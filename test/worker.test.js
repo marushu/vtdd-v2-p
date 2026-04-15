@@ -89,6 +89,64 @@ test("worker runs gateway route", async () => {
   assert.equal(body.repository, "marushu/vtdd-v2");
 });
 
+test("worker blocks gateway without required bearer token", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/mvp/gateway", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        phase: "exploration",
+        actorRole: "executor",
+        policyInput: {
+          actionType: ActionType.READ,
+          mode: TaskMode.READ_ONLY,
+          repositoryInput: "vtdd",
+          consent: { grantedCategories: [ConsentCategory.READ] }
+        }
+      })
+    }),
+    {
+      MVP_GATEWAY_BEARER_TOKEN: "test-token"
+    }
+  );
+
+  assert.equal(response.status, 401);
+  const body = await response.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.error, "unauthorized");
+});
+
+test("worker accepts gateway with valid bearer token", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/mvp/gateway", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: "Bearer test-token"
+      },
+      body: JSON.stringify({
+        phase: "exploration",
+        actorRole: "executor",
+        policyInput: {
+          actionType: ActionType.READ,
+          mode: TaskMode.READ_ONLY,
+          repositoryInput: "vtdd",
+          consent: { grantedCategories: [ConsentCategory.READ] }
+        }
+      })
+    }),
+    {
+      MVP_GATEWAY_BEARER_TOKEN: "test-token"
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.allowed, true);
+});
+
 test("worker blocks invalid policy input", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/mvp/gateway", {

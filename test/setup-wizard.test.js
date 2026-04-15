@@ -43,6 +43,11 @@ test("setup wizard returns git/db outputs and iphone onboarding pack", () => {
     ),
     true
   );
+  assert.equal(Boolean(parsed?.components?.securitySchemes?.GatewayBearerAuth), true);
+  assert.equal(
+    Array.isArray(parsed?.paths?.["/mvp/gateway"]?.post?.security),
+    true
+  );
 });
 
 test("setup wizard blocks non github_app credential model", () => {
