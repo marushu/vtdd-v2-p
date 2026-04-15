@@ -102,6 +102,45 @@ test("high-risk action requires GO + passkey", () => {
   assert.equal(result.requiredApproval, "go_passkey");
 });
 
+test("pr comment is allowed without GO when other gates pass", () => {
+  const result = evaluateExecutionPolicy({
+    actionType: ActionType.PR_COMMENT,
+    mode: TaskMode.EXECUTION,
+    repositoryInput: "tomio",
+    aliasRegistry: registry,
+    constitutionConsulted: true,
+    runtimeTruth: { runtimeAvailable: true },
+    credential: executeCredential,
+    consent: fullConsent,
+    approvalPhrase: "",
+    approvalScopeMatched: false,
+    issueTraceable: true,
+    go: false,
+    passkey: false
+  });
+  assert.equal(result.allowed, true);
+});
+
+test("pr review submit still requires GO", () => {
+  const result = evaluateExecutionPolicy({
+    actionType: ActionType.PR_REVIEW_SUBMIT,
+    mode: TaskMode.EXECUTION,
+    repositoryInput: "tomio",
+    aliasRegistry: registry,
+    constitutionConsulted: true,
+    runtimeTruth: { runtimeAvailable: true },
+    credential: executeCredential,
+    consent: fullConsent,
+    ...approvalContext,
+    issueTraceable: true,
+    go: false,
+    passkey: false
+  });
+  assert.equal(result.allowed, false);
+  assert.equal(result.blockedByRule, "approval_boundary");
+  assert.equal(result.requiredApproval, "go");
+});
+
 test("execution blocks when issue traceability is missing", () => {
   const result = evaluateExecutionPolicy({
     actionType: ActionType.BUILD,

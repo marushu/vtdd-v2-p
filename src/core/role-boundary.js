@@ -11,6 +11,8 @@ const EXECUTOR_ALLOWED_ACTIONS = new Set([
   ActionType.SUMMARIZE,
   ActionType.ISSUE_CREATE,
   ActionType.BUILD,
+  ActionType.PR_COMMENT,
+  ActionType.PR_REVIEW_SUBMIT,
   ActionType.PR_OPERATION,
   ActionType.MERGE,
   ActionType.DEPLOY_PRODUCTION,
