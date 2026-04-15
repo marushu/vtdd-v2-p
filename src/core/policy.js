@@ -1,5 +1,6 @@
 import { evaluateApproval, evaluateConsent } from "./approval.js";
 import { evaluateCredentialBoundary } from "./credential-boundary.js";
+import { evaluateIssueTraceability } from "./issue-traceability.js";
 import { resolveRepositoryTarget } from "./repository-resolution.js";
 import { evaluateRoleBoundary } from "./role-boundary.js";
 import { evaluateRuntimeTruthPrecondition } from "./runtime-truth.js";
@@ -24,6 +25,7 @@ export function evaluateExecutionPolicy(input) {
     approvalPhrase,
     approvalScopeMatched = false,
     issueTraceable,
+    issueTraceability,
     go,
     passkey
   } = input;
@@ -57,11 +59,13 @@ export function evaluateExecutionPolicy(input) {
     return deny("unresolved_target_blocks_execution", repo.reason);
   }
 
-  if (mode === TaskMode.EXECUTION && !issueTraceable) {
-    return deny(
-      "require_traceability_to_issue_sections",
-      "execution requires traceability to issue intent/success/non-goal"
-    );
+  const traceability = evaluateIssueTraceability({
+    mode,
+    issueTraceable,
+    traceability: issueTraceability
+  });
+  if (!traceability.ok) {
+    return deny(traceability.rule, traceability.reason);
   }
 
   const consentResult = evaluateConsent({ actionType, consent });
