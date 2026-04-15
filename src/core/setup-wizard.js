@@ -88,6 +88,7 @@ function buildSetupOutputs(answers) {
   const approvalRecord = {
     recordType: "approval_log",
     content: {
+      consentCategories: ["read", "propose", "execute", "destructive", "external_publish"],
       highRiskApproval: "go_passkey",
       credentialModel: "github_app",
       reviewerInitial: "gemini"

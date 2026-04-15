@@ -32,3 +32,11 @@ export const CredentialTier = Object.freeze({
   EXECUTE: "execute",
   HIGH_RISK: "high_risk"
 });
+
+export const ConsentCategory = Object.freeze({
+  READ: "read",
+  PROPOSE: "propose",
+  EXECUTE: "execute",
+  DESTRUCTIVE: "destructive",
+  EXTERNAL_PUBLISH: "external_publish"
+});

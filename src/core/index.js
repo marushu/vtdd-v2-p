@@ -1,5 +1,17 @@
-export { ActionType, ActorRole, ApprovalLevel, CredentialTier, TaskMode } from "./types.js";
-export { requiredApprovalLevel, evaluateApproval } from "./approval.js";
+export {
+  ActionType,
+  ActorRole,
+  ApprovalLevel,
+  ConsentCategory,
+  CredentialTier,
+  TaskMode
+} from "./types.js";
+export {
+  requiredApprovalLevel,
+  requiredConsentCategory,
+  evaluateConsent,
+  evaluateApproval
+} from "./approval.js";
 export { requiredCredentialTier, evaluateCredentialBoundary } from "./credential-boundary.js";
 export { resolveRepositoryTarget } from "./repository-resolution.js";
 export { evaluateRoleBoundary } from "./role-boundary.js";

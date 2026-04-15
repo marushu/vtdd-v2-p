@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   ActionType,
+  ConsentCategory,
   CredentialTier,
   JudgmentStep,
   evaluateButlerExecution
@@ -22,6 +23,21 @@ const judgmentTrace = [
   JudgmentStep.CURRENT_QUERY
 ];
 
+const fullConsent = {
+  grantedCategories: [
+    ConsentCategory.READ,
+    ConsentCategory.PROPOSE,
+    ConsentCategory.EXECUTE,
+    ConsentCategory.DESTRUCTIVE,
+    ConsentCategory.EXTERNAL_PUBLISH
+  ]
+};
+
+const approvalContext = {
+  approvalPhrase: "GO issue creation",
+  approvalScopeMatched: true
+};
+
 test("butler orchestrator allows issue creation when all gates pass", () => {
   const result = evaluateButlerExecution({
     surfaceContext: {
@@ -37,6 +53,8 @@ test("butler orchestrator allows issue creation when all gates pass", () => {
       constitutionConsulted: true,
       runtimeTruth: { runtimeAvailable: true },
       credential: { model: "github_app", tier: CredentialTier.EXECUTE },
+      consent: fullConsent,
+      ...approvalContext,
       issueTraceable: true,
       go: true,
       passkey: false
@@ -66,6 +84,8 @@ test("butler orchestrator blocks invalid judgment order", () => {
       constitutionConsulted: true,
       runtimeTruth: { runtimeAvailable: true },
       credential: { model: "github_app", tier: CredentialTier.EXECUTE },
+      consent: fullConsent,
+      ...approvalContext,
       issueTraceable: true,
       go: true,
       passkey: false
@@ -90,6 +110,8 @@ test("butler orchestrator blocks when surface overrides judgment model", () => {
       constitutionConsulted: true,
       runtimeTruth: { runtimeAvailable: true },
       credential: { model: "github_app", tier: CredentialTier.EXECUTE },
+      consent: fullConsent,
+      ...approvalContext,
       issueTraceable: true,
       go: true,
       passkey: false
@@ -114,6 +136,8 @@ test("butler orchestrator propagates policy block for unresolved repository", ()
       constitutionConsulted: true,
       runtimeTruth: { runtimeAvailable: true },
       credential: { model: "github_app", tier: CredentialTier.EXECUTE },
+      consent: fullConsent,
+      ...approvalContext,
       issueTraceable: true,
       go: true,
       passkey: false

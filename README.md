@@ -8,6 +8,7 @@ Current code starts with deterministic governance gates:
 - constitution-first execution check
 - runtime truth precondition with stale detection and reconcile-required conflict detection
 - approval boundary (`GO` / `GO + passkey`)
+- consent + approval schema checks (category grant, approval phrase, scope binding)
 - role-action boundary (`butler` / `executor` / `reviewer`)
 - credential boundary (`github_app` + tiered permissions + short-lived high-risk credential)
 - alias-based repository resolution with no default repository
