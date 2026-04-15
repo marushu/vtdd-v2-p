@@ -212,6 +212,7 @@ function buildCustomGptActionSchema(baseUrl) {
       }
     ],
     components: {
+      schemas: {},
       securitySchemes: {
         GatewayBearerAuth: {
           type: "http",
