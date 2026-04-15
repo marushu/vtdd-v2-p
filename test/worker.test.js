@@ -22,6 +22,29 @@ test("worker returns health", async () => {
   assert.equal(body.ok, true);
 });
 
+test("worker returns setup wizard html", async () => {
+  const response = await worker.fetch(new Request("https://example.com/setup/wizard"));
+  assert.equal(response.status, 200);
+  const contentType = response.headers.get("content-type") ?? "";
+  assert.equal(contentType.includes("text/html"), true);
+  const html = await response.text();
+  assert.equal(html.includes("VTDD Setup Wizard"), true);
+  assert.equal(html.includes("Custom GPT Construction"), true);
+});
+
+test("worker returns setup wizard json", async () => {
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/setup/wizard?format=json&repo=marushu/vtdd-v2&surface=custom_gpt"
+    )
+  );
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.onboarding.customGpt.actionSchemaJson.includes("/mvp/gateway"), true);
+  assert.equal(body.generatedAnswers.actionEndpointBaseUrl, "https://example.com");
+});
+
 test("worker runs gateway route", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/mvp/gateway", {
