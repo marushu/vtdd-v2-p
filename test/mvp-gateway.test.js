@@ -80,6 +80,8 @@ test("gateway allows butler issue creation and transitions workflow", () => {
   assert.equal(result.allowed, true);
   assert.equal(result.workflowState.stage, WorkflowStage.PROPOSAL);
   assert.equal(result.repository, "marushu/vtdd-v2");
+  assert.equal(result.repositoryCandidates.length, 1);
+  assert.equal(result.repositoryCandidates[0].canonicalRepo, "marushu/vtdd-v2");
   assert.equal(result.memoryWrite.recordType, "decision_log");
 });
 
@@ -108,6 +110,7 @@ test("gateway blocks when memory record contains secret", () => {
   });
   assert.equal(result.allowed, false);
   assert.equal(result.blockedByRule, "memory_must_exclude_secrets");
+  assert.equal(result.repositoryCandidates.length, 1);
 });
 
 test("gateway blocks invalid workflow transition", () => {

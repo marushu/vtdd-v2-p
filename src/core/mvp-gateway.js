@@ -26,10 +26,14 @@ export function runMvpGateway(input) {
     ...(input?.policyInput ?? {}),
     actorRole
   };
+  const repositoryCandidates = collectRepositoryCandidates(policyInput.aliasRegistry);
 
   const execution = evaluateExecution({ actorRole, input, policyInput });
   if (!execution.allowed) {
-    return deny(execution.blockedByRule, execution.reason, { retrievalPlan });
+    return deny(execution.blockedByRule, execution.reason, {
+      retrievalPlan,
+      repositoryCandidates
+    });
   }
 
   const workflowDecision = evaluateWorkflowTransition(
@@ -42,6 +46,7 @@ export function runMvpGateway(input) {
       workflowDecision.reason,
       {
         retrievalPlan,
+        repositoryCandidates,
         workflowState: workflowDecision.state,
         allowedWorkflowEvents: workflowDecision.allowedEvents
       }
@@ -50,7 +55,10 @@ export function runMvpGateway(input) {
 
   const memoryPlan = prepareMemoryPlan(input?.memoryRecord);
   if (!memoryPlan.ok) {
-    return deny(memoryPlan.rule, memoryPlan.reason, { retrievalPlan });
+    return deny(memoryPlan.rule, memoryPlan.reason, {
+      retrievalPlan,
+      repositoryCandidates
+    });
   }
 
   return {
@@ -58,6 +66,7 @@ export function runMvpGateway(input) {
     retrievalPlan,
     workflowState: workflowDecision.state,
     repository: execution.repository ?? null,
+    repositoryCandidates,
     requiredApproval: execution.requiredApproval ?? null,
     memoryWrite: memoryPlan.value
   };
@@ -143,4 +152,21 @@ function normalizeRole(value) {
     return normalized;
   }
   return ActorRole.EXECUTOR;
+}
+
+function collectRepositoryCandidates(aliasRegistry) {
+  const registry = Array.isArray(aliasRegistry) ? aliasRegistry : [];
+  return registry
+    .map((item) => ({
+      canonicalRepo: normalizeText(item?.canonicalRepo),
+      productName: normalizeText(item?.productName) || null,
+      aliases: Array.isArray(item?.aliases)
+        ? item.aliases.map(normalizeText).filter(Boolean)
+        : []
+    }))
+    .filter((item) => Boolean(item.canonicalRepo));
+}
+
+function normalizeText(value) {
+  return String(value ?? "").trim();
 }
