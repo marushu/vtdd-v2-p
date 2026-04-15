@@ -1,0 +1,56 @@
+name: deploy-production
+
+on:
+  workflow_dispatch:
+    inputs:
+      approval_phrase:
+        description: "Type GO to approve production deploy"
+        required: true
+        type: string
+      passkey_verified:
+        description: "Set true after passkey-based operator approval"
+        required: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Enforce GO + passkey boundary
+        shell: bash
+        run: |
+          if [ "${{ github.event.inputs.approval_phrase }}" != "GO" ]; then
+            echo "Approval phrase must be GO for production deploy."
+            exit 1
+          fi
+          if [ "${{ github.event.inputs.passkey_verified }}" != "true" ]; then
+            echo "passkey_verified must be true for production deploy."
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Run tests
+        run: npm test
+
+      - name: Deploy to Cloudflare Workers
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --env production
