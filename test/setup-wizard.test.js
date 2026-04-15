@@ -36,6 +36,13 @@ test("setup wizard returns git/db outputs and iphone onboarding pack", () => {
   assert.equal(result.onboarding.setupMode, SetupMode.IPHONE_FIRST);
   assert.equal(result.onboarding.customGpt.endpointBaseUrl, "https://vtdd-v2-mvp.example.workers.dev");
   assert.equal(result.onboarding.customGpt.actionSchemaJson.includes("/mvp/gateway"), true);
+  const parsed = JSON.parse(result.onboarding.customGpt.actionSchemaJson);
+  assert.equal(
+    Boolean(
+      parsed?.paths?.["/mvp/gateway"]?.post?.requestBody?.content?.["application/json"]?.schema?.properties
+    ),
+    true
+  );
 });
 
 test("setup wizard blocks non github_app credential model", () => {
