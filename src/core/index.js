@@ -25,6 +25,11 @@ export {
 } from "./reviewer-contract.js";
 export { INITIAL_REVIEWER_ID, createReviewerRegistry } from "./reviewer-registry.js";
 export {
+  REQUIRED_CONSTITUTION_RULE_IDS,
+  validateConstitutionSchema,
+  createDefaultConstitutionSchema
+} from "./constitution-schema.js";
+export {
   createDecisionLogEntry,
   validateDecisionLogEntry,
   createProposalLogEntry,

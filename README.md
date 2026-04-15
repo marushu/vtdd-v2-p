@@ -11,6 +11,7 @@ Current code starts with deterministic governance gates:
 - consent + approval schema checks (category grant, approval phrase, scope binding)
 - structured issue traceability checks (intent/success/non-goal refs + out-of-scope guard)
 - role-action boundary (`butler` / `executor` / `reviewer`)
+- constitution schema validator with required core rule coverage checks
 - credential boundary (`github_app` + tiered permissions + short-lived high-risk credential)
 - alias-based repository resolution with no default repository
 - memory safety gate (record-type boundary + secret exclusion + redaction helper)
