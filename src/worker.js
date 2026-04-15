@@ -151,6 +151,13 @@ function renderSetupWizardHtml({ result, answers, url }) {
         font-size: 18px;
         margin: 18px 0 10px;
       }
+      .section-header {
+        margin-top: 18px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
       p {
         margin: 8px 0;
         line-height: 1.5;
@@ -181,6 +188,19 @@ function renderSetupWizardHtml({ result, answers, url }) {
         font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
         font-size: 12px;
       }
+      .copy-button {
+        border: 1px solid #8eb0f8;
+        background: #edf4ff;
+        color: #1e4ca6;
+        font-size: 12px;
+        font-weight: 600;
+        border-radius: 8px;
+        padding: 6px 10px;
+      }
+      .copy-hint {
+        font-size: 12px;
+        color: #4b5a73;
+      }
       code {
         background: #eef3ff;
         padding: 2px 5px;
@@ -193,6 +213,45 @@ function renderSetupWizardHtml({ result, answers, url }) {
       <h1>VTDD Setup Wizard</h1>
       ${body}
     </main>
+    <script>
+      function setCopyState(button, message) {
+        const targetId = button.getAttribute("data-copy-target");
+        const status = document.querySelector('[data-copy-status="' + targetId + '"]');
+        if (status) {
+          status.textContent = message;
+        }
+      }
+
+      async function copyFromTextarea(button) {
+        const targetId = button.getAttribute("data-copy-target");
+        const textarea = document.getElementById(targetId);
+        if (!textarea) {
+          return;
+        }
+
+        const value = textarea.value || textarea.textContent || "";
+        try {
+          if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(value);
+          } else {
+            textarea.focus();
+            textarea.select();
+            document.execCommand("copy");
+          }
+          setCopyState(button, "Copied.");
+        } catch {
+          textarea.focus();
+          textarea.select();
+          setCopyState(button, "Select all and copy manually.");
+        }
+      }
+
+      document.querySelectorAll("[data-copy-target]").forEach((button) => {
+        button.addEventListener("click", () => {
+          copyFromTextarea(button);
+        });
+      });
+    </script>
   </body>
 </html>`;
 }
@@ -216,10 +275,18 @@ function renderSuccessContent(result, answers, url) {
     <div class="block">
       <ul>${steps.map((step) => `<li>${escapeHtml(step)}</li>`).join("")}</ul>
     </div>
-    <h2>Custom GPT Construction</h2>
-    <textarea readonly>${escapeHtml(constructionText)}</textarea>
-    <h2>Custom GPT Action Schema (OpenAPI)</h2>
-    <textarea readonly>${escapeHtml(actionSchemaJson)}</textarea>
+    <div class="section-header">
+      <h2>Custom GPT Construction</h2>
+      <button class="copy-button" type="button" data-copy-target="constructionText">Copy Construction</button>
+    </div>
+    <textarea id="constructionText" readonly>${escapeHtml(constructionText)}</textarea>
+    <p class="copy-hint" data-copy-status="constructionText">Tap copy button if text selection is difficult on mobile.</p>
+    <div class="section-header">
+      <h2>Custom GPT Action Schema (OpenAPI)</h2>
+      <button class="copy-button" type="button" data-copy-target="actionSchemaJson">Copy Schema</button>
+    </div>
+    <textarea id="actionSchemaJson" readonly>${escapeHtml(actionSchemaJson)}</textarea>
+    <p class="copy-hint" data-copy-status="actionSchemaJson">Tap copy button to copy full OpenAPI JSON.</p>
     <p class="meta">Secrets are not handled here. Keep Cloudflare credentials in GitHub Environment secrets only.</p>
   `;
 }
