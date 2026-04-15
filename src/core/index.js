@@ -18,6 +18,7 @@ export { evaluateRoleBoundary } from "./role-boundary.js";
 export { evaluateRuntimeTruthPrecondition } from "./runtime-truth.js";
 export { evaluateMemorySafety, inspectSensitiveContent, sanitizeMemoryPayload } from "./memory-safety.js";
 export { evaluateIssueTraceability } from "./issue-traceability.js";
+export { createCloudflareMemoryProvider } from "./cloudflare-provider.js";
 export {
   ReviewerRecommendedAction,
   validateReviewerRequest,

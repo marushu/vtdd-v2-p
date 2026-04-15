@@ -19,6 +19,7 @@ Current code starts with deterministic governance gates:
 - memory schema + provider interface + retrieve primitives
 - retrieval contract (phase-aware source priority and primary reference selection)
 - reviewer pluggable contract (Gemini initial + registry-based adapter model)
+- Cloudflare provider minimum adapter (D1/R2/Vectorize via injected clients)
 - execution policy gate (traceability + target resolution + approval)
 - Butler orchestrator (surface independence + fixed judgment order + policy integration)
 - MVP gateway (`runMvpGateway`) that composes policy, workflow, retrieval, and memory safety
