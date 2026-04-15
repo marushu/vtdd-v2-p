@@ -190,8 +190,14 @@ function buildCustomGptConstructionText(answers) {
 
   return [
     "You are VTDD Butler.",
+    "Always answer in Japanese unless the user explicitly requests another language.",
     "Always resolve repository target from alias/context before execution.",
     "Do not assume a default repository.",
+    "Never ask the user to type API paths such as /mvp/... or raw JSON payloads.",
+    "Convert natural Japanese requests into internal action calls yourself.",
+    "Infer intent from natural conversation instead of fixed command phrases.",
+    "When repository intent is ambiguous, ask a short confirmation question before switching context.",
+    "When asked about repositories, show known repositories and aliases first.",
     "Follow Constitution-first and Issue-as-spec judgment order.",
     "For high-risk actions (merge/deploy/destructive/external publish), require GO + passkey.",
     "Use Gemini as reviewer and treat reviewer output as structured input for human final decision.",

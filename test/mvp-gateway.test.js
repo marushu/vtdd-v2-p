@@ -15,7 +15,14 @@ const registry = [
   {
     canonicalRepo: "marushu/vtdd-v2",
     productName: "VTDD V2",
+    visibility: "private",
     aliases: ["vtdd"]
+  },
+  {
+    canonicalRepo: "marushu/hibou-piccola-bookkeeping",
+    productName: "Tomio Bookkeeping",
+    visibility: "public",
+    aliases: ["tomio", "bookkeeping"]
   }
 ];
 
@@ -80,6 +87,9 @@ test("gateway allows butler issue creation and transitions workflow", () => {
   assert.equal(result.allowed, true);
   assert.equal(result.workflowState.stage, WorkflowStage.PROPOSAL);
   assert.equal(result.repository, "marushu/vtdd-v2");
+  assert.equal(result.repositoryCandidates.length, 2);
+  assert.equal(result.repositoryCandidates[0].canonicalRepo, "marushu/vtdd-v2");
+  assert.equal(result.repositoryCandidates[0].visibility, "private");
   assert.equal(result.memoryWrite.recordType, "decision_log");
 });
 
@@ -108,6 +118,7 @@ test("gateway blocks when memory record contains secret", () => {
   });
   assert.equal(result.allowed, false);
   assert.equal(result.blockedByRule, "memory_must_exclude_secrets");
+  assert.equal(result.repositoryCandidates.length, 2);
 });
 
 test("gateway blocks invalid workflow transition", () => {
@@ -162,4 +173,78 @@ test("gateway exploration phase includes conversation in retrieval plan", () => 
   assert.equal(result.allowed, true);
   assert.equal(result.retrievalPlan.phase, "exploration");
   assert.equal(result.retrievalPlan.sources.includes("conversation"), true);
+});
+
+test("gateway infers repository list intent from natural conversation", () => {
+  const result = runMvpGateway({
+    phase: "exploration",
+    actorRole: ActorRole.EXECUTOR,
+    conversation: {
+      userText: "俺の持ってるリポジトリ一覧出して"
+    },
+    policyInput: {
+      actionType: ActionType.READ,
+      mode: "read_only",
+      repositoryInput: "unknown",
+      aliasRegistry: registry,
+      runtimeTruth: { runtimeAvailable: false, safeFallbackChosen: true },
+      consent: {
+        grantedCategories: [ConsentCategory.READ]
+      },
+      issueTraceable: false
+    }
+  });
+  assert.equal(result.allowed, true);
+  assert.equal(result.conversationAssist.detectedIntent, "list_repositories");
+  assert.equal(result.conversationAssist.hideTechnicalPaths, true);
+  assert.equal(result.conversationAssist.responseGuide.style, "repository_list");
+  assert.equal(result.repositoryCandidates[1].visibility, "public");
+});
+
+test("gateway asks confirmation when conversation implies repository switch", () => {
+  const result = runMvpGateway({
+    phase: "exploration",
+    actorRole: ActorRole.EXECUTOR,
+    conversation: {
+      userText: "VTDD V2 を開いて",
+      currentRepository: "marushu/hibou-piccola-bookkeeping"
+    },
+    policyInput: {
+      actionType: ActionType.READ,
+      mode: "read_only",
+      repositoryInput: "vtdd",
+      aliasRegistry: registry,
+      runtimeTruth: { runtimeAvailable: false, safeFallbackChosen: true },
+      consent: {
+        grantedCategories: [ConsentCategory.READ]
+      },
+      issueTraceable: false
+    }
+  });
+  assert.equal(result.allowed, true);
+  assert.equal(result.repository, "marushu/vtdd-v2");
+  assert.equal(result.conversationAssist.mentionedRepository, "marushu/vtdd-v2");
+  assert.equal(result.conversationAssist.requiresConfirmation, true);
+});
+
+test("gateway returns natural consent question for blocked consent boundary", () => {
+  const result = runMvpGateway({
+    phase: "exploration",
+    actorRole: ActorRole.EXECUTOR,
+    conversation: {
+      userText: "今の状態だけ確認したい"
+    },
+    policyInput: {
+      actionType: ActionType.READ,
+      mode: "read_only",
+      repositoryInput: "vtdd",
+      aliasRegistry: registry
+    }
+  });
+  assert.equal(result.allowed, false);
+  assert.equal(result.blockedByRule, "consent_boundary");
+  assert.equal(
+    result.conversationAssist.nextQuestion,
+    "読み取り同意が必要です。読み取りを許可して進めますか？"
+  );
 });

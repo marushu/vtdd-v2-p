@@ -36,6 +36,22 @@ test("setup wizard returns git/db outputs and iphone onboarding pack", () => {
   assert.equal(result.onboarding.setupMode, SetupMode.IPHONE_FIRST);
   assert.equal(result.onboarding.customGpt.endpointBaseUrl, "https://vtdd-v2-mvp.example.workers.dev");
   assert.equal(result.onboarding.customGpt.actionSchemaJson.includes("/mvp/gateway"), true);
+  assert.equal(
+    result.onboarding.customGpt.constructionText.includes("Always answer in Japanese"),
+    true
+  );
+  assert.equal(
+    result.onboarding.customGpt.constructionText.includes(
+      "Never ask the user to type API paths such as /mvp/... or raw JSON payloads."
+    ),
+    true
+  );
+  assert.equal(
+    result.onboarding.customGpt.constructionText.includes(
+      "Infer intent from natural conversation instead of fixed command phrases."
+    ),
+    true
+  );
   const parsed = JSON.parse(result.onboarding.customGpt.actionSchemaJson);
   assert.equal(
     Boolean(
