@@ -64,6 +64,22 @@ test("read-only mode can proceed safely even when repo is unresolved", () => {
   assert.equal(resolved.safeToProceedReadOnly, true);
 });
 
+test("repository resolution does not throw when alias registry is missing", () => {
+  const readOnly = resolveRepositoryTarget({
+    input: "vtdd",
+    mode: TaskMode.READ_ONLY
+  });
+  assert.equal(readOnly.resolved, false);
+  assert.equal(readOnly.safeToProceedReadOnly, true);
+
+  const execution = resolveRepositoryTarget({
+    input: "vtdd",
+    mode: TaskMode.EXECUTION
+  });
+  assert.equal(execution.resolved, false);
+  assert.equal(execution.safeToProceedReadOnly, false);
+});
+
 test("execution mode blocks unresolved repository target", () => {
   const result = evaluateExecutionPolicy({
     actionType: ActionType.BUILD,
