@@ -30,6 +30,8 @@ test("worker returns setup wizard html", async () => {
   const html = await response.text();
   assert.equal(html.includes("VTDD Setup Wizard"), true);
   assert.equal(html.includes("Custom GPT Construction"), true);
+  assert.equal(html.includes("Copy Construction"), true);
+  assert.equal(html.includes("Copy Schema"), true);
 });
 
 test("worker returns setup wizard json", async () => {
