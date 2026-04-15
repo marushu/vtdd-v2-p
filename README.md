@@ -13,6 +13,7 @@ Current code starts with deterministic governance gates:
 - credential boundary (`github_app` + tiered permissions + short-lived high-risk credential)
 - alias-based repository resolution with no default repository
 - memory safety gate (record-type boundary + secret exclusion + redaction helper)
+- decision/proposal log contracts and in-memory store primitives
 - retrieval contract (phase-aware source priority and primary reference selection)
 - execution policy gate (traceability + target resolution + approval)
 - Butler orchestrator (surface independence + fixed judgment order + policy integration)
