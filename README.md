@@ -13,10 +13,11 @@ Current code starts with deterministic governance gates:
 - alias-based repository resolution with no default repository
 - memory safety gate (record-type boundary + secret exclusion + redaction helper)
 - execution policy gate (traceability + target resolution + approval)
+- Butler orchestrator (surface independence + fixed judgment order + policy integration)
 - immutable workflow state machine (`Idea -> Proposal -> Issue -> GO -> Build -> PR -> Review -> Merge`)
 - reconcile hold state (`reconcile_required`) for runtime/memory conflicts
 
-Code lives in `src/core/`, with tests in `test/core-policy.test.js` and `test/workflow-state-machine.test.js`.
+Code lives in `src/core/`, with tests in `test/`.
 
 ## Run tests
 
