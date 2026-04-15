@@ -32,6 +32,20 @@ export {
 } from "./log-contracts.js";
 export { createInMemoryLogStore } from "./log-store.js";
 export {
+  MemoryRecordType,
+  createMemoryRecord,
+  validateMemoryRecord
+} from "./memory-schema.js";
+export {
+  validateMemoryProvider,
+  createInMemoryMemoryProvider
+} from "./memory-provider.js";
+export {
+  retrieveConstitution,
+  retrieveByType,
+  retrieveHybrid
+} from "./memory-retrieve.js";
+export {
   RetrievalSource,
   buildRetrievalPlan,
   selectPrimaryReference
