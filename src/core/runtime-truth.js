@@ -5,6 +5,9 @@ export function evaluateRuntimeTruthPrecondition(input) {
     mode = TaskMode.EXECUTION,
     runtimeAvailable = false,
     safeFallbackChosen = false,
+    observedAt = null,
+    maxAgeMs = null,
+    nowMs = Date.now(),
     runtimeState = null,
     memoryState = null
   } = input ?? {};
@@ -21,6 +24,15 @@ export function evaluateRuntimeTruthPrecondition(input) {
     };
   }
 
+  if (runtimeAvailable && isStale({ observedAt, maxAgeMs, nowMs })) {
+    return {
+      ok: false,
+      rule: "runtime_truth_stale_requires_reconfirm",
+      reason: "runtime truth is stale and must be re-fetched before execution",
+      reconcileRequired: true
+    };
+  }
+
   if (runtimeAvailable && runtimeState && memoryState && hasConflict(runtimeState, memoryState)) {
     return {
       ok: false,
@@ -31,6 +43,25 @@ export function evaluateRuntimeTruthPrecondition(input) {
   }
 
   return { ok: true };
+}
+
+function isStale({ observedAt, maxAgeMs, nowMs }) {
+  if (observedAt === null || observedAt === undefined) {
+    return false;
+  }
+  if (typeof maxAgeMs !== "number" || maxAgeMs <= 0) {
+    return false;
+  }
+
+  const observedMs =
+    typeof observedAt === "number"
+      ? observedAt
+      : Date.parse(String(observedAt));
+  if (!Number.isFinite(observedMs)) {
+    return false;
+  }
+
+  return nowMs - observedMs > maxAgeMs;
 }
 
 function hasConflict(runtimeState, memoryState) {
