@@ -16,6 +16,7 @@ Current code starts with deterministic governance gates:
 - alias-based repository resolution with no default repository
 - memory safety gate (record-type boundary + secret exclusion + redaction helper)
 - decision/proposal log contracts and in-memory store primitives
+- memory schema + provider interface + retrieve primitives
 - retrieval contract (phase-aware source priority and primary reference selection)
 - reviewer pluggable contract (Gemini initial + registry-based adapter model)
 - execution policy gate (traceability + target resolution + approval)
