@@ -230,7 +230,86 @@ function buildCustomGptActionSchema(baseUrl) {
             content: {
               "application/json": {
                 schema: {
-                  type: "object"
+                  type: "object",
+                  additionalProperties: true,
+                  properties: {
+                    phase: {
+                      type: "string",
+                      enum: ["execution", "exploration"]
+                    },
+                    actorRole: {
+                      type: "string",
+                      enum: ["butler", "executor", "reviewer"]
+                    },
+                    policyInput: {
+                      type: "object",
+                      additionalProperties: true,
+                      properties: {
+                        actionType: {
+                          type: "string",
+                          enum: [
+                            "read",
+                            "summarize",
+                            "issue_create",
+                            "build",
+                            "pr_comment",
+                            "pr_review_submit",
+                            "pr_operation",
+                            "merge",
+                            "deploy_production",
+                            "destructive",
+                            "external_publish"
+                          ]
+                        },
+                        mode: {
+                          type: "string",
+                          enum: ["read_only", "execution"]
+                        },
+                        repositoryInput: {
+                          type: "string"
+                        },
+                        constitutionConsulted: {
+                          type: "boolean"
+                        },
+                        runtimeTruth: {
+                          type: "object",
+                          additionalProperties: true,
+                          properties: {
+                            runtimeAvailable: {
+                              type: "boolean"
+                            }
+                          }
+                        },
+                        credential: {
+                          type: "object",
+                          additionalProperties: true,
+                          properties: {
+                            model: { type: "string" },
+                            tier: { type: "string" },
+                            shortLived: { type: "boolean" },
+                            boundApprovalId: { type: "string" }
+                          }
+                        },
+                        consent: {
+                          type: "object",
+                          additionalProperties: true,
+                          properties: {
+                            grantedCategories: {
+                              type: "array",
+                              items: { type: "string" }
+                            }
+                          }
+                        },
+                        approvalPhrase: { type: "string" },
+                        approvalScopeMatched: { type: "boolean" },
+                        issueTraceable: { type: "boolean" },
+                        go: { type: "boolean" },
+                        passkey: { type: "boolean" }
+                      },
+                      required: ["actionType", "mode", "repositoryInput"]
+                    }
+                  },
+                  required: ["policyInput"]
                 }
               }
             }
