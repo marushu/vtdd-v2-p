@@ -8,6 +8,7 @@ import {
   TaskMode,
   evaluateCredentialBoundary,
   evaluateExecutionPolicy,
+  evaluateIssueTraceability,
   evaluateRoleBoundary,
   evaluateRuntimeTruthPrecondition,
   resolveRepositoryTarget
@@ -421,4 +422,64 @@ test("execution blocks when approval scope does not match", () => {
   });
   assert.equal(result.allowed, false);
   assert.equal(result.blockedByRule, "approval_boundary");
+});
+
+test("issue traceability helper blocks empty structured references", () => {
+  const result = evaluateIssueTraceability({
+    mode: TaskMode.EXECUTION,
+    traceability: {
+      intentRefs: [],
+      successCriteriaRefs: [],
+      nonGoalRefs: []
+    }
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.rule, "require_traceability_to_issue_sections");
+});
+
+test("execution blocks out-of-scope implementation when not proposal-only", () => {
+  const result = evaluateExecutionPolicy({
+    actionType: ActionType.BUILD,
+    actorRole: ActorRole.EXECUTOR,
+    mode: TaskMode.EXECUTION,
+    repositoryInput: "VTDD V2",
+    aliasRegistry: registry,
+    constitutionConsulted: true,
+    runtimeTruth: { runtimeAvailable: true },
+    credential: executeCredential,
+    consent: fullConsent,
+    ...approvalContext,
+    issueTraceability: {
+      intentRefs: ["Intent-1"],
+      outOfScopeChanges: ["Refactor unrelated module"],
+      outOfScopeProposedOnly: false
+    },
+    go: true,
+    passkey: false
+  });
+  assert.equal(result.allowed, false);
+  assert.equal(result.blockedByRule, "no_out_of_scope_implementation");
+});
+
+test("execution allows out-of-scope note when proposal-only", () => {
+  const result = evaluateExecutionPolicy({
+    actionType: ActionType.BUILD,
+    actorRole: ActorRole.EXECUTOR,
+    mode: TaskMode.EXECUTION,
+    repositoryInput: "VTDD V2",
+    aliasRegistry: registry,
+    constitutionConsulted: true,
+    runtimeTruth: { runtimeAvailable: true },
+    credential: executeCredential,
+    consent: fullConsent,
+    ...approvalContext,
+    issueTraceability: {
+      intentRefs: ["Intent-1"],
+      outOfScopeChanges: ["Potential cleanup idea"],
+      outOfScopeProposedOnly: true
+    },
+    go: true,
+    passkey: false
+  });
+  assert.equal(result.allowed, true);
 });
