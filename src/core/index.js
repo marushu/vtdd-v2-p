@@ -4,6 +4,7 @@ export { requiredCredentialTier, evaluateCredentialBoundary } from "./credential
 export { resolveRepositoryTarget } from "./repository-resolution.js";
 export { evaluateRoleBoundary } from "./role-boundary.js";
 export { evaluateRuntimeTruthPrecondition } from "./runtime-truth.js";
+export { evaluateMemorySafety, inspectSensitiveContent, sanitizeMemoryPayload } from "./memory-safety.js";
 export { evaluateExecutionPolicy } from "./policy.js";
 export {
   WorkflowStage,
