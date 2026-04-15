@@ -21,13 +21,15 @@ export function resolveRepositoryTarget({ input, mode, aliasRegistry }) {
     return unresolved(mode, "repository is not specified");
   }
 
-  for (const record of aliasRegistry) {
+  const registry = Array.isArray(aliasRegistry) ? aliasRegistry : [];
+
+  for (const record of registry) {
     if (normalize(record.canonicalRepo) === normalizedInput) {
       return { resolved: true, repository: record.canonicalRepo, via: "canonical" };
     }
   }
 
-  for (const record of aliasRegistry) {
+  for (const record of registry) {
     const names = [record.productName, ...(record.aliases ?? [])].map(normalize).filter(Boolean);
     if (names.includes(normalizedInput)) {
       return { resolved: true, repository: record.canonicalRepo, via: "alias" };
