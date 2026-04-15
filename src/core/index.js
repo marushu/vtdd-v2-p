@@ -18,6 +18,7 @@ export {
 } from "./surface-independence.js";
 export { evaluateExecutionPolicy } from "./policy.js";
 export { evaluateButlerExecution } from "./butler-orchestrator.js";
+export { runMvpGateway } from "./mvp-gateway.js";
 export {
   WorkflowStage,
   WorkflowEvent,

@@ -15,6 +15,7 @@ Current code starts with deterministic governance gates:
 - retrieval contract (phase-aware source priority and primary reference selection)
 - execution policy gate (traceability + target resolution + approval)
 - Butler orchestrator (surface independence + fixed judgment order + policy integration)
+- MVP gateway (`runMvpGateway`) that composes policy, workflow, retrieval, and memory safety
 - immutable workflow state machine (`Idea -> Proposal -> Issue -> GO -> Build -> PR -> Review -> Merge`)
 - reconcile hold state (`reconcile_required`) for runtime/memory conflicts
 
