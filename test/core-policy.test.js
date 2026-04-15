@@ -180,6 +180,40 @@ test("runtime truth precondition allows safe fallback when runtime is unavailabl
   assert.equal(result.ok, true);
 });
 
+test("runtime truth precondition blocks stale runtime truth", () => {
+  const result = evaluateRuntimeTruthPrecondition({
+    mode: TaskMode.EXECUTION,
+    runtimeAvailable: true,
+    observedAt: "2026-04-15T00:00:00Z",
+    maxAgeMs: 60_000,
+    nowMs: Date.parse("2026-04-15T00:02:00Z")
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.rule, "runtime_truth_stale_requires_reconfirm");
+});
+
+test("execution blocks when runtime truth is stale", () => {
+  const result = evaluateExecutionPolicy({
+    actionType: ActionType.BUILD,
+    mode: TaskMode.EXECUTION,
+    repositoryInput: "VTDD V2",
+    aliasRegistry: registry,
+    constitutionConsulted: true,
+    runtimeTruth: {
+      runtimeAvailable: true,
+      observedAt: "2026-04-15T00:00:00Z",
+      maxAgeMs: 30_000,
+      nowMs: Date.parse("2026-04-15T00:01:00Z")
+    },
+    credential: executeCredential,
+    issueTraceable: true,
+    go: true,
+    passkey: false
+  });
+  assert.equal(result.allowed, false);
+  assert.equal(result.blockedByRule, "runtime_truth_stale_requires_reconfirm");
+});
+
 test("reviewer role cannot run build action", () => {
   const result = evaluateExecutionPolicy({
     actionType: ActionType.BUILD,
