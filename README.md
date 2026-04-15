@@ -16,6 +16,7 @@ Current code starts with deterministic governance gates:
 - memory safety gate (record-type boundary + secret exclusion + redaction helper)
 - decision/proposal log contracts and in-memory store primitives
 - retrieval contract (phase-aware source priority and primary reference selection)
+- reviewer pluggable contract (Gemini initial + registry-based adapter model)
 - execution policy gate (traceability + target resolution + approval)
 - Butler orchestrator (surface independence + fixed judgment order + policy integration)
 - MVP gateway (`runMvpGateway`) that composes policy, workflow, retrieval, and memory safety

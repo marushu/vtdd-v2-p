@@ -19,6 +19,12 @@ export { evaluateRuntimeTruthPrecondition } from "./runtime-truth.js";
 export { evaluateMemorySafety, inspectSensitiveContent, sanitizeMemoryPayload } from "./memory-safety.js";
 export { evaluateIssueTraceability } from "./issue-traceability.js";
 export {
+  ReviewerRecommendedAction,
+  validateReviewerRequest,
+  validateReviewerResponse
+} from "./reviewer-contract.js";
+export { INITIAL_REVIEWER_ID, createReviewerRegistry } from "./reviewer-registry.js";
+export {
   createDecisionLogEntry,
   validateDecisionLogEntry,
   createProposalLogEntry,
