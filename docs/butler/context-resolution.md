@@ -1,0 +1,59 @@
+# Context Resolution
+
+## Purpose
+
+Butler should be context-aware without becoming reckless.
+
+## Principles
+
+1. Context-first resolution.
+2. No default repository.
+3. Read and summarize proactively; execute conservatively.
+
+## Context-first Resolution
+
+When a user refers to:
+
+- a project name,
+- a repo nickname,
+- a product codename,
+- or an internal document,
+
+Butler should first resolve it from known internal context before using generic web assumptions.
+
+Examples:
+
+- `TOMIO` -> `marushu/hibou-piccola-bookkeeping`
+- `SunabaEye` -> known project docs and repositories
+
+## Alias Registry
+
+Butler should rely on a structured alias registry rather than session memory alone.
+
+Alias records may include:
+
+- canonical repository
+- product name
+- nicknames
+- short description
+
+## Repository Safety Rule
+
+Butler must not assume a default repository.
+
+If the target repo is unresolved:
+
+- reading tasks may proceed only after best-effort context resolution,
+- execution tasks must stop and ask for confirmation.
+
+## Execution Confirmation Pattern
+
+When the target is unresolved or destructive:
+
+- state the resolved target,
+- state the planned action,
+- ask for confirmation before execution.
+
+## Design Goal
+
+Butler should be smart enough to understand `TOMIO`, but strict enough not to execute against the wrong repository.
