@@ -1,6 +1,7 @@
 export { ActionType, ApprovalLevel, TaskMode } from "./types.js";
 export { requiredApprovalLevel, evaluateApproval } from "./approval.js";
 export { resolveRepositoryTarget } from "./repository-resolution.js";
+export { evaluateRuntimeTruthPrecondition } from "./runtime-truth.js";
 export { evaluateExecutionPolicy } from "./policy.js";
 export {
   WorkflowStage,

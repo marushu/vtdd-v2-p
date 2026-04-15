@@ -1,6 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ActionType, TaskMode, evaluateExecutionPolicy, resolveRepositoryTarget } from "../src/core/index.js";
+import {
+  ActionType,
+  TaskMode,
+  evaluateExecutionPolicy,
+  evaluateRuntimeTruthPrecondition,
+  resolveRepositoryTarget
+} from "../src/core/index.js";
 
 const registry = [
   {
@@ -31,6 +37,8 @@ test("execution mode blocks unresolved repository target", () => {
     mode: TaskMode.EXECUTION,
     repositoryInput: "unknown-project",
     aliasRegistry: registry,
+    constitutionConsulted: true,
+    runtimeTruth: { runtimeAvailable: true },
     issueTraceable: true,
     go: true,
     passkey: false
@@ -45,6 +53,8 @@ test("high-risk action requires GO + passkey", () => {
     mode: TaskMode.EXECUTION,
     repositoryInput: "tomio",
     aliasRegistry: registry,
+    constitutionConsulted: true,
+    runtimeTruth: { runtimeAvailable: true },
     issueTraceable: true,
     go: true,
     passkey: false
@@ -59,6 +69,8 @@ test("execution blocks when issue traceability is missing", () => {
     mode: TaskMode.EXECUTION,
     repositoryInput: "vtdd",
     aliasRegistry: registry,
+    constitutionConsulted: true,
+    runtimeTruth: { runtimeAvailable: true },
     issueTraceable: false,
     go: true,
     passkey: false
@@ -73,10 +85,74 @@ test("execution allows build with resolved repo and GO", () => {
     mode: TaskMode.EXECUTION,
     repositoryInput: "VTDD V2",
     aliasRegistry: registry,
+    constitutionConsulted: true,
+    runtimeTruth: { runtimeAvailable: true },
     issueTraceable: true,
     go: true,
     passkey: false
   });
   assert.equal(result.allowed, true);
   assert.equal(result.repository, "marushu/vtdd-v2");
+});
+
+test("execution blocks when constitution is not consulted", () => {
+  const result = evaluateExecutionPolicy({
+    actionType: ActionType.BUILD,
+    mode: TaskMode.EXECUTION,
+    repositoryInput: "VTDD V2",
+    aliasRegistry: registry,
+    constitutionConsulted: false,
+    runtimeTruth: { runtimeAvailable: true },
+    issueTraceable: true,
+    go: true,
+    passkey: false
+  });
+  assert.equal(result.allowed, false);
+  assert.equal(result.blockedByRule, "butler_must_read_constitution_before_judgment");
+});
+
+test("execution blocks when runtime truth is unavailable and no safe fallback is set", () => {
+  const result = evaluateExecutionPolicy({
+    actionType: ActionType.BUILD,
+    mode: TaskMode.EXECUTION,
+    repositoryInput: "VTDD V2",
+    aliasRegistry: registry,
+    constitutionConsulted: true,
+    runtimeTruth: { runtimeAvailable: false, safeFallbackChosen: false },
+    issueTraceable: true,
+    go: true,
+    passkey: false
+  });
+  assert.equal(result.allowed, false);
+  assert.equal(result.blockedByRule, "runtime_truth_required_or_safe_fallback");
+});
+
+test("runtime-memory conflict requires reconcile", () => {
+  const result = evaluateExecutionPolicy({
+    actionType: ActionType.BUILD,
+    mode: TaskMode.EXECUTION,
+    repositoryInput: "VTDD V2",
+    aliasRegistry: registry,
+    constitutionConsulted: true,
+    runtimeTruth: {
+      runtimeAvailable: true,
+      runtimeState: { issueStatus: "open", prCount: 1 },
+      memoryState: { issueStatus: "open", prCount: 2 }
+    },
+    issueTraceable: true,
+    go: true,
+    passkey: false
+  });
+  assert.equal(result.allowed, false);
+  assert.equal(result.blockedByRule, "reconcile_when_runtime_conflicts_with_memory");
+  assert.equal(result.reconcileRequired, true);
+});
+
+test("runtime truth precondition allows safe fallback when runtime is unavailable", () => {
+  const result = evaluateRuntimeTruthPrecondition({
+    mode: TaskMode.EXECUTION,
+    runtimeAvailable: false,
+    safeFallbackChosen: true
+  });
+  assert.equal(result.ok, true);
 });

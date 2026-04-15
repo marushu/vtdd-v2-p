@@ -5,6 +5,8 @@ VTDD V2: memory-first architecture with pluggable sockets and GitHub-first but n
 
 Current code starts with deterministic governance gates:
 
+- constitution-first execution check
+- runtime truth precondition and reconcile-required conflict detection
 - approval boundary (`GO` / `GO + passkey`)
 - alias-based repository resolution with no default repository
 - execution policy gate (traceability + target resolution + approval)

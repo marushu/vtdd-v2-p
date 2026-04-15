@@ -1,5 +1,6 @@
 import { evaluateApproval } from "./approval.js";
 import { resolveRepositoryTarget } from "./repository-resolution.js";
+import { evaluateRuntimeTruthPrecondition } from "./runtime-truth.js";
 import { TaskMode } from "./types.js";
 
 /**
@@ -13,10 +14,27 @@ export function evaluateExecutionPolicy(input) {
     mode = TaskMode.EXECUTION,
     repositoryInput,
     aliasRegistry,
+    constitutionConsulted = false,
+    runtimeTruth = {},
     issueTraceable,
     go,
     passkey
   } = input;
+
+  if (mode === TaskMode.EXECUTION && !constitutionConsulted) {
+    return deny(
+      "butler_must_read_constitution_before_judgment",
+      "constitution must be consulted before execution judgment"
+    );
+  }
+
+  const runtime = evaluateRuntimeTruthPrecondition({
+    mode,
+    ...runtimeTruth
+  });
+  if (!runtime.ok) {
+    return deny(runtime.rule, runtime.reason, { reconcileRequired: runtime.reconcileRequired === true });
+  }
 
   const repo = resolveRepositoryTarget({
     input: repositoryInput,
