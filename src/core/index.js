@@ -18,6 +18,13 @@ export { evaluateRoleBoundary } from "./role-boundary.js";
 export { evaluateRuntimeTruthPrecondition } from "./runtime-truth.js";
 export { evaluateMemorySafety, inspectSensitiveContent, sanitizeMemoryPayload } from "./memory-safety.js";
 export {
+  createDecisionLogEntry,
+  validateDecisionLogEntry,
+  createProposalLogEntry,
+  validateProposalLogEntry
+} from "./log-contracts.js";
+export { createInMemoryLogStore } from "./log-store.js";
+export {
   RetrievalSource,
   buildRetrievalPlan,
   selectPrimaryReference
