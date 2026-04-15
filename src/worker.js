@@ -1,8 +1,19 @@
-import { runMvpGateway } from "./core/index.js";
+import { runInitialSetupWizard, runMvpGateway } from "./core/index.js";
 
 const JSON_HEADERS = {
   "content-type": "application/json; charset=utf-8"
 };
+
+const HTML_HEADERS = {
+  "content-type": "text/html; charset=utf-8"
+};
+
+const DEFAULT_REPOSITORIES = Object.freeze([
+  {
+    canonicalRepo: "marushu/vtdd-v2",
+    aliases: ["vtdd", "vtdd-v2"]
+  }
+]);
 
 export default {
   async fetch(request) {
@@ -14,6 +25,10 @@ export default {
         service: "vtdd-v2-worker",
         mode: "mvp"
       });
+    }
+
+    if (request.method === "GET" && url.pathname === "/setup/wizard") {
+      return handleSetupWizardRequest(url);
     }
 
     if (request.method === "POST" && url.pathname === "/mvp/gateway") {
@@ -29,6 +44,202 @@ export default {
   }
 };
 
+function handleSetupWizardRequest(url) {
+  const answers = buildSetupWizardAnswers(url);
+  const result = runInitialSetupWizard({ answers });
+  const format = normalize(url.searchParams.get("format"));
+
+  if (format === "json") {
+    return json(result.ok ? 200 : 422, {
+      ...result,
+      generatedAnswers: answers
+    });
+  }
+
+  const htmlBody = renderSetupWizardHtml({ result, answers, url });
+  return html(result.ok ? 200 : 422, htmlBody);
+}
+
+function buildSetupWizardAnswers(url) {
+  const repositories = parseRepositories(url);
+  const initialSurfaces = parseInitialSurfaces(url);
+  const actionEndpointBaseUrl = normalizeUrl(url.searchParams.get("actionEndpointBaseUrl")) || url.origin;
+
+  return {
+    repositories,
+    allowDefaultRepository: false,
+    credentialModel: "github_app",
+    highRiskApproval: "go_passkey",
+    reviewerInitial: "gemini",
+    setupMode: "iphone_first",
+    actionEndpointBaseUrl,
+    initialSurfaces
+  };
+}
+
+function parseRepositories(url) {
+  const provided = url.searchParams
+    .getAll("repo")
+    .map(normalizeRepo)
+    .filter(Boolean);
+
+  if (provided.length === 0) {
+    return DEFAULT_REPOSITORIES.map((item) => ({
+      canonicalRepo: item.canonicalRepo,
+      aliases: [...item.aliases]
+    }));
+  }
+
+  return provided.map((canonicalRepo) => ({
+    canonicalRepo,
+    aliases: deriveAliases(canonicalRepo)
+  }));
+}
+
+function parseInitialSurfaces(url) {
+  const surfaces = url.searchParams
+    .getAll("surface")
+    .map(normalize)
+    .filter(Boolean);
+
+  return surfaces.length > 0 ? surfaces : ["custom_gpt"];
+}
+
+function deriveAliases(canonicalRepo) {
+  const [, repoNameRaw] = canonicalRepo.split("/");
+  const repoName = String(repoNameRaw ?? "").trim().toLowerCase();
+  const compact = repoName.replace(/[^a-z0-9]+/g, "");
+  const aliases = new Set([repoName, compact].filter(Boolean));
+  return [...aliases];
+}
+
+function renderSetupWizardHtml({ result, answers, url }) {
+  const body = result.ok
+    ? renderSuccessContent(result, answers, url)
+    : renderFailureContent(result, answers, url);
+
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>VTDD Setup Wizard</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      body {
+        margin: 0;
+        padding: 20px;
+        background: #f4f6fb;
+        color: #152033;
+      }
+      main {
+        max-width: 860px;
+        margin: 0 auto;
+        background: #ffffff;
+        border-radius: 14px;
+        padding: 20px;
+        box-shadow: 0 6px 24px rgba(14, 30, 52, 0.12);
+      }
+      h1 {
+        font-size: 24px;
+        margin: 0 0 12px;
+      }
+      h2 {
+        font-size: 18px;
+        margin: 18px 0 10px;
+      }
+      p {
+        margin: 8px 0;
+        line-height: 1.5;
+      }
+      ul {
+        margin: 10px 0;
+        padding-left: 18px;
+      }
+      li {
+        margin: 4px 0;
+      }
+      .meta {
+        font-size: 14px;
+        color: #4b5a73;
+      }
+      .block {
+        background: #f8fbff;
+        border: 1px solid #d8e6ff;
+        border-radius: 10px;
+        padding: 12px;
+      }
+      textarea {
+        width: 100%;
+        min-height: 180px;
+        border-radius: 8px;
+        border: 1px solid #c4d7f7;
+        padding: 10px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12px;
+      }
+      code {
+        background: #eef3ff;
+        padding: 2px 5px;
+        border-radius: 5px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>VTDD Setup Wizard</h1>
+      ${body}
+    </main>
+  </body>
+</html>`;
+}
+
+function renderSuccessContent(result, answers, url) {
+  const onboarding = result.onboarding ?? {};
+  const customGpt = onboarding.customGpt ?? {};
+  const repoList = answers.repositories.map((item) => escapeHtml(item.canonicalRepo));
+  const steps = Array.isArray(onboarding.steps) ? onboarding.steps : [];
+  const actionSchemaJson = customGpt.actionSchemaJson ?? "";
+  const constructionText = customGpt.constructionText ?? "";
+
+  return `
+    <p class="meta">Open this URL on iPhone Safari, then copy the blocks below into Custom GPT settings.</p>
+    <p class="meta">JSON output: <code>${escapeHtml(`${url.origin}/setup/wizard?format=json`)}</code></p>
+    <h2>Repositories</h2>
+    <div class="block">
+      <ul>${repoList.map((repo) => `<li>${repo}</li>`).join("")}</ul>
+    </div>
+    <h2>Checklist</h2>
+    <div class="block">
+      <ul>${steps.map((step) => `<li>${escapeHtml(step)}</li>`).join("")}</ul>
+    </div>
+    <h2>Custom GPT Construction</h2>
+    <textarea readonly>${escapeHtml(constructionText)}</textarea>
+    <h2>Custom GPT Action Schema (OpenAPI)</h2>
+    <textarea readonly>${escapeHtml(actionSchemaJson)}</textarea>
+    <p class="meta">Secrets are not handled here. Keep Cloudflare credentials in GitHub Environment secrets only.</p>
+  `;
+}
+
+function renderFailureContent(result, answers, url) {
+  const issues = Array.isArray(result.blockingIssues) ? result.blockingIssues : [];
+  const issueItems = issues.map((item) => `<li>${escapeHtml(item)}</li>`).join("");
+
+  return `
+    <p class="meta">Wizard validation failed.</p>
+    <h2>Blocking Issues</h2>
+    <div class="block">
+      <ul>${issueItems || "<li>unknown validation error</li>"}</ul>
+    </div>
+    <h2>Debug (safe answers only)</h2>
+    <textarea readonly>${escapeHtml(JSON.stringify(answers, null, 2))}</textarea>
+    <p class="meta">Tip: use <code>${escapeHtml(`${url.origin}/setup/wizard?format=json`)}</code> to inspect machine-readable output.</p>
+  `;
+}
+
 async function readJson(request) {
   try {
     return await request.json();
@@ -42,4 +253,46 @@ function json(status, body) {
     status,
     headers: JSON_HEADERS
   });
+}
+
+function html(status, body) {
+  return new Response(body, {
+    status,
+    headers: HTML_HEADERS
+  });
+}
+
+function normalize(value) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase();
+}
+
+function normalizeRepo(value) {
+  const repo = normalize(value);
+  if (!repo || !repo.includes("/")) {
+    return "";
+  }
+  return repo;
+}
+
+function normalizeUrl(value) {
+  const text = String(value ?? "").trim();
+  if (!text) {
+    return "";
+  }
+  try {
+    const parsed = new URL(text);
+    return parsed.origin;
+  } catch {
+    return "";
+  }
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
 }

@@ -21,7 +21,7 @@ Current code starts with deterministic governance gates:
 - retrieval contract (phase-aware source priority and primary reference selection)
 - reviewer pluggable contract (Gemini initial + registry-based adapter model)
 - Cloudflare provider minimum adapter (D1/R2/Vectorize via injected clients)
-- Cloudflare Worker runtime entry (`src/worker.js`) with `/health` and `/mvp/gateway`
+- Cloudflare Worker runtime entry (`src/worker.js`) with `/health`, `/setup/wizard`, and `/mvp/gateway`
 - production deploy workflow (`.github/workflows/deploy-production.yml`) for `GitHub Actions -> Cloudflare`
 - execution policy gate (traceability + target resolution + approval)
 - Butler orchestrator (surface independence + fixed judgment order + policy integration)

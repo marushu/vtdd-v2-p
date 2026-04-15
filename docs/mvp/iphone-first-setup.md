@@ -10,16 +10,26 @@ This runbook is for starting VTDD V2 from iPhone without local Mac setup.
 
 ## Steps
 
-1. Open ChatGPT on iPhone and edit the Butler Custom GPT.
-2. Copy `constructionText` and `actionSchemaJson` from `runInitialSetupWizard(...).onboarding.customGpt`.
-3. Ensure GitHub `production` environment has required reviewers enabled.
-4. Ensure GitHub has environment secrets:
+1. Open Safari on iPhone and access setup URL:
+   - `https://<your-worker-domain>/setup/wizard`
+   - JSON mode (optional): `https://<your-worker-domain>/setup/wizard?format=json`
+2. Open ChatGPT on iPhone and edit the Butler Custom GPT.
+3. Copy `Custom GPT Construction` and `Custom GPT Action Schema` from setup page.
+4. Ensure GitHub `production` environment has required reviewers enabled.
+5. Ensure GitHub has environment secrets:
    - `CLOUDFLARE_API_TOKEN`
    - `CLOUDFLARE_ACCOUNT_ID`
-5. Run `deploy-production` workflow with:
+6. Run `deploy-production` workflow with:
    - `approval_phrase=GO`
    - `passkey_verified=true`
-6. Approve the production environment gate.
+7. Approve the production environment gate.
+
+## Optional Query Parameters
+
+- `repo=owner/name` (repeatable): override repository list
+- `surface=custom_gpt` (repeatable): override initial surfaces
+- `actionEndpointBaseUrl=https://...`: force action schema server URL
+- `format=json`: return machine-readable wizard output
 
 ## Security Boundary
 
