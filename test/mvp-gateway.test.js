@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   ActionType,
   ActorRole,
+  ConsentCategory,
   CredentialTier,
   JudgmentStep,
   WorkflowEvent,
@@ -24,6 +25,21 @@ const validJudgmentTrace = [
   JudgmentStep.ISSUE_CONTEXT,
   JudgmentStep.CURRENT_QUERY
 ];
+
+const fullConsent = {
+  grantedCategories: [
+    ConsentCategory.READ,
+    ConsentCategory.PROPOSE,
+    ConsentCategory.EXECUTE,
+    ConsentCategory.DESTRUCTIVE,
+    ConsentCategory.EXTERNAL_PUBLISH
+  ]
+};
+
+const approvalContext = {
+  approvalPhrase: "GO scoped in gateway",
+  approvalScopeMatched: true
+};
 
 test("gateway allows butler issue creation and transitions workflow", () => {
   const result = runMvpGateway({
@@ -48,6 +64,8 @@ test("gateway allows butler issue creation and transitions workflow", () => {
       constitutionConsulted: true,
       runtimeTruth: { runtimeAvailable: true },
       credential: { model: "github_app", tier: CredentialTier.EXECUTE },
+      consent: fullConsent,
+      ...approvalContext,
       issueTraceable: true,
       go: true,
       passkey: false
@@ -77,6 +95,8 @@ test("gateway blocks when memory record contains secret", () => {
       constitutionConsulted: true,
       runtimeTruth: { runtimeAvailable: true },
       credential: { model: "github_app", tier: CredentialTier.EXECUTE },
+      consent: fullConsent,
+      ...approvalContext,
       issueTraceable: true,
       go: true,
       passkey: false
@@ -108,6 +128,8 @@ test("gateway blocks invalid workflow transition", () => {
       constitutionConsulted: true,
       runtimeTruth: { runtimeAvailable: true },
       credential: { model: "github_app", tier: CredentialTier.EXECUTE },
+      consent: fullConsent,
+      ...approvalContext,
       issueTraceable: true,
       go: true,
       passkey: false
@@ -129,6 +151,9 @@ test("gateway exploration phase includes conversation in retrieval plan", () => 
       constitutionConsulted: false,
       runtimeTruth: { runtimeAvailable: false, safeFallbackChosen: true },
       credential: { model: "github_app", tier: CredentialTier.READ },
+      consent: {
+        grantedCategories: [ConsentCategory.READ]
+      },
       issueTraceable: false,
       go: false,
       passkey: false

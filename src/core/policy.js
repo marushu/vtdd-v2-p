@@ -1,4 +1,4 @@
-import { evaluateApproval } from "./approval.js";
+import { evaluateApproval, evaluateConsent } from "./approval.js";
 import { evaluateCredentialBoundary } from "./credential-boundary.js";
 import { resolveRepositoryTarget } from "./repository-resolution.js";
 import { evaluateRoleBoundary } from "./role-boundary.js";
@@ -20,6 +20,9 @@ export function evaluateExecutionPolicy(input) {
     constitutionConsulted = false,
     runtimeTruth = {},
     credential,
+    consent,
+    approvalPhrase,
+    approvalScopeMatched = false,
     issueTraceable,
     go,
     passkey
@@ -61,7 +64,18 @@ export function evaluateExecutionPolicy(input) {
     );
   }
 
-  const approval = evaluateApproval({ actionType, go, passkey });
+  const consentResult = evaluateConsent({ actionType, consent });
+  if (!consentResult.ok) {
+    return deny("consent_boundary", consentResult.reason, { requiredConsent: consentResult.required });
+  }
+
+  const approval = evaluateApproval({
+    actionType,
+    go,
+    passkey,
+    approvalPhrase,
+    approvalScopeMatched
+  });
   if (!approval.ok) {
     return deny("approval_boundary", approval.reason, { requiredApproval: approval.required });
   }

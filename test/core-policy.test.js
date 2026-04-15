@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   ActionType,
   ActorRole,
+  ConsentCategory,
   CredentialTier,
   TaskMode,
   evaluateCredentialBoundary,
@@ -37,6 +38,21 @@ const highRiskCredential = {
   boundApprovalId: "approval-123"
 };
 
+const fullConsent = {
+  grantedCategories: [
+    ConsentCategory.READ,
+    ConsentCategory.PROPOSE,
+    ConsentCategory.EXECUTE,
+    ConsentCategory.DESTRUCTIVE,
+    ConsentCategory.EXTERNAL_PUBLISH
+  ]
+};
+
+const approvalContext = {
+  approvalPhrase: "GO for scoped task",
+  approvalScopeMatched: true
+};
+
 test("read-only mode can proceed safely even when repo is unresolved", () => {
   const resolved = resolveRepositoryTarget({
     input: "unknown-project",
@@ -56,6 +72,8 @@ test("execution mode blocks unresolved repository target", () => {
     constitutionConsulted: true,
     runtimeTruth: { runtimeAvailable: true },
     credential: executeCredential,
+    consent: fullConsent,
+    ...approvalContext,
     issueTraceable: true,
     go: true,
     passkey: false
@@ -73,6 +91,8 @@ test("high-risk action requires GO + passkey", () => {
     constitutionConsulted: true,
     runtimeTruth: { runtimeAvailable: true },
     credential: highRiskCredential,
+    consent: fullConsent,
+    ...approvalContext,
     issueTraceable: true,
     go: true,
     passkey: false
@@ -90,6 +110,8 @@ test("execution blocks when issue traceability is missing", () => {
     constitutionConsulted: true,
     runtimeTruth: { runtimeAvailable: true },
     credential: executeCredential,
+    consent: fullConsent,
+    ...approvalContext,
     issueTraceable: false,
     go: true,
     passkey: false
@@ -107,6 +129,8 @@ test("execution allows build with resolved repo and GO", () => {
     constitutionConsulted: true,
     runtimeTruth: { runtimeAvailable: true },
     credential: executeCredential,
+    consent: fullConsent,
+    ...approvalContext,
     issueTraceable: true,
     go: true,
     passkey: false
@@ -124,6 +148,8 @@ test("execution blocks when constitution is not consulted", () => {
     constitutionConsulted: false,
     runtimeTruth: { runtimeAvailable: true },
     credential: executeCredential,
+    consent: fullConsent,
+    ...approvalContext,
     issueTraceable: true,
     go: true,
     passkey: false
@@ -141,6 +167,8 @@ test("execution blocks when runtime truth is unavailable and no safe fallback is
     constitutionConsulted: true,
     runtimeTruth: { runtimeAvailable: false, safeFallbackChosen: false },
     credential: executeCredential,
+    consent: fullConsent,
+    ...approvalContext,
     issueTraceable: true,
     go: true,
     passkey: false
@@ -162,6 +190,8 @@ test("runtime-memory conflict requires reconcile", () => {
       memoryState: { issueStatus: "open", prCount: 2 }
     },
     credential: executeCredential,
+    consent: fullConsent,
+    ...approvalContext,
     issueTraceable: true,
     go: true,
     passkey: false
@@ -206,6 +236,8 @@ test("execution blocks when runtime truth is stale", () => {
       nowMs: Date.parse("2026-04-15T00:01:00Z")
     },
     credential: executeCredential,
+    consent: fullConsent,
+    ...approvalContext,
     issueTraceable: true,
     go: true,
     passkey: false
@@ -224,6 +256,8 @@ test("reviewer role cannot run build action", () => {
     constitutionConsulted: true,
     runtimeTruth: { runtimeAvailable: true },
     credential: executeCredential,
+    consent: fullConsent,
+    ...approvalContext,
     issueTraceable: true,
     go: true,
     passkey: false
@@ -242,6 +276,8 @@ test("butler role can create issue with GO", () => {
     constitutionConsulted: true,
     runtimeTruth: { runtimeAvailable: true },
     credential: executeCredential,
+    consent: fullConsent,
+    ...approvalContext,
     issueTraceable: true,
     go: true,
     passkey: false
@@ -268,6 +304,8 @@ test("execution blocks when credential model is not github_app", () => {
     constitutionConsulted: true,
     runtimeTruth: { runtimeAvailable: true },
     credential: { model: "personal_access_token", tier: CredentialTier.EXECUTE },
+    consent: fullConsent,
+    ...approvalContext,
     issueTraceable: true,
     go: true,
     passkey: false
@@ -291,6 +329,8 @@ test("high-risk action blocks when credential is not short-lived", () => {
       shortLived: false,
       boundApprovalId: "approval-123"
     },
+    consent: fullConsent,
+    ...approvalContext,
     issueTraceable: true,
     go: true,
     passkey: true
@@ -312,4 +352,73 @@ test("credential boundary helper rejects always-on destructive credential", () =
   });
   assert.equal(result.ok, false);
   assert.equal(result.rule, "no_permanent_destructive_credentials");
+});
+
+test("execution blocks when required consent category is missing", () => {
+  const result = evaluateExecutionPolicy({
+    actionType: ActionType.DESTRUCTIVE,
+    actorRole: ActorRole.EXECUTOR,
+    mode: TaskMode.EXECUTION,
+    repositoryInput: "VTDD V2",
+    aliasRegistry: registry,
+    constitutionConsulted: true,
+    runtimeTruth: { runtimeAvailable: true },
+    credential: {
+      model: "github_app",
+      tier: CredentialTier.HIGH_RISK,
+      shortLived: true,
+      boundApprovalId: "approval-123"
+    },
+    consent: {
+      grantedCategories: [ConsentCategory.READ, ConsentCategory.EXECUTE]
+    },
+    ...approvalContext,
+    issueTraceable: true,
+    go: true,
+    passkey: true
+  });
+  assert.equal(result.allowed, false);
+  assert.equal(result.blockedByRule, "consent_boundary");
+});
+
+test("execution blocks when approval phrase is missing", () => {
+  const result = evaluateExecutionPolicy({
+    actionType: ActionType.BUILD,
+    actorRole: ActorRole.EXECUTOR,
+    mode: TaskMode.EXECUTION,
+    repositoryInput: "VTDD V2",
+    aliasRegistry: registry,
+    constitutionConsulted: true,
+    runtimeTruth: { runtimeAvailable: true },
+    credential: executeCredential,
+    consent: fullConsent,
+    approvalPhrase: "",
+    approvalScopeMatched: true,
+    issueTraceable: true,
+    go: true,
+    passkey: false
+  });
+  assert.equal(result.allowed, false);
+  assert.equal(result.blockedByRule, "approval_boundary");
+});
+
+test("execution blocks when approval scope does not match", () => {
+  const result = evaluateExecutionPolicy({
+    actionType: ActionType.BUILD,
+    actorRole: ActorRole.EXECUTOR,
+    mode: TaskMode.EXECUTION,
+    repositoryInput: "VTDD V2",
+    aliasRegistry: registry,
+    constitutionConsulted: true,
+    runtimeTruth: { runtimeAvailable: true },
+    credential: executeCredential,
+    consent: fullConsent,
+    approvalPhrase: "GO for another scope",
+    approvalScopeMatched: false,
+    issueTraceable: true,
+    go: true,
+    passkey: false
+  });
+  assert.equal(result.allowed, false);
+  assert.equal(result.blockedByRule, "approval_boundary");
 });
