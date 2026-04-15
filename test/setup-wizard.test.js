@@ -46,6 +46,12 @@ test("setup wizard returns git/db outputs and iphone onboarding pack", () => {
     ),
     true
   );
+  assert.equal(
+    result.onboarding.customGpt.constructionText.includes(
+      "Infer intent from natural conversation instead of fixed command phrases."
+    ),
+    true
+  );
   const parsed = JSON.parse(result.onboarding.customGpt.actionSchemaJson);
   assert.equal(
     Boolean(

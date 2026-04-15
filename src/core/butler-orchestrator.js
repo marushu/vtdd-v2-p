@@ -26,11 +26,7 @@ export function evaluateButlerExecution(input) {
     actorRole: ActorRole.BUTLER
   });
   if (!policy.allowed) {
-    return {
-      allowed: false,
-      blockedByRule: policy.blockedByRule,
-      reason: policy.reason
-    };
+    return { ...policy };
   }
 
   return {
