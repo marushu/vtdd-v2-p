@@ -2,8 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   ActionType,
+  ActorRole,
   TaskMode,
   evaluateExecutionPolicy,
+  evaluateRoleBoundary,
   evaluateRuntimeTruthPrecondition,
   resolveRepositoryTarget
 } from "../src/core/index.js";
@@ -155,4 +157,46 @@ test("runtime truth precondition allows safe fallback when runtime is unavailabl
     safeFallbackChosen: true
   });
   assert.equal(result.ok, true);
+});
+
+test("reviewer role cannot run build action", () => {
+  const result = evaluateExecutionPolicy({
+    actionType: ActionType.BUILD,
+    actorRole: ActorRole.REVIEWER,
+    mode: TaskMode.EXECUTION,
+    repositoryInput: "VTDD V2",
+    aliasRegistry: registry,
+    constitutionConsulted: true,
+    runtimeTruth: { runtimeAvailable: true },
+    issueTraceable: true,
+    go: true,
+    passkey: false
+  });
+  assert.equal(result.allowed, false);
+  assert.equal(result.blockedByRule, "role_action_boundary");
+});
+
+test("butler role can create issue with GO", () => {
+  const result = evaluateExecutionPolicy({
+    actionType: ActionType.ISSUE_CREATE,
+    actorRole: ActorRole.BUTLER,
+    mode: TaskMode.EXECUTION,
+    repositoryInput: "VTDD V2",
+    aliasRegistry: registry,
+    constitutionConsulted: true,
+    runtimeTruth: { runtimeAvailable: true },
+    issueTraceable: true,
+    go: true,
+    passkey: false
+  });
+  assert.equal(result.allowed, true);
+});
+
+test("unknown role is rejected", () => {
+  const result = evaluateRoleBoundary({
+    actorRole: "random-agent",
+    actionType: ActionType.READ
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.rule, "unknown_actor_role");
 });

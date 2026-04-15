@@ -20,3 +20,9 @@ export const TaskMode = Object.freeze({
   READ_ONLY: "read_only",
   EXECUTION: "execution"
 });
+
+export const ActorRole = Object.freeze({
+  BUTLER: "butler",
+  EXECUTOR: "executor",
+  REVIEWER: "reviewer"
+});

@@ -1,5 +1,6 @@
 import { evaluateApproval } from "./approval.js";
 import { resolveRepositoryTarget } from "./repository-resolution.js";
+import { evaluateRoleBoundary } from "./role-boundary.js";
 import { evaluateRuntimeTruthPrecondition } from "./runtime-truth.js";
 import { TaskMode } from "./types.js";
 
@@ -11,6 +12,7 @@ import { TaskMode } from "./types.js";
 export function evaluateExecutionPolicy(input) {
   const {
     actionType,
+    actorRole,
     mode = TaskMode.EXECUTION,
     repositoryInput,
     aliasRegistry,
@@ -20,6 +22,11 @@ export function evaluateExecutionPolicy(input) {
     go,
     passkey
   } = input;
+
+  const role = evaluateRoleBoundary({ actorRole, actionType });
+  if (!role.ok) {
+    return deny(role.rule, role.reason);
+  }
 
   if (mode === TaskMode.EXECUTION && !constitutionConsulted) {
     return deny(
