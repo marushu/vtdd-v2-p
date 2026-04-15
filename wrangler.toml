@@ -1,0 +1,6 @@
+name = "vtdd-v2-mvp"
+main = "src/worker.js"
+compatibility_date = "2026-04-15"
+
+[env.production]
+name = "vtdd-v2-mvp"
