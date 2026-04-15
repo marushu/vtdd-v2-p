@@ -5,10 +5,25 @@ export const SetupOutputTarget = Object.freeze({
   DB: "db"
 });
 
+export const SetupMode = Object.freeze({
+  IPHONE_FIRST: "iphone_first"
+});
+
+const SENSITIVE_SETUP_FIELDS = Object.freeze([
+  "cloudflareApiToken",
+  "cloudflareAccountId",
+  "githubAppPrivateKey",
+  "githubToken",
+  "openaiApiKey",
+  "geminiApiKey"
+]);
+
 /**
  * Initial setup wizard contract.
  * This function does not write to providers yet.
- * It only validates and returns where outputs must be written.
+ * It validates answers and returns:
+ * - output targets (Git / DB)
+ * - iPhone-first onboarding pack for copy/paste setup
  */
 export function runInitialSetupWizard(input) {
   const answers = input?.answers ?? {};
@@ -17,7 +32,8 @@ export function runInitialSetupWizard(input) {
     return {
       ok: false,
       blockingIssues: checks.issues,
-      outputs: { git: [], db: [] }
+      outputs: { git: [], db: [] },
+      onboarding: null
     };
   }
 
@@ -25,7 +41,8 @@ export function runInitialSetupWizard(input) {
   return {
     ok: true,
     blockingIssues: [],
-    outputs
+    outputs,
+    onboarding: buildIphoneOnboardingPack(answers)
   };
 }
 
@@ -56,6 +73,22 @@ function validateSetupAnswers(answers) {
     issues.push("initial reviewer must be gemini");
   }
 
+  if (normalize(answers.setupMode || SetupMode.IPHONE_FIRST) !== SetupMode.IPHONE_FIRST) {
+    issues.push("setup mode must be iphone_first");
+  }
+
+  const surfaces = normalizedStringArray(answers.initialSurfaces);
+  if (surfaces.includes("custom_gpt") && !normalizeUrl(answers.actionEndpointBaseUrl)) {
+    issues.push("actionEndpointBaseUrl is required for custom_gpt surface");
+  }
+
+  const sensitiveInputs = findSensitiveSetupInputs(answers);
+  if (sensitiveInputs.length > 0) {
+    issues.push(
+      `sensitive credentials must not be entered in setup wizard answers (${sensitiveInputs.join(", ")})`
+    );
+  }
+
   return {
     ok: issues.length === 0,
     issues
@@ -69,6 +102,12 @@ function buildSetupOutputs(answers) {
       kind: "shared_spec_reference",
       path: "docs/mvp/bootstrap-plan.md",
       reason: "shared MVP baseline must remain in Git"
+    },
+    {
+      target: SetupOutputTarget.GIT,
+      kind: "onboarding_reference",
+      path: "docs/mvp/iphone-first-setup.md",
+      reason: "mobile-first setup instructions are shared team knowledge"
     }
   ];
 
@@ -103,7 +142,9 @@ function buildSetupOutputs(answers) {
     recordType: "execution_log",
     content: {
       initialSurfaces: answers.initialSurfaces,
-      noDefaultRepository: true
+      noDefaultRepository: true,
+      setupMode: SetupMode.IPHONE_FIRST,
+      operatorManagedSecrets: true
     },
     metadata: {
       source: "initial_setup_wizard"
@@ -112,6 +153,100 @@ function buildSetupOutputs(answers) {
   pushSafeMemoryRecord(db, executionRecord, "setup_execution_profile");
 
   return { git, db };
+}
+
+function buildIphoneOnboardingPack(answers) {
+  const actionEndpointBaseUrl = normalizeUrl(answers.actionEndpointBaseUrl);
+  const customGptActionSchema = actionEndpointBaseUrl
+    ? buildCustomGptActionSchema(actionEndpointBaseUrl)
+    : null;
+
+  return {
+    setupMode: SetupMode.IPHONE_FIRST,
+    steps: [
+      "Open ChatGPT on iPhone and create or edit the Butler Custom GPT.",
+      "Paste construction instructions and action schema from this onboarding pack.",
+      "Confirm GitHub production environment has required reviewers and Cloudflare secrets.",
+      "Run GitHub Actions deploy-production with approval_phrase=GO and passkey_verified=true."
+    ],
+    secretHandlingPolicy: {
+      model: "operator_managed_environment_secrets",
+      statement:
+        "Do not paste Cloudflare or API credentials into wizard answers, chats, or GPT instructions."
+    },
+    customGpt: {
+      constructionText: buildCustomGptConstructionText(answers),
+      actionSchemaJson: customGptActionSchema ? JSON.stringify(customGptActionSchema, null, 2) : null,
+      endpointBaseUrl: actionEndpointBaseUrl
+    }
+  };
+}
+
+function buildCustomGptConstructionText(answers) {
+  const repositories = (answers.repositories ?? [])
+    .map((item) => item?.canonicalRepo)
+    .filter(Boolean);
+  const repoText = repositories.length > 0 ? repositories.join(", ") : "configured repositories";
+
+  return [
+    "You are VTDD Butler.",
+    "Always resolve repository target from alias/context before execution.",
+    "Do not assume a default repository.",
+    "Follow Constitution-first and Issue-as-spec judgment order.",
+    "For high-risk actions (merge/deploy/destructive/external publish), require GO + passkey.",
+    "Use Gemini as reviewer and treat reviewer output as structured input for human final decision.",
+    `Primary repositories: ${repoText}.`
+  ].join("\n");
+}
+
+function buildCustomGptActionSchema(baseUrl) {
+  return {
+    openapi: "3.1.0",
+    info: {
+      title: "VTDD Butler Action API",
+      version: "0.1.0"
+    },
+    servers: [
+      {
+        url: baseUrl
+      }
+    ],
+    paths: {
+      "/health": {
+        get: {
+          operationId: "getHealth",
+          responses: {
+            "200": {
+              description: "Worker is healthy"
+            }
+          }
+        }
+      },
+      "/mvp/gateway": {
+        post: {
+          operationId: "postMvpGateway",
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object"
+                }
+              }
+            }
+          },
+          responses: {
+            "200": {
+              description: "Execution allowed"
+            },
+            "422": {
+              description: "Execution blocked by policy"
+            }
+          }
+        }
+      }
+    }
+  };
 }
 
 function pushSafeMemoryRecord(dbOutputs, record, logicalTable) {
@@ -140,8 +275,43 @@ function pushSafeMemoryRecord(dbOutputs, record, logicalTable) {
   });
 }
 
+function findSensitiveSetupInputs(answers) {
+  const hits = [];
+  for (const field of SENSITIVE_SETUP_FIELDS) {
+    if (normalizeText(answers[field])) {
+      hits.push(field);
+    }
+  }
+  return hits;
+}
+
+function normalizedStringArray(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.map(normalize).filter(Boolean);
+}
+
 function normalize(value) {
   return String(value ?? "")
     .trim()
     .toLowerCase();
+}
+
+function normalizeText(value) {
+  return String(value ?? "").trim();
+}
+
+function normalizeUrl(value) {
+  const text = normalizeText(value);
+  if (!text) {
+    return "";
+  }
+
+  try {
+    const url = new URL(text);
+    return url.origin;
+  } catch {
+    return "";
+  }
 }

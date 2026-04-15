@@ -3,6 +3,7 @@ import { ActionType, ApprovalLevel, ConsentCategory } from "./types.js";
 const GO_REQUIRED_ACTIONS = new Set([
   ActionType.ISSUE_CREATE,
   ActionType.BUILD,
+  ActionType.PR_REVIEW_SUBMIT,
   ActionType.PR_OPERATION
 ]);
 
@@ -18,6 +19,8 @@ const CONSENT_REQUIREMENTS = Object.freeze({
   [ActionType.SUMMARIZE]: ConsentCategory.READ,
   [ActionType.ISSUE_CREATE]: ConsentCategory.PROPOSE,
   [ActionType.BUILD]: ConsentCategory.EXECUTE,
+  [ActionType.PR_COMMENT]: ConsentCategory.EXECUTE,
+  [ActionType.PR_REVIEW_SUBMIT]: ConsentCategory.EXECUTE,
   [ActionType.PR_OPERATION]: ConsentCategory.EXECUTE,
   [ActionType.MERGE]: ConsentCategory.EXECUTE,
   [ActionType.DEPLOY_PRODUCTION]: ConsentCategory.EXECUTE,

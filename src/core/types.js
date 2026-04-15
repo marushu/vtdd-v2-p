@@ -3,6 +3,8 @@ export const ActionType = Object.freeze({
   SUMMARIZE: "summarize",
   ISSUE_CREATE: "issue_create",
   BUILD: "build",
+  PR_COMMENT: "pr_comment",
+  PR_REVIEW_SUBMIT: "pr_review_submit",
   PR_OPERATION: "pr_operation",
   MERGE: "merge",
   DEPLOY_PRODUCTION: "deploy_production",

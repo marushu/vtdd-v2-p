@@ -8,6 +8,7 @@ Current code starts with deterministic governance gates:
 - constitution-first execution check
 - runtime truth precondition with stale detection and reconcile-required conflict detection
 - approval boundary (`GO` / `GO + passkey`)
+- PR action split boundary (`pr_comment` without GO, `pr_review_submit` with GO)
 - consent + approval schema checks (category grant, approval phrase, scope binding)
 - structured issue traceability checks (intent/success/non-goal refs + out-of-scope guard)
 - role-action boundary (`butler` / `executor` / `reviewer`)
@@ -25,7 +26,7 @@ Current code starts with deterministic governance gates:
 - execution policy gate (traceability + target resolution + approval)
 - Butler orchestrator (surface independence + fixed judgment order + policy integration)
 - MVP gateway (`runMvpGateway`) that composes policy, workflow, retrieval, and memory safety
-- setup wizard contract (`runInitialSetupWizard`) with explicit output targets (Git for shared spec, DB for user state)
+- setup wizard contract (`runInitialSetupWizard`) with explicit output targets and iPhone-first onboarding pack
 - immutable workflow state machine (`Idea -> Proposal -> Issue -> GO -> Build -> PR -> Review -> Merge`)
 - reconcile hold state (`reconcile_required`) for runtime/memory conflicts
 

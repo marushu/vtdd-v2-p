@@ -19,6 +19,8 @@ export function requiredCredentialTier(actionType) {
   if (
     actionType === ActionType.ISSUE_CREATE ||
     actionType === ActionType.BUILD ||
+    actionType === ActionType.PR_COMMENT ||
+    actionType === ActionType.PR_REVIEW_SUBMIT ||
     actionType === ActionType.PR_OPERATION
   ) {
     return CredentialTier.EXECUTE;
