@@ -45,6 +45,10 @@ test("setup wizard returns git/db outputs and iphone onboarding pack", () => {
   );
   assert.equal(Boolean(parsed?.components?.securitySchemes?.GatewayBearerAuth), true);
   assert.equal(
+    typeof parsed?.components?.schemas === "object" && !Array.isArray(parsed?.components?.schemas),
+    true
+  );
+  assert.equal(
     Array.isArray(parsed?.paths?.["/mvp/gateway"]?.post?.security),
     true
   );
