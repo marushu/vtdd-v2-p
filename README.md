@@ -8,8 +8,10 @@ Current code starts with deterministic governance gates:
 - approval boundary (`GO` / `GO + passkey`)
 - alias-based repository resolution with no default repository
 - execution policy gate (traceability + target resolution + approval)
+- immutable workflow state machine (`Idea -> Proposal -> Issue -> GO -> Build -> PR -> Review -> Merge`)
+- reconcile hold state (`reconcile_required`) for runtime/memory conflicts
 
-Code lives in `src/core/`, with tests in `test/core-policy.test.js`.
+Code lives in `src/core/`, with tests in `test/core-policy.test.js` and `test/workflow-state-machine.test.js`.
 
 ## Run tests
 
