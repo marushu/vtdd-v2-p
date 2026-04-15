@@ -1,4 +1,5 @@
 import { evaluateApproval } from "./approval.js";
+import { evaluateCredentialBoundary } from "./credential-boundary.js";
 import { resolveRepositoryTarget } from "./repository-resolution.js";
 import { evaluateRoleBoundary } from "./role-boundary.js";
 import { evaluateRuntimeTruthPrecondition } from "./runtime-truth.js";
@@ -18,6 +19,7 @@ export function evaluateExecutionPolicy(input) {
     aliasRegistry,
     constitutionConsulted = false,
     runtimeTruth = {},
+    credential,
     issueTraceable,
     go,
     passkey
@@ -62,6 +64,15 @@ export function evaluateExecutionPolicy(input) {
   const approval = evaluateApproval({ actionType, go, passkey });
   if (!approval.ok) {
     return deny("approval_boundary", approval.reason, { requiredApproval: approval.required });
+  }
+
+  if (mode === TaskMode.EXECUTION) {
+    const credentialBoundary = evaluateCredentialBoundary({ actionType, credential });
+    if (!credentialBoundary.ok) {
+      return deny(credentialBoundary.rule, credentialBoundary.reason, {
+        requiredCredentialTier: credentialBoundary.requiredTier
+      });
+    }
   }
 
   return {

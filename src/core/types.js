@@ -26,3 +26,9 @@ export const ActorRole = Object.freeze({
   EXECUTOR: "executor",
   REVIEWER: "reviewer"
 });
+
+export const CredentialTier = Object.freeze({
+  READ: "read",
+  EXECUTE: "execute",
+  HIGH_RISK: "high_risk"
+});

@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 import {
   ActionType,
   ActorRole,
+  CredentialTier,
   TaskMode,
+  evaluateCredentialBoundary,
   evaluateExecutionPolicy,
   evaluateRoleBoundary,
   evaluateRuntimeTruthPrecondition,
@@ -23,6 +25,18 @@ const registry = [
   }
 ];
 
+const executeCredential = {
+  model: "github_app",
+  tier: CredentialTier.EXECUTE
+};
+
+const highRiskCredential = {
+  model: "github_app",
+  tier: CredentialTier.HIGH_RISK,
+  shortLived: true,
+  boundApprovalId: "approval-123"
+};
+
 test("read-only mode can proceed safely even when repo is unresolved", () => {
   const resolved = resolveRepositoryTarget({
     input: "unknown-project",
@@ -41,6 +55,7 @@ test("execution mode blocks unresolved repository target", () => {
     aliasRegistry: registry,
     constitutionConsulted: true,
     runtimeTruth: { runtimeAvailable: true },
+    credential: executeCredential,
     issueTraceable: true,
     go: true,
     passkey: false
@@ -57,6 +72,7 @@ test("high-risk action requires GO + passkey", () => {
     aliasRegistry: registry,
     constitutionConsulted: true,
     runtimeTruth: { runtimeAvailable: true },
+    credential: highRiskCredential,
     issueTraceable: true,
     go: true,
     passkey: false
@@ -73,6 +89,7 @@ test("execution blocks when issue traceability is missing", () => {
     aliasRegistry: registry,
     constitutionConsulted: true,
     runtimeTruth: { runtimeAvailable: true },
+    credential: executeCredential,
     issueTraceable: false,
     go: true,
     passkey: false
@@ -89,6 +106,7 @@ test("execution allows build with resolved repo and GO", () => {
     aliasRegistry: registry,
     constitutionConsulted: true,
     runtimeTruth: { runtimeAvailable: true },
+    credential: executeCredential,
     issueTraceable: true,
     go: true,
     passkey: false
@@ -105,6 +123,7 @@ test("execution blocks when constitution is not consulted", () => {
     aliasRegistry: registry,
     constitutionConsulted: false,
     runtimeTruth: { runtimeAvailable: true },
+    credential: executeCredential,
     issueTraceable: true,
     go: true,
     passkey: false
@@ -121,6 +140,7 @@ test("execution blocks when runtime truth is unavailable and no safe fallback is
     aliasRegistry: registry,
     constitutionConsulted: true,
     runtimeTruth: { runtimeAvailable: false, safeFallbackChosen: false },
+    credential: executeCredential,
     issueTraceable: true,
     go: true,
     passkey: false
@@ -141,6 +161,7 @@ test("runtime-memory conflict requires reconcile", () => {
       runtimeState: { issueStatus: "open", prCount: 1 },
       memoryState: { issueStatus: "open", prCount: 2 }
     },
+    credential: executeCredential,
     issueTraceable: true,
     go: true,
     passkey: false
@@ -168,6 +189,7 @@ test("reviewer role cannot run build action", () => {
     aliasRegistry: registry,
     constitutionConsulted: true,
     runtimeTruth: { runtimeAvailable: true },
+    credential: executeCredential,
     issueTraceable: true,
     go: true,
     passkey: false
@@ -185,6 +207,7 @@ test("butler role can create issue with GO", () => {
     aliasRegistry: registry,
     constitutionConsulted: true,
     runtimeTruth: { runtimeAvailable: true },
+    credential: executeCredential,
     issueTraceable: true,
     go: true,
     passkey: false
@@ -199,4 +222,60 @@ test("unknown role is rejected", () => {
   });
   assert.equal(result.ok, false);
   assert.equal(result.rule, "unknown_actor_role");
+});
+
+test("execution blocks when credential model is not github_app", () => {
+  const result = evaluateExecutionPolicy({
+    actionType: ActionType.BUILD,
+    actorRole: ActorRole.EXECUTOR,
+    mode: TaskMode.EXECUTION,
+    repositoryInput: "VTDD V2",
+    aliasRegistry: registry,
+    constitutionConsulted: true,
+    runtimeTruth: { runtimeAvailable: true },
+    credential: { model: "personal_access_token", tier: CredentialTier.EXECUTE },
+    issueTraceable: true,
+    go: true,
+    passkey: false
+  });
+  assert.equal(result.allowed, false);
+  assert.equal(result.blockedByRule, "github_app_credential_required");
+});
+
+test("high-risk action blocks when credential is not short-lived", () => {
+  const result = evaluateExecutionPolicy({
+    actionType: ActionType.DEPLOY_PRODUCTION,
+    actorRole: ActorRole.EXECUTOR,
+    mode: TaskMode.EXECUTION,
+    repositoryInput: "VTDD V2",
+    aliasRegistry: registry,
+    constitutionConsulted: true,
+    runtimeTruth: { runtimeAvailable: true },
+    credential: {
+      model: "github_app",
+      tier: CredentialTier.HIGH_RISK,
+      shortLived: false,
+      boundApprovalId: "approval-123"
+    },
+    issueTraceable: true,
+    go: true,
+    passkey: true
+  });
+  assert.equal(result.allowed, false);
+  assert.equal(result.blockedByRule, "short_lived_credential_required_for_high_risk");
+});
+
+test("credential boundary helper rejects always-on destructive credential", () => {
+  const result = evaluateCredentialBoundary({
+    actionType: ActionType.DESTRUCTIVE,
+    credential: {
+      model: "github_app",
+      tier: CredentialTier.HIGH_RISK,
+      shortLived: true,
+      boundApprovalId: "approval-123",
+      destructiveAlwaysOn: true
+    }
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.rule, "no_permanent_destructive_credentials");
 });
