@@ -16,7 +16,7 @@ const DEFAULT_REPOSITORIES = Object.freeze([
 ]);
 
 export default {
-  async fetch(request) {
+  async fetch(request, env) {
     const url = new URL(request.url);
 
     if (request.method === "GET" && url.pathname === "/health") {
@@ -32,6 +32,15 @@ export default {
     }
 
     if (request.method === "POST" && url.pathname === "/mvp/gateway") {
+      const auth = authorizeGatewayRequest({ request, env });
+      if (!auth.ok) {
+        return json(auth.status, {
+          ok: false,
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+
       const payload = await readJson(request);
       const result = runMvpGateway(payload);
       return json(result.allowed ? 200 : 422, result);
@@ -307,6 +316,45 @@ function renderFailureContent(result, answers, url) {
   `;
 }
 
+function authorizeGatewayRequest({ request, env }) {
+  const runtimeEnv = env ?? {};
+
+  const bearerToken = normalizeText(runtimeEnv.MVP_GATEWAY_BEARER_TOKEN);
+  if (bearerToken) {
+    const provided = parseBearerToken(request.headers.get("authorization"));
+    if (provided === bearerToken) {
+      return { ok: true };
+    }
+    return {
+      ok: false,
+      status: 401,
+      reason: "valid bearer token is required for /mvp/gateway"
+    };
+  }
+
+  const accessClientId = normalizeText(runtimeEnv.CF_ACCESS_CLIENT_ID);
+  const accessClientSecret = normalizeText(runtimeEnv.CF_ACCESS_CLIENT_SECRET);
+  if (accessClientId || accessClientSecret) {
+    const providedId = normalizeText(request.headers.get("cf-access-client-id"));
+    const providedSecret = normalizeText(request.headers.get("cf-access-client-secret"));
+    if (
+      accessClientId &&
+      accessClientSecret &&
+      providedId === accessClientId &&
+      providedSecret === accessClientSecret
+    ) {
+      return { ok: true };
+    }
+    return {
+      ok: false,
+      status: 401,
+      reason: "valid Cloudflare Access service token headers are required for /mvp/gateway"
+    };
+  }
+
+  return { ok: true };
+}
+
 async function readJson(request) {
   try {
     return await request.json();
@@ -333,6 +381,23 @@ function normalize(value) {
   return String(value ?? "")
     .trim()
     .toLowerCase();
+}
+
+function normalizeText(value) {
+  return String(value ?? "").trim();
+}
+
+function parseBearerToken(value) {
+  const text = normalizeText(value);
+  if (!text) {
+    return "";
+  }
+
+  const [scheme, token] = text.split(/\s+/, 2);
+  if (normalize(scheme) !== "bearer") {
+    return "";
+  }
+  return normalizeText(token);
 }
 
 function normalizeRepo(value) {

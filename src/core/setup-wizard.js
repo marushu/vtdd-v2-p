@@ -211,6 +211,17 @@ function buildCustomGptActionSchema(baseUrl) {
         url: baseUrl
       }
     ],
+    components: {
+      securitySchemes: {
+        GatewayBearerAuth: {
+          type: "http",
+          scheme: "bearer",
+          bearerFormat: "API token",
+          description:
+            "Set this to MVP_GATEWAY_BEARER_TOKEN configured on Cloudflare Worker environment."
+        }
+      }
+    },
     paths: {
       "/health": {
         get: {
@@ -225,6 +236,7 @@ function buildCustomGptActionSchema(baseUrl) {
       "/mvp/gateway": {
         post: {
           operationId: "postMvpGateway",
+          security: [{ GatewayBearerAuth: [] }],
           requestBody: {
             required: true,
             content: {

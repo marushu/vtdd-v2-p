@@ -27,6 +27,7 @@ Current code starts with deterministic governance gates:
 - Butler orchestrator (surface independence + fixed judgment order + policy integration)
 - MVP gateway (`runMvpGateway`) that composes policy, workflow, retrieval, and memory safety
 - setup wizard contract (`runInitialSetupWizard`) with explicit output targets and iPhone-first onboarding pack
+- machine auth path for `/mvp/gateway` (Bearer token / Access service token)
 - immutable workflow state machine (`Idea -> Proposal -> Issue -> GO -> Build -> PR -> Review -> Merge`)
 - reconcile hold state (`reconcile_required`) for runtime/memory conflicts
 
