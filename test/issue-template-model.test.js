@@ -9,6 +9,8 @@ const TEMPLATE_PATH = path.join(process.cwd(), ".github", "ISSUE_TEMPLATE", "spe
 const CANONICAL_SECTIONS = [
   "Intent",
   "Success Criteria",
+  "Completion Gate",
+  "Validation Plan",
   "Non-goal",
   "Open Questions",
   "Related Issues / Rules"
@@ -33,4 +35,20 @@ test("spec issue template contains canonical sections in order", () => {
     assert.ok(nextIndex > lastIndex, `${marker} must appear after previous canonical section`);
     lastIndex = nextIndex;
   }
+});
+
+test("spec issue template includes completion and validation slots", () => {
+  const template = fs.readFileSync(TEMPLATE_PATH, "utf8");
+
+  assert.match(template, /## Completion Gate/);
+  assert.match(template, /- \[ \] code merged/);
+  assert.match(template, /- \[ \] required tests pass/);
+  assert.match(template, /- \[ \] mapped E2E passes/);
+  assert.match(template, /- \[ \] human approval/);
+
+  assert.match(template, /## Validation Plan/);
+  assert.match(template, /- Unit:/);
+  assert.match(template, /- Integration:/);
+  assert.match(template, /- E2E:/);
+  assert.match(template, /- Evidence path\/link:/);
 });

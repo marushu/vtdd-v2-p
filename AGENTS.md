@@ -136,6 +136,18 @@ MVP completion claim is allowed only when the matrix shows complete coverage for
 - Memory excludes secrets and raw sensitive material.
 - Reviewer role does not get execution credentials.
 
+## Memory Capture and Cost Boundary
+
+- Do not persist full conversation transcripts by default.
+- Persist only structured entries that improve future judgment or recovery.
+- Selection must happen before write (pre-write filter); do not "store all then trim later" by default.
+- If temporary full-log capture is explicitly approved for a narrow case, it must include:
+  - explicit Issue linkage,
+  - retention TTL,
+  - deletion plan,
+  - owner approval note.
+- Any PR that changes memory write behavior must state expected write-volume/cost impact.
+
 ## Conversation UX Contract
 
 - User-facing operational guidance is Japanese by default unless user requests otherwise.
@@ -160,6 +172,18 @@ Any completion claim must include evidence:
 - relevant file path(s)
 - test result(s)
 - E2E run result(s)
+
+Issue authoring must keep completion unambiguous:
+
+- each Success Criteria must be observable/testable (not abstract wording only),
+- completion must be judgeable without interpretation drift.
+
+PR authoring must include executed verification, not intent only:
+
+- what was tested,
+- how it was tested,
+- what passed/failed,
+- where evidence can be found.
 
 If evidence is missing, status must be "unverified" or "incomplete", never "done".
 

@@ -15,6 +15,14 @@ None.
 
 None.
 
+## Verification Evidence
+
+- Unit:
+- Integration:
+- E2E:
+- Manual:
+- Evidence path/link:
+
 ## Related Constitution Rules
 
 - 

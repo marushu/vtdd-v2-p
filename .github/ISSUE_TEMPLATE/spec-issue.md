@@ -16,6 +16,20 @@ assignees: []
 - [ ] 
 - [ ] 
 
+## Completion Gate
+
+- [ ] code merged
+- [ ] required tests pass
+- [ ] mapped E2E passes
+- [ ] human approval
+
+## Validation Plan
+
+- Unit:
+- Integration:
+- E2E:
+- Evidence path/link:
+
 ## Non-goal
 
 - 

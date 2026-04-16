@@ -11,9 +11,10 @@ Every PR should contain these sections in this order:
 2. `Satisfied Success Criteria`
 3. `Unsatisfied Success Criteria`
 4. `Non-goal violations`
-5. `Related Constitution Rules`
-6. `Out-of-scope but NOT implemented`
-7. `Extra changes (if any)`
+5. `Verification Evidence`
+6. `Related Constitution Rules`
+7. `Out-of-scope but NOT implemented`
+8. `Extra changes (if any)`
 
 ## Section Purpose
 
@@ -32,6 +33,11 @@ Call out remaining criteria explicitly, or state `None.` when there are none.
 ### `Non-goal violations`
 
 Call out any violation of declared non-goals, or state `None.` when there are none.
+
+### `Verification Evidence`
+
+Record executed verification (unit/integration/E2E/manual), results, and where
+the evidence is visible.
 
 ### `Related Constitution Rules`
 

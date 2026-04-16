@@ -11,6 +11,7 @@ const CANONICAL_SECTIONS = [
   "Satisfied Success Criteria",
   "Unsatisfied Success Criteria",
   "Non-goal violations",
+  "Verification Evidence",
   "Related Constitution Rules",
   "Out-of-scope but NOT implemented",
   "Extra changes (if any)"
@@ -44,4 +45,15 @@ test("pr template uses plain None markers for empty sections", () => {
   assert.match(template, /## Unsatisfied Success Criteria\s+None\./);
   assert.match(template, /## Non-goal violations\s+None\./);
   assert.match(template, /## Extra changes \(if any\)\s+None\./);
+});
+
+test("pr template includes explicit verification slots", () => {
+  const template = fs.readFileSync(TEMPLATE_PATH, "utf8");
+
+  assert.match(template, /## Verification Evidence/);
+  assert.match(template, /- Unit:/);
+  assert.match(template, /- Integration:/);
+  assert.match(template, /- E2E:/);
+  assert.match(template, /- Manual:/);
+  assert.match(template, /- Evidence path\/link:/);
 });
