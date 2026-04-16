@@ -330,6 +330,139 @@ test("worker runs gateway route", async () => {
   assert.equal(body.repository, "sample-org/vtdd-v2");
 });
 
+test("worker gateway allows pr comment without GO when other gates pass", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/gateway", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        phase: "execution",
+        actorRole: "executor",
+        policyInput: {
+          actionType: ActionType.PR_COMMENT,
+          mode: TaskMode.EXECUTION,
+          repositoryInput: "vtdd",
+          aliasRegistry,
+          targetConfirmed: true,
+          constitutionConsulted: true,
+          runtimeTruth: {
+            runtimeAvailable: true
+          },
+          credential: {
+            model: "github_app",
+            tier: CredentialTier.EXECUTE
+          },
+          consent: {
+            grantedCategories: [ConsentCategory.EXECUTE]
+          },
+          approvalPhrase: "",
+          approvalScopeMatched: false,
+          issueTraceable: true,
+          go: false,
+          passkey: false
+        }
+      })
+    })
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.allowed, true);
+  assert.equal(body.requiredApproval, "none");
+});
+
+test("worker gateway blocks pr review submit without GO", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/gateway", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        phase: "execution",
+        actorRole: "executor",
+        policyInput: {
+          actionType: ActionType.PR_REVIEW_SUBMIT,
+          mode: TaskMode.EXECUTION,
+          repositoryInput: "vtdd",
+          aliasRegistry,
+          targetConfirmed: true,
+          constitutionConsulted: true,
+          runtimeTruth: {
+            runtimeAvailable: true
+          },
+          credential: {
+            model: "github_app",
+            tier: CredentialTier.EXECUTE
+          },
+          consent: {
+            grantedCategories: [ConsentCategory.EXECUTE]
+          },
+          approvalPhrase: "GO review submit",
+          approvalScopeMatched: true,
+          issueTraceable: true,
+          go: false,
+          passkey: false
+        }
+      })
+    })
+  );
+
+  assert.equal(response.status, 422);
+  const body = await response.json();
+  assert.equal(body.allowed, false);
+  assert.equal(body.blockedByRule, "approval_boundary");
+  assert.equal(body.reason, "explicit GO is required before execution");
+});
+
+test("worker gateway keeps merge on GO plus passkey boundary", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/gateway", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        phase: "execution",
+        actorRole: "executor",
+        policyInput: {
+          actionType: ActionType.MERGE,
+          mode: TaskMode.EXECUTION,
+          repositoryInput: "vtdd",
+          aliasRegistry,
+          targetConfirmed: true,
+          constitutionConsulted: true,
+          runtimeTruth: {
+            runtimeAvailable: true
+          },
+          credential: {
+            model: "github_app",
+            tier: CredentialTier.HIGH_RISK,
+            shortLived: true,
+            boundApprovalId: "approval-merge-1"
+          },
+          consent: {
+            grantedCategories: [ConsentCategory.EXECUTE]
+          },
+          approvalPhrase: "GO merge request",
+          approvalScopeMatched: true,
+          issueTraceable: true,
+          go: true,
+          passkey: false
+        }
+      })
+    })
+  );
+
+  assert.equal(response.status, 422);
+  const body = await response.json();
+  assert.equal(body.allowed, false);
+  assert.equal(body.blockedByRule, "approval_boundary");
+  assert.equal(body.reason, "high-risk action requires GO + passkey");
+});
+
 test("worker gateway blocks merge in guarded absence mode and records stop log", async () => {
   const provider = createInMemoryMemoryProvider();
   const response = await worker.fetch(
