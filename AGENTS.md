@@ -151,6 +151,11 @@ Any completion claim must include evidence:
 
 If evidence is missing, status must be "unverified" or "incomplete", never "done".
 
+If scope ambiguity, interpretation choice, or mismatch reconciliation occurred
+during implementation, record that reasoning in the PR description.
+PRs must not hide meaningful judgment history when that history explains why the
+chosen change is in-scope and safe.
+
 ## Butler and Reviewer as Stop Roles
 
 When available:
