@@ -8,9 +8,11 @@ Every new spec Issue should contain these sections in this order:
 
 1. `Intent`
 2. `Success Criteria`
-3. `Non-goal`
-4. `Open Questions`
-5. `Related Issues / Rules`
+3. `Completion Gate`
+4. `Validation Plan`
+5. `Non-goal`
+6. `Open Questions`
+7. `Related Issues / Rules`
 
 ## Section Purpose
 
@@ -22,6 +24,16 @@ Describe what the spec is trying to achieve in one to three clear sentences.
 
 List the observable conditions that must be true for the Issue to be treated
 as satisfied.
+
+### `Completion Gate`
+
+State the exact closure gate in checkable form (for example: merged code,
+required tests pass, mapped E2E passes, human approval).
+
+### `Validation Plan`
+
+List the concrete verification plan for this Issue (unit/integration/E2E,
+manual test steps, and expected evidence).
 
 ### `Non-goal`
 

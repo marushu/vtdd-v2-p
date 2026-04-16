@@ -136,6 +136,22 @@ MVP completion claim is allowed only when the matrix shows complete coverage for
 - Memory excludes secrets and raw sensitive material.
 - Reviewer role does not get execution credentials.
 
+## RAG Memory Capture and Cost Boundary
+
+This section applies to RAG memory persistence only
+(`decision_log` / `proposal_log` / `working_memory` and related memory records).
+It must not be interpreted as a blanket prohibition for non-RAG operational logs.
+
+- Do not persist full conversation transcripts into RAG memory by default.
+- Persist only structured entries that improve future judgment or recovery.
+- Selection must happen before RAG write (pre-write filter); do not "store all then trim later" by default.
+- If temporary full-log capture into RAG memory is explicitly approved for a narrow case, it must include:
+  - explicit Issue linkage,
+  - retention TTL,
+  - deletion plan,
+  - owner approval note.
+- Any PR that changes RAG memory write behavior must state expected write-volume/cost impact.
+
 ## Conversation UX Contract
 
 - User-facing operational guidance is Japanese by default unless user requests otherwise.
@@ -160,6 +176,18 @@ Any completion claim must include evidence:
 - relevant file path(s)
 - test result(s)
 - E2E run result(s)
+
+Issue authoring must keep completion unambiguous:
+
+- each Success Criteria must be observable/testable (not abstract wording only),
+- completion must be judgeable without interpretation drift.
+
+PR authoring must include executed verification, not intent only:
+
+- what was tested,
+- how it was tested,
+- what passed/failed,
+- where evidence can be found.
 
 If evidence is missing, status must be "unverified" or "incomplete", never "done".
 

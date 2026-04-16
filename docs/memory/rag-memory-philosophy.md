@@ -64,3 +64,15 @@ Do not store:
 - unnecessary full casual chat history.
 
 Store only what improves future judgment and recovery.
+
+## Retention and Pruning Principle
+
+- Prefer selective structured capture at write time over full transcript capture.
+- Apply filtering before storage to control long-term storage and retrieval cost.
+- Temporary full-log capture is allowed only with explicit owner approval and
+  must define:
+  - Issue linkage,
+  - retention TTL,
+  - deletion plan.
+- Proposal/decision/execution records should remain compact and referenceable
+  rather than transcript-heavy.
