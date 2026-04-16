@@ -1,7 +1,10 @@
 import {
   appendDecisionLogFromGateway,
+  appendProposalLogFromGateway,
   inferRelatedIssueFromGatewayInput,
+  inferRelatedIssueFromProposalGatewayInput,
   retrieveDecisionLogReferences,
+  retrieveProposalLogReferences,
   retrieveConstitution,
   runInitialSetupWizard,
   runMvpGateway,
@@ -89,6 +92,19 @@ export default {
       return handleRetrieveDecisionLogsRequest(url, env);
     }
 
+    if (request.method === "GET" && url.pathname === "/mvp/retrieve/proposals") {
+      const auth = authorizeGatewayRequest({ request, env });
+      if (!auth.ok) {
+        return json(auth.status, {
+          ok: false,
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+
+      return handleRetrieveProposalLogsRequest(url, env);
+    }
+
     return json(404, {
       ok: false,
       error: "not_found"
@@ -167,37 +183,93 @@ async function handleRetrieveDecisionLogsRequest(url, env) {
   });
 }
 
+async function handleRetrieveProposalLogsRequest(url, env) {
+  const provider = env?.MEMORY_PROVIDER ?? null;
+  const validation = validateMemoryProvider(provider);
+  if (!validation.ok) {
+    return json(503, {
+      ok: false,
+      error: "memory_provider_unavailable",
+      reason: "valid memory provider is required for proposal log retrieval"
+    });
+  }
+
+  const limit = normalizeLimit(url.searchParams.get("limit"), 5);
+  const relatedIssue = normalizeIssue(url.searchParams.get("relatedIssue"));
+  const retrieved = await retrieveProposalLogReferences(provider, {
+    limit,
+    relatedIssue
+  });
+
+  if (!retrieved.ok) {
+    return json(retrieved.status, {
+      ok: false,
+      error: retrieved.error ?? "memory_read_failed",
+      reason: retrieved.reason
+    });
+  }
+
+  return json(200, {
+    ok: true,
+    recordType: "proposal_log",
+    recordCount: retrieved.references.length,
+    references: retrieved.references
+  });
+}
+
 async function completeGatewayRuntime({ payload, gatewayResult, env }) {
   const provider = env?.MEMORY_PROVIDER ?? null;
   const providerValidation = validateMemoryProvider(provider);
   const needsDecisionWrite = gatewayResult?.memoryWrite?.recordType === "decision_log";
+  const needsProposalWrite = gatewayResult?.memoryWrite?.recordType === "proposal_log";
   const shouldAttachDecisionReferences = Array.isArray(gatewayResult?.retrievalPlan?.sources)
     ? gatewayResult.retrievalPlan.sources.includes("decision_log")
     : false;
+  const shouldAttachProposalReferences = Array.isArray(gatewayResult?.retrievalPlan?.sources)
+    ? gatewayResult.retrievalPlan.sources.includes("proposal_log")
+    : false;
 
-  if (!needsDecisionWrite && !shouldAttachDecisionReferences) {
+  if (
+    !needsDecisionWrite &&
+    !needsProposalWrite &&
+    !shouldAttachDecisionReferences &&
+    !shouldAttachProposalReferences
+  ) {
     return { status: 200, body: gatewayResult };
   }
 
   if (!providerValidation.ok) {
-    if (needsDecisionWrite) {
+    if (needsDecisionWrite || needsProposalWrite) {
+      const reason = needsProposalWrite
+        ? "valid memory provider is required for proposal log persistence"
+        : "valid memory provider is required for decision log persistence";
       return {
         status: 503,
         body: {
           allowed: false,
           error: "memory_provider_unavailable",
-          reason: "valid memory provider is required for decision log persistence"
+          reason
         }
       };
     }
+
+    const retrievalReferences = {};
+    const warnings = [];
+    if (shouldAttachDecisionReferences) {
+      retrievalReferences.decisionLogs = [];
+      warnings.push("memory provider unavailable; decision references skipped");
+    }
+    if (shouldAttachProposalReferences) {
+      retrievalReferences.proposalLogs = [];
+      warnings.push("memory provider unavailable; proposal references skipped");
+    }
+
     return {
       status: 200,
       body: {
         ...gatewayResult,
-        retrievalReferences: {
-          decisionLogs: []
-        },
-        warnings: ["memory provider unavailable; decision references skipped"]
+        retrievalReferences,
+        warnings
       }
     };
   }
@@ -239,6 +311,41 @@ async function completeGatewayRuntime({ payload, gatewayResult, env }) {
     };
   }
 
+  if (needsProposalWrite) {
+    const persisted = await appendProposalLogFromGateway(provider, payload, gatewayResult);
+    if (!persisted.ok) {
+      if (persisted.status === 422) {
+        return {
+          status: 422,
+          body: {
+            allowed: false,
+            blockedByRule: persisted.blockedByRule ?? "proposal_log_schema_invalid",
+            reason: persisted.reason,
+            issues: Array.isArray(persisted.issues) ? persisted.issues : []
+          }
+        };
+      }
+      return {
+        status: persisted.status ?? 503,
+        body: {
+          allowed: false,
+          error: persisted.error ?? "memory_write_failed",
+          reason: persisted.reason
+        }
+      };
+    }
+
+    responseBody = {
+      ...responseBody,
+      memoryWritePersisted: {
+        recordId: persisted.record.id,
+        recordType: persisted.record.type,
+        relatedIssue: persisted.entry.relatedIssue ?? null,
+        timestamp: persisted.entry.timestamp
+      }
+    };
+  }
+
   if (shouldAttachDecisionReferences) {
     const relatedIssue =
       responseBody?.memoryWritePersisted?.relatedIssue ?? inferRelatedIssueFromGatewayInput(payload);
@@ -263,6 +370,36 @@ async function completeGatewayRuntime({ payload, gatewayResult, env }) {
       retrievalReferences: {
         ...(responseBody.retrievalReferences ?? {}),
         decisionLogs: retrieved.references
+      }
+    };
+  }
+
+  if (shouldAttachProposalReferences) {
+    const relatedIssue =
+      responseBody?.memoryWritePersisted?.recordType === "proposal_log"
+        ? responseBody.memoryWritePersisted.relatedIssue
+        : inferRelatedIssueFromProposalGatewayInput(payload);
+    const retrieved = await retrieveProposalLogReferences(provider, {
+      limit: 5,
+      relatedIssue
+    });
+
+    if (!retrieved.ok) {
+      return {
+        status: retrieved.status ?? 503,
+        body: {
+          allowed: false,
+          error: retrieved.error ?? "memory_read_failed",
+          reason: retrieved.reason
+        }
+      };
+    }
+
+    responseBody = {
+      ...responseBody,
+      retrievalReferences: {
+        ...(responseBody.retrievalReferences ?? {}),
+        proposalLogs: retrieved.references
       }
     };
   }

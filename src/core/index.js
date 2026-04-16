@@ -36,6 +36,7 @@ export {
 } from "./constitution-schema.js";
 export {
   DECISION_LOG_FIELDS,
+  PROPOSAL_LOG_FIELDS,
   createDecisionLogEntry,
   validateDecisionLogEntry,
   createProposalLogEntry,
@@ -47,6 +48,12 @@ export {
   inferRelatedIssueFromGatewayInput,
   createCanonicalDecisionFromGateway
 } from "./decision-log-runtime.js";
+export {
+  appendProposalLogFromGateway,
+  retrieveProposalLogReferences,
+  inferRelatedIssueFromProposalGatewayInput,
+  createCanonicalProposalFromGateway
+} from "./proposal-log-runtime.js";
 export { createInMemoryLogStore } from "./log-store.js";
 export {
   MEMORY_RECORD_FIELD_POLICY,
