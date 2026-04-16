@@ -342,6 +342,34 @@ function buildCustomGptActionSchema(baseUrl) {
             }
           }
         }
+      },
+      "/mvp/retrieve/constitution": {
+        get: {
+          operationId: "getConstitutionRecords",
+          security: [{ GatewayBearerAuth: [] }],
+          parameters: [
+            {
+              name: "limit",
+              in: "query",
+              required: false,
+              schema: {
+                type: "integer",
+                minimum: 1,
+                maximum: 200,
+                default: 5
+              },
+              description: "Maximum number of constitution records to return."
+            }
+          ],
+          responses: {
+            "200": {
+              description: "Constitution records retrieved"
+            },
+            "503": {
+              description: "Memory provider is not configured"
+            }
+          }
+        }
       }
     }
   };
