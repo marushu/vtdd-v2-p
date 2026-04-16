@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vtdd.dev/schemas/constitution.schema.json",
+  "title": "VTDD V2 Constitution Schema",
+  "description": "Machine-readable constitution schema for VTDD V2 (#7).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "rules"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Constitution schema version."
+    },
+    "rules": {
+      "type": "array",
+      "minItems": 9,
+      "items": {
+        "$ref": "#/$defs/rule"
+      }
+    }
+  },
+  "$defs": {
+    "ruleId": {
+      "type": "string",
+      "enum": [
+        "no_build_without_explicit_go",
+        "runtime_truth_over_memory",
+        "reconcile_when_runtime_conflicts_with_memory",
+        "merge_requires_explicit_human_approval",
+        "no_out_of_scope_implementation",
+        "no_spec_inference_during_execution",
+        "proposal_not_implementation_for_extra_ideas",
+        "require_traceability_to_issue_sections",
+        "butler_must_read_constitution_before_judgment"
+      ]
+    },
+    "ruleType": {
+      "type": "string",
+      "enum": ["requirement"]
+    },
+    "enforcementLevel": {
+      "type": "string",
+      "enum": ["must"]
+    },
+    "rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "description", "enforcementLevel"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/ruleId"
+        },
+        "type": {
+          "$ref": "#/$defs/ruleType"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "enforcementLevel": {
+          "$ref": "#/$defs/enforcementLevel"
+        }
+      }
+    }
+  }
+}
