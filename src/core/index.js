@@ -92,6 +92,7 @@ export {
 export { evaluateExecutionPolicy } from "./policy.js";
 export { evaluateButlerExecution } from "./butler-orchestrator.js";
 export { runMvpGateway } from "./mvp-gateway.js";
+export { resolveGatewayAliasRegistryFromGitHubApp } from "./github-app-repository-index.js";
 export { SetupMode, SetupOutputTarget, runInitialSetupWizard } from "./setup-wizard.js";
 export {
   WorkflowStage,
