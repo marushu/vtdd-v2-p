@@ -78,6 +78,8 @@ export { SetupMode, SetupOutputTarget, runInitialSetupWizard } from "./setup-wiz
 export {
   WorkflowStage,
   WorkflowEvent,
+  WORKFLOW_STAGES,
+  WORKFLOW_EVENTS,
   createInitialWorkflowState,
   transitionWorkflow,
   listAllowedEvents
