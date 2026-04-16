@@ -1,4 +1,7 @@
 import {
+  appendDecisionLogFromGateway,
+  inferRelatedIssueFromGatewayInput,
+  retrieveDecisionLogReferences,
   retrieveConstitution,
   runInitialSetupWizard,
   runMvpGateway,
@@ -48,7 +51,16 @@ export default {
 
       const payload = await readJson(request);
       const result = runMvpGateway(payload);
-      return json(result.allowed ? 200 : 422, result);
+      if (!result.allowed) {
+        return json(422, result);
+      }
+
+      const gatewayOutcome = await completeGatewayRuntime({
+        payload,
+        gatewayResult: result,
+        env
+      });
+      return json(gatewayOutcome.status, gatewayOutcome.body);
     }
 
     if (request.method === "GET" && url.pathname === "/mvp/retrieve/constitution") {
@@ -62,6 +74,19 @@ export default {
       }
 
       return handleRetrieveConstitutionRequest(url, env);
+    }
+
+    if (request.method === "GET" && url.pathname === "/mvp/retrieve/decisions") {
+      const auth = authorizeGatewayRequest({ request, env });
+      if (!auth.ok) {
+        return json(auth.status, {
+          ok: false,
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+
+      return handleRetrieveDecisionLogsRequest(url, env);
     }
 
     return json(404, {
@@ -106,6 +131,146 @@ async function handleRetrieveConstitutionRequest(url, env) {
     recordCount: records.length,
     records
   });
+}
+
+async function handleRetrieveDecisionLogsRequest(url, env) {
+  const provider = env?.MEMORY_PROVIDER ?? null;
+  const validation = validateMemoryProvider(provider);
+  if (!validation.ok) {
+    return json(503, {
+      ok: false,
+      error: "memory_provider_unavailable",
+      reason: "valid memory provider is required for decision log retrieval"
+    });
+  }
+
+  const limit = normalizeLimit(url.searchParams.get("limit"), 5);
+  const relatedIssue = normalizeIssue(url.searchParams.get("relatedIssue"));
+  const retrieved = await retrieveDecisionLogReferences(provider, {
+    limit,
+    relatedIssue
+  });
+
+  if (!retrieved.ok) {
+    return json(retrieved.status, {
+      ok: false,
+      error: retrieved.error ?? "memory_read_failed",
+      reason: retrieved.reason
+    });
+  }
+
+  return json(200, {
+    ok: true,
+    recordType: "decision_log",
+    recordCount: retrieved.references.length,
+    references: retrieved.references
+  });
+}
+
+async function completeGatewayRuntime({ payload, gatewayResult, env }) {
+  const provider = env?.MEMORY_PROVIDER ?? null;
+  const providerValidation = validateMemoryProvider(provider);
+  const needsDecisionWrite = gatewayResult?.memoryWrite?.recordType === "decision_log";
+  const shouldAttachDecisionReferences = Array.isArray(gatewayResult?.retrievalPlan?.sources)
+    ? gatewayResult.retrievalPlan.sources.includes("decision_log")
+    : false;
+
+  if (!needsDecisionWrite && !shouldAttachDecisionReferences) {
+    return { status: 200, body: gatewayResult };
+  }
+
+  if (!providerValidation.ok) {
+    if (needsDecisionWrite) {
+      return {
+        status: 503,
+        body: {
+          allowed: false,
+          error: "memory_provider_unavailable",
+          reason: "valid memory provider is required for decision log persistence"
+        }
+      };
+    }
+    return {
+      status: 200,
+      body: {
+        ...gatewayResult,
+        retrievalReferences: {
+          decisionLogs: []
+        },
+        warnings: ["memory provider unavailable; decision references skipped"]
+      }
+    };
+  }
+
+  let responseBody = { ...gatewayResult };
+
+  if (needsDecisionWrite) {
+    const persisted = await appendDecisionLogFromGateway(provider, payload, gatewayResult);
+    if (!persisted.ok) {
+      if (persisted.status === 422) {
+        return {
+          status: 422,
+          body: {
+            allowed: false,
+            blockedByRule: persisted.blockedByRule ?? "decision_log_schema_invalid",
+            reason: persisted.reason,
+            issues: Array.isArray(persisted.issues) ? persisted.issues : []
+          }
+        };
+      }
+      return {
+        status: persisted.status ?? 503,
+        body: {
+          allowed: false,
+          error: persisted.error ?? "memory_write_failed",
+          reason: persisted.reason
+        }
+      };
+    }
+
+    responseBody = {
+      ...responseBody,
+      memoryWritePersisted: {
+        recordId: persisted.record.id,
+        recordType: persisted.record.type,
+        relatedIssue: persisted.entry.relatedIssue,
+        timestamp: persisted.entry.timestamp
+      }
+    };
+  }
+
+  if (shouldAttachDecisionReferences) {
+    const relatedIssue =
+      responseBody?.memoryWritePersisted?.relatedIssue ?? inferRelatedIssueFromGatewayInput(payload);
+    const retrieved = await retrieveDecisionLogReferences(provider, {
+      limit: 5,
+      relatedIssue
+    });
+
+    if (!retrieved.ok) {
+      return {
+        status: retrieved.status ?? 503,
+        body: {
+          allowed: false,
+          error: retrieved.error ?? "memory_read_failed",
+          reason: retrieved.reason
+        }
+      };
+    }
+
+    responseBody = {
+      ...responseBody,
+      retrievalReferences: {
+        ...(responseBody.retrievalReferences ?? {}),
+        decisionLogs: retrieved.references
+      }
+    };
+  }
+
+  return {
+    status: 200,
+    body: responseBody
+  };
 }
 
 function buildSetupWizardAnswers(url) {
@@ -408,6 +573,14 @@ function normalizeLimit(value, fallback) {
     return fallback;
   }
   return Math.min(Math.floor(numeric), 200);
+}
+
+function normalizeIssue(value) {
+  const numeric = Number(value);
+  if (!Number.isInteger(numeric) || numeric <= 0) {
+    return null;
+  }
+  return numeric;
 }
 
 function json(status, body) {
