@@ -7,6 +7,8 @@ export {
   TaskMode
 } from "./types.js";
 export {
+  APPROVAL_REQUIREMENTS,
+  CONSENT_REQUIREMENT_MAP,
   requiredApprovalLevel,
   requiredConsentCategory,
   evaluateConsent,

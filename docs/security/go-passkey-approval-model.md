@@ -1,5 +1,9 @@
 # GO + Passkey Approval Model
 
+This document focuses on the highest-risk approval path.
+For the full canonical consent / approval model, see
+[consent-approval-model.md](./consent-approval-model.md).
+
 ## Intent
 
 High-risk actions should require both explicit intent and strong user authentication.
