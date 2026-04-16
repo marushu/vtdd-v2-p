@@ -1,0 +1,40 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+
+const DOC_PATH = path.join(process.cwd(), "docs", "mvp", "production-deploy-path.md");
+const WORKFLOW_PATH = path.join(
+  process.cwd(),
+  ".github",
+  "workflows",
+  "deploy-production.yml"
+);
+
+test("production deploy doc defines the governed GitHub Actions deploy path", () => {
+  const doc = fs.readFileSync(DOC_PATH, "utf8");
+  assert.equal(doc.includes("GitHub Actions"), true);
+  assert.equal(doc.includes("Cloudflare Workers"), true);
+  assert.equal(doc.includes("`wrangler deploy --env production`"), true);
+  assert.equal(doc.includes("GitHub Environment `production`"), true);
+  assert.equal(doc.includes("`approval_phrase=GO`"), true);
+  assert.equal(doc.includes("`passkey_verified=true`"), true);
+  assert.equal(doc.includes("`CLOUDFLARE_API_TOKEN`"), true);
+  assert.equal(doc.includes("`CLOUDFLARE_ACCOUNT_ID`"), true);
+});
+
+test("deploy-production workflow enforces the MVP production deploy boundary", () => {
+  const workflow = fs.readFileSync(WORKFLOW_PATH, "utf8");
+  assert.equal(workflow.includes("name: deploy-production"), true);
+  assert.equal(workflow.includes("workflow_dispatch:"), true);
+  assert.equal(workflow.includes("if: github.ref == 'refs/heads/main'"), true);
+  assert.equal(workflow.includes("environment: production"), true);
+  assert.equal(workflow.includes('github.event.inputs.approval_phrase }}" != "GO"'), true);
+  assert.equal(workflow.includes('github.event.inputs.passkey_verified }}" != "true"'), true);
+  assert.equal(workflow.includes("apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}"), true);
+  assert.equal(
+    workflow.includes("CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}"),
+    true
+  );
+  assert.equal(workflow.includes('command: deploy --env production'), true);
+});
