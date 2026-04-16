@@ -49,4 +49,4 @@ This runbook is for starting VTDD V2 from iPhone without local Mac setup.
 - High-risk actions remain `GO + passkey`.
 - Reviewer output is advisory; final execution is still human-approved.
 - Team members without admin permissions cannot merge or deploy.
-- `/v2/gateway` should use machine auth (`VTDD_GATEWAY_BEARER_TOKEN`) instead of browser login flow.
+- `/v2/gateway` and `/v2/retrieve/*` should use machine auth (`VTDD_GATEWAY_BEARER_TOKEN`) instead of browser login flow.

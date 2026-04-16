@@ -14,6 +14,7 @@ test("execution retrieval plan prioritizes issue first", () => {
   });
   assert.equal(plan.sources[0], RetrievalSource.ISSUE);
   assert.equal(plan.sources.includes(RetrievalSource.CONSTITUTION), true);
+  assert.equal(plan.sources.includes(RetrievalSource.PR_CONTEXT), true);
 });
 
 test("execution retrieval can exclude proposal and conversation", () => {
@@ -33,6 +34,7 @@ test("exploration retrieval starts from constitution", () => {
     includeConversation: true
   });
   assert.equal(plan.sources[0], RetrievalSource.CONSTITUTION);
+  assert.equal(plan.sources.includes(RetrievalSource.PR_CONTEXT), true);
 });
 
 test("selectPrimaryReference picks first available source by contract order", () => {

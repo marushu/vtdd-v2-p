@@ -3,6 +3,7 @@ import {
   appendProposalLogFromGateway,
   inferRelatedIssueFromGatewayInput,
   inferRelatedIssueFromProposalGatewayInput,
+  retrieveCrossIssueMemoryIndex,
   retrieveDecisionLogReferences,
   retrieveProposalLogReferences,
   retrieveConstitution,
@@ -121,6 +122,19 @@ export default {
       return handleRetrieveProposalLogsRequest(url, env);
     }
 
+    if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/cross")) {
+      const auth = authorizeGatewayRequest({ request, env });
+      if (!auth.ok) {
+        return json(auth.status, {
+          ok: false,
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+
+      return handleRetrieveCrossIssueRequest(url, env);
+    }
+
     return json(404, {
       ok: false,
       error: "not_found"
@@ -232,6 +246,49 @@ async function handleRetrieveProposalLogsRequest(url, env) {
     recordType: "proposal_log",
     recordCount: retrieved.references.length,
     references: retrieved.references
+  });
+}
+
+async function handleRetrieveCrossIssueRequest(url, env) {
+  const provider = env?.MEMORY_PROVIDER ?? null;
+  const phase = normalize(url.searchParams.get("phase")) || "execution";
+  const limit = normalizeLimit(url.searchParams.get("limit"), 5);
+  const relatedIssue = normalizeIssue(url.searchParams.get("relatedIssue"));
+  const issueNumber = normalizeIssue(url.searchParams.get("issueNumber"));
+  const issueTitle = normalizeText(url.searchParams.get("issueTitle"));
+  const issueUrl = normalizeText(url.searchParams.get("issueUrl"));
+  const queryText = normalizeText(url.searchParams.get("q"));
+
+  const retrieved = await retrieveCrossIssueMemoryIndex(provider, {
+    phase,
+    limit,
+    relatedIssue,
+    text: queryText,
+    issueContext:
+      issueNumber || issueTitle || issueUrl
+        ? {
+            issueNumber,
+            issueTitle,
+            issueUrl
+          }
+        : null
+  });
+  if (!retrieved.ok) {
+    return json(retrieved.status ?? 503, {
+      ok: false,
+      error: retrieved.error ?? "memory_read_failed",
+      reason: retrieved.reason
+    });
+  }
+
+  return json(200, {
+    ok: true,
+    retrievalPlan: retrieved.retrievalPlan,
+    relatedIssue: retrieved.relatedIssue,
+    queryText: retrieved.queryText,
+    primaryReference: retrieved.primaryReference,
+    referencesBySource: retrieved.referencesBySource,
+    orderedReferences: retrieved.orderedReferences
   });
 }
 
