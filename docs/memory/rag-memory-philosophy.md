@@ -36,8 +36,9 @@ During execution, the strongest sources are:
 3. Runtime truth
 4. Decision Log
 5. Proposal / Exploration
-6. Conversation
-7. Ad hoc AI inference
+6. PR metadata / review summaries
+7. Conversation
+8. Ad hoc AI inference
 
 For current state, runtime truth overrides memory.
 
@@ -48,6 +49,14 @@ Retrieval should be hybrid:
 - structured lookup first,
 - semantic retrieval second,
 - ordered history where sequence matters.
+
+Cross retrieval should keep this minimum source set:
+
+- Issues (current spec context)
+- Constitution rules
+- Decision logs
+- Proposal / exploration logs
+- PR metadata / review summaries
 
 ## Storage Principle
 

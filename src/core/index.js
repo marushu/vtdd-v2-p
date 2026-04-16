@@ -54,6 +54,10 @@ export {
   inferRelatedIssueFromProposalGatewayInput,
   createCanonicalProposalFromGateway
 } from "./proposal-log-runtime.js";
+export {
+  retrieveCrossIssueMemoryIndex,
+  retrievePrContextReferences
+} from "./cross-retrieval-runtime.js";
 export { createInMemoryLogStore } from "./log-store.js";
 export {
   MEMORY_RECORD_FIELD_POLICY,

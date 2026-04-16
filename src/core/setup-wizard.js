@@ -446,6 +446,92 @@ function buildCustomGptActionSchema(baseUrl) {
             }
           }
         }
+      },
+      "/v2/retrieve/cross": {
+        get: {
+          operationId: "getCrossIssueMemoryIndex",
+          security: [{ GatewayBearerAuth: [] }],
+          parameters: [
+            {
+              name: "phase",
+              in: "query",
+              required: false,
+              schema: {
+                type: "string",
+                enum: ["execution", "exploration"],
+                default: "execution"
+              },
+              description: "Retrieval phase that determines source priority."
+            },
+            {
+              name: "limit",
+              in: "query",
+              required: false,
+              schema: {
+                type: "integer",
+                minimum: 1,
+                maximum: 200,
+                default: 5
+              },
+              description: "Maximum number of ordered references to return."
+            },
+            {
+              name: "relatedIssue",
+              in: "query",
+              required: false,
+              schema: {
+                type: "integer",
+                minimum: 1
+              },
+              description: "Filter decision/proposal/PR context by related issue number."
+            },
+            {
+              name: "issueNumber",
+              in: "query",
+              required: false,
+              schema: {
+                type: "integer",
+                minimum: 1
+              },
+              description: "Current issue number to include as issue reference candidate."
+            },
+            {
+              name: "issueTitle",
+              in: "query",
+              required: false,
+              schema: {
+                type: "string"
+              },
+              description: "Current issue title for issue reference candidate."
+            },
+            {
+              name: "issueUrl",
+              in: "query",
+              required: false,
+              schema: {
+                type: "string"
+              },
+              description: "Current issue URL for issue reference candidate."
+            },
+            {
+              name: "q",
+              in: "query",
+              required: false,
+              schema: {
+                type: "string"
+              },
+              description: "Optional free-text query for PR context narrowing."
+            }
+          ],
+          responses: {
+            "200": {
+              description: "Cross-issue memory index retrieved"
+            },
+            "503": {
+              description: "Memory provider is not configured"
+            }
+          }
+        }
       }
     }
   };

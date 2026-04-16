@@ -761,6 +761,96 @@ test("worker returns proposal log references through retrieve route", async () =
   assert.equal(body.references[0].relatedIssue, 20);
 });
 
+test("worker returns cross-issue memory index through retrieve route", async () => {
+  const provider = createInMemoryMemoryProvider();
+  await provider.store({
+    id: "constitution-cross-1",
+    type: MemoryRecordType.CONSTITUTION,
+    content: {
+      title: "constitution_rule",
+      description: "Constitution should be returned in cross retrieval."
+    },
+    metadata: { version: "v2" },
+    priority: 90,
+    tags: ["constitution"],
+    createdAt: "2026-04-16T03:00:00Z"
+  });
+  await provider.store({
+    id: "decision-cross-1",
+    type: MemoryRecordType.DECISION_LOG,
+    content: {
+      decision: "Cross retrieval should include decisions",
+      rationale: "Butler needs why trace",
+      relatedIssue: 19,
+      decidedBy: "owner",
+      timestamp: "2026-04-16T03:10:00Z",
+      supersededBy: null
+    },
+    metadata: { repository: "sample-org/vtdd-v2" },
+    priority: 95,
+    tags: ["decision_log", "issue:19"],
+    createdAt: "2026-04-16T03:10:00Z"
+  });
+  await provider.store({
+    id: "proposal-cross-1",
+    type: MemoryRecordType.PROPOSAL_LOG,
+    content: {
+      hypothesis: "Cross retrieval API should include proposal context",
+      options: ["route", "route+orchestration"],
+      rejectedReasons: [{ option: "route", reason: "insufficient review history" }],
+      concerns: ["search drift"],
+      unresolvedQuestions: ["UI wiring timing"],
+      relatedIssue: 19,
+      proposedBy: "owner",
+      timestamp: "2026-04-16T03:20:00Z"
+    },
+    metadata: { repository: "sample-org/vtdd-v2" },
+    priority: 85,
+    tags: ["proposal_log", "issue:19"],
+    createdAt: "2026-04-16T03:20:00Z"
+  });
+  await provider.store({
+    id: "execution-cross-pr-101",
+    type: MemoryRecordType.EXECUTION_LOG,
+    content: {
+      summary: "PR #101 contains review summary for issue #19",
+      relatedIssue: 19,
+      prNumber: 101,
+      reviewer: "gemini",
+      status: "approved"
+    },
+    metadata: { kind: "pr_review_summary", repository: "sample-org/vtdd-v2" },
+    priority: 80,
+    tags: ["pr_context", "pr:101", "issue:19"],
+    createdAt: "2026-04-16T03:30:00Z"
+  });
+
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/v2/retrieve/cross?phase=execution&relatedIssue=19&issueNumber=19&issueTitle=Retrieval%20Contract&limit=8",
+      {
+        headers: {
+          authorization: "Bearer test-token"
+        }
+      }
+    ),
+    {
+      VTDD_GATEWAY_BEARER_TOKEN: "test-token",
+      MEMORY_PROVIDER: provider
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.retrievalPlan.sources[0], "issue");
+  assert.equal(body.primaryReference.source, "issue");
+  assert.equal(body.referencesBySource.decision_log.length, 1);
+  assert.equal(body.referencesBySource.proposal_log.length, 1);
+  assert.equal(body.referencesBySource.pr_context.length, 1);
+  assert.equal(body.referencesBySource.pr_context[0].prNumber, 101);
+});
+
 test("worker returns 503 when constitution retrieve provider is unavailable", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/v2/retrieve/constitution", {

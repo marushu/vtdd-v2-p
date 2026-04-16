@@ -22,6 +22,7 @@ const EXPLORATION_ORDER = Object.freeze([
   RetrievalSource.CONSTITUTION,
   RetrievalSource.DECISION_LOG,
   RetrievalSource.PROPOSAL_LOG,
+  RetrievalSource.PR_CONTEXT,
   RetrievalSource.ISSUE,
   RetrievalSource.CONVERSATION
 ]);

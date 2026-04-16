@@ -1,18 +1,24 @@
-# Machine Auth Path for `/v2/gateway`
+# Machine Auth Path for `/v2/gateway` and `/v2/retrieve/*`
 
 ## Purpose
 
-Keep `/setup/*` human-login oriented while allowing GPT Actions to call `/v2/gateway` with machine auth.
+Keep `/setup/*` human-login oriented while allowing GPT Actions to call protected API routes with machine auth.
 
 ## Contract
 
-- If `VTDD_GATEWAY_BEARER_TOKEN` is set on Worker env, `/v2/gateway` requires:
+- If `VTDD_GATEWAY_BEARER_TOKEN` is set on Worker env, protected routes require:
   - `Authorization: Bearer <token>`
 - If bearer token is not configured and Cloudflare Access service token env is set:
   - `CF_ACCESS_CLIENT_ID`
   - `CF_ACCESS_CLIENT_SECRET`
   - request must include matching `cf-access-client-id` and `cf-access-client-secret` headers
-- If neither is configured, gateway remains open for backward compatibility.
+- Protected routes:
+  - `/v2/gateway`
+  - `/v2/retrieve/constitution`
+  - `/v2/retrieve/decisions`
+  - `/v2/retrieve/proposals`
+  - `/v2/retrieve/cross`
+- If neither is configured, these routes remain open for backward compatibility.
 
 ## Error Behavior
 
