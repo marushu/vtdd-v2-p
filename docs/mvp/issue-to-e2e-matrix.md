@@ -225,15 +225,16 @@ Status values used below:
   - invalid reviewer schema or missing reviewer contract is rejected
 - Implementation evidence:
   - `src/core/reviewer-registry.js`
+  - `docs/security/reviewer-policy.md`
   - `docs/butler/role.md`
 - Test evidence:
   - `test/reviewer-registry.test.js`
-- Status: `partial`
+  - `test/reviewer-policy.test.js`
+- Status: `implemented_pending_e2e`
 
 ## Current Completion Reading
 
 - Repository completion status: `partial`
 - Main reason:
   - mapped E2E evidence is still pending across the matrix
-  - reviewer operational validation is still partial
   - issue closure must remain human-gated
