@@ -144,7 +144,8 @@ function buildSetupOutputs(answers) {
       initialSurfaces: answers.initialSurfaces,
       noDefaultRepository: true,
       setupMode: SetupMode.IPHONE_FIRST,
-      operatorManagedSecrets: true
+      operatorManagedSecrets: true,
+      autonomyModes: ["normal", "guarded_absence"]
     },
     metadata: {
       source: "initial_setup_wizard"
@@ -199,6 +200,8 @@ function buildCustomGptConstructionText(answers) {
     "When repository intent is ambiguous, ask a short confirmation question before switching context.",
     "When asked about repositories, show known repositories and aliases first.",
     "Follow Constitution-first and Issue-as-spec judgment order.",
+    "Normal mode uses autonomyMode=normal. Absence mode uses autonomyMode=guarded_absence with strict stop boundaries.",
+    "In guarded_absence mode, do not execute merge/deploy/destructive/external_publish and stop on ambiguity/spec conflict/unconfirmed target.",
     "For high-risk actions (merge/deploy/destructive/external publish), require GO + passkey.",
     "Use Gemini as reviewer and treat reviewer output as structured input for human final decision.",
     `Primary repositories: ${repoText}.`
@@ -297,6 +300,25 @@ function buildCustomGptActionSchema(baseUrl) {
                         mode: {
                           type: "string",
                           enum: ["read_only", "execution"]
+                        },
+                        autonomyMode: {
+                          type: "string",
+                          enum: ["normal", "guarded_absence"],
+                          description:
+                            "Execution autonomy mode. Use guarded_absence when operator is away and strict guardrails should stop ambiguous/high-risk actions."
+                        },
+                        ambiguity: {
+                          type: "object",
+                          additionalProperties: true,
+                          properties: {
+                            ambiguousRequest: { type: "boolean" },
+                            specConflict: { type: "boolean" },
+                            targetUnconfirmed: { type: "boolean" },
+                            issuePrCount: { type: "integer", minimum: 0 }
+                          }
+                        },
+                        targetConfirmed: {
+                          type: "boolean"
                         },
                         repositoryInput: {
                           type: "string"

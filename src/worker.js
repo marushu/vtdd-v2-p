@@ -1,8 +1,12 @@
 import {
+  AutonomyMode,
+  MemoryRecordType,
   appendDecisionLogFromGateway,
   appendProposalLogFromGateway,
+  createMemoryRecord,
   inferRelatedIssueFromGatewayInput,
   inferRelatedIssueFromProposalGatewayInput,
+  normalizeAutonomyMode,
   retrieveCrossIssueMemoryIndex,
   retrieveDecisionLogReferences,
   retrieveProposalLogReferences,
@@ -23,6 +27,8 @@ const HTML_HEADERS = {
 
 const CANONICAL_API_PREFIX = "/v2";
 const LEGACY_API_PREFIX = "/mvp";
+const AUTONOMY_MODE_ENV = "VTDD_AUTONOMY_MODE";
+const LEGACY_AUTONOMY_MODE_ENV = "MVP_AUTONOMY_MODE";
 
 const SETUP_WIZARD_CLOUDFLARE_CHECK_ENABLED_ENV = "SETUP_WIZARD_CLOUDFLARE_CHECK_ENABLED";
 const CLOUDFLARE_BILLING_HINT_REGEX =
@@ -45,7 +51,8 @@ export default {
       return json(200, {
         ok: true,
         service: "vtdd-v2-worker",
-        mode: "v2"
+        mode: "v2",
+        autonomyMode: resolveRuntimeAutonomyMode(env)
       });
     }
 
@@ -66,16 +73,20 @@ export default {
       const payload = await readJson(request);
       const prepared = await prepareGatewayPayload({ payload, env });
       const result = appendWarnings(runMvpGateway(prepared.payload), prepared.warnings);
-      if (!result.allowed) {
-        return json(422, result);
-      }
+      const gatewayOutcome = result.allowed
+        ? await completeGatewayRuntime({
+            payload: prepared.payload,
+            gatewayResult: result,
+            env
+          })
+        : { status: 422, body: result };
 
-      const gatewayOutcome = await completeGatewayRuntime({
+      const auditedGatewayOutcome = await appendGuardedAbsenceExecutionLog({
         payload: prepared.payload,
-        gatewayResult: result,
+        gatewayOutcome,
         env
       });
-      return json(gatewayOutcome.status, gatewayOutcome.body);
+      return json(auditedGatewayOutcome.status, auditedGatewayOutcome.body);
     }
 
     if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/constitution")) {
@@ -295,21 +306,35 @@ async function prepareGatewayPayload({ payload, env }) {
     basePayload.policyInput && typeof basePayload.policyInput === "object"
       ? basePayload.policyInput
       : {};
+  const runtimeAutonomyMode = resolveRuntimeAutonomyMode(env);
+  const requestedAutonomyMode = normalizeAutonomyMode(basePolicyInput.autonomyMode);
+  const effectiveAutonomyMode =
+    runtimeAutonomyMode === AutonomyMode.GUARDED_ABSENCE
+      ? AutonomyMode.GUARDED_ABSENCE
+      : requestedAutonomyMode;
 
   const resolvedAliasRegistry = await resolveGatewayAliasRegistryFromGitHubApp({
     policyInput: basePolicyInput,
     env
   });
+  const warnings = [...(resolvedAliasRegistry.warnings ?? [])];
+  if (
+    runtimeAutonomyMode === AutonomyMode.GUARDED_ABSENCE &&
+    requestedAutonomyMode !== AutonomyMode.GUARDED_ABSENCE
+  ) {
+    warnings.push("runtime forces guarded absence mode; payload autonomyMode override was ignored");
+  }
 
   return {
     payload: {
       ...basePayload,
       policyInput: {
         ...basePolicyInput,
-        aliasRegistry: resolvedAliasRegistry.aliasRegistry
+        aliasRegistry: resolvedAliasRegistry.aliasRegistry,
+        autonomyMode: effectiveAutonomyMode
       }
     },
-    warnings: resolvedAliasRegistry.warnings
+    warnings
   };
 }
 
@@ -325,6 +350,96 @@ function appendWarnings(result, warnings) {
     ...result,
     warnings: [...merged]
   };
+}
+
+async function appendGuardedAbsenceExecutionLog({ payload, gatewayOutcome, env }) {
+  const policyInput = normalizeObject(payload?.policyInput);
+  const autonomyMode = normalizeAutonomyMode(policyInput.autonomyMode);
+  if (autonomyMode !== AutonomyMode.GUARDED_ABSENCE) {
+    return gatewayOutcome;
+  }
+
+  const provider = env?.MEMORY_PROVIDER ?? null;
+  const providerValidation = validateMemoryProvider(provider);
+  if (!providerValidation.ok) {
+    return attachGatewayWarning(
+      gatewayOutcome,
+      "guarded absence execution log skipped: memory provider unavailable"
+    );
+  }
+
+  const nowIso = new Date().toISOString();
+  const body = normalizeObject(gatewayOutcome?.body);
+  const blockedByRule = normalizeText(body.blockedByRule) || null;
+  const recordInput = {
+    id: buildGuardedAbsenceExecutionLogId({
+      actionType: policyInput.actionType,
+      timestamp: nowIso
+    }),
+    type: MemoryRecordType.EXECUTION_LOG,
+    content: {
+      mode: autonomyMode,
+      phase: normalizeText(payload?.phase) || "execution",
+      actorRole: normalizeText(payload?.actorRole) || null,
+      actionType: normalizeText(policyInput.actionType) || null,
+      allowed: body.allowed === true,
+      blockedByRule,
+      reason: normalizeText(body.reason) || null,
+      repositoryInput: normalizeText(policyInput.repositoryInput) || null,
+      repository: normalizeText(body.repository) || null,
+      requiredApproval: normalizeText(body.requiredApproval) || null,
+      stopCategory: classifyGuardedStopCategory(blockedByRule)
+    },
+    metadata: {
+      source: "guarded_absence_gateway",
+      statusCode: Number(gatewayOutcome?.status) || 200,
+      blockedByRule,
+      recordedAt: nowIso
+    },
+    priority: 88,
+    tags: [
+      "execution_log",
+      "guarded_absence",
+      body.allowed === true ? "result:allowed" : "result:blocked",
+      blockedByRule ? `rule:${normalizeTag(blockedByRule)}` : null
+    ].filter(Boolean),
+    createdAt: nowIso
+  };
+
+  const created = createMemoryRecord(recordInput);
+  if (!created.ok) {
+    return attachGatewayWarning(
+      gatewayOutcome,
+      "guarded absence execution log skipped: execution_log schema invalid"
+    );
+  }
+
+  try {
+    const stored = await provider.store(created.record);
+    if (!stored?.ok) {
+      return attachGatewayWarning(
+        gatewayOutcome,
+        "guarded absence execution log skipped: memory provider rejected execution_log record"
+      );
+    }
+
+    return {
+      status: gatewayOutcome.status,
+      body: {
+        ...body,
+        guardedAbsenceExecutionLog: {
+          recordId: stored.record.id,
+          recordType: stored.record.type,
+          mode: autonomyMode
+        }
+      }
+    };
+  } catch {
+    return attachGatewayWarning(
+      gatewayOutcome,
+      "guarded absence execution log skipped: memory provider store failed"
+    );
+  }
 }
 
 async function completeGatewayRuntime({ payload, gatewayResult, env }) {
@@ -1202,6 +1317,63 @@ function toBoolean(value) {
   return normalized === "true" || normalized === "1" || normalized === "yes" || normalized === "on";
 }
 
+function resolveRuntimeAutonomyMode(env) {
+  const runtimeEnv = env ?? {};
+  const configured = runtimeEnv[AUTONOMY_MODE_ENV] ?? runtimeEnv[LEGACY_AUTONOMY_MODE_ENV];
+  return normalizeAutonomyMode(configured);
+}
+
+function attachGatewayWarning(gatewayOutcome, warning) {
+  const body = normalizeObject(gatewayOutcome?.body);
+  const warnings = Array.isArray(body.warnings) ? body.warnings : [];
+  const merged = [...new Set([...warnings, normalizeText(warning)].filter(Boolean))];
+  return {
+    status: gatewayOutcome.status,
+    body: {
+      ...body,
+      warnings: merged
+    }
+  };
+}
+
+function buildGuardedAbsenceExecutionLogId({ actionType, timestamp }) {
+  const actionPart = normalizeTag(actionType || "unknown");
+  const timestampPart = normalizeTag(
+    String(timestamp || "")
+      .replaceAll(":", "")
+      .replaceAll("-", "")
+      .replaceAll(".", "")
+  );
+  const randomPart = Math.random().toString(36).slice(2, 8);
+  return `guarded_absence_${actionPart}_${timestampPart}_${randomPart}`;
+}
+
+function classifyGuardedStopCategory(blockedByRule) {
+  const rule = normalize(blockedByRule);
+  if (!rule) {
+    return "allowed_or_not_blocked";
+  }
+  if (rule.includes("guarded_absence")) {
+    return "guarded_absence_boundary";
+  }
+  if (rule.includes("approval")) {
+    return "approval_boundary";
+  }
+  if (rule.includes("consent")) {
+    return "consent_boundary";
+  }
+  if (rule.includes("traceability")) {
+    return "traceability_boundary";
+  }
+  if (rule.includes("runtime_truth") || rule.includes("reconcile")) {
+    return "runtime_truth_boundary";
+  }
+  if (rule.includes("target") || rule.includes("repository")) {
+    return "target_resolution_boundary";
+  }
+  return "other_boundary";
+}
+
 function authorizeGatewayRequest({ request, env, apiSuffix = "/gateway" }) {
   const runtimeEnv = env ?? {};
   const routeLabel = `/${CANONICAL_API_PREFIX.replace(/^\//, "")}${apiSuffix} (legacy ${LEGACY_API_PREFIX}${apiSuffix} is also accepted)`;
@@ -1298,6 +1470,13 @@ function normalizeIssue(value) {
   return numeric;
 }
 
+function normalizeObject(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+  return value;
+}
+
 function json(status, body) {
   return new Response(JSON.stringify(body), {
     status,
@@ -1320,6 +1499,12 @@ function normalize(value) {
 
 function normalizeText(value) {
   return String(value ?? "").trim();
+}
+
+function normalizeTag(value) {
+  return normalizeText(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9:_-]+/g, "_");
 }
 
 function parseBearerToken(value) {

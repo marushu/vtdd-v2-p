@@ -1,11 +1,13 @@
 export {
   ActionType,
   ActorRole,
+  AutonomyMode,
   ApprovalLevel,
   ConsentCategory,
   CredentialTier,
   TaskMode
 } from "./types.js";
+export { evaluateAutonomyModeBoundary, normalizeAutonomyMode } from "./autonomy-mode.js";
 export {
   APPROVAL_REQUIREMENTS,
   CONSENT_REQUIREMENT_MAP,

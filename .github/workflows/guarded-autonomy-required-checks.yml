@@ -1,0 +1,68 @@
+name: guarded-autonomy-required-checks
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  guarded-policy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate PR evidence sections
+        shell: bash
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          body="${PR_BODY:-}"
+          required_markers=(
+            "## This PR satisfies Intent"
+            "## Satisfied Success Criteria"
+            "## Unsatisfied Success Criteria"
+            "## Verification Evidence"
+          )
+
+          for marker in "${required_markers[@]}"; do
+            if ! printf '%s' "$body" | grep -F "$marker" >/dev/null; then
+              echo "Missing PR template marker: $marker"
+              exit 1
+            fi
+          done
+
+      - name: Guard Closes usage with E2E evidence pointers
+        shell: bash
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          body="${PR_BODY:-}"
+          if printf '%s' "$body" | grep -Eiq 'Closes #[0-9]+'; then
+            if ! printf '%s' "$body" | grep -Eq 'E2E:'; then
+              echo "PR uses Closes but E2E slot is missing."
+              exit 1
+            fi
+            if ! printf '%s' "$body" | grep -Eq 'Evidence path/link:'; then
+              echo "PR uses Closes but evidence path/link slot is missing."
+              exit 1
+            fi
+          fi
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Run tests
+        run: npm test

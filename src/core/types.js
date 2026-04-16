@@ -23,6 +23,11 @@ export const TaskMode = Object.freeze({
   EXECUTION: "execution"
 });
 
+export const AutonomyMode = Object.freeze({
+  NORMAL: "normal",
+  GUARDED_ABSENCE: "guarded_absence"
+});
+
 export const ActorRole = Object.freeze({
   BUTLER: "butler",
   EXECUTOR: "executor",

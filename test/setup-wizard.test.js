@@ -68,6 +68,12 @@ test("setup wizard returns git/db outputs and iphone onboarding pack", () => {
     ),
     true
   );
+  assert.equal(
+    result.onboarding.customGpt.constructionText.includes(
+      "Normal mode uses autonomyMode=normal. Absence mode uses autonomyMode=guarded_absence with strict stop boundaries."
+    ),
+    true
+  );
   const parsed = JSON.parse(result.onboarding.customGpt.actionSchemaJson);
   assert.equal(
     Boolean(
@@ -75,6 +81,12 @@ test("setup wizard returns git/db outputs and iphone onboarding pack", () => {
     ),
     true
   );
+  const policyInputSchema =
+    parsed?.paths?.["/v2/gateway"]?.post?.requestBody?.content?.["application/json"]?.schema
+      ?.properties?.policyInput?.properties;
+  assert.equal(Boolean(policyInputSchema?.autonomyMode), true);
+  assert.equal(Boolean(policyInputSchema?.ambiguity), true);
+  assert.equal(Boolean(policyInputSchema?.targetConfirmed), true);
   assert.equal(Boolean(parsed?.components?.securitySchemes?.GatewayBearerAuth), true);
   assert.equal(Boolean(parsed?.components?.securitySchemes?.GatewayAccessClientIdHeader), true);
   assert.equal(Boolean(parsed?.components?.securitySchemes?.GatewayAccessClientSecretHeader), true);

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   ActionType,
   ActorRole,
+  AutonomyMode,
   ConsentCategory,
   CredentialTier,
   TaskMode,
@@ -116,6 +117,92 @@ test("high-risk action requires GO + passkey", () => {
   });
   assert.equal(result.allowed, false);
   assert.equal(result.requiredApproval, "go_passkey");
+});
+
+test("guarded absence mode blocks merge even with GO + passkey", () => {
+  const result = evaluateExecutionPolicy({
+    actionType: ActionType.MERGE,
+    mode: TaskMode.EXECUTION,
+    autonomyMode: AutonomyMode.GUARDED_ABSENCE,
+    repositoryInput: "ledger",
+    aliasRegistry: registry,
+    constitutionConsulted: true,
+    runtimeTruth: { runtimeAvailable: true },
+    credential: highRiskCredential,
+    consent: fullConsent,
+    ...approvalContext,
+    issueTraceable: true,
+    go: true,
+    passkey: true
+  });
+  assert.equal(result.allowed, false);
+  assert.equal(result.blockedByRule, "guarded_absence_forbids_action");
+});
+
+test("guarded absence mode blocks ambiguous request", () => {
+  const result = evaluateExecutionPolicy({
+    actionType: ActionType.BUILD,
+    mode: TaskMode.EXECUTION,
+    autonomyMode: AutonomyMode.GUARDED_ABSENCE,
+    ambiguity: { ambiguousRequest: true },
+    repositoryInput: "ledger",
+    aliasRegistry: registry,
+    constitutionConsulted: true,
+    runtimeTruth: { runtimeAvailable: true },
+    credential: executeCredential,
+    consent: fullConsent,
+    ...approvalContext,
+    issueTraceable: true,
+    go: true,
+    passkey: false
+  });
+  assert.equal(result.allowed, false);
+  assert.equal(result.blockedByRule, "guarded_absence_blocks_ambiguous_request");
+});
+
+test("guarded absence mode blocks one-issue-many-pr violation when runtime truth provides count", () => {
+  const result = evaluateExecutionPolicy({
+    actionType: ActionType.PR_OPERATION,
+    mode: TaskMode.EXECUTION,
+    autonomyMode: AutonomyMode.GUARDED_ABSENCE,
+    repositoryInput: "ledger",
+    aliasRegistry: registry,
+    constitutionConsulted: true,
+    runtimeTruth: {
+      runtimeAvailable: true,
+      runtimeState: {
+        issuePrCount: 2
+      }
+    },
+    credential: executeCredential,
+    consent: fullConsent,
+    ...approvalContext,
+    issueTraceable: true,
+    go: true,
+    passkey: false
+  });
+  assert.equal(result.allowed, false);
+  assert.equal(result.blockedByRule, "guarded_absence_requires_one_issue_one_pr");
+});
+
+test("guarded absence mode allows pr operation when boundaries are satisfied", () => {
+  const result = evaluateExecutionPolicy({
+    actionType: ActionType.PR_OPERATION,
+    mode: TaskMode.EXECUTION,
+    autonomyMode: AutonomyMode.GUARDED_ABSENCE,
+    repositoryInput: "ledger",
+    aliasRegistry: registry,
+    constitutionConsulted: true,
+    runtimeTruth: { runtimeAvailable: true, runtimeState: { issuePrCount: 1 } },
+    credential: executeCredential,
+    consent: fullConsent,
+    ...approvalContext,
+    issueTraceable: true,
+    go: true,
+    passkey: false
+  });
+  assert.equal(result.allowed, true);
+  assert.equal(result.autonomyMode, "guarded_absence");
 });
 
 test("pr comment is allowed without GO when other gates pass", () => {
