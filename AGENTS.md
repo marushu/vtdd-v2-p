@@ -136,17 +136,21 @@ MVP completion claim is allowed only when the matrix shows complete coverage for
 - Memory excludes secrets and raw sensitive material.
 - Reviewer role does not get execution credentials.
 
-## Memory Capture and Cost Boundary
+## RAG Memory Capture and Cost Boundary
 
-- Do not persist full conversation transcripts by default.
+This section applies to RAG memory persistence only
+(`decision_log` / `proposal_log` / `working_memory` and related memory records).
+It must not be interpreted as a blanket prohibition for non-RAG operational logs.
+
+- Do not persist full conversation transcripts into RAG memory by default.
 - Persist only structured entries that improve future judgment or recovery.
-- Selection must happen before write (pre-write filter); do not "store all then trim later" by default.
-- If temporary full-log capture is explicitly approved for a narrow case, it must include:
+- Selection must happen before RAG write (pre-write filter); do not "store all then trim later" by default.
+- If temporary full-log capture into RAG memory is explicitly approved for a narrow case, it must include:
   - explicit Issue linkage,
   - retention TTL,
   - deletion plan,
   - owner approval note.
-- Any PR that changes memory write behavior must state expected write-volume/cost impact.
+- Any PR that changes RAG memory write behavior must state expected write-volume/cost impact.
 
 ## Conversation UX Contract
 
