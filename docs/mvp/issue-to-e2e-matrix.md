@@ -161,10 +161,12 @@ Status values used below:
 - Boundary path:
   - secret-like material or full casual transcript is rejected/redacted
 - Implementation evidence:
+  - `docs/security/memory-safety-policy.md`
   - `src/core/memory-safety.js`
   - `docs/memory/rag-memory-philosophy.md`
 - Test evidence:
   - `test/memory-safety.test.js`
+  - `test/memory-safety-policy.test.js`
 - Status: `implemented_pending_e2e`
 
 ## E2E-10 Surface/role separation invariants
