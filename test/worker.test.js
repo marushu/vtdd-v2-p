@@ -75,6 +75,7 @@ test("worker returns setup wizard json", async () => {
   assert.equal(body.onboarding.customGpt.actionSchemaJson.includes("/v2/gateway"), true);
   assert.equal(body.generatedAnswers.actionEndpointBaseUrl, "https://example.com");
   assert.equal(body.cloudflareSetupCheck.state, "disabled");
+  assert.equal(body.githubAppSetupCheck.state, "not_configured");
 });
 
 test("worker setup wizard json keeps iphone-first and no-default-repo policy visible", async () => {
@@ -103,6 +104,80 @@ test("worker setup wizard never exposes secret credential input fields", async (
   assert.equal("githubToken" in body.generatedAnswers, false);
   assert.equal("openaiApiKey" in body.generatedAnswers, false);
   assert.equal("geminiApiKey" in body.generatedAnswers, false);
+});
+
+test("worker setup wizard reports partially configured github app bootstrap", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/setup/wizard?format=json&repo=sample-org/vtdd-v2"),
+    {
+      GITHUB_APP_ID: "12345"
+    }
+  );
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.githubAppSetupCheck.state, "partially_configured");
+  assert.equal(
+    body.githubAppSetupCheck.guidance.some((item) => item.includes("GITHUB_APP_INSTALLATION_ID")),
+    true
+  );
+  assert.equal(
+    body.githubAppSetupCheck.guidance.some((item) => item.includes("GITHUB_APP_PRIVATE_KEY")),
+    true
+  );
+});
+
+test("worker setup wizard verifies github app live probe when requested", async () => {
+  const calls = [];
+  const githubApiFetch = async (url, init = {}) => {
+    calls.push({ url: String(url), init });
+    if (String(url).includes("/app/installations/98765/access_tokens")) {
+      return new Response(
+        JSON.stringify({
+          token: "ghs_minted_installation_token",
+          expires_at: "2030-01-01T00:00:00Z"
+        }),
+        {
+          status: 201,
+          headers: { "content-type": "application/json" }
+        }
+      );
+    }
+    return new Response(
+      JSON.stringify({
+        total_count: 1,
+        repositories: [
+          {
+            full_name: "sample-org/vtdd-v2",
+            name: "vtdd-v2",
+            private: true
+          }
+        ]
+      }),
+      {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      }
+    );
+  };
+
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/setup/wizard?format=json&repo=sample-org/vtdd-v2&githubAppCheck=on"
+    ),
+    {
+      GITHUB_APP_ID: "12345",
+      GITHUB_APP_INSTALLATION_ID: "98765",
+      GITHUB_APP_PRIVATE_KEY: "-----BEGIN PRIVATE KEY-----\nplaceholder\n-----END PRIVATE KEY-----",
+      GITHUB_APP_JWT_PROVIDER: async () => "app_jwt_token_for_tests",
+      GITHUB_API_FETCH: githubApiFetch
+    }
+  );
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.githubAppSetupCheck.state, "ready");
+  assert.equal(body.githubAppSetupCheck.evidence.source, "github_app_live");
+  assert.equal(body.githubAppSetupCheck.evidence.repositoryCount, 1);
+  assert.equal(calls.length, 2);
 });
 
 test("worker setup wizard accepts deploy authority detection query inputs", async () => {

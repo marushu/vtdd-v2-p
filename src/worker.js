@@ -152,6 +152,7 @@ async function handleSetupWizardRequest(url, env) {
   const answers = buildSetupWizardAnswers(url);
   const result = runInitialSetupWizard({ answers });
   const cloudflareSetupCheck = await runCloudflareSetupCheck(url, env);
+  const githubAppSetupCheck = await runGitHubAppSetupCheck(url, env);
   const format = normalize(url.searchParams.get("format"));
   const guidance = buildSetupWizardGuidance({ result, url });
 
@@ -160,11 +161,18 @@ async function handleSetupWizardRequest(url, env) {
       ...result,
       generatedAnswers: answers,
       cloudflareSetupCheck,
+      githubAppSetupCheck,
       guidance
     });
   }
 
-  const htmlBody = renderSetupWizardHtml({ result, answers, url, cloudflareSetupCheck });
+  const htmlBody = renderSetupWizardHtml({
+    result,
+    answers,
+    url,
+    cloudflareSetupCheck,
+    githubAppSetupCheck
+  });
   return html(result.ok ? 200 : 422, htmlBody);
 }
 
@@ -783,10 +791,10 @@ function deriveAliases(canonicalRepo) {
   return [...aliases];
 }
 
-function renderSetupWizardHtml({ result, answers, url, cloudflareSetupCheck }) {
+function renderSetupWizardHtml({ result, answers, url, cloudflareSetupCheck, githubAppSetupCheck }) {
   const body = result.ok
-    ? renderSuccessContent(result, answers, url, cloudflareSetupCheck)
-    : renderFailureContent(result, answers, url, cloudflareSetupCheck);
+    ? renderSuccessContent(result, answers, url, cloudflareSetupCheck, githubAppSetupCheck)
+    : renderFailureContent(result, answers, url, cloudflareSetupCheck, githubAppSetupCheck);
 
   return `<!doctype html>
 <html lang="en">
@@ -926,7 +934,7 @@ function renderSetupWizardHtml({ result, answers, url, cloudflareSetupCheck }) {
 </html>`;
 }
 
-function renderSuccessContent(result, answers, url, cloudflareSetupCheck) {
+function renderSuccessContent(result, answers, url, cloudflareSetupCheck, githubAppSetupCheck) {
   const onboarding = result.onboarding ?? {};
   const customGpt = onboarding.customGpt ?? {};
   const repoList = answers.repositories.map((item) => escapeHtml(item.canonicalRepo));
@@ -957,12 +965,13 @@ function renderSuccessContent(result, answers, url, cloudflareSetupCheck) {
     </div>
     <textarea id="actionSchemaJson" readonly>${escapeHtml(actionSchemaJson)}</textarea>
     <p class="copy-hint" data-copy-status="actionSchemaJson">Tap copy button to copy full OpenAPI JSON.</p>
+    ${renderGitHubAppSetupCheck(githubAppSetupCheck)}
     ${renderCloudflareSetupCheck(cloudflareSetupCheck)}
     <p class="meta">Secrets are not handled here. Keep Cloudflare credentials in GitHub Environment secrets only.</p>
   `;
 }
 
-function renderFailureContent(result, answers, url, cloudflareSetupCheck) {
+function renderFailureContent(result, answers, url, cloudflareSetupCheck, githubAppSetupCheck) {
   const issues = Array.isArray(result.blockingIssues) ? result.blockingIssues : [];
   const issueItems = issues.map((item) => `<li>${escapeHtml(item)}</li>`).join("");
   const guidance = buildSetupWizardGuidance({ result, url });
@@ -979,6 +988,7 @@ function renderFailureContent(result, answers, url, cloudflareSetupCheck) {
         ? `<h2>Guidance</h2><div class="block"><ul>${guidanceItems}</ul></div>`
         : ""
     }
+    ${renderGitHubAppSetupCheck(githubAppSetupCheck)}
     ${renderCloudflareSetupCheck(cloudflareSetupCheck)}
     <h2>Debug (safe answers only)</h2>
     <textarea readonly>${escapeHtml(JSON.stringify(answers, null, 2))}</textarea>
@@ -1046,6 +1056,60 @@ function renderCloudflareSetupCheck(check) {
                   `<li><a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.title)}</a></li>`
               )
               .join("")}</ul>`
+          : ""
+      }
+      ${
+        checkedAt
+          ? `<p class="meta">checkedAt: <code>${escapeHtml(checkedAt)}</code></p>`
+          : ""
+      }
+    </div>
+  `;
+}
+
+function renderGitHubAppSetupCheck(check) {
+  const state = normalizeText(check?.state) || "not_configured";
+  const summary = normalizeText(check?.summary) || "GitHub App setup check is not configured.";
+  const guidance = Array.isArray(check?.guidance) ? check.guidance : [];
+  const links = Array.isArray(check?.links) ? check.links : [];
+  const evidence = check?.evidence ?? null;
+  const checkedAt = normalizeText(check?.checkedAt);
+  const listItem = (text) => `<li>${escapeHtml(text)}</li>`;
+
+  const evidenceItems = [];
+  if (normalizeText(evidence?.stage)) {
+    evidenceItems.push(`stage: ${normalizeText(evidence.stage)}`);
+  }
+  if (normalizeText(evidence?.source)) {
+    evidenceItems.push(`source: ${normalizeText(evidence.source)}`);
+  }
+  if (Number.isFinite(Number(evidence?.repositoryCount))) {
+    evidenceItems.push(`repositoryCount: ${Number(evidence.repositoryCount)}`);
+  }
+
+  return `
+    <h2>GitHub App Setup Check</h2>
+    <div class="block">
+      <p><strong>state:</strong> <code>${escapeHtml(state)}</code></p>
+      <p>${escapeHtml(summary)}</p>
+      ${
+        guidance.length > 0
+          ? `<ul>${guidance.map((item) => listItem(item)).join("")}</ul>`
+          : ""
+      }
+      ${
+        links.length > 0
+          ? `<ul>${links
+              .map(
+                (item) =>
+                  `<li><a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.title)}</a></li>`
+              )
+              .join("")}</ul>`
+          : ""
+      }
+      ${
+        evidenceItems.length > 0
+          ? `<p class="meta">${escapeHtml(evidenceItems.join(" / "))}</p>`
           : ""
       }
       ${
@@ -1293,6 +1357,145 @@ function classifyCloudflareSetupFailure({ stage, response }) {
   };
 }
 
+async function runGitHubAppSetupCheck(url, env) {
+  const runtimeEnv = env ?? {};
+  const appId = normalizeText(runtimeEnv.GITHUB_APP_ID);
+  const installationId = normalizeText(runtimeEnv.GITHUB_APP_INSTALLATION_ID);
+  const privateKey = resolveGitHubAppPrivateKey(runtimeEnv);
+  const configuredFields = [
+    ["GITHUB_APP_ID", appId],
+    ["GITHUB_APP_INSTALLATION_ID", installationId],
+    ["GITHUB_APP_PRIVATE_KEY", privateKey]
+  ];
+  const missingFields = configuredFields.filter(([, value]) => !value).map(([name]) => name);
+  const configuredCount = configuredFields.length - missingFields.length;
+  const diagnosticsEnabled = isTruthySignal(normalize(url.searchParams.get("githubAppCheck")));
+
+  if (configuredCount === 0) {
+    return {
+      state: "not_configured",
+      summary:
+        "GitHub App setup check: Worker runtime does not have GitHub App bootstrap secrets yet.",
+      guidance: [
+        "Create and install a GitHub App first.",
+        "Then set GITHUB_APP_ID, GITHUB_APP_INSTALLATION_ID, and GITHUB_APP_PRIVATE_KEY as Worker secrets.",
+        "Do not paste App private key into chat, URL, or setup wizard answers."
+      ],
+      links: [
+        {
+          title: "GitHub Apps documentation",
+          url: "https://docs.github.com/en/apps/creating-github-apps"
+        }
+      ]
+    };
+  }
+
+  if (missingFields.length > 0) {
+    return {
+      state: "partially_configured",
+      summary:
+        "GitHub App setup check: some required Worker secrets are missing, so VTDD cannot mint installation tokens yet.",
+      guidance: missingFields.map((field) => `Set ${field} on Worker runtime.`),
+      evidence: {
+        stage: "configuration_check",
+        source: "worker_runtime"
+      }
+    };
+  }
+
+  if (!diagnosticsEnabled) {
+    return {
+      state: "configured",
+      summary:
+        "GitHub App bootstrap secrets are configured on Worker runtime. Add githubAppCheck=on to verify token mint and live repository access.",
+      guidance: [
+        "Open setup wizard with githubAppCheck=on when you want live GitHub App diagnostics.",
+        "VTDD can mint short-lived installation tokens automatically after bootstrap."
+      ],
+      evidence: {
+        stage: "configuration_check",
+        source: "worker_runtime"
+      }
+    };
+  }
+
+  const live = await resolveGatewayAliasRegistryFromGitHubApp({
+    policyInput: { aliasRegistry: [] },
+    env: runtimeEnv
+  });
+
+  if (live.source === "github_app_live") {
+    return {
+      state: "ready",
+      summary:
+        "GitHub App setup check passed: VTDD can mint an installation token and read the live repository index.",
+      guidance: [
+        "You can rely on live repository listing and repository switch detection.",
+        "Keep App permissions minimal and expand only when a specific runtime path needs it."
+      ],
+      evidence: {
+        stage: "live_probe",
+        source: live.source,
+        repositoryCount: Array.isArray(live.aliasRegistry) ? live.aliasRegistry.length : 0
+      },
+      checkedAt: new Date().toISOString()
+    };
+  }
+
+  const warning = normalizeText((live.warnings ?? [])[0]);
+  return {
+    state: "probe_failed",
+    summary: warning || "GitHub App setup check failed during live probe.",
+    guidance: buildGitHubAppSetupGuidanceFromWarning(warning),
+    evidence: {
+      stage: "live_probe",
+      source: live.source
+    },
+    checkedAt: new Date().toISOString()
+  };
+}
+
+function buildGitHubAppSetupGuidanceFromWarning(warning) {
+  const normalized = normalizeText(warning).toLowerCase();
+  if (normalized.includes("must all be configured")) {
+    return [
+      "Set GITHUB_APP_ID, GITHUB_APP_INSTALLATION_ID, and GITHUB_APP_PRIVATE_KEY on Worker runtime.",
+      "After updating secrets, redeploy or restart the Worker."
+    ];
+  }
+  if (normalized.includes("resource not accessible by integration")) {
+    return [
+      "Confirm the GitHub App is installed to the correct repo or organization.",
+      "Check repository permissions and visibility scope for the installation."
+    ];
+  }
+  if (normalized.includes("invalid or expired")) {
+    return [
+      "Regenerate the GitHub App private key and update GITHUB_APP_PRIVATE_KEY.",
+      "Confirm the installation still exists for the target repo or organization."
+    ];
+  }
+  if (normalized.includes("rate limited")) {
+    return [
+      "Retry after the GitHub API rate limit window resets.",
+      "Keep setup wizard diagnostics occasional; normal VTDD flow can still fall back to provided aliases."
+    ];
+  }
+  if (normalized.includes("mint failed")) {
+    return [
+      "Verify GITHUB_APP_ID, GITHUB_APP_INSTALLATION_ID, and GITHUB_APP_PRIVATE_KEY.",
+      "If values look correct, regenerate the private key and retry diagnostics."
+    ];
+  }
+  if (normalized.includes("network request failed")) {
+    return ["Confirm Worker runtime can reach api.github.com and retry diagnostics."];
+  }
+  return [
+    "Re-check GitHub App installation target and Worker secrets.",
+    "If live probe still fails, keep using provided aliases temporarily and return to bootstrap diagnostics."
+  ];
+}
+
 async function readSafeJson(response) {
   try {
     return await response.json();
@@ -1312,6 +1515,19 @@ function normalizeCloudflareErrors(errors) {
       documentationUrl: normalizeText(item?.documentation_url)
     }))
     .filter((item) => Number.isFinite(item.code) || item.message);
+}
+
+function resolveGitHubAppPrivateKey(env) {
+  const runtimeEnv = env ?? {};
+  const base64Value = normalizeText(runtimeEnv.GITHUB_APP_PRIVATE_KEY_BASE64);
+  if (base64Value) {
+    try {
+      return decodeBase64(base64Value);
+    } catch {
+      return "";
+    }
+  }
+  return normalizeText(runtimeEnv.GITHUB_APP_PRIVATE_KEY);
 }
 
 function isTruthySignal(value) {
@@ -1575,6 +1791,13 @@ function normalizeDeployAuthorityPreference(value) {
     return normalized;
   }
   return "auto";
+}
+
+function decodeBase64(value) {
+  if (typeof atob === "function") {
+    return atob(value);
+  }
+  return Buffer.from(value, "base64").toString("utf8");
 }
 
 function escapeHtml(value) {
