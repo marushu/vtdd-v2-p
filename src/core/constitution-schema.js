@@ -10,6 +10,27 @@ export const REQUIRED_CONSTITUTION_RULE_IDS = Object.freeze([
   "butler_must_read_constitution_before_judgment"
 ]);
 
+export const CONSTITUTION_RULE_DESCRIPTIONS = Object.freeze({
+  no_build_without_explicit_go:
+    "Build or execution must not start without explicit human GO.",
+  runtime_truth_over_memory:
+    "Runtime truth takes precedence over memory when judging current state.",
+  reconcile_when_runtime_conflicts_with_memory:
+    "If runtime truth conflicts with memory, execution must move to reconcile_required.",
+  merge_requires_explicit_human_approval:
+    "Merge requires explicit human approval and must never be inferred.",
+  no_out_of_scope_implementation:
+    "Implementation must not extend beyond Issue-traceable scope.",
+  no_spec_inference_during_execution:
+    "Execution must not guess or silently fill missing specification.",
+  proposal_not_implementation_for_extra_ideas:
+    "Extra ideas may be proposed, but not implemented without acceptance.",
+  require_traceability_to_issue_sections:
+    "Every change must be traceable to Issue sections such as Intent or Success Criteria.",
+  butler_must_read_constitution_before_judgment:
+    "Butler must consult the Constitution before making judgments."
+});
+
 export function validateConstitutionSchema(input) {
   const schema = {
     version: normalizeText(input?.version),
@@ -66,7 +87,7 @@ export function createDefaultConstitutionSchema() {
     rules: REQUIRED_CONSTITUTION_RULE_IDS.map((id) => ({
       id,
       type: "requirement",
-      description: `Constitution rule: ${id}`,
+      description: CONSTITUTION_RULE_DESCRIPTIONS[id],
       enforcementLevel: "must"
     }))
   };
