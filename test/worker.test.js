@@ -91,6 +91,176 @@ test("worker runs gateway route", async () => {
   assert.equal(body.repository, "marushu/vtdd-v2");
 });
 
+test("worker gateway persists decision log and returns decision references", async () => {
+  const provider = createInMemoryMemoryProvider();
+  const response = await worker.fetch(
+    new Request("https://example.com/mvp/gateway", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: "Bearer test-token"
+      },
+      body: JSON.stringify({
+        phase: "execution",
+        actorRole: "executor",
+        policyInput: {
+          actionType: ActionType.ISSUE_CREATE,
+          mode: TaskMode.EXECUTION,
+          repositoryInput: "vtdd",
+          aliasRegistry,
+          constitutionConsulted: true,
+          runtimeTruth: {
+            runtimeAvailable: true
+          },
+          credential: {
+            model: "github_app",
+            tier: CredentialTier.EXECUTE
+          },
+          consent: {
+            grantedCategories: [ConsentCategory.PROPOSE]
+          },
+          approvalPhrase: "GO issue create",
+          approvalScopeMatched: true,
+          issueTraceable: true,
+          go: true,
+          passkey: false
+        },
+        memoryRecord: {
+          recordType: "decision_log",
+          content: {
+            decision: "Issue #17 の接続不足を修正する",
+            rationale: "Butler が過去判断を理由付きで説明できるようにする",
+            relatedIssue: 17
+          },
+          metadata: {
+            decidedBy: "shuhei"
+          }
+        }
+      })
+    }),
+    {
+      MVP_GATEWAY_BEARER_TOKEN: "test-token",
+      MEMORY_PROVIDER: provider
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.allowed, true);
+  assert.equal(Boolean(body.memoryWritePersisted?.recordId), true);
+  assert.equal(body.retrievalReferences.decisionLogs.length, 1);
+  assert.equal(body.retrievalReferences.decisionLogs[0].relatedIssue, 17);
+});
+
+test("worker gateway blocks invalid decision log schema", async () => {
+  const provider = createInMemoryMemoryProvider();
+  const response = await worker.fetch(
+    new Request("https://example.com/mvp/gateway", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: "Bearer test-token"
+      },
+      body: JSON.stringify({
+        phase: "execution",
+        actorRole: "executor",
+        policyInput: {
+          actionType: ActionType.ISSUE_CREATE,
+          mode: TaskMode.EXECUTION,
+          repositoryInput: "vtdd",
+          aliasRegistry,
+          constitutionConsulted: true,
+          runtimeTruth: {
+            runtimeAvailable: true
+          },
+          credential: {
+            model: "github_app",
+            tier: CredentialTier.EXECUTE
+          },
+          consent: {
+            grantedCategories: [ConsentCategory.PROPOSE]
+          },
+          approvalPhrase: "GO issue create",
+          approvalScopeMatched: true,
+          issueTraceable: true,
+          go: true,
+          passkey: false
+        },
+        memoryRecord: {
+          recordType: "decision_log",
+          content: {
+            decision: "Issue #17 の接続不足を修正する",
+            relatedIssue: 17
+          }
+        }
+      })
+    }),
+    {
+      MVP_GATEWAY_BEARER_TOKEN: "test-token",
+      MEMORY_PROVIDER: provider
+    }
+  );
+
+  assert.equal(response.status, 422);
+  const body = await response.json();
+  assert.equal(body.allowed, false);
+  assert.equal(body.blockedByRule, "decision_log_schema_invalid");
+});
+
+test("worker gateway requires memory provider for decision log persistence", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/mvp/gateway", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: "Bearer test-token"
+      },
+      body: JSON.stringify({
+        phase: "execution",
+        actorRole: "executor",
+        policyInput: {
+          actionType: ActionType.ISSUE_CREATE,
+          mode: TaskMode.EXECUTION,
+          repositoryInput: "vtdd",
+          aliasRegistry,
+          constitutionConsulted: true,
+          runtimeTruth: {
+            runtimeAvailable: true
+          },
+          credential: {
+            model: "github_app",
+            tier: CredentialTier.EXECUTE
+          },
+          consent: {
+            grantedCategories: [ConsentCategory.PROPOSE]
+          },
+          approvalPhrase: "GO issue create",
+          approvalScopeMatched: true,
+          issueTraceable: true,
+          go: true,
+          passkey: false
+        },
+        memoryRecord: {
+          recordType: "decision_log",
+          content: {
+            decision: "Issue #17 の接続不足を修正する",
+            rationale: "理由参照を復元する",
+            relatedIssue: 17
+          }
+        }
+      })
+    }),
+    {
+      MVP_GATEWAY_BEARER_TOKEN: "test-token"
+    }
+  );
+
+  assert.equal(response.status, 503);
+  const body = await response.json();
+  assert.equal(body.allowed, false);
+  assert.equal(body.error, "memory_provider_unavailable");
+});
+
 test("worker blocks gateway without required bearer token", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/mvp/gateway", {
@@ -193,6 +363,45 @@ test("worker returns constitution records through retrieve route", async () => {
   assert.equal(body.recordType, "constitution");
   assert.equal(body.recordCount, 1);
   assert.equal(body.records[0].id, "constitution-1");
+});
+
+test("worker returns decision log references through retrieve route", async () => {
+  const provider = createInMemoryMemoryProvider();
+  await provider.store({
+    id: "decision-1",
+    type: MemoryRecordType.DECISION_LOG,
+    content: {
+      decision: "Issue #17 を再接続する",
+      rationale: "Butler 参照を復元する",
+      relatedIssue: 17,
+      decidedBy: "shuhei",
+      timestamp: "2026-04-16T01:00:00Z",
+      supersededBy: null
+    },
+    metadata: { repository: "marushu/vtdd-v2" },
+    priority: 95,
+    tags: ["decision_log", "issue:17"],
+    createdAt: "2026-04-16T01:00:00Z"
+  });
+
+  const response = await worker.fetch(
+    new Request("https://example.com/mvp/retrieve/decisions?relatedIssue=17&limit=3", {
+      headers: {
+        authorization: "Bearer test-token"
+      }
+    }),
+    {
+      MVP_GATEWAY_BEARER_TOKEN: "test-token",
+      MEMORY_PROVIDER: provider
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.recordType, "decision_log");
+  assert.equal(body.recordCount, 1);
+  assert.equal(body.references[0].relatedIssue, 17);
 });
 
 test("worker returns 503 when constitution retrieve provider is unavailable", async () => {

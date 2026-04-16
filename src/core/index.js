@@ -41,6 +41,12 @@ export {
   createProposalLogEntry,
   validateProposalLogEntry
 } from "./log-contracts.js";
+export {
+  appendDecisionLogFromGateway,
+  retrieveDecisionLogReferences,
+  inferRelatedIssueFromGatewayInput,
+  createCanonicalDecisionFromGateway
+} from "./decision-log-runtime.js";
 export { createInMemoryLogStore } from "./log-store.js";
 export {
   MEMORY_RECORD_FIELD_POLICY,
