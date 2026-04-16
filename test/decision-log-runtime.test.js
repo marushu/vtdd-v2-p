@@ -62,7 +62,7 @@ test("decision log runtime persists and retrieves references", async () => {
       }
     },
     {
-      repository: "marushu/vtdd-v2"
+      repository: "sample-org/vtdd-v2"
     }
   );
 
@@ -74,5 +74,5 @@ test("decision log runtime persists and retrieves references", async () => {
   assert.equal(retrieved.ok, true);
   assert.equal(retrieved.references.length, 1);
   assert.equal(retrieved.references[0].decision, "Issue #17 の保存経路を接続");
-  assert.equal(retrieved.references[0].repository, "marushu/vtdd-v2");
+  assert.equal(retrieved.references[0].repository, "sample-org/vtdd-v2");
 });

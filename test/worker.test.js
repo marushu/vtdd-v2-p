@@ -12,7 +12,7 @@ import {
 
 const aliasRegistry = [
   {
-    canonicalRepo: "marushu/vtdd-v2",
+    canonicalRepo: "sample-org/vtdd-v2",
     aliases: ["vtdd"]
   }
 ];
@@ -25,8 +25,10 @@ test("worker returns health", async () => {
   assert.equal(body.mode, "v2");
 });
 
-test("worker returns setup wizard html", async () => {
-  const response = await worker.fetch(new Request("https://example.com/setup/wizard"));
+test("worker returns setup wizard html when repo query is provided", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/setup/wizard?repo=sample-org/vtdd-v2")
+  );
   assert.equal(response.status, 200);
   const contentType = response.headers.get("content-type") ?? "";
   assert.equal(contentType.includes("text/html"), true);
@@ -37,10 +39,23 @@ test("worker returns setup wizard html", async () => {
   assert.equal(html.includes("Copy Schema"), true);
 });
 
+test("worker setup wizard requires repo query and returns explicit guidance", async () => {
+  const response = await worker.fetch(new Request("https://example.com/setup/wizard?format=json"));
+  assert.equal(response.status, 422);
+  const body = await response.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.blockingIssues.includes("at least one repository mapping is required"), true);
+  assert.equal(Array.isArray(body.guidance), true);
+  assert.equal(
+    body.guidance.some((item) => item.includes("repo=sample-org%2Fsample-repo")),
+    true
+  );
+});
+
 test("worker returns setup wizard json", async () => {
   const response = await worker.fetch(
     new Request(
-      "https://example.com/setup/wizard?format=json&repo=marushu/vtdd-v2&surface=custom_gpt"
+      "https://example.com/setup/wizard?format=json&repo=sample-org/vtdd-v2&surface=custom_gpt"
     )
   );
   assert.equal(response.status, 200);
@@ -88,7 +103,9 @@ test("worker setup wizard classifies cloudflare billing-related setup failure", 
   };
 
   const response = await worker.fetch(
-    new Request("https://example.com/setup/wizard?format=json&cloudflareCheck=on"),
+    new Request(
+      "https://example.com/setup/wizard?format=json&repo=sample-org/vtdd-v2&cloudflareCheck=on"
+    ),
     {
       SETUP_WIZARD_CLOUDFLARE_CHECK_ENABLED: "true",
       CLOUDFLARE_API_TOKEN: "token-for-check-only",
@@ -126,12 +143,15 @@ test("worker setup wizard does not call cloudflare api unless explicitly request
     );
   };
 
-  const response = await worker.fetch(new Request("https://example.com/setup/wizard?format=json"), {
-    SETUP_WIZARD_CLOUDFLARE_CHECK_ENABLED: "true",
-    CLOUDFLARE_API_TOKEN: "token-for-check-only",
-    CLOUDFLARE_ACCOUNT_ID: "account-id-for-check-only",
-    CF_API_FETCH: cloudflareApiFetch
-  });
+  const response = await worker.fetch(
+    new Request("https://example.com/setup/wizard?format=json&repo=sample-org/vtdd-v2"),
+    {
+      SETUP_WIZARD_CLOUDFLARE_CHECK_ENABLED: "true",
+      CLOUDFLARE_API_TOKEN: "token-for-check-only",
+      CLOUDFLARE_ACCOUNT_ID: "account-id-for-check-only",
+      CF_API_FETCH: cloudflareApiFetch
+    }
+  );
 
   assert.equal(response.status, 200);
   const body = await response.json();
@@ -178,7 +198,7 @@ test("worker runs gateway route", async () => {
   assert.equal(response.status, 200);
   const body = await response.json();
   assert.equal(body.allowed, true);
-  assert.equal(body.repository, "marushu/vtdd-v2");
+  assert.equal(body.repository, "sample-org/vtdd-v2");
 });
 
 test("worker gateway uses github app live repository index for natural list conversation", async () => {
@@ -188,13 +208,13 @@ test("worker gateway uses github app live repository index for natural list conv
         total_count: 2,
         repositories: [
           {
-            full_name: "marushu/vtdd-v2",
+            full_name: "sample-org/vtdd-v2",
             name: "vtdd-v2",
             private: true
           },
           {
-            full_name: "marushu/hibou-piccola-bookkeeping",
-            name: "hibou-piccola-bookkeeping",
+            full_name: "sample-org/accounting-app",
+            name: "accounting-app",
             private: false
           }
         ]
@@ -245,12 +265,12 @@ test("worker gateway uses github app live repository index for natural list conv
   assert.equal(body.conversationAssist.responseGuide.style, "repository_list");
   assert.equal(body.repositoryCandidates.length, 2);
   assert.equal(
-    body.repositoryCandidates.some((item) => item.canonicalRepo === "marushu/vtdd-v2"),
+    body.repositoryCandidates.some((item) => item.canonicalRepo === "sample-org/vtdd-v2"),
     true
   );
   assert.equal(
     body.repositoryCandidates.some(
-      (item) => item.canonicalRepo === "marushu/hibou-piccola-bookkeeping" && item.visibility === "public"
+      (item) => item.canonicalRepo === "sample-org/accounting-app" && item.visibility === "public"
     ),
     true
   );
@@ -263,7 +283,7 @@ test("worker gateway resolves repository switch intent using live github app ali
         total_count: 1,
         repositories: [
           {
-            full_name: "marushu/vtdd-v2",
+            full_name: "sample-org/vtdd-v2",
             name: "vtdd-v2",
             private: true
           }
@@ -286,7 +306,7 @@ test("worker gateway resolves repository switch intent using live github app ali
         actorRole: "executor",
         conversation: {
           userText: "VTDD を開いて",
-          currentRepository: "marushu/hibou-piccola-bookkeeping"
+          currentRepository: "sample-org/accounting-app"
         },
         policyInput: {
           actionType: ActionType.READ,
@@ -312,8 +332,8 @@ test("worker gateway resolves repository switch intent using live github app ali
   assert.equal(response.status, 200);
   const body = await response.json();
   assert.equal(body.allowed, true);
-  assert.equal(body.repository, "marushu/vtdd-v2");
-  assert.equal(body.conversationAssist.mentionedRepository, "marushu/vtdd-v2");
+  assert.equal(body.repository, "sample-org/vtdd-v2");
+  assert.equal(body.conversationAssist.mentionedRepository, "sample-org/vtdd-v2");
   assert.equal(body.conversationAssist.requiresConfirmation, true);
 });
 
@@ -953,7 +973,7 @@ test("worker returns decision log references through retrieve route", async () =
       timestamp: "2026-04-16T01:00:00Z",
       supersededBy: null
     },
-    metadata: { repository: "marushu/vtdd-v2" },
+    metadata: { repository: "sample-org/vtdd-v2" },
     priority: 95,
     tags: ["decision_log", "issue:17"],
     createdAt: "2026-04-16T01:00:00Z"
@@ -994,7 +1014,7 @@ test("worker returns proposal log references through retrieve route", async () =
       proposedBy: "shuhei",
       timestamp: "2026-04-16T01:30:00Z"
     },
-    metadata: { repository: "marushu/vtdd-v2" },
+    metadata: { repository: "sample-org/vtdd-v2" },
     priority: 85,
     tags: ["proposal_log", "issue:20"],
     createdAt: "2026-04-16T01:30:00Z"

@@ -23,7 +23,7 @@ Butler should first resolve it from known internal context before using generic 
 
 Examples:
 
-- `TOMIO` -> `marushu/hibou-piccola-bookkeeping`
+- `LEDGER_APP` -> `sample-org/accounting-app`
 - `SunabaEye` -> known project docs and repositories
 
 ## Alias Registry
@@ -71,4 +71,4 @@ If multiple issue numbers are detected in one prompt, Butler should ask a short 
 
 ## Design Goal
 
-Butler should be smart enough to understand `TOMIO`, but strict enough not to execute against the wrong repository.
+Butler should be smart enough to understand `LEDGER_APP`, but strict enough not to execute against the wrong repository.

@@ -13,16 +13,16 @@ import {
 
 const registry = [
   {
-    canonicalRepo: "marushu/vtdd-v2",
+    canonicalRepo: "sample-org/vtdd-v2",
     productName: "VTDD V2",
     visibility: "private",
     aliases: ["vtdd"]
   },
   {
-    canonicalRepo: "marushu/hibou-piccola-bookkeeping",
+    canonicalRepo: "sample-org/accounting-app",
     productName: "Tomio Bookkeeping",
     visibility: "public",
-    aliases: ["tomio", "bookkeeping"]
+    aliases: ["ledger", "bookkeeping"]
   }
 ];
 
@@ -86,9 +86,9 @@ test("gateway allows butler issue creation and transitions workflow", () => {
 
   assert.equal(result.allowed, true);
   assert.equal(result.workflowState.stage, WorkflowStage.PROPOSAL);
-  assert.equal(result.repository, "marushu/vtdd-v2");
+  assert.equal(result.repository, "sample-org/vtdd-v2");
   assert.equal(result.repositoryCandidates.length, 2);
-  assert.equal(result.repositoryCandidates[0].canonicalRepo, "marushu/vtdd-v2");
+  assert.equal(result.repositoryCandidates[0].canonicalRepo, "sample-org/vtdd-v2");
   assert.equal(result.repositoryCandidates[0].visibility, "private");
   assert.equal(result.memoryWrite.recordType, "decision_log");
 });
@@ -207,7 +207,7 @@ test("gateway asks confirmation when conversation implies repository switch", ()
     actorRole: ActorRole.EXECUTOR,
     conversation: {
       userText: "VTDD V2 を開いて",
-      currentRepository: "marushu/hibou-piccola-bookkeeping"
+      currentRepository: "sample-org/accounting-app"
     },
     policyInput: {
       actionType: ActionType.READ,
@@ -222,8 +222,8 @@ test("gateway asks confirmation when conversation implies repository switch", ()
     }
   });
   assert.equal(result.allowed, true);
-  assert.equal(result.repository, "marushu/vtdd-v2");
-  assert.equal(result.conversationAssist.mentionedRepository, "marushu/vtdd-v2");
+  assert.equal(result.repository, "sample-org/vtdd-v2");
+  assert.equal(result.conversationAssist.mentionedRepository, "sample-org/vtdd-v2");
   assert.equal(result.conversationAssist.requiresConfirmation, true);
 });
 

@@ -10,7 +10,7 @@ import {
 
 const registry = [
   {
-    canonicalRepo: "marushu/vtdd-v2",
+    canonicalRepo: "sample-org/vtdd-v2",
     productName: "VTDD V2",
     aliases: ["vtdd"]
   }
@@ -61,7 +61,7 @@ test("butler orchestrator allows issue creation when all gates pass", () => {
     }
   });
   assert.equal(result.allowed, true);
-  assert.equal(result.repository, "marushu/vtdd-v2");
+  assert.equal(result.repository, "sample-org/vtdd-v2");
 });
 
 test("butler orchestrator blocks invalid judgment order", () => {

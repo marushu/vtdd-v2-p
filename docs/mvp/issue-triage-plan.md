@@ -76,7 +76,7 @@
 repo 誤認による誤実行を防ぐため、Alias解決・文脈優先解決・No Default Repo を一つの安全仕様として定義する。
 
 ## Background
-プロダクト通称（例: TOMIO）と canonical repo 名が一致しない運用では、誤ターゲット実行が最も高リスクな失敗になる。
+プロダクト通称（例: LEDGER_APP）と canonical repo 名が一致しない運用では、誤ターゲット実行が最も高リスクな失敗になる。
 
 ## Scope
 - alias registry schema

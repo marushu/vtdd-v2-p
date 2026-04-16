@@ -29,7 +29,7 @@ Butler を特定 AI プロダクトや特定 UI に固定せず、role / contrac
 
 ### Intent
 
-`TOMIO` や `帳簿アプリ` のような通称を canonical repository に解決できるようにし、執事的な文脈理解と repo 誤認防止を両立する。
+`LEDGER_APP` や `帳簿アプリ` のような通称を canonical repository に解決できるようにし、執事的な文脈理解と repo 誤認防止を両立する。
 
 ### Background
 
@@ -70,7 +70,7 @@ Butler を特定 AI プロダクトや特定 UI に固定せず、role / contrac
 
 ### Success Criteria
 
-- `SunabaEye` や `TOMIO` を generic web search より前に内部文脈から解決する
+- `SunabaEye` や `LEDGER_APP` を generic web search より前に内部文脈から解決する
 - 既知 docs の要約依頼で、内部 docs 読解が優先される
 
 ### Non-goal

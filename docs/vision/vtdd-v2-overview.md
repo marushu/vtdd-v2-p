@@ -53,7 +53,7 @@ VTDD V2 should let a user:
 - execute through governed approval,
 - review and deploy from mobile devices,
 - recover context after interruption,
-- and keep using familiar product names like `TOMIO` without losing precision.
+- and keep using familiar product names like `LEDGER_APP` without losing precision.
 
 ## Platform Principle
 

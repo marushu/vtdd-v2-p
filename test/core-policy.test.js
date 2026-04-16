@@ -16,14 +16,14 @@ import {
 
 const registry = [
   {
-    canonicalRepo: "marushu/vtdd-v2",
+    canonicalRepo: "sample-org/vtdd-v2",
     productName: "VTDD V2",
-    aliases: ["vtdd", "tomio-core"]
+    aliases: ["vtdd", "acct-core"]
   },
   {
-    canonicalRepo: "marushu/hibou-piccola-bookkeeping",
-    productName: "TOMIO",
-    aliases: ["帳簿アプリ", "tomio"]
+    canonicalRepo: "sample-org/accounting-app",
+    productName: "LEDGER_APP",
+    aliases: ["帳簿アプリ", "ledger"]
   }
 ];
 
@@ -103,7 +103,7 @@ test("high-risk action requires GO + passkey", () => {
   const result = evaluateExecutionPolicy({
     actionType: ActionType.DEPLOY_PRODUCTION,
     mode: TaskMode.EXECUTION,
-    repositoryInput: "tomio",
+    repositoryInput: "ledger",
     aliasRegistry: registry,
     constitutionConsulted: true,
     runtimeTruth: { runtimeAvailable: true },
@@ -122,7 +122,7 @@ test("pr comment is allowed without GO when other gates pass", () => {
   const result = evaluateExecutionPolicy({
     actionType: ActionType.PR_COMMENT,
     mode: TaskMode.EXECUTION,
-    repositoryInput: "tomio",
+    repositoryInput: "ledger",
     aliasRegistry: registry,
     constitutionConsulted: true,
     runtimeTruth: { runtimeAvailable: true },
@@ -141,7 +141,7 @@ test("pr review submit still requires GO", () => {
   const result = evaluateExecutionPolicy({
     actionType: ActionType.PR_REVIEW_SUBMIT,
     mode: TaskMode.EXECUTION,
-    repositoryInput: "tomio",
+    repositoryInput: "ledger",
     aliasRegistry: registry,
     constitutionConsulted: true,
     runtimeTruth: { runtimeAvailable: true },
@@ -192,7 +192,7 @@ test("execution allows build with resolved repo and GO", () => {
     passkey: false
   });
   assert.equal(result.allowed, true);
-  assert.equal(result.repository, "marushu/vtdd-v2");
+  assert.equal(result.repository, "sample-org/vtdd-v2");
 });
 
 test("execution blocks when constitution is not consulted", () => {
