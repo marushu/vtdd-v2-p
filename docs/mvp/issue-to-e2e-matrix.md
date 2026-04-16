@@ -30,6 +30,7 @@ Status values used below:
   - `docs/mvp/issue-13-rewrite-draft.md`
 - Test evidence:
   - `test/constitution-schema.test.js`
+  - `test/canonical-docs-restoration.test.js`
 - Status: `implemented_pending_e2e`
 
 ## E2E-02 Issue/PR template discipline
