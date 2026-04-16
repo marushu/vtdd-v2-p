@@ -26,6 +26,9 @@ const DEFAULT_REPOSITORIES = Object.freeze([
   }
 ]);
 
+const CANONICAL_API_PREFIX = "/v2";
+const LEGACY_API_PREFIX = "/mvp";
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -34,7 +37,7 @@ export default {
       return json(200, {
         ok: true,
         service: "vtdd-v2-worker",
-        mode: "mvp"
+        mode: "v2"
       });
     }
 
@@ -42,7 +45,7 @@ export default {
       return handleSetupWizardRequest(url);
     }
 
-    if (request.method === "POST" && url.pathname === "/mvp/gateway") {
+    if (request.method === "POST" && isApiPath(url.pathname, "/gateway")) {
       const auth = authorizeGatewayRequest({ request, env });
       if (!auth.ok) {
         return json(auth.status, {
@@ -66,7 +69,7 @@ export default {
       return json(gatewayOutcome.status, gatewayOutcome.body);
     }
 
-    if (request.method === "GET" && url.pathname === "/mvp/retrieve/constitution") {
+    if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/constitution")) {
       const auth = authorizeGatewayRequest({ request, env });
       if (!auth.ok) {
         return json(auth.status, {
@@ -79,7 +82,7 @@ export default {
       return handleRetrieveConstitutionRequest(url, env);
     }
 
-    if (request.method === "GET" && url.pathname === "/mvp/retrieve/decisions") {
+    if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/decisions")) {
       const auth = authorizeGatewayRequest({ request, env });
       if (!auth.ok) {
         return json(auth.status, {
@@ -92,7 +95,7 @@ export default {
       return handleRetrieveDecisionLogsRequest(url, env);
     }
 
-    if (request.method === "GET" && url.pathname === "/mvp/retrieve/proposals") {
+    if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/proposals")) {
       const auth = authorizeGatewayRequest({ request, env });
       if (!auth.ok) {
         return json(auth.status, {
@@ -660,7 +663,9 @@ function renderFailureContent(result, answers, url) {
 function authorizeGatewayRequest({ request, env }) {
   const runtimeEnv = env ?? {};
 
-  const bearerToken = normalizeText(runtimeEnv.MVP_GATEWAY_BEARER_TOKEN);
+  const bearerToken = normalizeText(
+    runtimeEnv.VTDD_GATEWAY_BEARER_TOKEN ?? runtimeEnv.MVP_GATEWAY_BEARER_TOKEN
+  );
   if (bearerToken) {
     const provided = parseBearerToken(request.headers.get("authorization"));
     if (provided === bearerToken) {
@@ -669,7 +674,7 @@ function authorizeGatewayRequest({ request, env }) {
     return {
       ok: false,
       status: 401,
-      reason: "valid bearer token is required for /mvp/gateway"
+      reason: "valid bearer token is required for /v2/gateway (legacy /mvp/gateway is also accepted)"
     };
   }
 
@@ -689,7 +694,8 @@ function authorizeGatewayRequest({ request, env }) {
     return {
       ok: false,
       status: 401,
-      reason: "valid Cloudflare Access service token headers are required for /mvp/gateway"
+      reason:
+        "valid Cloudflare Access service token headers are required for /v2/gateway (legacy /mvp/gateway is also accepted)"
     };
   }
 
@@ -763,6 +769,12 @@ function normalizeRepo(value) {
     return "";
   }
   return repo;
+}
+
+function isApiPath(pathname, suffix) {
+  return (
+    pathname === `${CANONICAL_API_PREFIX}${suffix}` || pathname === `${LEGACY_API_PREFIX}${suffix}`
+  );
 }
 
 function normalizeUrl(value) {

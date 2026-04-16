@@ -22,6 +22,7 @@ test("worker returns health", async () => {
   assert.equal(response.status, 200);
   const body = await response.json();
   assert.equal(body.ok, true);
+  assert.equal(body.mode, "v2");
 });
 
 test("worker returns setup wizard html", async () => {
@@ -45,13 +46,13 @@ test("worker returns setup wizard json", async () => {
   assert.equal(response.status, 200);
   const body = await response.json();
   assert.equal(body.ok, true);
-  assert.equal(body.onboarding.customGpt.actionSchemaJson.includes("/mvp/gateway"), true);
+  assert.equal(body.onboarding.customGpt.actionSchemaJson.includes("/v2/gateway"), true);
   assert.equal(body.generatedAnswers.actionEndpointBaseUrl, "https://example.com");
 });
 
 test("worker runs gateway route", async () => {
   const response = await worker.fetch(
-    new Request("https://example.com/mvp/gateway", {
+    new Request("https://example.com/v2/gateway", {
       method: "POST",
       headers: {
         "content-type": "application/json"
@@ -91,10 +92,35 @@ test("worker runs gateway route", async () => {
   assert.equal(body.repository, "marushu/vtdd-v2");
 });
 
+test("worker accepts legacy /mvp gateway route for compatibility", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/mvp/gateway", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        phase: "exploration",
+        actorRole: "executor",
+        policyInput: {
+          actionType: ActionType.READ,
+          mode: TaskMode.READ_ONLY,
+          repositoryInput: "vtdd",
+          consent: { grantedCategories: [ConsentCategory.READ] }
+        }
+      })
+    })
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.allowed, true);
+});
+
 test("worker gateway persists decision log and returns decision references", async () => {
   const provider = createInMemoryMemoryProvider();
   const response = await worker.fetch(
-    new Request("https://example.com/mvp/gateway", {
+    new Request("https://example.com/v2/gateway", {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -139,7 +165,7 @@ test("worker gateway persists decision log and returns decision references", asy
       })
     }),
     {
-      MVP_GATEWAY_BEARER_TOKEN: "test-token",
+      VTDD_GATEWAY_BEARER_TOKEN: "test-token",
       MEMORY_PROVIDER: provider
     }
   );
@@ -155,7 +181,7 @@ test("worker gateway persists decision log and returns decision references", asy
 test("worker gateway blocks invalid decision log schema", async () => {
   const provider = createInMemoryMemoryProvider();
   const response = await worker.fetch(
-    new Request("https://example.com/mvp/gateway", {
+    new Request("https://example.com/v2/gateway", {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -196,7 +222,7 @@ test("worker gateway blocks invalid decision log schema", async () => {
       })
     }),
     {
-      MVP_GATEWAY_BEARER_TOKEN: "test-token",
+      VTDD_GATEWAY_BEARER_TOKEN: "test-token",
       MEMORY_PROVIDER: provider
     }
   );
@@ -209,7 +235,7 @@ test("worker gateway blocks invalid decision log schema", async () => {
 
 test("worker gateway requires memory provider for decision log persistence", async () => {
   const response = await worker.fetch(
-    new Request("https://example.com/mvp/gateway", {
+    new Request("https://example.com/v2/gateway", {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -251,7 +277,7 @@ test("worker gateway requires memory provider for decision log persistence", asy
       })
     }),
     {
-      MVP_GATEWAY_BEARER_TOKEN: "test-token"
+      VTDD_GATEWAY_BEARER_TOKEN: "test-token"
     }
   );
 
@@ -264,7 +290,7 @@ test("worker gateway requires memory provider for decision log persistence", asy
 test("worker gateway persists proposal log and returns proposal references", async () => {
   const provider = createInMemoryMemoryProvider();
   const response = await worker.fetch(
-    new Request("https://example.com/mvp/gateway", {
+    new Request("https://example.com/v2/gateway", {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -310,7 +336,7 @@ test("worker gateway persists proposal log and returns proposal references", asy
       })
     }),
     {
-      MVP_GATEWAY_BEARER_TOKEN: "test-token",
+      VTDD_GATEWAY_BEARER_TOKEN: "test-token",
       MEMORY_PROVIDER: provider
     }
   );
@@ -327,7 +353,7 @@ test("worker gateway persists proposal log and returns proposal references", asy
 test("worker gateway blocks invalid proposal log schema", async () => {
   const provider = createInMemoryMemoryProvider();
   const response = await worker.fetch(
-    new Request("https://example.com/mvp/gateway", {
+    new Request("https://example.com/v2/gateway", {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -367,7 +393,7 @@ test("worker gateway blocks invalid proposal log schema", async () => {
       })
     }),
     {
-      MVP_GATEWAY_BEARER_TOKEN: "test-token",
+      VTDD_GATEWAY_BEARER_TOKEN: "test-token",
       MEMORY_PROVIDER: provider
     }
   );
@@ -380,7 +406,7 @@ test("worker gateway blocks invalid proposal log schema", async () => {
 
 test("worker gateway requires memory provider for proposal log persistence", async () => {
   const response = await worker.fetch(
-    new Request("https://example.com/mvp/gateway", {
+    new Request("https://example.com/v2/gateway", {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -423,7 +449,7 @@ test("worker gateway requires memory provider for proposal log persistence", asy
       })
     }),
     {
-      MVP_GATEWAY_BEARER_TOKEN: "test-token"
+      VTDD_GATEWAY_BEARER_TOKEN: "test-token"
     }
   );
 
@@ -435,7 +461,7 @@ test("worker gateway requires memory provider for proposal log persistence", asy
 
 test("worker blocks gateway without required bearer token", async () => {
   const response = await worker.fetch(
-    new Request("https://example.com/mvp/gateway", {
+    new Request("https://example.com/v2/gateway", {
       method: "POST",
       headers: {
         "content-type": "application/json"
@@ -452,7 +478,7 @@ test("worker blocks gateway without required bearer token", async () => {
       })
     }),
     {
-      MVP_GATEWAY_BEARER_TOKEN: "test-token"
+      VTDD_GATEWAY_BEARER_TOKEN: "test-token"
     }
   );
 
@@ -464,7 +490,7 @@ test("worker blocks gateway without required bearer token", async () => {
 
 test("worker accepts gateway with valid bearer token", async () => {
   const response = await worker.fetch(
-    new Request("https://example.com/mvp/gateway", {
+    new Request("https://example.com/v2/gateway", {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -482,7 +508,36 @@ test("worker accepts gateway with valid bearer token", async () => {
       })
     }),
     {
-      MVP_GATEWAY_BEARER_TOKEN: "test-token"
+      VTDD_GATEWAY_BEARER_TOKEN: "test-token"
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.allowed, true);
+});
+
+test("worker accepts legacy MVP_GATEWAY_BEARER_TOKEN env on /v2 route", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/gateway", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: "Bearer legacy-token"
+      },
+      body: JSON.stringify({
+        phase: "exploration",
+        actorRole: "executor",
+        policyInput: {
+          actionType: ActionType.READ,
+          mode: TaskMode.READ_ONLY,
+          repositoryInput: "vtdd",
+          consent: { grantedCategories: [ConsentCategory.READ] }
+        }
+      })
+    }),
+    {
+      MVP_GATEWAY_BEARER_TOKEN: "legacy-token"
     }
   );
 
@@ -493,9 +548,9 @@ test("worker accepts gateway with valid bearer token", async () => {
 
 test("worker blocks constitution retrieve without required bearer token", async () => {
   const response = await worker.fetch(
-    new Request("https://example.com/mvp/retrieve/constitution"),
+    new Request("https://example.com/v2/retrieve/constitution"),
     {
-      MVP_GATEWAY_BEARER_TOKEN: "test-token"
+      VTDD_GATEWAY_BEARER_TOKEN: "test-token"
     }
   );
 
@@ -518,13 +573,13 @@ test("worker returns constitution records through retrieve route", async () => {
   });
 
   const response = await worker.fetch(
-    new Request("https://example.com/mvp/retrieve/constitution?limit=3", {
+    new Request("https://example.com/v2/retrieve/constitution?limit=3", {
       headers: {
         authorization: "Bearer test-token"
       }
     }),
     {
-      MVP_GATEWAY_BEARER_TOKEN: "test-token",
+      VTDD_GATEWAY_BEARER_TOKEN: "test-token",
       MEMORY_PROVIDER: provider
     }
   );
@@ -557,13 +612,13 @@ test("worker returns decision log references through retrieve route", async () =
   });
 
   const response = await worker.fetch(
-    new Request("https://example.com/mvp/retrieve/decisions?relatedIssue=17&limit=3", {
+    new Request("https://example.com/v2/retrieve/decisions?relatedIssue=17&limit=3", {
       headers: {
         authorization: "Bearer test-token"
       }
     }),
     {
-      MVP_GATEWAY_BEARER_TOKEN: "test-token",
+      VTDD_GATEWAY_BEARER_TOKEN: "test-token",
       MEMORY_PROVIDER: provider
     }
   );
@@ -598,13 +653,13 @@ test("worker returns proposal log references through retrieve route", async () =
   });
 
   const response = await worker.fetch(
-    new Request("https://example.com/mvp/retrieve/proposals?relatedIssue=20&limit=3", {
+    new Request("https://example.com/v2/retrieve/proposals?relatedIssue=20&limit=3", {
       headers: {
         authorization: "Bearer test-token"
       }
     }),
     {
-      MVP_GATEWAY_BEARER_TOKEN: "test-token",
+      VTDD_GATEWAY_BEARER_TOKEN: "test-token",
       MEMORY_PROVIDER: provider
     }
   );
@@ -619,13 +674,13 @@ test("worker returns proposal log references through retrieve route", async () =
 
 test("worker returns 503 when constitution retrieve provider is unavailable", async () => {
   const response = await worker.fetch(
-    new Request("https://example.com/mvp/retrieve/constitution", {
+    new Request("https://example.com/v2/retrieve/constitution", {
       headers: {
         authorization: "Bearer test-token"
       }
     }),
     {
-      MVP_GATEWAY_BEARER_TOKEN: "test-token"
+      VTDD_GATEWAY_BEARER_TOKEN: "test-token"
     }
   );
 
@@ -637,7 +692,7 @@ test("worker returns 503 when constitution retrieve provider is unavailable", as
 
 test("worker blocks invalid policy input", async () => {
   const response = await worker.fetch(
-    new Request("https://example.com/mvp/gateway", {
+    new Request("https://example.com/v2/gateway", {
       method: "POST",
       headers: {
         "content-type": "application/json"

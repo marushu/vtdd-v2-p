@@ -193,7 +193,7 @@ function buildCustomGptConstructionText(answers) {
     "Always answer in Japanese unless the user explicitly requests another language.",
     "Always resolve repository target from alias/context before execution.",
     "Do not assume a default repository.",
-    "Never ask the user to type API paths such as /mvp/... or raw JSON payloads.",
+    "Never ask the user to type API paths such as /v2/... (legacy /mvp/...) or raw JSON payloads.",
     "Convert natural Japanese requests into internal action calls yourself.",
     "Infer intent from natural conversation instead of fixed command phrases.",
     "When repository intent is ambiguous, ask a short confirmation question before switching context.",
@@ -225,7 +225,7 @@ function buildCustomGptActionSchema(baseUrl) {
           scheme: "bearer",
           bearerFormat: "API token",
           description:
-            "Set this to MVP_GATEWAY_BEARER_TOKEN configured on Cloudflare Worker environment."
+            "Set this to VTDD_GATEWAY_BEARER_TOKEN configured on Cloudflare Worker environment (legacy MVP_GATEWAY_BEARER_TOKEN is also accepted)."
         }
       }
     },
@@ -240,7 +240,7 @@ function buildCustomGptActionSchema(baseUrl) {
           }
         }
       },
-      "/mvp/gateway": {
+      "/v2/gateway": {
         post: {
           operationId: "postMvpGateway",
           security: [{ GatewayBearerAuth: [] }],
@@ -343,7 +343,7 @@ function buildCustomGptActionSchema(baseUrl) {
           }
         }
       },
-      "/mvp/retrieve/constitution": {
+      "/v2/retrieve/constitution": {
         get: {
           operationId: "getConstitutionRecords",
           security: [{ GatewayBearerAuth: [] }],
@@ -371,7 +371,7 @@ function buildCustomGptActionSchema(baseUrl) {
           }
         }
       },
-      "/mvp/retrieve/decisions": {
+      "/v2/retrieve/decisions": {
         get: {
           operationId: "getDecisionLogReferences",
           security: [{ GatewayBearerAuth: [] }],
@@ -409,7 +409,7 @@ function buildCustomGptActionSchema(baseUrl) {
           }
         }
       },
-      "/mvp/retrieve/proposals": {
+      "/v2/retrieve/proposals": {
         get: {
           operationId: "getProposalLogReferences",
           security: [{ GatewayBearerAuth: [] }],
