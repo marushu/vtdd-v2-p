@@ -179,6 +179,7 @@ Status values used below:
 - Test evidence:
   - `test/core-policy.test.js`
   - `test/reviewer-registry.test.js`
+  - `test/surface-independence.test.js`
 - Status: `implemented_pending_e2e`
 
 ## E2E-11 High-risk credential + machine auth path
