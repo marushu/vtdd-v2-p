@@ -7,6 +7,7 @@ import {
   retrieveDecisionLogReferences,
   retrieveProposalLogReferences,
   retrieveConstitution,
+  resolveGatewayAliasRegistryFromGitHubApp,
   runInitialSetupWizard,
   runMvpGateway,
   validateMemoryProvider
@@ -70,13 +71,14 @@ export default {
       }
 
       const payload = await readJson(request);
-      const result = runMvpGateway(payload);
+      const prepared = await prepareGatewayPayload({ payload, env });
+      const result = appendWarnings(runMvpGateway(prepared.payload), prepared.warnings);
       if (!result.allowed) {
         return json(422, result);
       }
 
       const gatewayOutcome = await completeGatewayRuntime({
-        payload,
+        payload: prepared.payload,
         gatewayResult: result,
         env
       });
@@ -290,6 +292,44 @@ async function handleRetrieveCrossIssueRequest(url, env) {
     referencesBySource: retrieved.referencesBySource,
     orderedReferences: retrieved.orderedReferences
   });
+}
+
+async function prepareGatewayPayload({ payload, env }) {
+  const basePayload = payload && typeof payload === "object" ? payload : {};
+  const basePolicyInput =
+    basePayload.policyInput && typeof basePayload.policyInput === "object"
+      ? basePayload.policyInput
+      : {};
+
+  const resolvedAliasRegistry = await resolveGatewayAliasRegistryFromGitHubApp({
+    policyInput: basePolicyInput,
+    env
+  });
+
+  return {
+    payload: {
+      ...basePayload,
+      policyInput: {
+        ...basePolicyInput,
+        aliasRegistry: resolvedAliasRegistry.aliasRegistry
+      }
+    },
+    warnings: resolvedAliasRegistry.warnings
+  };
+}
+
+function appendWarnings(result, warnings) {
+  if (!Array.isArray(warnings) || warnings.length === 0) {
+    return result;
+  }
+
+  const currentWarnings = Array.isArray(result?.warnings) ? result.warnings : [];
+  const merged = new Set([...currentWarnings, ...warnings].map(normalizeText).filter(Boolean));
+
+  return {
+    ...result,
+    warnings: [...merged]
+  };
 }
 
 async function completeGatewayRuntime({ payload, gatewayResult, env }) {

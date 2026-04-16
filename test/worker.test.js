@@ -181,6 +181,142 @@ test("worker runs gateway route", async () => {
   assert.equal(body.repository, "marushu/vtdd-v2");
 });
 
+test("worker gateway uses github app live repository index for natural list conversation", async () => {
+  const githubApiFetch = async () =>
+    new Response(
+      JSON.stringify({
+        total_count: 2,
+        repositories: [
+          {
+            full_name: "marushu/vtdd-v2",
+            name: "vtdd-v2",
+            private: true
+          },
+          {
+            full_name: "marushu/hibou-piccola-bookkeeping",
+            name: "hibou-piccola-bookkeeping",
+            private: false
+          }
+        ]
+      }),
+      {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      }
+    );
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/gateway", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        phase: "exploration",
+        actorRole: "executor",
+        conversation: {
+          userText: "持ってるリポジトリ一覧を見せて"
+        },
+        policyInput: {
+          actionType: ActionType.READ,
+          mode: TaskMode.READ_ONLY,
+          repositoryInput: "unknown",
+          runtimeTruth: {
+            runtimeAvailable: false,
+            safeFallbackChosen: true
+          },
+          consent: {
+            grantedCategories: [ConsentCategory.READ]
+          },
+          issueTraceable: false
+        }
+      })
+    }),
+    {
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_live_index_token",
+      GITHUB_API_FETCH: githubApiFetch
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.allowed, true);
+  assert.equal(body.conversationAssist.detectedIntent, "list_repositories");
+  assert.equal(body.conversationAssist.responseGuide.style, "repository_list");
+  assert.equal(body.repositoryCandidates.length, 2);
+  assert.equal(
+    body.repositoryCandidates.some((item) => item.canonicalRepo === "marushu/vtdd-v2"),
+    true
+  );
+  assert.equal(
+    body.repositoryCandidates.some(
+      (item) => item.canonicalRepo === "marushu/hibou-piccola-bookkeeping" && item.visibility === "public"
+    ),
+    true
+  );
+});
+
+test("worker gateway resolves repository switch intent using live github app aliases", async () => {
+  const githubApiFetch = async () =>
+    new Response(
+      JSON.stringify({
+        total_count: 1,
+        repositories: [
+          {
+            full_name: "marushu/vtdd-v2",
+            name: "vtdd-v2",
+            private: true
+          }
+        ]
+      }),
+      {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      }
+    );
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/gateway", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        phase: "exploration",
+        actorRole: "executor",
+        conversation: {
+          userText: "VTDD を開いて",
+          currentRepository: "marushu/hibou-piccola-bookkeeping"
+        },
+        policyInput: {
+          actionType: ActionType.READ,
+          mode: TaskMode.READ_ONLY,
+          repositoryInput: "vtdd",
+          runtimeTruth: {
+            runtimeAvailable: false,
+            safeFallbackChosen: true
+          },
+          consent: {
+            grantedCategories: [ConsentCategory.READ]
+          },
+          issueTraceable: false
+        }
+      })
+    }),
+    {
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_live_index_token",
+      GITHUB_API_FETCH: githubApiFetch
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.allowed, true);
+  assert.equal(body.repository, "marushu/vtdd-v2");
+  assert.equal(body.conversationAssist.mentionedRepository, "marushu/vtdd-v2");
+  assert.equal(body.conversationAssist.requiresConfirmation, true);
+});
+
 test("worker accepts legacy /mvp gateway route for compatibility", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/mvp/gateway", {
