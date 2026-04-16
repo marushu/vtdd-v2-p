@@ -9,12 +9,12 @@ import {
 const validAnswers = {
   repositories: [
     {
-      canonicalRepo: "marushu/vtdd-v2",
+      canonicalRepo: "sample-org/vtdd-v2",
       aliases: ["vtdd"]
     },
     {
-      canonicalRepo: "marushu/hibou-piccola-bookkeeping",
-      aliases: ["tomio", "bookkeeping"]
+      canonicalRepo: "sample-org/accounting-app",
+      aliases: ["ledger", "bookkeeping"]
     }
   ],
   allowDefaultRepository: false,

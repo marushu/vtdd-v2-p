@@ -11,13 +11,13 @@ test("github app index merges live repositories and filters out non-visible prov
         total_count: 2,
         repositories: [
           {
-            full_name: "marushu/vtdd-v2",
+            full_name: "sample-org/vtdd-v2",
             name: "vtdd-v2",
             private: true
           },
           {
-            full_name: "marushu/hibou-piccola-bookkeeping",
-            name: "hibou-piccola-bookkeeping",
+            full_name: "sample-org/accounting-app",
+            name: "accounting-app",
             private: false
           }
         ]
@@ -35,12 +35,12 @@ test("github app index merges live repositories and filters out non-visible prov
     policyInput: {
       aliasRegistry: [
         {
-          canonicalRepo: "marushu/vtdd-v2",
+          canonicalRepo: "sample-org/vtdd-v2",
           productName: "VTDD V2",
           aliases: ["vtdd"]
         },
         {
-          canonicalRepo: "marushu/private-hidden-repo",
+          canonicalRepo: "sample-org/private-hidden-repo",
           productName: "Hidden Repo",
           aliases: ["hidden"]
         }
@@ -56,11 +56,11 @@ test("github app index merges live repositories and filters out non-visible prov
   assert.equal(result.warnings.length, 0);
   assert.equal(result.aliasRegistry.length, 2);
   assert.equal(
-    result.aliasRegistry.some((item) => item.canonicalRepo === "marushu/private-hidden-repo"),
+    result.aliasRegistry.some((item) => item.canonicalRepo === "sample-org/private-hidden-repo"),
     false
   );
 
-  const vtdd = result.aliasRegistry.find((item) => item.canonicalRepo === "marushu/vtdd-v2");
+  const vtdd = result.aliasRegistry.find((item) => item.canonicalRepo === "sample-org/vtdd-v2");
   assert.equal(Boolean(vtdd), true);
   assert.equal(vtdd.visibility, "private");
   assert.equal(vtdd.productName, "VTDD V2");
@@ -87,7 +87,7 @@ test("github app index falls back to provided aliases when permission is denied"
 
   const fallbackRegistry = [
     {
-      canonicalRepo: "marushu/vtdd-v2",
+      canonicalRepo: "sample-org/vtdd-v2",
       aliases: ["vtdd"]
     }
   ];
@@ -104,7 +104,7 @@ test("github app index falls back to provided aliases when permission is denied"
 
   assert.equal(result.source, "provided");
   assert.equal(result.aliasRegistry.length, 1);
-  assert.equal(result.aliasRegistry[0].canonicalRepo, "marushu/vtdd-v2");
+  assert.equal(result.aliasRegistry[0].canonicalRepo, "sample-org/vtdd-v2");
   assert.equal(result.warnings.length, 1);
   assert.equal(result.warnings[0].includes("Resource not accessible by integration"), true);
 });
@@ -129,7 +129,7 @@ test("github app index reports rate limit boundary and keeps fallback aliases", 
     policyInput: {
       aliasRegistry: [
         {
-          canonicalRepo: "marushu/vtdd-v2",
+          canonicalRepo: "sample-org/vtdd-v2",
           aliases: ["vtdd"]
         }
       ]
@@ -167,7 +167,7 @@ test("github app index can mint installation token from github app credentials",
         total_count: 1,
         repositories: [
           {
-            full_name: "marushu/vtdd-v2",
+            full_name: "sample-org/vtdd-v2",
             name: "vtdd-v2",
             private: true
           }
@@ -196,7 +196,7 @@ test("github app index can mint installation token from github app credentials",
   assert.equal(result.source, "github_app_live");
   assert.equal(result.warnings.length, 0);
   assert.equal(result.aliasRegistry.length, 1);
-  assert.equal(result.aliasRegistry[0].canonicalRepo, "marushu/vtdd-v2");
+  assert.equal(result.aliasRegistry[0].canonicalRepo, "sample-org/vtdd-v2");
   assert.equal(calls.length, 2);
   assert.equal(calls[0].url.includes("/app/installations/98765/access_tokens"), true);
   assert.equal(calls[0].init.headers.authorization, "Bearer app_jwt_token_for_tests");
@@ -225,7 +225,7 @@ test("github app index reuses cached minted token until refresh margin", async (
         total_count: 1,
         repositories: [
           {
-            full_name: "marushu/vtdd-v2",
+            full_name: "sample-org/vtdd-v2",
             name: "vtdd-v2",
             private: true
           }
@@ -267,7 +267,7 @@ test("github app index warns when app credentials are incomplete", async () => {
     policyInput: {
       aliasRegistry: [
         {
-          canonicalRepo: "marushu/vtdd-v2",
+          canonicalRepo: "sample-org/vtdd-v2",
           aliases: ["vtdd"]
         }
       ]
@@ -288,7 +288,7 @@ test("github app index can enforce minted-token mode and block static token fall
     policyInput: {
       aliasRegistry: [
         {
-          canonicalRepo: "marushu/vtdd-v2",
+          canonicalRepo: "sample-org/vtdd-v2",
           aliases: ["vtdd"]
         }
       ]

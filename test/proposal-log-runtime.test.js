@@ -66,7 +66,7 @@ test("proposal log runtime persists and retrieves references", async () => {
       }
     },
     {
-      repository: "marushu/vtdd-v2"
+      repository: "sample-org/vtdd-v2"
     }
   );
 
@@ -78,5 +78,5 @@ test("proposal log runtime persists and retrieves references", async () => {
   assert.equal(retrieved.ok, true);
   assert.equal(retrieved.references.length, 1);
   assert.equal(retrieved.references[0].hypothesis, "Issue化前の案を保存する");
-  assert.equal(retrieved.references[0].repository, "marushu/vtdd-v2");
+  assert.equal(retrieved.references[0].repository, "sample-org/vtdd-v2");
 });

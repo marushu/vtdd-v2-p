@@ -21,13 +21,6 @@ const HTML_HEADERS = {
   "content-type": "text/html; charset=utf-8"
 };
 
-const DEFAULT_REPOSITORIES = Object.freeze([
-  {
-    canonicalRepo: "marushu/vtdd-v2",
-    aliases: ["vtdd", "vtdd-v2"]
-  }
-]);
-
 const CANONICAL_API_PREFIX = "/v2";
 const LEGACY_API_PREFIX = "/mvp";
 
@@ -149,12 +142,14 @@ async function handleSetupWizardRequest(url, env) {
   const result = runInitialSetupWizard({ answers });
   const cloudflareSetupCheck = await runCloudflareSetupCheck(url, env);
   const format = normalize(url.searchParams.get("format"));
+  const guidance = buildSetupWizardGuidance({ result, url });
 
   if (format === "json") {
     return json(result.ok ? 200 : 422, {
       ...result,
       generatedAnswers: answers,
-      cloudflareSetupCheck
+      cloudflareSetupCheck,
+      guidance
     });
   }
 
@@ -644,14 +639,6 @@ function parseRepositories(url) {
     .getAll("repo")
     .map(normalizeRepo)
     .filter(Boolean);
-
-  if (provided.length === 0) {
-    return DEFAULT_REPOSITORIES.map((item) => ({
-      canonicalRepo: item.canonicalRepo,
-      aliases: [...item.aliases]
-    }));
-  }
-
   return provided.map((canonicalRepo) => ({
     canonicalRepo,
     aliases: deriveAliases(canonicalRepo)
@@ -857,6 +844,8 @@ function renderSuccessContent(result, answers, url, cloudflareSetupCheck) {
 function renderFailureContent(result, answers, url, cloudflareSetupCheck) {
   const issues = Array.isArray(result.blockingIssues) ? result.blockingIssues : [];
   const issueItems = issues.map((item) => `<li>${escapeHtml(item)}</li>`).join("");
+  const guidance = buildSetupWizardGuidance({ result, url });
+  const guidanceItems = guidance.map((item) => `<li>${escapeHtml(item)}</li>`).join("");
 
   return `
     <p class="meta">Wizard validation failed.</p>
@@ -864,11 +853,30 @@ function renderFailureContent(result, answers, url, cloudflareSetupCheck) {
     <div class="block">
       <ul>${issueItems || "<li>unknown validation error</li>"}</ul>
     </div>
+    ${
+      guidanceItems
+        ? `<h2>Guidance</h2><div class="block"><ul>${guidanceItems}</ul></div>`
+        : ""
+    }
     ${renderCloudflareSetupCheck(cloudflareSetupCheck)}
     <h2>Debug (safe answers only)</h2>
     <textarea readonly>${escapeHtml(JSON.stringify(answers, null, 2))}</textarea>
     <p class="meta">Tip: use <code>${escapeHtml(`${url.origin}/setup/wizard?format=json`)}</code> to inspect machine-readable output.</p>
   `;
+}
+
+function buildSetupWizardGuidance({ result, url }) {
+  const issues = Array.isArray(result?.blockingIssues) ? result.blockingIssues : [];
+  const guidance = [];
+  if (issues.includes("at least one repository mapping is required")) {
+    const sampleRepo = "sample-org/sample-repo";
+    const encoded = encodeURIComponent(sampleRepo);
+    guidance.push(
+      `Add at least one repo query parameter, for example: ${url.origin}/setup/wizard?repo=${encoded}`
+    );
+    guidance.push("Repeat repo parameter when multiple repositories are needed.");
+  }
+  return guidance;
 }
 
 function renderCloudflareSetupCheck(check) {
