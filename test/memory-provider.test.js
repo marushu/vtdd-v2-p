@@ -1,7 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
+  MEMORY_RECORD_FIELD_POLICY,
   MemoryRecordType,
+  REQUIRED_CORE_MEMORY_RECORD_TYPES,
   createInMemoryMemoryProvider,
   createMemoryRecord,
   retrieveConstitution,
@@ -38,6 +41,30 @@ test("memory schema validates required fields", () => {
     createdAt: "invalid"
   });
   assert.equal(invalid.ok, false);
+});
+
+test("required core memory record types remain available", () => {
+  for (const type of REQUIRED_CORE_MEMORY_RECORD_TYPES) {
+    assert.equal(Object.values(MemoryRecordType).includes(type), true);
+  }
+});
+
+test("memory schema docs list the same required core record types", () => {
+  const doc = readFileSync(
+    new URL("../docs/memory-schema.md", import.meta.url),
+    "utf8"
+  );
+
+  for (const type of REQUIRED_CORE_MEMORY_RECORD_TYPES) {
+    assert.equal(doc.includes(`\`${type}\``), true);
+  }
+});
+
+test("memory field policy matches validation contract", () => {
+  assert.equal(MEMORY_RECORD_FIELD_POLICY.metadata, "required_object_without_secrets");
+  assert.equal(MEMORY_RECORD_FIELD_POLICY.priority, "integer_0_to_100");
+  assert.equal(MEMORY_RECORD_FIELD_POLICY.tags, "string_array");
+  assert.equal(MEMORY_RECORD_FIELD_POLICY.createdAt, "iso_8601_timestamp");
 });
 
 test("in-memory provider stores and retrieves constitution records", async () => {
