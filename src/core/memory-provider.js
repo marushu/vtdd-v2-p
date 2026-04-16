@@ -1,18 +1,33 @@
 import { createMemoryRecord, validateMemoryRecord } from "./memory-schema.js";
 
+export const MEMORY_PROVIDER_METHODS = Object.freeze([
+  "store",
+  "retrieve",
+  "query",
+  "validateRecord"
+]);
+
+export const MEMORY_PROVIDER_FILTER_FIELDS = Object.freeze([
+  "type",
+  "limit",
+  "tags"
+]);
+
+export const MEMORY_PROVIDER_QUERY_FIELDS = Object.freeze([
+  "text",
+  "type",
+  "limit"
+]);
+
 export function validateMemoryProvider(provider) {
   const issues = [];
   if (!provider || typeof provider !== "object") {
     issues.push("provider must be an object");
   } else {
-    if (typeof provider.store !== "function") {
-      issues.push("provider.store is required");
-    }
-    if (typeof provider.retrieve !== "function") {
-      issues.push("provider.retrieve is required");
-    }
-    if (typeof provider.query !== "function") {
-      issues.push("provider.query is required");
+    for (const method of MEMORY_PROVIDER_METHODS) {
+      if (typeof provider[method] !== "function") {
+        issues.push(`provider.${method} is required`);
+      }
     }
   }
   return issues.length > 0 ? { ok: false, issues } : { ok: true };

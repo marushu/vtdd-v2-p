@@ -46,6 +46,9 @@ export {
   validateMemoryRecord
 } from "./memory-schema.js";
 export {
+  MEMORY_PROVIDER_FILTER_FIELDS,
+  MEMORY_PROVIDER_METHODS,
+  MEMORY_PROVIDER_QUERY_FIELDS,
   validateMemoryProvider,
   createInMemoryMemoryProvider
 } from "./memory-provider.js";
