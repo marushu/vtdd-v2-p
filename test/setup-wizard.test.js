@@ -76,6 +76,8 @@ test("setup wizard returns git/db outputs and iphone onboarding pack", () => {
     true
   );
   assert.equal(Boolean(parsed?.components?.securitySchemes?.GatewayBearerAuth), true);
+  assert.equal(Boolean(parsed?.components?.securitySchemes?.GatewayAccessClientIdHeader), true);
+  assert.equal(Boolean(parsed?.components?.securitySchemes?.GatewayAccessClientSecretHeader), true);
   assert.equal(
     typeof parsed?.components?.schemas === "object" && !Array.isArray(parsed?.components?.schemas),
     true
@@ -100,6 +102,9 @@ test("setup wizard returns git/db outputs and iphone onboarding pack", () => {
     Array.isArray(parsed?.paths?.["/v2/retrieve/cross"]?.get?.security),
     true
   );
+  assert.equal(Boolean(parsed?.paths?.["/v2/gateway"]?.post?.responses?.["401"]), true);
+  assert.equal(Boolean(parsed?.paths?.["/v2/gateway"]?.post?.responses?.["403"]), true);
+  assert.equal(Boolean(parsed?.paths?.["/v2/gateway"]?.post?.responses?.["422"]), true);
 });
 
 test("setup wizard blocks non github_app credential model", () => {

@@ -61,7 +61,7 @@ export default {
     }
 
     if (request.method === "POST" && isApiPath(url.pathname, "/gateway")) {
-      const auth = authorizeGatewayRequest({ request, env });
+      const auth = authorizeGatewayRequest({ request, env, apiSuffix: "/gateway" });
       if (!auth.ok) {
         return json(auth.status, {
           ok: false,
@@ -86,7 +86,7 @@ export default {
     }
 
     if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/constitution")) {
-      const auth = authorizeGatewayRequest({ request, env });
+      const auth = authorizeGatewayRequest({ request, env, apiSuffix: "/retrieve/constitution" });
       if (!auth.ok) {
         return json(auth.status, {
           ok: false,
@@ -99,7 +99,7 @@ export default {
     }
 
     if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/decisions")) {
-      const auth = authorizeGatewayRequest({ request, env });
+      const auth = authorizeGatewayRequest({ request, env, apiSuffix: "/retrieve/decisions" });
       if (!auth.ok) {
         return json(auth.status, {
           ok: false,
@@ -112,7 +112,7 @@ export default {
     }
 
     if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/proposals")) {
-      const auth = authorizeGatewayRequest({ request, env });
+      const auth = authorizeGatewayRequest({ request, env, apiSuffix: "/retrieve/proposals" });
       if (!auth.ok) {
         return json(auth.status, {
           ok: false,
@@ -125,7 +125,7 @@ export default {
     }
 
     if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/cross")) {
-      const auth = authorizeGatewayRequest({ request, env });
+      const auth = authorizeGatewayRequest({ request, env, apiSuffix: "/retrieve/cross" });
       if (!auth.ok) {
         return json(auth.status, {
           ok: false,
@@ -1194,21 +1194,37 @@ function toBoolean(value) {
   return normalized === "true" || normalized === "1" || normalized === "yes" || normalized === "on";
 }
 
-function authorizeGatewayRequest({ request, env }) {
+function authorizeGatewayRequest({ request, env, apiSuffix = "/gateway" }) {
   const runtimeEnv = env ?? {};
+  const routeLabel = `/${CANONICAL_API_PREFIX.replace(/^\//, "")}${apiSuffix} (legacy ${LEGACY_API_PREFIX}${apiSuffix} is also accepted)`;
 
   const bearerToken = normalizeText(
     runtimeEnv.VTDD_GATEWAY_BEARER_TOKEN ?? runtimeEnv.MVP_GATEWAY_BEARER_TOKEN
   );
   if (bearerToken) {
+    const authorizationHeader = normalizeText(request.headers.get("authorization"));
     const provided = parseBearerToken(request.headers.get("authorization"));
+    if (!authorizationHeader) {
+      return {
+        ok: false,
+        status: 401,
+        reason: `machine auth credential is required for ${routeLabel}`
+      };
+    }
+    if (!provided) {
+      return {
+        ok: false,
+        status: 403,
+        reason: `authorization header must use bearer token for ${routeLabel}`
+      };
+    }
     if (provided === bearerToken) {
       return { ok: true };
     }
     return {
       ok: false,
-      status: 401,
-      reason: "valid bearer token is required for /v2/gateway (legacy /mvp/gateway is also accepted)"
+      status: 403,
+      reason: `provided bearer token is invalid for ${routeLabel}`
     };
   }
 
@@ -1217,6 +1233,21 @@ function authorizeGatewayRequest({ request, env }) {
   if (accessClientId || accessClientSecret) {
     const providedId = normalizeText(request.headers.get("cf-access-client-id"));
     const providedSecret = normalizeText(request.headers.get("cf-access-client-secret"));
+    if (!providedId && !providedSecret) {
+      return {
+        ok: false,
+        status: 401,
+        reason: `Cloudflare Access service token headers are required for ${routeLabel}`
+      };
+    }
+    if (!accessClientId || !accessClientSecret) {
+      return {
+        ok: false,
+        status: 403,
+        reason:
+          "Cloudflare Access service token configuration is incomplete on runtime (both CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET are required)"
+      };
+    }
     if (
       accessClientId &&
       accessClientSecret &&
@@ -1227,9 +1258,8 @@ function authorizeGatewayRequest({ request, env }) {
     }
     return {
       ok: false,
-      status: 401,
-      reason:
-        "valid Cloudflare Access service token headers are required for /v2/gateway (legacy /mvp/gateway is also accepted)"
+      status: 403,
+      reason: `provided Cloudflare Access service token headers are invalid for ${routeLabel}`
     };
   }
 
