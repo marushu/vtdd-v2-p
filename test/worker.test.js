@@ -713,6 +713,36 @@ test("worker blocks gateway without required bearer token", async () => {
   assert.equal(body.error, "unauthorized");
 });
 
+test("worker blocks gateway with invalid bearer token as forbidden", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/gateway", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: "Bearer wrong-token"
+      },
+      body: JSON.stringify({
+        phase: "exploration",
+        actorRole: "executor",
+        policyInput: {
+          actionType: ActionType.READ,
+          mode: TaskMode.READ_ONLY,
+          repositoryInput: "vtdd",
+          consent: { grantedCategories: [ConsentCategory.READ] }
+        }
+      })
+    }),
+    {
+      VTDD_GATEWAY_BEARER_TOKEN: "test-token"
+    }
+  );
+
+  assert.equal(response.status, 403);
+  const body = await response.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.error, "unauthorized");
+});
+
 test("worker accepts gateway with valid bearer token", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/v2/gateway", {
@@ -740,6 +770,99 @@ test("worker accepts gateway with valid bearer token", async () => {
   assert.equal(response.status, 200);
   const body = await response.json();
   assert.equal(body.allowed, true);
+});
+
+test("worker accepts gateway with valid Cloudflare Access service token headers", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/gateway", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "cf-access-client-id": "access-id",
+        "cf-access-client-secret": "access-secret"
+      },
+      body: JSON.stringify({
+        phase: "exploration",
+        actorRole: "executor",
+        policyInput: {
+          actionType: ActionType.READ,
+          mode: TaskMode.READ_ONLY,
+          repositoryInput: "vtdd",
+          consent: { grantedCategories: [ConsentCategory.READ] }
+        }
+      })
+    }),
+    {
+      CF_ACCESS_CLIENT_ID: "access-id",
+      CF_ACCESS_CLIENT_SECRET: "access-secret"
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.allowed, true);
+});
+
+test("worker blocks gateway without Cloudflare Access service token headers", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/gateway", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        phase: "exploration",
+        actorRole: "executor",
+        policyInput: {
+          actionType: ActionType.READ,
+          mode: TaskMode.READ_ONLY,
+          repositoryInput: "vtdd",
+          consent: { grantedCategories: [ConsentCategory.READ] }
+        }
+      })
+    }),
+    {
+      CF_ACCESS_CLIENT_ID: "access-id",
+      CF_ACCESS_CLIENT_SECRET: "access-secret"
+    }
+  );
+
+  assert.equal(response.status, 401);
+  const body = await response.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.error, "unauthorized");
+});
+
+test("worker blocks gateway with invalid Cloudflare Access service token headers", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/gateway", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "cf-access-client-id": "access-id",
+        "cf-access-client-secret": "wrong-secret"
+      },
+      body: JSON.stringify({
+        phase: "exploration",
+        actorRole: "executor",
+        policyInput: {
+          actionType: ActionType.READ,
+          mode: TaskMode.READ_ONLY,
+          repositoryInput: "vtdd",
+          consent: { grantedCategories: [ConsentCategory.READ] }
+        }
+      })
+    }),
+    {
+      CF_ACCESS_CLIENT_ID: "access-id",
+      CF_ACCESS_CLIENT_SECRET: "access-secret"
+    }
+  );
+
+  assert.equal(response.status, 403);
+  const body = await response.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.error, "unauthorized");
 });
 
 test("worker accepts legacy MVP_GATEWAY_BEARER_TOKEN env on /v2 route", async () => {

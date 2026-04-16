@@ -20,9 +20,10 @@ This runbook is for starting VTDD V2 from iPhone without local Mac setup.
 5. Ensure GitHub has environment secrets:
    - `CLOUDFLARE_API_TOKEN`
    - `CLOUDFLARE_ACCOUNT_ID`
-6. Configure Worker runtime secret for machine auth:
+6. Configure Worker runtime secret for machine auth (recommended):
    - `VTDD_GATEWAY_BEARER_TOKEN` (Cloudflare Worker secret)
    - set the same token in Custom GPT Action auth (Bearer)
+   - fallback mode (if bearer cannot be used): `CF_ACCESS_CLIENT_ID` + `CF_ACCESS_CLIENT_SECRET`
 7. Run `deploy-production` workflow with:
    - `approval_phrase=GO`
    - `passkey_verified=true`
@@ -50,3 +51,5 @@ This runbook is for starting VTDD V2 from iPhone without local Mac setup.
 - Reviewer output is advisory; final execution is still human-approved.
 - Team members without admin permissions cannot merge or deploy.
 - `/v2/gateway` and `/v2/retrieve/*` should use machine auth (`VTDD_GATEWAY_BEARER_TOKEN`) instead of browser login flow.
+- Rotate machine auth secrets regularly and immediately on suspected exposure.
+- Never paste bearer/service token values into chat, setup wizard answers, or Issue/PR text.

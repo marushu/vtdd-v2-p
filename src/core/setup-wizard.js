@@ -225,7 +225,21 @@ function buildCustomGptActionSchema(baseUrl) {
           scheme: "bearer",
           bearerFormat: "API token",
           description:
-            "Set this to VTDD_GATEWAY_BEARER_TOKEN configured on Cloudflare Worker environment (legacy MVP_GATEWAY_BEARER_TOKEN is also accepted)."
+            "Recommended for Custom GPT Actions. Set this to VTDD_GATEWAY_BEARER_TOKEN configured on Cloudflare Worker environment (legacy MVP_GATEWAY_BEARER_TOKEN is also accepted)."
+        },
+        GatewayAccessClientIdHeader: {
+          type: "apiKey",
+          in: "header",
+          name: "cf-access-client-id",
+          description:
+            "Alternative machine auth path. Set to CF_ACCESS_CLIENT_ID when Cloudflare Access service token mode is used."
+        },
+        GatewayAccessClientSecretHeader: {
+          type: "apiKey",
+          in: "header",
+          name: "cf-access-client-secret",
+          description:
+            "Alternative machine auth path. Set to CF_ACCESS_CLIENT_SECRET when Cloudflare Access service token mode is used."
         }
       }
     },
@@ -243,7 +257,7 @@ function buildCustomGptActionSchema(baseUrl) {
       "/v2/gateway": {
         post: {
           operationId: "postMvpGateway",
-          security: [{ GatewayBearerAuth: [] }],
+          security: buildMachineAuthSecurityOptions(),
           requestBody: {
             required: true,
             content: {
@@ -337,6 +351,12 @@ function buildCustomGptActionSchema(baseUrl) {
             "200": {
               description: "Execution allowed"
             },
+            "401": {
+              description: "Machine auth credential is missing"
+            },
+            "403": {
+              description: "Machine auth credential is present but invalid"
+            },
             "422": {
               description: "Execution blocked by policy"
             }
@@ -346,7 +366,7 @@ function buildCustomGptActionSchema(baseUrl) {
       "/v2/retrieve/constitution": {
         get: {
           operationId: "getConstitutionRecords",
-          security: [{ GatewayBearerAuth: [] }],
+          security: buildMachineAuthSecurityOptions(),
           parameters: [
             {
               name: "limit",
@@ -365,6 +385,12 @@ function buildCustomGptActionSchema(baseUrl) {
             "200": {
               description: "Constitution records retrieved"
             },
+            "401": {
+              description: "Machine auth credential is missing"
+            },
+            "403": {
+              description: "Machine auth credential is present but invalid"
+            },
             "503": {
               description: "Memory provider is not configured"
             }
@@ -374,7 +400,7 @@ function buildCustomGptActionSchema(baseUrl) {
       "/v2/retrieve/decisions": {
         get: {
           operationId: "getDecisionLogReferences",
-          security: [{ GatewayBearerAuth: [] }],
+          security: buildMachineAuthSecurityOptions(),
           parameters: [
             {
               name: "limit",
@@ -403,6 +429,12 @@ function buildCustomGptActionSchema(baseUrl) {
             "200": {
               description: "Decision log references retrieved"
             },
+            "401": {
+              description: "Machine auth credential is missing"
+            },
+            "403": {
+              description: "Machine auth credential is present but invalid"
+            },
             "503": {
               description: "Memory provider is not configured"
             }
@@ -412,7 +444,7 @@ function buildCustomGptActionSchema(baseUrl) {
       "/v2/retrieve/proposals": {
         get: {
           operationId: "getProposalLogReferences",
-          security: [{ GatewayBearerAuth: [] }],
+          security: buildMachineAuthSecurityOptions(),
           parameters: [
             {
               name: "limit",
@@ -441,6 +473,12 @@ function buildCustomGptActionSchema(baseUrl) {
             "200": {
               description: "Proposal log references retrieved"
             },
+            "401": {
+              description: "Machine auth credential is missing"
+            },
+            "403": {
+              description: "Machine auth credential is present but invalid"
+            },
             "503": {
               description: "Memory provider is not configured"
             }
@@ -450,7 +488,7 @@ function buildCustomGptActionSchema(baseUrl) {
       "/v2/retrieve/cross": {
         get: {
           operationId: "getCrossIssueMemoryIndex",
-          security: [{ GatewayBearerAuth: [] }],
+          security: buildMachineAuthSecurityOptions(),
           parameters: [
             {
               name: "phase",
@@ -527,6 +565,12 @@ function buildCustomGptActionSchema(baseUrl) {
             "200": {
               description: "Cross-issue memory index retrieved"
             },
+            "401": {
+              description: "Machine auth credential is missing"
+            },
+            "403": {
+              description: "Machine auth credential is present but invalid"
+            },
             "503": {
               description: "Memory provider is not configured"
             }
@@ -535,6 +579,16 @@ function buildCustomGptActionSchema(baseUrl) {
       }
     }
   };
+}
+
+function buildMachineAuthSecurityOptions() {
+  return [
+    { GatewayBearerAuth: [] },
+    {
+      GatewayAccessClientIdHeader: [],
+      GatewayAccessClientSecretHeader: []
+    }
+  ];
 }
 
 function pushSafeMemoryRecord(dbOutputs, record, logicalTable) {
