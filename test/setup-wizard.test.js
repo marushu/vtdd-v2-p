@@ -36,6 +36,8 @@ test("setup wizard returns git/db outputs and iphone onboarding pack", () => {
   assert.equal(result.onboarding.setupMode, SetupMode.IPHONE_FIRST);
   assert.equal(result.onboarding.customGpt.endpointBaseUrl, "https://vtdd-v2-mvp.example.workers.dev");
   assert.equal(result.onboarding.customGpt.actionSchemaJson.includes("/v2/gateway"), true);
+  assert.equal(result.onboarding.deployAuthority.selectedPath, "one_shot_github_actions");
+  assert.equal(result.onboarding.deployAuthority.fallbackPath, "direct_provider");
   assert.equal(
     result.onboarding.customGpt.actionSchemaJson.includes("/v2/retrieve/constitution"),
     true
@@ -71,6 +73,12 @@ test("setup wizard returns git/db outputs and iphone onboarding pack", () => {
   assert.equal(
     result.onboarding.customGpt.constructionText.includes(
       "Normal mode uses autonomyMode=normal. Absence mode uses autonomyMode=guarded_absence with strict stop boundaries."
+    ),
+    true
+  );
+  assert.equal(
+    result.onboarding.customGpt.constructionText.includes(
+      "Treat production deploy as VTDD-governed high-risk authority and avoid permanent production deploy secrets in GitHub."
     ),
     true
   );
@@ -117,6 +125,20 @@ test("setup wizard returns git/db outputs and iphone onboarding pack", () => {
   assert.equal(Boolean(parsed?.paths?.["/v2/gateway"]?.post?.responses?.["401"]), true);
   assert.equal(Boolean(parsed?.paths?.["/v2/gateway"]?.post?.responses?.["403"]), true);
   assert.equal(Boolean(parsed?.paths?.["/v2/gateway"]?.post?.responses?.["422"]), true);
+});
+
+test("setup wizard exposes direct provider fallback when GitHub protection is unavailable", () => {
+  const result = runInitialSetupWizard({
+    answers: {
+      ...validAnswers,
+      repositoryVisibility: "private",
+      branchProtectionApiStatus: "forbidden",
+      rulesetsApiStatus: "forbidden"
+    }
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.onboarding.deployAuthority.selectedPath, "direct_provider");
+  assert.equal(result.onboarding.deployAuthority.fallbackPath, "one_shot_github_actions");
 });
 
 test("setup wizard blocks non github_app credential model", () => {

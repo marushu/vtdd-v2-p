@@ -77,6 +77,20 @@ test("worker returns setup wizard json", async () => {
   assert.equal(body.cloudflareSetupCheck.state, "disabled");
 });
 
+test("worker setup wizard accepts deploy authority detection query inputs", async () => {
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/setup/wizard?format=json&repo=sample-org/vtdd-v2&repositoryVisibility=private&branchProtectionApiStatus=forbidden&rulesetsApiStatus=forbidden"
+    )
+  );
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.generatedAnswers.repositoryVisibility, "private");
+  assert.equal(body.generatedAnswers.branchProtectionApiStatus, "forbidden");
+  assert.equal(body.generatedAnswers.rulesetsApiStatus, "forbidden");
+  assert.equal(body.onboarding.deployAuthority.selectedPath, "direct_provider");
+});
+
 test("worker setup wizard classifies cloudflare billing-related setup failure", async () => {
   const calls = [];
   const cloudflareApiFetch = async (url) => {

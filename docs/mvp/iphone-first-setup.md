@@ -40,6 +40,10 @@ This runbook is for starting VTDD V2 from iPhone without local Mac setup.
 - `format=json`: return machine-readable wizard output
 - `cloudflareCheck=on`: run Cloudflare setup diagnostics (requires env opt-in below)
 - `policyInput.autonomyMode=guarded_absence`: optional request-level mode flag (runtime env takes precedence)
+- `repositoryVisibility=private|public`: optional deploy authority hint for setup output
+- `branchProtectionApiStatus=available|unavailable|forbidden|unknown`: optional GitHub protection hint for setup output
+- `rulesetsApiStatus=available|unavailable|forbidden|unknown`: optional GitHub rulesets hint for setup output
+- `deployAuthorityPreference=auto|github_assisted|vtdd_managed`: optional deploy authority preference hint
 
 ## Optional Cloudflare Diagnostics (Opt-in)
 
