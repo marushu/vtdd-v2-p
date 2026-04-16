@@ -18,6 +18,7 @@ export { requiredCredentialTier, evaluateCredentialBoundary } from "./credential
 export { resolveRepositoryTarget } from "./repository-resolution.js";
 export { evaluateRoleBoundary } from "./role-boundary.js";
 export { evaluateRuntimeTruthPrecondition } from "./runtime-truth.js";
+export { RUNTIME_TRUTH_FIELDS } from "./runtime-truth.js";
 export { evaluateMemorySafety, inspectSensitiveContent, sanitizeMemoryPayload } from "./memory-safety.js";
 export { evaluateIssueTraceability } from "./issue-traceability.js";
 export { createCloudflareMemoryProvider } from "./cloudflare-provider.js";
