@@ -1,14 +1,13 @@
+import { createMemoryRecord, validateMemoryRecord } from "./memory-schema.js";
+
 /**
  * Cloudflare-backed memory provider adapter.
  * Clients are injected so VTDD core remains provider-agnostic.
  *
- * Expected optional client methods:
- * - d1.insertRecord(record)
- * - d1.queryRecords(filter)
- * - r2.put(key, stringContent)
- * - r2.get(key) -> stringContent | null
- * - vectorize.upsert({ id, values, metadata })
- * - vectorize.query({ values, topK, filter }) -> [{ id }]
+ * Minimum storage role split:
+ * - D1: structured row index and deterministic retrieval path
+ * - R2: large payload spillover for oversized record content
+ * - Vectorize: optional semantic lookup accelerator
  */
 export function createCloudflareMemoryProvider(input = {}) {
   const {
@@ -20,21 +19,30 @@ export function createCloudflareMemoryProvider(input = {}) {
   } = input;
 
   return {
-    async store(record) {
-      const prepared = await persistBlobIfNeeded({ record, r2, blobThreshold });
+    async store(inputRecord) {
+      const created = createMemoryRecord(inputRecord);
+      if (!created.ok) {
+        return created;
+      }
+
+      const prepared = await persistBlobIfNeeded({
+        record: created.record,
+        r2,
+        blobThreshold
+      });
       if (!d1 || typeof d1.insertRecord !== "function") {
         return { ok: false, reason: "d1.insertRecord is required" };
       }
       await d1.insertRecord(prepared);
 
       if (vectorize && embedder && typeof vectorize.upsert === "function") {
-        const values = await embedder(recordToText(record));
+        const values = await embedder(recordToText(created.record));
         await vectorize.upsert({
-          id: record.id,
+          id: created.record.id,
           values,
           metadata: {
-            type: record.type,
-            tags: record.tags ?? []
+            type: created.record.type,
+            tags: created.record.tags ?? []
           }
         });
       }
@@ -78,6 +86,10 @@ export function createCloudflareMemoryProvider(input = {}) {
 
       const fallback = await d1.queryRecords(inputQuery);
       return hydrateBlobRecords(fallback, r2);
+    },
+
+    async validateRecord(inputRecord) {
+      return validateMemoryRecord(inputRecord);
     }
   };
 }
