@@ -80,7 +80,11 @@ export {
 } from "./memory-retrieve.js";
 export {
   RetrievalSource,
+  SemanticRetrievalMode,
   buildRetrievalPlan,
+  buildRetrievalQualityMetricsTemplate,
+  buildSemanticRetrievalPolicy,
+  rerankReferencesBySource,
   selectPrimaryReference
 } from "./retrieval-contract.js";
 export { JudgmentStep, evaluateJudgmentOrder } from "./judgment-order.js";
