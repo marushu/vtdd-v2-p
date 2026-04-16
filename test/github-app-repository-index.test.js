@@ -145,3 +145,162 @@ test("github app index reports rate limit boundary and keeps fallback aliases", 
   assert.equal(result.warnings.length, 1);
   assert.equal(result.warnings[0].includes("rate limited"), true);
 });
+
+test("github app index can mint installation token from github app credentials", async () => {
+  const calls = [];
+  const githubApiFetch = async (url, init = {}) => {
+    calls.push({ url, init });
+    if (String(url).includes("/app/installations/98765/access_tokens")) {
+      return new Response(
+        JSON.stringify({
+          token: "ghs_minted_installation_token",
+          expires_at: "2030-01-01T00:00:00Z"
+        }),
+        {
+          status: 201,
+          headers: { "content-type": "application/json" }
+        }
+      );
+    }
+    return new Response(
+      JSON.stringify({
+        total_count: 1,
+        repositories: [
+          {
+            full_name: "marushu/vtdd-v2",
+            name: "vtdd-v2",
+            private: true
+          }
+        ]
+      }),
+      {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      }
+    );
+  };
+
+  const result = await resolveGatewayAliasRegistryFromGitHubApp({
+    policyInput: {
+      aliasRegistry: []
+    },
+    env: {
+      GITHUB_APP_ID: "12345",
+      GITHUB_APP_INSTALLATION_ID: "98765",
+      GITHUB_APP_PRIVATE_KEY: "-----BEGIN PRIVATE KEY-----\nplaceholder\n-----END PRIVATE KEY-----",
+      GITHUB_APP_JWT_PROVIDER: async () => "app_jwt_token_for_tests",
+      GITHUB_API_FETCH: githubApiFetch
+    }
+  });
+
+  assert.equal(result.source, "github_app_live");
+  assert.equal(result.warnings.length, 0);
+  assert.equal(result.aliasRegistry.length, 1);
+  assert.equal(result.aliasRegistry[0].canonicalRepo, "marushu/vtdd-v2");
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].url.includes("/app/installations/98765/access_tokens"), true);
+  assert.equal(calls[0].init.headers.authorization, "Bearer app_jwt_token_for_tests");
+  assert.equal(calls[1].url.includes("/installation/repositories"), true);
+  assert.equal(calls[1].init.headers.authorization, "Bearer ghs_minted_installation_token");
+});
+
+test("github app index reuses cached minted token until refresh margin", async () => {
+  const calls = [];
+  const githubApiFetch = async (url, init = {}) => {
+    calls.push({ url, init });
+    if (String(url).includes("/app/installations/112233/access_tokens")) {
+      return new Response(
+        JSON.stringify({
+          token: "ghs_cached_installation_token",
+          expires_at: "2099-01-01T00:00:00Z"
+        }),
+        {
+          status: 201,
+          headers: { "content-type": "application/json" }
+        }
+      );
+    }
+    return new Response(
+      JSON.stringify({
+        total_count: 1,
+        repositories: [
+          {
+            full_name: "marushu/vtdd-v2",
+            name: "vtdd-v2",
+            private: true
+          }
+        ]
+      }),
+      {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      }
+    );
+  };
+
+  const env = {
+    GITHUB_APP_ID: "22222",
+    GITHUB_APP_INSTALLATION_ID: "112233",
+    GITHUB_APP_PRIVATE_KEY: "-----BEGIN PRIVATE KEY-----\nplaceholder\n-----END PRIVATE KEY-----",
+    GITHUB_APP_JWT_PROVIDER: async () => "cached_app_jwt_token",
+    GITHUB_APP_NOW_PROVIDER: () => 2000000000,
+    GITHUB_API_FETCH: githubApiFetch
+  };
+
+  const first = await resolveGatewayAliasRegistryFromGitHubApp({
+    policyInput: { aliasRegistry: [] },
+    env
+  });
+  const second = await resolveGatewayAliasRegistryFromGitHubApp({
+    policyInput: { aliasRegistry: [] },
+    env
+  });
+
+  assert.equal(first.source, "github_app_live");
+  assert.equal(second.source, "github_app_live");
+  assert.equal(calls.filter((item) => item.url.includes("/access_tokens")).length, 1);
+  assert.equal(calls.filter((item) => item.url.includes("/installation/repositories")).length, 2);
+});
+
+test("github app index warns when app credentials are incomplete", async () => {
+  const result = await resolveGatewayAliasRegistryFromGitHubApp({
+    policyInput: {
+      aliasRegistry: [
+        {
+          canonicalRepo: "marushu/vtdd-v2",
+          aliases: ["vtdd"]
+        }
+      ]
+    },
+    env: {
+      GITHUB_APP_ID: "12345"
+    }
+  });
+
+  assert.equal(result.source, "provided");
+  assert.equal(result.aliasRegistry.length, 1);
+  assert.equal(result.warnings.length, 1);
+  assert.equal(result.warnings[0].includes("must all be configured"), true);
+});
+
+test("github app index can enforce minted-token mode and block static token fallback", async () => {
+  const result = await resolveGatewayAliasRegistryFromGitHubApp({
+    policyInput: {
+      aliasRegistry: [
+        {
+          canonicalRepo: "marushu/vtdd-v2",
+          aliases: ["vtdd"]
+        }
+      ]
+    },
+    env: {
+      GITHUB_APP_ENFORCE_MINTED_INSTALLATION_TOKEN: "true",
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_static_token"
+    }
+  });
+
+  assert.equal(result.source, "provided");
+  assert.equal(result.aliasRegistry.length, 1);
+  assert.equal(result.warnings.length, 1);
+  assert.equal(result.warnings[0].includes("disabled by GITHUB_APP_ENFORCE_MINTED_INSTALLATION_TOKEN"), true);
+});
