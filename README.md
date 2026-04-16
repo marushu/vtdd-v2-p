@@ -16,6 +16,7 @@ Current code starts with deterministic governance gates:
 - credential boundary (`github_app` + tiered permissions + short-lived high-risk credential)
 - alias-based repository resolution with no default repository
 - memory safety gate (record-type boundary + secret exclusion + redaction helper)
+- canonical memory safety policy for store/do-not-store and Git-vs-DB separation
 - decision/proposal log contracts and in-memory store primitives
 - memory schema + provider interface + retrieve primitives
 - retrieval contract (phase-aware source priority and primary reference selection)
