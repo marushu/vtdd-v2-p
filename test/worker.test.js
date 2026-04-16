@@ -199,6 +199,7 @@ test("worker runs gateway route", async () => {
           mode: TaskMode.EXECUTION,
           repositoryInput: "vtdd",
           aliasRegistry,
+          targetConfirmed: true,
           constitutionConsulted: true,
           runtimeTruth: {
             runtimeAvailable: true
@@ -244,6 +245,7 @@ test("worker gateway blocks merge in guarded absence mode and records stop log",
           autonomyMode: AutonomyMode.GUARDED_ABSENCE,
           repositoryInput: "vtdd",
           aliasRegistry,
+          targetConfirmed: true,
           constitutionConsulted: true,
           runtimeTruth: {
             runtimeAvailable: true
@@ -305,6 +307,7 @@ test("worker runtime forced guarded absence mode overrides payload normal mode",
           autonomyMode: AutonomyMode.NORMAL,
           repositoryInput: "vtdd",
           aliasRegistry,
+          targetConfirmed: true,
           constitutionConsulted: true,
           runtimeTruth: {
             runtimeAvailable: true,
@@ -525,6 +528,7 @@ test("worker gateway persists decision log and returns decision references", asy
           mode: TaskMode.EXECUTION,
           repositoryInput: "vtdd",
           aliasRegistry,
+          targetConfirmed: true,
           constitutionConsulted: true,
           runtimeTruth: {
             runtimeAvailable: true
@@ -586,6 +590,7 @@ test("worker gateway blocks invalid decision log schema", async () => {
           mode: TaskMode.EXECUTION,
           repositoryInput: "vtdd",
           aliasRegistry,
+          targetConfirmed: true,
           constitutionConsulted: true,
           runtimeTruth: {
             runtimeAvailable: true
@@ -640,6 +645,7 @@ test("worker gateway requires memory provider for decision log persistence", asy
           mode: TaskMode.EXECUTION,
           repositoryInput: "vtdd",
           aliasRegistry,
+          targetConfirmed: true,
           constitutionConsulted: true,
           runtimeTruth: {
             runtimeAvailable: true
@@ -695,6 +701,7 @@ test("worker gateway persists proposal log and returns proposal references", asy
           mode: TaskMode.EXECUTION,
           repositoryInput: "vtdd",
           aliasRegistry,
+          targetConfirmed: true,
           constitutionConsulted: true,
           runtimeTruth: {
             runtimeAvailable: true
@@ -758,6 +765,7 @@ test("worker gateway blocks invalid proposal log schema", async () => {
           mode: TaskMode.EXECUTION,
           repositoryInput: "vtdd",
           aliasRegistry,
+          targetConfirmed: true,
           constitutionConsulted: true,
           runtimeTruth: {
             runtimeAvailable: true
@@ -811,6 +819,7 @@ test("worker gateway requires memory provider for proposal log persistence", asy
           mode: TaskMode.EXECUTION,
           repositoryInput: "vtdd",
           aliasRegistry,
+          targetConfirmed: true,
           constitutionConsulted: true,
           runtimeTruth: {
             runtimeAvailable: true
@@ -1411,6 +1420,7 @@ test("worker blocks invalid policy input", async () => {
           mode: TaskMode.EXECUTION,
           repositoryInput: "vtdd",
           aliasRegistry,
+          targetConfirmed: true,
           constitutionConsulted: true,
           runtimeTruth: {
             runtimeAvailable: true

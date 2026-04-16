@@ -87,6 +87,7 @@ test("execution mode blocks unresolved repository target", () => {
     mode: TaskMode.EXECUTION,
     repositoryInput: "unknown-project",
     aliasRegistry: registry,
+    targetConfirmed: true,
     constitutionConsulted: true,
     runtimeTruth: { runtimeAvailable: true },
     credential: executeCredential,
@@ -100,12 +101,55 @@ test("execution mode blocks unresolved repository target", () => {
   assert.equal(result.blockedByRule, "unresolved_target_blocks_execution");
 });
 
+test("execution mode requires explicit confirmation when target is resolved via alias", () => {
+  const result = evaluateExecutionPolicy({
+    actionType: ActionType.BUILD,
+    mode: TaskMode.EXECUTION,
+    repositoryInput: "ledger",
+    aliasRegistry: registry,
+    targetConfirmed: true,
+    constitutionConsulted: true,
+    runtimeTruth: { runtimeAvailable: true },
+    credential: executeCredential,
+    consent: fullConsent,
+    ...approvalContext,
+    issueTraceable: true,
+    go: true,
+    passkey: false,
+    targetConfirmed: false
+  });
+  assert.equal(result.allowed, false);
+  assert.equal(result.blockedByRule, "target_confirmation_required");
+});
+
+test("execution mode allows alias-resolved target after explicit confirmation", () => {
+  const result = evaluateExecutionPolicy({
+    actionType: ActionType.BUILD,
+    mode: TaskMode.EXECUTION,
+    repositoryInput: "ledger",
+    aliasRegistry: registry,
+    targetConfirmed: true,
+    constitutionConsulted: true,
+    runtimeTruth: { runtimeAvailable: true },
+    credential: executeCredential,
+    consent: fullConsent,
+    ...approvalContext,
+    issueTraceable: true,
+    go: true,
+    passkey: false,
+    targetConfirmed: true
+  });
+  assert.equal(result.allowed, true);
+  assert.equal(result.repository, "sample-org/accounting-app");
+});
+
 test("high-risk action requires GO + passkey", () => {
   const result = evaluateExecutionPolicy({
     actionType: ActionType.DEPLOY_PRODUCTION,
     mode: TaskMode.EXECUTION,
     repositoryInput: "ledger",
     aliasRegistry: registry,
+    targetConfirmed: true,
     constitutionConsulted: true,
     runtimeTruth: { runtimeAvailable: true },
     credential: highRiskCredential,
@@ -126,6 +170,7 @@ test("guarded absence mode blocks merge even with GO + passkey", () => {
     autonomyMode: AutonomyMode.GUARDED_ABSENCE,
     repositoryInput: "ledger",
     aliasRegistry: registry,
+    targetConfirmed: true,
     constitutionConsulted: true,
     runtimeTruth: { runtimeAvailable: true },
     credential: highRiskCredential,
@@ -147,6 +192,7 @@ test("guarded absence mode blocks ambiguous request", () => {
     ambiguity: { ambiguousRequest: true },
     repositoryInput: "ledger",
     aliasRegistry: registry,
+    targetConfirmed: true,
     constitutionConsulted: true,
     runtimeTruth: { runtimeAvailable: true },
     credential: executeCredential,
@@ -167,6 +213,7 @@ test("guarded absence mode blocks one-issue-many-pr violation when runtime truth
     autonomyMode: AutonomyMode.GUARDED_ABSENCE,
     repositoryInput: "ledger",
     aliasRegistry: registry,
+    targetConfirmed: true,
     constitutionConsulted: true,
     runtimeTruth: {
       runtimeAvailable: true,
@@ -192,6 +239,7 @@ test("guarded absence mode allows pr operation when boundaries are satisfied", (
     autonomyMode: AutonomyMode.GUARDED_ABSENCE,
     repositoryInput: "ledger",
     aliasRegistry: registry,
+    targetConfirmed: true,
     constitutionConsulted: true,
     runtimeTruth: { runtimeAvailable: true, runtimeState: { issuePrCount: 1 } },
     credential: executeCredential,
@@ -211,6 +259,7 @@ test("pr comment is allowed without GO when other gates pass", () => {
     mode: TaskMode.EXECUTION,
     repositoryInput: "ledger",
     aliasRegistry: registry,
+    targetConfirmed: true,
     constitutionConsulted: true,
     runtimeTruth: { runtimeAvailable: true },
     credential: executeCredential,
@@ -230,6 +279,7 @@ test("pr review submit still requires GO", () => {
     mode: TaskMode.EXECUTION,
     repositoryInput: "ledger",
     aliasRegistry: registry,
+    targetConfirmed: true,
     constitutionConsulted: true,
     runtimeTruth: { runtimeAvailable: true },
     credential: executeCredential,
@@ -250,6 +300,7 @@ test("execution blocks when issue traceability is missing", () => {
     mode: TaskMode.EXECUTION,
     repositoryInput: "vtdd",
     aliasRegistry: registry,
+    targetConfirmed: true,
     constitutionConsulted: true,
     runtimeTruth: { runtimeAvailable: true },
     credential: executeCredential,
@@ -269,6 +320,7 @@ test("execution allows build with resolved repo and GO", () => {
     mode: TaskMode.EXECUTION,
     repositoryInput: "VTDD V2",
     aliasRegistry: registry,
+    targetConfirmed: true,
     constitutionConsulted: true,
     runtimeTruth: { runtimeAvailable: true },
     credential: executeCredential,
@@ -288,6 +340,7 @@ test("execution blocks when constitution is not consulted", () => {
     mode: TaskMode.EXECUTION,
     repositoryInput: "VTDD V2",
     aliasRegistry: registry,
+    targetConfirmed: true,
     constitutionConsulted: false,
     runtimeTruth: { runtimeAvailable: true },
     credential: executeCredential,
@@ -307,6 +360,7 @@ test("execution blocks when runtime truth is unavailable and no safe fallback is
     mode: TaskMode.EXECUTION,
     repositoryInput: "VTDD V2",
     aliasRegistry: registry,
+    targetConfirmed: true,
     constitutionConsulted: true,
     runtimeTruth: { runtimeAvailable: false, safeFallbackChosen: false },
     credential: executeCredential,
@@ -326,6 +380,7 @@ test("runtime-memory conflict requires reconcile", () => {
     mode: TaskMode.EXECUTION,
     repositoryInput: "VTDD V2",
     aliasRegistry: registry,
+    targetConfirmed: true,
     constitutionConsulted: true,
     runtimeTruth: {
       runtimeAvailable: true,
@@ -371,6 +426,7 @@ test("execution blocks when runtime truth is stale", () => {
     mode: TaskMode.EXECUTION,
     repositoryInput: "VTDD V2",
     aliasRegistry: registry,
+    targetConfirmed: true,
     constitutionConsulted: true,
     runtimeTruth: {
       runtimeAvailable: true,
@@ -396,6 +452,7 @@ test("reviewer role cannot run build action", () => {
     mode: TaskMode.EXECUTION,
     repositoryInput: "VTDD V2",
     aliasRegistry: registry,
+    targetConfirmed: true,
     constitutionConsulted: true,
     runtimeTruth: { runtimeAvailable: true },
     credential: executeCredential,
@@ -416,6 +473,7 @@ test("butler role can create issue with GO", () => {
     mode: TaskMode.EXECUTION,
     repositoryInput: "VTDD V2",
     aliasRegistry: registry,
+    targetConfirmed: true,
     constitutionConsulted: true,
     runtimeTruth: { runtimeAvailable: true },
     credential: executeCredential,
@@ -444,6 +502,7 @@ test("execution blocks when credential model is not github_app", () => {
     mode: TaskMode.EXECUTION,
     repositoryInput: "VTDD V2",
     aliasRegistry: registry,
+    targetConfirmed: true,
     constitutionConsulted: true,
     runtimeTruth: { runtimeAvailable: true },
     credential: { model: "personal_access_token", tier: CredentialTier.EXECUTE },
@@ -464,6 +523,7 @@ test("high-risk action blocks when credential is not short-lived", () => {
     mode: TaskMode.EXECUTION,
     repositoryInput: "VTDD V2",
     aliasRegistry: registry,
+    targetConfirmed: true,
     constitutionConsulted: true,
     runtimeTruth: { runtimeAvailable: true },
     credential: {
@@ -504,6 +564,7 @@ test("execution blocks when required consent category is missing", () => {
     mode: TaskMode.EXECUTION,
     repositoryInput: "VTDD V2",
     aliasRegistry: registry,
+    targetConfirmed: true,
     constitutionConsulted: true,
     runtimeTruth: { runtimeAvailable: true },
     credential: {
@@ -531,6 +592,7 @@ test("execution blocks when approval phrase is missing", () => {
     mode: TaskMode.EXECUTION,
     repositoryInput: "VTDD V2",
     aliasRegistry: registry,
+    targetConfirmed: true,
     constitutionConsulted: true,
     runtimeTruth: { runtimeAvailable: true },
     credential: executeCredential,
@@ -552,6 +614,7 @@ test("execution blocks when approval scope does not match", () => {
     mode: TaskMode.EXECUTION,
     repositoryInput: "VTDD V2",
     aliasRegistry: registry,
+    targetConfirmed: true,
     constitutionConsulted: true,
     runtimeTruth: { runtimeAvailable: true },
     credential: executeCredential,
@@ -586,6 +649,7 @@ test("execution blocks out-of-scope implementation when not proposal-only", () =
     mode: TaskMode.EXECUTION,
     repositoryInput: "VTDD V2",
     aliasRegistry: registry,
+    targetConfirmed: true,
     constitutionConsulted: true,
     runtimeTruth: { runtimeAvailable: true },
     credential: executeCredential,
@@ -610,6 +674,7 @@ test("execution allows out-of-scope note when proposal-only", () => {
     mode: TaskMode.EXECUTION,
     repositoryInput: "VTDD V2",
     aliasRegistry: registry,
+    targetConfirmed: true,
     constitutionConsulted: true,
     runtimeTruth: { runtimeAvailable: true },
     credential: executeCredential,
@@ -633,6 +698,7 @@ test("policy order is deterministic: role boundary blocks before constitution ch
     mode: TaskMode.EXECUTION,
     repositoryInput: "unknown-project",
     aliasRegistry: registry,
+    targetConfirmed: true,
     constitutionConsulted: false,
     runtimeTruth: { runtimeAvailable: false, safeFallbackChosen: false },
     credential: { model: "personal_access_token", tier: CredentialTier.EXECUTE },
@@ -655,6 +721,7 @@ test("policy order is deterministic: constitution check blocks before runtime an
     mode: TaskMode.EXECUTION,
     repositoryInput: "unknown-project",
     aliasRegistry: registry,
+    targetConfirmed: true,
     constitutionConsulted: false,
     runtimeTruth: { runtimeAvailable: false, safeFallbackChosen: false },
     credential: executeCredential,
@@ -676,6 +743,7 @@ test("policy order is deterministic: runtime check blocks before repository reso
     mode: TaskMode.EXECUTION,
     repositoryInput: "unknown-project",
     aliasRegistry: registry,
+    targetConfirmed: true,
     constitutionConsulted: true,
     runtimeTruth: { runtimeAvailable: false, safeFallbackChosen: false },
     credential: executeCredential,
@@ -697,6 +765,7 @@ test("policy order is deterministic: repository resolution blocks before traceab
     mode: TaskMode.EXECUTION,
     repositoryInput: "unknown-project",
     aliasRegistry: registry,
+    targetConfirmed: true,
     constitutionConsulted: true,
     runtimeTruth: { runtimeAvailable: true },
     credential: executeCredential,
@@ -718,6 +787,7 @@ test("policy order is deterministic: traceability blocks before consent, approva
     mode: TaskMode.EXECUTION,
     repositoryInput: "vtdd",
     aliasRegistry: registry,
+    targetConfirmed: true,
     constitutionConsulted: true,
     runtimeTruth: { runtimeAvailable: true },
     credential: {
@@ -746,6 +816,7 @@ test("policy order is deterministic: consent blocks before approval and credenti
     mode: TaskMode.EXECUTION,
     repositoryInput: "vtdd",
     aliasRegistry: registry,
+    targetConfirmed: true,
     constitutionConsulted: true,
     runtimeTruth: { runtimeAvailable: true },
     credential: {
@@ -774,6 +845,7 @@ test("policy order is deterministic: approval blocks before credential", () => {
     mode: TaskMode.EXECUTION,
     repositoryInput: "vtdd",
     aliasRegistry: registry,
+    targetConfirmed: true,
     constitutionConsulted: true,
     runtimeTruth: { runtimeAvailable: true },
     credential: { model: "personal_access_token", tier: CredentialTier.EXECUTE },
@@ -796,6 +868,7 @@ test("policy order is deterministic: credential check is reached only after earl
     mode: TaskMode.EXECUTION,
     repositoryInput: "vtdd",
     aliasRegistry: registry,
+    targetConfirmed: true,
     constitutionConsulted: true,
     runtimeTruth: { runtimeAvailable: true },
     credential: { model: "personal_access_token", tier: CredentialTier.EXECUTE },
