@@ -1,3 +1,12 @@
+export const DECISION_LOG_FIELDS = Object.freeze([
+  "decision",
+  "rationale",
+  "relatedIssue",
+  "decidedBy",
+  "timestamp",
+  "supersededBy"
+]);
+
 export function createDecisionLogEntry(input) {
   const candidate = {
     decision: normalizeText(input?.decision),

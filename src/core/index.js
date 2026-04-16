@@ -35,6 +35,7 @@ export {
   createDefaultConstitutionSchema
 } from "./constitution-schema.js";
 export {
+  DECISION_LOG_FIELDS,
   createDecisionLogEntry,
   validateDecisionLogEntry,
   createProposalLogEntry,
