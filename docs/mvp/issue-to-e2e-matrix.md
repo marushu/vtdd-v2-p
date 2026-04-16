@@ -128,10 +128,12 @@ Status values used below:
 - Boundary path:
   - invalid judgment order or unsupported overrides are blocked
 - Implementation evidence:
+  - `docs/butler/review-protocol.md`
   - `src/core/butler-orchestrator.js`
   - `docs/butler/context-resolution.md`
 - Test evidence:
   - `test/butler-orchestrator.test.js`
+  - `test/butler-review-protocol.test.js`
 - Status: `implemented_pending_e2e`
 
 ## E2E-08 Repo resolution safety + conversation switch confirm
