@@ -1,0 +1,59 @@
+# VTDD v2 PR Template Model
+
+This document defines the canonical PR template used to show how a PR maps to
+its governing spec and where it intentionally does not.
+
+## Canonical Sections
+
+Every PR should contain these sections in this order:
+
+1. `This PR satisfies Intent`
+2. `Satisfied Success Criteria`
+3. `Unsatisfied Success Criteria`
+4. `Non-goal violations`
+5. `Related Constitution Rules`
+6. `Out-of-scope but NOT implemented`
+7. `Extra changes (if any)`
+
+## Section Purpose
+
+### `This PR satisfies Intent`
+
+State how the PR maps back to the Issue intent.
+
+### `Satisfied Success Criteria`
+
+List the success criteria already satisfied by this PR.
+
+### `Unsatisfied Success Criteria`
+
+Call out remaining criteria explicitly, or state `None.` when there are none.
+
+### `Non-goal violations`
+
+Call out any violation of declared non-goals, or state `None.` when there are none.
+
+### `Related Constitution Rules`
+
+List material Constitution rules that constrained the implementation.
+
+### `Out-of-scope but NOT implemented`
+
+List ideas or changes noticed during implementation but intentionally not implemented.
+
+### `Extra changes (if any)`
+
+Call out any extra changes that were necessary, or state `None.` when there are none.
+
+## Authoring Principle
+
+The PR template should make spec alignment and drift visible. It should not
+attempt to automate code quality judgment or prescribe implementation style.
+
+## Non-goals
+
+This model does not define:
+
+- code review automation
+- implementation method
+- reviewer quality heuristics
