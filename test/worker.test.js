@@ -77,6 +77,34 @@ test("worker returns setup wizard json", async () => {
   assert.equal(body.cloudflareSetupCheck.state, "disabled");
 });
 
+test("worker setup wizard json keeps iphone-first and no-default-repo policy visible", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/setup/wizard?format=json&repo=sample-org/vtdd-v2")
+  );
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.generatedAnswers.setupMode, "iphone_first");
+  assert.equal(body.generatedAnswers.allowDefaultRepository, false);
+  assert.equal(body.onboarding.setupMode, "iphone_first");
+  assert.equal(body.onboarding.customGpt.constructionText.includes("Do not assume a default repository."), true);
+});
+
+test("worker setup wizard never exposes secret credential input fields", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/setup/wizard?format=json&repo=sample-org/vtdd-v2")
+  );
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal("cloudflareApiToken" in body.generatedAnswers, false);
+  assert.equal("cloudflareAccountId" in body.generatedAnswers, false);
+  assert.equal("githubAppPrivateKey" in body.generatedAnswers, false);
+  assert.equal("githubToken" in body.generatedAnswers, false);
+  assert.equal("openaiApiKey" in body.generatedAnswers, false);
+  assert.equal("geminiApiKey" in body.generatedAnswers, false);
+});
+
 test("worker setup wizard accepts deploy authority detection query inputs", async () => {
   const response = await worker.fetch(
     new Request(
