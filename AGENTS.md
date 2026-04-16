@@ -34,6 +34,23 @@ Default assumption: implementation scope covers all active Issues unless the use
 If any active Issue is intentionally deferred, record it explicitly as deferred with reason.
 Never treat "not implemented yet" as "done".
 
+## MVP Definition (Repository Rule)
+
+In this repository, MVP is not "minimum guessed subset."
+MVP is achieved only when all active Issues in scope are implemented and verified.
+
+Prohibited:
+
+- declaring MVP complete while any active required Issue remains unimplemented
+- silently redefining MVP as a smaller subset
+- reporting "overall done" from partial progress
+
+Required:
+
+- maintain an explicit active-Issue checklist
+- map each active Issue to implementation evidence and E2E evidence
+- report status as "partial/in-progress" until all required Issues are complete
+
 ## Drift Stop Protocol (Required Before Editing Code)
 
 Before any runtime code edit, produce a bounded change contract:
@@ -78,6 +95,8 @@ Each active Issue must have at least:
 
 If any Issue has no passing mapped E2E, repository status is incomplete.
 Do not present overall completion as achieved.
+
+MVP completion claim is allowed only when the matrix shows complete coverage for all required active Issues.
 
 ## Safety Invariants (Must Not Regress)
 
