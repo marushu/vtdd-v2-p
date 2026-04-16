@@ -48,6 +48,95 @@ test("worker returns setup wizard json", async () => {
   assert.equal(body.ok, true);
   assert.equal(body.onboarding.customGpt.actionSchemaJson.includes("/v2/gateway"), true);
   assert.equal(body.generatedAnswers.actionEndpointBaseUrl, "https://example.com");
+  assert.equal(body.cloudflareSetupCheck.state, "disabled");
+});
+
+test("worker setup wizard classifies cloudflare billing-related setup failure", async () => {
+  const calls = [];
+  const cloudflareApiFetch = async (url) => {
+    calls.push(String(url));
+    if (String(url).includes("/user/tokens/verify")) {
+      return new Response(
+        JSON.stringify({
+          success: true,
+          errors: [],
+          messages: [],
+          result: { status: "active" }
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        }
+      );
+    }
+    return new Response(
+      JSON.stringify({
+        success: false,
+        errors: [
+          {
+            code: 10042,
+            message: "Billing setup required. Add payment method before using this feature."
+          }
+        ],
+        messages: []
+      }),
+      {
+        status: 403,
+        headers: { "content-type": "application/json" }
+      }
+    );
+  };
+
+  const response = await worker.fetch(
+    new Request("https://example.com/setup/wizard?format=json&cloudflareCheck=on"),
+    {
+      SETUP_WIZARD_CLOUDFLARE_CHECK_ENABLED: "true",
+      CLOUDFLARE_API_TOKEN: "token-for-check-only",
+      CLOUDFLARE_ACCOUNT_ID: "account-id-for-check-only",
+      CF_API_FETCH: cloudflareApiFetch
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(calls.length, 2);
+  assert.equal(body.cloudflareSetupCheck.state, "billing_action_required");
+  assert.equal(
+    body.cloudflareSetupCheck.summary.includes("billing/payment action may be required"),
+    true
+  );
+  assert.equal(Array.isArray(body.cloudflareSetupCheck.links), true);
+  assert.equal(body.cloudflareSetupCheck.links.length > 0, true);
+});
+
+test("worker setup wizard does not call cloudflare api unless explicitly requested", async () => {
+  let called = false;
+  const cloudflareApiFetch = async () => {
+    called = true;
+    return new Response(
+      JSON.stringify({
+        success: true,
+        errors: [],
+        messages: []
+      }),
+      {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      }
+    );
+  };
+
+  const response = await worker.fetch(new Request("https://example.com/setup/wizard?format=json"), {
+    SETUP_WIZARD_CLOUDFLARE_CHECK_ENABLED: "true",
+    CLOUDFLARE_API_TOKEN: "token-for-check-only",
+    CLOUDFLARE_ACCOUNT_ID: "account-id-for-check-only",
+    CF_API_FETCH: cloudflareApiFetch
+  });
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.cloudflareSetupCheck.state, "disabled");
+  assert.equal(called, false);
 });
 
 test("worker runs gateway route", async () => {
