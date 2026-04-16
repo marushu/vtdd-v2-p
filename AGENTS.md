@@ -27,6 +27,10 @@ When deciding what to implement, use this order:
 If these sources conflict, stop implementation and ask for a decision.
 Never resolve source conflicts by assumption.
 
+If current code only partially satisfies an Issue or contract, do not
+"complete it on the fly" without first surfacing the mismatch explicitly.
+When in doubt, stop and reconcile with the owner instead of pushing through.
+
 ## Active-Issue Coverage Policy
 
 Default assumption: implementation scope covers all active Issues unless the user explicitly narrows scope.
@@ -65,6 +69,16 @@ If a planned change cannot be mapped to an Issue section, do not implement it.
 Either:
 - propose a new Issue, or
 - move the idea to proposal-only notes.
+
+If implementation reveals a contract mismatch, missing requirement, ambiguous
+boundary, or partial compliance state:
+- stop the rollout
+- summarize the exact mismatch
+- state why continuing could create drift
+- get explicit human direction before proceeding
+
+Do not treat "this probably should be fixed now" as sufficient justification to
+continue implementation.
 
 ## Docs-First Gate
 
@@ -124,6 +138,8 @@ MVP completion claim is allowed only when the matrix shows complete coverage for
 - No "while we are here" edits.
 - No unrelated refactors in implementation PRs.
 - Keep docs-only PRs and runtime PRs separable when possible.
+- If a new guardrail or process correction is needed, land it in its own PR
+  rather than mixing it into an implementation slice.
 
 ## Evidence Discipline
 
