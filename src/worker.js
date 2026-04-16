@@ -1,4 +1,9 @@
-import { runInitialSetupWizard, runMvpGateway } from "./core/index.js";
+import {
+  retrieveConstitution,
+  runInitialSetupWizard,
+  runMvpGateway,
+  validateMemoryProvider
+} from "./core/index.js";
 
 const JSON_HEADERS = {
   "content-type": "application/json; charset=utf-8"
@@ -46,6 +51,19 @@ export default {
       return json(result.allowed ? 200 : 422, result);
     }
 
+    if (request.method === "GET" && url.pathname === "/mvp/retrieve/constitution") {
+      const auth = authorizeGatewayRequest({ request, env });
+      if (!auth.ok) {
+        return json(auth.status, {
+          ok: false,
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+
+      return handleRetrieveConstitutionRequest(url, env);
+    }
+
     return json(404, {
       ok: false,
       error: "not_found"
@@ -67,6 +85,27 @@ function handleSetupWizardRequest(url) {
 
   const htmlBody = renderSetupWizardHtml({ result, answers, url });
   return html(result.ok ? 200 : 422, htmlBody);
+}
+
+async function handleRetrieveConstitutionRequest(url, env) {
+  const provider = env?.MEMORY_PROVIDER ?? null;
+  const validation = validateMemoryProvider(provider);
+  if (!validation.ok) {
+    return json(503, {
+      ok: false,
+      error: "memory_provider_unavailable",
+      reason: "valid memory provider is required for constitution retrieval"
+    });
+  }
+
+  const limit = normalizeLimit(url.searchParams.get("limit"), 5);
+  const records = await retrieveConstitution(provider, limit);
+  return json(200, {
+    ok: true,
+    recordType: "constitution",
+    recordCount: records.length,
+    records
+  });
 }
 
 function buildSetupWizardAnswers(url) {
@@ -361,6 +400,14 @@ async function readJson(request) {
   } catch {
     return {};
   }
+}
+
+function normalizeLimit(value, fallback) {
+  const numeric = Number(value ?? fallback);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return fallback;
+  }
+  return Math.min(Math.floor(numeric), 200);
 }
 
 function json(status, body) {
