@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   MemoryRecordType,
   RetrievalSource,
+  SemanticRetrievalMode,
   createInMemoryMemoryProvider,
   retrieveCrossIssueMemoryIndex
 } from "../src/core/index.js";
@@ -39,6 +40,96 @@ test("cross retrieval returns provider_unavailable when provider is missing", as
   assert.equal(result.ok, false);
   assert.equal(result.status, 503);
   assert.equal(result.error, "memory_provider_unavailable");
+});
+
+test("cross retrieval supports semantic assistive extension while preserving structured-first", async () => {
+  const provider = createInMemoryMemoryProvider();
+  await seedCrossRetrievalRecords(provider);
+  await provider.store({
+    id: "decision-17-2",
+    type: MemoryRecordType.DECISION_LOG,
+    content: {
+      decision: "Second structured decision for ranking window",
+      rationale: "Keeps low-priority semantic candidate out of top structured set.",
+      relatedIssue: 17,
+      decidedBy: "owner",
+      timestamp: "2026-04-16T10:09:00Z",
+      supersededBy: null
+    },
+    metadata: {
+      repository: "sample-org/vtdd-v2"
+    },
+    priority: 94,
+    tags: ["decision_log", "issue:17"],
+    createdAt: "2026-04-16T10:09:00Z"
+  });
+  await provider.store({
+    id: "decision-17-3",
+    type: MemoryRecordType.DECISION_LOG,
+    content: {
+      decision: "Third structured decision for ranking window",
+      rationale: "Keeps low-priority semantic candidate out of top structured set.",
+      relatedIssue: 17,
+      decidedBy: "owner",
+      timestamp: "2026-04-16T10:08:00Z",
+      supersededBy: null
+    },
+    metadata: {
+      repository: "sample-org/vtdd-v2"
+    },
+    priority: 93,
+    tags: ["decision_log", "issue:17"],
+    createdAt: "2026-04-16T10:08:00Z"
+  });
+  await provider.store({
+    id: "decision-17-low-priority-semantic",
+    type: MemoryRecordType.DECISION_LOG,
+    content: {
+      decision: "Semantic rerank marker decision",
+      rationale: "Used to verify semantic expansion.",
+      relatedIssue: 17,
+      decidedBy: "owner",
+      timestamp: "2026-04-16T10:05:00Z",
+      supersededBy: null
+    },
+    metadata: {
+      repository: "sample-org/vtdd-v2"
+    },
+    priority: 10,
+    tags: ["decision_log", "issue:17", "semantic-marker"],
+    createdAt: "2026-04-16T10:05:00Z"
+  });
+
+  const result = await retrieveCrossIssueMemoryIndex(provider, {
+    phase: "execution",
+    limit: 3,
+    relatedIssue: 17,
+    text: "semantic rerank marker",
+    semanticRetrieval: {
+      enabled: true,
+      mode: SemanticRetrievalMode.ASSISTIVE,
+      maxPerSource: 3
+    },
+    issueContext: {
+      issueNumber: 17,
+      issueTitle: "spec: Decision Log runtime connection"
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.retrievalPlan.sources[0], RetrievalSource.ISSUE);
+  assert.equal(result.orderedReferences[0].source, RetrievalSource.ISSUE);
+  assert.equal(result.semanticRetrieval.enabled, true);
+  assert.equal(result.semanticRetrieval.applied, true);
+  assert.equal(result.referencesBySource.decision_log[0].id, "decision-17-1");
+  assert.equal(
+    result.referencesBySource.decision_log.some(
+      (item) =>
+        item.id === "decision-17-low-priority-semantic" &&
+        item.retrievalSignal?.type === "semantic_query"
+    ),
+    true
+  );
 });
 
 async function seedCrossRetrievalRecords(provider) {

@@ -58,6 +58,24 @@ Cross retrieval should keep this minimum source set:
 - Proposal / exploration logs
 - PR metadata / review summaries
 
+Semantic retrieval should be attached through provider-agnostic query adapters and
+must not replace structured lookup order.
+
+## Retrieval Quality Metrics
+
+When semantic assistive mode is enabled, track quality by use case:
+
+- recall context
+- similar issue discovery
+- decision rationale lookup
+
+For each use case, define:
+
+- precision@3 and precision@5
+- recall@5 and recall@10
+- baseline: structured-only
+- comparison target: structured + semantic assistive
+
 ## Storage Principle
 
 Common specifications and public system definitions belong in Git.

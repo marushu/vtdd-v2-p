@@ -1,7 +1,14 @@
 import { retrieveConstitution } from "./memory-retrieve.js";
 import { validateMemoryProvider } from "./memory-provider.js";
 import { MemoryRecordType } from "./memory-schema.js";
-import { buildRetrievalPlan, RetrievalSource, selectPrimaryReference } from "./retrieval-contract.js";
+import {
+  buildRetrievalPlan,
+  buildSemanticRetrievalPolicy,
+  rerankReferencesBySource,
+  RetrievalSource,
+  SemanticRetrievalMode,
+  selectPrimaryReference
+} from "./retrieval-contract.js";
 import { retrieveDecisionLogReferences } from "./decision-log-runtime.js";
 import { retrieveProposalLogReferences } from "./proposal-log-runtime.js";
 
@@ -24,11 +31,17 @@ export async function retrieveCrossIssueMemoryIndex(provider, input = {}) {
   const queryText = normalizeText(input.text);
   const issueContext = normalizeIssueContext(input.issueContext, relatedIssue);
   const runtimeTruth = normalizeRuntimeTruth(input.runtimeTruth);
+  const semanticRetrievalInput = normalizeSemanticRetrievalInput(
+    input.semanticRetrieval,
+    queryText,
+    limit
+  );
 
   const retrievalPlan = buildRetrievalPlan({
     phase,
     includeProposal: true,
-    includeConversation: false
+    includeConversation: false,
+    semanticRetrieval: semanticRetrievalInput
   });
 
   try {
@@ -64,10 +77,22 @@ export async function retrieveCrossIssueMemoryIndex(provider, input = {}) {
       [RetrievalSource.PR_CONTEXT]: prContextReferences,
       [RetrievalSource.CONVERSATION]: []
     };
+    const semanticRetrieved = await retrieveSemanticReferences(provider, {
+      text: queryText,
+      relatedIssue,
+      limit: limit * 2,
+      semanticPolicy: retrievalPlan.semanticRetrieval
+    });
+    const mergedCandidates = mergeStructuredAndSemanticCandidates({
+      planSources: retrievalPlan.sources,
+      structuredCandidates: candidates,
+      semanticCandidates: semanticRetrieved.referencesBySource,
+      semanticPolicy: retrievalPlan.semanticRetrieval
+    });
 
     const primary = selectPrimaryReference({
       phase,
-      candidates
+      candidates: mergedCandidates
     });
 
     return {
@@ -75,8 +100,14 @@ export async function retrieveCrossIssueMemoryIndex(provider, input = {}) {
       retrievalPlan,
       relatedIssue,
       queryText: queryText || null,
-      referencesBySource: candidates,
-      orderedReferences: flattenByPlan(retrievalPlan.sources, candidates, limit),
+      semanticRetrieval: {
+        ...retrievalPlan.semanticRetrieval,
+        applied: semanticRetrieved.applied,
+        adapter: semanticRetrieved.adapter,
+        sourceCounts: semanticRetrieved.sourceCounts
+      },
+      referencesBySource: mergedCandidates,
+      orderedReferences: flattenByPlan(retrievalPlan.sources, mergedCandidates, limit),
       primaryReference: primary
         ? {
             source: primary.source,
@@ -178,6 +209,219 @@ function flattenByPlan(planSources, candidates, limit) {
   return flattened;
 }
 
+function normalizeSemanticRetrievalInput(value, queryText, limit) {
+  const semantic = normalizeObject(value);
+  const enabled = semantic.enabled === true && Boolean(queryText);
+  return {
+    enabled,
+    queryText,
+    mode: normalizeSemanticMode(semantic.mode),
+    maxPerSource: normalizeLimit(semantic.maxPerSource, Math.max(2, Math.min(limit, 6))),
+    qualityUseCases: Array.isArray(semantic.qualityUseCases) ? semantic.qualityUseCases : undefined
+  };
+}
+
+async function retrieveSemanticReferences(provider, input = {}) {
+  const semanticPolicy = input.semanticPolicy ?? buildSemanticRetrievalPolicy();
+  const empty = {
+    applied: false,
+    adapter: "memory_provider.query",
+    sourceCounts: {},
+    referencesBySource: createEmptySourceMap()
+  };
+  if (!semanticPolicy.enabled) {
+    return empty;
+  }
+
+  const raw = await provider.query({
+    text: input.text,
+    limit: normalizeLimit(input.limit, DEFAULT_LIMIT)
+  });
+  const queriedRecords = normalizeQueriedRecords(raw);
+  const referencesBySource = createEmptySourceMap();
+  for (const record of queriedRecords) {
+    const normalized = toSemanticSourceReference(record);
+    if (!normalized) {
+      continue;
+    }
+    if (!shouldKeepSemanticReference(normalized.reference, normalized.source, input.relatedIssue)) {
+      continue;
+    }
+    referencesBySource[normalized.source].push(normalized.reference);
+  }
+
+  const sourceCounts = {};
+  for (const [source, entries] of Object.entries(referencesBySource)) {
+    sourceCounts[source] = entries.length;
+  }
+
+  return {
+    applied: true,
+    adapter: resolveSemanticAdapter(raw),
+    sourceCounts,
+    referencesBySource
+  };
+}
+
+function mergeStructuredAndSemanticCandidates(input = {}) {
+  const {
+    planSources = [],
+    structuredCandidates = {},
+    semanticCandidates = {},
+    semanticPolicy = buildSemanticRetrievalPolicy()
+  } = input;
+
+  const merged = {};
+  for (const source of planSources) {
+    const structuredReferences = Array.isArray(structuredCandidates[source])
+      ? structuredCandidates[source]
+      : [];
+    const semanticReferences = Array.isArray(semanticCandidates[source]) ? semanticCandidates[source] : [];
+    merged[source] = rerankReferencesBySource({
+      source,
+      structuredReferences,
+      semanticReferences,
+      semanticPolicy
+    });
+  }
+
+  for (const source of Object.keys(RetrievalSource)) {
+    const key = RetrievalSource[source];
+    if (!Array.isArray(merged[key])) {
+      merged[key] = Array.isArray(structuredCandidates[key]) ? structuredCandidates[key] : [];
+    }
+  }
+
+  return merged;
+}
+
+function normalizeQueriedRecords(queryResult) {
+  if (Array.isArray(queryResult)) {
+    return queryResult;
+  }
+  if (Array.isArray(queryResult?.records)) {
+    return queryResult.records;
+  }
+  return [];
+}
+
+function resolveSemanticAdapter(queryResult) {
+  const adapter = normalizeText(queryResult?.adapter);
+  return adapter || "memory_provider.query";
+}
+
+function createEmptySourceMap() {
+  return {
+    [RetrievalSource.ISSUE]: [],
+    [RetrievalSource.CONSTITUTION]: [],
+    [RetrievalSource.RUNTIME_TRUTH]: [],
+    [RetrievalSource.DECISION_LOG]: [],
+    [RetrievalSource.PROPOSAL_LOG]: [],
+    [RetrievalSource.PR_CONTEXT]: [],
+    [RetrievalSource.CONVERSATION]: []
+  };
+}
+
+function toSemanticSourceReference(record) {
+  const type = normalizeText(record?.type).toLowerCase();
+  const score = normalizeSemanticScore(
+    record?.semanticScore ?? record?.score ?? normalizeObject(record?.metadata).semanticScore
+  );
+  if (type === MemoryRecordType.CONSTITUTION) {
+    return {
+      source: RetrievalSource.CONSTITUTION,
+      reference: withSemanticScore(toConstitutionReference(record), score)
+    };
+  }
+  if (type === MemoryRecordType.DECISION_LOG) {
+    const decisionReference = toDecisionLogReference(record);
+    return decisionReference
+      ? {
+          source: RetrievalSource.DECISION_LOG,
+          reference: withSemanticScore(decisionReference, score)
+        }
+      : null;
+  }
+  if (type === MemoryRecordType.PROPOSAL_LOG) {
+    const proposalReference = toProposalLogReference(record);
+    return proposalReference
+      ? {
+          source: RetrievalSource.PROPOSAL_LOG,
+          reference: withSemanticScore(proposalReference, score)
+        }
+      : null;
+  }
+  if (type === MemoryRecordType.EXECUTION_LOG) {
+    const prReference = toPrContextReference(record);
+    return prReference
+      ? {
+          source: RetrievalSource.PR_CONTEXT,
+          reference: withSemanticScore(prReference, score)
+        }
+      : null;
+  }
+  return null;
+}
+
+function withSemanticScore(reference, semanticScore) {
+  if (!reference) {
+    return null;
+  }
+  return {
+    ...reference,
+    semanticScore
+  };
+}
+
+function toDecisionLogReference(record) {
+  const content = normalizeObject(record?.content);
+  const decision = normalizeText(content.decision);
+  if (!decision) {
+    return null;
+  }
+  return {
+    id: normalizeText(record?.id),
+    decision,
+    rationale: normalizeText(content.rationale) || null,
+    relatedIssue: normalizeIssue(content.relatedIssue ?? normalizeObject(record?.metadata).relatedIssue),
+    decidedBy: normalizeText(content.decidedBy) || null,
+    timestamp: normalizeText(content.timestamp) || normalizeText(record?.createdAt) || null,
+    supersededBy: normalizeText(content.supersededBy) || null,
+    repository: normalizeText(normalizeObject(record?.metadata).repository) || null
+  };
+}
+
+function toProposalLogReference(record) {
+  const content = normalizeObject(record?.content);
+  const hypothesis = normalizeText(content.hypothesis);
+  if (!hypothesis) {
+    return null;
+  }
+  return {
+    id: normalizeText(record?.id),
+    hypothesis,
+    options: Array.isArray(content.options) ? content.options : [],
+    relatedIssue: normalizeIssue(content.relatedIssue ?? normalizeObject(record?.metadata).relatedIssue),
+    proposedBy: normalizeText(content.proposedBy) || null,
+    timestamp: normalizeText(content.timestamp) || normalizeText(record?.createdAt) || null,
+    repository: normalizeText(normalizeObject(record?.metadata).repository) || null
+  };
+}
+
+function shouldKeepSemanticReference(reference, source, relatedIssue) {
+  if (!relatedIssue) {
+    return true;
+  }
+  if (
+    source === RetrievalSource.DECISION_LOG ||
+    source === RetrievalSource.PROPOSAL_LOG ||
+    source === RetrievalSource.PR_CONTEXT
+  ) {
+    return normalizeIssue(reference?.relatedIssue) === relatedIssue;
+  }
+  return true;
+}
+
 function normalizeIssueContext(issueContext, relatedIssue) {
   const context = normalizeObject(issueContext);
   const issueNumber = normalizeIssue(context.issueNumber ?? relatedIssue);
@@ -245,4 +489,20 @@ function normalizeLimit(value, fallback) {
     return fallback;
   }
   return Math.min(Math.floor(numeric), 200);
+}
+
+function normalizeSemanticMode(value) {
+  const mode = normalizeText(value).toLowerCase();
+  if (mode === SemanticRetrievalMode.ASSISTIVE) {
+    return SemanticRetrievalMode.ASSISTIVE;
+  }
+  return SemanticRetrievalMode.DISABLED;
+}
+
+function normalizeSemanticScore(value) {
+  const numeric = Number(value);
+  if (Number.isFinite(numeric)) {
+    return numeric;
+  }
+  return 0;
 }
