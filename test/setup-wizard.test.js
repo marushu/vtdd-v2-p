@@ -45,6 +45,10 @@ test("setup wizard returns git/db outputs and iphone onboarding pack", () => {
     true
   );
   assert.equal(
+    result.onboarding.customGpt.actionSchemaJson.includes("/mvp/retrieve/proposals"),
+    true
+  );
+  assert.equal(
     result.onboarding.customGpt.constructionText.includes("Always answer in Japanese"),
     true
   );
@@ -82,6 +86,10 @@ test("setup wizard returns git/db outputs and iphone onboarding pack", () => {
   );
   assert.equal(
     Array.isArray(parsed?.paths?.["/mvp/retrieve/decisions"]?.get?.security),
+    true
+  );
+  assert.equal(
+    Array.isArray(parsed?.paths?.["/mvp/retrieve/proposals"]?.get?.security),
     true
   );
 });

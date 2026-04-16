@@ -7,6 +7,17 @@ export const DECISION_LOG_FIELDS = Object.freeze([
   "supersededBy"
 ]);
 
+export const PROPOSAL_LOG_FIELDS = Object.freeze([
+  "hypothesis",
+  "options",
+  "rejectedReasons",
+  "concerns",
+  "unresolvedQuestions",
+  "relatedIssue",
+  "proposedBy",
+  "timestamp"
+]);
+
 export function createDecisionLogEntry(input) {
   const candidate = {
     decision: normalizeText(input?.decision),

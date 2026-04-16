@@ -408,6 +408,44 @@ function buildCustomGptActionSchema(baseUrl) {
             }
           }
         }
+      },
+      "/mvp/retrieve/proposals": {
+        get: {
+          operationId: "getProposalLogReferences",
+          security: [{ GatewayBearerAuth: [] }],
+          parameters: [
+            {
+              name: "limit",
+              in: "query",
+              required: false,
+              schema: {
+                type: "integer",
+                minimum: 1,
+                maximum: 200,
+                default: 5
+              },
+              description: "Maximum number of proposal logs to return."
+            },
+            {
+              name: "relatedIssue",
+              in: "query",
+              required: false,
+              schema: {
+                type: "integer",
+                minimum: 1
+              },
+              description: "Filter proposal logs by related issue number."
+            }
+          ],
+          responses: {
+            "200": {
+              description: "Proposal log references retrieved"
+            },
+            "503": {
+              description: "Memory provider is not configured"
+            }
+          }
+        }
       }
     }
   };
