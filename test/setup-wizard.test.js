@@ -35,17 +35,17 @@ test("setup wizard returns git/db outputs and iphone onboarding pack", () => {
   assert.equal(result.outputs.db[0].target, SetupOutputTarget.DB);
   assert.equal(result.onboarding.setupMode, SetupMode.IPHONE_FIRST);
   assert.equal(result.onboarding.customGpt.endpointBaseUrl, "https://vtdd-v2-mvp.example.workers.dev");
-  assert.equal(result.onboarding.customGpt.actionSchemaJson.includes("/mvp/gateway"), true);
+  assert.equal(result.onboarding.customGpt.actionSchemaJson.includes("/v2/gateway"), true);
   assert.equal(
-    result.onboarding.customGpt.actionSchemaJson.includes("/mvp/retrieve/constitution"),
+    result.onboarding.customGpt.actionSchemaJson.includes("/v2/retrieve/constitution"),
     true
   );
   assert.equal(
-    result.onboarding.customGpt.actionSchemaJson.includes("/mvp/retrieve/decisions"),
+    result.onboarding.customGpt.actionSchemaJson.includes("/v2/retrieve/decisions"),
     true
   );
   assert.equal(
-    result.onboarding.customGpt.actionSchemaJson.includes("/mvp/retrieve/proposals"),
+    result.onboarding.customGpt.actionSchemaJson.includes("/v2/retrieve/proposals"),
     true
   );
   assert.equal(
@@ -54,7 +54,7 @@ test("setup wizard returns git/db outputs and iphone onboarding pack", () => {
   );
   assert.equal(
     result.onboarding.customGpt.constructionText.includes(
-      "Never ask the user to type API paths such as /mvp/... or raw JSON payloads."
+      "Never ask the user to type API paths such as /v2/... (legacy /mvp/...) or raw JSON payloads."
     ),
     true
   );
@@ -67,7 +67,7 @@ test("setup wizard returns git/db outputs and iphone onboarding pack", () => {
   const parsed = JSON.parse(result.onboarding.customGpt.actionSchemaJson);
   assert.equal(
     Boolean(
-      parsed?.paths?.["/mvp/gateway"]?.post?.requestBody?.content?.["application/json"]?.schema?.properties
+      parsed?.paths?.["/v2/gateway"]?.post?.requestBody?.content?.["application/json"]?.schema?.properties
     ),
     true
   );
@@ -77,19 +77,19 @@ test("setup wizard returns git/db outputs and iphone onboarding pack", () => {
     true
   );
   assert.equal(
-    Array.isArray(parsed?.paths?.["/mvp/gateway"]?.post?.security),
+    Array.isArray(parsed?.paths?.["/v2/gateway"]?.post?.security),
     true
   );
   assert.equal(
-    Array.isArray(parsed?.paths?.["/mvp/retrieve/constitution"]?.get?.security),
+    Array.isArray(parsed?.paths?.["/v2/retrieve/constitution"]?.get?.security),
     true
   );
   assert.equal(
-    Array.isArray(parsed?.paths?.["/mvp/retrieve/decisions"]?.get?.security),
+    Array.isArray(parsed?.paths?.["/v2/retrieve/decisions"]?.get?.security),
     true
   );
   assert.equal(
-    Array.isArray(parsed?.paths?.["/mvp/retrieve/proposals"]?.get?.security),
+    Array.isArray(parsed?.paths?.["/v2/retrieve/proposals"]?.get?.security),
     true
   );
 });

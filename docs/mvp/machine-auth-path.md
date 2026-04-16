@@ -1,12 +1,12 @@
-# Machine Auth Path for `/mvp/gateway`
+# Machine Auth Path for `/v2/gateway`
 
 ## Purpose
 
-Keep `/setup/*` human-login oriented while allowing GPT Actions to call `/mvp/gateway` with machine auth.
+Keep `/setup/*` human-login oriented while allowing GPT Actions to call `/v2/gateway` with machine auth.
 
 ## Contract
 
-- If `MVP_GATEWAY_BEARER_TOKEN` is set on Worker env, `/mvp/gateway` requires:
+- If `VTDD_GATEWAY_BEARER_TOKEN` is set on Worker env, `/v2/gateway` requires:
   - `Authorization: Bearer <token>`
 - If bearer token is not configured and Cloudflare Access service token env is set:
   - `CF_ACCESS_CLIENT_ID`
@@ -24,6 +24,6 @@ Keep `/setup/*` human-login oriented while allowing GPT Actions to call `/mvp/ga
 
 Use bearer token mode for Custom GPT Actions:
 
-1. Set Worker secret `MVP_GATEWAY_BEARER_TOKEN`
+1. Set Worker secret `VTDD_GATEWAY_BEARER_TOKEN`
 2. Configure Custom GPT Action auth as Bearer using the same secret
 3. Keep `/setup/*` protected via browser login path

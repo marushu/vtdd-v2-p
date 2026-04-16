@@ -2,7 +2,7 @@
 
 ## Intent
 
-Cloudflare Access で `/mvp/*` を保護した状態を維持しつつ、ChatGPT Custom GPT Actions から `/mvp/gateway` を安定して呼び出せる機械認証経路を定義する。
+Cloudflare Access で `/v2/*` を保護した状態を維持しつつ、ChatGPT Custom GPT Actions から `/v2/gateway` を安定して呼び出せる機械認証経路を定義する。
 
 ## Background
 
@@ -12,7 +12,7 @@ Cloudflare Access で `/mvp/*` を保護した状態を維持しつつ、ChatGPT
 
 ## Scope
 
-- `/mvp/gateway` 向け machine auth contract を定義
+- `/v2/gateway` 向け machine auth contract を定義
 - Access 保護との両立方針を定義（browser auth と machine auth を分離）
 - 失効・ローテーション・最小権限の運用ルールを定義
 - GPT Action schema 側に必要な auth 記述（例: bearer/service token）を反映
@@ -21,7 +21,7 @@ Cloudflare Access で `/mvp/*` を保護した状態を維持しつつ、ChatGPT
 ## Success Criteria
 
 - `/setup/*` は人間ログイン（Access）で保護される
-- `/mvp/gateway` は機械認証付きで GPT Actions から安定して呼び出せる
+- `/v2/gateway` は機械認証付きで GPT Actions から安定して呼び出せる
 - 認証情報は GitHub/Cloudflare の secret 管理に限定され、平文共有されない
 - 既存の GO / GO+passkey 境界を壊さない
 
