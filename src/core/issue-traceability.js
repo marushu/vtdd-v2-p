@@ -1,5 +1,13 @@
 import { TaskMode } from "./types.js";
 
+export const ISSUE_TRACEABILITY_FIELDS = Object.freeze([
+  "intentRefs",
+  "successCriteriaRefs",
+  "nonGoalRefs",
+  "outOfScopeChanges",
+  "outOfScopeProposedOnly"
+]);
+
 export function evaluateIssueTraceability(input) {
   const {
     mode = TaskMode.EXECUTION,
