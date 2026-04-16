@@ -9,11 +9,11 @@
 
 ## Unsatisfied Success Criteria
 
-- [ ] None
+None.
 
-## Non-goal Violations
+## Non-goal violations
 
-- [ ] None
+None.
 
 ## Related Constitution Rules
 
@@ -25,4 +25,4 @@
 
 ## Extra changes (if any)
 
-- [ ] None
+None.
