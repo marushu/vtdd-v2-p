@@ -39,7 +39,9 @@ export {
 } from "./log-contracts.js";
 export { createInMemoryLogStore } from "./log-store.js";
 export {
+  MEMORY_RECORD_FIELD_POLICY,
   MemoryRecordType,
+  REQUIRED_CORE_MEMORY_RECORD_TYPES,
   createMemoryRecord,
   validateMemoryRecord
 } from "./memory-schema.js";

@@ -10,6 +10,21 @@ export const MemoryRecordType = Object.freeze({
   ALIAS_REGISTRY: "alias_registry"
 });
 
+export const REQUIRED_CORE_MEMORY_RECORD_TYPES = Object.freeze([
+  MemoryRecordType.CONSTITUTION,
+  MemoryRecordType.DECISION_LOG,
+  MemoryRecordType.WORKING_MEMORY,
+  MemoryRecordType.TEMPERATURE_NOTE,
+  MemoryRecordType.REPAIR_CASE
+]);
+
+export const MEMORY_RECORD_FIELD_POLICY = Object.freeze({
+  metadata: "required_object_without_secrets",
+  priority: "integer_0_to_100",
+  tags: "string_array",
+  createdAt: "iso_8601_timestamp"
+});
+
 export function createMemoryRecord(input) {
   const record = {
     id: normalizeText(input?.id),
