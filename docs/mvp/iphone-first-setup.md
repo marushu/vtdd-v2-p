@@ -13,6 +13,7 @@ This runbook is for starting VTDD V2 from iPhone without local Mac setup.
 1. Open Safari on iPhone and access setup URL:
    - `https://<your-worker-domain>/setup/wizard?repo=sample-org/vtdd-v2`
    - JSON mode (optional): `https://<your-worker-domain>/setup/wizard?format=json&repo=sample-org/vtdd-v2`
+   - GitHub App diagnostics (optional): `https://<your-worker-domain>/setup/wizard?format=json&repo=sample-org/vtdd-v2&githubAppCheck=on`
    - Cloudflare setup diagnostics are opt-in and disabled by default.
 2. Open ChatGPT on iPhone and edit the Butler Custom GPT.
 3. Copy `Custom GPT Construction` and `Custom GPT Action Schema` from setup page.
@@ -38,6 +39,7 @@ This runbook is for starting VTDD V2 from iPhone without local Mac setup.
 - `surface=custom_gpt` (repeatable): override initial surfaces
 - `actionEndpointBaseUrl=https://...`: force action schema server URL
 - `format=json`: return machine-readable wizard output
+- `githubAppCheck=on`: run GitHub App bootstrap/token-mint/live-index diagnostics
 - `cloudflareCheck=on`: run Cloudflare setup diagnostics (requires env opt-in below)
 - `policyInput.autonomyMode=guarded_absence`: optional request-level mode flag (runtime env takes precedence)
 - `repositoryVisibility=private|public`: optional deploy authority hint for setup output
