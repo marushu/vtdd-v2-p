@@ -248,3 +248,65 @@ test("gateway returns natural consent question for blocked consent boundary", ()
     "読み取り同意が必要です。読み取りを許可して進めますか？"
   );
 });
+
+test("gateway sets cross retrieval assist for natural recall conversation", () => {
+  const result = runMvpGateway({
+    phase: "exploration",
+    actorRole: ActorRole.EXECUTOR,
+    conversation: {
+      userText: "Issue #19 って何だっけ？過去の判断と提案を思い出したい"
+    },
+    policyInput: {
+      actionType: ActionType.READ,
+      mode: "read_only",
+      repositoryInput: "vtdd",
+      aliasRegistry: registry,
+      runtimeTruth: { runtimeAvailable: false, safeFallbackChosen: true },
+      consent: {
+        grantedCategories: [ConsentCategory.READ]
+      },
+      issueTraceable: false
+    }
+  });
+
+  assert.equal(result.allowed, true);
+  assert.equal(result.conversationAssist.detectedIntent, "recall_context");
+  assert.equal(result.conversationAssist.responseGuide.style, "cross_retrieval");
+  assert.equal(result.conversationAssist.crossRetrievalRequest.enabled, true);
+  assert.equal(result.conversationAssist.crossRetrievalRequest.phase, "exploration");
+  assert.equal(result.conversationAssist.crossRetrievalRequest.relatedIssue, 19);
+  assert.equal(result.conversationAssist.crossRetrievalRequest.displayMode, "short");
+});
+
+test("gateway asks clarification when recall conversation mentions multiple issues", () => {
+  const result = runMvpGateway({
+    phase: "exploration",
+    actorRole: ActorRole.EXECUTOR,
+    conversation: {
+      userText: "Issue #19 と #22 の経緯を振り返りたい"
+    },
+    policyInput: {
+      actionType: ActionType.READ,
+      mode: "read_only",
+      repositoryInput: "vtdd",
+      aliasRegistry: registry,
+      runtimeTruth: { runtimeAvailable: false, safeFallbackChosen: true },
+      consent: {
+        grantedCategories: [ConsentCategory.READ]
+      },
+      issueTraceable: false
+    }
+  });
+
+  assert.equal(result.allowed, true);
+  assert.equal(result.conversationAssist.detectedIntent, "recall_context");
+  assert.equal(result.conversationAssist.requiresConfirmation, true);
+  assert.equal(
+    result.conversationAssist.confirmationPrompt.includes("#19"),
+    true
+  );
+  assert.equal(
+    result.conversationAssist.confirmationPrompt.includes("#22"),
+    true
+  );
+});

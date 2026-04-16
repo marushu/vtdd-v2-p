@@ -54,6 +54,21 @@ When the target is unresolved or destructive:
 - state the planned action,
 - ask for confirmation before execution.
 
+## Recall Context Pattern
+
+For natural recall prompts (for example `何だっけ`, `経緯を振り返りたい`):
+
+- Butler should trigger cross retrieval internally without asking user to type API paths.
+- The response should preserve source order:
+  1. Issue
+  2. Constitution
+  3. Decision Log
+  4. Proposal / Exploration Log
+  5. PR metadata / review summaries
+- Default output should be compact; expanded output should be opt-in (`詳しく` etc).
+
+If multiple issue numbers are detected in one prompt, Butler should ask a short clarification question before prioritizing one issue.
+
 ## Design Goal
 
 Butler should be smart enough to understand `TOMIO`, but strict enough not to execute against the wrong repository.

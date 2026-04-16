@@ -1,7 +1,8 @@
 const ConversationIntent = Object.freeze({
   UNKNOWN: "unknown",
   LIST_REPOSITORIES: "list_repositories",
-  SELECT_REPOSITORY: "select_repository"
+  SELECT_REPOSITORY: "select_repository",
+  RECALL_CONTEXT: "recall_context"
 });
 
 export function buildConversationAssist(input) {
@@ -16,6 +17,8 @@ export function buildConversationAssist(input) {
   const detectedIntent = detectConversationIntent(userText);
   const mentionedRepository = matchRepositoryFromText(userText, repositoryCandidates);
   const activeRepository = currentRepository || normalizeText(input?.repository) || null;
+  const issueMentions = extractIssueMentions(userText);
+  const crossRetrievalDisplayMode = determineCrossRetrievalDisplayMode(userText);
 
   const assist = {
     locale: "ja",
@@ -25,6 +28,7 @@ export function buildConversationAssist(input) {
     detectedIntent,
     activeRepository,
     mentionedRepository: mentionedRepository?.canonicalRepo ?? null,
+    issueMentions,
     requiresConfirmation: false,
     confirmationPrompt: null,
     nextQuestion: null
@@ -44,6 +48,35 @@ export function buildConversationAssist(input) {
     if (normalizedActive && normalizedActive !== normalizedMentioned) {
       assist.requiresConfirmation = true;
       assist.confirmationPrompt = `現在は ${activeRepository} を見ています。${mentionedRepository.canonicalRepo} に切り替えますか？`;
+    }
+  }
+
+  if (detectedIntent === ConversationIntent.RECALL_CONTEXT) {
+    const chosenIssue = issueMentions.length === 1 ? issueMentions[0] : null;
+    assist.responseGuide = {
+      style: "cross_retrieval",
+      displayMode: crossRetrievalDisplayMode,
+      sourceOrder: ["issue", "constitution", "decision_log", "proposal_log", "pr_context"],
+      expandOnRequest: true
+    };
+    assist.crossRetrievalRequest = {
+      enabled: true,
+      phase: "exploration",
+      limit: crossRetrievalDisplayMode === "expanded" ? 12 : 5,
+      displayMode: crossRetrievalDisplayMode,
+      relatedIssue: chosenIssue,
+      text: null,
+      queryHint: userText || null
+    };
+
+    if (issueMentions.length > 1) {
+      assist.requiresConfirmation = true;
+      assist.confirmationPrompt = `複数の Issue（${issueMentions
+        .map((item) => `#${item}`)
+        .join(", ")}）が見つかりました。どれを優先して参照しますか？`;
+    } else if (!chosenIssue) {
+      assist.nextQuestion =
+        "参照対象の Issue 番号があれば指定できます。未指定のまま横断参照して進めてもよいですか？";
     }
   }
 
@@ -67,6 +100,10 @@ function detectConversationIntent(text) {
     return ConversationIntent.SELECT_REPOSITORY;
   }
 
+  if (isRecallContextIntent(text)) {
+    return ConversationIntent.RECALL_CONTEXT;
+  }
+
   return ConversationIntent.UNKNOWN;
 }
 
@@ -76,6 +113,10 @@ function isRepositoryListIntent(text) {
 
 function isRepositorySelectionIntent(text) {
   return hasKeyword(text, REPOSITORY_SELECTION_WORDS);
+}
+
+function isRecallContextIntent(text) {
+  return hasKeyword(text, RECALL_CONTEXT_WORDS);
 }
 
 function matchRepositoryFromText(text, repositoryCandidates) {
@@ -146,6 +187,46 @@ function normalizeLoose(value) {
   return normalizeText(value).replace(/[^a-z0-9\u3040-\u30ff\u4e00-\u9faf]+/g, "");
 }
 
+function extractIssueMentions(text) {
+  if (!text) {
+    return [];
+  }
+
+  const matches = new Set();
+  const hashPattern = /#\s*(\d+)/gi;
+  const issuePattern = /\bissue\s*(\d+)\b/gi;
+
+  let match = hashPattern.exec(text);
+  while (match) {
+    const issue = Number(match[1]);
+    if (Number.isInteger(issue) && issue > 0) {
+      matches.add(issue);
+    }
+    match = hashPattern.exec(text);
+  }
+
+  match = issuePattern.exec(text);
+  while (match) {
+    const issue = Number(match[1]);
+    if (Number.isInteger(issue) && issue > 0) {
+      matches.add(issue);
+    }
+    match = issuePattern.exec(text);
+  }
+
+  return [...matches];
+}
+
+function determineCrossRetrievalDisplayMode(text) {
+  if (!text) {
+    return "short";
+  }
+  if (hasKeyword(text, EXPANDED_VIEW_WORDS)) {
+    return "expanded";
+  }
+  return "short";
+}
+
 const REPOSITORY_WORDS = Object.freeze([
   "repo",
   "repository",
@@ -182,4 +263,32 @@ const REPOSITORY_SELECTION_WORDS = Object.freeze([
   "switch",
   "select",
   "use"
+]);
+
+const RECALL_CONTEXT_WORDS = Object.freeze([
+  "なんだっけ",
+  "何だっけ",
+  "思い出",
+  "振り返",
+  "過去判断",
+  "判断理由",
+  "根拠",
+  "前回",
+  "関連",
+  "履歴",
+  "経緯",
+  "recall",
+  "history",
+  "why",
+  "rationale"
+]);
+
+const EXPANDED_VIEW_WORDS = Object.freeze([
+  "詳しく",
+  "詳細",
+  "全部",
+  "展開",
+  "full",
+  "expanded",
+  "deep"
 ]);

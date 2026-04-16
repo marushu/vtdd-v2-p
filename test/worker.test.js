@@ -851,6 +851,108 @@ test("worker returns cross-issue memory index through retrieve route", async () 
   assert.equal(body.referencesBySource.pr_context[0].prNumber, 101);
 });
 
+test("worker gateway attaches cross retrieval references for recall conversation", async () => {
+  const provider = createInMemoryMemoryProvider();
+  await provider.store({
+    id: "constitution-gw-cross-1",
+    type: MemoryRecordType.CONSTITUTION,
+    content: {
+      title: "constitution_rule",
+      description: "Constitution first for recall flow."
+    },
+    metadata: { version: "v2" },
+    priority: 90,
+    tags: ["constitution"],
+    createdAt: "2026-04-16T04:00:00Z"
+  });
+  await provider.store({
+    id: "decision-gw-cross-1",
+    type: MemoryRecordType.DECISION_LOG,
+    content: {
+      decision: "Use cross retrieval for recall UX",
+      rationale: "Avoid asking users for API paths",
+      relatedIssue: 19,
+      decidedBy: "owner",
+      timestamp: "2026-04-16T04:10:00Z",
+      supersededBy: null
+    },
+    metadata: { repository: "sample-org/vtdd-v2" },
+    priority: 95,
+    tags: ["decision_log", "issue:19"],
+    createdAt: "2026-04-16T04:10:00Z"
+  });
+  await provider.store({
+    id: "proposal-gw-cross-1",
+    type: MemoryRecordType.PROPOSAL_LOG,
+    content: {
+      hypothesis: "Conversation-first UX should call cross retrieval via gateway",
+      options: ["gateway attach", "manual retrieve endpoint"],
+      rejectedReasons: [{ option: "manual retrieve endpoint", reason: "too technical for mobile" }],
+      concerns: ["prompt drift"],
+      unresolvedQuestions: ["how to present condensed output"],
+      relatedIssue: 19,
+      proposedBy: "owner",
+      timestamp: "2026-04-16T04:20:00Z"
+    },
+    metadata: { repository: "sample-org/vtdd-v2" },
+    priority: 85,
+    tags: ["proposal_log", "issue:19"],
+    createdAt: "2026-04-16T04:20:00Z"
+  });
+  await provider.store({
+    id: "execution-gw-cross-pr-120",
+    type: MemoryRecordType.EXECUTION_LOG,
+    content: {
+      summary: "PR #120 validated cross retrieval shape",
+      relatedIssue: 19,
+      prNumber: 120,
+      reviewer: "gemini",
+      status: "approved"
+    },
+    metadata: { kind: "pr_review_summary", repository: "sample-org/vtdd-v2" },
+    priority: 82,
+    tags: ["pr_context", "pr:120", "issue:19"],
+    createdAt: "2026-04-16T04:30:00Z"
+  });
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/gateway", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: "Bearer test-token"
+      },
+      body: JSON.stringify({
+        phase: "exploration",
+        actorRole: "executor",
+        conversation: {
+          userText: "Issue #19 って何だっけ？過去判断と提案を振り返りたい"
+        },
+        policyInput: {
+          actionType: ActionType.READ,
+          mode: TaskMode.READ_ONLY,
+          repositoryInput: "vtdd",
+          consent: { grantedCategories: [ConsentCategory.READ] }
+        }
+      })
+    }),
+    {
+      VTDD_GATEWAY_BEARER_TOKEN: "test-token",
+      MEMORY_PROVIDER: provider
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.allowed, true);
+  assert.equal(body.conversationAssist.detectedIntent, "recall_context");
+  assert.equal(body.retrievalReferences.cross.displayMode, "short");
+  assert.equal(body.retrievalReferences.cross.relatedIssue, 19);
+  assert.equal(body.retrievalReferences.cross.sourceCounts.decision_log, 1);
+  assert.equal(body.retrievalReferences.cross.sourceCounts.proposal_log, 1);
+  assert.equal(body.retrievalReferences.cross.sourceCounts.pr_context, 1);
+});
+
 test("worker returns 503 when constitution retrieve provider is unavailable", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/v2/retrieve/constitution", {
