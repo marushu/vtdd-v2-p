@@ -27,6 +27,7 @@ Current code starts with deterministic governance gates:
 - production deploy workflow (`.github/workflows/deploy-production.yml`) for `GitHub Actions -> Cloudflare`
 - execution policy gate (traceability + target resolution + approval)
 - Butler orchestrator (surface independence + fixed judgment order + policy integration)
+- canonical Butler review protocol with constitution-first judgment order
 - MVP gateway (`runMvpGateway`) that composes policy, workflow, retrieval, and memory safety
 - setup wizard contract (`runInitialSetupWizard`) with explicit output targets and iPhone-first onboarding pack
 - machine auth path for `/v2/gateway` + `/v2/retrieve/*` (Bearer token / Access service token)
