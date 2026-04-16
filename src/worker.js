@@ -297,6 +297,10 @@ async function completeGatewayRuntime({ payload, gatewayResult, env }) {
   const providerValidation = validateMemoryProvider(provider);
   const needsDecisionWrite = gatewayResult?.memoryWrite?.recordType === "decision_log";
   const needsProposalWrite = gatewayResult?.memoryWrite?.recordType === "proposal_log";
+  const crossRetrievalRequest = normalizeCrossRetrievalRequest(
+    gatewayResult?.conversationAssist?.crossRetrievalRequest
+  );
+  const shouldAttachCrossReferences = crossRetrievalRequest.enabled;
   const shouldAttachDecisionReferences = Array.isArray(gatewayResult?.retrievalPlan?.sources)
     ? gatewayResult.retrievalPlan.sources.includes("decision_log")
     : false;
@@ -307,6 +311,7 @@ async function completeGatewayRuntime({ payload, gatewayResult, env }) {
   if (
     !needsDecisionWrite &&
     !needsProposalWrite &&
+    !shouldAttachCrossReferences &&
     !shouldAttachDecisionReferences &&
     !shouldAttachProposalReferences
   ) {
@@ -337,6 +342,10 @@ async function completeGatewayRuntime({ payload, gatewayResult, env }) {
     if (shouldAttachProposalReferences) {
       retrievalReferences.proposalLogs = [];
       warnings.push("memory provider unavailable; proposal references skipped");
+    }
+    if (shouldAttachCrossReferences) {
+      retrievalReferences.cross = null;
+      warnings.push("memory provider unavailable; cross references skipped");
     }
 
     return {
@@ -479,9 +488,97 @@ async function completeGatewayRuntime({ payload, gatewayResult, env }) {
     };
   }
 
+  if (shouldAttachCrossReferences) {
+    const crossInput = buildCrossRetrievalInput({
+      payload,
+      responseBody,
+      crossRetrievalRequest
+    });
+    const retrieved = await retrieveCrossIssueMemoryIndex(provider, crossInput);
+    if (!retrieved.ok) {
+      responseBody = {
+        ...responseBody,
+        retrievalReferences: {
+          ...(responseBody.retrievalReferences ?? {}),
+          cross: null
+        },
+        warnings: [...(responseBody.warnings ?? []), retrieved.reason || "cross retrieval skipped"]
+      };
+    } else {
+      responseBody = {
+        ...responseBody,
+        retrievalReferences: {
+          ...(responseBody.retrievalReferences ?? {}),
+          cross: formatCrossRetrievalOutput(retrieved, crossInput.displayMode)
+        }
+      };
+    }
+  }
+
   return {
     status: 200,
     body: responseBody
+  };
+}
+
+function buildCrossRetrievalInput({ payload, responseBody, crossRetrievalRequest }) {
+  const relatedIssue =
+    crossRetrievalRequest.relatedIssue ??
+    responseBody?.memoryWritePersisted?.relatedIssue ??
+    inferRelatedIssueFromGatewayInput(payload) ??
+    inferRelatedIssueFromProposalGatewayInput(payload);
+  const issueContextInput = payload?.issueContext ?? {};
+  const issueNumber = normalizeIssue(issueContextInput.issueNumber) ?? relatedIssue;
+  const issueTitle = normalizeText(issueContextInput.issueTitle);
+  const issueUrl = normalizeText(issueContextInput.issueUrl);
+
+  return {
+    phase: crossRetrievalRequest.phase,
+    limit: crossRetrievalRequest.limit,
+    relatedIssue,
+    text: crossRetrievalRequest.text,
+    displayMode: crossRetrievalRequest.displayMode,
+    issueContext:
+      issueNumber || issueTitle || issueUrl
+        ? {
+            issueNumber,
+            issueTitle: issueTitle || null,
+            issueUrl: issueUrl || null
+          }
+        : null
+  };
+}
+
+function formatCrossRetrievalOutput(retrieved, displayMode) {
+  const ordered = Array.isArray(retrieved.orderedReferences) ? retrieved.orderedReferences : [];
+  const limitedOrdered =
+    displayMode === "expanded" ? ordered.slice(0, 12) : ordered.slice(0, 5);
+  const sourceCounts = {};
+  for (const [source, entries] of Object.entries(retrieved.referencesBySource ?? {})) {
+    sourceCounts[source] = Array.isArray(entries) ? entries.length : 0;
+  }
+
+  return {
+    displayMode,
+    retrievalPlan: retrieved.retrievalPlan,
+    relatedIssue: retrieved.relatedIssue,
+    queryText: retrieved.queryText,
+    primaryReference: retrieved.primaryReference,
+    sourceCounts,
+    orderedReferences: limitedOrdered
+  };
+}
+
+function normalizeCrossRetrievalRequest(request) {
+  const value = request && typeof request === "object" ? request : {};
+  const enabled = value.enabled === true;
+  return {
+    enabled,
+    phase: normalize(value.phase) === "exploration" ? "exploration" : "execution",
+    limit: normalizeLimit(value.limit, 5),
+    displayMode: normalize(value.displayMode) === "expanded" ? "expanded" : "short",
+    relatedIssue: normalizeIssue(value.relatedIssue),
+    text: normalizeText(value.text) || null
   };
 }
 
