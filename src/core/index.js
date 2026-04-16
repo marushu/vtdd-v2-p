@@ -9,6 +9,12 @@ export {
 } from "./types.js";
 export { evaluateAutonomyModeBoundary, normalizeAutonomyMode } from "./autonomy-mode.js";
 export {
+  DeployAuthorityPath,
+  DeployAuthorityPreference,
+  ProtectionSignalStatus,
+  evaluateDeployAuthorityStrategy
+} from "./deploy-authority.js";
+export {
   APPROVAL_REQUIREMENTS,
   CONSENT_REQUIREMENT_MAP,
   requiredApprovalLevel,

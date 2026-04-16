@@ -1,3 +1,4 @@
+import { evaluateDeployAuthorityStrategy } from "./deploy-authority.js";
 import { evaluateMemorySafety, sanitizeMemoryPayload } from "./memory-safety.js";
 
 export const SetupOutputTarget = Object.freeze({
@@ -145,7 +146,8 @@ function buildSetupOutputs(answers) {
       noDefaultRepository: true,
       setupMode: SetupMode.IPHONE_FIRST,
       operatorManagedSecrets: true,
-      autonomyModes: ["normal", "guarded_absence"]
+      autonomyModes: ["normal", "guarded_absence"],
+      deployAuthority: buildDeployAuthorityRecommendation(answers)
     },
     metadata: {
       source: "initial_setup_wizard"
@@ -161,6 +163,7 @@ function buildIphoneOnboardingPack(answers) {
   const customGptActionSchema = actionEndpointBaseUrl
     ? buildCustomGptActionSchema(actionEndpointBaseUrl)
     : null;
+  const deployAuthority = buildDeployAuthorityRecommendation(answers);
 
   return {
     setupMode: SetupMode.IPHONE_FIRST,
@@ -170,6 +173,7 @@ function buildIphoneOnboardingPack(answers) {
       "Confirm GitHub production environment has required reviewers and Cloudflare secrets.",
       "Run GitHub Actions deploy-production with approval_phrase=GO and passkey_verified=true."
     ],
+    deployAuthority,
     secretHandlingPolicy: {
       model: "operator_managed_environment_secrets",
       statement:
@@ -203,9 +207,19 @@ function buildCustomGptConstructionText(answers) {
     "Normal mode uses autonomyMode=normal. Absence mode uses autonomyMode=guarded_absence with strict stop boundaries.",
     "In guarded_absence mode, do not execute merge/deploy/destructive/external_publish and stop on ambiguity/spec conflict/unconfirmed target.",
     "For high-risk actions (merge/deploy/destructive/external publish), require GO + passkey.",
+    "Treat production deploy as VTDD-governed high-risk authority and avoid permanent production deploy secrets in GitHub.",
     "Use Gemini as reviewer and treat reviewer output as structured input for human final decision.",
     `Primary repositories: ${repoText}.`
   ].join("\n");
+}
+
+function buildDeployAuthorityRecommendation(answers) {
+  return evaluateDeployAuthorityStrategy({
+    repositoryVisibility: answers.repositoryVisibility,
+    branchProtectionApiStatus: answers.branchProtectionApiStatus,
+    rulesetsApiStatus: answers.rulesetsApiStatus,
+    operatorPreference: answers.deployAuthorityPreference
+  });
 }
 
 function buildCustomGptActionSchema(baseUrl) {

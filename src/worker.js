@@ -745,7 +745,13 @@ function buildSetupWizardAnswers(url) {
     reviewerInitial: "gemini",
     setupMode: "iphone_first",
     actionEndpointBaseUrl,
-    initialSurfaces
+    initialSurfaces,
+    repositoryVisibility: normalizeVisibility(url.searchParams.get("repositoryVisibility")),
+    branchProtectionApiStatus: normalizeSignalStatus(url.searchParams.get("branchProtectionApiStatus")),
+    rulesetsApiStatus: normalizeSignalStatus(url.searchParams.get("rulesetsApiStatus")),
+    deployAuthorityPreference: normalizeDeployAuthorityPreference(
+      url.searchParams.get("deployAuthorityPreference")
+    )
   };
 }
 
@@ -1545,6 +1551,30 @@ function normalizeUrl(value) {
   } catch {
     return "";
   }
+}
+
+function normalizeVisibility(value) {
+  const normalized = normalize(value);
+  if (normalized === "public" || normalized === "private") {
+    return normalized;
+  }
+  return "unknown";
+}
+
+function normalizeSignalStatus(value) {
+  const normalized = normalize(value);
+  if (["available", "unavailable", "forbidden", "unknown"].includes(normalized)) {
+    return normalized;
+  }
+  return "unknown";
+}
+
+function normalizeDeployAuthorityPreference(value) {
+  const normalized = normalize(value);
+  if (["auto", "github_assisted", "vtdd_managed"].includes(normalized)) {
+    return normalized;
+  }
+  return "auto";
 }
 
 function escapeHtml(value) {
