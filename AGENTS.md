@@ -98,6 +98,18 @@ Issue closure is allowed only when all are true:
 
 Manual closure without these four conditions is prohibited.
 
+Before writing `Closes #...` in a PR, explicitly verify:
+
+1. the behavior is defined, not only described
+2. the behavior is connected to a runnable execution path
+3. Butler and/or worker can actually use that path to satisfy the Issue intent
+
+If any of the three checks is false, do not write `Closes #...`.
+Mark the PR as partial progress and name the missing connection(s).
+
+Definition-only or canonicalization-only PRs must not close integration-facing
+Issues by default.
+
 ## E2E-First Completion Contract
 
 At milestone completion, create an Issue-to-E2E matrix.
@@ -155,6 +167,18 @@ If scope ambiguity, interpretation choice, or mismatch reconciliation occurred
 during implementation, record that reasoning in the PR description.
 PRs must not hide meaningful judgment history when that history explains why the
 chosen change is in-scope and safe.
+
+If a PR only establishes schema, docs, contracts, or templates, say so plainly.
+Do not imply end-to-end behavior exists unless it is demonstrably reachable from
+Butler/worker execution.
+
+When an Issue expects VTDD to behave in a user-observable way, stop and verify:
+
+- what the user is expected to do
+- what Butler/worker is expected to execute
+- what evidence proves that behavior actually works
+
+If those answers are incomplete, stop before presenting the PR as completion.
 
 ## Butler and Reviewer as Stop Roles
 
