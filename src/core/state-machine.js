@@ -24,6 +24,9 @@ export const WorkflowEvent = Object.freeze({
   RECONCILE_COMPLETED: "reconcile_completed"
 });
 
+export const WORKFLOW_STAGES = Object.freeze(Object.values(WorkflowStage));
+export const WORKFLOW_EVENTS = Object.freeze(Object.values(WorkflowEvent));
+
 const TRANSITIONS = Object.freeze({
   [WorkflowStage.IDEA]: Object.freeze({
     [WorkflowEvent.DRAFT_PROPOSAL]: WorkflowStage.PROPOSAL
