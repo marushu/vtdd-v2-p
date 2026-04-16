@@ -538,3 +538,187 @@ test("execution allows out-of-scope note when proposal-only", () => {
   });
   assert.equal(result.allowed, true);
 });
+
+test("policy order is deterministic: role boundary blocks before constitution check", () => {
+  const result = evaluateExecutionPolicy({
+    actionType: ActionType.BUILD,
+    actorRole: ActorRole.REVIEWER,
+    mode: TaskMode.EXECUTION,
+    repositoryInput: "unknown-project",
+    aliasRegistry: registry,
+    constitutionConsulted: false,
+    runtimeTruth: { runtimeAvailable: false, safeFallbackChosen: false },
+    credential: { model: "personal_access_token", tier: CredentialTier.EXECUTE },
+    consent: { grantedCategories: [] },
+    approvalPhrase: "",
+    approvalScopeMatched: false,
+    issueTraceable: false,
+    go: false,
+    passkey: false
+  });
+
+  assert.equal(result.allowed, false);
+  assert.equal(result.blockedByRule, "role_action_boundary");
+});
+
+test("policy order is deterministic: constitution check blocks before runtime and repository checks", () => {
+  const result = evaluateExecutionPolicy({
+    actionType: ActionType.BUILD,
+    actorRole: ActorRole.EXECUTOR,
+    mode: TaskMode.EXECUTION,
+    repositoryInput: "unknown-project",
+    aliasRegistry: registry,
+    constitutionConsulted: false,
+    runtimeTruth: { runtimeAvailable: false, safeFallbackChosen: false },
+    credential: executeCredential,
+    consent: fullConsent,
+    ...approvalContext,
+    issueTraceable: true,
+    go: true,
+    passkey: false
+  });
+
+  assert.equal(result.allowed, false);
+  assert.equal(result.blockedByRule, "butler_must_read_constitution_before_judgment");
+});
+
+test("policy order is deterministic: runtime check blocks before repository resolution", () => {
+  const result = evaluateExecutionPolicy({
+    actionType: ActionType.BUILD,
+    actorRole: ActorRole.EXECUTOR,
+    mode: TaskMode.EXECUTION,
+    repositoryInput: "unknown-project",
+    aliasRegistry: registry,
+    constitutionConsulted: true,
+    runtimeTruth: { runtimeAvailable: false, safeFallbackChosen: false },
+    credential: executeCredential,
+    consent: fullConsent,
+    ...approvalContext,
+    issueTraceable: true,
+    go: true,
+    passkey: false
+  });
+
+  assert.equal(result.allowed, false);
+  assert.equal(result.blockedByRule, "runtime_truth_required_or_safe_fallback");
+});
+
+test("policy order is deterministic: repository resolution blocks before traceability", () => {
+  const result = evaluateExecutionPolicy({
+    actionType: ActionType.BUILD,
+    actorRole: ActorRole.EXECUTOR,
+    mode: TaskMode.EXECUTION,
+    repositoryInput: "unknown-project",
+    aliasRegistry: registry,
+    constitutionConsulted: true,
+    runtimeTruth: { runtimeAvailable: true },
+    credential: executeCredential,
+    consent: fullConsent,
+    ...approvalContext,
+    issueTraceable: false,
+    go: true,
+    passkey: false
+  });
+
+  assert.equal(result.allowed, false);
+  assert.equal(result.blockedByRule, "unresolved_target_blocks_execution");
+});
+
+test("policy order is deterministic: traceability blocks before consent, approval, and credential", () => {
+  const result = evaluateExecutionPolicy({
+    actionType: ActionType.DEPLOY_PRODUCTION,
+    actorRole: ActorRole.EXECUTOR,
+    mode: TaskMode.EXECUTION,
+    repositoryInput: "vtdd",
+    aliasRegistry: registry,
+    constitutionConsulted: true,
+    runtimeTruth: { runtimeAvailable: true },
+    credential: {
+      model: "personal_access_token",
+      tier: CredentialTier.HIGH_RISK,
+      shortLived: false
+    },
+    consent: {
+      grantedCategories: [ConsentCategory.READ]
+    },
+    approvalPhrase: "",
+    approvalScopeMatched: false,
+    issueTraceable: false,
+    go: false,
+    passkey: false
+  });
+
+  assert.equal(result.allowed, false);
+  assert.equal(result.blockedByRule, "require_traceability_to_issue_sections");
+});
+
+test("policy order is deterministic: consent blocks before approval and credential", () => {
+  const result = evaluateExecutionPolicy({
+    actionType: ActionType.DESTRUCTIVE,
+    actorRole: ActorRole.EXECUTOR,
+    mode: TaskMode.EXECUTION,
+    repositoryInput: "vtdd",
+    aliasRegistry: registry,
+    constitutionConsulted: true,
+    runtimeTruth: { runtimeAvailable: true },
+    credential: {
+      model: "personal_access_token",
+      tier: CredentialTier.HIGH_RISK,
+      shortLived: false
+    },
+    consent: {
+      grantedCategories: [ConsentCategory.READ, ConsentCategory.EXECUTE]
+    },
+    approvalPhrase: "",
+    approvalScopeMatched: false,
+    issueTraceable: true,
+    go: false,
+    passkey: false
+  });
+
+  assert.equal(result.allowed, false);
+  assert.equal(result.blockedByRule, "consent_boundary");
+});
+
+test("policy order is deterministic: approval blocks before credential", () => {
+  const result = evaluateExecutionPolicy({
+    actionType: ActionType.BUILD,
+    actorRole: ActorRole.EXECUTOR,
+    mode: TaskMode.EXECUTION,
+    repositoryInput: "vtdd",
+    aliasRegistry: registry,
+    constitutionConsulted: true,
+    runtimeTruth: { runtimeAvailable: true },
+    credential: { model: "personal_access_token", tier: CredentialTier.EXECUTE },
+    consent: fullConsent,
+    approvalPhrase: "",
+    approvalScopeMatched: false,
+    issueTraceable: true,
+    go: false,
+    passkey: false
+  });
+
+  assert.equal(result.allowed, false);
+  assert.equal(result.blockedByRule, "approval_boundary");
+});
+
+test("policy order is deterministic: credential check is reached only after earlier gates pass", () => {
+  const result = evaluateExecutionPolicy({
+    actionType: ActionType.BUILD,
+    actorRole: ActorRole.EXECUTOR,
+    mode: TaskMode.EXECUTION,
+    repositoryInput: "vtdd",
+    aliasRegistry: registry,
+    constitutionConsulted: true,
+    runtimeTruth: { runtimeAvailable: true },
+    credential: { model: "personal_access_token", tier: CredentialTier.EXECUTE },
+    consent: fullConsent,
+    ...approvalContext,
+    issueTraceable: true,
+    go: true,
+    passkey: false
+  });
+
+  assert.equal(result.allowed, false);
+  assert.equal(result.blockedByRule, "github_app_credential_required");
+});
