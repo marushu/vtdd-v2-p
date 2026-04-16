@@ -29,6 +29,19 @@ const DEFAULT_REPOSITORIES = Object.freeze([
 const CANONICAL_API_PREFIX = "/v2";
 const LEGACY_API_PREFIX = "/mvp";
 
+const SETUP_WIZARD_CLOUDFLARE_CHECK_ENABLED_ENV = "SETUP_WIZARD_CLOUDFLARE_CHECK_ENABLED";
+const CLOUDFLARE_BILLING_HINT_REGEX =
+  /(payment|billing|subscription|add payment method|outstanding balance|cannot modify this subscription|zone cannot be upgraded|plan modification|card)/i;
+
+const CLOUDFLARE_SETUP_HELP_LINKS = Object.freeze({
+  tokenVerify: "https://developers.cloudflare.com/api/resources/user/subresources/tokens/methods/verify/",
+  accessApps:
+    "https://developers.cloudflare.com/api/resources/zero_trust/subresources/access/subresources/applications/methods/create/",
+  permissions: "https://developers.cloudflare.com/fundamentals/api/reference/permissions/",
+  billingTroubleshoot: "https://developers.cloudflare.com/billing/troubleshoot/",
+  billingOverview: "https://developers.cloudflare.com/fundamentals/concepts/free-plan/"
+});
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -42,7 +55,7 @@ export default {
     }
 
     if (request.method === "GET" && url.pathname === "/setup/wizard") {
-      return handleSetupWizardRequest(url);
+      return handleSetupWizardRequest(url, env);
     }
 
     if (request.method === "POST" && isApiPath(url.pathname, "/gateway")) {
@@ -115,19 +128,21 @@ export default {
   }
 };
 
-function handleSetupWizardRequest(url) {
+async function handleSetupWizardRequest(url, env) {
   const answers = buildSetupWizardAnswers(url);
   const result = runInitialSetupWizard({ answers });
+  const cloudflareSetupCheck = await runCloudflareSetupCheck(url, env);
   const format = normalize(url.searchParams.get("format"));
 
   if (format === "json") {
     return json(result.ok ? 200 : 422, {
       ...result,
-      generatedAnswers: answers
+      generatedAnswers: answers,
+      cloudflareSetupCheck
     });
   }
 
-  const htmlBody = renderSetupWizardHtml({ result, answers, url });
+  const htmlBody = renderSetupWizardHtml({ result, answers, url, cloudflareSetupCheck });
   return html(result.ok ? 200 : 422, htmlBody);
 }
 
@@ -466,10 +481,10 @@ function deriveAliases(canonicalRepo) {
   return [...aliases];
 }
 
-function renderSetupWizardHtml({ result, answers, url }) {
+function renderSetupWizardHtml({ result, answers, url, cloudflareSetupCheck }) {
   const body = result.ok
-    ? renderSuccessContent(result, answers, url)
-    : renderFailureContent(result, answers, url);
+    ? renderSuccessContent(result, answers, url, cloudflareSetupCheck)
+    : renderFailureContent(result, answers, url, cloudflareSetupCheck);
 
   return `<!doctype html>
 <html lang="en">
@@ -609,7 +624,7 @@ function renderSetupWizardHtml({ result, answers, url }) {
 </html>`;
 }
 
-function renderSuccessContent(result, answers, url) {
+function renderSuccessContent(result, answers, url, cloudflareSetupCheck) {
   const onboarding = result.onboarding ?? {};
   const customGpt = onboarding.customGpt ?? {};
   const repoList = answers.repositories.map((item) => escapeHtml(item.canonicalRepo));
@@ -640,11 +655,12 @@ function renderSuccessContent(result, answers, url) {
     </div>
     <textarea id="actionSchemaJson" readonly>${escapeHtml(actionSchemaJson)}</textarea>
     <p class="copy-hint" data-copy-status="actionSchemaJson">Tap copy button to copy full OpenAPI JSON.</p>
+    ${renderCloudflareSetupCheck(cloudflareSetupCheck)}
     <p class="meta">Secrets are not handled here. Keep Cloudflare credentials in GitHub Environment secrets only.</p>
   `;
 }
 
-function renderFailureContent(result, answers, url) {
+function renderFailureContent(result, answers, url, cloudflareSetupCheck) {
   const issues = Array.isArray(result.blockingIssues) ? result.blockingIssues : [];
   const issueItems = issues.map((item) => `<li>${escapeHtml(item)}</li>`).join("");
 
@@ -654,10 +670,334 @@ function renderFailureContent(result, answers, url) {
     <div class="block">
       <ul>${issueItems || "<li>unknown validation error</li>"}</ul>
     </div>
+    ${renderCloudflareSetupCheck(cloudflareSetupCheck)}
     <h2>Debug (safe answers only)</h2>
     <textarea readonly>${escapeHtml(JSON.stringify(answers, null, 2))}</textarea>
     <p class="meta">Tip: use <code>${escapeHtml(`${url.origin}/setup/wizard?format=json`)}</code> to inspect machine-readable output.</p>
   `;
+}
+
+function renderCloudflareSetupCheck(check) {
+  const state = normalizeText(check?.state) || "not_configured";
+  const summary = normalizeText(check?.summary) || "Cloudflare setup check is not configured.";
+  const guidance = Array.isArray(check?.guidance) ? check.guidance : [];
+  const links = Array.isArray(check?.links) ? check.links : [];
+  const evidence = check?.evidence ?? null;
+  const checkedAt = normalizeText(check?.checkedAt);
+  const listItem = (text) => `<li>${escapeHtml(text)}</li>`;
+
+  const evidenceItems = [];
+  if (normalizeText(evidence?.stage)) {
+    evidenceItems.push(`stage: ${normalizeText(evidence.stage)}`);
+  }
+  if (Number.isFinite(Number(evidence?.httpStatus))) {
+    evidenceItems.push(`httpStatus: ${Number(evidence.httpStatus)}`);
+  }
+  const errorCodes = Array.isArray(evidence?.errorCodes)
+    ? evidence.errorCodes.filter((item) => Number.isFinite(Number(item)))
+    : [];
+  if (errorCodes.length > 0) {
+    evidenceItems.push(`errorCodes: ${errorCodes.join(", ")}`);
+  }
+
+  return `
+    <h2>Cloudflare Setup Check</h2>
+    <div class="block">
+      <p><strong>state:</strong> <code>${escapeHtml(state)}</code></p>
+      <p>${escapeHtml(summary)}</p>
+      ${
+        guidance.length > 0
+          ? `<ul>${guidance.map((item) => listItem(item)).join("")}</ul>`
+          : ""
+      }
+      ${
+        evidenceItems.length > 0
+          ? `<p class="meta">${escapeHtml(evidenceItems.join(" / "))}</p>`
+          : ""
+      }
+      ${
+        links.length > 0
+          ? `<ul>${links
+              .map(
+                (item) =>
+                  `<li><a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.title)}</a></li>`
+              )
+              .join("")}</ul>`
+          : ""
+      }
+      ${
+        checkedAt
+          ? `<p class="meta">checkedAt: <code>${escapeHtml(checkedAt)}</code></p>`
+          : ""
+      }
+    </div>
+  `;
+}
+
+async function runCloudflareSetupCheck(url, env) {
+  const runtimeEnv = env ?? {};
+  const setupCheckEnabled = toBoolean(runtimeEnv[SETUP_WIZARD_CLOUDFLARE_CHECK_ENABLED_ENV]);
+  if (!setupCheckEnabled) {
+    return {
+      state: "disabled",
+      summary: "Cloudflare setup check is disabled by default.",
+      guidance: [
+        "Enable SETUP_WIZARD_CLOUDFLARE_CHECK_ENABLED=true in Worker runtime if you need automated diagnostics."
+      ]
+    };
+  }
+
+  const diagnosticsEnabled = normalize(url.searchParams.get("cloudflareCheck"));
+  if (!isTruthySignal(diagnosticsEnabled)) {
+    return {
+      state: "disabled",
+      summary:
+        "Cloudflare setup check is enabled in runtime but not requested for this page view.",
+      guidance: ["Add cloudflareCheck=on to setup wizard URL when you need Cloudflare diagnostics."]
+    };
+  }
+
+  const apiToken = normalizeText(runtimeEnv.CLOUDFLARE_API_TOKEN);
+  const accountId = normalizeText(runtimeEnv.CLOUDFLARE_ACCOUNT_ID);
+  if (!apiToken || !accountId) {
+    return {
+      state: "not_configured",
+      summary:
+        "Cloudflare setup check skipped: CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID are not configured on Worker runtime.",
+      guidance: [
+        "Set CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID as Worker environment secrets if you want automatic diagnostics in setup wizard.",
+        "Do not paste Cloudflare credentials into chat, URL, or wizard form fields."
+      ],
+      links: [
+        { title: "Cloudflare API token verify", url: CLOUDFLARE_SETUP_HELP_LINKS.tokenVerify },
+        { title: "Cloudflare billing troubleshoot", url: CLOUDFLARE_SETUP_HELP_LINKS.billingTroubleshoot }
+      ]
+    };
+  }
+
+  const fetchImpl =
+    typeof runtimeEnv.CF_API_FETCH === "function"
+      ? runtimeEnv.CF_API_FETCH
+      : typeof globalThis.fetch === "function"
+        ? globalThis.fetch.bind(globalThis)
+        : null;
+
+  if (!fetchImpl) {
+    return {
+      state: "runtime_fetch_unavailable",
+      summary: "Cloudflare setup check failed: fetch runtime is unavailable.",
+      guidance: ["Run diagnostics in an environment where fetch is available."],
+      links: [{ title: "Cloudflare API token verify", url: CLOUDFLARE_SETUP_HELP_LINKS.tokenVerify }]
+    };
+  }
+
+  try {
+    const tokenVerify = await callCloudflareApi(fetchImpl, apiToken, "https://api.cloudflare.com/client/v4/user/tokens/verify");
+    if (!tokenVerify.success) {
+      return classifyCloudflareSetupFailure({
+        stage: "token_verify",
+        response: tokenVerify
+      });
+    }
+
+    const accessProbe = await callCloudflareApi(
+      fetchImpl,
+      apiToken,
+      `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/access/apps?page=1&per_page=1`
+    );
+    if (!accessProbe.success) {
+      return classifyCloudflareSetupFailure({
+        stage: "access_apps_probe",
+        response: accessProbe
+      });
+    }
+
+    return {
+      state: "ready",
+      summary: "Cloudflare setup check passed: token/account can read Access applications.",
+      guidance: [
+        "Cloudflare Access application auto-setup can proceed.",
+        "If you enable auto-create later, keep token scope minimal and tag generated resources as VTDD managed."
+      ],
+      links: [
+        { title: "Cloudflare Access applications API", url: CLOUDFLARE_SETUP_HELP_LINKS.accessApps },
+        { title: "Cloudflare API permissions", url: CLOUDFLARE_SETUP_HELP_LINKS.permissions }
+      ],
+      checkedAt: new Date().toISOString(),
+      evidence: {
+        stage: "access_apps_probe",
+        httpStatus: accessProbe.httpStatus,
+        errorCodes: [],
+        errorMessages: []
+      }
+    };
+  } catch (error) {
+    return {
+      state: "network_error",
+      summary: "Cloudflare setup check failed due to network/runtime error.",
+      guidance: [
+        "Confirm Worker runtime can reach api.cloudflare.com and retry.",
+        "If this persists, inspect Worker logs for runtime exceptions."
+      ],
+      links: [
+        { title: "Cloudflare billing troubleshoot", url: CLOUDFLARE_SETUP_HELP_LINKS.billingTroubleshoot }
+      ],
+      checkedAt: new Date().toISOString(),
+      evidence: {
+        stage: "runtime_exception",
+        httpStatus: null,
+        errorCodes: []
+      }
+    };
+  }
+}
+
+async function callCloudflareApi(fetchImpl, apiToken, endpoint) {
+  const response = await fetchImpl(endpoint, {
+    method: "GET",
+    headers: {
+      authorization: `Bearer ${apiToken}`,
+      "content-type": "application/json"
+    }
+  });
+
+  const payload = await readSafeJson(response);
+  const errors = normalizeCloudflareErrors(payload?.errors);
+  const success = response.ok && payload?.success === true;
+  return {
+    success,
+    httpStatus: response.status,
+    errors
+  };
+}
+
+function classifyCloudflareSetupFailure({ stage, response }) {
+  const errors = Array.isArray(response?.errors) ? response.errors : [];
+  const httpStatus = Number(response?.httpStatus ?? 0);
+  const errorCodes = errors
+    .map((item) => Number(item.code))
+    .filter((item) => Number.isFinite(item));
+  const errorMessages = errors.map((item) => normalizeText(item.message)).filter(Boolean);
+  const messageBlob = errorMessages.join(" ").toLowerCase();
+
+  if (errorCodes.includes(7003) || messageBlob.includes("could not route to /client/v4/accounts")) {
+    return {
+      state: "invalid_account_identifier",
+      summary: "Cloudflare setup check failed: account id or endpoint identifier looks invalid.",
+      guidance: [
+        "Verify CLOUDFLARE_ACCOUNT_ID from Cloudflare dashboard account details.",
+        "If this happens in GitHub Actions deploy logs, re-check account id and target service/script name."
+      ],
+      links: [
+        { title: "Cloudflare Access applications API", url: CLOUDFLARE_SETUP_HELP_LINKS.accessApps }
+      ],
+      checkedAt: new Date().toISOString(),
+      evidence: { stage, httpStatus, errorCodes }
+    };
+  }
+
+  if (httpStatus === 402 || CLOUDFLARE_BILLING_HINT_REGEX.test(messageBlob)) {
+    return {
+      state: "billing_action_required",
+      summary:
+        "Cloudflare setup check indicates billing/payment action may be required (for example card not registered or billing state unresolved).",
+      guidance: [
+        "Open Cloudflare Billing and confirm payment method is registered.",
+        "Resolve outstanding balances or failed plan modifications, then retry setup wizard.",
+        "After billing update, retry in a few minutes and re-open /setup/wizard."
+      ],
+      links: [
+        { title: "Cloudflare billing troubleshoot", url: CLOUDFLARE_SETUP_HELP_LINKS.billingTroubleshoot },
+        { title: "Cloudflare billing overview", url: CLOUDFLARE_SETUP_HELP_LINKS.billingOverview }
+      ],
+      checkedAt: new Date().toISOString(),
+      evidence: { stage, httpStatus, errorCodes }
+    };
+  }
+
+  if (
+    httpStatus === 401 ||
+    errorCodes.includes(10000) ||
+    messageBlob.includes("authentication") ||
+    messageBlob.includes("unauthorized")
+  ) {
+    return {
+      state: "api_token_invalid",
+      summary: "Cloudflare setup check failed: API token is invalid, expired, or disabled.",
+      guidance: [
+        "Re-issue Cloudflare API token and set it again in Worker environment secret.",
+        "Ensure token is active and scoped to the same account as CLOUDFLARE_ACCOUNT_ID."
+      ],
+      links: [
+        { title: "Cloudflare API token verify", url: CLOUDFLARE_SETUP_HELP_LINKS.tokenVerify }
+      ],
+      checkedAt: new Date().toISOString(),
+      evidence: { stage, httpStatus, errorCodes }
+    };
+  }
+
+  if (
+    httpStatus === 403 ||
+    messageBlob.includes("permission") ||
+    messageBlob.includes("forbidden") ||
+    messageBlob.includes("not entitled")
+  ) {
+    return {
+      state: "insufficient_permission",
+      summary: "Cloudflare setup check failed: token permission or entitlement is insufficient.",
+      guidance: [
+        "Grant Access app/policy scopes required for setup automation.",
+        "Recommended minimum: Access: Apps and Policies Read (and Edit if creating resources)."
+      ],
+      links: [
+        { title: "Cloudflare API permissions", url: CLOUDFLARE_SETUP_HELP_LINKS.permissions }
+      ],
+      checkedAt: new Date().toISOString(),
+      evidence: { stage, httpStatus, errorCodes }
+    };
+  }
+
+  return {
+    state: "cloudflare_api_error",
+    summary: "Cloudflare setup check failed with an unclassified API error.",
+    guidance: [
+      "Inspect evidence fields (error code/message) and Worker logs.",
+      "If this repeats, verify token/account scopes and retry setup flow."
+    ],
+    links: [{ title: "Cloudflare Access applications API", url: CLOUDFLARE_SETUP_HELP_LINKS.accessApps }],
+    checkedAt: new Date().toISOString(),
+    evidence: { stage, httpStatus, errorCodes }
+  };
+}
+
+async function readSafeJson(response) {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+function normalizeCloudflareErrors(errors) {
+  if (!Array.isArray(errors)) {
+    return [];
+  }
+  return errors
+    .map((item) => ({
+      code: Number(item?.code),
+      message: normalizeText(item?.message),
+      documentationUrl: normalizeText(item?.documentation_url)
+    }))
+    .filter((item) => Number.isFinite(item.code) || item.message);
+}
+
+function isTruthySignal(value) {
+  return value === "on" || value === "true" || value === "1";
+}
+
+function toBoolean(value) {
+  const normalized = normalize(value);
+  return normalized === "true" || normalized === "1" || normalized === "yes" || normalized === "on";
 }
 
 function authorizeGatewayRequest({ request, env }) {
