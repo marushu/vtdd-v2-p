@@ -32,7 +32,8 @@ export function evaluateButlerExecution(input) {
   return {
     allowed: true,
     repository: policy.repository,
-    requiredApproval: policy.requiredApproval
+    requiredApproval: policy.requiredApproval,
+    autonomyMode: policy.autonomyMode ?? null
   };
 }
 

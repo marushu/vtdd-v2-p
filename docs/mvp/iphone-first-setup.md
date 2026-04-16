@@ -28,6 +28,9 @@ This runbook is for starting VTDD V2 from iPhone without local Mac setup.
    - `approval_phrase=GO`
    - `passkey_verified=true`
 8. Approve the production environment gate.
+9. If operator will be away, set Worker runtime env:
+   - `VTDD_AUTONOMY_MODE=guarded_absence`
+   - return to normal by setting `VTDD_AUTONOMY_MODE=normal` (or unsetting it)
 
 ## Optional Query Parameters
 
@@ -36,6 +39,7 @@ This runbook is for starting VTDD V2 from iPhone without local Mac setup.
 - `actionEndpointBaseUrl=https://...`: force action schema server URL
 - `format=json`: return machine-readable wizard output
 - `cloudflareCheck=on`: run Cloudflare setup diagnostics (requires env opt-in below)
+- `policyInput.autonomyMode=guarded_absence`: optional request-level mode flag (runtime env takes precedence)
 
 ## Optional Cloudflare Diagnostics (Opt-in)
 

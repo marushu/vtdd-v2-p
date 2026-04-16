@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import worker from "../src/worker.js";
 import {
   ActionType,
+  AutonomyMode,
   ConsentCategory,
   CredentialTier,
   MemoryRecordType,
@@ -23,6 +24,16 @@ test("worker returns health", async () => {
   const body = await response.json();
   assert.equal(body.ok, true);
   assert.equal(body.mode, "v2");
+  assert.equal(body.autonomyMode, AutonomyMode.NORMAL);
+});
+
+test("worker health reflects guarded absence mode when runtime env sets it", async () => {
+  const response = await worker.fetch(new Request("https://example.com/health"), {
+    VTDD_AUTONOMY_MODE: "guarded_absence"
+  });
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.autonomyMode, AutonomyMode.GUARDED_ABSENCE);
 });
 
 test("worker returns setup wizard html when repo query is provided", async () => {
@@ -199,6 +210,127 @@ test("worker runs gateway route", async () => {
   const body = await response.json();
   assert.equal(body.allowed, true);
   assert.equal(body.repository, "sample-org/vtdd-v2");
+});
+
+test("worker gateway blocks merge in guarded absence mode and records stop log", async () => {
+  const provider = createInMemoryMemoryProvider();
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/gateway", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: "Bearer test-token"
+      },
+      body: JSON.stringify({
+        phase: "execution",
+        actorRole: "executor",
+        policyInput: {
+          actionType: ActionType.MERGE,
+          mode: TaskMode.EXECUTION,
+          autonomyMode: AutonomyMode.GUARDED_ABSENCE,
+          repositoryInput: "vtdd",
+          aliasRegistry,
+          constitutionConsulted: true,
+          runtimeTruth: {
+            runtimeAvailable: true
+          },
+          credential: {
+            model: "github_app",
+            tier: CredentialTier.HIGH_RISK,
+            shortLived: true,
+            boundApprovalId: "approval-123"
+          },
+          consent: {
+            grantedCategories: [ConsentCategory.EXECUTE]
+          },
+          approvalPhrase: "GO merge request",
+          approvalScopeMatched: true,
+          issueTraceable: true,
+          go: true,
+          passkey: true
+        }
+      })
+    }),
+    {
+      VTDD_GATEWAY_BEARER_TOKEN: "test-token",
+      MEMORY_PROVIDER: provider
+    }
+  );
+
+  assert.equal(response.status, 422);
+  const body = await response.json();
+  assert.equal(body.allowed, false);
+  assert.equal(body.blockedByRule, "guarded_absence_forbids_action");
+  assert.equal(Boolean(body.guardedAbsenceExecutionLog?.recordId), true);
+
+  const records = await provider.retrieve({
+    type: MemoryRecordType.EXECUTION_LOG,
+    limit: 5
+  });
+  assert.equal(records.length, 1);
+  assert.equal(records[0].content.mode, "guarded_absence");
+  assert.equal(records[0].content.allowed, false);
+  assert.equal(records[0].content.blockedByRule, "guarded_absence_forbids_action");
+});
+
+test("worker runtime forced guarded absence mode overrides payload normal mode", async () => {
+  const provider = createInMemoryMemoryProvider();
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/gateway", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: "Bearer test-token"
+      },
+      body: JSON.stringify({
+        phase: "execution",
+        actorRole: "executor",
+        policyInput: {
+          actionType: ActionType.PR_OPERATION,
+          mode: TaskMode.EXECUTION,
+          autonomyMode: AutonomyMode.NORMAL,
+          repositoryInput: "vtdd",
+          aliasRegistry,
+          constitutionConsulted: true,
+          runtimeTruth: {
+            runtimeAvailable: true,
+            runtimeState: {
+              issuePrCount: 1
+            }
+          },
+          credential: {
+            model: "github_app",
+            tier: CredentialTier.EXECUTE
+          },
+          consent: {
+            grantedCategories: [ConsentCategory.EXECUTE]
+          },
+          approvalPhrase: "GO pr operation",
+          approvalScopeMatched: true,
+          issueTraceable: true,
+          go: true,
+          passkey: false
+        }
+      })
+    }),
+    {
+      VTDD_AUTONOMY_MODE: "guarded_absence",
+      VTDD_GATEWAY_BEARER_TOKEN: "test-token",
+      MEMORY_PROVIDER: provider
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.allowed, true);
+  assert.equal(body.autonomyMode, AutonomyMode.GUARDED_ABSENCE);
+  assert.equal(
+    body.warnings.includes(
+      "runtime forces guarded absence mode; payload autonomyMode override was ignored"
+    ),
+    true
+  );
+  assert.equal(Boolean(body.guardedAbsenceExecutionLog?.recordId), true);
 });
 
 test("worker gateway uses github app live repository index for natural list conversation", async () => {

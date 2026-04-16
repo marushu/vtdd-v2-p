@@ -85,6 +85,7 @@ export function runMvpGateway(input) {
       repository: execution.repository,
       repositoryCandidates
     }),
+    autonomyMode: execution.autonomyMode ?? policyInput.autonomyMode ?? null,
     requiredApproval: execution.requiredApproval ?? null,
     memoryWrite: memoryPlan.value
   };

@@ -30,6 +30,7 @@ Current code starts with deterministic governance gates:
 - machine auth path for `/v2/gateway` + `/v2/retrieve/*` (Bearer token / Access service token)
 - immutable workflow state machine (`Idea -> Proposal -> Issue -> GO -> Build -> PR -> Review -> Merge`)
 - reconcile hold state (`reconcile_required`) for runtime/memory conflicts
+- guarded semi-automation mode (`normal` / `guarded_absence`) with ambiguity-stop boundaries and execution-log traceability
 
 Code lives in `src/core/`, with tests in `test/`.
 Worker entry lives in `src/worker.js`.

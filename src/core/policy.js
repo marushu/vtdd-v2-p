@@ -1,10 +1,11 @@
 import { evaluateApproval, evaluateConsent } from "./approval.js";
+import { evaluateAutonomyModeBoundary } from "./autonomy-mode.js";
 import { evaluateCredentialBoundary } from "./credential-boundary.js";
 import { evaluateIssueTraceability } from "./issue-traceability.js";
 import { resolveRepositoryTarget } from "./repository-resolution.js";
 import { evaluateRoleBoundary } from "./role-boundary.js";
 import { evaluateRuntimeTruthPrecondition } from "./runtime-truth.js";
-import { TaskMode } from "./types.js";
+import { AutonomyMode, TaskMode } from "./types.js";
 
 /**
  * Deterministic MVP policy gate.
@@ -26,6 +27,9 @@ export function evaluateExecutionPolicy(input) {
     approvalScopeMatched = false,
     issueTraceable,
     issueTraceability,
+    autonomyMode = AutonomyMode.NORMAL,
+    ambiguity,
+    targetConfirmed = true,
     go,
     passkey
   } = input;
@@ -68,6 +72,22 @@ export function evaluateExecutionPolicy(input) {
     return deny(traceability.rule, traceability.reason);
   }
 
+  const autonomy = evaluateAutonomyModeBoundary({
+    autonomyMode,
+    mode,
+    actionType,
+    ambiguity,
+    targetConfirmed,
+    runtimeTruth
+  });
+  if (!autonomy.ok) {
+    return deny(autonomy.rule, autonomy.reason, {
+      autonomyMode: autonomy.autonomyMode,
+      allowedActions: autonomy.allowedActions,
+      issuePrCount: autonomy.issuePrCount
+    });
+  }
+
   const consentResult = evaluateConsent({ actionType, consent });
   if (!consentResult.ok) {
     return deny("consent_boundary", consentResult.reason, { requiredConsent: consentResult.required });
@@ -96,7 +116,8 @@ export function evaluateExecutionPolicy(input) {
   return {
     allowed: true,
     repository: repo.resolved ? repo.repository : null,
-    requiredApproval: approval.required
+    requiredApproval: approval.required,
+    autonomyMode: autonomy.autonomyMode
   };
 }
 
