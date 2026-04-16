@@ -5,6 +5,7 @@ import { evaluateIssueTraceability } from "./issue-traceability.js";
 import { resolveRepositoryTarget } from "./repository-resolution.js";
 import { evaluateRoleBoundary } from "./role-boundary.js";
 import { evaluateRuntimeTruthPrecondition } from "./runtime-truth.js";
+import { evaluateTargetConfirmationBoundary } from "./target-confirmation.js";
 import { AutonomyMode, TaskMode } from "./types.js";
 
 /**
@@ -29,7 +30,7 @@ export function evaluateExecutionPolicy(input) {
     issueTraceability,
     autonomyMode = AutonomyMode.NORMAL,
     ambiguity,
-    targetConfirmed = true,
+    targetConfirmed,
     go,
     passkey
   } = input;
@@ -61,6 +62,20 @@ export function evaluateExecutionPolicy(input) {
   });
   if (!repo.resolved && mode === TaskMode.EXECUTION) {
     return deny("unresolved_target_blocks_execution", repo.reason);
+  }
+
+  const targetConfirmation = evaluateTargetConfirmationBoundary({
+    mode,
+    actionType,
+    repository: repo.repository,
+    via: repo.via,
+    targetConfirmed
+  });
+  if (!targetConfirmation.ok) {
+    return deny(targetConfirmation.rule, targetConfirmation.reason, {
+      repository: targetConfirmation.repository,
+      via: targetConfirmation.via
+    });
   }
 
   const traceability = evaluateIssueTraceability({

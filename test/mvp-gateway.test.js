@@ -68,6 +68,7 @@ test("gateway allows butler issue creation and transitions workflow", () => {
       mode: "execution",
       repositoryInput: "vtdd",
       aliasRegistry: registry,
+    targetConfirmed: true,
       constitutionConsulted: true,
       runtimeTruth: { runtimeAvailable: true },
       credential: { model: "github_app", tier: CredentialTier.EXECUTE },
@@ -102,6 +103,7 @@ test("gateway blocks when memory record contains secret", () => {
       mode: "execution",
       repositoryInput: "vtdd",
       aliasRegistry: registry,
+    targetConfirmed: true,
       constitutionConsulted: true,
       runtimeTruth: { runtimeAvailable: true },
       credential: { model: "github_app", tier: CredentialTier.EXECUTE },
@@ -136,6 +138,7 @@ test("gateway blocks invalid workflow transition", () => {
       mode: "execution",
       repositoryInput: "vtdd",
       aliasRegistry: registry,
+    targetConfirmed: true,
       constitutionConsulted: true,
       runtimeTruth: { runtimeAvailable: true },
       credential: { model: "github_app", tier: CredentialTier.EXECUTE },
@@ -159,6 +162,7 @@ test("gateway exploration phase includes conversation in retrieval plan", () => 
       mode: "read_only",
       repositoryInput: "unknown",
       aliasRegistry: registry,
+    targetConfirmed: true,
       constitutionConsulted: false,
       runtimeTruth: { runtimeAvailable: false, safeFallbackChosen: true },
       credential: { model: "github_app", tier: CredentialTier.READ },
@@ -187,6 +191,7 @@ test("gateway infers repository list intent from natural conversation", () => {
       mode: "read_only",
       repositoryInput: "unknown",
       aliasRegistry: registry,
+    targetConfirmed: true,
       runtimeTruth: { runtimeAvailable: false, safeFallbackChosen: true },
       consent: {
         grantedCategories: [ConsentCategory.READ]
@@ -214,6 +219,7 @@ test("gateway asks confirmation when conversation implies repository switch", ()
       mode: "read_only",
       repositoryInput: "vtdd",
       aliasRegistry: registry,
+    targetConfirmed: true,
       runtimeTruth: { runtimeAvailable: false, safeFallbackChosen: true },
       consent: {
         grantedCategories: [ConsentCategory.READ]
@@ -261,6 +267,7 @@ test("gateway sets cross retrieval assist for natural recall conversation", () =
       mode: "read_only",
       repositoryInput: "vtdd",
       aliasRegistry: registry,
+    targetConfirmed: true,
       runtimeTruth: { runtimeAvailable: false, safeFallbackChosen: true },
       consent: {
         grantedCategories: [ConsentCategory.READ]
@@ -290,6 +297,7 @@ test("gateway asks clarification when recall conversation mentions multiple issu
       mode: "read_only",
       repositoryInput: "vtdd",
       aliasRegistry: registry,
+    targetConfirmed: true,
       runtimeTruth: { runtimeAvailable: false, safeFallbackChosen: true },
       consent: {
         grantedCategories: [ConsentCategory.READ]
