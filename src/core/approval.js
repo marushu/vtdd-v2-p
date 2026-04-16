@@ -28,7 +28,26 @@ const CONSENT_REQUIREMENTS = Object.freeze({
   [ActionType.EXTERNAL_PUBLISH]: ConsentCategory.EXTERNAL_PUBLISH
 });
 
+export const APPROVAL_REQUIREMENTS = Object.freeze({
+  [ActionType.READ]: ApprovalLevel.NONE,
+  [ActionType.SUMMARIZE]: ApprovalLevel.NONE,
+  [ActionType.ISSUE_CREATE]: ApprovalLevel.GO,
+  [ActionType.BUILD]: ApprovalLevel.GO,
+  [ActionType.PR_COMMENT]: ApprovalLevel.NONE,
+  [ActionType.PR_REVIEW_SUBMIT]: ApprovalLevel.GO,
+  [ActionType.PR_OPERATION]: ApprovalLevel.GO,
+  [ActionType.MERGE]: ApprovalLevel.GO_PASSKEY,
+  [ActionType.DEPLOY_PRODUCTION]: ApprovalLevel.GO_PASSKEY,
+  [ActionType.DESTRUCTIVE]: ApprovalLevel.GO_PASSKEY,
+  [ActionType.EXTERNAL_PUBLISH]: ApprovalLevel.GO_PASSKEY
+});
+
+export const CONSENT_REQUIREMENT_MAP = CONSENT_REQUIREMENTS;
+
 export function requiredApprovalLevel(actionType) {
+  if (APPROVAL_REQUIREMENTS[actionType]) {
+    return APPROVAL_REQUIREMENTS[actionType];
+  }
   if (GO_PASSKEY_REQUIRED_ACTIONS.has(actionType)) {
     return ApprovalLevel.GO_PASSKEY;
   }
