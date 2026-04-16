@@ -1,5 +1,14 @@
 import { TaskMode } from "./types.js";
 
+export const RUNTIME_TRUTH_FIELDS = Object.freeze([
+  "runtimeAvailable",
+  "safeFallbackChosen",
+  "observedAt",
+  "maxAgeMs",
+  "runtimeState",
+  "memoryState"
+]);
+
 export function evaluateRuntimeTruthPrecondition(input) {
   const {
     mode = TaskMode.EXECUTION,
