@@ -173,6 +173,7 @@ Status values used below:
 - Boundary path:
   - reviewer receives no execution authority and invalid role/surface combinations are rejected
 - Implementation evidence:
+  - `docs/butler/role-separation.md`
   - `docs/butler/surface-independence.md`
   - `docs/butler/role.md`
   - `src/core/policy.js`
@@ -180,6 +181,7 @@ Status values used below:
   - `test/core-policy.test.js`
   - `test/reviewer-registry.test.js`
   - `test/surface-independence.test.js`
+  - `test/role-separation.test.js`
 - Status: `implemented_pending_e2e`
 
 ## E2E-11 High-risk credential + machine auth path
