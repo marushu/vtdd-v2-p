@@ -982,6 +982,13 @@ function renderDeployAuthorityRecommendation(recommendation) {
   const fallbackPath = normalizeText(recommendation?.fallbackPath) || "none";
   const rationale = normalizeText(recommendation?.rationale) || "No rationale provided.";
   const invariants = Array.isArray(recommendation?.invariants) ? recommendation.invariants : [];
+  const availability = recommendation?.protectionAvailability ?? {};
+  const repositoryVisibility = normalizeText(availability.repositoryVisibility) || "unknown";
+  const branchProtectionApiStatus =
+    normalizeText(availability.branchProtectionApiStatus) || "unknown";
+  const rulesetsApiStatus = normalizeText(availability.rulesetsApiStatus) || "unknown";
+  const prefersGitHubHardening =
+    availability.prefersGitHubHardening === true ? "true" : "false";
 
   return `
     <h2>Deploy Authority Recommendation</h2>
@@ -989,6 +996,13 @@ function renderDeployAuthorityRecommendation(recommendation) {
       <p><strong>Selected path:</strong> <code>${escapeHtml(selectedPath)}</code></p>
       <p><strong>Fallback path:</strong> <code>${escapeHtml(fallbackPath)}</code></p>
       <p>${escapeHtml(rationale)}</p>
+      <p><strong>Detection inputs</strong></p>
+      <ul>
+        <li><code>repositoryVisibility=${escapeHtml(repositoryVisibility)}</code></li>
+        <li><code>branchProtectionApiStatus=${escapeHtml(branchProtectionApiStatus)}</code></li>
+        <li><code>rulesetsApiStatus=${escapeHtml(rulesetsApiStatus)}</code></li>
+        <li><code>prefersGitHubHardening=${escapeHtml(prefersGitHubHardening)}</code></li>
+      </ul>
       ${
         invariants.length > 0
           ? `<p><strong>Invariants</strong></p><ul>${invariants
