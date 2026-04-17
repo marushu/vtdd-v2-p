@@ -31,6 +31,8 @@ Status values used below:
 - Test evidence:
   - `test/constitution-schema.test.js`
   - `test/canonical-docs-restoration.test.js`
+- Run evidence:
+  - `docs/mvp/e2e/e2e-01-canonical-docs-reference-integrity.md`
 - Status: `implemented_pending_e2e`
 
 ## E2E-02 Issue/PR template discipline
