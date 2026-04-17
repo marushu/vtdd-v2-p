@@ -95,6 +95,41 @@ test("setup wizard returns git/db outputs and iphone onboarding pack", () => {
     result.onboarding.memorySafety.sourceOfTruth.db,
     "user-specific memory and operational traces"
   );
+  assert.deepEqual(result.onboarding.roleSeparation.butler.inputs, [
+    "human conversation",
+    "constitution",
+    "runtime truth",
+    "issue / proposal / decision context",
+    "reviewer output"
+  ]);
+  assert.deepEqual(result.onboarding.roleSeparation.butler.outputs, [
+    "structured next-step guidance",
+    "execution judgment",
+    "reviewer summary for human decision"
+  ]);
+  assert.deepEqual(result.onboarding.roleSeparation.executor.outputs, [
+    "code changes",
+    "tests",
+    "PR artifacts",
+    "execution logs"
+  ]);
+  assert.deepEqual(result.onboarding.roleSeparation.reviewer.inputs, ["PR diff", "review context"]);
+  assert.deepEqual(result.onboarding.roleSeparation.reviewer.outputs, [
+    "critical_findings[]",
+    "risks[]",
+    "recommended_action"
+  ]);
+  assert.deepEqual(result.onboarding.roleSeparation.reviewer.authorityLimits, [
+    "no execution authority",
+    "no merge authority",
+    "no deployment authority"
+  ]);
+  assert.deepEqual(result.onboarding.roleSeparation.handoffOrder, [
+    "Butler -> Executor",
+    "Executor -> Reviewer",
+    "Reviewer -> Butler",
+    "Human -> Final Authority"
+  ]);
   assert.equal(result.onboarding.guardedAbsence.modeName, "guarded_absence");
   assert.deepEqual(result.onboarding.guardedAbsence.allowedActions, [
     "read",

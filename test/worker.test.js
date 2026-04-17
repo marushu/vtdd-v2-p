@@ -120,6 +120,15 @@ test("worker returns setup wizard html when repo query is provided", async () =>
   assert.equal(html.includes("full casual transcripts"), true);
   assert.equal(html.includes("shared canonical specification"), true);
   assert.equal(html.includes("user-specific memory and operational traces"), true);
+  assert.equal(html.includes("Role Separation Contract"), true);
+  assert.equal(html.includes("human conversation"), true);
+  assert.equal(html.includes("execution judgment"), true);
+  assert.equal(html.includes("PR artifacts"), true);
+  assert.equal(html.includes("reviewer output"), true);
+  assert.equal(html.includes("Butler -&gt; Executor"), true);
+  assert.equal(html.includes("Executor -&gt; Reviewer"), true);
+  assert.equal(html.includes("Reviewer -&gt; Butler"), true);
+  assert.equal(html.includes("Human -&gt; Final Authority"), true);
   assert.equal(html.includes("Guarded Absence Contract"), true);
   assert.equal(html.includes("guarded_absence"), true);
   assert.equal(html.includes("pr_review_submit"), true);
@@ -226,6 +235,41 @@ test("worker returns setup wizard json", async () => {
     body.onboarding.memorySafety.sourceOfTruth.db,
     "user-specific memory and operational traces"
   );
+  assert.deepEqual(body.onboarding.roleSeparation.butler.inputs, [
+    "human conversation",
+    "constitution",
+    "runtime truth",
+    "issue / proposal / decision context",
+    "reviewer output"
+  ]);
+  assert.deepEqual(body.onboarding.roleSeparation.butler.outputs, [
+    "structured next-step guidance",
+    "execution judgment",
+    "reviewer summary for human decision"
+  ]);
+  assert.deepEqual(body.onboarding.roleSeparation.executor.outputs, [
+    "code changes",
+    "tests",
+    "PR artifacts",
+    "execution logs"
+  ]);
+  assert.deepEqual(body.onboarding.roleSeparation.reviewer.inputs, ["PR diff", "review context"]);
+  assert.deepEqual(body.onboarding.roleSeparation.reviewer.outputs, [
+    "critical_findings[]",
+    "risks[]",
+    "recommended_action"
+  ]);
+  assert.deepEqual(body.onboarding.roleSeparation.reviewer.authorityLimits, [
+    "no execution authority",
+    "no merge authority",
+    "no deployment authority"
+  ]);
+  assert.deepEqual(body.onboarding.roleSeparation.handoffOrder, [
+    "Butler -> Executor",
+    "Executor -> Reviewer",
+    "Reviewer -> Butler",
+    "Human -> Final Authority"
+  ]);
   assert.equal(body.onboarding.guardedAbsence.modeName, "guarded_absence");
   assert.equal(body.onboarding.guardedAbsence.forbiddenActions.includes("deploy_production"), true);
   assert.equal(body.onboarding.reviewer.initialReviewer, "gemini");

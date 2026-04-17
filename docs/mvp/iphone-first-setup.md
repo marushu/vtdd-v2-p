@@ -96,11 +96,16 @@ These steps are for first-time setup. They are manual because GitHub App creatio
    - do not store tokens, private keys, raw secrets, or full casual transcripts
    - Git remains the source of truth for shared canonical specification
    - DB remains the source of truth for user-specific memory and operational traces
-10. Run `deploy-production` workflow with:
+10. Keep role separation visible in setup output:
+   - Butler reads conversation / constitution / runtime truth / issue context / reviewer output and returns next-step judgment
+   - Executor is the only role that turns approved scope into code/tests/PR artifacts/execution logs
+   - Reviewer reads PR diff + review context and returns structured critique only
+   - Reviewer never gets execution, merge, or deployment authority
+11. Run `deploy-production` workflow with:
    - `approval_phrase=GO`
    - `passkey_verified=true`
-11. Approve the production environment gate.
-12. If operator will be away, set Worker runtime env:
+12. Approve the production environment gate.
+13. If operator will be away, set Worker runtime env:
    - `VTDD_AUTONOMY_MODE=guarded_absence`
    - return to normal by setting `VTDD_AUTONOMY_MODE=normal` (or unsetting it)
    - setup output now summarizes allowed actions, forbidden actions, and mandatory stop boundaries for guarded absence mode

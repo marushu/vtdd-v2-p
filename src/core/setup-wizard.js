@@ -217,6 +217,48 @@ function buildIphoneOnboardingPack(answers) {
       reminder:
         "Select and sanitize before write. Do not use DB memory as a replacement for canonical Git-managed specification."
     },
+    roleSeparation: {
+      butler: {
+        inputs: [
+          "human conversation",
+          "constitution",
+          "runtime truth",
+          "issue / proposal / decision context",
+          "reviewer output"
+        ],
+        outputs: [
+          "structured next-step guidance",
+          "execution judgment",
+          "reviewer summary for human decision"
+        ]
+      },
+      executor: {
+        inputs: [
+          "approved implementation scope",
+          "resolved repository target",
+          "execution credentials appropriate to the action tier",
+          "traceable issue context"
+        ],
+        outputs: ["code changes", "tests", "PR artifacts", "execution logs"]
+      },
+      reviewer: {
+        inputs: ["PR diff", "review context"],
+        outputs: ["critical_findings[]", "risks[]", "recommended_action"],
+        authorityLimits: [
+          "no execution authority",
+          "no merge authority",
+          "no deployment authority"
+        ]
+      },
+      handoffOrder: [
+        "Butler -> Executor",
+        "Executor -> Reviewer",
+        "Reviewer -> Butler",
+        "Human -> Final Authority"
+      ],
+      reminder:
+        "Same-AI operation does not collapse the role model. Credentials and outputs remain structurally separated."
+    },
     guardedAbsence: {
       modeName: "guarded_absence",
       allowedActions: ["read", "summarize", "issue_create", "build", "pr_comment", "pr_operation"],

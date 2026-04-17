@@ -987,6 +987,7 @@ function renderSuccessContent(result, answers, url, cloudflareSetupCheck, github
   const machineAuth = onboarding.machineAuth ?? {};
   const repositoryResolution = onboarding.repositoryResolution ?? {};
   const memorySafety = onboarding.memorySafety ?? {};
+  const roleSeparation = onboarding.roleSeparation ?? {};
   const guardedAbsence = onboarding.guardedAbsence ?? {};
   const reviewer = onboarding.reviewer ?? {};
   const repoList = answers.repositories.map((item) => escapeHtml(item.canonicalRepo));
@@ -1011,6 +1012,7 @@ function renderSuccessContent(result, answers, url, cloudflareSetupCheck, github
     ${renderMachineAuthContract(machineAuth)}
     ${renderRepositoryResolutionContract(repositoryResolution)}
     ${renderMemorySafetyContract(memorySafety)}
+    ${renderRoleSeparationContract(roleSeparation)}
     ${renderGuardedAbsenceContract(guardedAbsence)}
     ${renderReviewerContract(reviewer)}
     <div class="section-header">
@@ -1179,6 +1181,44 @@ function renderMemorySafetyContract(contract) {
       <p><strong>Git source of truth:</strong> <code>${escapeHtml(gitSource)}</code></p>
       <p><strong>DB source of truth:</strong> <code>${escapeHtml(dbSource)}</code></p>
       <p><strong>Reminder:</strong> ${escapeHtml(reminder || "Keep memory compact and safe.")}</p>
+    </div>
+  `;
+}
+
+function renderRoleSeparationContract(contract) {
+  const butlerInputs = Array.isArray(contract?.butler?.inputs) ? contract.butler.inputs : [];
+  const butlerOutputs = Array.isArray(contract?.butler?.outputs) ? contract.butler.outputs : [];
+  const executorInputs = Array.isArray(contract?.executor?.inputs) ? contract.executor.inputs : [];
+  const executorOutputs = Array.isArray(contract?.executor?.outputs) ? contract.executor.outputs : [];
+  const reviewerInputs = Array.isArray(contract?.reviewer?.inputs) ? contract.reviewer.inputs : [];
+  const reviewerOutputs = Array.isArray(contract?.reviewer?.outputs) ? contract.reviewer.outputs : [];
+  const authorityLimits = Array.isArray(contract?.reviewer?.authorityLimits)
+    ? contract.reviewer.authorityLimits
+    : [];
+  const handoffOrder = Array.isArray(contract?.handoffOrder) ? contract.handoffOrder : [];
+  const reminder = normalizeText(contract?.reminder);
+
+  if (
+    butlerInputs.length === 0 ||
+    executorInputs.length === 0 ||
+    reviewerInputs.length === 0 ||
+    handoffOrder.length === 0
+  ) {
+    return "";
+  }
+
+  return `
+    <h2>Role Separation Contract</h2>
+    <div class="block">
+      <p><strong>Butler input:</strong> ${butlerInputs.map((item) => `<code>${escapeHtml(item)}</code>`).join(", ")}</p>
+      <p><strong>Butler output:</strong> ${butlerOutputs.map((item) => `<code>${escapeHtml(item)}</code>`).join(", ")}</p>
+      <p><strong>Executor input:</strong> ${executorInputs.map((item) => `<code>${escapeHtml(item)}</code>`).join(", ")}</p>
+      <p><strong>Executor output:</strong> ${executorOutputs.map((item) => `<code>${escapeHtml(item)}</code>`).join(", ")}</p>
+      <p><strong>Reviewer input:</strong> ${reviewerInputs.map((item) => `<code>${escapeHtml(item)}</code>`).join(", ")}</p>
+      <p><strong>Reviewer output:</strong> ${reviewerOutputs.map((item) => `<code>${escapeHtml(item)}</code>`).join(", ")}</p>
+      <p><strong>Reviewer authority limits:</strong> ${authorityLimits.map((item) => `<code>${escapeHtml(item)}</code>`).join(", ")}</p>
+      <p><strong>Handoff order:</strong> ${handoffOrder.map((item) => `<code>${escapeHtml(item)}</code>`).join(", ")}</p>
+      <p><strong>Reminder:</strong> ${escapeHtml(reminder || "Role boundaries stay distinct.")}</p>
     </div>
   `;
 }
