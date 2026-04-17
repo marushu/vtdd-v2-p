@@ -1043,6 +1043,7 @@ function renderDeployAuthorityRecommendation(recommendation) {
   const fallbackPath = normalizeText(recommendation?.fallbackPath) || "none";
   const rationale = normalizeText(recommendation?.rationale) || "No rationale provided.";
   const invariants = Array.isArray(recommendation?.invariants) ? recommendation.invariants : [];
+  const relationshipToIssue37 = normalizeText(recommendation?.relationshipToIssue37) || "unknown";
   const availability = recommendation?.protectionAvailability ?? {};
   const repositoryVisibility = normalizeText(availability.repositoryVisibility) || "unknown";
   const branchProtectionApiStatus =
@@ -1057,6 +1058,7 @@ function renderDeployAuthorityRecommendation(recommendation) {
       <p><strong>Selected path:</strong> <code>${escapeHtml(selectedPath)}</code></p>
       <p><strong>Fallback path:</strong> <code>${escapeHtml(fallbackPath)}</code></p>
       <p>${escapeHtml(rationale)}</p>
+      <p><strong>Relationship to #37:</strong> <code>${escapeHtml(relationshipToIssue37)}</code></p>
       <p><strong>Detection inputs</strong></p>
       <ul>
         <li><code>repositoryVisibility=${escapeHtml(repositoryVisibility)}</code></li>

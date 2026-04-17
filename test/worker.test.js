@@ -87,6 +87,8 @@ test("worker returns setup wizard html when repo query is provided", async () =>
   assert.equal(html.includes("Deploy Authority Recommendation"), true);
   assert.equal(html.includes("one_shot_github_actions"), true);
   assert.equal(html.includes("direct_provider"), true);
+  assert.equal(html.includes("Relationship to #37"), true);
+  assert.equal(html.includes("coexist_with_github_actions_mvp_path"), true);
   assert.equal(html.includes("Production Deploy Contract"), true);
   assert.equal(html.includes("deploy-production"), true);
   assert.equal(html.includes("approval_phrase=GO"), true);
@@ -129,6 +131,7 @@ test("worker setup wizard html reflects direct provider recommendation when GitH
   assert.equal(html.includes("Deploy Authority Recommendation"), true);
   assert.equal(html.includes("direct_provider"), true);
   assert.equal(html.includes("one_shot_github_actions"), true);
+  assert.equal(html.includes("degrade_from_github_actions_mvp_path_to_provider_managed_path"), true);
   assert.equal(html.includes("repositoryVisibility=private"), true);
   assert.equal(html.includes("branchProtectionApiStatus=forbidden"), true);
   assert.equal(html.includes("rulesetsApiStatus=forbidden"), true);
@@ -160,6 +163,10 @@ test("worker returns setup wizard json", async () => {
   assert.equal(
     body.onboarding.customGpt.actionSchemaImportUrl,
     "https://example.com/setup/wizard?format=openapi&repo=sample-org%2Fvtdd-v2&surface=custom_gpt"
+  );
+  assert.equal(
+    body.onboarding.deployAuthority.relationshipToIssue37,
+    "coexist_with_github_actions_mvp_path"
   );
   assert.equal(body.onboarding.productionDeploy.workflow, "deploy-production");
   assert.equal(body.onboarding.productionDeploy.environment, "production");
@@ -302,6 +309,10 @@ test("worker setup wizard accepts deploy authority detection query inputs", asyn
   assert.equal(body.generatedAnswers.branchProtectionApiStatus, "forbidden");
   assert.equal(body.generatedAnswers.rulesetsApiStatus, "forbidden");
   assert.equal(body.onboarding.deployAuthority.selectedPath, "direct_provider");
+  assert.equal(
+    body.onboarding.deployAuthority.relationshipToIssue37,
+    "degrade_from_github_actions_mvp_path_to_provider_managed_path"
+  );
 });
 
 test("worker setup wizard classifies cloudflare billing-related setup failure", async () => {
