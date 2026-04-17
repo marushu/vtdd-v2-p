@@ -984,6 +984,7 @@ function renderSuccessContent(result, answers, url, cloudflareSetupCheck, github
   const customGpt = onboarding.customGpt ?? {};
   const deployAuthority = onboarding.deployAuthority ?? {};
   const productionDeploy = onboarding.productionDeploy ?? {};
+  const machineAuth = onboarding.machineAuth ?? {};
   const repoList = answers.repositories.map((item) => escapeHtml(item.canonicalRepo));
   const steps = Array.isArray(onboarding.steps) ? onboarding.steps : [];
   const actionSchemaJson = customGpt.actionSchemaJson ?? "";
@@ -1003,6 +1004,7 @@ function renderSuccessContent(result, answers, url, cloudflareSetupCheck, github
     </div>
     ${renderDeployAuthorityRecommendation(deployAuthority)}
     ${renderProductionDeployContract(productionDeploy)}
+    ${renderMachineAuthContract(machineAuth)}
     <div class="section-header">
       <h2>Custom GPT Construction</h2>
       <button class="copy-button" type="button" data-copy-target="constructionText">Copy Construction</button>
@@ -1088,6 +1090,37 @@ function renderProductionDeployContract(contract) {
       <p><strong>Required secrets:</strong> ${requiredSecrets.map((item) => `<code>${escapeHtml(item)}</code>`).join(", ")}</p>
       <p><strong>Required inputs:</strong> ${requiredInputs.map((item) => `<code>${escapeHtml(item)}</code>`).join(", ")}</p>
       <p><strong>Reminder:</strong> ${escapeHtml(reminder || "Production deploy remains human-gated.")}</p>
+    </div>
+  `;
+}
+
+function renderMachineAuthContract(contract) {
+  const recommendedMode = normalizeText(contract?.recommendedMode);
+  const bearerSecretName = normalizeText(contract?.bearerSecretName);
+  const actionAuthType = normalizeText(contract?.actionAuthType);
+  const fallbackMode = normalizeText(contract?.fallbackMode);
+  const fallbackHeaderNames = Array.isArray(contract?.fallbackHeaderNames)
+    ? contract.fallbackHeaderNames
+    : [];
+  const fallbackSecretNames = Array.isArray(contract?.fallbackSecretNames)
+    ? contract.fallbackSecretNames
+    : [];
+  const reminder = normalizeText(contract?.reminder);
+
+  if (!recommendedMode || !bearerSecretName || !actionAuthType) {
+    return "";
+  }
+
+  return `
+    <h2>Machine Auth Contract</h2>
+    <div class="block">
+      <p><strong>Recommended mode:</strong> <code>${escapeHtml(recommendedMode)}</code></p>
+      <p><strong>Worker secret:</strong> <code>${escapeHtml(bearerSecretName)}</code></p>
+      <p><strong>Custom GPT Action auth:</strong> <code>${escapeHtml(actionAuthType)}</code></p>
+      <p><strong>Fallback mode:</strong> <code>${escapeHtml(fallbackMode || "none")}</code></p>
+      <p><strong>Fallback headers:</strong> ${fallbackHeaderNames.map((item) => `<code>${escapeHtml(item)}</code>`).join(", ")}</p>
+      <p><strong>Fallback secrets:</strong> ${fallbackSecretNames.map((item) => `<code>${escapeHtml(item)}</code>`).join(", ")}</p>
+      <p><strong>Reminder:</strong> ${escapeHtml(reminder || "Do not paste secret values into setup surfaces.")}</p>
     </div>
   `;
 }

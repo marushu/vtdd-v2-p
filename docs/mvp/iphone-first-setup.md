@@ -84,6 +84,7 @@ These steps are for first-time setup. They are manual because GitHub App creatio
    - `VTDD_GATEWAY_BEARER_TOKEN` (Cloudflare Worker secret)
    - set the same token in Custom GPT Action auth (Bearer)
    - fallback mode (if bearer cannot be used): `CF_ACCESS_CLIENT_ID` + `CF_ACCESS_CLIENT_SECRET`
+   - setup output shows these setting names, but never the secret values themselves
 8. Run `deploy-production` workflow with:
    - `approval_phrase=GO`
    - `passkey_verified=true`
