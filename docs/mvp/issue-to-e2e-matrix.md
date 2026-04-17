@@ -217,6 +217,8 @@ Status values used below:
   - `test/reviewer-registry.test.js`
   - `test/surface-independence.test.js`
   - `test/role-separation.test.js`
+- Run evidence:
+  - `docs/mvp/e2e/e2e-10-surface-and-role-separation.md`
 - Status: `implemented_pending_e2e`
 
 ## E2E-11 High-risk credential + machine auth path
