@@ -283,6 +283,8 @@ Status values used below:
 - Test evidence:
   - `test/reviewer-registry.test.js`
   - `test/reviewer-policy.test.js`
+- Run evidence:
+  - `docs/mvp/e2e/e2e-13-reviewer-operational-loop.md`
 - Status: `implemented_pending_e2e`
 
 ## Current Completion Reading
