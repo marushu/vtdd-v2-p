@@ -8,14 +8,14 @@ This file exists so work can resume in a fresh thread without re-deriving the cu
 - canonical baseline docs are restored
 - setup surface, policy surface, reviewer surface, retrieval surface, deploy surface, and safety surfaces are connected
 - `docs/mvp/issue-to-e2e-matrix.md` is the canonical repository-wide completion tracker
-- repository reading is still `partial / in-progress`
+- repository reading is still `partial / in-progress`, but mapped E2E run evidence is now present across the matrix
 
 ## What Remains Open
 
 At this stage, remaining work is mainly one of:
 
 1. parent/spec drift prevention
-2. E2E evidence completion
+2. close-readiness and current-reading alignment
 3. human closure judgment
 
 Do not restart implementation from this handoff by assuming missing scope.

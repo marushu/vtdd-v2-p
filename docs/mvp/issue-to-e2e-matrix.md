@@ -13,6 +13,7 @@ Repository status must be treated as partial until every listed E2E scenario has
 Status values used below:
 
 - `implemented_pending_e2e`: code and tests exist, but mapped E2E evidence is still pending
+- `e2e_evidenced_pending_human_closure`: implementation, tests, and mapped E2E run evidence exist, but human closure judgment is still pending
 - `partial`: some supporting code/docs exist, but the full issue intent is not yet evidenced end to end
 - `pending`: implementation and/or evidence is still missing
 
@@ -31,7 +32,7 @@ Status values used below:
   - `test/bootstrap-plan-current-state.test.js`
 - Run evidence:
   - `docs/mvp/e2e/e2e-13-parent-readiness.md`
-- Status: `implemented_pending_e2e`
+- Status: `e2e_evidenced_pending_human_closure`
 
 ## E2E-01 Canonical docs + reference integrity
 
@@ -50,7 +51,7 @@ Status values used below:
   - `test/canonical-docs-restoration.test.js`
 - Run evidence:
   - `docs/mvp/e2e/e2e-01-canonical-docs-reference-integrity.md`
-- Status: `implemented_pending_e2e`
+- Status: `e2e_evidenced_pending_human_closure`
 
 ## E2E-02 Issue/PR template discipline
 
@@ -70,7 +71,7 @@ Status values used below:
   - `test/guarded-semi-automation-mode.test.js`
 - Run evidence:
   - `docs/mvp/e2e/e2e-02-issue-pr-template-discipline.md`
-- Status: `implemented_pending_e2e`
+- Status: `e2e_evidenced_pending_human_closure`
 
 ## E2E-03 Memory schema/provider contract
 
@@ -88,7 +89,7 @@ Status values used below:
   - `test/cloudflare-provider.test.js`
 - Run evidence:
   - `docs/mvp/e2e/e2e-03-memory-schema-and-provider-contract.md`
-- Status: `implemented_pending_e2e`
+- Status: `e2e_evidenced_pending_human_closure`
 
 ## E2E-04 Retrieve constitution/cross-issue memory
 
@@ -107,7 +108,7 @@ Status values used below:
   - `test/worker.test.js`
 - Run evidence:
   - `docs/mvp/e2e/e2e-04-retrieve-constitution-and-cross-memory.md`
-- Status: `implemented_pending_e2e`
+- Status: `e2e_evidenced_pending_human_closure`
 
 ## E2E-05 Decision/proposal durability
 
@@ -126,7 +127,7 @@ Status values used below:
   - `test/worker.test.js`
 - Run evidence:
   - `docs/mvp/e2e/e2e-05-decision-proposal-durability.md`
-- Status: `implemented_pending_e2e`
+- Status: `e2e_evidenced_pending_human_closure`
 
 ## E2E-06 Policy/consent/approval/state machine
 
@@ -149,7 +150,7 @@ Status values used below:
   - `test/worker.test.js`
 - Run evidence:
   - `docs/mvp/e2e/e2e-06-policy-consent-approval-state-machine.md`
-- Status: `implemented_pending_e2e`
+- Status: `e2e_evidenced_pending_human_closure`
 
 ## E2E-07 Butler constitution-first judgment protocol
 
@@ -168,7 +169,7 @@ Status values used below:
   - `test/worker.test.js`
 - Run evidence:
   - `docs/mvp/e2e/e2e-07-butler-constitution-first-judgment.md`
-- Status: `implemented_pending_e2e`
+- Status: `e2e_evidenced_pending_human_closure`
 
 ## E2E-08 Repo resolution safety + conversation switch confirm
 
@@ -187,7 +188,7 @@ Status values used below:
   - `test/butler-orchestrator.test.js`
 - Run evidence:
   - `docs/mvp/e2e/e2e-08-iphone-setup-and-repo-safety.md`
-- Status: `implemented_pending_e2e`
+- Status: `e2e_evidenced_pending_human_closure`
 
 ## E2E-09 Memory safety exclusions
 
@@ -205,7 +206,7 @@ Status values used below:
   - `test/memory-safety-policy.test.js`
 - Run evidence:
   - `docs/mvp/e2e/e2e-09-memory-safety-exclusions.md`
-- Status: `implemented_pending_e2e`
+- Status: `e2e_evidenced_pending_human_closure`
 
 ## E2E-10 Surface/role separation invariants
 
@@ -226,7 +227,7 @@ Status values used below:
   - `test/role-separation.test.js`
 - Run evidence:
   - `docs/mvp/e2e/e2e-10-surface-and-role-separation.md`
-- Status: `implemented_pending_e2e`
+- Status: `e2e_evidenced_pending_human_closure`
 
 ## E2E-11 High-risk credential + machine auth path
 
@@ -244,7 +245,7 @@ Status values used below:
   - `test/worker.test.js`
 - Run evidence:
   - `docs/mvp/e2e/e2e-11-high-risk-credential-and-machine-auth.md`
-- Status: `implemented_pending_e2e`
+- Status: `e2e_evidenced_pending_human_closure`
 
 ## E2E-12 Deploy boundary and governed production flow
 
@@ -267,7 +268,7 @@ Status values used below:
   - `test/worker.test.js`
 - Run evidence:
   - `docs/mvp/e2e/e2e-12-deploy-boundary-and-governed-flow.md`
-- Status: `implemented_pending_e2e`
+- Status: `e2e_evidenced_pending_human_closure`
 
 ## E2E-13 Reviewer operational loop
 
@@ -285,11 +286,12 @@ Status values used below:
   - `test/reviewer-policy.test.js`
 - Run evidence:
   - `docs/mvp/e2e/e2e-13-reviewer-operational-loop.md`
-- Status: `implemented_pending_e2e`
+- Status: `e2e_evidenced_pending_human_closure`
 
 ## Current Completion Reading
 
 - Repository completion status: `partial`
 - Main reason:
-  - mapped E2E evidence is still pending across the matrix
+  - mapped E2E evidence now exists across the matrix
   - issue closure must remain human-gated
+  - parent/spec issues remain intentionally open until the owner judges closure

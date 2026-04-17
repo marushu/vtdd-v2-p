@@ -9,7 +9,7 @@ It is a planning companion to `#13`, not a replacement for child Issue acceptanc
 
 - `#13` is the canonical execution anchor for MVP bootstrap
 - active implementation must still trace to child Issue Intent / Success Criteria / Non-goal
-- repository completion remains `partial` until the Issue-to-E2E matrix has passing mapped evidence and human closure judgment
+- repository completion remains `partial` until the Issue-to-E2E matrix has mapped run evidence and human closure judgment
 
 ## Canonical Parent / Spec Inputs
 
