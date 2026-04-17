@@ -7,6 +7,63 @@ This runbook is for starting VTDD V2 from iPhone without local Mac setup.
 - Keep shared spec and workflow in GitHub.
 - Keep user-specific memory in DB.
 - Never paste cloud credentials into chats or setup answers.
+- GitHub App bootstrap is one-time manual work. After that, VTDD mints short-lived installation tokens automatically.
+
+## What You Prepare vs What VTDD Does
+
+### You prepare once
+
+- create the GitHub App
+- install it to the target repository or organization
+- download the App private key
+- set Worker secrets:
+  - `GITHUB_APP_ID`
+  - `GITHUB_APP_INSTALLATION_ID`
+  - `GITHUB_APP_PRIVATE_KEY`
+
+### VTDD does automatically after setup
+
+- create a short-lived GitHub App JWT from the private key
+- mint a GitHub installation token
+- fetch the live repository index from GitHub
+- merge live repositories with alias/context resolution
+- use the live repository list for natural conversation such as repo listing or repo switching
+
+## GitHub App Bootstrap (One-time)
+
+These steps are for first-time setup. They are manual because GitHub App creation, installation, and private key download require GitHub-side operator approval.
+
+1. Open GitHub in Safari or on Mac and go to Developer Settings.
+2. Create a new GitHub App.
+3. Set a simple name such as `vtdd-butler`.
+4. Set Homepage URL to your project or repository URL.
+5. Disable features you do not need yet. Start from least privilege.
+6. Grant only the minimum repository permissions VTDD needs for live repo index and PR-oriented work.
+   - At minimum, repository metadata read access should be enabled.
+   - If you later need PR or issue write paths, expand permissions deliberately.
+7. Create the App.
+8. Generate a private key and download the `.pem` file.
+   - Keep this file private.
+   - Do not paste it into chat, Issue, PR, or setup wizard answers.
+9. Install the App to the target account or repository.
+10. Copy these values from the GitHub App screens:
+    - App ID -> `GITHUB_APP_ID`
+    - Installation ID -> `GITHUB_APP_INSTALLATION_ID`
+11. Open your Cloudflare Worker secret management and set:
+    - `GITHUB_APP_ID`
+    - `GITHUB_APP_INSTALLATION_ID`
+    - `GITHUB_APP_PRIVATE_KEY`
+12. Redeploy or restart the Worker so the new secrets are available.
+
+## GitHub App Bootstrap Checklist
+
+- App exists
+- App is installed to the correct repo or org
+- Private key file was downloaded once and stored safely
+- `GITHUB_APP_ID` is set on Worker
+- `GITHUB_APP_INSTALLATION_ID` is set on Worker
+- `GITHUB_APP_PRIVATE_KEY` is set on Worker
+- Worker has been redeployed after secret update
 
 ## Steps
 
@@ -32,6 +89,17 @@ This runbook is for starting VTDD V2 from iPhone without local Mac setup.
 9. If operator will be away, set Worker runtime env:
    - `VTDD_AUTONOMY_MODE=guarded_absence`
    - return to normal by setting `VTDD_AUTONOMY_MODE=normal` (or unsetting it)
+
+## If GitHub App Is Not Working
+
+- If repo list stays limited to provided aliases only, check whether all three Worker secrets are set:
+  - `GITHUB_APP_ID`
+  - `GITHUB_APP_INSTALLATION_ID`
+  - `GITHUB_APP_PRIVATE_KEY`
+- If the App exists but still cannot see repos, confirm the App is installed to the correct repo or organization.
+- If token mint fails, regenerate the private key and update `GITHUB_APP_PRIVATE_KEY`.
+- If repo visibility looks wrong, re-check the installation target and repository permissions.
+- If setup is unclear, verify the Worker can still operate safely with provided aliases, then return to GitHub App bootstrap before relying on live repo discovery.
 
 ## Optional Query Parameters
 
