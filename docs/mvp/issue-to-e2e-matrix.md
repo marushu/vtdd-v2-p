@@ -227,6 +227,8 @@ Status values used below:
 - Test evidence:
   - `test/github-app-repository-index.test.js`
   - `test/worker.test.js`
+- Run evidence:
+  - `docs/mvp/e2e/e2e-11-high-risk-credential-and-machine-auth.md`
 - Status: `implemented_pending_e2e`
 
 ## E2E-12 Deploy boundary and governed production flow
