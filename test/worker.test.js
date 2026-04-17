@@ -779,6 +779,16 @@ test("worker runtime forced guarded absence mode overrides payload normal mode",
     true
   );
   assert.equal(Boolean(body.guardedAbsenceExecutionLog?.recordId), true);
+
+  const records = await provider.retrieve({
+    type: MemoryRecordType.EXECUTION_LOG,
+    limit: 5
+  });
+  assert.equal(records.length, 1);
+  assert.equal(records[0].content.mode, "guarded_absence");
+  assert.equal(records[0].content.allowed, true);
+  assert.equal(records[0].content.actionType, ActionType.PR_OPERATION);
+  assert.equal(records[0].content.blockedByRule, null);
 });
 
 test("worker guarded absence blocks ambiguous request and records stop log", async () => {
