@@ -16,6 +16,23 @@ Status values used below:
 - `partial`: some supporting code/docs exist, but the full issue intent is not yet evidenced end to end
 - `pending`: implementation and/or evidence is still missing
 
+## E2E-00 Parent execution anchor readiness
+
+- Issues: `#13`
+- Happy path:
+  - parent issue functions as the MVP execution anchor and points readers to current docs/matrix instead of stale planning state
+- Boundary path:
+  - parent issue is not misread as completed while repository status remains partial
+- Implementation evidence:
+  - `docs/mvp/issue-13-rewrite-draft.md`
+  - `docs/mvp/bootstrap-plan.md`
+  - `docs/mvp/next-step-handoff.md`
+- Test evidence:
+  - `test/bootstrap-plan-current-state.test.js`
+- Run evidence:
+  - `docs/mvp/e2e/e2e-13-parent-readiness.md`
+- Status: `implemented_pending_e2e`
+
 ## E2E-01 Canonical docs + reference integrity
 
 - Issues: `#1 #7 #13 #51`
