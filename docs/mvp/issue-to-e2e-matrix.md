@@ -82,9 +82,10 @@ Status values used below:
   - `docs/memory-provider.md`
   - `src/core/cloudflare-provider.js`
 - Test evidence:
-  - `test/memory-schema.test.js`
   - `test/memory-provider.test.js`
   - `test/cloudflare-provider.test.js`
+- Run evidence:
+  - `docs/mvp/e2e/e2e-03-memory-schema-and-provider-contract.md`
 - Status: `implemented_pending_e2e`
 
 ## E2E-04 Retrieve constitution/cross-issue memory
