@@ -174,6 +174,8 @@ Status values used below:
   - `test/setup-wizard.test.js`
   - `test/worker.test.js`
   - `test/butler-orchestrator.test.js`
+- Run evidence:
+  - `docs/mvp/e2e/e2e-08-iphone-setup-and-repo-safety.md`
 - Status: `implemented_pending_e2e`
 
 ## E2E-09 Memory safety exclusions
