@@ -169,7 +169,7 @@ function buildIphoneOnboardingPack(answers) {
     setupMode: SetupMode.IPHONE_FIRST,
     steps: [
       "Open ChatGPT on iPhone and create or edit the Butler Custom GPT.",
-      "Paste construction instructions and action schema from this onboarding pack.",
+      "Replace the full Instructions field with the construction text from this onboarding pack, then set action schema from the same pack.",
       "Use pr_comment for low-friction PR comments without GO, but require GO before pr_review_submit.",
       "Confirm GitHub production environment has required reviewers and Cloudflare secrets.",
       "Run GitHub Actions deploy-production with approval_phrase=GO and passkey_verified=true."

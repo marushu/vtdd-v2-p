@@ -1006,7 +1006,7 @@ function renderSuccessContent(result, answers, url, cloudflareSetupCheck, github
       <button class="copy-button" type="button" data-copy-target="constructionText">Copy Construction</button>
     </div>
     <textarea id="constructionText" readonly>${escapeHtml(constructionText)}</textarea>
-    <p class="copy-hint" data-copy-status="constructionText">Tap copy button if text selection is difficult on mobile.</p>
+    <p class="copy-hint" data-copy-status="constructionText">Tap copy button if text selection is difficult on mobile. Replace the full Instructions field with this text.</p>
     <div class="section-header">
       <h2>Custom GPT Action Schema (OpenAPI)</h2>
       <button class="copy-button" type="button" data-copy-target="actionSchemaJson">Copy Schema</button>
