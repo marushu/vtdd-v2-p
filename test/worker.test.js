@@ -79,6 +79,9 @@ test("worker returns setup wizard html when repo query is provided", async () =>
   assert.equal(html.includes("Deploy Authority Recommendation"), true);
   assert.equal(html.includes("one_shot_github_actions"), true);
   assert.equal(html.includes("direct_provider"), true);
+  assert.equal(html.includes("repositoryVisibility=unknown"), true);
+  assert.equal(html.includes("branchProtectionApiStatus=unknown"), true);
+  assert.equal(html.includes("rulesetsApiStatus=unknown"), true);
   assert.equal(html.includes("cloudflareApiToken"), false);
   assert.equal(html.includes("githubAppPrivateKey"), false);
 });
@@ -94,6 +97,9 @@ test("worker setup wizard html reflects direct provider recommendation when GitH
   assert.equal(html.includes("Deploy Authority Recommendation"), true);
   assert.equal(html.includes("direct_provider"), true);
   assert.equal(html.includes("one_shot_github_actions"), true);
+  assert.equal(html.includes("repositoryVisibility=private"), true);
+  assert.equal(html.includes("branchProtectionApiStatus=forbidden"), true);
+  assert.equal(html.includes("rulesetsApiStatus=forbidden"), true);
 });
 
 test("worker setup wizard requires repo query and returns explicit guidance", async () => {
