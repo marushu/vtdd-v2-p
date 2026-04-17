@@ -157,6 +157,8 @@ Status values used below:
   - `test/butler-orchestrator.test.js`
   - `test/butler-review-protocol.test.js`
   - `test/worker.test.js`
+- Run evidence:
+  - `docs/mvp/e2e/e2e-07-butler-constitution-first-judgment.md`
 - Status: `implemented_pending_e2e`
 
 ## E2E-08 Repo resolution safety + conversation switch confirm
