@@ -10,6 +10,7 @@ const WORKFLOW_PATH = path.join(
   "workflows",
   "deploy-production.yml"
 );
+const WRANGLER_PATH = path.join(process.cwd(), "wrangler.toml");
 
 test("production deploy doc defines the governed GitHub Actions deploy path", () => {
   const doc = fs.readFileSync(DOC_PATH, "utf8");
@@ -37,4 +38,11 @@ test("deploy-production workflow enforces the MVP production deploy boundary", (
     true
   );
   assert.equal(workflow.includes('command: deploy --env production'), true);
+});
+
+test("wrangler config fixes worker runtime entry and production environment", () => {
+  const wrangler = fs.readFileSync(WRANGLER_PATH, "utf8");
+  assert.equal(wrangler.includes('main = "src/worker.js"'), true);
+  assert.equal(wrangler.includes("[env.production]"), true);
+  assert.equal(wrangler.includes('name = "vtdd-v2-mvp"'), true);
 });
