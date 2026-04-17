@@ -8,6 +8,7 @@ This runbook is for starting VTDD V2 from iPhone without local Mac setup.
 - Keep user-specific memory in DB.
 - Never paste cloud credentials into chats or setup answers.
 - GitHub App bootstrap is one-time manual work. After that, VTDD mints short-lived installation tokens automatically.
+- Worker secret bootstrap currently uses Cloudflare Dashboard entry as the canonical path; see `docs/security/worker-secret-bootstrap-options.md`.
 
 ## What You Prepare vs What VTDD Does
 
@@ -54,6 +55,13 @@ These steps are for first-time setup. They are manual because GitHub App creatio
     - `GITHUB_APP_INSTALLATION_ID`
     - `GITHUB_APP_PRIVATE_KEY`
 12. Redeploy or restart the Worker so the new secrets are available.
+
+## Worker Secret Bootstrap (Current Reading)
+
+- adopted now: Cloudflare Dashboard secret entry + setup wizard diagnostics
+- allowed optional operator path: Wrangler / CI-assisted provisioning
+- deferred: brokered one-time bootstrap session behind `GO + passkey` and audit controls
+- never paste secret values into chat or setup wizard answers
 
 ## GitHub App Bootstrap Checklist
 
