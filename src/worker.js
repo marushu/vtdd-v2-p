@@ -983,6 +983,7 @@ function renderSuccessContent(result, answers, url, cloudflareSetupCheck, github
   const onboarding = result.onboarding ?? {};
   const customGpt = onboarding.customGpt ?? {};
   const deployAuthority = onboarding.deployAuthority ?? {};
+  const productionDeploy = onboarding.productionDeploy ?? {};
   const repoList = answers.repositories.map((item) => escapeHtml(item.canonicalRepo));
   const steps = Array.isArray(onboarding.steps) ? onboarding.steps : [];
   const actionSchemaJson = customGpt.actionSchemaJson ?? "";
@@ -1001,6 +1002,7 @@ function renderSuccessContent(result, answers, url, cloudflareSetupCheck, github
       <ul>${steps.map((step) => `<li>${escapeHtml(step)}</li>`).join("")}</ul>
     </div>
     ${renderDeployAuthorityRecommendation(deployAuthority)}
+    ${renderProductionDeployContract(productionDeploy)}
     <div class="section-header">
       <h2>Custom GPT Construction</h2>
       <button class="copy-button" type="button" data-copy-target="constructionText">Copy Construction</button>
@@ -1063,6 +1065,29 @@ function renderDeployAuthorityRecommendation(recommendation) {
               .join("")}</ul>`
           : ""
       }
+    </div>
+  `;
+}
+
+function renderProductionDeployContract(contract) {
+  const workflow = normalizeText(contract?.workflow);
+  const environment = normalizeText(contract?.environment);
+  const requiredSecrets = Array.isArray(contract?.requiredSecrets) ? contract.requiredSecrets : [];
+  const requiredInputs = Array.isArray(contract?.requiredInputs) ? contract.requiredInputs : [];
+  const reminder = normalizeText(contract?.reminder);
+
+  if (!workflow || !environment) {
+    return "";
+  }
+
+  return `
+    <h2>Production Deploy Contract</h2>
+    <div class="block">
+      <p><strong>Workflow:</strong> <code>${escapeHtml(workflow)}</code></p>
+      <p><strong>Environment:</strong> <code>${escapeHtml(environment)}</code></p>
+      <p><strong>Required secrets:</strong> ${requiredSecrets.map((item) => `<code>${escapeHtml(item)}</code>`).join(", ")}</p>
+      <p><strong>Required inputs:</strong> ${requiredInputs.map((item) => `<code>${escapeHtml(item)}</code>`).join(", ")}</p>
+      <p><strong>Reminder:</strong> ${escapeHtml(reminder || "Production deploy remains human-gated.")}</p>
     </div>
   `;
 }

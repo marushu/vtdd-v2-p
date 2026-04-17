@@ -87,6 +87,12 @@ test("worker returns setup wizard html when repo query is provided", async () =>
   assert.equal(html.includes("Deploy Authority Recommendation"), true);
   assert.equal(html.includes("one_shot_github_actions"), true);
   assert.equal(html.includes("direct_provider"), true);
+  assert.equal(html.includes("Production Deploy Contract"), true);
+  assert.equal(html.includes("deploy-production"), true);
+  assert.equal(html.includes("approval_phrase=GO"), true);
+  assert.equal(html.includes("passkey_verified=true"), true);
+  assert.equal(html.includes("CLOUDFLARE_API_TOKEN"), true);
+  assert.equal(html.includes("CLOUDFLARE_ACCOUNT_ID"), true);
   assert.equal(html.includes("repositoryVisibility=unknown"), true);
   assert.equal(html.includes("branchProtectionApiStatus=unknown"), true);
   assert.equal(html.includes("rulesetsApiStatus=unknown"), true);
@@ -137,6 +143,8 @@ test("worker returns setup wizard json", async () => {
     body.onboarding.customGpt.actionSchemaImportUrl,
     "https://example.com/setup/wizard?format=openapi&repo=sample-org%2Fvtdd-v2&surface=custom_gpt"
   );
+  assert.equal(body.onboarding.productionDeploy.workflow, "deploy-production");
+  assert.equal(body.onboarding.productionDeploy.environment, "production");
   assert.equal(body.generatedAnswers.actionEndpointBaseUrl, "https://example.com");
   assert.equal(body.cloudflareSetupCheck.state, "disabled");
   assert.equal(body.githubAppSetupCheck.state, "not_configured");
