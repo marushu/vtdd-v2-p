@@ -116,9 +116,11 @@ Status values used below:
   - `docs/state-machine-model.md`
 - Test evidence:
   - `test/core-policy.test.js`
+  - `test/mvp-gateway.test.js`
   - `test/runtime-truth-model.test.js`
   - `test/state-machine-model.test.js`
   - `test/workflow-state-machine.test.js`
+  - `test/worker.test.js`
 - Status: `implemented_pending_e2e`
 
 ## E2E-07 Butler constitution-first judgment protocol
@@ -135,6 +137,7 @@ Status values used below:
 - Test evidence:
   - `test/butler-orchestrator.test.js`
   - `test/butler-review-protocol.test.js`
+  - `test/worker.test.js`
 - Status: `implemented_pending_e2e`
 
 ## E2E-08 Repo resolution safety + conversation switch confirm
@@ -222,6 +225,8 @@ Status values used below:
   - `test/production-deploy-path.test.js`
   - `test/guarded-semi-automation-mode.test.js`
   - `test/deploy-authority.test.js`
+  - `test/deploy-authority-branching-doc.test.js`
+  - `test/worker.test.js`
 - Status: `implemented_pending_e2e`
 
 ## E2E-13 Reviewer operational loop
