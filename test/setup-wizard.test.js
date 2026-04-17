@@ -72,6 +72,12 @@ test("setup wizard returns git/db outputs and iphone onboarding pack", () => {
   );
   assert.equal(
     result.onboarding.customGpt.constructionText.includes(
+      "Treat pr_comment and pr_review_submit as different approval boundaries: pr_comment does not require GO, but pr_review_submit requires GO."
+    ),
+    true
+  );
+  assert.equal(
+    result.onboarding.customGpt.constructionText.includes(
       "Normal mode uses autonomyMode=normal. Absence mode uses autonomyMode=guarded_absence with strict stop boundaries."
     ),
     true
@@ -125,6 +131,12 @@ test("setup wizard returns git/db outputs and iphone onboarding pack", () => {
   assert.equal(Boolean(parsed?.paths?.["/v2/gateway"]?.post?.responses?.["401"]), true);
   assert.equal(Boolean(parsed?.paths?.["/v2/gateway"]?.post?.responses?.["403"]), true);
   assert.equal(Boolean(parsed?.paths?.["/v2/gateway"]?.post?.responses?.["422"]), true);
+  assert.equal(
+    result.onboarding.steps.includes(
+      "Use pr_comment for low-friction PR comments without GO, but require GO before pr_review_submit."
+    ),
+    true
+  );
 });
 
 test("setup wizard exposes direct provider fallback when GitHub protection is unavailable", () => {
