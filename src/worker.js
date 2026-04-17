@@ -985,6 +985,7 @@ function renderSuccessContent(result, answers, url, cloudflareSetupCheck, github
   const deployAuthority = onboarding.deployAuthority ?? {};
   const productionDeploy = onboarding.productionDeploy ?? {};
   const machineAuth = onboarding.machineAuth ?? {};
+  const guardedAbsence = onboarding.guardedAbsence ?? {};
   const repoList = answers.repositories.map((item) => escapeHtml(item.canonicalRepo));
   const steps = Array.isArray(onboarding.steps) ? onboarding.steps : [];
   const actionSchemaJson = customGpt.actionSchemaJson ?? "";
@@ -1005,6 +1006,7 @@ function renderSuccessContent(result, answers, url, cloudflareSetupCheck, github
     ${renderDeployAuthorityRecommendation(deployAuthority)}
     ${renderProductionDeployContract(productionDeploy)}
     ${renderMachineAuthContract(machineAuth)}
+    ${renderGuardedAbsenceContract(guardedAbsence)}
     <div class="section-header">
       <h2>Custom GPT Construction</h2>
       <button class="copy-button" type="button" data-copy-target="constructionText">Copy Construction</button>
@@ -1121,6 +1123,29 @@ function renderMachineAuthContract(contract) {
       <p><strong>Fallback headers:</strong> ${fallbackHeaderNames.map((item) => `<code>${escapeHtml(item)}</code>`).join(", ")}</p>
       <p><strong>Fallback secrets:</strong> ${fallbackSecretNames.map((item) => `<code>${escapeHtml(item)}</code>`).join(", ")}</p>
       <p><strong>Reminder:</strong> ${escapeHtml(reminder || "Do not paste secret values into setup surfaces.")}</p>
+    </div>
+  `;
+}
+
+function renderGuardedAbsenceContract(contract) {
+  const modeName = normalizeText(contract?.modeName);
+  const allowedActions = Array.isArray(contract?.allowedActions) ? contract.allowedActions : [];
+  const forbiddenActions = Array.isArray(contract?.forbiddenActions) ? contract.forbiddenActions : [];
+  const mandatoryStops = Array.isArray(contract?.mandatoryStops) ? contract.mandatoryStops : [];
+  const reminder = normalizeText(contract?.reminder);
+
+  if (!modeName) {
+    return "";
+  }
+
+  return `
+    <h2>Guarded Absence Contract</h2>
+    <div class="block">
+      <p><strong>Mode:</strong> <code>${escapeHtml(modeName)}</code></p>
+      <p><strong>Allowed actions:</strong> ${allowedActions.map((item) => `<code>${escapeHtml(item)}</code>`).join(", ")}</p>
+      <p><strong>Forbidden actions:</strong> ${forbiddenActions.map((item) => `<code>${escapeHtml(item)}</code>`).join(", ")}</p>
+      <p><strong>Mandatory stops:</strong> ${mandatoryStops.map((item) => escapeHtml(item)).join(", ")}</p>
+      <p><strong>Reminder:</strong> ${escapeHtml(reminder || "Guarded absence remains traceable.")}</p>
     </div>
   `;
 }

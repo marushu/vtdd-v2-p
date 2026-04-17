@@ -92,6 +92,7 @@ These steps are for first-time setup. They are manual because GitHub App creatio
 10. If operator will be away, set Worker runtime env:
    - `VTDD_AUTONOMY_MODE=guarded_absence`
    - return to normal by setting `VTDD_AUTONOMY_MODE=normal` (or unsetting it)
+   - setup output now summarizes allowed actions, forbidden actions, and mandatory stop boundaries for guarded absence mode
 
 ## If GitHub App Is Not Working
 
