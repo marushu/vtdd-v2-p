@@ -82,6 +82,23 @@ test("setup wizard returns git/db outputs and iphone onboarding pack", () => {
     "unconfirmed target",
     "one issue / one PR violation"
   ]);
+  assert.equal(result.onboarding.reviewer.initialReviewer, "gemini");
+  assert.equal(result.onboarding.reviewer.fallbackReviewer, "antigravity");
+  assert.equal(
+    result.onboarding.reviewer.fallbackCondition,
+    "emergency_only_with_learning_use_disabled"
+  );
+  assert.deepEqual(result.onboarding.reviewer.inputContract, ["PR diff", "context"]);
+  assert.deepEqual(result.onboarding.reviewer.outputContract, [
+    "critical_findings[]",
+    "risks[]",
+    "recommended_action"
+  ]);
+  assert.deepEqual(result.onboarding.reviewer.authorityLimits, [
+    "no execution authority",
+    "no merge authority",
+    "no deployment authority"
+  ]);
   assert.equal(
     result.onboarding.customGpt.actionSchemaJson.includes("/v2/retrieve/constitution"),
     true

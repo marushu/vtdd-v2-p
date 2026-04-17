@@ -986,6 +986,7 @@ function renderSuccessContent(result, answers, url, cloudflareSetupCheck, github
   const productionDeploy = onboarding.productionDeploy ?? {};
   const machineAuth = onboarding.machineAuth ?? {};
   const guardedAbsence = onboarding.guardedAbsence ?? {};
+  const reviewer = onboarding.reviewer ?? {};
   const repoList = answers.repositories.map((item) => escapeHtml(item.canonicalRepo));
   const steps = Array.isArray(onboarding.steps) ? onboarding.steps : [];
   const actionSchemaJson = customGpt.actionSchemaJson ?? "";
@@ -1007,6 +1008,7 @@ function renderSuccessContent(result, answers, url, cloudflareSetupCheck, github
     ${renderProductionDeployContract(productionDeploy)}
     ${renderMachineAuthContract(machineAuth)}
     ${renderGuardedAbsenceContract(guardedAbsence)}
+    ${renderReviewerContract(reviewer)}
     <div class="section-header">
       <h2>Custom GPT Construction</h2>
       <button class="copy-button" type="button" data-copy-target="constructionText">Copy Construction</button>
@@ -1146,6 +1148,33 @@ function renderGuardedAbsenceContract(contract) {
       <p><strong>Forbidden actions:</strong> ${forbiddenActions.map((item) => `<code>${escapeHtml(item)}</code>`).join(", ")}</p>
       <p><strong>Mandatory stops:</strong> ${mandatoryStops.map((item) => escapeHtml(item)).join(", ")}</p>
       <p><strong>Reminder:</strong> ${escapeHtml(reminder || "Guarded absence remains traceable.")}</p>
+    </div>
+  `;
+}
+
+function renderReviewerContract(contract) {
+  const initialReviewer = normalizeText(contract?.initialReviewer);
+  const fallbackReviewer = normalizeText(contract?.fallbackReviewer);
+  const fallbackCondition = normalizeText(contract?.fallbackCondition);
+  const inputContract = Array.isArray(contract?.inputContract) ? contract.inputContract : [];
+  const outputContract = Array.isArray(contract?.outputContract) ? contract.outputContract : [];
+  const authorityLimits = Array.isArray(contract?.authorityLimits) ? contract.authorityLimits : [];
+  const reminder = normalizeText(contract?.reminder);
+
+  if (!initialReviewer) {
+    return "";
+  }
+
+  return `
+    <h2>Reviewer Contract</h2>
+    <div class="block">
+      <p><strong>Initial reviewer:</strong> <code>${escapeHtml(initialReviewer)}</code></p>
+      <p><strong>Fallback reviewer:</strong> <code>${escapeHtml(fallbackReviewer || "none")}</code></p>
+      <p><strong>Fallback condition:</strong> <code>${escapeHtml(fallbackCondition || "none")}</code></p>
+      <p><strong>Reviewer input:</strong> ${inputContract.map((item) => `<code>${escapeHtml(item)}</code>`).join(", ")}</p>
+      <p><strong>Reviewer output:</strong> ${outputContract.map((item) => `<code>${escapeHtml(item)}</code>`).join(", ")}</p>
+      <p><strong>Authority limits:</strong> ${authorityLimits.map((item) => `<code>${escapeHtml(item)}</code>`).join(", ")}</p>
+      <p><strong>Reminder:</strong> ${escapeHtml(reminder || "Reviewer remains advisory to human judgment.")}</p>
     </div>
   `;
 }

@@ -210,6 +210,15 @@ function buildIphoneOnboardingPack(answers) {
       ],
       reminder: "Every guarded_absence execution must leave an execution_log trail for post-absence review."
     },
+    reviewer: {
+      initialReviewer: "gemini",
+      fallbackReviewer: "antigravity",
+      fallbackCondition: "emergency_only_with_learning_use_disabled",
+      inputContract: ["PR diff", "context"],
+      outputContract: ["critical_findings[]", "risks[]", "recommended_action"],
+      authorityLimits: ["no execution authority", "no merge authority", "no deployment authority"],
+      reminder: "Reviewer output is a blocking risk signal for Butler and human judgment, not an execution authority."
+    },
     secretHandlingPolicy: {
       model: "operator_managed_environment_secrets",
       statement:
