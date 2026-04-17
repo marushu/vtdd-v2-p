@@ -155,10 +155,29 @@ async function handleSetupWizardRequest(url, env) {
   const githubAppSetupCheck = await runGitHubAppSetupCheck(url, env);
   const format = normalize(url.searchParams.get("format"));
   const guidance = buildSetupWizardGuidance({ result, url });
+  const enrichedResult = attachSetupWizardImportUrls({ result, url });
+
+  if (format === "openapi") {
+    const actionSchemaJson = enrichedResult?.onboarding?.customGpt?.actionSchemaJson;
+    if (!enrichedResult.ok || !actionSchemaJson) {
+      return json(422, {
+        ...enrichedResult,
+        generatedAnswers: answers,
+        cloudflareSetupCheck,
+        githubAppSetupCheck,
+        guidance
+      });
+    }
+
+    return new Response(actionSchemaJson, {
+      status: 200,
+      headers: JSON_HEADERS
+    });
+  }
 
   if (format === "json") {
     return json(result.ok ? 200 : 422, {
-      ...result,
+      ...enrichedResult,
       generatedAnswers: answers,
       cloudflareSetupCheck,
       githubAppSetupCheck,
@@ -167,13 +186,39 @@ async function handleSetupWizardRequest(url, env) {
   }
 
   const htmlBody = renderSetupWizardHtml({
-    result,
+    result: enrichedResult,
     answers,
     url,
     cloudflareSetupCheck,
     githubAppSetupCheck
   });
   return html(result.ok ? 200 : 422, htmlBody);
+}
+
+function attachSetupWizardImportUrls({ result, url }) {
+  const actionSchemaJson = result?.onboarding?.customGpt?.actionSchemaJson;
+  if (!actionSchemaJson) {
+    return result;
+  }
+
+  return {
+    ...result,
+    onboarding: {
+      ...result.onboarding,
+      customGpt: {
+        ...result.onboarding.customGpt,
+        actionSchemaImportUrl: buildActionSchemaImportUrl(url)
+      }
+    }
+  };
+}
+
+function buildActionSchemaImportUrl(url) {
+  const importUrl = new URL(url.toString());
+  importUrl.searchParams.set("format", "openapi");
+  importUrl.searchParams.delete("githubAppCheck");
+  importUrl.searchParams.delete("cloudflareCheck");
+  return importUrl.toString();
 }
 
 async function handleRetrieveConstitutionRequest(url, env) {
@@ -941,6 +986,7 @@ function renderSuccessContent(result, answers, url, cloudflareSetupCheck, github
   const repoList = answers.repositories.map((item) => escapeHtml(item.canonicalRepo));
   const steps = Array.isArray(onboarding.steps) ? onboarding.steps : [];
   const actionSchemaJson = customGpt.actionSchemaJson ?? "";
+  const actionSchemaImportUrl = customGpt.actionSchemaImportUrl ?? "";
   const constructionText = customGpt.constructionText ?? "";
 
   return `
@@ -965,6 +1011,13 @@ function renderSuccessContent(result, answers, url, cloudflareSetupCheck, github
       <h2>Custom GPT Action Schema (OpenAPI)</h2>
       <button class="copy-button" type="button" data-copy-target="actionSchemaJson">Copy Schema</button>
     </div>
+    <p class="meta">If pasting full schema is hard on iPhone, use Import from URL with the link below.</p>
+    <div class="section-header">
+      <h3>Schema Import URL</h3>
+      <button class="copy-button" type="button" data-copy-target="actionSchemaImportUrl">Copy Import URL</button>
+    </div>
+    <textarea id="actionSchemaImportUrl" readonly>${escapeHtml(actionSchemaImportUrl)}</textarea>
+    <p class="copy-hint" data-copy-status="actionSchemaImportUrl">Paste this URL into Custom GPT Action schema import.</p>
     <textarea id="actionSchemaJson" readonly>${escapeHtml(actionSchemaJson)}</textarea>
     <p class="copy-hint" data-copy-status="actionSchemaJson">Tap copy button to copy full OpenAPI JSON.</p>
     ${renderGitHubAppSetupCheck(githubAppSetupCheck)}

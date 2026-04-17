@@ -76,10 +76,13 @@ test("worker returns setup wizard html when repo query is provided", async () =>
   assert.equal(html.includes("Custom GPT Construction"), true);
   assert.equal(html.includes("Copy Construction"), true);
   assert.equal(html.includes("Copy Schema"), true);
+  assert.equal(html.includes("Copy Import URL"), true);
   assert.equal(html.includes('textarea id="constructionText"'), true);
+  assert.equal(html.includes('textarea id="actionSchemaImportUrl"'), true);
   assert.equal(html.includes('textarea id="actionSchemaJson"'), true);
   assert.equal(html.includes("You are VTDD Butler."), true);
   assert.equal(html.includes("/v2/gateway"), true);
+  assert.equal(html.includes("format=openapi"), true);
   assert.equal(html.includes("Deploy Authority Recommendation"), true);
   assert.equal(html.includes("one_shot_github_actions"), true);
   assert.equal(html.includes("direct_provider"), true);
@@ -129,9 +132,26 @@ test("worker returns setup wizard json", async () => {
   const body = await response.json();
   assert.equal(body.ok, true);
   assert.equal(body.onboarding.customGpt.actionSchemaJson.includes("/v2/gateway"), true);
+  assert.equal(
+    body.onboarding.customGpt.actionSchemaImportUrl,
+    "https://example.com/setup/wizard?format=openapi&repo=sample-org%2Fvtdd-v2&surface=custom_gpt"
+  );
   assert.equal(body.generatedAnswers.actionEndpointBaseUrl, "https://example.com");
   assert.equal(body.cloudflareSetupCheck.state, "disabled");
   assert.equal(body.githubAppSetupCheck.state, "not_configured");
+});
+
+test("worker returns setup wizard openapi schema for import url", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/setup/wizard?format=openapi&repo=sample-org/vtdd-v2")
+  );
+  assert.equal(response.status, 200);
+  const contentType = response.headers.get("content-type") ?? "";
+  assert.equal(contentType.includes("application/json"), true);
+  const body = await response.json();
+  assert.equal(body.openapi, "3.1.0");
+  assert.equal(body.paths["/v2/gateway"].post.operationId, "postMvpGateway");
+  assert.equal(body.servers[0].url, "https://example.com");
 });
 
 test("worker setup wizard json keeps iphone-first and no-default-repo policy visible", async () => {
