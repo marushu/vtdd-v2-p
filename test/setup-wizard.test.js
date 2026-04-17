@@ -38,6 +38,16 @@ test("setup wizard returns git/db outputs and iphone onboarding pack", () => {
   assert.equal(result.onboarding.customGpt.actionSchemaJson.includes("/v2/gateway"), true);
   assert.equal(result.onboarding.deployAuthority.selectedPath, "one_shot_github_actions");
   assert.equal(result.onboarding.deployAuthority.fallbackPath, "direct_provider");
+  assert.equal(result.onboarding.productionDeploy.workflow, "deploy-production");
+  assert.equal(result.onboarding.productionDeploy.environment, "production");
+  assert.deepEqual(result.onboarding.productionDeploy.requiredSecrets, [
+    "CLOUDFLARE_API_TOKEN",
+    "CLOUDFLARE_ACCOUNT_ID"
+  ]);
+  assert.deepEqual(result.onboarding.productionDeploy.requiredInputs, [
+    "approval_phrase=GO",
+    "passkey_verified=true"
+  ]);
   assert.equal(
     result.onboarding.customGpt.actionSchemaJson.includes("/v2/retrieve/constitution"),
     true

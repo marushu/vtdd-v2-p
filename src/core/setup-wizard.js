@@ -175,6 +175,13 @@ function buildIphoneOnboardingPack(answers) {
       "Run GitHub Actions deploy-production with approval_phrase=GO and passkey_verified=true."
     ],
     deployAuthority,
+    productionDeploy: {
+      workflow: "deploy-production",
+      environment: "production",
+      requiredSecrets: ["CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"],
+      requiredInputs: ["approval_phrase=GO", "passkey_verified=true"],
+      reminder: "Production deploy stays human-gated through GitHub Environment approval."
+    },
     secretHandlingPolicy: {
       model: "operator_managed_environment_secrets",
       statement:
