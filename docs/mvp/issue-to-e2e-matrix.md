@@ -68,6 +68,8 @@ Status values used below:
   - `test/issue-template-model.test.js`
   - `test/pr-template-model.test.js`
   - `test/guarded-semi-automation-mode.test.js`
+- Run evidence:
+  - `docs/mvp/e2e/e2e-02-issue-pr-template-discipline.md`
 - Status: `implemented_pending_e2e`
 
 ## E2E-03 Memory schema/provider contract
