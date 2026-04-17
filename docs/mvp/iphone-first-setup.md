@@ -115,11 +115,15 @@ These steps are for first-time setup. They are manual because GitHub App creatio
    - recall source order stays `issue -> constitution -> decision_log -> proposal_log -> pr_context`
    - execution order stays issue-first and constitution-aware
    - provider remains replaceable even if Cloudflare is the initial runtime
-14. Run `deploy-production` workflow with:
+14. Keep policy engine visible in setup output:
+   - deterministic policy order stays fixed
+   - execution preconditions stay `constitution consulted / runtime truth or safe fallback / target resolved / approval satisfied`
+   - earlier boundary failures are not overridden by later checks
+15. Run `deploy-production` workflow with:
    - `approval_phrase=GO`
    - `passkey_verified=true`
-15. Approve the production environment gate.
-16. If operator will be away, set Worker runtime env:
+16. Approve the production environment gate.
+17. If operator will be away, set Worker runtime env:
    - `VTDD_AUTONOMY_MODE=guarded_absence`
    - return to normal by setting `VTDD_AUTONOMY_MODE=normal` (or unsetting it)
    - setup output now summarizes allowed actions, forbidden actions, and mandatory stop boundaries for guarded absence mode
