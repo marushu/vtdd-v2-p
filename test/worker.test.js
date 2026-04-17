@@ -163,6 +163,20 @@ test("worker returns setup wizard html when repo query is provided", async () =>
     html.includes("contract_fixed_provider_agnostic_cloudflare_allowed_as_initial_runtime"),
     true
   );
+  assert.equal(html.includes("Policy Engine Contract"), true);
+  assert.equal(html.includes("deterministic"), true);
+  assert.equal(html.includes("constitution consulted"), true);
+  assert.equal(html.includes("runtime truth available or safe fallback selected"), true);
+  assert.equal(html.includes("target repository resolved"), true);
+  assert.equal(html.includes("approval level satisfied"), true);
+  assert.equal(html.includes("role boundary"), true);
+  assert.equal(html.includes("constitution check"), true);
+  assert.equal(html.includes("runtime truth check"), true);
+  assert.equal(html.includes("repository resolution"), true);
+  assert.equal(html.includes("traceability"), true);
+  assert.equal(html.includes("consent"), true);
+  assert.equal(html.includes("approval"), true);
+  assert.equal(html.includes("credential boundary"), true);
   assert.equal(html.includes("Guarded Absence Contract"), true);
   assert.equal(html.includes("guarded_absence"), true);
   assert.equal(html.includes("pr_review_submit"), true);
@@ -387,6 +401,23 @@ test("worker returns setup wizard json", async () => {
     body.onboarding.retrievalContract.providerModel,
     "contract_fixed_provider_agnostic_cloudflare_allowed_as_initial_runtime"
   );
+  assert.equal(body.onboarding.policyEngine.mode, "deterministic");
+  assert.deepEqual(body.onboarding.policyEngine.executionPreconditions, [
+    "constitution consulted",
+    "runtime truth available or safe fallback selected",
+    "target repository resolved",
+    "approval level satisfied"
+  ]);
+  assert.deepEqual(body.onboarding.policyEngine.decisionOrder, [
+    "role boundary",
+    "constitution check",
+    "runtime truth check",
+    "repository resolution",
+    "traceability",
+    "consent",
+    "approval",
+    "credential boundary"
+  ]);
   assert.equal(body.onboarding.guardedAbsence.modeName, "guarded_absence");
   assert.equal(body.onboarding.guardedAbsence.forbiddenActions.includes("deploy_production"), true);
   assert.equal(body.onboarding.reviewer.initialReviewer, "gemini");

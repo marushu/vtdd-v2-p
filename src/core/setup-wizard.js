@@ -336,6 +336,27 @@ function buildIphoneOnboardingPack(answers) {
       reminder:
         "Cross retrieval preserves canonical source order. Provider choice may change without changing VTDD retrieval contract."
     },
+    policyEngine: {
+      mode: "deterministic",
+      executionPreconditions: [
+        "constitution consulted",
+        "runtime truth available or safe fallback selected",
+        "target repository resolved",
+        "approval level satisfied"
+      ],
+      decisionOrder: [
+        "role boundary",
+        "constitution check",
+        "runtime truth check",
+        "repository resolution",
+        "traceability",
+        "consent",
+        "approval",
+        "credential boundary"
+      ],
+      reminder:
+        "Policy blocks early and deterministically. Later checks must not override earlier boundary failures."
+    },
     guardedAbsence: {
       modeName: "guarded_absence",
       allowedActions: ["read", "summarize", "issue_create", "build", "pr_comment", "pr_operation"],

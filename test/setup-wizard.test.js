@@ -213,6 +213,23 @@ test("setup wizard returns git/db outputs and iphone onboarding pack", () => {
     result.onboarding.retrievalContract.providerModel,
     "contract_fixed_provider_agnostic_cloudflare_allowed_as_initial_runtime"
   );
+  assert.equal(result.onboarding.policyEngine.mode, "deterministic");
+  assert.deepEqual(result.onboarding.policyEngine.executionPreconditions, [
+    "constitution consulted",
+    "runtime truth available or safe fallback selected",
+    "target repository resolved",
+    "approval level satisfied"
+  ]);
+  assert.deepEqual(result.onboarding.policyEngine.decisionOrder, [
+    "role boundary",
+    "constitution check",
+    "runtime truth check",
+    "repository resolution",
+    "traceability",
+    "consent",
+    "approval",
+    "credential boundary"
+  ]);
   assert.equal(result.onboarding.guardedAbsence.modeName, "guarded_absence");
   assert.deepEqual(result.onboarding.guardedAbsence.allowedActions, [
     "read",

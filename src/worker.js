@@ -991,6 +991,7 @@ function renderSuccessContent(result, answers, url, cloudflareSetupCheck, github
   const surfaceIndependence = onboarding.surfaceIndependence ?? {};
   const butlerReviewProtocol = onboarding.butlerReviewProtocol ?? {};
   const retrievalContract = onboarding.retrievalContract ?? {};
+  const policyEngine = onboarding.policyEngine ?? {};
   const guardedAbsence = onboarding.guardedAbsence ?? {};
   const reviewer = onboarding.reviewer ?? {};
   const repoList = answers.repositories.map((item) => escapeHtml(item.canonicalRepo));
@@ -1019,6 +1020,7 @@ function renderSuccessContent(result, answers, url, cloudflareSetupCheck, github
     ${renderSurfaceIndependenceContract(surfaceIndependence)}
     ${renderButlerReviewProtocolContract(butlerReviewProtocol)}
     ${renderRetrievalContract(retrievalContract)}
+    ${renderPolicyEngineContract(policyEngine)}
     ${renderGuardedAbsenceContract(guardedAbsence)}
     ${renderReviewerContract(reviewer)}
     <div class="section-header">
@@ -1325,6 +1327,29 @@ function renderRetrievalContract(contract) {
       <p><strong>Use cases:</strong> ${useCases.map((item) => `<code>${escapeHtml(item)}</code>`).join(", ")}</p>
       <p><strong>Provider model:</strong> <code>${escapeHtml(providerModel)}</code></p>
       <p><strong>Reminder:</strong> ${escapeHtml(reminder || "Retrieval contract stays provider-agnostic.")}</p>
+    </div>
+  `;
+}
+
+function renderPolicyEngineContract(contract) {
+  const mode = normalizeText(contract?.mode);
+  const executionPreconditions = Array.isArray(contract?.executionPreconditions)
+    ? contract.executionPreconditions
+    : [];
+  const decisionOrder = Array.isArray(contract?.decisionOrder) ? contract.decisionOrder : [];
+  const reminder = normalizeText(contract?.reminder);
+
+  if (!mode || executionPreconditions.length === 0 || decisionOrder.length === 0) {
+    return "";
+  }
+
+  return `
+    <h2>Policy Engine Contract</h2>
+    <div class="block">
+      <p><strong>Mode:</strong> <code>${escapeHtml(mode)}</code></p>
+      <p><strong>Execution preconditions:</strong> ${executionPreconditions.map((item) => `<code>${escapeHtml(item)}</code>`).join(", ")}</p>
+      <p><strong>Decision order:</strong> ${decisionOrder.map((item) => `<code>${escapeHtml(item)}</code>`).join(", ")}</p>
+      <p><strong>Reminder:</strong> ${escapeHtml(reminder || "Policy remains deterministic.")}</p>
     </div>
   `;
 }
