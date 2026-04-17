@@ -140,6 +140,8 @@ Status values used below:
   - `test/state-machine-model.test.js`
   - `test/workflow-state-machine.test.js`
   - `test/worker.test.js`
+- Run evidence:
+  - `docs/mvp/e2e/e2e-06-policy-consent-approval-state-machine.md`
 - Status: `implemented_pending_e2e`
 
 ## E2E-07 Butler constitution-first judgment protocol
