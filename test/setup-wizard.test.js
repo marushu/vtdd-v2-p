@@ -133,6 +133,12 @@ test("setup wizard returns git/db outputs and iphone onboarding pack", () => {
   assert.equal(Boolean(parsed?.paths?.["/v2/gateway"]?.post?.responses?.["422"]), true);
   assert.equal(
     result.onboarding.steps.includes(
+      "Replace the full Instructions field with the construction text from this onboarding pack, then set action schema from the same pack."
+    ),
+    true
+  );
+  assert.equal(
+    result.onboarding.steps.includes(
       "Use pr_comment for low-friction PR comments without GO, but require GO before pr_review_submit."
     ),
     true

@@ -81,6 +81,7 @@ test("worker returns setup wizard html when repo query is provided", async () =>
   assert.equal(html.includes('textarea id="actionSchemaImportUrl"'), true);
   assert.equal(html.includes('textarea id="actionSchemaJson"'), true);
   assert.equal(html.includes("You are VTDD Butler."), true);
+  assert.equal(html.includes("Replace the full Instructions field with this text."), true);
   assert.equal(html.includes("/v2/gateway"), true);
   assert.equal(html.includes("format=openapi"), true);
   assert.equal(html.includes("Deploy Authority Recommendation"), true);
