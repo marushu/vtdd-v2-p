@@ -192,6 +192,14 @@ function buildIphoneOnboardingPack(answers) {
       reminder:
         "Show only setting names here. Do not paste bearer or service token values into setup wizard, chat, or issue text."
     },
+    repositoryResolution: {
+      aliasResolutionMode: "context_first_best_effort_for_read",
+      executionRule: "unresolved_target_blocks_execution",
+      confirmationRule: "resolved_target_plus_action_plus_confirm_for_execute_or_destructive",
+      defaultRepositoryPolicy: "forbidden",
+      reminder:
+        "Use aliases and context for read/summarize, but do not execute against a repo until the resolved target is explicit and confirmed."
+    },
     guardedAbsence: {
       modeName: "guarded_absence",
       allowedActions: ["read", "summarize", "issue_create", "build", "pr_comment", "pr_operation"],

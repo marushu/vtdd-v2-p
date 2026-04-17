@@ -985,6 +985,7 @@ function renderSuccessContent(result, answers, url, cloudflareSetupCheck, github
   const deployAuthority = onboarding.deployAuthority ?? {};
   const productionDeploy = onboarding.productionDeploy ?? {};
   const machineAuth = onboarding.machineAuth ?? {};
+  const repositoryResolution = onboarding.repositoryResolution ?? {};
   const guardedAbsence = onboarding.guardedAbsence ?? {};
   const reviewer = onboarding.reviewer ?? {};
   const repoList = answers.repositories.map((item) => escapeHtml(item.canonicalRepo));
@@ -1007,6 +1008,7 @@ function renderSuccessContent(result, answers, url, cloudflareSetupCheck, github
     ${renderDeployAuthorityRecommendation(deployAuthority)}
     ${renderProductionDeployContract(productionDeploy)}
     ${renderMachineAuthContract(machineAuth)}
+    ${renderRepositoryResolutionContract(repositoryResolution)}
     ${renderGuardedAbsenceContract(guardedAbsence)}
     ${renderReviewerContract(reviewer)}
     <div class="section-header">
@@ -1127,6 +1129,29 @@ function renderMachineAuthContract(contract) {
       <p><strong>Fallback headers:</strong> ${fallbackHeaderNames.map((item) => `<code>${escapeHtml(item)}</code>`).join(", ")}</p>
       <p><strong>Fallback secrets:</strong> ${fallbackSecretNames.map((item) => `<code>${escapeHtml(item)}</code>`).join(", ")}</p>
       <p><strong>Reminder:</strong> ${escapeHtml(reminder || "Do not paste secret values into setup surfaces.")}</p>
+    </div>
+  `;
+}
+
+function renderRepositoryResolutionContract(contract) {
+  const aliasResolutionMode = normalizeText(contract?.aliasResolutionMode);
+  const executionRule = normalizeText(contract?.executionRule);
+  const confirmationRule = normalizeText(contract?.confirmationRule);
+  const defaultRepositoryPolicy = normalizeText(contract?.defaultRepositoryPolicy);
+  const reminder = normalizeText(contract?.reminder);
+
+  if (!aliasResolutionMode || !executionRule || !confirmationRule || !defaultRepositoryPolicy) {
+    return "";
+  }
+
+  return `
+    <h2>Repository Resolution Contract</h2>
+    <div class="block">
+      <p><strong>Read path:</strong> <code>${escapeHtml(aliasResolutionMode)}</code></p>
+      <p><strong>Execution rule:</strong> <code>${escapeHtml(executionRule)}</code></p>
+      <p><strong>Confirmation rule:</strong> <code>${escapeHtml(confirmationRule)}</code></p>
+      <p><strong>Default repository:</strong> <code>${escapeHtml(defaultRepositoryPolicy)}</code></p>
+      <p><strong>Reminder:</strong> ${escapeHtml(reminder || "Resolve repo intent before execution.")}</p>
     </div>
   `;
 }
