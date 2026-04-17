@@ -27,9 +27,8 @@ The following parent-anchor conditions are satisfied in-repo:
 Issue `#13` is a parent execution anchor, not a child runtime slice.
 It remains open because repository-level completion still depends on:
 
-- mapped E2E happy-path results across the remaining matrix tracks
-- mapped E2E boundary/failure-path results across the remaining matrix tracks
-- human closure judgment after those results are reviewed
+- human closure judgment after the matrix evidence is reviewed
+- owner confirmation that the parent anchor should now be closed rather than kept open as a live umbrella
 
 ## Current Reading
 
@@ -38,7 +37,8 @@ As of 2026-04-17:
 - parent anchor is established
 - broad implementation coverage exists
 - repository completion is still `partial / in-progress`
-- `#13` must not be presented as complete until the matrix and closure gate are satisfied
+- mapped E2E run evidence now exists across the matrix
+- `#13` must not be presented as complete until the human closure gate is satisfied
 
 ## Evidence Files
 

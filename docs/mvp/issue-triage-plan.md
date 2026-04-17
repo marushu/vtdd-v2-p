@@ -13,7 +13,7 @@ As of 2026-04-17:
 - `#13` has already been rewritten as the MVP execution anchor
 - `#6` remains deprecated and must not be used as a direct implementation source
 - the repository now has broad runtime + contract coverage, but overall status is still `partial / in-progress`
-- the remaining work is mainly E2E evidence completion, parent/spec drift prevention, and human closure judgment
+- the remaining work is mainly close-readiness review, parent/spec drift prevention, and human closure judgment
 
 ## Compatibility Notes for Historical `#1-#20`
 
