@@ -110,6 +110,16 @@ test("worker returns setup wizard html when repo query is provided", async () =>
     true
   );
   assert.equal(html.includes("Default repository"), true);
+  assert.equal(html.includes("Memory Safety Contract"), true);
+  assert.equal(html.includes("decision_log"), true);
+  assert.equal(html.includes("proposal_log"), true);
+  assert.equal(html.includes("alias_registry"), true);
+  assert.equal(html.includes("approval_log"), true);
+  assert.equal(html.includes("execution_log"), true);
+  assert.equal(html.includes("working_memory_summary"), true);
+  assert.equal(html.includes("full casual transcripts"), true);
+  assert.equal(html.includes("shared canonical specification"), true);
+  assert.equal(html.includes("user-specific memory and operational traces"), true);
   assert.equal(html.includes("Guarded Absence Contract"), true);
   assert.equal(html.includes("guarded_absence"), true);
   assert.equal(html.includes("pr_review_submit"), true);
@@ -194,6 +204,28 @@ test("worker returns setup wizard json", async () => {
     "resolved_target_plus_action_plus_confirm_for_execute_or_destructive"
   );
   assert.equal(body.onboarding.repositoryResolution.defaultRepositoryPolicy, "forbidden");
+  assert.deepEqual(body.onboarding.memorySafety.allowedRecordTypes, [
+    "decision_log",
+    "proposal_log",
+    "alias_registry",
+    "approval_log",
+    "execution_log",
+    "working_memory_summary"
+  ]);
+  assert.deepEqual(body.onboarding.memorySafety.forbiddenContent, [
+    "tokens",
+    "private keys",
+    "raw secrets",
+    "full casual transcripts"
+  ]);
+  assert.equal(
+    body.onboarding.memorySafety.sourceOfTruth.git,
+    "shared canonical specification"
+  );
+  assert.equal(
+    body.onboarding.memorySafety.sourceOfTruth.db,
+    "user-specific memory and operational traces"
+  );
   assert.equal(body.onboarding.guardedAbsence.modeName, "guarded_absence");
   assert.equal(body.onboarding.guardedAbsence.forbiddenActions.includes("deploy_production"), true);
   assert.equal(body.onboarding.reviewer.initialReviewer, "gemini");

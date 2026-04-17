@@ -200,6 +200,23 @@ function buildIphoneOnboardingPack(answers) {
       reminder:
         "Use aliases and context for read/summarize, but do not execute against a repo until the resolved target is explicit and confirmed."
     },
+    memorySafety: {
+      allowedRecordTypes: [
+        "decision_log",
+        "proposal_log",
+        "alias_registry",
+        "approval_log",
+        "execution_log",
+        "working_memory_summary"
+      ],
+      forbiddenContent: ["tokens", "private keys", "raw secrets", "full casual transcripts"],
+      sourceOfTruth: {
+        git: "shared canonical specification",
+        db: "user-specific memory and operational traces"
+      },
+      reminder:
+        "Select and sanitize before write. Do not use DB memory as a replacement for canonical Git-managed specification."
+    },
     guardedAbsence: {
       modeName: "guarded_absence",
       allowedActions: ["read", "summarize", "issue_create", "build", "pr_comment", "pr_operation"],

@@ -73,6 +73,28 @@ test("setup wizard returns git/db outputs and iphone onboarding pack", () => {
     "resolved_target_plus_action_plus_confirm_for_execute_or_destructive"
   );
   assert.equal(result.onboarding.repositoryResolution.defaultRepositoryPolicy, "forbidden");
+  assert.deepEqual(result.onboarding.memorySafety.allowedRecordTypes, [
+    "decision_log",
+    "proposal_log",
+    "alias_registry",
+    "approval_log",
+    "execution_log",
+    "working_memory_summary"
+  ]);
+  assert.deepEqual(result.onboarding.memorySafety.forbiddenContent, [
+    "tokens",
+    "private keys",
+    "raw secrets",
+    "full casual transcripts"
+  ]);
+  assert.equal(
+    result.onboarding.memorySafety.sourceOfTruth.git,
+    "shared canonical specification"
+  );
+  assert.equal(
+    result.onboarding.memorySafety.sourceOfTruth.db,
+    "user-specific memory and operational traces"
+  );
   assert.equal(result.onboarding.guardedAbsence.modeName, "guarded_absence");
   assert.deepEqual(result.onboarding.guardedAbsence.allowedActions, [
     "read",

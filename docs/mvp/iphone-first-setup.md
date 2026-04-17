@@ -91,11 +91,16 @@ These steps are for first-time setup. They are manual because GitHub App creatio
    - unresolved repo must block execution
    - execute/destructive paths require resolved target + action + explicit confirmation
    - default repo remains forbidden
-9. Run `deploy-production` workflow with:
+9. Keep memory safety visible in setup output:
+   - allowed memory records stay structured (`decision_log`, `proposal_log`, `alias_registry`, `approval_log`, `execution_log`, compact working memory summaries)
+   - do not store tokens, private keys, raw secrets, or full casual transcripts
+   - Git remains the source of truth for shared canonical specification
+   - DB remains the source of truth for user-specific memory and operational traces
+10. Run `deploy-production` workflow with:
    - `approval_phrase=GO`
    - `passkey_verified=true`
-10. Approve the production environment gate.
-11. If operator will be away, set Worker runtime env:
+11. Approve the production environment gate.
+12. If operator will be away, set Worker runtime env:
    - `VTDD_AUTONOMY_MODE=guarded_absence`
    - return to normal by setting `VTDD_AUTONOMY_MODE=normal` (or unsetting it)
    - setup output now summarizes allowed actions, forbidden actions, and mandatory stop boundaries for guarded absence mode

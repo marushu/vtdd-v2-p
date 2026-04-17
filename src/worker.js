@@ -986,6 +986,7 @@ function renderSuccessContent(result, answers, url, cloudflareSetupCheck, github
   const productionDeploy = onboarding.productionDeploy ?? {};
   const machineAuth = onboarding.machineAuth ?? {};
   const repositoryResolution = onboarding.repositoryResolution ?? {};
+  const memorySafety = onboarding.memorySafety ?? {};
   const guardedAbsence = onboarding.guardedAbsence ?? {};
   const reviewer = onboarding.reviewer ?? {};
   const repoList = answers.repositories.map((item) => escapeHtml(item.canonicalRepo));
@@ -1009,6 +1010,7 @@ function renderSuccessContent(result, answers, url, cloudflareSetupCheck, github
     ${renderProductionDeployContract(productionDeploy)}
     ${renderMachineAuthContract(machineAuth)}
     ${renderRepositoryResolutionContract(repositoryResolution)}
+    ${renderMemorySafetyContract(memorySafety)}
     ${renderGuardedAbsenceContract(guardedAbsence)}
     ${renderReviewerContract(reviewer)}
     <div class="section-header">
@@ -1152,6 +1154,31 @@ function renderRepositoryResolutionContract(contract) {
       <p><strong>Confirmation rule:</strong> <code>${escapeHtml(confirmationRule)}</code></p>
       <p><strong>Default repository:</strong> <code>${escapeHtml(defaultRepositoryPolicy)}</code></p>
       <p><strong>Reminder:</strong> ${escapeHtml(reminder || "Resolve repo intent before execution.")}</p>
+    </div>
+  `;
+}
+
+function renderMemorySafetyContract(contract) {
+  const allowedRecordTypes = Array.isArray(contract?.allowedRecordTypes)
+    ? contract.allowedRecordTypes
+    : [];
+  const forbiddenContent = Array.isArray(contract?.forbiddenContent) ? contract.forbiddenContent : [];
+  const gitSource = normalizeText(contract?.sourceOfTruth?.git);
+  const dbSource = normalizeText(contract?.sourceOfTruth?.db);
+  const reminder = normalizeText(contract?.reminder);
+
+  if (allowedRecordTypes.length === 0 || forbiddenContent.length === 0 || !gitSource || !dbSource) {
+    return "";
+  }
+
+  return `
+    <h2>Memory Safety Contract</h2>
+    <div class="block">
+      <p><strong>Allowed memory records:</strong> ${allowedRecordTypes.map((item) => `<code>${escapeHtml(item)}</code>`).join(", ")}</p>
+      <p><strong>Do not store:</strong> ${forbiddenContent.map((item) => `<code>${escapeHtml(item)}</code>`).join(", ")}</p>
+      <p><strong>Git source of truth:</strong> <code>${escapeHtml(gitSource)}</code></p>
+      <p><strong>DB source of truth:</strong> <code>${escapeHtml(dbSource)}</code></p>
+      <p><strong>Reminder:</strong> ${escapeHtml(reminder || "Keep memory compact and safe.")}</p>
     </div>
   `;
 }
