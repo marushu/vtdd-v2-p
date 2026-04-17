@@ -937,6 +937,7 @@ function renderSetupWizardHtml({ result, answers, url, cloudflareSetupCheck, git
 function renderSuccessContent(result, answers, url, cloudflareSetupCheck, githubAppSetupCheck) {
   const onboarding = result.onboarding ?? {};
   const customGpt = onboarding.customGpt ?? {};
+  const deployAuthority = onboarding.deployAuthority ?? {};
   const repoList = answers.repositories.map((item) => escapeHtml(item.canonicalRepo));
   const steps = Array.isArray(onboarding.steps) ? onboarding.steps : [];
   const actionSchemaJson = customGpt.actionSchemaJson ?? "";
@@ -953,6 +954,7 @@ function renderSuccessContent(result, answers, url, cloudflareSetupCheck, github
     <div class="block">
       <ul>${steps.map((step) => `<li>${escapeHtml(step)}</li>`).join("")}</ul>
     </div>
+    ${renderDeployAuthorityRecommendation(deployAuthority)}
     <div class="section-header">
       <h2>Custom GPT Construction</h2>
       <button class="copy-button" type="button" data-copy-target="constructionText">Copy Construction</button>
@@ -968,6 +970,33 @@ function renderSuccessContent(result, answers, url, cloudflareSetupCheck, github
     ${renderGitHubAppSetupCheck(githubAppSetupCheck)}
     ${renderCloudflareSetupCheck(cloudflareSetupCheck)}
     <p class="meta">Secrets are not handled here. Keep Cloudflare credentials in GitHub Environment secrets only.</p>
+  `;
+}
+
+function renderDeployAuthorityRecommendation(recommendation) {
+  const selectedPath = normalizeText(recommendation?.selectedPath);
+  if (!selectedPath) {
+    return "";
+  }
+
+  const fallbackPath = normalizeText(recommendation?.fallbackPath) || "none";
+  const rationale = normalizeText(recommendation?.rationale) || "No rationale provided.";
+  const invariants = Array.isArray(recommendation?.invariants) ? recommendation.invariants : [];
+
+  return `
+    <h2>Deploy Authority Recommendation</h2>
+    <div class="block">
+      <p><strong>Selected path:</strong> <code>${escapeHtml(selectedPath)}</code></p>
+      <p><strong>Fallback path:</strong> <code>${escapeHtml(fallbackPath)}</code></p>
+      <p>${escapeHtml(rationale)}</p>
+      ${
+        invariants.length > 0
+          ? `<p><strong>Invariants</strong></p><ul>${invariants
+              .map((item) => `<li><code>${escapeHtml(normalizeText(item))}</code></li>`)
+              .join("")}</ul>`
+          : ""
+      }
+    </div>
   `;
 }
 

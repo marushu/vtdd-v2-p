@@ -57,6 +57,22 @@ test("worker returns setup wizard html when repo query is provided", async () =>
   assert.equal(html.includes("Custom GPT Construction"), true);
   assert.equal(html.includes("Copy Construction"), true);
   assert.equal(html.includes("Copy Schema"), true);
+  assert.equal(html.includes("Deploy Authority Recommendation"), true);
+  assert.equal(html.includes("one_shot_github_actions"), true);
+  assert.equal(html.includes("direct_provider"), true);
+});
+
+test("worker setup wizard html reflects direct provider recommendation when GitHub protection is unavailable", async () => {
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/setup/wizard?repo=sample-org/vtdd-v2&repositoryVisibility=private&branchProtectionApiStatus=forbidden&rulesetsApiStatus=forbidden"
+    )
+  );
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.equal(html.includes("Deploy Authority Recommendation"), true);
+  assert.equal(html.includes("direct_provider"), true);
+  assert.equal(html.includes("one_shot_github_actions"), true);
 });
 
 test("worker setup wizard requires repo query and returns explicit guidance", async () => {
