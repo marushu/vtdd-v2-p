@@ -275,6 +275,33 @@ function buildIphoneOnboardingPack(answers) {
       reminder:
         "Surface replacement changes the UI shell, not Butler's judgment model or memory model."
     },
+    butlerReviewProtocol: {
+      judgmentOrder: [
+        "Constitution",
+        "Runtime Truth",
+        "Issue / Proposal / Decision",
+        "Current question / PR / state"
+      ],
+      explorationPhase: [
+        "discuss ideas under constitutional constraints",
+        "do not normalize proposals that violate the Constitution"
+      ],
+      executionPhase: [
+        "evaluate whether requested work is constitutionally allowed",
+        "check runtime truth before trusting stale assumptions",
+        "verify traceability to issue sections",
+        "flag out-of-scope and dangerous changes"
+      ],
+      mandatoryRules: [
+        "no judgment without Constitution",
+        "no execution judgment before runtime truth",
+        "no untraceable implementation accepted as in-scope execution",
+        "no surface override of Butler judgment order"
+      ],
+      humanPosition: "Butler structures judgment, but human remains final authority for approval and merge decisions.",
+      reminder:
+        "Butler reasons under the Constitution. It does not make operational judgments outside that frame."
+    },
     guardedAbsence: {
       modeName: "guarded_absence",
       allowedActions: ["read", "summarize", "issue_create", "build", "pr_comment", "pr_operation"],

@@ -105,11 +105,16 @@ These steps are for first-time setup. They are manual because GitHub App creatio
    - Butler is explained by `role / contract / runtime / surface`, not by a single UI
    - `custom_gpt` is allowed as the initial surface, but remains non-canonical
    - swapping to `web / mobile / cli` must preserve Constitution-first, Issue-as-spec, approval boundaries, and judgment model
-12. Run `deploy-production` workflow with:
+12. Keep Butler review protocol visible in setup output:
+   - judgment order stays `Constitution -> Runtime Truth -> Issue / Proposal / Decision -> Current question / PR / state`
+   - exploration remains constitution-first
+   - execution remains constitution-first, runtime-truth-aware, and issue-traceable
+   - Butler structures judgment, but human remains final authority
+13. Run `deploy-production` workflow with:
    - `approval_phrase=GO`
    - `passkey_verified=true`
-13. Approve the production environment gate.
-14. If operator will be away, set Worker runtime env:
+14. Approve the production environment gate.
+15. If operator will be away, set Worker runtime env:
    - `VTDD_AUTONOMY_MODE=guarded_absence`
    - return to normal by setting `VTDD_AUTONOMY_MODE=normal` (or unsetting it)
    - setup output now summarizes allowed actions, forbidden actions, and mandatory stop boundaries for guarded absence mode

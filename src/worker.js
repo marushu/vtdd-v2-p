@@ -989,6 +989,7 @@ function renderSuccessContent(result, answers, url, cloudflareSetupCheck, github
   const memorySafety = onboarding.memorySafety ?? {};
   const roleSeparation = onboarding.roleSeparation ?? {};
   const surfaceIndependence = onboarding.surfaceIndependence ?? {};
+  const butlerReviewProtocol = onboarding.butlerReviewProtocol ?? {};
   const guardedAbsence = onboarding.guardedAbsence ?? {};
   const reviewer = onboarding.reviewer ?? {};
   const repoList = answers.repositories.map((item) => escapeHtml(item.canonicalRepo));
@@ -1015,6 +1016,7 @@ function renderSuccessContent(result, answers, url, cloudflareSetupCheck, github
     ${renderMemorySafetyContract(memorySafety)}
     ${renderRoleSeparationContract(roleSeparation)}
     ${renderSurfaceIndependenceContract(surfaceIndependence)}
+    ${renderButlerReviewProtocolContract(butlerReviewProtocol)}
     ${renderGuardedAbsenceContract(guardedAbsence)}
     ${renderReviewerContract(reviewer)}
     <div class="section-header">
@@ -1257,6 +1259,37 @@ function renderSurfaceIndependenceContract(contract) {
       <p><strong>Initial surface policy:</strong> <code>${escapeHtml(initialSurfacePolicy)}</code></p>
       <p><strong>Replacement invariants:</strong> ${replacementInvariants.map((item) => `<code>${escapeHtml(item)}</code>`).join(", ")}</p>
       <p><strong>Reminder:</strong> ${escapeHtml(reminder || "Surface replacement must not redefine Butler.")}</p>
+    </div>
+  `;
+}
+
+function renderButlerReviewProtocolContract(contract) {
+  const judgmentOrder = Array.isArray(contract?.judgmentOrder) ? contract.judgmentOrder : [];
+  const explorationPhase = Array.isArray(contract?.explorationPhase) ? contract.explorationPhase : [];
+  const executionPhase = Array.isArray(contract?.executionPhase) ? contract.executionPhase : [];
+  const mandatoryRules = Array.isArray(contract?.mandatoryRules) ? contract.mandatoryRules : [];
+  const humanPosition = normalizeText(contract?.humanPosition);
+  const reminder = normalizeText(contract?.reminder);
+
+  if (
+    judgmentOrder.length === 0 ||
+    explorationPhase.length === 0 ||
+    executionPhase.length === 0 ||
+    mandatoryRules.length === 0 ||
+    !humanPosition
+  ) {
+    return "";
+  }
+
+  return `
+    <h2>Butler Review Protocol</h2>
+    <div class="block">
+      <p><strong>Judgment order:</strong> ${judgmentOrder.map((item) => `<code>${escapeHtml(item)}</code>`).join(", ")}</p>
+      <p><strong>Exploration phase:</strong> ${explorationPhase.map((item) => `<code>${escapeHtml(item)}</code>`).join(", ")}</p>
+      <p><strong>Execution phase:</strong> ${executionPhase.map((item) => `<code>${escapeHtml(item)}</code>`).join(", ")}</p>
+      <p><strong>Mandatory rules:</strong> ${mandatoryRules.map((item) => `<code>${escapeHtml(item)}</code>`).join(", ")}</p>
+      <p><strong>Human position:</strong> ${escapeHtml(humanPosition)}</p>
+      <p><strong>Reminder:</strong> ${escapeHtml(reminder || "Butler remains constitution-first.")}</p>
     </div>
   `;
 }
