@@ -139,6 +139,17 @@ test("worker returns setup wizard html when repo query is provided", async () =>
   assert.equal(html.includes("web"), true);
   assert.equal(html.includes("mobile"), true);
   assert.equal(html.includes("cli"), true);
+  assert.equal(html.includes("Butler Review Protocol"), true);
+  assert.equal(html.includes("Constitution"), true);
+  assert.equal(html.includes("Runtime Truth"), true);
+  assert.equal(html.includes("Issue / Proposal / Decision"), true);
+  assert.equal(html.includes("Current question / PR / state"), true);
+  assert.equal(html.includes("no judgment without Constitution"), true);
+  assert.equal(html.includes("no execution judgment before runtime truth"), true);
+  assert.equal(
+    html.includes("no untraceable implementation accepted as in-scope execution"),
+    true
+  );
   assert.equal(html.includes("Guarded Absence Contract"), true);
   assert.equal(html.includes("guarded_absence"), true);
   assert.equal(html.includes("pr_review_submit"), true);
@@ -307,6 +318,28 @@ test("worker returns setup wizard json", async () => {
     "issue_as_spec_preserved",
     "approval_boundary_preserved",
     "judgment_model_not_redefined_by_surface"
+  ]);
+  assert.deepEqual(body.onboarding.butlerReviewProtocol.judgmentOrder, [
+    "Constitution",
+    "Runtime Truth",
+    "Issue / Proposal / Decision",
+    "Current question / PR / state"
+  ]);
+  assert.deepEqual(body.onboarding.butlerReviewProtocol.explorationPhase, [
+    "discuss ideas under constitutional constraints",
+    "do not normalize proposals that violate the Constitution"
+  ]);
+  assert.deepEqual(body.onboarding.butlerReviewProtocol.executionPhase, [
+    "evaluate whether requested work is constitutionally allowed",
+    "check runtime truth before trusting stale assumptions",
+    "verify traceability to issue sections",
+    "flag out-of-scope and dangerous changes"
+  ]);
+  assert.deepEqual(body.onboarding.butlerReviewProtocol.mandatoryRules, [
+    "no judgment without Constitution",
+    "no execution judgment before runtime truth",
+    "no untraceable implementation accepted as in-scope execution",
+    "no surface override of Butler judgment order"
   ]);
   assert.equal(body.onboarding.guardedAbsence.modeName, "guarded_absence");
   assert.equal(body.onboarding.guardedAbsence.forbiddenActions.includes("deploy_production"), true);

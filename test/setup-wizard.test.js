@@ -158,6 +158,28 @@ test("setup wizard returns git/db outputs and iphone onboarding pack", () => {
     "approval_boundary_preserved",
     "judgment_model_not_redefined_by_surface"
   ]);
+  assert.deepEqual(result.onboarding.butlerReviewProtocol.judgmentOrder, [
+    "Constitution",
+    "Runtime Truth",
+    "Issue / Proposal / Decision",
+    "Current question / PR / state"
+  ]);
+  assert.deepEqual(result.onboarding.butlerReviewProtocol.explorationPhase, [
+    "discuss ideas under constitutional constraints",
+    "do not normalize proposals that violate the Constitution"
+  ]);
+  assert.deepEqual(result.onboarding.butlerReviewProtocol.executionPhase, [
+    "evaluate whether requested work is constitutionally allowed",
+    "check runtime truth before trusting stale assumptions",
+    "verify traceability to issue sections",
+    "flag out-of-scope and dangerous changes"
+  ]);
+  assert.deepEqual(result.onboarding.butlerReviewProtocol.mandatoryRules, [
+    "no judgment without Constitution",
+    "no execution judgment before runtime truth",
+    "no untraceable implementation accepted as in-scope execution",
+    "no surface override of Butler judgment order"
+  ]);
   assert.equal(result.onboarding.guardedAbsence.modeName, "guarded_absence");
   assert.deepEqual(result.onboarding.guardedAbsence.allowedActions, [
     "read",
