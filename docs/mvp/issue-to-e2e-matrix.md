@@ -196,6 +196,8 @@ Status values used below:
 - Test evidence:
   - `test/memory-safety.test.js`
   - `test/memory-safety-policy.test.js`
+- Run evidence:
+  - `docs/mvp/e2e/e2e-09-memory-safety-exclusions.md`
 - Status: `implemented_pending_e2e`
 
 ## E2E-10 Surface/role separation invariants
