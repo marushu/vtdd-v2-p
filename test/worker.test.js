@@ -586,6 +586,186 @@ test("worker runtime forced guarded absence mode overrides payload normal mode",
   assert.equal(Boolean(body.guardedAbsenceExecutionLog?.recordId), true);
 });
 
+test("worker guarded absence blocks ambiguous request and records stop log", async () => {
+  const provider = createInMemoryMemoryProvider();
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/gateway", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: "Bearer test-token"
+      },
+      body: JSON.stringify({
+        phase: "execution",
+        actorRole: "executor",
+        policyInput: {
+          actionType: ActionType.BUILD,
+          mode: TaskMode.EXECUTION,
+          autonomyMode: AutonomyMode.GUARDED_ABSENCE,
+          ambiguity: {
+            ambiguousRequest: true
+          },
+          repositoryInput: "vtdd",
+          aliasRegistry,
+          targetConfirmed: true,
+          constitutionConsulted: true,
+          runtimeTruth: {
+            runtimeAvailable: true
+          },
+          credential: {
+            model: "github_app",
+            tier: CredentialTier.EXECUTE
+          },
+          consent: {
+            grantedCategories: [ConsentCategory.EXECUTE]
+          },
+          approvalPhrase: "GO build request",
+          approvalScopeMatched: true,
+          issueTraceable: true,
+          go: true,
+          passkey: false
+        }
+      })
+    }),
+    {
+      VTDD_GATEWAY_BEARER_TOKEN: "test-token",
+      MEMORY_PROVIDER: provider
+    }
+  );
+
+  assert.equal(response.status, 422);
+  const body = await response.json();
+  assert.equal(body.allowed, false);
+  assert.equal(body.blockedByRule, "guarded_absence_blocks_ambiguous_request");
+  assert.equal(Boolean(body.guardedAbsenceExecutionLog?.recordId), true);
+
+  const records = await provider.retrieve({
+    type: MemoryRecordType.EXECUTION_LOG,
+    limit: 5
+  });
+  assert.equal(records.length, 1);
+  assert.equal(records[0].content.blockedByRule, "guarded_absence_blocks_ambiguous_request");
+});
+
+test("worker guarded absence blocks spec conflict and records stop log", async () => {
+  const provider = createInMemoryMemoryProvider();
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/gateway", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: "Bearer test-token"
+      },
+      body: JSON.stringify({
+        phase: "execution",
+        actorRole: "executor",
+        policyInput: {
+          actionType: ActionType.BUILD,
+          mode: TaskMode.EXECUTION,
+          autonomyMode: AutonomyMode.GUARDED_ABSENCE,
+          ambiguity: {
+            specConflict: true
+          },
+          repositoryInput: "vtdd",
+          aliasRegistry,
+          targetConfirmed: true,
+          constitutionConsulted: true,
+          runtimeTruth: {
+            runtimeAvailable: true
+          },
+          credential: {
+            model: "github_app",
+            tier: CredentialTier.EXECUTE
+          },
+          consent: {
+            grantedCategories: [ConsentCategory.EXECUTE]
+          },
+          approvalPhrase: "GO build request",
+          approvalScopeMatched: true,
+          issueTraceable: true,
+          go: true,
+          passkey: false
+        }
+      })
+    }),
+    {
+      VTDD_GATEWAY_BEARER_TOKEN: "test-token",
+      MEMORY_PROVIDER: provider
+    }
+  );
+
+  assert.equal(response.status, 422);
+  const body = await response.json();
+  assert.equal(body.allowed, false);
+  assert.equal(body.blockedByRule, "guarded_absence_blocks_spec_conflict");
+  assert.equal(Boolean(body.guardedAbsenceExecutionLog?.recordId), true);
+
+  const records = await provider.retrieve({
+    type: MemoryRecordType.EXECUTION_LOG,
+    limit: 5
+  });
+  assert.equal(records.length, 1);
+  assert.equal(records[0].content.blockedByRule, "guarded_absence_blocks_spec_conflict");
+});
+
+test("worker guarded absence blocks unconfirmed target and records stop log", async () => {
+  const provider = createInMemoryMemoryProvider();
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/gateway", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: "Bearer test-token"
+      },
+      body: JSON.stringify({
+        phase: "execution",
+        actorRole: "executor",
+        policyInput: {
+          actionType: ActionType.BUILD,
+          mode: TaskMode.EXECUTION,
+          autonomyMode: AutonomyMode.GUARDED_ABSENCE,
+          repositoryInput: "vtdd",
+          aliasRegistry,
+          targetConfirmed: false,
+          constitutionConsulted: true,
+          runtimeTruth: {
+            runtimeAvailable: true
+          },
+          credential: {
+            model: "github_app",
+            tier: CredentialTier.EXECUTE
+          },
+          consent: {
+            grantedCategories: [ConsentCategory.EXECUTE]
+          },
+          approvalPhrase: "GO build request",
+          approvalScopeMatched: true,
+          issueTraceable: true,
+          go: true,
+          passkey: false
+        }
+      })
+    }),
+    {
+      VTDD_GATEWAY_BEARER_TOKEN: "test-token",
+      MEMORY_PROVIDER: provider
+    }
+  );
+
+  assert.equal(response.status, 422);
+  const body = await response.json();
+  assert.equal(body.allowed, false);
+  assert.equal(body.blockedByRule, "target_confirmation_required");
+  assert.equal(Boolean(body.guardedAbsenceExecutionLog?.recordId), true);
+
+  const records = await provider.retrieve({
+    type: MemoryRecordType.EXECUTION_LOG,
+    limit: 5
+  });
+  assert.equal(records.length, 1);
+  assert.equal(records[0].content.blockedByRule, "target_confirmation_required");
+});
+
 test("worker gateway uses github app live repository index for natural list conversation", async () => {
   const githubApiFetch = async () =>
     new Response(
