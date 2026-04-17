@@ -121,6 +121,8 @@ Status values used below:
   - `test/decision-log.test.js`
   - `test/proposal-log.test.js`
   - `test/worker.test.js`
+- Run evidence:
+  - `docs/mvp/e2e/e2e-05-decision-proposal-durability.md`
 - Status: `implemented_pending_e2e`
 
 ## E2E-06 Policy/consent/approval/state machine
