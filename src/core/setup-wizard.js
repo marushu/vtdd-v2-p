@@ -259,6 +259,22 @@ function buildIphoneOnboardingPack(answers) {
       reminder:
         "Same-AI operation does not collapse the role model. Credentials and outputs remain structurally separated."
     },
+    surfaceIndependence: {
+      role: "conversation, specification support, execution judgment, context recovery",
+      contract:
+        "inputs, outputs, judgment order, approval expectations, and resolution rules",
+      runtime: "memory retrieval, runtime truth retrieval, proposal handling, approval orchestration",
+      surfaces: ["custom_gpt", "web", "mobile", "cli"],
+      initialSurfacePolicy: "custom_gpt_allowed_but_non_canonical",
+      replacementInvariants: [
+        "constitution_first_preserved",
+        "issue_as_spec_preserved",
+        "approval_boundary_preserved",
+        "judgment_model_not_redefined_by_surface"
+      ],
+      reminder:
+        "Surface replacement changes the UI shell, not Butler's judgment model or memory model."
+    },
     guardedAbsence: {
       modeName: "guarded_absence",
       allowedActions: ["read", "summarize", "issue_create", "build", "pr_comment", "pr_operation"],

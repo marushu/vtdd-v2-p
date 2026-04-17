@@ -130,6 +130,34 @@ test("setup wizard returns git/db outputs and iphone onboarding pack", () => {
     "Reviewer -> Butler",
     "Human -> Final Authority"
   ]);
+  assert.equal(
+    result.onboarding.surfaceIndependence.role,
+    "conversation, specification support, execution judgment, context recovery"
+  );
+  assert.equal(
+    result.onboarding.surfaceIndependence.contract,
+    "inputs, outputs, judgment order, approval expectations, and resolution rules"
+  );
+  assert.equal(
+    result.onboarding.surfaceIndependence.runtime,
+    "memory retrieval, runtime truth retrieval, proposal handling, approval orchestration"
+  );
+  assert.deepEqual(result.onboarding.surfaceIndependence.surfaces, [
+    "custom_gpt",
+    "web",
+    "mobile",
+    "cli"
+  ]);
+  assert.equal(
+    result.onboarding.surfaceIndependence.initialSurfacePolicy,
+    "custom_gpt_allowed_but_non_canonical"
+  );
+  assert.deepEqual(result.onboarding.surfaceIndependence.replacementInvariants, [
+    "constitution_first_preserved",
+    "issue_as_spec_preserved",
+    "approval_boundary_preserved",
+    "judgment_model_not_redefined_by_surface"
+  ]);
   assert.equal(result.onboarding.guardedAbsence.modeName, "guarded_absence");
   assert.deepEqual(result.onboarding.guardedAbsence.allowedActions, [
     "read",

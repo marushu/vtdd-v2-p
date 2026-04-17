@@ -129,6 +129,16 @@ test("worker returns setup wizard html when repo query is provided", async () =>
   assert.equal(html.includes("Executor -&gt; Reviewer"), true);
   assert.equal(html.includes("Reviewer -&gt; Butler"), true);
   assert.equal(html.includes("Human -&gt; Final Authority"), true);
+  assert.equal(html.includes("Surface Independence Contract"), true);
+  assert.equal(html.includes("custom_gpt_allowed_but_non_canonical"), true);
+  assert.equal(html.includes("constitution_first_preserved"), true);
+  assert.equal(html.includes("issue_as_spec_preserved"), true);
+  assert.equal(html.includes("approval_boundary_preserved"), true);
+  assert.equal(html.includes("judgment_model_not_redefined_by_surface"), true);
+  assert.equal(html.includes("custom_gpt"), true);
+  assert.equal(html.includes("web"), true);
+  assert.equal(html.includes("mobile"), true);
+  assert.equal(html.includes("cli"), true);
   assert.equal(html.includes("Guarded Absence Contract"), true);
   assert.equal(html.includes("guarded_absence"), true);
   assert.equal(html.includes("pr_review_submit"), true);
@@ -269,6 +279,34 @@ test("worker returns setup wizard json", async () => {
     "Executor -> Reviewer",
     "Reviewer -> Butler",
     "Human -> Final Authority"
+  ]);
+  assert.equal(
+    body.onboarding.surfaceIndependence.role,
+    "conversation, specification support, execution judgment, context recovery"
+  );
+  assert.equal(
+    body.onboarding.surfaceIndependence.contract,
+    "inputs, outputs, judgment order, approval expectations, and resolution rules"
+  );
+  assert.equal(
+    body.onboarding.surfaceIndependence.runtime,
+    "memory retrieval, runtime truth retrieval, proposal handling, approval orchestration"
+  );
+  assert.deepEqual(body.onboarding.surfaceIndependence.surfaces, [
+    "custom_gpt",
+    "web",
+    "mobile",
+    "cli"
+  ]);
+  assert.equal(
+    body.onboarding.surfaceIndependence.initialSurfacePolicy,
+    "custom_gpt_allowed_but_non_canonical"
+  );
+  assert.deepEqual(body.onboarding.surfaceIndependence.replacementInvariants, [
+    "constitution_first_preserved",
+    "issue_as_spec_preserved",
+    "approval_boundary_preserved",
+    "judgment_model_not_redefined_by_surface"
   ]);
   assert.equal(body.onboarding.guardedAbsence.modeName, "guarded_absence");
   assert.equal(body.onboarding.guardedAbsence.forbiddenActions.includes("deploy_production"), true);
