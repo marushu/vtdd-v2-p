@@ -248,6 +248,8 @@ Status values used below:
   - `test/deploy-authority.test.js`
   - `test/deploy-authority-branching-doc.test.js`
   - `test/worker.test.js`
+- Run evidence:
+  - `docs/mvp/e2e/e2e-12-deploy-boundary-and-governed-flow.md`
 - Status: `implemented_pending_e2e`
 
 ## E2E-13 Reviewer operational loop
