@@ -76,6 +76,10 @@ test("worker returns setup wizard html when repo query is provided", async () =>
   assert.equal(html.includes("Custom GPT Construction"), true);
   assert.equal(html.includes("Copy Construction"), true);
   assert.equal(html.includes("Copy Schema"), true);
+  assert.equal(html.includes('textarea id="constructionText"'), true);
+  assert.equal(html.includes('textarea id="actionSchemaJson"'), true);
+  assert.equal(html.includes("You are VTDD Butler."), true);
+  assert.equal(html.includes("/v2/gateway"), true);
   assert.equal(html.includes("Deploy Authority Recommendation"), true);
   assert.equal(html.includes("one_shot_github_actions"), true);
   assert.equal(html.includes("direct_provider"), true);
