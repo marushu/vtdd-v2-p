@@ -102,6 +102,8 @@ Status values used below:
   - `test/retrieval-contract.test.js`
   - `test/cross-retrieval-runtime.test.js`
   - `test/worker.test.js`
+- Run evidence:
+  - `docs/mvp/e2e/e2e-04-retrieve-constitution-and-cross-memory.md`
 - Status: `implemented_pending_e2e`
 
 ## E2E-05 Decision/proposal durability
