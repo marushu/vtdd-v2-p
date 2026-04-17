@@ -110,11 +110,16 @@ These steps are for first-time setup. They are manual because GitHub App creatio
    - exploration remains constitution-first
    - execution remains constitution-first, runtime-truth-aware, and issue-traceable
    - Butler structures judgment, but human remains final authority
-13. Run `deploy-production` workflow with:
+13. Keep retrieval contract visible in setup output:
+   - retrieval sources stay `issue / constitution / runtime_truth / decision_log / proposal_log / pr_context`
+   - recall source order stays `issue -> constitution -> decision_log -> proposal_log -> pr_context`
+   - execution order stays issue-first and constitution-aware
+   - provider remains replaceable even if Cloudflare is the initial runtime
+14. Run `deploy-production` workflow with:
    - `approval_phrase=GO`
    - `passkey_verified=true`
-14. Approve the production environment gate.
-15. If operator will be away, set Worker runtime env:
+15. Approve the production environment gate.
+16. If operator will be away, set Worker runtime env:
    - `VTDD_AUTONOMY_MODE=guarded_absence`
    - return to normal by setting `VTDD_AUTONOMY_MODE=normal` (or unsetting it)
    - setup output now summarizes allowed actions, forbidden actions, and mandatory stop boundaries for guarded absence mode

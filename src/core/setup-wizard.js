@@ -302,6 +302,40 @@ function buildIphoneOnboardingPack(answers) {
       reminder:
         "Butler reasons under the Constitution. It does not make operational judgments outside that frame."
     },
+    retrievalContract: {
+      sources: [
+        "issue",
+        "constitution",
+        "runtime_truth",
+        "decision_log",
+        "proposal_log",
+        "pr_context"
+      ],
+      recallSourceOrder: [
+        "issue",
+        "constitution",
+        "decision_log",
+        "proposal_log",
+        "pr_context"
+      ],
+      executionOrder: [
+        "issue",
+        "constitution",
+        "runtime_truth",
+        "decision_log",
+        "proposal_log",
+        "pr_context"
+      ],
+      useCases: [
+        "recall_context",
+        "similar_issue_discovery",
+        "decision_rationale_lookup",
+        "constitution_rule_recall"
+      ],
+      providerModel: "contract_fixed_provider_agnostic_cloudflare_allowed_as_initial_runtime",
+      reminder:
+        "Cross retrieval preserves canonical source order. Provider choice may change without changing VTDD retrieval contract."
+    },
     guardedAbsence: {
       modeName: "guarded_absence",
       allowedActions: ["read", "summarize", "issue_create", "build", "pr_comment", "pr_operation"],

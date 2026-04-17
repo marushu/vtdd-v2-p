@@ -150,6 +150,19 @@ test("worker returns setup wizard html when repo query is provided", async () =>
     html.includes("no untraceable implementation accepted as in-scope execution"),
     true
   );
+  assert.equal(html.includes("Retrieval Contract"), true);
+  assert.equal(html.includes("runtime_truth"), true);
+  assert.equal(html.includes("decision_log"), true);
+  assert.equal(html.includes("proposal_log"), true);
+  assert.equal(html.includes("pr_context"), true);
+  assert.equal(html.includes("recall_context"), true);
+  assert.equal(html.includes("similar_issue_discovery"), true);
+  assert.equal(html.includes("decision_rationale_lookup"), true);
+  assert.equal(html.includes("constitution_rule_recall"), true);
+  assert.equal(
+    html.includes("contract_fixed_provider_agnostic_cloudflare_allowed_as_initial_runtime"),
+    true
+  );
   assert.equal(html.includes("Guarded Absence Contract"), true);
   assert.equal(html.includes("guarded_absence"), true);
   assert.equal(html.includes("pr_review_submit"), true);
@@ -341,6 +354,39 @@ test("worker returns setup wizard json", async () => {
     "no untraceable implementation accepted as in-scope execution",
     "no surface override of Butler judgment order"
   ]);
+  assert.deepEqual(body.onboarding.retrievalContract.sources, [
+    "issue",
+    "constitution",
+    "runtime_truth",
+    "decision_log",
+    "proposal_log",
+    "pr_context"
+  ]);
+  assert.deepEqual(body.onboarding.retrievalContract.recallSourceOrder, [
+    "issue",
+    "constitution",
+    "decision_log",
+    "proposal_log",
+    "pr_context"
+  ]);
+  assert.deepEqual(body.onboarding.retrievalContract.executionOrder, [
+    "issue",
+    "constitution",
+    "runtime_truth",
+    "decision_log",
+    "proposal_log",
+    "pr_context"
+  ]);
+  assert.deepEqual(body.onboarding.retrievalContract.useCases, [
+    "recall_context",
+    "similar_issue_discovery",
+    "decision_rationale_lookup",
+    "constitution_rule_recall"
+  ]);
+  assert.equal(
+    body.onboarding.retrievalContract.providerModel,
+    "contract_fixed_provider_agnostic_cloudflare_allowed_as_initial_runtime"
+  );
   assert.equal(body.onboarding.guardedAbsence.modeName, "guarded_absence");
   assert.equal(body.onboarding.guardedAbsence.forbiddenActions.includes("deploy_production"), true);
   assert.equal(body.onboarding.reviewer.initialReviewer, "gemini");
