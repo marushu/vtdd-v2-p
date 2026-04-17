@@ -1,22 +1,36 @@
 # Next-step Handoff
 
-This file exists so implementation can start in a fresh thread without re-deriving the current planning state.
+This file exists so work can resume in a fresh thread without re-deriving the current parent planning state.
 
-## Ready State
+## Current Ready State
 
-- MVP parent docs are in `docs/`
-- `docs/mvp/bootstrap-plan.md` bundles the current issue map
-- `docs/mvp/issue-13-rewrite-draft.md` contains the final rewrite for issue `#13`
-- `docs/mvp/issue-triage-plan.md` contains duplicate/merge/new triage and ready-to-post issue bodies
+- `#13` has already been rewritten as the MVP execution anchor
+- canonical baseline docs are restored
+- setup surface, policy surface, reviewer surface, retrieval surface, deploy surface, and safety surfaces are connected
+- `docs/mvp/issue-to-e2e-matrix.md` is the canonical repository-wide completion tracker
+- repository reading is still `partial / in-progress`
 
-## Immediate Actions (Before Implementation)
+## What Remains Open
 
-1. Update issue `#13` with `docs/mvp/issue-13-rewrite-draft.md`.
-2. Create new issues in the order written in `docs/mvp/issue-triage-plan.md`.
-3. Update `#11` with a short note linking role/reviewer separation follow-up issue.
-4. Keep implementation paused until those issue updates are merged into the planning baseline.
+At this stage, remaining work is mainly one of:
+
+1. parent/spec drift prevention
+2. E2E evidence completion
+3. human closure judgment
+
+Do not restart implementation from this handoff by assuming missing scope.
+Re-check open Issues first.
+
+## Immediate Fresh-thread Steps
+
+1. sync local `main` with `origin/main`
+2. check open Issues
+3. choose exactly one bounded target Issue
+4. write a bounded change contract before runtime edits
+5. update the Issue-to-E2E matrix when new behavior or evidence lands
 
 ## Boundary
 
-Do not begin implementation code from this handoff alone.
-Use updated `#13` as the execution anchor and treat new issues as missing canonical spec fixes.
+- do not treat this handoff file as a substitute for Issue text
+- do not treat docs-only progress as end-to-end completion
+- do not write `Closes #...` unless definition, runnable path, and Butler/worker reachability all hold

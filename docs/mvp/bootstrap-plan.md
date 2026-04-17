@@ -2,77 +2,86 @@
 
 ## Purpose
 
-This document bundles the current VTDD V2 issue set into an MVP-oriented build plan.
+This document keeps the current parent/child issue map for VTDD V2 MVP.
+It is a planning companion to `#13`, not a replacement for child Issue acceptance criteria.
 
-## Existing Core Issues
+## Execution Anchor
 
-### Vision and Foundation
+- `#13` is the canonical execution anchor for MVP bootstrap
+- active implementation must still trace to child Issue Intent / Success Criteria / Non-goal
+- repository completion remains `partial` until the Issue-to-E2E matrix has passing mapped evidence and human closure judgment
+
+## Canonical Parent / Spec Inputs
+
+### Parent / draft issues
 
 - `#1` VTDD V2 draft
-- `#7` Constitution schema
-- `#14` Issue as canonical spec
-- `#18` Butler review protocol
+- `#13` MVP bootstrap parent
 
-### Memory and Retrieval
-
-- `#2` memory schema
-- `#3` memory provider interface
-- `#4` Cloudflare provider minimum
-- `#5` retrieve minimum
-- `#17` Decision Log
-- `#19` Retrieval Contract
-- `#20` Proposal / Exploration Log
-
-### Governance and Execution
+### Canonical governance / runtime children
 
 - `#8` Policy Engine
 - `#9` Consent / Approval
 - `#10` Runtime Truth / Reconcile
-- `#12` State Machine
-- `#13` Bootstrap build issue
-- `#15` Issue Template
-- `#16` PR Template
 - `#11` reviewer pluggability
+- `#12` State Machine
+- `#18` Butler review protocol
+- `#19` Retrieval Contract
+- `#21` Repository resolution safety
+- `#23` Memory safety
+- `#24` Surface independence
+- `#25` Role separation
+- `#37` Production deploy boundary
+- `#41` iPhone-first setup wizard
+- `#75` Guarded semi-automation mode
+- `#90` Deploy authority branching
+- `#105` Secure Worker Secret Bootstrap
 
-## Additional MVP Topics To Capture
+## Canonical Git Documents
 
-These are not fully represented in the current issue list and should be formalized before or alongside implementation:
+- `docs/vision/vtdd-v2-overview.md`
+- `docs/architecture/basic-architecture.md`
+- `docs/butler/role.md`
+- `docs/butler/surface-independence.md`
+- `docs/butler/context-resolution.md`
+- `docs/memory/rag-memory-philosophy.md`
+- `docs/security/threat-model.md`
+- `docs/security/go-passkey-approval-model.md`
+- `docs/security/memory-safety-policy.md`
+- `docs/security/reviewer-policy.md`
+- `docs/security/guarded-semi-automation-mode.md`
+- `docs/security/worker-secret-bootstrap-options.md`
+- `docs/mvp/issue-to-e2e-matrix.md`
 
-- Butler surface independence
-- project alias / repository resolution
+## Current MVP Technical Baseline
+
+- SCM / PR surface: GitHub
+- Runtime: Cloudflare Workers
+- Structured storage: D1
+- Object storage: R2
+- Semantic retrieval initial runtime: Vectorize
+- Credential model: GitHub App
+- Deploy baseline: GitHub Actions -> Cloudflare
+- Approval baseline: `GO` and `GO + passkey`
+- Setup baseline: iPhone-first setup wizard
+
+## Current MVP Reading
+
+The MVP baseline now includes these user-visible/worker-connected areas:
+
+- Constitution-first Butler judgment
+- alias/context-first repository resolution
 - no default repository
-- context-first resolution
-- GitHub credential boundary / token segmentation
-- destructive action path
-- GO + passkey approval
-- memory safety policy
-- role separation model
-- reviewer contract
+- unresolved target blocks execution
+- high-risk approval boundary
+- GitHub App live repository index
+- machine auth boundary
+- setup wizard HTML / JSON / OpenAPI import path
+- reviewer / role / retrieval / policy / deploy contracts visible in setup output
+- guarded absence boundaries and execution logging
+- production deploy contract and authority branching guidance
 
-## Recommended MVP Technical Baseline
+## Completion Reminder
 
-- SCM: GitHub
-- Runtime provider: Cloudflare Workers
-- Structured DB: Cloudflare D1
-- Object storage: Cloudflare R2
-- Semantic retrieval: Cloudflare Vectorize
-- Deploy path: GitHub Actions -> Cloudflare
-- Approval: `GO` / `GO + passkey`
-
-## MVP Completion Criteria
-
-- Butler consults Constitution-first.
-- Issue is the execution spec.
-- Memory records begin from development stage.
-- Alias-based repository resolution works.
-- No default repository exists.
-- High-risk actions use `GO + passkey`.
-- Production deploy is part of MVP.
-- GitHub credentials are segmented by role and risk.
-
-## Companion Drafts
-
-- `issue-13-rewrite-draft.md`
-- `additional-issue-drafts.md`
-- `next-step-handoff.md`
-- `issue-triage-plan.md`
+Do not interpret this plan as proof of completion.
+Use `docs/mvp/issue-to-e2e-matrix.md` as the repository-wide completion tracker.
