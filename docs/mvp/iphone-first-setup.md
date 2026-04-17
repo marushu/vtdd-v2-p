@@ -101,11 +101,15 @@ These steps are for first-time setup. They are manual because GitHub App creatio
    - Executor is the only role that turns approved scope into code/tests/PR artifacts/execution logs
    - Reviewer reads PR diff + review context and returns structured critique only
    - Reviewer never gets execution, merge, or deployment authority
-11. Run `deploy-production` workflow with:
+11. Keep surface independence visible in setup output:
+   - Butler is explained by `role / contract / runtime / surface`, not by a single UI
+   - `custom_gpt` is allowed as the initial surface, but remains non-canonical
+   - swapping to `web / mobile / cli` must preserve Constitution-first, Issue-as-spec, approval boundaries, and judgment model
+12. Run `deploy-production` workflow with:
    - `approval_phrase=GO`
    - `passkey_verified=true`
-12. Approve the production environment gate.
-13. If operator will be away, set Worker runtime env:
+13. Approve the production environment gate.
+14. If operator will be away, set Worker runtime env:
    - `VTDD_AUTONOMY_MODE=guarded_absence`
    - return to normal by setting `VTDD_AUTONOMY_MODE=normal` (or unsetting it)
    - setup output now summarizes allowed actions, forbidden actions, and mandatory stop boundaries for guarded absence mode

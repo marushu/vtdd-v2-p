@@ -988,6 +988,7 @@ function renderSuccessContent(result, answers, url, cloudflareSetupCheck, github
   const repositoryResolution = onboarding.repositoryResolution ?? {};
   const memorySafety = onboarding.memorySafety ?? {};
   const roleSeparation = onboarding.roleSeparation ?? {};
+  const surfaceIndependence = onboarding.surfaceIndependence ?? {};
   const guardedAbsence = onboarding.guardedAbsence ?? {};
   const reviewer = onboarding.reviewer ?? {};
   const repoList = answers.repositories.map((item) => escapeHtml(item.canonicalRepo));
@@ -1013,6 +1014,7 @@ function renderSuccessContent(result, answers, url, cloudflareSetupCheck, github
     ${renderRepositoryResolutionContract(repositoryResolution)}
     ${renderMemorySafetyContract(memorySafety)}
     ${renderRoleSeparationContract(roleSeparation)}
+    ${renderSurfaceIndependenceContract(surfaceIndependence)}
     ${renderGuardedAbsenceContract(guardedAbsence)}
     ${renderReviewerContract(reviewer)}
     <div class="section-header">
@@ -1219,6 +1221,42 @@ function renderRoleSeparationContract(contract) {
       <p><strong>Reviewer authority limits:</strong> ${authorityLimits.map((item) => `<code>${escapeHtml(item)}</code>`).join(", ")}</p>
       <p><strong>Handoff order:</strong> ${handoffOrder.map((item) => `<code>${escapeHtml(item)}</code>`).join(", ")}</p>
       <p><strong>Reminder:</strong> ${escapeHtml(reminder || "Role boundaries stay distinct.")}</p>
+    </div>
+  `;
+}
+
+function renderSurfaceIndependenceContract(contract) {
+  const role = normalizeText(contract?.role);
+  const contractLayer = normalizeText(contract?.contract);
+  const runtime = normalizeText(contract?.runtime);
+  const surfaces = Array.isArray(contract?.surfaces) ? contract.surfaces : [];
+  const initialSurfacePolicy = normalizeText(contract?.initialSurfacePolicy);
+  const replacementInvariants = Array.isArray(contract?.replacementInvariants)
+    ? contract.replacementInvariants
+    : [];
+  const reminder = normalizeText(contract?.reminder);
+
+  if (
+    !role ||
+    !contractLayer ||
+    !runtime ||
+    surfaces.length === 0 ||
+    !initialSurfacePolicy ||
+    replacementInvariants.length === 0
+  ) {
+    return "";
+  }
+
+  return `
+    <h2>Surface Independence Contract</h2>
+    <div class="block">
+      <p><strong>Role layer:</strong> <code>${escapeHtml(role)}</code></p>
+      <p><strong>Contract layer:</strong> <code>${escapeHtml(contractLayer)}</code></p>
+      <p><strong>Runtime layer:</strong> <code>${escapeHtml(runtime)}</code></p>
+      <p><strong>Allowed surfaces:</strong> ${surfaces.map((item) => `<code>${escapeHtml(item)}</code>`).join(", ")}</p>
+      <p><strong>Initial surface policy:</strong> <code>${escapeHtml(initialSurfacePolicy)}</code></p>
+      <p><strong>Replacement invariants:</strong> ${replacementInvariants.map((item) => `<code>${escapeHtml(item)}</code>`).join(", ")}</p>
+      <p><strong>Reminder:</strong> ${escapeHtml(reminder || "Surface replacement must not redefine Butler.")}</p>
     </div>
   `;
 }
