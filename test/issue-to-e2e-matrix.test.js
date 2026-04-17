@@ -27,14 +27,17 @@ test("issue-to-e2e matrix defines all canonical E2E tracks", () => {
   }
 });
 
-test("issue-to-e2e matrix records happy path, boundary path, evidence, and status", () => {
+test("issue-to-e2e matrix records happy path, boundary path, evidence, and updated close-reading status", () => {
   const doc = fs.readFileSync(MATRIX_PATH, "utf8");
   assert.equal(doc.includes("- Happy path:"), true);
   assert.equal(doc.includes("- Boundary path:"), true);
   assert.equal(doc.includes("- Implementation evidence:"), true);
   assert.equal(doc.includes("- Test evidence:"), true);
+  assert.equal(doc.includes("- Run evidence:"), true);
   assert.equal(doc.includes("- Status:"), true);
+  assert.equal(doc.includes("e2e_evidenced_pending_human_closure"), true);
   assert.equal(doc.includes("implemented_pending_e2e"), true);
   assert.equal(doc.includes("partial"), true);
   assert.equal(doc.includes("Repository completion status: `partial`"), true);
+  assert.equal(doc.includes("mapped E2E evidence now exists across the matrix"), true);
 });
