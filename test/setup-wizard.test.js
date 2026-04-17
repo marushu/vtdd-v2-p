@@ -48,6 +48,18 @@ test("setup wizard returns git/db outputs and iphone onboarding pack", () => {
     "approval_phrase=GO",
     "passkey_verified=true"
   ]);
+  assert.equal(result.onboarding.machineAuth.recommendedMode, "worker_bearer");
+  assert.equal(result.onboarding.machineAuth.bearerSecretName, "VTDD_GATEWAY_BEARER_TOKEN");
+  assert.equal(result.onboarding.machineAuth.actionAuthType, "Bearer");
+  assert.equal(result.onboarding.machineAuth.fallbackMode, "cloudflare_access_service_token");
+  assert.deepEqual(result.onboarding.machineAuth.fallbackHeaderNames, [
+    "cf-access-client-id",
+    "cf-access-client-secret"
+  ]);
+  assert.deepEqual(result.onboarding.machineAuth.fallbackSecretNames, [
+    "CF_ACCESS_CLIENT_ID",
+    "CF_ACCESS_CLIENT_SECRET"
+  ]);
   assert.equal(
     result.onboarding.customGpt.actionSchemaJson.includes("/v2/retrieve/constitution"),
     true

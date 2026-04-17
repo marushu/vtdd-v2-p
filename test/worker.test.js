@@ -93,6 +93,13 @@ test("worker returns setup wizard html when repo query is provided", async () =>
   assert.equal(html.includes("passkey_verified=true"), true);
   assert.equal(html.includes("CLOUDFLARE_API_TOKEN"), true);
   assert.equal(html.includes("CLOUDFLARE_ACCOUNT_ID"), true);
+  assert.equal(html.includes("Machine Auth Contract"), true);
+  assert.equal(html.includes("VTDD_GATEWAY_BEARER_TOKEN"), true);
+  assert.equal(html.includes("Bearer"), true);
+  assert.equal(html.includes("cf-access-client-id"), true);
+  assert.equal(html.includes("cf-access-client-secret"), true);
+  assert.equal(html.includes("CF_ACCESS_CLIENT_ID"), true);
+  assert.equal(html.includes("CF_ACCESS_CLIENT_SECRET"), true);
   assert.equal(html.includes("repositoryVisibility=unknown"), true);
   assert.equal(html.includes("branchProtectionApiStatus=unknown"), true);
   assert.equal(html.includes("rulesetsApiStatus=unknown"), true);
@@ -145,6 +152,9 @@ test("worker returns setup wizard json", async () => {
   );
   assert.equal(body.onboarding.productionDeploy.workflow, "deploy-production");
   assert.equal(body.onboarding.productionDeploy.environment, "production");
+  assert.equal(body.onboarding.machineAuth.recommendedMode, "worker_bearer");
+  assert.equal(body.onboarding.machineAuth.bearerSecretName, "VTDD_GATEWAY_BEARER_TOKEN");
+  assert.equal(body.onboarding.machineAuth.actionAuthType, "Bearer");
   assert.equal(body.generatedAnswers.actionEndpointBaseUrl, "https://example.com");
   assert.equal(body.cloudflareSetupCheck.state, "disabled");
   assert.equal(body.githubAppSetupCheck.state, "not_configured");

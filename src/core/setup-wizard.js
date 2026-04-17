@@ -182,6 +182,16 @@ function buildIphoneOnboardingPack(answers) {
       requiredInputs: ["approval_phrase=GO", "passkey_verified=true"],
       reminder: "Production deploy stays human-gated through GitHub Environment approval."
     },
+    machineAuth: {
+      recommendedMode: "worker_bearer",
+      bearerSecretName: "VTDD_GATEWAY_BEARER_TOKEN",
+      actionAuthType: "Bearer",
+      fallbackMode: "cloudflare_access_service_token",
+      fallbackHeaderNames: ["cf-access-client-id", "cf-access-client-secret"],
+      fallbackSecretNames: ["CF_ACCESS_CLIENT_ID", "CF_ACCESS_CLIENT_SECRET"],
+      reminder:
+        "Show only setting names here. Do not paste bearer or service token values into setup wizard, chat, or issue text."
+    },
     secretHandlingPolicy: {
       model: "operator_managed_environment_secrets",
       statement:
