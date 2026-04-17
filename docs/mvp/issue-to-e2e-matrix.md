@@ -144,7 +144,7 @@ Status values used below:
 
 - Issues: `#21 #39 #41`
 - Happy path:
-  - iPhone-accessible setup wizard returns conversation-ready onboarding with no default repo and repository switch confirmation flow
+  - iPhone-accessible setup wizard returns conversation-ready onboarding with no default repo, copy-ready setup output, and repository switch confirmation flow
 - Boundary path:
   - unresolved repo, secret input, or ambiguous switch blocks execution or setup acceptance
 - Implementation evidence:
@@ -212,9 +212,9 @@ Status values used below:
 
 - Issues: `#37 #75 #90`
 - Happy path:
-  - production deploy path is explicitly governed, main push does not imply deploy, and setup output exposes deploy authority recommendation
+  - production deploy path is explicitly governed, main push does not imply deploy, setup output exposes deploy authority recommendation, and autonomy mode can return to normal after guarded absence
 - Boundary path:
-  - guarded absence blocks high-risk deploy path and deploy workflow requires GO/passkey/production environment
+  - guarded absence blocks high-risk deploy path, deploy workflow requires GO/passkey/production environment, and GitHub protection unavailability degrades setup recommendation to direct provider path
 - Implementation evidence:
   - `.github/workflows/deploy-production.yml`
   - `docs/mvp/production-deploy-path.md`
