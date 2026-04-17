@@ -170,6 +170,7 @@ function buildIphoneOnboardingPack(answers) {
     steps: [
       "Open ChatGPT on iPhone and create or edit the Butler Custom GPT.",
       "Paste construction instructions and action schema from this onboarding pack.",
+      "Use pr_comment for low-friction PR comments without GO, but require GO before pr_review_submit.",
       "Confirm GitHub production environment has required reviewers and Cloudflare secrets.",
       "Run GitHub Actions deploy-production with approval_phrase=GO and passkey_verified=true."
     ],
@@ -204,6 +205,7 @@ function buildCustomGptConstructionText(answers) {
     "When repository intent is ambiguous, ask a short confirmation question before switching context.",
     "When asked about repositories, show known repositories and aliases first.",
     "Follow Constitution-first and Issue-as-spec judgment order.",
+    "Treat pr_comment and pr_review_submit as different approval boundaries: pr_comment does not require GO, but pr_review_submit requires GO.",
     "Normal mode uses autonomyMode=normal. Absence mode uses autonomyMode=guarded_absence with strict stop boundaries.",
     "In guarded_absence mode, do not execute merge/deploy/destructive/external_publish and stop on ambiguity/spec conflict/unconfirmed target.",
     "For high-risk actions (merge/deploy/destructive/external publish), require GO + passkey.",
