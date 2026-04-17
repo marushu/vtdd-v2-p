@@ -102,6 +102,14 @@ test("worker returns setup wizard html when repo query is provided", async () =>
   assert.equal(html.includes("cf-access-client-secret"), true);
   assert.equal(html.includes("CF_ACCESS_CLIENT_ID"), true);
   assert.equal(html.includes("CF_ACCESS_CLIENT_SECRET"), true);
+  assert.equal(html.includes("Repository Resolution Contract"), true);
+  assert.equal(html.includes("context_first_best_effort_for_read"), true);
+  assert.equal(html.includes("unresolved_target_blocks_execution"), true);
+  assert.equal(
+    html.includes("resolved_target_plus_action_plus_confirm_for_execute_or_destructive"),
+    true
+  );
+  assert.equal(html.includes("Default repository"), true);
   assert.equal(html.includes("Guarded Absence Contract"), true);
   assert.equal(html.includes("guarded_absence"), true);
   assert.equal(html.includes("pr_review_submit"), true);
@@ -173,6 +181,19 @@ test("worker returns setup wizard json", async () => {
   assert.equal(body.onboarding.machineAuth.recommendedMode, "worker_bearer");
   assert.equal(body.onboarding.machineAuth.bearerSecretName, "VTDD_GATEWAY_BEARER_TOKEN");
   assert.equal(body.onboarding.machineAuth.actionAuthType, "Bearer");
+  assert.equal(
+    body.onboarding.repositoryResolution.aliasResolutionMode,
+    "context_first_best_effort_for_read"
+  );
+  assert.equal(
+    body.onboarding.repositoryResolution.executionRule,
+    "unresolved_target_blocks_execution"
+  );
+  assert.equal(
+    body.onboarding.repositoryResolution.confirmationRule,
+    "resolved_target_plus_action_plus_confirm_for_execute_or_destructive"
+  );
+  assert.equal(body.onboarding.repositoryResolution.defaultRepositoryPolicy, "forbidden");
   assert.equal(body.onboarding.guardedAbsence.modeName, "guarded_absence");
   assert.equal(body.onboarding.guardedAbsence.forbiddenActions.includes("deploy_production"), true);
   assert.equal(body.onboarding.reviewer.initialReviewer, "gemini");

@@ -86,11 +86,16 @@ These steps are for first-time setup. They are manual because GitHub App creatio
    - set the same token in Custom GPT Action auth (Bearer)
    - fallback mode (if bearer cannot be used): `CF_ACCESS_CLIENT_ID` + `CF_ACCESS_CLIENT_SECRET`
    - setup output shows these setting names, but never the secret values themselves
-8. Run `deploy-production` workflow with:
+8. Keep repository execution safety visible in setup output:
+   - read/summarize may use alias + context-first best-effort resolution
+   - unresolved repo must block execution
+   - execute/destructive paths require resolved target + action + explicit confirmation
+   - default repo remains forbidden
+9. Run `deploy-production` workflow with:
    - `approval_phrase=GO`
    - `passkey_verified=true`
-9. Approve the production environment gate.
-10. If operator will be away, set Worker runtime env:
+10. Approve the production environment gate.
+11. If operator will be away, set Worker runtime env:
    - `VTDD_AUTONOMY_MODE=guarded_absence`
    - return to normal by setting `VTDD_AUTONOMY_MODE=normal` (or unsetting it)
    - setup output now summarizes allowed actions, forbidden actions, and mandatory stop boundaries for guarded absence mode

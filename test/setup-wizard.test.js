@@ -60,6 +60,19 @@ test("setup wizard returns git/db outputs and iphone onboarding pack", () => {
     "CF_ACCESS_CLIENT_ID",
     "CF_ACCESS_CLIENT_SECRET"
   ]);
+  assert.equal(
+    result.onboarding.repositoryResolution.aliasResolutionMode,
+    "context_first_best_effort_for_read"
+  );
+  assert.equal(
+    result.onboarding.repositoryResolution.executionRule,
+    "unresolved_target_blocks_execution"
+  );
+  assert.equal(
+    result.onboarding.repositoryResolution.confirmationRule,
+    "resolved_target_plus_action_plus_confirm_for_execute_or_destructive"
+  );
+  assert.equal(result.onboarding.repositoryResolution.defaultRepositoryPolicy, "forbidden");
   assert.equal(result.onboarding.guardedAbsence.modeName, "guarded_absence");
   assert.deepEqual(result.onboarding.guardedAbsence.allowedActions, [
     "read",
