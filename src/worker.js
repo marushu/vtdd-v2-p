@@ -990,6 +990,7 @@ function renderSuccessContent(result, answers, url, cloudflareSetupCheck, github
   const roleSeparation = onboarding.roleSeparation ?? {};
   const surfaceIndependence = onboarding.surfaceIndependence ?? {};
   const butlerReviewProtocol = onboarding.butlerReviewProtocol ?? {};
+  const retrievalContract = onboarding.retrievalContract ?? {};
   const guardedAbsence = onboarding.guardedAbsence ?? {};
   const reviewer = onboarding.reviewer ?? {};
   const repoList = answers.repositories.map((item) => escapeHtml(item.canonicalRepo));
@@ -1017,6 +1018,7 @@ function renderSuccessContent(result, answers, url, cloudflareSetupCheck, github
     ${renderRoleSeparationContract(roleSeparation)}
     ${renderSurfaceIndependenceContract(surfaceIndependence)}
     ${renderButlerReviewProtocolContract(butlerReviewProtocol)}
+    ${renderRetrievalContract(retrievalContract)}
     ${renderGuardedAbsenceContract(guardedAbsence)}
     ${renderReviewerContract(reviewer)}
     <div class="section-header">
@@ -1290,6 +1292,39 @@ function renderButlerReviewProtocolContract(contract) {
       <p><strong>Mandatory rules:</strong> ${mandatoryRules.map((item) => `<code>${escapeHtml(item)}</code>`).join(", ")}</p>
       <p><strong>Human position:</strong> ${escapeHtml(humanPosition)}</p>
       <p><strong>Reminder:</strong> ${escapeHtml(reminder || "Butler remains constitution-first.")}</p>
+    </div>
+  `;
+}
+
+function renderRetrievalContract(contract) {
+  const sources = Array.isArray(contract?.sources) ? contract.sources : [];
+  const recallSourceOrder = Array.isArray(contract?.recallSourceOrder)
+    ? contract.recallSourceOrder
+    : [];
+  const executionOrder = Array.isArray(contract?.executionOrder) ? contract.executionOrder : [];
+  const useCases = Array.isArray(contract?.useCases) ? contract.useCases : [];
+  const providerModel = normalizeText(contract?.providerModel);
+  const reminder = normalizeText(contract?.reminder);
+
+  if (
+    sources.length === 0 ||
+    recallSourceOrder.length === 0 ||
+    executionOrder.length === 0 ||
+    useCases.length === 0 ||
+    !providerModel
+  ) {
+    return "";
+  }
+
+  return `
+    <h2>Retrieval Contract</h2>
+    <div class="block">
+      <p><strong>Sources:</strong> ${sources.map((item) => `<code>${escapeHtml(item)}</code>`).join(", ")}</p>
+      <p><strong>Recall source order:</strong> ${recallSourceOrder.map((item) => `<code>${escapeHtml(item)}</code>`).join(", ")}</p>
+      <p><strong>Execution order:</strong> ${executionOrder.map((item) => `<code>${escapeHtml(item)}</code>`).join(", ")}</p>
+      <p><strong>Use cases:</strong> ${useCases.map((item) => `<code>${escapeHtml(item)}</code>`).join(", ")}</p>
+      <p><strong>Provider model:</strong> <code>${escapeHtml(providerModel)}</code></p>
+      <p><strong>Reminder:</strong> ${escapeHtml(reminder || "Retrieval contract stays provider-agnostic.")}</p>
     </div>
   `;
 }

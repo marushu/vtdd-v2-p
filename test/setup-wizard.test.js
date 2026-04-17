@@ -180,6 +180,39 @@ test("setup wizard returns git/db outputs and iphone onboarding pack", () => {
     "no untraceable implementation accepted as in-scope execution",
     "no surface override of Butler judgment order"
   ]);
+  assert.deepEqual(result.onboarding.retrievalContract.sources, [
+    "issue",
+    "constitution",
+    "runtime_truth",
+    "decision_log",
+    "proposal_log",
+    "pr_context"
+  ]);
+  assert.deepEqual(result.onboarding.retrievalContract.recallSourceOrder, [
+    "issue",
+    "constitution",
+    "decision_log",
+    "proposal_log",
+    "pr_context"
+  ]);
+  assert.deepEqual(result.onboarding.retrievalContract.executionOrder, [
+    "issue",
+    "constitution",
+    "runtime_truth",
+    "decision_log",
+    "proposal_log",
+    "pr_context"
+  ]);
+  assert.deepEqual(result.onboarding.retrievalContract.useCases, [
+    "recall_context",
+    "similar_issue_discovery",
+    "decision_rationale_lookup",
+    "constitution_rule_recall"
+  ]);
+  assert.equal(
+    result.onboarding.retrievalContract.providerModel,
+    "contract_fixed_provider_agnostic_cloudflare_allowed_as_initial_runtime"
+  );
   assert.equal(result.onboarding.guardedAbsence.modeName, "guarded_absence");
   assert.deepEqual(result.onboarding.guardedAbsence.allowedActions, [
     "read",
