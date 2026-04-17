@@ -3,9 +3,11 @@ import assert from "node:assert/strict";
 import worker from "../src/worker.js";
 import {
   ActionType,
+  ActorRole,
   AutonomyMode,
   ConsentCategory,
   CredentialTier,
+  JudgmentStep,
   MemoryRecordType,
   TaskMode,
   createInMemoryMemoryProvider
@@ -16,6 +18,13 @@ const aliasRegistry = [
     canonicalRepo: "sample-org/vtdd-v2",
     aliases: ["vtdd"]
   }
+];
+
+const validButlerJudgmentTrace = [
+  JudgmentStep.CONSTITUTION,
+  JudgmentStep.RUNTIME_TRUTH,
+  JudgmentStep.ISSUE_CONTEXT,
+  JudgmentStep.CURRENT_QUERY
 ];
 
 test("worker returns health", async () => {
@@ -328,6 +337,155 @@ test("worker runs gateway route", async () => {
   const body = await response.json();
   assert.equal(body.allowed, true);
   assert.equal(body.repository, "sample-org/vtdd-v2");
+});
+
+test("worker gateway allows butler path when deterministic judgment order is satisfied", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/gateway", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        phase: "execution",
+        actorRole: ActorRole.BUTLER,
+        surfaceContext: {
+          surface: "custom_gpt",
+          judgmentModelId: "vtdd-butler-core-v1"
+        },
+        judgmentTrace: validButlerJudgmentTrace,
+        policyInput: {
+          actionType: ActionType.ISSUE_CREATE,
+          mode: TaskMode.EXECUTION,
+          repositoryInput: "vtdd",
+          aliasRegistry,
+          targetConfirmed: true,
+          constitutionConsulted: true,
+          runtimeTruth: {
+            runtimeAvailable: true
+          },
+          credential: {
+            model: "github_app",
+            tier: CredentialTier.EXECUTE
+          },
+          consent: {
+            grantedCategories: [ConsentCategory.PROPOSE]
+          },
+          approvalPhrase: "GO issue create",
+          approvalScopeMatched: true,
+          issueTraceable: true,
+          go: true,
+          passkey: false
+        }
+      })
+    })
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.allowed, true);
+  assert.equal(body.repository, "sample-org/vtdd-v2");
+});
+
+test("worker gateway blocks butler path when judgment order is invalid", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/gateway", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        phase: "execution",
+        actorRole: ActorRole.BUTLER,
+        surfaceContext: {
+          surface: "custom_gpt",
+          judgmentModelId: "vtdd-butler-core-v1"
+        },
+        judgmentTrace: [
+          JudgmentStep.RUNTIME_TRUTH,
+          JudgmentStep.CONSTITUTION,
+          JudgmentStep.ISSUE_CONTEXT,
+          JudgmentStep.CURRENT_QUERY
+        ],
+        policyInput: {
+          actionType: ActionType.ISSUE_CREATE,
+          mode: TaskMode.EXECUTION,
+          repositoryInput: "vtdd",
+          aliasRegistry,
+          targetConfirmed: true,
+          constitutionConsulted: true,
+          runtimeTruth: {
+            runtimeAvailable: true
+          },
+          credential: {
+            model: "github_app",
+            tier: CredentialTier.EXECUTE
+          },
+          consent: {
+            grantedCategories: [ConsentCategory.PROPOSE]
+          },
+          approvalPhrase: "GO issue create",
+          approvalScopeMatched: true,
+          issueTraceable: true,
+          go: true,
+          passkey: false
+        }
+      })
+    })
+  );
+
+  assert.equal(response.status, 422);
+  const body = await response.json();
+  assert.equal(body.allowed, false);
+  assert.equal(body.blockedByRule, "butler_invalid_judgment_order");
+});
+
+test("worker gateway blocks butler path when surface overrides judgment model", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/gateway", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        phase: "execution",
+        actorRole: ActorRole.BUTLER,
+        surfaceContext: {
+          surface: "web",
+          judgmentModelId: "vendor-specific-model"
+        },
+        judgmentTrace: validButlerJudgmentTrace,
+        policyInput: {
+          actionType: ActionType.ISSUE_CREATE,
+          mode: TaskMode.EXECUTION,
+          repositoryInput: "vtdd",
+          aliasRegistry,
+          targetConfirmed: true,
+          constitutionConsulted: true,
+          runtimeTruth: {
+            runtimeAvailable: true
+          },
+          credential: {
+            model: "github_app",
+            tier: CredentialTier.EXECUTE
+          },
+          consent: {
+            grantedCategories: [ConsentCategory.PROPOSE]
+          },
+          approvalPhrase: "GO issue create",
+          approvalScopeMatched: true,
+          issueTraceable: true,
+          go: true,
+          passkey: false
+        }
+      })
+    })
+  );
+
+  assert.equal(response.status, 422);
+  const body = await response.json();
+  assert.equal(body.allowed, false);
+  assert.equal(body.blockedByRule, "surface_must_not_override_judgment_model");
 });
 
 test("worker gateway allows pr comment without GO when other gates pass", async () => {
