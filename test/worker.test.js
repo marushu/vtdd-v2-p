@@ -45,6 +45,25 @@ test("worker health reflects guarded absence mode when runtime env sets it", asy
   assert.equal(body.autonomyMode, AutonomyMode.GUARDED_ABSENCE);
 });
 
+test("worker health accepts legacy autonomy mode env alias", async () => {
+  const response = await worker.fetch(new Request("https://example.com/health"), {
+    MVP_AUTONOMY_MODE: "guarded_absence"
+  });
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.autonomyMode, AutonomyMode.GUARDED_ABSENCE);
+});
+
+test("worker health returns to normal mode when VTDD_AUTONOMY_MODE is set to normal", async () => {
+  const response = await worker.fetch(new Request("https://example.com/health"), {
+    VTDD_AUTONOMY_MODE: "normal",
+    MVP_AUTONOMY_MODE: "guarded_absence"
+  });
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.autonomyMode, AutonomyMode.NORMAL);
+});
+
 test("worker returns setup wizard html when repo query is provided", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/setup/wizard?repo=sample-org/vtdd-v2")
