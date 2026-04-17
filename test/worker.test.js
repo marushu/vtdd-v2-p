@@ -1695,6 +1695,9 @@ test("worker returns cross-issue memory index through retrieve route", async () 
   assert.equal(body.ok, true);
   assert.equal(body.retrievalPlan.sources[0], "issue");
   assert.equal(body.primaryReference.source, "issue");
+  assert.equal(body.orderedReferences[0].source, "issue");
+  assert.equal(body.orderedReferences[1].source, "constitution");
+  assert.equal(body.orderedReferences[2].source, "decision_log");
   assert.equal(body.referencesBySource.decision_log.length, 1);
   assert.equal(body.referencesBySource.proposal_log.length, 1);
   assert.equal(body.referencesBySource.pr_context.length, 1);
@@ -1801,6 +1804,13 @@ test("worker gateway attaches cross retrieval references for recall conversation
   assert.equal(body.retrievalReferences.cross.sourceCounts.decision_log, 1);
   assert.equal(body.retrievalReferences.cross.sourceCounts.proposal_log, 1);
   assert.equal(body.retrievalReferences.cross.sourceCounts.pr_context, 1);
+  assert.deepEqual(body.conversationAssist.responseGuide.sourceOrder, [
+    "issue",
+    "constitution",
+    "decision_log",
+    "proposal_log",
+    "pr_context"
+  ]);
 });
 
 test("worker returns 503 when constitution retrieve provider is unavailable", async () => {
