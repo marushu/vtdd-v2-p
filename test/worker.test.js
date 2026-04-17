@@ -106,6 +106,11 @@ test("worker returns setup wizard html when repo query is provided", async () =>
   assert.equal(html.includes("deploy_production"), true);
   assert.equal(html.includes("ambiguous request"), true);
   assert.equal(html.includes("one issue / one PR violation"), true);
+  assert.equal(html.includes("Reviewer Contract"), true);
+  assert.equal(html.includes("gemini"), true);
+  assert.equal(html.includes("antigravity"), true);
+  assert.equal(html.includes("critical_findings[]"), true);
+  assert.equal(html.includes("no execution authority"), true);
   assert.equal(html.includes("repositoryVisibility=unknown"), true);
   assert.equal(html.includes("branchProtectionApiStatus=unknown"), true);
   assert.equal(html.includes("rulesetsApiStatus=unknown"), true);
@@ -163,6 +168,8 @@ test("worker returns setup wizard json", async () => {
   assert.equal(body.onboarding.machineAuth.actionAuthType, "Bearer");
   assert.equal(body.onboarding.guardedAbsence.modeName, "guarded_absence");
   assert.equal(body.onboarding.guardedAbsence.forbiddenActions.includes("deploy_production"), true);
+  assert.equal(body.onboarding.reviewer.initialReviewer, "gemini");
+  assert.equal(body.onboarding.reviewer.fallbackReviewer, "antigravity");
   assert.equal(body.generatedAnswers.actionEndpointBaseUrl, "https://example.com");
   assert.equal(body.cloudflareSetupCheck.state, "disabled");
   assert.equal(body.githubAppSetupCheck.state, "not_configured");

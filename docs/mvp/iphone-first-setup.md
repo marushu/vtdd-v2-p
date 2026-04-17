@@ -76,6 +76,7 @@ These steps are for first-time setup. They are manual because GitHub App creatio
 2. Open ChatGPT on iPhone and edit the Butler Custom GPT.
 3. Copy `Custom GPT Construction` from setup page.
 4. For `Custom GPT Action Schema`, prefer `Schema Import URL` on iPhone. If import from URL is unavailable, fall back to copying full schema JSON.
+   - setup output also shows reviewer contract summary (initial reviewer, fallback, authority limits)
 5. Ensure GitHub `production` environment has required reviewers enabled.
 6. Ensure GitHub has environment secrets:
    - `CLOUDFLARE_API_TOKEN`
