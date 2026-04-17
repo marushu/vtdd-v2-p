@@ -192,6 +192,24 @@ function buildIphoneOnboardingPack(answers) {
       reminder:
         "Show only setting names here. Do not paste bearer or service token values into setup wizard, chat, or issue text."
     },
+    guardedAbsence: {
+      modeName: "guarded_absence",
+      allowedActions: ["read", "summarize", "issue_create", "build", "pr_comment", "pr_operation"],
+      forbiddenActions: [
+        "pr_review_submit",
+        "merge",
+        "deploy_production",
+        "destructive",
+        "external_publish"
+      ],
+      mandatoryStops: [
+        "ambiguous request",
+        "spec conflict",
+        "unconfirmed target",
+        "one issue / one PR violation"
+      ],
+      reminder: "Every guarded_absence execution must leave an execution_log trail for post-absence review."
+    },
     secretHandlingPolicy: {
       model: "operator_managed_environment_secrets",
       statement:

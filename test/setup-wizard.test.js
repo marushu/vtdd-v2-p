@@ -60,6 +60,28 @@ test("setup wizard returns git/db outputs and iphone onboarding pack", () => {
     "CF_ACCESS_CLIENT_ID",
     "CF_ACCESS_CLIENT_SECRET"
   ]);
+  assert.equal(result.onboarding.guardedAbsence.modeName, "guarded_absence");
+  assert.deepEqual(result.onboarding.guardedAbsence.allowedActions, [
+    "read",
+    "summarize",
+    "issue_create",
+    "build",
+    "pr_comment",
+    "pr_operation"
+  ]);
+  assert.deepEqual(result.onboarding.guardedAbsence.forbiddenActions, [
+    "pr_review_submit",
+    "merge",
+    "deploy_production",
+    "destructive",
+    "external_publish"
+  ]);
+  assert.deepEqual(result.onboarding.guardedAbsence.mandatoryStops, [
+    "ambiguous request",
+    "spec conflict",
+    "unconfirmed target",
+    "one issue / one PR violation"
+  ]);
   assert.equal(
     result.onboarding.customGpt.actionSchemaJson.includes("/v2/retrieve/constitution"),
     true

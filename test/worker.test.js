@@ -100,6 +100,12 @@ test("worker returns setup wizard html when repo query is provided", async () =>
   assert.equal(html.includes("cf-access-client-secret"), true);
   assert.equal(html.includes("CF_ACCESS_CLIENT_ID"), true);
   assert.equal(html.includes("CF_ACCESS_CLIENT_SECRET"), true);
+  assert.equal(html.includes("Guarded Absence Contract"), true);
+  assert.equal(html.includes("guarded_absence"), true);
+  assert.equal(html.includes("pr_review_submit"), true);
+  assert.equal(html.includes("deploy_production"), true);
+  assert.equal(html.includes("ambiguous request"), true);
+  assert.equal(html.includes("one issue / one PR violation"), true);
   assert.equal(html.includes("repositoryVisibility=unknown"), true);
   assert.equal(html.includes("branchProtectionApiStatus=unknown"), true);
   assert.equal(html.includes("rulesetsApiStatus=unknown"), true);
@@ -155,6 +161,8 @@ test("worker returns setup wizard json", async () => {
   assert.equal(body.onboarding.machineAuth.recommendedMode, "worker_bearer");
   assert.equal(body.onboarding.machineAuth.bearerSecretName, "VTDD_GATEWAY_BEARER_TOKEN");
   assert.equal(body.onboarding.machineAuth.actionAuthType, "Bearer");
+  assert.equal(body.onboarding.guardedAbsence.modeName, "guarded_absence");
+  assert.equal(body.onboarding.guardedAbsence.forbiddenActions.includes("deploy_production"), true);
   assert.equal(body.generatedAnswers.actionEndpointBaseUrl, "https://example.com");
   assert.equal(body.cloudflareSetupCheck.state, "disabled");
   assert.equal(body.githubAppSetupCheck.state, "not_configured");
