@@ -153,6 +153,19 @@ That token is:
 - operator-managed
 - purpose-limited to manifest conversion/bootstrap work
 - never collected through setup wizard itself
+- expected to be a GitHub token class supported by the manifest conversion endpoint
+
+Current implementation reading:
+
+- Worker first tries `Authorization: Bearer ...`
+- if GitHub returns `401/403`, Worker retries with `Authorization: token ...`
+- if conversion still fails with `403`, treat that as a token contract mismatch or owner-permission mismatch, not as a setup wizard cosmetic fault
+
+Known unsupported classes from GitHub docs for this endpoint include:
+
+- GitHub App user access tokens
+- GitHub App installation access tokens
+- fine-grained personal access tokens
 
 This is a bounded bridge, not the final end-user GitHub connection model.
 

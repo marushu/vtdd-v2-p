@@ -2903,41 +2903,76 @@ async function convertGitHubAppManifestCode({ fetchImpl, code, authToken }) {
     };
   }
 
-  const response = await fetchImpl(
-    `${GITHUB_API_BASE_URL}/app-manifests/${encodeURIComponent(code)}/conversions`,
-    {
+  const conversionUrl = `${GITHUB_API_BASE_URL}/app-manifests/${encodeURIComponent(code)}/conversions`;
+  const authHeaderCandidates = buildGitHubTokenAuthHeaderCandidates(token);
+  let lastFailure = null;
+
+  for (const authorizationValue of authHeaderCandidates) {
+    const response = await fetchImpl(conversionUrl, {
       method: "POST",
       headers: {
         accept: "application/vnd.github+json",
-        authorization: `Bearer ${token}`,
+        authorization: authorizationValue,
         "x-github-api-version": "2022-11-28"
       }
+    });
+
+    const payload = await readSafeJson(response);
+    const appId = normalizeText(payload?.id);
+    const privateKey = normalizeText(payload?.pem);
+    const slug = normalizeText(payload?.slug);
+    const htmlUrl = normalizeText(payload?.html_url);
+
+    if (response.ok && appId && privateKey) {
+      return {
+        ok: true,
+        appId,
+        privateKey,
+        slug,
+        htmlUrl
+      };
     }
-  );
 
-  const payload = await readSafeJson(response);
-  const appId = normalizeText(payload?.id);
-  const privateKey = normalizeText(payload?.pem);
-  const slug = normalizeText(payload?.slug);
-  const htmlUrl = normalizeText(payload?.html_url);
-
-  if (response.ok && appId && privateKey) {
-    return {
-      ok: true,
-      appId,
-      privateKey,
-      slug,
-      htmlUrl
+    lastFailure = {
+      status: response.status,
+      message: normalizeText(payload?.message),
+      authorizationValue
     };
+
+    if (response.status !== 401 && response.status !== 403) {
+      break;
+    }
   }
 
-  const reason =
-    normalizeText(payload?.message) ||
-    `github app manifest conversion failed with http ${response.status}`;
+  const reason = buildGitHubManifestConversionFailureReason(lastFailure);
   return {
     ok: false,
     reason
   };
+}
+
+function buildGitHubTokenAuthHeaderCandidates(token) {
+  const normalized = normalizeText(token);
+  const candidates = [`Bearer ${normalized}`, `token ${normalized}`];
+  return [...new Set(candidates)];
+}
+
+function buildGitHubManifestConversionFailureReason(failure) {
+  const status = Number(failure?.status) || 500;
+  const message = normalizeText(failure?.message);
+  if (message) {
+    return message;
+  }
+
+  if (status === 403) {
+    return "github app manifest conversion failed with http 403 (service-owned GitHub token may be unsupported for this endpoint or missing required owner permissions)";
+  }
+
+  if (status === 401) {
+    return "github app manifest conversion failed with http 401 (service-owned GitHub token is invalid or expired)";
+  }
+
+  return `github app manifest conversion failed with http ${status}`;
 }
 
 function buildGitHubAppSetupGuidanceFromWarning(warning) {

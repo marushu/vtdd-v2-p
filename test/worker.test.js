@@ -602,6 +602,100 @@ test("worker setup wizard manifest callback writes github app id and private key
   assert.deepEqual(names, ["GITHUB_APP_ID", "GITHUB_APP_PRIVATE_KEY"]);
 });
 
+test("worker setup wizard manifest callback retries token auth after bearer 403", async () => {
+  const githubCalls = [];
+  const env = {
+    SETUP_WIZARD_PASSCODE: "2468",
+    CLOUDFLARE_API_TOKEN: "bootstrap-token",
+    CLOUDFLARE_ACCOUNT_ID: "account-id",
+    CLOUDFLARE_WORKER_SCRIPT_NAME: "vtdd-v2-mvp",
+    GITHUB_MANIFEST_CONVERSION_TOKEN: "gho_operator_token",
+    GITHUB_API_FETCH: async (url, init = {}) => {
+      githubCalls.push({ url: String(url), init });
+      if (githubCalls.length === 1) {
+        return new Response(JSON.stringify({ message: "Forbidden" }), {
+          status: 403,
+          headers: { "content-type": "application/json" }
+        });
+      }
+      return new Response(
+        JSON.stringify({
+          id: 12345,
+          pem: "-----BEGIN PRIVATE KEY-----\nmanifest\n-----END PRIVATE KEY-----",
+          slug: "vtdd-butler-v2"
+        }),
+        {
+          status: 201,
+          headers: { "content-type": "application/json" }
+        }
+      );
+    },
+    CF_API_FETCH: async () =>
+      new Response(
+        JSON.stringify({
+          success: true,
+          errors: [],
+          result: { name: "placeholder", type: "secret_text" }
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        }
+      )
+  };
+  const { sessionCookie } = await unlockSetupWizard(env);
+
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/setup/wizard/github-app/manifest/callback?code=manifest-code&returnTo=%2Fsetup%2Fwizard%3FgithubAppCheck%3Don",
+      {
+        headers: {
+          cookie: `vtdd_setup_access=${sessionCookie}`
+        }
+      }
+    ),
+    env
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(githubCalls.length, 2);
+  assert.equal(githubCalls[0].init.headers.authorization, "Bearer gho_operator_token");
+  assert.equal(githubCalls[1].init.headers.authorization, "token gho_operator_token");
+});
+
+test("worker setup wizard manifest callback returns actionable 403 contract guidance", async () => {
+  const env = {
+    SETUP_WIZARD_PASSCODE: "2468",
+    CLOUDFLARE_API_TOKEN: "bootstrap-token",
+    CLOUDFLARE_ACCOUNT_ID: "account-id",
+    CLOUDFLARE_WORKER_SCRIPT_NAME: "vtdd-v2-mvp",
+    GITHUB_MANIFEST_CONVERSION_TOKEN: "gho_operator_token",
+    GITHUB_API_FETCH: async () =>
+      new Response(JSON.stringify({}), {
+        status: 403,
+        headers: { "content-type": "application/json" }
+      })
+  };
+  const { sessionCookie } = await unlockSetupWizard(env);
+
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/setup/wizard/github-app/manifest/callback?code=manifest-code&returnTo=%2Fsetup%2Fwizard%3FgithubAppCheck%3Don",
+      {
+        headers: {
+          cookie: `vtdd_setup_access=${sessionCookie}`
+        }
+      }
+    ),
+    env
+  );
+
+  assert.equal(response.status, 502);
+  const body = await response.json();
+  assert.equal(body.error, "github_app_manifest_conversion_failed");
+  assert.equal(body.reason.includes("service-owned GitHub token may be unsupported"), true);
+});
+
 test("worker setup wizard manifest callback reports unavailable when manifest conversion token is missing", async () => {
   const env = {
     SETUP_WIZARD_PASSCODE: "2468",
