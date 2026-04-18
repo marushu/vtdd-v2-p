@@ -255,6 +255,43 @@ test("worker setup wizard shows passcode boundary when configured", async () => 
   assert.equal(html.includes('action="/setup/wizard/access"'), true);
 });
 
+test("worker localizes setup wizard html to Japanese from accept-language", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/setup/wizard?repo=sample-org/vtdd-v2", {
+      headers: {
+        "accept-language": "ja-JP,ja;q=0.9,en-US;q=0.8"
+      }
+    })
+  );
+
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.equal(html.includes("VTDD セットアップウィザード"), true);
+  assert.equal(html.includes("リポジトリ"), true);
+  assert.equal(html.includes("チェックリスト"), true);
+  assert.equal(html.includes("構成テキストをコピー"), true);
+  assert.equal(html.includes("Import URL をコピー"), true);
+});
+
+test("worker localizes locked setup wizard to Japanese from accept-language", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/setup/wizard?repo=sample-org/vtdd-v2", {
+      headers: {
+        "accept-language": "ja-JP,ja;q=0.9"
+      }
+    }),
+    {
+      SETUP_WIZARD_PASSCODE: "2468"
+    }
+  );
+
+  assert.equal(response.status, 401);
+  const html = await response.text();
+  assert.equal(html.includes("セットアップウィザードへのアクセスは保護されています。"), true);
+  assert.equal(html.includes("パスコード"), true);
+  assert.equal(html.includes("セットアップウィザードを開く"), true);
+});
+
 test("worker setup wizard json returns locked response when passcode boundary is configured", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/setup/wizard?format=json&repo=sample-org/vtdd-v2"),

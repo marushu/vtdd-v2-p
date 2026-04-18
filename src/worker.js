@@ -99,7 +99,7 @@ export default {
       if (!auth.ok) {
         return auth.response;
       }
-      return handleSetupWizardRequest(url, env);
+      return handleSetupWizardRequest({ request, url, env });
     }
 
     if (request.method === "POST" && isApiPath(url.pathname, "/gateway")) {
@@ -190,7 +190,7 @@ export default {
   }
 };
 
-async function handleSetupWizardRequest(url, env) {
+async function handleSetupWizardRequest({ request, url, env }) {
   const answers = buildSetupWizardAnswers(url);
   const result = runInitialSetupWizard({ answers });
   const cloudflareSetupCheck = await runCloudflareSetupCheck(url, env);
@@ -200,6 +200,7 @@ async function handleSetupWizardRequest(url, env) {
   const format = normalize(url.searchParams.get("format"));
   const guidance = buildSetupWizardGuidance({ result, url });
   const enrichedResult = attachSetupWizardImportUrls({ result, url });
+  const locale = detectSetupWizardLocale({ request, url });
 
   if (format === "openapi") {
     const actionSchemaJson = enrichedResult?.onboarding?.customGpt?.actionSchemaJson;
@@ -235,6 +236,7 @@ async function handleSetupWizardRequest(url, env) {
     result: enrichedResult,
     answers,
     url,
+    locale,
     cloudflareSetupCheck,
     githubAppSetupCheck,
     githubAppBootstrap
@@ -261,7 +263,7 @@ async function authorizeSetupWizardRequest({ request, url, env }) {
 
   return {
     ok: false,
-    response: renderSetupWizardLockedResponse({ url })
+    response: renderSetupWizardLockedResponse({ request, url })
   };
 }
 
@@ -525,7 +527,8 @@ function getSetupWizardAuthConfig(env) {
   };
 }
 
-function renderSetupWizardLockedResponse({ url }) {
+function renderSetupWizardLockedResponse({ request, url }) {
+  const locale = detectSetupWizardLocale({ request, url });
   const format = normalize(url.searchParams.get("format"));
   const returnTo = url.pathname + url.search;
 
@@ -542,28 +545,33 @@ function renderSetupWizardLockedResponse({ url }) {
   return html(
     401,
     renderHtmlDocument(`
-        <p class="meta">Setup wizard access is protected.</p>
+        <p class="meta">${escapeHtml(locale === "ja" ? "セットアップウィザードへのアクセスは保護されています。" : "Setup wizard access is protected.")}</p>
         <div class="block">
-          <p>Enter the bootstrap passcode to continue on this device.</p>
+          <p>${escapeHtml(locale === "ja" ? "この端末で続行するには bootstrap passcode を入力してください。" : "Enter the bootstrap passcode to continue on this device.")}</p>
           <form method="post" action="/setup/wizard/access">
             <input type="hidden" name="returnTo" value="${escapeHtml(returnTo)}" />
-            <label for="passcode"><strong>Passcode</strong></label>
-            <p class="meta" style="margin-top: 4px;">Tap the field below, enter the passcode, then unlock.</p>
+            <label for="passcode"><strong>${escapeHtml(locale === "ja" ? "パスコード" : "Passcode")}</strong></label>
+            <p class="meta" style="margin-top: 4px;">${escapeHtml(locale === "ja" ? "下の入力欄をタップして passcode を入れ、Unlock してください。" : "Tap the field below, enter the passcode, then unlock.")}</p>
             <input
               id="passcode"
               name="passcode"
               type="password"
               inputmode="text"
               autocomplete="one-time-code"
-              placeholder="Enter passcode"
+              placeholder="${escapeHtml(locale === "ja" ? "パスコードを入力" : "Enter passcode")}"
               style="display: block; width: 100%; max-width: 100%; min-height: 44px; margin-top: 8px; padding: 12px 14px; font-size: 16px; line-height: 1.4; border-radius: 10px; border: 1px solid #cbd5e1; background: #fff;"
             />
             <div style="margin-top: 12px;">
-              <button type="submit" class="copy-button">Unlock Setup Wizard</button>
+              <button type="submit" class="copy-button">${escapeHtml(locale === "ja" ? "セットアップウィザードを開く" : "Unlock Setup Wizard")}</button>
             </div>
           </form>
         </div>
-      `)
+      `, {
+        pageTitle: locale === "ja" ? "VTDD セットアップウィザード" : "VTDD Setup Wizard",
+        copiedText: locale === "ja" ? "コピーしました。" : "Copied.",
+        manualCopyText:
+          locale === "ja" ? "全選択して手動でコピーしてください。" : "Select all and copy manually."
+      })
   );
 }
 
@@ -1284,15 +1292,21 @@ function renderSetupWizardHtml({
   result,
   answers,
   url,
+  locale = "en",
   cloudflareSetupCheck,
   githubAppSetupCheck,
   githubAppBootstrap
 }) {
+  const pageTitle = locale === "ja" ? "VTDD セットアップウィザード" : "VTDD Setup Wizard";
+  const copiedText = locale === "ja" ? "コピーしました。" : "Copied.";
+  const manualCopyText =
+    locale === "ja" ? "全選択して手動でコピーしてください。" : "Select all and copy manually.";
   const body = result.ok
     ? renderSuccessContent(
         result,
         answers,
         url,
+        locale,
         cloudflareSetupCheck,
         githubAppSetupCheck,
         githubAppBootstrap
@@ -1301,21 +1315,30 @@ function renderSetupWizardHtml({
         result,
         answers,
         url,
+        locale,
         cloudflareSetupCheck,
         githubAppSetupCheck,
         githubAppBootstrap
       );
 
-  return renderHtmlDocument(body);
+  return renderHtmlDocument(body, {
+    pageTitle,
+    copiedText,
+    manualCopyText
+  });
 }
 
-function renderHtmlDocument(body) {
+function renderHtmlDocument(body, ui = {}) {
+  const pageTitle = normalizeText(ui.pageTitle) || "VTDD Setup Wizard";
+  const copiedText = normalizeText(ui.copiedText) || "Copied.";
+  const manualCopyText =
+    normalizeText(ui.manualCopyText) || "Select all and copy manually.";
   return `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>VTDD Setup Wizard</title>
+    <title>${escapeHtml(pageTitle)}</title>
     <style>
       :root {
         color-scheme: light;
@@ -1402,7 +1425,7 @@ function renderHtmlDocument(body) {
   </head>
   <body>
     <main>
-      <h1>VTDD Setup Wizard</h1>
+      <h1>${escapeHtml(pageTitle)}</h1>
       ${body}
     </main>
     <script>
@@ -1430,11 +1453,11 @@ function renderHtmlDocument(body) {
             textarea.select();
             document.execCommand("copy");
           }
-          setCopyState(button, "Copied.");
+          setCopyState(button, ${JSON.stringify(copiedText)});
         } catch {
           textarea.focus();
           textarea.select();
-          setCopyState(button, "Select all and copy manually.");
+          setCopyState(button, ${JSON.stringify(manualCopyText)});
         }
       }
 
@@ -1452,6 +1475,7 @@ function renderSuccessContent(
   result,
   answers,
   url,
+  locale = "en",
   cloudflareSetupCheck,
   githubAppSetupCheck,
   githubAppBootstrap
@@ -1475,15 +1499,49 @@ function renderSuccessContent(
   const actionSchemaJson = customGpt.actionSchemaJson ?? "";
   const actionSchemaImportUrl = customGpt.actionSchemaImportUrl ?? "";
   const constructionText = customGpt.constructionText ?? "";
+  const introText =
+    locale === "ja"
+      ? "iPhone の Safari で開き、この下の内容を Custom GPT 設定へコピーしてください。"
+      : "Open this URL on iPhone Safari, then copy the blocks below into Custom GPT settings.";
+  const jsonLabel = locale === "ja" ? "JSON 出力" : "JSON output";
+  const repositoriesTitle = locale === "ja" ? "リポジトリ" : "Repositories";
+  const checklistTitle = locale === "ja" ? "チェックリスト" : "Checklist";
+  const constructionTitle =
+    locale === "ja" ? "Custom GPT Instructions" : "Custom GPT Construction";
+  const copyConstructionLabel =
+    locale === "ja" ? "構成テキストをコピー" : "Copy Construction";
+  const copySchemaLabel = locale === "ja" ? "スキーマをコピー" : "Copy Schema";
+  const copyImportLabel =
+    locale === "ja" ? "Import URL をコピー" : "Copy Import URL";
+  const constructionHint =
+    locale === "ja"
+      ? "モバイルで選択しづらい場合はコピーボタンを使ってください。Instructions 全体をこの内容で置き換えます。"
+      : "Tap copy button if text selection is difficult on mobile. Replace the full Instructions field with this text.";
+  const importHint =
+    locale === "ja"
+      ? "この URL を Custom GPT Action のスキーマ Import に貼り付けます。"
+      : "Paste this URL into Custom GPT Action schema import.";
+  const schemaHint =
+    locale === "ja"
+      ? "OpenAPI JSON 全文をコピーします。"
+      : "Tap copy button to copy full OpenAPI JSON.";
+  const importHelp =
+    locale === "ja"
+      ? "iPhone で全文貼り付けが大変な場合は、下の URL から Import を使ってください。"
+      : "If pasting full schema is hard on iPhone, use Import from URL with the link below.";
+  const operatorManagedNote =
+    locale === "ja"
+      ? "GitHub App の allowlist された 3 項目だけがこの narrow bootstrap form で扱われます。Cloudflare 側の bootstrap credential は Worker runtime で operator-managed のまま保持してください。"
+      : "Only the allowlisted GitHub App trio is handled through the narrow bootstrap form. Keep Cloudflare bootstrap credentials operator-managed on Worker runtime.";
 
   return `
-    <p class="meta">Open this URL on iPhone Safari, then copy the blocks below into Custom GPT settings.</p>
-    <p class="meta">JSON output: <code>${escapeHtml(`${url.origin}/setup/wizard?format=json`)}</code></p>
-    <h2>Repositories</h2>
+    <p class="meta">${escapeHtml(introText)}</p>
+    <p class="meta">${escapeHtml(jsonLabel)}: <code>${escapeHtml(`${url.origin}/setup/wizard?format=json`)}</code></p>
+    <h2>${escapeHtml(repositoriesTitle)}</h2>
     <div class="block">
       <ul>${repoList.map((repo) => `<li>${repo}</li>`).join("")}</ul>
     </div>
-    <h2>Checklist</h2>
+    <h2>${escapeHtml(checklistTitle)}</h2>
     <div class="block">
       <ul>${steps.map((step) => `<li>${escapeHtml(step)}</li>`).join("")}</ul>
     </div>
@@ -1500,28 +1558,28 @@ function renderSuccessContent(
     ${renderGuardedAbsenceContract(guardedAbsence)}
     ${renderReviewerContract(reviewer)}
     <div class="section-header">
-      <h2>Custom GPT Construction</h2>
-      <button class="copy-button" type="button" data-copy-target="constructionText">Copy Construction</button>
+      <h2>${escapeHtml(constructionTitle)}</h2>
+      <button class="copy-button" type="button" data-copy-target="constructionText">${escapeHtml(copyConstructionLabel)}</button>
     </div>
     <textarea id="constructionText" readonly>${escapeHtml(constructionText)}</textarea>
-    <p class="copy-hint" data-copy-status="constructionText">Tap copy button if text selection is difficult on mobile. Replace the full Instructions field with this text.</p>
+    <p class="copy-hint" data-copy-status="constructionText">${escapeHtml(constructionHint)}</p>
     <div class="section-header">
       <h2>Custom GPT Action Schema (OpenAPI)</h2>
-      <button class="copy-button" type="button" data-copy-target="actionSchemaJson">Copy Schema</button>
+      <button class="copy-button" type="button" data-copy-target="actionSchemaJson">${escapeHtml(copySchemaLabel)}</button>
     </div>
-    <p class="meta">If pasting full schema is hard on iPhone, use Import from URL with the link below.</p>
+    <p class="meta">${escapeHtml(importHelp)}</p>
     <div class="section-header">
       <h3>Schema Import URL</h3>
-      <button class="copy-button" type="button" data-copy-target="actionSchemaImportUrl">Copy Import URL</button>
+      <button class="copy-button" type="button" data-copy-target="actionSchemaImportUrl">${escapeHtml(copyImportLabel)}</button>
     </div>
     <textarea id="actionSchemaImportUrl" readonly>${escapeHtml(actionSchemaImportUrl)}</textarea>
-    <p class="copy-hint" data-copy-status="actionSchemaImportUrl">Paste this URL into Custom GPT Action schema import.</p>
+    <p class="copy-hint" data-copy-status="actionSchemaImportUrl">${escapeHtml(importHint)}</p>
       <textarea id="actionSchemaJson" readonly>${escapeHtml(actionSchemaJson)}</textarea>
-      <p class="copy-hint" data-copy-status="actionSchemaJson">Tap copy button to copy full OpenAPI JSON.</p>
-      ${renderGitHubAppSetupCheck(githubAppSetupCheck)}
-      ${renderGitHubAppBootstrap(githubAppBootstrap, url)}
-      ${renderCloudflareSetupCheck(cloudflareSetupCheck)}
-      <p class="meta">Only the allowlisted GitHub App trio is handled through the narrow bootstrap form. Keep Cloudflare bootstrap credentials operator-managed on Worker runtime.</p>
+      <p class="copy-hint" data-copy-status="actionSchemaJson">${escapeHtml(schemaHint)}</p>
+      ${renderGitHubAppSetupCheck(githubAppSetupCheck, locale)}
+      ${renderGitHubAppBootstrap(githubAppBootstrap, url, locale)}
+      ${renderCloudflareSetupCheck(cloudflareSetupCheck, locale)}
+      <p class="meta">${escapeHtml(operatorManagedNote)}</p>
     `;
 }
 
@@ -1885,6 +1943,7 @@ function renderFailureContent(
   result,
   answers,
   url,
+  locale = "en",
   cloudflareSetupCheck,
   githubAppSetupCheck,
   githubAppBootstrap
@@ -1895,23 +1954,41 @@ function renderFailureContent(
   const guidanceItems = guidance.map((item) => `<li>${escapeHtml(item)}</li>`).join("");
 
   return `
-    <p class="meta">Wizard validation failed.</p>
-    <h2>Blocking Issues</h2>
+    <p class="meta">${escapeHtml(locale === "ja" ? "ウィザード検証に失敗しました。" : "Wizard validation failed.")}</p>
+    <h2>${escapeHtml(locale === "ja" ? "ブロッキング項目" : "Blocking Issues")}</h2>
     <div class="block">
       <ul>${issueItems || "<li>unknown validation error</li>"}</ul>
     </div>
     ${
       guidanceItems
-        ? `<h2>Guidance</h2><div class="block"><ul>${guidanceItems}</ul></div>`
+        ? `<h2>${escapeHtml(locale === "ja" ? "ガイダンス" : "Guidance")}</h2><div class="block"><ul>${guidanceItems}</ul></div>`
         : ""
       }
-      ${renderGitHubAppSetupCheck(githubAppSetupCheck)}
-      ${renderGitHubAppBootstrap(githubAppBootstrap, url)}
-      ${renderCloudflareSetupCheck(cloudflareSetupCheck)}
-      <h2>Debug (safe answers only)</h2>
+      ${renderGitHubAppSetupCheck(githubAppSetupCheck, locale)}
+      ${renderGitHubAppBootstrap(githubAppBootstrap, url, locale)}
+      ${renderCloudflareSetupCheck(cloudflareSetupCheck, locale)}
+      <h2>${escapeHtml(locale === "ja" ? "デバッグ（安全な回答のみ）" : "Debug (safe answers only)")}</h2>
       <textarea readonly>${escapeHtml(JSON.stringify(answers, null, 2))}</textarea>
       <p class="meta">Tip: use <code>${escapeHtml(`${url.origin}/setup/wizard?format=json`)}</code> to inspect machine-readable output.</p>
     `;
+}
+
+function detectSetupWizardLocale({ request, url }) {
+  const explicit = normalize(url.searchParams.get("lang"));
+  if (explicit === "ja" || explicit === "en") {
+    return explicit;
+  }
+
+  const acceptLanguage = normalizeText(request?.headers?.get("accept-language")).toLowerCase();
+  if (
+    acceptLanguage.startsWith("ja") ||
+    acceptLanguage.includes(",ja") ||
+    acceptLanguage.includes(" ja")
+  ) {
+    return "ja";
+  }
+
+  return "en";
 }
 
 function buildSetupWizardGuidance({ result, url }) {
@@ -1928,7 +2005,7 @@ function buildSetupWizardGuidance({ result, url }) {
   return guidance;
 }
 
-function renderCloudflareSetupCheck(check) {
+function renderCloudflareSetupCheck(check, locale = "en") {
   const state = normalizeText(check?.state) || "not_configured";
   const summary = normalizeText(check?.summary) || "Cloudflare setup check is not configured.";
   const guidance = Array.isArray(check?.guidance) ? check.guidance : [];
@@ -1952,7 +2029,7 @@ function renderCloudflareSetupCheck(check) {
   }
 
   return `
-    <h2>Cloudflare Setup Check</h2>
+    <h2>${escapeHtml(locale === "ja" ? "Cloudflare 設定チェック" : "Cloudflare Setup Check")}</h2>
     <div class="block">
       <p><strong>state:</strong> <code>${escapeHtml(state)}</code></p>
       <p>${escapeHtml(summary)}</p>
@@ -1985,7 +2062,7 @@ function renderCloudflareSetupCheck(check) {
   `;
 }
 
-function renderGitHubAppSetupCheck(check) {
+function renderGitHubAppSetupCheck(check, locale = "en") {
   const state = normalizeText(check?.state) || "not_configured";
   const summary = normalizeText(check?.summary) || "GitHub App setup check is not configured.";
   const guidance = Array.isArray(check?.guidance) ? check.guidance : [];
@@ -2006,7 +2083,7 @@ function renderGitHubAppSetupCheck(check) {
   }
 
   return `
-    <h2>GitHub App Setup Check</h2>
+    <h2>${escapeHtml(locale === "ja" ? "GitHub App 設定チェック" : "GitHub App Setup Check")}</h2>
     <div class="block">
       <p><strong>state:</strong> <code>${escapeHtml(state)}</code></p>
       <p>${escapeHtml(summary)}</p>
@@ -2039,7 +2116,7 @@ function renderGitHubAppSetupCheck(check) {
   `;
 }
 
-function renderGitHubAppBootstrap(bootstrap, url) {
+function renderGitHubAppBootstrap(bootstrap, url, locale = "en") {
   const state = normalizeText(bootstrap?.state) || "missing_prerequisites";
   const summary =
     normalizeText(bootstrap?.summary) || "GitHub App bootstrap write path is not available.";
@@ -2057,7 +2134,7 @@ function renderGitHubAppBootstrap(bootstrap, url) {
   const manifestLaunch = bootstrap?.manifestLaunch ?? null;
 
   return `
-    <h2>GitHub App Runtime Bootstrap</h2>
+    <h2>${escapeHtml(locale === "ja" ? "GitHub App Runtime Bootstrap" : "GitHub App Runtime Bootstrap")}</h2>
     <div class="block">
       <p><strong>state:</strong> <code>${escapeHtml(state)}</code></p>
       <p>${escapeHtml(summary)}</p>
@@ -2089,11 +2166,11 @@ function renderGitHubAppBootstrap(bootstrap, url) {
         state === "available" && manifestLaunch
           ? `
             <div class="block" style="margin-top: 12px;">
-              <p><strong>Create GitHub App automatically</strong></p>
-              <p class="meta">This opens GitHub's manifest flow and returns here with App ID and private key ready for Worker bootstrap.</p>
+              <p><strong>${escapeHtml(locale === "ja" ? "GitHub App を自動作成" : "Create GitHub App automatically")}</strong></p>
+              <p class="meta">${escapeHtml(locale === "ja" ? "GitHub の manifest flow を開き、App ID と private key をこの Worker bootstrap に戻します。" : "This opens GitHub's manifest flow and returns here with App ID and private key ready for Worker bootstrap.")}</p>
               <form method="post" action="${escapeHtml(manifestLaunch.action)}" target="_blank" rel="noopener noreferrer">
                 <input type="hidden" name="manifest" value="${escapeHtml(manifestLaunch.manifest)}" />
-                <button type="submit" class="copy-button">Create GitHub App Automatically</button>
+                <button type="submit" class="copy-button">${escapeHtml(locale === "ja" ? "GitHub App を自動作成" : "Create GitHub App Automatically")}</button>
               </form>
             </div>
           `
