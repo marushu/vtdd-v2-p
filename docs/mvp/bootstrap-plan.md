@@ -2,21 +2,23 @@
 
 ## Purpose
 
-This document keeps the current parent/child issue map for VTDD V2 MVP.
-It is a planning companion to `#13`, not a replacement for child Issue acceptance criteria.
+This document keeps the historical MVP core map plus the current bootstrap-related parent map.
+It is a planning companion, not a replacement for child Issue acceptance criteria.
 
-## Execution Anchor
+## Execution Anchor Reading
 
-- `#13` is the canonical execution anchor for MVP bootstrap
+- `#13` remains the historical MVP core execution anchor
+- current main-line implementation work is now driven by `#182` for bootstrap automation and service connection boundaries
 - active implementation must still trace to child Issue Intent / Success Criteria / Non-goal
-- repository completion remains `partial` until the Issue-to-E2E matrix has mapped run evidence and human closure judgment
+- repository completion remains `partial` until the bootstrap/setup path also reaches intended live usability
 
 ## Canonical Parent / Spec Inputs
 
 ### Parent / draft issues
 
 - `#1` VTDD V2 draft
-- `#13` MVP bootstrap parent
+- `#13` historical MVP core parent
+- `#182` bootstrap automation and service connection parent
 
 ### Canonical governance / runtime children
 
@@ -81,7 +83,7 @@ The MVP baseline now includes these user-visible/worker-connected areas:
 - guarded absence boundaries and execution logging
 - production deploy contract and authority branching guidance
 
-## Completion Reminder
+## Current Main-line Reminder
 
-Do not interpret this plan as proof of completion.
-Use `docs/mvp/issue-to-e2e-matrix.md` as the repository-wide completion tracker.
+Do not interpret the MVP core evidence set as proof that VTDD entry/setup is already complete.
+Use `docs/mvp/issue-to-e2e-matrix.md` as the repository-wide tracker for the MVP core issue set, and use `#182` plus canonical bootstrap/security docs for the current setup/bootstrap line of work.
