@@ -36,6 +36,16 @@ const gatewayAuthEnv = {
   VTDD_GATEWAY_BEARER_TOKEN: "test-token"
 };
 
+function readCookieValue(setCookieHeader, name) {
+  const header = String(setCookieHeader ?? "");
+  const prefix = `${name}=`;
+  const part = header
+    .split(";")
+    .map((item) => item.trim())
+    .find((item) => item.startsWith(prefix));
+  return part ? part.slice(prefix.length) : "";
+}
+
 test("worker returns health", async () => {
   const response = await worker.fetch(new Request("https://example.com/health"));
   assert.equal(response.status, 200);
@@ -202,6 +212,100 @@ test("worker returns setup wizard html when repo query is provided", async () =>
   assert.equal(html.includes("rulesetsApiStatus=unknown"), true);
   assert.equal(html.includes("cloudflareApiToken"), false);
   assert.equal(html.includes("githubAppPrivateKey"), false);
+});
+
+test("worker setup wizard shows passcode boundary when configured", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/setup/wizard?repo=sample-org/vtdd-v2"),
+    {
+      SETUP_WIZARD_PASSCODE: "2468"
+    }
+  );
+
+  assert.equal(response.status, 401);
+  const html = await response.text();
+  assert.equal(html.includes("Setup wizard access is protected."), true);
+  assert.equal(html.includes("Unlock Setup Wizard"), true);
+  assert.equal(html.includes('action="/setup/wizard/access"'), true);
+});
+
+test("worker setup wizard json returns locked response when passcode boundary is configured", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/setup/wizard?format=json&repo=sample-org/vtdd-v2"),
+    {
+      SETUP_WIZARD_PASSCODE: "2468"
+    }
+  );
+
+  assert.equal(response.status, 401);
+  const body = await response.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.error, "setup_wizard_locked");
+  assert.equal(body.unlockPath, "/setup/wizard/access");
+});
+
+test("worker setup wizard access accepts passcode and grants cookie-backed access", async () => {
+  const unlockResponse = await worker.fetch(
+    new Request("https://example.com/setup/wizard/access", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        passcode: "2468",
+        returnTo: "/setup/wizard?repo=sample-org/vtdd-v2"
+      })
+    }),
+    {
+      SETUP_WIZARD_PASSCODE: "2468"
+    }
+  );
+
+  assert.equal(unlockResponse.status, 200);
+  const setCookie = unlockResponse.headers.get("set-cookie") ?? "";
+  assert.equal(setCookie.includes("vtdd_setup_access="), true);
+  assert.equal(setCookie.includes("HttpOnly"), true);
+  assert.equal(setCookie.includes("Secure"), true);
+
+  const sessionCookie = readCookieValue(setCookie, "vtdd_setup_access");
+  assert.notEqual(sessionCookie, "");
+
+  const wizardResponse = await worker.fetch(
+    new Request("https://example.com/setup/wizard?repo=sample-org/vtdd-v2", {
+      headers: {
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      }
+    }),
+    {
+      SETUP_WIZARD_PASSCODE: "2468"
+    }
+  );
+
+  assert.equal(wizardResponse.status, 200);
+  const html = await wizardResponse.text();
+  assert.equal(html.includes("VTDD Setup Wizard"), true);
+});
+
+test("worker setup wizard access rejects invalid passcode", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/setup/wizard/access", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        passcode: "9999"
+      })
+    }),
+    {
+      SETUP_WIZARD_PASSCODE: "2468"
+    }
+  );
+
+  assert.equal(response.status, 403);
+  const body = await response.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.error, "invalid_setup_passcode");
 });
 
 test("worker setup wizard html reflects direct provider recommendation when GitHub protection is unavailable", async () => {
