@@ -2514,12 +2514,17 @@ function buildGitHubAppManifestLaunch(url) {
   redirectUrl.searchParams.set("returnTo", returnTo);
   const setupUrl = new URL("/setup/wizard", url.origin);
   setupUrl.search = url.search;
+  const webhookUrl = new URL("/github/webhooks", url.origin);
 
   return {
     action: "https://github.com/settings/apps/new",
     manifest: JSON.stringify({
       name: "VTDD Butler V2",
       url: url.origin,
+      hook_attributes: {
+        url: webhookUrl.toString(),
+        active: false
+      },
       redirect_url: redirectUrl.toString(),
       setup_url: setupUrl.toString(),
       description:
