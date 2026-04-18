@@ -180,7 +180,8 @@ async function handleSetupWizardRequest(url, env) {
   const result = runInitialSetupWizard({ answers });
   const cloudflareSetupCheck = await runCloudflareSetupCheck(url, env);
   const githubAppSetupCheck = await runGitHubAppSetupCheck(url, env);
-  const githubAppBootstrap = buildGitHubAppBootstrapStatus({ url, env });
+  const githubAppBootstrapInternal = buildGitHubAppBootstrapStatus({ url, env });
+  const githubAppBootstrap = toPublicGitHubAppBootstrapStatus(githubAppBootstrapInternal);
   const format = normalize(url.searchParams.get("format"));
   const guidance = buildSetupWizardGuidance({ result, url });
   const enrichedResult = attachSetupWizardImportUrls({ result, url });
@@ -2373,6 +2374,15 @@ function buildGitHubAppBootstrapStatus({ url, env }) {
     accountId,
     cloudflareApiToken
   };
+}
+
+function toPublicGitHubAppBootstrapStatus(status) {
+  if (!status || typeof status !== "object") {
+    return status;
+  }
+
+  const { cloudflareApiToken: _cloudflareApiToken, ...publicStatus } = status;
+  return publicStatus;
 }
 
 function resolveCloudflareWorkerScriptName({ url, env }) {

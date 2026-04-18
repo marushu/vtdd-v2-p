@@ -402,6 +402,32 @@ test("worker setup wizard unlocked json reports github app bootstrap availabilit
   assert.equal(body.githubAppBootstrap.missingPrerequisites.includes("CLOUDFLARE_WORKER_SCRIPT_NAME"), true);
 });
 
+test("worker setup wizard unlocked json does not expose cloudflare bootstrap token when github app bootstrap is available", async () => {
+  const env = {
+    SETUP_WIZARD_PASSCODE: "2468",
+    CLOUDFLARE_API_TOKEN: "bootstrap-token",
+    CLOUDFLARE_ACCOUNT_ID: "account-id",
+    CLOUDFLARE_WORKER_SCRIPT_NAME: "vtdd-v2-mvp"
+  };
+  const { unlockResponse, sessionCookie } = await unlockSetupWizard(env);
+  assert.equal(unlockResponse.status, 200);
+
+  const response = await worker.fetch(
+    new Request("https://example.com/setup/wizard?format=json&repo=sample-org/vtdd-v2", {
+      headers: {
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      }
+    }),
+    env
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.githubAppBootstrap.state, "available");
+  assert.equal(body.githubAppBootstrap.accountId, "account-id");
+  assert.equal("cloudflareApiToken" in body.githubAppBootstrap, false);
+});
+
 test("worker setup wizard bootstrap writes allowlisted github app runtime secrets", async () => {
   const calls = [];
   const env = {
