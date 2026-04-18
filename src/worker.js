@@ -31,6 +31,10 @@ const AUTONOMY_MODE_ENV = "VTDD_AUTONOMY_MODE";
 const LEGACY_AUTONOMY_MODE_ENV = "MVP_AUTONOMY_MODE";
 
 const SETUP_WIZARD_CLOUDFLARE_CHECK_ENABLED_ENV = "SETUP_WIZARD_CLOUDFLARE_CHECK_ENABLED";
+const SETUP_WIZARD_PASSCODE_ENV = "SETUP_WIZARD_PASSCODE";
+const SETUP_WIZARD_SESSION_SECRET_ENV = "SETUP_WIZARD_SESSION_SECRET";
+const SETUP_WIZARD_SESSION_COOKIE = "vtdd_setup_access";
+const SETUP_WIZARD_SESSION_TTL_SECONDS = 30 * 60;
 const CLOUDFLARE_BILLING_HINT_REGEX =
   /(payment|billing|subscription|add payment method|outstanding balance|cannot modify this subscription|zone cannot be upgraded|plan modification|card)/i;
 
@@ -56,7 +60,15 @@ export default {
       });
     }
 
+    if (request.method === "POST" && url.pathname === "/setup/wizard/access") {
+      return handleSetupWizardAccessRequest({ request, url, env });
+    }
+
     if (request.method === "GET" && url.pathname === "/setup/wizard") {
+      const auth = await authorizeSetupWizardRequest({ request, url, env });
+      if (!auth.ok) {
+        return auth.response;
+      }
       return handleSetupWizardRequest(url, env);
     }
 
@@ -195,6 +207,76 @@ async function handleSetupWizardRequest(url, env) {
   return html(result.ok ? 200 : 422, htmlBody);
 }
 
+async function authorizeSetupWizardRequest({ request, url, env }) {
+  const config = getSetupWizardAuthConfig(env);
+  if (!config.enabled) {
+    return { ok: true };
+  }
+
+  const cookieHeader = request.headers.get("cookie");
+  const cookieValue = readCookie(cookieHeader, SETUP_WIZARD_SESSION_COOKIE);
+  const sessionValid = await verifySetupWizardSession({
+    cookieValue,
+    sessionSecret: config.sessionSecret
+  });
+
+  if (sessionValid) {
+    return { ok: true };
+  }
+
+  return {
+    ok: false,
+    response: renderSetupWizardLockedResponse({ url })
+  };
+}
+
+async function handleSetupWizardAccessRequest({ request, url, env }) {
+  const config = getSetupWizardAuthConfig(env);
+  if (!config.enabled) {
+    return json(409, {
+      ok: false,
+      error: "setup_wizard_access_not_enabled",
+      reason: "setup wizard passcode boundary is not configured"
+    });
+  }
+
+  const payload = await readSetupWizardAccessPayload(request);
+  if (payload.passcode !== config.passcode) {
+    return json(403, {
+      ok: false,
+      error: "invalid_setup_passcode"
+    });
+  }
+
+  const cookieValue = await createSetupWizardSessionToken({
+    sessionSecret: config.sessionSecret
+  });
+  const setCookie = buildSetupWizardSessionCookie(cookieValue);
+  const returnTo = normalizeReturnTo(payload.returnTo);
+
+  if (payload.mode === "form") {
+    return new Response(null, {
+      status: 303,
+      headers: {
+        location: returnTo || "/setup/wizard",
+        "set-cookie": setCookie
+      }
+    });
+  }
+
+  return json(
+    200,
+    {
+      ok: true,
+      unlocked: true,
+      returnTo: returnTo || "/setup/wizard"
+    },
+    {
+      "set-cookie": setCookie
+    }
+  );
+}
+
 function attachSetupWizardImportUrls({ result, url }) {
   const actionSchemaJson = result?.onboarding?.customGpt?.actionSchemaJson;
   if (!actionSchemaJson) {
@@ -219,6 +301,149 @@ function buildActionSchemaImportUrl(url) {
   importUrl.searchParams.delete("githubAppCheck");
   importUrl.searchParams.delete("cloudflareCheck");
   return importUrl.toString();
+}
+
+function getSetupWizardAuthConfig(env) {
+  const passcode = normalizeText(env?.[SETUP_WIZARD_PASSCODE_ENV]);
+  const sessionSecret =
+    normalizeText(env?.[SETUP_WIZARD_SESSION_SECRET_ENV]) || normalizeText(passcode);
+
+  return {
+    enabled: Boolean(passcode),
+    passcode,
+    sessionSecret
+  };
+}
+
+function renderSetupWizardLockedResponse({ url }) {
+  const format = normalize(url.searchParams.get("format"));
+  const returnTo = url.pathname + url.search;
+
+  if (format === "json" || format === "openapi") {
+    return json(401, {
+      ok: false,
+      error: "setup_wizard_locked",
+      reason: "setup wizard requires bootstrap passcode authentication",
+      unlockPath: "/setup/wizard/access",
+      returnTo
+    });
+  }
+
+  return html(
+    401,
+    renderHtmlDocument(`
+        <p class="meta">Setup wizard access is protected.</p>
+        <div class="block">
+          <p>Enter the bootstrap passcode to continue on this device.</p>
+          <form method="post" action="/setup/wizard/access">
+            <input type="hidden" name="returnTo" value="${escapeHtml(returnTo)}" />
+            <label for="passcode"><strong>Passcode</strong></label>
+            <input id="passcode" name="passcode" type="password" inputmode="text" autocomplete="one-time-code" />
+            <div style="margin-top: 12px;">
+              <button type="submit" class="copy-button">Unlock Setup Wizard</button>
+            </div>
+          </form>
+        </div>
+      `)
+  );
+}
+
+async function readSetupWizardAccessPayload(request) {
+  const contentType = normalizeText(request.headers.get("content-type"));
+  if (contentType.includes("application/json")) {
+    const payload = await readJson(request);
+    return {
+      mode: "json",
+      passcode: normalizeText(payload?.passcode),
+      returnTo: normalizeText(payload?.returnTo)
+    };
+  }
+
+  const form = await request.formData();
+  return {
+    mode: "form",
+    passcode: normalizeText(form.get("passcode")),
+    returnTo: normalizeText(form.get("returnTo"))
+  };
+}
+
+function normalizeReturnTo(value) {
+  const text = normalizeText(value);
+  if (!text.startsWith("/setup/wizard")) {
+    return "";
+  }
+  return text;
+}
+
+function readCookie(cookieHeader, name) {
+  const header = normalizeText(cookieHeader);
+  if (!header) {
+    return "";
+  }
+
+  for (const part of header.split(";")) {
+    const [cookieName, ...rest] = part.trim().split("=");
+    if (cookieName === name) {
+      return rest.join("=");
+    }
+  }
+
+  return "";
+}
+
+async function createSetupWizardSessionToken({ sessionSecret }) {
+  const expiresAt = Date.now() + SETUP_WIZARD_SESSION_TTL_SECONDS * 1000;
+  const signature = await signSetupWizardValue({
+    sessionSecret,
+    message: String(expiresAt)
+  });
+  return `${expiresAt}.${signature}`;
+}
+
+async function verifySetupWizardSession({ cookieValue, sessionSecret }) {
+  const raw = normalizeText(cookieValue);
+  if (!raw) {
+    return false;
+  }
+
+  const [expiresAtText, signature] = raw.split(".", 2);
+  const expiresAt = Number(expiresAtText);
+  if (!Number.isFinite(expiresAt) || expiresAt <= Date.now() || !signature) {
+    return false;
+  }
+
+  const expected = await signSetupWizardValue({
+    sessionSecret,
+    message: String(expiresAt)
+  });
+  return signature === expected;
+}
+
+async function signSetupWizardValue({ sessionSecret, message }) {
+  const cryptoKey = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(sessionSecret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const signature = await crypto.subtle.sign(
+    "HMAC",
+    cryptoKey,
+    new TextEncoder().encode(`setup-wizard:${message}`)
+  );
+  return toHex(new Uint8Array(signature));
+}
+
+function buildSetupWizardSessionCookie(cookieValue) {
+  return [
+    `${SETUP_WIZARD_SESSION_COOKIE}=${cookieValue}`,
+    "Path=/setup/wizard",
+    `Max-Age=${SETUP_WIZARD_SESSION_TTL_SECONDS}`,
+    "HttpOnly",
+    "Secure",
+    "SameSite=Lax"
+  ].join("; ");
 }
 
 async function handleRetrieveConstitutionRequest(url, env) {
@@ -841,6 +1066,10 @@ function renderSetupWizardHtml({ result, answers, url, cloudflareSetupCheck, git
     ? renderSuccessContent(result, answers, url, cloudflareSetupCheck, githubAppSetupCheck)
     : renderFailureContent(result, answers, url, cloudflareSetupCheck, githubAppSetupCheck);
 
+  return renderHtmlDocument(body);
+}
+
+function renderHtmlDocument(body) {
   return `<!doctype html>
 <html lang="en">
   <head>
@@ -2136,17 +2365,23 @@ function normalizeObject(value) {
   return value;
 }
 
-function json(status, body) {
+function json(status, body, extraHeaders = {}) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: JSON_HEADERS
+    headers: {
+      ...JSON_HEADERS,
+      ...extraHeaders
+    }
   });
 }
 
-function html(status, body) {
+function html(status, body, extraHeaders = {}) {
   return new Response(body, {
     status,
-    headers: HTML_HEADERS
+    headers: {
+      ...HTML_HEADERS,
+      ...extraHeaders
+    }
   });
 }
 
@@ -2235,6 +2470,10 @@ function decodeBase64(value) {
     return atob(value);
   }
   return Buffer.from(value, "base64").toString("utf8");
+}
+
+function toHex(bytes) {
+  return Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("");
 }
 
 function escapeHtml(value) {
