@@ -670,11 +670,27 @@ test("worker setup wizard manifest callback returns actionable 403 contract guid
     CLOUDFLARE_ACCOUNT_ID: "account-id",
     CLOUDFLARE_WORKER_SCRIPT_NAME: "vtdd-v2-mvp",
     GITHUB_MANIFEST_CONVERSION_TOKEN: "gho_operator_token",
-    GITHUB_API_FETCH: async () =>
-      new Response(JSON.stringify({}), {
+    GITHUB_API_FETCH: async (url) => {
+      if (String(url).endsWith("/user")) {
+        return new Response(
+          JSON.stringify({
+            login: "marushu",
+            type: "User"
+          }),
+          {
+            status: 200,
+            headers: {
+              "content-type": "application/json",
+              "x-oauth-scopes": "repo, workflow, read:org"
+            }
+          }
+        );
+      }
+      return new Response(JSON.stringify({}), {
         status: 403,
         headers: { "content-type": "application/json" }
-      })
+      });
+    }
   };
   const { sessionCookie } = await unlockSetupWizard(env);
 
@@ -694,6 +710,10 @@ test("worker setup wizard manifest callback returns actionable 403 contract guid
   const body = await response.json();
   assert.equal(body.error, "github_app_manifest_conversion_failed");
   assert.equal(body.reason.includes("service-owned GitHub token may be unsupported"), true);
+  assert.equal(body.diagnostics.state, "token_actor_resolved");
+  assert.equal(body.diagnostics.actorLogin, "marushu");
+  assert.equal(body.diagnostics.actorType, "User");
+  assert.deepEqual(body.diagnostics.oauthScopes, ["repo", "workflow", "read:org"]);
 });
 
 test("worker setup wizard manifest callback reports unavailable when manifest conversion token is missing", async () => {

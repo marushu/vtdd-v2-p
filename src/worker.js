@@ -450,10 +450,15 @@ async function handleGitHubAppManifestCallbackRequest({ request, url, env }) {
     authToken: bootstrap.githubManifestConversionToken
   });
   if (!converted.ok) {
+    const diagnostics = await diagnoseGitHubManifestConversionToken({
+      fetchImpl,
+      authToken: bootstrap.githubManifestConversionToken
+    });
     return json(502, {
       ok: false,
       error: "github_app_manifest_conversion_failed",
-      reason: converted.reason
+      reason: converted.reason,
+      diagnostics
     });
   }
 
@@ -2957,6 +2962,59 @@ function buildGitHubTokenAuthHeaderCandidates(token) {
   return [...new Set(candidates)];
 }
 
+async function diagnoseGitHubManifestConversionToken({ fetchImpl, authToken }) {
+  const token = normalizeText(authToken);
+  if (!token) {
+    return {
+      ok: false,
+      state: "missing_token"
+    };
+  }
+
+  const authHeaderCandidates = buildGitHubTokenAuthHeaderCandidates(token);
+  let last = null;
+
+  for (const authorizationValue of authHeaderCandidates) {
+    const response = await fetchImpl(`${GITHUB_API_BASE_URL}/user`, {
+      method: "GET",
+      headers: {
+        accept: "application/vnd.github+json",
+        authorization: authorizationValue,
+        "x-github-api-version": "2022-11-28"
+      }
+    });
+
+    const payload = await readSafeJson(response);
+    const login = normalizeText(payload?.login);
+    const accountType = normalizeText(payload?.type);
+    const scopes = normalizeHeaderCsv(response.headers.get("x-oauth-scopes"));
+    const acceptedScopes = normalizeHeaderCsv(response.headers.get("x-accepted-oauth-scopes"));
+
+    last = {
+      ok: response.ok && Boolean(login),
+      status: response.status,
+      authHeaderType: authorizationValue.startsWith("token ") ? "token" : "bearer",
+      actorLogin: login || null,
+      actorType: accountType || null,
+      oauthScopes: scopes,
+      acceptedScopes,
+      message: normalizeText(payload?.message) || null
+    };
+
+    if (last.ok) {
+      return {
+        ...last,
+        state: "token_actor_resolved"
+      };
+    }
+  }
+
+  return {
+    ...(last ?? {}),
+    state: "token_actor_unresolved"
+  };
+}
+
 function buildGitHubManifestConversionFailureReason(failure) {
   const status = Number(failure?.status) || 500;
   const message = normalizeText(failure?.message);
@@ -2973,6 +3031,17 @@ function buildGitHubManifestConversionFailureReason(failure) {
   }
 
   return `github app manifest conversion failed with http ${status}`;
+}
+
+function normalizeHeaderCsv(value) {
+  const normalized = normalizeText(value);
+  if (!normalized) {
+    return [];
+  }
+  return normalized
+    .split(",")
+    .map((item) => normalizeText(item))
+    .filter(Boolean);
 }
 
 function buildGitHubAppSetupGuidanceFromWarning(warning) {

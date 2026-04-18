@@ -160,6 +160,11 @@ Current implementation reading:
 - Worker first tries `Authorization: Bearer ...`
 - if GitHub returns `401/403`, Worker retries with `Authorization: token ...`
 - if conversion still fails with `403`, treat that as a token contract mismatch or owner-permission mismatch, not as a setup wizard cosmetic fault
+- on conversion failure, setup wizard should expose bounded diagnostics for the operator-managed token:
+  - actor login
+  - actor type
+  - OAuth scopes headers when available
+  - whether actor resolution succeeded at all
 
 Known unsupported classes from GitHub docs for this endpoint include:
 
