@@ -439,7 +439,16 @@ function renderSetupWizardLockedResponse({ url }) {
           <form method="post" action="/setup/wizard/access">
             <input type="hidden" name="returnTo" value="${escapeHtml(returnTo)}" />
             <label for="passcode"><strong>Passcode</strong></label>
-            <input id="passcode" name="passcode" type="password" inputmode="text" autocomplete="one-time-code" />
+            <p class="meta" style="margin-top: 4px;">Tap the field below, enter the passcode, then unlock.</p>
+            <input
+              id="passcode"
+              name="passcode"
+              type="password"
+              inputmode="text"
+              autocomplete="one-time-code"
+              placeholder="Enter passcode"
+              style="display: block; width: 100%; max-width: 100%; min-height: 44px; margin-top: 8px; padding: 12px 14px; font-size: 16px; line-height: 1.4; border-radius: 10px; border: 1px solid #cbd5e1; background: #fff;"
+            />
             <div style="margin-top: 12px;">
               <button type="submit" class="copy-button">Unlock Setup Wizard</button>
             </div>

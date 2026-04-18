@@ -250,6 +250,8 @@ test("worker setup wizard shows passcode boundary when configured", async () => 
   const html = await response.text();
   assert.equal(html.includes("Setup wizard access is protected."), true);
   assert.equal(html.includes("Unlock Setup Wizard"), true);
+  assert.equal(html.includes("Enter passcode"), true);
+  assert.equal(html.includes("Tap the field below"), true);
   assert.equal(html.includes('action="/setup/wizard/access"'), true);
 });
 
