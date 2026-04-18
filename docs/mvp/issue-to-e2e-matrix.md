@@ -175,9 +175,9 @@ Status values used below:
 
 - Issues: `#21 #39 #41`
 - Happy path:
-  - iPhone-accessible setup wizard returns conversation-ready onboarding with no default repo, copy-ready setup output, full Instructions replacement guidance, schema import URL for Custom GPT action setup, machine-auth setting names, repository switch confirmation flow, and no secret input prompts
+  - iPhone-accessible setup wizard returns conversation-ready onboarding with no default repo, copy-ready setup output, full Instructions replacement guidance, schema import URL for Custom GPT action setup, machine-auth setting names, repository switch confirmation flow, and no generic secret input prompts outside the passcode-authenticated GitHub App bootstrap step
 - Boundary path:
-  - unresolved repo, secret input, or ambiguous switch blocks execution or setup acceptance
+  - unresolved repo, generic secret input, or ambiguous switch blocks execution or setup acceptance
 - Implementation evidence:
   - `src/core/setup-wizard.js`
   - `src/worker.js`

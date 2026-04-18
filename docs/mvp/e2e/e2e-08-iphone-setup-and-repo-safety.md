@@ -29,6 +29,7 @@ Observed result on 2026-04-17:
 - confirms copy-ready construction text is present
 - confirms schema import URL is present for Custom GPT action setup
 - confirms machine-auth setting names are shown without exposing secret values
+- confirms any GitHub App secret intake is limited to a passcode-authenticated narrow bootstrap step
 - confirms repository resolution safety contract is visible in setup output
 - confirms HTML surface includes full Instructions replacement guidance
 

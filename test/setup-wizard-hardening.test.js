@@ -14,6 +14,7 @@ test("setup wizard hardening doc separates bootstrap surface from internal api a
   assert.equal(doc.includes("Cloudflare Access OTP or equivalent short-friction user auth"), true);
   assert.equal(doc.includes("missing machine-auth runtime configuration must be treated as a blocking error"), true);
   assert.equal(doc.includes("This means `/v2/gateway` and `/v2/retrieve/*` should be fail-closed."), true);
-  assert.equal(doc.includes("adding secret input fields to setup wizard"), true);
+  assert.equal(doc.includes("adding generic secret input fields to the default setup wizard path"), true);
+  assert.equal(doc.includes("Issue #181 allows a bounded exception"), true);
   assert.equal(doc.includes("setup wizard public exposure is not considered the desired steady state"), true);
 });

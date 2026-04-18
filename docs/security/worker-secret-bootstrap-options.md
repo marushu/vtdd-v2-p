@@ -109,7 +109,7 @@ Deferred. This is the most promising future automation path, but it is not safe 
 
 The following are out of bounds for normal operation:
 
-- adding secret input fields to setup wizard
+- adding generic or unauthenticated secret input fields to setup wizard
 - asking the user to paste secrets into chat
 - generic secret write API without narrow approval and audit controls
 - storing private keys or bearer tokens in Git, DB memory, Issue text, or PR text
@@ -118,7 +118,7 @@ The following are out of bounds for normal operation:
 
 Each candidate must be judged against all of the following:
 
-- secret never flows through chat or setup wizard
+- secret never flows through chat or the default setup wizard read path
 - iPhone-first is preserved or degraded explicitly
 - `GO + passkey` and related approval boundaries remain coherent
 - Cloudflare / GitHub privilege surface does not expand unnecessarily
@@ -137,10 +137,16 @@ This means VTDD V2 currently prefers:
 
 - Cloudflare Dashboard secret entry as the canonical bootstrap path
 - setup wizard diagnostics as the confirmation path
-- no direct secret ingestion by VTDD surfaces
+- no generic direct secret ingestion by VTDD surfaces
+
+Issue #181 introduces a bounded exception to evaluate separately:
+
+- passcode-authenticated setup wizard may expose a narrow bootstrap step
+- the step must stay allowlisted to `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, and `GITHUB_APP_PRIVATE_KEY`
+- the step must not become a generic secret write surface
 
 ## Non-goals
 
 - implementing a secret write API in this Issue
-- making setup wizard receive private key or bearer token values
+- making the default setup wizard read path receive private key or bearer token values
 - replacing Cloudflare as the system of record for Worker secret storage
