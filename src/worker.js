@@ -2098,7 +2098,11 @@ function authorizeGatewayRequest({ request, env, apiSuffix = "/gateway" }) {
     };
   }
 
-  return { ok: true };
+  return {
+    ok: false,
+    status: 503,
+    reason: `machine auth runtime is not configured for ${routeLabel}`
+  };
 }
 
 async function readJson(request) {
