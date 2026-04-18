@@ -720,6 +720,181 @@ test("worker setup wizard manifest callback returns actionable 403 contract guid
   assert.equal(body.diagnostics.authHeaderType, "bearer");
 });
 
+test("worker setup wizard manifest callback returns cloudflare bootstrap diagnostics when secret write auth fails", async () => {
+  const env = {
+    SETUP_WIZARD_PASSCODE: "2468",
+    CLOUDFLARE_API_TOKEN: "bootstrap-token",
+    CLOUDFLARE_ACCOUNT_ID: "account-id",
+    CLOUDFLARE_WORKER_SCRIPT_NAME: "vtdd-v2-mvp",
+    GITHUB_MANIFEST_CONVERSION_TOKEN: "gho_operator_token",
+    GITHUB_API_FETCH: async (url) => {
+      if (String(url).includes("/app-manifests/")) {
+        return new Response(
+          JSON.stringify({
+            id: 123456,
+            slug: "vtdd-butler-v2",
+            pem: "-----BEGIN PRIVATE KEY-----\nabc\n-----END PRIVATE KEY-----",
+            html_url: "https://github.com/apps/vtdd-butler-v2"
+          }),
+          {
+            status: 201,
+            headers: { "content-type": "application/json" }
+          }
+        );
+      }
+      return new Response(JSON.stringify({}), {
+        status: 404,
+        headers: { "content-type": "application/json" }
+      });
+    },
+    CF_API_FETCH: async (url, init) => {
+      if (String(url).includes("/workers/scripts/vtdd-v2-mvp/secrets") && init?.method === "PUT") {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            errors: [{ code: 10000, message: "Authentication error" }]
+          }),
+          {
+            status: 403,
+            headers: { "content-type": "application/json" }
+          }
+        );
+      }
+      if (String(url).includes("/user/tokens/verify")) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            errors: [{ code: 10000, message: "Authentication error" }]
+          }),
+          {
+            status: 403,
+            headers: { "content-type": "application/json" }
+          }
+        );
+      }
+      return new Response(JSON.stringify({ success: false, errors: [] }), {
+        status: 404,
+        headers: { "content-type": "application/json" }
+      });
+    }
+  };
+  const { sessionCookie } = await unlockSetupWizard(env);
+
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/setup/wizard/github-app/manifest/callback?code=manifest-code&returnTo=%2Fsetup%2Fwizard%3FgithubAppCheck%3Don",
+      {
+        headers: {
+          cookie: `vtdd_setup_access=${sessionCookie}`
+        }
+      }
+    ),
+    env
+  );
+
+  assert.equal(response.status, 502);
+  const body = await response.json();
+  assert.equal(body.error, "github_app_manifest_secret_write_failed");
+  assert.equal(body.secretName, "GITHUB_APP_ID");
+  assert.equal(body.reason, "Authentication error");
+  assert.equal(body.diagnostics.state, "api_token_invalid");
+  assert.equal(body.diagnostics.writeFailure.state, "insufficient_permission");
+});
+
+test("worker setup wizard manifest callback distinguishes cloudflare permission mismatch after verify succeeds", async () => {
+  const env = {
+    SETUP_WIZARD_PASSCODE: "2468",
+    CLOUDFLARE_API_TOKEN: "bootstrap-token",
+    CLOUDFLARE_ACCOUNT_ID: "account-id",
+    CLOUDFLARE_WORKER_SCRIPT_NAME: "vtdd-v2-mvp",
+    GITHUB_MANIFEST_CONVERSION_TOKEN: "gho_operator_token",
+    GITHUB_API_FETCH: async (url) => {
+      if (String(url).includes("/app-manifests/")) {
+        return new Response(
+          JSON.stringify({
+            id: 123456,
+            slug: "vtdd-butler-v2",
+            pem: "-----BEGIN PRIVATE KEY-----\nabc\n-----END PRIVATE KEY-----",
+            html_url: "https://github.com/apps/vtdd-butler-v2"
+          }),
+          {
+            status: 201,
+            headers: { "content-type": "application/json" }
+          }
+        );
+      }
+      return new Response(JSON.stringify({}), {
+        status: 404,
+        headers: { "content-type": "application/json" }
+      });
+    },
+    CF_API_FETCH: async (url, init) => {
+      if (String(url).includes("/workers/scripts/vtdd-v2-mvp/secrets") && init?.method === "PUT") {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            errors: [{ code: 1001, message: "Forbidden" }]
+          }),
+          {
+            status: 403,
+            headers: { "content-type": "application/json" }
+          }
+        );
+      }
+      if (String(url).includes("/user/tokens/verify")) {
+        return new Response(
+          JSON.stringify({
+            success: true,
+            errors: [],
+            result: { status: "active" }
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          }
+        );
+      }
+      if (String(url).includes("/workers/scripts/vtdd-v2-mvp/secrets") && init?.method === "GET") {
+        return new Response(
+          JSON.stringify({
+            success: true,
+            errors: [],
+            result: []
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          }
+        );
+      }
+      return new Response(JSON.stringify({ success: false, errors: [] }), {
+        status: 404,
+        headers: { "content-type": "application/json" }
+      });
+    }
+  };
+  const { sessionCookie } = await unlockSetupWizard(env);
+
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/setup/wizard/github-app/manifest/callback?code=manifest-code&returnTo=%2Fsetup%2Fwizard%3FgithubAppCheck%3Don",
+      {
+        headers: {
+          cookie: `vtdd_setup_access=${sessionCookie}`
+        }
+      }
+    ),
+    env
+  );
+
+  assert.equal(response.status, 502);
+  const body = await response.json();
+  assert.equal(body.error, "github_app_manifest_secret_write_failed");
+  assert.equal(body.diagnostics.state, "secret_write_failed_after_verify");
+  assert.equal(body.diagnostics.writeFailure.state, "insufficient_permission");
+  assert.equal(body.diagnostics.scriptSecretsProbe.state, "reachable");
+});
+
 test("worker setup wizard manifest callback reports unavailable when manifest conversion token is missing", async () => {
   const env = {
     SETUP_WIZARD_PASSCODE: "2468",

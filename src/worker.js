@@ -477,11 +477,20 @@ async function handleGitHubAppManifestCallbackRequest({ request, url, env }) {
       secretValue
     });
     if (!updated.ok) {
+      const diagnostics = await diagnoseCloudflareBootstrapSecretWrite({
+        fetchImpl: typeof env?.CF_API_FETCH === "function" ? env.CF_API_FETCH : globalThis.fetch.bind(globalThis),
+        apiToken: bootstrap.cloudflareApiToken,
+        accountId: bootstrap.accountId,
+        scriptName: bootstrap.scriptName,
+        failedStage: "workers_secret_write",
+        failedResponse: updated
+      });
       return json(502, {
         ok: false,
         error: "github_app_manifest_secret_write_failed",
         secretName,
-        reason: updated.reason
+        reason: updated.reason,
+        diagnostics
       });
     }
   }
@@ -2505,6 +2514,89 @@ async function callCloudflareApi(fetchImpl, apiToken, endpoint) {
   };
 }
 
+async function diagnoseCloudflareBootstrapSecretWrite({
+  fetchImpl,
+  apiToken,
+  accountId,
+  scriptName,
+  failedStage,
+  failedResponse
+}) {
+  if (typeof fetchImpl !== "function") {
+    return {
+      state: "runtime_fetch_unavailable",
+      summary: "Cloudflare bootstrap diagnostics could not run because fetch is unavailable.",
+      evidence: {
+        stage: "runtime_fetch_unavailable",
+        httpStatus: null,
+        errorCodes: []
+      }
+    };
+  }
+
+  const writeFailure = classifyCloudflareSetupFailure({
+    stage: failedStage,
+    response: failedResponse
+  });
+
+  const tokenVerify = await callCloudflareApi(
+    fetchImpl,
+    apiToken,
+    "https://api.cloudflare.com/client/v4/user/tokens/verify"
+  );
+  if (!tokenVerify.success) {
+    return {
+      ...classifyCloudflareSetupFailure({
+        stage: "token_verify",
+        response: tokenVerify
+      }),
+      writeFailure
+    };
+  }
+
+  const scriptSecretsProbe = await callCloudflareApi(
+    fetchImpl,
+    apiToken,
+    `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/workers/scripts/${encodeURIComponent(scriptName)}/secrets`
+  );
+  if (!scriptSecretsProbe.success) {
+    return {
+      ...classifyCloudflareSetupFailure({
+        stage: "script_secret_probe",
+        response: scriptSecretsProbe
+      }),
+      writeFailure
+    };
+  }
+
+  return {
+    state: "secret_write_failed_after_verify",
+    summary:
+      "Cloudflare bootstrap diagnostics verified the token and target script read path, but secret write still failed.",
+    guidance: [
+      "Re-check that CLOUDFLARE_API_TOKEN includes Workers Scripts Write for the same account.",
+      "If the token was recently rotated, rewrite CLOUDFLARE_API_TOKEN on Worker runtime and retry setup wizard."
+    ],
+    checkedAt: new Date().toISOString(),
+    evidence: {
+      stage: "workers_secret_write",
+      httpStatus: Number(failedResponse?.httpStatus ?? 0) || null,
+      errorCodes: Array.isArray(failedResponse?.errorCodes) ? failedResponse.errorCodes : []
+    },
+    writeFailure,
+    tokenVerify: {
+      state: "verified",
+      httpStatus: tokenVerify.httpStatus,
+      errorCodes: []
+    },
+    scriptSecretsProbe: {
+      state: "reachable",
+      httpStatus: scriptSecretsProbe.httpStatus,
+      errorCodes: []
+    }
+  };
+}
+
 function classifyCloudflareSetupFailure({ stage, response }) {
   const errors = Array.isArray(response?.errors) ? response.errors : [];
   const httpStatus = Number(response?.httpStatus ?? 0);
@@ -2520,6 +2612,7 @@ function classifyCloudflareSetupFailure({ stage, response }) {
       summary: "Cloudflare setup check failed: account id or endpoint identifier looks invalid.",
       guidance: [
         "Verify CLOUDFLARE_ACCOUNT_ID from Cloudflare dashboard account details.",
+        "If this happens in setup wizard bootstrap, re-check CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_WORKER_SCRIPT_NAME.",
         "If this happens in GitHub Actions deploy logs, re-check account id and target service/script name."
       ],
       links: [
@@ -2560,7 +2653,8 @@ function classifyCloudflareSetupFailure({ stage, response }) {
       summary: "Cloudflare setup check failed: API token is invalid, expired, or disabled.",
       guidance: [
         "Re-issue Cloudflare API token and set it again in Worker environment secret.",
-        "Ensure token is active and scoped to the same account as CLOUDFLARE_ACCOUNT_ID."
+        "Ensure token is active and scoped to the same account as CLOUDFLARE_ACCOUNT_ID.",
+        "If setup wizard secret writes are failing, rewrite CLOUDFLARE_API_TOKEN on Worker runtime before retrying."
       ],
       links: [
         { title: "Cloudflare API token verify", url: CLOUDFLARE_SETUP_HELP_LINKS.tokenVerify }
@@ -2580,8 +2674,9 @@ function classifyCloudflareSetupFailure({ stage, response }) {
       state: "insufficient_permission",
       summary: "Cloudflare setup check failed: token permission or entitlement is insufficient.",
       guidance: [
-        "Grant Access app/policy scopes required for setup automation.",
-        "Recommended minimum: Access: Apps and Policies Read (and Edit if creating resources)."
+        "Grant token permissions required for the failing setup step.",
+        "For setup wizard GitHub App bootstrap secret writes, ensure Workers Scripts Write is included.",
+        "For Access diagnostics, keep Access: Apps and Policies Read (and Edit if creating resources)."
       ],
       links: [
         { title: "Cloudflare API permissions", url: CLOUDFLARE_SETUP_HELP_LINKS.permissions }
@@ -2896,7 +2991,11 @@ async function putCloudflareWorkerSecret({
   return {
     ok: false,
     httpStatus: response.status,
-    reason
+    reason,
+    errorCodes: errors
+      .map((item) => Number(item.code))
+      .filter((item) => Number.isFinite(item)),
+    errorMessages: errors.map((item) => normalizeText(item.message)).filter(Boolean)
   };
 }
 

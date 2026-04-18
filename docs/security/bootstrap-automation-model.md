@@ -184,6 +184,10 @@ Current reading:
 - this is not yet a user-facing Cloudflare connect flow
 - setup wizard may depend on operator-seeded bootstrap credentials today
 - that dependency must be stated plainly rather than hidden behind implied automation
+- when setup wizard secret writes fail, VTDD should return bounded Cloudflare diagnostics for:
+  - token verify failure
+  - account or script target mismatch
+  - missing `Workers Scripts Write` permission
 
 ## Main-line Phasing
 
