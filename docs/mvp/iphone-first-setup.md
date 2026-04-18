@@ -82,12 +82,12 @@ These steps are for first-time setup. They are manual because GitHub App creatio
 1. Open Safari on iPhone and access setup URL:
    - `https://<your-worker-domain>/setup/wizard?repo=sample-org/vtdd-v2`
    - JSON mode (optional): `https://<your-worker-domain>/setup/wizard?format=json&repo=sample-org/vtdd-v2`
-   - OpenAPI import URL (optional): `https://<your-worker-domain>/setup/wizard?format=openapi&repo=sample-org/vtdd-v2`
+   - OpenAPI import URL (optional): setup wizard shows a ready-to-import signed URL for Custom GPT Action import
    - GitHub App diagnostics (optional): `https://<your-worker-domain>/setup/wizard?format=json&repo=sample-org/vtdd-v2&githubAppCheck=on`
    - Cloudflare setup diagnostics are opt-in and disabled by default.
 2. Open ChatGPT on iPhone and edit the Butler Custom GPT.
 3. Copy `Custom GPT Construction` from setup page.
-4. For `Custom GPT Action Schema`, prefer `Schema Import URL` on iPhone. If import from URL is unavailable, fall back to copying full schema JSON.
+4. For `Custom GPT Action Schema`, prefer `Schema Import URL` on iPhone. If setup wizard access is passcode-protected, use the signed import URL shown by setup wizard instead of hand-editing the raw `format=openapi` path. If import from URL is unavailable, fall back to copying full schema JSON.
    - setup output also shows reviewer contract summary (initial reviewer, fallback, authority limits)
 5. Ensure GitHub `production` environment has required reviewers enabled.
 6. Ensure GitHub has environment secrets:

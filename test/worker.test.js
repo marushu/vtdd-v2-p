@@ -907,6 +907,58 @@ test("worker returns setup wizard openapi schema for import url", async () => {
   assert.deepEqual(body.paths["/v2/gateway"].post.security, [{ GatewayBearerAuth: [] }]);
 });
 
+test("worker setup wizard returns signed import url when passcode protection is enabled", async () => {
+  const env = {
+    SETUP_WIZARD_PASSCODE: "2468"
+  };
+  const { sessionCookie } = await unlockSetupWizard(env);
+
+  const response = await worker.fetch(
+    new Request("https://example.com/setup/wizard?format=json&repo=sample-org/vtdd-v2", {
+      headers: {
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      }
+    }),
+    env
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  const importUrl = new URL(body.onboarding.customGpt.actionSchemaImportUrl);
+  assert.equal(importUrl.searchParams.get("format"), "openapi");
+  assert.equal(importUrl.searchParams.get("repo"), "sample-org/vtdd-v2");
+  assert.equal(Boolean(importUrl.searchParams.get("import_expires")), true);
+  assert.equal(Boolean(importUrl.searchParams.get("import_token")), true);
+});
+
+test("worker setup wizard signed import url works without setup cookie", async () => {
+  const env = {
+    SETUP_WIZARD_PASSCODE: "2468"
+  };
+  const { sessionCookie } = await unlockSetupWizard(env);
+
+  const setupResponse = await worker.fetch(
+    new Request("https://example.com/setup/wizard?format=json&repo=sample-org/vtdd-v2", {
+      headers: {
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      }
+    }),
+    env
+  );
+  assert.equal(setupResponse.status, 200);
+  const setupBody = await setupResponse.json();
+
+  const response = await worker.fetch(
+    new Request(setupBody.onboarding.customGpt.actionSchemaImportUrl),
+    env
+  );
+  assert.equal(response.status, 200);
+  const contentType = response.headers.get("content-type") ?? "";
+  assert.equal(contentType.includes("application/json"), true);
+  const body = await response.json();
+  assert.equal(body.openapi, "3.1.0");
+});
+
 test("worker setup wizard json keeps iphone-first and no-default-repo policy visible", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/setup/wizard?format=json&repo=sample-org/vtdd-v2")

@@ -35,6 +35,9 @@ const SETUP_WIZARD_PASSCODE_ENV = "SETUP_WIZARD_PASSCODE";
 const SETUP_WIZARD_SESSION_SECRET_ENV = "SETUP_WIZARD_SESSION_SECRET";
 const SETUP_WIZARD_SESSION_COOKIE = "vtdd_setup_access";
 const SETUP_WIZARD_SESSION_TTL_SECONDS = 30 * 60;
+const SETUP_WIZARD_IMPORT_TOKEN_TTL_SECONDS = 15 * 60;
+const SETUP_WIZARD_IMPORT_TOKEN_PARAM = "import_token";
+const SETUP_WIZARD_IMPORT_EXPIRES_PARAM = "import_expires";
 const SETUP_WIZARD_GITHUB_APP_BOOTSTRAP_PATH = "/setup/wizard/github-app/bootstrap";
 const SETUP_WIZARD_GITHUB_APP_MANIFEST_CALLBACK_PATH = "/setup/wizard/github-app/manifest/callback";
 const CLOUDFLARE_WORKER_SCRIPT_NAME_ENV = "CLOUDFLARE_WORKER_SCRIPT_NAME";
@@ -199,7 +202,7 @@ async function handleSetupWizardRequest({ request, url, env }) {
   const githubAppBootstrap = toPublicGitHubAppBootstrapStatus(githubAppBootstrapInternal);
   const format = normalize(url.searchParams.get("format"));
   const guidance = buildSetupWizardGuidance({ result, url });
-  const enrichedResult = attachSetupWizardImportUrls({ result, url });
+  const enrichedResult = await attachSetupWizardImportUrls({ result, url, env });
   const locale = detectSetupWizardLocale({ request, url });
 
   if (format === "openapi") {
@@ -248,6 +251,17 @@ async function authorizeSetupWizardRequest({ request, url, env }) {
   const config = getSetupWizardAuthConfig(env);
   if (!config.enabled) {
     return { ok: true };
+  }
+
+  const format = normalize(url.searchParams.get("format"));
+  if (format === "openapi") {
+    const importAuthorized = await verifySetupWizardImportToken({
+      url,
+      sessionSecret: config.sessionSecret
+    });
+    if (importAuthorized) {
+      return { ok: true };
+    }
   }
 
   const cookieHeader = request.headers.get("cookie");
@@ -489,11 +503,13 @@ async function handleGitHubAppManifestCallbackRequest({ request, url, env }) {
   );
 }
 
-function attachSetupWizardImportUrls({ result, url }) {
+async function attachSetupWizardImportUrls({ result, url, env }) {
   const actionSchemaJson = result?.onboarding?.customGpt?.actionSchemaJson;
   if (!actionSchemaJson) {
     return result;
   }
+
+  const authConfig = getSetupWizardAuthConfig(env);
 
   return {
     ...result,
@@ -501,17 +517,37 @@ function attachSetupWizardImportUrls({ result, url }) {
       ...result.onboarding,
       customGpt: {
         ...result.onboarding.customGpt,
-        actionSchemaImportUrl: buildActionSchemaImportUrl(url)
+        actionSchemaImportUrl: await buildActionSchemaImportUrl({
+          url,
+          sessionSecret: authConfig.sessionSecret,
+          authEnabled: authConfig.enabled
+        })
       }
     }
   };
 }
 
-function buildActionSchemaImportUrl(url) {
+async function buildActionSchemaImportUrl({ url, sessionSecret, authEnabled }) {
   const importUrl = new URL(url.toString());
   importUrl.searchParams.set("format", "openapi");
   importUrl.searchParams.delete("githubAppCheck");
   importUrl.searchParams.delete("cloudflareCheck");
+  importUrl.searchParams.delete(SETUP_WIZARD_IMPORT_TOKEN_PARAM);
+  importUrl.searchParams.delete(SETUP_WIZARD_IMPORT_EXPIRES_PARAM);
+
+  if (authEnabled && sessionSecret) {
+    const expiresAt = Math.floor(Date.now() / 1000) + SETUP_WIZARD_IMPORT_TOKEN_TTL_SECONDS;
+    importUrl.searchParams.set(SETUP_WIZARD_IMPORT_EXPIRES_PARAM, String(expiresAt));
+    importUrl.searchParams.set(
+      SETUP_WIZARD_IMPORT_TOKEN_PARAM,
+      await createSetupWizardImportToken({
+        url: importUrl,
+        expiresAt,
+        sessionSecret
+      })
+    );
+  }
+
   return importUrl.toString();
 }
 
@@ -644,6 +680,61 @@ async function verifySetupWizardSession({ cookieValue, sessionSecret }) {
     message: String(expiresAt)
   });
   return signature === expected;
+}
+
+async function createSetupWizardImportToken({ url, expiresAt, sessionSecret }) {
+  const normalized = buildSetupWizardImportTokenPayload({
+    url,
+    expiresAt
+  });
+  return signSetupWizardValue({
+    message: normalized,
+    sessionSecret
+  });
+}
+
+async function verifySetupWizardImportToken({ url, sessionSecret }) {
+  const token = normalizeText(url.searchParams.get(SETUP_WIZARD_IMPORT_TOKEN_PARAM));
+  const expiresAt = Number.parseInt(
+    normalizeText(url.searchParams.get(SETUP_WIZARD_IMPORT_EXPIRES_PARAM)),
+    10
+  );
+  if (!token || !Number.isFinite(expiresAt)) {
+    return false;
+  }
+  if (expiresAt < Math.floor(Date.now() / 1000)) {
+    return false;
+  }
+
+  const expected = await createSetupWizardImportToken({
+    url,
+    expiresAt,
+    sessionSecret
+  });
+  return safeEqual(token, expected);
+}
+
+function buildSetupWizardImportTokenPayload({ url, expiresAt }) {
+  const normalizedUrl = new URL(url.toString());
+  normalizedUrl.searchParams.delete(SETUP_WIZARD_IMPORT_TOKEN_PARAM);
+  normalizedUrl.searchParams.set("format", "openapi");
+  normalizedUrl.searchParams.set(SETUP_WIZARD_IMPORT_EXPIRES_PARAM, String(expiresAt));
+  normalizedUrl.searchParams.sort();
+  return `${normalizedUrl.pathname}?${normalizedUrl.searchParams.toString()}`;
+}
+
+function safeEqual(left, right) {
+  const a = normalizeText(left);
+  const b = normalizeText(right);
+  if (!a || !b || a.length !== b.length) {
+    return false;
+  }
+
+  let diff = 0;
+  for (let index = 0; index < a.length; index += 1) {
+    diff |= a.charCodeAt(index) ^ b.charCodeAt(index);
+  }
+  return diff === 0;
 }
 
 async function signSetupWizardValue({ sessionSecret, message }) {
