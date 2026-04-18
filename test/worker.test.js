@@ -352,7 +352,8 @@ test("worker setup wizard unlocked html shows narrow github app bootstrap form w
     SETUP_WIZARD_PASSCODE: "2468",
     CLOUDFLARE_API_TOKEN: "bootstrap-token",
     CLOUDFLARE_ACCOUNT_ID: "account-id",
-    CLOUDFLARE_WORKER_SCRIPT_NAME: "vtdd-v2-mvp"
+    CLOUDFLARE_WORKER_SCRIPT_NAME: "vtdd-v2-mvp",
+    GITHUB_MANIFEST_CONVERSION_TOKEN: "ghp_conversion_token"
   };
   const { unlockResponse, sessionCookie } = await unlockSetupWizard(env);
   assert.equal(unlockResponse.status, 200);
@@ -406,6 +407,10 @@ test("worker setup wizard unlocked json reports github app bootstrap availabilit
   assert.equal(body.githubAppBootstrap.missingPrerequisites.includes("CLOUDFLARE_API_TOKEN"), true);
   assert.equal(body.githubAppBootstrap.missingPrerequisites.includes("CLOUDFLARE_ACCOUNT_ID"), true);
   assert.equal(body.githubAppBootstrap.missingPrerequisites.includes("CLOUDFLARE_WORKER_SCRIPT_NAME"), true);
+  assert.equal(
+    body.githubAppBootstrap.missingPrerequisites.includes("GITHUB_MANIFEST_CONVERSION_TOKEN"),
+    true
+  );
 });
 
 test("worker setup wizard unlocked json does not expose cloudflare bootstrap token when github app bootstrap is available", async () => {
@@ -413,7 +418,8 @@ test("worker setup wizard unlocked json does not expose cloudflare bootstrap tok
     SETUP_WIZARD_PASSCODE: "2468",
     CLOUDFLARE_API_TOKEN: "bootstrap-token",
     CLOUDFLARE_ACCOUNT_ID: "account-id",
-    CLOUDFLARE_WORKER_SCRIPT_NAME: "vtdd-v2-mvp"
+    CLOUDFLARE_WORKER_SCRIPT_NAME: "vtdd-v2-mvp",
+    GITHUB_MANIFEST_CONVERSION_TOKEN: "ghp_conversion_token"
   };
   const { unlockResponse, sessionCookie } = await unlockSetupWizard(env);
   assert.equal(unlockResponse.status, 200);
@@ -432,6 +438,7 @@ test("worker setup wizard unlocked json does not expose cloudflare bootstrap tok
   assert.equal(body.githubAppBootstrap.state, "available");
   assert.equal(body.githubAppBootstrap.accountId, "account-id");
   assert.equal("cloudflareApiToken" in body.githubAppBootstrap, false);
+  assert.equal("githubManifestConversionToken" in body.githubAppBootstrap, false);
 });
 
 test("worker setup wizard bootstrap writes allowlisted github app runtime secrets", async () => {
@@ -441,6 +448,7 @@ test("worker setup wizard bootstrap writes allowlisted github app runtime secret
     CLOUDFLARE_API_TOKEN: "bootstrap-token",
     CLOUDFLARE_ACCOUNT_ID: "account-id",
     CLOUDFLARE_WORKER_SCRIPT_NAME: "vtdd-v2-mvp",
+    GITHUB_MANIFEST_CONVERSION_TOKEN: "ghp_conversion_token",
     CF_API_FETCH: async (url, init = {}) => {
       calls.push({ url: String(url), init });
       return new Response(
@@ -490,13 +498,16 @@ test("worker setup wizard bootstrap writes allowlisted github app runtime secret
 
 test("worker setup wizard manifest callback writes github app id and private key only", async () => {
   const calls = [];
+  const githubCalls = [];
   const env = {
     SETUP_WIZARD_PASSCODE: "2468",
     CLOUDFLARE_API_TOKEN: "bootstrap-token",
     CLOUDFLARE_ACCOUNT_ID: "account-id",
     CLOUDFLARE_WORKER_SCRIPT_NAME: "vtdd-v2-mvp",
-    GITHUB_API_FETCH: async () =>
-      new Response(
+    GITHUB_MANIFEST_CONVERSION_TOKEN: "ghp_conversion_token",
+    GITHUB_API_FETCH: async (url, init = {}) => {
+      githubCalls.push({ url: String(url), init });
+      return new Response(
         JSON.stringify({
           id: 12345,
           pem: "-----BEGIN PRIVATE KEY-----\nmanifest\n-----END PRIVATE KEY-----",
@@ -506,7 +517,8 @@ test("worker setup wizard manifest callback writes github app id and private key
           status: 201,
           headers: { "content-type": "application/json" }
         }
-      ),
+      );
+    },
     CF_API_FETCH: async (url, init = {}) => {
       calls.push({ url: String(url), init });
       return new Response(
@@ -540,9 +552,38 @@ test("worker setup wizard manifest callback writes github app id and private key
   const html = await response.text();
   assert.equal(html.includes("GitHub App manifest bootstrap completed."), true);
   assert.equal(html.includes("Install the GitHub App"), true);
+  assert.equal(githubCalls.length, 1);
+  assert.equal(githubCalls[0].init.headers.authorization, "Bearer ghp_conversion_token");
   assert.equal(calls.length, 2);
   const names = calls.map((call) => JSON.parse(String(call.init.body)).name).sort();
   assert.deepEqual(names, ["GITHUB_APP_ID", "GITHUB_APP_PRIVATE_KEY"]);
+});
+
+test("worker setup wizard manifest callback reports unavailable when manifest conversion token is missing", async () => {
+  const env = {
+    SETUP_WIZARD_PASSCODE: "2468",
+    CLOUDFLARE_API_TOKEN: "bootstrap-token",
+    CLOUDFLARE_ACCOUNT_ID: "account-id",
+    CLOUDFLARE_WORKER_SCRIPT_NAME: "vtdd-v2-mvp"
+  };
+  const { sessionCookie } = await unlockSetupWizard(env);
+
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/setup/wizard/github-app/manifest/callback?code=manifest-code&returnTo=%2Fsetup%2Fwizard%3FgithubAppCheck%3Don",
+      {
+        headers: {
+          cookie: `vtdd_setup_access=${sessionCookie}`
+        }
+      }
+    ),
+    env
+  );
+
+  assert.equal(response.status, 503);
+  const body = await response.json();
+  assert.equal(body.error, "github_app_manifest_bootstrap_unavailable");
+  assert.equal(body.missingPrerequisites.includes("GITHUB_MANIFEST_CONVERSION_TOKEN"), true);
 });
 
 test("worker setup wizard bootstrap rejects requests with missing allowlisted values", async () => {
@@ -550,7 +591,8 @@ test("worker setup wizard bootstrap rejects requests with missing allowlisted va
     SETUP_WIZARD_PASSCODE: "2468",
     CLOUDFLARE_API_TOKEN: "bootstrap-token",
     CLOUDFLARE_ACCOUNT_ID: "account-id",
-    CLOUDFLARE_WORKER_SCRIPT_NAME: "vtdd-v2-mvp"
+    CLOUDFLARE_WORKER_SCRIPT_NAME: "vtdd-v2-mvp",
+    GITHUB_MANIFEST_CONVERSION_TOKEN: "ghp_conversion_token"
   };
   const { sessionCookie } = await unlockSetupWizard(env);
 

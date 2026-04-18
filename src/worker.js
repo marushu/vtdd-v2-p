@@ -38,6 +38,7 @@ const SETUP_WIZARD_SESSION_TTL_SECONDS = 30 * 60;
 const SETUP_WIZARD_GITHUB_APP_BOOTSTRAP_PATH = "/setup/wizard/github-app/bootstrap";
 const SETUP_WIZARD_GITHUB_APP_MANIFEST_CALLBACK_PATH = "/setup/wizard/github-app/manifest/callback";
 const CLOUDFLARE_WORKER_SCRIPT_NAME_ENV = "CLOUDFLARE_WORKER_SCRIPT_NAME";
+const GITHUB_MANIFEST_CONVERSION_TOKEN_ENV = "GITHUB_MANIFEST_CONVERSION_TOKEN";
 const GITHUB_APP_BOOTSTRAP_SECRET_ALLOWLIST = Object.freeze([
   "GITHUB_APP_ID",
   "GITHUB_APP_INSTALLATION_ID",
@@ -429,7 +430,8 @@ async function handleGitHubAppManifestCallbackRequest({ request, url, env }) {
 
   const converted = await convertGitHubAppManifestCode({
     fetchImpl,
-    code
+    code,
+    authToken: bootstrap.githubManifestConversionToken
   });
   if (!converted.ok) {
     return json(502, {
@@ -2458,6 +2460,9 @@ function buildGitHubAppBootstrapStatus({ url, env }) {
   const runtimeEnv = env ?? {};
   const cloudflareApiToken = normalizeText(runtimeEnv.CLOUDFLARE_API_TOKEN);
   const accountId = normalizeText(runtimeEnv.CLOUDFLARE_ACCOUNT_ID);
+  const githubManifestConversionToken = normalizeText(
+    runtimeEnv[GITHUB_MANIFEST_CONVERSION_TOKEN_ENV]
+  );
   const scriptName = resolveCloudflareWorkerScriptName({ url, env: runtimeEnv });
   const authConfig = getSetupWizardAuthConfig(runtimeEnv);
   const missingPrerequisites = [];
@@ -2470,6 +2475,9 @@ function buildGitHubAppBootstrapStatus({ url, env }) {
   }
   if (!accountId) {
     missingPrerequisites.push("CLOUDFLARE_ACCOUNT_ID");
+  }
+  if (!githubManifestConversionToken) {
+    missingPrerequisites.push(GITHUB_MANIFEST_CONVERSION_TOKEN_ENV);
   }
   if (!scriptName) {
     missingPrerequisites.push(CLOUDFLARE_WORKER_SCRIPT_NAME_ENV);
@@ -2485,7 +2493,8 @@ function buildGitHubAppBootstrapStatus({ url, env }) {
       actionPath: SETUP_WIZARD_GITHUB_APP_BOOTSTRAP_PATH,
       guidance: [
         "This path is intentionally narrow: only the GitHub App runtime secret trio can be written.",
-        "Configure Cloudflare bootstrap credentials on Worker runtime first, then return here to paste the GitHub App values once."
+        "Configure Cloudflare bootstrap credentials and a service-owned GitHub manifest conversion token on Worker runtime first.",
+        "The conversion token stays operator-managed on Worker runtime and is never collected through setup wizard."
       ]
     };
   }
@@ -2499,12 +2508,14 @@ function buildGitHubAppBootstrapStatus({ url, env }) {
     actionPath: SETUP_WIZARD_GITHUB_APP_BOOTSTRAP_PATH,
     guidance: [
       "Paste GitHub App ID, installation ID, and private key once, then reload setup wizard diagnostics.",
-      "This endpoint is allowlisted and does not accept arbitrary secret names."
+      "This endpoint is allowlisted and does not accept arbitrary secret names.",
+      "Manifest conversion uses an operator-managed GitHub token already stored on Worker runtime."
     ],
     manifestLaunch: buildGitHubAppManifestLaunch(url),
     scriptName,
     accountId,
-    cloudflareApiToken
+    cloudflareApiToken,
+    githubManifestConversionToken
   };
 }
 
@@ -2546,7 +2557,11 @@ function toPublicGitHubAppBootstrapStatus(status) {
     return status;
   }
 
-  const { cloudflareApiToken: _cloudflareApiToken, ...publicStatus } = status;
+  const {
+    cloudflareApiToken: _cloudflareApiToken,
+    githubManifestConversionToken: _githubManifestConversionToken,
+    ...publicStatus
+  } = status;
   return publicStatus;
 }
 
@@ -2639,13 +2654,22 @@ async function putCloudflareWorkerSecret({
   };
 }
 
-async function convertGitHubAppManifestCode({ fetchImpl, code }) {
+async function convertGitHubAppManifestCode({ fetchImpl, code, authToken }) {
+  const token = normalizeText(authToken);
+  if (!token) {
+    return {
+      ok: false,
+      reason: "github manifest conversion token is not configured on worker runtime"
+    };
+  }
+
   const response = await fetchImpl(
     `${GITHUB_API_BASE_URL}/app-manifests/${encodeURIComponent(code)}/conversions`,
     {
       method: "POST",
       headers: {
         accept: "application/vnd.github+json",
+        authorization: `Bearer ${token}`,
         "x-github-api-version": "2022-11-28"
       }
     }

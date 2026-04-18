@@ -143,6 +143,19 @@ This means the next runtime slice must answer:
 
 Do not continue treating this as a cosmetic setup-wizard bug.
 
+### Current Bounded Reading For The Next Slice
+
+For the current bounded runtime slice, manifest conversion is treated as using a
+service-owned GitHub token stored on Worker runtime.
+
+That token is:
+
+- operator-managed
+- purpose-limited to manifest conversion/bootstrap work
+- never collected through setup wizard itself
+
+This is a bounded bridge, not the final end-user GitHub connection model.
+
 ## Cloudflare Connection Reading
 
 Current Cloudflare bootstrap is still operator-seeded.

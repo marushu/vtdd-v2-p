@@ -16,4 +16,5 @@ test('bootstrap automation model records manifest 403 as connection-boundary pro
   assert.equal(doc.includes('github_app_manifest_conversion_failed'), true);
   assert.equal(doc.includes('403'), true);
   assert.equal(doc.includes('missing piece is the auth source for manifest conversion'), true);
+  assert.equal(doc.includes('service-owned GitHub token stored on Worker runtime'), true);
 });
