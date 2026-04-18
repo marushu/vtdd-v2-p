@@ -597,6 +597,7 @@ test("worker setup wizard manifest callback writes github app id and private key
   assert.equal(html.includes("Install the GitHub App"), true);
   assert.equal(githubCalls.length, 1);
   assert.equal(githubCalls[0].init.headers.authorization, "Bearer ghp_conversion_token");
+  assert.equal(githubCalls[0].init.headers["user-agent"], "vtdd-v2-worker");
   assert.equal(calls.length, 2);
   const names = calls.map((call) => JSON.parse(String(call.init.body)).name).sort();
   assert.deepEqual(names, ["GITHUB_APP_ID", "GITHUB_APP_PRIVATE_KEY"]);
@@ -661,6 +662,8 @@ test("worker setup wizard manifest callback retries token auth after bearer 403"
   assert.equal(githubCalls.length, 2);
   assert.equal(githubCalls[0].init.headers.authorization, "Bearer gho_operator_token");
   assert.equal(githubCalls[1].init.headers.authorization, "token gho_operator_token");
+  assert.equal(githubCalls[0].init.headers["user-agent"], "vtdd-v2-worker");
+  assert.equal(githubCalls[1].init.headers["user-agent"], "vtdd-v2-worker");
 });
 
 test("worker setup wizard manifest callback returns actionable 403 contract guidance", async () => {
@@ -714,6 +717,7 @@ test("worker setup wizard manifest callback returns actionable 403 contract guid
   assert.equal(body.diagnostics.actorLogin, "marushu");
   assert.equal(body.diagnostics.actorType, "User");
   assert.deepEqual(body.diagnostics.oauthScopes, ["repo", "workflow", "read:org"]);
+  assert.equal(body.diagnostics.authHeaderType, "bearer");
 });
 
 test("worker setup wizard manifest callback reports unavailable when manifest conversion token is missing", async () => {

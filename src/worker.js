@@ -52,6 +52,7 @@ const GITHUB_APP_MANIFEST_SECRET_ALLOWLIST = Object.freeze([
   "GITHUB_APP_PRIVATE_KEY"
 ]);
 const GITHUB_API_BASE_URL = "https://api.github.com";
+const GITHUB_API_USER_AGENT = "vtdd-v2-worker";
 const CLOUDFLARE_BILLING_HINT_REGEX =
   /(payment|billing|subscription|add payment method|outstanding balance|cannot modify this subscription|zone cannot be upgraded|plan modification|card)/i;
 
@@ -2918,6 +2919,7 @@ async function convertGitHubAppManifestCode({ fetchImpl, code, authToken }) {
       headers: {
         accept: "application/vnd.github+json",
         authorization: authorizationValue,
+        "user-agent": GITHUB_API_USER_AGENT,
         "x-github-api-version": "2022-11-28"
       }
     });
@@ -2980,6 +2982,7 @@ async function diagnoseGitHubManifestConversionToken({ fetchImpl, authToken }) {
       headers: {
         accept: "application/vnd.github+json",
         authorization: authorizationValue,
+        "user-agent": GITHUB_API_USER_AGENT,
         "x-github-api-version": "2022-11-28"
       }
     });
