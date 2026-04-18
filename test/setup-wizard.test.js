@@ -333,20 +333,15 @@ test("setup wizard returns git/db outputs and iphone onboarding pack", () => {
   assert.equal(Boolean(policyInputSchema?.ambiguity), true);
   assert.equal(Boolean(policyInputSchema?.targetConfirmed), true);
   assert.equal(Boolean(parsed?.components?.securitySchemes?.GatewayBearerAuth), true);
-  assert.equal(Boolean(parsed?.components?.securitySchemes?.GatewayAccessClientIdHeader), true);
-  assert.equal(Boolean(parsed?.components?.securitySchemes?.GatewayAccessClientSecretHeader), true);
+  assert.deepEqual(Object.keys(parsed?.components?.securitySchemes ?? {}), ["GatewayBearerAuth"]);
   assert.equal(
     typeof parsed?.components?.schemas === "object" && !Array.isArray(parsed?.components?.schemas),
     true
   );
-  assert.equal(
-    Array.isArray(parsed?.paths?.["/v2/gateway"]?.post?.security),
-    true
-  );
-  assert.equal(
-    Array.isArray(parsed?.paths?.["/v2/retrieve/constitution"]?.get?.security),
-    true
-  );
+  assert.deepEqual(parsed?.paths?.["/v2/gateway"]?.post?.security, [{ GatewayBearerAuth: [] }]);
+  assert.deepEqual(parsed?.paths?.["/v2/retrieve/constitution"]?.get?.security, [
+    { GatewayBearerAuth: [] }
+  ]);
   assert.equal(
     Array.isArray(parsed?.paths?.["/v2/retrieve/decisions"]?.get?.security),
     true

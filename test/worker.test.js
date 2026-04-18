@@ -860,6 +860,8 @@ test("worker returns setup wizard openapi schema for import url", async () => {
   assert.equal(body.openapi, "3.1.0");
   assert.equal(body.paths["/v2/gateway"].post.operationId, "postMvpGateway");
   assert.equal(body.servers[0].url, "https://example.com");
+  assert.deepEqual(Object.keys(body.components.securitySchemes), ["GatewayBearerAuth"]);
+  assert.deepEqual(body.paths["/v2/gateway"].post.security, [{ GatewayBearerAuth: [] }]);
 });
 
 test("worker setup wizard json keeps iphone-first and no-default-repo policy visible", async () => {

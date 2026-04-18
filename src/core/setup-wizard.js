@@ -453,21 +453,7 @@ function buildCustomGptActionSchema(baseUrl) {
           scheme: "bearer",
           bearerFormat: "API token",
           description:
-            "Recommended for Custom GPT Actions. Set this to VTDD_GATEWAY_BEARER_TOKEN configured on Cloudflare Worker environment (legacy MVP_GATEWAY_BEARER_TOKEN is also accepted)."
-        },
-        GatewayAccessClientIdHeader: {
-          type: "apiKey",
-          in: "header",
-          name: "cf-access-client-id",
-          description:
-            "Alternative machine auth path. Set to CF_ACCESS_CLIENT_ID when Cloudflare Access service token mode is used."
-        },
-        GatewayAccessClientSecretHeader: {
-          type: "apiKey",
-          in: "header",
-          name: "cf-access-client-secret",
-          description:
-            "Alternative machine auth path. Set to CF_ACCESS_CLIENT_SECRET when Cloudflare Access service token mode is used."
+            "Required for Custom GPT Actions. Set this to VTDD_GATEWAY_BEARER_TOKEN configured on Cloudflare Worker environment (legacy MVP_GATEWAY_BEARER_TOKEN is also accepted)."
         }
       }
     },
@@ -829,13 +815,7 @@ function buildCustomGptActionSchema(baseUrl) {
 }
 
 function buildMachineAuthSecurityOptions() {
-  return [
-    { GatewayBearerAuth: [] },
-    {
-      GatewayAccessClientIdHeader: [],
-      GatewayAccessClientSecretHeader: []
-    }
-  ];
+  return [{ GatewayBearerAuth: [] }];
 }
 
 function pushSafeMemoryRecord(dbOutputs, record, logicalTable) {
