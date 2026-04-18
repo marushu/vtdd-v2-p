@@ -36,12 +36,18 @@ const SETUP_WIZARD_SESSION_SECRET_ENV = "SETUP_WIZARD_SESSION_SECRET";
 const SETUP_WIZARD_SESSION_COOKIE = "vtdd_setup_access";
 const SETUP_WIZARD_SESSION_TTL_SECONDS = 30 * 60;
 const SETUP_WIZARD_GITHUB_APP_BOOTSTRAP_PATH = "/setup/wizard/github-app/bootstrap";
+const SETUP_WIZARD_GITHUB_APP_MANIFEST_CALLBACK_PATH = "/setup/wizard/github-app/manifest/callback";
 const CLOUDFLARE_WORKER_SCRIPT_NAME_ENV = "CLOUDFLARE_WORKER_SCRIPT_NAME";
 const GITHUB_APP_BOOTSTRAP_SECRET_ALLOWLIST = Object.freeze([
   "GITHUB_APP_ID",
   "GITHUB_APP_INSTALLATION_ID",
   "GITHUB_APP_PRIVATE_KEY"
 ]);
+const GITHUB_APP_MANIFEST_SECRET_ALLOWLIST = Object.freeze([
+  "GITHUB_APP_ID",
+  "GITHUB_APP_PRIVATE_KEY"
+]);
+const GITHUB_API_BASE_URL = "https://api.github.com";
 const CLOUDFLARE_BILLING_HINT_REGEX =
   /(payment|billing|subscription|add payment method|outstanding balance|cannot modify this subscription|zone cannot be upgraded|plan modification|card)/i;
 
@@ -77,6 +83,14 @@ export default {
         return auth.response;
       }
       return handleGitHubAppBootstrapRequest({ request, url, env });
+    }
+
+    if (request.method === "GET" && url.pathname === SETUP_WIZARD_GITHUB_APP_MANIFEST_CALLBACK_PATH) {
+      const auth = await authorizeSetupWizardRequest({ request, url, env });
+      if (!auth.ok) {
+        return auth.response;
+      }
+      return handleGitHubAppManifestCallbackRequest({ request, url, env });
     }
 
     if (request.method === "GET" && url.pathname === "/setup/wizard") {
@@ -376,6 +390,99 @@ async function handleGitHubAppBootstrapRequest({ request, url, env }) {
     updatedSecrets: [...GITHUB_APP_BOOTSTRAP_SECRET_ALLOWLIST],
     returnTo
   });
+}
+
+async function handleGitHubAppManifestCallbackRequest({ request, url, env }) {
+  const bootstrap = buildGitHubAppBootstrapStatus({ url, env });
+  if (bootstrap.state !== "available") {
+    return json(503, {
+      ok: false,
+      error: "github_app_manifest_bootstrap_unavailable",
+      state: bootstrap.state,
+      summary: bootstrap.summary,
+      missingPrerequisites: bootstrap.missingPrerequisites ?? []
+    });
+  }
+
+  const code = normalizeText(url.searchParams.get("code"));
+  const returnTo = normalizeGitHubAppBootstrapReturnTo(url.searchParams.get("returnTo"));
+
+  if (!code) {
+    return json(422, {
+      ok: false,
+      error: "github_app_manifest_callback_missing_parameters"
+    });
+  }
+
+  const fetchImpl =
+    typeof env?.GITHUB_API_FETCH === "function"
+      ? env.GITHUB_API_FETCH
+      : typeof globalThis.fetch === "function"
+        ? globalThis.fetch.bind(globalThis)
+        : null;
+  if (!fetchImpl) {
+    return json(503, {
+      ok: false,
+      error: "github_app_manifest_fetch_unavailable"
+    });
+  }
+
+  const converted = await convertGitHubAppManifestCode({
+    fetchImpl,
+    code
+  });
+  if (!converted.ok) {
+    return json(502, {
+      ok: false,
+      error: "github_app_manifest_conversion_failed",
+      reason: converted.reason
+    });
+  }
+
+  const secretsToWrite = [
+    ["GITHUB_APP_ID", String(converted.appId)],
+    ["GITHUB_APP_PRIVATE_KEY", converted.privateKey]
+  ];
+  for (const [secretName, secretValue] of secretsToWrite) {
+    const updated = await putCloudflareWorkerSecret({
+      fetchImpl: typeof env?.CF_API_FETCH === "function" ? env.CF_API_FETCH : globalThis.fetch.bind(globalThis),
+      apiToken: bootstrap.cloudflareApiToken,
+      accountId: bootstrap.accountId,
+      scriptName: bootstrap.scriptName,
+      secretName,
+      secretValue
+    });
+    if (!updated.ok) {
+      return json(502, {
+        ok: false,
+        error: "github_app_manifest_secret_write_failed",
+        secretName,
+        reason: updated.reason
+      });
+    }
+  }
+
+  const installUrl = converted.slug
+    ? `https://github.com/apps/${encodeURIComponent(converted.slug)}/installations/new`
+    : converted.htmlUrl;
+  const redirectTarget = returnTo || "/setup/wizard?githubAppCheck=on";
+
+  return html(
+    200,
+    renderHtmlDocument(`
+      <p class="meta">GitHub App manifest bootstrap completed.</p>
+      <div class="block">
+        <p><strong>App ID</strong> and <strong>private key</strong> were written to Worker runtime.</p>
+        <p class="meta">Installation ID is still required after you install the app.</p>
+        ${
+          installUrl
+            ? `<p><a href="${escapeHtml(installUrl)}" target="_blank" rel="noopener noreferrer">Install the GitHub App</a></p>`
+            : ""
+        }
+        <p><a href="${escapeHtml(redirectTarget)}">Return to setup wizard</a></p>
+      </div>
+    `)
+  );
 }
 
 function attachSetupWizardImportUrls({ result, url }) {
@@ -1945,6 +2052,7 @@ function renderGitHubAppBootstrap(bootstrap, url) {
     normalizeText(bootstrap?.actionPath) || SETUP_WIZARD_GITHUB_APP_BOOTSTRAP_PATH;
   const scriptName = normalizeText(bootstrap?.scriptName);
   const returnTo = `${url.pathname}${url.search || "?githubAppCheck=on"}`;
+  const manifestLaunch = bootstrap?.manifestLaunch ?? null;
 
   return `
     <h2>GitHub App Runtime Bootstrap</h2>
@@ -1973,6 +2081,20 @@ function renderGitHubAppBootstrap(bootstrap, url) {
       ${
         guidance.length > 0
           ? `<ul>${guidance.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`
+          : ""
+      }
+      ${
+        state === "available" && manifestLaunch
+          ? `
+            <div class="block" style="margin-top: 12px;">
+              <p><strong>Create GitHub App automatically</strong></p>
+              <p class="meta">This opens GitHub's manifest flow and returns here with App ID and private key ready for Worker bootstrap.</p>
+              <form method="post" action="${escapeHtml(manifestLaunch.action)}" target="_blank" rel="noopener noreferrer">
+                <input type="hidden" name="manifest" value="${escapeHtml(manifestLaunch.manifest)}" />
+                <button type="submit" class="copy-button">Create GitHub App Automatically</button>
+              </form>
+            </div>
+          `
           : ""
       }
       ${
@@ -2379,9 +2501,38 @@ function buildGitHubAppBootstrapStatus({ url, env }) {
       "Paste GitHub App ID, installation ID, and private key once, then reload setup wizard diagnostics.",
       "This endpoint is allowlisted and does not accept arbitrary secret names."
     ],
+    manifestLaunch: buildGitHubAppManifestLaunch(url),
     scriptName,
     accountId,
     cloudflareApiToken
+  };
+}
+
+function buildGitHubAppManifestLaunch(url) {
+  const returnTo = `${url.pathname}${url.search || "?githubAppCheck=on"}`;
+  const redirectUrl = new URL(SETUP_WIZARD_GITHUB_APP_MANIFEST_CALLBACK_PATH, url.origin);
+  redirectUrl.searchParams.set("returnTo", returnTo);
+  const setupUrl = new URL("/setup/wizard", url.origin);
+  setupUrl.search = url.search;
+
+  return {
+    action: "https://github.com/settings/apps/new",
+    manifest: JSON.stringify({
+      name: "VTDD Butler V2",
+      url: url.origin,
+      redirect_url: redirectUrl.toString(),
+      setup_url: setupUrl.toString(),
+      description:
+        "VTDD Butler bootstrap app for iPhone-first setup and GitHub execution.",
+      public: false,
+      default_permissions: {
+        metadata: "read",
+        contents: "write",
+        pull_requests: "write",
+        issues: "write"
+      },
+      default_events: ["issues", "issue_comment", "pull_request", "pull_request_review", "pull_request_review_comment"]
+    })
   };
 }
 
@@ -2479,6 +2630,43 @@ async function putCloudflareWorkerSecret({
   return {
     ok: false,
     httpStatus: response.status,
+    reason
+  };
+}
+
+async function convertGitHubAppManifestCode({ fetchImpl, code }) {
+  const response = await fetchImpl(
+    `${GITHUB_API_BASE_URL}/app-manifests/${encodeURIComponent(code)}/conversions`,
+    {
+      method: "POST",
+      headers: {
+        accept: "application/vnd.github+json",
+        "x-github-api-version": "2022-11-28"
+      }
+    }
+  );
+
+  const payload = await readSafeJson(response);
+  const appId = normalizeText(payload?.id);
+  const privateKey = normalizeText(payload?.pem);
+  const slug = normalizeText(payload?.slug);
+  const htmlUrl = normalizeText(payload?.html_url);
+
+  if (response.ok && appId && privateKey) {
+    return {
+      ok: true,
+      appId,
+      privateKey,
+      slug,
+      htmlUrl
+    };
+  }
+
+  const reason =
+    normalizeText(payload?.message) ||
+    `github app manifest conversion failed with http ${response.status}`;
+  return {
+    ok: false,
     reason
   };
 }
