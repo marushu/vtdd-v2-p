@@ -371,6 +371,8 @@ test("worker setup wizard unlocked html shows narrow github app bootstrap form w
   const html = await response.text();
   assert.equal(html.includes("GitHub App Runtime Bootstrap"), true);
   assert.equal(html.includes('action="/setup/wizard/github-app/bootstrap"'), true);
+  assert.equal(html.includes('action="https://github.com/settings/apps/new"'), true);
+  assert.equal(html.includes("Create GitHub App Automatically"), true);
   assert.equal(html.includes("GITHUB_APP_PRIVATE_KEY"), true);
   assert.equal(html.includes("Write GitHub App Runtime Secrets"), true);
 });
@@ -482,6 +484,63 @@ test("worker setup wizard bootstrap writes allowlisted github app runtime secret
     assert.equal(["GITHUB_APP_ID", "GITHUB_APP_INSTALLATION_ID", "GITHUB_APP_PRIVATE_KEY"].includes(payload.name), true);
     assert.equal(payload.type, "secret_text");
   }
+});
+
+test("worker setup wizard manifest callback writes github app id and private key only", async () => {
+  const calls = [];
+  const env = {
+    SETUP_WIZARD_PASSCODE: "2468",
+    CLOUDFLARE_API_TOKEN: "bootstrap-token",
+    CLOUDFLARE_ACCOUNT_ID: "account-id",
+    CLOUDFLARE_WORKER_SCRIPT_NAME: "vtdd-v2-mvp",
+    GITHUB_API_FETCH: async () =>
+      new Response(
+        JSON.stringify({
+          id: 12345,
+          pem: "-----BEGIN PRIVATE KEY-----\nmanifest\n-----END PRIVATE KEY-----",
+          slug: "vtdd-butler-v2"
+        }),
+        {
+          status: 201,
+          headers: { "content-type": "application/json" }
+        }
+      ),
+    CF_API_FETCH: async (url, init = {}) => {
+      calls.push({ url: String(url), init });
+      return new Response(
+        JSON.stringify({
+          success: true,
+          errors: [],
+          result: { name: "placeholder", type: "secret_text" }
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        }
+      );
+    }
+  };
+  const { sessionCookie } = await unlockSetupWizard(env);
+
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/setup/wizard/github-app/manifest/callback?code=manifest-code&returnTo=%2Fsetup%2Fwizard%3FgithubAppCheck%3Don",
+      {
+        headers: {
+          cookie: `vtdd_setup_access=${sessionCookie}`
+        }
+      }
+    ),
+    env
+  );
+
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.equal(html.includes("GitHub App manifest bootstrap completed."), true);
+  assert.equal(html.includes("Install the GitHub App"), true);
+  assert.equal(calls.length, 2);
+  const names = calls.map((call) => JSON.parse(String(call.init.body)).name).sort();
+  assert.deepEqual(names, ["GITHUB_APP_ID", "GITHUB_APP_PRIVATE_KEY"]);
 });
 
 test("worker setup wizard bootstrap rejects requests with missing allowlisted values", async () => {
