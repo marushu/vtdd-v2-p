@@ -27,6 +27,15 @@ const validButlerJudgmentTrace = [
   JudgmentStep.CURRENT_QUERY
 ];
 
+const gatewayAuthHeaders = {
+  "content-type": "application/json",
+  authorization: "Bearer test-token"
+};
+
+const gatewayAuthEnv = {
+  VTDD_GATEWAY_BEARER_TOKEN: "test-token"
+};
+
 test("worker returns health", async () => {
   const response = await worker.fetch(new Request("https://example.com/health"));
   assert.equal(response.status, 200);
@@ -657,9 +666,7 @@ test("worker runs gateway route", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/v2/gateway", {
       method: "POST",
-      headers: {
-        "content-type": "application/json"
-      },
+      headers: gatewayAuthHeaders,
       body: JSON.stringify({
         phase: "execution",
         actorRole: "executor",
@@ -687,7 +694,8 @@ test("worker runs gateway route", async () => {
           passkey: false
         }
       })
-    })
+    }),
+    gatewayAuthEnv
   );
 
   assert.equal(response.status, 200);
@@ -700,9 +708,7 @@ test("worker gateway allows butler path when deterministic judgment order is sat
   const response = await worker.fetch(
     new Request("https://example.com/v2/gateway", {
       method: "POST",
-      headers: {
-        "content-type": "application/json"
-      },
+      headers: gatewayAuthHeaders,
       body: JSON.stringify({
         phase: "execution",
         actorRole: ActorRole.BUTLER,
@@ -735,7 +741,8 @@ test("worker gateway allows butler path when deterministic judgment order is sat
           passkey: false
         }
       })
-    })
+    }),
+    gatewayAuthEnv
   );
 
   assert.equal(response.status, 200);
@@ -748,9 +755,7 @@ test("worker gateway blocks butler path when judgment order is invalid", async (
   const response = await worker.fetch(
     new Request("https://example.com/v2/gateway", {
       method: "POST",
-      headers: {
-        "content-type": "application/json"
-      },
+      headers: gatewayAuthHeaders,
       body: JSON.stringify({
         phase: "execution",
         actorRole: ActorRole.BUTLER,
@@ -788,7 +793,8 @@ test("worker gateway blocks butler path when judgment order is invalid", async (
           passkey: false
         }
       })
-    })
+    }),
+    gatewayAuthEnv
   );
 
   assert.equal(response.status, 422);
@@ -801,9 +807,7 @@ test("worker gateway blocks butler path when surface overrides judgment model", 
   const response = await worker.fetch(
     new Request("https://example.com/v2/gateway", {
       method: "POST",
-      headers: {
-        "content-type": "application/json"
-      },
+      headers: gatewayAuthHeaders,
       body: JSON.stringify({
         phase: "execution",
         actorRole: ActorRole.BUTLER,
@@ -836,7 +840,8 @@ test("worker gateway blocks butler path when surface overrides judgment model", 
           passkey: false
         }
       })
-    })
+    }),
+    gatewayAuthEnv
   );
 
   assert.equal(response.status, 422);
@@ -849,9 +854,7 @@ test("worker gateway allows pr comment without GO when other gates pass", async 
   const response = await worker.fetch(
     new Request("https://example.com/v2/gateway", {
       method: "POST",
-      headers: {
-        "content-type": "application/json"
-      },
+      headers: gatewayAuthHeaders,
       body: JSON.stringify({
         phase: "execution",
         actorRole: "executor",
@@ -879,7 +882,8 @@ test("worker gateway allows pr comment without GO when other gates pass", async 
           passkey: false
         }
       })
-    })
+    }),
+    gatewayAuthEnv
   );
 
   assert.equal(response.status, 200);
@@ -892,9 +896,7 @@ test("worker gateway blocks pr review submit without GO", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/v2/gateway", {
       method: "POST",
-      headers: {
-        "content-type": "application/json"
-      },
+      headers: gatewayAuthHeaders,
       body: JSON.stringify({
         phase: "execution",
         actorRole: "executor",
@@ -922,7 +924,8 @@ test("worker gateway blocks pr review submit without GO", async () => {
           passkey: false
         }
       })
-    })
+    }),
+    gatewayAuthEnv
   );
 
   assert.equal(response.status, 422);
@@ -936,9 +939,7 @@ test("worker gateway keeps merge on GO plus passkey boundary", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/v2/gateway", {
       method: "POST",
-      headers: {
-        "content-type": "application/json"
-      },
+      headers: gatewayAuthHeaders,
       body: JSON.stringify({
         phase: "execution",
         actorRole: "executor",
@@ -968,7 +969,8 @@ test("worker gateway keeps merge on GO plus passkey boundary", async () => {
           passkey: false
         }
       })
-    })
+    }),
+    gatewayAuthEnv
   );
 
   assert.equal(response.status, 422);
@@ -1318,9 +1320,7 @@ test("worker gateway uses github app live repository index for natural list conv
   const response = await worker.fetch(
     new Request("https://example.com/v2/gateway", {
       method: "POST",
-      headers: {
-        "content-type": "application/json"
-      },
+      headers: gatewayAuthHeaders,
       body: JSON.stringify({
         phase: "exploration",
         actorRole: "executor",
@@ -1343,6 +1343,7 @@ test("worker gateway uses github app live repository index for natural list conv
       })
     }),
     {
+      ...gatewayAuthEnv,
       GITHUB_APP_INSTALLATION_TOKEN: "ghs_live_index_token",
       GITHUB_API_FETCH: githubApiFetch
     }
@@ -1388,9 +1389,7 @@ test("worker gateway resolves repository switch intent using live github app ali
   const response = await worker.fetch(
     new Request("https://example.com/v2/gateway", {
       method: "POST",
-      headers: {
-        "content-type": "application/json"
-      },
+      headers: gatewayAuthHeaders,
       body: JSON.stringify({
         phase: "exploration",
         actorRole: "executor",
@@ -1414,6 +1413,7 @@ test("worker gateway resolves repository switch intent using live github app ali
       })
     }),
     {
+      ...gatewayAuthEnv,
       GITHUB_APP_INSTALLATION_TOKEN: "ghs_live_index_token",
       GITHUB_API_FETCH: githubApiFetch
     }
@@ -1431,9 +1431,7 @@ test("worker accepts legacy /mvp gateway route for compatibility", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/mvp/gateway", {
       method: "POST",
-      headers: {
-        "content-type": "application/json"
-      },
+      headers: gatewayAuthHeaders,
       body: JSON.stringify({
         phase: "exploration",
         actorRole: "executor",
@@ -1444,7 +1442,8 @@ test("worker accepts legacy /mvp gateway route for compatibility", async () => {
           consent: { grantedCategories: [ConsentCategory.READ] }
         }
       })
-    })
+    }),
+    gatewayAuthEnv
   );
 
   assert.equal(response.status, 200);
@@ -1829,6 +1828,37 @@ test("worker blocks gateway without required bearer token", async () => {
   assert.equal(body.error, "unauthorized");
 });
 
+test("worker blocks gateway when machine auth runtime is not configured", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/gateway", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        phase: "exploration",
+        actorRole: "executor",
+        policyInput: {
+          actionType: ActionType.READ,
+          mode: TaskMode.READ_ONLY,
+          repositoryInput: "vtdd",
+          consent: { grantedCategories: [ConsentCategory.READ] }
+        }
+      })
+    }),
+    {}
+  );
+
+  assert.equal(response.status, 503);
+  const body = await response.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.error, "unauthorized");
+  assert.equal(
+    body.reason,
+    "machine auth runtime is not configured for /v2/gateway (legacy /mvp/gateway is also accepted)"
+  );
+});
+
 test("worker blocks gateway with invalid bearer token as forbidden", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/v2/gateway", {
@@ -2022,6 +2052,22 @@ test("worker blocks constitution retrieve without required bearer token", async 
   const body = await response.json();
   assert.equal(body.ok, false);
   assert.equal(body.error, "unauthorized");
+});
+
+test("worker blocks constitution retrieve when machine auth runtime is not configured", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/retrieve/constitution"),
+    {}
+  );
+
+  assert.equal(response.status, 503);
+  const body = await response.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.error, "unauthorized");
+  assert.equal(
+    body.reason,
+    "machine auth runtime is not configured for /v2/retrieve/constitution (legacy /mvp/retrieve/constitution is also accepted)"
+  );
 });
 
 test("worker returns constitution records through retrieve route", async () => {
@@ -2360,9 +2406,7 @@ test("worker blocks invalid policy input", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/v2/gateway", {
       method: "POST",
-      headers: {
-        "content-type": "application/json"
-      },
+      headers: gatewayAuthHeaders,
       body: JSON.stringify({
         phase: "execution",
         actorRole: "executor",
@@ -2390,7 +2434,8 @@ test("worker blocks invalid policy input", async () => {
           passkey: false
         }
       })
-    })
+    }),
+    gatewayAuthEnv
   );
 
   assert.equal(response.status, 422);
