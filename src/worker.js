@@ -35,6 +35,13 @@ const SETUP_WIZARD_PASSCODE_ENV = "SETUP_WIZARD_PASSCODE";
 const SETUP_WIZARD_SESSION_SECRET_ENV = "SETUP_WIZARD_SESSION_SECRET";
 const SETUP_WIZARD_SESSION_COOKIE = "vtdd_setup_access";
 const SETUP_WIZARD_SESSION_TTL_SECONDS = 30 * 60;
+const SETUP_WIZARD_GITHUB_APP_BOOTSTRAP_PATH = "/setup/wizard/github-app/bootstrap";
+const CLOUDFLARE_WORKER_SCRIPT_NAME_ENV = "CLOUDFLARE_WORKER_SCRIPT_NAME";
+const GITHUB_APP_BOOTSTRAP_SECRET_ALLOWLIST = Object.freeze([
+  "GITHUB_APP_ID",
+  "GITHUB_APP_INSTALLATION_ID",
+  "GITHUB_APP_PRIVATE_KEY"
+]);
 const CLOUDFLARE_BILLING_HINT_REGEX =
   /(payment|billing|subscription|add payment method|outstanding balance|cannot modify this subscription|zone cannot be upgraded|plan modification|card)/i;
 
@@ -62,6 +69,14 @@ export default {
 
     if (request.method === "POST" && url.pathname === "/setup/wizard/access") {
       return handleSetupWizardAccessRequest({ request, url, env });
+    }
+
+    if (request.method === "POST" && url.pathname === SETUP_WIZARD_GITHUB_APP_BOOTSTRAP_PATH) {
+      const auth = await authorizeSetupWizardRequest({ request, url, env });
+      if (!auth.ok) {
+        return auth.response;
+      }
+      return handleGitHubAppBootstrapRequest({ request, url, env });
     }
 
     if (request.method === "GET" && url.pathname === "/setup/wizard") {
@@ -165,6 +180,7 @@ async function handleSetupWizardRequest(url, env) {
   const result = runInitialSetupWizard({ answers });
   const cloudflareSetupCheck = await runCloudflareSetupCheck(url, env);
   const githubAppSetupCheck = await runGitHubAppSetupCheck(url, env);
+  const githubAppBootstrap = buildGitHubAppBootstrapStatus({ url, env });
   const format = normalize(url.searchParams.get("format"));
   const guidance = buildSetupWizardGuidance({ result, url });
   const enrichedResult = attachSetupWizardImportUrls({ result, url });
@@ -177,6 +193,7 @@ async function handleSetupWizardRequest(url, env) {
         generatedAnswers: answers,
         cloudflareSetupCheck,
         githubAppSetupCheck,
+        githubAppBootstrap,
         guidance
       });
     }
@@ -193,6 +210,7 @@ async function handleSetupWizardRequest(url, env) {
       generatedAnswers: answers,
       cloudflareSetupCheck,
       githubAppSetupCheck,
+      githubAppBootstrap,
       guidance
     });
   }
@@ -202,7 +220,8 @@ async function handleSetupWizardRequest(url, env) {
     answers,
     url,
     cloudflareSetupCheck,
-    githubAppSetupCheck
+    githubAppSetupCheck,
+    githubAppBootstrap
   });
   return html(result.ok ? 200 : 422, htmlBody);
 }
@@ -275,6 +294,87 @@ async function handleSetupWizardAccessRequest({ request, url, env }) {
       "set-cookie": setCookie
     }
   );
+}
+
+async function handleGitHubAppBootstrapRequest({ request, url, env }) {
+  const bootstrap = buildGitHubAppBootstrapStatus({ url, env });
+  if (bootstrap.state !== "available") {
+    return json(503, {
+      ok: false,
+      error: "github_app_bootstrap_unavailable",
+      state: bootstrap.state,
+      summary: bootstrap.summary,
+      missingPrerequisites: bootstrap.missingPrerequisites ?? [],
+      guidance: bootstrap.guidance ?? [],
+      allowlistedSecrets: bootstrap.allowlistedSecrets ?? []
+    });
+  }
+
+  const payload = await readGitHubAppBootstrapPayload(request);
+  const missingSecretValues = GITHUB_APP_BOOTSTRAP_SECRET_ALLOWLIST.filter(
+    (name) => !normalizeText(payload[name])
+  );
+  if (missingSecretValues.length > 0) {
+    return json(422, {
+      ok: false,
+      error: "github_app_bootstrap_missing_values",
+      missingSecretValues
+    });
+  }
+
+  const fetchImpl =
+    typeof env?.CF_API_FETCH === "function"
+      ? env.CF_API_FETCH
+      : typeof globalThis.fetch === "function"
+        ? globalThis.fetch.bind(globalThis)
+        : null;
+  if (!fetchImpl) {
+    return json(503, {
+      ok: false,
+      error: "github_app_bootstrap_fetch_unavailable",
+      reason: "runtime fetch is unavailable"
+    });
+  }
+
+  for (const secretName of GITHUB_APP_BOOTSTRAP_SECRET_ALLOWLIST) {
+    const updated = await putCloudflareWorkerSecret({
+      fetchImpl,
+      apiToken: bootstrap.cloudflareApiToken,
+      accountId: bootstrap.accountId,
+      scriptName: bootstrap.scriptName,
+      secretName,
+      secretValue: payload[secretName]
+    });
+    if (!updated.ok) {
+      return json(502, {
+        ok: false,
+        error: "github_app_bootstrap_write_failed",
+        secretName,
+        reason: updated.reason,
+        evidence: {
+          httpStatus: updated.httpStatus ?? null
+        }
+      });
+    }
+  }
+
+  const returnTo =
+    normalizeGitHubAppBootstrapReturnTo(payload.returnTo) || "/setup/wizard?githubAppCheck=on";
+
+  if (payload.mode === "form") {
+    return new Response(null, {
+      status: 303,
+      headers: {
+        location: returnTo
+      }
+    });
+  }
+
+  return json(200, {
+    ok: true,
+    updatedSecrets: [...GITHUB_APP_BOOTSTRAP_SECRET_ALLOWLIST],
+    returnTo
+  });
 }
 
 function attachSetupWizardImportUrls({ result, url }) {
@@ -1061,10 +1161,31 @@ function deriveAliases(canonicalRepo) {
   return [...aliases];
 }
 
-function renderSetupWizardHtml({ result, answers, url, cloudflareSetupCheck, githubAppSetupCheck }) {
+function renderSetupWizardHtml({
+  result,
+  answers,
+  url,
+  cloudflareSetupCheck,
+  githubAppSetupCheck,
+  githubAppBootstrap
+}) {
   const body = result.ok
-    ? renderSuccessContent(result, answers, url, cloudflareSetupCheck, githubAppSetupCheck)
-    : renderFailureContent(result, answers, url, cloudflareSetupCheck, githubAppSetupCheck);
+    ? renderSuccessContent(
+        result,
+        answers,
+        url,
+        cloudflareSetupCheck,
+        githubAppSetupCheck,
+        githubAppBootstrap
+      )
+    : renderFailureContent(
+        result,
+        answers,
+        url,
+        cloudflareSetupCheck,
+        githubAppSetupCheck,
+        githubAppBootstrap
+      );
 
   return renderHtmlDocument(body);
 }
@@ -1208,7 +1329,14 @@ function renderHtmlDocument(body) {
 </html>`;
 }
 
-function renderSuccessContent(result, answers, url, cloudflareSetupCheck, githubAppSetupCheck) {
+function renderSuccessContent(
+  result,
+  answers,
+  url,
+  cloudflareSetupCheck,
+  githubAppSetupCheck,
+  githubAppBootstrap
+) {
   const onboarding = result.onboarding ?? {};
   const customGpt = onboarding.customGpt ?? {};
   const deployAuthority = onboarding.deployAuthority ?? {};
@@ -1269,12 +1397,13 @@ function renderSuccessContent(result, answers, url, cloudflareSetupCheck, github
     </div>
     <textarea id="actionSchemaImportUrl" readonly>${escapeHtml(actionSchemaImportUrl)}</textarea>
     <p class="copy-hint" data-copy-status="actionSchemaImportUrl">Paste this URL into Custom GPT Action schema import.</p>
-    <textarea id="actionSchemaJson" readonly>${escapeHtml(actionSchemaJson)}</textarea>
-    <p class="copy-hint" data-copy-status="actionSchemaJson">Tap copy button to copy full OpenAPI JSON.</p>
-    ${renderGitHubAppSetupCheck(githubAppSetupCheck)}
-    ${renderCloudflareSetupCheck(cloudflareSetupCheck)}
-    <p class="meta">Secrets are not handled here. Keep Cloudflare credentials in GitHub Environment secrets only.</p>
-  `;
+      <textarea id="actionSchemaJson" readonly>${escapeHtml(actionSchemaJson)}</textarea>
+      <p class="copy-hint" data-copy-status="actionSchemaJson">Tap copy button to copy full OpenAPI JSON.</p>
+      ${renderGitHubAppSetupCheck(githubAppSetupCheck)}
+      ${renderGitHubAppBootstrap(githubAppBootstrap, url)}
+      ${renderCloudflareSetupCheck(cloudflareSetupCheck)}
+      <p class="meta">Only the allowlisted GitHub App trio is handled through the narrow bootstrap form. Keep Cloudflare bootstrap credentials operator-managed on Worker runtime.</p>
+    `;
 }
 
 function renderDeployAuthorityRecommendation(recommendation) {
@@ -1633,7 +1762,14 @@ function renderReviewerContract(contract) {
   `;
 }
 
-function renderFailureContent(result, answers, url, cloudflareSetupCheck, githubAppSetupCheck) {
+function renderFailureContent(
+  result,
+  answers,
+  url,
+  cloudflareSetupCheck,
+  githubAppSetupCheck,
+  githubAppBootstrap
+) {
   const issues = Array.isArray(result.blockingIssues) ? result.blockingIssues : [];
   const issueItems = issues.map((item) => `<li>${escapeHtml(item)}</li>`).join("");
   const guidance = buildSetupWizardGuidance({ result, url });
@@ -1649,13 +1785,14 @@ function renderFailureContent(result, answers, url, cloudflareSetupCheck, github
       guidanceItems
         ? `<h2>Guidance</h2><div class="block"><ul>${guidanceItems}</ul></div>`
         : ""
-    }
-    ${renderGitHubAppSetupCheck(githubAppSetupCheck)}
-    ${renderCloudflareSetupCheck(cloudflareSetupCheck)}
-    <h2>Debug (safe answers only)</h2>
-    <textarea readonly>${escapeHtml(JSON.stringify(answers, null, 2))}</textarea>
-    <p class="meta">Tip: use <code>${escapeHtml(`${url.origin}/setup/wizard?format=json`)}</code> to inspect machine-readable output.</p>
-  `;
+      }
+      ${renderGitHubAppSetupCheck(githubAppSetupCheck)}
+      ${renderGitHubAppBootstrap(githubAppBootstrap, url)}
+      ${renderCloudflareSetupCheck(cloudflareSetupCheck)}
+      <h2>Debug (safe answers only)</h2>
+      <textarea readonly>${escapeHtml(JSON.stringify(answers, null, 2))}</textarea>
+      <p class="meta">Tip: use <code>${escapeHtml(`${url.origin}/setup/wizard?format=json`)}</code> to inspect machine-readable output.</p>
+    `;
 }
 
 function buildSetupWizardGuidance({ result, url }) {
@@ -1777,6 +1914,74 @@ function renderGitHubAppSetupCheck(check) {
       ${
         checkedAt
           ? `<p class="meta">checkedAt: <code>${escapeHtml(checkedAt)}</code></p>`
+          : ""
+      }
+    </div>
+  `;
+}
+
+function renderGitHubAppBootstrap(bootstrap, url) {
+  const state = normalizeText(bootstrap?.state) || "missing_prerequisites";
+  const summary =
+    normalizeText(bootstrap?.summary) || "GitHub App bootstrap write path is not available.";
+  const allowlistedSecrets = Array.isArray(bootstrap?.allowlistedSecrets)
+    ? bootstrap.allowlistedSecrets
+    : [];
+  const missingPrerequisites = Array.isArray(bootstrap?.missingPrerequisites)
+    ? bootstrap.missingPrerequisites
+    : [];
+  const guidance = Array.isArray(bootstrap?.guidance) ? bootstrap.guidance : [];
+  const actionPath =
+    normalizeText(bootstrap?.actionPath) || SETUP_WIZARD_GITHUB_APP_BOOTSTRAP_PATH;
+  const scriptName = normalizeText(bootstrap?.scriptName);
+  const returnTo = `${url.pathname}${url.search || "?githubAppCheck=on"}`;
+
+  return `
+    <h2>GitHub App Runtime Bootstrap</h2>
+    <div class="block">
+      <p><strong>state:</strong> <code>${escapeHtml(state)}</code></p>
+      <p>${escapeHtml(summary)}</p>
+      ${
+        scriptName
+          ? `<p><strong>Worker script:</strong> <code>${escapeHtml(scriptName)}</code></p>`
+          : ""
+      }
+      ${
+        allowlistedSecrets.length > 0
+          ? `<p><strong>Allowlisted secrets:</strong> ${allowlistedSecrets
+              .map((item) => `<code>${escapeHtml(item)}</code>`)
+              .join(", ")}</p>`
+          : ""
+      }
+      ${
+        missingPrerequisites.length > 0
+          ? `<p><strong>Missing prerequisites:</strong> ${missingPrerequisites
+              .map((item) => `<code>${escapeHtml(item)}</code>`)
+              .join(", ")}</p>`
+          : ""
+      }
+      ${
+        guidance.length > 0
+          ? `<ul>${guidance.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`
+          : ""
+      }
+      ${
+        state === "available"
+          ? `
+            <form method="post" action="${escapeHtml(actionPath)}">
+              <input type="hidden" name="returnTo" value="${escapeHtml(returnTo)}" />
+              <label for="githubAppId"><strong>GitHub App ID</strong></label>
+              <input id="githubAppId" name="GITHUB_APP_ID" type="text" inputmode="numeric" autocomplete="off" />
+              <label for="githubAppInstallationId"><strong>GitHub App Installation ID</strong></label>
+              <input id="githubAppInstallationId" name="GITHUB_APP_INSTALLATION_ID" type="text" inputmode="numeric" autocomplete="off" />
+              <label for="githubAppPrivateKey"><strong>GitHub App Private Key</strong></label>
+              <textarea id="githubAppPrivateKey" name="GITHUB_APP_PRIVATE_KEY" rows="8" autocomplete="off"></textarea>
+              <p class="meta">Values are sent only to the narrow bootstrap endpoint and are never echoed back in the response.</p>
+              <div style="margin-top: 12px;">
+                <button type="submit" class="copy-button">Write GitHub App Runtime Secrets</button>
+              </div>
+            </form>
+          `
           : ""
       }
     </div>
@@ -2114,6 +2319,148 @@ async function runGitHubAppSetupCheck(url, env) {
       source: live.source
     },
     checkedAt: new Date().toISOString()
+  };
+}
+
+function buildGitHubAppBootstrapStatus({ url, env }) {
+  const runtimeEnv = env ?? {};
+  const cloudflareApiToken = normalizeText(runtimeEnv.CLOUDFLARE_API_TOKEN);
+  const accountId = normalizeText(runtimeEnv.CLOUDFLARE_ACCOUNT_ID);
+  const scriptName = resolveCloudflareWorkerScriptName({ url, env: runtimeEnv });
+  const authConfig = getSetupWizardAuthConfig(runtimeEnv);
+  const missingPrerequisites = [];
+
+  if (!authConfig.enabled) {
+    missingPrerequisites.push("SETUP_WIZARD_PASSCODE");
+  }
+  if (!cloudflareApiToken) {
+    missingPrerequisites.push("CLOUDFLARE_API_TOKEN");
+  }
+  if (!accountId) {
+    missingPrerequisites.push("CLOUDFLARE_ACCOUNT_ID");
+  }
+  if (!scriptName) {
+    missingPrerequisites.push(CLOUDFLARE_WORKER_SCRIPT_NAME_ENV);
+  }
+
+  if (missingPrerequisites.length > 0) {
+    return {
+      state: "missing_prerequisites",
+      summary:
+        "GitHub App runtime bootstrap is unavailable until Cloudflare bootstrap prerequisites are configured on this Worker.",
+      missingPrerequisites,
+      allowlistedSecrets: [...GITHUB_APP_BOOTSTRAP_SECRET_ALLOWLIST],
+      actionPath: SETUP_WIZARD_GITHUB_APP_BOOTSTRAP_PATH,
+      guidance: [
+        "This path is intentionally narrow: only the GitHub App runtime secret trio can be written.",
+        "Configure Cloudflare bootstrap credentials on Worker runtime first, then return here to paste the GitHub App values once."
+      ]
+    };
+  }
+
+  return {
+    state: "available",
+    summary:
+      "Passcode-authenticated setup wizard can write the allowlisted GitHub App runtime secrets to this Worker.",
+    missingPrerequisites: [],
+    allowlistedSecrets: [...GITHUB_APP_BOOTSTRAP_SECRET_ALLOWLIST],
+    actionPath: SETUP_WIZARD_GITHUB_APP_BOOTSTRAP_PATH,
+    guidance: [
+      "Paste GitHub App ID, installation ID, and private key once, then reload setup wizard diagnostics.",
+      "This endpoint is allowlisted and does not accept arbitrary secret names."
+    ],
+    scriptName,
+    accountId,
+    cloudflareApiToken
+  };
+}
+
+function resolveCloudflareWorkerScriptName({ url, env }) {
+  const explicit = normalizeText(env?.[CLOUDFLARE_WORKER_SCRIPT_NAME_ENV]);
+  if (explicit) {
+    return explicit;
+  }
+
+  const hostname = normalizeText(url?.hostname);
+  if (!hostname.endsWith(".workers.dev")) {
+    return "";
+  }
+
+  const [scriptName] = hostname.split(".", 1);
+  return normalizeText(scriptName);
+}
+
+async function readGitHubAppBootstrapPayload(request) {
+  const contentType = normalizeText(request.headers.get("content-type"));
+  if (contentType.includes("application/json")) {
+    const payload = await readJson(request);
+    return {
+      mode: "json",
+      returnTo: normalizeText(payload?.returnTo),
+      GITHUB_APP_ID: normalizeText(payload?.GITHUB_APP_ID),
+      GITHUB_APP_INSTALLATION_ID: normalizeText(payload?.GITHUB_APP_INSTALLATION_ID),
+      GITHUB_APP_PRIVATE_KEY: normalizeText(payload?.GITHUB_APP_PRIVATE_KEY)
+    };
+  }
+
+  const form = await request.formData();
+  return {
+    mode: "form",
+    returnTo: normalizeText(form.get("returnTo")),
+    GITHUB_APP_ID: normalizeText(form.get("GITHUB_APP_ID")),
+    GITHUB_APP_INSTALLATION_ID: normalizeText(form.get("GITHUB_APP_INSTALLATION_ID")),
+    GITHUB_APP_PRIVATE_KEY: normalizeText(form.get("GITHUB_APP_PRIVATE_KEY"))
+  };
+}
+
+function normalizeGitHubAppBootstrapReturnTo(value) {
+  const text = normalizeText(value);
+  if (!text.startsWith("/setup/wizard")) {
+    return "";
+  }
+  return text;
+}
+
+async function putCloudflareWorkerSecret({
+  fetchImpl,
+  apiToken,
+  accountId,
+  scriptName,
+  secretName,
+  secretValue
+}) {
+  const response = await fetchImpl(
+    `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/workers/scripts/${encodeURIComponent(scriptName)}/secrets`,
+    {
+      method: "PUT",
+      headers: {
+        authorization: `Bearer ${apiToken}`,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        name: secretName,
+        text: secretValue,
+        type: "secret_text"
+      })
+    }
+  );
+
+  const payload = await readSafeJson(response);
+  if (response.ok && payload?.success !== false) {
+    return {
+      ok: true,
+      httpStatus: response.status
+    };
+  }
+
+  const errors = normalizeCloudflareErrors(payload?.errors);
+  const reason =
+    errors.map((item) => normalizeText(item.message)).find(Boolean) ||
+    `cloudflare secret update failed with http ${response.status}`;
+  return {
+    ok: false,
+    httpStatus: response.status,
+    reason
   };
 }
 

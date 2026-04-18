@@ -44,22 +44,26 @@ These steps are for first-time setup. They are manual because GitHub App creatio
    - If you later need PR or issue write paths, expand permissions deliberately.
 7. Create the App.
 8. Generate a private key and download the `.pem` file.
-   - Keep this file private.
-   - Do not paste it into chat, Issue, PR, or setup wizard answers.
+    - Keep this file private.
+    - Do not paste it into chat, Issue, PR, or setup wizard answers.
 9. Install the App to the target account or repository.
 10. Copy these values from the GitHub App screens:
     - App ID -> `GITHUB_APP_ID`
     - Installation ID -> `GITHUB_APP_INSTALLATION_ID`
-11. Open your Cloudflare Worker secret management and set:
+11. Choose one bootstrap path for Worker runtime secrets:
+    - canonical baseline: Cloudflare Worker secret management
+    - bounded alternative: passcode-authenticated setup wizard GitHub App bootstrap step
+12. Set:
     - `GITHUB_APP_ID`
     - `GITHUB_APP_INSTALLATION_ID`
     - `GITHUB_APP_PRIVATE_KEY`
-12. Redeploy or restart the Worker so the new secrets are available.
+13. Redeploy or restart the Worker if your chosen path does not auto-publish new secret values.
 
 ## Worker Secret Bootstrap (Current Reading)
 
 - adopted now: Cloudflare Dashboard secret entry + setup wizard diagnostics
 - allowed optional operator path: Wrangler / CI-assisted provisioning
+- bounded exception: passcode-authenticated setup wizard GitHub App bootstrap for the allowlisted trio only
 - deferred: brokered one-time bootstrap session behind `GO + passkey` and audit controls
 - never paste secret values into chat or setup wizard answers
 

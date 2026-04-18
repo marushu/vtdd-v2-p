@@ -82,11 +82,17 @@ The preferred UX direction is:
 
 This preserves an iPhone-friendly setup flow without turning the main wizard into a secret intake surface.
 
+Issue #181 allows a bounded exception:
+
+- a passcode-authenticated bootstrap step may accept the GitHub App runtime trio
+- the step must remain allowlisted and separate from normal read-only setup content
+- it must not become a generic admin or secret console
+
 ## Non-goals
 
 - fixing a specific auth vendor in this document
 - implementing OAuth in this document
-- adding secret input fields to setup wizard
+- adding generic secret input fields to the default setup wizard path
 - using setup wizard as a generic admin console
 
 ## Current Reading

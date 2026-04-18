@@ -46,6 +46,30 @@ function readCookieValue(setCookieHeader, name) {
   return part ? part.slice(prefix.length) : "";
 }
 
+async function unlockSetupWizard(env, returnTo = "/setup/wizard?repo=sample-org/vtdd-v2") {
+  const unlockResponse = await worker.fetch(
+    new Request("https://example.com/setup/wizard/access", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        passcode: env.SETUP_WIZARD_PASSCODE,
+        returnTo
+      })
+    }),
+    env
+  );
+
+  const setCookie = unlockResponse.headers.get("set-cookie") ?? "";
+  const sessionCookie = readCookieValue(setCookie, "vtdd_setup_access");
+  return {
+    unlockResponse,
+    setCookie,
+    sessionCookie
+  };
+}
+
 test("worker returns health", async () => {
   const response = await worker.fetch(new Request("https://example.com/health"));
   assert.equal(response.status, 200);
@@ -306,6 +330,160 @@ test("worker setup wizard access rejects invalid passcode", async () => {
   const body = await response.json();
   assert.equal(body.ok, false);
   assert.equal(body.error, "invalid_setup_passcode");
+});
+
+test("worker setup wizard json reports github app bootstrap prerequisites", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/setup/wizard?format=json&repo=sample-org/vtdd-v2"),
+    {
+      SETUP_WIZARD_PASSCODE: "2468"
+    }
+  );
+
+  assert.equal(response.status, 401);
+  const body = await response.json();
+  assert.equal(body.error, "setup_wizard_locked");
+});
+
+test("worker setup wizard unlocked html shows narrow github app bootstrap form when prerequisites exist", async () => {
+  const env = {
+    SETUP_WIZARD_PASSCODE: "2468",
+    CLOUDFLARE_API_TOKEN: "bootstrap-token",
+    CLOUDFLARE_ACCOUNT_ID: "account-id",
+    CLOUDFLARE_WORKER_SCRIPT_NAME: "vtdd-v2-mvp"
+  };
+  const { unlockResponse, sessionCookie } = await unlockSetupWizard(env);
+  assert.equal(unlockResponse.status, 200);
+  assert.notEqual(sessionCookie, "");
+
+  const response = await worker.fetch(
+    new Request("https://example.com/setup/wizard?repo=sample-org/vtdd-v2", {
+      headers: {
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      }
+    }),
+    env
+  );
+
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.equal(html.includes("GitHub App Runtime Bootstrap"), true);
+  assert.equal(html.includes('action="/setup/wizard/github-app/bootstrap"'), true);
+  assert.equal(html.includes("GITHUB_APP_PRIVATE_KEY"), true);
+  assert.equal(html.includes("Write GitHub App Runtime Secrets"), true);
+});
+
+test("worker setup wizard unlocked json reports github app bootstrap availability and missing prerequisites", async () => {
+  const env = {
+    SETUP_WIZARD_PASSCODE: "2468"
+  };
+  const { unlockResponse, sessionCookie } = await unlockSetupWizard(env);
+  assert.equal(unlockResponse.status, 200);
+
+  const response = await worker.fetch(
+    new Request("https://example.com/setup/wizard?format=json&repo=sample-org/vtdd-v2", {
+      headers: {
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      }
+    }),
+    env
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.githubAppBootstrap.state, "missing_prerequisites");
+  assert.deepEqual(body.githubAppBootstrap.allowlistedSecrets, [
+    "GITHUB_APP_ID",
+    "GITHUB_APP_INSTALLATION_ID",
+    "GITHUB_APP_PRIVATE_KEY"
+  ]);
+  assert.equal(body.githubAppBootstrap.missingPrerequisites.includes("CLOUDFLARE_API_TOKEN"), true);
+  assert.equal(body.githubAppBootstrap.missingPrerequisites.includes("CLOUDFLARE_ACCOUNT_ID"), true);
+  assert.equal(body.githubAppBootstrap.missingPrerequisites.includes("CLOUDFLARE_WORKER_SCRIPT_NAME"), true);
+});
+
+test("worker setup wizard bootstrap writes allowlisted github app runtime secrets", async () => {
+  const calls = [];
+  const env = {
+    SETUP_WIZARD_PASSCODE: "2468",
+    CLOUDFLARE_API_TOKEN: "bootstrap-token",
+    CLOUDFLARE_ACCOUNT_ID: "account-id",
+    CLOUDFLARE_WORKER_SCRIPT_NAME: "vtdd-v2-mvp",
+    CF_API_FETCH: async (url, init = {}) => {
+      calls.push({ url: String(url), init });
+      return new Response(
+        JSON.stringify({
+          success: true,
+          errors: [],
+          result: { name: "placeholder", type: "secret_text" }
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        }
+      );
+    }
+  };
+  const { sessionCookie } = await unlockSetupWizard(env);
+
+  const response = await worker.fetch(
+    new Request("https://example.com/setup/wizard/github-app/bootstrap", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      },
+      body: JSON.stringify({
+        GITHUB_APP_ID: "12345",
+        GITHUB_APP_INSTALLATION_ID: "98765",
+        GITHUB_APP_PRIVATE_KEY: "-----BEGIN PRIVATE KEY-----\nplaceholder\n-----END PRIVATE KEY-----",
+        returnTo: "/setup/wizard?githubAppCheck=on"
+      })
+    }),
+    env
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.updatedSecrets.length, 3);
+  assert.equal(calls.length, 3);
+  for (const call of calls) {
+    assert.equal(call.url, "https://api.cloudflare.com/client/v4/accounts/account-id/workers/scripts/vtdd-v2-mvp/secrets");
+    const payload = JSON.parse(String(call.init.body));
+    assert.equal(["GITHUB_APP_ID", "GITHUB_APP_INSTALLATION_ID", "GITHUB_APP_PRIVATE_KEY"].includes(payload.name), true);
+    assert.equal(payload.type, "secret_text");
+  }
+});
+
+test("worker setup wizard bootstrap rejects requests with missing allowlisted values", async () => {
+  const env = {
+    SETUP_WIZARD_PASSCODE: "2468",
+    CLOUDFLARE_API_TOKEN: "bootstrap-token",
+    CLOUDFLARE_ACCOUNT_ID: "account-id",
+    CLOUDFLARE_WORKER_SCRIPT_NAME: "vtdd-v2-mvp"
+  };
+  const { sessionCookie } = await unlockSetupWizard(env);
+
+  const response = await worker.fetch(
+    new Request("https://example.com/setup/wizard/github-app/bootstrap", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      },
+      body: JSON.stringify({
+        GITHUB_APP_ID: "12345",
+        GITHUB_APP_INSTALLATION_ID: "98765"
+      })
+    }),
+    env
+  );
+
+  assert.equal(response.status, 422);
+  const body = await response.json();
+  assert.equal(body.error, "github_app_bootstrap_missing_values");
+  assert.equal(body.missingSecretValues.includes("GITHUB_APP_PRIVATE_KEY"), true);
 });
 
 test("worker setup wizard html reflects direct provider recommendation when GitHub protection is unavailable", async () => {
