@@ -1461,9 +1461,41 @@ function renderHtmlDocument(body, ui = {}) {
         }
       }
 
+      async function copyFromValue(button) {
+        const value = button.getAttribute("data-copy-value") || "";
+        if (!value) {
+          return;
+        }
+
+        try {
+          if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(value);
+          } else {
+            const textarea = document.createElement("textarea");
+            textarea.value = value;
+            textarea.setAttribute("readonly", "");
+            textarea.style.position = "absolute";
+            textarea.style.left = "-9999px";
+            document.body.appendChild(textarea);
+            textarea.focus();
+            textarea.select();
+            document.execCommand("copy");
+            document.body.removeChild(textarea);
+          }
+          setCopyState(button, ${JSON.stringify(copiedText)});
+        } catch {
+          setCopyState(button, ${JSON.stringify(manualCopyText)});
+        }
+      }
+
       document.querySelectorAll("[data-copy-target]").forEach((button) => {
         button.addEventListener("click", () => {
           copyFromTextarea(button);
+        });
+      });
+      document.querySelectorAll("[data-copy-value]").forEach((button) => {
+        button.addEventListener("click", () => {
+          copyFromValue(button);
         });
       });
     </script>
@@ -1533,6 +1565,14 @@ function renderSuccessContent(
     locale === "ja"
       ? "GitHub App の allowlist された 3 項目だけがこの narrow bootstrap form で扱われます。Cloudflare 側の bootstrap credential は Worker runtime で operator-managed のまま保持してください。"
       : "Only the allowlisted GitHub App trio is handled through the narrow bootstrap form. Keep Cloudflare bootstrap credentials operator-managed on Worker runtime.";
+  const currentSetupUrl = url.toString();
+  const jsonOutputUrl = `${url.origin}/setup/wizard?format=json`;
+  const currentSetupLabel =
+    locale === "ja" ? "現在の Setup URL" : "Current Setup URL";
+  const copyCurrentSetupLabel =
+    locale === "ja" ? "Setup URL をコピー" : "Copy Setup URL";
+  const copyJsonLabel =
+    locale === "ja" ? "JSON URL をコピー" : "Copy JSON URL";
   const checklistSteps =
     locale === "ja"
       ? [
@@ -1570,7 +1610,16 @@ function renderSuccessContent(
 
   return `
     <p class="meta">${escapeHtml(introText)}</p>
-    <p class="meta">${escapeHtml(jsonLabel)}: <code>${escapeHtml(`${url.origin}/setup/wizard?format=json`)}</code></p>
+    <div class="section-header">
+      <p class="meta" style="margin: 0;">${escapeHtml(currentSetupLabel)}: <code>${escapeHtml(currentSetupUrl)}</code></p>
+      <button class="copy-button" type="button" data-copy-value="${escapeHtml(currentSetupUrl)}" data-copy-target="setupCurrentUrlStatus">${escapeHtml(copyCurrentSetupLabel)}</button>
+    </div>
+    <p class="copy-hint" data-copy-status="setupCurrentUrlStatus"></p>
+    <div class="section-header">
+      <p class="meta" style="margin: 0;">${escapeHtml(jsonLabel)}: <code>${escapeHtml(jsonOutputUrl)}</code></p>
+      <button class="copy-button" type="button" data-copy-value="${escapeHtml(jsonOutputUrl)}" data-copy-target="setupJsonUrlStatus">${escapeHtml(copyJsonLabel)}</button>
+    </div>
+    <p class="copy-hint" data-copy-status="setupJsonUrlStatus"></p>
     <h2>${escapeHtml(repositoriesTitle)}</h2>
     <div class="block">
       <ul>${repoList.map((repo) => `<li>${repo}</li>`).join("")}</ul>

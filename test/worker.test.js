@@ -120,6 +120,8 @@ test("worker returns setup wizard html when repo query is provided", async () =>
   assert.equal(html.includes("Copy Construction"), true);
   assert.equal(html.includes("Copy Schema"), true);
   assert.equal(html.includes("Copy Import URL"), true);
+  assert.equal(html.includes("Copy Setup URL"), true);
+  assert.equal(html.includes("Copy JSON URL"), true);
   assert.equal(html.includes('textarea id="constructionText"'), true);
   assert.equal(html.includes('textarea id="actionSchemaImportUrl"'), true);
   assert.equal(html.includes('textarea id="actionSchemaJson"'), true);
@@ -271,6 +273,8 @@ test("worker localizes setup wizard html to Japanese from accept-language", asyn
   assert.equal(html.includes("チェックリスト"), true);
   assert.equal(html.includes("構成テキストをコピー"), true);
   assert.equal(html.includes("Import URL をコピー"), true);
+  assert.equal(html.includes("Setup URL をコピー"), true);
+  assert.equal(html.includes("JSON URL をコピー"), true);
   assert.equal(html.includes("詳細契約を開く"), true);
   assert.equal(html.includes("Action auth は Bearer を使う"), true);
 });
