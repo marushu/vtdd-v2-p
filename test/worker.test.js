@@ -372,6 +372,8 @@ test("worker setup wizard unlocked html shows narrow github app bootstrap form w
   assert.equal(html.includes("GitHub App Runtime Bootstrap"), true);
   assert.equal(html.includes('action="/setup/wizard/github-app/bootstrap"'), true);
   assert.equal(html.includes('action="https://github.com/settings/apps/new"'), true);
+  assert.equal(html.includes("&quot;hook_attributes&quot;"), true);
+  assert.equal(html.includes("&quot;url&quot;:&quot;https://example.com/github/webhooks&quot;"), true);
   assert.equal(html.includes("Create GitHub App Automatically"), true);
   assert.equal(html.includes("GITHUB_APP_PRIVATE_KEY"), true);
   assert.equal(html.includes("Write GitHub App Runtime Secrets"), true);
