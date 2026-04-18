@@ -1533,6 +1533,40 @@ function renderSuccessContent(
     locale === "ja"
       ? "GitHub App の allowlist された 3 項目だけがこの narrow bootstrap form で扱われます。Cloudflare 側の bootstrap credential は Worker runtime で operator-managed のまま保持してください。"
       : "Only the allowlisted GitHub App trio is handled through the narrow bootstrap form. Keep Cloudflare bootstrap credentials operator-managed on Worker runtime.";
+  const checklistSteps =
+    locale === "ja"
+      ? [
+          "Instructions は「構成テキストをコピー」で入れる",
+          "Action は「Import URL」を使って設定する",
+          "Action auth は Bearer を使う",
+          "GitHub App と Cloudflare の状態を下で確認する"
+        ]
+      : steps;
+  const detailedContracts = [
+    renderDeployAuthorityRecommendation(deployAuthority),
+    renderProductionDeployContract(productionDeploy),
+    renderMachineAuthContract(machineAuth),
+    renderRepositoryResolutionContract(repositoryResolution),
+    renderMemorySafetyContract(memorySafety),
+    renderRoleSeparationContract(roleSeparation),
+    renderSurfaceIndependenceContract(surfaceIndependence),
+    renderButlerReviewProtocolContract(butlerReviewProtocol),
+    renderRetrievalContract(retrievalContract),
+    renderPolicyEngineContract(policyEngine),
+    renderGuardedAbsenceContract(guardedAbsence),
+    renderReviewerContract(reviewer)
+  ].join("");
+  const detailedContractsSection =
+    locale === "ja"
+      ? `
+        <details class="block" style="margin-top: 18px;">
+          <summary><strong>詳細契約を開く</strong></summary>
+          <div style="margin-top: 12px;">
+            ${detailedContracts}
+          </div>
+        </details>
+      `
+      : detailedContracts;
 
   return `
     <p class="meta">${escapeHtml(introText)}</p>
@@ -1543,20 +1577,9 @@ function renderSuccessContent(
     </div>
     <h2>${escapeHtml(checklistTitle)}</h2>
     <div class="block">
-      <ul>${steps.map((step) => `<li>${escapeHtml(step)}</li>`).join("")}</ul>
+      <ul>${checklistSteps.map((step) => `<li>${escapeHtml(step)}</li>`).join("")}</ul>
     </div>
-    ${renderDeployAuthorityRecommendation(deployAuthority)}
-    ${renderProductionDeployContract(productionDeploy)}
-    ${renderMachineAuthContract(machineAuth)}
-    ${renderRepositoryResolutionContract(repositoryResolution)}
-    ${renderMemorySafetyContract(memorySafety)}
-    ${renderRoleSeparationContract(roleSeparation)}
-    ${renderSurfaceIndependenceContract(surfaceIndependence)}
-    ${renderButlerReviewProtocolContract(butlerReviewProtocol)}
-    ${renderRetrievalContract(retrievalContract)}
-    ${renderPolicyEngineContract(policyEngine)}
-    ${renderGuardedAbsenceContract(guardedAbsence)}
-    ${renderReviewerContract(reviewer)}
+    ${detailedContractsSection}
     <div class="section-header">
       <h2>${escapeHtml(constructionTitle)}</h2>
       <button class="copy-button" type="button" data-copy-target="constructionText">${escapeHtml(copyConstructionLabel)}</button>
