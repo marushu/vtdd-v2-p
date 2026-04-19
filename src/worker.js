@@ -4731,6 +4731,7 @@ async function runGitHubAppSetupCheck(url, env) {
     if (missingOnlyInstallation && diagnosticsEnabled) {
       const detection = await detectGitHubAppInstallation({
         env: runtimeEnv,
+        targetOwner: getSingleSetupWizardRepoOwner(url),
         fetchImpl:
           typeof env?.GITHUB_API_FETCH === "function"
             ? env.GITHUB_API_FETCH.bind(env)
@@ -8062,7 +8063,7 @@ function buildBootstrapSessionSafetyReadout({ bootstrapState, preview }) {
   };
 }
 
-async function detectGitHubAppInstallation({ env, fetchImpl }) {
+async function detectGitHubAppInstallation({ env, fetchImpl, targetOwner }) {
   const runtimeEnv = env ?? {};
   const appId = normalizeText(runtimeEnv.GITHUB_APP_ID);
   const privateKey = resolveGitHubAppPrivateKey(runtimeEnv);
@@ -8133,10 +8134,40 @@ async function detectGitHubAppInstallation({ env, fetchImpl }) {
       totalInstallations: 1
     };
   }
+
+  const normalizedTargetOwner = normalizeText(targetOwner).toLowerCase();
+  if (normalizedTargetOwner) {
+    const matchingInstallations = installations.filter((item) => {
+      const accountLogin = normalizeText(item?.account?.login).toLowerCase();
+      return accountLogin && accountLogin === normalizedTargetOwner;
+    });
+    if (matchingInstallations.length === 1) {
+      return {
+        state: "installation_detected",
+        installationId: normalizeText(matchingInstallations[0]?.id),
+        totalInstallations: installations.length
+      };
+    }
+  }
+
   return {
     state: "installation_selection_required",
     totalInstallations: installations.length
   };
+}
+
+function getSingleSetupWizardRepoOwner(url) {
+  const repositories = parseRepositories(url);
+  if (repositories.length !== 1) {
+    return "";
+  }
+
+  const canonicalRepo = normalizeText(repositories[0]?.canonicalRepo);
+  if (!canonicalRepo.includes("/")) {
+    return "";
+  }
+
+  return canonicalRepo.split("/")[0];
 }
 
 async function getGitHubAppMetadata({ env, fetchImpl }) {
