@@ -2135,18 +2135,7 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
     absorbedBody.approvalBoundBootstrapSession.phaseReadout.currentPhase.id,
     "live_readiness_verified"
   );
-  assert.equal(
-    absorbedBody.approvalBoundBootstrapSession.capabilityReadout.githubConnection.state,
-    "verified_live"
-  );
-  assert.equal(
-    absorbedBody.approvalBoundBootstrapSession.capabilityReadout.workerRuntime.state,
-    "verified_runtime_identity"
-  );
-  assert.equal(
-    absorbedBody.approvalBoundBootstrapSession.capabilityReadout.vtddCapability.state,
-    "can_continue_live_github_work"
-  );
+  assert.equal(absorbedBody.approvalBoundBootstrapSession.capabilityReadout, null);
   assert.equal(
     absorbedBody.approvalBoundBootstrapSession.completionReadout.claimState.id,
     "wizard_complete_ready_path_verified"
@@ -2354,6 +2343,7 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
   assert.equal(absorbedHtml.includes("Steps this path is intended to absorb"), false);
   assert.equal(absorbedHtml.includes("Session contract"), false);
   assert.equal(absorbedHtml.includes("Envelope consume result"), false);
+  assert.equal(absorbedHtml.includes("Capability readout"), false);
   assert.equal(absorbedHtml.includes("Service connection model"), false);
   assert.equal(absorbedHtml.includes("Service connection actionability"), false);
   assert.equal(absorbedHtml.includes("Service connection friction"), false);
