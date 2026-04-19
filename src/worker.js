@@ -8085,11 +8085,12 @@ async function detectGitHubAppInstallation({ env, fetchImpl }) {
 }
 
 function buildGitHubAppManifestLaunch(url) {
-  const returnTo = `${url.pathname}${url.search || "?githubAppCheck=on"}`;
+  const returnTo =
+    normalizeGitHubAppBootstrapReturnTo(`${url.pathname}${url.search || "?githubAppCheck=on"}`) ||
+    "/setup/wizard?githubAppCheck=on";
   const redirectUrl = new URL(SETUP_WIZARD_GITHUB_APP_MANIFEST_CALLBACK_PATH, url.origin);
   redirectUrl.searchParams.set("returnTo", returnTo);
-  const setupUrl = new URL("/setup/wizard", url.origin);
-  setupUrl.search = url.search;
+  const setupUrl = new URL(returnTo, url.origin);
   const webhookUrl = new URL("/github/webhooks", url.origin);
 
   return {
@@ -8307,7 +8308,11 @@ function normalizeGitHubAppBootstrapReturnTo(value) {
   if (!text.startsWith("/setup/wizard")) {
     return "";
   }
-  return text;
+  const url = new URL(text, "https://example.com");
+  if (!isTruthySignal(normalize(url.searchParams.get("githubAppCheck")))) {
+    url.searchParams.set("githubAppCheck", "on");
+  }
+  return `${url.pathname}${url.search}`;
 }
 
 function normalizeSetupWizardContinuationReturnTo(value) {
