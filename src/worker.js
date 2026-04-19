@@ -5519,7 +5519,9 @@ async function buildApprovalBoundBootstrapSessionStatus({
       ...base.contract,
       preview: {
         ...base.contract.preview,
-        blockedBy: ["attestation_backed_bootstrap_authority_not_implemented"]
+        blockedBy: absorbedLiveProof
+          ? []
+          : ["attestation_backed_bootstrap_authority_not_implemented"]
       }
     }
   };

@@ -2166,6 +2166,10 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
     absorbedBody.approvalBoundBootstrapSession.completionReadout.claimState.id,
     "wizard_complete_ready_path_verified"
   );
+  assert.deepEqual(
+    absorbedBody.approvalBoundBootstrapSession.contract.preview.blockedBy,
+    []
+  );
   assert.equal(
     absorbedBody.approvalBoundBootstrapSession.evidenceReadout.blockedEvidence.length,
     0
