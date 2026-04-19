@@ -453,6 +453,9 @@ test("worker setup wizard unlocked html shows narrow github app bootstrap form w
   assert.equal(html.includes("Service connection handoff shape"), true);
   assert.equal(html.includes("GitHub handoff"), true);
   assert.equal(html.includes("Cloudflare handoff"), true);
+  assert.equal(html.includes("Service return continuity"), true);
+  assert.equal(html.includes("GitHub return"), true);
+  assert.equal(html.includes("Cloudflare return"), true);
   assert.equal(html.includes("Responsibility split"), true);
   assert.equal(html.includes("Human step"), true);
   assert.equal(html.includes("VTDD step"), true);
@@ -689,6 +692,22 @@ test("worker setup wizard unlocked json reports github app bootstrap availabilit
   assert.equal(
     body.approvalBoundBootstrapSession.serviceConnectionHandoffShapeReadout.cloudflare.returnCaptureOwner,
     "operator_for_current_recovery_debt"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.serviceConnectionReturnContinuityReadout.github.id,
+    "github_return_continuity_deferred_until_boundary_restored"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.serviceConnectionReturnContinuityReadout.github.humanReentryRequired,
+    "no"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.serviceConnectionReturnContinuityReadout.cloudflare.id,
+    "cloudflare_return_continuity_blocked_by_operator_recovery"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.serviceConnectionReturnContinuityReadout.cloudflare.humanReentryRequired,
+    "yes"
   );
   assert.equal(
     body.approvalBoundBootstrapSession.responsibilityReadout.humanStep.id,
@@ -1027,6 +1046,22 @@ test("worker setup wizard unlocked json does not expose cloudflare bootstrap tok
   assert.equal(
     body.approvalBoundBootstrapSession.serviceConnectionHandoffShapeReadout.cloudflare.returnCaptureOwner,
     "vtdd_runtime_boundary"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.serviceConnectionReturnContinuityReadout.github.id,
+    "github_return_to_same_wizard_context_after_provider_step"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.serviceConnectionReturnContinuityReadout.github.humanReentryRequired,
+    "no"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.serviceConnectionReturnContinuityReadout.cloudflare.id,
+    "cloudflare_continuity_stays_inside_runtime_boundary"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.serviceConnectionReturnContinuityReadout.cloudflare.humanReentryRequired,
+    "no"
   );
   assert.equal(
     body.approvalBoundBootstrapSession.responsibilityReadout.humanStep.id,
@@ -1795,6 +1830,14 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
   assert.equal(
     absorbedBody.approvalBoundBootstrapSession.serviceConnectionHandoffShapeReadout.cloudflare.id,
     "cloudflare_handoff_already_absorbed"
+  );
+  assert.equal(
+    absorbedBody.approvalBoundBootstrapSession.serviceConnectionReturnContinuityReadout.github.id,
+    "github_return_continuity_already_satisfied"
+  );
+  assert.equal(
+    absorbedBody.approvalBoundBootstrapSession.serviceConnectionReturnContinuityReadout.cloudflare.id,
+    "cloudflare_return_continuity_already_satisfied"
   );
 
   const absorbedHtmlResponse = await worker.fetch(

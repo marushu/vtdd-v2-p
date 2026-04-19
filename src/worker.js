@@ -3093,6 +3093,11 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
     session?.serviceConnectionHandoffShapeReadout ?? null;
   const githubConnectionHandoff = serviceConnectionHandoffShapeReadout?.github ?? null;
   const cloudflareConnectionHandoff = serviceConnectionHandoffShapeReadout?.cloudflare ?? null;
+  const serviceConnectionReturnContinuityReadout =
+    session?.serviceConnectionReturnContinuityReadout ?? null;
+  const githubReturnContinuity = serviceConnectionReturnContinuityReadout?.github ?? null;
+  const cloudflareReturnContinuity =
+    serviceConnectionReturnContinuityReadout?.cloudflare ?? null;
   const responsibilityReadout = session?.responsibilityReadout ?? null;
   const humanStep = responsibilityReadout?.humanStep ?? null;
   const vtddStep = responsibilityReadout?.vtddStep ?? null;
@@ -3438,6 +3443,25 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
               ${
                 cloudflareConnectionHandoff
                   ? `<p><strong>${escapeHtml(locale === "ja" ? "Cloudflare handoff" : "Cloudflare handoff")}:</strong> <code>${escapeHtml(normalizeText(cloudflareConnectionHandoff.id))}</code> ${escapeHtml(normalizeText(cloudflareConnectionHandoff.summary))} <strong>${escapeHtml(locale === "ja" ? "Human step shape" : "Human step shape")}:</strong> ${escapeHtml(normalizeText(cloudflareConnectionHandoff.humanStepShape))} <strong>${escapeHtml(locale === "ja" ? "Return capture owner" : "Return capture owner")}:</strong> <code>${escapeHtml(normalizeText(cloudflareConnectionHandoff.returnCaptureOwner))}</code></p>`
+                  : ""
+              }
+            </div>
+          `
+          : ""
+      }
+      ${
+        serviceConnectionReturnContinuityReadout
+          ? `
+            <div class="block" style="margin-top: 12px;">
+              <p><strong>${escapeHtml(locale === "ja" ? "Service return continuity" : "Service return continuity")}:</strong></p>
+              ${
+                githubReturnContinuity
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "GitHub return" : "GitHub return")}:</strong> <code>${escapeHtml(normalizeText(githubReturnContinuity.id))}</code> ${escapeHtml(normalizeText(githubReturnContinuity.summary))} <strong>${escapeHtml(locale === "ja" ? "Expected return context" : "Expected return context")}:</strong> ${escapeHtml(normalizeText(githubReturnContinuity.expectedReturnContext))} <strong>${escapeHtml(locale === "ja" ? "Human re-entry required" : "Human re-entry required")}:</strong> <code>${escapeHtml(normalizeText(githubReturnContinuity.humanReentryRequired))}</code></p>`
+                  : ""
+              }
+              ${
+                cloudflareReturnContinuity
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Cloudflare return" : "Cloudflare return")}:</strong> <code>${escapeHtml(normalizeText(cloudflareReturnContinuity.id))}</code> ${escapeHtml(normalizeText(cloudflareReturnContinuity.summary))} <strong>${escapeHtml(locale === "ja" ? "Expected return context" : "Expected return context")}:</strong> ${escapeHtml(normalizeText(cloudflareReturnContinuity.expectedReturnContext))} <strong>${escapeHtml(locale === "ja" ? "Human re-entry required" : "Human re-entry required")}:</strong> <code>${escapeHtml(normalizeText(cloudflareReturnContinuity.humanReentryRequired))}</code></p>`
                   : ""
               }
             </div>
@@ -4755,6 +4779,12 @@ async function buildApprovalBoundBootstrapSessionStatus({
       preview: effectivePreview,
       githubAppSetupCheck: effectiveGitHubAppSetupCheck
     }),
+    serviceConnectionReturnContinuityReadout:
+      buildBootstrapSessionServiceConnectionReturnContinuityReadout({
+        bootstrapState,
+        preview: effectivePreview,
+        githubAppSetupCheck: effectiveGitHubAppSetupCheck
+      }),
     responsibilityReadout: buildBootstrapSessionResponsibilityReadout({
       bootstrapState,
       preview: effectivePreview
@@ -6410,6 +6440,114 @@ function buildBootstrapSessionServiceConnectionHandoffShapeReadout({
       returnCaptureOwner: "vtdd_runtime_boundary",
       summary:
         "Cloudflare is only retaining runtime state while VTDD runs live proof."
+    }
+  };
+}
+
+function buildBootstrapSessionServiceConnectionReturnContinuityReadout({
+  bootstrapState,
+  preview,
+  githubAppSetupCheck
+}) {
+  const plannedWrites = Array.isArray(preview?.plannedWrites) ? preview.plannedWrites : [];
+  const setupState = normalizeText(githubAppSetupCheck?.state) || "unknown";
+
+  if (bootstrapState !== "available") {
+    return {
+      github: {
+        id: "github_return_continuity_deferred_until_boundary_restored",
+        expectedReturnContext:
+          "same setup wizard context once VTDD can safely open the provider step",
+        humanReentryRequired: "no",
+        summary:
+          "GitHub return continuity is still deferred, but the target remains a return to the same wizard context rather than a manual restart."
+      },
+      cloudflare: {
+        id: "cloudflare_return_continuity_blocked_by_operator_recovery",
+        expectedReturnContext:
+          "operator recovery currently sits outside the intended wizard return path",
+        humanReentryRequired: "yes",
+        summary:
+          "Cloudflare still breaks clean return continuity because operator recovery debt is not yet absorbed into the wizard-complete path."
+      }
+    };
+  }
+
+  if (plannedWrites.length > 1) {
+    return {
+      github: {
+        id: "github_return_to_same_wizard_context_after_provider_step",
+        expectedReturnContext:
+          "same wizard flow with VTDD capturing returned provider state",
+        humanReentryRequired: "no",
+        summary:
+          "After GitHub-side auth or consent, the user should return to the same wizard context and let VTDD absorb the resulting state."
+      },
+      cloudflare: {
+        id: "cloudflare_continuity_stays_inside_runtime_boundary",
+        expectedReturnContext:
+          "no separate user return path; runtime boundary keeps setup continuity",
+        humanReentryRequired: "no",
+        summary:
+          "Cloudflare continuity stays on the runtime side, so the user should not need a separate return trip or re-entry step."
+      }
+    };
+  }
+
+  if (plannedWrites.length === 1 && plannedWrites[0] === "GITHUB_APP_INSTALLATION_ID") {
+    return {
+      github: {
+        id: "github_install_return_absorbed_into_same_setup_context",
+        expectedReturnContext:
+          "same wizard context after installation consent or redirect completion",
+        humanReentryRequired: "no",
+        summary:
+          "The installation step should return into the same setup context so VTDD can capture the binding without asking the human to restart or paste values."
+      },
+      cloudflare: {
+        id: "cloudflare_bounded_write_keeps_continuity_without_reentry",
+        expectedReturnContext:
+          "runtime captures bounded write result without user-side re-entry",
+        humanReentryRequired: "no",
+        summary:
+          "Cloudflare should preserve continuity for the bounded write without introducing a user-facing return loop."
+      }
+    };
+  }
+
+  if (setupState === "ready") {
+    return {
+      github: {
+        id: "github_return_continuity_already_satisfied",
+        expectedReturnContext: "completed setup already holds the absorbed return state",
+        humanReentryRequired: "no",
+        summary:
+          "GitHub return continuity has already been satisfied because the setup result is fully absorbed."
+      },
+      cloudflare: {
+        id: "cloudflare_return_continuity_already_satisfied",
+        expectedReturnContext: "completed runtime state already preserves absorbed return state",
+        humanReentryRequired: "no",
+        summary:
+          "Cloudflare return continuity has already been satisfied because the runtime state is already bound."
+      }
+    };
+  }
+
+  return {
+    github: {
+      id: "github_live_probe_continues_without_reentry",
+      expectedReturnContext: "same wizard context while VTDD runs live proof",
+      humanReentryRequired: "no",
+      summary:
+        "GitHub is already back inside the wizard flow, so live proof should continue without any human re-entry step."
+    },
+    cloudflare: {
+      id: "cloudflare_live_probe_continuity_preserved_runtime_side",
+      expectedReturnContext: "runtime side preserves continuity during live proof",
+      humanReentryRequired: "no",
+      summary:
+        "Cloudflare only preserves runtime continuity during live proof and does not require a user-facing return path."
     }
   };
 }
