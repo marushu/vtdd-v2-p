@@ -263,6 +263,16 @@ async function handleSetupWizardRequest({ request, url, env }) {
     approvalBoundBootstrapSession
   });
   const format = normalize(url.searchParams.get("format"));
+  const autoConsumeResponse = await maybeAutoConsumeDetectedInstallationCompletion({
+    request,
+    url,
+    env,
+    format,
+    githubAppSetupCheck
+  });
+  if (autoConsumeResponse) {
+    return autoConsumeResponse;
+  }
   const guidance = buildSetupWizardGuidance({ result, url });
   const enrichedResult = await attachSetupWizardImportUrls({ result, url, env });
   const locale = detectSetupWizardLocale({ request, url });
@@ -619,6 +629,52 @@ async function handleApprovalBoundBootstrapSessionConsume({ request, url, env })
     writeTarget: preview?.writeTarget ?? null,
     plannedWrites: Array.isArray(preview?.plannedWrites) ? [...preview.plannedWrites] : [],
     postChecks: Array.isArray(preview?.postChecks) ? [...preview.postChecks] : []
+  });
+}
+
+async function maybeAutoConsumeDetectedInstallationCompletion({
+  request,
+  url,
+  env,
+  format,
+  githubAppSetupCheck
+}) {
+  if (request.method !== "GET" || format === "json" || format === "openapi") {
+    return null;
+  }
+
+  if (normalizeText(url.searchParams.get(SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_STATE_PARAM))) {
+    return null;
+  }
+
+  const completionAction = githubAppSetupCheck?.completeDetectedInstallationAction ?? null;
+  const consumePath = normalizeText(completionAction?.path);
+  const returnTo = normalizeGitHubAppBootstrapReturnTo(completionAction?.returnTo);
+  const envelopeToken = normalizeText(completionAction?.envelopeToken);
+
+  if (
+    consumePath !== SETUP_WIZARD_APPROVAL_BOUND_BOOTSTRAP_SESSION_CONSUME_PATH ||
+    !returnTo ||
+    !envelopeToken
+  ) {
+    return null;
+  }
+
+  const consumeRequest = new Request(new URL(consumePath, url.origin), {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded"
+    },
+    body: new URLSearchParams({
+      returnTo,
+      envelope_token: envelopeToken
+    })
+  });
+
+  return handleApprovalBoundBootstrapSessionConsume({
+    request: consumeRequest,
+    url: new URL(consumePath, url.origin),
+    env
   });
 }
 
