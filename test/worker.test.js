@@ -1568,10 +1568,10 @@ test("worker setup wizard consume can complete a single detected installation bi
     new Request("https://example.com/setup/wizard/bootstrap-session/request", {
       method: "POST",
       headers: {
-        "content-type": "application/x-www-form-urlencoded",
+        "content-type": "application/json",
         cookie: `vtdd_setup_access=${sessionCookie}`
       },
-      body: new URLSearchParams({
+      body: JSON.stringify({
         returnTo: "/setup/wizard?repo=sample-org/vtdd-v2&githubAppCheck=on",
         approval_phrase: "GO",
         passkey_verified: "true"
@@ -1580,7 +1580,8 @@ test("worker setup wizard consume can complete a single detected installation bi
     env
   );
 
-  const location = requestResponse.headers.get("location") ?? "";
+  const requestBody = await requestResponse.json();
+  const location = requestBody.returnTo ?? "";
   const statusResponse = await worker.fetch(
     new Request(`https://example.com${location}&format=json`, {
       headers: {
@@ -1645,7 +1646,7 @@ test("worker setup wizard consume can complete a single detected installation bi
   assert.equal(payload.text, "125153871");
 });
 
-test("worker setup wizard can auto-consume detected installation binding on html return", async () => {
+test("worker setup wizard request can auto-continue detected installation binding on form submit", async () => {
   const calls = [];
   const { privateKey } = generateKeyPairSync("rsa", {
     modulusLength: 2048,
@@ -1763,18 +1764,8 @@ test("worker setup wizard can auto-consume detected installation binding on html
     env
   );
 
-  const location = requestResponse.headers.get("location") ?? "";
-  const autoConsumeResponse = await worker.fetch(
-    new Request(`https://example.com${location}`, {
-      headers: {
-        cookie: `vtdd_setup_access=${sessionCookie}`
-      }
-    }),
-    env
-  );
-
-  assert.equal(autoConsumeResponse.status, 303);
-  const completedLocation = autoConsumeResponse.headers.get("location") ?? "";
+  assert.equal(requestResponse.status, 303);
+  const completedLocation = requestResponse.headers.get("location") ?? "";
   assert.equal(completedLocation.includes("bootstrap_session_consume=completed"), true);
   assert.equal(
     completedLocation.includes("bootstrap_session_consume_proof_state=ready"),
@@ -1896,10 +1887,10 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
     new Request("https://example.com/setup/wizard/bootstrap-session/request", {
       method: "POST",
       headers: {
-        "content-type": "application/x-www-form-urlencoded",
+        "content-type": "application/json",
         cookie: `vtdd_setup_access=${sessionCookie}`
       },
-      body: new URLSearchParams({
+      body: JSON.stringify({
         returnTo: "/setup/wizard?repo=sample-org/vtdd-v2&githubAppCheck=on",
         approval_phrase: "GO",
         passkey_verified: "true"
@@ -1908,7 +1899,8 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
     env
   );
 
-  const location = requestResponse.headers.get("location") ?? "";
+  const requestBody = await requestResponse.json();
+  const location = requestBody.returnTo ?? "";
   const statusResponse = await worker.fetch(
     new Request(`https://example.com${location}&format=json`, {
       headers: {

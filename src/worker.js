@@ -456,6 +456,15 @@ async function handleApprovalBoundBootstrapSessionRequest({ request, url, env })
   );
 
   if (payload.mode === "form") {
+    const autoContinueResponse = await maybeAutoContinueDetectedInstallationAfterRequest({
+      redirectUrl,
+      originUrl: url,
+      env
+    });
+    if (autoContinueResponse) {
+      return autoContinueResponse;
+    }
+
     return new Response(null, {
       status: 303,
       headers: {
@@ -672,7 +681,64 @@ async function maybeAutoConsumeDetectedInstallationCompletion({
     return null;
   }
 
-  const consumeRequest = new Request(new URL(consumePath, url.origin), {
+  return continueDetectedInstallationCompletion({
+    consumePath,
+    returnTo,
+    envelopeToken,
+    originUrl: url,
+    env
+  });
+}
+
+async function maybeAutoContinueDetectedInstallationAfterRequest({
+  redirectUrl,
+  originUrl,
+  env
+}) {
+  const rawGitHubAppSetupCheck = await runGitHubAppSetupCheck(redirectUrl, env);
+  const githubAppBootstrap = toPublicGitHubAppBootstrapStatus(
+    buildGitHubAppBootstrapStatus({ url: redirectUrl, env })
+  );
+  const approvalBoundBootstrapSession = await buildApprovalBoundBootstrapSessionStatus({
+    url: redirectUrl,
+    env,
+    githubAppBootstrap,
+    githubAppSetupCheck: rawGitHubAppSetupCheck
+  });
+  const githubAppSetupCheck = attachDetectedInstallationCompletionAction({
+    githubAppSetupCheck: rawGitHubAppSetupCheck,
+    approvalBoundBootstrapSession
+  });
+  const completionAction = githubAppSetupCheck?.completeDetectedInstallationAction ?? null;
+  const consumePath = normalizeText(completionAction?.path);
+  const returnTo = normalizeGitHubAppBootstrapReturnTo(completionAction?.returnTo);
+  const envelopeToken = normalizeText(completionAction?.envelopeToken);
+
+  if (
+    consumePath !== SETUP_WIZARD_APPROVAL_BOUND_BOOTSTRAP_SESSION_CONSUME_PATH ||
+    !returnTo ||
+    !envelopeToken
+  ) {
+    return null;
+  }
+
+  return continueDetectedInstallationCompletion({
+    consumePath,
+    returnTo,
+    envelopeToken,
+    originUrl,
+    env
+  });
+}
+
+async function continueDetectedInstallationCompletion({
+  consumePath,
+  returnTo,
+  envelopeToken,
+  originUrl,
+  env
+}) {
+  const consumeRequest = new Request(new URL(consumePath, originUrl.origin), {
     method: "POST",
     headers: {
       "content-type": "application/x-www-form-urlencoded"
@@ -685,7 +751,7 @@ async function maybeAutoConsumeDetectedInstallationCompletion({
 
   return handleApprovalBoundBootstrapSessionConsume({
     request: consumeRequest,
-    url: new URL(consumePath, url.origin),
+    url: new URL(consumePath, originUrl.origin),
     env
   });
 }
