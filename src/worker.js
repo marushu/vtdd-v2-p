@@ -2764,6 +2764,10 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
   const targetContext = authorityRequestTargetReadout?.targetContext ?? null;
   const targetDrift = authorityRequestTargetReadout?.targetDrift ?? null;
   const targetRecovery = authorityRequestTargetReadout?.targetRecovery ?? null;
+  const authorityRequestProvenanceReadout = session?.authorityRequestProvenanceReadout ?? null;
+  const provenanceSource = authorityRequestProvenanceReadout?.provenanceSource ?? null;
+  const provenanceDrift = authorityRequestProvenanceReadout?.provenanceDrift ?? null;
+  const provenanceRecovery = authorityRequestProvenanceReadout?.provenanceRecovery ?? null;
   const completionReadout = session?.completionReadout ?? null;
   const claimState = completionReadout?.claimState ?? null;
   const cannotYetClaim = completionReadout?.cannotYetClaim ?? null;
@@ -3193,6 +3197,30 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
               ${
                 targetRecovery
                   ? `<p><strong>${escapeHtml(locale === "ja" ? "Target recovery" : "Target recovery")}:</strong> <code>${escapeHtml(normalizeText(targetRecovery.id))}</code> ${escapeHtml(normalizeText(targetRecovery.summary))}</p>`
+                  : ""
+              }
+            </div>
+          `
+          : ""
+      }
+      ${
+        authorityRequestProvenanceReadout
+          ? `
+            <div class="block" style="margin-top: 12px;">
+              <p><strong>${escapeHtml(locale === "ja" ? "Authority request provenance" : "Authority request provenance")}:</strong></p>
+              ${
+                provenanceSource
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Provenance source" : "Provenance source")}:</strong> <code>${escapeHtml(normalizeText(provenanceSource.id))}</code> ${escapeHtml(normalizeText(provenanceSource.summary))}</p>`
+                  : ""
+              }
+              ${
+                provenanceDrift
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Provenance drift" : "Provenance drift")}:</strong> <code>${escapeHtml(normalizeText(provenanceDrift.id))}</code> ${escapeHtml(normalizeText(provenanceDrift.summary))}</p>`
+                  : ""
+              }
+              ${
+                provenanceRecovery
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Provenance recovery" : "Provenance recovery")}:</strong> <code>${escapeHtml(normalizeText(provenanceRecovery.id))}</code> ${escapeHtml(normalizeText(provenanceRecovery.summary))}</p>`
                   : ""
               }
             </div>
@@ -4046,6 +4074,10 @@ async function buildApprovalBoundBootstrapSessionStatus({
       bootstrapState,
       preview,
       url
+    }),
+    authorityRequestProvenanceReadout: buildBootstrapSessionAuthorityRequestProvenanceReadout({
+      bootstrapState,
+      preview
     }),
     completionReadout: buildBootstrapSessionCompletionReadout({
       bootstrapState,
@@ -5563,6 +5595,88 @@ function buildBootstrapSessionAuthorityRequestTargetReadout({ bootstrapState, pr
       id: "reconfirm_repo_and_verification_target_then_request",
       summary:
         "Recovery is to reconfirm the current repository target and remaining verification need, then create a fresh request for that target only."
+    }
+  };
+}
+
+function buildBootstrapSessionAuthorityRequestProvenanceReadout({ bootstrapState, preview }) {
+  const plannedWrites = Array.isArray(preview?.plannedWrites) ? preview.plannedWrites : [];
+
+  if (bootstrapState !== "available") {
+    return {
+      provenanceSource: {
+        id: "current_wizard_entry_with_blocked_prerequisite_context",
+        summary:
+          "Any future approval-bound request must come from the current protected wizard flow that is reading the blocked prerequisite state, not from an older or external handoff."
+      },
+      provenanceDrift: {
+        id: "older_or_external_flow_provenance_invalidates_request",
+        summary:
+          "If a request comes from an older setup flow or outside the current protected wizard context, its provenance drifts and must not be trusted."
+      },
+      provenanceRecovery: {
+        id: "resume_current_protected_wizard_flow_then_request",
+        summary:
+          "Recovery is to resume the current protected wizard flow after prerequisites are restored, then create a fresh request from that flow only."
+      }
+    };
+  }
+
+  if (plannedWrites.length === 1 && plannedWrites[0] === "GITHUB_APP_INSTALLATION_ID") {
+    return {
+      provenanceSource: {
+        id: "current_wizard_flow_after_runtime_identity_capture",
+        summary:
+          "The request must come from the current protected wizard flow after runtime identity capture, not from an earlier broader bootstrap phase."
+      },
+      provenanceDrift: {
+        id: "pre_installation_or_external_flow_provenance_invalidates_request",
+        summary:
+          "If the request provenance comes from before the current installation-binding phase or from outside the wizard flow, it is out of date."
+      },
+      provenanceRecovery: {
+        id: "resume_current_installation_phase_then_request",
+        summary:
+          "Recovery is to resume the current installation-binding phase in wizard and create a fresh request from that live flow only."
+      }
+    };
+  }
+
+  if (plannedWrites.length > 1) {
+    return {
+      provenanceSource: {
+        id: "current_wizard_flow_with_runtime_identity_gap",
+        summary:
+          "The request must come from the current protected wizard flow that is holding the remaining runtime identity gap, not from a detached operator or chat-side transport path."
+      },
+      provenanceDrift: {
+        id: "older_runtime_bootstrap_flow_provenance_invalidates_request",
+        summary:
+          "If the request provenance comes from an earlier runtime-bootstrap attempt or outside the current wizard flow, it must be treated as stale."
+      },
+      provenanceRecovery: {
+        id: "resume_current_runtime_gap_flow_then_request",
+        summary:
+          "Recovery is to resume the current runtime-gap flow inside wizard and issue a fresh request from that same protected flow."
+      }
+    };
+  }
+
+  return {
+    provenanceSource: {
+      id: "current_wizard_flow_with_remaining_verification_need",
+      summary:
+        "Any future request must come from the current protected wizard flow that is reading the remaining verification need, not from an older bootstrap phase."
+    },
+    provenanceDrift: {
+      id: "older_bootstrap_or_external_verification_flow_invalidates_request",
+      summary:
+        "If the provenance comes from an older bootstrap flow or from outside the current verification path, the request is out of date."
+    },
+    provenanceRecovery: {
+      id: "resume_current_verification_flow_then_request",
+      summary:
+        "Recovery is to resume the current verification-bound wizard flow and create a fresh request from that live context only."
     }
   };
 }

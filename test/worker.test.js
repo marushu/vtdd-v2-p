@@ -483,6 +483,10 @@ test("worker setup wizard unlocked html shows narrow github app bootstrap form w
   assert.equal(html.includes("Target context"), true);
   assert.equal(html.includes("Target drift"), true);
   assert.equal(html.includes("Target recovery"), true);
+  assert.equal(html.includes("Authority request provenance"), true);
+  assert.equal(html.includes("Provenance source"), true);
+  assert.equal(html.includes("Provenance drift"), true);
+  assert.equal(html.includes("Provenance recovery"), true);
   assert.equal(html.includes("Completion claim"), true);
   assert.equal(html.includes("Current claim"), true);
   assert.equal(html.includes("Cannot yet claim"), true);
@@ -734,6 +738,18 @@ test("worker setup wizard unlocked json reports github app bootstrap availabilit
   assert.equal(
     body.approvalBoundBootstrapSession.authorityRequestTargetReadout.targetRecovery.id,
     "restore_target_context_then_request_again"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityRequestProvenanceReadout.provenanceSource.id,
+    "current_wizard_entry_with_blocked_prerequisite_context"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityRequestProvenanceReadout.provenanceDrift.id,
+    "older_or_external_flow_provenance_invalidates_request"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityRequestProvenanceReadout.provenanceRecovery.id,
+    "resume_current_protected_wizard_flow_then_request"
   );
   assert.equal(
     body.approvalBoundBootstrapSession.completionReadout.claimState.id,
@@ -996,6 +1012,18 @@ test("worker setup wizard unlocked json does not expose cloudflare bootstrap tok
   assert.equal(
     body.approvalBoundBootstrapSession.authorityRequestTargetReadout.targetRecovery.id,
     "reconfirm_repo_and_runtime_target_then_request"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityRequestProvenanceReadout.provenanceSource.id,
+    "current_wizard_flow_with_runtime_identity_gap"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityRequestProvenanceReadout.provenanceDrift.id,
+    "older_runtime_bootstrap_flow_provenance_invalidates_request"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityRequestProvenanceReadout.provenanceRecovery.id,
+    "resume_current_runtime_gap_flow_then_request"
   );
   assert.equal(
     body.approvalBoundBootstrapSession.completionReadout.claimState.id,
@@ -1290,6 +1318,18 @@ test("worker setup wizard preview narrows planned write to installation binding 
   assert.equal(
     body.approvalBoundBootstrapSession.authorityRequestTargetReadout.targetRecovery.id,
     "reconfirm_repo_and_installation_target_then_request"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityRequestProvenanceReadout.provenanceSource.id,
+    "current_wizard_flow_after_runtime_identity_capture"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityRequestProvenanceReadout.provenanceDrift.id,
+    "pre_installation_or_external_flow_provenance_invalidates_request"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityRequestProvenanceReadout.provenanceRecovery.id,
+    "resume_current_installation_phase_then_request"
   );
   assert.equal(
     body.approvalBoundBootstrapSession.completionReadout.claimState.id,
