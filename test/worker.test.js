@@ -2201,14 +2201,7 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
     absorbedBody.approvalBoundBootstrapSession.serviceConnectionModelReadout.cloudflare.requiredBecause,
     "VTDD already has the Cloudflare runtime authority needed to hold the verified setup state from this flow."
   );
-  assert.equal(
-    absorbedBody.approvalBoundBootstrapSession.serviceConnectionActionability.github.id,
-    "github_no_connection_action_needed_now"
-  );
-  assert.equal(
-    absorbedBody.approvalBoundBootstrapSession.serviceConnectionActionability.cloudflare.id,
-    "cloudflare_no_connection_action_needed_now"
-  );
+  assert.equal(absorbedBody.approvalBoundBootstrapSession.serviceConnectionActionability, null);
   assert.equal(
     absorbedBody.approvalBoundBootstrapSession.authBoundaryReadout.operatorBootstrapAuthority.state,
     "deferred_after_verified_ready_path"
@@ -2355,6 +2348,7 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
   assert.equal(absorbedBody.approvalBoundBootstrapSession.envelopeConsumePreflight, null);
   assert.equal(absorbedBody.approvalBoundBootstrapSession.envelopeConsumeOutcome, null);
   assert.equal(absorbedBody.approvalBoundBootstrapSession.envelopeConsumeAuditReadout, null);
+  assert.equal(absorbedBody.approvalBoundBootstrapSession.serviceConnectionActionability, null);
   assert.equal(absorbedBody.approvalBoundBootstrapSession.serviceConnectionFrictionReadout, null);
   assert.equal(absorbedBody.approvalBoundBootstrapSession.serviceConnectionHandoffShapeReadout, null);
   assert.equal(absorbedBody.approvalBoundBootstrapSession.serviceConnectionReturnContinuityReadout, null);
@@ -2375,6 +2369,7 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
   assert.equal(absorbedHtml.includes("Steps this path is intended to absorb"), false);
   assert.equal(absorbedHtml.includes("Session contract"), false);
   assert.equal(absorbedHtml.includes("Envelope consume result"), false);
+  assert.equal(absorbedHtml.includes("Service connection actionability"), false);
   assert.equal(absorbedHtml.includes("Service connection friction"), false);
   assert.equal(absorbedHtml.includes("Service connection handoff shape"), false);
   assert.equal(absorbedHtml.includes("Service return continuity"), false);
