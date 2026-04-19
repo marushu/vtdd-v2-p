@@ -5270,7 +5270,8 @@ async function buildApprovalBoundBootstrapSessionStatus({
     }),
     safetyReadout: buildBootstrapSessionSafetyReadout({
       bootstrapState,
-      preview: effectivePreview
+      preview: effectivePreview,
+      githubAppSetupCheck: effectiveGitHubAppSetupCheck
     }),
     contract: {
       authorityState: "not_issued",
@@ -8255,8 +8256,13 @@ function buildBootstrapSessionEvidenceReadout({
   };
 }
 
-function buildBootstrapSessionSafetyReadout({ bootstrapState, preview }) {
+function buildBootstrapSessionSafetyReadout({
+  bootstrapState,
+  preview,
+  githubAppSetupCheck
+}) {
   const plannedWrites = Array.isArray(preview?.plannedWrites) ? preview.plannedWrites : [];
+  const setupState = normalizeText(githubAppSetupCheck?.state) || "unknown";
 
   if (bootstrapState !== "available") {
     return {
@@ -8314,6 +8320,26 @@ function buildBootstrapSessionSafetyReadout({ bootstrapState, preview }) {
         id: "pretend_runtime_identity_is_complete",
         summary:
           "VTDD refuses to treat partial GitHub App bootstrap as if the runtime identity were already complete."
+      }
+    };
+  }
+
+  if (setupState === "ready") {
+    return {
+      stopReason: {
+        id: "no_setup_stop_active",
+        summary:
+          "VTDD is no longer stopped inside setup because this flow already proved live GitHub readiness."
+      },
+      invariantProtected: {
+        id: "verified_ready_state_not_reopened_as_pending",
+        summary:
+          "Once live readiness is proven in this flow, the wizard must not regress that verified state back into a pending setup narrative."
+      },
+      unsafeShortcutDenied: {
+        id: "reopen_verified_setup_as_if_proof_were_missing",
+        summary:
+          "VTDD refuses to present the verified setup path as if live proof were still missing."
       }
     };
   }

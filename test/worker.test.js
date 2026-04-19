@@ -2147,6 +2147,18 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
     absorbedBody.approvalBoundBootstrapSession.evidenceReadout.nextProof.id,
     "use_verified_live_github_capability"
   );
+  assert.equal(
+    absorbedBody.approvalBoundBootstrapSession.safetyReadout.stopReason.id,
+    "no_setup_stop_active"
+  );
+  assert.equal(
+    absorbedBody.approvalBoundBootstrapSession.safetyReadout.invariantProtected.id,
+    "verified_ready_state_not_reopened_as_pending"
+  );
+  assert.equal(
+    absorbedBody.approvalBoundBootstrapSession.safetyReadout.unsafeShortcutDenied.id,
+    "reopen_verified_setup_as_if_proof_were_missing"
+  );
   assert.deepEqual(
     absorbedBody.approvalBoundBootstrapSession.progressReadout.completedPhases,
     ["runtime_identity_bootstrap", "installation_binding", "live_readiness_verification"]
