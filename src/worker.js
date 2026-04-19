@@ -5461,6 +5461,7 @@ async function buildApprovalBoundBootstrapSessionStatus({
 
   return {
     ...base,
+    targetAbsorbs: absorbedLiveProof ? [] : base.targetAbsorbs,
     envelopeConsumptionPlan: requestRecorded
       && !absorbedLiveProof
       ? buildBootstrapSessionEnvelopeConsumptionPlan({
