@@ -2138,14 +2138,7 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
     "wizard_complete_ready_path_verified"
   );
   assert.equal(absorbedBody.approvalBoundBootstrapSession.contract, null);
-  assert.equal(
-    absorbedBody.approvalBoundBootstrapSession.evidenceReadout.blockedEvidence.length,
-    0
-  );
-  assert.equal(
-    absorbedBody.approvalBoundBootstrapSession.evidenceReadout.nextProof.id,
-    "use_verified_live_github_capability"
-  );
+  assert.equal(absorbedBody.approvalBoundBootstrapSession.evidenceReadout, null);
   assert.equal(
     absorbedBody.approvalBoundBootstrapSession.safetyReadout.stopReason.id,
     "no_setup_stop_active"
@@ -2329,6 +2322,7 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
   assert.equal(absorbedHtml.includes("Steps this path is intended to absorb"), false);
   assert.equal(absorbedHtml.includes("Session contract"), false);
   assert.equal(absorbedHtml.includes("Envelope consume result"), false);
+  assert.equal(absorbedHtml.includes("Evidence readout"), false);
   assert.equal(absorbedHtml.includes("Flow phase"), false);
   assert.equal(absorbedHtml.includes("Flow progress"), false);
   assert.equal(absorbedHtml.includes("Provider connection phase"), false);
