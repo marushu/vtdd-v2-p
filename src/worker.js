@@ -42,6 +42,12 @@ const SETUP_WIZARD_GITHUB_APP_BOOTSTRAP_PATH = "/setup/wizard/github-app/bootstr
 const SETUP_WIZARD_GITHUB_APP_MANIFEST_CALLBACK_PATH = "/setup/wizard/github-app/manifest/callback";
 const SETUP_WIZARD_GITHUB_APP_INSTALLATION_CAPTURE_PATH =
   "/setup/wizard/github-app/capture-installation";
+const SETUP_WIZARD_APPROVAL_BOUND_BOOTSTRAP_SESSION_REQUEST_PATH =
+  "/setup/wizard/bootstrap-session/request";
+const SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_TTL_SECONDS = 5 * 60;
+const SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_TOKEN_PARAM = "bootstrap_session_request_token";
+const SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_EXPIRES_PARAM = "bootstrap_session_request_expires";
+const SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_STATE_PARAM = "bootstrap_session_request";
 const CLOUDFLARE_WORKER_SCRIPT_NAME_ENV = "CLOUDFLARE_WORKER_SCRIPT_NAME";
 const GITHUB_MANIFEST_CONVERSION_TOKEN_ENV = "GITHUB_MANIFEST_CONVERSION_TOKEN";
 const GITHUB_APP_BOOTSTRAP_SECRET_ALLOWLIST = Object.freeze([
@@ -101,6 +107,17 @@ export default {
         return auth.response;
       }
       return handleGitHubAppInstallationCaptureRequest({ request, url, env });
+    }
+
+    if (
+      request.method === "POST" &&
+      url.pathname === SETUP_WIZARD_APPROVAL_BOUND_BOOTSTRAP_SESSION_REQUEST_PATH
+    ) {
+      const auth = await authorizeSetupWizardRequest({ request, url, env });
+      if (!auth.ok) {
+        return auth.response;
+      }
+      return handleApprovalBoundBootstrapSessionRequest({ request, url, env });
     }
 
     if (request.method === "GET" && url.pathname === SETUP_WIZARD_GITHUB_APP_MANIFEST_CALLBACK_PATH) {
@@ -214,7 +231,8 @@ async function handleSetupWizardRequest({ request, url, env }) {
   const githubAppSetupCheck = await runGitHubAppSetupCheck(url, env);
   const githubAppBootstrapInternal = buildGitHubAppBootstrapStatus({ url, env });
   const githubAppBootstrap = toPublicGitHubAppBootstrapStatus(githubAppBootstrapInternal);
-  const approvalBoundBootstrapSession = buildApprovalBoundBootstrapSessionStatus({
+  const approvalBoundBootstrapSession = await buildApprovalBoundBootstrapSessionStatus({
+    url,
     env,
     githubAppBootstrap
   });
@@ -347,6 +365,62 @@ async function handleSetupWizardAccessRequest({ request, url, env }) {
       "set-cookie": setCookie
     }
   );
+}
+
+async function handleApprovalBoundBootstrapSessionRequest({ request, url, env }) {
+  const payload = await readApprovalBoundBootstrapSessionRequestPayload(request);
+  const returnTo = normalizeReturnTo(payload.returnTo) || "/setup/wizard";
+
+  if (payload.approvalPhrase !== "GO" || payload.passkeyVerified !== "true") {
+    if (payload.mode === "form") {
+      const failureUrl = new URL(returnTo, url.origin);
+      failureUrl.searchParams.set(SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_STATE_PARAM, "invalid");
+      return new Response(null, {
+        status: 303,
+        headers: {
+          location: `${failureUrl.pathname}${failureUrl.search}`
+        }
+      });
+    }
+
+    return json(403, {
+      ok: false,
+      error: "approval_bound_bootstrap_session_requires_go_passkey",
+      reason: "approval-bound bootstrap session request requires GO + passkey"
+    });
+  }
+
+  const authConfig = getSetupWizardAuthConfig(env);
+  const redirectUrl = new URL(returnTo, url.origin);
+  const expiresAt = Math.floor(Date.now() / 1000) + SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_TTL_SECONDS;
+  redirectUrl.searchParams.set(SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_STATE_PARAM, "requested");
+  redirectUrl.searchParams.set(
+    SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_EXPIRES_PARAM,
+    String(expiresAt)
+  );
+  redirectUrl.searchParams.set(
+    SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_TOKEN_PARAM,
+    await createSetupWizardBootstrapSessionRequestToken({
+      url: redirectUrl,
+      expiresAt,
+      sessionSecret: authConfig.sessionSecret
+    })
+  );
+
+  if (payload.mode === "form") {
+    return new Response(null, {
+      status: 303,
+      headers: {
+        location: `${redirectUrl.pathname}${redirectUrl.search}`
+      }
+    });
+  }
+
+  return json(200, {
+    ok: true,
+    requested: true,
+    returnTo: `${redirectUrl.pathname}${redirectUrl.search}`
+  });
 }
 
 async function handleGitHubAppBootstrapRequest({ request, url, env }) {
@@ -739,6 +813,27 @@ async function readSetupWizardAccessPayload(request) {
   };
 }
 
+async function readApprovalBoundBootstrapSessionRequestPayload(request) {
+  const contentType = normalizeText(request.headers.get("content-type"));
+  if (contentType.includes("application/json")) {
+    const payload = await readJson(request);
+    return {
+      mode: "json",
+      approvalPhrase: normalizeText(payload?.approval_phrase),
+      passkeyVerified: normalizeText(payload?.passkey_verified),
+      returnTo: normalizeText(payload?.returnTo)
+    };
+  }
+
+  const form = await request.formData();
+  return {
+    mode: "form",
+    approvalPhrase: normalizeText(form.get("approval_phrase")),
+    passkeyVerified: normalizeText(form.get("passkey_verified")),
+    returnTo: normalizeText(form.get("returnTo"))
+  };
+}
+
 function normalizeReturnTo(value) {
   const text = normalizeText(value);
   if (!text.startsWith("/setup/wizard")) {
@@ -823,11 +918,64 @@ async function verifySetupWizardImportToken({ url, sessionSecret }) {
   return safeEqual(token, expected);
 }
 
+async function createSetupWizardBootstrapSessionRequestToken({
+  url,
+  expiresAt,
+  sessionSecret
+}) {
+  return signSetupWizardValue({
+    message: buildSetupWizardBootstrapSessionRequestPayload({ url, expiresAt }),
+    sessionSecret
+  });
+}
+
+async function verifySetupWizardBootstrapSessionRequestToken({ url, sessionSecret }) {
+  const requested = normalizeText(
+    url.searchParams.get(SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_STATE_PARAM)
+  );
+  const token = normalizeText(
+    url.searchParams.get(SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_TOKEN_PARAM)
+  );
+  const expiresAt = Number.parseInt(
+    normalizeText(url.searchParams.get(SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_EXPIRES_PARAM)),
+    10
+  );
+
+  if (requested !== "requested" || !token || !Number.isFinite(expiresAt)) {
+    return false;
+  }
+  if (expiresAt < Math.floor(Date.now() / 1000)) {
+    return false;
+  }
+
+  const expected = await createSetupWizardBootstrapSessionRequestToken({
+    url,
+    expiresAt,
+    sessionSecret
+  });
+  return safeEqual(token, expected);
+}
+
 function buildSetupWizardImportTokenPayload({ url, expiresAt }) {
   const normalizedUrl = new URL(url.toString());
   normalizedUrl.searchParams.delete(SETUP_WIZARD_IMPORT_TOKEN_PARAM);
   normalizedUrl.searchParams.set("format", "openapi");
   normalizedUrl.searchParams.set(SETUP_WIZARD_IMPORT_EXPIRES_PARAM, String(expiresAt));
+  normalizedUrl.searchParams.sort();
+  return `${normalizedUrl.pathname}?${normalizedUrl.searchParams.toString()}`;
+}
+
+function buildSetupWizardBootstrapSessionRequestPayload({ url, expiresAt }) {
+  const normalizedUrl = new URL(url.toString());
+  normalizedUrl.searchParams.delete(SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_TOKEN_PARAM);
+  normalizedUrl.searchParams.set(
+    SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_STATE_PARAM,
+    "requested"
+  );
+  normalizedUrl.searchParams.set(
+    SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_EXPIRES_PARAM,
+    String(expiresAt)
+  );
   normalizedUrl.searchParams.sort();
   return `${normalizedUrl.pathname}?${normalizedUrl.searchParams.toString()}`;
 }
@@ -2521,6 +2669,11 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
   const targetAbsorbs = Array.isArray(session?.targetAbsorbs) ? session.targetAbsorbs : [];
   const approvalBoundary = normalizeText(session?.approvalBoundary);
   const checkedAt = normalizeText(session?.checkedAt);
+  const requestPath =
+    normalizeText(session?.requestPath) ||
+    SETUP_WIZARD_APPROVAL_BOUND_BOOTSTRAP_SESSION_REQUEST_PATH;
+  const requestEnabled = toBoolean(session?.requestEnabled);
+  const returnTo = normalizeReturnTo(session?.returnTo) || "/setup/wizard";
 
   return `
     <h2>${escapeHtml(locale === "ja" ? "承認境界つき Bootstrap Session" : "Approval-Bound Bootstrap Session")}</h2>
@@ -2542,6 +2695,22 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
       ${
         guidance.length > 0
           ? `<ul>${guidance.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`
+          : ""
+      }
+      ${
+        requestEnabled
+          ? `
+            <form method="post" action="${escapeHtml(requestPath)}" style="margin-top: 12px;">
+              <input type="hidden" name="returnTo" value="${escapeHtml(returnTo)}" />
+              <input type="hidden" name="approval_phrase" value="GO" />
+              <input type="hidden" name="passkey_verified" value="true" />
+              <button type="submit" class="copy-button">${escapeHtml(
+                locale === "ja"
+                  ? "GO + passkey request を記録"
+                  : "Record GO + passkey request"
+              )}</button>
+            </form>
+          `
           : ""
       }
       ${
@@ -3127,12 +3296,22 @@ function buildGitHubAppBootstrapStatus({ url, env }) {
   };
 }
 
-function buildApprovalBoundBootstrapSessionStatus({ env, githubAppBootstrap }) {
+async function buildApprovalBoundBootstrapSessionStatus({ url, env, githubAppBootstrap }) {
   const authConfig = getSetupWizardAuthConfig(env);
   const bootstrapState = normalizeText(githubAppBootstrap?.state) || "missing_prerequisites";
   const missingPrerequisites = Array.isArray(githubAppBootstrap?.missingPrerequisites)
     ? githubAppBootstrap.missingPrerequisites
     : [];
+  const requestRecorded =
+    authConfig.sessionSecret && url
+      ? await verifySetupWizardBootstrapSessionRequestToken({
+          url,
+          sessionSecret: authConfig.sessionSecret
+        })
+      : false;
+  const requestInvalid =
+    normalizeText(url?.searchParams?.get(SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_STATE_PARAM)) ===
+    "invalid";
   const base = {
     approvalBoundary: "GO + passkey",
     targetAbsorbs: [
@@ -3140,8 +3319,24 @@ function buildApprovalBoundBootstrapSessionStatus({ env, githubAppBootstrap }) {
       "allowlisted_runtime_secret_write",
       "post_write_readiness_verification"
     ],
+    requestPath: SETUP_WIZARD_APPROVAL_BOUND_BOOTSTRAP_SESSION_REQUEST_PATH,
+    requestEnabled: true,
+    returnTo: `${url?.pathname || "/setup/wizard"}${url?.search || ""}`,
     checkedAt: new Date().toISOString()
   };
+
+  if (requestInvalid) {
+    return {
+      ...base,
+      state: "request_rejected",
+      summary:
+        "VTDD rejected the approval-bound bootstrap session request because it did not satisfy the GO + passkey contract.",
+      guidance: [
+        "This path does not open a privileged session unless the request shape matches GO + passkey.",
+        "Current setup still does not mint short-lived bootstrap authority from this request."
+      ]
+    };
+  }
 
   if (!authConfig.enabled) {
     return {
@@ -3159,11 +3354,17 @@ function buildApprovalBoundBootstrapSessionStatus({ env, githubAppBootstrap }) {
   if (bootstrapState !== "available") {
     return {
       ...base,
-      state: "blocked_by_operator_prerequisites",
+      state: requestRecorded
+        ? "request_recorded_but_blocked"
+        : "blocked_by_operator_prerequisites",
       summary:
-        "VTDD does not expose the approval-bound bootstrap session yet because the current runtime is still missing operator-seeded bootstrap prerequisites.",
+        requestRecorded
+          ? "VTDD recorded the GO + passkey-shaped request, but no privileged bootstrap session was opened because operator-seeded prerequisites are still missing."
+          : "VTDD does not expose the approval-bound bootstrap session yet because the current runtime is still missing operator-seeded bootstrap prerequisites.",
       guidance: [
-        "Current setup can explain the future path, but it cannot safely absorb the bounded write step yet.",
+        requestRecorded
+          ? "The request was acknowledged, but it did not grant write authority or open a privileged session."
+          : "Current setup can explain the future path, but it cannot safely absorb the bounded write step yet.",
         missingPrerequisites.length > 0
           ? `Current missing prerequisites: ${missingPrerequisites.join(", ")}.`
           : "Re-check Cloudflare bootstrap prerequisites before enabling a privileged setup path."
@@ -3173,11 +3374,15 @@ function buildApprovalBoundBootstrapSessionStatus({ env, githubAppBootstrap }) {
 
   return {
     ...base,
-    state: "deferred",
+    state: requestRecorded ? "request_recorded_but_deferred" : "deferred",
     summary:
-      "VTDD has the operator-seeded baseline needed for a future approval-bound bootstrap session, but the session itself is still intentionally deferred.",
+      requestRecorded
+        ? "VTDD recorded the GO + passkey-shaped request, but no privileged bootstrap session was opened because attestation-backed bootstrap authority is still deferred."
+        : "VTDD has the operator-seeded baseline needed for a future approval-bound bootstrap session, but the session itself is still intentionally deferred.",
     guidance: [
-      "Current live setup still uses the bounded GitHub App bootstrap path plus operator-managed Cloudflare authority.",
+      requestRecorded
+        ? "This request proves the wizard can carry approval-bound intent without granting authority yet."
+        : "Current live setup still uses the bounded GitHub App bootstrap path plus operator-managed Cloudflare authority.",
       "The future approval-bound session should absorb setup-critical transport without becoming a generic secret terminal.",
       "Do not present setup as wizard-complete until this path is implemented and verified."
     ]

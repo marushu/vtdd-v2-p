@@ -418,6 +418,8 @@ test("worker setup wizard unlocked html shows narrow github app bootstrap form w
   assert.equal(html.includes("Approval-Bound Bootstrap Session"), true);
   assert.equal(html.includes("GO + passkey"), true);
   assert.equal(html.includes("github_app_installation_binding"), true);
+  assert.equal(html.includes('action="/setup/wizard/bootstrap-session/request"'), true);
+  assert.equal(html.includes("Record GO + passkey request"), true);
   assert.equal(html.includes('action="/setup/wizard/github-app/bootstrap"'), true);
   assert.equal(html.includes('action="https://github.com/settings/apps/new"'), true);
   assert.equal(html.includes("&quot;hook_attributes&quot;"), true);
@@ -493,6 +495,86 @@ test("worker setup wizard unlocked json does not expose cloudflare bootstrap tok
   assert.equal(body.githubAppBootstrap.accountId, "account-id");
   assert.equal("cloudflareApiToken" in body.githubAppBootstrap, false);
   assert.equal("githubManifestConversionToken" in body.githubAppBootstrap, false);
+});
+
+test("worker setup wizard records approval-bound bootstrap request without granting authority", async () => {
+  const env = {
+    SETUP_WIZARD_PASSCODE: "2468",
+    CLOUDFLARE_API_TOKEN: "bootstrap-token",
+    CLOUDFLARE_ACCOUNT_ID: "account-id",
+    CLOUDFLARE_WORKER_SCRIPT_NAME: "vtdd-v2-mvp",
+    GITHUB_MANIFEST_CONVERSION_TOKEN: "ghp_conversion_token"
+  };
+  const { sessionCookie } = await unlockSetupWizard(env);
+
+  const requestResponse = await worker.fetch(
+    new Request("https://example.com/setup/wizard/bootstrap-session/request", {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      },
+      body: new URLSearchParams({
+        returnTo: "/setup/wizard?repo=sample-org/vtdd-v2",
+        approval_phrase: "GO",
+        passkey_verified: "true"
+      })
+    }),
+    env
+  );
+
+  assert.equal(requestResponse.status, 303);
+  const location = requestResponse.headers.get("location") ?? "";
+  assert.equal(location.includes("bootstrap_session_request=requested"), true);
+  assert.equal(location.includes("bootstrap_session_request_token="), true);
+
+  const response = await worker.fetch(
+    new Request(`https://example.com${location}`, {
+      headers: {
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      }
+    }),
+    env
+  );
+
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.equal(html.includes("request_recorded_but_deferred"), true);
+  assert.equal(
+    html.includes("no privileged bootstrap session was opened because attestation-backed bootstrap authority is still deferred"),
+    true
+  );
+});
+
+test("worker setup wizard rejects bootstrap request without GO plus passkey in json mode", async () => {
+  const env = {
+    SETUP_WIZARD_PASSCODE: "2468",
+    CLOUDFLARE_API_TOKEN: "bootstrap-token",
+    CLOUDFLARE_ACCOUNT_ID: "account-id",
+    CLOUDFLARE_WORKER_SCRIPT_NAME: "vtdd-v2-mvp",
+    GITHUB_MANIFEST_CONVERSION_TOKEN: "ghp_conversion_token"
+  };
+  const { sessionCookie } = await unlockSetupWizard(env);
+
+  const response = await worker.fetch(
+    new Request("https://example.com/setup/wizard/bootstrap-session/request", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      },
+      body: JSON.stringify({
+        returnTo: "/setup/wizard?repo=sample-org/vtdd-v2",
+        approval_phrase: "WAIT",
+        passkey_verified: "false"
+      })
+    }),
+    env
+  );
+
+  assert.equal(response.status, 403);
+  const body = await response.json();
+  assert.equal(body.error, "approval_bound_bootstrap_session_requires_go_passkey");
 });
 
 test("worker setup wizard bootstrap writes allowlisted github app runtime secrets", async () => {
