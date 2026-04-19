@@ -2703,6 +2703,10 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
   const externalRedirects = Array.isArray(stepBoundaries?.externalRedirects)
     ? stepBoundaries.externalRedirects
     : [];
+  const capabilityReadout = session?.capabilityReadout ?? null;
+  const githubConnection = capabilityReadout?.githubConnection ?? null;
+  const workerRuntime = capabilityReadout?.workerRuntime ?? null;
+  const vtddCapability = capabilityReadout?.vtddCapability ?? null;
 
   return `
     <h2>${escapeHtml(locale === "ja" ? "承認境界つき Bootstrap Session" : "Approval-Bound Bootstrap Session")}</h2>
@@ -2770,6 +2774,30 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
                   : `<p><strong>${escapeHtml(locale === "ja" ? "Remaining external redirects" : "Remaining external redirects")}:</strong> ${escapeHtml(
                       locale === "ja" ? "none" : "none"
                     )}</p>`
+              }
+            </div>
+          `
+          : ""
+      }
+      ${
+        capabilityReadout
+          ? `
+            <div class="block" style="margin-top: 12px;">
+              <p><strong>${escapeHtml(locale === "ja" ? "Capability readout" : "Capability readout")}:</strong></p>
+              ${
+                githubConnection
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "GitHub connection" : "GitHub connection")}:</strong> <code>${escapeHtml(normalizeText(githubConnection.state))}</code> ${escapeHtml(normalizeText(githubConnection.summary))}</p>`
+                  : ""
+              }
+              ${
+                workerRuntime
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Worker runtime" : "Worker runtime")}:</strong> <code>${escapeHtml(normalizeText(workerRuntime.state))}</code> ${escapeHtml(normalizeText(workerRuntime.summary))}</p>`
+                  : ""
+              }
+              ${
+                vtddCapability
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "VTDD capability" : "VTDD capability")}:</strong> <code>${escapeHtml(normalizeText(vtddCapability.state))}</code> ${escapeHtml(normalizeText(vtddCapability.summary))}</p>`
+                  : ""
               }
             </div>
           `
@@ -3485,6 +3513,11 @@ async function buildApprovalBoundBootstrapSessionStatus({
       preview,
       githubAppSetupCheck
     }),
+    capabilityReadout: buildBootstrapSessionCapabilityReadout({
+      bootstrapState,
+      preview,
+      githubAppSetupCheck
+    }),
     contract: {
       authorityState: "not_issued",
       sessionMode: "approval_bound_one_time_bootstrap",
@@ -3733,6 +3766,94 @@ function buildBootstrapSessionStepBoundaries({ preview, githubAppSetupCheck }) {
   return {
     vtddOwnedSteps,
     externalRedirects
+  };
+}
+
+function buildBootstrapSessionCapabilityReadout({
+  bootstrapState,
+  preview,
+  githubAppSetupCheck
+}) {
+  const setupState = normalizeText(githubAppSetupCheck?.state) || "unknown";
+  const plannedWrites = Array.isArray(preview?.plannedWrites) ? preview.plannedWrites : [];
+
+  if (bootstrapState !== "available") {
+    return {
+      githubConnection: {
+        state: "blocked",
+        summary:
+          "GitHub connection is still blocked because VTDD cannot yet complete the bootstrap path from runtime."
+      },
+      workerRuntime: {
+        state: "blocked",
+        summary:
+          "Worker runtime is not ready for a bounded setup-critical write because operator bootstrap prerequisites are still missing."
+      },
+      vtddCapability: {
+        state: "cannot_yet_continue_github_app_bootstrap",
+        summary:
+          "VTDD cannot yet carry GitHub App bootstrap through to readiness because the current runtime is missing required bootstrap prerequisites."
+      }
+    };
+  }
+
+  if (plannedWrites.length === 0) {
+    return {
+      githubConnection: {
+        state: "ready",
+        summary: "GitHub connection is ready for live verification from VTDD."
+      },
+      workerRuntime: {
+        state: "ready_for_verification",
+        summary:
+          "Worker runtime already has the current GitHub App identity and does not need another bounded write for setup."
+      },
+      vtddCapability: {
+        state: "can_verify_live_github_readiness",
+        summary:
+          "VTDD can verify live GitHub readiness from the wizard, even though approval-bound bootstrap authority is still deferred."
+      }
+    };
+  }
+
+  if (plannedWrites.length === 1 && plannedWrites[0] === "GITHUB_APP_INSTALLATION_ID") {
+    return {
+      githubConnection: {
+        state: "installation_binding_pending",
+        summary:
+          "GitHub App identity is present, but installation binding is still the remaining connection step."
+      },
+      workerRuntime: {
+        state: "ready_for_narrow_installation_write",
+        summary:
+          "Worker runtime is ready for a narrow installation-binding write once the approval-bound path exists."
+      },
+      vtddCapability: {
+        state: "cannot_yet_mint_installation_tokens",
+        summary:
+          "VTDD cannot yet mint installation tokens, but finishing installation binding would unlock live GitHub readiness checks."
+      }
+    };
+  }
+
+  return {
+    githubConnection: {
+      state: "bootstrap_in_progress",
+      summary:
+        setupState === "installation_detected"
+          ? "GitHub App installation is detectable, but runtime identity is still incomplete."
+          : "GitHub connection is still in progress because VTDD is missing current GitHub App runtime identity."
+    },
+    workerRuntime: {
+      state: "ready_for_bounded_bootstrap",
+      summary:
+        "Worker runtime has the operator-seeded baseline needed for a future bounded bootstrap write."
+    },
+    vtddCapability: {
+      state: "cannot_yet_mint_installation_tokens",
+      summary:
+        "VTDD cannot yet mint installation tokens or verify live GitHub readiness until the missing GitHub App runtime fields are stored."
+    }
   };
 }
 

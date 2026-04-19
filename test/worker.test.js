@@ -426,6 +426,10 @@ test("worker setup wizard unlocked html shows narrow github app bootstrap form w
   assert.equal(html.includes("Step boundary"), true);
   assert.equal(html.includes("VTDD-owned steps"), true);
   assert.equal(html.includes("Remaining external redirects"), true);
+  assert.equal(html.includes("Capability readout"), true);
+  assert.equal(html.includes("GitHub connection"), true);
+  assert.equal(html.includes("Worker runtime"), true);
+  assert.equal(html.includes("VTDD capability"), true);
   assert.equal(html.includes("Allowlisted secrets"), true);
   assert.equal(html.includes("Planned writes"), true);
   assert.equal(html.includes("Post-session checks"), true);
@@ -502,6 +506,12 @@ test("worker setup wizard unlocked json reports github app bootstrap availabilit
     "github_app_creation_and_manifest_consent",
     "github_app_installation_consent"
   ]);
+  assert.equal(body.approvalBoundBootstrapSession.capabilityReadout.githubConnection.state, "blocked");
+  assert.equal(body.approvalBoundBootstrapSession.capabilityReadout.workerRuntime.state, "blocked");
+  assert.equal(
+    body.approvalBoundBootstrapSession.capabilityReadout.vtddCapability.state,
+    "cannot_yet_continue_github_app_bootstrap"
+  );
   assert.deepEqual(body.githubAppBootstrap.allowlistedSecrets, [
     "GITHUB_APP_ID",
     "GITHUB_APP_INSTALLATION_ID",
@@ -558,6 +568,18 @@ test("worker setup wizard unlocked json does not expose cloudflare bootstrap tok
       "attestation_backed_bootstrap_authority_not_implemented"
     ),
     true
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.capabilityReadout.githubConnection.state,
+    "bootstrap_in_progress"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.capabilityReadout.workerRuntime.state,
+    "ready_for_bounded_bootstrap"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.capabilityReadout.vtddCapability.state,
+    "cannot_yet_mint_installation_tokens"
   );
   assert.equal(body.githubAppBootstrap.accountId, "account-id");
   assert.equal("cloudflareApiToken" in body.githubAppBootstrap, false);
@@ -651,6 +673,18 @@ test("worker setup wizard preview narrows planned write to installation binding 
   assert.deepEqual(body.approvalBoundBootstrapSession.stepBoundaries.externalRedirects, [
     "github_app_installation_consent"
   ]);
+  assert.equal(
+    body.approvalBoundBootstrapSession.capabilityReadout.githubConnection.state,
+    "installation_binding_pending"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.capabilityReadout.workerRuntime.state,
+    "ready_for_narrow_installation_write"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.capabilityReadout.vtddCapability.state,
+    "cannot_yet_mint_installation_tokens"
+  );
 });
 
 test("worker setup wizard rejects bootstrap request without GO plus passkey in json mode", async () => {
