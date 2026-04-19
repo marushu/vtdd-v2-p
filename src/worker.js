@@ -5251,7 +5251,8 @@ async function buildApprovalBoundBootstrapSessionStatus({
     }),
     authorityRequestReplayReadout: buildBootstrapSessionAuthorityRequestReplayReadout({
       bootstrapState,
-      preview: effectivePreview
+      preview: effectivePreview,
+      githubAppSetupCheck: effectiveGitHubAppSetupCheck
     }),
     authorityRequestBindingReadout: buildBootstrapSessionAuthorityRequestBindingReadout({
       bootstrapState,
@@ -8071,8 +8072,13 @@ function buildBootstrapSessionAuthorityRequestFreshnessReadout({
   };
 }
 
-function buildBootstrapSessionAuthorityRequestReplayReadout({ bootstrapState, preview }) {
+function buildBootstrapSessionAuthorityRequestReplayReadout({
+  bootstrapState,
+  preview,
+  githubAppSetupCheck
+}) {
   const plannedWrites = Array.isArray(preview?.plannedWrites) ? preview.plannedWrites : [];
+  const setupState = normalizeText(githubAppSetupCheck?.state) || "unknown";
 
   if (bootstrapState !== "available") {
     return {
@@ -8130,6 +8136,26 @@ function buildBootstrapSessionAuthorityRequestReplayReadout({ bootstrapState, pr
         id: "recompute_runtime_gap_then_request_once",
         summary:
           "Recovery is to recompute the current remaining runtime gap and submit one new bounded request only for that latest scope."
+      }
+    };
+  }
+
+  if (setupState === "ready") {
+    return {
+      replayRisk: {
+        id: "no_current_setup_request_replay_risk",
+        summary:
+          "This verified path does not currently carry a setup request replay risk because setup no longer needs another approval-bound request."
+      },
+      replayRejection: {
+        id: "future_generalized_request_replay_is_separate_work",
+        summary:
+          "Any future generalized replay rejection is separate work and is not part of the current verified narrow setup path."
+      },
+      replayRecovery: {
+        id: "verified_path_continues_without_current_replay_recovery",
+        summary:
+          "The verified path continues from completed setup capability rather than recovering from a current request replay branch."
       }
     };
   }
