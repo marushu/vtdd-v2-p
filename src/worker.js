@@ -2752,6 +2752,10 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
   const freshnessRequirement = authorityRequestFreshnessReadout?.freshnessRequirement ?? null;
   const staleRequestRejection = authorityRequestFreshnessReadout?.staleRequestRejection ?? null;
   const freshnessRecovery = authorityRequestFreshnessReadout?.freshnessRecovery ?? null;
+  const authorityRequestReplayReadout = session?.authorityRequestReplayReadout ?? null;
+  const replayRisk = authorityRequestReplayReadout?.replayRisk ?? null;
+  const replayRejection = authorityRequestReplayReadout?.replayRejection ?? null;
+  const replayRecovery = authorityRequestReplayReadout?.replayRecovery ?? null;
   const completionReadout = session?.completionReadout ?? null;
   const claimState = completionReadout?.claimState ?? null;
   const cannotYetClaim = completionReadout?.cannotYetClaim ?? null;
@@ -3109,6 +3113,30 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
               ${
                 freshnessRecovery
                   ? `<p><strong>${escapeHtml(locale === "ja" ? "Freshness recovery" : "Freshness recovery")}:</strong> <code>${escapeHtml(normalizeText(freshnessRecovery.id))}</code> ${escapeHtml(normalizeText(freshnessRecovery.summary))}</p>`
+                  : ""
+              }
+            </div>
+          `
+          : ""
+      }
+      ${
+        authorityRequestReplayReadout
+          ? `
+            <div class="block" style="margin-top: 12px;">
+              <p><strong>${escapeHtml(locale === "ja" ? "Authority request replay" : "Authority request replay")}:</strong></p>
+              ${
+                replayRisk
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Replay risk" : "Replay risk")}:</strong> <code>${escapeHtml(normalizeText(replayRisk.id))}</code> ${escapeHtml(normalizeText(replayRisk.summary))}</p>`
+                  : ""
+              }
+              ${
+                replayRejection
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Replay rejection" : "Replay rejection")}:</strong> <code>${escapeHtml(normalizeText(replayRejection.id))}</code> ${escapeHtml(normalizeText(replayRejection.summary))}</p>`
+                  : ""
+              }
+              ${
+                replayRecovery
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Replay recovery" : "Replay recovery")}:</strong> <code>${escapeHtml(normalizeText(replayRecovery.id))}</code> ${escapeHtml(normalizeText(replayRecovery.summary))}</p>`
                   : ""
               }
             </div>
@@ -3949,6 +3977,10 @@ async function buildApprovalBoundBootstrapSessionStatus({
       bootstrapState,
       preview,
       maxAgeSeconds: SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_TTL_SECONDS
+    }),
+    authorityRequestReplayReadout: buildBootstrapSessionAuthorityRequestReplayReadout({
+      bootstrapState,
+      preview
     }),
     completionReadout: buildBootstrapSessionCompletionReadout({
       bootstrapState,
@@ -5219,6 +5251,88 @@ function buildBootstrapSessionAuthorityRequestFreshnessReadout({
       id: "reconfirm_verification_need_and_submit_new_request",
       summary:
         `Recovery is to reconfirm the remaining verification need and submit a new bounded request within the ${expirySeconds}-second approval window.`
+    }
+  };
+}
+
+function buildBootstrapSessionAuthorityRequestReplayReadout({ bootstrapState, preview }) {
+  const plannedWrites = Array.isArray(preview?.plannedWrites) ? preview.plannedWrites : [];
+
+  if (bootstrapState !== "available") {
+    return {
+      replayRisk: {
+        id: "blocked_state_request_replay_risk",
+        summary:
+          "Replaying a request from the blocked prerequisite state would wrongly carry old approval intent into a runtime that was never issuable."
+      },
+      replayRejection: {
+        id: "reject_replay_from_non_issuable_state",
+        summary:
+          "VTDD should reject replay from a non-issuable state instead of treating repeated submission as progress."
+      },
+      replayRecovery: {
+        id: "restore_prerequisites_and_submit_new_request_once",
+        summary:
+          "Recovery is to restore prerequisites and then submit one new GO + passkey-shaped request from the current issuable state."
+      }
+    };
+  }
+
+  if (plannedWrites.length === 1 && plannedWrites[0] === "GITHUB_APP_INSTALLATION_ID") {
+    return {
+      replayRisk: {
+        id: "installation_binding_request_replay_risk",
+        summary:
+          "Replaying an old installation-binding request could recreate an already-completed step or ignore a changed installation context."
+      },
+      replayRejection: {
+        id: "reject_replay_of_consumed_installation_request",
+        summary:
+          "VTDD should reject replay of a consumed installation-binding request because this path is single-use and tied to the current installation gap only."
+      },
+      replayRecovery: {
+        id: "reconfirm_installation_gap_then_request_once",
+        summary:
+          "Recovery is to reconfirm the current installation gap and submit one new narrow request only if that gap still exists."
+      }
+    };
+  }
+
+  if (plannedWrites.length > 1) {
+    return {
+      replayRisk: {
+        id: "runtime_bootstrap_request_replay_risk",
+        summary:
+          "Replaying an older runtime-bootstrap request could reapply stale write intent after the remaining runtime gap has already changed."
+      },
+      replayRejection: {
+        id: "reject_replay_of_consumed_runtime_request",
+        summary:
+          "VTDD should reject replay of a consumed runtime-bootstrap request because single-use approval must not become a reusable write token."
+      },
+      replayRecovery: {
+        id: "recompute_runtime_gap_then_request_once",
+        summary:
+          "Recovery is to recompute the current remaining runtime gap and submit one new bounded request only for that latest scope."
+      }
+    };
+  }
+
+  return {
+    replayRisk: {
+      id: "verification_request_replay_risk",
+      summary:
+        "Replaying an old verification-bound request could reopen an outdated bootstrap context after configuration is already present."
+    },
+    replayRejection: {
+      id: "reject_replay_that_reopens_old_verification_context",
+      summary:
+        "VTDD should reject replay of an already-consumed verification-bound request rather than keeping reusable approval alive."
+    },
+    replayRecovery: {
+      id: "reconfirm_verification_need_then_request_once",
+      summary:
+        "Recovery is to reconfirm the current verification need and submit one new bounded request only for that remaining path."
     }
   };
 }
