@@ -2161,11 +2161,7 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
     absorbedBody.approvalBoundBootstrapSession.safetyReadout.unsafeShortcutDenied.id,
     "reopen_verified_setup_as_if_proof_were_missing"
   );
-  assert.deepEqual(
-    absorbedBody.approvalBoundBootstrapSession.progressReadout.completedPhases,
-    ["runtime_identity_bootstrap", "installation_binding", "live_readiness_verification"]
-  );
-  assert.deepEqual(absorbedBody.approvalBoundBootstrapSession.progressReadout.remainingPhases, []);
+  assert.equal(absorbedBody.approvalBoundBootstrapSession.progressReadout, null);
   assert.equal(absorbedBody.approvalBoundBootstrapSession.providerConnectionReadout, null);
   assert.equal(absorbedBody.approvalBoundBootstrapSession.serviceConnectionModelReadout, null);
   assert.equal(absorbedBody.approvalBoundBootstrapSession.serviceConnectionActionability, null);
@@ -2336,6 +2332,7 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
   assert.equal(absorbedHtml.includes("Steps this path is intended to absorb"), false);
   assert.equal(absorbedHtml.includes("Session contract"), false);
   assert.equal(absorbedHtml.includes("Envelope consume result"), false);
+  assert.equal(absorbedHtml.includes("Flow progress"), false);
   assert.equal(absorbedHtml.includes("Provider connection phase"), false);
   assert.equal(absorbedHtml.includes("Capability readout"), false);
   assert.equal(absorbedHtml.includes("Service connection model"), false);
