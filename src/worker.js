@@ -2836,6 +2836,10 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
   const consumptionIntent = envelopeConsumptionPlan?.consumptionIntent ?? null;
   const consumptionBoundary = envelopeConsumptionPlan?.consumptionBoundary ?? null;
   const consumptionVerification = envelopeConsumptionPlan?.consumptionVerification ?? null;
+  const envelopeConsumePreflight = session?.envelopeConsumePreflight ?? null;
+  const preflightGate = envelopeConsumePreflight?.preflightGate ?? null;
+  const preflightFailure = envelopeConsumePreflight?.preflightFailure ?? null;
+  const preflightRecovery = envelopeConsumePreflight?.preflightRecovery ?? null;
   const completionReadout = session?.completionReadout ?? null;
   const claimState = completionReadout?.claimState ?? null;
   const cannotYetClaim = completionReadout?.cannotYetClaim ?? null;
@@ -3347,6 +3351,30 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
               ${
                 consumptionVerification
                   ? `<p><strong>${escapeHtml(locale === "ja" ? "Consumption verification" : "Consumption verification")}:</strong> <code>${escapeHtml(normalizeText(consumptionVerification.id))}</code> ${escapeHtml(normalizeText(consumptionVerification.summary))}</p>`
+                  : ""
+              }
+            </div>
+          `
+          : ""
+      }
+      ${
+        envelopeConsumePreflight
+          ? `
+            <div class="block" style="margin-top: 12px;">
+              <p><strong>${escapeHtml(locale === "ja" ? "Envelope consume preflight" : "Envelope consume preflight")}:</strong></p>
+              ${
+                preflightGate
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Preflight gate" : "Preflight gate")}:</strong> <code>${escapeHtml(normalizeText(preflightGate.id))}</code> ${escapeHtml(normalizeText(preflightGate.summary))}</p>`
+                  : ""
+              }
+              ${
+                preflightFailure
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Preflight failure" : "Preflight failure")}:</strong> <code>${escapeHtml(normalizeText(preflightFailure.id))}</code> ${escapeHtml(normalizeText(preflightFailure.summary))}</p>`
+                  : ""
+              }
+              ${
+                preflightRecovery
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Preflight recovery" : "Preflight recovery")}:</strong> <code>${escapeHtml(normalizeText(preflightRecovery.id))}</code> ${escapeHtml(normalizeText(preflightRecovery.summary))}</p>`
                   : ""
               }
             </div>
@@ -4242,6 +4270,7 @@ async function buildApprovalBoundBootstrapSessionStatus({
           })
         : null,
     envelopeConsumptionPlan: null,
+    envelopeConsumePreflight: null,
     requestPath: SETUP_WIZARD_APPROVAL_BOUND_BOOTSTRAP_SESSION_REQUEST_PATH,
     requestEnabled: true,
     returnTo: `${url?.pathname || "/setup/wizard"}${url?.search || ""}`,
@@ -4370,6 +4399,12 @@ async function buildApprovalBoundBootstrapSessionStatus({
     ...base,
     envelopeConsumptionPlan: requestRecorded
       ? buildBootstrapSessionEnvelopeConsumptionPlan({
+          bootstrapState,
+          preview
+        })
+      : null,
+    envelopeConsumePreflight: requestRecorded
+      ? buildBootstrapSessionEnvelopeConsumePreflight({
           bootstrapState,
           preview
         })
@@ -4506,6 +4541,88 @@ function buildBootstrapSessionEnvelopeConsumptionPlan({ bootstrapState, preview 
       id: postChecks.join("_then_") || "verify_live_readiness_after_consume",
       summary:
         "After consumption, VTDD should only run the remaining verification checks and then retire the envelope."
+    }
+  };
+}
+
+function buildBootstrapSessionEnvelopeConsumePreflight({ bootstrapState, preview }) {
+  const plannedWrites = Array.isArray(preview?.plannedWrites) ? preview.plannedWrites : [];
+
+  if (bootstrapState !== "available") {
+    return {
+      preflightGate: {
+        id: "operator_prerequisites_must_be_present_at_consume_time",
+        summary:
+          "Before consume, VTDD must confirm that the operator-seeded bootstrap prerequisites are still present."
+      },
+      preflightFailure: {
+        id: "fail_closed_if_prerequisites_dropped_before_consume",
+        summary:
+          "If the prerequisite baseline dropped after the request was signed, consume must fail closed immediately."
+      },
+      preflightRecovery: {
+        id: "restore_prerequisites_and_reissue_request_before_consume",
+        summary:
+          "Recovery is to restore prerequisites and issue a fresh request and envelope before any consume path runs."
+      }
+    };
+  }
+
+  if (plannedWrites.length === 1 && plannedWrites[0] === "GITHUB_APP_INSTALLATION_ID") {
+    return {
+      preflightGate: {
+        id: "remaining_scope_must_still_equal_installation_binding_only",
+        summary:
+          "Before consume, VTDD must confirm that installation binding is still the only remaining bounded write."
+      },
+      preflightFailure: {
+        id: "fail_closed_if_installation_scope_changed_before_consume",
+        summary:
+          "If installation binding was resolved or the remaining scope widened, consume must fail closed instead of replaying the old envelope."
+      },
+      preflightRecovery: {
+        id: "recompute_installation_scope_and_reissue_envelope",
+        summary:
+          "Recovery is to recompute the current installation scope and issue a fresh envelope only if that exact remaining step still exists."
+      }
+    };
+  }
+
+  if (plannedWrites.length > 1) {
+    return {
+      preflightGate: {
+        id: "remaining_write_set_must_match_signed_envelope_scope",
+        summary:
+          "Before consume, VTDD must confirm that the current remaining runtime write set still matches the signed envelope scope."
+      },
+      preflightFailure: {
+        id: "fail_closed_if_runtime_write_set_shifted_before_consume",
+        summary:
+          "If the remaining runtime write set changed after signing, consume must fail closed rather than applying stale bootstrap intent."
+      },
+      preflightRecovery: {
+        id: "recompute_runtime_scope_and_reissue_envelope",
+        summary:
+          "Recovery is to recompute the latest runtime scope and issue a fresh envelope only for that current bounded write set."
+      }
+    };
+  }
+
+  return {
+    preflightGate: {
+      id: "remaining_work_must_stay_verification_bound",
+      summary:
+        "Before consume, VTDD must confirm that the remaining work is still verification-bound and does not reopen bootstrap write scope."
+    },
+    preflightFailure: {
+      id: "fail_closed_if_verification_path_reopens_write_scope",
+      summary:
+        "If the remaining path reopens setup-critical writes, consume must fail closed instead of stretching the old envelope."
+    },
+    preflightRecovery: {
+      id: "recompute_verification_scope_and_reissue_envelope",
+      summary:
+        "Recovery is to recompute the current remaining verification scope and issue a fresh envelope only for that path."
     }
   };
 }

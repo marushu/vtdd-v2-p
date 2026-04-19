@@ -1114,6 +1114,10 @@ test("worker setup wizard records approval-bound bootstrap request without grant
   assert.equal(html.includes("Consumption intent"), true);
   assert.equal(html.includes("Consumption boundary"), true);
   assert.equal(html.includes("Consumption verification"), true);
+  assert.equal(html.includes("Envelope consume preflight"), true);
+  assert.equal(html.includes("Preflight gate"), true);
+  assert.equal(html.includes("Preflight failure"), true);
+  assert.equal(html.includes("Preflight recovery"), true);
 
   const jsonResponse = await worker.fetch(
     new Request(`https://example.com${location}&format=json`, {
@@ -1152,6 +1156,18 @@ test("worker setup wizard records approval-bound bootstrap request without grant
   assert.equal(
     body.approvalBoundBootstrapSession.envelopeConsumptionPlan.consumptionVerification.id,
     "github_app_setup_check"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.envelopeConsumePreflight.preflightGate.id,
+    "remaining_write_set_must_match_signed_envelope_scope"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.envelopeConsumePreflight.preflightFailure.id,
+    "fail_closed_if_runtime_write_set_shifted_before_consume"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.envelopeConsumePreflight.preflightRecovery.id,
+    "recompute_runtime_scope_and_reissue_envelope"
   );
 });
 
