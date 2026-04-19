@@ -2129,6 +2129,7 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
     absorbedBody.approvalBoundBootstrapSession.recommendedNextStep.id,
     "continue_with_live_github_capability"
   );
+  assert.equal(absorbedBody.approvalBoundBootstrapSession.returnTo, null);
   assert.equal(absorbedBody.approvalBoundBootstrapSession.requestPath, null);
   assert.equal(absorbedBody.approvalBoundBootstrapSession.requestEnabled, false);
   assert.equal(absorbedBody.approvalBoundBootstrapSession.consumePath, null);

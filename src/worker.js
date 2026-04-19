@@ -5325,7 +5325,7 @@ async function buildApprovalBoundBootstrapSessionStatus({
       ? null
       : SETUP_WIZARD_APPROVAL_BOUND_BOOTSTRAP_SESSION_CONSUME_PATH,
     consumeEnabled: requestRecorded && !absorbedLiveProof,
-    returnTo: `${url?.pathname || "/setup/wizard"}${url?.search || ""}`,
+    returnTo: absorbedLiveProof ? null : `${url?.pathname || "/setup/wizard"}${url?.search || ""}`,
     recommendedNextStep: null,
     checkedAt: new Date().toISOString()
   };
