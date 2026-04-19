@@ -2711,6 +2711,14 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
   const currentPhase = phaseReadout?.currentPhase ?? null;
   const nextCapability = phaseReadout?.nextCapability ?? null;
   const transitionTrigger = phaseReadout?.transitionTrigger ?? null;
+  const progressReadout = session?.progressReadout ?? null;
+  const completedPhases = Array.isArray(progressReadout?.completedPhases)
+    ? progressReadout.completedPhases
+    : [];
+  const currentBlocker = progressReadout?.currentBlocker ?? null;
+  const remainingPhases = Array.isArray(progressReadout?.remainingPhases)
+    ? progressReadout.remainingPhases
+    : [];
 
   return `
     <h2>${escapeHtml(locale === "ja" ? "承認境界つき Bootstrap Session" : "Approval-Bound Bootstrap Session")}</h2>
@@ -2825,6 +2833,36 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
               ${
                 transitionTrigger
                   ? `<p><strong>${escapeHtml(locale === "ja" ? "Transition trigger" : "Transition trigger")}:</strong> <code>${escapeHtml(normalizeText(transitionTrigger.id))}</code> ${escapeHtml(normalizeText(transitionTrigger.summary))}</p>`
+                  : ""
+              }
+            </div>
+          `
+          : ""
+      }
+      ${
+        progressReadout
+          ? `
+            <div class="block" style="margin-top: 12px;">
+              <p><strong>${escapeHtml(locale === "ja" ? "Flow progress" : "Flow progress")}:</strong></p>
+              ${
+                completedPhases.length > 0
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Completed phases" : "Completed phases")}:</strong> ${completedPhases
+                      .map((item) => `<code>${escapeHtml(item)}</code>`)
+                      .join(", ")}</p>`
+                  : `<p><strong>${escapeHtml(locale === "ja" ? "Completed phases" : "Completed phases")}:</strong> ${escapeHtml(
+                      locale === "ja" ? "none yet" : "none yet"
+                    )}</p>`
+              }
+              ${
+                currentBlocker
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Current blocker" : "Current blocker")}:</strong> <code>${escapeHtml(normalizeText(currentBlocker.id))}</code> ${escapeHtml(normalizeText(currentBlocker.summary))}</p>`
+                  : ""
+              }
+              ${
+                remainingPhases.length > 0
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Remaining phases" : "Remaining phases")}:</strong> ${remainingPhases
+                      .map((item) => `<code>${escapeHtml(item)}</code>`)
+                      .join(", ")}</p>`
                   : ""
               }
             </div>
@@ -3551,6 +3589,10 @@ async function buildApprovalBoundBootstrapSessionStatus({
       preview,
       githubAppSetupCheck
     }),
+    progressReadout: buildBootstrapSessionProgressReadout({
+      bootstrapState,
+      preview
+    }),
     contract: {
       authorityState: "not_issued",
       sessionMode: "approval_bound_one_time_bootstrap",
@@ -3976,6 +4018,64 @@ function buildBootstrapSessionPhaseReadout({
       summary:
         "Run the live readiness probe so wizard can move from configuration-complete to verified GitHub capability."
     }
+  };
+}
+
+function buildBootstrapSessionProgressReadout({ bootstrapState, preview }) {
+  const plannedWrites = Array.isArray(preview?.plannedWrites) ? preview.plannedWrites : [];
+
+  if (bootstrapState !== "available") {
+    return {
+      completedPhases: [],
+      currentBlocker: {
+        id: "operator_bootstrap_prerequisites_missing",
+        summary:
+          "Operator-seeded bootstrap prerequisites are still missing, so VTDD cannot enter the bounded bootstrap flow yet."
+      },
+      remainingPhases: [
+        "runtime_identity_bootstrap",
+        "installation_binding",
+        "live_readiness_verification"
+      ]
+    };
+  }
+
+  if (plannedWrites.length === 1 && plannedWrites[0] === "GITHUB_APP_INSTALLATION_ID") {
+    return {
+      completedPhases: ["runtime_identity_bootstrap"],
+      currentBlocker: {
+        id: "installation_binding_still_missing",
+        summary:
+          "Installation binding is still missing, so VTDD cannot mint installation tokens or finish live verification yet."
+      },
+      remainingPhases: ["installation_binding", "live_readiness_verification"]
+    };
+  }
+
+  if (plannedWrites.length > 1) {
+    return {
+      completedPhases: [],
+      currentBlocker: {
+        id: "runtime_identity_still_incomplete",
+        summary:
+          "The current GitHub App runtime identity is still incomplete, so VTDD cannot narrow the flow to installation binding yet."
+      },
+      remainingPhases: [
+        "runtime_identity_bootstrap",
+        "installation_binding",
+        "live_readiness_verification"
+      ]
+    };
+  }
+
+  return {
+    completedPhases: ["runtime_identity_bootstrap", "installation_binding"],
+    currentBlocker: {
+      id: "live_readiness_not_yet_verified",
+      summary:
+        "Configuration is in place, but VTDD still needs a live readiness probe before it can claim verified GitHub capability."
+    },
+    remainingPhases: ["live_readiness_verification"]
   };
 }
 
