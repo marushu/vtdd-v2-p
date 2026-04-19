@@ -2756,6 +2756,10 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
   const replayRisk = authorityRequestReplayReadout?.replayRisk ?? null;
   const replayRejection = authorityRequestReplayReadout?.replayRejection ?? null;
   const replayRecovery = authorityRequestReplayReadout?.replayRecovery ?? null;
+  const authorityRequestBindingReadout = session?.authorityRequestBindingReadout ?? null;
+  const bindingTarget = authorityRequestBindingReadout?.bindingTarget ?? null;
+  const bindingDrift = authorityRequestBindingReadout?.bindingDrift ?? null;
+  const bindingRecovery = authorityRequestBindingReadout?.bindingRecovery ?? null;
   const completionReadout = session?.completionReadout ?? null;
   const claimState = completionReadout?.claimState ?? null;
   const cannotYetClaim = completionReadout?.cannotYetClaim ?? null;
@@ -3137,6 +3141,30 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
               ${
                 replayRecovery
                   ? `<p><strong>${escapeHtml(locale === "ja" ? "Replay recovery" : "Replay recovery")}:</strong> <code>${escapeHtml(normalizeText(replayRecovery.id))}</code> ${escapeHtml(normalizeText(replayRecovery.summary))}</p>`
+                  : ""
+              }
+            </div>
+          `
+          : ""
+      }
+      ${
+        authorityRequestBindingReadout
+          ? `
+            <div class="block" style="margin-top: 12px;">
+              <p><strong>${escapeHtml(locale === "ja" ? "Authority request binding" : "Authority request binding")}:</strong></p>
+              ${
+                bindingTarget
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Binding target" : "Binding target")}:</strong> <code>${escapeHtml(normalizeText(bindingTarget.id))}</code> ${escapeHtml(normalizeText(bindingTarget.summary))}</p>`
+                  : ""
+              }
+              ${
+                bindingDrift
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Binding drift" : "Binding drift")}:</strong> <code>${escapeHtml(normalizeText(bindingDrift.id))}</code> ${escapeHtml(normalizeText(bindingDrift.summary))}</p>`
+                  : ""
+              }
+              ${
+                bindingRecovery
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Binding recovery" : "Binding recovery")}:</strong> <code>${escapeHtml(normalizeText(bindingRecovery.id))}</code> ${escapeHtml(normalizeText(bindingRecovery.summary))}</p>`
                   : ""
               }
             </div>
@@ -3979,6 +4007,10 @@ async function buildApprovalBoundBootstrapSessionStatus({
       maxAgeSeconds: SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_TTL_SECONDS
     }),
     authorityRequestReplayReadout: buildBootstrapSessionAuthorityRequestReplayReadout({
+      bootstrapState,
+      preview
+    }),
+    authorityRequestBindingReadout: buildBootstrapSessionAuthorityRequestBindingReadout({
       bootstrapState,
       preview
     }),
@@ -5333,6 +5365,88 @@ function buildBootstrapSessionAuthorityRequestReplayReadout({ bootstrapState, pr
       id: "reconfirm_verification_need_then_request_once",
       summary:
         "Recovery is to reconfirm the current verification need and submit one new bounded request only for that remaining path."
+    }
+  };
+}
+
+function buildBootstrapSessionAuthorityRequestBindingReadout({ bootstrapState, preview }) {
+  const plannedWrites = Array.isArray(preview?.plannedWrites) ? preview.plannedWrites : [];
+
+  if (bootstrapState !== "available") {
+    return {
+      bindingTarget: {
+        id: "blocked_runtime_context_only",
+        summary:
+          "Any future approval-bound request must bind to the currently blocked runtime context rather than float above the missing prerequisite state."
+      },
+      bindingDrift: {
+        id: "prerequisite_drift_invalidates_request_context",
+        summary:
+          "If prerequisite state changes, the old request context drifts immediately and must not be reused as if it still described the current runtime."
+      },
+      bindingRecovery: {
+        id: "rebind_after_prerequisites_are_restored",
+        summary:
+          "Recovery is to restore prerequisites first, then create a fresh request bound to the current runtime context."
+      }
+    };
+  }
+
+  if (plannedWrites.length === 1 && plannedWrites[0] === "GITHUB_APP_INSTALLATION_ID") {
+    return {
+      bindingTarget: {
+        id: "current_installation_binding_gap",
+        summary:
+          "The request must bind to the current installation-binding gap only, not to a broader earlier bootstrap phase."
+      },
+      bindingDrift: {
+        id: "installation_context_shift_invalidates_request",
+        summary:
+          "If the installation context changes or binding is resolved, the previous request drifts out of scope and must be rejected."
+      },
+      bindingRecovery: {
+        id: "rebind_to_current_installation_gap",
+        summary:
+          "Recovery is to confirm the current installation gap and issue a fresh request bound only to that remaining step."
+      }
+    };
+  }
+
+  if (plannedWrites.length > 1) {
+    return {
+      bindingTarget: {
+        id: "current_runtime_identity_gap",
+        summary:
+          "The request must bind to the current remaining runtime identity gap so VTDD can keep the bounded write set traceable."
+      },
+      bindingDrift: {
+        id: "runtime_gap_shift_invalidates_bound_request",
+        summary:
+          "If the remaining runtime identity gap shifts, the old bound request drifts and must not be replayed against the updated state."
+      },
+      bindingRecovery: {
+        id: "rebind_to_current_runtime_gap",
+        summary:
+          "Recovery is to recompute the current runtime gap and issue a fresh request bound only to that latest remaining scope."
+      }
+    };
+  }
+
+  return {
+    bindingTarget: {
+      id: "remaining_verification_context_only",
+      summary:
+        "Any future request must bind only to the remaining verification context, not to an older bootstrap-write phase."
+    },
+    bindingDrift: {
+      id: "verification_context_shift_invalidates_request",
+      summary:
+        "If the remaining verification context changes, the old request must be treated as out of date rather than reopened."
+    },
+    bindingRecovery: {
+      id: "rebind_to_remaining_verification_need",
+      summary:
+        "Recovery is to reconfirm the remaining verification need and issue a fresh request bound only to that current context."
     }
   };
 }
