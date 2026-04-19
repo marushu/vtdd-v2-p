@@ -455,6 +455,10 @@ test("worker setup wizard unlocked html shows narrow github app bootstrap form w
   assert.equal(html.includes("Runtime evidence"), true);
   assert.equal(html.includes("Blocked evidence"), true);
   assert.equal(html.includes("Next proof"), true);
+  assert.equal(html.includes("Safety readout"), true);
+  assert.equal(html.includes("Stop reason"), true);
+  assert.equal(html.includes("Invariant protected"), true);
+  assert.equal(html.includes("Unsafe shortcut denied"), true);
   assert.equal(html.includes("Allowlisted secrets"), true);
   assert.equal(html.includes("Planned writes"), true);
   assert.equal(html.includes("Post-session checks"), true);
@@ -610,6 +614,18 @@ test("worker setup wizard unlocked json reports github app bootstrap availabilit
     body.approvalBoundBootstrapSession.evidenceReadout.nextProof.id,
     "operator_prerequisites_restored"
   );
+  assert.equal(
+    body.approvalBoundBootstrapSession.safetyReadout.stopReason.id,
+    "operator_bootstrap_prerequisites_not_ready"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.safetyReadout.invariantProtected.id,
+    "no_generic_secret_terminal"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.safetyReadout.unsafeShortcutDenied.id,
+    "skip_operator_bootstrap_boundary"
+  );
   assert.deepEqual(body.githubAppBootstrap.allowlistedSecrets, [
     "GITHUB_APP_ID",
     "GITHUB_APP_INSTALLATION_ID",
@@ -747,6 +763,18 @@ test("worker setup wizard unlocked json does not expose cloudflare bootstrap tok
   assert.equal(
     body.approvalBoundBootstrapSession.evidenceReadout.nextProof.id,
     "runtime_identity_fields_written"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.safetyReadout.stopReason.id,
+    "runtime_identity_still_incomplete"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.safetyReadout.invariantProtected.id,
+    "no_broad_bootstrap_authority_exposure"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.safetyReadout.unsafeShortcutDenied.id,
+    "pretend_runtime_identity_is_complete"
   );
   assert.equal(body.githubAppBootstrap.accountId, "account-id");
   assert.equal("cloudflareApiToken" in body.githubAppBootstrap, false);
@@ -925,6 +953,18 @@ test("worker setup wizard preview narrows planned write to installation binding 
   assert.equal(
     body.approvalBoundBootstrapSession.evidenceReadout.nextProof.id,
     "installation_binding_detected_or_captured"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.safetyReadout.stopReason.id,
+    "installation_binding_still_required"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.safetyReadout.invariantProtected.id,
+    "no_fake_github_connection_ready_state"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.safetyReadout.unsafeShortcutDenied.id,
+    "assume_installation_binding_without_proof"
   );
 });
 

@@ -2740,6 +2740,10 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
     ? evidenceReadout.blockedEvidence
     : [];
   const nextProof = evidenceReadout?.nextProof ?? null;
+  const safetyReadout = session?.safetyReadout ?? null;
+  const stopReason = safetyReadout?.stopReason ?? null;
+  const invariantProtected = safetyReadout?.invariantProtected ?? null;
+  const unsafeShortcutDenied = safetyReadout?.unsafeShortcutDenied ?? null;
 
   return `
     <h2>${escapeHtml(locale === "ja" ? "承認境界つき Bootstrap Session" : "Approval-Bound Bootstrap Session")}</h2>
@@ -2989,6 +2993,30 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
               ${
                 nextProof
                   ? `<p><strong>${escapeHtml(locale === "ja" ? "Next proof" : "Next proof")}:</strong> <code>${escapeHtml(normalizeText(nextProof.id))}</code> ${escapeHtml(normalizeText(nextProof.summary))}</p>`
+                  : ""
+              }
+            </div>
+          `
+          : ""
+      }
+      ${
+        safetyReadout
+          ? `
+            <div class="block" style="margin-top: 12px;">
+              <p><strong>${escapeHtml(locale === "ja" ? "Safety readout" : "Safety readout")}:</strong></p>
+              ${
+                stopReason
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Stop reason" : "Stop reason")}:</strong> <code>${escapeHtml(normalizeText(stopReason.id))}</code> ${escapeHtml(normalizeText(stopReason.summary))}</p>`
+                  : ""
+              }
+              ${
+                invariantProtected
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Invariant protected" : "Invariant protected")}:</strong> <code>${escapeHtml(normalizeText(invariantProtected.id))}</code> ${escapeHtml(normalizeText(invariantProtected.summary))}</p>`
+                  : ""
+              }
+              ${
+                unsafeShortcutDenied
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Unsafe shortcut denied" : "Unsafe shortcut denied")}:</strong> <code>${escapeHtml(normalizeText(unsafeShortcutDenied.id))}</code> ${escapeHtml(normalizeText(unsafeShortcutDenied.summary))}</p>`
                   : ""
               }
             </div>
@@ -3733,6 +3761,10 @@ async function buildApprovalBoundBootstrapSessionStatus({
       preview
     }),
     evidenceReadout: buildBootstrapSessionEvidenceReadout({
+      bootstrapState,
+      preview
+    }),
+    safetyReadout: buildBootstrapSessionSafetyReadout({
       bootstrapState,
       preview
     }),
@@ -4550,6 +4582,88 @@ function buildBootstrapSessionEvidenceReadout({ bootstrapState, preview }) {
       summary:
         "The next proof is a passing live readiness probe that shows VTDD can do real GitHub work through the configured runtime identity."
     }
+  };
+}
+
+function buildBootstrapSessionSafetyReadout({ bootstrapState, preview }) {
+  const plannedWrites = Array.isArray(preview?.plannedWrites) ? preview.plannedWrites : [];
+
+  if (bootstrapState !== "available") {
+    return {
+      stopReason: {
+        id: "operator_bootstrap_prerequisites_not_ready",
+        summary:
+          "VTDD stops here because opening any bootstrap write path without the operator prerequisites would blur the bootstrap boundary."
+      },
+      invariantProtected: {
+        id: "no_generic_secret_terminal",
+        summary:
+          "The setup surface must not degrade into a generic secret terminal just to get around missing bootstrap prerequisites."
+      },
+      unsafeShortcutDenied: {
+        id: "skip_operator_bootstrap_boundary",
+        summary:
+          "VTDD refuses to skip the operator bootstrap boundary by pretending the missing prerequisites are only a cosmetic setup problem."
+      }
+    };
+  }
+
+  if (plannedWrites.length === 1 && plannedWrites[0] === "GITHUB_APP_INSTALLATION_ID") {
+    return {
+      stopReason: {
+        id: "installation_binding_still_required",
+        summary:
+          "VTDD stops at installation binding because token minting and live verification would be unsafe without a real installation connection."
+      },
+      invariantProtected: {
+        id: "no_fake_github_connection_ready_state",
+        summary:
+          "The wizard must not claim GitHub connection readiness before installation binding is actually present."
+      },
+      unsafeShortcutDenied: {
+        id: "assume_installation_binding_without_proof",
+        summary:
+          "VTDD refuses to assume installation binding from partial identity alone."
+      }
+    };
+  }
+
+  if (plannedWrites.length > 1) {
+    return {
+      stopReason: {
+        id: "runtime_identity_still_incomplete",
+        summary:
+          "VTDD stops before installation and verification because the current runtime identity is still incomplete."
+      },
+      invariantProtected: {
+        id: "no_broad_bootstrap_authority_exposure",
+        summary:
+          "The setup path must not widen into broad write authority just to bypass the missing runtime identity fields."
+      },
+      unsafeShortcutDenied: {
+        id: "pretend_runtime_identity_is_complete",
+        summary:
+          "VTDD refuses to treat partial GitHub App bootstrap as if the runtime identity were already complete."
+      }
+    };
+  }
+
+  return {
+    stopReason: {
+      id: "live_verification_still_required",
+      summary:
+        "VTDD stops short of a completion claim because configuration without live verification is still an unproven path."
+    },
+    invariantProtected: {
+      id: "no_unverified_wizard_complete_claim",
+      summary:
+        "The wizard must not call setup complete until live verification proves the configured path does real GitHub work."
+    },
+    unsafeShortcutDenied: {
+      id: "skip_live_probe_before_claiming_completion",
+      summary:
+        "VTDD refuses to skip the live probe and still claim wizard-complete setup."
+      }
   };
 }
 
