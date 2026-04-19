@@ -3174,6 +3174,67 @@ test("worker setup wizard narrows multiple installations by target repo owner", 
   );
 });
 
+test("worker setup wizard narrows multiple installations by shared owner across multiple repos", async () => {
+  const { privateKey } = generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+    privateKeyEncoding: {
+      type: "pkcs8",
+      format: "pem"
+    },
+    publicKeyEncoding: {
+      type: "spki",
+      format: "pem"
+    }
+  });
+  const env = {
+    GITHUB_APP_ID: "12345",
+    GITHUB_APP_PRIVATE_KEY: privateKey,
+    GITHUB_API_FETCH: async (url) => {
+      if (String(url).endsWith("/app/installations")) {
+        return new Response(
+          JSON.stringify([
+            { id: 111, account: { login: "other-org" } },
+            { id: 222, account: { login: "sample-org" } }
+          ]),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          }
+        );
+      }
+      if (String(url).endsWith("/app")) {
+        return new Response(
+          JSON.stringify({
+            id: 12345,
+            slug: "vtdd-test",
+            html_url: "https://github.com/apps/vtdd-test"
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          }
+        );
+      }
+      return new Response(JSON.stringify({}), {
+        status: 404,
+        headers: { "content-type": "application/json" }
+      });
+    }
+  };
+
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/setup/wizard?format=json&repo=sample-org/vtdd-v2&repo=sample-org/another-repo&githubAppCheck=on"
+    ),
+    env
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.githubAppSetupCheck.state, "installation_detected");
+  assert.equal(body.githubAppSetupCheck.detectedInstallationId, "222");
+});
+
 test("worker setup wizard can request detected installation continuation from github block", async () => {
   const { privateKey } = generateKeyPairSync("rsa", {
     modulusLength: 2048,

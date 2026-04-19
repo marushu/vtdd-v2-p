@@ -8158,16 +8158,21 @@ async function detectGitHubAppInstallation({ env, fetchImpl, targetOwner }) {
 
 function getSingleSetupWizardRepoOwner(url) {
   const repositories = parseRepositories(url);
-  if (repositories.length !== 1) {
+  if (repositories.length === 0) {
     return "";
   }
 
-  const canonicalRepo = normalizeText(repositories[0]?.canonicalRepo);
-  if (!canonicalRepo.includes("/")) {
+  const owners = repositories
+    .map((item) => normalizeText(item?.canonicalRepo))
+    .filter((item) => item.includes("/"))
+    .map((item) => item.split("/")[0])
+    .filter(Boolean);
+  if (owners.length !== repositories.length) {
     return "";
   }
 
-  return canonicalRepo.split("/")[0];
+  const uniqueOwners = [...new Set(owners)];
+  return uniqueOwners.length === 1 ? uniqueOwners[0] : "";
 }
 
 async function getGitHubAppMetadata({ env, fetchImpl }) {
