@@ -438,6 +438,9 @@ test("worker setup wizard unlocked html shows narrow github app bootstrap form w
   assert.equal(html.includes("Completed phases"), true);
   assert.equal(html.includes("Current blocker"), true);
   assert.equal(html.includes("Remaining phases"), true);
+  assert.equal(html.includes("Provider connection phase"), true);
+  assert.equal(html.includes("GitHub phase"), true);
+  assert.equal(html.includes("Cloudflare phase"), true);
   assert.equal(html.includes("Responsibility split"), true);
   assert.equal(html.includes("Human step"), true);
   assert.equal(html.includes("VTDD step"), true);
@@ -603,6 +606,14 @@ test("worker setup wizard unlocked json reports github app bootstrap availabilit
     "installation_binding",
     "live_readiness_verification"
   ]);
+  assert.equal(
+    body.approvalBoundBootstrapSession.providerConnectionReadout.github.id,
+    "github_login_or_consent_not_yet_actionable"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.providerConnectionReadout.cloudflare.id,
+    "cloudflare_operator_authority_missing"
+  );
   assert.equal(
     body.approvalBoundBootstrapSession.responsibilityReadout.humanStep.id,
     "approve_or_restore_operator_bootstrap_prerequisites"
@@ -877,6 +888,14 @@ test("worker setup wizard unlocked json does not expose cloudflare bootstrap tok
     "installation_binding",
     "live_readiness_verification"
   ]);
+  assert.equal(
+    body.approvalBoundBootstrapSession.providerConnectionReadout.github.id,
+    "github_app_creation_or_install_consent_phase"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.providerConnectionReadout.cloudflare.id,
+    "cloudflare_runtime_authority_available_without_user_login"
+  );
   assert.equal(
     body.approvalBoundBootstrapSession.responsibilityReadout.humanStep.id,
     "approve_provider_creation_or_installation_step"
@@ -1605,6 +1624,14 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
     ["runtime_identity_bootstrap", "installation_binding", "live_readiness_verification"]
   );
   assert.deepEqual(absorbedBody.approvalBoundBootstrapSession.progressReadout.remainingPhases, []);
+  assert.equal(
+    absorbedBody.approvalBoundBootstrapSession.providerConnectionReadout.github.id,
+    "github_connection_verified"
+  );
+  assert.equal(
+    absorbedBody.approvalBoundBootstrapSession.providerConnectionReadout.cloudflare.id,
+    "cloudflare_runtime_connection_already_bound"
+  );
 
   const absorbedHtmlResponse = await worker.fetch(
     new Request(`https://example.com${consumedLocation}`, {
