@@ -1110,6 +1110,10 @@ test("worker setup wizard records approval-bound bootstrap request without grant
   );
   assert.equal(html.includes("Session envelope"), true);
   assert.equal(html.includes("signed_request_bound_envelope"), true);
+  assert.equal(html.includes("Envelope consumption plan"), true);
+  assert.equal(html.includes("Consumption intent"), true);
+  assert.equal(html.includes("Consumption boundary"), true);
+  assert.equal(html.includes("Consumption verification"), true);
 
   const jsonResponse = await worker.fetch(
     new Request(`https://example.com${location}&format=json`, {
@@ -1136,6 +1140,18 @@ test("worker setup wizard records approval-bound bootstrap request without grant
   assert.equal(
     body.approvalBoundBootstrapSession.sessionEnvelope.envelopeId.length,
     12
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.envelopeConsumptionPlan.consumptionIntent.id,
+    "consume_once_for_remaining_runtime_identity_write_set"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.envelopeConsumptionPlan.consumptionBoundary.id,
+    "fail_closed_if_remaining_write_set_changes"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.envelopeConsumptionPlan.consumptionVerification.id,
+    "github_app_setup_check"
   );
 });
 

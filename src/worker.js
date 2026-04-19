@@ -2832,6 +2832,10 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
   const envelopeExpiresAt = sessionEnvelope?.expiresAt ?? null;
   const envelopeSingleUse = sessionEnvelope?.singleUse ?? null;
   const envelopeBoundScope = sessionEnvelope?.boundScope ?? null;
+  const envelopeConsumptionPlan = session?.envelopeConsumptionPlan ?? null;
+  const consumptionIntent = envelopeConsumptionPlan?.consumptionIntent ?? null;
+  const consumptionBoundary = envelopeConsumptionPlan?.consumptionBoundary ?? null;
+  const consumptionVerification = envelopeConsumptionPlan?.consumptionVerification ?? null;
   const completionReadout = session?.completionReadout ?? null;
   const claimState = completionReadout?.claimState ?? null;
   const cannotYetClaim = completionReadout?.cannotYetClaim ?? null;
@@ -3319,6 +3323,30 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
               ${
                 envelopeBoundScope
                   ? `<p><strong>${escapeHtml(locale === "ja" ? "Envelope bound scope" : "Envelope bound scope")}:</strong> <code>${escapeHtml(normalizeText(envelopeBoundScope))}</code></p>`
+                  : ""
+              }
+            </div>
+          `
+          : ""
+      }
+      ${
+        envelopeConsumptionPlan
+          ? `
+            <div class="block" style="margin-top: 12px;">
+              <p><strong>${escapeHtml(locale === "ja" ? "Envelope consumption plan" : "Envelope consumption plan")}:</strong></p>
+              ${
+                consumptionIntent
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Consumption intent" : "Consumption intent")}:</strong> <code>${escapeHtml(normalizeText(consumptionIntent.id))}</code> ${escapeHtml(normalizeText(consumptionIntent.summary))}</p>`
+                  : ""
+              }
+              ${
+                consumptionBoundary
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Consumption boundary" : "Consumption boundary")}:</strong> <code>${escapeHtml(normalizeText(consumptionBoundary.id))}</code> ${escapeHtml(normalizeText(consumptionBoundary.summary))}</p>`
+                  : ""
+              }
+              ${
+                consumptionVerification
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Consumption verification" : "Consumption verification")}:</strong> <code>${escapeHtml(normalizeText(consumptionVerification.id))}</code> ${escapeHtml(normalizeText(consumptionVerification.summary))}</p>`
                   : ""
               }
             </div>
@@ -4213,6 +4241,7 @@ async function buildApprovalBoundBootstrapSessionStatus({
             expiresAt: requestExpiresAt
           })
         : null,
+    envelopeConsumptionPlan: null,
     requestPath: SETUP_WIZARD_APPROVAL_BOUND_BOOTSTRAP_SESSION_REQUEST_PATH,
     requestEnabled: true,
     returnTo: `${url?.pathname || "/setup/wizard"}${url?.search || ""}`,
@@ -4339,6 +4368,12 @@ async function buildApprovalBoundBootstrapSessionStatus({
 
   return {
     ...base,
+    envelopeConsumptionPlan: requestRecorded
+      ? buildBootstrapSessionEnvelopeConsumptionPlan({
+          bootstrapState,
+          preview
+        })
+      : null,
     state: requestRecorded ? "request_recorded_but_deferred" : "deferred",
     summary:
       requestRecorded
@@ -4389,6 +4424,89 @@ async function buildBootstrapSessionEnvelope({
     writeTarget: preview?.writeTarget ?? null,
     plannedWrites: Array.isArray(preview?.plannedWrites) ? [...preview.plannedWrites] : [],
     postChecks: Array.isArray(preview?.postChecks) ? [...preview.postChecks] : []
+  };
+}
+
+function buildBootstrapSessionEnvelopeConsumptionPlan({ bootstrapState, preview }) {
+  const plannedWrites = Array.isArray(preview?.plannedWrites) ? preview.plannedWrites : [];
+  const postChecks = Array.isArray(preview?.postChecks) ? preview.postChecks : [];
+
+  if (bootstrapState !== "available") {
+    return {
+      consumptionIntent: {
+        id: "do_not_consume_before_prerequisites_are_restored",
+        summary:
+          "This envelope is not meant to consume into a write while operator prerequisites are still missing."
+      },
+      consumptionBoundary: {
+        id: "fail_closed_on_missing_operator_prerequisites",
+        summary:
+          "Consumption must fail closed if the operator-seeded bootstrap prerequisites are not present at consume time."
+      },
+      consumptionVerification: {
+        id: "recheck_prerequisites_before_any_write_attempt",
+        summary:
+          "Before any future consume path runs, VTDD must recheck the prerequisite state instead of trusting the old request alone."
+      }
+    };
+  }
+
+  if (plannedWrites.length === 1 && plannedWrites[0] === "GITHUB_APP_INSTALLATION_ID") {
+    return {
+      consumptionIntent: {
+        id: "consume_once_for_installation_binding_only",
+        summary:
+          "The envelope is intended for one installation-binding write only, followed by installation token mint and live probe checks."
+      },
+      consumptionBoundary: {
+        id: "fail_closed_if_scope_widens_beyond_installation_binding",
+        summary:
+          "Consumption must fail closed if the remaining scope widens beyond installation binding or if the current gap no longer matches the envelope."
+      },
+      consumptionVerification: {
+        id: postChecks.join("_then_") || "verify_installation_binding_after_consume",
+        summary:
+          "After consumption, VTDD should immediately run the planned installation follow-up checks before considering the envelope spent."
+      }
+    };
+  }
+
+  if (plannedWrites.length > 1) {
+    return {
+      consumptionIntent: {
+        id: "consume_once_for_remaining_runtime_identity_write_set",
+        summary:
+          "The envelope is intended for one bounded runtime-identity write set only, not for repeated or broadened secret management."
+      },
+      consumptionBoundary: {
+        id: "fail_closed_if_remaining_write_set_changes",
+        summary:
+          "Consumption must fail closed if the remaining write set has changed from what the envelope was signed to carry."
+      },
+      consumptionVerification: {
+        id: postChecks.join("_then_") || "verify_runtime_identity_after_consume",
+        summary:
+          "After consumption, VTDD should immediately run the planned post-write checks so the flow can shrink or stop with evidence."
+      }
+    };
+  }
+
+  return {
+    consumptionIntent: {
+      id: "consume_once_for_verification_bound_follow_up",
+      summary:
+        "The envelope is intended only for a verification-bound follow-up path once no setup-critical writes remain."
+    },
+    consumptionBoundary: {
+      id: "fail_closed_if_consume_reopens_bootstrap_write_scope",
+      summary:
+        "Consumption must fail closed if it would reopen bootstrap write scope after configuration is already present."
+      },
+    consumptionVerification: {
+      id: postChecks.join("_then_") || "verify_live_readiness_after_consume",
+      summary:
+        "After consumption, VTDD should only run the remaining verification checks and then retire the envelope."
+    }
   };
 }
 
