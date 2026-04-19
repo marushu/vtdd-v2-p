@@ -2760,6 +2760,10 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
   const bindingTarget = authorityRequestBindingReadout?.bindingTarget ?? null;
   const bindingDrift = authorityRequestBindingReadout?.bindingDrift ?? null;
   const bindingRecovery = authorityRequestBindingReadout?.bindingRecovery ?? null;
+  const authorityRequestTargetReadout = session?.authorityRequestTargetReadout ?? null;
+  const targetContext = authorityRequestTargetReadout?.targetContext ?? null;
+  const targetDrift = authorityRequestTargetReadout?.targetDrift ?? null;
+  const targetRecovery = authorityRequestTargetReadout?.targetRecovery ?? null;
   const completionReadout = session?.completionReadout ?? null;
   const claimState = completionReadout?.claimState ?? null;
   const cannotYetClaim = completionReadout?.cannotYetClaim ?? null;
@@ -3165,6 +3169,30 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
               ${
                 bindingRecovery
                   ? `<p><strong>${escapeHtml(locale === "ja" ? "Binding recovery" : "Binding recovery")}:</strong> <code>${escapeHtml(normalizeText(bindingRecovery.id))}</code> ${escapeHtml(normalizeText(bindingRecovery.summary))}</p>`
+                  : ""
+              }
+            </div>
+          `
+          : ""
+      }
+      ${
+        authorityRequestTargetReadout
+          ? `
+            <div class="block" style="margin-top: 12px;">
+              <p><strong>${escapeHtml(locale === "ja" ? "Authority request target" : "Authority request target")}:</strong></p>
+              ${
+                targetContext
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Target context" : "Target context")}:</strong> <code>${escapeHtml(normalizeText(targetContext.id))}</code> ${escapeHtml(normalizeText(targetContext.summary))}</p>`
+                  : ""
+              }
+              ${
+                targetDrift
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Target drift" : "Target drift")}:</strong> <code>${escapeHtml(normalizeText(targetDrift.id))}</code> ${escapeHtml(normalizeText(targetDrift.summary))}</p>`
+                  : ""
+              }
+              ${
+                targetRecovery
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Target recovery" : "Target recovery")}:</strong> <code>${escapeHtml(normalizeText(targetRecovery.id))}</code> ${escapeHtml(normalizeText(targetRecovery.summary))}</p>`
                   : ""
               }
             </div>
@@ -4013,6 +4041,11 @@ async function buildApprovalBoundBootstrapSessionStatus({
     authorityRequestBindingReadout: buildBootstrapSessionAuthorityRequestBindingReadout({
       bootstrapState,
       preview
+    }),
+    authorityRequestTargetReadout: buildBootstrapSessionAuthorityRequestTargetReadout({
+      bootstrapState,
+      preview,
+      url
     }),
     completionReadout: buildBootstrapSessionCompletionReadout({
       bootstrapState,
@@ -5447,6 +5480,89 @@ function buildBootstrapSessionAuthorityRequestBindingReadout({ bootstrapState, p
       id: "rebind_to_remaining_verification_need",
       summary:
         "Recovery is to reconfirm the remaining verification need and issue a fresh request bound only to that current context."
+    }
+  };
+}
+
+function buildBootstrapSessionAuthorityRequestTargetReadout({ bootstrapState, preview, url }) {
+  const plannedWrites = Array.isArray(preview?.plannedWrites) ? preview.plannedWrites : [];
+  const repo = normalizeText(url?.searchParams?.get("repo")) || "<unresolved-repo>";
+
+  if (bootstrapState !== "available") {
+    return {
+      targetContext: {
+        id: "blocked_repo_target_context",
+        summary:
+          `Any future approval-bound request must stay bound to the current setup target ${repo} and its blocked prerequisite context rather than float across repositories.`
+      },
+      targetDrift: {
+        id: "repo_or_prerequisite_target_shift_invalidates_request",
+        summary:
+          "If the setup target or blocked prerequisite context changes, the old request target drifts immediately and must not be reused."
+      },
+      targetRecovery: {
+        id: "restore_target_context_then_request_again",
+        summary:
+          "Recovery is to restore the intended setup target and prerequisites, then submit a fresh request for that current target only."
+      }
+    };
+  }
+
+  if (plannedWrites.length === 1 && plannedWrites[0] === "GITHUB_APP_INSTALLATION_ID") {
+    return {
+      targetContext: {
+        id: "repo_target_with_installation_binding_gap",
+        summary:
+          `The request must stay bound to setup target ${repo} and its current installation-binding gap, not a broader or different repository context.`
+      },
+      targetDrift: {
+        id: "repo_or_installation_target_shift_invalidates_request",
+        summary:
+          "If the setup target or installation context changes, the previous request target drifts out of scope and must be rejected."
+      },
+      targetRecovery: {
+        id: "reconfirm_repo_and_installation_target_then_request",
+        summary:
+          "Recovery is to reconfirm the current repository target and installation gap, then create a fresh request for that exact target."
+      }
+    };
+  }
+
+  if (plannedWrites.length > 1) {
+    return {
+      targetContext: {
+        id: "repo_target_with_runtime_identity_gap",
+        summary:
+          `The request must stay bound to setup target ${repo} and its current remaining runtime identity gap so the bounded write set stays target-specific.`
+      },
+      targetDrift: {
+        id: "repo_or_runtime_target_shift_invalidates_request",
+        summary:
+          "If the repository target or remaining runtime identity gap changes, the old request target must be treated as stale."
+      },
+      targetRecovery: {
+        id: "reconfirm_repo_and_runtime_target_then_request",
+        summary:
+          "Recovery is to recompute the current repository target and remaining runtime gap, then issue a fresh request only for that target."
+      }
+    };
+  }
+
+  return {
+    targetContext: {
+      id: "repo_target_with_remaining_verification_need",
+      summary:
+        `Any future request must stay bound to setup target ${repo} and its remaining verification need rather than reopen a past bootstrap target.`
+    },
+    targetDrift: {
+      id: "repo_or_verification_target_shift_invalidates_request",
+      summary:
+        "If the repository target or verification context changes, the old request target is out of date and must not be reused."
+    },
+    targetRecovery: {
+      id: "reconfirm_repo_and_verification_target_then_request",
+      summary:
+        "Recovery is to reconfirm the current repository target and remaining verification need, then create a fresh request for that target only."
     }
   };
 }

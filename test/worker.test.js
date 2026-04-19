@@ -479,6 +479,10 @@ test("worker setup wizard unlocked html shows narrow github app bootstrap form w
   assert.equal(html.includes("Binding target"), true);
   assert.equal(html.includes("Binding drift"), true);
   assert.equal(html.includes("Binding recovery"), true);
+  assert.equal(html.includes("Authority request target"), true);
+  assert.equal(html.includes("Target context"), true);
+  assert.equal(html.includes("Target drift"), true);
+  assert.equal(html.includes("Target recovery"), true);
   assert.equal(html.includes("Completion claim"), true);
   assert.equal(html.includes("Current claim"), true);
   assert.equal(html.includes("Cannot yet claim"), true);
@@ -718,6 +722,18 @@ test("worker setup wizard unlocked json reports github app bootstrap availabilit
   assert.equal(
     body.approvalBoundBootstrapSession.authorityRequestBindingReadout.bindingRecovery.id,
     "rebind_after_prerequisites_are_restored"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityRequestTargetReadout.targetContext.id,
+    "blocked_repo_target_context"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityRequestTargetReadout.targetDrift.id,
+    "repo_or_prerequisite_target_shift_invalidates_request"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityRequestTargetReadout.targetRecovery.id,
+    "restore_target_context_then_request_again"
   );
   assert.equal(
     body.approvalBoundBootstrapSession.completionReadout.claimState.id,
@@ -968,6 +984,18 @@ test("worker setup wizard unlocked json does not expose cloudflare bootstrap tok
   assert.equal(
     body.approvalBoundBootstrapSession.authorityRequestBindingReadout.bindingRecovery.id,
     "rebind_to_current_runtime_gap"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityRequestTargetReadout.targetContext.id,
+    "repo_target_with_runtime_identity_gap"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityRequestTargetReadout.targetDrift.id,
+    "repo_or_runtime_target_shift_invalidates_request"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityRequestTargetReadout.targetRecovery.id,
+    "reconfirm_repo_and_runtime_target_then_request"
   );
   assert.equal(
     body.approvalBoundBootstrapSession.completionReadout.claimState.id,
@@ -1250,6 +1278,18 @@ test("worker setup wizard preview narrows planned write to installation binding 
   assert.equal(
     body.approvalBoundBootstrapSession.authorityRequestBindingReadout.bindingRecovery.id,
     "rebind_to_current_installation_gap"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityRequestTargetReadout.targetContext.id,
+    "repo_target_with_installation_binding_gap"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityRequestTargetReadout.targetDrift.id,
+    "repo_or_installation_target_shift_invalidates_request"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityRequestTargetReadout.targetRecovery.id,
+    "reconfirm_repo_and_installation_target_then_request"
   );
   assert.equal(
     body.approvalBoundBootstrapSession.completionReadout.claimState.id,
