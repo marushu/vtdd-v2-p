@@ -5240,7 +5240,8 @@ async function buildApprovalBoundBootstrapSessionStatus({
     }),
     authorityRenewalDenialReadout: buildBootstrapSessionAuthorityRenewalDenialReadout({
       bootstrapState,
-      preview: effectivePreview
+      preview: effectivePreview,
+      githubAppSetupCheck: effectiveGitHubAppSetupCheck
     }),
     authorityRequestFreshnessReadout: buildBootstrapSessionAuthorityRequestFreshnessReadout({
       bootstrapState,
@@ -7853,8 +7854,13 @@ function buildBootstrapSessionAuthorityRenewalReadout({
   };
 }
 
-function buildBootstrapSessionAuthorityRenewalDenialReadout({ bootstrapState, preview }) {
+function buildBootstrapSessionAuthorityRenewalDenialReadout({
+  bootstrapState,
+  preview,
+  githubAppSetupCheck
+}) {
   const plannedWrites = Array.isArray(preview?.plannedWrites) ? preview.plannedWrites : [];
+  const setupState = normalizeText(githubAppSetupCheck?.state) || "unknown";
 
   if (bootstrapState !== "available") {
     return {
@@ -7912,6 +7918,26 @@ function buildBootstrapSessionAuthorityRenewalDenialReadout({ bootstrapState, pr
         id: "recompute_remaining_runtime_scope_before_retry",
         summary:
           "Recovery is to recalculate the remaining runtime scope first and issue a fresh narrower request only if work still remains."
+      }
+    };
+  }
+
+  if (setupState === "ready") {
+    return {
+      denialReason: {
+        id: "no_current_setup_renewal_denial_path_needed",
+        summary:
+          "This verified path does not currently need a renewal-denial path because setup no longer needs another approval-bound session."
+      },
+      denialBoundary: {
+        id: "future_generalized_renewal_denial_is_separate_work",
+        summary:
+          "Any future generalized renewal-denial boundary is separate work and is not part of the current verified narrow setup path."
+      },
+      denialRecovery: {
+        id: "verified_path_continues_without_current_renewal_recovery",
+        summary:
+          "The verified path continues from completed setup capability rather than recovering from a current renewal-denial branch."
       }
     };
   }
