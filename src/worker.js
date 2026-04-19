@@ -5224,7 +5224,8 @@ async function buildApprovalBoundBootstrapSessionStatus({
     }),
     authorityShapeReadout: buildBootstrapSessionAuthorityShapeReadout({
       bootstrapState,
-      preview: effectivePreview
+      preview: effectivePreview,
+      githubAppSetupCheck: effectiveGitHubAppSetupCheck
     }),
     authorityExpiryReadout: buildBootstrapSessionAuthorityExpiryReadout({
       bootstrapState,
@@ -7527,8 +7528,13 @@ function buildBootstrapSessionIssuanceReadout({
   };
 }
 
-function buildBootstrapSessionAuthorityShapeReadout({ bootstrapState, preview }) {
+function buildBootstrapSessionAuthorityShapeReadout({
+  bootstrapState,
+  preview,
+  githubAppSetupCheck
+}) {
   const plannedWrites = Array.isArray(preview?.plannedWrites) ? preview.plannedWrites : [];
+  const setupState = normalizeText(githubAppSetupCheck?.state) || "unknown";
 
   if (bootstrapState !== "available") {
     return {
@@ -7586,6 +7592,26 @@ function buildBootstrapSessionAuthorityShapeReadout({ bootstrapState, preview })
         id: "go_passkey_plus_bounded_write_trace",
         summary:
           "Any future issuance must be audited as a GO + passkey-approved bounded write rather than an untracked secret management action."
+      }
+    };
+  }
+
+  if (setupState === "ready") {
+    return {
+      authorityOwner: {
+        id: "no_additional_setup_authority_owner_needed",
+        summary:
+          "This verified narrow path does not need another setup authority owner because the required setup work is already complete."
+      },
+      authorityScope: {
+        id: "verified_path_has_no_current_setup_write_scope",
+        summary:
+          "There is no current setup write scope left in this verified path because runtime configuration and live proof are already complete."
+      },
+      authorityAudit: {
+        id: "verified_path_keeps_prior_go_passkey_audit_history",
+        summary:
+          "Audit remains as the recorded GO + passkey-approved history for this path rather than a signal that another current setup authority must be issued."
       }
     };
   }

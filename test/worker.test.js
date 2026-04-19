@@ -2241,6 +2241,18 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
     "future_generalized_bootstrap_needs_separate_implementation"
   );
   assert.equal(
+    absorbedBody.approvalBoundBootstrapSession.authorityShapeReadout.authorityOwner.id,
+    "no_additional_setup_authority_owner_needed"
+  );
+  assert.equal(
+    absorbedBody.approvalBoundBootstrapSession.authorityShapeReadout.authorityScope.id,
+    "verified_path_has_no_current_setup_write_scope"
+  );
+  assert.equal(
+    absorbedBody.approvalBoundBootstrapSession.authorityShapeReadout.authorityAudit.id,
+    "verified_path_keeps_prior_go_passkey_audit_history"
+  );
+  assert.equal(
     absorbedBody.approvalBoundBootstrapSession.serviceConnectionFrictionReadout.github.id,
     "github_connection_completed_without_remaining_transport"
   );
