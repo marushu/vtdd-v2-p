@@ -5317,9 +5317,13 @@ async function buildApprovalBoundBootstrapSessionStatus({
     envelopeConsumePreflight: null,
     envelopeConsumeOutcome: null,
     envelopeConsumeAuditReadout: null,
-    requestPath: SETUP_WIZARD_APPROVAL_BOUND_BOOTSTRAP_SESSION_REQUEST_PATH,
+    requestPath: absorbedLiveProof
+      ? null
+      : SETUP_WIZARD_APPROVAL_BOUND_BOOTSTRAP_SESSION_REQUEST_PATH,
     requestEnabled: !absorbedLiveProof,
-    consumePath: SETUP_WIZARD_APPROVAL_BOUND_BOOTSTRAP_SESSION_CONSUME_PATH,
+    consumePath: absorbedLiveProof
+      ? null
+      : SETUP_WIZARD_APPROVAL_BOUND_BOOTSTRAP_SESSION_CONSUME_PATH,
     consumeEnabled: requestRecorded && !absorbedLiveProof,
     returnTo: `${url?.pathname || "/setup/wizard"}${url?.search || ""}`,
     recommendedNextStep: null,
