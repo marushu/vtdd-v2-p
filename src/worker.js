@@ -2744,6 +2744,10 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
   const renewalTrigger = authorityRenewalReadout?.renewalTrigger ?? null;
   const renewalGate = authorityRenewalReadout?.renewalGate ?? null;
   const renewalScope = authorityRenewalReadout?.renewalScope ?? null;
+  const authorityRenewalDenialReadout = session?.authorityRenewalDenialReadout ?? null;
+  const denialReason = authorityRenewalDenialReadout?.denialReason ?? null;
+  const denialBoundary = authorityRenewalDenialReadout?.denialBoundary ?? null;
+  const denialRecovery = authorityRenewalDenialReadout?.denialRecovery ?? null;
   const completionReadout = session?.completionReadout ?? null;
   const claimState = completionReadout?.claimState ?? null;
   const cannotYetClaim = completionReadout?.cannotYetClaim ?? null;
@@ -3053,6 +3057,30 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
               ${
                 renewalScope
                   ? `<p><strong>${escapeHtml(locale === "ja" ? "Renewal scope" : "Renewal scope")}:</strong> <code>${escapeHtml(normalizeText(renewalScope.id))}</code> ${escapeHtml(normalizeText(renewalScope.summary))}</p>`
+                  : ""
+              }
+            </div>
+          `
+          : ""
+      }
+      ${
+        authorityRenewalDenialReadout
+          ? `
+            <div class="block" style="margin-top: 12px;">
+              <p><strong>${escapeHtml(locale === "ja" ? "Authority renewal denial" : "Authority renewal denial")}:</strong></p>
+              ${
+                denialReason
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Denial reason" : "Denial reason")}:</strong> <code>${escapeHtml(normalizeText(denialReason.id))}</code> ${escapeHtml(normalizeText(denialReason.summary))}</p>`
+                  : ""
+              }
+              ${
+                denialBoundary
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Denial boundary" : "Denial boundary")}:</strong> <code>${escapeHtml(normalizeText(denialBoundary.id))}</code> ${escapeHtml(normalizeText(denialBoundary.summary))}</p>`
+                  : ""
+              }
+              ${
+                denialRecovery
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Denial recovery" : "Denial recovery")}:</strong> <code>${escapeHtml(normalizeText(denialRecovery.id))}</code> ${escapeHtml(normalizeText(denialRecovery.summary))}</p>`
                   : ""
               }
             </div>
@@ -3882,6 +3910,10 @@ async function buildApprovalBoundBootstrapSessionStatus({
       maxAgeSeconds: SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_TTL_SECONDS
     }),
     authorityRenewalReadout: buildBootstrapSessionAuthorityRenewalReadout({
+      bootstrapState,
+      preview
+    }),
+    authorityRenewalDenialReadout: buildBootstrapSessionAuthorityRenewalDenialReadout({
       bootstrapState,
       preview
     }),
@@ -4985,6 +5017,88 @@ function buildBootstrapSessionAuthorityRenewalReadout({ bootstrapState, preview 
       id: "remain_verification_bound_without_reopening_write_scope",
       summary:
         "Renewal must stay verification-bound and must not reopen setup-critical write scope once configuration is already present."
+      }
+  };
+}
+
+function buildBootstrapSessionAuthorityRenewalDenialReadout({ bootstrapState, preview }) {
+  const plannedWrites = Array.isArray(preview?.plannedWrites) ? preview.plannedWrites : [];
+
+  if (bootstrapState !== "available") {
+    return {
+      denialReason: {
+        id: "deny_renewal_while_prerequisites_are_missing",
+        summary:
+          "VTDD should deny renewal outright while operator bootstrap prerequisites are missing, because renewing into a blocked runtime would only hide the real blocker."
+      },
+      denialBoundary: {
+        id: "prerequisite_boundary_before_any_retry_authority",
+        summary:
+          "The prerequisite boundary comes before any retry authority, so renewal must fail closed until the operator baseline exists again."
+      },
+      denialRecovery: {
+        id: "restore_prerequisites_then_reissue_fresh_request",
+        summary:
+          "Recovery is to restore the missing prerequisites first and only then ask for a fresh GO + passkey-shaped request."
+      }
+    };
+  }
+
+  if (plannedWrites.length === 1 && plannedWrites[0] === "GITHUB_APP_INSTALLATION_ID") {
+    return {
+      denialReason: {
+        id: "deny_renewal_if_installation_binding_is_already_resolved",
+        summary:
+          "VTDD should deny renewal if installation binding has already been resolved, because renewing the old scope would recreate a step that is no longer needed."
+      },
+      denialBoundary: {
+        id: "no_reopening_completed_installation_scope",
+        summary:
+          "Once installation binding is complete, renewal must not reopen that installation-scoped authority."
+      },
+      denialRecovery: {
+        id: "recompute_from_current_installation_state",
+        summary:
+          "Recovery is to recompute from the current installation state and continue only with whatever narrower remaining work still exists."
+      }
+    };
+  }
+
+  if (plannedWrites.length > 1) {
+    return {
+      denialReason: {
+        id: "deny_renewal_if_runtime_scope_would_widen_or_repeat_blindly",
+        summary:
+          "VTDD should deny renewal if the request would blindly replay or widen runtime bootstrap scope instead of reflecting the current remaining write set."
+      },
+      denialBoundary: {
+        id: "no_reuse_of_stale_runtime_bootstrap_scope",
+        summary:
+          "Renewal must not reuse stale runtime-bootstrap scope once the current runtime state may already have changed."
+      },
+      denialRecovery: {
+        id: "recompute_remaining_runtime_scope_before_retry",
+        summary:
+          "Recovery is to recalculate the remaining runtime scope first and issue a fresh narrower request only if work still remains."
+      }
+    };
+  }
+
+  return {
+    denialReason: {
+      id: "deny_renewal_if_it_reopens_write_scope_after_configuration",
+      summary:
+        "VTDD should deny renewal if it would reopen setup-critical write scope after configuration is already present."
+    },
+    denialBoundary: {
+      id: "verification_phase_does_not_restore_bootstrap_write_rights",
+      summary:
+        "The verification phase must not be used to smuggle bootstrap write rights back into the flow."
+    },
+    denialRecovery: {
+      id: "continue_with_verification_bound_path_only",
+      summary:
+        "Recovery is to stay on the verification-bound path and request a fresh approval only for that remaining verification work."
       }
   };
 }

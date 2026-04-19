@@ -463,6 +463,10 @@ test("worker setup wizard unlocked html shows narrow github app bootstrap form w
   assert.equal(html.includes("Renewal trigger"), true);
   assert.equal(html.includes("Renewal gate"), true);
   assert.equal(html.includes("Renewal scope"), true);
+  assert.equal(html.includes("Authority renewal denial"), true);
+  assert.equal(html.includes("Denial reason"), true);
+  assert.equal(html.includes("Denial boundary"), true);
+  assert.equal(html.includes("Denial recovery"), true);
   assert.equal(html.includes("Completion claim"), true);
   assert.equal(html.includes("Current claim"), true);
   assert.equal(html.includes("Cannot yet claim"), true);
@@ -654,6 +658,18 @@ test("worker setup wizard unlocked json reports github app bootstrap availabilit
   assert.equal(
     body.approvalBoundBootstrapSession.authorityRenewalReadout.renewalScope.id,
     "recompute_from_current_blocked_state"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityRenewalDenialReadout.denialReason.id,
+    "deny_renewal_while_prerequisites_are_missing"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityRenewalDenialReadout.denialBoundary.id,
+    "prerequisite_boundary_before_any_retry_authority"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityRenewalDenialReadout.denialRecovery.id,
+    "restore_prerequisites_then_reissue_fresh_request"
   );
   assert.equal(
     body.approvalBoundBootstrapSession.completionReadout.claimState.id,
@@ -856,6 +872,18 @@ test("worker setup wizard unlocked json does not expose cloudflare bootstrap tok
   assert.equal(
     body.approvalBoundBootstrapSession.authorityRenewalReadout.renewalScope.id,
     "recompute_and_shrink_remaining_write_set"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityRenewalDenialReadout.denialReason.id,
+    "deny_renewal_if_runtime_scope_would_widen_or_repeat_blindly"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityRenewalDenialReadout.denialBoundary.id,
+    "no_reuse_of_stale_runtime_bootstrap_scope"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityRenewalDenialReadout.denialRecovery.id,
+    "recompute_remaining_runtime_scope_before_retry"
   );
   assert.equal(
     body.approvalBoundBootstrapSession.completionReadout.claimState.id,
@@ -1090,6 +1118,18 @@ test("worker setup wizard preview narrows planned write to installation binding 
   assert.equal(
     body.approvalBoundBootstrapSession.authorityRenewalReadout.renewalScope.id,
     "remain_narrowed_to_installation_binding"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityRenewalDenialReadout.denialReason.id,
+    "deny_renewal_if_installation_binding_is_already_resolved"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityRenewalDenialReadout.denialBoundary.id,
+    "no_reopening_completed_installation_scope"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityRenewalDenialReadout.denialRecovery.id,
+    "recompute_from_current_installation_state"
   );
   assert.equal(
     body.approvalBoundBootstrapSession.completionReadout.claimState.id,
