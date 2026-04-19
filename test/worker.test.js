@@ -2313,6 +2313,18 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
     "verified_path_continues_without_current_replay_recovery"
   );
   assert.equal(
+    absorbedBody.approvalBoundBootstrapSession.authorityRequestBindingReadout.bindingTarget.id,
+    "no_current_setup_request_binding_needed"
+  );
+  assert.equal(
+    absorbedBody.approvalBoundBootstrapSession.authorityRequestBindingReadout.bindingDrift.id,
+    "future_generalized_request_binding_is_separate_work"
+  );
+  assert.equal(
+    absorbedBody.approvalBoundBootstrapSession.authorityRequestBindingReadout.bindingRecovery.id,
+    "verified_path_continues_without_current_binding_recovery"
+  );
+  assert.equal(
     absorbedBody.approvalBoundBootstrapSession.serviceConnectionFrictionReadout.github.id,
     "github_connection_completed_without_remaining_transport"
   );

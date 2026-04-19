@@ -5256,7 +5256,8 @@ async function buildApprovalBoundBootstrapSessionStatus({
     }),
     authorityRequestBindingReadout: buildBootstrapSessionAuthorityRequestBindingReadout({
       bootstrapState,
-      preview: effectivePreview
+      preview: effectivePreview,
+      githubAppSetupCheck: effectiveGitHubAppSetupCheck
     }),
     authorityRequestTargetReadout: buildBootstrapSessionAuthorityRequestTargetReadout({
       bootstrapState,
@@ -8179,8 +8180,33 @@ function buildBootstrapSessionAuthorityRequestReplayReadout({
   };
 }
 
-function buildBootstrapSessionAuthorityRequestBindingReadout({ bootstrapState, preview }) {
+function buildBootstrapSessionAuthorityRequestBindingReadout({
+  bootstrapState,
+  preview,
+  githubAppSetupCheck
+}) {
   const plannedWrites = Array.isArray(preview?.plannedWrites) ? preview.plannedWrites : [];
+  const setupState = normalizeText(githubAppSetupCheck?.state) || "unknown";
+
+  if (setupState === "ready") {
+    return {
+      bindingTarget: {
+        id: "no_current_setup_request_binding_needed",
+        summary:
+          "VTDD already absorbed the setup binding it needed for the current path, so no further request binding is required to keep this flow coherent."
+      },
+      bindingDrift: {
+        id: "future_generalized_request_binding_is_separate_work",
+        summary:
+          "Any future generalized request binding belongs to separate bootstrap work, not to the current verified-ready setup path."
+      },
+      bindingRecovery: {
+        id: "verified_path_continues_without_current_binding_recovery",
+        summary:
+          "The verified path continues without a current binding recovery step because the setup-bound request was already consumed and absorbed."
+      }
+    };
+  }
 
   if (bootstrapState !== "available") {
     return {
