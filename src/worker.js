@@ -5286,11 +5286,13 @@ async function buildApprovalBoundBootstrapSessionStatus({
           url,
           githubAppSetupCheck: effectiveGitHubAppSetupCheck
         }),
-    authorityRequestProvenanceReadout: buildBootstrapSessionAuthorityRequestProvenanceReadout({
-      bootstrapState,
-      preview: effectivePreview,
-      githubAppSetupCheck: effectiveGitHubAppSetupCheck
-    }),
+    authorityRequestProvenanceReadout: absorbedLiveProof
+      ? null
+      : buildBootstrapSessionAuthorityRequestProvenanceReadout({
+          bootstrapState,
+          preview: effectivePreview,
+          githubAppSetupCheck: effectiveGitHubAppSetupCheck
+        }),
     completionReadout: buildBootstrapSessionCompletionReadout({
       bootstrapState,
       preview: effectivePreview,
