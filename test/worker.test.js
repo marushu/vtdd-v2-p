@@ -2185,22 +2185,7 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
     absorbedBody.approvalBoundBootstrapSession.providerConnectionReadout.cloudflare.id,
     "cloudflare_runtime_connection_already_bound"
   );
-  assert.equal(
-    absorbedBody.approvalBoundBootstrapSession.serviceConnectionModelReadout.github.id,
-    "github_connection_already_live"
-  );
-  assert.equal(
-    absorbedBody.approvalBoundBootstrapSession.serviceConnectionModelReadout.github.requiredBecause,
-    "VTDD now has proven repository access through GitHub App installation tokens in this setup flow."
-  );
-  assert.equal(
-    absorbedBody.approvalBoundBootstrapSession.serviceConnectionModelReadout.cloudflare.id,
-    "cloudflare_connection_already_live"
-  );
-  assert.equal(
-    absorbedBody.approvalBoundBootstrapSession.serviceConnectionModelReadout.cloudflare.requiredBecause,
-    "VTDD already has the Cloudflare runtime authority needed to hold the verified setup state from this flow."
-  );
+  assert.equal(absorbedBody.approvalBoundBootstrapSession.serviceConnectionModelReadout, null);
   assert.equal(absorbedBody.approvalBoundBootstrapSession.serviceConnectionActionability, null);
   assert.equal(
     absorbedBody.approvalBoundBootstrapSession.authBoundaryReadout.operatorBootstrapAuthority.state,
@@ -2369,6 +2354,7 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
   assert.equal(absorbedHtml.includes("Steps this path is intended to absorb"), false);
   assert.equal(absorbedHtml.includes("Session contract"), false);
   assert.equal(absorbedHtml.includes("Envelope consume result"), false);
+  assert.equal(absorbedHtml.includes("Service connection model"), false);
   assert.equal(absorbedHtml.includes("Service connection actionability"), false);
   assert.equal(absorbedHtml.includes("Service connection friction"), false);
   assert.equal(absorbedHtml.includes("Service connection handoff shape"), false);

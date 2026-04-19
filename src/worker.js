@@ -5463,6 +5463,9 @@ async function buildApprovalBoundBootstrapSessionStatus({
     approvalBoundary: absorbedLiveProof ? null : base.approvalBoundary,
     targetAbsorbs: absorbedLiveProof ? [] : base.targetAbsorbs,
     stepBoundaries: absorbedLiveProof ? null : base.stepBoundaries,
+    serviceConnectionModelReadout: absorbedLiveProof
+      ? null
+      : base.serviceConnectionModelReadout,
     serviceConnectionActionability: absorbedLiveProof
       ? null
       : base.serviceConnectionActionability,
