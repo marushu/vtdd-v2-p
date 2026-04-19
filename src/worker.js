@@ -5517,26 +5517,22 @@ async function buildApprovalBoundBootstrapSessionStatus({
           ])
     ],
     recommendedNextStep,
-    contract: {
-      ...base.contract,
-      preview: {
-        ...base.contract.preview,
-        writeTarget: absorbedLiveProof ? null : base.contract.preview?.writeTarget ?? null,
-        plannedWrites: absorbedLiveProof
-          ? []
-          : Array.isArray(base.contract.preview?.plannedWrites)
-            ? [...base.contract.preview.plannedWrites]
-            : [],
-        postChecks: absorbedLiveProof
-          ? []
-          : Array.isArray(base.contract.preview?.postChecks)
-            ? [...base.contract.preview.postChecks]
-            : [],
-        blockedBy: absorbedLiveProof
-          ? []
-          : ["attestation_backed_bootstrap_authority_not_implemented"]
-      }
-    }
+    contract: absorbedLiveProof
+      ? null
+      : {
+          ...base.contract,
+          preview: {
+            ...base.contract.preview,
+            writeTarget: base.contract.preview?.writeTarget ?? null,
+            plannedWrites: Array.isArray(base.contract.preview?.plannedWrites)
+              ? [...base.contract.preview.plannedWrites]
+              : [],
+            postChecks: Array.isArray(base.contract.preview?.postChecks)
+              ? [...base.contract.preview.postChecks]
+              : [],
+            blockedBy: ["attestation_backed_bootstrap_authority_not_implemented"]
+          }
+        }
   };
 }
 
