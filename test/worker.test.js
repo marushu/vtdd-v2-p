@@ -1118,6 +1118,10 @@ test("worker setup wizard records approval-bound bootstrap request without grant
   assert.equal(html.includes("Preflight gate"), true);
   assert.equal(html.includes("Preflight failure"), true);
   assert.equal(html.includes("Preflight recovery"), true);
+  assert.equal(html.includes("Envelope consume outcome"), true);
+  assert.equal(html.includes("Outcome state"), true);
+  assert.equal(html.includes("Outcome failure"), true);
+  assert.equal(html.includes("Outcome next proof"), true);
 
   const jsonResponse = await worker.fetch(
     new Request(`https://example.com${location}&format=json`, {
@@ -1168,6 +1172,18 @@ test("worker setup wizard records approval-bound bootstrap request without grant
   assert.equal(
     body.approvalBoundBootstrapSession.envelopeConsumePreflight.preflightRecovery.id,
     "recompute_runtime_scope_and_reissue_envelope"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.envelopeConsumeOutcome.outcomeState.id,
+    "deferred_until_attested_runtime_bootstrap_consume_exists"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.envelopeConsumeOutcome.outcomeFailure.id,
+    "future_consume_must_fail_closed_if_runtime_scope_changed"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.envelopeConsumeOutcome.outcomeNextProof.id,
+    "github_app_setup_check"
   );
 });
 

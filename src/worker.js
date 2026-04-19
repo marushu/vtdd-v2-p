@@ -2840,6 +2840,10 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
   const preflightGate = envelopeConsumePreflight?.preflightGate ?? null;
   const preflightFailure = envelopeConsumePreflight?.preflightFailure ?? null;
   const preflightRecovery = envelopeConsumePreflight?.preflightRecovery ?? null;
+  const envelopeConsumeOutcome = session?.envelopeConsumeOutcome ?? null;
+  const outcomeState = envelopeConsumeOutcome?.outcomeState ?? null;
+  const outcomeFailure = envelopeConsumeOutcome?.outcomeFailure ?? null;
+  const outcomeNextProof = envelopeConsumeOutcome?.outcomeNextProof ?? null;
   const completionReadout = session?.completionReadout ?? null;
   const claimState = completionReadout?.claimState ?? null;
   const cannotYetClaim = completionReadout?.cannotYetClaim ?? null;
@@ -3375,6 +3379,30 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
               ${
                 preflightRecovery
                   ? `<p><strong>${escapeHtml(locale === "ja" ? "Preflight recovery" : "Preflight recovery")}:</strong> <code>${escapeHtml(normalizeText(preflightRecovery.id))}</code> ${escapeHtml(normalizeText(preflightRecovery.summary))}</p>`
+                  : ""
+              }
+            </div>
+          `
+          : ""
+      }
+      ${
+        envelopeConsumeOutcome
+          ? `
+            <div class="block" style="margin-top: 12px;">
+              <p><strong>${escapeHtml(locale === "ja" ? "Envelope consume outcome" : "Envelope consume outcome")}:</strong></p>
+              ${
+                outcomeState
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Outcome state" : "Outcome state")}:</strong> <code>${escapeHtml(normalizeText(outcomeState.id))}</code> ${escapeHtml(normalizeText(outcomeState.summary))}</p>`
+                  : ""
+              }
+              ${
+                outcomeFailure
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Outcome failure" : "Outcome failure")}:</strong> <code>${escapeHtml(normalizeText(outcomeFailure.id))}</code> ${escapeHtml(normalizeText(outcomeFailure.summary))}</p>`
+                  : ""
+              }
+              ${
+                outcomeNextProof
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Outcome next proof" : "Outcome next proof")}:</strong> <code>${escapeHtml(normalizeText(outcomeNextProof.id))}</code> ${escapeHtml(normalizeText(outcomeNextProof.summary))}</p>`
                   : ""
               }
             </div>
@@ -4271,6 +4299,7 @@ async function buildApprovalBoundBootstrapSessionStatus({
         : null,
     envelopeConsumptionPlan: null,
     envelopeConsumePreflight: null,
+    envelopeConsumeOutcome: null,
     requestPath: SETUP_WIZARD_APPROVAL_BOUND_BOOTSTRAP_SESSION_REQUEST_PATH,
     requestEnabled: true,
     returnTo: `${url?.pathname || "/setup/wizard"}${url?.search || ""}`,
@@ -4405,6 +4434,12 @@ async function buildApprovalBoundBootstrapSessionStatus({
       : null,
     envelopeConsumePreflight: requestRecorded
       ? buildBootstrapSessionEnvelopeConsumePreflight({
+          bootstrapState,
+          preview
+        })
+      : null,
+    envelopeConsumeOutcome: requestRecorded
+      ? buildBootstrapSessionEnvelopeConsumeOutcome({
           bootstrapState,
           preview
         })
@@ -4623,6 +4658,89 @@ function buildBootstrapSessionEnvelopeConsumePreflight({ bootstrapState, preview
       id: "recompute_verification_scope_and_reissue_envelope",
       summary:
         "Recovery is to recompute the current remaining verification scope and issue a fresh envelope only for that path."
+    }
+  };
+}
+
+function buildBootstrapSessionEnvelopeConsumeOutcome({ bootstrapState, preview }) {
+  const plannedWrites = Array.isArray(preview?.plannedWrites) ? preview.plannedWrites : [];
+  const postChecks = Array.isArray(preview?.postChecks) ? preview.postChecks : [];
+
+  if (bootstrapState !== "available") {
+    return {
+      outcomeState: {
+        id: "blocked_until_prerequisite_consume_path_exists",
+        summary:
+          "Any consume outcome stays blocked until the prerequisite baseline exists and a real consume path can run."
+      },
+      outcomeFailure: {
+        id: "consume_would_fail_closed_on_missing_prerequisites",
+        summary:
+          "If consume were attempted in this state, it should fail closed because the prerequisite baseline is not present."
+      },
+      outcomeNextProof: {
+        id: "proof_of_restored_prerequisites_before_consume",
+        summary:
+          "The next proof would be evidence that prerequisites were restored before a fresh consume attempt was allowed."
+      }
+    };
+  }
+
+  if (plannedWrites.length === 1 && plannedWrites[0] === "GITHUB_APP_INSTALLATION_ID") {
+    return {
+      outcomeState: {
+        id: "deferred_until_attested_installation_binding_consume_exists",
+        summary:
+          "The consume outcome is still deferred until VTDD has an attested way to spend the envelope on the single installation-binding step."
+      },
+      outcomeFailure: {
+        id: "future_consume_must_fail_closed_if_installation_gap_changed",
+        summary:
+          "A future consume attempt must fail closed if the installation-binding gap changed before the envelope was spent."
+      },
+      outcomeNextProof: {
+        id: postChecks.join("_then_") || "installation_binding_consume_proof_missing",
+        summary:
+          "The next proof would be the planned installation follow-up checks succeeding after one attested consume."
+      }
+    };
+  }
+
+  if (plannedWrites.length > 1) {
+    return {
+      outcomeState: {
+        id: "deferred_until_attested_runtime_bootstrap_consume_exists",
+        summary:
+          "The consume outcome is still deferred until VTDD has an attested way to spend the envelope on the current bounded runtime write set."
+      },
+      outcomeFailure: {
+        id: "future_consume_must_fail_closed_if_runtime_scope_changed",
+        summary:
+          "A future consume attempt must fail closed if the bounded runtime scope changed before the envelope was spent."
+      },
+      outcomeNextProof: {
+        id: postChecks.join("_then_") || "runtime_bootstrap_consume_proof_missing",
+        summary:
+          "The next proof would be the planned post-write checks succeeding after one attested consume of the bounded write set."
+      }
+    };
+  }
+
+  return {
+    outcomeState: {
+      id: "deferred_until_attested_verification_consume_exists",
+      summary:
+        "The consume outcome is still deferred until VTDD has an attested way to spend the envelope on the remaining verification-bound path."
+    },
+    outcomeFailure: {
+      id: "future_consume_must_fail_closed_if_verification_scope_reopens",
+      summary:
+        "A future consume attempt must fail closed if the verification path reopens bootstrap write scope."
+    },
+    outcomeNextProof: {
+      id: postChecks.join("_then_") || "verification_consume_proof_missing",
+      summary:
+        "The next proof would be the remaining verification checks succeeding after one attested consume."
     }
   };
 }
