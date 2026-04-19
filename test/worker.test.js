@@ -459,6 +459,10 @@ test("worker setup wizard unlocked html shows narrow github app bootstrap form w
   assert.equal(html.includes("Expiry trigger"), true);
   assert.equal(html.includes("Expiry window"), true);
   assert.equal(html.includes("Expiry after use"), true);
+  assert.equal(html.includes("Authority renewal"), true);
+  assert.equal(html.includes("Renewal trigger"), true);
+  assert.equal(html.includes("Renewal gate"), true);
+  assert.equal(html.includes("Renewal scope"), true);
   assert.equal(html.includes("Completion claim"), true);
   assert.equal(html.includes("Current claim"), true);
   assert.equal(html.includes("Cannot yet claim"), true);
@@ -638,6 +642,18 @@ test("worker setup wizard unlocked json reports github app bootstrap availabilit
   assert.equal(
     body.approvalBoundBootstrapSession.authorityExpiryReadout.expiryAfterUse.id,
     "future_single_use_expiry_reserved"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityRenewalReadout.renewalTrigger.id,
+    "no_renewal_until_prerequisites_restored"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityRenewalReadout.renewalGate.id,
+    "fresh_go_passkey_required_after_block"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityRenewalReadout.renewalScope.id,
+    "recompute_from_current_blocked_state"
   );
   assert.equal(
     body.approvalBoundBootstrapSession.completionReadout.claimState.id,
@@ -828,6 +844,18 @@ test("worker setup wizard unlocked json does not expose cloudflare bootstrap tok
   assert.equal(
     body.approvalBoundBootstrapSession.authorityExpiryReadout.expiryAfterUse.id,
     "expire_after_one_bounded_write_trace"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityRenewalReadout.renewalTrigger.id,
+    "renew_only_if_runtime_identity_still_incomplete"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityRenewalReadout.renewalGate.id,
+    "fresh_go_passkey_plus_current_runtime_state"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityRenewalReadout.renewalScope.id,
+    "recompute_and_shrink_remaining_write_set"
   );
   assert.equal(
     body.approvalBoundBootstrapSession.completionReadout.claimState.id,
@@ -1050,6 +1078,18 @@ test("worker setup wizard preview narrows planned write to installation binding 
   assert.equal(
     body.approvalBoundBootstrapSession.authorityExpiryReadout.expiryAfterUse.id,
     "expire_after_one_installation_binding_use"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityRenewalReadout.renewalTrigger.id,
+    "renew_only_if_installation_binding_still_missing"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityRenewalReadout.renewalGate.id,
+    "fresh_go_passkey_plus_current_installation_context"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityRenewalReadout.renewalScope.id,
+    "remain_narrowed_to_installation_binding"
   );
   assert.equal(
     body.approvalBoundBootstrapSession.completionReadout.claimState.id,

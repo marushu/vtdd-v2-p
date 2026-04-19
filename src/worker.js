@@ -2740,6 +2740,10 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
   const expiryTrigger = authorityExpiryReadout?.expiryTrigger ?? null;
   const expiryWindow = authorityExpiryReadout?.expiryWindow ?? null;
   const expiryAfterUse = authorityExpiryReadout?.expiryAfterUse ?? null;
+  const authorityRenewalReadout = session?.authorityRenewalReadout ?? null;
+  const renewalTrigger = authorityRenewalReadout?.renewalTrigger ?? null;
+  const renewalGate = authorityRenewalReadout?.renewalGate ?? null;
+  const renewalScope = authorityRenewalReadout?.renewalScope ?? null;
   const completionReadout = session?.completionReadout ?? null;
   const claimState = completionReadout?.claimState ?? null;
   const cannotYetClaim = completionReadout?.cannotYetClaim ?? null;
@@ -3025,6 +3029,30 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
               ${
                 expiryAfterUse
                   ? `<p><strong>${escapeHtml(locale === "ja" ? "Expiry after use" : "Expiry after use")}:</strong> <code>${escapeHtml(normalizeText(expiryAfterUse.id))}</code> ${escapeHtml(normalizeText(expiryAfterUse.summary))}</p>`
+                  : ""
+              }
+            </div>
+          `
+          : ""
+      }
+      ${
+        authorityRenewalReadout
+          ? `
+            <div class="block" style="margin-top: 12px;">
+              <p><strong>${escapeHtml(locale === "ja" ? "Authority renewal" : "Authority renewal")}:</strong></p>
+              ${
+                renewalTrigger
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Renewal trigger" : "Renewal trigger")}:</strong> <code>${escapeHtml(normalizeText(renewalTrigger.id))}</code> ${escapeHtml(normalizeText(renewalTrigger.summary))}</p>`
+                  : ""
+              }
+              ${
+                renewalGate
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Renewal gate" : "Renewal gate")}:</strong> <code>${escapeHtml(normalizeText(renewalGate.id))}</code> ${escapeHtml(normalizeText(renewalGate.summary))}</p>`
+                  : ""
+              }
+              ${
+                renewalScope
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Renewal scope" : "Renewal scope")}:</strong> <code>${escapeHtml(normalizeText(renewalScope.id))}</code> ${escapeHtml(normalizeText(renewalScope.summary))}</p>`
                   : ""
               }
             </div>
@@ -3852,6 +3880,10 @@ async function buildApprovalBoundBootstrapSessionStatus({
       bootstrapState,
       preview,
       maxAgeSeconds: SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_TTL_SECONDS
+    }),
+    authorityRenewalReadout: buildBootstrapSessionAuthorityRenewalReadout({
+      bootstrapState,
+      preview
     }),
     completionReadout: buildBootstrapSessionCompletionReadout({
       bootstrapState,
@@ -4872,6 +4904,88 @@ function buildBootstrapSessionAuthorityExpiryReadout({
       summary:
         "Any future session should still expire after one verification-bound use rather than remain reusable."
     }
+  };
+}
+
+function buildBootstrapSessionAuthorityRenewalReadout({ bootstrapState, preview }) {
+  const plannedWrites = Array.isArray(preview?.plannedWrites) ? preview.plannedWrites : [];
+
+  if (bootstrapState !== "available") {
+    return {
+      renewalTrigger: {
+        id: "no_renewal_until_prerequisites_restored",
+        summary:
+          "VTDD should not even consider renewing a bootstrap session until the operator bootstrap prerequisites are restored."
+      },
+      renewalGate: {
+        id: "fresh_go_passkey_required_after_block",
+        summary:
+          "Any future retry still needs a fresh GO + passkey-shaped request after the blocking prerequisite state is resolved."
+      },
+      renewalScope: {
+        id: "recompute_from_current_blocked_state",
+        summary:
+          "When renewal becomes possible, VTDD should recompute the bounded scope from the current runtime state instead of replaying stale write intent."
+      }
+    };
+  }
+
+  if (plannedWrites.length === 1 && plannedWrites[0] === "GITHUB_APP_INSTALLATION_ID") {
+    return {
+      renewalTrigger: {
+        id: "renew_only_if_installation_binding_still_missing",
+        summary:
+          "A new session should only be requested if installation binding is still genuinely missing after the previous bounded attempt expires."
+      },
+      renewalGate: {
+        id: "fresh_go_passkey_plus_current_installation_context",
+        summary:
+          "Renewal still requires a fresh GO + passkey approval and current installation context rather than blindly replaying the old session."
+      },
+      renewalScope: {
+        id: "remain_narrowed_to_installation_binding",
+        summary:
+          "Any renewed authority must stay narrowed to the single remaining installation-binding step and must not widen back to broader bootstrap scope."
+      }
+    };
+  }
+
+  if (plannedWrites.length > 1) {
+    return {
+      renewalTrigger: {
+        id: "renew_only_if_runtime_identity_still_incomplete",
+        summary:
+          "A new session should only be requested if the runtime identity is still incomplete after the prior bounded attempt has expired."
+      },
+      renewalGate: {
+        id: "fresh_go_passkey_plus_current_runtime_state",
+        summary:
+          "Renewal still requires a fresh GO + passkey approval tied to the current runtime state, not reuse of an earlier bootstrap approval."
+      },
+      renewalScope: {
+        id: "recompute_and_shrink_remaining_write_set",
+        summary:
+          "Any renewed authority must recalculate the remaining write set and shrink if some runtime fields were already stored."
+      }
+    };
+  }
+
+  return {
+    renewalTrigger: {
+      id: "renew_only_for_remaining_verification_need",
+      summary:
+        "A new session should only be considered if the remaining blocked work is still the verification-bound step rather than another bootstrap write."
+    },
+    renewalGate: {
+      id: "fresh_go_passkey_before_verification_bound_retry",
+      summary:
+        "Any future retry still requires a fresh GO + passkey approval instead of keeping a reusable verification session alive."
+    },
+    renewalScope: {
+      id: "remain_verification_bound_without_reopening_write_scope",
+      summary:
+        "Renewal must stay verification-bound and must not reopen setup-critical write scope once configuration is already present."
+      }
   };
 }
 
