@@ -415,6 +415,9 @@ test("worker setup wizard unlocked html shows narrow github app bootstrap form w
   assert.equal(response.status, 200);
   const html = await response.text();
   assert.equal(html.includes("GitHub App Runtime Bootstrap"), true);
+  assert.equal(html.includes("Approval-Bound Bootstrap Session"), true);
+  assert.equal(html.includes("GO + passkey"), true);
+  assert.equal(html.includes("github_app_installation_binding"), true);
   assert.equal(html.includes('action="/setup/wizard/github-app/bootstrap"'), true);
   assert.equal(html.includes('action="https://github.com/settings/apps/new"'), true);
   assert.equal(html.includes("&quot;hook_attributes&quot;"), true);
@@ -443,6 +446,12 @@ test("worker setup wizard unlocked json reports github app bootstrap availabilit
   assert.equal(response.status, 200);
   const body = await response.json();
   assert.equal(body.githubAppBootstrap.state, "missing_prerequisites");
+  assert.equal(body.approvalBoundBootstrapSession.state, "blocked_by_operator_prerequisites");
+  assert.equal(body.approvalBoundBootstrapSession.approvalBoundary, "GO + passkey");
+  assert.equal(
+    body.approvalBoundBootstrapSession.targetAbsorbs.includes("allowlisted_runtime_secret_write"),
+    true
+  );
   assert.deepEqual(body.githubAppBootstrap.allowlistedSecrets, [
     "GITHUB_APP_ID",
     "GITHUB_APP_INSTALLATION_ID",
@@ -480,6 +489,7 @@ test("worker setup wizard unlocked json does not expose cloudflare bootstrap tok
   assert.equal(response.status, 200);
   const body = await response.json();
   assert.equal(body.githubAppBootstrap.state, "available");
+  assert.equal(body.approvalBoundBootstrapSession.state, "deferred");
   assert.equal(body.githubAppBootstrap.accountId, "account-id");
   assert.equal("cloudflareApiToken" in body.githubAppBootstrap, false);
   assert.equal("githubManifestConversionToken" in body.githubAppBootstrap, false);

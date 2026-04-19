@@ -214,6 +214,10 @@ async function handleSetupWizardRequest({ request, url, env }) {
   const githubAppSetupCheck = await runGitHubAppSetupCheck(url, env);
   const githubAppBootstrapInternal = buildGitHubAppBootstrapStatus({ url, env });
   const githubAppBootstrap = toPublicGitHubAppBootstrapStatus(githubAppBootstrapInternal);
+  const approvalBoundBootstrapSession = buildApprovalBoundBootstrapSessionStatus({
+    env,
+    githubAppBootstrap
+  });
   const format = normalize(url.searchParams.get("format"));
   const guidance = buildSetupWizardGuidance({ result, url });
   const enrichedResult = await attachSetupWizardImportUrls({ result, url, env });
@@ -228,6 +232,7 @@ async function handleSetupWizardRequest({ request, url, env }) {
         cloudflareSetupCheck,
         githubAppSetupCheck,
         githubAppBootstrap,
+        approvalBoundBootstrapSession,
         guidance
       });
     }
@@ -245,6 +250,7 @@ async function handleSetupWizardRequest({ request, url, env }) {
       cloudflareSetupCheck,
       githubAppSetupCheck,
       githubAppBootstrap,
+      approvalBoundBootstrapSession,
       guidance
     });
   }
@@ -256,7 +262,8 @@ async function handleSetupWizardRequest({ request, url, env }) {
     locale,
     cloudflareSetupCheck,
     githubAppSetupCheck,
-    githubAppBootstrap
+    githubAppBootstrap,
+    approvalBoundBootstrapSession
   });
   return html(result.ok ? 200 : 422, htmlBody);
 }
@@ -1488,7 +1495,8 @@ function renderSetupWizardHtml({
   locale = "en",
   cloudflareSetupCheck,
   githubAppSetupCheck,
-  githubAppBootstrap
+  githubAppBootstrap,
+  approvalBoundBootstrapSession
 }) {
   const pageTitle = locale === "ja" ? "VTDD セットアップウィザード" : "VTDD Setup Wizard";
   const copiedText = locale === "ja" ? "コピーしました。" : "Copied.";
@@ -1502,7 +1510,8 @@ function renderSetupWizardHtml({
         locale,
         cloudflareSetupCheck,
         githubAppSetupCheck,
-        githubAppBootstrap
+        githubAppBootstrap,
+        approvalBoundBootstrapSession
       )
     : renderFailureContent(
         result,
@@ -1511,7 +1520,8 @@ function renderSetupWizardHtml({
         locale,
         cloudflareSetupCheck,
         githubAppSetupCheck,
-        githubAppBootstrap
+        githubAppBootstrap,
+        approvalBoundBootstrapSession
       );
 
   return renderHtmlDocument(body, {
@@ -1703,7 +1713,8 @@ function renderSuccessContent(
   locale = "en",
   cloudflareSetupCheck,
   githubAppSetupCheck,
-  githubAppBootstrap
+  githubAppBootstrap,
+  approvalBoundBootstrapSession
 ) {
   const onboarding = result.onboarding ?? {};
   const customGpt = onboarding.customGpt ?? {};
@@ -1838,11 +1849,12 @@ function renderSuccessContent(
       <button class="copy-button" type="button" data-copy-target="actionSchemaImportUrl">${escapeHtml(copyImportLabel)}</button>
     </div>
     <textarea id="actionSchemaImportUrl" readonly>${escapeHtml(actionSchemaImportUrl)}</textarea>
-    <p class="copy-hint" data-copy-status="actionSchemaImportUrl">${escapeHtml(importHint)}</p>
+      <p class="copy-hint" data-copy-status="actionSchemaImportUrl">${escapeHtml(importHint)}</p>
       <textarea id="actionSchemaJson" readonly>${escapeHtml(actionSchemaJson)}</textarea>
       <p class="copy-hint" data-copy-status="actionSchemaJson">${escapeHtml(schemaHint)}</p>
       ${renderGitHubAppSetupCheck(githubAppSetupCheck, locale)}
       ${renderGitHubAppBootstrap(githubAppBootstrap, url, locale)}
+      ${renderApprovalBoundBootstrapSession(approvalBoundBootstrapSession, locale)}
       ${renderCloudflareSetupCheck(cloudflareSetupCheck, locale)}
       <p class="meta">${escapeHtml(operatorManagedNote)}</p>
     `;
@@ -2211,7 +2223,8 @@ function renderFailureContent(
   locale = "en",
   cloudflareSetupCheck,
   githubAppSetupCheck,
-  githubAppBootstrap
+  githubAppBootstrap,
+  approvalBoundBootstrapSession
 ) {
   const issues = Array.isArray(result.blockingIssues) ? result.blockingIssues : [];
   const issueItems = issues.map((item) => `<li>${escapeHtml(item)}</li>`).join("");
@@ -2231,6 +2244,7 @@ function renderFailureContent(
       }
       ${renderGitHubAppSetupCheck(githubAppSetupCheck, locale)}
       ${renderGitHubAppBootstrap(githubAppBootstrap, url, locale)}
+      ${renderApprovalBoundBootstrapSession(approvalBoundBootstrapSession, locale)}
       ${renderCloudflareSetupCheck(cloudflareSetupCheck, locale)}
       <h2>${escapeHtml(locale === "ja" ? "デバッグ（安全な回答のみ）" : "Debug (safe answers only)")}</h2>
       <textarea readonly>${escapeHtml(JSON.stringify(answers, null, 2))}</textarea>
@@ -2492,6 +2506,47 @@ function renderGitHubAppBootstrap(bootstrap, url, locale = "en") {
               </div>
             </form>
           `
+          : ""
+      }
+    </div>
+  `;
+}
+
+function renderApprovalBoundBootstrapSession(session, locale = "en") {
+  const state = normalizeText(session?.state) || "deferred";
+  const summary =
+    normalizeText(session?.summary) ||
+    "Approval-bound bootstrap session status is not available.";
+  const guidance = Array.isArray(session?.guidance) ? session.guidance : [];
+  const targetAbsorbs = Array.isArray(session?.targetAbsorbs) ? session.targetAbsorbs : [];
+  const approvalBoundary = normalizeText(session?.approvalBoundary);
+  const checkedAt = normalizeText(session?.checkedAt);
+
+  return `
+    <h2>${escapeHtml(locale === "ja" ? "承認境界つき Bootstrap Session" : "Approval-Bound Bootstrap Session")}</h2>
+    <div class="block">
+      <p><strong>state:</strong> <code>${escapeHtml(state)}</code></p>
+      <p>${escapeHtml(summary)}</p>
+      ${
+        approvalBoundary
+          ? `<p><strong>${escapeHtml(locale === "ja" ? "Approval boundary" : "Approval boundary")}:</strong> <code>${escapeHtml(approvalBoundary)}</code></p>`
+          : ""
+      }
+      ${
+        targetAbsorbs.length > 0
+          ? `<p><strong>${escapeHtml(locale === "ja" ? "この path が吸収したい step" : "Steps this path is intended to absorb")}:</strong> ${targetAbsorbs
+              .map((item) => `<code>${escapeHtml(item)}</code>`)
+              .join(", ")}</p>`
+          : ""
+      }
+      ${
+        guidance.length > 0
+          ? `<ul>${guidance.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`
+          : ""
+      }
+      ${
+        checkedAt
+          ? `<p class="meta">checkedAt: <code>${escapeHtml(checkedAt)}</code></p>`
           : ""
       }
     </div>
@@ -3069,6 +3124,63 @@ function buildGitHubAppBootstrapStatus({ url, env }) {
     accountId,
     cloudflareApiToken,
     githubManifestConversionToken
+  };
+}
+
+function buildApprovalBoundBootstrapSessionStatus({ env, githubAppBootstrap }) {
+  const authConfig = getSetupWizardAuthConfig(env);
+  const bootstrapState = normalizeText(githubAppBootstrap?.state) || "missing_prerequisites";
+  const missingPrerequisites = Array.isArray(githubAppBootstrap?.missingPrerequisites)
+    ? githubAppBootstrap.missingPrerequisites
+    : [];
+  const base = {
+    approvalBoundary: "GO + passkey",
+    targetAbsorbs: [
+      "github_app_installation_binding",
+      "allowlisted_runtime_secret_write",
+      "post_write_readiness_verification"
+    ],
+    checkedAt: new Date().toISOString()
+  };
+
+  if (!authConfig.enabled) {
+    return {
+      ...base,
+      state: "blocked_by_entry_boundary",
+      summary:
+        "VTDD does not expose the approval-bound bootstrap session because setup wizard entry protection is not configured yet.",
+      guidance: [
+        "Configure setup wizard passcode/session protection before exposing a privileged bootstrap path.",
+        "Do not replace the missing boundary with an open secret write form."
+      ]
+    };
+  }
+
+  if (bootstrapState !== "available") {
+    return {
+      ...base,
+      state: "blocked_by_operator_prerequisites",
+      summary:
+        "VTDD does not expose the approval-bound bootstrap session yet because the current runtime is still missing operator-seeded bootstrap prerequisites.",
+      guidance: [
+        "Current setup can explain the future path, but it cannot safely absorb the bounded write step yet.",
+        missingPrerequisites.length > 0
+          ? `Current missing prerequisites: ${missingPrerequisites.join(", ")}.`
+          : "Re-check Cloudflare bootstrap prerequisites before enabling a privileged setup path."
+      ]
+    };
+  }
+
+  return {
+    ...base,
+    state: "deferred",
+    summary:
+      "VTDD has the operator-seeded baseline needed for a future approval-bound bootstrap session, but the session itself is still intentionally deferred.",
+    guidance: [
+      "Current live setup still uses the bounded GitHub App bootstrap path plus operator-managed Cloudflare authority.",
+      "The future approval-bound session should absorb setup-critical transport without becoming a generic secret terminal.",
+      "Do not present setup as wizard-complete until this path is implemented and verified."
+    ]
   };
 }
 
