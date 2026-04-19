@@ -5264,11 +5264,13 @@ async function buildApprovalBoundBootstrapSessionStatus({
           maxAgeSeconds: SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_TTL_SECONDS,
           githubAppSetupCheck: effectiveGitHubAppSetupCheck
         }),
-    authorityRequestReplayReadout: buildBootstrapSessionAuthorityRequestReplayReadout({
-      bootstrapState,
-      preview: effectivePreview,
-      githubAppSetupCheck: effectiveGitHubAppSetupCheck
-    }),
+    authorityRequestReplayReadout: absorbedLiveProof
+      ? null
+      : buildBootstrapSessionAuthorityRequestReplayReadout({
+          bootstrapState,
+          preview: effectivePreview,
+          githubAppSetupCheck: effectiveGitHubAppSetupCheck
+        }),
     authorityRequestBindingReadout: buildBootstrapSessionAuthorityRequestBindingReadout({
       bootstrapState,
       preview: effectivePreview,
