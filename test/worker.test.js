@@ -460,6 +460,11 @@ test("worker setup wizard unlocked json reports github app bootstrap availabilit
   assert.equal(body.approvalBoundBootstrapSession.contract.sessionMode, "approval_bound_one_time_bootstrap");
   assert.equal(body.approvalBoundBootstrapSession.contract.singleUse, true);
   assert.equal(body.approvalBoundBootstrapSession.contract.maxAgeSeconds, 300);
+  assert.equal(body.approvalBoundBootstrapSession.recommendedNextStep.id, "restore_operator_bootstrap_prerequisites");
+  assert.equal(
+    body.approvalBoundBootstrapSession.recommendedNextStep.action,
+    "configure_cloudflare_bootstrap_prerequisites"
+  );
   assert.deepEqual(body.approvalBoundBootstrapSession.contract.allowlistedSecrets, [
     "GITHUB_APP_ID",
     "GITHUB_APP_INSTALLATION_ID",
@@ -523,6 +528,7 @@ test("worker setup wizard unlocked json does not expose cloudflare bootstrap tok
   const body = await response.json();
   assert.equal(body.githubAppBootstrap.state, "available");
   assert.equal(body.approvalBoundBootstrapSession.state, "deferred");
+  assert.equal(body.approvalBoundBootstrapSession.recommendedNextStep.id, "complete_github_app_bootstrap");
   assert.equal(
     body.approvalBoundBootstrapSession.contract.preview.writeTarget,
     "cloudflare:account-id/workers/scripts/vtdd-v2-mvp/secrets"
@@ -618,6 +624,10 @@ test("worker setup wizard preview narrows planned write to installation binding 
 
   assert.equal(response.status, 200);
   const body = await response.json();
+  assert.equal(
+    body.approvalBoundBootstrapSession.recommendedNextStep.id,
+    "capture_or_detect_installation_binding"
+  );
   assert.deepEqual(body.approvalBoundBootstrapSession.contract.preview.plannedWrites, [
     "GITHUB_APP_INSTALLATION_ID"
   ]);

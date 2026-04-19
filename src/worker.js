@@ -2692,6 +2692,10 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
   const plannedWrites = Array.isArray(preview?.plannedWrites) ? preview.plannedWrites : [];
   const postChecks = Array.isArray(preview?.postChecks) ? preview.postChecks : [];
   const blockedBy = Array.isArray(preview?.blockedBy) ? preview.blockedBy : [];
+  const recommendedNextStep = session?.recommendedNextStep ?? null;
+  const nextStepId = normalizeText(recommendedNextStep?.id);
+  const nextStepSummary = normalizeText(recommendedNextStep?.summary);
+  const nextStepAction = normalizeText(recommendedNextStep?.action);
 
   return `
     <h2>${escapeHtml(locale === "ja" ? "承認境界つき Bootstrap Session" : "Approval-Bound Bootstrap Session")}</h2>
@@ -2713,6 +2717,30 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
       ${
         guidance.length > 0
           ? `<ul>${guidance.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`
+          : ""
+      }
+      ${
+        recommendedNextStep
+          ? `
+            <div class="block" style="margin-top: 12px;">
+              <p><strong>${escapeHtml(locale === "ja" ? "Recommended next step" : "Recommended next step")}:</strong></p>
+              ${
+                nextStepId
+                  ? `<p><code>${escapeHtml(nextStepId)}</code></p>`
+                  : ""
+              }
+              ${
+                nextStepSummary
+                  ? `<p>${escapeHtml(nextStepSummary)}</p>`
+                  : ""
+              }
+              ${
+                nextStepAction
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Action" : "Action")}:</strong> <code>${escapeHtml(nextStepAction)}</code></p>`
+                  : ""
+              }
+            </div>
+          `
           : ""
       }
       ${
@@ -3434,6 +3462,7 @@ async function buildApprovalBoundBootstrapSessionStatus({
     requestPath: SETUP_WIZARD_APPROVAL_BOUND_BOOTSTRAP_SESSION_REQUEST_PATH,
     requestEnabled: true,
     returnTo: `${url?.pathname || "/setup/wizard"}${url?.search || ""}`,
+    recommendedNextStep: null,
     checkedAt: new Date().toISOString()
   };
 
@@ -3447,6 +3476,12 @@ async function buildApprovalBoundBootstrapSessionStatus({
         "This path does not open a privileged session unless the request shape matches GO + passkey.",
         "Current setup still does not mint short-lived bootstrap authority from this request."
       ],
+      recommendedNextStep: {
+        id: "repeat_go_passkey_request",
+        summary:
+          "Submit the bootstrap session request again only after the wizard can carry a valid GO + passkey-shaped request.",
+        action: "record_go_passkey_request"
+      },
       contract: {
         ...base.contract,
         preview: {
@@ -3466,11 +3501,37 @@ async function buildApprovalBoundBootstrapSessionStatus({
       guidance: [
         "Configure setup wizard passcode/session protection before exposing a privileged bootstrap path.",
         "Do not replace the missing boundary with an open secret write form."
-      ]
+      ],
+      recommendedNextStep: {
+        id: "configure_setup_wizard_entry_boundary",
+        summary:
+          "Restore the setup wizard entry boundary first so VTDD can safely expose any future privileged bootstrap path.",
+        action: "configure_setup_wizard_passcode_session"
+      }
     };
   }
 
   if (bootstrapState !== "available") {
+    const missingSet = new Set(missingPrerequisites);
+    let recommendedNextStep = {
+      id: "restore_operator_bootstrap_prerequisites",
+      summary:
+        "Restore the operator-seeded Cloudflare bootstrap prerequisites before trying to open any approval-bound bootstrap session.",
+      action: "configure_cloudflare_bootstrap_prerequisites"
+    };
+
+    if (
+      missingSet.has("GITHUB_MANIFEST_CONVERSION_TOKEN") &&
+      missingPrerequisites.length === 1
+    ) {
+      recommendedNextStep = {
+        id: "restore_manifest_conversion_token",
+        summary:
+          "Restore the operator-managed manifest conversion token so VTDD can continue GitHub App bootstrap from wizard.",
+        action: "set_github_manifest_conversion_token"
+      };
+    }
+
     return {
       ...base,
       state: requestRecorded
@@ -3488,6 +3549,7 @@ async function buildApprovalBoundBootstrapSessionStatus({
           ? `Current missing prerequisites: ${missingPrerequisites.join(", ")}.`
           : "Re-check Cloudflare bootstrap prerequisites before enabling a privileged setup path."
       ],
+      recommendedNextStep,
       contract: {
         ...base.contract,
         preview: {
@@ -3495,6 +3557,29 @@ async function buildApprovalBoundBootstrapSessionStatus({
           blockedBy: missingPrerequisites
         }
       }
+    };
+  }
+
+  let recommendedNextStep = {
+    id: "wait_for_attestation_backed_bootstrap_authority",
+    summary:
+      "The runtime is ready for a future approval-bound bootstrap session, but VTDD still needs attestation-backed bootstrap authority before it can open one.",
+    action: "implement_attestation_backed_bootstrap_authority"
+  };
+
+  if (preview.plannedWrites.length === 1 && preview.plannedWrites[0] === "GITHUB_APP_INSTALLATION_ID") {
+    recommendedNextStep = {
+      id: "capture_or_detect_installation_binding",
+      summary:
+        "Finish installation binding first so VTDD can narrow the future approval-bound bootstrap session to the remaining installation step.",
+      action: "capture_installation_binding"
+    };
+  } else if (preview.plannedWrites.length > 1) {
+    recommendedNextStep = {
+      id: "complete_github_app_bootstrap",
+      summary:
+        "Complete the current GitHub App bootstrap path first so the future approval-bound session can shrink to the minimum remaining write set.",
+      action: "write_missing_github_app_runtime_fields"
     };
   }
 
@@ -3512,6 +3597,7 @@ async function buildApprovalBoundBootstrapSessionStatus({
       "The future approval-bound session should absorb setup-critical transport without becoming a generic secret terminal.",
       "Do not present setup as wizard-complete until this path is implemented and verified."
     ],
+    recommendedNextStep,
     contract: {
       ...base.contract,
       preview: {
