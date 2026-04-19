@@ -2177,8 +2177,16 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
     "github_connection_already_live"
   );
   assert.equal(
+    absorbedBody.approvalBoundBootstrapSession.serviceConnectionModelReadout.github.requiredBecause,
+    "VTDD now has proven repository access through GitHub App installation tokens in this setup flow."
+  );
+  assert.equal(
     absorbedBody.approvalBoundBootstrapSession.serviceConnectionModelReadout.cloudflare.id,
     "cloudflare_connection_already_live"
+  );
+  assert.equal(
+    absorbedBody.approvalBoundBootstrapSession.serviceConnectionModelReadout.cloudflare.requiredBecause,
+    "VTDD already has the Cloudflare runtime authority needed to hold the verified setup state from this flow."
   );
   assert.equal(
     absorbedBody.approvalBoundBootstrapSession.serviceConnectionActionability.github.id,

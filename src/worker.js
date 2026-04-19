@@ -6596,7 +6596,7 @@ function buildBootstrapSessionServiceConnectionModelReadout({
         id: "github_connection_already_live",
         connectionType: "verified_provider_connection",
         requiredBecause:
-          "VTDD needs proven repository access through GitHub App installation tokens before setup can claim GitHub-ready state.",
+          "VTDD now has proven repository access through GitHub App installation tokens in this setup flow.",
         summary:
           "GitHub connection is already proven live, so no additional login or consent step is currently needed."
       },
@@ -6604,7 +6604,7 @@ function buildBootstrapSessionServiceConnectionModelReadout({
         id: "cloudflare_connection_already_live",
         connectionType: "verified_runtime_authority",
         requiredBecause:
-          "VTDD needs Cloudflare runtime authority to hold the live setup state it just proved.",
+          "VTDD already has the Cloudflare runtime authority needed to hold the verified setup state from this flow.",
         summary:
           "Cloudflare runtime authority is already present and bound for this setup path."
       }
