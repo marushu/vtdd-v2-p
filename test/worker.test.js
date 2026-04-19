@@ -1612,6 +1612,8 @@ test("worker setup wizard consume can complete a single detected installation bi
     statusBody.githubAppSetupCheck.completeDetectedInstallationAction.envelopeToken,
     envelopeToken
   );
+  assert.equal(statusBody.approvalBoundBootstrapSession.consumeEnabled, true);
+  assert.equal(statusBody.approvalBoundBootstrapSession.consumeSurfacedInline, true);
 
   const consumeResponse = await worker.fetch(
     new Request("https://example.com/setup/wizard/bootstrap-session/consume", {

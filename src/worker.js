@@ -266,8 +266,12 @@ async function handleSetupWizardRequest({ request, url, env }) {
     githubAppSetupCheck: githubAppSetupCheckWithRequest,
     approvalBoundBootstrapSession
   });
-  const approvalBoundBootstrapSessionForResponse = attachInlineRequestSurfaceHint({
+  const approvalBoundBootstrapSessionWithInlineRequest = attachInlineRequestSurfaceHint({
     approvalBoundBootstrapSession,
+    githubAppSetupCheck
+  });
+  const approvalBoundBootstrapSessionForResponse = attachInlineConsumeSurfaceHint({
+    approvalBoundBootstrapSession: approvalBoundBootstrapSessionWithInlineRequest,
     githubAppSetupCheck
   });
   const format = normalize(url.searchParams.get("format"));
@@ -3298,6 +3302,7 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
     normalizeText(session?.consumePath) ||
     SETUP_WIZARD_APPROVAL_BOUND_BOOTSTRAP_SESSION_CONSUME_PATH;
   const consumeEnabled = toBoolean(session?.consumeEnabled);
+  const consumeSurfacedInline = toBoolean(session?.consumeSurfacedInline);
   const envelopeConsumeResult = session?.envelopeConsumeResult ?? null;
   const consumeResultState = envelopeConsumeResult?.state ?? null;
   const consumeResultSummary = envelopeConsumeResult?.summary ?? null;
@@ -3932,7 +3937,7 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
                   : ""
               }
               ${
-                consumeEnabled && envelopeToken
+                consumeEnabled && envelopeToken && !consumeSurfacedInline
                   ? `
                     <form method="post" action="${escapeHtml(consumePath)}" style="margin-top: 12px;">
                       <input type="hidden" name="returnTo" value="${escapeHtml(returnTo)}" />
@@ -8142,6 +8147,21 @@ function attachInlineRequestSurfaceHint({
   return {
     ...session,
     requestSurfacedInline: Boolean(githubAppSetupCheck?.requestDetectedInstallationAction)
+  };
+}
+
+function attachInlineConsumeSurfaceHint({
+  approvalBoundBootstrapSession,
+  githubAppSetupCheck
+}) {
+  const session = approvalBoundBootstrapSession ?? null;
+  if (!session) {
+    return session;
+  }
+
+  return {
+    ...session,
+    consumeSurfacedInline: Boolean(githubAppSetupCheck?.completeDetectedInstallationAction)
   };
 }
 
