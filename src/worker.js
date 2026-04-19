@@ -2674,6 +2674,18 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
     SETUP_WIZARD_APPROVAL_BOUND_BOOTSTRAP_SESSION_REQUEST_PATH;
   const requestEnabled = toBoolean(session?.requestEnabled);
   const returnTo = normalizeReturnTo(session?.returnTo) || "/setup/wizard";
+  const contract = session?.contract ?? null;
+  const allowlistedSecrets = Array.isArray(contract?.allowlistedSecrets)
+    ? contract.allowlistedSecrets
+    : [];
+  const authorityState = normalizeText(contract?.authorityState);
+  const sessionMode = normalizeText(contract?.sessionMode);
+  const issuance = normalizeText(contract?.issuance);
+  const maxAgeSeconds = Number.isFinite(Number(contract?.maxAgeSeconds))
+    ? Number(contract.maxAgeSeconds)
+    : null;
+  const singleUse = toBoolean(contract?.singleUse);
+  const attestationState = normalizeText(contract?.attestationState);
 
   return `
     <h2>${escapeHtml(locale === "ja" ? "承認境界つき Bootstrap Session" : "Approval-Bound Bootstrap Session")}</h2>
@@ -2695,6 +2707,48 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
       ${
         guidance.length > 0
           ? `<ul>${guidance.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`
+          : ""
+      }
+      ${
+        contract
+          ? `
+            <div class="block" style="margin-top: 12px;">
+              <p><strong>${escapeHtml(locale === "ja" ? "Session contract" : "Session contract")}:</strong></p>
+              ${
+                authorityState
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Authority state" : "Authority state")}:</strong> <code>${escapeHtml(authorityState)}</code></p>`
+                  : ""
+              }
+              ${
+                sessionMode
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Session mode" : "Session mode")}:</strong> <code>${escapeHtml(sessionMode)}</code></p>`
+                  : ""
+              }
+              ${
+                issuance
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Issuance" : "Issuance")}:</strong> <code>${escapeHtml(issuance)}</code></p>`
+                  : ""
+              }
+              ${
+                attestationState
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Attestation" : "Attestation")}:</strong> <code>${escapeHtml(attestationState)}</code></p>`
+                  : ""
+              }
+              ${
+                maxAgeSeconds !== null
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Max age" : "Max age")}:</strong> <code>${escapeHtml(String(maxAgeSeconds))}</code> seconds</p>`
+                  : ""
+              }
+              <p><strong>${escapeHtml(locale === "ja" ? "Single use" : "Single use")}:</strong> <code>${escapeHtml(singleUse ? "true" : "false")}</code></p>
+              ${
+                allowlistedSecrets.length > 0
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Allowlisted secrets" : "Allowlisted secrets")}:</strong> ${allowlistedSecrets
+                      .map((item) => `<code>${escapeHtml(item)}</code>`)
+                      .join(", ")}</p>`
+                  : ""
+              }
+            </div>
+          `
           : ""
       }
       ${
@@ -3319,6 +3373,15 @@ async function buildApprovalBoundBootstrapSessionStatus({ url, env, githubAppBoo
       "allowlisted_runtime_secret_write",
       "post_write_readiness_verification"
     ],
+    contract: {
+      authorityState: "not_issued",
+      sessionMode: "approval_bound_one_time_bootstrap",
+      issuance: "deferred_until_attestation_backed_bootstrap_authority_exists",
+      attestationState: "not_implemented",
+      maxAgeSeconds: SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_TTL_SECONDS,
+      singleUse: true,
+      allowlistedSecrets: [...GITHUB_APP_BOOTSTRAP_SECRET_ALLOWLIST]
+    },
     requestPath: SETUP_WIZARD_APPROVAL_BOUND_BOOTSTRAP_SESSION_REQUEST_PATH,
     requestEnabled: true,
     returnTo: `${url?.pathname || "/setup/wizard"}${url?.search || ""}`,

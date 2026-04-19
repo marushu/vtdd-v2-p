@@ -420,6 +420,10 @@ test("worker setup wizard unlocked html shows narrow github app bootstrap form w
   assert.equal(html.includes("github_app_installation_binding"), true);
   assert.equal(html.includes('action="/setup/wizard/bootstrap-session/request"'), true);
   assert.equal(html.includes("Record GO + passkey request"), true);
+  assert.equal(html.includes("Session contract"), true);
+  assert.equal(html.includes("approval_bound_one_time_bootstrap"), true);
+  assert.equal(html.includes("not_issued"), true);
+  assert.equal(html.includes("Allowlisted secrets"), true);
   assert.equal(html.includes('action="/setup/wizard/github-app/bootstrap"'), true);
   assert.equal(html.includes('action="https://github.com/settings/apps/new"'), true);
   assert.equal(html.includes("&quot;hook_attributes&quot;"), true);
@@ -450,6 +454,15 @@ test("worker setup wizard unlocked json reports github app bootstrap availabilit
   assert.equal(body.githubAppBootstrap.state, "missing_prerequisites");
   assert.equal(body.approvalBoundBootstrapSession.state, "blocked_by_operator_prerequisites");
   assert.equal(body.approvalBoundBootstrapSession.approvalBoundary, "GO + passkey");
+  assert.equal(body.approvalBoundBootstrapSession.contract.authorityState, "not_issued");
+  assert.equal(body.approvalBoundBootstrapSession.contract.sessionMode, "approval_bound_one_time_bootstrap");
+  assert.equal(body.approvalBoundBootstrapSession.contract.singleUse, true);
+  assert.equal(body.approvalBoundBootstrapSession.contract.maxAgeSeconds, 300);
+  assert.deepEqual(body.approvalBoundBootstrapSession.contract.allowlistedSecrets, [
+    "GITHUB_APP_ID",
+    "GITHUB_APP_INSTALLATION_ID",
+    "GITHUB_APP_PRIVATE_KEY"
+  ]);
   assert.equal(
     body.approvalBoundBootstrapSession.targetAbsorbs.includes("allowlisted_runtime_secret_write"),
     true
