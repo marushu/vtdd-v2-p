@@ -5267,7 +5267,8 @@ async function buildApprovalBoundBootstrapSessionStatus({
     }),
     authorityRequestProvenanceReadout: buildBootstrapSessionAuthorityRequestProvenanceReadout({
       bootstrapState,
-      preview: effectivePreview
+      preview: effectivePreview,
+      githubAppSetupCheck: effectiveGitHubAppSetupCheck
     }),
     completionReadout: buildBootstrapSessionCompletionReadout({
       bootstrapState,
@@ -8397,8 +8398,33 @@ function buildBootstrapSessionAuthorityRequestTargetReadout({
   };
 }
 
-function buildBootstrapSessionAuthorityRequestProvenanceReadout({ bootstrapState, preview }) {
+function buildBootstrapSessionAuthorityRequestProvenanceReadout({
+  bootstrapState,
+  preview,
+  githubAppSetupCheck
+}) {
   const plannedWrites = Array.isArray(preview?.plannedWrites) ? preview.plannedWrites : [];
+  const setupState = normalizeText(githubAppSetupCheck?.state) || "unknown";
+
+  if (setupState === "ready") {
+    return {
+      provenanceSource: {
+        id: "no_current_setup_request_provenance_needed",
+        summary:
+          "VTDD already absorbed the current setup path inside the live wizard flow, so no additional request provenance is needed for this verified-ready state."
+      },
+      provenanceDrift: {
+        id: "future_generalized_request_provenance_is_separate_work",
+        summary:
+          "Any future generalized request provenance belongs to separate bootstrap work, not to the current verified-ready setup path."
+      },
+      provenanceRecovery: {
+        id: "verified_path_continues_without_current_provenance_recovery",
+        summary:
+          "The verified path continues without a current provenance-recovery step because the setup-bound request provenance was already consumed and absorbed."
+      }
+    };
+  }
 
   if (bootstrapState !== "available") {
     return {
