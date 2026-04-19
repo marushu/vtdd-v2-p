@@ -451,6 +451,10 @@ test("worker setup wizard unlocked html shows narrow github app bootstrap form w
   assert.equal(html.includes("Issuable state"), true);
   assert.equal(html.includes("Blocking gate"), true);
   assert.equal(html.includes("Next issuance condition"), true);
+  assert.equal(html.includes("Authority shape"), true);
+  assert.equal(html.includes("Authority owner"), true);
+  assert.equal(html.includes("Authority scope"), true);
+  assert.equal(html.includes("Authority audit"), true);
   assert.equal(html.includes("Completion claim"), true);
   assert.equal(html.includes("Current claim"), true);
   assert.equal(html.includes("Cannot yet claim"), true);
@@ -606,6 +610,18 @@ test("worker setup wizard unlocked json reports github app bootstrap availabilit
   assert.equal(
     body.approvalBoundBootstrapSession.issuanceReadout.nextIssuanceCondition.id,
     "operator_prerequisites_restored"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityShapeReadout.authorityOwner.id,
+    "service_owned_prerequisite_not_session_issued"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityShapeReadout.authorityScope.id,
+    "bounded_session_shape_not_available"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityShapeReadout.authorityAudit.id,
+    "approval_boundary_reserved"
   );
   assert.equal(
     body.approvalBoundBootstrapSession.completionReadout.claimState.id,
@@ -772,6 +788,18 @@ test("worker setup wizard unlocked json does not expose cloudflare bootstrap tok
   assert.equal(
     body.approvalBoundBootstrapSession.issuanceReadout.nextIssuanceCondition.id,
     "runtime_identity_fields_written"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityShapeReadout.authorityOwner.id,
+    "future_session_bound_runtime_bootstrap_authority"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityShapeReadout.authorityScope.id,
+    "allowlisted_runtime_identity_write_set"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityShapeReadout.authorityAudit.id,
+    "go_passkey_plus_bounded_write_trace"
   );
   assert.equal(
     body.approvalBoundBootstrapSession.completionReadout.claimState.id,
@@ -970,6 +998,18 @@ test("worker setup wizard preview narrows planned write to installation binding 
   assert.equal(
     body.approvalBoundBootstrapSession.issuanceReadout.nextIssuanceCondition.id,
     "installation_binding_detected_or_captured"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityShapeReadout.authorityOwner.id,
+    "future_session_bound_installation_authority"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityShapeReadout.authorityScope.id,
+    "single_remaining_allowlisted_write"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityShapeReadout.authorityAudit.id,
+    "go_passkey_plus_installation_proof"
   );
   assert.equal(
     body.approvalBoundBootstrapSession.completionReadout.claimState.id,

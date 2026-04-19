@@ -2732,6 +2732,10 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
   const issuableState = issuanceReadout?.issuableState ?? null;
   const blockingGate = issuanceReadout?.blockingGate ?? null;
   const nextIssuanceCondition = issuanceReadout?.nextIssuanceCondition ?? null;
+  const authorityShapeReadout = session?.authorityShapeReadout ?? null;
+  const authorityOwner = authorityShapeReadout?.authorityOwner ?? null;
+  const authorityScope = authorityShapeReadout?.authorityScope ?? null;
+  const authorityAudit = authorityShapeReadout?.authorityAudit ?? null;
   const completionReadout = session?.completionReadout ?? null;
   const claimState = completionReadout?.claimState ?? null;
   const cannotYetClaim = completionReadout?.cannotYetClaim ?? null;
@@ -2969,6 +2973,30 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
               ${
                 nextIssuanceCondition
                   ? `<p><strong>${escapeHtml(locale === "ja" ? "Next issuance condition" : "Next issuance condition")}:</strong> <code>${escapeHtml(normalizeText(nextIssuanceCondition.id))}</code> ${escapeHtml(normalizeText(nextIssuanceCondition.summary))}</p>`
+                  : ""
+              }
+            </div>
+          `
+          : ""
+      }
+      ${
+        authorityShapeReadout
+          ? `
+            <div class="block" style="margin-top: 12px;">
+              <p><strong>${escapeHtml(locale === "ja" ? "Authority shape" : "Authority shape")}:</strong></p>
+              ${
+                authorityOwner
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Authority owner" : "Authority owner")}:</strong> <code>${escapeHtml(normalizeText(authorityOwner.id))}</code> ${escapeHtml(normalizeText(authorityOwner.summary))}</p>`
+                  : ""
+              }
+              ${
+                authorityScope
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Authority scope" : "Authority scope")}:</strong> <code>${escapeHtml(normalizeText(authorityScope.id))}</code> ${escapeHtml(normalizeText(authorityScope.summary))}</p>`
+                  : ""
+              }
+              ${
+                authorityAudit
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Authority audit" : "Authority audit")}:</strong> <code>${escapeHtml(normalizeText(authorityAudit.id))}</code> ${escapeHtml(normalizeText(authorityAudit.summary))}</p>`
                   : ""
               }
             </div>
@@ -3785,6 +3813,10 @@ async function buildApprovalBoundBootstrapSessionStatus({
       authConfig
     }),
     issuanceReadout: buildBootstrapSessionIssuanceReadout({
+      bootstrapState,
+      preview
+    }),
+    authorityShapeReadout: buildBootstrapSessionAuthorityShapeReadout({
       bootstrapState,
       preview
     }),
@@ -4637,6 +4669,88 @@ function buildBootstrapSessionIssuanceReadout({ bootstrapState, preview }) {
       id: "attestation_backed_bootstrap_authority_exists",
       summary:
         "Issuance only becomes possible after VTDD has an attestation-backed way to mint the approval-bound bootstrap session."
+    }
+  };
+}
+
+function buildBootstrapSessionAuthorityShapeReadout({ bootstrapState, preview }) {
+  const plannedWrites = Array.isArray(preview?.plannedWrites) ? preview.plannedWrites : [];
+
+  if (bootstrapState !== "available") {
+    return {
+      authorityOwner: {
+        id: "service_owned_prerequisite_not_session_issued",
+        summary:
+          "The only authority present is still the service-held operator prerequisite, not a user-carried bootstrap session."
+      },
+      authorityScope: {
+        id: "bounded_session_shape_not_available",
+        summary:
+          "The intended authority shape remains a narrow setup-specific session, but VTDD does not expose it before the operator prerequisites are restored."
+      },
+      authorityAudit: {
+        id: "approval_boundary_reserved",
+        summary:
+          "Audit remains anchored to GO + passkey because no session issuance or bounded write has occurred yet."
+      }
+    };
+  }
+
+  if (plannedWrites.length === 1 && plannedWrites[0] === "GITHUB_APP_INSTALLATION_ID") {
+    return {
+      authorityOwner: {
+        id: "future_session_bound_installation_authority",
+        summary:
+          "The future authority is intended to be session-bound and narrowed to the remaining installation-binding step rather than held as broad operator access."
+      },
+      authorityScope: {
+        id: "single_remaining_allowlisted_write",
+        summary:
+          "The authority scope is reduced to the single remaining allowlisted installation-binding write plus its follow-up readiness checks."
+      },
+      authorityAudit: {
+        id: "go_passkey_plus_installation_proof",
+        summary:
+          "Any future issuance must stay auditable through GO + passkey and proof that the installation binding belongs to this wizard flow."
+      }
+    };
+  }
+
+  if (plannedWrites.length > 1) {
+    return {
+      authorityOwner: {
+        id: "future_session_bound_runtime_bootstrap_authority",
+        summary:
+          "The future authority is intended to be a one-time session-bound bootstrap right, not persistent user or operator admin access."
+      },
+      authorityScope: {
+        id: "allowlisted_runtime_identity_write_set",
+        summary:
+          "Its scope is the allowlisted GitHub App runtime identity write set and the post-write checks needed to narrow the flow further."
+      },
+      authorityAudit: {
+        id: "go_passkey_plus_bounded_write_trace",
+        summary:
+          "Any future issuance must be audited as a GO + passkey-approved bounded write rather than an untracked secret management action."
+      }
+    };
+  }
+
+  return {
+    authorityOwner: {
+      id: "future_session_bound_verification_authority_only",
+      summary:
+        "No further bootstrap write authority should be broadened here; the remaining future authority is limited to verification-oriented session use."
+    },
+    authorityScope: {
+      id: "no_additional_setup_write_scope",
+      summary:
+        "The authority shape is no longer about additional setup writes because runtime configuration is already present."
+    },
+    authorityAudit: {
+      id: "go_passkey_boundary_preserved_without_write",
+      summary:
+        "Audit still preserves the GO + passkey boundary even though the remaining blocked step is attestation-backed issuance rather than another write."
     }
   };
 }
