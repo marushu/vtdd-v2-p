@@ -44,10 +44,15 @@ const SETUP_WIZARD_GITHUB_APP_INSTALLATION_CAPTURE_PATH =
   "/setup/wizard/github-app/capture-installation";
 const SETUP_WIZARD_APPROVAL_BOUND_BOOTSTRAP_SESSION_REQUEST_PATH =
   "/setup/wizard/bootstrap-session/request";
+const SETUP_WIZARD_APPROVAL_BOUND_BOOTSTRAP_SESSION_CONSUME_PATH =
+  "/setup/wizard/bootstrap-session/consume";
 const SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_TTL_SECONDS = 5 * 60;
 const SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_TOKEN_PARAM = "bootstrap_session_request_token";
 const SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_EXPIRES_PARAM = "bootstrap_session_request_expires";
 const SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_STATE_PARAM = "bootstrap_session_request";
+const SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_STATE_PARAM = "bootstrap_session_consume";
+const SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_ENVELOPE_ID_PARAM =
+  "bootstrap_session_consume_envelope_id";
 const SETUP_WIZARD_BOOTSTRAP_SESSION_ENVELOPE_VERSION = "v1";
 const CLOUDFLARE_WORKER_SCRIPT_NAME_ENV = "CLOUDFLARE_WORKER_SCRIPT_NAME";
 const GITHUB_MANIFEST_CONVERSION_TOKEN_ENV = "GITHUB_MANIFEST_CONVERSION_TOKEN";
@@ -119,6 +124,17 @@ export default {
         return auth.response;
       }
       return handleApprovalBoundBootstrapSessionRequest({ request, url, env });
+    }
+
+    if (
+      request.method === "POST" &&
+      url.pathname === SETUP_WIZARD_APPROVAL_BOUND_BOOTSTRAP_SESSION_CONSUME_PATH
+    ) {
+      const auth = await authorizeSetupWizardRequest({ request, url, env });
+      if (!auth.ok) {
+        return auth.response;
+      }
+      return handleApprovalBoundBootstrapSessionConsume({ request, url, env });
     }
 
     if (request.method === "GET" && url.pathname === SETUP_WIZARD_GITHUB_APP_MANIFEST_CALLBACK_PATH) {
@@ -422,6 +438,94 @@ async function handleApprovalBoundBootstrapSessionRequest({ request, url, env })
     ok: true,
     requested: true,
     returnTo: `${redirectUrl.pathname}${redirectUrl.search}`
+  });
+}
+
+async function handleApprovalBoundBootstrapSessionConsume({ request, url, env }) {
+  const payload = await readApprovalBoundBootstrapSessionConsumePayload(request);
+  const returnTo = normalizeReturnTo(payload.returnTo) || "/setup/wizard";
+  const authConfig = getSetupWizardAuthConfig(env);
+
+  if (!authConfig.sessionSecret) {
+    return json(503, {
+      ok: false,
+      error: "approval_bound_bootstrap_session_consume_unavailable",
+      reason: "setup wizard session secret is not configured"
+    });
+  }
+
+  const contextUrl = new URL(returnTo, url.origin);
+  const requestRecorded = await verifySetupWizardBootstrapSessionRequestToken({
+    url: contextUrl,
+    sessionSecret: authConfig.sessionSecret
+  });
+  const requestExpiresAt = getSetupWizardBootstrapSessionRequestExpiresAt(contextUrl);
+  const githubAppBootstrap = buildGitHubAppBootstrapStatus({ url: contextUrl, env });
+  const githubAppSetupCheck = await runGitHubAppSetupCheck(contextUrl, env);
+  const bootstrapState = normalizeText(githubAppBootstrap?.state) || "missing_prerequisites";
+  const preview = buildBootstrapSessionPreview({
+    env,
+    githubAppBootstrap,
+    githubAppSetupCheck
+  });
+  const envelopeValid =
+    requestRecorded &&
+    Number.isFinite(requestExpiresAt) &&
+    (await verifySetupWizardBootstrapSessionEnvelopeToken({
+      token: payload.envelopeToken,
+      url: contextUrl,
+      expiresAt: requestExpiresAt,
+      bootstrapState,
+      preview,
+      sessionSecret: authConfig.sessionSecret
+    }));
+
+  if (!envelopeValid) {
+    if (payload.mode === "form") {
+      const failureUrl = new URL(returnTo, url.origin);
+      failureUrl.searchParams.set(SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_STATE_PARAM, "invalid");
+      return new Response(null, {
+        status: 303,
+        headers: {
+          location: `${failureUrl.pathname}${failureUrl.search}`
+        }
+      });
+    }
+
+    return json(403, {
+      ok: false,
+      error: "approval_bound_bootstrap_session_consume_invalid_envelope",
+      reason: "bootstrap session envelope is invalid for the current wizard context"
+    });
+  }
+
+  const envelopeId = normalizeText(payload.envelopeToken).slice(0, 12);
+
+  if (payload.mode === "form") {
+    const successUrl = new URL(returnTo, url.origin);
+    successUrl.searchParams.set(SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_STATE_PARAM, "deferred");
+    successUrl.searchParams.set(
+      SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_ENVELOPE_ID_PARAM,
+      envelopeId
+    );
+    return new Response(null, {
+      status: 303,
+      headers: {
+        location: `${successUrl.pathname}${successUrl.search}`
+      }
+    });
+  }
+
+  return json(200, {
+    ok: true,
+    consumed: false,
+    state: "consume_deferred",
+    summary:
+      "VTDD validated the signed bootstrap session envelope against the current wizard context, but attestation-backed consume is still deferred.",
+    envelopeId,
+    writeTarget: preview?.writeTarget ?? null,
+    plannedWrites: Array.isArray(preview?.plannedWrites) ? [...preview.plannedWrites] : [],
+    postChecks: Array.isArray(preview?.postChecks) ? [...preview.postChecks] : []
   });
 }
 
@@ -836,6 +940,25 @@ async function readApprovalBoundBootstrapSessionRequestPayload(request) {
   };
 }
 
+async function readApprovalBoundBootstrapSessionConsumePayload(request) {
+  const contentType = normalizeText(request.headers.get("content-type"));
+  if (contentType.includes("application/json")) {
+    const payload = await readJson(request);
+    return {
+      mode: "json",
+      envelopeToken: normalizeText(payload?.envelope_token),
+      returnTo: normalizeText(payload?.returnTo)
+    };
+  }
+
+  const form = await request.formData();
+  return {
+    mode: "form",
+    envelopeToken: normalizeText(form.get("envelope_token")),
+    returnTo: normalizeText(form.get("returnTo"))
+  };
+}
+
 function normalizeReturnTo(value) {
   const text = normalizeText(value);
   if (!text.startsWith("/setup/wizard")) {
@@ -956,6 +1079,32 @@ async function verifySetupWizardBootstrapSessionRequestToken({ url, sessionSecre
     sessionSecret
   });
   return safeEqual(token, expected);
+}
+
+async function verifySetupWizardBootstrapSessionEnvelopeToken({
+  token,
+  url,
+  expiresAt,
+  bootstrapState,
+  preview,
+  sessionSecret
+}) {
+  const normalizedToken = normalizeText(token);
+  if (!normalizedToken || !Number.isFinite(expiresAt)) {
+    return false;
+  }
+  if (expiresAt < Math.floor(Date.now() / 1000)) {
+    return false;
+  }
+
+  const expected = await createSetupWizardBootstrapSessionEnvelopeToken({
+    url,
+    expiresAt,
+    bootstrapState,
+    preview,
+    sessionSecret
+  });
+  return safeEqual(normalizedToken, expected);
 }
 
 function getSetupWizardBootstrapSessionRequestExpiresAt(url) {
@@ -2829,9 +2978,19 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
   const sessionEnvelope = session?.sessionEnvelope ?? null;
   const envelopeState = sessionEnvelope?.state ?? null;
   const envelopeId = sessionEnvelope?.envelopeId ?? null;
+  const envelopeToken = sessionEnvelope?.envelopeToken ?? null;
   const envelopeExpiresAt = sessionEnvelope?.expiresAt ?? null;
   const envelopeSingleUse = sessionEnvelope?.singleUse ?? null;
   const envelopeBoundScope = sessionEnvelope?.boundScope ?? null;
+  const consumePath =
+    normalizeText(session?.consumePath) ||
+    SETUP_WIZARD_APPROVAL_BOUND_BOOTSTRAP_SESSION_CONSUME_PATH;
+  const consumeEnabled = toBoolean(session?.consumeEnabled);
+  const envelopeConsumeResult = session?.envelopeConsumeResult ?? null;
+  const consumeResultState = envelopeConsumeResult?.state ?? null;
+  const consumeResultSummary = envelopeConsumeResult?.summary ?? null;
+  const consumeResultEnvelopeId = envelopeConsumeResult?.envelopeId ?? null;
+  const consumeResultNextProof = envelopeConsumeResult?.nextProof ?? null;
   const envelopeConsumptionPlan = session?.envelopeConsumptionPlan ?? null;
   const consumptionIntent = envelopeConsumptionPlan?.consumptionIntent ?? null;
   const consumptionBoundary = envelopeConsumptionPlan?.consumptionBoundary ?? null;
@@ -3335,6 +3494,50 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
               ${
                 envelopeBoundScope
                   ? `<p><strong>${escapeHtml(locale === "ja" ? "Envelope bound scope" : "Envelope bound scope")}:</strong> <code>${escapeHtml(normalizeText(envelopeBoundScope))}</code></p>`
+                  : ""
+              }
+              ${
+                consumeEnabled && envelopeToken
+                  ? `
+                    <form method="post" action="${escapeHtml(consumePath)}" style="margin-top: 12px;">
+                      <input type="hidden" name="returnTo" value="${escapeHtml(returnTo)}" />
+                      <input type="hidden" name="envelope_token" value="${escapeHtml(normalizeText(envelopeToken))}" />
+                      <button type="submit" class="copy-button">${escapeHtml(
+                        locale === "ja"
+                          ? "Session envelope を consume して確認"
+                          : "Consume session envelope"
+                      )}</button>
+                    </form>
+                  `
+                  : ""
+              }
+            </div>
+          `
+          : ""
+      }
+      ${
+        envelopeConsumeResult
+          ? `
+            <div class="block" style="margin-top: 12px;">
+              <p><strong>${escapeHtml(locale === "ja" ? "Envelope consume result" : "Envelope consume result")}:</strong></p>
+              ${
+                consumeResultState
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Consume state" : "Consume state")}:</strong> <code>${escapeHtml(normalizeText(consumeResultState))}</code></p>`
+                  : ""
+              }
+              ${
+                consumeResultSummary
+                  ? `<p>${escapeHtml(normalizeText(consumeResultSummary))}</p>`
+                  : ""
+              }
+              ${
+                consumeResultEnvelopeId
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Envelope id" : "Envelope id")}:</strong> <code>${escapeHtml(normalizeText(consumeResultEnvelopeId))}</code></p>`
+                  : ""
+              }
+              ${
+                consumeResultNextProof
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Next proof" : "Next proof")}:</strong> <code>${escapeHtml(normalizeText(consumeResultNextProof.id))}</code> ${escapeHtml(normalizeText(consumeResultNextProof.summary))}</p>`
                   : ""
               }
             </div>
@@ -4325,12 +4528,18 @@ async function buildApprovalBoundBootstrapSessionStatus({
             expiresAt: requestExpiresAt
           })
         : null,
+    envelopeConsumeResult: buildBootstrapSessionEnvelopeConsumeResult({
+      url,
+      preview
+    }),
     envelopeConsumptionPlan: null,
     envelopeConsumePreflight: null,
     envelopeConsumeOutcome: null,
     envelopeConsumeAuditReadout: null,
     requestPath: SETUP_WIZARD_APPROVAL_BOUND_BOOTSTRAP_SESSION_REQUEST_PATH,
     requestEnabled: true,
+    consumePath: SETUP_WIZARD_APPROVAL_BOUND_BOOTSTRAP_SESSION_CONSUME_PATH,
+    consumeEnabled: requestRecorded,
     returnTo: `${url?.pathname || "/setup/wizard"}${url?.search || ""}`,
     recommendedNextStep: null,
     checkedAt: new Date().toISOString()
@@ -4530,6 +4739,50 @@ async function buildBootstrapSessionEnvelope({
     plannedWrites: Array.isArray(preview?.plannedWrites) ? [...preview.plannedWrites] : [],
     postChecks: Array.isArray(preview?.postChecks) ? [...preview.postChecks] : []
   };
+}
+
+function buildBootstrapSessionEnvelopeConsumeResult({ url, preview }) {
+  const state = normalizeText(
+    url?.searchParams?.get(SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_STATE_PARAM)
+  );
+  if (!state) {
+    return null;
+  }
+
+  const envelopeId = normalizeText(
+    url?.searchParams?.get(SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_ENVELOPE_ID_PARAM)
+  );
+  const postChecks = Array.isArray(preview?.postChecks) ? preview.postChecks : [];
+
+  if (state === "deferred") {
+    return {
+      state: "consume_deferred",
+      summary:
+        "VTDD validated the signed bootstrap session envelope against the current wizard context, but attestation-backed consume is still deferred.",
+      envelopeId,
+      nextProof: {
+        id: postChecks.join("_then_") || "attested_bootstrap_consume_proof_missing",
+        summary:
+          "The next proof is one attested consume path that can perform the bounded write and immediately run the planned post-write checks."
+      }
+    };
+  }
+
+  if (state === "invalid") {
+    return {
+      state: "consume_rejected",
+      summary:
+        "VTDD rejected the bootstrap session consume attempt because the signed envelope did not match the current wizard context.",
+      envelopeId,
+      nextProof: {
+        id: "reissue_request_bound_envelope_for_current_context",
+        summary:
+          "Return to the current wizard context, record a fresh request, and issue a new envelope before trying consume again."
+      }
+    };
+  }
+
+  return null;
 }
 
 function buildBootstrapSessionEnvelopeConsumptionPlan({ bootstrapState, preview }) {

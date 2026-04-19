@@ -1110,6 +1110,7 @@ test("worker setup wizard records approval-bound bootstrap request without grant
   );
   assert.equal(html.includes("Session envelope"), true);
   assert.equal(html.includes("signed_request_bound_envelope"), true);
+  assert.equal(html.includes('action="/setup/wizard/bootstrap-session/consume"'), true);
   assert.equal(html.includes("Envelope consumption plan"), true);
   assert.equal(html.includes("Consumption intent"), true);
   assert.equal(html.includes("Consumption boundary"), true);
@@ -1153,6 +1154,7 @@ test("worker setup wizard records approval-bound bootstrap request without grant
     body.approvalBoundBootstrapSession.sessionEnvelope.envelopeId.length,
     12
   );
+  assert.equal(body.approvalBoundBootstrapSession.consumeEnabled, true);
   assert.equal(
     body.approvalBoundBootstrapSession.envelopeConsumptionPlan.consumptionIntent.id,
     "consume_once_for_remaining_runtime_identity_write_set"
@@ -1200,6 +1202,127 @@ test("worker setup wizard records approval-bound bootstrap request without grant
   assert.equal(
     body.approvalBoundBootstrapSession.envelopeConsumeAuditReadout.auditRetention.id,
     "retain_runtime_consume_trace_through_post_write_proof"
+  );
+});
+
+test("worker setup wizard consumes a valid bootstrap session envelope into deferred state", async () => {
+  const env = {
+    SETUP_WIZARD_PASSCODE: "2468",
+    CLOUDFLARE_API_TOKEN: "bootstrap-token",
+    CLOUDFLARE_ACCOUNT_ID: "account-id",
+    CLOUDFLARE_WORKER_SCRIPT_NAME: "vtdd-v2-mvp",
+    GITHUB_MANIFEST_CONVERSION_TOKEN: "ghp_conversion_token"
+  };
+  const { sessionCookie } = await unlockSetupWizard(env);
+
+  const requestResponse = await worker.fetch(
+    new Request("https://example.com/setup/wizard/bootstrap-session/request", {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      },
+      body: new URLSearchParams({
+        returnTo: "/setup/wizard?repo=sample-org/vtdd-v2",
+        approval_phrase: "GO",
+        passkey_verified: "true"
+      })
+    }),
+    env
+  );
+
+  const location = requestResponse.headers.get("location") ?? "";
+  const currentContext = `https://example.com${location}`;
+  const statusResponse = await worker.fetch(
+    new Request(`${currentContext}&format=json`, {
+      headers: {
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      }
+    }),
+    env
+  );
+  const statusBody = await statusResponse.json();
+  const envelopeToken =
+    statusBody.approvalBoundBootstrapSession.sessionEnvelope.envelopeToken;
+
+  const consumeResponse = await worker.fetch(
+    new Request("https://example.com/setup/wizard/bootstrap-session/consume", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      },
+      body: JSON.stringify({
+        returnTo: location,
+        envelope_token: envelopeToken
+      })
+    }),
+    env
+  );
+
+  assert.equal(consumeResponse.status, 200);
+  const consumeBody = await consumeResponse.json();
+  assert.equal(consumeBody.state, "consume_deferred");
+  assert.equal(consumeBody.consumed, false);
+  assert.equal(
+    consumeBody.summary,
+    "VTDD validated the signed bootstrap session envelope against the current wizard context, but attestation-backed consume is still deferred."
+  );
+  assert.equal(consumeBody.envelopeId.length, 12);
+  assert.deepEqual(consumeBody.plannedWrites, [
+    "GITHUB_APP_ID",
+    "GITHUB_APP_INSTALLATION_ID",
+    "GITHUB_APP_PRIVATE_KEY"
+  ]);
+});
+
+test("worker setup wizard rejects invalid bootstrap session envelope consume requests", async () => {
+  const env = {
+    SETUP_WIZARD_PASSCODE: "2468",
+    CLOUDFLARE_API_TOKEN: "bootstrap-token",
+    CLOUDFLARE_ACCOUNT_ID: "account-id",
+    CLOUDFLARE_WORKER_SCRIPT_NAME: "vtdd-v2-mvp",
+    GITHUB_MANIFEST_CONVERSION_TOKEN: "ghp_conversion_token"
+  };
+  const { sessionCookie } = await unlockSetupWizard(env);
+
+  const requestResponse = await worker.fetch(
+    new Request("https://example.com/setup/wizard/bootstrap-session/request", {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      },
+      body: new URLSearchParams({
+        returnTo: "/setup/wizard?repo=sample-org/vtdd-v2",
+        approval_phrase: "GO",
+        passkey_verified: "true"
+      })
+    }),
+    env
+  );
+
+  const location = requestResponse.headers.get("location") ?? "";
+  const consumeResponse = await worker.fetch(
+    new Request("https://example.com/setup/wizard/bootstrap-session/consume", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      },
+      body: JSON.stringify({
+        returnTo: location,
+        envelope_token: "invalid-envelope"
+      })
+    }),
+    env
+  );
+
+  assert.equal(consumeResponse.status, 403);
+  const consumeBody = await consumeResponse.json();
+  assert.equal(
+    consumeBody.error,
+    "approval_bound_bootstrap_session_consume_invalid_envelope"
   );
 });
 
