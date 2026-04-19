@@ -5653,9 +5653,18 @@ function deriveEffectiveGitHubAppSetupCheckFromContinuation({ url, githubAppSetu
     return base;
   }
 
+  const {
+    installationSelectionOptions: _installationSelectionOptions,
+    installationCapturePath: _installationCapturePath,
+    requestDetectedInstallationAction: _requestDetectedInstallationAction,
+    completeDetectedInstallationAction: _completeDetectedInstallationAction,
+    detectedInstallationId: _detectedInstallationId,
+    ...rest
+  } = base;
+
   if (proofState === "ready") {
     return {
-      ...base,
+      ...rest,
       state: "ready",
       summary:
         "GitHub App setup check passed in the current setup flow: VTDD completed installation binding and confirmed live repository access.",
@@ -5668,7 +5677,7 @@ function deriveEffectiveGitHubAppSetupCheckFromContinuation({ url, githubAppSetu
 
   if (proofState === "configured") {
     return {
-      ...base,
+      ...rest,
       state: "configured",
       summary:
         "GitHub App installation binding completed in the current setup flow, and runtime now reports the GitHub App configuration as complete pending live diagnostics."
@@ -5677,7 +5686,7 @@ function deriveEffectiveGitHubAppSetupCheckFromContinuation({ url, githubAppSetu
 
   if (proofState === "probe_failed") {
     return {
-      ...base,
+      ...rest,
       state: "probe_failed",
       summary:
         "GitHub App installation binding completed in the current setup flow, but the immediate live readiness probe still failed closed."
