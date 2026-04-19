@@ -1961,14 +1961,7 @@ test("worker setup wizard selected installation can auto-complete after request 
   assert.equal(statusBody.githubAppSetupCheck.evidence.stage, "live_probe");
   assert.equal(statusBody.githubAppSetupCheck.evidence.source, "github_app_live");
   assert.equal(statusBody.approvalBoundBootstrapSession.state, "bounded_consume_completed_with_live_proof");
-  assert.equal(
-    statusBody.approvalBoundBootstrapSession.envelopeConsumeResult.state,
-    "consume_completed"
-  );
-  assert.equal(
-    statusBody.approvalBoundBootstrapSession.envelopeConsumeResult.proof.state,
-    "ready"
-  );
+  assert.equal(statusBody.approvalBoundBootstrapSession.envelopeConsumeResult, null);
   assert.equal(calls.length, 1);
   const payload = JSON.parse(String(calls[0].init.body));
   assert.equal(payload.name, "GITHUB_APP_INSTALLATION_ID");
@@ -2380,6 +2373,7 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
     "verified_path_continues_without_current_provenance_recovery"
   );
   assert.equal(absorbedBody.approvalBoundBootstrapSession.sessionEnvelope, null);
+  assert.equal(absorbedBody.approvalBoundBootstrapSession.envelopeConsumeResult, null);
   assert.equal(absorbedBody.approvalBoundBootstrapSession.envelopeConsumptionPlan, null);
   assert.equal(absorbedBody.approvalBoundBootstrapSession.envelopeConsumePreflight, null);
   assert.equal(absorbedBody.approvalBoundBootstrapSession.envelopeConsumeOutcome, null);
@@ -2420,6 +2414,7 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
   const absorbedHtml = await absorbedHtmlResponse.text();
   assert.equal(absorbedHtml.includes("Record GO + passkey request"), false);
   assert.equal(absorbedHtml.includes("Consume session envelope"), false);
+  assert.equal(absorbedHtml.includes("Envelope consume result"), false);
   assert.equal(absorbedHtml.includes("Planned write target"), false);
   assert.equal(absorbedHtml.includes("Planned writes"), false);
   assert.equal(absorbedHtml.includes("Post-session checks"), false);

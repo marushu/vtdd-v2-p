@@ -5309,10 +5309,12 @@ async function buildApprovalBoundBootstrapSessionStatus({
             expiresAt: requestExpiresAt
           })
         : null,
-    envelopeConsumeResult: buildBootstrapSessionEnvelopeConsumeResult({
-      url,
-      preview: effectivePreview
-    }),
+    envelopeConsumeResult: absorbedLiveProof
+      ? null
+      : buildBootstrapSessionEnvelopeConsumeResult({
+          url,
+          preview: effectivePreview
+        }),
     envelopeConsumptionPlan: null,
     envelopeConsumePreflight: null,
     envelopeConsumeOutcome: null,
