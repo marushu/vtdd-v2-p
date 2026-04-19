@@ -5668,10 +5668,15 @@ function deriveEffectiveGitHubAppSetupCheckFromContinuation({ url, githubAppSetu
       state: "ready",
       summary:
         "GitHub App setup check passed in the current setup flow: VTDD completed installation binding and confirmed live repository access.",
+      links: [],
       guidance: [
         "VTDD can continue with live GitHub capability from this setup flow.",
         "Keep App permissions minimal and expand only when a specific runtime path needs it."
-      ]
+      ],
+      evidence: {
+        stage: "live_probe",
+        source: "github_app_live"
+      }
     };
   }
 
@@ -5679,8 +5684,13 @@ function deriveEffectiveGitHubAppSetupCheckFromContinuation({ url, githubAppSetu
     return {
       ...rest,
       state: "configured",
+      links: [],
       summary:
-        "GitHub App installation binding completed in the current setup flow, and runtime now reports the GitHub App configuration as complete pending live diagnostics."
+        "GitHub App installation binding completed in the current setup flow, and runtime now reports the GitHub App configuration as complete pending live diagnostics.",
+      evidence: {
+        stage: "configuration_check",
+        source: "worker_runtime"
+      }
     };
   }
 
@@ -5688,8 +5698,13 @@ function deriveEffectiveGitHubAppSetupCheckFromContinuation({ url, githubAppSetu
     return {
       ...rest,
       state: "probe_failed",
+      links: [],
       summary:
-        "GitHub App installation binding completed in the current setup flow, but the immediate live readiness probe still failed closed."
+        "GitHub App installation binding completed in the current setup flow, but the immediate live readiness probe still failed closed.",
+      evidence: {
+        stage: "live_probe",
+        source: "github_app_live"
+      }
     };
   }
 

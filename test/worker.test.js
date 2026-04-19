@@ -1952,11 +1952,14 @@ test("worker setup wizard selected installation can auto-complete after request 
   assert.equal(statusResponse.status, 200);
   const statusBody = await statusResponse.json();
   assert.equal(statusBody.githubAppSetupCheck.state, "ready");
+  assert.deepEqual(statusBody.githubAppSetupCheck.links, []);
   assert.equal(statusBody.githubAppSetupCheck.installationSelectionOptions, undefined);
   assert.equal(statusBody.githubAppSetupCheck.installationCapturePath, undefined);
   assert.equal(statusBody.githubAppSetupCheck.requestDetectedInstallationAction, undefined);
   assert.equal(statusBody.githubAppSetupCheck.completeDetectedInstallationAction, undefined);
   assert.equal(statusBody.githubAppSetupCheck.detectedInstallationId, undefined);
+  assert.equal(statusBody.githubAppSetupCheck.evidence.stage, "live_probe");
+  assert.equal(statusBody.githubAppSetupCheck.evidence.source, "github_app_live");
   assert.equal(statusBody.approvalBoundBootstrapSession.state, "bounded_consume_completed_with_live_proof");
   assert.equal(
     statusBody.approvalBoundBootstrapSession.envelopeConsumeResult.state,
