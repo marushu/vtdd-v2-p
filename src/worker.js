@@ -5260,11 +5260,13 @@ async function buildApprovalBoundBootstrapSessionStatus({
     }),
     completionReadout: buildBootstrapSessionCompletionReadout({
       bootstrapState,
-      preview: effectivePreview
+      preview: effectivePreview,
+      githubAppSetupCheck: effectiveGitHubAppSetupCheck
     }),
     evidenceReadout: buildBootstrapSessionEvidenceReadout({
       bootstrapState,
-      preview: effectivePreview
+      preview: effectivePreview,
+      githubAppSetupCheck: effectiveGitHubAppSetupCheck
     }),
     safetyReadout: buildBootstrapSessionSafetyReadout({
       bootstrapState,
@@ -7235,8 +7237,13 @@ function buildBootstrapSessionAuthBoundaryReadout({
   };
 }
 
-function buildBootstrapSessionCompletionReadout({ bootstrapState, preview }) {
+function buildBootstrapSessionCompletionReadout({
+  bootstrapState,
+  preview,
+  githubAppSetupCheck
+}) {
   const plannedWrites = Array.isArray(preview?.plannedWrites) ? preview.plannedWrites : [];
+  const setupState = normalizeText(githubAppSetupCheck?.state) || "unknown";
 
   if (bootstrapState !== "available") {
     return {
@@ -7294,6 +7301,26 @@ function buildBootstrapSessionCompletionReadout({ bootstrapState, preview }) {
         id: "runtime_identity_bootstrap_narrows_to_installation_and_verification",
         summary:
           "That claim only moves forward after the runtime identity bootstrap narrows to installation binding and then to live verification."
+      }
+    };
+  }
+
+  if (setupState === "ready") {
+    return {
+      claimState: {
+        id: "wizard_complete_ready_path_verified",
+        summary:
+          "VTDD can claim that the current setup path is verified live and no further setup wiring is required in this flow."
+      },
+      cannotYetClaim: {
+        id: "generic_bootstrap_authority_complete",
+        summary:
+          "VTDD still cannot claim that a general approval-bound bootstrap authority exists beyond this verified narrow path."
+      },
+      claimBecomesValidWhen: {
+        id: "future_general_bootstrap_path_is_implemented_and_verified",
+        summary:
+          "That broader claim becomes valid only after the future generalized approval-bound bootstrap path is implemented and verified."
       }
     };
   }
@@ -8148,9 +8175,14 @@ function buildBootstrapSessionAuthorityRequestProvenanceReadout({ bootstrapState
   };
 }
 
-function buildBootstrapSessionEvidenceReadout({ bootstrapState, preview }) {
+function buildBootstrapSessionEvidenceReadout({
+  bootstrapState,
+  preview,
+  githubAppSetupCheck
+}) {
   const plannedWrites = Array.isArray(preview?.plannedWrites) ? preview.plannedWrites : [];
   const postChecks = Array.isArray(preview?.postChecks) ? preview.postChecks : [];
+  const setupState = normalizeText(githubAppSetupCheck?.state) || "unknown";
 
   if (bootstrapState !== "available") {
     return {
@@ -8187,6 +8219,23 @@ function buildBootstrapSessionEvidenceReadout({ bootstrapState, preview }) {
         id: "runtime_identity_fields_written",
         summary:
           "The next proof is that the missing GitHub App runtime fields are stored so the flow narrows to installation binding."
+      }
+    };
+  }
+
+  if (setupState === "ready") {
+    return {
+      runtimeEvidence: [
+        "github_app_runtime_identity_present",
+        "installation_binding_present",
+        "live_readiness_verified",
+        ...postChecks
+      ],
+      blockedEvidence: [],
+      nextProof: {
+        id: "use_verified_live_github_capability",
+        summary:
+          "The next proof is VTDD continuing from this verified live GitHub capability rather than reopening setup transport."
       }
     };
   }

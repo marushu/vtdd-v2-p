@@ -2135,6 +2135,18 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
     absorbedBody.approvalBoundBootstrapSession.phaseReadout.currentPhase.id,
     "live_readiness_verified"
   );
+  assert.equal(
+    absorbedBody.approvalBoundBootstrapSession.completionReadout.claimState.id,
+    "wizard_complete_ready_path_verified"
+  );
+  assert.equal(
+    absorbedBody.approvalBoundBootstrapSession.evidenceReadout.blockedEvidence.length,
+    0
+  );
+  assert.equal(
+    absorbedBody.approvalBoundBootstrapSession.evidenceReadout.nextProof.id,
+    "use_verified_live_github_capability"
+  );
   assert.deepEqual(
     absorbedBody.approvalBoundBootstrapSession.progressReadout.completedPhases,
     ["runtime_identity_bootstrap", "installation_binding", "live_readiness_verification"]
