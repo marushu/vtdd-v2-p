@@ -2728,6 +2728,10 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
   const operatorBootstrapAuthority = authBoundaryReadout?.operatorBootstrapAuthority ?? null;
   const externalAccountConnection = authBoundaryReadout?.externalAccountConnection ?? null;
   const runtimeMachineAuth = authBoundaryReadout?.runtimeMachineAuth ?? null;
+  const issuanceReadout = session?.issuanceReadout ?? null;
+  const issuableState = issuanceReadout?.issuableState ?? null;
+  const blockingGate = issuanceReadout?.blockingGate ?? null;
+  const nextIssuanceCondition = issuanceReadout?.nextIssuanceCondition ?? null;
   const completionReadout = session?.completionReadout ?? null;
   const claimState = completionReadout?.claimState ?? null;
   const cannotYetClaim = completionReadout?.cannotYetClaim ?? null;
@@ -2941,6 +2945,30 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
               ${
                 runtimeMachineAuth
                   ? `<p><strong>${escapeHtml(locale === "ja" ? "Runtime machine auth" : "Runtime machine auth")}:</strong> <code>${escapeHtml(normalizeText(runtimeMachineAuth.state))}</code> ${escapeHtml(normalizeText(runtimeMachineAuth.summary))}</p>`
+                  : ""
+              }
+            </div>
+          `
+          : ""
+      }
+      ${
+        issuanceReadout
+          ? `
+            <div class="block" style="margin-top: 12px;">
+              <p><strong>${escapeHtml(locale === "ja" ? "Issuance readout" : "Issuance readout")}:</strong></p>
+              ${
+                issuableState
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Issuable state" : "Issuable state")}:</strong> <code>${escapeHtml(normalizeText(issuableState.id))}</code> ${escapeHtml(normalizeText(issuableState.summary))}</p>`
+                  : ""
+              }
+              ${
+                blockingGate
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Blocking gate" : "Blocking gate")}:</strong> <code>${escapeHtml(normalizeText(blockingGate.id))}</code> ${escapeHtml(normalizeText(blockingGate.summary))}</p>`
+                  : ""
+              }
+              ${
+                nextIssuanceCondition
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Next issuance condition" : "Next issuance condition")}:</strong> <code>${escapeHtml(normalizeText(nextIssuanceCondition.id))}</code> ${escapeHtml(normalizeText(nextIssuanceCondition.summary))}</p>`
                   : ""
               }
             </div>
@@ -3756,6 +3784,10 @@ async function buildApprovalBoundBootstrapSessionStatus({
       preview,
       authConfig
     }),
+    issuanceReadout: buildBootstrapSessionIssuanceReadout({
+      bootstrapState,
+      preview
+    }),
     completionReadout: buildBootstrapSessionCompletionReadout({
       bootstrapState,
       preview
@@ -4523,6 +4555,88 @@ function buildBootstrapSessionCompletionReadout({ bootstrapState, preview }) {
       id: "live_verification_passes",
       summary:
         "That claim becomes valid only after the live readiness probe passes and VTDD can prove the configured path does real GitHub work."
+    }
+  };
+}
+
+function buildBootstrapSessionIssuanceReadout({ bootstrapState, preview }) {
+  const plannedWrites = Array.isArray(preview?.plannedWrites) ? preview.plannedWrites : [];
+
+  if (bootstrapState !== "available") {
+    return {
+      issuableState: {
+        id: "not_issuable",
+        summary:
+          "VTDD must not issue an approval-bound bootstrap session while the operator-seeded bootstrap prerequisites are still missing."
+      },
+      blockingGate: {
+        id: "operator_bootstrap_prerequisites_missing",
+        summary:
+          "The issuance gate is blocked at the operator bootstrap layer, so no bounded write session can be opened yet."
+      },
+      nextIssuanceCondition: {
+        id: "operator_prerequisites_restored",
+        summary:
+          "Issuance can move forward only after the operator bootstrap prerequisites are restored and the bounded path is available again."
+      }
+    };
+  }
+
+  if (plannedWrites.length === 1 && plannedWrites[0] === "GITHUB_APP_INSTALLATION_ID") {
+    return {
+      issuableState: {
+        id: "issuance_deferred_to_installation_binding",
+        summary:
+          "VTDD has narrowed the future session to installation binding, but issuance is still deferred until that connection step is completed."
+      },
+      blockingGate: {
+        id: "installation_binding_not_complete",
+        summary:
+          "The issuance gate is blocked on installation binding because VTDD cannot safely mint installation-scoped capability without it."
+      },
+      nextIssuanceCondition: {
+        id: "installation_binding_detected_or_captured",
+        summary:
+          "The next issuance condition is proof that installation binding was detected or captured in the wizard flow."
+      }
+    };
+  }
+
+  if (plannedWrites.length > 1) {
+    return {
+      issuableState: {
+        id: "issuance_deferred_to_runtime_identity_completion",
+        summary:
+          "VTDD has the bootstrap baseline, but the future session is still deferred until the current GitHub App runtime identity is complete."
+      },
+      blockingGate: {
+        id: "runtime_identity_not_complete",
+        summary:
+          "The issuance gate is blocked because the runtime is still missing GitHub App identity fields that the future bounded session would need to reconcile."
+      },
+      nextIssuanceCondition: {
+        id: "runtime_identity_fields_written",
+        summary:
+          "The next issuance condition is that the missing GitHub App runtime fields are written so the remaining session scope can narrow."
+      }
+    };
+  }
+
+  return {
+    issuableState: {
+      id: "issuance_deferred_to_attestation_backend",
+      summary:
+        "VTDD has no remaining setup-critical writes to plan, but it still does not issue a bootstrap session until attestation-backed authority exists."
+    },
+    blockingGate: {
+      id: "attestation_backed_bootstrap_authority_not_implemented",
+      summary:
+        "The issuance gate is blocked at the final authority layer because attestation-backed bootstrap authority is still not implemented."
+    },
+    nextIssuanceCondition: {
+      id: "attestation_backed_bootstrap_authority_exists",
+      summary:
+        "Issuance only becomes possible after VTDD has an attestation-backed way to mint the approval-bound bootstrap session."
     }
   };
 }

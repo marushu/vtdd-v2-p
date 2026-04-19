@@ -447,6 +447,10 @@ test("worker setup wizard unlocked html shows narrow github app bootstrap form w
   assert.equal(html.includes("Operator bootstrap authority"), true);
   assert.equal(html.includes("External account connection"), true);
   assert.equal(html.includes("Runtime machine auth"), true);
+  assert.equal(html.includes("Issuance readout"), true);
+  assert.equal(html.includes("Issuable state"), true);
+  assert.equal(html.includes("Blocking gate"), true);
+  assert.equal(html.includes("Next issuance condition"), true);
   assert.equal(html.includes("Completion claim"), true);
   assert.equal(html.includes("Current claim"), true);
   assert.equal(html.includes("Cannot yet claim"), true);
@@ -590,6 +594,18 @@ test("worker setup wizard unlocked json reports github app bootstrap availabilit
   assert.equal(
     body.approvalBoundBootstrapSession.authBoundaryReadout.runtimeMachineAuth.state,
     "separate_internal_boundary"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.issuanceReadout.issuableState.id,
+    "not_issuable"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.issuanceReadout.blockingGate.id,
+    "operator_bootstrap_prerequisites_missing"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.issuanceReadout.nextIssuanceCondition.id,
+    "operator_prerequisites_restored"
   );
   assert.equal(
     body.approvalBoundBootstrapSession.completionReadout.claimState.id,
@@ -744,6 +760,18 @@ test("worker setup wizard unlocked json does not expose cloudflare bootstrap tok
   assert.equal(
     body.approvalBoundBootstrapSession.authBoundaryReadout.runtimeMachineAuth.state,
     "separate_internal_boundary"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.issuanceReadout.issuableState.id,
+    "issuance_deferred_to_runtime_identity_completion"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.issuanceReadout.blockingGate.id,
+    "runtime_identity_not_complete"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.issuanceReadout.nextIssuanceCondition.id,
+    "runtime_identity_fields_written"
   );
   assert.equal(
     body.approvalBoundBootstrapSession.completionReadout.claimState.id,
@@ -930,6 +958,18 @@ test("worker setup wizard preview narrows planned write to installation binding 
   assert.equal(
     body.approvalBoundBootstrapSession.authBoundaryReadout.runtimeMachineAuth.state,
     "separate_internal_boundary"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.issuanceReadout.issuableState.id,
+    "issuance_deferred_to_installation_binding"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.issuanceReadout.blockingGate.id,
+    "installation_binding_not_complete"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.issuanceReadout.nextIssuanceCondition.id,
+    "installation_binding_detected_or_captured"
   );
   assert.equal(
     body.approvalBoundBootstrapSession.completionReadout.claimState.id,
