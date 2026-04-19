@@ -55,6 +55,7 @@ It is a planning companion, not a replacement for child Issue acceptance criteri
 - `docs/security/guarded-semi-automation-mode.md`
 - `docs/security/setup-wizard-meaning-first-contract.md`
 - `docs/security/worker-secret-bootstrap-options.md`
+- `docs/mvp/setup-wizard-current-and-target-flow.md`
 - `docs/mvp/issue-to-e2e-matrix.md`
 
 ## Current MVP Technical Baseline
