@@ -1594,8 +1594,36 @@ test("worker setup wizard consume can complete a single detected installation bi
     statusBody.approvalBoundBootstrapSession.sessionEnvelope.plannedWrites[0],
     "GITHUB_APP_INSTALLATION_ID"
   );
+  assert.equal(
+    statusBody.githubAppSetupCheck.completeDetectedInstallationAction.id,
+    "consume_detected_installation_binding"
+  );
+  assert.equal(
+    statusBody.githubAppSetupCheck.completeDetectedInstallationAction.path,
+    "/setup/wizard/bootstrap-session/consume"
+  );
+  assert.equal(
+    statusBody.githubAppSetupCheck.completeDetectedInstallationAction.returnTo,
+    location
+  );
   const envelopeToken =
     statusBody.approvalBoundBootstrapSession.sessionEnvelope.envelopeToken;
+  assert.equal(
+    statusBody.githubAppSetupCheck.completeDetectedInstallationAction.envelopeToken,
+    envelopeToken
+  );
+
+  const statusHtmlResponse = await worker.fetch(
+    new Request(`https://example.com${location}`, {
+      headers: {
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      }
+    }),
+    env
+  );
+  const statusHtml = await statusHtmlResponse.text();
+  assert.equal(statusHtml.includes("Store detected installation and continue"), true);
+  assert.equal(statusHtml.includes('action="/setup/wizard/bootstrap-session/consume"'), true);
 
   const consumeResponse = await worker.fetch(
     new Request("https://example.com/setup/wizard/bootstrap-session/consume", {
@@ -2688,6 +2716,7 @@ test("worker setup wizard detects a single github app installation before instal
     body.githubAppSetupCheck.installationCapturePath,
     "/setup/wizard/github-app/capture-installation"
   );
+  assert.equal(body.githubAppSetupCheck.completeDetectedInstallationAction, undefined);
 });
 
 test("worker setup wizard can store detected installation id through narrow capture endpoint", async () => {

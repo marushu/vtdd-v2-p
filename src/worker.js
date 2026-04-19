@@ -249,14 +249,18 @@ async function handleSetupWizardRequest({ request, url, env }) {
   const answers = buildSetupWizardAnswers(url);
   const result = runInitialSetupWizard({ answers });
   const cloudflareSetupCheck = await runCloudflareSetupCheck(url, env);
-  const githubAppSetupCheck = await runGitHubAppSetupCheck(url, env);
+  const rawGitHubAppSetupCheck = await runGitHubAppSetupCheck(url, env);
   const githubAppBootstrapInternal = buildGitHubAppBootstrapStatus({ url, env });
   const githubAppBootstrap = toPublicGitHubAppBootstrapStatus(githubAppBootstrapInternal);
   const approvalBoundBootstrapSession = await buildApprovalBoundBootstrapSessionStatus({
     url,
     env,
     githubAppBootstrap,
-    githubAppSetupCheck
+    githubAppSetupCheck: rawGitHubAppSetupCheck
+  });
+  const githubAppSetupCheck = attachDetectedInstallationCompletionAction({
+    githubAppSetupCheck: rawGitHubAppSetupCheck,
+    approvalBoundBootstrapSession
   });
   const format = normalize(url.searchParams.get("format"));
   const guidance = buildSetupWizardGuidance({ result, url });
@@ -2858,6 +2862,14 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
   const detectedInstallationId = normalizeText(check?.detectedInstallationId);
   const installationCapturePath = normalizeText(check?.installationCapturePath);
   const returnTo = normalizeGitHubAppBootstrapReturnTo(check?.returnTo);
+  const completeDetectedInstallationAction = check?.completeDetectedInstallationAction ?? null;
+  const completionActionPath = normalizeText(completeDetectedInstallationAction?.path);
+  const completionActionReturnTo = normalizeGitHubAppBootstrapReturnTo(
+    completeDetectedInstallationAction?.returnTo
+  );
+  const completionActionEnvelopeToken = normalizeText(
+    completeDetectedInstallationAction?.envelopeToken
+  );
   const listItem = (text) => `<li>${escapeHtml(text)}</li>`;
 
   const evidenceItems = [];
@@ -2897,7 +2909,38 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
           : ""
       }
       ${
-        state === "installation_detected" && detectedInstallationId && installationCapturePath
+        state === "installation_detected" &&
+        completionActionPath &&
+        completionActionReturnTo &&
+        completionActionEnvelopeToken
+          ? `
+            <div class="block" style="margin-top: 12px;">
+              <p><strong>${escapeHtml(
+                locale === "ja"
+                  ? "VTDD が installation を検出し、そのまま継続できます"
+                  : "VTDD found the installation and can continue now"
+              )}</strong></p>
+              <p class="meta">${escapeHtml(
+                locale === "ja"
+                  ? "GitHub 側の同意が終わっていれば、VTDD が installation binding を保存し、そのまま readiness 確認まで進めます。"
+                  : "If the GitHub-side consent is done, VTDD can store the installation binding and continue into readiness verification."
+              )}</p>
+              <form method="post" action="${escapeHtml(completionActionPath)}">
+                <input type="hidden" name="returnTo" value="${escapeHtml(
+                  completionActionReturnTo
+                )}" />
+                <input type="hidden" name="envelope_token" value="${escapeHtml(
+                  completionActionEnvelopeToken
+                )}" />
+                <button type="submit" class="copy-button">${escapeHtml(
+                  locale === "ja"
+                    ? "検出した Installation を保存して続行"
+                    : "Store detected installation and continue"
+                )}</button>
+              </form>
+            </div>
+          `
+          : state === "installation_detected" && detectedInstallationId && installationCapturePath
           ? `
             <div class="block" style="margin-top: 12px;">
               <p><strong>${escapeHtml(
@@ -7906,6 +7949,50 @@ function buildGitHubAppManifestLaunch(url) {
   };
 }
 
+function attachDetectedInstallationCompletionAction({
+  githubAppSetupCheck,
+  approvalBoundBootstrapSession
+}) {
+  const setupCheck = githubAppSetupCheck ?? null;
+  const session = approvalBoundBootstrapSession ?? null;
+  const state = normalizeText(setupCheck?.state);
+  const detectedInstallationId = normalizeText(setupCheck?.detectedInstallationId);
+  const envelopeToken = normalizeText(session?.sessionEnvelope?.envelopeToken);
+  const consumePath = normalizeText(session?.consumePath);
+  const returnTo = normalizeSetupWizardContinuationReturnTo(
+    session?.returnTo || setupCheck?.returnTo
+  );
+  const consumeEnabled = toBoolean(session?.consumeEnabled);
+  const plannedWrites = Array.isArray(session?.sessionEnvelope?.plannedWrites)
+    ? session.sessionEnvelope.plannedWrites
+    : [];
+  const installationOnlyWrite =
+    plannedWrites.length === 1 && plannedWrites[0] === "GITHUB_APP_INSTALLATION_ID";
+
+  if (
+    state !== "installation_detected" ||
+    !detectedInstallationId ||
+    !consumeEnabled ||
+    !envelopeToken ||
+    !consumePath ||
+    !returnTo ||
+    !installationOnlyWrite
+  ) {
+    return setupCheck;
+  }
+
+  return {
+    ...setupCheck,
+    completeDetectedInstallationAction: {
+      id: "consume_detected_installation_binding",
+      path: consumePath,
+      returnTo,
+      envelopeToken,
+      installationId: detectedInstallationId
+    }
+  };
+}
+
 function toPublicGitHubAppBootstrapStatus(status) {
   if (!status || typeof status !== "object") {
     return status;
@@ -7983,6 +8070,17 @@ function normalizeGitHubAppBootstrapReturnTo(value) {
     return "";
   }
   return text;
+}
+
+function normalizeSetupWizardContinuationReturnTo(value) {
+  const text = normalizeGitHubAppBootstrapReturnTo(value);
+  if (!text) {
+    return "";
+  }
+
+  const url = new URL(text, "https://example.com");
+  url.searchParams.delete("format");
+  return `${url.pathname}${url.search}`;
 }
 
 async function putCloudflareWorkerSecret({
