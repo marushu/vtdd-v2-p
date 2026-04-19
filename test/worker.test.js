@@ -1122,6 +1122,10 @@ test("worker setup wizard records approval-bound bootstrap request without grant
   assert.equal(html.includes("Outcome state"), true);
   assert.equal(html.includes("Outcome failure"), true);
   assert.equal(html.includes("Outcome next proof"), true);
+  assert.equal(html.includes("Envelope consume audit"), true);
+  assert.equal(html.includes("Audit record"), true);
+  assert.equal(html.includes("Audit failure"), true);
+  assert.equal(html.includes("Audit retention"), true);
 
   const jsonResponse = await worker.fetch(
     new Request(`https://example.com${location}&format=json`, {
@@ -1184,6 +1188,18 @@ test("worker setup wizard records approval-bound bootstrap request without grant
   assert.equal(
     body.approvalBoundBootstrapSession.envelopeConsumeOutcome.outcomeNextProof.id,
     "github_app_setup_check"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.envelopeConsumeAuditReadout.auditRecord.id,
+    "future_audit_record_for_bounded_runtime_bootstrap_consume"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.envelopeConsumeAuditReadout.auditFailure.id,
+    "audit_must_fail_closed_if_runtime_consume_cannot_be_traced"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.envelopeConsumeAuditReadout.auditRetention.id,
+    "retain_runtime_consume_trace_through_post_write_proof"
   );
 });
 

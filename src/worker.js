@@ -2844,6 +2844,10 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
   const outcomeState = envelopeConsumeOutcome?.outcomeState ?? null;
   const outcomeFailure = envelopeConsumeOutcome?.outcomeFailure ?? null;
   const outcomeNextProof = envelopeConsumeOutcome?.outcomeNextProof ?? null;
+  const envelopeConsumeAuditReadout = session?.envelopeConsumeAuditReadout ?? null;
+  const auditRecord = envelopeConsumeAuditReadout?.auditRecord ?? null;
+  const auditFailure = envelopeConsumeAuditReadout?.auditFailure ?? null;
+  const auditRetention = envelopeConsumeAuditReadout?.auditRetention ?? null;
   const completionReadout = session?.completionReadout ?? null;
   const claimState = completionReadout?.claimState ?? null;
   const cannotYetClaim = completionReadout?.cannotYetClaim ?? null;
@@ -3403,6 +3407,30 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
               ${
                 outcomeNextProof
                   ? `<p><strong>${escapeHtml(locale === "ja" ? "Outcome next proof" : "Outcome next proof")}:</strong> <code>${escapeHtml(normalizeText(outcomeNextProof.id))}</code> ${escapeHtml(normalizeText(outcomeNextProof.summary))}</p>`
+                  : ""
+              }
+            </div>
+          `
+          : ""
+      }
+      ${
+        envelopeConsumeAuditReadout
+          ? `
+            <div class="block" style="margin-top: 12px;">
+              <p><strong>${escapeHtml(locale === "ja" ? "Envelope consume audit" : "Envelope consume audit")}:</strong></p>
+              ${
+                auditRecord
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Audit record" : "Audit record")}:</strong> <code>${escapeHtml(normalizeText(auditRecord.id))}</code> ${escapeHtml(normalizeText(auditRecord.summary))}</p>`
+                  : ""
+              }
+              ${
+                auditFailure
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Audit failure" : "Audit failure")}:</strong> <code>${escapeHtml(normalizeText(auditFailure.id))}</code> ${escapeHtml(normalizeText(auditFailure.summary))}</p>`
+                  : ""
+              }
+              ${
+                auditRetention
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Audit retention" : "Audit retention")}:</strong> <code>${escapeHtml(normalizeText(auditRetention.id))}</code> ${escapeHtml(normalizeText(auditRetention.summary))}</p>`
                   : ""
               }
             </div>
@@ -4300,6 +4328,7 @@ async function buildApprovalBoundBootstrapSessionStatus({
     envelopeConsumptionPlan: null,
     envelopeConsumePreflight: null,
     envelopeConsumeOutcome: null,
+    envelopeConsumeAuditReadout: null,
     requestPath: SETUP_WIZARD_APPROVAL_BOUND_BOOTSTRAP_SESSION_REQUEST_PATH,
     requestEnabled: true,
     returnTo: `${url?.pathname || "/setup/wizard"}${url?.search || ""}`,
@@ -4440,6 +4469,12 @@ async function buildApprovalBoundBootstrapSessionStatus({
       : null,
     envelopeConsumeOutcome: requestRecorded
       ? buildBootstrapSessionEnvelopeConsumeOutcome({
+          bootstrapState,
+          preview
+        })
+      : null,
+    envelopeConsumeAuditReadout: requestRecorded
+      ? buildBootstrapSessionEnvelopeConsumeAuditReadout({
           bootstrapState,
           preview
         })
@@ -4741,6 +4776,88 @@ function buildBootstrapSessionEnvelopeConsumeOutcome({ bootstrapState, preview }
       id: postChecks.join("_then_") || "verification_consume_proof_missing",
       summary:
         "The next proof would be the remaining verification checks succeeding after one attested consume."
+    }
+  };
+}
+
+function buildBootstrapSessionEnvelopeConsumeAuditReadout({ bootstrapState, preview }) {
+  const plannedWrites = Array.isArray(preview?.plannedWrites) ? preview.plannedWrites : [];
+
+  if (bootstrapState !== "available") {
+    return {
+      auditRecord: {
+        id: "future_audit_record_required_even_for_blocked_consume",
+        summary:
+          "A future consume path should still record that consume was blocked by missing prerequisites rather than silently dropping the attempt."
+      },
+      auditFailure: {
+        id: "audit_must_fail_closed_if_block_reason_cannot_be_recorded",
+        summary:
+          "If VTDD cannot record why consume was blocked, it should fail closed rather than pretend the attempt never happened."
+      },
+      auditRetention: {
+        id: "retain_block_reason_with_request_bound_context",
+        summary:
+          "The audit record should retain the request-bound context and blocked reason so the operator can understand why consume did not proceed."
+      }
+    };
+  }
+
+  if (plannedWrites.length === 1 && plannedWrites[0] === "GITHUB_APP_INSTALLATION_ID") {
+    return {
+      auditRecord: {
+        id: "future_audit_record_for_single_installation_binding_consume",
+        summary:
+          "A future consume path should record the one-time installation-binding write, the envelope id, and the immediate follow-up checks."
+      },
+      auditFailure: {
+        id: "audit_must_fail_closed_if_installation_consume_cannot_be_traced",
+        summary:
+          "If the installation-binding consume cannot be traced back to the signed envelope and resulting checks, VTDD should fail closed."
+      },
+      auditRetention: {
+        id: "retain_installation_consume_trace_until_follow_up_checks_complete",
+        summary:
+          "The audit record should stay available through the installation follow-up checks so the one-shot consume can be reviewed end to end."
+      }
+    };
+  }
+
+  if (plannedWrites.length > 1) {
+    return {
+      auditRecord: {
+        id: "future_audit_record_for_bounded_runtime_bootstrap_consume",
+        summary:
+          "A future consume path should record the bounded runtime write set, envelope id, and the exact post-write checks that prove what happened."
+      },
+      auditFailure: {
+        id: "audit_must_fail_closed_if_runtime_consume_cannot_be_traced",
+        summary:
+          "If the bounded runtime consume cannot be traced to a signed envelope and resulting checks, VTDD should fail closed."
+      },
+      auditRetention: {
+        id: "retain_runtime_consume_trace_through_post_write_proof",
+        summary:
+          "The audit record should remain available until the post-write proof is complete so the consumed envelope can be audited end to end."
+      }
+    };
+  }
+
+  return {
+    auditRecord: {
+      id: "future_audit_record_for_verification_bound_consume",
+      summary:
+        "A future consume path should record the verification-bound consume, envelope id, and the final readiness proof it was meant to unlock."
+    },
+    auditFailure: {
+      id: "audit_must_fail_closed_if_verification_consume_cannot_be_traced",
+      summary:
+        "If the verification-bound consume cannot be traced to the signed envelope and resulting proof, VTDD should fail closed."
+    },
+    auditRetention: {
+      id: "retain_verification_consume_trace_until_final_readiness_proof",
+      summary:
+        "The audit record should remain available until the final readiness proof is complete."
     }
   };
 }
