@@ -8119,7 +8119,11 @@ async function detectGitHubAppInstallation({ env, fetchImpl, targetOwner }) {
   }
 
   const installations = Array.isArray(payload)
-    ? payload.filter((item) => normalizeText(item?.id))
+    ? payload.filter((item) => {
+        const installationId = normalizeText(item?.id);
+        const suspendedAt = normalizeText(item?.suspended_at);
+        return installationId && !suspendedAt;
+      })
     : [];
   if (installations.length === 0) {
     return {
