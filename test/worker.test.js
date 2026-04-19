@@ -3107,6 +3107,206 @@ test("worker setup wizard installation selection required exposes direct GitHub 
       url: "https://github.com/apps/vtdd-test"
     }
   ]);
+  assert.equal(
+    body.githubAppSetupCheck.installationCapturePath,
+    "/setup/wizard/github-app/capture-installation"
+  );
+  assert.deepEqual(body.githubAppSetupCheck.installationSelectionOptions, []);
+});
+
+test("worker setup wizard installation selection required html offers direct selection buttons", async () => {
+  const { privateKey } = generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+    privateKeyEncoding: {
+      type: "pkcs8",
+      format: "pem"
+    },
+    publicKeyEncoding: {
+      type: "spki",
+      format: "pem"
+    }
+  });
+  const env = {
+    GITHUB_APP_ID: "12345",
+    GITHUB_APP_PRIVATE_KEY: privateKey,
+    GITHUB_API_FETCH: async (url) => {
+      if (String(url).endsWith("/app/installations")) {
+        return new Response(
+          JSON.stringify([
+            { id: 111, account: { login: "other-org" } },
+            { id: 222, account: { login: "sample-org" } }
+          ]),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          }
+        );
+      }
+      if (String(url).endsWith("/app")) {
+        return new Response(
+          JSON.stringify({
+            id: 12345,
+            slug: "vtdd-test",
+            html_url: "https://github.com/apps/vtdd-test"
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          }
+        );
+      }
+      return new Response(JSON.stringify({}), {
+        status: 404,
+        headers: { "content-type": "application/json" }
+      });
+    }
+  };
+
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/setup/wizard?repo=sample-org/vtdd-v2&repo=other-org/another-repo&githubAppCheck=on"
+    ),
+    env
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.text();
+  assert.match(body, /You can choose the installation directly in the wizard/);
+  assert.match(body, /Use other-org installation/);
+  assert.match(body, /Use sample-org installation/);
+});
+
+test("worker setup wizard installation selection required json exposes direct selection options", async () => {
+  const { privateKey } = generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+    privateKeyEncoding: {
+      type: "pkcs8",
+      format: "pem"
+    },
+    publicKeyEncoding: {
+      type: "spki",
+      format: "pem"
+    }
+  });
+  const env = {
+    GITHUB_APP_ID: "12345",
+    GITHUB_APP_PRIVATE_KEY: privateKey,
+    GITHUB_API_FETCH: async (url) => {
+      if (String(url).endsWith("/app/installations")) {
+        return new Response(
+          JSON.stringify([
+            { id: 111, account: { login: "other-org" } },
+            { id: 222, account: { login: "sample-org" } }
+          ]),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          }
+        );
+      }
+      if (String(url).endsWith("/app")) {
+        return new Response(
+          JSON.stringify({
+            id: 12345,
+            slug: "vtdd-test",
+            html_url: "https://github.com/apps/vtdd-test"
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          }
+        );
+      }
+      return new Response(JSON.stringify({}), {
+        status: 404,
+        headers: { "content-type": "application/json" }
+      });
+    }
+  };
+
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/setup/wizard?format=json&repo=sample-org/vtdd-v2&repo=other-org/another-repo&githubAppCheck=on"
+    ),
+    env
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.githubAppSetupCheck.state, "installation_selection_required");
+  assert.deepEqual(body.githubAppSetupCheck.installationSelectionOptions, [
+    {
+      installationId: "111",
+      accountLogin: "other-org",
+      accountType: ""
+    },
+    {
+      installationId: "222",
+      accountLogin: "sample-org",
+      accountType: ""
+    }
+  ]);
+});
+
+test("worker setup wizard installation selection stays provider-led when candidate owners are ambiguous", async () => {
+  const { privateKey } = generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+    privateKeyEncoding: {
+      type: "pkcs8",
+      format: "pem"
+    },
+    publicKeyEncoding: {
+      type: "spki",
+      format: "pem"
+    }
+  });
+  const env = {
+    GITHUB_APP_ID: "12345",
+    GITHUB_APP_PRIVATE_KEY: privateKey,
+    GITHUB_API_FETCH: async (url) => {
+      if (String(url).endsWith("/app/installations")) {
+        return new Response(
+          JSON.stringify([
+            { id: 111, account: { login: "sample-org" } },
+            { id: 222, account: { login: "sample-org" } }
+          ]),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          }
+        );
+      }
+      if (String(url).endsWith("/app")) {
+        return new Response(
+          JSON.stringify({
+            id: 12345,
+            slug: "vtdd-test",
+            html_url: "https://github.com/apps/vtdd-test"
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          }
+        );
+      }
+      return new Response(JSON.stringify({}), {
+        status: 404,
+        headers: { "content-type": "application/json" }
+      });
+    }
+  };
+
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/setup/wizard?format=json&repo=sample-org/vtdd-v2&githubAppCheck=on"
+    ),
+    env
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.githubAppSetupCheck.state, "installation_selection_required");
+  assert.deepEqual(body.githubAppSetupCheck.installationSelectionOptions, []);
 });
 
 test("worker setup wizard narrows multiple installations by target repo owner", async () => {

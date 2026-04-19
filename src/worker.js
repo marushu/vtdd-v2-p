@@ -3035,6 +3035,15 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
   const completionActionEnvelopeToken = normalizeText(
     completeDetectedInstallationAction?.envelopeToken
   );
+  const installationSelectionOptions = Array.isArray(check?.installationSelectionOptions)
+    ? check.installationSelectionOptions
+        .map((item) => ({
+          installationId: normalizeText(item?.installationId),
+          accountLogin: normalizeText(item?.accountLogin),
+          accountType: normalizeText(item?.accountType)
+        }))
+        .filter((item) => item.installationId && item.accountLogin)
+    : [];
   const listItem = (text) => `<li>${escapeHtml(text)}</li>`;
 
   const evidenceItems = [];
@@ -3071,6 +3080,47 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
       ${
         evidenceItems.length > 0
           ? `<p class="meta">${escapeHtml(evidenceItems.join(" / "))}</p>`
+          : ""
+      }
+      ${
+        state === "installation_selection_required" &&
+        installationCapturePath &&
+        installationSelectionOptions.length > 0
+          ? `
+            <div class="block" style="margin-top: 12px;">
+              <p><strong>${escapeHtml(
+                locale === "ja"
+                  ? "候補 installation を wizard 内でそのまま選べます"
+                  : "You can choose the installation directly in the wizard"
+              )}</strong></p>
+              <p class="meta">${escapeHtml(
+                locale === "ja"
+                  ? "GitHub が返した active installation 候補です。値をコピーせず、この setup target に合う owner を選ぶと VTDD が installation binding を保存します。"
+                  : "These are the active installation candidates GitHub returned. Choose the owner that matches this setup target and VTDD will store the installation binding without asking you to copy values."
+              )}</p>
+              <div class="button-group">
+                ${installationSelectionOptions
+                  .map(
+                    (item) => `
+                      <form method="post" action="${escapeHtml(installationCapturePath)}">
+                        <input type="hidden" name="returnTo" value="${escapeHtml(
+                          returnTo || "/setup/wizard?githubAppCheck=on"
+                        )}" />
+                        <input type="hidden" name="GITHUB_APP_INSTALLATION_ID" value="${escapeHtml(
+                          item.installationId
+                        )}" />
+                        <button type="submit" class="copy-button">${escapeHtml(
+                          locale === "ja"
+                            ? `${item.accountLogin} の installation を使う`
+                            : `Use ${item.accountLogin} installation`
+                        )}</button>
+                      </form>
+                    `
+                  )
+                  .join("")}
+              </div>
+            </div>
+          `
           : ""
       }
       ${
@@ -4799,6 +4849,9 @@ async function runGitHubAppSetupCheck(url, env) {
             "Choose the correct installation in GitHub, then return here for capture."
           ],
           links: buildGitHubAppInstallationLinks(appMetadata),
+          installationSelectionOptions: detection.selectionOptions ?? [],
+          installationCapturePath: SETUP_WIZARD_GITHUB_APP_INSTALLATION_CAPTURE_PATH,
+          returnTo: `${url.pathname}${url.search || "?githubAppCheck=on"}`,
           evidence: {
             stage: "installation_detection",
             source: "github_app_installations",
@@ -8156,7 +8209,8 @@ async function detectGitHubAppInstallation({ env, fetchImpl, targetOwner }) {
 
   return {
     state: "installation_selection_required",
-    totalInstallations: installations.length
+    totalInstallations: installations.length,
+    selectionOptions: buildGitHubAppInstallationSelectionOptions(installations)
   };
 }
 
@@ -8244,6 +8298,35 @@ function buildGitHubAppInstallationLinks(appMetadata) {
   }
 
   return links;
+}
+
+function buildGitHubAppInstallationSelectionOptions(installations) {
+  const options = (Array.isArray(installations) ? installations : [])
+    .map((item) => {
+      const installationId = normalizeText(item?.id);
+      const accountLogin = normalizeText(item?.account?.login);
+      const accountType = normalizeText(item?.account?.type);
+      if (!installationId || !accountLogin) {
+        return null;
+      }
+      return {
+        installationId,
+        accountLogin,
+        accountType
+      };
+    })
+    .filter(Boolean);
+
+  if (options.length < 2) {
+    return [];
+  }
+
+  const uniqueAccountLogins = new Set(options.map((item) => item.accountLogin.toLowerCase()));
+  if (uniqueAccountLogins.size !== options.length) {
+    return [];
+  }
+
+  return options;
 }
 
 function buildGitHubAppManifestLaunch(url) {
