@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { generateKeyPairSync } from "node:crypto";
 import { resolveGatewayAliasRegistryFromGitHubApp } from "../src/core/index.js";
 
 test("github app index merges live repositories and filters out non-visible provided mappings", async () => {
@@ -281,6 +282,73 @@ test("github app index warns when app credentials are incomplete", async () => {
   assert.equal(result.aliasRegistry.length, 1);
   assert.equal(result.warnings.length, 1);
   assert.equal(result.warnings[0].includes("must all be configured"), true);
+});
+
+test("github app index normalizes escaped private key newlines before jwt provider usage", async () => {
+  const githubApiFetch = async (url, init = {}) => {
+    if (String(url).includes("/app/installations/98765/access_tokens")) {
+      return new Response(
+        JSON.stringify({
+          token: "ghs_minted_installation_token",
+          expires_at: "2030-01-01T00:00:00Z"
+        }),
+        {
+          status: 201,
+          headers: { "content-type": "application/json" }
+        }
+      );
+    }
+    return new Response(
+      JSON.stringify({
+        total_count: 1,
+        repositories: [
+          {
+            full_name: "sample-org/vtdd-v2",
+            name: "vtdd-v2",
+            private: true
+          }
+        ]
+      }),
+      {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      }
+    );
+  };
+
+  const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+  const pem = privateKey.export({ type: "pkcs8", format: "pem" });
+  let seenKey = null;
+  const result = await resolveGatewayAliasRegistryFromGitHubApp({
+    policyInput: { aliasRegistry: [] },
+    env: {
+      GITHUB_APP_ID: "12345",
+      GITHUB_APP_INSTALLATION_ID: "98765",
+      GITHUB_APP_PRIVATE_KEY: JSON.stringify(pem).slice(1, -1),
+      GITHUB_API_FETCH: async (url, init = {}) => {
+        if (String(url).includes("/app/installations/98765/access_tokens")) {
+          const authHeader = String(init?.headers?.authorization ?? "");
+          assert.equal(authHeader.startsWith("Bearer "), true);
+          seenKey = "normalized";
+          return new Response(
+            JSON.stringify({
+              token: "ghs_minted_installation_token",
+              expires_at: "2030-01-01T00:00:00Z"
+            }),
+            {
+              status: 201,
+              headers: { "content-type": "application/json" }
+            }
+          );
+        }
+        return githubApiFetch(url, init);
+      },
+    }
+  });
+
+  assert.equal(result.source, "github_app_live");
+  assert.equal(result.warnings.length, 0);
+  assert.equal(seenKey, "normalized");
 });
 
 test("github app index can enforce minted-token mode and block static token fallback", async () => {

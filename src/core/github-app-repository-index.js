@@ -552,12 +552,26 @@ function resolveGitHubAppPrivateKey(env) {
   const base64Value = normalizeText(env?.GITHUB_APP_PRIVATE_KEY_BASE64);
   if (base64Value) {
     try {
-      return decodeToUtf8(base64Value);
+      return normalizeGitHubAppPrivateKeyValue(decodeToUtf8(base64Value));
     } catch {
       return "";
     }
   }
-  return normalizeText(env?.GITHUB_APP_PRIVATE_KEY);
+  return normalizeGitHubAppPrivateKeyValue(env?.GITHUB_APP_PRIVATE_KEY);
+}
+
+function normalizeGitHubAppPrivateKeyValue(value) {
+  const normalized = normalizeText(value);
+  if (!normalized) {
+    return "";
+  }
+
+  const unquoted =
+    normalized.startsWith('"') && normalized.endsWith('"')
+      ? normalized.slice(1, -1)
+      : normalized;
+
+  return unquoted.replaceAll("\\n", "\n");
 }
 
 function decodePemPrivateKey(value) {

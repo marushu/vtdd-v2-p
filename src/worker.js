@@ -3213,12 +3213,26 @@ function resolveGitHubAppPrivateKey(env) {
   const base64Value = normalizeText(runtimeEnv.GITHUB_APP_PRIVATE_KEY_BASE64);
   if (base64Value) {
     try {
-      return decodeBase64(base64Value);
+      return normalizeGitHubAppPrivateKeyValue(decodeBase64(base64Value));
     } catch {
       return "";
     }
   }
-  return normalizeText(runtimeEnv.GITHUB_APP_PRIVATE_KEY);
+  return normalizeGitHubAppPrivateKeyValue(runtimeEnv.GITHUB_APP_PRIVATE_KEY);
+}
+
+function normalizeGitHubAppPrivateKeyValue(value) {
+  const normalized = normalizeText(value);
+  if (!normalized) {
+    return "";
+  }
+
+  const unquoted =
+    normalized.startsWith('"') && normalized.endsWith('"')
+      ? normalized.slice(1, -1)
+      : normalized;
+
+  return unquoted.replaceAll("\\n", "\n");
 }
 
 function isTruthySignal(value) {
