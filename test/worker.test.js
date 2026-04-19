@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { generateKeyPairSync } from "node:crypto";
 import worker from "../src/worker.js";
 import {
   ActionType,
@@ -594,7 +595,14 @@ test("worker setup wizard manifest callback writes github app id and private key
   assert.equal(response.status, 200);
   const html = await response.text();
   assert.equal(html.includes("GitHub App manifest bootstrap completed."), true);
+  assert.equal(html.includes("VTDD now has a GitHub App identity stored on Worker runtime."), true);
   assert.equal(html.includes("Install the GitHub App"), true);
+  assert.equal(
+    html.includes(
+      "VTDD will try to detect the installation automatically before asking you for manual recovery steps."
+    ),
+    true
+  );
   assert.equal(githubCalls.length, 1);
   assert.equal(githubCalls[0].init.headers.authorization, "Bearer ghp_conversion_token");
   assert.equal(githubCalls[0].init.headers["user-agent"], "vtdd-v2-worker");
@@ -920,6 +928,110 @@ test("worker setup wizard manifest callback reports unavailable when manifest co
   const body = await response.json();
   assert.equal(body.error, "github_app_manifest_bootstrap_unavailable");
   assert.equal(body.missingPrerequisites.includes("GITHUB_MANIFEST_CONVERSION_TOKEN"), true);
+});
+
+test("worker setup wizard detects a single github app installation before installation id is stored", async () => {
+  const { privateKey } = generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+    privateKeyEncoding: {
+      type: "pkcs8",
+      format: "pem"
+    },
+    publicKeyEncoding: {
+      type: "spki",
+      format: "pem"
+    }
+  });
+  const env = {
+    GITHUB_APP_ID: "12345",
+    GITHUB_APP_PRIVATE_KEY: privateKey,
+    GITHUB_API_FETCH: async (url) => {
+      if (String(url).endsWith("/app/installations")) {
+        return new Response(
+          JSON.stringify([
+            {
+              id: 125153871
+            }
+          ]),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          }
+        );
+      }
+      return new Response(JSON.stringify({}), {
+        status: 404,
+        headers: { "content-type": "application/json" }
+      });
+    }
+  };
+
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/setup/wizard?format=json&repo=sample-org/vtdd-v2&githubAppCheck=on"
+    ),
+    env
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.githubAppSetupCheck.state, "installation_detected");
+  assert.equal(body.githubAppSetupCheck.detectedInstallationId, "125153871");
+  assert.equal(
+    body.githubAppSetupCheck.installationCapturePath,
+    "/setup/wizard/github-app/capture-installation"
+  );
+});
+
+test("worker setup wizard can store detected installation id through narrow capture endpoint", async () => {
+  const calls = [];
+  const env = {
+    SETUP_WIZARD_PASSCODE: "2468",
+    CLOUDFLARE_API_TOKEN: "bootstrap-token",
+    CLOUDFLARE_ACCOUNT_ID: "account-id",
+    CLOUDFLARE_WORKER_SCRIPT_NAME: "vtdd-v2-mvp",
+    GITHUB_MANIFEST_CONVERSION_TOKEN: "gho_operator_token",
+    CF_API_FETCH: async (url, init = {}) => {
+      calls.push({ url: String(url), init });
+      return new Response(
+        JSON.stringify({
+          success: true,
+          errors: [],
+          result: { name: "GITHUB_APP_INSTALLATION_ID", type: "secret_text" }
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        }
+      );
+    }
+  };
+  const { sessionCookie } = await unlockSetupWizard(env);
+
+  const response = await worker.fetch(
+    new Request("https://example.com/setup/wizard/github-app/capture-installation", {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      },
+      body: new URLSearchParams({
+        GITHUB_APP_INSTALLATION_ID: "125153871",
+        returnTo: "/setup/wizard?repo=sample-org/vtdd-v2&githubAppCheck=on"
+      })
+    }),
+    env
+  );
+
+  assert.equal(response.status, 303);
+  assert.equal(
+    response.headers.get("location"),
+    "/setup/wizard?repo=sample-org/vtdd-v2&githubAppCheck=on"
+  );
+  assert.equal(calls.length, 1);
+  const payload = JSON.parse(String(calls[0].init.body));
+  assert.equal(payload.name, "GITHUB_APP_INSTALLATION_ID");
+  assert.equal(payload.text, "125153871");
 });
 
 test("worker setup wizard bootstrap rejects requests with missing allowlisted values", async () => {

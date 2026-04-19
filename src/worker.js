@@ -40,6 +40,8 @@ const SETUP_WIZARD_IMPORT_TOKEN_PARAM = "import_token";
 const SETUP_WIZARD_IMPORT_EXPIRES_PARAM = "import_expires";
 const SETUP_WIZARD_GITHUB_APP_BOOTSTRAP_PATH = "/setup/wizard/github-app/bootstrap";
 const SETUP_WIZARD_GITHUB_APP_MANIFEST_CALLBACK_PATH = "/setup/wizard/github-app/manifest/callback";
+const SETUP_WIZARD_GITHUB_APP_INSTALLATION_CAPTURE_PATH =
+  "/setup/wizard/github-app/capture-installation";
 const CLOUDFLARE_WORKER_SCRIPT_NAME_ENV = "CLOUDFLARE_WORKER_SCRIPT_NAME";
 const GITHUB_MANIFEST_CONVERSION_TOKEN_ENV = "GITHUB_MANIFEST_CONVERSION_TOKEN";
 const GITHUB_APP_BOOTSTRAP_SECRET_ALLOWLIST = Object.freeze([
@@ -88,6 +90,17 @@ export default {
         return auth.response;
       }
       return handleGitHubAppBootstrapRequest({ request, url, env });
+    }
+
+    if (
+      request.method === "POST" &&
+      url.pathname === SETUP_WIZARD_GITHUB_APP_INSTALLATION_CAPTURE_PATH
+    ) {
+      const auth = await authorizeSetupWizardRequest({ request, url, env });
+      if (!auth.ok) {
+        return auth.response;
+      }
+      return handleGitHubAppInstallationCaptureRequest({ request, url, env });
     }
 
     if (request.method === "GET" && url.pathname === SETUP_WIZARD_GITHUB_APP_MANIFEST_CALLBACK_PATH) {
@@ -505,17 +518,91 @@ async function handleGitHubAppManifestCallbackRequest({ request, url, env }) {
     renderHtmlDocument(`
       <p class="meta">GitHub App manifest bootstrap completed.</p>
       <div class="block">
-        <p><strong>App ID</strong> and <strong>private key</strong> were written to Worker runtime.</p>
-        <p class="meta">Installation ID is still required after you install the app.</p>
+        <p><strong>VTDD now has a GitHub App identity stored on Worker runtime.</strong></p>
+        <p class="meta">Next, GitHub needs to install that identity to your repositories so VTDD can mint short-lived installation tokens later.</p>
         ${
           installUrl
             ? `<p><a href="${escapeHtml(installUrl)}" target="_blank" rel="noopener noreferrer">Install the GitHub App</a></p>`
             : ""
         }
+        <p class="meta">After installation, return to setup wizard. VTDD will try to detect the installation automatically before asking you for manual recovery steps.</p>
         <p><a href="${escapeHtml(redirectTarget)}">Return to setup wizard</a></p>
       </div>
     `)
   );
+}
+
+async function handleGitHubAppInstallationCaptureRequest({ request, url, env }) {
+  const bootstrap = buildGitHubAppBootstrapStatus({ url, env });
+  if (bootstrap.state !== "available") {
+    return json(503, {
+      ok: false,
+      error: "github_app_installation_capture_unavailable",
+      state: bootstrap.state,
+      summary: bootstrap.summary,
+      missingPrerequisites: bootstrap.missingPrerequisites ?? []
+    });
+  }
+
+  const payload = await readGitHubAppInstallationCapturePayload(request);
+  const installationId = normalizeText(payload.GITHUB_APP_INSTALLATION_ID);
+  if (!installationId) {
+    return json(422, {
+      ok: false,
+      error: "github_app_installation_capture_missing_value"
+    });
+  }
+
+  const fetchImpl =
+    typeof env?.CF_API_FETCH === "function"
+      ? env.CF_API_FETCH
+      : typeof globalThis.fetch === "function"
+        ? globalThis.fetch.bind(globalThis)
+        : null;
+  if (!fetchImpl) {
+    return json(503, {
+      ok: false,
+      error: "github_app_installation_capture_fetch_unavailable",
+      reason: "runtime fetch is unavailable"
+    });
+  }
+
+  const updated = await putCloudflareWorkerSecret({
+    fetchImpl,
+    apiToken: bootstrap.cloudflareApiToken,
+    accountId: bootstrap.accountId,
+    scriptName: bootstrap.scriptName,
+    secretName: "GITHUB_APP_INSTALLATION_ID",
+    secretValue: installationId
+  });
+  if (!updated.ok) {
+    return json(502, {
+      ok: false,
+      error: "github_app_installation_capture_write_failed",
+      reason: updated.reason,
+      evidence: {
+        httpStatus: updated.httpStatus ?? null
+      }
+    });
+  }
+
+  const returnTo =
+    normalizeGitHubAppBootstrapReturnTo(payload.returnTo) || "/setup/wizard?githubAppCheck=on";
+
+  if (payload.mode === "form") {
+    return new Response(null, {
+      status: 303,
+      headers: {
+        location: returnTo
+      }
+    });
+  }
+
+  return json(200, {
+    ok: true,
+    updatedSecrets: ["GITHUB_APP_INSTALLATION_ID"],
+    returnTo
+  });
 }
 
 async function attachSetupWizardImportUrls({ result, url, env }) {
@@ -2247,6 +2334,9 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
   const links = Array.isArray(check?.links) ? check.links : [];
   const evidence = check?.evidence ?? null;
   const checkedAt = normalizeText(check?.checkedAt);
+  const detectedInstallationId = normalizeText(check?.detectedInstallationId);
+  const installationCapturePath = normalizeText(check?.installationCapturePath);
+  const returnTo = normalizeGitHubAppBootstrapReturnTo(check?.returnTo);
   const listItem = (text) => `<li>${escapeHtml(text)}</li>`;
 
   const evidenceItems = [];
@@ -2283,6 +2373,37 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
       ${
         evidenceItems.length > 0
           ? `<p class="meta">${escapeHtml(evidenceItems.join(" / "))}</p>`
+          : ""
+      }
+      ${
+        state === "installation_detected" && detectedInstallationId && installationCapturePath
+          ? `
+            <div class="block" style="margin-top: 12px;">
+              <p><strong>${escapeHtml(
+                locale === "ja"
+                  ? "VTDD が installation を 1 件検出しました"
+                  : "VTDD found a single GitHub App installation"
+              )}</strong></p>
+              <p class="meta">${escapeHtml(
+                locale === "ja"
+                  ? "この installation ID を保存すると、VTDD は short-lived installation token を mint できる状態に近づきます。"
+                  : "Saving this installation ID moves VTDD closer to minting short-lived installation tokens."
+              )}</p>
+              <form method="post" action="${escapeHtml(installationCapturePath)}">
+                <input type="hidden" name="returnTo" value="${escapeHtml(
+                  returnTo || "/setup/wizard?githubAppCheck=on"
+                )}" />
+                <input type="hidden" name="GITHUB_APP_INSTALLATION_ID" value="${escapeHtml(
+                  detectedInstallationId
+                )}" />
+                <button type="submit" class="copy-button">${escapeHtml(
+                  locale === "ja"
+                    ? "検出した Installation ID を保存"
+                    : "Store Detected Installation ID"
+                )}</button>
+              </form>
+            </div>
+          `
           : ""
       }
       ${
@@ -2345,7 +2466,7 @@ function renderGitHubAppBootstrap(bootstrap, url, locale = "en") {
           ? `
             <div class="block" style="margin-top: 12px;">
               <p><strong>${escapeHtml(locale === "ja" ? "GitHub App を自動作成" : "Create GitHub App automatically")}</strong></p>
-              <p class="meta">${escapeHtml(locale === "ja" ? "GitHub の manifest flow を開き、App ID と private key をこの Worker bootstrap に戻します。" : "This opens GitHub's manifest flow and returns here with App ID and private key ready for Worker bootstrap.")}</p>
+              <p class="meta">${escapeHtml(locale === "ja" ? "この step では、VTDD が GitHub を安全に触るための身分証を作りに行きます。戻ってくると App ID と private key が Worker runtime に保存されます。" : "This step creates the GitHub-side identity VTDD needs for safe execution. When you return, App ID and private key will be stored on Worker runtime.")}</p>
               <form method="post" action="${escapeHtml(manifestLaunch.action)}" target="_blank" rel="noopener noreferrer">
                 <input type="hidden" name="manifest" value="${escapeHtml(manifestLaunch.manifest)}" />
                 <button type="submit" class="copy-button">${escapeHtml(locale === "ja" ? "GitHub App を自動作成" : "Create GitHub App Automatically")}</button>
@@ -2733,11 +2854,102 @@ async function runGitHubAppSetupCheck(url, env) {
   }
 
   if (missingFields.length > 0) {
+    const missingOnlyInstallation =
+      missingFields.length === 1 && missingFields[0] === "GITHUB_APP_INSTALLATION_ID";
+    if (missingOnlyInstallation && diagnosticsEnabled) {
+      const detection = await detectGitHubAppInstallation({
+        env: runtimeEnv,
+        fetchImpl:
+          typeof env?.GITHUB_API_FETCH === "function"
+            ? env.GITHUB_API_FETCH.bind(env)
+            : typeof globalThis.fetch === "function"
+              ? globalThis.fetch.bind(globalThis)
+              : null
+      });
+
+      if (detection.state === "installation_detected") {
+        return {
+          state: "installation_detected",
+          summary:
+            "GitHub App identity is stored on Worker runtime, and VTDD found one installation that can be captured automatically.",
+          guidance: [
+            "Store the detected installation ID to let VTDD mint short-lived installation tokens.",
+            "After saving it, reload diagnostics to verify live repository access."
+          ],
+          detectedInstallationId: detection.installationId,
+          installationCapturePath: SETUP_WIZARD_GITHUB_APP_INSTALLATION_CAPTURE_PATH,
+          returnTo: `${url.pathname}${url.search || "?githubAppCheck=on"}`,
+          evidence: {
+            stage: "installation_detection",
+            source: "github_app_installations",
+            repositoryCount: detection.totalInstallations
+          },
+          checkedAt: new Date().toISOString()
+        };
+      }
+
+      if (detection.state === "awaiting_installation") {
+        return {
+          state: "awaiting_installation",
+          summary:
+            "VTDD has a GitHub App identity, but GitHub has not exposed an installation for capture yet.",
+          guidance: [
+            "Finish GitHub App installation, then reload diagnostics.",
+            "If you already installed it, wait a moment and retry this check."
+          ],
+          evidence: {
+            stage: "installation_detection",
+            source: "github_app_installations",
+            repositoryCount: 0
+          },
+          checkedAt: new Date().toISOString()
+        };
+      }
+
+      if (detection.state === "installation_selection_required") {
+        return {
+          state: "installation_selection_required",
+          summary:
+            "VTDD found multiple GitHub App installations, so it cannot safely capture one automatically.",
+          guidance: [
+            "Keep setup wizard focused on one installation target at a time.",
+            "Choose the correct installation in GitHub, then return here for capture."
+          ],
+          evidence: {
+            stage: "installation_detection",
+            source: "github_app_installations",
+            repositoryCount: detection.totalInstallations
+          },
+          checkedAt: new Date().toISOString()
+        };
+      }
+
+      if (detection.state === "probe_failed") {
+        return {
+          state: "probe_failed",
+          summary: detection.summary,
+          guidance: detection.guidance,
+          evidence: {
+            stage: "installation_detection",
+            source: "github_app_installations"
+          },
+          checkedAt: new Date().toISOString()
+        };
+      }
+    }
+
     return {
       state: "partially_configured",
       summary:
-        "GitHub App setup check: some required Worker secrets are missing, so VTDD cannot mint installation tokens yet.",
-      guidance: missingFields.map((field) => `Set ${field} on Worker runtime.`),
+        missingOnlyInstallation
+          ? "VTDD already has the GitHub App identity, but it still needs the installation binding before it can mint installation tokens."
+          : "GitHub App setup check: some required Worker secrets are missing, so VTDD cannot mint installation tokens yet.",
+      guidance: missingOnlyInstallation
+        ? [
+            "Install the GitHub App, then run githubAppCheck=on so VTDD can try to detect the installation.",
+            "If detection is not available yet, set GITHUB_APP_INSTALLATION_ID on Worker runtime."
+          ]
+        : missingFields.map((field) => `Set ${field} on Worker runtime.`),
       evidence: {
         stage: "configuration_check",
         source: "worker_runtime"
@@ -2860,6 +3072,83 @@ function buildGitHubAppBootstrapStatus({ url, env }) {
   };
 }
 
+async function detectGitHubAppInstallation({ env, fetchImpl }) {
+  const runtimeEnv = env ?? {};
+  const appId = normalizeText(runtimeEnv.GITHUB_APP_ID);
+  const privateKey = resolveGitHubAppPrivateKey(runtimeEnv);
+  if (!appId || !privateKey || typeof fetchImpl !== "function") {
+    return {
+      state: "probe_failed",
+      summary: "VTDD could not inspect GitHub App installations from Worker runtime.",
+      guidance: ["Re-check GitHub App secrets and retry diagnostics."]
+    };
+  }
+
+  const appJwt = await createGitHubAppJwtFromPrivateKey({ appId, privateKey });
+  if (!appJwt.ok) {
+    return {
+      state: "probe_failed",
+      summary: "VTDD could not sign a GitHub App JWT while checking installations.",
+      guidance: ["Regenerate the GitHub App private key and update Worker runtime."]
+    };
+  }
+
+  let response;
+  try {
+    response = await fetchImpl(`${GITHUB_API_BASE_URL}/app/installations`, {
+      method: "GET",
+      headers: {
+        accept: "application/vnd.github+json",
+        authorization: `Bearer ${appJwt.token}`,
+        "user-agent": GITHUB_API_USER_AGENT,
+        "x-github-api-version": "2022-11-28"
+      }
+    });
+  } catch {
+    return {
+      state: "probe_failed",
+      summary: "VTDD could not reach GitHub while checking App installations.",
+      guidance: ["Retry diagnostics after confirming Worker runtime can reach api.github.com."]
+    };
+  }
+
+  const payload = await readSafeJson(response);
+  if (!response.ok) {
+    return {
+      state: "probe_failed",
+      summary:
+        normalizeText(payload?.message) ||
+        `VTDD could not inspect GitHub App installations (http ${response.status}).`,
+      guidance: buildGitHubAppSetupGuidanceFromWarning(
+        `github app installation detection failed: ${
+          normalizeText(payload?.message) || `http ${response.status}`
+        }`
+      )
+    };
+  }
+
+  const installations = Array.isArray(payload)
+    ? payload.filter((item) => normalizeText(item?.id))
+    : [];
+  if (installations.length === 0) {
+    return {
+      state: "awaiting_installation",
+      totalInstallations: 0
+    };
+  }
+  if (installations.length === 1) {
+    return {
+      state: "installation_detected",
+      installationId: normalizeText(installations[0]?.id),
+      totalInstallations: 1
+    };
+  }
+  return {
+    state: "installation_selection_required",
+    totalInstallations: installations.length
+  };
+}
+
 function buildGitHubAppManifestLaunch(url) {
   const returnTo = `${url.pathname}${url.search || "?githubAppCheck=on"}`;
   const redirectUrl = new URL(SETUP_WIZARD_GITHUB_APP_MANIFEST_CALLBACK_PATH, url.origin);
@@ -2941,6 +3230,26 @@ async function readGitHubAppBootstrapPayload(request) {
     GITHUB_APP_ID: normalizeText(form.get("GITHUB_APP_ID")),
     GITHUB_APP_INSTALLATION_ID: normalizeText(form.get("GITHUB_APP_INSTALLATION_ID")),
     GITHUB_APP_PRIVATE_KEY: normalizeText(form.get("GITHUB_APP_PRIVATE_KEY"))
+  };
+}
+
+async function readGitHubAppInstallationCapturePayload(request) {
+  const contentType = normalizeText(request.headers.get("content-type")).toLowerCase();
+
+  if (contentType.includes("application/json")) {
+    const payload = await request.json().catch(() => ({}));
+    return {
+      mode: "json",
+      returnTo: normalizeText(payload?.returnTo),
+      GITHUB_APP_INSTALLATION_ID: normalizeText(payload?.GITHUB_APP_INSTALLATION_ID)
+    };
+  }
+
+  const form = await request.formData();
+  return {
+    mode: "form",
+    returnTo: normalizeText(form.get("returnTo")),
+    GITHUB_APP_INSTALLATION_ID: normalizeText(form.get("GITHUB_APP_INSTALLATION_ID"))
   };
 }
 
@@ -3178,6 +3487,12 @@ function buildGitHubAppSetupGuidanceFromWarning(warning) {
       "If values look correct, regenerate the private key and retry diagnostics."
     ];
   }
+  if (normalized.includes("installation detection failed")) {
+    return [
+      "Re-check GitHub App installation target and current private key.",
+      "If the app was installed very recently, retry diagnostics in a moment."
+    ];
+  }
   if (normalized.includes("network request failed")) {
     return ["Confirm Worker runtime can reach api.github.com and retry diagnostics."];
   }
@@ -3206,6 +3521,83 @@ function normalizeCloudflareErrors(errors) {
       documentationUrl: normalizeText(item?.documentation_url)
     }))
     .filter((item) => Number.isFinite(item.code) || item.message);
+}
+
+async function createGitHubAppJwtFromPrivateKey({ appId, privateKey }) {
+  try {
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    const issuedAt = nowSeconds - 60;
+    const expiresAt = nowSeconds + 9 * 60;
+    const encodedHeader = encodeJwtPart({ alg: "RS256", typ: "JWT" });
+    const encodedPayload = encodeJwtPart({
+      iat: issuedAt,
+      exp: expiresAt,
+      iss: appId
+    });
+    const signingInput = `${encodedHeader}.${encodedPayload}`;
+    const key = await crypto.subtle.importKey(
+      "pkcs8",
+      decodePemPrivateKey(privateKey),
+      { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+      false,
+      ["sign"]
+    );
+    const signature = await crypto.subtle.sign(
+      { name: "RSASSA-PKCS1-v1_5" },
+      key,
+      new TextEncoder().encode(signingInput)
+    );
+    return {
+      ok: true,
+      token: `${signingInput}.${base64UrlEncodeBytes(new Uint8Array(signature))}`
+    };
+  } catch {
+    return { ok: false };
+  }
+}
+
+function encodeJwtPart(payload) {
+  const json = JSON.stringify(payload);
+  return base64UrlEncodeBytes(new TextEncoder().encode(json));
+}
+
+function decodePemPrivateKey(value) {
+  const pem = normalizeText(value);
+  const body = pem
+    .replaceAll("-----BEGIN PRIVATE KEY-----", "")
+    .replaceAll("-----END PRIVATE KEY-----", "")
+    .replace(/\s+/g, "");
+  return decodeBase64ToBytes(body);
+}
+
+function base64UrlEncodeBytes(bytes) {
+  return toBase64(bytes)
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+}
+
+function toBase64(bytes) {
+  if (typeof btoa === "function") {
+    let binary = "";
+    for (const byte of bytes) {
+      binary += String.fromCharCode(byte);
+    }
+    return btoa(binary);
+  }
+  return Buffer.from(bytes).toString("base64");
+}
+
+function decodeBase64ToBytes(value) {
+  if (typeof atob === "function") {
+    const binary = atob(value);
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) {
+      bytes[index] = binary.charCodeAt(index);
+    }
+    return bytes;
+  }
+  return new Uint8Array(Buffer.from(value, "base64"));
 }
 
 function resolveGitHubAppPrivateKey(env) {
