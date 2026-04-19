@@ -2217,6 +2217,18 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
     "verified_live_connection"
   );
   assert.equal(
+    absorbedBody.approvalBoundBootstrapSession.responsibilityReadout.humanStep.id,
+    "continue_from_verified_setup_without_new_wiring"
+  );
+  assert.equal(
+    absorbedBody.approvalBoundBootstrapSession.responsibilityReadout.vtddStep.id,
+    "carry_verified_capability_forward"
+  );
+  assert.equal(
+    absorbedBody.approvalBoundBootstrapSession.responsibilityReadout.providerStep.id,
+    "providers_hold_verified_runtime_boundary"
+  );
+  assert.equal(
     absorbedBody.approvalBoundBootstrapSession.serviceConnectionFrictionReadout.github.id,
     "github_connection_completed_without_remaining_transport"
   );

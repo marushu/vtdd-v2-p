@@ -5208,7 +5208,8 @@ async function buildApprovalBoundBootstrapSessionStatus({
       }),
     responsibilityReadout: buildBootstrapSessionResponsibilityReadout({
       bootstrapState,
-      preview: effectivePreview
+      preview: effectivePreview,
+      githubAppSetupCheck: effectiveGitHubAppSetupCheck
     }),
     authBoundaryReadout: buildBootstrapSessionAuthBoundaryReadout({
       bootstrapState,
@@ -7068,8 +7069,13 @@ function buildBootstrapSessionServiceConnectionReturnContinuityReadout({
   };
 }
 
-function buildBootstrapSessionResponsibilityReadout({ bootstrapState, preview }) {
+function buildBootstrapSessionResponsibilityReadout({
+  bootstrapState,
+  preview,
+  githubAppSetupCheck
+}) {
   const plannedWrites = Array.isArray(preview?.plannedWrites) ? preview.plannedWrites : [];
+  const setupState = normalizeText(githubAppSetupCheck?.state) || "unknown";
 
   if (bootstrapState !== "available") {
     return {
@@ -7127,6 +7133,26 @@ function buildBootstrapSessionResponsibilityReadout({ bootstrapState, preview })
         id: "github_and_cloudflare_keep_native_trust_boundaries",
         summary:
           "GitHub still owns App creation and install consent, while Cloudflare still owns runtime secret storage."
+      }
+    };
+  }
+
+  if (setupState === "ready") {
+    return {
+      humanStep: {
+        id: "continue_from_verified_setup_without_new_wiring",
+        summary:
+          "The human no longer needs to advance setup wiring or verification in this flow and can continue from the verified VTDD capability."
+      },
+      vtddStep: {
+        id: "carry_verified_capability_forward",
+        summary:
+          "VTDD owns carrying the already-verified GitHub capability forward rather than reopening setup verification."
+      },
+      providerStep: {
+        id: "providers_hold_verified_runtime_boundary",
+        summary:
+          "GitHub and Cloudflare continue to hold their native trust boundaries for the already-verified runtime path."
       }
     };
   }
