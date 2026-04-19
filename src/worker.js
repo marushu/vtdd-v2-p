@@ -5200,12 +5200,11 @@ async function buildApprovalBoundBootstrapSessionStatus({
       preview: effectivePreview,
       githubAppSetupCheck: effectiveGitHubAppSetupCheck
     }),
-    serviceConnectionReturnContinuityReadout:
-      buildBootstrapSessionServiceConnectionReturnContinuityReadout({
-        bootstrapState,
-        preview: effectivePreview,
-        githubAppSetupCheck: effectiveGitHubAppSetupCheck
-      }),
+    serviceConnectionReturnContinuityReadout: buildBootstrapSessionServiceConnectionReturnContinuityReadout({
+      bootstrapState,
+      preview: effectivePreview,
+      githubAppSetupCheck: effectiveGitHubAppSetupCheck
+    }),
     responsibilityReadout: buildBootstrapSessionResponsibilityReadout({
       bootstrapState,
       preview: effectivePreview,
@@ -5464,6 +5463,9 @@ async function buildApprovalBoundBootstrapSessionStatus({
     approvalBoundary: absorbedLiveProof ? null : base.approvalBoundary,
     targetAbsorbs: absorbedLiveProof ? [] : base.targetAbsorbs,
     stepBoundaries: absorbedLiveProof ? null : base.stepBoundaries,
+    serviceConnectionReturnContinuityReadout: absorbedLiveProof
+      ? null
+      : base.serviceConnectionReturnContinuityReadout,
     envelopeConsumptionPlan: requestRecorded
       && !absorbedLiveProof
       ? buildBootstrapSessionEnvelopeConsumptionPlan({
