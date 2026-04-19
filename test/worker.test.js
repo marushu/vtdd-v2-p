@@ -447,6 +447,9 @@ test("worker setup wizard unlocked html shows narrow github app bootstrap form w
   assert.equal(html.includes("Service connection actionability"), true);
   assert.equal(html.includes("GitHub action"), true);
   assert.equal(html.includes("Cloudflare action"), true);
+  assert.equal(html.includes("Service connection friction"), true);
+  assert.equal(html.includes("GitHub friction"), true);
+  assert.equal(html.includes("Cloudflare friction"), true);
   assert.equal(html.includes("Responsibility split"), true);
   assert.equal(html.includes("Human step"), true);
   assert.equal(html.includes("VTDD step"), true);
@@ -650,6 +653,22 @@ test("worker setup wizard unlocked json reports github app bootstrap availabilit
   );
   assert.equal(
     body.approvalBoundBootstrapSession.serviceConnectionActionability.cloudflare.userActionNeededNow,
+    "yes"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.serviceConnectionFrictionReadout.github.id,
+    "github_connection_deferred_not_manual_transport"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.serviceConnectionFrictionReadout.github.manualTransportRemains,
+    "no"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.serviceConnectionFrictionReadout.cloudflare.id,
+    "cloudflare_operator_recovery_still_outside_target_flow"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.serviceConnectionFrictionReadout.cloudflare.manualTransportRemains,
     "yes"
   );
   assert.equal(
@@ -956,6 +975,22 @@ test("worker setup wizard unlocked json does not expose cloudflare bootstrap tok
   );
   assert.equal(
     body.approvalBoundBootstrapSession.serviceConnectionActionability.cloudflare.userActionNeededNow,
+    "no"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.serviceConnectionFrictionReadout.github.id,
+    "github_login_or_consent_allowed_but_no_value_transport"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.serviceConnectionFrictionReadout.github.manualTransportRemains,
+    "no"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.serviceConnectionFrictionReadout.cloudflare.id,
+    "cloudflare_runtime_absorbs_values_without_user_copy"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.serviceConnectionFrictionReadout.cloudflare.manualTransportRemains,
     "no"
   );
   assert.equal(
@@ -1709,6 +1744,14 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
   assert.equal(
     absorbedBody.approvalBoundBootstrapSession.serviceConnectionActionability.cloudflare.id,
     "cloudflare_no_connection_action_needed_now"
+  );
+  assert.equal(
+    absorbedBody.approvalBoundBootstrapSession.serviceConnectionFrictionReadout.github.id,
+    "github_connection_completed_without_remaining_transport"
+  );
+  assert.equal(
+    absorbedBody.approvalBoundBootstrapSession.serviceConnectionFrictionReadout.cloudflare.id,
+    "cloudflare_connection_completed_without_remaining_transport"
   );
 
   const absorbedHtmlResponse = await worker.fetch(

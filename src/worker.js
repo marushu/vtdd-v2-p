@@ -3086,6 +3086,9 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
   const serviceConnectionActionability = session?.serviceConnectionActionability ?? null;
   const githubConnectionActionability = serviceConnectionActionability?.github ?? null;
   const cloudflareConnectionActionability = serviceConnectionActionability?.cloudflare ?? null;
+  const serviceConnectionFrictionReadout = session?.serviceConnectionFrictionReadout ?? null;
+  const githubConnectionFriction = serviceConnectionFrictionReadout?.github ?? null;
+  const cloudflareConnectionFriction = serviceConnectionFrictionReadout?.cloudflare ?? null;
   const responsibilityReadout = session?.responsibilityReadout ?? null;
   const humanStep = responsibilityReadout?.humanStep ?? null;
   const vtddStep = responsibilityReadout?.vtddStep ?? null;
@@ -3393,6 +3396,25 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
                         ? ` <strong>${escapeHtml(locale === "ja" ? "Expected action type" : "Expected action type")}:</strong> <code>${escapeHtml(normalizeText(cloudflareConnectionActionability.expectedActionType))}</code>`
                         : ""
                     }</p>`
+                  : ""
+              }
+            </div>
+          `
+          : ""
+      }
+      ${
+        serviceConnectionFrictionReadout
+          ? `
+            <div class="block" style="margin-top: 12px;">
+              <p><strong>${escapeHtml(locale === "ja" ? "Service connection friction" : "Service connection friction")}:</strong></p>
+              ${
+                githubConnectionFriction
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "GitHub friction" : "GitHub friction")}:</strong> <code>${escapeHtml(normalizeText(githubConnectionFriction.id))}</code> ${escapeHtml(normalizeText(githubConnectionFriction.summary))} <strong>${escapeHtml(locale === "ja" ? "Manual transport remains" : "Manual transport remains")}:</strong> <code>${escapeHtml(normalizeText(githubConnectionFriction.manualTransportRemains))}</code> <strong>${escapeHtml(locale === "ja" ? "Allowed human involvement" : "Allowed human involvement")}:</strong> ${escapeHtml(normalizeText(githubConnectionFriction.allowedHumanInvolvement))}</p>`
+                  : ""
+              }
+              ${
+                cloudflareConnectionFriction
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Cloudflare friction" : "Cloudflare friction")}:</strong> <code>${escapeHtml(normalizeText(cloudflareConnectionFriction.id))}</code> ${escapeHtml(normalizeText(cloudflareConnectionFriction.summary))} <strong>${escapeHtml(locale === "ja" ? "Manual transport remains" : "Manual transport remains")}:</strong> <code>${escapeHtml(normalizeText(cloudflareConnectionFriction.manualTransportRemains))}</code> <strong>${escapeHtml(locale === "ja" ? "Allowed human involvement" : "Allowed human involvement")}:</strong> ${escapeHtml(normalizeText(cloudflareConnectionFriction.allowedHumanInvolvement))}</p>`
                   : ""
               }
             </div>
@@ -4696,6 +4718,11 @@ async function buildApprovalBoundBootstrapSessionStatus({
       githubAppSetupCheck: effectiveGitHubAppSetupCheck
     }),
     serviceConnectionActionability: buildBootstrapSessionServiceConnectionActionability({
+      bootstrapState,
+      preview: effectivePreview,
+      githubAppSetupCheck: effectiveGitHubAppSetupCheck
+    }),
+    serviceConnectionFrictionReadout: buildBootstrapSessionServiceConnectionFrictionReadout({
       bootstrapState,
       preview: effectivePreview,
       githubAppSetupCheck: effectiveGitHubAppSetupCheck
@@ -6149,6 +6176,110 @@ function buildBootstrapSessionServiceConnectionActionability({
       expectedActionType: "runtime_state_preservation",
       summary:
         "Cloudflare is already present to preserve runtime state while the live probe runs, so no separate user action is needed."
+    }
+  };
+}
+
+function buildBootstrapSessionServiceConnectionFrictionReadout({
+  bootstrapState,
+  preview,
+  githubAppSetupCheck
+}) {
+  const plannedWrites = Array.isArray(preview?.plannedWrites) ? preview.plannedWrites : [];
+  const setupState = normalizeText(githubAppSetupCheck?.state) || "unknown";
+
+  if (bootstrapState !== "available") {
+    return {
+      github: {
+        id: "github_connection_deferred_not_manual_transport",
+        manualTransportRemains: "no",
+        allowedHumanInvolvement:
+          "provider login or consent later, once wizard can safely open that step",
+        summary:
+          "GitHub is not currently asking the human to fetch or carry values; the connection step is deferred until wizard can open it coherently."
+      },
+      cloudflare: {
+        id: "cloudflare_operator_recovery_still_outside_target_flow",
+        manualTransportRemains: "yes",
+        allowedHumanInvolvement:
+          "operator boundary recovery only, not end-user copy/paste inside wizard-complete target flow",
+        summary:
+          "Cloudflare still has operator-seeded recovery debt here, which means the current path has not yet eliminated manual authority restoration."
+      }
+    };
+  }
+
+  if (plannedWrites.length > 1) {
+    return {
+      github: {
+        id: "github_login_or_consent_allowed_but_no_value_transport",
+        manualTransportRemains: "no",
+        allowedHumanInvolvement: "provider login, app creation, or installation consent",
+        summary:
+          "GitHub may still require the human to authenticate or consent, but VTDD is trying to avoid making the human carry values back from GitHub."
+      },
+      cloudflare: {
+        id: "cloudflare_runtime_absorbs_values_without_user_copy",
+        manualTransportRemains: "no",
+        allowedHumanInvolvement: "none in the happy path beyond prior runtime authority seeding",
+        summary:
+          "Cloudflare is acting as the runtime sink for setup state, so the user should not need to copy values into wizard in this phase."
+      }
+    };
+  }
+
+  if (plannedWrites.length === 1 && plannedWrites[0] === "GITHUB_APP_INSTALLATION_ID") {
+    return {
+      github: {
+        id: "github_binding_step_should_not_require_copy_paste",
+        manualTransportRemains: "no",
+        allowedHumanInvolvement: "repository installation consent or redirect completion",
+        summary:
+          "The remaining GitHub step is installation binding, and the target flow is to absorb that without turning the human into a value courier."
+      },
+      cloudflare: {
+        id: "cloudflare_bounded_write_without_user_transport",
+        manualTransportRemains: "no",
+        allowedHumanInvolvement: "none during bounded installation write",
+        summary:
+          "Cloudflare should receive the bounded installation-binding write directly from VTDD rather than through human copy/paste."
+      }
+    };
+  }
+
+  if (setupState === "ready") {
+    return {
+      github: {
+        id: "github_connection_completed_without_remaining_transport",
+        manualTransportRemains: "no",
+        allowedHumanInvolvement: "none for completed setup",
+        summary:
+          "GitHub setup is already complete, and there is no remaining manual transport debt in this path."
+      },
+      cloudflare: {
+        id: "cloudflare_connection_completed_without_remaining_transport",
+        manualTransportRemains: "no",
+        allowedHumanInvolvement: "none for completed setup",
+        summary:
+          "Cloudflare runtime state is already in place, and there is no remaining manual transport debt in this path."
+      }
+    };
+  }
+
+  return {
+    github: {
+      id: "github_live_probe_phase_without_manual_transport",
+      manualTransportRemains: "no",
+      allowedHumanInvolvement: "none while live proof runs",
+      summary:
+        "GitHub is in live-proof phase, so the remaining work is verification rather than any manual fetch/copy/return loop."
+    },
+    cloudflare: {
+      id: "cloudflare_live_probe_phase_without_manual_transport",
+      manualTransportRemains: "no",
+      allowedHumanInvolvement: "none while runtime preserves live proof state",
+      summary:
+        "Cloudflare is only preserving runtime state for live proof here, not asking the human to transport anything."
     }
   };
 }
