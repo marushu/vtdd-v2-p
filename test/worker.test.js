@@ -2129,6 +2129,18 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
     absorbedBody.approvalBoundBootstrapSession.recommendedNextStep.id,
     "continue_with_live_github_capability"
   );
+  assert.equal(
+    absorbedBody.approvalBoundBootstrapSession.guidance[0],
+    "This setup flow already absorbed installation binding and proved live GitHub capability."
+  );
+  assert.equal(
+    absorbedBody.approvalBoundBootstrapSession.guidance[1],
+    "Continue with real VTDD GitHub work from this verified state instead of reopening setup transport steps."
+  );
+  assert.equal(
+    absorbedBody.approvalBoundBootstrapSession.guidance[2],
+    "Treat any future generalized approval-bound bootstrap work as separate from this completed narrow path."
+  );
   assert.equal(absorbedBody.approvalBoundBootstrapSession.returnTo, null);
   assert.equal(absorbedBody.approvalBoundBootstrapSession.requestPath, null);
   assert.equal(absorbedBody.approvalBoundBootstrapSession.requestEnabled, false);
