@@ -2148,18 +2148,7 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
   assert.equal(absorbedBody.approvalBoundBootstrapSession.authorityExpiryReadout, null);
   assert.equal(absorbedBody.approvalBoundBootstrapSession.authorityRenewalReadout, null);
   assert.equal(absorbedBody.approvalBoundBootstrapSession.authorityRenewalDenialReadout, null);
-  assert.equal(
-    absorbedBody.approvalBoundBootstrapSession.authorityRequestFreshnessReadout.freshnessRequirement.id,
-    "no_current_setup_request_freshness_needed"
-  );
-  assert.equal(
-    absorbedBody.approvalBoundBootstrapSession.authorityRequestFreshnessReadout.staleRequestRejection.id,
-    "future_generalized_request_freshness_is_separate_work"
-  );
-  assert.equal(
-    absorbedBody.approvalBoundBootstrapSession.authorityRequestFreshnessReadout.freshnessRecovery.id,
-    "verified_path_continues_without_current_request_recovery"
-  );
+  assert.equal(absorbedBody.approvalBoundBootstrapSession.authorityRequestFreshnessReadout, null);
   assert.equal(
     absorbedBody.approvalBoundBootstrapSession.authorityRequestReplayReadout.replayRisk.id,
     "no_current_setup_request_replay_risk"
@@ -2254,6 +2243,7 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
   assert.equal(absorbedHtml.includes("Authority expiry"), false);
   assert.equal(absorbedHtml.includes("<strong>Authority renewal:</strong>"), false);
   assert.equal(absorbedHtml.includes("Authority renewal denial"), false);
+  assert.equal(absorbedHtml.includes("Authority request freshness"), false);
   assert.equal(absorbedHtml.includes("This setup flow already absorbed installation binding"), false);
 });
 
