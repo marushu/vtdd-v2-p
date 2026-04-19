@@ -3083,6 +3083,9 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
   const serviceConnectionModelReadout = session?.serviceConnectionModelReadout ?? null;
   const githubConnectionModel = serviceConnectionModelReadout?.github ?? null;
   const cloudflareConnectionModel = serviceConnectionModelReadout?.cloudflare ?? null;
+  const serviceConnectionActionability = session?.serviceConnectionActionability ?? null;
+  const githubConnectionActionability = serviceConnectionActionability?.github ?? null;
+  const cloudflareConnectionActionability = serviceConnectionActionability?.cloudflare ?? null;
   const responsibilityReadout = session?.responsibilityReadout ?? null;
   const humanStep = responsibilityReadout?.humanStep ?? null;
   const vtddStep = responsibilityReadout?.vtddStep ?? null;
@@ -3363,6 +3366,33 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
               ${
                 cloudflareConnectionModel
                   ? `<p><strong>${escapeHtml(locale === "ja" ? "Cloudflare connection" : "Cloudflare connection")}:</strong> <code>${escapeHtml(normalizeText(cloudflareConnectionModel.id))}</code> ${escapeHtml(normalizeText(cloudflareConnectionModel.summary))} <strong>${escapeHtml(locale === "ja" ? "Type" : "Type")}:</strong> <code>${escapeHtml(normalizeText(cloudflareConnectionModel.connectionType))}</code> <strong>${escapeHtml(locale === "ja" ? "Needed for" : "Needed for")}:</strong> ${escapeHtml(normalizeText(cloudflareConnectionModel.requiredBecause))}</p>`
+                  : ""
+              }
+            </div>
+          `
+          : ""
+      }
+      ${
+        serviceConnectionActionability
+          ? `
+            <div class="block" style="margin-top: 12px;">
+              <p><strong>${escapeHtml(locale === "ja" ? "Service connection actionability" : "Service connection actionability")}:</strong></p>
+              ${
+                githubConnectionActionability
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "GitHub action" : "GitHub action")}:</strong> <code>${escapeHtml(normalizeText(githubConnectionActionability.id))}</code> ${escapeHtml(normalizeText(githubConnectionActionability.summary))} <strong>${escapeHtml(locale === "ja" ? "User action needed now" : "User action needed now")}:</strong> <code>${escapeHtml(normalizeText(githubConnectionActionability.userActionNeededNow))}</code>${
+                      githubConnectionActionability.expectedActionType
+                        ? ` <strong>${escapeHtml(locale === "ja" ? "Expected action type" : "Expected action type")}:</strong> <code>${escapeHtml(normalizeText(githubConnectionActionability.expectedActionType))}</code>`
+                        : ""
+                    }</p>`
+                  : ""
+              }
+              ${
+                cloudflareConnectionActionability
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Cloudflare action" : "Cloudflare action")}:</strong> <code>${escapeHtml(normalizeText(cloudflareConnectionActionability.id))}</code> ${escapeHtml(normalizeText(cloudflareConnectionActionability.summary))} <strong>${escapeHtml(locale === "ja" ? "User action needed now" : "User action needed now")}:</strong> <code>${escapeHtml(normalizeText(cloudflareConnectionActionability.userActionNeededNow))}</code>${
+                      cloudflareConnectionActionability.expectedActionType
+                        ? ` <strong>${escapeHtml(locale === "ja" ? "Expected action type" : "Expected action type")}:</strong> <code>${escapeHtml(normalizeText(cloudflareConnectionActionability.expectedActionType))}</code>`
+                        : ""
+                    }</p>`
                   : ""
               }
             </div>
@@ -4661,6 +4691,11 @@ async function buildApprovalBoundBootstrapSessionStatus({
       githubAppSetupCheck: effectiveGitHubAppSetupCheck
     }),
     serviceConnectionModelReadout: buildBootstrapSessionServiceConnectionModelReadout({
+      bootstrapState,
+      preview: effectivePreview,
+      githubAppSetupCheck: effectiveGitHubAppSetupCheck
+    }),
+    serviceConnectionActionability: buildBootstrapSessionServiceConnectionActionability({
       bootstrapState,
       preview: effectivePreview,
       githubAppSetupCheck: effectiveGitHubAppSetupCheck
@@ -6012,6 +6047,108 @@ function buildBootstrapSessionServiceConnectionModelReadout({
         "VTDD needs Cloudflare runtime authority to preserve the setup state that the live probe is about to validate.",
       summary:
         "Cloudflare runtime authority is already present for this path and does not surface as a separate browser login step."
+    }
+  };
+}
+
+function buildBootstrapSessionServiceConnectionActionability({
+  bootstrapState,
+  preview,
+  githubAppSetupCheck
+}) {
+  const plannedWrites = Array.isArray(preview?.plannedWrites) ? preview.plannedWrites : [];
+  const setupState = normalizeText(githubAppSetupCheck?.state) || "unknown";
+
+  if (bootstrapState !== "available") {
+    return {
+      github: {
+        id: "github_wait_until_wizard_can_open_connection_step",
+        userActionNeededNow: "no",
+        expectedActionType: "login_or_provider_consent_later",
+        summary:
+          "GitHub will eventually require a provider-side login or consent step, but wizard is not ready to ask for it until Cloudflare bootstrap authority is restored."
+      },
+      cloudflare: {
+        id: "cloudflare_restore_operator_authority",
+        userActionNeededNow: "yes",
+        expectedActionType: "operator_bootstrap_authority_recovery",
+        summary:
+          "Cloudflare needs action now, but the action is restoring operator-seeded runtime authority rather than sending the user through a normal browser login."
+      }
+    };
+  }
+
+  if (plannedWrites.length > 1) {
+    return {
+      github: {
+        id: "github_provider_step_needed_now",
+        userActionNeededNow: "yes",
+        expectedActionType: "login_or_provider_consent",
+        summary:
+          "GitHub still needs an active provider-side step now, typically App creation or installation consent."
+      },
+      cloudflare: {
+        id: "cloudflare_no_user_login_step_needed_now",
+        userActionNeededNow: "no",
+        expectedActionType: "runtime_authority_already_present",
+        summary:
+          "Cloudflare does not need a separate user login step right now because runtime authority is already present behind the wizard."
+      }
+    };
+  }
+
+  if (plannedWrites.length === 1 && plannedWrites[0] === "GITHUB_APP_INSTALLATION_ID") {
+    return {
+      github: {
+        id: "github_installation_binding_needed_now",
+        userActionNeededNow: "yes",
+        expectedActionType: "installation_binding_or_consent",
+        summary:
+          "GitHub still needs the installation to be connected to the target repository before setup can continue."
+      },
+      cloudflare: {
+        id: "cloudflare_bounded_write_no_login_needed_now",
+        userActionNeededNow: "no",
+        expectedActionType: "bounded_runtime_write",
+        summary:
+          "Cloudflare is only needed as the bounded runtime write target for the installation binding, not as a user login step."
+      }
+    };
+  }
+
+  if (setupState === "ready") {
+    return {
+      github: {
+        id: "github_no_connection_action_needed_now",
+        userActionNeededNow: "no",
+        expectedActionType: "already_verified",
+        summary:
+          "GitHub connection is already verified, so setup does not need another login, consent, or installation action right now."
+      },
+      cloudflare: {
+        id: "cloudflare_no_connection_action_needed_now",
+        userActionNeededNow: "no",
+        expectedActionType: "already_bound",
+        summary:
+          "Cloudflare runtime authority is already bound for this setup path, so no new Cloudflare action is needed right now."
+      }
+    };
+  }
+
+  return {
+    github: {
+      id: "github_live_probe_runs_without_new_login",
+      userActionNeededNow: "no",
+      expectedActionType: "live_probe",
+      summary:
+        "GitHub no longer needs a new login or consent step; the next action is the live readiness probe."
+    },
+    cloudflare: {
+      id: "cloudflare_present_for_probe_without_new_login",
+      userActionNeededNow: "no",
+      expectedActionType: "runtime_state_preservation",
+      summary:
+        "Cloudflare is already present to preserve runtime state while the live probe runs, so no separate user action is needed."
     }
   };
 }
