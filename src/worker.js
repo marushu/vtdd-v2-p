@@ -5230,7 +5230,8 @@ async function buildApprovalBoundBootstrapSessionStatus({
     authorityExpiryReadout: buildBootstrapSessionAuthorityExpiryReadout({
       bootstrapState,
       preview: effectivePreview,
-      maxAgeSeconds: SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_TTL_SECONDS
+      maxAgeSeconds: SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_TTL_SECONDS,
+      githubAppSetupCheck: effectiveGitHubAppSetupCheck
     }),
     authorityRenewalReadout: buildBootstrapSessionAuthorityRenewalReadout({
       bootstrapState,
@@ -7638,10 +7639,12 @@ function buildBootstrapSessionAuthorityShapeReadout({
 function buildBootstrapSessionAuthorityExpiryReadout({
   bootstrapState,
   preview,
-  maxAgeSeconds
+  maxAgeSeconds,
+  githubAppSetupCheck
 }) {
   const plannedWrites = Array.isArray(preview?.plannedWrites) ? preview.plannedWrites : [];
   const expirySeconds = Number.isFinite(Number(maxAgeSeconds)) ? Number(maxAgeSeconds) : 0;
+  const setupState = normalizeText(githubAppSetupCheck?.state) || "unknown";
 
   if (bootstrapState !== "available") {
     return {
@@ -7699,6 +7702,26 @@ function buildBootstrapSessionAuthorityExpiryReadout({
         id: "expire_after_one_bounded_write_trace",
         summary:
           "The future session should terminate after one traced bounded write flow rather than surviving for manual retry loops."
+      }
+    };
+  }
+
+  if (setupState === "ready") {
+    return {
+      expiryTrigger: {
+        id: "no_current_setup_session_to_expire",
+        summary:
+          "There is no current setup session to expire in this verified path because setup no longer needs another approval-bound session."
+      },
+      expiryWindow: {
+        id: "future_generalized_session_window_is_separate",
+        summary:
+          `Any future generalized session would still be short-lived at ${expirySeconds} seconds, but that is separate work rather than part of this already-verified path.`
+      },
+      expiryAfterUse: {
+        id: "verified_path_relies_on_completed_single_use_history",
+        summary:
+          "This verified path now relies on the already-completed single-use history rather than a current session that still needs to expire."
       }
     };
   }

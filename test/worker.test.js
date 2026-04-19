@@ -2253,6 +2253,18 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
     "verified_path_keeps_prior_go_passkey_audit_history"
   );
   assert.equal(
+    absorbedBody.approvalBoundBootstrapSession.authorityExpiryReadout.expiryTrigger.id,
+    "no_current_setup_session_to_expire"
+  );
+  assert.equal(
+    absorbedBody.approvalBoundBootstrapSession.authorityExpiryReadout.expiryWindow.id,
+    "future_generalized_session_window_is_separate"
+  );
+  assert.equal(
+    absorbedBody.approvalBoundBootstrapSession.authorityExpiryReadout.expiryAfterUse.id,
+    "verified_path_relies_on_completed_single_use_history"
+  );
+  assert.equal(
     absorbedBody.approvalBoundBootstrapSession.serviceConnectionFrictionReadout.github.id,
     "github_connection_completed_without_remaining_transport"
   );
