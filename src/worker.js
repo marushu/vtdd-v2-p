@@ -2736,6 +2736,10 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
   const authorityOwner = authorityShapeReadout?.authorityOwner ?? null;
   const authorityScope = authorityShapeReadout?.authorityScope ?? null;
   const authorityAudit = authorityShapeReadout?.authorityAudit ?? null;
+  const authorityExpiryReadout = session?.authorityExpiryReadout ?? null;
+  const expiryTrigger = authorityExpiryReadout?.expiryTrigger ?? null;
+  const expiryWindow = authorityExpiryReadout?.expiryWindow ?? null;
+  const expiryAfterUse = authorityExpiryReadout?.expiryAfterUse ?? null;
   const completionReadout = session?.completionReadout ?? null;
   const claimState = completionReadout?.claimState ?? null;
   const cannotYetClaim = completionReadout?.cannotYetClaim ?? null;
@@ -2997,6 +3001,30 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
               ${
                 authorityAudit
                   ? `<p><strong>${escapeHtml(locale === "ja" ? "Authority audit" : "Authority audit")}:</strong> <code>${escapeHtml(normalizeText(authorityAudit.id))}</code> ${escapeHtml(normalizeText(authorityAudit.summary))}</p>`
+                  : ""
+              }
+            </div>
+          `
+          : ""
+      }
+      ${
+        authorityExpiryReadout
+          ? `
+            <div class="block" style="margin-top: 12px;">
+              <p><strong>${escapeHtml(locale === "ja" ? "Authority expiry" : "Authority expiry")}:</strong></p>
+              ${
+                expiryTrigger
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Expiry trigger" : "Expiry trigger")}:</strong> <code>${escapeHtml(normalizeText(expiryTrigger.id))}</code> ${escapeHtml(normalizeText(expiryTrigger.summary))}</p>`
+                  : ""
+              }
+              ${
+                expiryWindow
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Expiry window" : "Expiry window")}:</strong> <code>${escapeHtml(normalizeText(expiryWindow.id))}</code> ${escapeHtml(normalizeText(expiryWindow.summary))}</p>`
+                  : ""
+              }
+              ${
+                expiryAfterUse
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Expiry after use" : "Expiry after use")}:</strong> <code>${escapeHtml(normalizeText(expiryAfterUse.id))}</code> ${escapeHtml(normalizeText(expiryAfterUse.summary))}</p>`
                   : ""
               }
             </div>
@@ -3819,6 +3847,11 @@ async function buildApprovalBoundBootstrapSessionStatus({
     authorityShapeReadout: buildBootstrapSessionAuthorityShapeReadout({
       bootstrapState,
       preview
+    }),
+    authorityExpiryReadout: buildBootstrapSessionAuthorityExpiryReadout({
+      bootstrapState,
+      preview,
+      maxAgeSeconds: SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_TTL_SECONDS
     }),
     completionReadout: buildBootstrapSessionCompletionReadout({
       bootstrapState,
@@ -4751,6 +4784,93 @@ function buildBootstrapSessionAuthorityShapeReadout({ bootstrapState, preview })
       id: "go_passkey_boundary_preserved_without_write",
       summary:
         "Audit still preserves the GO + passkey boundary even though the remaining blocked step is attestation-backed issuance rather than another write."
+    }
+  };
+}
+
+function buildBootstrapSessionAuthorityExpiryReadout({
+  bootstrapState,
+  preview,
+  maxAgeSeconds
+}) {
+  const plannedWrites = Array.isArray(preview?.plannedWrites) ? preview.plannedWrites : [];
+  const expirySeconds = Number.isFinite(Number(maxAgeSeconds)) ? Number(maxAgeSeconds) : 0;
+
+  if (bootstrapState !== "available") {
+    return {
+      expiryTrigger: {
+        id: "no_session_to_expire_until_prerequisites_exist",
+        summary:
+          "There is no approval-bound session to expire yet because VTDD must not issue one before the operator bootstrap prerequisites exist."
+      },
+      expiryWindow: {
+        id: "future_short_lived_window_reserved",
+        summary:
+          `Once issuance exists, the intended window remains short-lived at ${expirySeconds} seconds rather than long-running operator access.`
+      },
+      expiryAfterUse: {
+        id: "future_single_use_expiry_reserved",
+        summary:
+          "The intended session still expires after one bounded use, but that behavior remains deferred until issuance actually exists."
+      }
+    };
+  }
+
+  if (plannedWrites.length === 1 && plannedWrites[0] === "GITHUB_APP_INSTALLATION_ID") {
+    return {
+      expiryTrigger: {
+        id: "expire_after_installation_binding_step",
+        summary:
+          "The future session should expire once the single remaining installation-binding step and its immediate checks are complete."
+      },
+      expiryWindow: {
+        id: "single_step_short_lived_window",
+        summary:
+          `The intended expiry window stays short-lived at ${expirySeconds} seconds because only one remaining allowlisted step should fit inside it.`
+      },
+      expiryAfterUse: {
+        id: "expire_after_one_installation_binding_use",
+        summary:
+          "The future session should be consumed by one installation-binding use rather than staying available for repeated secret writes."
+      }
+    };
+  }
+
+  if (plannedWrites.length > 1) {
+    return {
+      expiryTrigger: {
+        id: "expire_after_bounded_runtime_bootstrap_attempt",
+        summary:
+          "The future session should expire after one bounded runtime-bootstrap attempt, whether it succeeds or fails, instead of lingering across repeated write tries."
+      },
+      expiryWindow: {
+        id: "runtime_bootstrap_short_lived_window",
+        summary:
+          `The intended expiry window stays short-lived at ${expirySeconds} seconds so the bootstrap authority cannot turn into standing runtime admin access.`
+      },
+      expiryAfterUse: {
+        id: "expire_after_one_bounded_write_trace",
+        summary:
+          "The future session should terminate after one traced bounded write flow rather than surviving for manual retry loops."
+      }
+    };
+  }
+
+  return {
+    expiryTrigger: {
+      id: "expire_without_additional_bootstrap_write",
+      summary:
+        "Any future issuance should expire without another setup-critical write because the remaining work is verification rather than bootstrap transport."
+    },
+    expiryWindow: {
+      id: "verification_only_short_lived_window",
+      summary:
+        `The intended window still stays short-lived at ${expirySeconds} seconds even when the remaining blocked step is verification-oriented.`
+    },
+    expiryAfterUse: {
+      id: "expire_after_one_verification_bound_use",
+      summary:
+        "Any future session should still expire after one verification-bound use rather than remain reusable."
     }
   };
 }

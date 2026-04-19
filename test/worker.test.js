@@ -455,6 +455,10 @@ test("worker setup wizard unlocked html shows narrow github app bootstrap form w
   assert.equal(html.includes("Authority owner"), true);
   assert.equal(html.includes("Authority scope"), true);
   assert.equal(html.includes("Authority audit"), true);
+  assert.equal(html.includes("Authority expiry"), true);
+  assert.equal(html.includes("Expiry trigger"), true);
+  assert.equal(html.includes("Expiry window"), true);
+  assert.equal(html.includes("Expiry after use"), true);
   assert.equal(html.includes("Completion claim"), true);
   assert.equal(html.includes("Current claim"), true);
   assert.equal(html.includes("Cannot yet claim"), true);
@@ -622,6 +626,18 @@ test("worker setup wizard unlocked json reports github app bootstrap availabilit
   assert.equal(
     body.approvalBoundBootstrapSession.authorityShapeReadout.authorityAudit.id,
     "approval_boundary_reserved"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityExpiryReadout.expiryTrigger.id,
+    "no_session_to_expire_until_prerequisites_exist"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityExpiryReadout.expiryWindow.id,
+    "future_short_lived_window_reserved"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityExpiryReadout.expiryAfterUse.id,
+    "future_single_use_expiry_reserved"
   );
   assert.equal(
     body.approvalBoundBootstrapSession.completionReadout.claimState.id,
@@ -800,6 +816,18 @@ test("worker setup wizard unlocked json does not expose cloudflare bootstrap tok
   assert.equal(
     body.approvalBoundBootstrapSession.authorityShapeReadout.authorityAudit.id,
     "go_passkey_plus_bounded_write_trace"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityExpiryReadout.expiryTrigger.id,
+    "expire_after_bounded_runtime_bootstrap_attempt"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityExpiryReadout.expiryWindow.id,
+    "runtime_bootstrap_short_lived_window"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityExpiryReadout.expiryAfterUse.id,
+    "expire_after_one_bounded_write_trace"
   );
   assert.equal(
     body.approvalBoundBootstrapSession.completionReadout.claimState.id,
@@ -1010,6 +1038,18 @@ test("worker setup wizard preview narrows planned write to installation binding 
   assert.equal(
     body.approvalBoundBootstrapSession.authorityShapeReadout.authorityAudit.id,
     "go_passkey_plus_installation_proof"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityExpiryReadout.expiryTrigger.id,
+    "expire_after_installation_binding_step"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityExpiryReadout.expiryWindow.id,
+    "single_step_short_lived_window"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityExpiryReadout.expiryAfterUse.id,
+    "expire_after_one_installation_binding_use"
   );
   assert.equal(
     body.approvalBoundBootstrapSession.completionReadout.claimState.id,
