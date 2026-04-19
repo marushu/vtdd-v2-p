@@ -5213,7 +5213,8 @@ async function buildApprovalBoundBootstrapSessionStatus({
     authBoundaryReadout: buildBootstrapSessionAuthBoundaryReadout({
       bootstrapState,
       preview: effectivePreview,
-      authConfig
+      authConfig,
+      githubAppSetupCheck
     }),
     issuanceReadout: buildBootstrapSessionIssuanceReadout({
       bootstrapState,
@@ -7152,10 +7153,12 @@ function buildBootstrapSessionResponsibilityReadout({ bootstrapState, preview })
 function buildBootstrapSessionAuthBoundaryReadout({
   bootstrapState,
   preview,
-  authConfig
+  authConfig,
+  githubAppSetupCheck
 }) {
   const plannedWrites = Array.isArray(preview?.plannedWrites) ? preview.plannedWrites : [];
   const serviceAccessState = authConfig?.enabled ? "configured" : "not_configured";
+  const setupState = normalizeText(githubAppSetupCheck?.state) || "unknown";
 
   if (bootstrapState !== "available") {
     return {
@@ -7230,6 +7233,31 @@ function buildBootstrapSessionAuthBoundaryReadout({
         state: "separate_internal_boundary",
         summary:
           "Runtime machine auth remains distinct from browser setup and is not reused as bootstrap authority."
+      }
+    };
+  }
+
+  if (setupState === "ready") {
+    return {
+      serviceAccess: {
+        state: serviceAccessState,
+        summary:
+          "VTDD service access is configured and no longer the setup blocker."
+      },
+      operatorBootstrapAuthority: {
+        state: "deferred_after_verified_ready_path",
+        summary:
+          "Operator bootstrap authority stays narrow and deferred after this verified narrow setup path, rather than reopening broader write authority."
+      },
+      externalAccountConnection: {
+        state: "verified_live_connection",
+        summary:
+          "External account connection is already verified live in runtime for this setup flow."
+      },
+      runtimeMachineAuth: {
+        state: "separate_internal_boundary",
+        summary:
+          "Runtime machine auth continues to protect internal execution surfaces separately from the already-verified setup flow."
       }
     };
   }

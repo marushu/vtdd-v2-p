@@ -2209,6 +2209,14 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
     "cloudflare_no_connection_action_needed_now"
   );
   assert.equal(
+    absorbedBody.approvalBoundBootstrapSession.authBoundaryReadout.operatorBootstrapAuthority.state,
+    "deferred_after_verified_ready_path"
+  );
+  assert.equal(
+    absorbedBody.approvalBoundBootstrapSession.authBoundaryReadout.externalAccountConnection.state,
+    "verified_live_connection"
+  );
+  assert.equal(
     absorbedBody.approvalBoundBootstrapSession.serviceConnectionFrictionReadout.github.id,
     "github_connection_completed_without_remaining_transport"
   );
