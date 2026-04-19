@@ -2166,14 +2166,7 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
     ["runtime_identity_bootstrap", "installation_binding", "live_readiness_verification"]
   );
   assert.deepEqual(absorbedBody.approvalBoundBootstrapSession.progressReadout.remainingPhases, []);
-  assert.equal(
-    absorbedBody.approvalBoundBootstrapSession.providerConnectionReadout.github.id,
-    "github_connection_verified"
-  );
-  assert.equal(
-    absorbedBody.approvalBoundBootstrapSession.providerConnectionReadout.cloudflare.id,
-    "cloudflare_runtime_connection_already_bound"
-  );
+  assert.equal(absorbedBody.approvalBoundBootstrapSession.providerConnectionReadout, null);
   assert.equal(absorbedBody.approvalBoundBootstrapSession.serviceConnectionModelReadout, null);
   assert.equal(absorbedBody.approvalBoundBootstrapSession.serviceConnectionActionability, null);
   assert.equal(
@@ -2343,6 +2336,7 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
   assert.equal(absorbedHtml.includes("Steps this path is intended to absorb"), false);
   assert.equal(absorbedHtml.includes("Session contract"), false);
   assert.equal(absorbedHtml.includes("Envelope consume result"), false);
+  assert.equal(absorbedHtml.includes("Provider connection phase"), false);
   assert.equal(absorbedHtml.includes("Capability readout"), false);
   assert.equal(absorbedHtml.includes("Service connection model"), false);
   assert.equal(absorbedHtml.includes("Service connection actionability"), false);
