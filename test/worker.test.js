@@ -2363,14 +2363,7 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
     absorbedBody.approvalBoundBootstrapSession.serviceConnectionFrictionReadout.cloudflare.id,
     "cloudflare_connection_completed_without_remaining_transport"
   );
-  assert.equal(
-    absorbedBody.approvalBoundBootstrapSession.serviceConnectionHandoffShapeReadout.github.id,
-    "github_handoff_already_absorbed"
-  );
-  assert.equal(
-    absorbedBody.approvalBoundBootstrapSession.serviceConnectionHandoffShapeReadout.cloudflare.id,
-    "cloudflare_handoff_already_absorbed"
-  );
+  assert.equal(absorbedBody.approvalBoundBootstrapSession.serviceConnectionHandoffShapeReadout, null);
   assert.equal(absorbedBody.approvalBoundBootstrapSession.serviceConnectionReturnContinuityReadout, null);
 
   const absorbedHtmlResponse = await worker.fetch(
@@ -2389,6 +2382,7 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
   assert.equal(absorbedHtml.includes("Steps this path is intended to absorb"), false);
   assert.equal(absorbedHtml.includes("Session contract"), false);
   assert.equal(absorbedHtml.includes("Envelope consume result"), false);
+  assert.equal(absorbedHtml.includes("Service connection handoff shape"), false);
   assert.equal(absorbedHtml.includes("Service return continuity"), false);
   assert.equal(absorbedHtml.includes("This setup flow already absorbed installation binding"), false);
 });
