@@ -2229,6 +2229,18 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
     "providers_hold_verified_runtime_boundary"
   );
   assert.equal(
+    absorbedBody.approvalBoundBootstrapSession.issuanceReadout.issuableState.id,
+    "no_setup_issuance_needed_for_verified_path"
+  );
+  assert.equal(
+    absorbedBody.approvalBoundBootstrapSession.issuanceReadout.blockingGate.id,
+    "no_current_setup_issuance_blocker"
+  );
+  assert.equal(
+    absorbedBody.approvalBoundBootstrapSession.issuanceReadout.nextIssuanceCondition.id,
+    "future_generalized_bootstrap_needs_separate_implementation"
+  );
+  assert.equal(
     absorbedBody.approvalBoundBootstrapSession.serviceConnectionFrictionReadout.github.id,
     "github_connection_completed_without_remaining_transport"
   );

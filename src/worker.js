@@ -5219,7 +5219,8 @@ async function buildApprovalBoundBootstrapSessionStatus({
     }),
     issuanceReadout: buildBootstrapSessionIssuanceReadout({
       bootstrapState,
-      preview: effectivePreview
+      preview: effectivePreview,
+      githubAppSetupCheck: effectiveGitHubAppSetupCheck
     }),
     authorityShapeReadout: buildBootstrapSessionAuthorityShapeReadout({
       bootstrapState,
@@ -7419,8 +7420,13 @@ function buildBootstrapSessionCompletionReadout({
   };
 }
 
-function buildBootstrapSessionIssuanceReadout({ bootstrapState, preview }) {
+function buildBootstrapSessionIssuanceReadout({
+  bootstrapState,
+  preview,
+  githubAppSetupCheck
+}) {
   const plannedWrites = Array.isArray(preview?.plannedWrites) ? preview.plannedWrites : [];
+  const setupState = normalizeText(githubAppSetupCheck?.state) || "unknown";
 
   if (bootstrapState !== "available") {
     return {
@@ -7478,6 +7484,26 @@ function buildBootstrapSessionIssuanceReadout({ bootstrapState, preview }) {
         id: "runtime_identity_fields_written",
         summary:
           "The next issuance condition is that the missing GitHub App runtime fields are written so the remaining session scope can narrow."
+      }
+    };
+  }
+
+  if (setupState === "ready") {
+    return {
+      issuableState: {
+        id: "no_setup_issuance_needed_for_verified_path",
+        summary:
+          "VTDD does not need to issue another setup session in this flow because the narrow path is already verified live."
+      },
+      blockingGate: {
+        id: "no_current_setup_issuance_blocker",
+        summary:
+          "There is no current setup-issuance blocker in this verified path because setup no longer needs another approval-bound session."
+      },
+      nextIssuanceCondition: {
+        id: "future_generalized_bootstrap_needs_separate_implementation",
+        summary:
+          "A future generalized bootstrap issuance path remains separate work and is not required for this already-verified narrow setup flow."
       }
     };
   }
