@@ -1441,6 +1441,170 @@ test("worker setup wizard consume can complete a single detected installation bi
   assert.equal(payload.text, "125153871");
 });
 
+test("worker setup wizard absorbs completed consume proof into approval-bound session state", async () => {
+  const calls = [];
+  const { privateKey } = generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+    privateKeyEncoding: {
+      type: "pkcs8",
+      format: "pem"
+    },
+    publicKeyEncoding: {
+      type: "spki",
+      format: "pem"
+    }
+  });
+  const env = {
+    SETUP_WIZARD_PASSCODE: "2468",
+    CLOUDFLARE_API_TOKEN: "bootstrap-token",
+    CLOUDFLARE_ACCOUNT_ID: "account-id",
+    CLOUDFLARE_WORKER_SCRIPT_NAME: "vtdd-v2-mvp",
+    GITHUB_MANIFEST_CONVERSION_TOKEN: "gho_operator_token",
+    GITHUB_APP_ID: "12345",
+    GITHUB_APP_PRIVATE_KEY: privateKey,
+    GITHUB_APP_JWT_PROVIDER: async () => "app_jwt_token_for_tests",
+    CF_API_FETCH: async (url, init = {}) => {
+      calls.push({ url: String(url), init, kind: "cf" });
+      return new Response(
+        JSON.stringify({
+          success: true,
+          errors: [],
+          result: { name: "GITHUB_APP_INSTALLATION_ID", type: "secret_text" }
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        }
+      );
+    },
+    GITHUB_API_FETCH: async (url) => {
+      const requestUrl = String(url);
+      if (requestUrl.endsWith("/app/installations")) {
+        return new Response(JSON.stringify([{ id: 125153871, app_id: 12345 }]), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        });
+      }
+      if (requestUrl.includes("/app/installations/125153871/access_tokens")) {
+        return new Response(
+          JSON.stringify({
+            token: "ghs_minted_installation_token",
+            expires_at: "2030-01-01T00:00:00Z"
+          }),
+          {
+            status: 201,
+            headers: { "content-type": "application/json" }
+          }
+        );
+      }
+      if (requestUrl.includes("/installation/repositories")) {
+        return new Response(
+          JSON.stringify({
+            total_count: 1,
+            repositories: [
+              {
+                full_name: "sample-org/vtdd-v2",
+                name: "vtdd-v2",
+                private: true
+              }
+            ]
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          }
+        );
+      }
+      if (requestUrl.endsWith("/app")) {
+        return new Response(JSON.stringify({ id: 12345, slug: "vtdd-test" }), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        });
+      }
+      return new Response(JSON.stringify({ message: "not found" }), {
+        status: 404,
+        headers: { "content-type": "application/json" }
+      });
+    }
+  };
+  const { sessionCookie } = await unlockSetupWizard(env);
+
+  const requestResponse = await worker.fetch(
+    new Request("https://example.com/setup/wizard/bootstrap-session/request", {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      },
+      body: new URLSearchParams({
+        returnTo: "/setup/wizard?repo=sample-org/vtdd-v2&githubAppCheck=on",
+        approval_phrase: "GO",
+        passkey_verified: "true"
+      })
+    }),
+    env
+  );
+
+  const location = requestResponse.headers.get("location") ?? "";
+  const statusResponse = await worker.fetch(
+    new Request(`https://example.com${location}&format=json`, {
+      headers: {
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      }
+    }),
+    env
+  );
+  const statusBody = await statusResponse.json();
+  const envelopeToken =
+    statusBody.approvalBoundBootstrapSession.sessionEnvelope.envelopeToken;
+
+  const consumeResponse = await worker.fetch(
+    new Request("https://example.com/setup/wizard/bootstrap-session/consume", {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      },
+      body: new URLSearchParams({
+        returnTo: location,
+        envelope_token: envelopeToken
+      })
+    }),
+    env
+  );
+
+  assert.equal(consumeResponse.status, 303);
+  const consumedLocation = consumeResponse.headers.get("location") ?? "";
+  const absorbedResponse = await worker.fetch(
+    new Request(`https://example.com${consumedLocation}&format=json`, {
+      headers: {
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      }
+    }),
+    env
+  );
+
+  assert.equal(absorbedResponse.status, 200);
+  const absorbedBody = await absorbedResponse.json();
+  assert.equal(
+    absorbedBody.approvalBoundBootstrapSession.state,
+    "bounded_consume_completed_with_live_proof"
+  );
+  assert.equal(
+    absorbedBody.approvalBoundBootstrapSession.recommendedNextStep.id,
+    "continue_with_live_github_capability"
+  );
+  assert.equal(
+    absorbedBody.approvalBoundBootstrapSession.phaseReadout.currentPhase.id,
+    "live_readiness_verified"
+  );
+  assert.deepEqual(
+    absorbedBody.approvalBoundBootstrapSession.progressReadout.completedPhases,
+    ["runtime_identity_bootstrap", "installation_binding", "live_readiness_verification"]
+  );
+  assert.deepEqual(absorbedBody.approvalBoundBootstrapSession.progressReadout.remainingPhases, []);
+});
+
 test("worker setup wizard rejects invalid bootstrap session envelope consume requests", async () => {
   const env = {
     SETUP_WIZARD_PASSCODE: "2468",

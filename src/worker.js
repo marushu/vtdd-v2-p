@@ -4573,6 +4573,13 @@ async function buildApprovalBoundBootstrapSessionStatus({
   const requestInvalid =
     normalizeText(url?.searchParams?.get(SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_STATE_PARAM)) ===
     "invalid";
+  const effectiveContext = deriveEffectiveBootstrapSessionContext({
+    url,
+    preview,
+    githubAppSetupCheck
+  });
+  const effectivePreview = effectiveContext.preview;
+  const effectiveGitHubAppSetupCheck = effectiveContext.githubAppSetupCheck;
   const base = {
     approvalBoundary: "GO + passkey",
     targetAbsorbs: [
@@ -4581,86 +4588,87 @@ async function buildApprovalBoundBootstrapSessionStatus({
       "post_write_readiness_verification"
     ],
     stepBoundaries: buildBootstrapSessionStepBoundaries({
-      preview,
-      githubAppSetupCheck
+      preview: effectivePreview,
+      githubAppSetupCheck: effectiveGitHubAppSetupCheck
     }),
     capabilityReadout: buildBootstrapSessionCapabilityReadout({
       bootstrapState,
-      preview,
-      githubAppSetupCheck
+      preview: effectivePreview,
+      githubAppSetupCheck: effectiveGitHubAppSetupCheck
     }),
     phaseReadout: buildBootstrapSessionPhaseReadout({
       bootstrapState,
-      preview,
-      githubAppSetupCheck
+      preview: effectivePreview,
+      githubAppSetupCheck: effectiveGitHubAppSetupCheck
     }),
     progressReadout: buildBootstrapSessionProgressReadout({
       bootstrapState,
-      preview
+      preview: effectivePreview,
+      githubAppSetupCheck: effectiveGitHubAppSetupCheck
     }),
     responsibilityReadout: buildBootstrapSessionResponsibilityReadout({
       bootstrapState,
-      preview
+      preview: effectivePreview
     }),
     authBoundaryReadout: buildBootstrapSessionAuthBoundaryReadout({
       bootstrapState,
-      preview,
+      preview: effectivePreview,
       authConfig
     }),
     issuanceReadout: buildBootstrapSessionIssuanceReadout({
       bootstrapState,
-      preview
+      preview: effectivePreview
     }),
     authorityShapeReadout: buildBootstrapSessionAuthorityShapeReadout({
       bootstrapState,
-      preview
+      preview: effectivePreview
     }),
     authorityExpiryReadout: buildBootstrapSessionAuthorityExpiryReadout({
       bootstrapState,
-      preview,
+      preview: effectivePreview,
       maxAgeSeconds: SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_TTL_SECONDS
     }),
     authorityRenewalReadout: buildBootstrapSessionAuthorityRenewalReadout({
       bootstrapState,
-      preview
+      preview: effectivePreview
     }),
     authorityRenewalDenialReadout: buildBootstrapSessionAuthorityRenewalDenialReadout({
       bootstrapState,
-      preview
+      preview: effectivePreview
     }),
     authorityRequestFreshnessReadout: buildBootstrapSessionAuthorityRequestFreshnessReadout({
       bootstrapState,
-      preview,
+      preview: effectivePreview,
       maxAgeSeconds: SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_TTL_SECONDS
     }),
     authorityRequestReplayReadout: buildBootstrapSessionAuthorityRequestReplayReadout({
       bootstrapState,
-      preview
+      preview: effectivePreview
     }),
     authorityRequestBindingReadout: buildBootstrapSessionAuthorityRequestBindingReadout({
       bootstrapState,
-      preview
+      preview: effectivePreview
     }),
     authorityRequestTargetReadout: buildBootstrapSessionAuthorityRequestTargetReadout({
       bootstrapState,
-      preview,
+      preview: effectivePreview,
       url
     }),
     authorityRequestProvenanceReadout: buildBootstrapSessionAuthorityRequestProvenanceReadout({
       bootstrapState,
-      preview
+      preview: effectivePreview
     }),
     completionReadout: buildBootstrapSessionCompletionReadout({
       bootstrapState,
-      preview
+      preview: effectivePreview
     }),
     evidenceReadout: buildBootstrapSessionEvidenceReadout({
       bootstrapState,
-      preview
+      preview: effectivePreview
     }),
     safetyReadout: buildBootstrapSessionSafetyReadout({
       bootstrapState,
-      preview
+      preview: effectivePreview
     }),
     contract: {
       authorityState: "not_issued",
@@ -4670,7 +4678,7 @@ async function buildApprovalBoundBootstrapSessionStatus({
       maxAgeSeconds: SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_TTL_SECONDS,
       singleUse: true,
       allowlistedSecrets: [...GITHUB_APP_BOOTSTRAP_SECRET_ALLOWLIST],
-      preview
+      preview: effectivePreview
     },
     sessionEnvelope:
       requestRecorded &&
@@ -4681,13 +4689,13 @@ async function buildApprovalBoundBootstrapSessionStatus({
             url,
             sessionSecret: authConfig.sessionSecret,
             bootstrapState,
-            preview,
+            preview: effectivePreview,
             expiresAt: requestExpiresAt
           })
         : null,
     envelopeConsumeResult: buildBootstrapSessionEnvelopeConsumeResult({
       url,
-      preview
+      preview: effectivePreview
     }),
     envelopeConsumptionPlan: null,
     envelopeConsumePreflight: null,
@@ -4803,19 +4811,29 @@ async function buildApprovalBoundBootstrapSessionStatus({
     action: "implement_attestation_backed_bootstrap_authority"
   };
 
-  if (preview.plannedWrites.length === 1 && preview.plannedWrites[0] === "GITHUB_APP_INSTALLATION_ID") {
+  if (
+    effectivePreview.plannedWrites.length === 1 &&
+    effectivePreview.plannedWrites[0] === "GITHUB_APP_INSTALLATION_ID"
+  ) {
     recommendedNextStep = {
       id: "capture_or_detect_installation_binding",
       summary:
         "Finish installation binding first so VTDD can narrow the future approval-bound bootstrap session to the remaining installation step.",
       action: "capture_installation_binding"
     };
-  } else if (preview.plannedWrites.length > 1) {
+  } else if (effectivePreview.plannedWrites.length > 1) {
     recommendedNextStep = {
       id: "complete_github_app_bootstrap",
       summary:
         "Complete the current GitHub App bootstrap path first so the future approval-bound session can shrink to the minimum remaining write set.",
       action: "write_missing_github_app_runtime_fields"
+    };
+  } else if (normalizeText(effectiveGitHubAppSetupCheck?.state) === "ready") {
+    recommendedNextStep = {
+      id: "continue_with_live_github_capability",
+      summary:
+        "The bounded bootstrap path has already proven live GitHub readiness, so the next step is to continue with real VTDD GitHub capability rather than more setup wiring.",
+      action: "use_live_github_capability"
     };
   }
 
@@ -4824,34 +4842,52 @@ async function buildApprovalBoundBootstrapSessionStatus({
     envelopeConsumptionPlan: requestRecorded
       ? buildBootstrapSessionEnvelopeConsumptionPlan({
           bootstrapState,
-          preview
+          preview: effectivePreview
         })
       : null,
     envelopeConsumePreflight: requestRecorded
       ? buildBootstrapSessionEnvelopeConsumePreflight({
           bootstrapState,
-          preview
+          preview: effectivePreview
         })
       : null,
     envelopeConsumeOutcome: requestRecorded
       ? buildBootstrapSessionEnvelopeConsumeOutcome({
           bootstrapState,
-          preview
+          preview: effectivePreview
         })
       : null,
     envelopeConsumeAuditReadout: requestRecorded
       ? buildBootstrapSessionEnvelopeConsumeAuditReadout({
           bootstrapState,
-          preview
+          preview: effectivePreview
         })
       : null,
-    state: requestRecorded ? "request_recorded_but_deferred" : "deferred",
+    state:
+      normalizeText(effectiveGitHubAppSetupCheck?.state) === "ready" &&
+      normalizeText(
+        url?.searchParams?.get(SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_STATE_PARAM)
+      ) === "completed"
+        ? "bounded_consume_completed_with_live_proof"
+        : requestRecorded
+          ? "request_recorded_but_deferred"
+          : "deferred",
     summary:
-      requestRecorded
+      normalizeText(effectiveGitHubAppSetupCheck?.state) === "ready" &&
+      normalizeText(
+        url?.searchParams?.get(SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_STATE_PARAM)
+      ) === "completed"
+        ? "VTDD consumed the bounded installation-binding step and immediately proved live GitHub readiness in the same setup flow."
+        : requestRecorded
         ? "VTDD recorded the GO + passkey-shaped request, but no privileged bootstrap session was opened because attestation-backed bootstrap authority is still deferred."
         : "VTDD has the operator-seeded baseline needed for a future approval-bound bootstrap session, but the session itself is still intentionally deferred.",
     guidance: [
-      requestRecorded
+      normalizeText(effectiveGitHubAppSetupCheck?.state) === "ready" &&
+      normalizeText(
+        url?.searchParams?.get(SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_STATE_PARAM)
+      ) === "completed"
+        ? "This bounded path absorbed installation binding and immediately proved that VTDD can reach live GitHub capability."
+        : requestRecorded
         ? "This request proves the wizard can carry approval-bound intent without granting authority yet."
         : "Current live setup still uses the bounded GitHub App bootstrap path plus operator-managed Cloudflare authority.",
       "The future approval-bound session should absorb setup-critical transport without becoming a generic secret terminal.",
@@ -5010,6 +5046,39 @@ function buildBootstrapSessionConsumeProofReadout({ proofState }) {
     state: proofState,
     summary:
       "VTDD recorded a post-consume proof state after the bounded installation binding write."
+  };
+}
+
+function deriveEffectiveBootstrapSessionContext({ url, preview, githubAppSetupCheck }) {
+  const consumeState = normalizeText(
+    url?.searchParams?.get(SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_STATE_PARAM)
+  );
+  const proofState = normalizeText(
+    url?.searchParams?.get(SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_PROOF_STATE_PARAM)
+  );
+
+  if (consumeState !== "completed") {
+    return {
+      preview,
+      githubAppSetupCheck
+    };
+  }
+
+  const effectivePreview = {
+    ...(preview ?? {}),
+    plannedWrites: []
+  };
+  const effectiveGitHubAppSetupCheck =
+    proofState === "ready" || proofState === "configured"
+      ? {
+          ...(githubAppSetupCheck ?? {}),
+          state: proofState
+        }
+      : githubAppSetupCheck;
+
+  return {
+    preview: effectivePreview,
+    githubAppSetupCheck: effectiveGitHubAppSetupCheck
   };
 }
 
@@ -5593,6 +5662,26 @@ function buildBootstrapSessionPhaseReadout({
     };
   }
 
+  if (setupState === "ready") {
+    return {
+      currentPhase: {
+        id: "live_readiness_verified",
+        summary:
+          "VTDD has already verified live GitHub readiness in this setup flow and no bounded bootstrap writes remain."
+      },
+      nextCapability: {
+        id: "live_github_work_execution",
+        summary:
+          "VTDD can continue into real GitHub work from the verified runtime identity."
+      },
+      transitionTrigger: {
+        id: "bounded_bootstrap_path_can_retire",
+        summary:
+          "The bounded bootstrap path can retire because installation binding and live readiness proof are already complete."
+      }
+    };
+  }
+
   return {
     currentPhase: {
       id: "live_readiness_verification",
@@ -5612,8 +5701,9 @@ function buildBootstrapSessionPhaseReadout({
   };
 }
 
-function buildBootstrapSessionProgressReadout({ bootstrapState, preview }) {
+function buildBootstrapSessionProgressReadout({ bootstrapState, preview, githubAppSetupCheck }) {
   const plannedWrites = Array.isArray(preview?.plannedWrites) ? preview.plannedWrites : [];
+  const setupState = normalizeText(githubAppSetupCheck?.state) || "unknown";
 
   if (bootstrapState !== "available") {
     return {
@@ -5656,6 +5746,18 @@ function buildBootstrapSessionProgressReadout({ bootstrapState, preview }) {
         "installation_binding",
         "live_readiness_verification"
       ]
+    };
+  }
+
+  if (setupState === "ready") {
+    return {
+      completedPhases: [
+        "runtime_identity_bootstrap",
+        "installation_binding",
+        "live_readiness_verification"
+      ],
+      currentBlocker: null,
+      remainingPhases: []
     };
   }
 
