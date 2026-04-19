@@ -5456,24 +5456,28 @@ async function buildApprovalBoundBootstrapSessionStatus({
   return {
     ...base,
     envelopeConsumptionPlan: requestRecorded
+      && !absorbedLiveProof
       ? buildBootstrapSessionEnvelopeConsumptionPlan({
           bootstrapState,
           preview: effectivePreview
         })
       : null,
     envelopeConsumePreflight: requestRecorded
+      && !absorbedLiveProof
       ? buildBootstrapSessionEnvelopeConsumePreflight({
           bootstrapState,
           preview: effectivePreview
         })
       : null,
     envelopeConsumeOutcome: requestRecorded
+      && !absorbedLiveProof
       ? buildBootstrapSessionEnvelopeConsumeOutcome({
           bootstrapState,
           preview: effectivePreview
         })
       : null,
     envelopeConsumeAuditReadout: requestRecorded
+      && !absorbedLiveProof
       ? buildBootstrapSessionEnvelopeConsumeAuditReadout({
           bootstrapState,
           preview: effectivePreview

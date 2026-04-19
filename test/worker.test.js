@@ -2349,6 +2349,10 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
     "verified_path_continues_without_current_provenance_recovery"
   );
   assert.equal(absorbedBody.approvalBoundBootstrapSession.sessionEnvelope, null);
+  assert.equal(absorbedBody.approvalBoundBootstrapSession.envelopeConsumptionPlan, null);
+  assert.equal(absorbedBody.approvalBoundBootstrapSession.envelopeConsumePreflight, null);
+  assert.equal(absorbedBody.approvalBoundBootstrapSession.envelopeConsumeOutcome, null);
+  assert.equal(absorbedBody.approvalBoundBootstrapSession.envelopeConsumeAuditReadout, null);
   assert.equal(
     absorbedBody.approvalBoundBootstrapSession.serviceConnectionFrictionReadout.github.id,
     "github_connection_completed_without_remaining_transport"
