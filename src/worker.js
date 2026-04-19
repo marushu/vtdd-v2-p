@@ -2728,6 +2728,10 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
   const operatorBootstrapAuthority = authBoundaryReadout?.operatorBootstrapAuthority ?? null;
   const externalAccountConnection = authBoundaryReadout?.externalAccountConnection ?? null;
   const runtimeMachineAuth = authBoundaryReadout?.runtimeMachineAuth ?? null;
+  const completionReadout = session?.completionReadout ?? null;
+  const claimState = completionReadout?.claimState ?? null;
+  const cannotYetClaim = completionReadout?.cannotYetClaim ?? null;
+  const claimBecomesValidWhen = completionReadout?.claimBecomesValidWhen ?? null;
 
   return `
     <h2>${escapeHtml(locale === "ja" ? "承認境界つき Bootstrap Session" : "Approval-Bound Bootstrap Session")}</h2>
@@ -2925,6 +2929,30 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
               ${
                 runtimeMachineAuth
                   ? `<p><strong>${escapeHtml(locale === "ja" ? "Runtime machine auth" : "Runtime machine auth")}:</strong> <code>${escapeHtml(normalizeText(runtimeMachineAuth.state))}</code> ${escapeHtml(normalizeText(runtimeMachineAuth.summary))}</p>`
+                  : ""
+              }
+            </div>
+          `
+          : ""
+      }
+      ${
+        completionReadout
+          ? `
+            <div class="block" style="margin-top: 12px;">
+              <p><strong>${escapeHtml(locale === "ja" ? "Completion claim" : "Completion claim")}:</strong></p>
+              ${
+                claimState
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Current claim" : "Current claim")}:</strong> <code>${escapeHtml(normalizeText(claimState.id))}</code> ${escapeHtml(normalizeText(claimState.summary))}</p>`
+                  : ""
+              }
+              ${
+                cannotYetClaim
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Cannot yet claim" : "Cannot yet claim")}:</strong> <code>${escapeHtml(normalizeText(cannotYetClaim.id))}</code> ${escapeHtml(normalizeText(cannotYetClaim.summary))}</p>`
+                  : ""
+              }
+              ${
+                claimBecomesValidWhen
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Claim becomes valid when" : "Claim becomes valid when")}:</strong> <code>${escapeHtml(normalizeText(claimBecomesValidWhen.id))}</code> ${escapeHtml(normalizeText(claimBecomesValidWhen.summary))}</p>`
                   : ""
               }
             </div>
@@ -3664,6 +3692,10 @@ async function buildApprovalBoundBootstrapSessionStatus({
       preview,
       authConfig
     }),
+    completionReadout: buildBootstrapSessionCompletionReadout({
+      bootstrapState,
+      preview
+    }),
     contract: {
       authorityState: "not_issued",
       sessionMode: "approval_bound_one_time_bootstrap",
@@ -4337,6 +4369,88 @@ function buildBootstrapSessionAuthBoundaryReadout({
       state: "separate_internal_boundary",
       summary:
         "Runtime machine auth continues to protect internal execution surfaces separately from the setup flow."
+    }
+  };
+}
+
+function buildBootstrapSessionCompletionReadout({ bootstrapState, preview }) {
+  const plannedWrites = Array.isArray(preview?.plannedWrites) ? preview.plannedWrites : [];
+
+  if (bootstrapState !== "available") {
+    return {
+      claimState: {
+        id: "meaningful_but_blocked_setup_surface",
+        summary:
+          "VTDD can claim a meaning-first setup surface, but not a bounded automation path that can continue through setup-critical runtime bootstrap."
+      },
+      cannotYetClaim: {
+        id: "wizard_complete_setup",
+        summary:
+          "VTDD cannot yet claim wizard-complete setup because operator bootstrap prerequisites are still missing."
+      },
+      claimBecomesValidWhen: {
+        id: "operator_prerequisites_restored_and_bounded_path_available",
+        summary:
+          "That claim moves forward only after the operator prerequisites are restored and the bounded bootstrap path can continue coherently."
+      }
+    };
+  }
+
+  if (plannedWrites.length === 1 && plannedWrites[0] === "GITHUB_APP_INSTALLATION_ID") {
+    return {
+      claimState: {
+        id: "narrowed_setup_flow",
+        summary:
+          "VTDD can claim that setup has narrowed to installation binding as the last unresolved configuration phase."
+      },
+      cannotYetClaim: {
+        id: "wizard_complete_setup",
+        summary:
+          "VTDD still cannot claim wizard-complete setup because installation binding and live verification are not finished."
+      },
+      claimBecomesValidWhen: {
+        id: "installation_binding_and_live_probe_complete",
+        summary:
+          "That claim becomes valid only after installation binding succeeds and VTDD verifies live readiness."
+      }
+    };
+  }
+
+  if (plannedWrites.length > 1) {
+    return {
+      claimState: {
+        id: "coherent_bootstrap_in_progress",
+        summary:
+          "VTDD can claim that setup is in one coherent bootstrap flow, but runtime identity bootstrap is still incomplete."
+      },
+      cannotYetClaim: {
+        id: "wizard_complete_setup",
+        summary:
+          "VTDD cannot yet claim wizard-complete setup because the current GitHub App runtime identity is not fully stored."
+      },
+      claimBecomesValidWhen: {
+        id: "runtime_identity_bootstrap_narrows_to_installation_and_verification",
+        summary:
+          "That claim only moves forward after the runtime identity bootstrap narrows to installation binding and then to live verification."
+      }
+    };
+  }
+
+  return {
+    claimState: {
+      id: "configuration_ready_pending_verification",
+      summary:
+        "VTDD can claim that configuration is in place and the remaining work is live verification rather than more bootstrap wiring."
+    },
+    cannotYetClaim: {
+      id: "wizard_complete_setup",
+      summary:
+        "VTDD still cannot claim wizard-complete setup until the configured runtime identity is verified live."
+    },
+    claimBecomesValidWhen: {
+      id: "live_verification_passes",
+      summary:
+        "That claim becomes valid only after the live readiness probe passes and VTDD can prove the configured path does real GitHub work."
     }
   };
 }

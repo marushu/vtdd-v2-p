@@ -447,6 +447,10 @@ test("worker setup wizard unlocked html shows narrow github app bootstrap form w
   assert.equal(html.includes("Operator bootstrap authority"), true);
   assert.equal(html.includes("External account connection"), true);
   assert.equal(html.includes("Runtime machine auth"), true);
+  assert.equal(html.includes("Completion claim"), true);
+  assert.equal(html.includes("Current claim"), true);
+  assert.equal(html.includes("Cannot yet claim"), true);
+  assert.equal(html.includes("Claim becomes valid when"), true);
   assert.equal(html.includes("Allowlisted secrets"), true);
   assert.equal(html.includes("Planned writes"), true);
   assert.equal(html.includes("Post-session checks"), true);
@@ -579,6 +583,18 @@ test("worker setup wizard unlocked json reports github app bootstrap availabilit
     body.approvalBoundBootstrapSession.authBoundaryReadout.runtimeMachineAuth.state,
     "separate_internal_boundary"
   );
+  assert.equal(
+    body.approvalBoundBootstrapSession.completionReadout.claimState.id,
+    "meaningful_but_blocked_setup_surface"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.completionReadout.cannotYetClaim.id,
+    "wizard_complete_setup"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.completionReadout.claimBecomesValidWhen.id,
+    "operator_prerequisites_restored_and_bounded_path_available"
+  );
   assert.deepEqual(body.githubAppBootstrap.allowlistedSecrets, [
     "GITHUB_APP_ID",
     "GITHUB_APP_INSTALLATION_ID",
@@ -697,6 +713,18 @@ test("worker setup wizard unlocked json does not expose cloudflare bootstrap tok
   assert.equal(
     body.approvalBoundBootstrapSession.authBoundaryReadout.runtimeMachineAuth.state,
     "separate_internal_boundary"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.completionReadout.claimState.id,
+    "coherent_bootstrap_in_progress"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.completionReadout.cannotYetClaim.id,
+    "wizard_complete_setup"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.completionReadout.claimBecomesValidWhen.id,
+    "runtime_identity_bootstrap_narrows_to_installation_and_verification"
   );
   assert.equal(body.githubAppBootstrap.accountId, "account-id");
   assert.equal("cloudflareApiToken" in body.githubAppBootstrap, false);
@@ -852,6 +880,18 @@ test("worker setup wizard preview narrows planned write to installation binding 
   assert.equal(
     body.approvalBoundBootstrapSession.authBoundaryReadout.runtimeMachineAuth.state,
     "separate_internal_boundary"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.completionReadout.claimState.id,
+    "narrowed_setup_flow"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.completionReadout.cannotYetClaim.id,
+    "wizard_complete_setup"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.completionReadout.claimBecomesValidWhen.id,
+    "installation_binding_and_live_probe_complete"
   );
 });
 
