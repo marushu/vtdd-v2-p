@@ -5242,11 +5242,13 @@ async function buildApprovalBoundBootstrapSessionStatus({
           maxAgeSeconds: SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_TTL_SECONDS,
           githubAppSetupCheck: effectiveGitHubAppSetupCheck
         }),
-    authorityRenewalReadout: buildBootstrapSessionAuthorityRenewalReadout({
-      bootstrapState,
-      preview: effectivePreview,
-      githubAppSetupCheck: effectiveGitHubAppSetupCheck
-    }),
+    authorityRenewalReadout: absorbedLiveProof
+      ? null
+      : buildBootstrapSessionAuthorityRenewalReadout({
+          bootstrapState,
+          preview: effectivePreview,
+          githubAppSetupCheck: effectiveGitHubAppSetupCheck
+        }),
     authorityRenewalDenialReadout: buildBootstrapSessionAuthorityRenewalDenialReadout({
       bootstrapState,
       preview: effectivePreview,
