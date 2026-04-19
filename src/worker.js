@@ -2732,6 +2732,14 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
   const claimState = completionReadout?.claimState ?? null;
   const cannotYetClaim = completionReadout?.cannotYetClaim ?? null;
   const claimBecomesValidWhen = completionReadout?.claimBecomesValidWhen ?? null;
+  const evidenceReadout = session?.evidenceReadout ?? null;
+  const runtimeEvidence = Array.isArray(evidenceReadout?.runtimeEvidence)
+    ? evidenceReadout.runtimeEvidence
+    : [];
+  const blockedEvidence = Array.isArray(evidenceReadout?.blockedEvidence)
+    ? evidenceReadout.blockedEvidence
+    : [];
+  const nextProof = evidenceReadout?.nextProof ?? null;
 
   return `
     <h2>${escapeHtml(locale === "ja" ? "承認境界つき Bootstrap Session" : "Approval-Bound Bootstrap Session")}</h2>
@@ -2953,6 +2961,34 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
               ${
                 claimBecomesValidWhen
                   ? `<p><strong>${escapeHtml(locale === "ja" ? "Claim becomes valid when" : "Claim becomes valid when")}:</strong> <code>${escapeHtml(normalizeText(claimBecomesValidWhen.id))}</code> ${escapeHtml(normalizeText(claimBecomesValidWhen.summary))}</p>`
+                  : ""
+              }
+            </div>
+          `
+          : ""
+      }
+      ${
+        evidenceReadout
+          ? `
+            <div class="block" style="margin-top: 12px;">
+              <p><strong>${escapeHtml(locale === "ja" ? "Evidence readout" : "Evidence readout")}:</strong></p>
+              ${
+                runtimeEvidence.length > 0
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Runtime evidence" : "Runtime evidence")}:</strong> ${runtimeEvidence
+                      .map((item) => `<code>${escapeHtml(item)}</code>`)
+                      .join(", ")}</p>`
+                  : ""
+              }
+              ${
+                blockedEvidence.length > 0
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Blocked evidence" : "Blocked evidence")}:</strong> ${blockedEvidence
+                      .map((item) => `<code>${escapeHtml(item)}</code>`)
+                      .join(", ")}</p>`
+                  : ""
+              }
+              ${
+                nextProof
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Next proof" : "Next proof")}:</strong> <code>${escapeHtml(normalizeText(nextProof.id))}</code> ${escapeHtml(normalizeText(nextProof.summary))}</p>`
                   : ""
               }
             </div>
@@ -3693,6 +3729,10 @@ async function buildApprovalBoundBootstrapSessionStatus({
       authConfig
     }),
     completionReadout: buildBootstrapSessionCompletionReadout({
+      bootstrapState,
+      preview
+    }),
+    evidenceReadout: buildBootstrapSessionEvidenceReadout({
       bootstrapState,
       preview
     }),
@@ -4451,6 +4491,64 @@ function buildBootstrapSessionCompletionReadout({ bootstrapState, preview }) {
       id: "live_verification_passes",
       summary:
         "That claim becomes valid only after the live readiness probe passes and VTDD can prove the configured path does real GitHub work."
+    }
+  };
+}
+
+function buildBootstrapSessionEvidenceReadout({ bootstrapState, preview }) {
+  const plannedWrites = Array.isArray(preview?.plannedWrites) ? preview.plannedWrites : [];
+  const postChecks = Array.isArray(preview?.postChecks) ? preview.postChecks : [];
+
+  if (bootstrapState !== "available") {
+    return {
+      runtimeEvidence: ["setup_wizard_entry_access", "approval_bound_contract_surface"],
+      blockedEvidence: ["missing_operator_bootstrap_prerequisites"],
+      nextProof: {
+        id: "operator_prerequisites_restored",
+        summary:
+          "The next meaningful proof is that the operator bootstrap prerequisites are restored and the bounded bootstrap path can advance beyond prerequisite blocking."
+      }
+    };
+  }
+
+  if (plannedWrites.length === 1 && plannedWrites[0] === "GITHUB_APP_INSTALLATION_ID") {
+    return {
+      runtimeEvidence: [
+        "github_app_identity_present_in_runtime",
+        "bounded_installation_binding_preview"
+      ],
+      blockedEvidence: ["installation_binding_not_yet_stored"],
+      nextProof: {
+        id: "installation_binding_detected_or_captured",
+        summary:
+          "The next proof is that installation binding is detected or captured so VTDD can mint installation tokens and continue to live verification."
+      }
+    };
+  }
+
+  if (plannedWrites.length > 1) {
+    return {
+      runtimeEvidence: ["operator_bootstrap_baseline_available", ...postChecks],
+      blockedEvidence: ["missing_runtime_identity_fields"],
+      nextProof: {
+        id: "runtime_identity_fields_written",
+        summary:
+          "The next proof is that the missing GitHub App runtime fields are stored so the flow narrows to installation binding."
+      }
+    };
+  }
+
+  return {
+    runtimeEvidence: [
+      "github_app_runtime_identity_present",
+      "installation_binding_present",
+      ...postChecks
+    ],
+    blockedEvidence: ["live_readiness_not_yet_verified"],
+    nextProof: {
+      id: "live_probe_passes",
+      summary:
+        "The next proof is a passing live readiness probe that shows VTDD can do real GitHub work through the configured runtime identity."
     }
   };
 }
