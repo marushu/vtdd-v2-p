@@ -2125,18 +2125,7 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
   assert.equal(absorbedBody.approvalBoundBootstrapSession.stepBoundaries, null);
   assert.equal(absorbedBody.approvalBoundBootstrapSession.approvalBoundary, null);
   assert.deepEqual(absorbedBody.approvalBoundBootstrapSession.targetAbsorbs, []);
-  assert.equal(
-    absorbedBody.approvalBoundBootstrapSession.guidance[0],
-    "This setup flow already absorbed installation binding and proved live GitHub capability."
-  );
-  assert.equal(
-    absorbedBody.approvalBoundBootstrapSession.guidance[1],
-    "Continue with real VTDD GitHub work from this verified state instead of reopening setup transport steps."
-  );
-  assert.equal(
-    absorbedBody.approvalBoundBootstrapSession.guidance[2],
-    "Treat any future generalized approval-bound bootstrap work as separate from this completed narrow path."
-  );
+  assert.deepEqual(absorbedBody.approvalBoundBootstrapSession.guidance, []);
   assert.equal(absorbedBody.approvalBoundBootstrapSession.returnTo, null);
   assert.equal(absorbedBody.approvalBoundBootstrapSession.requestPath, null);
   assert.equal(absorbedBody.approvalBoundBootstrapSession.requestEnabled, false);
@@ -2407,6 +2396,7 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
   assert.equal(absorbedHtml.includes("Steps this path is intended to absorb"), false);
   assert.equal(absorbedHtml.includes("Session contract"), false);
   assert.equal(absorbedHtml.includes("Envelope consume result"), false);
+  assert.equal(absorbedHtml.includes("This setup flow already absorbed installation binding"), false);
 });
 
 test("worker setup wizard rejects invalid bootstrap session envelope consume requests", async () => {

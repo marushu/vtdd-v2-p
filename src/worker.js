@@ -5504,21 +5504,15 @@ async function buildApprovalBoundBootstrapSessionStatus({
         : requestRecorded
         ? "VTDD recorded the GO + passkey-shaped request, but no privileged bootstrap session was opened because attestation-backed bootstrap authority is still deferred."
         : "VTDD has the operator-seeded baseline needed for a future approval-bound bootstrap session, but the session itself is still intentionally deferred.",
-    guidance: [
-      ...(absorbedLiveProof
-        ? [
-            "This setup flow already absorbed installation binding and proved live GitHub capability.",
-            "Continue with real VTDD GitHub work from this verified state instead of reopening setup transport steps.",
-            "Treat any future generalized approval-bound bootstrap work as separate from this completed narrow path."
-          ]
-        : [
-            requestRecorded
-              ? "This request proves the wizard can carry approval-bound intent without granting authority yet."
-              : "Current live setup still uses the bounded GitHub App bootstrap path plus operator-managed Cloudflare authority.",
-            "The future approval-bound session should absorb setup-critical transport without becoming a generic secret terminal.",
-            "Do not present setup as wizard-complete until this path is implemented and verified."
-          ])
-    ],
+    guidance: absorbedLiveProof
+      ? []
+      : [
+          requestRecorded
+            ? "This request proves the wizard can carry approval-bound intent without granting authority yet."
+            : "Current live setup still uses the bounded GitHub App bootstrap path plus operator-managed Cloudflare authority.",
+          "The future approval-bound session should absorb setup-critical transport without becoming a generic secret terminal.",
+          "Do not present setup as wizard-complete until this path is implemented and verified."
+        ],
     recommendedNextStep,
     contract: absorbedLiveProof
       ? null
