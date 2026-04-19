@@ -2265,6 +2265,18 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
     "verified_path_relies_on_completed_single_use_history"
   );
   assert.equal(
+    absorbedBody.approvalBoundBootstrapSession.authorityRenewalReadout.renewalTrigger.id,
+    "no_current_setup_renewal_needed"
+  );
+  assert.equal(
+    absorbedBody.approvalBoundBootstrapSession.authorityRenewalReadout.renewalGate.id,
+    "future_generalized_renewal_is_separate_work"
+  );
+  assert.equal(
+    absorbedBody.approvalBoundBootstrapSession.authorityRenewalReadout.renewalScope.id,
+    "verified_path_has_no_current_renewal_scope"
+  );
+  assert.equal(
     absorbedBody.approvalBoundBootstrapSession.serviceConnectionFrictionReadout.github.id,
     "github_connection_completed_without_remaining_transport"
   );

@@ -5235,7 +5235,8 @@ async function buildApprovalBoundBootstrapSessionStatus({
     }),
     authorityRenewalReadout: buildBootstrapSessionAuthorityRenewalReadout({
       bootstrapState,
-      preview: effectivePreview
+      preview: effectivePreview,
+      githubAppSetupCheck: effectiveGitHubAppSetupCheck
     }),
     authorityRenewalDenialReadout: buildBootstrapSessionAuthorityRenewalDenialReadout({
       bootstrapState,
@@ -7745,8 +7746,13 @@ function buildBootstrapSessionAuthorityExpiryReadout({
   };
 }
 
-function buildBootstrapSessionAuthorityRenewalReadout({ bootstrapState, preview }) {
+function buildBootstrapSessionAuthorityRenewalReadout({
+  bootstrapState,
+  preview,
+  githubAppSetupCheck
+}) {
   const plannedWrites = Array.isArray(preview?.plannedWrites) ? preview.plannedWrites : [];
+  const setupState = normalizeText(githubAppSetupCheck?.state) || "unknown";
 
   if (bootstrapState !== "available") {
     return {
@@ -7804,6 +7810,26 @@ function buildBootstrapSessionAuthorityRenewalReadout({ bootstrapState, preview 
         id: "recompute_and_shrink_remaining_write_set",
         summary:
           "Any renewed authority must recalculate the remaining write set and shrink if some runtime fields were already stored."
+      }
+    };
+  }
+
+  if (setupState === "ready") {
+    return {
+      renewalTrigger: {
+        id: "no_current_setup_renewal_needed",
+        summary:
+          "This verified path does not need a current setup renewal because the narrow setup flow is already complete."
+      },
+      renewalGate: {
+        id: "future_generalized_renewal_is_separate_work",
+        summary:
+          "Any future generalized renewal gate is separate work and is not part of the current verified narrow setup path."
+      },
+      renewalScope: {
+        id: "verified_path_has_no_current_renewal_scope",
+        summary:
+          "There is no current renewal scope left in this verified path because setup no longer needs another approval-bound session."
       }
     };
   }
