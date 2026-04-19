@@ -2719,6 +2719,10 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
   const remainingPhases = Array.isArray(progressReadout?.remainingPhases)
     ? progressReadout.remainingPhases
     : [];
+  const responsibilityReadout = session?.responsibilityReadout ?? null;
+  const humanStep = responsibilityReadout?.humanStep ?? null;
+  const vtddStep = responsibilityReadout?.vtddStep ?? null;
+  const providerStep = responsibilityReadout?.providerStep ?? null;
 
   return `
     <h2>${escapeHtml(locale === "ja" ? "承認境界つき Bootstrap Session" : "Approval-Bound Bootstrap Session")}</h2>
@@ -2863,6 +2867,30 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
                   ? `<p><strong>${escapeHtml(locale === "ja" ? "Remaining phases" : "Remaining phases")}:</strong> ${remainingPhases
                       .map((item) => `<code>${escapeHtml(item)}</code>`)
                       .join(", ")}</p>`
+                  : ""
+              }
+            </div>
+          `
+          : ""
+      }
+      ${
+        responsibilityReadout
+          ? `
+            <div class="block" style="margin-top: 12px;">
+              <p><strong>${escapeHtml(locale === "ja" ? "Responsibility split" : "Responsibility split")}:</strong></p>
+              ${
+                humanStep
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Human step" : "Human step")}:</strong> <code>${escapeHtml(normalizeText(humanStep.id))}</code> ${escapeHtml(normalizeText(humanStep.summary))}</p>`
+                  : ""
+              }
+              ${
+                vtddStep
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "VTDD step" : "VTDD step")}:</strong> <code>${escapeHtml(normalizeText(vtddStep.id))}</code> ${escapeHtml(normalizeText(vtddStep.summary))}</p>`
+                  : ""
+              }
+              ${
+                providerStep
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Provider step" : "Provider step")}:</strong> <code>${escapeHtml(normalizeText(providerStep.id))}</code> ${escapeHtml(normalizeText(providerStep.summary))}</p>`
                   : ""
               }
             </div>
@@ -3593,6 +3621,10 @@ async function buildApprovalBoundBootstrapSessionStatus({
       bootstrapState,
       preview
     }),
+    responsibilityReadout: buildBootstrapSessionResponsibilityReadout({
+      bootstrapState,
+      preview
+    }),
     contract: {
       authorityState: "not_issued",
       sessionMode: "approval_bound_one_time_bootstrap",
@@ -4076,6 +4108,88 @@ function buildBootstrapSessionProgressReadout({ bootstrapState, preview }) {
         "Configuration is in place, but VTDD still needs a live readiness probe before it can claim verified GitHub capability."
     },
     remainingPhases: ["live_readiness_verification"]
+  };
+}
+
+function buildBootstrapSessionResponsibilityReadout({ bootstrapState, preview }) {
+  const plannedWrites = Array.isArray(preview?.plannedWrites) ? preview.plannedWrites : [];
+
+  if (bootstrapState !== "available") {
+    return {
+      humanStep: {
+        id: "approve_or_restore_operator_bootstrap_prerequisites",
+        summary:
+          "The human still needs to restore the operator-managed bootstrap prerequisites before VTDD can continue setup."
+      },
+      vtddStep: {
+        id: "hold_meaningful_setup_context",
+        summary:
+          "VTDD keeps the setup narrative coherent, but it does not open a privileged bootstrap path until the missing prerequisites exist."
+      },
+      providerStep: {
+        id: "cloudflare_retains_runtime_secret_boundary",
+        summary:
+          "Cloudflare remains the system of record for runtime secret storage and execution hosting."
+      }
+    };
+  }
+
+  if (plannedWrites.length === 1 && plannedWrites[0] === "GITHUB_APP_INSTALLATION_ID") {
+    return {
+      humanStep: {
+        id: "approve_installation_binding_if_needed",
+        summary:
+          "The human may still need to complete the bounded GitHub installation step, but should not carry IDs across surfaces manually."
+      },
+      vtddStep: {
+        id: "detect_or_capture_installation_binding",
+        summary:
+          "VTDD narrows the remaining work to installation detection or binding capture and keeps the post-installation checks in one flow."
+      },
+      providerStep: {
+        id: "github_owns_installation_consent",
+        summary:
+          "GitHub still owns installation scope and permission consent for the App."
+      }
+    };
+  }
+
+  if (plannedWrites.length > 1) {
+    return {
+      humanStep: {
+        id: "approve_provider_creation_or_installation_step",
+        summary:
+          "The human may still need to pass through provider consent, but should not become the transport layer for runtime IDs or secrets."
+      },
+      vtddStep: {
+        id: "orchestrate_runtime_identity_bootstrap",
+        summary:
+          "VTDD owns callback capture, bounded transport planning, and follow-up checks for the missing GitHub App runtime identity."
+      },
+      providerStep: {
+        id: "github_and_cloudflare_keep_native_trust_boundaries",
+        summary:
+          "GitHub still owns App creation and install consent, while Cloudflare still owns runtime secret storage."
+      }
+    };
+  }
+
+  return {
+    humanStep: {
+      id: "approve_live_verification_if_requested",
+      summary:
+        "The human no longer needs to move setup-critical material, and only needs to continue the bounded verification path when requested."
+    },
+    vtddStep: {
+      id: "run_live_readiness_checks",
+      summary:
+        "VTDD now owns the remaining live readiness probe and can report verified capability in wizard terms."
+      },
+    providerStep: {
+      id: "providers_serve_verified_runtime_identity",
+      summary:
+        "GitHub and Cloudflare continue to serve their native trust boundaries while VTDD verifies the configured runtime identity."
+    }
   };
 }
 

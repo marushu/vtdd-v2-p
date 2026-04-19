@@ -438,6 +438,10 @@ test("worker setup wizard unlocked html shows narrow github app bootstrap form w
   assert.equal(html.includes("Completed phases"), true);
   assert.equal(html.includes("Current blocker"), true);
   assert.equal(html.includes("Remaining phases"), true);
+  assert.equal(html.includes("Responsibility split"), true);
+  assert.equal(html.includes("Human step"), true);
+  assert.equal(html.includes("VTDD step"), true);
+  assert.equal(html.includes("Provider step"), true);
   assert.equal(html.includes("Allowlisted secrets"), true);
   assert.equal(html.includes("Planned writes"), true);
   assert.equal(html.includes("Post-session checks"), true);
@@ -542,6 +546,18 @@ test("worker setup wizard unlocked json reports github app bootstrap availabilit
     "installation_binding",
     "live_readiness_verification"
   ]);
+  assert.equal(
+    body.approvalBoundBootstrapSession.responsibilityReadout.humanStep.id,
+    "approve_or_restore_operator_bootstrap_prerequisites"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.responsibilityReadout.vtddStep.id,
+    "hold_meaningful_setup_context"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.responsibilityReadout.providerStep.id,
+    "cloudflare_retains_runtime_secret_boundary"
+  );
   assert.deepEqual(body.githubAppBootstrap.allowlistedSecrets, [
     "GITHUB_APP_ID",
     "GITHUB_APP_INSTALLATION_ID",
@@ -633,6 +649,18 @@ test("worker setup wizard unlocked json does not expose cloudflare bootstrap tok
     "installation_binding",
     "live_readiness_verification"
   ]);
+  assert.equal(
+    body.approvalBoundBootstrapSession.responsibilityReadout.humanStep.id,
+    "approve_provider_creation_or_installation_step"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.responsibilityReadout.vtddStep.id,
+    "orchestrate_runtime_identity_bootstrap"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.responsibilityReadout.providerStep.id,
+    "github_and_cloudflare_keep_native_trust_boundaries"
+  );
   assert.equal(body.githubAppBootstrap.accountId, "account-id");
   assert.equal("cloudflareApiToken" in body.githubAppBootstrap, false);
   assert.equal("githubManifestConversionToken" in body.githubAppBootstrap, false);
@@ -760,6 +788,18 @@ test("worker setup wizard preview narrows planned write to installation binding 
     "installation_binding",
     "live_readiness_verification"
   ]);
+  assert.equal(
+    body.approvalBoundBootstrapSession.responsibilityReadout.humanStep.id,
+    "approve_installation_binding_if_needed"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.responsibilityReadout.vtddStep.id,
+    "detect_or_capture_installation_binding"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.responsibilityReadout.providerStep.id,
+    "github_owns_installation_consent"
+  );
 });
 
 test("worker setup wizard rejects bootstrap request without GO plus passkey in json mode", async () => {
