@@ -4580,6 +4580,11 @@ async function buildApprovalBoundBootstrapSessionStatus({
   });
   const effectivePreview = effectiveContext.preview;
   const effectiveGitHubAppSetupCheck = effectiveContext.githubAppSetupCheck;
+  const absorbedLiveProof =
+    normalizeText(effectiveGitHubAppSetupCheck?.state) === "ready" &&
+    normalizeText(
+      url?.searchParams?.get(SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_STATE_PARAM)
+    ) === "completed";
   const base = {
     approvalBoundary: "GO + passkey",
     targetAbsorbs: [
@@ -4702,9 +4707,9 @@ async function buildApprovalBoundBootstrapSessionStatus({
     envelopeConsumeOutcome: null,
     envelopeConsumeAuditReadout: null,
     requestPath: SETUP_WIZARD_APPROVAL_BOUND_BOOTSTRAP_SESSION_REQUEST_PATH,
-    requestEnabled: true,
+    requestEnabled: !absorbedLiveProof,
     consumePath: SETUP_WIZARD_APPROVAL_BOUND_BOOTSTRAP_SESSION_CONSUME_PATH,
-    consumeEnabled: requestRecorded,
+    consumeEnabled: requestRecorded && !absorbedLiveProof,
     returnTo: `${url?.pathname || "/setup/wizard"}${url?.search || ""}`,
     recommendedNextStep: null,
     checkedAt: new Date().toISOString()
@@ -4864,28 +4869,19 @@ async function buildApprovalBoundBootstrapSessionStatus({
         })
       : null,
     state:
-      normalizeText(effectiveGitHubAppSetupCheck?.state) === "ready" &&
-      normalizeText(
-        url?.searchParams?.get(SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_STATE_PARAM)
-      ) === "completed"
+      absorbedLiveProof
         ? "bounded_consume_completed_with_live_proof"
         : requestRecorded
           ? "request_recorded_but_deferred"
           : "deferred",
     summary:
-      normalizeText(effectiveGitHubAppSetupCheck?.state) === "ready" &&
-      normalizeText(
-        url?.searchParams?.get(SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_STATE_PARAM)
-      ) === "completed"
+      absorbedLiveProof
         ? "VTDD consumed the bounded installation-binding step and immediately proved live GitHub readiness in the same setup flow."
         : requestRecorded
         ? "VTDD recorded the GO + passkey-shaped request, but no privileged bootstrap session was opened because attestation-backed bootstrap authority is still deferred."
         : "VTDD has the operator-seeded baseline needed for a future approval-bound bootstrap session, but the session itself is still intentionally deferred.",
     guidance: [
-      normalizeText(effectiveGitHubAppSetupCheck?.state) === "ready" &&
-      normalizeText(
-        url?.searchParams?.get(SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_STATE_PARAM)
-      ) === "completed"
+      absorbedLiveProof
         ? "This bounded path absorbed installation binding and immediately proved that VTDD can reach live GitHub capability."
         : requestRecorded
         ? "This request proves the wizard can carry approval-bound intent without granting authority yet."

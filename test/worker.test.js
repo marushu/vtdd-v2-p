@@ -1594,6 +1594,8 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
     absorbedBody.approvalBoundBootstrapSession.recommendedNextStep.id,
     "continue_with_live_github_capability"
   );
+  assert.equal(absorbedBody.approvalBoundBootstrapSession.requestEnabled, false);
+  assert.equal(absorbedBody.approvalBoundBootstrapSession.consumeEnabled, false);
   assert.equal(
     absorbedBody.approvalBoundBootstrapSession.phaseReadout.currentPhase.id,
     "live_readiness_verified"
@@ -1603,6 +1605,18 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
     ["runtime_identity_bootstrap", "installation_binding", "live_readiness_verification"]
   );
   assert.deepEqual(absorbedBody.approvalBoundBootstrapSession.progressReadout.remainingPhases, []);
+
+  const absorbedHtmlResponse = await worker.fetch(
+    new Request(`https://example.com${consumedLocation}`, {
+      headers: {
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      }
+    }),
+    env
+  );
+  const absorbedHtml = await absorbedHtmlResponse.text();
+  assert.equal(absorbedHtml.includes("Record GO + passkey request"), false);
+  assert.equal(absorbedHtml.includes("Consume session envelope"), false);
 });
 
 test("worker setup wizard rejects invalid bootstrap session envelope consume requests", async () => {
