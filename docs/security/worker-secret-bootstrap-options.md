@@ -105,6 +105,8 @@ Reading:
 
 Deferred. This is the most promising future automation path, but it is not safe to implement without its own bounded design and approval review.
 
+That bounded design is now tracked by Issue #210.
+
 ## Rejected Paths
 
 The following are out of bounds for normal operation:

@@ -20,6 +20,7 @@ test("worker secret bootstrap options record adopted baseline and rejected paths
   assert.equal(doc.includes("adopted now: Option A"), true);
   assert.equal(doc.includes("allowed optional operator path: Option B"), true);
   assert.equal(doc.includes("deferred for future bounded design: Option C"), true);
+  assert.equal(doc.includes("That bounded design is now tracked by Issue #210."), true);
   assert.equal(doc.includes("adding generic or unauthenticated secret input fields to setup wizard"), true);
   assert.equal(doc.includes("asking the user to paste secrets into chat"), true);
   assert.equal(doc.includes("generic secret write API without narrow approval and audit controls"), true);

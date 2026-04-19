@@ -242,6 +242,11 @@ That slice should:
 - define the auth source used by manifest conversion
 - keep install automation and Cloudflare automation out of scope
 
+That reading was correct for the bounded manifest slice.
+Wizard-complete setup automation is now tracked separately by Issue #210 so it
+can be defined explicitly instead of being silently folded into prerequisite or
+diagnostic work.
+
 ## Non-goals
 
 - claiming that bootstrap is already low-friction end to end

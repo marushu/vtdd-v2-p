@@ -27,5 +27,6 @@ test('setup wizard current and target flow records manual debt, target flow, and
   assert.equal(doc.includes('Target Flow'), true);
   assert.equal(doc.includes('Issue #206'), true);
   assert.equal(doc.includes('Issue #207'), true);
+  assert.equal(doc.includes('Issue #210'), true);
   assert.equal(doc.includes('Definition Of Done For Wizard Completion'), true);
 });

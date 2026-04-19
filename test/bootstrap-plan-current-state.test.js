@@ -11,6 +11,7 @@ test("bootstrap plan reflects historical mvp anchor and current bootstrap parent
   assert.equal(doc.includes("`#13` remains the historical MVP core execution anchor"), true);
   assert.equal(doc.includes("`#182` bootstrap automation and service connection parent"), true);
   assert.equal(doc.includes("`docs/mvp/issue-to-e2e-matrix.md`"), true);
+  assert.equal(doc.includes("`docs/security/setup-wizard-approval-bound-automation-path.md`"), true);
   assert.equal(doc.includes("bootstrap/setup path also reaches intended live usability"), true);
   assert.equal(doc.includes("`#105` Secure Worker Secret Bootstrap"), true);
 });

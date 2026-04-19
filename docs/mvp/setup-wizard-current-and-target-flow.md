@@ -250,6 +250,15 @@ Tracked by:
 - Issue #206
 - Issue #207
 
+### Gap 5: Approval-Bound Automation Path For Wizard Completion
+
+Current setup still depends on manual bridging in places that a completed
+wizard should absorb.
+
+Tracked by:
+
+- Issue #210
+
 ## Definition Of Done For Wizard Completion
 
 VTDD can claim the setup wizard is complete only when:
@@ -261,3 +270,5 @@ VTDD can claim the setup wizard is complete only when:
 4. success and blocked states are legible in user-facing VTDD terms
 5. the resulting runtime can actually perform the intended Butler/GitHub live
    operations
+6. the bounded setup path does not depend on the human manually transporting
+   setup-critical IDs or secrets between providers
