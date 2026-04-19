@@ -2122,6 +2122,7 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
     absorbedBody.approvalBoundBootstrapSession.recommendedNextStep.id,
     "continue_with_live_github_capability"
   );
+  assert.equal(absorbedBody.approvalBoundBootstrapSession.approvalBoundary, null);
   assert.deepEqual(absorbedBody.approvalBoundBootstrapSession.targetAbsorbs, []);
   assert.equal(
     absorbedBody.approvalBoundBootstrapSession.guidance[0],
@@ -2398,6 +2399,7 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
     env
   );
   const absorbedHtml = await absorbedHtmlResponse.text();
+  assert.equal(absorbedHtml.includes("Approval boundary"), false);
   assert.equal(absorbedHtml.includes("Record GO + passkey request"), false);
   assert.equal(absorbedHtml.includes("Consume session envelope"), false);
   assert.equal(absorbedHtml.includes("Steps this path is intended to absorb"), false);
