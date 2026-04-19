@@ -249,7 +249,10 @@ async function handleSetupWizardRequest({ request, url, env }) {
   const answers = buildSetupWizardAnswers(url);
   const result = runInitialSetupWizard({ answers });
   const cloudflareSetupCheck = await runCloudflareSetupCheck(url, env);
-  const rawGitHubAppSetupCheck = await runGitHubAppSetupCheck(url, env);
+  const rawGitHubAppSetupCheck = deriveEffectiveGitHubAppSetupCheckFromContinuation({
+    url,
+    githubAppSetupCheck: await runGitHubAppSetupCheck(url, env)
+  });
   const githubAppBootstrapInternal = buildGitHubAppBootstrapStatus({ url, env });
   const githubAppBootstrap = toPublicGitHubAppBootstrapStatus(githubAppBootstrapInternal);
   const approvalBoundBootstrapSession = await buildApprovalBoundBootstrapSessionStatus({
@@ -756,6 +759,84 @@ async function continueDetectedInstallationCompletion({
   });
 }
 
+async function maybeAutoContinueSelectedInstallationAfterCapture({
+  returnTo,
+  installationId,
+  originUrl,
+  env
+}) {
+  const normalizedReturnTo = normalizeGitHubAppBootstrapReturnTo(returnTo);
+  const normalizedInstallationId = normalizeText(installationId);
+  if (!normalizedReturnTo || !normalizedInstallationId) {
+    return null;
+  }
+
+  const authConfig = getSetupWizardAuthConfig(env);
+  if (!authConfig.sessionSecret) {
+    return null;
+  }
+
+  const contextUrl = new URL(normalizedReturnTo, originUrl.origin);
+  const requestRecorded = await verifySetupWizardBootstrapSessionRequestToken({
+    url: contextUrl,
+    sessionSecret: authConfig.sessionSecret
+  });
+  if (!requestRecorded) {
+    return null;
+  }
+
+  const requestExpiresAt = getSetupWizardBootstrapSessionRequestExpiresAt(contextUrl);
+  if (!Number.isFinite(requestExpiresAt)) {
+    return null;
+  }
+
+  const githubAppBootstrap = buildGitHubAppBootstrapStatus({ url: contextUrl, env });
+  if (normalizeText(githubAppBootstrap?.state) !== "available") {
+    return null;
+  }
+
+  const githubAppSetupCheck = await runGitHubAppSetupCheck(contextUrl, env);
+  const preview = buildBootstrapSessionPreview({
+    env,
+    githubAppBootstrap,
+    githubAppSetupCheck
+  });
+  const installationOnlyWrite =
+    Array.isArray(preview?.plannedWrites) &&
+    preview.plannedWrites.length === 1 &&
+    preview.plannedWrites[0] === "GITHUB_APP_INSTALLATION_ID";
+  if (!installationOnlyWrite) {
+    return null;
+  }
+
+  const proof = await runBootstrapSessionConsumeProof({
+    url: contextUrl,
+    env,
+    installationId: normalizedInstallationId
+  });
+  const successUrl = new URL(normalizedReturnTo, originUrl.origin);
+  successUrl.searchParams.set(SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_STATE_PARAM, "completed");
+  successUrl.searchParams.set(
+    SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_ENVELOPE_ID_PARAM,
+    normalizeText(
+      contextUrl.searchParams.get(SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_TOKEN_PARAM)
+    ).slice(0, 12)
+  );
+  if (normalizeText(proof?.state)) {
+    successUrl.searchParams.set(
+      SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_PROOF_STATE_PARAM,
+      normalizeText(proof.state)
+    );
+  }
+
+  return new Response(null, {
+    status: 303,
+    headers: {
+      location: `${successUrl.pathname}${successUrl.search}`
+    }
+  });
+}
+
 async function handleGitHubAppBootstrapRequest({ request, url, env }) {
   const bootstrap = buildGitHubAppBootstrapStatus({ url, env });
   if (bootstrap.state !== "available") {
@@ -822,6 +903,16 @@ async function handleGitHubAppBootstrapRequest({ request, url, env }) {
     normalizeGitHubAppBootstrapReturnTo(payload.returnTo) || "/setup/wizard?githubAppCheck=on";
 
   if (payload.mode === "form") {
+    const autoContinueResponse = await maybeAutoContinueSelectedInstallationAfterCapture({
+      returnTo,
+      installationId,
+      originUrl: url,
+      env
+    });
+    if (autoContinueResponse) {
+      return autoContinueResponse;
+    }
+
     return new Response(null, {
       status: 303,
       headers: {
@@ -1002,6 +1093,16 @@ async function handleGitHubAppInstallationCaptureRequest({ request, url, env }) 
     normalizeGitHubAppBootstrapReturnTo(payload.returnTo) || "/setup/wizard?githubAppCheck=on";
 
   if (payload.mode === "form") {
+    const autoContinueResponse = await maybeAutoContinueSelectedInstallationAfterCapture({
+      returnTo,
+      installationId,
+      originUrl: url,
+      env
+    });
+    if (autoContinueResponse) {
+      return autoContinueResponse;
+    }
+
     return new Response(null, {
       status: 303,
       headers: {
@@ -5537,6 +5638,53 @@ function buildBootstrapSessionConsumeProofReadout({ proofState }) {
     summary:
       "VTDD recorded a post-consume proof state after the bounded installation binding write."
   };
+}
+
+function deriveEffectiveGitHubAppSetupCheckFromContinuation({ url, githubAppSetupCheck }) {
+  const base = githubAppSetupCheck ?? null;
+  const consumeState = normalizeText(
+    url?.searchParams?.get(SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_STATE_PARAM)
+  );
+  const proofState = normalizeText(
+    url?.searchParams?.get(SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_PROOF_STATE_PARAM)
+  );
+
+  if (consumeState !== "completed" || !base) {
+    return base;
+  }
+
+  if (proofState === "ready") {
+    return {
+      ...base,
+      state: "ready",
+      summary:
+        "GitHub App setup check passed in the current setup flow: VTDD completed installation binding and confirmed live repository access.",
+      guidance: [
+        "VTDD can continue with live GitHub capability from this setup flow.",
+        "Keep App permissions minimal and expand only when a specific runtime path needs it."
+      ]
+    };
+  }
+
+  if (proofState === "configured") {
+    return {
+      ...base,
+      state: "configured",
+      summary:
+        "GitHub App installation binding completed in the current setup flow, and runtime now reports the GitHub App configuration as complete pending live diagnostics."
+    };
+  }
+
+  if (proofState === "probe_failed") {
+    return {
+      ...base,
+      state: "probe_failed",
+      summary:
+        "GitHub App installation binding completed in the current setup flow, but the immediate live readiness probe still failed closed."
+    };
+  }
+
+  return base;
 }
 
 function deriveEffectiveBootstrapSessionContext({ url, preview, githubAppSetupCheck }) {
