@@ -5234,12 +5234,14 @@ async function buildApprovalBoundBootstrapSessionStatus({
           preview: effectivePreview,
           githubAppSetupCheck: effectiveGitHubAppSetupCheck
         }),
-    authorityExpiryReadout: buildBootstrapSessionAuthorityExpiryReadout({
-      bootstrapState,
-      preview: effectivePreview,
-      maxAgeSeconds: SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_TTL_SECONDS,
-      githubAppSetupCheck: effectiveGitHubAppSetupCheck
-    }),
+    authorityExpiryReadout: absorbedLiveProof
+      ? null
+      : buildBootstrapSessionAuthorityExpiryReadout({
+          bootstrapState,
+          preview: effectivePreview,
+          maxAgeSeconds: SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_TTL_SECONDS,
+          githubAppSetupCheck: effectiveGitHubAppSetupCheck
+        }),
     authorityRenewalReadout: buildBootstrapSessionAuthorityRenewalReadout({
       bootstrapState,
       preview: effectivePreview,
