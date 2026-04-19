@@ -2355,14 +2355,7 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
   assert.equal(absorbedBody.approvalBoundBootstrapSession.envelopeConsumePreflight, null);
   assert.equal(absorbedBody.approvalBoundBootstrapSession.envelopeConsumeOutcome, null);
   assert.equal(absorbedBody.approvalBoundBootstrapSession.envelopeConsumeAuditReadout, null);
-  assert.equal(
-    absorbedBody.approvalBoundBootstrapSession.serviceConnectionFrictionReadout.github.id,
-    "github_connection_completed_without_remaining_transport"
-  );
-  assert.equal(
-    absorbedBody.approvalBoundBootstrapSession.serviceConnectionFrictionReadout.cloudflare.id,
-    "cloudflare_connection_completed_without_remaining_transport"
-  );
+  assert.equal(absorbedBody.approvalBoundBootstrapSession.serviceConnectionFrictionReadout, null);
   assert.equal(absorbedBody.approvalBoundBootstrapSession.serviceConnectionHandoffShapeReadout, null);
   assert.equal(absorbedBody.approvalBoundBootstrapSession.serviceConnectionReturnContinuityReadout, null);
 
@@ -2382,6 +2375,7 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
   assert.equal(absorbedHtml.includes("Steps this path is intended to absorb"), false);
   assert.equal(absorbedHtml.includes("Session contract"), false);
   assert.equal(absorbedHtml.includes("Envelope consume result"), false);
+  assert.equal(absorbedHtml.includes("Service connection friction"), false);
   assert.equal(absorbedHtml.includes("Service connection handoff shape"), false);
   assert.equal(absorbedHtml.includes("Service return continuity"), false);
   assert.equal(absorbedHtml.includes("This setup flow already absorbed installation binding"), false);
