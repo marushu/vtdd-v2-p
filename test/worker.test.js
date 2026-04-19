@@ -2131,10 +2131,7 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
   assert.equal(absorbedBody.approvalBoundBootstrapSession.requestEnabled, false);
   assert.equal(absorbedBody.approvalBoundBootstrapSession.consumePath, null);
   assert.equal(absorbedBody.approvalBoundBootstrapSession.consumeEnabled, false);
-  assert.equal(
-    absorbedBody.approvalBoundBootstrapSession.phaseReadout.currentPhase.id,
-    "live_readiness_verified"
-  );
+  assert.equal(absorbedBody.approvalBoundBootstrapSession.phaseReadout, null);
   assert.equal(absorbedBody.approvalBoundBootstrapSession.capabilityReadout, null);
   assert.equal(
     absorbedBody.approvalBoundBootstrapSession.completionReadout.claimState.id,
@@ -2332,6 +2329,7 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
   assert.equal(absorbedHtml.includes("Steps this path is intended to absorb"), false);
   assert.equal(absorbedHtml.includes("Session contract"), false);
   assert.equal(absorbedHtml.includes("Envelope consume result"), false);
+  assert.equal(absorbedHtml.includes("Flow phase"), false);
   assert.equal(absorbedHtml.includes("Flow progress"), false);
   assert.equal(absorbedHtml.includes("Provider connection phase"), false);
   assert.equal(absorbedHtml.includes("Capability readout"), false);
