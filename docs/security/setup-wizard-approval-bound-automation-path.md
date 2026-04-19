@@ -37,6 +37,9 @@ The target state is:
   bar for calling the surface a wizard at all
 - `docs/mvp/setup-wizard-current-and-target-flow.md` defines the current and
   target setup story across GitHub and Cloudflare
+- `docs/mvp/setup-wizard-approval-bound-runtime-checkpoint.md` records the
+  current runtime checkpoint so future slices do not over-claim what is already
+  absorbed
 - `docs/security/bootstrap-automation-model.md` defines the auth and bootstrap
   boundary split
 - `docs/security/worker-secret-bootstrap-options.md` records the deferred

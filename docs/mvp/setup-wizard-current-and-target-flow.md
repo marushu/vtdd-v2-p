@@ -258,6 +258,7 @@ wizard should absorb.
 Tracked by:
 
 - Issue #210
+- `docs/mvp/setup-wizard-approval-bound-runtime-checkpoint.md`
 
 ## Definition Of Done For Wizard Completion
 
