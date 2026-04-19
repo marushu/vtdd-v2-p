@@ -2943,6 +2943,8 @@ test("worker setup wizard can request detected installation continuation from gi
     "/setup/wizard?repo=sample-org%2Fvtdd-v2&githubAppCheck=on"
   );
   assert.equal(jsonBody.githubAppSetupCheck.completeDetectedInstallationAction, undefined);
+  assert.equal(jsonBody.approvalBoundBootstrapSession.requestEnabled, true);
+  assert.equal(jsonBody.approvalBoundBootstrapSession.requestSurfacedInline, true);
 
   const htmlResponse = await worker.fetch(
     new Request("https://example.com/setup/wizard?repo=sample-org/vtdd-v2&githubAppCheck=on", {
@@ -2956,6 +2958,7 @@ test("worker setup wizard can request detected installation continuation from gi
   const html = await htmlResponse.text();
   assert.equal(html.includes("Continue with GO + passkey"), true);
   assert.equal(html.includes('action="/setup/wizard/bootstrap-session/request"'), true);
+  assert.equal(html.includes("Record GO + passkey request"), false);
   assert.equal(html.includes("Store Detected Installation ID"), false);
 });
 

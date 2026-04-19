@@ -266,6 +266,10 @@ async function handleSetupWizardRequest({ request, url, env }) {
     githubAppSetupCheck: githubAppSetupCheckWithRequest,
     approvalBoundBootstrapSession
   });
+  const approvalBoundBootstrapSessionForResponse = attachInlineRequestSurfaceHint({
+    approvalBoundBootstrapSession,
+    githubAppSetupCheck
+  });
   const format = normalize(url.searchParams.get("format"));
   const autoConsumeResponse = await maybeAutoConsumeDetectedInstallationCompletion({
     request,
@@ -290,7 +294,7 @@ async function handleSetupWizardRequest({ request, url, env }) {
         cloudflareSetupCheck,
         githubAppSetupCheck,
         githubAppBootstrap,
-        approvalBoundBootstrapSession,
+        approvalBoundBootstrapSession: approvalBoundBootstrapSessionForResponse,
         guidance
       });
     }
@@ -308,7 +312,7 @@ async function handleSetupWizardRequest({ request, url, env }) {
       cloudflareSetupCheck,
       githubAppSetupCheck,
       githubAppBootstrap,
-      approvalBoundBootstrapSession,
+      approvalBoundBootstrapSession: approvalBoundBootstrapSessionForResponse,
       guidance
     });
   }
@@ -321,7 +325,7 @@ async function handleSetupWizardRequest({ request, url, env }) {
     cloudflareSetupCheck,
     githubAppSetupCheck,
     githubAppBootstrap,
-    approvalBoundBootstrapSession
+    approvalBoundBootstrapSession: approvalBoundBootstrapSessionForResponse
   });
   return html(result.ok ? 200 : 422, htmlBody);
 }
@@ -3167,6 +3171,7 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
     normalizeText(session?.requestPath) ||
     SETUP_WIZARD_APPROVAL_BOUND_BOOTSTRAP_SESSION_REQUEST_PATH;
   const requestEnabled = toBoolean(session?.requestEnabled);
+  const requestSurfacedInline = toBoolean(session?.requestSurfacedInline);
   const returnTo = normalizeReturnTo(session?.returnTo) || "/setup/wizard";
   const contract = session?.contract ?? null;
   const allowlistedSecrets = Array.isArray(contract?.allowlistedSecrets)
@@ -4226,7 +4231,7 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
           : ""
       }
       ${
-        requestEnabled
+        requestEnabled && !requestSurfacedInline
           ? `
             <form method="post" action="${escapeHtml(requestPath)}" style="margin-top: 12px;">
               <input type="hidden" name="returnTo" value="${escapeHtml(returnTo)}" />
@@ -8122,6 +8127,21 @@ function attachDetectedInstallationRequestAction({
       path: requestPath,
       returnTo
     }
+  };
+}
+
+function attachInlineRequestSurfaceHint({
+  approvalBoundBootstrapSession,
+  githubAppSetupCheck
+}) {
+  const session = approvalBoundBootstrapSession ?? null;
+  if (!session) {
+    return session;
+  }
+
+  return {
+    ...session,
+    requestSurfacedInline: Boolean(githubAppSetupCheck?.requestDetectedInstallationAction)
   };
 }
 
