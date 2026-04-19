@@ -5210,12 +5210,14 @@ async function buildApprovalBoundBootstrapSessionStatus({
       preview: effectivePreview,
       githubAppSetupCheck: effectiveGitHubAppSetupCheck
     }),
-    authBoundaryReadout: buildBootstrapSessionAuthBoundaryReadout({
-      bootstrapState,
-      preview: effectivePreview,
-      authConfig,
-      githubAppSetupCheck
-    }),
+    authBoundaryReadout: absorbedLiveProof
+      ? null
+      : buildBootstrapSessionAuthBoundaryReadout({
+          bootstrapState,
+          preview: effectivePreview,
+          authConfig,
+          githubAppSetupCheck
+        }),
     issuanceReadout: buildBootstrapSessionIssuanceReadout({
       bootstrapState,
       preview: effectivePreview,

@@ -2141,14 +2141,7 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
   assert.equal(absorbedBody.approvalBoundBootstrapSession.providerConnectionReadout, null);
   assert.equal(absorbedBody.approvalBoundBootstrapSession.serviceConnectionModelReadout, null);
   assert.equal(absorbedBody.approvalBoundBootstrapSession.serviceConnectionActionability, null);
-  assert.equal(
-    absorbedBody.approvalBoundBootstrapSession.authBoundaryReadout.operatorBootstrapAuthority.state,
-    "deferred_after_verified_ready_path"
-  );
-  assert.equal(
-    absorbedBody.approvalBoundBootstrapSession.authBoundaryReadout.externalAccountConnection.state,
-    "verified_live_connection"
-  );
+  assert.equal(absorbedBody.approvalBoundBootstrapSession.authBoundaryReadout, null);
   assert.equal(
     absorbedBody.approvalBoundBootstrapSession.responsibilityReadout.humanStep.id,
     "continue_from_verified_setup_without_new_wiring"
@@ -2320,6 +2313,7 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
   assert.equal(absorbedHtml.includes("Service connection friction"), false);
   assert.equal(absorbedHtml.includes("Service connection handoff shape"), false);
   assert.equal(absorbedHtml.includes("Service return continuity"), false);
+  assert.equal(absorbedHtml.includes("Auth boundary split"), false);
   assert.equal(absorbedHtml.includes("This setup flow already absorbed installation binding"), false);
 });
 
