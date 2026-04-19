@@ -4738,6 +4738,15 @@ async function runGitHubAppSetupCheck(url, env) {
               ? globalThis.fetch.bind(globalThis)
               : null
       });
+      const appMetadata = await getGitHubAppMetadata({
+        env: runtimeEnv,
+        fetchImpl:
+          typeof env?.GITHUB_API_FETCH === "function"
+            ? env.GITHUB_API_FETCH.bind(env)
+            : typeof globalThis.fetch === "function"
+              ? globalThis.fetch.bind(globalThis)
+              : null
+      });
 
       if (detection.state === "installation_detected") {
         return {
@@ -4769,6 +4778,7 @@ async function runGitHubAppSetupCheck(url, env) {
             "Finish GitHub App installation, then reload diagnostics.",
             "If you already installed it, wait a moment and retry this check."
           ],
+          links: buildGitHubAppInstallationLinks(appMetadata),
           evidence: {
             stage: "installation_detection",
             source: "github_app_installations",
@@ -4787,6 +4797,7 @@ async function runGitHubAppSetupCheck(url, env) {
             "Keep setup wizard focused on one installation target at a time.",
             "Choose the correct installation in GitHub, then return here for capture."
           ],
+          links: buildGitHubAppInstallationLinks(appMetadata),
           evidence: {
             stage: "installation_detection",
             source: "github_app_installations",
@@ -8126,6 +8137,73 @@ async function detectGitHubAppInstallation({ env, fetchImpl }) {
     state: "installation_selection_required",
     totalInstallations: installations.length
   };
+}
+
+async function getGitHubAppMetadata({ env, fetchImpl }) {
+  const runtimeEnv = env ?? {};
+  const appId = normalizeText(runtimeEnv.GITHUB_APP_ID);
+  const privateKey = resolveGitHubAppPrivateKey(runtimeEnv);
+  if (!appId || !privateKey || typeof fetchImpl !== "function") {
+    return null;
+  }
+
+  const appJwt = await createGitHubAppJwtFromPrivateKey({ appId, privateKey });
+  if (!appJwt.ok) {
+    return null;
+  }
+
+  let response;
+  try {
+    response = await fetchImpl(`${GITHUB_API_BASE_URL}/app`, {
+      method: "GET",
+      headers: {
+        accept: "application/vnd.github+json",
+        authorization: `Bearer ${appJwt.token}`,
+        "user-agent": GITHUB_API_USER_AGENT,
+        "x-github-api-version": "2022-11-28"
+      }
+    });
+  } catch {
+    return null;
+  }
+
+  const payload = await readSafeJson(response);
+  if (!response.ok) {
+    return null;
+  }
+
+  const slug = normalizeText(payload?.slug);
+  const htmlUrl = normalizeText(payload?.html_url);
+  if (!slug && !htmlUrl) {
+    return null;
+  }
+
+  return {
+    slug,
+    htmlUrl
+  };
+}
+
+function buildGitHubAppInstallationLinks(appMetadata) {
+  const slug = normalizeText(appMetadata?.slug);
+  const htmlUrl = normalizeText(appMetadata?.htmlUrl);
+  const links = [];
+
+  if (slug) {
+    links.push({
+      title: "Open GitHub App installation",
+      url: `https://github.com/apps/${encodeURIComponent(slug)}/installations/new`
+    });
+  }
+
+  if (htmlUrl) {
+    links.push({
+      title: "Open GitHub App settings",
+      url: htmlUrl
+    });
+  }
+
+  return links;
 }
 
 function buildGitHubAppManifestLaunch(url) {

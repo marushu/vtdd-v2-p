@@ -2981,6 +2981,134 @@ test("worker setup wizard auto-rechecks html while awaiting github app installat
   assert.equal(html.includes("window.location.reload()"), true);
 });
 
+test("worker setup wizard awaiting installation exposes direct GitHub installation links", async () => {
+  const { privateKey } = generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+    privateKeyEncoding: {
+      type: "pkcs8",
+      format: "pem"
+    },
+    publicKeyEncoding: {
+      type: "spki",
+      format: "pem"
+    }
+  });
+  const env = {
+    GITHUB_APP_ID: "12345",
+    GITHUB_APP_PRIVATE_KEY: privateKey,
+    GITHUB_API_FETCH: async (url) => {
+      if (String(url).endsWith("/app/installations")) {
+        return new Response(JSON.stringify([]), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        });
+      }
+      if (String(url).endsWith("/app")) {
+        return new Response(
+          JSON.stringify({
+            id: 12345,
+            slug: "vtdd-test",
+            html_url: "https://github.com/apps/vtdd-test"
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          }
+        );
+      }
+      return new Response(JSON.stringify({}), {
+        status: 404,
+        headers: { "content-type": "application/json" }
+      });
+    }
+  };
+
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/setup/wizard?format=json&repo=sample-org/vtdd-v2&githubAppCheck=on"
+    ),
+    env
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.githubAppSetupCheck.state, "awaiting_installation");
+  assert.deepEqual(body.githubAppSetupCheck.links, [
+    {
+      title: "Open GitHub App installation",
+      url: "https://github.com/apps/vtdd-test/installations/new"
+    },
+    {
+      title: "Open GitHub App settings",
+      url: "https://github.com/apps/vtdd-test"
+    }
+  ]);
+});
+
+test("worker setup wizard installation selection required exposes direct GitHub app links", async () => {
+  const { privateKey } = generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+    privateKeyEncoding: {
+      type: "pkcs8",
+      format: "pem"
+    },
+    publicKeyEncoding: {
+      type: "spki",
+      format: "pem"
+    }
+  });
+  const env = {
+    GITHUB_APP_ID: "12345",
+    GITHUB_APP_PRIVATE_KEY: privateKey,
+    GITHUB_API_FETCH: async (url) => {
+      if (String(url).endsWith("/app/installations")) {
+        return new Response(JSON.stringify([{ id: 111 }, { id: 222 }]), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        });
+      }
+      if (String(url).endsWith("/app")) {
+        return new Response(
+          JSON.stringify({
+            id: 12345,
+            slug: "vtdd-test",
+            html_url: "https://github.com/apps/vtdd-test"
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          }
+        );
+      }
+      return new Response(JSON.stringify({}), {
+        status: 404,
+        headers: { "content-type": "application/json" }
+      });
+    }
+  };
+
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/setup/wizard?format=json&repo=sample-org/vtdd-v2&githubAppCheck=on"
+    ),
+    env
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.githubAppSetupCheck.state, "installation_selection_required");
+  assert.deepEqual(body.githubAppSetupCheck.links, [
+    {
+      title: "Open GitHub App installation",
+      url: "https://github.com/apps/vtdd-test/installations/new"
+    },
+    {
+      title: "Open GitHub App settings",
+      url: "https://github.com/apps/vtdd-test"
+    }
+  ]);
+});
+
 test("worker setup wizard can request detected installation continuation from github block", async () => {
   const { privateKey } = generateKeyPairSync("rsa", {
     modulusLength: 2048,
