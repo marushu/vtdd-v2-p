@@ -53,6 +53,8 @@ const SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_STATE_PARAM = "bootstrap_session_re
 const SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_STATE_PARAM = "bootstrap_session_consume";
 const SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_ENVELOPE_ID_PARAM =
   "bootstrap_session_consume_envelope_id";
+const SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_REASON_PARAM =
+  "bootstrap_session_consume_reason";
 const SETUP_WIZARD_BOOTSTRAP_SESSION_ENVELOPE_VERSION = "v1";
 const CLOUDFLARE_WORKER_SCRIPT_NAME_ENV = "CLOUDFLARE_WORKER_SCRIPT_NAME";
 const GITHUB_MANIFEST_CONVERSION_TOKEN_ENV = "GITHUB_MANIFEST_CONVERSION_TOKEN";
@@ -500,6 +502,78 @@ async function handleApprovalBoundBootstrapSessionConsume({ request, url, env })
   }
 
   const envelopeId = normalizeText(payload.envelopeToken).slice(0, 12);
+  const installationOnlyWrite =
+    preview.plannedWrites.length === 1 && preview.plannedWrites[0] === "GITHUB_APP_INSTALLATION_ID";
+  const detectedInstallationId = normalizeText(githubAppSetupCheck?.detectedInstallationId);
+
+  if (
+    installationOnlyWrite &&
+    normalizeText(githubAppSetupCheck?.state) === "installation_detected" &&
+    detectedInstallationId
+  ) {
+    const writeResult = await writeGitHubAppInstallationBinding({
+      env,
+      bootstrap: githubAppBootstrap,
+      installationId: detectedInstallationId
+    });
+
+    if (!writeResult.ok) {
+      if (payload.mode === "form") {
+        const failureUrl = new URL(returnTo, url.origin);
+        failureUrl.searchParams.set(SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_STATE_PARAM, "failed");
+        failureUrl.searchParams.set(
+          SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_ENVELOPE_ID_PARAM,
+          envelopeId
+        );
+        failureUrl.searchParams.set(
+          SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_REASON_PARAM,
+          normalizeText(writeResult.error) || "consume_write_failed"
+        );
+        return new Response(null, {
+          status: 303,
+          headers: {
+            location: `${failureUrl.pathname}${failureUrl.search}`
+          }
+        });
+      }
+
+      return json(writeResult.status ?? 502, {
+        ok: false,
+        error: writeResult.error || "approval_bound_bootstrap_session_consume_write_failed",
+        reason: writeResult.reason || "failed to store detected installation binding",
+        envelopeId
+      });
+    }
+
+    if (payload.mode === "form") {
+      const successUrl = new URL(returnTo, url.origin);
+      successUrl.searchParams.set(SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_STATE_PARAM, "completed");
+      successUrl.searchParams.set(
+        SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_ENVELOPE_ID_PARAM,
+        envelopeId
+      );
+      return new Response(null, {
+        status: 303,
+        headers: {
+          location: `${successUrl.pathname}${successUrl.search}`
+        }
+      });
+    }
+
+    return json(200, {
+      ok: true,
+      consumed: true,
+      state: "consume_completed",
+      summary:
+        "VTDD consumed the signed bootstrap session envelope and stored the detected installation binding on Worker runtime.",
+      envelopeId,
+      updatedSecrets: ["GITHUB_APP_INSTALLATION_ID"],
+      installationId: detectedInstallationId,
+      writeTarget: preview?.writeTarget ?? null,
+      plannedWrites: ["GITHUB_APP_INSTALLATION_ID"],
+      postChecks: Array.isArray(preview?.postChecks) ? [...preview.postChecks] : []
+    });
+  }
 
   if (payload.mode === "form") {
     const successUrl = new URL(returnTo, url.origin);
@@ -754,18 +828,16 @@ async function handleGitHubAppInstallationCaptureRequest({ request, url, env }) 
     });
   }
 
-  const updated = await putCloudflareWorkerSecret({
-    fetchImpl,
-    apiToken: bootstrap.cloudflareApiToken,
-    accountId: bootstrap.accountId,
-    scriptName: bootstrap.scriptName,
-    secretName: "GITHUB_APP_INSTALLATION_ID",
-    secretValue: installationId
+  const updated = await writeGitHubAppInstallationBinding({
+    env,
+    bootstrap,
+    installationId,
+    fetchImpl
   });
   if (!updated.ok) {
-    return json(502, {
+    return json(updated.status ?? 502, {
       ok: false,
-      error: "github_app_installation_capture_write_failed",
+      error: updated.error || "github_app_installation_capture_write_failed",
       reason: updated.reason,
       evidence: {
         httpStatus: updated.httpStatus ?? null
@@ -790,6 +862,62 @@ async function handleGitHubAppInstallationCaptureRequest({ request, url, env }) 
     updatedSecrets: ["GITHUB_APP_INSTALLATION_ID"],
     returnTo
   });
+}
+
+async function writeGitHubAppInstallationBinding({
+  env,
+  bootstrap,
+  installationId,
+  fetchImpl
+}) {
+  const normalizedInstallationId = normalizeText(installationId);
+  if (!normalizedInstallationId) {
+    return {
+      ok: false,
+      status: 422,
+      error: "github_app_installation_capture_missing_value",
+      reason: "installation id is required"
+    };
+  }
+
+  const runtimeFetchImpl =
+    fetchImpl ??
+    (typeof env?.CF_API_FETCH === "function"
+      ? env.CF_API_FETCH
+      : typeof globalThis.fetch === "function"
+        ? globalThis.fetch.bind(globalThis)
+        : null);
+  if (!runtimeFetchImpl) {
+    return {
+      ok: false,
+      status: 503,
+      error: "github_app_installation_capture_fetch_unavailable",
+      reason: "runtime fetch is unavailable"
+    };
+  }
+
+  const updated = await putCloudflareWorkerSecret({
+    fetchImpl: runtimeFetchImpl,
+    apiToken: bootstrap.cloudflareApiToken,
+    accountId: bootstrap.accountId,
+    scriptName: bootstrap.scriptName,
+    secretName: "GITHUB_APP_INSTALLATION_ID",
+    secretValue: normalizedInstallationId
+  });
+  if (!updated.ok) {
+    return {
+      ok: false,
+      status: 502,
+      error: "github_app_installation_capture_write_failed",
+      reason: updated.reason,
+      httpStatus: updated.httpStatus ?? null
+    };
+  }
+
+  return {
+    ok: true,
+    installationId: normalizedInstallationId
+  };
 }
 
 async function attachSetupWizardImportUrls({ result, url, env }) {
@@ -4752,7 +4880,24 @@ function buildBootstrapSessionEnvelopeConsumeResult({ url, preview }) {
   const envelopeId = normalizeText(
     url?.searchParams?.get(SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_ENVELOPE_ID_PARAM)
   );
+  const failureReason = normalizeText(
+    url?.searchParams?.get(SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_REASON_PARAM)
+  );
   const postChecks = Array.isArray(preview?.postChecks) ? preview.postChecks : [];
+
+  if (state === "completed") {
+    return {
+      state: "consume_completed",
+      summary:
+        "VTDD consumed the signed bootstrap session envelope and stored the detected installation binding on Worker runtime.",
+      envelopeId,
+      nextProof: {
+        id: postChecks.join("_then_") || "github_app_live_readiness_proof_pending",
+        summary:
+          "The next proof is the planned installation-token mint and live probe checks succeeding after the one-time installation binding write."
+      }
+    };
+  }
 
   if (state === "deferred") {
     return {
@@ -4778,6 +4923,20 @@ function buildBootstrapSessionEnvelopeConsumeResult({ url, preview }) {
         id: "reissue_request_bound_envelope_for_current_context",
         summary:
           "Return to the current wizard context, record a fresh request, and issue a new envelope before trying consume again."
+      }
+    };
+  }
+
+  if (state === "failed") {
+    return {
+      state: "consume_failed",
+      summary:
+        "VTDD validated the signed envelope but failed closed before the bounded installation binding write could complete.",
+      envelopeId,
+      nextProof: {
+        id: failureReason || "bounded_installation_binding_write_failed",
+        summary:
+          "Restore the bounded installation write path, then issue a fresh envelope before retrying consume."
       }
     };
   }

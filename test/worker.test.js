@@ -1276,6 +1276,137 @@ test("worker setup wizard consumes a valid bootstrap session envelope into defer
   ]);
 });
 
+test("worker setup wizard consume can complete a single detected installation binding write", async () => {
+  const calls = [];
+  const { privateKey } = generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+    privateKeyEncoding: {
+      type: "pkcs8",
+      format: "pem"
+    },
+    publicKeyEncoding: {
+      type: "spki",
+      format: "pem"
+    }
+  });
+  const env = {
+    SETUP_WIZARD_PASSCODE: "2468",
+    CLOUDFLARE_API_TOKEN: "bootstrap-token",
+    CLOUDFLARE_ACCOUNT_ID: "account-id",
+    CLOUDFLARE_WORKER_SCRIPT_NAME: "vtdd-v2-mvp",
+    GITHUB_MANIFEST_CONVERSION_TOKEN: "gho_operator_token",
+    GITHUB_APP_ID: "12345",
+    GITHUB_APP_PRIVATE_KEY: privateKey,
+    CF_API_FETCH: async (url, init = {}) => {
+      calls.push({ url: String(url), init });
+      return new Response(
+        JSON.stringify({
+          success: true,
+          errors: [],
+          result: { name: "GITHUB_APP_INSTALLATION_ID", type: "secret_text" }
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        }
+      );
+    },
+    GITHUB_API_FETCH: async (url, init = {}) => {
+      const requestUrl = String(url);
+      if (requestUrl.endsWith("/app/installations")) {
+        return new Response(
+          JSON.stringify([
+            {
+              id: 125153871,
+              app_id: 12345
+            }
+          ]),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          }
+        );
+      }
+      if (requestUrl.endsWith("/app")) {
+        return new Response(
+          JSON.stringify({
+            id: 12345,
+            slug: "vtdd-test"
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          }
+        );
+      }
+      return new Response(JSON.stringify({}), {
+        status: 404,
+        headers: { "content-type": "application/json" }
+      });
+    }
+  };
+  const { sessionCookie } = await unlockSetupWizard(env);
+
+  const requestResponse = await worker.fetch(
+    new Request("https://example.com/setup/wizard/bootstrap-session/request", {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      },
+      body: new URLSearchParams({
+        returnTo: "/setup/wizard?repo=sample-org/vtdd-v2&githubAppCheck=on",
+        approval_phrase: "GO",
+        passkey_verified: "true"
+      })
+    }),
+    env
+  );
+
+  const location = requestResponse.headers.get("location") ?? "";
+  const statusResponse = await worker.fetch(
+    new Request(`https://example.com${location}&format=json`, {
+      headers: {
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      }
+    }),
+    env
+  );
+  const statusBody = await statusResponse.json();
+  assert.equal(
+    statusBody.approvalBoundBootstrapSession.sessionEnvelope.plannedWrites[0],
+    "GITHUB_APP_INSTALLATION_ID"
+  );
+  const envelopeToken =
+    statusBody.approvalBoundBootstrapSession.sessionEnvelope.envelopeToken;
+
+  const consumeResponse = await worker.fetch(
+    new Request("https://example.com/setup/wizard/bootstrap-session/consume", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      },
+      body: JSON.stringify({
+        returnTo: location,
+        envelope_token: envelopeToken
+      })
+    }),
+    env
+  );
+
+  assert.equal(consumeResponse.status, 200);
+  const consumeBody = await consumeResponse.json();
+  assert.equal(consumeBody.state, "consume_completed");
+  assert.equal(consumeBody.consumed, true);
+  assert.deepEqual(consumeBody.updatedSecrets, ["GITHUB_APP_INSTALLATION_ID"]);
+  assert.equal(consumeBody.installationId, "125153871");
+  assert.equal(calls.length, 1);
+  const payload = JSON.parse(String(calls[0].init.body));
+  assert.equal(payload.name, "GITHUB_APP_INSTALLATION_ID");
+  assert.equal(payload.text, "125153871");
+});
+
 test("worker setup wizard rejects invalid bootstrap session envelope consume requests", async () => {
   const env = {
     SETUP_WIZARD_PASSCODE: "2468",
