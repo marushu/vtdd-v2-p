@@ -2147,6 +2147,7 @@ function renderSetupWizardHtml({
   const copiedText = locale === "ja" ? "コピーしました。" : "Copied.";
   const manualCopyText =
     locale === "ja" ? "全選択して手動でコピーしてください。" : "Select all and copy manually.";
+  const extraScript = buildGitHubAppAutoRecheckScript({ githubAppSetupCheck });
   const body = result.ok
     ? renderSuccessContent(
         result,
@@ -2172,7 +2173,8 @@ function renderSetupWizardHtml({
   return renderHtmlDocument(body, {
     pageTitle,
     copiedText,
-    manualCopyText
+    manualCopyText,
+    extraScript
   });
 }
 
@@ -2181,6 +2183,7 @@ function renderHtmlDocument(body, ui = {}) {
   const copiedText = normalizeText(ui.copiedText) || "Copied.";
   const manualCopyText =
     normalizeText(ui.manualCopyText) || "Select all and copy manually.";
+  const extraScript = normalizeText(ui.extraScript);
   return `<!doctype html>
 <html lang="en">
   <head>
@@ -2346,9 +2349,32 @@ function renderHtmlDocument(body, ui = {}) {
           copyFromValue(button);
         });
       });
+      ${extraScript}
     </script>
   </body>
 </html>`;
+}
+
+function buildGitHubAppAutoRecheckScript({ githubAppSetupCheck }) {
+  if (normalizeText(githubAppSetupCheck?.state) !== "awaiting_installation") {
+    return "";
+  }
+
+  return `
+      (function () {
+        const key = "vtdd_github_installation_recheck_count";
+        const maxAttempts = 6;
+        const delayMs = 5000;
+        const current = Number(sessionStorage.getItem(key) || "0");
+        if (!Number.isFinite(current) || current >= maxAttempts) {
+          return;
+        }
+        sessionStorage.setItem(key, String(current + 1));
+        window.setTimeout(() => {
+          window.location.reload();
+        }, delayMs);
+      })();
+  `;
 }
 
 function renderSuccessContent(
@@ -3045,6 +3071,24 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
       ${
         evidenceItems.length > 0
           ? `<p class="meta">${escapeHtml(evidenceItems.join(" / "))}</p>`
+          : ""
+      }
+      ${
+        state === "awaiting_installation"
+          ? `
+            <div class="block" style="margin-top: 12px;">
+              <p><strong>${escapeHtml(
+                locale === "ja"
+                  ? "VTDD は installation の出現を短く再確認しています"
+                  : "VTDD is briefly rechecking for the installation"
+              )}</strong></p>
+              <p class="meta">${escapeHtml(
+                locale === "ja"
+                  ? "同じ setup flow の中で数回だけ自動再確認します。GitHub 側で install が反映されれば、そのまま detection に進みます。"
+                  : "VTDD will retry this check a few times in the same setup flow. If GitHub finishes exposing the installation, the wizard will move straight into detection."
+              )}</p>
+            </div>
+          `
           : ""
       }
       ${

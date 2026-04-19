@@ -2930,6 +2930,57 @@ test("worker setup wizard detects a single github app installation before instal
   assert.equal(body.githubAppSetupCheck.completeDetectedInstallationAction, undefined);
 });
 
+test("worker setup wizard auto-rechecks html while awaiting github app installation", async () => {
+  const { privateKey } = generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+    privateKeyEncoding: {
+      type: "pkcs8",
+      format: "pem"
+    },
+    publicKeyEncoding: {
+      type: "spki",
+      format: "pem"
+    }
+  });
+  const env = {
+    SETUP_WIZARD_PASSCODE: "2468",
+    GITHUB_APP_ID: "12345",
+    GITHUB_APP_PRIVATE_KEY: privateKey,
+    GITHUB_API_FETCH: async (url) => {
+      if (String(url).endsWith("/app/installations")) {
+        return new Response(JSON.stringify([]), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        });
+      }
+      return new Response(JSON.stringify({}), {
+        status: 404,
+        headers: { "content-type": "application/json" }
+      });
+    }
+  };
+  const { sessionCookie } = await unlockSetupWizard(
+    env,
+    "/setup/wizard?repo=sample-org/vtdd-v2&githubAppCheck=on"
+  );
+
+  const response = await worker.fetch(
+    new Request("https://example.com/setup/wizard?repo=sample-org/vtdd-v2&githubAppCheck=on", {
+      headers: {
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      }
+    }),
+    env
+  );
+
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.equal(html.includes("<code>awaiting_installation</code>"), true);
+  assert.equal(html.includes("VTDD is briefly rechecking for the installation"), true);
+  assert.equal(html.includes('const key = "vtdd_github_installation_recheck_count";'), true);
+  assert.equal(html.includes("window.location.reload()"), true);
+});
+
 test("worker setup wizard can request detected installation continuation from github block", async () => {
   const { privateKey } = generateKeyPairSync("rsa", {
     modulusLength: 2048,
