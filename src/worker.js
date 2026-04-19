@@ -2748,6 +2748,10 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
   const denialReason = authorityRenewalDenialReadout?.denialReason ?? null;
   const denialBoundary = authorityRenewalDenialReadout?.denialBoundary ?? null;
   const denialRecovery = authorityRenewalDenialReadout?.denialRecovery ?? null;
+  const authorityRequestFreshnessReadout = session?.authorityRequestFreshnessReadout ?? null;
+  const freshnessRequirement = authorityRequestFreshnessReadout?.freshnessRequirement ?? null;
+  const staleRequestRejection = authorityRequestFreshnessReadout?.staleRequestRejection ?? null;
+  const freshnessRecovery = authorityRequestFreshnessReadout?.freshnessRecovery ?? null;
   const completionReadout = session?.completionReadout ?? null;
   const claimState = completionReadout?.claimState ?? null;
   const cannotYetClaim = completionReadout?.cannotYetClaim ?? null;
@@ -3081,6 +3085,30 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
               ${
                 denialRecovery
                   ? `<p><strong>${escapeHtml(locale === "ja" ? "Denial recovery" : "Denial recovery")}:</strong> <code>${escapeHtml(normalizeText(denialRecovery.id))}</code> ${escapeHtml(normalizeText(denialRecovery.summary))}</p>`
+                  : ""
+              }
+            </div>
+          `
+          : ""
+      }
+      ${
+        authorityRequestFreshnessReadout
+          ? `
+            <div class="block" style="margin-top: 12px;">
+              <p><strong>${escapeHtml(locale === "ja" ? "Authority request freshness" : "Authority request freshness")}:</strong></p>
+              ${
+                freshnessRequirement
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Freshness requirement" : "Freshness requirement")}:</strong> <code>${escapeHtml(normalizeText(freshnessRequirement.id))}</code> ${escapeHtml(normalizeText(freshnessRequirement.summary))}</p>`
+                  : ""
+              }
+              ${
+                staleRequestRejection
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Stale request rejection" : "Stale request rejection")}:</strong> <code>${escapeHtml(normalizeText(staleRequestRejection.id))}</code> ${escapeHtml(normalizeText(staleRequestRejection.summary))}</p>`
+                  : ""
+              }
+              ${
+                freshnessRecovery
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Freshness recovery" : "Freshness recovery")}:</strong> <code>${escapeHtml(normalizeText(freshnessRecovery.id))}</code> ${escapeHtml(normalizeText(freshnessRecovery.summary))}</p>`
                   : ""
               }
             </div>
@@ -3916,6 +3944,11 @@ async function buildApprovalBoundBootstrapSessionStatus({
     authorityRenewalDenialReadout: buildBootstrapSessionAuthorityRenewalDenialReadout({
       bootstrapState,
       preview
+    }),
+    authorityRequestFreshnessReadout: buildBootstrapSessionAuthorityRequestFreshnessReadout({
+      bootstrapState,
+      preview,
+      maxAgeSeconds: SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_TTL_SECONDS
     }),
     completionReadout: buildBootstrapSessionCompletionReadout({
       bootstrapState,
@@ -5100,6 +5133,93 @@ function buildBootstrapSessionAuthorityRenewalDenialReadout({ bootstrapState, pr
       summary:
         "Recovery is to stay on the verification-bound path and request a fresh approval only for that remaining verification work."
       }
+  };
+}
+
+function buildBootstrapSessionAuthorityRequestFreshnessReadout({
+  bootstrapState,
+  preview,
+  maxAgeSeconds
+}) {
+  const plannedWrites = Array.isArray(preview?.plannedWrites) ? preview.plannedWrites : [];
+  const expirySeconds = Number.isFinite(Number(maxAgeSeconds)) ? Number(maxAgeSeconds) : 0;
+
+  if (bootstrapState !== "available") {
+    return {
+      freshnessRequirement: {
+        id: "fresh_request_only_after_prerequisites_exist",
+        summary:
+          "VTDD should only accept a fresh approval-bound request after the operator prerequisites exist, not while the runtime is still blocked."
+      },
+      staleRequestRejection: {
+        id: "reject_stale_request_from_pre_prerequisite_state",
+        summary:
+          "Requests carried over from the blocked pre-prerequisite state should be rejected as stale because they no longer describe a valid issuable context."
+      },
+      freshnessRecovery: {
+        id: "restore_prerequisites_then_submit_new_go_passkey_request",
+        summary:
+          `Recovery is to restore prerequisites and submit a new GO + passkey-shaped request inside the current ${expirySeconds}-second bounded window.`
+      }
+    };
+  }
+
+  if (plannedWrites.length === 1 && plannedWrites[0] === "GITHUB_APP_INSTALLATION_ID") {
+    return {
+      freshnessRequirement: {
+        id: "fresh_request_must_match_current_installation_gap",
+        summary:
+          "Any approval-bound request must be fresh enough to match the current installation-binding gap, not an earlier broader setup state."
+      },
+      staleRequestRejection: {
+        id: "reject_request_if_installation_gap_changed",
+        summary:
+          "A request becomes stale if installation binding has already changed or been resolved since that approval context was created."
+      },
+      freshnessRecovery: {
+        id: "reconfirm_installation_gap_and_submit_new_request",
+        summary:
+          `Recovery is to confirm the current installation gap and submit a new narrow request within the ${expirySeconds}-second approval window.`
+      }
+    };
+  }
+
+  if (plannedWrites.length > 1) {
+    return {
+      freshnessRequirement: {
+        id: "fresh_request_must_match_current_runtime_gap",
+        summary:
+          "Any approval-bound request must be fresh enough to reflect the current remaining runtime identity gap, not an older bootstrap snapshot."
+      },
+      staleRequestRejection: {
+        id: "reject_request_if_runtime_gap_shifted",
+        summary:
+          "A request becomes stale if the runtime identity gap has shifted since approval, because VTDD must not replay stale write intent."
+      },
+      freshnessRecovery: {
+        id: "recompute_runtime_gap_and_submit_new_request",
+        summary:
+          `Recovery is to recompute the current runtime gap and submit a new GO + passkey-shaped request within the ${expirySeconds}-second bounded window.`
+      }
+    };
+  }
+
+  return {
+    freshnessRequirement: {
+      id: "fresh_request_must_match_remaining_verification_need",
+      summary:
+        "Any future request must be fresh enough to match the remaining verification-bound need rather than an outdated bootstrap write state."
+    },
+    staleRequestRejection: {
+      id: "reject_request_if_it_reopens_old_write_context",
+      summary:
+        "A request becomes stale if it tries to reopen an older write context after configuration is already present."
+    },
+    freshnessRecovery: {
+      id: "reconfirm_verification_need_and_submit_new_request",
+      summary:
+        `Recovery is to reconfirm the remaining verification need and submit a new bounded request within the ${expirySeconds}-second approval window.`
+    }
   };
 }
 

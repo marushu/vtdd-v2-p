@@ -467,6 +467,10 @@ test("worker setup wizard unlocked html shows narrow github app bootstrap form w
   assert.equal(html.includes("Denial reason"), true);
   assert.equal(html.includes("Denial boundary"), true);
   assert.equal(html.includes("Denial recovery"), true);
+  assert.equal(html.includes("Authority request freshness"), true);
+  assert.equal(html.includes("Freshness requirement"), true);
+  assert.equal(html.includes("Stale request rejection"), true);
+  assert.equal(html.includes("Freshness recovery"), true);
   assert.equal(html.includes("Completion claim"), true);
   assert.equal(html.includes("Current claim"), true);
   assert.equal(html.includes("Cannot yet claim"), true);
@@ -670,6 +674,18 @@ test("worker setup wizard unlocked json reports github app bootstrap availabilit
   assert.equal(
     body.approvalBoundBootstrapSession.authorityRenewalDenialReadout.denialRecovery.id,
     "restore_prerequisites_then_reissue_fresh_request"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityRequestFreshnessReadout.freshnessRequirement.id,
+    "fresh_request_only_after_prerequisites_exist"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityRequestFreshnessReadout.staleRequestRejection.id,
+    "reject_stale_request_from_pre_prerequisite_state"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityRequestFreshnessReadout.freshnessRecovery.id,
+    "restore_prerequisites_then_submit_new_go_passkey_request"
   );
   assert.equal(
     body.approvalBoundBootstrapSession.completionReadout.claimState.id,
@@ -884,6 +900,18 @@ test("worker setup wizard unlocked json does not expose cloudflare bootstrap tok
   assert.equal(
     body.approvalBoundBootstrapSession.authorityRenewalDenialReadout.denialRecovery.id,
     "recompute_remaining_runtime_scope_before_retry"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityRequestFreshnessReadout.freshnessRequirement.id,
+    "fresh_request_must_match_current_runtime_gap"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityRequestFreshnessReadout.staleRequestRejection.id,
+    "reject_request_if_runtime_gap_shifted"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityRequestFreshnessReadout.freshnessRecovery.id,
+    "recompute_runtime_gap_and_submit_new_request"
   );
   assert.equal(
     body.approvalBoundBootstrapSession.completionReadout.claimState.id,
@@ -1130,6 +1158,18 @@ test("worker setup wizard preview narrows planned write to installation binding 
   assert.equal(
     body.approvalBoundBootstrapSession.authorityRenewalDenialReadout.denialRecovery.id,
     "recompute_from_current_installation_state"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityRequestFreshnessReadout.freshnessRequirement.id,
+    "fresh_request_must_match_current_installation_gap"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityRequestFreshnessReadout.staleRequestRejection.id,
+    "reject_request_if_installation_gap_changed"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authorityRequestFreshnessReadout.freshnessRecovery.id,
+    "reconfirm_installation_gap_and_submit_new_request"
   );
   assert.equal(
     body.approvalBoundBootstrapSession.completionReadout.claimState.id,
