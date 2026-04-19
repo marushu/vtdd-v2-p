@@ -475,8 +475,7 @@ test("worker setup wizard unlocked json reports github app bootstrap availabilit
     "GITHUB_APP_PRIVATE_KEY"
   ]);
   assert.deepEqual(body.approvalBoundBootstrapSession.contract.preview.postChecks, [
-    "github_app_installation_token_mint",
-    "github_app_live_probe"
+    "github_app_setup_check"
   ]);
   assert.equal(
     body.approvalBoundBootstrapSession.contract.preview.blockedBy.includes("CLOUDFLARE_API_TOKEN"),
@@ -528,6 +527,14 @@ test("worker setup wizard unlocked json does not expose cloudflare bootstrap tok
     body.approvalBoundBootstrapSession.contract.preview.writeTarget,
     "cloudflare:account-id/workers/scripts/vtdd-v2-mvp/secrets"
   );
+  assert.deepEqual(body.approvalBoundBootstrapSession.contract.preview.plannedWrites, [
+    "GITHUB_APP_ID",
+    "GITHUB_APP_INSTALLATION_ID",
+    "GITHUB_APP_PRIVATE_KEY"
+  ]);
+  assert.deepEqual(body.approvalBoundBootstrapSession.contract.preview.postChecks, [
+    "github_app_setup_check"
+  ]);
   assert.equal(
     body.approvalBoundBootstrapSession.contract.preview.blockedBy.includes(
       "attestation_backed_bootstrap_authority_not_implemented"
@@ -586,6 +593,39 @@ test("worker setup wizard records approval-bound bootstrap request without grant
     html.includes("no privileged bootstrap session was opened because attestation-backed bootstrap authority is still deferred"),
     true
   );
+});
+
+test("worker setup wizard preview narrows planned write to installation binding when app identity already exists", async () => {
+  const env = {
+    SETUP_WIZARD_PASSCODE: "2468",
+    CLOUDFLARE_API_TOKEN: "bootstrap-token",
+    CLOUDFLARE_ACCOUNT_ID: "account-id",
+    CLOUDFLARE_WORKER_SCRIPT_NAME: "vtdd-v2-mvp",
+    GITHUB_MANIFEST_CONVERSION_TOKEN: "ghp_conversion_token",
+    GITHUB_APP_ID: "12345",
+    GITHUB_APP_PRIVATE_KEY: "-----BEGIN PRIVATE KEY-----\nplaceholder\n-----END PRIVATE KEY-----"
+  };
+  const { sessionCookie } = await unlockSetupWizard(env);
+
+  const response = await worker.fetch(
+    new Request("https://example.com/setup/wizard?format=json&repo=sample-org/vtdd-v2", {
+      headers: {
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      }
+    }),
+    env
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.deepEqual(body.approvalBoundBootstrapSession.contract.preview.plannedWrites, [
+    "GITHUB_APP_INSTALLATION_ID"
+  ]);
+  assert.deepEqual(body.approvalBoundBootstrapSession.contract.preview.postChecks, [
+    "github_app_installation_detection_or_capture",
+    "github_app_installation_token_mint",
+    "github_app_live_probe"
+  ]);
 });
 
 test("worker setup wizard rejects bootstrap request without GO plus passkey in json mode", async () => {

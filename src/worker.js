@@ -234,7 +234,8 @@ async function handleSetupWizardRequest({ request, url, env }) {
   const approvalBoundBootstrapSession = await buildApprovalBoundBootstrapSessionStatus({
     url,
     env,
-    githubAppBootstrap
+    githubAppBootstrap,
+    githubAppSetupCheck
   });
   const format = normalize(url.searchParams.get("format"));
   const guidance = buildSetupWizardGuidance({ result, url });
@@ -3387,12 +3388,22 @@ function buildGitHubAppBootstrapStatus({ url, env }) {
   };
 }
 
-async function buildApprovalBoundBootstrapSessionStatus({ url, env, githubAppBootstrap }) {
+async function buildApprovalBoundBootstrapSessionStatus({
+  url,
+  env,
+  githubAppBootstrap,
+  githubAppSetupCheck
+}) {
   const authConfig = getSetupWizardAuthConfig(env);
   const bootstrapState = normalizeText(githubAppBootstrap?.state) || "missing_prerequisites";
   const missingPrerequisites = Array.isArray(githubAppBootstrap?.missingPrerequisites)
     ? githubAppBootstrap.missingPrerequisites
     : [];
+  const preview = buildBootstrapSessionPreview({
+    env,
+    githubAppBootstrap,
+    githubAppSetupCheck
+  });
   const requestRecorded =
     authConfig.sessionSecret && url
       ? await verifySetupWizardBootstrapSessionRequestToken({
@@ -3418,12 +3429,7 @@ async function buildApprovalBoundBootstrapSessionStatus({ url, env, githubAppBoo
       maxAgeSeconds: SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_TTL_SECONDS,
       singleUse: true,
       allowlistedSecrets: [...GITHUB_APP_BOOTSTRAP_SECRET_ALLOWLIST],
-      preview: {
-        writeTarget: buildBootstrapSessionWriteTarget({ githubAppBootstrap }),
-        plannedWrites: [...GITHUB_APP_BOOTSTRAP_SECRET_ALLOWLIST],
-        postChecks: ["github_app_installation_token_mint", "github_app_live_probe"],
-        blockedBy: []
-      }
+      preview
     },
     requestPath: SETUP_WIZARD_APPROVAL_BOUND_BOOTSTRAP_SESSION_REQUEST_PATH,
     requestEnabled: true,
@@ -3526,6 +3532,54 @@ function buildBootstrapSessionWriteTarget({ githubAppBootstrap }) {
     return `cloudflare:workers/scripts/${scriptName}/secrets`;
   }
   return "cloudflare:workers/scripts/<unresolved>/secrets";
+}
+
+function buildBootstrapSessionPreview({ env, githubAppBootstrap, githubAppSetupCheck }) {
+  const runtimeEnv = env ?? {};
+  const appId = normalizeText(runtimeEnv.GITHUB_APP_ID);
+  const installationId = normalizeText(runtimeEnv.GITHUB_APP_INSTALLATION_ID);
+  const privateKey = resolveGitHubAppPrivateKey(runtimeEnv);
+  const configuredFields = [
+    ["GITHUB_APP_ID", appId],
+    ["GITHUB_APP_INSTALLATION_ID", installationId],
+    ["GITHUB_APP_PRIVATE_KEY", privateKey]
+  ];
+  const missingFields = configuredFields.filter(([, value]) => !value).map(([name]) => name);
+  const setupState = normalizeText(githubAppSetupCheck?.state) || "unknown";
+  let postChecks = [];
+
+  if (setupState === "installation_detected") {
+    postChecks = [
+      "github_app_installation_capture",
+      "github_app_installation_token_mint",
+      "github_app_live_probe"
+    ];
+  } else if (
+    setupState === "awaiting_installation" ||
+    setupState === "installation_selection_required"
+  ) {
+    postChecks = [
+      "github_app_installation_detection_or_capture",
+      "github_app_installation_token_mint",
+      "github_app_live_probe"
+    ];
+  } else if (missingFields.length === 0) {
+    postChecks = ["github_app_installation_token_mint", "github_app_live_probe"];
+  } else if (missingFields.length === 1 && missingFields[0] === "GITHUB_APP_INSTALLATION_ID") {
+    postChecks = [
+      "github_app_installation_detection_or_capture",
+      "github_app_installation_token_mint",
+      "github_app_live_probe"
+    ];
+  } else {
+    postChecks = ["github_app_setup_check"];
+  }
+
+  return {
+    writeTarget: buildBootstrapSessionWriteTarget({ githubAppBootstrap }),
+    plannedWrites: missingFields.length > 0 ? missingFields : [],
+    postChecks
+  };
 }
 
 async function detectGitHubAppInstallation({ env, fetchImpl }) {
