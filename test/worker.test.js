@@ -423,6 +423,9 @@ test("worker setup wizard unlocked html shows narrow github app bootstrap form w
   assert.equal(html.includes("Session contract"), true);
   assert.equal(html.includes("approval_bound_one_time_bootstrap"), true);
   assert.equal(html.includes("not_issued"), true);
+  assert.equal(html.includes("Step boundary"), true);
+  assert.equal(html.includes("VTDD-owned steps"), true);
+  assert.equal(html.includes("Remaining external redirects"), true);
   assert.equal(html.includes("Allowlisted secrets"), true);
   assert.equal(html.includes("Planned writes"), true);
   assert.equal(html.includes("Post-session checks"), true);
@@ -490,6 +493,15 @@ test("worker setup wizard unlocked json reports github app bootstrap availabilit
     body.approvalBoundBootstrapSession.targetAbsorbs.includes("allowlisted_runtime_secret_write"),
     true
   );
+  assert.deepEqual(body.approvalBoundBootstrapSession.stepBoundaries.vtddOwnedSteps, [
+    "redirect_context_preservation",
+    "installation_detection_or_capture_surface",
+    "readiness_status_reporting"
+  ]);
+  assert.deepEqual(body.approvalBoundBootstrapSession.stepBoundaries.externalRedirects, [
+    "github_app_creation_and_manifest_consent",
+    "github_app_installation_consent"
+  ]);
   assert.deepEqual(body.githubAppBootstrap.allowlistedSecrets, [
     "GITHUB_APP_ID",
     "GITHUB_APP_INSTALLATION_ID",
@@ -635,6 +647,9 @@ test("worker setup wizard preview narrows planned write to installation binding 
     "github_app_installation_detection_or_capture",
     "github_app_installation_token_mint",
     "github_app_live_probe"
+  ]);
+  assert.deepEqual(body.approvalBoundBootstrapSession.stepBoundaries.externalRedirects, [
+    "github_app_installation_consent"
   ]);
 });
 

@@ -2696,6 +2696,13 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
   const nextStepId = normalizeText(recommendedNextStep?.id);
   const nextStepSummary = normalizeText(recommendedNextStep?.summary);
   const nextStepAction = normalizeText(recommendedNextStep?.action);
+  const stepBoundaries = session?.stepBoundaries ?? null;
+  const vtddOwnedSteps = Array.isArray(stepBoundaries?.vtddOwnedSteps)
+    ? stepBoundaries.vtddOwnedSteps
+    : [];
+  const externalRedirects = Array.isArray(stepBoundaries?.externalRedirects)
+    ? stepBoundaries.externalRedirects
+    : [];
 
   return `
     <h2>${escapeHtml(locale === "ja" ? "承認境界つき Bootstrap Session" : "Approval-Bound Bootstrap Session")}</h2>
@@ -2738,6 +2745,31 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
                 nextStepAction
                   ? `<p><strong>${escapeHtml(locale === "ja" ? "Action" : "Action")}:</strong> <code>${escapeHtml(nextStepAction)}</code></p>`
                   : ""
+              }
+            </div>
+          `
+          : ""
+      }
+      ${
+        stepBoundaries
+          ? `
+            <div class="block" style="margin-top: 12px;">
+              <p><strong>${escapeHtml(locale === "ja" ? "Step boundary" : "Step boundary")}:</strong></p>
+              ${
+                vtddOwnedSteps.length > 0
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "VTDD-owned steps" : "VTDD-owned steps")}:</strong> ${vtddOwnedSteps
+                      .map((item) => `<code>${escapeHtml(item)}</code>`)
+                      .join(", ")}</p>`
+                  : ""
+              }
+              ${
+                externalRedirects.length > 0
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Remaining external redirects" : "Remaining external redirects")}:</strong> ${externalRedirects
+                      .map((item) => `<code>${escapeHtml(item)}</code>`)
+                      .join(", ")}</p>`
+                  : `<p><strong>${escapeHtml(locale === "ja" ? "Remaining external redirects" : "Remaining external redirects")}:</strong> ${escapeHtml(
+                      locale === "ja" ? "none" : "none"
+                    )}</p>`
               }
             </div>
           `
@@ -3449,6 +3481,10 @@ async function buildApprovalBoundBootstrapSessionStatus({
       "allowlisted_runtime_secret_write",
       "post_write_readiness_verification"
     ],
+    stepBoundaries: buildBootstrapSessionStepBoundaries({
+      preview,
+      githubAppSetupCheck
+    }),
     contract: {
       authorityState: "not_issued",
       sessionMode: "approval_bound_one_time_bootstrap",
@@ -3665,6 +3701,38 @@ function buildBootstrapSessionPreview({ env, githubAppBootstrap, githubAppSetupC
     writeTarget: buildBootstrapSessionWriteTarget({ githubAppBootstrap }),
     plannedWrites: missingFields.length > 0 ? missingFields : [],
     postChecks
+  };
+}
+
+function buildBootstrapSessionStepBoundaries({ preview, githubAppSetupCheck }) {
+  const setupState = normalizeText(githubAppSetupCheck?.state) || "unknown";
+  const plannedWrites = Array.isArray(preview?.plannedWrites) ? preview.plannedWrites : [];
+  const plannedWriteSet = new Set(plannedWrites);
+  const vtddOwnedSteps = [
+    "redirect_context_preservation",
+    "installation_detection_or_capture_surface",
+    "readiness_status_reporting"
+  ];
+  const externalRedirects = [];
+
+  if (
+    plannedWriteSet.has("GITHUB_APP_ID") ||
+    plannedWriteSet.has("GITHUB_APP_PRIVATE_KEY")
+  ) {
+    externalRedirects.push("github_app_creation_and_manifest_consent");
+  }
+
+  if (
+    plannedWriteSet.has("GITHUB_APP_INSTALLATION_ID") ||
+    setupState === "awaiting_installation" ||
+    setupState === "installation_selection_required"
+  ) {
+    externalRedirects.push("github_app_installation_consent");
+  }
+
+  return {
+    vtddOwnedSteps,
+    externalRedirects
   };
 }
 
