@@ -2723,6 +2723,11 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
   const humanStep = responsibilityReadout?.humanStep ?? null;
   const vtddStep = responsibilityReadout?.vtddStep ?? null;
   const providerStep = responsibilityReadout?.providerStep ?? null;
+  const authBoundaryReadout = session?.authBoundaryReadout ?? null;
+  const serviceAccess = authBoundaryReadout?.serviceAccess ?? null;
+  const operatorBootstrapAuthority = authBoundaryReadout?.operatorBootstrapAuthority ?? null;
+  const externalAccountConnection = authBoundaryReadout?.externalAccountConnection ?? null;
+  const runtimeMachineAuth = authBoundaryReadout?.runtimeMachineAuth ?? null;
 
   return `
     <h2>${escapeHtml(locale === "ja" ? "承認境界つき Bootstrap Session" : "Approval-Bound Bootstrap Session")}</h2>
@@ -2891,6 +2896,35 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
               ${
                 providerStep
                   ? `<p><strong>${escapeHtml(locale === "ja" ? "Provider step" : "Provider step")}:</strong> <code>${escapeHtml(normalizeText(providerStep.id))}</code> ${escapeHtml(normalizeText(providerStep.summary))}</p>`
+                  : ""
+              }
+            </div>
+          `
+          : ""
+      }
+      ${
+        authBoundaryReadout
+          ? `
+            <div class="block" style="margin-top: 12px;">
+              <p><strong>${escapeHtml(locale === "ja" ? "Auth boundary split" : "Auth boundary split")}:</strong></p>
+              ${
+                serviceAccess
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "VTDD service access" : "VTDD service access")}:</strong> <code>${escapeHtml(normalizeText(serviceAccess.state))}</code> ${escapeHtml(normalizeText(serviceAccess.summary))}</p>`
+                  : ""
+              }
+              ${
+                operatorBootstrapAuthority
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Operator bootstrap authority" : "Operator bootstrap authority")}:</strong> <code>${escapeHtml(normalizeText(operatorBootstrapAuthority.state))}</code> ${escapeHtml(normalizeText(operatorBootstrapAuthority.summary))}</p>`
+                  : ""
+              }
+              ${
+                externalAccountConnection
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "External account connection" : "External account connection")}:</strong> <code>${escapeHtml(normalizeText(externalAccountConnection.state))}</code> ${escapeHtml(normalizeText(externalAccountConnection.summary))}</p>`
+                  : ""
+              }
+              ${
+                runtimeMachineAuth
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Runtime machine auth" : "Runtime machine auth")}:</strong> <code>${escapeHtml(normalizeText(runtimeMachineAuth.state))}</code> ${escapeHtml(normalizeText(runtimeMachineAuth.summary))}</p>`
                   : ""
               }
             </div>
@@ -3625,6 +3659,11 @@ async function buildApprovalBoundBootstrapSessionStatus({
       bootstrapState,
       preview
     }),
+    authBoundaryReadout: buildBootstrapSessionAuthBoundaryReadout({
+      bootstrapState,
+      preview,
+      authConfig
+    }),
     contract: {
       authorityState: "not_issued",
       sessionMode: "approval_bound_one_time_bootstrap",
@@ -4189,6 +4228,115 @@ function buildBootstrapSessionResponsibilityReadout({ bootstrapState, preview })
       id: "providers_serve_verified_runtime_identity",
       summary:
         "GitHub and Cloudflare continue to serve their native trust boundaries while VTDD verifies the configured runtime identity."
+    }
+  };
+}
+
+function buildBootstrapSessionAuthBoundaryReadout({
+  bootstrapState,
+  preview,
+  authConfig
+}) {
+  const plannedWrites = Array.isArray(preview?.plannedWrites) ? preview.plannedWrites : [];
+  const serviceAccessState = authConfig?.enabled ? "configured" : "not_configured";
+
+  if (bootstrapState !== "available") {
+    return {
+      serviceAccess: {
+        state: serviceAccessState,
+        summary:
+          serviceAccessState === "configured"
+            ? "VTDD service access is configured, so the user can enter setup wizard without exposing the surface publicly."
+            : "VTDD service access is not configured yet, so setup entry protection still needs to be restored."
+      },
+      operatorBootstrapAuthority: {
+        state: "missing_prerequisites",
+        summary:
+          "Operator bootstrap authority is still incomplete because the prerequisite bootstrap inputs are missing."
+      },
+      externalAccountConnection: {
+        state: "not_ready",
+        summary:
+          "External account connection cannot progress meaningfully until the operator bootstrap prerequisites are restored."
+      },
+      runtimeMachineAuth: {
+        state: "separate_internal_boundary",
+        summary:
+          "Runtime machine auth remains a separate fail-closed boundary for internal execution routes and is not part of browser setup entry."
+      }
+    };
+  }
+
+  if (plannedWrites.length === 1 && plannedWrites[0] === "GITHUB_APP_INSTALLATION_ID") {
+    return {
+      serviceAccess: {
+        state: serviceAccessState,
+        summary:
+          "VTDD service access remains the browser-facing entry boundary and is distinct from GitHub and Cloudflare rights."
+      },
+      operatorBootstrapAuthority: {
+        state: "narrow_write_deferred",
+        summary:
+          "Operator bootstrap authority is narrowed and deferred to the future approval-bound write path rather than opened broadly."
+      },
+      externalAccountConnection: {
+        state: "installation_binding_pending",
+        summary:
+          "External account connection is narrowed to the remaining GitHub installation-binding step."
+      },
+      runtimeMachineAuth: {
+        state: "separate_internal_boundary",
+        summary:
+          "Runtime machine auth still protects internal execution routes separately from setup wizard state."
+      }
+    };
+  }
+
+  if (plannedWrites.length > 1) {
+    return {
+      serviceAccess: {
+        state: serviceAccessState,
+        summary:
+          "VTDD service access is configured separately from the provider rights still needed for runtime bootstrap."
+      },
+      operatorBootstrapAuthority: {
+        state: "ready_but_not_issued_to_user",
+        summary:
+          "Operator bootstrap authority exists only as a narrow service-held prerequisite and is not exposed as generic user write access."
+      },
+      externalAccountConnection: {
+        state: "provider_connection_in_progress",
+        summary:
+          "External account connection is still in progress because GitHub creation or install consent is not yet fully reflected in runtime identity."
+      },
+      runtimeMachineAuth: {
+        state: "separate_internal_boundary",
+        summary:
+          "Runtime machine auth remains distinct from browser setup and is not reused as bootstrap authority."
+      }
+    };
+  }
+
+  return {
+    serviceAccess: {
+      state: serviceAccessState,
+      summary:
+        "VTDD service access is configured and no longer the setup blocker."
+    },
+    operatorBootstrapAuthority: {
+      state: "deferred_after_configuration",
+      summary:
+        "Operator bootstrap authority stays narrow and deferred because the remaining work is verification, not another broad secret write."
+    },
+    externalAccountConnection: {
+      state: "configured_pending_live_probe",
+      summary:
+        "External account connection is configured in runtime and only awaits live verification."
+    },
+    runtimeMachineAuth: {
+      state: "separate_internal_boundary",
+      summary:
+        "Runtime machine auth continues to protect internal execution surfaces separately from the setup flow."
     }
   };
 }

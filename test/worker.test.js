@@ -442,6 +442,11 @@ test("worker setup wizard unlocked html shows narrow github app bootstrap form w
   assert.equal(html.includes("Human step"), true);
   assert.equal(html.includes("VTDD step"), true);
   assert.equal(html.includes("Provider step"), true);
+  assert.equal(html.includes("Auth boundary split"), true);
+  assert.equal(html.includes("VTDD service access"), true);
+  assert.equal(html.includes("Operator bootstrap authority"), true);
+  assert.equal(html.includes("External account connection"), true);
+  assert.equal(html.includes("Runtime machine auth"), true);
   assert.equal(html.includes("Allowlisted secrets"), true);
   assert.equal(html.includes("Planned writes"), true);
   assert.equal(html.includes("Post-session checks"), true);
@@ -558,6 +563,22 @@ test("worker setup wizard unlocked json reports github app bootstrap availabilit
     body.approvalBoundBootstrapSession.responsibilityReadout.providerStep.id,
     "cloudflare_retains_runtime_secret_boundary"
   );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authBoundaryReadout.serviceAccess.state,
+    "configured"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authBoundaryReadout.operatorBootstrapAuthority.state,
+    "missing_prerequisites"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authBoundaryReadout.externalAccountConnection.state,
+    "not_ready"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authBoundaryReadout.runtimeMachineAuth.state,
+    "separate_internal_boundary"
+  );
   assert.deepEqual(body.githubAppBootstrap.allowlistedSecrets, [
     "GITHUB_APP_ID",
     "GITHUB_APP_INSTALLATION_ID",
@@ -660,6 +681,22 @@ test("worker setup wizard unlocked json does not expose cloudflare bootstrap tok
   assert.equal(
     body.approvalBoundBootstrapSession.responsibilityReadout.providerStep.id,
     "github_and_cloudflare_keep_native_trust_boundaries"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authBoundaryReadout.serviceAccess.state,
+    "configured"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authBoundaryReadout.operatorBootstrapAuthority.state,
+    "ready_but_not_issued_to_user"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authBoundaryReadout.externalAccountConnection.state,
+    "provider_connection_in_progress"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authBoundaryReadout.runtimeMachineAuth.state,
+    "separate_internal_boundary"
   );
   assert.equal(body.githubAppBootstrap.accountId, "account-id");
   assert.equal("cloudflareApiToken" in body.githubAppBootstrap, false);
@@ -799,6 +836,22 @@ test("worker setup wizard preview narrows planned write to installation binding 
   assert.equal(
     body.approvalBoundBootstrapSession.responsibilityReadout.providerStep.id,
     "github_owns_installation_consent"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authBoundaryReadout.serviceAccess.state,
+    "configured"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authBoundaryReadout.operatorBootstrapAuthority.state,
+    "narrow_write_deferred"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authBoundaryReadout.externalAccountConnection.state,
+    "installation_binding_pending"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.authBoundaryReadout.runtimeMachineAuth.state,
+    "separate_internal_boundary"
   );
 });
 
