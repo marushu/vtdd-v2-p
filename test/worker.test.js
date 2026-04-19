@@ -2863,7 +2863,100 @@ test("worker setup wizard detects a single github app installation before instal
     body.githubAppSetupCheck.installationCapturePath,
     "/setup/wizard/github-app/capture-installation"
   );
+  assert.equal(
+    body.githubAppSetupCheck.requestDetectedInstallationAction.id,
+    "request_detected_installation_binding"
+  );
+  assert.equal(
+    body.githubAppSetupCheck.requestDetectedInstallationAction.path,
+    "/setup/wizard/bootstrap-session/request"
+  );
   assert.equal(body.githubAppSetupCheck.completeDetectedInstallationAction, undefined);
+});
+
+test("worker setup wizard can request detected installation continuation from github block", async () => {
+  const { privateKey } = generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+    privateKeyEncoding: {
+      type: "pkcs8",
+      format: "pem"
+    },
+    publicKeyEncoding: {
+      type: "spki",
+      format: "pem"
+    }
+  });
+  const env = {
+    SETUP_WIZARD_PASSCODE: "2468",
+    CLOUDFLARE_API_TOKEN: "bootstrap-token",
+    CLOUDFLARE_ACCOUNT_ID: "account-id",
+    CLOUDFLARE_WORKER_SCRIPT_NAME: "vtdd-v2-mvp",
+    GITHUB_MANIFEST_CONVERSION_TOKEN: "gho_operator_token",
+    GITHUB_APP_ID: "12345",
+    GITHUB_APP_PRIVATE_KEY: privateKey,
+    GITHUB_API_FETCH: async (url) => {
+      if (String(url).endsWith("/app/installations")) {
+        return new Response(
+          JSON.stringify([
+            {
+              id: 125153871
+            }
+          ]),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          }
+        );
+      }
+      return new Response(JSON.stringify({}), {
+        status: 404,
+        headers: { "content-type": "application/json" }
+      });
+    }
+  };
+  const { sessionCookie } = await unlockSetupWizard(env);
+
+  const jsonResponse = await worker.fetch(
+    new Request(
+      "https://example.com/setup/wizard?format=json&repo=sample-org/vtdd-v2&githubAppCheck=on",
+      {
+        headers: {
+          cookie: `vtdd_setup_access=${sessionCookie}`
+        }
+      }
+    ),
+    env
+  );
+
+  assert.equal(jsonResponse.status, 200);
+  const jsonBody = await jsonResponse.json();
+  assert.equal(
+    jsonBody.githubAppSetupCheck.requestDetectedInstallationAction.id,
+    "request_detected_installation_binding"
+  );
+  assert.equal(
+    jsonBody.githubAppSetupCheck.requestDetectedInstallationAction.path,
+    "/setup/wizard/bootstrap-session/request"
+  );
+  assert.equal(
+    jsonBody.githubAppSetupCheck.requestDetectedInstallationAction.returnTo,
+    "/setup/wizard?repo=sample-org%2Fvtdd-v2&githubAppCheck=on"
+  );
+  assert.equal(jsonBody.githubAppSetupCheck.completeDetectedInstallationAction, undefined);
+
+  const htmlResponse = await worker.fetch(
+    new Request("https://example.com/setup/wizard?repo=sample-org/vtdd-v2&githubAppCheck=on", {
+      headers: {
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      }
+    }),
+    env
+  );
+  assert.equal(htmlResponse.status, 200);
+  const html = await htmlResponse.text();
+  assert.equal(html.includes("Continue with GO + passkey"), true);
+  assert.equal(html.includes('action="/setup/wizard/bootstrap-session/request"'), true);
+  assert.equal(html.includes("Store Detected Installation ID"), false);
 });
 
 test("worker setup wizard can store detected installation id through narrow capture endpoint", async () => {

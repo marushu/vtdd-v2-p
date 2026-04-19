@@ -258,8 +258,12 @@ async function handleSetupWizardRequest({ request, url, env }) {
     githubAppBootstrap,
     githubAppSetupCheck: rawGitHubAppSetupCheck
   });
-  const githubAppSetupCheck = attachDetectedInstallationCompletionAction({
+  const githubAppSetupCheckWithRequest = attachDetectedInstallationRequestAction({
     githubAppSetupCheck: rawGitHubAppSetupCheck,
+    approvalBoundBootstrapSession
+  });
+  const githubAppSetupCheck = attachDetectedInstallationCompletionAction({
+    githubAppSetupCheck: githubAppSetupCheckWithRequest,
     approvalBoundBootstrapSession
   });
   const format = normalize(url.searchParams.get("format"));
@@ -2918,6 +2922,11 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
   const detectedInstallationId = normalizeText(check?.detectedInstallationId);
   const installationCapturePath = normalizeText(check?.installationCapturePath);
   const returnTo = normalizeGitHubAppBootstrapReturnTo(check?.returnTo);
+  const requestDetectedInstallationAction = check?.requestDetectedInstallationAction ?? null;
+  const requestActionPath = normalizeText(requestDetectedInstallationAction?.path);
+  const requestActionReturnTo = normalizeGitHubAppBootstrapReturnTo(
+    requestDetectedInstallationAction?.returnTo
+  );
   const completeDetectedInstallationAction = check?.completeDetectedInstallationAction ?? null;
   const completionActionPath = normalizeText(completeDetectedInstallationAction?.path);
   const completionActionReturnTo = normalizeGitHubAppBootstrapReturnTo(
@@ -2992,6 +3001,33 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                   locale === "ja"
                     ? "検出した Installation を保存して続行"
                     : "Store detected installation and continue"
+                )}</button>
+              </form>
+            </div>
+          `
+          : state === "installation_detected" && requestActionPath && requestActionReturnTo
+          ? `
+            <div class="block" style="margin-top: 12px;">
+              <p><strong>${escapeHtml(
+                locale === "ja"
+                  ? "VTDD が installation を検出しました。次は承認つきで続行します"
+                  : "VTDD found the installation. The next step is approval-bound continuation"
+              )}</strong></p>
+              <p class="meta">${escapeHtml(
+                locale === "ja"
+                  ? "追加の値の運搬ではなく、ここで GO + passkey request を記録すると、VTDD が同じ setup flow の中で installation binding と readiness 確認に進みます。"
+                  : "Instead of asking you to carry values manually, this records the GO + passkey request so VTDD can continue into installation binding and readiness in the same setup flow."
+              )}</p>
+              <form method="post" action="${escapeHtml(requestActionPath)}">
+                <input type="hidden" name="returnTo" value="${escapeHtml(
+                  requestActionReturnTo
+                )}" />
+                <input type="hidden" name="approval_phrase" value="GO" />
+                <input type="hidden" name="passkey_verified" value="true" />
+                <button type="submit" class="copy-button">${escapeHtml(
+                  locale === "ja"
+                    ? "GO + passkey で続行"
+                    : "Continue with GO + passkey"
                 )}</button>
               </form>
             </div>
@@ -8045,6 +8081,46 @@ function attachDetectedInstallationCompletionAction({
       returnTo,
       envelopeToken,
       installationId: detectedInstallationId
+    }
+  };
+}
+
+function attachDetectedInstallationRequestAction({
+  githubAppSetupCheck,
+  approvalBoundBootstrapSession
+}) {
+  const setupCheck = githubAppSetupCheck ?? null;
+  const session = approvalBoundBootstrapSession ?? null;
+  const state = normalizeText(setupCheck?.state);
+  const detectedInstallationId = normalizeText(setupCheck?.detectedInstallationId);
+  const requestEnabled = toBoolean(session?.requestEnabled);
+  const requestPath = normalizeText(session?.requestPath);
+  const returnTo = normalizeSetupWizardContinuationReturnTo(
+    session?.returnTo || setupCheck?.returnTo
+  );
+  const plannedWrites = Array.isArray(session?.contract?.preview?.plannedWrites)
+    ? session.contract.preview.plannedWrites
+    : [];
+  const installationOnlyWrite =
+    plannedWrites.length === 1 && plannedWrites[0] === "GITHUB_APP_INSTALLATION_ID";
+
+  if (
+    state !== "installation_detected" ||
+    !detectedInstallationId ||
+    !requestEnabled ||
+    !requestPath ||
+    !returnTo ||
+    !installationOnlyWrite
+  ) {
+    return setupCheck;
+  }
+
+  return {
+    ...setupCheck,
+    requestDetectedInstallationAction: {
+      id: "request_detected_installation_binding",
+      path: requestPath,
+      returnTo
     }
   };
 }
