@@ -2136,6 +2136,18 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
     "live_readiness_verified"
   );
   assert.equal(
+    absorbedBody.approvalBoundBootstrapSession.capabilityReadout.githubConnection.state,
+    "verified_live"
+  );
+  assert.equal(
+    absorbedBody.approvalBoundBootstrapSession.capabilityReadout.workerRuntime.state,
+    "verified_runtime_identity"
+  );
+  assert.equal(
+    absorbedBody.approvalBoundBootstrapSession.capabilityReadout.vtddCapability.state,
+    "can_continue_live_github_work"
+  );
+  assert.equal(
     absorbedBody.approvalBoundBootstrapSession.completionReadout.claimState.id,
     "wizard_complete_ready_path_verified"
   );

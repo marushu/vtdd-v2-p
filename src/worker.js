@@ -6198,6 +6198,26 @@ function buildBootstrapSessionCapabilityReadout({
   }
 
   if (plannedWrites.length === 0) {
+    if (setupState === "ready") {
+      return {
+        githubConnection: {
+          state: "verified_live",
+          summary:
+            "GitHub connection is already verified live in this setup flow."
+        },
+        workerRuntime: {
+          state: "verified_runtime_identity",
+          summary:
+            "Worker runtime already holds the verified GitHub App identity and installation binding for this setup path."
+        },
+        vtddCapability: {
+          state: "can_continue_live_github_work",
+          summary:
+            "VTDD can continue from setup into real GitHub work because live readiness is already proven."
+        }
+      };
+    }
+
     return {
       githubConnection: {
         state: "ready",
