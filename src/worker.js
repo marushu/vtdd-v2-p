@@ -55,6 +55,8 @@ const SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_ENVELOPE_ID_PARAM =
   "bootstrap_session_consume_envelope_id";
 const SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_REASON_PARAM =
   "bootstrap_session_consume_reason";
+const SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_PROOF_STATE_PARAM =
+  "bootstrap_session_consume_proof_state";
 const SETUP_WIZARD_BOOTSTRAP_SESSION_ENVELOPE_VERSION = "v1";
 const CLOUDFLARE_WORKER_SCRIPT_NAME_ENV = "CLOUDFLARE_WORKER_SCRIPT_NAME";
 const GITHUB_MANIFEST_CONVERSION_TOKEN_ENV = "GITHUB_MANIFEST_CONVERSION_TOKEN";
@@ -545,6 +547,12 @@ async function handleApprovalBoundBootstrapSessionConsume({ request, url, env })
       });
     }
 
+    const proof = await runBootstrapSessionConsumeProof({
+      url: contextUrl,
+      env,
+      installationId: detectedInstallationId
+    });
+
     if (payload.mode === "form") {
       const successUrl = new URL(returnTo, url.origin);
       successUrl.searchParams.set(SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_STATE_PARAM, "completed");
@@ -552,6 +560,12 @@ async function handleApprovalBoundBootstrapSessionConsume({ request, url, env })
         SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_ENVELOPE_ID_PARAM,
         envelopeId
       );
+      if (normalizeText(proof?.state)) {
+        successUrl.searchParams.set(
+          SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_PROOF_STATE_PARAM,
+          normalizeText(proof.state)
+        );
+      }
       return new Response(null, {
         status: 303,
         headers: {
@@ -571,7 +585,8 @@ async function handleApprovalBoundBootstrapSessionConsume({ request, url, env })
       installationId: detectedInstallationId,
       writeTarget: preview?.writeTarget ?? null,
       plannedWrites: ["GITHUB_APP_INSTALLATION_ID"],
-      postChecks: Array.isArray(preview?.postChecks) ? [...preview.postChecks] : []
+      postChecks: Array.isArray(preview?.postChecks) ? [...preview.postChecks] : [],
+      proof
     });
   }
 
@@ -918,6 +933,14 @@ async function writeGitHubAppInstallationBinding({
     ok: true,
     installationId: normalizedInstallationId
   };
+}
+
+async function runBootstrapSessionConsumeProof({ url, env, installationId }) {
+  const effectiveEnv = {
+    ...(env ?? {}),
+    GITHUB_APP_INSTALLATION_ID: normalizeText(installationId)
+  };
+  return runGitHubAppSetupCheck(url, effectiveEnv);
 }
 
 async function attachSetupWizardImportUrls({ result, url, env }) {
@@ -3119,6 +3142,7 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
   const consumeResultSummary = envelopeConsumeResult?.summary ?? null;
   const consumeResultEnvelopeId = envelopeConsumeResult?.envelopeId ?? null;
   const consumeResultNextProof = envelopeConsumeResult?.nextProof ?? null;
+  const consumeResultProof = envelopeConsumeResult?.proof ?? null;
   const envelopeConsumptionPlan = session?.envelopeConsumptionPlan ?? null;
   const consumptionIntent = envelopeConsumptionPlan?.consumptionIntent ?? null;
   const consumptionBoundary = envelopeConsumptionPlan?.consumptionBoundary ?? null;
@@ -3666,6 +3690,11 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
               ${
                 consumeResultNextProof
                   ? `<p><strong>${escapeHtml(locale === "ja" ? "Next proof" : "Next proof")}:</strong> <code>${escapeHtml(normalizeText(consumeResultNextProof.id))}</code> ${escapeHtml(normalizeText(consumeResultNextProof.summary))}</p>`
+                  : ""
+              }
+              ${
+                consumeResultProof
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Post-consume proof" : "Post-consume proof")}:</strong> <code>${escapeHtml(normalizeText(consumeResultProof.state))}</code> ${escapeHtml(normalizeText(consumeResultProof.summary))}</p>`
                   : ""
               }
             </div>
@@ -4883,6 +4912,9 @@ function buildBootstrapSessionEnvelopeConsumeResult({ url, preview }) {
   const failureReason = normalizeText(
     url?.searchParams?.get(SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_REASON_PARAM)
   );
+  const proofState = normalizeText(
+    url?.searchParams?.get(SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_PROOF_STATE_PARAM)
+  );
   const postChecks = Array.isArray(preview?.postChecks) ? preview.postChecks : [];
 
   if (state === "completed") {
@@ -4891,6 +4923,7 @@ function buildBootstrapSessionEnvelopeConsumeResult({ url, preview }) {
       summary:
         "VTDD consumed the signed bootstrap session envelope and stored the detected installation binding on Worker runtime.",
       envelopeId,
+      proof: buildBootstrapSessionConsumeProofReadout({ proofState }),
       nextProof: {
         id: postChecks.join("_then_") || "github_app_live_readiness_proof_pending",
         summary:
@@ -4942,6 +4975,42 @@ function buildBootstrapSessionEnvelopeConsumeResult({ url, preview }) {
   }
 
   return null;
+}
+
+function buildBootstrapSessionConsumeProofReadout({ proofState }) {
+  if (!proofState) {
+    return null;
+  }
+
+  if (proofState === "ready") {
+    return {
+      state: "ready",
+      summary:
+        "VTDD immediately rechecked GitHub App readiness after the bounded installation binding write and confirmed live repository access."
+    };
+  }
+
+  if (proofState === "probe_failed") {
+    return {
+      state: "probe_failed",
+      summary:
+        "VTDD completed the bounded installation binding write, but the immediate live readiness probe still failed closed."
+    };
+  }
+
+  if (proofState === "configured") {
+    return {
+      state: "configured",
+      summary:
+        "VTDD completed the bounded installation binding write, and runtime now reports the GitHub App configuration as complete pending live diagnostics."
+    };
+  }
+
+  return {
+    state: proofState,
+    summary:
+      "VTDD recorded a post-consume proof state after the bounded installation binding write."
+  };
 }
 
 function buildBootstrapSessionEnvelopeConsumptionPlan({ bootstrapState, preview }) {

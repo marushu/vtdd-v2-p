@@ -1297,6 +1297,7 @@ test("worker setup wizard consume can complete a single detected installation bi
     GITHUB_MANIFEST_CONVERSION_TOKEN: "gho_operator_token",
     GITHUB_APP_ID: "12345",
     GITHUB_APP_PRIVATE_KEY: privateKey,
+    GITHUB_APP_JWT_PROVIDER: async () => "app_jwt_token_for_tests",
     CF_API_FETCH: async (url, init = {}) => {
       calls.push({ url: String(url), init });
       return new Response(
@@ -1321,6 +1322,36 @@ test("worker setup wizard consume can complete a single detected installation bi
               app_id: 12345
             }
           ]),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          }
+        );
+      }
+      if (requestUrl.includes("/app/installations/125153871/access_tokens")) {
+        return new Response(
+          JSON.stringify({
+            token: "ghs_minted_installation_token",
+            expires_at: "2030-01-01T00:00:00Z"
+          }),
+          {
+            status: 201,
+            headers: { "content-type": "application/json" }
+          }
+        );
+      }
+      if (requestUrl.includes("/installation/repositories")) {
+        return new Response(
+          JSON.stringify({
+            total_count: 1,
+            repositories: [
+              {
+                full_name: "sample-org/vtdd-v2",
+                name: "vtdd-v2",
+                private: true
+              }
+            ]
+          }),
           {
             status: 200,
             headers: { "content-type": "application/json" }
@@ -1401,6 +1432,9 @@ test("worker setup wizard consume can complete a single detected installation bi
   assert.equal(consumeBody.consumed, true);
   assert.deepEqual(consumeBody.updatedSecrets, ["GITHUB_APP_INSTALLATION_ID"]);
   assert.equal(consumeBody.installationId, "125153871");
+  assert.equal(consumeBody.proof.state, "ready");
+  assert.equal(consumeBody.proof.evidence.source, "github_app_live");
+  assert.equal(consumeBody.proof.evidence.repositoryCount, 1);
   assert.equal(calls.length, 1);
   const payload = JSON.parse(String(calls[0].init.body));
   assert.equal(payload.name, "GITHUB_APP_INSTALLATION_ID");
