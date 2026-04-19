@@ -450,6 +450,9 @@ test("worker setup wizard unlocked html shows narrow github app bootstrap form w
   assert.equal(html.includes("Service connection friction"), true);
   assert.equal(html.includes("GitHub friction"), true);
   assert.equal(html.includes("Cloudflare friction"), true);
+  assert.equal(html.includes("Service connection handoff shape"), true);
+  assert.equal(html.includes("GitHub handoff"), true);
+  assert.equal(html.includes("Cloudflare handoff"), true);
   assert.equal(html.includes("Responsibility split"), true);
   assert.equal(html.includes("Human step"), true);
   assert.equal(html.includes("VTDD step"), true);
@@ -670,6 +673,22 @@ test("worker setup wizard unlocked json reports github app bootstrap availabilit
   assert.equal(
     body.approvalBoundBootstrapSession.serviceConnectionFrictionReadout.cloudflare.manualTransportRemains,
     "yes"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.serviceConnectionHandoffShapeReadout.github.id,
+    "github_handoff_not_open_yet"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.serviceConnectionHandoffShapeReadout.github.returnCaptureOwner,
+    "vtdd_when_bootstrap_boundary_is_restored"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.serviceConnectionHandoffShapeReadout.cloudflare.id,
+    "cloudflare_handoff_still_operator_boundary"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.serviceConnectionHandoffShapeReadout.cloudflare.returnCaptureOwner,
+    "operator_for_current_recovery_debt"
   );
   assert.equal(
     body.approvalBoundBootstrapSession.responsibilityReadout.humanStep.id,
@@ -992,6 +1011,22 @@ test("worker setup wizard unlocked json does not expose cloudflare bootstrap tok
   assert.equal(
     body.approvalBoundBootstrapSession.serviceConnectionFrictionReadout.cloudflare.manualTransportRemains,
     "no"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.serviceConnectionHandoffShapeReadout.github.id,
+    "github_redirect_then_vtdd_capture"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.serviceConnectionHandoffShapeReadout.github.returnCaptureOwner,
+    "vtdd"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.serviceConnectionHandoffShapeReadout.cloudflare.id,
+    "cloudflare_runtime_capture_without_human_return"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.serviceConnectionHandoffShapeReadout.cloudflare.returnCaptureOwner,
+    "vtdd_runtime_boundary"
   );
   assert.equal(
     body.approvalBoundBootstrapSession.responsibilityReadout.humanStep.id,
@@ -1752,6 +1787,14 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
   assert.equal(
     absorbedBody.approvalBoundBootstrapSession.serviceConnectionFrictionReadout.cloudflare.id,
     "cloudflare_connection_completed_without_remaining_transport"
+  );
+  assert.equal(
+    absorbedBody.approvalBoundBootstrapSession.serviceConnectionHandoffShapeReadout.github.id,
+    "github_handoff_already_absorbed"
+  );
+  assert.equal(
+    absorbedBody.approvalBoundBootstrapSession.serviceConnectionHandoffShapeReadout.cloudflare.id,
+    "cloudflare_handoff_already_absorbed"
   );
 
   const absorbedHtmlResponse = await worker.fetch(

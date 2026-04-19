@@ -3089,6 +3089,10 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
   const serviceConnectionFrictionReadout = session?.serviceConnectionFrictionReadout ?? null;
   const githubConnectionFriction = serviceConnectionFrictionReadout?.github ?? null;
   const cloudflareConnectionFriction = serviceConnectionFrictionReadout?.cloudflare ?? null;
+  const serviceConnectionHandoffShapeReadout =
+    session?.serviceConnectionHandoffShapeReadout ?? null;
+  const githubConnectionHandoff = serviceConnectionHandoffShapeReadout?.github ?? null;
+  const cloudflareConnectionHandoff = serviceConnectionHandoffShapeReadout?.cloudflare ?? null;
   const responsibilityReadout = session?.responsibilityReadout ?? null;
   const humanStep = responsibilityReadout?.humanStep ?? null;
   const vtddStep = responsibilityReadout?.vtddStep ?? null;
@@ -3415,6 +3419,25 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
               ${
                 cloudflareConnectionFriction
                   ? `<p><strong>${escapeHtml(locale === "ja" ? "Cloudflare friction" : "Cloudflare friction")}:</strong> <code>${escapeHtml(normalizeText(cloudflareConnectionFriction.id))}</code> ${escapeHtml(normalizeText(cloudflareConnectionFriction.summary))} <strong>${escapeHtml(locale === "ja" ? "Manual transport remains" : "Manual transport remains")}:</strong> <code>${escapeHtml(normalizeText(cloudflareConnectionFriction.manualTransportRemains))}</code> <strong>${escapeHtml(locale === "ja" ? "Allowed human involvement" : "Allowed human involvement")}:</strong> ${escapeHtml(normalizeText(cloudflareConnectionFriction.allowedHumanInvolvement))}</p>`
+                  : ""
+              }
+            </div>
+          `
+          : ""
+      }
+      ${
+        serviceConnectionHandoffShapeReadout
+          ? `
+            <div class="block" style="margin-top: 12px;">
+              <p><strong>${escapeHtml(locale === "ja" ? "Service connection handoff shape" : "Service connection handoff shape")}:</strong></p>
+              ${
+                githubConnectionHandoff
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "GitHub handoff" : "GitHub handoff")}:</strong> <code>${escapeHtml(normalizeText(githubConnectionHandoff.id))}</code> ${escapeHtml(normalizeText(githubConnectionHandoff.summary))} <strong>${escapeHtml(locale === "ja" ? "Human step shape" : "Human step shape")}:</strong> ${escapeHtml(normalizeText(githubConnectionHandoff.humanStepShape))} <strong>${escapeHtml(locale === "ja" ? "Return capture owner" : "Return capture owner")}:</strong> <code>${escapeHtml(normalizeText(githubConnectionHandoff.returnCaptureOwner))}</code></p>`
+                  : ""
+              }
+              ${
+                cloudflareConnectionHandoff
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Cloudflare handoff" : "Cloudflare handoff")}:</strong> <code>${escapeHtml(normalizeText(cloudflareConnectionHandoff.id))}</code> ${escapeHtml(normalizeText(cloudflareConnectionHandoff.summary))} <strong>${escapeHtml(locale === "ja" ? "Human step shape" : "Human step shape")}:</strong> ${escapeHtml(normalizeText(cloudflareConnectionHandoff.humanStepShape))} <strong>${escapeHtml(locale === "ja" ? "Return capture owner" : "Return capture owner")}:</strong> <code>${escapeHtml(normalizeText(cloudflareConnectionHandoff.returnCaptureOwner))}</code></p>`
                   : ""
               }
             </div>
@@ -4723,6 +4746,11 @@ async function buildApprovalBoundBootstrapSessionStatus({
       githubAppSetupCheck: effectiveGitHubAppSetupCheck
     }),
     serviceConnectionFrictionReadout: buildBootstrapSessionServiceConnectionFrictionReadout({
+      bootstrapState,
+      preview: effectivePreview,
+      githubAppSetupCheck: effectiveGitHubAppSetupCheck
+    }),
+    serviceConnectionHandoffShapeReadout: buildBootstrapSessionServiceConnectionHandoffShapeReadout({
       bootstrapState,
       preview: effectivePreview,
       githubAppSetupCheck: effectiveGitHubAppSetupCheck
@@ -6280,6 +6308,108 @@ function buildBootstrapSessionServiceConnectionFrictionReadout({
       allowedHumanInvolvement: "none while runtime preserves live proof state",
       summary:
         "Cloudflare is only preserving runtime state for live proof here, not asking the human to transport anything."
+    }
+  };
+}
+
+function buildBootstrapSessionServiceConnectionHandoffShapeReadout({
+  bootstrapState,
+  preview,
+  githubAppSetupCheck
+}) {
+  const plannedWrites = Array.isArray(preview?.plannedWrites) ? preview.plannedWrites : [];
+  const setupState = normalizeText(githubAppSetupCheck?.state) || "unknown";
+
+  if (bootstrapState !== "available") {
+    return {
+      github: {
+        id: "github_handoff_not_open_yet",
+        humanStepShape: "future provider login or consent redirect only",
+        returnCaptureOwner: "vtdd_when_bootstrap_boundary_is_restored",
+        summary:
+          "GitHub handoff is not open yet, but the intended shape is still redirect/auth first and VTDD-owned return capture afterward."
+      },
+      cloudflare: {
+        id: "cloudflare_handoff_still_operator_boundary",
+        humanStepShape: "operator boundary recovery outside wizard-complete happy path",
+        returnCaptureOwner: "operator_for_current_recovery_debt",
+        summary:
+          "Cloudflare is still carrying operator recovery debt here, so return capture is not yet fully absorbed by VTDD."
+      }
+    };
+  }
+
+  if (plannedWrites.length > 1) {
+    return {
+      github: {
+        id: "github_redirect_then_vtdd_capture",
+        humanStepShape: "provider login, app creation, or consent redirect",
+        returnCaptureOwner: "vtdd",
+        summary:
+          "GitHub may still send the human through provider-side auth or consent, but VTDD should capture the resulting state rather than asking the human to bring it back manually."
+      },
+      cloudflare: {
+        id: "cloudflare_runtime_capture_without_human_return",
+        humanStepShape: "no user-facing handoff in the happy path",
+        returnCaptureOwner: "vtdd_runtime_boundary",
+        summary:
+          "Cloudflare should receive setup state directly on the runtime side, without a human return trip carrying values."
+      }
+    };
+  }
+
+  if (plannedWrites.length === 1 && plannedWrites[0] === "GITHUB_APP_INSTALLATION_ID") {
+    return {
+      github: {
+        id: "github_install_redirect_then_vtdd_binding_capture",
+        humanStepShape: "installation consent or redirect completion only",
+        returnCaptureOwner: "vtdd",
+        summary:
+          "The remaining GitHub handoff is installation-side consent, and VTDD should absorb the returned binding state."
+      },
+      cloudflare: {
+        id: "cloudflare_bounded_runtime_capture",
+        humanStepShape: "no human return step for bounded write",
+        returnCaptureOwner: "vtdd_runtime_boundary",
+        summary:
+          "Cloudflare should only be the bounded runtime capture point for the installation binding result."
+      }
+    };
+  }
+
+  if (setupState === "ready") {
+    return {
+      github: {
+        id: "github_handoff_already_absorbed",
+        humanStepShape: "none for completed setup",
+        returnCaptureOwner: "vtdd_already_completed",
+        summary:
+          "GitHub handoff has already been absorbed into completed setup state."
+      },
+      cloudflare: {
+        id: "cloudflare_handoff_already_absorbed",
+        humanStepShape: "none for completed setup",
+        returnCaptureOwner: "vtdd_runtime_boundary_already_completed",
+        summary:
+          "Cloudflare runtime capture has already been absorbed into completed setup state."
+      }
+    };
+  }
+
+  return {
+    github: {
+      id: "github_live_probe_without_new_handoff",
+      humanStepShape: "no new human handoff while live proof runs",
+      returnCaptureOwner: "vtdd",
+      summary:
+        "GitHub is already past the provider handoff stage, so VTDD is only running live proof now."
+    },
+    cloudflare: {
+      id: "cloudflare_live_probe_state_retained_by_vtdd",
+      humanStepShape: "no human handoff while runtime preserves proof state",
+      returnCaptureOwner: "vtdd_runtime_boundary",
+      summary:
+        "Cloudflare is only retaining runtime state while VTDD runs live proof."
     }
   };
 }
