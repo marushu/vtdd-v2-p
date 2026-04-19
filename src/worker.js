@@ -936,7 +936,7 @@ async function handleGitHubAppManifestCallbackRequest({ request, url, env }) {
         <p class="meta">Next, GitHub needs to install that identity to your repositories so VTDD can mint short-lived installation tokens later.</p>
         ${
           installUrl
-            ? `<p><a href="${escapeHtml(installUrl)}" target="_blank" rel="noopener noreferrer">Install the GitHub App</a></p>`
+            ? `<p><a href="${escapeHtml(installUrl)}">Install the GitHub App</a></p>`
             : ""
         }
         <p class="meta">After installation, return to setup wizard. VTDD will try to detect the installation automatically before asking you for manual recovery steps.</p>
@@ -3197,7 +3197,7 @@ function renderGitHubAppBootstrap(bootstrap, url, locale = "en") {
             <div class="block" style="margin-top: 12px;">
               <p><strong>${escapeHtml(locale === "ja" ? "GitHub App を自動作成" : "Create GitHub App automatically")}</strong></p>
               <p class="meta">${escapeHtml(locale === "ja" ? "この step では、VTDD が GitHub を安全に触るための身分証を作りに行きます。戻ってくると App ID と private key が Worker runtime に保存されます。" : "This step creates the GitHub-side identity VTDD needs for safe execution. When you return, App ID and private key will be stored on Worker runtime.")}</p>
-              <form method="post" action="${escapeHtml(manifestLaunch.action)}" target="_blank" rel="noopener noreferrer">
+              <form method="post" action="${escapeHtml(manifestLaunch.action)}">
                 <input type="hidden" name="manifest" value="${escapeHtml(manifestLaunch.manifest)}" />
                 <button type="submit" class="copy-button">${escapeHtml(locale === "ja" ? "GitHub App を自動作成" : "Create GitHub App Automatically")}</button>
               </form>

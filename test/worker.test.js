@@ -522,6 +522,7 @@ test("worker setup wizard unlocked html shows narrow github app bootstrap form w
   assert.equal(html.includes("Post-session checks"), true);
   assert.equal(html.includes('action="/setup/wizard/github-app/bootstrap"'), true);
   assert.equal(html.includes('action="https://github.com/settings/apps/new"'), true);
+  assert.equal(html.includes('action="https://github.com/settings/apps/new" target="_blank"'), false);
   assert.equal(html.includes("&quot;hook_attributes&quot;"), true);
   assert.equal(html.includes("&quot;url&quot;:&quot;https://example.com/github/webhooks&quot;"), true);
   assert.equal(
@@ -2479,6 +2480,7 @@ test("worker setup wizard manifest callback writes github app id and private key
   assert.equal(html.includes("GitHub App manifest bootstrap completed."), true);
   assert.equal(html.includes("VTDD now has a GitHub App identity stored on Worker runtime."), true);
   assert.equal(html.includes("Install the GitHub App"), true);
+  assert.equal(html.includes('target="_blank" rel="noopener noreferrer">Install the GitHub App</a>'), false);
   assert.equal(
     html.includes(
       "VTDD will try to detect the installation automatically before asking you for manual recovery steps."
