@@ -5519,6 +5519,17 @@ async function buildApprovalBoundBootstrapSessionStatus({
       ...base.contract,
       preview: {
         ...base.contract.preview,
+        writeTarget: absorbedLiveProof ? null : base.contract.preview?.writeTarget ?? null,
+        plannedWrites: absorbedLiveProof
+          ? []
+          : Array.isArray(base.contract.preview?.plannedWrites)
+            ? [...base.contract.preview.plannedWrites]
+            : [],
+        postChecks: absorbedLiveProof
+          ? []
+          : Array.isArray(base.contract.preview?.postChecks)
+            ? [...base.contract.preview.postChecks]
+            : [],
         blockedBy: absorbedLiveProof
           ? []
           : ["attestation_backed_bootstrap_authority_not_implemented"]

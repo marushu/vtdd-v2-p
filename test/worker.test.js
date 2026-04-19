@@ -2171,6 +2171,18 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
     []
   );
   assert.equal(
+    absorbedBody.approvalBoundBootstrapSession.contract.preview.writeTarget,
+    null
+  );
+  assert.deepEqual(
+    absorbedBody.approvalBoundBootstrapSession.contract.preview.plannedWrites,
+    []
+  );
+  assert.deepEqual(
+    absorbedBody.approvalBoundBootstrapSession.contract.preview.postChecks,
+    []
+  );
+  assert.equal(
     absorbedBody.approvalBoundBootstrapSession.evidenceReadout.blockedEvidence.length,
     0
   );
@@ -2408,6 +2420,9 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
   const absorbedHtml = await absorbedHtmlResponse.text();
   assert.equal(absorbedHtml.includes("Record GO + passkey request"), false);
   assert.equal(absorbedHtml.includes("Consume session envelope"), false);
+  assert.equal(absorbedHtml.includes("Planned write target"), false);
+  assert.equal(absorbedHtml.includes("Planned writes"), false);
+  assert.equal(absorbedHtml.includes("Post-session checks"), false);
 });
 
 test("worker setup wizard rejects invalid bootstrap session envelope consume requests", async () => {
