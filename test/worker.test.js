@@ -1108,6 +1108,35 @@ test("worker setup wizard records approval-bound bootstrap request without grant
     html.includes("no privileged bootstrap session was opened because attestation-backed bootstrap authority is still deferred"),
     true
   );
+  assert.equal(html.includes("Session envelope"), true);
+  assert.equal(html.includes("signed_request_bound_envelope"), true);
+
+  const jsonResponse = await worker.fetch(
+    new Request(`https://example.com${location}&format=json`, {
+      headers: {
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      }
+    }),
+    env
+  );
+
+  assert.equal(jsonResponse.status, 200);
+  const body = await jsonResponse.json();
+  assert.equal(body.approvalBoundBootstrapSession.sessionEnvelope.state, "signed_request_bound_envelope");
+  assert.equal(body.approvalBoundBootstrapSession.sessionEnvelope.version, "v1");
+  assert.equal(body.approvalBoundBootstrapSession.sessionEnvelope.singleUse, true);
+  assert.equal(
+    body.approvalBoundBootstrapSession.sessionEnvelope.boundScope,
+    "allowlisted_runtime_bootstrap_only"
+  );
+  assert.equal(
+    typeof body.approvalBoundBootstrapSession.sessionEnvelope.envelopeToken,
+    "string"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.sessionEnvelope.envelopeId.length,
+    12
+  );
 });
 
 test("worker setup wizard preview narrows planned write to installation binding when app identity already exists", async () => {

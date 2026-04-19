@@ -48,6 +48,7 @@ const SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_TTL_SECONDS = 5 * 60;
 const SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_TOKEN_PARAM = "bootstrap_session_request_token";
 const SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_EXPIRES_PARAM = "bootstrap_session_request_expires";
 const SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_STATE_PARAM = "bootstrap_session_request";
+const SETUP_WIZARD_BOOTSTRAP_SESSION_ENVELOPE_VERSION = "v1";
 const CLOUDFLARE_WORKER_SCRIPT_NAME_ENV = "CLOUDFLARE_WORKER_SCRIPT_NAME";
 const GITHUB_MANIFEST_CONVERSION_TOKEN_ENV = "GITHUB_MANIFEST_CONVERSION_TOKEN";
 const GITHUB_APP_BOOTSTRAP_SECRET_ALLOWLIST = Object.freeze([
@@ -957,6 +958,31 @@ async function verifySetupWizardBootstrapSessionRequestToken({ url, sessionSecre
   return safeEqual(token, expected);
 }
 
+function getSetupWizardBootstrapSessionRequestExpiresAt(url) {
+  return Number.parseInt(
+    normalizeText(url?.searchParams?.get(SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_EXPIRES_PARAM)),
+    10
+  );
+}
+
+async function createSetupWizardBootstrapSessionEnvelopeToken({
+  url,
+  expiresAt,
+  bootstrapState,
+  preview,
+  sessionSecret
+}) {
+  return signSetupWizardValue({
+    message: buildSetupWizardBootstrapSessionEnvelopePayload({
+      url,
+      expiresAt,
+      bootstrapState,
+      preview
+    }),
+    sessionSecret
+  });
+}
+
 function buildSetupWizardImportTokenPayload({ url, expiresAt }) {
   const normalizedUrl = new URL(url.toString());
   normalizedUrl.searchParams.delete(SETUP_WIZARD_IMPORT_TOKEN_PARAM);
@@ -969,6 +995,7 @@ function buildSetupWizardImportTokenPayload({ url, expiresAt }) {
 function buildSetupWizardBootstrapSessionRequestPayload({ url, expiresAt }) {
   const normalizedUrl = new URL(url.toString());
   normalizedUrl.searchParams.delete(SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_TOKEN_PARAM);
+  normalizedUrl.searchParams.delete("format");
   normalizedUrl.searchParams.set(
     SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_STATE_PARAM,
     "requested"
@@ -979,6 +1006,37 @@ function buildSetupWizardBootstrapSessionRequestPayload({ url, expiresAt }) {
   );
   normalizedUrl.searchParams.sort();
   return `${normalizedUrl.pathname}?${normalizedUrl.searchParams.toString()}`;
+}
+
+function buildSetupWizardBootstrapSessionEnvelopePayload({
+  url,
+  expiresAt,
+  bootstrapState,
+  preview
+}) {
+  const normalizedUrl = new URL(url.toString());
+  normalizedUrl.searchParams.delete(SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_TOKEN_PARAM);
+  normalizedUrl.searchParams.delete("format");
+  normalizedUrl.searchParams.set(
+    SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_STATE_PARAM,
+    "requested"
+  );
+  normalizedUrl.searchParams.set(
+    SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_EXPIRES_PARAM,
+    String(expiresAt)
+  );
+  normalizedUrl.searchParams.sort();
+  const plannedWrites = Array.isArray(preview?.plannedWrites) ? preview.plannedWrites.join(",") : "";
+  const postChecks = Array.isArray(preview?.postChecks) ? preview.postChecks.join(",") : "";
+  return [
+    `version=${SETUP_WIZARD_BOOTSTRAP_SESSION_ENVELOPE_VERSION}`,
+    `context=${normalizedUrl.pathname}?${normalizedUrl.searchParams.toString()}`,
+    `bootstrapState=${normalizeText(bootstrapState)}`,
+    `writeTarget=${normalizeText(preview?.writeTarget)}`,
+    `plannedWrites=${plannedWrites}`,
+    `postChecks=${postChecks}`,
+    "singleUse=true"
+  ].join("|");
 }
 
 function safeEqual(left, right) {
@@ -2768,6 +2826,12 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
   const provenanceSource = authorityRequestProvenanceReadout?.provenanceSource ?? null;
   const provenanceDrift = authorityRequestProvenanceReadout?.provenanceDrift ?? null;
   const provenanceRecovery = authorityRequestProvenanceReadout?.provenanceRecovery ?? null;
+  const sessionEnvelope = session?.sessionEnvelope ?? null;
+  const envelopeState = sessionEnvelope?.state ?? null;
+  const envelopeId = sessionEnvelope?.envelopeId ?? null;
+  const envelopeExpiresAt = sessionEnvelope?.expiresAt ?? null;
+  const envelopeSingleUse = sessionEnvelope?.singleUse ?? null;
+  const envelopeBoundScope = sessionEnvelope?.boundScope ?? null;
   const completionReadout = session?.completionReadout ?? null;
   const claimState = completionReadout?.claimState ?? null;
   const cannotYetClaim = completionReadout?.cannotYetClaim ?? null;
@@ -3221,6 +3285,40 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
               ${
                 provenanceRecovery
                   ? `<p><strong>${escapeHtml(locale === "ja" ? "Provenance recovery" : "Provenance recovery")}:</strong> <code>${escapeHtml(normalizeText(provenanceRecovery.id))}</code> ${escapeHtml(normalizeText(provenanceRecovery.summary))}</p>`
+                  : ""
+              }
+            </div>
+          `
+          : ""
+      }
+      ${
+        sessionEnvelope
+          ? `
+            <div class="block" style="margin-top: 12px;">
+              <p><strong>${escapeHtml(locale === "ja" ? "Session envelope" : "Session envelope")}:</strong></p>
+              ${
+                envelopeState
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Envelope state" : "Envelope state")}:</strong> <code>${escapeHtml(normalizeText(envelopeState))}</code></p>`
+                  : ""
+              }
+              ${
+                envelopeId
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Envelope id" : "Envelope id")}:</strong> <code>${escapeHtml(normalizeText(envelopeId))}</code></p>`
+                  : ""
+              }
+              ${
+                envelopeExpiresAt
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Envelope expires at" : "Envelope expires at")}:</strong> <code>${escapeHtml(normalizeText(envelopeExpiresAt))}</code></p>`
+                  : ""
+              }
+              ${
+                typeof envelopeSingleUse === "boolean"
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Envelope single use" : "Envelope single use")}:</strong> <code>${escapeHtml(String(envelopeSingleUse))}</code></p>`
+                  : ""
+              }
+              ${
+                envelopeBoundScope
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Envelope bound scope" : "Envelope bound scope")}:</strong> <code>${escapeHtml(normalizeText(envelopeBoundScope))}</code></p>`
                   : ""
               }
             </div>
@@ -3999,6 +4097,7 @@ async function buildApprovalBoundBootstrapSessionStatus({
           sessionSecret: authConfig.sessionSecret
         })
       : false;
+  const requestExpiresAt = requestRecorded ? getSetupWizardBootstrapSessionRequestExpiresAt(url) : null;
   const requestInvalid =
     normalizeText(url?.searchParams?.get(SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_STATE_PARAM)) ===
     "invalid";
@@ -4101,6 +4200,19 @@ async function buildApprovalBoundBootstrapSessionStatus({
       allowlistedSecrets: [...GITHUB_APP_BOOTSTRAP_SECRET_ALLOWLIST],
       preview
     },
+    sessionEnvelope:
+      requestRecorded &&
+      authConfig.sessionSecret &&
+      Number.isFinite(requestExpiresAt) &&
+      requestExpiresAt >= Math.floor(Date.now() / 1000)
+        ? await buildBootstrapSessionEnvelope({
+            url,
+            sessionSecret: authConfig.sessionSecret,
+            bootstrapState,
+            preview,
+            expiresAt: requestExpiresAt
+          })
+        : null,
     requestPath: SETUP_WIZARD_APPROVAL_BOUND_BOOTSTRAP_SESSION_REQUEST_PATH,
     requestEnabled: true,
     returnTo: `${url?.pathname || "/setup/wizard"}${url?.search || ""}`,
@@ -4247,6 +4359,36 @@ async function buildApprovalBoundBootstrapSessionStatus({
         blockedBy: ["attestation_backed_bootstrap_authority_not_implemented"]
       }
     }
+  };
+}
+
+async function buildBootstrapSessionEnvelope({
+  url,
+  sessionSecret,
+  bootstrapState,
+  preview,
+  expiresAt
+}) {
+  const token = await createSetupWizardBootstrapSessionEnvelopeToken({
+    url,
+    expiresAt,
+    bootstrapState,
+    preview,
+    sessionSecret
+  });
+
+  return {
+    state: "signed_request_bound_envelope",
+    version: SETUP_WIZARD_BOOTSTRAP_SESSION_ENVELOPE_VERSION,
+    envelopeId: token.slice(0, 12),
+    envelopeToken: token,
+    expiresAt: new Date(expiresAt * 1000).toISOString(),
+    singleUse: true,
+    boundScope: "allowlisted_runtime_bootstrap_only",
+    bootstrapState,
+    writeTarget: preview?.writeTarget ?? null,
+    plannedWrites: Array.isArray(preview?.plannedWrites) ? [...preview.plannedWrites] : [],
+    postChecks: Array.isArray(preview?.postChecks) ? [...preview.postChecks] : []
   };
 }
 
