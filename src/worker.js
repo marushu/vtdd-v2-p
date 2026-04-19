@@ -2686,6 +2686,11 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
     : null;
   const singleUse = toBoolean(contract?.singleUse);
   const attestationState = normalizeText(contract?.attestationState);
+  const preview = contract?.preview ?? null;
+  const writeTarget = normalizeText(preview?.writeTarget);
+  const plannedWrites = Array.isArray(preview?.plannedWrites) ? preview.plannedWrites : [];
+  const postChecks = Array.isArray(preview?.postChecks) ? preview.postChecks : [];
+  const blockedBy = Array.isArray(preview?.blockedBy) ? preview.blockedBy : [];
 
   return `
     <h2>${escapeHtml(locale === "ja" ? "承認境界つき Bootstrap Session" : "Approval-Bound Bootstrap Session")}</h2>
@@ -2745,6 +2750,38 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
                   ? `<p><strong>${escapeHtml(locale === "ja" ? "Allowlisted secrets" : "Allowlisted secrets")}:</strong> ${allowlistedSecrets
                       .map((item) => `<code>${escapeHtml(item)}</code>`)
                       .join(", ")}</p>`
+                  : ""
+              }
+              ${
+                preview
+                  ? `
+                    ${
+                      writeTarget
+                        ? `<p><strong>${escapeHtml(locale === "ja" ? "Planned write target" : "Planned write target")}:</strong> <code>${escapeHtml(writeTarget)}</code></p>`
+                        : ""
+                    }
+                    ${
+                      plannedWrites.length > 0
+                        ? `<p><strong>${escapeHtml(locale === "ja" ? "Planned writes" : "Planned writes")}:</strong> ${plannedWrites
+                            .map((item) => `<code>${escapeHtml(item)}</code>`)
+                            .join(", ")}</p>`
+                        : ""
+                    }
+                    ${
+                      postChecks.length > 0
+                        ? `<p><strong>${escapeHtml(locale === "ja" ? "Post-session checks" : "Post-session checks")}:</strong> ${postChecks
+                            .map((item) => `<code>${escapeHtml(item)}</code>`)
+                            .join(", ")}</p>`
+                        : ""
+                    }
+                    ${
+                      blockedBy.length > 0
+                        ? `<p><strong>${escapeHtml(locale === "ja" ? "Currently blocked by" : "Currently blocked by")}:</strong> ${blockedBy
+                            .map((item) => `<code>${escapeHtml(item)}</code>`)
+                            .join(", ")}</p>`
+                        : ""
+                    }
+                  `
                   : ""
               }
             </div>
@@ -3380,7 +3417,13 @@ async function buildApprovalBoundBootstrapSessionStatus({ url, env, githubAppBoo
       attestationState: "not_implemented",
       maxAgeSeconds: SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_TTL_SECONDS,
       singleUse: true,
-      allowlistedSecrets: [...GITHUB_APP_BOOTSTRAP_SECRET_ALLOWLIST]
+      allowlistedSecrets: [...GITHUB_APP_BOOTSTRAP_SECRET_ALLOWLIST],
+      preview: {
+        writeTarget: buildBootstrapSessionWriteTarget({ githubAppBootstrap }),
+        plannedWrites: [...GITHUB_APP_BOOTSTRAP_SECRET_ALLOWLIST],
+        postChecks: ["github_app_installation_token_mint", "github_app_live_probe"],
+        blockedBy: []
+      }
     },
     requestPath: SETUP_WIZARD_APPROVAL_BOUND_BOOTSTRAP_SESSION_REQUEST_PATH,
     requestEnabled: true,
@@ -3397,7 +3440,14 @@ async function buildApprovalBoundBootstrapSessionStatus({ url, env, githubAppBoo
       guidance: [
         "This path does not open a privileged session unless the request shape matches GO + passkey.",
         "Current setup still does not mint short-lived bootstrap authority from this request."
-      ]
+      ],
+      contract: {
+        ...base.contract,
+        preview: {
+          ...base.contract.preview,
+          blockedBy: ["go_passkey_contract_not_satisfied"]
+        }
+      }
     };
   }
 
@@ -3431,7 +3481,14 @@ async function buildApprovalBoundBootstrapSessionStatus({ url, env, githubAppBoo
         missingPrerequisites.length > 0
           ? `Current missing prerequisites: ${missingPrerequisites.join(", ")}.`
           : "Re-check Cloudflare bootstrap prerequisites before enabling a privileged setup path."
-      ]
+      ],
+      contract: {
+        ...base.contract,
+        preview: {
+          ...base.contract.preview,
+          blockedBy: missingPrerequisites
+        }
+      }
     };
   }
 
@@ -3448,8 +3505,27 @@ async function buildApprovalBoundBootstrapSessionStatus({ url, env, githubAppBoo
         : "Current live setup still uses the bounded GitHub App bootstrap path plus operator-managed Cloudflare authority.",
       "The future approval-bound session should absorb setup-critical transport without becoming a generic secret terminal.",
       "Do not present setup as wizard-complete until this path is implemented and verified."
-    ]
+    ],
+    contract: {
+      ...base.contract,
+      preview: {
+        ...base.contract.preview,
+        blockedBy: ["attestation_backed_bootstrap_authority_not_implemented"]
+      }
+    }
   };
+}
+
+function buildBootstrapSessionWriteTarget({ githubAppBootstrap }) {
+  const accountId = normalizeText(githubAppBootstrap?.accountId);
+  const scriptName = normalizeText(githubAppBootstrap?.scriptName);
+  if (accountId && scriptName) {
+    return `cloudflare:${accountId}/workers/scripts/${scriptName}/secrets`;
+  }
+  if (scriptName) {
+    return `cloudflare:workers/scripts/${scriptName}/secrets`;
+  }
+  return "cloudflare:workers/scripts/<unresolved>/secrets";
 }
 
 async function detectGitHubAppInstallation({ env, fetchImpl }) {

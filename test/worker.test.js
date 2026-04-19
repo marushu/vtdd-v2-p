@@ -424,6 +424,8 @@ test("worker setup wizard unlocked html shows narrow github app bootstrap form w
   assert.equal(html.includes("approval_bound_one_time_bootstrap"), true);
   assert.equal(html.includes("not_issued"), true);
   assert.equal(html.includes("Allowlisted secrets"), true);
+  assert.equal(html.includes("Planned writes"), true);
+  assert.equal(html.includes("Post-session checks"), true);
   assert.equal(html.includes('action="/setup/wizard/github-app/bootstrap"'), true);
   assert.equal(html.includes('action="https://github.com/settings/apps/new"'), true);
   assert.equal(html.includes("&quot;hook_attributes&quot;"), true);
@@ -463,6 +465,23 @@ test("worker setup wizard unlocked json reports github app bootstrap availabilit
     "GITHUB_APP_INSTALLATION_ID",
     "GITHUB_APP_PRIVATE_KEY"
   ]);
+  assert.equal(
+    body.approvalBoundBootstrapSession.contract.preview.writeTarget,
+    "cloudflare:workers/scripts/<unresolved>/secrets"
+  );
+  assert.deepEqual(body.approvalBoundBootstrapSession.contract.preview.plannedWrites, [
+    "GITHUB_APP_ID",
+    "GITHUB_APP_INSTALLATION_ID",
+    "GITHUB_APP_PRIVATE_KEY"
+  ]);
+  assert.deepEqual(body.approvalBoundBootstrapSession.contract.preview.postChecks, [
+    "github_app_installation_token_mint",
+    "github_app_live_probe"
+  ]);
+  assert.equal(
+    body.approvalBoundBootstrapSession.contract.preview.blockedBy.includes("CLOUDFLARE_API_TOKEN"),
+    true
+  );
   assert.equal(
     body.approvalBoundBootstrapSession.targetAbsorbs.includes("allowlisted_runtime_secret_write"),
     true
@@ -505,6 +524,16 @@ test("worker setup wizard unlocked json does not expose cloudflare bootstrap tok
   const body = await response.json();
   assert.equal(body.githubAppBootstrap.state, "available");
   assert.equal(body.approvalBoundBootstrapSession.state, "deferred");
+  assert.equal(
+    body.approvalBoundBootstrapSession.contract.preview.writeTarget,
+    "cloudflare:account-id/workers/scripts/vtdd-v2-mvp/secrets"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.contract.preview.blockedBy.includes(
+      "attestation_backed_bootstrap_authority_not_implemented"
+    ),
+    true
+  );
   assert.equal(body.githubAppBootstrap.accountId, "account-id");
   assert.equal("cloudflareApiToken" in body.githubAppBootstrap, false);
   assert.equal("githubManifestConversionToken" in body.githubAppBootstrap, false);
