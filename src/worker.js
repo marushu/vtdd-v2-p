@@ -3080,6 +3080,9 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
   const providerConnectionReadout = session?.providerConnectionReadout ?? null;
   const githubProviderPhase = providerConnectionReadout?.github ?? null;
   const cloudflareProviderPhase = providerConnectionReadout?.cloudflare ?? null;
+  const serviceConnectionModelReadout = session?.serviceConnectionModelReadout ?? null;
+  const githubConnectionModel = serviceConnectionModelReadout?.github ?? null;
+  const cloudflareConnectionModel = serviceConnectionModelReadout?.cloudflare ?? null;
   const responsibilityReadout = session?.responsibilityReadout ?? null;
   const humanStep = responsibilityReadout?.humanStep ?? null;
   const vtddStep = responsibilityReadout?.vtddStep ?? null;
@@ -3341,6 +3344,25 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
               ${
                 cloudflareProviderPhase
                   ? `<p><strong>${escapeHtml(locale === "ja" ? "Cloudflare phase" : "Cloudflare phase")}:</strong> <code>${escapeHtml(normalizeText(cloudflareProviderPhase.id))}</code> ${escapeHtml(normalizeText(cloudflareProviderPhase.summary))}</p>`
+                  : ""
+              }
+            </div>
+          `
+          : ""
+      }
+      ${
+        serviceConnectionModelReadout
+          ? `
+            <div class="block" style="margin-top: 12px;">
+              <p><strong>${escapeHtml(locale === "ja" ? "Service connection model" : "Service connection model")}:</strong></p>
+              ${
+                githubConnectionModel
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "GitHub connection" : "GitHub connection")}:</strong> <code>${escapeHtml(normalizeText(githubConnectionModel.id))}</code> ${escapeHtml(normalizeText(githubConnectionModel.summary))} <strong>${escapeHtml(locale === "ja" ? "Type" : "Type")}:</strong> <code>${escapeHtml(normalizeText(githubConnectionModel.connectionType))}</code> <strong>${escapeHtml(locale === "ja" ? "Needed for" : "Needed for")}:</strong> ${escapeHtml(normalizeText(githubConnectionModel.requiredBecause))}</p>`
+                  : ""
+              }
+              ${
+                cloudflareConnectionModel
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Cloudflare connection" : "Cloudflare connection")}:</strong> <code>${escapeHtml(normalizeText(cloudflareConnectionModel.id))}</code> ${escapeHtml(normalizeText(cloudflareConnectionModel.summary))} <strong>${escapeHtml(locale === "ja" ? "Type" : "Type")}:</strong> <code>${escapeHtml(normalizeText(cloudflareConnectionModel.connectionType))}</code> <strong>${escapeHtml(locale === "ja" ? "Needed for" : "Needed for")}:</strong> ${escapeHtml(normalizeText(cloudflareConnectionModel.requiredBecause))}</p>`
                   : ""
               }
             </div>
@@ -4638,6 +4660,11 @@ async function buildApprovalBoundBootstrapSessionStatus({
       preview: effectivePreview,
       githubAppSetupCheck: effectiveGitHubAppSetupCheck
     }),
+    serviceConnectionModelReadout: buildBootstrapSessionServiceConnectionModelReadout({
+      bootstrapState,
+      preview: effectivePreview,
+      githubAppSetupCheck: effectiveGitHubAppSetupCheck
+    }),
     responsibilityReadout: buildBootstrapSessionResponsibilityReadout({
       bootstrapState,
       preview: effectivePreview
@@ -5873,6 +5900,118 @@ function buildBootstrapSessionProviderConnectionReadout({
       id: "cloudflare_runtime_connection_present",
       summary:
         "Cloudflare runtime connection is already present for this setup path and remains a backend authority boundary rather than a browser login step."
+    }
+  };
+}
+
+function buildBootstrapSessionServiceConnectionModelReadout({
+  bootstrapState,
+  preview,
+  githubAppSetupCheck
+}) {
+  const plannedWrites = Array.isArray(preview?.plannedWrites) ? preview.plannedWrites : [];
+  const setupState = normalizeText(githubAppSetupCheck?.state) || "unknown";
+
+  if (bootstrapState !== "available") {
+    return {
+      github: {
+        id: "github_connection_not_yet_reachable",
+        connectionType: "login_or_provider_consent",
+        requiredBecause:
+          "VTDD needs GitHub-side identity creation and installation consent before it can act on repositories.",
+        summary:
+          "GitHub connection is part login/consent and part App installation, but wizard is not ready to send you there until Cloudflare-side bootstrap authority exists."
+      },
+      cloudflare: {
+        id: "cloudflare_connection_still_operator_seeded",
+        connectionType: "operator_seeded_runtime_authority",
+        requiredBecause:
+          "VTDD needs Cloudflare-side runtime authority to store and verify setup-critical Worker secrets.",
+        summary:
+          "Cloudflare is required for setup, but the current path still depends on operator-seeded runtime authority rather than a user-facing login step."
+      }
+    };
+  }
+
+  if (plannedWrites.length > 1) {
+    return {
+      github: {
+        id: "github_connection_via_app_creation_and_install",
+        connectionType: "login_or_provider_consent",
+        requiredBecause:
+          "VTDD needs GitHub App identity and installation consent so it can mint installation tokens and reach the target repository.",
+        summary:
+          "GitHub connection is currently expressed as App creation and installation consent rather than a generic sign-in screen."
+      },
+      cloudflare: {
+        id: "cloudflare_connection_via_existing_runtime_authority",
+        connectionType: "operator_seeded_runtime_authority",
+        requiredBecause:
+          "VTDD needs Cloudflare Worker runtime authority to persist the setup-critical values produced by the GitHub handoff.",
+        summary:
+          "Cloudflare connection already exists behind the wizard as runtime authority, so the user is not being sent through a separate Cloudflare login step here."
+      }
+    };
+  }
+
+  if (plannedWrites.length === 1 && plannedWrites[0] === "GITHUB_APP_INSTALLATION_ID") {
+    return {
+      github: {
+        id: "github_connection_via_installation_binding",
+        connectionType: "provider_consent_and_binding",
+        requiredBecause:
+          "VTDD still needs the GitHub App installation to be connected to the target repository before live access can be proven.",
+        summary:
+          "GitHub connection is narrowed to installation binding, which is a provider-side consent/binding step rather than raw credential entry."
+      },
+      cloudflare: {
+        id: "cloudflare_connection_via_bounded_runtime_write",
+        connectionType: "operator_seeded_runtime_authority",
+        requiredBecause:
+          "VTDD uses Cloudflare as the bounded runtime secret store that records the installation binding once detected.",
+        summary:
+          "Cloudflare remains a backend authority boundary for the bounded write, not a browser login step."
+      }
+    };
+  }
+
+  if (setupState === "ready") {
+    return {
+      github: {
+        id: "github_connection_already_live",
+        connectionType: "verified_provider_connection",
+        requiredBecause:
+          "VTDD needs proven repository access through GitHub App installation tokens before setup can claim GitHub-ready state.",
+        summary:
+          "GitHub connection is already proven live, so no additional login or consent step is currently needed."
+      },
+      cloudflare: {
+        id: "cloudflare_connection_already_live",
+        connectionType: "verified_runtime_authority",
+        requiredBecause:
+          "VTDD needs Cloudflare runtime authority to hold the live setup state it just proved.",
+        summary:
+          "Cloudflare runtime authority is already present and bound for this setup path."
+      }
+    };
+  }
+
+  return {
+    github: {
+      id: "github_connection_ready_for_live_probe",
+      connectionType: "verified_configuration_pending_live_probe",
+      requiredBecause:
+        "VTDD needs GitHub-side connection to be proven by a live probe before setup can claim GitHub capability.",
+      summary:
+        "GitHub connection inputs are in place, and the remaining step is live proof rather than another login or consent action."
+    },
+    cloudflare: {
+      id: "cloudflare_connection_present_for_live_probe",
+      connectionType: "runtime_authority_present",
+      requiredBecause:
+        "VTDD needs Cloudflare runtime authority to preserve the setup state that the live probe is about to validate.",
+      summary:
+        "Cloudflare runtime authority is already present for this path and does not surface as a separate browser login step."
     }
   };
 }

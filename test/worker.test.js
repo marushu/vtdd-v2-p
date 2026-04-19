@@ -441,6 +441,9 @@ test("worker setup wizard unlocked html shows narrow github app bootstrap form w
   assert.equal(html.includes("Provider connection phase"), true);
   assert.equal(html.includes("GitHub phase"), true);
   assert.equal(html.includes("Cloudflare phase"), true);
+  assert.equal(html.includes("Service connection model"), true);
+  assert.equal(html.includes("GitHub connection"), true);
+  assert.equal(html.includes("Cloudflare connection"), true);
   assert.equal(html.includes("Responsibility split"), true);
   assert.equal(html.includes("Human step"), true);
   assert.equal(html.includes("VTDD step"), true);
@@ -613,6 +616,22 @@ test("worker setup wizard unlocked json reports github app bootstrap availabilit
   assert.equal(
     body.approvalBoundBootstrapSession.providerConnectionReadout.cloudflare.id,
     "cloudflare_operator_authority_missing"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.serviceConnectionModelReadout.github.id,
+    "github_connection_not_yet_reachable"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.serviceConnectionModelReadout.github.connectionType,
+    "login_or_provider_consent"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.serviceConnectionModelReadout.cloudflare.id,
+    "cloudflare_connection_still_operator_seeded"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.serviceConnectionModelReadout.cloudflare.connectionType,
+    "operator_seeded_runtime_authority"
   );
   assert.equal(
     body.approvalBoundBootstrapSession.responsibilityReadout.humanStep.id,
@@ -895,6 +914,14 @@ test("worker setup wizard unlocked json does not expose cloudflare bootstrap tok
   assert.equal(
     body.approvalBoundBootstrapSession.providerConnectionReadout.cloudflare.id,
     "cloudflare_runtime_authority_available_without_user_login"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.serviceConnectionModelReadout.github.id,
+    "github_connection_via_app_creation_and_install"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.serviceConnectionModelReadout.cloudflare.id,
+    "cloudflare_connection_via_existing_runtime_authority"
   );
   assert.equal(
     body.approvalBoundBootstrapSession.responsibilityReadout.humanStep.id,
@@ -1631,6 +1658,14 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
   assert.equal(
     absorbedBody.approvalBoundBootstrapSession.providerConnectionReadout.cloudflare.id,
     "cloudflare_runtime_connection_already_bound"
+  );
+  assert.equal(
+    absorbedBody.approvalBoundBootstrapSession.serviceConnectionModelReadout.github.id,
+    "github_connection_already_live"
+  );
+  assert.equal(
+    absorbedBody.approvalBoundBootstrapSession.serviceConnectionModelReadout.cloudflare.id,
+    "cloudflare_connection_already_live"
   );
 
   const absorbedHtmlResponse = await worker.fetch(
