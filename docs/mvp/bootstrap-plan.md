@@ -11,6 +11,7 @@ It is a planning companion, not a replacement for child Issue acceptance criteri
 - current main-line implementation work is now driven by `#182` for bootstrap automation and service connection boundaries
 - active implementation must still trace to child Issue Intent / Success Criteria / Non-goal
 - repository completion remains `partial` until the bootstrap/setup path also reaches intended live usability
+- repository completion also remains `partial` while setup wizard is still more accurately described as a bounded bootstrap helper than as a meaning-first wizard
 
 ## Canonical Parent / Spec Inputs
 
@@ -52,6 +53,7 @@ It is a planning companion, not a replacement for child Issue acceptance criteri
 - `docs/security/memory-safety-policy.md`
 - `docs/security/reviewer-policy.md`
 - `docs/security/guarded-semi-automation-mode.md`
+- `docs/security/setup-wizard-meaning-first-contract.md`
 - `docs/security/worker-secret-bootstrap-options.md`
 - `docs/mvp/issue-to-e2e-matrix.md`
 

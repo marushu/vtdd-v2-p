@@ -10,6 +10,10 @@ GitHub manifest bootstrap boundary.
 It treats setup wizard as a core VTDD entry surface, not as optional onboarding
 chrome.
 
+For the user-facing bar that decides whether this surface is actually a wizard
+instead of a bootstrap helper, see
+`docs/security/setup-wizard-meaning-first-contract.md`.
+
 ## Why This Is Main-line Work
 
 VTDD V2 is trying to remove unnecessary complexity from development.
@@ -40,6 +44,10 @@ This means setup wizard work must be treated like core runtime work when:
 - defining boundaries
 - ranking priorities
 - deciding what blocks live/manual testing
+
+Core does not automatically mean "already wizard-quality."
+Current runtime can still be core and still fail the meaning-first wizard bar if
+the human has to act as the glue between service dashboards.
 
 ### Service Auth Is Not the Same as External Account Connection
 
