@@ -5262,7 +5262,8 @@ async function buildApprovalBoundBootstrapSessionStatus({
     authorityRequestTargetReadout: buildBootstrapSessionAuthorityRequestTargetReadout({
       bootstrapState,
       preview: effectivePreview,
-      url
+      url,
+      githubAppSetupCheck: effectiveGitHubAppSetupCheck
     }),
     authorityRequestProvenanceReadout: buildBootstrapSessionAuthorityRequestProvenanceReadout({
       bootstrapState,
@@ -8287,9 +8288,35 @@ function buildBootstrapSessionAuthorityRequestBindingReadout({
   };
 }
 
-function buildBootstrapSessionAuthorityRequestTargetReadout({ bootstrapState, preview, url }) {
+function buildBootstrapSessionAuthorityRequestTargetReadout({
+  bootstrapState,
+  preview,
+  url,
+  githubAppSetupCheck
+}) {
   const plannedWrites = Array.isArray(preview?.plannedWrites) ? preview.plannedWrites : [];
   const repo = normalizeText(url?.searchParams?.get("repo")) || "<unresolved-repo>";
+  const setupState = normalizeText(githubAppSetupCheck?.state) || "unknown";
+
+  if (setupState === "ready") {
+    return {
+      targetContext: {
+        id: "no_current_setup_request_target_needed",
+        summary:
+          `VTDD already completed the current setup path for ${repo}, so no additional request targeting is needed to keep this verified flow coherent.`
+      },
+      targetDrift: {
+        id: "future_generalized_request_targeting_is_separate_work",
+        summary:
+          "Any future generalized request targeting belongs to separate bootstrap work, not to the current verified-ready setup path."
+      },
+      targetRecovery: {
+        id: "verified_path_continues_without_current_target_recovery",
+        summary:
+          "The verified path continues without a current target-recovery step because the setup-bound request target was already consumed and absorbed."
+      }
+    };
+  }
 
   if (bootstrapState !== "available") {
     return {
