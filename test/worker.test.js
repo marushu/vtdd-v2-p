@@ -2142,18 +2142,7 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
   assert.equal(absorbedBody.approvalBoundBootstrapSession.serviceConnectionModelReadout, null);
   assert.equal(absorbedBody.approvalBoundBootstrapSession.serviceConnectionActionability, null);
   assert.equal(absorbedBody.approvalBoundBootstrapSession.authBoundaryReadout, null);
-  assert.equal(
-    absorbedBody.approvalBoundBootstrapSession.responsibilityReadout.humanStep.id,
-    "continue_from_verified_setup_without_new_wiring"
-  );
-  assert.equal(
-    absorbedBody.approvalBoundBootstrapSession.responsibilityReadout.vtddStep.id,
-    "carry_verified_capability_forward"
-  );
-  assert.equal(
-    absorbedBody.approvalBoundBootstrapSession.responsibilityReadout.providerStep.id,
-    "providers_hold_verified_runtime_boundary"
-  );
+  assert.equal(absorbedBody.approvalBoundBootstrapSession.responsibilityReadout, null);
   assert.equal(
     absorbedBody.approvalBoundBootstrapSession.issuanceReadout.issuableState.id,
     "no_setup_issuance_needed_for_verified_path"
@@ -2314,6 +2303,7 @@ test("worker setup wizard absorbs completed consume proof into approval-bound se
   assert.equal(absorbedHtml.includes("Service connection handoff shape"), false);
   assert.equal(absorbedHtml.includes("Service return continuity"), false);
   assert.equal(absorbedHtml.includes("Auth boundary split"), false);
+  assert.equal(absorbedHtml.includes("Responsibility split"), false);
   assert.equal(absorbedHtml.includes("This setup flow already absorbed installation binding"), false);
 });
 
