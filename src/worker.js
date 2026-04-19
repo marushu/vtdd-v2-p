@@ -2707,6 +2707,10 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
   const githubConnection = capabilityReadout?.githubConnection ?? null;
   const workerRuntime = capabilityReadout?.workerRuntime ?? null;
   const vtddCapability = capabilityReadout?.vtddCapability ?? null;
+  const phaseReadout = session?.phaseReadout ?? null;
+  const currentPhase = phaseReadout?.currentPhase ?? null;
+  const nextCapability = phaseReadout?.nextCapability ?? null;
+  const transitionTrigger = phaseReadout?.transitionTrigger ?? null;
 
   return `
     <h2>${escapeHtml(locale === "ja" ? "承認境界つき Bootstrap Session" : "Approval-Bound Bootstrap Session")}</h2>
@@ -2797,6 +2801,30 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
               ${
                 vtddCapability
                   ? `<p><strong>${escapeHtml(locale === "ja" ? "VTDD capability" : "VTDD capability")}:</strong> <code>${escapeHtml(normalizeText(vtddCapability.state))}</code> ${escapeHtml(normalizeText(vtddCapability.summary))}</p>`
+                  : ""
+              }
+            </div>
+          `
+          : ""
+      }
+      ${
+        phaseReadout
+          ? `
+            <div class="block" style="margin-top: 12px;">
+              <p><strong>${escapeHtml(locale === "ja" ? "Flow phase" : "Flow phase")}:</strong></p>
+              ${
+                currentPhase
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Current phase" : "Current phase")}:</strong> <code>${escapeHtml(normalizeText(currentPhase.id))}</code> ${escapeHtml(normalizeText(currentPhase.summary))}</p>`
+                  : ""
+              }
+              ${
+                nextCapability
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Next capability" : "Next capability")}:</strong> <code>${escapeHtml(normalizeText(nextCapability.id))}</code> ${escapeHtml(normalizeText(nextCapability.summary))}</p>`
+                  : ""
+              }
+              ${
+                transitionTrigger
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Transition trigger" : "Transition trigger")}:</strong> <code>${escapeHtml(normalizeText(transitionTrigger.id))}</code> ${escapeHtml(normalizeText(transitionTrigger.summary))}</p>`
                   : ""
               }
             </div>
@@ -3518,6 +3546,11 @@ async function buildApprovalBoundBootstrapSessionStatus({
       preview,
       githubAppSetupCheck
     }),
+    phaseReadout: buildBootstrapSessionPhaseReadout({
+      bootstrapState,
+      preview,
+      githubAppSetupCheck
+    }),
     contract: {
       authorityState: "not_issued",
       sessionMode: "approval_bound_one_time_bootstrap",
@@ -3853,6 +3886,95 @@ function buildBootstrapSessionCapabilityReadout({
       state: "cannot_yet_mint_installation_tokens",
       summary:
         "VTDD cannot yet mint installation tokens or verify live GitHub readiness until the missing GitHub App runtime fields are stored."
+    }
+  };
+}
+
+function buildBootstrapSessionPhaseReadout({
+  bootstrapState,
+  preview,
+  githubAppSetupCheck
+}) {
+  const setupState = normalizeText(githubAppSetupCheck?.state) || "unknown";
+  const plannedWrites = Array.isArray(preview?.plannedWrites) ? preview.plannedWrites : [];
+
+  if (bootstrapState !== "available") {
+    return {
+      currentPhase: {
+        id: "bootstrap_prerequisites_blocked",
+        summary:
+          "VTDD is still before the approval-bound bootstrap phase because operator-seeded prerequisites are missing."
+      },
+      nextCapability: {
+        id: "bounded_runtime_bootstrap_availability",
+        summary:
+          "Once prerequisites are restored, VTDD can present a bounded bootstrap path with the remaining setup-critical writes in one flow."
+      },
+      transitionTrigger: {
+        id: "restore_operator_bootstrap_prerequisites",
+        summary:
+          "Restore the missing bootstrap prerequisites so wizard can move from blocked prerequisite reading into bounded bootstrap planning."
+      }
+    };
+  }
+
+  if (plannedWrites.length === 1 && plannedWrites[0] === "GITHUB_APP_INSTALLATION_ID") {
+    return {
+      currentPhase: {
+        id: "installation_binding_pending",
+        summary:
+          "VTDD has GitHub App identity in runtime and is now narrowed to the installation-binding phase."
+      },
+      nextCapability: {
+        id: "installation_token_mint_and_live_probe",
+        summary:
+          "After installation binding, VTDD can mint installation tokens and verify live GitHub readiness."
+      },
+      transitionTrigger: {
+        id: "capture_or_detect_installation_binding",
+        summary:
+          "Capture or detect the installation binding so wizard can move from partial identity to live GitHub verification."
+      }
+    };
+  }
+
+  if (plannedWrites.length > 1) {
+    return {
+      currentPhase: {
+        id: "runtime_identity_bootstrap_pending",
+        summary:
+          setupState === "installation_detected"
+            ? "VTDD has crossed provider installation consent, but runtime identity is still incomplete."
+            : "VTDD is still collecting the current GitHub App runtime identity needed for live readiness."
+      },
+      nextCapability: {
+        id: "narrow_installation_binding_phase",
+        summary:
+          "After the missing GitHub App runtime fields are stored, wizard can narrow to installation binding as the remaining setup step."
+      },
+      transitionTrigger: {
+        id: "write_missing_github_app_runtime_fields",
+        summary:
+          "Complete the current GitHub App bootstrap path so VTDD can move from broad runtime bootstrap to the narrower installation phase."
+      }
+    };
+  }
+
+  return {
+    currentPhase: {
+      id: "live_readiness_verification",
+      summary:
+        "VTDD has the current GitHub App runtime identity and is in the verification phase rather than the bootstrap phase."
+    },
+    nextCapability: {
+      id: "live_github_work_execution",
+      summary:
+        "After live verification succeeds, VTDD can do real GitHub work from the configured runtime identity."
+    },
+    transitionTrigger: {
+      id: "run_live_github_readiness_probe",
+      summary:
+        "Run the live readiness probe so wizard can move from configuration-complete to verified GitHub capability."
     }
   };
 }
