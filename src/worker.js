@@ -5246,7 +5246,8 @@ async function buildApprovalBoundBootstrapSessionStatus({
     authorityRequestFreshnessReadout: buildBootstrapSessionAuthorityRequestFreshnessReadout({
       bootstrapState,
       preview: effectivePreview,
-      maxAgeSeconds: SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_TTL_SECONDS
+      maxAgeSeconds: SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_TTL_SECONDS,
+      githubAppSetupCheck: effectiveGitHubAppSetupCheck
     }),
     authorityRequestReplayReadout: buildBootstrapSessionAuthorityRequestReplayReadout({
       bootstrapState,
@@ -7964,10 +7965,12 @@ function buildBootstrapSessionAuthorityRenewalDenialReadout({
 function buildBootstrapSessionAuthorityRequestFreshnessReadout({
   bootstrapState,
   preview,
-  maxAgeSeconds
+  maxAgeSeconds,
+  githubAppSetupCheck
 }) {
   const plannedWrites = Array.isArray(preview?.plannedWrites) ? preview.plannedWrites : [];
   const expirySeconds = Number.isFinite(Number(maxAgeSeconds)) ? Number(maxAgeSeconds) : 0;
+  const setupState = normalizeText(githubAppSetupCheck?.state) || "unknown";
 
   if (bootstrapState !== "available") {
     return {
@@ -8025,6 +8028,26 @@ function buildBootstrapSessionAuthorityRequestFreshnessReadout({
         id: "recompute_runtime_gap_and_submit_new_request",
         summary:
           `Recovery is to recompute the current runtime gap and submit a new GO + passkey-shaped request within the ${expirySeconds}-second bounded window.`
+      }
+    };
+  }
+
+  if (setupState === "ready") {
+    return {
+      freshnessRequirement: {
+        id: "no_current_setup_request_freshness_needed",
+        summary:
+          "This verified path does not currently need request freshness because setup no longer needs another approval-bound request."
+      },
+      staleRequestRejection: {
+        id: "future_generalized_request_freshness_is_separate_work",
+        summary:
+          "Any future generalized freshness rejection is separate work and is not part of the current verified narrow setup path."
+      },
+      freshnessRecovery: {
+        id: "verified_path_continues_without_current_request_recovery",
+        summary:
+          `The verified path continues from completed setup capability rather than recovering through a new request inside the ${expirySeconds}-second approval window.`
       }
     };
   }
