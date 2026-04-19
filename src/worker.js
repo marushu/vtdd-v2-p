@@ -5297,6 +5297,7 @@ async function buildApprovalBoundBootstrapSessionStatus({
     },
     sessionEnvelope:
       requestRecorded &&
+      !absorbedLiveProof &&
       authConfig.sessionSecret &&
       Number.isFinite(requestExpiresAt) &&
       requestExpiresAt >= Math.floor(Date.now() / 1000)
