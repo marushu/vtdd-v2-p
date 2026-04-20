@@ -3256,6 +3256,13 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                     : "Only if detection stays unavailable does VTDD fall back to bounded installation ID storage."
                 )}</li>
               </ul>
+              ${
+                diagnosticsReturnTo
+                  ? `<form method="get" action="${escapeHtml(diagnosticsReturnTo)}"><button type="submit" class="copy-button">${escapeHtml(
+                      locale === "ja" ? "live diagnostics を実行" : "Run live diagnostics now"
+                    )}</button></form>`
+                  : ""
+              }
             </div>
           `
           : ""
@@ -5447,7 +5454,12 @@ async function runGitHubAppSetupCheck(url, env) {
     return {
       state: "partially_configured",
       ...(missingOnlyInstallation
-        ? { progressVariant: "missing_only_installation" }
+        ? {
+            progressVariant: "missing_only_installation",
+            returnTo:
+              normalizeSetupWizardDiagnosticsReturnTo(`${url.pathname}${url.search || ""}`) ||
+              "/setup/wizard?githubAppCheck=on"
+          }
         : {}),
       summary:
         missingOnlyInstallation

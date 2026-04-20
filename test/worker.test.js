@@ -4868,6 +4868,7 @@ test("worker setup wizard missing-only-installation guidance prefers same-flow d
   const body = await response.json();
   assert.equal(body.githubAppSetupCheck.state, "partially_configured");
   assert.equal(body.githubAppSetupCheck.progressVariant, "missing_only_installation");
+  assert.equal(body.githubAppSetupCheck.returnTo, "/setup/wizard?repo=sample-org%2Fvtdd-v2&githubAppCheck=on");
   assert.deepEqual(body.githubAppSetupCheck.guidance, [
     "Install the GitHub App, then return to this same setup flow with githubAppCheck=on so VTDD can try installation detection first.",
     "If detection is still unavailable, use setting GITHUB_APP_INSTALLATION_ID on Worker runtime only as a bounded fallback."
@@ -4906,6 +4907,8 @@ test("worker setup wizard partially configured html shows installation-binding s
     ),
     true
   );
+  assert.equal(html.includes('action="/setup/wizard?repo=sample-org%2Fvtdd-v2&amp;githubAppCheck=on"'), true);
+  assert.equal(html.includes("Run live diagnostics now"), true);
 });
 
 test("worker setup wizard verifies github app live probe when requested", async () => {
