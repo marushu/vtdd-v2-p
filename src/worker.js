@@ -3289,6 +3289,24 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                   ? "VTDD は installation の出現を短く再確認しています"
                   : "VTDD is briefly rechecking for the installation"
               )}</strong></p>
+              <p><strong>${escapeHtml(locale === "ja" ? "Setup progress" : "Setup progress")}</strong></p>
+              <ul>
+                <li>${escapeHtml(
+                  locale === "ja"
+                    ? "VTDD は GitHub App identity を保持したまま installation 出現を確認中です。"
+                    : "VTDD already has GitHub App identity and is now waiting for installation visibility."
+                )}</li>
+                <li>${escapeHtml(
+                  locale === "ja"
+                    ? "同じ setup flow で短時間の自動再確認を行い、手動の再入力は求めません。"
+                    : "VTDD is retrying briefly in the same setup flow without asking for manual re-entry."
+                )}</li>
+                <li>${escapeHtml(
+                  locale === "ja"
+                    ? "GitHub 側で installation が反映され次第、そのまま detection から binding/readiness へ進みます。"
+                    : "Once GitHub exposes the installation, VTDD will continue directly from detection into binding and readiness."
+                )}</li>
+              </ul>
               <p class="meta">${escapeHtml(
                 locale === "ja"
                   ? "同じ setup flow の中で数回だけ自動再確認します。GitHub 側で install が反映されれば、そのまま detection に進みます。"

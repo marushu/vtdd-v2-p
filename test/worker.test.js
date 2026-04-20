@@ -3340,6 +3340,23 @@ test("worker setup wizard auto-rechecks html while awaiting github app installat
   const html = await response.text();
   assert.equal(html.includes("<code>awaiting_installation</code>"), true);
   assert.equal(html.includes("VTDD is briefly rechecking for the installation"), true);
+  assert.equal(html.includes("Setup progress"), true);
+  assert.equal(
+    html.includes("VTDD already has GitHub App identity and is now waiting for installation visibility."),
+    true
+  );
+  assert.equal(
+    html.includes(
+      "VTDD is retrying briefly in the same setup flow without asking for manual re-entry."
+    ),
+    true
+  );
+  assert.equal(
+    html.includes(
+      "Once GitHub exposes the installation, VTDD will continue directly from detection into binding and readiness."
+    ),
+    true
+  );
   assert.equal(html.includes('const key = "vtdd_github_installation_recheck_count";'), true);
   assert.equal(html.includes("window.location.reload()"), true);
 });
