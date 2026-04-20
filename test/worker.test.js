@@ -1430,6 +1430,34 @@ test("worker setup wizard records approval-bound bootstrap request without grant
     ),
     true
   );
+  assert.equal(
+    htmlJa.includes(
+      "この request 記録により、authority を発行しなくても wizard が approval-bound intent を保持できることを確認しました。"
+    ),
+    true
+  );
+  assert.equal(
+    htmlJa.includes(
+      "将来の approval-bound session は、generic な secret terminal にならずに setup-critical な運搬を吸収する必要があります。"
+    ),
+    true
+  );
+  assert.equal(
+    htmlJa.includes(
+      "この path が実装・検証されるまでは setup を wizard-complete と表示しません。"
+    ),
+    true
+  );
+  assert.equal(
+    htmlJa.includes(
+      "まず現在の GitHub App bootstrap path を完了し、将来の approval-bound session を最小の remaining write set まで縮小します。"
+    ),
+    true
+  );
+  assert.equal(
+    htmlJa.includes("<strong>アクション:</strong> <code>write_missing_github_app_runtime_fields</code>"),
+    true
+  );
 
   const jsonResponse = await worker.fetch(
     new Request(`https://example.com${location}&format=json`, {

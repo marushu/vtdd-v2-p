@@ -4312,6 +4312,50 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
         "いま GO + passkey request を記録して、同じ setup flow のまま installation capture を再試行します。";
     }
   }
+  if (locale === "ja" && state === "request_recorded_but_deferred") {
+    renderedGuidance = guidance.map((item) => {
+      if (
+        item ===
+        "This request proves the wizard can carry approval-bound intent without granting authority yet."
+      ) {
+        return "この request 記録により、authority を発行しなくても wizard が approval-bound intent を保持できることを確認しました。";
+      }
+      if (
+        item ===
+        "The future approval-bound session should absorb setup-critical transport without becoming a generic secret terminal."
+      ) {
+        return "将来の approval-bound session は、generic な secret terminal にならずに setup-critical な運搬を吸収する必要があります。";
+      }
+      if (
+        item === "Do not present setup as wizard-complete until this path is implemented and verified."
+      ) {
+        return "この path が実装・検証されるまでは setup を wizard-complete と表示しません。";
+      }
+      return item;
+    });
+    if (
+      nextStepId === "complete_github_app_bootstrap" &&
+      nextStepSummary ===
+        "Complete the current GitHub App bootstrap path first so the future approval-bound session can shrink to the minimum remaining write set."
+    ) {
+      renderedNextStepSummary =
+        "まず現在の GitHub App bootstrap path を完了し、将来の approval-bound session を最小の remaining write set まで縮小します。";
+    } else if (
+      nextStepId === "capture_or_detect_installation_binding" &&
+      nextStepSummary ===
+        "Finish installation binding first so VTDD can narrow the future approval-bound bootstrap session to the remaining installation step."
+    ) {
+      renderedNextStepSummary =
+        "まず installation binding を完了し、将来の approval-bound bootstrap session を remaining installation step に絞り込みます。";
+    } else if (
+      nextStepId === "wait_for_attestation_backed_bootstrap_authority" &&
+      nextStepSummary ===
+        "The runtime is ready for a future approval-bound bootstrap session, but VTDD still needs attestation-backed bootstrap authority before it can open one."
+    ) {
+      renderedNextStepSummary =
+        "runtime は将来の approval-bound bootstrap session に向けて準備済みですが、開始には attestation-backed bootstrap authority がまだ必要です。";
+    }
+  }
   const stepBoundaries = session?.stepBoundaries ?? null;
   const vtddOwnedSteps = Array.isArray(stepBoundaries?.vtddOwnedSteps)
     ? stepBoundaries.vtddOwnedSteps
