@@ -267,8 +267,11 @@ async function handleSetupWizardRequest({ request, url, env }) {
     githubAppSetupCheck: rawGitHubAppSetupCheck,
     approvalBoundBootstrapSession
   });
+  const githubAppSetupCheckWithDetectedGuidance = attachDetectedRequestGuidance({
+    githubAppSetupCheck: githubAppSetupCheckWithRequest
+  });
   const githubAppSetupCheckWithSelectionRequest = attachInstallationSelectionRequestAction({
-    githubAppSetupCheck: githubAppSetupCheckWithRequest,
+    githubAppSetupCheck: githubAppSetupCheckWithDetectedGuidance,
     approvalBoundBootstrapSession
   });
   const githubAppSetupCheckWithSelectionGuidance = attachSelectionRequestGuidance({
@@ -1348,10 +1351,13 @@ async function evaluateInstallationCaptureBoundary({
           approvalBoundBootstrapSession
         })
       : setupCheckWithSelectionGuidance;
+  const setupCheckWithDetectedGuidance = attachDetectedRequestGuidance({
+    githubAppSetupCheck: setupCheckWithDetectedRequest
+  });
   const requestAction =
-    normalizeText(setupCheckWithDetectedRequest?.state) === "installation_selection_required"
-      ? setupCheckWithDetectedRequest?.requestInstallationSelectionAction
-      : setupCheckWithDetectedRequest?.requestDetectedInstallationAction;
+    normalizeText(setupCheckWithDetectedGuidance?.state) === "installation_selection_required"
+      ? setupCheckWithDetectedGuidance?.requestInstallationSelectionAction
+      : setupCheckWithDetectedGuidance?.requestDetectedInstallationAction;
   if (!requestAction) {
     return { ok: true };
   }
@@ -10231,6 +10237,31 @@ function attachInstallationSelectionRequestAction({
       returnTo,
       pendingInstallationIdParam: "pending_installation_id"
     }
+  };
+}
+
+function attachDetectedRequestGuidance({ githubAppSetupCheck }) {
+  const setupCheck = githubAppSetupCheck ?? null;
+  const state = normalizeText(setupCheck?.state);
+  const requestActionId = normalizeText(setupCheck?.requestDetectedInstallationAction?.id);
+  const guidance = Array.isArray(setupCheck?.guidance) ? setupCheck.guidance : [];
+
+  if (
+    state !== "installation_detected" ||
+    requestActionId !== "request_detected_installation_binding"
+  ) {
+    return setupCheck;
+  }
+
+  const inFlowGuidance =
+    "When approval-bound continuation is available, stay in this wizard and record GO + passkey before VTDD consumes installation binding.";
+  if (guidance.includes(inFlowGuidance)) {
+    return setupCheck;
+  }
+
+  return {
+    ...setupCheck,
+    guidance: [...guidance, inFlowGuidance]
   };
 }
 
