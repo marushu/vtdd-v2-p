@@ -5689,6 +5689,7 @@ test("worker setup wizard can request detected installation continuation from gi
   const htmlJa = await htmlJaResponse.text();
   assert.equal(htmlJa.includes("セットアップ進捗"), true);
   assert.equal(htmlJa.includes("GitHub App installation を検出しました"), true);
+  assert.equal(htmlJa.includes("GO + passkey で続行"), true);
 });
 
 test("worker setup wizard reports request-required blocked state after capture fail-closed redirect", async () => {
