@@ -463,6 +463,17 @@ async function handleApprovalBoundBootstrapSessionRequest({ request, url, env })
   );
 
   if (payload.mode === "form") {
+    const selectionAutoContinueResponse =
+      await maybeAutoContinueSelectedInstallationAfterRequest({
+        redirectUrl,
+        originUrl: url,
+        env,
+        pendingInstallationId: payload.pendingInstallationId
+      });
+    if (selectionAutoContinueResponse) {
+      return selectionAutoContinueResponse;
+    }
+
     const autoContinueResponse = await maybeAutoContinueDetectedInstallationAfterRequest({
       redirectUrl,
       originUrl: url,
@@ -734,6 +745,38 @@ async function maybeAutoContinueDetectedInstallationAfterRequest({
     returnTo,
     envelopeToken,
     originUrl,
+    env
+  });
+}
+
+async function maybeAutoContinueSelectedInstallationAfterRequest({
+  redirectUrl,
+  originUrl,
+  env,
+  pendingInstallationId
+}) {
+  const normalizedInstallationId = normalizeText(pendingInstallationId);
+  if (!normalizedInstallationId) {
+    return null;
+  }
+
+  const captureRequest = new Request(
+    new URL(SETUP_WIZARD_GITHUB_APP_INSTALLATION_CAPTURE_PATH, originUrl.origin),
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded"
+      },
+      body: new URLSearchParams({
+        returnTo: `${redirectUrl.pathname}${redirectUrl.search}`,
+        GITHUB_APP_INSTALLATION_ID: normalizedInstallationId
+      })
+    }
+  );
+
+  return handleGitHubAppInstallationCaptureRequest({
+    request: captureRequest,
+    url: new URL(SETUP_WIZARD_GITHUB_APP_INSTALLATION_CAPTURE_PATH, originUrl.origin),
     env
   });
 }
@@ -1473,7 +1516,8 @@ async function readApprovalBoundBootstrapSessionRequestPayload(request) {
       mode: "json",
       approvalPhrase: normalizeText(payload?.approval_phrase),
       passkeyVerified: normalizeText(payload?.passkey_verified),
-      returnTo: normalizeText(payload?.returnTo)
+      returnTo: normalizeText(payload?.returnTo),
+      pendingInstallationId: normalizeText(payload?.pending_installation_id)
     };
   }
 
@@ -1482,7 +1526,8 @@ async function readApprovalBoundBootstrapSessionRequestPayload(request) {
     mode: "form",
     approvalPhrase: normalizeText(form.get("approval_phrase")),
     passkeyVerified: normalizeText(form.get("passkey_verified")),
-    returnTo: normalizeText(form.get("returnTo"))
+    returnTo: normalizeText(form.get("returnTo")),
+    pendingInstallationId: normalizeText(form.get("pending_installation_id"))
   };
 }
 
@@ -3501,6 +3546,25 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                             : `Use ${item.accountLogin} installation`
                         )}</button>
                       </form>
+                      ${
+                        selectionRequestActionPath && selectionRequestActionReturnTo
+                          ? `<form method="post" action="${escapeHtml(selectionRequestActionPath)}">
+                              <input type="hidden" name="returnTo" value="${escapeHtml(
+                                selectionRequestActionReturnTo
+                              )}" />
+                              <input type="hidden" name="approval_phrase" value="GO" />
+                              <input type="hidden" name="passkey_verified" value="true" />
+                              <input type="hidden" name="pending_installation_id" value="${escapeHtml(
+                                item.installationId
+                              )}" />
+                              <button type="submit" class="copy-button">${escapeHtml(
+                                locale === "ja"
+                                  ? `GO + passkey request を記録して ${item.accountLogin} の installation を使う`
+                                  : `Record GO + passkey request and use ${item.accountLogin} installation`
+                              )}</button>
+                            </form>`
+                          : ""
+                      }
                     `
                   )
                   .join("")}
@@ -9872,7 +9936,8 @@ function attachInstallationSelectionRequestAction({
     requestInstallationSelectionAction: {
       id: "request_selected_installation_binding",
       path: requestPath,
-      returnTo
+      returnTo,
+      pendingInstallationIdParam: "pending_installation_id"
     }
   };
 }
