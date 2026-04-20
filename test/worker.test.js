@@ -3420,6 +3420,10 @@ test("worker setup wizard awaiting installation exposes direct GitHub installati
   assert.equal(response.status, 200);
   const body = await response.json();
   assert.equal(body.githubAppSetupCheck.state, "awaiting_installation");
+  assert.deepEqual(body.githubAppSetupCheck.guidance, [
+    "Finish GitHub App installation, then return to this same setup flow and reload diagnostics.",
+    "If you already installed it, wait a moment and retry this check without re-entering IDs."
+  ]);
   assert.deepEqual(body.githubAppSetupCheck.links, [
     {
       title: "Open GitHub App installation",
@@ -3484,6 +3488,10 @@ test("worker setup wizard installation selection required exposes direct GitHub 
   assert.equal(response.status, 200);
   const body = await response.json();
   assert.equal(body.githubAppSetupCheck.state, "installation_selection_required");
+  assert.deepEqual(body.githubAppSetupCheck.guidance, [
+    "Keep setup wizard focused on one installation target at a time.",
+    "Choose the correct installation in GitHub, then return here so VTDD can capture it without manual ID transport."
+  ]);
   assert.deepEqual(body.githubAppSetupCheck.links, [
     {
       title: "Open GitHub App installation",
