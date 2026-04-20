@@ -3997,7 +3997,8 @@ test("worker setup wizard installation selection required exposes direct GitHub 
   assert.equal(body.githubAppSetupCheck.state, "installation_selection_required");
   assert.deepEqual(body.githubAppSetupCheck.guidance, [
     "Keep setup wizard focused on one installation target at a time.",
-    "Choose the correct installation in GitHub, then return here so VTDD can capture it without manual ID transport."
+    "Choose the correct installation in GitHub, then return here so VTDD can capture it without manual ID transport.",
+    "At this point, the only external step is adjusting installation scope on GitHub; no manual ID copy/paste is needed."
   ]);
   assert.deepEqual(body.githubAppSetupCheck.links, [
     {
