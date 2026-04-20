@@ -4002,6 +4002,20 @@ test("worker setup wizard auto-rechecks html while awaiting github app installat
   assert.equal(html.includes("Run live diagnostics now"), true);
   assert.equal(html.includes('const key = "vtdd_github_installation_recheck_count";'), true);
   assert.equal(html.includes("window.location.reload()"), true);
+
+  const htmlJaResponse = await worker.fetch(
+    new Request("https://example.com/setup/wizard?repo=sample-org/vtdd-v2&githubAppCheck=on", {
+      headers: {
+        cookie: `vtdd_setup_access=${sessionCookie}`,
+        "accept-language": "ja"
+      }
+    }),
+    env
+  );
+  assert.equal(htmlJaResponse.status, 200);
+  const htmlJa = await htmlJaResponse.text();
+  assert.equal(htmlJa.includes("セットアップ進捗"), true);
+  assert.equal(htmlJa.includes("VTDD は installation の出現を短く再確認しています"), true);
 });
 
 test("worker setup wizard awaiting installation exposes direct GitHub installation links", async () => {
@@ -5503,6 +5517,20 @@ test("worker setup wizard can request detected installation continuation from gi
   assert.equal(html.includes('name="pending_installation_id" value="125153871"'), true);
   assert.equal(html.includes("Record GO + passkey request"), false);
   assert.equal(html.includes("Store detected installation and continue"), false);
+
+  const htmlJaResponse = await worker.fetch(
+    new Request("https://example.com/setup/wizard?repo=sample-org/vtdd-v2&githubAppCheck=on", {
+      headers: {
+        cookie: `vtdd_setup_access=${sessionCookie}`,
+        "accept-language": "ja"
+      }
+    }),
+    env
+  );
+  assert.equal(htmlJaResponse.status, 200);
+  const htmlJa = await htmlJaResponse.text();
+  assert.equal(htmlJa.includes("セットアップ進捗"), true);
+  assert.equal(htmlJa.includes("GitHub App installation を検出しました"), true);
 });
 
 test("worker setup wizard reports request-required blocked state after capture fail-closed redirect", async () => {

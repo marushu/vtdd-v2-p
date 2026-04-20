@@ -3731,7 +3731,7 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                   ? "VTDD は installation の出現を短く再確認しています"
                   : "VTDD is briefly rechecking for the installation"
               )}</strong></p>
-              <p><strong>${escapeHtml(locale === "ja" ? "Setup progress" : "Setup progress")}</strong></p>
+              <p><strong>${escapeHtml(locale === "ja" ? "セットアップ進捗" : "Setup progress")}</strong></p>
               <ul>
                 <li>${escapeHtml(
                   locale === "ja"
@@ -3779,7 +3779,7 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                   ? "installation binding 後の live readiness probe が fail-closed でした"
                   : "The live readiness probe failed closed after installation binding"
               )}</strong></p>
-              <p><strong>${escapeHtml(locale === "ja" ? "Setup progress" : "Setup progress")}</strong></p>
+              <p><strong>${escapeHtml(locale === "ja" ? "セットアップ進捗" : "Setup progress")}</strong></p>
               <ul>
                 <li>${escapeHtml(
                   locale === "ja"
@@ -3824,7 +3824,7 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                   ? "installation 検出は fail-closed で停止し、同じ flow で復旧待ちです"
                   : "Installation detection failed closed and is waiting for in-flow recovery"
               )}</strong></p>
-              <p><strong>${escapeHtml(locale === "ja" ? "Setup progress" : "Setup progress")}</strong></p>
+              <p><strong>${escapeHtml(locale === "ja" ? "セットアップ進捗" : "Setup progress")}</strong></p>
               <ul>
                 <li>${escapeHtml(
                   locale === "ja"
@@ -3862,7 +3862,7 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                   ? "installation binding は完了し、次は live readiness 確認です"
                   : "Installation binding is complete, and the next step is live readiness verification"
               )}</strong></p>
-              <p><strong>${escapeHtml(locale === "ja" ? "Setup progress" : "Setup progress")}</strong></p>
+              <p><strong>${escapeHtml(locale === "ja" ? "セットアップ進捗" : "Setup progress")}</strong></p>
               <ul>
                 <li>${escapeHtml(
                   locale === "ja"
@@ -3912,7 +3912,7 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                   ? "GitHub App runtime 設定は完了し、次は live 診断です"
                   : "GitHub App runtime configuration is complete, and live diagnostics is next"
               )}</strong></p>
-              <p><strong>${escapeHtml(locale === "ja" ? "Setup progress" : "Setup progress")}</strong></p>
+              <p><strong>${escapeHtml(locale === "ja" ? "セットアップ進捗" : "Setup progress")}</strong></p>
               <ul>
                 <li>${escapeHtml(
                   locale === "ja"
@@ -3953,7 +3953,7 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                   ? "VTDD が installation を検出し、そのまま継続できます"
                   : "VTDD found the installation and can continue now"
               )}</strong></p>
-              <p><strong>${escapeHtml(locale === "ja" ? "Setup progress" : "Setup progress")}</strong></p>
+              <p><strong>${escapeHtml(locale === "ja" ? "セットアップ進捗" : "Setup progress")}</strong></p>
               <ul>
                 <li>${escapeHtml(
                   locale === "ja"
@@ -4009,7 +4009,7 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                   ? "VTDD が installation を検出しました。次は承認つきで続行します"
                   : "VTDD found the installation. The next step is approval-bound continuation"
               )}</strong></p>
-              <p><strong>${escapeHtml(locale === "ja" ? "Setup progress" : "Setup progress")}</strong></p>
+              <p><strong>${escapeHtml(locale === "ja" ? "セットアップ進捗" : "Setup progress")}</strong></p>
               <ul>
                 <li>${escapeHtml(
                   locale === "ja"
@@ -4067,7 +4067,7 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                   ? "VTDD が installation を 1 件検出しました"
                   : "VTDD found a single GitHub App installation"
               )}</strong></p>
-              <p><strong>${escapeHtml(locale === "ja" ? "Setup progress" : "Setup progress")}</strong></p>
+              <p><strong>${escapeHtml(locale === "ja" ? "セットアップ進捗" : "Setup progress")}</strong></p>
               <ul>
                 <li>${escapeHtml(
                   locale === "ja"
@@ -5062,7 +5062,7 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
               ${
                 consumeResultState === "consume_completed"
                   ? `
-                    <p><strong>${escapeHtml(locale === "ja" ? "Setup progress" : "Setup progress")}:</strong></p>
+                    <p><strong>${escapeHtml(locale === "ja" ? "セットアップ進捗" : "Setup progress")}:</strong></p>
                     <ul>
                       <li>${escapeHtml(
                         locale === "ja"
@@ -5102,7 +5102,7 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
               ${
                 consumeResultState === "consume_deferred"
                   ? `
-                    <p><strong>${escapeHtml(locale === "ja" ? "Setup progress" : "Setup progress")}:</strong></p>
+                    <p><strong>${escapeHtml(locale === "ja" ? "セットアップ進捗" : "Setup progress")}:</strong></p>
                     <ul>
                       <li>${escapeHtml(
                         locale === "ja"
@@ -5126,7 +5126,7 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
               ${
                 consumeResultState === "consume_rejected"
                   ? `
-                    <p><strong>${escapeHtml(locale === "ja" ? "Setup progress" : "Setup progress")}:</strong></p>
+                    <p><strong>${escapeHtml(locale === "ja" ? "セットアップ進捗" : "Setup progress")}:</strong></p>
                     <ul>
                       <li>${escapeHtml(
                         locale === "ja"
@@ -5150,7 +5150,7 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
               ${
                 consumeResultState === "consume_failed"
                   ? `
-                    <p><strong>${escapeHtml(locale === "ja" ? "Setup progress" : "Setup progress")}:</strong></p>
+                    <p><strong>${escapeHtml(locale === "ja" ? "セットアップ進捗" : "Setup progress")}:</strong></p>
                     <ul>
                       <li>${escapeHtml(
                         locale === "ja"
