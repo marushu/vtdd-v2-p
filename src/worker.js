@@ -4284,6 +4284,7 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
   const consumeResultSummary = envelopeConsumeResult?.summary ?? null;
   const consumeResultEnvelopeId = envelopeConsumeResult?.envelopeId ?? null;
   const consumeResultNextProof = envelopeConsumeResult?.nextProof ?? null;
+  const consumeResultRequiredAction = envelopeConsumeResult?.requiredAction ?? null;
   const consumeResultProof = envelopeConsumeResult?.proof ?? null;
   const envelopeConsumptionPlan = session?.envelopeConsumptionPlan ?? null;
   const consumptionIntent = envelopeConsumptionPlan?.consumptionIntent ?? null;
@@ -5067,6 +5068,20 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
               ${
                 consumeResultNextProof
                   ? `<p><strong>${escapeHtml(locale === "ja" ? "Next proof" : "Next proof")}:</strong> <code>${escapeHtml(normalizeText(consumeResultNextProof.id))}</code> ${escapeHtml(normalizeText(consumeResultNextProof.summary))}</p>`
+                  : ""
+              }
+              ${
+                normalizeText(consumeResultRequiredAction?.method) === "GET" &&
+                normalizeText(consumeResultRequiredAction?.path)
+                  ? `<form method="get" action="${escapeHtml(
+                      normalizeText(consumeResultRequiredAction.path)
+                    )}" style="margin-top: 12px;">
+                      <button type="submit" class="copy-button">${escapeHtml(
+                        locale === "ja"
+                          ? "同じ setup flow で再確認する"
+                          : "Retry in same setup flow"
+                      )}</button>
+                    </form>`
                   : ""
               }
               ${
@@ -6568,7 +6583,32 @@ function buildBootstrapSessionEnvelopeConsumeResult({ url, preview }) {
       summary:
         "VTDD validated the signed envelope but failed closed before the bounded installation binding write could complete.",
       envelopeId,
-      nextProof: buildBootstrapSessionConsumeFailedNextProof({ failureReason })
+      nextProof: buildBootstrapSessionConsumeFailedNextProof({ failureReason }),
+      requiredAction: buildBootstrapSessionConsumeFailedRequiredAction({
+        failureReason,
+        url
+      })
+    };
+  }
+
+  return null;
+}
+
+function buildBootstrapSessionConsumeFailedRequiredAction({ failureReason, url }) {
+  const currentReturnTo = `${url?.pathname || "/setup/wizard"}${url?.search || ""}`;
+  const diagnosticsPath =
+    normalizeSetupWizardDiagnosticsReturnTo(currentReturnTo) || currentReturnTo;
+
+  if (
+    failureReason === "github_app_installation_capture_pending_selection_state_drifted" ||
+    failureReason === "github_app_installation_capture_pending_selection_mismatch" ||
+    failureReason === "github_app_installation_capture_detected_id_mismatch" ||
+    failureReason === "github_app_installation_capture_invalid_selection_candidate"
+  ) {
+    return {
+      id: "rerun_installation_detection_same_flow",
+      method: "GET",
+      path: diagnosticsPath
     };
   }
 
