@@ -4445,6 +4445,13 @@ test("worker setup wizard selection capture fails closed without request token a
     invalidCandidateBody.error,
     "github_app_installation_capture_invalid_selection_candidate"
   );
+  assert.equal(invalidCandidateBody.requiredAction.id, "select_current_installation_candidate");
+  assert.equal(
+    invalidCandidateBody.requiredAction.path,
+    "/setup/wizard/github-app/capture-installation"
+  );
+  assert.equal(invalidCandidateBody.requiredAction.returnTo, requestReturnTo);
+  assert.deepEqual(invalidCandidateBody.requiredAction.installationCandidates, ["111", "222"]);
   assert.equal(calls.length, 0);
 
   const allowedResponse = await worker.fetch(
@@ -4740,6 +4747,13 @@ test("worker setup wizard detected capture fails closed without request token an
   assert.equal(mismatchResponse.status, 422);
   const mismatchBody = await mismatchResponse.json();
   assert.equal(mismatchBody.error, "github_app_installation_capture_detected_id_mismatch");
+  assert.equal(mismatchBody.requiredAction.id, "use_detected_installation_candidate_capture");
+  assert.equal(
+    mismatchBody.requiredAction.path,
+    "/setup/wizard/github-app/capture-installation"
+  );
+  assert.equal(mismatchBody.requiredAction.returnTo, requestReturnTo);
+  assert.equal(mismatchBody.requiredAction.installationId, "125153871");
   assert.equal(calls.length, 0);
 
   const allowedResponse = await worker.fetch(
