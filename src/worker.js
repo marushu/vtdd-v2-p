@@ -3192,6 +3192,37 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
           : ""
       }
       ${
+        state === "not_configured"
+          ? `
+            <div class="block" style="margin-top: 12px;">
+              <p><strong>${escapeHtml(
+                locale === "ja"
+                  ? "VTDD は GitHub App bootstrap 前の状態です"
+                  : "VTDD is before GitHub App bootstrap"
+              )}</strong></p>
+              <p><strong>${escapeHtml(locale === "ja" ? "Setup progress" : "Setup progress")}</strong></p>
+              <ul>
+                <li>${escapeHtml(
+                  locale === "ja"
+                    ? "GitHub App identity はまだ Worker runtime に保存されていません。"
+                    : "GitHub App identity is not stored on Worker runtime yet."
+                )}</li>
+                <li>${escapeHtml(
+                  locale === "ja"
+                    ? "次に manifest flow で App ID と private key を取得し、runtime に保存します。"
+                    : "Next, VTDD acquires App ID and private key through manifest flow and stores them on runtime."
+                )}</li>
+                <li>${escapeHtml(
+                  locale === "ja"
+                    ? "その後は同じ setup flow で installation detection から binding/readiness へ進みます。"
+                    : "Then VTDD continues in the same setup flow from installation detection into binding and readiness."
+                )}</li>
+              </ul>
+            </div>
+          `
+          : ""
+      }
+      ${
         state === "partially_configured" &&
         guidance.some(
           (item) =>

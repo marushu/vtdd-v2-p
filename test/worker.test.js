@@ -168,6 +168,21 @@ test("worker returns setup wizard html when repo query is provided", async () =>
   assert.equal(html.includes("user-specific memory and operational traces"), true);
   assert.equal(html.includes("Role Separation Contract"), true);
   assert.equal(html.includes("human conversation"), true);
+  assert.equal(html.includes("VTDD is before GitHub App bootstrap"), true);
+  assert.equal(html.includes("Setup progress"), true);
+  assert.equal(html.includes("GitHub App identity is not stored on Worker runtime yet."), true);
+  assert.equal(
+    html.includes(
+      "Next, VTDD acquires App ID and private key through manifest flow and stores them on runtime."
+    ),
+    true
+  );
+  assert.equal(
+    html.includes(
+      "Then VTDD continues in the same setup flow from installation detection into binding and readiness."
+    ),
+    true
+  );
   assert.equal(html.includes("execution judgment"), true);
   assert.equal(html.includes("PR artifacts"), true);
   assert.equal(html.includes("reviewer output"), true);
