@@ -3951,6 +3951,11 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                     ? "この時点では外部プロバイダ画面への追加移動は不要で、この wizard 内でそのまま続行できます。"
                     : "At this point, no extra external-provider redirect is needed; continuation stays inside this wizard."
                 )}</li>
+                <li>${escapeHtml(
+                  locale === "ja"
+                    ? "この consume 継続は、検出済み installation 候補に束縛された single-use として扱われます。"
+                    : "This consume continuation is handled as single-use and bound to the detected installation candidate."
+                )}</li>
               </ul>
               <p class="meta">${escapeHtml(
                 locale === "ja"
@@ -10327,16 +10332,21 @@ function attachDetectedCompletionGuidance({ githubAppSetupCheck }) {
 
   const inFlowGuidance =
     "When approval-bound consume is available, stay in this wizard and continue with the detected installation to complete binding and readiness in-flow.";
+  const singleUseGuidance =
+    "This approval-bound consume remains single-use and bound to the currently detected installation candidate.";
   const genericGuidance =
     "When approval-bound continuation is available, no extra provider redirect is needed; continue inside this wizard with GO + passkey.";
   const guidanceWithoutGeneric = guidance.filter((item) => item !== genericGuidance);
   const nextGuidance = guidanceWithoutGeneric.includes(inFlowGuidance)
     ? guidanceWithoutGeneric
     : [...guidanceWithoutGeneric, inFlowGuidance];
+  const finalGuidance = nextGuidance.includes(singleUseGuidance)
+    ? nextGuidance
+    : [...nextGuidance, singleUseGuidance];
 
   return {
     ...setupCheck,
-    guidance: nextGuidance
+    guidance: finalGuidance
   };
 }
 
