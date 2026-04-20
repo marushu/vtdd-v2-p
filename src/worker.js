@@ -3200,6 +3200,24 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                   ? "候補 installation を wizard 内でそのまま選べます"
                   : "You can choose the installation directly in the wizard"
               )}</strong></p>
+              <p><strong>${escapeHtml(locale === "ja" ? "Setup progress" : "Setup progress")}</strong></p>
+              <ul>
+                <li>${escapeHtml(
+                  locale === "ja"
+                    ? "GitHub から active installation 候補を取得しました。"
+                    : "VTDD retrieved active installation candidates from GitHub."
+                )}</li>
+                <li>${escapeHtml(
+                  locale === "ja"
+                    ? "候補 ID は wizard 内で保持しており、手動コピーは不要です。"
+                    : "Candidate IDs stay inside wizard, so manual copy/paste is not required."
+                )}</li>
+                <li>${escapeHtml(
+                  locale === "ja"
+                    ? "次に owner を選ぶと、VTDD が installation binding を設定し readiness 確認に進みます。"
+                    : "Next, selecting the owner lets VTDD store installation binding and continue into readiness verification."
+                )}</li>
+              </ul>
               <p class="meta">${escapeHtml(
                 locale === "ja"
                   ? "GitHub が返した active installation 候補です。値をコピーせず、この setup target に合う owner を選ぶと VTDD が installation binding を保存します。"
@@ -3274,8 +3292,8 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                 )}</li>
                 <li>${escapeHtml(
                   locale === "ja"
-                    ? "次に VTDD が installation binding を保存し、そのまま readiness 確認に進みます。"
-                    : "Next, VTDD will store the installation binding and continue into readiness verification."
+                    ? "次に VTDD が installation binding を設定し、設定後そのまま readiness 確認に進みます。"
+                    : "Next, VTDD will store the installation binding and then continue directly into readiness verification."
                 )}</li>
               </ul>
               <p class="meta">${escapeHtml(
@@ -4289,6 +4307,46 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
               ${
                 consumeResultSummary
                   ? `<p>${escapeHtml(normalizeText(consumeResultSummary))}</p>`
+                  : ""
+              }
+              ${
+                consumeResultState === "consume_completed"
+                  ? `
+                    <p><strong>${escapeHtml(locale === "ja" ? "Setup progress" : "Setup progress")}:</strong></p>
+                    <ul>
+                      <li>${escapeHtml(
+                        locale === "ja"
+                          ? "同じ setup flow の signed envelope を照合し、installation 候補を取得しました。"
+                          : "VTDD validated the signed envelope in the same setup flow and absorbed the installation candidate."
+                      )}</li>
+                      <li>${escapeHtml(
+                        locale === "ja"
+                          ? "VTDD が installation binding を Worker runtime に設定しました。"
+                          : "VTDD stored the installation binding on Worker runtime."
+                      )}</li>
+                      <li>${escapeHtml(
+                        locale === "ja"
+                          ? consumeResultProof && normalizeText(consumeResultProof.state) === "ready"
+                            ? "設定後すぐ readiness を確認し、live repository access を確認しました。"
+                            : consumeResultProof &&
+                                normalizeText(consumeResultProof.state) === "configured"
+                              ? "設定後すぐ readiness 確認を実行し、runtime configuration completed を確認しました。"
+                              : consumeResultProof &&
+                                  normalizeText(consumeResultProof.state) === "probe_failed"
+                                ? "設定後すぐ readiness 確認を実行しましたが、live probe は fail-closed でした。"
+                                : "設定後すぐ post-consume proof を記録しました。"
+                          : consumeResultProof && normalizeText(consumeResultProof.state) === "ready"
+                            ? "Immediately after the write, VTDD verified readiness and confirmed live repository access."
+                            : consumeResultProof &&
+                                normalizeText(consumeResultProof.state) === "configured"
+                              ? "Immediately after the write, VTDD verified readiness and confirmed runtime configuration completion."
+                              : consumeResultProof &&
+                                  normalizeText(consumeResultProof.state) === "probe_failed"
+                                ? "VTDD ran readiness verification immediately after the write, but the live probe still failed closed."
+                                : "VTDD recorded post-consume proof immediately after the write."
+                      )}</li>
+                    </ul>
+                  `
                   : ""
               }
               ${

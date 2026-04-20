@@ -3354,6 +3354,11 @@ test("worker setup wizard installation selection required html offers direct sel
   assert.equal(response.status, 200);
   const body = await response.text();
   assert.match(body, /You can choose the installation directly in the wizard/);
+  assert.match(body, /VTDD retrieved active installation candidates from GitHub\./);
+  assert.match(
+    body,
+    /Candidate IDs stay inside wizard, so manual copy\/paste is not required\./
+  );
   assert.match(body, /Use other-org installation/);
   assert.match(body, /Use sample-org installation/);
 });
