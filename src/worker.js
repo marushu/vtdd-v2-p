@@ -1069,6 +1069,40 @@ async function handleGitHubAppInstallationCaptureRequest({ request, url, env }) 
       error: "github_app_installation_capture_missing_value"
     });
   }
+  const returnTo =
+    normalizeGitHubAppBootstrapReturnTo(payload.returnTo) || "/setup/wizard?githubAppCheck=on";
+  const captureBoundary = await evaluateSelectionInstallationCaptureBoundary({
+    url,
+    env,
+    returnTo,
+    installationId
+  });
+  if (!captureBoundary.ok) {
+    if (payload.mode === "form") {
+      const failureUrl = new URL(returnTo, url.origin);
+      if (captureBoundary.error === "approval_bound_request_required_for_selection_capture") {
+        failureUrl.searchParams.set(SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_STATE_PARAM, "missing");
+      } else {
+        failureUrl.searchParams.set(SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_STATE_PARAM, "failed");
+        failureUrl.searchParams.set(
+          SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_REASON_PARAM,
+          captureBoundary.error
+        );
+      }
+      return new Response(null, {
+        status: 303,
+        headers: {
+          location: `${failureUrl.pathname}${failureUrl.search}`
+        }
+      });
+    }
+
+    return json(captureBoundary.status ?? 403, {
+      ok: false,
+      error: captureBoundary.error,
+      reason: captureBoundary.reason
+    });
+  }
 
   const fetchImpl =
     typeof env?.CF_API_FETCH === "function"
@@ -1101,9 +1135,6 @@ async function handleGitHubAppInstallationCaptureRequest({ request, url, env }) 
     });
   }
 
-  const returnTo =
-    normalizeGitHubAppBootstrapReturnTo(payload.returnTo) || "/setup/wizard?githubAppCheck=on";
-
   if (payload.mode === "form") {
     const autoContinueResponse = await maybeAutoContinueSelectedInstallationAfterCapture({
       returnTo,
@@ -1128,6 +1159,82 @@ async function handleGitHubAppInstallationCaptureRequest({ request, url, env }) 
     updatedSecrets: ["GITHUB_APP_INSTALLATION_ID"],
     returnTo
   });
+}
+
+async function evaluateSelectionInstallationCaptureBoundary({
+  url,
+  env,
+  returnTo,
+  installationId
+}) {
+  const contextUrl = new URL(returnTo, url.origin);
+  const setupCheck = await runGitHubAppSetupCheck(contextUrl, env);
+  const state = normalizeText(setupCheck?.state);
+  if (state !== "installation_selection_required") {
+    return { ok: true };
+  }
+
+  const options = Array.isArray(setupCheck?.installationSelectionOptions)
+    ? setupCheck.installationSelectionOptions
+    : [];
+  const normalizedInstallationId = normalizeText(installationId);
+  if (options.length > 0) {
+    const optionIds = new Set(
+      options.map((item) => normalizeText(item?.installationId)).filter(Boolean)
+    );
+    if (!optionIds.has(normalizedInstallationId)) {
+      return {
+        ok: false,
+        status: 422,
+        error: "github_app_installation_capture_invalid_selection_candidate",
+        reason:
+          "installation id is not in the current selection candidates for this setup flow"
+      };
+    }
+  }
+
+  const githubAppBootstrap = toPublicGitHubAppBootstrapStatus(
+    buildGitHubAppBootstrapStatus({ url: contextUrl, env })
+  );
+  const approvalBoundBootstrapSession = await buildApprovalBoundBootstrapSessionStatus({
+    url: contextUrl,
+    env,
+    githubAppBootstrap,
+    githubAppSetupCheck: setupCheck
+  });
+  const setupCheckWithSelectionRequest = attachInstallationSelectionRequestAction({
+    githubAppSetupCheck: setupCheck,
+    approvalBoundBootstrapSession
+  });
+  const selectionRequestAction = setupCheckWithSelectionRequest?.requestInstallationSelectionAction;
+  if (!selectionRequestAction) {
+    return { ok: true };
+  }
+
+  const authConfig = getSetupWizardAuthConfig(env);
+  if (!authConfig.sessionSecret) {
+    return {
+      ok: false,
+      status: 403,
+      error: "approval_bound_request_required_for_selection_capture",
+      reason: "GO + passkey request token is required before selection-based installation capture"
+    };
+  }
+
+  const requestRecorded = await verifySetupWizardBootstrapSessionRequestToken({
+    url: contextUrl,
+    sessionSecret: authConfig.sessionSecret
+  });
+  if (!requestRecorded) {
+    return {
+      ok: false,
+      status: 403,
+      error: "approval_bound_request_required_for_selection_capture",
+      reason: "GO + passkey request token is required before selection-based installation capture"
+    };
+  }
+
+  return { ok: true };
 }
 
 async function writeGitHubAppInstallationBinding({
