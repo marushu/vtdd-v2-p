@@ -3597,8 +3597,8 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                 }
                 <li>${escapeHtml(
                   locale === "ja"
-                    ? "対象 owner が見当たらない場合は GitHub 側で installation を調整し、この setup flow に戻ると VTDD が再検出します。"
-                    : "If the target owner is not listed, adjust installation scope on GitHub and return to this setup flow so VTDD can re-detect."
+                    ? "選択したい owner が見当たらない場合は GitHub 側で installation を調整し、この setup flow に戻ると VTDD が再検出します。"
+                    : "If your owner is not listed, adjust installation scope on GitHub and return to this setup flow so VTDD can re-detect."
                 )}</li>
                 <li>${escapeHtml(
                   locale === "ja"
@@ -5922,7 +5922,7 @@ async function runGitHubAppSetupCheck(url, env) {
               ? [
                   "Keep setup wizard focused on one installation candidate at a time.",
                   "Choose the correct installation in GitHub, then return here so VTDD can capture it without manual ID transport.",
-                  "If your target owner is listed, continue in this wizard without another provider redirect."
+                  "If your owner is listed, continue in this wizard without another provider redirect."
                 ]
               : [
                   "Keep setup wizard focused on one installation candidate at a time.",

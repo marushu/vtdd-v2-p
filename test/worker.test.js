@@ -4172,7 +4172,7 @@ test("worker setup wizard installation selection required html offers direct sel
   );
   assert.match(
     body,
-    /If the target owner is not listed, adjust installation scope on GitHub and return to this setup flow so VTDD can re-detect\./
+    /If your owner is not listed, adjust installation scope on GitHub and return to this setup flow so VTDD can re-detect\./
   );
   assert.match(
     body,
@@ -4306,7 +4306,7 @@ test("worker setup wizard installation selection required json exposes direct se
   assert.deepEqual(body.githubAppSetupCheck.guidance, [
     "Keep setup wizard focused on one installation candidate at a time.",
     "Choose the correct installation in GitHub, then return here so VTDD can capture it without manual ID transport.",
-    "If your target owner is listed, continue in this wizard without another provider redirect.",
+    "If your owner is listed, continue in this wizard without another provider redirect.",
     "When approval-bound continuation is available, stay in this wizard and record GO + passkey before selecting the installation candidate.",
     "This GO + passkey continuation should remain single-use and bound to the selected installation candidate."
   ]);
