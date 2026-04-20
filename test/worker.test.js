@@ -3741,6 +3741,12 @@ test("worker setup wizard probe failure html shows setup progress for same-flow 
     ),
     true
   );
+  assert.equal(
+    html.includes(
+      "Even if an approval-bound request is already recorded, consume/proof does not start at this stage and resumes in the same setup flow after probe recovery."
+    ),
+    true
+  );
   assert.equal(html.includes('action="/setup/wizard?repo=sample-org%2Fvtdd-v2&amp;githubAppCheck=on"'), true);
   assert.equal(html.includes("Run live diagnostics now"), true);
 
@@ -3757,6 +3763,12 @@ test("worker setup wizard probe failure html shows setup progress for same-flow 
   const htmlJa = await responseJa.text();
   assert.equal(htmlJa.includes("セットアップ進捗"), true);
   assert.equal(htmlJa.includes("installation 検出は fail-closed で停止し、同じ flow で復旧待ちです"), true);
+  assert.equal(
+    htmlJa.includes(
+      "approval-bound request を記録済みでも、この段階では consume/proof を開始せず、probe 回復後に同じ setup flow で継続します。"
+    ),
+    true
+  );
 });
 
 test("worker setup wizard consume proof probe_failed rewrites guidance to live-readiness recovery", async () => {

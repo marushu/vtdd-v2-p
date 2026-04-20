@@ -3851,6 +3851,11 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                     ? "probe blocker が解消されると、VTDD は installation detection から binding/readiness へ再開します。"
                     : "Once the probe blocker is cleared, VTDD resumes from installation detection into binding and readiness."
                 )}</li>
+                <li>${escapeHtml(
+                  locale === "ja"
+                    ? "approval-bound request を記録済みでも、この段階では consume/proof を開始せず、probe 回復後に同じ setup flow で継続します。"
+                    : "Even if an approval-bound request is already recorded, consume/proof does not start at this stage and resumes in the same setup flow after probe recovery."
+                )}</li>
               </ul>
               ${
                 diagnosticsReturnTo
