@@ -1896,6 +1896,7 @@ test("worker setup wizard request can auto-continue detected installation bindin
     ),
     true
   );
+  assert.equal(completedHtml.includes("live_readiness_verified_in_same_flow"), false);
   assert.equal(calls.length, 1);
   const payload = JSON.parse(String(calls[0].init.body));
   assert.equal(payload.name, "GITHUB_APP_INSTALLATION_ID");
