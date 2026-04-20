@@ -4665,6 +4665,8 @@ test("worker setup wizard selection-required state exposes approval-bound reques
     ),
     true
   );
+  assert.equal(htmlJa.includes("GO + passkey request を記録して other-org の installation を使う"), true);
+  assert.equal(htmlJa.includes("GO + passkey request を記録して sample-org の installation を使う"), true);
 });
 
 test("worker setup wizard request can auto-continue selected installation binding when pending installation id is provided", async () => {
