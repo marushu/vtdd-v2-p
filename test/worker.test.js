@@ -2842,11 +2842,18 @@ test("worker setup wizard manifest callback writes github app id and private key
   assert.equal(html.includes("GitHub App ID retrieved."), true);
   assert.equal(html.includes("GitHub App private key retrieved and stored on Worker runtime."), true);
   assert.equal(html.includes("GitHub App identity runtime configuration completed."), true);
+  assert.equal(html.includes("VTDD kept the same setup return context for this target."), true);
+  assert.equal(
+    html.includes(
+      "After installation consent, VTDD will continue into installation detection, binding, and readiness verification."
+    ),
+    true
+  );
   assert.equal(html.includes("Install the GitHub App"), true);
   assert.equal(html.includes('target="_blank" rel="noopener noreferrer">Install the GitHub App</a>'), false);
   assert.equal(
     html.includes(
-      "VTDD will try to detect the installation automatically before asking you for manual recovery steps."
+      "After installation, return to setup wizard in this same flow. VTDD will try to detect the installation automatically before asking you for manual recovery steps."
     ),
     true
   );
