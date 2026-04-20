@@ -4164,12 +4164,114 @@ test("worker setup wizard selection-required state exposes approval-bound reques
   const html = await htmlResponse.text();
   assert.equal(html.includes("Record GO + passkey request and continue"), true);
   assert.equal(html.includes('action="/setup/wizard/bootstrap-session/request"'), true);
+  assert.equal(html.includes('name="pending_installation_id" value="111"'), true);
+  assert.equal(html.includes('name="pending_installation_id" value="222"'), true);
   assert.equal(
     html.includes(
       "When approval-bound write is available, recording the GO + passkey request first lets VTDD absorb consume/proof in this same setup flow."
     ),
     true
   );
+});
+
+test("worker setup wizard request can auto-continue selected installation binding when pending installation id is provided", async () => {
+  const calls = [];
+  const env = {
+    SETUP_WIZARD_PASSCODE: "2468",
+    CLOUDFLARE_API_TOKEN: "bootstrap-token",
+    CLOUDFLARE_ACCOUNT_ID: "account-id",
+    CLOUDFLARE_WORKER_SCRIPT_NAME: "vtdd-v2-mvp",
+    GITHUB_MANIFEST_CONVERSION_TOKEN: "gho_operator_token",
+    GITHUB_APP_ID: "12345",
+    GITHUB_APP_PRIVATE_KEY: "private-key-present-via-jwt-provider",
+    GITHUB_APP_JWT_PROVIDER: async () => "app_jwt_token_for_tests",
+    CF_API_FETCH: async (url, init = {}) => {
+      calls.push({ url: String(url), init });
+      return new Response(
+        JSON.stringify({
+          success: true,
+          errors: [],
+          result: { name: "GITHUB_APP_INSTALLATION_ID", type: "secret_text" }
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        }
+      );
+    },
+    GITHUB_API_FETCH: async (url) => {
+      const requestUrl = String(url);
+      if (requestUrl.endsWith("/app/installations")) {
+        return new Response(
+          JSON.stringify([
+            { id: 111, account: { login: "other-org" } },
+            { id: 222, account: { login: "sample-org" } }
+          ]),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          }
+        );
+      }
+      if (requestUrl.includes("/app/installations/222/access_tokens")) {
+        return new Response(
+          JSON.stringify({
+            token: "ghs_minted_installation_token",
+            expires_at: "2030-01-01T00:00:00Z"
+          }),
+          {
+            status: 201,
+            headers: { "content-type": "application/json" }
+          }
+        );
+      }
+      if (requestUrl.includes("/installation/repositories")) {
+        return new Response(
+          JSON.stringify({
+            total_count: 1,
+            repositories: [{ full_name: "sample-org/vtdd-v2" }]
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          }
+        );
+      }
+      return new Response(JSON.stringify({ message: "not found" }), {
+        status: 404,
+        headers: { "content-type": "application/json" }
+      });
+    }
+  };
+  const baseReturnTo =
+    "/setup/wizard?repo=sample-org/vtdd-v2&repo=other-org/another-repo&githubAppCheck=on";
+  const { sessionCookie } = await unlockSetupWizard(env, baseReturnTo);
+
+  const requestResponse = await worker.fetch(
+    new Request("https://example.com/setup/wizard/bootstrap-session/request", {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      },
+      body: new URLSearchParams({
+        approval_phrase: "GO",
+        passkey_verified: "true",
+        returnTo: baseReturnTo,
+        pending_installation_id: "222"
+      })
+    }),
+    env
+  );
+
+  assert.equal(requestResponse.status, 303);
+  const completedLocation = requestResponse.headers.get("location") ?? "";
+  assert.equal(completedLocation.includes("bootstrap_session_consume=completed"), true);
+  assert.equal(completedLocation.includes("bootstrap_session_consume_proof_state=ready"), true);
+  assert.equal(calls.length, 1);
+  const payload = JSON.parse(String(calls[0].init.body));
+  assert.equal(payload.name, "GITHUB_APP_INSTALLATION_ID");
+  assert.equal(payload.text, "222");
 });
 
 test("worker setup wizard selection capture fails closed without request token and rejects non-candidate ids", async () => {
