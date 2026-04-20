@@ -1151,7 +1151,8 @@ async function handleGitHubAppInstallationCaptureRequest({ request, url, env }) 
       error: captureBoundary.error,
       reason: captureBoundary.reason,
       requiredAction:
-        captureBoundary.error === "approval_bound_request_required_for_selection_capture"
+        captureBoundary.requiredAction ??
+        (captureBoundary.error === "approval_bound_request_required_for_selection_capture"
           ? {
               id: "record_go_passkey_request_for_capture",
               path: SETUP_WIZARD_APPROVAL_BOUND_BOOTSTRAP_SESSION_REQUEST_PATH,
@@ -1160,7 +1161,7 @@ async function handleGitHubAppInstallationCaptureRequest({ request, url, env }) 
               pendingInstallationIdParam: "pending_installation_id",
               pendingInstallationId: installationId
             }
-          : null
+          : null)
     });
   }
 
@@ -1235,12 +1236,19 @@ async function evaluateInstallationCaptureBoundary({
       contextUrl.searchParams.get(SETUP_WIZARD_BOOTSTRAP_SESSION_PENDING_INSTALLATION_ID_PARAM)
     );
     if (pendingInstallationId) {
+      const diagnosticsReturnTo =
+        normalizeSetupWizardDiagnosticsReturnTo(returnTo) || returnTo;
       return {
         ok: false,
         status: 409,
         error: "github_app_installation_capture_pending_selection_state_drifted",
         reason:
-          "pending installation capture token is present, but setup flow no longer has a capturable detected/selection state"
+          "pending installation capture token is present, but setup flow no longer has a capturable detected/selection state",
+        requiredAction: {
+          id: "rerun_installation_detection_same_flow",
+          method: "GET",
+          path: diagnosticsReturnTo
+        }
       };
     }
     return { ok: true };
@@ -1256,7 +1264,13 @@ async function evaluateInstallationCaptureBoundary({
       status: 422,
       error: "github_app_installation_capture_pending_selection_mismatch",
       reason:
-        "installation id does not match the pending installation capture token for this setup flow"
+        "installation id does not match the pending installation capture token for this setup flow",
+      requiredAction: {
+        id: "retry_pending_installation_candidate_capture",
+        path: SETUP_WIZARD_GITHUB_APP_INSTALLATION_CAPTURE_PATH,
+        returnTo,
+        installationId: pendingInstallationId
+      }
     };
   }
   if (state === "installation_selection_required") {
