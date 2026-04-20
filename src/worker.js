@@ -3798,7 +3798,7 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                 )}</li>
                 <li>${escapeHtml(
                   locale === "ja"
-                    ? "installation target が変わらない限り、この段階で GO + passkey request を新規に再発行する必要はありません。"
+                    ? "installation candidate が変わらない限り、この段階で GO + passkey request を新規に再発行する必要はありません。"
                     : "Unless the installation candidate changes, no new GO + passkey request is needed at this stage."
                 )}</li>
                 <li>${escapeHtml(
@@ -3881,7 +3881,7 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                 )}</li>
                 <li>${escapeHtml(
                   locale === "ja"
-                    ? "installation target が変わらない限り、この段階で GO + passkey request を新規に再発行する必要はありません。"
+                    ? "installation candidate が変わらない限り、この段階で GO + passkey request を新規に再発行する必要はありません。"
                     : "Unless the installation candidate changes, no new GO + passkey request is needed at this stage."
                 )}</li>
                 <li>${escapeHtml(
