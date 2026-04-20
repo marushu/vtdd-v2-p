@@ -3154,6 +3154,7 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
         .filter((item) => item.installationId && item.accountLogin)
     : [];
   const listItem = (text) => `<li>${escapeHtml(text)}</li>`;
+  const evidenceStage = normalizeText(evidence?.stage);
 
   const evidenceItems = [];
   if (normalizeText(evidence?.stage)) {
@@ -3391,7 +3392,35 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
           : ""
       }
       ${
-        state === "probe_failed"
+        state === "probe_failed" && evidenceStage === "live_probe"
+          ? `
+            <div class="block" style="margin-top: 12px;">
+              <p><strong>${escapeHtml(
+                locale === "ja"
+                  ? "installation binding 後の live readiness probe が fail-closed でした"
+                  : "The live readiness probe failed closed after installation binding"
+              )}</strong></p>
+              <p><strong>${escapeHtml(locale === "ja" ? "Setup progress" : "Setup progress")}</strong></p>
+              <ul>
+                <li>${escapeHtml(
+                  locale === "ja"
+                    ? "installation binding は同じ setup flow で設定済みです。"
+                    : "Installation binding is already stored in this same setup flow."
+                )}</li>
+                <li>${escapeHtml(
+                  locale === "ja"
+                    ? "今回の停止点は installation detection ではなく、直後の live readiness probe です。"
+                    : "This stop is not installation detection; it is the immediate live readiness probe."
+                )}</li>
+                <li>${escapeHtml(
+                  locale === "ja"
+                    ? "probe blocker を解消したら同じ setup flow で readiness を再確認し、verified 状態へ進みます。"
+                    : "After clearing the probe blocker, rerun readiness in the same setup flow to move to verified state."
+                )}</li>
+              </ul>
+            </div>
+          `
+          : state === "probe_failed"
           ? `
             <div class="block" style="margin-top: 12px;">
               <p><strong>${escapeHtml(
@@ -6119,6 +6148,10 @@ function deriveEffectiveGitHubAppSetupCheckFromContinuation({ url, githubAppSetu
       links: [],
       summary:
         "GitHub App installation binding completed in the current setup flow, and runtime now reports the GitHub App configuration as complete pending live diagnostics.",
+      guidance: [
+        "Installation binding is already stored in this same setup flow.",
+        "Run githubAppCheck=on again to execute live readiness diagnostics without re-entering installation IDs."
+      ],
       evidence: {
         stage: "configuration_check",
         source: "worker_runtime"
@@ -6133,6 +6166,10 @@ function deriveEffectiveGitHubAppSetupCheckFromContinuation({ url, githubAppSetu
       links: [],
       summary:
         "GitHub App installation binding completed in the current setup flow, but the immediate live readiness probe still failed closed.",
+      guidance: [
+        "Installation binding already completed in this same setup flow, so do not retry installation capture.",
+        "Fix the live probe blocker, then rerun githubAppCheck=on to continue readiness verification."
+      ],
       evidence: {
         stage: "live_probe",
         source: "github_app_live"

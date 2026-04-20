@@ -3394,6 +3394,162 @@ test("worker setup wizard probe failure html shows setup progress for same-flow 
   );
 });
 
+test("worker setup wizard consume proof probe_failed rewrites guidance to live-readiness recovery", async () => {
+  const { privateKey } = generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+    privateKeyEncoding: {
+      type: "pkcs8",
+      format: "pem"
+    },
+    publicKeyEncoding: {
+      type: "spki",
+      format: "pem"
+    }
+  });
+  const env = {
+    GITHUB_APP_ID: "12345",
+    GITHUB_APP_PRIVATE_KEY: privateKey,
+    GITHUB_API_FETCH: async (url) => {
+      if (String(url).endsWith("/app/installations")) {
+        return new Response(JSON.stringify([{ id: 125153871 }]), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        });
+      }
+      return new Response(JSON.stringify({}), {
+        status: 404,
+        headers: { "content-type": "application/json" }
+      });
+    }
+  };
+
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/setup/wizard?format=json&repo=sample-org/vtdd-v2&githubAppCheck=on&bootstrap_session_consume=completed&bootstrap_session_consume_proof_state=probe_failed"
+    ),
+    env
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.githubAppSetupCheck.state, "probe_failed");
+  assert.deepEqual(body.githubAppSetupCheck.guidance, [
+    "Installation binding already completed in this same setup flow, so do not retry installation capture.",
+    "Fix the live probe blocker, then rerun githubAppCheck=on to continue readiness verification."
+  ]);
+  assert.equal(body.githubAppSetupCheck.evidence.stage, "live_probe");
+  assert.equal(body.githubAppSetupCheck.evidence.source, "github_app_live");
+});
+
+test("worker setup wizard consume proof probe_failed html shows live-readiness-specific setup progress", async () => {
+  const { privateKey } = generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+    privateKeyEncoding: {
+      type: "pkcs8",
+      format: "pem"
+    },
+    publicKeyEncoding: {
+      type: "spki",
+      format: "pem"
+    }
+  });
+  const env = {
+    SETUP_WIZARD_PASSCODE: "2468",
+    GITHUB_APP_ID: "12345",
+    GITHUB_APP_PRIVATE_KEY: privateKey,
+    GITHUB_API_FETCH: async (url) => {
+      if (String(url).endsWith("/app/installations")) {
+        return new Response(JSON.stringify([{ id: 125153871 }]), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        });
+      }
+      return new Response(JSON.stringify({}), {
+        status: 404,
+        headers: { "content-type": "application/json" }
+      });
+    }
+  };
+  const { sessionCookie } = await unlockSetupWizard(
+    env,
+    "/setup/wizard?repo=sample-org/vtdd-v2&githubAppCheck=on"
+  );
+
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/setup/wizard?repo=sample-org/vtdd-v2&githubAppCheck=on&bootstrap_session_consume=completed&bootstrap_session_consume_proof_state=probe_failed",
+      {
+        headers: {
+          cookie: `vtdd_setup_access=${sessionCookie}`
+        }
+      }
+    ),
+    env
+  );
+
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.equal(
+    html.includes("The live readiness probe failed closed after installation binding"),
+    true
+  );
+  assert.equal(
+    html.includes("This stop is not installation detection; it is the immediate live readiness probe."),
+    true
+  );
+  assert.equal(
+    html.includes("Installation detection failed closed and is waiting for in-flow recovery"),
+    false
+  );
+});
+
+test("worker setup wizard consume proof configured rewrites guidance to live-readiness next step", async () => {
+  const { privateKey } = generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+    privateKeyEncoding: {
+      type: "pkcs8",
+      format: "pem"
+    },
+    publicKeyEncoding: {
+      type: "spki",
+      format: "pem"
+    }
+  });
+  const env = {
+    GITHUB_APP_ID: "12345",
+    GITHUB_APP_PRIVATE_KEY: privateKey,
+    GITHUB_API_FETCH: async (url) => {
+      if (String(url).endsWith("/app/installations")) {
+        return new Response(JSON.stringify([{ id: 125153871 }]), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        });
+      }
+      return new Response(JSON.stringify({}), {
+        status: 404,
+        headers: { "content-type": "application/json" }
+      });
+    }
+  };
+
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/setup/wizard?format=json&repo=sample-org/vtdd-v2&githubAppCheck=on&bootstrap_session_consume=completed&bootstrap_session_consume_proof_state=configured"
+    ),
+    env
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.githubAppSetupCheck.state, "configured");
+  assert.deepEqual(body.githubAppSetupCheck.guidance, [
+    "Installation binding is already stored in this same setup flow.",
+    "Run githubAppCheck=on again to execute live readiness diagnostics without re-entering installation IDs."
+  ]);
+  assert.equal(body.githubAppSetupCheck.evidence.stage, "configuration_check");
+  assert.equal(body.githubAppSetupCheck.evidence.source, "worker_runtime");
+});
+
 test("worker setup wizard auto-rechecks html while awaiting github app installation", async () => {
   const { privateKey } = generateKeyPairSync("rsa", {
     modulusLength: 2048,
