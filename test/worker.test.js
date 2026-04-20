@@ -5121,6 +5121,10 @@ test("worker setup wizard installation selection stays provider-led when candida
   assert.equal(htmlJaResponse.status, 200);
   const htmlJa = await htmlJaResponse.text();
   assert.equal(
+    htmlJa.includes("installation 候補の確認は GitHub 側での確認が必要です"),
+    true
+  );
+  assert.equal(
     htmlJa.includes(
       "ID の手動コピーではなく、GitHub 側で installation 候補を確認して同じ setup flow に戻る想定です。"
     ),
