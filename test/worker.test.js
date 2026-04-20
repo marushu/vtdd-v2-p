@@ -3494,6 +3494,29 @@ test("worker setup wizard installation selection stays provider-led when candida
   const body = await response.json();
   assert.equal(body.githubAppSetupCheck.state, "installation_selection_required");
   assert.deepEqual(body.githubAppSetupCheck.installationSelectionOptions, []);
+
+  const htmlResponse = await worker.fetch(
+    new Request("https://example.com/setup/wizard?repo=sample-org/vtdd-v2&githubAppCheck=on"),
+    env
+  );
+  assert.equal(htmlResponse.status, 200);
+  const html = await htmlResponse.text();
+  assert.equal(
+    html.includes("Selecting the installation still needs a GitHub-side check"),
+    true
+  );
+  assert.equal(
+    html.includes(
+      "VTDD retrieved active installation candidates but could not safely narrow to one target yet."
+    ),
+    true
+  );
+  assert.equal(
+    html.includes(
+      "Instead of manual ID transport, confirm the target installation on GitHub and return to the same setup flow."
+    ),
+    true
+  );
 });
 
 test("worker setup wizard narrows multiple installations by target repo owner", async () => {
@@ -3780,7 +3803,7 @@ test("worker setup wizard can request detected installation continuation from gi
   );
   assert.equal(html.includes('action="/setup/wizard/bootstrap-session/request"'), true);
   assert.equal(html.includes("Record GO + passkey request"), false);
-  assert.equal(html.includes("Store Detected Installation ID"), false);
+  assert.equal(html.includes("Store detected installation and continue"), false);
 });
 
 test("worker setup wizard can store detected installation id through narrow capture endpoint", async () => {

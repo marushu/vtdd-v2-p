@@ -3249,6 +3249,38 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
           : ""
       }
       ${
+        state === "installation_selection_required" &&
+        installationSelectionOptions.length === 0
+          ? `
+            <div class="block" style="margin-top: 12px;">
+              <p><strong>${escapeHtml(
+                locale === "ja"
+                  ? "installation 候補の選定は GitHub 側での確認が必要です"
+                  : "Selecting the installation still needs a GitHub-side check"
+              )}</strong></p>
+              <p><strong>${escapeHtml(locale === "ja" ? "Setup progress" : "Setup progress")}</strong></p>
+              <ul>
+                <li>${escapeHtml(
+                  locale === "ja"
+                    ? "VTDD は active installation 候補を取得しましたが、安全に 1 件へ自動確定できませんでした。"
+                    : "VTDD retrieved active installation candidates but could not safely narrow to one target yet."
+                )}</li>
+                <li>${escapeHtml(
+                  locale === "ja"
+                    ? "ID の手動コピーではなく、GitHub 側で対象 installation を確認して同じ setup flow に戻る想定です。"
+                    : "Instead of manual ID transport, confirm the target installation on GitHub and return to the same setup flow."
+                )}</li>
+                <li>${escapeHtml(
+                  locale === "ja"
+                    ? "次に VTDD が detection を再実行し、installation binding と readiness 確認へ進みます。"
+                    : "Next, VTDD will rerun detection and continue into installation binding and readiness verification."
+                )}</li>
+              </ul>
+            </div>
+          `
+          : ""
+      }
+      ${
         state === "awaiting_installation"
           ? `
             <div class="block" style="margin-top: 12px;">
@@ -3379,12 +3411,12 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                 <li>${escapeHtml(
                   locale === "ja"
                     ? "検出した installation ID はこの setup flow の候補として保持されています。"
-                    : "The detected installation ID is held as the candidate for this setup flow."
+                    : "VTDD is keeping the detected installation candidate in this setup flow."
                 )}</li>
                 <li>${escapeHtml(
                   locale === "ja"
-                    ? "次に VTDD がこの installation binding を保存できる状態に進みます。"
-                    : "Next, VTDD can move this flow into stored installation binding."
+                    ? "次に VTDD が installation binding を設定し、そのまま readiness 確認に進みます。"
+                    : "Next, VTDD will store installation binding and continue into readiness verification."
                 )}</li>
               </ul>
               <p class="meta">${escapeHtml(
@@ -3401,8 +3433,8 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                 )}" />
                 <button type="submit" class="copy-button">${escapeHtml(
                   locale === "ja"
-                    ? "検出した Installation ID を保存"
-                    : "Store Detected Installation ID"
+                    ? "検出した Installation を保存して続行"
+                    : "Store detected installation and continue"
                 )}</button>
               </form>
             </div>
