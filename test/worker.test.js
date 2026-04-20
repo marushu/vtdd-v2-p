@@ -588,6 +588,9 @@ test("worker setup wizard localizes capability readout labels to Japanese", asyn
   assert.equal(html.includes("完了フェーズ"), true);
   assert.equal(html.includes("現在のブロッカー"), true);
   assert.equal(html.includes("残りフェーズ"), true);
+  assert.equal(html.includes("プロバイダー接続フェーズ"), true);
+  assert.equal(html.includes("GitHub フェーズ"), true);
+  assert.equal(html.includes("Cloudflare フェーズ"), true);
 });
 
 test("worker setup wizard unlocked json reports github app bootstrap availability and missing prerequisites", async () => {

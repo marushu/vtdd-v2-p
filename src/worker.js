@@ -4794,15 +4794,15 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
         providerConnectionReadout
           ? `
             <div class="block" style="margin-top: 12px;">
-              <p><strong>${escapeHtml(locale === "ja" ? "Provider connection phase" : "Provider connection phase")}:</strong></p>
+              <p><strong>${escapeHtml(locale === "ja" ? "プロバイダー接続フェーズ" : "Provider connection phase")}:</strong></p>
               ${
                 githubProviderPhase
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "GitHub phase" : "GitHub phase")}:</strong> <code>${escapeHtml(normalizeText(githubProviderPhase.id))}</code> ${escapeHtml(normalizeText(githubProviderPhase.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "GitHub フェーズ" : "GitHub phase")}:</strong> <code>${escapeHtml(normalizeText(githubProviderPhase.id))}</code> ${escapeHtml(normalizeText(githubProviderPhase.summary))}</p>`
                   : ""
               }
               ${
                 cloudflareProviderPhase
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Cloudflare phase" : "Cloudflare phase")}:</strong> <code>${escapeHtml(normalizeText(cloudflareProviderPhase.id))}</code> ${escapeHtml(normalizeText(cloudflareProviderPhase.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Cloudflare フェーズ" : "Cloudflare phase")}:</strong> <code>${escapeHtml(normalizeText(cloudflareProviderPhase.id))}</code> ${escapeHtml(normalizeText(cloudflareProviderPhase.summary))}</p>`
                   : ""
               }
             </div>
