@@ -1071,7 +1071,7 @@ async function handleGitHubAppInstallationCaptureRequest({ request, url, env }) 
   }
   const returnTo =
     normalizeGitHubAppBootstrapReturnTo(payload.returnTo) || "/setup/wizard?githubAppCheck=on";
-  const captureBoundary = await evaluateSelectionInstallationCaptureBoundary({
+  const captureBoundary = await evaluateInstallationCaptureBoundary({
     url,
     env,
     returnTo,
@@ -1161,7 +1161,7 @@ async function handleGitHubAppInstallationCaptureRequest({ request, url, env }) 
   });
 }
 
-async function evaluateSelectionInstallationCaptureBoundary({
+async function evaluateInstallationCaptureBoundary({
   url,
   env,
   returnTo,
@@ -1170,25 +1170,40 @@ async function evaluateSelectionInstallationCaptureBoundary({
   const contextUrl = new URL(returnTo, url.origin);
   const setupCheck = await runGitHubAppSetupCheck(contextUrl, env);
   const state = normalizeText(setupCheck?.state);
-  if (state !== "installation_selection_required") {
+  if (state !== "installation_selection_required" && state !== "installation_detected") {
     return { ok: true };
   }
 
-  const options = Array.isArray(setupCheck?.installationSelectionOptions)
-    ? setupCheck.installationSelectionOptions
-    : [];
   const normalizedInstallationId = normalizeText(installationId);
-  if (options.length > 0) {
-    const optionIds = new Set(
-      options.map((item) => normalizeText(item?.installationId)).filter(Boolean)
-    );
-    if (!optionIds.has(normalizedInstallationId)) {
+  if (state === "installation_selection_required") {
+    const options = Array.isArray(setupCheck?.installationSelectionOptions)
+      ? setupCheck.installationSelectionOptions
+      : [];
+    if (options.length > 0) {
+      const optionIds = new Set(
+        options.map((item) => normalizeText(item?.installationId)).filter(Boolean)
+      );
+      if (!optionIds.has(normalizedInstallationId)) {
+        return {
+          ok: false,
+          status: 422,
+          error: "github_app_installation_capture_invalid_selection_candidate",
+          reason:
+            "installation id is not in the current selection candidates for this setup flow"
+        };
+      }
+    }
+  }
+
+  if (state === "installation_detected") {
+    const detectedInstallationId = normalizeText(setupCheck?.detectedInstallationId);
+    if (detectedInstallationId && detectedInstallationId !== normalizedInstallationId) {
       return {
         ok: false,
         status: 422,
-        error: "github_app_installation_capture_invalid_selection_candidate",
+        error: "github_app_installation_capture_detected_id_mismatch",
         reason:
-          "installation id is not in the current selection candidates for this setup flow"
+          "installation id does not match the detected installation candidate in this setup flow"
       };
     }
   }
@@ -1202,12 +1217,25 @@ async function evaluateSelectionInstallationCaptureBoundary({
     githubAppBootstrap,
     githubAppSetupCheck: setupCheck
   });
-  const setupCheckWithSelectionRequest = attachInstallationSelectionRequestAction({
-    githubAppSetupCheck: setupCheck,
-    approvalBoundBootstrapSession
-  });
-  const selectionRequestAction = setupCheckWithSelectionRequest?.requestInstallationSelectionAction;
-  if (!selectionRequestAction) {
+  const setupCheckWithSelectionRequest =
+    state === "installation_selection_required"
+      ? attachInstallationSelectionRequestAction({
+          githubAppSetupCheck: setupCheck,
+          approvalBoundBootstrapSession
+        })
+      : setupCheck;
+  const setupCheckWithDetectedRequest =
+    state === "installation_detected"
+      ? attachDetectedInstallationRequestAction({
+          githubAppSetupCheck: setupCheckWithSelectionRequest,
+          approvalBoundBootstrapSession
+        })
+      : setupCheckWithSelectionRequest;
+  const requestAction =
+    normalizeText(setupCheckWithDetectedRequest?.state) === "installation_selection_required"
+      ? setupCheckWithDetectedRequest?.requestInstallationSelectionAction
+      : setupCheckWithDetectedRequest?.requestDetectedInstallationAction;
+  if (!requestAction) {
     return { ok: true };
   }
 
