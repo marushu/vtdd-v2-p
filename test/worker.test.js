@@ -5814,6 +5814,8 @@ test("worker setup wizard reports request-required blocked state after capture f
     true
   );
   assert.equal(html.includes('action="/setup/wizard/bootstrap-session/request"'), true);
+  assert.equal(html.includes('name="returnTo" value="/setup/wizard?'), true);
+  assert.equal(html.includes("bootstrap_session_pending_installation_id=125153871"), true);
   assert.equal(html.includes('name="pending_installation_id" value="125153871"'), true);
   assert.equal(html.includes("Record GO + passkey request"), true);
 
@@ -5844,6 +5846,11 @@ test("worker setup wizard reports request-required blocked state after capture f
     true
   );
   assert.equal(htmlJa.includes('action="/setup/wizard/bootstrap-session/request"'), true);
+  assert.equal(htmlJa.includes('name="returnTo" value="/setup/wizard?'), true);
+  assert.equal(
+    htmlJa.includes("bootstrap_session_pending_installation_id=125153871"),
+    true
+  );
   assert.equal(htmlJa.includes('name="pending_installation_id" value="125153871"'), true);
   assert.equal(htmlJa.includes("GO + passkey request を記録"), true);
 });
