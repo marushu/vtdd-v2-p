@@ -2470,6 +2470,13 @@ test("worker setup wizard shows reason-aware failed consume setup progress for c
     ),
     true
   );
+  assert.equal(html.includes("Retry in same setup flow"), true);
+  assert.equal(
+    html.includes(
+      'action="/setup/wizard?repo=sample-org%2Fvtdd-v2&amp;githubAppCheck=on"'
+    ),
+    true
+  );
 });
 
 test("worker setup wizard reports consume-failed next proof for pending selection state drift", async () => {
@@ -2494,6 +2501,18 @@ test("worker setup wizard reports consume-failed next proof for pending selectio
   assert.equal(
     body.approvalBoundBootstrapSession.envelopeConsumeResult.nextProof.summary,
     "Rerun installation detection in this same setup flow, then issue a fresh request-bound envelope for the current capturable state before retrying consume."
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.envelopeConsumeResult.requiredAction.id,
+    "rerun_installation_detection_same_flow"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.envelopeConsumeResult.requiredAction.method,
+    "GET"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.envelopeConsumeResult.requiredAction.path,
+    "/setup/wizard?repo=sample-org%2Fvtdd-v2&githubAppCheck=on"
   );
 });
 
