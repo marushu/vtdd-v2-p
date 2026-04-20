@@ -2657,6 +2657,10 @@ test("worker setup wizard manifest callback writes github app id and private key
   const html = await response.text();
   assert.equal(html.includes("GitHub App manifest bootstrap completed."), true);
   assert.equal(html.includes("VTDD now has a GitHub App identity stored on Worker runtime."), true);
+  assert.equal(html.includes("Setup progress"), true);
+  assert.equal(html.includes("GitHub App ID retrieved."), true);
+  assert.equal(html.includes("GitHub App private key retrieved and stored on Worker runtime."), true);
+  assert.equal(html.includes("GitHub App identity runtime configuration completed."), true);
   assert.equal(html.includes("Install the GitHub App"), true);
   assert.equal(html.includes('target="_blank" rel="noopener noreferrer">Install the GitHub App</a>'), false);
   assert.equal(

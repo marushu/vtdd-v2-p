@@ -1024,6 +1024,12 @@ async function handleGitHubAppManifestCallbackRequest({ request, url, env }) {
       <p class="meta">GitHub App manifest bootstrap completed.</p>
       <div class="block">
         <p><strong>VTDD now has a GitHub App identity stored on Worker runtime.</strong></p>
+        <p><strong>Setup progress</strong></p>
+        <ul>
+          <li>GitHub App ID retrieved.</li>
+          <li>GitHub App private key retrieved and stored on Worker runtime.</li>
+          <li>GitHub App identity runtime configuration completed.</li>
+        </ul>
         <p class="meta">Next, GitHub needs to install that identity to your repositories so VTDD can mint short-lived installation tokens later.</p>
         ${
           installUrl
