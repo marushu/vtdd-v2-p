@@ -3650,7 +3650,8 @@ test("worker setup wizard consume proof configured rewrites guidance to live-rea
   assert.equal(body.githubAppSetupCheck.progressVariant, "post_consume_configured");
   assert.deepEqual(body.githubAppSetupCheck.guidance, [
     "Installation binding is already stored in this same setup flow.",
-    "Run githubAppCheck=on again to execute live readiness diagnostics without re-entering installation IDs."
+    "Run githubAppCheck=on again to execute live readiness diagnostics without re-entering installation IDs.",
+    "No extra external-provider redirect or manual installation ID transport is needed at this stage."
   ]);
   assert.equal(body.githubAppSetupCheck.evidence.stage, "configuration_check");
   assert.equal(body.githubAppSetupCheck.evidence.source, "worker_runtime");
