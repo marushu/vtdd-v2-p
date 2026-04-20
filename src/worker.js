@@ -4454,6 +4454,30 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
           : ""
       }
       ${
+        state === "request_required_for_capture"
+          ? `
+            <p><strong>${escapeHtml(locale === "ja" ? "セットアップ進捗" : "Setup progress")}:</strong></p>
+            <ul>
+              <li>${escapeHtml(
+                locale === "ja"
+                  ? "installation capture は fail-closed で停止しました。"
+                  : "Installation capture stopped fail-closed."
+              )}</li>
+              <li>${escapeHtml(
+                locale === "ja"
+                  ? "同じ setup flow で新しい GO + passkey request を記録すると再試行できます。"
+                  : "Recording a fresh GO + passkey request in this same setup flow allows retry."
+              )}</li>
+              <li>${escapeHtml(
+                locale === "ja"
+                  ? "この境界により installation binding 書き込み承認は approval-bound かつ監査可能な状態を維持します。"
+                  : "This boundary keeps installation binding write approval-bound and auditable."
+              )}</li>
+            </ul>
+          `
+          : ""
+      }
+      ${
         recommendedNextStep
           ? `
             <div class="block" style="margin-top: 12px;">

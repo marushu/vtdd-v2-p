@@ -5787,6 +5787,59 @@ test("worker setup wizard reports request-required blocked state after capture f
     "Record a fresh GO + passkey request in this same setup flow before retrying installation capture.",
     "This fail-closed boundary keeps installation binding write approval-bound and auditable."
   ]);
+
+  const htmlResponse = await worker.fetch(
+    new Request(
+      "https://example.com/setup/wizard?repo=sample-org/vtdd-v2&githubAppCheck=on&bootstrap_session_request=missing&bootstrap_session_pending_installation_id=125153871",
+      {
+        headers: {
+          cookie: `vtdd_setup_access=${sessionCookie}`
+        }
+      }
+    ),
+    env
+  );
+  assert.equal(htmlResponse.status, 200);
+  const html = await htmlResponse.text();
+  assert.equal(html.includes("Setup progress"), true);
+  assert.equal(html.includes("Installation capture stopped fail-closed."), true);
+  assert.equal(
+    html.includes(
+      "Recording a fresh GO + passkey request in this same setup flow allows retry."
+    ),
+    true
+  );
+  assert.equal(
+    html.includes("This boundary keeps installation binding write approval-bound and auditable."),
+    true
+  );
+
+  const htmlJaResponse = await worker.fetch(
+    new Request(
+      "https://example.com/setup/wizard?repo=sample-org/vtdd-v2&githubAppCheck=on&bootstrap_session_request=missing&bootstrap_session_pending_installation_id=125153871",
+      {
+        headers: {
+          cookie: `vtdd_setup_access=${sessionCookie}`,
+          "accept-language": "ja"
+        }
+      }
+    ),
+    env
+  );
+  assert.equal(htmlJaResponse.status, 200);
+  const htmlJa = await htmlJaResponse.text();
+  assert.equal(htmlJa.includes("セットアップ進捗"), true);
+  assert.equal(htmlJa.includes("installation capture は fail-closed で停止しました。"), true);
+  assert.equal(
+    htmlJa.includes("同じ setup flow で新しい GO + passkey request を記録すると再試行できます。"),
+    true
+  );
+  assert.equal(
+    htmlJa.includes(
+      "この境界により installation binding 書き込み承認は approval-bound かつ監査可能な状態を維持します。"
+    ),
+    true
+  );
 });
 
 test("worker setup wizard can store detected installation id through narrow capture endpoint", async () => {
