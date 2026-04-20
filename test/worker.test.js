@@ -3591,6 +3591,7 @@ test("worker setup wizard consume proof probe_failed html shows live-readiness-s
     false
   );
   assert.equal(html.includes("Run live diagnostics now"), true);
+  assert.equal(html.includes("Retry in same setup flow"), false);
 });
 
 test("worker setup wizard consume proof configured rewrites guidance to live-readiness next step", async () => {
@@ -3790,6 +3791,7 @@ test("worker setup wizard consume-proof configured html shows post-binding setup
     false
   );
   assert.equal(html.includes("Run live diagnostics now"), true);
+  assert.equal(html.includes("Retry in same setup flow"), false);
 });
 
 test("worker setup wizard auto-rechecks html while awaiting github app installation", async () => {
