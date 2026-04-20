@@ -5153,8 +5153,8 @@ async function runGitHubAppSetupCheck(url, env) {
           summary:
             "GitHub App identity is stored on Worker runtime, and VTDD found one installation that can be captured automatically.",
           guidance: [
-            "Store the detected installation ID to let VTDD mint short-lived installation tokens.",
-            "After saving it, reload diagnostics to verify live repository access."
+            "Use this detected installation in the same setup flow so VTDD can capture installation binding without manual ID transport.",
+            "After capture, run readiness verification so VTDD can prove live repository access."
           ],
           detectedInstallationId: detection.installationId,
           installationCapturePath: SETUP_WIZARD_GITHUB_APP_INSTALLATION_CAPTURE_PATH,
