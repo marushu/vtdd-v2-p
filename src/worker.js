@@ -4111,6 +4111,29 @@ function renderGitHubAppBootstrap(bootstrap, url, locale = "en") {
   `;
 }
 
+function buildConsumeFailedProgressHint({ locale, consumeResultNextProof }) {
+  const id = normalizeText(consumeResultNextProof?.id);
+  if (id === "github_app_installation_capture_pending_selection_state_drifted") {
+    return locale === "ja"
+      ? "次に同じ setup flow で installation detection を再実行し、現在の capturable state で fresh envelope を再発行してください。"
+      : "Next, rerun installation detection in this same setup flow, then reissue a fresh envelope for the current capturable state.";
+  }
+
+  if (
+    id === "github_app_installation_capture_pending_selection_mismatch" ||
+    id === "github_app_installation_capture_detected_id_mismatch" ||
+    id === "github_app_installation_capture_invalid_selection_candidate"
+  ) {
+    return locale === "ja"
+      ? "次にこの setup flow の現在候補に一致する installation で再試行し、fresh envelope で consume をやり直してください。"
+      : "Next, retry with the installation candidate that matches this setup flow, then consume again with a fresh envelope.";
+  }
+
+  return locale === "ja"
+    ? "次に bounded write 経路を復元し、fresh envelope で再実行してください。"
+    : "Next, restore the bounded write path and retry with a fresh envelope.";
+}
+
 function renderApprovalBoundBootstrapSession(session, locale = "en") {
   const state = normalizeText(session?.state) || "deferred";
   const summary =
@@ -5027,9 +5050,10 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
                           : "VTDD then failed closed before installation binding write completion."
                       )}</li>
                       <li>${escapeHtml(
-                        locale === "ja"
-                          ? "次に bounded write 経路を復元し、fresh envelope で再実行してください。"
-                          : "Next, restore the bounded write path and retry with a fresh envelope."
+                        buildConsumeFailedProgressHint({
+                          locale,
+                          consumeResultNextProof
+                        })
                       )}</li>
                     </ul>
                   `
