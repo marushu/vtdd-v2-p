@@ -4242,6 +4242,12 @@ test("worker setup wizard auto-rechecks html while awaiting github app installat
   );
   assert.equal(
     html.includes(
+      "If an approval-bound request is already recorded, VTDD continues in the same setup flow into consume/proof absorption after installation becomes visible."
+    ),
+    true
+  );
+  assert.equal(
+    html.includes(
       "At this point, the only external step is GitHub-side installation consent, and manual ID copy/paste is not needed."
     ),
     true
@@ -4269,6 +4275,12 @@ test("worker setup wizard auto-rechecks html while awaiting github app installat
   const htmlJa = await htmlJaResponse.text();
   assert.equal(htmlJa.includes("セットアップ進捗"), true);
   assert.equal(htmlJa.includes("VTDD は installation の出現を短く再確認しています"), true);
+  assert.equal(
+    htmlJa.includes(
+      "approval-bound request を記録済みの場合は、installation 可視化後に同じ setup flow で consume/proof の吸収へ進みます。"
+    ),
+    true
+  );
 });
 
 test("worker setup wizard awaiting installation exposes direct GitHub installation links", async () => {

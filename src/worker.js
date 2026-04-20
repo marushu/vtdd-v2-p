@@ -3755,6 +3755,11 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                 )}</li>
                 <li>${escapeHtml(
                   locale === "ja"
+                    ? "approval-bound request を記録済みの場合は、installation 可視化後に同じ setup flow で consume/proof の吸収へ進みます。"
+                    : "If an approval-bound request is already recorded, VTDD continues in the same setup flow into consume/proof absorption after installation becomes visible."
+                )}</li>
+                <li>${escapeHtml(
+                  locale === "ja"
                     ? "この時点の外部ステップは GitHub 側の installation 同意のみで、ID の手動コピーは不要です。"
                     : "At this point, the only external step is GitHub-side installation consent, and manual ID copy/paste is not needed."
                 )}</li>
