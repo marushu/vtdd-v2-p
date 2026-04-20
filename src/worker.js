@@ -3555,8 +3555,8 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                 )}</li>
                 <li>${escapeHtml(
                   locale === "ja"
-                    ? "次に owner を選ぶと、VTDD が installation binding を設定し readiness 確認に進みます。"
-                    : "Next, selecting the owner lets VTDD store installation binding and continue into readiness verification."
+                    ? "次に owner を選ぶと、VTDD が同じ setup flow で installation capture→binding 設定→readiness 確認へ進みます。"
+                    : "Next, selecting the owner lets VTDD continue in the same setup flow through installation capture, binding write, and readiness verification."
                 )}</li>
                 ${
                   selectionRequestActionPath && selectionRequestActionReturnTo
