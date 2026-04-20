@@ -3993,6 +3993,11 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                     ? "この時点では外部プロバイダ画面への追加移動は不要で、wizard 内の承認つき続行だけで進めます。"
                     : "At this point, no extra external-provider redirect is needed; continuation stays inside this wizard with approval."
                 )}</li>
+                <li>${escapeHtml(
+                  locale === "ja"
+                    ? "この GO + passkey 継続は検出済み候補に束縛された single-use の request として扱われます。"
+                    : "This GO + passkey continuation is handled as a single-use request bound to the detected candidate."
+                )}</li>
               </ul>
               <p class="meta">${escapeHtml(
                 locale === "ja"
