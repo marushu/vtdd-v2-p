@@ -4176,7 +4176,7 @@ test("worker setup wizard installation selection required html offers direct sel
   );
   assert.match(
     body,
-    /At this point, the only external step is GitHub-side scope adjustment when the target is not listed, and manual ID transport is not needed\./
+    /At this point, the only external step is GitHub-side scope adjustment when your owner is not listed, and manual ID transport is not needed\./
   );
   assert.match(body, /Use other-org installation/);
   assert.match(body, /Use sample-org installation/);

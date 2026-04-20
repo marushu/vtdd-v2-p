@@ -3602,8 +3602,8 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                 )}</li>
                 <li>${escapeHtml(
                   locale === "ja"
-                    ? "この時点の外部ステップは target 未掲載時の GitHub 側調整のみで、ID の手動運搬は不要です。"
-                    : "At this point, the only external step is GitHub-side scope adjustment when the target is not listed, and manual ID transport is not needed."
+                    ? "この時点の外部ステップは owner 未掲載時の GitHub 側調整のみで、ID の手動運搬は不要です。"
+                    : "At this point, the only external step is GitHub-side scope adjustment when your owner is not listed, and manual ID transport is not needed."
                 )}</li>
               </ul>
               ${
