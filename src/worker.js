@@ -6081,6 +6081,12 @@ async function buildApprovalBoundBootstrapSessionStatus({
       state: "request_required_for_capture",
       summary:
         "VTDD blocked installation capture in this setup flow because no current GO + passkey request token was present.",
+      requiredAction: {
+        id: "record_go_passkey_request_for_capture",
+        path: SETUP_WIZARD_APPROVAL_BOUND_BOOTSTRAP_SESSION_REQUEST_PATH,
+        returnTo: `${url?.pathname || "/setup/wizard"}${url?.search || ""}`,
+        approvalBoundary: "GO + passkey"
+      },
       guidance: [
         "Record a fresh GO + passkey request in this same setup flow before retrying installation capture.",
         "This fail-closed boundary keeps installation binding write approval-bound and auditable."
