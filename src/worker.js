@@ -5445,7 +5445,9 @@ async function runGitHubAppSetupCheck(url, env) {
           links: buildGitHubAppInstallationLinks(appMetadata),
           installationSelectionOptions: detection.selectionOptions ?? [],
           installationCapturePath: SETUP_WIZARD_GITHUB_APP_INSTALLATION_CAPTURE_PATH,
-          returnTo: `${url.pathname}${url.search || "?githubAppCheck=on"}`,
+          returnTo:
+            normalizeSetupWizardDiagnosticsReturnTo(`${url.pathname}${url.search || ""}`) ||
+            "/setup/wizard?githubAppCheck=on",
           evidence: {
             stage: "installation_detection",
             source: "github_app_installations",

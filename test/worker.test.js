@@ -3915,6 +3915,10 @@ test("worker setup wizard installation selection required exposes direct GitHub 
     "/setup/wizard/github-app/capture-installation"
   );
   assert.deepEqual(body.githubAppSetupCheck.installationSelectionOptions, []);
+  assert.equal(
+    body.githubAppSetupCheck.returnTo,
+    "/setup/wizard?repo=sample-org%2Fvtdd-v2&githubAppCheck=on"
+  );
 });
 
 test("worker setup wizard installation selection required html offers direct selection buttons", async () => {
@@ -4065,6 +4069,10 @@ test("worker setup wizard installation selection required json exposes direct se
       accountType: ""
     }
   ]);
+  assert.equal(
+    body.githubAppSetupCheck.returnTo,
+    "/setup/wizard?repo=sample-org%2Fvtdd-v2&repo=other-org%2Fanother-repo&githubAppCheck=on"
+  );
 });
 
 test("worker setup wizard installation selection stays provider-led when candidate owners are ambiguous", async () => {
