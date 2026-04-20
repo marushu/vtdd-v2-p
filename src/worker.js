@@ -3953,6 +3953,11 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                     ? "次に GO + passkey request を記録すると、VTDD が installation binding と readiness 確認に進みます。"
                     : "Next, recording the GO + passkey request lets VTDD continue into installation binding and readiness verification."
                 )}</li>
+                <li>${escapeHtml(
+                  locale === "ja"
+                    ? "この時点では外部プロバイダ画面への追加移動は不要で、wizard 内の承認つき続行だけで進めます。"
+                    : "At this point, no extra external-provider redirect is needed; continuation stays inside this wizard with approval."
+                )}</li>
               </ul>
               <p class="meta">${escapeHtml(
                 locale === "ja"
