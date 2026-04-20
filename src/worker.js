@@ -3155,13 +3155,7 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
     : [];
   const listItem = (text) => `<li>${escapeHtml(text)}</li>`;
   const progressVariant = normalizeText(check?.progressVariant);
-  const configuredAfterConsume =
-    progressVariant === "post_consume_configured" ||
-    guidance.some(
-      (item) =>
-        typeof item === "string" &&
-        item.includes("Installation binding is already stored in this same setup flow.")
-    );
+  const configuredAfterConsume = progressVariant === "post_consume_configured";
   const probeFailedAfterConsume = progressVariant === "post_consume_probe_failed";
 
   const evidenceItems = [];
@@ -3233,12 +3227,7 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
       }
       ${
         state === "partially_configured" &&
-        (progressVariant === "missing_only_installation" ||
-          guidance.some(
-            (item) =>
-              typeof item === "string" &&
-              item.includes("githubAppCheck=on")
-          ))
+        progressVariant === "missing_only_installation"
           ? `
             <div class="block" style="margin-top: 12px;">
               <p><strong>${escapeHtml(
