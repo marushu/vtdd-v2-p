@@ -1913,6 +1913,12 @@ test("worker setup wizard request can auto-continue detected installation bindin
     ),
     true
   );
+  assert.equal(
+    completedHtml.includes(
+      "No new GO + passkey request is needed in this flow unless the installation target changes."
+    ),
+    true
+  );
   assert.equal(completedHtml.includes("live_readiness_verified_in_same_flow"), false);
   assert.equal(calls.length, 1);
   const payload = JSON.parse(String(calls[0].init.body));
@@ -2081,6 +2087,12 @@ test("worker setup wizard selected installation can auto-complete after request 
   assert.equal(
     statusBody.githubAppSetupCheck.guidance.includes(
       "The single-use approval-bound installation-binding request is already consumed and absorbed in this setup flow."
+    ),
+    true
+  );
+  assert.equal(
+    statusBody.githubAppSetupCheck.guidance.includes(
+      "No new GO + passkey request is needed in this flow unless the installation target changes."
     ),
     true
   );

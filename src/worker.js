@@ -6897,6 +6897,7 @@ function deriveEffectiveGitHubAppSetupCheckFromContinuation({ url, githubAppSetu
       guidance: [
         "VTDD can continue with live GitHub capability from this setup flow.",
         "The single-use approval-bound installation-binding request is already consumed and absorbed in this setup flow.",
+        "No new GO + passkey request is needed in this flow unless the installation target changes.",
         "Keep App permissions minimal and expand only when a specific runtime path needs it."
       ],
       evidence: {
