@@ -6517,15 +6517,51 @@ function buildBootstrapSessionEnvelopeConsumeResult({ url, preview }) {
       summary:
         "VTDD validated the signed envelope but failed closed before the bounded installation binding write could complete.",
       envelopeId,
-      nextProof: {
-        id: failureReason || "bounded_installation_binding_write_failed",
-        summary:
-          "Restore the bounded installation write path, then issue a fresh envelope before retrying consume."
-      }
+      nextProof: buildBootstrapSessionConsumeFailedNextProof({ failureReason })
     };
   }
 
   return null;
+}
+
+function buildBootstrapSessionConsumeFailedNextProof({ failureReason }) {
+  if (failureReason === "github_app_installation_capture_pending_selection_state_drifted") {
+    return {
+      id: failureReason,
+      summary:
+        "Rerun installation detection in this same setup flow, then issue a fresh request-bound envelope for the current capturable state before retrying consume."
+    };
+  }
+
+  if (failureReason === "github_app_installation_capture_pending_selection_mismatch") {
+    return {
+      id: failureReason,
+      summary:
+        "Retry from the same setup flow with the matched pending installation candidate, then issue a fresh request-bound envelope before consume."
+    };
+  }
+
+  if (failureReason === "github_app_installation_capture_detected_id_mismatch") {
+    return {
+      id: failureReason,
+      summary:
+        "Use the currently detected installation candidate for this setup flow, then request and consume a fresh envelope."
+    };
+  }
+
+  if (failureReason === "github_app_installation_capture_invalid_selection_candidate") {
+    return {
+      id: failureReason,
+      summary:
+        "Choose one of the current in-flow selection candidates, then issue a fresh request-bound envelope before consume."
+    };
+  }
+
+  return {
+    id: failureReason || "bounded_installation_binding_write_failed",
+    summary:
+      "Restore the bounded installation write path, then issue a fresh envelope before retrying consume."
+  };
 }
 
 function buildBootstrapSessionConsumeProofReadout({ proofState }) {

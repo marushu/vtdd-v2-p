@@ -2453,6 +2453,31 @@ test("worker setup wizard shows failed consume setup progress in html readout", 
   );
 });
 
+test("worker setup wizard reports consume-failed next proof for pending selection state drift", async () => {
+  const env = {};
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/setup/wizard?format=json&repo=sample-org/vtdd-v2&bootstrap_session_consume=failed&bootstrap_session_consume_envelope_id=abcd1234efgh&bootstrap_session_consume_reason=github_app_installation_capture_pending_selection_state_drifted"
+    ),
+    env
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(
+    body.approvalBoundBootstrapSession.envelopeConsumeResult.state,
+    "consume_failed"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.envelopeConsumeResult.nextProof.id,
+    "github_app_installation_capture_pending_selection_state_drifted"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.envelopeConsumeResult.nextProof.summary,
+    "Rerun installation detection in this same setup flow, then issue a fresh request-bound envelope for the current capturable state before retrying consume."
+  );
+});
+
 test("worker setup wizard preview narrows planned write to installation binding when app identity already exists", async () => {
   const env = {
     SETUP_WIZARD_PASSCODE: "2468",
