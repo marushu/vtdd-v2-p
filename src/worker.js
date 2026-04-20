@@ -649,7 +649,7 @@ async function handleApprovalBoundBootstrapSessionConsume({ request, url, env })
       installationId: detectedInstallationId,
       guidance: [
         "The single-use approval-bound installation-binding request is now consumed for the current installation candidate.",
-        "Do not issue a new GO + passkey request unless the installation target changes."
+        "Do not issue a new GO + passkey request unless the installation candidate changes."
       ],
       writeTarget: preview?.writeTarget ?? null,
       plannedWrites: ["GITHUB_APP_INSTALLATION_ID"],
