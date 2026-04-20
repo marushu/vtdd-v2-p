@@ -5111,6 +5111,21 @@ test("worker setup wizard installation selection stays provider-led when candida
     true
   );
   assert.equal(html.includes("Run live diagnostics now"), true);
+
+  const htmlJaResponse = await worker.fetch(
+    new Request("https://example.com/setup/wizard?repo=sample-org/vtdd-v2&githubAppCheck=on", {
+      headers: { "accept-language": "ja" }
+    }),
+    env
+  );
+  assert.equal(htmlJaResponse.status, 200);
+  const htmlJa = await htmlJaResponse.text();
+  assert.equal(
+    htmlJa.includes(
+      "ID の手動コピーではなく、GitHub 側で installation 候補を確認して同じ setup flow に戻る想定です。"
+    ),
+    true
+  );
 });
 
 test("worker setup wizard narrows multiple installations by target repo owner", async () => {

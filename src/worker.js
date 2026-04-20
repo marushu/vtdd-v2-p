@@ -3624,7 +3624,7 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
               }
               <p class="meta">${escapeHtml(
                 locale === "ja"
-                  ? "GitHub が返した active installation 候補です。値をコピーせず、この setup target に合う owner を選ぶと VTDD が installation binding を保存します。"
+                  ? "GitHub が返した active installation 候補です。値をコピーせず、この setup flow に合う owner を選ぶと VTDD が installation binding を保存します。"
                   : "These are the active installation candidates GitHub returned. Choose the owner that matches this setup flow and VTDD will store the installation binding without asking you to copy values."
               )}</p>
               <div class="button-group">
@@ -3697,7 +3697,7 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                 )}</li>
                 <li>${escapeHtml(
                   locale === "ja"
-                    ? "ID の手動コピーではなく、GitHub 側で対象 installation を確認して同じ setup flow に戻る想定です。"
+                    ? "ID の手動コピーではなく、GitHub 側で installation 候補を確認して同じ setup flow に戻る想定です。"
                     : "Instead of manual ID transport, confirm the installation candidate on GitHub and return to the same setup flow."
                 )}</li>
                 <li>${escapeHtml(
