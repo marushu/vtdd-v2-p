@@ -6868,7 +6868,8 @@ function deriveEffectiveGitHubAppSetupCheckFromContinuation({ url, githubAppSetu
         "GitHub App installation binding completed in the current setup flow, and runtime now reports the GitHub App configuration as complete pending live diagnostics.",
       guidance: [
         "Installation binding is already stored in this same setup flow.",
-        "Run githubAppCheck=on again to execute live readiness diagnostics without re-entering installation IDs."
+        "Run githubAppCheck=on again to execute live readiness diagnostics without re-entering installation IDs.",
+        "No extra external-provider redirect or manual installation ID transport is needed at this stage."
       ],
       evidence: {
         stage: "configuration_check",
