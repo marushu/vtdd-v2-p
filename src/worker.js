@@ -1231,10 +1231,34 @@ async function evaluateInstallationCaptureBoundary({
   const setupCheck = await runGitHubAppSetupCheck(contextUrl, env);
   const state = normalizeText(setupCheck?.state);
   if (state !== "installation_selection_required" && state !== "installation_detected") {
+    const pendingInstallationId = normalizeText(
+      contextUrl.searchParams.get(SETUP_WIZARD_BOOTSTRAP_SESSION_PENDING_INSTALLATION_ID_PARAM)
+    );
+    if (pendingInstallationId) {
+      return {
+        ok: false,
+        status: 409,
+        error: "github_app_installation_capture_pending_selection_state_drifted",
+        reason:
+          "pending installation capture token is present, but setup flow no longer has a capturable detected/selection state"
+      };
+    }
     return { ok: true };
   }
 
   const normalizedInstallationId = normalizeText(installationId);
+  const pendingInstallationId = normalizeText(
+    contextUrl.searchParams.get(SETUP_WIZARD_BOOTSTRAP_SESSION_PENDING_INSTALLATION_ID_PARAM)
+  );
+  if (pendingInstallationId && pendingInstallationId !== normalizedInstallationId) {
+    return {
+      ok: false,
+      status: 422,
+      error: "github_app_installation_capture_pending_selection_mismatch",
+      reason:
+        "installation id does not match the pending installation capture token for this setup flow"
+    };
+  }
   if (state === "installation_selection_required") {
     const options = Array.isArray(setupCheck?.installationSelectionOptions)
       ? setupCheck.installationSelectionOptions

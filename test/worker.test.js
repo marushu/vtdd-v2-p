@@ -4442,6 +4442,144 @@ test("worker setup wizard selection capture fails closed without request token a
   assert.equal(calls.length, 1);
 });
 
+test("worker setup wizard selection capture fails closed when pending installation token mismatches", async () => {
+  const calls = [];
+  const { privateKey } = generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+    privateKeyEncoding: {
+      type: "pkcs8",
+      format: "pem"
+    },
+    publicKeyEncoding: {
+      type: "spki",
+      format: "pem"
+    }
+  });
+  const env = {
+    SETUP_WIZARD_PASSCODE: "2468",
+    CLOUDFLARE_API_TOKEN: "bootstrap-token",
+    CLOUDFLARE_ACCOUNT_ID: "account-id",
+    CLOUDFLARE_WORKER_SCRIPT_NAME: "vtdd-v2-mvp",
+    GITHUB_MANIFEST_CONVERSION_TOKEN: "gho_operator_token",
+    GITHUB_APP_ID: "12345",
+    GITHUB_APP_PRIVATE_KEY: privateKey,
+    GITHUB_API_FETCH: async (url) => {
+      if (String(url).endsWith("/app/installations")) {
+        return new Response(
+          JSON.stringify([
+            { id: 111, account: { login: "other-org" } },
+            { id: 222, account: { login: "sample-org" } }
+          ]),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          }
+        );
+      }
+      return new Response(JSON.stringify({}), {
+        status: 404,
+        headers: { "content-type": "application/json" }
+      });
+    },
+    CF_API_FETCH: async (url, init = {}) => {
+      calls.push({ url: String(url), init });
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      });
+    }
+  };
+  const { sessionCookie } = await unlockSetupWizard(env);
+  const mismatchedPendingReturnTo =
+    "/setup/wizard?repo=sample-org/vtdd-v2&repo=other-org/another-repo&githubAppCheck=on&bootstrap_session_pending_installation_id=222";
+
+  const response = await worker.fetch(
+    new Request("https://example.com/setup/wizard/github-app/capture-installation", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      },
+      body: JSON.stringify({
+        GITHUB_APP_INSTALLATION_ID: "111",
+        returnTo: mismatchedPendingReturnTo
+      })
+    }),
+    env
+  );
+
+  assert.equal(response.status, 422);
+  const body = await response.json();
+  assert.equal(body.error, "github_app_installation_capture_pending_selection_mismatch");
+  assert.equal(calls.length, 0);
+});
+
+test("worker setup wizard pending installation token fails closed when setup state drifted away from capturable state", async () => {
+  const calls = [];
+  const { privateKey } = generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+    privateKeyEncoding: {
+      type: "pkcs8",
+      format: "pem"
+    },
+    publicKeyEncoding: {
+      type: "spki",
+      format: "pem"
+    }
+  });
+  const env = {
+    SETUP_WIZARD_PASSCODE: "2468",
+    CLOUDFLARE_API_TOKEN: "bootstrap-token",
+    CLOUDFLARE_ACCOUNT_ID: "account-id",
+    CLOUDFLARE_WORKER_SCRIPT_NAME: "vtdd-v2-mvp",
+    GITHUB_MANIFEST_CONVERSION_TOKEN: "gho_operator_token",
+    GITHUB_APP_ID: "12345",
+    GITHUB_APP_PRIVATE_KEY: privateKey,
+    GITHUB_API_FETCH: async (url) => {
+      if (String(url).endsWith("/app/installations")) {
+        return new Response(JSON.stringify([]), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        });
+      }
+      return new Response(JSON.stringify({}), {
+        status: 404,
+        headers: { "content-type": "application/json" }
+      });
+    },
+    CF_API_FETCH: async (url, init = {}) => {
+      calls.push({ url: String(url), init });
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      });
+    }
+  };
+  const { sessionCookie } = await unlockSetupWizard(env);
+  const pendingReturnTo =
+    "/setup/wizard?repo=sample-org/vtdd-v2&githubAppCheck=on&bootstrap_session_pending_installation_id=222";
+
+  const response = await worker.fetch(
+    new Request("https://example.com/setup/wizard/github-app/capture-installation", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      },
+      body: JSON.stringify({
+        GITHUB_APP_INSTALLATION_ID: "222",
+        returnTo: pendingReturnTo
+      })
+    }),
+    env
+  );
+
+  assert.equal(response.status, 409);
+  const body = await response.json();
+  assert.equal(body.error, "github_app_installation_capture_pending_selection_state_drifted");
+  assert.equal(calls.length, 0);
+});
+
 test("worker setup wizard detected capture fails closed without request token and rejects mismatched id", async () => {
   const calls = [];
   const { privateKey } = generateKeyPairSync("rsa", {
