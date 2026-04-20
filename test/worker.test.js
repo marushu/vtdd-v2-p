@@ -1619,6 +1619,19 @@ test("worker setup wizard shows deferred consume setup progress in html readout"
     ),
     true
   );
+
+  const htmlJaResponse = await worker.fetch(
+    new Request(`https://example.com${deferredLocation}`, {
+      headers: {
+        cookie: `vtdd_setup_access=${sessionCookie}`,
+        "accept-language": "ja"
+      }
+    }),
+    env
+  );
+  assert.equal(htmlJaResponse.status, 200);
+  const htmlJa = await htmlJaResponse.text();
+  assert.equal(htmlJa.includes("セットアップ進捗"), true);
 });
 
 test("worker setup wizard consume can complete a single detected installation binding write", async () => {
@@ -2518,6 +2531,19 @@ test("worker setup wizard shows rejected consume setup progress in html readout"
     ),
     true
   );
+
+  const htmlJaResponse = await worker.fetch(
+    new Request(`https://example.com${rejectedLocation}`, {
+      headers: {
+        cookie: `vtdd_setup_access=${sessionCookie}`,
+        "accept-language": "ja"
+      }
+    }),
+    env
+  );
+  assert.equal(htmlJaResponse.status, 200);
+  const htmlJa = await htmlJaResponse.text();
+  assert.equal(htmlJa.includes("セットアップ進捗"), true);
 });
 
 test("worker setup wizard shows failed consume setup progress in html readout", async () => {
@@ -2543,6 +2569,21 @@ test("worker setup wizard shows failed consume setup progress in html readout", 
     html.includes("Next, restore the bounded write path and retry with a fresh envelope."),
     true
   );
+
+  const htmlJaResponse = await worker.fetch(
+    new Request(
+      "https://example.com/setup/wizard?repo=sample-org/vtdd-v2&bootstrap_session_consume=failed&bootstrap_session_consume_envelope_id=abcd1234efgh&bootstrap_session_consume_reason=bounded_installation_binding_write_failed",
+      {
+        headers: {
+          "accept-language": "ja"
+        }
+      }
+    ),
+    env
+  );
+  assert.equal(htmlJaResponse.status, 200);
+  const htmlJa = await htmlJaResponse.text();
+  assert.equal(htmlJa.includes("セットアップ進捗"), true);
 });
 
 test("worker setup wizard shows reason-aware failed consume setup progress for capture mismatch", async () => {
