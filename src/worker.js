@@ -3154,12 +3154,15 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
         .filter((item) => item.installationId && item.accountLogin)
     : [];
   const listItem = (text) => `<li>${escapeHtml(text)}</li>`;
-  const evidenceStage = normalizeText(evidence?.stage);
-  const configuredAfterConsume = guidance.some(
-    (item) =>
-      typeof item === "string" &&
-      item.includes("Installation binding is already stored in this same setup flow.")
-  );
+  const progressVariant = normalizeText(check?.progressVariant);
+  const configuredAfterConsume =
+    progressVariant === "post_consume_configured" ||
+    guidance.some(
+      (item) =>
+        typeof item === "string" &&
+        item.includes("Installation binding is already stored in this same setup flow.")
+    );
+  const probeFailedAfterConsume = progressVariant === "post_consume_probe_failed";
 
   const evidenceItems = [];
   if (normalizeText(evidence?.stage)) {
@@ -3397,7 +3400,7 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
           : ""
       }
       ${
-        state === "probe_failed" && evidenceStage === "live_probe"
+        state === "probe_failed" && probeFailedAfterConsume
           ? `
             <div class="block" style="margin-top: 12px;">
               <p><strong>${escapeHtml(
@@ -6209,6 +6212,7 @@ function deriveEffectiveGitHubAppSetupCheckFromContinuation({ url, githubAppSetu
     return {
       ...rest,
       state: "configured",
+      progressVariant: "post_consume_configured",
       links: [],
       summary:
         "GitHub App installation binding completed in the current setup flow, and runtime now reports the GitHub App configuration as complete pending live diagnostics.",
@@ -6227,6 +6231,7 @@ function deriveEffectiveGitHubAppSetupCheckFromContinuation({ url, githubAppSetu
     return {
       ...rest,
       state: "probe_failed",
+      progressVariant: "post_consume_probe_failed",
       links: [],
       summary:
         "GitHub App installation binding completed in the current setup flow, but the immediate live readiness probe still failed closed.",

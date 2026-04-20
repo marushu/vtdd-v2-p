@@ -3433,6 +3433,7 @@ test("worker setup wizard consume proof probe_failed rewrites guidance to live-r
   assert.equal(response.status, 200);
   const body = await response.json();
   assert.equal(body.githubAppSetupCheck.state, "probe_failed");
+  assert.equal(body.githubAppSetupCheck.progressVariant, "post_consume_probe_failed");
   assert.deepEqual(body.githubAppSetupCheck.guidance, [
     "Installation binding already completed in this same setup flow, so do not retry installation capture.",
     "Fix the live probe blocker, then rerun githubAppCheck=on to continue readiness verification."
@@ -3542,6 +3543,7 @@ test("worker setup wizard consume proof configured rewrites guidance to live-rea
   assert.equal(response.status, 200);
   const body = await response.json();
   assert.equal(body.githubAppSetupCheck.state, "configured");
+  assert.equal(body.githubAppSetupCheck.progressVariant, "post_consume_configured");
   assert.deepEqual(body.githubAppSetupCheck.guidance, [
     "Installation binding is already stored in this same setup flow.",
     "Run githubAppCheck=on again to execute live readiness diagnostics without re-entering installation IDs."
@@ -3584,6 +3586,35 @@ test("worker setup wizard configured html shows bootstrap-complete setup progres
     html.includes("Next, run githubAppCheck=on to verify token minting and live repository access."),
     true
   );
+});
+
+test("worker setup wizard configured json without continuation does not expose post-consume variant", async () => {
+  const { privateKey } = generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+    privateKeyEncoding: {
+      type: "pkcs8",
+      format: "pem"
+    },
+    publicKeyEncoding: {
+      type: "spki",
+      format: "pem"
+    }
+  });
+  const env = {
+    GITHUB_APP_ID: "12345",
+    GITHUB_APP_PRIVATE_KEY: privateKey,
+    GITHUB_APP_INSTALLATION_ID: "125153871"
+  };
+
+  const response = await worker.fetch(
+    new Request("https://example.com/setup/wizard?format=json&repo=sample-org/vtdd-v2"),
+    env
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.githubAppSetupCheck.state, "configured");
+  assert.equal(body.githubAppSetupCheck.progressVariant, undefined);
 });
 
 test("worker setup wizard consume-proof configured html shows post-binding setup progress", async () => {
