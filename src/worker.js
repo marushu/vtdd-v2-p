@@ -4740,20 +4740,20 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
         phaseReadout
           ? `
             <div class="block" style="margin-top: 12px;">
-              <p><strong>${escapeHtml(locale === "ja" ? "Flow phase" : "Flow phase")}:</strong></p>
+              <p><strong>${escapeHtml(locale === "ja" ? "フローフェーズ" : "Flow phase")}:</strong></p>
               ${
                 currentPhase
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Current phase" : "Current phase")}:</strong> <code>${escapeHtml(normalizeText(currentPhase.id))}</code> ${escapeHtml(normalizeText(currentPhase.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "現在のフェーズ" : "Current phase")}:</strong> <code>${escapeHtml(normalizeText(currentPhase.id))}</code> ${escapeHtml(normalizeText(currentPhase.summary))}</p>`
                   : ""
               }
               ${
                 nextCapability
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Next capability" : "Next capability")}:</strong> <code>${escapeHtml(normalizeText(nextCapability.id))}</code> ${escapeHtml(normalizeText(nextCapability.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "次の機能" : "Next capability")}:</strong> <code>${escapeHtml(normalizeText(nextCapability.id))}</code> ${escapeHtml(normalizeText(nextCapability.summary))}</p>`
                   : ""
               }
               ${
                 transitionTrigger
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Transition trigger" : "Transition trigger")}:</strong> <code>${escapeHtml(normalizeText(transitionTrigger.id))}</code> ${escapeHtml(normalizeText(transitionTrigger.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "遷移トリガー" : "Transition trigger")}:</strong> <code>${escapeHtml(normalizeText(transitionTrigger.id))}</code> ${escapeHtml(normalizeText(transitionTrigger.summary))}</p>`
                   : ""
               }
             </div>
