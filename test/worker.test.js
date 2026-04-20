@@ -4536,6 +4536,13 @@ test("worker setup wizard selection capture fails closed when pending installati
   assert.equal(response.status, 422);
   const body = await response.json();
   assert.equal(body.error, "github_app_installation_capture_pending_selection_mismatch");
+  assert.equal(body.requiredAction.id, "retry_pending_installation_candidate_capture");
+  assert.equal(body.requiredAction.path, "/setup/wizard/github-app/capture-installation");
+  assert.equal(
+    body.requiredAction.returnTo,
+    "/setup/wizard?repo=sample-org/vtdd-v2&repo=other-org/another-repo&githubAppCheck=on&bootstrap_session_pending_installation_id=222"
+  );
+  assert.equal(body.requiredAction.installationId, "222");
   assert.equal(calls.length, 0);
 });
 
@@ -4602,6 +4609,12 @@ test("worker setup wizard pending installation token fails closed when setup sta
   assert.equal(response.status, 409);
   const body = await response.json();
   assert.equal(body.error, "github_app_installation_capture_pending_selection_state_drifted");
+  assert.equal(body.requiredAction.id, "rerun_installation_detection_same_flow");
+  assert.equal(body.requiredAction.method, "GET");
+  assert.equal(
+    body.requiredAction.path,
+    "/setup/wizard?repo=sample-org%2Fvtdd-v2&githubAppCheck=on&bootstrap_session_pending_installation_id=222"
+  );
   assert.equal(calls.length, 0);
 });
 
