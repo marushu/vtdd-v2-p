@@ -520,7 +520,7 @@ test("worker setup wizard unlocked html shows narrow github app bootstrap form w
   assert.equal(html.includes("Allowlisted secrets"), true);
   assert.equal(html.includes("Planned writes"), true);
   assert.equal(html.includes("Post-session checks"), true);
-  assert.equal(html.includes('action="/setup/wizard/github-app/bootstrap"'), true);
+  assert.equal(html.includes('action="/setup/wizard/github-app/bootstrap"'), false);
   assert.equal(html.includes('action="https://github.com/settings/apps/new"'), true);
   assert.equal(html.includes('action="https://github.com/settings/apps/new" target="_blank"'), false);
   assert.equal(html.includes("&quot;hook_attributes&quot;"), true);
@@ -532,8 +532,8 @@ test("worker setup wizard unlocked html shows narrow github app bootstrap form w
     true
   );
   assert.equal(html.includes("Create GitHub App Automatically"), true);
-  assert.equal(html.includes("GITHUB_APP_PRIVATE_KEY"), true);
-  assert.equal(html.includes("Write GitHub App Runtime Secrets"), true);
+  assert.equal(html.includes('id="githubAppPrivateKey"'), false);
+  assert.equal(html.includes("Write GitHub App Runtime Secrets"), false);
 });
 
 test("worker setup wizard unlocked json reports github app bootstrap availability and missing prerequisites", async () => {

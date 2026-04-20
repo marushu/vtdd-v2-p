@@ -3401,7 +3401,7 @@ function renderGitHubAppBootstrap(bootstrap, url, locale = "en") {
           : ""
       }
       ${
-        state === "available"
+        state === "available" && !manifestLaunch
           ? `
             <form method="post" action="${escapeHtml(actionPath)}">
               <input type="hidden" name="returnTo" value="${escapeHtml(returnTo)}" />
@@ -5098,9 +5098,10 @@ function buildGitHubAppBootstrapStatus({ url, env }) {
     allowlistedSecrets: [...GITHUB_APP_BOOTSTRAP_SECRET_ALLOWLIST],
     actionPath: SETUP_WIZARD_GITHUB_APP_BOOTSTRAP_PATH,
     guidance: [
-      "Paste GitHub App ID, installation ID, and private key once, then reload setup wizard diagnostics.",
+      "Use GitHub's manifest flow from setup wizard so VTDD can capture App ID and private key on return without manual copy/paste.",
       "This endpoint is allowlisted and does not accept arbitrary secret names.",
-      "Manifest conversion uses an operator-managed GitHub token already stored on Worker runtime."
+      "Manifest conversion uses an operator-managed GitHub token already stored on Worker runtime.",
+      "The narrow bootstrap endpoint remains recovery-only when an already-created App must be reconnected outside the manifest path."
     ],
     manifestLaunch: buildGitHubAppManifestLaunch(url),
     scriptName,
