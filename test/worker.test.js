@@ -3521,6 +3521,7 @@ test("worker setup wizard consume proof probe_failed rewrites guidance to live-r
   assert.equal(body.githubAppSetupCheck.progressVariant, "post_consume_probe_failed");
   assert.deepEqual(body.githubAppSetupCheck.guidance, [
     "Installation binding already completed in this same setup flow, so do not retry installation capture.",
+    "The single-use approval-bound request for installation binding is already consumed and absorbed in this setup flow.",
     "Fix the live probe blocker, then rerun githubAppCheck=on to continue readiness verification."
   ]);
   assert.equal(body.githubAppSetupCheck.evidence.stage, "live_probe");
@@ -3600,6 +3601,12 @@ test("worker setup wizard consume proof probe_failed html shows live-readiness-s
     true
   );
   assert.equal(
+    html.includes(
+      "The single-use request for installation binding is already consumed and absorbed in this setup flow."
+    ),
+    true
+  );
+  assert.equal(
     html.includes("Installation detection failed closed and is waiting for in-flow recovery"),
     false
   );
@@ -3656,6 +3663,7 @@ test("worker setup wizard consume proof configured rewrites guidance to live-rea
   assert.equal(body.githubAppSetupCheck.progressVariant, "post_consume_configured");
   assert.deepEqual(body.githubAppSetupCheck.guidance, [
     "Installation binding is already stored in this same setup flow.",
+    "The single-use approval-bound request for installation binding is already consumed and absorbed in this setup flow.",
     "Run githubAppCheck=on again to execute live readiness diagnostics without re-entering installation IDs.",
     "No extra external-provider redirect or manual installation ID transport is needed at this stage."
   ]);
@@ -3801,6 +3809,12 @@ test("worker setup wizard consume-proof configured html shows post-binding setup
   assert.equal(
     html.includes(
       "The next step is live readiness diagnostics, not another installation capture step."
+    ),
+    true
+  );
+  assert.equal(
+    html.includes(
+      "The single-use request for installation binding is already consumed and absorbed in this setup flow."
     ),
     true
   );

@@ -3789,6 +3789,11 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                 )}</li>
                 <li>${escapeHtml(
                   locale === "ja"
+                    ? "installation binding 用の single-use request はこの setup flow ですでに消費済みとして吸収されています。"
+                    : "The single-use request for installation binding is already consumed and absorbed in this setup flow."
+                )}</li>
+                <li>${escapeHtml(
+                  locale === "ja"
                     ? "probe blocker を解消したら同じ setup flow で readiness を再確認し、verified 状態へ進みます。"
                     : "After clearing the probe blocker, rerun readiness in the same setup flow to move to verified state."
                 )}</li>
@@ -3859,6 +3864,11 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                   locale === "ja"
                     ? "次は installation capture をやり直さず、live readiness diagnostics を実行する段階です。"
                     : "The next step is live readiness diagnostics, not another installation capture step."
+                )}</li>
+                <li>${escapeHtml(
+                  locale === "ja"
+                    ? "installation binding 用の single-use request はこの setup flow ですでに消費済みとして吸収されています。"
+                    : "The single-use request for installation binding is already consumed and absorbed in this setup flow."
                 )}</li>
                 <li>${escapeHtml(
                   locale === "ja"
@@ -6898,6 +6908,7 @@ function deriveEffectiveGitHubAppSetupCheckFromContinuation({ url, githubAppSetu
         "GitHub App installation binding completed in the current setup flow, and runtime now reports the GitHub App configuration as complete pending live diagnostics.",
       guidance: [
         "Installation binding is already stored in this same setup flow.",
+        "The single-use approval-bound request for installation binding is already consumed and absorbed in this setup flow.",
         "Run githubAppCheck=on again to execute live readiness diagnostics without re-entering installation IDs.",
         "No extra external-provider redirect or manual installation ID transport is needed at this stage."
       ],
@@ -6921,6 +6932,7 @@ function deriveEffectiveGitHubAppSetupCheckFromContinuation({ url, githubAppSetu
         "GitHub App installation binding completed in the current setup flow, but the immediate live readiness probe still failed closed.",
       guidance: [
         "Installation binding already completed in this same setup flow, so do not retry installation capture.",
+        "The single-use approval-bound request for installation binding is already consumed and absorbed in this setup flow.",
         "Fix the live probe blocker, then rerun githubAppCheck=on to continue readiness verification."
       ],
       evidence: {
