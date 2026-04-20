@@ -4118,6 +4118,10 @@ test("worker setup wizard installation selection required html offers direct sel
     body,
     /If the target owner is not listed, adjust installation scope on GitHub and return to this setup flow so VTDD can re-detect\./
   );
+  assert.match(
+    body,
+    /At this point, the only external step is GitHub-side scope adjustment when the target is not listed, and manual ID transport is not needed\./
+  );
   assert.match(body, /Use other-org installation/);
   assert.match(body, /Use sample-org installation/);
   assert.equal(

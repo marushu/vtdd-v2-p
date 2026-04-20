@@ -3587,6 +3587,11 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                     ? "対象 owner が見当たらない場合は GitHub 側で installation を調整し、この setup flow に戻ると VTDD が再検出します。"
                     : "If the target owner is not listed, adjust installation scope on GitHub and return to this setup flow so VTDD can re-detect."
                 )}</li>
+                <li>${escapeHtml(
+                  locale === "ja"
+                    ? "この時点の外部ステップは target 未掲載時の GitHub 側調整のみで、ID の手動運搬は不要です。"
+                    : "At this point, the only external step is GitHub-side scope adjustment when the target is not listed, and manual ID transport is not needed."
+                )}</li>
               </ul>
               ${
                 selectionRequestActionPath && selectionRequestActionReturnTo
