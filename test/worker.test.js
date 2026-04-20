@@ -1018,6 +1018,12 @@ test("worker setup wizard unlocked json does not expose cloudflare bootstrap tok
     "github_connection_via_app_creation_and_install"
   );
   assert.equal(
+    body.approvalBoundBootstrapSession.serviceConnectionModelReadout.github.requiredBecause.includes(
+      "selected repository context"
+    ),
+    true
+  );
+  assert.equal(
     body.approvalBoundBootstrapSession.serviceConnectionModelReadout.cloudflare.id,
     "cloudflare_connection_via_existing_runtime_authority"
   );
