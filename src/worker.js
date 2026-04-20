@@ -1091,7 +1091,7 @@ async function handleGitHubAppManifestCallbackRequest({ request, url, env }) {
           <li>GitHub App ID retrieved.</li>
           <li>GitHub App private key retrieved and stored on Worker runtime.</li>
           <li>GitHub App identity runtime configuration completed.</li>
-          <li>VTDD kept the same setup return context for this target.</li>
+          <li>VTDD kept the same setup return context for this setup flow.</li>
           <li>After installation consent, VTDD will continue into installation detection, binding, and readiness verification.</li>
         </ul>
         <p class="meta">Next, GitHub needs to install that identity to your repositories so VTDD can mint short-lived installation tokens later.</p>

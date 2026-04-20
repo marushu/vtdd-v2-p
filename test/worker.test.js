@@ -2960,7 +2960,7 @@ test("worker setup wizard manifest callback writes github app id and private key
   assert.equal(html.includes("GitHub App ID retrieved."), true);
   assert.equal(html.includes("GitHub App private key retrieved and stored on Worker runtime."), true);
   assert.equal(html.includes("GitHub App identity runtime configuration completed."), true);
-  assert.equal(html.includes("VTDD kept the same setup return context for this target."), true);
+  assert.equal(html.includes("VTDD kept the same setup return context for this setup flow."), true);
   assert.equal(
     html.includes(
       "After installation consent, VTDD will continue into installation detection, binding, and readiness verification."
