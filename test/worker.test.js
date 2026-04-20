@@ -4354,6 +4354,11 @@ test("worker returns setup wizard json", async () => {
   assert.equal(body.generatedAnswers.actionEndpointBaseUrl, "https://example.com");
   assert.equal(body.cloudflareSetupCheck.state, "disabled");
   assert.equal(body.githubAppSetupCheck.state, "not_configured");
+  assert.deepEqual(body.githubAppSetupCheck.guidance, [
+    "Start GitHub App bootstrap from setup wizard so VTDD can capture App identity first.",
+    "After manifest return and installation consent, keep the same setup flow and run githubAppCheck=on for detection before any manual fallback.",
+    "Do not paste App private key into chat, URL, or setup wizard answers."
+  ]);
 });
 
 test("worker returns setup wizard openapi schema for import url", async () => {

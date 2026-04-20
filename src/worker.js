@@ -5177,8 +5177,8 @@ async function runGitHubAppSetupCheck(url, env) {
       summary:
         "GitHub App setup check: Worker runtime does not have GitHub App bootstrap secrets yet.",
       guidance: [
-        "Create and install a GitHub App first.",
-        "Then set GITHUB_APP_ID, GITHUB_APP_INSTALLATION_ID, and GITHUB_APP_PRIVATE_KEY as Worker secrets.",
+        "Start GitHub App bootstrap from setup wizard so VTDD can capture App identity first.",
+        "After manifest return and installation consent, keep the same setup flow and run githubAppCheck=on for detection before any manual fallback.",
         "Do not paste App private key into chat, URL, or setup wizard answers."
       ],
       links: [
