@@ -50,6 +50,8 @@ const SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_TTL_SECONDS = 5 * 60;
 const SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_TOKEN_PARAM = "bootstrap_session_request_token";
 const SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_EXPIRES_PARAM = "bootstrap_session_request_expires";
 const SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_STATE_PARAM = "bootstrap_session_request";
+const SETUP_WIZARD_BOOTSTRAP_SESSION_PENDING_INSTALLATION_ID_PARAM =
+  "bootstrap_session_pending_installation_id";
 const SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_STATE_PARAM = "bootstrap_session_consume";
 const SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_ENVELOPE_ID_PARAM =
   "bootstrap_session_consume_envelope_id";
@@ -1125,6 +1127,10 @@ async function handleGitHubAppInstallationCaptureRequest({ request, url, env }) 
       const failureUrl = new URL(returnTo, url.origin);
       if (captureBoundary.error === "approval_bound_request_required_for_selection_capture") {
         failureUrl.searchParams.set(SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_STATE_PARAM, "missing");
+        failureUrl.searchParams.set(
+          SETUP_WIZARD_BOOTSTRAP_SESSION_PENDING_INSTALLATION_ID_PARAM,
+          installationId
+        );
       } else {
         failureUrl.searchParams.set(SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_STATE_PARAM, "failed");
         failureUrl.searchParams.set(
@@ -1150,7 +1156,9 @@ async function handleGitHubAppInstallationCaptureRequest({ request, url, env }) 
               id: "record_go_passkey_request_for_capture",
               path: SETUP_WIZARD_APPROVAL_BOUND_BOOTSTRAP_SESSION_REQUEST_PATH,
               returnTo,
-              approvalBoundary: "GO + passkey"
+              approvalBoundary: "GO + passkey",
+              pendingInstallationIdParam: "pending_installation_id",
+              pendingInstallationId: installationId
             }
           : null
     });
@@ -4055,6 +4063,10 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
   const requestPath =
     normalizeText(session?.requestPath) ||
     SETUP_WIZARD_APPROVAL_BOUND_BOOTSTRAP_SESSION_REQUEST_PATH;
+  const requiredAction = session?.requiredAction ?? null;
+  const pendingInstallationIdParam =
+    normalizeText(requiredAction?.pendingInstallationIdParam) || "pending_installation_id";
+  const pendingInstallationId = normalizeText(requiredAction?.pendingInstallationId);
   const requestEnabled = toBoolean(session?.requestEnabled);
   const requestSurfacedInline = toBoolean(session?.requestSurfacedInline);
   const returnTo = normalizeReturnTo(session?.returnTo) || "/setup/wizard";
@@ -5235,6 +5247,13 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
               <input type="hidden" name="returnTo" value="${escapeHtml(returnTo)}" />
               <input type="hidden" name="approval_phrase" value="GO" />
               <input type="hidden" name="passkey_verified" value="true" />
+              ${
+                pendingInstallationId
+                  ? `<input type="hidden" name="${escapeHtml(
+                      pendingInstallationIdParam
+                    )}" value="${escapeHtml(pendingInstallationId)}" />`
+                  : ""
+              }
               <button type="submit" class="copy-button">${escapeHtml(
                 locale === "ja"
                   ? "GO + passkey request を記録"
@@ -6140,6 +6159,10 @@ async function buildApprovalBoundBootstrapSessionStatus({
   }
 
   if (requestMissing) {
+    const pendingInstallationId = resolvePendingInstallationIdForRequestAction({
+      url,
+      githubAppSetupCheck
+    });
     return {
       ...base,
       state: "request_required_for_capture",
@@ -6149,7 +6172,9 @@ async function buildApprovalBoundBootstrapSessionStatus({
         id: "record_go_passkey_request_for_capture",
         path: SETUP_WIZARD_APPROVAL_BOUND_BOOTSTRAP_SESSION_REQUEST_PATH,
         returnTo: `${url?.pathname || "/setup/wizard"}${url?.search || ""}`,
-        approvalBoundary: "GO + passkey"
+        approvalBoundary: "GO + passkey",
+        pendingInstallationIdParam: "pending_installation_id",
+        ...(pendingInstallationId ? { pendingInstallationId } : {})
       },
       guidance: [
         "Record a fresh GO + passkey request in this same setup flow before retrying installation capture.",
@@ -9973,6 +9998,33 @@ function attachInlineConsumeSurfaceHint({
     ...session,
     consumeSurfacedInline: Boolean(githubAppSetupCheck?.completeDetectedInstallationAction)
   };
+}
+
+function resolvePendingInstallationIdForRequestAction({ url, githubAppSetupCheck }) {
+  const pendingInstallationId = normalizeText(
+    url?.searchParams?.get(SETUP_WIZARD_BOOTSTRAP_SESSION_PENDING_INSTALLATION_ID_PARAM)
+  );
+  if (!pendingInstallationId) {
+    return "";
+  }
+
+  const setupState = normalizeText(githubAppSetupCheck?.state);
+  if (setupState === "installation_detected") {
+    const detectedInstallationId = normalizeText(githubAppSetupCheck?.detectedInstallationId);
+    return detectedInstallationId === pendingInstallationId ? pendingInstallationId : "";
+  }
+
+  if (setupState === "installation_selection_required") {
+    const options = Array.isArray(githubAppSetupCheck?.installationSelectionOptions)
+      ? githubAppSetupCheck.installationSelectionOptions
+      : [];
+    const optionIds = new Set(
+      options.map((item) => normalizeText(item?.installationId)).filter(Boolean)
+    );
+    return optionIds.has(pendingInstallationId) ? pendingInstallationId : "";
+  }
+
+  return "";
 }
 
 function toPublicGitHubAppBootstrapStatus(status) {

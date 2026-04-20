@@ -4355,7 +4355,31 @@ test("worker setup wizard selection capture fails closed without request token a
     "/setup/wizard?repo=sample-org/vtdd-v2&repo=other-org/another-repo&githubAppCheck=on"
   );
   assert.equal(blockedBody.requiredAction.approvalBoundary, "GO + passkey");
+  assert.equal(blockedBody.requiredAction.pendingInstallationIdParam, "pending_installation_id");
+  assert.equal(blockedBody.requiredAction.pendingInstallationId, "111");
   assert.equal(calls.length, 0);
+
+  const blockedFormResponse = await worker.fetch(
+    new Request("https://example.com/setup/wizard/github-app/capture-installation", {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      },
+      body: new URLSearchParams({
+        GITHUB_APP_INSTALLATION_ID: "111",
+        returnTo: baseReturnTo
+      })
+    }),
+    env
+  );
+  assert.equal(blockedFormResponse.status, 303);
+  const blockedLocation = blockedFormResponse.headers.get("location") ?? "";
+  assert.equal(blockedLocation.includes("bootstrap_session_request=missing"), true);
+  assert.equal(
+    blockedLocation.includes("bootstrap_session_pending_installation_id=111"),
+    true
+  );
 
   const requestResponse = await worker.fetch(
     new Request("https://example.com/setup/wizard/bootstrap-session/request", {
@@ -4500,6 +4524,8 @@ test("worker setup wizard detected capture fails closed without request token an
     "/setup/wizard?repo=sample-org/vtdd-v2&githubAppCheck=on"
   );
   assert.equal(blockedBody.requiredAction.approvalBoundary, "GO + passkey");
+  assert.equal(blockedBody.requiredAction.pendingInstallationIdParam, "pending_installation_id");
+  assert.equal(blockedBody.requiredAction.pendingInstallationId, "125153871");
   assert.equal(calls.length, 0);
 
   const requestResponse = await worker.fetch(
@@ -4982,7 +5008,7 @@ test("worker setup wizard reports request-required blocked state after capture f
 
   const response = await worker.fetch(
     new Request(
-      "https://example.com/setup/wizard?format=json&repo=sample-org/vtdd-v2&githubAppCheck=on&bootstrap_session_request=missing",
+      "https://example.com/setup/wizard?format=json&repo=sample-org/vtdd-v2&githubAppCheck=on&bootstrap_session_request=missing&bootstrap_session_pending_installation_id=125153871",
       {
         headers: {
           cookie: `vtdd_setup_access=${sessionCookie}`
@@ -5009,11 +5035,19 @@ test("worker setup wizard reports request-required blocked state after capture f
   );
   assert.equal(
     body.approvalBoundBootstrapSession.requiredAction.returnTo,
-    "/setup/wizard?format=json&repo=sample-org/vtdd-v2&githubAppCheck=on&bootstrap_session_request=missing"
+    "/setup/wizard?format=json&repo=sample-org/vtdd-v2&githubAppCheck=on&bootstrap_session_request=missing&bootstrap_session_pending_installation_id=125153871"
   );
   assert.equal(
     body.approvalBoundBootstrapSession.requiredAction.approvalBoundary,
     "GO + passkey"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.requiredAction.pendingInstallationIdParam,
+    "pending_installation_id"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.requiredAction.pendingInstallationId,
+    "125153871"
   );
   assert.deepEqual(body.approvalBoundBootstrapSession.guidance, [
     "Record a fresh GO + passkey request in this same setup flow before retrying installation capture.",
