@@ -3385,7 +3385,7 @@ function renderCloudflareSetupCheck(check, locale = "en") {
       }
       ${
         checkedAt
-          ? `<p class="meta">checkedAt: <code>${escapeHtml(checkedAt)}</code></p>`
+          ? `<p class="meta">${escapeHtml(locale === "ja" ? "確認時刻" : "checkedAt")}: <code>${escapeHtml(checkedAt)}</code></p>`
           : ""
       }
     </div>
@@ -4139,7 +4139,7 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
       }
       ${
         checkedAt
-          ? `<p class="meta">checkedAt: <code>${escapeHtml(checkedAt)}</code></p>`
+          ? `<p class="meta">${escapeHtml(locale === "ja" ? "確認時刻" : "checkedAt")}: <code>${escapeHtml(checkedAt)}</code></p>`
           : ""
       }
     </div>
@@ -5690,7 +5690,7 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
       }
       ${
         checkedAt
-          ? `<p class="meta">checkedAt: <code>${escapeHtml(checkedAt)}</code></p>`
+          ? `<p class="meta">${escapeHtml(locale === "ja" ? "確認時刻" : "checkedAt")}: <code>${escapeHtml(checkedAt)}</code></p>`
           : ""
       }
     </div>

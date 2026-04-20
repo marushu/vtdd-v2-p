@@ -3769,6 +3769,7 @@ test("worker setup wizard probe failure html shows setup progress for same-flow 
   const htmlJa = await responseJa.text();
   assert.equal(htmlJa.includes("セットアップ進捗"), true);
   assert.equal(htmlJa.includes("installation 検出は fail-closed で停止し、同じ flow で復旧待ちです"), true);
+  assert.equal(htmlJa.includes("確認時刻"), true);
   assert.equal(
     htmlJa.includes(
       "approval-bound request を記録済みでも、この段階では consume/proof を開始せず、probe 回復後に同じ setup flow で継続します。"
