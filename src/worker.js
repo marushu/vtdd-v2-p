@@ -3919,11 +3919,16 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                     ? "次に VTDD が installation binding を設定し、設定後そのまま readiness 確認に進みます。"
                     : "Next, VTDD will store the installation binding and then continue directly into readiness verification."
                 )}</li>
+                <li>${escapeHtml(
+                  locale === "ja"
+                    ? "この時点では外部プロバイダ画面への追加移動は不要で、この wizard 内でそのまま続行できます。"
+                    : "At this point, no extra external-provider redirect is needed; continuation stays inside this wizard."
+                )}</li>
               </ul>
               <p class="meta">${escapeHtml(
                 locale === "ja"
-                  ? "GitHub 側の同意が終わっていれば、VTDD が installation binding を保存し、そのまま readiness 確認まで進めます。"
-                  : "If the GitHub-side consent is done, VTDD can store the installation binding and continue into readiness verification."
+                  ? "GitHub 側の同意が終わっていれば、ここで続行するだけで VTDD が installation binding を保存し、そのまま readiness 確認まで進めます。"
+                  : "If the GitHub-side consent is done, continuing here is enough for VTDD to store installation binding and move straight into readiness verification."
               )}</p>
               <form method="post" action="${escapeHtml(completionActionPath)}">
                 <input type="hidden" name="returnTo" value="${escapeHtml(
