@@ -6546,11 +6546,14 @@ function buildBootstrapSessionEnvelopeConsumeResult({ url, preview }) {
         "VTDD consumed the signed bootstrap session envelope and stored the detected installation binding on Worker runtime.",
       envelopeId,
       proof: buildBootstrapSessionConsumeProofReadout({ proofState }),
-      nextProof: {
-        id: postChecks.join("_then_") || "github_app_live_readiness_proof_pending",
-        summary:
-          "The next proof is the planned installation-token mint and live probe checks succeeding after the one-time installation binding write."
-      }
+      nextProof: buildBootstrapSessionConsumeCompletedNextProof({
+        proofState,
+        postChecks
+      }),
+      requiredAction: buildBootstrapSessionConsumeCompletedRequiredAction({
+        proofState,
+        url
+      })
     };
   }
 
@@ -6597,6 +6600,54 @@ function buildBootstrapSessionEnvelopeConsumeResult({ url, preview }) {
   }
 
   return null;
+}
+
+function buildBootstrapSessionConsumeCompletedNextProof({ proofState, postChecks }) {
+  if (proofState === "ready") {
+    return {
+      id: "live_readiness_verified_in_same_flow",
+      summary:
+        "Live readiness proof is already verified in this same setup flow, so no additional installation-binding proof step is pending."
+    };
+  }
+
+  if (proofState === "probe_failed") {
+    return {
+      id: "rerun_live_readiness_probe_same_flow",
+      summary:
+        "Fix the live probe blocker, then rerun readiness diagnostics in this same setup flow without re-running installation capture."
+    };
+  }
+
+  if (proofState === "configured") {
+    return {
+      id: "run_live_readiness_diagnostics_same_flow",
+      summary:
+        "Run live readiness diagnostics in this same setup flow to move from runtime-configured state to verified live proof."
+    };
+  }
+
+  return {
+    id: postChecks.join("_then_") || "github_app_live_readiness_proof_pending",
+    summary:
+      "The next proof is the planned installation-token mint and live probe checks succeeding after the one-time installation binding write."
+  };
+}
+
+function buildBootstrapSessionConsumeCompletedRequiredAction({ proofState, url }) {
+  if (proofState !== "probe_failed" && proofState !== "configured") {
+    return null;
+  }
+
+  const currentReturnTo = `${url?.pathname || "/setup/wizard"}${url?.search || ""}`;
+  const diagnosticsPath =
+    normalizeSetupWizardDiagnosticsReturnTo(currentReturnTo) || currentReturnTo;
+
+  return {
+    id: "run_live_readiness_diagnostics_same_flow",
+    method: "GET",
+    path: diagnosticsPath
+  };
 }
 
 function buildBootstrapSessionConsumeFailedRequiredAction({ failureReason, url }) {
