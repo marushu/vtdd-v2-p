@@ -3233,11 +3233,12 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
       }
       ${
         state === "partially_configured" &&
-        guidance.some(
-          (item) =>
-            typeof item === "string" &&
-            item.includes("githubAppCheck=on")
-        )
+        (progressVariant === "missing_only_installation" ||
+          guidance.some(
+            (item) =>
+              typeof item === "string" &&
+              item.includes("githubAppCheck=on")
+          ))
           ? `
             <div class="block" style="margin-top: 12px;">
               <p><strong>${escapeHtml(
@@ -5422,6 +5423,9 @@ async function runGitHubAppSetupCheck(url, env) {
 
     return {
       state: "partially_configured",
+      ...(missingOnlyInstallation
+        ? { progressVariant: "missing_only_installation" }
+        : {}),
       summary:
         missingOnlyInstallation
           ? "VTDD already has the GitHub App identity, but it still needs the installation binding before it can mint installation tokens."
