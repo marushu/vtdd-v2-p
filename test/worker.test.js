@@ -549,6 +549,7 @@ test("worker setup wizard unlocked html shows narrow github app bootstrap form w
   assert.equal(html.includes("Create GitHub App Automatically"), true);
   assert.equal(html.includes('id="githubAppPrivateKey"'), false);
   assert.equal(html.includes("Write GitHub App Runtime Secrets"), false);
+
 });
 
 test("worker setup wizard unlocked json reports github app bootstrap availability and missing prerequisites", async () => {
@@ -924,6 +925,35 @@ test("worker setup wizard unlocked json reports github app bootstrap availabilit
   assert.equal(body.githubAppBootstrap.missingPrerequisites.includes("CLOUDFLARE_WORKER_SCRIPT_NAME"), true);
   assert.equal(
     body.githubAppBootstrap.missingPrerequisites.includes("GITHUB_MANIFEST_CONVERSION_TOKEN"),
+    true
+  );
+
+  const htmlJaResponse = await worker.fetch(
+    new Request("https://example.com/setup/wizard?repo=sample-org/vtdd-v2", {
+      headers: {
+        cookie: `vtdd_setup_access=${sessionCookie}`,
+        "accept-language": "ja"
+      }
+    }),
+    env
+  );
+  assert.equal(htmlJaResponse.status, 200);
+  const htmlJa = await htmlJaResponse.text();
+  assert.equal(
+    htmlJa.includes(
+      "現在の setup は将来の path を説明できますが、bounded write step をまだ安全に吸収できません。"
+    ),
+    true
+  );
+  assert.equal(htmlJa.includes("現在不足している prerequisites:"), true);
+  assert.equal(
+    htmlJa.includes(
+      "approval-bound bootstrap session を開く前に、operator-seeded な Cloudflare bootstrap prerequisites を復旧します。"
+    ),
+    true
+  );
+  assert.equal(
+    htmlJa.includes("<strong>アクション:</strong> <code>configure_cloudflare_bootstrap_prerequisites</code>"),
     true
   );
 });

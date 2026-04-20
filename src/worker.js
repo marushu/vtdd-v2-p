@@ -4356,6 +4356,44 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
         "runtime は将来の approval-bound bootstrap session に向けて準備済みですが、開始には attestation-backed bootstrap authority がまだ必要です。";
     }
   }
+  if (
+    locale === "ja" &&
+    (state === "blocked_by_operator_prerequisites" || state === "request_recorded_but_blocked")
+  ) {
+    renderedGuidance = guidance.map((item) => {
+      if (
+        item ===
+        "Current setup can explain the future path, but it cannot safely absorb the bounded write step yet."
+      ) {
+        return "現在の setup は将来の path を説明できますが、bounded write step をまだ安全に吸収できません。";
+      }
+      if (
+        item ===
+        "The request was acknowledged, but it did not grant write authority or open a privileged session."
+      ) {
+        return "request は受理されましたが、write authority の付与や privileged session の開始は行われていません。";
+      }
+      if (item.startsWith("Current missing prerequisites: ")) {
+        return item.replace("Current missing prerequisites: ", "現在不足している prerequisites: ");
+      }
+      return item;
+    });
+    if (
+      nextStepId === "restore_operator_bootstrap_prerequisites" &&
+      nextStepSummary ===
+        "Restore the operator-seeded Cloudflare bootstrap prerequisites before trying to open any approval-bound bootstrap session."
+    ) {
+      renderedNextStepSummary =
+        "approval-bound bootstrap session を開く前に、operator-seeded な Cloudflare bootstrap prerequisites を復旧します。";
+    } else if (
+      nextStepId === "restore_manifest_conversion_token" &&
+      nextStepSummary ===
+        "Restore the operator-managed manifest conversion token so VTDD can continue GitHub App bootstrap from wizard."
+    ) {
+      renderedNextStepSummary =
+        "operator-managed な manifest conversion token を復旧し、wizard から GitHub App bootstrap を継続できるようにします。";
+    }
+  }
   const stepBoundaries = session?.stepBoundaries ?? null;
   const vtddOwnedSteps = Array.isArray(stepBoundaries?.vtddOwnedSteps)
     ? stepBoundaries.vtddOwnedSteps
