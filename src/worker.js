@@ -3361,7 +3361,7 @@ function renderCloudflareSetupCheck(check, locale = "en") {
   return `
     <h2>${escapeHtml(locale === "ja" ? "Cloudflare 設定チェック" : "Cloudflare Setup Check")}</h2>
     <div class="block">
-      <p><strong>state:</strong> <code>${escapeHtml(state)}</code></p>
+      <p><strong>${escapeHtml(locale === "ja" ? "状態" : "state")}:</strong> <code>${escapeHtml(state)}</code></p>
       <p>${escapeHtml(summary)}</p>
       ${
         guidance.length > 0
@@ -3457,7 +3457,7 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
   return `
     <h2>${escapeHtml(locale === "ja" ? "GitHub App 設定チェック" : "GitHub App Setup Check")}</h2>
     <div class="block">
-      <p><strong>state:</strong> <code>${escapeHtml(state)}</code></p>
+      <p><strong>${escapeHtml(locale === "ja" ? "状態" : "state")}:</strong> <code>${escapeHtml(state)}</code></p>
       <p>${escapeHtml(summary)}</p>
       ${
         guidance.length > 0
@@ -4166,7 +4166,7 @@ function renderGitHubAppBootstrap(bootstrap, url, locale = "en") {
   return `
     <h2>${escapeHtml(locale === "ja" ? "GitHub App Runtime Bootstrap" : "GitHub App Runtime Bootstrap")}</h2>
     <div class="block">
-      <p><strong>state:</strong> <code>${escapeHtml(state)}</code></p>
+      <p><strong>${escapeHtml(locale === "ja" ? "状態" : "state")}:</strong> <code>${escapeHtml(state)}</code></p>
       <p>${escapeHtml(summary)}</p>
       ${
         scriptName
@@ -4572,7 +4572,7 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
   return `
     <h2>${escapeHtml(locale === "ja" ? "承認境界つき Bootstrap Session" : "Approval-Bound Bootstrap Session")}</h2>
     <div class="block">
-      <p><strong>state:</strong> <code>${escapeHtml(state)}</code></p>
+      <p><strong>${escapeHtml(locale === "ja" ? "状態" : "state")}:</strong> <code>${escapeHtml(state)}</code></p>
       <p>${escapeHtml(summary)}</p>
       ${
         approvalBoundary

@@ -293,6 +293,7 @@ test("worker localizes setup wizard html to Japanese from accept-language", asyn
   assert.equal(html.includes("JSON URL をコピー"), true);
   assert.equal(html.includes("詳細契約を開く"), true);
   assert.equal(html.includes("Action auth は Bearer を使う"), true);
+  assert.equal(html.includes("状態:"), true);
 });
 
 test("worker localizes locked setup wizard to Japanese from accept-language", async () => {
