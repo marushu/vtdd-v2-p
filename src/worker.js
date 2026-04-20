@@ -3219,6 +3219,11 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                     ? "次に owner を選ぶと、VTDD が installation binding を設定し readiness 確認に進みます。"
                     : "Next, selecting the owner lets VTDD store installation binding and continue into readiness verification."
                 )}</li>
+                <li>${escapeHtml(
+                  locale === "ja"
+                    ? "対象 owner が見当たらない場合は GitHub 側で installation を調整し、この setup flow に戻ると VTDD が再検出します。"
+                    : "If the target owner is not listed, adjust installation scope on GitHub and return to this setup flow so VTDD can re-detect."
+                )}</li>
               </ul>
               <p class="meta">${escapeHtml(
                 locale === "ja"
