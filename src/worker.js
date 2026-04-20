@@ -3582,6 +3582,15 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                       )
                     : ""
                 }
+                ${
+                  selectionRequestActionPath && selectionRequestActionReturnTo
+                    ? listItem(
+                        locale === "ja"
+                          ? "この GO + passkey 継続は、選択対象となる installation 候補に束縛された single-use の request として扱われます。"
+                          : "This GO + passkey continuation is handled as a single-use request bound to the selected installation candidate."
+                      )
+                    : ""
+                }
                 <li>${escapeHtml(
                   locale === "ja"
                     ? "対象 owner が見当たらない場合は GitHub 側で installation を調整し、この setup flow に戻ると VTDD が再検出します。"

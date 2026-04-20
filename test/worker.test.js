@@ -4382,6 +4382,12 @@ test("worker setup wizard selection-required state exposes approval-bound reques
     ),
     true
   );
+  assert.equal(
+    html.includes(
+      "This GO + passkey continuation is handled as a single-use request bound to the selected installation candidate."
+    ),
+    true
+  );
 });
 
 test("worker setup wizard request can auto-continue selected installation binding when pending installation id is provided", async () => {
