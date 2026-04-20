@@ -4716,20 +4716,20 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
         capabilityReadout
           ? `
             <div class="block" style="margin-top: 12px;">
-              <p><strong>${escapeHtml(locale === "ja" ? "Capability readout" : "Capability readout")}:</strong></p>
+              <p><strong>${escapeHtml(locale === "ja" ? "能力の読取結果" : "Capability readout")}:</strong></p>
               ${
                 githubConnection
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "GitHub connection" : "GitHub connection")}:</strong> <code>${escapeHtml(normalizeText(githubConnection.state))}</code> ${escapeHtml(normalizeText(githubConnection.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "GitHub 接続" : "GitHub connection")}:</strong> <code>${escapeHtml(normalizeText(githubConnection.state))}</code> ${escapeHtml(normalizeText(githubConnection.summary))}</p>`
                   : ""
               }
               ${
                 workerRuntime
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Worker runtime" : "Worker runtime")}:</strong> <code>${escapeHtml(normalizeText(workerRuntime.state))}</code> ${escapeHtml(normalizeText(workerRuntime.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Worker ランタイム" : "Worker runtime")}:</strong> <code>${escapeHtml(normalizeText(workerRuntime.state))}</code> ${escapeHtml(normalizeText(workerRuntime.summary))}</p>`
                   : ""
               }
               ${
                 vtddCapability
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "VTDD capability" : "VTDD capability")}:</strong> <code>${escapeHtml(normalizeText(vtddCapability.state))}</code> ${escapeHtml(normalizeText(vtddCapability.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "VTDD 機能" : "VTDD capability")}:</strong> <code>${escapeHtml(normalizeText(vtddCapability.state))}</code> ${escapeHtml(normalizeText(vtddCapability.summary))}</p>`
                   : ""
               }
             </div>

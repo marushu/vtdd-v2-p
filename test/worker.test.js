@@ -550,7 +550,36 @@ test("worker setup wizard unlocked html shows narrow github app bootstrap form w
   assert.equal(html.includes("Create GitHub App Automatically"), true);
   assert.equal(html.includes('id="githubAppPrivateKey"'), false);
   assert.equal(html.includes("Write GitHub App Runtime Secrets"), false);
+});
 
+test("worker setup wizard localizes capability readout labels to Japanese", async () => {
+  const env = {
+    SETUP_WIZARD_PASSCODE: "2468",
+    CLOUDFLARE_API_TOKEN: "bootstrap-token",
+    CLOUDFLARE_ACCOUNT_ID: "account-id",
+    CLOUDFLARE_WORKER_SCRIPT_NAME: "vtdd-v2-mvp",
+    GITHUB_MANIFEST_CONVERSION_TOKEN: "ghp_conversion_token"
+  };
+  const { unlockResponse, sessionCookie } = await unlockSetupWizard(env);
+  assert.equal(unlockResponse.status, 200);
+  assert.notEqual(sessionCookie, "");
+
+  const response = await worker.fetch(
+    new Request("https://example.com/setup/wizard?repo=sample-org/vtdd-v2", {
+      headers: {
+        cookie: `vtdd_setup_access=${sessionCookie}`,
+        "accept-language": "ja-JP,ja;q=0.9,en-US;q=0.8"
+      }
+    }),
+    env
+  );
+
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.equal(html.includes("能力の読取結果"), true);
+  assert.equal(html.includes("GitHub 接続"), true);
+  assert.equal(html.includes("Worker ランタイム"), true);
+  assert.equal(html.includes("VTDD 機能"), true);
 });
 
 test("worker setup wizard unlocked json reports github app bootstrap availability and missing prerequisites", async () => {
