@@ -3686,7 +3686,7 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
               <p><strong>${escapeHtml(
                 locale === "ja"
                   ? "installation 候補の確認は GitHub 側での確認が必要です"
-                  : "Selecting the installation still needs a GitHub-side check"
+                  : "Confirming the installation candidate still needs a GitHub-side check"
               )}</strong></p>
               <p><strong>${escapeHtml(locale === "ja" ? "Setup progress" : "Setup progress")}</strong></p>
               <ul>

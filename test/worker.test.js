@@ -4238,7 +4238,7 @@ test("worker setup wizard installation selection required html keeps external st
 
   assert.equal(response.status, 200);
   const body = await response.text();
-  assert.match(body, /Selecting the installation still needs a GitHub-side check/);
+  assert.match(body, /Confirming the installation candidate still needs a GitHub-side check/);
   assert.match(
     body,
     /At this point, the only external step is adjusting installation scope on GitHub, without manual ID transport\./
@@ -5089,7 +5089,7 @@ test("worker setup wizard installation selection stays provider-led when candida
   assert.equal(htmlResponse.status, 200);
   const html = await htmlResponse.text();
   assert.equal(
-    html.includes("Selecting the installation still needs a GitHub-side check"),
+    html.includes("Confirming the installation candidate still needs a GitHub-side check"),
     true
   );
   assert.equal(
