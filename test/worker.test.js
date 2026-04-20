@@ -2453,6 +2453,25 @@ test("worker setup wizard shows failed consume setup progress in html readout", 
   );
 });
 
+test("worker setup wizard shows reason-aware failed consume setup progress for capture mismatch", async () => {
+  const env = {};
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/setup/wizard?repo=sample-org/vtdd-v2&bootstrap_session_consume=failed&bootstrap_session_consume_envelope_id=abcd1234efgh&bootstrap_session_consume_reason=github_app_installation_capture_pending_selection_mismatch"
+    ),
+    env
+  );
+
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.equal(
+    html.includes(
+      "Next, retry with the installation candidate that matches this setup flow, then consume again with a fresh envelope."
+    ),
+    true
+  );
+});
+
 test("worker setup wizard reports consume-failed next proof for pending selection state drift", async () => {
   const env = {};
   const response = await worker.fetch(
