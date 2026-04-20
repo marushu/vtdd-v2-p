@@ -3986,6 +3986,13 @@ test("worker setup wizard installation selection required html offers direct sel
   );
   assert.match(body, /Use other-org installation/);
   assert.match(body, /Use sample-org installation/);
+  assert.equal(
+    body.includes(
+      '<form method="get" action="/setup/wizard?repo=sample-org%2Fvtdd-v2&amp;repo=other-org%2Fanother-repo&amp;githubAppCheck=on"><button type="submit" class="copy-button">Run live diagnostics now</button></form>'
+    ),
+    true
+  );
+  assert.equal(body.includes("Run live diagnostics now"), true);
 });
 
 test("worker setup wizard installation selection required json exposes direct selection options", async () => {
@@ -4142,6 +4149,13 @@ test("worker setup wizard installation selection stays provider-led when candida
     ),
     true
   );
+  assert.equal(
+    html.includes(
+      '<form method="get" action="/setup/wizard?repo=sample-org%2Fvtdd-v2&amp;githubAppCheck=on"><button type="submit" class="copy-button">Run live diagnostics now</button></form>'
+    ),
+    true
+  );
+  assert.equal(html.includes("Run live diagnostics now"), true);
 });
 
 test("worker setup wizard narrows multiple installations by target repo owner", async () => {

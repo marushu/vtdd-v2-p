@@ -3327,6 +3327,13 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                   )
                   .join("")}
               </div>
+              ${
+                diagnosticsReturnTo
+                  ? `<form method="get" action="${escapeHtml(diagnosticsReturnTo)}"><button type="submit" class="copy-button">${escapeHtml(
+                      locale === "ja" ? "live diagnostics を実行" : "Run live diagnostics now"
+                    )}</button></form>`
+                  : ""
+              }
             </div>
           `
           : ""
@@ -3359,6 +3366,13 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                     : "Next, VTDD will rerun detection and continue into installation binding and readiness verification."
                 )}</li>
               </ul>
+              ${
+                diagnosticsReturnTo
+                  ? `<form method="get" action="${escapeHtml(diagnosticsReturnTo)}"><button type="submit" class="copy-button">${escapeHtml(
+                      locale === "ja" ? "live diagnostics を実行" : "Run live diagnostics now"
+                    )}</button></form>`
+                  : ""
+              }
             </div>
           `
           : ""
