@@ -4610,6 +4610,30 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
           : ""
       }
       ${
+        state === "blocked_by_operator_prerequisites" || state === "request_recorded_but_blocked"
+          ? `
+            <p><strong>${escapeHtml(locale === "ja" ? "セットアップ進捗" : "Setup progress")}:</strong></p>
+            <ul>
+              <li>${escapeHtml(
+                locale === "ja"
+                  ? "operator-seeded な prerequisites が不足しているため、bounded write step はまだ実行できません。"
+                  : "Operator-seeded prerequisites are still missing, so the bounded write step cannot run yet."
+              )}</li>
+              <li>${escapeHtml(
+                locale === "ja"
+                  ? "request は記録されても authority は発行されず、privileged session も開始されません。"
+                  : "Even when a request is recorded, authority is not issued and no privileged session is opened."
+              )}</li>
+              <li>${escapeHtml(
+                locale === "ja"
+                  ? "まず prerequisites を復旧すると、同じ setup flow で approval-bound path の再開に進めます。"
+                  : "Restoring the prerequisites first allows this same setup flow to resume the approval-bound path."
+              )}</li>
+            </ul>
+          `
+          : ""
+      }
+      ${
         recommendedNextStep
           ? `
             <div class="block" style="margin-top: 12px;">

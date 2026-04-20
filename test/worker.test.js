@@ -928,6 +928,31 @@ test("worker setup wizard unlocked json reports github app bootstrap availabilit
     true
   );
 
+  const htmlResponse = await worker.fetch(
+    new Request("https://example.com/setup/wizard?repo=sample-org/vtdd-v2", {
+      headers: {
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      }
+    }),
+    env
+  );
+  assert.equal(htmlResponse.status, 200);
+  const html = await htmlResponse.text();
+  assert.equal(
+    html.includes("Operator-seeded prerequisites are still missing, so the bounded write step cannot run yet."),
+    true
+  );
+  assert.equal(
+    html.includes("Even when a request is recorded, authority is not issued and no privileged session is opened."),
+    true
+  );
+  assert.equal(
+    html.includes(
+      "Restoring the prerequisites first allows this same setup flow to resume the approval-bound path."
+    ),
+    true
+  );
+
   const htmlJaResponse = await worker.fetch(
     new Request("https://example.com/setup/wizard?repo=sample-org/vtdd-v2", {
       headers: {
@@ -954,6 +979,14 @@ test("worker setup wizard unlocked json reports github app bootstrap availabilit
   );
   assert.equal(
     htmlJa.includes("<strong>アクション:</strong> <code>configure_cloudflare_bootstrap_prerequisites</code>"),
+    true
+  );
+  assert.equal(
+    htmlJa.includes("operator-seeded な prerequisites が不足しているため、bounded write step はまだ実行できません。"),
+    true
+  );
+  assert.equal(
+    htmlJa.includes("まず prerequisites を復旧すると、同じ setup flow で approval-bound path の再開に進めます。"),
     true
   );
 });
