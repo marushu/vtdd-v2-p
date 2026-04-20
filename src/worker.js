@@ -5845,7 +5845,8 @@ async function runGitHubAppSetupCheck(url, env) {
             "VTDD has a GitHub App identity, but GitHub has not exposed an installation for capture yet.",
           guidance: [
             "Finish GitHub App installation, then return to this same setup flow and reload diagnostics.",
-            "If you already installed it, wait a moment and retry this check without re-entering IDs."
+            "If you already installed it, wait a moment and retry this check without re-entering IDs.",
+            "At this point, the only external step is GitHub-side installation consent; no manual ID copy/paste is needed."
           ],
           links: buildGitHubAppInstallationLinks(appMetadata),
           evidence: {
