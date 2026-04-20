@@ -977,6 +977,9 @@ test("worker setup wizard unlocked json reports github app bootstrap availabilit
     ),
     true
   );
+  assert.equal(htmlJa.includes("<strong>承認境界:</strong>"), true);
+  assert.equal(htmlJa.includes("推奨される次のステップ"), true);
+  assert.equal(htmlJa.includes("ステップ境界"), true);
   assert.equal(
     htmlJa.includes("<strong>アクション:</strong> <code>configure_cloudflare_bootstrap_prerequisites</code>"),
     true

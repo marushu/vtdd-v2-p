@@ -4546,7 +4546,7 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
       <p>${escapeHtml(summary)}</p>
       ${
         approvalBoundary
-          ? `<p><strong>${escapeHtml(locale === "ja" ? "Approval boundary" : "Approval boundary")}:</strong> <code>${escapeHtml(approvalBoundary)}</code></p>`
+          ? `<p><strong>${escapeHtml(locale === "ja" ? "承認境界" : "Approval boundary")}:</strong> <code>${escapeHtml(approvalBoundary)}</code></p>`
           : ""
       }
       ${
@@ -4637,7 +4637,7 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
         recommendedNextStep
           ? `
             <div class="block" style="margin-top: 12px;">
-              <p><strong>${escapeHtml(locale === "ja" ? "Recommended next step" : "Recommended next step")}:</strong></p>
+              <p><strong>${escapeHtml(locale === "ja" ? "推奨される次のステップ" : "Recommended next step")}:</strong></p>
               ${
                 nextStepId
                   ? `<p><code>${escapeHtml(nextStepId)}</code></p>`
@@ -4661,20 +4661,20 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
         stepBoundaries
           ? `
             <div class="block" style="margin-top: 12px;">
-              <p><strong>${escapeHtml(locale === "ja" ? "Step boundary" : "Step boundary")}:</strong></p>
+              <p><strong>${escapeHtml(locale === "ja" ? "ステップ境界" : "Step boundary")}:</strong></p>
               ${
                 vtddOwnedSteps.length > 0
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "VTDD-owned steps" : "VTDD-owned steps")}:</strong> ${vtddOwnedSteps
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "VTDD が担当するステップ" : "VTDD-owned steps")}:</strong> ${vtddOwnedSteps
                       .map((item) => `<code>${escapeHtml(item)}</code>`)
                       .join(", ")}</p>`
                   : ""
               }
               ${
                 externalRedirects.length > 0
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Remaining external redirects" : "Remaining external redirects")}:</strong> ${externalRedirects
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "外部リダイレクトで残っているステップ" : "Remaining external redirects")}:</strong> ${externalRedirects
                       .map((item) => `<code>${escapeHtml(item)}</code>`)
                       .join(", ")}</p>`
-                  : `<p><strong>${escapeHtml(locale === "ja" ? "Remaining external redirects" : "Remaining external redirects")}:</strong> ${escapeHtml(
+                  : `<p><strong>${escapeHtml(locale === "ja" ? "外部リダイレクトで残っているステップ" : "Remaining external redirects")}:</strong> ${escapeHtml(
                       locale === "ja" ? "none" : "none"
                     )}</p>`
               }
