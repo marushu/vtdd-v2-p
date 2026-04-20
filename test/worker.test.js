@@ -1275,6 +1275,52 @@ test("worker setup wizard unlocked json does not expose cloudflare bootstrap tok
   assert.equal("githubManifestConversionToken" in body.githubAppBootstrap, false);
 });
 
+test("worker setup wizard unlocked json missing-only-installation keeps selected repository context wording", async () => {
+  const env = {
+    SETUP_WIZARD_PASSCODE: "2468",
+    CLOUDFLARE_API_TOKEN: "bootstrap-token",
+    CLOUDFLARE_ACCOUNT_ID: "account-id",
+    CLOUDFLARE_WORKER_SCRIPT_NAME: "vtdd-v2-mvp",
+    GITHUB_MANIFEST_CONVERSION_TOKEN: "ghp_conversion_token",
+    GITHUB_APP_ID: "12345",
+    GITHUB_APP_PRIVATE_KEY: "-----BEGIN PRIVATE KEY-----\nplaceholder\n-----END PRIVATE KEY-----"
+  };
+  const { unlockResponse, sessionCookie } = await unlockSetupWizard(env);
+  assert.equal(unlockResponse.status, 200);
+
+  const response = await worker.fetch(
+    new Request("https://example.com/setup/wizard?format=json&repo=sample-org/vtdd-v2", {
+      headers: {
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      }
+    }),
+    env
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(
+    body.approvalBoundBootstrapSession.serviceConnectionModelReadout.github.id,
+    "github_connection_via_installation_binding"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.serviceConnectionModelReadout.github.requiredBecause.includes(
+      "selected repository context"
+    ),
+    true
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.serviceConnectionActionability.github.id,
+    "github_installation_binding_needed_now"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.serviceConnectionActionability.github.summary.includes(
+      "selected repository context"
+    ),
+    true
+  );
+});
+
 test("worker setup wizard records approval-bound bootstrap request without granting authority", async () => {
   const env = {
     SETUP_WIZARD_PASSCODE: "2468",
