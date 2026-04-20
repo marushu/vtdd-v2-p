@@ -3672,6 +3672,11 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                     ? "次に VTDD が detection を再実行し、installation binding と readiness 確認へ進みます。"
                     : "Next, VTDD will rerun detection and continue into installation binding and readiness verification."
                 )}</li>
+                <li>${escapeHtml(
+                  locale === "ja"
+                    ? "この時点の外部ステップは GitHub 側での installation 範囲調整のみで、ID の手動運搬は不要です。"
+                    : "At this point, the only external step is adjusting installation scope on GitHub, without manual ID transport."
+                )}</li>
               </ul>
               ${
                 diagnosticsReturnTo
