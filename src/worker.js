@@ -4139,6 +4139,14 @@ function buildConsumeFailedProgressHint({ locale, consumeResultNextProof }) {
     : "Next, restore the bounded write path and retry with a fresh envelope.";
 }
 
+function buildConsumeResultRequiredActionLabel({ locale, actionId }) {
+  if (actionId === "run_live_readiness_diagnostics_same_flow") {
+    return locale === "ja" ? "live diagnostics を実行" : "Run live diagnostics now";
+  }
+
+  return locale === "ja" ? "同じ setup flow で再確認する" : "Retry in same setup flow";
+}
+
 function renderApprovalBoundBootstrapSession(session, locale = "en") {
   const state = normalizeText(session?.state) || "deferred";
   const summary =
@@ -5082,9 +5090,10 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
                       normalizeText(consumeResultRequiredAction.path)
                     )}" style="margin-top: 12px;">
                       <button type="submit" class="copy-button">${escapeHtml(
-                        locale === "ja"
-                          ? "同じ setup flow で再確認する"
-                          : "Retry in same setup flow"
+                        buildConsumeResultRequiredActionLabel({
+                          locale,
+                          actionId: normalizeText(consumeResultRequiredAction.id)
+                        })
                       )}</button>
                     </form>`
                   : ""
