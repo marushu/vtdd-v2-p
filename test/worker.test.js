@@ -4897,6 +4897,22 @@ test("worker setup wizard reports request-required blocked state after capture f
     body.approvalBoundBootstrapSession.summary,
     "VTDD blocked installation capture in this setup flow because no current GO + passkey request token was present."
   );
+  assert.equal(
+    body.approvalBoundBootstrapSession.requiredAction.id,
+    "record_go_passkey_request_for_capture"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.requiredAction.path,
+    "/setup/wizard/bootstrap-session/request"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.requiredAction.returnTo,
+    "/setup/wizard?format=json&repo=sample-org/vtdd-v2&githubAppCheck=on&bootstrap_session_request=missing"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.requiredAction.approvalBoundary,
+    "GO + passkey"
+  );
   assert.deepEqual(body.approvalBoundBootstrapSession.guidance, [
     "Record a fresh GO + passkey request in this same setup flow before retrying installation capture.",
     "This fail-closed boundary keeps installation binding write approval-bound and auditable."
