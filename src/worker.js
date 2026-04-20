@@ -4147,6 +4147,22 @@ function buildConsumeResultRequiredActionLabel({ locale, actionId }) {
   return locale === "ja" ? "同じ setup flow で再確認する" : "Retry in same setup flow";
 }
 
+function shouldRenderConsumeResultNextProof({ consumeResultNextProof, consumeResultRequiredAction }) {
+  const nextProofId = normalizeText(consumeResultNextProof?.id);
+  if (!nextProofId) {
+    return false;
+  }
+
+  if (
+    nextProofId === "live_readiness_verified_in_same_flow" &&
+    !normalizeText(consumeResultRequiredAction?.id)
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
 function renderApprovalBoundBootstrapSession(session, locale = "en") {
   const state = normalizeText(session?.state) || "deferred";
   const summary =
@@ -5079,7 +5095,10 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
                   : ""
               }
               ${
-                consumeResultNextProof
+                shouldRenderConsumeResultNextProof({
+                  consumeResultNextProof,
+                  consumeResultRequiredAction
+                })
                   ? `<p><strong>${escapeHtml(locale === "ja" ? "Next proof" : "Next proof")}:</strong> <code>${escapeHtml(normalizeText(consumeResultNextProof.id))}</code> ${escapeHtml(normalizeText(consumeResultNextProof.summary))}</p>`
                   : ""
               }
