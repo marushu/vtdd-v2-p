@@ -1282,12 +1282,19 @@ async function evaluateInstallationCaptureBoundary({
         options.map((item) => normalizeText(item?.installationId)).filter(Boolean)
       );
       if (!optionIds.has(normalizedInstallationId)) {
+        const optionIdsList = [...optionIds];
         return {
           ok: false,
           status: 422,
           error: "github_app_installation_capture_invalid_selection_candidate",
           reason:
-            "installation id is not in the current selection candidates for this setup flow"
+            "installation id is not in the current selection candidates for this setup flow",
+          requiredAction: {
+            id: "select_current_installation_candidate",
+            path: SETUP_WIZARD_GITHUB_APP_INSTALLATION_CAPTURE_PATH,
+            returnTo,
+            installationCandidates: optionIdsList
+          }
         };
       }
     }
@@ -1301,7 +1308,13 @@ async function evaluateInstallationCaptureBoundary({
         status: 422,
         error: "github_app_installation_capture_detected_id_mismatch",
         reason:
-          "installation id does not match the detected installation candidate in this setup flow"
+          "installation id does not match the detected installation candidate in this setup flow",
+        requiredAction: {
+          id: "use_detected_installation_candidate_capture",
+          path: SETUP_WIZARD_GITHUB_APP_INSTALLATION_CAPTURE_PATH,
+          returnTo,
+          installationId: detectedInstallationId
+        }
       };
     }
   }
