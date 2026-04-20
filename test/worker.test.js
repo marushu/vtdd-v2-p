@@ -2078,6 +2078,12 @@ test("worker setup wizard selected installation can auto-complete after request 
   assert.equal(statusBody.githubAppSetupCheck.detectedInstallationId, undefined);
   assert.equal(statusBody.githubAppSetupCheck.evidence.stage, "live_probe");
   assert.equal(statusBody.githubAppSetupCheck.evidence.source, "github_app_live");
+  assert.equal(
+    statusBody.githubAppSetupCheck.guidance.includes(
+      "The single-use approval-bound installation-binding request is already consumed and absorbed in this setup flow."
+    ),
+    true
+  );
   assert.equal(statusBody.approvalBoundBootstrapSession.state, "bounded_consume_completed_with_live_proof");
   assert.equal(statusBody.approvalBoundBootstrapSession.envelopeConsumeResult, null);
   assert.equal(calls.length, 1);
