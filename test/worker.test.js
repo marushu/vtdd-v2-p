@@ -3366,7 +3366,6 @@ test("worker setup wizard detects a single github app installation before instal
   assert.deepEqual(body.githubAppSetupCheck.guidance, [
     "Use this detected installation in the same setup flow so VTDD can capture installation binding without manual ID transport.",
     "After capture, run readiness verification so VTDD can prove live repository access.",
-    "When approval-bound continuation is available, no extra provider redirect is needed; continue inside this wizard with GO + passkey.",
     "When approval-bound continuation is available, stay in this wizard and record GO + passkey before VTDD consumes installation binding."
   ]);
   assert.equal(body.githubAppSetupCheck.detectedInstallationId, "125153871");
