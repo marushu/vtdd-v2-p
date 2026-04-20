@@ -1100,7 +1100,16 @@ async function handleGitHubAppInstallationCaptureRequest({ request, url, env }) 
     return json(captureBoundary.status ?? 403, {
       ok: false,
       error: captureBoundary.error,
-      reason: captureBoundary.reason
+      reason: captureBoundary.reason,
+      requiredAction:
+        captureBoundary.error === "approval_bound_request_required_for_selection_capture"
+          ? {
+              id: "record_go_passkey_request_for_capture",
+              path: SETUP_WIZARD_APPROVAL_BOUND_BOOTSTRAP_SESSION_REQUEST_PATH,
+              returnTo,
+              approvalBoundary: "GO + passkey"
+            }
+          : null
     });
   }
 
