@@ -3799,7 +3799,7 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                 <li>${escapeHtml(
                   locale === "ja"
                     ? "installation target が変わらない限り、この段階で GO + passkey request を新規に再発行する必要はありません。"
-                    : "Unless the installation target changes, no new GO + passkey request is needed at this stage."
+                    : "Unless the installation candidate changes, no new GO + passkey request is needed at this stage."
                 )}</li>
                 <li>${escapeHtml(
                   locale === "ja"
@@ -3882,7 +3882,7 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                 <li>${escapeHtml(
                   locale === "ja"
                     ? "installation target が変わらない限り、この段階で GO + passkey request を新規に再発行する必要はありません。"
-                    : "Unless the installation target changes, no new GO + passkey request is needed at this stage."
+                    : "Unless the installation candidate changes, no new GO + passkey request is needed at this stage."
                 )}</li>
                 <li>${escapeHtml(
                   locale === "ja"
@@ -6901,7 +6901,7 @@ function deriveEffectiveGitHubAppSetupCheckFromContinuation({ url, githubAppSetu
       guidance: [
         "VTDD can continue with live GitHub capability from this setup flow.",
         "The single-use approval-bound installation-binding request is already consumed and absorbed in this setup flow.",
-        "No new GO + passkey request is needed in this flow unless the installation target changes.",
+        "No new GO + passkey request is needed in this flow unless the installation candidate changes.",
         "Keep App permissions minimal and expand only when a specific runtime path needs it."
       ],
       evidence: {
@@ -6925,7 +6925,7 @@ function deriveEffectiveGitHubAppSetupCheckFromContinuation({ url, githubAppSetu
       guidance: [
         "Installation binding is already stored in this same setup flow.",
         "The single-use approval-bound request for installation binding is already consumed and absorbed in this setup flow.",
-        "Do not issue a new GO + passkey request for installation binding at this stage unless the installation target changes.",
+        "Do not issue a new GO + passkey request for installation binding at this stage unless the installation candidate changes.",
         "Run githubAppCheck=on again to execute live readiness diagnostics without re-entering installation IDs.",
         "No extra external-provider redirect or manual installation ID transport is needed at this stage."
       ],
@@ -6950,7 +6950,7 @@ function deriveEffectiveGitHubAppSetupCheckFromContinuation({ url, githubAppSetu
       guidance: [
         "Installation binding already completed in this same setup flow, so do not retry installation capture.",
         "The single-use approval-bound request for installation binding is already consumed and absorbed in this setup flow.",
-        "Do not issue a new GO + passkey request for installation binding at this stage unless the installation target changes.",
+        "Do not issue a new GO + passkey request for installation binding at this stage unless the installation candidate changes.",
         "Fix the live probe blocker, then rerun githubAppCheck=on to continue readiness verification."
       ],
       evidence: {
