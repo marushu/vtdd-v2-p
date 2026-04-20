@@ -1762,7 +1762,7 @@ test("worker setup wizard consume can complete a single detected installation bi
   assert.deepEqual(consumeBody.updatedSecrets, ["GITHUB_APP_INSTALLATION_ID"]);
   assert.equal(consumeBody.installationId, "125153871");
   assert.deepEqual(consumeBody.guidance, [
-    "The single-use approval-bound installation-binding request is now consumed for the current installation target.",
+    "The single-use approval-bound installation-binding request is now consumed for the current installation candidate.",
     "Do not issue a new GO + passkey request unless the installation target changes."
   ]);
   assert.equal(consumeBody.proof.state, "ready");
