@@ -3625,7 +3625,7 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
               <p class="meta">${escapeHtml(
                 locale === "ja"
                   ? "GitHub が返した active installation 候補です。値をコピーせず、この setup target に合う owner を選ぶと VTDD が installation binding を保存します。"
-                  : "These are the active installation candidates GitHub returned. Choose the owner that matches this setup target and VTDD will store the installation binding without asking you to copy values."
+                  : "These are the active installation candidates GitHub returned. Choose the owner that matches this setup flow and VTDD will store the installation binding without asking you to copy values."
               )}</p>
               <div class="button-group">
                 ${installationSelectionOptions
@@ -3693,12 +3693,12 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                 <li>${escapeHtml(
                   locale === "ja"
                     ? "VTDD は active installation 候補を取得しましたが、安全に 1 件へ自動確定できませんでした。"
-                    : "VTDD retrieved active installation candidates but could not safely narrow to one target yet."
+                    : "VTDD retrieved active installation candidates but could not safely narrow to one installation candidate yet."
                 )}</li>
                 <li>${escapeHtml(
                   locale === "ja"
                     ? "ID の手動コピーではなく、GitHub 側で対象 installation を確認して同じ setup flow に戻る想定です。"
-                    : "Instead of manual ID transport, confirm the target installation on GitHub and return to the same setup flow."
+                    : "Instead of manual ID transport, confirm the installation candidate on GitHub and return to the same setup flow."
                 )}</li>
                 <li>${escapeHtml(
                   locale === "ja"
@@ -5920,12 +5920,12 @@ async function runGitHubAppSetupCheck(url, env) {
           guidance:
             installationSelectionOptions.length > 0
               ? [
-                  "Keep setup wizard focused on one installation target at a time.",
+                  "Keep setup wizard focused on one installation candidate at a time.",
                   "Choose the correct installation in GitHub, then return here so VTDD can capture it without manual ID transport.",
                   "If your target owner is listed, continue in this wizard without another provider redirect."
                 ]
               : [
-                  "Keep setup wizard focused on one installation target at a time.",
+                  "Keep setup wizard focused on one installation candidate at a time.",
                   "Choose the correct installation in GitHub, then return here so VTDD can capture it without manual ID transport.",
                   "At this point, the only external step is adjusting installation scope on GitHub; no manual ID copy/paste is needed."
                 ],

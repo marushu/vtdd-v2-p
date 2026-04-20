@@ -4078,7 +4078,7 @@ test("worker setup wizard installation selection required exposes direct GitHub 
   const body = await response.json();
   assert.equal(body.githubAppSetupCheck.state, "installation_selection_required");
   assert.deepEqual(body.githubAppSetupCheck.guidance, [
-    "Keep setup wizard focused on one installation target at a time.",
+    "Keep setup wizard focused on one installation candidate at a time.",
     "Choose the correct installation in GitHub, then return here so VTDD can capture it without manual ID transport.",
     "At this point, the only external step is adjusting installation scope on GitHub; no manual ID copy/paste is needed."
   ]);
@@ -4304,7 +4304,7 @@ test("worker setup wizard installation selection required json exposes direct se
   const body = await response.json();
   assert.equal(body.githubAppSetupCheck.state, "installation_selection_required");
   assert.deepEqual(body.githubAppSetupCheck.guidance, [
-    "Keep setup wizard focused on one installation target at a time.",
+    "Keep setup wizard focused on one installation candidate at a time.",
     "Choose the correct installation in GitHub, then return here so VTDD can capture it without manual ID transport.",
     "If your target owner is listed, continue in this wizard without another provider redirect.",
     "When approval-bound continuation is available, stay in this wizard and record GO + passkey before selecting the installation candidate.",
@@ -5094,13 +5094,13 @@ test("worker setup wizard installation selection stays provider-led when candida
   );
   assert.equal(
     html.includes(
-      "VTDD retrieved active installation candidates but could not safely narrow to one target yet."
+      "VTDD retrieved active installation candidates but could not safely narrow to one installation candidate yet."
     ),
     true
   );
   assert.equal(
     html.includes(
-      "Instead of manual ID transport, confirm the target installation on GitHub and return to the same setup flow."
+      "Instead of manual ID transport, confirm the installation candidate on GitHub and return to the same setup flow."
     ),
     true
   );
