@@ -3761,6 +3761,13 @@ test("worker setup wizard auto-rechecks html while awaiting github app installat
     ),
     true
   );
+  assert.equal(
+    html.includes(
+      '<form method="get" action="/setup/wizard?repo=sample-org%2Fvtdd-v2&amp;githubAppCheck=on"><button type="submit" class="copy-button">Run live diagnostics now</button></form>'
+    ),
+    true
+  );
+  assert.equal(html.includes("Run live diagnostics now"), true);
   assert.equal(html.includes('const key = "vtdd_github_installation_recheck_count";'), true);
   assert.equal(html.includes("window.location.reload()"), true);
 });
@@ -3831,6 +3838,10 @@ test("worker setup wizard awaiting installation exposes direct GitHub installati
       url: "https://github.com/apps/vtdd-test"
     }
   ]);
+  assert.equal(
+    body.githubAppSetupCheck.returnTo,
+    "/setup/wizard?repo=sample-org%2Fvtdd-v2&githubAppCheck=on"
+  );
 });
 
 test("worker setup wizard installation selection required exposes direct GitHub app links", async () => {

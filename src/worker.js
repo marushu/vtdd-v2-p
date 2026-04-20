@@ -3390,6 +3390,13 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                     : "Once GitHub exposes the installation, VTDD will continue directly from detection into binding and readiness."
                 )}</li>
               </ul>
+              ${
+                diagnosticsReturnTo
+                  ? `<form method="get" action="${escapeHtml(diagnosticsReturnTo)}"><button type="submit" class="copy-button">${escapeHtml(
+                      locale === "ja" ? "live diagnostics を実行" : "Run live diagnostics now"
+                    )}</button></form>`
+                  : ""
+              }
               <p class="meta">${escapeHtml(
                 locale === "ja"
                   ? "同じ setup flow の中で数回だけ自動再確認します。GitHub 側で install が反映されれば、そのまま detection に進みます。"
@@ -5393,6 +5400,9 @@ async function runGitHubAppSetupCheck(url, env) {
       if (detection.state === "awaiting_installation") {
         return {
           state: "awaiting_installation",
+          returnTo:
+            normalizeSetupWizardDiagnosticsReturnTo(`${url.pathname}${url.search || ""}`) ||
+            "/setup/wizard?githubAppCheck=on",
           summary:
             "VTDD has a GitHub App identity, but GitHub has not exposed an installation for capture yet.",
           guidance: [
