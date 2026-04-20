@@ -4764,24 +4764,24 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
         progressReadout
           ? `
             <div class="block" style="margin-top: 12px;">
-              <p><strong>${escapeHtml(locale === "ja" ? "Flow progress" : "Flow progress")}:</strong></p>
+              <p><strong>${escapeHtml(locale === "ja" ? "フロー進捗" : "Flow progress")}:</strong></p>
               ${
                 completedPhases.length > 0
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Completed phases" : "Completed phases")}:</strong> ${completedPhases
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "完了フェーズ" : "Completed phases")}:</strong> ${completedPhases
                       .map((item) => `<code>${escapeHtml(item)}</code>`)
                       .join(", ")}</p>`
-                  : `<p><strong>${escapeHtml(locale === "ja" ? "Completed phases" : "Completed phases")}:</strong> ${escapeHtml(
-                      locale === "ja" ? "none yet" : "none yet"
+                  : `<p><strong>${escapeHtml(locale === "ja" ? "完了フェーズ" : "Completed phases")}:</strong> ${escapeHtml(
+                      locale === "ja" ? "まだなし" : "none yet"
                     )}</p>`
               }
               ${
                 currentBlocker
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Current blocker" : "Current blocker")}:</strong> <code>${escapeHtml(normalizeText(currentBlocker.id))}</code> ${escapeHtml(normalizeText(currentBlocker.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "現在のブロッカー" : "Current blocker")}:</strong> <code>${escapeHtml(normalizeText(currentBlocker.id))}</code> ${escapeHtml(normalizeText(currentBlocker.summary))}</p>`
                   : ""
               }
               ${
                 remainingPhases.length > 0
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Remaining phases" : "Remaining phases")}:</strong> ${remainingPhases
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "残りフェーズ" : "Remaining phases")}:</strong> ${remainingPhases
                       .map((item) => `<code>${escapeHtml(item)}</code>`)
                       .join(", ")}</p>`
                   : ""
