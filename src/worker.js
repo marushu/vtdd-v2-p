@@ -4109,6 +4109,11 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                     ? "次に VTDD が installation binding を設定し、そのまま readiness 確認に進みます。"
                     : "Next, VTDD will store installation binding and continue into readiness verification."
                 )}</li>
+                <li>${escapeHtml(
+                  locale === "ja"
+                    ? "approval-bound 継続がまだ利用できない場合でも、この setup flow の bounded capture だけで installation binding を進めます。"
+                    : "Even when approval-bound continuation is not available yet, this same setup flow can proceed with bounded installation-binding capture."
+                )}</li>
               </ul>
               <p class="meta">${escapeHtml(
                 locale === "ja"
