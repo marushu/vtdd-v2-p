@@ -4075,6 +4075,103 @@ test("worker setup wizard installation selection required json exposes direct se
   );
 });
 
+test("worker setup wizard selection-required state exposes approval-bound request action when available", async () => {
+  const { privateKey } = generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+    privateKeyEncoding: {
+      type: "pkcs8",
+      format: "pem"
+    },
+    publicKeyEncoding: {
+      type: "spki",
+      format: "pem"
+    }
+  });
+  const env = {
+    SETUP_WIZARD_PASSCODE: "2468",
+    CLOUDFLARE_API_TOKEN: "bootstrap-token",
+    CLOUDFLARE_ACCOUNT_ID: "account-id",
+    CLOUDFLARE_WORKER_SCRIPT_NAME: "vtdd-v2-mvp",
+    GITHUB_MANIFEST_CONVERSION_TOKEN: "gho_operator_token",
+    GITHUB_APP_ID: "12345",
+    GITHUB_APP_PRIVATE_KEY: privateKey,
+    GITHUB_API_FETCH: async (url) => {
+      if (String(url).endsWith("/app/installations")) {
+        return new Response(
+          JSON.stringify([
+            { id: 111, account: { login: "other-org" } },
+            { id: 222, account: { login: "sample-org" } }
+          ]),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          }
+        );
+      }
+      return new Response(JSON.stringify({}), {
+        status: 404,
+        headers: { "content-type": "application/json" }
+      });
+    }
+  };
+  const { sessionCookie } = await unlockSetupWizard(
+    env,
+    "/setup/wizard?repo=sample-org/vtdd-v2&repo=other-org/another-repo&githubAppCheck=on"
+  );
+
+  const jsonResponse = await worker.fetch(
+    new Request(
+      "https://example.com/setup/wizard?format=json&repo=sample-org/vtdd-v2&repo=other-org/another-repo&githubAppCheck=on",
+      {
+        headers: {
+          cookie: `vtdd_setup_access=${sessionCookie}`
+        }
+      }
+    ),
+    env
+  );
+
+  assert.equal(jsonResponse.status, 200);
+  const jsonBody = await jsonResponse.json();
+  assert.equal(jsonBody.githubAppSetupCheck.state, "installation_selection_required");
+  assert.equal(
+    jsonBody.githubAppSetupCheck.requestInstallationSelectionAction.id,
+    "request_selected_installation_binding"
+  );
+  assert.equal(
+    jsonBody.githubAppSetupCheck.requestInstallationSelectionAction.path,
+    "/setup/wizard/bootstrap-session/request"
+  );
+  assert.equal(
+    jsonBody.githubAppSetupCheck.requestInstallationSelectionAction.returnTo,
+    "/setup/wizard?repo=sample-org%2Fvtdd-v2&repo=other-org%2Fanother-repo&githubAppCheck=on"
+  );
+  assert.equal(jsonBody.approvalBoundBootstrapSession.requestEnabled, true);
+  assert.equal(jsonBody.approvalBoundBootstrapSession.requestSurfacedInline, true);
+
+  const htmlResponse = await worker.fetch(
+    new Request(
+      "https://example.com/setup/wizard?repo=sample-org/vtdd-v2&repo=other-org/another-repo&githubAppCheck=on",
+      {
+        headers: {
+          cookie: `vtdd_setup_access=${sessionCookie}`
+        }
+      }
+    ),
+    env
+  );
+  assert.equal(htmlResponse.status, 200);
+  const html = await htmlResponse.text();
+  assert.equal(html.includes("Record GO + passkey request and continue"), true);
+  assert.equal(html.includes('action="/setup/wizard/bootstrap-session/request"'), true);
+  assert.equal(
+    html.includes(
+      "When approval-bound write is available, recording the GO + passkey request first lets VTDD absorb consume/proof in this same setup flow."
+    ),
+    true
+  );
+});
+
 test("worker setup wizard installation selection stays provider-led when candidate owners are ambiguous", async () => {
   const { privateKey } = generateKeyPairSync("rsa", {
     modulusLength: 2048,

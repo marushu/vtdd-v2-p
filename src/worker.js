@@ -265,8 +265,12 @@ async function handleSetupWizardRequest({ request, url, env }) {
     githubAppSetupCheck: rawGitHubAppSetupCheck,
     approvalBoundBootstrapSession
   });
-  const githubAppSetupCheck = attachDetectedInstallationCompletionAction({
+  const githubAppSetupCheckWithSelectionRequest = attachInstallationSelectionRequestAction({
     githubAppSetupCheck: githubAppSetupCheckWithRequest,
+    approvalBoundBootstrapSession
+  });
+  const githubAppSetupCheck = attachDetectedInstallationCompletionAction({
+    githubAppSetupCheck: githubAppSetupCheckWithSelectionRequest,
     approvalBoundBootstrapSession
   });
   const approvalBoundBootstrapSessionWithInlineRequest = attachInlineRequestSurfaceHint({
@@ -3136,6 +3140,11 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
   const requestActionReturnTo = normalizeGitHubAppBootstrapReturnTo(
     requestDetectedInstallationAction?.returnTo
   );
+  const requestInstallationSelectionAction = check?.requestInstallationSelectionAction ?? null;
+  const selectionRequestActionPath = normalizeText(requestInstallationSelectionAction?.path);
+  const selectionRequestActionReturnTo = normalizeGitHubAppBootstrapReturnTo(
+    requestInstallationSelectionAction?.returnTo
+  );
   const completeDetectedInstallationAction = check?.completeDetectedInstallationAction ?? null;
   const completionActionPath = normalizeText(completeDetectedInstallationAction?.path);
   const completionActionReturnTo = normalizeGitHubAppBootstrapReturnTo(
@@ -3295,12 +3304,37 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                     ? "次に owner を選ぶと、VTDD が installation binding を設定し readiness 確認に進みます。"
                     : "Next, selecting the owner lets VTDD store installation binding and continue into readiness verification."
                 )}</li>
+                ${
+                  selectionRequestActionPath && selectionRequestActionReturnTo
+                    ? listItem(
+                        locale === "ja"
+                          ? "approval-bound write が利用可能な場合は、先に GO + passkey request を記録すると同じ setup flow で consume/proof を吸収できます。"
+                          : "When approval-bound write is available, recording the GO + passkey request first lets VTDD absorb consume/proof in this same setup flow."
+                      )
+                    : ""
+                }
                 <li>${escapeHtml(
                   locale === "ja"
                     ? "対象 owner が見当たらない場合は GitHub 側で installation を調整し、この setup flow に戻ると VTDD が再検出します。"
                     : "If the target owner is not listed, adjust installation scope on GitHub and return to this setup flow so VTDD can re-detect."
                 )}</li>
               </ul>
+              ${
+                selectionRequestActionPath && selectionRequestActionReturnTo
+                  ? `<form method="post" action="${escapeHtml(selectionRequestActionPath)}">
+                      <input type="hidden" name="returnTo" value="${escapeHtml(
+                        selectionRequestActionReturnTo
+                      )}" />
+                      <input type="hidden" name="approval_phrase" value="GO" />
+                      <input type="hidden" name="passkey_verified" value="true" />
+                      <button type="submit" class="copy-button">${escapeHtml(
+                        locale === "ja"
+                          ? "GO + passkey request を記録して続行"
+                          : "Record GO + passkey request and continue"
+                      )}</button>
+                    </form>`
+                  : ""
+              }
               <p class="meta">${escapeHtml(
                 locale === "ja"
                   ? "GitHub が返した active installation 候補です。値をコピーせず、この setup target に合う owner を選ぶと VTDD が installation binding を保存します。"
@@ -9629,6 +9663,48 @@ function attachDetectedInstallationRequestAction({
   };
 }
 
+function attachInstallationSelectionRequestAction({
+  githubAppSetupCheck,
+  approvalBoundBootstrapSession
+}) {
+  const setupCheck = githubAppSetupCheck ?? null;
+  const session = approvalBoundBootstrapSession ?? null;
+  const state = normalizeText(setupCheck?.state);
+  const options = Array.isArray(setupCheck?.installationSelectionOptions)
+    ? setupCheck.installationSelectionOptions
+    : [];
+  const requestEnabled = toBoolean(session?.requestEnabled);
+  const requestPath = normalizeText(session?.requestPath);
+  const returnTo = normalizeSetupWizardContinuationReturnTo(
+    session?.returnTo || setupCheck?.returnTo
+  );
+  const plannedWrites = Array.isArray(session?.contract?.preview?.plannedWrites)
+    ? session.contract.preview.plannedWrites
+    : [];
+  const installationOnlyWrite =
+    plannedWrites.length === 1 && plannedWrites[0] === "GITHUB_APP_INSTALLATION_ID";
+
+  if (
+    state !== "installation_selection_required" ||
+    options.length === 0 ||
+    !requestEnabled ||
+    !requestPath ||
+    !returnTo ||
+    !installationOnlyWrite
+  ) {
+    return setupCheck;
+  }
+
+  return {
+    ...setupCheck,
+    requestInstallationSelectionAction: {
+      id: "request_selected_installation_binding",
+      path: requestPath,
+      returnTo
+    }
+  };
+}
+
 function attachInlineRequestSurfaceHint({
   approvalBoundBootstrapSession,
   githubAppSetupCheck
@@ -9640,7 +9716,10 @@ function attachInlineRequestSurfaceHint({
 
   return {
     ...session,
-    requestSurfacedInline: Boolean(githubAppSetupCheck?.requestDetectedInstallationAction)
+    requestSurfacedInline: Boolean(
+      githubAppSetupCheck?.requestDetectedInstallationAction ||
+        githubAppSetupCheck?.requestInstallationSelectionAction
+    )
   };
 }
 
