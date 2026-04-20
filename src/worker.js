@@ -3260,6 +3260,24 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                   ? "VTDD が installation を検出し、そのまま継続できます"
                   : "VTDD found the installation and can continue now"
               )}</strong></p>
+              <p><strong>${escapeHtml(locale === "ja" ? "Setup progress" : "Setup progress")}</strong></p>
+              <ul>
+                <li>${escapeHtml(
+                  locale === "ja"
+                    ? "GitHub App installation を検出しました。"
+                    : "GitHub App installation detected."
+                )}</li>
+                <li>${escapeHtml(
+                  locale === "ja"
+                    ? "この setup flow は検出済み installation 候補と結び付いています。"
+                    : "This setup flow is now bound to the detected installation candidate."
+                )}</li>
+                <li>${escapeHtml(
+                  locale === "ja"
+                    ? "次に VTDD が installation binding を保存し、そのまま readiness 確認に進みます。"
+                    : "Next, VTDD will store the installation binding and continue into readiness verification."
+                )}</li>
+              </ul>
               <p class="meta">${escapeHtml(
                 locale === "ja"
                   ? "GitHub 側の同意が終わっていれば、VTDD が installation binding を保存し、そのまま readiness 確認まで進めます。"
@@ -3288,6 +3306,24 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                   ? "VTDD が installation を検出しました。次は承認つきで続行します"
                   : "VTDD found the installation. The next step is approval-bound continuation"
               )}</strong></p>
+              <p><strong>${escapeHtml(locale === "ja" ? "Setup progress" : "Setup progress")}</strong></p>
+              <ul>
+                <li>${escapeHtml(
+                  locale === "ja"
+                    ? "GitHub App installation を検出しました。"
+                    : "GitHub App installation detected."
+                )}</li>
+                <li>${escapeHtml(
+                  locale === "ja"
+                    ? "VTDD は manual ID 運搬なしで同じ setup flow を保っています。"
+                    : "VTDD is keeping the same setup flow without asking for manual ID transport."
+                )}</li>
+                <li>${escapeHtml(
+                  locale === "ja"
+                    ? "次に GO + passkey request を記録すると、VTDD が installation binding と readiness 確認に進みます。"
+                    : "Next, recording the GO + passkey request lets VTDD continue into installation binding and readiness verification."
+                )}</li>
+              </ul>
               <p class="meta">${escapeHtml(
                 locale === "ja"
                   ? "追加の値の運搬ではなく、ここで GO + passkey request を記録すると、VTDD が同じ setup flow の中で installation binding と readiness 確認に進みます。"
@@ -3315,6 +3351,24 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                   ? "VTDD が installation を 1 件検出しました"
                   : "VTDD found a single GitHub App installation"
               )}</strong></p>
+              <p><strong>${escapeHtml(locale === "ja" ? "Setup progress" : "Setup progress")}</strong></p>
+              <ul>
+                <li>${escapeHtml(
+                  locale === "ja"
+                    ? "GitHub App installation を 1 件検出しました。"
+                    : "A single GitHub App installation was detected."
+                )}</li>
+                <li>${escapeHtml(
+                  locale === "ja"
+                    ? "検出した installation ID はこの setup flow の候補として保持されています。"
+                    : "The detected installation ID is held as the candidate for this setup flow."
+                )}</li>
+                <li>${escapeHtml(
+                  locale === "ja"
+                    ? "次に VTDD がこの installation binding を保存できる状態に進みます。"
+                    : "Next, VTDD can move this flow into stored installation binding."
+                )}</li>
+              </ul>
               <p class="meta">${escapeHtml(
                 locale === "ja"
                   ? "この installation ID を保存すると、VTDD は short-lived installation token を mint できる状態に近づきます。"

@@ -3761,6 +3761,18 @@ test("worker setup wizard can request detected installation continuation from gi
   assert.equal(htmlResponse.status, 200);
   const html = await htmlResponse.text();
   assert.equal(html.includes("Continue with GO + passkey"), true);
+  assert.equal(html.includes("Setup progress"), true);
+  assert.equal(html.includes("GitHub App installation detected."), true);
+  assert.equal(
+    html.includes("VTDD is keeping the same setup flow without asking for manual ID transport."),
+    true
+  );
+  assert.equal(
+    html.includes(
+      "Next, recording the GO + passkey request lets VTDD continue into installation binding and readiness verification."
+    ),
+    true
+  );
   assert.equal(html.includes('action="/setup/wizard/bootstrap-session/request"'), true);
   assert.equal(html.includes("Record GO + passkey request"), false);
   assert.equal(html.includes("Store Detected Installation ID"), false);
