@@ -7823,7 +7823,7 @@ function buildBootstrapSessionServiceConnectionModelReadout({
         id: "github_connection_via_app_creation_and_install",
         connectionType: "login_or_provider_consent",
         requiredBecause:
-          "VTDD needs GitHub App identity and installation consent so it can mint installation tokens and reach the target repository.",
+          "VTDD needs GitHub App identity and installation consent so it can mint installation tokens and reach the selected repository context.",
         summary:
           "GitHub connection is currently expressed as App creation and installation consent rather than a generic sign-in screen."
       },
@@ -7844,7 +7844,7 @@ function buildBootstrapSessionServiceConnectionModelReadout({
         id: "github_connection_via_installation_binding",
         connectionType: "provider_consent_and_binding",
         requiredBecause:
-          "VTDD still needs the GitHub App installation to be connected to the target repository before live access can be proven.",
+          "VTDD still needs the GitHub App installation to be connected to the selected repository context before live access can be proven.",
         summary:
           "GitHub connection is narrowed to installation binding, which is a provider-side consent/binding step rather than raw credential entry."
       },
@@ -7953,7 +7953,7 @@ function buildBootstrapSessionServiceConnectionActionability({
         userActionNeededNow: "yes",
         expectedActionType: "installation_binding_or_consent",
         summary:
-          "GitHub still needs the installation to be connected to the target repository before setup can continue."
+          "GitHub still needs the installation to be connected to the selected repository context before setup can continue."
       },
       cloudflare: {
         id: "cloudflare_bounded_write_no_login_needed_now",
