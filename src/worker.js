@@ -10346,13 +10346,21 @@ function attachSelectionRequestGuidance({ githubAppSetupCheck }) {
 
   const inFlowGuidance =
     "When approval-bound continuation is available, stay in this wizard and record GO + passkey before selecting the installation candidate.";
-  if (guidance.includes(inFlowGuidance)) {
-    return setupCheck;
-  }
+  const singleUseGuidance =
+    "This GO + passkey continuation should remain single-use and bound to the selected installation candidate.";
+  const genericGuidance =
+    "When approval-bound continuation is available, no extra provider redirect is needed; continue inside this wizard with GO + passkey.";
+  const guidanceWithoutGeneric = guidance.filter((item) => item !== genericGuidance);
+  const nextGuidance = guidanceWithoutGeneric.includes(inFlowGuidance)
+    ? guidanceWithoutGeneric
+    : [...guidanceWithoutGeneric, inFlowGuidance];
+  const finalGuidance = nextGuidance.includes(singleUseGuidance)
+    ? nextGuidance
+    : [...nextGuidance, singleUseGuidance];
 
   return {
     ...setupCheck,
-    guidance: [...guidance, inFlowGuidance]
+    guidance: finalGuidance
   };
 }
 

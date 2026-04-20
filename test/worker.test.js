@@ -4252,7 +4252,8 @@ test("worker setup wizard installation selection required json exposes direct se
     "Keep setup wizard focused on one installation target at a time.",
     "Choose the correct installation in GitHub, then return here so VTDD can capture it without manual ID transport.",
     "If your target owner is listed, continue in this wizard without another provider redirect.",
-    "When approval-bound continuation is available, stay in this wizard and record GO + passkey before selecting the installation candidate."
+    "When approval-bound continuation is available, stay in this wizard and record GO + passkey before selecting the installation candidate.",
+    "This GO + passkey continuation should remain single-use and bound to the selected installation candidate."
   ]);
   assert.deepEqual(body.githubAppSetupCheck.installationSelectionOptions, [
     {
@@ -4334,6 +4335,12 @@ test("worker setup wizard selection-required state exposes approval-bound reques
   assert.equal(
     jsonBody.githubAppSetupCheck.guidance.includes(
       "When approval-bound continuation is available, stay in this wizard and record GO + passkey before selecting the installation candidate."
+    ),
+    true
+  );
+  assert.equal(
+    jsonBody.githubAppSetupCheck.guidance.includes(
+      "This GO + passkey continuation should remain single-use and bound to the selected installation candidate."
     ),
     true
   );
