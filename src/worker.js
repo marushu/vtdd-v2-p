@@ -3144,6 +3144,9 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
   const completionActionEnvelopeToken = normalizeText(
     completeDetectedInstallationAction?.envelopeToken
   );
+  const diagnosticsReturnTo =
+    normalizeSetupWizardDiagnosticsReturnTo(returnTo || "/setup/wizard?githubAppCheck=on") ||
+    "/setup/wizard?githubAppCheck=on";
   const installationSelectionOptions = Array.isArray(check?.installationSelectionOptions)
     ? check.installationSelectionOptions
         .map((item) => ({
@@ -3475,6 +3478,13 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                     : "Rerunning githubAppCheck=on in the same flow refreshes readiness evidence toward verified state."
                 )}</li>
               </ul>
+              ${
+                diagnosticsReturnTo
+                  ? `<form method="get" action="${escapeHtml(diagnosticsReturnTo)}"><button type="submit" class="copy-button">${escapeHtml(
+                      locale === "ja" ? "live diagnostics を実行" : "Run live diagnostics now"
+                    )}</button></form>`
+                  : ""
+              }
             </div>
           `
           : state === "configured"
@@ -3503,6 +3513,13 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                     : "Once live readiness evidence is recorded, wizard can report verified progress."
                 )}</li>
               </ul>
+              ${
+                diagnosticsReturnTo
+                  ? `<form method="get" action="${escapeHtml(diagnosticsReturnTo)}"><button type="submit" class="copy-button">${escapeHtml(
+                      locale === "ja" ? "live diagnostics を実行" : "Run live diagnostics now"
+                    )}</button></form>`
+                  : ""
+              }
             </div>
           `
           : ""
@@ -5435,6 +5452,9 @@ async function runGitHubAppSetupCheck(url, env) {
   if (!diagnosticsEnabled) {
     return {
       state: "configured",
+      returnTo:
+        normalizeSetupWizardDiagnosticsReturnTo(`${url.pathname}${url.search || ""}`) ||
+        "/setup/wizard?githubAppCheck=on",
       summary:
         "GitHub App bootstrap secrets are configured on Worker runtime. Add githubAppCheck=on to verify token mint and live repository access.",
       guidance: [
@@ -6206,6 +6226,9 @@ function deriveEffectiveGitHubAppSetupCheckFromContinuation({ url, githubAppSetu
       ...rest,
       state: "configured",
       progressVariant: "post_consume_configured",
+      returnTo:
+        normalizeSetupWizardDiagnosticsReturnTo(rest.returnTo || `${url.pathname}${url.search || ""}`) ||
+        "/setup/wizard?githubAppCheck=on",
       links: [],
       summary:
         "GitHub App installation binding completed in the current setup flow, and runtime now reports the GitHub App configuration as complete pending live diagnostics.",
@@ -6225,6 +6248,9 @@ function deriveEffectiveGitHubAppSetupCheckFromContinuation({ url, githubAppSetu
       ...rest,
       state: "probe_failed",
       progressVariant: "post_consume_probe_failed",
+      returnTo:
+        normalizeSetupWizardDiagnosticsReturnTo(rest.returnTo || `${url.pathname}${url.search || ""}`) ||
+        "/setup/wizard?githubAppCheck=on",
       links: [],
       summary:
         "GitHub App installation binding completed in the current setup flow, but the immediate live readiness probe still failed closed.",
@@ -9669,6 +9695,20 @@ function normalizeSetupWizardContinuationReturnTo(value) {
 
   const url = new URL(text, "https://example.com");
   url.searchParams.delete("format");
+  return `${url.pathname}${url.search}`;
+}
+
+function normalizeSetupWizardDiagnosticsReturnTo(value) {
+  const text = normalizeSetupWizardContinuationReturnTo(value);
+  if (!text) {
+    return "";
+  }
+
+  const url = new URL(text, "https://example.com");
+  url.searchParams.delete(SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_STATE_PARAM);
+  url.searchParams.delete(SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_ENVELOPE_ID_PARAM);
+  url.searchParams.delete(SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_REASON_PARAM);
+  url.searchParams.delete(SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_PROOF_STATE_PARAM);
   return `${url.pathname}${url.search}`;
 }
 

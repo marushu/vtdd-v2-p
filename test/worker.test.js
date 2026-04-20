@@ -3586,6 +3586,8 @@ test("worker setup wizard configured html shows bootstrap-complete setup progres
     html.includes("Next, run githubAppCheck=on to verify token minting and live repository access."),
     true
   );
+  assert.equal(html.includes('action="/setup/wizard?repo=sample-org%2Fvtdd-v2&amp;githubAppCheck=on"'), true);
+  assert.equal(html.includes("Run live diagnostics now"), true);
 });
 
 test("worker setup wizard configured json without continuation does not expose post-consume variant", async () => {
@@ -3675,6 +3677,14 @@ test("worker setup wizard consume-proof configured html shows post-binding setup
     ),
     true
   );
+  assert.equal(html.includes('action="/setup/wizard?repo=sample-org%2Fvtdd-v2&amp;githubAppCheck=on"'), true);
+  assert.equal(
+    html.includes(
+      'action="/setup/wizard?repo=sample-org%2Fvtdd-v2&amp;githubAppCheck=on&amp;bootstrap_session_consume=completed'
+    ),
+    false
+  );
+  assert.equal(html.includes("Run live diagnostics now"), true);
 });
 
 test("worker setup wizard auto-rechecks html while awaiting github app installation", async () => {
