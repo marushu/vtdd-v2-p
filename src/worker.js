@@ -3155,6 +3155,11 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
     : [];
   const listItem = (text) => `<li>${escapeHtml(text)}</li>`;
   const evidenceStage = normalizeText(evidence?.stage);
+  const configuredAfterConsume = guidance.some(
+    (item) =>
+      typeof item === "string" &&
+      item.includes("Installation binding is already stored in this same setup flow.")
+  );
 
   const evidenceItems = [];
   if (normalizeText(evidence?.stage)) {
@@ -3444,6 +3449,65 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                   locale === "ja"
                     ? "probe blocker が解消されると、VTDD は installation detection から binding/readiness へ再開します。"
                     : "Once the probe blocker is cleared, VTDD resumes from installation detection into binding and readiness."
+                )}</li>
+              </ul>
+            </div>
+          `
+          : ""
+      }
+      ${
+        state === "configured" && configuredAfterConsume
+          ? `
+            <div class="block" style="margin-top: 12px;">
+              <p><strong>${escapeHtml(
+                locale === "ja"
+                  ? "installation binding は完了し、次は live readiness 確認です"
+                  : "Installation binding is complete, and the next step is live readiness verification"
+              )}</strong></p>
+              <p><strong>${escapeHtml(locale === "ja" ? "Setup progress" : "Setup progress")}</strong></p>
+              <ul>
+                <li>${escapeHtml(
+                  locale === "ja"
+                    ? "installation binding は同じ setup flow ですでに保存されています。"
+                    : "Installation binding is already stored in this same setup flow."
+                )}</li>
+                <li>${escapeHtml(
+                  locale === "ja"
+                    ? "次は installation capture をやり直さず、live readiness diagnostics を実行する段階です。"
+                    : "The next step is live readiness diagnostics, not another installation capture step."
+                )}</li>
+                <li>${escapeHtml(
+                  locale === "ja"
+                    ? "githubAppCheck=on を同じ flow で再実行すると、verified へ向けた readiness 証跡を更新できます。"
+                    : "Rerunning githubAppCheck=on in the same flow refreshes readiness evidence toward verified state."
+                )}</li>
+              </ul>
+            </div>
+          `
+          : state === "configured"
+          ? `
+            <div class="block" style="margin-top: 12px;">
+              <p><strong>${escapeHtml(
+                locale === "ja"
+                  ? "GitHub App runtime 設定は完了し、次は live 診断です"
+                  : "GitHub App runtime configuration is complete, and live diagnostics is next"
+              )}</strong></p>
+              <p><strong>${escapeHtml(locale === "ja" ? "Setup progress" : "Setup progress")}</strong></p>
+              <ul>
+                <li>${escapeHtml(
+                  locale === "ja"
+                    ? "GitHub App bootstrap の必須 runtime 設定は Worker 上で揃っています。"
+                    : "Required GitHub App bootstrap runtime settings are present on Worker."
+                )}</li>
+                <li>${escapeHtml(
+                  locale === "ja"
+                    ? "次に githubAppCheck=on で token mint と live repository access を確認します。"
+                    : "Next, run githubAppCheck=on to verify token minting and live repository access."
+                )}</li>
+                <li>${escapeHtml(
+                  locale === "ja"
+                    ? "この live readiness 証跡が揃うと、wizard は verified の進捗を示せます。"
+                    : "Once live readiness evidence is recorded, wizard can report verified progress."
                 )}</li>
               </ul>
             </div>

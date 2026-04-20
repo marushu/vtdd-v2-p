@@ -3550,6 +3550,102 @@ test("worker setup wizard consume proof configured rewrites guidance to live-rea
   assert.equal(body.githubAppSetupCheck.evidence.source, "worker_runtime");
 });
 
+test("worker setup wizard configured html shows bootstrap-complete setup progress", async () => {
+  const { privateKey } = generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+    privateKeyEncoding: {
+      type: "pkcs8",
+      format: "pem"
+    },
+    publicKeyEncoding: {
+      type: "spki",
+      format: "pem"
+    }
+  });
+  const env = {
+    GITHUB_APP_ID: "12345",
+    GITHUB_APP_PRIVATE_KEY: privateKey,
+    GITHUB_APP_INSTALLATION_ID: "125153871"
+  };
+
+  const response = await worker.fetch(
+    new Request("https://example.com/setup/wizard?repo=sample-org/vtdd-v2"),
+    env
+  );
+
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.equal(html.includes("<code>configured</code>"), true);
+  assert.equal(
+    html.includes("GitHub App runtime configuration is complete, and live diagnostics is next"),
+    true
+  );
+  assert.equal(
+    html.includes("Next, run githubAppCheck=on to verify token minting and live repository access."),
+    true
+  );
+});
+
+test("worker setup wizard consume-proof configured html shows post-binding setup progress", async () => {
+  const { privateKey } = generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+    privateKeyEncoding: {
+      type: "pkcs8",
+      format: "pem"
+    },
+    publicKeyEncoding: {
+      type: "spki",
+      format: "pem"
+    }
+  });
+  const env = {
+    SETUP_WIZARD_PASSCODE: "2468",
+    GITHUB_APP_ID: "12345",
+    GITHUB_APP_PRIVATE_KEY: privateKey,
+    GITHUB_API_FETCH: async (url) => {
+      if (String(url).endsWith("/app/installations")) {
+        return new Response(JSON.stringify([{ id: 125153871 }]), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        });
+      }
+      return new Response(JSON.stringify({}), {
+        status: 404,
+        headers: { "content-type": "application/json" }
+      });
+    }
+  };
+  const { sessionCookie } = await unlockSetupWizard(
+    env,
+    "/setup/wizard?repo=sample-org/vtdd-v2&githubAppCheck=on"
+  );
+
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/setup/wizard?repo=sample-org/vtdd-v2&githubAppCheck=on&bootstrap_session_consume=completed&bootstrap_session_consume_proof_state=configured",
+      {
+        headers: {
+          cookie: `vtdd_setup_access=${sessionCookie}`
+        }
+      }
+    ),
+    env
+  );
+
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.equal(
+    html.includes("Installation binding is complete, and the next step is live readiness verification"),
+    true
+  );
+  assert.equal(
+    html.includes(
+      "The next step is live readiness diagnostics, not another installation capture step."
+    ),
+    true
+  );
+});
+
 test("worker setup wizard auto-rechecks html while awaiting github app installation", async () => {
   const { privateKey } = generateKeyPairSync("rsa", {
     modulusLength: 2048,
