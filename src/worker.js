@@ -5833,17 +5833,25 @@ async function runGitHubAppSetupCheck(url, env) {
       }
 
       if (detection.state === "installation_selection_required") {
+        const installationSelectionOptions = detection.selectionOptions ?? [];
         return {
           state: "installation_selection_required",
           summary:
             "VTDD found multiple GitHub App installations, so it cannot safely capture one automatically.",
-          guidance: [
-            "Keep setup wizard focused on one installation target at a time.",
-            "Choose the correct installation in GitHub, then return here so VTDD can capture it without manual ID transport.",
-            "At this point, the only external step is adjusting installation scope on GitHub; no manual ID copy/paste is needed."
-          ],
+          guidance:
+            installationSelectionOptions.length > 0
+              ? [
+                  "Keep setup wizard focused on one installation target at a time.",
+                  "Choose the correct installation in GitHub, then return here so VTDD can capture it without manual ID transport.",
+                  "If your target owner is listed, continue in this wizard without another provider redirect."
+                ]
+              : [
+                  "Keep setup wizard focused on one installation target at a time.",
+                  "Choose the correct installation in GitHub, then return here so VTDD can capture it without manual ID transport.",
+                  "At this point, the only external step is adjusting installation scope on GitHub; no manual ID copy/paste is needed."
+                ],
           links: buildGitHubAppInstallationLinks(appMetadata),
-          installationSelectionOptions: detection.selectionOptions ?? [],
+          installationSelectionOptions,
           installationCapturePath: SETUP_WIZARD_GITHUB_APP_INSTALLATION_CAPTURE_PATH,
           returnTo:
             normalizeSetupWizardDiagnosticsReturnTo(`${url.pathname}${url.search || ""}`) ||

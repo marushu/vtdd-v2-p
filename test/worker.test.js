@@ -4217,6 +4217,11 @@ test("worker setup wizard installation selection required json exposes direct se
   assert.equal(response.status, 200);
   const body = await response.json();
   assert.equal(body.githubAppSetupCheck.state, "installation_selection_required");
+  assert.deepEqual(body.githubAppSetupCheck.guidance, [
+    "Keep setup wizard focused on one installation target at a time.",
+    "Choose the correct installation in GitHub, then return here so VTDD can capture it without manual ID transport.",
+    "If your target owner is listed, continue in this wizard without another provider redirect."
+  ]);
   assert.deepEqual(body.githubAppSetupCheck.installationSelectionOptions, [
     {
       installationId: "111",
