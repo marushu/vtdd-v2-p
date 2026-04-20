@@ -3846,6 +3846,11 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                     ? "githubAppCheck=on を同じ flow で再実行すると、verified へ向けた readiness 証跡を更新できます。"
                     : "Rerunning githubAppCheck=on in the same flow refreshes readiness evidence toward verified state."
                 )}</li>
+                <li>${escapeHtml(
+                  locale === "ja"
+                    ? "この段階では外部プロバイダ画面への追加移動や installation ID の手動運搬は不要です。"
+                    : "At this stage, no extra external-provider redirect or manual installation ID transport is needed."
+                )}</li>
               </ul>
               ${
                 diagnosticsReturnTo

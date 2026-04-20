@@ -3797,6 +3797,12 @@ test("worker setup wizard consume-proof configured html shows post-binding setup
     ),
     true
   );
+  assert.equal(
+    html.includes(
+      "At this stage, no extra external-provider redirect or manual installation ID transport is needed."
+    ),
+    true
+  );
   assert.equal(html.includes('action="/setup/wizard?repo=sample-org%2Fvtdd-v2&amp;githubAppCheck=on"'), true);
   assert.equal(
     html.includes(
