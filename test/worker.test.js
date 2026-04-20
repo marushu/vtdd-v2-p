@@ -3592,6 +3592,20 @@ test("worker setup wizard probe failure html shows setup progress for same-flow 
   );
   assert.equal(html.includes('action="/setup/wizard?repo=sample-org%2Fvtdd-v2&amp;githubAppCheck=on"'), true);
   assert.equal(html.includes("Run live diagnostics now"), true);
+
+  const responseJa = await worker.fetch(
+    new Request("https://example.com/setup/wizard?repo=sample-org/vtdd-v2&githubAppCheck=on", {
+      headers: {
+        cookie: `vtdd_setup_access=${sessionCookie}`,
+        "accept-language": "ja"
+      }
+    }),
+    env
+  );
+  assert.equal(responseJa.status, 200);
+  const htmlJa = await responseJa.text();
+  assert.equal(htmlJa.includes("セットアップ進捗"), true);
+  assert.equal(htmlJa.includes("installation 検出は fail-closed で停止し、同じ flow で復旧待ちです"), true);
 });
 
 test("worker setup wizard consume proof probe_failed rewrites guidance to live-readiness recovery", async () => {
@@ -3741,6 +3755,23 @@ test("worker setup wizard consume proof probe_failed html shows live-readiness-s
   );
   assert.equal(html.includes("Run live diagnostics now"), true);
   assert.equal(html.includes("Retry in same setup flow"), false);
+
+  const responseJa = await worker.fetch(
+    new Request(
+      "https://example.com/setup/wizard?repo=sample-org/vtdd-v2&githubAppCheck=on&bootstrap_session_consume=completed&bootstrap_session_consume_proof_state=probe_failed",
+      {
+        headers: {
+          cookie: `vtdd_setup_access=${sessionCookie}`,
+          "accept-language": "ja"
+        }
+      }
+    ),
+    env
+  );
+  assert.equal(responseJa.status, 200);
+  const htmlJa = await responseJa.text();
+  assert.equal(htmlJa.includes("セットアップ進捗"), true);
+  assert.equal(htmlJa.includes("installation binding 後の live readiness probe が fail-closed でした"), true);
 });
 
 test("worker setup wizard consume proof configured rewrites guidance to live-readiness next step", async () => {
