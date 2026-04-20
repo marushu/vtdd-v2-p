@@ -277,9 +277,12 @@ async function handleSetupWizardRequest({ request, url, env }) {
   const githubAppSetupCheckWithSelectionGuidance = attachSelectionRequestGuidance({
     githubAppSetupCheck: githubAppSetupCheckWithSelectionRequest
   });
-  const githubAppSetupCheck = attachDetectedInstallationCompletionAction({
+  const githubAppSetupCheckWithCompletionAction = attachDetectedInstallationCompletionAction({
     githubAppSetupCheck: githubAppSetupCheckWithSelectionGuidance,
     approvalBoundBootstrapSession
+  });
+  const githubAppSetupCheck = attachDetectedCompletionGuidance({
+    githubAppSetupCheck: githubAppSetupCheckWithCompletionAction
   });
   const approvalBoundBootstrapSessionWithInlineRequest = attachInlineRequestSurfaceHint({
     approvalBoundBootstrapSession,
@@ -10271,6 +10274,34 @@ function attachDetectedRequestGuidance({ githubAppSetupCheck }) {
   return {
     ...setupCheck,
     guidance: [...guidanceWithoutGeneric, inFlowGuidance]
+  };
+}
+
+function attachDetectedCompletionGuidance({ githubAppSetupCheck }) {
+  const setupCheck = githubAppSetupCheck ?? null;
+  const state = normalizeText(setupCheck?.state);
+  const completionActionId = normalizeText(setupCheck?.completeDetectedInstallationAction?.id);
+  const guidance = Array.isArray(setupCheck?.guidance) ? setupCheck.guidance : [];
+
+  if (
+    state !== "installation_detected" ||
+    completionActionId !== "consume_detected_installation_binding"
+  ) {
+    return setupCheck;
+  }
+
+  const inFlowGuidance =
+    "When approval-bound consume is available, stay in this wizard and continue with the detected installation to complete binding and readiness in-flow.";
+  const genericGuidance =
+    "When approval-bound continuation is available, no extra provider redirect is needed; continue inside this wizard with GO + passkey.";
+  const guidanceWithoutGeneric = guidance.filter((item) => item !== genericGuidance);
+  const nextGuidance = guidanceWithoutGeneric.includes(inFlowGuidance)
+    ? guidanceWithoutGeneric
+    : [...guidanceWithoutGeneric, inFlowGuidance];
+
+  return {
+    ...setupCheck,
+    guidance: nextGuidance
   };
 }
 

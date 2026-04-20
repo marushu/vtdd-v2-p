@@ -1722,6 +1722,18 @@ test("worker setup wizard consume can complete a single detected installation bi
   );
   assert.equal(statusBody.approvalBoundBootstrapSession.consumeEnabled, true);
   assert.equal(statusBody.approvalBoundBootstrapSession.consumeSurfacedInline, true);
+  assert.equal(
+    statusBody.githubAppSetupCheck.guidance.includes(
+      "When approval-bound consume is available, stay in this wizard and continue with the detected installation to complete binding and readiness in-flow."
+    ),
+    true
+  );
+  assert.equal(
+    statusBody.githubAppSetupCheck.guidance.includes(
+      "When approval-bound continuation is available, no extra provider redirect is needed; continue inside this wizard with GO + passkey."
+    ),
+    false
+  );
 
   const consumeResponse = await worker.fetch(
     new Request("https://example.com/setup/wizard/bootstrap-session/consume", {
