@@ -1469,6 +1469,91 @@ test("worker setup wizard consumes a valid bootstrap session envelope into defer
   ]);
 });
 
+test("worker setup wizard shows deferred consume setup progress in html readout", async () => {
+  const env = {
+    SETUP_WIZARD_PASSCODE: "2468",
+    CLOUDFLARE_API_TOKEN: "bootstrap-token",
+    CLOUDFLARE_ACCOUNT_ID: "account-id",
+    CLOUDFLARE_WORKER_SCRIPT_NAME: "vtdd-v2-mvp",
+    GITHUB_MANIFEST_CONVERSION_TOKEN: "ghp_conversion_token"
+  };
+  const { sessionCookie } = await unlockSetupWizard(env);
+
+  const requestResponse = await worker.fetch(
+    new Request("https://example.com/setup/wizard/bootstrap-session/request", {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      },
+      body: new URLSearchParams({
+        returnTo: "/setup/wizard?repo=sample-org/vtdd-v2",
+        approval_phrase: "GO",
+        passkey_verified: "true"
+      })
+    }),
+    env
+  );
+
+  assert.equal(requestResponse.status, 303);
+  const location = requestResponse.headers.get("location") ?? "";
+  const statusResponse = await worker.fetch(
+    new Request(`https://example.com${location}&format=json`, {
+      headers: {
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      }
+    }),
+    env
+  );
+  const statusBody = await statusResponse.json();
+  const envelopeToken =
+    statusBody.approvalBoundBootstrapSession.sessionEnvelope.envelopeToken;
+
+  const consumeResponse = await worker.fetch(
+    new Request("https://example.com/setup/wizard/bootstrap-session/consume", {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      },
+      body: new URLSearchParams({
+        returnTo: location,
+        envelope_token: envelopeToken
+      })
+    }),
+    env
+  );
+
+  assert.equal(consumeResponse.status, 303);
+  const deferredLocation = consumeResponse.headers.get("location") ?? "";
+  const htmlResponse = await worker.fetch(
+    new Request(`https://example.com${deferredLocation}`, {
+      headers: {
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      }
+    }),
+    env
+  );
+  assert.equal(htmlResponse.status, 200);
+  const html = await htmlResponse.text();
+  assert.equal(
+    html.includes("VTDD validated the signed envelope against the current setup flow."),
+    true
+  );
+  assert.equal(
+    html.includes(
+      "The attested consume execution path is still deferred, so VTDD did not perform the bounded write yet."
+    ),
+    true
+  );
+  assert.equal(
+    html.includes(
+      "Next, restoring one attested consume path lets VTDD continue into installation binding and immediate readiness verification."
+    ),
+    true
+  );
+});
+
 test("worker setup wizard consume can complete a single detected installation binding write", async () => {
   const calls = [];
   const { privateKey } = generateKeyPairSync("rsa", {
@@ -2254,6 +2339,102 @@ test("worker setup wizard rejects invalid bootstrap session envelope consume req
   assert.equal(
     consumeBody.error,
     "approval_bound_bootstrap_session_consume_invalid_envelope"
+  );
+});
+
+test("worker setup wizard shows rejected consume setup progress in html readout", async () => {
+  const env = {
+    SETUP_WIZARD_PASSCODE: "2468",
+    CLOUDFLARE_API_TOKEN: "bootstrap-token",
+    CLOUDFLARE_ACCOUNT_ID: "account-id",
+    CLOUDFLARE_WORKER_SCRIPT_NAME: "vtdd-v2-mvp",
+    GITHUB_MANIFEST_CONVERSION_TOKEN: "ghp_conversion_token"
+  };
+  const { sessionCookie } = await unlockSetupWizard(env);
+
+  const requestResponse = await worker.fetch(
+    new Request("https://example.com/setup/wizard/bootstrap-session/request", {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      },
+      body: new URLSearchParams({
+        returnTo: "/setup/wizard?repo=sample-org/vtdd-v2",
+        approval_phrase: "GO",
+        passkey_verified: "true"
+      })
+    }),
+    env
+  );
+
+  assert.equal(requestResponse.status, 303);
+  const location = requestResponse.headers.get("location") ?? "";
+  const consumeResponse = await worker.fetch(
+    new Request("https://example.com/setup/wizard/bootstrap-session/consume", {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      },
+      body: new URLSearchParams({
+        returnTo: location,
+        envelope_token: "invalid-envelope"
+      })
+    }),
+    env
+  );
+
+  assert.equal(consumeResponse.status, 303);
+  const rejectedLocation = consumeResponse.headers.get("location") ?? "";
+  const htmlResponse = await worker.fetch(
+    new Request(`https://example.com${rejectedLocation}`, {
+      headers: {
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      }
+    }),
+    env
+  );
+  assert.equal(htmlResponse.status, 200);
+  const html = await htmlResponse.text();
+  assert.equal(
+    html.includes("VTDD checked this consume request against the current wizard context."),
+    true
+  );
+  assert.equal(
+    html.includes("VTDD rejected it fail-closed because the signed envelope did not match."),
+    true
+  );
+  assert.equal(
+    html.includes(
+      "Next, issuing a fresh GO + passkey request and envelope in the current context allows retry."
+    ),
+    true
+  );
+});
+
+test("worker setup wizard shows failed consume setup progress in html readout", async () => {
+  const env = {};
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/setup/wizard?repo=sample-org/vtdd-v2&bootstrap_session_consume=failed&bootstrap_session_consume_envelope_id=abcd1234efgh&bootstrap_session_consume_reason=bounded_installation_binding_write_failed"
+    ),
+    env
+  );
+
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.equal(
+    html.includes("VTDD validated the signed envelope and entered the bounded write path."),
+    true
+  );
+  assert.equal(
+    html.includes("VTDD then failed closed before installation binding write completion."),
+    true
+  );
+  assert.equal(
+    html.includes("Next, restore the bounded write path and retry with a fresh envelope."),
+    true
   );
 });
 

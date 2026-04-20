@@ -4382,6 +4382,78 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
                   : ""
               }
               ${
+                consumeResultState === "consume_deferred"
+                  ? `
+                    <p><strong>${escapeHtml(locale === "ja" ? "Setup progress" : "Setup progress")}:</strong></p>
+                    <ul>
+                      <li>${escapeHtml(
+                        locale === "ja"
+                          ? "VTDD は signed envelope を現在の setup flow と照合しました。"
+                          : "VTDD validated the signed envelope against the current setup flow."
+                      )}</li>
+                      <li>${escapeHtml(
+                        locale === "ja"
+                          ? "ただし、attestation 付き consume 実行経路はまだ deferred のため書き込みは行っていません。"
+                          : "The attested consume execution path is still deferred, so VTDD did not perform the bounded write yet."
+                      )}</li>
+                      <li>${escapeHtml(
+                        locale === "ja"
+                          ? "次に attested consume 経路を復元すると、installation binding と直後の readiness 確認に進めます。"
+                          : "Next, restoring one attested consume path lets VTDD continue into installation binding and immediate readiness verification."
+                      )}</li>
+                    </ul>
+                  `
+                  : ""
+              }
+              ${
+                consumeResultState === "consume_rejected"
+                  ? `
+                    <p><strong>${escapeHtml(locale === "ja" ? "Setup progress" : "Setup progress")}:</strong></p>
+                    <ul>
+                      <li>${escapeHtml(
+                        locale === "ja"
+                          ? "VTDD はこの consume 要求を現在の wizard context と照合しました。"
+                          : "VTDD checked this consume request against the current wizard context."
+                      )}</li>
+                      <li>${escapeHtml(
+                        locale === "ja"
+                          ? "signed envelope が一致しないため fail-closed で拒否しました。"
+                          : "VTDD rejected it fail-closed because the signed envelope did not match."
+                      )}</li>
+                      <li>${escapeHtml(
+                        locale === "ja"
+                          ? "次に現在の context で新しい GO + passkey request と envelope を発行すると再試行できます。"
+                          : "Next, issuing a fresh GO + passkey request and envelope in the current context allows retry."
+                      )}</li>
+                    </ul>
+                  `
+                  : ""
+              }
+              ${
+                consumeResultState === "consume_failed"
+                  ? `
+                    <p><strong>${escapeHtml(locale === "ja" ? "Setup progress" : "Setup progress")}:</strong></p>
+                    <ul>
+                      <li>${escapeHtml(
+                        locale === "ja"
+                          ? "VTDD は signed envelope を検証し、bounded write を開始しました。"
+                          : "VTDD validated the signed envelope and entered the bounded write path."
+                      )}</li>
+                      <li>${escapeHtml(
+                        locale === "ja"
+                          ? "ただし、installation binding 書き込み完了前に fail-closed で停止しました。"
+                          : "VTDD then failed closed before installation binding write completion."
+                      )}</li>
+                      <li>${escapeHtml(
+                        locale === "ja"
+                          ? "次に bounded write 経路を復元し、fresh envelope で再実行してください。"
+                          : "Next, restore the bounded write path and retry with a fresh envelope."
+                      )}</li>
+                    </ul>
+                  `
+                  : ""
+              }
+              ${
                 consumeResultEnvelopeId
                   ? `<p><strong>${escapeHtml(locale === "ja" ? "Envelope id" : "Envelope id")}:</strong> <code>${escapeHtml(normalizeText(consumeResultEnvelopeId))}</code></p>`
                   : ""
