@@ -3361,6 +3361,12 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
   const requestActionReturnTo = normalizeGitHubAppBootstrapReturnTo(
     requestDetectedInstallationAction?.returnTo
   );
+  const requestActionPendingInstallationId = normalizeText(
+    requestDetectedInstallationAction?.pendingInstallationId
+  );
+  const requestActionPendingInstallationIdParam =
+    normalizeText(requestDetectedInstallationAction?.pendingInstallationIdParam) ||
+    "pending_installation_id";
   const requestInstallationSelectionAction = check?.requestInstallationSelectionAction ?? null;
   const selectionRequestActionPath = normalizeText(requestInstallationSelectionAction?.path);
   const selectionRequestActionReturnTo = normalizeGitHubAppBootstrapReturnTo(
@@ -3927,6 +3933,9 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                 )}" />
                 <input type="hidden" name="approval_phrase" value="GO" />
                 <input type="hidden" name="passkey_verified" value="true" />
+                <input type="hidden" name="${escapeHtml(
+                  requestActionPendingInstallationIdParam
+                )}" value="${escapeHtml(requestActionPendingInstallationId)}" />
                 <button type="submit" class="copy-button">${escapeHtml(
                   locale === "ja"
                     ? "GO + passkey で続行"
@@ -9943,7 +9952,9 @@ function attachDetectedInstallationRequestAction({
     requestDetectedInstallationAction: {
       id: "request_detected_installation_binding",
       path: requestPath,
-      returnTo
+      returnTo,
+      pendingInstallationIdParam: "pending_installation_id",
+      pendingInstallationId: detectedInstallationId
     }
   };
 }

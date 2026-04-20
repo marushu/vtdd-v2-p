@@ -5070,6 +5070,14 @@ test("worker setup wizard can request detected installation continuation from gi
     jsonBody.githubAppSetupCheck.requestDetectedInstallationAction.returnTo,
     "/setup/wizard?repo=sample-org%2Fvtdd-v2&githubAppCheck=on"
   );
+  assert.equal(
+    jsonBody.githubAppSetupCheck.requestDetectedInstallationAction.pendingInstallationIdParam,
+    "pending_installation_id"
+  );
+  assert.equal(
+    jsonBody.githubAppSetupCheck.requestDetectedInstallationAction.pendingInstallationId,
+    "125153871"
+  );
   assert.equal(jsonBody.githubAppSetupCheck.completeDetectedInstallationAction, undefined);
   assert.equal(jsonBody.approvalBoundBootstrapSession.requestEnabled, true);
   assert.equal(jsonBody.approvalBoundBootstrapSession.requestSurfacedInline, true);
@@ -5098,6 +5106,7 @@ test("worker setup wizard can request detected installation continuation from gi
     true
   );
   assert.equal(html.includes('action="/setup/wizard/bootstrap-session/request"'), true);
+  assert.equal(html.includes('name="pending_installation_id" value="125153871"'), true);
   assert.equal(html.includes("Record GO + passkey request"), false);
   assert.equal(html.includes("Store detected installation and continue"), false);
 });
