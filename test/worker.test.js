@@ -4665,6 +4665,12 @@ test("worker setup wizard selection-required state exposes approval-bound reques
     ),
     true
   );
+  assert.equal(
+    htmlJa.includes(
+      "この GO + passkey 継続は、選択対象となる installation 候補に束縛された single-use の request として扱われます。"
+    ),
+    true
+  );
   assert.equal(htmlJa.includes("GO + passkey request を記録して other-org の installation を使う"), true);
   assert.equal(htmlJa.includes("GO + passkey request を記録して sample-org の installation を使う"), true);
 });
