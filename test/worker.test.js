@@ -3505,6 +3505,22 @@ test("worker setup wizard consume proof probe_failed rewrites guidance to live-r
   ]);
   assert.equal(body.githubAppSetupCheck.evidence.stage, "live_probe");
   assert.equal(body.githubAppSetupCheck.evidence.source, "github_app_live");
+  assert.equal(
+    body.approvalBoundBootstrapSession.envelopeConsumeResult.nextProof.id,
+    "rerun_live_readiness_probe_same_flow"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.envelopeConsumeResult.requiredAction.id,
+    "run_live_readiness_diagnostics_same_flow"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.envelopeConsumeResult.requiredAction.method,
+    "GET"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.envelopeConsumeResult.requiredAction.path,
+    "/setup/wizard?repo=sample-org%2Fvtdd-v2&githubAppCheck=on"
+  );
 });
 
 test("worker setup wizard consume proof probe_failed html shows live-readiness-specific setup progress", async () => {
@@ -3623,6 +3639,22 @@ test("worker setup wizard consume proof configured rewrites guidance to live-rea
   ]);
   assert.equal(body.githubAppSetupCheck.evidence.stage, "configuration_check");
   assert.equal(body.githubAppSetupCheck.evidence.source, "worker_runtime");
+  assert.equal(
+    body.approvalBoundBootstrapSession.envelopeConsumeResult.nextProof.id,
+    "run_live_readiness_diagnostics_same_flow"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.envelopeConsumeResult.requiredAction.id,
+    "run_live_readiness_diagnostics_same_flow"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.envelopeConsumeResult.requiredAction.method,
+    "GET"
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.envelopeConsumeResult.requiredAction.path,
+    "/setup/wizard?repo=sample-org%2Fvtdd-v2&githubAppCheck=on"
+  );
 });
 
 test("worker setup wizard configured html shows bootstrap-complete setup progress", async () => {
