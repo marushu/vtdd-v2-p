@@ -3391,6 +3391,37 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
           : ""
       }
       ${
+        state === "probe_failed"
+          ? `
+            <div class="block" style="margin-top: 12px;">
+              <p><strong>${escapeHtml(
+                locale === "ja"
+                  ? "installation 検出は fail-closed で停止し、同じ flow で復旧待ちです"
+                  : "Installation detection failed closed and is waiting for in-flow recovery"
+              )}</strong></p>
+              <p><strong>${escapeHtml(locale === "ja" ? "Setup progress" : "Setup progress")}</strong></p>
+              <ul>
+                <li>${escapeHtml(
+                  locale === "ja"
+                    ? "GitHub App identity の前提は保持したまま、検出 probe の失敗原因を確認中です。"
+                    : "VTDD keeps the existing GitHub App identity context while diagnosing the detection probe failure."
+                )}</li>
+                <li>${escapeHtml(
+                  locale === "ja"
+                    ? "manual secret/ID の運搬ではなく、同じ setup flow で githubAppCheck=on を再実行します。"
+                    : "Instead of manual secret/ID transport, rerun githubAppCheck=on in this same setup flow."
+                )}</li>
+                <li>${escapeHtml(
+                  locale === "ja"
+                    ? "probe blocker が解消されると、VTDD は installation detection から binding/readiness へ再開します。"
+                    : "Once the probe blocker is cleared, VTDD resumes from installation detection into binding and readiness."
+                )}</li>
+              </ul>
+            </div>
+          `
+          : ""
+      }
+      ${
         state === "installation_detected" &&
         completionActionPath &&
         completionActionReturnTo &&
@@ -5280,7 +5311,10 @@ async function runGitHubAppSetupCheck(url, env) {
         return {
           state: "probe_failed",
           summary: detection.summary,
-          guidance: detection.guidance,
+          guidance: [
+            "Keep the same setup flow and rerun githubAppCheck=on after fixing the probe blocker.",
+            ...detection.guidance
+          ],
           evidence: {
             stage: "installation_detection",
             source: "github_app_installations"
@@ -9083,7 +9117,10 @@ async function detectGitHubAppInstallation({ env, fetchImpl, targetOwner }) {
     return {
       state: "probe_failed",
       summary: "VTDD could not inspect GitHub App installations from Worker runtime.",
-      guidance: ["Re-check GitHub App secrets and retry diagnostics."]
+      guidance: [
+        "Restore GitHub App runtime prerequisites, then rerun githubAppCheck=on in this same setup flow.",
+        "Do not switch to manual secret or ID transport while this probe is blocked."
+      ]
     };
   }
 
@@ -9092,7 +9129,10 @@ async function detectGitHubAppInstallation({ env, fetchImpl, targetOwner }) {
     return {
       state: "probe_failed",
       summary: "VTDD could not sign a GitHub App JWT while checking installations.",
-      guidance: ["Regenerate the GitHub App private key and update Worker runtime."]
+      guidance: [
+        "Regenerate the GitHub App private key and update Worker runtime.",
+        "After runtime update, rerun githubAppCheck=on in the same setup flow to continue detection."
+      ]
     };
   }
 
@@ -9111,7 +9151,10 @@ async function detectGitHubAppInstallation({ env, fetchImpl, targetOwner }) {
     return {
       state: "probe_failed",
       summary: "VTDD could not reach GitHub while checking App installations.",
-      guidance: ["Retry diagnostics after confirming Worker runtime can reach api.github.com."]
+      guidance: [
+        "Confirm Worker runtime can reach api.github.com, then rerun githubAppCheck=on in this same setup flow.",
+        "Do not fall back to manual ID transport while installation detection connectivity is blocked."
+      ]
     };
   }
 

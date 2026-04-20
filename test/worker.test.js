@@ -3319,6 +3319,81 @@ test("worker setup wizard detects a single github app installation before instal
   assert.equal(body.githubAppSetupCheck.completeDetectedInstallationAction, undefined);
 });
 
+test("worker setup wizard probe failure guidance keeps same-flow recovery narrative", async () => {
+  const env = {
+    GITHUB_APP_ID: "12345",
+    GITHUB_APP_PRIVATE_KEY: "not-a-valid-private-key",
+    GITHUB_API_FETCH: async () =>
+      new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      })
+  };
+
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/setup/wizard?format=json&repo=sample-org/vtdd-v2&githubAppCheck=on"
+    ),
+    env
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.githubAppSetupCheck.state, "probe_failed");
+  assert.deepEqual(body.githubAppSetupCheck.guidance, [
+    "Keep the same setup flow and rerun githubAppCheck=on after fixing the probe blocker.",
+    "Regenerate the GitHub App private key and update Worker runtime.",
+    "After runtime update, rerun githubAppCheck=on in the same setup flow to continue detection."
+  ]);
+});
+
+test("worker setup wizard probe failure html shows setup progress for same-flow recovery", async () => {
+  const env = {
+    SETUP_WIZARD_PASSCODE: "2468",
+    GITHUB_APP_ID: "12345",
+    GITHUB_APP_PRIVATE_KEY: "not-a-valid-private-key",
+    GITHUB_API_FETCH: async () =>
+      new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      })
+  };
+  const { sessionCookie } = await unlockSetupWizard(
+    env,
+    "/setup/wizard?repo=sample-org/vtdd-v2&githubAppCheck=on"
+  );
+
+  const response = await worker.fetch(
+    new Request("https://example.com/setup/wizard?repo=sample-org/vtdd-v2&githubAppCheck=on", {
+      headers: {
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      }
+    }),
+    env
+  );
+
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.equal(html.includes("<code>probe_failed</code>"), true);
+  assert.equal(
+    html.includes("Installation detection failed closed and is waiting for in-flow recovery"),
+    true
+  );
+  assert.equal(html.includes("Setup progress"), true);
+  assert.equal(
+    html.includes(
+      "Instead of manual secret/ID transport, rerun githubAppCheck=on in this same setup flow."
+    ),
+    true
+  );
+  assert.equal(
+    html.includes(
+      "Once the probe blocker is cleared, VTDD resumes from installation detection into binding and readiness."
+    ),
+    true
+  );
+});
+
 test("worker setup wizard auto-rechecks html while awaiting github app installation", async () => {
   const { privateKey } = generateKeyPairSync("rsa", {
     modulusLength: 2048,
