@@ -4456,6 +4456,24 @@ test("worker setup wizard reports partially configured github app bootstrap", as
   );
 });
 
+test("worker setup wizard missing-only-installation guidance prefers same-flow detection before fallback write", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/setup/wizard?format=json&repo=sample-org/vtdd-v2"),
+    {
+      GITHUB_APP_ID: "12345",
+      GITHUB_APP_PRIVATE_KEY: "-----BEGIN PRIVATE KEY-----\nplaceholder\n-----END PRIVATE KEY-----"
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.githubAppSetupCheck.state, "partially_configured");
+  assert.deepEqual(body.githubAppSetupCheck.guidance, [
+    "Install the GitHub App, then return to this same setup flow with githubAppCheck=on so VTDD can try installation detection first.",
+    "If detection is still unavailable, use setting GITHUB_APP_INSTALLATION_ID on Worker runtime only as a bounded fallback."
+  ]);
+});
+
 test("worker setup wizard verifies github app live probe when requested", async () => {
   const calls = [];
   const githubApiFetch = async (url, init = {}) => {

@@ -5231,8 +5231,8 @@ async function runGitHubAppSetupCheck(url, env) {
           : "GitHub App setup check: some required Worker secrets are missing, so VTDD cannot mint installation tokens yet.",
       guidance: missingOnlyInstallation
         ? [
-            "Install the GitHub App, then run githubAppCheck=on so VTDD can try to detect the installation.",
-            "If detection is not available yet, set GITHUB_APP_INSTALLATION_ID on Worker runtime."
+            "Install the GitHub App, then return to this same setup flow with githubAppCheck=on so VTDD can try installation detection first.",
+            "If detection is still unavailable, use setting GITHUB_APP_INSTALLATION_ID on Worker runtime only as a bounded fallback."
           ]
         : missingFields.map((field) => `Set ${field} on Worker runtime.`),
       evidence: {
