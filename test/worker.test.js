@@ -4567,6 +4567,29 @@ test("worker setup wizard selection-required state exposes approval-bound reques
     ),
     true
   );
+
+  const htmlJaResponse = await worker.fetch(
+    new Request(
+      "https://example.com/setup/wizard?repo=sample-org/vtdd-v2&repo=other-org/another-repo&githubAppCheck=on",
+      {
+        headers: {
+          cookie: `vtdd_setup_access=${sessionCookie}`,
+          "accept-language": "ja"
+        }
+      }
+    ),
+    env
+  );
+  assert.equal(htmlJaResponse.status, 200);
+  const htmlJa = await htmlJaResponse.text();
+  assert.equal(htmlJa.includes("セットアップ進捗"), true);
+  assert.equal(htmlJa.includes("GO + passkey request を記録して続行"), true);
+  assert.equal(
+    htmlJa.includes(
+      "approval-bound write が利用可能な場合は、先に GO + passkey request を記録すると同じ setup flow で consume/proof を吸収できます。"
+    ),
+    true
+  );
 });
 
 test("worker setup wizard request can auto-continue selected installation binding when pending installation id is provided", async () => {
