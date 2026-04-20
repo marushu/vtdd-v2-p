@@ -10255,13 +10255,17 @@ function attachDetectedRequestGuidance({ githubAppSetupCheck }) {
 
   const inFlowGuidance =
     "When approval-bound continuation is available, stay in this wizard and record GO + passkey before VTDD consumes installation binding.";
-  if (guidance.includes(inFlowGuidance)) {
+  const genericGuidance =
+    "When approval-bound continuation is available, no extra provider redirect is needed; continue inside this wizard with GO + passkey.";
+  const guidanceWithoutGeneric = guidance.filter((item) => item !== genericGuidance);
+
+  if (guidanceWithoutGeneric.includes(inFlowGuidance)) {
     return setupCheck;
   }
 
   return {
     ...setupCheck,
-    guidance: [...guidance, inFlowGuidance]
+    guidance: [...guidanceWithoutGeneric, inFlowGuidance]
   };
 }
 
