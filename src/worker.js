@@ -3488,7 +3488,7 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                   ? "VTDD は GitHub App bootstrap 前の状態です"
                   : "VTDD is before GitHub App bootstrap"
               )}</strong></p>
-              <p><strong>${escapeHtml(locale === "ja" ? "Setup progress" : "Setup progress")}</strong></p>
+              <p><strong>${escapeHtml(locale === "ja" ? "セットアップ進捗" : "Setup progress")}</strong></p>
               <ul>
                 <li>${escapeHtml(
                   locale === "ja"
@@ -3520,7 +3520,7 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                   ? "installation binding の残りステップに進んでいます"
                   : "VTDD is narrowed to the remaining installation binding step"
               )}</strong></p>
-              <p><strong>${escapeHtml(locale === "ja" ? "Setup progress" : "Setup progress")}</strong></p>
+              <p><strong>${escapeHtml(locale === "ja" ? "セットアップ進捗" : "Setup progress")}</strong></p>
               <ul>
                 <li>${escapeHtml(
                   locale === "ja"
@@ -3560,7 +3560,7 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                   ? "候補 installation を wizard 内でそのまま選べます"
                   : "You can choose the installation directly in the wizard"
               )}</strong></p>
-              <p><strong>${escapeHtml(locale === "ja" ? "Setup progress" : "Setup progress")}</strong></p>
+              <p><strong>${escapeHtml(locale === "ja" ? "セットアップ進捗" : "Setup progress")}</strong></p>
               <ul>
                 <li>${escapeHtml(
                   locale === "ja"
@@ -3688,7 +3688,7 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                   ? "installation 候補の確認は GitHub 側での確認が必要です"
                   : "Confirming the installation candidate still needs a GitHub-side check"
               )}</strong></p>
-              <p><strong>${escapeHtml(locale === "ja" ? "Setup progress" : "Setup progress")}</strong></p>
+              <p><strong>${escapeHtml(locale === "ja" ? "セットアップ進捗" : "Setup progress")}</strong></p>
               <ul>
                 <li>${escapeHtml(
                   locale === "ja"
