@@ -1368,6 +1368,23 @@ test("worker setup wizard records approval-bound bootstrap request without grant
     html.includes("no privileged bootstrap session was opened because attestation-backed bootstrap authority is still deferred"),
     true
   );
+  assert.equal(html.includes("Setup progress"), true);
+  assert.equal(
+    html.includes("VTDD recorded the GO + passkey request in this same setup flow."),
+    true
+  );
+  assert.equal(
+    html.includes(
+      "No privileged session was issued yet because attestation-backed bootstrap authority is not implemented."
+    ),
+    true
+  );
+  assert.equal(
+    html.includes(
+      "This recorded request is retained as preparation for the next bounded consume and verification path."
+    ),
+    true
+  );
   assert.equal(html.includes("Session envelope"), true);
   assert.equal(html.includes("signed_request_bound_envelope"), true);
   assert.equal(html.includes('action="/setup/wizard/bootstrap-session/consume"'), true);
@@ -1387,6 +1404,32 @@ test("worker setup wizard records approval-bound bootstrap request without grant
   assert.equal(html.includes("Audit record"), true);
   assert.equal(html.includes("Audit failure"), true);
   assert.equal(html.includes("Audit retention"), true);
+
+  const htmlJaResponse = await worker.fetch(
+    new Request(`https://example.com${location}`, {
+      headers: {
+        cookie: `vtdd_setup_access=${sessionCookie}`,
+        "accept-language": "ja"
+      }
+    }),
+    env
+  );
+  assert.equal(htmlJaResponse.status, 200);
+  const htmlJa = await htmlJaResponse.text();
+  assert.equal(htmlJa.includes("セットアップ進捗"), true);
+  assert.equal(htmlJa.includes("GO + passkey request は同じ setup flow で記録されました。"), true);
+  assert.equal(
+    htmlJa.includes(
+      "ただし、attestation-backed bootstrap authority が未実装のため privileged session は未発行です。"
+    ),
+    true
+  );
+  assert.equal(
+    htmlJa.includes(
+      "この request 記録は保持され、次の bounded consume/verification path の準備として扱われます。"
+    ),
+    true
+  );
 
   const jsonResponse = await worker.fetch(
     new Request(`https://example.com${location}&format=json`, {

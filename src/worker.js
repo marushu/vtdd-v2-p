@@ -4504,6 +4504,30 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
           : ""
       }
       ${
+        state === "request_recorded_but_deferred"
+          ? `
+            <p><strong>${escapeHtml(locale === "ja" ? "セットアップ進捗" : "Setup progress")}:</strong></p>
+            <ul>
+              <li>${escapeHtml(
+                locale === "ja"
+                  ? "GO + passkey request は同じ setup flow で記録されました。"
+                  : "VTDD recorded the GO + passkey request in this same setup flow."
+              )}</li>
+              <li>${escapeHtml(
+                locale === "ja"
+                  ? "ただし、attestation-backed bootstrap authority が未実装のため privileged session は未発行です。"
+                  : "No privileged session was issued yet because attestation-backed bootstrap authority is not implemented."
+              )}</li>
+              <li>${escapeHtml(
+                locale === "ja"
+                  ? "この request 記録は保持され、次の bounded consume/verification path の準備として扱われます。"
+                  : "This recorded request is retained as preparation for the next bounded consume and verification path."
+              )}</li>
+            </ul>
+          `
+          : ""
+      }
+      ${
         recommendedNextStep
           ? `
             <div class="block" style="margin-top: 12px;">
