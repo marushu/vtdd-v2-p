@@ -4049,6 +4049,10 @@ test("worker setup wizard installation selection required html offers direct sel
   );
   assert.match(
     body,
+    /Next, selecting the owner lets VTDD continue in the same setup flow through installation capture, binding write, and readiness verification\./
+  );
+  assert.match(
+    body,
     /If the target owner is not listed, adjust installation scope on GitHub and return to this setup flow so VTDD can re-detect\./
   );
   assert.match(body, /Use other-org installation/);
