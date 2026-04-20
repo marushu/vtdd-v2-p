@@ -1989,6 +1989,20 @@ test("worker setup wizard request can auto-continue detected installation bindin
     true
   );
   assert.equal(completedHtml.includes("live_readiness_verified_in_same_flow"), false);
+
+  const completedHtmlJaResponse = await worker.fetch(
+    new Request(`https://example.com${completedLocation}`, {
+      headers: {
+        cookie: `vtdd_setup_access=${sessionCookie}`,
+        "accept-language": "ja"
+      }
+    }),
+    env
+  );
+  assert.equal(completedHtmlJaResponse.status, 200);
+  const completedHtmlJa = await completedHtmlJaResponse.text();
+  assert.equal(completedHtmlJa.includes("bounded_consume_completed_with_live_proof"), true);
+
   assert.equal(calls.length, 1);
   const payload = JSON.parse(String(calls[0].init.body));
   assert.equal(payload.name, "GITHUB_APP_INSTALLATION_ID");
