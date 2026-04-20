@@ -4038,6 +4038,12 @@ test("worker setup wizard configured html shows bootstrap-complete setup progres
     html.includes("Next, run githubAppCheck=on to verify token minting and live repository access."),
     true
   );
+  assert.equal(
+    html.includes(
+      "If an approval-bound request is already recorded, it stays deferred until installation detection establishes candidate binding."
+    ),
+    true
+  );
   assert.equal(html.includes('action="/setup/wizard?repo=sample-org%2Fvtdd-v2&amp;githubAppCheck=on"'), true);
   assert.equal(html.includes("Run live diagnostics now"), true);
 
@@ -4053,6 +4059,12 @@ test("worker setup wizard configured html shows bootstrap-complete setup progres
   const htmlJa = await responseJa.text();
   assert.equal(htmlJa.includes("セットアップ進捗"), true);
   assert.equal(htmlJa.includes("GitHub App runtime 設定は完了し、次は live 診断です"), true);
+  assert.equal(
+    htmlJa.includes(
+      "approval-bound request を記録済みの場合は、installation detection で候補束縛が整うまで deferred のまま保持されます。"
+    ),
+    true
+  );
 });
 
 test("worker setup wizard configured json without continuation does not expose post-consume variant", async () => {

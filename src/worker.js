@@ -3944,6 +3944,11 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                     ? "この live readiness 証跡が揃うと、wizard は verified の進捗を示せます。"
                     : "Once live readiness evidence is recorded, wizard can report verified progress."
                 )}</li>
+                <li>${escapeHtml(
+                  locale === "ja"
+                    ? "approval-bound request を記録済みの場合は、installation detection で候補束縛が整うまで deferred のまま保持されます。"
+                    : "If an approval-bound request is already recorded, it stays deferred until installation detection establishes candidate binding."
+                )}</li>
               </ul>
               ${
                 diagnosticsReturnTo
