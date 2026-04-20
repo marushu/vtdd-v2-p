@@ -3419,6 +3419,13 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                     : "After clearing the probe blocker, rerun readiness in the same setup flow to move to verified state."
                 )}</li>
               </ul>
+              ${
+                diagnosticsReturnTo
+                  ? `<form method="get" action="${escapeHtml(diagnosticsReturnTo)}"><button type="submit" class="copy-button">${escapeHtml(
+                      locale === "ja" ? "live diagnostics を実行" : "Run live diagnostics now"
+                    )}</button></form>`
+                  : ""
+              }
             </div>
           `
           : state === "probe_failed"
@@ -3447,6 +3454,13 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                     : "Once the probe blocker is cleared, VTDD resumes from installation detection into binding and readiness."
                 )}</li>
               </ul>
+              ${
+                diagnosticsReturnTo
+                  ? `<form method="get" action="${escapeHtml(diagnosticsReturnTo)}"><button type="submit" class="copy-button">${escapeHtml(
+                      locale === "ja" ? "live diagnostics を実行" : "Run live diagnostics now"
+                    )}</button></form>`
+                  : ""
+              }
             </div>
           `
           : ""
@@ -5413,6 +5427,9 @@ async function runGitHubAppSetupCheck(url, env) {
       if (detection.state === "probe_failed") {
         return {
           state: "probe_failed",
+          returnTo:
+            normalizeSetupWizardDiagnosticsReturnTo(`${url.pathname}${url.search || ""}`) ||
+            "/setup/wizard?githubAppCheck=on",
           summary: detection.summary,
           guidance: [
             "Keep the same setup flow and rerun githubAppCheck=on after fixing the probe blocker.",

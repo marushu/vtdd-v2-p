@@ -3392,6 +3392,8 @@ test("worker setup wizard probe failure html shows setup progress for same-flow 
     ),
     true
   );
+  assert.equal(html.includes('action="/setup/wizard?repo=sample-org%2Fvtdd-v2&amp;githubAppCheck=on"'), true);
+  assert.equal(html.includes("Run live diagnostics now"), true);
 });
 
 test("worker setup wizard consume proof probe_failed rewrites guidance to live-readiness recovery", async () => {
@@ -3502,6 +3504,14 @@ test("worker setup wizard consume proof probe_failed html shows live-readiness-s
     html.includes("Installation detection failed closed and is waiting for in-flow recovery"),
     false
   );
+  assert.equal(html.includes('action="/setup/wizard?repo=sample-org%2Fvtdd-v2&amp;githubAppCheck=on"'), true);
+  assert.equal(
+    html.includes(
+      'action="/setup/wizard?repo=sample-org%2Fvtdd-v2&amp;githubAppCheck=on&amp;bootstrap_session_consume=completed'
+    ),
+    false
+  );
+  assert.equal(html.includes("Run live diagnostics now"), true);
 });
 
 test("worker setup wizard consume proof configured rewrites guidance to live-readiness next step", async () => {
