@@ -5813,6 +5813,9 @@ test("worker setup wizard reports request-required blocked state after capture f
     html.includes("This boundary keeps installation binding write approval-bound and auditable."),
     true
   );
+  assert.equal(html.includes('action="/setup/wizard/bootstrap-session/request"'), true);
+  assert.equal(html.includes('name="pending_installation_id" value="125153871"'), true);
+  assert.equal(html.includes("Record GO + passkey request"), true);
 
   const htmlJaResponse = await worker.fetch(
     new Request(
@@ -5840,6 +5843,9 @@ test("worker setup wizard reports request-required blocked state after capture f
     ),
     true
   );
+  assert.equal(htmlJa.includes('action="/setup/wizard/bootstrap-session/request"'), true);
+  assert.equal(htmlJa.includes('name="pending_installation_id" value="125153871"'), true);
+  assert.equal(htmlJa.includes("GO + passkey request を記録"), true);
 });
 
 test("worker setup wizard can store detected installation id through narrow capture endpoint", async () => {
