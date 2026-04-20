@@ -3707,6 +3707,11 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                 )}</li>
                 <li>${escapeHtml(
                   locale === "ja"
+                    ? "approval-bound request を記録済みでも、候補が 1 件に絞られるまで consume/proof は開始されません。"
+                    : "Even when an approval-bound request is already recorded, consume/proof does not start until the candidate is narrowed to one."
+                )}</li>
+                <li>${escapeHtml(
+                  locale === "ja"
                     ? "この時点の外部ステップは GitHub 側での installation 範囲調整のみで、ID の手動運搬は不要です。"
                     : "At this point, the only external step is adjusting installation scope on GitHub, without manual ID transport."
                 )}</li>

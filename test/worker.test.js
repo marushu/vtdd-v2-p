@@ -5473,6 +5473,12 @@ test("worker setup wizard installation selection stays provider-led when candida
   );
   assert.equal(
     html.includes(
+      "Even when an approval-bound request is already recorded, consume/proof does not start until the candidate is narrowed to one."
+    ),
+    true
+  );
+  assert.equal(
+    html.includes(
       '<form method="get" action="/setup/wizard?repo=sample-org%2Fvtdd-v2&amp;githubAppCheck=on"><button type="submit" class="copy-button">Run live diagnostics now</button></form>'
     ),
     true
@@ -5495,6 +5501,12 @@ test("worker setup wizard installation selection stays provider-led when candida
   assert.equal(
     htmlJa.includes(
       "ID の手動コピーではなく、GitHub 側で installation 候補を確認して同じ setup flow に戻る想定です。"
+    ),
+    true
+  );
+  assert.equal(
+    htmlJa.includes(
+      "approval-bound request を記録済みでも、候補が 1 件に絞られるまで consume/proof は開始されません。"
     ),
     true
   );
