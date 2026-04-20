@@ -5864,12 +5864,18 @@ test("worker setup wizard reports request-required blocked state after capture f
   assert.equal(htmlJa.includes("record_go_passkey_request_for_capture"), true);
   assert.equal(
     htmlJa.includes(
-      "Record GO + passkey request now, then retry installation capture in this same setup flow."
+      "いま GO + passkey request を記録して、同じ setup flow のまま installation capture を再試行します。"
     ),
     true
   );
   assert.equal(
-    htmlJa.includes("<strong>Action:</strong> <code>record_go_passkey_request</code>"),
+    htmlJa.includes(
+      "同じ setup flow で新しい GO + passkey request を記録してから installation capture を再試行してください。"
+    ),
+    true
+  );
+  assert.equal(
+    htmlJa.includes("<strong>アクション:</strong> <code>record_go_passkey_request</code>"),
     true
   );
 });

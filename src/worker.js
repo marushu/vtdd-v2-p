@@ -4286,6 +4286,32 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
   const nextStepId = normalizeText(recommendedNextStep?.id);
   const nextStepSummary = normalizeText(recommendedNextStep?.summary);
   const nextStepAction = normalizeText(recommendedNextStep?.action);
+  let renderedGuidance = guidance;
+  let renderedNextStepSummary = nextStepSummary;
+  if (locale === "ja" && state === "request_required_for_capture") {
+    renderedGuidance = guidance.map((item) => {
+      if (
+        item === "Record a fresh GO + passkey request in this same setup flow before retrying installation capture."
+      ) {
+        return "同じ setup flow で新しい GO + passkey request を記録してから installation capture を再試行してください。";
+      }
+      if (
+        item ===
+        "This fail-closed boundary keeps installation binding write approval-bound and auditable."
+      ) {
+        return "この fail-closed 境界により installation binding 書き込みは approval-bound かつ監査可能な状態を維持します。";
+      }
+      return item;
+    });
+    if (
+      nextStepId === "record_go_passkey_request_for_capture" &&
+      nextStepSummary ===
+        "Record GO + passkey request now, then retry installation capture in this same setup flow."
+    ) {
+      renderedNextStepSummary =
+        "いま GO + passkey request を記録して、同じ setup flow のまま installation capture を再試行します。";
+    }
+  }
   const stepBoundaries = session?.stepBoundaries ?? null;
   const vtddOwnedSteps = Array.isArray(stepBoundaries?.vtddOwnedSteps)
     ? stepBoundaries.vtddOwnedSteps
@@ -4449,8 +4475,8 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
           : ""
       }
       ${
-        guidance.length > 0
-          ? `<ul>${guidance.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`
+        renderedGuidance.length > 0
+          ? `<ul>${renderedGuidance.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`
           : ""
       }
       ${
@@ -4488,13 +4514,13 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
                   : ""
               }
               ${
-                nextStepSummary
-                  ? `<p>${escapeHtml(nextStepSummary)}</p>`
+                renderedNextStepSummary
+                  ? `<p>${escapeHtml(renderedNextStepSummary)}</p>`
                   : ""
               }
               ${
                 nextStepAction
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Action" : "Action")}:</strong> <code>${escapeHtml(nextStepAction)}</code></p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "アクション" : "Action")}:</strong> <code>${escapeHtml(nextStepAction)}</code></p>`
                   : ""
               }
             </div>
