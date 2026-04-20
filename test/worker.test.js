@@ -4246,6 +4246,13 @@ test("worker setup wizard selection capture fails closed without request token a
   assert.equal(blockedResponse.status, 403);
   const blockedBody = await blockedResponse.json();
   assert.equal(blockedBody.error, "approval_bound_request_required_for_selection_capture");
+  assert.equal(blockedBody.requiredAction.id, "record_go_passkey_request_for_capture");
+  assert.equal(blockedBody.requiredAction.path, "/setup/wizard/bootstrap-session/request");
+  assert.equal(
+    blockedBody.requiredAction.returnTo,
+    "/setup/wizard?repo=sample-org/vtdd-v2&repo=other-org/another-repo&githubAppCheck=on"
+  );
+  assert.equal(blockedBody.requiredAction.approvalBoundary, "GO + passkey");
   assert.equal(calls.length, 0);
 
   const requestResponse = await worker.fetch(
@@ -4384,6 +4391,13 @@ test("worker setup wizard detected capture fails closed without request token an
   assert.equal(blockedResponse.status, 403);
   const blockedBody = await blockedResponse.json();
   assert.equal(blockedBody.error, "approval_bound_request_required_for_selection_capture");
+  assert.equal(blockedBody.requiredAction.id, "record_go_passkey_request_for_capture");
+  assert.equal(blockedBody.requiredAction.path, "/setup/wizard/bootstrap-session/request");
+  assert.equal(
+    blockedBody.requiredAction.returnTo,
+    "/setup/wizard?repo=sample-org/vtdd-v2&githubAppCheck=on"
+  );
+  assert.equal(blockedBody.requiredAction.approvalBoundary, "GO + passkey");
   assert.equal(calls.length, 0);
 
   const requestResponse = await worker.fetch(
