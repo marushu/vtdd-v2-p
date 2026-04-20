@@ -3730,6 +3730,11 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                     ? "GitHub 側で installation が反映され次第、そのまま detection から binding/readiness へ進みます。"
                     : "Once GitHub exposes the installation, VTDD will continue directly from detection into binding and readiness."
                 )}</li>
+                <li>${escapeHtml(
+                  locale === "ja"
+                    ? "この時点の外部ステップは GitHub 側の installation 同意のみで、ID の手動コピーは不要です。"
+                    : "At this point, the only external step is GitHub-side installation consent, and manual ID copy/paste is not needed."
+                )}</li>
               </ul>
               ${
                 diagnosticsReturnTo

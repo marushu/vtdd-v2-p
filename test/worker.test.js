@@ -3881,6 +3881,12 @@ test("worker setup wizard auto-rechecks html while awaiting github app installat
   );
   assert.equal(
     html.includes(
+      "At this point, the only external step is GitHub-side installation consent, and manual ID copy/paste is not needed."
+    ),
+    true
+  );
+  assert.equal(
+    html.includes(
       '<form method="get" action="/setup/wizard?repo=sample-org%2Fvtdd-v2&amp;githubAppCheck=on"><button type="submit" class="copy-button">Run live diagnostics now</button></form>'
     ),
     true
