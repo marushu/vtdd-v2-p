@@ -3997,6 +3997,11 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                 )}</li>
                 <li>${escapeHtml(
                   locale === "ja"
+                    ? "同じ setup flow で GO + passkey request は記録済みのため、再発行せずにこのまま consume 継続へ進めます。"
+                    : "The GO + passkey request is already recorded in this same setup flow, so VTDD can continue consume without reissuing it."
+                )}</li>
+                <li>${escapeHtml(
+                  locale === "ja"
                     ? "この consume 継続は、検出済み installation 候補に束縛された single-use として扱われます。"
                     : "This consume continuation is handled as single-use and bound to the detected installation candidate."
                 )}</li>
@@ -10564,15 +10569,20 @@ function attachDetectedCompletionGuidance({ githubAppSetupCheck }) {
     "When approval-bound consume is available, stay in this wizard and continue with the detected installation to complete binding and readiness in-flow.";
   const singleUseGuidance =
     "This approval-bound consume remains single-use and bound to the currently detected installation candidate.";
+  const noReissueGuidance =
+    "The GO + passkey request is already recorded in this same setup flow, so VTDD can continue consume without reissuing it.";
   const genericGuidance =
     "When approval-bound continuation is available, no extra provider redirect is needed; continue inside this wizard with GO + passkey.";
   const guidanceWithoutGeneric = guidance.filter((item) => item !== genericGuidance);
   const nextGuidance = guidanceWithoutGeneric.includes(inFlowGuidance)
     ? guidanceWithoutGeneric
     : [...guidanceWithoutGeneric, inFlowGuidance];
-  const finalGuidance = nextGuidance.includes(singleUseGuidance)
+  const guidanceWithSingleUse = nextGuidance.includes(singleUseGuidance)
     ? nextGuidance
     : [...nextGuidance, singleUseGuidance];
+  const finalGuidance = guidanceWithSingleUse.includes(noReissueGuidance)
+    ? guidanceWithSingleUse
+    : [...guidanceWithSingleUse, noReissueGuidance];
 
   return {
     ...setupCheck,

@@ -1938,6 +1938,12 @@ test("worker setup wizard consume can complete a single detected installation bi
   );
   assert.equal(
     statusBody.githubAppSetupCheck.guidance.includes(
+      "The GO + passkey request is already recorded in this same setup flow, so VTDD can continue consume without reissuing it."
+    ),
+    true
+  );
+  assert.equal(
+    statusBody.githubAppSetupCheck.guidance.includes(
       "When approval-bound continuation is available, no extra provider redirect is needed; continue inside this wizard with GO + passkey."
     ),
     false
