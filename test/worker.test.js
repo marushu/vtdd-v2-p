@@ -3846,6 +3846,19 @@ test("worker setup wizard configured html shows bootstrap-complete setup progres
   );
   assert.equal(html.includes('action="/setup/wizard?repo=sample-org%2Fvtdd-v2&amp;githubAppCheck=on"'), true);
   assert.equal(html.includes("Run live diagnostics now"), true);
+
+  const responseJa = await worker.fetch(
+    new Request("https://example.com/setup/wizard?repo=sample-org/vtdd-v2", {
+      headers: {
+        "accept-language": "ja"
+      }
+    }),
+    env
+  );
+  assert.equal(responseJa.status, 200);
+  const htmlJa = await responseJa.text();
+  assert.equal(htmlJa.includes("セットアップ進捗"), true);
+  assert.equal(htmlJa.includes("GitHub App runtime 設定は完了し、次は live 診断です"), true);
 });
 
 test("worker setup wizard configured json without continuation does not expose post-consume variant", async () => {
@@ -3962,6 +3975,23 @@ test("worker setup wizard consume-proof configured html shows post-binding setup
   );
   assert.equal(html.includes("Run live diagnostics now"), true);
   assert.equal(html.includes("Retry in same setup flow"), false);
+
+  const responseJa = await worker.fetch(
+    new Request(
+      "https://example.com/setup/wizard?repo=sample-org/vtdd-v2&githubAppCheck=on&bootstrap_session_consume=completed&bootstrap_session_consume_proof_state=configured",
+      {
+        headers: {
+          cookie: `vtdd_setup_access=${sessionCookie}`,
+          "accept-language": "ja"
+        }
+      }
+    ),
+    env
+  );
+  assert.equal(responseJa.status, 200);
+  const htmlJa = await responseJa.text();
+  assert.equal(htmlJa.includes("セットアップ進捗"), true);
+  assert.equal(htmlJa.includes("installation binding は完了し、次は live readiness 確認です"), true);
 });
 
 test("worker setup wizard auto-rechecks html while awaiting github app installation", async () => {
