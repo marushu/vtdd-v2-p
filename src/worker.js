@@ -3192,6 +3192,42 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
           : ""
       }
       ${
+        state === "partially_configured" &&
+        guidance.some(
+          (item) =>
+            typeof item === "string" &&
+            item.includes("githubAppCheck=on")
+        )
+          ? `
+            <div class="block" style="margin-top: 12px;">
+              <p><strong>${escapeHtml(
+                locale === "ja"
+                  ? "installation binding の残りステップに進んでいます"
+                  : "VTDD is narrowed to the remaining installation binding step"
+              )}</strong></p>
+              <p><strong>${escapeHtml(locale === "ja" ? "Setup progress" : "Setup progress")}</strong></p>
+              <ul>
+                <li>${escapeHtml(
+                  locale === "ja"
+                    ? "GitHub App identity は Worker runtime に設定済みです。"
+                    : "GitHub App identity is already configured on Worker runtime."
+                )}</li>
+                <li>${escapeHtml(
+                  locale === "ja"
+                    ? "次は同じ setup flow で installation detection を優先し、手動運搬なしの capture を試みます。"
+                    : "Next, VTDD prioritizes installation detection in this same setup flow before manual transport."
+                )}</li>
+                <li>${escapeHtml(
+                  locale === "ja"
+                    ? "detection が unavailable の場合のみ、bounded fallback として installation ID 設定に進みます。"
+                    : "Only if detection stays unavailable does VTDD fall back to bounded installation ID storage."
+                )}</li>
+              </ul>
+            </div>
+          `
+          : ""
+      }
+      ${
         state === "installation_selection_required" &&
         installationCapturePath &&
         installationSelectionOptions.length > 0

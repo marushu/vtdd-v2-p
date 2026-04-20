@@ -4474,6 +4474,40 @@ test("worker setup wizard missing-only-installation guidance prefers same-flow d
   ]);
 });
 
+test("worker setup wizard partially configured html shows installation-binding setup progress", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/setup/wizard?repo=sample-org/vtdd-v2"),
+    {
+      GITHUB_APP_ID: "12345",
+      GITHUB_APP_PRIVATE_KEY: "-----BEGIN PRIVATE KEY-----\nplaceholder\n-----END PRIVATE KEY-----"
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.equal(
+    html.includes("VTDD is narrowed to the remaining installation binding step"),
+    true
+  );
+  assert.equal(html.includes("Setup progress"), true);
+  assert.equal(
+    html.includes("GitHub App identity is already configured on Worker runtime."),
+    true
+  );
+  assert.equal(
+    html.includes(
+      "Next, VTDD prioritizes installation detection in this same setup flow before manual transport."
+    ),
+    true
+  );
+  assert.equal(
+    html.includes(
+      "Only if detection stays unavailable does VTDD fall back to bounded installation ID storage."
+    ),
+    true
+  );
+});
+
 test("worker setup wizard verifies github app live probe when requested", async () => {
   const calls = [];
   const githubApiFetch = async (url, init = {}) => {
