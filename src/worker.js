@@ -5839,7 +5839,8 @@ async function runGitHubAppSetupCheck(url, env) {
             "VTDD found multiple GitHub App installations, so it cannot safely capture one automatically.",
           guidance: [
             "Keep setup wizard focused on one installation target at a time.",
-            "Choose the correct installation in GitHub, then return here so VTDD can capture it without manual ID transport."
+            "Choose the correct installation in GitHub, then return here so VTDD can capture it without manual ID transport.",
+            "At this point, the only external step is adjusting installation scope on GitHub; no manual ID copy/paste is needed."
           ],
           links: buildGitHubAppInstallationLinks(appMetadata),
           installationSelectionOptions: detection.selectionOptions ?? [],
