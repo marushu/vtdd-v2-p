@@ -5819,6 +5819,9 @@ async function buildApprovalBoundBootstrapSessionStatus({
   const requestInvalid =
     normalizeText(url?.searchParams?.get(SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_STATE_PARAM)) ===
     "invalid";
+  const requestMissing =
+    normalizeText(url?.searchParams?.get(SETUP_WIZARD_BOOTSTRAP_SESSION_REQUEST_STATE_PARAM)) ===
+    "missing";
   const effectiveContext = deriveEffectiveBootstrapSessionContext({
     url,
     preview,
@@ -6059,6 +6062,25 @@ async function buildApprovalBoundBootstrapSessionStatus({
           ...base.contract.preview,
           blockedBy: ["go_passkey_contract_not_satisfied"]
         }
+      }
+    };
+  }
+
+  if (requestMissing) {
+    return {
+      ...base,
+      state: "request_required_for_capture",
+      summary:
+        "VTDD blocked installation capture in this setup flow because no current GO + passkey request token was present.",
+      guidance: [
+        "Record a fresh GO + passkey request in this same setup flow before retrying installation capture.",
+        "This fail-closed boundary keeps installation binding write approval-bound and auditable."
+      ],
+      recommendedNextStep: {
+        id: "record_go_passkey_request_for_capture",
+        summary:
+          "Record GO + passkey request now, then retry installation capture in this same setup flow.",
+        action: "record_go_passkey_request"
       }
     };
   }
