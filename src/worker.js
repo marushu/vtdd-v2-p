@@ -4705,7 +4705,7 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
                       .map((item) => `<code>${escapeHtml(item)}</code>`)
                       .join(", ")}</p>`
                   : `<p><strong>${escapeHtml(locale === "ja" ? "外部リダイレクトで残っているステップ" : "Remaining external redirects")}:</strong> ${escapeHtml(
-                      locale === "ja" ? "none" : "none"
+                      locale === "ja" ? "なし" : "none"
                     )}</p>`
               }
             </div>

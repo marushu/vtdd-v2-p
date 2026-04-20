@@ -4071,6 +4071,7 @@ test("worker setup wizard configured html shows bootstrap-complete setup progres
     ),
     true
   );
+  assert.equal(htmlJa.includes("外部リダイレクトで残っているステップ:</strong> なし"), true);
 });
 
 test("worker setup wizard configured json without continuation does not expose post-consume variant", async () => {
