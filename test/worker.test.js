@@ -4309,6 +4309,141 @@ test("worker setup wizard selection capture fails closed without request token a
   assert.equal(calls.length, 1);
 });
 
+test("worker setup wizard detected capture fails closed without request token and rejects mismatched id", async () => {
+  const calls = [];
+  const { privateKey } = generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+    privateKeyEncoding: {
+      type: "pkcs8",
+      format: "pem"
+    },
+    publicKeyEncoding: {
+      type: "spki",
+      format: "pem"
+    }
+  });
+  const env = {
+    SETUP_WIZARD_PASSCODE: "2468",
+    CLOUDFLARE_API_TOKEN: "bootstrap-token",
+    CLOUDFLARE_ACCOUNT_ID: "account-id",
+    CLOUDFLARE_WORKER_SCRIPT_NAME: "vtdd-v2-mvp",
+    GITHUB_MANIFEST_CONVERSION_TOKEN: "gho_operator_token",
+    GITHUB_APP_ID: "12345",
+    GITHUB_APP_PRIVATE_KEY: privateKey,
+    GITHUB_API_FETCH: async (url) => {
+      if (String(url).endsWith("/app/installations")) {
+        return new Response(
+          JSON.stringify([
+            {
+              id: 125153871
+            }
+          ]),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          }
+        );
+      }
+      return new Response(JSON.stringify({}), {
+        status: 404,
+        headers: { "content-type": "application/json" }
+      });
+    },
+    CF_API_FETCH: async (url, init = {}) => {
+      calls.push({ url: String(url), init });
+      return new Response(
+        JSON.stringify({
+          success: true,
+          errors: [],
+          result: { name: "GITHUB_APP_INSTALLATION_ID", type: "secret_text" }
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        }
+      );
+    }
+  };
+  const baseReturnTo = "/setup/wizard?repo=sample-org/vtdd-v2&githubAppCheck=on";
+  const { sessionCookie } = await unlockSetupWizard(env, baseReturnTo);
+
+  const blockedResponse = await worker.fetch(
+    new Request("https://example.com/setup/wizard/github-app/capture-installation", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      },
+      body: JSON.stringify({
+        GITHUB_APP_INSTALLATION_ID: "125153871",
+        returnTo: baseReturnTo
+      })
+    }),
+    env
+  );
+  assert.equal(blockedResponse.status, 403);
+  const blockedBody = await blockedResponse.json();
+  assert.equal(blockedBody.error, "approval_bound_request_required_for_selection_capture");
+  assert.equal(calls.length, 0);
+
+  const requestResponse = await worker.fetch(
+    new Request("https://example.com/setup/wizard/bootstrap-session/request", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      },
+      body: JSON.stringify({
+        approval_phrase: "GO",
+        passkey_verified: "true",
+        returnTo: baseReturnTo
+      })
+    }),
+    env
+  );
+  assert.equal(requestResponse.status, 200);
+  const requestBody = await requestResponse.json();
+  const requestReturnTo = requestBody.returnTo;
+
+  const mismatchResponse = await worker.fetch(
+    new Request("https://example.com/setup/wizard/github-app/capture-installation", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      },
+      body: JSON.stringify({
+        GITHUB_APP_INSTALLATION_ID: "999",
+        returnTo: requestReturnTo
+      })
+    }),
+    env
+  );
+  assert.equal(mismatchResponse.status, 422);
+  const mismatchBody = await mismatchResponse.json();
+  assert.equal(mismatchBody.error, "github_app_installation_capture_detected_id_mismatch");
+  assert.equal(calls.length, 0);
+
+  const allowedResponse = await worker.fetch(
+    new Request("https://example.com/setup/wizard/github-app/capture-installation", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      },
+      body: JSON.stringify({
+        GITHUB_APP_INSTALLATION_ID: "125153871",
+        returnTo: requestReturnTo
+      })
+    }),
+    env
+  );
+  assert.equal(allowedResponse.status, 200);
+  const allowedBody = await allowedResponse.json();
+  assert.equal(allowedBody.ok, true);
+  assert.equal(calls.length, 1);
+});
+
 test("worker setup wizard installation selection stays provider-led when candidate owners are ambiguous", async () => {
   const { privateKey } = generateKeyPairSync("rsa", {
     modulusLength: 2048,
