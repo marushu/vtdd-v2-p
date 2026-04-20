@@ -4294,6 +4294,23 @@ test("worker setup wizard installation selection required html offers direct sel
     true
   );
   assert.equal(body.includes("Run live diagnostics now"), true);
+
+  const responseJa = await worker.fetch(
+    new Request(
+      "https://example.com/setup/wizard?repo=sample-org/vtdd-v2&repo=other-org/another-repo&githubAppCheck=on",
+      {
+        headers: {
+          "accept-language": "ja"
+        }
+      }
+    ),
+    env
+  );
+  assert.equal(responseJa.status, 200);
+  const bodyJa = await responseJa.text();
+  assert.equal(bodyJa.includes("セットアップ進捗"), true);
+  assert.equal(bodyJa.includes("候補 installation を wizard 内でそのまま選べます"), true);
+  assert.equal(bodyJa.includes("GitHub から active installation 候補を取得しました。"), true);
 });
 
 test("worker setup wizard installation selection required html keeps external step explicit without manual ID transport", async () => {
