@@ -5290,6 +5290,12 @@ test("worker setup wizard can request detected installation continuation from gi
     ),
     true
   );
+  assert.equal(
+    html.includes(
+      "At this point, no extra external-provider redirect is needed; continuation stays inside this wizard with approval."
+    ),
+    true
+  );
   assert.equal(html.includes('action="/setup/wizard/bootstrap-session/request"'), true);
   assert.equal(html.includes('name="pending_installation_id" value="125153871"'), true);
   assert.equal(html.includes("Record GO + passkey request"), false);
