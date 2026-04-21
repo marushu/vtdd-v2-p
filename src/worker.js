@@ -5543,24 +5543,24 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
         evidenceReadout
           ? `
             <div class="block" style="margin-top: 12px;">
-              <p><strong>${escapeHtml(locale === "ja" ? "Evidence readout" : "Evidence readout")}:</strong></p>
+              <p><strong>${escapeHtml(locale === "ja" ? "証跡読取結果" : "Evidence readout")}:</strong></p>
               ${
                 runtimeEvidence.length > 0
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Runtime evidence" : "Runtime evidence")}:</strong> ${runtimeEvidence
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "ランタイム証跡" : "Runtime evidence")}:</strong> ${runtimeEvidence
                       .map((item) => `<code>${escapeHtml(item)}</code>`)
                       .join(", ")}</p>`
                   : ""
               }
               ${
                 blockedEvidence.length > 0
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Blocked evidence" : "Blocked evidence")}:</strong> ${blockedEvidence
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "ブロック中証跡" : "Blocked evidence")}:</strong> ${blockedEvidence
                       .map((item) => `<code>${escapeHtml(item)}</code>`)
                       .join(", ")}</p>`
                   : ""
               }
               ${
                 nextProof
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Next proof" : "Next proof")}:</strong> <code>${escapeHtml(normalizeText(nextProof.id))}</code> ${escapeHtml(normalizeText(nextProof.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "次の証跡" : "Next proof")}:</strong> <code>${escapeHtml(normalizeText(nextProof.id))}</code> ${escapeHtml(normalizeText(nextProof.summary))}</p>`
                   : ""
               }
             </div>

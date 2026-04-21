@@ -1659,6 +1659,10 @@ test("worker setup wizard records approval-bound bootstrap request without grant
   assert.equal(htmlJa.includes("現在の主張"), true);
   assert.equal(htmlJa.includes("まだ主張不可"), true);
   assert.equal(htmlJa.includes("主張成立条件"), true);
+  assert.equal(htmlJa.includes("証跡読取結果"), true);
+  assert.equal(htmlJa.includes("ランタイム証跡"), true);
+  assert.equal(htmlJa.includes("ブロック中証跡"), true);
+  assert.equal(htmlJa.includes("次の証跡"), true);
 
   const jsonResponse = await worker.fetch(
     new Request(`https://example.com${location}&format=json`, {
