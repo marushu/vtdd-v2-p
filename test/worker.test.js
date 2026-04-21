@@ -620,6 +620,11 @@ test("worker setup wizard localizes capability readout labels to Japanese", asyn
   assert.equal(html.includes("人が行うステップ"), true);
   assert.equal(html.includes("VTDD ステップ"), true);
   assert.equal(html.includes("プロバイダーステップ"), true);
+  assert.equal(html.includes("認証境界分割"), true);
+  assert.equal(html.includes("VTDD サービスアクセス"), true);
+  assert.equal(html.includes("オペレーター bootstrap 権限"), true);
+  assert.equal(html.includes("外部アカウント接続"), true);
+  assert.equal(html.includes("ランタイムマシン認証"), true);
 });
 
 test("worker setup wizard unlocked json reports github app bootstrap availability and missing prerequisites", async () => {

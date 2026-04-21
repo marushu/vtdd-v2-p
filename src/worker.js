@@ -4940,25 +4940,25 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
         authBoundaryReadout
           ? `
             <div class="block" style="margin-top: 12px;">
-              <p><strong>${escapeHtml(locale === "ja" ? "Auth boundary split" : "Auth boundary split")}:</strong></p>
+              <p><strong>${escapeHtml(locale === "ja" ? "認証境界分割" : "Auth boundary split")}:</strong></p>
               ${
                 serviceAccess
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "VTDD service access" : "VTDD service access")}:</strong> <code>${escapeHtml(normalizeText(serviceAccess.state))}</code> ${escapeHtml(normalizeText(serviceAccess.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "VTDD サービスアクセス" : "VTDD service access")}:</strong> <code>${escapeHtml(normalizeText(serviceAccess.state))}</code> ${escapeHtml(normalizeText(serviceAccess.summary))}</p>`
                   : ""
               }
               ${
                 operatorBootstrapAuthority
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Operator bootstrap authority" : "Operator bootstrap authority")}:</strong> <code>${escapeHtml(normalizeText(operatorBootstrapAuthority.state))}</code> ${escapeHtml(normalizeText(operatorBootstrapAuthority.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "オペレーター bootstrap 権限" : "Operator bootstrap authority")}:</strong> <code>${escapeHtml(normalizeText(operatorBootstrapAuthority.state))}</code> ${escapeHtml(normalizeText(operatorBootstrapAuthority.summary))}</p>`
                   : ""
               }
               ${
                 externalAccountConnection
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "External account connection" : "External account connection")}:</strong> <code>${escapeHtml(normalizeText(externalAccountConnection.state))}</code> ${escapeHtml(normalizeText(externalAccountConnection.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "外部アカウント接続" : "External account connection")}:</strong> <code>${escapeHtml(normalizeText(externalAccountConnection.state))}</code> ${escapeHtml(normalizeText(externalAccountConnection.summary))}</p>`
                   : ""
               }
               ${
                 runtimeMachineAuth
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Runtime machine auth" : "Runtime machine auth")}:</strong> <code>${escapeHtml(normalizeText(runtimeMachineAuth.state))}</code> ${escapeHtml(normalizeText(runtimeMachineAuth.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "ランタイムマシン認証" : "Runtime machine auth")}:</strong> <code>${escapeHtml(normalizeText(runtimeMachineAuth.state))}</code> ${escapeHtml(normalizeText(runtimeMachineAuth.summary))}</p>`
                   : ""
               }
             </div>
