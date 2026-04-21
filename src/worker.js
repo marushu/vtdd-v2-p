@@ -5137,20 +5137,20 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
         authorityRequestBindingReadout
           ? `
             <div class="block" style="margin-top: 12px;">
-              <p><strong>${escapeHtml(locale === "ja" ? "Authority request binding" : "Authority request binding")}:</strong></p>
+              <p><strong>${escapeHtml(locale === "ja" ? "権限要求バインディング" : "Authority request binding")}:</strong></p>
               ${
                 bindingTarget
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Binding target" : "Binding target")}:</strong> <code>${escapeHtml(normalizeText(bindingTarget.id))}</code> ${escapeHtml(normalizeText(bindingTarget.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "バインディング対象" : "Binding target")}:</strong> <code>${escapeHtml(normalizeText(bindingTarget.id))}</code> ${escapeHtml(normalizeText(bindingTarget.summary))}</p>`
                   : ""
               }
               ${
                 bindingDrift
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Binding drift" : "Binding drift")}:</strong> <code>${escapeHtml(normalizeText(bindingDrift.id))}</code> ${escapeHtml(normalizeText(bindingDrift.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "バインディングドリフト" : "Binding drift")}:</strong> <code>${escapeHtml(normalizeText(bindingDrift.id))}</code> ${escapeHtml(normalizeText(bindingDrift.summary))}</p>`
                   : ""
               }
               ${
                 bindingRecovery
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Binding recovery" : "Binding recovery")}:</strong> <code>${escapeHtml(normalizeText(bindingRecovery.id))}</code> ${escapeHtml(normalizeText(bindingRecovery.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "バインディング復帰" : "Binding recovery")}:</strong> <code>${escapeHtml(normalizeText(bindingRecovery.id))}</code> ${escapeHtml(normalizeText(bindingRecovery.summary))}</p>`
                   : ""
               }
             </div>
