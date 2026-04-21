@@ -2044,6 +2044,7 @@ test("worker setup wizard request auto-continues verification-only consume when 
   const location = requestResponse.headers.get("location") ?? "";
   assert.equal(location.includes("bootstrap_session_consume=completed"), true);
   assert.equal(location.includes("bootstrap_session_consume_proof_state=ready"), true);
+  assert.equal(location.includes("bootstrap_session_consume_mode=verification_only"), true);
 
   const statusResponse = await worker.fetch(
     new Request(`https://example.com${location}&format=json`, {
@@ -2055,6 +2056,55 @@ test("worker setup wizard request auto-continues verification-only consume when 
   );
   const statusBody = await statusResponse.json();
   assert.equal(statusBody.approvalBoundBootstrapSession.state, "bounded_consume_completed_with_live_proof");
+  assert.equal(
+    statusBody.approvalBoundBootstrapSession.summary,
+    "VTDD consumed the bounded verification-only step and immediately proved live GitHub readiness in the same setup flow."
+  );
+  assert.equal(
+    statusBody.githubAppSetupCheck.summary,
+    "GitHub App setup check passed in the current setup flow: VTDD consumed verification-only scope and confirmed live repository access."
+  );
+  assert.equal(
+    statusBody.githubAppSetupCheck.guidance.includes(
+      "The single-use approval-bound verification request is already consumed and absorbed in this setup flow."
+    ),
+    true
+  );
+  assert.equal(
+    statusBody.githubAppSetupCheck.guidance.includes(
+      "No new GO + passkey request is needed in this flow unless runtime identity or target context changes."
+    ),
+    true
+  );
+  assert.equal(
+    statusBody.githubAppSetupCheck.guidance.includes(
+      "The single-use approval-bound installation-binding request is already consumed and absorbed in this setup flow."
+    ),
+    false
+  );
+
+  const completedHtmlResponse = await worker.fetch(
+    new Request(`https://example.com${location}`, {
+      headers: {
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      }
+    }),
+    env
+  );
+  assert.equal(completedHtmlResponse.status, 200);
+  const completedHtml = await completedHtmlResponse.text();
+  assert.equal(
+    completedHtml.includes(
+      "VTDD consumed the bounded verification-only step and immediately proved live GitHub readiness in the same setup flow."
+    ),
+    true
+  );
+  assert.equal(
+    completedHtml.includes(
+      "VTDD consumed the bounded installation-binding step and immediately proved live GitHub readiness in the same setup flow."
+    ),
+    false
+  );
 });
 
 test("worker setup wizard shows deferred consume setup progress in html readout", async () => {
@@ -2508,6 +2558,10 @@ test("worker setup wizard request can auto-continue detected installation bindin
   assert.equal(completedLocation.includes("bootstrap_session_consume=completed"), true);
   assert.equal(
     completedLocation.includes("bootstrap_session_consume_proof_state=ready"),
+    true
+  );
+  assert.equal(
+    completedLocation.includes("bootstrap_session_consume_mode=installation_binding"),
     true
   );
 
@@ -4247,6 +4301,66 @@ test("worker setup wizard consume proof probe_failed rewrites guidance to live-r
   );
 });
 
+test("worker setup wizard consume proof probe_failed rewrites guidance for verification-only continuation", async () => {
+  const { privateKey } = generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+    privateKeyEncoding: {
+      type: "pkcs8",
+      format: "pem"
+    },
+    publicKeyEncoding: {
+      type: "spki",
+      format: "pem"
+    }
+  });
+  const env = {
+    GITHUB_APP_ID: "12345",
+    GITHUB_APP_PRIVATE_KEY: privateKey,
+    GITHUB_API_FETCH: async (url) => {
+      if (String(url).endsWith("/app/installations")) {
+        return new Response(JSON.stringify([{ id: 125153871 }]), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        });
+      }
+      return new Response(JSON.stringify({}), {
+        status: 404,
+        headers: { "content-type": "application/json" }
+      });
+    }
+  };
+
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/setup/wizard?format=json&repo=sample-org/vtdd-v2&githubAppCheck=on&bootstrap_session_consume=completed&bootstrap_session_consume_mode=verification_only&bootstrap_session_consume_proof_state=probe_failed"
+    ),
+    env
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.githubAppSetupCheck.state, "probe_failed");
+  assert.equal(body.githubAppSetupCheck.progressVariant, "post_consume_probe_failed");
+  assert.equal(
+    body.githubAppSetupCheck.summary,
+    "GitHub App verification-only consume completed in the current setup flow, but the immediate live readiness probe still failed closed."
+  );
+  assert.deepEqual(body.githubAppSetupCheck.guidance, [
+    "Verification-only consume already completed in this same setup flow, so do not retry consume before fixing the probe blocker.",
+    "The single-use approval-bound verification request is already consumed and absorbed in this setup flow.",
+    "Do not issue a new GO + passkey verification request at this stage unless runtime identity or target context changes.",
+    "Fix the live probe blocker, then rerun githubAppCheck=on to continue readiness verification."
+  ]);
+  assert.equal(
+    body.approvalBoundBootstrapSession.envelopeConsumeResult.proof.summary,
+    "VTDD completed verification-only consume, but the immediate live readiness probe still failed closed."
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.envelopeConsumeResult.nextProof.summary,
+    "Fix the live probe blocker, then rerun readiness diagnostics in this same setup flow without issuing another consume request."
+  );
+});
+
 test("worker setup wizard consume proof probe_failed html shows live-readiness-specific setup progress", async () => {
   const { privateKey } = generateKeyPairSync("rsa", {
     modulusLength: 2048,
@@ -4411,6 +4525,67 @@ test("worker setup wizard consume proof configured rewrites guidance to live-rea
   assert.equal(
     body.approvalBoundBootstrapSession.envelopeConsumeResult.requiredAction.path,
     "/setup/wizard?repo=sample-org%2Fvtdd-v2&githubAppCheck=on"
+  );
+});
+
+test("worker setup wizard consume proof configured rewrites guidance for verification-only continuation", async () => {
+  const { privateKey } = generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+    privateKeyEncoding: {
+      type: "pkcs8",
+      format: "pem"
+    },
+    publicKeyEncoding: {
+      type: "spki",
+      format: "pem"
+    }
+  });
+  const env = {
+    GITHUB_APP_ID: "12345",
+    GITHUB_APP_PRIVATE_KEY: privateKey,
+    GITHUB_API_FETCH: async (url) => {
+      if (String(url).endsWith("/app/installations")) {
+        return new Response(JSON.stringify([{ id: 125153871 }]), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        });
+      }
+      return new Response(JSON.stringify({}), {
+        status: 404,
+        headers: { "content-type": "application/json" }
+      });
+    }
+  };
+
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/setup/wizard?format=json&repo=sample-org/vtdd-v2&githubAppCheck=on&bootstrap_session_consume=completed&bootstrap_session_consume_mode=verification_only&bootstrap_session_consume_proof_state=configured"
+    ),
+    env
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.githubAppSetupCheck.state, "configured");
+  assert.equal(body.githubAppSetupCheck.progressVariant, "post_consume_configured");
+  assert.equal(
+    body.githubAppSetupCheck.summary,
+    "GitHub App verification-only consume completed in the current setup flow, and runtime now reports the GitHub App configuration as complete pending live diagnostics."
+  );
+  assert.deepEqual(body.githubAppSetupCheck.guidance, [
+    "Verification-only consume is already absorbed in this same setup flow.",
+    "The single-use approval-bound verification request is already consumed and absorbed in this setup flow.",
+    "Do not issue a new GO + passkey verification request at this stage unless runtime identity or target context changes.",
+    "Run githubAppCheck=on again to execute live readiness diagnostics without re-entering installation IDs.",
+    "No extra external-provider redirect or manual value transport is needed at this stage."
+  ]);
+  assert.equal(
+    body.approvalBoundBootstrapSession.envelopeConsumeResult.proof.summary,
+    "VTDD completed verification-only consume, and runtime now reports the GitHub App configuration as complete pending live diagnostics."
+  );
+  assert.equal(
+    body.approvalBoundBootstrapSession.envelopeConsumeResult.nextProof.summary,
+    "Run live readiness diagnostics in this same setup flow to move from verification-configured state to verified live proof."
   );
 });
 
@@ -5354,6 +5529,10 @@ test("worker setup wizard request can auto-continue selected installation bindin
   const completedLocation = requestResponse.headers.get("location") ?? "";
   assert.equal(completedLocation.includes("bootstrap_session_consume=completed"), true);
   assert.equal(completedLocation.includes("bootstrap_session_consume_proof_state=ready"), true);
+  assert.equal(
+    completedLocation.includes("bootstrap_session_consume_mode=installation_binding"),
+    true
+  );
   assert.equal(calls.length, 1);
   const payload = JSON.parse(String(calls[0].init.body));
   assert.equal(payload.name, "GITHUB_APP_INSTALLATION_ID");

@@ -59,6 +59,10 @@ const SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_REASON_PARAM =
   "bootstrap_session_consume_reason";
 const SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_PROOF_STATE_PARAM =
   "bootstrap_session_consume_proof_state";
+const SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_MODE_PARAM =
+  "bootstrap_session_consume_mode";
+const BOOTSTRAP_SESSION_CONSUME_MODE_INSTALLATION_BINDING = "installation_binding";
+const BOOTSTRAP_SESSION_CONSUME_MODE_VERIFICATION_ONLY = "verification_only";
 const SETUP_WIZARD_BOOTSTRAP_SESSION_ENVELOPE_VERSION = "v1";
 const CLOUDFLARE_WORKER_SCRIPT_NAME_ENV = "CLOUDFLARE_WORKER_SCRIPT_NAME";
 const GITHUB_MANIFEST_CONVERSION_TOKEN_ENV = "GITHUB_MANIFEST_CONVERSION_TOKEN";
@@ -632,6 +636,10 @@ async function handleApprovalBoundBootstrapSessionConsume({ request, url, env })
           normalizeText(proof.state)
         );
       }
+      successUrl.searchParams.set(
+        SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_MODE_PARAM,
+        BOOTSTRAP_SESSION_CONSUME_MODE_INSTALLATION_BINDING
+      );
       return new Response(null, {
         status: 303,
         headers: {
@@ -680,6 +688,10 @@ async function handleApprovalBoundBootstrapSessionConsume({ request, url, env })
           normalizeText(proof.state)
         );
       }
+      successUrl.searchParams.set(
+        SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_MODE_PARAM,
+        BOOTSTRAP_SESSION_CONSUME_MODE_VERIFICATION_ONLY
+      );
       return new Response(null, {
         status: 303,
         headers: {
@@ -971,6 +983,10 @@ async function maybeAutoContinueSelectedInstallationAfterCapture({
       normalizeText(proof.state)
     );
   }
+  successUrl.searchParams.set(
+    SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_MODE_PARAM,
+    BOOTSTRAP_SESSION_CONSUME_MODE_INSTALLATION_BINDING
+  );
 
   return new Response(null, {
     status: 303,
@@ -3528,6 +3544,10 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
   const progressVariant = normalizeText(check?.progressVariant);
   const configuredAfterConsume = progressVariant === "post_consume_configured";
   const probeFailedAfterConsume = progressVariant === "post_consume_probe_failed";
+  const consumeMode =
+    normalizeText(check?.consumeMode) || BOOTSTRAP_SESSION_CONSUME_MODE_INSTALLATION_BINDING;
+  const postConsumeVerificationOnly =
+    consumeMode === BOOTSTRAP_SESSION_CONSUME_MODE_VERIFICATION_ONLY;
 
   const evidenceItems = [];
   if (normalizeText(evidence?.stage)) {
@@ -3872,15 +3892,23 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
             <div class="block" style="margin-top: 12px;">
               <p><strong>${escapeHtml(
                 locale === "ja"
-                  ? "installation binding 後の live readiness probe が fail-closed でした"
-                  : "The live readiness probe failed closed after installation binding"
+                  ? postConsumeVerificationOnly
+                    ? "verification-only consume 後の live readiness probe が fail-closed でした"
+                    : "installation binding 後の live readiness probe が fail-closed でした"
+                  : postConsumeVerificationOnly
+                    ? "The live readiness probe failed closed after verification-only consume"
+                    : "The live readiness probe failed closed after installation binding"
               )}</strong></p>
               <p><strong>${escapeHtml(locale === "ja" ? "セットアップ進捗" : "Setup progress")}</strong></p>
               <ul>
                 <li>${escapeHtml(
                   locale === "ja"
-                    ? "installation binding は同じ setup flow で設定済みです。"
-                    : "Installation binding is already stored in this same setup flow."
+                    ? postConsumeVerificationOnly
+                      ? "verification-only consume は同じ setup flow で完了済みです。"
+                      : "installation binding は同じ setup flow で設定済みです。"
+                    : postConsumeVerificationOnly
+                      ? "Verification-only consume is already completed in this same setup flow."
+                      : "Installation binding is already stored in this same setup flow."
                 )}</li>
                 <li>${escapeHtml(
                   locale === "ja"
@@ -3889,13 +3917,21 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                 )}</li>
                 <li>${escapeHtml(
                   locale === "ja"
-                    ? "installation binding 用の single-use request はこの setup flow ですでに消費済みとして吸収されています。"
-                    : "The single-use request for installation binding is already consumed and absorbed in this setup flow."
+                    ? postConsumeVerificationOnly
+                      ? "verification 用の single-use request はこの setup flow ですでに消費済みとして吸収されています。"
+                      : "installation binding 用の single-use request はこの setup flow ですでに消費済みとして吸収されています。"
+                    : postConsumeVerificationOnly
+                      ? "The single-use request for verification-only consume is already consumed and absorbed in this setup flow."
+                      : "The single-use request for installation binding is already consumed and absorbed in this setup flow."
                 )}</li>
                 <li>${escapeHtml(
                   locale === "ja"
-                    ? "installation candidate が変わらない限り、この段階で GO + passkey request を新規に再発行する必要はありません。"
-                    : "Unless the installation candidate changes, no new GO + passkey request is needed at this stage."
+                    ? postConsumeVerificationOnly
+                      ? "runtime identity または target context が変わらない限り、この段階で GO + passkey request を新規に再発行する必要はありません。"
+                      : "installation candidate が変わらない限り、この段階で GO + passkey request を新規に再発行する必要はありません。"
+                    : postConsumeVerificationOnly
+                      ? "Unless runtime identity or target context changes, no new GO + passkey request is needed at this stage."
+                      : "Unless the installation candidate changes, no new GO + passkey request is needed at this stage."
                 )}</li>
                 <li>${escapeHtml(
                   locale === "ja"
@@ -3960,15 +3996,23 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
             <div class="block" style="margin-top: 12px;">
               <p><strong>${escapeHtml(
                 locale === "ja"
-                  ? "インストール紐付けは完了し、次はライブ準備性確認です"
-                  : "Installation binding is complete, and the next step is live readiness verification"
+                  ? postConsumeVerificationOnly
+                    ? "verification-only consume は完了し、次はライブ準備性確認です"
+                    : "インストール紐付けは完了し、次はライブ準備性確認です"
+                  : postConsumeVerificationOnly
+                    ? "Verification-only consume is complete, and the next step is live readiness verification"
+                    : "Installation binding is complete, and the next step is live readiness verification"
               )}</strong></p>
               <p><strong>${escapeHtml(locale === "ja" ? "セットアップ進捗" : "Setup progress")}</strong></p>
               <ul>
                 <li>${escapeHtml(
                   locale === "ja"
-                    ? "installation binding は同じ setup flow ですでに保存されています。"
-                    : "Installation binding is already stored in this same setup flow."
+                    ? postConsumeVerificationOnly
+                      ? "verification-only consume は同じ setup flow ですでに完了しています。"
+                      : "installation binding は同じ setup flow ですでに保存されています。"
+                    : postConsumeVerificationOnly
+                      ? "Verification-only consume is already completed in this same setup flow."
+                      : "Installation binding is already stored in this same setup flow."
                 )}</li>
                 <li>${escapeHtml(
                   locale === "ja"
@@ -3977,13 +4021,21 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                 )}</li>
                 <li>${escapeHtml(
                   locale === "ja"
-                    ? "installation binding 用の single-use request はこの setup flow ですでに消費済みとして吸収されています。"
-                    : "The single-use request for installation binding is already consumed and absorbed in this setup flow."
+                    ? postConsumeVerificationOnly
+                      ? "verification 用の single-use request はこの setup flow ですでに消費済みとして吸収されています。"
+                      : "installation binding 用の single-use request はこの setup flow ですでに消費済みとして吸収されています。"
+                    : postConsumeVerificationOnly
+                      ? "The single-use request for verification-only consume is already consumed and absorbed in this setup flow."
+                      : "The single-use request for installation binding is already consumed and absorbed in this setup flow."
                 )}</li>
                 <li>${escapeHtml(
                   locale === "ja"
-                    ? "installation candidate が変わらない限り、この段階で GO + passkey request を新規に再発行する必要はありません。"
-                    : "Unless the installation candidate changes, no new GO + passkey request is needed at this stage."
+                    ? postConsumeVerificationOnly
+                      ? "runtime identity または target context が変わらない限り、この段階で GO + passkey request を新規に再発行する必要はありません。"
+                      : "installation candidate が変わらない限り、この段階で GO + passkey request を新規に再発行する必要はありません。"
+                    : postConsumeVerificationOnly
+                      ? "Unless runtime identity or target context changes, no new GO + passkey request is needed at this stage."
+                      : "Unless the installation candidate changes, no new GO + passkey request is needed at this stage."
                 )}</li>
                 <li>${escapeHtml(
                   locale === "ja"
@@ -3992,8 +4044,12 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                 )}</li>
                 <li>${escapeHtml(
                   locale === "ja"
-                    ? "この段階では外部プロバイダ画面への追加移動や installation ID の手動運搬は不要です。"
-                    : "At this stage, no extra external-provider redirect or manual installation ID transport is needed."
+                    ? postConsumeVerificationOnly
+                      ? "この段階では外部プロバイダ画面への追加移動や手動値運搬は不要です。"
+                      : "この段階では外部プロバイダ画面への追加移動や installation ID の手動運搬は不要です。"
+                    : postConsumeVerificationOnly
+                      ? "At this stage, no extra external-provider redirect or manual value transport is needed."
+                      : "At this stage, no extra external-provider redirect or manual installation ID transport is needed."
                 )}</li>
               </ul>
               ${
@@ -4622,6 +4678,10 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
   const consumeResultNextProof = envelopeConsumeResult?.nextProof ?? null;
   const consumeResultRequiredAction = envelopeConsumeResult?.requiredAction ?? null;
   const consumeResultProof = envelopeConsumeResult?.proof ?? null;
+  const consumeResultMode =
+    normalizeText(envelopeConsumeResult?.mode) || BOOTSTRAP_SESSION_CONSUME_MODE_INSTALLATION_BINDING;
+  const consumeResultVerificationOnly =
+    consumeResultMode === BOOTSTRAP_SESSION_CONSUME_MODE_VERIFICATION_ONLY;
   const envelopeConsumptionPlan = session?.envelopeConsumptionPlan ?? null;
   const consumptionIntent = envelopeConsumptionPlan?.consumptionIntent ?? null;
   const consumptionBoundary = envelopeConsumptionPlan?.consumptionBoundary ?? null;
@@ -5362,34 +5422,58 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
                     <ul>
                       <li>${escapeHtml(
                         locale === "ja"
-                          ? "同じ setup flow の signed envelope を照合し、installation 候補を取得しました。"
-                          : "VTDD validated the signed envelope in the same setup flow and absorbed the installation candidate."
+                          ? consumeResultVerificationOnly
+                            ? "同じ setup flow の signed envelope を照合し、現在の runtime context で verification scope を吸収しました。"
+                            : "同じ setup flow の signed envelope を照合し、installation 候補を取得しました。"
+                          : consumeResultVerificationOnly
+                            ? "VTDD validated the signed envelope in the same setup flow and absorbed verification scope for the current runtime context."
+                            : "VTDD validated the signed envelope in the same setup flow and absorbed the installation candidate."
                       )}</li>
                       <li>${escapeHtml(
                         locale === "ja"
-                          ? "VTDD が installation binding を Worker runtime に設定しました。"
-                          : "VTDD stored the installation binding on Worker runtime."
+                          ? consumeResultVerificationOnly
+                            ? "この consume では追加の installation binding 書き込みは行わず、verification-only として記録しました。"
+                            : "VTDD が installation binding を Worker runtime に設定しました。"
+                          : consumeResultVerificationOnly
+                            ? "This consume ran in verification-only mode, so VTDD did not write installation binding in this step."
+                            : "VTDD stored the installation binding on Worker runtime."
                       )}</li>
                       <li>${escapeHtml(
                         locale === "ja"
                           ? consumeResultProof && normalizeText(consumeResultProof.state) === "ready"
-                            ? "設定後すぐ readiness を確認し、live repository access を確認しました。"
+                            ? consumeResultVerificationOnly
+                              ? "verification-only consume 後に readiness を確認し、live repository access を確認しました。"
+                              : "設定後すぐ readiness を確認し、live repository access を確認しました。"
                             : consumeResultProof &&
                                 normalizeText(consumeResultProof.state) === "configured"
-                              ? "設定後すぐ readiness 確認を実行し、runtime configuration completed を確認しました。"
+                              ? consumeResultVerificationOnly
+                                ? "verification-only consume 後に readiness 確認を実行し、runtime configuration completed を確認しました。"
+                                : "設定後すぐ readiness 確認を実行し、runtime configuration completed を確認しました。"
                               : consumeResultProof &&
                                   normalizeText(consumeResultProof.state) === "probe_failed"
-                                ? "設定後すぐ readiness 確認を実行しましたが、live probe は fail-closed でした。"
-                                : "設定後すぐ post-consume proof を記録しました。"
+                                ? consumeResultVerificationOnly
+                                  ? "verification-only consume 後に readiness 確認を実行しましたが、live probe は fail-closed でした。"
+                                  : "設定後すぐ readiness 確認を実行しましたが、live probe は fail-closed でした。"
+                                : consumeResultVerificationOnly
+                                  ? "verification-only consume 後の post-consume proof を記録しました。"
+                                  : "設定後すぐ post-consume proof を記録しました。"
                           : consumeResultProof && normalizeText(consumeResultProof.state) === "ready"
-                            ? "Immediately after the write, VTDD verified readiness and confirmed live repository access."
+                            ? consumeResultVerificationOnly
+                              ? "Immediately after verification-only consume, VTDD verified readiness and confirmed live repository access."
+                              : "Immediately after the write, VTDD verified readiness and confirmed live repository access."
                             : consumeResultProof &&
                                 normalizeText(consumeResultProof.state) === "configured"
-                              ? "Immediately after the write, VTDD verified readiness and confirmed runtime configuration completion."
+                              ? consumeResultVerificationOnly
+                                ? "Immediately after verification-only consume, VTDD verified readiness and confirmed runtime configuration completion."
+                                : "Immediately after the write, VTDD verified readiness and confirmed runtime configuration completion."
                               : consumeResultProof &&
                                   normalizeText(consumeResultProof.state) === "probe_failed"
-                                ? "VTDD ran readiness verification immediately after the write, but the live probe still failed closed."
-                                : "VTDD recorded post-consume proof immediately after the write."
+                                ? consumeResultVerificationOnly
+                                  ? "VTDD ran readiness verification immediately after verification-only consume, but the live probe still failed closed."
+                                  : "VTDD ran readiness verification immediately after the write, but the live probe still failed closed."
+                                : consumeResultVerificationOnly
+                                  ? "VTDD recorded post-consume proof immediately after verification-only consume."
+                                  : "VTDD recorded post-consume proof immediately after the write."
                       )}</li>
                     </ul>
                   `
@@ -6443,6 +6527,9 @@ async function buildApprovalBoundBootstrapSessionStatus({
   });
   const effectivePreview = effectiveContext.preview;
   const effectiveGitHubAppSetupCheck = effectiveContext.githubAppSetupCheck;
+  const consumeMode = resolveBootstrapSessionConsumeMode({ url });
+  const verificationOnlyConsume =
+    consumeMode === BOOTSTRAP_SESSION_CONSUME_MODE_VERIFICATION_ONLY;
   const absorbedLiveProof =
     normalizeText(effectiveGitHubAppSetupCheck?.state) === "ready" &&
     normalizeText(
@@ -6875,7 +6962,9 @@ async function buildApprovalBoundBootstrapSessionStatus({
           : "deferred",
     summary:
       absorbedLiveProof
-        ? "VTDD consumed the bounded installation-binding step and immediately proved live GitHub readiness in the same setup flow."
+        ? verificationOnlyConsume
+          ? "VTDD consumed the bounded verification-only step and immediately proved live GitHub readiness in the same setup flow."
+          : "VTDD consumed the bounded installation-binding step and immediately proved live GitHub readiness in the same setup flow."
         : requestRecorded
         ? "VTDD recorded the GO + passkey-shaped request, but no privileged bootstrap session was opened because attestation-backed bootstrap authority is still deferred."
         : "VTDD has the operator-seeded baseline needed for a future approval-bound bootstrap session, but the session itself is still intentionally deferred.",
@@ -6938,6 +7027,19 @@ async function buildBootstrapSessionEnvelope({
   };
 }
 
+function resolveBootstrapSessionConsumeMode({ url }) {
+  const mode = normalizeText(
+    url?.searchParams?.get(SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_MODE_PARAM)
+  );
+  if (
+    mode === BOOTSTRAP_SESSION_CONSUME_MODE_INSTALLATION_BINDING ||
+    mode === BOOTSTRAP_SESSION_CONSUME_MODE_VERIFICATION_ONLY
+  ) {
+    return mode;
+  }
+  return BOOTSTRAP_SESSION_CONSUME_MODE_INSTALLATION_BINDING;
+}
+
 function buildBootstrapSessionEnvelopeConsumeResult({ url, preview }) {
   const state = normalizeText(
     url?.searchParams?.get(SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_STATE_PARAM)
@@ -6955,18 +7057,23 @@ function buildBootstrapSessionEnvelopeConsumeResult({ url, preview }) {
   const proofState = normalizeText(
     url?.searchParams?.get(SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_PROOF_STATE_PARAM)
   );
+  const consumeMode = resolveBootstrapSessionConsumeMode({ url });
   const postChecks = Array.isArray(preview?.postChecks) ? preview.postChecks : [];
 
   if (state === "completed") {
     return {
       state: "consume_completed",
+      mode: consumeMode,
       summary:
-        "VTDD consumed the signed bootstrap session envelope and stored the detected installation binding on Worker runtime.",
+        consumeMode === BOOTSTRAP_SESSION_CONSUME_MODE_VERIFICATION_ONLY
+          ? "VTDD consumed the signed bootstrap session envelope and completed verification-only consume for the current runtime context."
+          : "VTDD consumed the signed bootstrap session envelope and stored the detected installation binding on Worker runtime.",
       envelopeId,
-      proof: buildBootstrapSessionConsumeProofReadout({ proofState }),
+      proof: buildBootstrapSessionConsumeProofReadout({ proofState, consumeMode }),
       nextProof: buildBootstrapSessionConsumeCompletedNextProof({
         proofState,
-        postChecks
+        postChecks,
+        consumeMode
       }),
       requiredAction: buildBootstrapSessionConsumeCompletedRequiredAction({
         proofState,
@@ -7020,12 +7127,15 @@ function buildBootstrapSessionEnvelopeConsumeResult({ url, preview }) {
   return null;
 }
 
-function buildBootstrapSessionConsumeCompletedNextProof({ proofState, postChecks }) {
+function buildBootstrapSessionConsumeCompletedNextProof({ proofState, postChecks, consumeMode }) {
+  const verificationOnly = consumeMode === BOOTSTRAP_SESSION_CONSUME_MODE_VERIFICATION_ONLY;
   if (proofState === "ready") {
     return {
       id: "live_readiness_verified_in_same_flow",
       summary:
-        "Live readiness proof is already verified in this same setup flow, so no additional installation-binding proof step is pending."
+        verificationOnly
+          ? "Live readiness proof is already verified in this same setup flow, so no additional verification consume step is pending."
+          : "Live readiness proof is already verified in this same setup flow, so no additional installation-binding proof step is pending."
     };
   }
 
@@ -7033,7 +7143,9 @@ function buildBootstrapSessionConsumeCompletedNextProof({ proofState, postChecks
     return {
       id: "rerun_live_readiness_probe_same_flow",
       summary:
-        "Fix the live probe blocker, then rerun readiness diagnostics in this same setup flow without re-running installation capture."
+        verificationOnly
+          ? "Fix the live probe blocker, then rerun readiness diagnostics in this same setup flow without issuing another consume request."
+          : "Fix the live probe blocker, then rerun readiness diagnostics in this same setup flow without re-running installation capture."
     };
   }
 
@@ -7041,14 +7153,18 @@ function buildBootstrapSessionConsumeCompletedNextProof({ proofState, postChecks
     return {
       id: "run_live_readiness_diagnostics_same_flow",
       summary:
-        "Run live readiness diagnostics in this same setup flow to move from runtime-configured state to verified live proof."
+        verificationOnly
+          ? "Run live readiness diagnostics in this same setup flow to move from verification-configured state to verified live proof."
+          : "Run live readiness diagnostics in this same setup flow to move from runtime-configured state to verified live proof."
     };
   }
 
   return {
     id: postChecks.join("_then_") || "github_app_live_readiness_proof_pending",
     summary:
-      "The next proof is the planned installation-token mint and live probe checks succeeding after the one-time installation binding write."
+      verificationOnly
+        ? "The next proof is the planned live diagnostics succeeding after this one-time verification consume."
+        : "The next proof is the planned installation-token mint and live probe checks succeeding after the one-time installation binding write."
   };
 }
 
@@ -7129,16 +7245,19 @@ function buildBootstrapSessionConsumeFailedNextProof({ failureReason }) {
   };
 }
 
-function buildBootstrapSessionConsumeProofReadout({ proofState }) {
+function buildBootstrapSessionConsumeProofReadout({ proofState, consumeMode }) {
   if (!proofState) {
     return null;
   }
+  const verificationOnly = consumeMode === BOOTSTRAP_SESSION_CONSUME_MODE_VERIFICATION_ONLY;
 
   if (proofState === "ready") {
     return {
       state: "ready",
       summary:
-        "VTDD immediately rechecked GitHub App readiness after the bounded installation binding write and confirmed live repository access."
+        verificationOnly
+          ? "VTDD immediately rechecked GitHub App readiness after verification-only consume and confirmed live repository access."
+          : "VTDD immediately rechecked GitHub App readiness after the bounded installation binding write and confirmed live repository access."
     };
   }
 
@@ -7146,7 +7265,9 @@ function buildBootstrapSessionConsumeProofReadout({ proofState }) {
     return {
       state: "probe_failed",
       summary:
-        "VTDD completed the bounded installation binding write, but the immediate live readiness probe still failed closed."
+        verificationOnly
+          ? "VTDD completed verification-only consume, but the immediate live readiness probe still failed closed."
+          : "VTDD completed the bounded installation binding write, but the immediate live readiness probe still failed closed."
     };
   }
 
@@ -7154,14 +7275,18 @@ function buildBootstrapSessionConsumeProofReadout({ proofState }) {
     return {
       state: "configured",
       summary:
-        "VTDD completed the bounded installation binding write, and runtime now reports the GitHub App configuration as complete pending live diagnostics."
+        verificationOnly
+          ? "VTDD completed verification-only consume, and runtime now reports the GitHub App configuration as complete pending live diagnostics."
+          : "VTDD completed the bounded installation binding write, and runtime now reports the GitHub App configuration as complete pending live diagnostics."
     };
   }
 
   return {
     state: proofState,
     summary:
-      "VTDD recorded a post-consume proof state after the bounded installation binding write."
+      verificationOnly
+        ? "VTDD recorded a post-consume proof state after verification-only consume."
+        : "VTDD recorded a post-consume proof state after the bounded installation binding write."
   };
 }
 
@@ -7173,6 +7298,8 @@ function deriveEffectiveGitHubAppSetupCheckFromContinuation({ url, githubAppSetu
   const proofState = normalizeText(
     url?.searchParams?.get(SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_PROOF_STATE_PARAM)
   );
+  const consumeMode = resolveBootstrapSessionConsumeMode({ url });
+  const verificationOnly = consumeMode === BOOTSTRAP_SESSION_CONSUME_MODE_VERIFICATION_ONLY;
 
   if (consumeState !== "completed" || !base) {
     return base;
@@ -7191,13 +7318,20 @@ function deriveEffectiveGitHubAppSetupCheckFromContinuation({ url, githubAppSetu
     return {
       ...rest,
       state: "ready",
+      consumeMode,
       summary:
-        "GitHub App setup check passed in the current setup flow: VTDD completed installation binding and confirmed live repository access.",
+        verificationOnly
+          ? "GitHub App setup check passed in the current setup flow: VTDD consumed verification-only scope and confirmed live repository access."
+          : "GitHub App setup check passed in the current setup flow: VTDD completed installation binding and confirmed live repository access.",
       links: [],
       guidance: [
         "VTDD can continue with live GitHub capability from this setup flow.",
-        "The single-use approval-bound installation-binding request is already consumed and absorbed in this setup flow.",
-        "No new GO + passkey request is needed in this flow unless the installation candidate changes.",
+        verificationOnly
+          ? "The single-use approval-bound verification request is already consumed and absorbed in this setup flow."
+          : "The single-use approval-bound installation-binding request is already consumed and absorbed in this setup flow.",
+        verificationOnly
+          ? "No new GO + passkey request is needed in this flow unless runtime identity or target context changes."
+          : "No new GO + passkey request is needed in this flow unless the installation candidate changes.",
         "Keep App permissions minimal and expand only when a specific runtime path needs it."
       ],
       evidence: {
@@ -7212,18 +7346,29 @@ function deriveEffectiveGitHubAppSetupCheckFromContinuation({ url, githubAppSetu
       ...rest,
       state: "configured",
       progressVariant: "post_consume_configured",
+      consumeMode,
       returnTo:
         normalizeSetupWizardDiagnosticsReturnTo(rest.returnTo || `${url.pathname}${url.search || ""}`) ||
         "/setup/wizard?githubAppCheck=on",
       links: [],
       summary:
-        "GitHub App installation binding completed in the current setup flow, and runtime now reports the GitHub App configuration as complete pending live diagnostics.",
+        verificationOnly
+          ? "GitHub App verification-only consume completed in the current setup flow, and runtime now reports the GitHub App configuration as complete pending live diagnostics."
+          : "GitHub App installation binding completed in the current setup flow, and runtime now reports the GitHub App configuration as complete pending live diagnostics.",
       guidance: [
-        "Installation binding is already stored in this same setup flow.",
-        "The single-use approval-bound request for installation binding is already consumed and absorbed in this setup flow.",
-        "Do not issue a new GO + passkey request for installation binding at this stage unless the installation candidate changes.",
+        verificationOnly
+          ? "Verification-only consume is already absorbed in this same setup flow."
+          : "Installation binding is already stored in this same setup flow.",
+        verificationOnly
+          ? "The single-use approval-bound verification request is already consumed and absorbed in this setup flow."
+          : "The single-use approval-bound request for installation binding is already consumed and absorbed in this setup flow.",
+        verificationOnly
+          ? "Do not issue a new GO + passkey verification request at this stage unless runtime identity or target context changes."
+          : "Do not issue a new GO + passkey request for installation binding at this stage unless the installation candidate changes.",
         "Run githubAppCheck=on again to execute live readiness diagnostics without re-entering installation IDs.",
-        "No extra external-provider redirect or manual installation ID transport is needed at this stage."
+        verificationOnly
+          ? "No extra external-provider redirect or manual value transport is needed at this stage."
+          : "No extra external-provider redirect or manual installation ID transport is needed at this stage."
       ],
       evidence: {
         stage: "configuration_check",
@@ -7237,16 +7382,25 @@ function deriveEffectiveGitHubAppSetupCheckFromContinuation({ url, githubAppSetu
       ...rest,
       state: "probe_failed",
       progressVariant: "post_consume_probe_failed",
+      consumeMode,
       returnTo:
         normalizeSetupWizardDiagnosticsReturnTo(rest.returnTo || `${url.pathname}${url.search || ""}`) ||
         "/setup/wizard?githubAppCheck=on",
       links: [],
       summary:
-        "GitHub App installation binding completed in the current setup flow, but the immediate live readiness probe still failed closed.",
+        verificationOnly
+          ? "GitHub App verification-only consume completed in the current setup flow, but the immediate live readiness probe still failed closed."
+          : "GitHub App installation binding completed in the current setup flow, but the immediate live readiness probe still failed closed.",
       guidance: [
-        "Installation binding already completed in this same setup flow, so do not retry installation capture.",
-        "The single-use approval-bound request for installation binding is already consumed and absorbed in this setup flow.",
-        "Do not issue a new GO + passkey request for installation binding at this stage unless the installation candidate changes.",
+        verificationOnly
+          ? "Verification-only consume already completed in this same setup flow, so do not retry consume before fixing the probe blocker."
+          : "Installation binding already completed in this same setup flow, so do not retry installation capture.",
+        verificationOnly
+          ? "The single-use approval-bound verification request is already consumed and absorbed in this setup flow."
+          : "The single-use approval-bound request for installation binding is already consumed and absorbed in this setup flow.",
+        verificationOnly
+          ? "Do not issue a new GO + passkey verification request at this stage unless runtime identity or target context changes."
+          : "Do not issue a new GO + passkey request for installation binding at this stage unless the installation candidate changes.",
         "Fix the live probe blocker, then rerun githubAppCheck=on to continue readiness verification."
       ],
       evidence: {
@@ -10879,6 +11033,7 @@ function normalizeSetupWizardDiagnosticsReturnTo(value) {
   url.searchParams.delete(SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_ENVELOPE_ID_PARAM);
   url.searchParams.delete(SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_REASON_PARAM);
   url.searchParams.delete(SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_PROOF_STATE_PARAM);
+  url.searchParams.delete(SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_MODE_PARAM);
   return `${url.pathname}${url.search}`;
 }
 
