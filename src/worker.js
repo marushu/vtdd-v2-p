@@ -802,7 +802,38 @@ async function maybeAutoContinueDetectedInstallationAfterRequest({
     !returnTo ||
     !envelopeToken
   ) {
-    return null;
+    const sessionEnvelopeToken = normalizeText(
+      approvalBoundBootstrapSession?.sessionEnvelope?.envelopeToken
+    );
+    const sessionConsumePath = normalizeText(approvalBoundBootstrapSession?.consumePath);
+    const sessionReturnTo = normalizeGitHubAppBootstrapReturnTo(
+      approvalBoundBootstrapSession?.returnTo
+    );
+    const sessionConsumeEnabled = toBoolean(approvalBoundBootstrapSession?.consumeEnabled);
+    const sessionPlannedWrites = Array.isArray(
+      approvalBoundBootstrapSession?.sessionEnvelope?.plannedWrites
+    )
+      ? approvalBoundBootstrapSession.sessionEnvelope.plannedWrites
+      : [];
+    const verificationOnlyConsume = sessionPlannedWrites.length === 0;
+
+    if (
+      !sessionConsumeEnabled ||
+      !verificationOnlyConsume ||
+      sessionConsumePath !== SETUP_WIZARD_APPROVAL_BOUND_BOOTSTRAP_SESSION_CONSUME_PATH ||
+      !sessionReturnTo ||
+      !sessionEnvelopeToken
+    ) {
+      return null;
+    }
+
+    return continueDetectedInstallationCompletion({
+      consumePath: sessionConsumePath,
+      returnTo: sessionReturnTo,
+      envelopeToken: sessionEnvelopeToken,
+      originUrl,
+      env
+    });
   }
 
   return continueDetectedInstallationCompletion({

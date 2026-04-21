@@ -34,6 +34,8 @@ Observed result on 2026-04-21:
   Worker runtime without manual ID transport between GitHub and Cloudflare
 - confirms when no runtime write is pending, the signed approval-bound envelope
   can still be consumed for verification-only proof in the same setup flow
+- confirms GO + passkey request submit can auto-continue into verification-only
+  consume in the same setup flow when no write remains
 - confirms the bounded installation-binding consume path can immediately run
   live readiness proof in the same setup flow
 - confirms success is reported in VTDD capability terms rather than as raw
