@@ -127,6 +127,10 @@ export default {
       });
     }
 
+    if (request.method === "GET" && url.pathname === "/setup/wizard/access") {
+      return handleSetupWizardAccessPageRequest({ request, url, env });
+    }
+
     if (request.method === "POST" && url.pathname === "/setup/wizard/access") {
       return handleSetupWizardAccessRequest({ request, url, env });
     }
@@ -533,8 +537,42 @@ async function authorizeSetupWizardRequest({ request, url, env }) {
 
   return {
     ok: false,
-    response: renderSetupWizardLockedResponse({ request, url })
+    response: renderSetupWizardNotFoundResponse({ url })
   };
+}
+
+async function handleSetupWizardAccessPageRequest({ request, url, env }) {
+  const config = getSetupWizardAuthConfig(env);
+  if (!config.enabled) {
+    return json(409, {
+      ok: false,
+      error: "setup_wizard_access_not_enabled",
+      reason: "setup wizard passcode boundary is not configured"
+    });
+  }
+
+  const cookieHeader = request.headers.get("cookie");
+  const cookieValue = readCookie(cookieHeader, SETUP_WIZARD_SESSION_COOKIE);
+  const sessionValid = await verifySetupWizardSession({
+    cookieValue,
+    sessionSecret: config.sessionSecret
+  });
+  const returnTo = normalizeReturnTo(url.searchParams.get("returnTo")) || "/setup/wizard";
+
+  if (sessionValid) {
+    return new Response(null, {
+      status: 303,
+      headers: {
+        location: returnTo
+      }
+    });
+  }
+
+  return renderSetupWizardLockedResponse({
+    request,
+    url,
+    returnTo
+  });
 }
 
 async function handleSetupWizardAccessRequest({ request, url, env }) {
@@ -2397,10 +2435,28 @@ function getSetupWizardAuthConfig(env) {
   };
 }
 
-function renderSetupWizardLockedResponse({ request, url }) {
+function renderSetupWizardNotFoundResponse({ url }) {
+  const format = normalize(url.searchParams.get("format"));
+
+  if (format === "json" || format === "openapi") {
+    return json(404, {
+      ok: false,
+      error: "not_found"
+    });
+  }
+
+  return new Response("Not Found", {
+    status: 404,
+    headers: {
+      "content-type": "text/plain; charset=utf-8"
+    }
+  });
+}
+
+function renderSetupWizardLockedResponse({ request, url, returnTo: explicitReturnTo = "" }) {
   const locale = detectSetupWizardLocale({ request, url });
   const format = normalize(url.searchParams.get("format"));
-  const returnTo = url.pathname + url.search;
+  const returnTo = normalizeReturnTo(explicitReturnTo) || url.pathname + url.search;
 
   if (format === "json" || format === "openapi") {
     return json(401, {
