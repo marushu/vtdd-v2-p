@@ -5495,20 +5495,20 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
         envelopeConsumeAuditReadout
           ? `
             <div class="block" style="margin-top: 12px;">
-              <p><strong>${escapeHtml(locale === "ja" ? "Envelope consume audit" : "Envelope consume audit")}:</strong></p>
+              <p><strong>${escapeHtml(locale === "ja" ? "封筒消費監査" : "Envelope consume audit")}:</strong></p>
               ${
                 auditRecord
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Audit record" : "Audit record")}:</strong> <code>${escapeHtml(normalizeText(auditRecord.id))}</code> ${escapeHtml(normalizeText(auditRecord.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "監査記録" : "Audit record")}:</strong> <code>${escapeHtml(normalizeText(auditRecord.id))}</code> ${escapeHtml(normalizeText(auditRecord.summary))}</p>`
                   : ""
               }
               ${
                 auditFailure
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Audit failure" : "Audit failure")}:</strong> <code>${escapeHtml(normalizeText(auditFailure.id))}</code> ${escapeHtml(normalizeText(auditFailure.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "監査失敗" : "Audit failure")}:</strong> <code>${escapeHtml(normalizeText(auditFailure.id))}</code> ${escapeHtml(normalizeText(auditFailure.summary))}</p>`
                   : ""
               }
               ${
                 auditRetention
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Audit retention" : "Audit retention")}:</strong> <code>${escapeHtml(normalizeText(auditRetention.id))}</code> ${escapeHtml(normalizeText(auditRetention.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "監査保持" : "Audit retention")}:</strong> <code>${escapeHtml(normalizeText(auditRetention.id))}</code> ${escapeHtml(normalizeText(auditRetention.summary))}</p>`
                   : ""
               }
             </div>
