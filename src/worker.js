@@ -5017,20 +5017,20 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
         authorityExpiryReadout
           ? `
             <div class="block" style="margin-top: 12px;">
-              <p><strong>${escapeHtml(locale === "ja" ? "Authority expiry" : "Authority expiry")}:</strong></p>
+              <p><strong>${escapeHtml(locale === "ja" ? "権限期限" : "Authority expiry")}:</strong></p>
               ${
                 expiryTrigger
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Expiry trigger" : "Expiry trigger")}:</strong> <code>${escapeHtml(normalizeText(expiryTrigger.id))}</code> ${escapeHtml(normalizeText(expiryTrigger.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "期限トリガー" : "Expiry trigger")}:</strong> <code>${escapeHtml(normalizeText(expiryTrigger.id))}</code> ${escapeHtml(normalizeText(expiryTrigger.summary))}</p>`
                   : ""
               }
               ${
                 expiryWindow
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Expiry window" : "Expiry window")}:</strong> <code>${escapeHtml(normalizeText(expiryWindow.id))}</code> ${escapeHtml(normalizeText(expiryWindow.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "期限ウィンドウ" : "Expiry window")}:</strong> <code>${escapeHtml(normalizeText(expiryWindow.id))}</code> ${escapeHtml(normalizeText(expiryWindow.summary))}</p>`
                   : ""
               }
               ${
                 expiryAfterUse
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Expiry after use" : "Expiry after use")}:</strong> <code>${escapeHtml(normalizeText(expiryAfterUse.id))}</code> ${escapeHtml(normalizeText(expiryAfterUse.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "使用後期限" : "Expiry after use")}:</strong> <code>${escapeHtml(normalizeText(expiryAfterUse.id))}</code> ${escapeHtml(normalizeText(expiryAfterUse.summary))}</p>`
                   : ""
               }
             </div>
