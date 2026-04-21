@@ -4969,20 +4969,20 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
         issuanceReadout
           ? `
             <div class="block" style="margin-top: 12px;">
-              <p><strong>${escapeHtml(locale === "ja" ? "Issuance readout" : "Issuance readout")}:</strong></p>
+              <p><strong>${escapeHtml(locale === "ja" ? "発行読取結果" : "Issuance readout")}:</strong></p>
               ${
                 issuableState
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Issuable state" : "Issuable state")}:</strong> <code>${escapeHtml(normalizeText(issuableState.id))}</code> ${escapeHtml(normalizeText(issuableState.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "発行可能状態" : "Issuable state")}:</strong> <code>${escapeHtml(normalizeText(issuableState.id))}</code> ${escapeHtml(normalizeText(issuableState.summary))}</p>`
                   : ""
               }
               ${
                 blockingGate
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Blocking gate" : "Blocking gate")}:</strong> <code>${escapeHtml(normalizeText(blockingGate.id))}</code> ${escapeHtml(normalizeText(blockingGate.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "ブロッキングゲート" : "Blocking gate")}:</strong> <code>${escapeHtml(normalizeText(blockingGate.id))}</code> ${escapeHtml(normalizeText(blockingGate.summary))}</p>`
                   : ""
               }
               ${
                 nextIssuanceCondition
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Next issuance condition" : "Next issuance condition")}:</strong> <code>${escapeHtml(normalizeText(nextIssuanceCondition.id))}</code> ${escapeHtml(normalizeText(nextIssuanceCondition.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "次の発行条件" : "Next issuance condition")}:</strong> <code>${escapeHtml(normalizeText(nextIssuanceCondition.id))}</code> ${escapeHtml(normalizeText(nextIssuanceCondition.summary))}</p>`
                   : ""
               }
             </div>
