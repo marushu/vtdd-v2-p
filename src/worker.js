@@ -5571,20 +5571,20 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
         safetyReadout
           ? `
             <div class="block" style="margin-top: 12px;">
-              <p><strong>${escapeHtml(locale === "ja" ? "Safety readout" : "Safety readout")}:</strong></p>
+              <p><strong>${escapeHtml(locale === "ja" ? "安全読取結果" : "Safety readout")}:</strong></p>
               ${
                 stopReason
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Stop reason" : "Stop reason")}:</strong> <code>${escapeHtml(normalizeText(stopReason.id))}</code> ${escapeHtml(normalizeText(stopReason.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "停止理由" : "Stop reason")}:</strong> <code>${escapeHtml(normalizeText(stopReason.id))}</code> ${escapeHtml(normalizeText(stopReason.summary))}</p>`
                   : ""
               }
               ${
                 invariantProtected
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Invariant protected" : "Invariant protected")}:</strong> <code>${escapeHtml(normalizeText(invariantProtected.id))}</code> ${escapeHtml(normalizeText(invariantProtected.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "保護された不変条件" : "Invariant protected")}:</strong> <code>${escapeHtml(normalizeText(invariantProtected.id))}</code> ${escapeHtml(normalizeText(invariantProtected.summary))}</p>`
                   : ""
               }
               ${
                 unsafeShortcutDenied
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Unsafe shortcut denied" : "Unsafe shortcut denied")}:</strong> <code>${escapeHtml(normalizeText(unsafeShortcutDenied.id))}</code> ${escapeHtml(normalizeText(unsafeShortcutDenied.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "危険ショートカット拒否" : "Unsafe shortcut denied")}:</strong> <code>${escapeHtml(normalizeText(unsafeShortcutDenied.id))}</code> ${escapeHtml(normalizeText(unsafeShortcutDenied.summary))}</p>`
                   : ""
               }
             </div>
