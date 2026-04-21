@@ -15,6 +15,20 @@ This file exists to stop the exact failure mode where implementation appears to 
 4. Do not merge on behalf of the user unless explicitly requested.
 5. Do not implement behavior that cannot be traced to an Issue or approved doc.
 
+If the user explicitly delegates implementation and merge authority for a
+bounded Issue window, that delegation allows:
+
+- implementation work within the named Issue scope
+- PR creation
+- PR review response and iteration
+- merge only after scoped criteria, tests, and mapped E2E evidence are all present
+
+That delegation does not allow:
+
+- Issue closure without explicit human approval
+- changing the scoped Issue set by assumption
+- declaring wizard-complete / milestone-complete by implication
+
 ## Canonical Source Order
 
 When deciding what to implement, use this order:
@@ -34,6 +48,15 @@ When in doubt, stop and reconcile with the owner instead of pushing through.
 ## Active-Issue Coverage Policy
 
 Default assumption: implementation scope covers all active Issues unless the user explicitly narrows scope.
+
+Current repository execution note:
+
+- when the user explicitly fixes the active implementation window to specific
+  Issues, treat only those Issues as in-scope for implementation until the user
+  re-opens the broader active-Issue set
+- for the current setup-wizard execution window, `#210` and `#207` are the
+  only implementation Issues in scope; other active/bootstrap Issues are
+  treated as deferred/blocked unless the user explicitly re-activates them
 
 If any active Issue is intentionally deferred, record it explicitly as deferred with reason.
 Never treat "not implemented yet" as "done".
@@ -95,6 +118,10 @@ Issue closure is allowed only when all are true:
 2. Required tests pass.
 3. Mapped E2E scenario(s) pass with evidence.
 4. Human explicitly approves closure.
+
+Even when the user delegates merge authority, keep Issue closure and milestone
+completion judgment human-approved unless the user explicitly delegates closure
+for the specific Issue.
 
 Manual closure without these four conditions is prohibited.
 

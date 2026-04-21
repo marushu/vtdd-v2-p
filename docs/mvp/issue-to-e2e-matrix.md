@@ -288,6 +288,31 @@ Status values used below:
   - `docs/mvp/e2e/e2e-13-reviewer-operational-loop.md`
 - Status: `e2e_evidenced_pending_human_closure`
 
+## E2E-14 Setup wizard approval-bound path
+
+- Issues: `#207 #210`
+- Happy path:
+  - setup wizard carries one approval-bound installation-binding flow through to
+    Worker runtime write and same-flow live readiness proof without manual ID or
+    secret transport across GitHub and Cloudflare surfaces
+- Boundary path:
+  - missing Cloudflare prerequisites, missing current `GO + passkey` request,
+    or deferred approval-bound issuance remain explicit fail-closed states with
+    recovery guidance inside the same setup narrative
+- Implementation evidence:
+  - `src/worker.js`
+  - `docs/mvp/setup-wizard-current-and-target-flow.md`
+  - `docs/mvp/setup-wizard-approval-bound-runtime-checkpoint.md`
+  - `docs/security/setup-wizard-approval-bound-automation-path.md`
+- Test evidence:
+  - `test/worker.test.js`
+  - `test/setup-wizard-current-and-target-flow.test.js`
+  - `test/setup-wizard-approval-bound-automation-path.test.js`
+  - `test/e2e-14-setup-wizard-approval-bound-path.test.js`
+- Run evidence:
+  - `docs/mvp/e2e/e2e-14-setup-wizard-approval-bound-path.md`
+- Status: `partial`
+
 ## Current Completion Reading
 
 - Repository completion status: `partial`
