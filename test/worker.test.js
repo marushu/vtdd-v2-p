@@ -1901,6 +1901,8 @@ test("worker setup wizard shows deferred consume setup progress in html readout"
   assert.equal(htmlJaResponse.status, 200);
   const htmlJa = await htmlJaResponse.text();
   assert.equal(htmlJa.includes("セットアップ進捗"), true);
+  assert.equal(htmlJa.includes("封筒消費結果"), true);
+  assert.equal(htmlJa.includes("消費状態"), true);
 });
 
 test("worker setup wizard consume can complete a single detected installation binding write", async () => {

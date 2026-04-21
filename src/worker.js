@@ -5258,10 +5258,10 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
         envelopeConsumeResult
           ? `
             <div class="block" style="margin-top: 12px;">
-              <p><strong>${escapeHtml(locale === "ja" ? "Envelope consume result" : "Envelope consume result")}:</strong></p>
+              <p><strong>${escapeHtml(locale === "ja" ? "封筒消費結果" : "Envelope consume result")}:</strong></p>
               ${
                 consumeResultState
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Consume state" : "Consume state")}:</strong> <code>${escapeHtml(normalizeText(consumeResultState))}</code></p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "消費状態" : "Consume state")}:</strong> <code>${escapeHtml(normalizeText(consumeResultState))}</code></p>`
                   : ""
               }
               ${
@@ -5384,7 +5384,7 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
               }
               ${
                 consumeResultEnvelopeId
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Envelope id" : "Envelope id")}:</strong> <code>${escapeHtml(normalizeText(consumeResultEnvelopeId))}</code></p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "封筒ID" : "Envelope id")}:</strong> <code>${escapeHtml(normalizeText(consumeResultEnvelopeId))}</code></p>`
                   : ""
               }
               ${
@@ -5392,7 +5392,7 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
                   consumeResultNextProof,
                   consumeResultRequiredAction
                 })
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Next proof" : "Next proof")}:</strong> <code>${escapeHtml(normalizeText(consumeResultNextProof.id))}</code> ${escapeHtml(normalizeText(consumeResultNextProof.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "次の証跡" : "Next proof")}:</strong> <code>${escapeHtml(normalizeText(consumeResultNextProof.id))}</code> ${escapeHtml(normalizeText(consumeResultNextProof.summary))}</p>`
                   : ""
               }
               ${
