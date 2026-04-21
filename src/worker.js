@@ -5041,20 +5041,20 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
         authorityRenewalReadout
           ? `
             <div class="block" style="margin-top: 12px;">
-              <p><strong>${escapeHtml(locale === "ja" ? "Authority renewal" : "Authority renewal")}:</strong></p>
+              <p><strong>${escapeHtml(locale === "ja" ? "権限更新" : "Authority renewal")}:</strong></p>
               ${
                 renewalTrigger
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Renewal trigger" : "Renewal trigger")}:</strong> <code>${escapeHtml(normalizeText(renewalTrigger.id))}</code> ${escapeHtml(normalizeText(renewalTrigger.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "更新トリガー" : "Renewal trigger")}:</strong> <code>${escapeHtml(normalizeText(renewalTrigger.id))}</code> ${escapeHtml(normalizeText(renewalTrigger.summary))}</p>`
                   : ""
               }
               ${
                 renewalGate
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Renewal gate" : "Renewal gate")}:</strong> <code>${escapeHtml(normalizeText(renewalGate.id))}</code> ${escapeHtml(normalizeText(renewalGate.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "更新ゲート" : "Renewal gate")}:</strong> <code>${escapeHtml(normalizeText(renewalGate.id))}</code> ${escapeHtml(normalizeText(renewalGate.summary))}</p>`
                   : ""
               }
               ${
                 renewalScope
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Renewal scope" : "Renewal scope")}:</strong> <code>${escapeHtml(normalizeText(renewalScope.id))}</code> ${escapeHtml(normalizeText(renewalScope.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "更新スコープ" : "Renewal scope")}:</strong> <code>${escapeHtml(normalizeText(renewalScope.id))}</code> ${escapeHtml(normalizeText(renewalScope.summary))}</p>`
                   : ""
               }
             </div>
@@ -5065,20 +5065,20 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
         authorityRenewalDenialReadout
           ? `
             <div class="block" style="margin-top: 12px;">
-              <p><strong>${escapeHtml(locale === "ja" ? "Authority renewal denial" : "Authority renewal denial")}:</strong></p>
+              <p><strong>${escapeHtml(locale === "ja" ? "権限更新拒否" : "Authority renewal denial")}:</strong></p>
               ${
                 denialReason
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Denial reason" : "Denial reason")}:</strong> <code>${escapeHtml(normalizeText(denialReason.id))}</code> ${escapeHtml(normalizeText(denialReason.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "拒否理由" : "Denial reason")}:</strong> <code>${escapeHtml(normalizeText(denialReason.id))}</code> ${escapeHtml(normalizeText(denialReason.summary))}</p>`
                   : ""
               }
               ${
                 denialBoundary
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Denial boundary" : "Denial boundary")}:</strong> <code>${escapeHtml(normalizeText(denialBoundary.id))}</code> ${escapeHtml(normalizeText(denialBoundary.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "拒否境界" : "Denial boundary")}:</strong> <code>${escapeHtml(normalizeText(denialBoundary.id))}</code> ${escapeHtml(normalizeText(denialBoundary.summary))}</p>`
                   : ""
               }
               ${
                 denialRecovery
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Denial recovery" : "Denial recovery")}:</strong> <code>${escapeHtml(normalizeText(denialRecovery.id))}</code> ${escapeHtml(normalizeText(denialRecovery.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "拒否後復帰" : "Denial recovery")}:</strong> <code>${escapeHtml(normalizeText(denialRecovery.id))}</code> ${escapeHtml(normalizeText(denialRecovery.summary))}</p>`
                   : ""
               }
             </div>
