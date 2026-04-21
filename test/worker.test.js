@@ -657,6 +657,10 @@ test("worker setup wizard localizes capability readout labels to Japanese", asyn
   assert.equal(html.includes("バインディング対象"), true);
   assert.equal(html.includes("バインディングドリフト"), true);
   assert.equal(html.includes("バインディング復帰"), true);
+  assert.equal(html.includes("権限要求ターゲット"), true);
+  assert.equal(html.includes("ターゲット文脈"), true);
+  assert.equal(html.includes("ターゲットドリフト"), true);
+  assert.equal(html.includes("ターゲット復帰"), true);
 });
 
 test("worker setup wizard unlocked json reports github app bootstrap availability and missing prerequisites", async () => {
