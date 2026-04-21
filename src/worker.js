@@ -5423,20 +5423,20 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
         envelopeConsumptionPlan
           ? `
             <div class="block" style="margin-top: 12px;">
-              <p><strong>${escapeHtml(locale === "ja" ? "Envelope consumption plan" : "Envelope consumption plan")}:</strong></p>
+              <p><strong>${escapeHtml(locale === "ja" ? "封筒消費計画" : "Envelope consumption plan")}:</strong></p>
               ${
                 consumptionIntent
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Consumption intent" : "Consumption intent")}:</strong> <code>${escapeHtml(normalizeText(consumptionIntent.id))}</code> ${escapeHtml(normalizeText(consumptionIntent.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "消費意図" : "Consumption intent")}:</strong> <code>${escapeHtml(normalizeText(consumptionIntent.id))}</code> ${escapeHtml(normalizeText(consumptionIntent.summary))}</p>`
                   : ""
               }
               ${
                 consumptionBoundary
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Consumption boundary" : "Consumption boundary")}:</strong> <code>${escapeHtml(normalizeText(consumptionBoundary.id))}</code> ${escapeHtml(normalizeText(consumptionBoundary.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "消費境界" : "Consumption boundary")}:</strong> <code>${escapeHtml(normalizeText(consumptionBoundary.id))}</code> ${escapeHtml(normalizeText(consumptionBoundary.summary))}</p>`
                   : ""
               }
               ${
                 consumptionVerification
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Consumption verification" : "Consumption verification")}:</strong> <code>${escapeHtml(normalizeText(consumptionVerification.id))}</code> ${escapeHtml(normalizeText(consumptionVerification.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "消費検証" : "Consumption verification")}:</strong> <code>${escapeHtml(normalizeText(consumptionVerification.id))}</code> ${escapeHtml(normalizeText(consumptionVerification.summary))}</p>`
                   : ""
               }
             </div>
