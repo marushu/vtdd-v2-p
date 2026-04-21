@@ -318,9 +318,23 @@ test("worker returns setup wizard html when repo query is provided", async () =>
   assert.equal(html.includes("githubAppPrivateKey"), false);
 });
 
-test("worker setup wizard shows passcode boundary when configured", async () => {
+test("worker setup wizard hides locked surface when configured", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/setup/wizard?repo=sample-org/vtdd-v2"),
+    {
+      SETUP_WIZARD_PASSCODE: "2468"
+    }
+  );
+
+  assert.equal(response.status, 404);
+  assert.equal(await response.text(), "Not Found");
+});
+
+test("worker setup wizard access page shows passcode boundary when configured", async () => {
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/setup/wizard/access?returnTo=%2Fsetup%2Fwizard%3Frepo%3Dsample-org%2Fvtdd-v2"
+    ),
     {
       SETUP_WIZARD_PASSCODE: "2468"
     }
@@ -357,9 +371,9 @@ test("worker localizes setup wizard html to Japanese from accept-language", asyn
   assert.equal(html.includes("状態:"), true);
 });
 
-test("worker localizes locked setup wizard to Japanese from accept-language", async () => {
+test("worker localizes locked setup wizard access page to Japanese from accept-language", async () => {
   const response = await worker.fetch(
-    new Request("https://example.com/setup/wizard?repo=sample-org/vtdd-v2", {
+    new Request("https://example.com/setup/wizard/access?returnTo=%2Fsetup%2Fwizard%3Frepo%3Dsample-org%2Fvtdd-v2", {
       headers: {
         "accept-language": "ja-JP,ja;q=0.9"
       }
@@ -376,7 +390,7 @@ test("worker localizes locked setup wizard to Japanese from accept-language", as
   assert.equal(html.includes("セットアップウィザードを開く"), true);
 });
 
-test("worker setup wizard json returns locked response when passcode boundary is configured", async () => {
+test("worker setup wizard json hides locked response when passcode boundary is configured", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/setup/wizard?format=json&repo=sample-org/vtdd-v2"),
     {
@@ -384,11 +398,10 @@ test("worker setup wizard json returns locked response when passcode boundary is
     }
   );
 
-  assert.equal(response.status, 401);
+  assert.equal(response.status, 404);
   const body = await response.json();
   assert.equal(body.ok, false);
-  assert.equal(body.error, "setup_wizard_locked");
-  assert.equal(body.unlockPath, "/setup/wizard/access");
+  assert.equal(body.error, "not_found");
 });
 
 test("worker setup wizard access accepts passcode and grants cookie-backed access", async () => {
@@ -463,9 +476,9 @@ test("worker setup wizard json reports github app bootstrap prerequisites", asyn
     }
   );
 
-  assert.equal(response.status, 401);
+  assert.equal(response.status, 404);
   const body = await response.json();
-  assert.equal(body.error, "setup_wizard_locked");
+  assert.equal(body.error, "not_found");
 });
 
 test("worker setup wizard unlocked html shows narrow github app bootstrap form when prerequisites exist", async () => {
