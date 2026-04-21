@@ -5447,20 +5447,20 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
         envelopeConsumePreflight
           ? `
             <div class="block" style="margin-top: 12px;">
-              <p><strong>${escapeHtml(locale === "ja" ? "Envelope consume preflight" : "Envelope consume preflight")}:</strong></p>
+              <p><strong>${escapeHtml(locale === "ja" ? "封筒消費プリフライト" : "Envelope consume preflight")}:</strong></p>
               ${
                 preflightGate
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Preflight gate" : "Preflight gate")}:</strong> <code>${escapeHtml(normalizeText(preflightGate.id))}</code> ${escapeHtml(normalizeText(preflightGate.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "プリフライトゲート" : "Preflight gate")}:</strong> <code>${escapeHtml(normalizeText(preflightGate.id))}</code> ${escapeHtml(normalizeText(preflightGate.summary))}</p>`
                   : ""
               }
               ${
                 preflightFailure
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Preflight failure" : "Preflight failure")}:</strong> <code>${escapeHtml(normalizeText(preflightFailure.id))}</code> ${escapeHtml(normalizeText(preflightFailure.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "プリフライト失敗" : "Preflight failure")}:</strong> <code>${escapeHtml(normalizeText(preflightFailure.id))}</code> ${escapeHtml(normalizeText(preflightFailure.summary))}</p>`
                   : ""
               }
               ${
                 preflightRecovery
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Preflight recovery" : "Preflight recovery")}:</strong> <code>${escapeHtml(normalizeText(preflightRecovery.id))}</code> ${escapeHtml(normalizeText(preflightRecovery.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "プリフライト復帰" : "Preflight recovery")}:</strong> <code>${escapeHtml(normalizeText(preflightRecovery.id))}</code> ${escapeHtml(normalizeText(preflightRecovery.summary))}</p>`
                   : ""
               }
             </div>
