@@ -5412,7 +5412,7 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
               }
               ${
                 consumeResultProof
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Post-consume proof" : "Post-consume proof")}:</strong> <code>${escapeHtml(normalizeText(consumeResultProof.state))}</code> ${escapeHtml(normalizeText(consumeResultProof.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "消費後証跡" : "Post-consume proof")}:</strong> <code>${escapeHtml(normalizeText(consumeResultProof.state))}</code> ${escapeHtml(normalizeText(consumeResultProof.summary))}</p>`
                   : ""
               }
             </div>
