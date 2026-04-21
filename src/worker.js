@@ -5471,20 +5471,20 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
         envelopeConsumeOutcome
           ? `
             <div class="block" style="margin-top: 12px;">
-              <p><strong>${escapeHtml(locale === "ja" ? "Envelope consume outcome" : "Envelope consume outcome")}:</strong></p>
+              <p><strong>${escapeHtml(locale === "ja" ? "封筒消費結果アウトカム" : "Envelope consume outcome")}:</strong></p>
               ${
                 outcomeState
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Outcome state" : "Outcome state")}:</strong> <code>${escapeHtml(normalizeText(outcomeState.id))}</code> ${escapeHtml(normalizeText(outcomeState.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "アウトカム状態" : "Outcome state")}:</strong> <code>${escapeHtml(normalizeText(outcomeState.id))}</code> ${escapeHtml(normalizeText(outcomeState.summary))}</p>`
                   : ""
               }
               ${
                 outcomeFailure
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Outcome failure" : "Outcome failure")}:</strong> <code>${escapeHtml(normalizeText(outcomeFailure.id))}</code> ${escapeHtml(normalizeText(outcomeFailure.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "アウトカム失敗" : "Outcome failure")}:</strong> <code>${escapeHtml(normalizeText(outcomeFailure.id))}</code> ${escapeHtml(normalizeText(outcomeFailure.summary))}</p>`
                   : ""
               }
               ${
                 outcomeNextProof
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Outcome next proof" : "Outcome next proof")}:</strong> <code>${escapeHtml(normalizeText(outcomeNextProof.id))}</code> ${escapeHtml(normalizeText(outcomeNextProof.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "アウトカム次の証跡" : "Outcome next proof")}:</strong> <code>${escapeHtml(normalizeText(outcomeNextProof.id))}</code> ${escapeHtml(normalizeText(outcomeNextProof.summary))}</p>`
                   : ""
               }
             </div>
