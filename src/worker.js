@@ -5113,20 +5113,20 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
         authorityRequestReplayReadout
           ? `
             <div class="block" style="margin-top: 12px;">
-              <p><strong>${escapeHtml(locale === "ja" ? "Authority request replay" : "Authority request replay")}:</strong></p>
+              <p><strong>${escapeHtml(locale === "ja" ? "権限要求リプレイ" : "Authority request replay")}:</strong></p>
               ${
                 replayRisk
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Replay risk" : "Replay risk")}:</strong> <code>${escapeHtml(normalizeText(replayRisk.id))}</code> ${escapeHtml(normalizeText(replayRisk.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "リプレイリスク" : "Replay risk")}:</strong> <code>${escapeHtml(normalizeText(replayRisk.id))}</code> ${escapeHtml(normalizeText(replayRisk.summary))}</p>`
                   : ""
               }
               ${
                 replayRejection
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Replay rejection" : "Replay rejection")}:</strong> <code>${escapeHtml(normalizeText(replayRejection.id))}</code> ${escapeHtml(normalizeText(replayRejection.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "リプレイ拒否" : "Replay rejection")}:</strong> <code>${escapeHtml(normalizeText(replayRejection.id))}</code> ${escapeHtml(normalizeText(replayRejection.summary))}</p>`
                   : ""
               }
               ${
                 replayRecovery
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Replay recovery" : "Replay recovery")}:</strong> <code>${escapeHtml(normalizeText(replayRecovery.id))}</code> ${escapeHtml(normalizeText(replayRecovery.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "リプレイ復帰" : "Replay recovery")}:</strong> <code>${escapeHtml(normalizeText(replayRecovery.id))}</code> ${escapeHtml(normalizeText(replayRecovery.summary))}</p>`
                   : ""
               }
             </div>
