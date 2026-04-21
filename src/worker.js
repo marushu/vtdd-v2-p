@@ -34,16 +34,21 @@ const SETUP_WIZARD_CLOUDFLARE_CHECK_ENABLED_ENV = "SETUP_WIZARD_CLOUDFLARE_CHECK
 const SETUP_WIZARD_PASSCODE_ENV = "SETUP_WIZARD_PASSCODE";
 const SETUP_WIZARD_SESSION_SECRET_ENV = "SETUP_WIZARD_SESSION_SECRET";
 const SETUP_WIZARD_SESSION_COOKIE = "vtdd_setup_access";
+const SETUP_WIZARD_DAY0_CLOUDFLARE_STATE_COOKIE = "vtdd_day0_cf_state";
+const SETUP_WIZARD_DAY0_TEMP_SECRET_D1 = "SETUP_WIZARD_DAY0_TEMP_SECRET_D1";
 const SETUP_WIZARD_SESSION_TTL_SECONDS = 30 * 60;
 const SETUP_WIZARD_IMPORT_TOKEN_TTL_SECONDS = 15 * 60;
 const SETUP_WIZARD_IMPORT_TOKEN_PARAM = "import_token";
 const SETUP_WIZARD_IMPORT_EXPIRES_PARAM = "import_expires";
+const SETUP_WIZARD_CLOUDFLARE_CONNECT_PATH = "/setup/wizard/cloudflare/connect";
+const SETUP_WIZARD_GITHUB_FORK_PATH = "/setup/wizard/github/fork";
 const SETUP_WIZARD_GITHUB_APP_BOOTSTRAP_PATH = "/setup/wizard/github-app/bootstrap";
 const SETUP_WIZARD_GITHUB_APP_MANIFEST_CALLBACK_PATH = "/setup/wizard/github-app/manifest/callback";
 const SETUP_WIZARD_GITHUB_APP_INSTALLATION_CAPTURE_PATH =
   "/setup/wizard/github-app/capture-installation";
 const SETUP_WIZARD_REQUIRED_SETTINGS_BOOTSTRAP_PATH =
   "/setup/wizard/runtime/bootstrap";
+const VTDD_SHARED_GPT_URL_ENV = "VTDD_SHARED_GPT_URL";
 const SETUP_WIZARD_APPROVAL_BOUND_BOOTSTRAP_SESSION_REQUEST_PATH =
   "/setup/wizard/bootstrap-session/request";
 const SETUP_WIZARD_APPROVAL_BOUND_BOOTSTRAP_SESSION_CONSUME_PATH =
@@ -92,6 +97,11 @@ const SETUP_WIZARD_VTDD_READY_SECRET_SET = Object.freeze([
 ]);
 const GITHUB_API_BASE_URL = "https://api.github.com";
 const GITHUB_API_USER_AGENT = "vtdd-v2-worker";
+const DAY0_CLOUDFLARE_RUNTIME_COOKIE_VERSION = "v1";
+const DAY0_TEMP_SECRET_KIND_GITHUB_APP_MANIFEST = "github_app_manifest";
+const DAY0_TEMP_SECRET_KIND_CLOUDFLARE_API_TOKEN = "cloudflare_api_token";
+const DAY0_CLOUDFLARE_RUNTIME_COMPATIBILITY_DATE = "2026-04-21";
+const DAY0_CLOUDFLARE_RUNTIME_ENTRY_MODULE = "index.mjs";
 const CLOUDFLARE_BILLING_HINT_REGEX =
   /(payment|billing|subscription|add payment method|outstanding balance|cannot modify this subscription|zone cannot be upgraded|plan modification|card)/i;
 
@@ -119,6 +129,22 @@ export default {
 
     if (request.method === "POST" && url.pathname === "/setup/wizard/access") {
       return handleSetupWizardAccessRequest({ request, url, env });
+    }
+
+    if (request.method === "POST" && url.pathname === SETUP_WIZARD_CLOUDFLARE_CONNECT_PATH) {
+      const auth = await authorizeSetupWizardRequest({ request, url, env });
+      if (!auth.ok) {
+        return auth.response;
+      }
+      return handleDay0CloudflareConnectRequest({ request, url, env });
+    }
+
+    if (request.method === "POST" && url.pathname === SETUP_WIZARD_GITHUB_FORK_PATH) {
+      const auth = await authorizeSetupWizardRequest({ request, url, env });
+      if (!auth.ok) {
+        return auth.response;
+      }
+      return handleDay0GitHubForkRequest({ request, url, env });
     }
 
     if (request.method === "POST" && url.pathname === SETUP_WIZARD_GITHUB_APP_BOOTSTRAP_PATH) {
@@ -281,11 +307,23 @@ async function handleSetupWizardRequest({ request, url, env }) {
   const answers = buildSetupWizardAnswers(url);
   const result = runInitialSetupWizard({ answers });
   const cloudflareSetupCheck = await runCloudflareSetupCheck(url, env);
+  const day0CloudflareSetupState = await readDay0CloudflareSetupStateFromCookie({ request, env });
+  const day0CloudflareSetup = toPublicDay0CloudflareRuntimeState(day0CloudflareSetupState);
+  const day0GitHubForkSetup = buildDay0GitHubForkSetupStatus({
+    url,
+    day0CloudflareSetup: day0CloudflareSetupState
+  });
   const rawGitHubAppSetupCheck = deriveEffectiveGitHubAppSetupCheckFromContinuation({
     url,
-    githubAppSetupCheck: await runGitHubAppSetupCheck(url, env)
+    githubAppSetupCheck: await runGitHubAppSetupCheck(url, env, {
+      day0CloudflareSetup: day0CloudflareSetupState
+    })
   });
-  const githubAppBootstrapInternal = buildGitHubAppBootstrapStatus({ url, env });
+  const githubAppBootstrapInternal = buildGitHubAppBootstrapStatus({
+    url,
+    env,
+    day0CloudflareSetup: day0CloudflareSetupState
+  });
   const githubAppBootstrap = toPublicGitHubAppBootstrapStatus(githubAppBootstrapInternal);
   const approvalBoundBootstrapSession = await buildApprovalBoundBootstrapSessionStatus({
     url,
@@ -314,11 +352,22 @@ async function handleSetupWizardRequest({ request, url, env }) {
   const githubAppSetupCheck = attachDetectedCompletionGuidance({
     githubAppSetupCheck: githubAppSetupCheckWithCompletionAction
   });
-  const requiredSettingsBootstrap = buildRequiredSettingsBootstrapStatus({ url, env });
+  const requiredSettingsBootstrap = buildRequiredSettingsBootstrapStatus({
+    url,
+    env,
+    day0CloudflareSetup: day0CloudflareSetupState
+  });
   const setupCompletion = buildSetupWizardCompletionStatus({
     url,
     requiredSettingsBootstrap,
     githubAppSetupCheck
+  });
+  const day0SharedUseSetup = buildDay0SharedUseSetupStatus({
+    env,
+    githubAppSetupCheck,
+    day0CloudflareSetup: day0CloudflareSetupState,
+    requiredSettingsBootstrap,
+    setupCompletion
   });
   const approvalBoundBootstrapSessionWithInlineRequest = attachInlineRequestSurfaceHint({
     approvalBoundBootstrapSession,
@@ -341,42 +390,99 @@ async function handleSetupWizardRequest({ request, url, env }) {
   }
   const guidance = buildSetupWizardGuidance({ result, url });
   const enrichedResult = await attachSetupWizardImportUrls({ result, url, env });
+  const gatedResult = gateSetupWizardResultForDay0({
+    result: enrichedResult,
+    day0SharedUseSetup
+  });
   const locale = detectSetupWizardLocale({ request, url });
+  let responseCookie = "";
+  if (day0SharedUseSetup.state === "ready" && day0CloudflareSetupState) {
+    const temporaryStore = getDay0TemporarySecretStore(env);
+    if (temporaryStore) {
+      if (day0CloudflareSetupState.pendingGitHubAppBundleId) {
+        await temporaryStore.delete({ id: day0CloudflareSetupState.pendingGitHubAppBundleId });
+      }
+      if (day0CloudflareSetupState.pendingCloudflareTokenId) {
+        await temporaryStore.delete({ id: day0CloudflareSetupState.pendingCloudflareTokenId });
+      }
+    }
+    const authConfig = getSetupWizardAuthConfig(env);
+    if (authConfig.sessionSecret) {
+      responseCookie = await buildDay0CloudflareStateCookie({
+        sessionSecret: authConfig.sessionSecret,
+        state: buildDay0CloudflareRuntimeState({
+          ...day0CloudflareSetupState,
+          pendingGitHubAppBundleId: "",
+          pendingGitHubAppStoredAt: "",
+          pendingCloudflareTokenId: "",
+          pendingCloudflareTokenStoredAt: "",
+          checkedAt: new Date().toISOString(),
+          summary:
+            "Day0 shared-use setup reached ready state and temporary setup secrets were purged from server-controlled state."
+        })
+      });
+    }
+  }
 
   if (format === "openapi") {
-    const actionSchemaJson = enrichedResult?.onboarding?.customGpt?.actionSchemaJson;
-    if (!enrichedResult.ok || !actionSchemaJson) {
-      return json(422, {
-        ...enrichedResult,
+    const actionSchemaJson = gatedResult?.onboarding?.customGpt?.actionSchemaJson;
+    if (!day0SharedUseSetup.canRevealCustomGptEntry) {
+      return json(423, {
+        ok: false,
+        error: "day0_shared_use_not_ready",
+        reason:
+          "Custom GPT action schema remains withheld until Day0 shared-use setup is complete.",
+        day0SharedUseSetup,
+        day0GitHubForkSetup,
+        day0CloudflareSetup,
         generatedAnswers: answers,
         cloudflareSetupCheck,
         githubAppSetupCheck,
         githubAppBootstrap,
         requiredSettingsBootstrap,
         setupCompletion,
+        day0CloudflareSetup,
         approvalBoundBootstrapSession: approvalBoundBootstrapSessionForResponse,
         guidance
-      });
+      }, responseCookie ? { "set-cookie": responseCookie } : undefined);
+    }
+    if (!gatedResult.ok || !actionSchemaJson) {
+      return json(422, {
+        ...gatedResult,
+        generatedAnswers: answers,
+        cloudflareSetupCheck,
+        day0GitHubForkSetup,
+        githubAppSetupCheck,
+        githubAppBootstrap,
+        requiredSettingsBootstrap,
+        setupCompletion,
+        day0SharedUseSetup,
+        approvalBoundBootstrapSession: approvalBoundBootstrapSessionForResponse,
+        guidance
+      }, responseCookie ? { "set-cookie": responseCookie } : undefined);
     }
 
     return new Response(actionSchemaJson, {
       status: 200,
-      headers: JSON_HEADERS
+      headers: responseCookie ? { ...JSON_HEADERS, "set-cookie": responseCookie } : JSON_HEADERS
     });
   }
 
   if (format === "json") {
     return json(result.ok ? 200 : 422, {
-      ...enrichedResult,
+      ...gatedResult,
       generatedAnswers: answers,
       cloudflareSetupCheck,
+      day0GitHubForkSetup,
+      day0CloudflareSetup,
       githubAppSetupCheck,
       githubAppBootstrap,
       requiredSettingsBootstrap,
       setupCompletion,
+      day0SharedUseSetup,
       approvalBoundBootstrapSession: approvalBoundBootstrapSessionForResponse,
       guidance
-    });
+    }, responseCookie ? { "set-cookie": responseCookie } : undefined);
   }
 
   const htmlBody = renderSetupWizardHtml({
@@ -385,13 +491,16 @@ async function handleSetupWizardRequest({ request, url, env }) {
     url,
     locale,
     cloudflareSetupCheck,
+    day0GitHubForkSetup,
+    day0CloudflareSetup,
     githubAppSetupCheck,
     githubAppBootstrap,
     requiredSettingsBootstrap,
     setupCompletion,
+    day0SharedUseSetup,
     approvalBoundBootstrapSession: approvalBoundBootstrapSessionForResponse
   });
-  return html(result.ok ? 200 : 422, htmlBody);
+  return html(result.ok ? 200 : 422, htmlBody, responseCookie ? { "set-cookie": responseCookie } : undefined);
 }
 
 async function authorizeSetupWizardRequest({ request, url, env }) {
@@ -549,6 +658,235 @@ async function handleApprovalBoundBootstrapSessionRequest({ request, url, env })
     requested: true,
     returnTo: `${redirectUrl.pathname}${redirectUrl.search}`
   });
+}
+
+async function handleDay0GitHubForkRequest({ request, url, env }) {
+  const day0CloudflareSetup = await readDay0CloudflareSetupStateFromCookie({ request, env });
+  const day0Runtime = buildDay0CloudflareRuntimeState(day0CloudflareSetup);
+  const payload = await readDay0GitHubForkPayload(request);
+  const sourceRepo = normalizeRepo(payload.sourceRepo) || normalizeRepo(url.searchParams.get("repo"));
+  if (!sourceRepo) {
+    return json(422, {
+      ok: false,
+      error: "github_fork_missing_source_repo",
+      reason: "source repository is required"
+    });
+  }
+
+  const githubToken = normalizeText(payload.githubToken);
+  if (!githubToken) {
+    return json(422, {
+      ok: false,
+      error: "github_fork_missing_token",
+      reason: "a GitHub token is required for the bounded fork step"
+    });
+  }
+
+  const returnTo = replaceSetupWizardRepoReturnTo(payload.returnTo, sourceRepo);
+  const fetchImpl =
+    typeof env?.GITHUB_API_FETCH === "function"
+      ? env.GITHUB_API_FETCH.bind(env)
+      : typeof globalThis.fetch === "function"
+        ? globalThis.fetch.bind(globalThis)
+        : null;
+  if (!fetchImpl) {
+    return json(503, {
+      ok: false,
+      error: "github_fork_fetch_unavailable",
+      reason: "runtime fetch is unavailable"
+    });
+  }
+
+  const forkOutcome = await resolveOrCreateUserOwnedFork({
+    fetchImpl,
+    sourceRepo,
+    githubToken
+  });
+  if (!forkOutcome.ok) {
+    return json(forkOutcome.status ?? 502, {
+      ok: false,
+      error: forkOutcome.error,
+      reason: forkOutcome.reason,
+      sourceRepo,
+      recoveryActions: forkOutcome.recoveryActions ?? []
+    });
+  }
+
+  const forkReturnTo = replaceSetupWizardRepoReturnTo(payload.returnTo, forkOutcome.canonicalRepo);
+  const authConfig = getSetupWizardAuthConfig(env);
+  let setCookie = "";
+  if (authConfig.sessionSecret) {
+    setCookie = await buildDay0CloudflareStateCookie({
+      sessionSecret: authConfig.sessionSecret,
+      state: buildDay0CloudflareRuntimeState({
+        ...day0Runtime,
+        githubForkCanonicalRepo: forkOutcome.canonicalRepo,
+        githubForkDecision: forkOutcome.decision,
+        checkedAt: new Date().toISOString(),
+        summary:
+          forkOutcome.decision === "reused_existing_fork"
+            ? "GitHub user-owned fork already existed and is now the Day0 setup target."
+            : "GitHub user-owned fork was created and is now the Day0 setup target."
+      })
+    });
+  }
+
+  if (payload.mode === "form") {
+    return redirectWithCookies(forkReturnTo, setCookie ? [setCookie] : []);
+  }
+
+  return json(
+    200,
+    {
+      ok: true,
+      sourceRepo,
+      canonicalRepo: forkOutcome.canonicalRepo,
+      decision: forkOutcome.decision,
+      returnTo: forkReturnTo
+    },
+    setCookie ? { "set-cookie": setCookie } : undefined
+  );
+}
+
+async function resolveOrCreateUserOwnedFork({ fetchImpl, sourceRepo, githubToken }) {
+  const [sourceOwner, sourceName] = sourceRepo.split("/", 2);
+  if (!sourceOwner || !sourceName) {
+    return {
+      ok: false,
+      status: 422,
+      error: "github_fork_invalid_source_repo",
+      reason: "source repo must be owner/name"
+    };
+  }
+
+  const viewer = await callGitHubUserApi(fetchImpl, githubToken, `${GITHUB_API_BASE_URL}/user`);
+  if (!viewer.ok) {
+    return {
+      ok: false,
+      status: viewer.status ?? 502,
+      error: "github_fork_viewer_lookup_failed",
+      reason: viewer.reason
+    };
+  }
+  const viewerLogin = normalizeText(viewer.payload?.login);
+  if (!viewerLogin) {
+    return {
+      ok: false,
+      status: 502,
+      error: "github_fork_viewer_lookup_failed",
+      reason: "authenticated GitHub login is unavailable"
+    };
+  }
+
+  const targetRepoUrl = `${GITHUB_API_BASE_URL}/repos/${encodeURIComponent(viewerLogin)}/${encodeURIComponent(sourceName)}`;
+  const existingRepo = await callGitHubUserApi(fetchImpl, githubToken, targetRepoUrl);
+  if (existingRepo.ok) {
+    const parentFullName = normalizeRepo(existingRepo.payload?.parent?.full_name);
+    const existingFullName = normalizeRepo(existingRepo.payload?.full_name);
+    if (parentFullName === sourceRepo && existingFullName) {
+      return {
+        ok: true,
+        canonicalRepo: existingFullName,
+        decision: "reused_existing_fork"
+      };
+    }
+    return {
+      ok: false,
+      status: 409,
+      error: "github_fork_target_ambiguity",
+      reason:
+        "a repository with the same name already exists under the authenticated account but is not a fork of the setup source repo",
+      recoveryActions: [
+        {
+          id: "rename_or_remove_conflicting_repo",
+          summary:
+            "Rename or remove the conflicting repository, or use manual setup outside the wizard."
+        }
+      ]
+    };
+  }
+  if (existingRepo.status !== 404) {
+    return {
+      ok: false,
+      status: existingRepo.status ?? 502,
+      error: "github_fork_existing_repo_check_failed",
+      reason: existingRepo.reason
+    };
+  }
+
+  const createdFork = await callGitHubUserApi(
+    fetchImpl,
+    githubToken,
+    `${GITHUB_API_BASE_URL}/repos/${encodeURIComponent(sourceOwner)}/${encodeURIComponent(sourceName)}/forks`,
+    {
+      method: "POST",
+      body: JSON.stringify({})
+    }
+  );
+  if (!createdFork.ok) {
+    return {
+      ok: false,
+      status: createdFork.status ?? 502,
+      error: "github_fork_create_failed",
+      reason: createdFork.reason
+    };
+  }
+
+  const createdFullName =
+    normalizeRepo(createdFork.payload?.full_name) || normalizeRepo(`${viewerLogin}/${sourceName}`);
+  return {
+    ok: true,
+    canonicalRepo: createdFullName,
+    decision: "created_new_fork"
+  };
+}
+
+async function callGitHubUserApi(fetchImpl, githubToken, requestUrl, init = {}) {
+  let response;
+  try {
+    response = await fetchImpl(requestUrl, {
+      method: init.method || "GET",
+      headers: {
+        accept: "application/vnd.github+json",
+        authorization: `Bearer ${githubToken}`,
+        "user-agent": GITHUB_API_USER_AGENT,
+        "x-github-api-version": "2022-11-28",
+        ...(init.body ? { "content-type": "application/json; charset=utf-8" } : {})
+      },
+      ...(init.body ? { body: init.body } : {})
+    });
+  } catch {
+    return {
+      ok: false,
+      status: 502,
+      reason: "github api request failed"
+    };
+  }
+  const payload = await readSafeJson(response);
+  if (!response.ok) {
+    return {
+      ok: false,
+      status: response.status,
+      reason: normalizeText(payload?.message) || `github api failed with http ${response.status}`,
+      payload
+    };
+  }
+  return {
+    ok: true,
+    status: response.status,
+    payload
+  };
+}
+
+async function readDay0GitHubForkPayload(request) {
+  const payload = await readJson(request);
+  const body = payload && typeof payload === "object" ? payload : {};
+  return {
+    sourceRepo: normalizeRepo(body.sourceRepo),
+    githubToken: normalizeText(body.githubToken),
+    returnTo: normalizeGitHubAppBootstrapReturnTo(body.returnTo),
+    mode: normalizeText(body.mode)
+  };
 }
 
 async function handleApprovalBoundBootstrapSessionConsume({ request, url, env }) {
@@ -1035,8 +1373,10 @@ async function maybeAutoContinueSelectedInstallationAfterCapture({
 }
 
 async function handleGitHubAppBootstrapRequest({ request, url, env }) {
-  const bootstrap = buildGitHubAppBootstrapStatus({ url, env });
-  if (bootstrap.state !== "available") {
+  const day0CloudflareSetup = await readDay0CloudflareSetupStateFromCookie({ request, env });
+  const day0Runtime = buildDay0CloudflareRuntimeState(day0CloudflareSetup);
+  const bootstrap = buildGitHubAppBootstrapStatus({ url, env, day0CloudflareSetup });
+  if (!["available", "pending_bundle_consume"].includes(normalizeText(bootstrap.state))) {
     return json(503, {
       ok: false,
       error: "github_app_bootstrap_unavailable",
@@ -1049,6 +1389,142 @@ async function handleGitHubAppBootstrapRequest({ request, url, env }) {
   }
 
   const payload = await readGitHubAppBootstrapPayload(request);
+  if (normalizeText(bootstrap?.targetMode) === "day0_user_owned_runtime") {
+    const cloudflareApiToken =
+      normalizeText(payload.cloudflareApiToken) ||
+      normalizeText(
+        (
+          await resolveDay0StoredSecretPayload({
+            env,
+            id: day0Runtime.pendingCloudflareTokenId,
+            kind: DAY0_TEMP_SECRET_KIND_CLOUDFLARE_API_TOKEN
+          })
+        )?.apiToken
+      );
+    if (!cloudflareApiToken) {
+      return json(422, {
+        ok: false,
+        error: "github_app_bootstrap_missing_values",
+        missingSecretValues: ["cloudflareApiToken"]
+      });
+    }
+
+    const pendingBundleId = normalizeText(day0Runtime.pendingGitHubAppBundleId);
+    if (!pendingBundleId || !day0Runtime.accountId || !day0Runtime.scriptName) {
+      return json(409, {
+        ok: false,
+        error: "github_app_bootstrap_pending_bundle_unavailable",
+        reason: "prepared user-owned runtime is missing the pending GitHub App manifest bundle context"
+      });
+    }
+
+    const temporaryStore = getDay0TemporarySecretStore(env);
+    if (!temporaryStore) {
+      return json(503, {
+        ok: false,
+        error: "day0_temp_secret_store_unavailable",
+        reason:
+          "shared-use GitHub App consume path needs a server-controlled temporary secret store before VTDD can write the pending bundle into the prepared runtime"
+      });
+    }
+
+    const storedBundle = await temporaryStore.read({
+      id: pendingBundleId,
+      kind: DAY0_TEMP_SECRET_KIND_GITHUB_APP_MANIFEST
+    });
+    if (!storedBundle.ok || !storedBundle.payload) {
+      return json(409, {
+        ok: false,
+        error: "github_app_bootstrap_pending_bundle_unavailable",
+        reason: storedBundle.reason || "pending_bundle_not_found"
+      });
+    }
+
+    const fetchImpl =
+      typeof env?.CF_API_FETCH === "function"
+        ? env.CF_API_FETCH
+        : typeof globalThis.fetch === "function"
+          ? globalThis.fetch.bind(globalThis)
+          : null;
+    if (!fetchImpl) {
+      return json(503, {
+        ok: false,
+        error: "github_app_bootstrap_fetch_unavailable",
+        reason: "runtime fetch is unavailable"
+      });
+    }
+
+    const secretsToWrite = [
+      ["GITHUB_APP_ID", normalizeText(storedBundle.payload.GITHUB_APP_ID)],
+      ["GITHUB_APP_PRIVATE_KEY", normalizeText(storedBundle.payload.GITHUB_APP_PRIVATE_KEY)]
+    ];
+    for (const [secretName, secretValue] of secretsToWrite) {
+      const updated = await putCloudflareWorkerSecret({
+        fetchImpl,
+        apiToken: cloudflareApiToken,
+        accountId: day0Runtime.accountId,
+        scriptName: day0Runtime.scriptName,
+        secretName,
+        secretValue
+      });
+      if (!updated.ok) {
+        const diagnostics = await diagnoseCloudflareBootstrapSecretWrite({
+          fetchImpl,
+          apiToken: cloudflareApiToken,
+          accountId: day0Runtime.accountId,
+          scriptName: day0Runtime.scriptName,
+          failedStage: "workers_secret_write",
+          failedResponse: updated
+        });
+        return json(502, {
+          ok: false,
+          error: "github_app_bootstrap_write_failed",
+          secretName,
+          reason: updated.reason,
+          diagnostics
+        });
+      }
+    }
+
+    const authConfig = getSetupWizardAuthConfig(env);
+    let setCookie = "";
+    if (authConfig.sessionSecret) {
+      setCookie = await buildDay0CloudflareStateCookie({
+        sessionSecret: authConfig.sessionSecret,
+        state: buildDay0CloudflareRuntimeState({
+          ...day0Runtime,
+          githubIdentityRuntimeWrittenAt: new Date().toISOString(),
+          writtenSecrets: [
+            ...new Set([
+              ...(Array.isArray(day0Runtime.writtenSecrets) ? day0Runtime.writtenSecrets : []),
+              "GITHUB_APP_ID",
+              "GITHUB_APP_PRIVATE_KEY"
+            ])
+          ],
+          checkedAt: new Date().toISOString(),
+          summary:
+            "GitHub App identity bundle was written into the prepared user-owned runtime. Continue to installation and readiness verification."
+        })
+      });
+    }
+
+    const returnTo =
+      normalizeGitHubAppBootstrapReturnTo(payload.returnTo) || "/setup/wizard?githubAppCheck=on";
+    if (payload.mode === "form") {
+      return redirectWithCookies(returnTo, setCookie ? [setCookie] : []);
+    }
+
+    return json(
+      200,
+      {
+        ok: true,
+        updatedSecrets: ["GITHUB_APP_ID", "GITHUB_APP_PRIVATE_KEY"],
+        returnTo
+      },
+      setCookie ? { "set-cookie": setCookie } : undefined
+    );
+  }
+
   const missingSecretValues = GITHUB_APP_BOOTSTRAP_SECRET_ALLOWLIST.filter(
     (name) => !normalizeText(payload[name])
   );
@@ -1126,7 +1602,8 @@ async function handleGitHubAppBootstrapRequest({ request, url, env }) {
 }
 
 async function handleRequiredSettingsBootstrapRequest({ request, url, env }) {
-  const status = buildRequiredSettingsBootstrapStatus({ url, env });
+  const day0CloudflareSetup = await readDay0CloudflareSetupStateFromCookie({ request, env });
+  const status = buildRequiredSettingsBootstrapStatus({ url, env, day0CloudflareSetup });
   if (status.state !== "available") {
     return json(503, {
       ok: false,
@@ -1185,10 +1662,31 @@ async function handleRequiredSettingsBootstrapRequest({ request, url, env }) {
     });
   }
 
+  const targetApiToken =
+    status.targetMode === "day0_user_owned_runtime"
+      ? normalizeText(payload.cloudflareApiToken) ||
+        normalizeText(
+          (
+            await resolveDay0StoredSecretPayload({
+              env,
+              id: day0CloudflareSetup?.pendingCloudflareTokenId,
+              kind: DAY0_TEMP_SECRET_KIND_CLOUDFLARE_API_TOKEN
+            })
+          )?.apiToken
+        )
+      : status.cloudflareApiToken;
+  if (status.targetMode === "day0_user_owned_runtime" && !targetApiToken) {
+    return json(422, {
+      ok: false,
+      error: "required_settings_bootstrap_missing_cloudflare_token",
+      reason: "day0 shared-use required settings bootstrap needs a Cloudflare API token for the prepared runtime"
+    });
+  }
+
   for (const secretName of providedEntries) {
     const updated = await putCloudflareWorkerSecret({
       fetchImpl,
-      apiToken: status.cloudflareApiToken,
+      apiToken: targetApiToken,
       accountId: status.accountId,
       scriptName: status.scriptName,
       secretName,
@@ -1208,16 +1706,32 @@ async function handleRequiredSettingsBootstrapRequest({ request, url, env }) {
   }
 
   const remainingMissing = status.missingSettings.filter((name) => !providedEntries.includes(name));
+  const authConfig = getSetupWizardAuthConfig(env);
+  let setCookie = "";
+  if (status.targetMode === "day0_user_owned_runtime" && day0CloudflareSetup && authConfig.sessionSecret) {
+    const updatedState = buildDay0CloudflareRuntimeState({
+      ...day0CloudflareSetup,
+      writtenSecrets: [
+        ...(Array.isArray(day0CloudflareSetup?.writtenSecrets) ? day0CloudflareSetup.writtenSecrets : []),
+        ...providedEntries
+      ],
+      checkedAt: new Date().toISOString(),
+      summary:
+        remainingMissing.length === 0
+          ? "Required Day0 runtime settings were written to the prepared user-owned runtime."
+          : "Some required Day0 runtime settings were written. Continue until the remaining settings are cleared."
+    });
+    updatedState.writtenSecrets = [...new Set(updatedState.writtenSecrets)];
+    setCookie = await buildDay0CloudflareStateCookie({
+      sessionSecret: authConfig.sessionSecret,
+      state: updatedState
+    });
+  }
 
   if (payload.mode === "form") {
     const successUrl = new URL(returnTo, url.origin);
     successUrl.searchParams.set("required_settings_bootstrap", "completed");
-    return new Response(null, {
-      status: 303,
-      headers: {
-        location: `${successUrl.pathname}${successUrl.search}`
-      }
-    });
+    return redirectWithCookies(`${successUrl.pathname}${successUrl.search}`, [setCookie]);
   }
 
   return json(200, {
@@ -1225,11 +1739,18 @@ async function handleRequiredSettingsBootstrapRequest({ request, url, env }) {
     updatedSecrets: providedEntries,
     remainingMissingSettings: remainingMissing,
     returnTo
-  });
+  }, setCookie ? { "set-cookie": setCookie } : undefined);
 }
 
 async function handleGitHubAppManifestCallbackRequest({ request, url, env }) {
-  const bootstrap = buildGitHubAppBootstrapStatus({ url, env });
+  const day0CloudflareSetup = await readDay0CloudflareSetupStateFromCookie({ request, env });
+  const day0Runtime = buildDay0CloudflareRuntimeState(day0CloudflareSetup);
+  const sharedUseRuntimePrepared =
+    normalizeText(day0Runtime.state) === "runtime_prepared" ||
+    normalizeText(day0Runtime.state) === "ready";
+  const bootstrap = sharedUseRuntimePrepared
+    ? buildSharedUseGitHubManifestCallbackStatus({ env })
+    : buildGitHubAppBootstrapStatus({ url, env });
   if (bootstrap.state !== "available") {
     return json(503, {
       ok: false,
@@ -1279,6 +1800,63 @@ async function handleGitHubAppManifestCallbackRequest({ request, url, env }) {
       reason: converted.reason,
       diagnostics
     });
+  }
+
+  if (sharedUseRuntimePrepared) {
+    const temporaryStore = getDay0TemporarySecretStore(env);
+    if (!temporaryStore) {
+      return json(503, {
+        ok: false,
+        error: "day0_temp_secret_store_unavailable",
+        reason:
+          "shared-use GitHub manifest callback needs a server-controlled temporary secret store before VTDD can carry the private key into the user-owned runtime"
+      });
+    }
+    const stored = await temporaryStore.store({
+      kind: DAY0_TEMP_SECRET_KIND_GITHUB_APP_MANIFEST,
+      payload: {
+        GITHUB_APP_ID: String(converted.appId),
+        GITHUB_APP_PRIVATE_KEY: converted.privateKey,
+        slug: converted.slug,
+        htmlUrl: converted.htmlUrl
+      }
+    });
+    const authConfig = getSetupWizardAuthConfig(env);
+    let setCookie = "";
+    if (stored.ok && authConfig.sessionSecret) {
+      const updatedState = buildDay0CloudflareRuntimeState({
+        ...day0Runtime,
+        pendingGitHubAppBundleId: stored.id,
+        pendingGitHubAppStoredAt: new Date().toISOString(),
+        checkedAt: new Date().toISOString(),
+        summary:
+          "GitHub App manifest secrets were captured into server-controlled temporary state for the prepared user-owned runtime."
+      });
+      setCookie = await buildDay0CloudflareStateCookie({
+        sessionSecret: authConfig.sessionSecret,
+        state: updatedState
+      });
+    }
+
+    const redirectTarget = returnTo || "/setup/wizard?githubAppCheck=on";
+    return html(
+      200,
+      renderHtmlDocument(`
+        <p class="meta">GitHub App manifest bootstrap captured for shared-use Day0 flow.</p>
+        <div class="block">
+          <p><strong>VTDD stored the GitHub App identity bundle in server-controlled temporary state.</strong></p>
+          <p><strong>Setup progress</strong></p>
+          <ul>
+            <li>GitHub App ID retrieved.</li>
+            <li>GitHub App private key captured without exposing it to browser state.</li>
+            <li>User-owned runtime consume step is still pending.</li>
+          </ul>
+          <p class="meta">Next, return to the setup wizard and continue the shared-use GitHub consume path.</p>
+          <p><a href="${escapeHtml(redirectTarget)}">Return to setup wizard</a></p>
+        </div>
+      `),
+      setCookie ? { "set-cookie": setCookie } : undefined
+    );
   }
 
   const secretsToWrite = [
@@ -1345,8 +1923,43 @@ async function handleGitHubAppManifestCallbackRequest({ request, url, env }) {
   );
 }
 
+function buildSharedUseGitHubManifestCallbackStatus({ env }) {
+  const runtimeEnv = env ?? {};
+  const authConfig = getSetupWizardAuthConfig(runtimeEnv);
+  const githubManifestConversionToken = normalizeText(
+    runtimeEnv[GITHUB_MANIFEST_CONVERSION_TOKEN_ENV]
+  );
+  const missingPrerequisites = [];
+
+  if (!authConfig.enabled) {
+    missingPrerequisites.push("SETUP_WIZARD_PASSCODE");
+  }
+  if (!githubManifestConversionToken) {
+    missingPrerequisites.push(GITHUB_MANIFEST_CONVERSION_TOKEN_ENV);
+  }
+
+  if (missingPrerequisites.length > 0) {
+    return {
+      state: "missing_prerequisites",
+      summary:
+        "GitHub App manifest callback is unavailable until passcode auth and the service-owned manifest conversion token are configured.",
+      missingPrerequisites
+    };
+  }
+
+  return {
+    state: "available",
+    summary:
+      "GitHub App manifest callback can capture identity into server-controlled temporary state for the prepared user-owned runtime.",
+    missingPrerequisites: [],
+    githubManifestConversionToken
+  };
+}
+
 async function handleGitHubAppInstallationCaptureRequest({ request, url, env }) {
-  const bootstrap = buildGitHubAppBootstrapStatus({ url, env });
+  const day0CloudflareSetup = await readDay0CloudflareSetupStateFromCookie({ request, env });
+  const day0Runtime = buildDay0CloudflareRuntimeState(day0CloudflareSetup);
+  const bootstrap = buildGitHubAppBootstrapStatus({ url, env, day0CloudflareSetup });
   if (bootstrap.state !== "available") {
     return json(503, {
       ok: false,
@@ -1432,7 +2045,20 @@ async function handleGitHubAppInstallationCaptureRequest({ request, url, env }) 
 
   const updated = await writeGitHubAppInstallationBinding({
     env,
-    bootstrap,
+    bootstrap: {
+      ...bootstrap,
+      cloudflareApiToken:
+        bootstrap.cloudflareApiToken ||
+        normalizeText(
+          (
+            await resolveDay0StoredSecretPayload({
+              env,
+              id: day0Runtime.pendingCloudflareTokenId,
+              kind: DAY0_TEMP_SECRET_KIND_CLOUDFLARE_API_TOKEN
+            })
+          )?.apiToken
+        )
+    },
     installationId,
     fetchImpl
   });
@@ -1447,6 +2073,21 @@ async function handleGitHubAppInstallationCaptureRequest({ request, url, env }) 
     });
   }
 
+  const authConfig = getSetupWizardAuthConfig(env);
+  let setCookie = "";
+  if (authConfig.sessionSecret) {
+    setCookie = await buildDay0CloudflareStateCookie({
+      sessionSecret: authConfig.sessionSecret,
+      state: buildDay0CloudflareRuntimeState({
+        ...day0Runtime,
+        githubAppInstallationId: installationId,
+        checkedAt: new Date().toISOString(),
+        summary:
+          "GitHub App installation binding was written into the prepared user-owned runtime. VTDD can now continue to live readiness verification."
+      })
+    });
+  }
+
   if (payload.mode === "form") {
     const autoContinueResponse = await maybeAutoContinueSelectedInstallationAfterCapture({
       returnTo,
@@ -1457,20 +2098,14 @@ async function handleGitHubAppInstallationCaptureRequest({ request, url, env }) 
     if (autoContinueResponse) {
       return autoContinueResponse;
     }
-
-    return new Response(null, {
-      status: 303,
-      headers: {
-        location: returnTo
-      }
-    });
+    return redirectWithCookies(returnTo, setCookie ? [setCookie] : []);
   }
 
   return json(200, {
     ok: true,
     updatedSecrets: ["GITHUB_APP_INSTALLATION_ID"],
     returnTo
-  });
+  }, setCookie ? { "set-cookie": setCookie } : undefined);
 }
 
 async function evaluateInstallationCaptureBoundary({
@@ -1871,6 +2506,152 @@ async function readApprovalBoundBootstrapSessionConsumePayload(request) {
   };
 }
 
+async function readDay0CloudflareConnectPayload(request) {
+  const contentType = normalizeText(request.headers.get("content-type"));
+  if (contentType.includes("application/json")) {
+    const payload = await readJson(request);
+    return {
+      mode: "json",
+      returnTo: normalizeText(payload?.returnTo),
+      accountId: normalizeText(payload?.cloudflareAccountId ?? payload?.accountId),
+      apiToken: normalizeText(payload?.cloudflareApiToken ?? payload?.apiToken)
+    };
+  }
+
+  const form = await request.formData();
+  return {
+    mode: "form",
+    returnTo: normalizeText(form.get("returnTo")),
+    accountId: normalizeText(form.get("cloudflareAccountId") ?? form.get("accountId")),
+    apiToken: normalizeText(form.get("cloudflareApiToken") ?? form.get("apiToken"))
+  };
+}
+
+async function handleDay0CloudflareConnectRequest({ request, url, env }) {
+  const day0CloudflareSetup = await readDay0CloudflareSetupStateFromCookie({ request, env });
+  const day0Runtime = buildDay0CloudflareRuntimeState(day0CloudflareSetup);
+  const payload = await readDay0CloudflareConnectPayload(request);
+  const locale = detectSetupWizardLocale({ request, url });
+  const returnTo = normalizeReturnTo(payload.returnTo) || "/setup/wizard";
+  const setupContextUrl = new URL(returnTo, url.origin);
+  const authConfig = getSetupWizardAuthConfig(env);
+
+  if (!authConfig.sessionSecret) {
+    return json(503, {
+      ok: false,
+      error: "setup_wizard_session_secret_missing",
+      reason: "setup wizard session secret is required for Day0 Cloudflare state"
+    });
+  }
+
+  const missingFields = [];
+  if (!payload.accountId) {
+    missingFields.push("cloudflareAccountId");
+  }
+  if (!payload.apiToken) {
+    missingFields.push("cloudflareApiToken");
+  }
+
+  if (missingFields.length > 0) {
+    const blockedState = buildDay0CloudflareRuntimeState({
+      ...day0Runtime,
+      state: "blocked",
+      summary:
+        "Cloudflare Day0 setup needs both an account id and an API token before VTDD can verify or create a user-owned runtime.",
+      blockingReasons: ["cloudflare_credentials_missing"],
+      accountId: payload.accountId,
+      checkedAt: new Date().toISOString()
+    });
+    const setCookie = await buildDay0CloudflareStateCookie({
+      sessionSecret: authConfig.sessionSecret,
+      state: blockedState
+    });
+    if (payload.mode === "json") {
+      return json(422, {
+        ok: false,
+        error: "cloudflare_day0_credentials_missing",
+        missingFields,
+        day0CloudflareSetup: toPublicDay0CloudflareRuntimeState(blockedState)
+      }, setCookie ? { "set-cookie": setCookie } : undefined);
+    }
+    return redirectWithCookies(returnTo, [setCookie]);
+  }
+
+  const fetchImpl =
+    typeof env?.CF_API_FETCH === "function"
+      ? env.CF_API_FETCH.bind(env)
+      : typeof globalThis.fetch === "function"
+        ? globalThis.fetch.bind(globalThis)
+        : null;
+
+  if (typeof fetchImpl !== "function") {
+    const blockedState = buildDay0CloudflareRuntimeState({
+      ...day0Runtime,
+      state: "blocked",
+      summary: "Cloudflare Day0 setup cannot run because fetch is unavailable in this runtime.",
+      blockingReasons: ["runtime_fetch_unavailable"],
+      accountId: payload.accountId,
+      checkedAt: new Date().toISOString()
+    });
+    const setCookie = await buildDay0CloudflareStateCookie({
+      sessionSecret: authConfig.sessionSecret,
+      state: blockedState
+    });
+    if (payload.mode === "json") {
+      return json(503, {
+        ok: false,
+        error: "cloudflare_day0_fetch_unavailable",
+        day0CloudflareSetup: toPublicDay0CloudflareRuntimeState(blockedState)
+      }, setCookie ? { "set-cookie": setCookie } : undefined);
+    }
+    return redirectWithCookies(returnTo, [setCookie]);
+  }
+
+  const runtime = await prepareDay0CloudflareRuntime({
+    fetchImpl,
+    apiToken: payload.apiToken,
+    accountId: payload.accountId,
+    url: setupContextUrl,
+    locale
+  });
+  let runtimeState = buildDay0CloudflareRuntimeState({
+    ...day0Runtime,
+    ...runtime,
+    githubForkCanonicalRepo:
+      normalizeRepo(runtime.githubForkCanonicalRepo) || day0Runtime.githubForkCanonicalRepo,
+    githubForkDecision: normalizeText(runtime.githubForkDecision) || day0Runtime.githubForkDecision
+  });
+  const temporaryStore = getDay0TemporarySecretStore(env);
+  if (temporaryStore) {
+    const storedToken = await temporaryStore.store({
+      kind: DAY0_TEMP_SECRET_KIND_CLOUDFLARE_API_TOKEN,
+      payload: {
+        apiToken: payload.apiToken
+      }
+    });
+    if (storedToken?.ok) {
+      runtimeState = buildDay0CloudflareRuntimeState({
+        ...runtimeState,
+        pendingCloudflareTokenId: storedToken.id,
+        pendingCloudflareTokenStoredAt: new Date().toISOString()
+      });
+    }
+  }
+  const setCookie = await buildDay0CloudflareStateCookie({
+    sessionSecret: authConfig.sessionSecret,
+    state: runtimeState
+  });
+
+  if (payload.mode === "json") {
+    return json(runtimeState.state === "runtime_prepared" ? 200 : 422, {
+      ok: runtimeState.state === "runtime_prepared",
+      day0CloudflareSetup: toPublicDay0CloudflareRuntimeState(runtimeState)
+    }, setCookie ? { "set-cookie": setCookie } : undefined);
+  }
+
+  return redirectWithCookies(returnTo, [setCookie]);
+}
+
 function normalizeReturnTo(value) {
   const text = normalizeText(value);
   if (!text.startsWith("/setup/wizard")) {
@@ -1893,6 +2674,20 @@ function readCookie(cookieHeader, name) {
   }
 
   return "";
+}
+
+function redirectWithCookies(location, cookieHeaders = []) {
+  const headers = {
+    location
+  };
+  const filtered = cookieHeaders.filter(Boolean);
+  if (filtered.length === 1) {
+    headers["set-cookie"] = filtered[0];
+  }
+  return new Response(null, {
+    status: 303,
+    headers
+  });
 }
 
 async function createSetupWizardSessionToken({ sessionSecret }) {
@@ -2139,6 +2934,76 @@ function buildSetupWizardSessionCookie(cookieValue) {
     "Secure",
     "SameSite=Lax"
   ].join("; ");
+}
+
+function buildSetupWizardStateCookie({ cookieName, cookieValue, maxAge = SETUP_WIZARD_SESSION_TTL_SECONDS }) {
+  return [
+    `${cookieName}=${cookieValue}`,
+    "Path=/setup/wizard",
+    `Max-Age=${maxAge}`,
+    "HttpOnly",
+    "Secure",
+    "SameSite=Lax"
+  ].join("; ");
+}
+
+async function buildDay0CloudflareStateCookie({ sessionSecret, state }) {
+  if (!sessionSecret || !state) {
+    return "";
+  }
+
+  const serialized = JSON.stringify(state);
+  const encoded = encodeURIComponent(serialized);
+  const signature = await signSetupWizardValue({
+    sessionSecret,
+    message: `day0-cloudflare:${encoded}`
+  });
+  return buildSetupWizardStateCookie({
+    cookieName: SETUP_WIZARD_DAY0_CLOUDFLARE_STATE_COOKIE,
+    cookieValue: `${encoded}.${signature}`
+  });
+}
+
+async function readDay0CloudflareSetupStateFromCookie({ request, env }) {
+  const authConfig = getSetupWizardAuthConfig(env);
+  if (!authConfig.sessionSecret) {
+    return null;
+  }
+
+  const cookieValue = readCookie(
+    request?.headers?.get("cookie"),
+    SETUP_WIZARD_DAY0_CLOUDFLARE_STATE_COOKIE
+  );
+  const raw = normalizeText(cookieValue);
+  if (!raw) {
+    return null;
+  }
+
+  const lastSeparator = raw.lastIndexOf(".");
+  if (lastSeparator <= 0) {
+    return null;
+  }
+
+  const encoded = raw.slice(0, lastSeparator);
+  const signature = raw.slice(lastSeparator + 1);
+  const expected = await signSetupWizardValue({
+    sessionSecret: authConfig.sessionSecret,
+    message: `day0-cloudflare:${encoded}`
+  });
+  if (!safeEqual(signature, expected)) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(decodeURIComponent(encoded));
+  } catch {
+    return null;
+  }
+}
+
+async function readDay0CloudflareSetupStatus({ request, env }) {
+  const state = await readDay0CloudflareSetupStateFromCookie({ request, env });
+  return toPublicDay0CloudflareRuntimeState(state);
 }
 
 async function handleRetrieveConstitutionRequest(url, env) {
@@ -2728,6 +3593,19 @@ function buildSetupWizardAnswers(url) {
   };
 }
 
+function replaceSetupWizardRepoReturnTo(returnTo, canonicalRepo) {
+  const normalizedRepo = normalizeRepo(canonicalRepo);
+  const normalizedReturnTo = normalizeGitHubAppBootstrapReturnTo(returnTo);
+  if (!normalizedRepo) {
+    return normalizedReturnTo || "/setup/wizard";
+  }
+
+  const nextUrl = new URL(normalizedReturnTo || "/setup/wizard", "https://example.com");
+  nextUrl.searchParams.delete("repo");
+  nextUrl.searchParams.append("repo", normalizedRepo);
+  return `${nextUrl.pathname}${nextUrl.search}`;
+}
+
 function parseRepositories(url) {
   const provided = url.searchParams
     .getAll("repo")
@@ -2762,10 +3640,13 @@ function renderSetupWizardHtml({
   url,
   locale = "en",
   cloudflareSetupCheck,
+  day0GitHubForkSetup,
+  day0CloudflareSetup,
   githubAppSetupCheck,
   githubAppBootstrap,
   requiredSettingsBootstrap,
   setupCompletion,
+  day0SharedUseSetup,
   approvalBoundBootstrapSession
 }) {
   const pageTitle = locale === "ja" ? "VTDD セットアップウィザード" : "VTDD Setup Wizard";
@@ -2780,10 +3661,13 @@ function renderSetupWizardHtml({
         url,
         locale,
         cloudflareSetupCheck,
+        day0GitHubForkSetup,
+        day0CloudflareSetup,
         githubAppSetupCheck,
         githubAppBootstrap,
         requiredSettingsBootstrap,
         setupCompletion,
+        day0SharedUseSetup,
         approvalBoundBootstrapSession
       )
     : renderFailureContent(
@@ -2792,10 +3676,12 @@ function renderSetupWizardHtml({
         url,
         locale,
         cloudflareSetupCheck,
+        day0CloudflareSetup,
         githubAppSetupCheck,
         githubAppBootstrap,
         requiredSettingsBootstrap,
         setupCompletion,
+        day0SharedUseSetup,
         approvalBoundBootstrapSession
       );
 
@@ -3012,14 +3898,18 @@ function renderSuccessContent(
   url,
   locale = "en",
   cloudflareSetupCheck,
+  day0GitHubForkSetup,
+  day0CloudflareSetup,
   githubAppSetupCheck,
   githubAppBootstrap,
   requiredSettingsBootstrap,
   setupCompletion,
+  day0SharedUseSetup,
   approvalBoundBootstrapSession
 ) {
   const onboarding = result.onboarding ?? {};
   const customGpt = onboarding.customGpt ?? {};
+  const surfaceEntry = onboarding.surfaceEntry ?? {};
   const deployAuthority = onboarding.deployAuthority ?? {};
   const productionDeploy = onboarding.productionDeploy ?? {};
   const machineAuth = onboarding.machineAuth ?? {};
@@ -3037,10 +3927,18 @@ function renderSuccessContent(
   const actionSchemaJson = customGpt.actionSchemaJson ?? "";
   const actionSchemaImportUrl = customGpt.actionSchemaImportUrl ?? "";
   const constructionText = customGpt.constructionText ?? "";
+  const canRevealCustomGptEntry = Boolean(day0SharedUseSetup?.canRevealCustomGptEntry);
+  const chatgptEntry =
+    day0SharedUseSetup?.entrySurfaces?.chatgpt ?? surfaceEntry.chatgpt ?? {};
+  const codexEntry = day0SharedUseSetup?.entrySurfaces?.codex ?? surfaceEntry.codex ?? {};
+  const sharedGptUrl = normalizeText(chatgptEntry?.sharedGptUrl);
+  const sharedUseSummary =
+    normalizeText(day0SharedUseSetup?.summary) ||
+    "Day0 shared-use setup is not ready yet.";
   const introText =
     locale === "ja"
-      ? "iPhone の Safari で開き、この下の内容を Custom GPT 設定へコピーしてください。"
-      : "Open this URL on iPhone Safari, then copy the blocks below into Custom GPT settings.";
+      ? "iPhone の Safari で開き、Day0 setup の進捗を確認してください。"
+      : "Open this URL on iPhone Safari to review Day0 setup progress.";
   const jsonLabel = locale === "ja" ? "JSON 出力" : "JSON output";
   const repositoriesTitle = locale === "ja" ? "リポジトリ" : "Repositories";
   const checklistTitle = locale === "ja" ? "チェックリスト" : "Checklist";
@@ -3113,6 +4011,66 @@ function renderSuccessContent(
         </details>
       `
       : detailedContracts;
+  const customGptGateNotice = canRevealCustomGptEntry
+    ? ""
+    : `
+      <h2>${escapeHtml(locale === "ja" ? "VTDD 利用導線" : "VTDD Entry Surfaces")}</h2>
+      <div class="block">
+        <p>${escapeHtml(
+          locale === "ja"
+            ? "Day0 shared-use setup が完了するまで、VTDD GPT link / Codex handoff / Custom GPT Instructions は表示しません。"
+            : "VTDD GPT link, Codex handoff, and Custom GPT instructions stay hidden until Day0 shared-use setup is complete."
+        )}</p>
+        <p><strong>${escapeHtml(locale === "ja" ? "理由" : "Reason")}:</strong> ${escapeHtml(sharedUseSummary)}</p>
+      </div>
+    `;
+  const customGptSetupSection = canRevealCustomGptEntry
+    ? `
+      <h2>${escapeHtml(locale === "ja" ? "VTDD 利用導線" : "VTDD Entry Surfaces")}</h2>
+      <div class="block">
+        <p><strong>${escapeHtml(locale === "ja" ? "ChatGPT" : "ChatGPT")}:</strong> ${escapeHtml(
+          locale === "ja"
+            ? "ChatGPT にログインした上で、共有 VTDD GPT から利用を開始します。"
+            : "Sign in to ChatGPT, then start from the shared VTDD GPT entry."
+        )}</p>
+        ${
+          sharedGptUrl
+            ? `<p><a href="${escapeHtml(sharedGptUrl)}" target="_blank" rel="noreferrer">${escapeHtml(
+                locale === "ja" ? "共有 VTDD GPT を開く" : "Open Shared VTDD GPT"
+              )}</a></p>`
+            : ""
+        }
+        <p><strong>${escapeHtml(locale === "ja" ? "Codex" : "Codex")}:</strong> ${escapeHtml(
+          normalizeText(codexEntry?.summary) ||
+            (locale === "ja"
+              ? "同じ user-owned repository と runtime を使って Codex に切り替えます。"
+              : "Continue in Codex with the same user-owned repository and runtime.")
+        )}</p>
+        <p><code>${escapeHtml(
+          normalizeText(codexEntry?.handoffMode) || "same_repo_same_runtime_after_ready"
+        )}</code></p>
+      </div>
+      <div class="section-header">
+        <h2>${escapeHtml(constructionTitle)}</h2>
+        <button class="copy-button" type="button" data-copy-target="constructionText">${escapeHtml(copyConstructionLabel)}</button>
+      </div>
+      <textarea id="constructionText" readonly>${escapeHtml(constructionText)}</textarea>
+      <p class="copy-hint" data-copy-status="constructionText">${escapeHtml(constructionHint)}</p>
+      <div class="section-header">
+        <h2>Custom GPT Action Schema (OpenAPI)</h2>
+        <button class="copy-button" type="button" data-copy-target="actionSchemaJson">${escapeHtml(copySchemaLabel)}</button>
+      </div>
+      <p class="meta">${escapeHtml(importHelp)}</p>
+      <div class="section-header">
+        <h3>Schema Import URL</h3>
+        <button class="copy-button" type="button" data-copy-target="actionSchemaImportUrl">${escapeHtml(copyImportLabel)}</button>
+      </div>
+      <textarea id="actionSchemaImportUrl" readonly>${escapeHtml(actionSchemaImportUrl)}</textarea>
+      <p class="copy-hint" data-copy-status="actionSchemaImportUrl">${escapeHtml(importHint)}</p>
+      <textarea id="actionSchemaJson" readonly>${escapeHtml(actionSchemaJson)}</textarea>
+      <p class="copy-hint" data-copy-status="actionSchemaJson">${escapeHtml(schemaHint)}</p>
+    `
+    : customGptGateNotice;
 
   return `
     <p class="meta">${escapeHtml(introText)}</p>
@@ -3134,26 +4092,10 @@ function renderSuccessContent(
     <div class="block">
       <ul>${checklistSteps.map((step) => `<li>${escapeHtml(step)}</li>`).join("")}</ul>
     </div>
-    ${detailedContractsSection}
-    <div class="section-header">
-      <h2>${escapeHtml(constructionTitle)}</h2>
-      <button class="copy-button" type="button" data-copy-target="constructionText">${escapeHtml(copyConstructionLabel)}</button>
-    </div>
-    <textarea id="constructionText" readonly>${escapeHtml(constructionText)}</textarea>
-    <p class="copy-hint" data-copy-status="constructionText">${escapeHtml(constructionHint)}</p>
-    <div class="section-header">
-      <h2>Custom GPT Action Schema (OpenAPI)</h2>
-      <button class="copy-button" type="button" data-copy-target="actionSchemaJson">${escapeHtml(copySchemaLabel)}</button>
-    </div>
-    <p class="meta">${escapeHtml(importHelp)}</p>
-    <div class="section-header">
-      <h3>Schema Import URL</h3>
-      <button class="copy-button" type="button" data-copy-target="actionSchemaImportUrl">${escapeHtml(copyImportLabel)}</button>
-    </div>
-    <textarea id="actionSchemaImportUrl" readonly>${escapeHtml(actionSchemaImportUrl)}</textarea>
-      <p class="copy-hint" data-copy-status="actionSchemaImportUrl">${escapeHtml(importHint)}</p>
-      <textarea id="actionSchemaJson" readonly>${escapeHtml(actionSchemaJson)}</textarea>
-      <p class="copy-hint" data-copy-status="actionSchemaJson">${escapeHtml(schemaHint)}</p>
+      ${detailedContractsSection}
+      ${renderDay0GitHubForkSetup(day0GitHubForkSetup, url, locale)}
+      ${renderDay0SharedUseSetup(day0SharedUseSetup, url, locale, day0CloudflareSetup)}
+      ${customGptSetupSection}
       ${renderGitHubAppSetupCheck(githubAppSetupCheck, locale)}
       ${renderGitHubAppBootstrap(githubAppBootstrap, url, locale)}
       ${renderRequiredSettingsBootstrap(requiredSettingsBootstrap, url, locale)}
@@ -3526,10 +4468,12 @@ function renderFailureContent(
   url,
   locale = "en",
   cloudflareSetupCheck,
+  day0CloudflareSetup,
   githubAppSetupCheck,
   githubAppBootstrap,
   requiredSettingsBootstrap,
   setupCompletion,
+  day0SharedUseSetup,
   approvalBoundBootstrapSession
 ) {
   const issues = Array.isArray(result.blockingIssues) ? result.blockingIssues : [];
@@ -3548,6 +4492,7 @@ function renderFailureContent(
         ? `<h2>${escapeHtml(locale === "ja" ? "ガイダンス" : "Guidance")}</h2><div class="block"><ul>${guidanceItems}</ul></div>`
         : ""
       }
+      ${renderDay0SharedUseSetup(day0SharedUseSetup, url, locale, day0CloudflareSetup)}
       ${renderGitHubAppSetupCheck(githubAppSetupCheck, locale)}
       ${renderGitHubAppBootstrap(githubAppBootstrap, url, locale)}
       ${renderRequiredSettingsBootstrap(requiredSettingsBootstrap, url, locale)}
@@ -4447,6 +5392,7 @@ function renderGitHubAppBootstrap(bootstrap, url, locale = "en") {
   const state = normalizeText(bootstrap?.state) || "missing_prerequisites";
   const summary =
     normalizeText(bootstrap?.summary) || "GitHub App bootstrap write path is not available.";
+  const targetMode = normalizeText(bootstrap?.targetMode) || "legacy_operator_runtime";
   const allowlistedSecrets = Array.isArray(bootstrap?.allowlistedSecrets)
     ? bootstrap.allowlistedSecrets
     : [];
@@ -4494,7 +5440,15 @@ function renderGitHubAppBootstrap(bootstrap, url, locale = "en") {
           ? `
             <div class="block" style="margin-top: 12px;">
               <p><strong>${escapeHtml(locale === "ja" ? "GitHub App を自動作成" : "Create GitHub App automatically")}</strong></p>
-              <p class="meta">${escapeHtml(locale === "ja" ? "この step では、VTDD が GitHub を安全に触るための身分証を作りに行きます。戻ってくると App ID と private key が Worker runtime に保存されます。" : "This step creates the GitHub-side identity VTDD needs for safe execution. When you return, App ID and private key will be stored on Worker runtime.")}</p>
+              <p class="meta">${escapeHtml(
+                targetMode === "day0_user_owned_runtime"
+                  ? locale === "ja"
+                    ? "この step では、VTDD が GitHub を安全に触るための身分証を作りに行きます。戻ってくると App ID と private key は一時的に server-controlled state に保存され、その後 prepared runtime に書き込まれます。"
+                    : "This step creates the GitHub-side identity VTDD needs for safe execution. On return, App ID and private key are captured into temporary server-controlled state before VTDD writes them into the prepared runtime."
+                  : locale === "ja"
+                    ? "この step では、VTDD が GitHub を安全に触るための身分証を作りに行きます。戻ってくると App ID と private key が Worker runtime に保存されます。"
+                    : "This step creates the GitHub-side identity VTDD needs for safe execution. When you return, App ID and private key will be stored on Worker runtime."
+              )}</p>
               <form method="post" action="${escapeHtml(manifestLaunch.action)}">
                 <input type="hidden" name="manifest" value="${escapeHtml(manifestLaunch.manifest)}" />
                 <button type="submit" class="copy-button">${escapeHtml(locale === "ja" ? "GitHub App を自動作成" : "Create GitHub App Automatically")}</button>
@@ -4504,7 +5458,32 @@ function renderGitHubAppBootstrap(bootstrap, url, locale = "en") {
           : ""
       }
       ${
-        state === "available" && !manifestLaunch
+        state === "pending_bundle_consume"
+          ? `
+            <form method="post" action="${escapeHtml(actionPath)}">
+              <input type="hidden" name="returnTo" value="${escapeHtml(returnTo)}" />
+              <label for="githubBundleCloudflareApiToken"><strong>${escapeHtml(
+                locale === "ja" ? "Cloudflare API Token" : "Cloudflare API Token"
+              )}</strong></label>
+              <input id="githubBundleCloudflareApiToken" name="cloudflareApiToken" type="password" inputmode="text" autocomplete="off" />
+              <p class="meta">${escapeHtml(
+                locale === "ja"
+                  ? "token はこの一回の bounded write にのみ使い、URL・通常JSON・画面には再表示しません。"
+                  : "The token is used only for this bounded write and is not echoed into URLs, normal JSON, or setup HTML."
+              )}</p>
+              <div style="margin-top: 12px;">
+                <button type="submit" class="copy-button">${escapeHtml(
+                  locale === "ja"
+                    ? "Prepared runtime に GitHub App identity を書き込む"
+                    : "Write GitHub App identity into prepared runtime"
+                )}</button>
+              </div>
+            </form>
+          `
+          : ""
+      }
+      ${
+        state === "available" && !manifestLaunch && targetMode !== "day0_user_owned_runtime"
           ? `
             <form method="post" action="${escapeHtml(actionPath)}">
               <input type="hidden" name="returnTo" value="${escapeHtml(returnTo)}" />
@@ -4530,6 +5509,7 @@ function renderRequiredSettingsBootstrap(status, url, locale = "en") {
   const state = normalizeText(status?.state) || "missing_prerequisites";
   const summary =
     normalizeText(status?.summary) || "Required settings bootstrap status is not available.";
+  const targetMode = normalizeText(status?.targetMode) || "legacy_operator_runtime";
   const allowlistedSecrets = Array.isArray(status?.allowlistedSecrets)
     ? status.allowlistedSecrets
     : [];
@@ -4553,6 +5533,9 @@ function renderRequiredSettingsBootstrap(status, url, locale = "en") {
           ? `<p><strong>Worker script:</strong> <code>${escapeHtml(scriptName)}</code></p>`
           : ""
       }
+      <p><strong>${escapeHtml(locale === "ja" ? "書き込み先" : "Target")}:</strong> <code>${escapeHtml(
+        targetMode
+      )}</code></p>
       ${
         allowlistedSecrets.length > 0
           ? `<p><strong>Allowlisted secrets:</strong> ${allowlistedSecrets
@@ -4601,6 +5584,19 @@ function renderRequiredSettingsBootstrap(status, url, locale = "en") {
               <input type="hidden" name="returnTo" value="${escapeHtml(returnTo)}" />
               <input type="hidden" name="approval_phrase" value="GO" />
               <input type="hidden" name="passkey_verified" value="true" />
+              ${
+                targetMode === "day0_user_owned_runtime"
+                  ? `
+                    <label for="requiredSettingsCloudflareApiToken"><strong>Cloudflare API Token</strong></label>
+                    <input id="requiredSettingsCloudflareApiToken" name="cloudflareApiToken" type="password" inputmode="text" autocomplete="off" />
+                    <p class="meta">${escapeHtml(
+                      locale === "ja"
+                        ? "prepared runtime に書き込むため、Cloudflare token をこの送信でのみ再利用します。URL や通常JSONには残しません。"
+                        : "Re-enter the Cloudflare token only for this write into the prepared runtime. It is not echoed into URLs or normal JSON output."
+                    )}</p>
+                  `
+                  : ""
+              }
               <label for="setupWizardPasscode"><strong>SETUP_WIZARD_PASSCODE</strong></label>
               <input id="setupWizardPasscode" name="SETUP_WIZARD_PASSCODE" type="password" inputmode="text" autocomplete="off" />
               <label for="vtddGatewayBearerToken"><strong>VTDD_GATEWAY_BEARER_TOKEN</strong></label>
@@ -4677,6 +5673,173 @@ function renderSetupCompletion(status, locale = "en") {
                   `<li><code>${escapeHtml(normalizeText(action?.id) || "recovery")}</code>: ${escapeHtml(normalizeText(action?.summary) || "")}</li>`
               )
               .join("")}</ul>`
+          : ""
+      }
+    </div>
+  `;
+}
+
+function renderDay0GitHubForkSetup(status, url, locale = "en") {
+  const state = normalizeText(status?.state) || "fork_required";
+  const summary = normalizeText(status?.summary) || "GitHub fork setup status is unavailable.";
+  const sourceRepo = normalizeRepo(status?.sourceRepo);
+  const canonicalRepo = normalizeRepo(status?.canonicalRepo);
+  const decision = normalizeText(status?.decision);
+  const actionPath = normalizeText(status?.actionPath) || SETUP_WIZARD_GITHUB_FORK_PATH;
+  const returnTo = `${url?.pathname || "/setup/wizard"}${url?.search || ""}`;
+
+  return `
+    <h2>${escapeHtml(locale === "ja" ? "GitHub Fork Step" : "GitHub Fork Step")}</h2>
+    <div class="block">
+      <p><strong>${escapeHtml(locale === "ja" ? "状態" : "state")}:</strong> <code>${escapeHtml(state)}</code></p>
+      <p>${escapeHtml(summary)}</p>
+      ${
+        sourceRepo
+          ? `<p><strong>${escapeHtml(locale === "ja" ? "source repo" : "source repo")}:</strong> <code>${escapeHtml(sourceRepo)}</code></p>`
+          : ""
+      }
+      ${
+        canonicalRepo
+          ? `<p><strong>${escapeHtml(locale === "ja" ? "user-owned fork" : "user-owned fork")}:</strong> <code>${escapeHtml(canonicalRepo)}</code></p>`
+          : ""
+      }
+      ${decision ? `<p><strong>${escapeHtml(locale === "ja" ? "決定" : "decision")}:</strong> <code>${escapeHtml(decision)}</code></p>` : ""}
+      ${
+        state !== "ready"
+          ? `
+            <form method="post" action="${escapeHtml(actionPath)}">
+              <input type="hidden" name="returnTo" value="${escapeHtml(returnTo)}" />
+              <input type="hidden" name="sourceRepo" value="${escapeHtml(sourceRepo)}" />
+              <label for="githubForkToken"><strong>${escapeHtml(locale === "ja" ? "GitHub Token" : "GitHub Token")}</strong></label>
+              <input
+                id="githubForkToken"
+                name="githubToken"
+                type="password"
+                inputmode="text"
+                autocomplete="off"
+                placeholder="${escapeHtml(locale === "ja" ? "repo access token" : "repo access token")}"
+                style="display: block; width: 100%; max-width: 100%; min-height: 44px; margin-top: 8px; padding: 12px 14px; font-size: 16px; line-height: 1.4; border-radius: 10px; border: 1px solid #cbd5e1; background: #fff;"
+              />
+              <p class="meta" style="margin-top: 8px;">${escapeHtml(
+                locale === "ja"
+                  ? "token は fork create / reuse 判定の一回だけに使い、wizard は保持しません。"
+                  : "The token is used only for fork create/reuse detection and is not retained by the wizard."
+              )}</p>
+              <div style="margin-top: 12px;">
+                <button type="submit" class="copy-button">${escapeHtml(
+                  locale === "ja" ? "GitHub fork を準備する" : "Prepare GitHub fork"
+                )}</button>
+              </div>
+            </form>
+          `
+          : ""
+      }
+    </div>
+  `;
+}
+
+function renderDay0SharedUseSetup(status, url, locale = "en", day0CloudflareSetup = null) {
+  const state = normalizeText(status?.state) || "blocked";
+  const summary =
+    normalizeText(status?.summary) || "Day0 shared-use setup status is unavailable.";
+  const blockingReasons = Array.isArray(status?.blockingReasons) ? status.blockingReasons : [];
+  const steps = Array.isArray(status?.steps) ? status.steps : [];
+  const chatgptEntry = status?.entrySurfaces?.chatgpt ?? {};
+  const codexEntry = status?.entrySurfaces?.codex ?? {};
+  const sharedGptUrl = normalizeText(chatgptEntry?.sharedGptUrl);
+  const cloudflareStatus = toPublicDay0CloudflareRuntimeState(day0CloudflareSetup);
+  const cloudflareActionPath =
+    normalizeText(cloudflareStatus?.actionPath) || SETUP_WIZARD_CLOUDFLARE_CONNECT_PATH;
+  const cloudflareState = normalizeText(cloudflareStatus?.state) || "token_pending";
+  const cloudflareSummary =
+    normalizeText(cloudflareStatus?.summary) ||
+    "Cloudflare Day0 setup is waiting for account-scoped runtime preparation.";
+  const connectButtonLabel =
+    locale === "ja" ? "Cloudflare runtime を準備する" : "Prepare Cloudflare runtime";
+  const accountIdLabel =
+    locale === "ja" ? "Cloudflare Account ID" : "Cloudflare Account ID";
+  const tokenLabel =
+    locale === "ja" ? "Cloudflare API Token" : "Cloudflare API Token";
+  const tokenHint =
+    locale === "ja"
+      ? "token はこの送信でのみ使用し、URL・通常JSON・画面には再表示しません。"
+      : "The token is used only for this submission and is not echoed into URLs, normal JSON, or setup HTML.";
+  const returnTo = `${url?.pathname || "/setup/wizard"}${url?.search || ""}`;
+
+  return `
+    <h2>${escapeHtml(locale === "ja" ? "Day0 Shared-Use Setup" : "Day0 Shared-Use Setup")}</h2>
+    <div class="block">
+      <p><strong>${escapeHtml(locale === "ja" ? "状態" : "state")}:</strong> <code>${escapeHtml(state)}</code></p>
+      <p>${escapeHtml(summary)}</p>
+      ${
+        steps.length > 0
+          ? `<ul>${steps
+              .map((step) => {
+                const id = normalizeText(step?.id) || "step";
+                const stepState = normalizeText(step?.state) || "blocked";
+                const stepSummary = normalizeText(step?.summary) || "";
+                return `<li><code>${escapeHtml(id)}</code> <strong>${escapeHtml(stepState)}</strong>: ${escapeHtml(stepSummary)}</li>`;
+              })
+              .join("")}</ul>`
+          : ""
+      }
+      ${
+        blockingReasons.length > 0
+          ? `<p><strong>${escapeHtml(locale === "ja" ? "ブロック理由" : "Blocking reasons")}:</strong> ${blockingReasons
+              .map((item) => `<code>${escapeHtml(item)}</code>`)
+              .join(", ")}</p>`
+          : ""
+      }
+      <p><strong>${escapeHtml(locale === "ja" ? "Cloudflare Day0" : "Cloudflare Day0")}:</strong> <code>${escapeHtml(
+        cloudflareState
+      )}</code> ${escapeHtml(cloudflareSummary)}</p>
+      ${
+        cloudflareState !== "runtime_prepared" && cloudflareState !== "ready"
+          ? `
+            <form method="post" action="${escapeHtml(cloudflareActionPath)}">
+              <input type="hidden" name="returnTo" value="${escapeHtml(returnTo)}" />
+              <label for="cloudflareAccountId"><strong>${escapeHtml(accountIdLabel)}</strong></label>
+              <input
+                id="cloudflareAccountId"
+                name="cloudflareAccountId"
+                type="text"
+                inputmode="text"
+                autocomplete="off"
+                placeholder="${escapeHtml(locale === "ja" ? "32文字の account id" : "32-character account id")}"
+                style="display: block; width: 100%; max-width: 100%; min-height: 44px; margin-top: 8px; padding: 12px 14px; font-size: 16px; line-height: 1.4; border-radius: 10px; border: 1px solid #cbd5e1; background: #fff;"
+              />
+              <label for="cloudflareApiToken" style="display:block; margin-top: 12px;"><strong>${escapeHtml(tokenLabel)}</strong></label>
+              <input
+                id="cloudflareApiToken"
+                name="cloudflareApiToken"
+                type="password"
+                inputmode="text"
+                autocomplete="off"
+                placeholder="${escapeHtml(locale === "ja" ? "Workers Scripts Write token" : "Workers Scripts Write token")}"
+                style="display: block; width: 100%; max-width: 100%; min-height: 44px; margin-top: 8px; padding: 12px 14px; font-size: 16px; line-height: 1.4; border-radius: 10px; border: 1px solid #cbd5e1; background: #fff;"
+              />
+              <p class="meta" style="margin-top: 8px;">${escapeHtml(tokenHint)}</p>
+              <div style="margin-top: 12px;">
+                <button type="submit" class="copy-button">${escapeHtml(connectButtonLabel)}</button>
+              </div>
+            </form>
+          `
+          : `<p class="meta">${escapeHtml(
+              locale === "ja"
+                ? "runtime identity は wizard 内部 state に保持し、公開面には出しません。"
+                : "Runtime identity stays in wizard-internal state and is not shown on public setup surfaces."
+            )}</p>`
+      }
+      ${
+        sharedGptUrl
+          ? `<p><strong>${escapeHtml(locale === "ja" ? "共有 VTDD GPT" : "Shared VTDD GPT")}:</strong> <a href="${escapeHtml(sharedGptUrl)}" target="_blank" rel="noreferrer">${escapeHtml(sharedGptUrl)}</a></p>`
+          : ""
+      }
+      ${
+        normalizeText(codexEntry?.handoffMode)
+          ? `<p><strong>${escapeHtml(locale === "ja" ? "Codex handoff" : "Codex handoff")}:</strong> <code>${escapeHtml(
+              normalizeText(codexEntry?.handoffMode)
+            )}</code></p>`
           : ""
       }
     </div>
@@ -6179,6 +7342,478 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
   `;
 }
 
+function buildDay0CloudflareRuntimeState(partial = {}) {
+  const source = partial && typeof partial === "object" ? partial : {};
+  return {
+    version: DAY0_CLOUDFLARE_RUNTIME_COOKIE_VERSION,
+    state: normalizeText(source.state) || "token_pending",
+    summary:
+      normalizeText(source.summary) ||
+      "Cloudflare Day0 setup is waiting for account-scoped API token verification.",
+    blockingReasons: Array.isArray(source.blockingReasons)
+      ? source.blockingReasons.map(normalizeText).filter(Boolean)
+      : [],
+    accountId: normalizeText(source.accountId),
+    workersSubdomain: normalizeText(source.workersSubdomain),
+    githubForkCanonicalRepo: normalizeText(source.githubForkCanonicalRepo),
+    githubForkDecision: normalizeText(source.githubForkDecision),
+    scriptName: normalizeText(source.scriptName),
+    runtimeUrl: normalizeText(source.runtimeUrl),
+    runtimeDecision: normalizeText(source.runtimeDecision),
+    writtenSecrets: Array.isArray(source.writtenSecrets)
+      ? source.writtenSecrets.map(normalizeText).filter(Boolean)
+      : [],
+    pendingCloudflareTokenId: normalizeText(source.pendingCloudflareTokenId),
+    pendingCloudflareTokenStoredAt: normalizeText(source.pendingCloudflareTokenStoredAt),
+    pendingGitHubAppBundleId: normalizeText(source.pendingGitHubAppBundleId),
+    pendingGitHubAppStoredAt: normalizeText(source.pendingGitHubAppStoredAt),
+    githubAppInstallationId: normalizeText(source.githubAppInstallationId),
+    githubIdentityRuntimeWrittenAt: normalizeText(source.githubIdentityRuntimeWrittenAt),
+    checkedAt: normalizeText(source.checkedAt) || new Date().toISOString(),
+    evidence: source.evidence && typeof source.evidence === "object" ? source.evidence : {}
+  };
+}
+
+function toPublicDay0CloudflareRuntimeState(state) {
+  const normalized = buildDay0CloudflareRuntimeState(state);
+  return {
+    state: normalized.state,
+    summary: normalized.summary,
+    blockingReasons: normalized.blockingReasons,
+    githubForkCanonicalRepo: normalized.githubForkCanonicalRepo,
+    githubForkDecision: normalized.githubForkDecision,
+    runtimeDecision: normalized.runtimeDecision,
+    checkedAt: normalized.checkedAt,
+    actionPath: SETUP_WIZARD_CLOUDFLARE_CONNECT_PATH,
+    tokenHandling: "submitted_once_server_side_not_echoed",
+    runtimeIdentityVisibility: "hidden_in_public_setup_surfaces"
+  };
+}
+
+async function prepareDay0CloudflareRuntime({
+  fetchImpl,
+  apiToken,
+  accountId,
+  url,
+  locale
+}) {
+  const tokenVerify = await callCloudflareApi(
+    fetchImpl,
+    apiToken,
+    "https://api.cloudflare.com/client/v4/user/tokens/verify"
+  );
+  if (!tokenVerify.success || normalizeText(tokenVerify?.result?.status) !== "active") {
+    const failure = classifyCloudflareSetupFailure({
+      stage: "token_verify",
+      response: tokenVerify
+    });
+    return buildDay0CloudflareRuntimeState({
+      state: "blocked",
+      summary: failure.summary,
+      blockingReasons: [normalizeText(failure.state) || "cloudflare_token_verify_failed"],
+      accountId,
+      evidence: failure.evidence
+    });
+  }
+
+  const accountVerify = await callCloudflareApi(
+    fetchImpl,
+    apiToken,
+    `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/tokens/verify`
+  );
+  if (!accountVerify.success || normalizeText(accountVerify?.result?.status) !== "active") {
+    const failure = classifyCloudflareSetupFailure({
+      stage: "account_token_verify",
+      response: accountVerify
+    });
+    return buildDay0CloudflareRuntimeState({
+      state: "blocked",
+      summary: failure.summary,
+      blockingReasons: [normalizeText(failure.state) || "cloudflare_account_verify_failed"],
+      accountId,
+      evidence: failure.evidence
+    });
+  }
+
+  const workersSubdomain = await resolveOrCreateWorkersSubdomain({
+    fetchImpl,
+    apiToken,
+    accountId
+  });
+  if (!workersSubdomain.ok) {
+    return buildDay0CloudflareRuntimeState({
+      state: "blocked",
+      summary: workersSubdomain.summary,
+      blockingReasons: workersSubdomain.blockingReasons,
+      accountId,
+      evidence: workersSubdomain.evidence
+    });
+  }
+
+  const scriptName = deriveDay0CloudflareRuntimeScriptName(url);
+  const runtime = await resolveOrCreateDay0CloudflareRuntime({
+    fetchImpl,
+    apiToken,
+    accountId,
+    scriptName,
+    locale
+  });
+  if (!runtime.ok) {
+    return buildDay0CloudflareRuntimeState({
+      state: "blocked",
+      summary: runtime.summary,
+      blockingReasons: runtime.blockingReasons,
+      accountId,
+      workersSubdomain: workersSubdomain.subdomain,
+      scriptName,
+      evidence: runtime.evidence
+    });
+  }
+
+  const runtimeUrl = `https://${scriptName}.${workersSubdomain.subdomain}.workers.dev`;
+  return buildDay0CloudflareRuntimeState({
+    state: "runtime_prepared",
+    summary:
+      runtime.runtimeDecision === "created_new_runtime"
+        ? "Cloudflare user-owned runtime was created and prepared without exposing the raw URL in setup surfaces."
+        : "Cloudflare user-owned runtime already existed and was re-bound into Day0 setup without exposing the raw URL.",
+    blockingReasons: [],
+    accountId,
+    workersSubdomain: workersSubdomain.subdomain,
+    scriptName,
+    runtimeUrl,
+    runtimeDecision: runtime.runtimeDecision,
+    evidence: {
+      tokenVerifyHttpStatus: tokenVerify.httpStatus,
+      accountVerifyHttpStatus: accountVerify.httpStatus,
+      subdomainDecision: workersSubdomain.decision,
+      runtimeDecision: runtime.runtimeDecision
+    }
+  });
+}
+
+function getDay0TemporarySecretStore(env) {
+  const db = env?.[SETUP_WIZARD_DAY0_TEMP_SECRET_D1];
+  if (!db || typeof db.prepare !== "function") {
+    return null;
+  }
+  return createDay0TemporarySecretStore(db);
+}
+
+async function resolveDay0StoredSecretPayload({ env, id, kind }) {
+  const secretId = normalizeText(id);
+  if (!secretId) {
+    return null;
+  }
+  const store = getDay0TemporarySecretStore(env);
+  if (!store) {
+    return null;
+  }
+  const loaded = await store.read({ id: secretId, kind });
+  return loaded.ok ? loaded.payload : null;
+}
+
+function createDay0TemporarySecretStore(db) {
+  return {
+    async store({ kind, payload, ttlSeconds = 15 * 60 }) {
+      const id = crypto.randomUUID();
+      const now = Date.now();
+      const expiresAt = now + ttlSeconds * 1000;
+      const serialized = JSON.stringify(payload);
+      await ensureDay0TemporarySecretSchema(db);
+      await db
+        .prepare(
+          "INSERT INTO day0_temp_secrets (id, kind, payload_json, expires_at_ms, consumed_at_ms, created_at_ms) VALUES (?, ?, ?, ?, NULL, ?)"
+        )
+        .bind(id, kind, serialized, expiresAt, now)
+        .run();
+      return { ok: true, id, expiresAt };
+    },
+    async read({ id, kind }) {
+      await ensureDay0TemporarySecretSchema(db);
+      const now = Date.now();
+      const row = await db
+        .prepare(
+          "SELECT id, kind, payload_json, expires_at_ms, consumed_at_ms FROM day0_temp_secrets WHERE id = ?"
+        )
+        .bind(id)
+        .first();
+      if (!row) {
+        return { ok: false, reason: "not_found" };
+      }
+      if (normalizeText(row.kind) !== normalizeText(kind)) {
+        return { ok: false, reason: "kind_mismatch" };
+      }
+      if (Number(row.consumed_at_ms)) {
+        return { ok: false, reason: "already_consumed" };
+      }
+      if (Number(row.expires_at_ms) <= now) {
+        await db
+          .prepare("DELETE FROM day0_temp_secrets WHERE id = ?")
+          .bind(id)
+          .run();
+        return { ok: false, reason: "expired" };
+      }
+      return {
+        ok: true,
+        payload: parseJsonOrNull(row.payload_json)
+      };
+    },
+    async consume({ id, kind }) {
+      const loaded = await this.read({ id, kind });
+      if (!loaded.ok) {
+        return loaded;
+      }
+      const now = Date.now();
+      await db
+        .prepare("UPDATE day0_temp_secrets SET consumed_at_ms = ? WHERE id = ?")
+        .bind(now, id)
+        .run();
+      return {
+        ok: true,
+        payload: loaded.payload
+      };
+    },
+    async delete({ id }) {
+      const secretId = normalizeText(id);
+      if (!secretId) {
+        return { ok: false, reason: "missing_id" };
+      }
+      await ensureDay0TemporarySecretSchema(db);
+      await db
+        .prepare("DELETE FROM day0_temp_secrets WHERE id = ?")
+        .bind(secretId)
+        .run();
+      return { ok: true };
+    }
+  };
+}
+
+function parseJsonOrNull(value) {
+  try {
+    return JSON.parse(String(value ?? ""));
+  } catch {
+    return null;
+  }
+}
+
+let ensuredDay0TemporarySecretSchema = false;
+async function ensureDay0TemporarySecretSchema(db) {
+  if (ensuredDay0TemporarySecretSchema) {
+    return;
+  }
+  if (typeof db.exec === "function") {
+    await db.exec(`
+      CREATE TABLE IF NOT EXISTS day0_temp_secrets (
+        id TEXT PRIMARY KEY,
+        kind TEXT NOT NULL,
+        payload_json TEXT NOT NULL,
+        expires_at_ms INTEGER NOT NULL,
+        consumed_at_ms INTEGER,
+        created_at_ms INTEGER NOT NULL
+      );
+    `);
+    ensuredDay0TemporarySecretSchema = true;
+    return;
+  }
+
+  await db
+    .prepare(
+      "CREATE TABLE IF NOT EXISTS day0_temp_secrets (id TEXT PRIMARY KEY, kind TEXT NOT NULL, payload_json TEXT NOT NULL, expires_at_ms INTEGER NOT NULL, consumed_at_ms INTEGER, created_at_ms INTEGER NOT NULL)"
+    )
+    .run();
+  ensuredDay0TemporarySecretSchema = true;
+}
+
+async function resolveOrCreateWorkersSubdomain({ fetchImpl, apiToken, accountId }) {
+  const current = await callCloudflareApi(
+    fetchImpl,
+    apiToken,
+    `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/workers/subdomain`
+  );
+  const currentSubdomain = normalizeText(current?.result?.subdomain);
+  if (current.success && currentSubdomain) {
+    return {
+      ok: true,
+      subdomain: currentSubdomain,
+      decision: "reused_existing_subdomain"
+    };
+  }
+
+  const candidate = `vtdd-${accountId.slice(0, 8).toLowerCase()}`;
+  const created = await callCloudflareApi(
+    fetchImpl,
+    apiToken,
+    `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/workers/subdomain`,
+    {
+      method: "PUT",
+      body: JSON.stringify({ subdomain: candidate })
+    }
+  );
+  const createdSubdomain = normalizeText(created?.result?.subdomain);
+  if (created.success && createdSubdomain) {
+    return {
+      ok: true,
+      subdomain: createdSubdomain,
+      decision: "created_new_subdomain"
+    };
+  }
+
+  const failure = classifyCloudflareSetupFailure({
+    stage: "workers_subdomain_create",
+    response: created
+  });
+  return {
+    ok: false,
+    summary: failure.summary,
+    blockingReasons: [normalizeText(failure.state) || "cloudflare_workers_subdomain_unavailable"],
+    evidence: failure.evidence
+  };
+}
+
+async function resolveOrCreateDay0CloudflareRuntime({
+  fetchImpl,
+  apiToken,
+  accountId,
+  scriptName,
+  locale
+}) {
+  const current = await callCloudflareApi(
+    fetchImpl,
+    apiToken,
+    `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/workers/scripts/${encodeURIComponent(scriptName)}/content/v2`
+  );
+  if (current.success) {
+    const subdomainEnabled = await callCloudflareApi(
+      fetchImpl,
+      apiToken,
+      `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/workers/scripts/${encodeURIComponent(scriptName)}/subdomain`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          enabled: true,
+          previews_enabled: false
+        })
+      }
+    );
+    if (!subdomainEnabled.success) {
+      const failure = classifyCloudflareSetupFailure({
+        stage: "workers_script_subdomain_enable",
+        response: subdomainEnabled
+      });
+      return {
+        ok: false,
+        summary: failure.summary,
+        blockingReasons: [normalizeText(failure.state) || "cloudflare_runtime_subdomain_enable_failed"],
+        evidence: failure.evidence
+      };
+    }
+    return {
+      ok: true,
+      runtimeDecision: "reused_existing_runtime"
+    };
+  }
+
+  if (Number(current.httpStatus) && Number(current.httpStatus) !== 404) {
+    const failure = classifyCloudflareSetupFailure({
+      stage: "workers_script_probe",
+      response: current
+    });
+    return {
+      ok: false,
+      summary: failure.summary,
+      blockingReasons: [normalizeText(failure.state) || "cloudflare_runtime_probe_failed"],
+      evidence: failure.evidence
+    };
+  }
+
+  const created = await putCloudflareWorkerContent({
+    fetchImpl,
+    apiToken,
+    accountId,
+    scriptName,
+    scriptSource: buildDay0CloudflareBootstrapWorkerSource(locale)
+  });
+  if (!created.ok) {
+    const failure = classifyCloudflareSetupFailure({
+      stage: "workers_script_create",
+      response: created
+    });
+    return {
+      ok: false,
+      summary: failure.summary,
+      blockingReasons: [normalizeText(failure.state) || "cloudflare_runtime_create_failed"],
+      evidence: failure.evidence
+    };
+  }
+
+  const subdomainEnabled = await callCloudflareApi(
+    fetchImpl,
+    apiToken,
+    `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/workers/scripts/${encodeURIComponent(scriptName)}/subdomain`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        enabled: true,
+        previews_enabled: false
+      })
+    }
+  );
+  if (!subdomainEnabled.success) {
+    const failure = classifyCloudflareSetupFailure({
+      stage: "workers_script_subdomain_enable",
+      response: subdomainEnabled
+    });
+    return {
+      ok: false,
+      summary: failure.summary,
+      blockingReasons: [normalizeText(failure.state) || "cloudflare_runtime_subdomain_enable_failed"],
+      evidence: failure.evidence
+    };
+  }
+
+  return {
+    ok: true,
+    runtimeDecision: "created_new_runtime"
+  };
+}
+
+function deriveDay0CloudflareRuntimeScriptName(url) {
+  const repositories = parseRepositories(url);
+  const repoNames = repositories
+    .map((item) => normalizeText(item?.canonicalRepo))
+    .filter((item) => item.includes("/"))
+    .map((item) => item.split("/")[1])
+    .filter(Boolean);
+  const uniqueRepoNames = [...new Set(repoNames)];
+  const baseName = uniqueRepoNames.length === 1 ? uniqueRepoNames[0] : "vtdd";
+  const normalized = baseName
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-{2,}/g, "-")
+    .slice(0, 40);
+  return normalizeText(`${normalized || "vtdd"}-day0`);
+}
+
+function buildDay0CloudflareBootstrapWorkerSource(locale = "en") {
+  const readyText =
+    locale === "ja"
+      ? "VTDD Day0 runtime is prepared. Raw runtime URL remains hidden from setup surfaces."
+      : "VTDD Day0 runtime is prepared. Raw runtime URL remains hidden from setup surfaces.";
+  return `export default {
+  async fetch() {
+    return new Response(${JSON.stringify(readyText)}, {
+      status: 200,
+      headers: {
+        "content-type": "text/plain; charset=utf-8",
+        "cache-control": "no-store"
+      }
+    });
+  }
+};`;
+}
+
 async function runCloudflareSetupCheck(url, env) {
   const runtimeEnv = env ?? {};
   const setupCheckEnabled = toBoolean(runtimeEnv[SETUP_WIZARD_CLOUDFLARE_CHECK_ENABLED_ENV]);
@@ -6297,13 +7932,25 @@ async function runCloudflareSetupCheck(url, env) {
   }
 }
 
-async function callCloudflareApi(fetchImpl, apiToken, endpoint) {
-  const response = await fetchImpl(endpoint, {
-    method: "GET",
-    headers: {
-      authorization: `Bearer ${apiToken}`,
-      "content-type": "application/json"
+async function callCloudflareApi(fetchImpl, apiToken, endpoint, init = {}) {
+  const headers = {
+    authorization: `Bearer ${apiToken}`
+  };
+  const requestedHeaders =
+    init?.headers && typeof init.headers === "object" ? init.headers : {};
+  for (const [key, value] of Object.entries(requestedHeaders)) {
+    if (value != null) {
+      headers[key] = value;
     }
+  }
+  if (init.body && !headers["content-type"] && !(init.body instanceof FormData)) {
+    headers["content-type"] = "application/json";
+  }
+
+  const response = await fetchImpl(endpoint, {
+    method: init.method || "GET",
+    headers,
+    body: init.body
   });
 
   const payload = await readSafeJson(response);
@@ -6312,7 +7959,62 @@ async function callCloudflareApi(fetchImpl, apiToken, endpoint) {
   return {
     success,
     httpStatus: response.status,
-    errors
+    errors,
+    result: payload?.result
+  };
+}
+
+async function putCloudflareWorkerContent({
+  fetchImpl,
+  apiToken,
+  accountId,
+  scriptName,
+  scriptSource
+}) {
+  const form = new FormData();
+  form.append(
+    "metadata",
+    JSON.stringify({
+      main_module: DAY0_CLOUDFLARE_RUNTIME_ENTRY_MODULE,
+      compatibility_date: DAY0_CLOUDFLARE_RUNTIME_COMPATIBILITY_DATE
+    })
+  );
+  form.append(
+    DAY0_CLOUDFLARE_RUNTIME_ENTRY_MODULE,
+    new Blob([scriptSource], {
+      type: "application/javascript+module"
+    }),
+    DAY0_CLOUDFLARE_RUNTIME_ENTRY_MODULE
+  );
+
+  const response = await fetchImpl(
+    `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/workers/scripts/${encodeURIComponent(scriptName)}/content`,
+    {
+      method: "PUT",
+      headers: {
+        authorization: `Bearer ${apiToken}`
+      },
+      body: form
+    }
+  );
+
+  const payload = await readSafeJson(response);
+  const errors = normalizeCloudflareErrors(payload?.errors);
+  if (response.ok && payload?.success !== false) {
+    return {
+      ok: true,
+      httpStatus: response.status,
+      result: payload?.result ?? null
+    };
+  }
+
+  return {
+    ok: false,
+    httpStatus: response.status,
+    errors,
+    errorCodes: errors
+      .map((item) => Number(item.code))
+      .filter((item) => Number.isFinite(item))
   };
 }
 
@@ -6501,8 +8203,34 @@ function classifyCloudflareSetupFailure({ stage, response }) {
   };
 }
 
-async function runGitHubAppSetupCheck(url, env) {
-  const runtimeEnv = env ?? {};
+async function buildEffectiveGitHubAppRuntimeEnv({ env, day0CloudflareSetup = null }) {
+  const baseEnv = env ?? {};
+  const day0Runtime = buildDay0CloudflareRuntimeState(day0CloudflareSetup);
+  if (!day0Runtime.pendingGitHubAppBundleId) {
+    return baseEnv;
+  }
+
+  const bundle = await resolveDay0StoredSecretPayload({
+    env,
+    id: day0Runtime.pendingGitHubAppBundleId,
+    kind: DAY0_TEMP_SECRET_KIND_GITHUB_APP_MANIFEST
+  });
+  if (!bundle) {
+    return baseEnv;
+  }
+
+  return {
+    ...baseEnv,
+    GITHUB_APP_ID: normalizeText(bundle.GITHUB_APP_ID) || baseEnv.GITHUB_APP_ID,
+    GITHUB_APP_PRIVATE_KEY:
+      normalizeText(bundle.GITHUB_APP_PRIVATE_KEY) || baseEnv.GITHUB_APP_PRIVATE_KEY,
+    GITHUB_APP_INSTALLATION_ID:
+      normalizeText(day0Runtime.githubAppInstallationId) || baseEnv.GITHUB_APP_INSTALLATION_ID
+  };
+}
+
+async function runGitHubAppSetupCheck(url, env, { day0CloudflareSetup = null } = {}) {
+  const runtimeEnv = await buildEffectiveGitHubAppRuntimeEnv({ env, day0CloudflareSetup });
   const appId = normalizeText(runtimeEnv.GITHUB_APP_ID);
   const installationId = normalizeText(runtimeEnv.GITHUB_APP_INSTALLATION_ID);
   const privateKey = resolveGitHubAppPrivateKey(runtimeEnv);
@@ -6738,8 +8466,12 @@ async function runGitHubAppSetupCheck(url, env) {
   };
 }
 
-function buildGitHubAppBootstrapStatus({ url, env }) {
+function buildGitHubAppBootstrapStatus({ url, env, day0CloudflareSetup = null }) {
   const runtimeEnv = env ?? {};
+  const day0Runtime = buildDay0CloudflareRuntimeState(day0CloudflareSetup);
+  const day0Ready =
+    normalizeText(day0Runtime.state) === "runtime_prepared" ||
+    normalizeText(day0Runtime.state) === "ready";
   const cloudflareApiToken = normalizeText(runtimeEnv.CLOUDFLARE_API_TOKEN);
   const accountId = normalizeText(runtimeEnv.CLOUDFLARE_ACCOUNT_ID);
   const githubManifestConversionToken = normalizeText(
@@ -6748,6 +8480,68 @@ function buildGitHubAppBootstrapStatus({ url, env }) {
   const scriptName = resolveCloudflareWorkerScriptName({ url, env: runtimeEnv });
   const authConfig = getSetupWizardAuthConfig(runtimeEnv);
   const missingPrerequisites = [];
+
+  if (day0Ready) {
+    if (!authConfig.enabled) {
+      missingPrerequisites.push("SETUP_WIZARD_PASSCODE");
+    }
+    if (!githubManifestConversionToken) {
+      missingPrerequisites.push(GITHUB_MANIFEST_CONVERSION_TOKEN_ENV);
+    }
+
+    if (missingPrerequisites.length > 0) {
+      return {
+        state: "missing_prerequisites",
+        summary:
+          "GitHub App shared-use bootstrap is unavailable until passcode auth and the service-owned GitHub manifest conversion token are configured.",
+        missingPrerequisites,
+        allowlistedSecrets: ["GITHUB_APP_ID", "GITHUB_APP_PRIVATE_KEY"],
+        actionPath: SETUP_WIZARD_GITHUB_APP_BOOTSTRAP_PATH,
+        guidance: [
+          "Shared-use Day0 setup never asks the browser to carry the GitHub App private key.",
+          "Manifest conversion still relies on the operator-managed GitHub token stored on the setup service.",
+          "After manifest callback, VTDD writes only the captured App identity bundle into the prepared user-owned runtime."
+        ],
+        targetMode: "day0_user_owned_runtime"
+      };
+    }
+
+    const pendingBundle = Boolean(day0Runtime.pendingGitHubAppBundleId);
+    const runtimeIdentityWritten = Boolean(day0Runtime.githubIdentityRuntimeWrittenAt);
+    return {
+      state: pendingBundle && !runtimeIdentityWritten ? "pending_bundle_consume" : "available",
+      summary: pendingBundle && !runtimeIdentityWritten
+        ? "GitHub App manifest bundle is waiting in server-controlled temporary state. Re-enter a Cloudflare token once so VTDD can write it into the prepared user-owned runtime."
+        : pendingBundle && runtimeIdentityWritten
+          ? "GitHub App identity is already written into the prepared user-owned runtime, while setup service still holds a short-lived bundle for installation detection and readiness verification."
+          : "Passcode-authenticated setup wizard can launch GitHub's manifest flow for the prepared user-owned runtime without exposing App secrets to the browser.",
+      missingPrerequisites: [],
+      allowlistedSecrets: ["GITHUB_APP_ID", "GITHUB_APP_PRIVATE_KEY"],
+      actionPath: SETUP_WIZARD_GITHUB_APP_BOOTSTRAP_PATH,
+      guidance: pendingBundle && !runtimeIdentityWritten
+        ? [
+            "The GitHub App private key is already stored in server-controlled temporary state, not in browser state.",
+            "Re-enter a Cloudflare API token only for the bounded write into the prepared user-owned runtime.",
+            "VTDD keeps the raw runtime URL hidden from public setup surfaces during this step."
+          ]
+        : pendingBundle && runtimeIdentityWritten
+          ? [
+              "The prepared runtime already has GitHub App identity, and setup service retains a short-lived bundle only until readiness is proven.",
+              "Continue with GitHub installation consent and in-flow readiness checks; VTDD will purge temporary state after completion.",
+              "The raw runtime URL stays hidden from public setup surfaces during this step."
+            ]
+        : [
+            "Use GitHub's manifest flow from setup wizard so VTDD can capture App ID and private key without manual copy/paste.",
+            "On return, VTDD stores the App identity bundle in temporary server-controlled state before the final runtime write.",
+            "The narrow bootstrap endpoint remains recovery-only if a pending bundle must be written again within the same setup flow."
+          ],
+      manifestLaunch: pendingBundle ? null : buildGitHubAppManifestLaunch(url),
+      targetMode: "day0_user_owned_runtime",
+      accountId: day0Runtime.accountId,
+      scriptName: day0Runtime.scriptName,
+      githubManifestConversionToken
+    };
+  }
 
   if (!authConfig.enabled) {
     missingPrerequisites.push("SETUP_WIZARD_PASSCODE");
@@ -6820,7 +8614,7 @@ function resolveMissingSetupWizardVtddReadySecrets(runtimeEnv) {
   return SETUP_WIZARD_VTDD_READY_SECRET_SET.filter((name) => !normalizeText(secretValues[name]));
 }
 
-function buildRequiredSettingsBootstrapStatus({ url, env }) {
+function buildRequiredSettingsBootstrapStatus({ url, env, day0CloudflareSetup = null }) {
   const runtimeEnv = env ?? {};
   const cloudflareApiToken = normalizeText(runtimeEnv.CLOUDFLARE_API_TOKEN);
   const accountId = normalizeText(runtimeEnv.CLOUDFLARE_ACCOUNT_ID);
@@ -6838,6 +8632,33 @@ function buildRequiredSettingsBootstrapStatus({ url, env }) {
   }
 
   const missingSettings = resolveMissingSetupWizardVtddReadySecrets(runtimeEnv);
+  const day0Runtime = buildDay0CloudflareRuntimeState(day0CloudflareSetup);
+  const day0Ready =
+    normalizeText(day0Runtime.state) === "runtime_prepared" ||
+    normalizeText(day0Runtime.state) === "ready";
+  const day0WrittenSecrets = Array.isArray(day0Runtime.writtenSecrets)
+    ? day0Runtime.writtenSecrets
+    : [];
+  const day0MissingSettings = SETUP_WIZARD_RUNTIME_REQUIRED_SECRET_ALLOWLIST.filter(
+    (name) => !day0WrittenSecrets.includes(name)
+  );
+
+  if (day0Ready && day0Runtime.accountId && day0Runtime.scriptName) {
+    return {
+      state: day0MissingSettings.length === 0 ? "ready" : "available",
+      targetMode: "day0_user_owned_runtime",
+      summary:
+        day0MissingSettings.length === 0
+          ? "All Day0 runtime required settings have been written to the prepared user-owned runtime."
+          : "Use required settings bootstrap to write the remaining allowlisted runtime secrets to the prepared user-owned runtime.",
+      missingPrerequisites: [],
+      missingSettings: day0MissingSettings,
+      allowlistedSecrets: [...SETUP_WIZARD_RUNTIME_REQUIRED_SECRET_ALLOWLIST],
+      actionPath: SETUP_WIZARD_REQUIRED_SETTINGS_BOOTSTRAP_PATH,
+      scriptName: day0Runtime.scriptName,
+      accountId: day0Runtime.accountId
+    };
+  }
 
   if (missingPrerequisites.length > 0) {
     return {
@@ -6854,6 +8675,7 @@ function buildRequiredSettingsBootstrapStatus({ url, env }) {
   if (missingSettings.length === 0) {
     return {
       state: "ready",
+      targetMode: "legacy_operator_runtime",
       summary:
         "All VTDD-required setup secrets are present on Worker runtime for GitHub, Cloudflare entry boundary, gateway auth, and Gemini reviewer-provider readiness.",
       missingPrerequisites: [],
@@ -6868,6 +8690,7 @@ function buildRequiredSettingsBootstrapStatus({ url, env }) {
 
   return {
     state: "available",
+    targetMode: "legacy_operator_runtime",
     summary:
       "Setup wizard can write the remaining VTDD-required runtime secrets through a narrow allowlist so setup can finish in-flow.",
     missingPrerequisites: [],
@@ -6885,6 +8708,66 @@ function buildSetupWizardCompletionStatus({
   requiredSettingsBootstrap,
   githubAppSetupCheck
 }) {
+  const targetMode = normalizeText(requiredSettingsBootstrap?.targetMode);
+  if (targetMode === "day0_user_owned_runtime") {
+    const missingRuntimeSettings = Array.isArray(requiredSettingsBootstrap?.missingSettings)
+      ? requiredSettingsBootstrap.missingSettings
+      : [];
+    const githubState = normalizeText(githubAppSetupCheck?.state);
+    const githubReady = githubState === "ready";
+    const blockingReasons = [];
+    if (missingRuntimeSettings.length > 0) {
+      blockingReasons.push("required_runtime_settings_missing");
+    }
+    if (!githubReady) {
+      blockingReasons.push("github_app_not_ready");
+    }
+
+    if (blockingReasons.length === 0) {
+      return {
+        state: "ready",
+        summary:
+          "Day0 shared-use setup is complete. VTDD runtime prerequisites and GitHub readiness are configured on the prepared user-owned runtime.",
+        completionDefinition: [...SETUP_WIZARD_VTDD_READY_SECRET_SET],
+        missingRuntimeSettings: [],
+        blockingReasons: [],
+        recoveryActions: []
+      };
+    }
+
+    const diagnosticsReturnTo =
+      normalizeSetupWizardDiagnosticsReturnTo(`${url.pathname}${url.search || ""}`) ||
+      "/setup/wizard?githubAppCheck=on";
+    const recoveryActions = [];
+    if (missingRuntimeSettings.length > 0 && normalizeText(requiredSettingsBootstrap?.state) === "available") {
+      recoveryActions.push({
+        id: "write_required_runtime_settings",
+        path: normalizeText(requiredSettingsBootstrap?.actionPath) || SETUP_WIZARD_REQUIRED_SETTINGS_BOOTSTRAP_PATH,
+        approvalBoundary: "GO + passkey",
+        summary:
+          "Use required settings bootstrap to write missing runtime settings through the allowlisted path."
+      });
+    }
+    if (!githubReady) {
+      recoveryActions.push({
+        id: "run_github_app_readiness_check",
+        method: "GET",
+        path: diagnosticsReturnTo,
+        summary:
+          "Run GitHub App diagnostics and complete installation binding/readiness in the same setup flow."
+      });
+    }
+    return {
+      state: "blocked",
+      summary:
+        "Day0 shared-use setup is not complete yet. VTDD immediate-use readiness remains blocked until runtime settings and live GitHub readiness are satisfied.",
+      completionDefinition: [...SETUP_WIZARD_VTDD_READY_SECRET_SET],
+      missingRuntimeSettings,
+      blockingReasons,
+      recoveryActions
+    };
+  }
+
   const missingRuntimeSettings = Array.isArray(requiredSettingsBootstrap?.missingSettings)
     ? requiredSettingsBootstrap.missingSettings
     : [];
@@ -6956,6 +8839,200 @@ function buildSetupWizardCompletionStatus({
     missingRuntimeSettings,
     blockingReasons,
     recoveryActions
+  };
+}
+
+function buildDay0GitHubForkSetupStatus({ url, day0CloudflareSetup }) {
+  const day0Runtime = buildDay0CloudflareRuntimeState(day0CloudflareSetup);
+  const sourceRepo = normalizeRepo(url?.searchParams?.get("repo"));
+  const canonicalRepo = normalizeRepo(day0Runtime.githubForkCanonicalRepo);
+  const decision = normalizeText(day0Runtime.githubForkDecision);
+  if (canonicalRepo) {
+    return {
+      state: "ready",
+      summary:
+        decision === "reused_existing_fork"
+          ? "GitHub user-owned fork already exists and is now the current Day0 setup target."
+          : "GitHub user-owned fork was created and is now the current Day0 setup target.",
+      sourceRepo,
+      canonicalRepo,
+      decision,
+      actionPath: SETUP_WIZARD_GITHUB_FORK_PATH
+    };
+  }
+
+  return {
+    state: "fork_required",
+    summary:
+      "VTDD needs a user-owned fork before the shared-use GitHub setup can continue safely.",
+    sourceRepo,
+    canonicalRepo: "",
+    decision: "",
+    actionPath: SETUP_WIZARD_GITHUB_FORK_PATH
+  };
+}
+
+function buildDay0SharedUseSetupStatus({
+  env,
+  githubAppSetupCheck,
+  day0CloudflareSetup,
+  requiredSettingsBootstrap,
+  setupCompletion
+}) {
+  const day0Runtime = buildDay0CloudflareRuntimeState(day0CloudflareSetup);
+  const githubState = normalizeText(githubAppSetupCheck?.state);
+  const legacyGitHubReady = githubState === "configured" || githubState === "ready";
+  const pendingGitHubBundle = Boolean(day0Runtime.pendingGitHubAppBundleId);
+  const githubForkReady = Boolean(normalizeRepo(day0Runtime.githubForkCanonicalRepo));
+  const sharedUseGitHubReady = githubForkReady && githubState === "ready";
+  const missingRuntimeSettings = Array.isArray(requiredSettingsBootstrap?.missingSettings)
+    ? requiredSettingsBootstrap.missingSettings
+    : [];
+  const geminiReady = !missingRuntimeSettings.includes("GEMINI_API_KEY");
+  const sharedGptUrl = normalizeText(env?.[VTDD_SHARED_GPT_URL_ENV]);
+  const cloudflareState = normalizeText(day0CloudflareSetup?.state) || "token_pending";
+  const cloudflareReady = cloudflareState === "runtime_prepared" || cloudflareState === "ready";
+  const cloudflareSummary =
+    normalizeText(day0CloudflareSetup?.summary) ||
+    "Day0 wizard still lacks in-flow creation or resolution of a user-owned Cloudflare runtime.";
+
+  const steps = [
+    {
+      id: "github",
+      state: sharedUseGitHubReady ? "ready" : "blocked",
+      summary: !githubForkReady
+        ? "A user-owned fork is still required before GitHub App identity and readiness can be completed for shared-use Day0 setup."
+        : pendingGitHubBundle
+        ? day0Runtime.githubIdentityRuntimeWrittenAt
+          ? "GitHub App identity is written into the prepared user-owned runtime, and setup service retains a short-lived bundle only until readiness is proven."
+          : "GitHub App manifest secret bundle is stored in server-controlled temporary state. The final write into the user-owned runtime is still pending."
+        : legacyGitHubReady
+        ? "GitHub readiness is already available for this Day0 shared-use flow."
+        : normalizeText(githubAppSetupCheck?.summary) ||
+          "GitHub-side setup is not ready for a shared-use Day0 flow yet."
+    },
+    {
+      id: "cloudflare",
+      state: cloudflareReady ? "ready" : "blocked",
+      summary: cloudflareSummary
+    },
+    {
+      id: "gemini",
+      state: geminiReady ? "ready" : "blocked",
+      summary: geminiReady
+        ? "Gemini API key is already present in runtime-required settings."
+        : "Gemini API key still needs to be collected and stored on the user-owned runtime."
+    }
+  ];
+
+  const priorStepsReady = sharedUseGitHubReady && cloudflareReady && geminiReady;
+  steps.push({
+    id: "chatgpt",
+    state: !priorStepsReady ? "blocked" : sharedGptUrl ? "ready" : "pending",
+    summary: !sharedGptUrl
+      ? "Shared VTDD GPT entry is not configured yet, so ChatGPT handoff remains withheld even though Day0 core setup may already be ready."
+      : "VTDD GPT entry remains withheld until the shared-use Day0 steps above are complete."
+  });
+  steps.push({
+    id: "codex",
+    state: priorStepsReady ? "ready" : "pending",
+    summary: priorStepsReady
+      ? "Codex handoff may continue from the same user-owned repository and runtime after Day0 setup is ready."
+      : "Codex handoff stays pending until the user-owned GitHub, Cloudflare, and Gemini setup steps are complete."
+  });
+
+  const blockingReasons = [];
+  if (!githubForkReady) {
+    blockingReasons.push("github_user_owned_fork_missing");
+  }
+  if (!sharedUseGitHubReady) {
+    blockingReasons.push("github_user_owned_setup_incomplete");
+  }
+  if (!cloudflareReady) {
+    const cloudflareBlockingReasons = Array.isArray(day0CloudflareSetup?.blockingReasons)
+      ? day0CloudflareSetup.blockingReasons
+      : [];
+    if (cloudflareBlockingReasons.length > 0) {
+      blockingReasons.push(...cloudflareBlockingReasons.map(normalizeText).filter(Boolean));
+    } else {
+      blockingReasons.push("cloudflare_user_owned_runtime_creation_in_flow_missing");
+    }
+  }
+  if (!geminiReady) {
+    blockingReasons.push("gemini_runtime_setting_missing");
+  }
+  if (normalizeText(setupCompletion?.state) !== "ready") {
+    blockingReasons.push("legacy_runtime_bootstrap_still_incomplete");
+  }
+
+  return {
+    state: blockingReasons.length === 0 ? "ready" : "blocked",
+    summary:
+      blockingReasons.length === 0
+        ? sharedGptUrl
+          ? "Day0 shared-use setup is complete and VTDD may reveal the shared GPT entry and Codex handoff."
+          : "Day0 shared-use core setup is complete. Codex handoff may continue now, while the shared VTDD GPT entry remains intentionally withheld until configured."
+        : "Day0 shared-use setup is still blocked. Shared/public use cannot rely on the historical owner-seeded runtime flow.",
+    steps,
+    blockingReasons,
+    sharedGptUrl,
+    entrySurfaces: {
+      chatgpt: {
+        state: !priorStepsReady ? "blocked" : sharedGptUrl ? "ready" : "pending",
+        sharedGptUrl: sharedGptUrl && priorStepsReady ? sharedGptUrl : "",
+        loginRequired: true
+      },
+      codex: {
+        state: priorStepsReady ? "ready" : "pending",
+        handoffMode: "same_repo_same_runtime_after_ready",
+        workspaceExpectation: "open_user_owned_vtdd_repository",
+        summary: priorStepsReady
+          ? "Open the user-owned VTDD repository in Codex and continue from the same Day0-ready runtime."
+          : "Codex handoff remains unavailable until Day0 shared-use setup is ready."
+      }
+    },
+    canRevealCustomGptEntry: blockingReasons.length === 0 && Boolean(sharedGptUrl)
+  };
+}
+
+function gateSetupWizardResultForDay0({ result, day0SharedUseSetup }) {
+  if (day0SharedUseSetup?.canRevealCustomGptEntry) {
+    return result;
+  }
+
+  if (!result || typeof result !== "object") {
+    return result;
+  }
+
+  const onboarding = result.onboarding && typeof result.onboarding === "object" ? result.onboarding : {};
+  const customGpt = onboarding.customGpt && typeof onboarding.customGpt === "object" ? onboarding.customGpt : {};
+  const surfaceEntry =
+    onboarding.surfaceEntry && typeof onboarding.surfaceEntry === "object"
+      ? onboarding.surfaceEntry
+      : {};
+  const chatgptEntry =
+    surfaceEntry.chatgpt && typeof surfaceEntry.chatgpt === "object" ? surfaceEntry.chatgpt : {};
+
+  return {
+    ...result,
+    onboarding: {
+      ...onboarding,
+      surfaceEntry: {
+        ...surfaceEntry,
+        chatgpt: {
+          ...chatgptEntry,
+          sharedGptUrl: "",
+          day0SharedUseGate: normalizeText(day0SharedUseSetup?.summary)
+        }
+      },
+      customGpt: {
+        ...customGpt,
+        constructionText: "",
+        actionSchemaJson: "",
+        actionSchemaImportUrl: "",
+        day0SharedUseGate: normalizeText(day0SharedUseSetup?.summary)
+      }
+    }
   };
 }
 
@@ -11432,6 +13509,7 @@ async function readGitHubAppBootstrapPayload(request) {
     return {
       mode: "json",
       returnTo: normalizeText(payload?.returnTo),
+      cloudflareApiToken: normalizeText(payload?.cloudflareApiToken),
       GITHUB_APP_ID: normalizeText(payload?.GITHUB_APP_ID),
       GITHUB_APP_INSTALLATION_ID: normalizeText(payload?.GITHUB_APP_INSTALLATION_ID),
       GITHUB_APP_PRIVATE_KEY: normalizeText(payload?.GITHUB_APP_PRIVATE_KEY)
@@ -11442,6 +13520,7 @@ async function readGitHubAppBootstrapPayload(request) {
   return {
     mode: "form",
     returnTo: normalizeText(form.get("returnTo")),
+    cloudflareApiToken: normalizeText(form.get("cloudflareApiToken")),
     GITHUB_APP_ID: normalizeText(form.get("GITHUB_APP_ID")),
     GITHUB_APP_INSTALLATION_ID: normalizeText(form.get("GITHUB_APP_INSTALLATION_ID")),
     GITHUB_APP_PRIVATE_KEY: normalizeText(form.get("GITHUB_APP_PRIVATE_KEY"))
@@ -11457,6 +13536,7 @@ async function readRequiredSettingsBootstrapPayload(request) {
       returnTo: normalizeText(payload?.returnTo),
       approvalPhrase: normalizeText(payload?.approval_phrase ?? payload?.approvalPhrase),
       passkeyVerified: normalizeText(payload?.passkey_verified ?? payload?.passkeyVerified),
+      cloudflareApiToken: normalizeText(payload?.cloudflareApiToken ?? payload?.apiToken),
       SETUP_WIZARD_PASSCODE: normalizeText(payload?.SETUP_WIZARD_PASSCODE),
       VTDD_GATEWAY_BEARER_TOKEN: normalizeText(payload?.VTDD_GATEWAY_BEARER_TOKEN),
       GEMINI_API_KEY: normalizeText(payload?.GEMINI_API_KEY)
@@ -11469,6 +13549,7 @@ async function readRequiredSettingsBootstrapPayload(request) {
     returnTo: normalizeText(form.get("returnTo")),
     approvalPhrase: normalizeText(form.get("approval_phrase")),
     passkeyVerified: normalizeText(form.get("passkey_verified")),
+    cloudflareApiToken: normalizeText(form.get("cloudflareApiToken") ?? form.get("apiToken")),
     SETUP_WIZARD_PASSCODE: normalizeText(form.get("SETUP_WIZARD_PASSCODE")),
     VTDD_GATEWAY_BEARER_TOKEN: normalizeText(form.get("VTDD_GATEWAY_BEARER_TOKEN")),
     GEMINI_API_KEY: normalizeText(form.get("GEMINI_API_KEY"))

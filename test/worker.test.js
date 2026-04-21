@@ -47,6 +47,69 @@ function readCookieValue(setCookieHeader, name) {
   return part ? part.slice(prefix.length) : "";
 }
 
+function createMockD1Database() {
+  const rows = new Map();
+
+  return {
+    rows,
+    async exec() {},
+    prepare(sql) {
+      const normalizedSql = String(sql).replace(/\s+/g, " ").trim();
+      let bound = [];
+      return {
+        bind(...args) {
+          bound = args;
+          return this;
+        },
+        async run() {
+          if (normalizedSql.startsWith("CREATE TABLE IF NOT EXISTS day0_temp_secrets")) {
+            return { success: true };
+          }
+          if (
+            normalizedSql.startsWith(
+              "INSERT INTO day0_temp_secrets (id, kind, payload_json, expires_at_ms, consumed_at_ms, created_at_ms) VALUES (?, ?, ?, ?, NULL, ?)"
+            )
+          ) {
+            const [id, kind, payloadJson, expiresAtMs, createdAtMs] = bound;
+            rows.set(String(id), {
+              id: String(id),
+              kind: String(kind),
+              payload_json: String(payloadJson),
+              expires_at_ms: Number(expiresAtMs),
+              consumed_at_ms: null,
+              created_at_ms: Number(createdAtMs)
+            });
+            return { success: true };
+          }
+          if (normalizedSql.startsWith("UPDATE day0_temp_secrets SET consumed_at_ms = ? WHERE id = ?")) {
+            const [consumedAtMs, id] = bound;
+            const existing = rows.get(String(id));
+            if (existing) {
+              existing.consumed_at_ms = Number(consumedAtMs);
+            }
+            return { success: true };
+          }
+          if (normalizedSql.startsWith("DELETE FROM day0_temp_secrets WHERE id = ?")) {
+            rows.delete(String(bound[0]));
+            return { success: true };
+          }
+          throw new Error(`unsupported D1 run SQL: ${normalizedSql}`);
+        },
+        async first() {
+          if (
+            normalizedSql.startsWith(
+              "SELECT id, kind, payload_json, expires_at_ms, consumed_at_ms FROM day0_temp_secrets WHERE id = ?"
+            )
+          ) {
+            return rows.get(String(bound[0])) ?? null;
+          }
+          throw new Error(`unsupported D1 first SQL: ${normalizedSql}`);
+        }
+      };
+    }
+  };
+}
+
 async function unlockSetupWizard(env, returnTo = "/setup/wizard?repo=sample-org/vtdd-v2") {
   const unlockResponse = await worker.fetch(
     new Request("https://example.com/setup/wizard/access", {
@@ -117,19 +180,16 @@ test("worker returns setup wizard html when repo query is provided", async () =>
   assert.equal(contentType.includes("text/html"), true);
   const html = await response.text();
   assert.equal(html.includes("VTDD Setup Wizard"), true);
-  assert.equal(html.includes("Custom GPT Construction"), true);
-  assert.equal(html.includes("Copy Construction"), true);
-  assert.equal(html.includes("Copy Schema"), true);
-  assert.equal(html.includes("Copy Import URL"), true);
+  assert.equal(html.includes("Day0 Shared-Use Setup"), true);
+  assert.equal(
+    html.includes("VTDD GPT link, Codex handoff, and Custom GPT instructions stay hidden"),
+    true
+  );
   assert.equal(html.includes("Copy Setup URL"), true);
   assert.equal(html.includes("Copy JSON URL"), true);
-  assert.equal(html.includes('textarea id="constructionText"'), true);
-  assert.equal(html.includes('textarea id="actionSchemaImportUrl"'), true);
-  assert.equal(html.includes('textarea id="actionSchemaJson"'), true);
-  assert.equal(html.includes("You are VTDD Butler."), true);
-  assert.equal(html.includes("Replace the full Instructions field with this text."), true);
-  assert.equal(html.includes("/v2/gateway"), true);
-  assert.equal(html.includes("format=openapi"), true);
+  assert.equal(html.includes('textarea id="constructionText"'), false);
+  assert.equal(html.includes('textarea id="actionSchemaImportUrl"'), false);
+  assert.equal(html.includes('textarea id="actionSchemaJson"'), false);
   assert.equal(html.includes("Deploy Authority Recommendation"), true);
   assert.equal(html.includes("one_shot_github_actions"), true);
   assert.equal(html.includes("direct_provider"), true);
@@ -252,7 +312,9 @@ test("worker returns setup wizard html when repo query is provided", async () =>
   assert.equal(html.includes("repositoryVisibility=unknown"), true);
   assert.equal(html.includes("branchProtectionApiStatus=unknown"), true);
   assert.equal(html.includes("rulesetsApiStatus=unknown"), true);
-  assert.equal(html.includes("cloudflareApiToken"), false);
+  assert.equal(html.includes('name="cloudflareApiToken"'), true);
+  assert.equal(html.includes("submitted_once_server_side_not_echoed"), false);
+  assert.equal(html.includes(".workers.dev"), false);
   assert.equal(html.includes("githubAppPrivateKey"), false);
 });
 
@@ -287,8 +349,7 @@ test("worker localizes setup wizard html to Japanese from accept-language", asyn
   assert.equal(html.includes("VTDD セットアップウィザード"), true);
   assert.equal(html.includes("リポジトリ"), true);
   assert.equal(html.includes("チェックリスト"), true);
-  assert.equal(html.includes("構成テキストをコピー"), true);
-  assert.equal(html.includes("Import URL をコピー"), true);
+  assert.equal(html.includes("Day0 shared-use setup が完了するまで"), true);
   assert.equal(html.includes("Setup URL をコピー"), true);
   assert.equal(html.includes("JSON URL をコピー"), true);
   assert.equal(html.includes("詳細契約を開く"), true);
@@ -3988,7 +4049,7 @@ test("worker setup wizard manifest callback returns actionable 403 contract guid
       if (String(url).endsWith("/user")) {
         return new Response(
           JSON.stringify({
-            login: "marushu",
+            login: "owner-user",
             type: "User"
           }),
           {
@@ -4025,7 +4086,7 @@ test("worker setup wizard manifest callback returns actionable 403 contract guid
   assert.equal(body.error, "github_app_manifest_conversion_failed");
   assert.equal(body.reason.includes("service-owned GitHub token may be unsupported"), true);
   assert.equal(body.diagnostics.state, "token_actor_resolved");
-  assert.equal(body.diagnostics.actorLogin, "marushu");
+  assert.equal(body.diagnostics.actorLogin, "owner-user");
   assert.equal(body.diagnostics.actorType, "User");
   assert.deepEqual(body.diagnostics.oauthScopes, ["repo", "workflow", "read:org"]);
   assert.equal(body.diagnostics.authHeaderType, "bearer");
@@ -6947,11 +7008,9 @@ test("worker returns setup wizard json", async () => {
   assert.equal(response.status, 200);
   const body = await response.json();
   assert.equal(body.ok, true);
-  assert.equal(body.onboarding.customGpt.actionSchemaJson.includes("/v2/gateway"), true);
-  assert.equal(
-    body.onboarding.customGpt.actionSchemaImportUrl,
-    "https://example.com/setup/wizard?format=openapi&repo=sample-org%2Fvtdd-v2&surface=custom_gpt"
-  );
+  assert.equal(body.onboarding.customGpt.actionSchemaJson, "");
+  assert.equal(body.onboarding.customGpt.actionSchemaImportUrl, "");
+  assert.equal(typeof body.onboarding.customGpt.day0SharedUseGate, "string");
   assert.equal(
     body.onboarding.deployAuthority.relationshipToIssue37,
     "coexist_with_github_actions_mvp_path"
@@ -7138,6 +7197,14 @@ test("worker returns setup wizard json", async () => {
   assert.equal(body.generatedAnswers.actionEndpointBaseUrl, "https://example.com");
   assert.equal(body.cloudflareSetupCheck.state, "disabled");
   assert.equal(body.githubAppSetupCheck.state, "not_configured");
+  assert.equal(body.day0SharedUseSetup.state, "blocked");
+  assert.equal(
+    body.day0SharedUseSetup.blockingReasons.includes("cloudflare_user_owned_runtime_creation_in_flow_missing"),
+    true
+  );
+  assert.equal(body.day0SharedUseSetup.canRevealCustomGptEntry, false);
+  assert.equal(body.day0SharedUseSetup.entrySurfaces.codex.handoffMode, "same_repo_same_runtime_after_ready");
+  assert.equal(body.onboarding.surfaceEntry.chatgpt.sharedGptUrl, "");
   assert.deepEqual(body.githubAppSetupCheck.guidance, [
     "Start GitHub App bootstrap from setup wizard so VTDD can capture App identity first.",
     "After manifest return and installation consent, keep the same setup flow and run githubAppCheck=on for detection before any manual fallback.",
@@ -7149,18 +7216,15 @@ test("worker returns setup wizard openapi schema for import url", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/setup/wizard?format=openapi&repo=sample-org/vtdd-v2")
   );
-  assert.equal(response.status, 200);
+  assert.equal(response.status, 423);
   const contentType = response.headers.get("content-type") ?? "";
   assert.equal(contentType.includes("application/json"), true);
   const body = await response.json();
-  assert.equal(body.openapi, "3.1.0");
-  assert.equal(body.paths["/v2/gateway"].post.operationId, "postMvpGateway");
-  assert.equal(body.servers[0].url, "https://example.com");
-  assert.deepEqual(Object.keys(body.components.securitySchemes), ["GatewayBearerAuth"]);
-  assert.deepEqual(body.paths["/v2/gateway"].post.security, [{ GatewayBearerAuth: [] }]);
+  assert.equal(body.error, "day0_shared_use_not_ready");
+  assert.equal(body.day0SharedUseSetup.state, "blocked");
 });
 
-test("worker setup wizard returns signed import url when passcode protection is enabled", async () => {
+test("worker setup wizard keeps signed import url hidden when Day0 shared-use setup is not ready", async () => {
   const env = {
     SETUP_WIZARD_PASSCODE: "2468"
   };
@@ -7177,14 +7241,12 @@ test("worker setup wizard returns signed import url when passcode protection is 
 
   assert.equal(response.status, 200);
   const body = await response.json();
-  const importUrl = new URL(body.onboarding.customGpt.actionSchemaImportUrl);
-  assert.equal(importUrl.searchParams.get("format"), "openapi");
-  assert.equal(importUrl.searchParams.get("repo"), "sample-org/vtdd-v2");
-  assert.equal(Boolean(importUrl.searchParams.get("import_expires")), true);
-  assert.equal(Boolean(importUrl.searchParams.get("import_token")), true);
+  assert.equal(body.onboarding.customGpt.actionSchemaImportUrl, "");
+  assert.equal(body.day0SharedUseSetup.canRevealCustomGptEntry, false);
+  assert.equal(body.onboarding.surfaceEntry.chatgpt.sharedGptUrl, "");
 });
 
-test("worker setup wizard signed import url works without setup cookie", async () => {
+test("worker setup wizard blocks direct openapi import access while Day0 shared-use setup is not ready", async () => {
   const env = {
     SETUP_WIZARD_PASSCODE: "2468"
   };
@@ -7200,16 +7262,1121 @@ test("worker setup wizard signed import url works without setup cookie", async (
   );
   assert.equal(setupResponse.status, 200);
   const setupBody = await setupResponse.json();
+  assert.equal(setupBody.onboarding.customGpt.actionSchemaImportUrl, "");
 
   const response = await worker.fetch(
-    new Request(setupBody.onboarding.customGpt.actionSchemaImportUrl),
+    new Request("https://example.com/setup/wizard?format=openapi&repo=sample-org/vtdd-v2", {
+      headers: {
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      }
+    }),
     env
   );
-  assert.equal(response.status, 200);
+  assert.equal(response.status, 423);
   const contentType = response.headers.get("content-type") ?? "";
   assert.equal(contentType.includes("application/json"), true);
   const body = await response.json();
-  assert.equal(body.openapi, "3.1.0");
+  assert.equal(body.error, "day0_shared_use_not_ready");
+});
+
+test("worker setup wizard can prepare a user-owned Cloudflare runtime without exposing raw runtime identity", async () => {
+  const env = {
+    SETUP_WIZARD_PASSCODE: "2468",
+    CF_API_FETCH: async (url, init = {}) => {
+      const target = String(url);
+      if (target === "https://api.cloudflare.com/client/v4/user/tokens/verify") {
+        return Response.json({
+          success: true,
+          errors: [],
+          result: { status: "active" }
+        });
+      }
+      if (
+        target ===
+        "https://api.cloudflare.com/client/v4/accounts/1234567890abcdef1234567890abcdef/tokens/verify"
+      ) {
+        return Response.json({
+          success: true,
+          errors: [],
+          result: { status: "active" }
+        });
+      }
+      if (
+        target ===
+          "https://api.cloudflare.com/client/v4/accounts/1234567890abcdef1234567890abcdef/workers/subdomain" &&
+        (init.method || "GET") === "GET"
+      ) {
+        return Response.json(
+          {
+            success: false,
+            errors: [{ code: 1000, message: "subdomain missing" }]
+          },
+          { status: 404 }
+        );
+      }
+      if (
+        target ===
+          "https://api.cloudflare.com/client/v4/accounts/1234567890abcdef1234567890abcdef/workers/subdomain" &&
+        init.method === "PUT"
+      ) {
+        return Response.json({
+          success: true,
+          errors: [],
+          result: { subdomain: "vtdd-12345678" }
+        });
+      }
+      if (
+        target ===
+          "https://api.cloudflare.com/client/v4/accounts/1234567890abcdef1234567890abcdef/workers/scripts/vtdd-v2-day0/content/v2"
+      ) {
+        return Response.json(
+          {
+            success: false,
+            errors: [{ code: 1000, message: "script missing" }]
+          },
+          { status: 404 }
+        );
+      }
+      if (
+        target ===
+          "https://api.cloudflare.com/client/v4/accounts/1234567890abcdef1234567890abcdef/workers/scripts/vtdd-v2-day0/content" &&
+        init.method === "PUT"
+      ) {
+        return Response.json({
+          success: true,
+          errors: [],
+          result: { id: "vtdd-v2-day0" }
+        });
+      }
+      if (
+        target ===
+          "https://api.cloudflare.com/client/v4/accounts/1234567890abcdef1234567890abcdef/workers/scripts/vtdd-v2-day0/subdomain" &&
+        init.method === "POST"
+      ) {
+        return Response.json({
+          success: true,
+          errors: [],
+          result: { enabled: true }
+        });
+      }
+
+      throw new Error(`unexpected Cloudflare request: ${target} ${init.method || "GET"}`);
+    }
+  };
+  const { sessionCookie } = await unlockSetupWizard(env);
+
+  const connectResponse = await worker.fetch(
+    new Request("https://example.com/setup/wizard/cloudflare/connect", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      },
+      body: JSON.stringify({
+        returnTo: "/setup/wizard?repo=sample-org/vtdd-v2",
+        cloudflareAccountId: "1234567890abcdef1234567890abcdef",
+        cloudflareApiToken: "cf-secret-token"
+      })
+    }),
+    env
+  );
+
+  assert.equal(connectResponse.status, 200);
+  const connectBody = await connectResponse.json();
+  assert.equal(connectBody.ok, true);
+  assert.equal(connectBody.day0CloudflareSetup.state, "runtime_prepared");
+  assert.equal(connectBody.day0CloudflareSetup.runtimeDecision, "created_new_runtime");
+  assert.equal("runtimeUrl" in connectBody.day0CloudflareSetup, false);
+
+  const day0Cookie = readCookieValue(
+    connectResponse.headers.get("set-cookie"),
+    "vtdd_day0_cf_state"
+  );
+  assert.equal(Boolean(day0Cookie), true);
+
+  const setupResponse = await worker.fetch(
+    new Request("https://example.com/setup/wizard?format=json&repo=sample-org/vtdd-v2", {
+      headers: {
+        cookie: `vtdd_setup_access=${sessionCookie}; vtdd_day0_cf_state=${day0Cookie}`
+      }
+    }),
+    env
+  );
+
+  assert.equal(setupResponse.status, 200);
+  const body = await setupResponse.json();
+  assert.equal(body.day0CloudflareSetup.state, "runtime_prepared");
+  assert.equal(body.day0SharedUseSetup.steps.find((step) => step.id === "cloudflare")?.state, "ready");
+  assert.equal(JSON.stringify(body).includes("vtdd-v2-day0.vtdd-12345678.workers.dev"), false);
+});
+
+test("worker setup wizard can write required settings to the prepared user-owned Cloudflare runtime", async () => {
+  const env = {
+    SETUP_WIZARD_PASSCODE: "2468",
+    CF_API_FETCH: async (url, init = {}) => {
+      const target = String(url);
+      if (target === "https://api.cloudflare.com/client/v4/user/tokens/verify") {
+        return Response.json({
+          success: true,
+          errors: [],
+          result: { status: "active" }
+        });
+      }
+      if (
+        target ===
+        "https://api.cloudflare.com/client/v4/accounts/1234567890abcdef1234567890abcdef/tokens/verify"
+      ) {
+        return Response.json({
+          success: true,
+          errors: [],
+          result: { status: "active" }
+        });
+      }
+      if (
+        target ===
+          "https://api.cloudflare.com/client/v4/accounts/1234567890abcdef1234567890abcdef/workers/subdomain" &&
+        (init.method || "GET") === "GET"
+      ) {
+        return Response.json({
+          success: true,
+          errors: [],
+          result: { subdomain: "vtdd-12345678" }
+        });
+      }
+      if (
+        target ===
+          "https://api.cloudflare.com/client/v4/accounts/1234567890abcdef1234567890abcdef/workers/scripts/vtdd-v2-day0/content/v2"
+      ) {
+        return Response.json({
+          success: true,
+          errors: [],
+          result: {}
+        });
+      }
+      if (
+        target ===
+          "https://api.cloudflare.com/client/v4/accounts/1234567890abcdef1234567890abcdef/workers/scripts/vtdd-v2-day0/subdomain" &&
+        init.method === "POST"
+      ) {
+        return Response.json({
+          success: true,
+          errors: [],
+          result: { enabled: true }
+        });
+      }
+      if (
+        target ===
+          "https://api.cloudflare.com/client/v4/accounts/1234567890abcdef1234567890abcdef/workers/scripts/vtdd-v2-day0/secrets" &&
+        init.method === "PUT"
+      ) {
+        const body = JSON.parse(String(init.body));
+        return Response.json({
+          success: true,
+          errors: [],
+          result: { name: body.name }
+        });
+      }
+
+      throw new Error(`unexpected Cloudflare request: ${target} ${init.method || "GET"}`);
+    }
+  };
+  const { sessionCookie } = await unlockSetupWizard(env);
+
+  const connectResponse = await worker.fetch(
+    new Request("https://example.com/setup/wizard/cloudflare/connect", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      },
+      body: JSON.stringify({
+        returnTo: "/setup/wizard?repo=sample-org/vtdd-v2",
+        cloudflareAccountId: "1234567890abcdef1234567890abcdef",
+        cloudflareApiToken: "cf-secret-token"
+      })
+    }),
+    env
+  );
+  const day0Cookie = readCookieValue(
+    connectResponse.headers.get("set-cookie"),
+    "vtdd_day0_cf_state"
+  );
+
+  const bootstrapResponse = await worker.fetch(
+    new Request("https://example.com/setup/wizard/runtime/bootstrap", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        cookie: `vtdd_setup_access=${sessionCookie}; vtdd_day0_cf_state=${day0Cookie}`
+      },
+      body: JSON.stringify({
+        returnTo: "/setup/wizard?repo=sample-org/vtdd-v2",
+        approval_phrase: "GO",
+        passkey_verified: "true",
+        cloudflareApiToken: "cf-secret-token",
+        GEMINI_API_KEY: "gem-test-key"
+      })
+    }),
+    env
+  );
+
+  assert.equal(bootstrapResponse.status, 200);
+  const bootstrapBody = await bootstrapResponse.json();
+  assert.equal(bootstrapBody.ok, true);
+  assert.deepEqual(bootstrapBody.updatedSecrets, ["GEMINI_API_KEY"]);
+  assert.equal(bootstrapBody.remainingMissingSettings.includes("GEMINI_API_KEY"), false);
+
+  const updatedDay0Cookie = readCookieValue(
+    bootstrapResponse.headers.get("set-cookie"),
+    "vtdd_day0_cf_state"
+  );
+  assert.equal(Boolean(updatedDay0Cookie), true);
+
+  const setupResponse = await worker.fetch(
+    new Request("https://example.com/setup/wizard?format=json&repo=sample-org/vtdd-v2", {
+      headers: {
+        cookie: `vtdd_setup_access=${sessionCookie}; vtdd_day0_cf_state=${updatedDay0Cookie}`
+      }
+    }),
+    env
+  );
+  const body = await setupResponse.json();
+  assert.equal(body.requiredSettingsBootstrap.targetMode, "day0_user_owned_runtime");
+  assert.equal(body.requiredSettingsBootstrap.missingSettings.includes("GEMINI_API_KEY"), false);
+  assert.equal(JSON.stringify(body).includes("cf-secret-token"), false);
+  assert.equal(JSON.stringify(body).includes("gem-test-key"), false);
+});
+
+test("worker setup wizard manifest callback stores shared-use github bundle in D1 without exposing secrets", async () => {
+  const tempSecretDb = createMockD1Database();
+  const cloudflareCalls = [];
+  const env = {
+    SETUP_WIZARD_PASSCODE: "2468",
+    GITHUB_MANIFEST_CONVERSION_TOKEN: "ghp_conversion_token",
+    SETUP_WIZARD_DAY0_TEMP_SECRET_D1: tempSecretDb,
+    GITHUB_API_FETCH: async (url, init = {}) => {
+      const target = String(url);
+      if (target === "https://api.github.com/user") {
+        return Response.json({ login: "octocat" });
+      }
+      if (target === "https://api.github.com/repos/octocat/vtdd-v2") {
+        return Response.json(
+          {
+            message: "Not Found"
+          },
+          { status: 404 }
+        );
+      }
+      if (
+        target === "https://api.github.com/repos/sample-org/vtdd-v2/forks" &&
+        (init.method || "GET") === "POST"
+      ) {
+        return Response.json({
+          full_name: "octocat/vtdd-v2",
+          parent: { full_name: "sample-org/vtdd-v2" }
+        });
+      }
+      if (target.includes("/app-manifests/")) {
+        return new Response(
+          JSON.stringify({
+            id: 12345,
+            pem: "-----BEGIN PRIVATE KEY-----\nmanifest\n-----END PRIVATE KEY-----",
+            slug: "vtdd-butler-v2",
+            html_url: "https://github.com/apps/vtdd-butler-v2"
+          }),
+          {
+            status: 201,
+            headers: { "content-type": "application/json" }
+          }
+        );
+      }
+      throw new Error(`unexpected GitHub request: ${target} ${init.method || "GET"}`);
+    },
+    CF_API_FETCH: async (url, init = {}) => {
+      cloudflareCalls.push({ url: String(url), init });
+      const target = String(url);
+      if (target === "https://api.cloudflare.com/client/v4/user/tokens/verify") {
+        return Response.json({
+          success: true,
+          errors: [],
+          result: { status: "active" }
+        });
+      }
+      if (
+        target ===
+        "https://api.cloudflare.com/client/v4/accounts/1234567890abcdef1234567890abcdef/tokens/verify"
+      ) {
+        return Response.json({
+          success: true,
+          errors: [],
+          result: { status: "active" }
+        });
+      }
+      if (
+        target ===
+          "https://api.cloudflare.com/client/v4/accounts/1234567890abcdef1234567890abcdef/workers/subdomain" &&
+        (init.method || "GET") === "GET"
+      ) {
+        return Response.json({
+          success: true,
+          errors: [],
+          result: { subdomain: "vtdd-12345678" }
+        });
+      }
+      if (
+        target ===
+          "https://api.cloudflare.com/client/v4/accounts/1234567890abcdef1234567890abcdef/workers/scripts/vtdd-v2-day0/content/v2"
+      ) {
+        return Response.json({
+          success: true,
+          errors: [],
+          result: {}
+        });
+      }
+      if (
+        target ===
+          "https://api.cloudflare.com/client/v4/accounts/1234567890abcdef1234567890abcdef/workers/scripts/vtdd-v2-day0/subdomain" &&
+        init.method === "POST"
+      ) {
+        return Response.json({
+          success: true,
+          errors: [],
+          result: { enabled: true }
+        });
+      }
+      throw new Error(`unexpected Cloudflare request: ${target} ${init.method || "GET"}`);
+    }
+  };
+  const { sessionCookie } = await unlockSetupWizard(env);
+
+  const connectResponse = await worker.fetch(
+    new Request("https://example.com/setup/wizard/cloudflare/connect", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      },
+      body: JSON.stringify({
+        returnTo: "/setup/wizard?repo=sample-org/vtdd-v2",
+        cloudflareAccountId: "1234567890abcdef1234567890abcdef",
+        cloudflareApiToken: "cf-secret-token"
+      })
+    }),
+    env
+  );
+  const day0Cookie = readCookieValue(
+    connectResponse.headers.get("set-cookie"),
+    "vtdd_day0_cf_state"
+  );
+  const forkResponse = await worker.fetch(
+    new Request("https://example.com/setup/wizard/github/fork", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        cookie: `vtdd_setup_access=${sessionCookie}; vtdd_day0_cf_state=${day0Cookie}`
+      },
+      body: JSON.stringify({
+        returnTo: "/setup/wizard?repo=sample-org/vtdd-v2",
+        sourceRepo: "sample-org/vtdd-v2",
+        githubToken: "github-user-token"
+      })
+    }),
+    env
+  );
+  const forkCookie = readCookieValue(
+    forkResponse.headers.get("set-cookie"),
+    "vtdd_day0_cf_state"
+  );
+  const cloudflareCallCountBeforeCallback = cloudflareCalls.length;
+
+  const callbackResponse = await worker.fetch(
+    new Request(
+      "https://example.com/setup/wizard/github-app/manifest/callback?code=manifest-code&returnTo=%2Fsetup%2Fwizard%3Frepo%3Doctocat%2Fvtdd-v2",
+      {
+        headers: {
+          cookie: `vtdd_setup_access=${sessionCookie}; vtdd_day0_cf_state=${forkCookie}`
+        }
+      }
+    ),
+    env
+  );
+
+  assert.equal(callbackResponse.status, 200);
+  const html = await callbackResponse.text();
+  assert.equal(
+    html.includes("GitHub App manifest bootstrap captured for shared-use Day0 flow."),
+    true
+  );
+  assert.equal(
+    html.includes("stored the GitHub App identity bundle in server-controlled temporary state"),
+    true
+  );
+  assert.equal(html.includes("PRIVATE KEY"), false);
+  assert.equal(html.includes("github_app_manifest"), false);
+  assert.equal(html.includes(".workers.dev"), false);
+  assert.equal(cloudflareCalls.length, cloudflareCallCountBeforeCallback);
+  assert.equal(tempSecretDb.rows.size, 2);
+
+  const manifestRows = [...tempSecretDb.rows.entries()].filter(
+    ([, row]) => row.kind === "github_app_manifest"
+  );
+  assert.equal(manifestRows.length, 1);
+  const [[storedId, storedRow]] = manifestRows;
+  assert.equal(storedRow.kind, "github_app_manifest");
+  const storedPayload = JSON.parse(storedRow.payload_json);
+  assert.equal(storedPayload.GITHUB_APP_ID, "12345");
+  assert.equal(storedPayload.slug, "vtdd-butler-v2");
+  assert.equal(storedPayload.htmlUrl, "https://github.com/apps/vtdd-butler-v2");
+  assert.equal(storedPayload.GITHUB_APP_PRIVATE_KEY.includes("PRIVATE KEY"), true);
+
+  const updatedDay0Cookie = readCookieValue(
+    callbackResponse.headers.get("set-cookie"),
+    "vtdd_day0_cf_state"
+  );
+  assert.equal(Boolean(updatedDay0Cookie), true);
+
+  const setupResponse = await worker.fetch(
+    new Request("https://example.com/setup/wizard?format=json&repo=octocat/vtdd-v2", {
+      headers: {
+        cookie: `vtdd_setup_access=${sessionCookie}; vtdd_day0_cf_state=${updatedDay0Cookie}`
+      }
+    }),
+    env
+  );
+  const body = await setupResponse.json();
+  assert.equal(body.githubAppBootstrap.state, "pending_bundle_consume");
+  const githubStep = body.day0SharedUseSetup.steps.find((step) => step.id === "github");
+  assert.equal(githubStep?.state, "blocked");
+  assert.equal(
+    githubStep?.summary,
+    "GitHub App manifest secret bundle is stored in server-controlled temporary state. The final write into the user-owned runtime is still pending."
+  );
+  assert.equal(JSON.stringify(body).includes(storedId), false);
+  assert.equal(JSON.stringify(body).includes("PRIVATE KEY"), false);
+  assert.equal(JSON.stringify(body).includes(storedPayload.GITHUB_APP_PRIVATE_KEY), false);
+});
+
+test("worker setup wizard can consume shared-use github manifest bundle into the prepared runtime", async () => {
+  const tempSecretDb = createMockD1Database();
+  const secretWriteCalls = [];
+  const env = {
+    SETUP_WIZARD_PASSCODE: "2468",
+    GITHUB_MANIFEST_CONVERSION_TOKEN: "ghp_conversion_token",
+    SETUP_WIZARD_DAY0_TEMP_SECRET_D1: tempSecretDb,
+    GITHUB_API_FETCH: async (url, init = {}) => {
+      const target = String(url);
+      if (target === "https://api.github.com/user") {
+        return Response.json({ login: "octocat" });
+      }
+      if (target === "https://api.github.com/repos/octocat/vtdd-v2") {
+        return Response.json(
+          {
+            message: "Not Found"
+          },
+          { status: 404 }
+        );
+      }
+      if (
+        target === "https://api.github.com/repos/sample-org/vtdd-v2/forks" &&
+        (init.method || "GET") === "POST"
+      ) {
+        return Response.json({
+          full_name: "octocat/vtdd-v2",
+          parent: { full_name: "sample-org/vtdd-v2" }
+        });
+      }
+      if (target.includes("/app-manifests/")) {
+        return new Response(
+          JSON.stringify({
+            id: 12345,
+            pem: "-----BEGIN PRIVATE KEY-----\nmanifest\n-----END PRIVATE KEY-----",
+            slug: "vtdd-butler-v2",
+            html_url: "https://github.com/apps/vtdd-butler-v2"
+          }),
+          {
+            status: 201,
+            headers: { "content-type": "application/json" }
+          }
+        );
+      }
+      throw new Error(`unexpected GitHub request: ${target} ${init.method || "GET"}`);
+    },
+    CF_API_FETCH: async (url, init = {}) => {
+      const target = String(url);
+      if (target === "https://api.cloudflare.com/client/v4/user/tokens/verify") {
+        return Response.json({
+          success: true,
+          errors: [],
+          result: { status: "active" }
+        });
+      }
+      if (
+        target ===
+        "https://api.cloudflare.com/client/v4/accounts/1234567890abcdef1234567890abcdef/tokens/verify"
+      ) {
+        return Response.json({
+          success: true,
+          errors: [],
+          result: { status: "active" }
+        });
+      }
+      if (
+        target ===
+          "https://api.cloudflare.com/client/v4/accounts/1234567890abcdef1234567890abcdef/workers/subdomain" &&
+        (init.method || "GET") === "GET"
+      ) {
+        return Response.json({
+          success: true,
+          errors: [],
+          result: { subdomain: "vtdd-12345678" }
+        });
+      }
+      if (
+        target ===
+          "https://api.cloudflare.com/client/v4/accounts/1234567890abcdef1234567890abcdef/workers/scripts/vtdd-v2-day0/content/v2"
+      ) {
+        return Response.json({
+          success: true,
+          errors: [],
+          result: {}
+        });
+      }
+      if (
+        target ===
+          "https://api.cloudflare.com/client/v4/accounts/1234567890abcdef1234567890abcdef/workers/scripts/vtdd-v2-day0/subdomain" &&
+        init.method === "POST"
+      ) {
+        return Response.json({
+          success: true,
+          errors: [],
+          result: { enabled: true }
+        });
+      }
+      if (
+        target ===
+          "https://api.cloudflare.com/client/v4/accounts/1234567890abcdef1234567890abcdef/workers/scripts/vtdd-v2-day0/secrets" &&
+        init.method === "PUT"
+      ) {
+        const body = JSON.parse(String(init.body));
+        secretWriteCalls.push(body);
+        return Response.json({
+          success: true,
+          errors: [],
+          result: { name: body.name }
+        });
+      }
+      throw new Error(`unexpected Cloudflare request: ${target} ${init.method || "GET"}`);
+    }
+  };
+  const { sessionCookie } = await unlockSetupWizard(env);
+
+  const connectResponse = await worker.fetch(
+    new Request("https://example.com/setup/wizard/cloudflare/connect", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      },
+      body: JSON.stringify({
+        returnTo: "/setup/wizard?repo=sample-org/vtdd-v2",
+        cloudflareAccountId: "1234567890abcdef1234567890abcdef",
+        cloudflareApiToken: "cf-secret-token"
+      })
+    }),
+    env
+  );
+  const day0Cookie = readCookieValue(
+    connectResponse.headers.get("set-cookie"),
+    "vtdd_day0_cf_state"
+  );
+  const forkResponse = await worker.fetch(
+    new Request("https://example.com/setup/wizard/github/fork", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        cookie: `vtdd_setup_access=${sessionCookie}; vtdd_day0_cf_state=${day0Cookie}`
+      },
+      body: JSON.stringify({
+        returnTo: "/setup/wizard?repo=sample-org/vtdd-v2",
+        sourceRepo: "sample-org/vtdd-v2",
+        githubToken: "github-user-token"
+      })
+    }),
+    env
+  );
+  const forkCookie = readCookieValue(
+    forkResponse.headers.get("set-cookie"),
+    "vtdd_day0_cf_state"
+  );
+
+  const callbackResponse = await worker.fetch(
+    new Request(
+      "https://example.com/setup/wizard/github-app/manifest/callback?code=manifest-code&returnTo=%2Fsetup%2Fwizard%3Frepo%3Doctocat%2Fvtdd-v2",
+      {
+        headers: {
+          cookie: `vtdd_setup_access=${sessionCookie}; vtdd_day0_cf_state=${forkCookie}`
+        }
+      }
+    ),
+    env
+  );
+  const pendingDay0Cookie = readCookieValue(
+    callbackResponse.headers.get("set-cookie"),
+    "vtdd_day0_cf_state"
+  );
+
+  const consumeResponse = await worker.fetch(
+    new Request("https://example.com/setup/wizard/github-app/bootstrap", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        cookie: `vtdd_setup_access=${sessionCookie}; vtdd_day0_cf_state=${pendingDay0Cookie}`
+      },
+      body: JSON.stringify({
+        returnTo: "/setup/wizard?repo=sample-org/vtdd-v2",
+        cloudflareApiToken: "cf-secret-token"
+      })
+    }),
+    env
+  );
+
+  assert.equal(consumeResponse.status, 200);
+  const consumeBody = await consumeResponse.json();
+  assert.equal(consumeBody.ok, true);
+  assert.deepEqual(consumeBody.updatedSecrets, ["GITHUB_APP_ID", "GITHUB_APP_PRIVATE_KEY"]);
+  assert.equal(secretWriteCalls.length, 2);
+  const writtenNames = secretWriteCalls.map((entry) => entry.name).sort();
+  assert.deepEqual(writtenNames, ["GITHUB_APP_ID", "GITHUB_APP_PRIVATE_KEY"]);
+
+  const manifestRows = [...tempSecretDb.rows.entries()].filter(
+    ([, row]) => row.kind === "github_app_manifest"
+  );
+  assert.equal(manifestRows.length, 1);
+  const [[storedId, storedRow]] = manifestRows;
+  assert.equal(Boolean(storedId), true);
+  assert.equal(storedRow.consumed_at_ms, null);
+
+  const updatedDay0Cookie = readCookieValue(
+    consumeResponse.headers.get("set-cookie"),
+    "vtdd_day0_cf_state"
+  );
+  assert.equal(Boolean(updatedDay0Cookie), true);
+
+  const setupResponse = await worker.fetch(
+    new Request("https://example.com/setup/wizard?format=json&repo=sample-org/vtdd-v2", {
+      headers: {
+        cookie: `vtdd_setup_access=${sessionCookie}; vtdd_day0_cf_state=${updatedDay0Cookie}`
+      }
+    }),
+    env
+  );
+  const body = await setupResponse.json();
+  assert.equal(body.githubAppBootstrap.state, "available");
+  assert.equal(body.githubAppBootstrap.targetMode, "day0_user_owned_runtime");
+  assert.equal(body.day0GitHubForkSetup.state, "ready");
+  const githubStep = body.day0SharedUseSetup.steps.find((step) => step.id === "github");
+  assert.equal(
+    githubStep?.summary.includes("server-controlled temporary state"),
+    false
+  );
+  assert.equal(JSON.stringify(body).includes("PRIVATE KEY"), false);
+  assert.equal(JSON.stringify(body).includes("cf-secret-token"), false);
+});
+
+test("worker setup wizard can reach shared-use ready state and purge temporary setup secrets", async () => {
+  const tempSecretDb = createMockD1Database();
+  const { privateKey } = generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+    privateKeyEncoding: {
+      type: "pkcs8",
+      format: "pem"
+    },
+    publicKeyEncoding: {
+      type: "spki",
+      format: "pem"
+    }
+  });
+  const env = {
+    SETUP_WIZARD_PASSCODE: "2468",
+    SETUP_WIZARD_DAY0_TEMP_SECRET_D1: tempSecretDb,
+    VTDD_GATEWAY_BEARER_TOKEN: "gateway-token",
+    GEMINI_API_KEY: "gemini-live-key",
+    GITHUB_MANIFEST_CONVERSION_TOKEN: "ghp_conversion_token",
+    GITHUB_API_FETCH: async (url) => {
+      const target = String(url);
+      if (target === "https://api.github.com/user") {
+        return Response.json({ login: "octocat" });
+      }
+      if (target === "https://api.github.com/repos/octocat/vtdd-v2") {
+        return Response.json(
+          {
+            parent: { full_name: "sample-org/vtdd-v2" },
+            full_name: "octocat/vtdd-v2"
+          },
+          { status: 200 }
+        );
+      }
+      if (target.includes("/app-manifests/")) {
+        return new Response(
+          JSON.stringify({
+            id: 12345,
+            pem: privateKey,
+            slug: "vtdd-butler-v2",
+            html_url: "https://github.com/apps/vtdd-butler-v2"
+          }),
+          {
+            status: 201,
+            headers: { "content-type": "application/json" }
+          }
+        );
+      }
+      if (target.endsWith("/app/installations/98765/access_tokens")) {
+        return new Response(
+          JSON.stringify({
+            token: "ghs_installation_token",
+            expires_at: "2099-01-01T00:00:00Z"
+          }),
+          {
+            status: 201,
+            headers: { "content-type": "application/json" }
+          }
+        );
+      }
+      if (target.includes("/installation/repositories")) {
+        return new Response(
+          JSON.stringify({
+            total_count: 1,
+            repositories: [
+              {
+                full_name: "octocat/vtdd-v2",
+                private: true
+              }
+            ]
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          }
+        );
+      }
+      throw new Error(`unexpected GitHub request: ${target}`);
+    },
+    CF_API_FETCH: async (url, init = {}) => {
+      const target = String(url);
+      if (target === "https://api.cloudflare.com/client/v4/user/tokens/verify") {
+        return Response.json({
+          success: true,
+          errors: [],
+          result: { status: "active" }
+        });
+      }
+      if (
+        target ===
+        "https://api.cloudflare.com/client/v4/accounts/1234567890abcdef1234567890abcdef/tokens/verify"
+      ) {
+        return Response.json({
+          success: true,
+          errors: [],
+          result: { status: "active" }
+        });
+      }
+      if (
+        target ===
+          "https://api.cloudflare.com/client/v4/accounts/1234567890abcdef1234567890abcdef/workers/subdomain" &&
+        (init.method || "GET") === "GET"
+      ) {
+        return Response.json({
+          success: true,
+          errors: [],
+          result: { subdomain: "vtdd-12345678" }
+        });
+      }
+      if (
+        target ===
+          "https://api.cloudflare.com/client/v4/accounts/1234567890abcdef1234567890abcdef/workers/scripts/vtdd-v2-day0/content/v2"
+      ) {
+        return Response.json({
+          success: true,
+          errors: [],
+          result: {}
+        });
+      }
+      if (
+        target ===
+          "https://api.cloudflare.com/client/v4/accounts/1234567890abcdef1234567890abcdef/workers/scripts/vtdd-v2-day0/subdomain" &&
+        init.method === "POST"
+      ) {
+        return Response.json({
+          success: true,
+          errors: [],
+          result: { enabled: true }
+        });
+      }
+      if (
+        target ===
+          "https://api.cloudflare.com/client/v4/accounts/1234567890abcdef1234567890abcdef/workers/scripts/vtdd-v2-day0/secrets" &&
+        init.method === "PUT"
+      ) {
+        return Response.json({
+          success: true,
+          errors: [],
+          result: { name: JSON.parse(String(init.body)).name }
+        });
+      }
+      throw new Error(`unexpected Cloudflare request: ${target} ${init.method || "GET"}`);
+    }
+  };
+  const { sessionCookie } = await unlockSetupWizard(env);
+  const forkResponse = await worker.fetch(
+    new Request("https://example.com/setup/wizard/github/fork", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      },
+      body: JSON.stringify({
+        returnTo: "/setup/wizard?repo=sample-org/vtdd-v2",
+        sourceRepo: "sample-org/vtdd-v2",
+        githubToken: "github-user-token"
+      })
+    }),
+    env
+  );
+  assert.equal(forkResponse.status, 200);
+  const forkBody = await forkResponse.json();
+  assert.equal(forkBody.canonicalRepo, "octocat/vtdd-v2");
+  const forkCookie = readCookieValue(
+    forkResponse.headers.get("set-cookie"),
+    "vtdd_day0_cf_state"
+  );
+
+  const connectResponse = await worker.fetch(
+    new Request("https://example.com/setup/wizard/cloudflare/connect", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        cookie: `vtdd_setup_access=${sessionCookie}; vtdd_day0_cf_state=${forkCookie}`
+      },
+      body: JSON.stringify({
+        returnTo: "/setup/wizard?repo=octocat/vtdd-v2",
+        cloudflareAccountId: "1234567890abcdef1234567890abcdef",
+        cloudflareApiToken: "cf-secret-token"
+      })
+    }),
+    env
+  );
+  const connectCookie = readCookieValue(
+    connectResponse.headers.get("set-cookie"),
+    "vtdd_day0_cf_state"
+  );
+
+  const callbackResponse = await worker.fetch(
+    new Request(
+      "https://example.com/setup/wizard/github-app/manifest/callback?code=manifest-code&returnTo=%2Fsetup%2Fwizard%3Frepo%3Doctocat%2Fvtdd-v2",
+      {
+        headers: {
+          cookie: `vtdd_setup_access=${sessionCookie}; vtdd_day0_cf_state=${connectCookie}`
+        }
+      }
+    ),
+    env
+  );
+  const callbackCookie = readCookieValue(
+    callbackResponse.headers.get("set-cookie"),
+    "vtdd_day0_cf_state"
+  );
+
+  const bootstrapResponse = await worker.fetch(
+    new Request("https://example.com/setup/wizard/github-app/bootstrap", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        cookie: `vtdd_setup_access=${sessionCookie}; vtdd_day0_cf_state=${callbackCookie}`
+      },
+      body: JSON.stringify({
+        returnTo: "/setup/wizard?repo=octocat/vtdd-v2"
+      })
+    }),
+    env
+  );
+  const bootstrapCookie = readCookieValue(
+    bootstrapResponse.headers.get("set-cookie"),
+    "vtdd_day0_cf_state"
+  );
+
+  const requiredSettingsResponse = await worker.fetch(
+    new Request("https://example.com/setup/wizard/runtime/bootstrap", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        cookie: `vtdd_setup_access=${sessionCookie}; vtdd_day0_cf_state=${bootstrapCookie}`
+      },
+      body: JSON.stringify({
+        returnTo: "/setup/wizard?repo=octocat/vtdd-v2&githubAppCheck=on",
+        approval_phrase: "GO",
+        passkey_verified: "true",
+        SETUP_WIZARD_PASSCODE: "2468",
+        VTDD_GATEWAY_BEARER_TOKEN: "gateway-token",
+        GEMINI_API_KEY: "gemini-live-key"
+      })
+    }),
+    env
+  );
+  assert.equal(requiredSettingsResponse.status, 200);
+  const requiredSettingsCookie = readCookieValue(
+    requiredSettingsResponse.headers.get("set-cookie"),
+    "vtdd_day0_cf_state"
+  );
+
+  const installResponse = await worker.fetch(
+    new Request("https://example.com/setup/wizard/github-app/capture-installation", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        cookie: `vtdd_setup_access=${sessionCookie}; vtdd_day0_cf_state=${requiredSettingsCookie}`
+      },
+      body: JSON.stringify({
+        returnTo: "/setup/wizard?repo=octocat/vtdd-v2&githubAppCheck=on",
+        GITHUB_APP_INSTALLATION_ID: "98765"
+      })
+    }),
+    env
+  );
+  assert.equal(installResponse.status, 200);
+  const installCookie = readCookieValue(
+    installResponse.headers.get("set-cookie"),
+    "vtdd_day0_cf_state"
+  );
+
+  const readyResponse = await worker.fetch(
+    new Request("https://example.com/setup/wizard?format=json&repo=octocat/vtdd-v2&githubAppCheck=on", {
+      headers: {
+        cookie: `vtdd_setup_access=${sessionCookie}; vtdd_day0_cf_state=${installCookie}`
+      }
+    }),
+    env
+  );
+
+  assert.equal(readyResponse.status, 200);
+  const body = await readyResponse.json();
+  assert.equal(body.githubAppSetupCheck.state, "ready");
+  assert.equal(body.setupCompletion.state, "ready");
+  assert.equal(body.day0SharedUseSetup.state, "ready");
+  assert.equal(body.day0GitHubForkSetup.state, "ready");
+  assert.equal(tempSecretDb.rows.size, 0);
+  assert.equal(JSON.stringify(body).includes("PRIVATE KEY"), false);
+  assert.equal(JSON.stringify(body).includes("cf-secret-token"), false);
+});
+
+test("worker setup wizard manifest callback fails closed for shared-use runtime when temporary secret store is unavailable", async () => {
+  const env = {
+    SETUP_WIZARD_PASSCODE: "2468",
+    GITHUB_MANIFEST_CONVERSION_TOKEN: "ghp_conversion_token",
+    GITHUB_API_FETCH: async () =>
+      new Response(
+        JSON.stringify({
+          id: 12345,
+          pem: "-----BEGIN PRIVATE KEY-----\nmanifest\n-----END PRIVATE KEY-----",
+          slug: "vtdd-butler-v2",
+          html_url: "https://github.com/apps/vtdd-butler-v2"
+        }),
+        {
+          status: 201,
+          headers: { "content-type": "application/json" }
+        }
+      ),
+    CF_API_FETCH: async (url, init = {}) => {
+      const target = String(url);
+      if (target === "https://api.cloudflare.com/client/v4/user/tokens/verify") {
+        return Response.json({
+          success: true,
+          errors: [],
+          result: { status: "active" }
+        });
+      }
+      if (
+        target ===
+        "https://api.cloudflare.com/client/v4/accounts/1234567890abcdef1234567890abcdef/tokens/verify"
+      ) {
+        return Response.json({
+          success: true,
+          errors: [],
+          result: { status: "active" }
+        });
+      }
+      if (
+        target ===
+          "https://api.cloudflare.com/client/v4/accounts/1234567890abcdef1234567890abcdef/workers/subdomain" &&
+        (init.method || "GET") === "GET"
+      ) {
+        return Response.json({
+          success: true,
+          errors: [],
+          result: { subdomain: "vtdd-12345678" }
+        });
+      }
+      if (
+        target ===
+          "https://api.cloudflare.com/client/v4/accounts/1234567890abcdef1234567890abcdef/workers/scripts/vtdd-v2-day0/content/v2"
+      ) {
+        return Response.json({
+          success: true,
+          errors: [],
+          result: {}
+        });
+      }
+      if (
+        target ===
+          "https://api.cloudflare.com/client/v4/accounts/1234567890abcdef1234567890abcdef/workers/scripts/vtdd-v2-day0/subdomain" &&
+        init.method === "POST"
+      ) {
+        return Response.json({
+          success: true,
+          errors: [],
+          result: { enabled: true }
+        });
+      }
+      throw new Error(`unexpected Cloudflare request: ${target} ${init.method || "GET"}`);
+    }
+  };
+  const { sessionCookie } = await unlockSetupWizard(env);
+
+  const connectResponse = await worker.fetch(
+    new Request("https://example.com/setup/wizard/cloudflare/connect", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      },
+      body: JSON.stringify({
+        returnTo: "/setup/wizard?repo=sample-org/vtdd-v2",
+        cloudflareAccountId: "1234567890abcdef1234567890abcdef",
+        cloudflareApiToken: "cf-secret-token"
+      })
+    }),
+    env
+  );
+  const day0Cookie = readCookieValue(
+    connectResponse.headers.get("set-cookie"),
+    "vtdd_day0_cf_state"
+  );
+
+  const callbackResponse = await worker.fetch(
+    new Request(
+      "https://example.com/setup/wizard/github-app/manifest/callback?code=manifest-code&returnTo=%2Fsetup%2Fwizard%3Frepo%3Dsample-org%2Fvtdd-v2",
+      {
+        headers: {
+          cookie: `vtdd_setup_access=${sessionCookie}; vtdd_day0_cf_state=${day0Cookie}`
+        }
+      }
+    ),
+    env
+  );
+
+  assert.equal(callbackResponse.status, 503);
+  const body = await callbackResponse.json();
+  assert.equal(body.error, "day0_temp_secret_store_unavailable");
+  assert.equal(body.reason.includes("server-controlled temporary secret store"), true);
 });
 
 test("worker setup wizard json keeps iphone-first and no-default-repo policy visible", async () => {
@@ -7222,7 +8389,9 @@ test("worker setup wizard json keeps iphone-first and no-default-repo policy vis
   assert.equal(body.generatedAnswers.setupMode, "iphone_first");
   assert.equal(body.generatedAnswers.allowDefaultRepository, false);
   assert.equal(body.onboarding.setupMode, "iphone_first");
-  assert.equal(body.onboarding.customGpt.constructionText.includes("Do not assume a default repository."), true);
+  assert.equal(body.onboarding.customGpt.constructionText, "");
+  assert.equal(body.onboarding.surfaceEntry.chatgpt.sharedGptUrl, "");
+  assert.equal(body.onboarding.surfaceEntry.codex.handoffMode, "same_repo_same_runtime_after_ready");
   assert.equal(body.setupCompletion.state, "blocked");
   assert.equal(
     body.setupCompletion.blockingReasons.includes("required_runtime_settings_missing"),
@@ -7234,6 +8403,7 @@ test("worker setup wizard json keeps iphone-first and no-default-repo policy vis
     true
   );
   assert.equal(body.setupCompletion.recoveryActions.length > 0, true);
+  assert.equal(body.day0SharedUseSetup.state, "blocked");
 });
 
 test("worker setup wizard setupCompletion becomes ready when required runtime settings are present", async () => {
@@ -7398,7 +8568,8 @@ test("worker setup wizard verifies github app live probe when requested", async 
       GITHUB_APP_INSTALLATION_ID: "98765",
       GITHUB_APP_PRIVATE_KEY: "-----BEGIN PRIVATE KEY-----\nplaceholder\n-----END PRIVATE KEY-----",
       GITHUB_APP_JWT_PROVIDER: async () => "app_jwt_token_for_tests",
-      GITHUB_API_FETCH: githubApiFetch
+      GITHUB_API_FETCH: githubApiFetch,
+      GITHUB_API_BASE_URL: "https://github.example.test/live-probe"
     }
   );
   assert.equal(response.status, 200);

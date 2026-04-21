@@ -24,7 +24,7 @@ const SENSITIVE_SETUP_FIELDS = Object.freeze([
  * This function does not write to providers yet.
  * It validates answers and returns:
  * - output targets (Git / DB)
- * - iPhone-first onboarding pack for copy/paste setup
+ * - iPhone-first onboarding pack for Day0 shared-use setup and post-setup entry
  */
 export function runInitialSetupWizard(input) {
   const answers = input?.answers ?? {};
@@ -168,11 +168,11 @@ function buildIphoneOnboardingPack(answers) {
   return {
     setupMode: SetupMode.IPHONE_FIRST,
     steps: [
-      "Open ChatGPT on iPhone and create or edit the Butler Custom GPT.",
-      "Replace the full Instructions field with the construction text from this onboarding pack, then set action schema from the same pack.",
-      "Use pr_comment for low-friction PR comments without GO, but require GO before pr_review_submit.",
-      "Confirm GitHub production environment has required reviewers and Cloudflare secrets.",
-      "Run GitHub Actions deploy-production with approval_phrase=GO and passkey_verified=true."
+      "Open the invitation-only Day0 setup URL on iPhone Safari or browser and accept the beta / billing responsibility terms.",
+      "Complete GitHub setup on your own account and let the wizard create or reuse your user-owned VTDD fork.",
+      "Complete Cloudflare setup on your own account and create or resolve a user-owned Worker runtime.",
+      "Add Gemini API key to the user-owned runtime through the guided setup step.",
+      "After Day0 setup reaches ready, continue with the shared VTDD GPT entry or switch to Codex using the same user-owned repository and runtime."
     ],
     deployAuthority,
     productionDeploy: {
@@ -388,6 +388,21 @@ function buildIphoneOnboardingPack(answers) {
       model: "operator_managed_environment_secrets",
       statement:
         "Do not paste Cloudflare or API credentials into wizard answers, chats, or GPT instructions."
+    },
+    surfaceEntry: {
+      readinessRule: "show_only_after_day0_ready",
+      chatgpt: {
+        loginRequired: true,
+        sharedGptLinkMode: "shared_live_gpt_link_after_ready",
+        reminder:
+          "Do not reveal the shared VTDD GPT link before GitHub, Cloudflare, and Gemini setup are complete."
+      },
+      codex: {
+        handoffMode: "same_repo_same_runtime_after_ready",
+        workspaceExpectation: "open_user_owned_vtdd_repository",
+        reminder:
+          "Switching to Codex does not change repository ownership or Cloudflare runtime ownership; continue from the same Day0-ready state."
+      }
     },
     customGpt: {
       constructionText: buildCustomGptConstructionText(answers),

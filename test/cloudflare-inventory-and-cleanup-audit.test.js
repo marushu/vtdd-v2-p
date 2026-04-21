@@ -8,10 +8,12 @@ const DOC_PATH = path.join(process.cwd(), "docs", "mvp", "cloudflare-inventory-a
 test("cloudflare inventory audit records live worker exposure and unresolved inventory areas", () => {
   const doc = fs.readFileSync(DOC_PATH, "utf8");
 
-  assert.equal(doc.includes("worker name: `vtdd-v2-mvp`"), true);
-  assert.equal(doc.includes("workers.dev account subdomain: `polished-tree-da7c`"), true);
+  assert.equal(doc.includes("worker name: `[redacted-owner-worker-name]`"), true);
+  assert.equal(doc.includes("workers.dev account subdomain: `[redacted-owner-workers-subdomain]`"), true);
   assert.equal(
-    doc.includes("https://vtdd-v2-mvp.polished-tree-da7c.workers.dev/setup/wizard?repo=sample-org/vtdd-v2"),
+    doc.includes(
+      "https://[redacted-owner-worker-name].[redacted-owner-workers-subdomain].workers.dev/setup/wizard?repo=sample-org/vtdd-v2"
+    ),
     true
   );
   assert.equal(doc.includes("custom worker domains are not attached"), true);
@@ -20,5 +22,6 @@ test("cloudflare inventory audit records live worker exposure and unresolved inv
   assert.equal(doc.includes("Access applications"), true);
   assert.equal(doc.includes("current token could not read Access applications (`403 Forbidden`)"), true);
   assert.equal(doc.includes("current token could not read R2 buckets (`403 Forbidden`)"), true);
+  assert.equal(doc.includes("[redacted-owner-account-id]"), true);
   assert.equal(doc.includes("This audit does not say the environment is clean."), true);
 });
