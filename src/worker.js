@@ -4832,21 +4832,21 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
         serviceConnectionActionability
           ? `
             <div class="block" style="margin-top: 12px;">
-              <p><strong>${escapeHtml(locale === "ja" ? "Service connection actionability" : "Service connection actionability")}:</strong></p>
+              <p><strong>${escapeHtml(locale === "ja" ? "サービス接続アクション可能性" : "Service connection actionability")}:</strong></p>
               ${
                 githubConnectionActionability
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "GitHub action" : "GitHub action")}:</strong> <code>${escapeHtml(normalizeText(githubConnectionActionability.id))}</code> ${escapeHtml(normalizeText(githubConnectionActionability.summary))} <strong>${escapeHtml(locale === "ja" ? "User action needed now" : "User action needed now")}:</strong> <code>${escapeHtml(normalizeText(githubConnectionActionability.userActionNeededNow))}</code>${
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "GitHub アクション" : "GitHub action")}:</strong> <code>${escapeHtml(normalizeText(githubConnectionActionability.id))}</code> ${escapeHtml(normalizeText(githubConnectionActionability.summary))} <strong>${escapeHtml(locale === "ja" ? "今必要なユーザー操作" : "User action needed now")}:</strong> <code>${escapeHtml(normalizeText(githubConnectionActionability.userActionNeededNow))}</code>${
                       githubConnectionActionability.expectedActionType
-                        ? ` <strong>${escapeHtml(locale === "ja" ? "Expected action type" : "Expected action type")}:</strong> <code>${escapeHtml(normalizeText(githubConnectionActionability.expectedActionType))}</code>`
+                        ? ` <strong>${escapeHtml(locale === "ja" ? "想定アクション種別" : "Expected action type")}:</strong> <code>${escapeHtml(normalizeText(githubConnectionActionability.expectedActionType))}</code>`
                         : ""
                     }</p>`
                   : ""
               }
               ${
                 cloudflareConnectionActionability
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Cloudflare action" : "Cloudflare action")}:</strong> <code>${escapeHtml(normalizeText(cloudflareConnectionActionability.id))}</code> ${escapeHtml(normalizeText(cloudflareConnectionActionability.summary))} <strong>${escapeHtml(locale === "ja" ? "User action needed now" : "User action needed now")}:</strong> <code>${escapeHtml(normalizeText(cloudflareConnectionActionability.userActionNeededNow))}</code>${
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Cloudflare アクション" : "Cloudflare action")}:</strong> <code>${escapeHtml(normalizeText(cloudflareConnectionActionability.id))}</code> ${escapeHtml(normalizeText(cloudflareConnectionActionability.summary))} <strong>${escapeHtml(locale === "ja" ? "今必要なユーザー操作" : "User action needed now")}:</strong> <code>${escapeHtml(normalizeText(cloudflareConnectionActionability.userActionNeededNow))}</code>${
                       cloudflareConnectionActionability.expectedActionType
-                        ? ` <strong>${escapeHtml(locale === "ja" ? "Expected action type" : "Expected action type")}:</strong> <code>${escapeHtml(normalizeText(cloudflareConnectionActionability.expectedActionType))}</code>`
+                        ? ` <strong>${escapeHtml(locale === "ja" ? "想定アクション種別" : "Expected action type")}:</strong> <code>${escapeHtml(normalizeText(cloudflareConnectionActionability.expectedActionType))}</code>`
                         : ""
                     }</p>`
                   : ""
