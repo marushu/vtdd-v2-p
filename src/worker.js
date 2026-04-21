@@ -4897,15 +4897,15 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
         serviceConnectionReturnContinuityReadout
           ? `
             <div class="block" style="margin-top: 12px;">
-              <p><strong>${escapeHtml(locale === "ja" ? "Service return continuity" : "Service return continuity")}:</strong></p>
+              <p><strong>${escapeHtml(locale === "ja" ? "サービス復帰継続性" : "Service return continuity")}:</strong></p>
               ${
                 githubReturnContinuity
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "GitHub return" : "GitHub return")}:</strong> <code>${escapeHtml(normalizeText(githubReturnContinuity.id))}</code> ${escapeHtml(normalizeText(githubReturnContinuity.summary))} <strong>${escapeHtml(locale === "ja" ? "Expected return context" : "Expected return context")}:</strong> ${escapeHtml(normalizeText(githubReturnContinuity.expectedReturnContext))} <strong>${escapeHtml(locale === "ja" ? "Human re-entry required" : "Human re-entry required")}:</strong> <code>${escapeHtml(normalizeText(githubReturnContinuity.humanReentryRequired))}</code></p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "GitHub 復帰" : "GitHub return")}:</strong> <code>${escapeHtml(normalizeText(githubReturnContinuity.id))}</code> ${escapeHtml(normalizeText(githubReturnContinuity.summary))} <strong>${escapeHtml(locale === "ja" ? "期待される復帰コンテキスト" : "Expected return context")}:</strong> ${escapeHtml(normalizeText(githubReturnContinuity.expectedReturnContext))} <strong>${escapeHtml(locale === "ja" ? "人の再入場が必要か" : "Human re-entry required")}:</strong> <code>${escapeHtml(normalizeText(githubReturnContinuity.humanReentryRequired))}</code></p>`
                   : ""
               }
               ${
                 cloudflareReturnContinuity
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Cloudflare return" : "Cloudflare return")}:</strong> <code>${escapeHtml(normalizeText(cloudflareReturnContinuity.id))}</code> ${escapeHtml(normalizeText(cloudflareReturnContinuity.summary))} <strong>${escapeHtml(locale === "ja" ? "Expected return context" : "Expected return context")}:</strong> ${escapeHtml(normalizeText(cloudflareReturnContinuity.expectedReturnContext))} <strong>${escapeHtml(locale === "ja" ? "Human re-entry required" : "Human re-entry required")}:</strong> <code>${escapeHtml(normalizeText(cloudflareReturnContinuity.humanReentryRequired))}</code></p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Cloudflare 復帰" : "Cloudflare return")}:</strong> <code>${escapeHtml(normalizeText(cloudflareReturnContinuity.id))}</code> ${escapeHtml(normalizeText(cloudflareReturnContinuity.summary))} <strong>${escapeHtml(locale === "ja" ? "期待される復帰コンテキスト" : "Expected return context")}:</strong> ${escapeHtml(normalizeText(cloudflareReturnContinuity.expectedReturnContext))} <strong>${escapeHtml(locale === "ja" ? "人の再入場が必要か" : "Human re-entry required")}:</strong> <code>${escapeHtml(normalizeText(cloudflareReturnContinuity.humanReentryRequired))}</code></p>`
                   : ""
               }
             </div>
