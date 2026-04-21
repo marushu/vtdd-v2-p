@@ -431,6 +431,7 @@ test("worker setup wizard unlocked html shows narrow github app bootstrap form w
   assert.equal(response.status, 200);
   const html = await response.text();
   assert.equal(html.includes("GitHub App Runtime Bootstrap"), true);
+  assert.equal(html.includes("Required Settings Bootstrap"), true);
   assert.equal(html.includes("Approval-Bound Bootstrap Session"), true);
   assert.equal(html.includes("GO + passkey"), true);
   assert.equal(html.includes("github_app_installation_binding"), true);
@@ -550,6 +551,7 @@ test("worker setup wizard unlocked html shows narrow github app bootstrap form w
   assert.equal(html.includes("Create GitHub App Automatically"), true);
   assert.equal(html.includes('id="githubAppPrivateKey"'), false);
   assert.equal(html.includes("Write GitHub App Runtime Secrets"), false);
+  assert.equal(html.includes("Write required settings (GO + passkey)"), true);
 });
 
 test("worker setup wizard localizes capability readout labels to Japanese", async () => {
@@ -3519,6 +3521,174 @@ test("worker setup wizard preview narrows planned write to installation binding 
     body.approvalBoundBootstrapSession.safetyReadout.unsafeShortcutDenied.id,
     "assume_installation_binding_without_proof"
   );
+  assert.equal(body.requiredSettingsBootstrap.state, "available");
+  assert.deepEqual(body.requiredSettingsBootstrap.allowlistedSecrets, [
+    "SETUP_WIZARD_PASSCODE",
+    "VTDD_GATEWAY_BEARER_TOKEN",
+    "GEMINI_API_KEY"
+  ]);
+  assert.equal(
+    body.requiredSettingsBootstrap.missingPrerequisites.length,
+    0
+  );
+  assert.equal(
+    body.requiredSettingsBootstrap.missingSettings.includes("VTDD_GATEWAY_BEARER_TOKEN"),
+    true
+  );
+  assert.equal(
+    body.requiredSettingsBootstrap.missingSettings.includes("GEMINI_API_KEY"),
+    true
+  );
+});
+
+test("worker setup wizard required settings bootstrap rejects requests without GO plus passkey", async () => {
+  const env = {
+    SETUP_WIZARD_PASSCODE: "2468",
+    CLOUDFLARE_API_TOKEN: "bootstrap-token",
+    CLOUDFLARE_ACCOUNT_ID: "account-id",
+    CLOUDFLARE_WORKER_SCRIPT_NAME: "vtdd-v2-mvp"
+  };
+  const { sessionCookie } = await unlockSetupWizard(env);
+
+  const response = await worker.fetch(
+    new Request("https://example.com/setup/wizard/runtime/bootstrap", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      },
+      body: JSON.stringify({
+        returnTo: "/setup/wizard?repo=sample-org/vtdd-v2",
+        approval_phrase: "WAIT",
+        passkey_verified: "false",
+        VTDD_GATEWAY_BEARER_TOKEN: "token"
+      })
+    }),
+    env
+  );
+
+  assert.equal(response.status, 403);
+  const body = await response.json();
+  assert.equal(body.error, "required_settings_bootstrap_requires_go_passkey");
+});
+
+test("worker setup wizard required settings bootstrap writes allowlisted runtime secrets only", async () => {
+  const calls = [];
+  const env = {
+    SETUP_WIZARD_PASSCODE: "2468",
+    CLOUDFLARE_API_TOKEN: "bootstrap-token",
+    CLOUDFLARE_ACCOUNT_ID: "account-id",
+    CLOUDFLARE_WORKER_SCRIPT_NAME: "vtdd-v2-mvp",
+    GITHUB_MANIFEST_CONVERSION_TOKEN: "ghp_conversion_token",
+    GITHUB_APP_ID: "12345",
+    GITHUB_APP_INSTALLATION_ID: "98765",
+    GITHUB_APP_PRIVATE_KEY: "-----BEGIN PRIVATE KEY-----\nplaceholder\n-----END PRIVATE KEY-----",
+    CF_API_FETCH: async (url, init = {}) => {
+      calls.push({ url: String(url), init });
+      return new Response(
+        JSON.stringify({
+          success: true,
+          errors: [],
+          result: { name: "placeholder", type: "secret_text" }
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        }
+      );
+    }
+  };
+  const { sessionCookie } = await unlockSetupWizard(env);
+
+  const response = await worker.fetch(
+    new Request("https://example.com/setup/wizard/runtime/bootstrap", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      },
+      body: JSON.stringify({
+        approval_phrase: "GO",
+        passkey_verified: "true",
+        VTDD_GATEWAY_BEARER_TOKEN: "vtdd_bearer_token",
+        GEMINI_API_KEY: "gemini_api_key_value",
+        returnTo: "/setup/wizard?repo=sample-org/vtdd-v2&githubAppCheck=on"
+      })
+    }),
+    env
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.deepEqual(body.updatedSecrets, ["VTDD_GATEWAY_BEARER_TOKEN", "GEMINI_API_KEY"]);
+  assert.deepEqual(body.remainingMissingSettings, []);
+  assert.equal(calls.length, 2);
+  for (const call of calls) {
+    assert.equal(
+      call.url,
+      "https://api.cloudflare.com/client/v4/accounts/account-id/workers/scripts/vtdd-v2-mvp/secrets"
+    );
+    const payload = JSON.parse(String(call.init.body));
+    assert.equal(["VTDD_GATEWAY_BEARER_TOKEN", "GEMINI_API_KEY"].includes(payload.name), true);
+    assert.equal(payload.type, "secret_text");
+  }
+});
+
+test("worker setup wizard required settings bootstrap redirects with completion marker in form mode", async () => {
+  const calls = [];
+  const env = {
+    SETUP_WIZARD_PASSCODE: "2468",
+    CLOUDFLARE_API_TOKEN: "bootstrap-token",
+    CLOUDFLARE_ACCOUNT_ID: "account-id",
+    CLOUDFLARE_WORKER_SCRIPT_NAME: "vtdd-v2-mvp",
+    GITHUB_MANIFEST_CONVERSION_TOKEN: "ghp_conversion_token",
+    GITHUB_APP_ID: "12345",
+    GITHUB_APP_INSTALLATION_ID: "98765",
+    GITHUB_APP_PRIVATE_KEY: "-----BEGIN PRIVATE KEY-----\nplaceholder\n-----END PRIVATE KEY-----",
+    CF_API_FETCH: async (url, init = {}) => {
+      calls.push({ url: String(url), init });
+      return new Response(
+        JSON.stringify({
+          success: true,
+          errors: [],
+          result: { name: "placeholder", type: "secret_text" }
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        }
+      );
+    }
+  };
+  const { sessionCookie } = await unlockSetupWizard(env);
+
+  const response = await worker.fetch(
+    new Request("https://example.com/setup/wizard/runtime/bootstrap", {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      },
+      body: new URLSearchParams({
+        approval_phrase: "GO",
+        passkey_verified: "true",
+        VTDD_GATEWAY_BEARER_TOKEN: "vtdd_bearer_token",
+        returnTo: "/setup/wizard?repo=sample-org/vtdd-v2&githubAppCheck=on"
+      })
+    }),
+    env
+  );
+
+  assert.equal(response.status, 303);
+  assert.equal(
+    response.headers.get("location"),
+    "/setup/wizard?repo=sample-org%2Fvtdd-v2&githubAppCheck=on&required_settings_bootstrap=completed"
+  );
+  assert.equal(calls.length, 1);
+  const payload = JSON.parse(String(calls[0].init.body));
+  assert.equal(payload.name, "VTDD_GATEWAY_BEARER_TOKEN");
+  assert.equal(payload.text, "vtdd_bearer_token");
 });
 
 test("worker setup wizard rejects bootstrap request without GO plus passkey in json mode", async () => {

@@ -42,6 +42,8 @@ const SETUP_WIZARD_GITHUB_APP_BOOTSTRAP_PATH = "/setup/wizard/github-app/bootstr
 const SETUP_WIZARD_GITHUB_APP_MANIFEST_CALLBACK_PATH = "/setup/wizard/github-app/manifest/callback";
 const SETUP_WIZARD_GITHUB_APP_INSTALLATION_CAPTURE_PATH =
   "/setup/wizard/github-app/capture-installation";
+const SETUP_WIZARD_REQUIRED_SETTINGS_BOOTSTRAP_PATH =
+  "/setup/wizard/runtime/bootstrap";
 const SETUP_WIZARD_APPROVAL_BOUND_BOOTSTRAP_SESSION_REQUEST_PATH =
   "/setup/wizard/bootstrap-session/request";
 const SETUP_WIZARD_APPROVAL_BOUND_BOOTSTRAP_SESSION_CONSUME_PATH =
@@ -73,6 +75,19 @@ const GITHUB_APP_BOOTSTRAP_SECRET_ALLOWLIST = Object.freeze([
 ]);
 const GITHUB_APP_MANIFEST_SECRET_ALLOWLIST = Object.freeze([
   "GITHUB_APP_ID",
+  "GITHUB_APP_PRIVATE_KEY"
+]);
+const SETUP_WIZARD_RUNTIME_REQUIRED_SECRET_ALLOWLIST = Object.freeze([
+  "SETUP_WIZARD_PASSCODE",
+  "VTDD_GATEWAY_BEARER_TOKEN",
+  "GEMINI_API_KEY"
+]);
+const SETUP_WIZARD_VTDD_READY_SECRET_SET = Object.freeze([
+  "SETUP_WIZARD_PASSCODE",
+  "VTDD_GATEWAY_BEARER_TOKEN",
+  "GEMINI_API_KEY",
+  "GITHUB_APP_ID",
+  "GITHUB_APP_INSTALLATION_ID",
   "GITHUB_APP_PRIVATE_KEY"
 ]);
 const GITHUB_API_BASE_URL = "https://api.github.com";
@@ -123,6 +138,17 @@ export default {
         return auth.response;
       }
       return handleGitHubAppInstallationCaptureRequest({ request, url, env });
+    }
+
+    if (
+      request.method === "POST" &&
+      url.pathname === SETUP_WIZARD_REQUIRED_SETTINGS_BOOTSTRAP_PATH
+    ) {
+      const auth = await authorizeSetupWizardRequest({ request, url, env });
+      if (!auth.ok) {
+        return auth.response;
+      }
+      return handleRequiredSettingsBootstrapRequest({ request, url, env });
     }
 
     if (
@@ -288,6 +314,7 @@ async function handleSetupWizardRequest({ request, url, env }) {
   const githubAppSetupCheck = attachDetectedCompletionGuidance({
     githubAppSetupCheck: githubAppSetupCheckWithCompletionAction
   });
+  const requiredSettingsBootstrap = buildRequiredSettingsBootstrapStatus({ url, env });
   const approvalBoundBootstrapSessionWithInlineRequest = attachInlineRequestSurfaceHint({
     approvalBoundBootstrapSession,
     githubAppSetupCheck
@@ -320,6 +347,7 @@ async function handleSetupWizardRequest({ request, url, env }) {
         cloudflareSetupCheck,
         githubAppSetupCheck,
         githubAppBootstrap,
+        requiredSettingsBootstrap,
         approvalBoundBootstrapSession: approvalBoundBootstrapSessionForResponse,
         guidance
       });
@@ -338,6 +366,7 @@ async function handleSetupWizardRequest({ request, url, env }) {
       cloudflareSetupCheck,
       githubAppSetupCheck,
       githubAppBootstrap,
+      requiredSettingsBootstrap,
       approvalBoundBootstrapSession: approvalBoundBootstrapSessionForResponse,
       guidance
     });
@@ -351,6 +380,7 @@ async function handleSetupWizardRequest({ request, url, env }) {
     cloudflareSetupCheck,
     githubAppSetupCheck,
     githubAppBootstrap,
+    requiredSettingsBootstrap,
     approvalBoundBootstrapSession: approvalBoundBootstrapSessionForResponse
   });
   return html(result.ok ? 200 : 422, htmlBody);
@@ -1083,6 +1113,109 @@ async function handleGitHubAppBootstrapRequest({ request, url, env }) {
   return json(200, {
     ok: true,
     updatedSecrets: [...GITHUB_APP_BOOTSTRAP_SECRET_ALLOWLIST],
+    returnTo
+  });
+}
+
+async function handleRequiredSettingsBootstrapRequest({ request, url, env }) {
+  const status = buildRequiredSettingsBootstrapStatus({ url, env });
+  if (status.state !== "available") {
+    return json(503, {
+      ok: false,
+      error: "required_settings_bootstrap_unavailable",
+      state: status.state,
+      summary: status.summary,
+      missingPrerequisites: status.missingPrerequisites ?? [],
+      allowlistedSecrets: status.allowlistedSecrets ?? []
+    });
+  }
+
+  const payload = await readRequiredSettingsBootstrapPayload(request);
+  const returnTo =
+    normalizeGitHubAppBootstrapReturnTo(payload.returnTo) || "/setup/wizard?githubAppCheck=on";
+
+  if (payload.approvalPhrase !== "GO" || payload.passkeyVerified !== "true") {
+    if (payload.mode === "form") {
+      const failureUrl = new URL(returnTo, url.origin);
+      failureUrl.searchParams.set("required_settings_bootstrap", "invalid");
+      return new Response(null, {
+        status: 303,
+        headers: {
+          location: `${failureUrl.pathname}${failureUrl.search}`
+        }
+      });
+    }
+    return json(403, {
+      ok: false,
+      error: "required_settings_bootstrap_requires_go_passkey",
+      reason: "required settings bootstrap requires GO + passkey"
+    });
+  }
+
+  const providedEntries = SETUP_WIZARD_RUNTIME_REQUIRED_SECRET_ALLOWLIST.filter((name) =>
+    normalizeText(payload[name])
+  );
+  if (providedEntries.length === 0) {
+    return json(422, {
+      ok: false,
+      error: "required_settings_bootstrap_missing_values",
+      expectedAnyOf: [...SETUP_WIZARD_RUNTIME_REQUIRED_SECRET_ALLOWLIST]
+    });
+  }
+
+  const fetchImpl =
+    typeof env?.CF_API_FETCH === "function"
+      ? env.CF_API_FETCH
+      : typeof globalThis.fetch === "function"
+        ? globalThis.fetch.bind(globalThis)
+        : null;
+  if (!fetchImpl) {
+    return json(503, {
+      ok: false,
+      error: "required_settings_bootstrap_fetch_unavailable",
+      reason: "runtime fetch is unavailable"
+    });
+  }
+
+  for (const secretName of providedEntries) {
+    const updated = await putCloudflareWorkerSecret({
+      fetchImpl,
+      apiToken: status.cloudflareApiToken,
+      accountId: status.accountId,
+      scriptName: status.scriptName,
+      secretName,
+      secretValue: payload[secretName]
+    });
+    if (!updated.ok) {
+      return json(502, {
+        ok: false,
+        error: "required_settings_bootstrap_write_failed",
+        secretName,
+        reason: updated.reason,
+        evidence: {
+          httpStatus: updated.httpStatus ?? null
+        }
+      });
+    }
+  }
+
+  const remainingMissing = status.missingSettings.filter((name) => !providedEntries.includes(name));
+
+  if (payload.mode === "form") {
+    const successUrl = new URL(returnTo, url.origin);
+    successUrl.searchParams.set("required_settings_bootstrap", "completed");
+    return new Response(null, {
+      status: 303,
+      headers: {
+        location: `${successUrl.pathname}${successUrl.search}`
+      }
+    });
+  }
+
+  return json(200, {
+    ok: true,
+    updatedSecrets: providedEntries,
+    remainingMissingSettings: remainingMissing,
     returnTo
   });
 }
@@ -2623,6 +2756,7 @@ function renderSetupWizardHtml({
   cloudflareSetupCheck,
   githubAppSetupCheck,
   githubAppBootstrap,
+  requiredSettingsBootstrap,
   approvalBoundBootstrapSession
 }) {
   const pageTitle = locale === "ja" ? "VTDD セットアップウィザード" : "VTDD Setup Wizard";
@@ -2639,6 +2773,7 @@ function renderSetupWizardHtml({
         cloudflareSetupCheck,
         githubAppSetupCheck,
         githubAppBootstrap,
+        requiredSettingsBootstrap,
         approvalBoundBootstrapSession
       )
     : renderFailureContent(
@@ -2649,6 +2784,7 @@ function renderSetupWizardHtml({
         cloudflareSetupCheck,
         githubAppSetupCheck,
         githubAppBootstrap,
+        requiredSettingsBootstrap,
         approvalBoundBootstrapSession
       );
 
@@ -2867,6 +3003,7 @@ function renderSuccessContent(
   cloudflareSetupCheck,
   githubAppSetupCheck,
   githubAppBootstrap,
+  requiredSettingsBootstrap,
   approvalBoundBootstrapSession
 ) {
   const onboarding = result.onboarding ?? {};
@@ -3007,6 +3144,7 @@ function renderSuccessContent(
       <p class="copy-hint" data-copy-status="actionSchemaJson">${escapeHtml(schemaHint)}</p>
       ${renderGitHubAppSetupCheck(githubAppSetupCheck, locale)}
       ${renderGitHubAppBootstrap(githubAppBootstrap, url, locale)}
+      ${renderRequiredSettingsBootstrap(requiredSettingsBootstrap, url, locale)}
       ${renderApprovalBoundBootstrapSession(approvalBoundBootstrapSession, locale)}
       ${renderCloudflareSetupCheck(cloudflareSetupCheck, locale)}
       <p class="meta">${escapeHtml(operatorManagedNote)}</p>
@@ -3377,6 +3515,7 @@ function renderFailureContent(
   cloudflareSetupCheck,
   githubAppSetupCheck,
   githubAppBootstrap,
+  requiredSettingsBootstrap,
   approvalBoundBootstrapSession
 ) {
   const issues = Array.isArray(result.blockingIssues) ? result.blockingIssues : [];
@@ -3397,6 +3536,7 @@ function renderFailureContent(
       }
       ${renderGitHubAppSetupCheck(githubAppSetupCheck, locale)}
       ${renderGitHubAppBootstrap(githubAppBootstrap, url, locale)}
+      ${renderRequiredSettingsBootstrap(requiredSettingsBootstrap, url, locale)}
       ${renderApprovalBoundBootstrapSession(approvalBoundBootstrapSession, locale)}
       ${renderCloudflareSetupCheck(cloudflareSetupCheck, locale)}
       <h2>${escapeHtml(locale === "ja" ? "デバッグ（安全な回答のみ）" : "Debug (safe answers only)")}</h2>
@@ -4362,6 +4502,107 @@ function renderGitHubAppBootstrap(bootstrap, url, locale = "en") {
               <p class="meta">Values are sent only to the narrow bootstrap endpoint and are never echoed back in the response.</p>
               <div style="margin-top: 12px;">
                 <button type="submit" class="copy-button">Write GitHub App Runtime Secrets</button>
+              </div>
+            </form>
+          `
+          : ""
+      }
+    </div>
+  `;
+}
+
+function renderRequiredSettingsBootstrap(status, url, locale = "en") {
+  const state = normalizeText(status?.state) || "missing_prerequisites";
+  const summary =
+    normalizeText(status?.summary) || "Required settings bootstrap status is not available.";
+  const allowlistedSecrets = Array.isArray(status?.allowlistedSecrets)
+    ? status.allowlistedSecrets
+    : [];
+  const missingPrerequisites = Array.isArray(status?.missingPrerequisites)
+    ? status.missingPrerequisites
+    : [];
+  const missingSettings = Array.isArray(status?.missingSettings) ? status.missingSettings : [];
+  const actionPath =
+    normalizeText(status?.actionPath) || SETUP_WIZARD_REQUIRED_SETTINGS_BOOTSTRAP_PATH;
+  const scriptName = normalizeText(status?.scriptName);
+  const returnTo = `${url.pathname}${url.search || ""}`;
+  const result = normalizeText(url.searchParams.get("required_settings_bootstrap"));
+
+  return `
+    <h2>${escapeHtml(locale === "ja" ? "Required Settings Bootstrap" : "Required Settings Bootstrap")}</h2>
+    <div class="block">
+      <p><strong>${escapeHtml(locale === "ja" ? "状態" : "state")}:</strong> <code>${escapeHtml(state)}</code></p>
+      <p>${escapeHtml(summary)}</p>
+      ${
+        scriptName
+          ? `<p><strong>Worker script:</strong> <code>${escapeHtml(scriptName)}</code></p>`
+          : ""
+      }
+      ${
+        allowlistedSecrets.length > 0
+          ? `<p><strong>Allowlisted secrets:</strong> ${allowlistedSecrets
+              .map((item) => `<code>${escapeHtml(item)}</code>`)
+              .join(", ")}</p>`
+          : ""
+      }
+      ${
+        missingPrerequisites.length > 0
+          ? `<p><strong>Missing prerequisites:</strong> ${missingPrerequisites
+              .map((item) => `<code>${escapeHtml(item)}</code>`)
+              .join(", ")}</p>`
+          : ""
+      }
+      ${
+        missingSettings.length > 0
+          ? `<p><strong>${escapeHtml(
+              locale === "ja" ? "不足している必須設定" : "Missing required settings"
+            )}:</strong> ${missingSettings
+              .map((item) => `<code>${escapeHtml(item)}</code>`)
+              .join(", ")}</p>`
+          : ""
+      }
+      ${
+        result === "completed"
+          ? `<p class="meta">${escapeHtml(
+              locale === "ja"
+                ? "required settings bootstrap を更新しました。未設定が残っている場合は同じフォームで続けて入力できます。"
+                : "Required settings bootstrap completed. If any required settings remain, continue with the same form."
+            )}</p>`
+          : ""
+      }
+      ${
+        result === "invalid"
+          ? `<p class="meta">${escapeHtml(
+              locale === "ja"
+                ? "GO + passkey が不足しているため required settings bootstrap を実行できませんでした。"
+                : "Required settings bootstrap was rejected because GO + passkey was missing."
+            )}</p>`
+          : ""
+      }
+      ${
+        state === "available"
+          ? `
+            <form method="post" action="${escapeHtml(actionPath)}">
+              <input type="hidden" name="returnTo" value="${escapeHtml(returnTo)}" />
+              <input type="hidden" name="approval_phrase" value="GO" />
+              <input type="hidden" name="passkey_verified" value="true" />
+              <label for="setupWizardPasscode"><strong>SETUP_WIZARD_PASSCODE</strong></label>
+              <input id="setupWizardPasscode" name="SETUP_WIZARD_PASSCODE" type="password" inputmode="text" autocomplete="off" />
+              <label for="vtddGatewayBearerToken"><strong>VTDD_GATEWAY_BEARER_TOKEN</strong></label>
+              <input id="vtddGatewayBearerToken" name="VTDD_GATEWAY_BEARER_TOKEN" type="password" inputmode="text" autocomplete="off" />
+              <label for="geminiApiKey"><strong>GEMINI_API_KEY</strong></label>
+              <input id="geminiApiKey" name="GEMINI_API_KEY" type="password" inputmode="text" autocomplete="off" />
+              <p class="meta">${escapeHtml(
+                locale === "ja"
+                  ? "空欄は書き込まず、入力した値だけを allowlisted endpoint に書き込みます。"
+                  : "Blank fields are skipped; only provided values are written through the allowlisted endpoint."
+              )}</p>
+              <div style="margin-top: 12px;">
+                <button type="submit" class="copy-button">${escapeHtml(
+                  locale === "ja"
+                    ? "Required settings を書き込む（GO + passkey）"
+                    : "Write required settings (GO + passkey)"
+                )}</button>
               </div>
             </form>
           `
@@ -6487,6 +6728,84 @@ function buildGitHubAppBootstrapStatus({ url, env }) {
     accountId,
     cloudflareApiToken,
     githubManifestConversionToken
+  };
+}
+
+function resolveSetupWizardVtddReadySecretValues(runtimeEnv) {
+  return {
+    SETUP_WIZARD_PASSCODE: normalizeText(runtimeEnv?.SETUP_WIZARD_PASSCODE),
+    VTDD_GATEWAY_BEARER_TOKEN: normalizeText(
+      runtimeEnv?.VTDD_GATEWAY_BEARER_TOKEN ?? runtimeEnv?.MVP_GATEWAY_BEARER_TOKEN
+    ),
+    GEMINI_API_KEY: normalizeText(runtimeEnv?.GEMINI_API_KEY),
+    GITHUB_APP_ID: normalizeText(runtimeEnv?.GITHUB_APP_ID),
+    GITHUB_APP_INSTALLATION_ID: normalizeText(runtimeEnv?.GITHUB_APP_INSTALLATION_ID),
+    GITHUB_APP_PRIVATE_KEY: resolveGitHubAppPrivateKey(runtimeEnv)
+  };
+}
+
+function resolveMissingSetupWizardVtddReadySecrets(runtimeEnv) {
+  const secretValues = resolveSetupWizardVtddReadySecretValues(runtimeEnv);
+  return SETUP_WIZARD_VTDD_READY_SECRET_SET.filter((name) => !normalizeText(secretValues[name]));
+}
+
+function buildRequiredSettingsBootstrapStatus({ url, env }) {
+  const runtimeEnv = env ?? {};
+  const cloudflareApiToken = normalizeText(runtimeEnv.CLOUDFLARE_API_TOKEN);
+  const accountId = normalizeText(runtimeEnv.CLOUDFLARE_ACCOUNT_ID);
+  const scriptName = resolveCloudflareWorkerScriptName({ url, env: runtimeEnv });
+  const missingPrerequisites = [];
+
+  if (!cloudflareApiToken) {
+    missingPrerequisites.push("CLOUDFLARE_API_TOKEN");
+  }
+  if (!accountId) {
+    missingPrerequisites.push("CLOUDFLARE_ACCOUNT_ID");
+  }
+  if (!scriptName) {
+    missingPrerequisites.push(CLOUDFLARE_WORKER_SCRIPT_NAME_ENV);
+  }
+
+  const missingSettings = resolveMissingSetupWizardVtddReadySecrets(runtimeEnv);
+
+  if (missingPrerequisites.length > 0) {
+    return {
+      state: "missing_prerequisites",
+      summary:
+        "Required settings bootstrap is unavailable until Cloudflare secret-write prerequisites are configured on this Worker.",
+      missingPrerequisites,
+      missingSettings,
+      allowlistedSecrets: [...SETUP_WIZARD_RUNTIME_REQUIRED_SECRET_ALLOWLIST],
+      actionPath: SETUP_WIZARD_REQUIRED_SETTINGS_BOOTSTRAP_PATH
+    };
+  }
+
+  if (missingSettings.length === 0) {
+    return {
+      state: "ready",
+      summary:
+        "All VTDD-required setup secrets are present on Worker runtime for GitHub, Cloudflare entry boundary, gateway auth, and Gemini reviewer-provider readiness.",
+      missingPrerequisites: [],
+      missingSettings: [],
+      allowlistedSecrets: [...SETUP_WIZARD_RUNTIME_REQUIRED_SECRET_ALLOWLIST],
+      actionPath: SETUP_WIZARD_REQUIRED_SETTINGS_BOOTSTRAP_PATH,
+      scriptName,
+      accountId,
+      cloudflareApiToken
+    };
+  }
+
+  return {
+    state: "available",
+    summary:
+      "Setup wizard can write the remaining VTDD-required runtime secrets through a narrow allowlist so setup can finish in-flow.",
+    missingPrerequisites: [],
+    missingSettings,
+    allowlistedSecrets: [...SETUP_WIZARD_RUNTIME_REQUIRED_SECRET_ALLOWLIST],
+    actionPath: SETUP_WIZARD_REQUIRED_SETTINGS_BOOTSTRAP_PATH,
+    scriptName,
+    accountId,
+    cloudflareApiToken
   };
 }
 
@@ -10976,6 +11295,33 @@ async function readGitHubAppBootstrapPayload(request) {
     GITHUB_APP_ID: normalizeText(form.get("GITHUB_APP_ID")),
     GITHUB_APP_INSTALLATION_ID: normalizeText(form.get("GITHUB_APP_INSTALLATION_ID")),
     GITHUB_APP_PRIVATE_KEY: normalizeText(form.get("GITHUB_APP_PRIVATE_KEY"))
+  };
+}
+
+async function readRequiredSettingsBootstrapPayload(request) {
+  const contentType = normalizeText(request.headers.get("content-type"));
+  if (contentType.includes("application/json")) {
+    const payload = await readJson(request);
+    return {
+      mode: "json",
+      returnTo: normalizeText(payload?.returnTo),
+      approvalPhrase: normalizeText(payload?.approval_phrase ?? payload?.approvalPhrase),
+      passkeyVerified: normalizeText(payload?.passkey_verified ?? payload?.passkeyVerified),
+      SETUP_WIZARD_PASSCODE: normalizeText(payload?.SETUP_WIZARD_PASSCODE),
+      VTDD_GATEWAY_BEARER_TOKEN: normalizeText(payload?.VTDD_GATEWAY_BEARER_TOKEN),
+      GEMINI_API_KEY: normalizeText(payload?.GEMINI_API_KEY)
+    };
+  }
+
+  const form = await request.formData();
+  return {
+    mode: "form",
+    returnTo: normalizeText(form.get("returnTo")),
+    approvalPhrase: normalizeText(form.get("approval_phrase")),
+    passkeyVerified: normalizeText(form.get("passkey_verified")),
+    SETUP_WIZARD_PASSCODE: normalizeText(form.get("SETUP_WIZARD_PASSCODE")),
+    VTDD_GATEWAY_BEARER_TOKEN: normalizeText(form.get("VTDD_GATEWAY_BEARER_TOKEN")),
+    GEMINI_API_KEY: normalizeText(form.get("GEMINI_API_KEY"))
   };
 }
 
