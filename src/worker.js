@@ -5595,36 +5595,36 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
         contract
           ? `
             <div class="block" style="margin-top: 12px;">
-              <p><strong>${escapeHtml(locale === "ja" ? "Session contract" : "Session contract")}:</strong></p>
+              <p><strong>${escapeHtml(locale === "ja" ? "セッション契約" : "Session contract")}:</strong></p>
               ${
                 authorityState
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Authority state" : "Authority state")}:</strong> <code>${escapeHtml(authorityState)}</code></p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "権限状態" : "Authority state")}:</strong> <code>${escapeHtml(authorityState)}</code></p>`
                   : ""
               }
               ${
                 sessionMode
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Session mode" : "Session mode")}:</strong> <code>${escapeHtml(sessionMode)}</code></p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "セッションモード" : "Session mode")}:</strong> <code>${escapeHtml(sessionMode)}</code></p>`
                   : ""
               }
               ${
                 issuance
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Issuance" : "Issuance")}:</strong> <code>${escapeHtml(issuance)}</code></p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "発行" : "Issuance")}:</strong> <code>${escapeHtml(issuance)}</code></p>`
                   : ""
               }
               ${
                 attestationState
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Attestation" : "Attestation")}:</strong> <code>${escapeHtml(attestationState)}</code></p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "アテステーション" : "Attestation")}:</strong> <code>${escapeHtml(attestationState)}</code></p>`
                   : ""
               }
               ${
                 maxAgeSeconds !== null
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Max age" : "Max age")}:</strong> <code>${escapeHtml(String(maxAgeSeconds))}</code> seconds</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "最大有効秒数" : "Max age")}:</strong> <code>${escapeHtml(String(maxAgeSeconds))}</code> seconds</p>`
                   : ""
               }
-              <p><strong>${escapeHtml(locale === "ja" ? "Single use" : "Single use")}:</strong> <code>${escapeHtml(singleUse ? "true" : "false")}</code></p>
+              <p><strong>${escapeHtml(locale === "ja" ? "単回利用" : "Single use")}:</strong> <code>${escapeHtml(singleUse ? "true" : "false")}</code></p>
               ${
                 allowlistedSecrets.length > 0
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Allowlisted secrets" : "Allowlisted secrets")}:</strong> ${allowlistedSecrets
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "許可済みシークレット" : "Allowlisted secrets")}:</strong> ${allowlistedSecrets
                       .map((item) => `<code>${escapeHtml(item)}</code>`)
                       .join(", ")}</p>`
                   : ""
@@ -5634,26 +5634,26 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
                   ? `
                     ${
                       writeTarget
-                        ? `<p><strong>${escapeHtml(locale === "ja" ? "Planned write target" : "Planned write target")}:</strong> <code>${escapeHtml(writeTarget)}</code></p>`
+                        ? `<p><strong>${escapeHtml(locale === "ja" ? "予定書込先" : "Planned write target")}:</strong> <code>${escapeHtml(writeTarget)}</code></p>`
                         : ""
                     }
                     ${
                       plannedWrites.length > 0
-                        ? `<p><strong>${escapeHtml(locale === "ja" ? "Planned writes" : "Planned writes")}:</strong> ${plannedWrites
+                        ? `<p><strong>${escapeHtml(locale === "ja" ? "予定書込項目" : "Planned writes")}:</strong> ${plannedWrites
                             .map((item) => `<code>${escapeHtml(item)}</code>`)
                             .join(", ")}</p>`
                         : ""
                     }
                     ${
                       postChecks.length > 0
-                        ? `<p><strong>${escapeHtml(locale === "ja" ? "Post-session checks" : "Post-session checks")}:</strong> ${postChecks
+                        ? `<p><strong>${escapeHtml(locale === "ja" ? "セッション後チェック" : "Post-session checks")}:</strong> ${postChecks
                             .map((item) => `<code>${escapeHtml(item)}</code>`)
                             .join(", ")}</p>`
                         : ""
                     }
                     ${
                       blockedBy.length > 0
-                        ? `<p><strong>${escapeHtml(locale === "ja" ? "Currently blocked by" : "Currently blocked by")}:</strong> ${blockedBy
+                        ? `<p><strong>${escapeHtml(locale === "ja" ? "現在のブロッカー" : "Currently blocked by")}:</strong> ${blockedBy
                             .map((item) => `<code>${escapeHtml(item)}</code>`)
                             .join(", ")}</p>`
                         : ""

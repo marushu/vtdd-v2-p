@@ -1667,6 +1667,18 @@ test("worker setup wizard records approval-bound bootstrap request without grant
   assert.equal(htmlJa.includes("停止理由"), true);
   assert.equal(htmlJa.includes("保護された不変条件"), true);
   assert.equal(htmlJa.includes("危険ショートカット拒否"), true);
+  assert.equal(htmlJa.includes("セッション契約"), true);
+  assert.equal(htmlJa.includes("権限状態"), true);
+  assert.equal(htmlJa.includes("セッションモード"), true);
+  assert.equal(htmlJa.includes("発行"), true);
+  assert.equal(htmlJa.includes("アテステーション"), true);
+  assert.equal(htmlJa.includes("最大有効秒数"), true);
+  assert.equal(htmlJa.includes("単回利用"), true);
+  assert.equal(htmlJa.includes("許可済みシークレット"), true);
+  assert.equal(htmlJa.includes("予定書込先"), true);
+  assert.equal(htmlJa.includes("予定書込項目"), true);
+  assert.equal(htmlJa.includes("セッション後チェック"), true);
+  assert.equal(htmlJa.includes("現在のブロッカー"), true);
 
   const jsonResponse = await worker.fetch(
     new Request(`https://example.com${location}&format=json`, {
