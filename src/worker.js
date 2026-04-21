@@ -4813,15 +4813,15 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
         serviceConnectionModelReadout
           ? `
             <div class="block" style="margin-top: 12px;">
-              <p><strong>${escapeHtml(locale === "ja" ? "Service connection model" : "Service connection model")}:</strong></p>
+              <p><strong>${escapeHtml(locale === "ja" ? "サービス接続モデル" : "Service connection model")}:</strong></p>
               ${
                 githubConnectionModel
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "GitHub connection" : "GitHub connection")}:</strong> <code>${escapeHtml(normalizeText(githubConnectionModel.id))}</code> ${escapeHtml(normalizeText(githubConnectionModel.summary))} <strong>${escapeHtml(locale === "ja" ? "Type" : "Type")}:</strong> <code>${escapeHtml(normalizeText(githubConnectionModel.connectionType))}</code> <strong>${escapeHtml(locale === "ja" ? "Needed for" : "Needed for")}:</strong> ${escapeHtml(normalizeText(githubConnectionModel.requiredBecause))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "GitHub 接続モデル" : "GitHub connection")}:</strong> <code>${escapeHtml(normalizeText(githubConnectionModel.id))}</code> ${escapeHtml(normalizeText(githubConnectionModel.summary))} <strong>${escapeHtml(locale === "ja" ? "接続タイプ" : "Type")}:</strong> <code>${escapeHtml(normalizeText(githubConnectionModel.connectionType))}</code> <strong>${escapeHtml(locale === "ja" ? "必要理由" : "Needed for")}:</strong> ${escapeHtml(normalizeText(githubConnectionModel.requiredBecause))}</p>`
                   : ""
               }
               ${
                 cloudflareConnectionModel
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Cloudflare connection" : "Cloudflare connection")}:</strong> <code>${escapeHtml(normalizeText(cloudflareConnectionModel.id))}</code> ${escapeHtml(normalizeText(cloudflareConnectionModel.summary))} <strong>${escapeHtml(locale === "ja" ? "Type" : "Type")}:</strong> <code>${escapeHtml(normalizeText(cloudflareConnectionModel.connectionType))}</code> <strong>${escapeHtml(locale === "ja" ? "Needed for" : "Needed for")}:</strong> ${escapeHtml(normalizeText(cloudflareConnectionModel.requiredBecause))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Cloudflare 接続モデル" : "Cloudflare connection")}:</strong> <code>${escapeHtml(normalizeText(cloudflareConnectionModel.id))}</code> ${escapeHtml(normalizeText(cloudflareConnectionModel.summary))} <strong>${escapeHtml(locale === "ja" ? "接続タイプ" : "Type")}:</strong> <code>${escapeHtml(normalizeText(cloudflareConnectionModel.connectionType))}</code> <strong>${escapeHtml(locale === "ja" ? "必要理由" : "Needed for")}:</strong> ${escapeHtml(normalizeText(cloudflareConnectionModel.requiredBecause))}</p>`
                   : ""
               }
             </div>
