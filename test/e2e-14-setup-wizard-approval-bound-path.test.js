@@ -16,6 +16,7 @@ test("E2E-14 doc records approval-bound happy path and fail-closed boundary path
   const doc = fs.readFileSync(DOC_PATH, "utf8");
   assert.equal(doc.includes("record a `GO + passkey` request"), true);
   assert.equal(doc.includes("same setup flow"), true);
+  assert.equal(doc.includes("verification-only proof"), true);
   assert.equal(doc.includes("blocked_by_operator_prerequisites"), true);
   assert.equal(doc.includes("fail-closed recovery guidance"), true);
   assert.equal(doc.includes("Current repository reading remains `partial / in-progress`"), true);

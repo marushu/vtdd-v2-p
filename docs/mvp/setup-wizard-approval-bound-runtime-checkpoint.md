@@ -30,6 +30,8 @@ Current runtime evidence includes:
 - bounded consume endpoint for that envelope
 - actual narrow installation-binding write when the only remaining write is
   `GITHUB_APP_INSTALLATION_ID`
+- verification-only consume completion when no runtime write remains and proof
+  is the only remaining step
 - immediate post-consume readiness proof
 - absorbed success state after bounded consume succeeds
 
@@ -60,7 +62,9 @@ What is actually automated today is narrower:
 1. GitHub App bootstrap can move through manifest callback capture.
 2. Single installation detection/binding can be absorbed into runtime.
 3. One bounded approval-bound write path can complete installation binding.
-4. Live readiness proof can run immediately after that bounded write.
+4. The same approval-bound envelope can complete verification-only consume when
+   no write remains and the remaining step is proof.
+5. Live readiness proof can run immediately after bounded consume.
 
 This means current runtime has one real absorbed path, but not a general
 "connect every required service end-to-end" path yet.

@@ -1828,6 +1828,133 @@ test("worker setup wizard consumes a valid bootstrap session envelope into defer
   ]);
 });
 
+test("worker setup wizard consumes verification-only envelope when no writes remain", async () => {
+  const { privateKey } = generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+    privateKeyEncoding: {
+      type: "pkcs8",
+      format: "pem"
+    },
+    publicKeyEncoding: {
+      type: "spki",
+      format: "pem"
+    }
+  });
+  const env = {
+    SETUP_WIZARD_PASSCODE: "2468",
+    CLOUDFLARE_API_TOKEN: "bootstrap-token",
+    CLOUDFLARE_ACCOUNT_ID: "account-id",
+    CLOUDFLARE_WORKER_SCRIPT_NAME: "vtdd-v2-mvp",
+    GITHUB_MANIFEST_CONVERSION_TOKEN: "gho_operator_token",
+    GITHUB_APP_ID: "12345",
+    GITHUB_APP_INSTALLATION_ID: "125153871",
+    GITHUB_APP_PRIVATE_KEY: privateKey,
+    GITHUB_APP_JWT_PROVIDER: async () => "app_jwt_token_for_tests",
+    GITHUB_API_FETCH: async (url) => {
+      const requestUrl = String(url);
+      if (requestUrl.endsWith("/app/installations")) {
+        return new Response(JSON.stringify([{ id: 125153871, app_id: 12345 }]), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        });
+      }
+      if (requestUrl.includes("/app/installations/125153871/access_tokens")) {
+        return new Response(
+          JSON.stringify({
+            token: "ghs_minted_installation_token",
+            expires_at: "2030-01-01T00:00:00Z"
+          }),
+          {
+            status: 201,
+            headers: { "content-type": "application/json" }
+          }
+        );
+      }
+      if (requestUrl.includes("/installation/repositories")) {
+        return new Response(
+          JSON.stringify({
+            total_count: 1,
+            repositories: [{ full_name: "sample-org/vtdd-v2" }]
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          }
+        );
+      }
+      if (requestUrl.endsWith("/app")) {
+        return new Response(JSON.stringify({ id: 12345, slug: "vtdd-test" }), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        });
+      }
+      return new Response(JSON.stringify({}), {
+        status: 404,
+        headers: { "content-type": "application/json" }
+      });
+    }
+  };
+  const { sessionCookie } = await unlockSetupWizard(env);
+
+  const requestResponse = await worker.fetch(
+    new Request("https://example.com/setup/wizard/bootstrap-session/request", {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      },
+      body: new URLSearchParams({
+        returnTo: "/setup/wizard?repo=sample-org/vtdd-v2&githubAppCheck=on",
+        approval_phrase: "GO",
+        passkey_verified: "true"
+      })
+    }),
+    env
+  );
+
+  assert.equal(requestResponse.status, 303);
+  const location = requestResponse.headers.get("location") ?? "";
+  const statusResponse = await worker.fetch(
+    new Request(`https://example.com${location}&format=json`, {
+      headers: {
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      }
+    }),
+    env
+  );
+  const statusBody = await statusResponse.json();
+  const envelopeToken =
+    statusBody.approvalBoundBootstrapSession.sessionEnvelope.envelopeToken;
+
+  const consumeResponse = await worker.fetch(
+    new Request("https://example.com/setup/wizard/bootstrap-session/consume", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      },
+      body: JSON.stringify({
+        returnTo: location,
+        envelope_token: envelopeToken
+      })
+    }),
+    env
+  );
+
+  assert.equal(consumeResponse.status, 200);
+  const consumeBody = await consumeResponse.json();
+  assert.equal(consumeBody.state, "consume_completed");
+  assert.equal(consumeBody.consumed, true);
+  assert.equal(
+    consumeBody.summary,
+    "VTDD consumed the signed bootstrap session envelope and completed verification-only consume for the current runtime context."
+  );
+  assert.deepEqual(consumeBody.plannedWrites, []);
+  assert.deepEqual(consumeBody.updatedSecrets, []);
+  assert.equal(consumeBody.installationId, "125153871");
+  assert.equal(consumeBody.proof.state, "ready");
+});
+
 test("worker setup wizard shows deferred consume setup progress in html readout", async () => {
   const env = {
     SETUP_WIZARD_PASSCODE: "2468",

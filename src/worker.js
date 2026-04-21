@@ -570,7 +570,9 @@ async function handleApprovalBoundBootstrapSessionConsume({ request, url, env })
   const envelopeId = normalizeText(payload.envelopeToken).slice(0, 12);
   const installationOnlyWrite =
     preview.plannedWrites.length === 1 && preview.plannedWrites[0] === "GITHUB_APP_INSTALLATION_ID";
+  const noPendingWrites = preview.plannedWrites.length === 0;
   const detectedInstallationId = normalizeText(githubAppSetupCheck?.detectedInstallationId);
+  const runtimeInstallationId = normalizeText(env?.GITHUB_APP_INSTALLATION_ID);
 
   if (
     installationOnlyWrite &&
@@ -653,6 +655,54 @@ async function handleApprovalBoundBootstrapSessionConsume({ request, url, env })
       ],
       writeTarget: preview?.writeTarget ?? null,
       plannedWrites: ["GITHUB_APP_INSTALLATION_ID"],
+      postChecks: Array.isArray(preview?.postChecks) ? [...preview.postChecks] : [],
+      proof
+    });
+  }
+
+  if (noPendingWrites) {
+    const proof = await runBootstrapSessionConsumeProof({
+      url: contextUrl,
+      env,
+      installationId: runtimeInstallationId
+    });
+
+    if (payload.mode === "form") {
+      const successUrl = new URL(returnTo, url.origin);
+      successUrl.searchParams.set(SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_STATE_PARAM, "completed");
+      successUrl.searchParams.set(
+        SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_ENVELOPE_ID_PARAM,
+        envelopeId
+      );
+      if (normalizeText(proof?.state)) {
+        successUrl.searchParams.set(
+          SETUP_WIZARD_BOOTSTRAP_SESSION_CONSUME_PROOF_STATE_PARAM,
+          normalizeText(proof.state)
+        );
+      }
+      return new Response(null, {
+        status: 303,
+        headers: {
+          location: `${successUrl.pathname}${successUrl.search}`
+        }
+      });
+    }
+
+    return json(200, {
+      ok: true,
+      consumed: true,
+      state: "consume_completed",
+      summary:
+        "VTDD consumed the signed bootstrap session envelope and completed verification-only consume for the current runtime context.",
+      envelopeId,
+      updatedSecrets: [],
+      installationId: runtimeInstallationId || null,
+      guidance: [
+        "The single-use approval-bound verification request is now consumed for the current runtime context.",
+        "Do not issue a new GO + passkey request unless runtime identity or target context changes."
+      ],
+      writeTarget: preview?.writeTarget ?? null,
+      plannedWrites: [],
       postChecks: Array.isArray(preview?.postChecks) ? [...preview.postChecks] : [],
       proof
     });
@@ -1452,10 +1502,15 @@ async function writeGitHubAppInstallationBinding({
 }
 
 async function runBootstrapSessionConsumeProof({ url, env, installationId }) {
-  const effectiveEnv = {
-    ...(env ?? {}),
-    GITHUB_APP_INSTALLATION_ID: normalizeText(installationId)
-  };
+  const normalizedInstallationId = normalizeText(installationId);
+  const effectiveEnv = normalizedInstallationId
+    ? {
+        ...(env ?? {}),
+        GITHUB_APP_INSTALLATION_ID: normalizedInstallationId
+      }
+    : {
+        ...(env ?? {})
+      };
   return runGitHubAppSetupCheck(url, effectiveEnv);
 }
 
