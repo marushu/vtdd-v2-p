@@ -311,7 +311,7 @@ Status values used below:
   - `test/e2e-14-setup-wizard-approval-bound-path.test.js`
 - Run evidence:
   - `docs/mvp/e2e/e2e-14-setup-wizard-approval-bound-path.md`
-- Status: `partial`
+- Status: `e2e_evidenced_pending_human_closure`
 
 ## Current Completion Reading
 

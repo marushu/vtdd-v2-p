@@ -18,8 +18,10 @@ test("E2E-14 doc records approval-bound happy path and fail-closed boundary path
   assert.equal(doc.includes("same setup flow"), true);
   assert.equal(doc.includes("verification-only proof"), true);
   assert.equal(doc.includes("auto-continue into verification-only"), true);
+  assert.equal(doc.includes("mode-aware (`installation_binding` /"), true);
   assert.equal(doc.includes("blocked_by_operator_prerequisites"), true);
   assert.equal(doc.includes("fail-closed recovery guidance"), true);
+  assert.equal(doc.includes("`e2e_evidenced_pending_human_closure`"), true);
   assert.equal(doc.includes("Current repository reading remains `partial / in-progress`"), true);
 });
 
@@ -28,5 +30,5 @@ test("matrix references E2E-14 setup wizard approval-bound path evidence", () =>
   assert.equal(doc.includes("## E2E-14 Setup wizard approval-bound path"), true);
   assert.equal(doc.includes("Issues: `#207 #210`"), true);
   assert.equal(doc.includes("docs/mvp/e2e/e2e-14-setup-wizard-approval-bound-path.md"), true);
-  assert.equal(doc.includes("- Status: `partial`"), true);
+  assert.equal(doc.includes("- Status: `e2e_evidenced_pending_human_closure`"), true);
 });

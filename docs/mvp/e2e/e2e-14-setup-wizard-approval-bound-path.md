@@ -38,6 +38,9 @@ Observed result on 2026-04-21:
   consume in the same setup flow when no write remains
 - confirms the bounded installation-binding consume path can immediately run
   live readiness proof in the same setup flow
+- confirms continuation readouts stay mode-aware (`installation_binding` /
+  `verification_only`) so verification-only consume is not narrated as an
+  installation-binding write
 - confirms success is reported in VTDD capability terms rather than as raw
   secret presence only
 
@@ -75,11 +78,14 @@ Observed result on 2026-04-21:
 E2E-14 now records one real approval-bound setup happy path and one fail-closed
 boundary path for the current `#210` / `#207` window.
 
-This does not yet prove wizard-complete setup.
+Current E2E track status is `e2e_evidenced_pending_human_closure` for the
+current `#210` / `#207` execution window.
+
+This does not auto-close Issues and does not override human closure gates.
 Current repository reading remains `partial / in-progress` because:
 
 - Cloudflare operator bootstrap recovery still remains setup debt
 - approval-bound automation is still narrower than a general wizard-complete
   authority path
-- setup completion must continue to be judged by mapped E2E evidence plus human
-  closure review, not by the presence of one narrow success path alone
+- setup and milestone completion must continue to be judged by mapped E2E
+  evidence plus explicit human closure review
