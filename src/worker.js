@@ -5185,20 +5185,20 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
         authorityRequestProvenanceReadout
           ? `
             <div class="block" style="margin-top: 12px;">
-              <p><strong>${escapeHtml(locale === "ja" ? "Authority request provenance" : "Authority request provenance")}:</strong></p>
+              <p><strong>${escapeHtml(locale === "ja" ? "権限要求来歴" : "Authority request provenance")}:</strong></p>
               ${
                 provenanceSource
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Provenance source" : "Provenance source")}:</strong> <code>${escapeHtml(normalizeText(provenanceSource.id))}</code> ${escapeHtml(normalizeText(provenanceSource.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "来歴ソース" : "Provenance source")}:</strong> <code>${escapeHtml(normalizeText(provenanceSource.id))}</code> ${escapeHtml(normalizeText(provenanceSource.summary))}</p>`
                   : ""
               }
               ${
                 provenanceDrift
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Provenance drift" : "Provenance drift")}:</strong> <code>${escapeHtml(normalizeText(provenanceDrift.id))}</code> ${escapeHtml(normalizeText(provenanceDrift.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "来歴ドリフト" : "Provenance drift")}:</strong> <code>${escapeHtml(normalizeText(provenanceDrift.id))}</code> ${escapeHtml(normalizeText(provenanceDrift.summary))}</p>`
                   : ""
               }
               ${
                 provenanceRecovery
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Provenance recovery" : "Provenance recovery")}:</strong> <code>${escapeHtml(normalizeText(provenanceRecovery.id))}</code> ${escapeHtml(normalizeText(provenanceRecovery.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "来歴復帰" : "Provenance recovery")}:</strong> <code>${escapeHtml(normalizeText(provenanceRecovery.id))}</code> ${escapeHtml(normalizeText(provenanceRecovery.summary))}</p>`
                   : ""
               }
             </div>
