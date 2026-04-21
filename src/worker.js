@@ -4878,15 +4878,15 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
         serviceConnectionHandoffShapeReadout
           ? `
             <div class="block" style="margin-top: 12px;">
-              <p><strong>${escapeHtml(locale === "ja" ? "Service connection handoff shape" : "Service connection handoff shape")}:</strong></p>
+              <p><strong>${escapeHtml(locale === "ja" ? "サービス接続ハンドオフ形状" : "Service connection handoff shape")}:</strong></p>
               ${
                 githubConnectionHandoff
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "GitHub handoff" : "GitHub handoff")}:</strong> <code>${escapeHtml(normalizeText(githubConnectionHandoff.id))}</code> ${escapeHtml(normalizeText(githubConnectionHandoff.summary))} <strong>${escapeHtml(locale === "ja" ? "Human step shape" : "Human step shape")}:</strong> ${escapeHtml(normalizeText(githubConnectionHandoff.humanStepShape))} <strong>${escapeHtml(locale === "ja" ? "Return capture owner" : "Return capture owner")}:</strong> <code>${escapeHtml(normalizeText(githubConnectionHandoff.returnCaptureOwner))}</code></p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "GitHub ハンドオフ" : "GitHub handoff")}:</strong> <code>${escapeHtml(normalizeText(githubConnectionHandoff.id))}</code> ${escapeHtml(normalizeText(githubConnectionHandoff.summary))} <strong>${escapeHtml(locale === "ja" ? "人が行うステップ形状" : "Human step shape")}:</strong> ${escapeHtml(normalizeText(githubConnectionHandoff.humanStepShape))} <strong>${escapeHtml(locale === "ja" ? "復帰キャプチャ責任者" : "Return capture owner")}:</strong> <code>${escapeHtml(normalizeText(githubConnectionHandoff.returnCaptureOwner))}</code></p>`
                   : ""
               }
               ${
                 cloudflareConnectionHandoff
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Cloudflare handoff" : "Cloudflare handoff")}:</strong> <code>${escapeHtml(normalizeText(cloudflareConnectionHandoff.id))}</code> ${escapeHtml(normalizeText(cloudflareConnectionHandoff.summary))} <strong>${escapeHtml(locale === "ja" ? "Human step shape" : "Human step shape")}:</strong> ${escapeHtml(normalizeText(cloudflareConnectionHandoff.humanStepShape))} <strong>${escapeHtml(locale === "ja" ? "Return capture owner" : "Return capture owner")}:</strong> <code>${escapeHtml(normalizeText(cloudflareConnectionHandoff.returnCaptureOwner))}</code></p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Cloudflare ハンドオフ" : "Cloudflare handoff")}:</strong> <code>${escapeHtml(normalizeText(cloudflareConnectionHandoff.id))}</code> ${escapeHtml(normalizeText(cloudflareConnectionHandoff.summary))} <strong>${escapeHtml(locale === "ja" ? "人が行うステップ形状" : "Human step shape")}:</strong> ${escapeHtml(normalizeText(cloudflareConnectionHandoff.humanStepShape))} <strong>${escapeHtml(locale === "ja" ? "復帰キャプチャ責任者" : "Return capture owner")}:</strong> <code>${escapeHtml(normalizeText(cloudflareConnectionHandoff.returnCaptureOwner))}</code></p>`
                   : ""
               }
             </div>
