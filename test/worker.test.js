@@ -1816,6 +1816,23 @@ test("worker setup wizard shows deferred consume setup progress in html readout"
 
   assert.equal(requestResponse.status, 303);
   const location = requestResponse.headers.get("location") ?? "";
+  const envelopeHtmlJaResponse = await worker.fetch(
+    new Request(`https://example.com${location}`, {
+      headers: {
+        cookie: `vtdd_setup_access=${sessionCookie}`,
+        "accept-language": "ja"
+      }
+    }),
+    env
+  );
+  assert.equal(envelopeHtmlJaResponse.status, 200);
+  const envelopeHtmlJa = await envelopeHtmlJaResponse.text();
+  assert.equal(envelopeHtmlJa.includes("セッション封筒"), true);
+  assert.equal(envelopeHtmlJa.includes("封筒状態"), true);
+  assert.equal(envelopeHtmlJa.includes("封筒ID"), true);
+  assert.equal(envelopeHtmlJa.includes("封筒有効期限"), true);
+  assert.equal(envelopeHtmlJa.includes("封筒単回利用"), true);
+  assert.equal(envelopeHtmlJa.includes("封筒拘束スコープ"), true);
   const statusResponse = await worker.fetch(
     new Request(`https://example.com${location}&format=json`, {
       headers: {

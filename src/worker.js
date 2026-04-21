@@ -5209,30 +5209,30 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
         sessionEnvelope
           ? `
             <div class="block" style="margin-top: 12px;">
-              <p><strong>${escapeHtml(locale === "ja" ? "Session envelope" : "Session envelope")}:</strong></p>
+              <p><strong>${escapeHtml(locale === "ja" ? "セッション封筒" : "Session envelope")}:</strong></p>
               ${
                 envelopeState
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Envelope state" : "Envelope state")}:</strong> <code>${escapeHtml(normalizeText(envelopeState))}</code></p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "封筒状態" : "Envelope state")}:</strong> <code>${escapeHtml(normalizeText(envelopeState))}</code></p>`
                   : ""
               }
               ${
                 envelopeId
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Envelope id" : "Envelope id")}:</strong> <code>${escapeHtml(normalizeText(envelopeId))}</code></p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "封筒ID" : "Envelope id")}:</strong> <code>${escapeHtml(normalizeText(envelopeId))}</code></p>`
                   : ""
               }
               ${
                 envelopeExpiresAt
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Envelope expires at" : "Envelope expires at")}:</strong> <code>${escapeHtml(normalizeText(envelopeExpiresAt))}</code></p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "封筒有効期限" : "Envelope expires at")}:</strong> <code>${escapeHtml(normalizeText(envelopeExpiresAt))}</code></p>`
                   : ""
               }
               ${
                 typeof envelopeSingleUse === "boolean"
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Envelope single use" : "Envelope single use")}:</strong> <code>${escapeHtml(String(envelopeSingleUse))}</code></p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "封筒単回利用" : "Envelope single use")}:</strong> <code>${escapeHtml(String(envelopeSingleUse))}</code></p>`
                   : ""
               }
               ${
                 envelopeBoundScope
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Envelope bound scope" : "Envelope bound scope")}:</strong> <code>${escapeHtml(normalizeText(envelopeBoundScope))}</code></p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "封筒拘束スコープ" : "Envelope bound scope")}:</strong> <code>${escapeHtml(normalizeText(envelopeBoundScope))}</code></p>`
                   : ""
               }
               ${
