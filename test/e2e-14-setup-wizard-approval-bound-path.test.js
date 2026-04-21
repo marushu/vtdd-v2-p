@@ -28,7 +28,7 @@ test("E2E-14 doc records approval-bound happy path and fail-closed boundary path
 test("matrix references E2E-14 setup wizard approval-bound path evidence", () => {
   const doc = fs.readFileSync(MATRIX_PATH, "utf8");
   assert.equal(doc.includes("## E2E-14 Setup wizard approval-bound path"), true);
-  assert.equal(doc.includes("Issues: `#207 #210`"), true);
+  assert.equal(doc.includes("Issues: `#207 #210 #477`"), true);
   assert.equal(doc.includes("docs/mvp/e2e/e2e-14-setup-wizard-approval-bound-path.md"), true);
   assert.equal(doc.includes("- Status: `e2e_evidenced_pending_human_closure`"), true);
 });

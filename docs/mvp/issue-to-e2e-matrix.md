@@ -290,15 +290,16 @@ Status values used below:
 
 ## E2E-14 Setup wizard approval-bound path
 
-- Issues: `#207 #210`
+- Issues: `#207 #210 #477`
 - Happy path:
   - setup wizard carries one approval-bound installation-binding flow through to
     Worker runtime write and same-flow live readiness proof without manual ID or
-    secret transport across GitHub and Cloudflare surfaces
+    secret transport across GitHub and Cloudflare surfaces, and reports
+    setup-complete readiness only when VTDD required runtime settings are present
 - Boundary path:
   - missing Cloudflare prerequisites, missing current `GO + passkey` request,
-    or deferred approval-bound issuance remain explicit fail-closed states with
-    recovery guidance inside the same setup narrative
+    deferred approval-bound issuance, or missing required runtime settings remain
+    explicit fail-closed states with recovery guidance inside the same setup narrative
 - Implementation evidence:
   - `src/worker.js`
   - `docs/mvp/setup-wizard-current-and-target-flow.md`

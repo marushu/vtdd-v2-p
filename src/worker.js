@@ -315,6 +315,11 @@ async function handleSetupWizardRequest({ request, url, env }) {
     githubAppSetupCheck: githubAppSetupCheckWithCompletionAction
   });
   const requiredSettingsBootstrap = buildRequiredSettingsBootstrapStatus({ url, env });
+  const setupCompletion = buildSetupWizardCompletionStatus({
+    url,
+    requiredSettingsBootstrap,
+    githubAppSetupCheck
+  });
   const approvalBoundBootstrapSessionWithInlineRequest = attachInlineRequestSurfaceHint({
     approvalBoundBootstrapSession,
     githubAppSetupCheck
@@ -348,6 +353,7 @@ async function handleSetupWizardRequest({ request, url, env }) {
         githubAppSetupCheck,
         githubAppBootstrap,
         requiredSettingsBootstrap,
+        setupCompletion,
         approvalBoundBootstrapSession: approvalBoundBootstrapSessionForResponse,
         guidance
       });
@@ -367,6 +373,7 @@ async function handleSetupWizardRequest({ request, url, env }) {
       githubAppSetupCheck,
       githubAppBootstrap,
       requiredSettingsBootstrap,
+      setupCompletion,
       approvalBoundBootstrapSession: approvalBoundBootstrapSessionForResponse,
       guidance
     });
@@ -381,6 +388,7 @@ async function handleSetupWizardRequest({ request, url, env }) {
     githubAppSetupCheck,
     githubAppBootstrap,
     requiredSettingsBootstrap,
+    setupCompletion,
     approvalBoundBootstrapSession: approvalBoundBootstrapSessionForResponse
   });
   return html(result.ok ? 200 : 422, htmlBody);
@@ -2757,6 +2765,7 @@ function renderSetupWizardHtml({
   githubAppSetupCheck,
   githubAppBootstrap,
   requiredSettingsBootstrap,
+  setupCompletion,
   approvalBoundBootstrapSession
 }) {
   const pageTitle = locale === "ja" ? "VTDD セットアップウィザード" : "VTDD Setup Wizard";
@@ -2774,6 +2783,7 @@ function renderSetupWizardHtml({
         githubAppSetupCheck,
         githubAppBootstrap,
         requiredSettingsBootstrap,
+        setupCompletion,
         approvalBoundBootstrapSession
       )
     : renderFailureContent(
@@ -2785,6 +2795,7 @@ function renderSetupWizardHtml({
         githubAppSetupCheck,
         githubAppBootstrap,
         requiredSettingsBootstrap,
+        setupCompletion,
         approvalBoundBootstrapSession
       );
 
@@ -3004,6 +3015,7 @@ function renderSuccessContent(
   githubAppSetupCheck,
   githubAppBootstrap,
   requiredSettingsBootstrap,
+  setupCompletion,
   approvalBoundBootstrapSession
 ) {
   const onboarding = result.onboarding ?? {};
@@ -3145,6 +3157,7 @@ function renderSuccessContent(
       ${renderGitHubAppSetupCheck(githubAppSetupCheck, locale)}
       ${renderGitHubAppBootstrap(githubAppBootstrap, url, locale)}
       ${renderRequiredSettingsBootstrap(requiredSettingsBootstrap, url, locale)}
+      ${renderSetupCompletion(setupCompletion, locale)}
       ${renderApprovalBoundBootstrapSession(approvalBoundBootstrapSession, locale)}
       ${renderCloudflareSetupCheck(cloudflareSetupCheck, locale)}
       <p class="meta">${escapeHtml(operatorManagedNote)}</p>
@@ -3516,6 +3529,7 @@ function renderFailureContent(
   githubAppSetupCheck,
   githubAppBootstrap,
   requiredSettingsBootstrap,
+  setupCompletion,
   approvalBoundBootstrapSession
 ) {
   const issues = Array.isArray(result.blockingIssues) ? result.blockingIssues : [];
@@ -3537,6 +3551,7 @@ function renderFailureContent(
       ${renderGitHubAppSetupCheck(githubAppSetupCheck, locale)}
       ${renderGitHubAppBootstrap(githubAppBootstrap, url, locale)}
       ${renderRequiredSettingsBootstrap(requiredSettingsBootstrap, url, locale)}
+      ${renderSetupCompletion(setupCompletion, locale)}
       ${renderApprovalBoundBootstrapSession(approvalBoundBootstrapSession, locale)}
       ${renderCloudflareSetupCheck(cloudflareSetupCheck, locale)}
       <h2>${escapeHtml(locale === "ja" ? "デバッグ（安全な回答のみ）" : "Debug (safe answers only)")}</h2>
@@ -4606,6 +4621,62 @@ function renderRequiredSettingsBootstrap(status, url, locale = "en") {
               </div>
             </form>
           `
+          : ""
+      }
+    </div>
+  `;
+}
+
+function renderSetupCompletion(status, locale = "en") {
+  const state = normalizeText(status?.state) || "blocked";
+  const summary = normalizeText(status?.summary) || "Setup completion status is unavailable.";
+  const blockingReasons = Array.isArray(status?.blockingReasons) ? status.blockingReasons : [];
+  const missingRuntimeSettings = Array.isArray(status?.missingRuntimeSettings)
+    ? status.missingRuntimeSettings
+    : [];
+  const completionDefinition = Array.isArray(status?.completionDefinition)
+    ? status.completionDefinition
+    : [];
+  const recoveryActions = Array.isArray(status?.recoveryActions) ? status.recoveryActions : [];
+
+  return `
+    <h2>${escapeHtml(locale === "ja" ? "Setup Completion" : "Setup Completion")}</h2>
+    <div class="block">
+      <p><strong>${escapeHtml(locale === "ja" ? "状態" : "state")}:</strong> <code>${escapeHtml(state)}</code></p>
+      <p>${escapeHtml(summary)}</p>
+      ${
+        completionDefinition.length > 0
+          ? `<p><strong>${escapeHtml(
+              locale === "ja" ? "完了判定の必須設定" : "Completion required settings"
+            )}:</strong> ${completionDefinition
+              .map((item) => `<code>${escapeHtml(item)}</code>`)
+              .join(", ")}</p>`
+          : ""
+      }
+      ${
+        missingRuntimeSettings.length > 0
+          ? `<p><strong>${escapeHtml(
+              locale === "ja" ? "不足設定" : "Missing settings"
+            )}:</strong> ${missingRuntimeSettings
+              .map((item) => `<code>${escapeHtml(item)}</code>`)
+              .join(", ")}</p>`
+          : ""
+      }
+      ${
+        blockingReasons.length > 0
+          ? `<p><strong>${escapeHtml(locale === "ja" ? "ブロック理由" : "Blocking reasons")}:</strong> ${blockingReasons
+              .map((item) => `<code>${escapeHtml(item)}</code>`)
+              .join(", ")}</p>`
+          : ""
+      }
+      ${
+        recoveryActions.length > 0
+          ? `<ul>${recoveryActions
+              .map(
+                (action) =>
+                  `<li><code>${escapeHtml(normalizeText(action?.id) || "recovery")}</code>: ${escapeHtml(normalizeText(action?.summary) || "")}</li>`
+              )
+              .join("")}</ul>`
           : ""
       }
     </div>
@@ -6806,6 +6877,85 @@ function buildRequiredSettingsBootstrapStatus({ url, env }) {
     scriptName,
     accountId,
     cloudflareApiToken
+  };
+}
+
+function buildSetupWizardCompletionStatus({
+  url,
+  requiredSettingsBootstrap,
+  githubAppSetupCheck
+}) {
+  const missingRuntimeSettings = Array.isArray(requiredSettingsBootstrap?.missingSettings)
+    ? requiredSettingsBootstrap.missingSettings
+    : [];
+  const missingPrerequisites = Array.isArray(requiredSettingsBootstrap?.missingPrerequisites)
+    ? requiredSettingsBootstrap.missingPrerequisites
+    : [];
+  const githubState = normalizeText(githubAppSetupCheck?.state);
+  const githubReady = githubState === "configured" || githubState === "ready";
+
+  const blockingReasons = [];
+  if (missingPrerequisites.length > 0 && missingRuntimeSettings.length > 0) {
+    blockingReasons.push("operator_bootstrap_prerequisites_missing");
+  }
+  if (missingRuntimeSettings.length > 0) {
+    blockingReasons.push("required_runtime_settings_missing");
+  }
+  if (!githubReady) {
+    blockingReasons.push("github_app_not_ready");
+  }
+
+  if (blockingReasons.length === 0) {
+    return {
+      state: "ready",
+      summary:
+        "Setup wizard completion criteria are satisfied. VTDD runtime prerequisites for immediate use are configured.",
+      completionDefinition: [...SETUP_WIZARD_VTDD_READY_SECRET_SET],
+      missingRuntimeSettings: [],
+      blockingReasons: [],
+      recoveryActions: []
+    };
+  }
+
+  const diagnosticsReturnTo =
+    normalizeSetupWizardDiagnosticsReturnTo(`${url.pathname}${url.search || ""}`) ||
+    "/setup/wizard?githubAppCheck=on";
+  const recoveryActions = [];
+
+  if (missingRuntimeSettings.length > 0 && normalizeText(requiredSettingsBootstrap?.state) === "available") {
+    recoveryActions.push({
+      id: "write_required_runtime_settings",
+      path: normalizeText(requiredSettingsBootstrap?.actionPath) || SETUP_WIZARD_REQUIRED_SETTINGS_BOOTSTRAP_PATH,
+      approvalBoundary: "GO + passkey",
+      summary:
+        "Use required settings bootstrap to write missing runtime settings through the allowlisted path."
+    });
+  }
+  if (missingPrerequisites.length > 0) {
+    recoveryActions.push({
+      id: "restore_operator_bootstrap_prerequisites",
+      summary:
+        "Restore Cloudflare bootstrap prerequisites so required settings bootstrap can write runtime secrets."
+    });
+  }
+  if (!githubReady) {
+    recoveryActions.push({
+      id: "run_github_app_readiness_check",
+      method: "GET",
+      path: diagnosticsReturnTo,
+      summary:
+        "Run GitHub App diagnostics and complete installation binding/readiness in the same setup flow."
+    });
+  }
+
+  return {
+    state: "blocked",
+    summary:
+      "Setup wizard is not complete yet. VTDD immediate-use readiness remains blocked until all required runtime settings and GitHub App readiness are satisfied.",
+    completionDefinition: [...SETUP_WIZARD_VTDD_READY_SECRET_SET],
+    missingRuntimeSettings,
+    blockingReasons,
+    recoveryActions
   };
 }
 

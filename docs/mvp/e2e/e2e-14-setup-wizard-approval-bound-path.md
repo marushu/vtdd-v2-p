@@ -1,6 +1,6 @@
 # E2E-14 Setup Wizard Approval-Bound Path Evidence
 
-This document records concrete run evidence for the current `#210` / `#207`
+This document records concrete run evidence for the current `#210` / `#207` / `#477`
 setup-wizard execution window.
 
 ## Scope
@@ -8,6 +8,7 @@ setup-wizard execution window.
 Issues:
 - `#210`
 - `#207`
+- `#477`
 - parent chain: `#182`
 
 Goal:
@@ -15,6 +16,8 @@ Goal:
   ID/secret transport
 - confirm Cloudflare prerequisite legibility remains user-facing rather than
   hidden as operator-only diagnostics
+- confirm wizard completion is reported in VTDD terms (`ready` / `blocked`)
+  using required runtime-setting readiness and same-flow recovery guidance
 - confirm blocked or deferred setup states stay fail-closed and recover inside
   the same setup narrative
 
@@ -43,6 +46,11 @@ Observed result on 2026-04-21:
   installation-binding write
 - confirms success is reported in VTDD capability terms rather than as raw
   secret presence only
+- confirms `setupCompletion` reports `ready` only when VTDD required runtime
+  settings are present (`SETUP_WIZARD_PASSCODE`, `VTDD_GATEWAY_BEARER_TOKEN`,
+  `GEMINI_API_KEY`, GitHub App identity/binding trio)
+- confirms wizard reports `blocked` with recovery actions when required runtime
+  settings or GitHub readiness remain incomplete
 
 ## Boundary-path Run
 
@@ -60,6 +68,8 @@ Observed result on 2026-04-21:
   with fail-closed recovery guidance
 - confirms deferred approval-bound issuance is reported as intentionally
   deferred rather than silently upgraded into broad bootstrap authority
+- confirms required-settings bootstrap remains fail-closed on missing
+  `GO + passkey` and writes only through allowlisted runtime secret names
 - confirms current and target flow docs keep Cloudflare prerequisite debt and
   wizard-complete gaps explicit
 
@@ -76,10 +86,10 @@ Observed result on 2026-04-21:
 ## Current Reading
 
 E2E-14 now records one real approval-bound setup happy path and one fail-closed
-boundary path for the current `#210` / `#207` window.
+boundary path for the current `#210` / `#207` / `#477` window.
 
 Current E2E track status is `e2e_evidenced_pending_human_closure` for the
-current `#210` / `#207` execution window.
+current `#210` / `#207` / `#477` execution window.
 
 This does not auto-close Issues and does not override human closure gates.
 Current repository reading remains `partial / in-progress` because:

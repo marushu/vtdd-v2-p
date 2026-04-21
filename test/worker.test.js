@@ -7223,6 +7223,44 @@ test("worker setup wizard json keeps iphone-first and no-default-repo policy vis
   assert.equal(body.generatedAnswers.allowDefaultRepository, false);
   assert.equal(body.onboarding.setupMode, "iphone_first");
   assert.equal(body.onboarding.customGpt.constructionText.includes("Do not assume a default repository."), true);
+  assert.equal(body.setupCompletion.state, "blocked");
+  assert.equal(
+    body.setupCompletion.blockingReasons.includes("required_runtime_settings_missing"),
+    true
+  );
+  assert.equal(body.setupCompletion.blockingReasons.includes("github_app_not_ready"), true);
+  assert.equal(
+    body.setupCompletion.completionDefinition.includes("VTDD_GATEWAY_BEARER_TOKEN"),
+    true
+  );
+  assert.equal(body.setupCompletion.recoveryActions.length > 0, true);
+});
+
+test("worker setup wizard setupCompletion becomes ready when required runtime settings are present", async () => {
+  const env = {
+    SETUP_WIZARD_PASSCODE: "2468",
+    VTDD_GATEWAY_BEARER_TOKEN: "token",
+    GEMINI_API_KEY: "gemini-key",
+    GITHUB_APP_ID: "12345",
+    GITHUB_APP_INSTALLATION_ID: "98765",
+    GITHUB_APP_PRIVATE_KEY: "-----BEGIN PRIVATE KEY-----\nplaceholder\n-----END PRIVATE KEY-----"
+  };
+  const { sessionCookie } = await unlockSetupWizard(env, "/setup/wizard?repo=sample-org/vtdd-v2");
+
+  const response = await worker.fetch(
+    new Request("https://example.com/setup/wizard?format=json&repo=sample-org/vtdd-v2", {
+      headers: {
+        cookie: `vtdd_setup_access=${sessionCookie}`
+      }
+    }),
+    env
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.setupCompletion.state, "ready");
+  assert.deepEqual(body.setupCompletion.missingRuntimeSettings, []);
+  assert.deepEqual(body.setupCompletion.blockingReasons, []);
 });
 
 test("worker setup wizard never exposes secret credential input fields", async () => {
