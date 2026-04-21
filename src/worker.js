@@ -5519,20 +5519,20 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
         completionReadout
           ? `
             <div class="block" style="margin-top: 12px;">
-              <p><strong>${escapeHtml(locale === "ja" ? "Completion claim" : "Completion claim")}:</strong></p>
+              <p><strong>${escapeHtml(locale === "ja" ? "完了主張" : "Completion claim")}:</strong></p>
               ${
                 claimState
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Current claim" : "Current claim")}:</strong> <code>${escapeHtml(normalizeText(claimState.id))}</code> ${escapeHtml(normalizeText(claimState.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "現在の主張" : "Current claim")}:</strong> <code>${escapeHtml(normalizeText(claimState.id))}</code> ${escapeHtml(normalizeText(claimState.summary))}</p>`
                   : ""
               }
               ${
                 cannotYetClaim
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Cannot yet claim" : "Cannot yet claim")}:</strong> <code>${escapeHtml(normalizeText(cannotYetClaim.id))}</code> ${escapeHtml(normalizeText(cannotYetClaim.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "まだ主張不可" : "Cannot yet claim")}:</strong> <code>${escapeHtml(normalizeText(cannotYetClaim.id))}</code> ${escapeHtml(normalizeText(cannotYetClaim.summary))}</p>`
                   : ""
               }
               ${
                 claimBecomesValidWhen
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Claim becomes valid when" : "Claim becomes valid when")}:</strong> <code>${escapeHtml(normalizeText(claimBecomesValidWhen.id))}</code> ${escapeHtml(normalizeText(claimBecomesValidWhen.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "主張成立条件" : "Claim becomes valid when")}:</strong> <code>${escapeHtml(normalizeText(claimBecomesValidWhen.id))}</code> ${escapeHtml(normalizeText(claimBecomesValidWhen.summary))}</p>`
                   : ""
               }
             </div>
