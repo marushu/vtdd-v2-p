@@ -3874,7 +3874,7 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
             <div class="block" style="margin-top: 12px;">
               <p><strong>${escapeHtml(
                 locale === "ja"
-                  ? "installation binding は完了し、次は live readiness 確認です"
+                  ? "インストール紐付けは完了し、次はライブ準備性確認です"
                   : "Installation binding is complete, and the next step is live readiness verification"
               )}</strong></p>
               <p><strong>${escapeHtml(locale === "ja" ? "セットアップ進捗" : "Setup progress")}</strong></p>
@@ -3886,7 +3886,7 @@ function renderGitHubAppSetupCheck(check, locale = "en") {
                 )}</li>
                 <li>${escapeHtml(
                   locale === "ja"
-                    ? "次は installation capture をやり直さず、live readiness diagnostics を実行する段階です。"
+                    ? "次はインストール捕捉をやり直さず、ライブ準備性診断を実行する段階です。"
                     : "The next step is live readiness diagnostics, not another installation capture step."
                 )}</li>
                 <li>${escapeHtml(

@@ -4379,7 +4379,7 @@ test("worker setup wizard consume-proof configured html shows post-binding setup
   assert.equal(responseJa.status, 200);
   const htmlJa = await responseJa.text();
   assert.equal(htmlJa.includes("セットアップ進捗"), true);
-  assert.equal(htmlJa.includes("installation binding は完了し、次は live readiness 確認です"), true);
+  assert.equal(htmlJa.includes("インストール紐付けは完了し、次はライブ準備性確認です"), true);
   assert.equal(htmlJa.includes("消費後証跡"), true);
 });
 
