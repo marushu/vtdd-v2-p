@@ -34,6 +34,13 @@ test("setup wizard returns git/db outputs and iphone onboarding pack", () => {
   assert.equal(result.outputs.git[0].target, SetupOutputTarget.GIT);
   assert.equal(result.outputs.db[0].target, SetupOutputTarget.DB);
   assert.equal(result.onboarding.setupMode, SetupMode.IPHONE_FIRST);
+  assert.deepEqual(result.onboarding.steps, [
+    "Open the invitation-only Day0 setup URL on iPhone Safari or browser and accept the beta / billing responsibility terms.",
+    "Complete GitHub setup on your own account and let the wizard create or reuse your user-owned VTDD fork.",
+    "Complete Cloudflare setup on your own account and create or resolve a user-owned Worker runtime.",
+    "Add Gemini API key to the user-owned runtime through the guided setup step.",
+    "After Day0 setup reaches ready, continue with the shared VTDD GPT entry or switch to Codex using the same user-owned repository and runtime."
+  ]);
   assert.equal(result.onboarding.customGpt.endpointBaseUrl, "https://vtdd-v2-mvp.example.workers.dev");
   assert.equal(result.onboarding.customGpt.actionSchemaJson.includes("/v2/gateway"), true);
   assert.equal(result.onboarding.deployAuthority.selectedPath, "one_shot_github_actions");
@@ -258,6 +265,20 @@ test("setup wizard returns git/db outputs and iphone onboarding pack", () => {
     result.onboarding.reviewer.fallbackCondition,
     "emergency_only_with_learning_use_disabled"
   );
+  assert.equal(result.onboarding.surfaceEntry.readinessRule, "show_only_after_day0_ready");
+  assert.equal(result.onboarding.surfaceEntry.chatgpt.loginRequired, true);
+  assert.equal(
+    result.onboarding.surfaceEntry.chatgpt.sharedGptLinkMode,
+    "shared_live_gpt_link_after_ready"
+  );
+  assert.equal(
+    result.onboarding.surfaceEntry.codex.handoffMode,
+    "same_repo_same_runtime_after_ready"
+  );
+  assert.equal(
+    result.onboarding.surfaceEntry.codex.workspaceExpectation,
+    "open_user_owned_vtdd_repository"
+  );
   assert.deepEqual(result.onboarding.reviewer.inputContract, ["PR diff", "context"]);
   assert.deepEqual(result.onboarding.reviewer.outputContract, [
     "critical_findings[]",
@@ -357,18 +378,6 @@ test("setup wizard returns git/db outputs and iphone onboarding pack", () => {
   assert.equal(Boolean(parsed?.paths?.["/v2/gateway"]?.post?.responses?.["401"]), true);
   assert.equal(Boolean(parsed?.paths?.["/v2/gateway"]?.post?.responses?.["403"]), true);
   assert.equal(Boolean(parsed?.paths?.["/v2/gateway"]?.post?.responses?.["422"]), true);
-  assert.equal(
-    result.onboarding.steps.includes(
-      "Replace the full Instructions field with the construction text from this onboarding pack, then set action schema from the same pack."
-    ),
-    true
-  );
-  assert.equal(
-    result.onboarding.steps.includes(
-      "Use pr_comment for low-friction PR comments without GO, but require GO before pr_review_submit."
-    ),
-    true
-  );
 });
 
 test("setup wizard exposes direct provider fallback when GitHub protection is unavailable", () => {

@@ -21,22 +21,22 @@ It does not delete or recreate Cloudflare resources automatically.
 
 ### Worker Script
 
-- account id: `bd82bbc79ce38442976432eaa409e48c`
-- worker name: `vtdd-v2-mvp`
-- workers.dev account subdomain: `polished-tree-da7c`
+- account id: `[redacted-owner-account-id]`
+- worker name: `[redacted-owner-worker-name]`
+- workers.dev account subdomain: `[redacted-owner-workers-subdomain]`
 - script subdomain status: `enabled=true`, `previews_enabled=true`
 
 Current public worker URL:
 
-- `https://vtdd-v2-mvp.polished-tree-da7c.workers.dev`
+- `https://[redacted-owner-worker-name].[redacted-owner-workers-subdomain].workers.dev`
 
 Current setup wizard URL:
 
-- `https://vtdd-v2-mvp.polished-tree-da7c.workers.dev/setup/wizard?repo=sample-org/vtdd-v2`
+- `https://[redacted-owner-worker-name].[redacted-owner-workers-subdomain].workers.dev/setup/wizard?repo=sample-org/vtdd-v2`
 
 Current health URL:
 
-- `https://vtdd-v2-mvp.polished-tree-da7c.workers.dev/health`
+- `https://[redacted-owner-worker-name].[redacted-owner-workers-subdomain].workers.dev/health`
 
 ### Exposure Reading
 
@@ -47,7 +47,8 @@ Current health URL:
 ### Custom Domains
 
 - current inventory reading: none
-- Cloudflare Workers Domains API returned zero attached domains for `vtdd-v2-mvp`
+- Cloudflare Workers Domains API returned zero attached domains for the
+  redacted owner worker
 
 ### D1
 
@@ -75,7 +76,8 @@ Current health URL:
 
 ### Safe-to-assume current live asset
 
-- `vtdd-v2-mvp` worker script exists and is publicly reachable on `workers.dev`
+- an owner-specific worker script exists and is publicly reachable on
+  `workers.dev`
 
 ### Likely absent from current account evidence
 
