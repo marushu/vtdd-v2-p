@@ -5089,20 +5089,20 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
         authorityRequestFreshnessReadout
           ? `
             <div class="block" style="margin-top: 12px;">
-              <p><strong>${escapeHtml(locale === "ja" ? "Authority request freshness" : "Authority request freshness")}:</strong></p>
+              <p><strong>${escapeHtml(locale === "ja" ? "権限要求鮮度" : "Authority request freshness")}:</strong></p>
               ${
                 freshnessRequirement
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Freshness requirement" : "Freshness requirement")}:</strong> <code>${escapeHtml(normalizeText(freshnessRequirement.id))}</code> ${escapeHtml(normalizeText(freshnessRequirement.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "鮮度要件" : "Freshness requirement")}:</strong> <code>${escapeHtml(normalizeText(freshnessRequirement.id))}</code> ${escapeHtml(normalizeText(freshnessRequirement.summary))}</p>`
                   : ""
               }
               ${
                 staleRequestRejection
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Stale request rejection" : "Stale request rejection")}:</strong> <code>${escapeHtml(normalizeText(staleRequestRejection.id))}</code> ${escapeHtml(normalizeText(staleRequestRejection.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "陳腐化要求拒否" : "Stale request rejection")}:</strong> <code>${escapeHtml(normalizeText(staleRequestRejection.id))}</code> ${escapeHtml(normalizeText(staleRequestRejection.summary))}</p>`
                   : ""
               }
               ${
                 freshnessRecovery
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Freshness recovery" : "Freshness recovery")}:</strong> <code>${escapeHtml(normalizeText(freshnessRecovery.id))}</code> ${escapeHtml(normalizeText(freshnessRecovery.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "鮮度復帰" : "Freshness recovery")}:</strong> <code>${escapeHtml(normalizeText(freshnessRecovery.id))}</code> ${escapeHtml(normalizeText(freshnessRecovery.summary))}</p>`
                   : ""
               }
             </div>
