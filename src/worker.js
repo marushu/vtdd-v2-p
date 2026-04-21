@@ -4916,20 +4916,20 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
         responsibilityReadout
           ? `
             <div class="block" style="margin-top: 12px;">
-              <p><strong>${escapeHtml(locale === "ja" ? "Responsibility split" : "Responsibility split")}:</strong></p>
+              <p><strong>${escapeHtml(locale === "ja" ? "責務分割" : "Responsibility split")}:</strong></p>
               ${
                 humanStep
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Human step" : "Human step")}:</strong> <code>${escapeHtml(normalizeText(humanStep.id))}</code> ${escapeHtml(normalizeText(humanStep.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "人が行うステップ" : "Human step")}:</strong> <code>${escapeHtml(normalizeText(humanStep.id))}</code> ${escapeHtml(normalizeText(humanStep.summary))}</p>`
                   : ""
               }
               ${
                 vtddStep
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "VTDD step" : "VTDD step")}:</strong> <code>${escapeHtml(normalizeText(vtddStep.id))}</code> ${escapeHtml(normalizeText(vtddStep.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "VTDD ステップ" : "VTDD step")}:</strong> <code>${escapeHtml(normalizeText(vtddStep.id))}</code> ${escapeHtml(normalizeText(vtddStep.summary))}</p>`
                   : ""
               }
               ${
                 providerStep
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Provider step" : "Provider step")}:</strong> <code>${escapeHtml(normalizeText(providerStep.id))}</code> ${escapeHtml(normalizeText(providerStep.summary))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "プロバイダーステップ" : "Provider step")}:</strong> <code>${escapeHtml(normalizeText(providerStep.id))}</code> ${escapeHtml(normalizeText(providerStep.summary))}</p>`
                   : ""
               }
             </div>
