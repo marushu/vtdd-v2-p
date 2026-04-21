@@ -4859,15 +4859,15 @@ function renderApprovalBoundBootstrapSession(session, locale = "en") {
         serviceConnectionFrictionReadout
           ? `
             <div class="block" style="margin-top: 12px;">
-              <p><strong>${escapeHtml(locale === "ja" ? "Service connection friction" : "Service connection friction")}:</strong></p>
+              <p><strong>${escapeHtml(locale === "ja" ? "サービス接続摩擦" : "Service connection friction")}:</strong></p>
               ${
                 githubConnectionFriction
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "GitHub friction" : "GitHub friction")}:</strong> <code>${escapeHtml(normalizeText(githubConnectionFriction.id))}</code> ${escapeHtml(normalizeText(githubConnectionFriction.summary))} <strong>${escapeHtml(locale === "ja" ? "Manual transport remains" : "Manual transport remains")}:</strong> <code>${escapeHtml(normalizeText(githubConnectionFriction.manualTransportRemains))}</code> <strong>${escapeHtml(locale === "ja" ? "Allowed human involvement" : "Allowed human involvement")}:</strong> ${escapeHtml(normalizeText(githubConnectionFriction.allowedHumanInvolvement))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "GitHub 摩擦" : "GitHub friction")}:</strong> <code>${escapeHtml(normalizeText(githubConnectionFriction.id))}</code> ${escapeHtml(normalizeText(githubConnectionFriction.summary))} <strong>${escapeHtml(locale === "ja" ? "手動搬送が残るか" : "Manual transport remains")}:</strong> <code>${escapeHtml(normalizeText(githubConnectionFriction.manualTransportRemains))}</code> <strong>${escapeHtml(locale === "ja" ? "許容される人の関与" : "Allowed human involvement")}:</strong> ${escapeHtml(normalizeText(githubConnectionFriction.allowedHumanInvolvement))}</p>`
                   : ""
               }
               ${
                 cloudflareConnectionFriction
-                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Cloudflare friction" : "Cloudflare friction")}:</strong> <code>${escapeHtml(normalizeText(cloudflareConnectionFriction.id))}</code> ${escapeHtml(normalizeText(cloudflareConnectionFriction.summary))} <strong>${escapeHtml(locale === "ja" ? "Manual transport remains" : "Manual transport remains")}:</strong> <code>${escapeHtml(normalizeText(cloudflareConnectionFriction.manualTransportRemains))}</code> <strong>${escapeHtml(locale === "ja" ? "Allowed human involvement" : "Allowed human involvement")}:</strong> ${escapeHtml(normalizeText(cloudflareConnectionFriction.allowedHumanInvolvement))}</p>`
+                  ? `<p><strong>${escapeHtml(locale === "ja" ? "Cloudflare 摩擦" : "Cloudflare friction")}:</strong> <code>${escapeHtml(normalizeText(cloudflareConnectionFriction.id))}</code> ${escapeHtml(normalizeText(cloudflareConnectionFriction.summary))} <strong>${escapeHtml(locale === "ja" ? "手動搬送が残るか" : "Manual transport remains")}:</strong> <code>${escapeHtml(normalizeText(cloudflareConnectionFriction.manualTransportRemains))}</code> <strong>${escapeHtml(locale === "ja" ? "許容される人の関与" : "Allowed human involvement")}:</strong> ${escapeHtml(normalizeText(cloudflareConnectionFriction.allowedHumanInvolvement))}</p>`
                   : ""
               }
             </div>
