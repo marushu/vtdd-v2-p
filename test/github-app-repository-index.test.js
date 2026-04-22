@@ -201,8 +201,10 @@ test("github app index can mint installation token from github app credentials",
   assert.equal(calls.length, 2);
   assert.equal(calls[0].url.includes("/app/installations/98765/access_tokens"), true);
   assert.equal(calls[0].init.headers.authorization, "Bearer app_jwt_token_for_tests");
+  assert.equal(calls[0].init.headers["user-agent"], "vtdd-v2-github-app-index");
   assert.equal(calls[1].url.includes("/installation/repositories"), true);
   assert.equal(calls[1].init.headers.authorization, "Bearer ghs_minted_installation_token");
+  assert.equal(calls[1].init.headers["user-agent"], "vtdd-v2-github-app-index");
 });
 
 test("github app index reuses cached minted token until refresh margin", async () => {
@@ -371,4 +373,33 @@ test("github app index can enforce minted-token mode and block static token fall
   assert.equal(result.aliasRegistry.length, 1);
   assert.equal(result.warnings.length, 1);
   assert.equal(result.warnings[0].includes("disabled by GITHUB_APP_ENFORCE_MINTED_INSTALLATION_TOKEN"), true);
+});
+
+test("github app index surfaces non-json installation token mint failure details", async () => {
+  const result = await resolveGatewayAliasRegistryFromGitHubApp({
+    policyInput: { aliasRegistry: [] },
+    env: {
+      GITHUB_APP_ID: "55555",
+      GITHUB_APP_INSTALLATION_ID: "44444",
+      GITHUB_APP_PRIVATE_KEY: "-----BEGIN PRIVATE KEY-----\nplaceholder\n-----END PRIVATE KEY-----",
+      GITHUB_APP_JWT_PROVIDER: async () => "app_jwt_token_for_tests",
+      GITHUB_API_FETCH: async (url) => {
+        if (String(url).includes("/app/installations/44444/access_tokens")) {
+          return new Response("<html><body>Request forbidden by upstream policy</body></html>", {
+            status: 403,
+            statusText: "Forbidden",
+            headers: { "content-type": "text/html; charset=utf-8" }
+          });
+        }
+        throw new Error("repositories fetch should not run after mint failure");
+      }
+    }
+  });
+
+  assert.equal(result.source, "provided");
+  assert.equal(result.warnings.length, 1);
+  assert.equal(
+    result.warnings[0].includes("<html><body>Request forbidden by upstream policy</body></html>"),
+    true
+  );
 });
