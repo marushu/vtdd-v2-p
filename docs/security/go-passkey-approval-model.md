@@ -7,6 +7,8 @@ For the full canonical consent / approval model, see
 ## Intent
 
 High-risk actions should require both explicit intent and strong user authentication.
+Merge and bounded post-merge completion tasks remain explicit `GO` actions, but
+they are not part of the `GO + passkey` set.
 
 ## Approval Levels
 
@@ -23,13 +25,17 @@ No explicit approval required.
 - issue creation
 - branch / PR operations
 - normal execution
+- merge
+- post-merge issue close for the scoped work
+- merged-branch deletion for the scoped PR
 
 Requires `GO`.
 
 ### Level 3
 
-- merge
 - production deploy
+- credential mutation
+- permission mutation
 - destructive actions
 - external publish
 

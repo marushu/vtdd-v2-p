@@ -59,7 +59,7 @@ The reviewer contract must stay compatible with registry-based adapter replaceme
 
 - Butler treats reviewer output as a blocking risk signal when critical findings or serious risks are present.
 - Butler may summarize or structure reviewer output, but must not erase meaningful reviewer objections.
-- Human remains the final authority for revision GO and merge GO.
+- Human remains the final authority for revision GO and for GO/GO+passkey authority delegation.
 
 ## Security Boundary
 

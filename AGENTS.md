@@ -22,12 +22,15 @@ bounded Issue window, that delegation allows:
 - PR creation
 - PR review response and iteration
 - merge only after scoped criteria, tests, and mapped E2E evidence are all present
+- post-merge Issue closure and merged-branch deletion only after the same
+  scoped criteria, tests, and mapped E2E evidence are all present
 
 That delegation does not allow:
 
-- Issue closure without explicit human approval
 - changing the scoped Issue set by assumption
 - declaring milestone-complete by implication
+- deploy, credential mutation, permission mutation, or destructive operation
+  without `GO + passkey`
 
 ## Canonical Source Order
 
@@ -126,11 +129,11 @@ Issue closure is allowed only when all are true:
 1. Code implementing the scoped criteria is merged.
 2. Required tests pass.
 3. Mapped E2E scenario(s) pass with evidence.
-4. Human explicitly approves closure.
+4. A human has explicitly delegated or approved closure for the scoped work
+   (for example via `GO` in a bounded execution window).
 
-Even when the user delegates merge authority, keep Issue closure and milestone
-completion judgment human-approved unless the user explicitly delegates closure
-for the specific Issue.
+Even when the user delegates merge authority, keep milestone completion judgment
+human-approved unless the user explicitly delegates that judgment.
 
 Manual closure without these four conditions is prohibited.
 
@@ -167,6 +170,8 @@ MVP completion claim is allowed only when the matrix shows complete coverage for
 - No default repository.
 - Unresolved target blocks execution.
 - High-risk actions require GO + passkey.
+- Merge, post-merge Issue closure, and merged-branch deletion require explicit
+  `GO`, not silent inference.
 - Credential model is GitHub App.
 - High-risk credential is short-lived and approval-bound.
 - Memory excludes secrets and raw sensitive material.
@@ -209,6 +214,30 @@ inside an explicitly stated contract. Stop when:
 - GitHub / Cloudflare / ChatGPT ownership semantics become ambiguous
 - a change would expose or depend on owner-specific runtime state
 - Issue / spec coverage for the current implementation slice is missing
+
+## Authority Boundary
+
+- `GO` may authorize bounded execution work including PR creation/update,
+  merge, post-merge Issue closure, and merged-branch deletion.
+- `GO` does not authorize deploy, credential mutation, permission mutation, or
+  destructive/high-blast-radius operations.
+- `GO + passkey` is required for deploy, credential mutation, permission
+  mutation, destructive operations, and other high-risk external effects.
+- Issue closure is allowed only after merge and only when scoped criteria,
+  tests, and mapped E2E evidence are all present.
+- Merged-branch deletion is allowed only for the branch merged by that scoped
+  PR, not for unrelated branches.
+
+## Public Repo Collaboration Boundary
+
+- For a public repository owned by a personal account, do not add human
+  collaborators by default.
+- Default external contribution path is fork + PR, not direct collaborator
+  write access.
+- Preserve owner-only administration for Actions settings, GitHub App setup,
+  secrets, and other repository administration surfaces whenever possible.
+- If a human collaborator is ever added, treat that as an explicit policy
+  change and re-evaluate Issue close, secret, and execution-boundary risk.
 
 ## RAG Memory Capture and Cost Boundary
 

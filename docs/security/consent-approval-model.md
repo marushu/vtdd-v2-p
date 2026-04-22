@@ -31,6 +31,7 @@ action on this specific scope proceed now?"
 - `approvalPhrase` is required whenever approval level is not `none`.
 - Approval must be bound to the target scope.
 - High-risk operations require `GO + passkey`.
+- Merge and bounded post-merge completion tasks require explicit `GO`.
 
 ## Canonical Action Mapping
 
@@ -57,10 +58,22 @@ action on this specific scope proceed now?"
 - `pr_comment` -> `none`
 - `pr_review_submit` -> `go`
 - `pr_operation` -> `go`
-- `merge` -> `go_passkey`
+- `merge` -> `go`
 - `deploy_production` -> `go_passkey`
 - `destructive` -> `go_passkey`
 - `external_publish` -> `go_passkey`
+
+## Operational Extension
+
+The canonical action table above covers the current execution action types.
+The following bounded post-merge completion tasks follow the same `go` approval
+level as `merge`:
+
+- issue close for the scoped work that was just merged
+- deletion of the merged topic branch tied to that PR
+
+These tasks are not authorized by category consent alone and must not be
+inferred without explicit scoped `GO`.
 
 ## Destructive Handling
 

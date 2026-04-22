@@ -78,7 +78,7 @@ VTDD V2 の MVP 実装を開始するための統合親 Issue を確定する。
 
 - GitHub App is the credential model
 - Credential boundary is segmented by role/risk
-- High-risk actions require `GO + passkey`
+- Merge uses explicit `GO`; high-risk actions require `GO + passkey`
 - Destructive path is separated and audited
 
 ### 4. Memory Backbone and Safety
@@ -109,6 +109,7 @@ VTDD V2 の MVP 実装を開始するための統合親 Issue を確定する。
 - Butler can resolve context safely and refuse unsafe execution
 - Repository mis-targeting risk is reduced by alias + no-default + confirmation path
 - High-risk operations are gated by `GO + passkey` and short-lived credentials
+- Merge and bounded post-merge completion use explicit `GO`
 - Production deploy can be executed under governed approval
 
 ## Execution Notes
