@@ -111,10 +111,6 @@ function createMockD1Database() {
 }
 
 async function unlockSetupWizard(env, returnTo = "/setup/wizard?repo=sample-org/vtdd-v2") {
-  const effectiveEnv = {
-    ...env,
-    SETUP_WIZARD_ACCESS_ENABLED: "true"
-  };
   const unlockResponse = await worker.fetch(
     new Request("https://example.com/setup/wizard/access", {
       method: "POST",
@@ -126,7 +122,7 @@ async function unlockSetupWizard(env, returnTo = "/setup/wizard?repo=sample-org/
         returnTo
       })
     }),
-    effectiveEnv
+    env
   );
 
   const setCookie = unlockResponse.headers.get("set-cookie") ?? "";
@@ -340,8 +336,7 @@ test("worker setup wizard access page shows passcode boundary when configured", 
       "https://example.com/setup/wizard/access?returnTo=%2Fsetup%2Fwizard%3Frepo%3Dsample-org%2Fvtdd-v2"
     ),
     {
-      SETUP_WIZARD_PASSCODE: "2468",
-      SETUP_WIZARD_ACCESS_ENABLED: "true"
+      SETUP_WIZARD_PASSCODE: "2468"
     }
   );
 
@@ -384,8 +379,7 @@ test("worker localizes locked setup wizard access page to Japanese from accept-l
       }
     }),
     {
-      SETUP_WIZARD_PASSCODE: "2468",
-      SETUP_WIZARD_ACCESS_ENABLED: "true"
+      SETUP_WIZARD_PASSCODE: "2468"
     }
   );
 
@@ -423,8 +417,7 @@ test("worker setup wizard access accepts passcode and grants cookie-backed acces
       })
     }),
     {
-      SETUP_WIZARD_PASSCODE: "2468",
-      SETUP_WIZARD_ACCESS_ENABLED: "true"
+      SETUP_WIZARD_PASSCODE: "2468"
     }
   );
 
@@ -465,8 +458,7 @@ test("worker setup wizard access rejects invalid passcode", async () => {
       })
     }),
     {
-      SETUP_WIZARD_PASSCODE: "2468",
-      SETUP_WIZARD_ACCESS_ENABLED: "true"
+      SETUP_WIZARD_PASSCODE: "2468"
     }
   );
 

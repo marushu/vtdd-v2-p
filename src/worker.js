@@ -128,16 +128,10 @@ export default {
     }
 
     if (request.method === "GET" && url.pathname === "/setup/wizard/access") {
-      if (!isSetupWizardAccessEnabled(env)) {
-        return renderSetupWizardNotFoundResponse({ url });
-      }
       return handleSetupWizardAccessPageRequest({ request, url, env });
     }
 
     if (request.method === "POST" && url.pathname === "/setup/wizard/access") {
-      if (!isSetupWizardAccessEnabled(env)) {
-        return renderSetupWizardNotFoundResponse({ url });
-      }
       return handleSetupWizardAccessRequest({ request, url, env });
     }
 
@@ -2439,10 +2433,6 @@ function getSetupWizardAuthConfig(env) {
     passcode,
     sessionSecret
   };
-}
-
-function isSetupWizardAccessEnabled(env) {
-  return normalizeText(env?.SETUP_WIZARD_ACCESS_ENABLED) === "true";
 }
 
 function renderSetupWizardNotFoundResponse({ url }) {
