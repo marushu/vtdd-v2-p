@@ -2,6 +2,7 @@ const GITHUB_API_BASE_URL = "https://api.github.com";
 const INSTALLATION_REPOSITORIES_PATH = "/installation/repositories";
 const INSTALLATION_ACCESS_TOKEN_PATH = "/app/installations";
 const GITHUB_API_VERSION = "2022-11-28";
+const GITHUB_API_USER_AGENT = "vtdd-v2-github-app-index";
 const REPOSITORIES_PER_PAGE = 100;
 const MAX_REPOSITORY_PAGES = 10;
 const GITHUB_APP_JWT_LIFETIME_SECONDS = 9 * 60;
@@ -161,6 +162,7 @@ async function mintInstallationToken({
         authorization: `Bearer ${appJwt.token}`,
         accept: "application/vnd.github+json",
         "x-github-api-version": GITHUB_API_VERSION,
+        "user-agent": GITHUB_API_USER_AGENT,
         "content-type": "application/json; charset=utf-8"
       },
       body: JSON.stringify({})
@@ -252,6 +254,7 @@ async function fetchGitHubInstallationRepositories({ token, fetchImpl, apiBaseUr
         headers: {
           authorization: `Bearer ${token}`,
           accept: "application/vnd.github+json",
+          "user-agent": GITHUB_API_USER_AGENT,
           "x-github-api-version": GITHUB_API_VERSION
         }
       });
@@ -293,14 +296,28 @@ async function fetchGitHubInstallationRepositories({ token, fetchImpl, apiBaseUr
 
 async function readJsonSafe(response) {
   try {
-    return await response.json();
+    const text = await response.text();
+    if (!normalizeText(text)) {
+      return {};
+    }
+    try {
+      return JSON.parse(text);
+    } catch {
+      return {
+        __rawText: sanitizeApiBodySnippet(text)
+      };
+    }
   } catch {
     return {};
   }
 }
 
 function classifyApiFailure(response, body) {
-  const message = normalizeText(body?.message) || `github api returned status ${response.status}`;
+  const message =
+    normalizeText(body?.message) ||
+    normalizeText(body?.error) ||
+    normalizeText(body?.__rawText) ||
+    buildStatusFallbackMessage(response);
   const remaining = normalizeText(response.headers.get("x-ratelimit-remaining"));
   const retryAfter = normalizeText(response.headers.get("retry-after"));
 
@@ -334,6 +351,23 @@ function classifyApiFailure(response, body) {
     error: "api_error",
     reason: message
   };
+}
+
+function buildStatusFallbackMessage(response) {
+  const status = Number(response?.status);
+  const statusText = normalizeText(response?.statusText);
+  if (statusText) {
+    return `github api returned status ${status} (${statusText})`;
+  }
+  return `github api returned status ${status}`;
+}
+
+function sanitizeApiBodySnippet(value) {
+  const normalized = normalizeText(value).replace(/\s+/g, " ");
+  if (!normalized) {
+    return "";
+  }
+  return normalized.slice(0, 200);
 }
 
 function buildRepositoryIndexWarning(result) {
