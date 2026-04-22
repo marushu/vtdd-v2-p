@@ -35,13 +35,21 @@ jobs:
           fi
 
       - name: Rotate production setup wizard passcode
-        uses: cloudflare/wrangler-action@v3
+        shell: bash
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           SETUP_WIZARD_PASSCODE_VALUE: ${{ secrets.SETUP_WIZARD_PASSCODE_ROTATION_VALUE }}
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          wranglerVersion: "4.83.0"
-          command: secret put SETUP_WIZARD_PASSCODE --env production
-          secrets: |
-            SETUP_WIZARD_PASSCODE_VALUE
+        run: |
+          curl --fail-with-body --silent --show-error \
+            -X PUT \
+            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/services/vtdd-v2-mvp/environments/production/secrets" \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data @- <<EOF
+          {
+            "name": "SETUP_WIZARD_PASSCODE",
+            "text": "${SETUP_WIZARD_PASSCODE_VALUE}",
+            "type": "secret_text"
+          }
+          EOF
