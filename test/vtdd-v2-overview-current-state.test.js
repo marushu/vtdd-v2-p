@@ -19,5 +19,5 @@ test("overview includes current operational direction boundaries", () => {
   assert.equal(doc.includes("no default repository"), true);
   assert.equal(doc.includes("unresolved target blocks execution"), true);
   assert.equal(doc.includes("high-risk actions require `GO + passkey`"), true);
-  assert.equal(doc.includes("should not require pasting secrets into chat or setup answers"), true);
+  assert.equal(doc.includes("mobile-first operation should not require pasting secrets into chat answers"), true);
 });

@@ -50,7 +50,7 @@ The repository has broad runtime and contract coverage, but overall completion s
 - Alias / repository resolution
 - Butler / executor / reviewer role separation
 - GitHub App credential boundary
-- iPhone-first setup wizard
+- machine-auth gateway and retrieval runtime
 
 ## User Experience Goal
 
@@ -84,7 +84,7 @@ But none of these define the essence of VTDD V2.
 - unresolved target blocks execution
 - high-risk actions require `GO + passkey`
 - reviewer is a blocking risk signal, not an executor
-- setup should remain iPhone-first and should not require pasting secrets into chat or setup answers
+- mobile-first operation should not require pasting secrets into chat answers
 
 ## One Line
 
