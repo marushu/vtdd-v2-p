@@ -227,6 +227,16 @@ inside an explicitly stated contract. Stop when:
   tests, and mapped E2E evidence are all present.
 - Merged-branch deletion is allowed only for the branch merged by that scoped
   PR, not for unrelated branches.
+- GitHub-side approval boundaries are canonicalized in
+  `docs/security/consent-approval-model.md`.
+- Treat GitHub App capability as execution ability, not as standing permission.
+- Require `GO + passkey` for GitHub-side secret/variable mutation, GitHub App
+  install or permission mutation, repository settings mutation, ruleset/branch
+  protection mutation, collaborator mutation, repository archive/delete/transfer,
+  and destructive cleanup outside the bounded post-merge path.
+- Never auto-execute milestone completion judgment, unscoped Issue closure,
+  repository administration mutation, or broad cleanup from repository state
+  alone even if the GitHub App could technically perform it.
 
 ## Public Repo Collaboration Boundary
 

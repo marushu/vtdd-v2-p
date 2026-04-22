@@ -41,6 +41,33 @@ Requires `GO`.
 
 Requires `GO + passkey`.
 
+## GitHub-side High-risk Examples
+
+When the execution surface is GitHub, `GO + passkey` includes at least:
+
+- repository or environment secret / variable mutation
+- GitHub App installation, credential, token, or permission mutation
+- repository settings mutation
+- ruleset / branch protection / environment protection mutation
+- collaborator / team / permission mutation
+- repository archive / delete / transfer / visibility change
+- destructive workflow, release, branch, tag, or environment mutation outside
+  the bounded post-merge cleanup path
+
+These operations may be technically possible for the GitHub App, but VTDD must
+still block them until explicit scoped `GO + passkey` succeeds.
+
+## Never-auto Boundary
+
+`GO + passkey` is a required unlock for high-risk execution, but it does not
+convert GitHub state changes into auto-permitted behavior. VTDD must still
+forbid automatic:
+
+- milestone completion judgment
+- issue closure without scoped linkage to merged work
+- repository administration changes inferred from convenience
+- destructive cleanup outside the currently scoped work window
+
 ## Approval Components
 
 - `GO` confirms human intent.
