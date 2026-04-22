@@ -31,6 +31,7 @@ action on this specific scope proceed now?"
 - `approvalPhrase` is required whenever approval level is not `none`.
 - Approval must be bound to the target scope.
 - High-risk operations require `GO + passkey`.
+- Merge and bounded post-merge completion tasks require explicit `GO`.
 
 ## Canonical Action Mapping
 
@@ -57,10 +58,69 @@ action on this specific scope proceed now?"
 - `pr_comment` -> `none`
 - `pr_review_submit` -> `go`
 - `pr_operation` -> `go`
-- `merge` -> `go_passkey`
+- `merge` -> `go`
 - `deploy_production` -> `go_passkey`
 - `destructive` -> `go_passkey`
 - `external_publish` -> `go_passkey`
+
+## Operational Extension
+
+The canonical action table above covers the current execution action types.
+The following bounded post-merge completion tasks follow the same `go` approval
+level as `merge`:
+
+- issue close for the scoped work that was just merged
+- deletion of the merged topic branch tied to that PR
+
+These tasks are not authorized by category consent alone and must not be
+inferred without explicit scoped `GO`.
+
+## GitHub Operation Matrix
+
+The GitHub App may hold broad repository capabilities, but VTDD must still
+separate "can execute" from "may execute now." The following matrix is the
+canonical approval boundary for GitHub-side actions.
+
+### `GO`
+
+Bounded repository workflow operations may proceed with explicit scoped `GO`:
+
+- branch creation for scoped work
+- commit / push on the scoped topic branch
+- PR creation, update, label, assignee, and review-response work
+- PR comment and scoped review iteration
+- merge, when scoped criteria, tests, and mapped E2E evidence are present
+- post-merge issue close for the scoped work
+- deletion of the merged topic branch tied to that scoped PR
+
+### `GO + passkey`
+
+High-risk or administration-bearing GitHub operations require explicit scoped
+`GO + passkey`:
+
+- production deploy or deploy-triggering repository operation
+- repository / environment secret creation, update, or deletion
+- repository / environment variable creation, update, or deletion
+- GitHub App installation, token, credential, or permission mutation
+- repository settings mutation
+- ruleset, branch protection, environment protection, or merge-policy mutation
+- collaborator / team / permission mutation
+- repository archive, delete, transfer, visibility change, or equivalent
+- destructive branch, tag, release, environment, or workflow mutation outside
+  the bounded post-merge branch cleanup path
+- external publish or externally visible integration enablement
+
+### `Never Auto`
+
+The following must never be inferred or auto-executed from repository state
+alone, even when the GitHub App technically has the capability:
+
+- milestone completion judgment
+- issue closure without bounded scope linkage to the merged work
+- repository administration or permission mutation without explicit high-risk approval
+- destructive operation without explicit scoped `GO + passkey`
+- broad cleanup outside the currently scoped branch / PR / issue window
+- policy reinterpretation from "the app can do it" to "the app may do it now"
 
 ## Destructive Handling
 

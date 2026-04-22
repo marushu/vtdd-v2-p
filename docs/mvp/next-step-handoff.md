@@ -8,7 +8,7 @@ This file exists so work can resume in a fresh thread without re-deriving the cu
 - historical MVP core runtime/evidence work is already in repo
 - `docs/mvp/issue-to-e2e-matrix.md` remains the canonical tracker for the completed MVP-core issue set
 - wizard research has been archived onto `wizard-ready`
-- current main-line work is `#486`: remove the hosted wizard line from `main` and keep only VTDD core
+- current main-line direction is to keep `main` honest as the VTDD core line in this public repo
 
 ## What Remains Open
 
@@ -26,7 +26,7 @@ Re-check open Issues first.
 1. sync local `main` with `origin/main`
 2. check open Issues
 3. choose exactly one bounded target Issue
-4. if the target is `#486`, remove only hosted wizard surfaces and keep VTDD core intact
+4. keep hosted wizard assumptions out of current `main` unless explicitly re-activated
 5. write a bounded change contract before runtime edits
 6. update the Issue-to-E2E matrix only when actual runtime behavior or evidence lands
 

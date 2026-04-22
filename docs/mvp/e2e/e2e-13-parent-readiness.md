@@ -43,7 +43,7 @@ As of 2026-04-17:
 ## Evidence Files
 
 - `docs/mvp/issue-13-rewrite-draft.md`
-- `docs/mvp/bootstrap-plan.md`
+- `README.md`
 - `docs/mvp/next-step-handoff.md`
 - `docs/mvp/issue-to-e2e-matrix.md`
 - `docs/mvp/e2e/e2e-01-canonical-docs-reference-integrity.md`

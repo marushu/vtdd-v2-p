@@ -19,4 +19,5 @@ test("matrix references parent execution anchor readiness track", () => {
   assert.equal(doc.includes("## E2E-00 Parent execution anchor readiness"), true);
   assert.equal(doc.includes("docs/mvp/e2e/e2e-13-parent-readiness.md"), true);
   assert.equal(doc.includes("Issues: `#13`"), true);
+  assert.equal(doc.includes("README.md"), true);
 });

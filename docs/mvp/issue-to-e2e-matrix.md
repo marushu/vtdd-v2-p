@@ -26,10 +26,11 @@ Status values used below:
   - parent issue is not misread as completed while repository status remains partial
 - Implementation evidence:
   - `docs/mvp/issue-13-rewrite-draft.md`
-  - `docs/mvp/bootstrap-plan.md`
+  - `README.md`
   - `docs/mvp/next-step-handoff.md`
 - Test evidence:
-  - `test/bootstrap-plan-current-state.test.js`
+  - `test/e2e-13-parent-readiness.test.js`
+  - `test/issue-triage-plan-current-state.test.js`
 - Run evidence:
   - `docs/mvp/e2e/e2e-13-parent-readiness.md`
 - Status: `e2e_evidenced_pending_human_closure`
@@ -122,8 +123,11 @@ Status values used below:
   - `docs/proposal-log-model.md`
   - `src/worker.js`
 - Test evidence:
-  - `test/decision-log.test.js`
-  - `test/proposal-log.test.js`
+  - `test/decision-log-model.test.js`
+  - `test/proposal-log-model.test.js`
+  - `test/decision-log-runtime.test.js`
+  - `test/proposal-log-runtime.test.js`
+  - `test/log-store.test.js`
   - `test/worker.test.js`
 - Run evidence:
   - `docs/mvp/e2e/e2e-05-decision-proposal-durability.md`
@@ -169,25 +173,6 @@ Status values used below:
   - `test/worker.test.js`
 - Run evidence:
   - `docs/mvp/e2e/e2e-07-butler-constitution-first-judgment.md`
-- Status: `e2e_evidenced_pending_human_closure`
-
-## E2E-08 Repo resolution safety + conversation switch confirm
-
-- Issues: `#21 #39 #41`
-- Happy path:
-  - iPhone-accessible setup wizard returns conversation-ready onboarding with no default repo, copy-ready setup output, full Instructions replacement guidance, schema import URL for Custom GPT action setup, machine-auth setting names, repository switch confirmation flow, and no generic secret input prompts outside the passcode-authenticated GitHub App bootstrap step
-- Boundary path:
-  - unresolved repo, generic secret input, or ambiguous switch blocks execution or setup acceptance
-- Implementation evidence:
-  - `src/core/setup-wizard.js`
-  - `src/worker.js`
-  - `docs/mvp/iphone-first-setup.md`
-- Test evidence:
-  - `test/setup-wizard.test.js`
-  - `test/worker.test.js`
-  - `test/butler-orchestrator.test.js`
-- Run evidence:
-  - `docs/mvp/e2e/e2e-08-iphone-setup-and-repo-safety.md`
 - Status: `e2e_evidenced_pending_human_closure`
 
 ## E2E-09 Memory safety exclusions
@@ -288,36 +273,10 @@ Status values used below:
   - `docs/mvp/e2e/e2e-13-reviewer-operational-loop.md`
 - Status: `e2e_evidenced_pending_human_closure`
 
-## E2E-14 Setup wizard approval-bound path
-
-- Issues: `#207 #210 #477`
-- Happy path:
-  - setup wizard carries one approval-bound installation-binding flow through to
-    Worker runtime write and same-flow live readiness proof without manual ID or
-    secret transport across GitHub and Cloudflare surfaces, and reports
-    setup-complete readiness only when VTDD required runtime settings are present
-- Boundary path:
-  - missing Cloudflare prerequisites, missing current `GO + passkey` request,
-    deferred approval-bound issuance, or missing required runtime settings remain
-    explicit fail-closed states with recovery guidance inside the same setup narrative
-- Implementation evidence:
-  - `src/worker.js`
-  - `docs/mvp/setup-wizard-current-and-target-flow.md`
-  - `docs/mvp/setup-wizard-approval-bound-runtime-checkpoint.md`
-  - `docs/security/setup-wizard-approval-bound-automation-path.md`
-- Test evidence:
-  - `test/worker.test.js`
-  - `test/setup-wizard-current-and-target-flow.test.js`
-  - `test/setup-wizard-approval-bound-automation-path.test.js`
-  - `test/e2e-14-setup-wizard-approval-bound-path.test.js`
-- Run evidence:
-  - `docs/mvp/e2e/e2e-14-setup-wizard-approval-bound-path.md`
-- Status: `e2e_evidenced_pending_human_closure`
-
 ## Current Completion Reading
 
 - Repository completion status: `partial`
 - Main reason:
-  - mapped E2E evidence now exists across the matrix
+  - mapped E2E evidence now exists across the active main-line matrix
   - issue closure must remain human-gated
   - parent/spec issues remain intentionally open until the owner judges closure
