@@ -41,15 +41,30 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           SETUP_WIZARD_PASSCODE_VALUE: ${{ secrets.SETUP_WIZARD_PASSCODE_ROTATION_VALUE }}
         run: |
-          curl --fail-with-body --silent --show-error \
-            -X PUT \
-            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/services/vtdd-v2-mvp/environments/production/secrets" \
-            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
-            -H "Content-Type: application/json" \
-            --data @- <<EOF
+          for SCRIPT_NAME in vtdd-v2-mvp vtdd-v2-mvp-production; do
+            echo "Trying secret rotation for script: ${SCRIPT_NAME}"
+            HTTP_CODE=$(curl --silent --show-error \
+              -o /tmp/rotate-setup-passcode-response.json \
+              -w "%{http_code}" \
+              -X PUT \
+              "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${SCRIPT_NAME}/secrets" \
+              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+              -H "Content-Type: application/json" \
+              --data @- <<EOF
           {
             "name": "SETUP_WIZARD_PASSCODE",
             "text": "${SETUP_WIZARD_PASSCODE_VALUE}",
             "type": "secret_text"
           }
           EOF
+            )
+            if [ "${HTTP_CODE}" = "200" ]; then
+              echo "Secret rotation succeeded for ${SCRIPT_NAME}"
+              cat /tmp/rotate-setup-passcode-response.json
+              exit 0
+            fi
+            echo "Secret rotation failed for ${SCRIPT_NAME} with HTTP ${HTTP_CODE}"
+            cat /tmp/rotate-setup-passcode-response.json
+          done
+          echo "Failed to rotate SETUP_WIZARD_PASSCODE for all known script names"
+          exit 1
