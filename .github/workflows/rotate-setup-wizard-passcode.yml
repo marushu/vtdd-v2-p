@@ -10,24 +10,16 @@ jobs:
   rotate:
     runs-on: ubuntu-latest
     environment: production
-    env:
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      SETUP_WIZARD_PASSCODE_VALUE: ${{ secrets.SETUP_WIZARD_PASSCODE_ROTATION_VALUE }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Install Wrangler
-        run: npm install --no-save wrangler@4.83.0
-
       - name: Validate rotation inputs
         shell: bash
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          SETUP_WIZARD_PASSCODE_VALUE: ${{ secrets.SETUP_WIZARD_PASSCODE_ROTATION_VALUE }}
         run: |
           if [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
             echo "Missing CLOUDFLARE_ACCOUNT_ID"
@@ -43,6 +35,13 @@ jobs:
           fi
 
       - name: Rotate production setup wizard passcode
-        shell: bash
-        run: |
-          printf '%s' "$SETUP_WIZARD_PASSCODE_VALUE" | npx wrangler secret put SETUP_WIZARD_PASSCODE --env production
+        uses: cloudflare/wrangler-action@v3
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          SETUP_WIZARD_PASSCODE_VALUE: ${{ secrets.SETUP_WIZARD_PASSCODE_ROTATION_VALUE }}
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          wranglerVersion: "4.83.0"
+          command: secret put SETUP_WIZARD_PASSCODE --env production
+          secrets: |
+            SETUP_WIZARD_PASSCODE_VALUE
