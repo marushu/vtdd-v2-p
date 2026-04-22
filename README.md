@@ -24,13 +24,12 @@ Current code starts with deterministic governance gates:
 - canonical reviewer policy (Gemini initial, Antigravity emergency fallback, no execution authority)
 - canonical role separation model for Butler / Executor / Reviewer handoff and isolation
 - Cloudflare provider minimum adapter (D1/R2/Vectorize via injected clients)
-- Cloudflare Worker runtime entry (`src/worker.js`) with `/health`, `/setup/wizard`, `/v2/gateway`, and `/v2/retrieve/*` routes (legacy `/mvp/*` aliases also accepted)
+- Cloudflare Worker runtime entry (`src/worker.js`) with `/health`, `/v2/gateway`, and `/v2/retrieve/*` routes (legacy `/mvp/*` aliases also accepted)
 - production deploy workflow (`.github/workflows/deploy-production.yml`) for `GitHub Actions -> Cloudflare`
 - execution policy gate (traceability + target resolution + approval)
 - Butler orchestrator (surface independence + fixed judgment order + policy integration)
 - canonical Butler review protocol with constitution-first judgment order
 - MVP gateway (`runMvpGateway`) that composes policy, workflow, retrieval, and memory safety
-- setup wizard contract (`runInitialSetupWizard`) with explicit output targets and iPhone-first onboarding pack
 - machine auth path for `/v2/gateway` + `/v2/retrieve/*` (Bearer token / Access service token)
 - immutable workflow state machine (`Idea -> Proposal -> Issue -> GO -> Build -> PR -> Review -> Merge`)
 - reconcile hold state (`reconcile_required`) for runtime/memory conflicts
@@ -38,6 +37,17 @@ Current code starts with deterministic governance gates:
 
 Code lives in `src/core/`, with tests in `test/`.
 Worker entry lives in `src/worker.js`.
+
+## Mainline Direction
+
+`main` is the VTDD core line.
+
+- VTDD core philosophy, governance, gateway, retrieval, and provider contracts stay on `main`
+- the historical hosted setup-wizard line is archived on `wizard-ready`
+- `main` should no longer be read as the current setup-wizard product line
+
+If you need the historical wizard research, read the `wizard-ready` branch and
+the archive note there.
 
 ## Run tests
 

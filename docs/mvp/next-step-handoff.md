@@ -7,16 +7,16 @@ This file exists so work can resume in a fresh thread without re-deriving the cu
 - canonical baseline docs are restored
 - historical MVP core runtime/evidence work is already in repo
 - `docs/mvp/issue-to-e2e-matrix.md` remains the canonical tracker for the completed MVP-core issue set
-- current main-line work is now bootstrap architecture and service connection design under `#182` and its children
-- repository reading remains `partial / in-progress` because setup/bootstrap still blocks the intended iPhone-first entry experience
+- wizard research has been archived onto `wizard-ready`
+- current main-line work is `#486`: remove the hosted wizard line from `main` and keep only VTDD core
 
 ## What Remains Open
 
 At this stage, remaining work is mainly one of:
 
-1. bootstrap architecture and service connection boundary definition
-2. setup wizard and live bootstrap friction reduction
-3. inventory / diagnostics / safe cleanup visibility
+1. keep `main` honest as the VTDD core line
+2. preserve handoff, review, retrieval, and runtime-truth behavior
+3. treat any future wizard work as archive/research unless explicitly re-activated
 
 Do not restart implementation from this handoff by assuming missing scope.
 Re-check open Issues first.
@@ -26,7 +26,7 @@ Re-check open Issues first.
 1. sync local `main` with `origin/main`
 2. check open Issues
 3. choose exactly one bounded target Issue
-4. if the target is under `#182`, define the auth/bootstrap boundary before runtime edits
+4. if the target is `#486`, remove only hosted wizard surfaces and keep VTDD core intact
 5. write a bounded change contract before runtime edits
 6. update the Issue-to-E2E matrix only when actual runtime behavior or evidence lands
 
