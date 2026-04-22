@@ -9,6 +9,7 @@ test("issue-to-e2e matrix defines all canonical E2E tracks", () => {
   const doc = fs.readFileSync(MATRIX_PATH, "utf8");
 
   for (const id of [
+    "E2E-00",
     "E2E-01",
     "E2E-02",
     "E2E-03",
@@ -16,13 +17,11 @@ test("issue-to-e2e matrix defines all canonical E2E tracks", () => {
     "E2E-05",
     "E2E-06",
     "E2E-07",
-    "E2E-08",
     "E2E-09",
     "E2E-10",
     "E2E-11",
     "E2E-12",
-    "E2E-13",
-    "E2E-14"
+    "E2E-13"
   ]) {
     assert.equal(doc.includes(`## ${id}`), true);
   }
@@ -40,5 +39,5 @@ test("issue-to-e2e matrix records happy path, boundary path, evidence, and updat
   assert.equal(doc.includes("implemented_pending_e2e"), true);
   assert.equal(doc.includes("partial"), true);
   assert.equal(doc.includes("Repository completion status: `partial`"), true);
-  assert.equal(doc.includes("mapped E2E evidence now exists across the matrix"), true);
+  assert.equal(doc.includes("mapped E2E evidence now exists across the active main-line matrix"), true);
 });

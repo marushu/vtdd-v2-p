@@ -10,7 +10,7 @@ Status note:
 
 - this is the current GitHub Actions centered MVP path
 - deploy authority branching alternatives are tracked in
-  [deploy-authority-branching.md](/Users/shuhei/hibou_works/vtdd-v2/docs/mvp/deploy-authority-branching.md)
+  `docs/mvp/deploy-authority-branching.md`
 
 ## Required GitHub Settings
 

@@ -54,7 +54,8 @@ VTDD V2 の MVP 実装を開始するための統合親 Issue を確定する。
 - `docs/memory/rag-memory-philosophy.md`
 - `docs/security/threat-model.md`
 - `docs/security/go-passkey-approval-model.md`
-- `docs/mvp/bootstrap-plan.md`
+- `README.md`
+- `docs/mvp/next-step-handoff.md`
 - `docs/mvp/issue-triage-plan.md`
 
 ## MVP Scope (Must Hold Together)

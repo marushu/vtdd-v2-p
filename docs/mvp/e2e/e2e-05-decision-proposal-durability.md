@@ -19,7 +19,7 @@ Goal:
 Command:
 
 ```sh
-node --test test/decision-log.test.js test/proposal-log.test.js test/worker.test.js
+node --test test/decision-log-model.test.js test/proposal-log-model.test.js test/decision-log-runtime.test.js test/proposal-log-runtime.test.js test/log-store.test.js test/worker.test.js
 ```
 
 Observed result on 2026-04-17:
@@ -33,7 +33,7 @@ Observed result on 2026-04-17:
 Command:
 
 ```sh
-node --test test/decision-log.test.js test/proposal-log.test.js test/worker.test.js
+node --test test/decision-log-model.test.js test/proposal-log-model.test.js test/decision-log-runtime.test.js test/proposal-log-runtime.test.js test/log-store.test.js test/worker.test.js
 ```
 
 Observed result on 2026-04-17:
@@ -44,8 +44,11 @@ Observed result on 2026-04-17:
 
 ## Evidence Files
 
-- `test/decision-log.test.js`
-- `test/proposal-log.test.js`
+- `test/decision-log-model.test.js`
+- `test/proposal-log-model.test.js`
+- `test/decision-log-runtime.test.js`
+- `test/proposal-log-runtime.test.js`
+- `test/log-store.test.js`
 - `test/worker.test.js`
 - `docs/decision-log-model.md`
 - `docs/proposal-log-model.md`

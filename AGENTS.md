@@ -27,7 +27,7 @@ That delegation does not allow:
 
 - Issue closure without explicit human approval
 - changing the scoped Issue set by assumption
-- declaring wizard-complete / milestone-complete by implication
+- declaring milestone-complete by implication
 
 ## Canonical Source Order
 
@@ -54,12 +54,10 @@ Current repository execution note:
 - when the user explicitly fixes the active implementation window to specific
   Issues, treat only those Issues as in-scope for implementation until the user
   re-opens the broader active-Issue set
-- the historical `#210` / `#207` setup-wizard window is closed; do not keep
-  treating that bounded window as the current implementation scope after the
-  owner redefines the goal
-- for the current Day0 setup-wizard redesign, the active implementation scope
-  must be re-established explicitly before runtime edits begin; do not inherit
-  old setup-wizard assumptions by default
+- the historical setup-wizard line is archived; do not treat it as active
+  implementation scope on this branch unless the user explicitly re-activates it
+- this public/core branch does not use the setup wizard by default; do not
+  inherit old wizard assumptions into current runtime or docs work
 
 If any active Issue is intentionally deferred, record it explicitly as deferred with reason.
 Never treat "not implemented yet" as "done".
@@ -106,11 +104,9 @@ boundary, or partial compliance state:
 Do not treat "this probably should be fixed now" as sufficient justification to
 continue implementation.
 
-For the current Day0 setup-wizard redesign, the bounded change contract must
-also state:
+For this public/core branch, the bounded change contract must also state when relevant:
 
-- whether the change assumes an existing user-owned Cloudflare runtime, or
-  creates one as part of the flow
+- whether any archived wizard artifact is being changed, removed, or referenced
 - whether any personal/operator-specific runtime URL, account identifier, or
   bootstrap value is touched, removed, or still referenced
 - whether the change is safe for a repo intended to be usable by people other
@@ -175,37 +171,27 @@ MVP completion claim is allowed only when the matrix shows complete coverage for
 - High-risk credential is short-lived and approval-bound.
 - Memory excludes secrets and raw sensitive material.
 - Reviewer role does not get execution credentials.
-- Public-facing setup flow must not embed the owner's personal Cloudflare
+- Public-facing docs and runtime must not embed the owner's personal Cloudflare
   runtime URL or equivalent operator-specific runtime destination.
-- Setup flow for shared/public use must converge on user-owned GitHub,
-  Cloudflare, Gemini, and ChatGPT accounts rather than the owner's accounts.
+- Shared/public use must converge on user-owned GitHub, Cloudflare, Gemini,
+  and ChatGPT accounts rather than the owner's accounts.
 - Existing operator-specific bootstrap/runtime assumptions must not be silently
-  carried into Day0 wizard work.
+  carried into current main-line work.
 
-## Day0 Wizard Redesign Guardrails
+## Archived Wizard Boundary
 
-When the owner states that VTDD must be usable by people other than the owner,
-interpret that as a shared-use Day0 wizard requirement, not as an incremental
-polish request on the legacy bootstrap flow.
+The setup-wizard line is historical on this branch.
+Treat wizard-specific docs, tests, and behavior as archived research unless the
+user explicitly re-activates them with a bounded Issue/spec.
 
-For that redesign:
+On this branch:
 
-- an existing personal Cloudflare Worker/runtime is not a valid default target
-- creating or resolving a user-owned Cloudflare runtime inside the wizard is a
-  required behavior, not optional polish
-- the first shared-use Cloudflare connection path is API Token based unless the
-  canonical spec is explicitly changed
-- worker/runtime URL may be created or resolved inside wizard state, but must
-  not be rendered as a raw public-facing setup value by default
-- Cloudflare API Token accepted from wizard input must stay in bounded
-  temporary server-controlled setup state only; do not place it in URLs, normal
-  JSON output, or shared troubleshooting logs
-- GitHub-side setup must be described in terms of the user's own control plane,
-  not the owner's private bootstrap environment
-- if the code only supports bounded bootstrap into an already-existing runtime,
-  report that as incomplete rather than stretching definitions
-- do not claim wizard-complete while runtime creation, user-owned control, or
-  post-setup GPT entry remain missing
+- do not reintroduce setup wizard behavior, API shape, or completion claims by
+  implication
+- do not keep wizard-era docs as active canonical references when the files or
+  runtime paths no longer exist
+- if historical wizard material is kept for comparison, mark it explicitly as
+  archive/historical rather than active scope
 
 If the repository still contains owner-specific identifiers, links, script
 names, URLs, or environment assumptions that would make the flow owner-only:
@@ -217,7 +203,7 @@ names, URLs, or environment assumptions that would make the flow owner-only:
 If the owner delegates implementation while away from the keyboard, that
 delegation still does not authorize speculative gap-filling. The assistant may
 continue through PR creation and merge only while the current step remains
-inside an explicitly stated Day0 wizard contract. Stop when:
+inside an explicitly stated contract. Stop when:
 
 - a required platform capability is unknown or cannot be verified
 - GitHub / Cloudflare / ChatGPT ownership semantics become ambiguous
@@ -251,6 +237,10 @@ It must not be interpreted as a blanket prohibition for non-RAG operational logs
 ## Change Size and PR Discipline
 
 - Prefer one bounded Issue slice per PR.
+- Do not develop directly on `main`.
+- Start by syncing the latest `main`, then create a topic branch before making changes.
+- Do implementation work on the topic branch, push that branch to remote, and open a PR targeting `main`.
+- If work has already started on `main`, stop and move the in-progress changes onto a topic branch before continuing.
 - No "while we are here" edits.
 - No unrelated refactors in implementation PRs.
 - Keep docs-only PRs and runtime PRs separable when possible.
