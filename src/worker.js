@@ -12,6 +12,7 @@ import {
   dispatchRemoteCodexExecution,
   inferRelatedIssueFromGatewayInput,
   inferRelatedIssueFromProposalGatewayInput,
+  isExpiredPasskeyEphemeralRecord,
   normalizeScopeSnapshot,
   normalizeAutonomyMode,
   retrieveRemoteCodexExecutionProgress,
@@ -57,18 +58,7 @@ export default {
     }
 
     if (request.method === "GET" && isApiPath(url.pathname, "/approval/passkey/operator")) {
-      const auth = authorizeGatewayRequest({
-        request,
-        env,
-        apiSuffix: "/approval/passkey/operator"
-      });
-      if (!auth.ok) {
-        return json(auth.status, {
-          ok: false,
-          error: "unauthorized",
-          reason: auth.reason
-        });
-      }
+      await purgeExpiredPasskeyArtifacts(resolveMemoryProvider(env));
       return handlePasskeyOperatorPageRequest(request);
     }
 
@@ -193,7 +183,8 @@ export default {
     }
 
     if (request.method === "POST" && isApiPath(url.pathname, "/approval/passkey/register/options")) {
-      const auth = authorizeGatewayRequest({
+      await purgeExpiredPasskeyArtifacts(resolveMemoryProvider(env));
+      const auth = await authorizePasskeyRegistrationRequest({
         request,
         env,
         apiSuffix: "/approval/passkey/register/options"
@@ -209,7 +200,8 @@ export default {
     }
 
     if (request.method === "POST" && isApiPath(url.pathname, "/approval/passkey/register/verify")) {
-      const auth = authorizeGatewayRequest({
+      await purgeExpiredPasskeyArtifacts(resolveMemoryProvider(env));
+      const auth = await authorizePasskeyRegistrationRequest({
         request,
         env,
         apiSuffix: "/approval/passkey/register/verify"
@@ -225,7 +217,8 @@ export default {
     }
 
     if (request.method === "POST" && isApiPath(url.pathname, "/approval/passkey/challenge")) {
-      const auth = authorizeGatewayRequest({
+      await purgeExpiredPasskeyArtifacts(resolveMemoryProvider(env));
+      const auth = authorizePasskeyBrowserOrMachineRequest({
         request,
         env,
         apiSuffix: "/approval/passkey/challenge"
@@ -241,7 +234,8 @@ export default {
     }
 
     if (request.method === "POST" && isApiPath(url.pathname, "/approval/passkey/verify")) {
-      const auth = authorizeGatewayRequest({
+      await purgeExpiredPasskeyArtifacts(resolveMemoryProvider(env));
+      const auth = authorizePasskeyBrowserOrMachineRequest({
         request,
         env,
         apiSuffix: "/approval/passkey/verify"
@@ -445,6 +439,7 @@ async function handleRetrieveCrossIssueRequest(url, env) {
 
 async function handleRetrieveApprovalGrantRequest(url, env) {
   const provider = resolveMemoryProvider(env);
+  await purgeExpiredPasskeyArtifacts(provider);
   const validation = validateMemoryProvider(provider);
   if (!validation.ok) {
     return json(503, {
@@ -807,6 +802,27 @@ async function retrieveRegisteredPasskeys(provider) {
     tags: ["passkey_registry"]
   });
   return dedupePasskeys(records);
+}
+
+async function purgeExpiredPasskeyArtifacts(provider) {
+  if (!provider || typeof provider.retrieve !== "function" || typeof provider.deleteRecords !== "function") {
+    return { ok: true, deletedCount: 0 };
+  }
+
+  const records = await provider.retrieve({
+    type: MemoryRecordType.APPROVAL_LOG,
+    limit: MAX_MEMORY_LIMIT
+  });
+  const expiredIds = records
+    .filter((record) => isExpiredPasskeyEphemeralRecord(record))
+    .map((record) => normalizeText(record?.id))
+    .filter(Boolean);
+
+  if (expiredIds.length === 0) {
+    return { ok: true, deletedCount: 0 };
+  }
+
+  return provider.deleteRecords({ ids: expiredIds });
 }
 
 async function findApprovalRecordById(provider, recordId) {
@@ -1315,6 +1331,25 @@ function createD1MemoryIndexAdapter(d1) {
       }
 
       return records.slice(0, limit);
+    },
+
+    async deleteRecords(input = {}) {
+      await ensureSchema();
+
+      const ids = Array.isArray(input?.ids)
+        ? input.ids.map((item) => normalizeText(item)).filter(Boolean)
+        : [];
+      if (ids.length === 0) {
+        return { ok: true, deletedCount: 0 };
+      }
+
+      const placeholders = ids.map(() => "?").join(", ");
+      await d1
+        .prepare(`DELETE FROM vtdd_memory_records WHERE id IN (${placeholders})`)
+        .bind(...ids)
+        .run();
+
+      return { ok: true, deletedCount: ids.length };
     }
   };
 
@@ -1323,20 +1358,14 @@ function createD1MemoryIndexAdapter(d1) {
 
   function ensureSchema() {
     if (!schemaPromise) {
-      schemaPromise = d1.exec(
-        `CREATE TABLE IF NOT EXISTS vtdd_memory_records (
-           id TEXT PRIMARY KEY,
-           type TEXT NOT NULL,
-           content_json TEXT,
-           content_ref TEXT,
-           metadata_json TEXT NOT NULL,
-           priority INTEGER NOT NULL,
-           tags_json TEXT NOT NULL,
-           created_at TEXT NOT NULL
-         );
-         CREATE INDEX IF NOT EXISTS idx_vtdd_memory_records_type_priority_created_at
-           ON vtdd_memory_records (type, priority DESC, created_at DESC);`
-      );
+      schemaPromise = (async () => {
+        await d1.exec(
+          "CREATE TABLE IF NOT EXISTS vtdd_memory_records (id TEXT PRIMARY KEY, type TEXT NOT NULL, content_json TEXT, content_ref TEXT, metadata_json TEXT NOT NULL, priority INTEGER NOT NULL, tags_json TEXT NOT NULL, created_at TEXT NOT NULL);"
+        );
+        await d1.exec(
+          "CREATE INDEX IF NOT EXISTS idx_vtdd_memory_records_type_priority_created_at ON vtdd_memory_records (type, priority DESC, created_at DESC);"
+        );
+      })();
     }
     return schemaPromise;
   }
@@ -1552,6 +1581,68 @@ function authorizeGatewayRequest({ request, env, apiSuffix = "/gateway" }) {
     status: 503,
     reason: `machine auth runtime is not configured for ${routeLabel}`
   };
+}
+
+async function authorizePasskeyRegistrationRequest({ request, env, apiSuffix }) {
+  const machineAuth = authorizeGatewayRequest({ request, env, apiSuffix });
+  if (machineAuth.ok) {
+    return machineAuth;
+  }
+
+  const browserAuth = authorizePasskeyBrowserOrMachineRequest({ request, env, apiSuffix });
+  if (!browserAuth.ok) {
+    return browserAuth;
+  }
+
+  const provider = resolveMemoryProvider(env);
+  const validation = validateMemoryProvider(provider);
+  if (!validation.ok) {
+    return browserAuth;
+  }
+
+  const passkeys = await retrieveRegisteredPasskeys(provider);
+  if (passkeys.length === 0) {
+    return browserAuth;
+  }
+
+  return {
+    ok: false,
+    status: 403,
+    reason: "browser bootstrap registration is allowed only before the first passkey is registered"
+  };
+}
+
+function authorizePasskeyBrowserOrMachineRequest({ request, env, apiSuffix }) {
+  const machineAuth = authorizeGatewayRequest({ request, env, apiSuffix });
+  if (machineAuth.ok) {
+    return machineAuth;
+  }
+  if (isSameOriginBrowserRequest(request)) {
+    return { ok: true };
+  }
+  return machineAuth;
+}
+
+function isSameOriginBrowserRequest(request) {
+  const originHeader = normalizeText(request.headers.get("origin"));
+  const fetchSite = normalize(request.headers.get("sec-fetch-site"));
+  const contentType = normalize(request.headers.get("content-type"));
+  if (!originHeader) {
+    return false;
+  }
+
+  const requestUrl = new URL(request.url);
+  const requestOrigin = `${requestUrl.protocol}//${requestUrl.host}`;
+  if (originHeader !== requestOrigin) {
+    return false;
+  }
+  if (fetchSite && fetchSite !== "same-origin" && fetchSite !== "same-site") {
+    return false;
+  }
+  if (request.method === "POST" && !contentType.includes("application/json")) {
+    return false;
+  }
+  return true;
 }
 
 async function readJson(request) {

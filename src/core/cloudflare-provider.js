@@ -90,6 +90,13 @@ export function createCloudflareMemoryProvider(input = {}) {
 
     async validateRecord(inputRecord) {
       return validateMemoryRecord(inputRecord);
+    },
+
+    async deleteRecords(input = {}) {
+      if (!d1 || typeof d1.deleteRecords !== "function") {
+        return { ok: false, reason: "d1.deleteRecords is required" };
+      }
+      return d1.deleteRecords(input);
     }
   };
 }

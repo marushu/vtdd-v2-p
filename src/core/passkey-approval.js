@@ -13,6 +13,11 @@ export const PASSKEY_REGISTRATION_KIND = "passkey_registration";
 export const PASSKEY_APPROVAL_KIND = "passkey_approval";
 export const DEFAULT_PASSKEY_SESSION_TTL_MS = 5 * 60 * 1000;
 export const DEFAULT_PASSKEY_GRANT_TTL_MS = 2 * 60 * 1000;
+export const PASSKEY_EPHEMERAL_KINDS = Object.freeze([
+  PASSKEY_REGISTRATION_KIND,
+  PASSKEY_APPROVAL_KIND,
+  PASSKEY_GRANT_TAG
+]);
 
 export const defaultPasskeyAdapter = Object.freeze({
   generateRegistrationOptions,
@@ -101,6 +106,10 @@ export async function verifyPasskeyRegistration(input = {}) {
   const expectedChallenge = normalizeText(
     input.expectedChallenge || sessionRecord?.content?.challenge
   );
+  const sessionTtlMs = normalizePositiveInt(
+    input.sessionTtlMs,
+    DEFAULT_PASSKEY_SESSION_TTL_MS
+  );
 
   if (!sessionRecord || !response || !rpID || !origin || !expectedChallenge) {
     return {
@@ -126,6 +135,8 @@ export async function verifyPasskeyRegistration(input = {}) {
 
   const { registrationInfo } = verification;
   const credentialId = base64UrlEncode(registrationInfo.credential.id);
+  const verifiedAt = new Date().toISOString();
+  const expiresAt = new Date(Date.now() + sessionTtlMs).toISOString();
   const passkeyRecord = createMemoryRecord({
     id: `passkey:${credentialId}`,
     type: MemoryRecordType.WORKING_MEMORY,
@@ -147,7 +158,7 @@ export async function verifyPasskeyRegistration(input = {}) {
     },
     priority: 86,
     tags: [PASSKEY_REGISTRY_TAG],
-    createdAt: new Date().toISOString()
+    createdAt: verifiedAt
   });
 
   const completedSessionRecord = createMemoryRecord({
@@ -157,7 +168,8 @@ export async function verifyPasskeyRegistration(input = {}) {
       kind: PASSKEY_REGISTRATION_KIND,
       status: "verified",
       sessionId: sessionRecord.id,
-      credentialId
+      credentialId,
+      expiresAt
     },
     metadata: {
       source: "passkey_registration_verify",
@@ -166,7 +178,7 @@ export async function verifyPasskeyRegistration(input = {}) {
     },
     priority: 90,
     tags: [PASSKEY_SESSION_TAG, PASSKEY_REGISTRATION_KIND, "verified"],
-    createdAt: new Date().toISOString()
+    createdAt: verifiedAt
   });
 
   if (!passkeyRecord.ok) {
@@ -435,6 +447,22 @@ export function dedupePasskeys(records = []) {
   return [...latest.values()].filter(
     (item) => item.credentialId && item.publicKey
   );
+}
+
+export function isExpiredPasskeyEphemeralRecord(record, now = new Date()) {
+  const kind = normalizeText(record?.content?.kind);
+  if (!PASSKEY_EPHEMERAL_KINDS.includes(kind)) {
+    return false;
+  }
+  const expiresAt = normalizeText(record?.content?.expiresAt);
+  if (!expiresAt) {
+    return false;
+  }
+  const expiresAtMs = Date.parse(expiresAt);
+  if (!Number.isFinite(expiresAtMs)) {
+    return false;
+  }
+  return expiresAtMs <= now.valueOf();
 }
 
 function resolvePasskeyAdapter(adapter) {
