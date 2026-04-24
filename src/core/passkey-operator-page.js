@@ -6,6 +6,7 @@ export function renderPasskeyOperatorPage(input = {}) {
   const repoDefault = escapeHtml(input.repositoryInput || "");
   const issueDefault = escapeHtml(input.issueNumber || "");
   const phaseDefault = escapeHtml(input.phase || "execution");
+  const actionTypeDefault = escapeHtml(input.actionType || "destructive");
   const highRiskKindDefault = escapeHtml(input.highRiskKind || "github_app_secret_sync");
   const syncEnabled = input.syncEnabled === true;
 
@@ -146,12 +147,14 @@ export function renderPasskeyOperatorPage(input = {}) {
           <input id="issue-input" value="${issueDefault}" placeholder="15" />
           <label for="phase-input">Phase</label>
           <input id="phase-input" value="${phaseDefault}" />
+          <label for="action-type-input">Action Type</label>
+          <input id="action-type-input" value="${actionTypeDefault}" />
           <label for="risk-kind-input">High-risk Kind</label>
           <input id="risk-kind-input" value="${highRiskKindDefault}" />
           <div class="row">
             <button class="secondary" id="approve-button">Approve high-risk action</button>
           </div>
-          <p class="muted">GitHub App secret sync 用なら <code>highRiskKind=github_app_secret_sync</code> を使います。</p>
+          <p class="muted">GitHub App secret sync なら <code>actionType=destructive</code> / <code>highRiskKind=github_app_secret_sync</code>、production deploy なら <code>actionType=deploy_production</code> / <code>highRiskKind=deploy_production</code> を使います。</p>
           <pre id="approve-output"></pre>
         </section>
 
@@ -222,7 +225,7 @@ export function renderPasskeyOperatorPage(input = {}) {
                 issueNumber: Number(document.getElementById("issue-input").value || 0) || null
               },
               policyInput: {
-                actionType: "destructive",
+                actionType: document.getElementById("action-type-input").value,
                 repositoryInput: document.getElementById("repo-input").value,
                 highRiskKind: document.getElementById("risk-kind-input").value
               }

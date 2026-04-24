@@ -5,6 +5,7 @@ import { renderPasskeyOperatorPage } from "../src/core/index.js";
 test("passkey operator page can target explicit api base and sync endpoint", () => {
   const html = renderPasskeyOperatorPage({
     apiBase: "/api",
+    actionType: "deploy_production",
     repositoryInput: "marushu/vtdd-v2-p",
     issueNumber: 15,
     highRiskKind: "github_app_secret_sync",
@@ -14,6 +15,7 @@ test("passkey operator page can target explicit api base and sync endpoint", () 
   assert.equal(html.includes('fetch("/api/approval/passkey/challenge"'), true);
   assert.equal(html.includes('fetch("/api/github-app-secret-sync/execute"'), true);
   assert.equal(html.includes("Sync GitHub App secrets"), true);
+  assert.equal(html.includes('id="action-type-input" value="deploy_production"'), true);
 });
 
 test("passkey operator page keeps sync disabled message when helper endpoint is absent", () => {

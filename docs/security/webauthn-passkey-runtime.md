@@ -45,6 +45,11 @@ intended target scope:
 - `relatedIssue`
 - `phase`
 
+For example:
+
+- GitHub App secret sync -> `actionType=destructive`, `highRiskKind=github_app_secret_sync`
+- production deploy -> `actionType=deploy_production`, `highRiskKind=deploy_production`
+
 ### 3. Verify WebAuthn response
 
 The worker verifies the authenticator response and writes an `approval_log`
