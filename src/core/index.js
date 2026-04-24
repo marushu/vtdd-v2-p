@@ -109,6 +109,13 @@ export {
   ExecutionTransferMode,
   evaluateExecutionContinuity
 } from "./execution-continuity.js";
+export {
+  REMOTE_CODEX_WORKFLOW_FILE,
+  RemoteCodexExecutionStatus,
+  createRemoteCodexExecutionRequest,
+  dispatchRemoteCodexExecution,
+  retrieveRemoteCodexExecutionProgress
+} from "./remote-codex-executor.js";
 export { runMvpGateway } from "./mvp-gateway.js";
 export { resolveGatewayAliasRegistryFromGitHubApp } from "./github-app-repository-index.js";
 export {

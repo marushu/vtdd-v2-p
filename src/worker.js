@@ -4,9 +4,12 @@ import {
   appendDecisionLogFromGateway,
   appendProposalLogFromGateway,
   createMemoryRecord,
+  createRemoteCodexExecutionRequest,
+  dispatchRemoteCodexExecution,
   inferRelatedIssueFromGatewayInput,
   inferRelatedIssueFromProposalGatewayInput,
   normalizeAutonomyMode,
+  retrieveRemoteCodexExecutionProgress,
   retrieveCrossIssueMemoryIndex,
   retrieveDecisionLogReferences,
   retrieveProposalLogReferences,
@@ -65,6 +68,85 @@ export default {
         env
       });
       return json(auditedGatewayOutcome.status, auditedGatewayOutcome.body);
+    }
+
+    if (request.method === "POST" && isApiPath(url.pathname, "/action/execute")) {
+      const auth = authorizeGatewayRequest({ request, env, apiSuffix: "/action/execute" });
+      if (!auth.ok) {
+        return json(auth.status, {
+          ok: false,
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+
+      const payload = await readJson(request);
+      const prepared = await prepareGatewayPayload({ payload, env });
+      const result = appendWarnings(runMvpGateway(prepared.payload), prepared.warnings);
+      if (!result.allowed) {
+        return json(422, result);
+      }
+
+      const requestValidation = createRemoteCodexExecutionRequest({
+        payload: prepared.payload,
+        gatewayResult: result
+      });
+      if (!requestValidation.ok) {
+        return json(422, {
+          ok: false,
+          error: "remote_codex_execution_request_invalid",
+          issues: requestValidation.issues
+        });
+      }
+
+      const dispatched = await dispatchRemoteCodexExecution({
+        payload: prepared.payload,
+        gatewayResult: result,
+        env
+      });
+      if (!dispatched.ok) {
+        return json(dispatched.status ?? 503, {
+          ok: false,
+          error: dispatched.error ?? "remote_codex_dispatch_failed",
+          blockedByRule: dispatched.blockedByRule ?? null,
+          reason: dispatched.reason,
+          issues: dispatched.issues ?? []
+        });
+      }
+
+      return json(202, {
+        ok: true,
+        allowed: true,
+        execution: dispatched.execution
+      });
+    }
+
+    if (request.method === "GET" && isApiPath(url.pathname, "/action/progress")) {
+      const auth = authorizeGatewayRequest({ request, env, apiSuffix: "/action/progress" });
+      if (!auth.ok) {
+        return json(auth.status, {
+          ok: false,
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+
+      const progress = await retrieveRemoteCodexExecutionProgress({
+        executionId: url.searchParams.get("executionId"),
+        env
+      });
+      if (!progress.ok) {
+        return json(progress.status ?? 503, {
+          ok: false,
+          error: progress.error,
+          reason: progress.reason
+        });
+      }
+
+      return json(200, {
+        ok: true,
+        progress: progress.progress
+      });
     }
 
     if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/constitution")) {
