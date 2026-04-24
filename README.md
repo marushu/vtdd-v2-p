@@ -1,6 +1,41 @@
 # vtdd-v2
 VTDD V2: memory-first architecture with pluggable sockets and GitHub-first but non-lock-in design
 
+## Repository Use Model
+
+This repository is the public canonical VTDD V2 core maintained by
+[`@marushu`](https://github.com/marushu).
+
+It is public so other people can study it, fork it, and run it.
+It is not a shared hosted runtime.
+
+If you want to use VTDD yourself, the expected path is:
+
+- fork this repository, or clone it into your own repository/account
+- configure your own GitHub, Cloudflare, OpenAI, Gemini, and ChatGPT assets
+- create and operate your own Butler / Custom GPT surface
+
+The canonical repository remains owner-maintained.
+User operation should happen in user-owned forks, repositories, and service
+accounts.
+
+## Ownership Boundary
+
+This repository does not expect users to share the owner's secrets, GitHub App,
+Cloudflare account, Gemini key, or ChatGPT surface.
+
+Instead:
+
+- workflow and runtime code reference secret names only
+- each user is expected to set secrets in their own GitHub/Cloudflare/runtime
+  environment
+- each user is expected to connect their own Butler / Custom GPT to their own
+  VTDD deployment
+
+No setup wizard is assumed on this branch.
+VTDD runtime is expected to run in a setup-complete environment owned by the
+person using it.
+
 ## MVP Core (initial implementation)
 
 Current code starts with deterministic governance gates:
