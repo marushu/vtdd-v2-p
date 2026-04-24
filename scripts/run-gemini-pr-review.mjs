@@ -41,6 +41,10 @@ async function main() {
     return;
   }
 
+  if (!githubToken.startsWith("gh")) {
+    console.log("Warning: GITHUB_TOKEN does not look like a GitHub App token.");
+  }
+
   const prDiff = buildPullRequestDiff(files);
   const context = buildPullRequestReviewContext({
     repository,
