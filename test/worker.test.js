@@ -192,10 +192,14 @@ test("worker gateway returns PR revision loop guidance for Butler summaries", as
                 number: 42,
                 url: "https://github.com/example/repo/pull/42",
                 state: "open",
+                title: "Connect reviewer loop",
                 reviewCommentsCount: 3,
                 unresolvedReviewCommentsCount: 2,
                 updatedSinceReview: true,
-                reviewer: "gemini"
+                reviewer: "gemini",
+                reviewComments: [
+                  { user: { login: "gemini" }, body: "The reviewer loop still has unresolved objections." }
+                ]
               }
             }
           },
@@ -217,6 +221,13 @@ test("worker gateway returns PR revision loop guidance for Butler summaries", as
   assert.equal(body.allowed, true);
   assert.equal(body.executionContinuity.codexGoal, "revise_pr");
   assert.equal(body.executionContinuity.reviewLoop.unresolvedReviewCommentsCount, 2);
+  assert.equal(body.executionContinuity.butlerReviewSynthesis.available, true);
+  assert.equal(
+    body.executionContinuity.butlerReviewSynthesis.reviewerSignal.recentReviewComments[0].includes(
+      "gemini:"
+    ),
+    true
+  );
   assert.equal(body.executionContinuity.nextSuggestedActions.includes("rerun_gemini_review"), true);
 });
 

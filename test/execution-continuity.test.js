@@ -55,10 +55,12 @@ test("execution continuity returns PR revision loop guidance when unresolved rev
           number: 42,
           url: "https://github.com/example/repo/pull/42",
           state: "open",
+          title: "Connect reviewer loop",
           reviewCommentsCount: 3,
           unresolvedReviewCommentsCount: 2,
           updatedSinceReview: true,
-          reviewer: "gemini"
+          reviewer: "gemini",
+          reviewComments: [{ user: { login: "gemini" }, body: "Still blocked on reviewer objections." }]
         }
       }
     }
@@ -68,4 +70,9 @@ test("execution continuity returns PR revision loop guidance when unresolved rev
   assert.equal(result.value.codexGoal, CodexGoal.REVISE_PR);
   assert.equal(result.value.reviewLoop.rerunReviewer, true);
   assert.equal(result.value.nextSuggestedActions.includes("apply_pr_feedback"), true);
+  assert.equal(result.value.butlerReviewSynthesis.available, true);
+  assert.equal(
+    result.value.butlerReviewSynthesis.headline.includes("unresolved reviewer objections"),
+    true
+  );
 });
