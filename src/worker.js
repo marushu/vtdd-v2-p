@@ -18,6 +18,7 @@ import {
   retrieveDecisionLogReferences,
   retrieveProposalLogReferences,
   retrieveConstitution,
+  renderPasskeyOperatorPage,
   resolveGatewayAliasRegistryFromGitHubApp,
   runMvpGateway,
   validateMemoryProvider,
@@ -45,6 +46,22 @@ export default {
         mode: "v2",
         autonomyMode: resolveRuntimeAutonomyMode(env)
       });
+    }
+
+    if (request.method === "GET" && isApiPath(url.pathname, "/approval/passkey/operator")) {
+      const auth = authorizeGatewayRequest({
+        request,
+        env,
+        apiSuffix: "/approval/passkey/operator"
+      });
+      if (!auth.ok) {
+        return json(auth.status, {
+          ok: false,
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+      return handlePasskeyOperatorPageRequest(request);
     }
 
     if (request.method === "POST" && isApiPath(url.pathname, "/gateway")) {
@@ -455,6 +472,26 @@ async function handleRetrieveApprovalGrantRequest(url, env) {
       verifiedAt: normalizeText(record.content.verifiedAt) || null,
       expiresAt: normalizeText(record.content.expiresAt) || null,
       scope: normalizeScopeSnapshot(record.content.scope)
+    }
+  });
+}
+
+function handlePasskeyOperatorPageRequest(request) {
+  const url = new URL(request.url);
+  const html = renderPasskeyOperatorPage({
+    origin: url.origin,
+    repositoryInput: url.searchParams.get("repositoryInput"),
+    issueNumber: url.searchParams.get("issueNumber"),
+    phase: url.searchParams.get("phase") || "execution",
+    highRiskKind: url.searchParams.get("highRiskKind") || "github_app_secret_sync",
+    operatorId: url.searchParams.get("operatorId") || "vtdd-operator",
+    operatorLabel: url.searchParams.get("operatorLabel") || "VTDD Operator"
+  });
+
+  return new Response(html, {
+    status: 200,
+    headers: {
+      "content-type": "text/html; charset=utf-8"
     }
   });
 }
