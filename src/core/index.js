@@ -22,6 +22,23 @@ export {
   evaluateConsent,
   evaluateApproval
 } from "./approval.js";
+export {
+  DEFAULT_PASSKEY_GRANT_TTL_MS,
+  DEFAULT_PASSKEY_SESSION_TTL_MS,
+  PASSKEY_APPROVAL_KIND,
+  PASSKEY_GRANT_TAG,
+  PASSKEY_REGISTRATION_KIND,
+  PASSKEY_REGISTRY_TAG,
+  PASSKEY_SESSION_TAG,
+  createPasskeyApprovalOptions,
+  createPasskeyRegistrationOptions,
+  dedupePasskeys,
+  defaultPasskeyAdapter,
+  evaluateApprovalGrant,
+  normalizeScopeSnapshot,
+  verifyPasskeyApproval,
+  verifyPasskeyRegistration
+} from "./passkey-approval.js";
 export { requiredCredentialTier, evaluateCredentialBoundary } from "./credential-boundary.js";
 export { resolveRepositoryTarget } from "./repository-resolution.js";
 export { evaluateTargetConfirmationBoundary } from "./target-confirmation.js";

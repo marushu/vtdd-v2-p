@@ -8,5 +8,8 @@
   },
   "engines": {
     "node": ">=20"
+  },
+  "dependencies": {
+    "@simplewebauthn/server": "^13.3.0"
   }
 }

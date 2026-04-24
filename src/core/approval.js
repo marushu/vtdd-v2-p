@@ -1,3 +1,4 @@
+import { evaluateApprovalGrant } from "./passkey-approval.js";
 import { ActionType, ApprovalLevel, ConsentCategory } from "./types.js";
 
 const GO_REQUIRED_ACTIONS = new Set([
@@ -78,6 +79,8 @@ export function evaluateApproval({
   actionType,
   go,
   passkey,
+  approvalGrant,
+  approvalScope,
   approvalPhrase,
   approvalScopeMatched = false
 }) {
@@ -111,13 +114,19 @@ export function evaluateApproval({
           reason: "explicit GO is required before execution"
         };
   }
-  if (go && passkey) {
+  const grantResult = evaluateApprovalGrant({
+    approvalGrant,
+    scope: approvalScope
+  });
+  if (go && (passkey || grantResult.ok)) {
     return { ok: true, required };
   }
   return {
     ok: false,
     required,
-    reason: "high-risk action requires GO + passkey"
+    reason: passkey
+      ? "high-risk action requires GO + passkey"
+      : grantResult.reason || "high-risk action requires GO + passkey"
   };
 }
 

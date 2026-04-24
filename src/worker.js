@@ -3,11 +3,15 @@ import {
   MemoryRecordType,
   appendDecisionLogFromGateway,
   appendProposalLogFromGateway,
+  createPasskeyApprovalOptions,
+  createPasskeyRegistrationOptions,
   createMemoryRecord,
   createRemoteCodexExecutionRequest,
+  dedupePasskeys,
   dispatchRemoteCodexExecution,
   inferRelatedIssueFromGatewayInput,
   inferRelatedIssueFromProposalGatewayInput,
+  normalizeScopeSnapshot,
   normalizeAutonomyMode,
   retrieveRemoteCodexExecutionProgress,
   retrieveCrossIssueMemoryIndex,
@@ -16,7 +20,9 @@ import {
   retrieveConstitution,
   resolveGatewayAliasRegistryFromGitHubApp,
   runMvpGateway,
-  validateMemoryProvider
+  validateMemoryProvider,
+  verifyPasskeyApproval,
+  verifyPasskeyRegistration
 } from "./core/index.js";
 
 const JSON_HEADERS = {
@@ -147,6 +153,70 @@ export default {
         ok: true,
         progress: progress.progress
       });
+    }
+
+    if (request.method === "POST" && isApiPath(url.pathname, "/approval/passkey/register/options")) {
+      const auth = authorizeGatewayRequest({
+        request,
+        env,
+        apiSuffix: "/approval/passkey/register/options"
+      });
+      if (!auth.ok) {
+        return json(auth.status, {
+          ok: false,
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+      return handlePasskeyRegistrationOptionsRequest(request, env);
+    }
+
+    if (request.method === "POST" && isApiPath(url.pathname, "/approval/passkey/register/verify")) {
+      const auth = authorizeGatewayRequest({
+        request,
+        env,
+        apiSuffix: "/approval/passkey/register/verify"
+      });
+      if (!auth.ok) {
+        return json(auth.status, {
+          ok: false,
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+      return handlePasskeyRegistrationVerifyRequest(request, env);
+    }
+
+    if (request.method === "POST" && isApiPath(url.pathname, "/approval/passkey/challenge")) {
+      const auth = authorizeGatewayRequest({
+        request,
+        env,
+        apiSuffix: "/approval/passkey/challenge"
+      });
+      if (!auth.ok) {
+        return json(auth.status, {
+          ok: false,
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+      return handlePasskeyApprovalOptionsRequest(request, env);
+    }
+
+    if (request.method === "POST" && isApiPath(url.pathname, "/approval/passkey/verify")) {
+      const auth = authorizeGatewayRequest({
+        request,
+        env,
+        apiSuffix: "/approval/passkey/verify"
+      });
+      if (!auth.ok) {
+        return json(auth.status, {
+          ok: false,
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+      return handlePasskeyApprovalVerifyRequest(request, env);
     }
 
     if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/constitution")) {
@@ -361,17 +431,219 @@ async function prepareGatewayPayload({ payload, env }) {
     warnings.push("runtime forces guarded absence mode; payload autonomyMode override was ignored");
   }
 
+  const resolvedApprovalGrant = await resolveApprovalGrant({
+    payload: basePayload,
+    policyInput: basePolicyInput,
+    env
+  });
+  if (resolvedApprovalGrant.warning) {
+    warnings.push(resolvedApprovalGrant.warning);
+  }
+
   return {
     payload: {
       ...basePayload,
       policyInput: {
         ...basePolicyInput,
         aliasRegistry: resolvedAliasRegistry.aliasRegistry,
-        autonomyMode: effectiveAutonomyMode
+        autonomyMode: effectiveAutonomyMode,
+        approvalGrant: resolvedApprovalGrant.approvalGrant,
+        approvalScope: buildApprovalScopeSnapshot({
+          payload: basePayload,
+          policyInput: basePolicyInput
+        })
       }
     },
     warnings
   };
+}
+
+async function handlePasskeyRegistrationOptionsRequest(request, env) {
+  const provider = env?.MEMORY_PROVIDER ?? null;
+  const validation = validateMemoryProvider(provider);
+  if (!validation.ok) {
+    return json(503, {
+      ok: false,
+      error: "memory_provider_unavailable",
+      reason: "valid memory provider is required for passkey registration"
+    });
+  }
+
+  const body = await readJson(request);
+  const created = await createPasskeyRegistrationOptions({
+    adapter: env?.PASSKEY_ADAPTER,
+    rpID: env?.VTDD_PASSKEY_RP_ID || new URL(request.url).hostname,
+    rpName: env?.VTDD_PASSKEY_RP_NAME || "VTDD",
+    origin: env?.VTDD_PASSKEY_ORIGIN || new URL(request.url).origin,
+    operatorId: normalizeText(body?.operatorId) || "vtdd-operator",
+    operatorLabel: normalizeText(body?.operatorLabel) || "VTDD Operator"
+  });
+
+  if (!created.ok) {
+    return json(422, {
+      ok: false,
+      error: "passkey_registration_options_invalid",
+      issues: created.issues ?? []
+    });
+  }
+
+  const stored = await provider.store(created.sessionRecord);
+  if (!stored?.ok) {
+    return json(503, {
+      ok: false,
+      error: "memory_write_failed",
+      reason: "failed to persist pending registration session"
+    });
+  }
+
+  return json(200, {
+    ok: true,
+    sessionId: created.sessionRecord.id,
+    optionsJSON: created.optionsJSON
+  });
+}
+
+async function handlePasskeyRegistrationVerifyRequest(request, env) {
+  const provider = env?.MEMORY_PROVIDER ?? null;
+  const validation = validateMemoryProvider(provider);
+  if (!validation.ok) {
+    return json(503, {
+      ok: false,
+      error: "memory_provider_unavailable",
+      reason: "valid memory provider is required for passkey registration verify"
+    });
+  }
+
+  const body = await readJson(request);
+  const sessionId = normalizeText(body?.sessionId);
+  const sessionRecord = await findApprovalRecordById(provider, sessionId);
+  if (!sessionRecord) {
+    return json(404, {
+      ok: false,
+      error: "passkey_session_not_found",
+      reason: "registration session not found"
+    });
+  }
+
+  const verified = await verifyPasskeyRegistration({
+    adapter: env?.PASSKEY_ADAPTER,
+    sessionRecord,
+    response: body?.response,
+    rpID: env?.VTDD_PASSKEY_RP_ID || new URL(request.url).hostname,
+    origin: env?.VTDD_PASSKEY_ORIGIN || new URL(request.url).origin
+  });
+
+  if (!verified.ok) {
+    return json(422, {
+      ok: false,
+      error: "passkey_registration_verify_failed",
+      issues: verified.issues ?? []
+    });
+  }
+
+  await provider.store(verified.passkeyRecord);
+  await provider.store(verified.completedSessionRecord);
+
+  return json(200, {
+    ok: true,
+    credentialId: verified.passkeyRecord.content.credentialId
+  });
+}
+
+async function handlePasskeyApprovalOptionsRequest(request, env) {
+  const provider = env?.MEMORY_PROVIDER ?? null;
+  const validation = validateMemoryProvider(provider);
+  if (!validation.ok) {
+    return json(503, {
+      ok: false,
+      error: "memory_provider_unavailable",
+      reason: "valid memory provider is required for passkey approval"
+    });
+  }
+
+  const body = await readJson(request);
+  const passkeys = await retrieveRegisteredPasskeys(provider);
+  const created = await createPasskeyApprovalOptions({
+    adapter: env?.PASSKEY_ADAPTER,
+    rpID: env?.VTDD_PASSKEY_RP_ID || new URL(request.url).hostname,
+    origin: env?.VTDD_PASSKEY_ORIGIN || new URL(request.url).origin,
+    passkeys,
+    scope: buildApprovalScopeSnapshot({
+      payload: body,
+      policyInput: body?.policyInput
+    })
+  });
+
+  if (!created.ok) {
+    return json(422, {
+      ok: false,
+      error: "passkey_approval_options_invalid",
+      issues: created.issues ?? []
+    });
+  }
+
+  const stored = await provider.store(created.sessionRecord);
+  if (!stored?.ok) {
+    return json(503, {
+      ok: false,
+      error: "memory_write_failed",
+      reason: "failed to persist pending passkey approval session"
+    });
+  }
+
+  return json(200, {
+    ok: true,
+    sessionId: created.sessionRecord.id,
+    optionsJSON: created.optionsJSON
+  });
+}
+
+async function handlePasskeyApprovalVerifyRequest(request, env) {
+  const provider = env?.MEMORY_PROVIDER ?? null;
+  const validation = validateMemoryProvider(provider);
+  if (!validation.ok) {
+    return json(503, {
+      ok: false,
+      error: "memory_provider_unavailable",
+      reason: "valid memory provider is required for passkey approval verify"
+    });
+  }
+
+  const body = await readJson(request);
+  const sessionId = normalizeText(body?.sessionId);
+  const sessionRecord = await findApprovalRecordById(provider, sessionId);
+  if (!sessionRecord) {
+    return json(404, {
+      ok: false,
+      error: "passkey_session_not_found",
+      reason: "approval session not found"
+    });
+  }
+
+  const verified = await verifyPasskeyApproval({
+    adapter: env?.PASSKEY_ADAPTER,
+    sessionRecord,
+    response: body?.response,
+    passkeys: await retrieveRegisteredPasskeys(provider),
+    rpID: env?.VTDD_PASSKEY_RP_ID || new URL(request.url).hostname,
+    origin: env?.VTDD_PASSKEY_ORIGIN || new URL(request.url).origin
+  });
+
+  if (!verified.ok) {
+    return json(422, {
+      ok: false,
+      error: "passkey_approval_verify_failed",
+      issues: verified.issues ?? []
+    });
+  }
+
+  await provider.store(verified.updatedPasskeyRecord);
+  await provider.store(verified.grantRecord);
+
+  return json(200, {
+    ok: true,
+    approvalGrant: verified.approvalGrant
+  });
 }
 
 function appendWarnings(result, warnings) {
@@ -386,6 +658,73 @@ function appendWarnings(result, warnings) {
     ...result,
     warnings: [...merged]
   };
+}
+
+async function resolveApprovalGrant({ payload, policyInput, env }) {
+  const provider = env?.MEMORY_PROVIDER ?? null;
+  const validation = validateMemoryProvider(provider);
+  if (!validation.ok) {
+    return { approvalGrant: null };
+  }
+
+  const approvalId = normalizeText(policyInput?.approvalGrantId);
+  if (!approvalId) {
+    return { approvalGrant: null };
+  }
+
+  const record = await findApprovalRecordById(provider, approvalId);
+  if (!record || record?.content?.kind !== "passkey_grant") {
+    return {
+      approvalGrant: null,
+      warning: "approval grant id was provided but no matching passkey grant was found"
+    };
+  }
+
+  return {
+    approvalGrant: {
+      approvalId,
+      verified: record.content.status === "verified",
+      expiresAt: record.content.expiresAt,
+      scope: record.content.scope
+    }
+  };
+}
+
+function buildApprovalScopeSnapshot({ payload, policyInput }) {
+  const issueContext = normalizeObject(payload?.issueContext);
+  const traceability = normalizeObject(policyInput?.issueTraceability);
+  return normalizeScopeSnapshot({
+    actionType: policyInput?.actionType,
+    repositoryInput: policyInput?.repositoryInput,
+    issueNumber: issueContext.issueNumber,
+    relatedIssue: traceability.relatedIssue ?? issueContext.issueNumber,
+    phase: payload?.phase
+  });
+}
+
+async function retrieveRegisteredPasskeys(provider) {
+  const records = await provider.retrieve({
+    type: MemoryRecordType.WORKING_MEMORY,
+    tags: ["passkey_registry"]
+  });
+  return dedupePasskeys(records);
+}
+
+async function findApprovalRecordById(provider, recordId) {
+  if (!recordId) {
+    return null;
+  }
+  const records = await provider.query({
+    type: MemoryRecordType.APPROVAL_LOG,
+    text: recordId,
+    limit: 50
+  });
+  return (
+    records.find((record) => normalizeText(record?.id) === recordId) ??
+    records.find((record) => normalizeText(record?.content?.approvalId) === recordId) ??
+    records.find((record) => normalizeText(record?.content?.sessionId) === recordId) ??
+    null
+  );
 }
 
 async function appendGuardedAbsenceExecutionLog({ payload, gatewayOutcome, env }) {
