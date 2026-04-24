@@ -1,0 +1,120 @@
+name: remote-codex-executor
+
+on:
+  workflow_dispatch:
+    inputs:
+      execution_id:
+        description: "Stable VTDD execution id"
+        required: true
+        type: string
+      target_repository:
+        description: "owner/repo to modify"
+        required: true
+        type: string
+      target_issue_number:
+        description: "Canonical execution Issue number"
+        required: true
+        type: string
+      target_branch:
+        description: "Branch to continue or create"
+        required: true
+        type: string
+      base_ref:
+        description: "Base ref used when the target branch does not yet exist"
+        required: true
+        type: string
+      codex_goal:
+        description: "open_pr / revise_pr / respond_to_review"
+        required: true
+        type: string
+      approval_phrase:
+        description: "Scoped approval phrase"
+        required: true
+        type: string
+      handoff_json:
+        description: "Optional handoff payload JSON"
+        required: false
+        type: string
+
+run-name: remote-codex-${{ inputs.execution_id }}
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: remote-codex-${{ inputs.target_repository }}-${{ inputs.target_issue_number }}-${{ inputs.target_branch }}
+  cancel-in-progress: false
+
+jobs:
+  codex:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enforce bounded GO
+        shell: bash
+        run: |
+          if [ "${{ github.event.inputs.approval_phrase }}" != "GO" ]; then
+            echo "approval_phrase must be GO for remote Codex execution."
+            exit 1
+          fi
+
+      - name: Mint GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.VTDD_GITHUB_APP_ID }}
+          private-key: ${{ secrets.VTDD_GITHUB_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      - name: Checkout target repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.inputs.target_repository }}
+          ref: ${{ github.event.inputs.base_ref }}
+          token: ${{ steps.app-token.outputs.token }}
+          fetch-depth: 0
+          path: target-repo
+
+      - name: Prepare target branch
+        working-directory: target-repo
+        shell: bash
+        run: |
+          git checkout -B "${{ github.event.inputs.target_branch }}"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Codex CLI
+        shell: bash
+        run: npm install -g @openai/codex
+
+      - name: Prepare Codex prompt
+        shell: bash
+        run: |
+          cat > codex-prompt.txt <<'EOF'
+          You are executing inside VTDD-managed remote Codex CLI transport.
+          Work only within the canonical Issue scope.
+          Repository: ${{ github.event.inputs.target_repository }}
+          Issue: #${{ github.event.inputs.target_issue_number }}
+          Branch: ${{ github.event.inputs.target_branch }}
+          Goal: ${{ github.event.inputs.codex_goal }}
+          Handoff JSON: ${{ github.event.inputs.handoff_json }}
+
+          Before making changes:
+          1. Read the repository state and current branch/PR status.
+          2. Resume existing bounded work when safe.
+          3. Do not expand scope beyond the Issue.
+          4. Aim to create or update a PR as the bounded goal.
+          EOF
+
+      - name: Run Codex CLI
+        working-directory: target-repo
+        shell: bash
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          codex exec --skip-git-repo-check "$(cat ../codex-prompt.txt)"

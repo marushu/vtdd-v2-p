@@ -185,6 +185,119 @@ test("worker gateway returns PR revision loop guidance for Butler summaries", as
   assert.equal(body.executionContinuity.nextSuggestedActions.includes("rerun_gemini_review"), true);
 });
 
+test("worker dispatches remote Codex execution", async () => {
+  const calls = [];
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/action/execute", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        phase: "execution",
+        actorRole: ActorRole.BUTLER,
+        surfaceContext: {
+          surface: "custom_gpt",
+          judgmentModelId: "vtdd-butler-core-v1"
+        },
+        judgmentTrace: validButlerJudgmentTrace,
+        issueContext: {
+          issueNumber: 6
+        },
+        policyInput: {
+          actionType: ActionType.ISSUE_CREATE,
+          mode: TaskMode.EXECUTION,
+          repositoryInput: "vtdd",
+          aliasRegistry,
+          targetConfirmed: true,
+          constitutionConsulted: true,
+          runtimeTruth: {
+            runtimeAvailable: true,
+            runtimeState: {
+              activeBranch: "codex/issue-6"
+            }
+          },
+          credential: { model: "github_app", tier: CredentialTier.EXECUTE },
+          consent: { grantedCategories: [ConsentCategory.PROPOSE] },
+          approvalPhrase: "GO",
+          approvalScopeMatched: true,
+          issueTraceable: true,
+          go: true,
+          passkey: false
+        }
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      VTDD_GITHUB_ACTIONS_REPOSITORY: "sample-org/vtdd-v2-p",
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_dispatch_token",
+      GITHUB_API_FETCH: async (url, init) => {
+        calls.push({ url, init });
+        if (String(url).includes("/installation/repositories")) {
+          return new Response(
+            JSON.stringify({
+              total_count: 1,
+              repositories: [
+                {
+                  full_name: "sample-org/vtdd-v2",
+                  name: "vtdd-v2",
+                  private: true
+                }
+              ]
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        return new Response(null, { status: 204 });
+      }
+    }
+  );
+
+  assert.equal(response.status, 202);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.execution.issueNumber, 6);
+  assert.equal(calls.length, 2);
+});
+
+test("worker returns remote Codex execution progress", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/action/progress?executionId=remote-codex-issue6-abcd12", {
+      headers: {
+        authorization: "Bearer test-token"
+      }
+    }),
+    {
+      ...gatewayAuthEnv,
+      VTDD_GITHUB_ACTIONS_REPOSITORY: "sample-org/vtdd-v2-p",
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_progress_token",
+      GITHUB_API_FETCH: async () =>
+        new Response(
+          JSON.stringify({
+            workflow_runs: [
+              {
+                id: 101,
+                name: "remote-codex-executor",
+                display_title: "remote-codex-issue6-abcd12",
+                html_url: "https://github.com/sample-org/vtdd-v2-p/actions/runs/101",
+                status: "queued",
+                conclusion: null,
+                head_branch: "main",
+                run_started_at: "2026-04-24T08:00:00Z",
+                updated_at: "2026-04-24T08:01:00Z"
+              }
+            ]
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        )
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.progress.workflowRunId, 101);
+  assert.equal(body.progress.status, "queued");
+});
+
 test("worker gateway blocks butler path when judgment order is invalid", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/v2/gateway", {
