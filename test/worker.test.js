@@ -71,6 +71,50 @@ const passkeyAdapter = {
   }
 };
 
+function createFakeMemoryD1Binding() {
+  const rows = new Map();
+
+  return {
+    async exec() {},
+    prepare(sql) {
+      return {
+        bind(...params) {
+          return {
+            async run() {
+              if (String(sql).includes("INSERT OR REPLACE INTO vtdd_memory_records")) {
+                const [id, type, contentJson, contentRef, metadataJson, priority, tagsJson, createdAt] =
+                  params;
+                rows.set(id, {
+                  id,
+                  type,
+                  content_json: contentJson,
+                  content_ref: contentRef,
+                  metadata_json: metadataJson,
+                  priority,
+                  tags_json: tagsJson,
+                  created_at: createdAt
+                });
+              }
+              return { success: true };
+            },
+            async all() {
+              const text = String(sql);
+              let results = [...rows.values()];
+              if (text.includes("WHERE id IN")) {
+                const idSet = new Set(params);
+                results = results.filter((row) => idSet.has(row.id));
+              } else if (text.includes("WHERE type = ?")) {
+                results = results.filter((row) => row.type === params[0]);
+              }
+              return { results };
+            }
+          };
+        }
+      };
+    }
+  };
+}
+
 test("worker returns health", async () => {
   const response = await worker.fetch(new Request("https://example.com/health"));
   assert.equal(response.status, 200);
@@ -391,6 +435,29 @@ test("worker serves passkey registration and approval flow routes", async () => 
   const approvalVerifyBody = await approvalVerify.json();
   assert.equal(approvalVerifyBody.ok, true);
   assert.equal(Boolean(approvalVerifyBody.approvalGrant.approvalId), true);
+});
+
+test("worker can resolve passkey memory provider from Cloudflare D1 binding fallback", async () => {
+  const registerOptions = await worker.fetch(
+    new Request("https://example.com/v2/approval/passkey/register/options", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        operatorId: "owner",
+        operatorLabel: "Owner"
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      VTDD_MEMORY_D1: createFakeMemoryD1Binding(),
+      PASSKEY_ADAPTER: passkeyAdapter
+    }
+  );
+
+  assert.equal(registerOptions.status, 200);
+  const registrationBody = await registerOptions.json();
+  assert.equal(registrationBody.ok, true);
+  assert.equal(Boolean(registrationBody.sessionId), true);
 });
 
 test("worker serves passkey operator page", async () => {
