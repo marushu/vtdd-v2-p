@@ -8,7 +8,7 @@ import {
   executeGitHubAppSecretSync,
   loadGitHubAppSecretSource,
   validateGitHubAppSecretSyncApprovalGrant
-} from "../src/core/index.js";
+} from "../src/core/github-app-secret-sync.js";
 
 test("loadGitHubAppSecretSource reads app id and private key from existing env file", async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "vtdd-app-sync-"));
