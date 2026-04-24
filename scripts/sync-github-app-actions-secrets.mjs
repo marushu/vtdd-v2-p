@@ -2,7 +2,8 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import {
   buildGitHubAppSecretSyncPlan,
-  loadGitHubAppSecretSource
+  loadGitHubAppSecretSource,
+  validateGitHubAppSecretSyncApprovalGrant
 } from "../src/core/index.js";
 
 const execFileAsync = promisify(execFile);
@@ -34,9 +35,20 @@ async function main() {
     return;
   }
 
-  const gate = String(args.approval || "").trim();
-  if (gate !== "GO+passkey") {
-    throw new Error("execute mode requires --approval GO+passkey");
+  const approvalGrant = await resolveApprovalGrant({
+    runtimeUrl: args.runtimeUrl || process.env.VTDD_RUNTIME_URL,
+    approvalGrantId: args.approvalGrantId,
+    bearerToken:
+      args.gatewayBearerToken ||
+      process.env.VTDD_GATEWAY_BEARER_TOKEN ||
+      sourceResult.source.gatewayBearerToken
+  });
+  const approvalValidation = validateGitHubAppSecretSyncApprovalGrant({
+    approvalGrant,
+    repo
+  });
+  if (!approvalValidation.ok) {
+    throw new Error(approvalValidation.issues.join(", "));
   }
 
   for (const secret of plan.secrets) {
@@ -59,6 +71,9 @@ function printDryRun(plan, source) {
   console.log(`app id: ${source.appId}`);
   console.log(`installation id: ${source.installationId}`);
   console.log(`private key path: ${source.privateKeyPath}`);
+  console.log(
+    `gateway bearer token path: ${source.gatewayBearerTokenPath || "[not configured in load-env.sh]"}`
+  );
   console.log("secrets to sync:");
   for (const secret of plan.secrets) {
     const detail =
@@ -67,7 +82,9 @@ function printDryRun(plan, source) {
         : secret.value;
     console.log(`- ${secret.name}: ${detail}`);
   }
-  console.log("This is a high-risk operation. Re-run with --execute --approval GO+passkey to perform sync.");
+  console.log(
+    "This is a high-risk operation. Re-run with --execute --runtime-url <url> --approval-grant-id <id> after real passkey approval."
+  );
 }
 
 function parseArgs(args) {
@@ -88,12 +105,57 @@ function parseArgs(args) {
       index += 1;
       continue;
     }
-    if (current === "--approval") {
-      parsed.approval = args[index + 1];
+    if (current === "--runtime-url") {
+      parsed.runtimeUrl = args[index + 1];
+      index += 1;
+      continue;
+    }
+    if (current === "--approval-grant-id") {
+      parsed.approvalGrantId = args[index + 1];
+      index += 1;
+      continue;
+    }
+    if (current === "--gateway-bearer-token") {
+      parsed.gatewayBearerToken = args[index + 1];
       index += 1;
     }
   }
   return parsed;
+}
+
+async function resolveApprovalGrant(input = {}) {
+  const approvalGrantId = String(input.approvalGrantId ?? "").trim();
+  const runtimeUrl = String(input.runtimeUrl ?? "").trim();
+  const bearerToken = String(input.bearerToken ?? "").trim();
+
+  if (!approvalGrantId) {
+    throw new Error("execute mode requires --approval-grant-id");
+  }
+  if (!runtimeUrl) {
+    throw new Error("execute mode requires --runtime-url or VTDD_RUNTIME_URL");
+  }
+  if (!bearerToken) {
+    throw new Error(
+      "execute mode requires gateway bearer token via --gateway-bearer-token, VTDD_GATEWAY_BEARER_TOKEN, or load-env.sh"
+    );
+  }
+
+  const endpoint = new URL("/v2/retrieve/approval-grant", runtimeUrl);
+  endpoint.searchParams.set("approvalId", approvalGrantId);
+  const response = await fetch(endpoint, {
+    headers: {
+      authorization: `Bearer ${bearerToken}`
+    }
+  });
+
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(body.reason || `approval grant retrieval failed with status ${response.status}`);
+  }
+  if (!body?.approvalGrant) {
+    throw new Error("approval grant retrieval returned no approvalGrant");
+  }
+  return body.approvalGrant;
 }
 
 main().catch((error) => {

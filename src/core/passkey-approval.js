@@ -404,6 +404,7 @@ export function evaluateApprovalGrant(input = {}) {
 export function normalizeScopeSnapshot(scope = {}) {
   return {
     actionType: normalizeText(scope.actionType),
+    highRiskKind: normalizeText(scope.highRiskKind),
     repositoryInput: normalizeText(scope.repositoryInput),
     issueNumber: normalizeText(scope.issueNumber),
     relatedIssue: normalizeText(scope.relatedIssue),

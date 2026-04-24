@@ -454,6 +454,49 @@ test("worker gateway accepts high-risk approval grant resolved from memory", asy
   assert.equal(body.allowed, true);
 });
 
+test("worker returns approval grant through retrieve route", async () => {
+  const provider = createInMemoryMemoryProvider();
+  await provider.store({
+    id: "approval-xyz",
+    type: MemoryRecordType.APPROVAL_LOG,
+    content: {
+      kind: "passkey_grant",
+      status: "verified",
+      approvalId: "approval-xyz",
+      verifiedAt: "2026-04-25T00:00:00.000Z",
+      expiresAt: "2099-01-01T00:00:00.000Z",
+      scope: {
+        actionType: "destructive",
+        repositoryInput: "sample-org/vtdd-v2-p",
+        issueNumber: "15",
+        relatedIssue: "15",
+        phase: "execution",
+        highRiskKind: "github_app_secret_sync"
+      }
+    },
+    metadata: { source: "test" },
+    priority: 90,
+    tags: ["passkey_grant"],
+    createdAt: "2026-04-25T00:00:00.000Z"
+  });
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/retrieve/approval-grant?approvalId=approval-xyz", {
+      headers: gatewayAuthHeaders
+    }),
+    {
+      ...gatewayAuthEnv,
+      MEMORY_PROVIDER: provider
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.approvalGrant.approvalId, "approval-xyz");
+  assert.equal(body.approvalGrant.scope.repositoryInput, "sample-org/vtdd-v2-p");
+});
+
 test("worker returns remote Codex execution progress", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/v2/action/progress?executionId=remote-codex-issue6-abcd12", {
