@@ -4,7 +4,7 @@ import {
   buildGitHubAppSecretSyncPlan,
   loadGitHubAppSecretSource,
   validateGitHubAppSecretSyncApprovalGrant
-} from "../src/core/index.js";
+} from "../src/core/github-app-secret-sync.js";
 
 const execFileAsync = promisify(execFile);
 

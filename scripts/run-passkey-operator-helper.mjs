@@ -2,7 +2,8 @@ import { execFile } from "node:child_process";
 import http from "node:http";
 import path from "node:path";
 import { promisify } from "node:util";
-import { loadGitHubAppSecretSource, renderPasskeyOperatorPage } from "../src/core/index.js";
+import { loadGitHubAppSecretSource } from "../src/core/github-app-secret-sync.js";
+import { renderPasskeyOperatorPage } from "../src/core/index.js";
 
 const execFileAsync = promisify(execFile);
 const SCRIPT_DIR = path.dirname(new URL(import.meta.url).pathname);
