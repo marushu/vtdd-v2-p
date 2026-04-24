@@ -22,8 +22,9 @@ approval grant that Butler can use on the next high-risk request.
 - `POST /v2/approval/passkey/challenge`
 - `POST /v2/approval/passkey/verify`
 - `GET /v2/retrieve/approval-grant?approvalId=...`
+- `GET /v2/approval/passkey/operator`
 
-All five routes use the same machine-auth boundary as the other `/v2/*`
+All six routes use the same machine-auth boundary as the other `/v2/*`
 endpoints.
 
 ## Runtime Shape
@@ -65,6 +66,17 @@ grant through `/v2/retrieve/approval-grant` and validate a scoped
 `highRiskKind` before mutating external high-risk surfaces such as GitHub
 Actions secrets.
 
+### 5. Operator helper page
+
+`/v2/approval/passkey/operator` returns a same-origin HTML helper that can:
+
+- register a passkey
+- request a high-risk approval challenge
+- verify the authenticator response
+- display the resulting `approvalGrantId`
+
+This is the minimum browser/iPhone execution surface for the real passkey flow.
+
 ## Safety Notes
 
 - phrase-only `passkey=true` is a temporary compatibility path, not the final
@@ -72,6 +84,7 @@ Actions secrets.
 - high-risk grant expiry is short-lived by design
 - grant scope must match the current target
 - reviewer never receives execution credentials or passkey registry material
+- operator page must not hard-code owner-specific runtime URLs
 
 ## Non-goals of This Slice
 

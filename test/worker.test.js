@@ -382,6 +382,25 @@ test("worker serves passkey registration and approval flow routes", async () => 
   assert.equal(Boolean(approvalVerifyBody.approvalGrant.approvalId), true);
 });
 
+test("worker serves passkey operator page", async () => {
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/v2/approval/passkey/operator?repositoryInput=marushu%2Fvtdd-v2-p&issueNumber=15&highRiskKind=github_app_secret_sync",
+      {
+        headers: gatewayAuthHeaders
+      }
+    ),
+    gatewayAuthEnv
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("content-type"), "text/html; charset=utf-8");
+  const html = await response.text();
+  assert.equal(html.includes("VTDD Passkey Operator"), true);
+  assert.equal(html.includes("/v2/approval/passkey/challenge"), true);
+  assert.equal(html.includes("github_app_secret_sync"), true);
+});
+
 test("worker gateway accepts high-risk approval grant resolved from memory", async () => {
   const provider = createInMemoryMemoryProvider();
   await provider.store({
