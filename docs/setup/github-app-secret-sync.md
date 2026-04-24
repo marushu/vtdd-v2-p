@@ -70,6 +70,27 @@ auth, verifies that:
 
 and only then performs GitHub Actions secret mutation.
 
+## Optional Operator Helper
+
+For explicit operator execution without manual API calls, use the local helper:
+
+```bash
+node scripts/run-passkey-operator-helper.mjs \
+  --runtime-url https://<your-runtime-host> \
+  --repo marushu/vtdd-v2-p \
+  --issue-number 15
+```
+
+This helper:
+
+- serves a local browser page for passkey registration and approval
+- proxies the real `/v2/approval/passkey/*` runtime with machine auth
+- executes `scripts/sync-github-app-actions-secrets.mjs` only after a real
+  `approvalGrantId` has been issued
+
+It is an explicit operator helper, not a setup wizard and not a background
+sync path.
+
 ## Non-goals
 
 - replacing the local GitHub App source of truth

@@ -77,6 +77,11 @@ Actions secrets.
 
 This is the minimum browser/iPhone execution surface for the real passkey flow.
 
+For explicit local operator execution, the repository may also serve the same
+page through `scripts/run-passkey-operator-helper.mjs`, which proxies the real
+`/v2/approval/passkey/*` runtime without introducing a new worker-side setup
+wizard path.
+
 ## Safety Notes
 
 - phrase-only `passkey=true` is a temporary compatibility path, not the final

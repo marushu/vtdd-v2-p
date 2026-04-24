@@ -1,11 +1,13 @@
 export function renderPasskeyOperatorPage(input = {}) {
   const origin = escapeHtml(input.origin || "");
+  const apiBase = escapeHtml(input.apiBase || "/v2");
   const registrationDefaultOperatorId = escapeHtml(input.operatorId || "vtdd-operator");
   const registrationDefaultOperatorLabel = escapeHtml(input.operatorLabel || "VTDD Operator");
   const repoDefault = escapeHtml(input.repositoryInput || "");
   const issueDefault = escapeHtml(input.issueNumber || "");
   const phaseDefault = escapeHtml(input.phase || "execution");
   const highRiskKindDefault = escapeHtml(input.highRiskKind || "github_app_secret_sync");
+  const syncEnabled = input.syncEnabled === true;
 
   return `<!doctype html>
 <html lang="ja">
@@ -152,17 +154,29 @@ export function renderPasskeyOperatorPage(input = {}) {
           <p class="muted">GitHub App secret sync 用なら <code>highRiskKind=github_app_secret_sync</code> を使います。</p>
           <pre id="approve-output"></pre>
         </section>
+
+        <section>
+          <h2>3. GitHub App Secret Sync</h2>
+          <p class="muted">real passkey approval 後、この helper から <code>#15</code> の explicit operator bootstrap を実行します。</p>
+          <div class="row">
+            <button id="sync-button"${syncEnabled ? "" : " disabled"}>Sync GitHub App secrets</button>
+          </div>
+          <p class="muted">${syncEnabled ? "approvalGrantId が取得済みなら実行できます。" : "この surface では secret sync endpoint が有効化されていません。"}</p>
+          <pre id="sync-output"></pre>
+        </section>
       </div>
     </main>
 
     <script>
       const registerOutput = document.getElementById("register-output");
       const approveOutput = document.getElementById("approve-output");
+      const syncOutput = document.getElementById("sync-output");
+      let latestApprovalGrantId = "";
 
       document.getElementById("register-button").addEventListener("click", async () => {
         try {
           registerOutput.textContent = "register options request...";
-          const optionsResponse = await fetch("/v2/approval/passkey/register/options", {
+          const optionsResponse = await fetch("${apiBase}/approval/passkey/register/options", {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({
@@ -177,7 +191,7 @@ export function renderPasskeyOperatorPage(input = {}) {
 
           const publicKey = decodeRegistrationOptions(optionsBody.optionsJSON);
           const credential = await navigator.credentials.create({ publicKey });
-          const verifyResponse = await fetch("/v2/approval/passkey/register/verify", {
+          const verifyResponse = await fetch("${apiBase}/approval/passkey/register/verify", {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({
@@ -198,7 +212,7 @@ export function renderPasskeyOperatorPage(input = {}) {
       document.getElementById("approve-button").addEventListener("click", async () => {
         try {
           approveOutput.textContent = "approval challenge request...";
-          const challengeResponse = await fetch("/v2/approval/passkey/challenge", {
+          const challengeResponse = await fetch("${apiBase}/approval/passkey/challenge", {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({
@@ -221,7 +235,7 @@ export function renderPasskeyOperatorPage(input = {}) {
 
           const publicKey = decodeAuthenticationOptions(challengeBody.optionsJSON);
           const assertion = await navigator.credentials.get({ publicKey });
-          const verifyResponse = await fetch("/v2/approval/passkey/verify", {
+          const verifyResponse = await fetch("${apiBase}/approval/passkey/verify", {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({
@@ -233,9 +247,34 @@ export function renderPasskeyOperatorPage(input = {}) {
           if (!verifyResponse.ok) {
             throw new Error(verifyBody.reason || verifyBody.error || "approval verify failed");
           }
+          latestApprovalGrantId = verifyBody?.approvalGrant?.approvalId || "";
           approveOutput.textContent = JSON.stringify(verifyBody, null, 2);
         } catch (error) {
           approveOutput.textContent = String(error);
+        }
+      });
+
+      document.getElementById("sync-button").addEventListener("click", async () => {
+        try {
+          if (!latestApprovalGrantId) {
+            throw new Error("approvalGrantId is required before secret sync");
+          }
+          syncOutput.textContent = "github app secret sync request...";
+          const syncResponse = await fetch("${apiBase}/github-app-secret-sync/execute", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              approvalGrantId: latestApprovalGrantId,
+              repositoryInput: document.getElementById("repo-input").value
+            })
+          });
+          const syncBody = await syncResponse.json();
+          if (!syncResponse.ok) {
+            throw new Error(syncBody.reason || syncBody.error || "github app secret sync failed");
+          }
+          syncOutput.textContent = JSON.stringify(syncBody, null, 2);
+        } catch (error) {
+          syncOutput.textContent = String(error);
         }
       });
 
