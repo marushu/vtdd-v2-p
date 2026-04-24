@@ -6,6 +6,7 @@ import {
   ConsentCategory,
   CredentialTier,
   JudgmentStep,
+  TaskMode,
   WorkflowEvent,
   WorkflowStage,
   runMvpGateway
@@ -317,4 +318,86 @@ test("gateway asks clarification when recall conversation mentions multiple issu
     result.conversationAssist.confirmationPrompt.includes("#22"),
     true
   );
+});
+
+test("gateway returns execution continuity guidance for PR-reaching execution", () => {
+  const result = runMvpGateway({
+    phase: "execution",
+    actorRole: ActorRole.BUTLER,
+    surfaceContext: {
+      surface: "custom_gpt",
+      judgmentModelId: "vtdd-butler-core-v1"
+    },
+    judgmentTrace: validJudgmentTrace,
+    policyInput: {
+      actionType: ActionType.ISSUE_CREATE,
+      mode: TaskMode.EXECUTION,
+      repositoryInput: "vtdd",
+      aliasRegistry: registry,
+      targetConfirmed: true,
+      constitutionConsulted: true,
+      runtimeTruth: {
+        runtimeAvailable: true,
+        runtimeState: {
+          activeBranch: "codex/issue-4",
+          pullRequest: {
+            number: 42,
+            url: "https://github.com/example/repo/pull/42",
+            state: "open",
+            reviewCommentsCount: 2,
+            unresolvedReviewCommentsCount: 1,
+            updatedSinceReview: true,
+            reviewer: "gemini"
+          }
+        }
+      },
+      credential: { model: "github_app", tier: CredentialTier.EXECUTE },
+      consent: fullConsent,
+      ...approvalContext,
+      issueTraceable: true,
+      go: true,
+      passkey: false
+    }
+  });
+
+  assert.equal(result.allowed, true);
+  assert.equal(result.executionContinuity.codexGoal, "revise_pr");
+  assert.equal(result.executionContinuity.reviewLoop.rerunReviewer, true);
+  assert.equal(
+    result.executionContinuity.nextSuggestedActions.includes("rerun_gemini_review"),
+    true
+  );
+});
+
+test("gateway surfaces blocked continuity when Butler-mediated handoff is required but missing", () => {
+  const result = runMvpGateway({
+    phase: "execution",
+    actorRole: ActorRole.BUTLER,
+    surfaceContext: {
+      surface: "custom_gpt",
+      judgmentModelId: "vtdd-butler-core-v1"
+    },
+    judgmentTrace: validJudgmentTrace,
+    continuationContext: {
+      requiresHandoff: true
+    },
+    policyInput: {
+      actionType: ActionType.ISSUE_CREATE,
+      mode: TaskMode.EXECUTION,
+      repositoryInput: "vtdd",
+      aliasRegistry: registry,
+      targetConfirmed: true,
+      constitutionConsulted: true,
+      runtimeTruth: { runtimeAvailable: true },
+      credential: { model: "github_app", tier: CredentialTier.EXECUTE },
+      consent: fullConsent,
+      ...approvalContext,
+      issueTraceable: true,
+      go: true,
+      passkey: false
+    }
+  });
+
+  assert.equal(result.allowed, false);
+  assert.equal(result.blockedByRule, "butler_handoff_required_for_execution_transfer");
 });

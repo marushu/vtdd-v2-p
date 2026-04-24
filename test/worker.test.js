@@ -129,6 +129,62 @@ test("worker gateway allows butler path when deterministic judgment order is sat
   assert.equal(body.repository, "sample-org/vtdd-v2");
 });
 
+test("worker gateway returns PR revision loop guidance for Butler summaries", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/gateway", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        phase: "execution",
+        actorRole: ActorRole.BUTLER,
+        surfaceContext: {
+          surface: "custom_gpt",
+          judgmentModelId: "vtdd-butler-core-v1"
+        },
+        judgmentTrace: validButlerJudgmentTrace,
+        policyInput: {
+          actionType: ActionType.ISSUE_CREATE,
+          mode: TaskMode.EXECUTION,
+          repositoryInput: "vtdd",
+          aliasRegistry,
+          targetConfirmed: true,
+          constitutionConsulted: true,
+          runtimeTruth: {
+            runtimeAvailable: true,
+            runtimeState: {
+              activeBranch: "codex/issue-4",
+              pullRequest: {
+                number: 42,
+                url: "https://github.com/example/repo/pull/42",
+                state: "open",
+                reviewCommentsCount: 3,
+                unresolvedReviewCommentsCount: 2,
+                updatedSinceReview: true,
+                reviewer: "gemini"
+              }
+            }
+          },
+          credential: { model: "github_app", tier: CredentialTier.EXECUTE },
+          consent: { grantedCategories: [ConsentCategory.PROPOSE] },
+          approvalPhrase: "GO issue create",
+          approvalScopeMatched: true,
+          issueTraceable: true,
+          go: true,
+          passkey: false
+        }
+      })
+    }),
+    gatewayAuthEnv
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.allowed, true);
+  assert.equal(body.executionContinuity.codexGoal, "revise_pr");
+  assert.equal(body.executionContinuity.reviewLoop.unresolvedReviewCommentsCount, 2);
+  assert.equal(body.executionContinuity.nextSuggestedActions.includes("rerun_gemini_review"), true);
+});
+
 test("worker gateway blocks butler path when judgment order is invalid", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/v2/gateway", {

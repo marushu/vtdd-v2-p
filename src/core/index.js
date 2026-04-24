@@ -104,6 +104,11 @@ export {
 } from "./surface-independence.js";
 export { evaluateExecutionPolicy } from "./policy.js";
 export { evaluateButlerExecution } from "./butler-orchestrator.js";
+export {
+  CodexGoal,
+  ExecutionTransferMode,
+  evaluateExecutionContinuity
+} from "./execution-continuity.js";
 export { runMvpGateway } from "./mvp-gateway.js";
 export { resolveGatewayAliasRegistryFromGitHubApp } from "./github-app-repository-index.js";
 export {
