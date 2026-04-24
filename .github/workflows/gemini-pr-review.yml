@@ -39,7 +39,7 @@ jobs:
           exit 0
 
       - name: Detect GitHub App secret availability
-        id: app-secrets
+        id: app_secrets
         env:
           VTDD_GITHUB_APP_ID: ${{ secrets.VTDD_GITHUB_APP_ID }}
           VTDD_GITHUB_APP_PRIVATE_KEY: ${{ secrets.VTDD_GITHUB_APP_PRIVATE_KEY }}
@@ -51,13 +51,13 @@ jobs:
           fi
 
       - name: Skip when GitHub App secrets are not configured
-        if: ${{ steps.app-secrets.outputs.configured != 'true' }}
+        if: ${{ steps.app_secrets.outputs.configured != 'true' }}
         run: |
           echo "Skipping Gemini review because VTDD_GITHUB_APP_ID / VTDD_GITHUB_APP_PRIVATE_KEY are not configured."
           exit 0
 
       - name: Mint GitHub App token
-        if: ${{ steps.app-secrets.outputs.configured == 'true' }}
+        if: ${{ steps.app_secrets.outputs.configured == 'true' }}
         id: app-token
         uses: actions/create-github-app-token@v1
         with:
@@ -66,20 +66,20 @@ jobs:
           owner: ${{ github.repository_owner }}
 
       - name: Checkout repository
-        if: ${{ steps.app-secrets.outputs.configured == 'true' }}
+        if: ${{ steps.app_secrets.outputs.configured == 'true' }}
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
           token: ${{ steps.app-token.outputs.token }}
 
       - name: Setup Node.js
-        if: ${{ steps.app-secrets.outputs.configured == 'true' }}
+        if: ${{ steps.app_secrets.outputs.configured == 'true' }}
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
       - name: Run Gemini PR review
-        if: ${{ steps.app-secrets.outputs.configured == 'true' }}
+        if: ${{ steps.app_secrets.outputs.configured == 'true' }}
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
