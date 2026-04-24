@@ -1,5 +1,6 @@
 import { evaluateButlerExecution } from "./butler-orchestrator.js";
 import { buildConversationAssist } from "./conversation-assist.js";
+import { evaluateExecutionContinuity } from "./execution-continuity.js";
 import { evaluateExecutionPolicy } from "./policy.js";
 import { buildRetrievalPlan } from "./retrieval-contract.js";
 import { evaluateMemorySafety, sanitizeMemoryPayload } from "./memory-safety.js";
@@ -74,6 +75,21 @@ export function runMvpGateway(input) {
     });
   }
 
+  const continuity = evaluateExecutionContinuity({
+    actorRole,
+    mode: policyInput?.mode,
+    runtimeTruth: policyInput?.runtimeTruth,
+    continuationContext: input?.continuationContext
+  });
+  if (!continuity.ok) {
+    return deny(continuity.rule, continuity.reason, {
+      retrievalPlan,
+      repositoryCandidates,
+      conversationAssist: deniedConversationAssist,
+      workflowState: workflowDecision.state
+    });
+  }
+
   return {
     allowed: true,
     retrievalPlan,
@@ -85,6 +101,7 @@ export function runMvpGateway(input) {
       repository: execution.repository,
       repositoryCandidates
     }),
+    executionContinuity: continuity.value,
     autonomyMode: execution.autonomyMode ?? policyInput.autonomyMode ?? null,
     requiredApproval: execution.requiredApproval ?? null,
     memoryWrite: memoryPlan.value
@@ -143,6 +160,7 @@ function prepareMemoryPlan(memoryRecord) {
     }
   };
 }
+
 
 function deny(rule, reason, detail = {}) {
   return {
