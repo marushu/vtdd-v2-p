@@ -3,6 +3,7 @@ import {
   MemoryRecordType,
   appendDecisionLogFromGateway,
   appendProposalLogFromGateway,
+  createCloudflareMemoryProvider,
   createPasskeyApprovalOptions,
   createPasskeyRegistrationOptions,
   createMemoryRecord,
@@ -34,6 +35,13 @@ const CANONICAL_API_PREFIX = "/v2";
 const LEGACY_API_PREFIX = "/mvp";
 const AUTONOMY_MODE_ENV = "VTDD_AUTONOMY_MODE";
 const LEGACY_AUTONOMY_MODE_ENV = "MVP_AUTONOMY_MODE";
+const MEMORY_D1_BINDING = "VTDD_MEMORY_D1";
+const MEMORY_R2_BINDING = "VTDD_MEMORY_R2";
+const MEMORY_BLOB_THRESHOLD_ENV = "VTDD_MEMORY_BLOB_THRESHOLD";
+const DEFAULT_MEMORY_LIMIT = 20;
+const MAX_MEMORY_LIMIT = 200;
+const memoryProviderCache = new WeakMap();
+const d1AdapterCache = new WeakMap();
 
 export default {
   async fetch(request, env) {
@@ -304,7 +312,7 @@ export default {
 };
 
 async function handleRetrieveConstitutionRequest(url, env) {
-  const provider = env?.MEMORY_PROVIDER ?? null;
+  const provider = resolveMemoryProvider(env);
   const validation = validateMemoryProvider(provider);
   if (!validation.ok) {
     return json(503, {
@@ -325,7 +333,7 @@ async function handleRetrieveConstitutionRequest(url, env) {
 }
 
 async function handleRetrieveDecisionLogsRequest(url, env) {
-  const provider = env?.MEMORY_PROVIDER ?? null;
+  const provider = resolveMemoryProvider(env);
   const validation = validateMemoryProvider(provider);
   if (!validation.ok) {
     return json(503, {
@@ -359,7 +367,7 @@ async function handleRetrieveDecisionLogsRequest(url, env) {
 }
 
 async function handleRetrieveProposalLogsRequest(url, env) {
-  const provider = env?.MEMORY_PROVIDER ?? null;
+  const provider = resolveMemoryProvider(env);
   const validation = validateMemoryProvider(provider);
   if (!validation.ok) {
     return json(503, {
@@ -393,7 +401,7 @@ async function handleRetrieveProposalLogsRequest(url, env) {
 }
 
 async function handleRetrieveCrossIssueRequest(url, env) {
-  const provider = env?.MEMORY_PROVIDER ?? null;
+  const provider = resolveMemoryProvider(env);
   const phase = normalize(url.searchParams.get("phase")) || "execution";
   const limit = normalizeLimit(url.searchParams.get("limit"), 5);
   const relatedIssue = normalizeIssue(url.searchParams.get("relatedIssue"));
@@ -436,7 +444,7 @@ async function handleRetrieveCrossIssueRequest(url, env) {
 }
 
 async function handleRetrieveApprovalGrantRequest(url, env) {
-  const provider = env?.MEMORY_PROVIDER ?? null;
+  const provider = resolveMemoryProvider(env);
   const validation = validateMemoryProvider(provider);
   if (!validation.ok) {
     return json(503, {
@@ -549,7 +557,7 @@ async function prepareGatewayPayload({ payload, env }) {
 }
 
 async function handlePasskeyRegistrationOptionsRequest(request, env) {
-  const provider = env?.MEMORY_PROVIDER ?? null;
+  const provider = resolveMemoryProvider(env);
   const validation = validateMemoryProvider(provider);
   if (!validation.ok) {
     return json(503, {
@@ -594,7 +602,7 @@ async function handlePasskeyRegistrationOptionsRequest(request, env) {
 }
 
 async function handlePasskeyRegistrationVerifyRequest(request, env) {
-  const provider = env?.MEMORY_PROVIDER ?? null;
+  const provider = resolveMemoryProvider(env);
   const validation = validateMemoryProvider(provider);
   if (!validation.ok) {
     return json(503, {
@@ -641,7 +649,7 @@ async function handlePasskeyRegistrationVerifyRequest(request, env) {
 }
 
 async function handlePasskeyApprovalOptionsRequest(request, env) {
-  const provider = env?.MEMORY_PROVIDER ?? null;
+  const provider = resolveMemoryProvider(env);
   const validation = validateMemoryProvider(provider);
   if (!validation.ok) {
     return json(503, {
@@ -689,7 +697,7 @@ async function handlePasskeyApprovalOptionsRequest(request, env) {
 }
 
 async function handlePasskeyApprovalVerifyRequest(request, env) {
-  const provider = env?.MEMORY_PROVIDER ?? null;
+  const provider = resolveMemoryProvider(env);
   const validation = validateMemoryProvider(provider);
   if (!validation.ok) {
     return json(503, {
@@ -751,7 +759,7 @@ function appendWarnings(result, warnings) {
 }
 
 async function resolveApprovalGrant({ payload, policyInput, env }) {
-  const provider = env?.MEMORY_PROVIDER ?? null;
+  const provider = resolveMemoryProvider(env);
   const validation = validateMemoryProvider(provider);
   if (!validation.ok) {
     return { approvalGrant: null };
@@ -825,7 +833,7 @@ async function appendGuardedAbsenceExecutionLog({ payload, gatewayOutcome, env }
     return gatewayOutcome;
   }
 
-  const provider = env?.MEMORY_PROVIDER ?? null;
+  const provider = resolveMemoryProvider(env);
   const providerValidation = validateMemoryProvider(provider);
   if (!providerValidation.ok) {
     return attachGatewayWarning(
@@ -909,7 +917,7 @@ async function appendGuardedAbsenceExecutionLog({ payload, gatewayOutcome, env }
 }
 
 async function completeGatewayRuntime({ payload, gatewayResult, env }) {
-  const provider = env?.MEMORY_PROVIDER ?? null;
+  const provider = resolveMemoryProvider(env);
   const providerValidation = validateMemoryProvider(provider);
   const needsDecisionWrite = gatewayResult?.memoryWrite?.recordType === "decision_log";
   const needsProposalWrite = gatewayResult?.memoryWrite?.recordType === "proposal_log";
@@ -1202,6 +1210,221 @@ function resolveRuntimeAutonomyMode(env) {
   const runtimeEnv = env ?? {};
   const configured = runtimeEnv[AUTONOMY_MODE_ENV] ?? runtimeEnv[LEGACY_AUTONOMY_MODE_ENV];
   return normalizeAutonomyMode(configured);
+}
+
+function resolveMemoryProvider(env) {
+  if (!env || typeof env !== "object") {
+    return null;
+  }
+
+  const injectedProvider = env.MEMORY_PROVIDER ?? null;
+  if (validateMemoryProvider(injectedProvider).ok) {
+    return injectedProvider;
+  }
+
+  if (memoryProviderCache.has(env)) {
+    return memoryProviderCache.get(env);
+  }
+
+  const d1Binding = env[MEMORY_D1_BINDING] ?? null;
+  if (!d1Binding) {
+    memoryProviderCache.set(env, null);
+    return null;
+  }
+
+  const provider = createCloudflareMemoryProvider({
+    d1: createD1MemoryIndexAdapter(d1Binding),
+    r2: createR2TextAdapter(env[MEMORY_R2_BINDING] ?? null),
+    blobThreshold: resolveMemoryBlobThreshold(env)
+  });
+
+  memoryProviderCache.set(env, provider);
+  return provider;
+}
+
+function createD1MemoryIndexAdapter(d1) {
+  if (!d1 || typeof d1.prepare !== "function") {
+    return null;
+  }
+  if (d1AdapterCache.has(d1)) {
+    return d1AdapterCache.get(d1);
+  }
+
+  let schemaPromise = null;
+  const adapter = {
+    async insertRecord(record) {
+      await ensureSchema();
+      await d1
+        .prepare(
+          `INSERT OR REPLACE INTO vtdd_memory_records (
+             id, type, content_json, content_ref, metadata_json, priority, tags_json, created_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+        )
+        .bind(
+          record.id,
+          record.type,
+          record.content === null || record.content === undefined ? null : JSON.stringify(record.content),
+          normalizeText(record.contentRef) || null,
+          JSON.stringify(record.metadata ?? {}),
+          Number(record.priority ?? 50),
+          JSON.stringify(record.tags ?? []),
+          record.createdAt
+        )
+        .run();
+    },
+
+    async queryRecords(filter = {}) {
+      await ensureSchema();
+
+      const ids = Array.isArray(filter.ids)
+        ? filter.ids.map((item) => normalizeText(item)).filter(Boolean)
+        : [];
+      const type = normalizeText(filter.type);
+      const limit = normalizeMemoryLimit(filter.limit);
+      const statement = buildMemorySelectStatement({ ids, type });
+      const result = await d1.prepare(statement.sql).bind(...statement.params).all();
+      const rows = Array.isArray(result?.results) ? result.results : [];
+      let records = rows.map(mapStoredMemoryRecord).filter(Boolean);
+
+      if (Array.isArray(filter.tags) && filter.tags.length > 0) {
+        const requiredTags = filter.tags.map((tag) => normalizeText(tag).toLowerCase()).filter(Boolean);
+        records = records.filter((record) =>
+          requiredTags.every((tag) =>
+            Array.isArray(record.tags) &&
+            record.tags.some((recordTag) => normalizeText(recordTag).toLowerCase() === tag)
+          )
+        );
+      }
+
+      const queryText = normalizeText(filter.text).toLowerCase();
+      if (queryText) {
+        records = records.filter((record) => JSON.stringify(record).toLowerCase().includes(queryText));
+      }
+
+      records.sort((left, right) => {
+        return right.priority - left.priority || String(right.createdAt).localeCompare(String(left.createdAt));
+      });
+
+      if (ids.length > 0) {
+        const order = new Map(ids.map((id, index) => [id, index]));
+        records.sort((left, right) => {
+          const leftIndex = order.has(left.id) ? order.get(left.id) : Number.MAX_SAFE_INTEGER;
+          const rightIndex = order.has(right.id) ? order.get(right.id) : Number.MAX_SAFE_INTEGER;
+          return leftIndex - rightIndex;
+        });
+      }
+
+      return records.slice(0, limit);
+    }
+  };
+
+  d1AdapterCache.set(d1, adapter);
+  return adapter;
+
+  function ensureSchema() {
+    if (!schemaPromise) {
+      schemaPromise = d1.exec(
+        `CREATE TABLE IF NOT EXISTS vtdd_memory_records (
+           id TEXT PRIMARY KEY,
+           type TEXT NOT NULL,
+           content_json TEXT,
+           content_ref TEXT,
+           metadata_json TEXT NOT NULL,
+           priority INTEGER NOT NULL,
+           tags_json TEXT NOT NULL,
+           created_at TEXT NOT NULL
+         );
+         CREATE INDEX IF NOT EXISTS idx_vtdd_memory_records_type_priority_created_at
+           ON vtdd_memory_records (type, priority DESC, created_at DESC);`
+      );
+    }
+    return schemaPromise;
+  }
+}
+
+function createR2TextAdapter(bucket) {
+  if (!bucket || typeof bucket.put !== "function" || typeof bucket.get !== "function") {
+    return null;
+  }
+
+  return {
+    async put(key, value) {
+      await bucket.put(key, value);
+    },
+    async get(key) {
+      const object = await bucket.get(key);
+      if (!object) {
+        return null;
+      }
+      if (typeof object === "string") {
+        return object;
+      }
+      if (typeof object.text === "function") {
+        return object.text();
+      }
+      return null;
+    }
+  };
+}
+
+function buildMemorySelectStatement({ ids, type }) {
+  if (ids.length > 0) {
+    const placeholders = ids.map(() => "?").join(", ");
+    return {
+      sql: `SELECT * FROM vtdd_memory_records WHERE id IN (${placeholders})`,
+      params: ids
+    };
+  }
+  if (type) {
+    return {
+      sql: "SELECT * FROM vtdd_memory_records WHERE type = ? ORDER BY priority DESC, created_at DESC LIMIT ?",
+      params: [type, MAX_MEMORY_LIMIT]
+    };
+  }
+  return {
+    sql: "SELECT * FROM vtdd_memory_records ORDER BY priority DESC, created_at DESC LIMIT ?",
+    params: [MAX_MEMORY_LIMIT]
+  };
+}
+
+function mapStoredMemoryRecord(row) {
+  if (!row || typeof row !== "object") {
+    return null;
+  }
+  return {
+    id: normalizeText(row.id),
+    type: normalizeText(row.type),
+    content: row.content_json ? safeParseJson(row.content_json) : null,
+    contentRef: normalizeText(row.content_ref) || undefined,
+    metadata: safeParseJson(row.metadata_json, {}),
+    priority: Number(row.priority ?? 50),
+    tags: safeParseJson(row.tags_json, []),
+    createdAt: normalizeText(row.created_at)
+  };
+}
+
+function resolveMemoryBlobThreshold(env) {
+  const numeric = Number(env?.[MEMORY_BLOB_THRESHOLD_ENV] ?? 1024);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return 1024;
+  }
+  return Math.floor(numeric);
+}
+
+function normalizeMemoryLimit(value) {
+  const numeric = Number(value ?? DEFAULT_MEMORY_LIMIT);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return DEFAULT_MEMORY_LIMIT;
+  }
+  return Math.min(Math.floor(numeric), MAX_MEMORY_LIMIT);
+}
+
+function safeParseJson(value, fallback = null) {
+  try {
+    return JSON.parse(String(value));
+  } catch {
+    return fallback;
+  }
 }
 
 function attachGatewayWarning(gatewayOutcome, warning) {
