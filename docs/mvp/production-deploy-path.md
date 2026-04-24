@@ -34,17 +34,25 @@ The token should be scoped to minimum required Worker deploy permissions.
 `deploy-production` workflow is manual (`workflow_dispatch`) and requires:
 
 - `approval_phrase=GO`
-- `passkey_verified=true`
+- `runtime_url=<user-owned worker runtime>`
+- `approval_grant_id=<real passkey approval grant id>`
 - environment approval on `production`
 
 This encodes the MVP high-risk policy as:
 
 1. explicit GO phrase
-2. passkey-verified operator intent
+2. real WebAuthn/passkey approval grant validated against the worker runtime
 3. protected environment confirmation
+
+The workflow validates the grant through `/v2/retrieve/approval-grant` using
+`VTDD_GATEWAY_BEARER_TOKEN`, and the grant scope must match:
+
+- `actionType=deploy_production`
+- `highRiskKind=deploy_production`
+- `repositoryInput=<target repo>`
 
 ## Notes
 
 - Branch restriction: deploy job runs only when ref is `main`
-- Pre-deploy check: `npm test` must pass
+- Pre-deploy checks: approval grant validation and `npm test`
 - Future hardening (out-of-scope for MVP): external passkey attestation service, staged rollout, rollback automation

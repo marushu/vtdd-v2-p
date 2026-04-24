@@ -7,10 +7,14 @@ on:
         description: "Type GO to approve production deploy"
         required: true
         type: string
-      passkey_verified:
-        description: "Set true after passkey-based operator approval"
+      runtime_url:
+        description: "Worker runtime URL used to validate the real passkey approval grant"
         required: true
-        type: boolean
+        type: string
+      approval_grant_id:
+        description: "Real WebAuthn/passkey approval grant id for deploy_production"
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -32,8 +36,12 @@ jobs:
             echo "Approval phrase must be GO for production deploy."
             exit 1
           fi
-          if [ "${{ github.event.inputs.passkey_verified }}" != "true" ]; then
-            echo "passkey_verified must be true for production deploy."
+          if [ -z "${{ github.event.inputs.runtime_url }}" ]; then
+            echo "runtime_url is required for production deploy."
+            exit 1
+          fi
+          if [ -z "${{ github.event.inputs.approval_grant_id }}" ]; then
+            echo "approval_grant_id is required for production deploy."
             exit 1
           fi
 
@@ -44,6 +52,18 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate real passkey approval grant
+        env:
+          VTDD_GATEWAY_BEARER_TOKEN: ${{ secrets.VTDD_GATEWAY_BEARER_TOKEN }}
+        run: |
+          node scripts/validate-deploy-approval-grant.mjs \
+            --runtime-url "${{ github.event.inputs.runtime_url }}" \
+            --approval-grant-id "${{ github.event.inputs.approval_grant_id }}" \
+            --repository "${{ github.repository }}"
 
       - name: Run tests
         run: npm test

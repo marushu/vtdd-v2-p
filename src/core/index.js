@@ -41,6 +41,7 @@ export {
 } from "./passkey-approval.js";
 export { renderPasskeyOperatorPage } from "./passkey-operator-page.js";
 export { buildButlerReviewSynthesis } from "./butler-review-synthesis.js";
+export { validateDeployApprovalGrant } from "./deploy-approval-grant.js";
 export { requiredCredentialTier, evaluateCredentialBoundary } from "./credential-boundary.js";
 export { resolveRepositoryTarget } from "./repository-resolution.js";
 export { evaluateTargetConfirmationBoundary } from "./target-confirmation.js";
