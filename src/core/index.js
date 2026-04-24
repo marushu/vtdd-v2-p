@@ -137,7 +137,8 @@ export {
   DEFAULT_GITHUB_APP_ENV_PATH,
   buildGitHubAppSecretSyncPlan,
   executeGitHubAppSecretSync,
-  loadGitHubAppSecretSource
+  loadGitHubAppSecretSource,
+  validateGitHubAppSecretSyncApprovalGrant
 } from "./github-app-secret-sync.js";
 export {
   DEFAULT_GEMINI_REVIEW_MODEL,

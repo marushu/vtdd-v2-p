@@ -155,6 +155,18 @@ export default {
       });
     }
 
+    if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/approval-grant")) {
+      const auth = authorizeGatewayRequest({ request, env, apiSuffix: "/retrieve/approval-grant" });
+      if (!auth.ok) {
+        return json(auth.status, {
+          ok: false,
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+      return handleRetrieveApprovalGrantRequest(url, env);
+    }
+
     if (request.method === "POST" && isApiPath(url.pathname, "/approval/passkey/register/options")) {
       const auth = authorizeGatewayRequest({
         request,
@@ -403,6 +415,47 @@ async function handleRetrieveCrossIssueRequest(url, env) {
     primaryReference: retrieved.primaryReference,
     referencesBySource: retrieved.referencesBySource,
     orderedReferences: retrieved.orderedReferences
+  });
+}
+
+async function handleRetrieveApprovalGrantRequest(url, env) {
+  const provider = env?.MEMORY_PROVIDER ?? null;
+  const validation = validateMemoryProvider(provider);
+  if (!validation.ok) {
+    return json(503, {
+      ok: false,
+      error: "memory_provider_unavailable",
+      reason: "valid memory provider is required for approval grant retrieval"
+    });
+  }
+
+  const approvalId = normalizeText(url.searchParams.get("approvalId"));
+  if (!approvalId) {
+    return json(422, {
+      ok: false,
+      error: "approval_id_required",
+      reason: "approvalId query parameter is required"
+    });
+  }
+
+  const record = await findApprovalRecordById(provider, approvalId);
+  if (!record || normalizeText(record?.content?.kind) !== "passkey_grant") {
+    return json(404, {
+      ok: false,
+      error: "approval_grant_not_found",
+      reason: "matching passkey approval grant was not found"
+    });
+  }
+
+  return json(200, {
+    ok: true,
+    approvalGrant: {
+      approvalId: normalizeText(record.content.approvalId) || record.id,
+      verified: record.content.status === "verified",
+      verifiedAt: normalizeText(record.content.verifiedAt) || null,
+      expiresAt: normalizeText(record.content.expiresAt) || null,
+      scope: normalizeScopeSnapshot(record.content.scope)
+    }
   });
 }
 
@@ -695,6 +748,7 @@ function buildApprovalScopeSnapshot({ payload, policyInput }) {
   const traceability = normalizeObject(policyInput?.issueTraceability);
   return normalizeScopeSnapshot({
     actionType: policyInput?.actionType,
+    highRiskKind: payload?.highRiskKind ?? policyInput?.highRiskKind,
     repositoryInput: policyInput?.repositoryInput,
     issueNumber: issueContext.issueNumber,
     relatedIssue: traceability.relatedIssue ?? issueContext.issueNumber,

@@ -21,8 +21,9 @@ approval grant that Butler can use on the next high-risk request.
 - `POST /v2/approval/passkey/register/verify`
 - `POST /v2/approval/passkey/challenge`
 - `POST /v2/approval/passkey/verify`
+- `GET /v2/retrieve/approval-grant?approvalId=...`
 
-All four routes use the same machine-auth boundary as the other `/v2/*`
+All five routes use the same machine-auth boundary as the other `/v2/*`
 endpoints.
 
 ## Runtime Shape
@@ -58,6 +59,11 @@ grant with:
 The caller sends `approvalGrantId` on the next `/v2/gateway` high-risk request.
 The worker resolves that grant from memory and binds it back into policy
 evaluation.
+
+For local operator bootstrap flows, the local runtime may also retrieve the
+grant through `/v2/retrieve/approval-grant` and validate a scoped
+`highRiskKind` before mutating external high-risk surfaces such as GitHub
+Actions secrets.
 
 ## Safety Notes
 

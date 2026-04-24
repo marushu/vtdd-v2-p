@@ -43,14 +43,32 @@ node scripts/sync-github-app-actions-secrets.mjs --repo marushu/vtdd-v2-p
 
 ## Execute
 
-Perform the sync only with explicit approval:
+Perform the sync only after a real passkey approval grant has been issued by
+the worker runtime for this exact high-risk operation.
+
+The approval challenge should be requested with a scope that includes:
+
+- `repositoryInput=<target repo>`
+- `highRiskKind=github_app_secret_sync`
+
+Then execute the local bootstrap with the returned `approvalGrantId`:
 
 ```bash
 node scripts/sync-github-app-actions-secrets.mjs \
   --repo marushu/vtdd-v2-p \
   --execute \
-  --approval GO+passkey
+  --runtime-url https://<your-runtime-host> \
+  --approval-grant-id <approvalGrantId>
 ```
+
+The script retrieves the approval grant from the worker runtime using machine
+auth, verifies that:
+
+- the grant is real and unexpired
+- the grant scope matches the target repository
+- `highRiskKind` is `github_app_secret_sync`
+
+and only then performs GitHub Actions secret mutation.
 
 ## Non-goals
 
