@@ -116,6 +116,19 @@ export {
   dispatchRemoteCodexExecution,
   retrieveRemoteCodexExecutionProgress
 } from "./remote-codex-executor.js";
+export {
+  DEFAULT_GEMINI_REVIEW_MODEL,
+  GEMINI_PR_REVIEW_MARKER,
+  MAX_CONTEXT_COMMENTS,
+  MAX_DIFF_CHARACTERS,
+  buildGeminiReviewRequestBody,
+  buildPullRequestDiff,
+  buildPullRequestReviewContext,
+  extractReviewerResponseFromGemini,
+  findExistingGeminiReviewComment,
+  formatGeminiReviewComment,
+  resolveGeminiReviewTrigger
+} from "./gemini-pr-review.js";
 export { runMvpGateway } from "./mvp-gateway.js";
 export { resolveGatewayAliasRegistryFromGitHubApp } from "./github-app-repository-index.js";
 export {
