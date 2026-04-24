@@ -336,21 +336,23 @@ test("gateway returns execution continuity guidance for PR-reaching execution", 
       aliasRegistry: registry,
       targetConfirmed: true,
       constitutionConsulted: true,
-      runtimeTruth: {
-        runtimeAvailable: true,
-        runtimeState: {
-          activeBranch: "codex/issue-4",
-          pullRequest: {
-            number: 42,
-            url: "https://github.com/example/repo/pull/42",
-            state: "open",
-            reviewCommentsCount: 2,
-            unresolvedReviewCommentsCount: 1,
-            updatedSinceReview: true,
-            reviewer: "gemini"
+        runtimeTruth: {
+          runtimeAvailable: true,
+          runtimeState: {
+            activeBranch: "codex/issue-4",
+            pullRequest: {
+              number: 42,
+              url: "https://github.com/example/repo/pull/42",
+              state: "open",
+              title: "Connect reviewer loop",
+              reviewCommentsCount: 2,
+              unresolvedReviewCommentsCount: 1,
+              updatedSinceReview: true,
+              reviewer: "gemini",
+              reviewComments: [{ user: { login: "gemini" }, body: "Please address the unresolved loop risk." }]
+            }
           }
-        }
-      },
+        },
       credential: { model: "github_app", tier: CredentialTier.EXECUTE },
       consent: fullConsent,
       ...approvalContext,
@@ -363,6 +365,13 @@ test("gateway returns execution continuity guidance for PR-reaching execution", 
   assert.equal(result.allowed, true);
   assert.equal(result.executionContinuity.codexGoal, "revise_pr");
   assert.equal(result.executionContinuity.reviewLoop.rerunReviewer, true);
+  assert.equal(result.executionContinuity.butlerReviewSynthesis.available, true);
+  assert.equal(
+    result.executionContinuity.butlerReviewSynthesis.humanDecisionFocus.includes(
+      "Meaningful reviewer objections remain unresolved; do not issue merge GO yet."
+    ),
+    true
+  );
   assert.equal(
     result.executionContinuity.nextSuggestedActions.includes("rerun_gemini_review"),
     true

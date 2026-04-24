@@ -1,3 +1,4 @@
+import { buildButlerReviewSynthesis } from "./butler-review-synthesis.js";
 import { ActorRole, TaskMode } from "./types.js";
 
 export const ExecutionTransferMode = Object.freeze({
@@ -63,6 +64,21 @@ export function evaluateExecutionContinuity(input = {}) {
         summarizeReviewComments: pullRequest.exists,
         suggestNextAction: true
       },
+      butlerReviewSynthesis: buildButlerReviewSynthesis({
+        pullRequest,
+        reviewLoop: {
+          reviewer: review.reviewer,
+          reviewCommentsCount: review.reviewCommentsCount,
+          unresolvedReviewCommentsCount: review.unresolvedReviewCommentsCount,
+          criticalReviewPending: review.criticalReviewPending
+        },
+        codexGoal,
+        nextSuggestedActions: buildNextSuggestedActions({
+          pullRequest,
+          review,
+          codexGoal
+        })
+      }),
       nextSuggestedActions: buildNextSuggestedActions({
         pullRequest,
         review,
@@ -181,12 +197,18 @@ function normalizeGitHubRuntime(value) {
       number: normalizeNumber(pullRequestInput.number),
       url: normalizeText(pullRequestInput.url) || null,
       state: normalizeText(pullRequestInput.state) || null,
+      title: normalizeText(pullRequestInput.title) || null,
+      baseRef: normalizeText(pullRequestInput.baseRef) || normalizeText(pullRequestInput.base?.ref) || null,
+      headRef: normalizeText(pullRequestInput.headRef) || normalizeText(pullRequestInput.head?.ref) || null,
       reviewCommentsCount: normalizeCount(pullRequestInput.reviewCommentsCount),
       unresolvedReviewCommentsCount: normalizeCount(
         pullRequestInput.unresolvedReviewCommentsCount
       ),
       updatedSinceReview: pullRequestInput.updatedSinceReview === true,
-      reviewer: normalizeText(pullRequestInput.reviewer) || "gemini"
+      reviewer: normalizeText(pullRequestInput.reviewer) || "gemini",
+      issueComments: Array.isArray(pullRequestInput.issueComments) ? pullRequestInput.issueComments : [],
+      reviewComments: Array.isArray(pullRequestInput.reviewComments) ? pullRequestInput.reviewComments : [],
+      reviews: Array.isArray(pullRequestInput.reviews) ? pullRequestInput.reviews : []
     }
   };
 }

@@ -72,6 +72,7 @@ After Codex creates a PR:
 - reads runtime truth
 - decides `resume` vs `handoff required`
 - summarizes PR and review comments
+- returns deterministic synthesis that preserves reviewer objections and next safe actions
 - suggests the next safe action
 
 ### Codex
