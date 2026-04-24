@@ -32,7 +32,32 @@ jobs:
   review:
     runs-on: ubuntu-latest
     steps:
+      - name: Skip when PR is draft
+        if: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.draft == true && github.event.action != 'ready_for_review' }}
+        run: |
+          echo "Skipping Gemini review for draft pull request."
+          exit 0
+
+      - name: Detect GitHub App secret availability
+        id: app_secrets
+        env:
+          VTDD_GITHUB_APP_ID: ${{ secrets.VTDD_GITHUB_APP_ID }}
+          VTDD_GITHUB_APP_PRIVATE_KEY: ${{ secrets.VTDD_GITHUB_APP_PRIVATE_KEY }}
+        run: |
+          if [ -n "$VTDD_GITHUB_APP_ID" ] && [ -n "$VTDD_GITHUB_APP_PRIVATE_KEY" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Skip when GitHub App secrets are not configured
+        if: ${{ steps.app_secrets.outputs.configured != 'true' }}
+        run: |
+          echo "Skipping Gemini review because VTDD_GITHUB_APP_ID / VTDD_GITHUB_APP_PRIVATE_KEY are not configured."
+          exit 0
+
       - name: Mint GitHub App token
+        if: ${{ steps.app_secrets.outputs.configured == 'true' }}
         id: app-token
         uses: actions/create-github-app-token@v1
         with:
@@ -41,17 +66,20 @@ jobs:
           owner: ${{ github.repository_owner }}
 
       - name: Checkout repository
+        if: ${{ steps.app_secrets.outputs.configured == 'true' }}
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
           token: ${{ steps.app-token.outputs.token }}
 
       - name: Setup Node.js
+        if: ${{ steps.app_secrets.outputs.configured == 'true' }}
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
       - name: Run Gemini PR review
+        if: ${{ steps.app_secrets.outputs.configured == 'true' }}
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}

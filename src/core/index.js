@@ -117,6 +117,12 @@ export {
   retrieveRemoteCodexExecutionProgress
 } from "./remote-codex-executor.js";
 export {
+  DEFAULT_GITHUB_APP_ENV_PATH,
+  buildGitHubAppSecretSyncPlan,
+  executeGitHubAppSecretSync,
+  loadGitHubAppSecretSource
+} from "./github-app-secret-sync.js";
+export {
   DEFAULT_GEMINI_REVIEW_MODEL,
   GEMINI_PR_REVIEW_MARKER,
   MAX_CONTEXT_COMMENTS,
