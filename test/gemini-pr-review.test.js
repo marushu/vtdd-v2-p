@@ -165,3 +165,27 @@ test("findExistingGeminiReviewComment locates prior marker comment", () => {
     body: `${GEMINI_PR_REVIEW_MARKER}\nexisting review`
   });
 });
+
+test("issue comment from human remains a rerun trigger", () => {
+  const result = resolveGeminiReviewTrigger({
+    eventName: "issue_comment",
+    payload: {
+      issue: {
+        number: 11,
+        pull_request: {
+          url: "https://api.github.com/repos/marushu/vtdd-v2-p/pulls/11"
+        }
+      },
+      comment: {
+        body: "Please rerun Gemini review after update."
+      },
+      sender: {
+        login: "marushu"
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.value.shouldReview, true);
+  assert.equal(result.value.pullRequestNumber, 11);
+});

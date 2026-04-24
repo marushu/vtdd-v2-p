@@ -22,7 +22,7 @@ on:
 permissions:
   contents: read
   pull-requests: read
-  issues: write
+  issues: read
 
 concurrency:
   group: gemini-pr-review-${{ github.repository }}-${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}
@@ -32,10 +32,19 @@ jobs:
   review:
     runs-on: ubuntu-latest
     steps:
+      - name: Mint GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.VTDD_GITHUB_APP_ID }}
+          private-key: ${{ secrets.VTDD_GITHUB_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -44,7 +53,7 @@ jobs:
 
       - name: Run Gemini PR review
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_REVIEW_MODEL: ${{ vars.GEMINI_REVIEW_MODEL }}
         run: node scripts/run-gemini-pr-review.mjs

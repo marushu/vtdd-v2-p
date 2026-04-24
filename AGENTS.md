@@ -48,6 +48,12 @@ If current code only partially satisfies an Issue or contract, do not
 "complete it on the fly" without first surfacing the mismatch explicitly.
 When in doubt, stop and reconcile with the owner instead of pushing through.
 
+Before proposing a new spec, runtime path, or missing-capability explanation,
+re-read the relevant existing docs, tests, and source files in this repository.
+Do not talk about executor / handoff / reviewer / claim behavior as if it were
+missing from scratch until you have explicitly checked for an existing contract,
+draft, test, or implementation anchor in-repo.
+
 ## Active-Issue Coverage Policy
 
 Default assumption: implementation scope covers all active Issues unless the user explicitly narrows scope.
@@ -285,6 +291,15 @@ It must not be interpreted as a blanket prohibition for non-RAG operational logs
 - Keep docs-only PRs and runtime PRs separable when possible.
 - If a new guardrail or process correction is needed, land it in its own PR
   rather than mixing it into an implementation slice.
+
+## Current Reality Guard
+
+- Do not overclaim VTDD end-to-end completion from partial adapter success.
+- If Butler can read repositories through GitHub App, describe that exactly as
+  GitHub App-backed repository read/repository resolution, not as full VTDD
+  executor/reviewer loop completion.
+- Keep partial success statements narrow and explicit about what is still not
+  connected.
 
 ## Evidence Discipline
 
