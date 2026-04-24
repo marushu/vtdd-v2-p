@@ -25,6 +25,8 @@ export function evaluateExecutionPolicy(input) {
     credential,
     consent,
     approvalPhrase,
+    approvalGrant,
+    approvalScope,
     approvalScopeMatched = false,
     issueTraceable,
     issueTraceability,
@@ -112,6 +114,8 @@ export function evaluateExecutionPolicy(input) {
     actionType,
     go,
     passkey,
+    approvalGrant,
+    approvalScope,
     approvalPhrase,
     approvalScopeMatched
   });

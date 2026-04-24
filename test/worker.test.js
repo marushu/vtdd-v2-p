@@ -36,6 +36,41 @@ const gatewayAuthEnv = {
   VTDD_GATEWAY_BEARER_TOKEN: "test-token"
 };
 
+const passkeyAdapter = {
+  async generateRegistrationOptions(input) {
+    return { challenge: input.challenge };
+  },
+  async verifyRegistrationResponse() {
+    return {
+      verified: true,
+      registrationInfo: {
+        credential: {
+          id: new Uint8Array([1, 2, 3, 4]),
+          publicKey: new Uint8Array([5, 6, 7, 8]),
+          counter: 1
+        },
+        credentialDeviceType: "singleDevice",
+        credentialBackedUp: true,
+        aaguid: "test-aaguid"
+      }
+    };
+  },
+  async generateAuthenticationOptions(input) {
+    return {
+      challenge: input.challenge,
+      allowCredentials: input.allowCredentials
+    };
+  },
+  async verifyAuthenticationResponse() {
+    return {
+      verified: true,
+      authenticationInfo: {
+        newCounter: 2
+      }
+    };
+  }
+};
+
 test("worker returns health", async () => {
   const response = await worker.fetch(new Request("https://example.com/health"));
   assert.equal(response.status, 200);
@@ -256,6 +291,167 @@ test("worker dispatches remote Codex execution", async () => {
   assert.equal(body.ok, true);
   assert.equal(body.execution.issueNumber, 6);
   assert.equal(calls.length, 2);
+});
+
+test("worker serves passkey registration and approval flow routes", async () => {
+  const provider = createInMemoryMemoryProvider();
+
+  const registerOptions = await worker.fetch(
+    new Request("https://example.com/v2/approval/passkey/register/options", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        operatorId: "owner",
+        operatorLabel: "Owner"
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      MEMORY_PROVIDER: provider,
+      PASSKEY_ADAPTER: passkeyAdapter
+    }
+  );
+  assert.equal(registerOptions.status, 200);
+  const registrationBody = await registerOptions.json();
+  assert.equal(registrationBody.ok, true);
+
+  const registerVerify = await worker.fetch(
+    new Request("https://example.com/v2/approval/passkey/register/verify", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        sessionId: registrationBody.sessionId,
+        response: {
+          id: "ignored",
+          response: { transports: ["internal"] }
+        }
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      MEMORY_PROVIDER: provider,
+      PASSKEY_ADAPTER: passkeyAdapter
+    }
+  );
+  assert.equal(registerVerify.status, 200);
+
+  const approvalOptions = await worker.fetch(
+    new Request("https://example.com/v2/approval/passkey/challenge", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        phase: "execution",
+        issueContext: { issueNumber: 14 },
+        policyInput: {
+          actionType: ActionType.DEPLOY_PRODUCTION,
+          repositoryInput: "vtdd"
+        }
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      MEMORY_PROVIDER: provider,
+      PASSKEY_ADAPTER: passkeyAdapter
+    }
+  );
+  assert.equal(approvalOptions.status, 200);
+  const approvalOptionsBody = await approvalOptions.json();
+  assert.equal(approvalOptionsBody.ok, true);
+
+  const approvalVerify = await worker.fetch(
+    new Request("https://example.com/v2/approval/passkey/verify", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        sessionId: approvalOptionsBody.sessionId,
+        response: {
+          id: "AQIDBA",
+          response: {}
+        }
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      MEMORY_PROVIDER: provider,
+      PASSKEY_ADAPTER: passkeyAdapter
+    }
+  );
+  assert.equal(approvalVerify.status, 200);
+  const approvalVerifyBody = await approvalVerify.json();
+  assert.equal(approvalVerifyBody.ok, true);
+  assert.equal(Boolean(approvalVerifyBody.approvalGrant.approvalId), true);
+});
+
+test("worker gateway accepts high-risk approval grant resolved from memory", async () => {
+  const provider = createInMemoryMemoryProvider();
+  await provider.store({
+    id: "approval-123",
+    type: MemoryRecordType.APPROVAL_LOG,
+    content: {
+      kind: "passkey_grant",
+      status: "verified",
+      approvalId: "approval-123",
+      expiresAt: "2099-01-01T00:00:00.000Z",
+      scope: {
+        actionType: "deploy_production",
+        repositoryInput: "vtdd",
+        issueNumber: "14",
+        relatedIssue: "14",
+        phase: "execution"
+      }
+    },
+    metadata: { source: "test" },
+    priority: 90,
+    tags: ["passkey_grant"],
+    createdAt: "2026-04-25T00:00:00.000Z"
+  });
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/gateway", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        phase: "execution",
+        actorRole: ActorRole.EXECUTOR,
+        surfaceContext: {
+          surface: "custom_gpt",
+          judgmentModelId: "vtdd-butler-core-v1"
+        },
+        judgmentTrace: validButlerJudgmentTrace,
+        issueContext: { issueNumber: 14 },
+        policyInput: {
+          actionType: ActionType.DEPLOY_PRODUCTION,
+          mode: TaskMode.EXECUTION,
+          repositoryInput: "vtdd",
+          aliasRegistry,
+          targetConfirmed: true,
+          constitutionConsulted: true,
+          runtimeTruth: { runtimeAvailable: true },
+          credential: {
+            model: "github_app",
+            tier: CredentialTier.HIGH_RISK,
+            shortLived: true,
+            boundApprovalId: "approval-123"
+          },
+          consent: { grantedCategories: [ConsentCategory.EXECUTE] },
+          approvalPhrase: "GO deploy request",
+          approvalScopeMatched: true,
+          approvalGrantId: "approval-123",
+          issueTraceable: true,
+          go: true,
+          passkey: false
+        }
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      MEMORY_PROVIDER: provider
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.allowed, true);
 });
 
 test("worker returns remote Codex execution progress", async () => {

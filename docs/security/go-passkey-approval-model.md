@@ -10,6 +10,14 @@ High-risk actions should require both explicit intent and strong user authentica
 Merge and bounded post-merge completion tasks remain explicit `GO` actions, but
 they are not part of the `GO + passkey` set.
 
+## Drift Note
+
+Historically, the repo used phrase-based `passkey` confirmation inside policy
+payloads. That phrase gate is not itself a real passkey ceremony.
+
+The executable runtime path for real WebAuthn/passkey verification is tracked in
+[webauthn-passkey-runtime.md](./webauthn-passkey-runtime.md).
+
 ## Approval Levels
 
 ### Level 1
