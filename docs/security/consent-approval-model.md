@@ -4,6 +4,9 @@ This document is the canonical consent / approval model for Issue #9.
 It defines the action categories, approval levels, scope binding rule, and the
 special handling for destructive operations.
 
+For the full GitHub capability contract that sits above these approval tiers,
+also read [github-operation-plane.md](./github-operation-plane.md).
+
 ## Consent Categories
 
 - `read`
@@ -79,7 +82,8 @@ inferred without explicit scoped `GO`.
 
 The GitHub App may hold broad repository capabilities, but VTDD must still
 separate "can execute" from "may execute now." The following matrix is the
-canonical approval boundary for GitHub-side actions.
+canonical approval boundary for GitHub-side actions. Capability narrowing is
+prohibited; see [github-operation-plane.md](./github-operation-plane.md).
 
 ### `GO`
 
