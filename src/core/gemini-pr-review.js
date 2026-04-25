@@ -275,6 +275,24 @@ export function findExistingGeminiReviewComment(comments = []) {
   );
 }
 
+export function parseGeminiReviewComment(comment = {}) {
+  const body = normalizeText(typeof comment === "string" ? comment : comment?.body);
+  if (!body || !containsMarker(body)) {
+    return null;
+  }
+
+  const recommendedActionMatch = body.match(/^- Recommended action:\s*`([^`]+)`/m);
+  const recommendedAction = normalizeText(recommendedActionMatch?.[1]).toLowerCase() || "manual_review";
+
+  return {
+    reviewer: "gemini",
+    recommendedAction,
+    blocking:
+      recommendedAction === "request_changes" || recommendedAction === "manual_review",
+    body
+  };
+}
+
 function summarizeComments(comments) {
   const list = Array.isArray(comments) ? comments : [];
   return list

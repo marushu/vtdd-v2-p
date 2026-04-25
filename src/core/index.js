@@ -149,6 +149,7 @@ export {
   extractReviewerResponseFromGemini,
   findExistingGeminiReviewComment,
   formatGeminiReviewComment,
+  parseGeminiReviewComment,
   resolveGeminiReviewTrigger
 } from "./gemini-pr-review.js";
 export { runMvpGateway } from "./mvp-gateway.js";

@@ -8,6 +8,7 @@ import {
   extractReviewerResponseFromGemini,
   findExistingGeminiReviewComment,
   formatGeminiReviewComment,
+  parseGeminiReviewComment,
   resolveGeminiReviewTrigger
 } from "../src/core/index.js";
 
@@ -163,6 +164,23 @@ test("findExistingGeminiReviewComment locates prior marker comment", () => {
   assert.deepEqual(comment, {
     id: 2,
     body: `${GEMINI_PR_REVIEW_MARKER}\nexisting review`
+  });
+});
+
+test("parseGeminiReviewComment treats approve as non-blocking reviewer evidence", () => {
+  const parsed = parseGeminiReviewComment(`${GEMINI_PR_REVIEW_MARKER}
+## VTDD Gemini Critical Review
+
+- Recommended action: \`approve\``);
+
+  assert.deepEqual(parsed, {
+    reviewer: "gemini",
+    recommendedAction: "approve",
+    blocking: false,
+    body: `${GEMINI_PR_REVIEW_MARKER}
+## VTDD Gemini Critical Review
+
+- Recommended action: \`approve\``
   });
 });
 

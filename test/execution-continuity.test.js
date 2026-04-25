@@ -76,3 +76,39 @@ test("execution continuity returns PR revision loop guidance when unresolved rev
     true
   );
 });
+
+test("execution continuity treats approve-only Gemini reviewer comment as non-blocking", () => {
+  const result = evaluateExecutionContinuity({
+    actorRole: ActorRole.BUTLER,
+    mode: TaskMode.EXECUTION,
+    runtimeTruth: {
+      runtimeState: {
+        activeBranch: "codex/test-pr-for-gemini-live",
+        pullRequest: {
+          number: 28,
+          url: "https://github.com/example/repo/pull/28",
+          state: "open",
+          title: "Live Gemini review test",
+          reviewer: "gemini",
+          issueComments: [
+            {
+              user: { login: "vtdd-codex[bot]" },
+              body: "<!-- vtdd:reviewer=gemini -->\n## VTDD Gemini Critical Review\n\n- Recommended action: `approve`"
+            }
+          ]
+        }
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.value.reviewLoop.reviewCommentsCount, 1);
+  assert.equal(result.value.reviewLoop.unresolvedReviewCommentsCount, 0);
+  assert.equal(result.value.reviewLoop.criticalReviewPending, false);
+  assert.equal(result.value.codexGoal, CodexGoal.WAIT_FOR_REVIEW);
+  assert.equal(
+    result.value.butlerReviewSynthesis.headline,
+    "PR #28 is open. Reviewer feedback exists and should be checked before human GO."
+  );
+  assert.deepEqual(result.value.nextSuggestedActions, ["summarize_for_human", "wait_for_human_go"]);
+});
