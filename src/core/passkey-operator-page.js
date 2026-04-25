@@ -221,6 +221,8 @@ export function renderPasskeyOperatorPage(input = {}) {
             body: JSON.stringify({
               phase: document.getElementById("phase-input").value || "execution",
               highRiskKind: document.getElementById("risk-kind-input").value,
+              repositoryInput: document.getElementById("repo-input").value,
+              issueNumber: Number(document.getElementById("issue-input").value || 0) || null,
               issueContext: {
                 issueNumber: Number(document.getElementById("issue-input").value || 0) || null
               },
