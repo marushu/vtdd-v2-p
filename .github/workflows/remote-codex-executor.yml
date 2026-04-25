@@ -118,3 +118,50 @@ jobs:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           codex exec --skip-git-repo-check "$(cat ../codex-prompt.txt)"
+
+      - name: Commit and push Codex changes
+        id: codex-changes
+        working-directory: target-repo
+        shell: bash
+        run: |
+          git config user.name "vtdd-codex[bot]"
+          git config user.email "vtdd-codex[bot]@users.noreply.github.com"
+
+          if git diff --quiet && git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No Codex changes detected."
+            exit 0
+          fi
+
+          git add -A
+          git commit -m "VTDD remote Codex execution for issue #${{ github.event.inputs.target_issue_number }}"
+          git push origin "${{ github.event.inputs.target_branch }}"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Create or update pull request
+        working-directory: target-repo
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          existing_url="$(gh pr view "${{ github.event.inputs.target_branch }}" \
+            --repo "${{ github.event.inputs.target_repository }}" \
+            --json url \
+            --jq .url 2>/dev/null || true)"
+
+          if [ -n "$existing_url" ]; then
+            echo "Existing PR: $existing_url"
+            exit 0
+          fi
+
+          if [ "${{ steps.codex-changes.outputs.changed }}" != "true" ]; then
+            echo "No existing PR and no Codex changes to open a PR with."
+            exit 1
+          fi
+
+          gh pr create \
+            --repo "${{ github.event.inputs.target_repository }}" \
+            --base "${{ github.event.inputs.base_ref }}" \
+            --head "${{ github.event.inputs.target_branch }}" \
+            --title "VTDD remote Codex execution for issue #${{ github.event.inputs.target_issue_number }}" \
+            --body "Remote Codex execution for issue #${{ github.event.inputs.target_issue_number }}.\n\nExecution ID: ${{ github.event.inputs.execution_id }}\nGoal: ${{ github.event.inputs.codex_goal }}"
