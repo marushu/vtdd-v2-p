@@ -2,6 +2,9 @@
 
 This document is the canonical role separation model for Issue #25.
 
+For the Butler/Codex/Human authority boundary used by the current GitHub-first
+execution loop, also read [authority-model.md](./authority-model.md).
+
 ## Goal
 
 Butler, Executor, and Reviewer must remain structurally separated even when the same underlying AI product is used during a transition period.
@@ -27,7 +30,9 @@ Output:
 - execution judgment
 - reviewer summary for human decision
 
-Butler does not directly hold merge authority or deployment authority.
+Butler does not grant itself authority silently. Merge, issue close, deploy,
+credential mutation, and other authority actions remain approval-bound as
+described in [authority-model.md](./authority-model.md).
 
 ### Executor
 
@@ -45,7 +50,9 @@ Output:
 - PR artifacts
 - execution logs
 
-Executor is the only role that may perform implementation-side execution within the approved boundary.
+Executor is the only role that may perform implementation-side execution within
+the approved boundary, but it does not become the authority role for merge or
+close.
 
 ### Reviewer
 
