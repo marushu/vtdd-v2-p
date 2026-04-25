@@ -26,6 +26,7 @@ Set repository or environment secrets:
 
 - `CLOUDFLARE_API_TOKEN`
 - `CLOUDFLARE_ACCOUNT_ID`
+- `CLOUDFLARE_D1_DATABASE_ID`
 - `VTDD_GATEWAY_BEARER_TOKEN`
 
 The token should be scoped to minimum required Worker deploy permissions.
@@ -37,6 +38,25 @@ reported before operator approval time is wasted.
 Use `docs/setup/cloudflare-deploy-secret-sync.md` as the canonical operator
 sync path. Do not treat Worker runtime secrets as equivalent to GitHub Actions
 secrets.
+
+### 3. Worker Bindings
+
+Production must bind the VTDD memory D1 database as `VTDD_MEMORY_D1`.
+
+This binding is required for real passkey registration, approval challenge
+persistence, and approval grant retrieval. A production deploy that drops this
+binding breaks `GO + passkey` issuance and therefore blocks high-risk runtime
+operations.
+
+Because this repository is public and reusable, owner-specific Cloudflare
+resource identifiers must not be committed to the shared `wrangler.toml`.
+Each operator must bind their own D1 database in their deployment configuration
+before deploying production.
+
+For local/operator deploys, store owner-specific bindings in an ignored file
+such as `wrangler.production.local.toml`. For GitHub Actions deploys, store the
+D1 database id in `CLOUDFLARE_D1_DATABASE_ID`; the workflow generates an
+uncommitted `wrangler.production.generated.toml` at deploy time.
 
 ## Approval Boundary (`GO + passkey`)
 
