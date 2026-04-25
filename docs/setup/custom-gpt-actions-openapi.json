@@ -3,12 +3,18 @@
   "info": {
     "title": "VTDD Butler Action API",
     "version": "0.1.0",
-    "description": "Canonical OpenAPI template for a user-owned Custom GPT Butler surface. Replace the server URL with your own VTDD runtime before importing.\n"
+    "description": "Canonical OpenAPI template for a user-owned VTDD Butler surface."
   },
   "servers": [
     {
-      "url": "https://your-runtime-host.example.workers.dev",
-      "description": "User-owned VTDD runtime host"
+      "url": "https://your-runtime-host.example.workers.dev"
+    }
+  ],
+  "security": [
+    {
+      "GatewayBearerAuth": [
+
+      ]
     }
   ],
   "components": {
@@ -16,120 +22,33 @@
       "GatewayBearerAuth": {
         "type": "http",
         "scheme": "bearer",
-        "bearerFormat": "API token",
-        "description": "Configure this with the same secret value as VTDD_GATEWAY_BEARER_TOKEN on your Worker runtime.\n"
+        "bearerFormat": "API token"
       }
     },
     "schemas": {
-      "SurfaceContext": {
+      "HealthResponse": {
         "type": "object",
         "properties": {
-          "surface": {
-            "type": "string"
-          },
-          "judgmentModelId": {
-            "type": "string"
-          }
-        },
-        "additionalProperties": true
-      },
-      "JudgmentTraceEntry": {
-        "type": "object",
-        "properties": {
-          "step": {
-            "type": "string"
-          },
-          "status": {
-            "type": "string"
-          },
-          "rationale": {
-            "type": "string"
-          }
-        },
-        "additionalProperties": true
-      },
-      "RuntimeTruthInput": {
-        "type": "object",
-        "properties": {
-          "runtimeAvailable": {
+          "ok": {
             "type": "boolean"
           },
-          "safeFallbackChosen": {
-            "type": "boolean"
-          }
-        },
-        "additionalProperties": true
-      },
-      "ConsentInput": {
-        "type": "object",
-        "properties": {
-          "grantedCategories": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        },
-        "additionalProperties": true
-      },
-      "ConversationInput": {
-        "type": "object",
-        "properties": {
-          "userText": {
+          "service": {
             "type": "string"
-          },
-          "currentRepository": {
-            "type": "string"
-          }
-        },
-        "additionalProperties": true
-      },
-      "PolicyInput": {
-        "type": "object",
-        "properties": {
-          "actionType": {
-            "type": "string",
-            "enum": [
-              "read",
-              "summarize",
-              "issue_create",
-              "build",
-              "pr_comment",
-              "pr_review_submit",
-              "pr_operation",
-              "merge",
-              "deploy_production",
-              "destructive",
-              "external_publish"
-            ]
           },
           "mode": {
-            "type": "string",
-            "enum": [
-              "read_only",
-              "execution"
-            ]
-          },
-          "repositoryInput": {
             "type": "string"
           },
-          "targetConfirmed": {
+          "autonomyMode": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      },
+      "VtddGenericResponse": {
+        "type": "object",
+        "properties": {
+          "ok": {
             "type": "boolean"
-          },
-          "issueTraceable": {
-            "type": "boolean"
-          },
-          "go": {
-            "type": "boolean"
-          },
-          "passkey": {
-            "type": "boolean"
-          },
-          "runtimeTruth": {
-            "$ref": "#/components/schemas/RuntimeTruthInput"
-          },
-          "consent": {
-            "$ref": "#/components/schemas/ConsentInput"
           }
         },
         "additionalProperties": true
@@ -265,12 +184,18 @@
           "continuationContext": {
             "type": "object",
             "properties": {
+              "executionId": {
+                "type": "string"
+              }
             },
             "additionalProperties": true
           },
           "memoryRecord": {
             "type": "object",
             "properties": {
+              "type": {
+                "type": "string"
+              }
             },
             "additionalProperties": true
           }
@@ -407,25 +332,9 @@
           }
         },
         "additionalProperties": true
-      },
-      "VtddGenericResponse": {
-        "type": "object",
-        "properties": {
-          "ok": {
-            "type": "boolean"
-          }
-        },
-        "additionalProperties": true
       }
     }
   },
-  "security": [
-    {
-      "GatewayBearerAuth": [
-
-      ]
-    }
-  ],
   "paths": {
     "/health": {
       "get": {
@@ -437,7 +346,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/VtddGenericResponse"
+                  "$ref": "#/components/schemas/HealthResponse"
                 }
               }
             }
@@ -448,14 +357,7 @@
     "/v2/gateway": {
       "post": {
         "operationId": "vtddGateway",
-        "summary": "Evaluate VTDD policy, context resolution, repository candidates, and Butler guidance.\n",
-        "security": [
-          {
-            "GatewayBearerAuth": [
-
-            ]
-          }
-        ],
+        "summary": "Evaluate VTDD policy, repository candidates, and Butler guidance.",
         "requestBody": {
           "required": true,
           "content": {
@@ -500,13 +402,6 @@
       "post": {
         "operationId": "vtddExecute",
         "summary": "Dispatch bounded VTDD execution, including remote Codex handoff.",
-        "security": [
-          {
-            "GatewayBearerAuth": [
-
-            ]
-          }
-        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -561,13 +456,6 @@
       "get": {
         "operationId": "vtddExecutionProgress",
         "summary": "Read progress for a remote Codex execution request.",
-        "security": [
-          {
-            "GatewayBearerAuth": [
-
-            ]
-          }
-        ],
         "parameters": [
           {
             "name": "executionId",
@@ -583,8 +471,7 @@
             "required": true,
             "schema": {
               "type": "string"
-            },
-            "description": "owner/repo, for example sample-org/vtdd-v2"
+            }
           },
           {
             "name": "issueNumber",
@@ -637,13 +524,6 @@
       "get": {
         "operationId": "vtddRetrieveApprovalGrant",
         "summary": "Retrieve a previously issued approval grant by approvalId.",
-        "security": [
-          {
-            "GatewayBearerAuth": [
-
-            ]
-          }
-        ],
         "parameters": [
           {
             "name": "approvalId",

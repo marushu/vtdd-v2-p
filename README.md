@@ -42,6 +42,12 @@ For the current Custom GPT Butler surface artifacts, use:
 - `docs/setup/custom-gpt-actions-openapi.yaml`
 - `docs/setup/custom-gpt-actions-openapi.json`
 
+The Action schema is intentionally kept importer-safe:
+
+- OpenAPI `3.1.0`
+- explicit `components.schemas`
+- no nested `$ref` inside request object fields
+
 If the Custom GPT importer rejects the YAML form, use the JSON form instead.
 
 ## Cost And Account Boundary

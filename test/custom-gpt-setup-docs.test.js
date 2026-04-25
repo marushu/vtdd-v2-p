@@ -50,20 +50,15 @@ test("custom gpt openapi doc exposes current gateway, execute, and progress rout
   assert.equal(doc.includes("issueNumber"), true);
 });
 
-test("custom gpt openapi request schemas do not use nested refs for importer-fragile fields", () => {
+test("custom gpt openapi keeps components.schemas while avoiding nested field refs", () => {
   const doc = fs.readFileSync(OPENAPI_PATH, "utf8");
-  assert.equal(
-    doc.includes("VtddExecuteRequest:\n      type: object"),
-    true
-  );
-  assert.equal(
-    doc.includes("VtddGatewayRequest:\n      type: object"),
-    true
-  );
-  assert.equal(
-    doc.includes("VtddExecuteRequest:\n      type: object\n      properties:\n        phase:"),
-    true
-  );
+  assert.equal(doc.includes("components:"), true);
+  assert.equal(doc.includes("schemas:"), true);
+  assert.equal(doc.includes("VtddGenericResponse:"), true);
+  assert.equal(doc.includes('#/components/schemas/VtddGatewayRequest'), true);
+  assert.equal(doc.includes("requestBody:"), true);
+  assert.equal(doc.includes("policyInput:"), true);
+  assert.equal(doc.includes("conversation:"), true);
   assert.equal(doc.includes("policyInput:\n          $ref:"), false);
   assert.equal(doc.includes("surfaceContext:\n          $ref:"), false);
   assert.equal(doc.includes("conversation:\n          $ref:"), false);
@@ -72,9 +67,13 @@ test("custom gpt openapi request schemas do not use nested refs for importer-fra
 
 test("custom gpt openapi json parses and exposes paths as an object", () => {
   const doc = JSON.parse(fs.readFileSync(OPENAPI_JSON_PATH, "utf8"));
+  assert.equal(doc.openapi, "3.1.0");
   assert.equal(typeof doc.paths, "object");
   assert.notEqual(doc.paths, null);
   assert.equal(typeof doc.paths["/v2/gateway"], "object");
   assert.equal(typeof doc.paths["/v2/action/execute"], "object");
   assert.equal(typeof doc.paths["/v2/action/progress"], "object");
+  assert.equal(typeof doc.paths["/v2/retrieve/approval-grant"], "object");
+  assert.equal(typeof doc.components.schemas, "object");
+  assert.equal(doc.components.securitySchemes.GatewayBearerAuth.scheme, "bearer");
 });
