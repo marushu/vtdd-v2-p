@@ -490,6 +490,10 @@ function isoBytes(value) {
 }
 
 function base64UrlEncode(input) {
+  if (typeof input === "string") {
+    const normalized = normalizeText(input);
+    return normalized;
+  }
   const bytes = input instanceof Uint8Array ? input : new Uint8Array(input);
   let text = "";
   for (const byte of bytes) {
