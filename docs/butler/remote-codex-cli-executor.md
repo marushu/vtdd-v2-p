@@ -22,12 +22,28 @@ This slice exists specifically so the loop can continue into:
 
 ## Transport Principle
 
-The first implementation path is GitHub Actions centered.
+The implementation must preserve a no-extra-API-cost default for operators who
+already use Codex through a ChatGPT/Codex subscription.
+
+The GitHub Actions Codex CLI runner is an optional `api_key_runner`, not the
+default account model. It requires `OPENAI_API_KEY` and may create separate API
+billing from a ChatGPT/Codex subscription.
+
+The default operator path is GitHub-centered resume/delegation through the
+operator's own Codex surface or future Codex cloud delegation surface when that
+surface is available to the operator without separate API-key billing.
+
+## Optional API-backed Runner
+
+The first machine-runner implementation path is GitHub Actions centered.
 
 - Butler triggers a VTDD-managed workflow dispatch
 - the workflow runs Codex CLI remotely
 - the workflow operates on the target repository and branch
 - progress is observed through GitHub Actions run state plus VTDD execution logs
+
+This path must remain explicit opt-in because it depends on `OPENAI_API_KEY`.
+Do not present it as the only VTDD remote executor path.
 
 ## Required Inputs
 
@@ -70,3 +86,7 @@ The bounded goal of this executor slice is:
 - start remote Codex CLI from VTDD
 - reach PR creation or PR update
 - expose enough progress for Butler to continue the loop
+
+When using the optional API-backed runner, completion evidence must state that
+the run used the API-backed path. When using a no-extra-API-cost path,
+completion evidence must state the Codex surface used for execution.

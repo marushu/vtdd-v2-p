@@ -24,3 +24,9 @@ test("remote Codex workflow avoids embedding dispatch inputs inside shell heredo
   assert.equal(workflow.includes("Handoff JSON: ${{ github.event.inputs.handoff_json }}"), false);
   assert.equal(workflow.includes("git push origin \"${{ github.event.inputs.target_branch }}\""), false);
 });
+
+test("remote Codex workflow marks OPENAI_API_KEY runner as explicit opt-in", () => {
+  assert.equal(workflow.includes("Optional API-backed runner."), true);
+  assert.equal(workflow.includes("may create separate API billing"), true);
+  assert.equal(workflow.includes("OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}"), true);
+});

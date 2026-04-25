@@ -1,5 +1,10 @@
 name: remote-codex-executor
 
+# Optional API-backed runner.
+# This workflow uses OPENAI_API_KEY and may create separate API billing from a
+# ChatGPT/Codex subscription. It is not the default no-extra-API-cost executor
+# path described in docs/butler/remote-codex-cli-executor.md.
+
 on:
   workflow_dispatch:
     inputs:

@@ -12,7 +12,7 @@ It is not a shared hosted runtime.
 If you want to use VTDD yourself, the expected path is:
 
 - fork this repository, or clone it into your own repository/account
-- configure your own GitHub, Cloudflare, OpenAI, Gemini, and ChatGPT assets
+- configure your own GitHub, Cloudflare, ChatGPT/Codex, and reviewer assets
 - create and operate your own Butler / Custom GPT surface
 
 The canonical repository remains owner-maintained.
@@ -22,7 +22,7 @@ accounts.
 ## Ownership Boundary
 
 This repository does not expect users to share the owner's secrets, GitHub App,
-Cloudflare account, Gemini key, or ChatGPT surface.
+Cloudflare account, reviewer keys, Codex account, or ChatGPT surface.
 
 Instead:
 
@@ -35,6 +35,19 @@ Instead:
 No setup wizard is assumed on this branch.
 VTDD runtime is expected to run in a setup-complete environment owned by the
 person using it.
+
+## Cost And Account Boundary
+
+VTDD should not silently turn an existing ChatGPT/Codex subscription into a
+separate OpenAI API billing path.
+
+The default operator expectation is user-owned ChatGPT/Codex access, GitHub,
+Cloudflare, and reviewer configuration. Any GitHub Actions runner that uses
+`OPENAI_API_KEY` for Codex CLI is an explicit opt-in API-backed executor, not
+the default no-extra-API-cost path.
+
+Likewise, a reviewer workflow that uses `GEMINI_API_KEY` is an optional
+provider-backed reviewer path. Reviewer choice remains pluggable.
 
 ## MVP Core (initial implementation)
 

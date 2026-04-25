@@ -17,6 +17,8 @@ The reviewer is a critical evaluation role.
 - Gemini is the initial reviewer for VTDD V2.
 - Reviewer integration must remain pluggable and vendor-independent.
 - The initial choice must not hard-code the long-term reviewer architecture.
+- Any reviewer path that requires a provider API key must be treated as an
+  explicit opt-in cost/account choice, not a silent default.
 
 ## Fallback Position
 
@@ -31,12 +33,16 @@ Reviewer candidates must be evaluated on all of the following axes:
 
 - review quality
 - operating cost
+- whether the operator already has access through an existing subscription
 - fit with revision loop
 - learning-use risk
 - data handling conditions
 - non-lock-in portability
 
 No reviewer choice should be justified by cost alone.
+No reviewer choice should silently add a new paid API dependency when a
+subscription-backed or already-owned reviewer surface is the intended operator
+path.
 
 ## Pluggable Contract
 
