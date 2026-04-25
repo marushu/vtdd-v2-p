@@ -208,3 +208,45 @@ test("completed registration session expires and becomes cleanup target", async 
     true
   );
 });
+
+test("registration verify preserves string credential id from runtime adapter", async () => {
+  const stringIdAdapter = {
+    ...mockAdapter,
+    async verifyRegistrationResponse() {
+      return {
+        verified: true,
+        registrationInfo: {
+          credential: {
+            id: "runtime-string-credential-id",
+            publicKey: new Uint8Array([5, 6, 7, 8]),
+            counter: 1
+          },
+          credentialDeviceType: "singleDevice",
+          credentialBackedUp: true,
+          aaguid: "test-aaguid"
+        }
+      };
+    }
+  };
+
+  const session = await createPasskeyRegistrationOptions({
+    adapter: stringIdAdapter,
+    rpID: "example.com",
+    rpName: "VTDD",
+    origin: "https://example.com"
+  });
+
+  const result = await verifyPasskeyRegistration({
+    adapter: stringIdAdapter,
+    sessionRecord: session.sessionRecord,
+    response: {
+      id: "ignored",
+      response: {
+        transports: ["internal"]
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.passkeyRecord.content.credentialId, "runtime-string-credential-id");
+});

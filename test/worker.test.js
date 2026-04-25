@@ -684,6 +684,9 @@ test("worker allows same-origin browser approval flow after passkey exists", asy
   const verifyBody = await verify.json();
   assert.equal(verifyBody.ok, true);
   assert.equal(Boolean(verifyBody.approvalGrant.approvalId), true);
+  assert.equal(verifyBody.approvalGrant.scope.repositoryInput, "marushu/vtdd-v2-p");
+  assert.equal(verifyBody.approvalGrant.scope.issueNumber, "15");
+  assert.equal(verifyBody.approvalGrant.scope.relatedIssue, "15");
 });
 
 test("worker gateway accepts high-risk approval grant resolved from memory", async () => {

@@ -77,6 +77,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: npm
+
+      - name: Install reviewer dependencies
+        if: ${{ steps.app_secrets.outputs.configured == 'true' }}
+        run: npm ci
 
       - name: Run Gemini PR review
         if: ${{ steps.app_secrets.outputs.configured == 'true' }}

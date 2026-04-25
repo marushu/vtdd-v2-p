@@ -789,9 +789,9 @@ function buildApprovalScopeSnapshot({ payload, policyInput }) {
   return normalizeScopeSnapshot({
     actionType: policyInput?.actionType,
     highRiskKind: payload?.highRiskKind ?? policyInput?.highRiskKind,
-    repositoryInput: policyInput?.repositoryInput,
-    issueNumber: issueContext.issueNumber,
-    relatedIssue: traceability.relatedIssue ?? issueContext.issueNumber,
+    repositoryInput: policyInput?.repositoryInput ?? payload?.repositoryInput,
+    issueNumber: issueContext.issueNumber ?? payload?.issueNumber,
+    relatedIssue: traceability.relatedIssue ?? issueContext.issueNumber ?? payload?.relatedIssue,
     phase: payload?.phase
   });
 }

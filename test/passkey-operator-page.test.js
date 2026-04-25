@@ -16,6 +16,8 @@ test("passkey operator page can target explicit api base and sync endpoint", () 
   assert.equal(html.includes('fetch("/api/github-app-secret-sync/execute"'), true);
   assert.equal(html.includes("Sync GitHub App secrets"), true);
   assert.equal(html.includes('id="action-type-input" value="deploy_production"'), true);
+  assert.equal(html.includes('repositoryInput: document.getElementById("repo-input").value'), true);
+  assert.equal(html.includes('issueNumber: Number(document.getElementById("issue-input").value || 0) || null'), true);
 });
 
 test("passkey operator page keeps sync disabled message when helper endpoint is absent", () => {
