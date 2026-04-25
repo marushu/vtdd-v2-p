@@ -133,6 +133,7 @@ export {
 } from "./execution-continuity.js";
 export {
   REMOTE_CODEX_WORKFLOW_FILE,
+  RemoteCodexExecutorTransport,
   RemoteCodexExecutionStatus,
   createRemoteCodexExecutionRequest,
   dispatchRemoteCodexExecution,

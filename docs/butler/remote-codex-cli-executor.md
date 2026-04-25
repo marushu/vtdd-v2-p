@@ -29,13 +29,32 @@ The GitHub Actions Codex CLI runner is an optional `api_key_runner`, not the
 default account model. It requires `OPENAI_API_KEY` and may create separate API
 billing from a ChatGPT/Codex subscription.
 
-The default operator path is GitHub-centered resume/delegation through the
-operator's own Codex surface or future Codex cloud delegation surface when that
-surface is available to the operator without separate API-key billing.
+The default operator path is GitHub-centered Codex Cloud delegation through the
+operator's own ChatGPT/Codex GitHub integration.
+
+VTDD expresses that delegation as a bounded GitHub Issue or PR comment that
+mentions `@codex`. This lets the operator's existing Codex Cloud entitlement
+pick up the work through GitHub without requiring `OPENAI_API_KEY`.
+
+This path depends on the operator having connected Codex Cloud to GitHub in
+their own ChatGPT/Codex account. VTDD must surface that as operator-owned
+configuration, not as a repository secret owned by this public repo.
+
+## Default Codex Cloud GitHub Comment Runner
+
+The default no-extra-API-cost runner is:
+
+- Butler builds a bounded execution contract from Issue and GitHub runtime truth
+- VTDD posts that contract as a GitHub comment containing `@codex`
+- Codex Cloud, running under the operator's ChatGPT/Codex account, picks up the task
+- Codex creates or updates a PR
+- Butler tracks progress from the delegation comment, branch, and PR state
+
+This runner does not use `OPENAI_API_KEY`.
 
 ## Optional API-backed Runner
 
-The first machine-runner implementation path is GitHub Actions centered.
+The optional machine-runner implementation path is GitHub Actions centered.
 
 - Butler triggers a VTDD-managed workflow dispatch
 - the workflow runs Codex CLI remotely
