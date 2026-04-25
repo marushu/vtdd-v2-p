@@ -4,8 +4,3 @@ compatibility_date = "2026-04-15"
 
 [env.production]
 name = "vtdd-v2-mvp"
-
-[[env.production.d1_databases]]
-binding = "VTDD_MEMORY_D1"
-database_name = "vtdd-memory"
-database_id = "a544d950-4a6a-4c6f-87e7-4671fe87b70d"

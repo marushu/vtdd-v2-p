@@ -11,6 +11,7 @@ const WORKFLOW_PATH = path.join(
   "deploy-production.yml"
 );
 const WRANGLER_PATH = path.join(process.cwd(), "wrangler.toml");
+const OWNER_D1_DATABASE_ID = "a544d950-4a6a-4c6f-87e7-4671fe87b70d";
 
 test("production deploy doc defines the governed GitHub Actions deploy path", () => {
   const doc = fs.readFileSync(DOC_PATH, "utf8");
@@ -32,6 +33,8 @@ test("production deploy doc defines the governed GitHub Actions deploy path", ()
   assert.equal(doc.includes("Worker runtime secrets"), true);
   assert.equal(doc.includes("`VTDD_MEMORY_D1`"), true);
   assert.equal(doc.includes("real passkey registration"), true);
+  assert.equal(doc.includes("owner-specific Cloudflare"), true);
+  assert.equal(doc.includes("must not be committed"), true);
 });
 
 test("deploy-production workflow enforces the MVP production deploy boundary", () => {
@@ -66,11 +69,6 @@ test("wrangler config fixes worker runtime entry and production environment", ()
   assert.equal(wrangler.includes('main = "src/worker.js"'), true);
   assert.equal(wrangler.includes("[env.production]"), true);
   assert.equal(wrangler.includes('name = "vtdd-v2-mvp"'), true);
-  assert.equal(wrangler.includes("[[env.production.d1_databases]]"), true);
-  assert.equal(wrangler.includes('binding = "VTDD_MEMORY_D1"'), true);
-  assert.equal(wrangler.includes('database_name = "vtdd-memory"'), true);
-  assert.equal(
-    wrangler.includes('database_id = "a544d950-4a6a-4c6f-87e7-4671fe87b70d"'),
-    true
-  );
+  assert.equal(wrangler.includes(OWNER_D1_DATABASE_ID), false);
+  assert.equal(wrangler.includes("database_id"), false);
 });

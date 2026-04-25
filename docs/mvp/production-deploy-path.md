@@ -47,6 +47,11 @@ persistence, and approval grant retrieval. A production deploy that drops this
 binding breaks `GO + passkey` issuance and therefore blocks high-risk runtime
 operations.
 
+Because this repository is public and reusable, owner-specific Cloudflare
+resource identifiers must not be committed to the shared `wrangler.toml`.
+Each operator must bind their own D1 database in their deployment configuration
+before deploying production.
+
 ## Approval Boundary (`GO + passkey`)
 
 `deploy-production` workflow is manual (`workflow_dispatch`) and requires:
