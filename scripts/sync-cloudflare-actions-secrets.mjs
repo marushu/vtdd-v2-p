@@ -1,26 +1,28 @@
 import fs from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { executeCloudflareDeploySecretSync } from "../src/core/index.js";
+import { executeCloudflareDeploySecretSync, loadDesktopBootstrapVault } from "../src/core/index.js";
 
 const execFileAsync = promisify(execFile);
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const repo = normalizeText(args.repo || process.env.GITHUB_REPOSITORY || "marushu/vtdd-v2-p");
+  const vault = await resolveVault(args);
   const source = {
     cloudflareApiToken: await resolveApiToken(args),
     cloudflareAccountId: normalizeText(
-      args.cloudflareAccountId ||
-        process.env.CLOUDFLARE_ACCOUNT_ID ||
-        "bd82bbc79ce38442976432eaa409e48c"
+      args.cloudflareAccountId || process.env.CLOUDFLARE_ACCOUNT_ID || vault?.cloudflare?.accountId
     )
   };
 
   const approvalGrant = await resolveApprovalGrant({
     runtimeUrl: args.runtimeUrl || process.env.VTDD_RUNTIME_URL,
     approvalGrantId: args.approvalGrantId,
-    bearerToken: args.gatewayBearerToken || process.env.VTDD_GATEWAY_BEARER_TOKEN
+    bearerToken:
+      args.gatewayBearerToken ||
+      process.env.VTDD_GATEWAY_BEARER_TOKEN ||
+      vault?.gateway?.bearerToken
   });
 
   const result = await executeCloudflareDeploySecretSync({
@@ -57,6 +59,12 @@ async function resolveApiToken(args) {
     return fromEnv;
   }
 
+  const vault = await resolveVault(args);
+  const fromVault = normalizeText(vault?.cloudflare?.apiToken);
+  if (fromVault) {
+    return fromVault;
+  }
+
   const tokenPath = normalizeText(args.cloudflareApiTokenPath);
   if (tokenPath) {
     return normalizeText(await fs.readFile(tokenPath, "utf8"));
@@ -67,6 +75,19 @@ async function resolveApiToken(args) {
   }
 
   return "";
+}
+
+let cachedVaultResult;
+async function resolveVault(args) {
+  if (cachedVaultResult !== undefined) {
+    return cachedVaultResult;
+  }
+  const manifestPath = normalizeText(args.manifestPath);
+  const result = await loadDesktopBootstrapVault({
+    manifestPath: manifestPath || undefined
+  });
+  cachedVaultResult = result.ok ? result.vault : null;
+  return cachedVaultResult;
 }
 
 async function resolveApprovalGrant(input = {}) {
@@ -122,6 +143,11 @@ function parseArgs(args) {
     }
     if (current === "--cloudflare-account-id") {
       parsed.cloudflareAccountId = args[index + 1];
+      index += 1;
+      continue;
+    }
+    if (current === "--manifest-path") {
+      parsed.manifestPath = args[index + 1];
       index += 1;
       continue;
     }

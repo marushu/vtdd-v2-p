@@ -50,6 +50,22 @@ The Action schema is intentionally kept importer-safe:
 
 If the Custom GPT importer rejects the YAML form, use the JSON form instead.
 
+## Local Desktop Bootstrap Vault
+
+Operator-owned root credential material is expected to live outside the
+repository under:
+
+- `~/.vtdd/credentials/manifest.json`
+
+See:
+
+- `docs/setup/desktop-bootstrap-vault.md`
+- `docs/setup/github-app-secret-sync.md`
+- `docs/setup/cloudflare-deploy-secret-sync.md`
+
+This repository must not contain committed secret values or repository-local
+bootstrap credential blobs.
+
 ## Cost And Account Boundary
 
 VTDD should not silently turn an existing ChatGPT/Codex subscription into a

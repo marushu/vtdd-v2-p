@@ -14,7 +14,7 @@ async function main() {
   const execute = args.execute === true;
 
   const sourceResult = await loadGitHubAppSecretSource({
-    envPath: args.envPath
+    manifestPath: args.manifestPath
   });
   if (!sourceResult.ok) {
     throw new Error(sourceResult.issues.join(", "));
@@ -67,12 +67,12 @@ async function main() {
 function printDryRun(plan, source) {
   console.log("GitHub App secret sync dry-run");
   console.log(`repo: ${plan.repo}`);
-  console.log(`env source: ${source.envPath}`);
+  console.log(`vault manifest: ${source.manifestPath}`);
   console.log(`app id: ${source.appId}`);
   console.log(`installation id: ${source.installationId}`);
   console.log(`private key path: ${source.privateKeyPath}`);
   console.log(
-    `gateway bearer token path: ${source.gatewayBearerTokenPath || "[not configured in load-env.sh]"}`
+    `gateway bearer token path: ${source.gatewayBearerTokenPath || "[not configured in vault manifest]"}`
   );
   console.log("secrets to sync:");
   for (const secret of plan.secrets) {
@@ -100,8 +100,8 @@ function parseArgs(args) {
       index += 1;
       continue;
     }
-    if (current === "--env-path") {
-      parsed.envPath = args[index + 1];
+    if (current === "--manifest-path") {
+      parsed.manifestPath = args[index + 1];
       index += 1;
       continue;
     }
@@ -136,7 +136,7 @@ async function resolveApprovalGrant(input = {}) {
   }
   if (!bearerToken) {
     throw new Error(
-      "execute mode requires gateway bearer token via --gateway-bearer-token, VTDD_GATEWAY_BEARER_TOKEN, or load-env.sh"
+      "execute mode requires gateway bearer token via --gateway-bearer-token, VTDD_GATEWAY_BEARER_TOKEN, or ~/.vtdd/credentials/manifest.json"
     );
   }
 

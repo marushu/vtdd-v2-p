@@ -21,7 +21,7 @@ test("cloudflare deploy secret sync plan targets Actions deploy secrets", () => 
     repo: "marushu/vtdd-v2-p",
     source: {
       cloudflareApiToken: "cf-token-redacted",
-      cloudflareAccountId: "bd82bbc79ce38442976432eaa409e48c"
+      cloudflareAccountId: "account-123"
     }
   });
 
@@ -36,7 +36,7 @@ test("cloudflare deploy secret sync plan fails without token source", () => {
   const result = buildCloudflareDeploySecretSyncPlan({
     repo: "marushu/vtdd-v2-p",
     source: {
-      cloudflareAccountId: "bd82bbc79ce38442976432eaa409e48c"
+      cloudflareAccountId: "account-123"
     }
   });
 
@@ -49,7 +49,7 @@ test("cloudflare deploy secret sync requires deploy_production approval grant", 
     repo: "marushu/vtdd-v2-p",
     source: {
       cloudflareApiToken: "cf-token-redacted",
-      cloudflareAccountId: "bd82bbc79ce38442976432eaa409e48c"
+      cloudflareAccountId: "account-123"
     },
     approvalGrant: {
       ...validApprovalGrant,
@@ -71,7 +71,7 @@ test("cloudflare deploy secret sync calls runner without exposing token", async 
     repo: "marushu/vtdd-v2-p",
     source: {
       cloudflareApiToken: "cf-token-redacted",
-      cloudflareAccountId: "bd82bbc79ce38442976432eaa409e48c"
+      cloudflareAccountId: "account-123"
     },
     approvalGrant: validApprovalGrant,
     runner: async (secret) => {

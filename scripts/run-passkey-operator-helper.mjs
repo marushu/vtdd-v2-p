@@ -17,7 +17,7 @@ async function main() {
   }
 
   const sourceResult = await loadGitHubAppSecretSource({
-    envPath: args.envPath
+    manifestPath: args.manifestPath
   });
   if (!sourceResult.ok) {
     throw new Error(sourceResult.issues.join(", "));
@@ -29,7 +29,7 @@ async function main() {
   );
   if (!bearerToken) {
     throw new Error(
-      "gateway bearer token is required via --gateway-bearer-token, VTDD_GATEWAY_BEARER_TOKEN, or load-env.sh"
+      "gateway bearer token is required via --gateway-bearer-token, VTDD_GATEWAY_BEARER_TOKEN, or ~/.vtdd/credentials/manifest.json"
     );
   }
 
@@ -45,7 +45,7 @@ async function main() {
     repo: normalizeText(args.repo || "marushu/vtdd-v2-p"),
     issueNumber: normalizeText(args.issueNumber || "15"),
     highRiskKind: normalizeText(args.highRiskKind || "github_app_secret_sync"),
-    envPath: normalizeText(args.envPath || sourceResult.source.envPath)
+    manifestPath: normalizeText(args.manifestPath || sourceResult.source.manifestPath)
   };
 
   const server = http.createServer((request, response) =>
@@ -112,8 +112,8 @@ async function handleRequest({ request, response, state }) {
       "--approval-grant-id",
       approvalGrantId
     ];
-    if (state.envPath) {
-      args.push("--env-path", state.envPath);
+    if (state.manifestPath) {
+      args.push("--manifest-path", state.manifestPath);
     }
 
     const result = await execFileAsync(process.execPath, args, {
@@ -227,8 +227,8 @@ function parseArgs(args) {
       index += 1;
       continue;
     }
-    if (current === "--env-path") {
-      parsed.envPath = args[index + 1];
+    if (current === "--manifest-path") {
+      parsed.manifestPath = args[index + 1];
       index += 1;
     }
   }
