@@ -80,6 +80,21 @@ export function createInMemoryMemoryProvider() {
 
     async validateRecord(input) {
       return validateMemoryRecord(input);
+    },
+
+    async deleteRecords(input = {}) {
+      const ids = normalizeIds(input.ids);
+      if (ids.length === 0) {
+        return { ok: true, deletedCount: 0 };
+      }
+      let deletedCount = 0;
+      for (let index = records.length - 1; index >= 0; index -= 1) {
+        if (ids.includes(records[index]?.id)) {
+          records.splice(index, 1);
+          deletedCount += 1;
+        }
+      }
+      return { ok: true, deletedCount };
     }
   };
 }
@@ -104,5 +119,14 @@ function normalizeTags(value) {
   }
   return value
     .map((item) => normalize(item))
+    .filter(Boolean);
+}
+
+function normalizeIds(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .map((item) => String(item ?? "").trim())
     .filter(Boolean);
 }

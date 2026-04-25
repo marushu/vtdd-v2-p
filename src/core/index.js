@@ -26,6 +26,7 @@ export {
   DEFAULT_PASSKEY_GRANT_TTL_MS,
   DEFAULT_PASSKEY_SESSION_TTL_MS,
   PASSKEY_APPROVAL_KIND,
+  PASSKEY_EPHEMERAL_KINDS,
   PASSKEY_GRANT_TAG,
   PASSKEY_REGISTRATION_KIND,
   PASSKEY_REGISTRY_TAG,
@@ -35,6 +36,7 @@ export {
   dedupePasskeys,
   defaultPasskeyAdapter,
   evaluateApprovalGrant,
+  isExpiredPasskeyEphemeralRecord,
   normalizeScopeSnapshot,
   verifyPasskeyApproval,
   verifyPasskeyRegistration

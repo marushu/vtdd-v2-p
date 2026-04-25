@@ -463,10 +463,7 @@ test("worker can resolve passkey memory provider from Cloudflare D1 binding fall
 test("worker serves passkey operator page", async () => {
   const response = await worker.fetch(
     new Request(
-      "https://example.com/v2/approval/passkey/operator?repositoryInput=marushu%2Fvtdd-v2-p&issueNumber=15&highRiskKind=github_app_secret_sync",
-      {
-        headers: gatewayAuthHeaders
-      }
+      "https://example.com/v2/approval/passkey/operator?repositoryInput=marushu%2Fvtdd-v2-p&issueNumber=15&highRiskKind=github_app_secret_sync"
     ),
     gatewayAuthEnv
   );
@@ -477,6 +474,216 @@ test("worker serves passkey operator page", async () => {
   assert.equal(html.includes("VTDD Passkey Operator"), true);
   assert.equal(html.includes("/v2/approval/passkey/challenge"), true);
   assert.equal(html.includes("github_app_secret_sync"), true);
+});
+
+test("worker allows same-origin browser bootstrap registration before first passkey exists", async () => {
+  const provider = createInMemoryMemoryProvider();
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/approval/passkey/register/options", {
+      method: "POST",
+      headers: {
+        origin: "https://example.com",
+        "sec-fetch-site": "same-origin",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        operatorId: "owner",
+        operatorLabel: "Owner"
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      MEMORY_PROVIDER: provider,
+      PASSKEY_ADAPTER: passkeyAdapter
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(Boolean(body.sessionId), true);
+});
+
+test("worker blocks browser registration after first passkey already exists", async () => {
+  const provider = createInMemoryMemoryProvider();
+  await provider.store({
+    id: "passkey:existing",
+    type: MemoryRecordType.WORKING_MEMORY,
+    content: {
+      kind: "passkey_registry",
+      credentialId: "existing",
+      publicKey: "pub",
+      counter: 1,
+      transports: ["internal"]
+    },
+    metadata: { source: "test" },
+    priority: 80,
+    tags: ["passkey_registry"],
+    createdAt: "2026-04-25T00:00:00.000Z"
+  });
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/approval/passkey/register/options", {
+      method: "POST",
+      headers: {
+        origin: "https://example.com",
+        "sec-fetch-site": "same-origin",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        operatorId: "owner",
+        operatorLabel: "Owner"
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      MEMORY_PROVIDER: provider,
+      PASSKEY_ADAPTER: passkeyAdapter
+    }
+  );
+
+  assert.equal(response.status, 403);
+});
+
+test("worker purges expired passkey session records before issuing challenge", async () => {
+  const provider = createInMemoryMemoryProvider();
+  await provider.store({
+    id: "passkey-auth:expired",
+    type: MemoryRecordType.APPROVAL_LOG,
+    content: {
+      kind: "passkey_approval",
+      status: "pending",
+      challenge: "challenge:old",
+      rpID: "example.com",
+      origin: "https://example.com",
+      expiresAt: "2000-01-01T00:00:00.000Z",
+      scope: {}
+    },
+    metadata: { source: "test" },
+    priority: 90,
+    tags: ["passkey_session", "passkey_approval"],
+    createdAt: "2000-01-01T00:00:00.000Z"
+  });
+  await provider.store({
+    id: "passkey:AQIDBA",
+    type: MemoryRecordType.WORKING_MEMORY,
+    content: {
+      kind: "passkey_registry",
+      credentialId: "AQIDBA",
+      publicKey: "BQYHCA",
+      counter: 1,
+      transports: ["internal"]
+    },
+    metadata: { source: "test" },
+    priority: 80,
+    tags: ["passkey_registry"],
+    createdAt: "2026-04-25T00:00:00.000Z"
+  });
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/approval/passkey/challenge", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        phase: "execution",
+        issueContext: { issueNumber: 14 },
+        policyInput: {
+          actionType: ActionType.DEPLOY_PRODUCTION,
+          repositoryInput: "vtdd"
+        }
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      MEMORY_PROVIDER: provider,
+      PASSKEY_ADAPTER: passkeyAdapter
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const remaining = await provider.query({
+    type: MemoryRecordType.APPROVAL_LOG,
+    text: "passkey-auth:expired",
+    limit: 10
+  });
+  assert.equal(remaining.length, 0);
+});
+
+test("worker allows same-origin browser approval flow after passkey exists", async () => {
+  const provider = createInMemoryMemoryProvider();
+  await provider.store({
+    id: "passkey:AQIDBA",
+    type: MemoryRecordType.WORKING_MEMORY,
+    content: {
+      kind: "passkey_registry",
+      credentialId: "AQIDBA",
+      publicKey: "BQYHCA",
+      counter: 1,
+      transports: ["internal"]
+    },
+    metadata: { source: "test" },
+    priority: 80,
+    tags: ["passkey_registry"],
+    createdAt: "2026-04-25T00:00:00.000Z"
+  });
+
+  const challenge = await worker.fetch(
+    new Request("https://example.com/v2/approval/passkey/challenge", {
+      method: "POST",
+      headers: {
+        origin: "https://example.com",
+        "sec-fetch-site": "same-origin",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        phase: "execution",
+        issueContext: { issueNumber: 15 },
+        policyInput: {
+          actionType: ActionType.DESTRUCTIVE,
+          repositoryInput: "marushu/vtdd-v2-p",
+          highRiskKind: "github_app_secret_sync"
+        }
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      MEMORY_PROVIDER: provider,
+      PASSKEY_ADAPTER: passkeyAdapter
+    }
+  );
+
+  assert.equal(challenge.status, 200);
+  const challengeBody = await challenge.json();
+  assert.equal(challengeBody.ok, true);
+
+  const verify = await worker.fetch(
+    new Request("https://example.com/v2/approval/passkey/verify", {
+      method: "POST",
+      headers: {
+        origin: "https://example.com",
+        "sec-fetch-site": "same-origin",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        sessionId: challengeBody.sessionId,
+        response: {
+          id: "AQIDBA",
+          response: {}
+        }
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      MEMORY_PROVIDER: provider,
+      PASSKEY_ADAPTER: passkeyAdapter
+    }
+  );
+
+  assert.equal(verify.status, 200);
+  const verifyBody = await verify.json();
+  assert.equal(verifyBody.ok, true);
+  assert.equal(Boolean(verifyBody.approvalGrant.approvalId), true);
 });
 
 test("worker gateway accepts high-risk approval grant resolved from memory", async () => {

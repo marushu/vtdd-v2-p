@@ -5,6 +5,7 @@ import {
   createPasskeyRegistrationOptions,
   dedupePasskeys,
   evaluateApprovalGrant,
+  isExpiredPasskeyEphemeralRecord,
   verifyPasskeyApproval,
   verifyPasskeyRegistration
 } from "../src/core/index.js";
@@ -179,4 +180,31 @@ test("dedupePasskeys keeps latest credential record", () => {
 
   assert.equal(records.length, 1);
   assert.equal(records[0].publicKey, "new");
+});
+
+test("completed registration session expires and becomes cleanup target", async () => {
+  const session = await createPasskeyRegistrationOptions({
+    adapter: mockAdapter,
+    rpID: "example.com",
+    rpName: "VTDD",
+    origin: "https://example.com",
+    sessionTtlMs: 1
+  });
+
+  const result = await verifyPasskeyRegistration({
+    adapter: mockAdapter,
+    sessionRecord: session.sessionRecord,
+    response: {
+      id: "ignored",
+      response: {
+        transports: ["internal"]
+      }
+    },
+    sessionTtlMs: 1
+  });
+
+  assert.equal(
+    isExpiredPasskeyEphemeralRecord(result.completedSessionRecord, new Date(Date.now() + 10)),
+    true
+  );
 });
