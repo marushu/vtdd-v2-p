@@ -26,6 +26,7 @@ Set repository or environment secrets:
 
 - `CLOUDFLARE_API_TOKEN`
 - `CLOUDFLARE_ACCOUNT_ID`
+- `CLOUDFLARE_D1_DATABASE_ID`
 - `VTDD_GATEWAY_BEARER_TOKEN`
 
 The token should be scoped to minimum required Worker deploy permissions.
@@ -51,6 +52,11 @@ Because this repository is public and reusable, owner-specific Cloudflare
 resource identifiers must not be committed to the shared `wrangler.toml`.
 Each operator must bind their own D1 database in their deployment configuration
 before deploying production.
+
+For local/operator deploys, store owner-specific bindings in an ignored file
+such as `wrangler.production.local.toml`. For GitHub Actions deploys, store the
+D1 database id in `CLOUDFLARE_D1_DATABASE_ID`; the workflow generates an
+uncommitted `wrangler.production.generated.toml` at deploy time.
 
 ## Approval Boundary (`GO + passkey`)
 

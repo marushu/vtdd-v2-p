@@ -50,6 +50,7 @@ jobs:
           VTDD_GATEWAY_BEARER_TOKEN: ${{ secrets.VTDD_GATEWAY_BEARER_TOKEN }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_D1_DATABASE_ID: ${{ secrets.CLOUDFLARE_D1_DATABASE_ID }}
         shell: bash
         run: |
           missing=0
@@ -63,6 +64,10 @@ jobs:
           fi
           if [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
             echo "Missing required Actions secret: CLOUDFLARE_ACCOUNT_ID"
+            missing=1
+          fi
+          if [ -z "$CLOUDFLARE_D1_DATABASE_ID" ]; then
+            echo "Missing required Actions secret: CLOUDFLARE_D1_DATABASE_ID"
             missing=1
           fi
           if [ "$missing" -ne 0 ]; then
@@ -93,6 +98,21 @@ jobs:
       - name: Run tests
         run: npm test
 
+      - name: Generate production Wrangler config
+        env:
+          CLOUDFLARE_D1_DATABASE_ID: ${{ secrets.CLOUDFLARE_D1_DATABASE_ID }}
+          CLOUDFLARE_D1_DATABASE_NAME: ${{ vars.CLOUDFLARE_D1_DATABASE_NAME || 'vtdd-memory' }}
+        shell: bash
+        run: |
+          cp wrangler.toml wrangler.production.generated.toml
+          cat >> wrangler.production.generated.toml <<EOF
+
+          [[env.production.d1_databases]]
+          binding = "VTDD_MEMORY_D1"
+          database_name = "$CLOUDFLARE_D1_DATABASE_NAME"
+          database_id = "$CLOUDFLARE_D1_DATABASE_ID"
+          EOF
+
       - name: Deploy to Cloudflare Workers
         uses: cloudflare/wrangler-action@v3
         env:
@@ -100,4 +120,4 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           wranglerVersion: "4.83.0"
-          command: deploy --env production
+          command: deploy --config wrangler.production.generated.toml --env production

@@ -11,6 +11,7 @@ const WORKFLOW_PATH = path.join(
   "deploy-production.yml"
 );
 const WRANGLER_PATH = path.join(process.cwd(), "wrangler.toml");
+const GITIGNORE_PATH = path.join(process.cwd(), ".gitignore");
 const OWNER_D1_DATABASE_ID = "a544d950-4a6a-4c6f-87e7-4671fe87b70d";
 
 test("production deploy doc defines the governed GitHub Actions deploy path", () => {
@@ -27,6 +28,7 @@ test("production deploy doc defines the governed GitHub Actions deploy path", ()
   assert.equal(doc.includes("`highRiskKind=deploy_production`"), true);
   assert.equal(doc.includes("`CLOUDFLARE_API_TOKEN`"), true);
   assert.equal(doc.includes("`CLOUDFLARE_ACCOUNT_ID`"), true);
+  assert.equal(doc.includes("`CLOUDFLARE_D1_DATABASE_ID`"), true);
   assert.equal(doc.includes("`VTDD_GATEWAY_BEARER_TOKEN`"), true);
   assert.equal(doc.includes("hard prerequisites"), true);
   assert.equal(doc.includes("docs/setup/cloudflare-deploy-secret-sync.md"), true);
@@ -35,6 +37,8 @@ test("production deploy doc defines the governed GitHub Actions deploy path", ()
   assert.equal(doc.includes("real passkey registration"), true);
   assert.equal(doc.includes("owner-specific Cloudflare"), true);
   assert.equal(doc.includes("must not be committed"), true);
+  assert.equal(doc.includes("`wrangler.production.local.toml`"), true);
+  assert.equal(doc.includes("`wrangler.production.generated.toml`"), true);
 });
 
 test("deploy-production workflow enforces the MVP production deploy boundary", () => {
@@ -50,6 +54,7 @@ test("deploy-production workflow enforces the MVP production deploy boundary", (
   assert.equal(workflow.includes("Missing required Actions secret: VTDD_GATEWAY_BEARER_TOKEN"), true);
   assert.equal(workflow.includes("Missing required Actions secret: CLOUDFLARE_API_TOKEN"), true);
   assert.equal(workflow.includes("Missing required Actions secret: CLOUDFLARE_ACCOUNT_ID"), true);
+  assert.equal(workflow.includes("Missing required Actions secret: CLOUDFLARE_D1_DATABASE_ID"), true);
   assert.equal(workflow.includes("Validate real passkey approval grant"), true);
   assert.equal(
     workflow.includes('VTDD_GATEWAY_BEARER_TOKEN: ${{ secrets.VTDD_GATEWAY_BEARER_TOKEN }}'),
@@ -61,7 +66,14 @@ test("deploy-production workflow enforces the MVP production deploy boundary", (
     workflow.includes("CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}"),
     true
   );
-  assert.equal(workflow.includes('command: deploy --env production'), true);
+  assert.equal(workflow.includes("Generate production Wrangler config"), true);
+  assert.equal(workflow.includes("[[env.production.d1_databases]]"), true);
+  assert.equal(workflow.includes('binding = "VTDD_MEMORY_D1"'), true);
+  assert.equal(workflow.includes('database_id = "$CLOUDFLARE_D1_DATABASE_ID"'), true);
+  assert.equal(
+    workflow.includes("command: deploy --config wrangler.production.generated.toml --env production"),
+    true
+  );
 });
 
 test("wrangler config fixes worker runtime entry and production environment", () => {
@@ -71,4 +83,11 @@ test("wrangler config fixes worker runtime entry and production environment", ()
   assert.equal(wrangler.includes('name = "vtdd-v2-mvp"'), true);
   assert.equal(wrangler.includes(OWNER_D1_DATABASE_ID), false);
   assert.equal(wrangler.includes("database_id"), false);
+});
+
+test("owner-specific wrangler config files are ignored", () => {
+  const gitignore = fs.readFileSync(GITIGNORE_PATH, "utf8");
+  assert.equal(gitignore.includes("wrangler.local.toml"), true);
+  assert.equal(gitignore.includes("wrangler.*.local.toml"), true);
+  assert.equal(gitignore.includes("wrangler.production.generated.toml"), true);
 });
