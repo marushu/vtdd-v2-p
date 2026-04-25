@@ -44,6 +44,11 @@ export {
 export { renderPasskeyOperatorPage } from "./passkey-operator-page.js";
 export { buildButlerReviewSynthesis } from "./butler-review-synthesis.js";
 export { validateDeployApprovalGrant } from "./deploy-approval-grant.js";
+export {
+  CLOUDFLARE_DEPLOY_ACTIONS_SECRETS,
+  buildCloudflareDeploySecretSyncPlan,
+  executeCloudflareDeploySecretSync
+} from "./cloudflare-deploy-secret-sync.js";
 export { requiredCredentialTier, evaluateCredentialBoundary } from "./credential-boundary.js";
 export { resolveRepositoryTarget } from "./repository-resolution.js";
 export { evaluateTargetConfirmationBoundary } from "./target-confirmation.js";
