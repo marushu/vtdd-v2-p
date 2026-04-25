@@ -1,4 +1,5 @@
 import { buildButlerReviewSynthesis } from "./butler-review-synthesis.js";
+import { parseGeminiReviewComment } from "./gemini-pr-review.js";
 import { ActorRole, TaskMode } from "./types.js";
 
 export const ExecutionTransferMode = Object.freeze({
@@ -118,8 +119,13 @@ function validateHandoffRequirement({ actorRole, continuation }) {
 }
 
 function buildReviewState(pullRequest) {
-  const reviewCommentsCount = pullRequest.reviewCommentsCount;
-  const unresolvedReviewCommentsCount = pullRequest.unresolvedReviewCommentsCount;
+  const parsedGeminiSignals = collectGeminiReviewerSignals(pullRequest);
+  const reviewCommentsCount =
+    parsedGeminiSignals.totalCount > 0 ? parsedGeminiSignals.totalCount : pullRequest.reviewCommentsCount;
+  const unresolvedReviewCommentsCount =
+    parsedGeminiSignals.totalCount > 0
+      ? parsedGeminiSignals.blockingCount
+      : pullRequest.unresolvedReviewCommentsCount;
   const reviewer = pullRequest.reviewer;
   const criticalReviewPending =
     pullRequest.exists && reviewCommentsCount > 0 && unresolvedReviewCommentsCount > 0;
@@ -135,15 +141,25 @@ function buildReviewState(pullRequest) {
   };
 }
 
+function collectGeminiReviewerSignals(pullRequest) {
+  const comments = [
+    ...(Array.isArray(pullRequest.issueComments) ? pullRequest.issueComments : []),
+    ...(Array.isArray(pullRequest.reviewComments) ? pullRequest.reviewComments : [])
+  ];
+  const parsed = comments.map(parseGeminiReviewComment).filter(Boolean);
+
+  return {
+    totalCount: parsed.length,
+    blockingCount: parsed.filter((signal) => signal.blocking).length
+  };
+}
+
 function determineCodexGoal({ pullRequest, review }) {
   if (!pullRequest.exists) {
     return CodexGoal.OPEN_PR;
   }
   if (review.unresolvedReviewCommentsCount > 0) {
     return CodexGoal.REVISE_PR;
-  }
-  if (review.reviewCommentsCount > 0) {
-    return CodexGoal.RESPOND_TO_REVIEW;
   }
   return CodexGoal.WAIT_FOR_REVIEW;
 }

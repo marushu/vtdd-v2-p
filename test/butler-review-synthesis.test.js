@@ -44,3 +44,37 @@ test("butler review synthesis reports missing PR state plainly", () => {
   assert.equal(result.available, false);
   assert.equal(result.headline, "No active PR is available for Butler synthesis.");
 });
+
+test("butler review synthesis does not present approve-only Gemini review as unresolved objection", () => {
+  const result = buildButlerReviewSynthesis({
+    pullRequest: {
+      number: 28,
+      url: "https://github.com/example/repo/pull/28",
+      state: "open",
+      title: "Live Gemini review test",
+      issueComments: [
+        {
+          user: { login: "vtdd-codex[bot]" },
+          body: "<!-- vtdd:reviewer=gemini -->\n## VTDD Gemini Critical Review\n\n- Recommended action: `approve`"
+        }
+      ]
+    },
+    reviewLoop: {
+      reviewer: "gemini",
+      reviewCommentsCount: 1,
+      unresolvedReviewCommentsCount: 0,
+      criticalReviewPending: false
+    },
+    codexGoal: "respond_to_review",
+    nextSuggestedActions: ["summarize_for_human", "wait_for_human_go"]
+  });
+
+  assert.equal(result.available, true);
+  assert.equal(result.headline, "PR #28 is open. Reviewer feedback exists and should be checked before human GO.");
+  assert.equal(
+    result.humanDecisionFocus.includes(
+      "Meaningful reviewer objections remain unresolved; do not issue merge GO yet."
+    ),
+    false
+  );
+});
