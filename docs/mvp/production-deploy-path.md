@@ -38,6 +38,15 @@ Use `docs/setup/cloudflare-deploy-secret-sync.md` as the canonical operator
 sync path. Do not treat Worker runtime secrets as equivalent to GitHub Actions
 secrets.
 
+### 3. Worker Bindings
+
+Production must bind the VTDD memory D1 database as `VTDD_MEMORY_D1`.
+
+This binding is required for real passkey registration, approval challenge
+persistence, and approval grant retrieval. A production deploy that drops this
+binding breaks `GO + passkey` issuance and therefore blocks high-risk runtime
+operations.
+
 ## Approval Boundary (`GO + passkey`)
 
 `deploy-production` workflow is manual (`workflow_dispatch`) and requires:

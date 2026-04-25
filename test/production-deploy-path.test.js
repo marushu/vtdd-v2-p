@@ -30,6 +30,8 @@ test("production deploy doc defines the governed GitHub Actions deploy path", ()
   assert.equal(doc.includes("hard prerequisites"), true);
   assert.equal(doc.includes("docs/setup/cloudflare-deploy-secret-sync.md"), true);
   assert.equal(doc.includes("Worker runtime secrets"), true);
+  assert.equal(doc.includes("`VTDD_MEMORY_D1`"), true);
+  assert.equal(doc.includes("real passkey registration"), true);
 });
 
 test("deploy-production workflow enforces the MVP production deploy boundary", () => {
@@ -64,4 +66,11 @@ test("wrangler config fixes worker runtime entry and production environment", ()
   assert.equal(wrangler.includes('main = "src/worker.js"'), true);
   assert.equal(wrangler.includes("[env.production]"), true);
   assert.equal(wrangler.includes('name = "vtdd-v2-mvp"'), true);
+  assert.equal(wrangler.includes("[[env.production.d1_databases]]"), true);
+  assert.equal(wrangler.includes('binding = "VTDD_MEMORY_D1"'), true);
+  assert.equal(wrangler.includes('database_name = "vtdd-memory"'), true);
+  assert.equal(
+    wrangler.includes('database_id = "a544d950-4a6a-4c6f-87e7-4671fe87b70d"'),
+    true
+  );
 });
