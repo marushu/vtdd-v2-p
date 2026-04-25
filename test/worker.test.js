@@ -336,7 +336,13 @@ test("worker dispatches remote Codex execution", async () => {
             { status: 200, headers: { "content-type": "application/json" } }
           );
         }
-        return new Response(null, { status: 204 });
+        return new Response(
+          JSON.stringify({
+            id: 123,
+            html_url: "https://github.com/sample-org/vtdd-v2/issues/6#issuecomment-123"
+          }),
+          { status: 201, headers: { "content-type": "application/json" } }
+        );
       }
     }
   );
@@ -345,6 +351,7 @@ test("worker dispatches remote Codex execution", async () => {
   const body = await response.json();
   assert.equal(body.ok, true);
   assert.equal(body.execution.issueNumber, 6);
+  assert.equal(body.execution.transport, "codex_cloud_github_comment");
   assert.equal(calls.length, 2);
 });
 
@@ -813,6 +820,7 @@ test("worker returns remote Codex execution progress", async () => {
     }),
     {
       ...gatewayAuthEnv,
+      REMOTE_CODEX_EXECUTOR_TRANSPORT: "api_key_runner",
       VTDD_GITHUB_ACTIONS_REPOSITORY: "sample-org/vtdd-v2-p",
       GITHUB_APP_INSTALLATION_TOKEN: "ghs_progress_token",
       GITHUB_API_FETCH: async () =>

@@ -46,6 +46,11 @@ Cloudflare, and reviewer configuration. Any GitHub Actions runner that uses
 `OPENAI_API_KEY` for Codex CLI is an explicit opt-in API-backed executor, not
 the default no-extra-API-cost path.
 
+The default no-extra-API-cost executor path delegates through GitHub by posting
+a bounded `@codex` Issue/PR comment for the operator's own Codex Cloud GitHub
+integration to pick up. That path uses the operator's ChatGPT/Codex account and
+does not require an OpenAI API key in GitHub Actions.
+
 Likewise, a reviewer workflow that uses `GEMINI_API_KEY` is an optional
 provider-backed reviewer path. Reviewer choice remains pluggable.
 

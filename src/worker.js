@@ -154,6 +154,9 @@ export default {
 
       const progress = await retrieveRemoteCodexExecutionProgress({
         executionId: url.searchParams.get("executionId"),
+        repository: url.searchParams.get("repository"),
+        issueNumber: url.searchParams.get("issueNumber"),
+        branch: url.searchParams.get("branch"),
         env
       });
       if (!progress.ok) {

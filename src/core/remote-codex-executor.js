@@ -2,6 +2,11 @@ import { ActorRole } from "./types.js";
 
 export const REMOTE_CODEX_WORKFLOW_FILE = "remote-codex-executor.yml";
 
+export const RemoteCodexExecutorTransport = Object.freeze({
+  CODEX_CLOUD_GITHUB_COMMENT: "codex_cloud_github_comment",
+  API_KEY_RUNNER: "api_key_runner"
+});
+
 export const RemoteCodexExecutionStatus = Object.freeze({
   QUEUED: "queued",
   IN_PROGRESS: "in_progress",
@@ -107,7 +112,16 @@ export async function dispatchRemoteCodexExecution(input = {}) {
     };
   }
 
-  const controlRepository = resolveControlRepository(input?.env);
+  const transport = resolveExecutorTransport(input);
+  if (transport === RemoteCodexExecutorTransport.CODEX_CLOUD_GITHUB_COMMENT) {
+    return dispatchCodexCloudGitHubComment({ request, token: token.value, env: input?.env });
+  }
+
+  return dispatchApiBackedWorkflow({ request, token: token.value, env: input?.env });
+}
+
+async function dispatchApiBackedWorkflow({ request, token, env }) {
+  const controlRepository = resolveControlRepository(env);
   if (!controlRepository) {
     return {
       ok: false,
@@ -118,11 +132,10 @@ export async function dispatchRemoteCodexExecution(input = {}) {
   }
 
   const workflowFile =
-    normalizeText(input?.env?.REMOTE_CODEX_WORKFLOW_FILE) || REMOTE_CODEX_WORKFLOW_FILE;
-  const workflowRef = normalizeText(input?.env?.REMOTE_CODEX_WORKFLOW_REF) || "main";
-  const apiBaseUrl = normalizeText(input?.env?.GITHUB_API_BASE_URL) || "https://api.github.com";
-  const fetchImpl =
-    typeof input?.env?.GITHUB_API_FETCH === "function" ? input.env.GITHUB_API_FETCH.bind(input.env) : fetch;
+    normalizeText(env?.REMOTE_CODEX_WORKFLOW_FILE) || REMOTE_CODEX_WORKFLOW_FILE;
+  const workflowRef = normalizeText(env?.REMOTE_CODEX_WORKFLOW_REF) || "main";
+  const apiBaseUrl = normalizeText(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
+  const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
 
   const dispatchUrl = `${apiBaseUrl}/repos/${encodeURIComponentRepository(
     controlRepository
@@ -146,7 +159,7 @@ export async function dispatchRemoteCodexExecution(input = {}) {
     response = await fetchImpl(dispatchUrl, {
       method: "POST",
       headers: {
-        authorization: `Bearer ${token.value}`,
+        authorization: `Bearer ${token}`,
         accept: "application/vnd.github+json",
         "content-type": "application/json; charset=utf-8",
         "x-github-api-version": "2022-11-28",
@@ -211,7 +224,23 @@ export async function retrieveRemoteCodexExecutionProgress(input = {}) {
     };
   }
 
-  const controlRepository = resolveControlRepository(input?.env);
+  const transport = resolveExecutorTransport(input);
+  if (transport === RemoteCodexExecutorTransport.CODEX_CLOUD_GITHUB_COMMENT) {
+    return retrieveCodexCloudGitHubCommentProgress({
+      executionId,
+      repository: normalizeText(input?.repository),
+      issueNumber: normalizePositiveInteger(input?.issueNumber),
+      branch: normalizeText(input?.branch),
+      token: token.value,
+      env: input?.env
+    });
+  }
+
+  return retrieveApiBackedWorkflowProgress({ executionId, token: token.value, env: input?.env });
+}
+
+async function retrieveApiBackedWorkflowProgress({ executionId, token, env }) {
+  const controlRepository = resolveControlRepository(env);
   if (!controlRepository) {
     return {
       ok: false,
@@ -222,10 +251,9 @@ export async function retrieveRemoteCodexExecutionProgress(input = {}) {
   }
 
   const workflowFile =
-    normalizeText(input?.env?.REMOTE_CODEX_WORKFLOW_FILE) || REMOTE_CODEX_WORKFLOW_FILE;
-  const apiBaseUrl = normalizeText(input?.env?.GITHUB_API_BASE_URL) || "https://api.github.com";
-  const fetchImpl =
-    typeof input?.env?.GITHUB_API_FETCH === "function" ? input.env.GITHUB_API_FETCH.bind(input.env) : fetch;
+    normalizeText(env?.REMOTE_CODEX_WORKFLOW_FILE) || REMOTE_CODEX_WORKFLOW_FILE;
+  const apiBaseUrl = normalizeText(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
+  const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
   const progressUrl = `${apiBaseUrl}/repos/${encodeURIComponentRepository(
     controlRepository
   )}/actions/workflows/${encodeURIComponent(workflowFile)}/runs?event=workflow_dispatch&per_page=30`;
@@ -235,7 +263,7 @@ export async function retrieveRemoteCodexExecutionProgress(input = {}) {
     response = await fetchImpl(progressUrl, {
       method: "GET",
       headers: {
-        authorization: `Bearer ${token.value}`,
+        authorization: `Bearer ${token}`,
         accept: "application/vnd.github+json",
         "x-github-api-version": "2022-11-28",
         "user-agent": "vtdd-v2-remote-codex-executor"
@@ -287,6 +315,246 @@ export async function retrieveRemoteCodexExecutionProgress(input = {}) {
       updatedAt: normalizeText(run.updated_at) || null
     }
   };
+}
+
+async function dispatchCodexCloudGitHubComment({ request, token, env }) {
+  const apiBaseUrl = normalizeText(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
+  const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
+  const commentUrl = `${apiBaseUrl}/repos/${encodeURIComponentRepository(
+    request.repository
+  )}/issues/${encodeURIComponent(String(request.issueNumber))}/comments`;
+  const body = buildCodexCloudGitHubComment({ request });
+
+  let response;
+  try {
+    response = await fetchImpl(commentUrl, {
+      method: "POST",
+      headers: githubJsonHeaders({ token }),
+      body: JSON.stringify({ body })
+    });
+  } catch {
+    return {
+      ok: false,
+      status: 503,
+      error: "remote_codex_dispatch_failed",
+      reason: "failed to post Codex Cloud GitHub delegation comment"
+    };
+  }
+
+  const responseBody = await readJsonSafe(response);
+  if (!response.ok) {
+    return {
+      ok: false,
+      status: response.status,
+      error: "remote_codex_dispatch_failed",
+      reason: normalizeText(responseBody?.message) || "GitHub issue comment creation failed"
+    };
+  }
+
+  return {
+    ok: true,
+    execution: {
+      executionId: request.executionId,
+      transport: RemoteCodexExecutorTransport.CODEX_CLOUD_GITHUB_COMMENT,
+      targetRepository: request.repository,
+      issueNumber: request.issueNumber,
+      branch: request.branch,
+      baseRef: request.baseRef,
+      codexGoal: request.codexGoal,
+      commentId: normalizePositiveInteger(responseBody?.id),
+      commentUrl: normalizeText(responseBody?.html_url) || null,
+      status: RemoteCodexExecutionStatus.QUEUED
+    }
+  };
+}
+
+async function retrieveCodexCloudGitHubCommentProgress({
+  executionId,
+  repository,
+  issueNumber,
+  branch,
+  token,
+  env
+}) {
+  if (!repository || !issueNumber) {
+    return {
+      ok: false,
+      status: 422,
+      error: "remote_codex_progress_scope_required",
+      reason: "repository and issueNumber are required for Codex Cloud GitHub comment progress"
+    };
+  }
+
+  const apiBaseUrl = normalizeText(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
+  const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
+  const commentsUrl = `${apiBaseUrl}/repos/${encodeURIComponentRepository(
+    repository
+  )}/issues/${encodeURIComponent(String(issueNumber))}/comments?per_page=100`;
+
+  let commentsResponse;
+  try {
+    commentsResponse = await fetchImpl(commentsUrl, {
+      method: "GET",
+      headers: githubJsonHeaders({ token })
+    });
+  } catch {
+    return {
+      ok: false,
+      status: 503,
+      error: "remote_codex_progress_failed",
+      reason: "failed to read Codex Cloud delegation comments"
+    };
+  }
+
+  const commentsBody = await readJsonSafe(commentsResponse);
+  if (!commentsResponse.ok) {
+    return {
+      ok: false,
+      status: commentsResponse.status,
+      error: "remote_codex_progress_failed",
+      reason: normalizeText(commentsBody?.message) || "GitHub issue comments lookup failed"
+    };
+  }
+
+  const comments = Array.isArray(commentsBody) ? commentsBody : [];
+  const delegationComment = comments.find((comment) =>
+    normalizeText(comment?.body).includes(`vtdd:remote-codex-execution:${executionId}`)
+  );
+  if (!delegationComment) {
+    return {
+      ok: false,
+      status: 404,
+      error: "remote_codex_execution_not_found",
+      reason: "no Codex Cloud GitHub delegation comment matched executionId"
+    };
+  }
+
+  const pullRequest = branch
+    ? await findPullRequestForBranch({ repository, branch, token, env })
+    : { ok: true, pullRequest: null };
+  if (!pullRequest.ok) {
+    return pullRequest;
+  }
+
+  return {
+    ok: true,
+    progress: {
+      executionId,
+      transport: RemoteCodexExecutorTransport.CODEX_CLOUD_GITHUB_COMMENT,
+      targetRepository: repository,
+      issueNumber,
+      branch: branch || null,
+      delegationCommentId: normalizePositiveInteger(delegationComment.id),
+      delegationCommentUrl: normalizeText(delegationComment.html_url) || null,
+      status: pullRequest.pullRequest
+        ? RemoteCodexExecutionStatus.COMPLETED
+        : RemoteCodexExecutionStatus.QUEUED,
+      pullRequest: pullRequest.pullRequest
+    }
+  };
+}
+
+async function findPullRequestForBranch({ repository, branch, token, env }) {
+  const apiBaseUrl = normalizeText(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
+  const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
+  const [owner] = repository.split("/");
+  const pullsUrl = `${apiBaseUrl}/repos/${encodeURIComponentRepository(
+    repository
+  )}/pulls?state=all&head=${encodeURIComponent(`${owner}:${branch}`)}&per_page=10`;
+
+  let response;
+  try {
+    response = await fetchImpl(pullsUrl, {
+      method: "GET",
+      headers: githubJsonHeaders({ token })
+    });
+  } catch {
+    return {
+      ok: false,
+      status: 503,
+      error: "remote_codex_progress_failed",
+      reason: "failed to read pull requests for Codex Cloud delegation"
+    };
+  }
+
+  const body = await readJsonSafe(response);
+  if (!response.ok) {
+    return {
+      ok: false,
+      status: response.status,
+      error: "remote_codex_progress_failed",
+      reason: normalizeText(body?.message) || "GitHub pull request lookup failed"
+    };
+  }
+
+  const pull = Array.isArray(body) ? body[0] : null;
+  return {
+    ok: true,
+    pullRequest: pull
+      ? {
+          number: normalizePositiveInteger(pull.number),
+          url: normalizeText(pull.html_url) || null,
+          state: normalizeText(pull.state) || null,
+          title: normalizeText(pull.title) || null
+        }
+      : null
+  };
+}
+
+function buildCodexCloudGitHubComment({ request }) {
+  const lines = [
+    `<!-- vtdd:remote-codex-execution:${request.executionId} -->`,
+    "@codex",
+    "",
+    "VTDD-managed Codex Cloud delegation request.",
+    "",
+    "Bounded execution contract:",
+    `- Repository: ${request.repository}`,
+    `- Issue: #${request.issueNumber}`,
+    `- Branch: ${request.branch}`,
+    `- Base ref: ${request.baseRef}`,
+    `- Goal: ${request.codexGoal}`,
+    "- Canonical spec: this GitHub Issue",
+    "- Runtime truth: current GitHub branch / diff / PR / review comments",
+    "- Completion target: create or update a pull request",
+    "",
+    "Rules:",
+    "- Do not expand scope beyond the Issue.",
+    "- Do not merge.",
+    "- Do not deploy.",
+    "- Preserve reviewer objections for Butler/human judgment.",
+    "- If the Issue or runtime truth is insufficient, stop and comment with the blocked reason."
+  ];
+
+  if (request.handoff) {
+    lines.push("", "Handoff:", fencedJson(request.handoff));
+  }
+
+  return lines.join("\n");
+}
+
+function resolveExecutorTransport(input = {}) {
+  const value = normalizeText(
+    input?.executorTransport ?? input?.env?.REMOTE_CODEX_EXECUTOR_TRANSPORT
+  );
+  if (value === RemoteCodexExecutorTransport.API_KEY_RUNNER) {
+    return RemoteCodexExecutorTransport.API_KEY_RUNNER;
+  }
+  return RemoteCodexExecutorTransport.CODEX_CLOUD_GITHUB_COMMENT;
+}
+
+function githubJsonHeaders({ token }) {
+  return {
+    authorization: `Bearer ${token}`,
+    accept: "application/vnd.github+json",
+    "content-type": "application/json; charset=utf-8",
+    "x-github-api-version": "2022-11-28",
+    "user-agent": "vtdd-v2-remote-codex-executor"
+  };
+}
+
+function fencedJson(value) {
+  return ["```json", JSON.stringify(value, null, 2), "```"].join("\n");
 }
 
 async function resolveGitHubExecutionToken(env) {
