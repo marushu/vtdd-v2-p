@@ -34,6 +34,10 @@ These secrets are hard prerequisites. The workflow must check them before
 validating the passkey grant or running tests so a missing deploy credential is
 reported before operator approval time is wasted.
 
+Use `docs/setup/cloudflare-deploy-secret-sync.md` as the canonical operator
+sync path. Do not treat Worker runtime secrets as equivalent to GitHub Actions
+secrets.
+
 ## Approval Boundary (`GO + passkey`)
 
 `deploy-production` workflow is manual (`workflow_dispatch`) and requires:

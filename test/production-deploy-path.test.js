@@ -28,6 +28,8 @@ test("production deploy doc defines the governed GitHub Actions deploy path", ()
   assert.equal(doc.includes("`CLOUDFLARE_ACCOUNT_ID`"), true);
   assert.equal(doc.includes("`VTDD_GATEWAY_BEARER_TOKEN`"), true);
   assert.equal(doc.includes("hard prerequisites"), true);
+  assert.equal(doc.includes("docs/setup/cloudflare-deploy-secret-sync.md"), true);
+  assert.equal(doc.includes("Worker runtime secrets"), true);
 });
 
 test("deploy-production workflow enforces the MVP production deploy boundary", () => {
