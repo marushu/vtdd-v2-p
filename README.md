@@ -70,6 +70,8 @@ Current code starts with deterministic governance gates:
 - reconcile hold state (`reconcile_required`) for runtime/memory conflicts
 - guarded semi-automation mode (`normal` / `guarded_absence`) with ambiguity-stop boundaries and execution-log traceability
 
+Live end-to-end completion still requires explicit PR/review/runtime evidence.
+
 Code lives in `src/core/`, with tests in `test/`.
 Worker entry lives in `src/worker.js`.
 
