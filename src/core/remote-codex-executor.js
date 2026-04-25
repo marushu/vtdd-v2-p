@@ -1,4 +1,5 @@
 import { ActorRole } from "./types.js";
+import { resolveGitHubAppInstallationToken } from "./github-app-repository-index.js";
 
 export const REMOTE_CODEX_WORKFLOW_FILE = "remote-codex-executor.yml";
 
@@ -563,6 +564,21 @@ async function resolveGitHubExecutionToken(env) {
   );
   if (directToken) {
     return { ok: true, value: directToken };
+  }
+
+  const mintedToken = await resolveGitHubAppInstallationToken({
+    env,
+    fetchImpl: typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch,
+    apiBaseUrl: normalizeText(env?.GITHUB_API_BASE_URL) || "https://api.github.com"
+  });
+  if (mintedToken.ok) {
+    return { ok: true, value: mintedToken.token };
+  }
+  if (mintedToken.warning) {
+    return {
+      ok: false,
+      reason: mintedToken.warning
+    };
   }
 
   const provider = env?.GITHUB_APP_INSTALLATION_TOKEN_PROVIDER;
