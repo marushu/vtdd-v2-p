@@ -36,6 +36,11 @@ No setup wizard is assumed on this branch.
 VTDD runtime is expected to run in a setup-complete environment owned by the
 person using it.
 
+For the current Custom GPT Butler surface artifacts, use:
+
+- `docs/setup/custom-gpt-instructions.md`
+- `docs/setup/custom-gpt-actions-openapi.yaml`
+
 ## Cost And Account Boundary
 
 VTDD should not silently turn an existing ChatGPT/Codex subscription into a
