@@ -26,8 +26,13 @@ Set repository or environment secrets:
 
 - `CLOUDFLARE_API_TOKEN`
 - `CLOUDFLARE_ACCOUNT_ID`
+- `VTDD_GATEWAY_BEARER_TOKEN`
 
 The token should be scoped to minimum required Worker deploy permissions.
+
+These secrets are hard prerequisites. The workflow must check them before
+validating the passkey grant or running tests so a missing deploy credential is
+reported before operator approval time is wasted.
 
 ## Approval Boundary (`GO + passkey`)
 

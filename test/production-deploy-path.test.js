@@ -26,6 +26,8 @@ test("production deploy doc defines the governed GitHub Actions deploy path", ()
   assert.equal(doc.includes("`highRiskKind=deploy_production`"), true);
   assert.equal(doc.includes("`CLOUDFLARE_API_TOKEN`"), true);
   assert.equal(doc.includes("`CLOUDFLARE_ACCOUNT_ID`"), true);
+  assert.equal(doc.includes("`VTDD_GATEWAY_BEARER_TOKEN`"), true);
+  assert.equal(doc.includes("hard prerequisites"), true);
 });
 
 test("deploy-production workflow enforces the MVP production deploy boundary", () => {
@@ -37,6 +39,10 @@ test("deploy-production workflow enforces the MVP production deploy boundary", (
   assert.equal(workflow.includes('github.event.inputs.approval_phrase }}" != "GO"'), true);
   assert.equal(workflow.includes('github.event.inputs.runtime_url'), true);
   assert.equal(workflow.includes('github.event.inputs.approval_grant_id'), true);
+  assert.equal(workflow.includes("Preflight deploy credentials"), true);
+  assert.equal(workflow.includes("Missing required Actions secret: VTDD_GATEWAY_BEARER_TOKEN"), true);
+  assert.equal(workflow.includes("Missing required Actions secret: CLOUDFLARE_API_TOKEN"), true);
+  assert.equal(workflow.includes("Missing required Actions secret: CLOUDFLARE_ACCOUNT_ID"), true);
   assert.equal(workflow.includes("Validate real passkey approval grant"), true);
   assert.equal(
     workflow.includes('VTDD_GATEWAY_BEARER_TOKEN: ${{ secrets.VTDD_GATEWAY_BEARER_TOKEN }}'),

@@ -45,6 +45,31 @@ jobs:
             exit 1
           fi
 
+      - name: Preflight deploy credentials
+        env:
+          VTDD_GATEWAY_BEARER_TOKEN: ${{ secrets.VTDD_GATEWAY_BEARER_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        shell: bash
+        run: |
+          missing=0
+          if [ -z "$VTDD_GATEWAY_BEARER_TOKEN" ]; then
+            echo "Missing required Actions secret: VTDD_GATEWAY_BEARER_TOKEN"
+            missing=1
+          fi
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "Missing required Actions secret: CLOUDFLARE_API_TOKEN"
+            missing=1
+          fi
+          if [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "Missing required Actions secret: CLOUDFLARE_ACCOUNT_ID"
+            missing=1
+          fi
+          if [ "$missing" -ne 0 ]; then
+            echo "Configure the missing secrets before requesting GO + passkey for production deploy."
+            exit 1
+          fi
+
       - name: Checkout
         uses: actions/checkout@v4
 
