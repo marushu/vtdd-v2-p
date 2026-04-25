@@ -50,14 +50,50 @@ concurrency:
 jobs:
   codex:
     runs-on: ubuntu-latest
+    env:
+      EXECUTION_ID: ${{ github.event.inputs.execution_id }}
+      TARGET_REPOSITORY: ${{ github.event.inputs.target_repository }}
+      TARGET_ISSUE_NUMBER: ${{ github.event.inputs.target_issue_number }}
+      TARGET_BRANCH: ${{ github.event.inputs.target_branch }}
+      BASE_REF: ${{ github.event.inputs.base_ref }}
+      CODEX_GOAL: ${{ github.event.inputs.codex_goal }}
+      APPROVAL_PHRASE: ${{ github.event.inputs.approval_phrase }}
+      HANDOFF_JSON: ${{ github.event.inputs.handoff_json }}
     steps:
       - name: Enforce bounded GO
         shell: bash
         run: |
-          if [ "${{ github.event.inputs.approval_phrase }}" != "GO" ]; then
+          if [ "$APPROVAL_PHRASE" != "GO" ]; then
             echo "approval_phrase must be GO for remote Codex execution."
             exit 1
           fi
+
+      - name: Validate remote Codex inputs
+        shell: bash
+        run: |
+          if ! [[ "$TARGET_REPOSITORY" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
+            echo "target_repository must be owner/repo."
+            exit 1
+          fi
+          if ! [[ "$TARGET_ISSUE_NUMBER" =~ ^[0-9]+$ ]]; then
+            echo "target_issue_number must be numeric."
+            exit 1
+          fi
+          if ! [[ "$TARGET_BRANCH" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+            echo "target_branch contains unsupported characters."
+            exit 1
+          fi
+          if ! [[ "$BASE_REF" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+            echo "base_ref contains unsupported characters."
+            exit 1
+          fi
+          case "$CODEX_GOAL" in
+            open_pr|revise_pr|respond_to_review) ;;
+            *)
+              echo "codex_goal must be open_pr, revise_pr, or respond_to_review."
+              exit 1
+              ;;
+          esac
 
       - name: Mint GitHub App token
         id: app-token
@@ -70,8 +106,8 @@ jobs:
       - name: Checkout target repository
         uses: actions/checkout@v4
         with:
-          repository: ${{ github.event.inputs.target_repository }}
-          ref: ${{ github.event.inputs.base_ref }}
+          repository: ${{ env.TARGET_REPOSITORY }}
+          ref: ${{ env.BASE_REF }}
           token: ${{ steps.app-token.outputs.token }}
           fetch-depth: 0
           path: target-repo
@@ -80,7 +116,7 @@ jobs:
         working-directory: target-repo
         shell: bash
         run: |
-          git checkout -B "${{ github.event.inputs.target_branch }}"
+          git checkout -B "$TARGET_BRANCH"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -94,20 +130,24 @@ jobs:
       - name: Prepare Codex prompt
         shell: bash
         run: |
-          cat > codex-prompt.txt <<'EOF'
-          You are executing inside VTDD-managed remote Codex CLI transport.
-          Work only within the canonical Issue scope.
-          Repository: ${{ github.event.inputs.target_repository }}
-          Issue: #${{ github.event.inputs.target_issue_number }}
-          Branch: ${{ github.event.inputs.target_branch }}
-          Goal: ${{ github.event.inputs.codex_goal }}
-          Handoff JSON: ${{ github.event.inputs.handoff_json }}
-
-          Before making changes:
-          1. Read the repository state and current branch/PR status.
-          2. Resume existing bounded work when safe.
-          3. Do not expand scope beyond the Issue.
-          4. Aim to create or update a PR as the bounded goal.
+          node <<'EOF'
+          const fs = require("node:fs");
+          const prompt = [
+            "You are executing inside VTDD-managed remote Codex CLI transport.",
+            "Work only within the canonical Issue scope.",
+            `Repository: ${process.env.TARGET_REPOSITORY}`,
+            `Issue: #${process.env.TARGET_ISSUE_NUMBER}`,
+            `Branch: ${process.env.TARGET_BRANCH}`,
+            `Goal: ${process.env.CODEX_GOAL}`,
+            `Handoff JSON: ${process.env.HANDOFF_JSON || ""}`,
+            "",
+            "Before making changes:",
+            "1. Read the repository state and current branch/PR status.",
+            "2. Resume existing bounded work when safe.",
+            "3. Do not expand scope beyond the Issue.",
+            "4. Aim to create or update a PR as the bounded goal."
+          ].join("\n");
+          fs.writeFileSync("codex-prompt.txt", prompt);
           EOF
 
       - name: Run Codex CLI
@@ -118,3 +158,50 @@ jobs:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           codex exec --skip-git-repo-check "$(cat ../codex-prompt.txt)"
+
+      - name: Commit and push Codex changes
+        id: codex-changes
+        working-directory: target-repo
+        shell: bash
+        run: |
+          git config user.name "vtdd-codex[bot]"
+          git config user.email "vtdd-codex[bot]@users.noreply.github.com"
+
+          if git diff --quiet && git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No Codex changes detected."
+            exit 0
+          fi
+
+          git add -A
+          git commit -m "VTDD remote Codex execution for issue #${TARGET_ISSUE_NUMBER}"
+          git push origin "$TARGET_BRANCH"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Create or update pull request
+        working-directory: target-repo
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          existing_url="$(gh pr view "$TARGET_BRANCH" \
+            --repo "$TARGET_REPOSITORY" \
+            --json url \
+            --jq .url 2>/dev/null || true)"
+
+          if [ -n "$existing_url" ]; then
+            echo "Existing PR: $existing_url"
+            exit 0
+          fi
+
+          if [ "${{ steps.codex-changes.outputs.changed }}" != "true" ]; then
+            echo "No existing PR and no Codex changes to open a PR with."
+            exit 1
+          fi
+
+          gh pr create \
+            --repo "$TARGET_REPOSITORY" \
+            --base "$BASE_REF" \
+            --head "$TARGET_BRANCH" \
+            --title "VTDD remote Codex execution for issue #${TARGET_ISSUE_NUMBER}" \
+            --body "Remote Codex execution for issue #${TARGET_ISSUE_NUMBER}.\n\nExecution ID: ${EXECUTION_ID}\nGoal: ${CODEX_GOAL}"
