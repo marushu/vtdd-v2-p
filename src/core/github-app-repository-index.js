@@ -14,7 +14,7 @@ export async function resolveGatewayAliasRegistryFromGitHubApp({ policyInput, en
   const providedAliasRegistry = normalizeAliasRegistry(policyInput?.aliasRegistry);
   const fetchImpl = resolveGitHubFetch(env);
   const apiBaseUrl = normalizeApiBaseUrl(env?.GITHUB_API_BASE_URL);
-  const tokenResolution = await resolveInstallationToken({ env, fetchImpl, apiBaseUrl });
+  const tokenResolution = await resolveGitHubAppInstallationToken({ env, fetchImpl, apiBaseUrl });
   if (!tokenResolution.ok) {
     return {
       aliasRegistry: providedAliasRegistry,
@@ -46,7 +46,9 @@ export async function resolveGatewayAliasRegistryFromGitHubApp({ policyInput, en
   };
 }
 
-async function resolveInstallationToken({ env, fetchImpl, apiBaseUrl }) {
+export async function resolveGitHubAppInstallationToken({ env, fetchImpl, apiBaseUrl } = {}) {
+  const resolvedFetchImpl = fetchImpl ?? resolveGitHubFetch(env);
+  const resolvedApiBaseUrl = normalizeApiBaseUrl(apiBaseUrl ?? env?.GITHUB_API_BASE_URL);
   const enforceMintedToken = toBoolean(env?.GITHUB_APP_ENFORCE_MINTED_INSTALLATION_TOKEN);
   const appId = normalizeText(env?.GITHUB_APP_ID);
   const installationId = normalizeText(env?.GITHUB_APP_INSTALLATION_ID);
@@ -75,8 +77,8 @@ async function resolveInstallationToken({ env, fetchImpl, apiBaseUrl }) {
       installationId,
       privateKey,
       env,
-      fetchImpl,
-      apiBaseUrl,
+      fetchImpl: resolvedFetchImpl,
+      apiBaseUrl: resolvedApiBaseUrl,
       nowSeconds
     });
     if (!minted.ok) {

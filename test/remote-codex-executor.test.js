@@ -92,6 +92,65 @@ test("remote Codex execution default dispatch posts bounded @codex GitHub commen
   assert.equal(body.includes("OPENAI_API_KEY"), false);
 });
 
+test("remote Codex execution mints GitHub App installation token from worker runtime credentials", async () => {
+  const calls = [];
+  const dispatched = await dispatchRemoteCodexExecution({
+    payload: {
+      actorRole: ActorRole.BUTLER,
+      issueContext: { issueNumber: 6 },
+      policyInput: {
+        approvalPhrase: "GO",
+        targetConfirmed: true,
+        approvalScopeMatched: true,
+        runtimeTruth: {
+          runtimeState: {
+            activeBranch: "codex/issue-6"
+          }
+        }
+      }
+    },
+    gatewayResult: {
+      repository: "sample-org/vtdd-v2",
+      executionContinuity: {
+        codexGoal: "open_pr"
+      }
+    },
+    env: {
+      GITHUB_APP_ID: "67890",
+      GITHUB_APP_INSTALLATION_ID: "24680",
+      GITHUB_APP_PRIVATE_KEY: "-----BEGIN PRIVATE KEY-----\nplaceholder\n-----END PRIVATE KEY-----",
+      GITHUB_APP_JWT_PROVIDER: async () => "app_jwt_token_for_tests",
+      GITHUB_API_FETCH: async (url, init) => {
+        calls.push({ url, init });
+        if (String(url).includes("/app/installations/24680/access_tokens")) {
+          return new Response(
+            JSON.stringify({
+              token: "ghs_minted_executor_token",
+              expires_at: "2026-04-25T15:00:00Z"
+            }),
+            { status: 201, headers: { "content-type": "application/json" } }
+          );
+        }
+        return new Response(
+          JSON.stringify({
+            id: 123,
+            html_url: "https://github.com/sample-org/vtdd-v2/issues/6#issuecomment-123"
+          }),
+          { status: 201, headers: { "content-type": "application/json" } }
+        );
+      }
+    }
+  });
+
+  assert.equal(dispatched.ok, true);
+  assert.equal(dispatched.execution.transport, RemoteCodexExecutorTransport.CODEX_CLOUD_GITHUB_COMMENT);
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].url.includes("/app/installations/24680/access_tokens"), true);
+  assert.equal(calls[0].init.headers.authorization, "Bearer app_jwt_token_for_tests");
+  assert.equal(calls[1].url.includes("/repos/sample-org/vtdd-v2/issues/6/comments"), true);
+  assert.equal(calls[1].init.headers.authorization, "Bearer ghs_minted_executor_token");
+});
+
 test("remote Codex API-backed execution dispatch posts workflow_dispatch to GitHub", async () => {
   const calls = [];
   const dispatched = await dispatchRemoteCodexExecution({

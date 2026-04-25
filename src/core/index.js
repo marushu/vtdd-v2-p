@@ -159,7 +159,10 @@ export {
   resolveGeminiReviewTrigger
 } from "./gemini-pr-review.js";
 export { runMvpGateway } from "./mvp-gateway.js";
-export { resolveGatewayAliasRegistryFromGitHubApp } from "./github-app-repository-index.js";
+export {
+  resolveGatewayAliasRegistryFromGitHubApp,
+  resolveGitHubAppInstallationToken
+} from "./github-app-repository-index.js";
 export {
   WorkflowStage,
   WorkflowEvent,
