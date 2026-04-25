@@ -40,6 +40,9 @@ This path depends on the operator having connected Codex Cloud to GitHub in
 their own ChatGPT/Codex account. VTDD must surface that as operator-owned
 configuration, not as a repository secret owned by this public repo.
 
+Codex Cloud is the default account-backed executor path. `OPENAI_API_KEY`
+runners are optional opt-in machine paths only.
+
 ## Default Codex Cloud GitHub Comment Runner
 
 The default no-extra-API-cost runner is:
@@ -97,6 +100,9 @@ Progress must be reconstructable from:
 - GitHub Actions run state
 - VTDD execution log
 - branch / PR state in GitHub runtime truth
+
+When Codex reaches an approval or scope boundary, the observable return path is
+GitHub state that Butler can read, not a hidden direct Codex-to-Butler channel.
 
 ## One-slice Goal
 

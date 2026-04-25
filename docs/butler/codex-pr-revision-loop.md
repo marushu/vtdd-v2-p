@@ -21,6 +21,8 @@ The canonical execution path is:
 
 Codex's bounded goal for this slice is PR creation and PR revision work.
 Merge remains a human `GO` decision.
+Codex authority return remains GitHub-observable and Butler-mediated, not a
+private chat backchannel.
 
 ## Resume-first Rule
 
@@ -80,6 +82,8 @@ After Codex creates a PR:
 - performs bounded coding work
 - creates and updates the PR
 - responds on the PR within approved scope
+- returns control through GitHub-observable state when approval, scope, review,
+  or runtime-truth boundaries are reached
 
 ### Gemini
 
@@ -93,3 +97,5 @@ After Codex creates a PR:
 - no treating handoff as canonical spec
 - no merge without explicit human `GO`
 - no erasing meaningful reviewer objections in Butler summaries
+- no invisible Codex-to-Butler authority channel outside GitHub-observable
+  runtime truth
