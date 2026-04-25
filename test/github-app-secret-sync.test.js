@@ -10,31 +10,40 @@ import {
   validateGitHubAppSecretSyncApprovalGrant
 } from "../src/core/github-app-secret-sync.js";
 
-test("loadGitHubAppSecretSource reads app id and private key from existing env file", async () => {
+test("loadGitHubAppSecretSource reads app id and private key from desktop bootstrap vault", async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "vtdd-app-sync-"));
-  const keyPath = path.join(tempDir, "app.pem");
-  const envPath = path.join(tempDir, "load-env.sh");
-  const tokenPath = path.join(tempDir, "gateway-token.txt");
+  const credentialsDir = path.join(tempDir, "credentials");
+  await fs.mkdir(path.join(credentialsDir, "github-app"), { recursive: true });
+  await fs.mkdir(path.join(credentialsDir, "gateway"), { recursive: true });
+  const keyPath = path.join(credentialsDir, "github-app", "private-key.pem");
+  const tokenPath = path.join(credentialsDir, "gateway", "bearer-token.txt");
+  const manifestPath = path.join(credentialsDir, "manifest.json");
 
-  await fs.writeFile(
-    keyPath,
-    "-----BEGIN PRIVATE KEY-----\nexample\n-----END PRIVATE KEY-----\n",
-    "utf8"
-  );
+  await fs.writeFile(keyPath, "-----BEGIN PRIVATE KEY-----\nexample\n-----END PRIVATE KEY-----\n", "utf8");
   await fs.writeFile(tokenPath, "test-bearer-token\n", "utf8");
   await fs.writeFile(
-    envPath,
-    [
-      'export GITHUB_APP_ID="3467409"',
-      'export GITHUB_APP_INSTALLATION_ID="126180737"',
-      `export GITHUB_APP_PRIVATE_KEY_PATH="${keyPath}"`,
-      `export VTDD_GATEWAY_BEARER_TOKEN_PATH="${tokenPath}"`
-    ].join("\n"),
+    manifestPath,
+    JSON.stringify(
+      {
+        version: 1,
+        githubApp: {
+          appId: "3467409",
+          installationId: "126180737",
+          privateKeyPath: "github-app/private-key.pem"
+        },
+        gateway: {
+          bearerTokenPath: "gateway/bearer-token.txt"
+        }
+      },
+      null,
+      2
+    ),
     "utf8"
   );
 
-  const result = await loadGitHubAppSecretSource({ envPath });
+  const result = await loadGitHubAppSecretSource({ manifestPath });
   assert.equal(result.ok, true);
+  assert.equal(result.source.sourceType, "desktop_bootstrap_vault");
   assert.equal(result.source.appId, "3467409");
   assert.equal(result.source.installationId, "126180737");
   assert.equal(result.source.privateKey.includes("BEGIN PRIVATE KEY"), true);

@@ -1,55 +1,27 @@
-import fs from "node:fs/promises";
-import path from "node:path";
-
-export const DEFAULT_GITHUB_APP_ENV_PATH = path.join(
-  process.cwd(),
-  "credentials",
-  "github-app",
-  "load-env.sh"
-);
+import {
+  DEFAULT_VTDD_VAULT_MANIFEST_PATH,
+  loadDesktopBootstrapVault
+} from "./desktop-bootstrap-vault.js";
 
 export async function loadGitHubAppSecretSource(input = {}) {
-  const envPath = input.envPath || DEFAULT_GITHUB_APP_ENV_PATH;
-  const content = await fs.readFile(envPath, "utf8");
-  const variables = parseExportedShellVariables(content);
-
-  const appId = normalizeText(variables.GITHUB_APP_ID);
-  const privateKeyPath = normalizeText(variables.GITHUB_APP_PRIVATE_KEY_PATH);
-  const installationId = normalizeText(variables.GITHUB_APP_INSTALLATION_ID);
-  const gatewayBearerTokenPath = normalizeText(variables.VTDD_GATEWAY_BEARER_TOKEN_PATH);
-  const privateKey = privateKeyPath ? await fs.readFile(privateKeyPath, "utf8") : "";
-  const gatewayBearerToken = gatewayBearerTokenPath
-    ? normalizeText(await fs.readFile(gatewayBearerTokenPath, "utf8"))
-    : "";
-
-  const issues = [];
-  if (!appId) {
-    issues.push("GITHUB_APP_ID is missing from load-env.sh");
-  }
-  if (!installationId) {
-    issues.push("GITHUB_APP_INSTALLATION_ID is missing from load-env.sh");
-  }
-  if (!privateKeyPath) {
-    issues.push("GITHUB_APP_PRIVATE_KEY_PATH is missing from load-env.sh");
-  }
-  if (!normalizeText(privateKey)) {
-    issues.push("GitHub App private key file is empty or unreadable");
+  const manifestPath = input.manifestPath || DEFAULT_VTDD_VAULT_MANIFEST_PATH;
+  const vaultResult = await loadDesktopBootstrapVault({ manifestPath });
+  if (!vaultResult.ok) {
+    return vaultResult;
   }
 
-  if (issues.length > 0) {
-    return { ok: false, issues };
-  }
-
+  const vault = vaultResult.vault;
   return {
     ok: true,
     source: {
-      envPath,
-      appId,
-      installationId,
-      privateKeyPath,
-      privateKey,
-      gatewayBearerTokenPath,
-      gatewayBearerToken
+      sourceType: "desktop_bootstrap_vault",
+      manifestPath: vault.manifestPath,
+      appId: vault.githubApp.appId,
+      installationId: vault.githubApp.installationId,
+      privateKeyPath: vault.githubApp.privateKeyPath,
+      privateKey: vault.githubApp.privateKey,
+      gatewayBearerTokenPath: vault.gateway.bearerTokenPath,
+      gatewayBearerToken: vault.gateway.bearerToken
     }
   };
 }
@@ -156,19 +128,6 @@ export function validateGitHubAppSecretSyncApprovalGrant(input = {}) {
   }
 
   return { ok: true };
-}
-
-function parseExportedShellVariables(content) {
-  const exports = {};
-  const lines = String(content ?? "").split("\n");
-  for (const line of lines) {
-    const match = line.match(/^export\s+([A-Z0-9_]+)=\"?(.*?)\"?$/);
-    if (!match) {
-      continue;
-    }
-    exports[match[1]] = match[2];
-  }
-  return exports;
 }
 
 function normalizeText(value) {

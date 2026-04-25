@@ -1,6 +1,7 @@
 # Cloudflare Deploy Secret Sync
 
-This document defines the explicit operator bootstrap path for Issue #35.
+This document defines the explicit operator bootstrap path for Issue #35 and
+the desktop bootstrap vault path from Issue #43.
 
 ## Problem
 
@@ -26,7 +27,7 @@ printf '%s' "$CLOUDFLARE_API_TOKEN" | node scripts/sync-cloudflare-actions-secre
   --repo marushu/vtdd-v2-p \
   --cloudflare-account-id "$CLOUDFLARE_ACCOUNT_ID" \
   --stdin \
-  --runtime-url https://vtdd-v2-mvp.polished-tree-da7c.workers.dev \
+  --runtime-url https://<your-runtime-host> \
   --approval-grant-id "$APPROVAL_GRANT_ID"
 ```
 
@@ -35,6 +36,11 @@ The script also accepts:
 - `--cloudflare-api-token-path <path>`
 - `CLOUDFLARE_API_TOKEN`
 - `CLOUDFLARE_ACCOUNT_ID`
+
+By default, the script can also read Cloudflare and gateway credential paths
+from:
+
+- `~/.vtdd/credentials/manifest.json`
 
 The script must not print the token value.
 

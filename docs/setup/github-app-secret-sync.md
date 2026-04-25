@@ -1,12 +1,12 @@
 # GitHub App Secret Sync Bootstrap
 
-This document is the canonical bootstrap contract for Issue #15.
+This document is the canonical bootstrap contract for Issue #15 and Issue #43.
 
 ## Purpose
 
-VTDD already holds local GitHub App credential material under
-`credentials/github-app/`, but runtime paths such as remote executor and Gemini
-reviewer also require GitHub Actions secrets.
+VTDD keeps local GitHub App root material in the operator-owned desktop
+bootstrap vault under `~/.vtdd/credentials/`, but runtime paths such as remote
+executor and reviewer flows also require GitHub Actions secrets.
 
 This bootstrap path exists to sync that local source of truth into GitHub
 Actions secrets through an explicit operator action instead of ad hoc manual
@@ -16,8 +16,8 @@ copying.
 
 The local source of truth is:
 
-- `credentials/github-app/load-env.sh`
-- the private key path referenced from that file
+- `~/.vtdd/credentials/manifest.json`
+- the private key path referenced from that manifest
 
 The sync target is GitHub Actions secrets:
 
@@ -70,6 +70,13 @@ auth, verifies that:
 
 and only then performs GitHub Actions secret mutation.
 
+By default, the script reads:
+
+- `~/.vtdd/credentials/manifest.json`
+
+Use `--manifest-path <path>` only if you intentionally keep the operator-owned
+desktop bootstrap vault somewhere else.
+
 ## Optional Operator Helper
 
 For explicit operator execution without manual API calls, use the local helper:
@@ -93,7 +100,7 @@ sync path.
 
 ## Non-goals
 
-- replacing the local GitHub App source of truth
+- replacing the desktop bootstrap vault as the local GitHub App source of truth
 - silent periodic sync
 - weakening high-risk approval boundaries
 - presenting the current phrase-based `passkey` gate as if it were already real
