@@ -6,16 +6,24 @@ import path from "node:path";
 const README_PATH = path.join(process.cwd(), "README.md");
 const INSTRUCTIONS_PATH = path.join(process.cwd(), "docs", "setup", "custom-gpt-instructions.md");
 const OPENAPI_PATH = path.join(process.cwd(), "docs", "setup", "custom-gpt-actions-openapi.yaml");
+const OPENAPI_JSON_PATH = path.join(
+  process.cwd(),
+  "docs",
+  "setup",
+  "custom-gpt-actions-openapi.json"
+);
 
 test("custom gpt setup artifacts exist as tracked setup docs", () => {
   assert.equal(fs.existsSync(INSTRUCTIONS_PATH), true);
   assert.equal(fs.existsSync(OPENAPI_PATH), true);
+  assert.equal(fs.existsSync(OPENAPI_JSON_PATH), true);
 });
 
 test("readme points to current custom gpt setup artifacts", () => {
   const readme = fs.readFileSync(README_PATH, "utf8");
   assert.equal(readme.includes("docs/setup/custom-gpt-instructions.md"), true);
   assert.equal(readme.includes("docs/setup/custom-gpt-actions-openapi.yaml"), true);
+  assert.equal(readme.includes("docs/setup/custom-gpt-actions-openapi.json"), true);
 });
 
 test("custom gpt instructions preserve current butler and approval boundaries", () => {
@@ -40,4 +48,33 @@ test("custom gpt openapi doc exposes current gateway, execute, and progress rout
   assert.equal(doc.includes("conversation:"), true);
   assert.equal(doc.includes("repositoryInput:"), true);
   assert.equal(doc.includes("issueNumber"), true);
+});
+
+test("custom gpt openapi request schemas do not use nested refs for importer-fragile fields", () => {
+  const doc = fs.readFileSync(OPENAPI_PATH, "utf8");
+  assert.equal(
+    doc.includes("VtddExecuteRequest:\n      type: object"),
+    true
+  );
+  assert.equal(
+    doc.includes("VtddGatewayRequest:\n      type: object"),
+    true
+  );
+  assert.equal(
+    doc.includes("VtddExecuteRequest:\n      type: object\n      properties:\n        phase:"),
+    true
+  );
+  assert.equal(doc.includes("policyInput:\n          $ref:"), false);
+  assert.equal(doc.includes("surfaceContext:\n          $ref:"), false);
+  assert.equal(doc.includes("conversation:\n          $ref:"), false);
+  assert.equal(doc.includes("items:\n            $ref:"), false);
+});
+
+test("custom gpt openapi json parses and exposes paths as an object", () => {
+  const doc = JSON.parse(fs.readFileSync(OPENAPI_JSON_PATH, "utf8"));
+  assert.equal(typeof doc.paths, "object");
+  assert.notEqual(doc.paths, null);
+  assert.equal(typeof doc.paths["/v2/gateway"], "object");
+  assert.equal(typeof doc.paths["/v2/action/execute"], "object");
+  assert.equal(typeof doc.paths["/v2/action/progress"], "object");
 });

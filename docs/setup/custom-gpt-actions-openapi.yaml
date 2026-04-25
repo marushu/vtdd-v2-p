@@ -5,6 +5,8 @@ info:
   description: >
     Canonical OpenAPI template for a user-owned Custom GPT Butler surface.
     Replace the server URL with your own VTDD runtime before importing.
+# If the Custom GPT importer rejects YAML, use the JSON sibling file:
+# docs/setup/custom-gpt-actions-openapi.json
 servers:
   - url: https://your-runtime-host.example.workers.dev
     description: User-owned VTDD runtime host
@@ -112,15 +114,82 @@ components:
             - executor
             - reviewer
         conversation:
-          $ref: "#/components/schemas/ConversationInput"
+          type: object
+          properties:
+            userText:
+              type: string
+            currentRepository:
+              type: string
+          additionalProperties: true
         surfaceContext:
-          $ref: "#/components/schemas/SurfaceContext"
+          type: object
+          properties:
+            surface:
+              type: string
+            judgmentModelId:
+              type: string
+          additionalProperties: true
         judgmentTrace:
           type: array
           items:
-            $ref: "#/components/schemas/JudgmentTraceEntry"
+            type: object
+            properties:
+              step:
+                type: string
+              status:
+                type: string
+              rationale:
+                type: string
+            additionalProperties: true
         policyInput:
-          $ref: "#/components/schemas/PolicyInput"
+          type: object
+          properties:
+            actionType:
+              type: string
+              enum:
+                - read
+                - summarize
+                - issue_create
+                - build
+                - pr_comment
+                - pr_review_submit
+                - pr_operation
+                - merge
+                - deploy_production
+                - destructive
+                - external_publish
+            mode:
+              type: string
+              enum:
+                - read_only
+                - execution
+            repositoryInput:
+              type: string
+            targetConfirmed:
+              type: boolean
+            issueTraceable:
+              type: boolean
+            go:
+              type: boolean
+            passkey:
+              type: boolean
+            runtimeTruth:
+              type: object
+              properties:
+                runtimeAvailable:
+                  type: boolean
+                safeFallbackChosen:
+                  type: boolean
+              additionalProperties: true
+            consent:
+              type: object
+              properties:
+                grantedCategories:
+                  type: array
+                  items:
+                    type: string
+              additionalProperties: true
+          additionalProperties: true
         continuationContext:
           type: object
           properties: {}
@@ -142,13 +211,74 @@ components:
           enum:
             - butler
         surfaceContext:
-          $ref: "#/components/schemas/SurfaceContext"
+          type: object
+          properties:
+            surface:
+              type: string
+            judgmentModelId:
+              type: string
+          additionalProperties: true
         judgmentTrace:
           type: array
           items:
-            $ref: "#/components/schemas/JudgmentTraceEntry"
+            type: object
+            properties:
+              step:
+                type: string
+              status:
+                type: string
+              rationale:
+                type: string
+            additionalProperties: true
         policyInput:
-          $ref: "#/components/schemas/PolicyInput"
+          type: object
+          properties:
+            actionType:
+              type: string
+              enum:
+                - read
+                - summarize
+                - issue_create
+                - build
+                - pr_comment
+                - pr_review_submit
+                - pr_operation
+                - merge
+                - deploy_production
+                - destructive
+                - external_publish
+            mode:
+              type: string
+              enum:
+                - read_only
+                - execution
+            repositoryInput:
+              type: string
+            targetConfirmed:
+              type: boolean
+            issueTraceable:
+              type: boolean
+            go:
+              type: boolean
+            passkey:
+              type: boolean
+            runtimeTruth:
+              type: object
+              properties:
+                runtimeAvailable:
+                  type: boolean
+                safeFallbackChosen:
+                  type: boolean
+              additionalProperties: true
+            consent:
+              type: object
+              properties:
+                grantedCategories:
+                  type: array
+                  items:
+                    type: string
+              additionalProperties: true
+          additionalProperties: true
         issueContext:
           type: object
           properties:
