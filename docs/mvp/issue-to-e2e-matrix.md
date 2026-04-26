@@ -345,6 +345,25 @@ Status values used below:
   - `docs/mvp/e2e/e2e-16-worker-passkey-secret-sync-bridge.md`
 - Status: `e2e_evidenced_pending_human_closure`
 
+## E2E-17 GitHub App secret sync bootstrap
+
+- Issues: `#15`
+- Happy path:
+  - an explicit operator bootstrap/update path syncs GitHub App root material from `~/.vtdd/credentials/manifest.json` into GitHub Actions/runtime secrets with approval-bound execution
+- Boundary path:
+  - invalid secret-sync approval scope, missing `approvalGrantId`, or missing machine auth blocks execution instead of implying ad hoc manual copying or steady-state desktop dependency
+- Implementation evidence:
+  - `scripts/sync-github-app-actions-secrets.mjs`
+  - `src/core/github-app-secret-sync.js`
+  - `docs/setup/github-app-secret-sync.md`
+- Test evidence:
+  - `test/github-app-secret-sync.test.js`
+  - `test/passkey-operator-helper.test.js`
+  - `test/worker.test.js`
+- Run evidence:
+  - `docs/mvp/e2e/e2e-17-github-app-secret-sync-bootstrap.md`
+- Status: `e2e_evidenced_pending_human_closure`
+
 ## Current Completion Reading
 
 - Repository completion status: `partial`
