@@ -7,7 +7,6 @@ This document records concrete run evidence for the E2E-03 track.
 Issues:
 - `#2`
 - `#3`
-- `#4`
 - parent anchor: `#13`
 
 Goal:
