@@ -283,6 +283,26 @@ Status values used below:
   - `docs/mvp/e2e/e2e-13-reviewer-operational-loop.md`
 - Status: `e2e_evidenced_pending_human_closure`
 
+## E2E-14 GitHub normal write plane
+
+- Issues: `#52`
+- Happy path:
+  - scoped `GO`-tier issue comments, branch creation, PR create/update, and PR comments execute through the GitHub normal write plane
+- Boundary path:
+  - missing `GO`, missing scope match, or unsupported high-risk operations are rejected instead of silently executing
+- Implementation evidence:
+  - `src/core/github-write-plane.js`
+  - `src/worker.js`
+  - `docs/setup/custom-gpt-actions-openapi.yaml`
+  - `docs/setup/custom-gpt-instructions.md`
+- Test evidence:
+  - `test/github-write-plane.test.js`
+  - `test/worker.test.js`
+  - `test/custom-gpt-setup-docs.test.js`
+- Run evidence:
+  - `docs/mvp/e2e/e2e-14-github-normal-write-plane.md`
+- Status: `e2e_evidenced_pending_human_closure`
+
 ## Current Completion Reading
 
 - Repository completion status: `partial`
