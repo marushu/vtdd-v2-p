@@ -894,6 +894,79 @@ test("worker returns unsupported for unknown GitHub read resources", async () =>
   assert.equal(body.error, "github_read_request_invalid");
 });
 
+test("worker executes scoped GitHub issue comments through the normal write plane", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/action/github", {
+      method: "POST",
+      headers: {
+        ...gatewayAuthHeaders,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        operation: "issue_comment_create",
+        repository: "sample-org/vtdd-v2-p",
+        issueContext: {
+          issueNumber: 52
+        },
+        body: "scoped comment",
+        policyInput: {
+          approvalPhrase: "GO",
+          targetConfirmed: true,
+          approvalScopeMatched: true
+        }
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_write",
+      GITHUB_API_FETCH: async () =>
+        new Response(
+          JSON.stringify({
+            id: 101,
+            html_url: "https://github.com/sample-org/vtdd-v2-p/issues/52#issuecomment-101"
+          }),
+          { status: 201, headers: { "content-type": "application/json" } }
+        )
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.write.operation, "issue_comment_create");
+  assert.equal(body.write.commentId, 101);
+});
+
+test("worker rejects unsupported high-risk GitHub write operations on the normal write plane", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/action/github", {
+      method: "POST",
+      headers: {
+        ...gatewayAuthHeaders,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        operation: "merge",
+        repository: "sample-org/vtdd-v2-p",
+        policyInput: {
+          approvalPhrase: "GO",
+          targetConfirmed: true,
+          approvalScopeMatched: true
+        }
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_write"
+    }
+  );
+
+  assert.equal(response.status, 422);
+  const body = await response.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.error, "github_write_request_invalid");
+});
+
 test("worker returns remote Codex execution progress", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/v2/action/progress?executionId=remote-codex-issue6-abcd12", {

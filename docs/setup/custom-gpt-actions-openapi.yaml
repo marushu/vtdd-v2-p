@@ -299,6 +299,84 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/VtddGenericResponse"
+  /v2/action/github:
+    post:
+      operationId: vtddWriteGitHub
+      summary: Execute scoped normal-tier GitHub write operations through VTDD.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                operation:
+                  type: string
+                  enum:
+                    - issue_comment_create
+                    - issue_comment_update
+                    - branch_create
+                    - pull_create
+                    - pull_update
+                    - pull_comment_create
+                repository:
+                  type: string
+                issueNumber:
+                  type: integer
+                pullNumber:
+                  type: integer
+                commentId:
+                  type: integer
+                branch:
+                  type: string
+                baseRef:
+                  type: string
+                head:
+                  type: string
+                title:
+                  type: string
+                body:
+                  type: string
+                issueContext:
+                  type: object
+                  properties:
+                    issueNumber:
+                      type: integer
+                  additionalProperties: true
+                policyInput:
+                  type: object
+                  properties:
+                    approvalPhrase:
+                      type: string
+                    targetConfirmed:
+                      type: boolean
+                    approvalScopeMatched:
+                      type: boolean
+                  additionalProperties: true
+              additionalProperties: true
+      responses:
+        "200":
+          description: GitHub normal write executed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "401":
+          description: Missing machine auth
+        "403":
+          description: Invalid machine auth
+        "422":
+          description: GitHub write request blocked or invalid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "503":
+          description: GitHub write route unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
   /v2/action/progress:
     get:
       operationId: vtddExecutionProgress
