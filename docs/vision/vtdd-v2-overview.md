@@ -12,6 +12,8 @@ It externalizes structure, memory, approval boundaries, and runtime truth so tha
 
 As of 2026-04-17, VTDD V2 is **partial / in-progress**.
 The repository has broad runtime and contract coverage, but overall completion still depends on mapped E2E evidence and human closure judgment.
+`live_verified` in this repository means human-observable external evidence, not
+just local files, docs, task summaries, or internal runtime flags.
 
 ## Core Principles
 

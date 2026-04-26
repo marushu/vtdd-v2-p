@@ -35,6 +35,11 @@ test("issue-to-e2e matrix records happy path, boundary path, evidence, and updat
   assert.equal(doc.includes("- Test evidence:"), true);
   assert.equal(doc.includes("- Run evidence:"), true);
   assert.equal(doc.includes("- Status:"), true);
+  assert.equal(doc.includes("docs/mvp/live-verified-contract.md"), true);
+  assert.equal(doc.includes("docs_only"), true);
+  assert.equal(doc.includes("code_only"), true);
+  assert.equal(doc.includes("surface_connected"), true);
+  assert.equal(doc.includes("live_verified"), true);
   assert.equal(doc.includes("e2e_evidenced_pending_human_closure"), true);
   assert.equal(doc.includes("implemented_pending_e2e"), true);
   assert.equal(doc.includes("partial"), true);
