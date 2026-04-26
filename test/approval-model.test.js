@@ -24,7 +24,7 @@ test("approval requirements map matches expected action levels", () => {
   assert.equal(APPROVAL_REQUIREMENTS[ActionType.READ], ApprovalLevel.NONE);
   assert.equal(APPROVAL_REQUIREMENTS[ActionType.BUILD], ApprovalLevel.GO);
   assert.equal(APPROVAL_REQUIREMENTS[ActionType.PR_REVIEW_SUBMIT], ApprovalLevel.GO);
-  assert.equal(APPROVAL_REQUIREMENTS[ActionType.MERGE], ApprovalLevel.GO);
+  assert.equal(APPROVAL_REQUIREMENTS[ActionType.MERGE], ApprovalLevel.GO_PASSKEY);
   assert.equal(APPROVAL_REQUIREMENTS[ActionType.DESTRUCTIVE], ApprovalLevel.GO_PASSKEY);
 });
 
