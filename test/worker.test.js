@@ -811,6 +811,89 @@ test("worker returns approval grant through retrieve route", async () => {
   assert.equal(body.approvalGrant.scope.repositoryInput, "sample-org/vtdd-v2-p");
 });
 
+test("worker returns GitHub repositories through read plane route", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/retrieve/github?resource=repositories&limit=5", {
+      headers: gatewayAuthHeaders
+    }),
+    {
+      ...gatewayAuthEnv,
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_repo_read",
+      GITHUB_API_FETCH: async () =>
+        new Response(
+          JSON.stringify({
+            repositories: [
+              {
+                full_name: "sample-org/vtdd-v2-p",
+                name: "vtdd-v2-p",
+                private: false,
+                default_branch: "main",
+                html_url: "https://github.com/sample-org/vtdd-v2-p"
+              }
+            ]
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        )
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.read.resource, "repositories");
+  assert.equal(body.read.records[0].fullName, "sample-org/vtdd-v2-p");
+});
+
+test("worker returns GitHub issues through read plane route", async () => {
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/v2/retrieve/github?resource=issues&repository=sample-org/vtdd-v2-p&state=open&limit=5",
+      {
+        headers: gatewayAuthHeaders
+      }
+    ),
+    {
+      ...gatewayAuthEnv,
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_issue_read",
+      GITHUB_API_FETCH: async () =>
+        new Response(
+          JSON.stringify([
+            {
+              number: 46,
+              title: "Implement GitHub read plane",
+              state: "open",
+              html_url: "https://github.com/sample-org/vtdd-v2-p/issues/46",
+              user: { login: "marushu" }
+            }
+          ]),
+          { status: 200, headers: { "content-type": "application/json" } }
+        )
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.read.records[0].number, 46);
+});
+
+test("worker returns unsupported for unknown GitHub read resources", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/retrieve/github?resource=milestones", {
+      headers: gatewayAuthHeaders
+    }),
+    {
+      ...gatewayAuthEnv,
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_issue_read"
+    }
+  );
+
+  assert.equal(response.status, 422);
+  const body = await response.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.error, "github_read_request_invalid");
+});
+
 test("worker returns remote Codex execution progress", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/v2/action/progress?executionId=remote-codex-issue6-abcd12", {

@@ -169,6 +169,7 @@ export {
   resolveGatewayAliasRegistryFromGitHubApp,
   resolveGitHubAppInstallationToken
 } from "./github-app-repository-index.js";
+export { GitHubReadResource, retrieveGitHubReadPlane } from "./github-read-plane.js";
 export {
   WorkflowStage,
   WorkflowEvent,
