@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "pr-body:validate": "node scripts/validate-pr-body.mjs .github/pull_request_template.md"
   },
   "engines": {
     "node": ">=20"

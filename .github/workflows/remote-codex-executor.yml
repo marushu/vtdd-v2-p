@@ -204,9 +204,27 @@ jobs:
             exit 1
           fi
 
+          node scripts/render-pr-body.mjs \
+            --output /tmp/vtdd-remote-codex-pr-body.md \
+            --issue "${TARGET_ISSUE_NUMBER}" \
+            --intent "Remote Codex execution result for issue #${TARGET_ISSUE_NUMBER} is being opened as a bounded PR for review." \
+            --satisfied "Codex produced branch changes for the bounded issue scope." \
+            --unsatisfied "Human review, CI review, and merge judgment remain pending." \
+            --unit "None." \
+            --integration "None." \
+            --e2e "None. Remote Codex handoff opens the PR; repository-specific evidence is added in follow-up iteration." \
+            --manual "GitHub PR creation path triggered from remote Codex workflow." \
+            --evidencePath ".github/workflows/remote-codex-executor.yml" \
+            --rules "Current Reality Guard\nEvidence Discipline\nChange Size and PR Discipline" \
+            --outOfScope "Merge\nIssue closure\nDeploy\nCredential mutation" \
+            --executionId "${EXECUTION_ID}" \
+            --codexGoal "${CODEX_GOAL}"
+
+          node scripts/validate-pr-body.mjs /tmp/vtdd-remote-codex-pr-body.md
+
           gh pr create \
             --repo "$TARGET_REPOSITORY" \
             --base "$BASE_REF" \
             --head "$TARGET_BRANCH" \
             --title "VTDD remote Codex execution for issue #${TARGET_ISSUE_NUMBER}" \
-            --body "Remote Codex execution for issue #${TARGET_ISSUE_NUMBER}.\n\nExecution ID: ${EXECUTION_ID}\nGoal: ${CODEX_GOAL}"
+            --body-file /tmp/vtdd-remote-codex-pr-body.md
