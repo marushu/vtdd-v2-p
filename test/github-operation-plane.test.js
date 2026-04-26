@@ -38,5 +38,8 @@ test("github operation plane keeps Butler-side authority and GitHub App credenti
   assert.equal(doc.includes("Long-lived PAT-style execution tokens must not be introduced as the default."), true);
   assert.equal(doc.includes("Codex does not merge or close issues directly."), true);
   assert.equal(doc.includes("Merge and issue close remain Butler-side authority actions."), true);
+  assert.equal(doc.includes("### `GO + real passkey`"), true);
+  assert.equal(doc.includes("- merge"), true);
+  assert.equal(doc.includes("- bounded issue close after merged scoped work"), true);
   assert.equal(approvalDoc.includes("github-operation-plane.md"), true);
 });

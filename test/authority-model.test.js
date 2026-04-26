@@ -12,6 +12,7 @@ test("authority model defines Codex freedom inside Issue scope and Butler-side m
   assert.equal(doc.includes("Merge and issue close are Butler-side authority actions."), true);
   assert.equal(doc.includes("ChatGPT Pro / Codex Cloud"), true);
   assert.equal(doc.includes("`OPENAI_API_KEY`-backed runners are optional opt-in machine paths"), true);
+  assert.equal(doc.includes("merge and bounded issue close require explicit `GO + real passkey`"), true);
 });
 
 test("authority model defines GitHub-observable Codex return markers", () => {

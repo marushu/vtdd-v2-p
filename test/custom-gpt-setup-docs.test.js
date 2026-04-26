@@ -36,6 +36,7 @@ test("custom gpt instructions preserve current butler and approval boundaries", 
   assert.equal(doc.includes("vtddExecutionProgress"), true);
   assert.equal(doc.includes("vtddRetrieveGitHub"), true);
   assert.equal(doc.includes("High-risk actions require GO + passkey."), true);
+  assert.equal(doc.includes("Merge requires explicit human GO + real passkey."), true);
   assert.equal(doc.includes("Do not claim a PR exists when only a Codex task summary exists."), true);
   assert.equal(
     doc.includes("Do not claim that Issues/PRs/comments are absent when the read path is unsupported, unauthorized, or unverified."),

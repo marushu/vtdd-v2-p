@@ -137,7 +137,7 @@ Codex does not perform merge directly.
 
 - read-only GitHub observation does not require merge authority
 - normal bounded execution follows the normal execution approval tier
-- merge and bounded issue close require explicit `GO`
+- merge and bounded issue close require explicit `GO + real passkey`
 - deploy, credential mutation, permission mutation, and destructive actions
   require `GO + real passkey`
 

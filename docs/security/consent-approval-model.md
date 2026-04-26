@@ -34,7 +34,7 @@ action on this specific scope proceed now?"
 - `approvalPhrase` is required whenever approval level is not `none`.
 - Approval must be bound to the target scope.
 - High-risk operations require `GO + passkey`.
-- Merge and bounded post-merge completion tasks require explicit `GO`.
+- Merge and bounded post-merge completion tasks require explicit `GO + passkey`.
 
 ## Canonical Action Mapping
 
@@ -61,7 +61,7 @@ action on this specific scope proceed now?"
 - `pr_comment` -> `none`
 - `pr_review_submit` -> `go`
 - `pr_operation` -> `go`
-- `merge` -> `go`
+- `merge` -> `go_passkey`
 - `deploy_production` -> `go_passkey`
 - `destructive` -> `go_passkey`
 - `external_publish` -> `go_passkey`
@@ -69,14 +69,14 @@ action on this specific scope proceed now?"
 ## Operational Extension
 
 The canonical action table above covers the current execution action types.
-The following bounded post-merge completion tasks follow the same `go` approval
+The following bounded post-merge completion tasks follow the same `go_passkey` approval
 level as `merge`:
 
 - issue close for the scoped work that was just merged
 - deletion of the merged topic branch tied to that PR
 
 These tasks are not authorized by category consent alone and must not be
-inferred without explicit scoped `GO`.
+inferred without explicit scoped `GO + passkey`.
 
 ## GitHub Operation Matrix
 
@@ -93,8 +93,6 @@ Bounded repository workflow operations may proceed with explicit scoped `GO`:
 - commit / push on the scoped topic branch
 - PR creation, update, label, assignee, and review-response work
 - PR comment and scoped review iteration
-- merge, when scoped criteria, tests, and mapped E2E evidence are present
-- post-merge issue close for the scoped work
 - deletion of the merged topic branch tied to that scoped PR
 
 ### `GO + passkey`
@@ -102,6 +100,8 @@ Bounded repository workflow operations may proceed with explicit scoped `GO`:
 High-risk or administration-bearing GitHub operations require explicit scoped
 `GO + passkey`:
 
+- merge, when scoped criteria, tests, and mapped E2E evidence are present
+- post-merge issue close for the scoped work
 - production deploy or deploy-triggering repository operation
 - repository / environment secret creation, update, or deletion
 - repository / environment variable creation, update, or deletion

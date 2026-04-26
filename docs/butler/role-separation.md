@@ -90,7 +90,7 @@ Reviewer is restricted to critical evaluation and does not execute changes.
 
 ### Human -> Final Authority
 
-- Human remains the final authority for revision GO and merge GO.
+- Human remains the final authority for revision GO and merge GO + real passkey.
 - No role may silently replace human approval on high-risk or closure decisions.
 
 ## Security Boundary
