@@ -324,6 +324,27 @@ Status values used below:
   - `docs/mvp/e2e/e2e-15-github-high-risk-authority-plane.md`
 - Status: `e2e_evidenced_pending_human_closure`
 
+## E2E-16 Worker passkey secret sync bridge
+
+- Issues: `#26`
+- Happy path:
+  - Worker-hosted section `3. GitHub App Secret Sync` connects to the canonical desktop bootstrap/update bridge when an explicit `syncApiBase` is provided
+- Boundary path:
+  - absent or invalid desktop bridge leaves section `3` disabled and surfaces `desktop maintenance required` instead of implying a Worker-only sync path
+- Implementation evidence:
+  - `src/core/passkey-operator-page.js`
+  - `src/worker.js`
+  - `scripts/run-passkey-operator-helper.mjs`
+  - `docs/setup/github-app-secret-sync.md`
+- Test evidence:
+  - `test/passkey-operator-page.test.js`
+  - `test/passkey-operator-helper.test.js`
+  - `test/github-app-secret-sync.test.js`
+  - `test/worker.test.js`
+- Run evidence:
+  - `docs/mvp/e2e/e2e-16-worker-passkey-secret-sync-bridge.md`
+- Status: `e2e_evidenced_pending_human_closure`
+
 ## Current Completion Reading
 
 - Repository completion status: `partial`
