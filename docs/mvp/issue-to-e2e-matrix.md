@@ -145,7 +145,7 @@ Status values used below:
 
 ## E2E-06 Policy/consent/approval/state machine
 
-- Issues: `#8 #9 #10 #12`
+- Issues: `#8 #10`
 - Happy path:
   - valid execution proceeds only after deterministic policy, consent, approval, and state transitions align
 - Boundary path:
@@ -362,6 +362,24 @@ Status values used below:
   - `test/worker.test.js`
 - Run evidence:
   - `docs/mvp/e2e/e2e-17-github-app-secret-sync-bootstrap.md`
+- Status: `e2e_evidenced_pending_human_closure`
+
+## E2E-18 Gemini PR review comment writeback
+
+- Issues: `#9 #12`
+- Happy path:
+  - a PR-triggered Gemini reviewer workflow writes a traceable VTDD Gemini review comment back to the PR through the GitHub App token path
+- Boundary path:
+  - missing GitHub App reviewer secrets or self-marker reruns do not silently write comments or create uncontrolled comment loops
+- Implementation evidence:
+  - `.github/workflows/gemini-pr-review.yml`
+  - `scripts/run-gemini-pr-review.mjs`
+  - `docs/butler/gemini-pr-review-comments.md`
+- Test evidence:
+  - `test/gemini-pr-review-workflow.test.js`
+  - `test/gemini-pr-review.test.js`
+- Run evidence:
+  - `docs/mvp/e2e/e2e-18-gemini-pr-review-comment-writeback.md`
 - Status: `e2e_evidenced_pending_human_closure`
 
 ## Current Completion Reading
