@@ -33,6 +33,7 @@ test("custom gpt instructions preserve current butler and approval boundaries", 
   assert.equal(doc.includes("vtddGateway"), true);
   assert.equal(doc.includes("vtddExecute"), true);
   assert.equal(doc.includes("vtddWriteGitHub"), true);
+  assert.equal(doc.includes("vtddGitHubAuthority"), true);
   assert.equal(doc.includes("vtddExecutionProgress"), true);
   assert.equal(doc.includes("vtddRetrieveGitHub"), true);
   assert.equal(doc.includes("High-risk actions require GO + passkey."), true);
@@ -50,6 +51,7 @@ test("custom gpt openapi doc exposes current gateway, execute, and progress rout
   assert.equal(doc.includes("/v2/gateway:"), true);
   assert.equal(doc.includes("/v2/action/execute:"), true);
   assert.equal(doc.includes("/v2/action/github:"), true);
+  assert.equal(doc.includes("/v2/action/github-authority:"), true);
   assert.equal(doc.includes("/v2/action/progress:"), true);
   assert.equal(doc.includes("/v2/retrieve/github:"), true);
   assert.equal(doc.includes("/v2/retrieve/approval-grant:"), true);
@@ -84,6 +86,7 @@ test("custom gpt openapi json parses and exposes paths as an object", () => {
   assert.equal(typeof doc.paths["/v2/gateway"], "object");
   assert.equal(typeof doc.paths["/v2/action/execute"], "object");
   assert.equal(typeof doc.paths["/v2/action/github"], "object");
+  assert.equal(typeof doc.paths["/v2/action/github-authority"], "object");
   assert.equal(typeof doc.paths["/v2/action/progress"], "object");
   assert.equal(typeof doc.paths["/v2/retrieve/github"], "object");
   assert.equal(typeof doc.paths["/v2/retrieve/approval-grant"], "object");

@@ -5,11 +5,11 @@ const GO_REQUIRED_ACTIONS = new Set([
   ActionType.ISSUE_CREATE,
   ActionType.BUILD,
   ActionType.PR_REVIEW_SUBMIT,
-  ActionType.PR_OPERATION,
-  ActionType.MERGE
+  ActionType.PR_OPERATION
 ]);
 
 const GO_PASSKEY_REQUIRED_ACTIONS = new Set([
+  ActionType.MERGE,
   ActionType.DEPLOY_PRODUCTION,
   ActionType.DESTRUCTIVE,
   ActionType.EXTERNAL_PUBLISH
@@ -37,7 +37,7 @@ export const APPROVAL_REQUIREMENTS = Object.freeze({
   [ActionType.PR_COMMENT]: ApprovalLevel.NONE,
   [ActionType.PR_REVIEW_SUBMIT]: ApprovalLevel.GO,
   [ActionType.PR_OPERATION]: ApprovalLevel.GO,
-  [ActionType.MERGE]: ApprovalLevel.GO,
+  [ActionType.MERGE]: ApprovalLevel.GO_PASSKEY,
   [ActionType.DEPLOY_PRODUCTION]: ApprovalLevel.GO_PASSKEY,
   [ActionType.DESTRUCTIVE]: ApprovalLevel.GO_PASSKEY,
   [ActionType.EXTERNAL_PUBLISH]: ApprovalLevel.GO_PASSKEY

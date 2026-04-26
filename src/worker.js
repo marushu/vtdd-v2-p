@@ -10,6 +10,7 @@ import {
   createRemoteCodexExecutionRequest,
   dedupePasskeys,
   dispatchRemoteCodexExecution,
+  executeGitHubHighRiskPlane,
   inferRelatedIssueFromGatewayInput,
   inferRelatedIssueFromProposalGatewayInput,
   isExpiredPasskeyEphemeralRecord,
@@ -22,6 +23,7 @@ import {
   retrieveConstitution,
   renderPasskeyOperatorPage,
   resolveGatewayAliasRegistryFromGitHubApp,
+  GitHubHighRiskOperation,
   retrieveGitHubReadPlane,
   executeGitHubWritePlane,
   runMvpGateway,
@@ -155,6 +157,19 @@ export default {
       }
 
       return handleGitHubWritePlaneRequest(request, env);
+    }
+
+    if (request.method === "POST" && isApiPath(url.pathname, "/action/github-authority")) {
+      const auth = authorizeGatewayRequest({ request, env, apiSuffix: "/action/github-authority" });
+      if (!auth.ok) {
+        return json(auth.status, {
+          ok: false,
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+
+      return handleGitHubHighRiskPlaneRequest(request, env);
     }
 
     if (request.method === "GET" && isApiPath(url.pathname, "/action/progress")) {
@@ -584,6 +599,97 @@ async function handleGitHubWritePlaneRequest(request, env) {
   });
 }
 
+async function handleGitHubHighRiskPlaneRequest(request, env) {
+  const payload = await readJson(request);
+  if (!payload || typeof payload !== "object") {
+    return json(422, {
+      ok: false,
+      error: "request_body_required",
+      reason: "valid JSON request body is required"
+    });
+  }
+
+  const policyInput =
+    payload.policyInput && typeof payload.policyInput === "object" ? payload.policyInput : {};
+  const issueContext =
+    payload.issueContext && typeof payload.issueContext === "object" ? payload.issueContext : {};
+  const operation = normalizeText(payload.operation);
+  const repository = normalizeText(payload.repository);
+  const scopedIssueNumber = issueContext.issueNumber ?? payload.issueNumber ?? null;
+  const phase = normalizeText(payload.phase) || "execution";
+  const highRiskKind = operation;
+  const actionType = mapGitHubHighRiskOperationToActionType(operation);
+  const approvalScope = buildApprovalScopeSnapshot({
+    payload: {
+      phase,
+      highRiskKind,
+      repositoryInput: repository,
+      issueNumber: scopedIssueNumber,
+      issueContext
+    },
+    policyInput: {
+      ...policyInput,
+      actionType,
+      repositoryInput: repository,
+      highRiskKind,
+      issueTraceability: {
+        relatedIssue: issueContext.issueNumber ?? payload.issueNumber ?? null
+      }
+    }
+  });
+  const resolvedApprovalGrant = await resolveApprovalGrant({
+    payload: {
+      phase,
+      highRiskKind,
+      repositoryInput: repository,
+      issueNumber: scopedIssueNumber,
+      issueContext
+    },
+    policyInput: {
+      ...policyInput,
+      actionType,
+      repositoryInput: repository,
+      highRiskKind,
+      issueTraceability: {
+        relatedIssue: issueContext.issueNumber ?? payload.issueNumber ?? null
+      }
+    },
+    env
+  });
+
+  const executed = await executeGitHubHighRiskPlane({
+    operation,
+    repository,
+    issueNumber: scopedIssueNumber,
+    pullNumber: payload.pullNumber,
+    mergeMethod: payload.mergeMethod,
+    commitTitle: payload.commitTitle,
+    commitMessage: payload.commitMessage,
+    approvalPhrase: policyInput.approvalPhrase,
+    targetConfirmed: policyInput.targetConfirmed,
+    approvalGrant:
+      payload.approvalGrant ??
+      policyInput.approvalGrant ??
+      resolvedApprovalGrant.approvalGrant,
+    approvalScope,
+    env
+  });
+
+  if (!executed.ok) {
+    return json(executed.status ?? 503, {
+      ok: false,
+      error: executed.error ?? "github_high_risk_failed",
+      reason: executed.reason,
+      issues: executed.issues ?? []
+    });
+  }
+
+  return json(200, {
+    ok: true,
+    authorityAction: executed.authorityAction
+  });
+}
+
 function handlePasskeyOperatorPageRequest(request) {
   const url = new URL(request.url);
   const html = renderPasskeyOperatorPage({
@@ -899,6 +1005,16 @@ function buildApprovalScopeSnapshot({ payload, policyInput }) {
     relatedIssue: traceability.relatedIssue ?? issueContext.issueNumber ?? payload?.relatedIssue,
     phase: payload?.phase
   });
+}
+
+function mapGitHubHighRiskOperationToActionType(operation) {
+  if (operation === GitHubHighRiskOperation.PULL_MERGE) {
+    return "merge";
+  }
+  if (operation === GitHubHighRiskOperation.ISSUE_CLOSE) {
+    return "destructive";
+  }
+  return normalizeText(operation);
 }
 
 async function retrieveRegisteredPasskeys(provider) {

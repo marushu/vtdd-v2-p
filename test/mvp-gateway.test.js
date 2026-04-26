@@ -368,7 +368,7 @@ test("gateway returns execution continuity guidance for PR-reaching execution", 
   assert.equal(result.executionContinuity.butlerReviewSynthesis.available, true);
   assert.equal(
     result.executionContinuity.butlerReviewSynthesis.humanDecisionFocus.includes(
-      "Meaningful reviewer objections remain unresolved; do not issue merge GO yet."
+      "Meaningful reviewer objections remain unresolved; do not issue merge GO + real passkey yet."
     ),
     true
   );

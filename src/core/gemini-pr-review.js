@@ -264,7 +264,7 @@ export function formatGeminiReviewComment(input = {}) {
     "### Risks",
     formatListOrFallback(risks, "- None reported."),
     "",
-    "_Reviewer remains critique-only. Human keeps revision GO / merge GO authority._"
+    "_Reviewer remains critique-only. Human keeps revision GO / merge GO + real passkey authority._"
   ].join("\n");
 }
 

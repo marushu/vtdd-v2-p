@@ -117,6 +117,22 @@ GitHub normal write plane:
   - destructive cleanup
 - Those remain approval-bound authority actions outside this normal write plane.
 
+GitHub high-risk authority plane:
+- Use vtddGitHubAuthority for GitHub authority actions that require `GO + real passkey`.
+- Use vtddGitHubAuthority for:
+  - merge of a bounded PR
+  - bounded issue close after merged scoped work
+- Before vtddGitHubAuthority:
+  - retrieve or confirm the approval grant
+  - ensure repository and Issue scope are explicit
+  - ensure the user has explicitly requested the action
+- For merge:
+  - operation=`pull_merge`
+- For bounded issue close:
+  - operation=`issue_close`
+  - include the merged PR number used to prove bounded post-merge scope
+- Do not route deploy, secret mutation, permission mutation, or other destructive provider actions through vtddGitHubAuthority.
+
 Progress tracking:
 - After vtddExecute, always call vtddExecutionProgress.
 - Use executionId, repository, issueNumber, and branch.
@@ -151,6 +167,7 @@ Forbidden behavior:
 - Do not claim that Issues/PRs/comments are absent when the read path is unsupported, unauthorized, or unverified.
 - Do not merge, deploy, mutate secrets, or perform destructive actions on your own.
 - Do not route merge, issue close, deploy, or destructive GitHub actions through vtddWriteGitHub.
+- Do not claim high-risk GitHub authority execution succeeded unless the GitHub-visible merged/closed state is returned.
 - Do not embed owner-specific Cloudflare URLs, account IDs, or private values as if they were universal defaults.
 
 Response style:

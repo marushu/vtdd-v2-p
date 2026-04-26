@@ -171,6 +171,7 @@ export {
 } from "./github-app-repository-index.js";
 export { GitHubReadResource, retrieveGitHubReadPlane } from "./github-read-plane.js";
 export { GitHubWriteOperation, executeGitHubWritePlane } from "./github-write-plane.js";
+export { GitHubHighRiskOperation, executeGitHubHighRiskPlane } from "./github-high-risk-plane.js";
 export {
   WorkflowStage,
   WorkflowEvent,
