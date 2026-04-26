@@ -66,6 +66,15 @@ See:
 This repository must not contain committed secret values or repository-local
 bootstrap credential blobs.
 
+The desktop vault is for:
+
+- initial bootstrap
+- later credential update / rotation / repair
+
+It is not intended to be a steady-state runtime dependency. Normal VTDD
+operation should rely on Worker/runtime secrets and short-lived derived tokens
+so iPhone-only operation can continue until bootstrap/update/repair is needed.
+
 ## Cost And Account Boundary
 
 VTDD should not silently turn an existing ChatGPT/Codex subscription into a

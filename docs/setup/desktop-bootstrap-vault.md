@@ -7,10 +7,14 @@ This document is the canonical desktop bootstrap contract for Issue #43.
 VTDD needs an operator-owned local credential root that:
 
 - lives outside the repository
-- can be reused for runtime secret sync and self-recovery
+- is used for initial bootstrap and later update/repair work
 - does not store short-lived execution tokens
 - can degrade cleanly into `desktop maintenance required` when iPhone-only
   operation cannot continue
+
+This vault is not the steady-state operational source for normal VTDD runtime.
+Steady-state operation is expected to use already-synced Worker/runtime secrets
+and minted short-lived execution tokens.
 
 The canonical local path is:
 
@@ -25,6 +29,7 @@ This vault is:
 - not repository-tracked
 - not D1-backed
 - not a setup wizard revival
+- not a steady-state runtime dependency
 
 Short-lived execution credentials must not be stored here.
 
@@ -96,6 +101,18 @@ At minimum, the vault contract covers:
 - VTDD gateway bearer token path
 - reviewer credential path(s), if configured
 
+## Operational Model
+
+The canonical model is:
+
+- `~/.vtdd/*` is used during initial bootstrap
+- `~/.vtdd/*` is used again only when update, rotation, or repair requires
+  operator-owned root credential material
+- steady-state VTDD operation should not require the local desktop vault to be
+  mounted or reachable
+- normal Butler / Worker execution should rely on Worker/runtime secrets plus
+  short-lived derived tokens instead
+
 ## Security Rules
 
 - no secret values are committed to the repository
@@ -108,8 +125,8 @@ At minimum, the vault contract covers:
 ## Desktop Maintenance Required
 
 When VTDD is operating from an iPhone-only or otherwise non-desktop surface and
-a required root credential is missing, invalid, expired, or needs rotation,
-Butler must stop and surface:
+update/rotation/repair cannot continue without operator-owned root credential
+material, Butler must stop and surface:
 
 - `desktop maintenance required`
 
@@ -120,9 +137,15 @@ The response should also include a concrete reason such as:
 - `gateway_bearer_token_missing`
 - `reviewer_api_key_invalid`
 
+This state is expected only when bootstrap/update/repair work is needed.
+It must not be treated as the normal steady-state requirement for everyday VTDD
+operation.
+
 ## Non-goals
 
 - setup wizard resurrection
 - storing short-lived execution tokens in D1
 - repository-tracked secret values
 - full encryption / KMS rollout in the same issue
+- making the local desktop vault a mandatory dependency for steady-state
+  iPhone-only operation

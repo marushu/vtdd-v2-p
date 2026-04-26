@@ -146,13 +146,15 @@ phrase.
 
 ## Desktop Maintenance Required
 
-If required operator-owned root credential maintenance can only continue from
+If required operator-owned root credential bootstrap/update/repair work can only continue from
 desktop bootstrap state, Butler must stop and surface:
 
 - `desktop maintenance required`
 
 This is not a Codex-side authority return marker. It is a Butler runtime state
 that blocks further authority action until the desktop bootstrap path is used.
+It should appear only for bootstrap/update/repair needs, not as a steady-state
+requirement for normal iPhone-only operation.
 
 ## Non-goals
 

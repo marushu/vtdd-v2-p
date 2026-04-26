@@ -5,16 +5,17 @@ This document is the canonical bootstrap contract for Issue #15 and Issue #43.
 ## Purpose
 
 VTDD keeps local GitHub App root material in the operator-owned desktop
-bootstrap vault under `~/.vtdd/credentials/`, but runtime paths such as remote
-executor and reviewer flows also require GitHub Actions secrets.
+bootstrap vault under `~/.vtdd/credentials/`, but steady-state runtime paths
+such as remote executor and reviewer flows are expected to use already-synced
+runtime secrets instead of reading the local vault directly.
 
 This bootstrap path exists to sync that local source of truth into GitHub
-Actions secrets through an explicit operator action instead of ad hoc manual
-copying.
+Actions/runtime secrets through an explicit operator action instead of ad hoc
+manual copying.
 
 ## Source of Truth
 
-The local source of truth is:
+The local bootstrap/update source of truth is:
 
 - `~/.vtdd/credentials/manifest.json`
 - the private key path referenced from that manifest
@@ -51,7 +52,8 @@ The approval challenge should be requested with a scope that includes:
 - `repositoryInput=<target repo>`
 - `highRiskKind=github_app_secret_sync`
 
-Then execute the local bootstrap with the returned `approvalGrantId`:
+Then execute the local bootstrap/update path with the returned
+`approvalGrantId`:
 
 ```bash
 node scripts/sync-github-app-actions-secrets.mjs \
@@ -95,8 +97,11 @@ This helper:
 - executes `scripts/sync-github-app-actions-secrets.mjs` only after a real
   `approvalGrantId` has been issued
 
-It is an explicit operator helper, not a setup wizard and not a background
-sync path.
+It is an explicit operator helper for bootstrap/update/repair, not a setup
+wizard, not a background sync path, and not a steady-state runtime dependency.
+
+Steady-state iPhone-only VTDD operation is expected to continue without
+`~/.vtdd/*` until a bootstrap/update/repair event is required.
 
 ## Non-goals
 
