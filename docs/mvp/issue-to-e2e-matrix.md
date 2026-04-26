@@ -303,6 +303,27 @@ Status values used below:
   - `docs/mvp/e2e/e2e-14-github-normal-write-plane.md`
 - Status: `e2e_evidenced_pending_human_closure`
 
+## E2E-15 GitHub high-risk authority plane
+
+- Issues: `#55`
+- Happy path:
+  - Butler-side authority execution performs bounded PR merge and bounded issue close through the GitHub high-risk plane with scoped `GO + real passkey`
+- Boundary path:
+  - missing real approval grant or missing merged-pull proof blocks merge/issue close instead of silently mutating GitHub state
+- Implementation evidence:
+  - `src/core/github-high-risk-plane.js`
+  - `src/core/approval.js`
+  - `src/worker.js`
+  - `docs/setup/custom-gpt-actions-openapi.yaml`
+  - `docs/setup/custom-gpt-instructions.md`
+- Test evidence:
+  - `test/github-high-risk-plane.test.js`
+  - `test/worker.test.js`
+  - `test/custom-gpt-setup-docs.test.js`
+- Run evidence:
+  - `docs/mvp/e2e/e2e-15-github-high-risk-authority-plane.md`
+- Status: `e2e_evidenced_pending_human_closure`
+
 ## Current Completion Reading
 
 - Repository completion status: `partial`
