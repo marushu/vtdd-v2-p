@@ -65,7 +65,7 @@ After Codex creates a PR:
 4. Codex performs bounded PR updates and PR comment responses as directed
 5. Gemini re-runs critical review when the PR changes or new comments arrive
 6. Butler re-summarizes the updated PR state for the human
-7. merge remains blocked until the human gives `GO`
+7. merge remains blocked until the human gives `GO + real passkey`
 
 ## Role Boundaries
 
@@ -95,7 +95,7 @@ After Codex creates a PR:
 
 - no speculative coding beyond Issue scope
 - no treating handoff as canonical spec
-- no merge without explicit human `GO`
+- no merge without explicit human `GO + real passkey`
 - no erasing meaningful reviewer objections in Butler summaries
 - no invisible Codex-to-Butler authority channel outside GitHub-observable
   runtime truth

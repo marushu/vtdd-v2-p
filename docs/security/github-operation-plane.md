@@ -103,14 +103,14 @@ Normal bounded execution includes at least:
 - commit and push on the scoped topic branch
 - PR creation and update
 - PR comment and bounded review-response work
-- merge
-- bounded issue close after merged scoped work
 - deletion of the merged topic branch tied to that scoped PR
 
 ### `GO + real passkey`
 
 High-risk GitHub execution includes at least:
 
+- merge
+- bounded issue close after merged scoped work
 - repository or environment secret mutation
 - repository or environment variable mutation
 - GitHub App install, credential, token, or permission mutation

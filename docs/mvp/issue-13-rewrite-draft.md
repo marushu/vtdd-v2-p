@@ -109,7 +109,7 @@ VTDD V2 の MVP 実装を開始するための統合親 Issue を確定する。
 - Butler can resolve context safely and refuse unsafe execution
 - Repository mis-targeting risk is reduced by alias + no-default + confirmation path
 - High-risk operations are gated by `GO + passkey` and short-lived credentials
-- Merge and bounded post-merge completion use explicit `GO`
+- Merge and bounded post-merge completion use explicit `GO + real passkey`
 - Production deploy can be executed under governed approval
 
 ## Execution Notes

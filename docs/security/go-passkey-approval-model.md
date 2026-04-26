@@ -7,8 +7,8 @@ For the full canonical consent / approval model, see
 ## Intent
 
 High-risk actions should require both explicit intent and strong user authentication.
-Merge and bounded post-merge completion tasks remain explicit `GO` actions, but
-they are not part of the `GO + passkey` set.
+Merge and bounded post-merge completion tasks are part of the high-risk set and
+must follow the same `GO + passkey` path as other authority-bearing actions.
 
 ## Drift Note
 
@@ -33,14 +33,14 @@ No explicit approval required.
 - issue creation
 - branch / PR operations
 - normal execution
-- merge
-- post-merge issue close for the scoped work
 - merged-branch deletion for the scoped PR
 
 Requires `GO`.
 
 ### Level 3
 
+- merge
+- post-merge issue close for the scoped work
 - production deploy
 - credential mutation
 - permission mutation
@@ -53,6 +53,8 @@ Requires `GO + passkey`.
 
 When the execution surface is GitHub, `GO + passkey` includes at least:
 
+- pull request merge
+- bounded issue close for the scoped merged work
 - repository or environment secret / variable mutation
 - GitHub App installation, credential, token, or permission mutation
 - repository settings mutation
