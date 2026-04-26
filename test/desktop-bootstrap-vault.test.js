@@ -84,4 +84,6 @@ test("desktop bootstrap vault doc defines canonical path and desktop maintenance
   assert.equal(doc.includes("~/.vtdd/credentials/manifest.json"), true);
   assert.equal(doc.includes("desktop maintenance required"), true);
   assert.equal(doc.includes("Short-lived execution credentials must not be stored here."), true);
+  assert.equal(doc.includes("not the steady-state operational source"), true);
+  assert.equal(doc.includes("steady-state VTDD operation should not require the local desktop vault"), true);
 });
