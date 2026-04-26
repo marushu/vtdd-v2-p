@@ -11,6 +11,9 @@ test("remote Codex workflow commits, pushes, and creates or updates a PR", () =>
   assert.equal(workflow.includes("name: Create or update pull request"), true);
   assert.equal(workflow.includes("gh pr view"), true);
   assert.equal(workflow.includes("gh pr create"), true);
+  assert.equal(workflow.includes("node scripts/render-pr-body.mjs"), true);
+  assert.equal(workflow.includes("node scripts/validate-pr-body.mjs"), true);
+  assert.equal(workflow.includes("--body-file /tmp/vtdd-remote-codex-pr-body.md"), true);
 });
 
 test("remote Codex workflow fails instead of pretending PR creation succeeded with no changes", () => {

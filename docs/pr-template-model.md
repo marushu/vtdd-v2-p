@@ -56,6 +56,13 @@ Call out any extra changes that were necessary, or state `None.` when there are 
 The PR template should make spec alignment and drift visible. It should not
 attempt to automate code quality judgment or prescribe implementation style.
 
+## Guardrail Usage
+
+Use `scripts/render-pr-body.mjs` to generate a valid starting body instead of
+hand-writing the headings. Validate the result locally with
+`node scripts/validate-pr-body.mjs <path>` before `gh pr create` or
+`gh pr edit --body-file`.
+
 ## Non-goals
 
 This model does not define:
