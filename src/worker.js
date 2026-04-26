@@ -692,14 +692,21 @@ async function handleGitHubHighRiskPlaneRequest(request, env) {
 
 function handlePasskeyOperatorPageRequest(request) {
   const url = new URL(request.url);
+  const syncApiBase = normalizeOptionalHttpUrl(url.searchParams.get("syncApiBase"));
+  const syncEnabled = Boolean(syncApiBase);
   const html = renderPasskeyOperatorPage({
     origin: url.origin,
+    syncApiBase,
     repositoryInput: url.searchParams.get("repositoryInput"),
     issueNumber: url.searchParams.get("issueNumber"),
     phase: url.searchParams.get("phase") || "execution",
     highRiskKind: url.searchParams.get("highRiskKind") || "github_app_secret_sync",
     operatorId: url.searchParams.get("operatorId") || "vtdd-operator",
-    operatorLabel: url.searchParams.get("operatorLabel") || "VTDD Operator"
+    operatorLabel: url.searchParams.get("operatorLabel") || "VTDD Operator",
+    syncEnabled,
+    syncMessage: syncEnabled
+      ? "approvalGrantId が取得済みなら実行できます。desktop helper bridge に接続します。"
+      : "desktop maintenance required: local secret sync bridge が未接続です。"
   });
 
   return new Response(html, {
@@ -708,6 +715,23 @@ function handlePasskeyOperatorPageRequest(request) {
       "content-type": "text/html; charset=utf-8"
     }
   });
+}
+
+function normalizeOptionalHttpUrl(value) {
+  const text = normalizeText(value);
+  if (!text) {
+    return "";
+  }
+
+  try {
+    const url = new URL(text);
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return "";
+    }
+    return url.href.replace(/\/$/, "");
+  } catch {
+    return "";
+  }
 }
 
 async function prepareGatewayPayload({ payload, env }) {
