@@ -170,6 +170,7 @@ export {
   resolveGitHubAppInstallationToken
 } from "./github-app-repository-index.js";
 export { GitHubReadResource, retrieveGitHubReadPlane } from "./github-read-plane.js";
+export { GitHubWriteOperation, executeGitHubWritePlane } from "./github-write-plane.js";
 export {
   WorkflowStage,
   WorkflowEvent,

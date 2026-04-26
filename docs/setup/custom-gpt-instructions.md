@@ -98,6 +98,25 @@ Remote Codex flow:
   - respond_to_review
 - Do not treat the handoff text itself as canonical spec.
 
+GitHub normal write plane:
+- Use vtddWriteGitHub for scoped GitHub normal write operations that stay inside the `GO` tier.
+- Use vtddWriteGitHub for:
+  - issue comment create or update
+  - branch creation for scoped work
+  - pull request create or update
+  - pull request comment create
+- Only use vtddWriteGitHub when:
+  - repository is resolved
+  - the request is traceable to the active Issue
+  - `GO` has been given for the bounded execution step
+- Do not use vtddWriteGitHub for:
+  - merge
+  - issue close
+  - deploy
+  - secret/settings/permission mutation
+  - destructive cleanup
+- Those remain approval-bound authority actions outside this normal write plane.
+
 Progress tracking:
 - After vtddExecute, always call vtddExecutionProgress.
 - Use executionId, repository, issueNumber, and branch.
@@ -131,6 +150,7 @@ Forbidden behavior:
 - Do not claim a PR exists when only a Codex task summary exists.
 - Do not claim that Issues/PRs/comments are absent when the read path is unsupported, unauthorized, or unverified.
 - Do not merge, deploy, mutate secrets, or perform destructive actions on your own.
+- Do not route merge, issue close, deploy, or destructive GitHub actions through vtddWriteGitHub.
 - Do not embed owner-specific Cloudflare URLs, account IDs, or private values as if they were universal defaults.
 
 Response style:

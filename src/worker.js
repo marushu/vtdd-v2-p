@@ -23,6 +23,7 @@ import {
   renderPasskeyOperatorPage,
   resolveGatewayAliasRegistryFromGitHubApp,
   retrieveGitHubReadPlane,
+  executeGitHubWritePlane,
   runMvpGateway,
   validateMemoryProvider,
   verifyPasskeyApproval,
@@ -141,6 +142,19 @@ export default {
         allowed: true,
         execution: dispatched.execution
       });
+    }
+
+    if (request.method === "POST" && isApiPath(url.pathname, "/action/github")) {
+      const auth = authorizeGatewayRequest({ request, env, apiSuffix: "/action/github" });
+      if (!auth.ok) {
+        return json(auth.status, {
+          ok: false,
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+
+      return handleGitHubWritePlaneRequest(request, env);
     }
 
     if (request.method === "GET" && isApiPath(url.pathname, "/action/progress")) {
@@ -520,6 +534,53 @@ async function handleRetrieveGitHubReadPlaneRequest(url, env) {
   return json(200, {
     ok: true,
     read: retrieved.read
+  });
+}
+
+async function handleGitHubWritePlaneRequest(request, env) {
+  const payload = await readJson(request);
+  if (!payload || typeof payload !== "object") {
+    return json(422, {
+      ok: false,
+      error: "request_body_required",
+      reason: "valid JSON request body is required"
+    });
+  }
+
+  const policyInput =
+    payload.policyInput && typeof payload.policyInput === "object" ? payload.policyInput : {};
+  const issueContext =
+    payload.issueContext && typeof payload.issueContext === "object" ? payload.issueContext : {};
+
+  const executed = await executeGitHubWritePlane({
+    operation: payload.operation,
+    repository: payload.repository,
+    issueNumber: payload.issueNumber ?? issueContext.issueNumber,
+    pullNumber: payload.pullNumber,
+    commentId: payload.commentId,
+    branch: payload.branch,
+    baseRef: payload.baseRef,
+    head: payload.head,
+    title: payload.title,
+    body: payload.body,
+    approvalPhrase: policyInput.approvalPhrase,
+    targetConfirmed: policyInput.targetConfirmed,
+    approvalScopeMatched: policyInput.approvalScopeMatched,
+    env
+  });
+
+  if (!executed.ok) {
+    return json(executed.status ?? 503, {
+      ok: false,
+      error: executed.error ?? "github_write_failed",
+      reason: executed.reason,
+      issues: executed.issues ?? []
+    });
+  }
+
+  return json(200, {
+    ok: true,
+    write: executed.write
   });
 }
 
