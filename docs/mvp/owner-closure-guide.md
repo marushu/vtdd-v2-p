@@ -33,18 +33,18 @@ Why:
 
 ### Recommended reading
 
-`#6` is historical and deprecated.
-It is not a direct implementation driver anymore.
+`#6` is historical execution-transport context.
+It is not the current parent authority anymore; `#4` now holds that role.
 
 ### Close only if the owner agrees all of these are true
 
-- `#13` and current canonical docs fully supersede the role `#6` once had
-- the owner no longer needs `#6` as a historical coordination marker
+- `#4` and current canonical docs fully supersede the current authority role `#6` once approximated
+- the owner no longer needs `#6` as a historical execution-spine marker
 
 ### Keep open if any of these are still useful
 
 - the owner wants to preserve historical comparison context in the open set for now
-- there is still value in explicitly seeing the deprecated parent while final parent/spec cleanup is underway
+- there is still value in explicitly seeing the earlier execution-spine slice while final parent/spec cleanup is underway
 
 ## Issue `#1`
 

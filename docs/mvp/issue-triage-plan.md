@@ -11,7 +11,8 @@ As of 2026-04-17:
 
 - the major triage/creation wave has already been executed
 - `#13` has already been rewritten as the MVP execution anchor
-- `#6` remains deprecated and must not be used as a direct implementation source
+- `#4` is the current parent contract for the Butler-Codex-Gemini loop
+- `#6` remains a historical execution-slice and must not compete with `#4` as a parent authority
 - the repository now has broad runtime + contract coverage, but overall status is still `partial / in-progress`
 - the remaining work is mainly close-readiness review, parent/spec drift prevention, and human closure judgment
 
@@ -19,7 +20,8 @@ As of 2026-04-17:
 
 - `#1`: remains a valid top-level draft, but child Issue text and canonical docs outrank it for execution decisions
 - `#2`-`#5`: remain valid early memory/runtime issues, now folded into the current MVP execution anchor via `#13`
-- `#6`: deprecated; keep only as historical context and never as direct implementation authority
+- `#4`: current loop parent for Butler-Codex-Gemini runtime authority
+- `#6`: historical execution-slice; keep as context, but route new parent-level loop decisions through `#4`
 - `#7`: valid constitution schema parent
 - `#8`: valid policy engine issue
 - `#9`: valid consent/approval issue
@@ -38,7 +40,7 @@ As of 2026-04-17:
 ## What This File Must Not Be Used For
 
 - re-opening already triaged scope by assuming the listed filing order is still pending
-- treating deprecated `#6` as a live source of truth
+- treating historical `#6` as a competing parent source of truth over `#4`
 - bypassing `docs/mvp/issue-to-e2e-matrix.md` when reasoning about completion
 - inferring new implementation requirements without checking current open Issues first
 
@@ -58,5 +60,6 @@ The following historical directions were already resolved into the current repo 
 For current completion reading, use:
 
 - `#13` for parent anchor
+- `#4` for current Butler-Codex-Gemini loop parent authority
 - `docs/mvp/issue-to-e2e-matrix.md` for repository-wide evidence status
 - active open Issues only for remaining bounded work

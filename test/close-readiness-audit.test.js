@@ -10,6 +10,7 @@ test("close-readiness audit distinguishes close-ready from auto-closed", () => {
   assert.equal(doc.includes("#13` is now close-ready for owner review"), true);
   assert.equal(doc.includes("It does not close any Issue automatically"), true);
   assert.equal(doc.includes("human-gated" ) || doc.includes("Human judgment is still required"), true);
-  assert.equal(doc.includes("#6` remains a deprecated historical issue"), true);
+  assert.equal(doc.includes("`#4` is the current parent contract for the Butler-Codex-Gemini revision loop"), true);
+  assert.equal(doc.includes("`#6` remains a historical execution-slice issue"), true);
   assert.equal(doc.includes("#1` remains the top-level VTDD V2 draft"), true);
 });
