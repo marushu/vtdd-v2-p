@@ -22,6 +22,7 @@ import {
   retrieveConstitution,
   renderPasskeyOperatorPage,
   resolveGatewayAliasRegistryFromGitHubApp,
+  retrieveGitHubReadPlane,
   runMvpGateway,
   validateMemoryProvider,
   verifyPasskeyApproval,
@@ -301,6 +302,18 @@ export default {
       return handleRetrieveCrossIssueRequest(url, env);
     }
 
+    if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/github")) {
+      const auth = authorizeGatewayRequest({ request, env, apiSuffix: "/retrieve/github" });
+      if (!auth.ok) {
+        return json(auth.status, {
+          ok: false,
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+      return handleRetrieveGitHubReadPlaneRequest(url, env);
+    }
+
     return json(404, {
       ok: false,
       error: "not_found"
@@ -479,6 +492,34 @@ async function handleRetrieveApprovalGrantRequest(url, env) {
       expiresAt: normalizeText(record.content.expiresAt) || null,
       scope: normalizeScopeSnapshot(record.content.scope)
     }
+  });
+}
+
+async function handleRetrieveGitHubReadPlaneRequest(url, env) {
+  const retrieved = await retrieveGitHubReadPlane({
+    resource: url.searchParams.get("resource"),
+    repository: url.searchParams.get("repository"),
+    issueNumber: url.searchParams.get("issueNumber"),
+    pullNumber: url.searchParams.get("pullNumber"),
+    branch: url.searchParams.get("branch"),
+    ref: url.searchParams.get("ref"),
+    state: url.searchParams.get("state"),
+    limit: url.searchParams.get("limit"),
+    env
+  });
+
+  if (!retrieved.ok) {
+    return json(retrieved.status ?? 503, {
+      ok: false,
+      error: retrieved.error ?? "github_read_failed",
+      reason: retrieved.reason,
+      issues: retrieved.issues ?? []
+    });
+  }
+
+  return json(200, {
+    ok: true,
+    read: retrieved.read
   });
 }
 

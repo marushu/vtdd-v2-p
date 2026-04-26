@@ -33,8 +33,13 @@ test("custom gpt instructions preserve current butler and approval boundaries", 
   assert.equal(doc.includes("vtddGateway"), true);
   assert.equal(doc.includes("vtddExecute"), true);
   assert.equal(doc.includes("vtddExecutionProgress"), true);
+  assert.equal(doc.includes("vtddRetrieveGitHub"), true);
   assert.equal(doc.includes("High-risk actions require GO + passkey."), true);
   assert.equal(doc.includes("Do not claim a PR exists when only a Codex task summary exists."), true);
+  assert.equal(
+    doc.includes("Do not claim that Issues/PRs/comments are absent when the read path is unsupported, unauthorized, or unverified."),
+    true
+  );
 });
 
 test("custom gpt openapi doc exposes current gateway, execute, and progress routes", () => {
@@ -43,11 +48,14 @@ test("custom gpt openapi doc exposes current gateway, execute, and progress rout
   assert.equal(doc.includes("/v2/gateway:"), true);
   assert.equal(doc.includes("/v2/action/execute:"), true);
   assert.equal(doc.includes("/v2/action/progress:"), true);
+  assert.equal(doc.includes("/v2/retrieve/github:"), true);
   assert.equal(doc.includes("/v2/retrieve/approval-grant:"), true);
   assert.equal(doc.includes("GatewayBearerAuth"), true);
   assert.equal(doc.includes("conversation:"), true);
   assert.equal(doc.includes("repositoryInput:"), true);
   assert.equal(doc.includes("issueNumber"), true);
+  assert.equal(doc.includes("pullNumber"), true);
+  assert.equal(doc.includes("workflow_runs"), true);
 });
 
 test("custom gpt openapi keeps components.schemas while avoiding nested field refs", () => {
@@ -73,6 +81,7 @@ test("custom gpt openapi json parses and exposes paths as an object", () => {
   assert.equal(typeof doc.paths["/v2/gateway"], "object");
   assert.equal(typeof doc.paths["/v2/action/execute"], "object");
   assert.equal(typeof doc.paths["/v2/action/progress"], "object");
+  assert.equal(typeof doc.paths["/v2/retrieve/github"], "object");
   assert.equal(typeof doc.paths["/v2/retrieve/approval-grant"], "object");
   assert.equal(typeof doc.components.schemas, "object");
   assert.equal(doc.components.securitySchemes.GatewayBearerAuth.scheme, "bearer");

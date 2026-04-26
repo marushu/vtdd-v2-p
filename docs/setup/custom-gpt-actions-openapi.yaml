@@ -341,6 +341,84 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/VtddGenericResponse"
+  /v2/retrieve/github:
+    get:
+      operationId: vtddRetrieveGitHub
+      summary: Read GitHub runtime truth through the VTDD GitHub read plane.
+      parameters:
+        - name: resource
+          in: query
+          required: true
+          schema:
+            type: string
+            enum:
+              - repositories
+              - issues
+              - issue_comments
+              - pulls
+              - pull_reviews
+              - pull_review_comments
+              - checks
+              - workflow_runs
+              - branches
+        - name: repository
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: issueNumber
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: pullNumber
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: branch
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: ref
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: GitHub runtime truth read result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "401":
+          description: Missing machine auth
+        "403":
+          description: Invalid machine auth
+        "422":
+          description: GitHub read request blocked or invalid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "503":
+          description: GitHub read route unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
   /v2/retrieve/approval-grant:
     get:
       operationId: vtddRetrieveApprovalGrant
