@@ -967,6 +967,142 @@ test("worker rejects unsupported high-risk GitHub write operations on the normal
   assert.equal(body.error, "github_write_request_invalid");
 });
 
+test("worker executes GitHub merge on the high-risk authority plane with approval grant id", async () => {
+  const provider = createInMemoryMemoryProvider();
+  await provider.store({
+    id: "approval-merge-123",
+    type: MemoryRecordType.APPROVAL_LOG,
+    content: {
+      kind: "passkey_grant",
+      status: "verified",
+      approvalId: "approval-merge-123",
+      expiresAt: "2099-01-01T00:00:00.000Z",
+      scope: {
+        actionType: "merge",
+        highRiskKind: "pull_merge",
+        repositoryInput: "sample-org/vtdd-v2-p",
+        issueNumber: "55",
+        relatedIssue: "55",
+        phase: "execution"
+      }
+    },
+    metadata: { source: "test" },
+    priority: 90,
+    tags: ["passkey_grant"],
+    createdAt: "2026-04-26T00:00:00.000Z"
+  });
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/action/github-authority", {
+      method: "POST",
+      headers: {
+        ...gatewayAuthHeaders,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        operation: "pull_merge",
+        repository: "sample-org/vtdd-v2-p",
+        pullNumber: 21,
+        issueContext: {
+          issueNumber: 55
+        },
+        policyInput: {
+          approvalPhrase: "GO",
+          approvalGrantId: "approval-merge-123",
+          targetConfirmed: true
+        }
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      MEMORY_PROVIDER: provider,
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_high_risk",
+      GITHUB_API_FETCH: async () =>
+        new Response(
+          JSON.stringify({
+            sha: "abc123",
+            merged: true,
+            message: "Pull Request successfully merged"
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        )
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.authorityAction.operation, "pull_merge");
+  assert.equal(body.authorityAction.merged, true);
+});
+
+test("worker blocks bounded issue close on the high-risk authority plane when merged pull proof is missing", async () => {
+  const provider = createInMemoryMemoryProvider();
+  await provider.store({
+    id: "approval-close-123",
+    type: MemoryRecordType.APPROVAL_LOG,
+    content: {
+      kind: "passkey_grant",
+      status: "verified",
+      approvalId: "approval-close-123",
+      expiresAt: "2099-01-01T00:00:00.000Z",
+      scope: {
+        actionType: "destructive",
+        highRiskKind: "issue_close",
+        repositoryInput: "sample-org/vtdd-v2-p",
+        issueNumber: "55",
+        relatedIssue: "55",
+        phase: "execution"
+      }
+    },
+    metadata: { source: "test" },
+    priority: 90,
+    tags: ["passkey_grant"],
+    createdAt: "2026-04-26T00:00:00.000Z"
+  });
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/action/github-authority", {
+      method: "POST",
+      headers: {
+        ...gatewayAuthHeaders,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        operation: "issue_close",
+        repository: "sample-org/vtdd-v2-p",
+        pullNumber: 21,
+        issueContext: {
+          issueNumber: 55
+        },
+        policyInput: {
+          approvalPhrase: "GO",
+          approvalGrantId: "approval-close-123",
+          targetConfirmed: true
+        }
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      MEMORY_PROVIDER: provider,
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_high_risk",
+      GITHUB_API_FETCH: async () =>
+        new Response(
+          JSON.stringify({
+            number: 21,
+            merged_at: null
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        )
+    }
+  );
+
+  assert.equal(response.status, 422);
+  const body = await response.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.reason, "bounded issue close requires a merged pull request");
+});
+
 test("worker returns remote Codex execution progress", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/v2/action/progress?executionId=remote-codex-issue6-abcd12", {

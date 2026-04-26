@@ -163,7 +163,7 @@ test("high-risk action requires GO + passkey", () => {
   assert.equal(result.requiredApproval, "go_passkey");
 });
 
-test("merge requires explicit GO but not passkey", () => {
+test("merge requires explicit GO + passkey approval", () => {
   const result = evaluateExecutionPolicy({
     actionType: ActionType.MERGE,
     mode: TaskMode.EXECUTION,
@@ -179,8 +179,8 @@ test("merge requires explicit GO but not passkey", () => {
     go: true,
     passkey: false
   });
-  assert.equal(result.allowed, true);
-  assert.equal(result.requiredApproval, "go");
+  assert.equal(result.allowed, false);
+  assert.equal(result.requiredApproval, "go_passkey");
 });
 
 test("guarded absence mode blocks merge even with GO + passkey", () => {

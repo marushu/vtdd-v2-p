@@ -58,7 +58,7 @@ function buildHumanDecisionFocus({ pullRequest, reviewLoop, codexGoal }) {
   const focus = [];
 
   if (reviewLoop.unresolvedReviewCommentsCount > 0) {
-    focus.push("Meaningful reviewer objections remain unresolved; do not issue merge GO yet.");
+    focus.push("Meaningful reviewer objections remain unresolved; do not issue merge GO + real passkey yet.");
   }
   if (pullRequest.updatedSinceReview) {
     focus.push("The PR changed after the last review signal; Gemini should re-evaluate current diff state.");
@@ -72,7 +72,7 @@ function buildHumanDecisionFocus({ pullRequest, reviewLoop, codexGoal }) {
   if (reviewLoop.reviewCommentsCount === 0) {
     focus.push("Gemini review evidence is not yet present on the PR.");
   }
-  focus.push("Human remains the final authority for revision GO and merge GO.");
+  focus.push("Human remains the final authority for revision GO and merge GO + real passkey.");
 
   return focus;
 }

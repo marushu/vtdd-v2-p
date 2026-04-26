@@ -12,9 +12,7 @@
   ],
   "security": [
     {
-      "GatewayBearerAuth": [
-
-      ]
+      "GatewayBearerAuth": []
     }
   ],
   "components": {
@@ -793,6 +791,117 @@
           },
           "404": {
             "description": "Approval grant not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/action/github-authority": {
+      "post": {
+        "operationId": "vtddGitHubAuthority",
+        "summary": "Execute approval-bound GitHub authority actions that require GO plus real passkey.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "operation": {
+                    "type": "string",
+                    "enum": [
+                      "pull_merge",
+                      "issue_close"
+                    ]
+                  },
+                  "repository": {
+                    "type": "string"
+                  },
+                  "issueNumber": {
+                    "type": "integer"
+                  },
+                  "pullNumber": {
+                    "type": "integer"
+                  },
+                  "mergeMethod": {
+                    "type": "string",
+                    "enum": [
+                      "merge",
+                      "squash",
+                      "rebase"
+                    ]
+                  },
+                  "commitTitle": {
+                    "type": "string"
+                  },
+                  "commitMessage": {
+                    "type": "string"
+                  },
+                  "issueContext": {
+                    "type": "object",
+                    "properties": {
+                      "issueNumber": {
+                        "type": "integer"
+                      }
+                    },
+                    "additionalProperties": true
+                  },
+                  "policyInput": {
+                    "type": "object",
+                    "properties": {
+                      "approvalPhrase": {
+                        "type": "string"
+                      },
+                      "approvalGrantId": {
+                        "type": "string"
+                      },
+                      "targetConfirmed": {
+                        "type": "boolean"
+                      }
+                    },
+                    "additionalProperties": true
+                  }
+                },
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "GitHub authority action executed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing machine auth"
+          },
+          "403": {
+            "description": "Invalid machine auth"
+          },
+          "422": {
+            "description": "GitHub authority action blocked or invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "GitHub authority route unavailable",
             "content": {
               "application/json": {
                 "schema": {

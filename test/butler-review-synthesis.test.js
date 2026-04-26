@@ -28,7 +28,7 @@ test("butler review synthesis preserves unresolved reviewer objections and next 
   assert.equal(result.headline.includes("unresolved reviewer objections"), true);
   assert.equal(
     result.humanDecisionFocus.includes(
-      "Meaningful reviewer objections remain unresolved; do not issue merge GO yet."
+      "Meaningful reviewer objections remain unresolved; do not issue merge GO + real passkey yet."
     ),
     true
   );
@@ -73,7 +73,7 @@ test("butler review synthesis does not present approve-only Gemini review as unr
   assert.equal(result.headline, "PR #28 is open. Reviewer feedback exists and should be checked before human GO.");
   assert.equal(
     result.humanDecisionFocus.includes(
-      "Meaningful reviewer objections remain unresolved; do not issue merge GO yet."
+      "Meaningful reviewer objections remain unresolved; do not issue merge GO + real passkey yet."
     ),
     false
   );
