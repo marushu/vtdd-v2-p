@@ -10,7 +10,17 @@ Repository status must be treated as partial until every listed E2E scenario has
 - mapped boundary/failure-path result
 - human approval for closure when applicable
 
+This matrix sits above the `live_verified` contract in
+`docs/mvp/live-verified-contract.md`.
+Human-observable runtime evidence is the floor; mapped E2E evidence and human
+closure judgment remain required for milestone completion.
+
 Status values used below:
+
+- `docs_only`: docs/spec/contracts exist, but no connected runtime/code path exists yet
+- `code_only`: code and/or tests exist, but no connected Butler/worker surface exists yet
+- `surface_connected`: a worker/Butler/action path exists, but human-observable external evidence is still missing
+- `live_verified`: the intended behavior is connected and a human can observe the relevant external effect
 
 - `implemented_pending_e2e`: code and tests exist, but mapped E2E evidence is still pending
 - `e2e_evidenced_pending_human_closure`: implementation, tests, and mapped E2E run evidence exist, but human closure judgment is still pending
