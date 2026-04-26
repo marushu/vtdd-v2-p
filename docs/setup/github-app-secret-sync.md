@@ -98,6 +98,30 @@ This helper:
 It is an explicit operator helper, not a setup wizard and not a background
 sync path.
 
+## Worker URL Bridge
+
+The canonical passkey ceremony surface remains the Worker URL:
+
+- `GET /v2/approval/passkey/operator`
+
+When you want section `3. GitHub App Secret Sync` on that Worker-hosted page to
+execute the real desktop bootstrap path, first start the local helper and then
+open the Worker URL with an explicit desktop bridge base:
+
+```text
+https://<your-runtime-host>/v2/approval/passkey/operator?repositoryInput=<owner/repo>&issueNumber=15&highRiskKind=github_app_secret_sync&syncApiBase=http%3A%2F%2F127.0.0.1%3A8789%2Fapi
+```
+
+Current contract:
+
+- if `syncApiBase` points at a running desktop helper bridge, section `3`
+  executes the real local bootstrap path
+- if `syncApiBase` is absent or invalid, the Worker page must surface
+  `desktop maintenance required` and keep the sync action disabled
+- the Worker runtime does not read `~/.vtdd` directly
+- the desktop helper remains the only component that reads the local bootstrap
+  vault and executes the GitHub Actions secret mutation path
+
 ## Non-goals
 
 - replacing the desktop bootstrap vault as the local GitHub App source of truth

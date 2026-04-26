@@ -1,6 +1,7 @@
 export function renderPasskeyOperatorPage(input = {}) {
   const origin = escapeHtml(input.origin || "");
   const apiBase = escapeHtml(input.apiBase || "/v2");
+  const syncApiBase = escapeHtml(input.syncApiBase || "");
   const registrationDefaultOperatorId = escapeHtml(input.operatorId || "vtdd-operator");
   const registrationDefaultOperatorLabel = escapeHtml(input.operatorLabel || "VTDD Operator");
   const repoDefault = escapeHtml(input.repositoryInput || "");
@@ -9,6 +10,12 @@ export function renderPasskeyOperatorPage(input = {}) {
   const actionTypeDefault = escapeHtml(input.actionType || "destructive");
   const highRiskKindDefault = escapeHtml(input.highRiskKind || "github_app_secret_sync");
   const syncEnabled = input.syncEnabled === true;
+  const syncMessage = escapeHtml(
+    input.syncMessage ||
+      (syncEnabled
+        ? "approvalGrantId が取得済みなら実行できます。desktop helper bridge に接続します。"
+        : "desktop maintenance required: local secret sync bridge が未接続です。")
+  );
 
   return `<!doctype html>
 <html lang="ja">
@@ -164,7 +171,7 @@ export function renderPasskeyOperatorPage(input = {}) {
           <div class="row">
             <button id="sync-button"${syncEnabled ? "" : " disabled"}>Sync GitHub App secrets</button>
           </div>
-          <p class="muted">${syncEnabled ? "approvalGrantId が取得済みなら実行できます。" : "この surface では secret sync endpoint が有効化されていません。"}</p>
+          <p class="muted">${syncMessage}</p>
           <pre id="sync-output"></pre>
         </section>
       </div>
@@ -264,8 +271,11 @@ export function renderPasskeyOperatorPage(input = {}) {
           if (!latestApprovalGrantId) {
             throw new Error("approvalGrantId is required before secret sync");
           }
+          if (!"${syncApiBase}") {
+            throw new Error("desktop maintenance required: local secret sync bridge is not configured");
+          }
           syncOutput.textContent = "github app secret sync request...";
-          const syncResponse = await fetch("${apiBase}/github-app-secret-sync/execute", {
+          const syncResponse = await fetch("${syncApiBase}/github-app-secret-sync/execute", {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({

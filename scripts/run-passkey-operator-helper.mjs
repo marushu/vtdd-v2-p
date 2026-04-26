@@ -69,6 +69,13 @@ async function main() {
 
 async function handleRequest({ request, response, state }) {
   const url = new URL(request.url, `http://${request.headers.host || "localhost"}`);
+  const corsHeaders = buildCorsHeaders(request.headers.origin);
+
+  if (request.method === "OPTIONS" && url.pathname === "/api/github-app-secret-sync/execute") {
+    response.writeHead(204, corsHeaders);
+    response.end();
+    return;
+  }
 
   if (request.method === "GET" && url.pathname === "/") {
     const html = renderPasskeyOperatorPage({
@@ -98,7 +105,7 @@ async function handleRequest({ request, response, state }) {
         ok: false,
         error: "approval_grant_id_required",
         reason: "approvalGrantId is required"
-      });
+      }, corsHeaders);
       return;
     }
 
@@ -133,7 +140,7 @@ async function handleRequest({ request, response, state }) {
         reason: result.reason,
         stdout: normalizeText(result.stdout),
         stderr: normalizeText(result.stderr)
-      });
+      }, corsHeaders);
       return;
     }
 
@@ -141,7 +148,7 @@ async function handleRequest({ request, response, state }) {
       ok: true,
       stdout: normalizeText(result.stdout),
       stderr: normalizeText(result.stderr)
-    });
+    }, corsHeaders);
     return;
   }
 
@@ -166,7 +173,7 @@ async function handleRequest({ request, response, state }) {
   writeJson(response, 404, {
     ok: false,
     error: "not_found"
-  });
+  }, corsHeaders);
 }
 
 async function proxyPasskeyApi({ request, response, state, pathname }) {
@@ -252,18 +259,37 @@ async function readJson(request) {
   return JSON.parse(body.toString("utf8"));
 }
 
-function writeJson(response, status, body) {
+function writeJson(response, status, body, extraHeaders = {}) {
   response.writeHead(status, {
-    "content-type": "application/json; charset=utf-8"
+    "content-type": "application/json; charset=utf-8",
+    ...extraHeaders
   });
   response.end(JSON.stringify(body));
+}
+
+function buildCorsHeaders(origin) {
+  const allowOrigin = normalizeText(origin) || "*";
+  return {
+    "access-control-allow-origin": allowOrigin,
+    "access-control-allow-methods": "POST, GET, OPTIONS",
+    "access-control-allow-headers": "content-type",
+    vary: "Origin"
+  };
 }
 
 function normalizeText(value) {
   return String(value ?? "").trim();
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exitCode = 1;
-});
+if (isDirectRun()) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  });
+}
+
+function isDirectRun() {
+  return Boolean(process.argv[1]) && path.resolve(process.argv[1]) === path.resolve(new URL(import.meta.url).pathname);
+}
+
+export { buildCorsHeaders, handleRequest };

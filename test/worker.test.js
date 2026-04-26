@@ -483,6 +483,20 @@ test("worker serves passkey operator page", async () => {
   assert.equal(html.includes("github_app_secret_sync"), true);
 });
 
+test("worker passkey operator page enables desktop secret sync bridge when syncApiBase is provided", async () => {
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/v2/approval/passkey/operator?repositoryInput=marushu%2Fvtdd-v2-p&issueNumber=15&highRiskKind=github_app_secret_sync&syncApiBase=http%3A%2F%2F127.0.0.1%3A8789%2Fapi"
+    ),
+    gatewayAuthEnv
+  );
+
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.equal(html.includes('fetch("http://127.0.0.1:8789/api/github-app-secret-sync/execute"'), true);
+  assert.equal(html.includes("desktop helper bridge に接続します"), true);
+});
+
 test("worker allows same-origin browser bootstrap registration before first passkey exists", async () => {
   const provider = createInMemoryMemoryProvider();
 
