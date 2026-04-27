@@ -506,6 +506,32 @@ Status values used below:
   - `docs/mvp/e2e/e2e-24-butler-self-parity-setup-artifacts.md`
 - Status: `e2e_evidenced_pending_human_closure`
 
+## E2E-25 Reviewer fallback from Gemini to Codex request
+
+- Issues: `#74`
+- Happy path:
+  - Gemini remains the primary reviewer when available, and quota exhaustion falls back to a GitHub-visible `@codex review` request without hard-failing the PR
+- Boundary path:
+  - fallback request state remains critique-only, does not overclaim delivered critique, and does not hide reviewer absence
+- Implementation evidence:
+  - `scripts/run-gemini-pr-review.mjs`
+  - `.github/workflows/gemini-pr-review.yml`
+  - `src/core/codex-review-fallback.js`
+  - `src/core/gemini-review-failure.js`
+  - `src/core/execution-continuity.js`
+  - `src/core/butler-review-synthesis.js`
+  - `docs/security/reviewer-policy.md`
+  - `docs/butler/gemini-pr-review-comments.md`
+- Test evidence:
+  - `test/codex-review-fallback.test.js`
+  - `test/gemini-review-failure.test.js`
+  - `test/gemini-pr-review-workflow.test.js`
+  - `test/execution-continuity.test.js`
+  - `test/butler-review-synthesis.test.js`
+- Run evidence:
+  - `docs/mvp/e2e/e2e-25-reviewer-fallback-gemini-codex.md`
+- Status: `e2e_evidenced_pending_human_closure`
+
 ## Current Completion Reading
 
 - Repository completion status: `partial`
