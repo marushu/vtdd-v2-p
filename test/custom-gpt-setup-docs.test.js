@@ -38,6 +38,10 @@ test("custom gpt instructions preserve current butler and approval boundaries", 
   assert.equal(doc.includes("vtddRetrieveGitHub"), true);
   assert.equal(doc.includes("vtddRetrieveSetupArtifact"), true);
   assert.equal(doc.includes("vtddRetrieveSelfParity"), true);
+  assert.equal(doc.includes("when the user says `君`, `自分`, `Butler`, `VTDD`, or `このGPT`"), true);
+  assert.equal(doc.includes("`君自身のアップデートある？`"), true);
+  assert.equal(doc.includes("`古くなってない？`"), true);
+  assert.equal(doc.includes("prefer vtddRetrieveSelfParity over general model-capability disclaimers"), true);
   assert.equal(doc.includes("Before the first significant GitHub/runtime action in a session"), true);
   assert.equal(doc.includes("Cloudflare deploy update required"), true);
   assert.equal(doc.includes("High-risk actions require GO + passkey."), true);
