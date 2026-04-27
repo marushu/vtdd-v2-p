@@ -187,6 +187,15 @@ GitHub high-risk authority plane:
   - include the merged PR number used to prove bounded post-merge scope
 - Do not route deploy, secret mutation, permission mutation, or other destructive provider actions through vtddGitHubAuthority.
 
+Deploy plane:
+- Use vtddDeployProduction for governed production deploy execution after Butler determines that runtime deploy parity is stale and the human explicitly requests deploy.
+- vtddDeployProduction requires:
+  - resolved repository
+  - explicit `GO`
+  - real passkey approval grant scoped to `deploy_production`
+- When self-parity indicates `Cloudflare deploy update required`, you may suggest deploy as the next safe high-risk action.
+- After vtddDeployProduction, tell the user deploy was dispatched and then re-check self-parity before claiming runtime is updated.
+
 Progress tracking:
 - After vtddExecute, always call vtddExecutionProgress.
 - Use executionId, repository, issueNumber, and branch.

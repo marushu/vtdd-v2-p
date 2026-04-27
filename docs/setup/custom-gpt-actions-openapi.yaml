@@ -449,6 +449,55 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/VtddGenericResponse"
+  /v2/action/deploy:
+    post:
+      operationId: vtddDeployProduction
+      summary: Dispatch governed production deploy after GO plus real passkey approval.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                repository:
+                  type: string
+                runtimeUrl:
+                  type: string
+                phase:
+                  type: string
+                policyInput:
+                  type: object
+                  properties:
+                    approvalPhrase:
+                      type: string
+                    approvalGrantId:
+                      type: string
+                  additionalProperties: true
+              additionalProperties: true
+      responses:
+        "202":
+          description: Production deploy dispatched
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "401":
+          description: Missing machine auth
+        "403":
+          description: Invalid machine auth
+        "422":
+          description: Deploy request blocked or invalid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "503":
+          description: Deploy dispatch failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
   /v2/action/progress:
     get:
       operationId: vtddExecutionProgress

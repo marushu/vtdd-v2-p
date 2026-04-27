@@ -169,6 +169,7 @@ export {
   classifyGeminiReviewFailure
 } from "./gemini-review-failure.js";
 export { runMvpGateway } from "./mvp-gateway.js";
+export { executeDeployProductionPlane } from "./deploy-production-plane.js";
 export {
   resolveGatewayAliasRegistryFromGitHubApp,
   resolveGitHubAppInstallationToken
