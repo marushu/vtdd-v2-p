@@ -12,6 +12,7 @@ test("close-readiness audit distinguishes close-ready from auto-closed", () => {
   assert.equal(doc.includes("docs/mvp/open-issue-current-reality-audit.md"), true);
   assert.equal(doc.includes("`#4` is the current parent contract for the Butler-Codex-Gemini revision loop"), true);
   assert.equal(doc.includes("`#6` remains a historical execution-slice issue"), true);
+  assert.equal(doc.includes("Its execution-spine behavior is already directly evidenced through `E2E-19`."), true);
   assert.equal(doc.includes("`#13` parent execution anchor"), false);
   assert.equal(doc.includes("`#1` top-level VTDD V2 draft"), false);
 });

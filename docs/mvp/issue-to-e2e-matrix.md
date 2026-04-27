@@ -384,7 +384,7 @@ Status values used below:
 
 ## E2E-19 Butler-Codex-Gemini PR revision loop
 
-- Issues: `#4 #45`
+- Issues: `#4 #6 #45`
 - Happy path:
   - Butler reads GitHub runtime truth, returns `resume` continuity guidance, and exposes PR/review synthesis that points Codex toward bounded PR revision work
 - Boundary path:
