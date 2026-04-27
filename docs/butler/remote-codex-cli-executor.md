@@ -1,6 +1,14 @@
 # VTDD-managed Remote Codex CLI Executor
 
-This document is the canonical runtime contract for Issue #6.
+This document is the canonical remote-executor transport contract under parent
+Issue #4.
+
+Historical note:
+- Issue `#6` captured the first execution-spine slice for this transport
+- current implementation authority for the full Butler-Codex-Gemini loop lives
+  under Issue `#4`
+- Issue `#6` remains useful as historical execution-transport context, not as a
+  competing parent contract
 
 ## Purpose
 

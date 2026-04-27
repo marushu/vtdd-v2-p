@@ -8,7 +8,8 @@ const DOC_PATH = path.join(process.cwd(), "docs", "mvp", "issue-triage-plan.md")
 test("issue triage plan reflects current reading and deprecated boundary", () => {
   const doc = fs.readFileSync(DOC_PATH, "utf8");
   assert.equal(doc.includes("`#13` has already been rewritten as the MVP execution anchor"), true);
-  assert.equal(doc.includes("`#6` remains deprecated and must not be used as a direct implementation source"), true);
+  assert.equal(doc.includes("`#4` is the current parent contract for the Butler-Codex-Gemini loop"), true);
+  assert.equal(doc.includes("`#6` remains a historical execution-slice and must not compete with `#4` as a parent authority"), true);
   assert.equal(doc.includes("overall status is still `partial / in-progress`"), true);
   assert.equal(doc.includes("`docs/mvp/issue-to-e2e-matrix.md`"), true);
 });
@@ -18,5 +19,6 @@ test("issue triage plan no longer reads like pending issue-creation instructions
   assert.equal(doc.includes("re-opening already triaged scope"), true);
   assert.equal(doc.includes("repository resolution safety was split out and implemented"), true);
   assert.equal(doc.includes("role separation was split out and implemented"), true);
+  assert.equal(doc.includes("`#4` for current Butler-Codex-Gemini loop parent authority"), true);
   assert.equal(doc.includes("active open Issues only for remaining bounded work"), true);
 });

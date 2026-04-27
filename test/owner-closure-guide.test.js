@@ -15,7 +15,8 @@ test("owner closure guide distinguishes #13 as strongest close candidate without
 
 test("owner closure guide keeps #1 and #6 as human judgment calls", () => {
   const doc = fs.readFileSync(DOC_PATH, "utf8");
-  assert.equal(doc.includes("`#6` is historical and deprecated"), true);
+  assert.equal(doc.includes("`#6` is historical execution-transport context"), true);
+  assert.equal(doc.includes("`#4` now holds that role"), true);
   assert.equal(doc.includes("`#1` is still the broadest top-level draft / umbrella reference"), true);
   assert.equal(doc.includes("This guide does not say any issue must be closed now"), true);
 });
