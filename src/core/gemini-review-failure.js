@@ -1,5 +1,5 @@
 export const GeminiReviewFailureKind = Object.freeze({
-  QUOTA_OR_RATE_LIMIT: "quota_or_rate_limit",
+  TEMPORARY_UNAVAILABLE: "temporary_unavailable",
   OTHER: "other"
 });
 
@@ -11,9 +11,11 @@ export function classifyGeminiReviewFailure(input = {}) {
   if (
     status === 429 ||
     providerStatus === "resource_exhausted" ||
-    /quota exceeded|rate limit|resource_exhausted|too many requests/i.test(message)
+    /quota exceeded|rate limit|resource_exhausted|too many requests|currently experiencing high demand|try again later|temporarily unavailable/i.test(
+      message
+    )
   ) {
-    return { kind: GeminiReviewFailureKind.QUOTA_OR_RATE_LIMIT };
+    return { kind: GeminiReviewFailureKind.TEMPORARY_UNAVAILABLE };
   }
 
   return { kind: GeminiReviewFailureKind.OTHER };

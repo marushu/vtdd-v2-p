@@ -10,12 +10,12 @@ import {
 test("formatCodexReviewFallbackComment renders marker and @codex request", () => {
   const body = formatCodexReviewFallbackComment({
     trigger: "pull_request_target:synchronize",
-    reason: "gemini_quota_or_rate_limit"
+    reason: "gemini_temporarily_unavailable"
   });
 
   assert.equal(body.includes(CODEX_REVIEW_FALLBACK_MARKER), true);
   assert.equal(body.includes("@codex review"), true);
-  assert.equal(body.includes("gemini_quota_or_rate_limit"), true);
+  assert.equal(body.includes("gemini_temporarily_unavailable"), true);
 });
 
 test("findExistingCodexReviewFallbackComment locates prior fallback request", () => {

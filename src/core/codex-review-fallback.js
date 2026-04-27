@@ -2,7 +2,7 @@ export const CODEX_REVIEW_FALLBACK_MARKER = "<!-- vtdd:reviewer=codex-fallback -
 
 export function formatCodexReviewFallbackComment(input = {}) {
   const trigger = normalizeText(input.trigger) || "unknown";
-  const reason = normalizeText(input.reason) || "gemini_quota_or_rate_limit";
+  const reason = normalizeText(input.reason) || "gemini_temporarily_unavailable";
 
   return [
     CODEX_REVIEW_FALLBACK_MARKER,

@@ -72,10 +72,10 @@ async function main() {
     });
   } catch (error) {
     const failure = classifyGeminiReviewFailure(error instanceof Error ? error : {});
-    if (failure.kind === GeminiReviewFailureKind.QUOTA_OR_RATE_LIMIT) {
+    if (failure.kind === GeminiReviewFailureKind.TEMPORARY_UNAVAILABLE) {
       const fallbackBody = formatCodexReviewFallbackComment({
         trigger: triggerResult.value.trigger,
-        reason: "gemini_quota_or_rate_limit"
+        reason: "gemini_temporarily_unavailable"
       });
       if (existingFallbackComment) {
         await githubFetch(`/repos/${repository}/issues/comments/${existingFallbackComment.id}`, {
