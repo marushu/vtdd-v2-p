@@ -125,24 +125,37 @@ function buildReviewState(pullRequest) {
   const parsedGeminiSignals = collectGeminiReviewerSignals(pullRequest);
   const codexFallback = collectCodexFallbackSignals(pullRequest);
   const reviewCommentsCount =
-    parsedGeminiSignals.totalCount > 0 ? parsedGeminiSignals.totalCount : pullRequest.reviewCommentsCount;
+    parsedGeminiSignals.totalCount > 0
+      ? parsedGeminiSignals.totalCount
+      : codexFallback.completed
+        ? 1
+        : pullRequest.reviewCommentsCount;
   const unresolvedReviewCommentsCount =
     parsedGeminiSignals.totalCount > 0
       ? parsedGeminiSignals.blockingCount
-      : pullRequest.unresolvedReviewCommentsCount;
-  const reviewerStatus = codexFallback.requested
-    ? "codex_review_requested"
-    : reviewCommentsCount > 0
-      ? "gemini_review_available"
-      : "review_unavailable";
-  const reviewer = reviewerStatus === "codex_review_requested" ? "codex" : pullRequest.reviewer;
+      : codexFallback.completed
+        ? (codexFallback.blocking ? 1 : 0)
+        : pullRequest.unresolvedReviewCommentsCount;
+  const reviewerStatus = codexFallback.completed
+    ? "codex_review_available"
+    : codexFallback.blocked
+      ? "codex_review_blocked"
+      : codexFallback.requested
+        ? "codex_review_requested"
+        : reviewCommentsCount > 0
+          ? "gemini_review_available"
+          : "review_unavailable";
+  const reviewer =
+    reviewerStatus.startsWith("codex_review") ? "codex" : pullRequest.reviewer;
   const criticalReviewPending =
     pullRequest.exists &&
     (reviewerStatus === "codex_review_requested" ||
+      reviewerStatus === "codex_review_blocked" ||
       (reviewCommentsCount > 0 && unresolvedReviewCommentsCount > 0));
   const rerunReviewer =
     pullRequest.exists &&
     reviewerStatus !== "codex_review_requested" &&
+    reviewerStatus !== "codex_review_blocked" &&
     (pullRequest.updatedSinceReview || unresolvedReviewCommentsCount > 0);
 
   return {
@@ -171,9 +184,13 @@ function collectGeminiReviewerSignals(pullRequest) {
 function collectCodexFallbackSignals(pullRequest) {
   const comments = [...(Array.isArray(pullRequest.issueComments) ? pullRequest.issueComments : [])];
   const parsed = comments.map(parseCodexReviewFallbackComment).filter(Boolean);
+  const latest = parsed.at(-1) ?? null;
 
   return {
-    requested: parsed.length > 0
+    requested: latest?.status === "requested",
+    completed: latest?.status === "completed",
+    blocked: latest?.status === "blocked",
+    blocking: latest?.blocking === true
   };
 }
 
@@ -194,6 +211,10 @@ function buildNextSuggestedActions({ pullRequest, review, codexGoal }) {
 
   if (review.reviewerStatus === "codex_review_requested") {
     return ["wait_for_codex_review", "summarize_for_human"];
+  }
+
+  if (review.reviewerStatus === "codex_review_blocked") {
+    return ["surface_reviewer_platform_blocker", "summarize_for_human"];
   }
 
   if (codexGoal === CodexGoal.REVISE_PR) {

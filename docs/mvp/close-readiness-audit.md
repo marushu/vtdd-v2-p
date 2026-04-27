@@ -22,6 +22,10 @@ The following open issues are intentionally not treated as close-readiness-only
 items here because they still represent active implementation/spec work:
 
 - `#84`
+  - current reading: runtime/docs progress exists for VTDD-managed non-manual
+    fallback workflow dispatch and explicit blocked-state signaling
+  - keep open until the owner judges whether that path is an acceptable
+    no-manual fallback answer
 
 ## Current Reading
 

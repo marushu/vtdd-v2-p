@@ -1,0 +1,100 @@
+name: codex-pr-review-fallback
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_repository:
+        description: "owner/repo to review"
+        required: true
+        type: string
+      pull_request_number:
+        description: "Target pull request number"
+        required: true
+        type: string
+      head_ref:
+        description: "PR head ref to review"
+        required: true
+        type: string
+      base_ref:
+        description: "PR base ref"
+        required: true
+        type: string
+      trigger:
+        description: "Original reviewer trigger"
+        required: true
+        type: string
+      reason:
+        description: "Fallback reason"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    env:
+      TARGET_REPOSITORY: ${{ github.event.inputs.target_repository }}
+      TARGET_PR_NUMBER: ${{ github.event.inputs.pull_request_number }}
+      TARGET_HEAD_REF: ${{ github.event.inputs.head_ref }}
+      TARGET_BASE_REF: ${{ github.event.inputs.base_ref }}
+      CODEX_FALLBACK_TRIGGER: ${{ github.event.inputs.trigger }}
+      CODEX_FALLBACK_REASON: ${{ github.event.inputs.reason }}
+    steps:
+      - name: Validate Codex fallback inputs
+        shell: bash
+        run: |
+          if ! [[ "$TARGET_REPOSITORY" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
+            echo "target_repository must be owner/repo."
+            exit 1
+          fi
+          if ! [[ "$TARGET_PR_NUMBER" =~ ^[0-9]+$ ]]; then
+            echo "pull_request_number must be numeric."
+            exit 1
+          fi
+          if ! [[ "$TARGET_HEAD_REF" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+            echo "head_ref contains unsupported characters."
+            exit 1
+          fi
+          if ! [[ "$TARGET_BASE_REF" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+            echo "base_ref contains unsupported characters."
+            exit 1
+          fi
+
+      - name: Mint GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.VTDD_GITHUB_APP_ID }}
+          private-key: ${{ secrets.VTDD_GITHUB_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      - name: Checkout target repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.TARGET_REPOSITORY }}
+          ref: ${{ env.TARGET_HEAD_REF }}
+          token: ${{ steps.app-token.outputs.token }}
+          fetch-depth: 0
+
+      - name: Fetch base ref
+        shell: bash
+        run: git fetch origin "$TARGET_BASE_REF":"refs/remotes/origin/$TARGET_BASE_REF"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Codex CLI
+        shell: bash
+        run: npm install -g @openai/codex
+
+      - name: Run non-manual Codex fallback review
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: node scripts/run-codex-pr-review-fallback.mjs

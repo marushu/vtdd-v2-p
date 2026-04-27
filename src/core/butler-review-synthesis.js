@@ -46,8 +46,14 @@ export function buildButlerReviewSynthesis(input = {}) {
 
 function buildHeadline({ pullRequest, reviewLoop }) {
   const base = `PR #${pullRequest.number} is ${pullRequest.state || "open"}.`;
+  if (reviewLoop.reviewerStatus === "codex_review_blocked") {
+    return `${base} Gemini is temporarily unavailable and non-manual Codex fallback is currently blocked by platform or repository configuration.`;
+  }
   if (reviewLoop.reviewerStatus === "codex_review_requested") {
     return `${base} Gemini is temporarily unavailable and Codex fallback review has been requested.`;
+  }
+  if (reviewLoop.reviewerStatus === "codex_review_available") {
+    return `${base} Codex fallback reviewer evidence is available and should be checked before human GO.`;
   }
   if (reviewLoop.unresolvedReviewCommentsCount > 0) {
     return `${base} ${reviewLoop.unresolvedReviewCommentsCount} unresolved reviewer objections remain.`;
@@ -66,6 +72,9 @@ function buildHumanDecisionFocus({ pullRequest, reviewLoop, codexGoal }) {
   }
   if (reviewLoop.reviewerStatus === "codex_review_requested") {
     focus.push("Gemini is temporarily unavailable; Codex fallback review has been requested and should arrive before human GO.");
+  }
+  if (reviewLoop.reviewerStatus === "codex_review_blocked") {
+    focus.push("Gemini is temporarily unavailable and non-manual Codex fallback is blocked; do not treat reviewer coverage as satisfied.");
   }
   if (pullRequest.updatedSinceReview) {
     focus.push("The PR changed after the last review signal; reviewer evidence should be refreshed against the current diff.");

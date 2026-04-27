@@ -29,17 +29,21 @@ Gemini review must run when:
 
 If Gemini is temporarily unavailable because of quota exhaustion, rate
 limiting, or transient provider high demand / temporary unavailability, VTDD
-may upsert a GitHub-visible Codex fallback review request comment (`@codex
-review`) instead of hard-failing the PR solely for reviewer availability
-reasons.
+must not hard-fail the PR solely for reviewer availability reasons.
+
+Preferred fallback:
+
+- VTDD dispatches a non-manual Codex fallback review workflow
+- that workflow runs Codex in critique-only reviewer mode
+- VTDD writes the resulting fallback review comment back to the PR through the
+  GitHub App token path
 
 Current limitation:
 
-- a VTDD bot-authored `@codex review` request is not yet guaranteed to produce
-  the same result as an owner-authored Codex request
-- therefore this slice proves request-state visibility, not a completed
-  no-manual Codex fallback design
-- the unresolved no-manual fallback path is tracked by `#84`
+- if reviewer runtime credentials/configuration for the non-manual Codex
+  fallback are absent, VTDD can only surface an explicit fallback blocker state
+- a VTDD bot-authored `@codex review` request is not treated as the canonical
+  no-manual solution path
 
 The workflow must ignore its own marker comment so that reviewer reruns do not
 create an infinite comment loop.

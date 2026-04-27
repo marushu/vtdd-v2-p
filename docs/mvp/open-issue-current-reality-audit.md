@@ -32,14 +32,18 @@ However, the open issue set now contains four different kinds of items:
 
 - none at the moment
 
-## Current Active Spec / Boundary Issues
+## Current Active Implementation / Boundary Issues
 
 - `#84`
+  - runtime/docs progress now exists for VTDD-managed no-manual Codex fallback
+    workflow dispatch plus explicit blocked-state handling
   - current reading: bot-authored `@codex review` fallback is not equivalent to
     owner-authored Codex invocation
   - manual copy-paste fallback is explicitly not the desired steady-state
     answer
-  - this remains active design work, not close-ready evidence-only work
+  - remaining work is no longer "missing design from scratch"; it is human
+    judgment on whether the VTDD-managed workflow path is the acceptable
+    no-manual fallback answer
 
 ## Open Issues With Merged Runtime / Docs Progress And Likely Human Closure Work
 
@@ -87,12 +91,14 @@ The following older readings must not be reintroduced:
 
 The next highest-value cleanup is:
 
-- keep `#82` and `#84` visible as current active work rather than reading the
-  repo as mostly closure-ready
-- decide whether `#80` and `#82` are ready for human closure judgment
+- keep `#84` visible as a boundary-sensitive open issue even after runtime/docs
+  progress lands, because owner judgment is still needed on the no-manual
+  fallback answer
+- decide whether `#80`, `#82`, and `#84` are ready for human closure judgment
 - keep `#6` separate as historical/human-judgment context rather than treating
   it as active implementation uncertainty
 
 The repository still has broad runnable coverage, but the remaining drift is no
 longer only at the owner close-readiness layer; it now concentrates mainly on
-the unresolved no-manual reviewer-fallback boundary tracked by `#84`.
+judging whether the VTDD-managed no-manual reviewer-fallback path for `#84`
+meets the intended operational bar.
