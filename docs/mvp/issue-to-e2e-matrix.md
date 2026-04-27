@@ -326,7 +326,7 @@ Status values used below:
 
 ## E2E-16 Worker passkey secret sync bridge
 
-- Issues: `#26`
+- Issues: `#26 #43`
 - Happy path:
   - Worker-hosted section `3. GitHub App Secret Sync` connects to the canonical desktop bootstrap/update bridge when an explicit `syncApiBase` is provided
 - Boundary path:
@@ -347,7 +347,7 @@ Status values used below:
 
 ## E2E-17 GitHub App secret sync bootstrap
 
-- Issues: `#15`
+- Issues: `#15 #43`
 - Happy path:
   - an explicit operator bootstrap/update path syncs GitHub App root material from `~/.vtdd/credentials/manifest.json` into GitHub Actions/runtime secrets with approval-bound execution
 - Boundary path:
@@ -384,7 +384,7 @@ Status values used below:
 
 ## E2E-19 Butler-Codex-Gemini PR revision loop
 
-- Issues: `#4`
+- Issues: `#4 #45`
 - Happy path:
   - Butler reads GitHub runtime truth, returns `resume` continuity guidance, and exposes PR/review synthesis that points Codex toward bounded PR revision work
 - Boundary path:
@@ -402,6 +402,87 @@ Status values used below:
   - `test/worker.test.js`
 - Run evidence:
   - `docs/mvp/e2e/e2e-19-butler-codex-gemini-pr-revision-loop.md`
+- Status: `e2e_evidenced_pending_human_closure`
+
+## E2E-20 GitHub operation plane canonicalization
+
+- Issues: `#42`
+- Happy path:
+  - the canonical GitHub operation plane remains full-scope by default and is connected to the current read, normal write, and high-risk Butler-side runtime paths
+- Boundary path:
+  - capability narrowing, normal-plane merge, or approval-bypass interpretations are rejected instead of silently redefining VTDD scope
+- Implementation evidence:
+  - `docs/security/github-operation-plane.md`
+  - `src/core/github-read-plane.js`
+  - `src/core/github-write-plane.js`
+  - `src/core/github-high-risk-plane.js`
+  - `src/core/approval.js`
+  - `src/worker.js`
+- Test evidence:
+  - `test/github-operation-plane.test.js`
+  - `test/github-read-plane.test.js`
+  - `test/github-write-plane.test.js`
+  - `test/github-high-risk-plane.test.js`
+  - `test/worker.test.js`
+- Run evidence:
+  - `docs/mvp/e2e/e2e-20-github-operation-plane-canonicalization.md`
+- Status: `e2e_evidenced_pending_human_closure`
+
+## E2E-21 Live verified completion contract
+
+- Issues: `#44`
+- Happy path:
+  - the canonical completion contract requires human-observable external evidence and fixes the repository-wide status vocabulary
+- Boundary path:
+  - docs-only, code-only, task-summary-only, or internal-flag-only completion claims remain explicitly insufficient
+- Implementation evidence:
+  - `docs/mvp/live-verified-contract.md`
+  - `docs/mvp/issue-to-e2e-matrix.md`
+- Test evidence:
+  - `test/live-verified-contract.test.js`
+  - `test/issue-to-e2e-matrix.test.js`
+- Run evidence:
+  - `docs/mvp/e2e/e2e-21-live-verified-completion-contract.md`
+- Status: `e2e_evidenced_pending_human_closure`
+
+## E2E-22 GitHub read plane
+
+- Issues: `#46`
+- Happy path:
+  - Butler can read repository, issue, review, review comment, check, workflow, and branch runtime truth through the GitHub App-backed read plane
+- Boundary path:
+  - unsupported resources or missing required identifiers are rejected instead of being guessed or narrated speculatively
+- Implementation evidence:
+  - `src/core/github-read-plane.js`
+  - `src/worker.js`
+  - `docs/setup/custom-gpt-actions-openapi.yaml`
+  - `docs/setup/custom-gpt-instructions.md`
+- Test evidence:
+  - `test/github-read-plane.test.js`
+  - `test/worker.test.js`
+  - `test/custom-gpt-setup-docs.test.js`
+- Run evidence:
+  - `docs/mvp/e2e/e2e-22-github-read-plane.md`
+- Status: `e2e_evidenced_pending_human_closure`
+
+## E2E-23 PR body guardrail
+
+- Issues: `#57`
+- Happy path:
+  - local helper tooling renders required PR evidence markers and the remote Codex workflow uses the generated body path
+- Boundary path:
+  - invalid/missing PR evidence markers fail locally before recurring guarded-policy CI waste occurs
+- Implementation evidence:
+  - `scripts/render-pr-body.mjs`
+  - `scripts/validate-pr-body.mjs`
+  - `.github/workflows/remote-codex-executor.yml`
+  - `docs/pr-template-model.md`
+- Test evidence:
+  - `test/pr-body-guardrail.test.js`
+  - `test/remote-codex-workflow.test.js`
+  - `test/pr-template-model.test.js`
+- Run evidence:
+  - `docs/mvp/e2e/e2e-23-pr-body-guardrail.md`
 - Status: `e2e_evidenced_pending_human_closure`
 
 ## Current Completion Reading

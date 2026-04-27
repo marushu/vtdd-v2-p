@@ -34,4 +34,5 @@ test("issue-to-e2e matrix references E2E-16 run evidence", () => {
   const doc = fs.readFileSync(MATRIX_PATH, "utf8");
   assert.equal(doc.includes("## E2E-16 Worker passkey secret sync bridge"), true);
   assert.equal(doc.includes("docs/mvp/e2e/e2e-16-worker-passkey-secret-sync-bridge.md"), true);
+  assert.equal(doc.includes("- Issues: `#26 #43`"), true);
 });

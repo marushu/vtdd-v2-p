@@ -11,21 +11,22 @@ const DOC_PATH = path.join(
 );
 const CLOSE_AUDIT_PATH = path.join(process.cwd(), "docs", "mvp", "close-readiness-audit.md");
 
-test("open issue current-reality audit distinguishes mapped, unmapped, and historical open issues", () => {
+test("open issue current-reality audit distinguishes mapped and historical open issues", () => {
   const doc = fs.readFileSync(DOC_PATH, "utf8");
   assert.equal(doc.includes("`#4`"), true);
-  assert.equal(doc.includes("`#15`"), true);
-  assert.equal(doc.includes("`#26`"), true);
-  assert.equal(doc.includes("`#52`"), true);
-  assert.equal(doc.includes("`#55`"), true);
-  assert.equal(doc.includes("`#9` and `#12`"), true);
   assert.equal(doc.includes("`#42`"), true);
   assert.equal(doc.includes("`#43`"), true);
   assert.equal(doc.includes("`#44`"), true);
   assert.equal(doc.includes("`#45`"), true);
   assert.equal(doc.includes("`#46`"), true);
+  assert.equal(doc.includes("`#15`"), true);
+  assert.equal(doc.includes("`#26`"), true);
+  assert.equal(doc.includes("`#52`"), true);
+  assert.equal(doc.includes("`#55`"), true);
   assert.equal(doc.includes("`#57`"), true);
+  assert.equal(doc.includes("`#9` and `#12`"), true);
   assert.equal(doc.includes("`#6`"), true);
+  assert.equal(doc.includes("Still Missing Direct Matrix Mapping"), false);
 });
 
 test("open issue current-reality audit records resolved stale readings", () => {
