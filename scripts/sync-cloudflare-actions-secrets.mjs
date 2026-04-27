@@ -1,7 +1,8 @@
 import fs from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { executeCloudflareDeploySecretSync, loadDesktopBootstrapVault } from "../src/core/index.js";
+import { executeCloudflareDeploySecretSync } from "../src/core/index.js";
+import { loadDesktopBootstrapVault } from "../src/core/desktop-bootstrap-vault.js";
 
 const execFileAsync = promisify(execFile);
 

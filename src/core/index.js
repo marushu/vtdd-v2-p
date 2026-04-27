@@ -9,12 +9,6 @@ export {
 } from "./types.js";
 export { evaluateAutonomyModeBoundary, normalizeAutonomyMode } from "./autonomy-mode.js";
 export {
-  DEFAULT_VTDD_CREDENTIALS_DIR,
-  DEFAULT_VTDD_HOME_PATH,
-  DEFAULT_VTDD_VAULT_MANIFEST_PATH,
-  loadDesktopBootstrapVault
-} from "./desktop-bootstrap-vault.js";
-export {
   DeployAuthorityPath,
   DeployAuthorityPreference,
   ProtectionSignalStatus,
