@@ -1039,10 +1039,24 @@
             }
           },
           "401": {
-            "description": "Missing machine auth"
+            "description": "Missing machine auth",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
           },
           "403": {
-            "description": "Invalid machine auth"
+            "description": "Invalid machine auth",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
           },
           "422": {
             "description": "Repository nickname request blocked or invalid",
@@ -1176,10 +1190,24 @@
             }
           },
           "401": {
-            "description": "Missing machine auth"
+            "description": "Missing machine auth",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
           },
           "403": {
-            "description": "Invalid machine auth"
+            "description": "Invalid machine auth",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
           },
           "503": {
             "description": "Butler self-parity evaluation unavailable",
@@ -1210,10 +1238,24 @@
             }
           },
           "401": {
-            "description": "Missing machine auth"
+            "description": "Missing machine auth",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
           },
           "403": {
-            "description": "Invalid machine auth"
+            "description": "Invalid machine auth",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
           },
           "503": {
             "description": "Repository nickname retrieval unavailable",

@@ -532,8 +532,16 @@ paths:
                 $ref: "#/components/schemas/VtddGenericResponse"
         "401":
           description: Missing machine auth
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
         "403":
           description: Invalid machine auth
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
         "422":
           description: Repository nickname request blocked or invalid
           content:
@@ -679,8 +687,16 @@ paths:
                 $ref: "#/components/schemas/VtddGenericResponse"
         "401":
           description: Missing machine auth
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
         "403":
           description: Invalid machine auth
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
         "503":
           description: Repository nickname retrieval unavailable
           content:
@@ -758,8 +774,16 @@ paths:
                 $ref: "#/components/schemas/VtddGenericResponse"
         "401":
           description: Missing machine auth
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
         "403":
           description: Invalid machine auth
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
         "503":
           description: Butler self-parity evaluation unavailable
           content:
