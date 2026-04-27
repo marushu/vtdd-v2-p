@@ -29,21 +29,33 @@ export function resolveRepositoryTarget({ input, mode, aliasRegistry }) {
     }
   }
 
+  const aliasMatches = [];
   for (const record of registry) {
     const names = [record.productName, ...(record.aliases ?? [])].map(normalize).filter(Boolean);
     if (names.includes(normalizedInput)) {
-      return { resolved: true, repository: record.canonicalRepo, via: "alias" };
+      aliasMatches.push(record.canonicalRepo);
     }
+  }
+
+  if (aliasMatches.length === 1) {
+    return { resolved: true, repository: aliasMatches[0], via: "alias" };
+  }
+
+  if (aliasMatches.length > 1) {
+    return unresolved(mode, "target repository nickname is ambiguous", {
+      ambiguous: true,
+      candidates: aliasMatches
+    });
   }
 
   return unresolved(mode, "target repository could not be resolved from alias registry");
 }
 
-function unresolved(mode, reason) {
+function unresolved(mode, reason, detail = {}) {
   if (mode === TaskMode.READ_ONLY) {
-    return { resolved: false, safeToProceedReadOnly: true, reason };
+    return { resolved: false, safeToProceedReadOnly: true, reason, ...detail };
   }
-  return { resolved: false, safeToProceedReadOnly: false, reason };
+  return { resolved: false, safeToProceedReadOnly: false, reason, ...detail };
 }
 
 function normalize(value) {

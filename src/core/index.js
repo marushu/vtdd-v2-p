@@ -51,6 +51,13 @@ export {
 } from "./cloudflare-deploy-secret-sync.js";
 export { requiredCredentialTier, evaluateCredentialBoundary } from "./credential-boundary.js";
 export { resolveRepositoryTarget } from "./repository-resolution.js";
+export {
+  RepositoryNicknameMode,
+  mergeAliasRegistries,
+  normalizeAliasRegistry,
+  retrieveStoredAliasRegistry,
+  upsertRepositoryNickname
+} from "./repository-nickname-registry.js";
 export { evaluateTargetConfirmationBoundary } from "./target-confirmation.js";
 export { evaluateRoleBoundary } from "./role-boundary.js";
 export { evaluateRuntimeTruthPrecondition } from "./runtime-truth.js";

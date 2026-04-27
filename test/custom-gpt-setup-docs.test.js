@@ -37,11 +37,14 @@ test("custom gpt instructions preserve current butler and approval boundaries", 
   assert.equal(doc.includes("vtddDeployProduction"), true);
   assert.equal(doc.includes("vtddExecutionProgress"), true);
   assert.equal(doc.includes("vtddRetrieveGitHub"), true);
+  assert.equal(doc.includes("vtddUpsertRepositoryNickname"), true);
+  assert.equal(doc.includes("vtddRetrieveRepositoryNicknames"), true);
   assert.equal(doc.includes("vtddRetrieveSetupArtifact"), true);
   assert.equal(doc.includes("vtddRetrieveSelfParity"), true);
   assert.equal(doc.includes("when the user says `君`, `自分`, `Butler`, `VTDD`, or `このGPT`"), true);
   assert.equal(doc.includes("`君自身のアップデートある？`"), true);
   assert.equal(doc.includes("`古くなってない？`"), true);
+  assert.equal(doc.includes("Nickname memory is explicit user-owned alias registry data"), true);
   assert.equal(doc.includes("prefer vtddRetrieveSelfParity over general model-capability disclaimers"), true);
   assert.equal(doc.includes("Before the first significant GitHub/runtime action in a session"), true);
   assert.equal(doc.includes("Cloudflare deploy update required"), true);
@@ -65,8 +68,10 @@ test("custom gpt openapi doc exposes current gateway, execute, and progress rout
   assert.equal(doc.includes("/v2/action/github:"), true);
   assert.equal(doc.includes("/v2/action/github-authority:"), true);
   assert.equal(doc.includes("/v2/action/deploy:"), true);
+  assert.equal(doc.includes("/v2/action/repository-nickname:"), true);
   assert.equal(doc.includes("/v2/action/progress:"), true);
   assert.equal(doc.includes("/v2/retrieve/github:"), true);
+  assert.equal(doc.includes("/v2/retrieve/repository-nicknames:"), true);
   assert.equal(doc.includes("/v2/retrieve/setup-artifact:"), true);
   assert.equal(doc.includes("/v2/retrieve/self-parity:"), true);
   assert.equal(doc.includes("/v2/retrieve/approval-grant:"), true);
@@ -103,8 +108,10 @@ test("custom gpt openapi json parses and exposes paths as an object", () => {
   assert.equal(typeof doc.paths["/v2/action/github"], "object");
   assert.equal(typeof doc.paths["/v2/action/github-authority"], "object");
   assert.equal(typeof doc.paths["/v2/action/deploy"], "object");
+  assert.equal(typeof doc.paths["/v2/action/repository-nickname"], "object");
   assert.equal(typeof doc.paths["/v2/action/progress"], "object");
   assert.equal(typeof doc.paths["/v2/retrieve/github"], "object");
+  assert.equal(typeof doc.paths["/v2/retrieve/repository-nicknames"], "object");
   assert.equal(typeof doc.paths["/v2/retrieve/setup-artifact"], "object");
   assert.equal(typeof doc.paths["/v2/retrieve/self-parity"], "object");
   assert.equal(typeof doc.paths["/v2/retrieve/approval-grant"], "object");
