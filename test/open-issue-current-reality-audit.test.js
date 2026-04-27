@@ -14,9 +14,9 @@ const CLOSE_AUDIT_PATH = path.join(process.cwd(), "docs", "mvp", "close-readines
 test("open issue current-reality audit distinguishes mapped and historical open issues", () => {
   const doc = fs.readFileSync(DOC_PATH, "utf8");
   assert.equal(doc.includes("`#4`"), true);
-  assert.equal(doc.includes("`#89`"), true);
-  assert.equal(doc.includes("`公開VTDD`"), true);
-  assert.equal(doc.includes("persistent user-owned nickname registry"), true);
+  assert.equal(doc.includes("`#91`"), true);
+  assert.equal(doc.includes("passkey operator URL"), true);
+  assert.equal(doc.includes("deploy stale"), true);
   assert.equal(doc.includes("`#4`"), true);
   assert.equal(doc.includes("Still Missing Direct Matrix Mapping"), false);
 });
@@ -36,7 +36,7 @@ test("close-readiness audit points readers to open issue current-reality audit",
   const doc = fs.readFileSync(CLOSE_AUDIT_PATH, "utf8");
   assert.equal(doc.includes("docs/mvp/open-issue-current-reality-audit.md"), true);
   assert.equal(doc.includes("`#4` current loop parent"), true);
-  assert.equal(doc.includes("`#89`"), true);
-  assert.equal(doc.includes("persistent"), true);
-  assert.equal(doc.includes("nickname"), true);
+  assert.equal(doc.includes("`#91`"), true);
+  assert.equal(doc.includes("passkey operator URL"), true);
+  assert.equal(doc.includes("iPhone-friendly"), true);
 });

@@ -18,10 +18,10 @@ For the broader open-issue vs current-reality mismatch inventory, also read:
 The following open issues are intentionally not treated as close-readiness-only
 items here because they still represent active implementation/spec work:
 
-- `#89`
-  - current reading: active implementation is still required for persistent
-    user-defined repository nicknames
-  - keep open until runtime/docs/E2E for nickname storage and safe resolution
+- `#91`
+  - current reading: active implementation is still required for direct
+    passkey operator URL guidance from Butler deploy recovery
+  - keep open until runtime/docs/E2E for the iPhone-friendly operator link path
     land on `main`
 
 ## Current Reading

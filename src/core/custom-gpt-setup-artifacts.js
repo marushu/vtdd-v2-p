@@ -157,6 +157,8 @@ export async function retrieveCustomGptSetupArtifact(input = {}) {
 export async function evaluateButlerSelfParity(input = {}) {
   const repository = normalizeText(input.repository);
   const ref = normalizeText(input.ref) || "main";
+  const runtimeOrigin = normalizeOrigin(input.runtimeOrigin);
+  const issueNumber = normalizeIssueNumber(input.issueNumber);
   const env = input.env ?? {};
 
   const instructions = await retrieveCustomGptSetupArtifact({
@@ -206,13 +208,29 @@ export async function evaluateButlerSelfParity(input = {}) {
       ? "cloudflare_deploy_update_required"
       : "in_sync";
 
+  const deployOperatorUrl =
+    runtimeParity === "cloudflare_deploy_update_required" && repository && runtimeOrigin
+      ? buildPasskeyOperatorUrl({
+          origin: runtimeOrigin,
+          repository,
+          actionType: "deploy_production",
+          highRiskKind: "deploy_production",
+          issueNumber
+        })
+      : null;
+
   const recommendedActions =
     runtimeParity === "in_sync"
       ? [
           "If Butler cannot use the expected feature set from the current surface, Action Schema update required.",
           "If Butler cannot follow the expected behavior from the current surface, Instructions update required."
         ]
-      : ["Cloudflare deploy update required."];
+      : [
+          "Cloudflare deploy update required.",
+          deployOperatorUrl
+            ? `Open the same-origin passkey operator helper: ${deployOperatorUrl}`
+            : "Resolve the repository on the current Butler surface before generating a passkey operator helper URL."
+        ];
 
   return {
     ok: true,
@@ -239,6 +257,17 @@ export async function evaluateButlerSelfParity(input = {}) {
       runtimeMissingRoutes,
       runtimeMissingOperationIds,
       runtimeMissingInstructionTokens,
+      deployRecovery:
+        runtimeParity === "cloudflare_deploy_update_required"
+          ? {
+              actionType: "deploy_production",
+              highRiskKind: "deploy_production",
+              requires: ["GO", "real passkey"],
+              repository,
+              issueNumber,
+              operatorUrl: deployOperatorUrl
+            }
+          : null,
       recommendedActions
     }
   };
@@ -298,6 +327,37 @@ function decodeGitHubFileContent(content, encoding) {
 function normalizeApiBaseUrl(value) {
   const normalized = normalizeText(value);
   return normalized ? normalized.replace(/\/+$/, "") : GITHUB_API_BASE_URL;
+}
+
+function buildPasskeyOperatorUrl({ origin, repository, actionType, highRiskKind, issueNumber }) {
+  const url = new URL("/v2/approval/passkey/operator", `${origin}/`);
+  url.searchParams.set("repositoryInput", repository);
+  url.searchParams.set("actionType", actionType);
+  url.searchParams.set("highRiskKind", highRiskKind);
+  if (Number.isInteger(issueNumber) && issueNumber > 0) {
+    url.searchParams.set("issueNumber", String(issueNumber));
+  }
+  return url.toString();
+}
+
+function normalizeOrigin(value) {
+  const normalized = normalizeText(value);
+  if (!normalized) {
+    return "";
+  }
+  try {
+    return new URL(normalized).origin;
+  } catch {
+    return "";
+  }
+}
+
+function normalizeIssueNumber(value) {
+  const numeric = Number(value);
+  if (!Number.isInteger(numeric) || numeric <= 0) {
+    return null;
+  }
+  return numeric;
 }
 
 function encodeRepository(repository) {

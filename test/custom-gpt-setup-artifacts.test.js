@@ -86,6 +86,8 @@ test("evaluateButlerSelfParity reports deploy update required when canonical set
   const result = await evaluateButlerSelfParity({
     repository: "sample-org/vtdd-v2-p",
     ref: "main",
+    runtimeOrigin: "https://sample-user-vtdd.example.workers.dev",
+    issueNumber: 91,
     env: {
       GITHUB_APP_INSTALLATION_TOKEN: "ghs_setup_read",
       GITHUB_API_FETCH: async (url) => {
@@ -107,4 +109,12 @@ test("evaluateButlerSelfParity reports deploy update required when canonical set
   assert.equal(result.selfParity.runtimeParity, "cloudflare_deploy_update_required");
   assert.equal(result.selfParity.runtimeMissingOperationIds.includes("vtddBrandNewParityRoute"), true);
   assert.equal(result.selfParity.recommendedActions.includes("Cloudflare deploy update required."), true);
+  assert.equal(
+    result.selfParity.deployRecovery.operatorUrl,
+    "https://sample-user-vtdd.example.workers.dev/v2/approval/passkey/operator?repositoryInput=sample-org%2Fvtdd-v2-p&actionType=deploy_production&highRiskKind=deploy_production&issueNumber=91"
+  );
+  assert.equal(
+    result.selfParity.recommendedActions.some((item) => item.includes("/v2/approval/passkey/operator")),
+    true
+  );
 });

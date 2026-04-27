@@ -29,12 +29,12 @@ However, the open issue set now contains three different kinds of items:
 
 ## Current Active Implementation Issues
 
-- `#89`
-  - current reading: user-defined repository nickname support is the new active
-    implementation slice
-  - existing alias/context-first resolution already works, but Butler still
-    lacks a persistent user-owned nickname registry for repo calls such as
-    `公開VTDD`
+- `#91`
+  - current reading: direct passkey operator URL guidance for iPhone deploy
+    recovery is the new active implementation slice
+  - governed deploy plane and operator page already exist, but Butler still
+    needs to return the canonical operator URL directly inside the conversation
+    when self-parity detects deploy stale
   - this remains active runtime/docs/E2E work rather than closure judgment
 
 ## Open Issues With Merged Runtime / Docs Progress And Likely Human Closure Work
@@ -62,10 +62,11 @@ The following older readings must not be reintroduced:
 
 The next highest-value cleanup is:
 
-- implement `#89` without weakening `no default repository`
+- implement `#91` so Butler can hand back the same-origin deploy operator URL
+  without weakening approval boundaries
 - keep `#4` as the live parent contract while child slices continue landing
 
 The repository still has broad runnable coverage, but the remaining drift is no
-longer concentrated on reviewer/deploy rescue slices. It is now concentrated on
-making Butler's repository context resolution more operator-friendly without
-reintroducing default-repository risk.
+longer concentrated on reviewer fallback or nickname storage. It is now
+concentrated on the final iPhone-friendly link guidance that connects deploy
+stale detection to the passkey operator page.

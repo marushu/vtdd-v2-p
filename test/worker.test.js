@@ -1140,7 +1140,7 @@ test("worker returns canonical Custom GPT setup artifacts", async () => {
 test("worker returns Butler self-parity summary", async () => {
   const response = await worker.fetch(
     new Request(
-      "https://example.com/v2/retrieve/self-parity?repository=sample-org/vtdd-v2-p&ref=main",
+      "https://example.com/v2/retrieve/self-parity?repository=sample-org/vtdd-v2-p&ref=main&issueNumber=91",
       {
         headers: gatewayAuthHeaders
       }
@@ -1196,6 +1196,71 @@ test("worker returns Butler self-parity summary", async () => {
   assert.equal(body.selfParity.runtimeParity, "in_sync");
   assert.equal(body.selfParity.runtimeMissingRoutes.length, 0);
   assert.equal(body.selfParity.canonical.artifacts.instructions.path, "docs/setup/custom-gpt-instructions.md");
+  assert.equal(body.selfParity.deployRecovery, null);
+});
+
+test("worker returns deploy recovery operator url in self-parity when runtime is stale", async () => {
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/v2/retrieve/self-parity?repository=sample-org/vtdd-v2-p&ref=main&issueNumber=91",
+      {
+        headers: gatewayAuthHeaders
+      }
+    ),
+    {
+      ...gatewayAuthEnv,
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_setup_read",
+      GITHUB_API_FETCH: async (url) => {
+        const parsed = new URL(url);
+        const isInstructions = parsed.pathname.endsWith("/docs/setup/custom-gpt-instructions.md");
+        return new Response(
+          JSON.stringify({
+            sha: isInstructions ? "instructions-sha" : "openapi-sha",
+            encoding: "base64",
+            content: Buffer.from(
+              isInstructions
+                ? [
+                    "vtddGateway",
+                    "vtddDeployProduction",
+                    "vtddRetrieveGitHub",
+                    "vtddRetrieveSetupArtifact",
+                    "vtddRetrieveSelfParity",
+                    "Action Schema update required",
+                    "Instructions update required",
+                    "Cloudflare deploy update required"
+                  ].join("\n")
+                : [
+                    "paths:",
+                    "  /v2/gateway:",
+                    "  /v2/action/deploy:",
+                    "  /v2/retrieve/github:",
+                    "  /v2/retrieve/setup-artifact:",
+                    "  /v2/retrieve/self-parity:",
+                    "    get:",
+                    "      operationId: vtddGateway",
+                    "      operationId: vtddDeployProduction",
+                    "      operationId: vtddRetrieveGitHub",
+                    "      operationId: vtddRetrieveSetupArtifact",
+                    "      operationId: vtddRetrieveSelfParity",
+                    "      operationId: vtddBrandNewParityRoute"
+                  ].join("\n"),
+              "utf8"
+            ).toString("base64")
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        );
+      }
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.selfParity.runtimeParity, "cloudflare_deploy_update_required");
+  assert.equal(
+    body.selfParity.deployRecovery.operatorUrl,
+    "https://example.com/v2/approval/passkey/operator?repositoryInput=sample-org%2Fvtdd-v2-p&actionType=deploy_production&highRiskKind=deploy_production&issueNumber=91"
+  );
 });
 
 test("worker executes scoped GitHub issue comments through the normal write plane", async () => {
