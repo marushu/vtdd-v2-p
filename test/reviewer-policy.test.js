@@ -24,3 +24,9 @@ test("reviewer policy defines vendor-neutral contract and no execution authority
   assert.equal(doc.includes("does not hold merge authority"), true);
   assert.equal(doc.includes("does not hold deployment authority"), true);
 });
+
+test("reviewer policy does not overclaim no-manual Codex fallback", () => {
+  const doc = fs.readFileSync(DOC_PATH, "utf8");
+  assert.equal(doc.includes("bot-authored `@codex review` request"), true);
+  assert.equal(doc.includes("No-manual Codex fallback remains active work under `#84`"), true);
+});

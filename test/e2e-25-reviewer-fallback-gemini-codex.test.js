@@ -18,6 +18,9 @@ test("E2E-25 evidence doc records reviewer fallback runs", () => {
   assert.equal(doc.includes("@codex review"), true);
   assert.equal(doc.includes("Gemini remains the primary reviewer"), true);
   assert.equal(doc.includes("does not overclaim"), true);
+  assert.equal(doc.includes("VTDD bot-authored `@codex review` request"), true);
+  assert.equal(doc.includes("solved no-manual fallback path on a live PR"), true);
+  assert.equal(doc.includes("tracked by open Issue `#84`"), true);
 });
 
 test("issue-to-e2e matrix references E2E-25 run evidence", () => {

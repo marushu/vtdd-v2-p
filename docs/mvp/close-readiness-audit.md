@@ -1,6 +1,8 @@
 # Close-readiness Audit
 
-This document records the current close-readiness reading for the remaining open parent/spec issues.
+This document records the current close-readiness reading for the remaining open
+issues that are best interpreted through human closure judgment rather than
+active implementation.
 
 It does not close any Issue automatically.
 Human judgment is still required.
@@ -9,10 +11,17 @@ For the broader open-issue vs current-reality mismatch inventory, also read:
 
 - `docs/mvp/open-issue-current-reality-audit.md`
 
-## Current Open Parent / Historical Issues
+## Current Human-judgment / Parent / Historical Issues
 
+- `#80` self-parity natural-language trigger improvement
 - `#4` current loop parent
 - `#6` historical execution-slice issue
+
+The following open issues are intentionally not treated as close-readiness-only
+items here because they still represent active implementation/spec work:
+
+- `#82`
+- `#84`
 
 ## Current Reading
 
@@ -38,7 +47,26 @@ satisfied that:
 - the historical execution-spine role of `#6` no longer needs to remain visible
   in the open set
 
+### `#80`
+
+`#80` has merged implementation progress for self-reference and natural
+self-parity trigger mapping.
+
+It may be close-ready if the owner agrees that:
+
+- the merged Instructions path is sufficient for the desired Butler self-parity
+  behavior
+- any remaining self-parity confusion is now implementation drift elsewhere,
+  not missing `#80` scope
+
+Keep it open if:
+
+- the owner still sees meaningful gaps in Butler self-reference / update-check
+  handling that belong to `#80` itself
+- follow-up behavior changes are expected before judging the issue complete
+
 ## Non-claim
 
 This audit does not claim repository completion.
-It only states that the repository has moved from E2E evidence gathering into owner-judged close-readiness review.
+It only narrows which currently open issues are best read through human
+closure judgment rather than active implementation.

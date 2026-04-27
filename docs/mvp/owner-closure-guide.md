@@ -1,33 +1,37 @@
 # Owner Closure Guide
 
-This document is a human-facing closure aid for the remaining open parent/spec issues.
+This document is a human-facing closure aid for the remaining open issues that
+are plausible human closure candidates.
 
 It does not authorize automatic closure.
 It exists so the owner can close or keep open each issue deliberately.
 
-## Issue `#13`
+## Issue `#80`
 
 ### Recommended reading
 
-`#13` is the strongest current close candidate.
+`#80` is the strongest current non-parent close candidate.
 
 Why:
-- it has been functioning as the execution anchor
-- the child implementation slices have landed
-- the Issue-to-E2E matrix now contains mapped run evidence across the tracked scenarios
-- current companion docs no longer read from stale pre-implementation assumptions
+- merged implementation exists via PR `#81`
+- the Butler Instructions now include the self-reference and natural
+  self-parity mapping added for this issue
+- current remaining friction is more strongly tied to deploy/runtime drift or
+  active fallback design than to `#80`'s core intent
 
 ### Close only if the owner agrees all of these are true
 
-- `#13` has finished serving as the active execution umbrella
-- the current matrix and companion docs are sufficient for future continuation without keeping `#13` open
-- no additional parent-level acceptance criteria need to be added to `#13`
+- `#80` has finished serving as the self-reference / natural self-parity
+  improvement issue
+- no additional behavior in that specific slice still needs to land before the
+  owner is comfortable closing it
 
 ### Keep open if any of these are still useful
 
-- the owner wants one live parent issue for final MVP supervision
-- parent-level wording may still change before final milestone judgment
-- the owner prefers to close `#13` only together with a broader final milestone review
+- the owner still sees unresolved behavior that belongs to self-reference or
+  natural self-parity mapping itself
+- the owner wants to validate that behavior in more live iPhone Butler use
+  before closing
 
 ## Issue `#6`
 
@@ -47,23 +51,24 @@ The underlying execution-spine behavior is already evidenced through `E2E-19`.
 - the owner wants to preserve historical comparison context in the open set for now
 - there is still value in explicitly seeing the earlier execution-spine slice while final parent/spec cleanup is underway
 
-## Issue `#1`
+## Issue `#4`
 
 ### Recommended reading
 
-`#1` is still the broadest top-level draft / umbrella reference.
-Unlike `#13`, it is not just an execution anchor; it is also vision context.
+`#4` remains the live parent authority for the Butler-Codex-Gemini loop.
 
 ### Close only if the owner agrees all of these are true
 
-- the current repo-side vision docs fully replace the need for `#1` as a live draft
-- the owner no longer wants `#1` to remain open as an umbrella reference
-- closing `#1` will not make future top-level judgment harder
+- current canonical docs and issue set fully replace the need for `#4` as the
+  live loop parent
+- the owner no longer wants one still-open parent issue for loop-level
+  supervision and wording
 
 ### Keep open if any of these are still useful
 
-- the owner wants one still-open top-level VTDD V2 vision issue
-- the draft/umbrella function of `#1` is still valuable even after implementation progress
+- the owner wants one still-open parent issue for the loop
+- parent-level wording or acceptance boundaries may still be refined while
+  `#82` and `#84` are active
 
 ## Non-claim
 
