@@ -38,11 +38,13 @@ test("custom gpt instructions preserve current butler and approval boundaries", 
   assert.equal(doc.includes("vtddRetrieveGitHub"), true);
   assert.equal(doc.includes("vtddRetrieveSetupArtifact"), true);
   assert.equal(doc.includes("vtddRetrieveSelfParity"), true);
+  assert.equal(doc.includes("Before the first significant GitHub/runtime action in a session"), true);
+  assert.equal(doc.includes("Cloudflare deploy update required"), true);
   assert.equal(doc.includes("High-risk actions require GO + passkey."), true);
   assert.equal(doc.includes("Merge requires explicit human GO + real passkey."), true);
   assert.equal(doc.includes("Action Schema update required"), true);
   assert.equal(doc.includes("Instructions update required"), true);
-  assert.equal(doc.includes("Cloudflare deploy update required"), true);
+  assert.equal(doc.includes("runtime is in sync, do not overclaim that the current Custom GPT editor is also in sync"), true);
   assert.equal(doc.includes("Do not claim a PR exists when only a Codex task summary exists."), true);
   assert.equal(
     doc.includes("Do not claim that Issues/PRs/comments are absent when the read path is unsupported, unauthorized, or unverified."),
