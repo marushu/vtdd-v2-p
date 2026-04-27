@@ -6,29 +6,30 @@ are plausible human closure candidates.
 It does not authorize automatic closure.
 It exists so the owner can close or keep open each issue deliberately.
 
-## Issue `#89`
+## Issue `#91`
 
 ### Recommended reading
 
-`#89` is the current active non-parent implementation issue.
+`#91` is the current active non-parent implementation issue.
 
 Why:
-- Butler already has alias/context-first repository resolution
-- the remaining friction is user-owned nickname persistence and recall, not
-  loop/reviewer/deploy foundations
-- this issue is the current place to improve repo naming UX without weakening
-  `no default repository`
+- Butler already has governed deploy and same-origin passkey operator support
+- the remaining friction is returning the tappable operator URL directly inside
+  the conversation, not the deploy plane itself
+- this issue is the current place to improve iPhone deploy recovery UX without
+  weakening `GO + real passkey`
 
 ### Close only if the owner agrees all of these are true
 
 - user-defined repository nickname storage and retrieval are merged
-- Butler can safely resolve those nicknames in practice
-- no meaningful gap remains in this specific nickname slice
+- Butler can return a direct passkey operator URL when deploy stale is detected
+- no meaningful gap remains in this specific iPhone deploy recovery slice
 
 ### Keep open if any of these are still useful
 
-- the owner still sees Butler forcing too much canonical owner/repo spelling
-- nickname persistence, retrieval, or ambiguity handling still needs work
+- the owner still cannot move from Butler conversation to passkey operator page
+  without rebuilding the URL by hand
+- direct operator link guidance still needs work
 
 ## Issue `#4`
 
@@ -47,7 +48,7 @@ Why:
 
 - the owner wants one still-open parent issue for the loop
 - parent-level wording or acceptance boundaries may still be refined while
-  `#89` is active
+  `#91` is active
 
 ## Non-claim
 

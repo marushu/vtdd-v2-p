@@ -48,6 +48,8 @@ test("custom gpt instructions preserve current butler and approval boundaries", 
   assert.equal(doc.includes("prefer vtddRetrieveSelfParity over general model-capability disclaimers"), true);
   assert.equal(doc.includes("Before the first significant GitHub/runtime action in a session"), true);
   assert.equal(doc.includes("Cloudflare deploy update required"), true);
+  assert.equal(doc.includes("selfParity.deployRecovery.operatorUrl"), true);
+  assert.equal(doc.includes("open it on iPhone/mobile"), true);
   assert.equal(doc.includes("High-risk actions require GO + passkey."), true);
   assert.equal(doc.includes("Merge requires explicit human GO + real passkey."), true);
   assert.equal(doc.includes("Action Schema update required"), true);

@@ -583,6 +583,26 @@ Status values used below:
   - `docs/mvp/e2e/e2e-28-repository-nickname-context-resolution.md`
 - Status: `e2e_evidenced_pending_human_closure`
 
+## E2E-29 Direct passkey operator link guidance for deploy recovery
+
+- Issues: `#91`
+- Happy path:
+  - Butler self-parity can return a direct same-origin passkey operator URL for deploy recovery so the human can open it on iPhone/mobile without rebuilding the path by hand
+- Boundary path:
+  - when repository is unresolved or runtime is already in sync, Butler does not fabricate a deploy operator URL or weaken `GO + real passkey`
+- Implementation evidence:
+  - `src/core/custom-gpt-setup-artifacts.js`
+  - `src/worker.js`
+  - `docs/setup/custom-gpt-instructions.md`
+  - `docs/security/webauthn-passkey-runtime.md`
+- Test evidence:
+  - `test/custom-gpt-setup-artifacts.test.js`
+  - `test/worker.test.js`
+  - `test/custom-gpt-setup-docs.test.js`
+- Run evidence:
+  - `docs/mvp/e2e/e2e-29-direct-passkey-operator-link-guidance.md`
+- Status: `e2e_evidenced_pending_human_closure`
+
 ## E2E-26 Governed production deploy from passkey operator
 
 - Issues: `#82`

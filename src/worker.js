@@ -662,6 +662,8 @@ async function handleRetrieveButlerSelfParityRequest(url, env) {
   const parity = await evaluateButlerSelfParity({
     repository: normalizeText(url.searchParams.get("repository")),
     ref: normalizeText(url.searchParams.get("ref")),
+    issueNumber: normalizeIssue(url.searchParams.get("issueNumber")),
+    runtimeOrigin: url.origin,
     env
   });
 

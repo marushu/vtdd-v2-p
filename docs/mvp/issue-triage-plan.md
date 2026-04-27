@@ -15,8 +15,8 @@ As of 2026-04-27:
 - `#6` has been closed as historical execution-slice context and must not be
   re-opened as a competing parent authority
 - the repository now has broad runtime + contract coverage, but overall status is still `partial / in-progress`
-- the remaining active implementation work is now repository nickname/context
-  resolution improvement (`#89`)
+- the remaining active implementation work is now iPhone-friendly passkey
+  operator link guidance for deploy recovery (`#91`)
 
 ## Compatibility Notes for Historical `#1-#20`
 
@@ -58,7 +58,7 @@ The following historical directions were already resolved into the current repo 
 - setup / deploy / guarded absence / reviewer / bootstrap follow-up issues were created as needed
 - newer follow-up issues such as `#80`, `#82`, and `#84` must be read directly
   from their historical GitHub text rather than inferred from this historical
-  triage file; the current active follow-up is `#89`
+  triage file; the current active follow-up is `#91`
 
 ## Completion Reminder
 
