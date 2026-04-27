@@ -3,6 +3,10 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 
 const workflow = fs.readFileSync(".github/workflows/gemini-pr-review.yml", "utf8");
+const fallbackWorkflow = fs.readFileSync(
+  ".github/workflows/codex-pr-review-fallback.yml",
+  "utf8"
+);
 
 test("Gemini review workflow skips when GitHub App secrets are not configured", () => {
   assert.equal(workflow.includes("name: Detect GitHub App secret availability"), true);
@@ -24,4 +28,20 @@ test("Gemini review workflow still routes reviewer execution through the script 
   assert.equal(workflow.includes("name: Run Gemini PR review"), true);
   assert.equal(workflow.includes("GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}"), true);
   assert.equal(workflow.includes("GEMINI_REVIEW_MODEL: ${{ vars.GEMINI_REVIEW_MODEL }}"), true);
+  assert.equal(workflow.includes("OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}"), true);
+  assert.equal(workflow.includes("contents: read"), true);
+  assert.equal(workflow.includes("pull-requests: write"), false);
+  assert.equal(workflow.includes("issues: write"), false);
+});
+
+test("Codex fallback workflow runs reviewer-only Codex CLI and writes back via GitHub App token", () => {
+  assert.equal(fallbackWorkflow.includes("name: codex-pr-review-fallback"), true);
+  assert.equal(fallbackWorkflow.includes("pull_request_number"), true);
+  assert.equal(fallbackWorkflow.includes("head_ref"), true);
+  assert.equal(fallbackWorkflow.includes("base_ref"), true);
+  assert.equal(fallbackWorkflow.includes("name: Install Codex CLI"), true);
+  assert.equal(fallbackWorkflow.includes("npm install -g @openai/codex"), true);
+  assert.equal(fallbackWorkflow.includes("run: node scripts/run-codex-pr-review-fallback.mjs"), true);
+  assert.equal(fallbackWorkflow.includes("OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}"), true);
+  assert.equal(fallbackWorkflow.includes("GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}"), true);
 });

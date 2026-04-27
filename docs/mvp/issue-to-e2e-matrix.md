@@ -506,11 +506,11 @@ Status values used below:
   - `docs/mvp/e2e/e2e-24-butler-self-parity-setup-artifacts.md`
 - Status: `e2e_evidenced_pending_human_closure`
 
-## E2E-25 Reviewer fallback from Gemini to Codex request
+## E2E-25 Reviewer fallback request-state preservation
 
 - Issues: `#74`
 - Happy path:
-  - Gemini remains the primary reviewer when available, and quota exhaustion falls back to a GitHub-visible `@codex review` request without hard-failing the PR
+  - Gemini remains the primary reviewer when available, and temporary reviewer failure still leaves a GitHub-visible Codex fallback request-state without hard-failing the PR
 - Boundary path:
   - fallback request state remains critique-only, does not overclaim delivered critique, and does not hide reviewer absence
 - Implementation evidence:
@@ -530,6 +530,33 @@ Status values used below:
   - `test/butler-review-synthesis.test.js`
 - Run evidence:
   - `docs/mvp/e2e/e2e-25-reviewer-fallback-gemini-codex.md`
+- Status: `e2e_evidenced_pending_human_closure`
+
+## E2E-27 No-manual Codex reviewer fallback
+
+- Issues: `#84`
+- Happy path:
+  - Gemini unavailable can advance into a VTDD-managed non-manual Codex reviewer fallback path, and Butler can consume the resulting delivered reviewer state
+- Boundary path:
+  - missing fallback reviewer runtime credentials/configuration surfaces an explicit blocker state instead of degrading to manual PR comment paste as the normal answer
+- Implementation evidence:
+  - `.github/workflows/gemini-pr-review.yml`
+  - `.github/workflows/codex-pr-review-fallback.yml`
+  - `scripts/run-gemini-pr-review.mjs`
+  - `scripts/run-codex-pr-review-fallback.mjs`
+  - `src/core/codex-review-fallback.js`
+  - `src/core/execution-continuity.js`
+  - `src/core/butler-review-synthesis.js`
+  - `docs/security/reviewer-policy.md`
+  - `docs/butler/gemini-pr-review-comments.md`
+- Test evidence:
+  - `test/codex-review-fallback.test.js`
+  - `test/gemini-pr-review-workflow.test.js`
+  - `test/execution-continuity.test.js`
+  - `test/butler-review-synthesis.test.js`
+  - `test/reviewer-policy.test.js`
+- Run evidence:
+  - `docs/mvp/e2e/e2e-27-no-manual-codex-reviewer-fallback.md`
 - Status: `e2e_evidenced_pending_human_closure`
 
 ## E2E-26 Governed production deploy from passkey operator

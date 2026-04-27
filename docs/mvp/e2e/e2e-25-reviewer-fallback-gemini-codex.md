@@ -1,4 +1,4 @@
-# E2E-25 Reviewer Fallback From Gemini To Codex Request
+# E2E-25 Reviewer Fallback Request-State Preservation
 
 This document records concrete run evidence for the E2E-25 track.
 
@@ -11,7 +11,7 @@ Issues:
 Goal:
 - confirm Gemini remains the primary reviewer when available
 - confirm Gemini quota/rate-limit exhaustion does not hard-fail the PR solely for reviewer quota reasons
-- confirm VTDD can upsert a GitHub-visible `@codex review` fallback request while preserving critique-only reviewer separation
+- confirm VTDD can preserve an explicit GitHub-visible Codex fallback request-state while preserving critique-only reviewer separation
 
 ## Happy-path Run
 
@@ -24,7 +24,7 @@ node --test test/codex-review-fallback.test.js test/gemini-review-failure.test.j
 Observed result on 2026-04-27:
 - passed
 - confirms quota/rate-limit failures are classified as reviewer unavailability rather than generic hard failure
-- confirms VTDD can format and detect a GitHub-visible Codex fallback request comment carrying `@codex review`
+- confirms VTDD can format and detect a GitHub-visible Codex fallback request-state comment
 - confirms execution continuity and Butler synthesis expose `codex_review_requested` distinctly from `gemini_review_available`
 - confirms Gemini-first behavior remains canonical when reviewer evidence is available again
 
@@ -66,6 +66,5 @@ This confirms Issue `#74` is connected to a repo-side fallback request path
 that keeps Gemini as primary, records Codex fallback request state, and
 preserves critique-only reviewer boundaries.
 
-It does not claim that a VTDD bot-authored `@codex review` request is already a
-solved no-manual fallback path on a live PR.
-That unresolved platform/UX boundary is now tracked by open Issue `#84`.
+It does not claim that request-state alone solves the no-manual fallback path.
+The non-manual delivered/blocker path is tracked by open Issue `#84`.

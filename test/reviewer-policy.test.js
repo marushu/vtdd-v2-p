@@ -28,5 +28,6 @@ test("reviewer policy defines vendor-neutral contract and no execution authority
 test("reviewer policy does not overclaim no-manual Codex fallback", () => {
   const doc = fs.readFileSync(DOC_PATH, "utf8");
   assert.equal(doc.includes("bot-authored `@codex review` request"), true);
-  assert.equal(doc.includes("No-manual Codex fallback remains active work under `#84`"), true);
+  assert.equal(doc.includes("VTDD-managed workflow execution"), true);
+  assert.equal(doc.includes("manual PR comment paste as the normal"), true);
 });

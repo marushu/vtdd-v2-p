@@ -110,3 +110,34 @@ test("butler review synthesis surfaces Codex fallback review requests plainly", 
     true
   );
 });
+
+test("butler review synthesis surfaces Codex fallback blocker plainly", () => {
+  const result = buildButlerReviewSynthesis({
+    pullRequest: {
+      number: 84,
+      url: "https://github.com/example/repo/pull/84",
+      state: "open",
+      title: "No-manual reviewer fallback"
+    },
+    reviewLoop: {
+      reviewer: "codex",
+      reviewerStatus: "codex_review_blocked",
+      reviewCommentsCount: 0,
+      unresolvedReviewCommentsCount: 0,
+      criticalReviewPending: true
+    },
+    codexGoal: "wait_for_review",
+    nextSuggestedActions: ["surface_reviewer_platform_blocker", "summarize_for_human"]
+  });
+
+  assert.equal(
+    result.headline,
+    "PR #84 is open. Gemini is temporarily unavailable and non-manual Codex fallback is currently blocked by platform or repository configuration."
+  );
+  assert.equal(
+    result.humanDecisionFocus.includes(
+      "Gemini is temporarily unavailable and non-manual Codex fallback is blocked; do not treat reviewer coverage as satisfied."
+    ),
+    true
+  );
+});

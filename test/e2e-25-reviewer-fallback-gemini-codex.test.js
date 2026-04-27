@@ -15,17 +15,16 @@ const MATRIX_PATH = path.join(process.cwd(), "docs", "mvp", "issue-to-e2e-matrix
 test("E2E-25 evidence doc records reviewer fallback runs", () => {
   const doc = fs.readFileSync(DOC_PATH, "utf8");
   assert.equal(doc.includes("`#74`"), true);
-  assert.equal(doc.includes("@codex review"), true);
+  assert.equal(doc.includes("request-state"), true);
   assert.equal(doc.includes("Gemini remains the primary reviewer"), true);
   assert.equal(doc.includes("does not overclaim"), true);
-  assert.equal(doc.includes("VTDD bot-authored `@codex review` request"), true);
-  assert.equal(doc.includes("solved no-manual fallback path on a live PR"), true);
+  assert.equal(doc.includes("request-state alone solves"), true);
   assert.equal(doc.includes("tracked by open Issue `#84`"), true);
 });
 
 test("issue-to-e2e matrix references E2E-25 run evidence", () => {
   const doc = fs.readFileSync(MATRIX_PATH, "utf8");
-  assert.equal(doc.includes("## E2E-25 Reviewer fallback from Gemini to Codex request"), true);
+  assert.equal(doc.includes("## E2E-25 Reviewer fallback request-state preservation"), true);
   assert.equal(doc.includes("docs/mvp/e2e/e2e-25-reviewer-fallback-gemini-codex.md"), true);
   assert.equal(doc.includes("- Issues: `#74`"), true);
 });

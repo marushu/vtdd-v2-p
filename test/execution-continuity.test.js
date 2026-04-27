@@ -128,7 +128,7 @@ test("execution continuity exposes Codex fallback requested when Gemini is tempo
           issueComments: [
             {
               user: { login: "vtdd-codex[bot]" },
-              body: "<!-- vtdd:reviewer=codex-fallback -->\n@codex review"
+              body: "<!-- vtdd:reviewer=codex-fallback -->\n- Status: `requested`"
             }
           ]
         }
@@ -142,4 +142,63 @@ test("execution continuity exposes Codex fallback requested when Gemini is tempo
   assert.equal(result.value.reviewLoop.criticalReviewPending, true);
   assert.equal(result.value.codexGoal, CodexGoal.WAIT_FOR_REVIEW);
   assert.deepEqual(result.value.nextSuggestedActions, ["wait_for_codex_review", "summarize_for_human"]);
+});
+
+test("execution continuity exposes Codex fallback review as available when VTDD posts a completed fallback comment", () => {
+  const result = evaluateExecutionContinuity({
+    actorRole: ActorRole.BUTLER,
+    mode: TaskMode.EXECUTION,
+    runtimeTruth: {
+      runtimeState: {
+        activeBranch: "codex/issue-84",
+        pullRequest: {
+          number: 84,
+          url: "https://github.com/example/repo/pull/84",
+          state: "open",
+          title: "No-manual reviewer fallback",
+          issueComments: [
+            {
+              user: { login: "vtdd-codex[bot]" },
+              body: "<!-- vtdd:reviewer=codex-fallback -->\n## VTDD Codex Reviewer Fallback Request\n\n- Status: `completed`\n- Recommended action: `approve`"
+            }
+          ]
+        }
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.value.reviewLoop.reviewer, "codex");
+  assert.equal(result.value.reviewLoop.reviewerStatus, "codex_review_available");
+  assert.equal(result.value.reviewLoop.criticalReviewPending, false);
+  assert.deepEqual(result.value.nextSuggestedActions, ["summarize_for_human", "wait_for_human_go"]);
+});
+
+test("execution continuity surfaces Codex fallback blocker when non-manual review cannot start", () => {
+  const result = evaluateExecutionContinuity({
+    actorRole: ActorRole.BUTLER,
+    mode: TaskMode.EXECUTION,
+    runtimeTruth: {
+      runtimeState: {
+        activeBranch: "codex/issue-84",
+        pullRequest: {
+          number: 84,
+          url: "https://github.com/example/repo/pull/84",
+          state: "open",
+          title: "No-manual reviewer fallback",
+          issueComments: [
+            {
+              user: { login: "vtdd-codex[bot]" },
+              body: "<!-- vtdd:reviewer=codex-fallback -->\n## VTDD Codex Reviewer Fallback Request\n\n- Status: `blocked`\n- Blocker: `openai_api_key_not_configured`"
+            }
+          ]
+        }
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.value.reviewLoop.reviewerStatus, "codex_review_blocked");
+  assert.equal(result.value.reviewLoop.criticalReviewPending, true);
+  assert.deepEqual(result.value.nextSuggestedActions, ["surface_reviewer_platform_blocker", "summarize_for_human"]);
 });

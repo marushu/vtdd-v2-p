@@ -22,15 +22,16 @@ The reviewer is a critical evaluation role.
 
 ## Fallback Position
 
-- Codex GitHub review may be requested as an emergency fallback when Gemini is
-  temporarily unavailable because of quota, rate-limit exhaustion, or transient
-  provider high demand / temporary unavailability.
-- This fallback remains critique-only and depends on the operator's Codex
-  GitHub integration, not on repository-owned execution credentials.
+- Non-manual Codex fallback should prefer VTDD-managed workflow execution over
+  bot-authored `@codex review` comments when Gemini is temporarily unavailable.
+- This fallback remains critique-only and uses explicit reviewer runtime
+  credentials/configuration, not merge/deploy authority.
 - A bot-authored `@codex review` request must not be assumed equivalent to an
   owner-authored Codex review invocation.
-- No-manual Codex fallback remains active work under `#84`; the current repo
-  only proves the request-state path, not a solved no-manual fallback loop.
+- If non-manual Codex fallback cannot start because required reviewer runtime
+  credentials/configuration are absent, VTDD must surface that blocker
+  explicitly rather than degrading to manual PR comment paste as the normal
+  answer.
 - Antigravity is not the normal reviewer path.
 - Antigravity may be used only as an emergency fallback.
 - Emergency fallback use assumes learning-use is disabled in its service settings.

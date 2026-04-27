@@ -160,6 +160,7 @@ export {
 } from "./gemini-pr-review.js";
 export {
   CODEX_REVIEW_FALLBACK_MARKER,
+  CodexReviewFallbackStatus,
   findExistingCodexReviewFallbackComment,
   formatCodexReviewFallbackComment,
   parseCodexReviewFallbackComment
