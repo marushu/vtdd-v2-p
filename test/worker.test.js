@@ -908,6 +908,97 @@ test("worker returns unsupported for unknown GitHub read resources", async () =>
   assert.equal(body.error, "github_read_request_invalid");
 });
 
+test("worker returns canonical Custom GPT setup artifacts", async () => {
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/v2/retrieve/setup-artifact?artifact=instructions&repository=sample-org/vtdd-v2-p&ref=main",
+      {
+        headers: gatewayAuthHeaders
+      }
+    ),
+    {
+      ...gatewayAuthEnv,
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_setup_read",
+      GITHUB_API_FETCH: async () =>
+        new Response(
+          JSON.stringify({
+            sha: "instructions-sha",
+            encoding: "base64",
+            content: Buffer.from("vtddRetrieveSetupArtifact\nvtddRetrieveSelfParity", "utf8").toString(
+              "base64"
+            )
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        )
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.artifact.artifact, "instructions");
+  assert.equal(body.artifact.path, "docs/setup/custom-gpt-instructions.md");
+  assert.equal(body.artifact.content.includes("vtddRetrieveSelfParity"), true);
+});
+
+test("worker returns Butler self-parity summary", async () => {
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/v2/retrieve/self-parity?repository=sample-org/vtdd-v2-p&ref=main",
+      {
+        headers: gatewayAuthHeaders
+      }
+    ),
+    {
+      ...gatewayAuthEnv,
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_setup_read",
+      GITHUB_API_FETCH: async (url) => {
+        const parsed = new URL(url);
+        const isInstructions = parsed.pathname.endsWith("/docs/setup/custom-gpt-instructions.md");
+        return new Response(
+          JSON.stringify({
+            sha: isInstructions ? "instructions-sha" : "openapi-sha",
+            encoding: "base64",
+            content: Buffer.from(
+              isInstructions
+                ? [
+                    "vtddGateway",
+                    "vtddRetrieveGitHub",
+                    "vtddRetrieveSetupArtifact",
+                    "vtddRetrieveSelfParity",
+                    "Action Schema update required",
+                    "Instructions update required",
+                    "Cloudflare deploy update required"
+                  ].join("\n")
+                : [
+                    "paths:",
+                    "  /v2/gateway:",
+                    "  /v2/retrieve/github:",
+                    "  /v2/retrieve/setup-artifact:",
+                    "  /v2/retrieve/self-parity:",
+                    "    get:",
+                    "      operationId: vtddGateway",
+                    "      operationId: vtddRetrieveGitHub",
+                    "      operationId: vtddRetrieveSetupArtifact",
+                    "      operationId: vtddRetrieveSelfParity"
+                  ].join("\n"),
+              "utf8"
+            ).toString("base64")
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        );
+      }
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.selfParity.runtimeParity, "in_sync");
+  assert.equal(body.selfParity.runtimeMissingRoutes.length, 0);
+  assert.equal(body.selfParity.canonical.artifacts.instructions.path, "docs/setup/custom-gpt-instructions.md");
+});
+
 test("worker executes scoped GitHub issue comments through the normal write plane", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/v2/action/github", {

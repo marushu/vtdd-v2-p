@@ -10,6 +10,7 @@ import {
   createRemoteCodexExecutionRequest,
   dedupePasskeys,
   dispatchRemoteCodexExecution,
+  evaluateButlerSelfParity,
   executeGitHubHighRiskPlane,
   inferRelatedIssueFromGatewayInput,
   inferRelatedIssueFromProposalGatewayInput,
@@ -21,6 +22,7 @@ import {
   retrieveDecisionLogReferences,
   retrieveProposalLogReferences,
   retrieveConstitution,
+  retrieveCustomGptSetupArtifact,
   renderPasskeyOperatorPage,
   resolveGatewayAliasRegistryFromGitHubApp,
   GitHubHighRiskOperation,
@@ -343,6 +345,30 @@ export default {
       return handleRetrieveGitHubReadPlaneRequest(url, env);
     }
 
+    if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/setup-artifact")) {
+      const auth = authorizeGatewayRequest({ request, env, apiSuffix: "/retrieve/setup-artifact" });
+      if (!auth.ok) {
+        return json(auth.status, {
+          ok: false,
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+      return handleRetrieveCustomGptSetupArtifactRequest(url, env);
+    }
+
+    if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/self-parity")) {
+      const auth = authorizeGatewayRequest({ request, env, apiSuffix: "/retrieve/self-parity" });
+      if (!auth.ok) {
+        return json(auth.status, {
+          ok: false,
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+      return handleRetrieveButlerSelfParityRequest(url, env);
+    }
+
     return json(404, {
       ok: false,
       error: "not_found"
@@ -549,6 +575,50 @@ async function handleRetrieveGitHubReadPlaneRequest(url, env) {
   return json(200, {
     ok: true,
     read: retrieved.read
+  });
+}
+
+async function handleRetrieveCustomGptSetupArtifactRequest(url, env) {
+  const retrieved = await retrieveCustomGptSetupArtifact({
+    artifact: normalizeText(url.searchParams.get("artifact")),
+    repository: normalizeText(url.searchParams.get("repository")),
+    ref: normalizeText(url.searchParams.get("ref")),
+    env
+  });
+
+  if (!retrieved.ok) {
+    return json(retrieved.status ?? 503, {
+      ok: false,
+      error: retrieved.error ?? "custom_gpt_setup_artifact_unavailable",
+      reason: retrieved.reason,
+      issues: retrieved.issues ?? []
+    });
+  }
+
+  return json(200, {
+    ok: true,
+    artifact: retrieved.artifact
+  });
+}
+
+async function handleRetrieveButlerSelfParityRequest(url, env) {
+  const parity = await evaluateButlerSelfParity({
+    repository: normalizeText(url.searchParams.get("repository")),
+    ref: normalizeText(url.searchParams.get("ref")),
+    env
+  });
+
+  if (!parity.ok) {
+    return json(parity.status ?? 503, {
+      ok: false,
+      error: parity.error ?? "custom_gpt_self_parity_unavailable",
+      reason: parity.reason
+    });
+  }
+
+  return json(200, {
+    ok: true,
+    selfParity: parity.selfParity
   });
 }
 
