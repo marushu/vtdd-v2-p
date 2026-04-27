@@ -532,6 +532,28 @@ Status values used below:
   - `docs/mvp/e2e/e2e-25-reviewer-fallback-gemini-codex.md`
 - Status: `e2e_evidenced_pending_human_closure`
 
+## E2E-26 Governed production deploy from passkey operator
+
+- Issues: `#82`
+- Happy path:
+  - Butler/runtime can move from deploy stale detection into a governed production deploy execution path, and the Worker-owned passkey operator can dispatch that path with a real deploy-scoped approval grant
+- Boundary path:
+  - missing `GO`, missing/invalid deploy-scoped approval grant, or missing deploy credentials block deploy with explicit failure categories instead of silently mutating runtime state
+- Implementation evidence:
+  - `src/worker.js`
+  - `src/core/deploy-production-plane.js`
+  - `src/core/passkey-operator-page.js`
+  - `docs/security/webauthn-passkey-runtime.md`
+  - `docs/setup/custom-gpt-instructions.md`
+- Test evidence:
+  - `test/deploy-production-plane.test.js`
+  - `test/passkey-operator-page.test.js`
+  - `test/worker.test.js`
+  - `test/custom-gpt-setup-docs.test.js`
+- Run evidence:
+  - `docs/mvp/e2e/e2e-26-governed-production-deploy-from-passkey-operator.md`
+- Status: `e2e_evidenced_pending_human_closure`
+
 ## Current Completion Reading
 
 - Repository completion status: `partial`

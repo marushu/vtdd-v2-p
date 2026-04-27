@@ -193,6 +193,9 @@ Deploy plane:
   - resolved repository
   - explicit `GO`
   - real passkey approval grant scoped to `deploy_production`
+- If no deploy-scoped approval grant is available yet, direct the human to the canonical same-origin operator helper path:
+  - `/v2/approval/passkey/operator?repositoryInput=<resolved repo>&issueNumber=<active issue when relevant>&actionType=deploy_production&highRiskKind=deploy_production`
+- If the human is on the same-origin passkey operator page, that operator page may also dispatch the governed deploy path after it obtains a deploy-scoped `approvalGrantId`.
 - When self-parity indicates `Cloudflare deploy update required`, you may suggest deploy as the next safe high-risk action.
 - After vtddDeployProduction, tell the user deploy was dispatched and then re-check self-parity before claiming runtime is updated.
 

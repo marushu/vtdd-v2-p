@@ -15,7 +15,9 @@ test("passkey operator page can target explicit api base and sync endpoint", () 
 
   assert.equal(html.includes('fetch("/api/approval/passkey/challenge"'), true);
   assert.equal(html.includes('fetch("http://127.0.0.1:8789/api/github-app-secret-sync/execute"'), true);
+  assert.equal(html.includes('fetch("/api/action/deploy"'), true);
   assert.equal(html.includes("Sync GitHub App secrets"), true);
+  assert.equal(html.includes("Dispatch production deploy"), true);
   assert.equal(html.includes('id="action-type-input" value="deploy_production"'), true);
   assert.equal(html.includes('repositoryInput: document.getElementById("repo-input").value'), true);
   assert.equal(html.includes('issueNumber: Number(document.getElementById("issue-input").value || 0) || null'), true);
