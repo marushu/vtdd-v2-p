@@ -54,6 +54,8 @@ mapped E2E evidence in `docs/mvp/issue-to-e2e-matrix.md`.
   - mapped by `E2E-15`
 - `#57`
   - mapped by `E2E-23`
+- `#70`
+  - mapped by `E2E-24`
 - `#9` and `#12`
   - jointly mapped by `E2E-18`
 

@@ -485,6 +485,27 @@ Status values used below:
   - `docs/mvp/e2e/e2e-23-pr-body-guardrail.md`
 - Status: `e2e_evidenced_pending_human_closure`
 
+## E2E-24 Butler self-parity setup artifacts
+
+- Issues: `#70`
+- Happy path:
+  - Butler can retrieve canonical Custom GPT setup artifacts and read a self-parity summary that compares repository canonical setup against deployed runtime capability
+- Boundary path:
+  - unsupported setup artifact requests or runtime capability drift remain explicit and do not collapse into speculative Butler narration
+- Implementation evidence:
+  - `src/core/custom-gpt-setup-artifacts.js`
+  - `src/worker.js`
+  - `docs/setup/custom-gpt-instructions.md`
+  - `docs/setup/custom-gpt-actions-openapi.yaml`
+  - `docs/setup/custom-gpt-actions-openapi.json`
+- Test evidence:
+  - `test/custom-gpt-setup-artifacts.test.js`
+  - `test/custom-gpt-setup-docs.test.js`
+  - `test/worker.test.js`
+- Run evidence:
+  - `docs/mvp/e2e/e2e-24-butler-self-parity-setup-artifacts.md`
+- Status: `e2e_evidenced_pending_human_closure`
+
 ## Current Completion Reading
 
 - Repository completion status: `partial`
