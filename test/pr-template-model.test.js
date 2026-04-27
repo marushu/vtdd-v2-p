@@ -12,6 +12,7 @@ const CANONICAL_SECTIONS = [
   "Unsatisfied Success Criteria",
   "Non-goal violations",
   "Verification Evidence",
+  "Surface Update Checklist",
   "Related Constitution Rules",
   "Out-of-scope but NOT implemented",
   "Extra changes (if any)"
@@ -56,4 +57,14 @@ test("pr template includes explicit verification slots", () => {
   assert.match(template, /- E2E:/);
   assert.match(template, /- Manual:/);
   assert.match(template, /- Evidence path\/link:/);
+});
+
+test("pr template includes surface update checklist slots", () => {
+  const template = fs.readFileSync(TEMPLATE_PATH, "utf8");
+
+  assert.match(template, /## Surface Update Checklist/);
+  assert.match(template, /- Cloudflare deploy:/);
+  assert.match(template, /- Custom GPT Action Schema update:/);
+  assert.match(template, /- Custom GPT Instructions update:/);
+  assert.match(template, /- iPhone Butler live E2E:/);
 });

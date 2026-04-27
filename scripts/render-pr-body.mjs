@@ -74,6 +74,13 @@ ${options.nonGoals || "None."}
 - Manual: ${options.manual || "None."}
 - Evidence path/link: ${evidencePath}
 
+## Surface Update Checklist
+
+- Cloudflare deploy: ${options.cloudflareDeploy || "Not required."}
+- Custom GPT Action Schema update: ${options.actionSchemaUpdate || "Not required."}
+- Custom GPT Instructions update: ${options.instructionsUpdate || "Not required."}
+- iPhone Butler live E2E: ${options.iphoneButlerE2E || "Not required."}
+
 ## Related Constitution Rules
 
 ${bulletize(options.rules, "- Add the governing Constitution rules here.")}

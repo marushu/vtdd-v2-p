@@ -7,6 +7,7 @@ const REQUIRED_MARKERS = [
   "## Satisfied Success Criteria",
   "## Unsatisfied Success Criteria",
   "## Verification Evidence",
+  "## Surface Update Checklist",
 ];
 
 function validatePrBody(body) {
