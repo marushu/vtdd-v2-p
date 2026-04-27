@@ -65,6 +65,8 @@ test("custom gpt instructions preserve current butler and approval boundaries", 
   assert.equal(doc.includes("runtime is in sync, do not overclaim that the current Custom GPT editor is also in sync"), true);
   assert.equal(doc.includes("surface the returned `error`, `reason`, and `issues` plainly in Japanese"), true);
   assert.equal(doc.includes("Do not collapse nickname failures into vague guesses"), true);
+  assert.equal(doc.includes("If the Action surface reports `ClientResponseError`"), true);
+  assert.equal(doc.includes("report it as an unverified Action transport failure"), true);
   assert.equal(doc.includes("If vtddDeployProduction fails, tell the user the exact deploy `error`, `reason`, and `issues`"), true);
   assert.equal(doc.includes("Do not claim a PR exists when only a Codex task summary exists."), true);
   assert.equal(
@@ -86,6 +88,8 @@ test("short custom gpt instructions stay under editor limits while preserving cr
   assert.equal(doc.includes("Nickname memory is explicit user-owned alias registry data"), true);
   assert.equal(doc.includes("surface the returned error/reason/issues plainly in Japanese"), true);
   assert.equal(doc.includes("Do not replace nickname failures with vague summaries"), true);
+  assert.equal(doc.includes("If an Action returns `ClientResponseError`, state action name"), true);
+  assert.equal(doc.includes("If self-parity returns `ClientResponseError`, say unverified Action transport failure"), true);
   assert.equal(doc.includes("Cloudflare deploy update required"), true);
   assert.equal(doc.includes("Action Schema update required"), true);
   assert.equal(doc.includes("Instructions update required"), true);
@@ -151,4 +155,21 @@ test("custom gpt openapi json parses and exposes paths as an object", () => {
   assert.equal(typeof doc.paths["/v2/retrieve/approval-grant"], "object");
   assert.equal(typeof doc.components.schemas, "object");
   assert.equal(doc.components.securitySchemes.GatewayBearerAuth.scheme, "bearer");
+});
+
+test("custom gpt openapi json exposes JSON bodies for Butler action auth failures", () => {
+  const doc = JSON.parse(fs.readFileSync(OPENAPI_JSON_PATH, "utf8"));
+  const routes = [
+    ["/v2/action/repository-nickname", "post"],
+    ["/v2/retrieve/repository-nicknames", "get"],
+    ["/v2/retrieve/self-parity", "get"]
+  ];
+
+  for (const [route, method] of routes) {
+    for (const status of ["401", "403"]) {
+      assert.deepEqual(doc.paths[route][method].responses[status].content["application/json"].schema, {
+        $ref: "#/components/schemas/VtddGenericResponse"
+      });
+    }
+  }
 });
