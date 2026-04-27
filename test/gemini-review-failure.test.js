@@ -9,7 +9,17 @@ test("classifyGeminiReviewFailure treats quota exhaustion as retryable reviewer 
     message: "Quota exceeded for metric"
   });
 
-  assert.deepEqual(result, { kind: GeminiReviewFailureKind.QUOTA_OR_RATE_LIMIT });
+  assert.deepEqual(result, { kind: GeminiReviewFailureKind.TEMPORARY_UNAVAILABLE });
+});
+
+test("classifyGeminiReviewFailure treats high-demand unavailability as retryable reviewer unavailability", () => {
+  const result = classifyGeminiReviewFailure({
+    status: 503,
+    providerStatus: "UNAVAILABLE",
+    message: "This model is currently experiencing high demand. Please try again later."
+  });
+
+  assert.deepEqual(result, { kind: GeminiReviewFailureKind.TEMPORARY_UNAVAILABLE });
 });
 
 test("classifyGeminiReviewFailure keeps unexpected failures as hard errors", () => {

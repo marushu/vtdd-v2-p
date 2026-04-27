@@ -27,10 +27,11 @@ Gemini review must run when:
 - a PR becomes ready for review
 - new PR comments or review comments arrive
 
-If Gemini is temporarily unavailable because of quota or rate-limit
-exhaustion, VTDD may upsert a GitHub-visible Codex fallback review request
-comment (`@codex review`) instead of hard-failing the PR solely for reviewer
-quota reasons.
+If Gemini is temporarily unavailable because of quota exhaustion, rate
+limiting, or transient provider high demand / temporary unavailability, VTDD
+may upsert a GitHub-visible Codex fallback review request comment (`@codex
+review`) instead of hard-failing the PR solely for reviewer availability
+reasons.
 
 The workflow must ignore its own marker comment so that reviewer reruns do not
 create an infinite comment loop.

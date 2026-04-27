@@ -113,7 +113,7 @@ test("execution continuity treats approve-only Gemini reviewer comment as non-bl
   assert.deepEqual(result.value.nextSuggestedActions, ["summarize_for_human", "wait_for_human_go"]);
 });
 
-test("execution continuity exposes Codex fallback requested when Gemini quota blocks review", () => {
+test("execution continuity exposes Codex fallback requested when Gemini is temporarily unavailable", () => {
   const result = evaluateExecutionContinuity({
     actorRole: ActorRole.BUTLER,
     mode: TaskMode.EXECUTION,
