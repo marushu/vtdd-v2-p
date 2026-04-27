@@ -86,7 +86,7 @@ Status values used below:
 
 ## E2E-03 Memory schema/provider contract
 
-- Issues: `#2 #3 #4`
+- Issues: `#2 #3`
 - Happy path:
   - canonical memory record validates and provider stores/reads via Cloudflare adapter contract
 - Boundary path:
@@ -380,6 +380,28 @@ Status values used below:
   - `test/gemini-pr-review.test.js`
 - Run evidence:
   - `docs/mvp/e2e/e2e-18-gemini-pr-review-comment-writeback.md`
+- Status: `e2e_evidenced_pending_human_closure`
+
+## E2E-19 Butler-Codex-Gemini PR revision loop
+
+- Issues: `#4`
+- Happy path:
+  - Butler reads GitHub runtime truth, returns `resume` continuity guidance, and exposes PR/review synthesis that points Codex toward bounded PR revision work
+- Boundary path:
+  - Butler blocks execution when a mediated transfer requires handoff but the handoff contract is missing or not issue-traceable
+- Implementation evidence:
+  - `src/core/execution-continuity.js`
+  - `src/core/butler-review-synthesis.js`
+  - `src/core/mvp-gateway.js`
+  - `src/worker.js`
+  - `docs/butler/codex-pr-revision-loop.md`
+- Test evidence:
+  - `test/execution-continuity.test.js`
+  - `test/butler-review-synthesis.test.js`
+  - `test/mvp-gateway.test.js`
+  - `test/worker.test.js`
+- Run evidence:
+  - `docs/mvp/e2e/e2e-19-butler-codex-gemini-pr-revision-loop.md`
 - Status: `e2e_evidenced_pending_human_closure`
 
 ## Current Completion Reading
