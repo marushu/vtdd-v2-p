@@ -5,28 +5,16 @@ This document records the current close-readiness reading for the remaining open
 It does not close any Issue automatically.
 Human judgment is still required.
 
-## Current Open Issues
+For the broader open-issue vs current-reality mismatch inventory, also read:
 
-- `#13` parent execution anchor
+- `docs/mvp/open-issue-current-reality-audit.md`
+
+## Current Open Parent / Historical Issues
+
 - `#4` current loop parent
 - `#6` historical execution-slice issue
-- `#1` top-level VTDD V2 draft
 
 ## Current Reading
-
-### `#13`
-
-`#13` is now close-ready for owner review in the narrow sense that:
-
-- canonical parent/child routing is established
-- mapped E2E run evidence exists across the matrix
-- parent companion docs read from current state instead of pre-implementation planning state
-
-`#13` is still intentionally open because:
-
-- parent closure is human-gated
-- the owner may want `#13` to remain open until the broader parent/spec reading is finalized
-- this repository must not infer closure from evidence presence alone
 
 ### `#4`
 
@@ -48,12 +36,6 @@ satisfied that:
 - `#4` and current canonical docs fully cover the current loop authority
 - the historical execution-spine role of `#6` no longer needs to remain visible
   in the open set
-
-### `#1`
-
-`#1` remains the top-level VTDD V2 draft / vision issue.
-It still functions as parent/spec context rather than a direct implementation slice.
-It may remain open until the owner decides the top-level draft is no longer needed as a live umbrella reference.
 
 ## Non-claim
 
