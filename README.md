@@ -39,6 +39,7 @@ person using it.
 For the current Custom GPT Butler surface artifacts, use:
 
 - `docs/setup/custom-gpt-instructions.md`
+- `docs/setup/custom-gpt-instructions-short.md`
 - `docs/setup/custom-gpt-actions-openapi.yaml`
 - `docs/setup/custom-gpt-actions-openapi.json`
 

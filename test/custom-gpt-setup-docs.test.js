@@ -5,6 +5,12 @@ import path from "node:path";
 
 const README_PATH = path.join(process.cwd(), "README.md");
 const INSTRUCTIONS_PATH = path.join(process.cwd(), "docs", "setup", "custom-gpt-instructions.md");
+const SHORT_INSTRUCTIONS_PATH = path.join(
+  process.cwd(),
+  "docs",
+  "setup",
+  "custom-gpt-instructions-short.md"
+);
 const OPENAPI_PATH = path.join(process.cwd(), "docs", "setup", "custom-gpt-actions-openapi.yaml");
 const OPENAPI_JSON_PATH = path.join(
   process.cwd(),
@@ -15,6 +21,7 @@ const OPENAPI_JSON_PATH = path.join(
 
 test("custom gpt setup artifacts exist as tracked setup docs", () => {
   assert.equal(fs.existsSync(INSTRUCTIONS_PATH), true);
+  assert.equal(fs.existsSync(SHORT_INSTRUCTIONS_PATH), true);
   assert.equal(fs.existsSync(OPENAPI_PATH), true);
   assert.equal(fs.existsSync(OPENAPI_JSON_PATH), true);
 });
@@ -22,6 +29,7 @@ test("custom gpt setup artifacts exist as tracked setup docs", () => {
 test("readme points to current custom gpt setup artifacts", () => {
   const readme = fs.readFileSync(README_PATH, "utf8");
   assert.equal(readme.includes("docs/setup/custom-gpt-instructions.md"), true);
+  assert.equal(readme.includes("docs/setup/custom-gpt-instructions-short.md"), true);
   assert.equal(readme.includes("docs/setup/custom-gpt-actions-openapi.yaml"), true);
   assert.equal(readme.includes("docs/setup/custom-gpt-actions-openapi.json"), true);
 });
@@ -60,6 +68,24 @@ test("custom gpt instructions preserve current butler and approval boundaries", 
     doc.includes("Do not claim that Issues/PRs/comments are absent when the read path is unsupported, unauthorized, or unverified."),
     true
   );
+});
+
+test("short custom gpt instructions stay under editor limits while preserving critical boundaries", () => {
+  const doc = fs.readFileSync(SHORT_INSTRUCTIONS_PATH, "utf8");
+  assert.equal(doc.length <= 8000, true);
+  assert.equal(doc.includes("Do not assume a default repository."), true);
+  assert.equal(doc.includes("vtddGateway"), true);
+  assert.equal(doc.includes("vtddRetrieveGitHub"), true);
+  assert.equal(doc.includes("vtddRetrieveSelfParity"), true);
+  assert.equal(doc.includes("vtddDeployProduction"), true);
+  assert.equal(doc.includes("vtddUpsertRepositoryNickname"), true);
+  assert.equal(doc.includes("vtddRetrieveRepositoryNicknames"), true);
+  assert.equal(doc.includes("Nickname memory is explicit user-owned alias registry data"), true);
+  assert.equal(doc.includes("Cloudflare deploy update required"), true);
+  assert.equal(doc.includes("Action Schema update required"), true);
+  assert.equal(doc.includes("Instructions update required"), true);
+  assert.equal(doc.includes("selfParity.deployRecovery.operatorUrl"), true);
+  assert.equal(doc.includes("GO + real passkey"), true);
 });
 
 test("custom gpt openapi doc exposes current gateway, execute, and progress routes", () => {
