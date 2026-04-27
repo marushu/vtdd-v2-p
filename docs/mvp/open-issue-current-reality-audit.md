@@ -71,6 +71,8 @@ Current reading:
 - `#6` is historical execution-spine context
 - `#4` is the current parent authority for the loop
 - `#6` should not be treated as the current implementation parent
+- `#6` is directly evidenced through `E2E-19`, but should still be judged as
+  historical context rather than a competing live parent
 
 ## Resolved Drift Already Observed
 

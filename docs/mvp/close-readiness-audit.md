@@ -30,6 +30,7 @@ It should remain open while:
 
 `#6` remains a historical execution-slice issue.
 It should not compete with `#4` as a current parent authority.
+Its execution-spine behavior is already directly evidenced through `E2E-19`.
 It may remain open as comparison context or be closed when the owner is
 satisfied that:
 

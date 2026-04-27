@@ -27,6 +27,7 @@ test("open issue current-reality audit distinguishes mapped and historical open 
   assert.equal(doc.includes("`#74`"), true);
   assert.equal(doc.includes("`#9` and `#12`"), true);
   assert.equal(doc.includes("`#6`"), true);
+  assert.equal(doc.includes("`#6` is directly evidenced through `E2E-19`"), true);
   assert.equal(doc.includes("Still Missing Direct Matrix Mapping"), false);
 });
 

@@ -35,6 +35,7 @@ Why:
 
 `#6` is historical execution-transport context.
 It is not the current parent authority anymore; `#4` now holds that role.
+The underlying execution-spine behavior is already evidenced through `E2E-19`.
 
 ### Close only if the owner agrees all of these are true
 

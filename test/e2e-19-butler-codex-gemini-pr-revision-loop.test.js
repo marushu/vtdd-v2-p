@@ -33,5 +33,5 @@ test("issue-to-e2e matrix references E2E-19 run evidence", () => {
   const doc = fs.readFileSync(MATRIX_PATH, "utf8");
   assert.equal(doc.includes("## E2E-19 Butler-Codex-Gemini PR revision loop"), true);
   assert.equal(doc.includes("docs/mvp/e2e/e2e-19-butler-codex-gemini-pr-revision-loop.md"), true);
-  assert.equal(doc.includes("- Issues: `#4 #45`"), true);
+  assert.equal(doc.includes("- Issues: `#4 #6 #45`"), true);
 });
