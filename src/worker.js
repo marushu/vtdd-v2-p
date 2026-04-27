@@ -10,6 +10,7 @@ import {
   createRemoteCodexExecutionRequest,
   dedupePasskeys,
   dispatchRemoteCodexExecution,
+  executeDeployProductionPlane,
   evaluateButlerSelfParity,
   executeGitHubHighRiskPlane,
   inferRelatedIssueFromGatewayInput,
@@ -172,6 +173,19 @@ export default {
       }
 
       return handleGitHubHighRiskPlaneRequest(request, env);
+    }
+
+    if (request.method === "POST" && isApiPath(url.pathname, "/action/deploy")) {
+      const auth = authorizeGatewayRequest({ request, env, apiSuffix: "/action/deploy" });
+      if (!auth.ok) {
+        return json(auth.status, {
+          ok: false,
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+
+      return handleDeployProductionRequest(request, env);
     }
 
     if (request.method === "GET" && isApiPath(url.pathname, "/action/progress")) {
@@ -757,6 +771,57 @@ async function handleGitHubHighRiskPlaneRequest(request, env) {
   return json(200, {
     ok: true,
     authorityAction: executed.authorityAction
+  });
+}
+
+async function handleDeployProductionRequest(request, env) {
+  const payload = await readJson(request);
+  if (!payload || typeof payload !== "object") {
+    return json(422, {
+      ok: false,
+      error: "request_body_required",
+      reason: "valid JSON request body is required"
+    });
+  }
+
+  const policyInput =
+    payload.policyInput && typeof payload.policyInput === "object" ? payload.policyInput : {};
+  const resolvedApprovalGrant = await resolveApprovalGrant({
+    payload: {
+      phase: normalizeText(payload.phase) || "execution",
+      highRiskKind: "deploy_production",
+      repositoryInput: payload.repository
+    },
+    policyInput: {
+      ...policyInput,
+      actionType: "deploy_production",
+      repositoryInput: payload.repository,
+      highRiskKind: "deploy_production"
+    },
+    env
+  });
+
+  const executed = await executeDeployProductionPlane({
+    repository: payload.repository,
+    runtimeUrl: payload.runtimeUrl || new URL(request.url).origin,
+    approvalPhrase: policyInput.approvalPhrase,
+    approvalGrantId: policyInput.approvalGrantId,
+    approvalGrant: payload.approvalGrant ?? policyInput.approvalGrant ?? resolvedApprovalGrant.approvalGrant,
+    env
+  });
+
+  if (!executed.ok) {
+    return json(executed.status ?? 503, {
+      ok: false,
+      error: executed.error ?? "deploy_failed",
+      reason: executed.reason,
+      issues: executed.issues ?? []
+    });
+  }
+
+  return json(202, {
+    ok: true,
+    deploy: executed.deploy
   });
 }
 

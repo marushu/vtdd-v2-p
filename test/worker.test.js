@@ -1208,6 +1208,70 @@ test("worker blocks bounded issue close on the high-risk authority plane when me
   assert.equal(body.reason, "bounded issue close requires a merged pull request");
 });
 
+test("worker dispatches governed production deploy using the request origin as the default runtime url", async () => {
+  const provider = createInMemoryMemoryProvider();
+  const calls = [];
+  await provider.store({
+    id: "approval-deploy-123",
+    type: MemoryRecordType.APPROVAL_LOG,
+    content: {
+      kind: "passkey_grant",
+      status: "verified",
+      approvalId: "approval-deploy-123",
+      expiresAt: "2099-01-01T00:00:00.000Z",
+      scope: {
+        actionType: "deploy_production",
+        highRiskKind: "deploy_production",
+        repositoryInput: "sample-org/vtdd-v2-p",
+        issueNumber: "82",
+        relatedIssue: "82",
+        phase: "execution"
+      }
+    },
+    metadata: { source: "test" },
+    priority: 90,
+    tags: ["passkey_grant"],
+    createdAt: "2026-04-27T00:00:00.000Z"
+  });
+
+  const response = await worker.fetch(
+    new Request("https://sample-user-vtdd.example.workers.dev/v2/action/deploy", {
+      method: "POST",
+      headers: {
+        ...gatewayAuthHeaders,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        repository: "sample-org/vtdd-v2-p",
+        policyInput: {
+          approvalPhrase: "GO",
+          approvalGrantId: "approval-deploy-123"
+        }
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      MEMORY_PROVIDER: provider,
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_deploy",
+      GITHUB_API_FETCH: async (url, init) => {
+        calls.push({ url: String(url), init });
+        return new Response(null, { status: 204 });
+      }
+    }
+  );
+
+  assert.equal(response.status, 202);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.deploy.status, "dispatched");
+  assert.equal(body.deploy.runtimeUrl, "https://sample-user-vtdd.example.workers.dev");
+  const dispatchBody = JSON.parse(calls[0].init.body);
+  assert.equal(
+    dispatchBody.inputs.runtime_url,
+    "https://sample-user-vtdd.example.workers.dev"
+  );
+});
+
 test("worker returns remote Codex execution progress", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/v2/action/progress?executionId=remote-codex-issue6-abcd12", {
