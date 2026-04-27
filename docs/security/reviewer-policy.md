@@ -22,6 +22,10 @@ The reviewer is a critical evaluation role.
 
 ## Fallback Position
 
+- Codex GitHub review may be requested as an emergency fallback when Gemini is
+  temporarily unavailable because of quota or rate-limit exhaustion.
+- This fallback remains critique-only and depends on the operator's Codex
+  GitHub integration, not on repository-owned execution credentials.
 - Antigravity is not the normal reviewer path.
 - Antigravity may be used only as an emergency fallback.
 - Emergency fallback use assumes learning-use is disabled in its service settings.

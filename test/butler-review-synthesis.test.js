@@ -78,3 +78,35 @@ test("butler review synthesis does not present approve-only Gemini review as unr
     false
   );
 });
+
+test("butler review synthesis surfaces Codex fallback review requests plainly", () => {
+  const result = buildButlerReviewSynthesis({
+    pullRequest: {
+      number: 74,
+      url: "https://github.com/example/repo/pull/74",
+      state: "open",
+      title: "Reviewer fallback"
+    },
+    reviewLoop: {
+      reviewer: "codex",
+      reviewerStatus: "codex_review_requested",
+      reviewCommentsCount: 0,
+      unresolvedReviewCommentsCount: 0,
+      criticalReviewPending: true
+    },
+    codexGoal: "wait_for_review",
+    nextSuggestedActions: ["wait_for_codex_review", "summarize_for_human"]
+  });
+
+  assert.equal(
+    result.headline,
+    "PR #74 is open. Gemini is temporarily unavailable and Codex fallback review has been requested."
+  );
+  assert.equal(result.reviewerSignal.reviewerStatus, "codex_review_requested");
+  assert.equal(
+    result.humanDecisionFocus.includes(
+      "Gemini is temporarily unavailable; Codex fallback review has been requested and should arrive before human GO."
+    ),
+    true
+  );
+});
