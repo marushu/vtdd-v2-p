@@ -24,7 +24,6 @@ test("open issue current-reality audit distinguishes mapped and historical open 
   assert.equal(doc.includes("`#52`"), true);
   assert.equal(doc.includes("`#55`"), true);
   assert.equal(doc.includes("`#57`"), true);
-  assert.equal(doc.includes("`#70`"), true);
   assert.equal(doc.includes("`#74`"), true);
   assert.equal(doc.includes("`#9` and `#12`"), true);
   assert.equal(doc.includes("`#6`"), true);

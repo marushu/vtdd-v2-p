@@ -32,7 +32,8 @@ test("issue-to-e2e matrix defines all canonical E2E tracks", () => {
     "E2E-21",
     "E2E-22",
     "E2E-23",
-    "E2E-24"
+    "E2E-24",
+    "E2E-25"
   ]) {
     assert.equal(doc.includes(`## ${id}`), true);
   }

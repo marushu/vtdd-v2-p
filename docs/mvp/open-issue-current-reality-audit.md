@@ -19,13 +19,11 @@ It exists to prevent drift between:
 The repository has broad implementation and mapped E2E coverage across the
 main-line runtime.
 
-However, the open issue set still contains three different kinds of items:
+However, the open issue set still contains two different kinds of items:
 
 1. issues that are already implemented and mapped to E2E evidence, awaiting only
    human closure judgment
-2. issues that now have partial runtime progress but do not yet have direct
-   mapped E2E closure evidence
-3. historical/context issues that remain open for human judgment rather than
+2. historical/context issues that remain open for human judgment rather than
    active implementation
 
 ## Open Issues With Direct Mapped E2E Evidence
@@ -56,23 +54,14 @@ mapped E2E evidence in `docs/mvp/issue-to-e2e-matrix.md`.
   - mapped by `E2E-15`
 - `#57`
   - mapped by `E2E-23`
-- `#70`
-  - mapped by `E2E-24`
+- `#74`
+  - mapped by `E2E-25`
 - `#9` and `#12`
   - jointly mapped by `E2E-18`
 
 Current reading:
 - these are not the main source of implementation uncertainty anymore
 - they are best read as `e2e_evidenced_pending_human_closure`
-
-## Open Issue With Partial Runtime Progress
-
-- `#74`
-
-Current reading:
-- runtime fallback behavior is being connected
-- direct mapped E2E evidence does not exist yet
-- this remains an active implementation slice, not close-ready
 
 ## Historical / Human-Judgment Open Issue
 
