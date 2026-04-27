@@ -33,4 +33,5 @@ test("issue-to-e2e matrix references E2E-17 run evidence", () => {
   const doc = fs.readFileSync(MATRIX_PATH, "utf8");
   assert.equal(doc.includes("## E2E-17 GitHub App secret sync bootstrap"), true);
   assert.equal(doc.includes("docs/mvp/e2e/e2e-17-github-app-secret-sync-bootstrap.md"), true);
+  assert.equal(doc.includes("- Issues: `#15 #43`"), true);
 });
