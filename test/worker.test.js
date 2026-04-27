@@ -963,6 +963,7 @@ test("worker returns Butler self-parity summary", async () => {
               isInstructions
                 ? [
                     "vtddGateway",
+                    "vtddDeployProduction",
                     "vtddRetrieveGitHub",
                     "vtddRetrieveSetupArtifact",
                     "vtddRetrieveSelfParity",
@@ -973,11 +974,13 @@ test("worker returns Butler self-parity summary", async () => {
                 : [
                     "paths:",
                     "  /v2/gateway:",
+                    "  /v2/action/deploy:",
                     "  /v2/retrieve/github:",
                     "  /v2/retrieve/setup-artifact:",
                     "  /v2/retrieve/self-parity:",
                     "    get:",
                     "      operationId: vtddGateway",
+                    "      operationId: vtddDeployProduction",
                     "      operationId: vtddRetrieveGitHub",
                     "      operationId: vtddRetrieveSetupArtifact",
                     "      operationId: vtddRetrieveSelfParity"
