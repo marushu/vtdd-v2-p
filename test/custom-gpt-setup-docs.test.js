@@ -63,6 +63,9 @@ test("custom gpt instructions preserve current butler and approval boundaries", 
   assert.equal(doc.includes("Action Schema update required"), true);
   assert.equal(doc.includes("Instructions update required"), true);
   assert.equal(doc.includes("runtime is in sync, do not overclaim that the current Custom GPT editor is also in sync"), true);
+  assert.equal(doc.includes("surface the returned `error`, `reason`, and `issues` plainly in Japanese"), true);
+  assert.equal(doc.includes("Do not collapse nickname failures into vague guesses"), true);
+  assert.equal(doc.includes("If vtddDeployProduction fails, tell the user the exact deploy `error`, `reason`, and `issues`"), true);
   assert.equal(doc.includes("Do not claim a PR exists when only a Codex task summary exists."), true);
   assert.equal(
     doc.includes("Do not claim that Issues/PRs/comments are absent when the read path is unsupported, unauthorized, or unverified."),
@@ -81,11 +84,14 @@ test("short custom gpt instructions stay under editor limits while preserving cr
   assert.equal(doc.includes("vtddUpsertRepositoryNickname"), true);
   assert.equal(doc.includes("vtddRetrieveRepositoryNicknames"), true);
   assert.equal(doc.includes("Nickname memory is explicit user-owned alias registry data"), true);
+  assert.equal(doc.includes("surface the returned error/reason/issues plainly in Japanese"), true);
+  assert.equal(doc.includes("Do not replace nickname failures with vague summaries"), true);
   assert.equal(doc.includes("Cloudflare deploy update required"), true);
   assert.equal(doc.includes("Action Schema update required"), true);
   assert.equal(doc.includes("Instructions update required"), true);
   assert.equal(doc.includes("selfParity.deployRecovery.operatorUrl"), true);
   assert.equal(doc.includes("GO + real passkey"), true);
+  assert.equal(doc.includes("If vtddDeployProduction fails, say the exact deploy error/reason/issues"), true);
 });
 
 test("custom gpt openapi doc exposes current gateway, execute, and progress routes", () => {
