@@ -60,6 +60,7 @@ test("evaluateButlerSelfParity reports deploy update required when canonical set
   const canonicalInstructions = [
     "vtddGateway",
     "vtddRetrieveGitHub",
+    "vtddDeployProduction",
     "vtddRetrieveSetupArtifact",
     "vtddRetrieveSelfParity",
     "Action Schema update required",
@@ -69,11 +70,13 @@ test("evaluateButlerSelfParity reports deploy update required when canonical set
   const canonicalOpenApi = [
     "paths:",
     "  /v2/gateway:",
+    "  /v2/action/deploy:",
     "  /v2/retrieve/github:",
     "  /v2/retrieve/setup-artifact:",
     "  /v2/retrieve/self-parity:",
     "    get:",
     "      operationId: vtddGateway",
+    "      operationId: vtddDeployProduction",
     "      operationId: vtddRetrieveGitHub",
     "      operationId: vtddRetrieveSetupArtifact",
     "      operationId: vtddRetrieveSelfParity",
