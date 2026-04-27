@@ -174,6 +174,16 @@ export function renderPasskeyOperatorPage(input = {}) {
           <p class="muted">${syncMessage}</p>
           <pre id="sync-output"></pre>
         </section>
+
+        <section>
+          <h2>4. Production Deploy</h2>
+          <p class="muted">deploy stale を検知したあと、取得済みの <code>approvalGrantId</code> を使って same-origin の governed deploy path を dispatch します。</p>
+          <div class="row">
+            <button id="deploy-button">Dispatch production deploy</button>
+          </div>
+          <p class="muted">この Worker origin を <code>runtimeUrl</code> として使います。実行後は Butler で self-parity を再確認してください。</p>
+          <pre id="deploy-output"></pre>
+        </section>
       </div>
     </main>
 
@@ -181,6 +191,7 @@ export function renderPasskeyOperatorPage(input = {}) {
       const registerOutput = document.getElementById("register-output");
       const approveOutput = document.getElementById("approve-output");
       const syncOutput = document.getElementById("sync-output");
+      const deployOutput = document.getElementById("deploy-output");
       let latestApprovalGrantId = "";
 
       document.getElementById("register-button").addEventListener("click", async () => {
@@ -290,6 +301,34 @@ export function renderPasskeyOperatorPage(input = {}) {
           syncOutput.textContent = JSON.stringify(syncBody, null, 2);
         } catch (error) {
           syncOutput.textContent = String(error);
+        }
+      });
+
+      document.getElementById("deploy-button").addEventListener("click", async () => {
+        try {
+          if (!latestApprovalGrantId) {
+            throw new Error("approvalGrantId is required before production deploy");
+          }
+          deployOutput.textContent = "production deploy request...";
+          const deployResponse = await fetch("${apiBase}/action/deploy", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              repository: document.getElementById("repo-input").value,
+              issueNumber: Number(document.getElementById("issue-input").value || 0) || null,
+              policyInput: {
+                approvalPhrase: "GO",
+                approvalGrantId: latestApprovalGrantId
+              }
+            })
+          });
+          const deployBody = await deployResponse.json();
+          if (!deployResponse.ok) {
+            throw new Error(deployBody.reason || deployBody.error || "production deploy failed");
+          }
+          deployOutput.textContent = JSON.stringify(deployBody, null, 2);
+        } catch (error) {
+          deployOutput.textContent = String(error);
         }
       });
 

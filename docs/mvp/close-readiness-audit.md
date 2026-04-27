@@ -14,13 +14,13 @@ For the broader open-issue vs current-reality mismatch inventory, also read:
 ## Current Human-judgment / Parent / Historical Issues
 
 - `#80` self-parity natural-language trigger improvement
+- `#82` governed stale-parity production deploy
 - `#4` current loop parent
 - `#6` historical execution-slice issue
 
 The following open issues are intentionally not treated as close-readiness-only
 items here because they still represent active implementation/spec work:
 
-- `#82`
 - `#84`
 
 ## Current Reading
@@ -64,6 +64,25 @@ Keep it open if:
 - the owner still sees meaningful gaps in Butler self-reference / update-check
   handling that belong to `#80` itself
 - follow-up behavior changes are expected before judging the issue complete
+
+### `#82`
+
+`#82` now has merged/runtime progress for governed deploy dispatch plus
+same-origin passkey-operator execution evidence.
+
+It may be close-ready if the owner agrees that:
+
+- stale parity can now advance into an iPhone-usable governed deploy path
+- `GO + real passkey` remains explicit and approval-bound
+- any remaining deploy confusion is now drift or operator setup outside `#82`
+  rather than missing deploy-orchestration scope
+
+Keep it open if:
+
+- the owner still sees meaningful gaps in Butler deploy guidance or
+  passkey-operator execution for mobile deploy recovery
+- additional Butler-side natural-language deploy handling is expected before
+  judging the issue complete
 
 ## Non-claim
 

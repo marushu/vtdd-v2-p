@@ -176,7 +176,11 @@ export default {
     }
 
     if (request.method === "POST" && isApiPath(url.pathname, "/action/deploy")) {
-      const auth = authorizeGatewayRequest({ request, env, apiSuffix: "/action/deploy" });
+      const auth = authorizePasskeyBrowserOrMachineRequest({
+        request,
+        env,
+        apiSuffix: "/action/deploy"
+      });
       if (!auth.ok) {
         return json(auth.status, {
           ok: false,

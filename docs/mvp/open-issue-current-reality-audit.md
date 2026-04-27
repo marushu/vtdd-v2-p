@@ -30,11 +30,7 @@ However, the open issue set now contains four different kinds of items:
 
 ## Current Active Implementation Issues
 
-- `#82`
-  - merged progress exists through PRs `#83` and `#85`
-  - current reading: the governed deploy plane and self-parity deploy manifest
-    landed, but natural-language Butler orchestration from stale parity into
-    `GO + real passkey` deploy is still incomplete
+- none at the moment
 
 ## Current Active Spec / Boundary Issues
 
@@ -52,6 +48,12 @@ However, the open issue set now contains four different kinds of items:
   - current reading: self-reference and natural self-parity trigger mapping are
     implemented; remaining work is mainly human closure judgment unless new
     gaps are found
+- `#82`
+  - merged/runtime progress exists through PRs `#83`, `#85`, and `#87`
+  - current reading: governed deploy plane, self-parity manifest alignment, and
+    same-origin passkey-operator deploy dispatch are implemented with mapped
+    E2E evidence; remaining work is mainly human closure judgment unless new
+    mobile deploy gaps are found
 - `#4`
   - mapped by `E2E-19`
   - current reading: remains the live parent authority for the
@@ -79,8 +81,7 @@ The following older readings must not be reintroduced:
   fallback is already solved
 - treating open issue count alone as proof that major runtime work is still
   unimplemented
-- treating the remaining work as mostly close-readiness while `#82` and `#84`
-  are still active implementation/spec gaps
+- treating no-manual reviewer fallback as solved while `#84` remains active
 
 ## Recommended Next Step
 
@@ -88,10 +89,10 @@ The next highest-value cleanup is:
 
 - keep `#82` and `#84` visible as current active work rather than reading the
   repo as mostly closure-ready
-- decide whether `#80` is ready for human closure judgment
+- decide whether `#80` and `#82` are ready for human closure judgment
 - keep `#6` separate as historical/human-judgment context rather than treating
   it as active implementation uncertainty
 
 The repository still has broad runnable coverage, but the remaining drift is no
-longer only at the owner close-readiness layer; it also includes active deploy
-orchestration and reviewer-fallback boundary work.
+longer only at the owner close-readiness layer; it now concentrates mainly on
+the unresolved no-manual reviewer-fallback boundary tracked by `#84`.

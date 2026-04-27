@@ -89,6 +89,8 @@ Worker URL itself. It can:
 - request a high-risk approval challenge
 - verify the authenticator response
 - display the resulting `approvalGrantId`
+- dispatch a governed production deploy after a deploy-scoped
+  `approvalGrantId` has been issued
 
 This is the minimum browser/iPhone execution surface for the real passkey flow.
 The Worker URL is canonical. Local helper/proxy paths are not the canonical
