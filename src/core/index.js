@@ -169,6 +169,11 @@ export {
   resolveGatewayAliasRegistryFromGitHubApp,
   resolveGitHubAppInstallationToken
 } from "./github-app-repository-index.js";
+export {
+  CustomGptSetupArtifact,
+  evaluateButlerSelfParity,
+  retrieveCustomGptSetupArtifact
+} from "./custom-gpt-setup-artifacts.js";
 export { GitHubReadResource, retrieveGitHubReadPlane } from "./github-read-plane.js";
 export { GitHubWriteOperation, executeGitHubWritePlane } from "./github-write-plane.js";
 export { GitHubHighRiskOperation, executeGitHubHighRiskPlane } from "./github-high-risk-plane.js";

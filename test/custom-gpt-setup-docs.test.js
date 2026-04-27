@@ -36,8 +36,13 @@ test("custom gpt instructions preserve current butler and approval boundaries", 
   assert.equal(doc.includes("vtddGitHubAuthority"), true);
   assert.equal(doc.includes("vtddExecutionProgress"), true);
   assert.equal(doc.includes("vtddRetrieveGitHub"), true);
+  assert.equal(doc.includes("vtddRetrieveSetupArtifact"), true);
+  assert.equal(doc.includes("vtddRetrieveSelfParity"), true);
   assert.equal(doc.includes("High-risk actions require GO + passkey."), true);
   assert.equal(doc.includes("Merge requires explicit human GO + real passkey."), true);
+  assert.equal(doc.includes("Action Schema update required"), true);
+  assert.equal(doc.includes("Instructions update required"), true);
+  assert.equal(doc.includes("Cloudflare deploy update required"), true);
   assert.equal(doc.includes("Do not claim a PR exists when only a Codex task summary exists."), true);
   assert.equal(
     doc.includes("Do not claim that Issues/PRs/comments are absent when the read path is unsupported, unauthorized, or unverified."),
@@ -54,6 +59,8 @@ test("custom gpt openapi doc exposes current gateway, execute, and progress rout
   assert.equal(doc.includes("/v2/action/github-authority:"), true);
   assert.equal(doc.includes("/v2/action/progress:"), true);
   assert.equal(doc.includes("/v2/retrieve/github:"), true);
+  assert.equal(doc.includes("/v2/retrieve/setup-artifact:"), true);
+  assert.equal(doc.includes("/v2/retrieve/self-parity:"), true);
   assert.equal(doc.includes("/v2/retrieve/approval-grant:"), true);
   assert.equal(doc.includes("GatewayBearerAuth"), true);
   assert.equal(doc.includes("conversation:"), true);
@@ -89,6 +96,8 @@ test("custom gpt openapi json parses and exposes paths as an object", () => {
   assert.equal(typeof doc.paths["/v2/action/github-authority"], "object");
   assert.equal(typeof doc.paths["/v2/action/progress"], "object");
   assert.equal(typeof doc.paths["/v2/retrieve/github"], "object");
+  assert.equal(typeof doc.paths["/v2/retrieve/setup-artifact"], "object");
+  assert.equal(typeof doc.paths["/v2/retrieve/self-parity"], "object");
   assert.equal(typeof doc.paths["/v2/retrieve/approval-grant"], "object");
   assert.equal(typeof doc.components.schemas, "object");
   assert.equal(doc.components.securitySchemes.GatewayBearerAuth.scheme, "bearer");

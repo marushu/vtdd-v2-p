@@ -569,6 +569,85 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/VtddGenericResponse"
+  /v2/retrieve/setup-artifact:
+    get:
+      operationId: vtddRetrieveSetupArtifact
+      summary: Retrieve canonical Custom GPT setup artifacts from the repository source of truth.
+      parameters:
+        - name: artifact
+          in: query
+          required: true
+          schema:
+            type: string
+            enum:
+              - instructions
+              - openapi_yaml
+              - openapi_json
+        - name: repository
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: ref
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Canonical setup artifact retrieval result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "401":
+          description: Missing machine auth
+        "403":
+          description: Invalid machine auth
+        "422":
+          description: Setup artifact request blocked or invalid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "503":
+          description: Setup artifact retrieval unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+  /v2/retrieve/self-parity:
+    get:
+      operationId: vtddRetrieveSelfParity
+      summary: Evaluate Butler self-parity against canonical setup artifacts and deployed runtime capability.
+      parameters:
+        - name: repository
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: ref
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Butler self-parity evaluation result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "401":
+          description: Missing machine auth
+        "403":
+          description: Invalid machine auth
+        "503":
+          description: Butler self-parity evaluation unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
   /v2/retrieve/approval-grant:
     get:
       operationId: vtddRetrieveApprovalGrant
