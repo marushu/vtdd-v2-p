@@ -33,6 +33,14 @@ may upsert a GitHub-visible Codex fallback review request comment (`@codex
 review`) instead of hard-failing the PR solely for reviewer availability
 reasons.
 
+Current limitation:
+
+- a VTDD bot-authored `@codex review` request is not yet guaranteed to produce
+  the same result as an owner-authored Codex request
+- therefore this slice proves request-state visibility, not a completed
+  no-manual Codex fallback design
+- the unresolved no-manual fallback path is tracked by `#84`
+
 The workflow must ignore its own marker comment so that reviewer reruns do not
 create an infinite comment loop.
 

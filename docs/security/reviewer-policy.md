@@ -27,6 +27,10 @@ The reviewer is a critical evaluation role.
   provider high demand / temporary unavailability.
 - This fallback remains critique-only and depends on the operator's Codex
   GitHub integration, not on repository-owned execution credentials.
+- A bot-authored `@codex review` request must not be assumed equivalent to an
+  owner-authored Codex review invocation.
+- No-manual Codex fallback remains active work under `#84`; the current repo
+  only proves the request-state path, not a solved no-manual fallback loop.
 - Antigravity is not the normal reviewer path.
 - Antigravity may be used only as an emergency fallback.
 - Emergency fallback use assumes learning-use is disabled in its service settings.

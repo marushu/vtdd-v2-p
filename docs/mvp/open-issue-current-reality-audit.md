@@ -1,7 +1,7 @@
 # Open Issue Current-Reality Audit
 
-This document records the current mismatch reading between the GitHub open issue
-set and the repository's merged/runtime reality.
+This document records the current reading between the GitHub open issue set and
+the repository's merged/runtime reality.
 
 It does not close any issue automatically.
 It exists to prevent drift between:
@@ -19,49 +19,43 @@ It exists to prevent drift between:
 The repository has broad implementation and mapped E2E coverage across the
 main-line runtime.
 
-However, the open issue set still contains two different kinds of items:
+However, the open issue set now contains four different kinds of items:
 
-1. issues that are already implemented and mapped to E2E evidence, awaiting only
-   human closure judgment
-2. historical/context issues that remain open for human judgment rather than
+1. current active implementation work
+2. current active spec / boundary-definition work
+3. open issues whose implementation landed and are now mainly waiting on human
+   closure judgment
+4. historical/context issues that remain open for human judgment rather than
    active implementation
 
-## Open Issues With Direct Mapped E2E Evidence
+## Current Active Implementation Issues
 
-These issues already have code/runtime evidence, test evidence, and direct
-mapped E2E evidence in `docs/mvp/issue-to-e2e-matrix.md`.
+- `#82`
+  - merged progress exists through PRs `#83` and `#85`
+  - current reading: the governed deploy plane and self-parity deploy manifest
+    landed, but natural-language Butler orchestration from stale parity into
+    `GO + real passkey` deploy is still incomplete
 
+## Current Active Spec / Boundary Issues
+
+- `#84`
+  - current reading: bot-authored `@codex review` fallback is not equivalent to
+    owner-authored Codex invocation
+  - manual copy-paste fallback is explicitly not the desired steady-state
+    answer
+  - this remains active design work, not close-ready evidence-only work
+
+## Open Issues With Merged Runtime / Docs Progress And Likely Human Closure Work
+
+- `#80`
+  - merged via PR `#81`
+  - current reading: self-reference and natural self-parity trigger mapping are
+    implemented; remaining work is mainly human closure judgment unless new
+    gaps are found
 - `#4`
   - mapped by `E2E-19`
-- `#42`
-  - mapped by `E2E-20`
-- `#43`
-  - mapped by `E2E-16`
-  - mapped by `E2E-17`
-- `#44`
-  - mapped by `E2E-21`
-- `#45`
-  - mapped by `E2E-19`
-- `#46`
-  - mapped by `E2E-22`
-- `#15`
-  - mapped by `E2E-17`
-- `#26`
-  - mapped by `E2E-16`
-- `#52`
-  - mapped by `E2E-14`
-- `#55`
-  - mapped by `E2E-15`
-- `#57`
-  - mapped by `E2E-23`
-- `#74`
-  - mapped by `E2E-25`
-- `#9` and `#12`
-  - jointly mapped by `E2E-18`
-
-Current reading:
-- these are not the main source of implementation uncertainty anymore
-- they are best read as `e2e_evidenced_pending_human_closure`
+  - current reading: remains the live parent authority for the
+    Butler-Codex-Gemini loop
 
 ## Historical / Human-Judgment Open Issue
 
@@ -81,18 +75,23 @@ The following older readings must not be reintroduced:
 - treating `#13` as a currently open issue
 - treating `#1` as a currently open issue
 - treating `#6` as the current parent authority for the loop
+- treating closed reviewer-fallback issue `#74` as proof that no-manual Codex
+  fallback is already solved
 - treating open issue count alone as proof that major runtime work is still
   unimplemented
+- treating the remaining work as mostly close-readiness while `#82` and `#84`
+  are still active implementation/spec gaps
 
 ## Recommended Next Step
 
 The next highest-value cleanup is:
 
-- decide which of the open E2E-mapped spec/runtime issues are ready for human
-  closure judgment
+- keep `#82` and `#84` visible as current active work rather than reading the
+  repo as mostly closure-ready
+- decide whether `#80` is ready for human closure judgment
 - keep `#6` separate as historical/human-judgment context rather than treating
   it as active implementation uncertainty
 
-This is likely more important than adding new runtime features, because the
-repository already has broad runnable coverage and the remaining drift is now
-primarily at the owner close-readiness layer.
+The repository still has broad runnable coverage, but the remaining drift is no
+longer only at the owner close-readiness layer; it also includes active deploy
+orchestration and reviewer-fallback boundary work.

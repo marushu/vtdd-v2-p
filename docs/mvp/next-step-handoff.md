@@ -12,11 +12,14 @@ This file exists so work can resume in a fresh thread without re-deriving the cu
 
 ## What Remains Open
 
-At this stage, remaining work is mainly one of:
+At this stage, remaining work includes:
 
 1. keep `main` honest as the VTDD core line
 2. preserve handoff, review, retrieval, and runtime-truth behavior
-3. treat any future wizard work as archive/research unless explicitly re-activated
+3. finish current active issues such as deploy-orchestration follow-up and
+   reviewer-fallback boundary work
+4. treat any future wizard work as archive/research unless explicitly
+   re-activated
 
 Do not restart implementation from this handoff by assuming missing scope.
 Re-check open Issues first.

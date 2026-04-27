@@ -62,9 +62,10 @@ Observed result on 2026-04-27:
 
 E2E-25 now has recorded happy-path and boundary-path run evidence in-repo.
 
-This confirms Issue `#74` is connected to a runnable reviewer fallback path
-that keeps Gemini as primary, requests Codex review on quota exhaustion, and
+This confirms Issue `#74` is connected to a repo-side fallback request path
+that keeps Gemini as primary, records Codex fallback request state, and
 preserves critique-only reviewer boundaries.
 
-It does not claim that the operator's external Codex GitHub integration has
-already posted a critique comment on a live PR.
+It does not claim that a VTDD bot-authored `@codex review` request is already a
+solved no-manual fallback path on a live PR.
+That unresolved platform/UX boundary is now tracked by open Issue `#84`.
