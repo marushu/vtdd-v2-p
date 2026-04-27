@@ -114,6 +114,7 @@ test("custom gpt openapi doc exposes current gateway, execute, and progress rout
   assert.equal(doc.includes("/v2/retrieve/self-parity:"), true);
   assert.equal(doc.includes("/v2/retrieve/approval-grant:"), true);
   assert.equal(doc.includes("GatewayBearerAuth"), true);
+  assert.equal(doc.includes("operationId: getHealth\n      security: []"), true);
   assert.equal(doc.includes("conversation:"), true);
   assert.equal(doc.includes("repositoryInput:"), true);
   assert.equal(doc.includes("issueNumber"), true);
@@ -153,6 +154,7 @@ test("custom gpt openapi json parses and exposes paths as an object", () => {
   assert.equal(typeof doc.paths["/v2/retrieve/setup-artifact"], "object");
   assert.equal(typeof doc.paths["/v2/retrieve/self-parity"], "object");
   assert.equal(typeof doc.paths["/v2/retrieve/approval-grant"], "object");
+  assert.deepEqual(doc.paths["/health"].get.security, []);
   assert.equal(typeof doc.components.schemas, "object");
   assert.equal(doc.components.securitySchemes.GatewayBearerAuth.scheme, "bearer");
 });

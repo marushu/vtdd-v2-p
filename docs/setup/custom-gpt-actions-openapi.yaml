@@ -231,6 +231,7 @@ paths:
   /health:
     get:
       operationId: getHealth
+      security: []
       summary: Check whether the VTDD worker is reachable.
       responses:
         "200":
