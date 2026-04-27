@@ -112,3 +112,34 @@ test("execution continuity treats approve-only Gemini reviewer comment as non-bl
   );
   assert.deepEqual(result.value.nextSuggestedActions, ["summarize_for_human", "wait_for_human_go"]);
 });
+
+test("execution continuity exposes Codex fallback requested when Gemini quota blocks review", () => {
+  const result = evaluateExecutionContinuity({
+    actorRole: ActorRole.BUTLER,
+    mode: TaskMode.EXECUTION,
+    runtimeTruth: {
+      runtimeState: {
+        activeBranch: "codex/issue-74",
+        pullRequest: {
+          number: 74,
+          url: "https://github.com/example/repo/pull/74",
+          state: "open",
+          title: "Reviewer fallback",
+          issueComments: [
+            {
+              user: { login: "vtdd-codex[bot]" },
+              body: "<!-- vtdd:reviewer=codex-fallback -->\n@codex review"
+            }
+          ]
+        }
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.value.reviewLoop.reviewer, "codex");
+  assert.equal(result.value.reviewLoop.reviewerStatus, "codex_review_requested");
+  assert.equal(result.value.reviewLoop.criticalReviewPending, true);
+  assert.equal(result.value.codexGoal, CodexGoal.WAIT_FOR_REVIEW);
+  assert.deepEqual(result.value.nextSuggestedActions, ["wait_for_codex_review", "summarize_for_human"]);
+});

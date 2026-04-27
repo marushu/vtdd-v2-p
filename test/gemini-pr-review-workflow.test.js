@@ -19,3 +19,9 @@ test("Gemini review workflow mints a GitHub App token and passes it to reviewer 
   assert.equal(workflow.includes("GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}"), true);
   assert.equal(workflow.includes("run: node scripts/run-gemini-pr-review.mjs"), true);
 });
+
+test("Gemini review workflow still routes reviewer execution through the script entrypoint", () => {
+  assert.equal(workflow.includes("name: Run Gemini PR review"), true);
+  assert.equal(workflow.includes("GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}"), true);
+  assert.equal(workflow.includes("GEMINI_REVIEW_MODEL: ${{ vars.GEMINI_REVIEW_MODEL }}"), true);
+});

@@ -1,4 +1,5 @@
 import { buildButlerReviewSynthesis } from "./butler-review-synthesis.js";
+import { parseCodexReviewFallbackComment } from "./codex-review-fallback.js";
 import { parseGeminiReviewComment } from "./gemini-pr-review.js";
 import { ActorRole, TaskMode } from "./types.js";
 
@@ -54,6 +55,7 @@ export function evaluateExecutionContinuity(input = {}) {
       },
       reviewLoop: {
         reviewer: review.reviewer,
+        reviewerStatus: review.reviewerStatus,
         reviewCommentsCount: review.reviewCommentsCount,
         unresolvedReviewCommentsCount: review.unresolvedReviewCommentsCount,
         criticalReviewPending: review.criticalReviewPending,
@@ -69,6 +71,7 @@ export function evaluateExecutionContinuity(input = {}) {
         pullRequest,
         reviewLoop: {
           reviewer: review.reviewer,
+          reviewerStatus: review.reviewerStatus,
           reviewCommentsCount: review.reviewCommentsCount,
           unresolvedReviewCommentsCount: review.unresolvedReviewCommentsCount,
           criticalReviewPending: review.criticalReviewPending
@@ -120,20 +123,31 @@ function validateHandoffRequirement({ actorRole, continuation }) {
 
 function buildReviewState(pullRequest) {
   const parsedGeminiSignals = collectGeminiReviewerSignals(pullRequest);
+  const codexFallback = collectCodexFallbackSignals(pullRequest);
   const reviewCommentsCount =
     parsedGeminiSignals.totalCount > 0 ? parsedGeminiSignals.totalCount : pullRequest.reviewCommentsCount;
   const unresolvedReviewCommentsCount =
     parsedGeminiSignals.totalCount > 0
       ? parsedGeminiSignals.blockingCount
       : pullRequest.unresolvedReviewCommentsCount;
-  const reviewer = pullRequest.reviewer;
+  const reviewerStatus = codexFallback.requested
+    ? "codex_review_requested"
+    : reviewCommentsCount > 0
+      ? "gemini_review_available"
+      : "review_unavailable";
+  const reviewer = reviewerStatus === "codex_review_requested" ? "codex" : pullRequest.reviewer;
   const criticalReviewPending =
-    pullRequest.exists && reviewCommentsCount > 0 && unresolvedReviewCommentsCount > 0;
+    pullRequest.exists &&
+    (reviewerStatus === "codex_review_requested" ||
+      (reviewCommentsCount > 0 && unresolvedReviewCommentsCount > 0));
   const rerunReviewer =
-    pullRequest.exists && (pullRequest.updatedSinceReview || unresolvedReviewCommentsCount > 0);
+    pullRequest.exists &&
+    reviewerStatus !== "codex_review_requested" &&
+    (pullRequest.updatedSinceReview || unresolvedReviewCommentsCount > 0);
 
   return {
     reviewer,
+    reviewerStatus,
     reviewCommentsCount,
     unresolvedReviewCommentsCount,
     criticalReviewPending,
@@ -154,6 +168,15 @@ function collectGeminiReviewerSignals(pullRequest) {
   };
 }
 
+function collectCodexFallbackSignals(pullRequest) {
+  const comments = [...(Array.isArray(pullRequest.issueComments) ? pullRequest.issueComments : [])];
+  const parsed = comments.map(parseCodexReviewFallbackComment).filter(Boolean);
+
+  return {
+    requested: parsed.length > 0
+  };
+}
+
 function determineCodexGoal({ pullRequest, review }) {
   if (!pullRequest.exists) {
     return CodexGoal.OPEN_PR;
@@ -169,6 +192,10 @@ function buildNextSuggestedActions({ pullRequest, review, codexGoal }) {
     return ["continue_bounded_coding", "open_pull_request", "request_gemini_review"];
   }
 
+  if (review.reviewerStatus === "codex_review_requested") {
+    return ["wait_for_codex_review", "summarize_for_human"];
+  }
+
   if (codexGoal === CodexGoal.REVISE_PR) {
     return ["apply_pr_feedback", "reply_on_pull_request", "rerun_gemini_review"];
   }
@@ -178,6 +205,10 @@ function buildNextSuggestedActions({ pullRequest, review, codexGoal }) {
   }
 
   if (review.rerunReviewer) {
+    return ["rerun_gemini_review", "summarize_for_human"];
+  }
+
+  if (review.reviewerStatus === "review_unavailable") {
     return ["rerun_gemini_review", "summarize_for_human"];
   }
 

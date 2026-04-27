@@ -164,6 +164,16 @@ export {
   parseGeminiReviewComment,
   resolveGeminiReviewTrigger
 } from "./gemini-pr-review.js";
+export {
+  CODEX_REVIEW_FALLBACK_MARKER,
+  findExistingCodexReviewFallbackComment,
+  formatCodexReviewFallbackComment,
+  parseCodexReviewFallbackComment
+} from "./codex-review-fallback.js";
+export {
+  GeminiReviewFailureKind,
+  classifyGeminiReviewFailure
+} from "./gemini-review-failure.js";
 export { runMvpGateway } from "./mvp-gateway.js";
 export {
   resolveGatewayAliasRegistryFromGitHubApp,
