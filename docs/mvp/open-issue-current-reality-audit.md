@@ -19,60 +19,30 @@ It exists to prevent drift between:
 The repository has broad implementation and mapped E2E coverage across the
 main-line runtime.
 
-However, the open issue set now contains four different kinds of items:
+However, the open issue set now contains three different kinds of items:
 
 1. current active implementation work
-2. current active spec / boundary-definition work
-3. open issues whose implementation landed and are now mainly waiting on human
+2. open issues whose implementation landed and are now mainly waiting on human
    closure judgment
-4. historical/context issues that remain open for human judgment rather than
+3. historical/context issues that remain open for human judgment rather than
    active implementation
 
 ## Current Active Implementation Issues
 
-- none at the moment
-
-## Current Active Implementation / Boundary Issues
-
-- `#84`
-  - runtime/docs progress now exists for VTDD-managed no-manual Codex fallback
-    workflow dispatch plus explicit blocked-state handling
-  - current reading: bot-authored `@codex review` fallback is not equivalent to
-    owner-authored Codex invocation
-  - manual copy-paste fallback is explicitly not the desired steady-state
-    answer
-  - remaining work is no longer "missing design from scratch"; it is human
-    judgment on whether the VTDD-managed workflow path is the acceptable
-    no-manual fallback answer
+- `#89`
+  - current reading: user-defined repository nickname support is the new active
+    implementation slice
+  - existing alias/context-first resolution already works, but Butler still
+    lacks a persistent user-owned nickname registry for repo calls such as
+    `公開VTDD`
+  - this remains active runtime/docs/E2E work rather than closure judgment
 
 ## Open Issues With Merged Runtime / Docs Progress And Likely Human Closure Work
 
-- `#80`
-  - merged via PR `#81`
-  - current reading: self-reference and natural self-parity trigger mapping are
-    implemented; remaining work is mainly human closure judgment unless new
-    gaps are found
-- `#82`
-  - merged/runtime progress exists through PRs `#83`, `#85`, and `#87`
-  - current reading: governed deploy plane, self-parity manifest alignment, and
-    same-origin passkey-operator deploy dispatch are implemented with mapped
-    E2E evidence; remaining work is mainly human closure judgment unless new
-    mobile deploy gaps are found
 - `#4`
   - mapped by `E2E-19`
   - current reading: remains the live parent authority for the
     Butler-Codex-Gemini loop
-
-## Historical / Human-Judgment Open Issue
-
-- `#6`
-
-Current reading:
-- `#6` is historical execution-spine context
-- `#4` is the current parent authority for the loop
-- `#6` should not be treated as the current implementation parent
-- `#6` is directly evidenced through `E2E-19`, but should still be judged as
-  historical context rather than a competing live parent
 
 ## Resolved Drift Already Observed
 
@@ -81,24 +51,21 @@ The following older readings must not be reintroduced:
 - treating `#13` as a currently open issue
 - treating `#1` as a currently open issue
 - treating `#6` as the current parent authority for the loop
+- treating closed issue `#6` as still-open implementation uncertainty
+- treating closed issues `#80`, `#82`, and `#84` as still-open active work
 - treating closed reviewer-fallback issue `#74` as proof that no-manual Codex
   fallback is already solved
 - treating open issue count alone as proof that major runtime work is still
   unimplemented
-- treating no-manual reviewer fallback as solved while `#84` remains active
 
 ## Recommended Next Step
 
 The next highest-value cleanup is:
 
-- keep `#84` visible as a boundary-sensitive open issue even after runtime/docs
-  progress lands, because owner judgment is still needed on the no-manual
-  fallback answer
-- decide whether `#80`, `#82`, and `#84` are ready for human closure judgment
-- keep `#6` separate as historical/human-judgment context rather than treating
-  it as active implementation uncertainty
+- implement `#89` without weakening `no default repository`
+- keep `#4` as the live parent contract while child slices continue landing
 
 The repository still has broad runnable coverage, but the remaining drift is no
-longer only at the owner close-readiness layer; it now concentrates mainly on
-judging whether the VTDD-managed no-manual reviewer-fallback path for `#84`
-meets the intended operational bar.
+longer concentrated on reviewer/deploy rescue slices. It is now concentrated on
+making Butler's repository context resolution more operator-friendly without
+reintroducing default-repository risk.

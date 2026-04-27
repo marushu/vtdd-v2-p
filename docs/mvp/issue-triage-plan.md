@@ -12,11 +12,11 @@ As of 2026-04-27:
 - the major triage/creation wave has already been executed
 - `#13` has already been rewritten as the MVP execution anchor
 - `#4` is the current parent contract for the Butler-Codex-Gemini loop
-- `#6` remains a historical execution-slice and must not compete with `#4` as a parent authority
+- `#6` has been closed as historical execution-slice context and must not be
+  re-opened as a competing parent authority
 - the repository now has broad runtime + contract coverage, but overall status is still `partial / in-progress`
-- the remaining work is not only close-readiness; it also includes active
-  deploy-orchestration work (`#82`) and active reviewer-fallback boundary work
-  (`#84`)
+- the remaining active implementation work is now repository nickname/context
+  resolution improvement (`#89`)
 
 ## Compatibility Notes for Historical `#1-#20`
 
@@ -57,8 +57,8 @@ The following historical directions were already resolved into the current repo 
 - role separation was split out and implemented
 - setup / deploy / guarded absence / reviewer / bootstrap follow-up issues were created as needed
 - newer follow-up issues such as `#80`, `#82`, and `#84` must be read directly
-  from their current GitHub text rather than inferred from this historical
-  triage file
+  from their historical GitHub text rather than inferred from this historical
+  triage file; the current active follow-up is `#89`
 
 ## Completion Reminder
 

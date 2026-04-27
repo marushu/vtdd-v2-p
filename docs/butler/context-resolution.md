@@ -37,6 +37,23 @@ Alias records may include:
 - nicknames
 - short description
 
+User-defined repository nicknames are valid alias-registry inputs.
+
+When the user explicitly says things like:
+
+- `この repo は 公開VTDD って呼んで`
+- `vtdd-v2-p を VTDD公開版 で覚えて`
+
+Butler should persist that nickname through the runtime nickname registry rather
+than treating it as temporary session-only wording.
+
+Persistent nickname recall must still preserve repository safety:
+
+- nickname storage does not create a default repository
+- ambiguous nickname matches must block execution and ask for confirmation
+- Butler should prefer canonical repository readback when showing what a saved
+  nickname currently resolves to
+
 ## Repository Safety Rule
 
 Butler must not assume a default repository.

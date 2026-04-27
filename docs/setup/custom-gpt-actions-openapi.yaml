@@ -498,6 +498,54 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/VtddGenericResponse"
+  /v2/action/repository-nickname:
+    post:
+      operationId: vtddUpsertRepositoryNickname
+      summary: Save or update a user-defined repository nickname in the VTDD alias registry.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                repository:
+                  type: string
+                nickname:
+                  type: string
+                nicknames:
+                  type: array
+                  items:
+                    type: string
+                mode:
+                  type: string
+                  enum:
+                    - append
+                    - replace
+              additionalProperties: true
+      responses:
+        "200":
+          description: Repository nickname persisted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "401":
+          description: Missing machine auth
+        "403":
+          description: Invalid machine auth
+        "422":
+          description: Repository nickname request blocked or invalid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "503":
+          description: Repository nickname persistence unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
   /v2/action/progress:
     get:
       operationId: vtddExecutionProgress
@@ -614,6 +662,27 @@ paths:
                 $ref: "#/components/schemas/VtddGenericResponse"
         "503":
           description: GitHub read route unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+  /v2/retrieve/repository-nicknames:
+    get:
+      operationId: vtddRetrieveRepositoryNicknames
+      summary: Read stored user-defined repository nicknames from the VTDD alias registry.
+      responses:
+        "200":
+          description: Repository nickname registry retrieval result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "401":
+          description: Missing machine auth
+        "403":
+          description: Invalid machine auth
+        "503":
+          description: Repository nickname retrieval unavailable
           content:
             application/json:
               schema:

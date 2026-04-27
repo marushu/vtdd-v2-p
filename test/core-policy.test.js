@@ -143,6 +143,39 @@ test("execution mode allows alias-resolved target after explicit confirmation", 
   assert.equal(result.repository, "sample-org/accounting-app");
 });
 
+test("execution mode blocks ambiguous repository nickname", () => {
+  const result = evaluateExecutionPolicy({
+    actionType: ActionType.BUILD,
+    mode: TaskMode.EXECUTION,
+    repositoryInput: "公開VTDD",
+    aliasRegistry: [
+      ...registry,
+      {
+        canonicalRepo: "sample-org/vtdd-v2-p",
+        productName: "VTDD Public",
+        aliases: ["公開VTDD"]
+      },
+      {
+        canonicalRepo: "sample-org/vtdd-public",
+        productName: "VTDD Public Alt",
+        aliases: ["公開VTDD"]
+      }
+    ],
+    targetConfirmed: true,
+    constitutionConsulted: true,
+    runtimeTruth: { runtimeAvailable: true },
+    credential: executeCredential,
+    consent: fullConsent,
+    ...approvalContext,
+    issueTraceable: true,
+    go: true,
+    passkey: false
+  });
+
+  assert.equal(result.allowed, false);
+  assert.equal(result.blockedByRule, "unresolved_target_blocks_execution");
+});
+
 test("high-risk action requires GO + passkey", () => {
   const result = evaluateExecutionPolicy({
     actionType: ActionType.DEPLOY_PRODUCTION,

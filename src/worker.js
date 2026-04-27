@@ -25,11 +25,17 @@ import {
   retrieveConstitution,
   retrieveCustomGptSetupArtifact,
   renderPasskeyOperatorPage,
+  RepositoryNicknameMode,
   resolveGatewayAliasRegistryFromGitHubApp,
+  resolveRepositoryTarget,
   GitHubHighRiskOperation,
+  mergeAliasRegistries,
+  retrieveStoredAliasRegistry,
   retrieveGitHubReadPlane,
+  TaskMode,
   executeGitHubWritePlane,
   runMvpGateway,
+  upsertRepositoryNickname,
   validateMemoryProvider,
   verifyPasskeyApproval,
   verifyPasskeyRegistration
@@ -190,6 +196,23 @@ export default {
       }
 
       return handleDeployProductionRequest(request, env);
+    }
+
+    if (request.method === "POST" && isApiPath(url.pathname, "/action/repository-nickname")) {
+      const auth = authorizeGatewayRequest({
+        request,
+        env,
+        apiSuffix: "/action/repository-nickname"
+      });
+      if (!auth.ok) {
+        return json(auth.status, {
+          ok: false,
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+
+      return handleRepositoryNicknameUpsertRequest(request, env);
     }
 
     if (request.method === "GET" && isApiPath(url.pathname, "/action/progress")) {
@@ -385,6 +408,22 @@ export default {
         });
       }
       return handleRetrieveButlerSelfParityRequest(url, env);
+    }
+
+    if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/repository-nicknames")) {
+      const auth = authorizeGatewayRequest({
+        request,
+        env,
+        apiSuffix: "/retrieve/repository-nicknames"
+      });
+      if (!auth.ok) {
+        return json(auth.status, {
+          ok: false,
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+      return handleRetrieveRepositoryNicknamesRequest(env);
     }
 
     return json(404, {
@@ -640,6 +679,25 @@ async function handleRetrieveButlerSelfParityRequest(url, env) {
   });
 }
 
+async function handleRetrieveRepositoryNicknamesRequest(env) {
+  const provider = resolveMemoryProvider(env);
+  const retrieved = await retrieveStoredAliasRegistry(provider);
+  if (!retrieved.ok) {
+    return json(retrieved.status ?? 503, {
+      ok: false,
+      error: retrieved.error,
+      reason: retrieved.reason
+    });
+  }
+
+  return json(200, {
+    ok: true,
+    recordType: MemoryRecordType.ALIAS_REGISTRY,
+    recordCount: retrieved.aliasRegistry.length,
+    aliasRegistry: retrieved.aliasRegistry
+  });
+}
+
 async function handleGitHubWritePlaneRequest(request, env) {
   const payload = await readJson(request);
   if (!payload || typeof payload !== "object") {
@@ -886,8 +944,15 @@ async function prepareGatewayPayload({ payload, env }) {
       ? AutonomyMode.GUARDED_ABSENCE
       : requestedAutonomyMode;
 
+  const combinedAliasRegistry = await resolveRuntimeAliasRegistry({
+    baseAliasRegistry: basePolicyInput.aliasRegistry,
+    env
+  });
   const resolvedAliasRegistry = await resolveGatewayAliasRegistryFromGitHubApp({
-    policyInput: basePolicyInput,
+    policyInput: {
+      ...basePolicyInput,
+      aliasRegistry: combinedAliasRegistry
+    },
     env
   });
   const warnings = [...(resolvedAliasRegistry.warnings ?? [])];
@@ -923,6 +988,68 @@ async function prepareGatewayPayload({ payload, env }) {
     },
     warnings
   };
+}
+
+async function resolveRuntimeAliasRegistry({ baseAliasRegistry, env }) {
+  const provider = resolveMemoryProvider(env);
+  const stored = await retrieveStoredAliasRegistry(provider);
+  return mergeAliasRegistries(
+    baseAliasRegistry,
+    stored.ok ? stored.aliasRegistry : []
+  );
+}
+
+async function handleRepositoryNicknameUpsertRequest(request, env) {
+  const provider = resolveMemoryProvider(env);
+  const body = await readJson(request);
+  const runtimeAliasRegistry = await resolveRuntimeAliasRegistry({
+    baseAliasRegistry: [],
+    env
+  });
+  const resolvedAliasRegistry = await resolveGatewayAliasRegistryFromGitHubApp({
+    policyInput: {
+      aliasRegistry: runtimeAliasRegistry
+    },
+    env
+  });
+  const resolution = resolveRepositoryTarget({
+    input: body?.repository ?? body?.repositoryInput,
+    mode: TaskMode.EXECUTION,
+    aliasRegistry: resolvedAliasRegistry.aliasRegistry
+  });
+
+  if (!resolution.resolved) {
+    return json(422, {
+      ok: false,
+      error: "repository_nickname_request_invalid",
+      reason: resolution.reason,
+      candidates: resolution.candidates ?? []
+    });
+  }
+
+  const result = await upsertRepositoryNickname({
+    provider,
+    repository: resolution.repository,
+    nickname: body?.nickname,
+    nicknames: body?.nicknames,
+    mode: body?.mode || RepositoryNicknameMode.APPEND,
+    aliasRegistry: resolvedAliasRegistry.aliasRegistry
+  });
+
+  if (!result.ok) {
+    return json(result.status ?? 422, {
+      ok: false,
+      error: result.error,
+      reason: result.reason,
+      issues: result.issues ?? []
+    });
+  }
+
+  return json(200, {
+    ok: true,
+    repository: resolution.repository,
+    aliasEntry: result.aliasEntry
+  });
 }
 
 async function handlePasskeyRegistrationOptionsRequest(request, env) {

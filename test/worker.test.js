@@ -858,6 +858,202 @@ test("worker returns GitHub repositories through read plane route", async () => 
   assert.equal(body.read.records[0].fullName, "sample-org/vtdd-v2-p");
 });
 
+test("worker stores and retrieves repository nicknames", async () => {
+  const provider = createInMemoryMemoryProvider();
+  const env = {
+    ...gatewayAuthEnv,
+    MEMORY_PROVIDER: provider,
+    GITHUB_APP_INSTALLATION_TOKEN: "ghs_repo_read",
+    GITHUB_API_FETCH: async () =>
+      new Response(
+        JSON.stringify({
+          total_count: 1,
+          repositories: [
+            {
+              full_name: "sample-org/vtdd-v2-p",
+              name: "vtdd-v2-p",
+              private: false
+            }
+          ]
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      )
+  };
+
+  const writeResponse = await worker.fetch(
+    new Request("https://example.com/v2/action/repository-nickname", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        repository: "vtdd-v2-p",
+        nickname: "公開VTDD"
+      })
+    }),
+    env
+  );
+
+  assert.equal(writeResponse.status, 200);
+  const writeBody = await writeResponse.json();
+  assert.equal(writeBody.ok, true);
+  assert.equal(writeBody.repository, "sample-org/vtdd-v2-p");
+  assert.deepEqual(writeBody.aliasEntry.aliases, ["公開VTDD"]);
+
+  const retrieveResponse = await worker.fetch(
+    new Request("https://example.com/v2/retrieve/repository-nicknames", {
+      headers: gatewayAuthHeaders
+    }),
+    env
+  );
+
+  assert.equal(retrieveResponse.status, 200);
+  const retrieveBody = await retrieveResponse.json();
+  assert.equal(retrieveBody.ok, true);
+  assert.equal(retrieveBody.aliasRegistry.length, 1);
+  assert.equal(retrieveBody.aliasRegistry[0].canonicalRepo, "sample-org/vtdd-v2-p");
+  assert.deepEqual(retrieveBody.aliasRegistry[0].aliases, ["公開VTDD"]);
+});
+
+test("worker gateway can resolve stored repository nickname against live repository index", async () => {
+  const provider = createInMemoryMemoryProvider();
+  await provider.store({
+    id: "alias_registry:sample-org/vtdd-v2-p",
+    type: MemoryRecordType.ALIAS_REGISTRY,
+    content: {
+      canonicalRepo: "sample-org/vtdd-v2-p",
+      productName: "vtdd-v2-p",
+      visibility: "public",
+      aliases: ["公開VTDD"]
+    },
+    metadata: { source: "test" },
+    priority: 60,
+    tags: ["alias_registry", "sample-org/vtdd-v2-p"],
+    createdAt: "2026-04-27T00:00:00.000Z"
+  });
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/gateway", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        phase: "execution",
+        actorRole: ActorRole.EXECUTOR,
+        policyInput: {
+          actionType: ActionType.BUILD,
+          mode: TaskMode.EXECUTION,
+          repositoryInput: "公開VTDD",
+          targetConfirmed: true,
+          constitutionConsulted: true,
+          runtimeTruth: { runtimeAvailable: true },
+          credential: { model: "github_app", tier: CredentialTier.EXECUTE },
+          consent: { grantedCategories: [ConsentCategory.EXECUTE] },
+          approvalPhrase: "GO build",
+          approvalScopeMatched: true,
+          issueTraceable: true,
+          go: true,
+          passkey: false
+        }
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      MEMORY_PROVIDER: provider,
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_repo_read",
+      GITHUB_API_FETCH: async () =>
+        new Response(
+          JSON.stringify({
+            total_count: 1,
+            repositories: [
+              {
+                full_name: "sample-org/vtdd-v2-p",
+                name: "vtdd-v2-p",
+                private: false
+              }
+            ]
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        )
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.allowed, true);
+  assert.equal(body.repository, "sample-org/vtdd-v2-p");
+});
+
+test("worker blocks repository nickname write when nickname target is ambiguous", async () => {
+  const provider = createInMemoryMemoryProvider();
+  await provider.store({
+    id: "alias_registry:sample-org/vtdd-v2-p",
+    type: MemoryRecordType.ALIAS_REGISTRY,
+    content: {
+      canonicalRepo: "sample-org/vtdd-v2-p",
+      productName: "vtdd-v2-p",
+      visibility: "public",
+      aliases: ["公開VTDD"]
+    },
+    metadata: { source: "test" },
+    priority: 60,
+    tags: ["alias_registry", "sample-org/vtdd-v2-p"],
+    createdAt: "2026-04-27T00:00:00.000Z"
+  });
+  await provider.store({
+    id: "alias_registry:sample-org/vtdd-public",
+    type: MemoryRecordType.ALIAS_REGISTRY,
+    content: {
+      canonicalRepo: "sample-org/vtdd-public",
+      productName: "vtdd-public",
+      visibility: "public",
+      aliases: ["公開VTDD"]
+    },
+    metadata: { source: "test" },
+    priority: 60,
+    tags: ["alias_registry", "sample-org/vtdd-public"],
+    createdAt: "2026-04-27T00:00:01.000Z"
+  });
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/action/repository-nickname", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        repository: "公開VTDD",
+        nickname: "公開本命"
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      MEMORY_PROVIDER: provider,
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_repo_read",
+      GITHUB_API_FETCH: async () =>
+        new Response(
+          JSON.stringify({
+            total_count: 2,
+            repositories: [
+              {
+                full_name: "sample-org/vtdd-v2-p",
+                name: "vtdd-v2-p",
+                private: false
+              },
+              {
+                full_name: "sample-org/vtdd-public",
+                name: "vtdd-public",
+                private: false
+              }
+            ]
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        )
+    }
+  );
+
+  assert.equal(response.status, 422);
+  const body = await response.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.error, "repository_nickname_request_invalid");
+  assert.equal(body.reason, "target repository nickname is ambiguous");
+});
+
 test("worker returns GitHub issues through read plane route", async () => {
   const response = await worker.fetch(
     new Request(

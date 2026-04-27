@@ -559,6 +559,30 @@ Status values used below:
   - `docs/mvp/e2e/e2e-27-no-manual-codex-reviewer-fallback.md`
 - Status: `e2e_evidenced_pending_human_closure`
 
+## E2E-28 Repository nickname context resolution
+
+- Issues: `#89`
+- Happy path:
+  - Butler can persist an explicit user-defined repository nickname, retrieve it later, and resolve it through the live GitHub App repository index without requiring the owner to repeat the full canonical `owner/repo`
+- Boundary path:
+  - ambiguous or unresolved nickname matches remain blocking and do not silently weaken `no default repository`
+- Implementation evidence:
+  - `src/core/repository-nickname-registry.js`
+  - `src/core/repository-resolution.js`
+  - `src/core/github-app-repository-index.js`
+  - `src/worker.js`
+  - `docs/butler/context-resolution.md`
+  - `docs/setup/custom-gpt-actions-openapi.yaml`
+  - `docs/setup/custom-gpt-instructions.md`
+- Test evidence:
+  - `test/repository-nickname-registry.test.js`
+  - `test/core-policy.test.js`
+  - `test/worker.test.js`
+  - `test/custom-gpt-setup-docs.test.js`
+- Run evidence:
+  - `docs/mvp/e2e/e2e-28-repository-nickname-context-resolution.md`
+- Status: `e2e_evidenced_pending_human_closure`
+
 ## E2E-26 Governed production deploy from passkey operator
 
 - Issues: `#82`
