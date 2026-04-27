@@ -29,8 +29,9 @@ test("Gemini review workflow still routes reviewer execution through the script 
   assert.equal(workflow.includes("GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}"), true);
   assert.equal(workflow.includes("GEMINI_REVIEW_MODEL: ${{ vars.GEMINI_REVIEW_MODEL }}"), true);
   assert.equal(workflow.includes("OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}"), true);
-  assert.equal(workflow.includes("pull-requests: write"), true);
-  assert.equal(workflow.includes("issues: write"), true);
+  assert.equal(workflow.includes("contents: read"), true);
+  assert.equal(workflow.includes("pull-requests: write"), false);
+  assert.equal(workflow.includes("issues: write"), false);
 });
 
 test("Codex fallback workflow runs reviewer-only Codex CLI and writes back via GitHub App token", () => {

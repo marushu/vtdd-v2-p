@@ -21,8 +21,6 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
-  issues: write
 
 concurrency:
   group: gemini-pr-review-${{ github.repository }}-${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}

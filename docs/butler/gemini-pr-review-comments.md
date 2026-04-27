@@ -45,6 +45,20 @@ Current limitation:
 - a VTDD bot-authored `@codex review` request is not treated as the canonical
   no-manual solution path
 
+## Operator Prerequisite
+
+For the non-manual Codex fallback to reach a `completed` reviewer state, the
+target repository must provide reviewer runtime credentials/configuration for
+that workflow path.
+
+Current canonical requirement:
+
+- `OPENAI_API_KEY` must be configured in the repository where the fallback
+  workflow will run
+
+If that prerequisite is missing, VTDD must preserve an explicit `blocked`
+fallback state rather than pretending the no-manual path completed.
+
 The workflow must ignore its own marker comment so that reviewer reruns do not
 create an infinite comment loop.
 

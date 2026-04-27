@@ -68,3 +68,8 @@ fallback design: when Gemini is unavailable, VTDD can either dispatch a
 non-manual Codex fallback review workflow or explicitly surface the runtime
 blocker. It does not claim live provider credentials are configured in every
 operator repository by default.
+
+Operator prerequisite for live `completed` state:
+
+- configure `OPENAI_API_KEY` in the target repository so the Codex fallback
+  workflow can run critique-only review instead of remaining `blocked`
