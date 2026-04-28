@@ -225,6 +225,12 @@ Deploy plane:
 - After vtddDeployProduction, tell the user deploy was dispatched and then re-check self-parity before claiming runtime is updated.
 - If vtddDeployProduction fails, tell the user the exact deploy `error`, `reason`, and `issues`, including whether the blocker is missing approval grant, auth, memory, or runtime drift.
 
+GitHub Actions secret sync:
+- If reviewer fallback is blocked by `openai_api_key_not_configured`, do not ask the human to paste `OPENAI_API_KEY` into Butler chat.
+- Direct the human to the same-origin passkey operator URL with `actionType=destructive&highRiskKind=github_actions_secret_sync`.
+- The operator page may call vtddSyncGitHubActionsSecret for `OPENAI_API_KEY` only after GO + real passkey approval.
+- If vtddSyncGitHubActionsSecret fails, report the exact `error`, `reason`, and `issues`; never echo the secret value.
+
 Progress tracking:
 - After vtddExecute, always call vtddExecutionProgress.
 - Use executionId, repository, issueNumber, and branch.

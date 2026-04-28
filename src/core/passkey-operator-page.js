@@ -184,6 +184,18 @@ export function renderPasskeyOperatorPage(input = {}) {
           <p class="muted">この Worker origin を <code>runtimeUrl</code> として使います。実行後は Butler で self-parity を再確認してください。</p>
           <pre id="deploy-output"></pre>
         </section>
+
+        <section>
+          <h2>5. Codex Fallback Secret Sync</h2>
+          <p class="muted">Codex reviewer fallback 用の <code>OPENAI_API_KEY</code> を GitHub Actions secret に同期します。値は Butler 会話に貼らず、この operator page から送信します。</p>
+          <label for="openai-api-key-input">OPENAI_API_KEY</label>
+          <input id="openai-api-key-input" type="password" autocomplete="off" placeholder="sk-..." />
+          <div class="row">
+            <button id="openai-secret-sync-button">Sync OPENAI_API_KEY</button>
+          </div>
+          <p class="muted"><code>actionType=destructive</code> / <code>highRiskKind=github_actions_secret_sync</code> の approvalGrantId が必要です。</p>
+          <pre id="openai-secret-sync-output"></pre>
+        </section>
       </div>
     </main>
 
@@ -192,7 +204,48 @@ export function renderPasskeyOperatorPage(input = {}) {
       const approveOutput = document.getElementById("approve-output");
       const syncOutput = document.getElementById("sync-output");
       const deployOutput = document.getElementById("deploy-output");
+      const openaiSecretSyncOutput = document.getElementById("openai-secret-sync-output");
       let latestApprovalGrantId = "";
+
+      async function readResponseBody(response) {
+        const contentType = response.headers.get("content-type") || "";
+        const text = await response.text();
+        if (contentType.includes("application/json")) {
+          try {
+            return text ? JSON.parse(text) : {};
+          } catch (error) {
+            return {
+              error: "invalid_json_response",
+              reason: String(error),
+              rawBody: sanitizeRawBody(text)
+            };
+          }
+        }
+        return {
+          error: "non_json_response",
+          reason: "Expected JSON response but received " + (contentType || "unknown content-type"),
+          httpStatus: response.status,
+          rawBody: sanitizeRawBody(text)
+        };
+      }
+
+      function sanitizeRawBody(text) {
+        return String(text || "")
+          .replace(/sk-[A-Za-z0-9_-]+/g, "[REDACTED_OPENAI_KEY]")
+          .replace(/(authorization|api[_-]?key|token|secret)(["'\\s:=]+)([^"'\\s<>&]+)/gi, "$1$2[REDACTED]")
+          .slice(0, 500);
+      }
+
+      function responseError(body, fallback) {
+        const parts = [body.reason || body.error || fallback];
+        if (body.httpStatus) {
+          parts.push("HTTP status: " + body.httpStatus);
+        }
+        if (body.rawBody) {
+          parts.push("rawBody: " + body.rawBody);
+        }
+        return new Error(parts.join("\\n"));
+      }
 
       document.getElementById("register-button").addEventListener("click", async () => {
         try {
@@ -205,9 +258,9 @@ export function renderPasskeyOperatorPage(input = {}) {
               operatorLabel: document.getElementById("operator-label").value
             })
           });
-          const optionsBody = await optionsResponse.json();
+          const optionsBody = await readResponseBody(optionsResponse);
           if (!optionsResponse.ok) {
-            throw new Error(optionsBody.reason || optionsBody.error || "register options failed");
+            throw responseError(optionsBody, "register options failed");
           }
 
           const publicKey = decodeRegistrationOptions(optionsBody.optionsJSON);
@@ -220,9 +273,9 @@ export function renderPasskeyOperatorPage(input = {}) {
               response: encodeRegistrationCredential(credential)
             })
           });
-          const verifyBody = await verifyResponse.json();
+          const verifyBody = await readResponseBody(verifyResponse);
           if (!verifyResponse.ok) {
-            throw new Error(verifyBody.reason || verifyBody.error || "register verify failed");
+            throw responseError(verifyBody, "register verify failed");
           }
           registerOutput.textContent = JSON.stringify(verifyBody, null, 2);
         } catch (error) {
@@ -251,9 +304,9 @@ export function renderPasskeyOperatorPage(input = {}) {
               }
             })
           });
-          const challengeBody = await challengeResponse.json();
+          const challengeBody = await readResponseBody(challengeResponse);
           if (!challengeResponse.ok) {
-            throw new Error(challengeBody.reason || challengeBody.error || "approval challenge failed");
+            throw responseError(challengeBody, "approval challenge failed");
           }
 
           const publicKey = decodeAuthenticationOptions(challengeBody.optionsJSON);
@@ -266,9 +319,9 @@ export function renderPasskeyOperatorPage(input = {}) {
               response: encodeAuthenticationAssertion(assertion)
             })
           });
-          const verifyBody = await verifyResponse.json();
+          const verifyBody = await readResponseBody(verifyResponse);
           if (!verifyResponse.ok) {
-            throw new Error(verifyBody.reason || verifyBody.error || "approval verify failed");
+            throw responseError(verifyBody, "approval verify failed");
           }
           latestApprovalGrantId = verifyBody?.approvalGrant?.approvalId || "";
           approveOutput.textContent = JSON.stringify(verifyBody, null, 2);
@@ -294,9 +347,9 @@ export function renderPasskeyOperatorPage(input = {}) {
               repositoryInput: document.getElementById("repo-input").value
             })
           });
-          const syncBody = await syncResponse.json();
+          const syncBody = await readResponseBody(syncResponse);
           if (!syncResponse.ok) {
-            throw new Error(syncBody.reason || syncBody.error || "github app secret sync failed");
+            throw responseError(syncBody, "github app secret sync failed");
           }
           syncOutput.textContent = JSON.stringify(syncBody, null, 2);
         } catch (error) {
@@ -322,13 +375,46 @@ export function renderPasskeyOperatorPage(input = {}) {
               }
             })
           });
-          const deployBody = await deployResponse.json();
+          const deployBody = await readResponseBody(deployResponse);
           if (!deployResponse.ok) {
-            throw new Error(deployBody.reason || deployBody.error || "production deploy failed");
+            throw responseError(deployBody, "production deploy failed");
           }
           deployOutput.textContent = JSON.stringify(deployBody, null, 2);
         } catch (error) {
           deployOutput.textContent = String(error);
+        }
+      });
+
+      document.getElementById("openai-secret-sync-button").addEventListener("click", async () => {
+        try {
+          if (!latestApprovalGrantId) {
+            throw new Error("approvalGrantId is required before OPENAI_API_KEY secret sync");
+          }
+          const secretValue = document.getElementById("openai-api-key-input").value;
+          if (!secretValue) {
+            throw new Error("OPENAI_API_KEY is required");
+          }
+          openaiSecretSyncOutput.textContent = "OPENAI_API_KEY secret sync request...";
+          const syncResponse = await fetch("${apiBase}/action/github-actions-secret", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              repository: document.getElementById("repo-input").value,
+              secretName: "OPENAI_API_KEY",
+              secretValue,
+              policyInput: {
+                approvalGrantId: latestApprovalGrantId
+              }
+            })
+          });
+          const syncBody = await readResponseBody(syncResponse);
+          if (!syncResponse.ok) {
+            throw responseError(syncBody, "OPENAI_API_KEY secret sync failed");
+          }
+          document.getElementById("openai-api-key-input").value = "";
+          openaiSecretSyncOutput.textContent = JSON.stringify(syncBody, null, 2);
+        } catch (error) {
+          openaiSecretSyncOutput.textContent = String(error);
         }
       });
 
