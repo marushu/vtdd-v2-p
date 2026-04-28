@@ -1270,6 +1270,84 @@
           }
         }
       }
+    },
+    "/v2/action/github-actions-secret": {
+      "post": {
+        "operationId": "vtddSyncGitHubActionsSecret",
+        "summary": "Sync an approved GitHub Actions secret such as OPENAI_API_KEY after GO plus real passkey approval.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "repository": {
+                    "type": "string"
+                  },
+                  "secretName": {
+                    "type": "string",
+                    "enum": [
+                      "OPENAI_API_KEY"
+                    ]
+                  },
+                  "secretValue": {
+                    "type": "string"
+                  },
+                  "policyInput": {
+                    "type": "object",
+                    "properties": {
+                      "approvalGrantId": {
+                        "type": "string"
+                      }
+                    },
+                    "additionalProperties": true
+                  }
+                },
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "GitHub Actions secret synced",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing machine auth"
+          },
+          "403": {
+            "description": "Invalid machine auth"
+          },
+          "422": {
+            "description": "GitHub Actions secret sync request blocked or invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "GitHub Actions secret sync failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   }
 }

@@ -43,6 +43,7 @@ test("custom gpt instructions preserve current butler and approval boundaries", 
   assert.equal(doc.includes("vtddWriteGitHub"), true);
   assert.equal(doc.includes("vtddGitHubAuthority"), true);
   assert.equal(doc.includes("vtddDeployProduction"), true);
+  assert.equal(doc.includes("vtddSyncGitHubActionsSecret"), true);
   assert.equal(doc.includes("vtddExecutionProgress"), true);
   assert.equal(doc.includes("vtddRetrieveGitHub"), true);
   assert.equal(doc.includes("vtddUpsertRepositoryNickname"), true);
@@ -70,6 +71,8 @@ test("custom gpt instructions preserve current butler and approval boundaries", 
   assert.equal(doc.includes("If the Action surface reports `ClientResponseError`"), true);
   assert.equal(doc.includes("report it as an unverified Action transport failure"), true);
   assert.equal(doc.includes("If vtddDeployProduction fails, tell the user the exact deploy `error`, `reason`, and `issues`"), true);
+  assert.equal(doc.includes("openai_api_key_not_configured"), true);
+  assert.equal(doc.includes("never echo the secret value"), true);
   assert.equal(doc.includes("Do not claim a PR exists when only a Codex task summary exists."), true);
   assert.equal(
     doc.includes("Do not claim that Issues/PRs/comments are absent when the read path is unsupported, unauthorized, or unverified."),
@@ -85,6 +88,7 @@ test("short custom gpt instructions stay under editor limits while preserving cr
   assert.equal(doc.includes("vtddRetrieveGitHub"), true);
   assert.equal(doc.includes("vtddRetrieveSelfParity"), true);
   assert.equal(doc.includes("vtddDeployProduction"), true);
+  assert.equal(doc.includes("vtddSyncGitHubActionsSecret"), true);
   assert.equal(doc.includes("vtddUpsertRepositoryNickname"), true);
   assert.equal(doc.includes("vtddRetrieveRepositoryNicknames"), true);
   assert.equal(doc.includes("Nickname memory is explicit user-owned alias registry data"), true);
@@ -100,6 +104,7 @@ test("short custom gpt instructions stay under editor limits while preserving cr
   assert.equal(doc.includes("never only `/v2/approval/passkey/operator...`"), true);
   assert.equal(doc.includes("Markdown link, not code"), true);
   assert.equal(doc.includes("GO + real passkey"), true);
+  assert.equal(doc.includes("openai_api_key_not_configured"), true);
   assert.equal(doc.includes("If vtddDeployProduction fails, say the exact deploy error/reason/issues"), true);
 });
 
@@ -111,6 +116,7 @@ test("custom gpt openapi doc exposes current gateway, execute, and progress rout
   assert.equal(doc.includes("/v2/action/github:"), true);
   assert.equal(doc.includes("/v2/action/github-authority:"), true);
   assert.equal(doc.includes("/v2/action/deploy:"), true);
+  assert.equal(doc.includes("/v2/action/github-actions-secret:"), true);
   assert.equal(doc.includes("/v2/action/repository-nickname:"), true);
   assert.equal(doc.includes("/v2/action/progress:"), true);
   assert.equal(doc.includes("/v2/retrieve/github:"), true);
@@ -152,6 +158,7 @@ test("custom gpt openapi json parses and exposes paths as an object", () => {
   assert.equal(typeof doc.paths["/v2/action/github"], "object");
   assert.equal(typeof doc.paths["/v2/action/github-authority"], "object");
   assert.equal(typeof doc.paths["/v2/action/deploy"], "object");
+  assert.equal(typeof doc.paths["/v2/action/github-actions-secret"], "object");
   assert.equal(typeof doc.paths["/v2/action/repository-nickname"], "object");
   assert.equal(typeof doc.paths["/v2/action/progress"], "object");
   assert.equal(typeof doc.paths["/v2/retrieve/github"], "object");
