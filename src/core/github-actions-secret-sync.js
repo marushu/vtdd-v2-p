@@ -1,4 +1,3 @@
-import sodium from "libsodium-wrappers";
 import { resolveGitHubAppInstallationToken } from "./github-app-repository-index.js";
 
 const GITHUB_API_BASE_URL = "https://api.github.com";
@@ -205,11 +204,17 @@ export function validateGitHubActionsSecretSyncApprovalGrant(input = {}) {
 }
 
 export async function encryptGitHubActionsSecret({ publicKey, secretValue }) {
+  const sodium = await loadSodium();
   await sodium.ready;
   const binaryKey = sodium.from_base64(publicKey, sodium.base64_variants.ORIGINAL);
   const binarySecret = sodium.from_string(secretValue);
   const encrypted = sodium.crypto_box_seal(binarySecret, binaryKey);
   return sodium.to_base64(encrypted, sodium.base64_variants.ORIGINAL);
+}
+
+export async function loadSodium() {
+  const module = await import("libsodium-wrappers");
+  return module.default ?? module;
 }
 
 function githubHeaders(token) {

@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   executeGitHubActionsSecretSync,
+  encryptGitHubActionsSecret,
   validateGitHubActionsSecretSyncApprovalGrant
 } from "../src/core/index.js";
 
@@ -109,4 +110,15 @@ test("github actions secret sync returns redacted JSON failure when encryption t
   assert.equal(result.error, "github_actions_secret_encryption_failed");
   assert.equal(result.reason.includes("secret-token"), false);
   assert.equal(result.reason.includes("sk-test-secret"), false);
+});
+
+test("github actions secret encryption loads sodium lazily inside the handler path", async () => {
+  const encrypted = await encryptGitHubActionsSecret({
+    publicKey: "LW+MLFAtyNPENefjLqmydKkBGp4l5suTetSR9313Xm8=",
+    secretValue: "sk-test-secret"
+  });
+
+  assert.equal(typeof encrypted, "string");
+  assert.equal(encrypted.length > 0, true);
+  assert.equal(encrypted.includes("sk-test-secret"), false);
 });
