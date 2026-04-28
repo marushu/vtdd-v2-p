@@ -26,6 +26,7 @@ import {
   retrieveConstitution,
   retrieveCustomGptSetupArtifact,
   renderPasskeyOperatorPage,
+  sanitizeGitHubActionsSecretSyncErrorMessage,
   RepositoryNicknameMode,
   resolveGatewayAliasRegistryFromGitHubApp,
   resolveRepositoryTarget,
@@ -946,7 +947,7 @@ async function handleGitHubActionsSecretSyncRequest(request, env) {
     ok: false,
     status: 503,
     error: "github_actions_secret_sync_exception",
-    reason: sanitizeOperationalErrorMessage(error)
+    reason: sanitizeGitHubActionsSecretSyncErrorMessage(error)
   }));
 
   if (!executed.ok) {
@@ -2282,13 +2283,6 @@ function normalize(value) {
 
 function normalizeText(value) {
   return String(value ?? "").trim();
-}
-
-function sanitizeOperationalErrorMessage(error) {
-  return normalizeText(error instanceof Error ? error.message : error)
-    .replace(/sk-[A-Za-z0-9_-]+/g, "[REDACTED_OPENAI_KEY]")
-    .replace(/(authorization|api[_-]?key|token|secret)(["'\s:=]+)([^"'\s<>&]+)/gi, "$1$2[REDACTED]")
-    .slice(0, 500);
 }
 
 function normalizeTag(value) {

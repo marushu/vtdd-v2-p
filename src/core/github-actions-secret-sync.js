@@ -36,7 +36,8 @@ export async function executeGitHubActionsSecretSync(input = {}) {
   const tokenResolution = await resolveGitHubAppInstallationToken({ env, fetchImpl, apiBaseUrl }).catch(
     (error) => ({
       ok: false,
-      warning: `GitHub App installation token resolution threw: ${sanitizeErrorMessage(error)}`
+      reason: `GitHub App installation token resolution threw: ${sanitizeGitHubActionsSecretSyncErrorMessage(error)}`,
+      warning: `GitHub App installation token resolution threw: ${sanitizeGitHubActionsSecretSyncErrorMessage(error)}`
     })
   );
   if (!tokenResolution.ok) {
@@ -88,7 +89,7 @@ export async function executeGitHubActionsSecretSync(input = {}) {
   const encryptedValue = await encryptSecret({ publicKey: key, secretValue }).catch((error) => ({
     ok: false,
     error: "github_actions_secret_encryption_failed",
-    reason: sanitizeErrorMessage(error)
+    reason: sanitizeGitHubActionsSecretSyncErrorMessage(error)
   }));
   if (encryptedValue && typeof encryptedValue === "object" && encryptedValue.ok === false) {
     return {
@@ -239,7 +240,7 @@ function normalizeText(value) {
   return String(value ?? "").trim();
 }
 
-function sanitizeErrorMessage(error) {
+export function sanitizeGitHubActionsSecretSyncErrorMessage(error) {
   return normalizeText(error instanceof Error ? error.message : error)
     .replace(/sk-[A-Za-z0-9_-]+/g, "[REDACTED_OPENAI_KEY]")
     .replace(/(authorization|api[_-]?key|token|secret)(["'\s:=]+)([^"'\s<>&]+)/gi, "$1$2[REDACTED]")

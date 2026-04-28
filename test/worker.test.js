@@ -1840,7 +1840,7 @@ test("worker allows same-origin browser OPENAI_API_KEY secret sync with approval
   assert.equal(calls[1].url.endsWith("/actions/secrets/OPENAI_API_KEY"), true);
 });
 
-test("worker returns JSON when OPENAI_API_KEY secret sync throws", async () => {
+test("worker returns JSON when OPENAI_API_KEY token resolution fails", async () => {
   const provider = createInMemoryMemoryProvider();
   await provider.store({
     id: "approval-actions-secret-throw-123",
@@ -1894,6 +1894,7 @@ test("worker returns JSON when OPENAI_API_KEY secret sync throws", async () => {
   const body = await response.json();
   assert.equal(body.ok, false);
   assert.equal(body.error, "github_actions_secret_sync_unavailable");
+  assert.match(body.reason, /installation token provider failed/);
   assert.equal(JSON.stringify(body).includes("secret-token"), false);
   assert.equal(JSON.stringify(body).includes("sk-test-secret"), false);
 });
