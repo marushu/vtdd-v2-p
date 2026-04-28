@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import vm from "node:vm";
 import { renderPasskeyOperatorPage } from "../src/core/index.js";
 
 test("passkey operator page can target explicit api base and sync endpoint", () => {
@@ -37,3 +38,62 @@ test("passkey operator page keeps sync disabled message when helper endpoint is 
   assert.equal(html.includes("desktop maintenance required"), true);
   assert.equal(html.includes("disabled"), true);
 });
+
+test("passkey operator page response parser reports and redacts non-json failures", async () => {
+  const helpers = loadOperatorPageHelpers();
+
+  const htmlFailure = await helpers.readResponseBody(
+    new Response("<!DOCTYPE html><p>token=secret-token sk-testsecret</p>", {
+      status: 502,
+      headers: { "content-type": "text/html" }
+    })
+  );
+  assert.equal(htmlFailure.error, "non_json_response");
+  assert.equal(htmlFailure.httpStatus, 502);
+  assert.equal(htmlFailure.rawBody.includes("<!DOCTYPE html>"), true);
+  assert.equal(htmlFailure.rawBody.includes("secret-token"), false);
+  assert.equal(htmlFailure.rawBody.includes("sk-testsecret"), false);
+
+  const malformedJson = await helpers.readResponseBody(
+    new Response("{", {
+      status: 500,
+      headers: { "content-type": "application/json" }
+    })
+  );
+  assert.equal(malformedJson.error, "invalid_json_response");
+  assert.equal(malformedJson.rawBody, "{");
+
+  const validJson = await helpers.readResponseBody(
+    new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: { "content-type": "application/json; charset=utf-8" }
+    })
+  );
+  assert.equal(validJson.ok, true);
+});
+
+function loadOperatorPageHelpers() {
+  const html = renderPasskeyOperatorPage();
+  const script = html.match(/<script>([\s\S]*)<\/script>/)?.[1];
+  assert.ok(script);
+
+  const elements = new Map();
+  const context = {
+    Response,
+    document: {
+      getElementById(id) {
+        if (!elements.has(id)) {
+          elements.set(id, {
+            value: "",
+            textContent: "",
+            addEventListener() {}
+          });
+        }
+        return elements.get(id);
+      }
+    }
+  };
+  vm.runInNewContext(script, context);
+  assert.equal(typeof context.readResponseBody, "function");
+  return context;
+}

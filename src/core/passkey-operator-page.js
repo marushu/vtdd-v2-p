@@ -217,7 +217,7 @@ export function renderPasskeyOperatorPage(input = {}) {
             return {
               error: "invalid_json_response",
               reason: String(error),
-              rawBody: text.slice(0, 500)
+              rawBody: sanitizeRawBody(text)
             };
           }
         }
@@ -225,8 +225,15 @@ export function renderPasskeyOperatorPage(input = {}) {
           error: "non_json_response",
           reason: "Expected JSON response but received " + (contentType || "unknown content-type"),
           httpStatus: response.status,
-          rawBody: text.slice(0, 500)
+          rawBody: sanitizeRawBody(text)
         };
+      }
+
+      function sanitizeRawBody(text) {
+        return String(text || "")
+          .replace(/sk-[A-Za-z0-9_-]+/g, "[REDACTED_OPENAI_KEY]")
+          .replace(/(authorization|api[_-]?key|token|secret)(["'\\s:=]+)([^"'\\s<>&]+)/gi, "$1$2[REDACTED]")
+          .slice(0, 500);
       }
 
       function responseError(body, fallback) {
