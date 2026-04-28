@@ -112,7 +112,7 @@ test("github actions secret sync returns redacted JSON failure when encryption t
   assert.equal(result.reason.includes("sk-test-secret"), false);
 });
 
-test("github actions secret encryption loads sodium lazily inside the handler path", async () => {
+test("github actions secret encryption uses pure JavaScript sealed box", async () => {
   const encrypted = await encryptGitHubActionsSecret({
     publicKey: "LW+MLFAtyNPENefjLqmydKkBGp4l5suTetSR9313Xm8=",
     secretValue: "sk-test-secret"
@@ -121,4 +121,26 @@ test("github actions secret encryption loads sodium lazily inside the handler pa
   assert.equal(typeof encrypted, "string");
   assert.equal(encrypted.length > 0, true);
   assert.equal(encrypted.includes("sk-test-secret"), false);
+});
+
+test("github actions secret encryption emits standard base64 sealed box output", async () => {
+  const naclModule = await import("tweetnacl");
+  const nacl = naclModule.default ?? naclModule;
+  const sealedboxModule = await import("tweetnacl-sealedbox-js");
+  const open = sealedboxModule.open ?? sealedboxModule.default?.open;
+  const overheadLength = sealedboxModule.overheadLength ?? sealedboxModule.default?.overheadLength;
+  const keyPair = nacl.box.keyPair();
+  const secretValue = "sk-test-secret";
+
+  const encrypted = await encryptGitHubActionsSecret({
+    publicKey: Buffer.from(keyPair.publicKey).toString("base64"),
+    secretValue
+  });
+  const encryptedBytes = Uint8Array.from(Buffer.from(encrypted, "base64"));
+  const decrypted = open(encryptedBytes, keyPair.publicKey, keyPair.secretKey);
+
+  assert.match(encrypted, /^[A-Za-z0-9+/]+={0,2}$/);
+  assert.equal(encryptedBytes.length, new TextEncoder().encode(secretValue).length + overheadLength);
+  assert.notEqual(decrypted, null);
+  assert.equal(new TextDecoder().decode(decrypted), secretValue);
 });

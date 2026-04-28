@@ -12,6 +12,6 @@
   },
   "dependencies": {
     "@simplewebauthn/server": "^13.3.0",
-    "libsodium-wrappers": "^0.8.4"
+    "tweetnacl-sealedbox-js": "^1.2.0"
   }
 }
