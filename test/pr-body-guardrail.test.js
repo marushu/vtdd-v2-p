@@ -19,6 +19,7 @@ test("renderPrBody includes all guarded-policy headings", () => {
   assert.match(body, /## Satisfied Success Criteria/);
   assert.match(body, /## Unsatisfied Success Criteria/);
   assert.match(body, /## Verification Evidence/);
+  assert.match(body, /## Surface Update Checklist/);
 });
 
 test("validatePrBody fails when required markers are missing", () => {
@@ -34,6 +35,8 @@ test("validatePrBody accepts rendered body", () => {
     satisfied: "Helper generates all required sections.",
     unit: "`node --test test/pr-body-guardrail.test.js`",
     evidencePath: "docs/pr-template-model.md",
+    actionSchemaUpdate: "Not required.",
+    iphoneButlerE2E: "Not required.",
   });
   const result = validatePrBody(body);
   assert.equal(result.ok, true);

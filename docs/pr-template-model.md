@@ -12,9 +12,10 @@ Every PR should contain these sections in this order:
 3. `Unsatisfied Success Criteria`
 4. `Non-goal violations`
 5. `Verification Evidence`
-6. `Related Constitution Rules`
-7. `Out-of-scope but NOT implemented`
-8. `Extra changes (if any)`
+6. `Surface Update Checklist`
+7. `Related Constitution Rules`
+8. `Out-of-scope but NOT implemented`
+9. `Extra changes (if any)`
 
 ## Section Purpose
 
@@ -38,6 +39,12 @@ Call out any violation of declared non-goals, or state `None.` when there are no
 
 Record executed verification (unit/integration/E2E/manual), results, and where
 the evidence is visible.
+
+### `Surface Update Checklist`
+
+Record whether the PR requires Cloudflare deploy, Custom GPT Action Schema
+update, Custom GPT Instructions update, and iPhone Butler live E2E. Use
+`required`, `not required`, or `done` plus evidence where useful.
 
 ### `Related Constitution Rules`
 

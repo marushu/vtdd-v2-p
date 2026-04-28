@@ -24,6 +24,7 @@ jobs:
             "## Satisfied Success Criteria"
             "## Unsatisfied Success Criteria"
             "## Verification Evidence"
+            "## Surface Update Checklist"
           )
 
           for marker in "${required_markers[@]}"; do
