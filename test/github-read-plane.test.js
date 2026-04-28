@@ -46,6 +46,7 @@ test("github read plane lists issues and filters pull request-shaped issue resul
             {
               number: 42,
               title: "Real issue",
+              body: "## Intent\nUse Issue text as the execution spec.",
               state: "open",
               html_url: "https://github.com/sample-org/vtdd-v2-p/issues/42",
               user: { login: "marushu" }
@@ -67,6 +68,38 @@ test("github read plane lists issues and filters pull request-shaped issue resul
   assert.equal(result.ok, true);
   assert.equal(result.read.records.length, 1);
   assert.equal(result.read.records[0].number, 42);
+  assert.equal(result.read.records[0].body, "## Intent\nUse Issue text as the execution spec.");
+});
+
+test("github read plane includes issue body when reading a specific issue", async () => {
+  const calls = [];
+  const result = await retrieveGitHubReadPlane({
+    resource: GitHubReadResource.ISSUES,
+    repository: "sample-org/vtdd-v2-p",
+    issueNumber: 4,
+    env: {
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_issue_read",
+      GITHUB_API_FETCH: async (url) => {
+        calls.push(url);
+        return new Response(
+          JSON.stringify({
+            number: 4,
+            title: "Parent execution loop",
+            body: "## Intent\nButler reads the canonical Issue before execution.",
+            state: "open",
+            html_url: "https://github.com/sample-org/vtdd-v2-p/issues/4",
+            user: { login: "marushu" }
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        );
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(calls[0].endsWith("/repos/sample-org/vtdd-v2-p/issues/4"), true);
+  assert.equal(result.read.issueNumber, 4);
+  assert.equal(result.read.records[0].body, "## Intent\nButler reads the canonical Issue before execution.");
 });
 
 test("github read plane reads pull reviews, review comments, checks, workflow runs, and branches", async () => {
