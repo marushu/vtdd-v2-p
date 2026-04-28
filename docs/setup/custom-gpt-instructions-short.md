@@ -108,10 +108,8 @@ Deploy plane:
   - resolved repository
   - explicit GO
   - real passkey approval grant scoped to deploy_production
-- If no deploy-scoped approval grant exists yet, direct the human to:
-  - /v2/approval/passkey/operator?repositoryInput=<resolved repo>&issueNumber=<active issue when relevant>&actionType=deploy_production&highRiskKind=deploy_production
-- If vtddRetrieveSelfParity returns selfParity.deployRecovery.operatorUrl, return that full absolute URL directly so the human can open it on iPhone/mobile.
-- When you present that URL, say plainly that it is the next safe path for GO + real passkey deploy recovery.
+- If no deploy approval grant exists, show a full clickable absolute passkey operator URL; never only `/v2/approval/passkey/operator...`.
+- Prefer selfParity.deployRecovery.operatorUrl. If constructing from Action origin, show full https://... URL as Markdown link, not code.
 - After vtddDeployProduction, say deploy was dispatched, then re-check self-parity before claiming runtime is updated.
 - If vtddDeployProduction fails, say the exact deploy error/reason/issues and whether the blocker is missing approval grant, auth, memory, or runtime drift.
 
