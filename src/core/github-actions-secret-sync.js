@@ -33,7 +33,12 @@ export async function executeGitHubActionsSecretSync(input = {}) {
     };
   }
 
-  const tokenResolution = await resolveGitHubAppInstallationToken({ env, fetchImpl, apiBaseUrl });
+  const tokenResolution = await resolveGitHubAppInstallationToken({ env, fetchImpl, apiBaseUrl }).catch(
+    (error) => ({
+      ok: false,
+      warning: `GitHub App installation token resolution threw: ${sanitizeErrorMessage(error)}`
+    })
+  );
   if (!tokenResolution.ok) {
     return {
       ok: false,
@@ -80,7 +85,19 @@ export async function executeGitHubActionsSecretSync(input = {}) {
     };
   }
 
-  const encryptedValue = await encryptSecret({ publicKey: key, secretValue });
+  const encryptedValue = await encryptSecret({ publicKey: key, secretValue }).catch((error) => ({
+    ok: false,
+    error: "github_actions_secret_encryption_failed",
+    reason: sanitizeErrorMessage(error)
+  }));
+  if (encryptedValue && typeof encryptedValue === "object" && encryptedValue.ok === false) {
+    return {
+      ok: false,
+      status: 503,
+      error: encryptedValue.error,
+      reason: encryptedValue.reason
+    };
+  }
   const putResponse = await fetchImpl(
     `${apiBaseUrl}/repos/${encodedRepository}/actions/secrets/${encodeURIComponent(secretName)}`,
     {
@@ -220,4 +237,11 @@ function normalizeApiBaseUrl(value) {
 
 function normalizeText(value) {
   return String(value ?? "").trim();
+}
+
+function sanitizeErrorMessage(error) {
+  return normalizeText(error instanceof Error ? error.message : error)
+    .replace(/sk-[A-Za-z0-9_-]+/g, "[REDACTED_OPENAI_KEY]")
+    .replace(/(authorization|api[_-]?key|token|secret)(["'\s:=]+)([^"'\s<>&]+)/gi, "$1$2[REDACTED]")
+    .slice(0, 500);
 }

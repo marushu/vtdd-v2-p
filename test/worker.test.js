@@ -1840,6 +1840,64 @@ test("worker allows same-origin browser OPENAI_API_KEY secret sync with approval
   assert.equal(calls[1].url.endsWith("/actions/secrets/OPENAI_API_KEY"), true);
 });
 
+test("worker returns JSON when OPENAI_API_KEY secret sync throws", async () => {
+  const provider = createInMemoryMemoryProvider();
+  await provider.store({
+    id: "approval-actions-secret-throw-123",
+    type: MemoryRecordType.APPROVAL_LOG,
+    content: {
+      kind: "passkey_grant",
+      status: "verified",
+      approvalId: "approval-actions-secret-throw-123",
+      expiresAt: "2099-01-01T00:00:00.000Z",
+      scope: {
+        actionType: "destructive",
+        highRiskKind: "github_actions_secret_sync",
+        repositoryInput: "sample-org/vtdd-v2-p",
+        phase: "execution"
+      }
+    },
+    metadata: { source: "test" },
+    priority: 90,
+    tags: ["passkey_grant"],
+    createdAt: "2026-04-28T00:00:00.000Z"
+  });
+
+  const response = await worker.fetch(
+    new Request("https://sample-user-vtdd.example.workers.dev/v2/action/github-actions-secret", {
+      method: "POST",
+      headers: {
+        origin: "https://sample-user-vtdd.example.workers.dev",
+        "sec-fetch-site": "same-origin",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        repository: "sample-org/vtdd-v2-p",
+        secretName: "OPENAI_API_KEY",
+        secretValue: "sk-test-secret",
+        policyInput: {
+          approvalGrantId: "approval-actions-secret-throw-123"
+        }
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      MEMORY_PROVIDER: provider,
+      GITHUB_APP_INSTALLATION_TOKEN_PROVIDER: async () => {
+        throw new Error("token=secret-token sk-test-secret");
+      }
+    }
+  );
+
+  assert.equal(response.status, 503);
+  assert.equal(response.headers.get("content-type"), "application/json; charset=utf-8");
+  const body = await response.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.error, "github_actions_secret_sync_unavailable");
+  assert.equal(JSON.stringify(body).includes("secret-token"), false);
+  assert.equal(JSON.stringify(body).includes("sk-test-secret"), false);
+});
+
 test("worker returns remote Codex execution progress", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/v2/action/progress?executionId=remote-codex-issue6-abcd12", {
