@@ -897,7 +897,8 @@ async function handleDeployProductionRequest(request, env) {
       ok: false,
       error: executed.error ?? "deploy_failed",
       reason: executed.reason,
-      issues: executed.issues ?? []
+      issues: executed.issues ?? [],
+      deploy: executed.deploy
     });
   }
 

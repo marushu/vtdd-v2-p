@@ -1519,8 +1519,24 @@ test("worker dispatches governed production deploy using the request origin as t
       ...gatewayAuthEnv,
       MEMORY_PROVIDER: provider,
       GITHUB_APP_INSTALLATION_TOKEN: "ghs_deploy",
+      DEPLOY_DISPATCH_VERIFY_DELAY_MS: "0",
       GITHUB_API_FETCH: async (url, init) => {
         calls.push({ url: String(url), init });
+        if (String(url).includes("/actions/workflows/deploy-production.yml/runs")) {
+          return new Response(
+            JSON.stringify({
+              workflow_runs: [
+                {
+                  id: 9090,
+                  html_url: "https://github.com/sample-org/vtdd-v2-p/actions/runs/9090",
+                  status: "queued",
+                  conclusion: null
+                }
+              ]
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
         return new Response(null, { status: 204 });
       }
     }
@@ -1530,6 +1546,7 @@ test("worker dispatches governed production deploy using the request origin as t
   const body = await response.json();
   assert.equal(body.ok, true);
   assert.equal(body.deploy.status, "dispatched");
+  assert.equal(body.deploy.runUrl, "https://github.com/sample-org/vtdd-v2-p/actions/runs/9090");
   assert.equal(body.deploy.runtimeUrl, "https://sample-user-vtdd.example.workers.dev");
   const dispatchBody = JSON.parse(calls[0].init.body);
   assert.equal(
@@ -1584,8 +1601,24 @@ test("worker allows same-origin browser governed production deploy with a real a
       ...gatewayAuthEnv,
       MEMORY_PROVIDER: provider,
       GITHUB_APP_INSTALLATION_TOKEN: "ghs_deploy",
+      DEPLOY_DISPATCH_VERIFY_DELAY_MS: "0",
       GITHUB_API_FETCH: async (url, init) => {
         calls.push({ url: String(url), init });
+        if (String(url).includes("/actions/workflows/deploy-production.yml/runs")) {
+          return new Response(
+            JSON.stringify({
+              workflow_runs: [
+                {
+                  id: 9091,
+                  html_url: "https://github.com/sample-org/vtdd-v2-p/actions/runs/9091",
+                  status: "queued",
+                  conclusion: null
+                }
+              ]
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
         return new Response(null, { status: 204 });
       }
     }
@@ -1595,12 +1628,79 @@ test("worker allows same-origin browser governed production deploy with a real a
   const body = await response.json();
   assert.equal(body.ok, true);
   assert.equal(body.deploy.status, "dispatched");
+  assert.equal(body.deploy.runUrl, "https://github.com/sample-org/vtdd-v2-p/actions/runs/9091");
   assert.equal(body.deploy.runtimeUrl, "https://sample-user-vtdd.example.workers.dev");
   const dispatchBody = JSON.parse(calls[0].init.body);
   assert.equal(
     dispatchBody.inputs.runtime_url,
     "https://sample-user-vtdd.example.workers.dev"
   );
+});
+
+test("worker returns raw deploy context when workflow dispatch is unverified", async () => {
+  const provider = createInMemoryMemoryProvider();
+  await provider.store({
+    id: "approval-deploy-unverified-123",
+    type: MemoryRecordType.APPROVAL_LOG,
+    content: {
+      kind: "passkey_grant",
+      status: "verified",
+      approvalId: "approval-deploy-unverified-123",
+      expiresAt: "2099-01-01T00:00:00.000Z",
+      scope: {
+        actionType: "deploy_production",
+        highRiskKind: "deploy_production",
+        repositoryInput: "sample-org/vtdd-v2-p",
+        phase: "execution"
+      }
+    },
+    metadata: { source: "test" },
+    priority: 90,
+    tags: ["passkey_grant"],
+    createdAt: "2026-04-27T00:00:00.000Z"
+  });
+
+  const response = await worker.fetch(
+    new Request("https://sample-user-vtdd.example.workers.dev/v2/action/deploy", {
+      method: "POST",
+      headers: {
+        ...gatewayAuthHeaders,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        repository: "sample-org/vtdd-v2-p",
+        policyInput: {
+          approvalPhrase: "GO",
+          approvalGrantId: "approval-deploy-unverified-123"
+        }
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      MEMORY_PROVIDER: provider,
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_deploy",
+      DEPLOY_DISPATCH_VERIFY_ATTEMPTS: "1",
+      DEPLOY_DISPATCH_VERIFY_DELAY_MS: "0",
+      GITHUB_API_FETCH: async (url) => {
+        if (String(url).includes("/actions/workflows/deploy-production.yml/runs")) {
+          return new Response(JSON.stringify({ workflow_runs: [] }), {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          });
+        }
+        return new Response(null, { status: 204 });
+      }
+    }
+  );
+
+  assert.equal(response.status, 503);
+  const body = await response.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.error, "deploy_dispatch_unverified");
+  assert.equal(body.deploy.status, "dispatch_unverified");
+  assert.equal(body.deploy.repository, "sample-org/vtdd-v2-p");
+  assert.equal(body.deploy.workflowFile, "deploy-production.yml");
+  assert.equal(body.deploy.runtimeUrl, "https://sample-user-vtdd.example.workers.dev");
 });
 
 test("worker syncs OPENAI_API_KEY through approval-bound GitHub Actions secret route", async () => {
