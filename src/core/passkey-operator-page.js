@@ -207,6 +207,46 @@ export function renderPasskeyOperatorPage(input = {}) {
       const openaiSecretSyncOutput = document.getElementById("openai-secret-sync-output");
       let latestApprovalGrantId = "";
 
+      async function readResponseBody(response) {
+        const contentType = response.headers.get("content-type") || "";
+        const text = await response.text();
+        if (contentType.includes("application/json")) {
+          try {
+            return text ? JSON.parse(text) : {};
+          } catch (error) {
+            return {
+              error: "invalid_json_response",
+              reason: String(error),
+              rawBody: sanitizeRawBody(text)
+            };
+          }
+        }
+        return {
+          error: "non_json_response",
+          reason: "Expected JSON response but received " + (contentType || "unknown content-type"),
+          httpStatus: response.status,
+          rawBody: sanitizeRawBody(text)
+        };
+      }
+
+      function sanitizeRawBody(text) {
+        return String(text || "")
+          .replace(/sk-[A-Za-z0-9_-]+/g, "[REDACTED_OPENAI_KEY]")
+          .replace(/(authorization|api[_-]?key|token|secret)(["'\\s:=]+)([^"'\\s<>&]+)/gi, "$1$2[REDACTED]")
+          .slice(0, 500);
+      }
+
+      function responseError(body, fallback) {
+        const parts = [body.reason || body.error || fallback];
+        if (body.httpStatus) {
+          parts.push("HTTP status: " + body.httpStatus);
+        }
+        if (body.rawBody) {
+          parts.push("rawBody: " + body.rawBody);
+        }
+        return new Error(parts.join("\\n"));
+      }
+
       document.getElementById("register-button").addEventListener("click", async () => {
         try {
           registerOutput.textContent = "register options request...";
@@ -218,9 +258,9 @@ export function renderPasskeyOperatorPage(input = {}) {
               operatorLabel: document.getElementById("operator-label").value
             })
           });
-          const optionsBody = await optionsResponse.json();
+          const optionsBody = await readResponseBody(optionsResponse);
           if (!optionsResponse.ok) {
-            throw new Error(optionsBody.reason || optionsBody.error || "register options failed");
+            throw responseError(optionsBody, "register options failed");
           }
 
           const publicKey = decodeRegistrationOptions(optionsBody.optionsJSON);
@@ -233,9 +273,9 @@ export function renderPasskeyOperatorPage(input = {}) {
               response: encodeRegistrationCredential(credential)
             })
           });
-          const verifyBody = await verifyResponse.json();
+          const verifyBody = await readResponseBody(verifyResponse);
           if (!verifyResponse.ok) {
-            throw new Error(verifyBody.reason || verifyBody.error || "register verify failed");
+            throw responseError(verifyBody, "register verify failed");
           }
           registerOutput.textContent = JSON.stringify(verifyBody, null, 2);
         } catch (error) {
@@ -264,9 +304,9 @@ export function renderPasskeyOperatorPage(input = {}) {
               }
             })
           });
-          const challengeBody = await challengeResponse.json();
+          const challengeBody = await readResponseBody(challengeResponse);
           if (!challengeResponse.ok) {
-            throw new Error(challengeBody.reason || challengeBody.error || "approval challenge failed");
+            throw responseError(challengeBody, "approval challenge failed");
           }
 
           const publicKey = decodeAuthenticationOptions(challengeBody.optionsJSON);
@@ -279,9 +319,9 @@ export function renderPasskeyOperatorPage(input = {}) {
               response: encodeAuthenticationAssertion(assertion)
             })
           });
-          const verifyBody = await verifyResponse.json();
+          const verifyBody = await readResponseBody(verifyResponse);
           if (!verifyResponse.ok) {
-            throw new Error(verifyBody.reason || verifyBody.error || "approval verify failed");
+            throw responseError(verifyBody, "approval verify failed");
           }
           latestApprovalGrantId = verifyBody?.approvalGrant?.approvalId || "";
           approveOutput.textContent = JSON.stringify(verifyBody, null, 2);
@@ -307,9 +347,9 @@ export function renderPasskeyOperatorPage(input = {}) {
               repositoryInput: document.getElementById("repo-input").value
             })
           });
-          const syncBody = await syncResponse.json();
+          const syncBody = await readResponseBody(syncResponse);
           if (!syncResponse.ok) {
-            throw new Error(syncBody.reason || syncBody.error || "github app secret sync failed");
+            throw responseError(syncBody, "github app secret sync failed");
           }
           syncOutput.textContent = JSON.stringify(syncBody, null, 2);
         } catch (error) {
@@ -335,9 +375,9 @@ export function renderPasskeyOperatorPage(input = {}) {
               }
             })
           });
-          const deployBody = await deployResponse.json();
+          const deployBody = await readResponseBody(deployResponse);
           if (!deployResponse.ok) {
-            throw new Error(deployBody.reason || deployBody.error || "production deploy failed");
+            throw responseError(deployBody, "production deploy failed");
           }
           deployOutput.textContent = JSON.stringify(deployBody, null, 2);
         } catch (error) {
@@ -367,9 +407,9 @@ export function renderPasskeyOperatorPage(input = {}) {
               }
             })
           });
-          const syncBody = await syncResponse.json();
+          const syncBody = await readResponseBody(syncResponse);
           if (!syncResponse.ok) {
-            throw new Error(syncBody.reason || syncBody.error || "OPENAI_API_KEY secret sync failed");
+            throw responseError(syncBody, "OPENAI_API_KEY secret sync failed");
           }
           document.getElementById("openai-api-key-input").value = "";
           openaiSecretSyncOutput.textContent = JSON.stringify(syncBody, null, 2);
