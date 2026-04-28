@@ -1071,6 +1071,7 @@ test("worker returns GitHub issues through read plane route", async () => {
             {
               number: 46,
               title: "Implement GitHub read plane",
+              body: "## Intent\nExpose Issue text to Butler.",
               state: "open",
               html_url: "https://github.com/sample-org/vtdd-v2-p/issues/46",
               user: { login: "marushu" }
@@ -1085,6 +1086,7 @@ test("worker returns GitHub issues through read plane route", async () => {
   const body = await response.json();
   assert.equal(body.ok, true);
   assert.equal(body.read.records[0].number, 46);
+  assert.equal(body.read.records[0].body, "## Intent\nExpose Issue text to Butler.");
 });
 
 test("worker returns unsupported for unknown GitHub read resources", async () => {

@@ -309,6 +309,7 @@ function normalizeIssue(item) {
   return {
     number: normalizePositiveInteger(item?.number),
     title: normalizeText(item?.title),
+    body: normalizeText(item?.body),
     state: normalizeText(item?.state),
     htmlUrl: normalizeText(item?.html_url),
     author: normalizeText(item?.user?.login)
