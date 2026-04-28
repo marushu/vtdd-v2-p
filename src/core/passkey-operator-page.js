@@ -184,6 +184,18 @@ export function renderPasskeyOperatorPage(input = {}) {
           <p class="muted">この Worker origin を <code>runtimeUrl</code> として使います。実行後は Butler で self-parity を再確認してください。</p>
           <pre id="deploy-output"></pre>
         </section>
+
+        <section>
+          <h2>5. Codex Fallback Secret Sync</h2>
+          <p class="muted">Codex reviewer fallback 用の <code>OPENAI_API_KEY</code> を GitHub Actions secret に同期します。値は Butler 会話に貼らず、この operator page から送信します。</p>
+          <label for="openai-api-key-input">OPENAI_API_KEY</label>
+          <input id="openai-api-key-input" type="password" autocomplete="off" placeholder="sk-..." />
+          <div class="row">
+            <button id="openai-secret-sync-button">Sync OPENAI_API_KEY</button>
+          </div>
+          <p class="muted"><code>actionType=destructive</code> / <code>highRiskKind=github_actions_secret_sync</code> の approvalGrantId が必要です。</p>
+          <pre id="openai-secret-sync-output"></pre>
+        </section>
       </div>
     </main>
 
@@ -192,6 +204,7 @@ export function renderPasskeyOperatorPage(input = {}) {
       const approveOutput = document.getElementById("approve-output");
       const syncOutput = document.getElementById("sync-output");
       const deployOutput = document.getElementById("deploy-output");
+      const openaiSecretSyncOutput = document.getElementById("openai-secret-sync-output");
       let latestApprovalGrantId = "";
 
       document.getElementById("register-button").addEventListener("click", async () => {
@@ -329,6 +342,39 @@ export function renderPasskeyOperatorPage(input = {}) {
           deployOutput.textContent = JSON.stringify(deployBody, null, 2);
         } catch (error) {
           deployOutput.textContent = String(error);
+        }
+      });
+
+      document.getElementById("openai-secret-sync-button").addEventListener("click", async () => {
+        try {
+          if (!latestApprovalGrantId) {
+            throw new Error("approvalGrantId is required before OPENAI_API_KEY secret sync");
+          }
+          const secretValue = document.getElementById("openai-api-key-input").value;
+          if (!secretValue) {
+            throw new Error("OPENAI_API_KEY is required");
+          }
+          openaiSecretSyncOutput.textContent = "OPENAI_API_KEY secret sync request...";
+          const syncResponse = await fetch("${apiBase}/action/github-actions-secret", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              repository: document.getElementById("repo-input").value,
+              secretName: "OPENAI_API_KEY",
+              secretValue,
+              policyInput: {
+                approvalGrantId: latestApprovalGrantId
+              }
+            })
+          });
+          const syncBody = await syncResponse.json();
+          if (!syncResponse.ok) {
+            throw new Error(syncBody.reason || syncBody.error || "OPENAI_API_KEY secret sync failed");
+          }
+          document.getElementById("openai-api-key-input").value = "";
+          openaiSecretSyncOutput.textContent = JSON.stringify(syncBody, null, 2);
+        } catch (error) {
+          openaiSecretSyncOutput.textContent = String(error);
         }
       });
 

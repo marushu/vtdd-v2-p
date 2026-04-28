@@ -11,6 +11,7 @@ import {
   dedupePasskeys,
   dispatchRemoteCodexExecution,
   executeDeployProductionPlane,
+  executeGitHubActionsSecretSync,
   evaluateButlerSelfParity,
   executeGitHubHighRiskPlane,
   inferRelatedIssueFromGatewayInput,
@@ -196,6 +197,23 @@ export default {
       }
 
       return handleDeployProductionRequest(request, env);
+    }
+
+    if (request.method === "POST" && isApiPath(url.pathname, "/action/github-actions-secret")) {
+      const auth = authorizePasskeyBrowserOrMachineRequest({
+        request,
+        env,
+        apiSuffix: "/action/github-actions-secret"
+      });
+      if (!auth.ok) {
+        return json(auth.status, {
+          ok: false,
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+
+      return handleGitHubActionsSecretSyncRequest(request, env);
     }
 
     if (request.method === "POST" && isApiPath(url.pathname, "/action/repository-nickname")) {
@@ -886,6 +904,57 @@ async function handleDeployProductionRequest(request, env) {
   return json(202, {
     ok: true,
     deploy: executed.deploy
+  });
+}
+
+async function handleGitHubActionsSecretSyncRequest(request, env) {
+  const payload = await readJson(request);
+  if (!payload || typeof payload !== "object") {
+    return json(422, {
+      ok: false,
+      error: "request_body_required",
+      reason: "valid JSON request body is required"
+    });
+  }
+
+  const policyInput =
+    payload.policyInput && typeof payload.policyInput === "object" ? payload.policyInput : {};
+  const resolvedApprovalGrant = await resolveApprovalGrant({
+    payload: {
+      phase: normalizeText(payload.phase) || "execution",
+      highRiskKind: "github_actions_secret_sync",
+      repositoryInput: payload.repository
+    },
+    policyInput: {
+      ...policyInput,
+      actionType: "destructive",
+      repositoryInput: payload.repository,
+      highRiskKind: "github_actions_secret_sync"
+    },
+    env
+  });
+
+  const executed = await executeGitHubActionsSecretSync({
+    repository: payload.repository,
+    secretName: payload.secretName,
+    secretValue: payload.secretValue,
+    approvalGrant:
+      payload.approvalGrant ?? policyInput.approvalGrant ?? resolvedApprovalGrant.approvalGrant,
+    env
+  });
+
+  if (!executed.ok) {
+    return json(executed.status ?? 503, {
+      ok: false,
+      error: executed.error ?? "github_actions_secret_sync_failed",
+      reason: executed.reason,
+      issues: executed.issues ?? []
+    });
+  }
+
+  return json(200, {
+    ok: true,
+    secretSync: executed.secretSync
   });
 }
 

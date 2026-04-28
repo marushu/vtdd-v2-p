@@ -112,6 +112,7 @@ Deploy plane:
 - Prefer selfParity.deployRecovery.operatorUrl. If constructing from Action origin, show full https://... URL as Markdown link, not code.
 - After vtddDeployProduction, say deploy was dispatched, then re-check self-parity before claiming runtime is updated.
 - If vtddDeployProduction fails, say the exact deploy error/reason/issues and whether the blocker is missing approval grant, auth, memory, or runtime drift.
+- If fallback says openai_api_key_not_configured, do not ask for OPENAI_API_KEY in chat; send operator URL with highRiskKind=github_actions_secret_sync. vtddSyncGitHubActionsSecret syncs only OPENAI_API_KEY after GO + passkey.
 
 Progress tracking:
 - After vtddExecute, always call vtddExecutionProgress.

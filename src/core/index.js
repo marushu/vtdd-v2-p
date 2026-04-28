@@ -49,6 +49,12 @@ export {
   buildCloudflareDeploySecretSyncPlan,
   executeCloudflareDeploySecretSync
 } from "./cloudflare-deploy-secret-sync.js";
+export {
+  encryptGitHubActionsSecret,
+  executeGitHubActionsSecretSync,
+  validateGitHubActionsSecretSyncApprovalGrant,
+  validateGitHubActionsSecretSyncRequest
+} from "./github-actions-secret-sync.js";
 export { requiredCredentialTier, evaluateCredentialBoundary } from "./credential-boundary.js";
 export { resolveRepositoryTarget } from "./repository-resolution.js";
 export {
