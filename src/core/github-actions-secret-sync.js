@@ -204,17 +204,14 @@ export function validateGitHubActionsSecretSyncApprovalGrant(input = {}) {
 }
 
 export async function encryptGitHubActionsSecret({ publicKey, secretValue }) {
-  const sodium = await loadSodium();
-  await sodium.ready;
-  const binaryKey = sodium.from_base64(publicKey, sodium.base64_variants.ORIGINAL);
-  const binarySecret = sodium.from_string(secretValue);
-  const encrypted = sodium.crypto_box_seal(binarySecret, binaryKey);
-  return sodium.to_base64(encrypted, sodium.base64_variants.ORIGINAL);
-}
-
-export async function loadSodium() {
-  const module = await import("libsodium-wrappers");
-  return module.default ?? module;
+  const sealedbox = await import("tweetnacl-sealedbox-js");
+  const seal = sealedbox.seal ?? sealedbox.default?.seal;
+  if (typeof seal !== "function") {
+    throw new Error("tweetnacl sealed box seal function is unavailable");
+  }
+  const binaryKey = base64ToBytes(publicKey);
+  const binarySecret = new TextEncoder().encode(secretValue);
+  return bytesToBase64(seal(binarySecret, binaryKey));
 }
 
 function githubHeaders(token) {
@@ -243,6 +240,33 @@ function normalizeApiBaseUrl(value) {
 
 function normalizeText(value) {
   return String(value ?? "").trim();
+}
+
+function base64ToBytes(value) {
+  const normalized = normalizeText(value);
+  if (typeof atob === "function") {
+    return Uint8Array.from(atob(normalized), (char) => char.charCodeAt(0));
+  }
+  const bufferCtor = globalThis.Buffer;
+  if (bufferCtor) {
+    return Uint8Array.from(bufferCtor.from(normalized, "base64"));
+  }
+  throw new Error("base64 decoder unavailable");
+}
+
+function bytesToBase64(bytes) {
+  if (typeof btoa === "function") {
+    let binary = "";
+    for (const byte of bytes) {
+      binary += String.fromCharCode(byte);
+    }
+    return btoa(binary);
+  }
+  const bufferCtor = globalThis.Buffer;
+  if (bufferCtor) {
+    return bufferCtor.from(bytes).toString("base64");
+  }
+  throw new Error("base64 encoder unavailable");
 }
 
 export function sanitizeGitHubActionsSecretSyncErrorMessage(error) {
