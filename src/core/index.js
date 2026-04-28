@@ -52,6 +52,7 @@ export {
 export {
   encryptGitHubActionsSecret,
   executeGitHubActionsSecretSync,
+  sanitizeGitHubActionsSecretSyncErrorMessage,
   validateGitHubActionsSecretSyncApprovalGrant,
   validateGitHubActionsSecretSyncRequest
 } from "./github-actions-secret-sync.js";

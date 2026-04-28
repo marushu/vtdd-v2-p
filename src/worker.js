@@ -26,6 +26,7 @@ import {
   retrieveConstitution,
   retrieveCustomGptSetupArtifact,
   renderPasskeyOperatorPage,
+  sanitizeGitHubActionsSecretSyncErrorMessage,
   RepositoryNicknameMode,
   resolveGatewayAliasRegistryFromGitHubApp,
   resolveRepositoryTarget,
@@ -942,7 +943,12 @@ async function handleGitHubActionsSecretSyncRequest(request, env) {
     approvalGrant:
       payload.approvalGrant ?? policyInput.approvalGrant ?? resolvedApprovalGrant.approvalGrant,
     env
-  });
+  }).catch((error) => ({
+    ok: false,
+    status: 503,
+    error: "github_actions_secret_sync_exception",
+    reason: sanitizeGitHubActionsSecretSyncErrorMessage(error)
+  }));
 
   if (!executed.ok) {
     return json(executed.status ?? 503, {

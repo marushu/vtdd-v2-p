@@ -80,3 +80,33 @@ test("github actions secret sync blocks unapproved names and wrong passkey scope
     true
   );
 });
+
+test("github actions secret sync returns redacted JSON failure when encryption throws", async () => {
+  const result = await executeGitHubActionsSecretSync({
+    repository: "sample-org/vtdd-v2-p",
+    secretName: "OPENAI_API_KEY",
+    secretValue: "sk-test-secret",
+    approvalGrant: validApprovalGrant,
+    encryptSecret: async () => {
+      throw new Error("token=secret-token sk-test-secret");
+    },
+    env: {
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_secret",
+      GITHUB_API_FETCH: async (url) => {
+        if (String(url).endsWith("/actions/secrets/public-key")) {
+          return new Response(JSON.stringify({ key_id: "key-123", key: "public-key" }), {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          });
+        }
+        return new Response(null, { status: 204 });
+      }
+    }
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.status, 503);
+  assert.equal(result.error, "github_actions_secret_encryption_failed");
+  assert.equal(result.reason.includes("secret-token"), false);
+  assert.equal(result.reason.includes("sk-test-secret"), false);
+});
