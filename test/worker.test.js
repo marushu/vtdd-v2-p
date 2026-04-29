@@ -470,7 +470,7 @@ test("worker can resolve passkey memory provider from Cloudflare D1 binding fall
 test("worker serves passkey operator page", async () => {
   const response = await worker.fetch(
     new Request(
-      "https://example.com/v2/approval/passkey/operator?repositoryInput=marushu%2Fvtdd-v2-p&issueNumber=15&phase=execution&actionType=deploy_production&highRiskKind=deploy_production"
+      "https://example.com/v2/approval/passkey/operator?repositoryInput=marushu%2Fvtdd-v2-p&issueNumber=15&phase=execution&actionType=deploy_production&highRiskKind=deploy_production&returnUrl=https%3A%2F%2Fchatgpt.com%2Fg%2Fexample-butler"
     ),
     gatewayAuthEnv
   );
@@ -485,6 +485,22 @@ test("worker serves passkey operator page", async () => {
   assert.equal(html.includes('id="phase-input" value="execution"'), true);
   assert.equal(html.includes('id="action-type-input" value="deploy_production"'), true);
   assert.equal(html.includes('id="risk-kind-input" value="deploy_production"'), true);
+  assert.equal(html.includes('href="https://chatgpt.com/g/example-butler"'), true);
+  assert.equal(html.includes('href="https://evil.example/phish"'), false);
+});
+
+test("worker strips non-ChatGPT operator return urls", async () => {
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/v2/approval/passkey/operator?repositoryInput=marushu%2Fvtdd-v2-p&returnUrl=https%3A%2F%2Fevil.example%2Fphish"
+    ),
+    gatewayAuthEnv
+  );
+
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.equal(html.includes('href="https://evil.example/phish"'), false);
+  assert.equal(html.includes('id="return-to-butler-link" href=""'), true);
 });
 
 test("worker passkey operator page enables desktop secret sync bridge when syncApiBase is provided", async () => {

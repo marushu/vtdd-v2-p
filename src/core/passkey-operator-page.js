@@ -9,6 +9,7 @@ export function renderPasskeyOperatorPage(input = {}) {
   const phaseDefault = escapeHtml(input.phase || "execution");
   const actionTypeDefault = escapeHtml(input.actionType || "destructive");
   const highRiskKindDefault = escapeHtml(input.highRiskKind || "github_app_secret_sync");
+  const returnUrl = escapeHtml(input.returnUrl || "");
   const syncEnabled = input.syncEnabled === true;
   const syncMessage = escapeHtml(
     input.syncMessage ||
@@ -109,6 +110,19 @@ export function renderPasskeyOperatorPage(input = {}) {
         color: var(--accent);
         border: 1px solid #b8cec3;
       }
+      .button-link {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        padding: 11px 16px;
+        background: #eef3ef;
+        color: var(--accent);
+        border: 1px solid #b8cec3;
+        text-decoration: none;
+      }
+      [hidden] {
+        display: none !important;
+      }
       pre {
         white-space: pre-wrap;
         word-break: break-word;
@@ -202,8 +216,10 @@ export function renderPasskeyOperatorPage(input = {}) {
           <p class="muted">deploy stale を検知したあと、取得済みの <code>approvalGrantId</code> を使って same-origin の governed deploy path を dispatch します。</p>
           <div class="row">
             <button id="deploy-button">Dispatch production deploy</button>
+            <a class="button-link" id="deploy-run-link" href="#" target="_blank" rel="noopener noreferrer" hidden>Open deploy run</a>
+            <a class="button-link" id="return-to-butler-link" href="${returnUrl}" rel="noopener noreferrer"${returnUrl ? "" : " hidden"}>Return to Butler</a>
           </div>
-          <p class="muted">この Worker origin を <code>runtimeUrl</code> として使います。実行後は Butler で self-parity を再確認してください。</p>
+          <p class="muted">この Worker origin を <code>runtimeUrl</code> として使います。実行後は deploy run link で完了状態を確認できます。</p>
           <pre id="deploy-output"></pre>
         </section>
 
@@ -229,6 +245,7 @@ export function renderPasskeyOperatorPage(input = {}) {
       const openaiSecretSyncOutput = document.getElementById("openai-secret-sync-output");
       const copyApprovalGrantButton = document.getElementById("copy-approval-grant-button");
       const autoCopyApprovalGrantInput = document.getElementById("auto-copy-approval-grant-input");
+      const deployRunLink = document.getElementById("deploy-run-link");
       let latestApprovalGrantId = "";
 
       async function readResponseBody(response) {
@@ -299,6 +316,46 @@ export function renderPasskeyOperatorPage(input = {}) {
         if (!quiet) {
           approveOutput.textContent = approveOutput.textContent + "\\n\\nCopied approvalGrantId to clipboard.";
         }
+      }
+
+      function extractDeployRunUrl(body) {
+        return body?.deploy?.runUrl || "";
+      }
+
+      function normalizeDeployRunUrl(value) {
+        const text = String(value || "");
+        if (!text) {
+          return "";
+        }
+        try {
+          const url = new URL(text);
+          if (url.protocol !== "https:" || url.hostname.toLowerCase() !== "github.com") {
+            return "";
+          }
+          if (!/\\/actions\\/runs\\/\\d+(?:$|[/?#])/.test(url.pathname + url.search + url.hash)) {
+            return "";
+          }
+          return url.href;
+        } catch {
+          return "";
+        }
+      }
+
+      function clearDeployRunLink() {
+        if (!deployRunLink) {
+          return;
+        }
+        deployRunLink.href = "#";
+        deployRunLink.hidden = true;
+      }
+
+      function showDeployRunLink(body) {
+        const runUrl = normalizeDeployRunUrl(extractDeployRunUrl(body));
+        if (!runUrl || !deployRunLink) {
+          return;
+        }
+        deployRunLink.href = runUrl;
+        deployRunLink.hidden = false;
       }
 
       copyApprovalGrantButton.addEventListener("click", async () => {
@@ -432,6 +489,7 @@ export function renderPasskeyOperatorPage(input = {}) {
           if (!latestApprovalGrantId) {
             throw new Error("approvalGrantId is required before production deploy");
           }
+          clearDeployRunLink();
           deployOutput.textContent = "production deploy request...";
           const deployResponse = await fetch("${apiBase}/action/deploy", {
             method: "POST",
@@ -449,6 +507,7 @@ export function renderPasskeyOperatorPage(input = {}) {
           if (!deployResponse.ok) {
             throw responseError(deployBody, "production deploy failed");
           }
+          showDeployRunLink(deployBody);
           deployOutput.textContent = JSON.stringify(deployBody, null, 2);
         } catch (error) {
           deployOutput.textContent = String(error);

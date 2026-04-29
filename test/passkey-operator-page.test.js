@@ -11,6 +11,7 @@ test("passkey operator page can target explicit api base and sync endpoint", () 
     repositoryInput: "marushu/vtdd-v2-p",
     issueNumber: 15,
     highRiskKind: "github_app_secret_sync",
+    returnUrl: "https://chatgpt.com/g/example-butler",
     syncEnabled: true
   });
 
@@ -23,6 +24,9 @@ test("passkey operator page can target explicit api base and sync endpoint", () 
   assert.equal(html.includes("Sync GitHub App secrets"), true);
   assert.equal(html.includes("Sync OPENAI_API_KEY"), true);
   assert.equal(html.includes("Dispatch production deploy"), true);
+  assert.equal(html.includes("Open deploy run"), true);
+  assert.equal(html.includes("Return to Butler"), true);
+  assert.equal(html.includes('href="https://chatgpt.com/g/example-butler"'), true);
   assert.equal(html.includes("Butler 会話に貼らず"), true);
   assert.equal(html.includes("Copy approvalGrantId"), true);
   assert.equal(html.includes("Auto-copy approvalGrantId after approval"), true);
@@ -138,6 +142,78 @@ test("passkey operator page clipboard helper falls back to textarea copy", async
   assert.equal(textareaRemoved, true);
 });
 
+test("passkey operator page exposes deploy run link from dispatch response", () => {
+  const deployRunLink = {
+    href: "#",
+    hidden: true
+  };
+  const helpers = loadOperatorPageHelpers({
+    document: {
+      getElementById(id) {
+        if (id === "deploy-run-link") {
+          return deployRunLink;
+        }
+        return {
+          value: "",
+          textContent: "",
+          addEventListener() {}
+        };
+      }
+    }
+  });
+
+  helpers.showDeployRunLink({
+    ok: true,
+    deploy: {
+      runUrl: "https://github.com/sample-org/vtdd-v2-p/actions/runs/123456"
+    }
+  });
+
+  assert.equal(deployRunLink.href, "https://github.com/sample-org/vtdd-v2-p/actions/runs/123456");
+  assert.equal(deployRunLink.hidden, false);
+
+  helpers.clearDeployRunLink();
+  assert.equal(deployRunLink.href, "#");
+  assert.equal(deployRunLink.hidden, true);
+});
+
+test("passkey operator page rejects unsafe or missing deploy run links", () => {
+  const deployRunLink = {
+    href: "#",
+    hidden: true
+  };
+  const helpers = loadOperatorPageHelpers({
+    document: {
+      getElementById(id) {
+        if (id === "deploy-run-link") {
+          return deployRunLink;
+        }
+        return {
+          value: "",
+          textContent: "",
+          addEventListener() {}
+        };
+      }
+    }
+  });
+
+  helpers.showDeployRunLink({
+    ok: true,
+    deploy: {
+      runUrl: "https://evil.example/actions/runs/123456"
+    }
+  });
+  assert.equal(deployRunLink.href, "#");
+  assert.equal(deployRunLink.hidden, true);
+
+  helpers.showDeployRunLink({
+    ok: true,
+    runUrl: "https://github.com/sample-org/vtdd-v2-p/actions/runs/123456"
+  });
+  assert.equal(deployRunLink.href, "#");
+  assert.equal(deployRunLink.hidden, true);
+});
+
 function loadOperatorPageHelpers(overrides = {}) {
   const html = renderPasskeyOperatorPage();
   const script = html.match(/<script>([\s\S]*)<\/script>/)?.[1];
@@ -146,6 +222,7 @@ function loadOperatorPageHelpers(overrides = {}) {
   const elements = new Map();
   const context = {
     Response,
+    URL,
     navigator: {},
     document: {
       getElementById(id) {
