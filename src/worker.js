@@ -992,6 +992,7 @@ function handlePasskeyOperatorPageRequest(request) {
     repositoryInput: url.searchParams.get("repositoryInput"),
     issueNumber: url.searchParams.get("issueNumber"),
     phase: url.searchParams.get("phase") || "execution",
+    actionType: url.searchParams.get("actionType") || "destructive",
     highRiskKind: url.searchParams.get("highRiskKind") || "github_app_secret_sync",
     operatorId: url.searchParams.get("operatorId") || "vtdd-operator",
     operatorLabel: url.searchParams.get("operatorLabel") || "VTDD Operator",

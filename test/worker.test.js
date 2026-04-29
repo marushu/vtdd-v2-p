@@ -470,7 +470,7 @@ test("worker can resolve passkey memory provider from Cloudflare D1 binding fall
 test("worker serves passkey operator page", async () => {
   const response = await worker.fetch(
     new Request(
-      "https://example.com/v2/approval/passkey/operator?repositoryInput=marushu%2Fvtdd-v2-p&issueNumber=15&highRiskKind=github_app_secret_sync"
+      "https://example.com/v2/approval/passkey/operator?repositoryInput=marushu%2Fvtdd-v2-p&issueNumber=15&phase=execution&actionType=deploy_production&highRiskKind=deploy_production"
     ),
     gatewayAuthEnv
   );
@@ -480,7 +480,11 @@ test("worker serves passkey operator page", async () => {
   const html = await response.text();
   assert.equal(html.includes("VTDD Passkey Operator"), true);
   assert.equal(html.includes("/v2/approval/passkey/challenge"), true);
-  assert.equal(html.includes("github_app_secret_sync"), true);
+  assert.equal(html.includes('id="repo-input" value="marushu/vtdd-v2-p"'), true);
+  assert.equal(html.includes('id="issue-input" value="15"'), true);
+  assert.equal(html.includes('id="phase-input" value="execution"'), true);
+  assert.equal(html.includes('id="action-type-input" value="deploy_production"'), true);
+  assert.equal(html.includes('id="risk-kind-input" value="deploy_production"'), true);
 });
 
 test("worker passkey operator page enables desktop secret sync bridge when syncApiBase is provided", async () => {
