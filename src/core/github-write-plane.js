@@ -5,6 +5,7 @@ const GITHUB_API_VERSION = "2022-11-28";
 const GITHUB_API_USER_AGENT = "vtdd-v2-github-write-plane";
 
 export const GitHubWriteOperation = Object.freeze({
+  ISSUE_CREATE: "issue_create",
   ISSUE_COMMENT_CREATE: "issue_comment_create",
   ISSUE_COMMENT_UPDATE: "issue_comment_update",
   BRANCH_CREATE: "branch_create",
@@ -110,13 +111,18 @@ function validateGitHubWriteRequest(input) {
   }
 
   if (
-    (input.operation === GitHubWriteOperation.ISSUE_COMMENT_CREATE ||
+    (input.operation === GitHubWriteOperation.ISSUE_CREATE ||
+      input.operation === GitHubWriteOperation.ISSUE_COMMENT_CREATE ||
       input.operation === GitHubWriteOperation.ISSUE_COMMENT_UPDATE ||
       input.operation === GitHubWriteOperation.PULL_CREATE ||
       input.operation === GitHubWriteOperation.PULL_COMMENT_CREATE) &&
     !input.body
   ) {
     issues.push("body is required for this operation");
+  }
+
+  if (input.operation === GitHubWriteOperation.ISSUE_CREATE && !input.title) {
+    issues.push("title is required for issue creation");
   }
 
   if (input.operation === GitHubWriteOperation.BRANCH_CREATE && !input.branch) {
@@ -196,6 +202,18 @@ async function dispatchGitHubWrite(input) {
 
 async function buildGitHubWriteRequest(input) {
   const encodedRepository = encodeURIComponentRepository(input.repository);
+
+  if (input.operation === GitHubWriteOperation.ISSUE_CREATE) {
+    return {
+      ok: true,
+      method: "POST",
+      url: `${input.apiBaseUrl}/repos/${encodedRepository}/issues`,
+      body: {
+        title: input.title,
+        body: input.body
+      }
+    };
+  }
 
   if (input.operation === GitHubWriteOperation.ISSUE_COMMENT_CREATE) {
     return {
@@ -329,7 +347,7 @@ function normalizeGitHubWriteResult(input) {
   return {
     operation: input.operation,
     repository: input.repository,
-    issueNumber: input.issueNumber ?? null,
+    issueNumber: input.issueNumber ?? normalizePositiveInteger(responseBody?.number) ?? null,
     pullNumber: normalizePositiveInteger(responseBody?.number) ?? input.pullNumber ?? null,
     branch: input.branch || null,
     baseRef: input.baseRef || null,
