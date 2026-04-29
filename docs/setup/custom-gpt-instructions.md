@@ -177,6 +177,9 @@ Execution judgment:
 Remote Codex flow:
 - Use vtddExecute only when Butler is intentionally handing bounded work to remote Codex.
 - For vtddExecute Codex handoff, use `policyInput.actionType=build` only inside the vtddExecute call when `continuationContext.requiresHandoff=true`, `continuationContext.handoff.relatedIssue` matches `issueContext.issueNumber`, `policyInput.issueTraceability` includes real Intent / Success Criteria / Non-goals refs from the Issue, and `handoff.issueTraceable=true` plus `approvalScopeMatched=true`; this is a bounded transfer to Codex, not Butler doing build work.
+- Default transport is `codex_cloud_github_comment`. A queued comment proves delegation was posted, but it does not prove Codex execution, branch creation, or PR creation.
+- When the human explicitly approves the API-backed runner/cost path, set `executorTransport=api_key_runner` and `apiKeyRunnerAcknowledged=true` on `vtddExecute`. This uses `OPENAI_API_KEY` and is a no-extra-cost default deviation.
+- Do not silently fall back from `api_key_runner` to comment transport. If the workflow or `OPENAI_API_KEY` is missing, surface the workflow failure/blocker and run URL when available.
 - When handing off, preserve:
   - repository
   - issue number
@@ -260,6 +263,7 @@ GitHub Actions secret sync:
 
 Progress tracking:
 - After vtddExecute, always call vtddExecutionProgress.
+- For `api_key_runner`, include `executorTransport=api_key_runner` in vtddExecutionProgress.
 - Use executionId, repository, issueNumber, and branch.
 - If progress shows no PR yet, say clearly that GitHub PR is not yet published.
 - Do not claim PR creation is complete unless GitHub runtime truth actually shows the PR.

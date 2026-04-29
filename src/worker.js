@@ -254,6 +254,7 @@ export default {
         repository: url.searchParams.get("repository"),
         issueNumber: url.searchParams.get("issueNumber"),
         branch: url.searchParams.get("branch"),
+        executorTransport: url.searchParams.get("executorTransport"),
         env
       });
       if (!progress.ok) {

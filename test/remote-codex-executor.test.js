@@ -195,6 +195,7 @@ test("remote Codex execution mints GitHub App installation token from worker run
 
 test("remote Codex API-backed execution dispatch posts workflow_dispatch to GitHub", async () => {
   const calls = [];
+  let executionId = "";
   const dispatched = await dispatchRemoteCodexExecution({
     payload: {
       actorRole: ActorRole.BUTLER,
@@ -222,6 +223,30 @@ test("remote Codex API-backed execution dispatch posts workflow_dispatch to GitH
       GITHUB_APP_INSTALLATION_TOKEN: "ghs_dispatch_token",
       GITHUB_API_FETCH: async (url, init) => {
         calls.push({ url, init });
+        if (String(url).includes("/dispatches")) {
+          executionId = JSON.parse(init.body).inputs.execution_id;
+          return new Response(null, { status: 204 });
+        }
+        if (String(url).includes("/runs")) {
+          return new Response(
+            JSON.stringify({
+              workflow_runs: [
+                {
+                  id: 101,
+                  name: "remote-codex-executor",
+                  display_title: executionId,
+                  html_url: "https://github.com/sample-org/vtdd-v2-p/actions/runs/101",
+                  status: "queued",
+                  conclusion: null,
+                  head_branch: "main",
+                  run_started_at: "2026-04-24T08:00:00Z",
+                  updated_at: "2026-04-24T08:01:00Z"
+                }
+              ]
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
         return new Response(null, { status: 204 });
       }
     }
@@ -229,9 +254,47 @@ test("remote Codex API-backed execution dispatch posts workflow_dispatch to GitH
 
   assert.equal(dispatched.ok, true);
   assert.equal(dispatched.execution.status, RemoteCodexExecutionStatus.QUEUED);
-  assert.equal(calls.length, 1);
+  assert.equal(dispatched.execution.transport, RemoteCodexExecutorTransport.API_KEY_RUNNER);
+  assert.equal(dispatched.execution.workflowRunId, 101);
+  assert.equal(dispatched.execution.workflowUrl, "https://github.com/sample-org/vtdd-v2-p/actions/runs/101");
+  assert.equal(calls.length, 2);
   assert.equal(calls[0].url.includes("/actions/workflows/remote-codex-executor.yml/dispatches"), true);
   assert.equal(calls[0].init.method, "POST");
+  assert.equal(calls[1].url.includes("/actions/workflows/remote-codex-executor.yml/runs"), true);
+});
+
+test("remote Codex API-backed execution requires explicit request acknowledgment", async () => {
+  const dispatched = await dispatchRemoteCodexExecution({
+    payload: {
+      actorRole: ActorRole.BUTLER,
+      executorTransport: RemoteCodexExecutorTransport.API_KEY_RUNNER,
+      issueContext: { issueNumber: 6 },
+      policyInput: {
+        approvalPhrase: "GO",
+        targetConfirmed: true,
+        approvalScopeMatched: true,
+        runtimeTruth: {
+          runtimeState: {
+            activeBranch: "codex/issue-6"
+          }
+        }
+      }
+    },
+    gatewayResult: {
+      repository: "sample-org/vtdd-v2",
+      executionContinuity: {
+        codexGoal: "open_pr"
+      }
+    },
+    env: {
+      VTDD_GITHUB_ACTIONS_REPOSITORY: "sample-org/vtdd-v2-p",
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_dispatch_token"
+    }
+  });
+
+  assert.equal(dispatched.ok, false);
+  assert.equal(dispatched.status, 422);
+  assert.equal(dispatched.error, "api_key_runner_approval_required");
 });
 
 test("remote Codex API-backed execution progress reads matching workflow run", async () => {

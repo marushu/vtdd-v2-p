@@ -149,6 +149,13 @@ components:
               type: string
             requiresHandoff:
               type: boolean
+            executorTransport:
+              type: string
+              enum:
+                - codex_cloud_github_comment
+                - api_key_runner
+            apiKeyRunnerAcknowledged:
+              type: boolean
             handoff:
               type: object
               required:
@@ -309,6 +316,13 @@ components:
             issueUrl:
               type: string
           additionalProperties: true
+        executorTransport:
+          type: string
+          enum:
+            - codex_cloud_github_comment
+            - api_key_runner
+        apiKeyRunnerAcknowledged:
+          type: boolean
       additionalProperties: true
 paths:
   /health:
@@ -726,6 +740,14 @@ paths:
           required: false
           schema:
             type: string
+        - name: executorTransport
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - codex_cloud_github_comment
+              - api_key_runner
       responses:
         "200":
           description: Current execution progress
