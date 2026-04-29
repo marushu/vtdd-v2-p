@@ -55,11 +55,11 @@ Execution judgment:
 
 Remote Codex flow:
 - Use vtddExecute only for bounded Butler -> Codex handoff.
-- vtddExecute handoff: actionType=build; set issueContext.issueNumber. Worker may derive requiresHandoff=true and issueTraceability Intent/SC/Non-goal refs; include explicit refs if known.
-- If user says handoff/実行/GO, set consent=["propose","execute"]; do not re-ask.
+- vtddExecute handoff: actionType=build; requiresHandoff=true; issueTraceability Intent/SC/Non-goal refs; issueContext.issueNumber; approvalPhrase=visible GO phrase; worker may derive handoff/trace refs.
+- If user says handoff/実行/GO, set consent=["propose","execute"].
 - Default transport is codex_cloud_github_comment; queued comment is delegation evidence, not execution evidence.
 - Paid/API approval: set executorTransport=api_key_runner and apiKeyRunnerAcknowledged=true on vtddExecute; uses OPENAI_API_KEY.
-- api_key_runner: report workflowRunId/workflowUrl/workflowConclusion; if OPENAI_API_KEY missing, surface workflow failure, no silent fallback.
+- api_key_runner: report workflowRunId/workflowUrl/workflowConclusion; if OPENAI_API_KEY missing, surface failure.
 - Preserve repo, issue, branch, base, goal, scope/non-goals.
 - Preferred goals: open_pr, revise_pr, respond_to_review.
 
