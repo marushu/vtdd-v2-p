@@ -226,7 +226,7 @@ export async function evaluateButlerSelfParity(input = {}) {
       : null;
 
   const deployOperatorUrl =
-    runtimeParity === "cloudflare_deploy_update_required" && repository && runtimeOrigin
+    repository && runtimeOrigin
       ? buildPasskeyOperatorUrl({
           origin: runtimeOrigin,
           repository,
@@ -275,6 +275,7 @@ export async function evaluateButlerSelfParity(input = {}) {
       runtimeMissingOperationIds,
       runtimeMissingInstructionTokens,
       staleCapabilities,
+      deployOperatorUrl,
       deployRecovery:
         runtimeParity === "cloudflare_deploy_update_required"
           ? {

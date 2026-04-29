@@ -118,6 +118,7 @@ test("evaluateButlerSelfParity reports deploy update required when canonical set
     result.selfParity.deployRecovery.operatorUrl,
     "https://sample-user-vtdd.example.workers.dev/v2/approval/passkey/operator?repositoryInput=sample-org%2Fvtdd-v2-p&actionType=deploy_production&highRiskKind=deploy_production&issueNumber=91"
   );
+  assert.equal(result.selfParity.deployOperatorUrl, result.selfParity.deployRecovery.operatorUrl);
   assert.equal(
     result.selfParity.recommendedActions.some((item) => item.includes("/v2/approval/passkey/operator")),
     true
@@ -215,5 +216,9 @@ test("evaluateButlerSelfParity treats current nickname and secret sync actions a
   assert.deepEqual(result.selfParity.runtimeMissingOperationIds, []);
   assert.deepEqual(result.selfParity.runtimeMissingInstructionTokens, []);
   assert.equal(result.selfParity.staleCapabilities, null);
+  assert.equal(
+    result.selfParity.deployOperatorUrl,
+    "https://sample-user-vtdd.example.workers.dev/v2/approval/passkey/operator?repositoryInput=sample-org%2Fvtdd-v2-p&actionType=deploy_production&highRiskKind=deploy_production"
+  );
   assert.equal(result.selfParity.deployRecovery, null);
 });

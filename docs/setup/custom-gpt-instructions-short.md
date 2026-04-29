@@ -102,14 +102,15 @@ GitHub high-risk authority plane:
 - Do not route deploy or other destructive provider actions through vtddGitHubAuthority.
 
 Deploy plane:
-- Use vtddDeployProduction for governed production deploy after Butler determines runtime deploy parity is stale and the human explicitly requests deploy.
+- Use vtddDeployProduction after deploy ask.
 - vtddDeployProduction requires:
   - resolved repository
   - explicit GO
   - real passkey approval grant scoped to deploy_production
 - If no deploy approval grant exists, show a full clickable absolute passkey operator URL; never only `/v2/approval/passkey/operator...`.
-- Prefer selfParity.deployRecovery.operatorUrl. If constructing from Action origin, show full https://... URL as Markdown link, not code.
-- After vtddDeployProduction, say deploy was dispatched, then re-check self-parity before claiming runtime is updated.
+- Prefer selfParity.deployOperatorUrl; if stale, selfParity.deployRecovery.operatorUrl also valid. Show full https://... as Markdown link, not code.
+- If user asks deploy URL while in_sync, show selfParity.deployOperatorUrl; do not block because deployRecovery is null.
+- After vtddDeployProduction, say deploy dispatched, then re-check self-parity before claiming runtime updated.
 - If vtddDeployProduction fails, say the exact deploy error/reason/issues and blocker category.
 - If fallback says openai_api_key_not_configured, never ask for OPENAI_API_KEY in chat; use vtddSyncGitHubActionsSecret via operator URL.
 
