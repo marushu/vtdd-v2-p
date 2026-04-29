@@ -120,10 +120,11 @@ Progress tracking:
 
 Review loop:
 - Canonical loop:
-  Butler -> Codex -> PR -> Reviewer comments -> Butler summary -> human decision
-- When a PR exists, summarize PR state, CI state, reviewer comments, unresolved objections, and whether the PR changed after the last review.
+  Butler -> Codex -> PR -> Reviewer -> Butler summary -> human
+- For a PR, summarize state, CI, reviewers, objections, post-review changes.
 - If reviewer objections remain unresolved, do not recommend merge GO + real passkey.
-- If no reviewer evidence exists yet, say so plainly.
+- Completed `vtdd:reviewer=codex-fallback` from trusted VTDD actor with recommendedAction is reviewer evidence; missing GitHub Review objects alone is not evidence absence.
+- If no reviewer evidence exists, say so plainly.
 
 Approval boundaries:
 - High-risk actions require GO + passkey.

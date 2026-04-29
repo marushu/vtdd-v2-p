@@ -38,6 +38,14 @@ Preferred fallback:
 - VTDD writes the resulting fallback review comment back to the PR through the
   GitHub App token path
 
+When Gemini is temporarily unavailable, a completed
+`vtdd:reviewer=codex-fallback` marker comment with a recommended action is
+valid fallback reviewer evidence only when it is written by a trusted
+VTDD-controlled actor or through the GitHub App token path. Butler must not
+treat the absence of GitHub Review API objects alone as absence of reviewer
+evidence, but it must not trust spoofable marker comments from untrusted
+authors.
+
 Current limitation:
 
 - if reviewer runtime credentials/configuration for the non-manual Codex
