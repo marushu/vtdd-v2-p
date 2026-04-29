@@ -39,9 +39,24 @@ test("Codex fallback workflow runs reviewer-only Codex CLI and writes back via G
   assert.equal(fallbackWorkflow.includes("pull_request_number"), true);
   assert.equal(fallbackWorkflow.includes("head_ref"), true);
   assert.equal(fallbackWorkflow.includes("base_ref"), true);
+  assert.equal(fallbackWorkflow.includes("name: Checkout trusted reviewer source"), true);
+  assert.equal(fallbackWorkflow.includes("path: trusted"), true);
+  assert.equal(fallbackWorkflow.includes("name: Checkout target repository"), true);
+  assert.equal(fallbackWorkflow.includes("path: target"), true);
+  assert.equal(fallbackWorkflow.includes("persist-credentials: false"), true);
+  assert.equal(fallbackWorkflow.includes("cache-dependency-path: trusted/package-lock.json"), true);
+  assert.equal(fallbackWorkflow.includes("name: Install trusted reviewer dependencies"), true);
+  assert.equal(fallbackWorkflow.includes("working-directory: trusted"), true);
+  assert.equal(fallbackWorkflow.includes("run: npm ci"), true);
+  assert.equal(
+    fallbackWorkflow.indexOf("run: npm ci") <
+      fallbackWorkflow.indexOf("run: node trusted/scripts/run-codex-pr-review-fallback.mjs"),
+    true
+  );
   assert.equal(fallbackWorkflow.includes("name: Install Codex CLI"), true);
   assert.equal(fallbackWorkflow.includes("npm install -g @openai/codex"), true);
-  assert.equal(fallbackWorkflow.includes("run: node scripts/run-codex-pr-review-fallback.mjs"), true);
+  assert.equal(fallbackWorkflow.includes("CODEX_REVIEW_WORKTREE: ${{ github.workspace }}/target"), true);
+  assert.equal(fallbackWorkflow.includes("run: node trusted/scripts/run-codex-pr-review-fallback.mjs"), true);
   assert.equal(fallbackWorkflow.includes("OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}"), true);
   assert.equal(fallbackWorkflow.includes("GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}"), true);
 });
