@@ -102,6 +102,52 @@ test("github read plane includes issue body when reading a specific issue", asyn
   assert.equal(result.read.records[0].body, "## Intent\nButler reads the canonical Issue before execution.");
 });
 
+test("github read plane exposes pull request merge truth when reading a specific PR", async () => {
+  const calls = [];
+  const result = await retrieveGitHubReadPlane({
+    resource: GitHubReadResource.PULLS,
+    repository: "sample-org/vtdd-v2-p",
+    pullNumber: 114,
+    env: {
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_pull_read",
+      GITHUB_API_FETCH: async (url) => {
+        calls.push(url);
+        return new Response(
+          JSON.stringify({
+            number: 114,
+            title: "Treat Codex fallback comments as reviewer evidence",
+            state: "closed",
+            draft: false,
+            head: {
+              ref: "codex/fix-reviewer-evidence-instructions",
+              sha: "d8755b961c6db1a5555320abf067d459686f48b8"
+            },
+            base: {
+              ref: "main",
+              sha: "83ba6135f3a01c27948a018c721135a301d938fe"
+            },
+            merged: true,
+            merged_at: "2026-04-29T03:00:45Z",
+            merge_commit_sha: "c9ad3c36ed5032bfb4f02bb79d65a8806bcd1047",
+            html_url: "https://github.com/sample-org/vtdd-v2-p/pull/114"
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        );
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(calls[0].endsWith("/repos/sample-org/vtdd-v2-p/pulls/114"), true);
+  assert.equal(result.read.pullNumber, 114);
+  assert.equal(result.read.records[0].state, "closed");
+  assert.equal(result.read.records[0].merged, true);
+  assert.equal(result.read.records[0].mergedAt, "2026-04-29T03:00:45Z");
+  assert.equal(result.read.records[0].mergeCommitSha, "c9ad3c36ed5032bfb4f02bb79d65a8806bcd1047");
+  assert.equal(result.read.records[0].headSha, "d8755b961c6db1a5555320abf067d459686f48b8");
+  assert.equal(result.read.records[0].baseSha, "83ba6135f3a01c27948a018c721135a301d938fe");
+});
+
 test("github read plane reads pull reviews, review comments, checks, workflow runs, and branches", async () => {
   const responses = new Map([
     [
