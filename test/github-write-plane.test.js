@@ -243,6 +243,15 @@ test("github write plane preserves sanitized fetch exception details", async () 
   assert.equal(result.error, "github_write_failed");
   assert.equal(result.reason, "failed to execute GitHub write operation: issue_create");
   assert.equal(result.issues.includes("github_write_fetch_exception"), true);
+  assert.deepEqual(result.diagnostics, {
+    operation: "issue_create",
+    requestMethod: "POST",
+    requestUrl: "https://api.github.com/repos/sample-org/vtdd-v2-p/issues",
+    exceptionName: "TypeError",
+    exceptionMessage: "fetch failed at /Users/[REDACTED_PATH] with Bearer [REDACTED_GITHUB_TOKEN]"
+  });
   assert.equal(result.issues.some((issue) => issue.includes("ghs_secret")), false);
   assert.equal(result.issues.some((issue) => issue.includes("/Users/example")), false);
+  assert.equal(JSON.stringify(result.diagnostics).includes("ghs_secret"), false);
+  assert.equal(JSON.stringify(result.diagnostics).includes("/Users/example"), false);
 });

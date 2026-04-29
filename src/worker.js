@@ -759,14 +759,16 @@ async function handleGitHubWritePlaneRequest(request, env) {
         httpStatus,
         error: executed.error ?? "github_write_failed",
         reason: executed.reason,
-        issues: executed.issues ?? []
+        issues: executed.issues ?? [],
+        diagnostics: executed.diagnostics ?? null
       });
     }
     return json(httpStatus, {
       ok: false,
       error: executed.error ?? "github_write_failed",
       reason: executed.reason,
-      issues: executed.issues ?? []
+      issues: executed.issues ?? [],
+      diagnostics: executed.diagnostics ?? null
     });
   }
 

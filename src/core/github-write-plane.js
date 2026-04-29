@@ -167,13 +167,19 @@ async function dispatchGitHubWrite(input) {
       headers: githubJsonHeaders({ token: input.token }),
       body: request.body ? JSON.stringify(request.body) : undefined
     });
-  } catch {
+  } catch (error) {
     return {
       ok: false,
       status: 503,
       error: "github_write_failed",
       reason: `failed to execute GitHub write operation: ${input.operation}`,
-      issues: ["github_write_fetch_exception"]
+      issues: ["github_write_fetch_exception"],
+      diagnostics: buildGitHubWriteFetchExceptionDiagnostics({
+        operation: input.operation,
+        method: request.method,
+        url: request.url,
+        error
+      })
     };
   }
 
@@ -403,4 +409,24 @@ function encodeURIComponentRepository(repository) {
     .split("/")
     .map((segment) => encodeURIComponent(segment))
     .join("/");
+}
+
+function buildGitHubWriteFetchExceptionDiagnostics({ operation, method, url, error }) {
+  return {
+    operation,
+    requestMethod: method,
+    requestUrl: sanitizeGitHubWriteDiagnosticText(url),
+    exceptionName: sanitizeGitHubWriteDiagnosticText(error?.name || "Error"),
+    exceptionMessage: sanitizeGitHubWriteDiagnosticText(error?.message || error)
+  };
+}
+
+function sanitizeGitHubWriteDiagnosticText(value) {
+  return normalizeText(value)
+    .replace(/sk-[A-Za-z0-9_-]+/g, "[REDACTED_OPENAI_KEY]")
+    .replace(/gh[psuro]_[A-Za-z0-9_]+/g, "[REDACTED_GITHUB_TOKEN]")
+    .replace(/Bearer\s+[A-Za-z0-9_.=-]+/gi, "Bearer [REDACTED]")
+    .replace(/(authorization|api[_-]?key|token|secret)(["'\s:=]+)([^"'\s<>&]+)/gi, "$1$2[REDACTED]")
+    .replace(/\/Users\/[^\s"'<>]+/g, "/Users/[REDACTED_PATH]")
+    .slice(0, 500);
 }

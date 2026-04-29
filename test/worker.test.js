@@ -1418,6 +1418,13 @@ test("worker returns action-visible GitHub write fetch failures", async () => {
   assert.equal(body.error, "github_write_failed");
   assert.equal(body.reason, "failed to execute GitHub write operation: issue_create");
   assert.equal(body.issues.includes("github_write_fetch_exception"), true);
+  assert.deepEqual(body.diagnostics, {
+    operation: "issue_create",
+    requestMethod: "POST",
+    requestUrl: "https://api.github.com/repos/sample-org/vtdd-v2-p/issues",
+    exceptionName: "TypeError",
+    exceptionMessage: "fetch failed"
+  });
 });
 
 test("worker preserves HTTP error status for GitHub write consumers that do not request action envelopes", async () => {
