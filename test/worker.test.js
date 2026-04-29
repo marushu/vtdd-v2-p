@@ -1220,7 +1220,11 @@ test("worker returns Butler self-parity summary", async () => {
   assert.equal(body.selfParity.canonical.artifacts.instructions.path, "docs/setup/custom-gpt-instructions.md");
   assert.equal(
     body.selfParity.deployOperatorUrl,
-    "https://example.com/v2/approval/passkey/operator?repositoryInput=sample-org%2Fvtdd-v2-p&actionType=deploy_production&highRiskKind=deploy_production&issueNumber=91"
+    "https://example.com/v2/approval/passkey/operator?repositoryInput=sample-org%2Fvtdd-v2-p&phase=execution&actionType=deploy_production&highRiskKind=deploy_production&issueNumber=91"
+  );
+  assert.equal(
+    body.selfParity.deployOperatorMarkdownLink,
+    `[Open deploy operator](${body.selfParity.deployOperatorUrl})`
   );
   assert.equal(body.selfParity.deployRecovery, null);
 });
@@ -1285,7 +1289,11 @@ test("worker returns deploy recovery operator url in self-parity when runtime is
   assert.equal(body.selfParity.runtimeParity, "cloudflare_deploy_update_required");
   assert.equal(
     body.selfParity.deployRecovery.operatorUrl,
-    "https://example.com/v2/approval/passkey/operator?repositoryInput=sample-org%2Fvtdd-v2-p&actionType=deploy_production&highRiskKind=deploy_production&issueNumber=91"
+    "https://example.com/v2/approval/passkey/operator?repositoryInput=sample-org%2Fvtdd-v2-p&phase=execution&actionType=deploy_production&highRiskKind=deploy_production&issueNumber=91"
+  );
+  assert.equal(
+    body.selfParity.deployRecovery.operatorMarkdownLink,
+    `[Open deploy operator](${body.selfParity.deployRecovery.operatorUrl})`
   );
 });
 

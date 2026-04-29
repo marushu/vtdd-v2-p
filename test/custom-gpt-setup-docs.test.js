@@ -62,7 +62,10 @@ test("custom gpt instructions preserve current butler and approval boundaries", 
   assert.equal(doc.includes("selfParity.deployRecovery.operatorUrl"), true);
   assert.equal(doc.includes("open it on iPhone/mobile"), true);
   assert.equal(doc.includes("Never show only the relative `/v2/approval/passkey/operator...` path"), true);
-  assert.equal(doc.includes("clickable Markdown link, not an inline code block"), true);
+  assert.equal(doc.includes("never paste a bare long URL that can be truncated"), true);
+  assert.equal(doc.includes("still provide `selfParity.deployOperatorMarkdownLink`"), true);
+  assert.equal(doc.includes("render `selfParity.deployOperatorUrl` as a short Markdown link"), true);
+  assert.equal(doc.includes("phase=execution"), true);
   assert.equal(doc.includes("High-risk actions require GO + passkey."), true);
   assert.equal(doc.includes("Merge requires explicit human GO + real passkey."), true);
   assert.equal(doc.includes("Action Schema update required"), true);
@@ -106,9 +109,11 @@ test("short custom gpt instructions stay under editor limits while preserving cr
   assert.equal(doc.includes("Action Schema update required"), true);
   assert.equal(doc.includes("Instructions update required"), true);
   assert.equal(doc.includes("selfParity.deployRecovery.operatorUrl"), true);
-  assert.equal(doc.includes("show a full clickable absolute passkey operator URL"), true);
-  assert.equal(doc.includes("never only `/v2/approval/passkey/operator...`"), true);
-  assert.equal(doc.includes("Markdown link, not code"), true);
+  assert.equal(doc.includes("selfParity.deployOperatorMarkdownLink"), true);
+  assert.equal(doc.includes("<actual selfParity.deployOperatorUrl>"), true);
+  assert.equal(doc.includes("never only show `/v2/approval/passkey/operator...`"), true);
+  assert.equal(doc.includes("bare long URL"), true);
+  assert.equal(doc.includes("phase=execution"), true);
   assert.equal(doc.includes("GO + real passkey"), true);
   assert.equal(doc.includes("openai_api_key_not_configured"), true);
   assert.equal(doc.includes("If vtddDeployProduction fails, say the exact deploy error/reason/issues"), true);

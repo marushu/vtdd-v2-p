@@ -230,11 +230,15 @@ export async function evaluateButlerSelfParity(input = {}) {
       ? buildPasskeyOperatorUrl({
           origin: runtimeOrigin,
           repository,
+          phase: "execution",
           actionType: "deploy_production",
           highRiskKind: "deploy_production",
           issueNumber
         })
       : null;
+  const deployOperatorMarkdownLink = deployOperatorUrl
+    ? `[Open deploy operator](${deployOperatorUrl})`
+    : null;
 
   const recommendedActions =
     runtimeParity === "in_sync"
@@ -244,8 +248,8 @@ export async function evaluateButlerSelfParity(input = {}) {
         ]
       : [
           "Cloudflare deploy update required.",
-          deployOperatorUrl
-            ? `Open the same-origin passkey operator helper: ${deployOperatorUrl}`
+          deployOperatorMarkdownLink
+            ? `Open the same-origin passkey operator helper: ${deployOperatorMarkdownLink}`
             : "Resolve the repository on the current Butler surface before generating a passkey operator helper URL."
         ];
 
@@ -276,6 +280,7 @@ export async function evaluateButlerSelfParity(input = {}) {
       runtimeMissingInstructionTokens,
       staleCapabilities,
       deployOperatorUrl,
+      deployOperatorMarkdownLink,
       deployRecovery:
         runtimeParity === "cloudflare_deploy_update_required"
           ? {
@@ -284,7 +289,8 @@ export async function evaluateButlerSelfParity(input = {}) {
               requires: ["GO", "real passkey"],
               repository,
               issueNumber,
-              operatorUrl: deployOperatorUrl
+              operatorUrl: deployOperatorUrl,
+              operatorMarkdownLink: deployOperatorMarkdownLink
             }
           : null,
       recommendedActions
@@ -348,9 +354,10 @@ function normalizeApiBaseUrl(value) {
   return normalized ? normalized.replace(/\/+$/, "") : GITHUB_API_BASE_URL;
 }
 
-function buildPasskeyOperatorUrl({ origin, repository, actionType, highRiskKind, issueNumber }) {
+function buildPasskeyOperatorUrl({ origin, repository, phase, actionType, highRiskKind, issueNumber }) {
   const url = new URL("/v2/approval/passkey/operator", `${origin}/`);
   url.searchParams.set("repositoryInput", repository);
+  url.searchParams.set("phase", phase || "execution");
   url.searchParams.set("actionType", actionType);
   url.searchParams.set("highRiskKind", highRiskKind);
   if (Number.isInteger(issueNumber) && issueNumber > 0) {
