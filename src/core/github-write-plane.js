@@ -26,7 +26,7 @@ export async function executeGitHubWritePlane(input = {}) {
   const body = normalizeBody(input.body);
   const head = normalizeText(input.head) || branch;
   const env = input.env ?? {};
-  const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
+  const fetchImpl = resolveGitHubWriteFetch(env);
   const apiBaseUrl = normalizeApiBaseUrl(env?.GITHUB_API_BASE_URL);
 
   const validation = validateGitHubWriteRequest({
@@ -409,6 +409,13 @@ function encodeURIComponentRepository(repository) {
     .split("/")
     .map((segment) => encodeURIComponent(segment))
     .join("/");
+}
+
+function resolveGitHubWriteFetch(env) {
+  if (typeof env?.GITHUB_API_FETCH === "function") {
+    return env.GITHUB_API_FETCH.bind(env);
+  }
+  return globalThis.fetch.bind(globalThis);
 }
 
 function buildGitHubWriteFetchExceptionDiagnostics({ operation, method, url, error }) {
