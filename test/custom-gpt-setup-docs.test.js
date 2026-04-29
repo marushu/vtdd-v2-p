@@ -68,6 +68,9 @@ test("custom gpt instructions preserve current butler and approval boundaries", 
   assert.equal(doc.includes("Nickname memory is explicit user-owned alias registry data"), true);
   assert.equal(doc.includes("such as `ぶい の本番にデプロイして`"), true);
   assert.equal(doc.includes("before asking the human to restate the repository"), true);
+  assert.equal(doc.includes("A nickname retrieval failure is not proof that the nickname is unknown"), true);
+  assert.equal(doc.includes("approvalGrant.scope.repositoryInput"), true);
+  assert.equal(doc.includes("unverified fallback candidate"), true);
   assert.equal(doc.includes("prefer vtddRetrieveSelfParity over general model-capability disclaimers"), true);
   assert.equal(doc.includes("Before the first significant GitHub/runtime action in a session"), true);
   assert.equal(doc.includes("Cloudflare deploy update required"), true);
@@ -115,8 +118,11 @@ test("short custom gpt instructions stay under editor limits while preserving cr
   assert.equal(doc.includes("Nickname memory is user-owned alias data"), true);
   assert.equal(doc.includes("non-owner/repo token like `ぶい の...`"), true);
   assert.equal(doc.includes("call nickname read/gateway before asking"), true);
-  assert.equal(doc.includes("surface the returned error/reason/issues plainly in Japanese"), true);
-  assert.equal(doc.includes("Do not replace nickname failures with vague summaries"), true);
+  assert.equal(doc.includes("Nickname read failure is not proof of unknown repo"), true);
+  assert.equal(doc.includes("approvalGrant.scope.repositoryInput"), true);
+  assert.equal(doc.includes("unverified fallback"), true);
+  assert.equal(doc.includes("surface error/reason/issues"), true);
+  assert.equal(doc.includes("do not replace with vague guesses"), true);
   assert.equal(doc.includes("If Action returns `ClientResponseError`, state action"), true);
   assert.equal(doc.includes("If self-parity returns `ClientResponseError`, say unverified Action transport failure"), true);
   assert.equal(doc.includes("judgmentModelId=vtdd-butler-core-v1"), true);

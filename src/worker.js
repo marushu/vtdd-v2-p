@@ -707,12 +707,17 @@ async function handleRetrieveButlerSelfParityRequest(url, env) {
 
 async function handleRetrieveRepositoryNicknamesRequest(env) {
   const provider = resolveMemoryProvider(env);
-  const retrieved = await retrieveStoredAliasRegistry(provider);
+  const retrieved = await safeRetrieveStoredAliasRegistry(provider);
   if (!retrieved.ok) {
-    return json(retrieved.status ?? 503, {
+    return json(200, {
       ok: false,
+      httpStatus: retrieved.status ?? 503,
       error: retrieved.error,
-      reason: retrieved.reason
+      reason: retrieved.reason,
+      issues: retrieved.issues ?? [],
+      recordType: MemoryRecordType.ALIAS_REGISTRY,
+      recordCount: 0,
+      aliasRegistry: []
     });
   }
 
@@ -722,6 +727,20 @@ async function handleRetrieveRepositoryNicknamesRequest(env) {
     recordCount: retrieved.aliasRegistry.length,
     aliasRegistry: retrieved.aliasRegistry
   });
+}
+
+async function safeRetrieveStoredAliasRegistry(provider) {
+  try {
+    return await retrieveStoredAliasRegistry(provider);
+  } catch (error) {
+    return {
+      ok: false,
+      status: 503,
+      error: "repository_nickname_retrieval_failed",
+      reason: error instanceof Error ? error.message : String(error),
+      issues: ["repository_nickname_retrieval_exception"]
+    };
+  }
 }
 
 async function handleGitHubWritePlaneRequest(request, env) {
@@ -1067,10 +1086,11 @@ async function prepareGatewayPayload({ payload, env }) {
       ? AutonomyMode.GUARDED_ABSENCE
       : requestedAutonomyMode;
 
-  const combinedAliasRegistry = await resolveRuntimeAliasRegistry({
+  const runtimeAliasResolution = await resolveRuntimeAliasRegistry({
     baseAliasRegistry: basePolicyInput.aliasRegistry,
     env
   });
+  const combinedAliasRegistry = runtimeAliasResolution.aliasRegistry;
   const resolvedAliasRegistry = await resolveGatewayAliasRegistryFromGitHubApp({
     policyInput: {
       ...basePolicyInput,
@@ -1078,7 +1098,10 @@ async function prepareGatewayPayload({ payload, env }) {
     },
     env
   });
-  const warnings = [...(resolvedAliasRegistry.warnings ?? [])];
+  const warnings = [
+    ...(runtimeAliasResolution.warnings ?? []),
+    ...(resolvedAliasRegistry.warnings ?? [])
+  ];
   if (
     runtimeAutonomyMode === AutonomyMode.GUARDED_ABSENCE &&
     requestedAutonomyMode !== AutonomyMode.GUARDED_ABSENCE
@@ -1115,23 +1138,37 @@ async function prepareGatewayPayload({ payload, env }) {
 
 async function resolveRuntimeAliasRegistry({ baseAliasRegistry, env }) {
   const provider = resolveMemoryProvider(env);
-  const stored = await retrieveStoredAliasRegistry(provider);
-  return mergeAliasRegistries(
-    baseAliasRegistry,
-    stored.ok ? stored.aliasRegistry : []
-  );
+  const stored = await safeRetrieveStoredAliasRegistry(provider);
+  const aliasRegistry = mergeAliasRegistries(baseAliasRegistry, stored.ok ? stored.aliasRegistry : []);
+  if (stored.ok) {
+    return { aliasRegistry, warnings: [] };
+  }
+
+  return {
+    aliasRegistry,
+    warnings: [
+      [
+        "repository nickname registry read unverified",
+        stored.error,
+        stored.reason
+      ]
+        .map(normalizeText)
+        .filter(Boolean)
+        .join(": ")
+    ]
+  };
 }
 
 async function handleRepositoryNicknameUpsertRequest(request, env) {
   const provider = resolveMemoryProvider(env);
   const body = await readJson(request);
-  const runtimeAliasRegistry = await resolveRuntimeAliasRegistry({
+  const runtimeAliasResolution = await resolveRuntimeAliasRegistry({
     baseAliasRegistry: [],
     env
   });
   const resolvedAliasRegistry = await resolveGatewayAliasRegistryFromGitHubApp({
     policyInput: {
-      aliasRegistry: runtimeAliasRegistry
+      aliasRegistry: runtimeAliasResolution.aliasRegistry
     },
     env
   });
@@ -1160,8 +1197,10 @@ async function handleRepositoryNicknameUpsertRequest(request, env) {
   });
 
   if (!result.ok) {
-    return json(result.status ?? 422, {
+    const status = result.status ?? 422;
+    return json(status >= 500 ? 200 : status, {
       ok: false,
+      httpStatus: status,
       error: result.error,
       reason: result.reason,
       issues: result.issues ?? []
