@@ -80,6 +80,10 @@ jobs:
             echo "target_repository must be owner/repo."
             exit 1
           fi
+          if [ "$TARGET_REPOSITORY" != "$GITHUB_REPOSITORY" ]; then
+            echo "api_key_runner is restricted to this repository."
+            exit 1
+          fi
           if ! [[ "$TARGET_ISSUE_NUMBER" =~ ^[0-9]+$ ]]; then
             echo "target_issue_number must be numeric."
             exit 1
@@ -164,11 +168,8 @@ jobs:
       - name: Run Codex CLI
         working-directory: target-repo
         shell: bash
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
-          codex exec --skip-git-repo-check "$(cat ../codex-prompt.txt)"
+          codex exec --sandbox workspace-write -c sandbox_workspace_write.network_access=true --skip-git-repo-check "$(cat ../codex-prompt.txt)"
 
       - name: Commit and push Codex changes
         id: codex-changes
