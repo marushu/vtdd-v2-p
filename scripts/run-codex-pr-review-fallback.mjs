@@ -13,12 +13,26 @@ async function main() {
   const reason = mustGetEnv("CODEX_FALLBACK_REASON");
   const githubToken = mustGetEnv("GITHUB_TOKEN");
 
-  if (!process.env.OPENAI_API_KEY) {
-    throw new Error("OPENAI_API_KEY is required for non-manual Codex fallback review");
-  }
-
   const apiBaseUrl = process.env.GITHUB_API_URL || "https://api.github.com";
   const githubFetch = createGitHubFetch({ apiBaseUrl, token: githubToken });
+
+  if (!process.env.OPENAI_API_KEY) {
+    await upsertCodexFallbackComment({
+      githubFetch,
+      repository,
+      prNumber,
+      body: formatCodexReviewFallbackComment({
+        status: "blocked",
+        trigger,
+        reason,
+        deliveryMode: "workflow_dispatch_codex_cli",
+        blocker: "openai_api_key_not_configured",
+        rawReview: "OPENAI_API_KEY is required for non-manual Codex fallback review."
+      })
+    });
+    console.log(`Recorded Codex fallback blocker state on PR #${prNumber}.`);
+    return;
+  }
 
   const pullRequest = await githubFetch(`/repos/${repository}/pulls/${prNumber}`);
   const files = await githubFetchAll(githubFetch, `/repos/${repository}/pulls/${prNumber}/files?per_page=100`);
@@ -43,7 +57,27 @@ async function main() {
   });
 
   const prompt = buildCodexFallbackReviewPrompt({ context, prDiff });
-  const review = await runCodexReview({ prompt });
+  let review;
+  try {
+    review = await runCodexReview({ prompt });
+  } catch (error) {
+    const failure = classifyCodexFallbackFailure(error);
+    await upsertCodexFallbackComment({
+      githubFetch,
+      repository,
+      prNumber,
+      body: formatCodexReviewFallbackComment({
+        status: "blocked",
+        trigger,
+        reason,
+        deliveryMode: "workflow_dispatch_codex_cli",
+        blocker: failure.blocker,
+        rawReview: failure.rawFailure
+      })
+    });
+    console.log(`Recorded Codex fallback blocker state on PR #${prNumber}: ${failure.blocker}.`);
+    return;
+  }
   const parsed = parseReviewerJson(review.stdout);
   const normalizedReview = normalizeReviewerResult(parsed, review.stdout);
 
@@ -58,28 +92,13 @@ async function main() {
     rawReview: review.stdout
   });
 
-  const latestIssueComments = await githubFetchAll(
+  const result = await upsertCodexFallbackComment({
     githubFetch,
-    `/repos/${repository}/issues/${prNumber}/comments?per_page=100`
-  );
-  const existing = latestIssueComments.find((comment) =>
-    String(comment?.body || "").includes("<!-- vtdd:reviewer=codex-fallback -->")
-  );
-
-  if (existing) {
-    await githubFetch(`/repos/${repository}/issues/comments/${existing.id}`, {
-      method: "PATCH",
-      body: { body }
-    });
-    console.log(`Updated Codex fallback review comment on PR #${prNumber}.`);
-    return;
-  }
-
-  await githubFetch(`/repos/${repository}/issues/${prNumber}/comments`, {
-    method: "POST",
-    body: { body }
+    repository,
+    prNumber,
+    body
   });
-  console.log(`Created Codex fallback review comment on PR #${prNumber}.`);
+  console.log(`${result === "updated" ? "Updated" : "Created"} Codex fallback review comment on PR #${prNumber}.`);
 }
 
 function buildCodexFallbackReviewPrompt({ context, prDiff }) {
@@ -224,6 +243,67 @@ function normalizeStringArray(value) {
   return value
     .map((item) => String(item ?? "").trim())
     .filter(Boolean);
+}
+
+async function upsertCodexFallbackComment({ githubFetch, repository, prNumber, body }) {
+  const latestIssueComments = await githubFetchAll(
+    githubFetch,
+    `/repos/${repository}/issues/${prNumber}/comments?per_page=100`
+  );
+  const existing = latestIssueComments.find((comment) =>
+    String(comment?.body || "").includes("<!-- vtdd:reviewer=codex-fallback -->")
+  );
+
+  if (existing) {
+    await githubFetch(`/repos/${repository}/issues/comments/${existing.id}`, {
+      method: "PATCH",
+      body: { body }
+    });
+    return "updated";
+  }
+
+  await githubFetch(`/repos/${repository}/issues/${prNumber}/comments`, {
+    method: "POST",
+    body: { body }
+  });
+  return "created";
+}
+
+function classifyCodexFallbackFailure(error) {
+  const raw = String(error?.message || error || "");
+  const lowered = raw.toLowerCase();
+  let blocker = "codex_fallback_review_failed";
+
+  if (lowered.includes("quota exceeded")) {
+    blocker = "openai_quota_exceeded";
+  } else if (
+    lowered.includes("missing bearer") ||
+    lowered.includes("401") ||
+    lowered.includes("unauthorized") ||
+    lowered.includes("api key")
+  ) {
+    blocker = "openai_api_key_invalid_or_missing";
+  } else if (lowered.includes("rate limit")) {
+    blocker = "openai_rate_limited";
+  }
+
+  return {
+    blocker,
+    rawFailure: summarizeCodexFallbackFailure(raw)
+  };
+}
+
+function summarizeCodexFallbackFailure(raw) {
+  const text = String(raw || "").replace(/\r/g, "");
+  const lines = text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const salient = lines.filter((line) =>
+    /error|quota|missing bearer|unauthorized|rate limit|failed with exit code/i.test(line)
+  );
+  const summary = (salient.length > 0 ? salient : lines).slice(0, 12).join("\n");
+  return summary.slice(0, 4000) || "Codex fallback review failed without visible stderr/stdout.";
 }
 
 function createGitHubFetch({ apiBaseUrl, token }) {

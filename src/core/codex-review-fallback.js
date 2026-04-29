@@ -87,7 +87,10 @@ function buildStatusSection({
     return [
       `- Blocker: \`${blocker || "codex_fallback_unavailable"}\``,
       "",
-      "Gemini critical review is temporarily unavailable, and non-manual Codex fallback could not be started from the current repository/runtime configuration."
+      "Gemini critical review is temporarily unavailable, and non-manual Codex fallback could not be started from the current repository/runtime configuration.",
+      ...(rawReview
+        ? ["", "### Raw Failure", "", "```text", rawReview, "```"]
+        : [])
     ];
   }
 

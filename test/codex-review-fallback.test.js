@@ -86,6 +86,22 @@ test("parseCodexReviewFallbackComment exposes blocked fallback reviewer state", 
   });
 });
 
+test("formatCodexReviewFallbackComment renders raw blocked failure details", () => {
+  const body = formatCodexReviewFallbackComment({
+    status: "blocked",
+    trigger: "pull_request_target:synchronize",
+    reason: "gemini_temporarily_unavailable",
+    deliveryMode: "workflow_dispatch_codex_cli",
+    blocker: "openai_quota_exceeded",
+    rawReview: "ERROR: Quota exceeded. Check your plan and billing details."
+  });
+
+  assert.equal(body.includes("- Status: `blocked`"), true);
+  assert.equal(body.includes("- Blocker: `openai_quota_exceeded`"), true);
+  assert.equal(body.includes("### Raw Failure"), true);
+  assert.equal(body.includes("ERROR: Quota exceeded."), true);
+});
+
 test("fallback script reviews GitHub API diff without checking out untrusted PR code", () => {
   assert.equal(fallbackScript.includes("buildPullRequestDiff"), true);
   assert.equal(fallbackScript.includes("buildPullRequestReviewContext"), true);
@@ -98,4 +114,12 @@ test("fallback script reviews GitHub API diff without checking out untrusted PR 
   assert.equal(fallbackScript.includes('rel="next"'), true);
   assert.equal(fallbackScript.includes('["exec", "review"'), false);
   assert.equal(fallbackScript.includes("CODEX_REVIEW_WORKTREE"), false);
+});
+
+test("fallback script records blocked marker comments for unavailable Codex review", () => {
+  assert.equal(fallbackScript.includes("classifyCodexFallbackFailure"), true);
+  assert.equal(fallbackScript.includes("upsertCodexFallbackComment"), true);
+  assert.equal(fallbackScript.includes("openai_quota_exceeded"), true);
+  assert.equal(fallbackScript.includes("openai_api_key_not_configured"), true);
+  assert.equal(fallbackScript.includes('status: "blocked"'), true);
 });
