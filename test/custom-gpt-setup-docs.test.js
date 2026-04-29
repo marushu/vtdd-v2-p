@@ -51,6 +51,10 @@ test("custom gpt instructions preserve current butler and approval boundaries", 
   assert.equal(doc.includes("vtddRetrieveSetupArtifact"), true);
   assert.equal(doc.includes("vtddRetrieveSelfParity"), true);
   assert.equal(doc.includes("operation=`issue_create`"), true);
+  assert.equal(doc.includes("If the human says something like \"この内容で Issue 作って\""), true);
+  assert.equal(doc.includes("この title/body で Issue を作成するなら「GO」と言ってください"), true);
+  assert.equal(doc.includes("Do not ask the human to say `targetConfirmed=true`"), true);
+  assert.equal(doc.includes("naturalApproval.exactPayloadPresented=true"), true);
   assert.equal(doc.includes("Do not ask the user to author internal `policyInput`, `judgmentTrace`, or"), true);
   assert.equal(doc.includes("Do not invent step names such as `issue_retrieval`"), true);
   assert.equal(doc.includes("Do not ask the human to supply internal constitution flags"), true);
@@ -117,6 +121,8 @@ test("short custom gpt instructions stay under editor limits while preserving cr
   assert.equal(doc.includes("vtddUpsertRepositoryNickname"), true);
   assert.equal(doc.includes("vtddRetrieveRepositoryNicknames"), true);
   assert.equal(doc.includes("For issue_create, fix title+body, bind GO to that payload"), true);
+  assert.equal(doc.includes("ask only `GO`"), true);
+  assert.equal(doc.includes("Never ask targetConfirmed/approvalScopeMatched/approvalPhrase/raw JSON"), true);
   assert.equal(doc.includes("Nickname memory is user-owned alias data"), true);
   assert.equal(doc.includes("non-owner/repo token like `ぶい の...`"), true);
   assert.equal(doc.includes("call nickname read/gateway before asking"), true);
@@ -185,6 +191,9 @@ test("custom gpt openapi doc exposes current gateway, execute, and progress rout
   assert.equal(doc.includes("- relatedIssue"), true);
   assert.equal(doc.includes("issueTraceability:"), true);
   assert.equal(doc.includes("approvalScopeMatched:"), true);
+  assert.equal(doc.includes("naturalApproval:"), true);
+  assert.equal(doc.includes("exactPayloadPresented:"), true);
+  assert.equal(doc.includes("presentedPayload:"), true);
 });
 
 test("custom gpt openapi keeps components.schemas while avoiding nested field refs", () => {
@@ -216,6 +225,9 @@ test("custom gpt openapi json parses and exposes paths as an object", () => {
     ),
     true
   );
+  const githubWriteSchema = doc.paths["/v2/action/github"].post.requestBody.content["application/json"].schema;
+  assert.equal(typeof githubWriteSchema.properties.naturalApproval, "object");
+  assert.equal(githubWriteSchema.properties.naturalApproval.properties.presentedPayload.properties.operation.enum[0], "issue_create");
   assert.equal(typeof doc.paths["/v2/action/github-authority"], "object");
   assert.equal(typeof doc.paths["/v2/action/deploy"], "object");
   assert.equal(typeof doc.paths["/v2/action/github-actions-secret"], "object");

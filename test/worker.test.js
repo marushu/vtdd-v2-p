@@ -2302,6 +2302,203 @@ test("worker executes scoped GitHub issues and issue comments through the normal
   assert.equal(body.write.commentId, 101);
 });
 
+test("worker binds natural GO to an immediately presented issue_create payload", async () => {
+  let requestBody = null;
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/action/github", {
+      method: "POST",
+      headers: {
+        ...gatewayAuthHeaders,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        operation: "issue_create",
+        repository: "sample-org/vtdd-v2-p",
+        title: "live E2E: natural GO issue create",
+        body: "Parent: #151\n\nExact payload shown immediately before GO.",
+        responseMode: "action_visible",
+        naturalApproval: {
+          exactPayloadPresented: true,
+          repositoryResolved: true,
+          userText: "この title/body で Issue を作成して。GO",
+          presentedPayload: {
+            operation: "issue_create",
+            repository: "sample-org/vtdd-v2-p",
+            title: "live E2E: natural GO issue create",
+            body: "Parent: #151\n\nExact payload shown immediately before GO."
+          }
+        }
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_write",
+      GITHUB_API_FETCH: async (_url, init) => {
+        requestBody = JSON.parse(init.body);
+        return new Response(
+          JSON.stringify({
+            number: 151,
+            title: "live E2E: natural GO issue create",
+            state: "open",
+            html_url: "https://github.com/sample-org/vtdd-v2-p/issues/151"
+          }),
+          { status: 201, headers: { "content-type": "application/json" } }
+        );
+      }
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.write.operation, "issue_create");
+  assert.equal(body.write.issueNumber, 151);
+  assert.deepEqual(requestBody, {
+    title: "live E2E: natural GO issue create",
+    body: "Parent: #151\n\nExact payload shown immediately before GO."
+  });
+});
+
+test("worker does not bind natural GO when issue_create payload was not presented", async () => {
+  let githubCalled = false;
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/action/github", {
+      method: "POST",
+      headers: {
+        ...gatewayAuthHeaders,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        operation: "issue_create",
+        repository: "sample-org/vtdd-v2-p",
+        title: "live E2E: natural GO issue create",
+        body: "Payload was not presented.",
+        responseMode: "action_visible",
+        naturalApproval: {
+          exactPayloadPresented: false,
+          repositoryResolved: true,
+          userText: "GO",
+          presentedPayload: {
+            operation: "issue_create",
+            repository: "sample-org/vtdd-v2-p",
+            title: "live E2E: natural GO issue create",
+            body: "Payload was not presented."
+          }
+        }
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_write",
+      GITHUB_API_FETCH: async () => {
+        githubCalled = true;
+        return new Response(JSON.stringify({ number: 1 }), {
+          status: 201,
+          headers: { "content-type": "application/json" }
+        });
+      }
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.httpStatus, 422);
+  assert.equal(body.issues.includes("targetConfirmed must be true"), true);
+  assert.equal(body.issues.includes("approvalScopeMatched must be true"), true);
+  assert.equal(body.issues.includes("approvalPhrase must be GO"), true);
+  assert.equal(githubCalled, false);
+});
+
+test("worker does not bind natural GO when presented issue_create payload differs", async () => {
+  let githubCalled = false;
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/action/github", {
+      method: "POST",
+      headers: {
+        ...gatewayAuthHeaders,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        operation: "issue_create",
+        repository: "sample-org/vtdd-v2-p",
+        title: "actual title",
+        body: "actual body",
+        responseMode: "action_visible",
+        naturalApproval: {
+          exactPayloadPresented: true,
+          repositoryResolved: true,
+          userText: "GO",
+          presentedPayload: {
+            operation: "issue_create",
+            repository: "sample-org/vtdd-v2-p",
+            title: "different title",
+            body: "actual body"
+          }
+        }
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_write",
+      GITHUB_API_FETCH: async () => {
+        githubCalled = true;
+        return new Response(JSON.stringify({ number: 1 }), {
+          status: 201,
+          headers: { "content-type": "application/json" }
+        });
+      }
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.httpStatus, 422);
+  assert.equal(githubCalled, false);
+});
+
+test("worker keeps natural GO binding limited to issue_create", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/action/github", {
+      method: "POST",
+      headers: {
+        ...gatewayAuthHeaders,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        operation: "pull_create",
+        repository: "sample-org/vtdd-v2-p",
+        title: "PR title",
+        body: "PR body",
+        head: "codex/example",
+        responseMode: "action_visible",
+        naturalApproval: {
+          exactPayloadPresented: true,
+          repositoryResolved: true,
+          userText: "GO",
+          presentedPayload: {
+            operation: "pull_create",
+            repository: "sample-org/vtdd-v2-p",
+            title: "PR title",
+            body: "PR body"
+          }
+        }
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_write"
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.httpStatus, 422);
+  assert.equal(body.issues.includes("targetConfirmed must be true"), true);
+});
+
 test("worker rejects unsupported high-risk GitHub write operations on the normal write plane", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/v2/action/github", {
