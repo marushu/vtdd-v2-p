@@ -542,7 +542,6 @@ test("worker dispatches remote Codex execution with approval scope matched only 
               activeBranch: "codex/issue-125"
             }
           },
-          credential: { model: "github_app", tier: CredentialTier.EXECUTE },
           consent: { grantedCategories: [ConsentCategory.PROPOSE, ConsentCategory.EXECUTE] },
           approvalPhrase: "GO Issue #125 Codex handoff",
           issueTraceable: true,

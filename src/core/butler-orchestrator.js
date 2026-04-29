@@ -2,7 +2,7 @@ import { evaluateJudgmentOrder } from "./judgment-order.js";
 import { evaluateExecutionPolicy } from "./policy.js";
 import { isBoundRemoteCodexHandoff } from "./remote-codex-handoff-scope.js";
 import { evaluateSurfaceIndependence } from "./surface-independence.js";
-import { ActionType, ActorRole } from "./types.js";
+import { ActionType, ActorRole, CredentialTier } from "./types.js";
 
 /**
  * Unified Butler entrypoint for execution judgments.
@@ -26,6 +26,9 @@ export function evaluateButlerExecution(input) {
   const policyInput = {
     ...(input?.policyInput ?? {}),
     constitutionConsulted: true,
+    credential:
+      input?.policyInput?.credential ??
+      (remoteCodexHandoff ? { model: "github_app", tier: CredentialTier.EXECUTE } : undefined),
     approvalScopeMatched:
       input?.policyInput?.approvalScopeMatched === true || remoteCodexHandoff
   };

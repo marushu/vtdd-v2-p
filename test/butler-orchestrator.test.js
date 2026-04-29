@@ -238,6 +238,52 @@ test("butler orchestrator derives approval scope match from bounded remote hando
   assert.equal(result.repository, "sample-org/vtdd-v2");
 });
 
+test("butler orchestrator derives GitHub App credential from bounded remote handoff", () => {
+  const result = evaluateButlerExecution({
+    surfaceContext: {
+      surface: "custom_gpt",
+      judgmentModelId: "vtdd-butler-core-v1"
+    },
+    judgmentTrace,
+    runtimeContext: {
+      allowButlerRemoteCodexHandoff: true
+    },
+    issueContext: {
+      issueNumber: 125
+    },
+    continuationContext: {
+      requiresHandoff: true,
+      handoff: {
+        issueTraceable: true,
+        approvalScopeMatched: true,
+        relatedIssue: 125,
+        summary: "Issue #125 bounded Codex handoff"
+      }
+    },
+    policyInput: {
+      actionType: ActionType.BUILD,
+      mode: "execution",
+      repositoryInput: "vtdd",
+      aliasRegistry: registry,
+      targetConfirmed: true,
+      runtimeTruth: { runtimeAvailable: true },
+      consent: fullConsent,
+      approvalPhrase: "GO Issue #125 Codex handoff",
+      issueTraceable: true,
+      issueTraceability: {
+        relatedIssue: 125,
+        intentRefs: ["#125 Intent"],
+        successCriteriaRefs: ["#125 Success Criteria"],
+        nonGoalRefs: ["#125 Non-goals"]
+      },
+      go: true,
+      passkey: false
+    }
+  });
+  assert.equal(result.allowed, true);
+  assert.equal(result.repository, "sample-org/vtdd-v2");
+});
+
 test("butler orchestrator does not derive handoff approval from non-string summary", () => {
   const result = evaluateButlerExecution({
     surfaceContext: {
