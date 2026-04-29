@@ -7,7 +7,10 @@ const workflow = fs.readFileSync(".github/workflows/remote-codex-executor.yml", 
 test("remote Codex workflow commits, pushes, and creates or updates a PR", () => {
   assert.equal(workflow.includes("name: Validate remote Codex inputs"), true);
   assert.equal(workflow.includes("name: Commit and push Codex changes"), true);
-  assert.equal(workflow.includes("git push origin"), true);
+  assert.equal(
+    workflow.includes('git push "https://x-access-token:${APP_TOKEN}@github.com/${TARGET_REPOSITORY}.git"'),
+    true
+  );
   assert.equal(workflow.includes("name: Create or update pull request"), true);
   assert.equal(workflow.includes("gh pr view"), true);
   assert.equal(workflow.includes("gh pr create"), true);
@@ -28,6 +31,10 @@ test("remote Codex workflow avoids embedding dispatch inputs inside shell heredo
   assert.equal(workflow.includes("git push origin \"${{ github.event.inputs.target_branch }}\""), false);
 });
 
+test("remote Codex workflow does not persist checkout credentials into the sandboxed workspace", () => {
+  assert.equal(workflow.includes("persist-credentials: false"), true);
+});
+
 test("remote Codex workflow marks OPENAI_API_KEY runner as explicit opt-in", () => {
   assert.equal(workflow.includes("Optional API-backed runner."), true);
   assert.equal(workflow.includes("may create separate API billing"), true);
@@ -38,7 +45,37 @@ test("remote Codex workflow authenticates Codex CLI before execution", () => {
   assert.equal(workflow.includes("name: Authenticate Codex CLI"), true);
   assert.equal(workflow.includes("printenv OPENAI_API_KEY | codex login --with-api-key"), true);
   assert.equal(
-    workflow.indexOf("codex login --with-api-key") < workflow.indexOf("codex exec --skip-git-repo-check"),
+    workflow.indexOf("codex login --with-api-key") < workflow.indexOf("codex exec "),
     true
   );
+});
+
+test("remote Codex workflow runs Codex with workspace-write sandbox", () => {
+  assert.equal(
+    workflow.includes(
+      "codex exec --sandbox workspace-write -c sandbox_workspace_write.network_access=true --skip-git-repo-check"
+    ),
+    true
+  );
+  assert.equal(workflow.includes("--dangerously-bypass-approvals-and-sandbox"), false);
+});
+
+test("remote Codex workflow prepares GitHub runner user namespaces for bubblewrap", () => {
+  assert.equal(workflow.includes("name: Enable Codex sandbox user namespaces"), true);
+  assert.equal(workflow.includes("/proc/sys/kernel/unprivileged_userns_clone"), true);
+  assert.equal(workflow.includes("/proc/sys/kernel/apparmor_restrict_unprivileged_userns"), true);
+});
+
+test("remote Codex workflow keeps secrets out of the Codex exec step", () => {
+  const runStepStart = workflow.indexOf("name: Run Codex CLI");
+  const commitStepStart = workflow.indexOf("name: Commit and push Codex changes");
+  const runStep = workflow.slice(runStepStart, commitStepStart);
+
+  assert.equal(runStep.includes("OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}"), false);
+  assert.equal(runStep.includes("GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}"), false);
+});
+
+test("remote Codex workflow restricts api_key_runner to the control repository", () => {
+  assert.equal(workflow.includes('if [ "$TARGET_REPOSITORY" != "$GITHUB_REPOSITORY" ]; then'), true);
+  assert.equal(workflow.includes("api_key_runner is restricted to this repository."), true);
 });

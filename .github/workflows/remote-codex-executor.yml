@@ -80,6 +80,10 @@ jobs:
             echo "target_repository must be owner/repo."
             exit 1
           fi
+          if [ "$TARGET_REPOSITORY" != "$GITHUB_REPOSITORY" ]; then
+            echo "api_key_runner is restricted to this repository."
+            exit 1
+          fi
           if ! [[ "$TARGET_ISSUE_NUMBER" =~ ^[0-9]+$ ]]; then
             echo "target_issue_number must be numeric."
             exit 1
@@ -115,6 +119,7 @@ jobs:
           ref: ${{ env.BASE_REF }}
           token: ${{ steps.app-token.outputs.token }}
           fetch-depth: 0
+          persist-credentials: false
           path: target-repo
 
       - name: Prepare target branch
@@ -131,6 +136,16 @@ jobs:
       - name: Install Codex CLI
         shell: bash
         run: npm install -g @openai/codex
+
+      - name: Enable Codex sandbox user namespaces
+        shell: bash
+        run: |
+          if [ -w /proc/sys/kernel/unprivileged_userns_clone ]; then
+            echo 1 | sudo tee /proc/sys/kernel/unprivileged_userns_clone
+          fi
+          if [ -w /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+            echo 0 | sudo tee /proc/sys/kernel/apparmor_restrict_unprivileged_userns
+          fi
 
       - name: Authenticate Codex CLI
         shell: bash
@@ -164,16 +179,15 @@ jobs:
       - name: Run Codex CLI
         working-directory: target-repo
         shell: bash
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
-          codex exec --skip-git-repo-check "$(cat ../codex-prompt.txt)"
+          codex exec --sandbox workspace-write -c sandbox_workspace_write.network_access=true --skip-git-repo-check "$(cat ../codex-prompt.txt)"
 
       - name: Commit and push Codex changes
         id: codex-changes
         working-directory: target-repo
         shell: bash
+        env:
+          APP_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           git config user.name "vtdd-codex[bot]"
           git config user.email "vtdd-codex[bot]@users.noreply.github.com"
@@ -186,7 +200,7 @@ jobs:
 
           git add -A
           git commit -m "VTDD remote Codex execution for issue #${TARGET_ISSUE_NUMBER}"
-          git push origin "$TARGET_BRANCH"
+          git push "https://x-access-token:${APP_TOKEN}@github.com/${TARGET_REPOSITORY}.git" "$TARGET_BRANCH"
           echo "changed=true" >> "$GITHUB_OUTPUT"
 
       - name: Create or update pull request
