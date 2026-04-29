@@ -88,7 +88,10 @@
                 "type": "string"
               },
               "judgmentModelId": {
-                "type": "string"
+                "type": "string",
+                "enum": [
+                  "vtdd-butler-core-v1"
+                ]
               }
             },
             "additionalProperties": true
@@ -222,7 +225,10 @@
                 "type": "string"
               },
               "judgmentModelId": {
-                "type": "string"
+                "type": "string",
+                "enum": [
+                  "vtdd-butler-core-v1"
+                ]
               }
             },
             "additionalProperties": true
