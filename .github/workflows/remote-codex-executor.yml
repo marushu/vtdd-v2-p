@@ -140,11 +140,13 @@ jobs:
       - name: Enable Codex sandbox user namespaces
         shell: bash
         run: |
-          if [ -w /proc/sys/kernel/unprivileged_userns_clone ]; then
+          if [ -e /proc/sys/kernel/unprivileged_userns_clone ]; then
             echo 1 | sudo tee /proc/sys/kernel/unprivileged_userns_clone
+            echo "unprivileged_userns_clone=$(cat /proc/sys/kernel/unprivileged_userns_clone)"
           fi
-          if [ -w /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+          if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
             echo 0 | sudo tee /proc/sys/kernel/apparmor_restrict_unprivileged_userns
+            echo "apparmor_restrict_unprivileged_userns=$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns)"
           fi
 
       - name: Authenticate Codex CLI

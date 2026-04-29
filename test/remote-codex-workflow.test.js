@@ -64,6 +64,12 @@ test("remote Codex workflow prepares GitHub runner user namespaces for bubblewra
   assert.equal(workflow.includes("name: Enable Codex sandbox user namespaces"), true);
   assert.equal(workflow.includes("/proc/sys/kernel/unprivileged_userns_clone"), true);
   assert.equal(workflow.includes("/proc/sys/kernel/apparmor_restrict_unprivileged_userns"), true);
+  assert.equal(workflow.includes("[ -w /proc/sys/kernel/unprivileged_userns_clone ]"), false);
+  assert.equal(workflow.includes("[ -w /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]"), false);
+  assert.equal(workflow.includes("[ -e /proc/sys/kernel/unprivileged_userns_clone ]"), true);
+  assert.equal(workflow.includes("[ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]"), true);
+  assert.equal(workflow.includes("sudo tee /proc/sys/kernel/unprivileged_userns_clone"), true);
+  assert.equal(workflow.includes("sudo tee /proc/sys/kernel/apparmor_restrict_unprivileged_userns"), true);
 });
 
 test("remote Codex workflow keeps secrets out of the Codex exec step", () => {
