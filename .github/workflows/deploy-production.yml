@@ -102,10 +102,14 @@ jobs:
         env:
           CLOUDFLARE_D1_DATABASE_ID: ${{ secrets.CLOUDFLARE_D1_DATABASE_ID }}
           CLOUDFLARE_D1_DATABASE_NAME: ${{ vars.CLOUDFLARE_D1_DATABASE_NAME || 'vtdd-memory' }}
+          VTDD_GITHUB_ACTIONS_REPOSITORY: ${{ github.repository }}
         shell: bash
         run: |
           cp wrangler.toml wrangler.production.generated.toml
           cat >> wrangler.production.generated.toml <<EOF
+
+          [env.production.vars]
+          VTDD_GITHUB_ACTIONS_REPOSITORY = "$VTDD_GITHUB_ACTIONS_REPOSITORY"
 
           [[env.production.d1_databases]]
           binding = "VTDD_MEMORY_D1"
