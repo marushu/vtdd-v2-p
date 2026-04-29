@@ -53,6 +53,9 @@ test("custom gpt instructions preserve current butler and approval boundaries", 
   assert.equal(doc.includes("operation=`issue_create`"), true);
   assert.equal(doc.includes("Do not ask the user to author internal `policyInput`, `judgmentTrace`, or"), true);
   assert.equal(doc.includes("Do not invent step names such as `issue_retrieval`"), true);
+  assert.equal(doc.includes("For vtddExecute Codex handoff, use `policyInput.actionType=build`"), true);
+  assert.equal(doc.includes("policyInput.issueTraceability` includes real Intent / Success Criteria / Non-goals refs"), true);
+  assert.equal(doc.includes("continuationContext.requiresHandoff=true"), true);
   assert.equal(
     doc.includes(
       "the first four judgmentTrace steps must be exactly:\n  1. constitution\n  2. runtime_truth\n  3. issue_context\n  4. current_query"
@@ -109,14 +112,17 @@ test("short custom gpt instructions stay under editor limits while preserving cr
   assert.equal(doc.includes("vtddUpsertRepositoryNickname"), true);
   assert.equal(doc.includes("vtddRetrieveRepositoryNicknames"), true);
   assert.equal(doc.includes("For issue_create, fix title+body, bind GO to that payload"), true);
-  assert.equal(doc.includes("Nickname memory is explicit user-owned alias registry data"), true);
+  assert.equal(doc.includes("Nickname memory is user-owned alias data"), true);
   assert.equal(doc.includes("non-owner/repo token like `ぶい の...`"), true);
   assert.equal(doc.includes("call nickname read/gateway before asking"), true);
   assert.equal(doc.includes("surface the returned error/reason/issues plainly in Japanese"), true);
   assert.equal(doc.includes("Do not replace nickname failures with vague summaries"), true);
-  assert.equal(doc.includes("If an Action returns `ClientResponseError`, state action name"), true);
+  assert.equal(doc.includes("If Action returns `ClientResponseError`, state action"), true);
   assert.equal(doc.includes("If self-parity returns `ClientResponseError`, say unverified Action transport failure"), true);
   assert.equal(doc.includes("judgmentModelId=vtdd-butler-core-v1"), true);
+  assert.equal(doc.includes("vtddExecute handoff: actionType=build"), true);
+  assert.equal(doc.includes("requiresHandoff=true"), true);
+  assert.equal(doc.includes("issueTraceability Intent/SC/Non-goal refs"), true);
   assert.equal(
     doc.includes("judgmentTrace first four steps must be exactly: constitution, runtime_truth, issue_context, current_query"),
     true
@@ -165,6 +171,10 @@ test("custom gpt openapi doc exposes current gateway, execute, and progress rout
   assert.equal(doc.includes("pullNumber"), true);
   assert.equal(doc.includes("workflow_runs"), true);
   assert.equal(doc.includes("enum:\n                - vtdd-butler-core-v1"), true);
+  assert.equal(doc.includes("requiresHandoff:"), true);
+  assert.equal(doc.includes("- relatedIssue"), true);
+  assert.equal(doc.includes("issueTraceability:"), true);
+  assert.equal(doc.includes("approvalScopeMatched:"), true);
 });
 
 test("custom gpt openapi keeps components.schemas while avoiding nested field refs", () => {
@@ -214,6 +224,25 @@ test("custom gpt openapi json parses and exposes paths as an object", () => {
   assert.deepEqual(
     doc.components.schemas.VtddExecuteRequest.properties.surfaceContext.properties.judgmentModelId.enum,
     ["vtdd-butler-core-v1"]
+  );
+  assert.equal(
+    doc.components.schemas.VtddExecuteRequest.properties.continuationContext.properties
+      .requiresHandoff.type,
+    "boolean"
+  );
+  assert.equal(
+    doc.components.schemas.VtddExecuteRequest.properties.continuationContext.properties
+      .handoff.properties.approvalScopeMatched.type,
+    "boolean"
+  );
+  assert.deepEqual(
+    doc.components.schemas.VtddExecuteRequest.properties.continuationContext.properties.handoff.required,
+    ["issueTraceable", "approvalScopeMatched", "relatedIssue", "summary"]
+  );
+  assert.equal(
+    doc.components.schemas.VtddExecuteRequest.properties.policyInput.properties.issueTraceability
+      .properties.intentRefs.items.type,
+    "string"
   );
   assert.deepEqual(doc.paths["/health"].get.security, []);
   assert.equal(typeof doc.components.schemas, "object");

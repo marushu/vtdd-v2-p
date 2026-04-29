@@ -104,6 +104,24 @@ components:
               type: boolean
             issueTraceable:
               type: boolean
+            issueTraceability:
+              type: object
+              properties:
+                relatedIssue:
+                  type: integer
+                intentRefs:
+                  type: array
+                  items:
+                    type: string
+                successCriteriaRefs:
+                  type: array
+                  items:
+                    type: string
+                nonGoalRefs:
+                  type: array
+                  items:
+                    type: string
+              additionalProperties: true
             go:
               type: boolean
             passkey:
@@ -130,6 +148,25 @@ components:
           properties:
             executionId:
               type: string
+            requiresHandoff:
+              type: boolean
+            handoff:
+              type: object
+              required:
+                - issueTraceable
+                - approvalScopeMatched
+                - relatedIssue
+                - summary
+              properties:
+                issueTraceable:
+                  type: boolean
+                approvalScopeMatched:
+                  type: boolean
+                relatedIssue:
+                  type: integer
+                summary:
+                  type: string
+              additionalProperties: true
           additionalProperties: true
         memoryRecord:
           type: object
@@ -199,6 +236,24 @@ components:
               type: boolean
             issueTraceable:
               type: boolean
+            issueTraceability:
+              type: object
+              properties:
+                relatedIssue:
+                  type: integer
+                intentRefs:
+                  type: array
+                  items:
+                    type: string
+                successCriteriaRefs:
+                  type: array
+                  items:
+                    type: string
+                nonGoalRefs:
+                  type: array
+                  items:
+                    type: string
+              additionalProperties: true
             go:
               type: boolean
             passkey:
@@ -218,6 +273,31 @@ components:
                   type: array
                   items:
                     type: string
+              additionalProperties: true
+          additionalProperties: true
+        continuationContext:
+          type: object
+          properties:
+            executionId:
+              type: string
+            requiresHandoff:
+              type: boolean
+            handoff:
+              type: object
+              required:
+                - issueTraceable
+                - approvalScopeMatched
+                - relatedIssue
+                - summary
+              properties:
+                issueTraceable:
+                  type: boolean
+                approvalScopeMatched:
+                  type: boolean
+                relatedIssue:
+                  type: integer
+                summary:
+                  type: string
               additionalProperties: true
           additionalProperties: true
         issueContext:

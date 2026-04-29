@@ -118,7 +118,12 @@ export default {
 
       const payload = await readJson(request);
       const prepared = await prepareGatewayPayload({ payload, env });
-      const result = appendWarnings(runMvpGateway(prepared.payload), prepared.warnings);
+      const result = appendWarnings(
+        runMvpGateway(prepared.payload, {
+          allowButlerRemoteCodexHandoff: true
+        }),
+        prepared.warnings
+      );
       if (!result.allowed) {
         return json(422, result);
       }

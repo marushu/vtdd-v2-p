@@ -178,6 +178,33 @@
                   }
                 },
                 "additionalProperties": true
+              },
+              "issueTraceability": {
+                "type": "object",
+                "properties": {
+                  "relatedIssue": {
+                    "type": "integer"
+                  },
+                  "intentRefs": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "successCriteriaRefs": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "nonGoalRefs": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "additionalProperties": true
               }
             },
             "additionalProperties": true
@@ -187,6 +214,33 @@
             "properties": {
               "executionId": {
                 "type": "string"
+              },
+              "requiresHandoff": {
+                "type": "boolean"
+              },
+              "handoff": {
+                "type": "object",
+                "properties": {
+                  "issueTraceable": {
+                    "type": "boolean"
+                  },
+                  "approvalScopeMatched": {
+                    "type": "boolean"
+                  },
+                  "relatedIssue": {
+                    "type": "integer"
+                  },
+                  "summary": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": true,
+                "required": [
+                  "issueTraceable",
+                  "approvalScopeMatched",
+                  "relatedIssue",
+                  "summary"
+                ]
               }
             },
             "additionalProperties": true
@@ -315,6 +369,33 @@
                   }
                 },
                 "additionalProperties": true
+              },
+              "issueTraceability": {
+                "type": "object",
+                "properties": {
+                  "relatedIssue": {
+                    "type": "integer"
+                  },
+                  "intentRefs": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "successCriteriaRefs": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "nonGoalRefs": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "additionalProperties": true
               }
             },
             "additionalProperties": true
@@ -330,6 +411,42 @@
               },
               "issueUrl": {
                 "type": "string"
+              }
+            },
+            "additionalProperties": true
+          },
+          "continuationContext": {
+            "type": "object",
+            "properties": {
+              "executionId": {
+                "type": "string"
+              },
+              "requiresHandoff": {
+                "type": "boolean"
+              },
+              "handoff": {
+                "type": "object",
+                "properties": {
+                  "issueTraceable": {
+                    "type": "boolean"
+                  },
+                  "approvalScopeMatched": {
+                    "type": "boolean"
+                  },
+                  "relatedIssue": {
+                    "type": "integer"
+                  },
+                  "summary": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": true,
+                "required": [
+                  "issueTraceable",
+                  "approvalScopeMatched",
+                  "relatedIssue",
+                  "summary"
+                ]
               }
             },
             "additionalProperties": true

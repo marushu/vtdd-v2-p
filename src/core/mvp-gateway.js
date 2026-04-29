@@ -15,7 +15,7 @@ import { ActorRole, TaskMode } from "./types.js";
  * - workflow transition
  * - memory safety pre-check
  */
-export function runMvpGateway(input) {
+export function runMvpGateway(input, runtimeContext = {}) {
   const phase = normalizePhase(input?.phase);
   const retrievalPlan = buildRetrievalPlan({
     phase,
@@ -34,7 +34,7 @@ export function runMvpGateway(input) {
     repositoryCandidates
   });
 
-  const execution = evaluateExecution({ actorRole, input, policyInput });
+  const execution = evaluateExecution({ actorRole, input, policyInput, runtimeContext });
   if (!execution.allowed) {
     return deny(execution.blockedByRule, execution.reason, {
       retrievalPlan,
@@ -108,11 +108,14 @@ export function runMvpGateway(input) {
   };
 }
 
-function evaluateExecution({ actorRole, input, policyInput }) {
+function evaluateExecution({ actorRole, input, policyInput, runtimeContext }) {
   if (actorRole === ActorRole.BUTLER && policyInput.mode !== TaskMode.READ_ONLY) {
     return evaluateButlerExecution({
       surfaceContext: input?.surfaceContext,
       judgmentTrace: input?.judgmentTrace,
+      continuationContext: input?.continuationContext,
+      issueContext: input?.issueContext,
+      runtimeContext,
       policyInput
     });
   }
