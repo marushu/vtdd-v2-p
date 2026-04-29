@@ -148,6 +148,48 @@ test("github read plane exposes pull request merge truth when reading a specific
   assert.equal(result.read.records[0].baseSha, "83ba6135f3a01c27948a018c721135a301d938fe");
 });
 
+test("github read plane can filter pull requests by exact head owner and branch", async () => {
+  const calls = [];
+  const result = await retrieveGitHubReadPlane({
+    resource: GitHubReadResource.PULLS,
+    repository: "sample-org/vtdd-v2-p",
+    state: "all",
+    head: "sample-org:codex/issue-135",
+    env: {
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_pull_read",
+      GITHUB_API_FETCH: async (url) => {
+        calls.push(url);
+        return new Response(
+          JSON.stringify([
+            {
+              number: 135,
+              title: "Issue #135 runner",
+              state: "open",
+              head: {
+                ref: "codex/issue-135",
+                sha: "head-sha",
+                repo: {
+                  full_name: "sample-org/vtdd-v2-p",
+                  owner: { login: "sample-org" }
+                }
+              },
+              base: { ref: "main", sha: "base-sha" },
+              html_url: "https://github.com/sample-org/vtdd-v2-p/pull/135"
+            }
+          ]),
+          { status: 200, headers: { "content-type": "application/json" } }
+        );
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(calls[0].includes("state=all"), true);
+  assert.equal(calls[0].includes("head=sample-org%3Acodex%2Fissue-135"), true);
+  assert.equal(result.read.records[0].headRef, "codex/issue-135");
+  assert.equal(result.read.records[0].headOwner, "sample-org");
+});
+
 test("github read plane reads pull reviews, review comments, checks, workflow runs, and branches", async () => {
   const responses = new Map([
     [
