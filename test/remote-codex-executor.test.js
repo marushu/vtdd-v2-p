@@ -41,6 +41,48 @@ test("remote Codex execution request is built from gateway result and payload", 
   assert.equal(result.request.codexGoal, "open_pr");
 });
 
+test("remote Codex execution request rejects non-string handoff approval refs", () => {
+  const result = createRemoteCodexExecutionRequest({
+    payload: {
+      actorRole: ActorRole.BUTLER,
+      issueContext: { issueNumber: 125 },
+      continuationContext: {
+        requiresHandoff: true,
+        handoff: {
+          issueTraceable: true,
+          approvalScopeMatched: true,
+          relatedIssue: 125,
+          summary: "Issue #125 bounded Codex handoff"
+        }
+      },
+      policyInput: {
+        approvalPhrase: "GO Issue #125 Codex handoff",
+        targetConfirmed: true,
+        issueTraceability: {
+          relatedIssue: 125,
+          intentRefs: [125],
+          successCriteriaRefs: ["#125 Success Criteria"],
+          nonGoalRefs: ["#125 Non-goals"]
+        },
+        runtimeTruth: {
+          runtimeState: {
+            activeBranch: "codex/issue-125"
+          }
+        }
+      }
+    },
+    gatewayResult: {
+      repository: "sample-org/vtdd-v2",
+      executionContinuity: {
+        codexGoal: "open_pr"
+      }
+    }
+  });
+
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.issues, ["approvalScopeMatched must be true"]);
+});
+
 test("remote Codex execution default dispatch posts bounded @codex GitHub comment", async () => {
   const calls = [];
   const dispatched = await dispatchRemoteCodexExecution({
