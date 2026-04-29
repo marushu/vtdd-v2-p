@@ -1170,12 +1170,30 @@ function normalizeRemoteCodexHandoffPayload(payload) {
     policyInput.issueTraceability && typeof policyInput.issueTraceability === "object"
       ? policyInput.issueTraceability
       : {};
+  const consent =
+    policyInput.consent && typeof policyInput.consent === "object" ? policyInput.consent : {};
+  const grantedCategories = Array.isArray(consent.grantedCategories)
+    ? consent.grantedCategories
+    : [];
+  const goGranted = policyInput.go === true;
+  const normalizedGrantedCategories = goGranted
+    ? mergeGrantedConsentCategories(grantedCategories, ["read", "propose", "execute"])
+    : grantedCategories;
+  const requestedExecutorTransport = normalizeText(
+    payload?.executorTransport ?? continuationContext.executorTransport
+  );
+  const apiKeyRunnerAcknowledged =
+    payload?.apiKeyRunnerAcknowledged === true ||
+    continuationContext.apiKeyRunnerAcknowledged === true ||
+    (goGranted && requestedExecutorTransport === "api_key_runner");
 
   return {
     ...payload,
+    apiKeyRunnerAcknowledged,
     continuationContext: {
       ...continuationContext,
       requiresHandoff: true,
+      apiKeyRunnerAcknowledged,
       handoff: {
         ...handoff,
         issueTraceable: handoff.issueTraceable === false ? false : true,
@@ -1189,6 +1207,11 @@ function normalizeRemoteCodexHandoffPayload(payload) {
     policyInput: {
       ...policyInput,
       issueTraceable: policyInput.issueTraceable === false ? false : true,
+      consent: {
+        ...consent,
+        grantedCategories: normalizedGrantedCategories
+      },
+      approvalPhrase: normalizeText(policyInput.approvalPhrase) || (goGranted ? "GO" : ""),
       issueTraceability: {
         ...issueTraceability,
         relatedIssue: normalizeIssue(issueTraceability.relatedIssue) ?? issueNumber,
@@ -1201,6 +1224,21 @@ function normalizeRemoteCodexHandoffPayload(payload) {
       }
     }
   };
+}
+
+function mergeGrantedConsentCategories(current, required) {
+  const seen = new Set();
+  const merged = [];
+  for (const category of [...current, ...required]) {
+    const text = normalizeText(category);
+    const key = normalize(text);
+    if (!text || seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    merged.push(text);
+  }
+  return merged;
 }
 
 function normalizeTraceRefs(value, fallback) {
