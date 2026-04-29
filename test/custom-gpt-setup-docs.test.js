@@ -53,6 +53,7 @@ test("custom gpt instructions preserve current butler and approval boundaries", 
   assert.equal(doc.includes("operation=`issue_create`"), true);
   assert.equal(doc.includes("Do not ask the user to author internal `policyInput`, `judgmentTrace`, or"), true);
   assert.equal(doc.includes("Do not invent step names such as `issue_retrieval`"), true);
+  assert.equal(doc.includes("Do not ask the human to supply internal constitution flags"), true);
   assert.equal(doc.includes("For vtddExecute Codex handoff, use `policyInput.actionType=build`"), true);
   assert.equal(doc.includes("policyInput.issueTraceability` includes real Intent / Success Criteria / Non-goals refs"), true);
   assert.equal(doc.includes("continuationContext.requiresHandoff=true"), true);
@@ -133,6 +134,7 @@ test("short custom gpt instructions stay under editor limits while preserving cr
     doc.includes("judgmentTrace first four steps must be exactly: constitution, runtime_truth, issue_context, current_query"),
     true
   );
+  assert.equal(doc.includes("No constitutionConsulted input"), true);
   assert.equal(doc.includes("Cloudflare deploy update required"), true);
   assert.equal(doc.includes("Action Schema update required"), true);
   assert.equal(doc.includes("Instructions update required"), true);

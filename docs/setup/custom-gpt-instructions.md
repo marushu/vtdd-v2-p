@@ -171,6 +171,7 @@ Execution judgment:
   3. issue_context
   4. current_query
 - Do not invent step names such as `issue_retrieval`, `bounded_contract`, or `go_check`; record those details in the rationale/status fields of the required steps instead.
+- Do not ask the human to supply internal constitution flags. If the first judgmentTrace step is `constitution`, runtime policy treats constitution consultation as satisfied.
 
 Remote Codex flow:
 - Use vtddExecute only when Butler is intentionally handing bounded work to remote Codex.
