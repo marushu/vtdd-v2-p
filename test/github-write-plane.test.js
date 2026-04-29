@@ -41,6 +41,47 @@ test("github write plane creates scoped issues with GO approval", async () => {
   });
 });
 
+test("github write plane binds global fetch for Worker-compatible writes", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = function fetchWithRequiredThis(url, init) {
+    assert.equal(this, globalThis);
+    calls.push({ url, init });
+    return Promise.resolve(
+      new Response(
+        JSON.stringify({
+          number: 108,
+          title: "test: bound fetch",
+          state: "open",
+          html_url: "https://github.com/sample-org/vtdd-v2-p/issues/108"
+        }),
+        { status: 201, headers: { "content-type": "application/json" } }
+      )
+    );
+  };
+
+  try {
+    const result = await executeGitHubWritePlane({
+      operation: GitHubWriteOperation.ISSUE_CREATE,
+      repository: "sample-org/vtdd-v2-p",
+      title: "test: bound fetch",
+      body: "Issue body fixed by approval scope.",
+      approvalPhrase: "GO",
+      targetConfirmed: true,
+      approvalScopeMatched: true,
+      env: {
+        GITHUB_APP_INSTALLATION_TOKEN: "ghs_write"
+      }
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.write.issueNumber, 108);
+    assert.equal(calls[0].url, "https://api.github.com/repos/sample-org/vtdd-v2-p/issues");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("github write plane creates scoped issue comments with GO approval", async () => {
   const calls = [];
   const result = await executeGitHubWritePlane({
