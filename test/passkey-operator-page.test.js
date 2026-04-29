@@ -18,13 +18,16 @@ test("passkey operator page can target explicit api base and sync endpoint", () 
   assert.equal(html.includes('fetch("/api/approval/passkey/challenge"'), true);
   assert.equal(html.includes('fetch("http://127.0.0.1:8789/api/github-app-secret-sync/execute"'), true);
   assert.equal(html.includes('fetch("/api/action/deploy"'), true);
+  assert.equal(html.includes('fetch("/api/action/github-authority"'), true);
   assert.equal(html.includes('fetch("/api/action/github-actions-secret"'), true);
   assert.equal(html.includes("readResponseBody"), true);
   assert.equal(html.includes("non_json_response"), true);
   assert.equal(html.includes("Sync GitHub App secrets"), true);
   assert.equal(html.includes("Sync OPENAI_API_KEY"), true);
   assert.equal(html.includes("Dispatch production deploy"), true);
+  assert.equal(html.includes("Dispatch PR merge"), true);
   assert.equal(html.includes("Open deploy run"), true);
+  assert.equal(html.includes("Open pull request"), true);
   assert.equal(html.includes("Return to Butler"), true);
   assert.equal(html.includes('href="https://chatgpt.com/g/example-butler"'), true);
   assert.equal(html.includes("Butler 会話に貼らず"), true);
@@ -33,6 +36,26 @@ test("passkey operator page can target explicit api base and sync endpoint", () 
   assert.equal(html.includes('id="action-type-input" value="deploy_production"'), true);
   assert.equal(html.includes('repositoryInput: document.getElementById("repo-input").value'), true);
   assert.equal(html.includes('issueNumber: Number(document.getElementById("issue-input").value || 0) || null'), true);
+});
+
+test("passkey operator page pre-fills PR merge fields from URL input", () => {
+  const html = renderPasskeyOperatorPage({
+    repositoryInput: "marushu/vtdd-v2-p",
+    issueNumber: 125,
+    pullNumber: 148,
+    phase: "execution",
+    actionType: "merge",
+    highRiskKind: "pull_merge",
+    mergeMethod: "squash"
+  });
+
+  assert.equal(html.includes('id="repo-input" value="marushu/vtdd-v2-p"'), true);
+  assert.equal(html.includes('id="issue-input" value="125"'), true);
+  assert.equal(html.includes('id="pull-number-input" value="148"'), true);
+  assert.equal(html.includes('id="action-type-input" value="merge"'), true);
+  assert.equal(html.includes('id="risk-kind-input" value="pull_merge"'), true);
+  assert.equal(html.includes('id="merge-method-input" value="squash"'), true);
+  assert.equal(html.includes('operation: "pull_merge"'), true);
 });
 
 test("passkey operator page keeps sync disabled message when helper endpoint is absent", () => {
@@ -212,6 +235,50 @@ test("passkey operator page rejects unsafe or missing deploy run links", () => {
   });
   assert.equal(deployRunLink.href, "#");
   assert.equal(deployRunLink.hidden, true);
+});
+
+test("passkey operator page exposes safe PR link from merge response", () => {
+  const mergePrLink = {
+    href: "#",
+    hidden: true
+  };
+  const helpers = loadOperatorPageHelpers({
+    document: {
+      getElementById(id) {
+        if (id === "merge-pr-link") {
+          return mergePrLink;
+        }
+        return {
+          value: "",
+          textContent: "",
+          addEventListener() {}
+        };
+      }
+    }
+  });
+
+  helpers.showMergePrLink({
+    ok: true,
+    authorityAction: {
+      htmlUrl: "https://github.com/sample-org/vtdd-v2-p/pull/148"
+    }
+  });
+
+  assert.equal(mergePrLink.href, "https://github.com/sample-org/vtdd-v2-p/pull/148");
+  assert.equal(mergePrLink.hidden, false);
+
+  helpers.clearMergePrLink();
+  assert.equal(mergePrLink.href, "#");
+  assert.equal(mergePrLink.hidden, true);
+
+  helpers.showMergePrLink({
+    ok: true,
+    authorityAction: {
+      htmlUrl: "https://evil.example/sample-org/vtdd-v2-p/pull/148"
+    }
+  });
+  assert.equal(mergePrLink.href, "#");
+  assert.equal(mergePrLink.hidden, true);
 });
 
 function loadOperatorPageHelpers(overrides = {}) {

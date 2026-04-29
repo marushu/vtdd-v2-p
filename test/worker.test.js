@@ -1282,7 +1282,7 @@ test("worker can resolve passkey memory provider from Cloudflare D1 binding fall
 test("worker serves passkey operator page", async () => {
   const response = await worker.fetch(
     new Request(
-      "https://example.com/v2/approval/passkey/operator?repositoryInput=marushu%2Fvtdd-v2-p&issueNumber=15&phase=execution&actionType=deploy_production&highRiskKind=deploy_production&returnUrl=https%3A%2F%2Fchatgpt.com%2Fg%2Fexample-butler"
+      "https://example.com/v2/approval/passkey/operator?repositoryInput=marushu%2Fvtdd-v2-p&issueNumber=15&pullNumber=148&phase=execution&actionType=merge&highRiskKind=pull_merge&mergeMethod=squash&returnUrl=https%3A%2F%2Fchatgpt.com%2Fg%2Fexample-butler"
     ),
     gatewayAuthEnv
   );
@@ -1294,9 +1294,12 @@ test("worker serves passkey operator page", async () => {
   assert.equal(html.includes("/v2/approval/passkey/challenge"), true);
   assert.equal(html.includes('id="repo-input" value="marushu/vtdd-v2-p"'), true);
   assert.equal(html.includes('id="issue-input" value="15"'), true);
+  assert.equal(html.includes('id="pull-number-input" value="148"'), true);
   assert.equal(html.includes('id="phase-input" value="execution"'), true);
-  assert.equal(html.includes('id="action-type-input" value="deploy_production"'), true);
-  assert.equal(html.includes('id="risk-kind-input" value="deploy_production"'), true);
+  assert.equal(html.includes('id="action-type-input" value="merge"'), true);
+  assert.equal(html.includes('id="risk-kind-input" value="pull_merge"'), true);
+  assert.equal(html.includes('id="merge-method-input" value="squash"'), true);
+  assert.equal(html.includes("Dispatch PR merge"), true);
   assert.equal(html.includes('href="https://chatgpt.com/g/example-butler"'), true);
   assert.equal(html.includes('href="https://evil.example/phish"'), false);
 });
@@ -2475,6 +2478,130 @@ test("worker executes GitHub merge on the high-risk authority plane with approva
   assert.equal(body.ok, true);
   assert.equal(body.authorityAction.operation, "pull_merge");
   assert.equal(body.authorityAction.merged, true);
+});
+
+test("worker allows same-origin passkey operator to dispatch GitHub merge authority", async () => {
+  const provider = createInMemoryMemoryProvider();
+  await provider.store({
+    id: "approval-merge-browser-123",
+    type: MemoryRecordType.APPROVAL_LOG,
+    content: {
+      kind: "passkey_grant",
+      status: "verified",
+      approvalId: "approval-merge-browser-123",
+      expiresAt: "2099-01-01T00:00:00.000Z",
+      scope: {
+        actionType: "merge",
+        highRiskKind: "pull_merge",
+        repositoryInput: "sample-org/vtdd-v2-p",
+        issueNumber: "55",
+        relatedIssue: "55",
+        phase: "execution"
+      }
+    },
+    metadata: { source: "test" },
+    priority: 90,
+    tags: ["passkey_grant"],
+    createdAt: "2026-04-26T00:00:00.000Z"
+  });
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/action/github-authority", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: "https://example.com",
+        "sec-fetch-site": "same-origin"
+      },
+      body: JSON.stringify({
+        operation: "pull_merge",
+        repository: "sample-org/vtdd-v2-p",
+        pullNumber: 21,
+        issueContext: {
+          issueNumber: 55
+        },
+        policyInput: {
+          approvalPhrase: "GO",
+          approvalGrantId: "approval-merge-browser-123",
+          targetConfirmed: true
+        }
+      })
+    }),
+    {
+      MEMORY_PROVIDER: provider,
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_high_risk",
+      GITHUB_API_FETCH: async () =>
+        new Response(
+          JSON.stringify({
+            sha: "abc123",
+            merged: true,
+            message: "Pull Request successfully merged"
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        )
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.authorityAction.operation, "pull_merge");
+  assert.equal(body.authorityAction.htmlUrl, "https://github.com/sample-org/vtdd-v2-p/pull/21");
+});
+
+test("worker rejects fabricated browser approval grants on the GitHub authority plane", async () => {
+  let githubCalled = false;
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/action/github-authority", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: "https://example.com",
+        "sec-fetch-site": "same-origin"
+      },
+      body: JSON.stringify({
+        operation: "pull_merge",
+        repository: "sample-org/vtdd-v2-p",
+        pullNumber: 21,
+        issueContext: {
+          issueNumber: 55
+        },
+        approvalGrant: {
+          approvalId: "fabricated-approval",
+          verified: true,
+          expiresAt: "2099-01-01T00:00:00.000Z",
+          scope: {
+            actionType: "merge",
+            highRiskKind: "pull_merge",
+            repositoryInput: "sample-org/vtdd-v2-p",
+            issueNumber: "55",
+            relatedIssue: "55",
+            phase: "execution"
+          }
+        },
+        policyInput: {
+          approvalPhrase: "GO",
+          targetConfirmed: true
+        }
+      })
+    }),
+    {
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_high_risk",
+      GITHUB_API_FETCH: async () => {
+        githubCalled = true;
+        return new Response(JSON.stringify({ merged: true }), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        });
+      }
+    }
+  );
+
+  assert.equal(response.status, 422);
+  const body = await response.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.issues.some((issue) => String(issue).includes("real passkey approval grant is required")), true);
+  assert.equal(githubCalled, false);
 });
 
 test("worker blocks bounded issue close on the high-risk authority plane when merged pull proof is missing", async () => {

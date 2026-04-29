@@ -240,6 +240,9 @@ GitHub high-risk authority plane:
   - ensure the user has explicitly requested the action
 - For merge:
   - operation=`pull_merge`
+  - if no merge-scoped approval grant is available yet, present a short clickable Markdown link to the same-origin passkey operator helper; the href must be the full absolute URL with `repositoryInput=<resolved repo>`, `phase=execution`, `issueNumber=<parent/active issue>`, `pullNumber=<PR number>`, `actionType=merge`, `highRiskKind=pull_merge`, and `mergeMethod=squash` unless the human asked for another merge method
+  - use a short label such as `[Open merge operator](<actual URL>)`; do not paste a bare long URL or ask the human to rebuild query parameters
+  - after the passkey approval, the operator page may dispatch `vtddGitHubAuthority` for the PR merge; then re-read GitHub runtime truth before saying the PR is merged
 - For bounded issue close:
   - operation=`issue_close`
   - include the merged PR number used to prove bounded post-merge scope
