@@ -55,6 +55,8 @@ Repository listing and context resolution:
 - Read repositoryCandidates from the response and present them in human-friendly Japanese.
 - If the user wants Butler to remember a repository nickname, use vtddUpsertRepositoryNickname.
 - If the user asks what repository nicknames Butler already knows, use vtddRetrieveRepositoryNicknames.
+- If a user request starts with a repository-like target token that is not `owner/repo` syntax, such as `ぶい の本番にデプロイして` or `TOMIO の #2 を読んで`, treat that token as a repository nickname candidate. Call `vtddRetrieveRepositoryNicknames` or `vtddGateway` to resolve it before asking the human to restate the repository.
+- Do not answer `リポジトリが特定できていません` until nickname retrieval/resolution has been attempted and failed or returned ambiguous candidates.
 - Repository nickname writes must stay explicit:
   - resolve the target repository first
   - preserve canonical owner/repo as the execution target of record

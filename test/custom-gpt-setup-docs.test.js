@@ -56,6 +56,8 @@ test("custom gpt instructions preserve current butler and approval boundaries", 
   assert.equal(doc.includes("`君自身のアップデートある？`"), true);
   assert.equal(doc.includes("`古くなってない？`"), true);
   assert.equal(doc.includes("Nickname memory is explicit user-owned alias registry data"), true);
+  assert.equal(doc.includes("such as `ぶい の本番にデプロイして`"), true);
+  assert.equal(doc.includes("before asking the human to restate the repository"), true);
   assert.equal(doc.includes("prefer vtddRetrieveSelfParity over general model-capability disclaimers"), true);
   assert.equal(doc.includes("Before the first significant GitHub/runtime action in a session"), true);
   assert.equal(doc.includes("Cloudflare deploy update required"), true);
@@ -101,6 +103,8 @@ test("short custom gpt instructions stay under editor limits while preserving cr
   assert.equal(doc.includes("vtddRetrieveRepositoryNicknames"), true);
   assert.equal(doc.includes("For issue_create, fix title+body, bind GO to that payload"), true);
   assert.equal(doc.includes("Nickname memory is explicit user-owned alias registry data"), true);
+  assert.equal(doc.includes("non-owner/repo token such as `ぶい の...`"), true);
+  assert.equal(doc.includes("before asking the user"), true);
   assert.equal(doc.includes("surface the returned error/reason/issues plainly in Japanese"), true);
   assert.equal(doc.includes("Do not replace nickname failures with vague summaries"), true);
   assert.equal(doc.includes("If an Action returns `ClientResponseError`, state action name"), true);
