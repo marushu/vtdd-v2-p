@@ -1062,6 +1062,45 @@ test("worker stores and retrieves repository nicknames", async () => {
   assert.deepEqual(retrieveBody.aliasRegistry[0].aliases, ["公開VTDD"]);
 });
 
+test("worker surfaces repository nickname retrieval failures as action-visible JSON", async () => {
+  const failingProvider = {
+    async store() {
+      return { ok: true };
+    },
+    async retrieve(filter) {
+      if (filter?.type === MemoryRecordType.ALIAS_REGISTRY) {
+        throw new TypeError("Illegal invocation (incorrect this reference)");
+      }
+      return [];
+    },
+    async query() {
+      return [];
+    },
+    async validateRecord() {
+      return { ok: true };
+    }
+  };
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/retrieve/repository-nicknames", {
+      headers: gatewayAuthHeaders
+    }),
+    {
+      ...gatewayAuthEnv,
+      MEMORY_PROVIDER: failingProvider
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.httpStatus, 503);
+  assert.equal(body.error, "repository_nickname_retrieval_failed");
+  assert.equal(body.reason, "Illegal invocation (incorrect this reference)");
+  assert.deepEqual(body.issues, ["repository_nickname_retrieval_exception"]);
+  assert.deepEqual(body.aliasRegistry, []);
+});
+
 test("worker gateway can resolve stored repository nickname against live repository index", async () => {
   const provider = createInMemoryMemoryProvider();
   await provider.store({
@@ -1128,6 +1167,73 @@ test("worker gateway can resolve stored repository nickname against live reposit
   const body = await response.json();
   assert.equal(body.allowed, true);
   assert.equal(body.repository, "sample-org/vtdd-v2-p");
+});
+
+test("worker gateway warns when runtime nickname registry read is unverified", async () => {
+  const failingProvider = {
+    async store() {
+      return { ok: true };
+    },
+    async retrieve(filter) {
+      if (filter?.type === MemoryRecordType.ALIAS_REGISTRY) {
+        throw new TypeError("Illegal invocation (incorrect this reference)");
+      }
+      return [];
+    },
+    async query() {
+      return [];
+    },
+    async validateRecord() {
+      return { ok: true };
+    }
+  };
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/gateway", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        phase: "execution",
+        actorRole: ActorRole.BUTLER,
+        surfaceContext: {
+          surface: "custom_gpt",
+          judgmentModelId: "vtdd-butler-core-v1"
+        },
+        judgmentTrace: validButlerJudgmentTrace,
+        policyInput: {
+          actionType: ActionType.ISSUE_CREATE,
+          mode: TaskMode.EXECUTION,
+          repositoryInput: "vtdd",
+          aliasRegistry,
+          targetConfirmed: true,
+          constitutionConsulted: true,
+          runtimeTruth: { runtimeAvailable: true },
+          credential: { model: "github_app", tier: CredentialTier.EXECUTE },
+          consent: { grantedCategories: [ConsentCategory.PROPOSE] },
+          approvalPhrase: "GO issue create",
+          approvalScopeMatched: true,
+          issueTraceable: true,
+          go: true,
+          passkey: false
+        }
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      MEMORY_PROVIDER: failingProvider
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.allowed, true);
+  assert.equal(body.repository, "sample-org/vtdd-v2");
+  assert.equal(
+    body.warnings.some((warning) =>
+      warning.includes("repository nickname registry read unverified")
+    ),
+    true
+  );
 });
 
 test("worker blocks repository nickname write when nickname target is ambiguous", async () => {
