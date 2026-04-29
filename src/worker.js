@@ -994,6 +994,7 @@ function handlePasskeyOperatorPageRequest(request) {
     phase: url.searchParams.get("phase") || "execution",
     actionType: url.searchParams.get("actionType") || "destructive",
     highRiskKind: url.searchParams.get("highRiskKind") || "github_app_secret_sync",
+    returnUrl: normalizeOperatorReturnUrl(url.searchParams.get("returnUrl")),
     operatorId: url.searchParams.get("operatorId") || "vtdd-operator",
     operatorLabel: url.searchParams.get("operatorLabel") || "VTDD Operator",
     syncEnabled,
@@ -1022,6 +1023,27 @@ function normalizeOptionalHttpUrl(value) {
       return "";
     }
     return url.href.replace(/\/$/, "");
+  } catch {
+    return "";
+  }
+}
+
+function normalizeOperatorReturnUrl(value) {
+  const text = normalizeText(value);
+  if (!text) {
+    return "";
+  }
+
+  try {
+    const url = new URL(text);
+    if (url.protocol !== "https:") {
+      return "";
+    }
+    const hostname = url.hostname.toLowerCase();
+    if (hostname !== "chatgpt.com" && hostname !== "chat.openai.com") {
+      return "";
+    }
+    return url.href;
   } catch {
     return "";
   }
