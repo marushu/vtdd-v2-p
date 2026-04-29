@@ -35,7 +35,7 @@ function normalizeSteps(steps) {
     return [];
   }
   return steps.map((item) =>
-    String(item ?? "")
+    String(typeof item === "object" && item !== null ? item.step : item ?? "")
       .trim()
       .toLowerCase()
   );

@@ -64,6 +64,36 @@ test("butler orchestrator allows issue creation when all gates pass", () => {
   assert.equal(result.repository, "sample-org/vtdd-v2");
 });
 
+test("butler orchestrator accepts OpenAPI judgment trace objects", () => {
+  const result = evaluateButlerExecution({
+    surfaceContext: {
+      surface: "custom_gpt",
+      judgmentModelId: "vtdd-butler-core-v1"
+    },
+    judgmentTrace: judgmentTrace.map((step) => ({
+      step,
+      status: "checked",
+      rationale: `${step} checked before issue creation`
+    })),
+    policyInput: {
+      actionType: ActionType.ISSUE_CREATE,
+      mode: "execution",
+      repositoryInput: "vtdd",
+      aliasRegistry: registry,
+      constitutionConsulted: true,
+      runtimeTruth: { runtimeAvailable: true },
+      credential: { model: "github_app", tier: CredentialTier.EXECUTE },
+      consent: fullConsent,
+      ...approvalContext,
+      issueTraceable: true,
+      go: true,
+      passkey: false
+    }
+  });
+  assert.equal(result.allowed, true);
+  assert.equal(result.repository, "sample-org/vtdd-v2");
+});
+
 test("butler orchestrator blocks invalid judgment order", () => {
   const result = evaluateButlerExecution({
     surfaceContext: {
