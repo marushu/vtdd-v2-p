@@ -446,9 +446,29 @@
                   "relatedIssue",
                   "summary"
                 ]
+              },
+              "executorTransport": {
+                "type": "string",
+                "enum": [
+                  "codex_cloud_github_comment",
+                  "api_key_runner"
+                ]
+              },
+              "apiKeyRunnerAcknowledged": {
+                "type": "boolean"
               }
             },
             "additionalProperties": true
+          },
+          "executorTransport": {
+            "type": "string",
+            "enum": [
+              "codex_cloud_github_comment",
+              "api_key_runner"
+            ]
+          },
+          "apiKeyRunnerAcknowledged": {
+            "type": "boolean"
           }
         },
         "additionalProperties": true
@@ -749,6 +769,18 @@
             "required": false,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "executorTransport",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "codex_cloud_github_comment",
+                "api_key_runner"
+              ]
             }
           }
         ],

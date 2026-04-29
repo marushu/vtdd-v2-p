@@ -121,8 +121,17 @@ export async function dispatchRemoteCodexExecution(input = {}) {
     };
   }
 
-  const transport = resolveExecutorTransport(input);
-  if (transport === RemoteCodexExecutorTransport.CODEX_CLOUD_GITHUB_COMMENT) {
+  const transport = resolveExecutorTransport(input, { requireRequestAcknowledgment: true });
+  if (!transport.ok) {
+    return {
+      ok: false,
+      status: 422,
+      error: transport.error,
+      reason: transport.reason,
+      issues: transport.issues
+    };
+  }
+  if (transport.value === RemoteCodexExecutorTransport.CODEX_CLOUD_GITHUB_COMMENT) {
     return dispatchCodexCloudGitHubComment({ request, token: token.value, env: input?.env });
   }
 
@@ -195,10 +204,17 @@ async function dispatchApiBackedWorkflow({ request, token, env }) {
     };
   }
 
+  const progress = await retrieveApiBackedWorkflowProgress({
+    executionId: request.executionId,
+    token,
+    env
+  });
+
   return {
     ok: true,
     execution: {
       executionId: request.executionId,
+      transport: RemoteCodexExecutorTransport.API_KEY_RUNNER,
       controlRepository,
       workflowFile,
       workflowRef,
@@ -208,6 +224,15 @@ async function dispatchApiBackedWorkflow({ request, token, env }) {
       baseRef: request.baseRef,
       codexGoal: request.codexGoal,
       approvalScopeMatched: request.approvalScopeMatched,
+      workflowRunId: progress.ok ? progress.progress.workflowRunId : null,
+      workflowUrl: progress.ok ? progress.progress.workflowUrl : null,
+      workflowConclusion: progress.ok ? progress.progress.conclusion : null,
+      progressLookup: progress.ok
+        ? null
+        : {
+            error: progress.error,
+            reason: progress.reason
+          },
       status: RemoteCodexExecutionStatus.QUEUED
     }
   };
@@ -234,8 +259,17 @@ export async function retrieveRemoteCodexExecutionProgress(input = {}) {
     };
   }
 
-  const transport = resolveExecutorTransport(input);
-  if (transport === RemoteCodexExecutorTransport.CODEX_CLOUD_GITHUB_COMMENT) {
+  const transport = resolveExecutorTransport(input, { requireRequestAcknowledgment: false });
+  if (!transport.ok) {
+    return {
+      ok: false,
+      status: 422,
+      error: transport.error,
+      reason: transport.reason,
+      issues: transport.issues
+    };
+  }
+  if (transport.value === RemoteCodexExecutorTransport.CODEX_CLOUD_GITHUB_COMMENT) {
     return retrieveCodexCloudGitHubCommentProgress({
       executionId,
       repository: normalizeText(input?.repository),
@@ -544,14 +578,31 @@ function buildCodexCloudGitHubComment({ request }) {
   return lines.join("\n");
 }
 
-function resolveExecutorTransport(input = {}) {
-  const value = normalizeText(
-    input?.executorTransport ?? input?.env?.REMOTE_CODEX_EXECUTOR_TRANSPORT
+function resolveExecutorTransport(input = {}, options = {}) {
+  const requestValue = normalizeText(
+    input?.executorTransport ??
+      input?.payload?.executorTransport ??
+      input?.payload?.continuationContext?.executorTransport
   );
+  const envValue = normalizeText(input?.env?.REMOTE_CODEX_EXECUTOR_TRANSPORT);
+  const value = requestValue || envValue;
   if (value === RemoteCodexExecutorTransport.API_KEY_RUNNER) {
-    return RemoteCodexExecutorTransport.API_KEY_RUNNER;
+    const requestSelected = requestValue === RemoteCodexExecutorTransport.API_KEY_RUNNER;
+    const acknowledged =
+      input?.apiKeyRunnerAcknowledged === true ||
+      input?.payload?.apiKeyRunnerAcknowledged === true ||
+      input?.payload?.continuationContext?.apiKeyRunnerAcknowledged === true;
+    if (requestSelected && options.requireRequestAcknowledgment !== false && !acknowledged) {
+      return {
+        ok: false,
+        error: "api_key_runner_approval_required",
+        reason: "api_key_runner requires explicit human approval because it uses OPENAI_API_KEY",
+        issues: ["api_key_runner_acknowledgment_required"]
+      };
+    }
+    return { ok: true, value: RemoteCodexExecutorTransport.API_KEY_RUNNER };
   }
-  return RemoteCodexExecutorTransport.CODEX_CLOUD_GITHUB_COMMENT;
+  return { ok: true, value: RemoteCodexExecutorTransport.CODEX_CLOUD_GITHUB_COMMENT };
 }
 
 function githubJsonHeaders({ token }) {

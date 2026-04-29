@@ -596,6 +596,121 @@ test("worker dispatches remote Codex execution with approval scope matched only 
   assert.equal(calls.length, 2);
 });
 
+test("worker dispatches API-backed remote Codex execution when explicitly selected", async () => {
+  const calls = [];
+  let executionId = "";
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/action/execute", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        phase: "execution",
+        actorRole: ActorRole.BUTLER,
+        executorTransport: "api_key_runner",
+        apiKeyRunnerAcknowledged: true,
+        surfaceContext: {
+          surface: "custom_gpt",
+          judgmentModelId: "vtdd-butler-core-v1"
+        },
+        judgmentTrace: validButlerJudgmentTrace,
+        issueContext: {
+          issueNumber: 135
+        },
+        continuationContext: {
+          requiresHandoff: true,
+          handoff: {
+            issueTraceable: true,
+            approvalScopeMatched: true,
+            relatedIssue: 135,
+            summary: "Issue #135 bounded remote Codex handoff"
+          }
+        },
+        policyInput: {
+          actionType: ActionType.BUILD,
+          mode: TaskMode.EXECUTION,
+          repositoryInput: "vtdd",
+          aliasRegistry,
+          targetConfirmed: true,
+          runtimeTruth: {
+            runtimeAvailable: true,
+            runtimeState: {
+              activeBranch: "codex/issue-135"
+            }
+          },
+          consent: { grantedCategories: [ConsentCategory.PROPOSE, ConsentCategory.EXECUTE] },
+          approvalPhrase: "GO",
+          issueTraceable: true,
+          issueTraceability: {
+            relatedIssue: 135,
+            intentRefs: ["#135 Intent"],
+            successCriteriaRefs: ["#135 Success Criteria"],
+            nonGoalRefs: ["#135 Non-goals"]
+          },
+          go: true,
+          passkey: false
+        }
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      VTDD_GITHUB_ACTIONS_REPOSITORY: "sample-org/vtdd-v2-p",
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_dispatch_token",
+      GITHUB_API_FETCH: async (url, init) => {
+        calls.push({ url, init });
+        if (String(url).includes("/installation/repositories")) {
+          return new Response(
+            JSON.stringify({
+              total_count: 1,
+              repositories: [
+                {
+                  full_name: "sample-org/vtdd-v2",
+                  name: "vtdd-v2",
+                  private: true
+                }
+              ]
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        if (String(url).includes("/dispatches")) {
+          executionId = JSON.parse(init.body).inputs.execution_id;
+          return new Response(null, { status: 204 });
+        }
+        if (String(url).includes("/runs")) {
+          return new Response(
+            JSON.stringify({
+              workflow_runs: [
+                {
+                  id: 135101,
+                  name: "remote-codex-executor",
+                  display_title: executionId,
+                  html_url: "https://github.com/sample-org/vtdd-v2-p/actions/runs/135101",
+                  status: "queued",
+                  conclusion: null,
+                  head_branch: "main",
+                  run_started_at: "2026-04-29T10:00:00Z",
+                  updated_at: "2026-04-29T10:00:01Z"
+                }
+              ]
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        throw new Error(`unexpected url ${url}`);
+      }
+    }
+  );
+
+  assert.equal(response.status, 202);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.execution.issueNumber, 135);
+  assert.equal(body.execution.transport, "api_key_runner");
+  assert.equal(body.execution.workflowRunId, 135101);
+  assert.equal(body.execution.workflowUrl, "https://github.com/sample-org/vtdd-v2-p/actions/runs/135101");
+  assert.equal(calls.length, 3);
+});
+
 test("worker gateway rejects self-asserted Butler build handoff", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/v2/gateway", {
