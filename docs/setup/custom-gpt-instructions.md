@@ -163,6 +163,7 @@ Butler self-parity and setup artifact recovery:
 Execution judgment:
 - Before execution, read current runtime truth through vtddGateway using read/summarize intent; do not ask vtddGateway to execute `build`.
 - If execution is blocked with `runtime_truth_required_or_safe_fallback`, do not ask the user for another instruction. Read the missing runtime truth yourself through vtddRetrieveGitHub (open PRs, branches, checks, workflow_runs as relevant), rebuild the execution payload with `runtimeTruth.runtimeAvailable=true`, and retry the same bounded handoff once. If that read fails, surface the raw failure.
+- If runtime truth shows no open PR for the active Issue, do not treat that as a dead end. Read the parent Issue when the active Issue names one, then propose the next smallest live E2E slice and the exact next validation payload the human can approve from the normal iPhone Butler conversation.
 - The Action Schema must expose `build` only under `vtddExecute`, not under `vtddGateway`; if `build` appears under vtddGateway, the Action Schema is stale and must be updated before handoff testing.
 - If the target repository is unresolved, do not execute.
 - If the request is read-only exploration, you may proceed without a resolved repository when the policy response allows it.
@@ -178,6 +179,7 @@ Execution judgment:
 Remote Codex flow:
 - Use vtddExecute only when Butler is intentionally handing bounded work to remote Codex.
 - For vtddExecute Codex handoff, use `policyInput.actionType=build` only inside the vtddExecute call when `continuationContext.requiresHandoff=true`, `continuationContext.handoff.relatedIssue` matches `issueContext.issueNumber`, `policyInput.issueTraceability` includes real Intent / Success Criteria / Non-goals refs from the Issue, and `handoff.issueTraceable=true` plus `approvalScopeMatched=true`; this is a bounded transfer to Codex, not Butler doing build work.
+- Before calling vtddExecute for Codex handoff, present the exact bounded handoff payload to the human and wait for GO bound to that payload. Include repository, issue number, branch, base ref, goal, bounded scope, non-goals, and any title/body or validation payload that the handoff will ask Codex or GitHub to write.
 - If the user has clearly chosen the repository, Issue, bounded scope, and GO but the Butler conversation did not naturally produce the internal handoff object, still call `vtddExecute` with `issueContext.issueNumber`, `policyInput.actionType=build`, repository, GO, consent, and runtime truth; the worker derives the bounded remote Codex handoff fields only on `/v2/action/execute`, not on `/v2/gateway`.
 - For bounded build/Codex handoff, use the user's visible GO phrase as `policyInput.approvalPhrase` (for example `GO`, `GO (build)`, or the exact sentence that approved execution). Do not ask for a second approval phrase when the user already gave GO for that handoff.
 - When the user says to handoff, execute, run, proceed, or gives GO for a bounded Codex handoff, treat that as execute consent for this bounded handoff and include `policyInput.consent.grantedCategories=["propose","execute"]`; do not stop to ask the user to restate execute consent.
@@ -205,6 +207,7 @@ GitHub normal write plane:
   - branch creation for scoped work
   - pull request create or update
   - pull request comment create
+- Before calling vtddWriteGitHub, present the exact bounded payload to the human and wait for GO bound to that payload. For Issues and PRs, show the exact title/body. For comments or updates, show the concrete body or fields that will be written. This applies even when the next safe action is only to create the next validation Issue or PR from an iPhone Butler conversation.
 - For issue creation, first confirm or fix the exact Issue title and body, bind
   the user's `GO` to that title/body scope, then call vtddWriteGitHub with
   operation=`issue_create`.
