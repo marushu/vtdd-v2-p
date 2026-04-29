@@ -99,7 +99,7 @@ test("custom gpt instructions preserve current butler and approval boundaries", 
 
 test("short custom gpt instructions stay under editor limits while preserving critical boundaries", () => {
   const doc = fs.readFileSync(SHORT_INSTRUCTIONS_PATH, "utf8");
-  assert.equal(doc.length <= 8000, true);
+  assert.equal(doc.length <= 7900, true);
   assert.equal(doc.includes("Do not assume a default repository."), true);
   assert.equal(doc.includes("vtddGateway"), true);
   assert.equal(doc.includes("vtddRetrieveGitHub"), true);
@@ -134,10 +134,10 @@ test("short custom gpt instructions stay under editor limits while preserving cr
   assert.equal(doc.includes("openai_api_key_not_configured"), true);
   assert.equal(doc.includes("If vtddDeployProduction fails, say the exact deploy error/reason/issues"), true);
   assert.equal(
-    doc.includes("Completed `vtdd:reviewer=codex-fallback` from trusted VTDD actor with recommendedAction is reviewer evidence"),
+    doc.includes("Completed `vtdd:reviewer=codex-fallback` from trusted VTDD actor with recommendedAction is evidence"),
     true
   );
-  assert.equal(doc.includes("missing GitHub Review objects alone is not evidence absence"), true);
+  assert.equal(doc.includes("missing GitHub Review objects alone is not absence"), true);
 });
 
 test("custom gpt openapi doc exposes current gateway, execute, and progress routes", () => {
