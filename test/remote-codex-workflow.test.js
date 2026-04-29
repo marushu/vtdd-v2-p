@@ -7,7 +7,10 @@ const workflow = fs.readFileSync(".github/workflows/remote-codex-executor.yml", 
 test("remote Codex workflow commits, pushes, and creates or updates a PR", () => {
   assert.equal(workflow.includes("name: Validate remote Codex inputs"), true);
   assert.equal(workflow.includes("name: Commit and push Codex changes"), true);
-  assert.equal(workflow.includes("git push origin"), true);
+  assert.equal(
+    workflow.includes('git push "https://x-access-token:${APP_TOKEN}@github.com/${TARGET_REPOSITORY}.git"'),
+    true
+  );
   assert.equal(workflow.includes("name: Create or update pull request"), true);
   assert.equal(workflow.includes("gh pr view"), true);
   assert.equal(workflow.includes("gh pr create"), true);
@@ -26,6 +29,10 @@ test("remote Codex workflow avoids embedding dispatch inputs inside shell heredo
   assert.equal(workflow.includes("Repository: ${{ github.event.inputs.target_repository }}"), false);
   assert.equal(workflow.includes("Handoff JSON: ${{ github.event.inputs.handoff_json }}"), false);
   assert.equal(workflow.includes("git push origin \"${{ github.event.inputs.target_branch }}\""), false);
+});
+
+test("remote Codex workflow does not persist checkout credentials into the sandboxed workspace", () => {
+  assert.equal(workflow.includes("persist-credentials: false"), true);
 });
 
 test("remote Codex workflow marks OPENAI_API_KEY runner as explicit opt-in", () => {
@@ -51,6 +58,18 @@ test("remote Codex workflow runs Codex with workspace-write sandbox", () => {
     true
   );
   assert.equal(workflow.includes("--dangerously-bypass-approvals-and-sandbox"), false);
+});
+
+test("remote Codex workflow prepares GitHub runner user namespaces for bubblewrap", () => {
+  assert.equal(workflow.includes("name: Enable Codex sandbox user namespaces"), true);
+  assert.equal(workflow.includes("/proc/sys/kernel/unprivileged_userns_clone"), true);
+  assert.equal(workflow.includes("/proc/sys/kernel/apparmor_restrict_unprivileged_userns"), true);
+  assert.equal(workflow.includes("[ -w /proc/sys/kernel/unprivileged_userns_clone ]"), false);
+  assert.equal(workflow.includes("[ -w /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]"), false);
+  assert.equal(workflow.includes("[ -e /proc/sys/kernel/unprivileged_userns_clone ]"), true);
+  assert.equal(workflow.includes("[ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]"), true);
+  assert.equal(workflow.includes("sudo tee /proc/sys/kernel/unprivileged_userns_clone"), true);
+  assert.equal(workflow.includes("sudo tee /proc/sys/kernel/apparmor_restrict_unprivileged_userns"), true);
 });
 
 test("remote Codex workflow keeps secrets out of the Codex exec step", () => {

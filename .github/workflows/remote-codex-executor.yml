@@ -119,6 +119,7 @@ jobs:
           ref: ${{ env.BASE_REF }}
           token: ${{ steps.app-token.outputs.token }}
           fetch-depth: 0
+          persist-credentials: false
           path: target-repo
 
       - name: Prepare target branch
@@ -135,6 +136,18 @@ jobs:
       - name: Install Codex CLI
         shell: bash
         run: npm install -g @openai/codex
+
+      - name: Enable Codex sandbox user namespaces
+        shell: bash
+        run: |
+          if [ -e /proc/sys/kernel/unprivileged_userns_clone ]; then
+            echo 1 | sudo tee /proc/sys/kernel/unprivileged_userns_clone
+            echo "unprivileged_userns_clone=$(cat /proc/sys/kernel/unprivileged_userns_clone)"
+          fi
+          if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+            echo 0 | sudo tee /proc/sys/kernel/apparmor_restrict_unprivileged_userns
+            echo "apparmor_restrict_unprivileged_userns=$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns)"
+          fi
 
       - name: Authenticate Codex CLI
         shell: bash
@@ -175,6 +188,8 @@ jobs:
         id: codex-changes
         working-directory: target-repo
         shell: bash
+        env:
+          APP_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           git config user.name "vtdd-codex[bot]"
           git config user.email "vtdd-codex[bot]@users.noreply.github.com"
@@ -187,7 +202,7 @@ jobs:
 
           git add -A
           git commit -m "VTDD remote Codex execution for issue #${TARGET_ISSUE_NUMBER}"
-          git push origin "$TARGET_BRANCH"
+          git push "https://x-access-token:${APP_TOKEN}@github.com/${TARGET_REPOSITORY}.git" "$TARGET_BRANCH"
           echo "changed=true" >> "$GITHUB_OUTPUT"
 
       - name: Create or update pull request
