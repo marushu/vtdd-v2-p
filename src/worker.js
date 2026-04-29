@@ -117,7 +117,11 @@ export default {
       }
 
       const payload = await readJson(request);
-      const prepared = await prepareGatewayPayload({ payload, env });
+      const prepared = await prepareGatewayPayload({
+        payload,
+        env,
+        allowRemoteCodexHandoffNormalization: true
+      });
       const result = appendWarnings(
         runMvpGateway(prepared.payload, {
           allowButlerRemoteCodexHandoff: true
@@ -1074,27 +1078,34 @@ function normalizeOperatorReturnUrl(value) {
   }
 }
 
-async function prepareGatewayPayload({ payload, env }) {
+async function prepareGatewayPayload({ payload, env, allowRemoteCodexHandoffNormalization = false }) {
   const basePayload = payload && typeof payload === "object" ? payload : {};
   const basePolicyInput =
     basePayload.policyInput && typeof basePayload.policyInput === "object"
       ? basePayload.policyInput
       : {};
+  const normalizedPayload = allowRemoteCodexHandoffNormalization
+    ? normalizeRemoteCodexHandoffPayload(basePayload)
+    : basePayload;
+  const normalizedPolicyInput =
+    normalizedPayload.policyInput && typeof normalizedPayload.policyInput === "object"
+      ? normalizedPayload.policyInput
+      : {};
   const runtimeAutonomyMode = resolveRuntimeAutonomyMode(env);
-  const requestedAutonomyMode = normalizeAutonomyMode(basePolicyInput.autonomyMode);
+  const requestedAutonomyMode = normalizeAutonomyMode(normalizedPolicyInput.autonomyMode);
   const effectiveAutonomyMode =
     runtimeAutonomyMode === AutonomyMode.GUARDED_ABSENCE
       ? AutonomyMode.GUARDED_ABSENCE
       : requestedAutonomyMode;
 
   const runtimeAliasResolution = await resolveRuntimeAliasRegistry({
-    baseAliasRegistry: basePolicyInput.aliasRegistry,
+    baseAliasRegistry: normalizedPolicyInput.aliasRegistry,
     env
   });
   const combinedAliasRegistry = runtimeAliasResolution.aliasRegistry;
   const resolvedAliasRegistry = await resolveGatewayAliasRegistryFromGitHubApp({
     policyInput: {
-      ...basePolicyInput,
+      ...normalizedPolicyInput,
       aliasRegistry: combinedAliasRegistry
     },
     env
@@ -1111,8 +1122,8 @@ async function prepareGatewayPayload({ payload, env }) {
   }
 
   const resolvedApprovalGrant = await resolveApprovalGrant({
-    payload: basePayload,
-    policyInput: basePolicyInput,
+    payload: normalizedPayload,
+    policyInput: normalizedPolicyInput,
     env
   });
   if (resolvedApprovalGrant.warning) {
@@ -1121,20 +1132,82 @@ async function prepareGatewayPayload({ payload, env }) {
 
   return {
     payload: {
-      ...basePayload,
+      ...normalizedPayload,
       policyInput: {
-        ...basePolicyInput,
+        ...normalizedPolicyInput,
         aliasRegistry: resolvedAliasRegistry.aliasRegistry,
         autonomyMode: effectiveAutonomyMode,
         approvalGrant: resolvedApprovalGrant.approvalGrant,
         approvalScope: buildApprovalScopeSnapshot({
-          payload: basePayload,
-          policyInput: basePolicyInput
+          payload: normalizedPayload,
+          policyInput: normalizedPolicyInput
         })
       }
     },
     warnings
   };
+}
+
+function normalizeRemoteCodexHandoffPayload(payload) {
+  const policyInput =
+    payload?.policyInput && typeof payload.policyInput === "object" ? payload.policyInput : {};
+  const actionType = normalizeText(policyInput.actionType);
+  const actorRole = normalizeText(payload?.actorRole);
+  const issueNumber = normalizeIssue(payload?.issueContext?.issueNumber);
+  if (actorRole !== "butler" || actionType !== "build" || !issueNumber) {
+    return payload;
+  }
+
+  const continuationContext =
+    payload?.continuationContext && typeof payload.continuationContext === "object"
+      ? payload.continuationContext
+      : {};
+  const handoff =
+    continuationContext.handoff && typeof continuationContext.handoff === "object"
+      ? continuationContext.handoff
+      : {};
+  const issueTraceability =
+    policyInput.issueTraceability && typeof policyInput.issueTraceability === "object"
+      ? policyInput.issueTraceability
+      : {};
+
+  return {
+    ...payload,
+    continuationContext: {
+      ...continuationContext,
+      requiresHandoff: true,
+      handoff: {
+        ...handoff,
+        issueTraceable: handoff.issueTraceable === false ? false : true,
+        approvalScopeMatched: handoff.approvalScopeMatched === false ? false : true,
+        relatedIssue: normalizeIssue(handoff.relatedIssue) ?? issueNumber,
+        summary:
+          normalizeText(handoff.summary) ||
+          `Issue #${issueNumber} bounded remote Codex handoff`
+      }
+    },
+    policyInput: {
+      ...policyInput,
+      issueTraceable: policyInput.issueTraceable === false ? false : true,
+      issueTraceability: {
+        ...issueTraceability,
+        relatedIssue: normalizeIssue(issueTraceability.relatedIssue) ?? issueNumber,
+        intentRefs: normalizeTraceRefs(issueTraceability.intentRefs, `#${issueNumber} Intent`),
+        successCriteriaRefs: normalizeTraceRefs(
+          issueTraceability.successCriteriaRefs,
+          `#${issueNumber} Success Criteria`
+        ),
+        nonGoalRefs: normalizeTraceRefs(issueTraceability.nonGoalRefs, `#${issueNumber} Non-goals`)
+      }
+    }
+  };
+}
+
+function normalizeTraceRefs(value, fallback) {
+  if (Array.isArray(value) && value.some((item) => Boolean(normalizeText(item)))) {
+    return value;
+  }
+  return [fallback];
 }
 
 async function resolveRuntimeAliasRegistry({ baseAliasRegistry, env }) {
