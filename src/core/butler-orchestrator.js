@@ -21,8 +21,12 @@ export function evaluateButlerExecution(input) {
     return deny(judgment.rule, judgment.reason);
   }
 
-  const policy = evaluateExecutionPolicy({
+  const policyInput = {
     ...(input?.policyInput ?? {}),
+    constitutionConsulted: true
+  };
+  const policy = evaluateExecutionPolicy({
+    ...policyInput,
     actorRole: resolveButlerPolicyActorRole(input)
   });
   if (!policy.allowed) {
