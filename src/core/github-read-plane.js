@@ -23,6 +23,7 @@ export async function retrieveGitHubReadPlane(input = {}) {
   const issueNumber = normalizePositiveInteger(input.issueNumber);
   const pullNumber = normalizePositiveInteger(input.pullNumber);
   const branch = normalizeText(input.branch);
+  const head = normalizeText(input.head);
   const ref = normalizeText(input.ref) || branch;
   const state = normalizeText(input.state) || "open";
   const limit = normalizeLimit(input.limit, 20);
@@ -64,6 +65,7 @@ export async function retrieveGitHubReadPlane(input = {}) {
     pullNumber,
     ref,
     branch,
+    head,
     state,
     limit,
     token: tokenResolution.token,
@@ -109,6 +111,7 @@ async function fetchGitHubReadResource(input) {
     pullNumber,
     ref,
     branch,
+    head,
     state,
     limit,
     token,
@@ -123,6 +126,7 @@ async function fetchGitHubReadResource(input) {
     pullNumber,
     ref,
     branch,
+    head,
     state,
     limit,
     apiBaseUrl
@@ -180,6 +184,7 @@ function buildGitHubReadRequest({
   pullNumber,
   ref,
   branch,
+  head,
   state,
   limit,
   apiBaseUrl
@@ -216,7 +221,9 @@ function buildGitHubReadRequest({
       };
     }
     return {
-      url: `${apiBaseUrl}/repos/${encodedRepository}/pulls?state=${encodeURIComponent(state)}&per_page=${limit}`
+      url:
+        `${apiBaseUrl}/repos/${encodedRepository}/pulls?state=${encodeURIComponent(state)}&per_page=${limit}` +
+        (head ? `&head=${encodeURIComponent(head)}` : "")
     };
   }
 
@@ -334,6 +341,11 @@ function normalizePullRequest(item) {
     draft: item?.draft === true,
     headRef: normalizeText(item?.head?.ref),
     headSha: normalizeText(item?.head?.sha),
+    headOwner:
+      normalizeText(item?.head?.repo?.owner?.login) ||
+      normalizeText(item?.head?.user?.login) ||
+      normalizeText(item?.head?.repo?.full_name).split("/")[0] ||
+      null,
     baseRef: normalizeText(item?.base?.ref),
     baseSha: normalizeText(item?.base?.sha),
     merged: item?.merged === true || Boolean(normalizeText(item?.merged_at)),

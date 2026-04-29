@@ -1123,9 +1123,20 @@ async function prepareGatewayPayload({ payload, env, allowRemoteCodexHandoffNorm
     warnings.push("runtime forces guarded absence mode; payload autonomyMode override was ignored");
   }
 
+  const runtimeTruthResolution = allowRemoteCodexHandoffNormalization
+    ? await resolveRemoteCodexHandoffRuntimeTruth({
+        payload: normalizedPayload,
+        policyInput: normalizedPolicyInput,
+        aliasRegistry: resolvedAliasRegistry.aliasRegistry,
+        env
+      })
+    : { policyInput: normalizedPolicyInput, warnings: [] };
+  warnings.push(...(runtimeTruthResolution.warnings ?? []));
+  const policyInputWithRuntimeTruth = runtimeTruthResolution.policyInput;
+
   const resolvedApprovalGrant = await resolveApprovalGrant({
     payload: normalizedPayload,
-    policyInput: normalizedPolicyInput,
+    policyInput: policyInputWithRuntimeTruth,
     env
   });
   if (resolvedApprovalGrant.warning) {
@@ -1136,17 +1147,134 @@ async function prepareGatewayPayload({ payload, env, allowRemoteCodexHandoffNorm
     payload: {
       ...normalizedPayload,
       policyInput: {
-        ...normalizedPolicyInput,
+        ...policyInputWithRuntimeTruth,
         aliasRegistry: resolvedAliasRegistry.aliasRegistry,
         autonomyMode: effectiveAutonomyMode,
         approvalGrant: resolvedApprovalGrant.approvalGrant,
         approvalScope: buildApprovalScopeSnapshot({
           payload: normalizedPayload,
-          policyInput: normalizedPolicyInput
+          policyInput: policyInputWithRuntimeTruth
         })
       }
     },
     warnings
+  };
+}
+
+async function resolveRemoteCodexHandoffRuntimeTruth({
+  payload,
+  policyInput,
+  aliasRegistry,
+  env
+}) {
+  const actionType = normalize(policyInput.actionType);
+  const actorRole = normalize(payload?.actorRole);
+  if (actorRole !== "butler" || actionType !== "build") {
+    return { policyInput, warnings: [] };
+  }
+
+  const runtimeTruth =
+    policyInput.runtimeTruth && typeof policyInput.runtimeTruth === "object"
+      ? policyInput.runtimeTruth
+      : {};
+  const runtimeState =
+    runtimeTruth.runtimeState && typeof runtimeTruth.runtimeState === "object"
+      ? runtimeTruth.runtimeState
+      : {};
+  if (runtimeTruth.runtimeAvailable === true && Object.keys(runtimeState).length > 0) {
+    return { policyInput, warnings: [] };
+  }
+
+  const repositoryResolution = resolveRepositoryTarget({
+    input: policyInput.repositoryInput,
+    mode: policyInput.mode,
+    aliasRegistry
+  });
+  if (!repositoryResolution.resolved) {
+    return { policyInput, warnings: [] };
+  }
+
+  const issueNumber = normalizeIssue(payload?.issueContext?.issueNumber);
+  const activeBranch =
+    normalizeText(runtimeState.activeBranch) ||
+    normalizeText(payload?.executionTarget?.branch) ||
+    (issueNumber ? `codex/issue-${issueNumber}` : "");
+  const [repositoryOwner] = repositoryResolution.repository.split("/");
+  const [pulls, branches, workflowRuns] = await Promise.all([
+    retrieveGitHubReadPlane({
+      resource: "pulls",
+      repository: repositoryResolution.repository,
+      state: "all",
+      head: `${repositoryOwner}:${activeBranch}`,
+      limit: 10,
+      env
+    }),
+    retrieveGitHubReadPlane({
+      resource: "branches",
+      repository: repositoryResolution.repository,
+      branch: activeBranch,
+      limit: 1,
+      env
+    }),
+    retrieveGitHubReadPlane({
+      resource: "workflow_runs",
+      repository: repositoryResolution.repository,
+      branch: activeBranch,
+      limit: 10,
+      env
+    })
+  ]);
+
+  if (!pulls.ok || !branches.ok || !workflowRuns.ok) {
+    return {
+      policyInput,
+      warnings: ["remote Codex handoff runtime truth read was unavailable"]
+    };
+  }
+
+  const pullRequest = selectPullRequestForBranch(pulls.read?.records, {
+    branch: activeBranch,
+    owner: repositoryOwner
+  });
+  const branchRecord = Array.isArray(branches.read?.records) ? branches.read.records[0] : null;
+  return {
+    policyInput: {
+      ...policyInput,
+      runtimeTruth: {
+        ...runtimeTruth,
+        runtimeAvailable: true,
+        runtimeState: {
+          ...runtimeState,
+          activeBranch,
+          branch: branchRecord ?? null,
+          pullRequest: pullRequest ?? { exists: false },
+          workflowRuns: workflowRuns.read?.records ?? []
+        }
+      }
+    },
+    warnings: []
+  };
+}
+
+function selectPullRequestForBranch(records, target) {
+  const items = Array.isArray(records) ? records : [];
+  const branch = normalizeText(target?.branch);
+  const owner = normalizeText(target?.owner);
+  const selected = items.find(
+    (item) => normalizeText(item?.headRef) === branch && normalizeText(item?.headOwner) === owner
+  );
+  if (!selected) {
+    return { exists: false };
+  }
+  return {
+    exists: true,
+    number: selected.number ?? null,
+    url: selected.htmlUrl ?? null,
+    state: selected.state ?? null,
+    title: selected.title ?? null,
+    headRef: selected.headRef ?? null,
+    headSha: selected.headSha ?? null,
+    baseRef: selected.baseRef ?? null
   };
 }
 
