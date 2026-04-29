@@ -1084,9 +1084,11 @@ async function prepareGatewayPayload({ payload, env, allowRemoteCodexHandoffNorm
     basePayload.policyInput && typeof basePayload.policyInput === "object"
       ? basePayload.policyInput
       : {};
-  const normalizedPayload = allowRemoteCodexHandoffNormalization
-    ? normalizeRemoteCodexHandoffPayload(basePayload)
-    : basePayload;
+  const normalizedPayload = normalizeButlerReadConsentPayload(
+    allowRemoteCodexHandoffNormalization
+      ? normalizeRemoteCodexHandoffPayload(basePayload)
+      : basePayload
+  );
   const normalizedPolicyInput =
     normalizedPayload.policyInput && typeof normalizedPayload.policyInput === "object"
       ? normalizedPayload.policyInput
@@ -1145,6 +1147,37 @@ async function prepareGatewayPayload({ payload, env, allowRemoteCodexHandoffNorm
       }
     },
     warnings
+  };
+}
+
+function normalizeButlerReadConsentPayload(payload) {
+  const policyInput =
+    payload?.policyInput && typeof payload.policyInput === "object" ? payload.policyInput : {};
+  const actionType = normalize(policyInput.actionType);
+  const actorRole = normalize(payload?.actorRole);
+  if (actorRole !== "butler" || (actionType !== "read" && actionType !== "summarize")) {
+    return payload;
+  }
+
+  const consent =
+    policyInput.consent && typeof policyInput.consent === "object" ? policyInput.consent : {};
+  const consentWasProvided = policyInput.consent && typeof policyInput.consent === "object";
+  const grantedCategories = Array.isArray(consent.grantedCategories)
+    ? consent.grantedCategories
+    : [];
+  if (consentWasProvided && grantedCategories.length > 0) {
+    return payload;
+  }
+
+  return {
+    ...payload,
+    policyInput: {
+      ...policyInput,
+      consent: {
+        ...consent,
+        grantedCategories: mergeGrantedConsentCategories(grantedCategories, ["read"])
+      }
+    }
   };
 }
 

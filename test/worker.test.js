@@ -315,6 +315,67 @@ test("worker gateway returns PR revision loop guidance for Butler summaries", as
   assert.equal(body.executionContinuity.nextSuggestedActions.includes("rerun_gemini_review"), true);
 });
 
+test("worker accepts natural Butler read without internal read consent field", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/gateway", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        phase: "exploration",
+        actorRole: ActorRole.BUTLER,
+        surfaceContext: {
+          surface: "custom_gpt",
+          judgmentModelId: "vtdd-butler-core-v1"
+        },
+        judgmentTrace: validButlerJudgmentTrace,
+        policyInput: {
+          actionType: ActionType.READ,
+          mode: TaskMode.READ_ONLY,
+          repositoryInput: "vtdd",
+          aliasRegistry
+        }
+      })
+    }),
+    gatewayAuthEnv
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.allowed, true);
+  assert.equal(body.repository, "sample-org/vtdd-v2");
+});
+
+test("worker does not override explicit Butler read consent categories", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/gateway", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        phase: "exploration",
+        actorRole: ActorRole.BUTLER,
+        surfaceContext: {
+          surface: "custom_gpt",
+          judgmentModelId: "vtdd-butler-core-v1"
+        },
+        judgmentTrace: validButlerJudgmentTrace,
+        policyInput: {
+          actionType: ActionType.READ,
+          mode: TaskMode.READ_ONLY,
+          repositoryInput: "vtdd",
+          aliasRegistry,
+          consent: { grantedCategories: [ConsentCategory.PROPOSE] }
+        }
+      })
+    }),
+    gatewayAuthEnv
+  );
+
+  assert.equal(response.status, 422);
+  const body = await response.json();
+  assert.equal(body.allowed, false);
+  assert.equal(body.blockedByRule, "consent_boundary");
+});
+
 test("worker dispatches remote Codex execution", async () => {
   const calls = [];
   const response = await worker.fetch(
