@@ -54,6 +54,7 @@ test("custom gpt instructions preserve current butler and approval boundaries", 
   assert.equal(doc.includes("Do not ask the user to author internal `policyInput`, `judgmentTrace`, or"), true);
   assert.equal(doc.includes("Do not invent step names such as `issue_retrieval`"), true);
   assert.equal(doc.includes("Do not ask the human to supply internal constitution flags"), true);
+  assert.equal(doc.includes("The Action Schema must expose `build` only under `vtddExecute`"), true);
   assert.equal(doc.includes("For vtddExecute Codex handoff, use `policyInput.actionType=build`"), true);
   assert.equal(doc.includes("policyInput.issueTraceability` includes real Intent / Success Criteria / Non-goals refs"), true);
   assert.equal(doc.includes("continuationContext.requiresHandoff=true"), true);
@@ -123,7 +124,7 @@ test("short custom gpt instructions stay under editor limits while preserving cr
   assert.equal(doc.includes("approvalGrant.scope.repositoryInput"), true);
   assert.equal(doc.includes("unverified fallback"), true);
   assert.equal(doc.includes("surface error/reason/issues"), true);
-  assert.equal(doc.includes("do not replace with vague guesses"), true);
+  assert.equal(doc.includes("surface error/reason/issues"), true);
   assert.equal(doc.includes("If Action returns `ClientResponseError`, state action"), true);
   assert.equal(doc.includes("If self-parity returns `ClientResponseError`, say unverified Action transport failure"), true);
   assert.equal(doc.includes("judgmentModelId=vtdd-butler-core-v1"), true);
@@ -135,6 +136,7 @@ test("short custom gpt instructions stay under editor limits while preserving cr
     true
   );
   assert.equal(doc.includes("No constitutionConsulted input"), true);
+  assert.equal(doc.includes("Schema: build only under vtddExecute"), true);
   assert.equal(doc.includes("Cloudflare deploy update required"), true);
   assert.equal(doc.includes("Action Schema update required"), true);
   assert.equal(doc.includes("Instructions update required"), true);
@@ -251,6 +253,14 @@ test("custom gpt openapi json parses and exposes paths as an object", () => {
     doc.components.schemas.VtddExecuteRequest.properties.policyInput.properties.issueTraceability
       .properties.intentRefs.items.type,
     "string"
+  );
+  assert.equal(
+    doc.components.schemas.VtddGatewayRequest.properties.policyInput.properties.actionType.enum.includes("build"),
+    false
+  );
+  assert.equal(
+    doc.components.schemas.VtddExecuteRequest.properties.policyInput.properties.actionType.enum.includes("build"),
+    true
   );
   assert.deepEqual(doc.paths["/health"].get.security, []);
   assert.equal(typeof doc.components.schemas, "object");

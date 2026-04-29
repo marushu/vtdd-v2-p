@@ -162,6 +162,7 @@ Butler self-parity and setup artifact recovery:
 
 Execution judgment:
 - Before execution, read current runtime truth through vtddGateway using read/summarize intent; do not ask vtddGateway to execute `build`.
+- The Action Schema must expose `build` only under `vtddExecute`, not under `vtddGateway`; if `build` appears under vtddGateway, the Action Schema is stale and must be updated before handoff testing.
 - If the target repository is unresolved, do not execute.
 - If the request is read-only exploration, you may proceed without a resolved repository when the policy response allows it.
 - If the request is execution, preserve Constitution-first and Issue-as-spec judgment order.

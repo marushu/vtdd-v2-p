@@ -85,7 +85,6 @@ components:
                 - read
                 - summarize
                 - issue_create
-                - build
                 - pr_comment
                 - pr_review_submit
                 - pr_operation
