@@ -24,6 +24,8 @@ test("passkey operator page can target explicit api base and sync endpoint", () 
   assert.equal(html.includes("Sync OPENAI_API_KEY"), true);
   assert.equal(html.includes("Dispatch production deploy"), true);
   assert.equal(html.includes("Butler 会話に貼らず"), true);
+  assert.equal(html.includes("Copy approvalGrantId"), true);
+  assert.equal(html.includes("Auto-copy approvalGrantId after approval"), true);
   assert.equal(html.includes('id="action-type-input" value="deploy_production"'), true);
   assert.equal(html.includes('repositoryInput: document.getElementById("repo-input").value'), true);
   assert.equal(html.includes('issueNumber: Number(document.getElementById("issue-input").value || 0) || null'), true);
@@ -72,7 +74,71 @@ test("passkey operator page response parser reports and redacts non-json failure
   assert.equal(validJson.ok, true);
 });
 
-function loadOperatorPageHelpers() {
+test("passkey operator page clipboard helper uses navigator clipboard when available", async () => {
+  let copied = "";
+  const helpers = loadOperatorPageHelpers({
+    navigator: {
+      clipboard: {
+        writeText: async (value) => {
+          copied = value;
+        }
+      }
+    }
+  });
+
+  await helpers.copyText("approval:test");
+
+  assert.equal(copied, "approval:test");
+});
+
+test("passkey operator page clipboard helper falls back to textarea copy", async () => {
+  let copied = false;
+  let textareaRemoved = false;
+  const textarea = {
+    value: "",
+    style: {},
+    setAttribute() {},
+    select() {
+      copied = this.value === "approval:fallback";
+    }
+  };
+  const helpers = loadOperatorPageHelpers({
+    navigator: {},
+    document: {
+      getElementById() {
+        return {
+          value: "",
+          textContent: "",
+          addEventListener() {}
+        };
+      },
+      createElement(tagName) {
+        assert.equal(tagName, "textarea");
+        return textarea;
+      },
+      execCommand(command) {
+        assert.equal(command, "copy");
+        return copied;
+      },
+      body: {
+        appendChild(element) {
+          assert.equal(element, textarea);
+        },
+        removeChild(element) {
+          assert.equal(element, textarea);
+          textareaRemoved = true;
+        }
+      }
+    }
+  });
+
+  await helpers.copyText("approval:fallback");
+
+  assert.equal(copied, true);
+  assert.equal(textareaRemoved, true);
+});
+
+function loadOperatorPageHelpers(overrides = {}) {
   const html = renderPasskeyOperatorPage();
   const script = html.match(/<script>([\s\S]*)<\/script>/)?.[1];
   assert.ok(script);
@@ -80,6 +146,7 @@ function loadOperatorPageHelpers() {
   const elements = new Map();
   const context = {
     Response,
+    navigator: {},
     document: {
       getElementById(id) {
         if (!elements.has(id)) {
@@ -91,7 +158,8 @@ function loadOperatorPageHelpers() {
         }
         return elements.get(id);
       }
-    }
+    },
+    ...overrides
   };
   vm.runInNewContext(script, context);
   assert.equal(typeof context.readResponseBody, "function");

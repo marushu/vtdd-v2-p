@@ -104,6 +104,11 @@ export function renderPasskeyOperatorPage(input = {}) {
       button.secondary {
         background: var(--accent-2);
       }
+      button.ghost {
+        background: #eef3ef;
+        color: var(--accent);
+        border: 1px solid #b8cec3;
+      }
       pre {
         white-space: pre-wrap;
         word-break: break-word;
@@ -121,6 +126,18 @@ export function renderPasskeyOperatorPage(input = {}) {
         display: flex;
         gap: 10px;
         flex-wrap: wrap;
+      }
+      .inline-check {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        margin: 8px 0 12px;
+        color: var(--muted);
+        font-size: 14px;
+      }
+      .inline-check input {
+        width: auto;
+        margin: 0;
       }
     </style>
   </head>
@@ -160,7 +177,12 @@ export function renderPasskeyOperatorPage(input = {}) {
           <input id="risk-kind-input" value="${highRiskKindDefault}" />
           <div class="row">
             <button class="secondary" id="approve-button">Approve high-risk action</button>
+            <button class="ghost" id="copy-approval-grant-button" type="button">Copy approvalGrantId</button>
           </div>
+          <label class="inline-check" for="auto-copy-approval-grant-input">
+            <input id="auto-copy-approval-grant-input" type="checkbox" />
+            Auto-copy approvalGrantId after approval
+          </label>
           <p class="muted">GitHub App secret sync なら <code>actionType=destructive</code> / <code>highRiskKind=github_app_secret_sync</code>、production deploy なら <code>actionType=deploy_production</code> / <code>highRiskKind=deploy_production</code> を使います。</p>
           <pre id="approve-output"></pre>
         </section>
@@ -205,6 +227,8 @@ export function renderPasskeyOperatorPage(input = {}) {
       const syncOutput = document.getElementById("sync-output");
       const deployOutput = document.getElementById("deploy-output");
       const openaiSecretSyncOutput = document.getElementById("openai-secret-sync-output");
+      const copyApprovalGrantButton = document.getElementById("copy-approval-grant-button");
+      const autoCopyApprovalGrantInput = document.getElementById("auto-copy-approval-grant-input");
       let latestApprovalGrantId = "";
 
       async function readResponseBody(response) {
@@ -246,6 +270,44 @@ export function renderPasskeyOperatorPage(input = {}) {
         }
         return new Error(parts.join("\\n"));
       }
+
+      async function copyText(text) {
+        const value = String(text || "");
+        if (!value) {
+          throw new Error("nothing to copy");
+        }
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(value);
+          return;
+        }
+        const textarea = document.createElement("textarea");
+        textarea.value = value;
+        textarea.setAttribute("readonly", "");
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.select();
+        const copied = document.execCommand("copy");
+        document.body.removeChild(textarea);
+        if (!copied) {
+          throw new Error("clipboard copy failed");
+        }
+      }
+
+      async function copyApprovalGrantIdToClipboard({ quiet = false } = {}) {
+        await copyText(latestApprovalGrantId);
+        if (!quiet) {
+          approveOutput.textContent = approveOutput.textContent + "\\n\\nCopied approvalGrantId to clipboard.";
+        }
+      }
+
+      copyApprovalGrantButton.addEventListener("click", async () => {
+        try {
+          await copyApprovalGrantIdToClipboard();
+        } catch (error) {
+          approveOutput.textContent = approveOutput.textContent + "\\n\\n" + String(error);
+        }
+      });
 
       document.getElementById("register-button").addEventListener("click", async () => {
         try {
@@ -323,8 +385,16 @@ export function renderPasskeyOperatorPage(input = {}) {
           if (!verifyResponse.ok) {
             throw responseError(verifyBody, "approval verify failed");
           }
-          latestApprovalGrantId = verifyBody?.approvalGrant?.approvalId || "";
+          latestApprovalGrantId = verifyBody?.approvalGrant?.approvalId || verifyBody?.approvalGrantId || "";
           approveOutput.textContent = JSON.stringify(verifyBody, null, 2);
+          if (latestApprovalGrantId && autoCopyApprovalGrantInput.checked) {
+            try {
+              await copyApprovalGrantIdToClipboard({ quiet: true });
+              approveOutput.textContent = approveOutput.textContent + "\\n\\nCopied approvalGrantId to clipboard.";
+            } catch (error) {
+              approveOutput.textContent = approveOutput.textContent + "\\n\\nAuto-copy failed: " + String(error);
+            }
+          }
         } catch (error) {
           approveOutput.textContent = String(error);
         }
