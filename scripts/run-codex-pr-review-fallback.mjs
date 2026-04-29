@@ -72,8 +72,9 @@ async function main() {
 }
 
 async function runCodexReview({ baseRef, prompt }) {
+  const cwd = process.env.CODEX_REVIEW_WORKTREE || process.cwd();
   return execFileAsync("codex", ["review", "--base", baseRef, "-"], {
-    cwd: process.cwd(),
+    cwd,
     env: process.env,
     input: prompt,
     maxBuffer: 1024 * 1024 * 8
