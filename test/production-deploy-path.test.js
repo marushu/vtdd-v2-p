@@ -67,6 +67,12 @@ test("deploy-production workflow enforces the MVP production deploy boundary", (
     true
   );
   assert.equal(workflow.includes("Generate production Wrangler config"), true);
+  assert.equal(workflow.includes("VTDD_GITHUB_ACTIONS_REPOSITORY: ${{ github.repository }}"), true);
+  assert.equal(workflow.includes("[env.production.vars]"), true);
+  assert.equal(
+    workflow.includes('VTDD_GITHUB_ACTIONS_REPOSITORY = "$VTDD_GITHUB_ACTIONS_REPOSITORY"'),
+    true
+  );
   assert.equal(workflow.includes("[[env.production.d1_databases]]"), true);
   assert.equal(workflow.includes('binding = "VTDD_MEMORY_D1"'), true);
   assert.equal(workflow.includes('database_id = "$CLOUDFLARE_D1_DATABASE_ID"'), true);
