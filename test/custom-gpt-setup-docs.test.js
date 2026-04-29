@@ -184,6 +184,7 @@ test("custom gpt openapi json parses and exposes paths as an object", () => {
 test("custom gpt openapi json exposes JSON bodies for Butler action auth failures", () => {
   const doc = JSON.parse(fs.readFileSync(OPENAPI_JSON_PATH, "utf8"));
   const routes = [
+    ["/v2/action/github", "post"],
     ["/v2/action/repository-nickname", "post"],
     ["/v2/retrieve/repository-nicknames", "get"],
     ["/v2/retrieve/self-parity", "get"]

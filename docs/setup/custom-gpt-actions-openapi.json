@@ -543,10 +543,24 @@
             }
           },
           "401": {
-            "description": "Missing machine auth"
+            "description": "Missing machine auth",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
           },
           "403": {
-            "description": "Invalid machine auth"
+            "description": "Invalid machine auth",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
           },
           "422": {
             "description": "GitHub write request blocked or invalid",

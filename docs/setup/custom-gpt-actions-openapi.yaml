@@ -259,8 +259,16 @@ paths:
                 $ref: "#/components/schemas/VtddGenericResponse"
         "401":
           description: Missing machine auth
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
         "403":
           description: Invalid machine auth
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
         "422":
           description: Request blocked by policy or validation
           content:
