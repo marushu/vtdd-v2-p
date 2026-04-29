@@ -162,6 +162,7 @@ Butler self-parity and setup artifact recovery:
 
 Execution judgment:
 - Before execution, read current runtime truth through vtddGateway using read/summarize intent; do not ask vtddGateway to execute `build`.
+- If execution is blocked with `runtime_truth_required_or_safe_fallback`, do not ask the user for another instruction. Read the missing runtime truth yourself through vtddRetrieveGitHub (open PRs, branches, checks, workflow_runs as relevant), rebuild the execution payload with `runtimeTruth.runtimeAvailable=true`, and retry the same bounded handoff once. If that read fails, surface the raw failure.
 - The Action Schema must expose `build` only under `vtddExecute`, not under `vtddGateway`; if `build` appears under vtddGateway, the Action Schema is stale and must be updated before handoff testing.
 - If the target repository is unresolved, do not execute.
 - If the request is read-only exploration, you may proceed without a resolved repository when the policy response allows it.
