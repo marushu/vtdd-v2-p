@@ -314,6 +314,7 @@ paths:
                 operation:
                   type: string
                   enum:
+                    - issue_create
                     - issue_comment_create
                     - issue_comment_update
                     - branch_create

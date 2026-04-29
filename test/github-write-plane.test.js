@@ -2,6 +2,45 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { executeGitHubWritePlane, GitHubWriteOperation } from "../src/core/index.js";
 
+test("github write plane creates scoped issues with GO approval", async () => {
+  const calls = [];
+  const result = await executeGitHubWritePlane({
+    operation: GitHubWriteOperation.ISSUE_CREATE,
+    repository: "sample-org/vtdd-v2-p",
+    title: "test: live E2E evidence",
+    body: "Issue body fixed by approval scope.",
+    approvalPhrase: "GO",
+    targetConfirmed: true,
+    approvalScopeMatched: true,
+    env: {
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_write",
+      GITHUB_API_FETCH: async (url, init) => {
+        calls.push({ url, init });
+        return new Response(
+          JSON.stringify({
+            number: 107,
+            title: "test: live E2E evidence",
+            state: "open",
+            html_url: "https://github.com/sample-org/vtdd-v2-p/issues/107"
+          }),
+          { status: 201, headers: { "content-type": "application/json" } }
+        );
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.write.operation, GitHubWriteOperation.ISSUE_CREATE);
+  assert.equal(result.write.issueNumber, 107);
+  assert.equal(result.write.url, "https://github.com/sample-org/vtdd-v2-p/issues/107");
+  assert.equal(calls[0].url.includes("/repos/sample-org/vtdd-v2-p/issues"), true);
+  assert.equal(calls[0].init.method, "POST");
+  assert.deepEqual(JSON.parse(calls[0].init.body), {
+    title: "test: live E2E evidence",
+    body: "Issue body fixed by approval scope."
+  });
+});
+
 test("github write plane creates scoped issue comments with GO approval", async () => {
   const calls = [];
   const result = await executeGitHubWritePlane({

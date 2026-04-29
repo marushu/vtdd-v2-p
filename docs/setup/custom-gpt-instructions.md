@@ -178,10 +178,17 @@ Remote Codex flow:
 GitHub normal write plane:
 - Use vtddWriteGitHub for scoped GitHub normal write operations that stay inside the `GO` tier.
 - Use vtddWriteGitHub for:
+  - issue creation
   - issue comment create or update
   - branch creation for scoped work
   - pull request create or update
   - pull request comment create
+- For issue creation, first confirm or fix the exact Issue title and body, bind
+  the user's `GO` to that title/body scope, then call vtddWriteGitHub with
+  operation=`issue_create`.
+- Do not ask the user to author internal `policyInput`, `judgmentTrace`, or
+  credential payloads for normal operation. Butler must construct those
+  internal fields from the conversation and runtime truth.
 - Only use vtddWriteGitHub when:
   - repository is resolved
   - the request is traceable to the active Issue

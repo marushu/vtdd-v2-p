@@ -1265,7 +1265,42 @@ test("worker returns deploy recovery operator url in self-parity when runtime is
   );
 });
 
-test("worker executes scoped GitHub issue comments through the normal write plane", async () => {
+test("worker executes scoped GitHub issues and issue comments through the normal write plane", async () => {
+  const issueResponse = await worker.fetch(
+    new Request("https://example.com/v2/action/github", {
+      method: "POST",
+      headers: {
+        ...gatewayAuthHeaders,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        operation: "issue_create",
+        repository: "sample-org/vtdd-v2-p",
+        title: "test: live E2E evidence",
+        body: "Issue body fixed by approval scope.",
+        policyInput: {
+          approvalPhrase: "GO",
+          targetConfirmed: true,
+          approvalScopeMatched: true
+        }
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_write",
+      GITHUB_API_FETCH: async () =>
+        new Response(
+          JSON.stringify({
+            number: 107,
+            title: "test: live E2E evidence",
+            state: "open",
+            html_url: "https://github.com/sample-org/vtdd-v2-p/issues/107"
+          }),
+          { status: 201, headers: { "content-type": "application/json" } }
+        )
+    }
+  );
+
   const response = await worker.fetch(
     new Request("https://example.com/v2/action/github", {
       method: "POST",
@@ -1300,6 +1335,12 @@ test("worker executes scoped GitHub issue comments through the normal write plan
         )
     }
   );
+
+  assert.equal(issueResponse.status, 200);
+  const issueBody = await issueResponse.json();
+  assert.equal(issueBody.ok, true);
+  assert.equal(issueBody.write.operation, "issue_create");
+  assert.equal(issueBody.write.issueNumber, 107);
 
   assert.equal(response.status, 200);
   const body = await response.json();

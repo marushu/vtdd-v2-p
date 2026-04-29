@@ -50,6 +50,8 @@ test("custom gpt instructions preserve current butler and approval boundaries", 
   assert.equal(doc.includes("vtddRetrieveRepositoryNicknames"), true);
   assert.equal(doc.includes("vtddRetrieveSetupArtifact"), true);
   assert.equal(doc.includes("vtddRetrieveSelfParity"), true);
+  assert.equal(doc.includes("operation=`issue_create`"), true);
+  assert.equal(doc.includes("Do not ask the user to author internal `policyInput`, `judgmentTrace`, or"), true);
   assert.equal(doc.includes("when the user says `君`, `自分`, `Butler`, `VTDD`, or `このGPT`"), true);
   assert.equal(doc.includes("`君自身のアップデートある？`"), true);
   assert.equal(doc.includes("`古くなってない？`"), true);
@@ -91,6 +93,7 @@ test("short custom gpt instructions stay under editor limits while preserving cr
   assert.equal(doc.includes("vtddSyncGitHubActionsSecret"), true);
   assert.equal(doc.includes("vtddUpsertRepositoryNickname"), true);
   assert.equal(doc.includes("vtddRetrieveRepositoryNicknames"), true);
+  assert.equal(doc.includes("For issue_create, fix title+body, bind GO to that payload"), true);
   assert.equal(doc.includes("Nickname memory is explicit user-owned alias registry data"), true);
   assert.equal(doc.includes("surface the returned error/reason/issues plainly in Japanese"), true);
   assert.equal(doc.includes("Do not replace nickname failures with vague summaries"), true);
@@ -129,6 +132,7 @@ test("custom gpt openapi doc exposes current gateway, execute, and progress rout
   assert.equal(doc.includes("conversation:"), true);
   assert.equal(doc.includes("repositoryInput:"), true);
   assert.equal(doc.includes("issueNumber"), true);
+  assert.equal(doc.includes("- issue_create"), true);
   assert.equal(doc.includes("pullNumber"), true);
   assert.equal(doc.includes("workflow_runs"), true);
 });
@@ -156,6 +160,12 @@ test("custom gpt openapi json parses and exposes paths as an object", () => {
   assert.equal(typeof doc.paths["/v2/gateway"], "object");
   assert.equal(typeof doc.paths["/v2/action/execute"], "object");
   assert.equal(typeof doc.paths["/v2/action/github"], "object");
+  assert.equal(
+    doc.paths["/v2/action/github"].post.requestBody.content["application/json"].schema.properties.operation.enum.includes(
+      "issue_create"
+    ),
+    true
+  );
   assert.equal(typeof doc.paths["/v2/action/github-authority"], "object");
   assert.equal(typeof doc.paths["/v2/action/deploy"], "object");
   assert.equal(typeof doc.paths["/v2/action/github-actions-secret"], "object");
