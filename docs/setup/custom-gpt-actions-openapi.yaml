@@ -61,6 +61,8 @@ components:
               type: string
             judgmentModelId:
               type: string
+              enum:
+                - vtdd-butler-core-v1
           additionalProperties: true
         judgmentTrace:
           type: array
@@ -154,6 +156,8 @@ components:
               type: string
             judgmentModelId:
               type: string
+              enum:
+                - vtdd-butler-core-v1
           additionalProperties: true
         judgmentTrace:
           type: array

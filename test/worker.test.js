@@ -208,6 +208,46 @@ test("worker gateway allows butler path when deterministic judgment order is sat
   assert.equal(body.repository, "sample-org/vtdd-v2");
 });
 
+test("worker gateway still blocks Custom GPT payloads with noncanonical judgment model ids", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/gateway", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        phase: "execution",
+        actorRole: ActorRole.BUTLER,
+        surfaceContext: {
+          surface: "custom_gpt",
+          judgmentModelId: "gpt-5.5 thinking"
+        },
+        judgmentTrace: validButlerJudgmentTrace,
+        policyInput: {
+          actionType: ActionType.ISSUE_CREATE,
+          mode: TaskMode.EXECUTION,
+          repositoryInput: "vtdd",
+          aliasRegistry,
+          targetConfirmed: true,
+          constitutionConsulted: true,
+          runtimeTruth: { runtimeAvailable: true },
+          credential: { model: "github_app", tier: CredentialTier.EXECUTE },
+          consent: { grantedCategories: [ConsentCategory.PROPOSE] },
+          approvalPhrase: "GO issue create",
+          approvalScopeMatched: true,
+          issueTraceable: true,
+          go: true,
+          passkey: false
+        }
+      })
+    }),
+    gatewayAuthEnv
+  );
+
+  assert.equal(response.status, 422);
+  const body = await response.json();
+  assert.equal(body.allowed, false);
+  assert.equal(body.blockedByRule, "surface_must_not_override_judgment_model");
+});
+
 test("worker gateway returns PR revision loop guidance for Butler summaries", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/v2/gateway", {

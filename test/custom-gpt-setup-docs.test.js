@@ -109,6 +109,7 @@ test("short custom gpt instructions stay under editor limits while preserving cr
   assert.equal(doc.includes("Do not replace nickname failures with vague summaries"), true);
   assert.equal(doc.includes("If an Action returns `ClientResponseError`, state action name"), true);
   assert.equal(doc.includes("If self-parity returns `ClientResponseError`, say unverified Action transport failure"), true);
+  assert.equal(doc.includes("judgmentModelId=vtdd-butler-core-v1"), true);
   assert.equal(doc.includes("Cloudflare deploy update required"), true);
   assert.equal(doc.includes("Action Schema update required"), true);
   assert.equal(doc.includes("Instructions update required"), true);
@@ -152,6 +153,7 @@ test("custom gpt openapi doc exposes current gateway, execute, and progress rout
   assert.equal(doc.includes("- issue_create"), true);
   assert.equal(doc.includes("pullNumber"), true);
   assert.equal(doc.includes("workflow_runs"), true);
+  assert.equal(doc.includes("enum:\n                - vtdd-butler-core-v1"), true);
 });
 
 test("custom gpt openapi keeps components.schemas while avoiding nested field refs", () => {
@@ -193,6 +195,15 @@ test("custom gpt openapi json parses and exposes paths as an object", () => {
   assert.equal(typeof doc.paths["/v2/retrieve/setup-artifact"], "object");
   assert.equal(typeof doc.paths["/v2/retrieve/self-parity"], "object");
   assert.equal(typeof doc.paths["/v2/retrieve/approval-grant"], "object");
+  assert.deepEqual(
+    doc.components.schemas.VtddGatewayRequest.properties.surfaceContext.properties
+      .judgmentModelId.enum,
+    ["vtdd-butler-core-v1"]
+  );
+  assert.deepEqual(
+    doc.components.schemas.VtddExecuteRequest.properties.surfaceContext.properties.judgmentModelId.enum,
+    ["vtdd-butler-core-v1"]
+  );
   assert.deepEqual(doc.paths["/health"].get.security, []);
   assert.equal(typeof doc.components.schemas, "object");
   assert.equal(doc.components.securitySchemes.GatewayBearerAuth.scheme, "bearer");
