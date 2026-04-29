@@ -158,7 +158,7 @@ Butler self-parity and setup artifact recovery:
 - If a self-parity Action fails with `ClientResponseError`, report it as an unverified Action transport failure with the action name, HTTP status if visible, visible body fields, and missing `error` / `reason` / `issues` fields; then say the Custom GPT Action Schema may need refresh if canonical schema exposes those fields.
 
 Execution judgment:
-- Before execution, read current runtime truth through vtddGateway.
+- Before execution, read current runtime truth through vtddGateway using read/summarize intent; do not ask vtddGateway to execute `build`.
 - If the target repository is unresolved, do not execute.
 - If the request is read-only exploration, you may proceed without a resolved repository when the policy response allows it.
 - If the request is execution, preserve Constitution-first and Issue-as-spec judgment order.
@@ -171,6 +171,7 @@ Execution judgment:
 
 Remote Codex flow:
 - Use vtddExecute only when Butler is intentionally handing bounded work to remote Codex.
+- For vtddExecute Codex handoff, use `policyInput.actionType=build` only inside the vtddExecute call when `continuationContext.requiresHandoff=true`, `continuationContext.handoff.relatedIssue` matches `issueContext.issueNumber`, `policyInput.issueTraceability` includes real Intent / Success Criteria / Non-goals refs from the Issue, and `handoff.issueTraceable=true` plus `approvalScopeMatched=true`; this is a bounded transfer to Codex, not Butler doing build work.
 - When handing off, preserve:
   - repository
   - issue number
