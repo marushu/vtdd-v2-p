@@ -180,7 +180,11 @@ export default {
     }
 
     if (request.method === "POST" && isApiPath(url.pathname, "/action/github-authority")) {
-      const auth = authorizeGatewayRequest({ request, env, apiSuffix: "/action/github-authority" });
+      const auth = authorizePasskeyBrowserOrMachineRequest({
+        request,
+        env,
+        apiSuffix: "/action/github-authority"
+      });
       if (!auth.ok) {
         return json(auth.status, {
           ok: false,
@@ -880,10 +884,7 @@ async function handleGitHubHighRiskPlaneRequest(request, env) {
     commitMessage: payload.commitMessage,
     approvalPhrase: policyInput.approvalPhrase,
     targetConfirmed: policyInput.targetConfirmed,
-    approvalGrant:
-      payload.approvalGrant ??
-      policyInput.approvalGrant ??
-      resolvedApprovalGrant.approvalGrant,
+    approvalGrant: resolvedApprovalGrant.approvalGrant,
     approvalScope,
     env
   });
@@ -1020,9 +1021,11 @@ function handlePasskeyOperatorPageRequest(request) {
     syncApiBase,
     repositoryInput: url.searchParams.get("repositoryInput"),
     issueNumber: url.searchParams.get("issueNumber"),
+    pullNumber: url.searchParams.get("pullNumber"),
     phase: url.searchParams.get("phase") || "execution",
     actionType: url.searchParams.get("actionType") || "destructive",
     highRiskKind: url.searchParams.get("highRiskKind") || "github_app_secret_sync",
+    mergeMethod: url.searchParams.get("mergeMethod") || "squash",
     returnUrl: normalizeOperatorReturnUrl(url.searchParams.get("returnUrl")),
     operatorId: url.searchParams.get("operatorId") || "vtdd-operator",
     operatorLabel: url.searchParams.get("operatorLabel") || "VTDD Operator",

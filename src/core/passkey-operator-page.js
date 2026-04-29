@@ -6,9 +6,11 @@ export function renderPasskeyOperatorPage(input = {}) {
   const registrationDefaultOperatorLabel = escapeHtml(input.operatorLabel || "VTDD Operator");
   const repoDefault = escapeHtml(input.repositoryInput || "");
   const issueDefault = escapeHtml(input.issueNumber || "");
+  const pullNumberDefault = escapeHtml(input.pullNumber || "");
   const phaseDefault = escapeHtml(input.phase || "execution");
   const actionTypeDefault = escapeHtml(input.actionType || "destructive");
   const highRiskKindDefault = escapeHtml(input.highRiskKind || "github_app_secret_sync");
+  const mergeMethodDefault = escapeHtml(input.mergeMethod || "squash");
   const returnUrl = escapeHtml(input.returnUrl || "");
   const syncEnabled = input.syncEnabled === true;
   const syncMessage = escapeHtml(
@@ -197,7 +199,7 @@ export function renderPasskeyOperatorPage(input = {}) {
             <input id="auto-copy-approval-grant-input" type="checkbox" />
             Auto-copy approvalGrantId after approval
           </label>
-          <p class="muted">GitHub App secret sync なら <code>actionType=destructive</code> / <code>highRiskKind=github_app_secret_sync</code>、production deploy なら <code>actionType=deploy_production</code> / <code>highRiskKind=deploy_production</code> を使います。</p>
+          <p class="muted">GitHub App secret sync なら <code>actionType=destructive</code> / <code>highRiskKind=github_app_secret_sync</code>、production deploy なら <code>actionType=deploy_production</code> / <code>highRiskKind=deploy_production</code>、PR merge なら <code>actionType=merge</code> / <code>highRiskKind=pull_merge</code> を使います。</p>
           <pre id="approve-output"></pre>
         </section>
 
@@ -224,7 +226,22 @@ export function renderPasskeyOperatorPage(input = {}) {
         </section>
 
         <section>
-          <h2>5. Codex Fallback Secret Sync</h2>
+          <h2>5. GitHub PR Merge</h2>
+          <p class="muted">PR merge 用の real passkey approval 後、この helper から same-origin の GitHub authority path を dispatch します。</p>
+          <label for="pull-number-input">Pull Number</label>
+          <input id="pull-number-input" value="${pullNumberDefault}" placeholder="148" />
+          <label for="merge-method-input">Merge Method</label>
+          <input id="merge-method-input" value="${mergeMethodDefault}" placeholder="squash" />
+          <div class="row">
+            <button id="merge-button">Dispatch PR merge</button>
+            <a class="button-link" id="merge-pr-link" href="#" target="_blank" rel="noopener noreferrer" hidden>Open pull request</a>
+          </div>
+          <p class="muted"><code>actionType=merge</code> / <code>highRiskKind=pull_merge</code> の approvalGrantId が必要です。merge 後は GitHub runtime truth で merged 状態を確認してください。</p>
+          <pre id="merge-output"></pre>
+        </section>
+
+        <section>
+          <h2>6. Codex Fallback Secret Sync</h2>
           <p class="muted">Codex reviewer fallback 用の <code>OPENAI_API_KEY</code> を GitHub Actions secret に同期します。値は Butler 会話に貼らず、この operator page から送信します。</p>
           <label for="openai-api-key-input">OPENAI_API_KEY</label>
           <input id="openai-api-key-input" type="password" autocomplete="off" placeholder="sk-..." />
@@ -242,10 +259,12 @@ export function renderPasskeyOperatorPage(input = {}) {
       const approveOutput = document.getElementById("approve-output");
       const syncOutput = document.getElementById("sync-output");
       const deployOutput = document.getElementById("deploy-output");
+      const mergeOutput = document.getElementById("merge-output");
       const openaiSecretSyncOutput = document.getElementById("openai-secret-sync-output");
       const copyApprovalGrantButton = document.getElementById("copy-approval-grant-button");
       const autoCopyApprovalGrantInput = document.getElementById("auto-copy-approval-grant-input");
       const deployRunLink = document.getElementById("deploy-run-link");
+      const mergePrLink = document.getElementById("merge-pr-link");
       let latestApprovalGrantId = "";
 
       async function readResponseBody(response) {
@@ -356,6 +375,46 @@ export function renderPasskeyOperatorPage(input = {}) {
         }
         deployRunLink.href = runUrl;
         deployRunLink.hidden = false;
+      }
+
+      function extractMergePullRequestUrl(body) {
+        return body?.authorityAction?.htmlUrl || body?.authorityAction?.pullRequestUrl || "";
+      }
+
+      function normalizeGitHubPullRequestUrl(value) {
+        const text = String(value || "");
+        if (!text) {
+          return "";
+        }
+        try {
+          const url = new URL(text);
+          if (url.protocol !== "https:" || url.hostname.toLowerCase() !== "github.com") {
+            return "";
+          }
+          if (!/\\/pull\\/\\d+(?:$|[/?#])/.test(url.pathname + url.search + url.hash)) {
+            return "";
+          }
+          return url.href;
+        } catch {
+          return "";
+        }
+      }
+
+      function clearMergePrLink() {
+        if (!mergePrLink) {
+          return;
+        }
+        mergePrLink.href = "#";
+        mergePrLink.hidden = true;
+      }
+
+      function showMergePrLink(body) {
+        const prUrl = normalizeGitHubPullRequestUrl(extractMergePullRequestUrl(body));
+        if (!prUrl || !mergePrLink) {
+          return;
+        }
+        mergePrLink.href = prUrl;
+        mergePrLink.hidden = false;
       }
 
       copyApprovalGrantButton.addEventListener("click", async () => {
@@ -511,6 +570,42 @@ export function renderPasskeyOperatorPage(input = {}) {
           deployOutput.textContent = JSON.stringify(deployBody, null, 2);
         } catch (error) {
           deployOutput.textContent = String(error);
+        }
+      });
+
+      document.getElementById("merge-button").addEventListener("click", async () => {
+        try {
+          if (!latestApprovalGrantId) {
+            throw new Error("approvalGrantId is required before PR merge");
+          }
+          clearMergePrLink();
+          mergeOutput.textContent = "PR merge request...";
+          const mergeResponse = await fetch("${apiBase}/action/github-authority", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              operation: "pull_merge",
+              repository: document.getElementById("repo-input").value,
+              pullNumber: Number(document.getElementById("pull-number-input").value || 0) || null,
+              mergeMethod: document.getElementById("merge-method-input").value || "squash",
+              issueContext: {
+                issueNumber: Number(document.getElementById("issue-input").value || 0) || null
+              },
+              policyInput: {
+                approvalPhrase: "GO",
+                approvalGrantId: latestApprovalGrantId,
+                targetConfirmed: true
+              }
+            })
+          });
+          const mergeBody = await readResponseBody(mergeResponse);
+          if (!mergeResponse.ok) {
+            throw responseError(mergeBody, "PR merge failed");
+          }
+          showMergePrLink(mergeBody);
+          mergeOutput.textContent = JSON.stringify(mergeBody, null, 2);
+        } catch (error) {
+          mergeOutput.textContent = String(error);
         }
       });
 
