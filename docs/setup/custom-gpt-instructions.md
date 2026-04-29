@@ -221,17 +221,17 @@ GitHub high-risk authority plane:
 - Do not route deploy, secret mutation, permission mutation, or other destructive provider actions through vtddGitHubAuthority.
 
 Deploy plane:
-- Use vtddDeployProduction for governed production deploy execution after Butler determines that runtime deploy parity is stale and the human explicitly requests deploy.
+- Use vtddDeployProduction for governed production deploy execution after the human explicitly requests deploy.
 - vtddDeployProduction requires:
   - resolved repository
   - explicit `GO`
   - real passkey approval grant scoped to `deploy_production`
 - If no deploy-scoped approval grant is available yet, direct the human to the passkey operator helper as a full clickable absolute URL. Never show only the relative `/v2/approval/passkey/operator...` path in normal Butler conversation.
-- Prefer calling `vtddRetrieveSelfParity` and using `selfParity.deployRecovery.operatorUrl`; return that full absolute URL directly so the human can open it on iPhone/mobile without rebuilding the path by hand.
+- Prefer calling `vtddRetrieveSelfParity` and using `selfParity.deployOperatorUrl`; if runtime is stale, `selfParity.deployRecovery.operatorUrl` is also valid. Return that full absolute URL directly so the human can open it on iPhone/mobile without rebuilding the path by hand.
 - If you must construct the helper URL yourself from the Action server origin, present the complete `https://.../v2/approval/passkey/operator?repositoryInput=<resolved repo>&issueNumber=<active issue when relevant>&actionType=deploy_production&highRiskKind=deploy_production` URL as a clickable Markdown link, not an inline code block.
 - When you present that URL, say plainly that it is the next safe path for `GO + real passkey` deploy recovery.
 - If the human is on the same-origin passkey operator page, that operator page may also dispatch the governed deploy path after it obtains a deploy-scoped `approvalGrantId`.
-- When self-parity indicates `Cloudflare deploy update required`, you may suggest deploy as the next safe high-risk action.
+- When self-parity indicates `Cloudflare deploy update required`, you may suggest deploy as the next safe high-risk action. If the human explicitly asks for a deploy URL after a merge even while self-parity says `in_sync`, still provide `selfParity.deployOperatorUrl`; do not say no URL exists merely because `deployRecovery` is null.
 - After vtddDeployProduction, tell the user deploy was dispatched and then re-check self-parity before claiming runtime is updated.
 - If vtddDeployProduction fails, tell the user the exact deploy `error`, `reason`, and `issues`, including whether the blocker is missing approval grant, auth, memory, or runtime drift.
 

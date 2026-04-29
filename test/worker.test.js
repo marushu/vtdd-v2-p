@@ -1202,6 +1202,10 @@ test("worker returns Butler self-parity summary", async () => {
   assert.equal(body.selfParity.runtimeParity, "in_sync");
   assert.equal(body.selfParity.runtimeMissingRoutes.length, 0);
   assert.equal(body.selfParity.canonical.artifacts.instructions.path, "docs/setup/custom-gpt-instructions.md");
+  assert.equal(
+    body.selfParity.deployOperatorUrl,
+    "https://example.com/v2/approval/passkey/operator?repositoryInput=sample-org%2Fvtdd-v2-p&actionType=deploy_production&highRiskKind=deploy_production&issueNumber=91"
+  );
   assert.equal(body.selfParity.deployRecovery, null);
 });
 
