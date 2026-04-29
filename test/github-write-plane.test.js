@@ -220,3 +220,29 @@ test("github write plane rejects missing GO approval scope or unsupported operat
   assert.equal(unsupported.ok, false);
   assert.equal(unsupported.reason.includes("operation is unsupported"), true);
 });
+
+test("github write plane preserves sanitized fetch exception details", async () => {
+  const result = await executeGitHubWritePlane({
+    operation: GitHubWriteOperation.ISSUE_CREATE,
+    repository: "sample-org/vtdd-v2-p",
+    title: "test",
+    body: "body",
+    approvalPhrase: "GO",
+    targetConfirmed: true,
+    approvalScopeMatched: true,
+    env: {
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_write",
+      GITHUB_API_FETCH: async () => {
+        throw new TypeError("fetch failed at /Users/example with Bearer ghs_secret");
+      }
+    }
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.status, 503);
+  assert.equal(result.error, "github_write_failed");
+  assert.equal(result.reason, "failed to execute GitHub write operation: issue_create");
+  assert.equal(result.issues.includes("github_write_fetch_exception"), true);
+  assert.equal(result.issues.some((issue) => issue.includes("ghs_secret")), false);
+  assert.equal(result.issues.some((issue) => issue.includes("/Users/example")), false);
+});

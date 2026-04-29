@@ -752,7 +752,17 @@ async function handleGitHubWritePlaneRequest(request, env) {
   });
 
   if (!executed.ok) {
-    return json(executed.status ?? 503, {
+    const httpStatus = executed.status ?? 503;
+    if (wantsActionVisibleGitHubWriteErrors(payload)) {
+      return json(200, {
+        ok: false,
+        httpStatus,
+        error: executed.error ?? "github_write_failed",
+        reason: executed.reason,
+        issues: executed.issues ?? []
+      });
+    }
+    return json(httpStatus, {
       ok: false,
       error: executed.error ?? "github_write_failed",
       reason: executed.reason,
@@ -764,6 +774,11 @@ async function handleGitHubWritePlaneRequest(request, env) {
     ok: true,
     write: executed.write
   });
+}
+
+function wantsActionVisibleGitHubWriteErrors(payload) {
+  const responseMode = normalizeText(payload?.responseMode);
+  return responseMode === "action_visible";
 }
 
 async function handleGitHubHighRiskPlaneRequest(request, env) {

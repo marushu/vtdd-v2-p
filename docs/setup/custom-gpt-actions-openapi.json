@@ -501,6 +501,13 @@
                   "body": {
                     "type": "string"
                   },
+                  "responseMode": {
+                    "type": "string",
+                    "enum": [
+                      "action_visible"
+                    ],
+                    "description": "Use action_visible from Custom GPT so write failures return ok:false JSON instead of an Action transport failure."
+                  },
                   "issueContext": {
                     "type": "object",
                     "properties": {
@@ -533,7 +540,7 @@
         },
         "responses": {
           "200": {
-            "description": "GitHub normal write executed",
+            "description": "GitHub normal write executed, or an action-visible ok:false envelope when responseMode is action_visible.",
             "content": {
               "application/json": {
                 "schema": {

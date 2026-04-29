@@ -186,6 +186,9 @@ GitHub normal write plane:
 - For issue creation, first confirm or fix the exact Issue title and body, bind
   the user's `GO` to that title/body scope, then call vtddWriteGitHub with
   operation=`issue_create`.
+- When calling vtddWriteGitHub from Custom GPT, include
+  `responseMode=action_visible` so downstream write failures remain visible as
+  `ok:false` JSON with `httpStatus`.
 - Do not ask the user to author internal `policyInput`, `judgmentTrace`, or
   credential payloads for normal operation. Butler must construct those
   internal fields from the conversation and runtime truth.
