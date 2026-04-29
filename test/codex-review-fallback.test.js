@@ -1,11 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import {
   CODEX_REVIEW_FALLBACK_MARKER,
   findExistingCodexReviewFallbackComment,
   formatCodexReviewFallbackComment,
   parseCodexReviewFallbackComment
 } from "../src/core/index.js";
+
+const fallbackScript = fs.readFileSync("scripts/run-codex-pr-review-fallback.mjs", "utf8");
 
 test("formatCodexReviewFallbackComment renders marker and requested fallback state", () => {
   const body = formatCodexReviewFallbackComment({
@@ -81,4 +84,18 @@ test("parseCodexReviewFallbackComment exposes blocked fallback reviewer state", 
     blocker: "openai_api_key_not_configured",
     body
   });
+});
+
+test("fallback script reviews GitHub API diff without checking out untrusted PR code", () => {
+  assert.equal(fallbackScript.includes("buildPullRequestDiff"), true);
+  assert.equal(fallbackScript.includes("buildPullRequestReviewContext"), true);
+  assert.equal(fallbackScript.includes("Do not run shell commands or inspect the filesystem."), true);
+  assert.equal(fallbackScript.includes('["exec", "--skip-git-repo-check", "--ephemeral", "-"]'), true);
+  assert.equal(fallbackScript.includes("buildCodexExecutionEnv(process.env)"), true);
+  assert.equal(fallbackScript.includes("env: process.env"), false);
+  assert.equal(fallbackScript.includes("githubFetchAll"), true);
+  assert.equal(fallbackScript.includes("latestIssueComments"), true);
+  assert.equal(fallbackScript.includes('rel="next"'), true);
+  assert.equal(fallbackScript.includes('["exec", "review"'), false);
+  assert.equal(fallbackScript.includes("CODEX_REVIEW_WORKTREE"), false);
 });
