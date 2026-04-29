@@ -385,11 +385,15 @@ export function renderPasskeyOperatorPage(input = {}) {
           if (!verifyResponse.ok) {
             throw responseError(verifyBody, "approval verify failed");
           }
-          latestApprovalGrantId = verifyBody?.approvalGrant?.approvalId || "";
+          latestApprovalGrantId = verifyBody?.approvalGrant?.approvalId || verifyBody?.approvalGrantId || "";
           approveOutput.textContent = JSON.stringify(verifyBody, null, 2);
           if (latestApprovalGrantId && autoCopyApprovalGrantInput.checked) {
-            await copyApprovalGrantIdToClipboard({ quiet: true });
-            approveOutput.textContent = approveOutput.textContent + "\\n\\nCopied approvalGrantId to clipboard.";
+            try {
+              await copyApprovalGrantIdToClipboard({ quiet: true });
+              approveOutput.textContent = approveOutput.textContent + "\\n\\nCopied approvalGrantId to clipboard.";
+            } catch (error) {
+              approveOutput.textContent = approveOutput.textContent + "\\n\\nAuto-copy failed: " + String(error);
+            }
           }
         } catch (error) {
           approveOutput.textContent = String(error);

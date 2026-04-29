@@ -91,6 +91,53 @@ test("passkey operator page clipboard helper uses navigator clipboard when avail
   assert.equal(copied, "approval:test");
 });
 
+test("passkey operator page clipboard helper falls back to textarea copy", async () => {
+  let copied = false;
+  let textareaRemoved = false;
+  const textarea = {
+    value: "",
+    style: {},
+    setAttribute() {},
+    select() {
+      copied = this.value === "approval:fallback";
+    }
+  };
+  const helpers = loadOperatorPageHelpers({
+    navigator: {},
+    document: {
+      getElementById() {
+        return {
+          value: "",
+          textContent: "",
+          addEventListener() {}
+        };
+      },
+      createElement(tagName) {
+        assert.equal(tagName, "textarea");
+        return textarea;
+      },
+      execCommand(command) {
+        assert.equal(command, "copy");
+        return copied;
+      },
+      body: {
+        appendChild(element) {
+          assert.equal(element, textarea);
+        },
+        removeChild(element) {
+          assert.equal(element, textarea);
+          textareaRemoved = true;
+        }
+      }
+    }
+  });
+
+  await helpers.copyText("approval:fallback");
+
+  assert.equal(copied, true);
+  assert.equal(textareaRemoved, true);
+});
+
 function loadOperatorPageHelpers(overrides = {}) {
   const html = renderPasskeyOperatorPage();
   const script = html.match(/<script>([\s\S]*)<\/script>/)?.[1];
