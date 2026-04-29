@@ -810,6 +810,107 @@ test("worker normalizes minimal Butler API-backed handoff into bounded remote Co
   assert.equal(calls.length, 3);
 });
 
+test("worker accepts natural Butler build GO without internal consent or approval phrase fields", async () => {
+  const calls = [];
+  let dispatchInputs = null;
+  let executionId = "";
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/action/execute", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        phase: "execution",
+        actorRole: ActorRole.BUTLER,
+        executorTransport: "api_key_runner",
+        surfaceContext: {
+          surface: "custom_gpt",
+          judgmentModelId: "vtdd-butler-core-v1"
+        },
+        judgmentTrace: validButlerJudgmentTrace,
+        issueContext: {
+          issueNumber: 135
+        },
+        policyInput: {
+          actionType: ActionType.BUILD,
+          mode: TaskMode.EXECUTION,
+          repositoryInput: "vtdd",
+          aliasRegistry,
+          targetConfirmed: true,
+          runtimeTruth: {
+            runtimeAvailable: true,
+            runtimeState: {
+              activeBranch: "codex/issue-135"
+            }
+          },
+          go: true,
+          passkey: false
+        }
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      VTDD_GITHUB_ACTIONS_REPOSITORY: "sample-org/vtdd-v2-p",
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_dispatch_token",
+      GITHUB_API_FETCH: async (url, init) => {
+        calls.push({ url, init });
+        if (String(url).includes("/installation/repositories")) {
+          return new Response(
+            JSON.stringify({
+              total_count: 1,
+              repositories: [
+                {
+                  full_name: "sample-org/vtdd-v2",
+                  name: "vtdd-v2",
+                  private: true
+                }
+              ]
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        if (String(url).includes("/dispatches")) {
+          dispatchInputs = JSON.parse(init.body).inputs;
+          executionId = dispatchInputs.execution_id;
+          return new Response(null, { status: 204 });
+        }
+        if (String(url).includes("/runs")) {
+          return new Response(
+            JSON.stringify({
+              workflow_runs: [
+                {
+                  id: 135303,
+                  name: "remote-codex-executor",
+                  display_title: executionId,
+                  html_url: "https://github.com/sample-org/vtdd-v2-p/actions/runs/135303",
+                  status: "queued",
+                  conclusion: null,
+                  head_branch: "main",
+                  run_started_at: "2026-04-29T10:10:00Z",
+                  updated_at: "2026-04-29T10:10:01Z"
+                }
+              ]
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        throw new Error(`unexpected url ${url}`);
+      }
+    }
+  );
+
+  assert.equal(response.status, 202);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.execution.issueNumber, 135);
+  assert.equal(body.execution.transport, "api_key_runner");
+  assert.equal(body.execution.workflowRunId, 135303);
+  assert.equal(dispatchInputs.target_issue_number, "135");
+  assert.equal(dispatchInputs.codex_goal, "open_pr");
+  assert.equal(dispatchInputs.approval_phrase, "GO");
+  assert.equal(JSON.parse(dispatchInputs.handoff_json).relatedIssue, 135);
+  assert.equal(calls.length, 3);
+});
+
 test("worker gateway rejects self-asserted Butler build handoff", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/v2/gateway", {
