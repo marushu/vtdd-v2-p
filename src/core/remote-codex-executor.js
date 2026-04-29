@@ -1,5 +1,6 @@
 import { ActorRole } from "./types.js";
 import { resolveGitHubAppInstallationToken } from "./github-app-repository-index.js";
+import { isBoundRemoteCodexHandoff } from "./remote-codex-handoff-scope.js";
 
 export const REMOTE_CODEX_WORKFLOW_FILE = "remote-codex-executor.yml";
 
@@ -22,6 +23,13 @@ export function createRemoteCodexExecutionRequest(input = {}) {
   const runtimeState = normalizeObject(payload?.policyInput?.runtimeTruth?.runtimeState);
   const continuationContext = normalizeObject(payload.continuationContext);
   const handoff = normalizeObject(continuationContext.handoff);
+  const approvalScopeMatched =
+    payload?.policyInput?.approvalScopeMatched === true ||
+    isBoundRemoteCodexHandoff({
+      continuationContext,
+      issueContext,
+      policyInput: payload?.policyInput
+    });
 
   const issueNumber = normalizePositiveInteger(
     issueContext.issueNumber ?? handoff.relatedIssue ?? payload.relatedIssue
@@ -42,7 +50,7 @@ export function createRemoteCodexExecutionRequest(input = {}) {
     codexGoal: normalizeText(gatewayResult?.executionContinuity?.codexGoal),
     approvalPhrase: normalizeText(payload?.policyInput?.approvalPhrase),
     targetConfirmed: payload?.policyInput?.targetConfirmed === true,
-    approvalScopeMatched: payload?.policyInput?.approvalScopeMatched === true,
+    approvalScopeMatched,
     handoffRequired: continuationContext.requiresHandoff === true,
     handoff:
       Object.keys(handoff).length > 0
@@ -199,6 +207,7 @@ async function dispatchApiBackedWorkflow({ request, token, env }) {
       branch: request.branch,
       baseRef: request.baseRef,
       codexGoal: request.codexGoal,
+      approvalScopeMatched: request.approvalScopeMatched,
       status: RemoteCodexExecutionStatus.QUEUED
     }
   };
@@ -362,6 +371,7 @@ async function dispatchCodexCloudGitHubComment({ request, token, env }) {
       branch: request.branch,
       baseRef: request.baseRef,
       codexGoal: request.codexGoal,
+      approvalScopeMatched: request.approvalScopeMatched,
       commentId: normalizePositiveInteger(responseBody?.id),
       commentUrl: normalizeText(responseBody?.html_url) || null,
       status: RemoteCodexExecutionStatus.QUEUED

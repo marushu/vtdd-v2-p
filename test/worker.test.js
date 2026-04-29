@@ -504,6 +504,99 @@ test("worker dispatches remote Codex execution without user-authored constitutio
   assert.equal(calls.length, 2);
 });
 
+test("worker dispatches remote Codex execution with approval scope matched only on handoff", async () => {
+  const calls = [];
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/action/execute", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        phase: "execution",
+        actorRole: ActorRole.BUTLER,
+        surfaceContext: {
+          surface: "custom_gpt",
+          judgmentModelId: "vtdd-butler-core-v1"
+        },
+        judgmentTrace: validButlerJudgmentTrace,
+        issueContext: {
+          issueNumber: 125
+        },
+        continuationContext: {
+          requiresHandoff: true,
+          handoff: {
+            issueTraceable: true,
+            approvalScopeMatched: true,
+            relatedIssue: 125,
+            summary: "Issue #125 bounded remote Codex handoff"
+          }
+        },
+        policyInput: {
+          actionType: ActionType.BUILD,
+          mode: TaskMode.EXECUTION,
+          repositoryInput: "vtdd",
+          aliasRegistry,
+          targetConfirmed: true,
+          runtimeTruth: {
+            runtimeAvailable: true,
+            runtimeState: {
+              activeBranch: "codex/issue-125"
+            }
+          },
+          credential: { model: "github_app", tier: CredentialTier.EXECUTE },
+          consent: { grantedCategories: [ConsentCategory.PROPOSE, ConsentCategory.EXECUTE] },
+          approvalPhrase: "GO Issue #125 Codex handoff",
+          issueTraceable: true,
+          issueTraceability: {
+            relatedIssue: 125,
+            intentRefs: ["#125 Intent"],
+            successCriteriaRefs: ["#125 Success Criteria"],
+            nonGoalRefs: ["#125 Non-goals"]
+          },
+          go: true,
+          passkey: false
+        }
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      VTDD_GITHUB_ACTIONS_REPOSITORY: "sample-org/vtdd-v2-p",
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_dispatch_token",
+      GITHUB_API_FETCH: async (url, init) => {
+        calls.push({ url, init });
+        if (String(url).includes("/installation/repositories")) {
+          return new Response(
+            JSON.stringify({
+              total_count: 1,
+              repositories: [
+                {
+                  full_name: "sample-org/vtdd-v2",
+                  name: "vtdd-v2",
+                  private: true
+                }
+              ]
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        return new Response(
+          JSON.stringify({
+            id: 126,
+            html_url: "https://github.com/sample-org/vtdd-v2/issues/125#issuecomment-126"
+          }),
+          { status: 201, headers: { "content-type": "application/json" } }
+        );
+      }
+    }
+  );
+
+  assert.equal(response.status, 202);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.execution.issueNumber, 125);
+  assert.equal(body.execution.approvalScopeMatched, true);
+  assert.equal(calls.length, 2);
+});
+
 test("worker gateway rejects self-asserted Butler build handoff", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/v2/gateway", {
