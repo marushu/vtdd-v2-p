@@ -52,6 +52,13 @@ test("custom gpt instructions preserve current butler and approval boundaries", 
   assert.equal(doc.includes("vtddRetrieveSelfParity"), true);
   assert.equal(doc.includes("operation=`issue_create`"), true);
   assert.equal(doc.includes("Do not ask the user to author internal `policyInput`, `judgmentTrace`, or"), true);
+  assert.equal(doc.includes("Do not invent step names such as `issue_retrieval`"), true);
+  assert.equal(
+    doc.includes(
+      "the first four judgmentTrace steps must be exactly:\n  1. constitution\n  2. runtime_truth\n  3. issue_context\n  4. current_query"
+    ),
+    true
+  );
   assert.equal(doc.includes("when the user says `君`, `自分`, `Butler`, `VTDD`, or `このGPT`"), true);
   assert.equal(doc.includes("`君自身のアップデートある？`"), true);
   assert.equal(doc.includes("`古くなってない？`"), true);
@@ -103,21 +110,25 @@ test("short custom gpt instructions stay under editor limits while preserving cr
   assert.equal(doc.includes("vtddRetrieveRepositoryNicknames"), true);
   assert.equal(doc.includes("For issue_create, fix title+body, bind GO to that payload"), true);
   assert.equal(doc.includes("Nickname memory is explicit user-owned alias registry data"), true);
-  assert.equal(doc.includes("non-owner/repo token such as `ぶい の...`"), true);
-  assert.equal(doc.includes("before asking the user"), true);
+  assert.equal(doc.includes("non-owner/repo token like `ぶい の...`"), true);
+  assert.equal(doc.includes("call nickname read/gateway before asking"), true);
   assert.equal(doc.includes("surface the returned error/reason/issues plainly in Japanese"), true);
   assert.equal(doc.includes("Do not replace nickname failures with vague summaries"), true);
   assert.equal(doc.includes("If an Action returns `ClientResponseError`, state action name"), true);
   assert.equal(doc.includes("If self-parity returns `ClientResponseError`, say unverified Action transport failure"), true);
   assert.equal(doc.includes("judgmentModelId=vtdd-butler-core-v1"), true);
+  assert.equal(
+    doc.includes("judgmentTrace first four steps must be exactly: constitution, runtime_truth, issue_context, current_query"),
+    true
+  );
   assert.equal(doc.includes("Cloudflare deploy update required"), true);
   assert.equal(doc.includes("Action Schema update required"), true);
   assert.equal(doc.includes("Instructions update required"), true);
-  assert.equal(doc.includes("selfParity.deployRecovery.operatorUrl"), true);
+  assert.equal(doc.includes("selfParity.deployRecovery.operatorMarkdownLink or operatorUrl"), true);
   assert.equal(doc.includes("selfParity.deployOperatorMarkdownLink"), true);
   assert.equal(doc.includes("<actual selfParity.deployOperatorUrl>"), true);
-  assert.equal(doc.includes("never only show `/v2/approval/passkey/operator...`"), true);
-  assert.equal(doc.includes("bare long URL"), true);
+  assert.equal(doc.includes("never a raw `/v2/approval/passkey/operator...`"), true);
+  assert.equal(doc.includes("bare URL"), true);
   assert.equal(doc.includes("phase=execution"), true);
   assert.equal(doc.includes("GO + real passkey"), true);
   assert.equal(doc.includes("openai_api_key_not_configured"), true);

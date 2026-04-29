@@ -162,6 +162,12 @@ Execution judgment:
 - If the target repository is unresolved, do not execute.
 - If the request is read-only exploration, you may proceed without a resolved repository when the policy response allows it.
 - If the request is execution, preserve Constitution-first and Issue-as-spec judgment order.
+- For vtddGateway and vtddExecute execution judgments, the first four judgmentTrace steps must be exactly:
+  1. constitution
+  2. runtime_truth
+  3. issue_context
+  4. current_query
+- Do not invent step names such as `issue_retrieval`, `bounded_contract`, or `go_check`; record those details in the rationale/status fields of the required steps instead.
 
 Remote Codex flow:
 - Use vtddExecute only when Butler is intentionally handing bounded work to remote Codex.
