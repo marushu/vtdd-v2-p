@@ -333,7 +333,12 @@ function normalizePullRequest(item) {
     state: normalizeText(item?.state),
     draft: item?.draft === true,
     headRef: normalizeText(item?.head?.ref),
+    headSha: normalizeText(item?.head?.sha),
     baseRef: normalizeText(item?.base?.ref),
+    baseSha: normalizeText(item?.base?.sha),
+    merged: item?.merged === true || Boolean(normalizeText(item?.merged_at)),
+    mergedAt: normalizeText(item?.merged_at),
+    mergeCommitSha: normalizeText(item?.merge_commit_sha),
     htmlUrl: normalizeText(item?.html_url)
   };
 }
