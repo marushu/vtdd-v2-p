@@ -116,9 +116,17 @@ test("evaluateButlerSelfParity reports deploy update required when canonical set
   assert.equal(result.selfParity.recommendedActions.includes("Cloudflare deploy update required."), true);
   assert.equal(
     result.selfParity.deployRecovery.operatorUrl,
-    "https://sample-user-vtdd.example.workers.dev/v2/approval/passkey/operator?repositoryInput=sample-org%2Fvtdd-v2-p&actionType=deploy_production&highRiskKind=deploy_production&issueNumber=91"
+    "https://sample-user-vtdd.example.workers.dev/v2/approval/passkey/operator?repositoryInput=sample-org%2Fvtdd-v2-p&phase=execution&actionType=deploy_production&highRiskKind=deploy_production&issueNumber=91"
   );
   assert.equal(result.selfParity.deployOperatorUrl, result.selfParity.deployRecovery.operatorUrl);
+  assert.equal(
+    result.selfParity.deployOperatorMarkdownLink,
+    `[Open deploy operator](${result.selfParity.deployOperatorUrl})`
+  );
+  assert.equal(
+    result.selfParity.deployRecovery.operatorMarkdownLink,
+    result.selfParity.deployOperatorMarkdownLink
+  );
   assert.equal(
     result.selfParity.recommendedActions.some((item) => item.includes("/v2/approval/passkey/operator")),
     true
@@ -218,7 +226,11 @@ test("evaluateButlerSelfParity treats current nickname and secret sync actions a
   assert.equal(result.selfParity.staleCapabilities, null);
   assert.equal(
     result.selfParity.deployOperatorUrl,
-    "https://sample-user-vtdd.example.workers.dev/v2/approval/passkey/operator?repositoryInput=sample-org%2Fvtdd-v2-p&actionType=deploy_production&highRiskKind=deploy_production"
+    "https://sample-user-vtdd.example.workers.dev/v2/approval/passkey/operator?repositoryInput=sample-org%2Fvtdd-v2-p&phase=execution&actionType=deploy_production&highRiskKind=deploy_production"
+  );
+  assert.equal(
+    result.selfParity.deployOperatorMarkdownLink,
+    `[Open deploy operator](${result.selfParity.deployOperatorUrl})`
   );
   assert.equal(result.selfParity.deployRecovery, null);
 });
