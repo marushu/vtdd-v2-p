@@ -172,7 +172,8 @@ async function dispatchGitHubWrite(input) {
       ok: false,
       status: 503,
       error: "github_write_failed",
-      reason: `failed to execute GitHub write operation: ${input.operation}`
+      reason: `failed to execute GitHub write operation: ${input.operation}`,
+      issues: ["github_write_fetch_exception"]
     };
   }
 

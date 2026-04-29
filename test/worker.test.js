@@ -1360,6 +1360,77 @@ test("worker rejects unsupported high-risk GitHub write operations on the normal
       body: JSON.stringify({
         operation: "merge",
         repository: "sample-org/vtdd-v2-p",
+        responseMode: "action_visible",
+        policyInput: {
+          approvalPhrase: "GO",
+          targetConfirmed: true,
+          approvalScopeMatched: true
+        }
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_write"
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.httpStatus, 422);
+  assert.equal(body.error, "github_write_request_invalid");
+});
+
+test("worker returns action-visible GitHub write fetch failures", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/action/github", {
+      method: "POST",
+      headers: {
+        ...gatewayAuthHeaders,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        operation: "issue_create",
+        repository: "sample-org/vtdd-v2-p",
+        title: "test",
+        body: "body",
+        responseMode: "action_visible",
+        policyInput: {
+          approvalPhrase: "GO",
+          targetConfirmed: true,
+          approvalScopeMatched: true
+        }
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_write",
+      GITHUB_API_FETCH: async () => {
+        throw new TypeError("fetch failed");
+      }
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.httpStatus, 503);
+  assert.equal(body.error, "github_write_failed");
+  assert.equal(body.reason, "failed to execute GitHub write operation: issue_create");
+  assert.equal(body.issues.includes("github_write_fetch_exception"), true);
+});
+
+test("worker preserves HTTP error status for GitHub write consumers that do not request action envelopes", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/action/github", {
+      method: "POST",
+      headers: {
+        ...gatewayAuthHeaders,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        operation: "merge",
+        repository: "sample-org/vtdd-v2-p",
         policyInput: {
           approvalPhrase: "GO",
           targetConfirmed: true,
@@ -1376,6 +1447,7 @@ test("worker rejects unsupported high-risk GitHub write operations on the normal
   assert.equal(response.status, 422);
   const body = await response.json();
   assert.equal(body.ok, false);
+  assert.equal(body.httpStatus, undefined);
   assert.equal(body.error, "github_write_request_invalid");
 });
 
