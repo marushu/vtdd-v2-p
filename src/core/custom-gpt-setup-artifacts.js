@@ -33,8 +33,11 @@ const RUNTIME_SETUP_MANIFEST = Object.freeze({
     "/v2/action/github",
     "/v2/action/github-authority",
     "/v2/action/deploy",
+    "/v2/action/github-actions-secret",
+    "/v2/action/repository-nickname",
     "/v2/action/progress",
     "/v2/retrieve/github",
+    "/v2/retrieve/repository-nicknames",
     "/v2/retrieve/approval-grant",
     "/v2/retrieve/setup-artifact",
     "/v2/retrieve/self-parity"
@@ -46,8 +49,11 @@ const RUNTIME_SETUP_MANIFEST = Object.freeze({
     "vtddWriteGitHub",
     "vtddGitHubAuthority",
     "vtddDeployProduction",
+    "vtddSyncGitHubActionsSecret",
+    "vtddUpsertRepositoryNickname",
     "vtddExecutionProgress",
     "vtddRetrieveGitHub",
+    "vtddRetrieveRepositoryNicknames",
     "vtddRetrieveApprovalGrant",
     "vtddRetrieveSetupArtifact",
     "vtddRetrieveSelfParity"
@@ -58,8 +64,11 @@ const RUNTIME_SETUP_MANIFEST = Object.freeze({
     "vtddWriteGitHub",
     "vtddGitHubAuthority",
     "vtddDeployProduction",
+    "vtddSyncGitHubActionsSecret",
+    "vtddUpsertRepositoryNickname",
     "vtddExecutionProgress",
     "vtddRetrieveGitHub",
+    "vtddRetrieveRepositoryNicknames",
     "vtddRetrieveSetupArtifact",
     "vtddRetrieveSelfParity",
     "Action Schema update required",
@@ -207,6 +216,14 @@ export async function evaluateButlerSelfParity(input = {}) {
     runtimeMissingInstructionTokens.length > 0
       ? "cloudflare_deploy_update_required"
       : "in_sync";
+  const staleCapabilities =
+    runtimeParity === "cloudflare_deploy_update_required"
+      ? {
+          routes: runtimeMissingRoutes,
+          operationIds: runtimeMissingOperationIds,
+          instructionTokens: runtimeMissingInstructionTokens
+        }
+      : null;
 
   const deployOperatorUrl =
     runtimeParity === "cloudflare_deploy_update_required" && repository && runtimeOrigin
@@ -257,6 +274,7 @@ export async function evaluateButlerSelfParity(input = {}) {
       runtimeMissingRoutes,
       runtimeMissingOperationIds,
       runtimeMissingInstructionTokens,
+      staleCapabilities,
       deployRecovery:
         runtimeParity === "cloudflare_deploy_update_required"
           ? {
