@@ -33,3 +33,12 @@ test("remote Codex workflow marks OPENAI_API_KEY runner as explicit opt-in", () 
   assert.equal(workflow.includes("may create separate API billing"), true);
   assert.equal(workflow.includes("OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}"), true);
 });
+
+test("remote Codex workflow authenticates Codex CLI before execution", () => {
+  assert.equal(workflow.includes("name: Authenticate Codex CLI"), true);
+  assert.equal(workflow.includes("printenv OPENAI_API_KEY | codex login --with-api-key"), true);
+  assert.equal(
+    workflow.indexOf("codex login --with-api-key") < workflow.indexOf("codex exec --skip-git-repo-check"),
+    true
+  );
+});

@@ -132,6 +132,12 @@ jobs:
         shell: bash
         run: npm install -g @openai/codex
 
+      - name: Authenticate Codex CLI
+        shell: bash
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: printenv OPENAI_API_KEY | codex login --with-api-key
+
       - name: Prepare Codex prompt
         shell: bash
         run: |
