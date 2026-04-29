@@ -42,6 +42,19 @@ Observed result on 2026-04-27:
 - confirms Butler summary preserves the platform blocker instead of degrading to manual comment-paste as the normal answer
 - confirms reviewer fallback remains critique-only and does not gain merge or deploy authority
 
+## Live Main Receiver Check
+
+Observed result on 2026-04-29 after PR `#112` was merged:
+
+- main fallback receiver run `25088189731` succeeded
+- PR `#112` fallback comment was updated to `Status: completed`
+- fallback review returned `Recommended action: approve`
+- run log recorded `Updated Codex fallback review comment on PR #112.`
+
+This confirms the main-branch fallback receiver can execute the non-manual
+Codex reviewer path and write delivered reviewer evidence back to GitHub after
+Gemini dispatches a fallback request.
+
 ## Evidence Files
 
 - `.github/workflows/gemini-pr-review.yml`
