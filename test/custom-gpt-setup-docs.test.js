@@ -100,7 +100,7 @@ test("custom gpt instructions preserve current butler and approval boundaries", 
   assert.equal(doc.includes("openai_api_key_not_configured"), true);
   assert.equal(doc.includes("never echo the secret value"), true);
   assert.equal(doc.includes("A completed `vtdd:reviewer=codex-fallback` marker comment"), true);
-  assert.equal(doc.includes("trusted VTDD-controlled actor or GitHub App token path"), true);
+  assert.equal(doc.includes("trusted VTDD-controlled actor, Codex Cloud reviewer result, or GitHub App token path"), true);
   assert.equal(doc.includes("do not treat missing GitHub Review API objects alone as missing reviewer evidence"), true);
   assert.equal(doc.includes("Do not claim a PR exists when only a Codex task summary exists."), true);
   assert.equal(
@@ -156,7 +156,7 @@ test("short custom gpt instructions stay under editor limits while preserving cr
   assert.equal(doc.includes("openai_api_key_not_configured"), true);
   assert.equal(doc.includes("If vtddDeployProduction fails, say the exact deploy error/reason/issues"), true);
   assert.equal(
-    doc.includes("Completed `vtdd:reviewer=codex-fallback` from trusted VTDD actor with recommendedAction is evidence"),
+    doc.includes("Completed `vtdd:reviewer=codex-fallback` from trusted VTDD actor/Codex Cloud result with recommendedAction is evidence"),
     true
   );
   assert.equal(doc.includes("missing GitHub Review objects alone is not absence"), true);

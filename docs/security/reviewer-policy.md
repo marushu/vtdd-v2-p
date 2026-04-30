@@ -22,14 +22,17 @@ The reviewer is a critical evaluation role.
 
 ## Fallback Position
 
-- Non-manual Codex fallback should prefer VTDD-managed workflow execution over
-  bot-authored `@codex review` comments when Gemini is temporarily unavailable.
-- This fallback remains critique-only and uses explicit reviewer runtime
-  credentials/configuration, not merge/deploy authority.
-- A bot-authored `@codex review` request must not be assumed equivalent to an
-  owner-authored Codex review invocation.
-- If non-manual Codex fallback cannot start because required reviewer runtime
-  credentials/configuration are absent, VTDD must surface that blocker
+- Non-manual Codex fallback should prefer the operator-owned Codex Cloud GitHub
+  comment transport when Gemini is temporarily unavailable.
+- This default fallback request does not require `OPENAI_API_KEY` and must not
+  silently create a separate API-billed reviewer path.
+- The Codex Cloud GitHub comment transport is request-state until a completed
+  `vtdd:reviewer=codex-fallback` marker with a recommended action is returned.
+- A bot-authored `@codex review` request must not be assumed equivalent to
+  delivered reviewer evidence.
+- API-key-backed Codex workflow execution remains an explicit opt-in
+  cost/account path, not the default fallback.
+- If the selected fallback path cannot start, VTDD must surface that blocker
   explicitly rather than degrading to manual PR comment paste as the normal
   answer.
 - Antigravity is not the normal reviewer path.
