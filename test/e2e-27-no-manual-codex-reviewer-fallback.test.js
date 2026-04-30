@@ -18,6 +18,9 @@ test("E2E-27 evidence doc records no-manual Codex fallback runs", () => {
   assert.equal(doc.includes("Codex Cloud"), true);
   assert.equal(doc.includes("deliveryMode=codex_cloud_github_comment"), true);
   assert.equal(doc.includes("does not require `OPENAI_API_KEY`"), true);
+  assert.equal(doc.includes("PR Runtime Verification Boundary"), true);
+  assert.equal(doc.includes("pull_request_target"), true);
+  assert.equal(doc.includes("openai_quota_exceeded"), true);
   assert.equal(doc.includes("requested"), true);
   assert.equal(doc.includes("completed"), true);
   assert.equal(doc.includes("blocked"), true);

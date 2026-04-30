@@ -75,6 +75,27 @@ This keeps the default reviewer fallback aligned with the operator-owned
 ChatGPT/Codex subscription surface. It does not claim that a bot-authored
 request has already produced completed reviewer evidence.
 
+## PR Runtime Verification Boundary
+
+Observed on PR `#154` before this transport correction reached `main`:
+
+- PR checks can pass while the PR fallback comment still shows the previous
+  `workflow_dispatch_codex_cli` delivery mode and an `openai_quota_exceeded`
+  blocker
+- this is expected for the correcting PR itself because `pull_request_target`
+  executes workflow and script content from base `main`
+- the correcting PR must therefore be judged as a transport correction from
+  source/test evidence, not as proof that the new Codex Cloud request path has
+  already produced live completed reviewer evidence
+
+Interpretation rule:
+
+- local/test evidence may prove that Gemini fallback will request
+  `deliveryMode=codex_cloud_github_comment` after merge
+- PR-level live fallback evidence remains incomplete until a later PR, running
+  against the updated `main`, produces either a Codex Cloud request-state
+  comment or a completed fallback reviewer marker from that path
+
 ## Evidence Files
 
 - `.github/workflows/gemini-pr-review.yml`
