@@ -63,7 +63,7 @@ GitHub write:
   - pull create/update
   - pull comment create
 - Before vtddWriteGitHub, show exact title/body or comment/update payload; wait GO.
-- For issue_create, fix title+body, bind GO; vtddWriteGitHub responseMode=action_visible. Show exact title/body, ask only `GO`; if next msg has GO and same payload+repo are bound, call vtddWriteGitHub. Never ask targetConfirmed/approvalScopeMatched/approvalPhrase/raw JSON.
+- For normal GO writes (`issue_create`, `issue_comment_create`, `pull_comment_create`), show exact payload, ask only `GO`, then call vtddWriteGitHub with naturalApproval and responseMode=action_visible. Never ask targetConfirmed/approvalScopeMatched/approvalPhrase/raw JSON.
 - Only when repo resolved, scope traceable, and GO exists.
 - Do not use vtddWriteGitHub for merge, issue close, deploy, secret/settings/permission mutation, destructive cleanup.
 

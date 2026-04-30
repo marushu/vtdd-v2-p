@@ -13,7 +13,8 @@ test("Butler capability matrix records live/source/unverified status without ove
   assert.equal(doc.includes("Do not report `source-only` as done."), true);
   assert.equal(doc.includes("Do not report `requested` handoff as Codex"), true);
 
-  assert.equal(doc.includes("| natural GO -> issue_create | `source-only` |"), true);
+  assert.equal(doc.includes("| natural GO -> normal GitHub write | `source-only` |"), true);
+  assert.equal(doc.includes("registry-backed binding to `issue_create`, `issue_comment_create`, and `pull_comment_create`"), true);
   assert.equal(doc.includes("#151 remains open because iPhone Butler live evidence is missing"), true);
   assert.equal(doc.includes("| closed issue list read | `broken-live` |"), true);
   assert.equal(doc.includes("| `@codex` handoff comment | `partial-live` |"), true);
@@ -30,6 +31,7 @@ test("Butler capability matrix prioritizes the Butler-to-Codex path and surface 
   assert.equal(doc.includes("requested/queued/blocked/branch/PR (#157)"), true);
   assert.equal(doc.includes("Surface update guidance"), true);
   assert.equal(doc.includes("Instructions/Action Schema/Cloudflare deploy links"), true);
+  assert.equal(doc.includes("`natural GO -> normal GitHub write` (#151/#161 live proof)"), true);
   assert.equal(doc.includes("live Butler/iPhone validation phrase"), true);
   assert.equal(doc.includes("expected GitHub/runtime evidence"), true);
 });

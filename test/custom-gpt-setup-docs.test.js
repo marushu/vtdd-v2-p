@@ -58,7 +58,7 @@ test("custom gpt instructions preserve current butler and approval boundaries", 
   assert.equal(doc.includes("no relevant RAG/memory hit is found, say so"), true);
   assert.equal(doc.includes("do not invent past precedent"), true);
   assert.equal(doc.includes("current state is governed by GitHub runtime truth"), true);
-  assert.equal(doc.includes("operation=`issue_create`"), true);
+  assert.equal(doc.includes("Current natural GO\n  binding is supported for `issue_create`, `issue_comment_create`, and\n  `pull_comment_create`"), true);
   assert.equal(doc.includes("If the human says something like \"この内容で Issue 作って\""), true);
   assert.equal(doc.includes("この title/body で Issue を作成するなら「GO」と言ってください"), true);
   assert.equal(doc.includes("Do not ask the human to say `targetConfirmed=true`"), true);
@@ -135,7 +135,7 @@ test("short custom gpt instructions stay under editor limits while preserving cr
   assert.equal(doc.includes("no RAG hit OK"), true);
   assert.equal(doc.includes("never invent"), true);
   assert.equal(doc.includes("Runtime truth > memory"), true);
-  assert.equal(doc.includes("For issue_create, fix title+body, bind GO"), true);
+  assert.equal(doc.includes("For normal GO writes (`issue_create`, `issue_comment_create`, `pull_comment_create`)"), true);
   assert.equal(doc.includes("ask only `GO`"), true);
   assert.equal(doc.includes("Never ask targetConfirmed/approvalScopeMatched/approvalPhrase/raw JSON"), true);
   assert.equal(doc.includes("Nickname memory is user-owned alias data"), true);
@@ -250,7 +250,11 @@ test("custom gpt openapi json parses and exposes paths as an object", () => {
   );
   const githubWriteSchema = doc.paths["/v2/action/github"].post.requestBody.content["application/json"].schema;
   assert.equal(typeof githubWriteSchema.properties.naturalApproval, "object");
-  assert.equal(githubWriteSchema.properties.naturalApproval.properties.presentedPayload.properties.operation.enum[0], "issue_create");
+  assert.deepEqual(githubWriteSchema.properties.naturalApproval.properties.presentedPayload.properties.operation.enum, [
+    "issue_create",
+    "issue_comment_create",
+    "pull_comment_create"
+  ]);
   assert.equal(typeof doc.paths["/v2/action/github-authority"], "object");
   assert.equal(typeof doc.paths["/v2/action/deploy"], "object");
   assert.equal(typeof doc.paths["/v2/action/github-actions-secret"], "object");

@@ -459,7 +459,7 @@ paths:
                   description: Use action_visible from Custom GPT so write failures return ok:false JSON instead of an Action transport failure.
                 naturalApproval:
                   type: object
-                  description: Evidence for normal issue_create natural GO binding after Butler showed the exact payload and the user replied with GO.
+                  description: Evidence for normal GitHub write natural GO binding after Butler showed the exact payload and the user replied with GO. Supported natural GO operations include issue_create, issue_comment_create, and pull_comment_create.
                   properties:
                     exactPayloadPresented:
                       type: boolean
@@ -474,8 +474,14 @@ paths:
                           type: string
                           enum:
                             - issue_create
+                            - issue_comment_create
+                            - pull_comment_create
                         repository:
                           type: string
+                        issueNumber:
+                          type: integer
+                        pullNumber:
+                          type: integer
                         title:
                           type: string
                         body:
