@@ -33,39 +33,43 @@ must not hard-fail the PR solely for reviewer availability reasons.
 
 Preferred fallback:
 
-- VTDD dispatches a non-manual Codex fallback review workflow
-- that workflow runs Codex in critique-only reviewer mode
-- VTDD writes the resulting fallback review comment back to the PR through the
-  GitHub App token path
+- VTDD posts or updates a `vtdd:reviewer=codex-fallback` request comment that
+  contains an `@codex review` request for Codex Cloud
+- the default request path does not use `OPENAI_API_KEY`
+- the request remains request-state until Codex returns a completed fallback
+  reviewer marker with a recommended action
 
 When Gemini is temporarily unavailable, a completed
 `vtdd:reviewer=codex-fallback` marker comment with a recommended action is
 valid fallback reviewer evidence only when it is written by a trusted
-VTDD-controlled actor or through the GitHub App token path. Butler must not
-treat the absence of GitHub Review API objects alone as absence of reviewer
+VTDD-controlled actor or by the Codex Cloud reviewer result path. Butler must
+not treat the absence of GitHub Review API objects alone as absence of reviewer
 evidence, but it must not trust spoofable marker comments from untrusted
 authors.
 
 Current limitation:
 
-- if reviewer runtime credentials/configuration for the non-manual Codex
-  fallback are absent, VTDD can only surface an explicit fallback blocker state
-- a VTDD bot-authored `@codex review` request is not treated as the canonical
-  no-manual solution path
+- a VTDD bot-authored `@codex review` request proves only that fallback was
+  requested; it is not completed reviewer evidence by itself
+- if Codex Cloud does not pick up the request, VTDD must keep the fallback state
+  as requested or blocked rather than pretending review completed
 
 ## Operator Prerequisite
 
-For the non-manual Codex fallback to reach a `completed` reviewer state, the
-target repository must provide reviewer runtime credentials/configuration for
-that workflow path.
+For the default non-manual Codex fallback to reach a `completed` reviewer
+state, the operator-owned Codex Cloud / ChatGPT GitHub integration must pick up
+the PR comment request and return reviewer output.
 
-Current canonical requirement:
+Optional API-backed runner:
 
-- `OPENAI_API_KEY` must be configured in the repository where the fallback
-  workflow will run
+- `OPENAI_API_KEY` may be configured only for an explicit opt-in Codex workflow
+  fallback path
+- this API-backed path is a cost/account deviation and must not be the silent
+  default
 
-If that prerequisite is missing, VTDD must preserve an explicit `blocked`
-fallback state rather than pretending the no-manual path completed.
+If the selected prerequisite is missing, VTDD must preserve an explicit
+`requested` or `blocked` fallback state rather than pretending the no-manual
+path completed.
 
 The workflow must ignore its own marker comment so that reviewer reruns do not
 create an infinite comment loop.

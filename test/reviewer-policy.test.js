@@ -27,7 +27,10 @@ test("reviewer policy defines vendor-neutral contract and no execution authority
 
 test("reviewer policy does not overclaim no-manual Codex fallback", () => {
   const doc = fs.readFileSync(DOC_PATH, "utf8");
+  assert.equal(doc.includes("Codex Cloud GitHub comment transport"), true);
+  assert.equal(doc.includes("does not require `OPENAI_API_KEY`"), true);
   assert.equal(doc.includes("bot-authored `@codex review` request"), true);
-  assert.equal(doc.includes("VTDD-managed workflow execution"), true);
+  assert.equal(doc.includes("delivered reviewer evidence"), true);
+  assert.equal(doc.includes("API-key-backed Codex workflow execution remains an explicit opt-in"), true);
   assert.equal(doc.includes("manual PR comment paste as the normal"), true);
 });

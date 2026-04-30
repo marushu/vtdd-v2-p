@@ -73,36 +73,13 @@ async function main() {
   } catch (error) {
     const failure = classifyGeminiReviewFailure(error instanceof Error ? error : {});
     if (failure.kind === GeminiReviewFailureKind.TEMPORARY_UNAVAILABLE) {
-      if (!process.env.OPENAI_API_KEY) {
-        const fallbackBody = formatCodexReviewFallbackComment({
-          status: "blocked",
-          trigger: triggerResult.value.trigger,
-          reason: "gemini_temporarily_unavailable",
-          deliveryMode: "workflow_dispatch_codex_cli",
-          blocker: "openai_api_key_not_configured"
-        });
-        if (existingFallbackComment) {
-          await githubFetch(`/repos/${repository}/issues/comments/${existingFallbackComment.id}`, {
-            method: "PATCH",
-            body: { body: fallbackBody }
-          });
-          console.log(`Updated Codex fallback blocker state on PR #${prNumber}.`);
-          return;
-        }
-
-        await githubFetch(`/repos/${repository}/issues/${prNumber}/comments`, {
-          method: "POST",
-          body: { body: fallbackBody }
-        });
-        console.log(`Recorded Codex fallback blocker state on PR #${prNumber}.`);
-        return;
-      }
-
       const fallbackBody = formatCodexReviewFallbackComment({
         status: "requested",
         trigger: triggerResult.value.trigger,
         reason: "gemini_temporarily_unavailable",
-        deliveryMode: "workflow_dispatch_codex_cli"
+        deliveryMode: "codex_cloud_github_comment",
+        repository,
+        pullRequestNumber: prNumber
       });
       if (existingFallbackComment) {
         await githubFetch(`/repos/${repository}/issues/comments/${existingFallbackComment.id}`, {
@@ -116,21 +93,7 @@ async function main() {
         });
       }
 
-      await githubFetch(`/repos/${repository}/actions/workflows/codex-pr-review-fallback.yml/dispatches`, {
-        method: "POST",
-        body: {
-          ref: pullRequest.base.ref,
-          inputs: {
-            target_repository: repository,
-            pull_request_number: String(prNumber),
-            head_ref: pullRequest.head.ref,
-            base_ref: pullRequest.base.ref,
-            trigger: triggerResult.value.trigger,
-            reason: "gemini_temporarily_unavailable"
-          }
-        }
-      });
-      console.log(`Dispatched non-manual Codex reviewer fallback on PR #${prNumber}.`);
+      console.log(`Requested Codex Cloud reviewer fallback on PR #${prNumber}.`);
       return;
     }
     throw error;

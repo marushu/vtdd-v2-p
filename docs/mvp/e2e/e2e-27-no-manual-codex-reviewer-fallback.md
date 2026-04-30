@@ -24,7 +24,8 @@ node --test test/codex-review-fallback.test.js test/gemini-review-failure.test.j
 
 Observed result on 2026-04-27:
 - passed
-- confirms Gemini temporary unavailability can dispatch a non-manual Codex fallback workflow instead of relying on bot-authored `@codex review`
+- confirms Gemini temporary unavailability can request non-manual Codex
+  fallback without requiring manual owner PR-comment paste
 - confirms VTDD can format and parse `requested` and `completed` fallback reviewer states
 - confirms Butler synthesis treats completed Codex fallback review as reviewer evidence rather than request-state only
 
@@ -38,8 +39,11 @@ node --test test/codex-review-fallback.test.js test/gemini-pr-review-workflow.te
 
 Observed result on 2026-04-27:
 - passed
-- confirms missing reviewer runtime credentials/configuration are surfaced as explicit `blocked` fallback state
-- confirms Butler summary preserves the platform blocker instead of degrading to manual comment-paste as the normal answer
+- confirms missing API-backed reviewer runtime credentials/configuration are
+  surfaced as explicit `blocked` fallback state when that optional path is
+  selected
+- confirms Butler summary preserves the platform blocker instead of degrading
+  to manual comment-paste as the normal answer
 - confirms reviewer fallback remains critique-only and does not gain merge or deploy authority
 
 ## Live Main Receiver Check
@@ -54,6 +58,43 @@ Observed result on 2026-04-29 after PR `#112` was merged:
 This confirms the main-branch fallback receiver can execute the non-manual
 Codex reviewer path and write delivered reviewer evidence back to GitHub after
 Gemini dispatches a fallback request.
+
+## Default No-API-Key Request Path
+
+Observed correction on 2026-04-30:
+
+- Gemini temporary unavailability now posts or updates a
+  `vtdd:reviewer=codex-fallback` request comment using
+  `deliveryMode=codex_cloud_github_comment`
+- this default request path includes `@codex review`
+- this default request path does not require `OPENAI_API_KEY`
+- the request remains request-state until Codex Cloud returns a completed
+  fallback reviewer marker with a recommended action
+
+This keeps the default reviewer fallback aligned with the operator-owned
+ChatGPT/Codex subscription surface. It does not claim that a bot-authored
+request has already produced completed reviewer evidence.
+
+## PR Runtime Verification Boundary
+
+Observed on PR `#154` before this transport correction reached `main`:
+
+- PR checks can pass while the PR fallback comment still shows the previous
+  `workflow_dispatch_codex_cli` delivery mode and an `openai_quota_exceeded`
+  blocker
+- this is expected for the correcting PR itself because `pull_request_target`
+  executes workflow and script content from base `main`
+- the correcting PR must therefore be judged as a transport correction from
+  source/test evidence, not as proof that the new Codex Cloud request path has
+  already produced live completed reviewer evidence
+
+Interpretation rule:
+
+- local/test evidence may prove that Gemini fallback will request
+  `deliveryMode=codex_cloud_github_comment` after merge
+- PR-level live fallback evidence remains incomplete until a later PR, running
+  against the updated `main`, produces either a Codex Cloud request-state
+  comment or a completed fallback reviewer marker from that path
 
 ## Evidence Files
 
@@ -77,12 +118,19 @@ Gemini dispatches a fallback request.
 E2E-27 now has recorded happy-path and boundary-path run evidence in-repo.
 
 This confirms Issue `#84` is connected to a VTDD-managed no-manual reviewer
-fallback design: when Gemini is unavailable, VTDD can either dispatch a
-non-manual Codex fallback review workflow or explicitly surface the runtime
-blocker. It does not claim live provider credentials are configured in every
-operator repository by default.
+fallback design: when Gemini is unavailable, VTDD can request Codex Cloud
+review through GitHub comment transport by default, or explicitly use an
+API-backed workflow only when that cost/account path is selected. It does not
+claim live provider pickup or credentials are configured in every operator
+repository by default.
 
-Operator prerequisite for live `completed` state:
+Operator prerequisite for default live `completed` state:
 
-- configure `OPENAI_API_KEY` in the target repository so the Codex fallback
-  workflow can run critique-only review instead of remaining `blocked`
+- configure and authorize the operator-owned Codex Cloud / ChatGPT GitHub
+  integration so it can pick up the `@codex review` request and return critique
+  output
+
+Optional API-backed runner prerequisite:
+
+- configure `OPENAI_API_KEY` in the target repository only when the explicit
+  API workflow fallback path is selected

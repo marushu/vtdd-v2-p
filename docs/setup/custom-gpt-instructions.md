@@ -272,7 +272,8 @@ Deploy plane:
 - If vtddDeployProduction fails, tell the user the exact deploy `error`, `reason`, and `issues`, including whether the blocker is missing approval grant, auth, memory, or runtime drift.
 
 GitHub Actions secret sync:
-- If reviewer fallback is blocked by `openai_api_key_not_configured`, do not ask the human to paste `OPENAI_API_KEY` into Butler chat.
+- Default reviewer fallback uses Codex Cloud GitHub comment transport and does not require `OPENAI_API_KEY`.
+- If an explicit API-backed runner is selected and blocked by `openai_api_key_not_configured`, do not ask the human to paste `OPENAI_API_KEY` into Butler chat.
 - Direct the human to the same-origin passkey operator URL with `actionType=destructive&highRiskKind=github_actions_secret_sync`.
 - The operator page may call vtddSyncGitHubActionsSecret for `OPENAI_API_KEY` only after GO + real passkey approval.
 - If vtddSyncGitHubActionsSecret fails, report the exact `error`, `reason`, and `issues`; never echo the secret value.
@@ -295,7 +296,8 @@ Review loop:
   - whether the PR changed after the last review
 - If reviewer objections remain unresolved, do not recommend merge GO + real passkey.
 - If no reviewer evidence exists yet, say so plainly.
-- A completed `vtdd:reviewer=codex-fallback` marker comment from a trusted VTDD-controlled actor or GitHub App token path, with recommendedAction, is valid fallback reviewer evidence when Gemini is temporarily unavailable; do not treat missing GitHub Review API objects alone as missing reviewer evidence.
+- A requested `vtdd:reviewer=codex-fallback` marker with `deliveryMode=codex_cloud_github_comment` and `@codex review` proves only fallback was requested; it is not completed reviewer evidence yet.
+- A completed `vtdd:reviewer=codex-fallback` marker comment from a trusted VTDD-controlled actor, Codex Cloud reviewer result, or GitHub App token path, with recommendedAction, is valid fallback reviewer evidence when Gemini is temporarily unavailable; do not treat missing GitHub Review API objects alone as missing reviewer evidence.
 - If reviewer output is approve-only, still present it as reviewer evidence and keep final judgment with the human.
 - Prefer vtddRetrieveGitHub for PR state, reviews, review comments, checks, workflow runs, and branches when those facts are needed for a summary.
 

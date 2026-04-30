@@ -16,6 +16,8 @@ export function formatCodexReviewFallbackComment(input = {}) {
   const criticalFindings = normalizeStringArray(input.criticalFindings);
   const risks = normalizeStringArray(input.risks);
   const rawReview = normalizeText(input.rawReview);
+  const repository = normalizeText(input.repository);
+  const pullRequestNumber = normalizeText(input.pullRequestNumber);
 
   const lines = [
     CODEX_REVIEW_FALLBACK_MARKER,
@@ -28,11 +30,14 @@ export function formatCodexReviewFallbackComment(input = {}) {
     "",
     ...buildStatusSection({
       status,
+      deliveryMode,
       blocker,
       recommendedAction,
       criticalFindings,
       risks,
-      rawReview
+      rawReview,
+      repository,
+      pullRequestNumber
     }),
     "",
     "_Reviewer remains critique-only. Human keeps revision GO / merge GO + real passkey authority._"
@@ -77,11 +82,14 @@ function containsMarker(value) {
 
 function buildStatusSection({
   status,
+  deliveryMode,
   blocker,
   recommendedAction,
   criticalFindings,
   risks,
-  rawReview
+  rawReview,
+  repository,
+  pullRequestNumber
 }) {
   if (status === CodexReviewFallbackStatus.BLOCKED) {
     return [
@@ -105,6 +113,27 @@ function buildStatusSection({
       ...formatListOrFallback(risks, "- None reported."),
       ...(rawReview
         ? ["", "### Raw Codex Output", "", "```text", rawReview, "```"]
+        : [])
+    ];
+  }
+
+  if (deliveryMode === "codex_cloud_github_comment") {
+    return [
+      "Gemini critical review is temporarily unavailable.",
+      "VTDD has requested Codex Cloud review through the GitHub comment transport.",
+      "This request does not use `OPENAI_API_KEY`; it is a request-state only until Codex returns a completed reviewer marker.",
+      "",
+      "@codex review",
+      "",
+      "Please perform a critique-only VTDD reviewer pass for this pull request.",
+      "Return or update a `vtdd:reviewer=codex-fallback` completed comment with `Recommended action`, `Critical Findings`, and `Risks`.",
+      ...(repository || pullRequestNumber
+        ? [
+            "",
+            "### Target",
+            ...(repository ? [`- Repository: \`${repository}\``] : []),
+            ...(pullRequestNumber ? [`- Pull request: #${pullRequestNumber}`] : [])
+          ]
         : [])
     ];
   }

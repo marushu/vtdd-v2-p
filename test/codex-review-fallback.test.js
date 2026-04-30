@@ -14,12 +14,19 @@ test("formatCodexReviewFallbackComment renders marker and requested fallback sta
   const body = formatCodexReviewFallbackComment({
     status: "requested",
     trigger: "pull_request_target:synchronize",
-    reason: "gemini_temporarily_unavailable"
+    reason: "gemini_temporarily_unavailable",
+    deliveryMode: "codex_cloud_github_comment",
+    repository: "marushu/vtdd-v2-p",
+    pullRequestNumber: 152
   });
 
   assert.equal(body.includes(CODEX_REVIEW_FALLBACK_MARKER), true);
   assert.equal(body.includes("- Status: `requested`"), true);
-  assert.equal(body.includes("workflow execution"), true);
+  assert.equal(body.includes("- Delivery mode: `codex_cloud_github_comment`"), true);
+  assert.equal(body.includes("@codex review"), true);
+  assert.equal(body.includes("does not use `OPENAI_API_KEY`"), true);
+  assert.equal(body.includes("- Repository: `marushu/vtdd-v2-p`"), true);
+  assert.equal(body.includes("- Pull request: #152"), true);
   assert.equal(body.includes("gemini_temporarily_unavailable"), true);
 });
 

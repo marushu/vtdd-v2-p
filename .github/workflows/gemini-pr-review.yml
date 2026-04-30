@@ -87,5 +87,4 @@ jobs:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_REVIEW_MODEL: ${{ vars.GEMINI_REVIEW_MODEL }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: node scripts/run-gemini-pr-review.mjs
