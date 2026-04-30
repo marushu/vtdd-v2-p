@@ -1078,15 +1078,18 @@ function handlePasskeyOperatorPageRequest(request) {
   const url = new URL(request.url);
   const syncApiBase = normalizeOptionalHttpUrl(url.searchParams.get("syncApiBase"));
   const syncEnabled = Boolean(syncApiBase);
+  const requestedActionType = url.searchParams.get("actionType");
+  const requestedHighRiskKind = url.searchParams.get("highRiskKind");
   const html = renderPasskeyOperatorPage({
     origin: url.origin,
     syncApiBase,
+    operatorMode: url.searchParams.get("mode") || (requestedActionType || requestedHighRiskKind ? "" : "full"),
     repositoryInput: url.searchParams.get("repositoryInput"),
     issueNumber: url.searchParams.get("issueNumber"),
     pullNumber: url.searchParams.get("pullNumber"),
     phase: url.searchParams.get("phase") || "execution",
-    actionType: url.searchParams.get("actionType") || "destructive",
-    highRiskKind: url.searchParams.get("highRiskKind") || "github_app_secret_sync",
+    actionType: requestedActionType,
+    highRiskKind: requestedHighRiskKind,
     mergeMethod: url.searchParams.get("mergeMethod") || "squash",
     returnUrl: normalizeOperatorReturnUrl(url.searchParams.get("returnUrl")),
     operatorId: url.searchParams.get("operatorId") || "vtdd-operator",
