@@ -53,9 +53,10 @@ execution.
 | PR create | `unverified` | Source write plane supports it; live Butler path not proven from Butler. | Create PR from a bounded branch if needed by a live slice. |
 | PR update | `unverified` | Source write plane supports it; live Butler path not proven. | Update a bounded PR title/body and verify. |
 | PR comment create | `unverified` | Source write plane supports it; live Butler path not proven. | Post a bounded PR comment and verify URL. |
-| `@codex` handoff comment | `partial-live` | PR #155 produced a `deliveryMode=codex_cloud_github_comment` request comment with `@codex review`. | Verify the same request shape from Butler-originated handoff, not only reviewer fallback. |
-| Butler -> Codex Cloud pickup | `broken-live` | PR #155 Codex Cloud response said: “To use Codex here, create a Codex account and connect to github.” A posted request is not execution evidence. | Configure/confirm the Codex Cloud GitHub connector, then confirm it creates a task/branch/PR or returns a clear no-op/failure. |
-| execution progress tracking | `unverified` | Source supports progress routes; live Butler progress loop is not proven. | Track queued -> running/failed/PR-created states after handoff. |
+| `@codex` handoff comment | `partial-live` | PR #155 produced a `deliveryMode=codex_cloud_github_comment` request comment with `@codex review`. | Verify the same request shape from Butler-originated development handoff, not only reviewer fallback. |
+| Butler -> Codex Cloud pickup | `partial-live` | PR #155 later showed Codex Cloud can respond to a human `@codex review`, but development handoff branch/PR creation is not proven. | Under #157, confirm Butler-originated development handoff creates a branch/PR or returns a clear blocker. |
+| Codex fallback as VTDD reviewer | `partial-live` | PR #155 Codex responded, but did not return the required VTDD reviewer marker/fields. #156 tracks this contract gap. | Require `vtdd:reviewer=codex-fallback` completed marker plus recommended action before treating it as reviewer evidence. |
+| execution progress tracking | `source-only` | Source now distinguishes delegation comment, connector blocker, branch, and PR states; live Butler progress loop is not proven. | Track queued -> blocked/branch/PR-created states after a Butler-originated handoff. |
 | issue close | `unverified` | High-risk authority plane supports bounded close after merge proof; live Butler/operator path not proven. | Use only after a bounded merged PR and explicit GO/passkey path. |
 | merge operator | `unverified` | Operator route exists; live Butler merge URL/dispatch path needs proof. | Ask Butler for merge operator link for a safe PR and verify fields. |
 | deploy operator | `partial-live` | Deploy operator and dispatch have worked in conversation; repeatability and post-dispatch tracking need proof. | Ask Butler for deploy URL, dispatch, and verify run/self-parity/health. |
@@ -69,9 +70,9 @@ execution.
 1. `natural GO -> issue_create` (#151 live proof)
 2. Issue read completeness: open/closed/exact body/comments/pagination
 3. PR runtime truth completeness: PR state/diff/comments/reviews/checks/runs/branches
-4. Butler -> Codex handoff progress: requested/queued/picked up/branch/PR/failed
-5. Codex Cloud pickup from `@codex` request
-6. Reviewer evidence aggregation: Gemini/Codex, requested/completed/blocked
+4. Butler -> Codex development handoff progress: requested/queued/blocked/branch/PR (#157)
+5. Codex fallback reviewer contract: Gemini/Codex, requested/completed/blocked (#156)
+6. Reviewer evidence aggregation: requested/completed/blocked without overclaiming
 7. Surface update guidance: Instructions/Action Schema/Cloudflare deploy links
 8. High-risk operator flows: merge/deploy/issue close under GO + passkey
 

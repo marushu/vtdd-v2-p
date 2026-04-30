@@ -17,16 +17,17 @@ test("Butler capability matrix records live/source/unverified status without ove
   assert.equal(doc.includes("#151 remains open because iPhone Butler live evidence is missing"), true);
   assert.equal(doc.includes("| closed issue list read | `broken-live` |"), true);
   assert.equal(doc.includes("| `@codex` handoff comment | `partial-live` |"), true);
-  assert.equal(doc.includes("| Butler -> Codex Cloud pickup | `broken-live` |"), true);
-  assert.equal(doc.includes("create a Codex account and connect to github"), true);
+  assert.equal(doc.includes("| Butler -> Codex Cloud pickup | `partial-live` |"), true);
+  assert.equal(doc.includes("| Codex fallback as VTDD reviewer | `partial-live` |"), true);
+  assert.equal(doc.includes("#156 tracks this contract gap"), true);
   assert.equal(doc.includes("| self-parity check | `verified-live` |"), true);
 });
 
 test("Butler capability matrix prioritizes the Butler-to-Codex path and surface guidance", () => {
   const doc = fs.readFileSync(DOC_PATH, "utf8");
 
-  assert.equal(doc.includes("Butler -> Codex handoff progress"), true);
-  assert.equal(doc.includes("requested/queued/picked up/branch/PR/failed"), true);
+  assert.equal(doc.includes("Butler -> Codex development handoff progress"), true);
+  assert.equal(doc.includes("requested/queued/blocked/branch/PR (#157)"), true);
   assert.equal(doc.includes("Surface update guidance"), true);
   assert.equal(doc.includes("Instructions/Action Schema/Cloudflare deploy links"), true);
   assert.equal(doc.includes("live Butler/iPhone validation phrase"), true);

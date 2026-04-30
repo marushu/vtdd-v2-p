@@ -375,3 +375,103 @@ test("remote Codex comment transport progress reads delegation comment and PR st
   assert.equal(progress.progress.pullRequest.number, 44);
   assert.equal(calls.length, 2);
 });
+
+test("remote Codex comment transport progress treats branch without PR as in progress", async () => {
+  const calls = [];
+  const progress = await retrieveRemoteCodexExecutionProgress({
+    executionId: "remote-codex-issue157-branch",
+    repository: "sample-org/vtdd-v2",
+    issueNumber: 157,
+    branch: "codex/issue-157",
+    env: {
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_progress_token",
+      GITHUB_API_FETCH: async (url, init) => {
+        calls.push({ url, init });
+        if (String(url).includes("/issues/157/comments")) {
+          return new Response(
+            JSON.stringify([
+              {
+                id: 1571,
+                html_url: "https://github.com/sample-org/vtdd-v2/issues/157#issuecomment-1571",
+                body: "<!-- vtdd:remote-codex-execution:remote-codex-issue157-branch -->\n@codex"
+              }
+            ]),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        if (String(url).includes("/pulls?")) {
+          return new Response(JSON.stringify([]), {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          });
+        }
+        return new Response(
+          JSON.stringify({
+            name: "codex/issue-157",
+            commit: { sha: "abc123" },
+            _links: {
+              html: "https://github.com/sample-org/vtdd-v2/tree/codex/issue-157"
+            }
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        );
+      }
+    }
+  });
+
+  assert.equal(progress.ok, true);
+  assert.equal(progress.progress.status, RemoteCodexExecutionStatus.IN_PROGRESS);
+  assert.equal(progress.progress.branch.name, "codex/issue-157");
+  assert.equal(progress.progress.branch.sha, "abc123");
+  assert.equal(progress.progress.pullRequest, null);
+  assert.equal(calls.length, 3);
+});
+
+test("remote Codex comment transport progress surfaces connector blocker without branch or PR", async () => {
+  const progress = await retrieveRemoteCodexExecutionProgress({
+    executionId: "remote-codex-issue157-blocked",
+    repository: "sample-org/vtdd-v2",
+    issueNumber: 157,
+    branch: "codex/issue-157",
+    env: {
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_progress_token",
+      GITHUB_API_FETCH: async (url) => {
+        if (String(url).includes("/issues/157/comments")) {
+          return new Response(
+            JSON.stringify([
+              {
+                id: 1571,
+                html_url: "https://github.com/sample-org/vtdd-v2/issues/157#issuecomment-1571",
+                body: "<!-- vtdd:remote-codex-execution:remote-codex-issue157-blocked -->\n@codex"
+              },
+              {
+                id: 1572,
+                user: { login: "chatgpt-codex-connector[bot]" },
+                html_url: "https://github.com/sample-org/vtdd-v2/issues/157#issuecomment-1572",
+                body: "To use Codex here, create a Codex account and connect to github."
+              }
+            ]),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        if (String(url).includes("/pulls?")) {
+          return new Response(JSON.stringify([]), {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          });
+        }
+        return new Response(JSON.stringify({ message: "Branch not found" }), {
+          status: 404,
+          headers: { "content-type": "application/json" }
+        });
+      }
+    }
+  });
+
+  assert.equal(progress.ok, true);
+  assert.equal(progress.progress.status, RemoteCodexExecutionStatus.BLOCKED);
+  assert.equal(progress.progress.blocker.error, "codex_cloud_connector_required");
+  assert.equal(progress.progress.blocker.commentId, 1572);
+  assert.equal(progress.progress.pullRequest, null);
+  assert.equal(progress.progress.branch, null);
+});
