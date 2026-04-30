@@ -1,4 +1,6 @@
 export function renderPasskeyOperatorPage(input = {}) {
+  const operatorMode = resolvePasskeyOperatorMode(input);
+  const sectionVisibility = resolveSectionVisibility(operatorMode);
   const origin = escapeHtml(input.origin || "");
   const apiBase = escapeHtml(input.apiBase || "/v2");
   const syncApiBase = escapeHtml(input.syncApiBase || "");
@@ -8,8 +10,8 @@ export function renderPasskeyOperatorPage(input = {}) {
   const issueDefault = escapeHtml(input.issueNumber || "");
   const pullNumberDefault = escapeHtml(input.pullNumber || "");
   const phaseDefault = escapeHtml(input.phase || "execution");
-  const actionTypeDefault = escapeHtml(input.actionType || "destructive");
-  const highRiskKindDefault = escapeHtml(input.highRiskKind || "github_app_secret_sync");
+  const actionTypeDefault = escapeHtml(input.actionType || defaultActionTypeForMode(operatorMode));
+  const highRiskKindDefault = escapeHtml(input.highRiskKind || defaultHighRiskKindForMode(operatorMode));
   const mergeMethodDefault = escapeHtml(input.mergeMethod || "squash");
   const returnUrl = escapeHtml(input.returnUrl || "");
   const syncEnabled = input.syncEnabled === true;
@@ -166,7 +168,7 @@ export function renderPasskeyOperatorPage(input = {}) {
       </div>
 
       <div class="grid">
-        <section>
+        <section data-operator-section="registration"${hiddenAttribute(!sectionVisibility.registration)}>
           <h2>1. Passkey 登録</h2>
           <label for="operator-id">Operator ID</label>
           <input id="operator-id" value="${registrationDefaultOperatorId}" />
@@ -179,7 +181,7 @@ export function renderPasskeyOperatorPage(input = {}) {
           <pre id="register-output"></pre>
         </section>
 
-        <section>
+        <section data-operator-section="approval"${hiddenAttribute(!sectionVisibility.approval)}>
           <h2>2. High-risk Approval</h2>
           <label for="repo-input">Repository</label>
           <input id="repo-input" value="${repoDefault}" placeholder="marushu/vtdd-v2-p" />
@@ -203,7 +205,7 @@ export function renderPasskeyOperatorPage(input = {}) {
           <pre id="approve-output"></pre>
         </section>
 
-        <section>
+        <section data-operator-section="github-app-secret-sync"${hiddenAttribute(!sectionVisibility.githubAppSecretSync)}>
           <h2>3. GitHub App Secret Sync</h2>
           <p class="muted">real passkey approval 後、この helper から <code>#15</code> の explicit operator bootstrap を実行します。</p>
           <div class="row">
@@ -213,7 +215,7 @@ export function renderPasskeyOperatorPage(input = {}) {
           <pre id="sync-output"></pre>
         </section>
 
-        <section>
+        <section data-operator-section="production-deploy"${hiddenAttribute(!sectionVisibility.productionDeploy)}>
           <h2>4. Production Deploy</h2>
           <p class="muted">deploy stale を検知したあと、取得済みの <code>approvalGrantId</code> を使って same-origin の governed deploy path を dispatch します。</p>
           <div class="row">
@@ -225,7 +227,7 @@ export function renderPasskeyOperatorPage(input = {}) {
           <pre id="deploy-output"></pre>
         </section>
 
-        <section>
+        <section data-operator-section="pr-merge"${hiddenAttribute(!sectionVisibility.prMerge)}>
           <h2>5. GitHub PR Merge</h2>
           <p class="muted">PR merge 用の real passkey approval 後、この helper から same-origin の GitHub authority path を dispatch します。</p>
           <label for="pull-number-input">Pull Number</label>
@@ -240,7 +242,7 @@ export function renderPasskeyOperatorPage(input = {}) {
           <pre id="merge-output"></pre>
         </section>
 
-        <section>
+        <section data-operator-section="github-actions-secret-sync"${hiddenAttribute(!sectionVisibility.githubActionsSecretSync)}>
           <h2>6. Codex Fallback Secret Sync</h2>
           <p class="muted">Codex reviewer fallback 用の <code>OPENAI_API_KEY</code> を GitHub Actions secret に同期します。値は Butler 会話に貼らず、この operator page から送信します。</p>
           <label for="openai-api-key-input">OPENAI_API_KEY</label>
@@ -727,6 +729,93 @@ export function renderPasskeyOperatorPage(input = {}) {
     </script>
   </body>
 </html>`;
+}
+
+export function resolvePasskeyOperatorMode(input = {}) {
+  const explicitMode = normalizeOperatorMode(input.operatorMode || input.mode);
+  if (explicitMode) {
+    return explicitMode;
+  }
+
+  const actionType = normalizeOperatorToken(input.actionType);
+  const highRiskKind = normalizeOperatorToken(input.highRiskKind);
+
+  if (!actionType && !highRiskKind) {
+    return "full";
+  }
+  if (actionType === "deploy_production" || highRiskKind === "deploy_production") {
+    return "deploy";
+  }
+  if (actionType === "merge" || highRiskKind === "pull_merge") {
+    return "merge";
+  }
+  if (highRiskKind === "github_actions_secret_sync") {
+    return "github_actions_secret_sync";
+  }
+  if (highRiskKind === "github_app_secret_sync") {
+    return "github_app_secret_sync";
+  }
+
+  return "full";
+}
+
+function resolveSectionVisibility(operatorMode) {
+  const full = operatorMode === "full";
+  return {
+    registration: true,
+    approval: true,
+    githubAppSecretSync: full || operatorMode === "github_app_secret_sync",
+    productionDeploy: full || operatorMode === "deploy",
+    prMerge: full || operatorMode === "merge",
+    githubActionsSecretSync: full || operatorMode === "github_actions_secret_sync"
+  };
+}
+
+function hiddenAttribute(hidden) {
+  return hidden ? " hidden" : "";
+}
+
+function normalizeOperatorMode(value) {
+  const token = normalizeOperatorToken(value);
+  if (["full", "deploy", "merge", "github_app_secret_sync", "github_actions_secret_sync"].includes(token)) {
+    return token;
+  }
+  if (token === "secret_sync") {
+    return "github_app_secret_sync";
+  }
+  if (token === "openai_secret_sync" || token === "codex_secret_sync") {
+    return "github_actions_secret_sync";
+  }
+  return "";
+}
+
+function defaultActionTypeForMode(operatorMode) {
+  if (operatorMode === "deploy") {
+    return "deploy_production";
+  }
+  if (operatorMode === "merge") {
+    return "merge";
+  }
+  return "destructive";
+}
+
+function defaultHighRiskKindForMode(operatorMode) {
+  if (operatorMode === "deploy") {
+    return "deploy_production";
+  }
+  if (operatorMode === "merge") {
+    return "pull_merge";
+  }
+  if (operatorMode === "github_actions_secret_sync") {
+    return "github_actions_secret_sync";
+  }
+  return "github_app_secret_sync";
+}
+
+function normalizeOperatorToken(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase();
 }
 
 function escapeHtml(value) {

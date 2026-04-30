@@ -58,6 +58,94 @@ test("passkey operator page pre-fills PR merge fields from URL input", () => {
   assert.equal(html.includes('operation: "pull_merge"'), true);
 });
 
+test("passkey operator page focuses deploy mode on deploy approval and dispatch sections", () => {
+  const html = renderPasskeyOperatorPage({
+    repositoryInput: "marushu/vtdd-v2-p",
+    phase: "execution",
+    actionType: "deploy_production",
+    highRiskKind: "deploy_production",
+    returnUrl: "https://chatgpt.com/g/example-butler"
+  });
+
+  assert.equal(html.includes('<section data-operator-section="registration">'), true);
+  assert.equal(html.includes('<section data-operator-section="approval">'), true);
+  assert.equal(html.includes('<section data-operator-section="production-deploy">'), true);
+  assert.equal(html.includes('<section data-operator-section="pr-merge" hidden>'), true);
+  assert.equal(html.includes('<section data-operator-section="github-app-secret-sync" hidden>'), true);
+  assert.equal(html.includes('<section data-operator-section="github-actions-secret-sync" hidden>'), true);
+  assert.equal(html.includes("Dispatch production deploy"), true);
+  assert.equal(html.includes("Return to Butler"), true);
+});
+
+test("passkey operator page fills safe approval defaults from explicit mode", () => {
+  const deployHtml = renderPasskeyOperatorPage({
+    operatorMode: "deploy",
+    repositoryInput: "marushu/vtdd-v2-p"
+  });
+
+  assert.equal(deployHtml.includes('id="action-type-input" value="deploy_production"'), true);
+  assert.equal(deployHtml.includes('id="risk-kind-input" value="deploy_production"'), true);
+  assert.equal(deployHtml.includes('<section data-operator-section="production-deploy">'), true);
+
+  const mergeHtml = renderPasskeyOperatorPage({
+    operatorMode: "merge",
+    repositoryInput: "marushu/vtdd-v2-p",
+    pullNumber: 148
+  });
+
+  assert.equal(mergeHtml.includes('id="action-type-input" value="merge"'), true);
+  assert.equal(mergeHtml.includes('id="risk-kind-input" value="pull_merge"'), true);
+  assert.equal(mergeHtml.includes('<section data-operator-section="pr-merge">'), true);
+});
+
+test("passkey operator page focuses merge mode on approval and PR merge sections", () => {
+  const html = renderPasskeyOperatorPage({
+    repositoryInput: "marushu/vtdd-v2-p",
+    pullNumber: 148,
+    actionType: "merge",
+    highRiskKind: "pull_merge"
+  });
+
+  assert.equal(html.includes('<section data-operator-section="registration">'), true);
+  assert.equal(html.includes('<section data-operator-section="approval">'), true);
+  assert.equal(html.includes('<section data-operator-section="pr-merge">'), true);
+  assert.equal(html.includes('<section data-operator-section="production-deploy" hidden>'), true);
+  assert.equal(html.includes('<section data-operator-section="github-app-secret-sync" hidden>'), true);
+  assert.equal(html.includes('<section data-operator-section="github-actions-secret-sync" hidden>'), true);
+});
+
+test("passkey operator page focuses secret sync modes without hiding the required approval section", () => {
+  const githubAppSecretHtml = renderPasskeyOperatorPage({
+    repositoryInput: "marushu/vtdd-v2-p",
+    actionType: "destructive",
+    highRiskKind: "github_app_secret_sync"
+  });
+  assert.equal(githubAppSecretHtml.includes('<section data-operator-section="approval">'), true);
+  assert.equal(githubAppSecretHtml.includes('<section data-operator-section="github-app-secret-sync">'), true);
+  assert.equal(githubAppSecretHtml.includes('<section data-operator-section="production-deploy" hidden>'), true);
+  assert.equal(githubAppSecretHtml.includes('<section data-operator-section="pr-merge" hidden>'), true);
+
+  const actionsSecretHtml = renderPasskeyOperatorPage({
+    repositoryInput: "marushu/vtdd-v2-p",
+    actionType: "destructive",
+    highRiskKind: "github_actions_secret_sync"
+  });
+  assert.equal(actionsSecretHtml.includes('<section data-operator-section="approval">'), true);
+  assert.equal(actionsSecretHtml.includes('<section data-operator-section="github-actions-secret-sync">'), true);
+  assert.equal(actionsSecretHtml.includes('<section data-operator-section="github-app-secret-sync" hidden>'), true);
+  assert.equal(actionsSecretHtml.includes('<section data-operator-section="production-deploy" hidden>'), true);
+  assert.equal(actionsSecretHtml.includes('<section data-operator-section="pr-merge" hidden>'), true);
+});
+
+test("passkey operator page keeps the full maintenance view when no mode is inferred", () => {
+  const html = renderPasskeyOperatorPage({ operatorMode: "full" });
+
+  assert.equal(html.includes('<section data-operator-section="github-app-secret-sync">'), true);
+  assert.equal(html.includes('<section data-operator-section="production-deploy">'), true);
+  assert.equal(html.includes('<section data-operator-section="pr-merge">'), true);
+  assert.equal(html.includes('<section data-operator-section="github-actions-secret-sync">'), true);
+});
+
 test("passkey operator page keeps sync disabled message when helper endpoint is absent", () => {
   const html = renderPasskeyOperatorPage({
     apiBase: "/v2",
