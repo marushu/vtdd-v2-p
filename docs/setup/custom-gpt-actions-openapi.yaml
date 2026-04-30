@@ -391,8 +391,16 @@ paths:
                 $ref: "#/components/schemas/VtddGenericResponse"
         "401":
           description: Missing machine auth
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
         "403":
           description: Invalid machine auth
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
         "422":
           description: Execution request blocked or invalid
           content:
@@ -500,8 +508,16 @@ paths:
                 $ref: "#/components/schemas/VtddGenericResponse"
         "401":
           description: Missing machine auth
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
         "403":
           description: Invalid machine auth
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
         "422":
           description: GitHub write request blocked or invalid
           content:
@@ -786,6 +802,189 @@ paths:
           description: Invalid machine auth
         "503":
           description: Progress lookup failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+  /v2/retrieve/constitution:
+    get:
+      operationId: vtddRetrieveConstitution
+      summary: Retrieve VTDD constitution records for Butler judgment context.
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Constitution retrieval result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "401":
+          description: Missing machine auth
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "403":
+          description: Invalid machine auth
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "503":
+          description: Constitution retrieval unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+  /v2/retrieve/decisions:
+    get:
+      operationId: vtddRetrieveDecisionLogs
+      summary: Retrieve decision log references for Butler context preflight.
+      parameters:
+        - name: relatedIssue
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Decision log retrieval result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "401":
+          description: Missing machine auth
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "403":
+          description: Invalid machine auth
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "503":
+          description: Decision log retrieval unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+  /v2/retrieve/proposals:
+    get:
+      operationId: vtddRetrieveProposalLogs
+      summary: Retrieve proposal log references for Butler context preflight.
+      parameters:
+        - name: relatedIssue
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Proposal log retrieval result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "401":
+          description: Missing machine auth
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "403":
+          description: Invalid machine auth
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "503":
+          description: Proposal log retrieval unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+  /v2/retrieve/cross:
+    get:
+      operationId: vtddRetrieveCrossMemory
+      summary: Retrieve cross-source VTDD memory and context references for Butler preflight.
+      parameters:
+        - name: phase
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - exploration
+              - execution
+        - name: relatedIssue
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: issueNumber
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: issueTitle
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: text
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: semantic
+          in: query
+          required: false
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: Cross-memory context retrieval result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "401":
+          description: Missing machine auth
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "403":
+          description: Invalid machine auth
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "503":
+          description: Cross-memory retrieval unavailable
           content:
             application/json:
               schema:

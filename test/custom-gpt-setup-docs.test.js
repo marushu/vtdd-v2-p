@@ -50,6 +50,14 @@ test("custom gpt instructions preserve current butler and approval boundaries", 
   assert.equal(doc.includes("vtddRetrieveRepositoryNicknames"), true);
   assert.equal(doc.includes("vtddRetrieveSetupArtifact"), true);
   assert.equal(doc.includes("vtddRetrieveSelfParity"), true);
+  assert.equal(doc.includes("vtddRetrieveConstitution"), true);
+  assert.equal(doc.includes("vtddRetrieveDecisionLogs"), true);
+  assert.equal(doc.includes("vtddRetrieveProposalLogs"), true);
+  assert.equal(doc.includes("vtddRetrieveCrossMemory"), true);
+  assert.equal(doc.includes("Before proposing an Issue, GitHub write, Codex handoff, or PR next action"), true);
+  assert.equal(doc.includes("no relevant RAG/memory hit is found, say so"), true);
+  assert.equal(doc.includes("do not invent past precedent"), true);
+  assert.equal(doc.includes("current state is governed by GitHub runtime truth"), true);
   assert.equal(doc.includes("operation=`issue_create`"), true);
   assert.equal(doc.includes("If the human says something like \"この内容で Issue 作って\""), true);
   assert.equal(doc.includes("この title/body で Issue を作成するなら「GO」と言ってください"), true);
@@ -120,25 +128,32 @@ test("short custom gpt instructions stay under editor limits while preserving cr
   assert.equal(doc.includes("vtddSyncGitHubActionsSecret"), true);
   assert.equal(doc.includes("vtddUpsertRepositoryNickname"), true);
   assert.equal(doc.includes("vtddRetrieveRepositoryNicknames"), true);
-  assert.equal(doc.includes("For issue_create, fix title+body, bind GO to that payload"), true);
+  assert.equal(doc.includes("vtddRetrieveCrossMemory"), true);
+  assert.equal(doc.includes("vtddRetrieveDecisionLogs"), true);
+  assert.equal(doc.includes("vtddRetrieveProposalLogs"), true);
+  assert.equal(doc.includes("vtddRetrieveConstitution"), true);
+  assert.equal(doc.includes("no RAG hit OK"), true);
+  assert.equal(doc.includes("never invent"), true);
+  assert.equal(doc.includes("Runtime truth > memory"), true);
+  assert.equal(doc.includes("For issue_create, fix title+body, bind GO"), true);
   assert.equal(doc.includes("ask only `GO`"), true);
   assert.equal(doc.includes("Never ask targetConfirmed/approvalScopeMatched/approvalPhrase/raw JSON"), true);
   assert.equal(doc.includes("Nickname memory is user-owned alias data"), true);
   assert.equal(doc.includes("non-owner/repo token like `ぶい の...`"), true);
-  assert.equal(doc.includes("call nickname read/gateway before asking"), true);
+  assert.equal(doc.includes("call nickname read/gateway first"), true);
   assert.equal(doc.includes("Nickname read failure is not proof of unknown repo"), true);
   assert.equal(doc.includes("approvalGrant.scope.repositoryInput"), true);
   assert.equal(doc.includes("unverified fallback"), true);
   assert.equal(doc.includes("surface error/reason/issues"), true);
   assert.equal(doc.includes("surface error/reason/issues"), true);
   assert.equal(doc.includes("If Action returns `ClientResponseError`, state action"), true);
-  assert.equal(doc.includes("If self-parity returns `ClientResponseError`, say unverified Action transport failure"), true);
+  assert.equal(doc.includes("If self-parity returns `ClientResponseError`, say unverified transport failure"), true);
   assert.equal(doc.includes("judgmentModelId=vtdd-butler-core-v1"), true);
   assert.equal(doc.includes("vtddExecute handoff: actionType=build"), true);
   assert.equal(doc.includes("requiresHandoff=true"), true);
   assert.equal(doc.includes("issueTraceability Intent/SC/Non-goal refs"), true);
   assert.equal(
-    doc.includes("judgmentTrace first four steps must be exactly: constitution, runtime_truth, issue_context, current_query"),
+    doc.includes("judgmentTrace first four steps exactly: constitution, runtime_truth, issue_context, current_query"),
     true
   );
   assert.equal(doc.includes("No constitutionConsulted input"), true);
@@ -149,7 +164,7 @@ test("short custom gpt instructions stay under editor limits while preserving cr
   assert.equal(doc.includes("selfParity.deployRecovery.operatorMarkdownLink or operatorUrl"), true);
   assert.equal(doc.includes("selfParity.deployOperatorMarkdownLink"), true);
   assert.equal(doc.includes("<actual selfParity.deployOperatorUrl>"), true);
-  assert.equal(doc.includes("never a raw `/v2/approval/passkey/operator...`"), true);
+  assert.equal(doc.includes("never raw `/v2/approval/passkey/operator...`"), true);
   assert.equal(doc.includes("bare URL"), true);
   assert.equal(doc.includes("phase=execution"), true);
   assert.equal(doc.includes("GO + real passkey"), true);
@@ -178,6 +193,14 @@ test("custom gpt openapi doc exposes current gateway, execute, and progress rout
   assert.equal(doc.includes("/v2/retrieve/setup-artifact:"), true);
   assert.equal(doc.includes("/v2/retrieve/self-parity:"), true);
   assert.equal(doc.includes("/v2/retrieve/approval-grant:"), true);
+  assert.equal(doc.includes("/v2/retrieve/constitution:"), true);
+  assert.equal(doc.includes("/v2/retrieve/decisions:"), true);
+  assert.equal(doc.includes("/v2/retrieve/proposals:"), true);
+  assert.equal(doc.includes("/v2/retrieve/cross:"), true);
+  assert.equal(doc.includes("operationId: vtddRetrieveConstitution"), true);
+  assert.equal(doc.includes("operationId: vtddRetrieveDecisionLogs"), true);
+  assert.equal(doc.includes("operationId: vtddRetrieveProposalLogs"), true);
+  assert.equal(doc.includes("operationId: vtddRetrieveCrossMemory"), true);
   assert.equal(doc.includes("GatewayBearerAuth"), true);
   assert.equal(doc.includes("operationId: getHealth\n      security: []"), true);
   assert.equal(doc.includes("conversation:"), true);
@@ -238,6 +261,14 @@ test("custom gpt openapi json parses and exposes paths as an object", () => {
   assert.equal(typeof doc.paths["/v2/retrieve/setup-artifact"], "object");
   assert.equal(typeof doc.paths["/v2/retrieve/self-parity"], "object");
   assert.equal(typeof doc.paths["/v2/retrieve/approval-grant"], "object");
+  assert.equal(typeof doc.paths["/v2/retrieve/constitution"], "object");
+  assert.equal(typeof doc.paths["/v2/retrieve/decisions"], "object");
+  assert.equal(typeof doc.paths["/v2/retrieve/proposals"], "object");
+  assert.equal(typeof doc.paths["/v2/retrieve/cross"], "object");
+  assert.equal(doc.paths["/v2/retrieve/constitution"].get.operationId, "vtddRetrieveConstitution");
+  assert.equal(doc.paths["/v2/retrieve/decisions"].get.operationId, "vtddRetrieveDecisionLogs");
+  assert.equal(doc.paths["/v2/retrieve/proposals"].get.operationId, "vtddRetrieveProposalLogs");
+  assert.equal(doc.paths["/v2/retrieve/cross"].get.operationId, "vtddRetrieveCrossMemory");
   assert.deepEqual(
     doc.components.schemas.VtddGatewayRequest.properties.surfaceContext.properties
       .judgmentModelId.enum,
