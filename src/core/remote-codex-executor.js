@@ -13,6 +13,7 @@ export const RemoteCodexExecutionStatus = Object.freeze({
   QUEUED: "queued",
   IN_PROGRESS: "in_progress",
   COMPLETED: "completed",
+  BLOCKED: "blocked",
   UNKNOWN: "unknown"
 });
 
@@ -481,6 +482,19 @@ async function retrieveCodexCloudGitHubCommentProgress({
     return pullRequest;
   }
 
+  const branchState =
+    branch && !pullRequest.pullRequest
+      ? await findBranch({ repository, branch, token, env })
+      : { ok: true, branch: null };
+  if (!branchState.ok) {
+    return branchState;
+  }
+
+  const connectorBlocker =
+    !pullRequest.pullRequest && !branchState.branch
+      ? findCodexCloudConnectorBlocker({ comments, delegationComment })
+      : null;
+
   return {
     ok: true,
     progress: {
@@ -493,8 +507,14 @@ async function retrieveCodexCloudGitHubCommentProgress({
       delegationCommentUrl: normalizeText(delegationComment.html_url) || null,
       status: pullRequest.pullRequest
         ? RemoteCodexExecutionStatus.COMPLETED
-        : RemoteCodexExecutionStatus.QUEUED,
-      pullRequest: pullRequest.pullRequest
+        : branchState.branch
+          ? RemoteCodexExecutionStatus.IN_PROGRESS
+          : connectorBlocker
+            ? RemoteCodexExecutionStatus.BLOCKED
+            : RemoteCodexExecutionStatus.QUEUED,
+      pullRequest: pullRequest.pullRequest,
+      branch: branchState.branch,
+      blocker: connectorBlocker
     }
   };
 }
@@ -543,6 +563,80 @@ async function findPullRequestForBranch({ repository, branch, token, env }) {
           title: normalizeText(pull.title) || null
         }
       : null
+  };
+}
+
+async function findBranch({ repository, branch, token, env }) {
+  const apiBaseUrl = normalizeText(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
+  const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
+  const branchUrl = `${apiBaseUrl}/repos/${encodeURIComponentRepository(
+    repository
+  )}/branches/${encodeURIComponent(branch)}`;
+
+  let response;
+  try {
+    response = await fetchImpl(branchUrl, {
+      method: "GET",
+      headers: githubJsonHeaders({ token })
+    });
+  } catch {
+    return {
+      ok: false,
+      status: 503,
+      error: "remote_codex_progress_failed",
+      reason: "failed to read branch for Codex Cloud delegation"
+    };
+  }
+
+  const body = await readJsonSafe(response);
+  if (response.status === 404) {
+    return { ok: true, branch: null };
+  }
+  if (!response.ok) {
+    return {
+      ok: false,
+      status: response.status,
+      error: "remote_codex_progress_failed",
+      reason: normalizeText(body?.message) || "GitHub branch lookup failed"
+    };
+  }
+
+  return {
+    ok: true,
+    branch: {
+      name: normalizeText(body?.name) || branch,
+      url: normalizeText(body?._links?.html) || null,
+      sha: normalizeText(body?.commit?.sha) || null
+    }
+  };
+}
+
+function findCodexCloudConnectorBlocker({ comments, delegationComment }) {
+  const delegationId = normalizePositiveInteger(delegationComment?.id) ?? 0;
+  const laterComments = comments.filter((comment) => {
+    const commentId = normalizePositiveInteger(comment?.id) ?? 0;
+    return !delegationId || commentId > delegationId;
+  });
+
+  const blockerComment = laterComments.find((comment) => {
+    const author = normalizeText(comment?.user?.login).toLowerCase();
+    const body = normalizeText(comment?.body).toLowerCase();
+    return (
+      author.includes("chatgpt-codex-connector") &&
+      (body.includes("create a codex account and connect to github") ||
+        body.includes("to use codex here"))
+    );
+  });
+
+  if (!blockerComment) {
+    return null;
+  }
+
+  return {
+    error: "codex_cloud_connector_required",
+    reason: "Codex Cloud connector is not ready for this repository or account",
+    commentId: normalizePositiveInteger(blockerComment.id),
+    commentUrl: normalizeText(blockerComment.html_url) || null
   };
 }
 
