@@ -475,3 +475,48 @@ test("remote Codex comment transport progress surfaces connector blocker without
   assert.equal(progress.progress.pullRequest, null);
   assert.equal(progress.progress.branch, null);
 });
+
+test("remote Codex comment transport blocks when pickup never creates branch or PR", async () => {
+  const progress = await retrieveRemoteCodexExecutionProgress({
+    executionId: "remote-codex-issue157-stale",
+    repository: "sample-org/vtdd-v2",
+    issueNumber: 157,
+    branch: "codex/issue-157",
+    env: {
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_progress_token",
+      CODEX_CLOUD_PICKUP_GRACE_SECONDS: "0",
+      GITHUB_API_FETCH: async (url) => {
+        if (String(url).includes("/issues/157/comments")) {
+          return new Response(
+            JSON.stringify([
+              {
+                id: 1571,
+                created_at: "2026-04-30T11:15:22Z",
+                html_url: "https://github.com/sample-org/vtdd-v2/issues/157#issuecomment-1571",
+                body: "<!-- vtdd:remote-codex-execution:remote-codex-issue157-stale -->\n@codex"
+              }
+            ]),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        if (String(url).includes("/pulls?")) {
+          return new Response(JSON.stringify([]), {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          });
+        }
+        return new Response(JSON.stringify({ message: "Branch not found" }), {
+          status: 404,
+          headers: { "content-type": "application/json" }
+        });
+      }
+    }
+  });
+
+  assert.equal(progress.ok, true);
+  assert.equal(progress.progress.status, RemoteCodexExecutionStatus.BLOCKED);
+  assert.equal(progress.progress.blocker.error, "codex_cloud_pickup_not_observed");
+  assert.equal(progress.progress.blocker.commentId, 1571);
+  assert.equal(progress.progress.pullRequest, null);
+  assert.equal(progress.progress.branch, null);
+});

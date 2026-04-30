@@ -494,6 +494,10 @@ async function retrieveCodexCloudGitHubCommentProgress({
     !pullRequest.pullRequest && !branchState.branch
       ? findCodexCloudConnectorBlocker({ comments, delegationComment })
       : null;
+  const pickupBlocker =
+    !pullRequest.pullRequest && !branchState.branch && !connectorBlocker
+      ? buildCodexCloudPickupBlocker({ delegationComment, env })
+      : null;
 
   return {
     ok: true,
@@ -511,10 +515,12 @@ async function retrieveCodexCloudGitHubCommentProgress({
           ? RemoteCodexExecutionStatus.IN_PROGRESS
           : connectorBlocker
             ? RemoteCodexExecutionStatus.BLOCKED
-            : RemoteCodexExecutionStatus.QUEUED,
+            : pickupBlocker
+              ? RemoteCodexExecutionStatus.BLOCKED
+              : RemoteCodexExecutionStatus.QUEUED,
       pullRequest: pullRequest.pullRequest,
       branch: branchState.branch,
-      blocker: connectorBlocker
+      blocker: connectorBlocker ?? pickupBlocker
     }
   };
 }
@@ -640,10 +646,35 @@ function findCodexCloudConnectorBlocker({ comments, delegationComment }) {
   };
 }
 
+function buildCodexCloudPickupBlocker({ delegationComment, env }) {
+  const graceSeconds = normalizeNonNegativeNumber(
+    env?.CODEX_CLOUD_PICKUP_GRACE_SECONDS ?? 300
+  );
+  const createdAt = Date.parse(normalizeText(delegationComment?.created_at));
+  if (!Number.isFinite(createdAt)) {
+    return null;
+  }
+
+  const ageSeconds = Math.floor((Date.now() - createdAt) / 1000);
+  if (ageSeconds < graceSeconds) {
+    return null;
+  }
+
+  return {
+    error: "codex_cloud_pickup_not_observed",
+    reason:
+      "Codex Cloud did not create a branch or PR from the delegation comment within the pickup grace period",
+    commentId: normalizePositiveInteger(delegationComment?.id),
+    commentUrl: normalizeText(delegationComment?.html_url) || null,
+    graceSeconds,
+    ageSeconds
+  };
+}
+
 function buildCodexCloudGitHubComment({ request }) {
   const lines = [
     `<!-- vtdd:remote-codex-execution:${request.executionId} -->`,
-    "@codex",
+    "@codex please implement this bounded development task and open or update the PR.",
     "",
     "VTDD-managed Codex Cloud delegation request.",
     "",
@@ -809,6 +840,14 @@ function normalizePositiveInteger(value) {
   const numeric = Number(value);
   if (!Number.isInteger(numeric) || numeric <= 0) {
     return null;
+  }
+  return numeric;
+}
+
+function normalizeNonNegativeNumber(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric < 0) {
+    return 300;
   }
   return numeric;
 }
