@@ -26,7 +26,13 @@ test("Butler capability matrix records live/source/unverified status without ove
   assert.equal(doc.includes("https://github.com/marushu/vtdd-v2-p/pull/163#issuecomment-4351775751"), true);
   assert.equal(doc.includes("| closed issue list read | `broken-live` |"), true);
   assert.equal(doc.includes("| `@codex` handoff comment | `partial-live` |"), true);
-  assert.equal(doc.includes("| Butler -> Codex Cloud pickup | `partial-live` |"), true);
+  assert.equal(doc.includes("https://github.com/marushu/vtdd-v2-p/issues/157#issuecomment-4351974112"), true);
+  assert.equal(doc.includes("| Butler -> Codex Cloud pickup | `broken-live` |"), true);
+  assert.equal(doc.includes("remote-codex-issue157-frn8c1"), true);
+  assert.equal(doc.includes("https://github.com/marushu/vtdd-v2-p/issues/157#issuecomment-4352013434"), true);
+  assert.equal(doc.includes("Queued/requested is correctly not treated as success"), true);
+  assert.equal(doc.includes("| execution progress tracking | `partial-live` |"), true);
+  assert.equal(doc.includes("github_read_failed: Branch not found"), true);
   assert.equal(doc.includes("| Codex fallback as VTDD reviewer | `partial-live` |"), true);
   assert.equal(doc.includes("#156 tracks this contract gap"), true);
   assert.equal(doc.includes("| self-parity check | `verified-live` |"), true);
