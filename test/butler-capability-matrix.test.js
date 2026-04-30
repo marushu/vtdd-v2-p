@@ -15,7 +15,10 @@ test("Butler capability matrix records live/source/unverified status without ove
 
   assert.equal(doc.includes("| natural GO -> normal GitHub write | `partial-live` |"), true);
   assert.equal(doc.includes("registry-backed binding to `issue_create`, `issue_comment_create`, and `pull_comment_create`"), true);
-  assert.equal(doc.includes("Fresh post-#163 `issue_create` and boundary failures remain unverified"), true);
+  assert.equal(doc.includes("Live Butler happy-path evidence now exists for all three configured operations"), true);
+  assert.equal(doc.includes("Boundary failures remain unverified"), true);
+  assert.equal(doc.includes("| issue create | `verified-live` |"), true);
+  assert.equal(doc.includes("https://github.com/marushu/vtdd-v2-p/issues/165"), true);
   assert.equal(doc.includes("| issue comment create | `verified-live` |"), true);
   assert.equal(doc.includes("https://github.com/marushu/vtdd-v2-p/issues/161#issuecomment-4351759028"), true);
   assert.equal(doc.includes("| PR comment create | `verified-live` |"), true);
@@ -35,7 +38,7 @@ test("Butler capability matrix prioritizes the Butler-to-Codex path and surface 
   assert.equal(doc.includes("requested/queued/blocked/branch/PR (#157)"), true);
   assert.equal(doc.includes("Surface update guidance"), true);
   assert.equal(doc.includes("Instructions/Action Schema/Cloudflare deploy links"), true);
-  assert.equal(doc.includes("`natural GO -> normal GitHub write` boundary/fresh `issue_create` proof (#151/#161)"), true);
+  assert.equal(doc.includes("`natural GO -> normal GitHub write` boundary proof (#151/#161)"), true);
   assert.equal(doc.includes("live Butler/iPhone validation phrase"), true);
   assert.equal(doc.includes("expected GitHub/runtime evidence"), true);
 });
