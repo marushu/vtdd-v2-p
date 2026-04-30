@@ -63,6 +63,12 @@ The default no-extra-API-cost runner is:
 
 This runner does not use `OPENAI_API_KEY`.
 
+If Codex Cloud does not create a GitHub-visible branch or PR after the pickup
+grace period, Butler must not keep reporting the handoff as merely queued
+forever. It must report a first-class blocked state such as
+`codex_cloud_pickup_not_observed`, preserving the delegation comment URL and
+the absence of branch/PR evidence as runtime truth.
+
 ## Optional API-backed Runner
 
 The optional machine-runner implementation path is GitHub Actions centered.
