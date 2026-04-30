@@ -196,6 +196,13 @@ export {
 } from "./custom-gpt-setup-artifacts.js";
 export { GitHubReadResource, retrieveGitHubReadPlane } from "./github-read-plane.js";
 export { GitHubWriteOperation, executeGitHubWritePlane } from "./github-write-plane.js";
+export {
+  GitHubAppOperationRegistry,
+  GitHubAppOperationTier,
+  bindNaturalGitHubWriteApproval,
+  canBindNaturalGitHubWriteApproval,
+  getGitHubAppOperation
+} from "./github-app-operation-registry.js";
 export { GitHubHighRiskOperation, executeGitHubHighRiskPlane } from "./github-high-risk-plane.js";
 export {
   WorkflowStage,

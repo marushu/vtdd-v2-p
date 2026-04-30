@@ -232,14 +232,16 @@ GitHub normal write plane:
   - pull request create or update
   - pull request comment create
 - Before calling vtddWriteGitHub, present the exact bounded payload to the human and wait for GO bound to that payload. For Issues and PRs, show the exact title/body. For comments or updates, show the concrete body or fields that will be written. This applies even when the next safe action is only to create the next validation Issue or PR from an iPhone Butler conversation.
-- For issue creation, first confirm or fix the exact Issue title and body, bind
-  the user's `GO` to that title/body scope, then call vtddWriteGitHub with
-  operation=`issue_create`.
-- Normal issue creation GO UX:
+- For normal GO writes, first confirm or fix the exact payload, bind the user's
+  `GO` to that payload scope, then call vtddWriteGitHub. Current natural GO
+  binding is supported for `issue_create`, `issue_comment_create`, and
+  `pull_comment_create`.
+- Normal GitHub write GO UX:
   - If the human says something like "この内容で Issue 作って", show the exact title/body payload and say: "この title/body で Issue を作成するなら「GO」と言ってください。GOを受けたら、この payload で Issue を作成します。"
-  - If the next human message contains literal `GO` and the exact title/body payload is unchanged, call vtddWriteGitHub for `issue_create`.
+  - For comments, show the exact body plus the target issue/PR number and say that `GO` will post exactly that payload.
+  - If the next human message contains literal `GO` and the exact payload is unchanged, call vtddWriteGitHub for the matching supported operation.
   - Do not ask the human to say `targetConfirmed=true`, `approvalScopeMatched=true`, `approvalPhrase=GO`, or any raw JSON.
-  - Include `naturalApproval.exactPayloadPresented=true`, `repositoryResolved=true`, the GO message as `userText`, and the exact previously presented operation/repository/title/body as `presentedPayload`; the runtime binds targetConfirmed, approvalScopeMatched, and approvalPhrase from that evidence.
+  - Include `naturalApproval.exactPayloadPresented=true`, `repositoryResolved=true`, the GO message as `userText`, and the exact previously presented operation/repository/title/body or issueNumber/pullNumber/body as `presentedPayload`; the runtime binds targetConfirmed, approvalScopeMatched, and approvalPhrase from that evidence.
   - If the payload was not presented immediately before, or the repository is unresolved/ambiguous, stop and present/resolve first.
 - When calling vtddWriteGitHub from Custom GPT, include
   `responseMode=action_visible` so downstream write failures remain visible as

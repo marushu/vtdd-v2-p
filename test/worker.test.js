@@ -2359,6 +2359,118 @@ test("worker binds natural GO to an immediately presented issue_create payload",
   });
 });
 
+test("worker binds natural GO to an immediately presented issue_comment_create payload", async () => {
+  let requestBody = null;
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/action/github", {
+      method: "POST",
+      headers: {
+        ...gatewayAuthHeaders,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        operation: "issue_comment_create",
+        repository: "sample-org/vtdd-v2-p",
+        issueContext: {
+          issueNumber: 161
+        },
+        body: "Live evidence comment for #161.",
+        responseMode: "action_visible",
+        naturalApproval: {
+          exactPayloadPresented: true,
+          repositoryResolved: true,
+          userText: "このコメントで追記して。GO",
+          presentedPayload: {
+            operation: "issue_comment_create",
+            repository: "sample-org/vtdd-v2-p",
+            issueNumber: 161,
+            body: "Live evidence comment for #161."
+          }
+        }
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_write",
+      GITHUB_API_FETCH: async (_url, init) => {
+        requestBody = JSON.parse(init.body);
+        return new Response(
+          JSON.stringify({
+            id: 435161,
+            html_url: "https://github.com/sample-org/vtdd-v2-p/issues/161#issuecomment-435161"
+          }),
+          { status: 201, headers: { "content-type": "application/json" } }
+        );
+      }
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.write.operation, "issue_comment_create");
+  assert.equal(body.write.issueNumber, 161);
+  assert.equal(body.write.commentId, 435161);
+  assert.deepEqual(requestBody, {
+    body: "Live evidence comment for #161."
+  });
+});
+
+test("worker binds natural GO to an immediately presented pull_comment_create payload", async () => {
+  let requestBody = null;
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/action/github", {
+      method: "POST",
+      headers: {
+        ...gatewayAuthHeaders,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        operation: "pull_comment_create",
+        repository: "sample-org/vtdd-v2-p",
+        pullNumber: 162,
+        body: "PR follow-up comment.",
+        responseMode: "action_visible",
+        naturalApproval: {
+          exactPayloadPresented: true,
+          repositoryResolved: true,
+          userText: "この PR コメントで投稿して。GO",
+          presentedPayload: {
+            operation: "pull_comment_create",
+            repository: "sample-org/vtdd-v2-p",
+            pullNumber: 162,
+            body: "PR follow-up comment."
+          }
+        }
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_write",
+      GITHUB_API_FETCH: async (_url, init) => {
+        requestBody = JSON.parse(init.body);
+        return new Response(
+          JSON.stringify({
+            id: 435162,
+            html_url: "https://github.com/sample-org/vtdd-v2-p/pull/162#issuecomment-435162"
+          }),
+          { status: 201, headers: { "content-type": "application/json" } }
+        );
+      }
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.write.operation, "pull_comment_create");
+  assert.equal(body.write.pullNumber, 162);
+  assert.equal(body.write.commentId, 435162);
+  assert.deepEqual(requestBody, {
+    body: "PR follow-up comment."
+  });
+});
+
 test("worker does not bind natural GO when issue_create payload was not presented", async () => {
   let githubCalled = false;
   const response = await worker.fetch(
@@ -2458,7 +2570,7 @@ test("worker does not bind natural GO when presented issue_create payload differ
   assert.equal(githubCalled, false);
 });
 
-test("worker keeps natural GO binding limited to issue_create", async () => {
+test("worker keeps natural GO binding limited to configured normal write operations", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/v2/action/github", {
       method: "POST",

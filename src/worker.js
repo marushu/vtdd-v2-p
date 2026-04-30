@@ -35,6 +35,7 @@ import {
   retrieveStoredAliasRegistry,
   retrieveGitHubReadPlane,
   TaskMode,
+  bindNaturalGitHubWriteApproval,
   executeGitHubWritePlane,
   runMvpGateway,
   upsertRepositoryNickname,
@@ -815,67 +816,6 @@ async function handleGitHubWritePlaneRequest(request, env) {
 function wantsActionVisibleGitHubWriteErrors(payload) {
   const responseMode = normalizeText(payload?.responseMode);
   return responseMode === "action_visible";
-}
-
-function bindNaturalGitHubWriteApproval({ payload, policyInput }) {
-  if (
-    policyInput?.targetConfirmed === true &&
-    policyInput?.approvalScopeMatched === true &&
-    normalizeText(policyInput?.approvalPhrase)
-  ) {
-    return policyInput;
-  }
-
-  if (!canBindNaturalIssueCreateApproval(payload)) {
-    return policyInput;
-  }
-
-  return {
-    ...policyInput,
-    targetConfirmed: true,
-    approvalScopeMatched: true,
-    approvalPhrase: "GO"
-  };
-}
-
-function canBindNaturalIssueCreateApproval(payload) {
-  const operation = normalizeText(payload?.operation);
-  if (operation !== "issue_create") {
-    return false;
-  }
-
-  const naturalApproval = normalizeObject(payload?.naturalApproval);
-  if (naturalApproval.exactPayloadPresented !== true || naturalApproval.repositoryResolved !== true) {
-    return false;
-  }
-
-  const userText = normalizeText(naturalApproval.userText);
-  if (!containsGoToken(userText)) {
-    return false;
-  }
-
-  const presentedPayload = normalizeObject(naturalApproval.presentedPayload);
-  if (normalizeText(presentedPayload.operation) !== "issue_create") {
-    return false;
-  }
-
-  if (!normalizeText(payload?.repository) || normalizeText(presentedPayload.repository) !== normalizeText(payload?.repository)) {
-    return false;
-  }
-
-  if (!normalizeText(payload?.title) || normalizeText(presentedPayload.title) !== normalizeText(payload?.title)) {
-    return false;
-  }
-
-  if (!normalizeBody(payload?.body) || normalizeBody(presentedPayload.body) !== normalizeBody(payload?.body)) {
-    return false;
-  }
-
-  return true;
-}
-
-function containsGoToken(value) {
-  return /(^|[^A-Za-z0-9_])GO([^A-Za-z0-9_]|$)/i.test(normalizeText(value));
 }
 
 async function handleGitHubHighRiskPlaneRequest(request, env) {
