@@ -35,10 +35,11 @@ execution.
 | open issues read | `partial-live` | Butler has read open issues. State filters/pagination are not fully proven. | Read open issues with a limit and compare to GitHub UI. |
 | closed issue list read | `broken-live` | Butler reported zero closed issues while GitHub UI had closed issues. | Read closed issues and exact known closed issues such as #135. |
 | exact Issue body read | `partial-live` | Some Issue bodies have been read; failures occurred when body was omitted. | Read #151/#153 and summarize Intent/SC/Non-goals from body. |
+| issue create | `verified-live` | #163 source/runtime/surface updates were deployed, then live Butler exact Issue payload -> natural `GO` created #165: https://github.com/marushu/vtdd-v2-p/issues/165. | Continue boundary validation for missing/changed payload and unresolved repo. |
 | issue comments read | `unverified` | Needed for reviewer and handoff evidence. | Read comments from an Issue with known comments and compare count/content. |
 | issue comment create | `verified-live` | #163 source/runtime/surface updates were deployed, then live Butler exact payload -> natural `GO` created #161 comment: https://github.com/marushu/vtdd-v2-p/issues/161#issuecomment-4351759028. | Continue boundary validation for missing/changed payload and update path. |
 | issue comment update | `unverified` | Source write plane supports it; live Butler path not proven. | Create then update a bounded test comment. |
-| natural GO -> normal GitHub write | `partial-live` | #152 added `issue_create`; #163 source expands registry-backed binding to `issue_create`, `issue_comment_create`, and `pull_comment_create`. Live Butler evidence now exists for issue comments and PR comments: https://github.com/marushu/vtdd-v2-p/issues/161#issuecomment-4351759028 and https://github.com/marushu/vtdd-v2-p/pull/163#issuecomment-4351775751. Fresh post-#163 `issue_create` and boundary failures remain unverified, so this is not fully complete. | Validate post-#163 `issue_create`, missing-payload block, changed-payload block, and unresolved-repo block. |
+| natural GO -> normal GitHub write | `partial-live` | #152 added `issue_create`; #163 source expands registry-backed binding to `issue_create`, `issue_comment_create`, and `pull_comment_create`. Live Butler happy-path evidence now exists for all three configured operations: https://github.com/marushu/vtdd-v2-p/issues/165, https://github.com/marushu/vtdd-v2-p/issues/161#issuecomment-4351759028, and https://github.com/marushu/vtdd-v2-p/pull/163#issuecomment-4351775751. Boundary failures remain unverified, so the aggregate row stays partial-live. | Validate missing-payload block, changed-payload block, and unresolved-repo block. |
 | open PR read | `partial-live` | Butler has read open PRs. | Read open PR list and exact PR details. |
 | closed/merged PR read | `partial-live` | Butler has read merged PRs and merge fields. | Read a known merged PR and verify merged/mergedAt/mergeCommitSha. |
 | PR diff / changed files read | `unverified` | Required for PR summary; current matrix lacks live evidence. | Ask Butler to summarize changed files for a known PR. |
@@ -67,7 +68,7 @@ execution.
 
 ## Priority Order
 
-1. `natural GO -> normal GitHub write` boundary/fresh `issue_create` proof (#151/#161)
+1. `natural GO -> normal GitHub write` boundary proof (#151/#161)
 2. Issue read completeness: open/closed/exact body/comments/pagination
 3. PR runtime truth completeness: PR state/diff/comments/reviews/checks/runs/branches
 4. Butler -> Codex development handoff progress: requested/queued/blocked/branch/PR (#157)
