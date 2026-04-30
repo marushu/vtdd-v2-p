@@ -12,7 +12,9 @@
   ],
   "security": [
     {
-      "GatewayBearerAuth": []
+      "GatewayBearerAuth": [
+
+      ]
     }
   ],
   "components": {
@@ -148,6 +150,33 @@
               "issueTraceable": {
                 "type": "boolean"
               },
+              "issueTraceability": {
+                "type": "object",
+                "properties": {
+                  "relatedIssue": {
+                    "type": "integer"
+                  },
+                  "intentRefs": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "successCriteriaRefs": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "nonGoalRefs": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "additionalProperties": true
+              },
               "go": {
                 "type": "boolean"
               },
@@ -177,33 +206,6 @@
                   }
                 },
                 "additionalProperties": true
-              },
-              "issueTraceability": {
-                "type": "object",
-                "properties": {
-                  "relatedIssue": {
-                    "type": "integer"
-                  },
-                  "intentRefs": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  "successCriteriaRefs": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  "nonGoalRefs": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  }
-                },
-                "additionalProperties": true
               }
             },
             "additionalProperties": true
@@ -217,8 +219,24 @@
               "requiresHandoff": {
                 "type": "boolean"
               },
+              "executorTransport": {
+                "type": "string",
+                "enum": [
+                  "codex_cloud_github_comment",
+                  "api_key_runner"
+                ]
+              },
+              "apiKeyRunnerAcknowledged": {
+                "type": "boolean"
+              },
               "handoff": {
                 "type": "object",
+                "required": [
+                  "issueTraceable",
+                  "approvalScopeMatched",
+                  "relatedIssue",
+                  "summary"
+                ],
                 "properties": {
                   "issueTraceable": {
                     "type": "boolean"
@@ -233,13 +251,7 @@
                     "type": "string"
                   }
                 },
-                "additionalProperties": true,
-                "required": [
-                  "issueTraceable",
-                  "approvalScopeMatched",
-                  "relatedIssue",
-                  "summary"
-                ]
+                "additionalProperties": true
               }
             },
             "additionalProperties": true
@@ -339,6 +351,33 @@
               "issueTraceable": {
                 "type": "boolean"
               },
+              "issueTraceability": {
+                "type": "object",
+                "properties": {
+                  "relatedIssue": {
+                    "type": "integer"
+                  },
+                  "intentRefs": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "successCriteriaRefs": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "nonGoalRefs": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "additionalProperties": true
+              },
               "go": {
                 "type": "boolean"
               },
@@ -368,30 +407,39 @@
                   }
                 },
                 "additionalProperties": true
+              }
+            },
+            "additionalProperties": true
+          },
+          "continuationContext": {
+            "type": "object",
+            "properties": {
+              "executionId": {
+                "type": "string"
               },
-              "issueTraceability": {
+              "requiresHandoff": {
+                "type": "boolean"
+              },
+              "handoff": {
                 "type": "object",
+                "required": [
+                  "issueTraceable",
+                  "approvalScopeMatched",
+                  "relatedIssue",
+                  "summary"
+                ],
                 "properties": {
+                  "issueTraceable": {
+                    "type": "boolean"
+                  },
+                  "approvalScopeMatched": {
+                    "type": "boolean"
+                  },
                   "relatedIssue": {
                     "type": "integer"
                   },
-                  "intentRefs": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  "successCriteriaRefs": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  "nonGoalRefs": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
+                  "summary": {
+                    "type": "string"
                   }
                 },
                 "additionalProperties": true
@@ -410,52 +458,6 @@
               },
               "issueUrl": {
                 "type": "string"
-              }
-            },
-            "additionalProperties": true
-          },
-          "continuationContext": {
-            "type": "object",
-            "properties": {
-              "executionId": {
-                "type": "string"
-              },
-              "requiresHandoff": {
-                "type": "boolean"
-              },
-              "handoff": {
-                "type": "object",
-                "properties": {
-                  "issueTraceable": {
-                    "type": "boolean"
-                  },
-                  "approvalScopeMatched": {
-                    "type": "boolean"
-                  },
-                  "relatedIssue": {
-                    "type": "integer"
-                  },
-                  "summary": {
-                    "type": "string"
-                  }
-                },
-                "additionalProperties": true,
-                "required": [
-                  "issueTraceable",
-                  "approvalScopeMatched",
-                  "relatedIssue",
-                  "summary"
-                ]
-              },
-              "executorTransport": {
-                "type": "string",
-                "enum": [
-                  "codex_cloud_github_comment",
-                  "api_key_runner"
-                ]
-              },
-              "apiKeyRunnerAcknowledged": {
-                "type": "boolean"
               }
             },
             "additionalProperties": true
@@ -479,6 +481,9 @@
     "/health": {
       "get": {
         "operationId": "getHealth",
+        "security": [
+
+        ],
         "summary": "Check whether the VTDD worker is reachable.",
         "responses": {
           "200": {
@@ -491,8 +496,7 @@
               }
             }
           }
-        },
-        "security": []
+        }
       }
     },
     "/v2/gateway": {
@@ -521,10 +525,24 @@
             }
           },
           "401": {
-            "description": "Missing machine auth"
+            "description": "Missing machine auth",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
           },
           "403": {
-            "description": "Invalid machine auth"
+            "description": "Invalid machine auth",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
           },
           "422": {
             "description": "Request blocked by policy or validation",
@@ -565,10 +583,24 @@
             }
           },
           "401": {
-            "description": "Missing machine auth"
+            "description": "Missing machine auth",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
           },
           "403": {
-            "description": "Invalid machine auth"
+            "description": "Invalid machine auth",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
           },
           "422": {
             "description": "Execution request blocked or invalid",
@@ -771,251 +803,6 @@
         }
       }
     },
-    "/v2/action/progress": {
-      "get": {
-        "operationId": "vtddExecutionProgress",
-        "summary": "Read progress for a remote Codex execution request.",
-        "parameters": [
-          {
-            "name": "executionId",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "repository",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "issueNumber",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "integer"
-            }
-          },
-          {
-            "name": "branch",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "executorTransport",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "codex_cloud_github_comment",
-                "api_key_runner"
-              ]
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Current execution progress",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/VtddGenericResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing machine auth"
-          },
-          "403": {
-            "description": "Invalid machine auth"
-          },
-          "503": {
-            "description": "Progress lookup failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/VtddGenericResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v2/retrieve/github": {
-      "get": {
-        "operationId": "vtddRetrieveGitHub",
-        "summary": "Read GitHub runtime truth through the VTDD GitHub read plane.",
-        "parameters": [
-          {
-            "name": "resource",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "repositories",
-                "issues",
-                "issue_comments",
-                "pulls",
-                "pull_reviews",
-                "pull_review_comments",
-                "checks",
-                "workflow_runs",
-                "branches"
-              ]
-            }
-          },
-          {
-            "name": "repository",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "issueNumber",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer"
-            }
-          },
-          {
-            "name": "pullNumber",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer"
-            }
-          },
-          {
-            "name": "branch",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "ref",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "state",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "GitHub runtime truth read result",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/VtddGenericResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing machine auth"
-          },
-          "403": {
-            "description": "Invalid machine auth"
-          },
-          "422": {
-            "description": "GitHub read request blocked or invalid",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/VtddGenericResponse"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "GitHub read route unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/VtddGenericResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v2/retrieve/approval-grant": {
-      "get": {
-        "operationId": "vtddRetrieveApprovalGrant",
-        "summary": "Retrieve a previously issued approval grant by approvalId.",
-        "parameters": [
-          {
-            "name": "approvalId",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Approval grant found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/VtddGenericResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing machine auth"
-          },
-          "403": {
-            "description": "Invalid machine auth"
-          },
-          "404": {
-            "description": "Approval grant not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/VtddGenericResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/v2/action/github-authority": {
       "post": {
         "operationId": "vtddGitHubAuthority",
@@ -1205,6 +992,84 @@
         }
       }
     },
+    "/v2/action/github-actions-secret": {
+      "post": {
+        "operationId": "vtddSyncGitHubActionsSecret",
+        "summary": "Sync an approved GitHub Actions secret such as OPENAI_API_KEY after GO plus real passkey approval.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "repository": {
+                    "type": "string"
+                  },
+                  "secretName": {
+                    "type": "string",
+                    "enum": [
+                      "OPENAI_API_KEY"
+                    ]
+                  },
+                  "secretValue": {
+                    "type": "string"
+                  },
+                  "policyInput": {
+                    "type": "object",
+                    "properties": {
+                      "approvalGrantId": {
+                        "type": "string"
+                      }
+                    },
+                    "additionalProperties": true
+                  }
+                },
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "GitHub Actions secret synced",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing machine auth"
+          },
+          "403": {
+            "description": "Invalid machine auth"
+          },
+          "422": {
+            "description": "GitHub Actions secret sync request blocked or invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "GitHub Actions secret sync failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v2/action/repository-nickname": {
       "post": {
         "operationId": "vtddUpsertRepositoryNickname",
@@ -1284,6 +1149,555 @@
           },
           "503": {
             "description": "Repository nickname persistence unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/action/progress": {
+      "get": {
+        "operationId": "vtddExecutionProgress",
+        "summary": "Read progress for a remote Codex execution request.",
+        "parameters": [
+          {
+            "name": "executionId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "repository",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "issueNumber",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "branch",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "executorTransport",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "codex_cloud_github_comment",
+                "api_key_runner"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current execution progress",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing machine auth"
+          },
+          "403": {
+            "description": "Invalid machine auth"
+          },
+          "503": {
+            "description": "Progress lookup failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/retrieve/constitution": {
+      "get": {
+        "operationId": "vtddRetrieveConstitution",
+        "summary": "Retrieve VTDD constitution records for Butler judgment context.",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Constitution retrieval result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing machine auth",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Invalid machine auth",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Constitution retrieval unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/retrieve/decisions": {
+      "get": {
+        "operationId": "vtddRetrieveDecisionLogs",
+        "summary": "Retrieve decision log references for Butler context preflight.",
+        "parameters": [
+          {
+            "name": "relatedIssue",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Decision log retrieval result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing machine auth",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Invalid machine auth",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Decision log retrieval unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/retrieve/proposals": {
+      "get": {
+        "operationId": "vtddRetrieveProposalLogs",
+        "summary": "Retrieve proposal log references for Butler context preflight.",
+        "parameters": [
+          {
+            "name": "relatedIssue",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Proposal log retrieval result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing machine auth",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Invalid machine auth",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Proposal log retrieval unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/retrieve/cross": {
+      "get": {
+        "operationId": "vtddRetrieveCrossMemory",
+        "summary": "Retrieve cross-source VTDD memory and context references for Butler preflight.",
+        "parameters": [
+          {
+            "name": "phase",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "exploration",
+                "execution"
+              ]
+            }
+          },
+          {
+            "name": "relatedIssue",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "issueNumber",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "issueTitle",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "text",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "semantic",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cross-memory context retrieval result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing machine auth",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Invalid machine auth",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Cross-memory retrieval unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/retrieve/github": {
+      "get": {
+        "operationId": "vtddRetrieveGitHub",
+        "summary": "Read GitHub runtime truth through the VTDD GitHub read plane.",
+        "parameters": [
+          {
+            "name": "resource",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "repositories",
+                "issues",
+                "issue_comments",
+                "pulls",
+                "pull_reviews",
+                "pull_review_comments",
+                "checks",
+                "workflow_runs",
+                "branches"
+              ]
+            }
+          },
+          {
+            "name": "repository",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "issueNumber",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "pullNumber",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "branch",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "ref",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "GitHub runtime truth read result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing machine auth"
+          },
+          "403": {
+            "description": "Invalid machine auth"
+          },
+          "422": {
+            "description": "GitHub read request blocked or invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "GitHub read route unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/retrieve/repository-nicknames": {
+      "get": {
+        "operationId": "vtddRetrieveRepositoryNicknames",
+        "summary": "Read stored user-defined repository nicknames from the VTDD alias registry.",
+        "responses": {
+          "200": {
+            "description": "Repository nickname registry retrieval result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing machine auth",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Invalid machine auth",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Repository nickname retrieval unavailable",
             "content": {
               "application/json": {
                 "schema": {
@@ -1436,95 +1850,23 @@
         }
       }
     },
-    "/v2/retrieve/repository-nicknames": {
+    "/v2/retrieve/approval-grant": {
       "get": {
-        "operationId": "vtddRetrieveRepositoryNicknames",
-        "summary": "Read stored user-defined repository nicknames from the VTDD alias registry.",
-        "responses": {
-          "200": {
-            "description": "Repository nickname registry retrieval result",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/VtddGenericResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing machine auth",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/VtddGenericResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Invalid machine auth",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/VtddGenericResponse"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Repository nickname retrieval unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/VtddGenericResponse"
-                }
-              }
+        "operationId": "vtddRetrieveApprovalGrant",
+        "summary": "Retrieve a previously issued approval grant by approvalId.",
+        "parameters": [
+          {
+            "name": "approvalId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
             }
           }
-        }
-      }
-    },
-    "/v2/action/github-actions-secret": {
-      "post": {
-        "operationId": "vtddSyncGitHubActionsSecret",
-        "summary": "Sync an approved GitHub Actions secret such as OPENAI_API_KEY after GO plus real passkey approval.",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "repository": {
-                    "type": "string"
-                  },
-                  "secretName": {
-                    "type": "string",
-                    "enum": [
-                      "OPENAI_API_KEY"
-                    ]
-                  },
-                  "secretValue": {
-                    "type": "string"
-                  },
-                  "policyInput": {
-                    "type": "object",
-                    "properties": {
-                      "approvalGrantId": {
-                        "type": "string"
-                      }
-                    },
-                    "additionalProperties": true
-                  }
-                },
-                "additionalProperties": true
-              }
-            }
-          }
-        },
+        ],
         "responses": {
           "200": {
-            "description": "GitHub Actions secret synced",
+            "description": "Approval grant found",
             "content": {
               "application/json": {
                 "schema": {
@@ -1539,18 +1881,8 @@
           "403": {
             "description": "Invalid machine auth"
           },
-          "422": {
-            "description": "GitHub Actions secret sync request blocked or invalid",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/VtddGenericResponse"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "GitHub Actions secret sync failed",
+          "404": {
+            "description": "Approval grant not found",
             "content": {
               "application/json": {
                 "schema": {
