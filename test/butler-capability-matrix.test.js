@@ -16,8 +16,9 @@ test("Butler capability matrix records live/source/unverified status without ove
   assert.equal(doc.includes("| natural GO -> issue_create | `source-only` |"), true);
   assert.equal(doc.includes("#151 remains open because iPhone Butler live evidence is missing"), true);
   assert.equal(doc.includes("| closed issue list read | `broken-live` |"), true);
-  assert.equal(doc.includes("| `@codex` handoff comment | `unverified` |"), true);
-  assert.equal(doc.includes("| Butler -> Codex Cloud pickup | `unverified` |"), true);
+  assert.equal(doc.includes("| `@codex` handoff comment | `partial-live` |"), true);
+  assert.equal(doc.includes("| Butler -> Codex Cloud pickup | `broken-live` |"), true);
+  assert.equal(doc.includes("create a Codex account and connect to github"), true);
   assert.equal(doc.includes("| self-parity check | `verified-live` |"), true);
 });
 

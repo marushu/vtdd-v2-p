@@ -53,8 +53,8 @@ execution.
 | PR create | `unverified` | Source write plane supports it; live Butler path not proven from Butler. | Create PR from a bounded branch if needed by a live slice. |
 | PR update | `unverified` | Source write plane supports it; live Butler path not proven. | Update a bounded PR title/body and verify. |
 | PR comment create | `unverified` | Source write plane supports it; live Butler path not proven. | Post a bounded PR comment and verify URL. |
-| `@codex` handoff comment | `unverified` | #154 restores no-API-key comment request transport; live pickup still not proven. | Butler posts bounded `@codex` handoff/comment and records URL. |
-| Butler -> Codex Cloud pickup | `unverified` | A posted request is not execution evidence. | Confirm Codex Cloud creates a task/branch/PR or returns a clear no-op/failure. |
+| `@codex` handoff comment | `partial-live` | PR #155 produced a `deliveryMode=codex_cloud_github_comment` request comment with `@codex review`. | Verify the same request shape from Butler-originated handoff, not only reviewer fallback. |
+| Butler -> Codex Cloud pickup | `broken-live` | PR #155 Codex Cloud response said: “To use Codex here, create a Codex account and connect to github.” A posted request is not execution evidence. | Configure/confirm the Codex Cloud GitHub connector, then confirm it creates a task/branch/PR or returns a clear no-op/failure. |
 | execution progress tracking | `unverified` | Source supports progress routes; live Butler progress loop is not proven. | Track queued -> running/failed/PR-created states after handoff. |
 | issue close | `unverified` | High-risk authority plane supports bounded close after merge proof; live Butler/operator path not proven. | Use only after a bounded merged PR and explicit GO/passkey path. |
 | merge operator | `unverified` | Operator route exists; live Butler merge URL/dispatch path needs proof. | Ask Butler for merge operator link for a safe PR and verify fields. |
