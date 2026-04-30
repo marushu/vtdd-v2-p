@@ -36,9 +36,9 @@ execution.
 | closed issue list read | `broken-live` | Butler reported zero closed issues while GitHub UI had closed issues. | Read closed issues and exact known closed issues such as #135. |
 | exact Issue body read | `partial-live` | Some Issue bodies have been read; failures occurred when body was omitted. | Read #151/#153 and summarize Intent/SC/Non-goals from body. |
 | issue comments read | `unverified` | Needed for reviewer and handoff evidence. | Read comments from an Issue with known comments and compare count/content. |
-| issue comment create | `source-only` | #161 source now binds natural GO for exact `issue_comment_create` payloads; live Butler path not proven. | Present exact comment payload, say GO, verify GitHub URL. |
+| issue comment create | `verified-live` | #163 source/runtime/surface updates were deployed, then live Butler exact payload -> natural `GO` created #161 comment: https://github.com/marushu/vtdd-v2-p/issues/161#issuecomment-4351759028. | Continue boundary validation for missing/changed payload and update path. |
 | issue comment update | `unverified` | Source write plane supports it; live Butler path not proven. | Create then update a bounded test comment. |
-| natural GO -> normal GitHub write | `source-only` | #152 added `issue_create`; #161 source expands registry-backed binding to `issue_create`, `issue_comment_create`, and `pull_comment_create`. #151 remains open because iPhone Butler live evidence is missing. | In Butler, after exact title/body or comment payload, say `GO`; verify created Issue/comment/PR comment URL. |
+| natural GO -> normal GitHub write | `partial-live` | #152 added `issue_create`; #163 source expands registry-backed binding to `issue_create`, `issue_comment_create`, and `pull_comment_create`. Live Butler evidence now exists for issue comments and PR comments: https://github.com/marushu/vtdd-v2-p/issues/161#issuecomment-4351759028 and https://github.com/marushu/vtdd-v2-p/pull/163#issuecomment-4351775751. Fresh post-#163 `issue_create` and boundary failures remain unverified, so this is not fully complete. | Validate post-#163 `issue_create`, missing-payload block, changed-payload block, and unresolved-repo block. |
 | open PR read | `partial-live` | Butler has read open PRs. | Read open PR list and exact PR details. |
 | closed/merged PR read | `partial-live` | Butler has read merged PRs and merge fields. | Read a known merged PR and verify merged/mergedAt/mergeCommitSha. |
 | PR diff / changed files read | `unverified` | Required for PR summary; current matrix lacks live evidence. | Ask Butler to summarize changed files for a known PR. |
@@ -52,7 +52,7 @@ execution.
 | branch create | `unverified` | Source write plane supports it; live Butler path not proven. | Create a bounded test branch and verify branch exists. |
 | PR create | `unverified` | Source write plane supports it; live Butler path not proven from Butler. | Create PR from a bounded branch if needed by a live slice. |
 | PR update | `unverified` | Source write plane supports it; live Butler path not proven. | Update a bounded PR title/body and verify. |
-| PR comment create | `source-only` | #161 source now binds natural GO for exact `pull_comment_create` payloads; live Butler path not proven. | Post a bounded PR comment and verify URL. |
+| PR comment create | `verified-live` | #163 source/runtime/surface updates were deployed, then live Butler exact payload -> natural `GO` created PR #163 comment: https://github.com/marushu/vtdd-v2-p/pull/163#issuecomment-4351775751. | Continue boundary validation and PR state/comment readback. |
 | `@codex` handoff comment | `partial-live` | PR #155 produced a `deliveryMode=codex_cloud_github_comment` request comment with `@codex review`. | Verify the same request shape from Butler-originated development handoff, not only reviewer fallback. |
 | Butler -> Codex Cloud pickup | `partial-live` | PR #155 later showed Codex Cloud can respond to a human `@codex review`, but development handoff branch/PR creation is not proven. | Under #157, confirm Butler-originated development handoff creates a branch/PR or returns a clear blocker. |
 | Codex fallback as VTDD reviewer | `partial-live` | PR #155 Codex responded, but did not return the required VTDD reviewer marker/fields. #156 tracks this contract gap. | Require `vtdd:reviewer=codex-fallback` completed marker plus recommended action before treating it as reviewer evidence. |
@@ -67,7 +67,7 @@ execution.
 
 ## Priority Order
 
-1. `natural GO -> normal GitHub write` (#151/#161 live proof)
+1. `natural GO -> normal GitHub write` boundary/fresh `issue_create` proof (#151/#161)
 2. Issue read completeness: open/closed/exact body/comments/pagination
 3. PR runtime truth completeness: PR state/diff/comments/reviews/checks/runs/branches
 4. Butler -> Codex development handoff progress: requested/queued/blocked/branch/PR (#157)
