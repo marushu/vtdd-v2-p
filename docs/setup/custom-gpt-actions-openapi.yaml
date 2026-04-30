@@ -449,6 +449,31 @@ paths:
                   enum:
                     - action_visible
                   description: Use action_visible from Custom GPT so write failures return ok:false JSON instead of an Action transport failure.
+                naturalApproval:
+                  type: object
+                  description: Evidence for normal issue_create natural GO binding after Butler showed the exact payload and the user replied with GO.
+                  properties:
+                    exactPayloadPresented:
+                      type: boolean
+                    repositoryResolved:
+                      type: boolean
+                    userText:
+                      type: string
+                    presentedPayload:
+                      type: object
+                      properties:
+                        operation:
+                          type: string
+                          enum:
+                            - issue_create
+                        repository:
+                          type: string
+                        title:
+                          type: string
+                        body:
+                          type: string
+                      additionalProperties: true
+                  additionalProperties: true
                 issueContext:
                   type: object
                   properties:
