@@ -31,6 +31,7 @@ import {
   resolveGatewayAliasRegistryFromGitHubApp,
   resolveRepositoryTarget,
   GitHubHighRiskOperation,
+  getGitHubAppOperation,
   mergeAliasRegistries,
   retrieveStoredAliasRegistry,
   retrieveGitHubReadPlane,
@@ -825,6 +826,18 @@ function wantsActionVisibleGitHubWriteErrors(payload) {
   return responseMode === "action_visible";
 }
 
+function validateConsistentIssueScope({ payload, issueContext }) {
+  const payloadIssueNumber = normalizePositiveInteger(payload?.issueNumber);
+  const contextIssueNumber = normalizePositiveInteger(issueContext?.issueNumber);
+  if (payloadIssueNumber && contextIssueNumber && payloadIssueNumber !== contextIssueNumber) {
+    return {
+      ok: false,
+      issues: ["issueNumber conflicts with issueContext.issueNumber"]
+    };
+  }
+  return { ok: true, issues: [] };
+}
+
 async function handleGitHubHighRiskPlaneRequest(request, env) {
   const payload = await readJson(request);
   if (!payload || typeof payload !== "object") {
@@ -839,6 +852,15 @@ async function handleGitHubHighRiskPlaneRequest(request, env) {
     payload.policyInput && typeof payload.policyInput === "object" ? payload.policyInput : {};
   const issueContext =
     payload.issueContext && typeof payload.issueContext === "object" ? payload.issueContext : {};
+  const issueScopeValidation = validateConsistentIssueScope({ payload, issueContext });
+  if (!issueScopeValidation.ok) {
+    return json(422, {
+      ok: false,
+      error: "github_authority_scope_invalid",
+      reason: issueScopeValidation.issues.join(", "),
+      issues: issueScopeValidation.issues
+    });
+  }
   const operation = normalizeText(payload.operation);
   const repository = normalizeText(payload.repository);
   const scopedIssueNumber = issueContext.issueNumber ?? payload.issueNumber ?? null;
@@ -1755,14 +1777,28 @@ async function resolveApprovalGrant({ payload, policyInput, env }) {
 function buildApprovalScopeSnapshot({ payload, policyInput }) {
   const issueContext = normalizeObject(payload?.issueContext);
   const traceability = normalizeObject(policyInput?.issueTraceability);
+  const operationConfig = getGitHubAppOperation(payload?.highRiskKind ?? policyInput?.highRiskKind);
+  const identityFields = new Set(operationConfig?.authorityScopeIdentityFields ?? [
+    "repository",
+    "issueNumber",
+    "pullNumber",
+    "relatedIssue",
+    "phase"
+  ]);
   return normalizeScopeSnapshot({
     actionType: policyInput?.actionType,
     highRiskKind: payload?.highRiskKind ?? policyInput?.highRiskKind,
-    repositoryInput: policyInput?.repositoryInput ?? payload?.repositoryInput,
-    issueNumber: issueContext.issueNumber ?? payload?.issueNumber,
-    pullNumber: payload?.pullNumber,
-    relatedIssue: traceability.relatedIssue ?? issueContext.issueNumber ?? payload?.relatedIssue,
-    phase: payload?.phase
+    repositoryInput: identityFields.has("repository")
+      ? policyInput?.repositoryInput ?? payload?.repositoryInput
+      : undefined,
+    issueNumber: identityFields.has("issueNumber")
+      ? issueContext.issueNumber ?? payload?.issueNumber
+      : undefined,
+    pullNumber: identityFields.has("pullNumber") ? payload?.pullNumber : undefined,
+    relatedIssue: identityFields.has("relatedIssue")
+      ? traceability.relatedIssue ?? issueContext.issueNumber ?? payload?.relatedIssue
+      : undefined,
+    phase: identityFields.has("phase") ? payload?.phase : undefined
   });
 }
 
@@ -2690,6 +2726,11 @@ function normalize(value) {
 
 function normalizeText(value) {
   return String(value ?? "").trim();
+}
+
+function normalizePositiveInteger(value) {
+  const number = Number(value);
+  return Number.isInteger(number) && number > 0 ? number : null;
 }
 
 function normalizeBody(value) {

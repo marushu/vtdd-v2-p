@@ -1,5 +1,9 @@
 import { evaluateApprovalGrant } from "./passkey-approval.js";
 import { resolveGitHubAppInstallationToken } from "./github-app-repository-index.js";
+import {
+  getGitHubAppOperation,
+  GitHubAppOperationTier
+} from "./github-app-operation-registry.js";
 
 const GITHUB_API_BASE_URL = "https://api.github.com";
 const GITHUB_API_VERSION = "2022-11-28";
@@ -73,24 +77,36 @@ export async function executeGitHubHighRiskPlane(input = {}) {
 
 function validateGitHubHighRiskRequest(input) {
   const issues = [];
+  const operationConfig = getGitHubAppOperation(input.operation);
 
-  if (!Object.values(GitHubHighRiskOperation).includes(input.operation)) {
+  if (
+    !operationConfig ||
+    operationConfig.tier !== GitHubAppOperationTier.PASSKEY_AUTHORITY ||
+    operationConfig.executorFunction !== "executeGitHubHighRiskPlane"
+  ) {
     issues.push("operation is unsupported");
   }
-  if (!input.repository) {
-    issues.push("repository is required");
+
+  if (operationConfig) {
+    const registryIssues = validateHighRiskRegistryConfig(operationConfig);
+    issues.push(...registryIssues);
+    for (const field of operationConfig.requiredPayloadFields ?? []) {
+      if (!hasPayloadField(input, field)) {
+        issues.push(`${field} is required`);
+      }
+    }
+    for (const field of operationConfig.requiredRuntimeEvidenceFields ?? []) {
+      if (!hasPayloadField(input, field)) {
+        issues.push(`${field} is required as runtime truth evidence`);
+      }
+    }
   }
+
   if (!input.targetConfirmed) {
     issues.push("targetConfirmed must be true");
   }
   if (normalizeText(input.approvalPhrase).toUpperCase() !== "GO") {
     issues.push("approvalPhrase must be GO");
-  }
-  if (!input.issueNumber) {
-    issues.push("issueNumber is required to bind the approval scope");
-  }
-  if (!input.pullNumber) {
-    issues.push("pullNumber is required");
   }
   if (
     input.operation === GitHubHighRiskOperation.PULL_MERGE &&
@@ -109,6 +125,39 @@ function validateGitHubHighRiskRequest(input) {
   }
 
   return issues.length > 0 ? { ok: false, issues } : { ok: true };
+}
+
+function validateHighRiskRegistryConfig(config) {
+  const issues = [];
+  if (!Array.isArray(config.requiredPayloadFields)) {
+    issues.push("high-risk registry config is missing requiredPayloadFields");
+  }
+  if (!Array.isArray(config.authorityScopeIdentityFields)) {
+    issues.push("high-risk registry config is missing authorityScopeIdentityFields");
+  }
+  if (!Array.isArray(config.requiredRuntimeTruthChecks)) {
+    issues.push("high-risk registry config is missing requiredRuntimeTruthChecks");
+  }
+  if (!config.passkey?.actionType || !config.passkey?.highRiskKind) {
+    issues.push("high-risk registry config is missing passkey metadata");
+  }
+  return issues;
+}
+
+function hasPayloadField(input, field) {
+  if (field === "repository") {
+    return Boolean(input.repository);
+  }
+  if (field === "issueNumber") {
+    return Boolean(input.issueNumber);
+  }
+  if (field === "pullNumber") {
+    return Boolean(input.pullNumber);
+  }
+  if (field === "mergeMethod") {
+    return Boolean(input.mergeMethod);
+  }
+  return Boolean(input[field]);
 }
 
 async function dispatchGitHubHighRisk(input) {
@@ -139,7 +188,7 @@ async function executePullMerge(input) {
         headers: githubJsonHeaders({ token: input.token }),
         body: JSON.stringify(
           compactObject({
-            merge_method: input.mergeMethod || "squash",
+            merge_method: input.mergeMethod,
             commit_title: input.commitTitle || undefined,
             commit_message: input.commitMessage || undefined
           })

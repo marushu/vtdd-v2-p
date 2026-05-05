@@ -8,7 +8,9 @@ import {
   ConsentCategory,
   CredentialTier,
   TaskMode,
-  executeGitHubHighRiskPlane
+  executeGitHubHighRiskPlane,
+  getGitHubAppOperation,
+  GitHubAppOperationTier
 } from "../src/core/index.js";
 
 const aliasRegistry = [
@@ -28,10 +30,38 @@ const mergeGrant = {
     highRiskKind: "pull_merge",
     repositoryInput: "sample-org/vtdd-v2-p",
     issueNumber: "55",
-    relatedIssue: "55",
     phase: "execution"
   }
 };
+
+test("github app operation registry defines issue close authority scope and runtime truth", () => {
+  const issueClose = getGitHubAppOperation("issue_close");
+  const pullMerge = getGitHubAppOperation("pull_merge");
+
+  assert.equal(issueClose.tier, GitHubAppOperationTier.PASSKEY_AUTHORITY);
+  assert.deepEqual(issueClose.requiredPayloadFields, ["repository", "issueNumber"]);
+  assert.deepEqual(issueClose.requiredRuntimeEvidenceFields, ["pullNumber"]);
+  assert.deepEqual(issueClose.authorityScopeIdentityFields, ["repository", "issueNumber", "phase"]);
+  assert.equal(issueClose.requiredRuntimeTruthChecks.includes("pull_request_merged_at_present"), true);
+  assert.deepEqual(issueClose.passkey.operatorUrlRequirements, [
+    "repositoryInput",
+    "phase",
+    "issueNumber",
+    "actionType",
+    "highRiskKind"
+  ]);
+  assert.equal(pullMerge.tier, GitHubAppOperationTier.PASSKEY_AUTHORITY);
+  assert.deepEqual(pullMerge.requiredPayloadFields, ["repository", "issueNumber", "mergeMethod"]);
+  assert.deepEqual(pullMerge.requiredRuntimeEvidenceFields, ["pullNumber"]);
+  assert.deepEqual(pullMerge.authorityScopeIdentityFields, ["repository", "issueNumber", "phase"]);
+  assert.deepEqual(pullMerge.passkey.operatorUrlRequirements, [
+    "repositoryInput",
+    "phase",
+    "issueNumber",
+    "actionType",
+    "highRiskKind"
+  ]);
+});
 
 test("merge now requires GO + passkey approval level in core policy", () => {
   const denied = evaluateExecutionPolicy({
@@ -96,6 +126,7 @@ test("github high-risk plane merges a pull request with scoped approval grant", 
     repository: "sample-org/vtdd-v2-p",
     issueNumber: 55,
     pullNumber: 21,
+    mergeMethod: "squash",
     approvalPhrase: "GO",
     targetConfirmed: true,
     approvalGrant: mergeGrant,
@@ -122,6 +153,25 @@ test("github high-risk plane merges a pull request with scoped approval grant", 
   assert.equal(calls[0].init.method, "PUT");
 });
 
+test("github high-risk plane requires merge method from registry", async () => {
+  const result = await executeGitHubHighRiskPlane({
+    operation: GitHubHighRiskOperation.PULL_MERGE,
+    repository: "sample-org/vtdd-v2-p",
+    issueNumber: 55,
+    pullNumber: 21,
+    approvalPhrase: "GO",
+    targetConfirmed: true,
+    approvalGrant: mergeGrant,
+    approvalScope: mergeGrant.scope,
+    env: {
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_high_risk"
+    }
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.issues.includes("mergeMethod is required"), true);
+});
+
 test("github high-risk plane closes bounded issue only after merged pull verification", async () => {
   const calls = [];
   const result = await executeGitHubHighRiskPlane({
@@ -140,8 +190,6 @@ test("github high-risk plane closes bounded issue only after merged pull verific
         highRiskKind: "issue_close",
         repositoryInput: "sample-org/vtdd-v2-p",
         issueNumber: "55",
-        pullNumber: "21",
-        relatedIssue: "55",
         phase: "execution"
       }
     },
@@ -150,8 +198,6 @@ test("github high-risk plane closes bounded issue only after merged pull verific
       highRiskKind: "issue_close",
       repositoryInput: "sample-org/vtdd-v2-p",
       issueNumber: "55",
-      pullNumber: "21",
-      relatedIssue: "55",
       phase: "execution"
     },
     env: {
@@ -192,6 +238,7 @@ test("github high-risk plane rejects missing approval grant or unmerged bounded 
     repository: "sample-org/vtdd-v2-p",
     issueNumber: 55,
     pullNumber: 21,
+    mergeMethod: "squash",
     approvalPhrase: "GO",
     targetConfirmed: true,
     approvalGrant: null,
@@ -217,8 +264,6 @@ test("github high-risk plane rejects missing approval grant or unmerged bounded 
         highRiskKind: "issue_close",
         repositoryInput: "sample-org/vtdd-v2-p",
         issueNumber: "55",
-        pullNumber: "21",
-        relatedIssue: "55",
         phase: "execution"
       }
     },
@@ -227,8 +272,6 @@ test("github high-risk plane rejects missing approval grant or unmerged bounded 
       highRiskKind: "issue_close",
       repositoryInput: "sample-org/vtdd-v2-p",
       issueNumber: "55",
-      pullNumber: "21",
-      relatedIssue: "55",
       phase: "execution"
     },
     env: {

@@ -2765,8 +2765,6 @@ test("worker executes GitHub merge on the high-risk authority plane with approva
         highRiskKind: "pull_merge",
         repositoryInput: "sample-org/vtdd-v2-p",
         issueNumber: "55",
-        pullNumber: "21",
-        relatedIssue: "55",
         phase: "execution"
       }
     },
@@ -2787,6 +2785,7 @@ test("worker executes GitHub merge on the high-risk authority plane with approva
         operation: "pull_merge",
         repository: "sample-org/vtdd-v2-p",
         pullNumber: 21,
+        mergeMethod: "squash",
         issueContext: {
           issueNumber: 55
         },
@@ -2835,8 +2834,6 @@ test("worker allows same-origin passkey operator to dispatch GitHub merge author
         highRiskKind: "pull_merge",
         repositoryInput: "sample-org/vtdd-v2-p",
         issueNumber: "55",
-        pullNumber: "21",
-        relatedIssue: "55",
         phase: "execution"
       }
     },
@@ -2858,6 +2855,7 @@ test("worker allows same-origin passkey operator to dispatch GitHub merge author
         operation: "pull_merge",
         repository: "sample-org/vtdd-v2-p",
         pullNumber: 21,
+        mergeMethod: "squash",
         issueContext: {
           issueNumber: 55
         },
@@ -2904,6 +2902,7 @@ test("worker rejects fabricated browser approval grants on the GitHub authority 
         operation: "pull_merge",
         repository: "sample-org/vtdd-v2-p",
         pullNumber: 21,
+        mergeMethod: "squash",
         issueContext: {
           issueNumber: 55
         },
@@ -2945,6 +2944,51 @@ test("worker rejects fabricated browser approval grants on the GitHub authority 
   assert.equal(githubCalled, false);
 });
 
+test("worker blocks GitHub authority when issue number fields conflict", async () => {
+  let githubCalled = false;
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/action/github-authority", {
+      method: "POST",
+      headers: {
+        ...gatewayAuthHeaders,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        operation: "issue_close",
+        repository: "sample-org/vtdd-v2-p",
+        issueNumber: 99,
+        pullNumber: 21,
+        issueContext: {
+          issueNumber: 55
+        },
+        policyInput: {
+          approvalPhrase: "GO",
+          approvalGrantId: "approval-close-123",
+          targetConfirmed: true
+        }
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_high_risk",
+      GITHUB_API_FETCH: async () => {
+        githubCalled = true;
+        return new Response(JSON.stringify({}), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        });
+      }
+    }
+  );
+
+  assert.equal(response.status, 422);
+  const body = await response.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.error, "github_authority_scope_invalid");
+  assert.equal(body.issues.includes("issueNumber conflicts with issueContext.issueNumber"), true);
+  assert.equal(githubCalled, false);
+});
+
 test("worker blocks bounded issue close on the high-risk authority plane when merged pull proof is missing", async () => {
   const provider = createInMemoryMemoryProvider();
   await provider.store({
@@ -2960,8 +3004,6 @@ test("worker blocks bounded issue close on the high-risk authority plane when me
         highRiskKind: "issue_close",
         repositoryInput: "sample-org/vtdd-v2-p",
         issueNumber: "55",
-        pullNumber: "21",
-        relatedIssue: "55",
         phase: "execution"
       }
     },
