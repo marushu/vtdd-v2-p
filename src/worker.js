@@ -1455,11 +1455,19 @@ async function handleRepositoryNicknameUpsertRequest(request, env) {
     },
     env
   });
-  const resolution = resolveRepositoryTarget({
-    input: body?.repository ?? body?.repositoryInput,
-    mode: TaskMode.EXECUTION,
-    aliasRegistry: resolvedAliasRegistry.aliasRegistry
-  });
+  const repositoryInput = body?.repository ?? body?.repositoryInput;
+  const canonicalRepositoryInput = normalizeCanonicalRepositoryInput(repositoryInput);
+  const resolution = canonicalRepositoryInput
+    ? {
+        resolved: true,
+        repository: canonicalRepositoryInput,
+        via: "canonical_owner_repo"
+      }
+    : resolveRepositoryTarget({
+        input: repositoryInput,
+        mode: TaskMode.EXECUTION,
+        aliasRegistry: resolvedAliasRegistry.aliasRegistry
+      });
 
   if (!resolution.resolved) {
     return json(422, {
@@ -1495,6 +1503,14 @@ async function handleRepositoryNicknameUpsertRequest(request, env) {
     repository: resolution.repository,
     aliasEntry: result.aliasEntry
   });
+}
+
+function normalizeCanonicalRepositoryInput(value) {
+  const text = normalizeText(value).toLowerCase();
+  if (!/^[a-z0-9_.-]+\/[a-z0-9_.-]+$/.test(text)) {
+    return "";
+  }
+  return text;
 }
 
 async function handlePasskeyRegistrationOptionsRequest(request, env) {

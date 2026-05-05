@@ -63,18 +63,18 @@ test("repository nickname registry can replace prior user-defined nicknames", as
   assert.deepEqual(result.aliasEntry.aliases, ["公開V2"]);
 });
 
-test("repository nickname registry rejects unknown canonical repositories", async () => {
+test("repository nickname registry accepts canonical repositories even before live alias registry has seen them", async () => {
   const provider = createInMemoryMemoryProvider();
   const result = await upsertRepositoryNickname({
     provider,
-    repository: "sample-org/unknown-repo",
+    repository: "sample-org/new-repo",
     nickname: "unknown",
     aliasRegistry: []
   });
 
-  assert.equal(result.ok, false);
-  assert.equal(result.status, 422);
-  assert.equal(result.error, "repository_nickname_request_invalid");
+  assert.equal(result.ok, true);
+  assert.equal(result.aliasEntry.canonicalRepo, "sample-org/new-repo");
+  assert.deepEqual(result.aliasEntry.aliases, ["unknown"]);
 });
 
 test("mergeAliasRegistries combines live aliases and stored nicknames", () => {

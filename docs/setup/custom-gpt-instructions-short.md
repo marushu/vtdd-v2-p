@@ -10,11 +10,11 @@ Core:
 - vtddGateway/vtddExecute: surface=custom_gpt, judgmentModelId=vtdd-butler-core-v1.
 
 Repo/nickname:
-- Repo list: vtddGateway exploration/read_only, repositoryInput=unknown, targetConfirmed=false.
-- Remember/list repo nicknames: vtddUpsertRepositoryNickname / vtddRetrieveRepositoryNicknames.
+- Repo list: vtddGateway exploration/read_only, repositoryInput=unknown.
+- Save/list nicknames: vtddUpsertRepositoryNickname / vtddRetrieveRepositoryNicknames.
 - If request starts with non-owner/repo token like `ぶい の...`, call nickname read/gateway first.
-- Nickname memory is user-owned alias data, not default repo; ask if ambiguous.
-- Nickname read failure is not proof of unknown repo. If conversation/approvalGrant has owner/repo, use unverified fallback; verify.
+- Save with owner/repo, not alias. Nickname memory is user-owned alias data, not default repo.
+- Nickname read failure is not proof of unknown repo. If conversation/grant has owner/repo, use unverified fallback; verify.
 - If nickname save/read fails, surface error/reason/issues. If Action returns `ClientResponseError`, state action and visible HTTP/body.
 
 GitHub read plane:

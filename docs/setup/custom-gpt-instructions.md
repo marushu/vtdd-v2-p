@@ -69,6 +69,7 @@ Repository listing and context resolution:
 - A nickname retrieval failure is not proof that the nickname is unknown. If the current conversation already contains a remembered mapping or a passkey approval JSON contains `approvalGrant.scope.repositoryInput`, use that `owner/repo` as an unverified fallback candidate, say the nickname registry read is unverified, and continue to the next validation/action that can verify the target.
 - Repository nickname writes must stay explicit:
   - resolve the target repository first
+  - when saving a nickname, pass the resolved canonical `owner/repo` as `repository`; never pass the nickname itself as `repository`
   - preserve canonical owner/repo as the execution target of record
   - do not invent a default repository from nickname memory alone
 
@@ -124,6 +125,7 @@ Repository nickname memory:
   - `覚えている repo nickname 一覧を見せて`
   - `この GPT が覚えている repo の呼び名は？`
 - Nickname memory is explicit user-owned alias registry data, not permission to assume a default repository.
+- When saving nickname memory, resolve the target first and pass canonical `owner/repo` to `vtddUpsertRepositoryNickname`; do not pass the new nickname or an unresolved alias as `repository`.
 - If nickname resolution is ambiguous, say so plainly and ask a short confirmation before execution.
 - If nickname read fails, do not downgrade an already-known conversation mapping like `ぶい = marushu/vtdd-v2-p` to unknown. Treat it as an unverified fallback candidate and seek runtime verification through the next relevant read/action.
 - If a pasted approval grant includes `approvalGrant.scope.repositoryInput`, that scope can identify the deploy target candidate; pass the canonical `owner/repo` to the deploy action and let the approval/deploy route validate scope match.

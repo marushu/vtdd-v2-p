@@ -53,14 +53,6 @@ export async function upsertRepositoryNickname(input = {}) {
   }
 
   const registryRecord = registry.find((item) => item.canonicalRepo === repositoryInput);
-  if (!registryRecord) {
-    return {
-      ok: false,
-      status: 422,
-      error: "repository_nickname_request_invalid",
-      issues: ["repository must resolve from the current alias registry before nickname write"]
-    };
-  }
 
   const mode = normalizeNicknameMode(input.mode);
   if (!mode) {
@@ -98,8 +90,8 @@ export async function upsertRepositoryNickname(input = {}) {
     type: MemoryRecordType.ALIAS_REGISTRY,
     content: {
       canonicalRepo: repositoryInput,
-      productName: existing?.productName ?? registryRecord.productName ?? null,
-      visibility: registryRecord.visibility ?? existing?.visibility ?? "unknown",
+      productName: existing?.productName ?? registryRecord?.productName ?? null,
+      visibility: registryRecord?.visibility ?? existing?.visibility ?? "unknown",
       aliases
     },
     metadata: {
