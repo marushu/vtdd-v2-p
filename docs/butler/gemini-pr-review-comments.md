@@ -51,6 +51,9 @@ Current limitation:
 
 - a VTDD bot-authored `@codex review` request proves only that fallback was
   requested; it is not completed reviewer evidence by itself
+- a `chatgpt-codex-connector` response that asks the operator to create/connect
+  a Codex account is a fallback blocker (`codex_connector_not_configured`), not
+  reviewer progress
 - if Codex Cloud does not pick up the request, VTDD must keep the fallback state
   as requested or blocked rather than pretending review completed
 

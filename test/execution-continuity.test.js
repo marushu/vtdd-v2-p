@@ -202,3 +202,41 @@ test("execution continuity surfaces Codex fallback blocker when non-manual revie
   assert.equal(result.value.reviewLoop.criticalReviewPending, true);
   assert.deepEqual(result.value.nextSuggestedActions, ["surface_reviewer_platform_blocker", "summarize_for_human"]);
 });
+
+test("execution continuity surfaces Codex connector setup comments as fallback blocker", () => {
+  const result = evaluateExecutionContinuity({
+    actorRole: ActorRole.BUTLER,
+    mode: TaskMode.EXECUTION,
+    runtimeTruth: {
+      runtimeState: {
+        activeBranch: "codex/issue-156",
+        pullRequest: {
+          number: 181,
+          url: "https://github.com/example/repo/pull/181",
+          state: "open",
+          title: "Context preflight",
+          issueComments: [
+            {
+              user: { login: "vtdd-codex[bot]" },
+              body: "<!-- vtdd:reviewer=codex-fallback -->\n## VTDD Codex Reviewer Fallback Request\n\n- Status: `requested`\n\n@codex review"
+            },
+            {
+              user: { login: "chatgpt-codex-connector" },
+              body: "To use Codex here, [create a Codex account and connect to github](https://chatgpt.com/codex/cloud/settings/connectors)."
+            }
+          ]
+        }
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.value.reviewLoop.reviewer, "codex");
+  assert.equal(result.value.reviewLoop.reviewerStatus, "codex_review_blocked");
+  assert.equal(result.value.reviewLoop.criticalReviewPending, true);
+  assert.deepEqual(result.value.nextSuggestedActions, ["surface_reviewer_platform_blocker", "summarize_for_human"]);
+  assert.equal(
+    result.value.butlerReviewSynthesis.headline,
+    "PR #181 is open. Gemini is temporarily unavailable and non-manual Codex fallback is currently blocked by platform or repository configuration."
+  );
+});

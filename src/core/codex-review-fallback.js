@@ -6,6 +6,10 @@ export const CodexReviewFallbackStatus = Object.freeze({
   BLOCKED: "blocked"
 });
 
+export const CodexReviewFallbackBlocker = Object.freeze({
+  CODEX_CONNECTOR_NOT_CONFIGURED: "codex_connector_not_configured"
+});
+
 export function formatCodexReviewFallbackComment(input = {}) {
   const trigger = normalizeText(input.trigger) || "unknown";
   const reason = normalizeText(input.reason) || "gemini_temporarily_unavailable";
@@ -76,8 +80,37 @@ export function parseCodexReviewFallbackComment(comment = {}) {
   };
 }
 
+export function parseCodexConnectorSetupComment(comment = {}) {
+  const body = normalizeText(typeof comment === "string" ? comment : comment?.body);
+  const author = normalizeText(comment?.author?.login ?? comment?.user?.login);
+  if (!isCodexConnectorAuthor(author) || !isCodexConnectorSetupBody(body)) {
+    return null;
+  }
+
+  return {
+    reviewer: "codex",
+    status: CodexReviewFallbackStatus.BLOCKED,
+    blocking: true,
+    recommendedAction: null,
+    blocker: CodexReviewFallbackBlocker.CODEX_CONNECTOR_NOT_CONFIGURED,
+    body
+  };
+}
+
 function containsMarker(value) {
   return normalizeText(value).includes(CODEX_REVIEW_FALLBACK_MARKER);
+}
+
+function isCodexConnectorAuthor(value) {
+  return normalizeText(value).toLowerCase() === "chatgpt-codex-connector";
+}
+
+function isCodexConnectorSetupBody(value) {
+  const body = normalizeText(value).toLowerCase();
+  return (
+    body.includes("to use codex here") &&
+    body.includes("connect to github")
+  );
 }
 
 function buildStatusSection({

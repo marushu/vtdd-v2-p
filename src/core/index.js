@@ -176,9 +176,11 @@ export {
 } from "./gemini-pr-review.js";
 export {
   CODEX_REVIEW_FALLBACK_MARKER,
+  CodexReviewFallbackBlocker,
   CodexReviewFallbackStatus,
   findExistingCodexReviewFallbackComment,
   formatCodexReviewFallbackComment,
+  parseCodexConnectorSetupComment,
   parseCodexReviewFallbackComment
 } from "./codex-review-fallback.js";
 export {
