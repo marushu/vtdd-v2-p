@@ -71,6 +71,39 @@ test("github read plane lists issues and filters pull request-shaped issue resul
   assert.equal(result.read.records[0].body, "## Intent\nUse Issue text as the execution spec.");
 });
 
+test("github read plane returns issue comment edit evidence", async () => {
+  const result = await retrieveGitHubReadPlane({
+    resource: GitHubReadResource.ISSUE_COMMENTS,
+    repository: "sample-org/vtdd-v2-p",
+    issueNumber: 183,
+    env: {
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_issue_read",
+      GITHUB_API_FETCH: async () =>
+        new Response(
+          JSON.stringify([
+            {
+              id: 4376926984,
+              body: "<!-- vtdd:reviewer=gemini -->\n- Recommended action: `approve`",
+              user: { login: "vtdd-codex" },
+              created_at: "2026-05-05T06:15:35Z",
+              updated_at: "2026-05-05T09:48:45Z",
+              html_url: "https://github.com/sample-org/vtdd-v2-p/pull/183#issuecomment-4376926984"
+            }
+          ]),
+          { status: 200, headers: { "content-type": "application/json" } }
+        )
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.read.records[0].updatedAt, "2026-05-05T09:48:45Z");
+  assert.equal(result.read.records[0].includesCreatedEdit, true);
+  assert.equal(
+    result.read.records[0].htmlUrl,
+    "https://github.com/sample-org/vtdd-v2-p/pull/183#issuecomment-4376926984"
+  );
+});
+
 test("github read plane includes issue body when reading a specific issue", async () => {
   const calls = [];
   const result = await retrieveGitHubReadPlane({
