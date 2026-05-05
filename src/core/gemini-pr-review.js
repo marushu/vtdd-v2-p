@@ -283,12 +283,17 @@ export function parseGeminiReviewComment(comment = {}) {
 
   const recommendedActionMatch = body.match(/^- Recommended action:\s*`([^`]+)`/m);
   const recommendedAction = normalizeText(recommendedActionMatch?.[1]).toLowerCase() || "manual_review";
+  const source = typeof comment === "object" && comment !== null ? comment : {};
 
   return {
     reviewer: "gemini",
     recommendedAction,
     blocking:
       recommendedAction === "request_changes" || recommendedAction === "manual_review",
+    url: normalizeText(source.url) || null,
+    createdAt: normalizeText(source.createdAt) || null,
+    updatedAt: normalizeText(source.updatedAt) || null,
+    includesCreatedEdit: source.includesCreatedEdit === true,
     body
   };
 }

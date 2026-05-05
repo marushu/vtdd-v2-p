@@ -168,15 +168,25 @@ test("findExistingGeminiReviewComment locates prior marker comment", () => {
 });
 
 test("parseGeminiReviewComment treats approve as non-blocking reviewer evidence", () => {
-  const parsed = parseGeminiReviewComment(`${GEMINI_PR_REVIEW_MARKER}
+  const parsed = parseGeminiReviewComment({
+    body: `${GEMINI_PR_REVIEW_MARKER}
 ## VTDD Gemini Critical Review
 
-- Recommended action: \`approve\``);
+- Recommended action: \`approve\``,
+    url: "https://github.com/example/repo/pull/28#issuecomment-1",
+    createdAt: "2026-05-05T06:15:35Z",
+    updatedAt: "2026-05-05T09:48:45Z",
+    includesCreatedEdit: true
+  });
 
   assert.deepEqual(parsed, {
     reviewer: "gemini",
     recommendedAction: "approve",
     blocking: false,
+    url: "https://github.com/example/repo/pull/28#issuecomment-1",
+    createdAt: "2026-05-05T06:15:35Z",
+    updatedAt: "2026-05-05T09:48:45Z",
+    includesCreatedEdit: true,
     body: `${GEMINI_PR_REVIEW_MARKER}
 ## VTDD Gemini Critical Review
 
