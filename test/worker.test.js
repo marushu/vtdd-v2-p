@@ -3901,6 +3901,54 @@ test("worker returns cross-issue memory index through retrieve route", async () 
   assert.equal(body.primaryReference.source, "issue");
 });
 
+test("worker cross-memory route honors action-schema text and semantic parameters", async () => {
+  const provider = createInMemoryMemoryProvider();
+  await provider.store({
+    id: "decision-cross-text-semantic",
+    type: MemoryRecordType.DECISION_LOG,
+    content: {
+      decision: "Butler context preflight must preserve VTDD premise anchors",
+      rationale: "RAG search text from the Action Schema must reach the worker runtime",
+      relatedIssue: 159,
+      decidedBy: "owner",
+      timestamp: "2026-05-05T08:30:00Z",
+      supersededBy: null
+    },
+    metadata: { repository: "marushu/vtdd-v2-p" },
+    priority: 95,
+    tags: ["decision_log", "issue:159", "preflight-anchor"],
+    createdAt: "2026-05-05T08:30:00Z"
+  });
+
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/v2/retrieve/cross?phase=execution&issueNumber=159&text=preflight%20anchor&semantic=true&limit=5",
+      {
+        headers: {
+          authorization: "Bearer test-token"
+        }
+      }
+    ),
+    {
+      ...gatewayAuthEnv,
+      MEMORY_PROVIDER: provider
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.queryText, "preflight anchor");
+  assert.equal(body.semanticRetrieval.enabled, true);
+  assert.equal(body.semanticRetrieval.applied, true);
+  assert.equal(
+    body.referencesBySource.decision_log.some(
+      (item) => item.id === "decision-cross-text-semantic"
+    ),
+    true
+  );
+});
+
 test("worker returns not_found for unknown route", async () => {
   const response = await worker.fetch(new Request("https://example.com/unknown"));
   assert.equal(response.status, 404);

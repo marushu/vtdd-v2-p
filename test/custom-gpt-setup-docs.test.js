@@ -70,6 +70,10 @@ test("custom gpt instructions preserve current butler and approval boundaries", 
   assert.equal(doc.includes("For vtddExecute Codex handoff, use `policyInput.actionType=build`"), true);
   assert.equal(doc.includes("policyInput.issueTraceability` includes real Intent / Success Criteria / Non-goals refs"), true);
   assert.equal(doc.includes("continuationContext.requiresHandoff=true"), true);
+  assert.equal(doc.includes("short natural GO tied to the user's visible intent"), true);
+  assert.equal(doc.includes("do not make the human write or understand those internal fields"), true);
+  assert.equal(doc.includes("Gemini が指摘している修正を Codex に進めさせます"), true);
+  assert.equal(doc.includes("exact bounded handoff payload"), false);
   assert.equal(
     doc.includes(
       "the first four judgmentTrace steps must be exactly:\n  1. constitution\n  2. runtime_truth\n  3. issue_context\n  4. current_query"
@@ -155,6 +159,8 @@ test("short custom gpt instructions stay under editor limits while preserving cr
   assert.equal(doc.includes("judgmentModelId=vtdd-butler-core-v1"), true);
   assert.equal(doc.includes("vtddExecute handoff: actionType=build"), true);
   assert.equal(doc.includes("PR feedback fix => revise_pr"), true);
+  assert.equal(doc.includes("short natural GO tied to the visible intent"), true);
+  assert.equal(doc.includes("Gemini が指摘している修正を Codex に進めさせます"), true);
   assert.equal(doc.includes("Executor transport is pluggable and user-owned"), true);
   assert.equal(doc.includes("codex_cloud_cli_control_runner"), true);
   assert.equal(doc.includes("vps_runner"), true);

@@ -284,6 +284,11 @@ test("gateway sets cross retrieval assist for natural recall conversation", () =
   assert.equal(result.conversationAssist.crossRetrievalRequest.phase, "exploration");
   assert.equal(result.conversationAssist.crossRetrievalRequest.relatedIssue, 19);
   assert.equal(result.conversationAssist.crossRetrievalRequest.displayMode, "short");
+  assert.equal(
+    result.conversationAssist.crossRetrievalRequest.text,
+    "issue #19 って何だっけ？過去の判断と提案を思い出したい"
+  );
+  assert.equal(result.conversationAssist.crossRetrievalRequest.semanticRetrieval.enabled, true);
 });
 
 test("gateway asks clarification when recall conversation mentions multiple issues", () => {
