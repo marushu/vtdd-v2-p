@@ -86,10 +86,28 @@ Cloudflare, and reviewer configuration. Any GitHub Actions runner that uses
 `OPENAI_API_KEY` for Codex CLI is an explicit opt-in API-backed executor, not
 the default no-extra-API-cost path.
 
-The default no-extra-API-cost executor path delegates through GitHub by posting
-a bounded `@codex` Issue/PR comment for the operator's own Codex Cloud GitHub
-integration to pick up. That path uses the operator's ChatGPT/Codex account and
-does not require an OpenAI API key in GitHub Actions.
+Executor transport is pluggable and user-owned. `marushu/vtdd-v2-p` is the
+public canonical core, not a shared hosted runner. Target repositories such as
+TOMIO or SunabaEye are separate from the executor backend that performs the
+work.
+
+Supported executor transport identities are:
+
+- `codex_cloud_github_comment`: bounded `@codex` Issue/PR comment transport.
+  This is request-only until GitHub-visible branch / PR evidence exists.
+- `codex_cloud_cli_control_runner`: user-owned private control repository or
+  trusted runner that runs `codex cloud exec` with ChatGPT-managed Codex auth.
+  This path does not use `OPENAI_API_KEY`; it consumes the user's runner
+  capacity such as private GitHub Actions minutes.
+- `vps_runner`: user-owned trusted VPS / persistent host option. This is the
+  migration target when private GitHub Actions minutes, queueing, or repository
+  constraints become the wrong trade-off. The VPS is not part of VTDD core and
+  must be maintained by the user.
+- `api_key_runner`: explicit opt-in runner that uses `OPENAI_API_KEY` and may
+  create separate API billing from ChatGPT/Codex subscription billing.
+
+The owner-specific `vtdd-v2-secret` repository is an example / evidence control
+repository for the owner. It is not a shared runner for other users.
 
 Likewise, a reviewer workflow that uses `GEMINI_API_KEY` is an optional
 provider-backed reviewer path. Reviewer choice remains pluggable.

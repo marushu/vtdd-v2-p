@@ -105,6 +105,10 @@ test("custom gpt instructions preserve current butler and approval boundaries", 
   assert.equal(doc.includes("If the Action surface reports `ClientResponseError`"), true);
   assert.equal(doc.includes("report it as an unverified Action transport failure"), true);
   assert.equal(doc.includes("If vtddDeployProduction fails, tell the user the exact deploy `error`, `reason`, and `issues`"), true);
+  assert.equal(doc.includes("Executor transport is pluggable and user-owned."), true);
+  assert.equal(doc.includes("codex_cloud_cli_control_runner"), true);
+  assert.equal(doc.includes("vtdd-v2-secret` is owner-specific example/evidence"), true);
+  assert.equal(doc.includes("vps_runner"), true);
   assert.equal(doc.includes("openai_api_key_not_configured"), true);
   assert.equal(doc.includes("never echo the secret value"), true);
   assert.equal(doc.includes("A completed `vtdd:reviewer=codex-fallback` marker comment"), true);
@@ -150,6 +154,9 @@ test("short custom gpt instructions stay under editor limits while preserving cr
   assert.equal(doc.includes("If self-parity returns `ClientResponseError`, say unverified transport failure"), true);
   assert.equal(doc.includes("judgmentModelId=vtdd-butler-core-v1"), true);
   assert.equal(doc.includes("vtddExecute handoff: actionType=build"), true);
+  assert.equal(doc.includes("Executor transport is pluggable and user-owned"), true);
+  assert.equal(doc.includes("codex_cloud_cli_control_runner"), true);
+  assert.equal(doc.includes("vps_runner"), true);
   assert.equal(doc.includes("requiresHandoff=true"), true);
   assert.equal(doc.includes("issueTraceability Intent/SC/Non-goal refs"), true);
   assert.equal(
@@ -260,6 +267,36 @@ test("custom gpt openapi json parses and exposes paths as an object", () => {
   assert.equal(typeof doc.paths["/v2/action/github-actions-secret"], "object");
   assert.equal(typeof doc.paths["/v2/action/repository-nickname"], "object");
   assert.equal(typeof doc.paths["/v2/action/progress"], "object");
+  assert.deepEqual(
+    doc.components.schemas.VtddExecuteRequest.properties.executorTransport.enum,
+    [
+      "codex_cloud_github_comment",
+      "codex_cloud_cli_control_runner",
+      "vps_runner",
+      "api_key_runner"
+    ]
+  );
+  assert.deepEqual(
+    doc.components.schemas.VtddExecuteRequest.properties.continuationContext.properties
+      .executorTransport.enum,
+    [
+      "codex_cloud_github_comment",
+      "codex_cloud_cli_control_runner",
+      "vps_runner",
+      "api_key_runner"
+    ]
+  );
+  assert.deepEqual(
+    doc.paths["/v2/action/progress"].get.parameters.find(
+      (parameter) => parameter.name === "executorTransport"
+    ).schema.enum,
+    [
+      "codex_cloud_github_comment",
+      "codex_cloud_cli_control_runner",
+      "vps_runner",
+      "api_key_runner"
+    ]
+  );
   assert.equal(typeof doc.paths["/v2/retrieve/github"], "object");
   assert.equal(typeof doc.paths["/v2/retrieve/repository-nicknames"], "object");
   assert.equal(typeof doc.paths["/v2/retrieve/setup-artifact"], "object");

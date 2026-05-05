@@ -156,6 +156,7 @@ export {
   RemoteCodexExecutionStatus,
   createRemoteCodexExecutionRequest,
   dispatchRemoteCodexExecution,
+  getRemoteCodexExecutorTransportRegistry,
   retrieveRemoteCodexExecutionProgress
 } from "./remote-codex-executor.js";
 export {

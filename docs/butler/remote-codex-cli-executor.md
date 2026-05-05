@@ -33,23 +33,37 @@ This slice exists specifically so the loop can continue into:
 The implementation must preserve a no-extra-API-cost default for operators who
 already use Codex through a ChatGPT/Codex subscription.
 
-The GitHub Actions Codex CLI runner is an optional `api_key_runner`, not the
-default account model. It requires `OPENAI_API_KEY` and may create separate API
-billing from a ChatGPT/Codex subscription.
+Executor transport is a pluggable registry. The VTDD public/core repository is
+not a shared hosted runner, and `marushu/vtdd-v2-p` must not be presented as an
+execution backend for other users. Each user brings their own GitHub,
+Cloudflare, ChatGPT/Codex, reviewer, and executor backend assets.
 
-The default operator path is GitHub-centered Codex Cloud delegation through the
-operator's own ChatGPT/Codex GitHub integration.
+Target repository and executor backend are separate:
 
-VTDD expresses that delegation as a bounded GitHub Issue or PR comment that
-mentions `@codex`. This lets the operator's existing Codex Cloud entitlement
-pick up the work through GitHub without requiring `OPENAI_API_KEY`.
+- target repository: the repository being changed, such as TOMIO, SunabaEye, or
+  `vtdd-v2-p`
+- executor backend: the user-owned comment integration, private control
+  repository, trusted VPS, or explicit API-key runner that performs the work
 
-This path depends on the operator having connected Codex Cloud to GitHub in
-their own ChatGPT/Codex account. VTDD must surface that as operator-owned
-configuration, not as a repository secret owned by this public repo.
+The registered executor transports are:
 
-Codex Cloud is the default account-backed executor path. `OPENAI_API_KEY`
-runners are optional opt-in machine paths only.
+| Transport | Owner / credential boundary | Billing / cost boundary | Success evidence |
+| --- | --- | --- | --- |
+| `codex_cloud_github_comment` | Operator-owned ChatGPT/Codex GitHub integration | ChatGPT/Codex subscription path; no `OPENAI_API_KEY` | Request is not success; branch and/or PR evidence must appear on GitHub |
+| `codex_cloud_cli_control_runner` | User-owned private control repository or trusted runner with ChatGPT-managed Codex auth | User-owned runner cost such as private GitHub Actions minutes; no `OPENAI_API_KEY` | workflow run plus GitHub-visible branch / PR evidence |
+| `vps_runner` | User-owned trusted VPS / persistent host | User pays and maintains VPS; VTDD core does not host it | runner log plus GitHub-visible branch / PR evidence |
+| `api_key_runner` | User-owned control repository or trusted runner with `OPENAI_API_KEY` | Explicit opt-in OpenAI API billing, separate from ChatGPT/Codex subscription | workflow run plus GitHub-visible branch / PR evidence |
+
+The `api_key_runner` transport is an optional `api_key_runner`, not a default
+account model.
+
+The owner-specific `vtdd-v2-secret` private repository is owner evidence and an
+example of the `codex_cloud_cli_control_runner` shape. It is not a shared
+runner for other VTDD users.
+
+Codex Cloud comment delegation remains request-state until GitHub-visible
+runtime truth appears. Queued/requested/comment-only evidence is not
+implementation success.
 
 ## Default Codex Cloud GitHub Comment Runner
 
@@ -68,6 +82,37 @@ grace period, Butler must not keep reporting the handoff as merely queued
 forever. It must report a first-class blocked state such as
 `codex_cloud_pickup_not_observed`, preserving the delegation comment URL and
 the absence of branch/PR evidence as runtime truth.
+
+## Codex Cloud CLI Control Runner
+
+The confirmed no-`OPENAI_API_KEY` machine path is
+`codex_cloud_cli_control_runner`:
+
+- Butler dispatches a bounded request to a user-owned private control
+  repository or trusted runner.
+- That backend restores ChatGPT-managed Codex authentication for `codex cloud
+  exec`.
+- The backend operates on the target repository and opens or updates a branch /
+  PR there.
+- Butler tracks the GitHub Actions workflow run, target branch, and PR as
+  runtime truth.
+
+The live evidence recorded for Issue #157 used this account model and produced
+GitHub-visible PR evidence. The evidence repository name `vtdd-v2-secret` is an
+owner-specific example, not shared infrastructure.
+
+Because a private control repository consumes account-wide private GitHub
+Actions minutes, Butler-facing guidance must surface cost and queueing state.
+When repeated TOMIO / SunabaEye / other target repository work makes private
+Actions minutes or repository constraints a poor fit, move the user's backend
+to `vps_runner` rather than silently changing to API billing.
+
+## User-owned VPS Runner
+
+`vps_runner` is the planned trusted-host alternative for users who want to avoid
+or reduce private GitHub Actions runner cost. It is not a prerequisite for VTDD
+core, and VTDD core does not provide or operate the VPS. The user is responsible
+for host security, patching, credentials, logging, and availability.
 
 ## Optional API-backed Runner
 
