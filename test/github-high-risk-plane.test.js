@@ -51,7 +51,16 @@ test("github app operation registry defines issue close authority scope and runt
     "highRiskKind"
   ]);
   assert.equal(pullMerge.tier, GitHubAppOperationTier.PASSKEY_AUTHORITY);
-  assert.deepEqual(pullMerge.requiredPayloadFields, ["repository", "pullNumber", "mergeMethod"]);
+  assert.deepEqual(pullMerge.requiredPayloadFields, ["repository", "issueNumber", "mergeMethod"]);
+  assert.deepEqual(pullMerge.requiredRuntimeEvidenceFields, ["pullNumber"]);
+  assert.deepEqual(pullMerge.authorityScopeIdentityFields, ["repository", "issueNumber", "phase"]);
+  assert.deepEqual(pullMerge.passkey.operatorUrlRequirements, [
+    "repositoryInput",
+    "phase",
+    "issueNumber",
+    "actionType",
+    "highRiskKind"
+  ]);
 });
 
 test("merge now requires GO + passkey approval level in core policy", () => {

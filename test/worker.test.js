@@ -2735,7 +2735,6 @@ test("worker executes GitHub merge on the high-risk authority plane with approva
         highRiskKind: "pull_merge",
         repositoryInput: "sample-org/vtdd-v2-p",
         issueNumber: "55",
-        pullNumber: "21",
         phase: "execution"
       }
     },
@@ -2805,7 +2804,6 @@ test("worker allows same-origin passkey operator to dispatch GitHub merge author
         highRiskKind: "pull_merge",
         repositoryInput: "sample-org/vtdd-v2-p",
         issueNumber: "55",
-        pullNumber: "21",
         phase: "execution"
       }
     },
