@@ -161,11 +161,14 @@ Progress must be reconstructable from:
 - VTDD execution log
 - branch / PR state in GitHub runtime truth
 
-For `codex_cloud_cli_control_runner`, a completed control workflow is not
-success by itself. Butler must read the target repository branch/PR state using
-the bounded target repository and branch. If the workflow completes without a
-target branch or PR, progress must report a blocked state with the workflow
-conclusion and the missing runtime evidence rather than reporting completion.
+For `codex_cloud_cli_control_runner`, the top-level progress `status` and
+`branch` describe the control workflow run for compatibility with existing
+consumers. Implementation success is reported separately under
+`targetRuntimeTruth`, which is derived from the bounded target repository and
+branch. A completed control workflow is not success by itself. If the workflow
+completes without a target branch or PR, `targetRuntimeTruth.status` must be
+`blocked` with the workflow conclusion and the missing runtime evidence rather
+than reporting implementation completion.
 
 When Codex reaches an approval or scope boundary, the observable return path is
 GitHub state that Butler can read, not a hidden direct Codex-to-Butler channel.

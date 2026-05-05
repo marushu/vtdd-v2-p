@@ -499,12 +499,13 @@ test("remote Codex control-runner progress includes target PR runtime truth", as
   assert.equal(progress.ok, true);
   assert.equal(progress.progress.status, RemoteCodexExecutionStatus.COMPLETED);
   assert.equal(progress.progress.workflowRunId, 15701);
-  assert.equal(progress.progress.controlBranch, "main");
-  assert.equal(progress.progress.targetRepository, "sample-org/vtdd-v2");
-  assert.equal(progress.progress.targetBranch, "codex/issue-157");
-  assert.equal(progress.progress.pullRequest.number, 157);
-  assert.equal(progress.progress.branch, null);
-  assert.equal(progress.progress.blocker, null);
+  assert.equal(progress.progress.branch, "main");
+  assert.equal(progress.progress.targetRuntimeTruth.status, RemoteCodexExecutionStatus.COMPLETED);
+  assert.equal(progress.progress.targetRuntimeTruth.targetRepository, "sample-org/vtdd-v2");
+  assert.equal(progress.progress.targetRuntimeTruth.targetBranch, "codex/issue-157");
+  assert.equal(progress.progress.targetRuntimeTruth.pullRequest.number, 157);
+  assert.equal(progress.progress.targetRuntimeTruth.branch, null);
+  assert.equal(progress.progress.targetRuntimeTruth.blocker, null);
   assert.equal(calls.length, 2);
 });
 
@@ -551,11 +552,13 @@ test("remote Codex control-runner progress blocks completed run without target b
   });
 
   assert.equal(progress.ok, true);
-  assert.equal(progress.progress.status, RemoteCodexExecutionStatus.BLOCKED);
-  assert.equal(progress.progress.pullRequest, null);
-  assert.equal(progress.progress.branch, null);
-  assert.equal(progress.progress.blocker.error, "remote_codex_workflow_failed");
-  assert.equal(progress.progress.blocker.conclusion, "failure");
+  assert.equal(progress.progress.status, RemoteCodexExecutionStatus.COMPLETED);
+  assert.equal(progress.progress.branch, "main");
+  assert.equal(progress.progress.targetRuntimeTruth.status, RemoteCodexExecutionStatus.BLOCKED);
+  assert.equal(progress.progress.targetRuntimeTruth.pullRequest, null);
+  assert.equal(progress.progress.targetRuntimeTruth.branch, null);
+  assert.equal(progress.progress.targetRuntimeTruth.blocker.error, "remote_codex_workflow_failed");
+  assert.equal(progress.progress.targetRuntimeTruth.blocker.conclusion, "failure");
 });
 
 test("remote Codex comment transport progress reads delegation comment and PR state", async () => {
