@@ -591,7 +591,7 @@ async function retrieveCodexCloudGitHubCommentProgress({
       transport: RemoteCodexExecutorTransport.CODEX_CLOUD_GITHUB_COMMENT,
       targetRepository: repository,
       issueNumber,
-      branch: branch || null,
+      branch: branchState.branch,
       delegationCommentId: normalizePositiveInteger(delegationComment.id),
       delegationCommentUrl: normalizeText(delegationComment.html_url) || null,
       status: pullRequest.pullRequest
@@ -604,7 +604,6 @@ async function retrieveCodexCloudGitHubCommentProgress({
               ? RemoteCodexExecutionStatus.BLOCKED
               : RemoteCodexExecutionStatus.QUEUED,
       pullRequest: pullRequest.pullRequest,
-      branch: branchState.branch,
       blocker: connectorBlocker ?? pickupBlocker
     }
   };
