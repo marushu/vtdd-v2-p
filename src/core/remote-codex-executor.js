@@ -6,7 +6,56 @@ export const REMOTE_CODEX_WORKFLOW_FILE = "remote-codex-executor.yml";
 
 export const RemoteCodexExecutorTransport = Object.freeze({
   CODEX_CLOUD_GITHUB_COMMENT: "codex_cloud_github_comment",
+  CODEX_CLOUD_CLI_CONTROL_RUNNER: "codex_cloud_cli_control_runner",
+  VPS_RUNNER: "vps_runner",
   API_KEY_RUNNER: "api_key_runner"
+});
+
+const REMOTE_CODEX_EXECUTOR_TRANSPORT_REGISTRY = Object.freeze({
+  [RemoteCodexExecutorTransport.CODEX_CLOUD_GITHUB_COMMENT]: Object.freeze({
+    id: RemoteCodexExecutorTransport.CODEX_CLOUD_GITHUB_COMMENT,
+    label: "Codex Cloud GitHub comment transport",
+    ownerBoundary: "operator_owned_chatgpt_codex_github_integration",
+    credentialModel: "chatgpt_managed_codex_github_integration",
+    billingModel: "chatgpt_codex_subscription_no_openai_api_key",
+    default: true,
+    optIn: false,
+    requestOnlyUntilRuntimeEvidence: true,
+    successEvidence: ["github_branch", "github_pull_request"]
+  }),
+  [RemoteCodexExecutorTransport.CODEX_CLOUD_CLI_CONTROL_RUNNER]: Object.freeze({
+    id: RemoteCodexExecutorTransport.CODEX_CLOUD_CLI_CONTROL_RUNNER,
+    label: "Codex Cloud CLI control runner",
+    ownerBoundary: "user_owned_private_control_repository_or_trusted_runner",
+    credentialModel: "chatgpt_managed_codex_auth_json",
+    billingModel: "chatgpt_codex_subscription_plus_user_owned_runner_cost",
+    default: false,
+    optIn: true,
+    usesOpenAiApiKey: false,
+    successEvidence: ["github_workflow_run", "github_branch", "github_pull_request"]
+  }),
+  [RemoteCodexExecutorTransport.VPS_RUNNER]: Object.freeze({
+    id: RemoteCodexExecutorTransport.VPS_RUNNER,
+    label: "User-owned VPS runner",
+    ownerBoundary: "user_owned_trusted_persistent_host",
+    credentialModel: "user_owned_runner_credentials",
+    billingModel: "user_owned_vps_cost",
+    default: false,
+    optIn: true,
+    implemented: false,
+    successEvidence: ["runner_execution_log", "github_branch", "github_pull_request"]
+  }),
+  [RemoteCodexExecutorTransport.API_KEY_RUNNER]: Object.freeze({
+    id: RemoteCodexExecutorTransport.API_KEY_RUNNER,
+    label: "OpenAI API key runner",
+    ownerBoundary: "user_owned_control_repository_or_trusted_runner",
+    credentialModel: "openai_api_key",
+    billingModel: "openai_api_billing_separate_from_chatgpt_codex_subscription",
+    default: false,
+    optIn: true,
+    usesOpenAiApiKey: true,
+    successEvidence: ["github_workflow_run", "github_branch", "github_pull_request"]
+  })
 });
 
 export const RemoteCodexExecutionStatus = Object.freeze({
@@ -16,6 +65,10 @@ export const RemoteCodexExecutionStatus = Object.freeze({
   BLOCKED: "blocked",
   UNKNOWN: "unknown"
 });
+
+export function getRemoteCodexExecutorTransportRegistry() {
+  return REMOTE_CODEX_EXECUTOR_TRANSPORT_REGISTRY;
+}
 
 export function createRemoteCodexExecutionRequest(input = {}) {
   const gatewayResult = input?.gatewayResult ?? {};
@@ -136,10 +189,25 @@ export async function dispatchRemoteCodexExecution(input = {}) {
     return dispatchCodexCloudGitHubComment({ request, token: token.value, env: input?.env });
   }
 
-  return dispatchApiBackedWorkflow({ request, token: token.value, env: input?.env });
+  if (transport.value === RemoteCodexExecutorTransport.VPS_RUNNER) {
+    return {
+      ok: false,
+      status: 501,
+      error: "vps_runner_not_implemented",
+      reason:
+        "vps_runner is registered as a user-owned backend option, but this runtime does not implement VPS dispatch yet"
+    };
+  }
+
+  return dispatchControlRepositoryWorkflow({
+    request,
+    token: token.value,
+    env: input?.env,
+    transport: transport.value
+  });
 }
 
-async function dispatchApiBackedWorkflow({ request, token, env }) {
+async function dispatchControlRepositoryWorkflow({ request, token, env, transport }) {
   const controlRepository = resolveControlRepository(env);
   if (!controlRepository) {
     return {
@@ -205,17 +273,18 @@ async function dispatchApiBackedWorkflow({ request, token, env }) {
     };
   }
 
-  const progress = await retrieveApiBackedWorkflowProgress({
+  const progress = await retrieveControlRepositoryWorkflowProgress({
     executionId: request.executionId,
     token,
-    env
+    env,
+    transport
   });
 
   return {
     ok: true,
     execution: {
       executionId: request.executionId,
-      transport: RemoteCodexExecutorTransport.API_KEY_RUNNER,
+      transport,
       controlRepository,
       workflowFile,
       workflowRef,
@@ -281,10 +350,25 @@ export async function retrieveRemoteCodexExecutionProgress(input = {}) {
     });
   }
 
-  return retrieveApiBackedWorkflowProgress({ executionId, token: token.value, env: input?.env });
+  if (transport.value === RemoteCodexExecutorTransport.VPS_RUNNER) {
+    return {
+      ok: false,
+      status: 501,
+      error: "vps_runner_not_implemented",
+      reason:
+        "vps_runner is registered as a user-owned backend option, but this runtime does not implement VPS progress lookup yet"
+    };
+  }
+
+  return retrieveControlRepositoryWorkflowProgress({
+    executionId,
+    token: token.value,
+    env: input?.env,
+    transport: transport.value
+  });
 }
 
-async function retrieveApiBackedWorkflowProgress({ executionId, token, env }) {
+async function retrieveControlRepositoryWorkflowProgress({ executionId, token, env, transport }) {
   const controlRepository = resolveControlRepository(env);
   if (!controlRepository) {
     return {
@@ -348,6 +432,7 @@ async function retrieveApiBackedWorkflowProgress({ executionId, token, env }) {
     ok: true,
     progress: {
       executionId,
+      transport,
       controlRepository,
       workflowFile,
       workflowRunId: normalizePositiveInteger(run.id),
@@ -711,6 +796,20 @@ function resolveExecutorTransport(input = {}, options = {}) {
   );
   const envValue = normalizeText(input?.env?.REMOTE_CODEX_EXECUTOR_TRANSPORT);
   const value = requestValue || envValue;
+  if (!value) {
+    return { ok: true, value: RemoteCodexExecutorTransport.CODEX_CLOUD_GITHUB_COMMENT };
+  }
+
+  const metadata = REMOTE_CODEX_EXECUTOR_TRANSPORT_REGISTRY[value];
+  if (!metadata) {
+    return {
+      ok: false,
+      error: "remote_codex_transport_unknown",
+      reason: "executorTransport is not registered",
+      issues: [`unsupported executorTransport: ${value}`]
+    };
+  }
+
   if (value === RemoteCodexExecutorTransport.API_KEY_RUNNER) {
     const requestSelected = requestValue === RemoteCodexExecutorTransport.API_KEY_RUNNER;
     const acknowledged =
@@ -725,9 +824,8 @@ function resolveExecutorTransport(input = {}, options = {}) {
         issues: ["api_key_runner_acknowledgment_required"]
       };
     }
-    return { ok: true, value: RemoteCodexExecutorTransport.API_KEY_RUNNER };
   }
-  return { ok: true, value: RemoteCodexExecutorTransport.CODEX_CLOUD_GITHUB_COMMENT };
+  return { ok: true, value };
 }
 
 function githubJsonHeaders({ token }) {

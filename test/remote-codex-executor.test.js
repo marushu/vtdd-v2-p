@@ -6,8 +6,31 @@ import {
   RemoteCodexExecutionStatus,
   createRemoteCodexExecutionRequest,
   dispatchRemoteCodexExecution,
+  getRemoteCodexExecutorTransportRegistry,
   retrieveRemoteCodexExecutionProgress
 } from "../src/core/index.js";
+
+test("remote Codex transport registry exposes pluggable user-owned backend choices", () => {
+  const registry = getRemoteCodexExecutorTransportRegistry();
+
+  assert.deepEqual(Object.keys(registry).sort(), [
+    RemoteCodexExecutorTransport.API_KEY_RUNNER,
+    RemoteCodexExecutorTransport.CODEX_CLOUD_CLI_CONTROL_RUNNER,
+    RemoteCodexExecutorTransport.CODEX_CLOUD_GITHUB_COMMENT,
+    RemoteCodexExecutorTransport.VPS_RUNNER
+  ].sort());
+  assert.equal(registry.codex_cloud_github_comment.default, true);
+  assert.equal(registry.codex_cloud_github_comment.requestOnlyUntilRuntimeEvidence, true);
+  assert.deepEqual(registry.codex_cloud_github_comment.successEvidence, [
+    "github_branch",
+    "github_pull_request"
+  ]);
+  assert.equal(registry.codex_cloud_cli_control_runner.ownerBoundary, "user_owned_private_control_repository_or_trusted_runner");
+  assert.equal(registry.codex_cloud_cli_control_runner.usesOpenAiApiKey, false);
+  assert.equal(registry.api_key_runner.optIn, true);
+  assert.equal(registry.api_key_runner.usesOpenAiApiKey, true);
+  assert.equal(registry.vps_runner.implemented, false);
+});
 
 test("remote Codex execution request is built from gateway result and payload", () => {
   const result = createRemoteCodexExecutionRequest({
@@ -263,6 +286,68 @@ test("remote Codex API-backed execution dispatch posts workflow_dispatch to GitH
   assert.equal(calls[1].url.includes("/actions/workflows/remote-codex-executor.yml/runs"), true);
 });
 
+test("remote Codex control-runner dispatch uses workflow evidence without OPENAI_API_KEY approval", async () => {
+  const calls = [];
+  let executionId = "";
+  const dispatched = await dispatchRemoteCodexExecution({
+    payload: {
+      actorRole: ActorRole.BUTLER,
+      issueContext: { issueNumber: 173 },
+      policyInput: {
+        approvalPhrase: "GO",
+        targetConfirmed: true,
+        approvalScopeMatched: true,
+        runtimeTruth: {
+          runtimeState: {
+            activeBranch: "codex/issue-173"
+          }
+        }
+      }
+    },
+    gatewayResult: {
+      repository: "sample-org/tomio",
+      executionContinuity: {
+        codexGoal: "open_pr"
+      }
+    },
+    env: {
+      REMOTE_CODEX_EXECUTOR_TRANSPORT: RemoteCodexExecutorTransport.CODEX_CLOUD_CLI_CONTROL_RUNNER,
+      VTDD_GITHUB_ACTIONS_REPOSITORY: "sample-org/private-control-runner",
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_dispatch_token",
+      GITHUB_API_FETCH: async (url, init) => {
+        calls.push({ url, init });
+        if (String(url).includes("/dispatches")) {
+          executionId = JSON.parse(init.body).inputs.execution_id;
+          return new Response(null, { status: 204 });
+        }
+        return new Response(
+          JSON.stringify({
+            workflow_runs: [
+              {
+                id: 1731,
+                name: "codex-cloud-cli-control-runner",
+                display_title: executionId,
+                html_url: "https://github.com/sample-org/private-control-runner/actions/runs/1731",
+                status: "queued",
+                conclusion: null,
+                head_branch: "main"
+              }
+            ]
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        );
+      }
+    }
+  });
+
+  assert.equal(dispatched.ok, true);
+  assert.equal(dispatched.execution.transport, RemoteCodexExecutorTransport.CODEX_CLOUD_CLI_CONTROL_RUNNER);
+  assert.equal(dispatched.execution.controlRepository, "sample-org/private-control-runner");
+  assert.equal(dispatched.execution.targetRepository, "sample-org/tomio");
+  assert.equal(dispatched.execution.workflowRunId, 1731);
+  assert.equal(JSON.stringify(calls.map((call) => call.init)).includes("OPENAI_API_KEY"), false);
+});
+
 test("remote Codex API-backed execution requires explicit request acknowledgment", async () => {
   const dispatched = await dispatchRemoteCodexExecution({
     payload: {
@@ -295,6 +380,39 @@ test("remote Codex API-backed execution requires explicit request acknowledgment
   assert.equal(dispatched.ok, false);
   assert.equal(dispatched.status, 422);
   assert.equal(dispatched.error, "api_key_runner_approval_required");
+});
+
+test("remote Codex vps_runner is registered but blocked until a user-owned VPS adapter exists", async () => {
+  const dispatched = await dispatchRemoteCodexExecution({
+    payload: {
+      actorRole: ActorRole.BUTLER,
+      executorTransport: RemoteCodexExecutorTransport.VPS_RUNNER,
+      issueContext: { issueNumber: 173 },
+      policyInput: {
+        approvalPhrase: "GO",
+        targetConfirmed: true,
+        approvalScopeMatched: true,
+        runtimeTruth: {
+          runtimeState: {
+            activeBranch: "codex/issue-173"
+          }
+        }
+      }
+    },
+    gatewayResult: {
+      repository: "sample-org/sunaba-eye",
+      executionContinuity: {
+        codexGoal: "open_pr"
+      }
+    },
+    env: {
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_dispatch_token"
+    }
+  });
+
+  assert.equal(dispatched.ok, false);
+  assert.equal(dispatched.status, 501);
+  assert.equal(dispatched.error, "vps_runner_not_implemented");
 });
 
 test("remote Codex API-backed execution progress reads matching workflow run", async () => {

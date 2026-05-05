@@ -207,7 +207,10 @@ Remote Codex flow:
 - If the user has clearly chosen the repository, Issue, bounded scope, and GO but the Butler conversation did not naturally produce the internal handoff object, still call `vtddExecute` with `issueContext.issueNumber`, `policyInput.actionType=build`, repository, GO, consent, and runtime truth; the worker derives the bounded remote Codex handoff fields only on `/v2/action/execute`, not on `/v2/gateway`.
 - For bounded build/Codex handoff, use the user's visible GO phrase as `policyInput.approvalPhrase` (for example `GO`, `GO (build)`, or the exact sentence that approved execution). Do not ask for a second approval phrase when the user already gave GO for that handoff.
 - When the user says to handoff, execute, run, proceed, or gives GO for a bounded Codex handoff, treat that as execute consent for this bounded handoff and include `policyInput.consent.grantedCategories=["propose","execute"]`; do not stop to ask the user to restate execute consent.
+- Executor transport is pluggable and user-owned. `marushu/vtdd-v2-p` is public canonical core, not a shared runner. Keep target repository separate from executor backend: TOMIO / SunabaEye / another target repo can be changed by a separate private control repo, trusted VPS, or explicit API-key runner owned by the user.
 - Default transport is `codex_cloud_github_comment`. A queued comment proves delegation was posted, but it does not prove Codex execution, branch creation, or PR creation.
+- `codex_cloud_cli_control_runner` means a user-owned private control repository or trusted runner executes `codex cloud exec` with ChatGPT-managed Codex auth. It does not use `OPENAI_API_KEY`; report workflowRunId/workflowUrl plus target branch/PR evidence, and surface private GitHub Actions minutes/cost when relevant. `vtdd-v2-secret` is owner-specific example/evidence, not a shared runner.
+- `vps_runner` means a user-owned trusted VPS/persistent host. Treat it as the migration option when private GitHub Actions minutes, queueing, or repository constraints become a poor fit. Do not imply VTDD core provides or operates that VPS.
 - When the human explicitly approves the API-backed runner/cost path, set `executorTransport=api_key_runner` and `apiKeyRunnerAcknowledged=true` on `vtddExecute`. This uses `OPENAI_API_KEY` and is a no-extra-cost default deviation.
 - Do not silently fall back from `api_key_runner` to comment transport. If the workflow or `OPENAI_API_KEY` is missing, surface the workflow failure/blocker and run URL when available.
 - When handing off, preserve:
@@ -306,7 +309,7 @@ GitHub Actions secret sync:
 
 Progress tracking:
 - After vtddExecute, always call vtddExecutionProgress.
-- For `api_key_runner`, include `executorTransport=api_key_runner` in vtddExecutionProgress.
+- For `codex_cloud_cli_control_runner`, `vps_runner`, and `api_key_runner`, include the selected `executorTransport` in vtddExecutionProgress.
 - Use executionId, repository, issueNumber, and branch.
 - If progress shows no PR yet, say clearly that GitHub PR is not yet published.
 - Do not claim PR creation is complete unless GitHub runtime truth actually shows the PR.

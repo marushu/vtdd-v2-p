@@ -223,6 +223,8 @@
                 "type": "string",
                 "enum": [
                   "codex_cloud_github_comment",
+                  "codex_cloud_cli_control_runner",
+                  "vps_runner",
                   "api_key_runner"
                 ]
               },
@@ -420,6 +422,18 @@
               "requiresHandoff": {
                 "type": "boolean"
               },
+              "executorTransport": {
+                "type": "string",
+                "enum": [
+                  "codex_cloud_github_comment",
+                  "codex_cloud_cli_control_runner",
+                  "vps_runner",
+                  "api_key_runner"
+                ]
+              },
+              "apiKeyRunnerAcknowledged": {
+                "type": "boolean"
+              },
               "handoff": {
                 "type": "object",
                 "required": [
@@ -466,6 +480,8 @@
             "type": "string",
             "enum": [
               "codex_cloud_github_comment",
+              "codex_cloud_cli_control_runner",
+              "vps_runner",
               "api_key_runner"
             ]
           },
@@ -1213,6 +1229,8 @@
               "type": "string",
               "enum": [
                 "codex_cloud_github_comment",
+                "codex_cloud_cli_control_runner",
+                "vps_runner",
                 "api_key_runner"
               ]
             }
