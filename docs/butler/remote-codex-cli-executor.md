@@ -153,12 +153,28 @@ Butler must be able to ask:
 - is it running?
 - did it finish?
 - which workflow run corresponds to the execution request?
+- which target branch or PR proves GitHub-visible Codex work started?
 
 Progress must be reconstructable from:
 
 - GitHub Actions run state
 - VTDD execution log
 - branch / PR state in GitHub runtime truth
+
+For `codex_cloud_cli_control_runner`, the top-level progress `status` and
+`branch` describe the control workflow run for compatibility with existing
+consumers. Implementation success is reported separately under
+`targetRuntimeTruth`, which is derived from the bounded target repository and
+branch. A completed control workflow is not success by itself. If the workflow
+completes without a target branch or PR, `targetRuntimeTruth.status` must be
+`blocked` with the workflow conclusion and the missing runtime evidence rather
+than reporting implementation completion.
+
+Target runtime truth requires both the bounded target repository and target
+branch inputs, plus GitHub App read access to the target repository's PR and
+branch surfaces. If those inputs or permissions are missing, Butler must report
+the progress as blocked/unverified for implementation success rather than
+falling back to the control workflow conclusion.
 
 When Codex reaches an approval or scope boundary, the observable return path is
 GitHub state that Butler can read, not a hidden direct Codex-to-Butler channel.

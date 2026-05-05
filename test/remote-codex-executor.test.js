@@ -449,6 +449,160 @@ test("remote Codex API-backed execution progress reads matching workflow run", a
   assert.equal(progress.progress.status, RemoteCodexExecutionStatus.IN_PROGRESS);
 });
 
+test("remote Codex control-runner progress includes target PR runtime truth", async () => {
+  const calls = [];
+  const progress = await retrieveRemoteCodexExecutionProgress({
+    executionId: "remote-codex-issue157-live",
+    repository: "sample-org/vtdd-v2",
+    branch: "codex/issue-157",
+    executorTransport: RemoteCodexExecutorTransport.CODEX_CLOUD_CLI_CONTROL_RUNNER,
+    env: {
+      VTDD_GITHUB_ACTIONS_REPOSITORY: "sample-org/private-control-runner",
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_progress_token",
+      GITHUB_API_FETCH: async (url, init) => {
+        calls.push({ url, init });
+        if (String(url).includes("/runs")) {
+          return new Response(
+            JSON.stringify({
+              workflow_runs: [
+                {
+                  id: 15701,
+                  name: "codex-cloud-cli-control-runner",
+                  display_title: "remote-codex-issue157-live",
+                  html_url: "https://github.com/sample-org/private-control-runner/actions/runs/15701",
+                  status: "completed",
+                  conclusion: "success",
+                  head_branch: "main",
+                  run_started_at: "2026-05-05T01:00:00Z",
+                  updated_at: "2026-05-05T01:03:00Z"
+                }
+              ]
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        return new Response(
+          JSON.stringify([
+            {
+              number: 157,
+              html_url: "https://github.com/sample-org/vtdd-v2/pull/157",
+              state: "open",
+              title: "Implement Issue #157 handoff progress"
+            }
+          ]),
+          { status: 200, headers: { "content-type": "application/json" } }
+        );
+      }
+    }
+  });
+
+  assert.equal(progress.ok, true);
+  assert.equal(progress.progress.status, RemoteCodexExecutionStatus.COMPLETED);
+  assert.equal(progress.progress.workflowRunId, 15701);
+  assert.equal(progress.progress.branch, "main");
+  assert.equal(progress.progress.targetRuntimeTruth.status, RemoteCodexExecutionStatus.COMPLETED);
+  assert.equal(progress.progress.targetRuntimeTruth.targetRepository, "sample-org/vtdd-v2");
+  assert.equal(progress.progress.targetRuntimeTruth.targetBranch, "codex/issue-157");
+  assert.equal(progress.progress.targetRuntimeTruth.pullRequest.number, 157);
+  assert.equal(progress.progress.targetRuntimeTruth.branch, null);
+  assert.equal(progress.progress.targetRuntimeTruth.blocker, null);
+  assert.equal(calls.length, 2);
+});
+
+test("remote Codex control-runner progress blocks completed run without target branch or PR", async () => {
+  const progress = await retrieveRemoteCodexExecutionProgress({
+    executionId: "remote-codex-issue157-no-evidence",
+    repository: "sample-org/vtdd-v2",
+    branch: "codex/issue-157",
+    executorTransport: RemoteCodexExecutorTransport.CODEX_CLOUD_CLI_CONTROL_RUNNER,
+    env: {
+      VTDD_GITHUB_ACTIONS_REPOSITORY: "sample-org/private-control-runner",
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_progress_token",
+      GITHUB_API_FETCH: async (url) => {
+        if (String(url).includes("/runs")) {
+          return new Response(
+            JSON.stringify({
+              workflow_runs: [
+                {
+                  id: 15702,
+                  name: "codex-cloud-cli-control-runner",
+                  display_title: "remote-codex-issue157-no-evidence",
+                  html_url: "https://github.com/sample-org/private-control-runner/actions/runs/15702",
+                  status: "completed",
+                  conclusion: "failure",
+                  head_branch: "main"
+                }
+              ]
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        if (String(url).includes("/pulls?")) {
+          return new Response(JSON.stringify([]), {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          });
+        }
+        return new Response(JSON.stringify({ message: "Branch not found" }), {
+          status: 404,
+          headers: { "content-type": "application/json" }
+        });
+      }
+    }
+  });
+
+  assert.equal(progress.ok, true);
+  assert.equal(progress.progress.status, RemoteCodexExecutionStatus.COMPLETED);
+  assert.equal(progress.progress.branch, "main");
+  assert.equal(progress.progress.targetRuntimeTruth.status, RemoteCodexExecutionStatus.BLOCKED);
+  assert.equal(progress.progress.targetRuntimeTruth.pullRequest, null);
+  assert.equal(progress.progress.targetRuntimeTruth.branch, null);
+  assert.equal(progress.progress.targetRuntimeTruth.blocker.error, "remote_codex_workflow_failed");
+  assert.equal(progress.progress.targetRuntimeTruth.blocker.conclusion, "failure");
+});
+
+test("remote Codex control-runner progress blocks when target runtime truth inputs are missing", async () => {
+  const progress = await retrieveRemoteCodexExecutionProgress({
+    executionId: "remote-codex-issue157-missing-target",
+    executorTransport: RemoteCodexExecutorTransport.CODEX_CLOUD_CLI_CONTROL_RUNNER,
+    env: {
+      VTDD_GITHUB_ACTIONS_REPOSITORY: "sample-org/private-control-runner",
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_progress_token",
+      GITHUB_API_FETCH: async (url) => {
+        assert.equal(String(url).includes("/runs"), true);
+        return new Response(
+          JSON.stringify({
+            workflow_runs: [
+              {
+                id: 15703,
+                display_title: "remote-codex-issue157-missing-target",
+                html_url: "https://github.com/sample-org/private-control-runner/actions/runs/15703",
+                status: "completed",
+                conclusion: "success",
+                head_branch: "main"
+              }
+            ]
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        );
+      }
+    }
+  });
+
+  assert.equal(progress.ok, true);
+  assert.equal(progress.progress.status, RemoteCodexExecutionStatus.COMPLETED);
+  assert.equal(progress.progress.branch, "main");
+  assert.equal(progress.progress.targetRuntimeTruth.status, RemoteCodexExecutionStatus.BLOCKED);
+  assert.equal(
+    progress.progress.targetRuntimeTruth.blocker.error,
+    "remote_codex_target_runtime_truth_unavailable"
+  );
+  assert.deepEqual(progress.progress.targetRuntimeTruth.blocker.missing, [
+    "targetRepository",
+    "targetBranch"
+  ]);
+});
+
 test("remote Codex comment transport progress reads delegation comment and PR state", async () => {
   const calls = [];
   const progress = await retrieveRemoteCodexExecutionProgress({
