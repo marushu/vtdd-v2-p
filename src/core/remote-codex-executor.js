@@ -813,7 +813,26 @@ function buildControlRunnerTargetRuntimeTruth({
   branch
 }) {
   if (!targetRepository || !targetBranch) {
-    return null;
+    const missing = [];
+    if (!targetRepository) {
+      missing.push("targetRepository");
+    }
+    if (!targetBranch) {
+      missing.push("targetBranch");
+    }
+    return {
+      status: RemoteCodexExecutionStatus.BLOCKED,
+      targetRepository: targetRepository || null,
+      targetBranch: targetBranch || null,
+      branch: null,
+      pullRequest: null,
+      blocker: {
+        error: "remote_codex_target_runtime_truth_unavailable",
+        reason:
+          "remote Codex control-runner progress requires target repository and branch to verify GitHub-visible runtime evidence",
+        missing
+      }
+    };
   }
 
   const status = pullRequest

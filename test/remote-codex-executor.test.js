@@ -561,6 +561,48 @@ test("remote Codex control-runner progress blocks completed run without target b
   assert.equal(progress.progress.targetRuntimeTruth.blocker.conclusion, "failure");
 });
 
+test("remote Codex control-runner progress blocks when target runtime truth inputs are missing", async () => {
+  const progress = await retrieveRemoteCodexExecutionProgress({
+    executionId: "remote-codex-issue157-missing-target",
+    executorTransport: RemoteCodexExecutorTransport.CODEX_CLOUD_CLI_CONTROL_RUNNER,
+    env: {
+      VTDD_GITHUB_ACTIONS_REPOSITORY: "sample-org/private-control-runner",
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_progress_token",
+      GITHUB_API_FETCH: async (url) => {
+        assert.equal(String(url).includes("/runs"), true);
+        return new Response(
+          JSON.stringify({
+            workflow_runs: [
+              {
+                id: 15703,
+                display_title: "remote-codex-issue157-missing-target",
+                html_url: "https://github.com/sample-org/private-control-runner/actions/runs/15703",
+                status: "completed",
+                conclusion: "success",
+                head_branch: "main"
+              }
+            ]
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        );
+      }
+    }
+  });
+
+  assert.equal(progress.ok, true);
+  assert.equal(progress.progress.status, RemoteCodexExecutionStatus.COMPLETED);
+  assert.equal(progress.progress.branch, "main");
+  assert.equal(progress.progress.targetRuntimeTruth.status, RemoteCodexExecutionStatus.BLOCKED);
+  assert.equal(
+    progress.progress.targetRuntimeTruth.blocker.error,
+    "remote_codex_target_runtime_truth_unavailable"
+  );
+  assert.deepEqual(progress.progress.targetRuntimeTruth.blocker.missing, [
+    "targetRepository",
+    "targetBranch"
+  ]);
+});
+
 test("remote Codex comment transport progress reads delegation comment and PR state", async () => {
   const calls = [];
   const progress = await retrieveRemoteCodexExecutionProgress({

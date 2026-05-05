@@ -170,6 +170,12 @@ completes without a target branch or PR, `targetRuntimeTruth.status` must be
 `blocked` with the workflow conclusion and the missing runtime evidence rather
 than reporting implementation completion.
 
+Target runtime truth requires both the bounded target repository and target
+branch inputs, plus GitHub App read access to the target repository's PR and
+branch surfaces. If those inputs or permissions are missing, Butler must report
+the progress as blocked/unverified for implementation success rather than
+falling back to the control workflow conclusion.
+
 When Codex reaches an approval or scope boundary, the observable return path is
 GitHub state that Butler can read, not a hidden direct Codex-to-Butler channel.
 
