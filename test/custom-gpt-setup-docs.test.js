@@ -154,10 +154,12 @@ test("short custom gpt instructions stay under editor limits while preserving cr
   assert.equal(doc.includes("If self-parity returns `ClientResponseError`, say unverified transport failure"), true);
   assert.equal(doc.includes("judgmentModelId=vtdd-butler-core-v1"), true);
   assert.equal(doc.includes("vtddExecute handoff: actionType=build"), true);
+  assert.equal(doc.includes("PR feedback fix => revise_pr"), true);
   assert.equal(doc.includes("Executor transport is pluggable and user-owned"), true);
   assert.equal(doc.includes("codex_cloud_cli_control_runner"), true);
   assert.equal(doc.includes("vps_runner"), true);
   assert.equal(doc.includes("requiresHandoff=true"), true);
+  assert.equal(doc.includes("Do not dispatch `wait_for_review`"), true);
   assert.equal(doc.includes("issueTraceability Intent/SC/Non-goal refs"), true);
   assert.equal(
     doc.includes("judgmentTrace first four steps exactly: constitution, runtime_truth, issue_context, current_query"),
@@ -285,6 +287,11 @@ test("custom gpt openapi json parses and exposes paths as an object", () => {
       "vps_runner",
       "api_key_runner"
     ]
+  );
+  assert.deepEqual(
+    doc.components.schemas.VtddExecuteRequest.properties.continuationContext.properties
+      .codexGoal.enum,
+    ["open_pr", "revise_pr", "respond_to_review"]
   );
   assert.deepEqual(
     doc.paths["/v2/action/progress"].get.parameters.find(

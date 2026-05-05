@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   ActorRole,
+  RemoteCodexDispatchGoal,
   RemoteCodexExecutorTransport,
   RemoteCodexExecutionStatus,
   createRemoteCodexExecutionRequest,
@@ -62,6 +63,65 @@ test("remote Codex execution request is built from gateway result and payload", 
   assert.equal(result.request.branch, "codex/issue-6");
   assert.equal(result.request.baseRef, "main");
   assert.equal(result.request.codexGoal, "open_pr");
+});
+
+test("remote Codex execution request accepts explicit bounded PR revision goal override", () => {
+  const result = createRemoteCodexExecutionRequest({
+    payload: {
+      actorRole: ActorRole.BUTLER,
+      issueContext: { issueNumber: 161 },
+      continuationContext: {
+        codexGoal: RemoteCodexDispatchGoal.REVISE_PR
+      },
+      policyInput: {
+        approvalPhrase: "GO",
+        targetConfirmed: true,
+        approvalScopeMatched: true,
+        runtimeTruth: {
+          runtimeState: {
+            activeBranch: "codex/issue-161"
+          }
+        }
+      }
+    },
+    gatewayResult: {
+      repository: "sample-org/vtdd-v2",
+      executionContinuity: {
+        codexGoal: "wait_for_review"
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.request.codexGoal, RemoteCodexDispatchGoal.REVISE_PR);
+});
+
+test("remote Codex execution request rejects wait-only continuity goal before workflow dispatch", () => {
+  const result = createRemoteCodexExecutionRequest({
+    payload: {
+      actorRole: ActorRole.BUTLER,
+      issueContext: { issueNumber: 161 },
+      policyInput: {
+        approvalPhrase: "GO",
+        targetConfirmed: true,
+        approvalScopeMatched: true,
+        runtimeTruth: {
+          runtimeState: {
+            activeBranch: "codex/issue-161"
+          }
+        }
+      }
+    },
+    gatewayResult: {
+      repository: "sample-org/vtdd-v2",
+      executionContinuity: {
+        codexGoal: "wait_for_review"
+      }
+    }
+  });
+
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.issues, ["codexGoal must be open_pr, revise_pr, or respond_to_review"]);
 });
 
 test("remote Codex execution request rejects non-string handoff approval refs", () => {

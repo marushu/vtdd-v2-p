@@ -219,6 +219,14 @@
               "requiresHandoff": {
                 "type": "boolean"
               },
+              "codexGoal": {
+                "type": "string",
+                "enum": [
+                  "open_pr",
+                  "revise_pr",
+                  "respond_to_review"
+                ]
+              },
               "executorTransport": {
                 "type": "string",
                 "enum": [
@@ -421,6 +429,14 @@
               },
               "requiresHandoff": {
                 "type": "boolean"
+              },
+              "codexGoal": {
+                "type": "string",
+                "enum": [
+                  "open_pr",
+                  "revise_pr",
+                  "respond_to_review"
+                ]
               },
               "executorTransport": {
                 "type": "string",

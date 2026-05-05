@@ -66,6 +66,14 @@ export const RemoteCodexExecutionStatus = Object.freeze({
   UNKNOWN: "unknown"
 });
 
+export const RemoteCodexDispatchGoal = Object.freeze({
+  OPEN_PR: "open_pr",
+  REVISE_PR: "revise_pr",
+  RESPOND_TO_REVIEW: "respond_to_review"
+});
+
+const REMOTE_CODEX_DISPATCH_GOALS = new Set(Object.values(RemoteCodexDispatchGoal));
+
 export function getRemoteCodexExecutorTransportRegistry() {
   return REMOTE_CODEX_EXECUTOR_TRANSPORT_REGISTRY;
 }
@@ -101,7 +109,10 @@ export function createRemoteCodexExecutionRequest(input = {}) {
       normalizeText(payload?.executionTarget?.baseRef) ||
       normalizeText(runtimeState.baseRef) ||
       "main",
-    codexGoal: normalizeText(gatewayResult?.executionContinuity?.codexGoal),
+    codexGoal:
+      normalizeText(continuationContext.codexGoal) ||
+      normalizeText(payload?.executionTarget?.codexGoal) ||
+      normalizeText(gatewayResult?.executionContinuity?.codexGoal),
     approvalPhrase: normalizeText(payload?.policyInput?.approvalPhrase),
     targetConfirmed: payload?.policyInput?.targetConfirmed === true,
     approvalScopeMatched,
@@ -132,6 +143,8 @@ export function createRemoteCodexExecutionRequest(input = {}) {
   }
   if (!request.codexGoal) {
     issues.push("codexGoal is required");
+  } else if (!REMOTE_CODEX_DISPATCH_GOALS.has(request.codexGoal)) {
+    issues.push("codexGoal must be open_pr, revise_pr, or respond_to_review");
   }
   if (!request.baseRef) {
     issues.push("baseRef is required");

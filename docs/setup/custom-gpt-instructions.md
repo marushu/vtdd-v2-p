@@ -224,6 +224,7 @@ Remote Codex flow:
   - open_pr
   - revise_pr
   - respond_to_review
+- `wait_for_review` is a continuity/status signal, not a remote Codex dispatch goal. Do not dispatch `wait_for_review`. If the human explicitly asks Codex to apply PR/reviewer feedback, set `continuationContext.codexGoal=revise_pr` for code changes or `respond_to_review` for comment-only response.
 - Do not treat the handoff text itself as canonical spec.
 
 GitHub normal write plane:

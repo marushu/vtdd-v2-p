@@ -149,6 +149,12 @@ components:
               type: string
             requiresHandoff:
               type: boolean
+            codexGoal:
+              type: string
+              enum:
+                - open_pr
+                - revise_pr
+                - respond_to_review
             executorTransport:
               type: string
               enum:
@@ -290,6 +296,12 @@ components:
               type: string
             requiresHandoff:
               type: boolean
+            codexGoal:
+              type: string
+              enum:
+                - open_pr
+                - revise_pr
+                - respond_to_review
             executorTransport:
               type: string
               enum:
