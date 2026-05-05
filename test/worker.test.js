@@ -1995,6 +1995,36 @@ test("worker blocks repository nickname write when nickname target is ambiguous"
   assert.equal(body.reason, "target repository nickname is ambiguous");
 });
 
+test("worker stores repository nickname for canonical owner repo without prior alias registry entry", async () => {
+  const provider = createInMemoryMemoryProvider();
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/action/repository-nickname", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        repository: "sample-org/new-repo",
+        nickname: "新規Repo"
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      MEMORY_PROVIDER: provider,
+      GITHUB_API_FETCH: async () =>
+        new Response(JSON.stringify({ total_count: 0, repositories: [] }), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        })
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.repository, "sample-org/new-repo");
+  assert.deepEqual(body.aliasEntry.aliases, ["新規Repo"]);
+});
+
 test("worker returns GitHub issues through read plane route", async () => {
   const response = await worker.fetch(
     new Request(
