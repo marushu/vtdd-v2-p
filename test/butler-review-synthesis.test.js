@@ -55,12 +55,21 @@ test("butler review synthesis does not present approve-only Gemini review as unr
       issueComments: [
         {
           user: { login: "vtdd-codex[bot]" },
-          body: "<!-- vtdd:reviewer=gemini -->\n## VTDD Gemini Critical Review\n\n- Recommended action: `approve`"
+          body: "<!-- vtdd:reviewer=gemini -->\n## VTDD Gemini Critical Review\n\n- Recommended action: `approve`",
+          url: "https://github.com/example/repo/pull/28#issuecomment-1",
+          includesCreatedEdit: true
         }
       ]
     },
     reviewLoop: {
       reviewer: "gemini",
+      reviewerStatus: "gemini_review_available",
+      reviewerEvidence: {
+        reviewer: "gemini",
+        recommendedAction: "approve",
+        url: "https://github.com/example/repo/pull/28#issuecomment-1",
+        includesCreatedEdit: true
+      },
       reviewCommentsCount: 1,
       unresolvedReviewCommentsCount: 0,
       criticalReviewPending: false
@@ -70,7 +79,24 @@ test("butler review synthesis does not present approve-only Gemini review as unr
   });
 
   assert.equal(result.available, true);
-  assert.equal(result.headline, "PR #28 is open. Reviewer feedback exists and should be checked before human GO.");
+  assert.equal(
+    result.headline,
+    "PR #28 is open. Gemini reviewer action is approve. Approve evidence: https://github.com/example/repo/pull/28#issuecomment-1"
+  );
+  assert.deepEqual(result.reviewerSignal.reviewerEvidence, {
+    reviewer: "gemini",
+    recommendedAction: "approve",
+    url: "https://github.com/example/repo/pull/28#issuecomment-1",
+    createdAt: null,
+    updatedAt: null,
+    includesCreatedEdit: true
+  });
+  assert.equal(
+    result.humanDecisionFocus.includes(
+      "Gemini updates its existing marker comment; GitHub may show the original comment time, so use the current marker body and evidence URL."
+    ),
+    true
+  );
   assert.equal(
     result.humanDecisionFocus.includes(
       "Meaningful reviewer objections remain unresolved; do not issue merge GO + real passkey yet."

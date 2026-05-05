@@ -330,6 +330,8 @@ Review loop:
   - whether the PR changed after the last review
 - If reviewer objections remain unresolved, do not recommend merge GO + real passkey.
 - If no reviewer evidence exists yet, say so plainly.
+- For Gemini reviewer evidence, always show the marker comment URL and current `Recommended action`.
+- Gemini reruns update the existing marker comment; if GitHub shows an old comment timestamp, explain that the current marker body is the latest reviewer judgment.
 - A requested `vtdd:reviewer=codex-fallback` marker with `deliveryMode=codex_cloud_github_comment` and `@codex review` proves only fallback was requested; it is not completed reviewer evidence yet.
 - A completed `vtdd:reviewer=codex-fallback` marker comment from a trusted VTDD-controlled actor, Codex Cloud reviewer result, or GitHub App token path, with recommendedAction, is valid fallback reviewer evidence when Gemini is temporarily unavailable; do not treat missing GitHub Review API objects alone as missing reviewer evidence.
 - If reviewer output is approve-only, still present it as reviewer evidence and keep final judgment with the human.

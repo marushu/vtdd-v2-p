@@ -27,6 +27,7 @@ export function buildButlerReviewSynthesis(input = {}) {
     reviewerSignal: {
       reviewer: reviewLoop.reviewer,
       reviewerStatus: reviewLoop.reviewerStatus,
+      reviewerEvidence: reviewLoop.reviewerEvidence,
       reviewCommentsCount: reviewLoop.reviewCommentsCount,
       unresolvedReviewCommentsCount: reviewLoop.unresolvedReviewCommentsCount,
       criticalReviewPending: reviewLoop.criticalReviewPending,
@@ -46,6 +47,15 @@ export function buildButlerReviewSynthesis(input = {}) {
 
 function buildHeadline({ pullRequest, reviewLoop }) {
   const base = `PR #${pullRequest.number} is ${pullRequest.state || "open"}.`;
+  if (
+    reviewLoop.reviewerStatus === "gemini_review_available" &&
+    reviewLoop.reviewerEvidence?.recommendedAction === "approve"
+  ) {
+    const url = reviewLoop.reviewerEvidence.url
+      ? ` Approve evidence: ${reviewLoop.reviewerEvidence.url}`
+      : "";
+    return `${base} Gemini reviewer action is approve.${url}`;
+  }
   if (reviewLoop.reviewerStatus === "codex_review_blocked") {
     return `${base} Gemini is temporarily unavailable and non-manual Codex fallback is currently blocked by platform or repository configuration.`;
   }
@@ -87,6 +97,16 @@ function buildHumanDecisionFocus({ pullRequest, reviewLoop, codexGoal }) {
   }
   if (reviewLoop.reviewCommentsCount === 0 && reviewLoop.reviewerStatus !== "codex_review_requested") {
     focus.push("Reviewer evidence is not yet present on the PR.");
+  }
+  if (reviewLoop.reviewerEvidence?.recommendedAction) {
+    const action = reviewLoop.reviewerEvidence.recommendedAction;
+    const url = reviewLoop.reviewerEvidence.url ? ` ${reviewLoop.reviewerEvidence.url}` : "";
+    focus.push(`Latest ${reviewLoop.reviewer} reviewer action is ${action}.${url}`);
+  }
+  if (reviewLoop.reviewer === "gemini" && reviewLoop.reviewerEvidence?.includesCreatedEdit) {
+    focus.push(
+      "Gemini updates its existing marker comment; GitHub may show the original comment time, so use the current marker body and evidence URL."
+    );
   }
   focus.push("Human remains the final authority for revision GO and merge GO + real passkey.");
 
@@ -151,9 +171,26 @@ function normalizeReviewLoop(value) {
   return {
     reviewer: normalizeText(input.reviewer) || "gemini",
     reviewerStatus: normalizeText(input.reviewerStatus) || "review_unavailable",
+    reviewerEvidence: normalizeReviewerEvidence(input.reviewerEvidence),
     reviewCommentsCount: normalizeCount(input.reviewCommentsCount),
     unresolvedReviewCommentsCount: normalizeCount(input.unresolvedReviewCommentsCount),
     criticalReviewPending: input.criticalReviewPending === true
+  };
+}
+
+function normalizeReviewerEvidence(value) {
+  const input = value && typeof value === "object" ? value : {};
+  const recommendedAction = normalizeText(input.recommendedAction).toLowerCase();
+  if (!recommendedAction) {
+    return null;
+  }
+  return {
+    reviewer: normalizeText(input.reviewer) || null,
+    recommendedAction,
+    url: normalizeText(input.url) || null,
+    createdAt: normalizeText(input.createdAt) || null,
+    updatedAt: normalizeText(input.updatedAt) || null,
+    includesCreatedEdit: input.includesCreatedEdit === true
   };
 }
 

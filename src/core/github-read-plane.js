@@ -324,11 +324,15 @@ function normalizeIssue(item) {
 }
 
 function normalizeIssueComment(item) {
+  const createdAt = normalizeText(item?.created_at);
+  const updatedAt = normalizeText(item?.updated_at);
   return {
     id: normalizePositiveInteger(item?.id),
     body: normalizeText(item?.body),
     author: normalizeText(item?.user?.login),
-    createdAt: normalizeText(item?.created_at),
+    createdAt,
+    updatedAt,
+    includesCreatedEdit: Boolean(createdAt) && Boolean(updatedAt) && createdAt !== updatedAt,
     htmlUrl: normalizeText(item?.html_url)
   };
 }
@@ -367,12 +371,16 @@ function normalizePullReview(item) {
 }
 
 function normalizePullReviewComment(item) {
+  const createdAt = normalizeText(item?.created_at);
+  const updatedAt = normalizeText(item?.updated_at);
   return {
     id: normalizePositiveInteger(item?.id),
     path: normalizeText(item?.path),
     body: normalizeText(item?.body),
     author: normalizeText(item?.user?.login),
-    createdAt: normalizeText(item?.created_at),
+    createdAt,
+    updatedAt,
+    includesCreatedEdit: Boolean(createdAt) && Boolean(updatedAt) && createdAt !== updatedAt,
     htmlUrl: normalizeText(item?.html_url)
   };
 }

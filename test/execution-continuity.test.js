@@ -93,7 +93,9 @@ test("execution continuity treats approve-only Gemini reviewer comment as non-bl
           issueComments: [
             {
               user: { login: "vtdd-codex[bot]" },
-              body: "<!-- vtdd:reviewer=gemini -->\n## VTDD Gemini Critical Review\n\n- Recommended action: `approve`"
+              body: "<!-- vtdd:reviewer=gemini -->\n## VTDD Gemini Critical Review\n\n- Recommended action: `approve`",
+              url: "https://github.com/example/repo/pull/28#issuecomment-4317590536",
+              includesCreatedEdit: true
             }
           ]
         }
@@ -108,7 +110,13 @@ test("execution continuity treats approve-only Gemini reviewer comment as non-bl
   assert.equal(result.value.codexGoal, CodexGoal.WAIT_FOR_REVIEW);
   assert.equal(
     result.value.butlerReviewSynthesis.headline,
-    "PR #28 is open. Reviewer feedback exists and should be checked before human GO."
+    "PR #28 is open. Gemini reviewer action is approve. Approve evidence: https://github.com/example/repo/pull/28#issuecomment-4317590536"
+  );
+  assert.equal(
+    result.value.butlerReviewSynthesis.humanDecisionFocus.includes(
+      "Gemini updates its existing marker comment; GitHub may show the original comment time, so use the current marker body and evidence URL."
+    ),
+    true
   );
   assert.deepEqual(result.value.nextSuggestedActions, ["summarize_for_human", "wait_for_human_go"]);
 });

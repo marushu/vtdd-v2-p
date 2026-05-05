@@ -59,6 +59,7 @@ export function evaluateExecutionContinuity(input = {}) {
       reviewLoop: {
         reviewer: review.reviewer,
         reviewerStatus: review.reviewerStatus,
+        reviewerEvidence: review.reviewerEvidence,
         reviewCommentsCount: review.reviewCommentsCount,
         unresolvedReviewCommentsCount: review.unresolvedReviewCommentsCount,
         criticalReviewPending: review.criticalReviewPending,
@@ -75,6 +76,7 @@ export function evaluateExecutionContinuity(input = {}) {
         reviewLoop: {
           reviewer: review.reviewer,
           reviewerStatus: review.reviewerStatus,
+          reviewerEvidence: review.reviewerEvidence,
           reviewCommentsCount: review.reviewCommentsCount,
           unresolvedReviewCommentsCount: review.unresolvedReviewCommentsCount,
           criticalReviewPending: review.criticalReviewPending
@@ -164,6 +166,7 @@ function buildReviewState(pullRequest) {
   return {
     reviewer,
     reviewerStatus,
+    reviewerEvidence: parsedGeminiSignals.latestEvidence,
     reviewCommentsCount,
     unresolvedReviewCommentsCount,
     criticalReviewPending,
@@ -180,7 +183,8 @@ function collectGeminiReviewerSignals(pullRequest) {
 
   return {
     totalCount: parsed.length,
-    blockingCount: parsed.filter((signal) => signal.blocking).length
+    blockingCount: parsed.filter((signal) => signal.blocking).length,
+    latestEvidence: parsed.at(-1) ?? null
   };
 }
 

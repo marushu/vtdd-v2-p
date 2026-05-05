@@ -110,6 +110,11 @@ already present.
 The goal is to keep one current critical-review surface on the PR rather than
 creating uncontrolled repeated comments.
 
+Butler summaries must present the current `Recommended action` and the Gemini
+marker comment URL. If GitHub displays the original comment timestamp, Butler
+must explain that the marker comment was updated and the current body is the
+latest reviewer evidence.
+
 When Gemini becomes available again after a fallback request, VTDD should
 return to Gemini-first behavior and clear the stale Codex fallback request
 state.
