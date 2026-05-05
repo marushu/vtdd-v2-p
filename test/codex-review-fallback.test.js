@@ -3,8 +3,10 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import {
   CODEX_REVIEW_FALLBACK_MARKER,
+  CodexReviewFallbackBlocker,
   findExistingCodexReviewFallbackComment,
   formatCodexReviewFallbackComment,
+  parseCodexConnectorSetupComment,
   parseCodexReviewFallbackComment
 } from "../src/core/index.js";
 
@@ -91,6 +93,32 @@ test("parseCodexReviewFallbackComment exposes blocked fallback reviewer state", 
     blocker: "openai_api_key_not_configured",
     body
   });
+});
+
+test("parseCodexConnectorSetupComment exposes connector setup blocker", () => {
+  const body = "To use Codex here, [create a Codex account and connect to github](https://chatgpt.com/codex/cloud/settings/connectors).";
+  const parsed = parseCodexConnectorSetupComment({
+    author: { login: "chatgpt-codex-connector" },
+    body
+  });
+
+  assert.deepEqual(parsed, {
+    reviewer: "codex",
+    status: "blocked",
+    blocking: true,
+    recommendedAction: null,
+    blocker: CodexReviewFallbackBlocker.CODEX_CONNECTOR_NOT_CONFIGURED,
+    body
+  });
+});
+
+test("parseCodexConnectorSetupComment ignores untrusted setup-like comments", () => {
+  const parsed = parseCodexConnectorSetupComment({
+    author: { login: "random-user" },
+    body: "To use Codex here, create a Codex account and connect to github."
+  });
+
+  assert.equal(parsed, null);
 });
 
 test("formatCodexReviewFallbackComment renders raw blocked failure details", () => {

@@ -30,6 +30,10 @@ The reviewer is a critical evaluation role.
   `vtdd:reviewer=codex-fallback` marker with a recommended action is returned.
 - A bot-authored `@codex review` request must not be assumed equivalent to
   delivered reviewer evidence.
+- A `chatgpt-codex-connector` setup response such as `To use Codex here...`
+  means the Codex Cloud GitHub connector is not configured for that request and
+  must be surfaced as `codex_connector_not_configured`, not as pending review
+  progress or approve-equivalent evidence.
 - API-key-backed Codex workflow execution remains an explicit opt-in
   cost/account path, not the default fallback.
 - If the selected fallback path cannot start, VTDD must surface that blocker

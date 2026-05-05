@@ -1,5 +1,8 @@
 import { buildButlerReviewSynthesis } from "./butler-review-synthesis.js";
-import { parseCodexReviewFallbackComment } from "./codex-review-fallback.js";
+import {
+  parseCodexConnectorSetupComment,
+  parseCodexReviewFallbackComment
+} from "./codex-review-fallback.js";
 import { parseGeminiReviewComment } from "./gemini-pr-review.js";
 import { ActorRole, TaskMode } from "./types.js";
 
@@ -184,7 +187,9 @@ function collectGeminiReviewerSignals(pullRequest) {
 function collectCodexFallbackSignals(pullRequest) {
   const comments = [...(Array.isArray(pullRequest.issueComments) ? pullRequest.issueComments : [])];
   const parsed = comments.map(parseCodexReviewFallbackComment).filter(Boolean);
-  const latest = parsed.at(-1) ?? null;
+  const connectorBlockers = comments.map(parseCodexConnectorSetupComment).filter(Boolean);
+  const latestConnectorBlocker = connectorBlockers.at(-1) ?? null;
+  const latest = latestConnectorBlocker ?? parsed.at(-1) ?? null;
 
   return {
     requested: latest?.status === "requested",
