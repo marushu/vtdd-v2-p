@@ -564,13 +564,19 @@ async function handleRetrieveCrossIssueRequest(url, env) {
   const issueNumber = normalizeIssue(url.searchParams.get("issueNumber"));
   const issueTitle = normalizeText(url.searchParams.get("issueTitle"));
   const issueUrl = normalizeText(url.searchParams.get("issueUrl"));
-  const queryText = normalizeText(url.searchParams.get("q"));
+  const queryText =
+    normalizeText(url.searchParams.get("text")) || normalizeText(url.searchParams.get("q"));
+  const semanticEnabled = parseBooleanQueryParam(url.searchParams.get("semantic"));
 
   const retrieved = await retrieveCrossIssueMemoryIndex(provider, {
     phase,
     limit,
     relatedIssue,
     text: queryText,
+    semanticRetrieval: {
+      enabled: semanticEnabled,
+      mode: semanticEnabled ? "assistive" : "disabled"
+    },
     issueContext:
       issueNumber || issueTitle || issueUrl
         ? {
@@ -593,6 +599,7 @@ async function handleRetrieveCrossIssueRequest(url, env) {
     retrievalPlan: retrieved.retrievalPlan,
     relatedIssue: retrieved.relatedIssue,
     queryText: retrieved.queryText,
+    semanticRetrieval: retrieved.semanticRetrieval,
     primaryReference: retrieved.primaryReference,
     referencesBySource: retrieved.referencesBySource,
     orderedReferences: retrieved.orderedReferences
@@ -2150,6 +2157,7 @@ function buildCrossRetrievalInput({ payload, responseBody, crossRetrievalRequest
     limit: crossRetrievalRequest.limit,
     relatedIssue,
     text: crossRetrievalRequest.text,
+    semanticRetrieval: crossRetrievalRequest.semanticRetrieval,
     displayMode: crossRetrievalRequest.displayMode,
     issueContext:
       issueNumber || issueTitle || issueUrl
@@ -2191,8 +2199,23 @@ function normalizeCrossRetrievalRequest(request) {
     limit: normalizeLimit(value.limit, 5),
     displayMode: normalize(value.displayMode) === "expanded" ? "expanded" : "short",
     relatedIssue: normalizeIssue(value.relatedIssue),
-    text: normalizeText(value.text) || null
+    text: normalizeText(value.text) || normalizeText(value.queryHint) || null,
+    semanticRetrieval: normalizeSemanticRetrievalRequest(value.semanticRetrieval)
   };
+}
+
+function normalizeSemanticRetrievalRequest(value) {
+  const input = value && typeof value === "object" ? value : {};
+  const enabled = input.enabled === true;
+  return {
+    enabled,
+    mode: enabled ? "assistive" : "disabled"
+  };
+}
+
+function parseBooleanQueryParam(value) {
+  const normalized = normalize(value);
+  return normalized === "true" || normalized === "1" || normalized === "yes";
 }
 
 function resolveRuntimeAutonomyMode(env) {

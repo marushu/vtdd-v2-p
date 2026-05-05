@@ -65,8 +65,12 @@ export function buildConversationAssist(input) {
       limit: crossRetrievalDisplayMode === "expanded" ? 12 : 5,
       displayMode: crossRetrievalDisplayMode,
       relatedIssue: chosenIssue,
-      text: null,
-      queryHint: userText || null
+      text: userText || null,
+      queryHint: userText || null,
+      semanticRetrieval: {
+        enabled: Boolean(userText),
+        mode: "assistive"
+      }
     };
 
     if (issueMentions.length > 1) {
