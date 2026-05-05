@@ -8,7 +8,9 @@ import {
   ConsentCategory,
   CredentialTier,
   TaskMode,
-  executeGitHubHighRiskPlane
+  executeGitHubHighRiskPlane,
+  getGitHubAppOperation,
+  GitHubAppOperationTier
 } from "../src/core/index.js";
 
 const aliasRegistry = [
@@ -32,6 +34,30 @@ const mergeGrant = {
     phase: "execution"
   }
 };
+
+test("github app operation registry defines issue close authority scope and runtime truth", () => {
+  const issueClose = getGitHubAppOperation("issue_close");
+  const pullMerge = getGitHubAppOperation("pull_merge");
+
+  assert.equal(issueClose.tier, GitHubAppOperationTier.PASSKEY_AUTHORITY);
+  assert.deepEqual(issueClose.requiredPayloadFields, ["repository", "issueNumber", "pullNumber"]);
+  assert.deepEqual(issueClose.authorityScopeIdentityFields, [
+    "repository",
+    "issueNumber",
+    "pullNumber",
+    "phase"
+  ]);
+  assert.equal(issueClose.requiredRuntimeTruthChecks.includes("pull_request_merged_at_present"), true);
+  assert.deepEqual(issueClose.passkey.operatorUrlRequirements, [
+    "repositoryInput",
+    "phase",
+    "issueNumber",
+    "pullNumber",
+    "actionType",
+    "highRiskKind"
+  ]);
+  assert.equal(pullMerge.tier, GitHubAppOperationTier.PASSKEY_AUTHORITY);
+});
 
 test("merge now requires GO + passkey approval level in core policy", () => {
   const denied = evaluateExecutionPolicy({

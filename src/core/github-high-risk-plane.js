@@ -1,5 +1,9 @@
 import { evaluateApprovalGrant } from "./passkey-approval.js";
 import { resolveGitHubAppInstallationToken } from "./github-app-repository-index.js";
+import {
+  getGitHubAppOperation,
+  GitHubAppOperationTier
+} from "./github-app-operation-registry.js";
 
 const GITHUB_API_BASE_URL = "https://api.github.com";
 const GITHUB_API_VERSION = "2022-11-28";
@@ -73,8 +77,12 @@ export async function executeGitHubHighRiskPlane(input = {}) {
 
 function validateGitHubHighRiskRequest(input) {
   const issues = [];
+  const operationConfig = getGitHubAppOperation(input.operation);
 
-  if (!Object.values(GitHubHighRiskOperation).includes(input.operation)) {
+  if (
+    !Object.values(GitHubHighRiskOperation).includes(input.operation) ||
+    operationConfig?.tier !== GitHubAppOperationTier.PASSKEY_AUTHORITY
+  ) {
     issues.push("operation is unsupported");
   }
   if (!input.repository) {

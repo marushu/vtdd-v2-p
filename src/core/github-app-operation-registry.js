@@ -56,37 +56,57 @@ export const GitHubAppOperationRegistry = Object.freeze({
   pull_merge: {
     operation: "pull_merge",
     tier: GitHubAppOperationTier.PASSKEY_AUTHORITY,
-    requiredPayloadFields: ["repository", "pullNumber", "mergeMethod"],
+    requiredPayloadFields: ["repository", "pullNumber"],
+    authorityScopeIdentityFields: ["repository", "issueNumber", "pullNumber", "phase"],
+    requiredRuntimeTruthChecks: ["pull_request_merge_result"],
+    executorFunction: "executeGitHubHighRiskPlane",
+    responseSummaryShape: ["operation", "repository", "pullNumber", "merged", "sha", "message", "htmlUrl"],
     passkey: {
       actionType: "merge",
-      highRiskKind: "pull_merge"
+      highRiskKind: "pull_merge",
+      operatorUrlRequirements: ["repositoryInput", "phase", "issueNumber", "pullNumber", "actionType", "highRiskKind"]
     }
   },
   issue_close: {
     operation: "issue_close",
     tier: GitHubAppOperationTier.PASSKEY_AUTHORITY,
     requiredPayloadFields: ["repository", "issueNumber", "pullNumber"],
+    authorityScopeIdentityFields: ["repository", "issueNumber", "pullNumber", "phase"],
+    requiredRuntimeTruthChecks: ["pull_request_merged_at_present", "issue_close_result"],
+    executorFunction: "executeGitHubHighRiskPlane",
+    responseSummaryShape: ["operation", "repository", "issueNumber", "pullNumber", "issueState", "htmlUrl"],
     passkey: {
       actionType: "issue_close",
-      highRiskKind: "issue_close"
+      highRiskKind: "issue_close",
+      operatorUrlRequirements: ["repositoryInput", "phase", "issueNumber", "pullNumber", "actionType", "highRiskKind"]
     }
   },
   deploy_production: {
     operation: "deploy_production",
     tier: GitHubAppOperationTier.PASSKEY_AUTHORITY,
     requiredPayloadFields: ["repository"],
+    authorityScopeIdentityFields: ["repository", "issueNumber", "phase"],
+    requiredRuntimeTruthChecks: ["deployment_dispatch_result", "runtime_truth_reload"],
+    executorFunction: "executeDeployProductionPlane",
+    responseSummaryShape: ["operation", "repository", "runUrl", "status"],
     passkey: {
       actionType: "deploy_production",
-      highRiskKind: "deploy_production"
+      highRiskKind: "deploy_production",
+      operatorUrlRequirements: ["repositoryInput", "phase", "actionType", "highRiskKind"]
     }
   },
   github_actions_secret_sync: {
     operation: "github_actions_secret_sync",
     tier: GitHubAppOperationTier.PASSKEY_AUTHORITY,
     requiredPayloadFields: ["repository", "secretName"],
+    authorityScopeIdentityFields: ["repository", "issueNumber", "phase", "secretName"],
+    requiredRuntimeTruthChecks: ["github_actions_secret_update_result"],
+    executorFunction: "executeGitHubActionsSecretSync",
+    responseSummaryShape: ["operation", "repository", "secretName", "updated"],
     passkey: {
       actionType: "destructive",
-      highRiskKind: "github_actions_secret_sync"
+      highRiskKind: "github_actions_secret_sync",
+      operatorUrlRequirements: ["repositoryInput", "phase", "actionType", "highRiskKind"]
     }
   }
 });
