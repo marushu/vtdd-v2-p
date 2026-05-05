@@ -364,11 +364,20 @@ export async function retrieveRemoteCodexExecutionProgress(input = {}) {
     executionId,
     token: token.value,
     env: input?.env,
-    transport: transport.value
+    transport: transport.value,
+    repository: normalizeText(input?.repository),
+    branch: normalizeText(input?.branch)
   });
 }
 
-async function retrieveControlRepositoryWorkflowProgress({ executionId, token, env, transport }) {
+async function retrieveControlRepositoryWorkflowProgress({
+  executionId,
+  token,
+  env,
+  transport,
+  repository,
+  branch
+}) {
   const controlRepository = resolveControlRepository(env);
   if (!controlRepository) {
     return {
@@ -428,6 +437,45 @@ async function retrieveControlRepositoryWorkflowProgress({ executionId, token, e
     };
   }
 
+  const targetRepository = normalizeText(repository);
+  const targetBranch = normalizeText(branch);
+  const pullRequest =
+    targetRepository && targetBranch
+      ? await findPullRequestForBranch({
+          repository: targetRepository,
+          branch: targetBranch,
+          token,
+          env
+        })
+      : { ok: true, pullRequest: null };
+  if (!pullRequest.ok) {
+    return pullRequest;
+  }
+
+  const branchState =
+    targetRepository && targetBranch && !pullRequest.pullRequest
+      ? await findBranch({
+          repository: targetRepository,
+          branch: targetBranch,
+          token,
+          env
+        })
+      : { ok: true, branch: null };
+  if (!branchState.ok) {
+    return branchState;
+  }
+
+  const runStatus = normalizeRunStatus(run.status);
+  const conclusion = normalizeText(run.conclusion) || null;
+  const blocker = buildControlRunnerRuntimeTruthBlocker({
+    runStatus,
+    conclusion,
+    targetRepository,
+    targetBranch,
+    pullRequest: pullRequest.pullRequest,
+    branch: branchState.branch
+  });
+
   return {
     ok: true,
     progress: {
@@ -437,9 +485,20 @@ async function retrieveControlRepositoryWorkflowProgress({ executionId, token, e
       workflowFile,
       workflowRunId: normalizePositiveInteger(run.id),
       workflowUrl: normalizeText(run.html_url) || null,
-      status: normalizeRunStatus(run.status),
-      conclusion: normalizeText(run.conclusion) || null,
-      branch: normalizeText(run.head_branch) || null,
+      status: pullRequest.pullRequest
+        ? RemoteCodexExecutionStatus.COMPLETED
+        : branchState.branch
+          ? RemoteCodexExecutionStatus.IN_PROGRESS
+          : blocker
+            ? RemoteCodexExecutionStatus.BLOCKED
+            : runStatus,
+      conclusion,
+      controlBranch: normalizeText(run.head_branch) || null,
+      targetRepository: targetRepository || null,
+      targetBranch,
+      branch: branchState.branch,
+      pullRequest: pullRequest.pullRequest,
+      blocker,
       displayTitle: normalizeText(run.display_title) || null,
       startedAt: normalizeText(run.run_started_at) || null,
       updatedAt: normalizeText(run.updated_at) || null
@@ -752,6 +811,42 @@ function buildCodexCloudPickupBlocker({ delegationComment, env }) {
     commentUrl: normalizeText(delegationComment?.html_url) || null,
     graceSeconds,
     ageSeconds
+  };
+}
+
+function buildControlRunnerRuntimeTruthBlocker({
+  runStatus,
+  conclusion,
+  targetRepository,
+  targetBranch,
+  pullRequest,
+  branch
+}) {
+  if (!targetRepository || !targetBranch || pullRequest || branch) {
+    return null;
+  }
+
+  if (runStatus !== RemoteCodexExecutionStatus.COMPLETED) {
+    return null;
+  }
+
+  if (conclusion && conclusion !== "success") {
+    return {
+      error: "remote_codex_workflow_failed",
+      reason:
+        "remote Codex control-runner workflow completed without GitHub-visible branch or PR evidence",
+      conclusion,
+      targetRepository,
+      targetBranch
+    };
+  }
+
+  return {
+    error: "remote_codex_runtime_evidence_missing",
+    reason:
+      "remote Codex control-runner workflow completed but no target branch or PR was observed",
+    targetRepository,
+    targetBranch
   };
 }
 
