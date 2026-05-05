@@ -844,6 +844,7 @@ async function handleGitHubHighRiskPlaneRequest(request, env) {
       highRiskKind,
       repositoryInput: repository,
       issueNumber: scopedIssueNumber,
+      pullNumber: payload.pullNumber,
       issueContext
     },
     policyInput: {
@@ -862,6 +863,7 @@ async function handleGitHubHighRiskPlaneRequest(request, env) {
       highRiskKind,
       repositoryInput: repository,
       issueNumber: scopedIssueNumber,
+      pullNumber: payload.pullNumber,
       issueContext
     },
     policyInput: {
@@ -1735,6 +1737,7 @@ function buildApprovalScopeSnapshot({ payload, policyInput }) {
     highRiskKind: payload?.highRiskKind ?? policyInput?.highRiskKind,
     repositoryInput: policyInput?.repositoryInput ?? payload?.repositoryInput,
     issueNumber: issueContext.issueNumber ?? payload?.issueNumber,
+    pullNumber: payload?.pullNumber,
     relatedIssue: traceability.relatedIssue ?? issueContext.issueNumber ?? payload?.relatedIssue,
     phase: payload?.phase
   });
@@ -1745,7 +1748,7 @@ function mapGitHubHighRiskOperationToActionType(operation) {
     return "merge";
   }
   if (operation === GitHubHighRiskOperation.ISSUE_CLOSE) {
-    return "destructive";
+    return "issue_close";
   }
   return normalizeText(operation);
 }

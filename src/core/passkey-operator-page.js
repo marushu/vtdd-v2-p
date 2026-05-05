@@ -474,6 +474,7 @@ export function renderPasskeyOperatorPage(input = {}) {
               highRiskKind: document.getElementById("risk-kind-input").value,
               repositoryInput: document.getElementById("repo-input").value,
               issueNumber: Number(document.getElementById("issue-input").value || 0) || null,
+              pullNumber: Number(document.getElementById("pull-number-input").value || 0) || null,
               issueContext: {
                 issueNumber: Number(document.getElementById("issue-input").value || 0) || null
               },
@@ -747,6 +748,9 @@ export function resolvePasskeyOperatorMode(input = {}) {
     return "deploy";
   }
   if (actionType === "merge" || highRiskKind === "pull_merge") {
+    return "merge";
+  }
+  if (actionType === "issue_close" || highRiskKind === "issue_close") {
     return "merge";
   }
   if (highRiskKind === "github_actions_secret_sync") {
