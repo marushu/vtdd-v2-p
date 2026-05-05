@@ -56,7 +56,7 @@ export const GitHubAppOperationRegistry = Object.freeze({
   pull_merge: {
     operation: "pull_merge",
     tier: GitHubAppOperationTier.PASSKEY_AUTHORITY,
-    requiredPayloadFields: ["repository", "pullNumber"],
+    requiredPayloadFields: ["repository", "pullNumber", "mergeMethod"],
     authorityScopeIdentityFields: ["repository", "issueNumber", "pullNumber", "phase"],
     requiredRuntimeTruthChecks: ["pull_request_merge_result"],
     executorFunction: "executeGitHubHighRiskPlane",
@@ -70,15 +70,16 @@ export const GitHubAppOperationRegistry = Object.freeze({
   issue_close: {
     operation: "issue_close",
     tier: GitHubAppOperationTier.PASSKEY_AUTHORITY,
-    requiredPayloadFields: ["repository", "issueNumber", "pullNumber"],
-    authorityScopeIdentityFields: ["repository", "issueNumber", "pullNumber", "phase"],
+    requiredPayloadFields: ["repository", "issueNumber"],
+    requiredRuntimeEvidenceFields: ["pullNumber"],
+    authorityScopeIdentityFields: ["repository", "issueNumber", "phase"],
     requiredRuntimeTruthChecks: ["pull_request_merged_at_present", "issue_close_result"],
     executorFunction: "executeGitHubHighRiskPlane",
     responseSummaryShape: ["operation", "repository", "issueNumber", "pullNumber", "issueState", "htmlUrl"],
     passkey: {
       actionType: "issue_close",
       highRiskKind: "issue_close",
-      operatorUrlRequirements: ["repositoryInput", "phase", "issueNumber", "pullNumber", "actionType", "highRiskKind"]
+      operatorUrlRequirements: ["repositoryInput", "phase", "issueNumber", "actionType", "highRiskKind"]
     }
   },
   deploy_production: {

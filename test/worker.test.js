@@ -2736,7 +2736,6 @@ test("worker executes GitHub merge on the high-risk authority plane with approva
         repositoryInput: "sample-org/vtdd-v2-p",
         issueNumber: "55",
         pullNumber: "21",
-        relatedIssue: "55",
         phase: "execution"
       }
     },
@@ -2757,6 +2756,7 @@ test("worker executes GitHub merge on the high-risk authority plane with approva
         operation: "pull_merge",
         repository: "sample-org/vtdd-v2-p",
         pullNumber: 21,
+        mergeMethod: "squash",
         issueContext: {
           issueNumber: 55
         },
@@ -2806,7 +2806,6 @@ test("worker allows same-origin passkey operator to dispatch GitHub merge author
         repositoryInput: "sample-org/vtdd-v2-p",
         issueNumber: "55",
         pullNumber: "21",
-        relatedIssue: "55",
         phase: "execution"
       }
     },
@@ -2828,6 +2827,7 @@ test("worker allows same-origin passkey operator to dispatch GitHub merge author
         operation: "pull_merge",
         repository: "sample-org/vtdd-v2-p",
         pullNumber: 21,
+        mergeMethod: "squash",
         issueContext: {
           issueNumber: 55
         },
@@ -2874,6 +2874,7 @@ test("worker rejects fabricated browser approval grants on the GitHub authority 
         operation: "pull_merge",
         repository: "sample-org/vtdd-v2-p",
         pullNumber: 21,
+        mergeMethod: "squash",
         issueContext: {
           issueNumber: 55
         },
@@ -2975,8 +2976,6 @@ test("worker blocks bounded issue close on the high-risk authority plane when me
         highRiskKind: "issue_close",
         repositoryInput: "sample-org/vtdd-v2-p",
         issueNumber: "55",
-        pullNumber: "21",
-        relatedIssue: "55",
         phase: "execution"
       }
     },

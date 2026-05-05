@@ -31,6 +31,7 @@ import {
   resolveGatewayAliasRegistryFromGitHubApp,
   resolveRepositoryTarget,
   GitHubHighRiskOperation,
+  getGitHubAppOperation,
   mergeAliasRegistries,
   retrieveStoredAliasRegistry,
   retrieveGitHubReadPlane,
@@ -1753,14 +1754,28 @@ async function resolveApprovalGrant({ payload, policyInput, env }) {
 function buildApprovalScopeSnapshot({ payload, policyInput }) {
   const issueContext = normalizeObject(payload?.issueContext);
   const traceability = normalizeObject(policyInput?.issueTraceability);
+  const operationConfig = getGitHubAppOperation(payload?.highRiskKind ?? policyInput?.highRiskKind);
+  const identityFields = new Set(operationConfig?.authorityScopeIdentityFields ?? [
+    "repository",
+    "issueNumber",
+    "pullNumber",
+    "relatedIssue",
+    "phase"
+  ]);
   return normalizeScopeSnapshot({
     actionType: policyInput?.actionType,
     highRiskKind: payload?.highRiskKind ?? policyInput?.highRiskKind,
-    repositoryInput: policyInput?.repositoryInput ?? payload?.repositoryInput,
-    issueNumber: issueContext.issueNumber ?? payload?.issueNumber,
-    pullNumber: payload?.pullNumber,
-    relatedIssue: traceability.relatedIssue ?? issueContext.issueNumber ?? payload?.relatedIssue,
-    phase: payload?.phase
+    repositoryInput: identityFields.has("repository")
+      ? policyInput?.repositoryInput ?? payload?.repositoryInput
+      : undefined,
+    issueNumber: identityFields.has("issueNumber")
+      ? issueContext.issueNumber ?? payload?.issueNumber
+      : undefined,
+    pullNumber: identityFields.has("pullNumber") ? payload?.pullNumber : undefined,
+    relatedIssue: identityFields.has("relatedIssue")
+      ? traceability.relatedIssue ?? issueContext.issueNumber ?? payload?.relatedIssue
+      : undefined,
+    phase: identityFields.has("phase") ? payload?.phase : undefined
   });
 }
 
