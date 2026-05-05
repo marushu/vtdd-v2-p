@@ -56,6 +56,26 @@ test("passkey operator page pre-fills PR merge fields from URL input", () => {
   assert.equal(html.includes('id="risk-kind-input" value="pull_merge"'), true);
   assert.equal(html.includes('id="merge-method-input" value="squash"'), true);
   assert.equal(html.includes('operation: "pull_merge"'), true);
+  assert.equal(html.includes('pullNumber: Number(document.getElementById("pull-number-input").value || 0) || null'), true);
+});
+
+test("passkey operator page can scope issue close approval to merged pull proof", () => {
+  const html = renderPasskeyOperatorPage({
+    repositoryInput: "marushu/vtdd-v2-p",
+    issueNumber: 157,
+    pullNumber: 176,
+    phase: "execution",
+    actionType: "issue_close",
+    highRiskKind: "issue_close"
+  });
+
+  assert.equal(html.includes('<section data-operator-section="approval">'), true);
+  assert.equal(html.includes('<section data-operator-section="pr-merge">'), true);
+  assert.equal(html.includes('id="issue-input" value="157"'), true);
+  assert.equal(html.includes('id="pull-number-input" value="176"'), true);
+  assert.equal(html.includes('id="action-type-input" value="issue_close"'), true);
+  assert.equal(html.includes('id="risk-kind-input" value="issue_close"'), true);
+  assert.equal(html.includes('pullNumber: Number(document.getElementById("pull-number-input").value || 0) || null'), true);
 });
 
 test("passkey operator page focuses deploy mode on deploy approval and dispatch sections", () => {

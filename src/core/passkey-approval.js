@@ -419,6 +419,7 @@ export function normalizeScopeSnapshot(scope = {}) {
     highRiskKind: normalizeText(scope.highRiskKind),
     repositoryInput: normalizeText(scope.repositoryInput),
     issueNumber: normalizeText(scope.issueNumber),
+    pullNumber: normalizeText(scope.pullNumber),
     relatedIssue: normalizeText(scope.relatedIssue),
     phase: normalizeText(scope.phase)
   };

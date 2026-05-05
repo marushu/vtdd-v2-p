@@ -136,19 +136,21 @@ test("github high-risk plane closes bounded issue only after merged pull verific
       verified: true,
       expiresAt: "2099-01-01T00:00:00.000Z",
       scope: {
-        actionType: "destructive",
+        actionType: "issue_close",
         highRiskKind: "issue_close",
         repositoryInput: "sample-org/vtdd-v2-p",
         issueNumber: "55",
+        pullNumber: "21",
         relatedIssue: "55",
         phase: "execution"
       }
     },
     approvalScope: {
-      actionType: "destructive",
+      actionType: "issue_close",
       highRiskKind: "issue_close",
       repositoryInput: "sample-org/vtdd-v2-p",
       issueNumber: "55",
+      pullNumber: "21",
       relatedIssue: "55",
       phase: "execution"
     },
@@ -211,19 +213,21 @@ test("github high-risk plane rejects missing approval grant or unmerged bounded 
       verified: true,
       expiresAt: "2099-01-01T00:00:00.000Z",
       scope: {
-        actionType: "destructive",
+        actionType: "issue_close",
         highRiskKind: "issue_close",
         repositoryInput: "sample-org/vtdd-v2-p",
         issueNumber: "55",
+        pullNumber: "21",
         relatedIssue: "55",
         phase: "execution"
       }
     },
     approvalScope: {
-      actionType: "destructive",
+      actionType: "issue_close",
       highRiskKind: "issue_close",
       repositoryInput: "sample-org/vtdd-v2-p",
       issueNumber: "55",
+      pullNumber: "21",
       relatedIssue: "55",
       phase: "execution"
     },

@@ -65,9 +65,9 @@ export const GitHubAppOperationRegistry = Object.freeze({
   issue_close: {
     operation: "issue_close",
     tier: GitHubAppOperationTier.PASSKEY_AUTHORITY,
-    requiredPayloadFields: ["repository", "issueNumber", "mergedPullNumber"],
+    requiredPayloadFields: ["repository", "issueNumber", "pullNumber"],
     passkey: {
-      actionType: "merge",
+      actionType: "issue_close",
       highRiskKind: "issue_close"
     }
   },

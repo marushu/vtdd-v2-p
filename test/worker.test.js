@@ -2735,6 +2735,7 @@ test("worker executes GitHub merge on the high-risk authority plane with approva
         highRiskKind: "pull_merge",
         repositoryInput: "sample-org/vtdd-v2-p",
         issueNumber: "55",
+        pullNumber: "21",
         relatedIssue: "55",
         phase: "execution"
       }
@@ -2804,6 +2805,7 @@ test("worker allows same-origin passkey operator to dispatch GitHub merge author
         highRiskKind: "pull_merge",
         repositoryInput: "sample-org/vtdd-v2-p",
         issueNumber: "55",
+        pullNumber: "21",
         relatedIssue: "55",
         phase: "execution"
       }
@@ -2924,10 +2926,11 @@ test("worker blocks bounded issue close on the high-risk authority plane when me
       approvalId: "approval-close-123",
       expiresAt: "2099-01-01T00:00:00.000Z",
       scope: {
-        actionType: "destructive",
+        actionType: "issue_close",
         highRiskKind: "issue_close",
         repositoryInput: "sample-org/vtdd-v2-p",
         issueNumber: "55",
+        pullNumber: "21",
         relatedIssue: "55",
         phase: "execution"
       }
