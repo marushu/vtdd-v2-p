@@ -845,6 +845,114 @@ test("worker dispatches API-backed remote Codex execution when explicitly select
   assert.equal(calls.length, 3);
 });
 
+test("worker dispatches VPS runner execution by posting a bounded queue comment", async () => {
+  const calls = [];
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/action/execute", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        phase: "execution",
+        actorRole: ActorRole.BUTLER,
+        executorTransport: "vps_runner",
+        surfaceContext: {
+          surface: "custom_gpt",
+          judgmentModelId: "vtdd-butler-core-v1"
+        },
+        judgmentTrace: validButlerJudgmentTrace,
+        issueContext: {
+          issueNumber: 157
+        },
+        continuationContext: {
+          requiresHandoff: true,
+          codexGoal: "open_pr",
+          handoff: {
+            issueTraceable: true,
+            approvalScopeMatched: true,
+            relatedIssue: 157,
+            summary: "Issue #157 bounded VPS runner handoff"
+          }
+        },
+        policyInput: {
+          actionType: ActionType.BUILD,
+          mode: TaskMode.EXECUTION,
+          repositoryInput: "vtdd",
+          aliasRegistry,
+          targetConfirmed: true,
+          runtimeTruth: {
+            runtimeAvailable: true,
+            runtimeState: {
+              activeBranch: "codex/issue-157-vps-worker-dispatch"
+            }
+          },
+          consent: { grantedCategories: [ConsentCategory.PROPOSE, ConsentCategory.EXECUTE] },
+          approvalPhrase: "GO",
+          issueTraceable: true,
+          issueTraceability: {
+            relatedIssue: 157,
+            intentRefs: ["#157 Intent"],
+            successCriteriaRefs: ["#157 Success Criteria"],
+            nonGoalRefs: ["#157 Non-goals"]
+          },
+          go: true,
+          passkey: false
+        }
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_dispatch_token",
+      GITHUB_API_FETCH: async (url, init) => {
+        calls.push({ url, init });
+        if (String(url).includes("/installation/repositories")) {
+          return new Response(
+            JSON.stringify({
+              total_count: 1,
+              repositories: [
+                {
+                  full_name: "sample-org/vtdd-v2",
+                  name: "vtdd-v2",
+                  private: true
+                }
+              ]
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        if (String(url).includes("/issues/157/comments")) {
+          return new Response(
+            JSON.stringify({
+              id: 15701,
+              html_url: "https://github.com/sample-org/vtdd-v2/issues/157#issuecomment-15701"
+            }),
+            { status: 201, headers: { "content-type": "application/json" } }
+          );
+        }
+        throw new Error(`unexpected url ${url}`);
+      }
+    }
+  );
+
+  assert.equal(response.status, 202);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.execution.transport, "vps_runner");
+  assert.equal(body.execution.status, "queued");
+  assert.equal(body.execution.issueNumber, 157);
+  assert.equal(body.execution.branch, "codex/issue-157-vps-worker-dispatch");
+  assert.equal(body.execution.queueCommentId, 15701);
+  assert.equal(body.execution.queueCommentUrl, "https://github.com/sample-org/vtdd-v2/issues/157#issuecomment-15701");
+  assert.equal(calls.length, 2);
+  const queueCall = calls.find((call) => String(call.url).includes("/issues/157/comments"));
+  assert.equal(queueCall.init.method, "POST");
+  const queueBody = JSON.parse(queueCall.init.body).body;
+  assert.equal(queueBody.includes("vtdd:vps-runner-execution:"), true);
+  assert.equal(queueBody.includes('"transport": "vps_runner"'), true);
+  assert.equal(queueBody.includes('"repository": "sample-org/vtdd-v2"'), true);
+  assert.equal(queueBody.includes('"branch": "codex/issue-157-vps-worker-dispatch"'), true);
+  assert.equal(queueBody.includes("- Do not merge."), true);
+});
+
 test("worker normalizes minimal Butler API-backed handoff into bounded remote Codex execution", async () => {
   const calls = [];
   let executionId = "";
