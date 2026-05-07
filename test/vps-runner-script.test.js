@@ -5,6 +5,8 @@ import {
   buildCodexExecArgs,
   buildVpsRunnerEventComment,
   classifyVpsRunnerFailure,
+  loadVpsRunnerRepositoryPolicies,
+  normalizeRepositoryPolicies,
   parseVpsRunnerEventComment,
   parseVpsRunnerQueueComment,
   runVpsRunnerOnce,
@@ -91,6 +93,89 @@ test("VPS runner selects only allowlisted pending queues", () => {
 
   assert.equal(selected.length, 1);
   assert.equal(selected[0].payload.executionId, "exec-1");
+});
+
+test("VPS runner repository policies allow per-repo base refs and branch prefixes", () => {
+  const policies = normalizeRepositoryPolicies({
+    config: {
+      repositories: {
+        "sample-org/tomio": {
+          baseRefs: ["private"],
+          branchPrefix: "codex/"
+        }
+      }
+    }
+  });
+
+  const comments = [
+    {
+      id: 1,
+      html_url: "https://github.com/sample-org/tomio/issues/7#issuecomment-1",
+      created_at: "2026-05-07T10:00:00Z",
+      body: queueComment({
+        executionId: "tomio-1",
+        repository: "sample-org/tomio",
+        issueNumber: 7,
+        branch: "codex/issue-7",
+        baseRef: "private"
+      })
+    },
+    {
+      id: 2,
+      html_url: "https://github.com/sample-org/tomio/issues/8#issuecomment-2",
+      created_at: "2026-05-07T10:01:00Z",
+      body: queueComment({
+        executionId: "tomio-2",
+        repository: "sample-org/tomio",
+        issueNumber: 8,
+        branch: "codex/issue-8",
+        baseRef: "main"
+      })
+    },
+    {
+      id: 3,
+      html_url: "https://github.com/sample-org/tomio/issues/9#issuecomment-3",
+      created_at: "2026-05-07T10:02:00Z",
+      body: queueComment({
+        executionId: "tomio-3",
+        repository: "sample-org/tomio",
+        issueNumber: 9,
+        branch: "feature/issue-9",
+        baseRef: "private"
+      })
+    }
+  ];
+
+  const selected = selectPendingVpsRunnerExecutions({ comments, repositoryPolicies: policies });
+
+  assert.equal(selected.length, 1);
+  assert.equal(selected[0].payload.executionId, "tomio-1");
+});
+
+test("VPS runner loads repository policies from config file", async () => {
+  const policies = await loadVpsRunnerRepositoryPolicies({
+    env: { VTDD_VPS_RUNNER_CONFIG: "/tmp/vtdd-runner-repos.json" },
+    readFile: async () =>
+      JSON.stringify({
+        repositories: {
+          "sample-org/vtdd-v2": {
+            baseRefs: ["main"],
+            branchPrefixes: ["codex/"]
+          },
+          "sample-org/disabled": {
+            enabled: false
+          }
+        }
+      })
+  });
+
+  assert.deepEqual(policies, [
+    {
+      repository: "sample-org/vtdd-v2",
+      baseRefs: ["main"],
+      branchPrefixes: ["codex/"]
+    }
+  ]);
 });
 
 test("VPS runner event comment is parseable by execution id", () => {
@@ -195,16 +280,22 @@ test("VPS runner Codex args require explicit opt-in for sandbox bypass", () => {
   ]);
 });
 
-function queueComment({ executionId, repository }) {
+function queueComment({
+  executionId,
+  repository,
+  issueNumber = 157,
+  branch = "codex/issue-157",
+  baseRef = "main"
+}) {
   return `<!-- vtdd:vps-runner-execution:${executionId} -->
 \`\`\`json
 {
   "executionId": "${executionId}",
   "transport": "vps_runner",
   "repository": "${repository}",
-  "issueNumber": 157,
-  "branch": "codex/issue-157",
-  "baseRef": "main",
+  "issueNumber": ${issueNumber},
+  "branch": "${branch}",
+  "baseRef": "${baseRef}",
   "codexGoal": "open_pr",
   "approvalScopeMatched": true
 }
