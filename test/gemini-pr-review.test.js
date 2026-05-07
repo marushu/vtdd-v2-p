@@ -29,6 +29,24 @@ test("pull_request_target opened event triggers Gemini review", () => {
   assert.equal(result.value.pullRequestNumber, 12);
 });
 
+test("pull_request_target draft opened event still triggers Gemini review", () => {
+  const result = resolveGeminiReviewTrigger({
+    eventName: "pull_request_target",
+    payload: {
+      action: "opened",
+      pull_request: {
+        number: 12,
+        draft: true
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.value.shouldReview, true);
+  assert.equal(result.value.trigger, "pull_request_target:opened");
+  assert.equal(result.value.pullRequestNumber, 12);
+});
+
 test("issue_comment on PR from bot marker is skipped", () => {
   const result = resolveGeminiReviewTrigger({
     eventName: "issue_comment",
