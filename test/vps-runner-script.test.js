@@ -142,12 +142,20 @@ test("VPS runner dry run reports selected execution without side effects", async
 
 test("VPS runner Codex prompt preserves high-risk boundaries", () => {
   const prompt = buildCodexExecutionPrompt({
-    repository: "sample-org/vtdd-v2",
-    issueNumber: 157,
-    branch: "codex/issue-157",
-    codexGoal: "open_pr"
+    payload: {
+      repository: "sample-org/vtdd-v2",
+      issueNumber: 157,
+      branch: "codex/issue-157",
+      codexGoal: "open_pr"
+    },
+    issue: {
+      title: "Smoke test",
+      body: "Create a small smoke evidence file."
+    }
   });
 
+  assert.equal(prompt.includes("Title: Smoke test"), true);
+  assert.equal(prompt.includes("Create a small smoke evidence file."), true);
   assert.equal(prompt.includes("Do not merge."), true);
   assert.equal(prompt.includes("Do not deploy."), true);
   assert.equal(prompt.includes("Do not mutate secrets"), true);
