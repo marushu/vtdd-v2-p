@@ -130,10 +130,41 @@ not require a public inbound VPS API:
   branch/PR evidence appears after the grace period, progress becomes blocked
   with `vps_runner_pickup_not_observed`
 
-The initial public/core contract deliberately stops at queue/progress semantics.
-The concrete VPS daemon, Codex authentication, systemd service, and credential
-storage remain user-owned runtime setup and must not be represented as shared
-VTDD infrastructure.
+The public/core repository includes a minimal user-owned runner entrypoint at
+`scripts/run-vps-runner.mjs`. It can poll the GitHub queue contract, report
+runner events, create the target branch, run Codex CLI in a cloned workspace,
+push changes, and open a draft PR. It is intentionally an operator-owned script,
+not a hosted VTDD service.
+
+Required runner environment:
+
+- `GITHUB_TOKEN` or `GH_TOKEN`: token available to `gh`, GitHub API reads,
+  branch push, Issue comment write, and PR creation for the allowlisted target
+  repositories.
+- `VTDD_VPS_RUNNER_REPOSITORIES`: comma-separated allowlist such as
+  `owner/repo,owner/another-repo`.
+- Optional `VTDD_VPS_RUNNER_WORKDIR`: workspace root. Defaults to
+  `~/vtdd-runner/workspaces`.
+- Codex CLI must be authenticated on the VPS user account. If `codex exec`
+  returns 401 or missing authentication, the runner reports
+  `codex_auth_unavailable` back through the VPS runner event comment.
+
+Dry-run pickup check:
+
+```sh
+node scripts/run-vps-runner.mjs --dry-run
+```
+
+One-shot execution:
+
+```sh
+node scripts/run-vps-runner.mjs
+```
+
+The script is suitable for a later systemd timer/service wrapper, but systemd
+installation, Codex login, token placement, and credential storage remain
+user-owned runtime setup. They must not be represented as shared VTDD
+infrastructure or embedded in this public/core repository.
 
 ## Optional API-backed Runner
 
