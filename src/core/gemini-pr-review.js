@@ -15,9 +15,6 @@ export function resolveGeminiReviewTrigger(input = {}) {
     if (!["opened", "reopened", "synchronize", "ready_for_review"].includes(action)) {
       return skip("unsupported_pull_request_action");
     }
-    if (pullRequest.draft === true && action !== "ready_for_review") {
-      return skip("draft_pull_request");
-    }
     return {
       ok: true,
       value: {
