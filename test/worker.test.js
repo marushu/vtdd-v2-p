@@ -378,6 +378,7 @@ test("worker does not override explicit Butler read consent categories", async (
 
 test("worker dispatches remote Codex execution", async () => {
   const calls = [];
+  let executionId = "";
   const response = await worker.fetch(
     new Request("https://example.com/v2/action/execute", {
       method: "POST",
@@ -452,6 +453,28 @@ test("worker dispatches remote Codex execution", async () => {
             { status: 200, headers: { "content-type": "application/json" } }
           );
         }
+        if (String(url).includes("/dispatches")) {
+          executionId = JSON.parse(init.body).inputs.execution_id;
+          return new Response(null, { status: 204 });
+        }
+        if (String(url).includes("/runs")) {
+          return new Response(
+            JSON.stringify({
+              workflow_runs: [
+                {
+                  id: 1531,
+                  name: "remote-codex-executor",
+                  display_title: executionId,
+                  html_url: "https://github.com/sample-org/vtdd-v2-p/actions/runs/1531",
+                  status: "queued",
+                  conclusion: null,
+                  head_branch: "main"
+                }
+              ]
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
         return new Response(
           JSON.stringify({
             id: 123,
@@ -467,12 +490,14 @@ test("worker dispatches remote Codex execution", async () => {
   const body = await response.json();
   assert.equal(body.ok, true);
   assert.equal(body.execution.issueNumber, 6);
-  assert.equal(body.execution.transport, "codex_cloud_github_comment");
-  assert.equal(calls.length, 2);
+  assert.equal(body.execution.transport, "codex_cloud_cli_control_runner");
+  assert.equal(body.execution.workflowRunId, 1531);
+  assert.equal(calls.length, 3);
 });
 
 test("worker dispatches remote Codex execution without user-authored constitutionConsulted", async () => {
   const calls = [];
+  let executionId = "";
   const response = await worker.fetch(
     new Request("https://example.com/v2/action/execute", {
       method: "POST",
@@ -546,6 +571,28 @@ test("worker dispatches remote Codex execution without user-authored constitutio
             { status: 200, headers: { "content-type": "application/json" } }
           );
         }
+        if (String(url).includes("/dispatches")) {
+          executionId = JSON.parse(init.body).inputs.execution_id;
+          return new Response(null, { status: 204 });
+        }
+        if (String(url).includes("/runs")) {
+          return new Response(
+            JSON.stringify({
+              workflow_runs: [
+                {
+                  id: 1532,
+                  name: "remote-codex-executor",
+                  display_title: executionId,
+                  html_url: "https://github.com/sample-org/vtdd-v2-p/actions/runs/1532",
+                  status: "queued",
+                  conclusion: null,
+                  head_branch: "main"
+                }
+              ]
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
         return new Response(
           JSON.stringify({
             id: 125,
@@ -561,12 +608,14 @@ test("worker dispatches remote Codex execution without user-authored constitutio
   const body = await response.json();
   assert.equal(body.ok, true);
   assert.equal(body.execution.issueNumber, 125);
-  assert.equal(body.execution.transport, "codex_cloud_github_comment");
-  assert.equal(calls.length, 2);
+  assert.equal(body.execution.transport, "codex_cloud_cli_control_runner");
+  assert.equal(body.execution.workflowRunId, 1532);
+  assert.equal(calls.length, 3);
 });
 
 test("worker dispatches remote Codex execution with approval scope matched only on handoff", async () => {
   const calls = [];
+  let executionId = "";
   const response = await worker.fetch(
     new Request("https://example.com/v2/action/execute", {
       method: "POST",
@@ -638,6 +687,28 @@ test("worker dispatches remote Codex execution with approval scope matched only 
             { status: 200, headers: { "content-type": "application/json" } }
           );
         }
+        if (String(url).includes("/dispatches")) {
+          executionId = JSON.parse(init.body).inputs.execution_id;
+          return new Response(null, { status: 204 });
+        }
+        if (String(url).includes("/runs")) {
+          return new Response(
+            JSON.stringify({
+              workflow_runs: [
+                {
+                  id: 1533,
+                  name: "remote-codex-executor",
+                  display_title: executionId,
+                  html_url: "https://github.com/sample-org/vtdd-v2-p/actions/runs/1533",
+                  status: "queued",
+                  conclusion: null,
+                  head_branch: "main"
+                }
+              ]
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
         return new Response(
           JSON.stringify({
             id: 126,
@@ -654,7 +725,9 @@ test("worker dispatches remote Codex execution with approval scope matched only 
   assert.equal(body.ok, true);
   assert.equal(body.execution.issueNumber, 125);
   assert.equal(body.execution.approvalScopeMatched, true);
-  assert.equal(calls.length, 2);
+  assert.equal(body.execution.transport, "codex_cloud_cli_control_runner");
+  assert.equal(body.execution.workflowRunId, 1533);
+  assert.equal(calls.length, 3);
 });
 
 test("worker dispatches API-backed remote Codex execution when explicitly selected", async () => {
