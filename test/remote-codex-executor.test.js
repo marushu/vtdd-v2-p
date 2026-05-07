@@ -347,6 +347,66 @@ test("remote Codex API-backed execution dispatch posts workflow_dispatch to GitH
   assert.equal(calls[1].url.includes("/actions/workflows/remote-codex-executor.yml/runs"), true);
 });
 
+test("remote Codex execution defaults to control runner when a control repository is configured", async () => {
+  const calls = [];
+  let executionId = "";
+  const dispatched = await dispatchRemoteCodexExecution({
+    payload: {
+      actorRole: ActorRole.BUTLER,
+      issueContext: { issueNumber: 153 },
+      policyInput: {
+        approvalPhrase: "GO",
+        targetConfirmed: true,
+        approvalScopeMatched: true,
+        runtimeTruth: {
+          runtimeState: {
+            activeBranch: "codex/issue-153"
+          }
+        }
+      }
+    },
+    gatewayResult: {
+      repository: "sample-org/vtdd-v2",
+      executionContinuity: {
+        codexGoal: "open_pr"
+      }
+    },
+    env: {
+      VTDD_GITHUB_ACTIONS_REPOSITORY: "sample-org/private-control-runner",
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_dispatch_token",
+      GITHUB_API_FETCH: async (url, init) => {
+        calls.push({ url, init });
+        if (String(url).includes("/dispatches")) {
+          executionId = JSON.parse(init.body).inputs.execution_id;
+          return new Response(null, { status: 204 });
+        }
+        return new Response(
+          JSON.stringify({
+            workflow_runs: [
+              {
+                id: 1531,
+                name: "codex-cloud-cli-control-runner",
+                display_title: executionId,
+                html_url: "https://github.com/sample-org/private-control-runner/actions/runs/1531",
+                status: "queued",
+                conclusion: null,
+                head_branch: "main"
+              }
+            ]
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        );
+      }
+    }
+  });
+
+  assert.equal(dispatched.ok, true);
+  assert.equal(dispatched.execution.transport, RemoteCodexExecutorTransport.CODEX_CLOUD_CLI_CONTROL_RUNNER);
+  assert.equal(dispatched.execution.controlRepository, "sample-org/private-control-runner");
+  assert.equal(dispatched.execution.workflowRunId, 1531);
+  assert.equal(calls[0].url.includes("/actions/workflows/remote-codex-executor.yml/dispatches"), true);
+});
+
 test("remote Codex control-runner dispatch uses workflow evidence without OPENAI_API_KEY approval", async () => {
   const calls = [];
   let executionId = "";

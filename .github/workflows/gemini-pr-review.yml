@@ -30,12 +30,6 @@ jobs:
   review:
     runs-on: ubuntu-latest
     steps:
-      - name: Skip when PR is draft
-        if: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.draft == true && github.event.action != 'ready_for_review' }}
-        run: |
-          echo "Skipping Gemini review for draft pull request."
-          exit 0
-
       - name: Detect GitHub App secret availability
         id: app_secrets
         env:

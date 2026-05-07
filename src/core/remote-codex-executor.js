@@ -1185,7 +1185,13 @@ function resolveExecutorTransport(input = {}, options = {}) {
   const envValue = normalizeText(input?.env?.REMOTE_CODEX_EXECUTOR_TRANSPORT);
   const value = requestValue || envValue;
   if (!value) {
-    return { ok: true, value: RemoteCodexExecutorTransport.CODEX_CLOUD_GITHUB_COMMENT };
+    const configuredControlRepository = resolveControlRepository(input?.env);
+    return {
+      ok: true,
+      value: configuredControlRepository
+        ? RemoteCodexExecutorTransport.CODEX_CLOUD_CLI_CONTROL_RUNNER
+        : RemoteCodexExecutorTransport.CODEX_CLOUD_GITHUB_COMMENT
+    };
   }
 
   const metadata = REMOTE_CODEX_EXECUTOR_TRANSPORT_REGISTRY[value];
