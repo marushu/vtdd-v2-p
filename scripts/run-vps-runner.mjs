@@ -95,7 +95,7 @@ async function executeVpsRunnerExecution({ githubFetch, token, workRoot, executi
 
     const issue = await githubFetch(`/repos/${payload.repository}/issues/${payload.issueNumber}`);
     const prompt = buildCodexExecutionPrompt({ payload, issue });
-    await runCommand("codex", ["exec", "--skip-git-repo-check", "--sandbox", "workspace-write", "-"], {
+    await runCommand("codex", buildCodexExecArgs({ env: process.env }), {
       cwd: workspace,
       env: buildCodexExecutionEnv(process.env),
       input: prompt,
@@ -296,6 +296,14 @@ function buildCodexExecutionPrompt({ payload, issue = {} }) {
 
 function classifyVpsRunnerFailure(error) {
   const reason = error instanceof Error ? error.message : String(error);
+  if (/bwrap: loopback: Failed RTM_NEWADDR|bubblewrap/i.test(reason)) {
+    return {
+      error: "codex_sandbox_unavailable",
+      reason:
+        "Codex CLI sandbox failed on the VPS. Set VTDD_VPS_RUNNER_CODEX_SANDBOX_BYPASS=true only on a trusted runner if this host cannot run bubblewrap networking.",
+      rawError: reason
+    };
+  }
   if (/401 Unauthorized|Missing bearer|authentication/i.test(reason)) {
     return {
       error: "codex_auth_unavailable",
@@ -313,6 +321,14 @@ function classifyVpsRunnerFailure(error) {
     error: "vps_runner_execution_failed",
     reason
   };
+}
+
+function buildCodexExecArgs({ env = {} } = {}) {
+  if (env.VTDD_VPS_RUNNER_CODEX_SANDBOX_BYPASS === "true") {
+    return ["exec", "--skip-git-repo-check", "--dangerously-bypass-approvals-and-sandbox", "-"];
+  }
+  const sandbox = normalizeText(env.VTDD_VPS_RUNNER_CODEX_SANDBOX) || "workspace-write";
+  return ["exec", "--skip-git-repo-check", "--sandbox", sandbox, "-"];
 }
 
 async function readRecentIssueComments({ githubFetch, repository }) {
@@ -524,6 +540,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 
 export {
   buildCodexExecutionPrompt,
+  buildCodexExecArgs,
   buildVpsRunnerEventComment,
   classifyVpsRunnerFailure,
   parseVpsRunnerEventComment,
