@@ -109,10 +109,31 @@ to `vps_runner` rather than silently changing to API billing.
 
 ## User-owned VPS Runner
 
-`vps_runner` is the planned trusted-host alternative for users who want to avoid
-or reduce private GitHub Actions runner cost. It is not a prerequisite for VTDD
-core, and VTDD core does not provide or operate the VPS. The user is responsible
-for host security, patching, credentials, logging, and availability.
+`vps_runner` is the trusted-host alternative for users who want to avoid or
+reduce private GitHub Actions runner cost. It is not a prerequisite for VTDD
+core, and VTDD core does not provide or operate the VPS. The user is
+responsible for host security, patching, credentials, logging, and
+availability.
+
+The public/core dispatch contract for `vps_runner` is GitHub-backed and does
+not require a public inbound VPS API:
+
+- Butler / Worker posts a bounded queue comment on the target Issue with
+  `<!-- vtdd:vps-runner-execution:<executionId> -->`
+- the user-owned VPS runner polls GitHub and picks up only allowlisted,
+  issue-traceable queue comments
+- the VPS runner reports milestone events back as Issue comments with
+  `<!-- vtdd:vps-runner-event:<executionId> -->`
+- Butler reads the queue comment, runner event comments, target branch, and
+  target PR as GitHub runtime truth
+- queued/requested is not implementation success; if no runner pickup or
+  branch/PR evidence appears after the grace period, progress becomes blocked
+  with `vps_runner_pickup_not_observed`
+
+The initial public/core contract deliberately stops at queue/progress semantics.
+The concrete VPS daemon, Codex authentication, systemd service, and credential
+storage remain user-owned runtime setup and must not be represented as shared
+VTDD infrastructure.
 
 ## Optional API-backed Runner
 
@@ -160,6 +181,7 @@ Progress must be reconstructable from:
 - GitHub Actions run state
 - VTDD execution log
 - branch / PR state in GitHub runtime truth
+- VPS runner GitHub queue and event comments when using `vps_runner`
 
 For `codex_cloud_cli_control_runner`, the top-level progress `status` and
 `branch` describe the control workflow run for compatibility with existing
@@ -175,6 +197,12 @@ branch inputs, plus GitHub App read access to the target repository's PR and
 branch surfaces. If those inputs or permissions are missing, Butler must report
 the progress as blocked/unverified for implementation success rather than
 falling back to the control workflow conclusion.
+
+For `vps_runner`, progress is derived from the GitHub queue comment, optional
+runner event comments, and target branch / PR evidence. A runner event comment
+may report raw failure, but it is not completion evidence unless GitHub-visible
+branch or PR truth exists. If a runner reports failure and no target branch or
+PR exists, Butler must surface the raw failure as blocked.
 
 When Codex reaches an approval or scope boundary, the observable return path is
 GitHub state that Butler can read, not a hidden direct Codex-to-Butler channel.
