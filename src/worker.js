@@ -927,7 +927,8 @@ async function handleGitHubHighRiskPlaneRequest(request, env) {
       ok: false,
       error: executed.error ?? "github_high_risk_failed",
       reason: executed.reason,
-      issues: executed.issues ?? []
+      issues: executed.issues ?? [],
+      diagnostics: executed.diagnostics ?? null
     });
   }
 

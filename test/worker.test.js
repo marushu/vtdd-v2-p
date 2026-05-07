@@ -2961,6 +2961,74 @@ test("worker allows same-origin passkey operator to dispatch GitHub merge author
   assert.equal(body.authorityAction.htmlUrl, "https://github.com/sample-org/vtdd-v2-p/pull/21");
 });
 
+test("worker returns GitHub merge diagnostics to same-origin passkey operator", async () => {
+  const provider = createInMemoryMemoryProvider();
+  await provider.store({
+    id: "approval-merge-browser-diagnostics",
+    type: MemoryRecordType.APPROVAL_LOG,
+    content: {
+      kind: "passkey_grant",
+      status: "verified",
+      approvalId: "approval-merge-browser-diagnostics",
+      expiresAt: "2099-01-01T00:00:00.000Z",
+      scope: {
+        actionType: "merge",
+        highRiskKind: "pull_merge",
+        repositoryInput: "sample-org/vtdd-v2-p",
+        issueNumber: "55",
+        phase: "execution"
+      }
+    },
+    metadata: { source: "test" },
+    priority: 90,
+    tags: ["passkey_grant"],
+    createdAt: "2026-04-26T00:00:00.000Z"
+  });
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/action/github-authority", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: "https://example.com",
+        "sec-fetch-site": "same-origin"
+      },
+      body: JSON.stringify({
+        operation: "pull_merge",
+        repository: "sample-org/vtdd-v2-p",
+        pullNumber: 21,
+        mergeMethod: "squash",
+        issueContext: {
+          issueNumber: 55
+        },
+        policyInput: {
+          approvalPhrase: "GO",
+          approvalGrantId: "approval-merge-browser-diagnostics",
+          targetConfirmed: true
+        }
+      })
+    }),
+    {
+      MEMORY_PROVIDER: provider,
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_high_risk",
+      GITHUB_API_FETCH: async () => {
+        throw new TypeError("fetch failed");
+      }
+    }
+  );
+
+  assert.equal(response.status, 503);
+  const body = await response.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.reason, "failed to execute GitHub merge: fetch failed");
+  assert.equal(body.issues.includes("github_merge_fetch_exception"), true);
+  assert.equal(body.diagnostics.exceptionMessage, "fetch failed");
+  assert.equal(
+    body.diagnostics.requestUrl,
+    "https://api.github.com/repos/sample-org/vtdd-v2-p/pulls/21/merge"
+  );
+});
+
 test("worker rejects fabricated browser approval grants on the GitHub authority plane", async () => {
   let githubCalled = false;
   const response = await worker.fetch(

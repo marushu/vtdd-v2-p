@@ -306,6 +306,9 @@ export function renderPasskeyOperatorPage(input = {}) {
         if (body.rawBody) {
           parts.push("rawBody: " + body.rawBody);
         }
+        if (body.diagnostics) {
+          parts.push("diagnostics: " + JSON.stringify(body.diagnostics, null, 2));
+        }
         return new Error(parts.join("\\n"));
       }
 
