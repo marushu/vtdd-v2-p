@@ -42,7 +42,8 @@ const REMOTE_CODEX_EXECUTOR_TRANSPORT_REGISTRY = Object.freeze({
     billingModel: "user_owned_vps_cost",
     default: false,
     optIn: true,
-    implemented: false,
+    implemented: true,
+    requestQueue: "github_issue_comment",
     successEvidence: ["runner_execution_log", "github_branch", "github_pull_request"]
   }),
   [RemoteCodexExecutorTransport.API_KEY_RUNNER]: Object.freeze({
@@ -203,13 +204,7 @@ export async function dispatchRemoteCodexExecution(input = {}) {
   }
 
   if (transport.value === RemoteCodexExecutorTransport.VPS_RUNNER) {
-    return {
-      ok: false,
-      status: 501,
-      error: "vps_runner_not_implemented",
-      reason:
-        "vps_runner is registered as a user-owned backend option, but this runtime does not implement VPS dispatch yet"
-    };
+    return dispatchVpsRunnerGitHubQueue({ request, token: token.value, env: input?.env });
   }
 
   return dispatchControlRepositoryWorkflow({
@@ -364,13 +359,14 @@ export async function retrieveRemoteCodexExecutionProgress(input = {}) {
   }
 
   if (transport.value === RemoteCodexExecutorTransport.VPS_RUNNER) {
-    return {
-      ok: false,
-      status: 501,
-      error: "vps_runner_not_implemented",
-      reason:
-        "vps_runner is registered as a user-owned backend option, but this runtime does not implement VPS progress lookup yet"
-    };
+    return retrieveVpsRunnerGitHubQueueProgress({
+      executionId,
+      repository: normalizeText(input?.repository),
+      issueNumber: normalizePositiveInteger(input?.issueNumber),
+      branch: normalizeText(input?.branch),
+      token: token.value,
+      env: input?.env
+    });
   }
 
   return retrieveControlRepositoryWorkflowProgress({
@@ -561,6 +557,58 @@ async function dispatchCodexCloudGitHubComment({ request, token, env }) {
   };
 }
 
+async function dispatchVpsRunnerGitHubQueue({ request, token, env }) {
+  const apiBaseUrl = normalizeText(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
+  const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
+  const commentUrl = `${apiBaseUrl}/repos/${encodeURIComponentRepository(
+    request.repository
+  )}/issues/${encodeURIComponent(String(request.issueNumber))}/comments`;
+  const body = buildVpsRunnerGitHubQueueComment({ request });
+
+  let response;
+  try {
+    response = await fetchImpl(commentUrl, {
+      method: "POST",
+      headers: githubJsonHeaders({ token }),
+      body: JSON.stringify({ body })
+    });
+  } catch {
+    return {
+      ok: false,
+      status: 503,
+      error: "vps_runner_dispatch_failed",
+      reason: "failed to post VPS runner GitHub queue comment"
+    };
+  }
+
+  const responseBody = await readJsonSafe(response);
+  if (!response.ok) {
+    return {
+      ok: false,
+      status: response.status,
+      error: "vps_runner_dispatch_failed",
+      reason: normalizeText(responseBody?.message) || "GitHub issue comment creation failed"
+    };
+  }
+
+  return {
+    ok: true,
+    execution: {
+      executionId: request.executionId,
+      transport: RemoteCodexExecutorTransport.VPS_RUNNER,
+      targetRepository: request.repository,
+      issueNumber: request.issueNumber,
+      branch: request.branch,
+      baseRef: request.baseRef,
+      codexGoal: request.codexGoal,
+      approvalScopeMatched: request.approvalScopeMatched,
+      queueCommentId: normalizePositiveInteger(responseBody?.id),
+      queueCommentUrl: normalizeText(responseBody?.html_url) || null,
+      status: RemoteCodexExecutionStatus.QUEUED
+    }
+  };
+}
+
 async function retrieveCodexCloudGitHubCommentProgress({
   executionId,
   repository,
@@ -667,6 +715,118 @@ async function retrieveCodexCloudGitHubCommentProgress({
               : RemoteCodexExecutionStatus.QUEUED,
       pullRequest: pullRequest.pullRequest,
       blocker: connectorBlocker ?? pickupBlocker
+    }
+  };
+}
+
+async function retrieveVpsRunnerGitHubQueueProgress({
+  executionId,
+  repository,
+  issueNumber,
+  branch,
+  token,
+  env
+}) {
+  if (!repository || !issueNumber) {
+    return {
+      ok: false,
+      status: 422,
+      error: "vps_runner_progress_scope_required",
+      reason: "repository and issueNumber are required for VPS runner progress"
+    };
+  }
+
+  const apiBaseUrl = normalizeText(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
+  const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
+  const commentsUrl = `${apiBaseUrl}/repos/${encodeURIComponentRepository(
+    repository
+  )}/issues/${encodeURIComponent(String(issueNumber))}/comments?per_page=100`;
+
+  let commentsResponse;
+  try {
+    commentsResponse = await fetchImpl(commentsUrl, {
+      method: "GET",
+      headers: githubJsonHeaders({ token })
+    });
+  } catch {
+    return {
+      ok: false,
+      status: 503,
+      error: "vps_runner_progress_failed",
+      reason: "failed to read VPS runner queue comments"
+    };
+  }
+
+  const commentsBody = await readJsonSafe(commentsResponse);
+  if (!commentsResponse.ok) {
+    return {
+      ok: false,
+      status: commentsResponse.status,
+      error: "vps_runner_progress_failed",
+      reason: normalizeText(commentsBody?.message) || "GitHub issue comments lookup failed"
+    };
+  }
+
+  const comments = Array.isArray(commentsBody) ? commentsBody : [];
+  const queueComment = comments.find((comment) =>
+    normalizeText(comment?.body).includes(`vtdd:vps-runner-execution:${executionId}`)
+  );
+  if (!queueComment) {
+    return {
+      ok: false,
+      status: 404,
+      error: "vps_runner_execution_not_found",
+      reason: "no VPS runner queue comment matched executionId"
+    };
+  }
+
+  const pullRequest = branch
+    ? await findPullRequestForBranch({ repository, branch, token, env })
+    : { ok: true, pullRequest: null };
+  if (!pullRequest.ok) {
+    return pullRequest;
+  }
+
+  const branchState =
+    branch && !pullRequest.pullRequest
+      ? await findBranch({ repository, branch, token, env })
+      : { ok: true, branch: null };
+  if (!branchState.ok) {
+    return branchState;
+  }
+
+  const runnerEvent = findLatestVpsRunnerEvent({ comments, queueComment });
+  const staleBlocker =
+    !pullRequest.pullRequest && !branchState.branch && !runnerEvent
+      ? buildVpsRunnerPickupBlocker({ queueComment, env })
+      : null;
+  const failureBlocker =
+    !pullRequest.pullRequest && !branchState.branch && runnerEvent?.status === RemoteCodexExecutionStatus.BLOCKED
+      ? runnerEvent.rawFailure
+      : null;
+
+  return {
+    ok: true,
+    progress: {
+      executionId,
+      transport: RemoteCodexExecutorTransport.VPS_RUNNER,
+      targetRepository: repository,
+      issueNumber,
+      branch: branchState.branch,
+      queueCommentId: normalizePositiveInteger(queueComment.id),
+      queueCommentUrl: normalizeText(queueComment.html_url) || null,
+      status: pullRequest.pullRequest
+        ? RemoteCodexExecutionStatus.COMPLETED
+        : branchState.branch
+          ? RemoteCodexExecutionStatus.IN_PROGRESS
+          : failureBlocker
+            ? RemoteCodexExecutionStatus.BLOCKED
+            : staleBlocker
+              ? RemoteCodexExecutionStatus.BLOCKED
+              : runnerEvent?.status || RemoteCodexExecutionStatus.QUEUED,
+      pullRequest: pullRequest.pullRequest,
+      runnerEvent,
+      blocker: failureBlocker ?? staleBlocker
     }
   };
 }
@@ -817,6 +977,64 @@ function buildCodexCloudPickupBlocker({ delegationComment, env }) {
   };
 }
 
+function findLatestVpsRunnerEvent({ comments, queueComment }) {
+  const queueCommentId = normalizePositiveInteger(queueComment?.id) ?? 0;
+  const laterComments = comments.filter((comment) => {
+    const commentId = normalizePositiveInteger(comment?.id) ?? 0;
+    return !queueCommentId || commentId > queueCommentId;
+  });
+
+  const events = laterComments
+    .map((comment) => {
+      const body = normalizeText(comment?.body);
+      const marker = `vtdd:vps-runner-event:${extractVpsExecutionIdFromQueueComment(queueComment)}`;
+      if (!body.includes(marker)) {
+        return null;
+      }
+      const payload = extractFirstJsonFence(body);
+      if (!payload) {
+        return null;
+      }
+      const status = normalizeVpsRunnerEventStatus(payload.status);
+      return {
+        commentId: normalizePositiveInteger(comment?.id),
+        commentUrl: normalizeText(comment?.html_url) || null,
+        status,
+        lastEvent: normalizeText(payload.lastEvent) || null,
+        rawFailure: normalizeObject(payload.rawFailure),
+        branch: normalizeText(payload.branch) || null,
+        pullRequest: normalizeObject(payload.pullRequest),
+        updatedAt: normalizeText(comment?.created_at) || null
+      };
+    })
+    .filter(Boolean);
+
+  return events.at(-1) || null;
+}
+
+function buildVpsRunnerPickupBlocker({ queueComment, env }) {
+  const graceSeconds = normalizeNonNegativeNumber(env?.VPS_RUNNER_PICKUP_GRACE_SECONDS ?? 300);
+  const createdAt = Date.parse(normalizeText(queueComment?.created_at));
+  if (!Number.isFinite(createdAt)) {
+    return null;
+  }
+
+  const ageSeconds = Math.floor((Date.now() - createdAt) / 1000);
+  if (ageSeconds < graceSeconds) {
+    return null;
+  }
+
+  return {
+    error: "vps_runner_pickup_not_observed",
+    reason:
+      "VPS runner did not report pickup and no target branch or PR was observed within the pickup grace period",
+    commentId: normalizePositiveInteger(queueComment?.id),
+    commentUrl: normalizeText(queueComment?.html_url) || null,
+    graceSeconds,
+    ageSeconds
+  };
+}
+
 function buildControlRunnerTargetRuntimeTruth({
   runStatus,
   conclusion,
@@ -914,6 +1132,46 @@ function buildCodexCloudGitHubComment({ request }) {
   if (request.handoff) {
     lines.push("", "Handoff:", fencedJson(request.handoff));
   }
+
+  return lines.join("\n");
+}
+
+function buildVpsRunnerGitHubQueueComment({ request }) {
+  const payload = {
+    executionId: request.executionId,
+    transport: RemoteCodexExecutorTransport.VPS_RUNNER,
+    repository: request.repository,
+    issueNumber: request.issueNumber,
+    branch: request.branch,
+    baseRef: request.baseRef,
+    codexGoal: request.codexGoal,
+    approvalScopeMatched: request.approvalScopeMatched,
+    handoff: request.handoff
+  };
+  const lines = [
+    `<!-- vtdd:vps-runner-execution:${request.executionId} -->`,
+    "VTDD-managed VPS runner execution request.",
+    "",
+    "Bounded execution contract:",
+    `- Repository: ${request.repository}`,
+    `- Issue: #${request.issueNumber}`,
+    `- Branch: ${request.branch}`,
+    `- Base ref: ${request.baseRef}`,
+    `- Goal: ${request.codexGoal}`,
+    "- Canonical spec: this GitHub Issue",
+    "- Runtime truth: current GitHub branch / diff / PR / review comments",
+    "- Completion target: create or update a pull request",
+    "",
+    "Rules:",
+    "- Do not expand scope beyond the Issue.",
+    "- Do not merge.",
+    "- Do not deploy.",
+    "- Preserve reviewer objections for Butler/human judgment.",
+    "- If the Issue or runtime truth is insufficient, stop and comment with the blocked reason.",
+    "",
+    "Runner payload:",
+    fencedJson(payload)
+  ];
 
   return lines.join("\n");
 }
@@ -1024,6 +1282,41 @@ function matchesExecutionId(run, executionId) {
   const displayTitle = normalizeText(run?.display_title);
   const name = normalizeText(run?.name);
   return displayTitle.includes(executionId) || name.includes(executionId);
+}
+
+function extractVpsExecutionIdFromQueueComment(queueComment) {
+  const body = normalizeText(queueComment?.body);
+  const match = body.match(/vtdd:vps-runner-execution:([a-zA-Z0-9._:-]+)/);
+  return match ? match[1] : "";
+}
+
+function extractFirstJsonFence(text) {
+  const match = normalizeText(text).match(/```json\s*([\s\S]*?)```/);
+  if (!match) {
+    return null;
+  }
+  try {
+    return JSON.parse(match[1]);
+  } catch {
+    return null;
+  }
+}
+
+function normalizeVpsRunnerEventStatus(value) {
+  const normalized = normalizeText(value).toLowerCase();
+  if (normalized === "running" || normalized === "in_progress" || normalized === "branch_created") {
+    return RemoteCodexExecutionStatus.IN_PROGRESS;
+  }
+  if (normalized === "pr_created" || normalized === "completed") {
+    return RemoteCodexExecutionStatus.COMPLETED;
+  }
+  if (normalized === "failed" || normalized === "blocked") {
+    return RemoteCodexExecutionStatus.BLOCKED;
+  }
+  if (normalized === "queued" || normalized === "requested") {
+    return RemoteCodexExecutionStatus.QUEUED;
+  }
+  return RemoteCodexExecutionStatus.UNKNOWN;
 }
 
 function normalizeRunStatus(value) {
