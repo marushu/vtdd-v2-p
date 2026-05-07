@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   buildCodexExecutionPrompt,
+  buildCodexExecArgs,
   buildVpsRunnerEventComment,
   classifyVpsRunnerFailure,
   parseVpsRunnerEventComment,
@@ -169,6 +170,29 @@ test("VPS runner classifies unauthenticated Codex CLI as raw auth failure", () =
   assert.equal(failure.error, "codex_auth_unavailable");
   assert.equal(failure.reason, "Codex CLI is not authenticated on the VPS runner.");
   assert.equal(failure.rawError.includes("401 Unauthorized"), true);
+});
+
+test("VPS runner classifies bubblewrap sandbox failure as sandbox unavailable", () => {
+  const failure = classifyVpsRunnerFailure(new Error("bwrap: loopback: Failed RTM_NEWADDR: Operation not permitted"));
+
+  assert.equal(failure.error, "codex_sandbox_unavailable");
+  assert.equal(failure.reason.includes("VTDD_VPS_RUNNER_CODEX_SANDBOX_BYPASS=true"), true);
+});
+
+test("VPS runner Codex args require explicit opt-in for sandbox bypass", () => {
+  assert.deepEqual(buildCodexExecArgs({ env: {} }), [
+    "exec",
+    "--skip-git-repo-check",
+    "--sandbox",
+    "workspace-write",
+    "-"
+  ]);
+  assert.deepEqual(buildCodexExecArgs({ env: { VTDD_VPS_RUNNER_CODEX_SANDBOX_BYPASS: "true" } }), [
+    "exec",
+    "--skip-git-repo-check",
+    "--dangerously-bypass-approvals-and-sandbox",
+    "-"
+  ]);
 });
 
 function queueComment({ executionId, repository }) {

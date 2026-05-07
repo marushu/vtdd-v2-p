@@ -148,6 +148,12 @@ Required runner environment:
 - Codex CLI must be authenticated on the VPS user account. If `codex exec`
   returns 401 or missing authentication, the runner reports
   `codex_auth_unavailable` back through the VPS runner event comment.
+- Optional `VTDD_VPS_RUNNER_CODEX_SANDBOX`: Codex sandbox mode. Defaults to
+  `workspace-write`.
+- Optional `VTDD_VPS_RUNNER_CODEX_SANDBOX_BYPASS=true`: uses Codex
+  `--dangerously-bypass-approvals-and-sandbox`. This is only for a trusted,
+  user-owned runner when the host cannot run Codex's bubblewrap sandbox, and it
+  must not be enabled in shared or untrusted infrastructure.
 
 Dry-run pickup check:
 
