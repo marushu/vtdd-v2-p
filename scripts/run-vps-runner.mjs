@@ -12,7 +12,7 @@ const DEFAULT_API_BASE_URL = "https://api.github.com";
 async function main() {
   const options = parseArgs(process.argv.slice(2));
   const token = mustGetEnv("GITHUB_TOKEN", process.env.GITHUB_TOKEN || process.env.GH_TOKEN);
-  const allowedRepositories = parseCsv(mustGetEnv("VTDD_VPS_RUNNER_REPOSITORIES"));
+  const repositoryPolicies = await loadVpsRunnerRepositoryPolicies({ env: process.env });
   const workRoot = process.env.VTDD_VPS_RUNNER_WORKDIR || path.join(os.homedir(), "vtdd-runner", "workspaces");
   const githubFetch = createGitHubFetch({
     token,
@@ -22,7 +22,7 @@ async function main() {
   const result = await runVpsRunnerOnce({
     githubFetch,
     token,
-    allowedRepositories,
+    repositoryPolicies,
     workRoot,
     dryRun: options.dryRun
   });
@@ -36,11 +36,19 @@ async function main() {
   console.log(result.message);
 }
 
-async function runVpsRunnerOnce({ githubFetch, token, allowedRepositories, workRoot, dryRun = false }) {
+async function runVpsRunnerOnce({
+  githubFetch,
+  token,
+  allowedRepositories,
+  repositoryPolicies,
+  workRoot,
+  dryRun = false
+}) {
+  const policies = normalizeRepositoryPolicies({ allowedRepositories, repositoryPolicies });
   const candidates = [];
-  for (const repository of allowedRepositories) {
+  for (const repository of policies.map((policy) => policy.repository)) {
     const comments = await readRecentIssueComments({ githubFetch, repository });
-    candidates.push(...selectPendingVpsRunnerExecutions({ comments, allowedRepositories }));
+    candidates.push(...selectPendingVpsRunnerExecutions({ comments, repositoryPolicies: policies }));
   }
 
   const execution = candidates.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))[0];
@@ -167,15 +175,15 @@ async function executeVpsRunnerExecution({ githubFetch, token, workRoot, executi
   }
 }
 
-function selectPendingVpsRunnerExecutions({ comments, allowedRepositories }) {
-  const allowed = new Set(allowedRepositories);
+function selectPendingVpsRunnerExecutions({ comments, allowedRepositories, repositoryPolicies }) {
+  const policies = normalizeRepositoryPolicies({ allowedRepositories, repositoryPolicies });
   const queues = new Map();
   const terminalEvents = new Set();
   const runningEvents = new Set();
 
   for (const comment of comments) {
     const queue = parseVpsRunnerQueueComment(comment.body);
-    if (queue.ok && allowed.has(queue.payload.repository)) {
+    if (queue.ok && validateVpsRunnerPayloadPolicy(queue.payload, policies).ok) {
       queues.set(queue.payload.executionId, {
         ...queue,
         commentId: comment.id,
@@ -200,6 +208,63 @@ function selectPendingVpsRunnerExecutions({ comments, allowedRepositories }) {
   return [...queues.values()].filter(
     (queue) => !terminalEvents.has(queue.payload.executionId) && !runningEvents.has(queue.payload.executionId)
   );
+}
+
+async function loadVpsRunnerRepositoryPolicies({ env = process.env, readFile = fs.readFile } = {}) {
+  const configPath = normalizeText(env.VTDD_VPS_RUNNER_CONFIG);
+  if (configPath) {
+    const config = JSON.parse(await readFile(configPath, "utf8"));
+    return normalizeRepositoryPolicies({ config });
+  }
+  return normalizeRepositoryPolicies({
+    allowedRepositories: parseCsv(mustGetEnv("VTDD_VPS_RUNNER_REPOSITORIES", env.VTDD_VPS_RUNNER_REPOSITORIES))
+  });
+}
+
+function normalizeRepositoryPolicies({ allowedRepositories, repositoryPolicies, config } = {}) {
+  if (Array.isArray(repositoryPolicies) && repositoryPolicies.length > 0) {
+    return repositoryPolicies.map(normalizeRepositoryPolicy).filter((policy) => policy.repository);
+  }
+
+  if (config && typeof config === "object") {
+    const repositories = Array.isArray(config.repositories)
+      ? config.repositories
+      : Object.entries(config.repositories || {}).map(([repository, policy]) => ({
+          ...(policy && typeof policy === "object" ? policy : {}),
+          repository
+        }));
+    return repositories
+      .filter((policy) => policy?.enabled !== false)
+      .map(normalizeRepositoryPolicy)
+      .filter((policy) => policy.repository);
+  }
+
+  return (allowedRepositories || []).map((repository) => normalizeRepositoryPolicy({ repository }));
+}
+
+function normalizeRepositoryPolicy(policy = {}) {
+  return {
+    repository: normalizeRepository(policy.repository),
+    baseRefs: normalizeStringList(policy.baseRefs).length > 0 ? normalizeStringList(policy.baseRefs) : ["main"],
+    branchPrefixes:
+      normalizeStringList(policy.branchPrefixes || policy.branchPrefix).length > 0
+        ? normalizeStringList(policy.branchPrefixes || policy.branchPrefix)
+        : ["codex/"]
+  };
+}
+
+function validateVpsRunnerPayloadPolicy(payload, policies) {
+  const policy = policies.find((item) => item.repository === payload.repository);
+  if (!policy) {
+    return { ok: false, reason: "repository_not_allowlisted" };
+  }
+  if (!policy.baseRefs.includes(payload.baseRef || "main")) {
+    return { ok: false, reason: "base_ref_not_allowlisted" };
+  }
+  if (!policy.branchPrefixes.some((prefix) => payload.branch.startsWith(prefix))) {
+    return { ok: false, reason: "branch_prefix_not_allowlisted" };
+  }
+  return { ok: true, policy };
 }
 
 function parseVpsRunnerQueueComment(body) {
@@ -507,6 +572,11 @@ function normalizePositiveInteger(value) {
   return Number.isInteger(number) && number > 0 ? number : 0;
 }
 
+function normalizeStringList(value) {
+  const values = Array.isArray(value) ? value : typeof value === "string" ? [value] : [];
+  return values.map(normalizeText).filter(Boolean);
+}
+
 function safePathSegment(value) {
   return String(value || "").replace(/[^A-Za-z0-9_.-]+/g, "_");
 }
@@ -543,6 +613,8 @@ export {
   buildCodexExecArgs,
   buildVpsRunnerEventComment,
   classifyVpsRunnerFailure,
+  loadVpsRunnerRepositoryPolicies,
+  normalizeRepositoryPolicies,
   parseVpsRunnerEventComment,
   parseVpsRunnerQueueComment,
   runVpsRunnerOnce,

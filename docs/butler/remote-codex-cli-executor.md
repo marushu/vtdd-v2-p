@@ -142,7 +142,30 @@ Required runner environment:
   branch push, Issue comment write, and PR creation for the allowlisted target
   repositories.
 - `VTDD_VPS_RUNNER_REPOSITORIES`: comma-separated allowlist such as
-  `owner/repo,owner/another-repo`.
+  `owner/repo,owner/another-repo`. This is the simple default form.
+- Optional `VTDD_VPS_RUNNER_CONFIG`: path to a JSON allowlist file. When set,
+  it replaces `VTDD_VPS_RUNNER_REPOSITORIES` and allows per-repository policy:
+
+  ```json
+  {
+    "repositories": {
+      "marushu/vtdd-v2-p": {
+        "enabled": true,
+        "baseRefs": ["main"],
+        "branchPrefixes": ["codex/"]
+      },
+      "marushu/tomio": {
+        "enabled": true,
+        "baseRefs": ["private"],
+        "branchPrefixes": ["codex/"]
+      }
+    }
+  }
+  ```
+
+  The runner ignores queue comments whose repository is not allowlisted, whose
+  `baseRef` is not in that repository's `baseRefs`, or whose branch does not
+  start with one of that repository's `branchPrefixes`.
 - Optional `VTDD_VPS_RUNNER_WORKDIR`: workspace root. Defaults to
   `~/vtdd-runner/workspaces`.
 - Codex CLI must be authenticated on the VPS user account. If `codex exec`
