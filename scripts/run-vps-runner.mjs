@@ -93,8 +93,9 @@ async function executeVpsRunnerExecution({ githubFetch, token, workRoot, executi
       }
     });
 
-    const prompt = buildCodexExecutionPrompt(payload);
-    await runCommand("codex", ["exec", "--skip-git-repo-check", "-"], {
+    const issue = await githubFetch(`/repos/${payload.repository}/issues/${payload.issueNumber}`);
+    const prompt = buildCodexExecutionPrompt({ payload, issue });
+    await runCommand("codex", ["exec", "--skip-git-repo-check", "--sandbox", "workspace-write", "-"], {
       cwd: workspace,
       env: buildCodexExecutionEnv(process.env),
       input: prompt,
@@ -269,9 +270,14 @@ function buildVpsRunnerEventComment({ executionId, event }) {
   return [`<!-- vtdd:vps-runner-event:${executionId} -->`, "VTDD VPS runner event.", "", fencedJson(event)].join("\n");
 }
 
-function buildCodexExecutionPrompt(payload) {
+function buildCodexExecutionPrompt({ payload, issue = {} }) {
   return [
     `Implement the bounded VTDD task for ${payload.repository} issue #${payload.issueNumber}.`,
+    "",
+    "Canonical Issue spec:",
+    `Title: ${normalizeText(issue.title) || "(missing title)"}`,
+    "",
+    normalizeText(issue.body) || "(missing issue body)",
     "",
     "Hard boundaries:",
     "- Use the GitHub Issue as the canonical spec.",
