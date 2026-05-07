@@ -172,6 +172,38 @@ test("github high-risk plane requires merge method from registry", async () => {
   assert.equal(result.issues.includes("mergeMethod is required"), true);
 });
 
+test("github high-risk plane surfaces merge fetch exception diagnostics", async () => {
+  const result = await executeGitHubHighRiskPlane({
+    operation: GitHubHighRiskOperation.PULL_MERGE,
+    repository: "sample-org/vtdd-v2-p",
+    issueNumber: 55,
+    pullNumber: 21,
+    mergeMethod: "squash",
+    approvalPhrase: "GO",
+    targetConfirmed: true,
+    approvalGrant: mergeGrant,
+    approvalScope: mergeGrant.scope,
+    env: {
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_high_risk",
+      GITHUB_API_FETCH: async () => {
+        throw new TypeError("fetch failed");
+      }
+    }
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.status, 503);
+  assert.equal(result.reason, "failed to execute GitHub merge: fetch failed");
+  assert.equal(result.issues.includes("github_merge_fetch_exception"), true);
+  assert.deepEqual(result.diagnostics, {
+    operation: "pull_merge",
+    requestMethod: "PUT",
+    requestUrl: "https://api.github.com/repos/sample-org/vtdd-v2-p/pulls/21/merge",
+    exceptionName: "TypeError",
+    exceptionMessage: "fetch failed"
+  });
+});
+
 test("github high-risk plane closes bounded issue only after merged pull verification", async () => {
   const calls = [];
   const result = await executeGitHubHighRiskPlane({

@@ -180,9 +180,10 @@ async function dispatchGitHubHighRisk(input) {
 async function executePullMerge(input) {
   const encodedRepository = encodeURIComponentRepository(input.repository);
   let response;
+  const requestUrl = `${input.apiBaseUrl}/repos/${encodedRepository}/pulls/${input.pullNumber}/merge`;
   try {
     response = await input.fetchImpl(
-      `${input.apiBaseUrl}/repos/${encodedRepository}/pulls/${input.pullNumber}/merge`,
+      requestUrl,
       {
         method: "PUT",
         headers: githubJsonHeaders({ token: input.token }),
@@ -195,12 +196,20 @@ async function executePullMerge(input) {
         )
       }
     );
-  } catch {
+  } catch (error) {
     return {
       ok: false,
       status: 503,
       error: "github_high_risk_failed",
-      reason: "failed to execute GitHub merge"
+      reason: `failed to execute GitHub merge: ${errorMessage(error)}`,
+      issues: ["github_merge_fetch_exception"],
+      diagnostics: {
+        operation: input.operation,
+        requestMethod: "PUT",
+        requestUrl,
+        exceptionName: errorName(error),
+        exceptionMessage: errorMessage(error)
+      }
     };
   }
 
@@ -210,7 +219,15 @@ async function executePullMerge(input) {
       ok: false,
       status: response.status,
       error: "github_high_risk_failed",
-      reason: normalizeText(responseBody?.message) || "GitHub merge failed"
+      reason: normalizeText(responseBody?.message) || "GitHub merge failed",
+      diagnostics: {
+        operation: input.operation,
+        requestMethod: "PUT",
+        requestUrl,
+        githubStatus: response.status,
+        githubMessage: normalizeText(responseBody?.message) || null,
+        githubDocumentationUrl: normalizeText(responseBody?.documentation_url) || null
+      }
     };
   }
 
@@ -367,4 +384,15 @@ async function readJsonSafe(response) {
 
 function normalizeText(value) {
   return String(value ?? "").trim();
+}
+
+function errorName(error) {
+  return error instanceof Error && error.name ? error.name : typeof error;
+}
+
+function errorMessage(error) {
+  if (error instanceof Error) {
+    return normalizeText(error.message) || error.name || "unknown error";
+  }
+  return normalizeText(error) || "unknown error";
 }
