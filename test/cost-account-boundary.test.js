@@ -34,6 +34,21 @@ test("remote Codex docs keep API-backed runner optional", () => {
   assert.equal(doc.includes("Do not present it as the only VTDD remote executor path."), true);
 });
 
+test("remote Codex docs define private repository VPS Actions-minimization boundary", () => {
+  const doc = read("docs/butler/remote-codex-cli-executor.md");
+
+  assert.equal(doc.includes("Private Repository Actions-Minimization Mode"), true);
+  assert.equal(doc.includes("use `vps_runner` for Codex implementation, branch push, and PR creation"), true);
+  assert.equal(
+    doc.includes("do not use `remote-codex-executor.yml` for normal private-repository Codex"),
+    true
+  );
+  assert.equal(doc.includes("does not eliminate Actions minutes"), true);
+  assert.equal(doc.includes('"baseRefs": ["private"]'), true);
+  assert.equal(doc.includes("Codex implementation moved off\nGitHub-hosted Actions"), true);
+  assert.equal(doc.includes("Actions cost is zero"), true);
+});
+
 test("reviewer policy requires explicit cost/account choice for API-key reviewers", () => {
   const doc = read("docs/security/reviewer-policy.md");
 

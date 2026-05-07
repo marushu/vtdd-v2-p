@@ -130,6 +130,46 @@ not require a public inbound VPS API:
   branch/PR evidence appears after the grace period, progress becomes blocked
   with `vps_runner_pickup_not_observed`
 
+### Private Repository Actions-Minimization Mode
+
+For private repositories such as TOMIO, the preferred low-Actions-consumption
+shape is:
+
+- use `vps_runner` for Codex implementation, branch push, and PR creation
+- keep GitHub Actions only for bounded PR gates that still need to run on
+  GitHub, such as required tests, guarded PR-body policy, and reviewer
+  writeback
+- do not use `remote-codex-executor.yml` for normal private-repository Codex
+  implementation work once the trusted VPS runner is configured
+- do not silently switch to `api_key_runner` as a workaround for private
+  Actions minutes
+
+This means VPS migration reduces the Actions minutes spent on Codex execution,
+fresh checkout, Node setup, Codex install/auth, and PR creation inside a
+GitHub-hosted runner. It does not eliminate Actions minutes for workflows that
+remain GitHub-hosted by design, including PR checks, Gemini review, deploy
+dispatches, or any repository-specific CI configured on the target repository.
+
+For TOMIO's private branch model, configure the repository policy with the
+private base branch explicitly:
+
+```json
+{
+  "repositories": {
+    "marushu/tomio": {
+      "enabled": true,
+      "baseRefs": ["private"],
+      "branchPrefixes": ["codex/"]
+    }
+  }
+}
+```
+
+Butler-facing guidance must describe this as "Codex implementation moved off
+GitHub-hosted Actions" rather than "Actions cost is zero." If a private
+repository still runs PR checks or reviewer workflows on GitHub-hosted runners,
+those minutes remain visible GitHub Actions usage.
+
 The public/core repository includes a minimal user-owned runner entrypoint at
 `scripts/run-vps-runner.mjs`. It can poll the GitHub queue contract, report
 runner events, create the target branch, run Codex CLI in a cloned workspace,
