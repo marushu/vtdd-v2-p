@@ -132,7 +132,7 @@ not require a public inbound VPS API:
 
 ### Private Repository Actions-Minimization Mode
 
-For private repositories such as TOMIO, the preferred low-Actions-consumption
+For private repositories, the preferred low-Actions-consumption
 shape is:
 
 - use `vps_runner` for Codex implementation, branch push, and PR creation
@@ -150,13 +150,13 @@ GitHub-hosted runner. It does not eliminate Actions minutes for workflows that
 remain GitHub-hosted by design, including PR checks, Gemini review, deploy
 dispatches, or any repository-specific CI configured on the target repository.
 
-For TOMIO's private branch model, configure the repository policy with the
-private base branch explicitly:
+For a private-branch target repository, configure the repository policy with
+the private base branch explicitly:
 
 ```json
 {
   "repositories": {
-    "marushu/tomio": {
+    "owner/private-repo": {
       "enabled": true,
       "baseRefs": ["private"],
       "branchPrefixes": ["codex/"]
@@ -194,7 +194,7 @@ Required runner environment:
         "baseRefs": ["main"],
         "branchPrefixes": ["codex/"]
       },
-      "marushu/tomio": {
+      "owner/private-repo": {
         "enabled": true,
         "baseRefs": ["private"],
         "branchPrefixes": ["codex/"]
@@ -206,6 +206,23 @@ Required runner environment:
   The runner ignores queue comments whose repository is not allowlisted, whose
   `baseRef` is not in that repository's `baseRefs`, or whose branch does not
   start with one of that repository's `branchPrefixes`.
+- Optional `scripts/vtdd-runner-repo.mjs`: operator helper for maintaining the
+  JSON allowlist. Butler owns nickname resolution; this helper accepts only the
+  resolved canonical `owner/repo` so the VPS does not duplicate nickname memory.
+  `add` and `check` verify GitHub runtime truth through `gh repo view`, including
+  current visibility and default branch, but visibility is not persisted as
+  policy because repositories may move between private and public:
+
+  ```bash
+  node scripts/vtdd-runner-repo.mjs add owner/private-repo --base private --branch-prefix codex/
+  node scripts/vtdd-runner-repo.mjs check owner/private-repo
+  node scripts/vtdd-runner-repo.mjs list
+  ```
+
+  The normal Butler path should remain natural-language first: Butler resolves
+  a nickname such as `TOMIO` to a canonical repository, the Worker writes a
+  bounded VPS runner queue request for that repository, and the VPS runner
+  executes only if the resolved repository is allowlisted.
 - Optional `VTDD_VPS_RUNNER_WORKDIR`: workspace root. Defaults to
   `~/vtdd-runner/workspaces`.
 - Codex CLI must be authenticated on the VPS user account. If `codex exec`
