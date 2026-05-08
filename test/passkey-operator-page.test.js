@@ -157,6 +157,36 @@ test("passkey operator page focuses secret sync modes without hiding the require
   assert.equal(actionsSecretHtml.includes('<section data-operator-section="pr-merge" hidden>'), true);
 });
 
+test("passkey operator page focuses VPS runner admin mode on real approval only", () => {
+  const html = renderPasskeyOperatorPage({
+    repositoryInput: "sample-org/private-repo",
+    issueNumber: 157,
+    actionType: "destructive",
+    highRiskKind: "vps_runner_admin"
+  });
+
+  assert.equal(html.includes('<section data-operator-section="approval">'), true);
+  assert.equal(html.includes('<section data-operator-section="vps-runner-admin">'), true);
+  assert.equal(html.includes('<section data-operator-section="production-deploy" hidden>'), true);
+  assert.equal(html.includes('<section data-operator-section="pr-merge" hidden>'), true);
+  assert.equal(html.includes('<section data-operator-section="github-app-secret-sync" hidden>'), true);
+  assert.equal(html.includes('<section data-operator-section="github-actions-secret-sync" hidden>'), true);
+  assert.equal(html.includes('id="action-type-input" value="destructive"'), true);
+  assert.equal(html.includes('id="risk-kind-input" value="vps_runner_admin"'), true);
+  assert.equal(html.includes("文字列としての passkey は承認ではありません"), true);
+});
+
+test("passkey operator page fills VPS runner admin defaults from explicit mode", () => {
+  const html = renderPasskeyOperatorPage({
+    operatorMode: "vps",
+    repositoryInput: "sample-org/private-repo"
+  });
+
+  assert.equal(html.includes('id="action-type-input" value="destructive"'), true);
+  assert.equal(html.includes('id="risk-kind-input" value="vps_runner_admin"'), true);
+  assert.equal(html.includes('<section data-operator-section="vps-runner-admin">'), true);
+});
+
 test("passkey operator page keeps the full maintenance view when no mode is inferred", () => {
   const html = renderPasskeyOperatorPage({ operatorMode: "full" });
 
@@ -164,6 +194,7 @@ test("passkey operator page keeps the full maintenance view when no mode is infe
   assert.equal(html.includes('<section data-operator-section="production-deploy">'), true);
   assert.equal(html.includes('<section data-operator-section="pr-merge">'), true);
   assert.equal(html.includes('<section data-operator-section="github-actions-secret-sync">'), true);
+  assert.equal(html.includes('<section data-operator-section="vps-runner-admin">'), true);
 });
 
 test("passkey operator page keeps sync disabled message when helper endpoint is absent", () => {

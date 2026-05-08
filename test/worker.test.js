@@ -1513,6 +1513,24 @@ test("worker passkey operator page enables desktop secret sync bridge when syncA
   assert.equal(html.includes("desktop helper bridge に接続します"), true);
 });
 
+test("worker serves VPS runner admin passkey operator mode", async () => {
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/v2/approval/passkey/operator?mode=vps&repositoryInput=sample-org%2Fprivate-repo&issueNumber=157&phase=execution"
+    ),
+    gatewayAuthEnv
+  );
+
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.equal(html.includes("VPS Runner Admin"), true);
+  assert.equal(html.includes('id="repo-input" value="sample-org/private-repo"'), true);
+  assert.equal(html.includes('id="issue-input" value="157"'), true);
+  assert.equal(html.includes('id="action-type-input" value="destructive"'), true);
+  assert.equal(html.includes('id="risk-kind-input" value="vps_runner_admin"'), true);
+  assert.equal(html.includes("文字列としての passkey は承認ではありません"), true);
+});
+
 test("worker allows same-origin browser bootstrap registration before first passkey exists", async () => {
   const provider = createInMemoryMemoryProvider();
 
