@@ -557,6 +557,55 @@ test("remote Codex vps_runner dispatch posts a GitHub-backed queue comment", asy
   assert.equal(body.includes("Do not merge."), true);
 });
 
+test("remote Codex vps_runner dispatch preserves bounded PR revision goal", async () => {
+  const calls = [];
+  const dispatched = await dispatchRemoteCodexExecution({
+    payload: {
+      actorRole: ActorRole.BUTLER,
+      executorTransport: RemoteCodexExecutorTransport.VPS_RUNNER,
+      issueContext: { issueNumber: 204 },
+      continuationContext: {
+        codexGoal: RemoteCodexDispatchGoal.REVISE_PR
+      },
+      policyInput: {
+        approvalPhrase: "GO",
+        targetConfirmed: true,
+        approvalScopeMatched: true,
+        runtimeTruth: {
+          runtimeState: {
+            activeBranch: "codex/add-pr-ready-authority"
+          }
+        }
+      }
+    },
+    gatewayResult: {
+      repository: "sample-org/vtdd-v2",
+      executionContinuity: {
+        codexGoal: "wait_for_review"
+      }
+    },
+    env: {
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_dispatch_token",
+      GITHUB_API_FETCH: async (url, init) => {
+        calls.push({ url, init });
+        return new Response(
+          JSON.stringify({
+            id: 20401,
+            html_url: "https://github.com/sample-org/vtdd-v2/issues/204#issuecomment-20401"
+          }),
+          { status: 201, headers: { "content-type": "application/json" } }
+        );
+      }
+    }
+  });
+
+  assert.equal(dispatched.ok, true);
+  assert.equal(dispatched.execution.transport, RemoteCodexExecutorTransport.VPS_RUNNER);
+  const body = JSON.parse(calls[0].init.body).body;
+  assert.equal(body.includes('"codexGoal": "revise_pr"'), true);
+  assert.equal(body.includes('"branch": "codex/add-pr-ready-authority"'), true);
+});
+
 test("remote Codex vps_runner progress reads queue comment and target PR truth", async () => {
   const calls = [];
   const progress = await retrieveRemoteCodexExecutionProgress({

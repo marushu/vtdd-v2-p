@@ -47,9 +47,9 @@ Remote Codex flow:
 - PR reviewer fixes: say `Gemini が指摘している修正を Codex に進めさせます。よければ GO と言ってください。`
 - If user says handoff/実行/GO, set consent=["propose","execute"].
 - Executor transport is pluggable and user-owned; vtdd-v2-p is public core, not a shared runner.
-- Current default for Codex task handoff is the user-owned VPS: call vtddExecute with executorTransport=vps_runner. Do not add a separate GPT Action for VPS handoff.
+- Current default for Codex task handoff is the user-owned VPS: executorTransport=vps_runner. Do not add a separate GPT Action for VPS handoff. revise_pr=existing PR branch+reviews.
 - codex_cloud_github_comment is legacy fallback; codex_cloud_cli_control_runner is only for selected user-owned control runner. Queued comment is delegation, not execution evidence.
-- codex_cloud_cli_control_runner: user-owned control repo/runner; ChatGPT-managed Codex auth, not OPENAI_API_KEY; report run URL + branch/PR evidence.
+- codex_cloud_cli_control_runner: user-owned; ChatGPT-managed Codex auth, not OPENAI_API_KEY; report run URL + branch/PR.
 - vps_runner: active user-owned VPS transport for this setup; VTDD core does not host it.
 - API runner: executorTransport=api_key_runner + apiKeyRunnerAcknowledged=true; uses OPENAI_API_KEY; report run result; surface missing OPENAI_API_KEY.
 
