@@ -4,6 +4,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { renderPrBody } from "./render-pr-body.mjs";
 
 const QUEUE_MARKER_RE = /<!--\s*vtdd:vps-runner-execution:([a-zA-Z0-9._:-]+)\s*-->/;
 const EVENT_MARKER_RE = /<!--\s*vtdd:vps-runner-event:([a-zA-Z0-9._:-]+)\s*-->/;
@@ -437,17 +438,37 @@ async function findExistingPullRequestUrl({ repository, branch, env, cwd }) {
 }
 
 function buildPullRequestBody(payload) {
-  return [
-    `Issue: #${payload.issueNumber}`,
-    `Execution ID: ${payload.executionId}`,
-    "",
-    "Created by the VTDD VPS runner.",
-    "",
-    "Boundaries:",
-    "- No merge performed.",
-    "- No deploy performed.",
-    "- GitHub branch / PR are the runtime truth for Butler progress."
-  ].join("\n");
+  return renderPrBody({
+    issue: payload.issueNumber,
+    executionId: payload.executionId,
+    codexGoal: payload.codexGoal || "open_pr",
+    intent: `VPS runner handoff for Issue #${payload.issueNumber}.`,
+    satisfied: [
+      "VPS runner created the target branch.",
+      "VPS runner opened this draft PR as GitHub-visible runtime truth."
+    ].join("\n"),
+    unsatisfied: "Human review and merge remain pending.",
+    nonGoals: "None.",
+    unit: "Not run by VPS runner.",
+    integration: "Not run by VPS runner.",
+    e2e: "GitHub branch / PR creation is the runtime evidence for this handoff.",
+    manual: "VPS runner executed the bounded Codex handoff.",
+    evidencePath: `Issue #${payload.issueNumber}, branch ${payload.branch || "not provided"}, execution ${payload.executionId}`,
+    cloudflareDeploy: "Not performed.",
+    actionSchemaUpdate: "Not required.",
+    instructionsUpdate: "Not required.",
+    iphoneButlerE2E: "Progress must be read through vtddExecutionProgress / GitHub runtime truth.",
+    rules: [
+      "Queued handoff alone is not success.",
+      "GitHub branch / PR / raw failure are runtime truth.",
+      "No merge or deploy is performed by the VPS runner."
+    ].join("\n"),
+    outOfScope: [
+      "Merge.",
+      "Deploy.",
+      "Secret, permission, or repository settings mutation."
+    ].join("\n")
+  });
 }
 
 function createGitHubFetch({ apiBaseUrl, token }) {
@@ -611,6 +632,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 export {
   buildCodexExecutionPrompt,
   buildCodexExecArgs,
+  buildPullRequestBody,
   buildVpsRunnerEventComment,
   classifyVpsRunnerFailure,
   loadVpsRunnerRepositoryPolicies,

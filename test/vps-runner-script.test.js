@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   buildCodexExecutionPrompt,
   buildCodexExecArgs,
+  buildPullRequestBody,
   buildVpsRunnerEventComment,
   classifyVpsRunnerFailure,
   loadVpsRunnerRepositoryPolicies,
@@ -245,6 +246,24 @@ test("VPS runner Codex prompt preserves high-risk boundaries", () => {
   assert.equal(prompt.includes("Do not merge."), true);
   assert.equal(prompt.includes("Do not deploy."), true);
   assert.equal(prompt.includes("Do not mutate secrets"), true);
+});
+
+test("VPS runner PR body satisfies guarded PR template markers", () => {
+  const body = buildPullRequestBody({
+    repository: "sample-org/vtdd-v2",
+    issueNumber: 194,
+    executionId: "remote-codex-issue194-test",
+    branch: "codex/issue-194",
+    codexGoal: "open_pr"
+  });
+
+  assert.equal(body.includes("## This PR satisfies Intent"), true);
+  assert.equal(body.includes("## Satisfied Success Criteria"), true);
+  assert.equal(body.includes("## Unsatisfied Success Criteria"), true);
+  assert.equal(body.includes("## Verification Evidence"), true);
+  assert.equal(body.includes("## Surface Update Checklist"), true);
+  assert.equal(body.includes("Execution ID: remote-codex-issue194-test"), true);
+  assert.equal(body.includes("No merge or deploy is performed by the VPS runner."), true);
 });
 
 test("VPS runner classifies unauthenticated Codex CLI as raw auth failure", () => {
