@@ -53,6 +53,21 @@ export const GitHubAppOperationRegistry = Object.freeze({
     requiredPayloadFields: ["repository", "pullNumber", "body"],
     naturalGoIdentityFields: ["repository", "pullNumber", "body"]
   },
+  pull_ready_for_review: {
+    operation: "pull_ready_for_review",
+    tier: GitHubAppOperationTier.PASSKEY_AUTHORITY,
+    requiredPayloadFields: ["repository", "issueNumber"],
+    requiredRuntimeEvidenceFields: ["pullNumber"],
+    authorityScopeIdentityFields: ["repository", "issueNumber", "pullNumber", "phase"],
+    requiredRuntimeTruthChecks: ["pull_request_ready_for_review_result"],
+    executorFunction: "executeGitHubHighRiskPlane",
+    responseSummaryShape: ["operation", "repository", "pullNumber", "readyForReview", "changed", "htmlUrl"],
+    passkey: {
+      actionType: "pull_ready_for_review",
+      highRiskKind: "pull_ready_for_review",
+      operatorUrlRequirements: ["repositoryInput", "phase", "issueNumber", "pullNumber", "actionType", "highRiskKind"]
+    }
+  },
   pull_merge: {
     operation: "pull_merge",
     tier: GitHubAppOperationTier.PASSKEY_AUTHORITY,

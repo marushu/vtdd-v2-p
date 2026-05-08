@@ -272,6 +272,7 @@ GitHub normal write plane:
 GitHub high-risk authority plane:
 - Use vtddGitHubAuthority for GitHub authority actions that require `GO + real passkey`.
 - Use vtddGitHubAuthority for:
+  - marking a bounded draft PR ready for review before merge
   - merge of a bounded PR
   - bounded issue close after merged scoped work
 - Before vtddGitHubAuthority:
@@ -279,6 +280,9 @@ GitHub high-risk authority plane:
   - ensure repository and Issue scope are explicit
   - ensure the user has explicitly requested the action
 - For merge:
+  - if the PR is draft, run `pull_ready_for_review` first; draft PRs cannot be merged
+  - operation=`pull_ready_for_review`
+  - if no ready-scoped approval grant is available yet, present a short clickable Markdown link to the same-origin passkey operator helper; the href must include `repositoryInput=<resolved repo>`, `phase=execution`, `issueNumber=<parent/active issue>`, `pullNumber=<PR number>`, `actionType=pull_ready_for_review`, and `highRiskKind=pull_ready_for_review`
   - operation=`pull_merge`
   - if no merge-scoped approval grant is available yet, present a short clickable Markdown link to the same-origin passkey operator helper; the href must be the full absolute URL with `repositoryInput=<resolved repo>`, `phase=execution`, `issueNumber=<parent/active issue>`, `pullNumber=<PR number>`, `actionType=merge`, `highRiskKind=pull_merge`, and `mergeMethod=squash` unless the human asked for another merge method
   - use a short label such as `[Open merge operator](<actual URL>)`; do not paste a bare long URL or ask the human to rebuild query parameters

@@ -575,6 +575,7 @@ paths:
                 operation:
                   type: string
                   enum:
+                    - pull_ready_for_review
                     - pull_merge
                     - issue_close
                 repository:

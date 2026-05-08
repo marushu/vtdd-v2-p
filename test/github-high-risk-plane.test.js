@@ -34,9 +34,24 @@ const mergeGrant = {
   }
 };
 
+const readyGrant = {
+  approvalId: "approval-ready-123",
+  verified: true,
+  expiresAt: "2099-01-01T00:00:00.000Z",
+  scope: {
+    actionType: "pull_ready_for_review",
+    highRiskKind: "pull_ready_for_review",
+    repositoryInput: "sample-org/vtdd-v2-p",
+    issueNumber: "55",
+    pullNumber: "21",
+    phase: "execution"
+  }
+};
+
 test("github app operation registry defines issue close authority scope and runtime truth", () => {
   const issueClose = getGitHubAppOperation("issue_close");
   const pullMerge = getGitHubAppOperation("pull_merge");
+  const pullReady = getGitHubAppOperation("pull_ready_for_review");
 
   assert.equal(issueClose.tier, GitHubAppOperationTier.PASSKEY_AUTHORITY);
   assert.deepEqual(issueClose.requiredPayloadFields, ["repository", "issueNumber"]);
@@ -58,6 +73,18 @@ test("github app operation registry defines issue close authority scope and runt
     "repositoryInput",
     "phase",
     "issueNumber",
+    "actionType",
+    "highRiskKind"
+  ]);
+  assert.equal(pullReady.tier, GitHubAppOperationTier.PASSKEY_AUTHORITY);
+  assert.deepEqual(pullReady.requiredPayloadFields, ["repository", "issueNumber"]);
+  assert.deepEqual(pullReady.requiredRuntimeEvidenceFields, ["pullNumber"]);
+  assert.deepEqual(pullReady.authorityScopeIdentityFields, ["repository", "issueNumber", "pullNumber", "phase"]);
+  assert.deepEqual(pullReady.passkey.operatorUrlRequirements, [
+    "repositoryInput",
+    "phase",
+    "issueNumber",
+    "pullNumber",
     "actionType",
     "highRiskKind"
   ]);
@@ -151,6 +178,86 @@ test("github high-risk plane merges a pull request with scoped approval grant", 
   assert.equal(result.authorityAction.operation, "pull_merge");
   assert.equal(result.authorityAction.merged, true);
   assert.equal(calls[0].init.method, "PUT");
+});
+
+test("github high-risk plane marks draft pull request ready for review with scoped approval grant", async () => {
+  const calls = [];
+  const result = await executeGitHubHighRiskPlane({
+    operation: GitHubHighRiskOperation.PULL_READY_FOR_REVIEW,
+    repository: "sample-org/vtdd-v2-p",
+    issueNumber: 55,
+    pullNumber: 21,
+    approvalPhrase: "GO",
+    targetConfirmed: true,
+    approvalGrant: readyGrant,
+    approvalScope: readyGrant.scope,
+    env: {
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_high_risk",
+      GITHUB_API_FETCH: async (url, init) => {
+        calls.push({ url, init });
+        if (calls.length === 1) {
+          return new Response(
+            JSON.stringify({
+              draft: true,
+              node_id: "PR_kwDOExample",
+              html_url: "https://github.com/sample-org/vtdd-v2-p/pull/21"
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        return new Response(
+          JSON.stringify({
+            data: {
+              markPullRequestReadyForReview: {
+                pullRequest: {
+                  isDraft: false,
+                  number: 21,
+                  url: "https://github.com/sample-org/vtdd-v2-p/pull/21"
+                }
+              }
+            }
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        );
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.authorityAction.operation, "pull_ready_for_review");
+  assert.equal(result.authorityAction.readyForReview, true);
+  assert.equal(result.authorityAction.changed, true);
+  assert.equal(calls[0].init.method, "GET");
+  assert.equal(calls[1].url, "https://api.github.com/graphql");
+  assert.equal(calls[1].init.method, "POST");
+});
+
+test("github high-risk plane treats already-ready pull request as no-op success", async () => {
+  const result = await executeGitHubHighRiskPlane({
+    operation: GitHubHighRiskOperation.PULL_READY_FOR_REVIEW,
+    repository: "sample-org/vtdd-v2-p",
+    issueNumber: 55,
+    pullNumber: 21,
+    approvalPhrase: "GO",
+    targetConfirmed: true,
+    approvalGrant: readyGrant,
+    approvalScope: readyGrant.scope,
+    env: {
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_high_risk",
+      GITHUB_API_FETCH: async () =>
+        new Response(
+          JSON.stringify({
+            draft: false,
+            html_url: "https://github.com/sample-org/vtdd-v2-p/pull/21"
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        )
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.authorityAction.readyForReview, true);
+  assert.equal(result.authorityAction.changed, false);
 });
 
 test("github high-risk plane requires merge method from registry", async () => {

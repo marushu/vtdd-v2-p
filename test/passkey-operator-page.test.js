@@ -55,8 +55,28 @@ test("passkey operator page pre-fills PR merge fields from URL input", () => {
   assert.equal(html.includes('id="action-type-input" value="merge"'), true);
   assert.equal(html.includes('id="risk-kind-input" value="pull_merge"'), true);
   assert.equal(html.includes('id="merge-method-input" value="squash"'), true);
+  assert.equal(html.includes("Mark ready for review"), true);
+  assert.equal(html.includes('operation: "pull_ready_for_review"'), true);
   assert.equal(html.includes('operation: "pull_merge"'), true);
   assert.equal(html.includes('pullNumber: Number(document.getElementById("pull-number-input").value || 0) || null'), true);
+});
+
+test("passkey operator page can scope PR ready-for-review approval to pull proof", () => {
+  const html = renderPasskeyOperatorPage({
+    repositoryInput: "marushu/vtdd-v2-p",
+    issueNumber: 194,
+    pullNumber: 202,
+    phase: "execution",
+    actionType: "pull_ready_for_review",
+    highRiskKind: "pull_ready_for_review"
+  });
+
+  assert.equal(html.includes('<section data-operator-section="approval">'), true);
+  assert.equal(html.includes('<section data-operator-section="pr-merge">'), true);
+  assert.equal(html.includes('id="action-type-input" value="pull_ready_for_review"'), true);
+  assert.equal(html.includes('id="risk-kind-input" value="pull_ready_for_review"'), true);
+  assert.equal(html.includes('id="pull-number-input" value="202"'), true);
+  assert.equal(html.includes("PR ready-for-review request"), true);
 });
 
 test("passkey operator page can scope issue close approval to merged pull proof", () => {
