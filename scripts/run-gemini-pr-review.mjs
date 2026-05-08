@@ -77,7 +77,7 @@ async function main() {
         status: "requested",
         trigger: triggerResult.value.trigger,
         reason: "gemini_temporarily_unavailable",
-        deliveryMode: "codex_cloud_github_comment",
+        deliveryMode: "vps_codex_cli",
         repository,
         pullRequestNumber: prNumber
       });
@@ -93,7 +93,7 @@ async function main() {
         });
       }
 
-      console.log(`Requested Codex Cloud reviewer fallback on PR #${prNumber}.`);
+      console.log(`Requested VPS Codex reviewer fallback on PR #${prNumber}.`);
       return;
     }
     throw error;

@@ -34,15 +34,15 @@ must not hard-fail the PR solely for reviewer availability reasons.
 Preferred fallback:
 
 - VTDD posts or updates a `vtdd:reviewer=codex-fallback` request comment that
-  contains an `@codex review` request for Codex Cloud
+  targets the user-owned VPS Codex CLI reviewer transport
 - the default request path does not use `OPENAI_API_KEY`
-- the request remains request-state until Codex returns a completed fallback
+- the request remains request-state until the VPS reviewer runner returns a completed fallback
   reviewer marker with a recommended action
 
 When Gemini is temporarily unavailable, a completed
 `vtdd:reviewer=codex-fallback` marker comment with a recommended action is
 valid fallback reviewer evidence only when it is written by a trusted
-VTDD-controlled actor or by the Codex Cloud reviewer result path. Butler must
+VTDD-controlled actor or by an explicitly configured Codex Cloud reviewer result path. Butler must
 not treat the absence of GitHub Review API objects alone as absence of reviewer
 evidence, but it must not trust spoofable marker comments from untrusted
 authors.
@@ -50,18 +50,19 @@ authors.
 Current limitation:
 
 - a VTDD bot-authored `@codex review` request proves only that fallback was
-  requested; it is not completed reviewer evidence by itself
+  requested when the legacy Codex Cloud comment path is selected; it is not completed reviewer evidence by itself
 - a `chatgpt-codex-connector` response that asks the operator to create/connect
   a Codex account is a fallback blocker (`codex_connector_not_configured`), not
   reviewer progress
-- if Codex Cloud does not pick up the request, VTDD must keep the fallback state
+- if the selected Codex reviewer transport does not pick up the request, VTDD must keep the fallback state
   as requested or blocked rather than pretending review completed
 
 ## Operator Prerequisite
 
 For the default non-manual Codex fallback to reach a `completed` reviewer
-state, the operator-owned Codex Cloud / ChatGPT GitHub integration must pick up
-the PR comment request and return reviewer output.
+state, the user-owned VPS runner must be configured with an authenticated Codex
+CLI session and allowed repository policy. This avoids depending on the
+ChatGPT/Codex GitHub connector for the default path.
 
 Optional API-backed runner:
 

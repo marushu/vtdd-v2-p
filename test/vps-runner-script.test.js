@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   buildCodexExecutionPrompt,
   buildCodexExecArgs,
+  buildPullRequestBody,
   buildVpsRunnerEventComment,
   classifyVpsRunnerFailure,
   loadVpsRunnerRepositoryPolicies,
@@ -10,6 +11,7 @@ import {
   parseVpsRunnerEventComment,
   parseVpsRunnerQueueComment,
   runVpsRunnerOnce,
+  selectPendingVpsReviewerFallbacks,
   selectPendingVpsRunnerExecutions
 } from "../scripts/run-vps-runner.mjs";
 
@@ -226,6 +228,49 @@ test("VPS runner dry run reports selected execution without side effects", async
   ]);
 });
 
+test("VPS runner selects pending Codex reviewer fallback comments after development queues", () => {
+  const selected = selectPendingVpsReviewerFallbacks({
+    repositoryPolicies: normalizeRepositoryPolicies({
+      allowedRepositories: ["sample-org/vtdd-v2"]
+    }),
+    comments: [
+      {
+        id: 1,
+        html_url: "https://github.com/sample-org/vtdd-v2/pull/22#issuecomment-1",
+        created_at: "2026-05-08T10:00:00Z",
+        repository: "sample-org/vtdd-v2",
+        pullRequestNumber: 22,
+        body: [
+          "<!-- vtdd:reviewer=codex-fallback -->",
+          "## VTDD Codex Reviewer Fallback Request",
+          "",
+          "- Status: `requested`",
+          "- Trigger: `pull_request_target:synchronize`",
+          "- Reason: `gemini_temporarily_unavailable`",
+          "- Delivery mode: `vps_codex_cli`"
+        ].join("\n")
+      },
+      {
+        id: 2,
+        html_url: "https://github.com/sample-org/vtdd-v2/pull/23#issuecomment-2",
+        created_at: "2026-05-08T10:01:00Z",
+        repository: "sample-org/vtdd-v2",
+        pullRequestNumber: 23,
+        body: [
+          "<!-- vtdd:reviewer=codex-fallback -->",
+          "- Status: `requested`",
+          "- Delivery mode: `codex_cloud_github_comment`"
+        ].join("\n")
+      }
+    ]
+  });
+
+  assert.equal(selected.length, 1);
+  assert.equal(selected[0].repository, "sample-org/vtdd-v2");
+  assert.equal(selected[0].pullRequestNumber, 22);
+  assert.equal(selected[0].trigger, "pull_request_target:synchronize");
+});
+
 test("VPS runner Codex prompt preserves high-risk boundaries", () => {
   const prompt = buildCodexExecutionPrompt({
     payload: {
@@ -245,6 +290,24 @@ test("VPS runner Codex prompt preserves high-risk boundaries", () => {
   assert.equal(prompt.includes("Do not merge."), true);
   assert.equal(prompt.includes("Do not deploy."), true);
   assert.equal(prompt.includes("Do not mutate secrets"), true);
+});
+
+test("VPS runner PR body satisfies guarded PR template markers", () => {
+  const body = buildPullRequestBody({
+    repository: "sample-org/vtdd-v2",
+    issueNumber: 194,
+    executionId: "remote-codex-issue194-test",
+    branch: "codex/issue-194",
+    codexGoal: "open_pr"
+  });
+
+  assert.equal(body.includes("## This PR satisfies Intent"), true);
+  assert.equal(body.includes("## Satisfied Success Criteria"), true);
+  assert.equal(body.includes("## Unsatisfied Success Criteria"), true);
+  assert.equal(body.includes("## Verification Evidence"), true);
+  assert.equal(body.includes("## Surface Update Checklist"), true);
+  assert.equal(body.includes("Execution ID: remote-codex-issue194-test"), true);
+  assert.equal(body.includes("No merge or deploy is performed by the VPS runner."), true);
 });
 
 test("VPS runner classifies unauthenticated Codex CLI as raw auth failure", () => {

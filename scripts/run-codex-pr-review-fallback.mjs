@@ -12,27 +12,10 @@ async function main() {
   const trigger = mustGetEnv("CODEX_FALLBACK_TRIGGER");
   const reason = mustGetEnv("CODEX_FALLBACK_REASON");
   const githubToken = mustGetEnv("GITHUB_TOKEN");
+  const deliveryMode = process.env.CODEX_FALLBACK_DELIVERY_MODE || "workflow_dispatch_codex_cli";
 
   const apiBaseUrl = process.env.GITHUB_API_URL || "https://api.github.com";
   const githubFetch = createGitHubFetch({ apiBaseUrl, token: githubToken });
-
-  if (!process.env.OPENAI_API_KEY) {
-    await upsertCodexFallbackComment({
-      githubFetch,
-      repository,
-      prNumber,
-      body: formatCodexReviewFallbackComment({
-        status: "blocked",
-        trigger,
-        reason,
-        deliveryMode: "workflow_dispatch_codex_cli",
-        blocker: "openai_api_key_not_configured",
-        rawReview: "OPENAI_API_KEY is required for non-manual Codex fallback review."
-      })
-    });
-    console.log(`Recorded Codex fallback blocker state on PR #${prNumber}.`);
-    return;
-  }
 
   const pullRequest = await githubFetch(`/repos/${repository}/pulls/${prNumber}`);
   const files = await githubFetchAll(githubFetch, `/repos/${repository}/pulls/${prNumber}/files?per_page=100`);
@@ -70,7 +53,7 @@ async function main() {
         status: "blocked",
         trigger,
         reason,
-        deliveryMode: "workflow_dispatch_codex_cli",
+        deliveryMode,
         blocker: failure.blocker,
         rawReview: failure.rawFailure
       })
@@ -85,7 +68,7 @@ async function main() {
     status: "completed",
     trigger,
     reason,
-    deliveryMode: "workflow_dispatch_codex_cli",
+    deliveryMode,
     recommendedAction: normalizedReview.recommendedAction,
     criticalFindings: normalizedReview.criticalFindings,
     risks: normalizedReview.risks,
@@ -277,6 +260,8 @@ function classifyCodexFallbackFailure(error) {
   if (lowered.includes("quota exceeded")) {
     blocker = "openai_quota_exceeded";
   } else if (
+    lowered.includes("not authenticated") ||
+    lowered.includes("login") ||
     lowered.includes("missing bearer") ||
     lowered.includes("401") ||
     lowered.includes("unauthorized") ||
