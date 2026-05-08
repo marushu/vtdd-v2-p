@@ -45,6 +45,9 @@ test("remote Codex docs define private repository VPS Actions-minimization bound
   );
   assert.equal(doc.includes("does not eliminate Actions minutes"), true);
   assert.equal(doc.includes('"baseRefs": ["private"]'), true);
+  assert.equal(doc.includes("owner/private-repo"), true);
+  assert.equal(doc.includes("marushu/tomio"), false);
+  assert.equal(doc.includes("marushu/hibou-piccola-bookkeeping"), false);
   assert.equal(doc.includes("Codex implementation moved off\nGitHub-hosted Actions"), true);
   assert.equal(doc.includes("Actions cost is zero"), true);
 });

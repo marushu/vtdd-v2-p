@@ -150,13 +150,13 @@ GitHub-hosted runner. It does not eliminate Actions minutes for workflows that
 remain GitHub-hosted by design, including PR checks, Gemini review, deploy
 dispatches, or any repository-specific CI configured on the target repository.
 
-For TOMIO's private branch model, configure the repository policy with the
-private base branch explicitly:
+For a private-branch target repository, configure the repository policy with
+the private base branch explicitly:
 
 ```json
 {
   "repositories": {
-    "marushu/tomio": {
+    "owner/private-repo": {
       "enabled": true,
       "baseRefs": ["private"],
       "branchPrefixes": ["codex/"]
@@ -194,7 +194,7 @@ Required runner environment:
         "baseRefs": ["main"],
         "branchPrefixes": ["codex/"]
       },
-      "marushu/tomio": {
+      "owner/private-repo": {
         "enabled": true,
         "baseRefs": ["private"],
         "branchPrefixes": ["codex/"]
