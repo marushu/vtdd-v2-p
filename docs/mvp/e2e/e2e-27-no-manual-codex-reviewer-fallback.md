@@ -59,21 +59,24 @@ This confirms the main-branch fallback receiver can execute the non-manual
 Codex reviewer path and write delivered reviewer evidence back to GitHub after
 Gemini dispatches a fallback request.
 
-## Default No-API-Key Request Path
+## Default VPS No-API-Key Request Path
 
-Observed correction on 2026-04-30:
+Observed correction on 2026-05-08:
 
 - Gemini temporary unavailability now posts or updates a
   `vtdd:reviewer=codex-fallback` request comment using
-  `deliveryMode=codex_cloud_github_comment`
-- this default request path includes `@codex review`
+  `deliveryMode=vps_codex_cli`
+- this default request path is picked up by the user-owned VPS runner, which
+  runs the critique-only Codex CLI fallback script and writes a completed or
+  blocked marker back to GitHub
 - this default request path does not require `OPENAI_API_KEY`
-- the request remains request-state until Codex Cloud returns a completed
+- the request remains request-state until the VPS runner returns a completed
   fallback reviewer marker with a recommended action
 
 This keeps the default reviewer fallback aligned with the operator-owned
-ChatGPT/Codex subscription surface. It does not claim that a bot-authored
-request has already produced completed reviewer evidence.
+ChatGPT/Codex subscription surface through the authenticated VPS Codex CLI. It
+does not claim that a requested marker has already produced completed reviewer
+evidence.
 
 ## PR Runtime Verification Boundary
 
@@ -91,10 +94,10 @@ Observed on PR `#154` before this transport correction reached `main`:
 Interpretation rule:
 
 - local/test evidence may prove that Gemini fallback will request
-  `deliveryMode=codex_cloud_github_comment` after merge
+  `deliveryMode=vps_codex_cli` after merge
 - PR-level live fallback evidence remains incomplete until a later PR, running
-  against the updated `main`, produces either a Codex Cloud request-state
-  comment or a completed fallback reviewer marker from that path
+  against the updated `main`, produces either a VPS request-state comment or a
+  completed fallback reviewer marker from that path
 
 ## Evidence Files
 
@@ -118,7 +121,7 @@ Interpretation rule:
 E2E-27 now has recorded happy-path and boundary-path run evidence in-repo.
 
 This confirms Issue `#84` is connected to a VTDD-managed no-manual reviewer
-fallback design: when Gemini is unavailable, VTDD can request Codex Cloud
+fallback design: when Gemini is unavailable, VTDD can request VPS Codex CLI
 review through GitHub comment transport by default, or explicitly use an
 API-backed workflow only when that cost/account path is selected. It does not
 claim live provider pickup or credentials are configured in every operator
@@ -126,8 +129,9 @@ repository by default.
 
 Operator prerequisite for default live `completed` state:
 
-- configure and authorize the operator-owned Codex Cloud / ChatGPT GitHub
-  integration so it can pick up the `@codex review` request and return critique
+- configure the user-owned VPS runner with an authenticated Codex CLI session
+  and an allowlisted target repository so it can pick up the
+  `deliveryMode=vps_codex_cli` request and return critique
   output
 
 Optional API-backed runner prerequisite:

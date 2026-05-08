@@ -35,10 +35,11 @@ test("Gemini review workflow still routes reviewer execution through the script 
   assert.equal(workflow.includes("issues: write"), false);
 });
 
-test("Gemini review script defaults Codex fallback to Codex Cloud comment transport", () => {
+test("Gemini review script defaults Codex fallback to VPS Codex CLI transport", () => {
   const script = fs.readFileSync("scripts/run-gemini-pr-review.mjs", "utf8");
-  assert.equal(script.includes('deliveryMode: "codex_cloud_github_comment"'), true);
-  assert.equal(script.includes("Requested Codex Cloud reviewer fallback"), true);
+  assert.equal(script.includes('deliveryMode: "vps_codex_cli"'), true);
+  assert.equal(script.includes("Requested VPS Codex reviewer fallback"), true);
+  assert.equal(script.includes("@codex review"), false);
   assert.equal(script.includes("OPENAI_API_KEY"), false);
   assert.equal(script.includes("/actions/workflows/codex-pr-review-fallback.yml/dispatches"), false);
 });

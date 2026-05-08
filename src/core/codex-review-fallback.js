@@ -173,7 +173,15 @@ function buildStatusSection({
 
   return [
     "Gemini critical review is temporarily unavailable.",
-    "Non-manual Codex fallback review has been dispatched through VTDD-managed workflow execution."
+    "Non-manual Codex fallback review has been dispatched through VTDD-managed workflow execution.",
+    ...(repository || pullRequestNumber
+      ? [
+          "",
+          "### Target",
+          ...(repository ? [`- Repository: \`${repository}\``] : []),
+          ...(pullRequestNumber ? [`- Pull request: #${pullRequestNumber}`] : [])
+        ]
+      : [])
   ];
 }
 

@@ -4,11 +4,14 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import { parseCodexReviewFallbackComment } from "../src/core/index.js";
 import { renderPrBody } from "./render-pr-body.mjs";
 
 const QUEUE_MARKER_RE = /<!--\s*vtdd:vps-runner-execution:([a-zA-Z0-9._:-]+)\s*-->/;
 const EVENT_MARKER_RE = /<!--\s*vtdd:vps-runner-event:([a-zA-Z0-9._:-]+)\s*-->/;
 const DEFAULT_API_BASE_URL = "https://api.github.com";
+const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
@@ -53,18 +56,36 @@ async function runVpsRunnerOnce({
   }
 
   const execution = candidates.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))[0];
-  if (!execution) {
+  if (execution) {
+    if (dryRun) {
+      return {
+        ok: true,
+        message: `Dry run selected ${execution.payload.executionId} for ${execution.payload.repository}#${execution.payload.issueNumber}.`
+      };
+    }
+
+    return executeVpsRunnerExecution({ githubFetch, token, workRoot, execution });
+  }
+
+  const reviewerFallbacks = [];
+  for (const repository of policies.map((policy) => policy.repository)) {
+    const comments = await readRecentPullRequestComments({ githubFetch, repository });
+    reviewerFallbacks.push(...selectPendingVpsReviewerFallbacks({ comments, repositoryPolicies: policies }));
+  }
+
+  const reviewerFallback = reviewerFallbacks.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))[0];
+  if (!reviewerFallback) {
     return { ok: true, message: "No pending VPS runner execution found." };
   }
 
   if (dryRun) {
     return {
       ok: true,
-      message: `Dry run selected ${execution.payload.executionId} for ${execution.payload.repository}#${execution.payload.issueNumber}.`
+      message: `Dry run selected Codex reviewer fallback for ${reviewerFallback.repository}#${reviewerFallback.pullRequestNumber}.`
     };
   }
 
-  return executeVpsRunnerExecution({ githubFetch, token, workRoot, execution });
+  return executeVpsReviewerFallback({ token, reviewerFallback });
 }
 
 async function executeVpsRunnerExecution({ githubFetch, token, workRoot, execution }) {
@@ -209,6 +230,38 @@ function selectPendingVpsRunnerExecutions({ comments, allowedRepositories, repos
   return [...queues.values()].filter(
     (queue) => !terminalEvents.has(queue.payload.executionId) && !runningEvents.has(queue.payload.executionId)
   );
+}
+
+function selectPendingVpsReviewerFallbacks({ comments, allowedRepositories, repositoryPolicies }) {
+  const policies = normalizeRepositoryPolicies({ allowedRepositories, repositoryPolicies });
+  return comments
+    .map((comment) => {
+      const parsed = parseCodexReviewFallbackComment(comment);
+      if (!parsed || parsed.status !== "requested") {
+        return null;
+      }
+      if (!String(comment?.body || "").includes("- Delivery mode: `vps_codex_cli`")) {
+        return null;
+      }
+      const repository = normalizeRepository(comment.repository);
+      const pullRequestNumber = normalizePositiveInteger(comment.pullRequestNumber);
+      if (!repository || !pullRequestNumber) {
+        return null;
+      }
+      if (!policies.some((policy) => policy.repository === repository)) {
+        return null;
+      }
+      return {
+        repository,
+        pullRequestNumber,
+        trigger: extractBacktickedCommentValue(comment.body, "Trigger") || "unknown",
+        reason: extractBacktickedCommentValue(comment.body, "Reason") || "gemini_temporarily_unavailable",
+        createdAt: comment.created_at,
+        commentId: comment.id,
+        commentUrl: comment.html_url
+      };
+    })
+    .filter(Boolean);
 }
 
 async function loadVpsRunnerRepositoryPolicies({ env = process.env, readFile = fs.readFile } = {}) {
@@ -407,6 +460,50 @@ async function readRecentIssueComments({ githubFetch, repository }) {
   return comments;
 }
 
+async function readRecentPullRequestComments({ githubFetch, repository }) {
+  const pulls = await githubFetch(`/repos/${repository}/pulls?state=open&sort=updated&direction=desc&per_page=100`);
+  const comments = [];
+  for (const pull of pulls) {
+    const issueComments = await githubFetch(`/repos/${repository}/issues/${pull.number}/comments?per_page=100`);
+    comments.push(
+      ...issueComments.map((comment) => ({
+        ...comment,
+        repository,
+        pullRequestNumber: pull.number
+      }))
+    );
+  }
+  return comments;
+}
+
+async function executeVpsReviewerFallback({ token, reviewerFallback }) {
+  const env = {
+    ...buildRunnerCommandEnv({ token }),
+    TARGET_REPOSITORY: reviewerFallback.repository,
+    TARGET_PR_NUMBER: String(reviewerFallback.pullRequestNumber),
+    CODEX_FALLBACK_TRIGGER: reviewerFallback.trigger,
+    CODEX_FALLBACK_REASON: reviewerFallback.reason,
+    CODEX_FALLBACK_DELIVERY_MODE: "vps_codex_cli"
+  };
+  const scriptPath = path.join(SCRIPT_DIR, "run-codex-pr-review-fallback.mjs");
+  try {
+    await runCommand("node", [scriptPath], {
+      cwd: path.dirname(SCRIPT_DIR),
+      env,
+      maxBuffer: 1024 * 1024 * 12
+    });
+    return {
+      ok: true,
+      message: `VPS Codex reviewer fallback completed for ${reviewerFallback.repository}#${reviewerFallback.pullRequestNumber}.`
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      reason: error instanceof Error ? error.message : String(error)
+    };
+  }
+}
+
 async function postVpsRunnerEvent({ githubFetch, payload, event }) {
   return githubFetch(`/repos/${payload.repository}/issues/${payload.issueNumber}/comments`, {
     method: "POST",
@@ -583,6 +680,15 @@ function normalizeText(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function extractBacktickedCommentValue(body, label) {
+  const match = String(body || "").match(new RegExp(`- ${escapeRegExp(label)}: \\\`([^\\\`]+)\\\``));
+  return normalizeText(match?.[1]);
+}
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function normalizeRepository(value) {
   const text = normalizeText(value);
   return /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(text) ? text : "";
@@ -640,5 +746,6 @@ export {
   parseVpsRunnerEventComment,
   parseVpsRunnerQueueComment,
   runVpsRunnerOnce,
+  selectPendingVpsReviewerFallbacks,
   selectPendingVpsRunnerExecutions
 };

@@ -15,8 +15,8 @@ const MATRIX_PATH = path.join(process.cwd(), "docs", "mvp", "issue-to-e2e-matrix
 test("E2E-27 evidence doc records no-manual Codex fallback runs", () => {
   const doc = fs.readFileSync(DOC_PATH, "utf8");
   assert.equal(doc.includes("`#84`"), true);
-  assert.equal(doc.includes("Codex Cloud"), true);
-  assert.equal(doc.includes("deliveryMode=codex_cloud_github_comment"), true);
+  assert.equal(doc.includes("VPS Codex CLI"), true);
+  assert.equal(doc.includes("deliveryMode=vps_codex_cli"), true);
   assert.equal(doc.includes("does not require `OPENAI_API_KEY`"), true);
   assert.equal(doc.includes("PR Runtime Verification Boundary"), true);
   assert.equal(doc.includes("pull_request_target"), true);

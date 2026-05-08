@@ -17,16 +17,16 @@ test("formatCodexReviewFallbackComment renders marker and requested fallback sta
     status: "requested",
     trigger: "pull_request_target:synchronize",
     reason: "gemini_temporarily_unavailable",
-    deliveryMode: "codex_cloud_github_comment",
+    deliveryMode: "vps_codex_cli",
     repository: "marushu/vtdd-v2-p",
     pullRequestNumber: 152
   });
 
   assert.equal(body.includes(CODEX_REVIEW_FALLBACK_MARKER), true);
   assert.equal(body.includes("- Status: `requested`"), true);
-  assert.equal(body.includes("- Delivery mode: `codex_cloud_github_comment`"), true);
-  assert.equal(body.includes("@codex review"), true);
-  assert.equal(body.includes("does not use `OPENAI_API_KEY`"), true);
+  assert.equal(body.includes("- Delivery mode: `vps_codex_cli`"), true);
+  assert.equal(body.includes("@codex review"), false);
+  assert.equal(body.includes("VTDD-managed workflow execution"), true);
   assert.equal(body.includes("- Repository: `marushu/vtdd-v2-p`"), true);
   assert.equal(body.includes("- Pull request: #152"), true);
   assert.equal(body.includes("gemini_temporarily_unavailable"), true);
@@ -155,6 +155,6 @@ test("fallback script records blocked marker comments for unavailable Codex revi
   assert.equal(fallbackScript.includes("classifyCodexFallbackFailure"), true);
   assert.equal(fallbackScript.includes("upsertCodexFallbackComment"), true);
   assert.equal(fallbackScript.includes("openai_quota_exceeded"), true);
-  assert.equal(fallbackScript.includes("openai_api_key_not_configured"), true);
+  assert.equal(fallbackScript.includes("openai_api_key_invalid_or_missing"), true);
   assert.equal(fallbackScript.includes('status: "blocked"'), true);
 });

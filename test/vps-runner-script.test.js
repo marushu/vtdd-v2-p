@@ -11,6 +11,7 @@ import {
   parseVpsRunnerEventComment,
   parseVpsRunnerQueueComment,
   runVpsRunnerOnce,
+  selectPendingVpsReviewerFallbacks,
   selectPendingVpsRunnerExecutions
 } from "../scripts/run-vps-runner.mjs";
 
@@ -225,6 +226,49 @@ test("VPS runner dry run reports selected execution without side effects", async
     "/repos/sample-org/vtdd-v2/issues?state=open&sort=updated&direction=desc&per_page=100",
     "/repos/sample-org/vtdd-v2/issues/157/comments?per_page=100"
   ]);
+});
+
+test("VPS runner selects pending Codex reviewer fallback comments after development queues", () => {
+  const selected = selectPendingVpsReviewerFallbacks({
+    repositoryPolicies: normalizeRepositoryPolicies({
+      allowedRepositories: ["sample-org/vtdd-v2"]
+    }),
+    comments: [
+      {
+        id: 1,
+        html_url: "https://github.com/sample-org/vtdd-v2/pull/22#issuecomment-1",
+        created_at: "2026-05-08T10:00:00Z",
+        repository: "sample-org/vtdd-v2",
+        pullRequestNumber: 22,
+        body: [
+          "<!-- vtdd:reviewer=codex-fallback -->",
+          "## VTDD Codex Reviewer Fallback Request",
+          "",
+          "- Status: `requested`",
+          "- Trigger: `pull_request_target:synchronize`",
+          "- Reason: `gemini_temporarily_unavailable`",
+          "- Delivery mode: `vps_codex_cli`"
+        ].join("\n")
+      },
+      {
+        id: 2,
+        html_url: "https://github.com/sample-org/vtdd-v2/pull/23#issuecomment-2",
+        created_at: "2026-05-08T10:01:00Z",
+        repository: "sample-org/vtdd-v2",
+        pullRequestNumber: 23,
+        body: [
+          "<!-- vtdd:reviewer=codex-fallback -->",
+          "- Status: `requested`",
+          "- Delivery mode: `codex_cloud_github_comment`"
+        ].join("\n")
+      }
+    ]
+  });
+
+  assert.equal(selected.length, 1);
+  assert.equal(selected[0].repository, "sample-org/vtdd-v2");
+  assert.equal(selected[0].pullRequestNumber, 22);
+  assert.equal(selected[0].trigger, "pull_request_target:synchronize");
 });
 
 test("VPS runner Codex prompt preserves high-risk boundaries", () => {
