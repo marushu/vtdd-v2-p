@@ -253,6 +253,12 @@ export function renderPasskeyOperatorPage(input = {}) {
           <p class="muted"><code>actionType=destructive</code> / <code>highRiskKind=github_actions_secret_sync</code> の approvalGrantId が必要です。</p>
           <pre id="openai-secret-sync-output"></pre>
         </section>
+
+        <section data-operator-section="vps-runner-admin"${hiddenAttribute(!sectionVisibility.vpsRunnerAdmin)}>
+          <h2>7. VPS Runner Admin</h2>
+          <p class="muted">VPS runner の repo allowlist 追加、runner restart、smoke などの管理操作用 approval です。ここでは real passkey で短命の <code>approvalGrantId</code> だけを発行します。VPS 操作そのものは GitHub queue と runner event に残る bounded command として別途実行されます。</p>
+          <p class="muted"><code>actionType=destructive</code> / <code>highRiskKind=vps_runner_admin</code> の approvalGrantId が必要です。文字列としての passkey は承認ではありません。</p>
+        </section>
       </div>
     </main>
 
@@ -762,6 +768,9 @@ export function resolvePasskeyOperatorMode(input = {}) {
   if (highRiskKind === "github_app_secret_sync") {
     return "github_app_secret_sync";
   }
+  if (highRiskKind === "vps_runner_admin" || highRiskKind === "vps_admin") {
+    return "vps";
+  }
 
   return "full";
 }
@@ -774,7 +783,8 @@ function resolveSectionVisibility(operatorMode) {
     githubAppSecretSync: full || operatorMode === "github_app_secret_sync",
     productionDeploy: full || operatorMode === "deploy",
     prMerge: full || operatorMode === "merge",
-    githubActionsSecretSync: full || operatorMode === "github_actions_secret_sync"
+    githubActionsSecretSync: full || operatorMode === "github_actions_secret_sync",
+    vpsRunnerAdmin: full || operatorMode === "vps"
   };
 }
 
@@ -784,7 +794,7 @@ function hiddenAttribute(hidden) {
 
 function normalizeOperatorMode(value) {
   const token = normalizeOperatorToken(value);
-  if (["full", "deploy", "merge", "github_app_secret_sync", "github_actions_secret_sync"].includes(token)) {
+  if (["full", "deploy", "merge", "github_app_secret_sync", "github_actions_secret_sync", "vps"].includes(token)) {
     return token;
   }
   if (token === "secret_sync") {
@@ -815,6 +825,9 @@ function defaultHighRiskKindForMode(operatorMode) {
   }
   if (operatorMode === "github_actions_secret_sync") {
     return "github_actions_secret_sync";
+  }
+  if (operatorMode === "vps") {
+    return "vps_runner_admin";
   }
   return "github_app_secret_sync";
 }
