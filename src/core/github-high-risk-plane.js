@@ -272,6 +272,15 @@ async function executePullReadyForReview(input) {
   }
 
   const pull = mutationBody?.data?.markPullRequestReadyForReview?.pullRequest;
+  if (!pull || pull.isDraft !== false) {
+    return {
+      ok: false,
+      status: 422,
+      error: "github_high_risk_failed",
+      reason: "GitHub ready-for-review mutation did not return a ready pull request"
+    };
+  }
+
   return {
     ok: true,
     authorityAction: {

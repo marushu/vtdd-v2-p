@@ -56,7 +56,7 @@ export const GitHubAppOperationRegistry = Object.freeze({
   pull_ready_for_review: {
     operation: "pull_ready_for_review",
     tier: GitHubAppOperationTier.PASSKEY_AUTHORITY,
-    requiredPayloadFields: ["repository", "issueNumber"],
+    requiredPayloadFields: ["repository", "issueNumber", "pullNumber"],
     requiredRuntimeEvidenceFields: ["pullNumber"],
     authorityScopeIdentityFields: ["repository", "issueNumber", "pullNumber", "phase"],
     requiredRuntimeTruthChecks: ["pull_request_ready_for_review_result"],

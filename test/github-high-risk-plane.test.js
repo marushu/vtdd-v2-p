@@ -77,7 +77,7 @@ test("github app operation registry defines issue close authority scope and runt
     "highRiskKind"
   ]);
   assert.equal(pullReady.tier, GitHubAppOperationTier.PASSKEY_AUTHORITY);
-  assert.deepEqual(pullReady.requiredPayloadFields, ["repository", "issueNumber"]);
+  assert.deepEqual(pullReady.requiredPayloadFields, ["repository", "issueNumber", "pullNumber"]);
   assert.deepEqual(pullReady.requiredRuntimeEvidenceFields, ["pullNumber"]);
   assert.deepEqual(pullReady.authorityScopeIdentityFields, ["repository", "issueNumber", "pullNumber", "phase"]);
   assert.deepEqual(pullReady.passkey.operatorUrlRequirements, [
@@ -258,6 +258,51 @@ test("github high-risk plane treats already-ready pull request as no-op success"
   assert.equal(result.ok, true);
   assert.equal(result.authorityAction.readyForReview, true);
   assert.equal(result.authorityAction.changed, false);
+});
+
+test("github high-risk plane fails when ready-for-review mutation does not prove readiness", async () => {
+  const result = await executeGitHubHighRiskPlane({
+    operation: GitHubHighRiskOperation.PULL_READY_FOR_REVIEW,
+    repository: "sample-org/vtdd-v2-p",
+    issueNumber: 55,
+    pullNumber: 21,
+    approvalPhrase: "GO",
+    targetConfirmed: true,
+    approvalGrant: readyGrant,
+    approvalScope: readyGrant.scope,
+    env: {
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_high_risk",
+      GITHUB_API_FETCH: async (url) => {
+        if (String(url).includes("/pulls/")) {
+          return new Response(
+            JSON.stringify({
+              draft: true,
+              node_id: "PR_kwDOExample"
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        return new Response(
+          JSON.stringify({
+            data: {
+              markPullRequestReadyForReview: {
+                pullRequest: {
+                  isDraft: true,
+                  number: 21,
+                  url: "https://github.com/sample-org/vtdd-v2-p/pull/21"
+                }
+              }
+            }
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        );
+      }
+    }
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.status, 422);
+  assert.equal(result.reason, "GitHub ready-for-review mutation did not return a ready pull request");
 });
 
 test("github high-risk plane requires merge method from registry", async () => {
