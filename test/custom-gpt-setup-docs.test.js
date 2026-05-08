@@ -110,6 +110,12 @@ test("custom gpt instructions preserve current butler and approval boundaries", 
   assert.equal(doc.includes("report it as an unverified Action transport failure"), true);
   assert.equal(doc.includes("If vtddDeployProduction fails, tell the user the exact deploy `error`, `reason`, and `issues`"), true);
   assert.equal(doc.includes("Executor transport is pluggable and user-owned."), true);
+  assert.equal(
+    doc.includes("For normal bounded Codex handoff, call the existing `vtddExecute` Action with `executorTransport=vps_runner`"),
+    true
+  );
+  assert.equal(doc.includes("do not create or require a separate Custom GPT Action for VPS handoff"), true);
+  assert.equal(doc.includes("Default transport is `vps_runner` for this runtime"), true);
   assert.equal(doc.includes("codex_cloud_cli_control_runner"), true);
   assert.equal(doc.includes("vtdd-v2-secret` is owner-specific example/evidence"), true);
   assert.equal(doc.includes("vps_runner"), true);
@@ -162,6 +168,9 @@ test("short custom gpt instructions stay under editor limits while preserving cr
   assert.equal(doc.includes("short natural GO tied to the visible intent"), true);
   assert.equal(doc.includes("Gemini が指摘している修正を Codex に進めさせます"), true);
   assert.equal(doc.includes("Executor transport is pluggable and user-owned"), true);
+  assert.equal(doc.includes("Current default for Codex task handoff is the user-owned VPS"), true);
+  assert.equal(doc.includes("executorTransport=vps_runner"), true);
+  assert.equal(doc.includes("Do not add a separate GPT Action for VPS handoff"), true);
   assert.equal(doc.includes("codex_cloud_cli_control_runner"), true);
   assert.equal(doc.includes("vps_runner"), true);
   assert.equal(doc.includes("requiresHandoff=true"), true);
