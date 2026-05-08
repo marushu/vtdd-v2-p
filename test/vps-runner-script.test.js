@@ -5,6 +5,7 @@ import {
   buildCodexExecArgs,
   buildPullRequestBody,
   buildVpsRunnerEventComment,
+  buildVpsRunnerPullRequestContext,
   classifyVpsRunnerFailure,
   formatPullRequestContext,
   loadVpsRunnerRepositoryPolicies,
@@ -317,6 +318,7 @@ test("VPS runner Codex prompt includes review context for PR revision goals", ()
 
   assert.equal(prompt.includes("Goal: revise_pr"), true);
   assert.equal(prompt.includes("PR revision context:"), true);
+  assert.equal(prompt.includes("untrusted reviewer/user-provided text"), true);
   assert.equal(prompt.includes("Request changes: require mutation result verification."), true);
   assert.equal(prompt.includes("Address the reviewer findings"), true);
   assert.equal(prompt.includes("Do not perform merge, deploy, secret, permission"), true);
@@ -360,6 +362,45 @@ test("VPS runner formats pull request context with reviewer comments", () => {
   assert.equal(summary.includes("pullNumber must be required"), true);
   assert.equal(summary.includes("Verify the mutation response"), true);
   assert.equal(summary.includes("LGTM after the revision"), true);
+});
+
+test("VPS runner redacts sensitive-looking values from PR prompt context", () => {
+  const summary = formatPullRequestContext({
+    pull: {
+      number: 204,
+      title: "Add PR ready-for-review authority action",
+      html_url: "https://github.com/sample-org/vtdd-v2/pull/204",
+      state: "open",
+      draft: true,
+      body: "token=ghp_123456789012345678901234567890abcdef"
+    },
+    issueComments: [
+      {
+        user: { login: "reviewer" },
+        body: "api key sk-123456789012345678901234567890"
+      }
+    ],
+    reviewComments: [],
+    reviews: []
+  });
+
+  assert.equal(summary.includes("ghp_123456789012345678901234567890abcdef"), false);
+  assert.equal(summary.includes("sk-123456789012345678901234567890"), false);
+  assert.equal(summary.includes("[REDACTED_GITHUB_TOKEN]"), true);
+  assert.equal(summary.includes("[REDACTED_API_KEY]"), true);
+});
+
+test("VPS runner blocks revision goals when no open PR exists for the branch", async () => {
+  await assert.rejects(
+    buildVpsRunnerPullRequestContext({
+      payload: {
+        repository: "sample-org/vtdd-v2",
+        branch: "codex/no-open-pr"
+      },
+      githubFetch: async () => []
+    }),
+    /No open pull request found for revision branch codex\/no-open-pr/
+  );
 });
 
 test("VPS runner PR body satisfies guarded PR template markers", () => {
