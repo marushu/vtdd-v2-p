@@ -59,6 +59,7 @@ export {
 export { requiredCredentialTier, evaluateCredentialBoundary } from "./credential-boundary.js";
 export { resolveRepositoryTarget } from "./repository-resolution.js";
 export {
+  deleteRepositoryNickname,
   RepositoryNicknameMode,
   mergeAliasRegistries,
   normalizeAliasRegistry,

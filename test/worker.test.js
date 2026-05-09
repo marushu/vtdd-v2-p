@@ -1947,6 +1947,127 @@ test("worker stores and retrieves repository nicknames", async () => {
   assert.deepEqual(retrieveBody.aliasRegistry[0].aliases, ["公開VTDD"]);
 });
 
+test("worker deletes explicit repository nickname aliases and retrieve confirms removal", async () => {
+  const provider = createInMemoryMemoryProvider();
+  const env = {
+    ...gatewayAuthEnv,
+    MEMORY_PROVIDER: provider,
+    GITHUB_APP_INSTALLATION_TOKEN: "ghs_repo_read",
+    GITHUB_API_FETCH: async () =>
+      new Response(
+        JSON.stringify({
+          total_count: 4,
+          repositories: [
+            { full_name: "owner/repository", name: "repository", private: false },
+            { full_name: "example/example", name: "example", private: false },
+            { full_name: "marushu/vtdd-v2-p", name: "vtdd-v2-p", private: false },
+            {
+              full_name: "marushu/hibou-piccola-bookkeeping",
+              name: "hibou-piccola-bookkeeping",
+              private: true
+            }
+          ]
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      )
+  };
+
+  for (const [repository, nickname] of [
+    ["owner/repository", "default"],
+    ["example/example", "example"],
+    ["marushu/vtdd-v2-p", "ぶい"],
+    ["marushu/hibou-piccola-bookkeeping", "TOMIO"]
+  ]) {
+    const response = await worker.fetch(
+      new Request("https://example.com/v2/action/repository-nickname", {
+        method: "POST",
+        headers: gatewayAuthHeaders,
+        body: JSON.stringify({ repository, nickname })
+      }),
+      env
+    );
+    assert.equal(response.status, 200);
+  }
+
+  for (const [repository, nickname] of [
+    ["owner/repository", "default"],
+    ["example/example", "example"]
+  ]) {
+    const response = await worker.fetch(
+      new Request("https://example.com/v2/action/repository-nickname/delete", {
+        method: "POST",
+        headers: gatewayAuthHeaders,
+        body: JSON.stringify({ repository, nickname })
+      }),
+      env
+    );
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.equal(body.ok, true);
+    assert.equal(body.deleted, true);
+  }
+
+  const retrieveResponse = await worker.fetch(
+    new Request("https://example.com/v2/retrieve/repository-nicknames", {
+      headers: gatewayAuthHeaders
+    }),
+    env
+  );
+
+  assert.equal(retrieveResponse.status, 200);
+  const retrieveBody = await retrieveResponse.json();
+  assert.equal(retrieveBody.ok, true);
+  assert.equal(
+    retrieveBody.aliasRegistry.some((item) => item.aliases.includes("default")),
+    false
+  );
+  assert.equal(
+    retrieveBody.aliasRegistry.some((item) => item.aliases.includes("example")),
+    false
+  );
+  assert.deepEqual(
+    retrieveBody.aliasRegistry.find((item) => item.canonicalRepo === "marushu/vtdd-v2-p")
+      .aliases,
+    ["ぶい"]
+  );
+  assert.deepEqual(
+    retrieveBody.aliasRegistry.find(
+      (item) => item.canonicalRepo === "marushu/hibou-piccola-bookkeeping"
+    ).aliases,
+    ["TOMIO"]
+  );
+});
+
+test("worker surfaces repository nickname delete not found errors", async () => {
+  const provider = createInMemoryMemoryProvider();
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/action/repository-nickname/delete", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        repository: "owner/repository",
+        nickname: "default"
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      MEMORY_PROVIDER: provider,
+      GITHUB_API_FETCH: async () =>
+        new Response(JSON.stringify({ total_count: 0, repositories: [] }), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        })
+    }
+  );
+
+  assert.equal(response.status, 404);
+  const body = await response.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.httpStatus, 404);
+  assert.equal(body.error, "repository_nickname_not_found");
+  assert.deepEqual(body.issues, ["repository nickname entry not found"]);
+});
+
 test("worker surfaces repository nickname retrieval failures as action-visible JSON", async () => {
   const failingProvider = {
     async store() {

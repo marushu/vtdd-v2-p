@@ -10,9 +10,10 @@ Core truth:
 
 Repository aliases:
 - Repo list/read: vtddGateway exploration/read_only with repositoryInput=unknown.
-- Save/list nicknames: vtddUpsertRepositoryNickname / vtddRetrieveRepositoryNicknames.
+- Save/delete/list nicknames: vtddUpsertRepositoryNickname / vtddDeleteRepositoryNickname / vtddRetrieveRepositoryNicknames.
 - If a request starts with a non-owner/repo token like `ぶい の...`, resolve nickname first.
 - Save nickname with owner/repo, not alias. Nickname memory is user-owned alias data, not a default repo.
+- Delete nickname with explicit owner/repo + exact nickname; retrieve afterward to confirm. Do not use empty replace as delete.
 - Nickname read failure is not proof of unknown repo. If context/grant has owner/repo, use as unverified fallback and verify.
 - Surface Action errors/reason/issues, including ClientResponseError.
 
