@@ -467,18 +467,22 @@ Status values used below:
 
 ## E2E-23 PR body guardrail
 
-- Issues: `#57`
+- Issues: `#57`, `#213`
 - Happy path:
   - local helper tooling renders required PR evidence markers and the remote Codex workflow uses the generated body path
+  - VPS runner open_pr validates the body candidate and uses a guarded-policy-compliant body before PR creation
 - Boundary path:
   - invalid/missing PR evidence markers fail locally before recurring guarded-policy CI waste occurs
+  - existing PRs with missing PR body markers are normalized instead of leaving guarded-policy to fail again
 - Implementation evidence:
   - `scripts/render-pr-body.mjs`
   - `scripts/validate-pr-body.mjs`
+  - `scripts/run-vps-runner.mjs`
   - `.github/workflows/remote-codex-executor.yml`
   - `docs/pr-template-model.md`
 - Test evidence:
   - `test/pr-body-guardrail.test.js`
+  - `test/vps-runner-script.test.js`
   - `test/remote-codex-workflow.test.js`
   - `test/pr-template-model.test.js`
 - Run evidence:

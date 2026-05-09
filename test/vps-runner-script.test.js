@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   buildCodexExecutionPrompt,
   buildCodexExecArgs,
+  buildGuardedPullRequestBody,
   buildPullRequestBody,
   buildVpsRunnerEventComment,
   buildVpsRunnerPullRequestContext,
@@ -292,6 +293,11 @@ test("VPS runner Codex prompt preserves high-risk boundaries", () => {
   assert.equal(prompt.includes("Do not merge."), true);
   assert.equal(prompt.includes("Do not deploy."), true);
   assert.equal(prompt.includes("Do not mutate secrets"), true);
+  assert.equal(prompt.includes("docs/pr-template-model.md"), true);
+  assert.equal(prompt.includes("scripts/render-pr-body.mjs"), true);
+  assert.equal(prompt.includes("scripts/validate-pr-body.mjs"), true);
+  assert.equal(prompt.includes("## This PR satisfies Intent"), true);
+  assert.equal(prompt.includes("## Surface Update Checklist"), true);
 });
 
 test("VPS runner Codex prompt includes review context for PR revision goals", () => {
@@ -419,6 +425,53 @@ test("VPS runner PR body satisfies guarded PR template markers", () => {
   assert.equal(body.includes("## Surface Update Checklist"), true);
   assert.equal(body.includes("Execution ID: remote-codex-issue194-test"), true);
   assert.equal(body.includes("No merge or deploy is performed by the VPS runner."), true);
+});
+
+test("VPS runner preserves a guarded-policy-compliant PR body candidate", () => {
+  const candidate = buildPullRequestBody({
+    repository: "sample-org/vtdd-v2",
+    issueNumber: 213,
+    executionId: "remote-codex-issue213-test",
+    branch: "codex/issue-213",
+    codexGoal: "open_pr"
+  });
+  const normalized = buildGuardedPullRequestBody({
+    payload: {
+      repository: "sample-org/vtdd-v2",
+      issueNumber: 213,
+      executionId: "remote-codex-issue213-test",
+      branch: "codex/issue-213",
+      codexGoal: "open_pr"
+    },
+    candidateBody: candidate
+  });
+
+  assert.equal(normalized.ok, true);
+  assert.equal(normalized.normalized, false);
+  assert.equal(normalized.body, candidate);
+});
+
+test("VPS runner normalizes malformed PR body candidates with canonical template", () => {
+  const normalized = buildGuardedPullRequestBody({
+    payload: {
+      repository: "sample-org/vtdd-v2",
+      issueNumber: 213,
+      executionId: "remote-codex-issue213-test",
+      branch: "codex/issue-213",
+      codexGoal: "open_pr"
+    },
+    candidateBody: "Partial notes without guarded-policy markers."
+  });
+
+  assert.equal(normalized.ok, true);
+  assert.equal(normalized.normalized, true);
+  assert.equal(normalized.validationErrors.includes("Missing PR template marker: ## This PR satisfies Intent"), true);
+  assert.equal(normalized.body.includes("## This PR satisfies Intent"), true);
+  assert.equal(normalized.body.includes("## Satisfied Success Criteria"), true);
+  assert.equal(normalized.body.includes("## Unsatisfied Success Criteria"), true);
+  assert.equal(normalized.body.includes("## Verification Evidence"), true);
+  assert.equal(normalized.body.includes("## Surface Update Checklist"), true);
+  assert.equal(normalized.body.includes("Issue #213"), true);
 });
 
 test("VPS runner classifies unauthenticated Codex CLI as raw auth failure", () => {
