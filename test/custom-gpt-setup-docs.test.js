@@ -11,6 +11,12 @@ const SHORT_INSTRUCTIONS_PATH = path.join(
   "setup",
   "custom-gpt-instructions-short.md"
 );
+const SHORT_MIN_INSTRUCTIONS_PATH = path.join(
+  process.cwd(),
+  "docs",
+  "setup",
+  "custom-gpt-instructions-short-min.md"
+);
 const OPENAPI_PATH = path.join(process.cwd(), "docs", "setup", "custom-gpt-actions-openapi.yaml");
 const OPENAPI_JSON_PATH = path.join(
   process.cwd(),
@@ -22,6 +28,7 @@ const OPENAPI_JSON_PATH = path.join(
 test("custom gpt setup artifacts exist as tracked setup docs", () => {
   assert.equal(fs.existsSync(INSTRUCTIONS_PATH), true);
   assert.equal(fs.existsSync(SHORT_INSTRUCTIONS_PATH), true);
+  assert.equal(fs.existsSync(SHORT_MIN_INSTRUCTIONS_PATH), true);
   assert.equal(fs.existsSync(OPENAPI_PATH), true);
   assert.equal(fs.existsSync(OPENAPI_JSON_PATH), true);
 });
@@ -30,6 +37,10 @@ test("readme points to current custom gpt setup artifacts", () => {
   const readme = fs.readFileSync(README_PATH, "utf8");
   assert.equal(readme.includes("docs/setup/custom-gpt-instructions.md"), true);
   assert.equal(readme.includes("docs/setup/custom-gpt-instructions-short.md"), true);
+  assert.equal(readme.includes("docs/setup/custom-gpt-instructions-short-min.md"), true);
+  assert.equal(readme.includes("canonical minimal"), true);
+  assert.equal(readme.includes("expanded editor paste\n  target"), true);
+  assert.equal(readme.includes("full reference and setup\n  artifact source"), true);
   assert.equal(readme.includes("docs/setup/custom-gpt-actions-openapi.yaml"), true);
   assert.equal(readme.includes("docs/setup/custom-gpt-actions-openapi.json"), true);
 });
@@ -203,6 +214,40 @@ test("short custom gpt instructions stay under editor limits while preserving cr
     true
   );
   assert.equal(doc.includes("missing GitHub Review objects alone is not absence"), true);
+});
+
+test("short-min custom gpt instructions stay pasteable while preserving critical invariants", () => {
+  const doc = fs.readFileSync(SHORT_MIN_INSTRUCTIONS_PATH, "utf8");
+
+  assert.equal(doc.length < 7900, true);
+  assert.equal(doc.includes("minimal Custom GPT paste target"), true);
+  assert.equal(doc.includes("custom-gpt-instructions.md` is the full canonical reference"), true);
+  assert.equal(doc.includes("custom-gpt-instructions-short.md` is the expanded paste target"), true);
+
+  const criticalTokens = [
+    "Issue is canonical spec",
+    "GitHub/runtime state is progress truth",
+    "Do not assume a default repository.",
+    "vtddExecute handoff must use actionType=build",
+    "requiresHandoff=true",
+    "issueTraceability Intent/SC/Non-goal refs",
+    "issueContext.issueNumber",
+    "policyInput.issueTraceability.relatedIssue",
+    "continuationContext.handoff.relatedIssue",
+    "GO + real passkey",
+    "show exact title/body/comment/update payload",
+    "Preserve reviewer objections",
+    "vtddRetrieveSelfParity",
+    "Remote Codex build invariant",
+    "Executor transport is pluggable and user-owned",
+    "executorTransport=vps_runner",
+    "No merge, deploy, secret/settings/permission mutation, issue close",
+    "No owner-specific runtime URL/account/bootstrap value"
+  ];
+
+  for (const token of criticalTokens) {
+    assert.equal(doc.includes(token), true, `missing short-min invariant: ${token}`);
+  }
 });
 
 test("custom gpt openapi doc exposes current gateway, execute, and progress routes", () => {
