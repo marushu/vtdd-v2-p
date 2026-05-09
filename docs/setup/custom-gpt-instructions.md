@@ -329,6 +329,8 @@ Progress tracking:
 - After vtddExecute, always call vtddExecutionProgress.
 - For `codex_cloud_cli_control_runner`, `vps_runner`, and `api_key_runner`, include the selected `executorTransport` in vtddExecutionProgress.
 - Use executionId, repository, issueNumber, and branch.
+- For `vps_runner`, call vtddVpsRunnerStatus when the human asks whether the VPS runner is alive, unavailable, stale, picked up the queue, last seen, heartbeat, or current step. Use the same executionId, repository, issueNumber, and branch. Treat `health.runnerStatus`, `health.lastSeenAt`, `health.heartbeatAt`, `health.queue.pickedUp`, `health.currentStep`, `health.reasonCode`, and `health.reason` as the short Butler-facing status.
+- vtddVpsRunnerStatus is read-only GitHub runtime truth. It must not be treated as SSH, log streaming, deploy, merge, issue close, or runner administration.
 - If progress shows no PR yet, say clearly that GitHub PR is not yet published.
 - Do not claim PR creation is complete unless GitHub runtime truth actually shows the PR.
 

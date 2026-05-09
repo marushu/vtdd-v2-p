@@ -4036,6 +4036,74 @@ test("worker returns remote Codex execution progress", async () => {
   assert.equal(body.progress.status, "queued");
 });
 
+test("worker returns explicit VPS runner health status", async () => {
+  const originalNow = Date.now;
+  Date.now = () => Date.parse("2026-05-09T10:02:00Z");
+  try {
+    const response = await worker.fetch(
+      new Request(
+        "https://example.com/v2/action/vps-runner-status?executionId=remote-codex-issue229-alive&repository=sample-org/sunaba-eye&issueNumber=229&branch=codex/issue-229",
+        {
+          headers: {
+            authorization: "Bearer test-token"
+          }
+        }
+      ),
+      {
+        ...gatewayAuthEnv,
+        GITHUB_APP_INSTALLATION_TOKEN: "ghs_progress_token",
+        GITHUB_API_FETCH: async (url) => {
+          if (String(url).includes("/issues/229/comments")) {
+            return new Response(
+              JSON.stringify([
+                {
+                  id: 22901,
+                  html_url: "https://github.com/sample-org/sunaba-eye/issues/229#issuecomment-22901",
+                  created_at: "2026-05-09T10:00:00Z",
+                  body: "<!-- vtdd:vps-runner-execution:remote-codex-issue229-alive -->"
+                },
+                {
+                  id: 22902,
+                  html_url: "https://github.com/sample-org/sunaba-eye/issues/229#issuecomment-22902",
+                  created_at: "2026-05-09T10:01:00Z",
+                  body:
+                    "<!-- vtdd:vps-runner-event:remote-codex-issue229-alive -->\n```json\n{\"status\":\"running\",\"currentStep\":\"codex_subprocess\",\"heartbeatAt\":\"2026-05-09T10:01:00.000Z\",\"updatedAt\":\"2026-05-09T10:01:00.000Z\"}\n```"
+                }
+              ]),
+              { status: 200, headers: { "content-type": "application/json" } }
+            );
+          }
+          if (String(url).includes("/pulls?")) {
+            return new Response(JSON.stringify([]), {
+              status: 200,
+              headers: { "content-type": "application/json" }
+            });
+          }
+          return new Response(
+            JSON.stringify({
+              name: "codex/issue-229",
+              commit: { sha: "abc123" },
+              _links: { html: "https://github.com/sample-org/sunaba-eye/tree/codex/issue-229" }
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+      }
+    );
+
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.equal(body.ok, true);
+    assert.equal(body.health.runnerStatus, "alive");
+    assert.equal(body.health.lastSeenAt, "2026-05-09T10:01:00.000Z");
+    assert.equal(body.health.queue.pickedUp, true);
+    assert.equal(body.health.currentStep, "codex_subprocess");
+    assert.equal(body.progress.status, "in_progress");
+  } finally {
+    Date.now = originalNow;
+  }
+});
+
 test("worker gateway blocks butler path when judgment order is invalid", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/v2/gateway", {

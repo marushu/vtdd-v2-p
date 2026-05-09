@@ -8,7 +8,8 @@ import {
   createRemoteCodexExecutionRequest,
   dispatchRemoteCodexExecution,
   getRemoteCodexExecutorTransportRegistry,
-  retrieveRemoteCodexExecutionProgress
+  retrieveRemoteCodexExecutionProgress,
+  retrieveVpsRunnerHealthStatus
 } from "../src/core/index.js";
 
 test("remote Codex transport registry exposes pluggable user-owned backend choices", () => {
@@ -854,6 +855,139 @@ test("remote Codex vps_runner progress reports runner raw failure comments", asy
   assert.equal(progress.progress.runnerEvent.lastEvent, "codex_login_missing");
   assert.equal(progress.progress.blocker.error, "codex_auth_unavailable");
   assert.equal(progress.progress.blocker.reason, "codex login is required on the VPS runner");
+});
+
+test("remote Codex vps_runner health reports alive pickup and current step", async () => {
+  const originalNow = Date.now;
+  Date.now = () => Date.parse("2026-05-09T10:02:00Z");
+  try {
+    const health = await retrieveVpsRunnerHealthStatus({
+      executionId: "remote-codex-issue229-alive",
+      repository: "sample-org/sunaba-eye",
+      issueNumber: 229,
+      branch: "codex/issue-229",
+      env: {
+        GITHUB_APP_INSTALLATION_TOKEN: "ghs_progress_token",
+        GITHUB_API_FETCH: async (url) => {
+          if (String(url).includes("/issues/229/comments")) {
+            return new Response(
+              JSON.stringify([
+                {
+                  id: 22901,
+                  html_url: "https://github.com/sample-org/sunaba-eye/issues/229#issuecomment-22901",
+                  created_at: "2026-05-09T10:00:00Z",
+                  body: "<!-- vtdd:vps-runner-execution:remote-codex-issue229-alive -->"
+                },
+                {
+                  id: 22902,
+                  html_url: "https://github.com/sample-org/sunaba-eye/issues/229#issuecomment-22902",
+                  created_at: "2026-05-09T10:01:00Z",
+                  body: [
+                    "<!-- vtdd:vps-runner-event:remote-codex-issue229-alive -->",
+                    "```json",
+                    JSON.stringify({
+                      status: "running",
+                      lastEvent: "codex_subprocess_heartbeat",
+                      currentStep: "codex_subprocess",
+                      heartbeatAt: "2026-05-09T10:01:00.000Z",
+                      updatedAt: "2026-05-09T10:01:00.000Z"
+                    }),
+                    "```"
+                  ].join("\n")
+                }
+              ]),
+              { status: 200, headers: { "content-type": "application/json" } }
+            );
+          }
+          if (String(url).includes("/pulls?")) {
+            return new Response(JSON.stringify([]), {
+              status: 200,
+              headers: { "content-type": "application/json" }
+            });
+          }
+          return new Response(
+            JSON.stringify({
+              name: "codex/issue-229",
+              commit: { sha: "abc123" },
+              _links: { html: "https://github.com/sample-org/sunaba-eye/tree/codex/issue-229" }
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+      }
+    });
+
+    assert.equal(health.ok, true);
+    assert.equal(health.health.runnerStatus, "alive");
+    assert.equal(health.health.runnerAlive, true);
+    assert.equal(health.health.lastSeenAt, "2026-05-09T10:01:00.000Z");
+    assert.equal(health.health.heartbeatAt, "2026-05-09T10:01:00.000Z");
+    assert.equal(health.health.queue.pickedUp, true);
+    assert.equal(health.health.queue.status, "picked_up");
+    assert.equal(health.health.currentStep, "codex_subprocess");
+    assert.equal(health.health.progressStatus, RemoteCodexExecutionStatus.IN_PROGRESS);
+    assert.equal(health.health.reason, null);
+  } finally {
+    Date.now = originalNow;
+  }
+});
+
+test("remote Codex vps_runner health reports unavailable stale queue safely", async () => {
+  const originalNow = Date.now;
+  Date.now = () => Date.parse("2026-05-09T10:10:00Z");
+  try {
+    const health = await retrieveVpsRunnerHealthStatus({
+      executionId: "remote-codex-issue229-stale",
+      repository: "sample-org/sunaba-eye",
+      issueNumber: 229,
+      branch: "codex/issue-229",
+      env: {
+        VPS_RUNNER_PICKUP_GRACE_SECONDS: 300,
+        GITHUB_APP_INSTALLATION_TOKEN: "ghs_progress_token",
+        GITHUB_API_FETCH: async (url) => {
+          if (String(url).includes("/issues/229/comments")) {
+            return new Response(
+              JSON.stringify([
+                {
+                  id: 22901,
+                  html_url: "https://github.com/sample-org/sunaba-eye/issues/229#issuecomment-22901",
+                  created_at: "2026-05-09T10:00:00Z",
+                  body: "<!-- vtdd:vps-runner-execution:remote-codex-issue229-stale -->"
+                }
+              ]),
+              { status: 200, headers: { "content-type": "application/json" } }
+            );
+          }
+          if (String(url).includes("/pulls?")) {
+            return new Response(JSON.stringify([]), {
+              status: 200,
+              headers: { "content-type": "application/json" }
+            });
+          }
+          return new Response(JSON.stringify({ message: "Branch not found" }), {
+            status: 404,
+            headers: { "content-type": "application/json" }
+          });
+        }
+      }
+    });
+
+    assert.equal(health.ok, true);
+    assert.equal(health.health.runnerStatus, "unavailable");
+    assert.equal(health.health.runnerAlive, false);
+    assert.equal(health.health.lastSeenAt, null);
+    assert.equal(health.health.queue.pickedUp, false);
+    assert.equal(health.health.queue.status, "stale");
+    assert.equal(health.health.currentStep, "queue_waiting");
+    assert.equal(health.health.reasonCode, "vps_runner_pickup_not_observed");
+    assert.equal(
+      health.health.reason,
+      "VPS runner did not report pickup and no target branch or PR was observed within the pickup grace period"
+    );
+    assert.equal(JSON.stringify(health.health).includes("ghs_progress_token"), false);
+  } finally {
+    Date.now = originalNow;
+  }
 });
 
 test("remote Codex API-backed execution progress reads matching workflow run", async () => {
