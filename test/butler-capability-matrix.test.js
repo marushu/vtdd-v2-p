@@ -8,8 +8,20 @@ const DOC_PATH = path.join(process.cwd(), "docs", "butler", "capability-matrix.m
 test("Butler capability matrix records live/source/unverified status without overclaiming", () => {
   const doc = fs.readFileSync(DOC_PATH, "utf8");
 
-  assert.equal(doc.includes("Issue: #153"), true);
-  assert.equal(doc.includes("iPhone/mobile conversation"), true);
+  assert.equal(doc.includes("Issue: #244"), true);
+  assert.equal(doc.includes("Supersedes: #153"), true);
+  assert.equal(doc.includes("owner-operation inventory"), true);
+  assert.equal(doc.includes("`src/core/github-owner-operation-inventory.js`"), true);
+  assert.equal(doc.includes("| PR close/reopen/state/review-request metadata | `unsupported` |"), true);
+  assert.equal(doc.includes("| issue body/title/state/labels/assignees/milestone update | `unsupported` |"), true);
+  assert.equal(doc.includes("| repository settings/rulesets/environments/pages/webhooks | `gated` |"), true);
+  assert.equal(doc.includes("| permissions/collaborators/teams/App installation | `gated` |"), true);
+  assert.equal(doc.includes("| secrets/variables | `gated` |"), true);
+  assert.equal(doc.includes("| releases/tags/packages | `unsupported` |"), true);
+  assert.equal(doc.includes("| deployments/environments/statuses | `gated` |"), true);
+  assert.equal(doc.includes("| archive/delete/transfer/visibility/destructive cleanup | `intentionally_blocked` |"), true);
+  assert.equal(doc.includes("GitHub UI fallback is not a steady-state answer."), true);
+  assert.equal(doc.includes("iPhone/mobile"), true);
   assert.equal(doc.includes("Do not report `source-only` as done."), true);
   assert.equal(doc.includes("Do not report `requested` handoff as Codex"), true);
 

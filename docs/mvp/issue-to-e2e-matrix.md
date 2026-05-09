@@ -406,19 +406,21 @@ Status values used below:
 
 ## E2E-20 GitHub operation plane canonicalization
 
-- Issues: `#42`
+- Issues: `#42`, `#244`
 - Happy path:
-  - the canonical GitHub operation plane remains full-scope by default and is connected to the current read, normal write, and high-risk Butler-side runtime paths
+  - the canonical GitHub operation plane remains full-scope by default and is connected to the current read, normal write, high-risk Butler-side runtime paths, and #244 owner-operation inventory
 - Boundary path:
-  - capability narrowing, normal-plane merge, or approval-bypass interpretations are rejected instead of silently redefining VTDD scope
+  - capability narrowing, normal-plane merge, approval-bypass interpretations, missing remediation for unsupported rows, and steady-state GitHub UI fallback are rejected instead of silently redefining VTDD scope
 - Implementation evidence:
   - `docs/security/github-operation-plane.md`
   - `src/core/github-read-plane.js`
   - `src/core/github-write-plane.js`
   - `src/core/github-high-risk-plane.js`
+  - `src/core/github-owner-operation-inventory.js`
   - `src/core/approval.js`
   - `src/worker.js`
 - Test evidence:
+  - `test/github-owner-operation-inventory.test.js`
   - `test/github-operation-plane.test.js`
   - `test/github-read-plane.test.js`
   - `test/github-write-plane.test.js`
