@@ -1,5 +1,6 @@
 import {
   AutonomyMode,
+  buildCustomGptRecoveryBundle,
   MemoryRecordType,
   appendDecisionLogFromGateway,
   appendProposalLogFromGateway,
@@ -28,6 +29,7 @@ import {
   retrieveConstitution,
   retrieveCustomGptSetupArtifact,
   renderPasskeyOperatorPage,
+  renderCustomGptRecoveryPage,
   sanitizeGitHubActionsSecretSyncErrorMessage,
   RepositoryNicknameMode,
   resolveGatewayAliasRegistryFromGitHubApp,
@@ -74,6 +76,13 @@ export default {
         mode: "v2",
         autonomyMode: resolveRuntimeAutonomyMode(env)
       });
+    }
+
+    if (
+      request.method === "GET" &&
+      (url.pathname === "/setup" || url.pathname === "/setup/recovery")
+    ) {
+      return handleCustomGptRecoveryPageRequest(url, env);
     }
 
     if (request.method === "GET" && isApiPath(url.pathname, "/approval/passkey/operator")) {
@@ -1127,6 +1136,50 @@ async function handleGitHubActionsSecretSyncRequest(request, env) {
     ok: true,
     secretSync: executed.secretSync
   });
+}
+
+async function handleCustomGptRecoveryPageRequest(url, env) {
+  const repository = normalizeText(url.searchParams.get("repository"));
+  const ref = normalizeText(url.searchParams.get("ref")) || "main";
+  const issueNumber = normalizeIssue(url.searchParams.get("issueNumber"));
+
+  if (!repository) {
+    return html(
+      200,
+      renderCustomGptRecoveryPage({
+        runtimeOrigin: url.origin,
+        repository,
+        ref,
+        issueNumber
+      })
+    );
+  }
+
+  const bundle = await buildCustomGptRecoveryBundle({
+    repository,
+    ref,
+    issueNumber,
+    runtimeOrigin: url.origin,
+    env
+  });
+
+  return html(
+    bundle.ok ? 200 : bundle.status ?? 503,
+    renderCustomGptRecoveryPage({
+      runtimeOrigin: url.origin,
+      repository,
+      ref,
+      issueNumber,
+      recovery: bundle.ok ? bundle.recovery : null,
+      error: bundle.ok
+        ? null
+        : {
+            error: bundle.error,
+            reason: bundle.reason,
+            issues: bundle.issues ?? []
+          }
+    })
+  );
 }
 
 function handlePasskeyOperatorPageRequest(request) {
@@ -2864,6 +2917,15 @@ function json(status, body, extraHeaders = {}) {
     headers: {
       ...JSON_HEADERS,
       ...extraHeaders
+    }
+  });
+}
+
+function html(status, body) {
+  return new Response(body, {
+    status,
+    headers: {
+      "content-type": "text/html; charset=utf-8"
     }
   });
 }

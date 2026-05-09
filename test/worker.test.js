@@ -124,6 +124,84 @@ test("worker returns health", async () => {
   assert.equal(body.autonomyMode, AutonomyMode.NORMAL);
 });
 
+test("worker setup recovery page opens without Action auth and prompts for repository", async () => {
+  const response = await worker.fetch(new Request("https://example.com/setup/recovery"));
+
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get("content-type"), /text\/html/);
+  const html = await response.text();
+  assert.equal(html.includes("VTDD Butler setup recovery"), true);
+  assert.equal(html.includes("name=\"repository\""), true);
+  assert.equal(html.includes("Bearer test-token"), false);
+});
+
+test("worker setup recovery page renders copy-ready schema and short-min bundle", async () => {
+  const canonicalOpenApi = [
+    "openapi: 3.1.1",
+    "servers:",
+    "  - url: https://your-runtime-host.example.workers.dev",
+    "paths:",
+    "  /health:",
+    "    get:",
+    "      operationId: getHealth",
+    "  /v2/retrieve/setup-artifact:",
+    "    get:",
+    "      operationId: vtddRetrieveSetupArtifact",
+    "  /v2/retrieve/self-parity:",
+    "    get:",
+    "      operationId: vtddRetrieveSelfParity"
+  ].join("\n");
+  const canonicalInstructions = [
+    "vtddRetrieveSetupArtifact",
+    "vtddRetrieveSelfParity",
+    "Action Schema update required",
+    "Instructions update required",
+    "Cloudflare deploy update required"
+  ].join("\n");
+  const shortMin = "VTDD Butler short-min instructions";
+
+  const response = await worker.fetch(
+    new Request("https://example.com/setup/recovery?repository=sample-org/vtdd-v2-p&ref=main"),
+    {
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_setup_read",
+      GITHUB_API_FETCH: async (url) => {
+        const parsed = new URL(url);
+        if (parsed.pathname.endsWith("/commits/main")) {
+          return new Response(JSON.stringify({ sha: "b".repeat(40) }), {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          });
+        }
+        const isShortMin = parsed.pathname.endsWith(
+          "/docs/setup/custom-gpt-instructions-short-min.md"
+        );
+        const isInstructions = parsed.pathname.endsWith("/docs/setup/custom-gpt-instructions.md");
+        return new Response(
+          JSON.stringify({
+            sha: isShortMin ? "short-min-sha" : isInstructions ? "instructions-sha" : "openapi-sha",
+            encoding: "base64",
+            content: Buffer.from(
+              isShortMin ? shortMin : isInstructions ? canonicalInstructions : canonicalOpenApi,
+              "utf8"
+            ).toString("base64")
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        );
+      }
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.equal(html.includes("Copy-ready Action Schema"), true);
+  assert.equal(html.includes("Copy-ready custom-gpt-instructions-short-min.md"), true);
+  assert.equal(html.includes("  - url: https://example.com"), true);
+  assert.equal(html.includes("VTDD Butler short-min instructions"), true);
+  assert.equal(html.includes("knownGoodCommitSha: " + "b".repeat(40)), true);
+  assert.equal(html.includes("No secret values, tokens, or approval grants are displayed."), true);
+  assert.equal(html.includes("ghs_setup_read"), false);
+});
+
 test("worker health reflects guarded absence mode when runtime env sets it", async () => {
   const response = await worker.fetch(new Request("https://example.com/health"), {
     VTDD_AUTONOMY_MODE: "guarded_absence"
