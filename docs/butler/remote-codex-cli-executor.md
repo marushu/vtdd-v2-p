@@ -125,11 +125,13 @@ not require a public inbound VPS API:
 - the VPS runner reports milestone events back as Issue comments with
   `<!-- vtdd:vps-runner-event:<executionId> -->`
 - while long-running Codex CLI or `gh` commands are active, the VPS runner
-  reports start / heartbeat / completed / failed events with `currentStep`,
-  `heartbeatAt`, `updatedAt`, command name, exit code when known, and a short
-  redacted stderr summary
-- Butler reads the queue comment, runner event comments, target branch, and
-  target PR as GitHub runtime truth
+  updates one runner state comment with
+  `<!-- vtdd:vps-runner-state:<executionId> -->`; the state comment also keeps
+  the existing runner event marker for compatibility and carries
+  `currentStep`, `heartbeatAt`, `updatedAt`, command name, exit code when
+  known, and a short redacted stderr summary
+- Butler reads the queue comment, runner state/event comments, target branch,
+  and target PR as GitHub runtime truth
 - queued/requested is not implementation success; if no runner pickup or
   branch/PR evidence appears after the grace period, progress becomes blocked
   with `vps_runner_pickup_not_observed`
@@ -239,8 +241,9 @@ Required runner environment:
   user-owned runner when the host cannot run Codex's bubblewrap sandbox, and it
   must not be enabled in shared or untrusted infrastructure.
 - Optional `VTDD_VPS_RUNNER_HEARTBEAT_SECONDS`: interval for GitHub-visible
-  heartbeat comments while Codex CLI or `gh` subprocesses are running. Defaults
-  to `120`. Set to `0` only when heartbeat comments are intentionally disabled.
+  runner state updates while Codex CLI or `gh` subprocesses are running.
+  Defaults to `120`. Set to `0` only when heartbeat updates are intentionally
+  disabled.
 
 Dry-run pickup check:
 
@@ -323,9 +326,9 @@ the progress as blocked/unverified for implementation success rather than
 falling back to the control workflow conclusion.
 
 For `vps_runner`, progress is derived from the GitHub queue comment, runner
-event comments, and target branch / PR evidence. The latest runner event may
-include `currentStep`, `heartbeatAt`, `updatedAt`, and a bounded command
-diagnostic. A runner event comment may report raw failure, but it is not
+state/event comments, and target branch / PR evidence. The latest runner state
+or event may include `currentStep`, `heartbeatAt`, `updatedAt`, and a bounded
+command diagnostic. A runner event comment may report raw failure, but it is not
 completion evidence unless GitHub-visible branch or PR truth exists. If a
 runner reports failure and no target PR exists, Butler must surface the raw
 failure as blocked. If the latest running event is older than the stale
@@ -343,7 +346,7 @@ progress-poll comments must not mention anyone.
 
 For explicit VPS runner health checks, Butler uses `vtddVpsRunnerStatus`. The
 status check is read-only and is derived from the same GitHub queue comment,
-runner event comments, branch, and PR truth as `vtddExecutionProgress`. It
+runner state/event comments, branch, and PR truth as `vtddExecutionProgress`. It
 returns a short `health` summary with `runnerStatus`, `runnerAlive`,
 `lastSeenAt`, `heartbeatAt`, queue pickup state, `currentStep`, and a safe
 `reasonCode` / `reason` when the runner is stale, unavailable, or not yet

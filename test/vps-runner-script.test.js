@@ -6,6 +6,7 @@ import {
   buildGuardedPullRequestBody,
   buildPullRequestBody,
   buildVpsRunnerEventComment,
+  buildVpsRunnerStateComment,
   buildVpsRunnerPullRequestContext,
   classifyVpsRunnerFailure,
   formatPullRequestContext,
@@ -13,6 +14,7 @@ import {
   normalizeRepositoryPolicies,
   parseVpsRunnerEventComment,
   parseVpsRunnerQueueComment,
+  postVpsRunnerEvent,
   runVpsRunnerOnce,
   summarizeDiagnosticText,
   selectPendingVpsReviewerFallbacks,
@@ -303,6 +305,152 @@ test("VPS runner notification omits mention when no mentionable actor exists", (
 
   assert.equal(body.includes("@"), false);
   assert.equal(body.includes("VTDD VPS runner event."), true);
+});
+
+test("VPS runner state comment remains compatible with runner event parsing", () => {
+  const body = buildVpsRunnerStateComment({
+    executionId: "exec-state-1",
+    event: {
+      status: "running",
+      lastEvent: "codex_subprocess_heartbeat",
+      currentStep: "codex_subprocess",
+      heartbeatAt: "2026-05-09T10:01:00.000Z",
+      updatedAt: "2026-05-09T10:01:00.000Z"
+    }
+  });
+  const parsed = parseVpsRunnerEventComment(body);
+
+  assert.equal(body.includes("vtdd:vps-runner-state:exec-state-1"), true);
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.executionId, "exec-state-1");
+  assert.equal(parsed.event.status, "running");
+  assert.equal(parsed.event.currentStep, "codex_subprocess");
+});
+
+test("VPS runner heartbeat updates existing state comment instead of posting a new comment", async () => {
+  const calls = [];
+  const payload = {
+    executionId: "exec-heartbeat-1",
+    repository: "sample-org/vtdd-v2",
+    issueNumber: 226
+  };
+  const githubFetch = async (url, init = {}) => {
+    calls.push({ url, init });
+    if (String(url).endsWith("/issues/226/comments?per_page=100&page=1")) {
+      return [
+        {
+          id: 22602,
+          body: buildVpsRunnerStateComment({
+            executionId: "exec-heartbeat-1",
+            event: {
+              status: "running",
+              currentStep: "gh_repo_clone",
+              heartbeatAt: "2026-05-09T10:00:00.000Z",
+              updatedAt: "2026-05-09T10:00:00.000Z"
+            }
+          })
+        }
+      ];
+    }
+    return { id: 22602 };
+  };
+
+  await postVpsRunnerEvent({
+    githubFetch,
+    payload,
+    event: {
+      status: "running",
+      lastEvent: "codex_subprocess_heartbeat",
+      currentStep: "codex_subprocess",
+      heartbeatAt: "2026-05-09T10:01:00.000Z",
+      updatedAt: "2026-05-09T10:01:00.000Z"
+    }
+  });
+
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].url, "/repos/sample-org/vtdd-v2/issues/226/comments?per_page=100&page=1");
+  assert.equal(calls[1].url, "/repos/sample-org/vtdd-v2/issues/comments/22602");
+  assert.equal(calls[1].init.method, "PATCH");
+  assert.equal(calls[1].init.body.body.includes("codex_subprocess_heartbeat"), true);
+});
+
+test("VPS runner heartbeat finds an existing state comment beyond the first comments page", async () => {
+  const calls = [];
+  const payload = {
+    executionId: "exec-heartbeat-paged",
+    repository: "sample-org/vtdd-v2",
+    issueNumber: 226
+  };
+  const githubFetch = async (url, init = {}) => {
+    calls.push({ url, init });
+    if (String(url).endsWith("/issues/226/comments?per_page=100&page=1")) {
+      return Array.from({ length: 100 }, (_, index) => ({
+        id: 1000 + index,
+        body: `ordinary comment ${index}`
+      }));
+    }
+    if (String(url).endsWith("/issues/226/comments?per_page=100&page=2")) {
+      return [
+        {
+          id: 22699,
+          body: buildVpsRunnerStateComment({
+            executionId: "exec-heartbeat-paged",
+            event: {
+              status: "running",
+              currentStep: "codex_subprocess",
+              heartbeatAt: "2026-05-09T10:00:00.000Z",
+              updatedAt: "2026-05-09T10:00:00.000Z"
+            }
+          })
+        }
+      ];
+    }
+    return { id: 22699 };
+  };
+
+  await postVpsRunnerEvent({
+    githubFetch,
+    payload,
+    event: {
+      status: "running",
+      lastEvent: "codex_subprocess_heartbeat",
+      currentStep: "codex_subprocess",
+      heartbeatAt: "2026-05-09T10:01:00.000Z",
+      updatedAt: "2026-05-09T10:01:00.000Z"
+    }
+  });
+
+  assert.equal(calls.length, 3);
+  assert.equal(calls[0].url, "/repos/sample-org/vtdd-v2/issues/226/comments?per_page=100&page=1");
+  assert.equal(calls[1].url, "/repos/sample-org/vtdd-v2/issues/226/comments?per_page=100&page=2");
+  assert.equal(calls[2].url, "/repos/sample-org/vtdd-v2/issues/comments/22699");
+  assert.equal(calls[2].init.method, "PATCH");
+});
+
+test("VPS runner milestone events still create new comments", async () => {
+  const calls = [];
+  await postVpsRunnerEvent({
+    githubFetch: async (url, init = {}) => {
+      calls.push({ url, init });
+      return { id: 22603 };
+    },
+    payload: {
+      executionId: "exec-branch-1",
+      repository: "sample-org/vtdd-v2",
+      issueNumber: 226
+    },
+    event: {
+      status: "branch_created",
+      lastEvent: "branch_pushed",
+      currentStep: "branch_pushed",
+      branch: "codex/issue-226"
+    }
+  });
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "/repos/sample-org/vtdd-v2/issues/226/comments");
+  assert.equal(calls[0].init.method, "POST");
+  assert.equal(calls[0].init.body.body.includes("vtdd:vps-runner-event:exec-branch-1"), true);
 });
 
 test("VPS runner diagnostic summaries redact secrets and stay short", () => {

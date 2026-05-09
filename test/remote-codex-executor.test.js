@@ -810,6 +810,194 @@ test("remote Codex vps_runner progress blocks stale runner heartbeat after branc
   }
 });
 
+test("remote Codex vps_runner progress reads latest updated runner state comment", async () => {
+  const originalNow = Date.now;
+  Date.now = () => Date.parse("2026-05-09T10:09:00Z");
+  try {
+    const progress = await retrieveRemoteCodexExecutionProgress({
+      executionId: "remote-codex-issue226-state",
+      repository: "sample-org/sunaba-eye",
+      issueNumber: 226,
+      branch: "codex/issue-226",
+      executorTransport: RemoteCodexExecutorTransport.VPS_RUNNER,
+      env: {
+        GITHUB_APP_INSTALLATION_TOKEN: "ghs_progress_token",
+        GITHUB_API_FETCH: async (url) => {
+          if (String(url).includes("/issues/226/comments")) {
+            return new Response(
+              JSON.stringify([
+                {
+                  id: 22601,
+                  html_url: "https://github.com/sample-org/sunaba-eye/issues/226#issuecomment-22601",
+                  created_at: "2026-05-09T10:00:00Z",
+                  updated_at: "2026-05-09T10:00:00Z",
+                  body: "<!-- vtdd:vps-runner-execution:remote-codex-issue226-state -->"
+                },
+                {
+                  id: 22602,
+                  html_url: "https://github.com/sample-org/sunaba-eye/issues/226#issuecomment-22602",
+                  created_at: "2026-05-09T10:01:00Z",
+                  updated_at: "2026-05-09T10:08:00Z",
+                  body: [
+                    "<!-- vtdd:vps-runner-state:remote-codex-issue226-state -->",
+                    "<!-- vtdd:vps-runner-event:remote-codex-issue226-state -->",
+                    "```json",
+                    JSON.stringify({
+                      status: "running",
+                      lastEvent: "codex_subprocess_heartbeat",
+                      currentStep: "codex_subprocess",
+                      heartbeatAt: "2026-05-09T10:08:00.000Z",
+                      updatedAt: "2026-05-09T10:08:00.000Z",
+                      command: {
+                        name: "codex",
+                        phase: "running",
+                        exitCode: null,
+                        stderrSummary: null
+                      }
+                    }),
+                    "```"
+                  ].join("\n")
+                },
+                {
+                  id: 22603,
+                  html_url: "https://github.com/sample-org/sunaba-eye/issues/226#issuecomment-22603",
+                  created_at: "2026-05-09T10:03:00Z",
+                  updated_at: "2026-05-09T10:03:00Z",
+                  body: [
+                    "<!-- vtdd:vps-runner-event:remote-codex-issue226-state -->",
+                    "```json",
+                    JSON.stringify({
+                      status: "branch_created",
+                      lastEvent: "branch_pushed",
+                      currentStep: "branch_pushed",
+                      updatedAt: "2026-05-09T10:03:00.000Z",
+                      branch: "codex/issue-226"
+                    }),
+                    "```"
+                  ].join("\n")
+                }
+              ]),
+              { status: 200, headers: { "content-type": "application/json" } }
+            );
+          }
+          if (String(url).includes("/pulls?")) {
+            return new Response(JSON.stringify([]), {
+              status: 200,
+              headers: { "content-type": "application/json" }
+            });
+          }
+          return new Response(
+            JSON.stringify({
+              name: "codex/issue-226",
+              commit: { sha: "abc123" },
+              _links: { html: "https://github.com/sample-org/sunaba-eye/tree/codex/issue-226" }
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+      }
+    });
+
+    assert.equal(progress.ok, true);
+    assert.equal(progress.progress.status, RemoteCodexExecutionStatus.IN_PROGRESS);
+    assert.equal(progress.progress.runnerEvent.commentId, 22602);
+    assert.equal(progress.progress.runnerEvent.currentStep, "codex_subprocess");
+    assert.equal(progress.progress.runnerEvent.heartbeatAt, "2026-05-09T10:08:00.000Z");
+    assert.equal(progress.progress.runnerEvent.command.phase, "running");
+  } finally {
+    Date.now = originalNow;
+  }
+});
+
+test("remote Codex vps_runner progress reads runner state comments beyond the first comments page", async () => {
+  const originalNow = Date.now;
+  Date.now = () => Date.parse("2026-05-09T10:09:00Z");
+  try {
+    const commentsRequests = [];
+    const progress = await retrieveRemoteCodexExecutionProgress({
+      executionId: "remote-codex-issue226-paged-state",
+      repository: "sample-org/sunaba-eye",
+      issueNumber: 226,
+      branch: "codex/issue-226",
+      executorTransport: RemoteCodexExecutorTransport.VPS_RUNNER,
+      env: {
+        GITHUB_APP_INSTALLATION_TOKEN: "ghs_progress_token",
+        GITHUB_API_FETCH: async (url) => {
+          if (String(url).includes("/issues/226/comments")) {
+            commentsRequests.push(String(url));
+            if (/[?&]page=1(?:&|$)/.test(String(url))) {
+              return new Response(
+                JSON.stringify(
+                  Array.from({ length: 100 }, (_, index) => ({
+                    id: 22000 + index,
+                    created_at: "2026-05-09T09:00:00Z",
+                    updated_at: "2026-05-09T09:00:00Z",
+                    body: `ordinary comment ${index}`
+                  }))
+                ),
+                { status: 200, headers: { "content-type": "application/json" } }
+              );
+            }
+            return new Response(
+              JSON.stringify([
+                {
+                  id: 22601,
+                  html_url: "https://github.com/sample-org/sunaba-eye/issues/226#issuecomment-22601",
+                  created_at: "2026-05-09T10:00:00Z",
+                  updated_at: "2026-05-09T10:00:00Z",
+                  body: "<!-- vtdd:vps-runner-execution:remote-codex-issue226-paged-state -->"
+                },
+                {
+                  id: 22602,
+                  html_url: "https://github.com/sample-org/sunaba-eye/issues/226#issuecomment-22602",
+                  created_at: "2026-05-09T10:01:00Z",
+                  updated_at: "2026-05-09T10:08:00Z",
+                  body: [
+                    "<!-- vtdd:vps-runner-state:remote-codex-issue226-paged-state -->",
+                    "<!-- vtdd:vps-runner-event:remote-codex-issue226-paged-state -->",
+                    "```json",
+                    JSON.stringify({
+                      status: "running",
+                      lastEvent: "codex_subprocess_heartbeat",
+                      currentStep: "codex_subprocess",
+                      heartbeatAt: "2026-05-09T10:08:00.000Z",
+                      updatedAt: "2026-05-09T10:08:00.000Z"
+                    }),
+                    "```"
+                  ].join("\n")
+                }
+              ]),
+              { status: 200, headers: { "content-type": "application/json" } }
+            );
+          }
+          if (String(url).includes("/pulls?")) {
+            return new Response(JSON.stringify([]), {
+              status: 200,
+              headers: { "content-type": "application/json" }
+            });
+          }
+          return new Response(
+            JSON.stringify({
+              name: "codex/issue-226",
+              commit: { sha: "abc123" },
+              _links: { html: "https://github.com/sample-org/sunaba-eye/tree/codex/issue-226" }
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+      }
+    });
+
+    assert.equal(progress.ok, true);
+    assert.equal(commentsRequests.length, 2);
+    assert.equal(progress.progress.runnerEvent.commentId, 22602);
+    assert.equal(progress.progress.runnerEvent.currentStep, "codex_subprocess");
+    assert.equal(progress.progress.runnerEvent.heartbeatAt, "2026-05-09T10:08:00.000Z");
+  } finally {
+    Date.now = originalNow;
+  }
+});
+
 test("remote Codex vps_runner progress reports runner raw failure comments", async () => {
   const progress = await retrieveRemoteCodexExecutionProgress({
     executionId: "remote-codex-issue173-failed",

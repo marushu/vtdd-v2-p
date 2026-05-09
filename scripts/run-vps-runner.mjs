@@ -508,6 +508,16 @@ function buildVpsRunnerEventComment({ executionId, event, notification } = {}) {
   return lines.join("\n");
 }
 
+function buildVpsRunnerStateComment({ executionId, event }) {
+  return [
+    `<!-- vtdd:vps-runner-state:${executionId} -->`,
+    `<!-- vtdd:vps-runner-event:${executionId} -->`,
+    "VTDD VPS runner state.",
+    "",
+    fencedJson(event)
+  ].join("\n");
+}
+
 function buildCodexExecutionPrompt({ payload, issue = {}, pullRequestContext = null }) {
   const goal = normalizeText(payload.codexGoal);
   const lines = [
@@ -750,21 +760,74 @@ async function executeVpsReviewerFallback({ token, reviewerFallback }) {
 }
 
 async function postVpsRunnerEvent({ githubFetch, payload, event, notification }) {
+  const eventPayload = {
+    ...event,
+    executionId: payload.executionId,
+    repository: payload.repository,
+    issueNumber: payload.issueNumber
+  };
+
+  if (shouldUpdateVpsRunnerState(eventPayload)) {
+    return upsertVpsRunnerStateComment({ githubFetch, payload, event: eventPayload });
+  }
+
   return githubFetch(`/repos/${payload.repository}/issues/${payload.issueNumber}/comments`, {
     method: "POST",
     body: {
       body: buildVpsRunnerEventComment({
         executionId: payload.executionId,
         notification,
-        event: {
-          ...event,
-          executionId: payload.executionId,
-          repository: payload.repository,
-          issueNumber: payload.issueNumber
-        }
+        event: eventPayload
       })
     }
   });
+}
+
+function shouldUpdateVpsRunnerState(event) {
+  return normalizeText(event?.status) === "running";
+}
+
+async function upsertVpsRunnerStateComment({ githubFetch, payload, event }) {
+  const body = buildVpsRunnerStateComment({
+    executionId: payload.executionId,
+    event
+  });
+  const existing = await findVpsRunnerStateComment({ githubFetch, payload });
+  if (existing?.id) {
+    return githubFetch(`/repos/${payload.repository}/issues/comments/${existing.id}`, {
+      method: "PATCH",
+      body: { body }
+    });
+  }
+
+  return githubFetch(`/repos/${payload.repository}/issues/${payload.issueNumber}/comments`, {
+    method: "POST",
+    body: { body }
+  });
+}
+
+async function findVpsRunnerStateComment({ githubFetch, payload }) {
+  const marker = `vtdd:vps-runner-state:${payload.executionId}`;
+  for await (const comments of readIssueCommentsPages({ githubFetch, payload })) {
+    const existing = comments.find((comment) => normalizeText(comment?.body).includes(marker));
+    if (existing) {
+      return existing;
+    }
+  }
+  return null;
+}
+
+async function* readIssueCommentsPages({ githubFetch, payload }) {
+  for (let page = 1; ; page += 1) {
+    const comments = await githubFetch(
+      `/repos/${payload.repository}/issues/${payload.issueNumber}/comments?per_page=100&page=${page}`
+    );
+    const pageComments = Array.isArray(comments) ? comments : [];
+    yield pageComments;
+    if (pageComments.length < 100) {
+      return;
+    }
+  }
 }
 
 async function findExistingPullRequest({ repository, branch, env, cwd, githubFetch, payload }) {
@@ -1285,6 +1348,7 @@ export {
   buildGuardedPullRequestBody,
   buildPullRequestBody,
   buildVpsRunnerEventComment,
+  buildVpsRunnerStateComment,
   buildVpsRunnerPullRequestContext,
   classifyVpsRunnerFailure,
   formatPullRequestContext,
@@ -1292,6 +1356,7 @@ export {
   normalizeRepositoryPolicies,
   parseVpsRunnerEventComment,
   parseVpsRunnerQueueComment,
+  postVpsRunnerEvent,
   runVpsRunnerOnce,
   summarizeDiagnosticText,
   selectPendingVpsReviewerFallbacks,
