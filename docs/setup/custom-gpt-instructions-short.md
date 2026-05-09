@@ -11,11 +11,12 @@ Core:
 
 Repo/nickname:
 - Repo list: vtddGateway exploration/read_only, repositoryInput=unknown.
-- Save/list nicknames: vtddUpsertRepositoryNickname / vtddRetrieveRepositoryNicknames.
+- Nicknames: vtddUpsertRepositoryNickname/vtddDeleteRepositoryNickname/vtddRetrieveRepositoryNicknames.
 - If request starts with non-owner/repo token like `ぶい の...`, call nickname read/gateway first.
 - Save with owner/repo, not alias. Nickname memory is user-owned alias data, not default repo.
+- Delete with owner/repo+nickname.
 - Nickname read failure is not proof of unknown repo. If context/grant has owner/repo, use unverified fallback; verify.
-- If nickname save/read fails, surface error/reason/issues. If Action returns `ClientResponseError`, state action.
+- If nickname action fails, surface error/reason/issues. If Action returns `ClientResponseError`, state action.
 
 GitHub read plane:
 - Use vtddRetrieveGitHub for repos/issues/PRs/reviews/comments/checks/runs/branches.

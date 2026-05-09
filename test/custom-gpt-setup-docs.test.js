@@ -47,6 +47,7 @@ test("custom gpt instructions preserve current butler and approval boundaries", 
   assert.equal(doc.includes("vtddExecutionProgress"), true);
   assert.equal(doc.includes("vtddRetrieveGitHub"), true);
   assert.equal(doc.includes("vtddUpsertRepositoryNickname"), true);
+  assert.equal(doc.includes("vtddDeleteRepositoryNickname"), true);
   assert.equal(doc.includes("vtddRetrieveRepositoryNicknames"), true);
   assert.equal(doc.includes("vtddRetrieveSetupArtifact"), true);
   assert.equal(doc.includes("vtddRetrieveSelfParity"), true);
@@ -85,6 +86,8 @@ test("custom gpt instructions preserve current butler and approval boundaries", 
   assert.equal(doc.includes("`古くなってない？`"), true);
   assert.equal(doc.includes("Nickname memory is explicit user-owned alias registry data"), true);
   assert.equal(doc.includes("such as `ぶい の本番にデプロイして`"), true);
+  assert.equal(doc.includes("vtddDeleteRepositoryNickname"), true);
+  assert.equal(doc.includes("do not use empty `nicknames` with `replace` as a deletion shortcut"), true);
   assert.equal(doc.includes("before asking the human to restate the repository"), true);
   assert.equal(doc.includes("A nickname retrieval failure is not proof that the nickname is unknown"), true);
   assert.equal(doc.includes("approvalGrant.scope.repositoryInput"), true);
@@ -141,6 +144,7 @@ test("short custom gpt instructions stay under editor limits while preserving cr
   assert.equal(doc.includes("vtddDeployProduction"), true);
   assert.equal(doc.includes("vtddSyncGitHubActionsSecret"), true);
   assert.equal(doc.includes("vtddUpsertRepositoryNickname"), true);
+  assert.equal(doc.includes("vtddDeleteRepositoryNickname"), true);
   assert.equal(doc.includes("vtddRetrieveRepositoryNicknames"), true);
   assert.equal(doc.includes("vtddRetrieveCrossMemory"), true);
   assert.equal(doc.includes("vtddRetrieveDecisionLogs"), true);
@@ -211,6 +215,7 @@ test("custom gpt openapi doc exposes current gateway, execute, and progress rout
   assert.equal(doc.includes("/v2/action/deploy:"), true);
   assert.equal(doc.includes("/v2/action/github-actions-secret:"), true);
   assert.equal(doc.includes("/v2/action/repository-nickname:"), true);
+  assert.equal(doc.includes("/v2/action/repository-nickname/delete:"), true);
   assert.equal(doc.includes("/v2/action/progress:"), true);
   assert.equal(doc.includes("/v2/retrieve/github:"), true);
   assert.equal(doc.includes("/v2/retrieve/repository-nicknames:"), true);
@@ -283,6 +288,11 @@ test("custom gpt openapi json parses and exposes paths as an object", () => {
   assert.equal(typeof doc.paths["/v2/action/deploy"], "object");
   assert.equal(typeof doc.paths["/v2/action/github-actions-secret"], "object");
   assert.equal(typeof doc.paths["/v2/action/repository-nickname"], "object");
+  assert.equal(typeof doc.paths["/v2/action/repository-nickname/delete"], "object");
+  assert.equal(
+    doc.paths["/v2/action/repository-nickname/delete"].post.operationId,
+    "vtddDeleteRepositoryNickname"
+  );
   assert.equal(typeof doc.paths["/v2/action/progress"], "object");
   assert.deepEqual(
     doc.components.schemas.VtddExecuteRequest.properties.executorTransport.enum,
@@ -378,6 +388,7 @@ test("custom gpt openapi json exposes JSON bodies for Butler action auth failure
   const routes = [
     ["/v2/action/github", "post"],
     ["/v2/action/repository-nickname", "post"],
+    ["/v2/action/repository-nickname/delete", "post"],
     ["/v2/retrieve/repository-nicknames", "get"],
     ["/v2/retrieve/self-parity", "get"]
   ];

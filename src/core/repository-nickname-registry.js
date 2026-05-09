@@ -125,6 +125,132 @@ export async function upsertRepositoryNickname(input = {}) {
   };
 }
 
+export async function deleteRepositoryNickname(input = {}) {
+  const provider = input.provider;
+  const validation = validateMemoryProvider(provider);
+  if (!validation.ok) {
+    return {
+      ok: false,
+      status: 503,
+      error: "memory_provider_unavailable",
+      reason: "valid memory provider is required for repository nickname deletion"
+    };
+  }
+
+  if (typeof provider.deleteRecords !== "function") {
+    return {
+      ok: false,
+      status: 503,
+      error: "memory_delete_unavailable",
+      reason: "memory provider deleteRecords is required for repository nickname deletion"
+    };
+  }
+
+  const repositoryInput = normalizeCanonicalRepo(input.repository);
+  const nickname = normalizeOptionalText(input.nickname);
+  const issues = [];
+  if (!repositoryInput) {
+    issues.push("repository must be a canonical owner/repo string");
+  }
+  if (!nickname) {
+    issues.push("nickname is required");
+  }
+  if (issues.length > 0) {
+    return {
+      ok: false,
+      status: 422,
+      error: "repository_nickname_delete_request_invalid",
+      issues
+    };
+  }
+
+  const stored = await retrieveStoredAliasRegistry(provider);
+  if (!stored.ok) {
+    return stored;
+  }
+
+  const existing = stored.aliasRegistry.find((item) => item.canonicalRepo === repositoryInput);
+  if (!existing) {
+    return {
+      ok: false,
+      status: 404,
+      error: "repository_nickname_not_found",
+      reason: "repository nickname entry was not found",
+      issues: ["repository nickname entry not found"]
+    };
+  }
+
+  const nextAliases = removeAlias(existing.aliases, nickname);
+  if (nextAliases.length === existing.aliases.length) {
+    return {
+      ok: false,
+      status: 404,
+      error: "repository_nickname_not_found",
+      reason: "repository nickname alias was not found",
+      issues: ["repository nickname alias not found"]
+    };
+  }
+
+  const recordId = buildRepositoryNicknameRecordId(repositoryInput);
+  const deleted = await provider.deleteRecords({ ids: [recordId] });
+  if (!deleted?.ok) {
+    return {
+      ok: false,
+      status: 503,
+      error: "memory_delete_failed",
+      reason: "failed to delete repository nickname record"
+    };
+  }
+
+  if (nextAliases.length === 0) {
+    return {
+      ok: true,
+      repository: repositoryInput,
+      nickname,
+      deleted: true,
+      deletedRecord: true,
+      aliasEntry: null
+    };
+  }
+
+  const record = {
+    id: recordId,
+    type: MemoryRecordType.ALIAS_REGISTRY,
+    content: {
+      ...existing,
+      aliases: nextAliases
+    },
+    metadata: {
+      canonicalRepo: repositoryInput,
+      source: "user_defined_repository_nickname",
+      mode: "delete"
+    },
+    priority: 60,
+    tags: ["alias_registry", repositoryInput, "repository_nickname"],
+    createdAt: new Date().toISOString()
+  };
+
+  const persisted = await provider.store(record);
+  if (!persisted?.ok) {
+    return {
+      ok: false,
+      status: 503,
+      error: "memory_write_failed",
+      reason: "failed to persist repository nickname deletion"
+    };
+  }
+
+  return {
+    ok: true,
+    repository: repositoryInput,
+    nickname,
+    deleted: true,
+    deletedRecord: false,
+    record: persisted.record,
+    aliasEntry: record.content
+  };
+}
+
 export function mergeAliasRegistries(...groups) {
   const byCanonical = new Map();
 
@@ -183,7 +309,7 @@ function mergeAliasList(...groups) {
   const deduped = new Map();
   for (const group of groups) {
     for (const alias of normalizeAliasList(group)) {
-      const key = alias.toLowerCase().replace(/[^a-z0-9\u3040-\u30ff\u4e00-\u9faf]+/g, "");
+      const key = buildAliasKey(alias);
       if (!key || deduped.has(key)) {
         continue;
       }
@@ -191,6 +317,17 @@ function mergeAliasList(...groups) {
     }
   }
   return [...deduped.values()];
+}
+
+function removeAlias(aliases, target) {
+  const targetKey = buildAliasKey(target);
+  return normalizeAliasList(aliases).filter((alias) => buildAliasKey(alias) !== targetKey);
+}
+
+function buildAliasKey(value) {
+  return normalizeOptionalText(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9\u3040-\u30ff\u4e00-\u9faf]+/g, "");
 }
 
 function normalizeAliasList(value) {

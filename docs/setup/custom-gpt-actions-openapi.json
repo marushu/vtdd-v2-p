@@ -1200,6 +1200,99 @@
         }
       }
     },
+    "/v2/action/repository-nickname/delete": {
+      "post": {
+        "operationId": "vtddDeleteRepositoryNickname",
+        "summary": "Delete an explicit user-defined repository nickname from the VTDD alias registry.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "repository",
+                  "nickname"
+                ],
+                "properties": {
+                  "repository": {
+                    "type": "string",
+                    "description": "Canonical owner/repo target for the nickname entry."
+                  },
+                  "nickname": {
+                    "type": "string",
+                    "description": "Exact nickname or alias to delete from the target repository entry."
+                  }
+                },
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Repository nickname deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing machine auth",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Invalid machine auth",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Repository nickname delete target not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Repository nickname delete request blocked or invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Repository nickname deletion unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v2/action/progress": {
       "get": {
         "operationId": "vtddExecutionProgress",

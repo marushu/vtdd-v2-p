@@ -8,6 +8,7 @@ import {
   createPasskeyRegistrationOptions,
   createMemoryRecord,
   createRemoteCodexExecutionRequest,
+  deleteRepositoryNickname,
   dedupePasskeys,
   dispatchRemoteCodexExecution,
   executeDeployProductionPlane,
@@ -247,6 +248,26 @@ export default {
       }
 
       return handleRepositoryNicknameUpsertRequest(request, env);
+    }
+
+    if (
+      request.method === "POST" &&
+      isApiPath(url.pathname, "/action/repository-nickname/delete")
+    ) {
+      const auth = authorizeGatewayRequest({
+        request,
+        env,
+        apiSuffix: "/action/repository-nickname/delete"
+      });
+      if (!auth.ok) {
+        return json(auth.status, {
+          ok: false,
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+
+      return handleRepositoryNicknameDeleteRequest(request, env);
     }
 
     if (request.method === "GET" && isApiPath(url.pathname, "/action/progress")) {
@@ -1545,6 +1566,69 @@ async function handleRepositoryNicknameUpsertRequest(request, env) {
   return json(200, {
     ok: true,
     repository: resolution.repository,
+    aliasEntry: result.aliasEntry
+  });
+}
+
+async function handleRepositoryNicknameDeleteRequest(request, env) {
+  const provider = resolveMemoryProvider(env);
+  const body = await readJson(request);
+  const runtimeAliasResolution = await resolveRuntimeAliasRegistry({
+    baseAliasRegistry: [],
+    env
+  });
+  const resolvedAliasRegistry = await resolveGatewayAliasRegistryFromGitHubApp({
+    policyInput: {
+      aliasRegistry: runtimeAliasResolution.aliasRegistry
+    },
+    env
+  });
+  const repositoryInput = body?.repository ?? body?.repositoryInput;
+  const canonicalRepositoryInput = normalizeCanonicalRepositoryInput(repositoryInput);
+  const resolution = canonicalRepositoryInput
+    ? {
+        resolved: true,
+        repository: canonicalRepositoryInput,
+        via: "canonical_owner_repo"
+      }
+    : resolveRepositoryTarget({
+        input: repositoryInput,
+        mode: TaskMode.EXECUTION,
+        aliasRegistry: resolvedAliasRegistry.aliasRegistry
+      });
+
+  if (!resolution.resolved) {
+    return json(422, {
+      ok: false,
+      error: "repository_nickname_delete_request_invalid",
+      reason: resolution.reason,
+      candidates: resolution.candidates ?? []
+    });
+  }
+
+  const result = await deleteRepositoryNickname({
+    provider,
+    repository: resolution.repository,
+    nickname: body?.nickname
+  });
+
+  if (!result.ok) {
+    const status = result.status ?? 422;
+    return json(status >= 500 ? 200 : status, {
+      ok: false,
+      httpStatus: status,
+      error: result.error,
+      reason: result.reason,
+      issues: result.issues ?? []
+    });
+  }
+
+  return json(200, {
+    ok: true,
+    repository: result.repository,
+    nickname: result.nickname,
+    deleted: result.deleted,
+    deletedRecord: result.deletedRecord,
     aliasEntry: result.aliasEntry
   });
 }

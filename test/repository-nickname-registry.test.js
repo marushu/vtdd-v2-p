@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   RepositoryNicknameMode,
   createInMemoryMemoryProvider,
+  deleteRepositoryNickname,
   mergeAliasRegistries,
   retrieveStoredAliasRegistry,
   upsertRepositoryNickname
@@ -61,6 +62,91 @@ test("repository nickname registry can replace prior user-defined nicknames", as
 
   assert.equal(result.ok, true);
   assert.deepEqual(result.aliasEntry.aliases, ["公開V2"]);
+});
+
+test("repository nickname registry deletes explicit aliases while preserving other entries", async () => {
+  const provider = createInMemoryMemoryProvider();
+  await upsertRepositoryNickname({
+    provider,
+    repository: "owner/repository",
+    nickname: "default"
+  });
+  await upsertRepositoryNickname({
+    provider,
+    repository: "example/example",
+    nickname: "example"
+  });
+  await upsertRepositoryNickname({
+    provider,
+    repository: "marushu/vtdd-v2-p",
+    nickname: "ぶい"
+  });
+  await upsertRepositoryNickname({
+    provider,
+    repository: "marushu/hibou-piccola-bookkeeping",
+    nickname: "TOMIO"
+  });
+
+  const defaultDelete = await deleteRepositoryNickname({
+    provider,
+    repository: "owner/repository",
+    nickname: "default"
+  });
+  const exampleDelete = await deleteRepositoryNickname({
+    provider,
+    repository: "example/example",
+    nickname: "example"
+  });
+
+  assert.equal(defaultDelete.ok, true);
+  assert.equal(defaultDelete.deletedRecord, true);
+  assert.equal(exampleDelete.ok, true);
+  assert.equal(exampleDelete.deletedRecord, true);
+
+  const retrieved = await retrieveStoredAliasRegistry(provider);
+  assert.equal(retrieved.ok, true);
+  assert.deepEqual(new Set(retrieved.aliasRegistry.map((item) => item.canonicalRepo)), new Set([
+    "marushu/hibou-piccola-bookkeeping",
+    "marushu/vtdd-v2-p"
+  ]));
+  assert.equal(
+    retrieved.aliasRegistry.some((item) => item.aliases.includes("default")),
+    false
+  );
+  assert.equal(
+    retrieved.aliasRegistry.some((item) => item.aliases.includes("example")),
+    false
+  );
+  assert.deepEqual(
+    retrieved.aliasRegistry.find((item) => item.canonicalRepo === "marushu/vtdd-v2-p").aliases,
+    ["ぶい"]
+  );
+  assert.deepEqual(
+    retrieved.aliasRegistry.find(
+      (item) => item.canonicalRepo === "marushu/hibou-piccola-bookkeeping"
+    ).aliases,
+    ["TOMIO"]
+  );
+});
+
+test("repository nickname registry surfaces not found for absent delete targets", async () => {
+  const provider = createInMemoryMemoryProvider();
+  await upsertRepositoryNickname({
+    provider,
+    repository: "owner/repository",
+    nickname: "default"
+  });
+
+  const result = await deleteRepositoryNickname({
+    provider,
+    repository: "owner/repository",
+    nickname: "missing"
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.status, 404);
+  assert.equal(result.error, "repository_nickname_not_found");
+  assert.deepEqual(result.issues, ["repository nickname alias not found"]);
 });
 
 test("repository nickname registry accepts canonical repositories even before live alias registry has seen them", async () => {
