@@ -2,12 +2,15 @@
 
 Parent: #4
 
-Issue: #153
+Issue: #244
+
+Supersedes: #153
 
 ## Purpose
 
-This matrix is the working truth for whether the Custom GPT Butler can actually
-drive VTDD from an iPhone/mobile conversation.
+This matrix is the working truth for whether the Custom GPT Butler can act as
+the repository owner's governed GitHub operator from an iPhone/mobile
+conversation.
 
 It is not enough for a route, schema, test, or source file to exist. A capability
 is only complete when Butler can use it from the Custom GPT surface and the
@@ -28,6 +31,43 @@ Do not report `source-only` as done. Do not report `requested` handoff as Codex
 execution.
 
 ## Current Capability Reading
+
+Issue #244 replaces the older #153 "basic capability matrix" with an
+owner-operation inventory. The queryable inventory is
+`src/core/github-owner-operation-inventory.js`; Butler must use it to explain
+each GitHub owner operation as `supported`, `gated`, `unsupported`, or
+`intentionally_blocked` with:
+
+- required GitHub App permission
+- required Butler action surface
+- required passkey/operator boundary
+- runtime truth verification method
+- remediation issue when unsupported
+
+GitHub UI fallback is not a steady-state answer. If an owner operation is
+unsupported, Butler must report that the operation is in scope, name the missing
+governed action surface, and cite remediation Issue #244.
+
+### Owner-Operation Inventory Reading
+
+| Operation family | Current status | Required Butler action surface | Boundary / runtime truth |
+|---|---:|---|---|
+| repository read | `supported` | `github_read.repository` | read-only GitHub runtime truth |
+| issue read/create/comment create/comment update | `supported` | `github_read.issue`, `github_write.issue_create`, `github_write.issue_comment_create`, `github_write.issue_comment_update` | reads are ungated; writes require exact payload + human GO and readback |
+| issue body/title/state/labels/assignees/milestone update | `unsupported` | `github_write.issue_update` | remediation: #244; do not fall back to GitHub UI as steady state |
+| bounded issue close after scoped merge | `gated` | `github_high_risk.issue_close` | explicit GO + real passkey; verify merged PR then issue state |
+| PR read/files/reviews/checks/create/update/comment | `supported` | `github_read.pull_request_runtime_truth`, `github_write.pull_create`, `github_write.pull_update`, `github_write.pull_comment_create` | exact payload + GO for writes; readback from GitHub runtime truth |
+| PR close/reopen/state/review-request metadata | `unsupported` | `github_write.pull_state_update` | remediation: #244; PR close is in scope and missing surface must be reported |
+| PR ready-for-review and merge | `gated` | `github_high_risk.pull_ready_for_review`, `github_high_risk.pull_merge` | explicit GO + real passkey; verify draft/merge runtime truth |
+| branch/ref create | `supported` | `github_write.branch_create` | exact payload + GO; verify ref exists |
+| branch/ref update/delete | `unsupported` | `github_write.branch_ref_update_delete` | remediation: #244; deletion requires scoped cleanup or passkey boundary |
+| workflow run dispatch/cancel/rerun/artifacts | `unsupported` | `github_actions.workflow_governed_control` | remediation: #244; workflow run truth must be read back |
+| repository settings/rulesets/environments/pages/webhooks | `gated` | `github_admin.repository_settings_governed_change` | explicit GO + real passkey; read before and after |
+| permissions/collaborators/teams/App installation | `gated` | `github_admin.permission_governed_change` | explicit GO + real passkey; owner policy remains required |
+| secrets/variables | `gated` | `github_actions_secret_sync`, `github_admin.variable_governed_change` | explicit GO + real passkey; never expose raw secret material |
+| releases/tags/packages | `unsupported` | `github_release.governed_release_control` | remediation: #244; publish/delete requires high-risk boundary |
+| deployments/environments/statuses | `gated` | `deploy_production`, `github_deployment.governed_status_control` | explicit GO + real passkey; verify workflow/deployment/runtime truth |
+| archive/delete/transfer/visibility/destructive cleanup | `intentionally_blocked` | none | refuse steady-state execution; requires explicit owner policy change |
 
 | Capability | Current status | Evidence / notes | Next validation |
 |---|---:|---|---|

@@ -1,6 +1,7 @@
 # GitHub Operation Plane
 
-This document is the canonical GitHub operation plane contract for Issue #42.
+This document is the canonical GitHub operation plane contract for Issues #42
+and #244.
 
 ## Intent
 
@@ -63,7 +64,22 @@ They do not define which GitHub capability exists conceptually.
 
 ## Canonical Coverage
 
-At minimum, the GitHub operation plane covers these operation groups:
+Issue #244 supersedes the earlier basic matrix in #153. The capability model is
+owner-equivalent by inventory: every GitHub repository-owner operation family is
+in scope even when its current Butler action surface is not implemented yet.
+
+The queryable source of truth for Butler operation explanations is
+`src/core/github-owner-operation-inventory.js`. Each inventory row records:
+
+- status: `supported`, `gated`, `unsupported`, or `intentionally_blocked`
+- required GitHub App permission
+- required Butler action surface
+- required passkey/operator boundary
+- runtime truth verification method
+- remediation issue when unsupported
+
+At minimum, the GitHub operation plane covers these operation groups, and the
+list must not be used to narrow the scope to examples only:
 
 - repositories
 - issues
@@ -75,8 +91,23 @@ At minimum, the GitHub operation plane covers these operation groups:
 - branches and refs
 - merge
 - issue close
+- PR close / reopen / state transition
+- Issue body, title, state, label, assignee, and milestone update
 - deploy-adjacent GitHub mutations
 - secret, variable, and settings mutations
+- repository settings, rulesets, environments, pages, and webhooks
+- repository permissions, collaborators, teams, and GitHub App installation state
+- releases, tags, and packages
+- deployments, environments, and deployment statuses
+- repository archive, delete, transfer, visibility, and destructive cleanup
+
+Unsupported rows are not treated as a steady-state GitHub UI fallback. They must
+name a remediation Issue and Butler must explain that the owner operation is in
+scope but lacks a governed action surface today.
+
+Intentionally blocked rows are still inventory rows. Butler must refuse them
+explicitly instead of pretending they do not exist or silently narrowing the
+owner-equivalent model.
 
 ## Tier Mapping
 

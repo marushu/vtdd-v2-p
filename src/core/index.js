@@ -212,6 +212,13 @@ export {
   canBindNaturalGitHubWriteApproval,
   getGitHubAppOperation
 } from "./github-app-operation-registry.js";
+export {
+  GitHubOwnerOperationInventory,
+  GitHubOwnerOperationStatus,
+  explainGitHubOwnerOperation,
+  listGitHubOwnerOperationInventory,
+  validateGitHubOwnerOperationInventory
+} from "./github-owner-operation-inventory.js";
 export { GitHubHighRiskOperation, executeGitHubHighRiskPlane } from "./github-high-risk-plane.js";
 export {
   WorkflowStage,
