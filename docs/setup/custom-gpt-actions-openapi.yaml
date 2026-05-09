@@ -1104,6 +1104,9 @@ paths:
     get:
       operationId: vtddRetrieveRepositoryNicknames
       summary: Read stored user-defined repository nicknames from the VTDD alias registry.
+      security:
+        - GatewayBearerAuth: []
+      parameters: []
       responses:
         "200":
           description: Repository nickname registry retrieval result
