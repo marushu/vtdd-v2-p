@@ -1986,6 +1986,21 @@ test("worker surfaces repository nickname retrieval failures as action-visible J
   assert.deepEqual(body.aliasRegistry, []);
 });
 
+test("worker can return action-visible unauthorized envelope for repository nickname retrieval", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/retrieve/repository-nicknames?responseMode=action_visible"),
+    {
+      VTDD_GATEWAY_BEARER_TOKEN: "required-token"
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.httpStatus, 401);
+  assert.equal(body.error, "unauthorized");
+});
+
 test("worker gateway can resolve stored repository nickname against live repository index", async () => {
   const provider = createInMemoryMemoryProvider();
   await provider.store({
