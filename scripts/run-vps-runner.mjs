@@ -755,9 +755,27 @@ async function upsertVpsRunnerStateComment({ githubFetch, payload, event }) {
 }
 
 async function findVpsRunnerStateComment({ githubFetch, payload }) {
-  const comments = await githubFetch(`/repos/${payload.repository}/issues/${payload.issueNumber}/comments?per_page=100`);
   const marker = `vtdd:vps-runner-state:${payload.executionId}`;
-  return comments.find((comment) => normalizeText(comment?.body).includes(marker)) || null;
+  for await (const comments of readIssueCommentsPages({ githubFetch, payload })) {
+    const existing = comments.find((comment) => normalizeText(comment?.body).includes(marker));
+    if (existing) {
+      return existing;
+    }
+  }
+  return null;
+}
+
+async function* readIssueCommentsPages({ githubFetch, payload }) {
+  for (let page = 1; ; page += 1) {
+    const comments = await githubFetch(
+      `/repos/${payload.repository}/issues/${payload.issueNumber}/comments?per_page=100&page=${page}`
+    );
+    const pageComments = Array.isArray(comments) ? comments : [];
+    yield pageComments;
+    if (pageComments.length < 100) {
+      return;
+    }
+  }
 }
 
 async function findExistingPullRequest({ repository, branch, env, cwd, githubFetch, payload }) {

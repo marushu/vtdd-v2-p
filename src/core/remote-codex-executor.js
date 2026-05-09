@@ -757,36 +757,24 @@ async function retrieveVpsRunnerGitHubQueueProgress({
 
   const apiBaseUrl = normalizeText(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
   const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
-  const commentsUrl = `${apiBaseUrl}/repos/${encodeURIComponentRepository(
-    repository
-  )}/issues/${encodeURIComponent(String(issueNumber))}/comments?per_page=100`;
-
-  let commentsResponse;
+  let comments;
   try {
-    commentsResponse = await fetchImpl(commentsUrl, {
-      method: "GET",
-      headers: githubJsonHeaders({ token })
+    comments = await readAllIssueComments({
+      apiBaseUrl,
+      repository,
+      issueNumber,
+      token,
+      fetchImpl
     });
-  } catch {
+  } catch (error) {
     return {
       ok: false,
-      status: 503,
+      status: error?.status || 503,
       error: "vps_runner_progress_failed",
-      reason: "failed to read VPS runner queue comments"
+      reason: normalizeText(error?.message) || "failed to read VPS runner queue comments"
     };
   }
 
-  const commentsBody = await readJsonSafe(commentsResponse);
-  if (!commentsResponse.ok) {
-    return {
-      ok: false,
-      status: commentsResponse.status,
-      error: "vps_runner_progress_failed",
-      reason: normalizeText(commentsBody?.message) || "GitHub issue comments lookup failed"
-    };
-  }
-
-  const comments = Array.isArray(commentsBody) ? commentsBody : [];
   const queueComment = comments.find((comment) =>
     normalizeText(comment?.body).includes(`vtdd:vps-runner-execution:${executionId}`)
   );
@@ -851,6 +839,30 @@ async function retrieveVpsRunnerGitHubQueueProgress({
       blocker: failureBlocker ?? runnerEventStaleBlocker ?? staleBlocker
     }
   };
+}
+
+async function readAllIssueComments({ apiBaseUrl, repository, issueNumber, token, fetchImpl }) {
+  const comments = [];
+  for (let page = 1; ; page += 1) {
+    const commentsUrl = `${apiBaseUrl}/repos/${encodeURIComponentRepository(
+      repository
+    )}/issues/${encodeURIComponent(String(issueNumber))}/comments?per_page=100&page=${page}`;
+    const response = await fetchImpl(commentsUrl, {
+      method: "GET",
+      headers: githubJsonHeaders({ token })
+    });
+    const body = await readJsonSafe(response);
+    if (!response.ok) {
+      const error = new Error(normalizeText(body?.message) || "GitHub issue comments lookup failed");
+      error.status = response.status;
+      throw error;
+    }
+    const pageComments = Array.isArray(body) ? body : [];
+    comments.push(...pageComments);
+    if (pageComments.length < 100) {
+      return comments;
+    }
+  }
 }
 
 async function findPullRequestForBranch({ repository, branch, token, env }) {
