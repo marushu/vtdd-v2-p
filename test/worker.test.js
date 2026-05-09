@@ -3173,6 +3173,99 @@ test("worker executes GitHub merge on the high-risk authority plane with approva
   assert.equal(body.authorityAction.merged, true);
 });
 
+test("worker executes GitHub ready-for-review on the high-risk authority plane with scoped approval grant id", async () => {
+  const provider = createInMemoryMemoryProvider();
+  await provider.store({
+    id: "approval-ready-123",
+    type: MemoryRecordType.APPROVAL_LOG,
+    content: {
+      kind: "passkey_grant",
+      status: "verified",
+      approvalId: "approval-ready-123",
+      expiresAt: "2099-01-01T00:00:00.000Z",
+      scope: {
+        actionType: "pull_ready_for_review",
+        highRiskKind: "pull_ready_for_review",
+        repositoryInput: "sample-org/vtdd-v2-p",
+        issueNumber: "55",
+        pullNumber: "21",
+        phase: "execution"
+      }
+    },
+    metadata: { source: "test" },
+    priority: 90,
+    tags: ["passkey_grant"],
+    createdAt: "2026-04-26T00:00:00.000Z"
+  });
+
+  const calls = [];
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/action/github-authority", {
+      method: "POST",
+      headers: {
+        ...gatewayAuthHeaders,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        operation: "pull_ready_for_review",
+        repository: "sample-org/vtdd-v2-p",
+        pullNumber: 21,
+        issueContext: {
+          issueNumber: 55
+        },
+        policyInput: {
+          approvalPhrase: "GO",
+          approvalGrantId: "approval-ready-123",
+          targetConfirmed: true
+        }
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      MEMORY_PROVIDER: provider,
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_high_risk",
+      GITHUB_API_FETCH: async (url, init) => {
+        calls.push({ url, init });
+        if (calls.length === 1) {
+          return new Response(
+            JSON.stringify({
+              draft: true,
+              node_id: "PR_kwDOExample",
+              html_url: "https://github.com/sample-org/vtdd-v2-p/pull/21"
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        return new Response(
+          JSON.stringify({
+            data: {
+              markPullRequestReadyForReview: {
+                pullRequest: {
+                  isDraft: false,
+                  number: 21,
+                  url: "https://github.com/sample-org/vtdd-v2-p/pull/21"
+                }
+              }
+            }
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        );
+      }
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.authorityAction.operation, "pull_ready_for_review");
+  assert.equal(body.authorityAction.readyForReview, true);
+  assert.equal(body.authorityAction.changed, true);
+  assert.deepEqual(
+    calls.map((call) => call.init.method),
+    ["GET", "POST"]
+  );
+});
+
 test("worker allows same-origin passkey operator to dispatch GitHub merge authority", async () => {
   const provider = createInMemoryMemoryProvider();
   await provider.store({

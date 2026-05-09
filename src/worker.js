@@ -1950,6 +1950,9 @@ function buildApprovalScopeSnapshot({ payload, policyInput }) {
 }
 
 function mapGitHubHighRiskOperationToActionType(operation) {
+  if (operation === GitHubHighRiskOperation.PULL_READY_FOR_REVIEW) {
+    return "pull_ready_for_review";
+  }
   if (operation === GitHubHighRiskOperation.PULL_MERGE) {
     return "merge";
   }
