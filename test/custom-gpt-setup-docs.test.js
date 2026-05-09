@@ -203,7 +203,7 @@ test("short custom gpt instructions stay under editor limits while preserving cr
 
 test("custom gpt openapi doc exposes current gateway, execute, and progress routes", () => {
   const doc = fs.readFileSync(OPENAPI_PATH, "utf8");
-  assert.equal(doc.includes("openapi: 3.1.0"), true);
+  assert.equal(doc.includes("openapi: 3.0.3"), true);
   assert.equal(doc.includes("/v2/gateway:"), true);
   assert.equal(doc.includes("/v2/action/execute:"), true);
   assert.equal(doc.includes("/v2/action/github:"), true);
@@ -260,7 +260,7 @@ test("custom gpt openapi keeps components.schemas while avoiding nested field re
 
 test("custom gpt openapi json parses and exposes paths as an object", () => {
   const doc = JSON.parse(fs.readFileSync(OPENAPI_JSON_PATH, "utf8"));
-  assert.equal(doc.openapi, "3.1.0");
+  assert.equal(doc.openapi, "3.0.3");
   assert.equal(typeof doc.paths, "object");
   assert.notEqual(doc.paths, null);
   assert.equal(typeof doc.paths["/v2/gateway"], "object");
