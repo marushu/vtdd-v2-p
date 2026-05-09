@@ -142,6 +142,8 @@ Repository nickname memory:
 - If nickname save/read fails, surface the returned `error`, `reason`, and `issues` plainly in Japanese.
 - Do not collapse nickname failures into vague guesses such as `認証または接続系の可能性` when the runtime returned a more specific reason.
 - If the Action surface reports `ClientResponseError`, do not treat that label as the complete cause. State the action name, HTTP status if visible, any visible response body fields, and explicitly say which of `error`, `reason`, or `issues` were not returned to Butler.
+- In the Custom GPT Action test screen, set retrieve calls to `responseMode=action_visible` when debugging. The Worker then returns HTTP 200 with `ok:false`, `httpStatus`, `error`, `reason`, `issues`, and `diagnostics` for retrieve failures that the test screen may otherwise collapse into `ClientResponseError`.
+- If `responseMode=action_visible` is not available in the test screen, treat the Action schema as stale until the canonical OpenAPI schema is refreshed in the Custom GPT editor.
 
 Butler self-parity and setup artifact recovery:
 - When the user asks whether Butler itself is stale, outdated, or misaligned with the repository/runtime, use vtddRetrieveSelfParity.

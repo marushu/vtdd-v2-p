@@ -389,7 +389,14 @@ test("custom gpt openapi json exposes JSON bodies for Butler action auth failure
     ["/v2/action/github", "post"],
     ["/v2/action/repository-nickname", "post"],
     ["/v2/action/repository-nickname/delete", "post"],
+    ["/v2/retrieve/constitution", "get"],
+    ["/v2/retrieve/decisions", "get"],
+    ["/v2/retrieve/proposals", "get"],
+    ["/v2/retrieve/cross", "get"],
+    ["/v2/retrieve/github", "get"],
     ["/v2/retrieve/repository-nicknames", "get"],
+    ["/v2/retrieve/setup-artifact", "get"],
+    ["/v2/retrieve/approval-grant", "get"],
     ["/v2/retrieve/self-parity", "get"]
   ];
 
@@ -399,5 +406,27 @@ test("custom gpt openapi json exposes JSON bodies for Butler action auth failure
         $ref: "#/components/schemas/VtddGenericResponse"
       });
     }
+  }
+});
+
+test("custom gpt retrieve actions expose action-visible response mode for test-screen debugging", () => {
+  const doc = JSON.parse(fs.readFileSync(OPENAPI_JSON_PATH, "utf8"));
+  const routes = [
+    "/v2/retrieve/constitution",
+    "/v2/retrieve/decisions",
+    "/v2/retrieve/proposals",
+    "/v2/retrieve/cross",
+    "/v2/retrieve/github",
+    "/v2/retrieve/repository-nicknames",
+    "/v2/retrieve/setup-artifact",
+    "/v2/retrieve/self-parity",
+    "/v2/retrieve/approval-grant"
+  ];
+
+  for (const route of routes) {
+    const parameter = doc.paths[route].get.parameters.find((item) => item.name === "responseMode");
+    assert.equal(parameter.in, "query");
+    assert.deepEqual(parameter.schema.enum, ["action_visible"]);
+    assert.match(parameter.description, /ClientResponseError/);
   }
 });

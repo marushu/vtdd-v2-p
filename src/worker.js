@@ -305,7 +305,7 @@ export default {
     if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/approval-grant")) {
       const auth = authorizeGatewayRequest({ request, env, apiSuffix: "/retrieve/approval-grant" });
       if (!auth.ok) {
-        return json(auth.status, {
+        return retrieveErrorJson(url, auth.status, {
           ok: false,
           error: "unauthorized",
           reason: auth.reason
@@ -385,7 +385,7 @@ export default {
     if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/constitution")) {
       const auth = authorizeGatewayRequest({ request, env, apiSuffix: "/retrieve/constitution" });
       if (!auth.ok) {
-        return json(auth.status, {
+        return retrieveErrorJson(url, auth.status, {
           ok: false,
           error: "unauthorized",
           reason: auth.reason
@@ -397,7 +397,7 @@ export default {
     if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/decisions")) {
       const auth = authorizeGatewayRequest({ request, env, apiSuffix: "/retrieve/decisions" });
       if (!auth.ok) {
-        return json(auth.status, {
+        return retrieveErrorJson(url, auth.status, {
           ok: false,
           error: "unauthorized",
           reason: auth.reason
@@ -409,7 +409,7 @@ export default {
     if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/proposals")) {
       const auth = authorizeGatewayRequest({ request, env, apiSuffix: "/retrieve/proposals" });
       if (!auth.ok) {
-        return json(auth.status, {
+        return retrieveErrorJson(url, auth.status, {
           ok: false,
           error: "unauthorized",
           reason: auth.reason
@@ -421,7 +421,7 @@ export default {
     if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/cross")) {
       const auth = authorizeGatewayRequest({ request, env, apiSuffix: "/retrieve/cross" });
       if (!auth.ok) {
-        return json(auth.status, {
+        return retrieveErrorJson(url, auth.status, {
           ok: false,
           error: "unauthorized",
           reason: auth.reason
@@ -433,7 +433,7 @@ export default {
     if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/github")) {
       const auth = authorizeGatewayRequest({ request, env, apiSuffix: "/retrieve/github" });
       if (!auth.ok) {
-        return json(auth.status, {
+        return retrieveErrorJson(url, auth.status, {
           ok: false,
           error: "unauthorized",
           reason: auth.reason
@@ -445,7 +445,7 @@ export default {
     if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/setup-artifact")) {
       const auth = authorizeGatewayRequest({ request, env, apiSuffix: "/retrieve/setup-artifact" });
       if (!auth.ok) {
-        return json(auth.status, {
+        return retrieveErrorJson(url, auth.status, {
           ok: false,
           error: "unauthorized",
           reason: auth.reason
@@ -457,7 +457,7 @@ export default {
     if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/self-parity")) {
       const auth = authorizeGatewayRequest({ request, env, apiSuffix: "/retrieve/self-parity" });
       if (!auth.ok) {
-        return json(auth.status, {
+        return retrieveErrorJson(url, auth.status, {
           ok: false,
           error: "unauthorized",
           reason: auth.reason
@@ -467,22 +467,13 @@ export default {
     }
 
     if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/repository-nicknames")) {
-      const actionVisible = wantsActionVisibleRetrieveErrors(url);
       const auth = authorizeGatewayRequest({
         request,
         env,
         apiSuffix: "/retrieve/repository-nicknames"
       });
       if (!auth.ok) {
-        if (actionVisible) {
-          return json(200, {
-            ok: false,
-            httpStatus: auth.status,
-            error: "unauthorized",
-            reason: auth.reason
-          });
-        }
-        return json(auth.status, {
+        return retrieveErrorJson(url, auth.status, {
           ok: false,
           error: "unauthorized",
           reason: auth.reason
@@ -502,7 +493,7 @@ async function handleRetrieveConstitutionRequest(url, env) {
   const provider = resolveMemoryProvider(env);
   const validation = validateMemoryProvider(provider);
   if (!validation.ok) {
-    return json(503, {
+    return retrieveErrorJson(url, 503, {
       ok: false,
       error: "memory_provider_unavailable",
       reason: "valid memory provider is required for constitution retrieval"
@@ -523,7 +514,7 @@ async function handleRetrieveDecisionLogsRequest(url, env) {
   const provider = resolveMemoryProvider(env);
   const validation = validateMemoryProvider(provider);
   if (!validation.ok) {
-    return json(503, {
+    return retrieveErrorJson(url, 503, {
       ok: false,
       error: "memory_provider_unavailable",
       reason: "valid memory provider is required for decision log retrieval"
@@ -538,7 +529,7 @@ async function handleRetrieveDecisionLogsRequest(url, env) {
   });
 
   if (!retrieved.ok) {
-    return json(retrieved.status, {
+    return retrieveErrorJson(url, retrieved.status, {
       ok: false,
       error: retrieved.error ?? "memory_read_failed",
       reason: retrieved.reason
@@ -557,7 +548,7 @@ async function handleRetrieveProposalLogsRequest(url, env) {
   const provider = resolveMemoryProvider(env);
   const validation = validateMemoryProvider(provider);
   if (!validation.ok) {
-    return json(503, {
+    return retrieveErrorJson(url, 503, {
       ok: false,
       error: "memory_provider_unavailable",
       reason: "valid memory provider is required for proposal log retrieval"
@@ -572,7 +563,7 @@ async function handleRetrieveProposalLogsRequest(url, env) {
   });
 
   if (!retrieved.ok) {
-    return json(retrieved.status, {
+    return retrieveErrorJson(url, retrieved.status, {
       ok: false,
       error: retrieved.error ?? "memory_read_failed",
       reason: retrieved.reason
@@ -618,7 +609,7 @@ async function handleRetrieveCrossIssueRequest(url, env) {
         : null
   });
   if (!retrieved.ok) {
-    return json(retrieved.status ?? 503, {
+    return retrieveErrorJson(url, retrieved.status ?? 503, {
       ok: false,
       error: retrieved.error ?? "memory_read_failed",
       reason: retrieved.reason
@@ -642,7 +633,7 @@ async function handleRetrieveApprovalGrantRequest(url, env) {
   await purgeExpiredPasskeyArtifacts(provider);
   const validation = validateMemoryProvider(provider);
   if (!validation.ok) {
-    return json(503, {
+    return retrieveErrorJson(url, 503, {
       ok: false,
       error: "memory_provider_unavailable",
       reason: "valid memory provider is required for approval grant retrieval"
@@ -651,7 +642,7 @@ async function handleRetrieveApprovalGrantRequest(url, env) {
 
   const approvalId = normalizeText(url.searchParams.get("approvalId"));
   if (!approvalId) {
-    return json(422, {
+    return retrieveErrorJson(url, 422, {
       ok: false,
       error: "approval_id_required",
       reason: "approvalId query parameter is required"
@@ -660,7 +651,7 @@ async function handleRetrieveApprovalGrantRequest(url, env) {
 
   const record = await findApprovalRecordById(provider, approvalId);
   if (!record || normalizeText(record?.content?.kind) !== "passkey_grant") {
-    return json(404, {
+    return retrieveErrorJson(url, 404, {
       ok: false,
       error: "approval_grant_not_found",
       reason: "matching passkey approval grant was not found"
@@ -693,7 +684,7 @@ async function handleRetrieveGitHubReadPlaneRequest(url, env) {
   });
 
   if (!retrieved.ok) {
-    return json(retrieved.status ?? 503, {
+    return retrieveErrorJson(url, retrieved.status ?? 503, {
       ok: false,
       error: retrieved.error ?? "github_read_failed",
       reason: retrieved.reason,
@@ -716,7 +707,7 @@ async function handleRetrieveCustomGptSetupArtifactRequest(url, env) {
   });
 
   if (!retrieved.ok) {
-    return json(retrieved.status ?? 503, {
+    return retrieveErrorJson(url, retrieved.status ?? 503, {
       ok: false,
       error: retrieved.error ?? "custom_gpt_setup_artifact_unavailable",
       reason: retrieved.reason,
@@ -740,7 +731,7 @@ async function handleRetrieveButlerSelfParityRequest(url, env) {
   });
 
   if (!parity.ok) {
-    return json(parity.status ?? 503, {
+    return retrieveErrorJson(url, parity.status ?? 503, {
       ok: false,
       error: parity.error ?? "custom_gpt_self_parity_unavailable",
       reason: parity.reason
@@ -854,6 +845,26 @@ async function handleGitHubWritePlaneRequest(request, env) {
 function wantsActionVisibleGitHubWriteErrors(payload) {
   const responseMode = normalizeText(payload?.responseMode);
   return responseMode === "action_visible";
+}
+
+function retrieveErrorJson(url, status, body = {}) {
+  if (!wantsActionVisibleRetrieveErrors(url)) {
+    return json(status, body);
+  }
+
+  return json(200, {
+    ok: false,
+    httpStatus: status,
+    error: normalizeText(body.error) || "retrieve_failed",
+    reason: normalizeText(body.reason) || null,
+    issues: Array.isArray(body.issues) ? body.issues : [],
+    diagnostics: {
+      route: normalizeText(url?.pathname) || null,
+      responseMode: "action_visible",
+      rootCause:
+        "Custom GPT Action test screen can surface non-2xx retrieve responses as ClientResponseError; this envelope preserves error/reason/issues for debugging."
+    }
+  });
 }
 
 function wantsActionVisibleRetrieveErrors(url) {
