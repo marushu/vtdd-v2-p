@@ -38,8 +38,12 @@ person using it.
 
 For the current Custom GPT Butler surface artifacts, use:
 
-- `docs/setup/custom-gpt-instructions.md`
-- `docs/setup/custom-gpt-instructions-short.md`
+- `docs/setup/custom-gpt-instructions-short-min.md` for the canonical minimal
+  Custom GPT editor paste target
+- `docs/setup/custom-gpt-instructions-short.md` for the expanded editor paste
+  target when additional guidance fits
+- `docs/setup/custom-gpt-instructions.md` remains the full reference and setup
+  artifact source used by self-parity checks
 - `docs/setup/custom-gpt-actions-openapi.yaml`
 - `docs/setup/custom-gpt-actions-openapi.json`
 
