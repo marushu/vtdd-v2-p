@@ -139,7 +139,10 @@ test("github high-risk plane merges a pull request with scoped approval grant", 
           JSON.stringify({
             sha: "abc123",
             merged: true,
-            message: "Pull Request successfully merged"
+            message: "Pull Request successfully merged",
+            merged_at: "2026-05-09T01:02:03Z",
+            merge_commit_sha: "def456",
+            html_url: "https://github.com/sample-org/vtdd-v2-p/pull/21"
           }),
           { status: 200, headers: { "content-type": "application/json" } }
         );
@@ -150,7 +153,68 @@ test("github high-risk plane merges a pull request with scoped approval grant", 
   assert.equal(result.ok, true);
   assert.equal(result.authorityAction.operation, "pull_merge");
   assert.equal(result.authorityAction.merged, true);
+  assert.deepEqual(result.authorityAction.runtimeTruth, {
+    merged: true,
+    mergedAt: "2026-05-09T01:02:03Z",
+    mergeCommitSha: "def456",
+    htmlUrl: "https://github.com/sample-org/vtdd-v2-p/pull/21"
+  });
   assert.equal(calls[0].init.method, "PUT");
+  assert.equal(calls[1].init.method, "GET");
+});
+
+test("github high-risk plane binds default fetch for Cloudflare Worker merge dispatch", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async function cloudflareLikeFetch(url, init) {
+    assert.equal(this, globalThis);
+    calls.push({ url, init });
+    if (init?.method === "PUT") {
+      return new Response(
+        JSON.stringify({
+          sha: "abc123",
+          merged: true,
+          message: "Pull Request successfully merged"
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    }
+    return new Response(
+      JSON.stringify({
+        merged: true,
+        merged_at: "2026-05-09T01:02:03Z",
+        merge_commit_sha: "def456",
+        html_url: "https://github.com/sample-org/vtdd-v2-p/pull/21"
+      }),
+      { status: 200, headers: { "content-type": "application/json" } }
+    );
+  };
+
+  try {
+    const result = await executeGitHubHighRiskPlane({
+      operation: GitHubHighRiskOperation.PULL_MERGE,
+      repository: "sample-org/vtdd-v2-p",
+      issueNumber: 55,
+      pullNumber: 21,
+      mergeMethod: "squash",
+      approvalPhrase: "GO",
+      targetConfirmed: true,
+      approvalGrant: mergeGrant,
+      approvalScope: mergeGrant.scope,
+      env: {
+        GITHUB_APP_INSTALLATION_TOKEN: "ghs_high_risk"
+      }
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.authorityAction.runtimeTruth.mergedAt, "2026-05-09T01:02:03Z");
+    assert.deepEqual(
+      calls.map((call) => call.init.method),
+      ["PUT", "GET"]
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("github high-risk plane requires merge method from registry", async () => {
