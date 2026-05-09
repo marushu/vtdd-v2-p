@@ -10,6 +10,7 @@ const GITHUB_API_VERSION = "2022-11-28";
 const GITHUB_API_USER_AGENT = "vtdd-v2-github-high-risk-plane";
 
 export const GitHubHighRiskOperation = Object.freeze({
+  PULL_READY_FOR_REVIEW: "pull_ready_for_review",
   PULL_MERGE: "pull_merge",
   ISSUE_CLOSE: "issue_close"
 });
@@ -161,6 +162,10 @@ function hasPayloadField(input, field) {
 }
 
 async function dispatchGitHubHighRisk(input) {
+  if (input.operation === GitHubHighRiskOperation.PULL_READY_FOR_REVIEW) {
+    return executePullReadyForReview(input);
+  }
+
   if (input.operation === GitHubHighRiskOperation.PULL_MERGE) {
     return executePullMerge(input);
   }
@@ -174,6 +179,118 @@ async function dispatchGitHubHighRisk(input) {
     status: 422,
     error: "github_high_risk_request_invalid",
     reason: "operation is unsupported"
+  };
+}
+
+async function executePullReadyForReview(input) {
+  const encodedRepository = encodeURIComponentRepository(input.repository);
+  const prUrl = `${input.apiBaseUrl}/repos/${encodedRepository}/pulls/${input.pullNumber}`;
+  let prResponse;
+  try {
+    prResponse = await input.fetchImpl(prUrl, {
+      method: "GET",
+      headers: githubJsonHeaders({ token: input.token })
+    });
+  } catch (error) {
+    return {
+      ok: false,
+      status: 503,
+      error: "github_high_risk_failed",
+      reason: `failed to read pull request before ready-for-review: ${errorMessage(error)}`
+    };
+  }
+
+  const prBody = await readJsonSafe(prResponse);
+  if (!prResponse.ok) {
+    return {
+      ok: false,
+      status: prResponse.status,
+      error: "github_high_risk_failed",
+      reason: normalizeText(prBody?.message) || "failed to read pull request before ready-for-review"
+    };
+  }
+
+  if (prBody?.draft !== true) {
+    return {
+      ok: true,
+      authorityAction: {
+        operation: input.operation,
+        repository: input.repository,
+        pullNumber: input.pullNumber,
+        readyForReview: true,
+        changed: false,
+        htmlUrl: normalizeText(prBody?.html_url) || `https://github.com/${input.repository}/pull/${input.pullNumber}`
+      }
+    };
+  }
+
+  const nodeId = normalizeText(prBody?.node_id);
+  if (!nodeId) {
+    return {
+      ok: false,
+      status: 422,
+      error: "github_high_risk_request_invalid",
+      reason: "pull request node_id is required for ready-for-review mutation"
+    };
+  }
+
+  const graphqlUrl = `${input.apiBaseUrl.replace(/\/rest$/, "")}/graphql`;
+  let mutationResponse;
+  try {
+    mutationResponse = await input.fetchImpl(graphqlUrl, {
+      method: "POST",
+      headers: githubJsonHeaders({ token: input.token }),
+      body: JSON.stringify({
+        query:
+          "mutation MarkPullRequestReadyForReview($pullRequestId: ID!) { markPullRequestReadyForReview(input: { pullRequestId: $pullRequestId }) { pullRequest { isDraft url number } } }",
+        variables: {
+          pullRequestId: nodeId
+        }
+      })
+    });
+  } catch (error) {
+    return {
+      ok: false,
+      status: 503,
+      error: "github_high_risk_failed",
+      reason: `failed to mark pull request ready for review: ${errorMessage(error)}`
+    };
+  }
+
+  const mutationBody = await readJsonSafe(mutationResponse);
+  const graphqlErrors = Array.isArray(mutationBody?.errors) ? mutationBody.errors : [];
+  if (!mutationResponse.ok || graphqlErrors.length > 0) {
+    return {
+      ok: false,
+      status: mutationResponse.status,
+      error: "github_high_risk_failed",
+      reason:
+        normalizeText(graphqlErrors[0]?.message) ||
+        normalizeText(mutationBody?.message) ||
+        "GitHub ready-for-review mutation failed"
+    };
+  }
+
+  const pull = mutationBody?.data?.markPullRequestReadyForReview?.pullRequest;
+  if (!pull || pull.isDraft !== false) {
+    return {
+      ok: false,
+      status: 422,
+      error: "github_high_risk_failed",
+      reason: "GitHub ready-for-review mutation did not return a ready pull request"
+    };
+  }
+
+  return {
+    ok: true,
+    authorityAction: {
+      operation: input.operation,
+      repository: input.repository,
+      pullNumber: Number(pull?.number ?? input.pullNumber),
+      readyForReview: true,
+      changed: true,
+      htmlUrl: normalizeText(pull?.url) || `https://github.com/${input.repository}/pull/${input.pullNumber}`
+    }
   };
 }
 

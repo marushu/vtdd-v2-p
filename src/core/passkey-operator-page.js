@@ -235,10 +235,11 @@ export function renderPasskeyOperatorPage(input = {}) {
           <label for="merge-method-input">Merge Method</label>
           <input id="merge-method-input" value="${mergeMethodDefault}" placeholder="squash" />
           <div class="row">
+            <button id="ready-button">Mark ready for review</button>
             <button id="merge-button">Dispatch PR merge</button>
             <a class="button-link" id="merge-pr-link" href="#" target="_blank" rel="noopener noreferrer" hidden>Open pull request</a>
           </div>
-          <p class="muted"><code>actionType=merge</code> / <code>highRiskKind=pull_merge</code> の approvalGrantId が必要です。merge 後は GitHub runtime truth で merged 状態を確認してください。</p>
+          <p class="muted">draft を解除する場合は <code>actionType=pull_ready_for_review</code> / <code>highRiskKind=pull_ready_for_review</code>、merge は <code>actionType=merge</code> / <code>highRiskKind=pull_merge</code> の approvalGrantId が必要です。merge 後は GitHub runtime truth で merged 状態を確認してください。</p>
           <pre id="merge-output"></pre>
         </section>
 
@@ -621,6 +622,41 @@ export function renderPasskeyOperatorPage(input = {}) {
         }
       });
 
+      document.getElementById("ready-button").addEventListener("click", async () => {
+        try {
+          if (!latestApprovalGrantId) {
+            throw new Error("approvalGrantId is required before marking PR ready for review");
+          }
+          clearMergePrLink();
+          mergeOutput.textContent = "PR ready-for-review request...";
+          const readyResponse = await fetch("${apiBase}/action/github-authority", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              operation: "pull_ready_for_review",
+              repository: document.getElementById("repo-input").value,
+              pullNumber: Number(document.getElementById("pull-number-input").value || 0) || null,
+              issueContext: {
+                issueNumber: Number(document.getElementById("issue-input").value || 0) || null
+              },
+              policyInput: {
+                approvalPhrase: "GO",
+                approvalGrantId: latestApprovalGrantId,
+                targetConfirmed: true
+              }
+            })
+          });
+          const readyBody = await readResponseBody(readyResponse);
+          if (!readyResponse.ok) {
+            throw responseError(readyBody, "PR ready-for-review failed");
+          }
+          showMergePrLink(readyBody);
+          mergeOutput.textContent = JSON.stringify(readyBody, null, 2);
+        } catch (error) {
+          mergeOutput.textContent = String(error);
+        }
+      });
+
       document.getElementById("openai-secret-sync-button").addEventListener("click", async () => {
         try {
           if (!latestApprovalGrantId) {
@@ -757,6 +793,9 @@ export function resolvePasskeyOperatorMode(input = {}) {
     return "deploy";
   }
   if (actionType === "merge" || highRiskKind === "pull_merge") {
+    return "merge";
+  }
+  if (actionType === "pull_ready_for_review" || highRiskKind === "pull_ready_for_review") {
     return "merge";
   }
   if (actionType === "issue_close" || highRiskKind === "issue_close") {
