@@ -268,6 +268,26 @@ test("VPS runner notification falls back from bot queue actor to issue author", 
   assert.equal(body.includes("@github-actions"), false);
 });
 
+test("VPS runner notification can fall back to PR author on branch milestones", () => {
+  const body = buildVpsRunnerEventComment({
+    executionId: "exec-pr-author",
+    notification: {
+      queueCommentAuthor: "github-actions[bot]",
+      issueAuthor: "vtdd-codex[bot]",
+      pullRequestAuthor: "pr-owner",
+      approvalActor: "go-owner"
+    },
+    event: {
+      status: "branch_created",
+      lastEvent: "branch_pushed"
+    }
+  });
+
+  assert.equal(body.includes("@pr-owner"), true);
+  assert.equal(body.includes("@go-owner"), false);
+  assert.equal(body.includes("@github-actions"), false);
+});
+
 test("VPS runner notification omits mention when no mentionable actor exists", () => {
   const body = buildVpsRunnerEventComment({
     executionId: "exec-no-mention",

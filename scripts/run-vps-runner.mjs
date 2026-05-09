@@ -104,7 +104,7 @@ async function executeVpsRunnerExecution({ githubFetch, token, workRoot, executi
   const { payload } = execution;
   const env = buildRunnerCommandEnv({ token });
   const issue = await githubFetch(`/repos/${payload.repository}/issues/${payload.issueNumber}`);
-  const notification = buildVpsRunnerNotificationContext({
+  let notification = buildVpsRunnerNotificationContext({
     queueCommentAuthor: execution?.actors?.queueCommentAuthor,
     issueAuthor: issue?.user?.login,
     approvalActor: payload?.approvalActor
@@ -133,6 +133,15 @@ async function executeVpsRunnerExecution({ githubFetch, token, workRoot, executi
     });
     await checkoutVpsRunnerBranch({ payload, cwd: workspace, env });
 
+    const pullRequestContext = isPrRevisionGoal(payload.codexGoal)
+      ? await buildVpsRunnerPullRequestContext({ githubFetch, payload })
+      : null;
+    let pullRequestAuthor = pullRequestContext?.pullRequest?.user?.login;
+    notification = buildVpsRunnerNotificationContext({
+      ...notification,
+      pullRequestAuthor
+    });
+
     await postVpsRunnerEvent({
       githubFetch,
       payload,
@@ -145,9 +154,6 @@ async function executeVpsRunnerExecution({ githubFetch, token, workRoot, executi
       }
     });
 
-    const pullRequestContext = isPrRevisionGoal(payload.codexGoal)
-      ? await buildVpsRunnerPullRequestContext({ githubFetch, payload })
-      : null;
     const prompt = buildCodexExecutionPrompt({ payload, issue, pullRequestContext });
     await runTrackedVpsCommand("codex", buildCodexExecArgs({ env: process.env }), {
       cwd: workspace,
@@ -198,6 +204,7 @@ async function executeVpsRunnerExecution({ githubFetch, token, workRoot, executi
       githubFetch,
       payload
     });
+    pullRequestAuthor = existingPullRequest?.author?.login || pullRequestAuthor;
     let prUrl = existingPullRequest?.url || "";
     if (prUrl) {
       const normalized = buildGuardedPullRequestBody({
@@ -257,6 +264,13 @@ async function executeVpsRunnerExecution({ githubFetch, token, workRoot, executi
         }
       );
       prUrl = pr.stdout.trim();
+      pullRequestAuthor =
+        (await readVpsRunnerPullRequestAuthor({
+          repository: payload.repository,
+          pr: prUrl,
+          env,
+          cwd: workspace
+        })) || pullRequestAuthor;
     }
 
     await postVpsRunnerEvent({
@@ -264,7 +278,7 @@ async function executeVpsRunnerExecution({ githubFetch, token, workRoot, executi
       payload,
       notification: buildVpsRunnerNotificationContext({
         ...notification,
-        pullRequestAuthor: existingPullRequest?.author?.login
+        pullRequestAuthor
       }),
       event: {
         status: "pr_created",
@@ -770,6 +784,20 @@ async function findExistingPullRequest({ repository, branch, env, cwd, githubFet
     return parsed[0] || null;
   } catch {
     return null;
+  }
+}
+
+async function readVpsRunnerPullRequestAuthor({ repository, pr, env, cwd }) {
+  const target = normalizeText(pr);
+  if (!target) {
+    return "";
+  }
+  try {
+    const result = await runCommand("gh", ["pr", "view", target, "--repo", repository, "--json", "author"], { cwd, env });
+    const parsed = JSON.parse(result.stdout || "{}");
+    return normalizeGitHubLogin(parsed?.author?.login);
+  } catch {
+    return "";
   }
 }
 
