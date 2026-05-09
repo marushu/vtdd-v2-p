@@ -1,6 +1,7 @@
 import { validateReviewerResponse } from "./reviewer-contract.js";
 
 export const GEMINI_PR_REVIEW_MARKER = "<!-- vtdd:reviewer=gemini -->";
+export const REVIEWER_OBJECTION_RESOLUTION_MARKER = "<!-- vtdd:reviewer-objection-resolution -->";
 export const DEFAULT_GEMINI_REVIEW_MODEL = "gemini-2.5-flash";
 export const MAX_DIFF_CHARACTERS = 60000;
 export const MAX_CONTEXT_COMMENTS = 10;
@@ -31,7 +32,7 @@ export function resolveGeminiReviewTrigger(input = {}) {
     if (!issue.pull_request) {
       return skip("issue_comment_not_for_pull_request");
     }
-    if (isBotTriggered(payload) || containsMarker(comment.body)) {
+    if (!isTrustedReviewerObjectionResolution(comment.body) && (isBotTriggered(payload) || containsMarker(comment.body))) {
       return skip("bot_or_marker_comment");
     }
     return {
@@ -300,7 +301,7 @@ export function parseGeminiReviewComment(comment = {}) {
 function summarizeComments(comments) {
   const list = Array.isArray(comments) ? comments : [];
   return list
-    .filter((comment) => !containsMarker(comment?.body))
+    .filter((comment) => !containsMarker(comment?.body) || isTrustedReviewerObjectionResolution(comment?.body))
     .slice(-MAX_CONTEXT_COMMENTS)
     .map((comment) => {
       const author = normalizeText(comment?.user?.login) || "unknown";
@@ -344,6 +345,10 @@ function isBotTriggered(payload) {
 
 function containsMarker(value) {
   return normalizeText(value).includes(GEMINI_PR_REVIEW_MARKER);
+}
+
+function isTrustedReviewerObjectionResolution(value) {
+  return normalizeText(value).includes(REVIEWER_OBJECTION_RESOLUTION_MARKER);
 }
 
 function normalizeInlineText(value) {

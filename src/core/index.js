@@ -165,6 +165,7 @@ export {
   GEMINI_PR_REVIEW_MARKER,
   MAX_CONTEXT_COMMENTS,
   MAX_DIFF_CHARACTERS,
+  REVIEWER_OBJECTION_RESOLUTION_MARKER,
   buildGeminiReviewRequestBody,
   buildPullRequestDiff,
   buildPullRequestReviewContext,

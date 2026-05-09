@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   GEMINI_PR_REVIEW_MARKER,
+  REVIEWER_OBJECTION_RESOLUTION_MARKER,
   buildGeminiReviewRequestBody,
   buildPullRequestDiff,
   buildPullRequestReviewContext,
@@ -70,6 +71,61 @@ test("issue_comment on PR from bot marker is skipped", () => {
   assert.equal(result.value.shouldReview, false);
 });
 
+test("issue_comment on PR from bot objection resolution triggers Gemini re-check", () => {
+  const result = resolveGeminiReviewTrigger({
+    eventName: "issue_comment",
+    payload: {
+      issue: {
+        number: 207,
+        pull_request: {
+          url: "https://api.github.com/repos/marushu/vtdd-v2-p/pulls/207"
+        }
+      },
+      comment: {
+        body: `${REVIEWER_OBJECTION_RESOLUTION_MARKER}
+## VTDD Reviewer Objection Resolution
+
+The manual-test objection has been addressed because revision-applied marker is present.`
+      },
+      sender: {
+        login: "vtdd-codex[bot]"
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.value.shouldReview, true);
+  assert.equal(result.value.trigger, "issue_comment:created");
+  assert.equal(result.value.pullRequestNumber, 207);
+});
+
+test("issue_comment on PR from Gemini marker still skips self-trigger loop", () => {
+  const result = resolveGeminiReviewTrigger({
+    eventName: "issue_comment",
+    payload: {
+      issue: {
+        number: 207,
+        pull_request: {
+          url: "https://api.github.com/repos/marushu/vtdd-v2-p/pulls/207"
+        }
+      },
+      comment: {
+        body: `${GEMINI_PR_REVIEW_MARKER}
+## VTDD Gemini Critical Review
+
+- Recommended action: \`approve\``
+      },
+      sender: {
+        login: "vtdd-codex[bot]"
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.value.shouldReview, false);
+  assert.equal(result.value.reason, "bot_or_marker_comment");
+});
+
 test("buildPullRequestDiff truncates large diffs", () => {
   const diff = buildPullRequestDiff(
     [
@@ -107,6 +163,39 @@ test("buildPullRequestReviewContext includes bounded PR metadata", () => {
   assert.equal(context.includes("Repository: sample/repo"), true);
   assert.equal(context.includes("Please re-check this path."), true);
   assert.equal(context.includes("Overall risky."), true);
+});
+
+test("buildPullRequestReviewContext keeps objection resolution evidence", () => {
+  const context = buildPullRequestReviewContext({
+    repository: "sample/repo",
+    trigger: "issue_comment:created",
+    pullRequest: {
+      number: 207,
+      title: "Issue #206: VTDD VPS runner handoff",
+      body: "Smoke test.",
+      state: "open",
+      base: { ref: "main" },
+      head: { ref: "codex/issue-206" },
+      user: { login: "marushu" }
+    },
+    files: [{ filename: "docs/mvp/e2e/vps-revise-pr-objection-smoke.md", status: "added" }],
+    issueComments: [
+      {
+        user: { login: "vtdd-codex[bot]" },
+        body: `${GEMINI_PR_REVIEW_MARKER}\nold review`
+      },
+      {
+        user: { login: "vtdd-codex[bot]" },
+        body: `${REVIEWER_OBJECTION_RESOLUTION_MARKER}
+The manual-test objection has been addressed because revision-applied marker is present.`
+      }
+    ],
+    reviewComments: [],
+    reviews: []
+  });
+
+  assert.equal(context.includes("old review"), false);
+  assert.equal(context.includes("revision-applied marker is present"), true);
 });
 
 test("buildGeminiReviewRequestBody requires diff and context", () => {
