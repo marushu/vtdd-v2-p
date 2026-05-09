@@ -446,12 +446,21 @@ export default {
     }
 
     if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/repository-nicknames")) {
+      const actionVisible = wantsActionVisibleRetrieveErrors(url);
       const auth = authorizeGatewayRequest({
         request,
         env,
         apiSuffix: "/retrieve/repository-nicknames"
       });
       if (!auth.ok) {
+        if (actionVisible) {
+          return json(200, {
+            ok: false,
+            httpStatus: auth.status,
+            error: "unauthorized",
+            reason: auth.reason
+          });
+        }
         return json(auth.status, {
           ok: false,
           error: "unauthorized",
@@ -823,6 +832,11 @@ async function handleGitHubWritePlaneRequest(request, env) {
 
 function wantsActionVisibleGitHubWriteErrors(payload) {
   const responseMode = normalizeText(payload?.responseMode);
+  return responseMode === "action_visible";
+}
+
+function wantsActionVisibleRetrieveErrors(url) {
+  const responseMode = normalizeText(url?.searchParams?.get("responseMode"));
   return responseMode === "action_visible";
 }
 
