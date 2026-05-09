@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  buildCustomGptRecoveryBundle,
   CustomGptSetupArtifact,
   evaluateButlerSelfParity,
   retrieveCustomGptSetupArtifact
@@ -265,4 +266,81 @@ test("evaluateButlerSelfParity treats current nickname and secret sync actions a
     `[Open deploy operator](${result.selfParity.deployOperatorUrl})`
   );
   assert.equal(result.selfParity.deployRecovery, null);
+});
+
+test("buildCustomGptRecoveryBundle expands Worker URL and reports short-min length", async () => {
+  const canonicalOpenApi = [
+    "openapi: 3.1.1",
+    "servers:",
+    "  - url: https://your-runtime-host.example.workers.dev",
+    "paths:",
+    "  /health:",
+    "    get:",
+    "      operationId: getHealth",
+    "  /v2/retrieve/setup-artifact:",
+    "    get:",
+    "      operationId: vtddRetrieveSetupArtifact",
+    "  /v2/retrieve/self-parity:",
+    "    get:",
+    "      operationId: vtddRetrieveSelfParity"
+  ].join("\n");
+  const canonicalInstructions = [
+    "vtddRetrieveSetupArtifact",
+    "vtddRetrieveSelfParity",
+    "Action Schema update required",
+    "Instructions update required",
+    "Cloudflare deploy update required"
+  ].join("\n");
+  const shortMin = "VTDD Butler short-min instructions";
+
+  const result = await buildCustomGptRecoveryBundle({
+    repository: "sample-org/vtdd-v2-p",
+    ref: "main",
+    runtimeOrigin: "https://sample-user-vtdd.example.workers.dev",
+    issueNumber: 242,
+    env: {
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_setup_read",
+      GITHUB_API_FETCH: async (url) => {
+        const parsed = new URL(url);
+        if (parsed.pathname.endsWith("/commits/main")) {
+          return new Response(JSON.stringify({ sha: "a".repeat(40) }), {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          });
+        }
+        const isShortMin = parsed.pathname.endsWith(
+          "/docs/setup/custom-gpt-instructions-short-min.md"
+        );
+        const isInstructions = parsed.pathname.endsWith("/docs/setup/custom-gpt-instructions.md");
+        return new Response(
+          JSON.stringify({
+            sha: isShortMin ? "short-min-sha" : isInstructions ? "instructions-sha" : "openapi-sha",
+            encoding: "base64",
+            content: encodeContent(
+              isShortMin ? shortMin : isInstructions ? canonicalInstructions : canonicalOpenApi
+            )
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        );
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(
+    result.recovery.actionSchema.content.includes(
+      "  - url: https://sample-user-vtdd.example.workers.dev"
+    ),
+    true
+  );
+  assert.equal(result.recovery.actionSchema.serverUrl, "https://sample-user-vtdd.example.workers.dev");
+  assert.equal(result.recovery.instructionsShortMin.characterCount, shortMin.length);
+  assert.equal(result.recovery.instructionsShortMin.limitExceeded, false);
+  assert.equal(result.recovery.rollback.knownGoodCommitSha, "a".repeat(40));
+  assert.equal(result.recovery.runtime.deployState, "in_sync");
+  assert.deepEqual(result.recovery.safety, {
+    displaysSecrets: false,
+    displaysTokens: false,
+    displaysApprovalGrant: false
+  });
 });

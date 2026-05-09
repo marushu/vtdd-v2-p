@@ -197,8 +197,10 @@ export {
   resolveGitHubAppInstallationToken
 } from "./github-app-repository-index.js";
 export {
+  buildCustomGptRecoveryBundle,
   CustomGptSetupArtifact,
   evaluateButlerSelfParity,
+  renderCustomGptRecoveryPage,
   retrieveCustomGptSetupArtifact
 } from "./custom-gpt-setup-artifacts.js";
 export { GitHubReadResource, retrieveGitHubReadPlane } from "./github-read-plane.js";

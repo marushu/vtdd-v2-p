@@ -6,6 +6,7 @@ const GITHUB_API_USER_AGENT = "vtdd-v2-custom-gpt-setup-artifacts";
 
 export const CustomGptSetupArtifact = Object.freeze({
   INSTRUCTIONS: "instructions",
+  INSTRUCTIONS_SHORT_MIN: "instructions_short_min",
   OPENAPI_YAML: "openapi_yaml",
   OPENAPI_JSON: "openapi_json"
 });
@@ -13,6 +14,10 @@ export const CustomGptSetupArtifact = Object.freeze({
 const SETUP_ARTIFACT_SPECS = Object.freeze({
   [CustomGptSetupArtifact.INSTRUCTIONS]: {
     path: "docs/setup/custom-gpt-instructions.md",
+    contentType: "text/plain; charset=utf-8"
+  },
+  [CustomGptSetupArtifact.INSTRUCTIONS_SHORT_MIN]: {
+    path: "docs/setup/custom-gpt-instructions-short-min.md",
     contentType: "text/plain; charset=utf-8"
   },
   [CustomGptSetupArtifact.OPENAPI_YAML]: {
@@ -28,6 +33,8 @@ const SETUP_ARTIFACT_SPECS = Object.freeze({
 const RUNTIME_SETUP_MANIFEST = Object.freeze({
   routes: [
     "/health",
+    "/setup",
+    "/setup/recovery",
     "/v2/gateway",
     "/v2/action/execute",
     "/v2/action/github",
@@ -94,6 +101,9 @@ const RUNTIME_SETUP_MANIFEST = Object.freeze({
     "Cloudflare deploy update required"
   ]
 });
+
+const INSTRUCTIONS_CHARACTER_LIMIT = 8000;
+const KNOWN_GOOD_COMMIT_ENV = "VTDD_KNOWN_GOOD_COMMIT_SHA";
 
 export async function retrieveCustomGptSetupArtifact(input = {}) {
   const artifact = normalizeText(input.artifact);
@@ -316,6 +326,195 @@ export async function evaluateButlerSelfParity(input = {}) {
   };
 }
 
+export async function buildCustomGptRecoveryBundle(input = {}) {
+  const repository = normalizeText(input.repository);
+  const ref = normalizeText(input.ref) || "main";
+  const runtimeOrigin = normalizeOrigin(input.runtimeOrigin);
+  const issueNumber = normalizeIssueNumber(input.issueNumber);
+  const env = input.env ?? {};
+
+  if (!repository) {
+    return {
+      ok: false,
+      status: 422,
+      error: "custom_gpt_recovery_request_invalid",
+      reason: "repository is required"
+    };
+  }
+  if (!runtimeOrigin) {
+    return {
+      ok: false,
+      status: 422,
+      error: "custom_gpt_recovery_request_invalid",
+      reason: "runtimeOrigin is required"
+    };
+  }
+
+  const [openapi, instructionsShortMin, selfParity, commit] = await Promise.all([
+    retrieveCustomGptSetupArtifact({
+      artifact: CustomGptSetupArtifact.OPENAPI_YAML,
+      repository,
+      ref,
+      env
+    }),
+    retrieveCustomGptSetupArtifact({
+      artifact: CustomGptSetupArtifact.INSTRUCTIONS_SHORT_MIN,
+      repository,
+      ref,
+      env
+    }),
+    evaluateButlerSelfParity({
+      repository,
+      ref,
+      runtimeOrigin,
+      issueNumber,
+      env
+    }),
+    resolveKnownGoodCommitSha({ repository, ref, env })
+  ]);
+
+  const failed = [openapi, instructionsShortMin, selfParity].find((result) => !result.ok);
+  if (failed) {
+    return {
+      ok: false,
+      status: failed.status ?? 503,
+      error: failed.error ?? "custom_gpt_recovery_unavailable",
+      reason: failed.reason ?? "failed to build Custom GPT recovery bundle",
+      issues: failed.issues ?? []
+    };
+  }
+
+  const actionSchema = expandOpenApiServerUrl(openapi.artifact.content, runtimeOrigin);
+  const instructions = instructionsShortMin.artifact.content;
+  const instructionsCharacterCount = countCodePoints(instructions);
+  const instructionsLimitExceeded = instructionsCharacterCount > INSTRUCTIONS_CHARACTER_LIMIT;
+
+  return {
+    ok: true,
+    recovery: {
+      repository,
+      ref,
+      runtimeOrigin,
+      generatedAt: new Date().toISOString(),
+      actionSchema: {
+        path: openapi.artifact.path,
+        sourceSha: openapi.artifact.sha,
+        serverUrl: runtimeOrigin,
+        contentType: openapi.artifact.contentType,
+        content: actionSchema
+      },
+      instructionsShortMin: {
+        path: instructionsShortMin.artifact.path,
+        sourceSha: instructionsShortMin.artifact.sha,
+        contentType: instructionsShortMin.artifact.contentType,
+        characterLimit: INSTRUCTIONS_CHARACTER_LIMIT,
+        characterCount: instructionsCharacterCount,
+        limitExceeded: instructionsLimitExceeded,
+        content: instructions
+      },
+      rollback: {
+        knownGoodCommitSha: commit.sha,
+        knownGoodCommitSource: commit.source,
+        bundleArtifacts: [
+          openapi.artifact.path,
+          instructionsShortMin.artifact.path
+        ],
+        restoreOrder: [
+          "Copy Action Schema into the Custom GPT Action Schema editor.",
+          "Copy short-min instructions into the Custom GPT Instructions editor.",
+          "Confirm the Action Schema server URL matches this Worker origin.",
+          "Run /health directly from the browser before relying on Butler Actions."
+        ]
+      },
+      runtime: {
+        selfParity: selfParity.selfParity,
+        deployState: selfParity.selfParity.runtimeParity
+      },
+      safety: {
+        displaysSecrets: false,
+        displaysTokens: false,
+        displaysApprovalGrant: false
+      }
+    }
+  };
+}
+
+export function renderCustomGptRecoveryPage(input = {}) {
+  const runtimeOrigin = normalizeOrigin(input.runtimeOrigin);
+  const repository = normalizeText(input.repository);
+  const ref = normalizeText(input.ref) || "main";
+  const issueNumber = normalizeIssueNumber(input.issueNumber);
+  const recovery = input.recovery ?? null;
+  const error = input.error ?? null;
+
+  return `<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VTDD Butler setup recovery</title>
+  <style>
+    :root { color-scheme: light dark; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    body { margin: 0; background: Canvas; color: CanvasText; }
+    main { width: min(100% - 24px, 1120px); margin: 0 auto; padding: 24px 0 48px; }
+    h1 { font-size: 1.55rem; line-height: 1.2; margin: 0 0 16px; }
+    h2 { font-size: 1rem; margin: 28px 0 10px; }
+    form, .status, .warning { border: 1px solid color-mix(in srgb, CanvasText 18%, transparent); border-radius: 8px; padding: 12px; margin: 14px 0; }
+    label { display: block; font-size: .9rem; margin: 8px 0 4px; }
+    input { width: 100%; box-sizing: border-box; font: inherit; padding: 10px; border-radius: 6px; border: 1px solid color-mix(in srgb, CanvasText 22%, transparent); background: Canvas; color: CanvasText; }
+    button, a.button { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; border: 1px solid color-mix(in srgb, CanvasText 22%, transparent); border-radius: 6px; padding: 0 12px; background: ButtonFace; color: ButtonText; font: inherit; text-decoration: none; }
+    pre, textarea { width: 100%; box-sizing: border-box; white-space: pre; overflow: auto; border: 1px solid color-mix(in srgb, CanvasText 18%, transparent); border-radius: 8px; padding: 12px; background: color-mix(in srgb, CanvasText 5%, Canvas); color: CanvasText; font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    textarea { min-height: 320px; resize: vertical; }
+    .meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 8px; }
+    .meta div { padding: 10px; border: 1px solid color-mix(in srgb, CanvasText 14%, transparent); border-radius: 8px; }
+    .small { font-size: .86rem; opacity: .82; }
+    .warning { border-color: #b45309; background: color-mix(in srgb, #f59e0b 16%, Canvas); }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>VTDD Butler setup recovery</h1>
+    <form method="get" action="/setup/recovery">
+      <label for="repository">Repository</label>
+      <input id="repository" name="repository" value="${escapeAttribute(repository)}" placeholder="owner/repo" autocomplete="off">
+      <label for="ref">Known-good ref</label>
+      <input id="ref" name="ref" value="${escapeAttribute(ref)}" autocomplete="off">
+      ${issueNumber ? `<input type="hidden" name="issueNumber" value="${escapeAttribute(String(issueNumber))}">` : ""}
+      <p><button type="submit">Load setup bundle</button></p>
+    </form>
+    ${
+      error
+        ? `<section class="warning"><strong>Recovery bundle unavailable.</strong><p>${escapeHtml(error.reason || error.error || "unknown error")}</p></section>`
+        : ""
+    }
+    ${
+      recovery
+        ? renderRecoveryBundleSections(recovery)
+        : `<p class="small">Repository を指定すると、この Worker origin (${escapeHtml(runtimeOrigin)}) 向けの copy-ready setup bundle を表示します。</p>`
+    }
+  </main>
+  <script>
+    document.addEventListener("click", async (event) => {
+      const button = event.target.closest("[data-copy-target]");
+      if (!button) return;
+      const target = document.getElementById(button.getAttribute("data-copy-target"));
+      if (!target) return;
+      target.focus();
+      target.select();
+      try {
+        await navigator.clipboard.writeText(target.value);
+        button.textContent = "Copied";
+      } catch {
+        document.execCommand("copy");
+        button.textContent = "Copied";
+      }
+      setTimeout(() => { button.textContent = button.getAttribute("data-copy-label"); }, 1600);
+    });
+  </script>
+</body>
+</html>`;
+}
+
 function validateCustomGptSetupArtifactRequest({ artifact, repository }) {
   const issues = [];
   if (!SETUP_ARTIFACT_SPECS[artifact]) {
@@ -325,6 +524,131 @@ function validateCustomGptSetupArtifactRequest({ artifact, repository }) {
     issues.push("repository is required");
   }
   return issues.length > 0 ? { ok: false, issues } : { ok: true };
+}
+
+async function resolveKnownGoodCommitSha({ repository, ref, env }) {
+  const configured = normalizeText(env?.[KNOWN_GOOD_COMMIT_ENV]);
+  if (configured) {
+    return { sha: configured, source: KNOWN_GOOD_COMMIT_ENV };
+  }
+
+  if (/^[a-f0-9]{40}$/i.test(ref)) {
+    return { sha: ref, source: "ref" };
+  }
+
+  const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
+  const apiBaseUrl = normalizeApiBaseUrl(env?.GITHUB_API_BASE_URL);
+  const tokenResolution = await resolveGitHubAppInstallationToken({ env, fetchImpl, apiBaseUrl });
+  if (!tokenResolution.ok) {
+    return { sha: null, source: "unverified" };
+  }
+
+  try {
+    const response = await fetchImpl(
+      `${apiBaseUrl}/repos/${encodeRepository(repository)}/commits/${encodeURIComponent(ref)}`,
+      {
+        method: "GET",
+        headers: {
+          authorization: `Bearer ${tokenResolution.token}`,
+          accept: "application/vnd.github+json",
+          "x-github-api-version": GITHUB_API_VERSION,
+          "user-agent": GITHUB_API_USER_AGENT
+        }
+      }
+    );
+    const body = await readJsonSafe(response);
+    if (!response.ok) {
+      return { sha: null, source: "unverified" };
+    }
+    return {
+      sha: normalizeText(body?.sha) || null,
+      source: "github_commit_ref"
+    };
+  } catch {
+    return { sha: null, source: "unverified" };
+  }
+}
+
+function expandOpenApiServerUrl(content, runtimeOrigin) {
+  const expanded = content.replace(
+    /(^servers:\n\s*-\s*url:\s*)([^\n]+)$/m,
+    `$1${runtimeOrigin}`
+  );
+  if (expanded !== content) {
+    return expanded;
+  }
+  return content.replace(/https:\/\/your-runtime-host\.example\.workers\.dev/g, runtimeOrigin);
+}
+
+function renderRecoveryBundleSections(recovery) {
+  const instructions = recovery.instructionsShortMin;
+  const actionSchema = recovery.actionSchema;
+  const rollback = recovery.rollback;
+  const selfParity = recovery.runtime.selfParity;
+  const warning = instructions.limitExceeded
+    ? `<section class="warning"><strong>Instructions exceed ${instructions.characterLimit} characters.</strong><p>${instructions.characterCount} characters. Shorten before pasting into the Custom GPT editor.</p></section>`
+    : "";
+
+  return `
+    ${warning}
+    <section class="status">
+      <div class="meta">
+        <div><strong>Worker URL</strong><br>${escapeHtml(recovery.runtimeOrigin)}</div>
+        <div><strong>Repository</strong><br>${escapeHtml(recovery.repository)}</div>
+        <div><strong>Known-good ref</strong><br>${escapeHtml(recovery.ref)}</div>
+        <div><strong>Known-good commit</strong><br>${escapeHtml(rollback.knownGoodCommitSha || "unverified")}</div>
+        <div><strong>Self-parity</strong><br>${escapeHtml(selfParity.runtimeParity)}</div>
+        <div><strong>Deploy state</strong><br>${escapeHtml(recovery.runtime.deployState)}</div>
+        <div><strong>short-min length</strong><br>${instructions.characterCount} / ${instructions.characterLimit}</div>
+        <div><strong>Safety</strong><br>No secret values, tokens, or approval grants are displayed.</div>
+      </div>
+    </section>
+    <section>
+      <h2>Copy-ready Action Schema</h2>
+      <p class="small">${escapeHtml(actionSchema.path)}; servers.url = ${escapeHtml(actionSchema.serverUrl)}</p>
+      <p><button type="button" data-copy-target="action-schema" data-copy-label="Copy Action Schema">Copy Action Schema</button></p>
+      <textarea id="action-schema" spellcheck="false">${escapeHtml(actionSchema.content)}</textarea>
+    </section>
+    <section>
+      <h2>Copy-ready custom-gpt-instructions-short-min.md</h2>
+      <p class="small">${escapeHtml(instructions.path)}</p>
+      <p><button type="button" data-copy-target="instructions-short-min" data-copy-label="Copy Instructions">Copy Instructions</button></p>
+      <textarea id="instructions-short-min" spellcheck="false">${escapeHtml(instructions.content)}</textarea>
+    </section>
+    <section>
+      <h2>Known-good rollback bundle</h2>
+      <pre>${escapeHtml(
+        [
+          `repository: ${recovery.repository}`,
+          `ref: ${recovery.ref}`,
+          `knownGoodCommitSha: ${rollback.knownGoodCommitSha || "unverified"}`,
+          `knownGoodCommitSource: ${rollback.knownGoodCommitSource}`,
+          `actionSchemaPath: ${actionSchema.path}`,
+          `instructionsShortMinPath: ${instructions.path}`,
+          `selfParity: ${selfParity.runtimeParity}`,
+          `deployState: ${recovery.runtime.deployState}`,
+          "restoreOrder:",
+          ...rollback.restoreOrder.map((item, index) => `  ${index + 1}. ${item}`)
+        ].join("\n")
+      )}</pre>
+    </section>`;
+}
+
+function countCodePoints(value) {
+  return Array.from(String(value ?? "")).length;
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function escapeAttribute(value) {
+  return escapeHtml(value);
 }
 
 function extractOpenApiRoutes(content) {
