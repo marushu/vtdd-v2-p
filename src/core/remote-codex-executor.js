@@ -1032,13 +1032,23 @@ function findLatestVpsRunnerEvent({ comments, queueComment }) {
         updatedAt:
           normalizeText(payload.updatedAt) ||
           normalizeText(payload.heartbeatAt) ||
+          normalizeText(comment?.updated_at) ||
           normalizeText(comment?.created_at) ||
           null
       };
     })
     .filter(Boolean);
 
-  return events.at(-1) || null;
+  return events
+    .sort((left, right) => {
+      const leftUpdatedAt = Date.parse(normalizeText(left?.updatedAt));
+      const rightUpdatedAt = Date.parse(normalizeText(right?.updatedAt));
+      if (Number.isFinite(leftUpdatedAt) && Number.isFinite(rightUpdatedAt) && leftUpdatedAt !== rightUpdatedAt) {
+        return leftUpdatedAt - rightUpdatedAt;
+      }
+      return (normalizePositiveInteger(left?.commentId) ?? 0) - (normalizePositiveInteger(right?.commentId) ?? 0);
+    })
+    .at(-1) || null;
 }
 
 function buildVpsRunnerEventStaleBlocker({ runnerEvent, env }) {
