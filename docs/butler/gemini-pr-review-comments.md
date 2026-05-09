@@ -120,6 +120,24 @@ When Gemini becomes available again after a fallback request, VTDD should
 return to Gemini-first behavior and clear the stale Codex fallback request
 state.
 
+## Objection Resolution Re-Check
+
+For the iPhone-only `revise_pr` loop, a VPS/Codex revision may be followed by a
+GitHub-visible objection-resolution comment from the VTDD bot:
+
+`<!-- vtdd:reviewer-objection-resolution -->`
+
+That marker is allowed to trigger a Gemini re-check even when the comment author
+is a bot. Gemini's own `vtdd:reviewer=gemini` marker remains loop-protected and
+must not self-trigger a review.
+
+This rule is based on live Issue #206 / PR #207 evidence: the VPS runner added
+the requested `revision-applied marker`, but Gemini skipped the bot-authored
+resolution marker as `bot_or_marker_comment`. A Mac-authored follow-up comment
+was then required to move Gemini to `approve`, which failed the iPhone-only
+completion baseline. The resolution marker must therefore be treated as trusted
+review context, not as a generic marker comment.
+
 ## Setup Boundary
 
 This workflow is designed for public/per-user use:
