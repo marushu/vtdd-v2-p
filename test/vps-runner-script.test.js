@@ -374,6 +374,59 @@ test("VPS runner heartbeat updates existing state comment instead of posting a n
   assert.equal(calls[1].init.body.body.includes("codex_subprocess_heartbeat"), true);
 });
 
+test("VPS runner heartbeat finds an existing state comment beyond the first comments page", async () => {
+  const calls = [];
+  const payload = {
+    executionId: "exec-heartbeat-paged",
+    repository: "sample-org/vtdd-v2",
+    issueNumber: 226
+  };
+  const githubFetch = async (url, init = {}) => {
+    calls.push({ url, init });
+    if (String(url).endsWith("/issues/226/comments?per_page=100&page=1")) {
+      return Array.from({ length: 100 }, (_, index) => ({
+        id: 1000 + index,
+        body: `ordinary comment ${index}`
+      }));
+    }
+    if (String(url).endsWith("/issues/226/comments?per_page=100&page=2")) {
+      return [
+        {
+          id: 22699,
+          body: buildVpsRunnerStateComment({
+            executionId: "exec-heartbeat-paged",
+            event: {
+              status: "running",
+              currentStep: "codex_subprocess",
+              heartbeatAt: "2026-05-09T10:00:00.000Z",
+              updatedAt: "2026-05-09T10:00:00.000Z"
+            }
+          })
+        }
+      ];
+    }
+    return { id: 22699 };
+  };
+
+  await postVpsRunnerEvent({
+    githubFetch,
+    payload,
+    event: {
+      status: "running",
+      lastEvent: "codex_subprocess_heartbeat",
+      currentStep: "codex_subprocess",
+      heartbeatAt: "2026-05-09T10:01:00.000Z",
+      updatedAt: "2026-05-09T10:01:00.000Z"
+    }
+  });
+
+  assert.equal(calls.length, 3);
+  assert.equal(calls[0].url, "/repos/sample-org/vtdd-v2/issues/226/comments?per_page=100&page=1");
+  assert.equal(calls[1].url, "/repos/sample-org/vtdd-v2/issues/226/comments?per_page=100&page=2");
+  assert.equal(calls[2].url, "/repos/sample-org/vtdd-v2/issues/comments/22699");
+  assert.equal(calls[2].init.method, "PATCH");
+});
+
 test("VPS runner milestone events still create new comments", async () => {
   const calls = [];
   await postVpsRunnerEvent({
