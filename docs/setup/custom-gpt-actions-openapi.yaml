@@ -907,6 +907,14 @@ paths:
           required: false
           schema:
             type: integer
+        - name: responseMode
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - action_visible
+          description: Use action_visible in the Custom GPT Action test screen so non-2xx retrieve failures return ok:false JSON with httpStatus/error/reason/issues instead of a ClientResponseError transport label.
       responses:
         "200":
           description: Constitution retrieval result
@@ -947,6 +955,14 @@ paths:
           required: false
           schema:
             type: integer
+        - name: responseMode
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - action_visible
+          description: Use action_visible in the Custom GPT Action test screen so non-2xx retrieve failures return ok:false JSON with httpStatus/error/reason/issues instead of a ClientResponseError transport label.
       responses:
         "200":
           description: Decision log retrieval result
@@ -987,6 +1003,14 @@ paths:
           required: false
           schema:
             type: integer
+        - name: responseMode
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - action_visible
+          description: Use action_visible in the Custom GPT Action test screen so non-2xx retrieve failures return ok:false JSON with httpStatus/error/reason/issues instead of a ClientResponseError transport label.
       responses:
         "200":
           description: Proposal log retrieval result
@@ -1055,6 +1079,14 @@ paths:
           required: false
           schema:
             type: boolean
+        - name: responseMode
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - action_visible
+          description: Use action_visible in the Custom GPT Action test screen so non-2xx retrieve failures return ok:false JSON with httpStatus/error/reason/issues instead of a ClientResponseError transport label.
       responses:
         "200":
           description: Cross-memory context retrieval result
@@ -1135,6 +1167,14 @@ paths:
           required: false
           schema:
             type: integer
+        - name: responseMode
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - action_visible
+          description: Use action_visible in the Custom GPT Action test screen so non-2xx retrieve failures return ok:false JSON with httpStatus/error/reason/issues instead of a ClientResponseError transport label.
       responses:
         "200":
           description: GitHub runtime truth read result
@@ -1144,8 +1184,16 @@ paths:
                 $ref: "#/components/schemas/VtddGenericResponse"
         "401":
           description: Missing machine auth
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
         "403":
           description: Invalid machine auth
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
         "422":
           description: GitHub read request blocked or invalid
           content:
@@ -1164,7 +1212,15 @@ paths:
       summary: Read stored user-defined repository nicknames from the VTDD alias registry.
       security:
         - GatewayBearerAuth: []
-      parameters: []
+      parameters:
+        - name: responseMode
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - action_visible
+          description: Use action_visible in the Custom GPT Action test screen so non-2xx retrieve failures return ok:false JSON with httpStatus/error/reason/issues instead of a ClientResponseError transport label.
       responses:
         "200":
           description: Repository nickname registry retrieval result
@@ -1214,6 +1270,14 @@ paths:
           required: false
           schema:
             type: string
+        - name: responseMode
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - action_visible
+          description: Use action_visible in the Custom GPT Action test screen so non-2xx retrieve failures return ok:false JSON with httpStatus/error/reason/issues instead of a ClientResponseError transport label.
       responses:
         "200":
           description: Canonical setup artifact retrieval result
@@ -1223,8 +1287,16 @@ paths:
                 $ref: "#/components/schemas/VtddGenericResponse"
         "401":
           description: Missing machine auth
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
         "403":
           description: Invalid machine auth
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
         "422":
           description: Setup artifact request blocked or invalid
           content:
@@ -1252,6 +1324,14 @@ paths:
           required: false
           schema:
             type: string
+        - name: responseMode
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - action_visible
+          description: Use action_visible in the Custom GPT Action test screen so non-2xx retrieve failures return ok:false JSON with httpStatus/error/reason/issues instead of a ClientResponseError transport label.
       responses:
         "200":
           description: Butler self-parity evaluation result
@@ -1287,6 +1367,14 @@ paths:
           required: true
           schema:
             type: string
+        - name: responseMode
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - action_visible
+          description: Use action_visible in the Custom GPT Action test screen so non-2xx retrieve failures return ok:false JSON with httpStatus/error/reason/issues instead of a ClientResponseError transport label.
       responses:
         "200":
           description: Approval grant found
@@ -1296,8 +1384,16 @@ paths:
                 $ref: "#/components/schemas/VtddGenericResponse"
         "401":
           description: Missing machine auth
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
         "403":
           description: Invalid machine auth
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
         "404":
           description: Approval grant not found
           content:

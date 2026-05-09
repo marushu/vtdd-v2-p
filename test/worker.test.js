@@ -2122,6 +2122,25 @@ test("worker can return action-visible unauthorized envelope for repository nick
   assert.equal(body.error, "unauthorized");
 });
 
+test("worker can return action-visible unauthorized envelope for retrieve routes", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/retrieve/decisions?responseMode=action_visible"),
+    {
+      VTDD_GATEWAY_BEARER_TOKEN: "required-token"
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.httpStatus, 401);
+  assert.equal(body.error, "unauthorized");
+  assert.equal(Array.isArray(body.issues), true);
+  assert.equal(body.diagnostics.route, "/v2/retrieve/decisions");
+  assert.equal(body.diagnostics.responseMode, "action_visible");
+  assert.match(body.diagnostics.rootCause, /ClientResponseError/);
+});
+
 test("worker gateway can resolve stored repository nickname against live repository index", async () => {
   const provider = createInMemoryMemoryProvider();
   await provider.store({
@@ -4257,6 +4276,24 @@ test("worker blocks constitution retrieve when machine auth runtime is not confi
   const body = await response.json();
   assert.equal(body.ok, false);
   assert.equal(body.error, "unauthorized");
+});
+
+test("worker can return action-visible provider failure envelope for retrieve routes", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/retrieve/constitution?responseMode=action_visible", {
+      headers: gatewayAuthHeaders
+    }),
+    gatewayAuthEnv
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.httpStatus, 503);
+  assert.equal(body.error, "memory_provider_unavailable");
+  assert.equal(body.reason, "valid memory provider is required for constitution retrieval");
+  assert.deepEqual(body.issues, []);
+  assert.equal(body.diagnostics.route, "/v2/retrieve/constitution");
 });
 
 test("worker returns constitution records through retrieve route", async () => {

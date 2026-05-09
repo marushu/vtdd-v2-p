@@ -12,9 +12,7 @@
   ],
   "security": [
     {
-      "GatewayBearerAuth": [
-
-      ]
+      "GatewayBearerAuth": []
     }
   ],
   "components": {
@@ -513,9 +511,7 @@
     "/health": {
       "get": {
         "operationId": "getHealth",
-        "security": [
-
-        ],
+        "security": [],
         "summary": "Check whether the VTDD worker is reachable.",
         "responses": {
           "200": {
@@ -1387,6 +1383,18 @@
             "schema": {
               "type": "integer"
             }
+          },
+          {
+            "name": "responseMode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "action_visible"
+              ]
+            },
+            "description": "Use action_visible in the Custom GPT Action test screen so non-2xx retrieve failures return ok:false JSON with httpStatus/error/reason/issues instead of a ClientResponseError transport label."
           }
         ],
         "responses": {
@@ -1453,6 +1461,18 @@
             "schema": {
               "type": "integer"
             }
+          },
+          {
+            "name": "responseMode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "action_visible"
+              ]
+            },
+            "description": "Use action_visible in the Custom GPT Action test screen so non-2xx retrieve failures return ok:false JSON with httpStatus/error/reason/issues instead of a ClientResponseError transport label."
           }
         ],
         "responses": {
@@ -1519,6 +1539,18 @@
             "schema": {
               "type": "integer"
             }
+          },
+          {
+            "name": "responseMode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "action_visible"
+              ]
+            },
+            "description": "Use action_visible in the Custom GPT Action test screen so non-2xx retrieve failures return ok:false JSON with httpStatus/error/reason/issues instead of a ClientResponseError transport label."
           }
         ],
         "responses": {
@@ -1629,6 +1661,18 @@
             "schema": {
               "type": "boolean"
             }
+          },
+          {
+            "name": "responseMode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "action_visible"
+              ]
+            },
+            "description": "Use action_visible in the Custom GPT Action test screen so non-2xx retrieve failures return ok:false JSON with httpStatus/error/reason/issues instead of a ClientResponseError transport label."
           }
         ],
         "responses": {
@@ -1754,6 +1798,18 @@
             "schema": {
               "type": "integer"
             }
+          },
+          {
+            "name": "responseMode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "action_visible"
+              ]
+            },
+            "description": "Use action_visible in the Custom GPT Action test screen so non-2xx retrieve failures return ok:false JSON with httpStatus/error/reason/issues instead of a ClientResponseError transport label."
           }
         ],
         "responses": {
@@ -1768,10 +1824,24 @@
             }
           },
           "401": {
-            "description": "Missing machine auth"
+            "description": "Missing machine auth",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
           },
           "403": {
-            "description": "Invalid machine auth"
+            "description": "Invalid machine auth",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
           },
           "422": {
             "description": "GitHub read request blocked or invalid",
@@ -1800,6 +1870,25 @@
       "get": {
         "operationId": "vtddRetrieveRepositoryNicknames",
         "summary": "Read stored user-defined repository nicknames from the VTDD alias registry.",
+        "security": [
+          {
+            "GatewayBearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "responseMode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "action_visible"
+              ]
+            },
+            "description": "Use action_visible in the Custom GPT Action test screen so non-2xx retrieve failures return ok:false JSON with httpStatus/error/reason/issues instead of a ClientResponseError transport label."
+          }
+        ],
         "responses": {
           "200": {
             "description": "Repository nickname registry retrieval result",
@@ -1877,6 +1966,18 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "responseMode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "action_visible"
+              ]
+            },
+            "description": "Use action_visible in the Custom GPT Action test screen so non-2xx retrieve failures return ok:false JSON with httpStatus/error/reason/issues instead of a ClientResponseError transport label."
           }
         ],
         "responses": {
@@ -1891,10 +1992,24 @@
             }
           },
           "401": {
-            "description": "Missing machine auth"
+            "description": "Missing machine auth",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
           },
           "403": {
-            "description": "Invalid machine auth"
+            "description": "Invalid machine auth",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
           },
           "422": {
             "description": "Setup artifact request blocked or invalid",
@@ -1939,6 +2054,18 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "responseMode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "action_visible"
+              ]
+            },
+            "description": "Use action_visible in the Custom GPT Action test screen so non-2xx retrieve failures return ok:false JSON with httpStatus/error/reason/issues instead of a ClientResponseError transport label."
           }
         ],
         "responses": {
@@ -1997,6 +2124,18 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "responseMode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "action_visible"
+              ]
+            },
+            "description": "Use action_visible in the Custom GPT Action test screen so non-2xx retrieve failures return ok:false JSON with httpStatus/error/reason/issues instead of a ClientResponseError transport label."
           }
         ],
         "responses": {
@@ -2011,10 +2150,24 @@
             }
           },
           "401": {
-            "description": "Missing machine auth"
+            "description": "Missing machine auth",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
           },
           "403": {
-            "description": "Invalid machine auth"
+            "description": "Invalid machine auth",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
           },
           "404": {
             "description": "Approval grant not found",
