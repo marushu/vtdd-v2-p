@@ -3087,6 +3087,99 @@ test("worker allows same-origin passkey operator to dispatch GitHub merge author
   assert.equal(body.authorityAction.htmlUrl, "https://github.com/sample-org/vtdd-v2-p/pull/21");
 });
 
+test("worker uses bound default fetch for GitHub merge authority dispatch", async () => {
+  const provider = createInMemoryMemoryProvider();
+  await provider.store({
+    id: "approval-merge-bound-fetch",
+    type: MemoryRecordType.APPROVAL_LOG,
+    content: {
+      kind: "passkey_grant",
+      status: "verified",
+      approvalId: "approval-merge-bound-fetch",
+      expiresAt: "2099-01-01T00:00:00.000Z",
+      scope: {
+        actionType: "merge",
+        highRiskKind: "pull_merge",
+        repositoryInput: "sample-org/vtdd-v2-p",
+        issueNumber: "55",
+        phase: "execution"
+      }
+    },
+    metadata: { source: "test" },
+    priority: 90,
+    tags: ["passkey_grant"],
+    createdAt: "2026-04-26T00:00:00.000Z"
+  });
+
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async function workerRuntimeFetch(url, init) {
+    assert.equal(this, globalThis);
+    calls.push({ url, init });
+    if (init?.method === "PUT") {
+      return new Response(
+        JSON.stringify({
+          sha: "abc123",
+          merged: true,
+          message: "Pull Request successfully merged"
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    }
+    return new Response(
+      JSON.stringify({
+        merged: true,
+        merged_at: "2026-05-09T01:02:03Z",
+        merge_commit_sha: "def456",
+        html_url: "https://github.com/sample-org/vtdd-v2-p/pull/21"
+      }),
+      { status: 200, headers: { "content-type": "application/json" } }
+    );
+  };
+
+  try {
+    const response = await worker.fetch(
+      new Request("https://example.com/v2/action/github-authority", {
+        method: "POST",
+        headers: {
+          ...gatewayAuthHeaders,
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({
+          operation: "pull_merge",
+          repository: "sample-org/vtdd-v2-p",
+          pullNumber: 21,
+          mergeMethod: "squash",
+          issueContext: {
+            issueNumber: 55
+          },
+          policyInput: {
+            approvalPhrase: "GO",
+            approvalGrantId: "approval-merge-bound-fetch",
+            targetConfirmed: true
+          }
+        })
+      }),
+      {
+        ...gatewayAuthEnv,
+        MEMORY_PROVIDER: provider,
+        GITHUB_APP_INSTALLATION_TOKEN: "ghs_high_risk"
+      }
+    );
+
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.equal(body.ok, true);
+    assert.equal(body.authorityAction.runtimeTruth.mergedAt, "2026-05-09T01:02:03Z");
+    assert.deepEqual(
+      calls.map((call) => call.init.method),
+      ["PUT", "GET"]
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("worker returns GitHub merge diagnostics to same-origin passkey operator", async () => {
   const provider = createInMemoryMemoryProvider();
   await provider.store({

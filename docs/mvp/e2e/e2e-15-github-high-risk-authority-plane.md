@@ -26,6 +26,7 @@ Observed result on 2026-04-26:
 - confirms `pull_merge` executes through `/v2/action/github-authority`
 - confirms merge requires a real approval grant resolved from passkey memory, not chat phrase substitution alone
 - confirms the authority response includes GitHub-visible merge state such as `merged: true`, merge `sha`, and `htmlUrl`
+- confirms `pull_merge` re-reads PR runtime truth after the merge API dispatch and returns `mergedAt` / `mergeCommitSha` evidence when GitHub provides it
 - confirms bounded `issue_close` only proceeds after merged pull verification and returns the closed issue `htmlUrl`
 
 ## Boundary-path Run
@@ -41,6 +42,18 @@ Observed result on 2026-04-26:
 - confirms missing real approval grant is rejected by the high-risk plane
 - confirms bounded issue close is rejected with `bounded issue close requires a merged pull request` when merged pull proof is absent
 - confirms merge and issue close remain outside the normal write plane and are not silently downgraded to `GO`-only execution
+
+## Issue #210 Runtime Failure Evidence
+
+Observed runtime failure from PR `#207` merge attempt:
+- operation: `pull_merge`
+- request method: `PUT`
+- endpoint: GitHub PR merge API for `marushu/vtdd-v2-p` PR `#207`
+- exception: `TypeError`
+- message: `Illegal invocation: function called with incorrect this reference`
+- runtime truth after the failure: PR `#207` remained unmerged
+
+Issue `#210` fixes this path by binding the default Worker `fetch` function before passing it through the high-risk plane. Tests now cover a Cloudflare-like default `fetch` that fails unless invoked with the correct `this` reference, plus the post-merge PR runtime-truth read.
 
 ## Evidence Files
 

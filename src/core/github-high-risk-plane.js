@@ -27,7 +27,7 @@ export async function executeGitHubHighRiskPlane(input = {}) {
   const approvalScope = input.approvalScope ?? null;
   const approvalGrant = input.approvalGrant ?? null;
   const env = input.env ?? {};
-  const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
+  const fetchImpl = resolveGitHubHighRiskFetch(env);
   const apiBaseUrl = normalizeApiBaseUrl(env?.GITHUB_API_BASE_URL);
 
   const validation = validateGitHubHighRiskRequest({
@@ -231,6 +231,11 @@ async function executePullMerge(input) {
     };
   }
 
+  const runtimeTruth = await readPullRuntimeTruthAfterMerge({ ...input, encodedRepository });
+  if (!runtimeTruth.ok) {
+    return runtimeTruth;
+  }
+
   return {
     ok: true,
     authorityAction: {
@@ -240,7 +245,63 @@ async function executePullMerge(input) {
       merged: responseBody?.merged === true,
       sha: normalizeText(responseBody?.sha) || null,
       message: normalizeText(responseBody?.message) || null,
-      htmlUrl: `https://github.com/${input.repository}/pull/${input.pullNumber}`
+      htmlUrl:
+        normalizeText(runtimeTruth.pull?.htmlUrl) || `https://github.com/${input.repository}/pull/${input.pullNumber}`,
+      runtimeTruth: runtimeTruth.pull
+    }
+  };
+}
+
+async function readPullRuntimeTruthAfterMerge(input) {
+  const requestUrl = `${input.apiBaseUrl}/repos/${input.encodedRepository}/pulls/${input.pullNumber}`;
+  let response;
+  try {
+    response = await input.fetchImpl(requestUrl, {
+      method: "GET",
+      headers: githubJsonHeaders({ token: input.token })
+    });
+  } catch (error) {
+    return {
+      ok: false,
+      status: 503,
+      error: "github_high_risk_failed",
+      reason: `failed to read GitHub pull request runtime truth after merge: ${errorMessage(error)}`,
+      issues: ["github_merge_runtime_truth_fetch_exception"],
+      diagnostics: {
+        operation: input.operation,
+        requestMethod: "GET",
+        requestUrl,
+        exceptionName: errorName(error),
+        exceptionMessage: errorMessage(error)
+      }
+    };
+  }
+
+  const responseBody = await readJsonSafe(response);
+  if (!response.ok) {
+    return {
+      ok: false,
+      status: response.status,
+      error: "github_high_risk_failed",
+      reason: normalizeText(responseBody?.message) || "failed to read GitHub pull request runtime truth after merge",
+      diagnostics: {
+        operation: input.operation,
+        requestMethod: "GET",
+        requestUrl,
+        githubStatus: response.status,
+        githubMessage: normalizeText(responseBody?.message) || null,
+        githubDocumentationUrl: normalizeText(responseBody?.documentation_url) || null
+      }
+    };
+  }
+
+  return {
+    ok: true,
+    pull: {
+      merged: responseBody?.merged === true || Boolean(normalizeText(responseBody?.merged_at)),
+      mergedAt: normalizeText(responseBody?.merged_at) || null,
+      mergeCommitSha: normalizeText(responseBody?.merge_commit_sha) || null,
+      htmlUrl: normalizeText(responseBody?.html_url) || null
     }
   };
 }
@@ -368,6 +429,13 @@ function encodeURIComponentRepository(repository) {
     .split("/")
     .map((part) => encodeURIComponent(part))
     .join("/");
+}
+
+function resolveGitHubHighRiskFetch(env) {
+  if (typeof env?.GITHUB_API_FETCH === "function") {
+    return env.GITHUB_API_FETCH.bind(env);
+  }
+  return globalThis.fetch.bind(globalThis);
 }
 
 async function readJsonSafe(response) {
