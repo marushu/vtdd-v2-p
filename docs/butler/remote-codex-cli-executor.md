@@ -332,6 +332,15 @@ failure as blocked. If the latest running event is older than the stale
 threshold, Butler must surface `vps_runner_event_stale` with the last step and
 age instead of treating an existing pushed branch as healthy progress forever.
 
+Runner event comments may include a GitHub mention only as a notification
+mirror; the JSON event payload and branch / PR evidence remain the runtime
+truth. The mention target is selected in this priority order when a login is
+available and not a bot or notification-blocked actor: queue comment author,
+Issue author, PR author, approval / GO actor, then no mention. Mentions are
+limited to milestone events (`picked_up`, `branch_pushed`, `pr_created`,
+`blocked`, `failed`, `stale`, `deploy_required`, `completed`). Heartbeat and
+progress-poll comments must not mention anyone.
+
 For explicit VPS runner health checks, Butler uses `vtddVpsRunnerStatus`. The
 status check is read-only and is derived from the same GitHub queue comment,
 runner event comments, branch, and PR truth as `vtddExecutionProgress`. It

@@ -115,6 +115,10 @@ export function createRemoteCodexExecutionRequest(input = {}) {
       normalizeText(payload?.executionTarget?.codexGoal) ||
       normalizeText(gatewayResult?.executionContinuity?.codexGoal),
     approvalPhrase: normalizeText(payload?.policyInput?.approvalPhrase),
+    approvalActor:
+      normalizeText(payload?.policyInput?.approvalActor) ||
+      normalizeText(payload?.policyInput?.goActor) ||
+      normalizeText(payload?.sender?.login),
     targetConfirmed: payload?.policyInput?.targetConfirmed === true,
     approvalScopeMatched,
     handoffRequired: continuationContext.requiresHandoff === true,
@@ -1285,6 +1289,7 @@ function buildVpsRunnerGitHubQueueComment({ request }) {
     baseRef: request.baseRef,
     codexGoal: request.codexGoal,
     approvalScopeMatched: request.approvalScopeMatched,
+    approvalActor: request.approvalActor,
     handoff: request.handoff
   };
   const lines = [
