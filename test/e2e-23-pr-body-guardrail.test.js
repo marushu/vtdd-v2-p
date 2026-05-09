@@ -24,11 +24,14 @@ test("E2E-23 evidence doc records PR body guardrail runs", () => {
   assert.equal(doc.includes("validator accepts a helper-rendered PR body"), true);
   assert.equal(doc.includes("workflow uses the helper-generated `--body-file` path"), true);
   assert.equal(doc.includes("validation fails when required evidence markers are missing"), true);
+  assert.equal(doc.includes("VPS runner open_pr path normalizes a malformed candidate PR"), true);
+  assert.equal(doc.includes("PR `#212`"), true);
+  assert.equal(doc.includes("guarded-autonomy-required-checks / guarded-policy"), true);
 });
 
 test("issue-to-e2e matrix references E2E-23 run evidence", () => {
   const doc = fs.readFileSync(MATRIX_PATH, "utf8");
   assert.equal(doc.includes("## E2E-23 PR body guardrail"), true);
   assert.equal(doc.includes("docs/mvp/e2e/e2e-23-pr-body-guardrail.md"), true);
-  assert.equal(doc.includes("- Issues: `#57`"), true);
+  assert.equal(doc.includes("- Issues: `#57`, `#213`"), true);
 });

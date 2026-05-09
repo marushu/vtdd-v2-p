@@ -214,6 +214,11 @@ test("remote Codex execution default dispatch posts bounded @codex GitHub commen
   const body = JSON.parse(calls[0].init.body).body;
   assert.equal(body.includes("@codex"), true);
   assert.equal(body.includes("Completion target: create or update a pull request"), true);
+  assert.equal(body.includes("docs/pr-template-model.md"), true);
+  assert.equal(body.includes("scripts/render-pr-body.mjs"), true);
+  assert.equal(body.includes("scripts/validate-pr-body.mjs"), true);
+  assert.equal(body.includes("## This PR satisfies Intent"), true);
+  assert.equal(body.includes("## Surface Update Checklist"), true);
   assert.equal(body.includes("Do not merge."), true);
   assert.equal(body.includes("OPENAI_API_KEY"), false);
 });
@@ -555,6 +560,11 @@ test("remote Codex vps_runner dispatch posts a GitHub-backed queue comment", asy
   assert.equal(body.includes('"transport": "vps_runner"'), true);
   assert.equal(body.includes('"repository": "sample-org/sunaba-eye"'), true);
   assert.equal(body.includes("Do not merge."), true);
+  assert.equal(body.includes("docs/pr-template-model.md"), true);
+  assert.equal(body.includes("scripts/render-pr-body.mjs"), true);
+  assert.equal(body.includes("scripts/validate-pr-body.mjs"), true);
+  assert.equal(body.includes("## This PR satisfies Intent"), true);
+  assert.equal(body.includes("## Surface Update Checklist"), true);
 });
 
 test("remote Codex vps_runner dispatch preserves bounded PR revision goal", async () => {
