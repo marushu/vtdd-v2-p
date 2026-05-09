@@ -12,6 +12,7 @@ import { validatePrBody } from "./validate-pr-body.mjs";
 const QUEUE_MARKER_RE = /<!--\s*vtdd:vps-runner-execution:([a-zA-Z0-9._:-]+)\s*-->/;
 const EVENT_MARKER_RE = /<!--\s*vtdd:vps-runner-event:([a-zA-Z0-9._:-]+)\s*-->/;
 const DEFAULT_API_BASE_URL = "https://api.github.com";
+const DEFAULT_HEARTBEAT_SECONDS = 120;
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 
 async function main() {
@@ -106,7 +107,12 @@ async function executeVpsRunnerExecution({ githubFetch, token, workRoot, executi
     const workspace = path.join(workRoot, safePathSegment(payload.repository), payload.executionId);
     await fs.mkdir(path.dirname(workspace), { recursive: true });
     await runCommand("rm", ["-rf", workspace], { env });
-    await runCommand("gh", ["repo", "clone", payload.repository, workspace], { env });
+    await runTrackedVpsCommand("gh", ["repo", "clone", payload.repository, workspace], {
+      env,
+      githubFetch,
+      payload,
+      currentStep: "gh_repo_clone"
+    });
     await checkoutVpsRunnerBranch({ payload, cwd: workspace, env });
 
     await postVpsRunnerEvent({
@@ -115,6 +121,7 @@ async function executeVpsRunnerExecution({ githubFetch, token, workRoot, executi
       event: {
         status: "branch_created",
         lastEvent: "branch_pushed",
+        currentStep: "branch_pushed",
         branch: payload.branch
       }
     });
@@ -124,11 +131,14 @@ async function executeVpsRunnerExecution({ githubFetch, token, workRoot, executi
       ? await buildVpsRunnerPullRequestContext({ githubFetch, payload })
       : null;
     const prompt = buildCodexExecutionPrompt({ payload, issue, pullRequestContext });
-    await runCommand("codex", buildCodexExecArgs({ env: process.env }), {
+    await runTrackedVpsCommand("codex", buildCodexExecArgs({ env: process.env }), {
       cwd: workspace,
       env: buildCodexExecutionEnv(process.env),
       input: prompt,
-      maxBuffer: 1024 * 1024 * 12
+      maxBuffer: 1024 * 1024 * 12,
+      githubFetch,
+      payload,
+      currentStep: "codex_subprocess"
     });
 
     const status = await runCommand("git", ["status", "--porcelain"], { cwd: workspace, env });
@@ -164,7 +174,9 @@ async function executeVpsRunnerExecution({ githubFetch, token, workRoot, executi
       repository: payload.repository,
       branch: payload.branch,
       env,
-      cwd: workspace
+      cwd: workspace,
+      githubFetch,
+      payload
     });
     let prUrl = existingPullRequest?.url || "";
     if (prUrl) {
@@ -182,9 +194,12 @@ async function executeVpsRunnerExecution({ githubFetch, token, workRoot, executi
           payload,
           body: normalized.body
         });
-        await runCommand("gh", ["pr", "edit", String(existingPullRequest.number || prUrl), "--repo", payload.repository, "--body-file", bodyFile], {
+        await runTrackedVpsCommand("gh", ["pr", "edit", String(existingPullRequest.number || prUrl), "--repo", payload.repository, "--body-file", bodyFile], {
           cwd: workspace,
-          env
+          env,
+          githubFetch,
+          payload,
+          currentStep: "gh_pr_edit"
         });
       }
     } else {
@@ -196,7 +211,7 @@ async function executeVpsRunnerExecution({ githubFetch, token, workRoot, executi
         await postVpsRunnerPrBodyBlockedEvent({ githubFetch, payload, normalized });
         return { ok: false, reason: normalized.reason };
       }
-      const pr = await runCommand(
+      const pr = await runTrackedVpsCommand(
         "gh",
         [
           "pr",
@@ -211,7 +226,13 @@ async function executeVpsRunnerExecution({ githubFetch, token, workRoot, executi
           "--body",
           normalized.body
         ],
-        { cwd: workspace, env }
+        {
+          cwd: workspace,
+          env,
+          githubFetch,
+          payload,
+          currentStep: "gh_pr_create"
+        }
       );
       prUrl = pr.stdout.trim();
     }
@@ -222,6 +243,7 @@ async function executeVpsRunnerExecution({ githubFetch, token, workRoot, executi
       event: {
         status: "pr_created",
         lastEvent: isPrRevisionGoal(payload.codexGoal) ? "pull_request_updated" : "pull_request_created",
+        currentStep: isPrRevisionGoal(payload.codexGoal) ? "pull_request_updated" : "pull_request_created",
         branch: payload.branch,
         pr: prUrl
       }
@@ -693,20 +715,124 @@ async function postVpsRunnerEvent({ githubFetch, payload, event }) {
   });
 }
 
-async function findExistingPullRequest({ repository, branch, env, cwd }) {
+async function findExistingPullRequest({ repository, branch, env, cwd, githubFetch, payload }) {
   try {
-    const result = await runCommand(
+    const result = await runTrackedVpsCommand(
       "gh",
       ["pr", "list", "--repo", repository, "--head", branch, "--json", "number,url,body", "--limit", "1"],
       {
         cwd,
-        env
+        env,
+        githubFetch,
+        payload,
+        currentStep: "gh_pr_list"
       }
     );
     const parsed = JSON.parse(result.stdout || "[]");
     return parsed[0] || null;
   } catch {
     return null;
+  }
+}
+
+async function runTrackedVpsCommand(command, args, options = {}) {
+  const { githubFetch, payload, currentStep } = options;
+  if (!githubFetch || !payload || !currentStep || !["codex", "gh"].includes(command)) {
+    return runCommand(command, args, options);
+  }
+
+  const startedAt = new Date().toISOString();
+  await postVpsRunnerEvent({
+    githubFetch,
+    payload,
+    event: {
+      status: "running",
+      lastEvent: `${currentStep}_started`,
+      currentStep,
+      heartbeatAt: startedAt,
+      updatedAt: startedAt,
+      command: {
+        name: command,
+        phase: "started",
+        exitCode: null,
+        stderrSummary: null
+      }
+    }
+  });
+
+  const heartbeatMs = getHeartbeatIntervalMs(options.env || process.env);
+  const heartbeatTimer =
+    heartbeatMs > 0
+      ? setInterval(() => {
+          const now = new Date().toISOString();
+          postVpsRunnerEvent({
+            githubFetch,
+            payload,
+            event: {
+              status: "running",
+              lastEvent: `${currentStep}_heartbeat`,
+              currentStep,
+              heartbeatAt: now,
+              updatedAt: now,
+              command: {
+                name: command,
+                phase: "running",
+                exitCode: null,
+                stderrSummary: null
+              }
+            }
+          }).catch(() => {});
+        }, heartbeatMs)
+      : null;
+  heartbeatTimer?.unref?.();
+
+  try {
+    const result = await runCommand(command, args, options);
+    if (heartbeatTimer) {
+      clearInterval(heartbeatTimer);
+    }
+    const completedAt = new Date().toISOString();
+    await postVpsRunnerEvent({
+      githubFetch,
+      payload,
+      event: {
+        status: "running",
+        lastEvent: `${currentStep}_completed`,
+        currentStep,
+        heartbeatAt: completedAt,
+        updatedAt: completedAt,
+        command: {
+          name: command,
+          phase: "completed",
+          exitCode: 0,
+          stderrSummary: summarizeDiagnosticText(result.stderr)
+        }
+      }
+    });
+    return result;
+  } catch (error) {
+    if (heartbeatTimer) {
+      clearInterval(heartbeatTimer);
+    }
+    const failedAt = new Date().toISOString();
+    await postVpsRunnerEvent({
+      githubFetch,
+      payload,
+      event: {
+        status: "failed",
+        lastEvent: `${currentStep}_failed`,
+        currentStep,
+        heartbeatAt: failedAt,
+        updatedAt: failedAt,
+        command: {
+          name: command,
+          phase: "completed",
+          exitCode: Number.isInteger(error?.exitCode) ? error.exitCode : null,
+          stderrSummary: summarizeDiagnosticText(error?.stderr || error?.message)
+        }
+      }
+    });
+    throw error;
   }
 }
 
@@ -880,7 +1006,11 @@ function runCommand(command, args, options = {}) {
         resolve({ stdout, stderr });
         return;
       }
-      reject(new Error(`${command} ${args.join(" ")} failed with exit code ${code}: ${stderr || stdout}`));
+      const error = new Error(`${command} ${args.join(" ")} failed with exit code ${code}: ${stderr || stdout}`);
+      error.exitCode = code;
+      error.stdout = stdout;
+      error.stderr = stderr;
+      reject(error);
     });
     if (options.input) {
       child.stdin.end(options.input);
@@ -888,6 +1018,35 @@ function runCommand(command, args, options = {}) {
       child.stdin.end();
     }
   });
+}
+
+function getHeartbeatIntervalMs(env = {}) {
+  const seconds = Number(env.VTDD_VPS_RUNNER_HEARTBEAT_SECONDS ?? DEFAULT_HEARTBEAT_SECONDS);
+  if (!Number.isFinite(seconds) || seconds <= 0) {
+    return 0;
+  }
+  return Math.floor(seconds * 1000);
+}
+
+function summarizeDiagnosticText(value, maxLength = 500) {
+  const redacted = redactDiagnosticText(value)
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join(" ");
+  if (!redacted) {
+    return null;
+  }
+  return redacted.length <= maxLength ? redacted : `${redacted.slice(0, maxLength)} [truncated]`;
+}
+
+function redactDiagnosticText(value) {
+  return String(value || "")
+    .replace(/gh[pousr]_[A-Za-z0-9_]{20,}/g, "[REDACTED_GITHUB_TOKEN]")
+    .replace(/github_pat_[A-Za-z0-9_]{20,}/g, "[REDACTED_GITHUB_TOKEN]")
+    .replace(/sk-[A-Za-z0-9_-]{20,}/g, "[REDACTED_API_KEY]")
+    .replace(/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g, "[REDACTED_PRIVATE_KEY]")
+    .replace(/\b[A-Za-z0-9+/]{40,}={0,2}\b/g, "[REDACTED_LONG_SECRET]");
 }
 
 function buildRunnerCommandEnv({ token }) {
@@ -1007,6 +1166,7 @@ export {
   parseVpsRunnerEventComment,
   parseVpsRunnerQueueComment,
   runVpsRunnerOnce,
+  summarizeDiagnosticText,
   selectPendingVpsReviewerFallbacks,
   selectPendingVpsRunnerExecutions
 };

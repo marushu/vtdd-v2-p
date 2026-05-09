@@ -796,14 +796,25 @@ async function retrieveVpsRunnerGitHubQueueProgress({
   }
 
   const runnerEvent = findLatestVpsRunnerEvent({ comments, queueComment });
+  const runnerEventStaleBlocker =
+    runnerEvent && !pullRequest.pullRequest
+      ? buildVpsRunnerEventStaleBlocker({ runnerEvent, env })
+      : null;
   const staleBlocker =
     !pullRequest.pullRequest && !branchState.branch && !runnerEvent
       ? buildVpsRunnerPickupBlocker({ queueComment, env })
       : null;
   const failureBlocker =
-    !pullRequest.pullRequest && !branchState.branch && runnerEvent?.status === RemoteCodexExecutionStatus.BLOCKED
+    !pullRequest.pullRequest && runnerEvent?.status === RemoteCodexExecutionStatus.BLOCKED
       ? runnerEvent.rawFailure
       : null;
+  const status = pullRequest.pullRequest
+    ? RemoteCodexExecutionStatus.COMPLETED
+    : failureBlocker || runnerEventStaleBlocker || staleBlocker
+      ? RemoteCodexExecutionStatus.BLOCKED
+      : branchState.branch
+        ? RemoteCodexExecutionStatus.IN_PROGRESS
+        : runnerEvent?.status || RemoteCodexExecutionStatus.QUEUED;
 
   return {
     ok: true,
@@ -815,18 +826,10 @@ async function retrieveVpsRunnerGitHubQueueProgress({
       branch: branchState.branch,
       queueCommentId: normalizePositiveInteger(queueComment.id),
       queueCommentUrl: normalizeText(queueComment.html_url) || null,
-      status: pullRequest.pullRequest
-        ? RemoteCodexExecutionStatus.COMPLETED
-        : branchState.branch
-          ? RemoteCodexExecutionStatus.IN_PROGRESS
-          : failureBlocker
-            ? RemoteCodexExecutionStatus.BLOCKED
-            : staleBlocker
-              ? RemoteCodexExecutionStatus.BLOCKED
-              : runnerEvent?.status || RemoteCodexExecutionStatus.QUEUED,
+      status,
       pullRequest: pullRequest.pullRequest,
       runnerEvent,
-      blocker: failureBlocker ?? staleBlocker
+      blocker: failureBlocker ?? runnerEventStaleBlocker ?? staleBlocker
     }
   };
 }
@@ -1001,15 +1004,51 @@ function findLatestVpsRunnerEvent({ comments, queueComment }) {
         commentUrl: normalizeText(comment?.html_url) || null,
         status,
         lastEvent: normalizeText(payload.lastEvent) || null,
+        currentStep: normalizeText(payload.currentStep) || null,
+        heartbeatAt: normalizeText(payload.heartbeatAt) || null,
         rawFailure: normalizeObject(payload.rawFailure),
+        command: normalizeObject(payload.command),
         branch: normalizeText(payload.branch) || null,
         pullRequest: normalizeObject(payload.pullRequest),
-        updatedAt: normalizeText(comment?.created_at) || null
+        updatedAt:
+          normalizeText(payload.updatedAt) ||
+          normalizeText(payload.heartbeatAt) ||
+          normalizeText(comment?.created_at) ||
+          null
       };
     })
     .filter(Boolean);
 
   return events.at(-1) || null;
+}
+
+function buildVpsRunnerEventStaleBlocker({ runnerEvent, env }) {
+  const staleSeconds = normalizeNonNegativeNumber(env?.VPS_RUNNER_EVENT_STALE_SECONDS ?? 600);
+  const updatedAt = Date.parse(normalizeText(runnerEvent?.updatedAt));
+  if (!Number.isFinite(updatedAt)) {
+    return null;
+  }
+  if (![RemoteCodexExecutionStatus.IN_PROGRESS, RemoteCodexExecutionStatus.UNKNOWN].includes(runnerEvent?.status)) {
+    return null;
+  }
+
+  const ageSeconds = Math.floor((Date.now() - updatedAt) / 1000);
+  if (ageSeconds < staleSeconds) {
+    return null;
+  }
+
+  return {
+    error: "vps_runner_event_stale",
+    reason:
+      "VPS runner last reported a running step but has not posted a heartbeat or terminal event within the stale threshold",
+    commentId: normalizePositiveInteger(runnerEvent?.commentId),
+    commentUrl: normalizeText(runnerEvent?.commentUrl) || null,
+    lastEvent: normalizeText(runnerEvent?.lastEvent) || null,
+    currentStep: normalizeText(runnerEvent?.currentStep) || null,
+    lastUpdatedAt: normalizeText(runnerEvent?.updatedAt) || null,
+    staleSeconds,
+    ageSeconds
+  };
 }
 
 function buildVpsRunnerPickupBlocker({ queueComment, env }) {

@@ -124,6 +124,10 @@ not require a public inbound VPS API:
   issue-traceable queue comments
 - the VPS runner reports milestone events back as Issue comments with
   `<!-- vtdd:vps-runner-event:<executionId> -->`
+- while long-running Codex CLI or `gh` commands are active, the VPS runner
+  reports start / heartbeat / completed / failed events with `currentStep`,
+  `heartbeatAt`, `updatedAt`, command name, exit code when known, and a short
+  redacted stderr summary
 - Butler reads the queue comment, runner event comments, target branch, and
   target PR as GitHub runtime truth
 - queued/requested is not implementation success; if no runner pickup or
@@ -234,6 +238,9 @@ Required runner environment:
   `--dangerously-bypass-approvals-and-sandbox`. This is only for a trusted,
   user-owned runner when the host cannot run Codex's bubblewrap sandbox, and it
   must not be enabled in shared or untrusted infrastructure.
+- Optional `VTDD_VPS_RUNNER_HEARTBEAT_SECONDS`: interval for GitHub-visible
+  heartbeat comments while Codex CLI or `gh` subprocesses are running. Defaults
+  to `120`. Set to `0` only when heartbeat comments are intentionally disabled.
 
 Dry-run pickup check:
 
@@ -315,11 +322,15 @@ branch surfaces. If those inputs or permissions are missing, Butler must report
 the progress as blocked/unverified for implementation success rather than
 falling back to the control workflow conclusion.
 
-For `vps_runner`, progress is derived from the GitHub queue comment, optional
-runner event comments, and target branch / PR evidence. A runner event comment
-may report raw failure, but it is not completion evidence unless GitHub-visible
-branch or PR truth exists. If a runner reports failure and no target branch or
-PR exists, Butler must surface the raw failure as blocked.
+For `vps_runner`, progress is derived from the GitHub queue comment, runner
+event comments, and target branch / PR evidence. The latest runner event may
+include `currentStep`, `heartbeatAt`, `updatedAt`, and a bounded command
+diagnostic. A runner event comment may report raw failure, but it is not
+completion evidence unless GitHub-visible branch or PR truth exists. If a
+runner reports failure and no target PR exists, Butler must surface the raw
+failure as blocked. If the latest running event is older than the stale
+threshold, Butler must surface `vps_runner_event_stale` with the last step and
+age instead of treating an existing pushed branch as healthy progress forever.
 
 When Codex reaches an approval or scope boundary, the observable return path is
 GitHub state that Butler can read, not a hidden direct Codex-to-Butler channel.

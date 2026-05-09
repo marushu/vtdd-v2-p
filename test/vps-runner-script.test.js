@@ -14,6 +14,7 @@ import {
   parseVpsRunnerEventComment,
   parseVpsRunnerQueueComment,
   runVpsRunnerOnce,
+  summarizeDiagnosticText,
   selectPendingVpsReviewerFallbacks,
   selectPendingVpsRunnerExecutions
 } from "../scripts/run-vps-runner.mjs";
@@ -189,6 +190,15 @@ test("VPS runner event comment is parseable by execution id", () => {
     event: {
       status: "failed",
       lastEvent: "codex_login_missing",
+      currentStep: "codex_subprocess",
+      heartbeatAt: "2026-05-09T10:00:00.000Z",
+      updatedAt: "2026-05-09T10:00:00.000Z",
+      command: {
+        name: "codex",
+        phase: "completed",
+        exitCode: 1,
+        stderrSummary: "Missing bearer authentication"
+      },
       rawFailure: { error: "codex_auth_unavailable" }
     }
   });
@@ -197,7 +207,30 @@ test("VPS runner event comment is parseable by execution id", () => {
   assert.equal(parsed.ok, true);
   assert.equal(parsed.executionId, "exec-1");
   assert.equal(parsed.event.status, "failed");
+  assert.equal(parsed.event.currentStep, "codex_subprocess");
+  assert.equal(parsed.event.heartbeatAt, "2026-05-09T10:00:00.000Z");
+  assert.equal(parsed.event.command.name, "codex");
+  assert.equal(parsed.event.command.exitCode, 1);
+  assert.equal(parsed.event.command.stderrSummary, "Missing bearer authentication");
   assert.equal(parsed.event.rawFailure.error, "codex_auth_unavailable");
+});
+
+test("VPS runner diagnostic summaries redact secrets and stay short", () => {
+  const summary = summarizeDiagnosticText(
+    [
+      "fatal: authentication failed for ghp_123456789012345678901234567890abcdef",
+      "api key sk-123456789012345678901234567890 should not be shown",
+      Array(120).fill("detail").join(" ")
+    ].join("\n"),
+    180
+  );
+
+  assert.equal(summary.includes("ghp_123456789012345678901234567890abcdef"), false);
+  assert.equal(summary.includes("sk-123456789012345678901234567890"), false);
+  assert.equal(summary.includes("[REDACTED_GITHUB_TOKEN]"), true);
+  assert.equal(summary.includes("[REDACTED_API_KEY]"), true);
+  assert.equal(summary.endsWith("[truncated]"), true);
+  assert.equal(summary.length <= 192, true);
 });
 
 test("VPS runner dry run reports selected execution without side effects", async () => {
