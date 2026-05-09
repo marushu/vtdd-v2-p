@@ -67,6 +67,7 @@ test("VPS runner selects only allowlisted pending queues", () => {
       id: 1,
       html_url: "https://github.com/sample-org/vtdd-v2/issues/157#issuecomment-1",
       created_at: "2026-05-07T10:00:00Z",
+      user: { login: "alice" },
       body: queueComment({ executionId: "exec-1", repository: "sample-org/vtdd-v2" })
     },
     {
@@ -99,6 +100,7 @@ test("VPS runner selects only allowlisted pending queues", () => {
 
   assert.equal(selected.length, 1);
   assert.equal(selected[0].payload.executionId, "exec-1");
+  assert.equal(selected[0].actors.queueCommentAuthor, "alice");
 });
 
 test("VPS runner repository policies allow per-repo base refs and branch prefixes", () => {
@@ -213,6 +215,74 @@ test("VPS runner event comment is parseable by execution id", () => {
   assert.equal(parsed.event.command.exitCode, 1);
   assert.equal(parsed.event.command.stderrSummary, "Missing bearer authentication");
   assert.equal(parsed.event.rawFailure.error, "codex_auth_unavailable");
+});
+
+test("VPS runner milestone event mentions queue comment author", () => {
+  const body = buildVpsRunnerEventComment({
+    executionId: "exec-mention",
+    notification: {
+      queueCommentAuthor: "alice",
+      issueAuthor: "bob"
+    },
+    event: {
+      status: "branch_created",
+      lastEvent: "branch_pushed"
+    }
+  });
+
+  assert.equal(body.includes("@alice"), true);
+  assert.equal(body.includes("@bob"), false);
+  assert.equal(parseVpsRunnerEventComment(body).ok, true);
+});
+
+test("VPS runner heartbeat event does not mention anyone", () => {
+  const body = buildVpsRunnerEventComment({
+    executionId: "exec-heartbeat",
+    notification: {
+      queueCommentAuthor: "alice"
+    },
+    event: {
+      status: "running",
+      lastEvent: "codex_subprocess_heartbeat",
+      currentStep: "codex_subprocess"
+    }
+  });
+
+  assert.equal(body.includes("@alice"), false);
+});
+
+test("VPS runner notification falls back from bot queue actor to issue author", () => {
+  const body = buildVpsRunnerEventComment({
+    executionId: "exec-fallback",
+    notification: {
+      queueCommentAuthor: "github-actions[bot]",
+      issueAuthor: "issue-owner"
+    },
+    event: {
+      status: "failed",
+      lastEvent: "runner_failed"
+    }
+  });
+
+  assert.equal(body.includes("@issue-owner"), true);
+  assert.equal(body.includes("@github-actions"), false);
+});
+
+test("VPS runner notification omits mention when no mentionable actor exists", () => {
+  const body = buildVpsRunnerEventComment({
+    executionId: "exec-no-mention",
+    notification: {
+      queueCommentAuthor: "app/vtdd-codex",
+      issueAuthor: "ghost"
+    },
+    event: {
+      status: "failed",
+      lastEvent: "runner_failed"
+    }
+  });
+
+  assert.equal(body.includes("@"), false);
+  assert.equal(body.includes("VTDD VPS runner event."), true);
 });
 
 test("VPS runner diagnostic summaries redact secrets and stay short", () => {

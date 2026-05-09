@@ -524,8 +524,10 @@ test("remote Codex vps_runner dispatch posts a GitHub-backed queue comment", asy
           runtimeState: {
             activeBranch: "codex/issue-173"
           }
-        }
-      }
+        },
+        approvalActor: "requester"
+      },
+      sender: { login: "ignored-sender" }
     },
     gatewayResult: {
       repository: "sample-org/sunaba-eye",
@@ -560,6 +562,8 @@ test("remote Codex vps_runner dispatch posts a GitHub-backed queue comment", asy
   assert.equal(body.includes("VTDD-managed VPS runner execution request."), true);
   assert.equal(body.includes('"transport": "vps_runner"'), true);
   assert.equal(body.includes('"repository": "sample-org/sunaba-eye"'), true);
+  assert.equal(body.includes('"approvalActor": "requester"'), true);
+  assert.equal(body.includes("@marushu"), false);
   assert.equal(body.includes("Do not merge."), true);
   assert.equal(body.includes("docs/pr-template-model.md"), true);
   assert.equal(body.includes("scripts/render-pr-body.mjs"), true);
