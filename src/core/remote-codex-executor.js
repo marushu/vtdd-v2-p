@@ -379,6 +379,25 @@ export async function retrieveRemoteCodexExecutionProgress(input = {}) {
   });
 }
 
+export async function retrieveVpsRunnerHealthStatus(input = {}) {
+  const progress = await retrieveRemoteCodexExecutionProgress({
+    ...input,
+    executorTransport: RemoteCodexExecutorTransport.VPS_RUNNER
+  });
+  if (!progress.ok) {
+    return progress;
+  }
+
+  return {
+    ok: true,
+    health: buildVpsRunnerHealthStatus({
+      progress: progress.progress,
+      env: input?.env
+    }),
+    progress: progress.progress
+  };
+}
+
 async function retrieveControlRepositoryWorkflowProgress({
   executionId,
   token,
@@ -1072,6 +1091,85 @@ function buildVpsRunnerPickupBlocker({ queueComment, env }) {
     graceSeconds,
     ageSeconds
   };
+}
+
+function buildVpsRunnerHealthStatus({ progress, env }) {
+  const runnerEvent = normalizeObject(progress?.runnerEvent);
+  const blocker = normalizeObject(progress?.blocker);
+  const pullRequest = normalizeObject(progress?.pullRequest);
+  const branch = normalizeObject(progress?.branch);
+  const lastSeenAt =
+    normalizeText(runnerEvent.updatedAt) ||
+    normalizeText(runnerEvent.heartbeatAt) ||
+    null;
+  const heartbeatAt = normalizeText(runnerEvent.heartbeatAt) || null;
+  const queuePickedUp = Boolean(
+    Object.keys(runnerEvent).length > 0 ||
+      Object.keys(branch).length > 0 ||
+      Object.keys(pullRequest).length > 0
+  );
+  const queueStatus = blocker.error === "vps_runner_pickup_not_observed"
+    ? "stale"
+    : queuePickedUp
+      ? "picked_up"
+      : "queued";
+  const currentStep =
+    normalizeText(runnerEvent.currentStep) ||
+    normalizeText(runnerEvent.lastEvent) ||
+    (Object.keys(pullRequest).length > 0
+      ? "pull_request_observed"
+      : Object.keys(branch).length > 0
+        ? "branch_observed"
+        : "queue_waiting");
+  const unavailableReason = buildVpsRunnerUnavailableReason({ progress, blocker });
+  const runnerAlive = unavailableReason ? false : Boolean(lastSeenAt);
+  const runnerStatus = runnerAlive ? "alive" : "unavailable";
+
+  return {
+    executionId: normalizeText(progress?.executionId) || null,
+    transport: RemoteCodexExecutorTransport.VPS_RUNNER,
+    runnerStatus,
+    runnerAlive,
+    lastSeenAt,
+    heartbeatAt,
+    queue: {
+      status: queueStatus,
+      pickedUp: queuePickedUp,
+      commentId: normalizePositiveInteger(progress?.queueCommentId),
+      commentUrl: normalizeText(progress?.queueCommentUrl) || null
+    },
+    currentStep,
+    progressStatus: normalizeText(progress?.status) || RemoteCodexExecutionStatus.UNKNOWN,
+    reason: unavailableReason?.reason || null,
+    reasonCode: unavailableReason?.code || null,
+    staleThresholdSeconds: normalizeNonNegativeNumber(env?.VPS_RUNNER_EVENT_STALE_SECONDS ?? 600)
+  };
+}
+
+function buildVpsRunnerUnavailableReason({ progress, blocker }) {
+  const progressStatus = normalizeText(progress?.status);
+  const code = normalizeText(blocker?.error);
+  if (code) {
+    return {
+      code,
+      reason:
+        normalizeText(blocker.reason) ||
+        "VPS runner status is unavailable from safe GitHub runtime truth"
+    };
+  }
+  if (progressStatus === RemoteCodexExecutionStatus.QUEUED) {
+    return {
+      code: "vps_runner_pickup_pending",
+      reason: "VPS runner pickup has not been observed yet"
+    };
+  }
+  if (!normalizeText(progress?.runnerEvent?.updatedAt) && !normalizeText(progress?.runnerEvent?.heartbeatAt)) {
+    return {
+      code: "vps_runner_last_seen_missing",
+      reason: "VPS runner has not reported a heartbeat or event timestamp"
+    };
+  }
+  return null;
 }
 
 function buildControlRunnerTargetRuntimeTruth({

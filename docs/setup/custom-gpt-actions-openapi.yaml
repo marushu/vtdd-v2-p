@@ -897,6 +897,60 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/VtddGenericResponse"
+  /v2/action/vps-runner-status:
+    get:
+      operationId: vtddVpsRunnerStatus
+      summary: Read explicit VPS runner health and status for a bounded execution.
+      parameters:
+        - name: executionId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: repository
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: issueNumber
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: branch
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: VPS runner health/status and matching execution progress
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "401":
+          description: Missing machine auth
+        "403":
+          description: Invalid machine auth
+        "404":
+          description: VPS runner execution not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "422":
+          description: VPS runner status request invalid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "503":
+          description: VPS runner status lookup failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
   /v2/retrieve/constitution:
     get:
       operationId: vtddRetrieveConstitution

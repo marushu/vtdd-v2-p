@@ -159,7 +159,8 @@ export {
   createRemoteCodexExecutionRequest,
   dispatchRemoteCodexExecution,
   getRemoteCodexExecutorTransportRegistry,
-  retrieveRemoteCodexExecutionProgress
+  retrieveRemoteCodexExecutionProgress,
+  retrieveVpsRunnerHealthStatus
 } from "./remote-codex-executor.js";
 export {
   DEFAULT_GEMINI_REVIEW_MODEL,

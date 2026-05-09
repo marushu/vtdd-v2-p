@@ -332,6 +332,15 @@ failure as blocked. If the latest running event is older than the stale
 threshold, Butler must surface `vps_runner_event_stale` with the last step and
 age instead of treating an existing pushed branch as healthy progress forever.
 
+For explicit VPS runner health checks, Butler uses `vtddVpsRunnerStatus`. The
+status check is read-only and is derived from the same GitHub queue comment,
+runner event comments, branch, and PR truth as `vtddExecutionProgress`. It
+returns a short `health` summary with `runnerStatus`, `runnerAlive`,
+`lastSeenAt`, `heartbeatAt`, queue pickup state, `currentStep`, and a safe
+`reasonCode` / `reason` when the runner is stale, unavailable, or not yet
+picked up. This endpoint does not SSH into the VPS, stream logs, mutate
+credentials, deploy, merge, close Issues, or administer the runner.
+
 When Codex reaches an approval or scope boundary, the observable return path is
 GitHub state that Butler can read, not a hidden direct Codex-to-Butler channel.
 

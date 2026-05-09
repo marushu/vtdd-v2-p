@@ -21,6 +21,7 @@ import {
   normalizeScopeSnapshot,
   normalizeAutonomyMode,
   retrieveRemoteCodexExecutionProgress,
+  retrieveVpsRunnerHealthStatus,
   retrieveCrossIssueMemoryIndex,
   retrieveDecisionLogReferences,
   retrieveProposalLogReferences,
@@ -299,6 +300,42 @@ export default {
       return json(200, {
         ok: true,
         progress: progress.progress
+      });
+    }
+
+    if (request.method === "GET" && isApiPath(url.pathname, "/action/vps-runner-status")) {
+      const auth = authorizeGatewayRequest({
+        request,
+        env,
+        apiSuffix: "/action/vps-runner-status"
+      });
+      if (!auth.ok) {
+        return json(auth.status, {
+          ok: false,
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+
+      const status = await retrieveVpsRunnerHealthStatus({
+        executionId: url.searchParams.get("executionId"),
+        repository: url.searchParams.get("repository"),
+        issueNumber: url.searchParams.get("issueNumber"),
+        branch: url.searchParams.get("branch"),
+        env
+      });
+      if (!status.ok) {
+        return json(status.status ?? 503, {
+          ok: false,
+          error: status.error,
+          reason: status.reason
+        });
+      }
+
+      return json(200, {
+        ok: true,
+        health: status.health,
+        progress: status.progress
       });
     }
 

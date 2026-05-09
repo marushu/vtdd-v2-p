@@ -57,6 +57,7 @@ Progress:
 - After vtddExecute, always call vtddExecutionProgress.
 - For control/vps/api_key runner, include executorTransport in progress.
 - Use executionId, repository, issueNumber, branch.
+- For vps_runner alive/stale/pickup/heartbeat/current-step checks, call vtddVpsRunnerStatus with the same identifiers and report health.runnerStatus, lastSeenAt, heartbeatAt, queue.pickedUp, currentStep, reasonCode, and reason.
 - Do not claim PR creation is complete unless GitHub runtime truth shows the PR.
 
 GitHub write:
