@@ -55,6 +55,19 @@ The Action schema is intentionally kept importer-safe:
 
 If the Custom GPT importer rejects the YAML form, use the JSON form instead.
 
+## Runtime Manifest Parity Check
+
+Before merge, CI runs `npm test`, which includes `npm run check:self-parity`.
+The check compares the canonical Action Schema route and `operationId` entries
+in `docs/setup/custom-gpt-actions-openapi.yaml` against the Worker runtime
+capability manifest in `src/core/custom-gpt-setup-artifacts.js`.
+
+When adding a Custom GPT action route, update both the Action Schema and
+`RUNTIME_SETUP_MANIFEST`. For example, an Action Schema addition such as
+`/v2/retrieve/operational-memory` with `vtddRetrieveOperationalMemory` must also
+be present in the runtime manifest before the PR can merge. This check is
+static and does not deploy production.
+
 ## Local Desktop Bootstrap Vault
 
 Operator-owned root credential material is expected to live outside the

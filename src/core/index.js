@@ -207,7 +207,9 @@ export {
   buildCustomGptRecoveryBundle,
   CustomGptSetupArtifact,
   evaluateButlerSelfParity,
+  evaluateRuntimeSetupManifestParity,
   renderCustomGptRecoveryPage,
+  RUNTIME_SETUP_MANIFEST,
   retrieveCustomGptSetupArtifact
 } from "./custom-gpt-setup-artifacts.js";
 export { GitHubReadResource, retrieveGitHubReadPlane } from "./github-read-plane.js";

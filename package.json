@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test",
+    "check:self-parity": "node scripts/check-runtime-self-parity.mjs",
+    "test": "node --test && npm run check:self-parity",
     "pr-body:validate": "node scripts/validate-pr-body.mjs .github/pull_request_template.md"
   },
   "engines": {
