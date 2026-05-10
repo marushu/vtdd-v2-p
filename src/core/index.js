@@ -185,6 +185,10 @@ export {
   resolveGeminiReviewTrigger
 } from "./gemini-pr-review.js";
 export {
+  ReviewerOperatorSeverity,
+  formatReviewerOperatorSummary
+} from "./reviewer-operator-summary.js";
+export {
   CODEX_REVIEW_FALLBACK_MARKER,
   CodexReviewFallbackBlocker,
   CodexReviewFallbackStatus,
