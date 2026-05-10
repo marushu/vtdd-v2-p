@@ -375,7 +375,17 @@ function normalizeSignals(input) {
 
   return [...runtimeSignals, ...gapSignals, ...recurringPainSignals, ...governanceSignals, ...capabilitySignals]
     .map(normalizeSignalObject)
-    .filter((signal) => normalizeText(signal.title ?? signal.description ?? signal.summary));
+    .filter(hasDetectableSignalContent);
+}
+
+function hasDetectableSignalContent(signal) {
+  if (normalizeText(signal.title ?? signal.description ?? signal.summary)) {
+    return true;
+  }
+  if (normalizeCount(signal.recurrenceCount ?? signal.recurrence) > 1) {
+    return true;
+  }
+  return normalizeEvidence(signal).length > 0;
 }
 
 function normalizeSignalObject(value) {

@@ -110,6 +110,29 @@ test("proactive engine detects recurrence-only runtime signals as recurring pain
   assert.equal(proposal.priority.factors.recurrenceFrequency, 75);
 });
 
+test("proactive engine keeps recurrence-only evidence without title text", () => {
+  const result = buildProactiveOperationalProposals({
+    signals: [
+      {
+        source: "operational_memory",
+        recurrenceCount: 2,
+        evidence: ["Owner had to repeat the same unstated remediation twice."]
+      }
+    ]
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.summary.signalCount, 1);
+  assert.equal(result.summary.recurringPainCount, 1);
+
+  const proposal = result.proposals[0];
+  assert.equal(proposal.target, ProactiveDetectionTarget.RECURRING_PAIN);
+  assert.equal(proposal.detectedFrom, "operational_memory");
+  assert.equal(proposal.title, "operations: reduce recurring manual intervention");
+  assert.equal(proposal.recurrence, 2);
+  assert.deepEqual(proposal.evidence, ["Owner had to repeat the same unstated remediation twice."]);
+});
+
 test("proactive engine improves proposal context with historical memory and duplicate candidates", () => {
   const result = buildProactiveOperationalProposals({
     signals: [

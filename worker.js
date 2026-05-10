@@ -27124,7 +27124,16 @@ function normalizeSignals(input) {
     ...normalizeSignalObject(item),
     target: ProactiveDetectionTarget.CAPABILITY_GAP
   }));
-  return [...runtimeSignals, ...gapSignals, ...recurringPainSignals, ...governanceSignals, ...capabilitySignals].map(normalizeSignalObject).filter((signal) => normalizeText18(signal.title ?? signal.description ?? signal.summary));
+  return [...runtimeSignals, ...gapSignals, ...recurringPainSignals, ...governanceSignals, ...capabilitySignals].map(normalizeSignalObject).filter(hasDetectableSignalContent);
+}
+function hasDetectableSignalContent(signal) {
+  if (normalizeText18(signal.title ?? signal.description ?? signal.summary)) {
+    return true;
+  }
+  if (normalizeCount2(signal.recurrenceCount ?? signal.recurrence) > 1) {
+    return true;
+  }
+  return normalizeEvidence(signal).length > 0;
 }
 function normalizeSignalObject(value) {
   if (typeof value === "string") {
