@@ -519,6 +519,43 @@ test("VPS runner lead time keeps pr_created_at distinct from completed_at", asyn
   assert.equal(parsed.event.leadTime.durations.total_lead_time.label, "4m 10s");
 });
 
+test("VPS runner completed event records both PR creation and completion timestamps", async () => {
+  const calls = [];
+  const payload = {
+    executionId: "exec-completed-1",
+    repository: "sample-org/vtdd-v2",
+    issueNumber: 260,
+    lifecycle: {
+      queuedAt: "2026-05-09T10:00:00.000Z",
+      pickedUpAt: "2026-05-09T10:00:12.000Z",
+      codexStartedAt: "2026-05-09T10:00:20.000Z",
+      branchPushedAt: "2026-05-09T10:04:02.000Z"
+    }
+  };
+
+  await postVpsRunnerEvent({
+    githubFetch: async (url, init = {}) => {
+      calls.push({ url, init });
+      return { id: 26004 };
+    },
+    payload,
+    event: {
+      status: "completed",
+      lastEvent: "pull_request_created",
+      currentStep: "pull_request_created",
+      updatedAt: "2026-05-09T10:04:10.000Z"
+    }
+  });
+
+  const parsed = parseVpsRunnerEventComment(calls[0].init.body.body);
+
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.event.leadTime.pr_created_at, "2026-05-09T10:04:10.000Z");
+  assert.equal(parsed.event.leadTime.completed_at, "2026-05-09T10:04:10.000Z");
+  assert.equal(parsed.event.leadTime.durations.pr_creation_duration.label, "8s");
+  assert.equal(parsed.event.leadTime.durations.total_lead_time.label, "4m 10s");
+});
+
 test("VPS runner diagnostic summaries redact secrets and stay short", () => {
   const summary = summarizeDiagnosticText(
     [
@@ -844,6 +881,8 @@ test("VPS runner PR body satisfies guarded PR template markers", () => {
   assert.equal(body.includes("## Surface Update Checklist"), true);
   assert.equal(body.includes("Execution ID: remote-codex-issue194-test"), true);
   assert.equal(body.includes("No merge or deploy is performed by the VPS runner."), true);
+  assert.equal(body.includes("issue-specific live E2E must be recorded separately"), true);
+  assert.equal(body.includes("Not run by VPS runner; Butler must read progress"), true);
 });
 
 test("VPS runner preserves a guarded-policy-compliant PR body candidate", () => {

@@ -756,7 +756,7 @@ test("remote Codex vps_runner progress exposes execution lead time from runner e
                   "<!-- vtdd:vps-runner-event:remote-codex-issue260-vps -->",
                   "```json",
                   JSON.stringify({
-                    status: "pr_created",
+                    status: "completed",
                     lastEvent: "pull_request_created",
                     currentStep: "pull_request_created",
                     updatedAt: "2026-05-09T10:04:10.000Z"
@@ -790,7 +790,7 @@ test("remote Codex vps_runner progress exposes execution lead time from runner e
   assert.equal(progress.progress.leadTime.codex_started_at, "2026-05-09T10:00:20.000Z");
   assert.equal(progress.progress.leadTime.branch_pushed_at, "2026-05-09T10:04:02.000Z");
   assert.equal(progress.progress.leadTime.pr_created_at, "2026-05-09T10:04:10.000Z");
-  assert.equal(progress.progress.leadTime.completed_at, null);
+  assert.equal(progress.progress.leadTime.completed_at, "2026-05-09T10:04:10.000Z");
   assert.equal(progress.progress.leadTime.durations.queue_wait_duration.label, "12s");
   assert.equal(progress.progress.leadTime.durations.codex_execution_duration.label, "3m 42s");
   assert.equal(progress.progress.leadTime.durations.pr_creation_duration.label, "8s");
