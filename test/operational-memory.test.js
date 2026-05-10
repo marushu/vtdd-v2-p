@@ -5,9 +5,11 @@ import {
   OPERATIONAL_MEMORY_STORAGE_CANDIDATES,
   OperationalMemoryLayer,
   OperationalMemorySignal,
+  RuntimeTruthRetrievalTrigger,
   buildOperationalMemoryArchitecture,
   createInMemoryMemoryProvider,
-  retrieveOperationalMemory
+  retrieveOperationalMemory,
+  retrieveRuntimeTruthOperationalMemory
 } from "../src/core/index.js";
 
 test("operational memory architecture declares the four issue #249 layers and storage candidates", () => {
@@ -29,6 +31,14 @@ test("operational memory architecture declares the four issue #249 layers and st
   assert.equal(architecture.nonGoals.includes("personality_simulation"), true);
   assert.equal(
     architecture.retrievalSignals.includes(OperationalMemorySignal.GOVERNANCE_IMPORTANCE),
+    true
+  );
+  assert.equal(
+    architecture.retrievalSignals.includes(OperationalMemorySignal.OPERATIONAL_IMPACT),
+    true
+  );
+  assert.equal(
+    architecture.retrievalSignals.includes(OperationalMemorySignal.EMOTIONAL_INTENSITY),
     true
   );
 });
@@ -163,6 +173,85 @@ test("operational memory deduplicates semantic and structured records without st
   assert.equal(result.compactContext.filter((item) => item.id === "same-record").length, 1);
 });
 
+test("runtime truth trigger retrieves operational memory for proposal integration", async () => {
+  const provider = createInMemoryMemoryProvider();
+  await seedRuntimeTriggeredMemory(provider);
+
+  const result = await retrieveRuntimeTruthOperationalMemory(provider, {
+    trigger: RuntimeTruthRetrievalTrigger.PR,
+    text: "PR conflict branch collision orchestration failure",
+    repository: "repo-b/vtdd",
+    limit: 4,
+    now: "2026-05-10T00:00:00.000Z",
+    runtimeTruth: {
+      currentState: "GitHub runtime truth shows PR conflict and branch collision",
+      source: "github_app",
+      checkedAt: "2026-05-10T01:00:00Z"
+    },
+    prContext: {
+      title: "PR #251 has conflict",
+      summary: "mergeability is blocked by branch collision"
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.runtimeTrigger, RuntimeTruthRetrievalTrigger.PR);
+  assert.equal(result.proactivePainDetected, true);
+  assert.equal(result.compactContext[0].id, "repair-branch-collision");
+  assert.equal(result.compactContext[0].scoreSignals.operationalImpact > 0, true);
+  assert.equal(result.compactContext[0].scoreSignals.emotionalIntensity > 0, true);
+  assert.equal(result.proposalIntegration.remediationProposal.recommended, true);
+  assert.equal(result.proposalIntegration.prioritization.priority, "high");
+  assert.equal(result.proposalIntegration.orchestrationSuggestion.recommended, true);
+  assert.deepEqual(result.proposalIntegration.uses, [
+    "issue_proposal",
+    "remediation_proposal",
+    "prioritization",
+    "orchestration_suggestion"
+  ]);
+});
+
+test("runtime truth retrieval applies cross-repository operational learning", async () => {
+  const provider = createInMemoryMemoryProvider();
+  await seedRuntimeTriggeredMemory(provider);
+
+  const result = await retrieveRuntimeTruthOperationalMemory(provider, {
+    trigger: RuntimeTruthRetrievalTrigger.CI_INSTABILITY,
+    text: "CI instability recurring test failure",
+    repository: "repo-b/vtdd",
+    limit: 5,
+    now: "2026-05-10T00:00:00.000Z",
+    runtimeTruth: {
+      currentState: "checks are unstable",
+      source: "github_app",
+      checkedAt: "2026-05-10T01:00:00Z"
+    }
+  });
+
+  assert.equal(result.ok, true);
+  const crossRepo = result.proposalIntegration.crossRepositoryLearning.find(
+    (item) => item.id === "decision-ci-recurrence"
+  );
+  assert.equal(crossRepo.repository, "repo-a/vtdd");
+  assert.equal(
+    result.compactContext.some((item) => item.id === "decision-ci-recurrence" && item.crossRepository),
+    true
+  );
+});
+
+test("runtime truth retrieval rejects unsupported triggers instead of generic search", async () => {
+  const provider = createInMemoryMemoryProvider();
+
+  const result = await retrieveRuntimeTruthOperationalMemory(provider, {
+    trigger: "random semantic search",
+    text: "anything"
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.status, 422);
+  assert.equal(result.blockedByRule, "runtime_truth_retrieval_trigger_required");
+});
+
 async function seedOperationalMemory(provider) {
   await provider.store({
     id: "decision-reviewer-policy",
@@ -223,5 +312,75 @@ async function seedOperationalMemory(provider) {
     priority: 65,
     tags: ["proposal_log", "proposal"],
     createdAt: "2026-05-08T00:00:00Z"
+  });
+}
+
+async function seedRuntimeTriggeredMemory(provider) {
+  await provider.store({
+    id: "repair-branch-collision",
+    type: MemoryRecordType.REPAIR_CASE,
+    content: {
+      failurePattern: "PR conflict from branch collision and orchestration failure",
+      remediation: "Pause completion claims, prioritize rebase/remediation proposal, then create a follow-up issue if the collision recurs.",
+      recurrenceCount: 3,
+      emotionalIntensity: 50,
+      operationalImpact: 70
+    },
+    metadata: {
+      repository: "repo-a/vtdd",
+      recurrenceCount: 3,
+      emotionalIntensity: 50,
+      operationalImpact: 70
+    },
+    priority: 92,
+    tags: [
+      "repair_case",
+      "pr",
+      "conflict",
+      "branch",
+      "collision",
+      "orchestration",
+      "failure",
+      "recurring",
+      "frustration"
+    ],
+    createdAt: "2026-05-08T00:00:00Z"
+  });
+
+  await provider.store({
+    id: "decision-ci-recurrence",
+    type: MemoryRecordType.DECISION_LOG,
+    content: {
+      decision: "Recurring CI instability should trigger runtime/history retrieval before proposing reruns.",
+      rationale: "Repeated failures are operational pain, not isolated flakes.",
+      recurrenceCount: 4,
+      operationalImpact: 65
+    },
+    metadata: {
+      repository: "repo-a/vtdd",
+      recurrenceCount: 4,
+      operationalImpact: 65
+    },
+    priority: 88,
+    tags: ["decision_log", "ci", "instability", "failure", "recurring", "operator_pain"],
+    createdAt: "2026-05-07T00:00:00Z"
+  });
+
+  await provider.store({
+    id: "proposal-notification-gap",
+    type: MemoryRecordType.PROPOSAL_LOG,
+    content: {
+      hypothesis: "Notification failure should be treated as an operator telemetry gap.",
+      options: ["issue proposal", "remediation proposal"],
+      relatedIssue: 251,
+      proposedBy: "butler",
+      timestamp: "2026-05-06T00:00:00Z"
+    },
+    metadata: {
+      repository: "repo-c/vtdd"
+    },
+    priority: 80,
+    tags: ["proposal_log", "notification", "telemetry", "operator_pain"],
+    createdAt: "2026-05-06T00:00:00Z"
   });
 }

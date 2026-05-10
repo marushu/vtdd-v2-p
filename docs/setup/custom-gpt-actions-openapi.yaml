@@ -86,6 +86,10 @@ components:
               type:
                 - string
                 - "null"
+            trigger:
+              type:
+                - string
+                - "null"
             source:
               type:
                 - string
@@ -102,6 +106,7 @@ components:
           enum:
             - runtime_truth_current_state_overrides_memory_background_reference
             - memory_background_reference_only
+            - runtime_truth_triggers_memory_retrieval_but_current_state_still_overrides_historical_memory
         compactContext:
           type: array
           items:
@@ -125,6 +130,10 @@ components:
                   - "null"
               crossRepository:
                 type: boolean
+              runtimeTrigger:
+                type: string
+              suggestedUse:
+                type: string
               createdAt:
                 type:
                   - string
@@ -144,7 +153,13 @@ components:
                     type: integer
                   recurrence:
                     type: integer
+                  operationalImpact:
+                    type: integer
+                  similarity:
+                    type: integer
                   recency:
+                    type: integer
+                  emotionalIntensity:
                     type: integer
                 additionalProperties: true
               use:
@@ -185,6 +200,22 @@ components:
               type: integer
             dumpedAllMemory:
               type: boolean
+          additionalProperties: true
+        runtimeTrigger:
+          type:
+            - string
+            - "null"
+        supportedTriggers:
+          type: array
+          items:
+            type: string
+        proactivePainDetected:
+          type: boolean
+        recurringOperationalPain:
+          type: object
+          additionalProperties: true
+        proposalIntegration:
+          type: object
           additionalProperties: true
       additionalProperties: true
     VtddGatewayRequest:
@@ -1394,6 +1425,21 @@ paths:
           required: false
           schema:
             type: string
+        - name: trigger
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - issue
+              - pr
+              - blocker
+              - execution_failure
+              - review_objection
+              - ci_instability
+              - deployment_failure
+              - orchestration_anomaly
+          description: Runtime truth trigger for Issue #251 retrieval. When present, retrieval returns proposal/remediation/prioritization/orchestration integration fields.
         - name: currentState
           in: query
           required: false

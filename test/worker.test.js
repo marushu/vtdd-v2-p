@@ -4910,6 +4910,55 @@ test("worker returns compact operational memory through retrieve route", async (
   assert.equal(body.retrievalSignals.dumpedAllMemory, false);
 });
 
+test("worker returns runtime-truth-aware operational memory through retrieve route", async () => {
+  const provider = createInMemoryMemoryProvider();
+  await provider.store({
+    id: "runtime-repair-1",
+    type: MemoryRecordType.REPAIR_CASE,
+    content: {
+      failurePattern: "PR conflict from branch collision and orchestration anomaly",
+      remediation: "Use prior branch-collision remediation before proposing completion.",
+      recurrenceCount: 3,
+      emotionalIntensity: 50,
+      operationalImpact: 70
+    },
+    metadata: {
+      repository: "repo-a/vtdd",
+      recurrenceCount: 3,
+      emotionalIntensity: 50,
+      operationalImpact: 70
+    },
+    priority: 92,
+    tags: ["repair_case", "pr", "conflict", "orchestration", "failure", "recurring", "frustration"],
+    createdAt: "2026-05-08T00:00:00Z"
+  });
+
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/v2/retrieve/operational-memory?trigger=pr&text=branch%20collision%20orchestration&repository=repo-b/vtdd&currentState=PR%20conflict&runtimeTruthSource=github_app&checkedAt=2026-05-10T01%3A00%3A00Z&limit=3",
+      {
+        headers: {
+          authorization: "Bearer test-token"
+        }
+      }
+    ),
+    {
+      ...gatewayAuthEnv,
+      MEMORY_PROVIDER: provider
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.runtimeTrigger, "pr");
+  assert.equal(body.proactivePainDetected, true);
+  assert.equal(body.proposalIntegration.remediationProposal.recommended, true);
+  assert.equal(body.proposalIntegration.orchestrationSuggestion.recommended, true);
+  assert.equal(body.compactContext[0].id, "runtime-repair-1");
+  assert.equal(body.compactContext[0].crossRepository, true);
+});
+
 test("worker returns not_found for unknown route", async () => {
   const response = await worker.fetch(new Request("https://example.com/unknown"));
   assert.equal(response.status, 404);

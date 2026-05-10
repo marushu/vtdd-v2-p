@@ -73,6 +73,9 @@ dump. Ranking uses:
 - recency
 - governance importance
 - recurrence
+- operational impact
+- similarity
+- emotional intensity
 
 The output must preserve the distinction between:
 
@@ -95,5 +98,15 @@ The function returns:
 - the four-layer architecture
 - compact ranked references
 - references grouped by layer
-- score signals for relevance, recency, governance importance, and recurrence
+- score signals for relevance, recency, governance importance, recurrence,
+  operational impact, similarity, and emotional intensity
 - an explicit memory-use rule that prevents memory from overriding runtime truth
+
+`retrieveRuntimeTruthOperationalMemory(provider, input)` is the Issue #251
+runtime-triggered entry point. It accepts the trigger families `issue`, `pr`,
+`blocker`, `execution_failure`, `review_objection`, `ci_instability`,
+`deployment_failure`, and `orchestration_anomaly`, then returns compact
+operational memory plus proposal integration fields for issue proposal,
+remediation proposal, prioritization, and orchestration suggestion. It keeps
+runtime truth as the current-state authority and uses historical memory only as
+background operational evidence.

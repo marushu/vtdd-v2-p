@@ -24375,7 +24375,20 @@ var OperationalMemorySignal = Object.freeze({
   RELEVANCE: "relevance",
   RECENCY: "recency",
   GOVERNANCE_IMPORTANCE: "governance_importance",
-  RECURRENCE: "recurrence"
+  RECURRENCE: "recurrence",
+  OPERATIONAL_IMPACT: "operational_impact",
+  SIMILARITY: "similarity",
+  EMOTIONAL_INTENSITY: "emotional_intensity"
+});
+var RuntimeTruthRetrievalTrigger = Object.freeze({
+  ISSUE: "issue",
+  PR: "pr",
+  BLOCKER: "blocker",
+  EXECUTION_FAILURE: "execution_failure",
+  REVIEW_OBJECTION: "review_objection",
+  CI_INSTABILITY: "ci_instability",
+  DEPLOYMENT_FAILURE: "deployment_failure",
+  ORCHESTRATION_ANOMALY: "orchestration_anomaly"
 });
 var OPERATIONAL_MEMORY_STORAGE_CANDIDATES = Object.freeze([
   "cloudflare_d1",
@@ -24461,7 +24474,10 @@ function buildOperationalMemoryArchitecture() {
       OperationalMemorySignal.RELEVANCE,
       OperationalMemorySignal.RECENCY,
       OperationalMemorySignal.GOVERNANCE_IMPORTANCE,
-      OperationalMemorySignal.RECURRENCE
+      OperationalMemorySignal.RECURRENCE,
+      OperationalMemorySignal.OPERATIONAL_IMPACT,
+      OperationalMemorySignal.SIMILARITY,
+      OperationalMemorySignal.EMOTIONAL_INTENSITY
     ],
     runtimeTruthRule: "runtime truth is evaluated separately and must override memory for current state"
   };
@@ -24510,7 +24526,10 @@ async function retrieveOperationalMemory(provider, input = {}) {
           OperationalMemorySignal.RELEVANCE,
           OperationalMemorySignal.GOVERNANCE_IMPORTANCE,
           OperationalMemorySignal.RECURRENCE,
-          OperationalMemorySignal.RECENCY
+          OperationalMemorySignal.OPERATIONAL_IMPACT,
+          OperationalMemorySignal.SIMILARITY,
+          OperationalMemorySignal.RECENCY,
+          OperationalMemorySignal.EMOTIONAL_INTENSITY
         ],
         limit,
         dumpedAllMemory: false
@@ -24525,6 +24544,60 @@ async function retrieveOperationalMemory(provider, input = {}) {
       details: normalizeText14(error?.message) || "unknown provider error"
     };
   }
+}
+async function retrieveRuntimeTruthOperationalMemory(provider, input = {}) {
+  const runtimeTruth = normalizeRuntimeTruth2(input.runtimeTruth);
+  const trigger = normalizeRuntimeTrigger(input.trigger ?? input.triggerType ?? runtimeTruth?.trigger);
+  if (!trigger) {
+    return {
+      ok: false,
+      status: 422,
+      blockedByRule: "runtime_truth_retrieval_trigger_required",
+      reason: "Issue #251 retrieval requires a runtime truth trigger"
+    };
+  }
+  const runtimeQueryText = buildRuntimeTriggeredQueryText({
+    trigger,
+    text: input.text,
+    runtimeTruth: input.runtimeTruth,
+    issueContext: input.issueContext,
+    prContext: input.prContext,
+    blocker: input.blocker
+  });
+  const retrieved = await retrieveOperationalMemory(provider, {
+    ...input,
+    text: runtimeQueryText,
+    runtimeTruth: {
+      ...normalizeObject6(input.runtimeTruth),
+      trigger
+    }
+  });
+  if (!retrieved.ok) {
+    return retrieved;
+  }
+  const compactContext = retrieved.compactContext.map((reference) => ({
+    ...reference,
+    runtimeTrigger: trigger,
+    suggestedUse: classifyOperationalSuggestion(reference, trigger)
+  }));
+  const painSignals = detectRecurringOperationalPain(compactContext);
+  return {
+    ...retrieved,
+    queryText: runtimeQueryText,
+    runtimeTrigger: trigger,
+    supportedTriggers: Object.values(RuntimeTruthRetrievalTrigger),
+    compactContext,
+    referencesByLayer: groupByLayer(compactContext),
+    proactivePainDetected: painSignals.detected,
+    recurringOperationalPain: painSignals,
+    proposalIntegration: buildProposalIntegration({
+      trigger,
+      compactContext,
+      painSignals,
+      runtimeTruth
+    }),
+    memoryUseRule: "runtime_truth_triggers_memory_retrieval_but_current_state_still_overrides_historical_memory"
+  };
 }
 async function retrieveStructuredOperationalRecords(provider, input = {}) {
   const limit = normalizeLimit5(input.limit, DEFAULT_LIMIT2);
@@ -24549,7 +24622,10 @@ function toOperationalMemoryReference(record, input = {}) {
     relevance: scoreRelevance(textBlob, queryText),
     governanceImportance: scoreGovernanceImportance(record, tags),
     recurrence: scoreRecurrence(record, tags),
-    recency: scoreRecency(record?.createdAt, input.now)
+    operationalImpact: scoreOperationalImpact(record, tags),
+    similarity: scoreSimilarity(textBlob, queryText, tags),
+    recency: scoreRecency(record?.createdAt, input.now),
+    emotionalIntensity: scoreEmotionalIntensity(record, tags)
   };
   return {
     id: normalizeText14(record?.id),
@@ -24595,6 +24671,56 @@ function scoreRecurrence(record, tags) {
   const numericScore = Number.isFinite(count) && count > 0 ? Math.min(60, count * 15) : 0;
   return Math.min(100, Math.round(tagScore + numericScore));
 }
+function scoreOperationalImpact(record, tags) {
+  const metadata = normalizeObject6(record?.metadata);
+  const content = normalizeObject6(record?.content);
+  const priority = normalizePriority2(record?.priority);
+  const impact = Number(metadata.operationalImpact ?? content.operationalImpact ?? 0);
+  const impactTags = [
+    "blocker",
+    "failure",
+    "ci",
+    "deploy",
+    "deployment",
+    "reviewer",
+    "review",
+    "orchestration",
+    "merge",
+    "runtime_truth"
+  ];
+  const tagScore = tags.some((tag) => impactTags.includes(tag)) ? 30 : 0;
+  const numericScore = Number.isFinite(impact) && impact > 0 ? Math.min(40, impact) : 0;
+  return Math.min(100, Math.round(priority * 0.3 + tagScore + numericScore));
+}
+function scoreSimilarity(textBlob, queryText, tags) {
+  const relevance = scoreRelevance(textBlob, queryText);
+  const tokens = tokenize(queryText);
+  if (tokens.length === 0) {
+    return 0;
+  }
+  const tagMatches = tokens.filter((token) => tags.includes(token)).length;
+  return Math.min(100, Math.round(relevance * 0.75 + tagMatches / tokens.length * 25));
+}
+function scoreEmotionalIntensity(record, tags) {
+  const metadata = normalizeObject6(record?.metadata);
+  const content = normalizeObject6(record?.content);
+  const explicit = Number(metadata.emotionalIntensity ?? content.emotionalIntensity ?? 0);
+  const intensityTags = [
+    "frustration",
+    "frustrating",
+    "pain",
+    "recurring_pain",
+    "operator_pain",
+    "cognitive_load",
+    "urgent",
+    "blocked"
+  ];
+  const tagScore = tags.some((tag) => intensityTags.includes(tag)) ? 45 : 0;
+  const text = `${JSON.stringify(content)} ${JSON.stringify(metadata)}`.toLowerCase();
+  const textScore = /\b(frustrat|pain|exhaust|annoy|again|repeated|cognitive load)\b/.test(text) ? 25 : 0;
+  const explicitScore = Number.isFinite(explicit) && explicit > 0 ? Math.min(55, explicit) : 0;
+  return Math.min(100, Math.round(tagScore + textScore + explicitScore));
+}
 function scoreRecency(createdAt, now) {
   const created = Date.parse(createdAt);
   const current = Date.parse(now);
@@ -24612,7 +24738,7 @@ function scoreRecency(createdAt, now) {
 }
 function calculateOperationalMemoryScore(signals) {
   return Math.round(
-    signals.relevance * 0.4 + signals.governanceImportance * 0.25 + signals.recurrence * 0.2 + signals.recency * 0.15
+    signals.relevance * 0.4 + signals.governanceImportance * 0.18 + signals.recurrence * 0.16 + signals.operationalImpact * 0.12 + signals.similarity * 0.08 + signals.recency * 0.04 + signals.emotionalIntensity * 0.02
   );
 }
 function compareOperationalMemoryReferences(a, b) {
@@ -24680,10 +24806,105 @@ function normalizeRuntimeTruth2(value) {
   }
   return {
     currentState: normalizeText14(runtimeTruth.currentState) || null,
+    trigger: normalizeRuntimeTrigger(runtimeTruth.trigger ?? runtimeTruth.triggerType),
     source: normalizeText14(runtimeTruth.source) || null,
     checkedAt: normalizeText14(runtimeTruth.checkedAt) || null,
     overridesMemory: true
   };
+}
+function normalizeRuntimeTrigger(value) {
+  const trigger = normalizeText14(value).toLowerCase().replace(/[\s-]+/g, "_");
+  if (Object.values(RuntimeTruthRetrievalTrigger).includes(trigger)) {
+    return trigger;
+  }
+  return null;
+}
+function buildRuntimeTriggeredQueryText(input = {}) {
+  const parts = [
+    input.trigger,
+    input.text,
+    normalizeObject6(input.runtimeTruth).currentState,
+    normalizeObject6(input.runtimeTruth).summary,
+    normalizeObject6(input.issueContext).title,
+    normalizeObject6(input.issueContext).body,
+    normalizeObject6(input.prContext).title,
+    normalizeObject6(input.prContext).summary,
+    normalizeObject6(input.blocker).summary
+  ];
+  return parts.map(normalizeText14).filter(Boolean).join(" ");
+}
+function detectRecurringOperationalPain(references) {
+  const painReferences = references.filter((reference) => {
+    const signals = reference.scoreSignals ?? {};
+    return Number(signals.recurrence) >= 40 || Number(signals.emotionalIntensity) >= 45 || reference.tags.includes("recurring_pain") || reference.tags.includes("operator_pain");
+  });
+  return {
+    detected: painReferences.length > 0,
+    count: painReferences.length,
+    references: painReferences.map((reference) => ({
+      id: reference.id,
+      title: reference.title,
+      repository: reference.repository,
+      crossRepository: reference.crossRepository,
+      recurrence: reference.scoreSignals.recurrence,
+      emotionalIntensity: reference.scoreSignals.emotionalIntensity,
+      operationalImpact: reference.scoreSignals.operationalImpact
+    }))
+  };
+}
+function buildProposalIntegration(input = {}) {
+  const references = Array.isArray(input.compactContext) ? input.compactContext : [];
+  const topReferences = references.slice(0, 3).map((reference) => ({
+    id: reference.id,
+    title: reference.title,
+    repository: reference.repository,
+    crossRepository: reference.crossRepository,
+    suggestedUse: reference.suggestedUse
+  }));
+  const highPriority = references.filter((reference) => Number(reference.scoreSignals?.operationalImpact) >= 60).slice(0, 3).map((reference) => reference.id);
+  return {
+    uses: [
+      "issue_proposal",
+      "remediation_proposal",
+      "prioritization",
+      "orchestration_suggestion"
+    ],
+    issueProposal: {
+      recommended: input.painSignals?.detected === true,
+      basis: topReferences
+    },
+    remediationProposal: {
+      recommended: references.length > 0,
+      trigger: input.trigger,
+      basis: topReferences
+    },
+    prioritization: {
+      priority: input.painSignals?.detected === true || highPriority.length > 0 ? "high" : "normal",
+      highImpactReferenceIds: highPriority
+    },
+    orchestrationSuggestion: {
+      recommended: input.trigger === RuntimeTruthRetrievalTrigger.ORCHESTRATION_ANOMALY || input.trigger === RuntimeTruthRetrievalTrigger.PR || input.trigger === RuntimeTruthRetrievalTrigger.REVIEW_OBJECTION || references.some((reference) => reference.tags.includes("orchestration")),
+      basis: topReferences
+    },
+    crossRepositoryLearning: references.filter((reference) => reference.crossRepository).slice(0, 3).map((reference) => ({
+      id: reference.id,
+      repository: reference.repository,
+      title: reference.title
+    }))
+  };
+}
+function classifyOperationalSuggestion(reference, trigger) {
+  const tags = reference.tags ?? [];
+  if (tags.includes("repair_case") || reference.type === MemoryRecordType.REPAIR_CASE) {
+    return "remediation_proposal";
+  }
+  if (tags.includes("proposal_log") || reference.type === MemoryRecordType.PROPOSAL_LOG) {
+    return "issue_proposal";
+  }
+  if (tags.includes("orchestration") || trigger === RuntimeTruthRetrievalTrigger.ORCHESTRATION_ANOMALY) {
+    return "orchestration_suggestion";
+  }
+  return "prioritization";
 }
 function normalizePriority2(value) {
   const numeric = Number(value ?? 50);
@@ -31247,8 +31468,11 @@ async function handleRetrieveOperationalMemoryRequest(url, env) {
   const limit = normalizeLimit7(url.searchParams.get("limit"), 8);
   const queryText = normalizeText30(url.searchParams.get("text")) || normalizeText30(url.searchParams.get("q"));
   const repository = normalizeText30(url.searchParams.get("repository"));
+  const trigger = normalizeText30(url.searchParams.get("trigger"));
   const runtimeTruth = buildRetrieveRuntimeTruth(url);
-  const retrieved = await retrieveOperationalMemory(provider, {
+  const retrieve = trigger ? retrieveRuntimeTruthOperationalMemory : retrieveOperationalMemory;
+  const retrieved = await retrieve(provider, {
+    trigger,
     text: queryText,
     repository,
     limit,
@@ -31270,7 +31494,12 @@ async function handleRetrieveOperationalMemoryRequest(url, env) {
     memoryUseRule: retrieved.memoryUseRule,
     compactContext: retrieved.compactContext,
     referencesByLayer: retrieved.referencesByLayer,
-    retrievalSignals: retrieved.retrievalSignals
+    retrievalSignals: retrieved.retrievalSignals,
+    runtimeTrigger: retrieved.runtimeTrigger ?? null,
+    supportedTriggers: retrieved.supportedTriggers ?? void 0,
+    proactivePainDetected: retrieved.proactivePainDetected ?? void 0,
+    recurringOperationalPain: retrieved.recurringOperationalPain ?? void 0,
+    proposalIntegration: retrieved.proposalIntegration ?? void 0
   });
 }
 async function handleRetrieveApprovalGrantRequest(url, env) {
@@ -32791,11 +33020,13 @@ function buildRetrieveRuntimeTruth(url) {
   const currentState = normalizeText30(url.searchParams.get("currentState"));
   const source = normalizeText30(url.searchParams.get("runtimeTruthSource"));
   const checkedAt = normalizeText30(url.searchParams.get("checkedAt"));
-  if (!currentState && !source && !checkedAt) {
+  const trigger = normalizeText30(url.searchParams.get("trigger"));
+  if (!currentState && !source && !checkedAt && !trigger) {
     return null;
   }
   return {
     currentState,
+    trigger,
     source,
     checkedAt
   };

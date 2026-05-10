@@ -115,6 +115,7 @@ VTDD context preflight / RAG:
   - text=<user request or active question>
   - semantic=true when similar issue / success / failure discovery is useful
 - Use vtddRetrieveDecisionLogs and vtddRetrieveProposalLogs when you need compact prior decisions or proposals for a related Issue.
+- Use vtddRetrieveOperationalMemory with trigger=issue/pr/blocker/execution_failure/review_objection/ci_instability/deployment_failure/orchestration_anomaly when runtime truth shows one of those operational states and prior pain, remediation, priority, or orchestration history could improve the proposal.
 - Use vtddRetrieveConstitution when judgment order, authority, or safety boundaries are unclear.
 - Treat memory results as context, not proof of current state.
 - Prefer both success and failure patterns when memory returns them.

@@ -133,8 +133,10 @@ export {
   OPERATIONAL_MEMORY_STORAGE_CANDIDATES,
   OperationalMemoryLayer,
   OperationalMemorySignal,
+  RuntimeTruthRetrievalTrigger,
   buildOperationalMemoryArchitecture,
-  retrieveOperationalMemory
+  retrieveOperationalMemory,
+  retrieveRuntimeTruthOperationalMemory
 } from "./operational-memory.js";
 export {
   RetrievalSource,

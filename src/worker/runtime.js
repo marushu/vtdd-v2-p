@@ -26,6 +26,7 @@ import {
   retrieveVpsRunnerHealthStatus,
   retrieveCrossIssueMemoryIndex,
   retrieveOperationalMemory,
+  retrieveRuntimeTruthOperationalMemory,
   retrieveDecisionLogReferences,
   retrieveProposalLogReferences,
   retrieveConstitution,
@@ -741,9 +742,12 @@ async function handleRetrieveOperationalMemoryRequest(url, env) {
   const queryText =
     normalizeText(url.searchParams.get("text")) || normalizeText(url.searchParams.get("q"));
   const repository = normalizeText(url.searchParams.get("repository"));
+  const trigger = normalizeText(url.searchParams.get("trigger"));
   const runtimeTruth = buildRetrieveRuntimeTruth(url);
 
-  const retrieved = await retrieveOperationalMemory(provider, {
+  const retrieve = trigger ? retrieveRuntimeTruthOperationalMemory : retrieveOperationalMemory;
+  const retrieved = await retrieve(provider, {
+    trigger,
     text: queryText,
     repository,
     limit,
@@ -766,7 +770,12 @@ async function handleRetrieveOperationalMemoryRequest(url, env) {
     memoryUseRule: retrieved.memoryUseRule,
     compactContext: retrieved.compactContext,
     referencesByLayer: retrieved.referencesByLayer,
-    retrievalSignals: retrieved.retrievalSignals
+    retrievalSignals: retrieved.retrievalSignals,
+    runtimeTrigger: retrieved.runtimeTrigger ?? null,
+    supportedTriggers: retrieved.supportedTriggers ?? undefined,
+    proactivePainDetected: retrieved.proactivePainDetected ?? undefined,
+    recurringOperationalPain: retrieved.recurringOperationalPain ?? undefined,
+    proposalIntegration: retrieved.proposalIntegration ?? undefined
   });
 }
 
@@ -2548,11 +2557,13 @@ function buildRetrieveRuntimeTruth(url) {
   const currentState = normalizeText(url.searchParams.get("currentState"));
   const source = normalizeText(url.searchParams.get("runtimeTruthSource"));
   const checkedAt = normalizeText(url.searchParams.get("checkedAt"));
-  if (!currentState && !source && !checkedAt) {
+  const trigger = normalizeText(url.searchParams.get("trigger"));
+  if (!currentState && !source && !checkedAt && !trigger) {
     return null;
   }
   return {
     currentState,
+    trigger,
     source,
     checkedAt
   };
