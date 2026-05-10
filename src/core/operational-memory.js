@@ -85,6 +85,8 @@ const MEMORY_TYPE_LAYER_MAP = Object.freeze({
   [MemoryRecordType.PROPOSAL_LOG]: OperationalMemoryLayer.SEMANTIC_OPERATIONAL_PATTERNS
 });
 
+const STRUCTURED_MEMORY_TYPES = Object.freeze(Object.keys(MEMORY_TYPE_LAYER_MAP));
+
 export function buildOperationalMemoryArchitecture() {
   return {
     purpose: "persistent_operational_cognition",
@@ -184,12 +186,10 @@ export async function retrieveOperationalMemory(provider, input = {}) {
 
 async function retrieveStructuredOperationalRecords(provider, input = {}) {
   const limit = normalizeLimit(input.limit, DEFAULT_LIMIT);
-  const records = [];
-  for (const type of Object.keys(MEMORY_TYPE_LAYER_MAP)) {
-    const retrieved = await provider.retrieve({ type, limit });
-    records.push(...normalizeQueriedRecords(retrieved));
-  }
-  return records;
+  const retrievedByType = await Promise.all(
+    STRUCTURED_MEMORY_TYPES.map((type) => provider.retrieve({ type, limit }))
+  );
+  return retrievedByType.flatMap((retrieved) => normalizeQueriedRecords(retrieved));
 }
 
 function toOperationalMemoryReference(record, input = {}) {
@@ -311,12 +311,26 @@ function groupByLayer(references) {
 function mergeRecords(primary, secondary) {
   const map = new Map();
   for (const record of [...primary, ...secondary]) {
-    const key = normalizeText(record?.id) || JSON.stringify(record);
+    const key = createRecordMergeKey(record);
     if (!map.has(key)) {
       map.set(key, record);
     }
   }
   return [...map.values()];
+}
+
+function createRecordMergeKey(record) {
+  const id = normalizeText(record?.id);
+  if (id) {
+    return `id:${id}`;
+  }
+  return [
+    "shape",
+    normalizeText(record?.type),
+    normalizeText(record?.createdAt),
+    resolveTitle(record),
+    resolveSummary(record)
+  ].join(":");
 }
 
 function normalizeQueriedRecords(value) {

@@ -87,6 +87,82 @@ test("operational memory rejects missing providers with a retrieval-safe error",
   assert.equal(result.error, "memory_provider_unavailable");
 });
 
+test("operational memory retrieves structured record families concurrently", async () => {
+  const calls = [];
+  let activeCalls = 0;
+  let maxActiveCalls = 0;
+  const provider = {
+    async store() {
+      return { ok: true };
+    },
+    async retrieve(filter) {
+      calls.push(filter.type);
+      activeCalls += 1;
+      maxActiveCalls = Math.max(maxActiveCalls, activeCalls);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      activeCalls -= 1;
+      return [];
+    },
+    async query() {
+      return [];
+    },
+    async validateRecord() {
+      return { ok: true };
+    }
+  };
+
+  const result = await retrieveOperationalMemory(provider, {
+    text: "reviewer blocker",
+    limit: 2,
+    now: "2026-05-10T00:00:00.000Z"
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(calls.length >= 4, true);
+  assert.equal(maxActiveCalls > 1, true);
+});
+
+test("operational memory deduplicates semantic and structured records without stringifying records", async () => {
+  const circularRecord = {
+    id: "same-record",
+    type: MemoryRecordType.DECISION_LOG,
+    content: {
+      decision: "Reviewer blocker policy must remain visible",
+      recurrenceCount: 2
+    },
+    metadata: {
+      repository: "repo-a/vtdd"
+    },
+    priority: 90,
+    tags: ["decision_log", "reviewer", "blocker", "policy"],
+    createdAt: "2026-05-01T00:00:00Z"
+  };
+  circularRecord.self = circularRecord;
+  const provider = {
+    async store() {
+      return { ok: true };
+    },
+    async retrieve(filter) {
+      return filter.type === MemoryRecordType.DECISION_LOG ? [circularRecord] : [];
+    },
+    async query() {
+      return [circularRecord];
+    },
+    async validateRecord() {
+      return { ok: true };
+    }
+  };
+
+  const result = await retrieveOperationalMemory(provider, {
+    text: "reviewer blocker policy",
+    limit: 5,
+    now: "2026-05-10T00:00:00.000Z"
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.compactContext.filter((item) => item.id === "same-record").length, 1);
+});
+
 async function seedOperationalMemory(provider) {
   await provider.store({
     id: "decision-reviewer-policy",

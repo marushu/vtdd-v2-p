@@ -19,6 +19,9 @@ separate from historical memory.
 - Storage: ephemeral runtime input
 - Role: highest-precedence current context
 - Persistence: not persisted by this layer
+- Retrieval shape: returned as `runtimeTruth` and the reserved
+  `referencesByLayer.immediate_context` bucket; it is not fetched from the
+  memory provider and must not be written as generic chat history.
 
 ### Layer 2: Active Operational Memory
 
