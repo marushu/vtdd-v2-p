@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  buildFreshExecutionBranchCandidates,
   buildCodexExecutionPrompt,
   buildCodexExecArgs,
   buildGuardedPullRequestBody,
@@ -8,8 +9,10 @@ import {
   buildVpsRunnerEventComment,
   buildVpsRunnerStateComment,
   buildVpsRunnerPullRequestContext,
+  checkoutVpsRunnerBranch,
   classifyVpsRunnerFailure,
   formatPullRequestContext,
+  isNonFastForwardPushFailure,
   loadVpsRunnerRepositoryPolicies,
   normalizeRepositoryPolicies,
   parseVpsRunnerEventComment,
@@ -500,6 +503,88 @@ test("VPS runner dry run reports selected execution without side effects", async
     "/repos/sample-org/vtdd-v2/issues?state=open&sort=updated&direction=desc&per_page=100",
     "/repos/sample-org/vtdd-v2/issues/157/comments?per_page=100"
   ]);
+});
+
+test("VPS runner creates a fresh branch when the requested branch already exists remotely", async () => {
+  const calls = [];
+  const result = await checkoutVpsRunnerBranch({
+    payload: {
+      branch: "codex/issue-244",
+      baseRef: "main",
+      codexGoal: "open_pr"
+    },
+    cwd: "/tmp/workspace",
+    env: {},
+    run: async (command, args) => {
+      calls.push({ command, args });
+      if (args[0] === "ls-remote" && args[3] === "codex/issue-244") {
+        return { stdout: "abc123\trefs/heads/codex/issue-244\n", stderr: "" };
+      }
+      return { stdout: "", stderr: "" };
+    }
+  });
+
+  assert.equal(result.branch, "codex/issue-244-v2");
+  assert.equal(result.originalBranch, "codex/issue-244");
+  assert.equal(result.baseRef, "main");
+  assert.equal(result.recovered, true);
+  assert.equal(result.reason, "remote_branch_collision");
+  assert.deepEqual(calls.map((call) => call.args), [
+    ["fetch", "origin", "main"],
+    ["ls-remote", "--heads", "origin", "codex/issue-244"],
+    ["ls-remote", "--heads", "origin", "codex/issue-244-v2"],
+    ["checkout", "-B", "codex/issue-244-v2", "origin/main"],
+    ["push", "-u", "origin", "codex/issue-244-v2"]
+  ]);
+});
+
+test("VPS runner retries with a fresh branch after non-fast-forward push rejection", async () => {
+  const calls = [];
+  const result = await checkoutVpsRunnerBranch({
+    payload: {
+      branch: "codex/issue-244",
+      baseRef: "main",
+      codexGoal: "open_pr"
+    },
+    cwd: "/tmp/workspace",
+    env: {},
+    run: async (command, args) => {
+      calls.push({ command, args });
+      if (args[0] === "push" && args[3] === "codex/issue-244") {
+        const error = new Error("git push -u origin codex/issue-244 failed with exit code 1");
+        error.stderr = "! [rejected] codex/issue-244 -> codex/issue-244 (non-fast-forward)\n";
+        throw error;
+      }
+      return { stdout: "", stderr: "" };
+    }
+  });
+
+  assert.equal(result.branch, "codex/issue-244-v2");
+  assert.equal(result.recovered, true);
+  assert.equal(result.reason, "push_rejected_retry");
+  assert.equal(result.pushRecovery.failedBranch, "codex/issue-244");
+  assert.equal(result.pushRecovery.error, "non_fast_forward_push_rejected");
+  assert.deepEqual(
+    calls.filter((call) => call.args[0] === "push").map((call) => call.args[3]),
+    ["codex/issue-244", "codex/issue-244-v2"]
+  );
+});
+
+test("VPS runner branch candidates include version and timestamp fallbacks", () => {
+  const candidates = buildFreshExecutionBranchCandidates("codex/issue-244", new Date("2026-05-10T12:34:56.000Z"));
+
+  assert.equal(candidates[0], "codex/issue-244");
+  assert.equal(candidates[1], "codex/issue-244-v2");
+  assert.equal(candidates.includes("codex/issue-244-v20"), true);
+  assert.equal(candidates.at(-1), "codex/issue-244-20260510T123456Z");
+});
+
+test("VPS runner recognizes non-fast-forward push failures", () => {
+  const error = new Error("git push failed");
+  error.stderr = "error: failed to push some refs to 'origin'\nhint: Updates were rejected because the remote contains work.";
+
+  assert.equal(isNonFastForwardPushFailure(error), true);
+  assert.equal(isNonFastForwardPushFailure(new Error("permission denied")), false);
 });
 
 test("VPS runner selects pending Codex reviewer fallback comments after development queues", () => {
