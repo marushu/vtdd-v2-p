@@ -24373,9 +24373,22 @@ var OperationalMemoryLayer = Object.freeze({
 });
 var OperationalMemorySignal = Object.freeze({
   RELEVANCE: "relevance",
+  SIMILARITY: "similarity",
   RECENCY: "recency",
   GOVERNANCE_IMPORTANCE: "governance_importance",
-  RECURRENCE: "recurrence"
+  RECURRENCE: "recurrence",
+  OPERATIONAL_IMPACT: "operational_impact",
+  EMOTIONAL_INTENSITY: "emotional_intensity"
+});
+var RuntimeMemoryTrigger = Object.freeze({
+  ISSUE: "issue",
+  PR: "pr",
+  BLOCKER: "blocker",
+  EXECUTION_FAILURE: "execution_failure",
+  REVIEW_OBJECTION: "review_objection",
+  CI_INSTABILITY: "ci_instability",
+  DEPLOYMENT_FAILURE: "deployment_failure",
+  ORCHESTRATION_ANOMALY: "orchestration_anomaly"
 });
 var OPERATIONAL_MEMORY_STORAGE_CANDIDATES = Object.freeze([
   "cloudflare_d1",
@@ -24459,11 +24472,63 @@ function buildOperationalMemoryArchitecture() {
     })),
     retrievalSignals: [
       OperationalMemorySignal.RELEVANCE,
+      OperationalMemorySignal.SIMILARITY,
       OperationalMemorySignal.RECENCY,
       OperationalMemorySignal.GOVERNANCE_IMPORTANCE,
-      OperationalMemorySignal.RECURRENCE
+      OperationalMemorySignal.RECURRENCE,
+      OperationalMemorySignal.OPERATIONAL_IMPACT,
+      OperationalMemorySignal.EMOTIONAL_INTENSITY
     ],
     runtimeTruthRule: "runtime truth is evaluated separately and must override memory for current state"
+  };
+}
+async function retrieveRuntimeTriggeredOperationalMemory(provider, input = {}) {
+  const trigger = normalizeRuntimeMemoryTrigger(input.trigger ?? input.runtimeTruth?.trigger);
+  const runtimeTruth = normalizeRuntimeTruth2(input.runtimeTruth);
+  const runtimeText = buildRuntimeTriggeredQueryText({
+    trigger,
+    runtimeTruth,
+    text: input.text,
+    context: input.context
+  });
+  const retrieval = await retrieveOperationalMemory(provider, {
+    text: runtimeText,
+    repository: input.repository ?? input.runtimeTruth?.repository,
+    runtimeTruth: input.runtimeTruth,
+    limit: input.limit,
+    now: input.now
+  });
+  if (!retrieval.ok) {
+    return retrieval;
+  }
+  const recurringPain = detectRecurringOperationalPain(retrieval.compactContext);
+  return {
+    ok: true,
+    trigger,
+    runtimeTruth,
+    runtimeQueryText: runtimeText || null,
+    memoryUseRule: retrieval.memoryUseRule,
+    compactContext: retrieval.compactContext,
+    referencesByLayer: retrieval.referencesByLayer,
+    retrievalSignals: {
+      ...retrieval.retrievalSignals,
+      rankedBy: [
+        OperationalMemorySignal.RECURRENCE,
+        OperationalMemorySignal.GOVERNANCE_IMPORTANCE,
+        OperationalMemorySignal.OPERATIONAL_IMPACT,
+        OperationalMemorySignal.SIMILARITY,
+        OperationalMemorySignal.RECENCY,
+        OperationalMemorySignal.EMOTIONAL_INTENSITY
+      ],
+      triggerMatched: trigger !== null
+    },
+    recurringPain,
+    proposalIntegration: buildProposalIntegration({
+      trigger,
+      runtimeTruth,
+      references: retrieval.compactContext,
+      recurringPain
+    })
   };
 }
 async function retrieveOperationalMemory(provider, input = {}) {
@@ -24547,9 +24612,12 @@ function toOperationalMemoryReference(record, input = {}) {
   const textBlob = `${JSON.stringify(content)} ${JSON.stringify(metadata)} ${tags.join(" ")}`.toLowerCase();
   const scoreSignals = {
     relevance: scoreRelevance(textBlob, queryText),
+    similarity: scoreSimilarity(textBlob, queryText),
     governanceImportance: scoreGovernanceImportance(record, tags),
     recurrence: scoreRecurrence(record, tags),
-    recency: scoreRecency(record?.createdAt, input.now)
+    operationalImpact: scoreOperationalImpact(record, tags),
+    recency: scoreRecency(record?.createdAt, input.now),
+    emotionalIntensity: scoreEmotionalIntensity(record, tags)
   };
   return {
     id: normalizeText14(record?.id),
@@ -24580,6 +24648,9 @@ function scoreRelevance(textBlob, queryText) {
   const matches = tokens.filter((token) => textBlob.includes(token)).length;
   return Math.round(matches / tokens.length * 100);
 }
+function scoreSimilarity(textBlob, queryText) {
+  return scoreRelevance(textBlob, queryText);
+}
 function scoreGovernanceImportance(record, tags) {
   const priority = normalizePriority2(record?.priority);
   const governanceTags = ["constitution", "governance", "approval", "policy", "authority", "safety"];
@@ -24594,6 +24665,39 @@ function scoreRecurrence(record, tags) {
   const tagScore = tags.includes("recurring") || tags.includes("recurrence") ? 40 : 0;
   const numericScore = Number.isFinite(count) && count > 0 ? Math.min(60, count * 15) : 0;
   return Math.min(100, Math.round(tagScore + numericScore));
+}
+function scoreOperationalImpact(record, tags) {
+  const metadata = normalizeObject6(record?.metadata);
+  const content = normalizeObject6(record?.content);
+  const explicit = normalizeScore2(metadata.operationalImpact ?? content.operationalImpact);
+  if (explicit !== null) {
+    return explicit;
+  }
+  const highImpactTags = [
+    "blocker",
+    "failure",
+    "execution_failure",
+    "ci",
+    "deploy",
+    "deployment",
+    "orchestration",
+    "notification",
+    "telemetry",
+    "reviewer"
+  ];
+  const tagScore = tags.some((tag) => highImpactTags.includes(tag)) ? 45 : 0;
+  const typeScore = record?.type === MemoryRecordType.REPAIR_CASE || record?.type === MemoryRecordType.EXECUTION_LOG ? 25 : 0;
+  return Math.min(100, tagScore + typeScore);
+}
+function scoreEmotionalIntensity(record, tags) {
+  const metadata = normalizeObject6(record?.metadata);
+  const content = normalizeObject6(record?.content);
+  const explicit = normalizeScore2(metadata.emotionalIntensity ?? content.emotionalIntensity);
+  if (explicit !== null) {
+    return explicit;
+  }
+  const emotionalTags = ["frustration", "pain", "recurring_pain", "operator_pain", "cognitive_load"];
+  return tags.some((tag) => emotionalTags.includes(tag)) ? 70 : 0;
 }
 function scoreRecency(createdAt, now) {
   const created = Date.parse(createdAt);
@@ -24612,7 +24716,7 @@ function scoreRecency(createdAt, now) {
 }
 function calculateOperationalMemoryScore(signals) {
   return Math.round(
-    signals.relevance * 0.4 + signals.governanceImportance * 0.25 + signals.recurrence * 0.2 + signals.recency * 0.15
+    signals.recurrence * 0.22 + signals.governanceImportance * 0.2 + signals.operationalImpact * 0.18 + signals.similarity * 0.18 + signals.recency * 0.12 + signals.emotionalIntensity * 0.1
   );
 }
 function compareOperationalMemoryReferences(a, b) {
@@ -24680,10 +24784,107 @@ function normalizeRuntimeTruth2(value) {
   }
   return {
     currentState: normalizeText14(runtimeTruth.currentState) || null,
+    trigger: normalizeRuntimeMemoryTrigger(runtimeTruth.trigger),
+    repository: normalizeText14(runtimeTruth.repository) || null,
     source: normalizeText14(runtimeTruth.source) || null,
     checkedAt: normalizeText14(runtimeTruth.checkedAt) || null,
     overridesMemory: true
   };
+}
+function normalizeRuntimeMemoryTrigger(value) {
+  const normalized = normalizeText14(value).toLowerCase().replace(/[\s-]+/g, "_");
+  if (Object.values(RuntimeMemoryTrigger).includes(normalized)) {
+    return normalized;
+  }
+  return null;
+}
+function buildRuntimeTriggeredQueryText(input = {}) {
+  const parts = [
+    input.trigger,
+    input.runtimeTruth?.currentState,
+    input.runtimeTruth?.source,
+    normalizeText14(input.text),
+    normalizeContextText(input.context)
+  ].filter(Boolean);
+  return parts.join(" ");
+}
+function normalizeContextText(value) {
+  if (!value) {
+    return "";
+  }
+  if (typeof value === "string") {
+    return normalizeText14(value);
+  }
+  if (typeof value === "object") {
+    return Object.values(value).map((item) => typeof item === "string" || typeof item === "number" ? normalizeText14(item) : "").filter(Boolean).join(" ");
+  }
+  return "";
+}
+function detectRecurringOperationalPain(references) {
+  const painful = references.filter((reference) => {
+    const recurrence = reference.scoreSignals?.recurrence ?? 0;
+    const impact = reference.scoreSignals?.operationalImpact ?? 0;
+    const intensity = reference.scoreSignals?.emotionalIntensity ?? 0;
+    return recurrence >= 40 && (impact >= 40 || intensity >= 50);
+  });
+  return {
+    detected: painful.length > 0,
+    count: painful.length,
+    references: painful.map((reference) => ({
+      id: reference.id,
+      title: reference.title,
+      repository: reference.repository,
+      scoreSignals: reference.scoreSignals
+    }))
+  };
+}
+function buildProposalIntegration(input = {}) {
+  const references = Array.isArray(input.references) ? input.references : [];
+  const topReferences = references.slice(0, 3).map((reference) => ({
+    id: reference.id,
+    title: reference.title,
+    repository: reference.repository,
+    crossRepository: reference.crossRepository,
+    score: reference.score
+  }));
+  const top = references[0] ?? null;
+  const recurringDetected = input.recurringPain?.detected === true;
+  return {
+    issueProposal: {
+      recommended: recurringDetected,
+      reason: recurringDetected ? "recurring_operational_pain_detected_from_runtime_truth" : "no_recurring_pain_threshold_met",
+      memoryReferences: topReferences
+    },
+    remediationProposal: {
+      recommended: Boolean(top),
+      trigger: input.trigger,
+      useMemoryReference: top ? {
+        id: top.id,
+        title: top.title,
+        summary: top.summary,
+        repository: top.repository
+      } : null
+    },
+    prioritization: {
+      priority: recurringDetected || (top?.scoreSignals?.governanceImportance ?? 0) >= 70 ? "high" : "normal",
+      basis: top ? {
+        score: top.score,
+        scoreSignals: top.scoreSignals
+      } : null
+    },
+    orchestrationSuggestion: {
+      suggested: Boolean(top),
+      action: top ? "surface_runtime_truth_with_ranked_memory_before_execution_or_review_response" : "continue_with_runtime_truth_only",
+      crossRepositoryLearningApplied: references.some((reference) => reference.crossRepository)
+    }
+  };
+}
+function normalizeScore2(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return null;
+  }
+  return Math.max(0, Math.min(100, Math.round(numeric)));
 }
 function normalizePriority2(value) {
   const numeric = Number(value ?? 50);
@@ -31080,8 +31281,11 @@ async function handleRetrieveOperationalMemoryRequest(url, env) {
   const limit = normalizeLimit7(url.searchParams.get("limit"), 8);
   const queryText = normalizeText29(url.searchParams.get("text")) || normalizeText29(url.searchParams.get("q"));
   const repository = normalizeText29(url.searchParams.get("repository"));
+  const trigger = normalizeText29(url.searchParams.get("trigger"));
   const runtimeTruth = buildRetrieveRuntimeTruth(url);
-  const retrieved = await retrieveOperationalMemory(provider, {
+  const retrieve = trigger ? retrieveRuntimeTriggeredOperationalMemory : retrieveOperationalMemory;
+  const retrieved = await retrieve(provider, {
+    trigger,
     text: queryText,
     repository,
     limit,
@@ -31103,7 +31307,11 @@ async function handleRetrieveOperationalMemoryRequest(url, env) {
     memoryUseRule: retrieved.memoryUseRule,
     compactContext: retrieved.compactContext,
     referencesByLayer: retrieved.referencesByLayer,
-    retrievalSignals: retrieved.retrievalSignals
+    retrievalSignals: retrieved.retrievalSignals,
+    trigger: retrieved.trigger ?? null,
+    runtimeQueryText: retrieved.runtimeQueryText ?? null,
+    recurringPain: retrieved.recurringPain ?? null,
+    proposalIntegration: retrieved.proposalIntegration ?? null
   });
 }
 async function handleRetrieveApprovalGrantRequest(url, env) {
@@ -32622,13 +32830,17 @@ function parseBooleanQueryParam(value) {
 }
 function buildRetrieveRuntimeTruth(url) {
   const currentState = normalizeText29(url.searchParams.get("currentState"));
+  const trigger = normalizeText29(url.searchParams.get("trigger"));
+  const repository = normalizeText29(url.searchParams.get("repository"));
   const source = normalizeText29(url.searchParams.get("runtimeTruthSource"));
   const checkedAt = normalizeText29(url.searchParams.get("checkedAt"));
-  if (!currentState && !source && !checkedAt) {
+  if (!currentState && !trigger && !repository && !source && !checkedAt) {
     return null;
   }
   return {
     currentState,
+    trigger,
+    repository,
     source,
     checkedAt
   };

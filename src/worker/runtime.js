@@ -26,6 +26,7 @@ import {
   retrieveVpsRunnerHealthStatus,
   retrieveCrossIssueMemoryIndex,
   retrieveOperationalMemory,
+  retrieveRuntimeTriggeredOperationalMemory,
   retrieveDecisionLogReferences,
   retrieveProposalLogReferences,
   retrieveConstitution,
@@ -741,9 +742,12 @@ async function handleRetrieveOperationalMemoryRequest(url, env) {
   const queryText =
     normalizeText(url.searchParams.get("text")) || normalizeText(url.searchParams.get("q"));
   const repository = normalizeText(url.searchParams.get("repository"));
+  const trigger = normalizeText(url.searchParams.get("trigger"));
   const runtimeTruth = buildRetrieveRuntimeTruth(url);
 
-  const retrieved = await retrieveOperationalMemory(provider, {
+  const retrieve = trigger ? retrieveRuntimeTriggeredOperationalMemory : retrieveOperationalMemory;
+  const retrieved = await retrieve(provider, {
+    trigger,
     text: queryText,
     repository,
     limit,
@@ -766,7 +770,11 @@ async function handleRetrieveOperationalMemoryRequest(url, env) {
     memoryUseRule: retrieved.memoryUseRule,
     compactContext: retrieved.compactContext,
     referencesByLayer: retrieved.referencesByLayer,
-    retrievalSignals: retrieved.retrievalSignals
+    retrievalSignals: retrieved.retrievalSignals,
+    trigger: retrieved.trigger ?? null,
+    runtimeQueryText: retrieved.runtimeQueryText ?? null,
+    recurringPain: retrieved.recurringPain ?? null,
+    proposalIntegration: retrieved.proposalIntegration ?? null
   });
 }
 
@@ -2546,13 +2554,17 @@ function parseBooleanQueryParam(value) {
 
 function buildRetrieveRuntimeTruth(url) {
   const currentState = normalizeText(url.searchParams.get("currentState"));
+  const trigger = normalizeText(url.searchParams.get("trigger"));
+  const repository = normalizeText(url.searchParams.get("repository"));
   const source = normalizeText(url.searchParams.get("runtimeTruthSource"));
   const checkedAt = normalizeText(url.searchParams.get("checkedAt"));
-  if (!currentState && !source && !checkedAt) {
+  if (!currentState && !trigger && !repository && !source && !checkedAt) {
     return null;
   }
   return {
     currentState,
+    trigger,
+    repository,
     source,
     checkedAt
   };

@@ -5,9 +5,11 @@ import {
   OPERATIONAL_MEMORY_STORAGE_CANDIDATES,
   OperationalMemoryLayer,
   OperationalMemorySignal,
+  RuntimeMemoryTrigger,
   buildOperationalMemoryArchitecture,
   createInMemoryMemoryProvider,
-  retrieveOperationalMemory
+  retrieveOperationalMemory,
+  retrieveRuntimeTriggeredOperationalMemory
 } from "../src/core/index.js";
 
 test("operational memory architecture declares the four issue #249 layers and storage candidates", () => {
@@ -29,6 +31,10 @@ test("operational memory architecture declares the four issue #249 layers and st
   assert.equal(architecture.nonGoals.includes("personality_simulation"), true);
   assert.equal(
     architecture.retrievalSignals.includes(OperationalMemorySignal.GOVERNANCE_IMPORTANCE),
+    true
+  );
+  assert.equal(
+    architecture.retrievalSignals.includes(OperationalMemorySignal.EMOTIONAL_INTENSITY),
     true
   );
 });
@@ -85,6 +91,75 @@ test("operational memory rejects missing providers with a retrieval-safe error",
   assert.equal(result.ok, false);
   assert.equal(result.status, 503);
   assert.equal(result.error, "memory_provider_unavailable");
+});
+
+test("runtime-triggered retrieval integrates PR conflict memory into Butler proposal context", async () => {
+  const provider = createInMemoryMemoryProvider();
+  await seedRuntimeTriggeredMemory(provider);
+
+  const result = await retrieveRuntimeTriggeredOperationalMemory(provider, {
+    trigger: RuntimeMemoryTrigger.PR,
+    repository: "repo-b/vtdd",
+    limit: 4,
+    now: "2026-05-10T00:00:00.000Z",
+    runtimeTruth: {
+      trigger: RuntimeMemoryTrigger.PR,
+      currentState: "PR conflict detected on active branch after branch collision",
+      repository: "repo-b/vtdd",
+      source: "github_app",
+      checkedAt: "2026-05-10T00:01:00Z"
+    },
+    context: {
+      prNumber: 251,
+      blocker: "merge conflict"
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.trigger, RuntimeMemoryTrigger.PR);
+  assert.equal(result.runtimeTruth.overridesMemory, true);
+  assert.equal(result.compactContext[0].id, "repair-branch-collision");
+  assert.equal(result.compactContext[0].crossRepository, true);
+  assert.equal(result.recurringPain.detected, true);
+  assert.equal(result.proposalIntegration.remediationProposal.recommended, true);
+  assert.equal(result.proposalIntegration.issueProposal.recommended, true);
+  assert.equal(result.proposalIntegration.prioritization.priority, "high");
+  assert.equal(
+    result.proposalIntegration.orchestrationSuggestion.crossRepositoryLearningApplied,
+    true
+  );
+});
+
+test("runtime-triggered retrieval detects notification failures as proactive operator telemetry pain", async () => {
+  const provider = createInMemoryMemoryProvider();
+  await seedRuntimeTriggeredMemory(provider);
+
+  const result = await retrieveRuntimeTriggeredOperationalMemory(provider, {
+    trigger: RuntimeMemoryTrigger.ORCHESTRATION_ANOMALY,
+    repository: "repo-b/vtdd",
+    limit: 4,
+    now: "2026-05-10T00:00:00.000Z",
+    runtimeTruth: {
+      trigger: RuntimeMemoryTrigger.ORCHESTRATION_ANOMALY,
+      currentState: "notification failure left owner unaware of execution progress",
+      repository: "repo-b/vtdd",
+      source: "butler_runtime",
+      checkedAt: "2026-05-10T00:01:00Z"
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.compactContext[0].id, "temperature-notification-failure");
+  assert.equal(result.recurringPain.detected, true);
+  assert.equal(
+    result.recurringPain.references.some((reference) => reference.id === "temperature-notification-failure"),
+    true
+  );
+  assert.equal(result.proposalIntegration.issueProposal.recommended, true);
+  assert.equal(
+    result.proposalIntegration.orchestrationSuggestion.action,
+    "surface_runtime_truth_with_ranked_memory_before_execution_or_review_response"
+  );
 });
 
 test("operational memory retrieves structured record families concurrently", async () => {
@@ -223,5 +298,80 @@ async function seedOperationalMemory(provider) {
     priority: 65,
     tags: ["proposal_log", "proposal"],
     createdAt: "2026-05-08T00:00:00Z"
+  });
+}
+
+async function seedRuntimeTriggeredMemory(provider) {
+  await provider.store({
+    id: "repair-branch-collision",
+    type: MemoryRecordType.REPAIR_CASE,
+    content: {
+      failurePattern: "Branch collision caused PR conflict and orchestration failure",
+      remediation: "Pause merge claims, rebase the active topic branch, and propose a branch-collision issue.",
+      recurrenceCount: 3,
+      operationalImpact: 92,
+      emotionalIntensity: 74
+    },
+    metadata: {
+      repository: "repo-a/vtdd",
+      recurrenceCount: 3,
+      operationalImpact: 92,
+      emotionalIntensity: 74
+    },
+    priority: 90,
+    tags: [
+      "repair_case",
+      "pr",
+      "conflict",
+      "branch",
+      "collision",
+      "orchestration",
+      "recurring",
+      "operator_pain"
+    ],
+    createdAt: "2026-05-01T00:00:00Z"
+  });
+
+  await provider.store({
+    id: "temperature-notification-failure",
+    type: MemoryRecordType.TEMPERATURE_NOTE,
+    content: {
+      summary: "Owner frustration increased when Butler failed to notify execution progress.",
+      remediation: "Treat missing notification as an operator telemetry gap and propose proactive status updates.",
+      recurrenceCount: 4,
+      operationalImpact: 86,
+      emotionalIntensity: 95
+    },
+    metadata: {
+      repository: "repo-a/vtdd",
+      recurrenceCount: 4,
+      operationalImpact: 86,
+      emotionalIntensity: 95
+    },
+    priority: 88,
+    tags: [
+      "temperature_note",
+      "notification",
+      "failure",
+      "telemetry",
+      "frustration",
+      "recurring_pain"
+    ],
+    createdAt: "2026-05-02T00:00:00Z"
+  });
+
+  await provider.store({
+    id: "proposal-low-similarity",
+    type: MemoryRecordType.PROPOSAL_LOG,
+    content: {
+      hypothesis: "Unrelated proposal should not outrank runtime-triggered operational pain.",
+      relatedIssue: 12
+    },
+    metadata: {
+      repository: "repo-b/vtdd"
+    },
+    priority: 55,
+    tags: ["proposal_log"],
+    createdAt: "2026-05-09T00:00:00Z"
   });
 }

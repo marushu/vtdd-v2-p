@@ -4891,6 +4891,58 @@ test("worker returns compact operational memory through retrieve route", async (
   assert.equal(body.retrievalSignals.dumpedAllMemory, false);
 });
 
+test("worker operational memory route can return runtime-triggered proposal integration", async () => {
+  const provider = createInMemoryMemoryProvider();
+  await provider.store({
+    id: "runtime-triggered-repair-1",
+    type: MemoryRecordType.REPAIR_CASE,
+    content: {
+      failurePattern: "PR conflict repeated after branch collision and orchestration anomaly",
+      remediation: "Surface prior branch-collision remediation before proposing merge or review response.",
+      recurrenceCount: 3,
+      operationalImpact: 90,
+      emotionalIntensity: 72
+    },
+    metadata: {
+      repository: "repo-a/vtdd",
+      recurrenceCount: 3,
+      operationalImpact: 90,
+      emotionalIntensity: 72
+    },
+    priority: 91,
+    tags: ["repair_case", "pr", "conflict", "branch", "collision", "orchestration", "recurring"],
+    createdAt: "2026-05-01T00:00:00Z"
+  });
+
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/v2/retrieve/operational-memory?trigger=pr&repository=repo-b/vtdd&currentState=PR%20conflict%20after%20branch%20collision&runtimeTruthSource=github_app&checkedAt=2026-05-10T01%3A00%3A00Z&limit=2",
+      {
+        headers: {
+          authorization: "Bearer test-token"
+        }
+      }
+    ),
+    {
+      ...gatewayAuthEnv,
+      MEMORY_PROVIDER: provider
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.trigger, "pr");
+  assert.equal(body.compactContext[0].id, "runtime-triggered-repair-1");
+  assert.equal(body.recurringPain.detected, true);
+  assert.equal(body.proposalIntegration.issueProposal.recommended, true);
+  assert.equal(body.proposalIntegration.remediationProposal.recommended, true);
+  assert.equal(
+    body.proposalIntegration.orchestrationSuggestion.crossRepositoryLearningApplied,
+    true
+  );
+});
+
 test("worker returns not_found for unknown route", async () => {
   const response = await worker.fetch(new Request("https://example.com/unknown"));
   assert.equal(response.status, 404);
