@@ -15,11 +15,11 @@
 - Lead-time duration calculation and formatting are shared by Butler progress reconstruction and VPS runner comment publishing.
 - `pr_created_at` remains distinct from `completed_at`; PR creation can end total lead-time calculation without falsifying a completed timestamp.
 - Reviewer objection is preserved: live GitHub runner E2E and iPhone Butler live E2E remain explicitly unverified.
+- GitHub CI passed on PR #269: `guarded-policy`, `test`, and `review`.
 - PR #261 was inspected only through GitHub read operations; no push was made to `codex/issue-260`.
 
 ## Unsatisfied Success Criteria
 
-- GitHub CI is pending until this fresh PR is opened and checks complete.
 - Live GitHub E2E on a real runner was not executed in this local workspace; this remains the reviewer-raised unverified production path.
 - iPhone Butler live E2E was not run because no deploy or live Butler session was authorized.
 
@@ -31,6 +31,7 @@ None.
 
 - Unit: `npm test` passed locally on 2026-05-10: 615 tests passed.
 - Integration: `node --test test/execution-lead-time.test.js test/vps-runner-script.test.js test/remote-codex-executor.test.js test/e2e-30-execution-lead-time-telemetry.test.js test/custom-gpt-setup-docs.test.js` passed locally on 2026-05-10: 81 tests passed.
+- CI: PR #269 `guarded-policy`, `test`, and `review` checks passed on 2026-05-10.
 - E2E: Not run live; covered by runtime progress/comment contract tests for happy-path and stale/failure boundaries. Reviewer-raised live GitHub runner E2E and iPhone Butler live E2E remain unverified.
 - Manual: Inspected docs/pr-template-model.md, scripts/render-pr-body.mjs, and scripts/validate-pr-body.mjs before drafting; read GitHub Issue #267, Issue #260, and PR #261 runtime truth with `gh` on 2026-05-10.
 - Evidence path/link: src/core/execution-lead-time.js; src/core/remote-codex-executor.js; scripts/run-vps-runner.mjs; test/execution-lead-time.test.js; test/remote-codex-executor.test.js; test/vps-runner-script.test.js; docs/mvp/e2e/e2e-30-execution-lead-time-telemetry.md
