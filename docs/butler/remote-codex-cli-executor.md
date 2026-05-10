@@ -257,6 +257,23 @@ One-shot execution:
 node scripts/run-vps-runner.mjs
 ```
 
+Cancel / drain control:
+
+- Butler requests cancel or drain through `vtddVpsRunnerCancel`, which writes a
+  `<!-- vtdd:vps-runner-canceled:<executionId> -->` marker onto the existing
+  queue comment. The queue comment is not deleted.
+- `mode=execution` cancels the named executionId. If the execution is already
+  running, this is a cooperative cancel request; the runner stops at the next
+  safe checkpoint and reports a canceled event.
+- `mode=issue_pending` cancels pending queue comments for the named Issue only.
+  Running executions are not killed by this mode.
+- `mode=drain_pending` cancels all pending queue comments in the allowlisted
+  repository scan. Running executions are not killed by this mode.
+- The runner must ignore any queue comment with a canceled marker before pickup
+  and must check the queue comment for a canceled marker at safe checkpoints
+  during execution. It must not delete pushed branches, commits, PRs, or
+  comments as part of cancellation.
+
 The script is suitable for a later systemd timer/service wrapper, but systemd
 installation, Codex login, token placement, and credential storage remain
 user-owned runtime setup. They must not be represented as shared VTDD
@@ -330,6 +347,11 @@ state/event comments, and target branch / PR evidence. The latest runner state
 or event may include `currentStep`, `heartbeatAt`, `updatedAt`, and a bounded
 command diagnostic. A runner event comment may report raw failure, but it is not
 completion evidence unless GitHub-visible branch or PR truth exists. If a
+queue comment carries a canceled marker, Butler must surface `status=canceled`,
+the cancellation payload, and a `vps_runner_execution_canceled` blocker from
+GitHub-visible runtime truth. If a running execution is canceled, the runner
+reports a cooperative canceled event at the next safe checkpoint; it does not
+perform unrestricted process kill or cleanup already-pushed GitHub state. If a
 runner reports failure and no target PR exists, Butler must surface the raw
 failure as blocked. If the latest running event is older than the stale
 threshold, Butler must surface `vps_runner_event_stale` with the last step and
@@ -364,9 +386,10 @@ status check is read-only and is derived from the same GitHub queue comment,
 runner state/event comments, branch, and PR truth as `vtddExecutionProgress`. It
 returns a short `health` summary with `runnerStatus`, `runnerAlive`,
 `lastSeenAt`, `heartbeatAt`, queue pickup state, `leadTime`, `currentStep`, and
-a safe `reasonCode` / `reason` when the runner is stale, unavailable, or not
-yet picked up. This endpoint does not SSH into the VPS, stream logs, mutate
-credentials, deploy, merge, close Issues, or administer the runner.
+a safe `reasonCode` / `reason` when the runner is stale, canceled,
+unavailable, or not yet picked up. This endpoint does not SSH into the VPS,
+stream logs, mutate credentials, deploy, merge, close Issues, or administer the
+runner.
 
 When Codex reaches an approval or scope boundary, the observable return path is
 GitHub state that Butler can read, not a hidden direct Codex-to-Butler channel.

@@ -1107,6 +1107,63 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/VtddGenericResponse"
+  /v2/action/vps-runner-cancel:
+    post:
+      operationId: vtddVpsRunnerCancel
+      summary: Cancel or drain VPS runner queue comments through GitHub-visible runtime truth.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - repository
+                - mode
+              properties:
+                repository:
+                  type: string
+                  description: Canonical owner/repo repository.
+                mode:
+                  type: string
+                  enum:
+                    - execution
+                    - issue_pending
+                    - drain_pending
+                executionId:
+                  type: string
+                  description: Required for mode=execution.
+                issueNumber:
+                  type: integer
+                  description: Required for mode=issue_pending; optional scope hint for mode=execution.
+                reason:
+                  type: string
+                actor:
+                  type: string
+              additionalProperties: false
+      responses:
+        "200":
+          description: VPS runner cancellation marker write result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "401":
+          description: Missing machine auth
+        "403":
+          description: Invalid machine auth
+        "422":
+          description: VPS runner cancel request invalid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "503":
+          description: VPS runner cancel unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
   /v2/retrieve/constitution:
     get:
       operationId: vtddRetrieveConstitution

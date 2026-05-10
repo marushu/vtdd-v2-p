@@ -171,6 +171,8 @@ export {
   RemoteCodexDispatchGoal,
   RemoteCodexExecutorTransport,
   RemoteCodexExecutionStatus,
+  VpsRunnerCancelMode,
+  cancelVpsRunnerQueue,
   createRemoteCodexExecutionRequest,
   dispatchRemoteCodexExecution,
   getRemoteCodexExecutorTransportRegistry,

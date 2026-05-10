@@ -25145,7 +25145,13 @@ var RemoteCodexExecutionStatus = Object.freeze({
   IN_PROGRESS: "in_progress",
   COMPLETED: "completed",
   BLOCKED: "blocked",
+  CANCELED: "canceled",
   UNKNOWN: "unknown"
+});
+var VpsRunnerCancelMode = Object.freeze({
+  EXECUTION: "execution",
+  ISSUE_PENDING: "issue_pending",
+  DRAIN_PENDING: "drain_pending"
 });
 var RemoteCodexDispatchGoal = Object.freeze({
   OPEN_PR: "open_pr",
@@ -25431,6 +25437,121 @@ async function retrieveVpsRunnerHealthStatus(input = {}) {
       env: input?.env
     }),
     progress: progress.progress
+  };
+}
+async function cancelVpsRunnerQueue(input = {}) {
+  const repository = normalizeText17(input?.repository);
+  const issueNumber = normalizePositiveInteger3(input?.issueNumber);
+  const executionId = normalizeText17(input?.executionId);
+  const mode = normalizeVpsRunnerCancelMode(input?.mode, { executionId, issueNumber });
+  const reason = normalizeText17(input?.reason) || "Canceled by Butler request.";
+  const actor = normalizeText17(input?.actor) || null;
+  const issues = [];
+  if (!repository) {
+    issues.push("repository is required");
+  }
+  if (mode === VpsRunnerCancelMode.EXECUTION && !executionId) {
+    issues.push("executionId is required for execution cancel");
+  }
+  if (mode === VpsRunnerCancelMode.ISSUE_PENDING && !issueNumber) {
+    issues.push("issueNumber is required for issue pending cancel");
+  }
+  if (![VpsRunnerCancelMode.EXECUTION, VpsRunnerCancelMode.ISSUE_PENDING, VpsRunnerCancelMode.DRAIN_PENDING].includes(mode)) {
+    issues.push("mode must be execution, issue_pending, or drain_pending");
+  }
+  if (issues.length > 0) {
+    return {
+      ok: false,
+      status: 422,
+      error: "vps_runner_cancel_request_invalid",
+      reason: issues.join(", "),
+      issues
+    };
+  }
+  const token = await resolveGitHubExecutionToken(input?.env);
+  if (!token.ok) {
+    return {
+      ok: false,
+      status: 503,
+      error: "github_execution_token_unavailable",
+      reason: token.reason
+    };
+  }
+  const apiBaseUrl = normalizeText17(input?.env?.GITHUB_API_BASE_URL) || "https://api.github.com";
+  const fetchImpl = typeof input?.env?.GITHUB_API_FETCH === "function" ? input.env.GITHUB_API_FETCH.bind(input.env) : fetch;
+  let comments;
+  try {
+    comments = issueNumber ? await readAllIssueComments({ apiBaseUrl, repository, issueNumber, token: token.value, fetchImpl }) : await readRecentRepositoryIssueComments({ apiBaseUrl, repository, token: token.value, fetchImpl });
+  } catch (error) {
+    return {
+      ok: false,
+      status: error?.status || 503,
+      error: "vps_runner_cancel_failed",
+      reason: normalizeText17(error?.message) || "failed to read VPS runner queue comments"
+    };
+  }
+  const queueStates = buildVpsRunnerQueueStates(comments);
+  const targets = queueStates.filter((state) => {
+    if (state.cancellation) {
+      return false;
+    }
+    if (mode === VpsRunnerCancelMode.EXECUTION) {
+      return state.executionId === executionId;
+    }
+    if (mode === VpsRunnerCancelMode.ISSUE_PENDING) {
+      return state.issueNumber === issueNumber && state.lifecycle === "pending";
+    }
+    return state.lifecycle === "pending";
+  });
+  const canceledAt = (/* @__PURE__ */ new Date()).toISOString();
+  const canceled = [];
+  for (const target of targets) {
+    const cancellation = {
+      status: "canceled",
+      mode,
+      executionId: target.executionId,
+      repository,
+      issueNumber: target.issueNumber,
+      reason,
+      actor,
+      canceledAt,
+      runningCancelRequested: target.lifecycle === "running"
+    };
+    const patchResult = await patchVpsRunnerQueueCancellation({
+      apiBaseUrl,
+      repository,
+      token: token.value,
+      fetchImpl,
+      comment: target.comment,
+      cancellation
+    });
+    if (!patchResult.ok) {
+      return patchResult;
+    }
+    canceled.push({
+      executionId: target.executionId,
+      issueNumber: target.issueNumber,
+      queueCommentId: normalizePositiveInteger3(target.comment?.id),
+      queueCommentUrl: normalizeText17(target.comment?.html_url) || null,
+      previousState: target.lifecycle,
+      runningCancelRequested: cancellation.runningCancelRequested
+    });
+  }
+  return {
+    ok: true,
+    cancellation: {
+      repository,
+      mode,
+      executionId: executionId || null,
+      issueNumber: issueNumber || null,
+      status: "canceled",
+      reason,
+      actor,
+      canceledAt,
+      matchedCount: targets.length,
+      canceledCount: canceled.length,
+      canceled
+    }
   };
 }
 async function retrieveControlRepositoryWorkflowProgress({
@@ -25783,6 +25904,7 @@ async function retrieveVpsRunnerGitHubQueueProgress({
   }
   const runnerEvents = findVpsRunnerEvents({ comments, queueComment });
   const runnerEvent = selectLatestVpsRunnerEvent(runnerEvents);
+  const cancellation = parseVpsRunnerCancellationFromQueueComment(queueComment);
   const leadTime = buildVpsRunnerProgressLeadTime({
     queueComment,
     runnerEvents,
@@ -25791,7 +25913,16 @@ async function retrieveVpsRunnerGitHubQueueProgress({
   const runnerEventStaleBlocker = runnerEvent && !pullRequest.pullRequest ? buildVpsRunnerEventStaleBlocker({ runnerEvent, env }) : null;
   const staleBlocker = !pullRequest.pullRequest && !branchState.branch && !runnerEvent ? buildVpsRunnerPickupBlocker({ queueComment, env }) : null;
   const failureBlocker = !pullRequest.pullRequest && runnerEvent?.status === RemoteCodexExecutionStatus.BLOCKED ? runnerEvent.rawFailure : null;
-  const status = pullRequest.pullRequest ? RemoteCodexExecutionStatus.COMPLETED : failureBlocker || runnerEventStaleBlocker || staleBlocker ? RemoteCodexExecutionStatus.BLOCKED : branchState.branch ? RemoteCodexExecutionStatus.IN_PROGRESS : runnerEvent?.status || RemoteCodexExecutionStatus.QUEUED;
+  const cancellationBlocker = cancellation ? {
+    error: "vps_runner_execution_canceled",
+    reason: cancellation.reason || "VPS runner execution was canceled by Butler request",
+    canceledAt: cancellation.canceledAt || null,
+    mode: cancellation.mode || null,
+    runningCancelRequested: cancellation.runningCancelRequested === true,
+    queueCommentId: normalizePositiveInteger3(queueComment.id),
+    queueCommentUrl: normalizeText17(queueComment.html_url) || null
+  } : null;
+  const status = cancellation ? RemoteCodexExecutionStatus.CANCELED : pullRequest.pullRequest ? RemoteCodexExecutionStatus.COMPLETED : failureBlocker || runnerEventStaleBlocker || staleBlocker ? RemoteCodexExecutionStatus.BLOCKED : branchState.branch ? RemoteCodexExecutionStatus.IN_PROGRESS : runnerEvent?.status || RemoteCodexExecutionStatus.QUEUED;
   return {
     ok: true,
     progress: {
@@ -25805,8 +25936,9 @@ async function retrieveVpsRunnerGitHubQueueProgress({
       status,
       pullRequest: pullRequest.pullRequest,
       runnerEvent,
+      cancellation,
       leadTime,
-      blocker: failureBlocker ?? runnerEventStaleBlocker ?? staleBlocker
+      blocker: cancellationBlocker ?? failureBlocker ?? runnerEventStaleBlocker ?? staleBlocker
     }
   };
 }
@@ -25832,6 +25964,38 @@ async function readAllIssueComments({ apiBaseUrl, repository, issueNumber, token
       return comments;
     }
   }
+}
+async function readRecentRepositoryIssueComments({ apiBaseUrl, repository, token, fetchImpl }) {
+  const issuesUrl = `${apiBaseUrl}/repos/${encodeURIComponentRepository2(
+    repository
+  )}/issues?state=open&sort=updated&direction=desc&per_page=100`;
+  const issuesResponse = await fetchImpl(issuesUrl, {
+    method: "GET",
+    headers: githubJsonHeaders({ token })
+  });
+  const issuesBody = await readJsonSafe3(issuesResponse);
+  if (!issuesResponse.ok) {
+    const error = new Error(normalizeText17(issuesBody?.message) || "GitHub issues lookup failed");
+    error.status = issuesResponse.status;
+    throw error;
+  }
+  const comments = [];
+  for (const issue of (Array.isArray(issuesBody) ? issuesBody : []).filter((item) => !item.pull_request)) {
+    const issueNumber = normalizePositiveInteger3(issue?.number);
+    if (!issueNumber) {
+      continue;
+    }
+    comments.push(
+      ...await readAllIssueComments({
+        apiBaseUrl,
+        repository,
+        issueNumber,
+        token,
+        fetchImpl
+      })
+    );
+  }
+  return comments;
 }
 async function findPullRequestForBranch({ repository, branch, token, env }) {
   const apiBaseUrl = normalizeText17(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
@@ -25996,6 +26160,113 @@ function findVpsRunnerEvents({ comments, queueComment }) {
   }).filter(Boolean);
   return events;
 }
+function buildVpsRunnerQueueStates(comments) {
+  const queues = /* @__PURE__ */ new Map();
+  const eventsByExecution = /* @__PURE__ */ new Map();
+  for (const comment of comments || []) {
+    const queueExecutionId = extractVpsExecutionIdFromQueueComment(comment);
+    if (queueExecutionId) {
+      const payload2 = extractFirstJsonFence(comment?.body);
+      queues.set(queueExecutionId, {
+        executionId: queueExecutionId,
+        issueNumber: normalizePositiveInteger3(payload2?.issueNumber),
+        comment,
+        cancellation: parseVpsRunnerCancellationFromQueueComment(comment),
+        lifecycle: "pending"
+      });
+      continue;
+    }
+    const eventExecutionId = extractVpsExecutionIdFromEventComment(comment);
+    if (!eventExecutionId) {
+      continue;
+    }
+    const payload = extractFirstJsonFence(comment?.body);
+    if (!payload) {
+      continue;
+    }
+    const list = eventsByExecution.get(eventExecutionId) || [];
+    list.push({
+      rawStatus: normalizeText17(payload.status),
+      status: normalizeVpsRunnerEventStatus(payload.status),
+      updatedAt: normalizeText17(payload.updatedAt) || normalizeText17(payload.heartbeatAt) || normalizeText17(comment?.updated_at) || normalizeText17(comment?.created_at)
+    });
+    eventsByExecution.set(eventExecutionId, list);
+  }
+  for (const state of queues.values()) {
+    const latest = selectLatestVpsRunnerEvent(eventsByExecution.get(state.executionId) || []);
+    if (latest?.status === RemoteCodexExecutionStatus.IN_PROGRESS) {
+      state.lifecycle = "running";
+    } else if ([RemoteCodexExecutionStatus.COMPLETED, RemoteCodexExecutionStatus.BLOCKED, RemoteCodexExecutionStatus.CANCELED].includes(latest?.status)) {
+      state.lifecycle = "terminal";
+    }
+  }
+  return [...queues.values()];
+}
+async function patchVpsRunnerQueueCancellation({ apiBaseUrl, repository, token, fetchImpl, comment, cancellation }) {
+  const commentId = normalizePositiveInteger3(comment?.id);
+  if (!commentId) {
+    return {
+      ok: false,
+      status: 422,
+      error: "vps_runner_cancel_failed",
+      reason: "queue comment id is missing"
+    };
+  }
+  const body = `${normalizeText17(comment?.body)}
+
+${buildVpsRunnerCanceledMarker(cancellation)}`;
+  const response = await fetchImpl(
+    `${apiBaseUrl}/repos/${encodeURIComponentRepository2(repository)}/issues/comments/${commentId}`,
+    {
+      method: "PATCH",
+      headers: githubJsonHeaders({ token }),
+      body: JSON.stringify({ body })
+    }
+  );
+  const responseBody = await readJsonSafe3(response);
+  if (!response.ok) {
+    return {
+      ok: false,
+      status: response.status,
+      error: "vps_runner_cancel_failed",
+      reason: normalizeText17(responseBody?.message) || "GitHub queue comment update failed"
+    };
+  }
+  return { ok: true };
+}
+function buildVpsRunnerCanceledMarker(cancellation) {
+  return [
+    `<!-- vtdd:vps-runner-canceled:${cancellation.executionId} -->`,
+    "VTDD VPS runner cancellation marker.",
+    "",
+    fencedJson(cancellation)
+  ].join("\n");
+}
+function parseVpsRunnerCancellationFromQueueComment(comment) {
+  const body = normalizeText17(comment?.body);
+  const executionId = extractVpsExecutionIdFromQueueComment(comment);
+  if (!executionId || !body.includes(`vtdd:vps-runner-canceled:${executionId}`)) {
+    return null;
+  }
+  const markerIndex = body.lastIndexOf(`vtdd:vps-runner-canceled:${executionId}`);
+  const payload = extractFirstJsonFence(body.slice(markerIndex));
+  return {
+    status: "canceled",
+    executionId,
+    mode: normalizeText17(payload?.mode) || null,
+    reason: normalizeText17(payload?.reason) || null,
+    actor: normalizeText17(payload?.actor) || null,
+    canceledAt: normalizeText17(payload?.canceledAt) || null,
+    runningCancelRequested: payload?.runningCancelRequested === true,
+    commentId: normalizePositiveInteger3(comment?.id),
+    commentUrl: normalizeText17(comment?.html_url) || null
+  };
+}
+function extractVpsExecutionIdFromEventComment(comment) {
+  const body = normalizeText17(comment?.body);
+  const match = body.match(/vtdd:vps-runner-event:([a-zA-Z0-9._:-]+)/);
+  return match ? match[1] : "";
+}
 function selectLatestVpsRunnerEvent(events) {
   return [...Array.isArray(events) ? events : []].sort((left, right) => {
     const leftUpdatedAt = Date.parse(normalizeText17(left?.updatedAt));
@@ -26097,12 +26368,13 @@ function buildVpsRunnerHealthStatus({ progress, env }) {
   const blocker = normalizeObject8(progress?.blocker);
   const pullRequest = normalizeObject8(progress?.pullRequest);
   const branch = normalizeObject8(progress?.branch);
+  const cancellation = normalizeObject8(progress?.cancellation);
   const lastSeenAt = normalizeText17(runnerEvent.updatedAt) || normalizeText17(runnerEvent.heartbeatAt) || null;
   const heartbeatAt = normalizeText17(runnerEvent.heartbeatAt) || null;
   const queuePickedUp = Boolean(
     Object.keys(runnerEvent).length > 0 || Object.keys(branch).length > 0 || Object.keys(pullRequest).length > 0
   );
-  const queueStatus = blocker.error === "vps_runner_pickup_not_observed" ? "stale" : queuePickedUp ? "picked_up" : "queued";
+  const queueStatus = Object.keys(cancellation).length > 0 ? "canceled" : blocker.error === "vps_runner_pickup_not_observed" ? "stale" : queuePickedUp ? "picked_up" : "queued";
   const currentStep = normalizeText17(runnerEvent.currentStep) || normalizeText17(runnerEvent.lastEvent) || (Object.keys(pullRequest).length > 0 ? "pull_request_observed" : Object.keys(branch).length > 0 ? "branch_observed" : "queue_waiting");
   const unavailableReason = buildVpsRunnerUnavailableReason({ progress, blocker });
   const runnerAlive = unavailableReason ? false : Boolean(lastSeenAt);
@@ -26123,6 +26395,7 @@ function buildVpsRunnerHealthStatus({ progress, env }) {
     leadTime: normalizeObject8(progress?.leadTime),
     currentStep,
     progressStatus: normalizeText17(progress?.status) || RemoteCodexExecutionStatus.UNKNOWN,
+    cancellation: Object.keys(cancellation).length > 0 ? cancellation : null,
     reason: unavailableReason?.reason || null,
     reasonCode: unavailableReason?.code || null,
     staleThresholdSeconds: normalizeNonNegativeNumber(env?.VPS_RUNNER_EVENT_STALE_SECONDS ?? 600)
@@ -26141,6 +26414,12 @@ function buildVpsRunnerUnavailableReason({ progress, blocker }) {
     return {
       code: "vps_runner_pickup_pending",
       reason: "VPS runner pickup has not been observed yet"
+    };
+  }
+  if (progressStatus === RemoteCodexExecutionStatus.CANCELED) {
+    return {
+      code: "vps_runner_execution_canceled",
+      reason: "VPS runner execution was canceled by Butler request"
     };
   }
   if (!normalizeText17(progress?.runnerEvent?.updatedAt) && !normalizeText17(progress?.runnerEvent?.heartbeatAt)) {
@@ -26397,10 +26676,32 @@ function normalizeVpsRunnerEventStatus(value) {
   if (normalized === "failed" || normalized === "blocked") {
     return RemoteCodexExecutionStatus.BLOCKED;
   }
+  if (normalized === "canceled" || normalized === "cancelled") {
+    return RemoteCodexExecutionStatus.CANCELED;
+  }
   if (normalized === "queued" || normalized === "requested") {
     return RemoteCodexExecutionStatus.QUEUED;
   }
   return RemoteCodexExecutionStatus.UNKNOWN;
+}
+function normalizeVpsRunnerCancelMode(value, { executionId, issueNumber } = {}) {
+  const normalized = normalizeText17(value).toLowerCase();
+  if (normalized === "execution" || normalized === "execution_id") {
+    return VpsRunnerCancelMode.EXECUTION;
+  }
+  if (normalized === "issue_pending" || normalized === "issue") {
+    return VpsRunnerCancelMode.ISSUE_PENDING;
+  }
+  if (normalized === "drain_pending" || normalized === "drain" || normalized === "all_pending") {
+    return VpsRunnerCancelMode.DRAIN_PENDING;
+  }
+  if (executionId) {
+    return VpsRunnerCancelMode.EXECUTION;
+  }
+  if (issueNumber) {
+    return VpsRunnerCancelMode.ISSUE_PENDING;
+  }
+  return VpsRunnerCancelMode.DRAIN_PENDING;
 }
 function normalizeRunStatus(value) {
   const normalized = normalizeText17(value).toLowerCase();
@@ -27764,6 +28065,7 @@ var RUNTIME_SETUP_MANIFEST = Object.freeze({
     "/v2/action/repository-nickname/delete",
     "/v2/action/progress",
     "/v2/action/vps-runner-status",
+    "/v2/action/vps-runner-cancel",
     "/v2/retrieve/constitution",
     "/v2/retrieve/decisions",
     "/v2/retrieve/proposals",
@@ -27787,6 +28089,7 @@ var RUNTIME_SETUP_MANIFEST = Object.freeze({
     "vtddDeleteRepositoryNickname",
     "vtddExecutionProgress",
     "vtddVpsRunnerStatus",
+    "vtddVpsRunnerCancel",
     "vtddRetrieveConstitution",
     "vtddRetrieveDecisionLogs",
     "vtddRetrieveProposalLogs",
@@ -27809,6 +28112,7 @@ var RUNTIME_SETUP_MANIFEST = Object.freeze({
     "vtddDeleteRepositoryNickname",
     "vtddExecutionProgress",
     "vtddVpsRunnerStatus",
+    "vtddVpsRunnerCancel",
     "vtddRetrieveConstitution",
     "vtddRetrieveDecisionLogs",
     "vtddRetrieveProposalLogs",
@@ -30423,6 +30727,42 @@ var runtime_default = {
         ok: true,
         health: status.health,
         progress: status.progress
+      });
+    }
+    if (request.method === "POST" && isApiPath(url.pathname, "/action/vps-runner-cancel")) {
+      const auth = authorizeGatewayRequest({
+        request,
+        env,
+        apiSuffix: "/action/vps-runner-cancel"
+      });
+      if (!auth.ok) {
+        return json(auth.status, {
+          ok: false,
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+      const payload = await readJson(request);
+      const cancellation = await cancelVpsRunnerQueue({
+        repository: payload.repository,
+        issueNumber: payload.issueNumber,
+        executionId: payload.executionId,
+        mode: payload.mode,
+        reason: payload.reason,
+        actor: payload.actor,
+        env
+      });
+      if (!cancellation.ok) {
+        return json(cancellation.status ?? 503, {
+          ok: false,
+          error: cancellation.error,
+          reason: cancellation.reason,
+          issues: cancellation.issues ?? []
+        });
+      }
+      return json(200, {
+        ok: true,
+        cancellation: cancellation.cancellation
       });
     }
     if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/approval-grant")) {

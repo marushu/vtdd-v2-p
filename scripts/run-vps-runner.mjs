@@ -12,6 +12,7 @@ import { validatePrBody } from "./validate-pr-body.mjs";
 
 const QUEUE_MARKER_RE = /<!--\s*vtdd:vps-runner-execution:([a-zA-Z0-9._:-]+)\s*-->/;
 const EVENT_MARKER_RE = /<!--\s*vtdd:vps-runner-event:([a-zA-Z0-9._:-]+)\s*-->/;
+const CANCELED_MARKER_RE = /<!--\s*vtdd:vps-runner-canceled:([a-zA-Z0-9._:-]+)\s*-->/;
 const DEFAULT_API_BASE_URL = "https://api.github.com";
 const DEFAULT_HEARTBEAT_SECONDS = 120;
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -141,9 +142,11 @@ async function executeVpsRunnerExecution({ githubFetch, token, workRoot, executi
   });
 
   try {
+    await assertVpsRunnerNotCanceled({ githubFetch, payload, checkpoint: "before_clone", notification });
     const workspace = path.join(workRoot, safePathSegment(payload.repository), payload.executionId);
     await fs.mkdir(path.dirname(workspace), { recursive: true });
     await runCommand("rm", ["-rf", workspace], { env });
+    await assertVpsRunnerNotCanceled({ githubFetch, payload, checkpoint: "before_clone_command", notification });
     await runTrackedVpsCommand("gh", ["repo", "clone", payload.repository, workspace], {
       env,
       githubFetch,
@@ -151,6 +154,7 @@ async function executeVpsRunnerExecution({ githubFetch, token, workRoot, executi
       notification,
       currentStep: "gh_repo_clone"
     });
+    await assertVpsRunnerNotCanceled({ githubFetch, payload, checkpoint: "after_clone", notification });
     const branchCheckout = await checkoutVpsRunnerBranch({ payload, cwd: workspace, env });
     payload = {
       ...payload,
@@ -181,6 +185,7 @@ async function executeVpsRunnerExecution({ githubFetch, token, workRoot, executi
     });
 
     const prompt = buildCodexExecutionPrompt({ payload, issue, pullRequestContext });
+    await assertVpsRunnerNotCanceled({ githubFetch, payload, checkpoint: "before_codex", notification });
     await runTrackedVpsCommand("codex", buildCodexExecArgs({ env: process.env }), {
       cwd: workspace,
       env: buildCodexExecutionEnv(process.env),
@@ -191,6 +196,7 @@ async function executeVpsRunnerExecution({ githubFetch, token, workRoot, executi
       notification,
       currentStep: "codex_subprocess"
     });
+    await assertVpsRunnerNotCanceled({ githubFetch, payload, checkpoint: "after_codex", notification });
 
     const status = await runCommand("git", ["status", "--porcelain"], { cwd: workspace, env });
     const hasWorkingTreeChanges = Boolean(status.stdout.trim());
@@ -241,6 +247,7 @@ async function executeVpsRunnerExecution({ githubFetch, token, workRoot, executi
       githubFetch,
       payload
     });
+    await assertVpsRunnerNotCanceled({ githubFetch, payload, checkpoint: "before_pr", notification });
     pullRequestAuthor = existingPullRequest?.author?.login || pullRequestAuthor;
     let prUrl = existingPullRequest?.url || "";
     if (prUrl) {
@@ -334,6 +341,9 @@ async function executeVpsRunnerExecution({ githubFetch, token, workRoot, executi
 
     return { ok: true, message: `VPS runner execution completed: ${prUrl}` };
   } catch (error) {
+    if (error?.code === "VTDD_VPS_RUNNER_CANCELED") {
+      return { ok: false, reason: error.message };
+    }
     const rawFailure = classifyVpsRunnerFailure(error);
     await postVpsRunnerEvent({
       githubFetch,
@@ -358,8 +368,12 @@ function selectPendingVpsRunnerExecutions({ comments, allowedRepositories, repos
   for (const comment of comments) {
     const queue = parseVpsRunnerQueueComment(comment.body);
     if (queue.ok && validateVpsRunnerPayloadPolicy(queue.payload, policies).ok) {
+      const cancellation = parseVpsRunnerCancellationMarker(comment.body, {
+        executionId: queue.payload.executionId
+      });
       queues.set(queue.payload.executionId, {
         ...queue,
+        cancellation,
         commentId: comment.id,
         commentUrl: comment.html_url,
         createdAt: comment.created_at,
@@ -374,7 +388,7 @@ function selectPendingVpsRunnerExecutions({ comments, allowedRepositories, repos
     if (!event.ok) {
       continue;
     }
-    if (["pr_created", "completed", "failed", "blocked"].includes(event.event.status)) {
+    if (["pr_created", "completed", "failed", "blocked", "canceled"].includes(event.event.status)) {
       terminalEvents.add(event.executionId);
     }
     if (event.event.status === "running") {
@@ -383,7 +397,10 @@ function selectPendingVpsRunnerExecutions({ comments, allowedRepositories, repos
   }
 
   return [...queues.values()].filter(
-    (queue) => !terminalEvents.has(queue.payload.executionId) && !runningEvents.has(queue.payload.executionId)
+    (queue) =>
+      !queue.cancellation &&
+      !terminalEvents.has(queue.payload.executionId) &&
+      !runningEvents.has(queue.payload.executionId)
   );
 }
 
@@ -543,6 +560,28 @@ function parseVpsRunnerEventComment(body) {
     return { ok: false, reason: "vps_runner_event_payload_missing", executionId: marker[1] };
   }
   return { ok: true, executionId: marker[1], event };
+}
+
+function parseVpsRunnerCancellationMarker(body, { executionId } = {}) {
+  const text = String(body || "");
+  const marker = text.match(CANCELED_MARKER_RE);
+  if (!marker) {
+    return null;
+  }
+  if (executionId && marker[1] !== executionId) {
+    return null;
+  }
+  const markerIndex = text.lastIndexOf(`vtdd:vps-runner-canceled:${marker[1]}`);
+  const payload = extractFirstJsonFence(text.slice(markerIndex));
+  return {
+    status: "canceled",
+    executionId: marker[1],
+    mode: normalizeText(payload?.mode),
+    reason: normalizeText(payload?.reason),
+    actor: normalizeGitHubLogin(payload?.actor),
+    canceledAt: normalizeIsoTimestamp(payload?.canceledAt),
+    runningCancelRequested: payload?.runningCancelRequested === true
+  };
 }
 
 function buildVpsRunnerEventComment({ executionId, event, notification } = {}) {
@@ -837,6 +876,50 @@ async function postVpsRunnerEvent({ githubFetch, payload, event, notification })
   });
 }
 
+async function assertVpsRunnerNotCanceled({ githubFetch, payload, checkpoint, notification }) {
+  const cancellation = await readVpsRunnerCancellation({ githubFetch, payload });
+  if (!cancellation) {
+    return;
+  }
+  await postVpsRunnerEvent({
+    githubFetch,
+    payload,
+    notification,
+    event: {
+      status: "canceled",
+      lastEvent: "execution_canceled",
+      currentStep: "canceled",
+      cancellation: {
+        ...cancellation,
+        checkpoint
+      },
+      rawFailure: {
+        error: "vps_runner_execution_canceled",
+        reason: cancellation.reason || "VPS runner execution was canceled by Butler request",
+        checkpoint
+      }
+    }
+  });
+  const error = new Error(cancellation.reason || "VPS runner execution canceled.");
+  error.code = "VTDD_VPS_RUNNER_CANCELED";
+  throw error;
+}
+
+async function readVpsRunnerCancellation({ githubFetch, payload }) {
+  for await (const comments of readIssueCommentsPages({ githubFetch, payload })) {
+    const queueComment = comments.find((comment) =>
+      normalizeText(comment?.body).includes(`vtdd:vps-runner-execution:${payload.executionId}`)
+    );
+    if (!queueComment) {
+      continue;
+    }
+    return parseVpsRunnerCancellationMarker(queueComment.body, {
+      executionId: payload.executionId
+    });
+  }
+  return null;
+}
+
 function updateVpsRunnerLifecycleForEvent({ lifecycle, event, now }) {
   const next = normalizeVpsRunnerLifecycle(lifecycle);
   const lastEvent = normalizeText(event?.lastEvent);
@@ -867,6 +950,9 @@ function updateVpsRunnerLifecycleForEvent({ lifecycle, event, now }) {
     next.completedAt = timestamp;
   }
   if (status === "failed" && !next.failedAt) {
+    next.failedAt = timestamp;
+  }
+  if (status === "canceled" && !next.failedAt) {
     next.failedAt = timestamp;
   }
   return next;
@@ -1596,6 +1682,7 @@ export {
   isNonFastForwardPushFailure,
   loadVpsRunnerRepositoryPolicies,
   normalizeRepositoryPolicies,
+  parseVpsRunnerCancellationMarker,
   parseVpsRunnerEventComment,
   parseVpsRunnerQueueComment,
   postVpsRunnerEvent,
