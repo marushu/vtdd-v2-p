@@ -30,7 +30,7 @@ const SETUP_ARTIFACT_SPECS = Object.freeze({
   }
 });
 
-const RUNTIME_SETUP_MANIFEST = Object.freeze({
+export const RUNTIME_SETUP_MANIFEST = Object.freeze({
   routes: [
     "/health",
     "/setup",
@@ -224,22 +224,19 @@ export async function evaluateButlerSelfParity(input = {}) {
     };
   }
 
-  const canonicalRoutes = extractOpenApiRoutes(openapi.artifact.content);
-  const canonicalOperationIds = extractOperationIds(openapi.artifact.content);
+  const manifestParity = evaluateRuntimeSetupManifestParity({
+    openApiContent: openapi.artifact.content,
+    instructionsContent: instructions.artifact.content
+  });
+  const canonicalRoutes = manifestParity.canonical.routes;
+  const canonicalOperationIds = manifestParity.canonical.operationIds;
   const canonicalInstructionTokens = extractInstructionTokens(
     instructions.artifact.content,
     RUNTIME_SETUP_MANIFEST.operationIds
   );
-
-  const runtimeMissingRoutes = canonicalRoutes.filter(
-    (route) => !RUNTIME_SETUP_MANIFEST.routes.includes(route)
-  );
-  const runtimeMissingOperationIds = canonicalOperationIds.filter(
-    (operationId) => !RUNTIME_SETUP_MANIFEST.operationIds.includes(operationId)
-  );
-  const runtimeMissingInstructionTokens = canonicalInstructionTokens.filter(
-    (token) => !RUNTIME_SETUP_MANIFEST.instructionTokens.includes(token)
-  );
+  const runtimeMissingRoutes = manifestParity.runtimeMissing.routes;
+  const runtimeMissingOperationIds = manifestParity.runtimeMissing.operationIds;
+  const runtimeMissingInstructionTokens = manifestParity.runtimeMissing.instructionTokens;
 
   const runtimeParity =
     runtimeMissingRoutes.length > 0 ||
@@ -325,6 +322,43 @@ export async function evaluateButlerSelfParity(input = {}) {
             }
           : null,
       recommendedActions
+    }
+  };
+}
+
+export function evaluateRuntimeSetupManifestParity(input = {}) {
+  const runtimeManifest = input.runtimeManifest ?? RUNTIME_SETUP_MANIFEST;
+  const canonicalRoutes = extractOpenApiRoutes(input.openApiContent);
+  const canonicalOperationIds = extractOperationIds(input.openApiContent);
+  const canonicalInstructionTokens = input.instructionsContent
+    ? extractInstructionTokens(input.instructionsContent, runtimeManifest.operationIds ?? [])
+    : [];
+
+  const runtimeMissingRoutes = canonicalRoutes.filter(
+    (route) => !(runtimeManifest.routes ?? []).includes(route)
+  );
+  const runtimeMissingOperationIds = canonicalOperationIds.filter(
+    (operationId) => !(runtimeManifest.operationIds ?? []).includes(operationId)
+  );
+  const runtimeMissingInstructionTokens = canonicalInstructionTokens.filter(
+    (token) => !(runtimeManifest.instructionTokens ?? []).includes(token)
+  );
+
+  return {
+    ok:
+      runtimeMissingRoutes.length === 0 &&
+      runtimeMissingOperationIds.length === 0 &&
+      runtimeMissingInstructionTokens.length === 0,
+    canonical: {
+      routes: canonicalRoutes,
+      operationIds: canonicalOperationIds,
+      instructionTokens: canonicalInstructionTokens
+    },
+    runtimeManifest,
+    runtimeMissing: {
+      routes: runtimeMissingRoutes,
+      operationIds: runtimeMissingOperationIds,
+      instructionTokens: runtimeMissingInstructionTokens
     }
   };
 }
