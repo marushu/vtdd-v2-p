@@ -632,6 +632,31 @@ Status values used below:
   - `docs/mvp/e2e/e2e-30-execution-lead-time-telemetry.md`
 - Status: `implemented_pending_e2e`
 
+## E2E-31 PR mergeability preflight
+
+- Issues: `#265`
+- Happy path:
+  - Butler can read PR mergeability runtime truth through `vtddRetrieveGitHub(pulls)`
+  - `pull_merge` reads PR runtime truth before dispatching the merge API
+- Boundary path:
+  - conflict/dirty PR runtime truth blocks before `PUT /merge`
+  - conflict diagnostics include a warning and fresh-branch recreation suggestion
+  - file-level conflict truth is not fabricated when the GitHub PR endpoint does not provide it
+- Implementation evidence:
+  - `src/core/github-mergeability.js`
+  - `src/core/github-read-plane.js`
+  - `src/core/github-high-risk-plane.js`
+  - `src/worker.js`
+- Test evidence:
+  - `test/github-read-plane.test.js`
+  - `test/github-high-risk-plane.test.js`
+  - `test/worker.test.js`
+- Run evidence:
+  - `docs/mvp/e2e/e2e-31-pr-mergeability-preflight.md`
+- Remaining blocker:
+  - live E2E against a real conflicting PR was not run in this revision and must not be implied
+- Status: `partial`
+
 ## E2E-26 Governed production deploy from passkey operator
 
 - Issues: `#82`
