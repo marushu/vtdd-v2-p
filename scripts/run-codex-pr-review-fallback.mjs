@@ -5,7 +5,8 @@ import {
   buildPullRequestReviewContext,
   findExistingCodexReviewFallbackComment,
   formatCodexReviewFallbackComment,
-  parseCodexReviewFallbackComment
+  parseCodexReviewFallbackComment,
+  resolveOperatorMention
 } from "../src/core/index.js";
 
 async function main() {
@@ -243,24 +244,6 @@ function shouldMentionCodexFallback({ existingComment, status, recommendedAction
   const nextStatus = String(status || "").trim().toLowerCase();
   const nextAction = String(recommendedAction || "").trim().toLowerCase() || null;
   return existing.status !== nextStatus || existing.recommendedAction !== nextAction;
-}
-
-function resolveOperatorMention(candidates = []) {
-  return candidates.map(normalizeMentionLogin).find(Boolean) || "";
-}
-
-function normalizeMentionLogin(value) {
-  const login = String(value ?? "").trim();
-  if (!/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/.test(login)) {
-    return "";
-  }
-  if (/\[bot\]$/i.test(login) || /bot$/i.test(login)) {
-    return "";
-  }
-  if (["ghost", "unknown"].includes(login.toLowerCase())) {
-    return "";
-  }
-  return login;
 }
 
 function normalizeStringArray(value) {

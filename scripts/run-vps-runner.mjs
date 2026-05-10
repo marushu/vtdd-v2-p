@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { parseCodexReviewFallbackComment } from "../src/core/index.js";
+import { normalizeMentionLogin, parseCodexReviewFallbackComment } from "../src/core/index.js";
 import { renderPrBody } from "./render-pr-body.mjs";
 import { validatePrBody } from "./validate-pr-body.mjs";
 
@@ -1353,14 +1353,7 @@ function getVpsRunnerMilestoneLabel(event = {}) {
 }
 
 function isMentionableGitHubLogin(value) {
-  const login = normalizeGitHubLogin(value);
-  if (!login) {
-    return false;
-  }
-  if (["ghost", "unknown"].includes(login.toLowerCase())) {
-    return false;
-  }
-  return true;
+  return Boolean(normalizeMentionLogin(value));
 }
 
 function redactDiagnosticText(value) {

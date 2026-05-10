@@ -214,6 +214,7 @@ export {
 } from "./custom-gpt-setup-artifacts.js";
 export { GitHubReadResource, retrieveGitHubReadPlane } from "./github-read-plane.js";
 export { GitHubWriteOperation, executeGitHubWritePlane } from "./github-write-plane.js";
+export { normalizeMentionLogin, resolveOperatorMention } from "./github-mention.js";
 export {
   GitHubAppOperationRegistry,
   GitHubAppOperationTier,

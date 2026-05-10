@@ -1,3 +1,5 @@
+import { normalizeMentionLogin } from "./github-mention.js";
+
 export const CODEX_REVIEW_FALLBACK_MARKER = "<!-- vtdd:reviewer=codex-fallback -->";
 
 export const CodexReviewFallbackStatus = Object.freeze({
@@ -232,20 +234,6 @@ function normalizeStringArray(value) {
 
 function normalizeText(value) {
   return String(value ?? "").trim();
-}
-
-function normalizeMentionLogin(value) {
-  const login = normalizeText(value);
-  if (!/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/.test(login)) {
-    return "";
-  }
-  if (/\[bot\]$/i.test(login) || /bot$/i.test(login)) {
-    return "";
-  }
-  if (["ghost", "unknown"].includes(login.toLowerCase())) {
-    return "";
-  }
-  return login;
 }
 
 function formatFallbackMilestoneLabel(status, recommendedAction) {

@@ -1,4 +1,5 @@
 import { validateReviewerResponse } from "./reviewer-contract.js";
+import { normalizeMentionLogin } from "./github-mention.js";
 
 export const GEMINI_PR_REVIEW_MARKER = "<!-- vtdd:reviewer=gemini -->";
 export const REVIEWER_OBJECTION_RESOLUTION_MARKER = "<!-- vtdd:reviewer-objection-resolution -->";
@@ -365,20 +366,6 @@ function normalizeMultilineText(value) {
 
 function normalizeText(value) {
   return String(value ?? "").trim();
-}
-
-function normalizeMentionLogin(value) {
-  const login = normalizeText(value);
-  if (!/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/.test(login)) {
-    return "";
-  }
-  if (/\[bot\]$/i.test(login) || /bot$/i.test(login)) {
-    return "";
-  }
-  if (["ghost", "unknown"].includes(login.toLowerCase())) {
-    return "";
-  }
-  return login;
 }
 
 function normalizePositiveInteger(value) {

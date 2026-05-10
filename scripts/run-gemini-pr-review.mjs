@@ -12,6 +12,7 @@ import {
   formatCodexReviewFallbackComment,
   formatGeminiReviewComment,
   parseGeminiReviewComment,
+  resolveOperatorMention,
   resolveGeminiReviewTrigger
 } from "../src/core/index.js";
 
@@ -202,24 +203,6 @@ function shouldMentionGeminiReviewResult({ existingComment, recommendedAction })
   const currentAction = String(recommendedAction || "").trim().toLowerCase() || "manual_review";
   const existing = parseGeminiReviewComment(existingComment);
   return !existing || existing.recommendedAction !== currentAction;
-}
-
-function resolveOperatorMention(candidates = []) {
-  return candidates.map(normalizeMentionLogin).find(Boolean) || "";
-}
-
-function normalizeMentionLogin(value) {
-  const login = String(value ?? "").trim();
-  if (!/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/.test(login)) {
-    return "";
-  }
-  if (/\[bot\]$/i.test(login) || /bot$/i.test(login)) {
-    return "";
-  }
-  if (["ghost", "unknown"].includes(login.toLowerCase())) {
-    return "";
-  }
-  return login;
 }
 
 main().catch((error) => {
