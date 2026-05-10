@@ -22,9 +22,11 @@ export function formatCodexReviewFallbackComment(input = {}) {
   const rawReview = normalizeText(input.rawReview);
   const repository = normalizeText(input.repository);
   const pullRequestNumber = normalizeText(input.pullRequestNumber);
+  const notificationMention = normalizeMentionLogin(input.notificationMention);
 
   const lines = [
     CODEX_REVIEW_FALLBACK_MARKER,
+    ...(notificationMention ? [`@${notificationMention} VTDD milestone: ${formatFallbackMilestoneLabel(status, recommendedAction)}.`] : []),
     "## VTDD Codex Reviewer Fallback Request",
     "",
     `- Status: \`${status}\``,
@@ -230,4 +232,34 @@ function normalizeStringArray(value) {
 
 function normalizeText(value) {
   return String(value ?? "").trim();
+}
+
+function normalizeMentionLogin(value) {
+  const login = normalizeText(value);
+  if (!/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/.test(login)) {
+    return "";
+  }
+  if (/\[bot\]$/i.test(login) || /bot$/i.test(login)) {
+    return "";
+  }
+  if (["ghost", "unknown"].includes(login.toLowerCase())) {
+    return "";
+  }
+  return login;
+}
+
+function formatFallbackMilestoneLabel(status, recommendedAction) {
+  if (status === CodexReviewFallbackStatus.REQUESTED) {
+    return "manual review required";
+  }
+  if (status === CodexReviewFallbackStatus.BLOCKED) {
+    return "reviewer blocked";
+  }
+  if (recommendedAction === "request_changes") {
+    return "review requested changes";
+  }
+  if (recommendedAction === "approve") {
+    return "review approved";
+  }
+  return "manual review required";
 }

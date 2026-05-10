@@ -262,6 +262,22 @@ test("formatGeminiReviewComment renders marker and sections", () => {
   assert.equal(body.includes("request_changes"), true);
 });
 
+test("formatGeminiReviewComment can render a short operator milestone mention", () => {
+  const body = formatGeminiReviewComment({
+    trigger: "pull_request_target:synchronize",
+    model: "gemini-2.5-flash",
+    notificationMention: "marushu",
+    review: {
+      criticalFindings: ["No major blocking issues found."],
+      risks: ["Human should still verify before merge."],
+      recommendedAction: "approve"
+    }
+  });
+
+  assert.equal(body.split("\n")[1], "@marushu VTDD milestone: review result changed.");
+  assert.equal(body.includes("Recommended action: `approve`"), true);
+});
+
 test("findExistingGeminiReviewComment locates prior marker comment", () => {
   const comment = findExistingGeminiReviewComment([
     { id: 1, body: "ordinary comment" },

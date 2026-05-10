@@ -247,9 +247,11 @@ export function formatGeminiReviewComment(input = {}) {
   const criticalFindings = normalizeStringArray(review.criticalFindings);
   const risks = normalizeStringArray(review.risks);
   const recommendedAction = normalizeText(review.recommendedAction) || "manual_review";
+  const notificationMention = normalizeMentionLogin(input.notificationMention);
 
-  return [
+  const lines = [
     GEMINI_PR_REVIEW_MARKER,
+    ...(notificationMention ? [`@${notificationMention} VTDD milestone: review result changed.`] : []),
     "## VTDD Gemini Critical Review",
     "",
     `- Trigger: \`${trigger}\``,
@@ -263,7 +265,9 @@ export function formatGeminiReviewComment(input = {}) {
     formatListOrFallback(risks, "- None reported."),
     "",
     "_Reviewer remains critique-only. Human keeps revision GO / merge GO + real passkey authority._"
-  ].join("\n");
+  ];
+
+  return lines.join("\n");
 }
 
 export function findExistingGeminiReviewComment(comments = []) {
@@ -361,6 +365,20 @@ function normalizeMultilineText(value) {
 
 function normalizeText(value) {
   return String(value ?? "").trim();
+}
+
+function normalizeMentionLogin(value) {
+  const login = normalizeText(value);
+  if (!/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/.test(login)) {
+    return "";
+  }
+  if (/\[bot\]$/i.test(login) || /bot$/i.test(login)) {
+    return "";
+  }
+  if (["ghost", "unknown"].includes(login.toLowerCase())) {
+    return "";
+  }
+  return login;
 }
 
 function normalizePositiveInteger(value) {

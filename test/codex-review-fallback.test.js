@@ -32,6 +32,21 @@ test("formatCodexReviewFallbackComment renders marker and requested fallback sta
   assert.equal(body.includes("gemini_temporarily_unavailable"), true);
 });
 
+test("formatCodexReviewFallbackComment can render a short operator milestone mention", () => {
+  const body = formatCodexReviewFallbackComment({
+    status: "completed",
+    trigger: "pull_request_target:synchronize",
+    reason: "gemini_temporarily_unavailable",
+    deliveryMode: "vps_codex_cli",
+    recommendedAction: "request_changes",
+    notificationMention: "marushu"
+  });
+
+  assert.equal(body.split("\n")[1], "@marushu VTDD milestone: review requested changes.");
+  assert.equal(body.includes("- Status: `completed`"), true);
+  assert.equal(body.includes("- Recommended action: `request_changes`"), true);
+});
+
 test("findExistingCodexReviewFallbackComment locates prior fallback request", () => {
   const comment = findExistingCodexReviewFallbackComment([
     { id: 1, body: "ordinary comment" },
