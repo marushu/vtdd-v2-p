@@ -651,10 +651,12 @@ Status values used below:
   - `test/github-read-plane.test.js`
   - `test/github-high-risk-plane.test.js`
   - `test/worker.test.js`
+  - `test/e2e-31-live-pr-mergeability-preflight.test.js` (read-only live harness, skipped until a human supplies a conflicting PR fixture)
 - Run evidence:
   - `docs/mvp/e2e/e2e-31-pr-mergeability-preflight.md`
 - Remaining blocker:
   - live E2E against a real conflicting PR was not run in this revision and must not be implied
+  - the live harness exists, but passing local tests do not substitute for a human-approved live fixture run
 - Status: `partial`
 
 ## E2E-26 Governed production deploy from passkey operator

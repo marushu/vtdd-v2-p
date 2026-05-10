@@ -52,6 +52,21 @@ The remaining reviewer risk is explicit: GitHub's live `mergeable` /
 `mergeable_state` computation can still differ from local mocked runtime truth
 until a human-approved live conflict fixture is exercised.
 
+Read-only live verification harness:
+
+```sh
+LIVE_GITHUB_REPOSITORY=owner/repo \
+LIVE_GITHUB_CONFLICT_PULL_NUMBER=123 \
+GITHUB_APP_INSTALLATION_TOKEN=ghs_... \
+node --test test/e2e-31-live-pr-mergeability-preflight.test.js
+```
+
+The harness only performs `GET /repos/{owner}/{repo}/pulls/{pull_number}`
+through `vtddRetrieveGitHub(pulls)`. It does not create branches, update PRs,
+call `PUT /merge`, deploy, mutate credentials, or change repository settings.
+It is skipped by default until a human supplies an existing conflicting PR
+fixture and a read-scoped GitHub App installation token.
+
 ## Evidence Files
 
 - `src/core/github-mergeability.js`
@@ -61,9 +76,11 @@ until a human-approved live conflict fixture is exercised.
 - `test/github-read-plane.test.js`
 - `test/github-high-risk-plane.test.js`
 - `test/worker.test.js`
+- `test/e2e-31-live-pr-mergeability-preflight.test.js`
 
 ## Current Reading
 
 Issue #265 has connected runtime code and passing local happy/boundary evidence.
 Closure remains blocked on human judgment and, if required by the reviewer,
-a separately approved live conflicting-PR E2E run.
+a separately approved live conflicting-PR E2E run. This revision adds the
+read-only harness for that run but does not replace the missing live evidence.
