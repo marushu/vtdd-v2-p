@@ -1053,11 +1053,13 @@ function findVpsRunnerEvents({ comments, queueComment }) {
       if (!payload) {
         return null;
       }
-      const status = normalizeVpsRunnerEventStatus(payload.status);
+      const rawStatus = normalizeText(payload.status);
+      const status = normalizeVpsRunnerEventStatus(rawStatus);
       const leadTime = normalizeObject(payload.leadTime);
       return {
         commentId: normalizePositiveInteger(comment?.id),
         commentUrl: normalizeText(comment?.html_url) || null,
+        rawStatus,
         status,
         lastEvent: normalizeText(payload.lastEvent) || null,
         currentStep: normalizeText(payload.currentStep) || null,
@@ -1104,7 +1106,7 @@ function buildVpsRunnerProgressLeadTime({ queueComment, runnerEvents, pullReques
     codexStartedAt: normalizeText(eventLeadTime.codex_started_at),
     branchPushedAt: normalizeText(eventLeadTime.branch_pushed_at),
     prCreatedAt: normalizeText(eventLeadTime.pr_created_at) || normalizeText(pullRequest?.createdAt),
-    completedAt: normalizeText(eventLeadTime.completed_at) || normalizeText(pullRequest?.createdAt),
+    completedAt: normalizeText(eventLeadTime.completed_at),
     failedAt: normalizeText(eventLeadTime.failed_at)
   };
 
@@ -1122,7 +1124,7 @@ function buildVpsRunnerProgressLeadTime({ queueComment, runnerEvents, pullReques
     if (!timestamps.prCreatedAt && ["pull_request_created", "pull_request_updated"].includes(normalizeText(event?.lastEvent))) {
       timestamps.prCreatedAt = updatedAt;
     }
-    if (!timestamps.completedAt && [RemoteCodexExecutionStatus.COMPLETED, "pr_created"].includes(normalizeText(event?.status))) {
+    if (!timestamps.completedAt && normalizeText(event?.rawStatus) === RemoteCodexExecutionStatus.COMPLETED) {
       timestamps.completedAt = updatedAt;
     }
     if (!timestamps.failedAt && normalizeText(event?.status) === RemoteCodexExecutionStatus.BLOCKED && Object.keys(normalizeObject(event?.rawFailure)).length > 0) {

@@ -20,6 +20,7 @@ test("execution lead time computes concise lifecycle durations", () => {
   assert.equal(leadTime.durations.codex_execution_duration.label, "3m 42s");
   assert.equal(leadTime.durations.pr_creation_duration.label, "8s");
   assert.equal(leadTime.durations.total_lead_time.label, "4m 10s");
+  assert.equal(leadTime.completed_at, null);
 });
 
 test("execution duration rejects missing or reversed timestamps", () => {

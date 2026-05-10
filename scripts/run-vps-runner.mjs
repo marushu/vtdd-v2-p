@@ -835,7 +835,7 @@ function updateVpsRunnerLifecycleForEvent({ lifecycle, event, now }) {
   if ((status === "pr_created" || lastEvent === "pull_request_created" || lastEvent === "pull_request_updated") && !next.prCreatedAt) {
     next.prCreatedAt = timestamp;
   }
-  if ((status === "completed" || status === "pr_created") && !next.completedAt) {
+  if (status === "completed" && !next.completedAt) {
     next.completedAt = timestamp;
   }
   if (status === "failed" && !next.failedAt) {
@@ -1441,7 +1441,7 @@ function normalizeText(value) {
 
 function normalizeIsoTimestamp(value) {
   const text = normalizeText(value);
-  return Number.isFinite(Date.parse(text)) ? text : "";
+  return Number.isFinite(Date.parse(text)) ? text : null;
 }
 
 function normalizeGitHubLogin(value) {
