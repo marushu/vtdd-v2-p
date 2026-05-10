@@ -24,6 +24,7 @@ import {
   retrieveRemoteCodexExecutionProgress,
   retrieveVpsRunnerHealthStatus,
   retrieveCrossIssueMemoryIndex,
+  retrieveOperationalMemory,
   retrieveDecisionLogReferences,
   retrieveProposalLogReferences,
   retrieveConstitution,
@@ -476,6 +477,22 @@ export default {
       return handleRetrieveCrossIssueRequest(url, env);
     }
 
+    if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/operational-memory")) {
+      const auth = authorizeGatewayRequest({
+        request,
+        env,
+        apiSuffix: "/retrieve/operational-memory"
+      });
+      if (!auth.ok) {
+        return retrieveErrorJson(url, auth.status, {
+          ok: false,
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+      return handleRetrieveOperationalMemoryRequest(url, env);
+    }
+
     if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/github")) {
       const auth = authorizeGatewayRequest({ request, env, apiSuffix: "/retrieve/github" });
       if (!auth.ok) {
@@ -671,6 +688,41 @@ async function handleRetrieveCrossIssueRequest(url, env) {
     primaryReference: retrieved.primaryReference,
     referencesBySource: retrieved.referencesBySource,
     orderedReferences: retrieved.orderedReferences
+  });
+}
+
+async function handleRetrieveOperationalMemoryRequest(url, env) {
+  const provider = resolveMemoryProvider(env);
+  const limit = normalizeLimit(url.searchParams.get("limit"), 8);
+  const queryText =
+    normalizeText(url.searchParams.get("text")) || normalizeText(url.searchParams.get("q"));
+  const repository = normalizeText(url.searchParams.get("repository"));
+  const runtimeTruth = buildRetrieveRuntimeTruth(url);
+
+  const retrieved = await retrieveOperationalMemory(provider, {
+    text: queryText,
+    repository,
+    limit,
+    runtimeTruth
+  });
+  if (!retrieved.ok) {
+    return retrieveErrorJson(url, retrieved.status ?? 503, {
+      ok: false,
+      error: retrieved.error ?? "operational_memory_read_failed",
+      reason: retrieved.reason
+    });
+  }
+
+  return json(200, {
+    ok: true,
+    architecture: retrieved.architecture,
+    queryText: retrieved.queryText,
+    repository: retrieved.repository,
+    runtimeTruth: retrieved.runtimeTruth,
+    memoryUseRule: retrieved.memoryUseRule,
+    compactContext: retrieved.compactContext,
+    referencesByLayer: retrieved.referencesByLayer,
+    retrievalSignals: retrieved.retrievalSignals
   });
 }
 
@@ -2455,6 +2507,20 @@ function normalizeSemanticRetrievalRequest(value) {
 function parseBooleanQueryParam(value) {
   const normalized = normalize(value);
   return normalized === "true" || normalized === "1" || normalized === "yes";
+}
+
+function buildRetrieveRuntimeTruth(url) {
+  const currentState = normalizeText(url.searchParams.get("currentState"));
+  const source = normalizeText(url.searchParams.get("runtimeTruthSource"));
+  const checkedAt = normalizeText(url.searchParams.get("checkedAt"));
+  if (!currentState && !source && !checkedAt) {
+    return null;
+  }
+  return {
+    currentState,
+    source,
+    checkedAt
+  };
 }
 
 function resolveRuntimeAutonomyMode(env) {

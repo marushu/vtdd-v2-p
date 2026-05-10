@@ -130,6 +130,13 @@ export {
   retrieveHybrid
 } from "./memory-retrieve.js";
 export {
+  OPERATIONAL_MEMORY_STORAGE_CANDIDATES,
+  OperationalMemoryLayer,
+  OperationalMemorySignal,
+  buildOperationalMemoryArchitecture,
+  retrieveOperationalMemory
+} from "./operational-memory.js";
+export {
   RetrievalSource,
   SemanticRetrievalMode,
   buildRetrievalPlan,

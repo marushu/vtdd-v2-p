@@ -32,6 +32,161 @@ components:
         ok:
           type: boolean
       additionalProperties: true
+    OperationalMemoryResponse:
+      type: object
+      required:
+        - ok
+        - architecture
+        - memoryUseRule
+        - compactContext
+        - referencesByLayer
+        - retrievalSignals
+      properties:
+        ok:
+          type: boolean
+        architecture:
+          type: object
+          properties:
+            purpose:
+              type: string
+            nonGoals:
+              type: array
+              items:
+                type: string
+            storageCandidates:
+              type: array
+              items:
+                type: string
+            layers:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
+            retrievalSignals:
+              type: array
+              items:
+                type: string
+            runtimeTruthRule:
+              type: string
+          additionalProperties: true
+        queryText:
+          type:
+            - string
+            - "null"
+        repository:
+          type:
+            - string
+            - "null"
+        runtimeTruth:
+          type:
+            - object
+            - "null"
+          properties:
+            currentState:
+              type:
+                - string
+                - "null"
+            source:
+              type:
+                - string
+                - "null"
+            checkedAt:
+              type:
+                - string
+                - "null"
+            overridesMemory:
+              type: boolean
+          additionalProperties: true
+        memoryUseRule:
+          type: string
+          enum:
+            - runtime_truth_current_state_overrides_memory_background_reference
+            - memory_background_reference_only
+        compactContext:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              layer:
+                type: string
+              type:
+                type: string
+              title:
+                type: string
+              summary:
+                type:
+                  - string
+                  - "null"
+              repository:
+                type:
+                  - string
+                  - "null"
+              crossRepository:
+                type: boolean
+              createdAt:
+                type:
+                  - string
+                  - "null"
+              tags:
+                type: array
+                items:
+                  type: string
+              score:
+                type: integer
+              scoreSignals:
+                type: object
+                properties:
+                  relevance:
+                    type: integer
+                  governanceImportance:
+                    type: integer
+                  recurrence:
+                    type: integer
+                  recency:
+                    type: integer
+                additionalProperties: true
+              use:
+                type: string
+            additionalProperties: true
+        referencesByLayer:
+          type: object
+          properties:
+            immediate_context:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
+            active_operational_memory:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
+            long_term_operational_memory:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
+            semantic_operational_patterns:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
+          additionalProperties: true
+        retrievalSignals:
+          type: object
+          properties:
+            rankedBy:
+              type: array
+              items:
+                type: string
+            limit:
+              type: integer
+            dumpedAllMemory:
+              type: boolean
+          additionalProperties: true
+      additionalProperties: true
     VtddGatewayRequest:
       type: object
       properties:
@@ -1163,6 +1318,74 @@ paths:
                 $ref: "#/components/schemas/VtddGenericResponse"
         "503":
           description: Cross-memory retrieval unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+  /v2/retrieve/operational-memory:
+    get:
+      operationId: vtddRetrieveOperationalMemory
+      summary: Retrieve compact ranked operational memory for Butler continuity.
+      parameters:
+        - name: text
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: repository
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: currentState
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: runtimeTruthSource
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: checkedAt
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: responseMode
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - action_visible
+          description: Use action_visible in the Custom GPT Action test screen so non-2xx retrieve failures return ok:false JSON with httpStatus/error/reason/issues instead of a ClientResponseError transport label.
+      responses:
+        "200":
+          description: Operational memory retrieval result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationalMemoryResponse"
+        "401":
+          description: Missing machine auth
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "403":
+          description: Invalid machine auth
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "503":
+          description: Operational memory retrieval unavailable
           content:
             application/json:
               schema:

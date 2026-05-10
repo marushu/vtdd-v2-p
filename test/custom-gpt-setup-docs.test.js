@@ -275,6 +275,9 @@ test("custom gpt openapi doc exposes current gateway, execute, and progress rout
   assert.equal(doc.includes("operationId: vtddRetrieveDecisionLogs"), true);
   assert.equal(doc.includes("operationId: vtddRetrieveProposalLogs"), true);
   assert.equal(doc.includes("operationId: vtddRetrieveCrossMemory"), true);
+  assert.equal(doc.includes("operationId: vtddRetrieveOperationalMemory"), true);
+  assert.equal(doc.includes("OperationalMemoryResponse:"), true);
+  assert.equal(doc.includes("$ref: \"#/components/schemas/OperationalMemoryResponse\""), true);
   assert.equal(doc.includes("GatewayBearerAuth"), true);
   assert.equal(doc.includes("operationId: getHealth\n      security: []"), true);
   assert.equal(doc.includes("conversation:"), true);
@@ -383,10 +386,27 @@ test("custom gpt openapi json parses and exposes paths as an object", () => {
   assert.equal(typeof doc.paths["/v2/retrieve/decisions"], "object");
   assert.equal(typeof doc.paths["/v2/retrieve/proposals"], "object");
   assert.equal(typeof doc.paths["/v2/retrieve/cross"], "object");
+  assert.equal(typeof doc.paths["/v2/retrieve/operational-memory"], "object");
   assert.equal(doc.paths["/v2/retrieve/constitution"].get.operationId, "vtddRetrieveConstitution");
   assert.equal(doc.paths["/v2/retrieve/decisions"].get.operationId, "vtddRetrieveDecisionLogs");
   assert.equal(doc.paths["/v2/retrieve/proposals"].get.operationId, "vtddRetrieveProposalLogs");
   assert.equal(doc.paths["/v2/retrieve/cross"].get.operationId, "vtddRetrieveCrossMemory");
+  assert.equal(
+    doc.paths["/v2/retrieve/operational-memory"].get.responses["200"].content["application/json"].schema.$ref,
+    "#/components/schemas/OperationalMemoryResponse"
+  );
+  assert.deepEqual(doc.components.schemas.OperationalMemoryResponse.required, [
+    "ok",
+    "architecture",
+    "memoryUseRule",
+    "compactContext",
+    "referencesByLayer",
+    "retrievalSignals"
+  ]);
+  assert.equal(
+    doc.components.schemas.OperationalMemoryResponse.properties.referencesByLayer.properties.immediate_context.type,
+    "array"
+  );
   assert.deepEqual(
     doc.components.schemas.VtddGatewayRequest.properties.surfaceContext.properties
       .judgmentModelId.enum,
@@ -438,6 +458,7 @@ test("custom gpt openapi json exposes JSON bodies for Butler action auth failure
     ["/v2/retrieve/decisions", "get"],
     ["/v2/retrieve/proposals", "get"],
     ["/v2/retrieve/cross", "get"],
+    ["/v2/retrieve/operational-memory", "get"],
     ["/v2/retrieve/github", "get"],
     ["/v2/retrieve/repository-nicknames", "get"],
     ["/v2/retrieve/setup-artifact", "get"],
@@ -461,6 +482,7 @@ test("custom gpt retrieve actions expose action-visible response mode for test-s
     "/v2/retrieve/decisions",
     "/v2/retrieve/proposals",
     "/v2/retrieve/cross",
+    "/v2/retrieve/operational-memory",
     "/v2/retrieve/github",
     "/v2/retrieve/repository-nicknames",
     "/v2/retrieve/setup-artifact",
