@@ -5,7 +5,11 @@ import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { normalizeMentionLogin, parseCodexReviewFallbackComment } from "../src/core/index.js";
+import {
+  normalizeMentionLogin,
+  parseCodexReviewFallbackComment,
+  resolveGitHubAppInstallationToken
+} from "../src/core/index.js";
 import { buildExecutionLeadTime } from "../src/core/execution-lead-time.js";
 import { renderPrBody } from "./render-pr-body.mjs";
 import { validatePrBody } from "./validate-pr-body.mjs";
@@ -44,15 +48,27 @@ const MILESTONE_MENTION_EVENTS = new Set([
 async function main() {
   const options = parseArgs(process.argv.slice(2));
   const token = mustGetEnv("GITHUB_TOKEN", process.env.GITHUB_TOKEN || process.env.GH_TOKEN);
+  const apiBaseUrl = process.env.GITHUB_API_URL || DEFAULT_API_BASE_URL;
   const repositoryPolicies = await loadVpsRunnerRepositoryPolicies({ env: process.env });
   const workRoot = process.env.VTDD_VPS_RUNNER_WORKDIR || path.join(os.homedir(), "vtdd-runner", "workspaces");
   const githubFetch = createGitHubFetch({
     token,
-    apiBaseUrl: process.env.GITHUB_API_URL || DEFAULT_API_BASE_URL
+    apiBaseUrl
+  });
+  const eventToken = await resolveVpsRunnerEventGitHubToken({
+    env: process.env,
+    fetchImpl: fetch,
+    apiBaseUrl,
+    fallbackToken: token
+  });
+  const eventGithubFetch = createGitHubFetch({
+    token: eventToken.token,
+    apiBaseUrl
   });
 
   const result = await runVpsRunnerOnce({
     githubFetch,
+    eventGithubFetch,
     token,
     repositoryPolicies,
     workRoot,
@@ -70,6 +86,7 @@ async function main() {
 
 async function runVpsRunnerOnce({
   githubFetch,
+  eventGithubFetch,
   token,
   allowedRepositories,
   repositoryPolicies,
@@ -92,7 +109,13 @@ async function runVpsRunnerOnce({
       };
     }
 
-    return executeVpsRunnerExecution({ githubFetch, token, workRoot, execution });
+    return executeVpsRunnerExecution({
+      githubFetch,
+      eventGithubFetch: eventGithubFetch || githubFetch,
+      token,
+      workRoot,
+      execution
+    });
   }
 
   const reviewerFallbacks = [];
@@ -116,7 +139,7 @@ async function runVpsRunnerOnce({
   return executeVpsReviewerFallback({ token, reviewerFallback });
 }
 
-async function executeVpsRunnerExecution({ githubFetch, token, workRoot, execution }) {
+async function executeVpsRunnerExecution({ githubFetch, eventGithubFetch = githubFetch, token, workRoot, execution }) {
   let payload = { ...execution.payload };
   payload.lifecycle = normalizeVpsRunnerLifecycle({
     ...payload.lifecycle,
@@ -130,7 +153,7 @@ async function executeVpsRunnerExecution({ githubFetch, token, workRoot, executi
     approvalActor: payload?.approvalActor
   });
   await postVpsRunnerEvent({
-    githubFetch,
+    githubFetch: eventGithubFetch,
     payload,
     notification,
     event: {
@@ -142,19 +165,19 @@ async function executeVpsRunnerExecution({ githubFetch, token, workRoot, executi
   });
 
   try {
-    await assertVpsRunnerNotCanceled({ githubFetch, payload, checkpoint: "before_clone", notification });
+    await assertVpsRunnerNotCanceled({ githubFetch, eventGithubFetch, payload, checkpoint: "before_clone", notification });
     const workspace = path.join(workRoot, safePathSegment(payload.repository), payload.executionId);
     await fs.mkdir(path.dirname(workspace), { recursive: true });
     await runCommand("rm", ["-rf", workspace], { env });
-    await assertVpsRunnerNotCanceled({ githubFetch, payload, checkpoint: "before_clone_command", notification });
+    await assertVpsRunnerNotCanceled({ githubFetch, eventGithubFetch, payload, checkpoint: "before_clone_command", notification });
     await runTrackedVpsCommand("gh", ["repo", "clone", payload.repository, workspace], {
       env,
-      githubFetch,
+      githubFetch: eventGithubFetch,
       payload,
       notification,
       currentStep: "gh_repo_clone"
     });
-    await assertVpsRunnerNotCanceled({ githubFetch, payload, checkpoint: "after_clone", notification });
+    await assertVpsRunnerNotCanceled({ githubFetch, eventGithubFetch, payload, checkpoint: "after_clone", notification });
     const branchCheckout = await checkoutVpsRunnerBranch({ payload, cwd: workspace, env });
     payload = {
       ...payload,
@@ -171,7 +194,7 @@ async function executeVpsRunnerExecution({ githubFetch, token, workRoot, executi
     });
 
     await postVpsRunnerEvent({
-      githubFetch,
+      githubFetch: eventGithubFetch,
       payload,
       notification,
       event: {
@@ -185,18 +208,18 @@ async function executeVpsRunnerExecution({ githubFetch, token, workRoot, executi
     });
 
     const prompt = buildCodexExecutionPrompt({ payload, issue, pullRequestContext });
-    await assertVpsRunnerNotCanceled({ githubFetch, payload, checkpoint: "before_codex", notification });
+    await assertVpsRunnerNotCanceled({ githubFetch, eventGithubFetch, payload, checkpoint: "before_codex", notification });
     await runTrackedVpsCommand("codex", buildCodexExecArgs({ env: process.env }), {
       cwd: workspace,
       env: buildCodexExecutionEnv(process.env),
       input: prompt,
       maxBuffer: 1024 * 1024 * 12,
-      githubFetch,
+      githubFetch: eventGithubFetch,
       payload,
       notification,
       currentStep: "codex_subprocess"
     });
-    await assertVpsRunnerNotCanceled({ githubFetch, payload, checkpoint: "after_codex", notification });
+    await assertVpsRunnerNotCanceled({ githubFetch, eventGithubFetch, payload, checkpoint: "after_codex", notification });
 
     const status = await runCommand("git", ["status", "--porcelain"], { cwd: workspace, env });
     const hasWorkingTreeChanges = Boolean(status.stdout.trim());
@@ -208,7 +231,7 @@ async function executeVpsRunnerExecution({ githubFetch, token, workRoot, executi
       });
       await runCommand("git", ["push", "origin", payload.branch], { cwd: workspace, env });
       await postVpsRunnerEvent({
-        githubFetch,
+        githubFetch: eventGithubFetch,
         payload,
         notification,
         event: {
@@ -226,7 +249,7 @@ async function executeVpsRunnerExecution({ githubFetch, token, workRoot, executi
         reason: "Codex completed a PR revision request without producing a commit-ready diff."
       };
       await postVpsRunnerEvent({
-        githubFetch,
+        githubFetch: eventGithubFetch,
         payload,
         notification,
         event: {
@@ -244,10 +267,10 @@ async function executeVpsRunnerExecution({ githubFetch, token, workRoot, executi
       branch: payload.branch,
       env,
       cwd: workspace,
-      githubFetch,
+      githubFetch: eventGithubFetch,
       payload
     });
-    await assertVpsRunnerNotCanceled({ githubFetch, payload, checkpoint: "before_pr", notification });
+    await assertVpsRunnerNotCanceled({ githubFetch, eventGithubFetch, payload, checkpoint: "before_pr", notification });
     pullRequestAuthor = existingPullRequest?.author?.login || pullRequestAuthor;
     let prUrl = existingPullRequest?.url || "";
     if (prUrl) {
@@ -256,7 +279,7 @@ async function executeVpsRunnerExecution({ githubFetch, token, workRoot, executi
         candidateBody: existingPullRequest.body
       });
       if (!normalized.ok) {
-        await postVpsRunnerPrBodyBlockedEvent({ githubFetch, payload, normalized, notification });
+        await postVpsRunnerPrBodyBlockedEvent({ githubFetch: eventGithubFetch, payload, normalized, notification });
         return { ok: false, reason: normalized.reason };
       }
       if (normalized.normalized) {
@@ -268,7 +291,7 @@ async function executeVpsRunnerExecution({ githubFetch, token, workRoot, executi
         await runTrackedVpsCommand("gh", ["pr", "edit", String(existingPullRequest.number || prUrl), "--repo", payload.repository, "--body-file", bodyFile], {
           cwd: workspace,
           env,
-          githubFetch,
+          githubFetch: eventGithubFetch,
           payload,
           notification,
           currentStep: "gh_pr_edit"
@@ -280,7 +303,7 @@ async function executeVpsRunnerExecution({ githubFetch, token, workRoot, executi
         candidateBody: extractCodexPrBodyDraft(payload)
       });
       if (!normalized.ok) {
-        await postVpsRunnerPrBodyBlockedEvent({ githubFetch, payload, normalized, notification });
+        await postVpsRunnerPrBodyBlockedEvent({ githubFetch: eventGithubFetch, payload, normalized, notification });
         return { ok: false, reason: normalized.reason };
       }
       const pr = await runTrackedVpsCommand(
@@ -301,7 +324,7 @@ async function executeVpsRunnerExecution({ githubFetch, token, workRoot, executi
         {
           cwd: workspace,
           env,
-          githubFetch,
+          githubFetch: eventGithubFetch,
           payload,
           notification,
           currentStep: "gh_pr_create"
@@ -319,7 +342,7 @@ async function executeVpsRunnerExecution({ githubFetch, token, workRoot, executi
 
     const completionFinalEvent = buildVpsRunnerCompletionFinalEvent({ payload });
     await postVpsRunnerEvent({
-      githubFetch,
+      githubFetch: eventGithubFetch,
       payload,
       notification: buildVpsRunnerNotificationContext({
         ...notification,
@@ -346,7 +369,7 @@ async function executeVpsRunnerExecution({ githubFetch, token, workRoot, executi
     }
     const rawFailure = classifyVpsRunnerFailure(error);
     await postVpsRunnerEvent({
-      githubFetch,
+      githubFetch: eventGithubFetch,
       payload,
       notification,
       event: {
@@ -864,7 +887,7 @@ async function postVpsRunnerEvent({ githubFetch, payload, event, notification })
     return upsertVpsRunnerStateComment({ githubFetch, payload, event: eventPayload });
   }
 
-  return githubFetch(`/repos/${payload.repository}/issues/${payload.issueNumber}/comments`, {
+  const response = await githubFetch(`/repos/${payload.repository}/issues/${payload.issueNumber}/comments`, {
     method: "POST",
     body: {
       body: buildVpsRunnerEventComment({
@@ -874,15 +897,20 @@ async function postVpsRunnerEvent({ githubFetch, payload, event, notification })
       })
     }
   });
+  return normalizeVpsRunnerEventWriteResult({
+    response,
+    operation: "comment_create",
+    runtimeTruthKind: "vps_runner_event_comment"
+  });
 }
 
-async function assertVpsRunnerNotCanceled({ githubFetch, payload, checkpoint, notification }) {
+async function assertVpsRunnerNotCanceled({ githubFetch, eventGithubFetch = githubFetch, payload, checkpoint, notification }) {
   const cancellation = await readVpsRunnerCancellation({ githubFetch, payload });
   if (!cancellation) {
     return;
   }
   await postVpsRunnerEvent({
-    githubFetch,
+    githubFetch: eventGithubFetch,
     payload,
     notification,
     event: {
@@ -1001,16 +1029,42 @@ async function upsertVpsRunnerStateComment({ githubFetch, payload, event }) {
   });
   const existing = await findVpsRunnerStateComment({ githubFetch, payload });
   if (existing?.id) {
-    return githubFetch(`/repos/${payload.repository}/issues/comments/${existing.id}`, {
+    const response = await githubFetch(`/repos/${payload.repository}/issues/comments/${existing.id}`, {
       method: "PATCH",
       body: { body }
     });
+    return normalizeVpsRunnerEventWriteResult({
+      response,
+      operation: "comment_update",
+      runtimeTruthKind: "vps_runner_state_comment",
+      commentId: existing.id
+    });
   }
 
-  return githubFetch(`/repos/${payload.repository}/issues/${payload.issueNumber}/comments`, {
+  const response = await githubFetch(`/repos/${payload.repository}/issues/${payload.issueNumber}/comments`, {
     method: "POST",
     body: { body }
   });
+  return normalizeVpsRunnerEventWriteResult({
+    response,
+    operation: "comment_create",
+    runtimeTruthKind: "vps_runner_state_comment"
+  });
+}
+
+function normalizeVpsRunnerEventWriteResult({ response, operation, runtimeTruthKind, commentId }) {
+  return {
+    ok: true,
+    operation,
+    runtimeTruthKind,
+    commentId: normalizePositiveInteger(response?.id) || normalizePositiveInteger(commentId),
+    commentUrl: normalizeText(response?.html_url) || null,
+    author: {
+      login: normalizeGitHubActorLogin(response?.user?.login),
+      type: normalizeText(response?.user?.type) || null,
+      association: normalizeText(response?.author_association) || null
+    }
+  };
 }
 
 async function findVpsRunnerStateComment({ githubFetch, payload }) {
@@ -1363,6 +1417,39 @@ async function postVpsRunnerPrBodyBlockedEvent({ githubFetch, payload, normalize
   });
 }
 
+async function resolveVpsRunnerEventGitHubToken({ env = {}, fetchImpl = fetch, apiBaseUrl = DEFAULT_API_BASE_URL, fallbackToken = "" } = {}) {
+  const tokenResolution = await resolveGitHubAppInstallationToken({
+    env,
+    fetchImpl,
+    apiBaseUrl
+  });
+  if (tokenResolution.ok) {
+    return {
+      ok: true,
+      token: tokenResolution.token,
+      source: "github_app_installation"
+    };
+  }
+
+  if (toBoolean(env?.VTDD_VPS_RUNNER_EVENT_TOKEN_ALLOW_FALLBACK)) {
+    const token = normalizeText(fallbackToken);
+    if (token) {
+      return {
+        ok: true,
+        token,
+        source: "explicit_fallback"
+      };
+    }
+  }
+
+  const reason =
+    tokenResolution.warning ||
+    "GitHub App installation token is required for VPS runner operator-facing event comments";
+  throw new Error(
+    `${reason}. Configure GITHUB_APP_INSTALLATION_TOKEN or GITHUB_APP_ID / GITHUB_APP_INSTALLATION_ID / GITHUB_APP_PRIVATE_KEY for bot-authored runner notifications.`
+  );
+}
+
 function createGitHubFetch({ apiBaseUrl, token }) {
   return async function githubFetch(pathname, init = {}) {
     const response = await fetch(`${apiBaseUrl}${pathname}`, {
@@ -1382,6 +1469,11 @@ function createGitHubFetch({ apiBaseUrl, token }) {
     }
     return body;
   };
+}
+
+function toBoolean(value) {
+  const normalized = normalizeText(value).toLowerCase();
+  return normalized === "true" || normalized === "1" || normalized === "yes" || normalized === "on";
 }
 
 function runCommand(command, args, options = {}) {
@@ -1611,6 +1703,14 @@ function normalizeGitHubLogin(value) {
   return login;
 }
 
+function normalizeGitHubActorLogin(value) {
+  const login = normalizeText(value);
+  if (!/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?(?:\[bot\])?$/.test(login)) {
+    return "";
+  }
+  return login;
+}
+
 function extractBacktickedCommentValue(body, label) {
   const match = String(body || "").match(new RegExp(`- ${escapeRegExp(label)}: \\\`([^\\\`]+)\\\``));
   return normalizeText(match?.[1]);
@@ -1686,6 +1786,7 @@ export {
   parseVpsRunnerEventComment,
   parseVpsRunnerQueueComment,
   postVpsRunnerEvent,
+  resolveVpsRunnerEventGitHubToken,
   runVpsRunnerOnce,
   summarizeDiagnosticText,
   selectPendingVpsReviewerFallbacks,

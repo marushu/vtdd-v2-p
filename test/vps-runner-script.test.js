@@ -20,6 +20,7 @@ import {
   parseVpsRunnerEventComment,
   parseVpsRunnerQueueComment,
   postVpsRunnerEvent,
+  resolveVpsRunnerEventGitHubToken,
   runVpsRunnerOnce,
   summarizeDiagnosticText,
   selectPendingVpsReviewerFallbacks,
@@ -351,6 +352,59 @@ test("VPS runner notification omits mention when no mentionable actor exists", (
   assert.equal(body.includes("VTDD milestone: failed."), true);
 });
 
+test("VPS runner event token resolves to GitHub App installation token for bot-authored notifications", async () => {
+  const calls = [];
+  const result = await resolveVpsRunnerEventGitHubToken({
+    apiBaseUrl: "https://api.github.test",
+    fallbackToken: "ghp_human_owner_token",
+    env: {
+      GITHUB_APP_ID: "12345",
+      GITHUB_APP_INSTALLATION_ID: "98765",
+      GITHUB_APP_PRIVATE_KEY: "-----BEGIN PRIVATE KEY-----\nplaceholder\n-----END PRIVATE KEY-----",
+      GITHUB_APP_JWT_PROVIDER: async () => "app_jwt_token_for_tests"
+    },
+    fetchImpl: async (url, init) => {
+      calls.push({ url, init });
+      return new Response(
+        JSON.stringify({
+          token: "ghs_vtdd_codex_bot_token",
+          expires_at: "2026-05-11T10:00:00Z"
+        }),
+        { status: 201, headers: { "content-type": "application/json" } }
+      );
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.source, "github_app_installation");
+  assert.equal(result.token, "ghs_vtdd_codex_bot_token");
+  assert.equal(calls[0].url, "https://api.github.test/app/installations/98765/access_tokens");
+  assert.equal(calls[0].init.headers.authorization, "Bearer app_jwt_token_for_tests");
+});
+
+test("VPS runner event token does not silently fall back to a human token", async () => {
+  await assert.rejects(
+    resolveVpsRunnerEventGitHubToken({
+      fallbackToken: "ghp_human_owner_token",
+      env: {}
+    }),
+    /GitHub App installation token is required/
+  );
+});
+
+test("VPS runner event token supports explicit fallback only when acknowledged", async () => {
+  const result = await resolveVpsRunnerEventGitHubToken({
+    fallbackToken: "ghs_known_bot_token",
+    env: {
+      VTDD_VPS_RUNNER_EVENT_TOKEN_ALLOW_FALLBACK: "true"
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.source, "explicit_fallback");
+  assert.equal(result.token, "ghs_known_bot_token");
+});
+
 test("VPS runner state comment remains compatible with runner event parsing", () => {
   const body = buildVpsRunnerStateComment({
     executionId: "exec-state-1",
@@ -522,6 +576,136 @@ test("VPS runner milestone events still create new comments", async () => {
   assert.equal(calls[0].url, "/repos/sample-org/vtdd-v2/issues/226/comments");
   assert.equal(calls[0].init.method, "POST");
   assert.equal(calls[0].init.body.body.includes("vtdd:vps-runner-event:exec-branch-1"), true);
+});
+
+test("VPS runner pickup records bot author runtime truth", async () => {
+  const calls = [];
+  const result = await postVpsRunnerEvent({
+    githubFetch: async (url, init = {}) => {
+      calls.push({ url, init });
+      if (String(url).endsWith("/issues/288/comments?per_page=100&page=1")) {
+        return [];
+      }
+      return {
+        id: 28801,
+        html_url: "https://github.com/sample-org/vtdd-v2/issues/288#issuecomment-28801",
+        user: { login: "vtdd-codex[bot]", type: "Bot" },
+        author_association: "NONE"
+      };
+    },
+    payload: {
+      executionId: "exec-pickup-bot-author",
+      repository: "sample-org/vtdd-v2",
+      issueNumber: 288
+    },
+    event: {
+      status: "running",
+      lastEvent: "picked_up",
+      currentStep: "picked_up"
+    }
+  });
+
+  assert.equal(calls[1].url, "/repos/sample-org/vtdd-v2/issues/288/comments");
+  assert.equal(calls[1].init.method, "POST");
+  assert.equal(result.runtimeTruthKind, "vps_runner_state_comment");
+  assert.equal(result.author.login, "vtdd-codex[bot]");
+  assert.equal(result.author.type, "Bot");
+});
+
+test("VPS runner branch recovery and codex heartbeat preserve bot state-comment author truth", async () => {
+  const calls = [];
+  const payload = {
+    executionId: "exec-branch-recovery-bot-author",
+    repository: "sample-org/vtdd-v2",
+    issueNumber: 288
+  };
+  const githubFetch = async (url, init = {}) => {
+    calls.push({ url, init });
+    if (String(url).endsWith("/issues/288/comments?per_page=100&page=1")) {
+      return [
+        {
+          id: 28802,
+          body: buildVpsRunnerStateComment({
+            executionId: payload.executionId,
+            event: {
+              status: "running",
+              lastEvent: "picked_up",
+              currentStep: "picked_up"
+            }
+          }),
+          user: { login: "vtdd-codex[bot]", type: "Bot" }
+        }
+      ];
+    }
+    return {
+      id: 28802,
+      html_url: "https://github.com/sample-org/vtdd-v2/issues/288#issuecomment-28802",
+      user: { login: "vtdd-codex[bot]", type: "Bot" }
+    };
+  };
+
+  const branchResult = await postVpsRunnerEvent({
+    githubFetch,
+    payload,
+    event: {
+      status: "branch_created",
+      lastEvent: "branch_created",
+      currentStep: "branch_created",
+      branchRecovery: {
+        recovered: true,
+        branch: "codex/issue-288-2",
+        originalBranch: "codex/issue-288"
+      }
+    }
+  });
+  const heartbeatResult = await postVpsRunnerEvent({
+    githubFetch,
+    payload,
+    event: {
+      status: "running",
+      lastEvent: "codex_subprocess_heartbeat",
+      currentStep: "codex_subprocess",
+      heartbeatAt: "2026-05-11T10:01:00.000Z",
+      updatedAt: "2026-05-11T10:01:00.000Z"
+    }
+  });
+
+  assert.equal(branchResult.author.login, "vtdd-codex[bot]");
+  assert.equal(heartbeatResult.author.login, "vtdd-codex[bot]");
+  assert.equal(calls.some((call) => call.url === "/repos/sample-org/vtdd-v2/issues/comments/28802" && call.init.method === "PATCH"), true);
+});
+
+test("VPS runner stale, failed, and revision_no_changes comments expose bot author truth", async () => {
+  const events = [
+    { status: "blocked", lastEvent: "stale", rawFailure: { error: "vps_runner_event_stale" } },
+    { status: "failed", lastEvent: "runner_failed", rawFailure: { error: "vps_runner_execution_failed" } },
+    { status: "failed", lastEvent: "revision_no_changes", rawFailure: { error: "codex_revision_no_changes" } }
+  ];
+  for (const [index, event] of events.entries()) {
+    const calls = [];
+    const result = await postVpsRunnerEvent({
+      githubFetch: async (url, init = {}) => {
+        calls.push({ url, init });
+        return {
+          id: 28810 + index,
+          html_url: `https://github.com/sample-org/vtdd-v2/issues/288#issuecomment-${28810 + index}`,
+          user: { login: "vtdd-codex[bot]", type: "Bot" }
+        };
+      },
+      payload: {
+        executionId: `exec-terminal-bot-author-${index}`,
+        repository: "sample-org/vtdd-v2",
+        issueNumber: 288
+      },
+      event
+    });
+
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].init.method, "POST");
+    assert.equal(result.runtimeTruthKind, "vps_runner_event_comment");
+    assert.equal(result.author.login, "vtdd-codex[bot]");
+    assert.equal(result.author.type, "Bot");
+  }
 });
 
 test("VPS runner lead time keeps pr_created_at distinct from completed_at", async () => {
