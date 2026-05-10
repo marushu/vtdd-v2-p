@@ -8,11 +8,12 @@
 - execution lead time is visible from vtddVpsRunnerStatus health.leadTime.
 - GitHub-visible VPS runner state/event comments include concise Lead time lines and JSON leadTime runtime truth.
 - Queue wait, Codex execution, PR creation, and total lead time durations are computed with readable labels.
+- Lead-time duration calculation and formatting are shared by Butler progress reconstruction and VPS runner comment publishing.
 - Existing execution flow remains compatible; existing event parsing and tests pass.
 
 ## Unsatisfied Success Criteria
 
-- Live GitHub E2E on a real runner was not executed in this local workspace.
+- Live GitHub E2E on a real runner was not executed in this local workspace; this remains the reviewer-raised unverified production path.
 
 ## Non-goal violations
 
@@ -20,11 +21,11 @@ None.
 
 ## Verification Evidence
 
-- Unit: npm test (602 tests passed).
-- Integration: node --test test/remote-codex-executor.test.js; node --test test/vps-runner-script.test.js; node --test test/custom-gpt-setup-docs.test.js test/custom-gpt-setup-artifacts.test.js.
+- Unit: npm test (605 tests passed).
+- Integration: node --test test/execution-lead-time.test.js test/vps-runner-script.test.js test/remote-codex-executor.test.js (67 tests passed).
 - E2E: Not run live; covered by runtime progress/comment contract tests for happy-path and stale/failure boundaries.
 - Manual: Inspected docs/pr-template-model.md, scripts/render-pr-body.mjs, scripts/validate-pr-body.mjs before drafting.
-- Evidence path/link: test/remote-codex-executor.test.js; test/vps-runner-script.test.js; docs/butler/remote-codex-cli-executor.md
+- Evidence path/link: src/core/execution-lead-time.js; test/execution-lead-time.test.js; test/remote-codex-executor.test.js; test/vps-runner-script.test.js; docs/butler/remote-codex-cli-executor.md
 
 ## Surface Update Checklist
 
@@ -48,9 +49,9 @@ None.
 
 ## Extra changes (if any)
 
-None.
+- Gemini reviewer code-duplication risk addressed by centralizing lead-time duration calculation and formatting in src/core/execution-lead-time.js.
 
 <!-- VTDD metadata -->
 - Issue: #260
-- Execution ID: remote-codex-issue260-3rswpp
-- Goal: open_pr
+- Execution ID: remote-codex-issue260-737qrr
+- Goal: revise_pr

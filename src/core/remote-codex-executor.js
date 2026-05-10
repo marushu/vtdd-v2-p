@@ -1,6 +1,7 @@
 import { ActorRole } from "./types.js";
 import { resolveGitHubAppInstallationToken } from "./github-app-repository-index.js";
 import { isBoundRemoteCodexHandoff } from "./remote-codex-handoff-scope.js";
+import { buildExecutionLeadTime } from "./execution-lead-time.js";
 
 export const REMOTE_CODEX_WORKFLOW_FILE = "remote-codex-executor.yml";
 
@@ -1133,60 +1134,7 @@ function buildVpsRunnerProgressLeadTime({ queueComment, runnerEvents, pullReques
 }
 
 function buildRemoteCodexLeadTime(timestamps = {}) {
-  const queuedAt = normalizeTimestamp(timestamps.queuedAt);
-  const pickedUpAt = normalizeTimestamp(timestamps.pickedUpAt);
-  const codexStartedAt = normalizeTimestamp(timestamps.codexStartedAt);
-  const branchPushedAt = normalizeTimestamp(timestamps.branchPushedAt);
-  const prCreatedAt = normalizeTimestamp(timestamps.prCreatedAt);
-  const completedAt = normalizeTimestamp(timestamps.completedAt);
-  const failedAt = normalizeTimestamp(timestamps.failedAt);
-  const terminalAt = completedAt || failedAt || prCreatedAt || null;
-
-  return {
-    queued_at: queuedAt,
-    picked_up_at: pickedUpAt,
-    codex_started_at: codexStartedAt,
-    branch_pushed_at: branchPushedAt,
-    pr_created_at: prCreatedAt,
-    completed_at: completedAt,
-    failed_at: failedAt,
-    durations: {
-      queue_wait_duration: buildLeadTimeDuration(queuedAt, pickedUpAt),
-      codex_execution_duration: buildLeadTimeDuration(codexStartedAt, branchPushedAt || prCreatedAt || completedAt || failedAt),
-      pr_creation_duration: buildLeadTimeDuration(branchPushedAt, prCreatedAt),
-      total_lead_time: buildLeadTimeDuration(queuedAt, terminalAt)
-    }
-  };
-}
-
-function buildLeadTimeDuration(start, end) {
-  const startMs = Date.parse(normalizeText(start));
-  const endMs = Date.parse(normalizeText(end));
-  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs < startMs) {
-    return null;
-  }
-  const seconds = Math.round((endMs - startMs) / 1000);
-  return {
-    seconds,
-    label: formatLeadTimeDuration(seconds)
-  };
-}
-
-function formatLeadTimeDuration(seconds) {
-  if (!Number.isFinite(seconds)) {
-    return null;
-  }
-  if (seconds < 60) {
-    return `${seconds}s`;
-  }
-  const minutes = Math.floor(seconds / 60);
-  const remainder = seconds % 60;
-  if (minutes < 60) {
-    return remainder ? `${minutes}m ${remainder}s` : `${minutes}m`;
-  }
-  const hours = Math.floor(minutes / 60);
-  const minuteRemainder = minutes % 60;
-  return minuteRemainder ? `${hours}h ${minuteRemainder}m` : `${hours}h`;
+  return buildExecutionLeadTime(timestamps, { normalizeTimestamp });
 }
 
 function normalizeTimestamp(value) {
