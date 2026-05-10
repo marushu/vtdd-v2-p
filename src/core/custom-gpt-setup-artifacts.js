@@ -107,6 +107,12 @@ export const RUNTIME_SETUP_MANIFEST = Object.freeze({
 
 const INSTRUCTIONS_CHARACTER_LIMIT = 8000;
 const KNOWN_GOOD_COMMIT_ENV = "VTDD_KNOWN_GOOD_COMMIT_SHA";
+export const VTDD_SETUP_REPOSITORY = "marushu/vtdd-v2-p";
+
+export const CustomGptSetupChannel = Object.freeze({
+  LATEST: "latest",
+  KNOWN_GOOD: "known_good"
+});
 
 export async function retrieveCustomGptSetupArtifact(input = {}) {
   const artifact = normalizeText(input.artifact);
@@ -364,20 +370,13 @@ export function evaluateRuntimeSetupManifestParity(input = {}) {
 }
 
 export async function buildCustomGptRecoveryBundle(input = {}) {
-  const repository = normalizeText(input.repository);
-  const ref = normalizeText(input.ref) || "main";
+  const repository = normalizeText(input.repository) || VTDD_SETUP_REPOSITORY;
+  const channel = normalizeSetupChannel(input.channel);
+  const requestedRef = normalizeText(input.ref) || "main";
   const runtimeOrigin = normalizeOrigin(input.runtimeOrigin);
   const issueNumber = normalizeIssueNumber(input.issueNumber);
   const env = input.env ?? {};
 
-  if (!repository) {
-    return {
-      ok: false,
-      status: 422,
-      error: "custom_gpt_recovery_request_invalid",
-      reason: "repository is required"
-    };
-  }
   if (!runtimeOrigin) {
     return {
       ok: false,
@@ -387,7 +386,16 @@ export async function buildCustomGptRecoveryBundle(input = {}) {
     };
   }
 
-  const [openapi, instructionsShortMin, selfParity, commit] = await Promise.all([
+  const knownGoodCommit =
+    channel === CustomGptSetupChannel.KNOWN_GOOD
+      ? await resolveKnownGoodCommitSha({ repository, ref: requestedRef, env })
+      : null;
+  const ref =
+    channel === CustomGptSetupChannel.KNOWN_GOOD
+      ? knownGoodCommit?.sha || requestedRef
+      : requestedRef;
+
+  const [openapi, instructionsShortMin, selfParity, latestCommit] = await Promise.all([
     retrieveCustomGptSetupArtifact({
       artifact: CustomGptSetupArtifact.OPENAPI_YAML,
       repository,
@@ -407,7 +415,9 @@ export async function buildCustomGptRecoveryBundle(input = {}) {
       issueNumber,
       env
     }),
-    resolveKnownGoodCommitSha({ repository, ref, env })
+    channel === CustomGptSetupChannel.LATEST
+      ? resolveKnownGoodCommitSha({ repository, ref, env })
+      : Promise.resolve(null)
   ]);
 
   const failed = [openapi, instructionsShortMin, selfParity].find((result) => !result.ok);
@@ -429,8 +439,12 @@ export async function buildCustomGptRecoveryBundle(input = {}) {
   return {
     ok: true,
     recovery: {
+      channel,
+      channelLabel:
+        channel === CustomGptSetupChannel.KNOWN_GOOD ? "known-good setup bundle" : "latest setup bundle",
       repository,
       ref,
+      requestedRef,
       runtimeOrigin,
       generatedAt: new Date().toISOString(),
       actionSchema: {
@@ -450,8 +464,15 @@ export async function buildCustomGptRecoveryBundle(input = {}) {
         content: instructions
       },
       rollback: {
-        knownGoodCommitSha: commit.sha,
-        knownGoodCommitSource: commit.source,
+        knownGoodCommitSha:
+          channel === CustomGptSetupChannel.KNOWN_GOOD
+            ? knownGoodCommit?.sha
+            : latestCommit?.sha,
+        knownGoodCommitSource:
+          channel === CustomGptSetupChannel.KNOWN_GOOD
+            ? knownGoodCommit?.source
+            : latestCommit?.source,
+        rollbackReady: channel === CustomGptSetupChannel.KNOWN_GOOD,
         bundleArtifacts: [
           openapi.artifact.path,
           instructionsShortMin.artifact.path
@@ -478,11 +499,21 @@ export async function buildCustomGptRecoveryBundle(input = {}) {
 
 export function renderCustomGptRecoveryPage(input = {}) {
   const runtimeOrigin = normalizeOrigin(input.runtimeOrigin);
-  const repository = normalizeText(input.repository);
+  const repository = normalizeText(input.repository) || VTDD_SETUP_REPOSITORY;
   const ref = normalizeText(input.ref) || "main";
   const issueNumber = normalizeIssueNumber(input.issueNumber);
+  const channel = normalizeSetupChannel(input.channel);
   const recovery = input.recovery ?? null;
   const error = input.error ?? null;
+  const latestHref = buildSetupPageHref({
+    path: "/setup/latest",
+    ref: channel === CustomGptSetupChannel.LATEST ? ref : "main",
+    issueNumber
+  });
+  const knownGoodHref = buildSetupPageHref({
+    path: "/setup/known-good",
+    issueNumber
+  });
 
   return `<!doctype html>
 <html lang="ja">
@@ -496,7 +527,7 @@ export function renderCustomGptRecoveryPage(input = {}) {
     main { width: min(100% - 24px, 1120px); margin: 0 auto; padding: 24px 0 48px; }
     h1 { font-size: 1.55rem; line-height: 1.2; margin: 0 0 16px; }
     h2 { font-size: 1rem; margin: 28px 0 10px; }
-    form, .status, .warning { border: 1px solid color-mix(in srgb, CanvasText 18%, transparent); border-radius: 8px; padding: 12px; margin: 14px 0; }
+    .status, .warning, .nav { border: 1px solid color-mix(in srgb, CanvasText 18%, transparent); border-radius: 8px; padding: 12px; margin: 14px 0; }
     label { display: block; font-size: .9rem; margin: 8px 0 4px; }
     input { width: 100%; box-sizing: border-box; font: inherit; padding: 10px; border-radius: 6px; border: 1px solid color-mix(in srgb, CanvasText 22%, transparent); background: Canvas; color: CanvasText; }
     button, a.button { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; border: 1px solid color-mix(in srgb, CanvasText 22%, transparent); border-radius: 6px; padding: 0 12px; background: ButtonFace; color: ButtonText; font: inherit; text-decoration: none; }
@@ -504,6 +535,9 @@ export function renderCustomGptRecoveryPage(input = {}) {
     textarea { min-height: 320px; resize: vertical; }
     .meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 8px; }
     .meta div { padding: 10px; border: 1px solid color-mix(in srgb, CanvasText 14%, transparent); border-radius: 8px; }
+    .nav { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .nav strong { margin-right: auto; }
+    .channel { text-transform: none; }
     .small { font-size: .86rem; opacity: .82; }
     .warning { border-color: #b45309; background: color-mix(in srgb, #f59e0b 16%, Canvas); }
   </style>
@@ -511,14 +545,11 @@ export function renderCustomGptRecoveryPage(input = {}) {
 <body>
   <main>
     <h1>VTDD Butler setup recovery</h1>
-    <form method="get" action="/setup/recovery">
-      <label for="repository">Repository</label>
-      <input id="repository" name="repository" value="${escapeAttribute(repository)}" placeholder="owner/repo" autocomplete="off">
-      <label for="ref">Known-good ref</label>
-      <input id="ref" name="ref" value="${escapeAttribute(ref)}" autocomplete="off">
-      ${issueNumber ? `<input type="hidden" name="issueNumber" value="${escapeAttribute(String(issueNumber))}">` : ""}
-      <p><button type="submit">Load setup bundle</button></p>
-    </form>
+    <section class="nav">
+      <strong>Recovery repo: ${escapeHtml(repository)}</strong>
+      <a class="button" href="${escapeAttribute(latestHref)}">setup/latest</a>
+      <a class="button" href="${escapeAttribute(knownGoodHref)}">setup/known-good</a>
+    </section>
     ${
       error
         ? `<section class="warning"><strong>Recovery bundle unavailable.</strong><p>${escapeHtml(error.reason || error.error || "unknown error")}</p></section>`
@@ -527,7 +558,7 @@ export function renderCustomGptRecoveryPage(input = {}) {
     ${
       recovery
         ? renderRecoveryBundleSections(recovery)
-        : `<p class="small">Repository を指定すると、この Worker origin (${escapeHtml(runtimeOrigin)}) 向けの copy-ready setup bundle を表示します。</p>`
+        : `<p class="small">${escapeHtml(runtimeOrigin)} 向けの ${escapeHtml(channel)} setup bundle を読み込んでいます。repo 入力は不要です。</p>`
     }
   </main>
   <script>
@@ -550,6 +581,18 @@ export function renderCustomGptRecoveryPage(input = {}) {
   </script>
 </body>
 </html>`;
+}
+
+function buildSetupPageHref({ path, ref, issueNumber }) {
+  const params = new URLSearchParams();
+  if (ref && ref !== "main") {
+    params.set("ref", ref);
+  }
+  if (Number.isInteger(issueNumber) && issueNumber > 0) {
+    params.set("issueNumber", String(issueNumber));
+  }
+  const query = params.toString();
+  return query ? `${path}?${query}` : path;
 }
 
 function validateCustomGptSetupArtifactRequest({ artifact, repository }) {
@@ -630,9 +673,10 @@ function renderRecoveryBundleSections(recovery) {
     ${warning}
     <section class="status">
       <div class="meta">
+        <div><strong>Bundle</strong><br><span class="channel">${escapeHtml(recovery.channelLabel)}</span></div>
         <div><strong>Worker URL</strong><br>${escapeHtml(recovery.runtimeOrigin)}</div>
         <div><strong>Repository</strong><br>${escapeHtml(recovery.repository)}</div>
-        <div><strong>Known-good ref</strong><br>${escapeHtml(recovery.ref)}</div>
+        <div><strong>${recovery.channel === CustomGptSetupChannel.KNOWN_GOOD ? "Known-good ref" : "Latest ref"}</strong><br>${escapeHtml(recovery.ref)}</div>
         <div><strong>Known-good commit</strong><br>${escapeHtml(rollback.knownGoodCommitSha || "unverified")}</div>
         <div><strong>Self-parity</strong><br>${escapeHtml(selfParity.runtimeParity)}</div>
         <div><strong>Deploy state</strong><br>${escapeHtml(recovery.runtime.deployState)}</div>
@@ -654,9 +698,15 @@ function renderRecoveryBundleSections(recovery) {
     </section>
     <section>
       <h2>Known-good rollback bundle</h2>
+      ${
+        rollback.rollbackReady
+          ? `<p><button type="button" data-copy-target="rollback-bundle" data-copy-label="Copy Rollback Bundle">Copy Rollback Bundle</button></p>`
+          : `<p class="small">Rollback は setup/known-good で copy-ready になります。latest は現在の候補確認用です。</p>`
+      }
       <pre>${escapeHtml(
         [
           `repository: ${recovery.repository}`,
+          `channel: ${recovery.channel}`,
           `ref: ${recovery.ref}`,
           `knownGoodCommitSha: ${rollback.knownGoodCommitSha || "unverified"}`,
           `knownGoodCommitSource: ${rollback.knownGoodCommitSource}`,
@@ -668,7 +718,33 @@ function renderRecoveryBundleSections(recovery) {
           ...rollback.restoreOrder.map((item, index) => `  ${index + 1}. ${item}`)
         ].join("\n")
       )}</pre>
+      ${
+        rollback.rollbackReady
+          ? `<textarea id="rollback-bundle" spellcheck="false">${escapeHtml(
+              [
+                `repository: ${recovery.repository}`,
+                `channel: ${recovery.channel}`,
+                `ref: ${recovery.ref}`,
+                `knownGoodCommitSha: ${rollback.knownGoodCommitSha || "unverified"}`,
+                `knownGoodCommitSource: ${rollback.knownGoodCommitSource}`,
+                `actionSchemaPath: ${actionSchema.path}`,
+                `instructionsShortMinPath: ${instructions.path}`,
+                `selfParity: ${selfParity.runtimeParity}`,
+                `deployState: ${recovery.runtime.deployState}`,
+                "restoreOrder:",
+                ...rollback.restoreOrder.map((item, index) => `  ${index + 1}. ${item}`)
+              ].join("\n")
+            )}</textarea>`
+          : ""
+      }
     </section>`;
+}
+
+function normalizeSetupChannel(value) {
+  const normalized = normalizeText(value).replace(/-/g, "_");
+  return normalized === CustomGptSetupChannel.KNOWN_GOOD
+    ? CustomGptSetupChannel.KNOWN_GOOD
+    : CustomGptSetupChannel.LATEST;
 }
 
 function countCodePoints(value) {

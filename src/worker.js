@@ -1,6 +1,7 @@
 import {
   AutonomyMode,
   buildCustomGptRecoveryBundle,
+  CustomGptSetupChannel,
   MemoryRecordType,
   appendDecisionLogFromGateway,
   appendProposalLogFromGateway,
@@ -81,7 +82,10 @@ export default {
 
     if (
       request.method === "GET" &&
-      (url.pathname === "/setup" || url.pathname === "/setup/recovery")
+      (url.pathname === "/setup" ||
+        url.pathname === "/setup/recovery" ||
+        url.pathname === "/setup/latest" ||
+        url.pathname === "/setup/known-good")
     ) {
       return handleCustomGptRecoveryPageRequest(url, env);
     }
@@ -1191,24 +1195,15 @@ async function handleGitHubActionsSecretSyncRequest(request, env) {
 }
 
 async function handleCustomGptRecoveryPageRequest(url, env) {
-  const repository = normalizeText(url.searchParams.get("repository"));
+  const channel =
+    url.pathname === "/setup/known-good"
+      ? CustomGptSetupChannel.KNOWN_GOOD
+      : CustomGptSetupChannel.LATEST;
   const ref = normalizeText(url.searchParams.get("ref")) || "main";
   const issueNumber = normalizeIssue(url.searchParams.get("issueNumber"));
 
-  if (!repository) {
-    return html(
-      200,
-      renderCustomGptRecoveryPage({
-        runtimeOrigin: url.origin,
-        repository,
-        ref,
-        issueNumber
-      })
-    );
-  }
-
   const bundle = await buildCustomGptRecoveryBundle({
-    repository,
+    channel,
     ref,
     issueNumber,
     runtimeOrigin: url.origin,
@@ -1216,10 +1211,10 @@ async function handleCustomGptRecoveryPageRequest(url, env) {
   });
 
   return html(
-    bundle.ok ? 200 : bundle.status ?? 503,
+    200,
     renderCustomGptRecoveryPage({
       runtimeOrigin: url.origin,
-      repository,
+      channel,
       ref,
       issueNumber,
       recovery: bundle.ok ? bundle.recovery : null,
