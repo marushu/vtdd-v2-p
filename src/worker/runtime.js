@@ -43,6 +43,7 @@ import {
   retrieveGitHubReadPlane,
   TaskMode,
   bindNaturalGitHubWriteApproval,
+  cancelVpsRunnerQueue,
   executeGitHubWritePlane,
   runMvpGateway,
   upsertRepositoryNickname,
@@ -350,6 +351,45 @@ export default {
         ok: true,
         health: status.health,
         progress: status.progress
+      });
+    }
+
+    if (request.method === "POST" && isApiPath(url.pathname, "/action/vps-runner-cancel")) {
+      const auth = authorizeGatewayRequest({
+        request,
+        env,
+        apiSuffix: "/action/vps-runner-cancel"
+      });
+      if (!auth.ok) {
+        return json(auth.status, {
+          ok: false,
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+
+      const payload = await readJson(request);
+      const cancellation = await cancelVpsRunnerQueue({
+        repository: payload.repository,
+        issueNumber: payload.issueNumber,
+        executionId: payload.executionId,
+        mode: payload.mode,
+        reason: payload.reason,
+        actor: payload.actor,
+        env
+      });
+      if (!cancellation.ok) {
+        return json(cancellation.status ?? 503, {
+          ok: false,
+          error: cancellation.error,
+          reason: cancellation.reason,
+          issues: cancellation.issues ?? []
+        });
+      }
+
+      return json(200, {
+        ok: true,
+        cancellation: cancellation.cancellation
       });
     }
 

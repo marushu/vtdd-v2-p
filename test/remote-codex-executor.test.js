@@ -5,6 +5,7 @@ import {
   RemoteCodexDispatchGoal,
   RemoteCodexExecutorTransport,
   RemoteCodexExecutionStatus,
+  cancelVpsRunnerQueue,
   createRemoteCodexExecutionRequest,
   dispatchRemoteCodexExecution,
   getRemoteCodexExecutorTransportRegistry,
@@ -675,6 +676,156 @@ test("remote Codex vps_runner progress reads queue comment and target PR truth",
   assert.equal(progress.progress.runnerEvent.status, RemoteCodexExecutionStatus.IN_PROGRESS);
   assert.equal(progress.progress.blocker, null);
   assert.equal(calls.length, 2);
+});
+
+test("remote Codex vps_runner cancel appends canceled marker to execution queue comment", async () => {
+  const calls = [];
+  const result = await cancelVpsRunnerQueue({
+    repository: "sample-org/vtdd-v2",
+    issueNumber: 235,
+    executionId: "remote-codex-issue235-cancel",
+    mode: "execution",
+    reason: "stale branch",
+    actor: "alice",
+    env: {
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_cancel_token",
+      GITHUB_API_FETCH: async (url, init = {}) => {
+        calls.push({ url: String(url), init });
+        if (String(url).includes("/issues/235/comments")) {
+          return new Response(
+            JSON.stringify([
+              {
+                id: 23501,
+                created_at: "2026-05-10T10:00:00Z",
+                html_url: "https://github.com/sample-org/vtdd-v2/issues/235#issuecomment-23501",
+                body:
+                  "<!-- vtdd:vps-runner-execution:remote-codex-issue235-cancel -->\n```json\n{\"executionId\":\"remote-codex-issue235-cancel\",\"transport\":\"vps_runner\",\"repository\":\"sample-org/vtdd-v2\",\"issueNumber\":235,\"branch\":\"codex/issue-235\",\"approvalScopeMatched\":true}\n```"
+              }
+            ]),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        if (String(url).includes("/issues/comments/23501")) {
+          return new Response(JSON.stringify({ ok: true }), {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          });
+        }
+        return new Response(JSON.stringify([]), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        });
+      }
+    }
+  });
+
+  const patch = calls.find((call) => call.init.method === "PATCH");
+  const patchBody = JSON.parse(patch.init.body).body;
+  assert.equal(result.ok, true);
+  assert.equal(result.cancellation.canceledCount, 1);
+  assert.equal(result.cancellation.canceled[0].previousState, "pending");
+  assert.equal(patchBody.includes("vtdd:vps-runner-canceled:remote-codex-issue235-cancel"), true);
+  assert.equal(patchBody.includes('"reason": "stale branch"'), true);
+});
+
+test("remote Codex vps_runner issue pending cancel skips running executions", async () => {
+  const patched = [];
+  const result = await cancelVpsRunnerQueue({
+    repository: "sample-org/vtdd-v2",
+    issueNumber: 235,
+    mode: "issue_pending",
+    reason: "drain stale pending work",
+    env: {
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_cancel_token",
+      GITHUB_API_FETCH: async (url, init = {}) => {
+        if (String(url).includes("/issues/235/comments")) {
+          return new Response(
+            JSON.stringify([
+              {
+                id: 23501,
+                created_at: "2026-05-10T10:00:00Z",
+                body:
+                  "<!-- vtdd:vps-runner-execution:pending-one -->\n```json\n{\"executionId\":\"pending-one\",\"transport\":\"vps_runner\",\"repository\":\"sample-org/vtdd-v2\",\"issueNumber\":235,\"branch\":\"codex/issue-235-a\",\"approvalScopeMatched\":true}\n```"
+              },
+              {
+                id: 23502,
+                created_at: "2026-05-10T10:01:00Z",
+                body:
+                  "<!-- vtdd:vps-runner-execution:running-one -->\n```json\n{\"executionId\":\"running-one\",\"transport\":\"vps_runner\",\"repository\":\"sample-org/vtdd-v2\",\"issueNumber\":235,\"branch\":\"codex/issue-235-b\",\"approvalScopeMatched\":true}\n```"
+              },
+              {
+                id: 23503,
+                created_at: "2026-05-10T10:02:00Z",
+                body: "<!-- vtdd:vps-runner-event:running-one -->\n```json\n{\"status\":\"running\",\"updatedAt\":\"2026-05-10T10:02:00Z\"}\n```"
+              }
+            ]),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        if (String(url).includes("/issues/comments/")) {
+          patched.push({ url: String(url), body: JSON.parse(init.body).body });
+          return new Response(JSON.stringify({ ok: true }), {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          });
+        }
+        return new Response(JSON.stringify([]), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        });
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.cancellation.canceledCount, 1);
+  assert.equal(result.cancellation.canceled[0].executionId, "pending-one");
+  assert.equal(patched.length, 1);
+  assert.equal(patched[0].url.includes("/issues/comments/23501"), true);
+});
+
+test("remote Codex vps_runner progress exposes canceled runtime truth", async () => {
+  const progress = await retrieveRemoteCodexExecutionProgress({
+    executionId: "remote-codex-issue235-canceled",
+    repository: "sample-org/vtdd-v2",
+    issueNumber: 235,
+    branch: "codex/issue-235",
+    executorTransport: RemoteCodexExecutorTransport.VPS_RUNNER,
+    env: {
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_progress_token",
+      GITHUB_API_FETCH: async (url) => {
+        if (String(url).includes("/issues/235/comments")) {
+          return new Response(
+            JSON.stringify([
+              {
+                id: 23501,
+                created_at: "2026-05-10T10:00:00Z",
+                html_url: "https://github.com/sample-org/vtdd-v2/issues/235#issuecomment-23501",
+                body:
+                  "<!-- vtdd:vps-runner-execution:remote-codex-issue235-canceled -->\n```json\n{\"executionId\":\"remote-codex-issue235-canceled\",\"transport\":\"vps_runner\",\"repository\":\"sample-org/vtdd-v2\",\"issueNumber\":235,\"branch\":\"codex/issue-235\",\"approvalScopeMatched\":true}\n```\n\n<!-- vtdd:vps-runner-canceled:remote-codex-issue235-canceled -->\n```json\n{\"status\":\"canceled\",\"mode\":\"execution\",\"executionId\":\"remote-codex-issue235-canceled\",\"reason\":\"operator canceled\",\"canceledAt\":\"2026-05-10T10:01:00.000Z\"}\n```"
+              }
+            ]),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        if (String(url).includes("/pulls?")) {
+          return new Response(JSON.stringify([]), {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          });
+        }
+        return new Response(JSON.stringify({ message: "Branch not found" }), {
+          status: 404,
+          headers: { "content-type": "application/json" }
+        });
+      }
+    }
+  });
+
+  assert.equal(progress.ok, true);
+  assert.equal(progress.progress.status, RemoteCodexExecutionStatus.CANCELED);
+  assert.equal(progress.progress.cancellation.reason, "operator canceled");
+  assert.equal(progress.progress.blocker.error, "vps_runner_execution_canceled");
 });
 
 test("remote Codex vps_runner progress exposes execution lead time from runner events", async () => {

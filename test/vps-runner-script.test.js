@@ -15,6 +15,7 @@ import {
   isNonFastForwardPushFailure,
   loadVpsRunnerRepositoryPolicies,
   normalizeRepositoryPolicies,
+  parseVpsRunnerCancellationMarker,
   parseVpsRunnerEventComment,
   parseVpsRunnerQueueComment,
   postVpsRunnerEvent,
@@ -106,6 +107,44 @@ test("VPS runner selects only allowlisted pending queues", () => {
   assert.equal(selected.length, 1);
   assert.equal(selected[0].payload.executionId, "exec-1");
   assert.equal(selected[0].actors.queueCommentAuthor, "alice");
+});
+
+test("VPS runner ignores queue comments with canceled markers", () => {
+  const body = `${queueComment({ executionId: "exec-cancel", repository: "sample-org/vtdd-v2" })}
+
+<!-- vtdd:vps-runner-canceled:exec-cancel -->
+VTDD VPS runner cancellation marker.
+
+\`\`\`json
+{
+  "status": "canceled",
+  "mode": "execution",
+  "executionId": "exec-cancel",
+  "repository": "sample-org/vtdd-v2",
+  "issueNumber": 157,
+  "reason": "stale branch",
+  "canceledAt": "2026-05-10T10:00:00.000Z"
+}
+\`\`\``;
+
+  const cancellation = parseVpsRunnerCancellationMarker(body, {
+    executionId: "exec-cancel"
+  });
+  const selected = selectPendingVpsRunnerExecutions({
+    comments: [
+      {
+        id: 1,
+        html_url: "https://github.com/sample-org/vtdd-v2/issues/157#issuecomment-1",
+        created_at: "2026-05-07T10:00:00Z",
+        body
+      }
+    ],
+    allowedRepositories: ["sample-org/vtdd-v2"]
+  });
+
+  assert.equal(cancellation.status, "canceled");
+  assert.equal(cancellation.reason, "stale branch");
+  assert.equal(selected.length, 0);
 });
 
 test("VPS runner repository policies allow per-repo base refs and branch prefixes", () => {

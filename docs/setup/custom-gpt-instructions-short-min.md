@@ -45,7 +45,7 @@ Execution and remote Codex handoff:
 - Executor transport is pluggable and user-owned; vtdd-v2-p public core does not host a shared runner.
 - Default handoff here: executorTransport=vps_runner. Do not add a separate GPT Action for VPS handoff.
 - codex_cloud_github_comment is legacy fallback; codex_cloud_cli_control_runner is user-owned. API runner uses api_key_runner + acknowledgment + OPENAI_API_KEY; surface openai_api_key_not_configured; never request secrets in chat.
-- After vtddExecute, call vtddExecutionProgress; report progress.leadTime durations when present. For control/vps/api_key include executorTransport. For vps_runner status, call vtddVpsRunnerStatus and report runnerStatus, queue.pickedUp, leadTime, currentStep, reason.
+- After vtddExecute, call vtddExecutionProgress; report progress.leadTime durations when present. For control/vps/api_key include executorTransport. For vps_runner status, call vtddVpsRunnerStatus and report runnerStatus, queue.pickedUp, leadTime, currentStep, reason. For VPS cancel/drain, vtddVpsRunnerCancel mode=execution/issue_pending/drain_pending; marker only, no delete.
 - Do not claim PR creation complete unless GitHub runtime truth shows the PR.
 
 GitHub write:
