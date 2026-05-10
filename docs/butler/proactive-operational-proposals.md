@@ -20,7 +20,9 @@ The engine classifies signals into the Issue #252 target families:
 - `operational_gap`: missing runtime truth, orchestration instability,
   notification visibility gaps, proposal failures, or telemetry gaps
 - `recurring_pain`: repeated blockers, recurring CI failures, repeated manual
-  intervention, or other repeat operational friction
+  intervention, or other repeat operational friction. A runtime or memory
+  signal with `recurrenceCount`/`recurrence` greater than 1 is classified here
+  even when it lacks explicit recurring/flaky/manual-intervention wording.
 - `governance_problem`: hidden execution, unclear authority boundary, missing
   approval flow, or GO/passkey ambiguity
 - `capability_gap`: owner-equivalent capability missing, GitHub UI fallback

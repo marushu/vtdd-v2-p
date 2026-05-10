@@ -82,8 +82,32 @@ test("proactive engine detects governance problems without bypassing approval bo
   assert.equal(proposal.target, ProactiveDetectionTarget.GOVERNANCE_PROBLEM);
   assert.equal(proposal.executionPlan.status, "proposal_only");
   assert.equal(proposal.executionPlan.requiresGO, true);
-  assert.match(proposal.executionPlan.approvalBoundary, /GO \+ passkey/);
+  assert.match(proposal.executionPlan.approvalBoundary, /GO \+ passkey required/);
+  assert.doesNotMatch(proposal.executionPlan.approvalBoundary, /may be required/);
   assert.equal(proposal.executionPlan.prohibitedUntilApproved.includes("high_risk_action"), true);
+});
+
+test("proactive engine detects recurrence-only runtime signals as recurring pain", () => {
+  const result = buildProactiveOperationalProposals({
+    signals: [
+      {
+        id: "runtime-signal-repeat",
+        title: "Runtime adapter timeout",
+        description: "The adapter returned no terminal status before owner escalation.",
+        recurrenceCount: 3,
+        evidence: ["Observed in three separate handoff windows"]
+      }
+    ]
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.summary.recurringPainCount, 1);
+
+  const proposal = result.proposals[0];
+  assert.equal(proposal.target, ProactiveDetectionTarget.RECURRING_PAIN);
+  assert.equal(proposal.recurrence, 3);
+  assert.match(proposal.explanation, /This appears recurring \(3 observed signals\)\./);
+  assert.equal(proposal.priority.factors.recurrenceFrequency, 75);
 });
 
 test("proactive engine improves proposal context with historical memory and duplicate candidates", () => {

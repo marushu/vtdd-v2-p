@@ -166,13 +166,23 @@ function buildDetectedOpportunity(signal, context) {
 function classifyTarget(signal) {
   const target = normalizeText(signal.target ?? signal.kind ?? signal.category);
   const searchable = `${signal.title ?? ""}\n${signal.description ?? ""}\n${signal.summary ?? ""}\n${signal.rootCause ?? ""}\n${normalizeArray(signal.tags).join(" ")}`;
+  const recurrence = normalizeCount(signal.recurrenceCount ?? signal.recurrence);
 
   const explicit = TARGET_RULES.find((rule) => rule.target === target);
   if (explicit) {
     return explicit;
   }
 
-  return TARGET_RULES.find((rule) => rule.patterns.some((pattern) => pattern.test(searchable))) ?? null;
+  const patternMatch = TARGET_RULES.find((rule) => rule.patterns.some((pattern) => pattern.test(searchable)));
+  if (patternMatch) {
+    return patternMatch;
+  }
+
+  if (recurrence > 1) {
+    return TARGET_RULES.find((rule) => rule.target === ProactiveDetectionTarget.RECURRING_PAIN);
+  }
+
+  return null;
 }
 
 function buildExplanation(signal, targetRule, memoryReferences) {
@@ -281,7 +291,7 @@ function buildExecutionPlan(signal, targetRule) {
     ],
     approvalBoundary:
       targetRule.target === ProactiveDetectionTarget.GOVERNANCE_PROBLEM || hasHighRiskTerms(signal)
-        ? "GO + passkey may be required if remediation touches high-risk external effects"
+        ? "GO + passkey required before deploy, secret, permission, settings, or other high-risk external effects; normal writes still require GO"
         : "GO required before normal write or execution"
   };
 }

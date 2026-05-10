@@ -26960,11 +26960,19 @@ ${signal.description ?? ""}
 ${signal.summary ?? ""}
 ${signal.rootCause ?? ""}
 ${normalizeArray(signal.tags).join(" ")}`;
+  const recurrence = normalizeCount2(signal.recurrenceCount ?? signal.recurrence);
   const explicit = TARGET_RULES.find((rule) => rule.target === target);
   if (explicit) {
     return explicit;
   }
-  return TARGET_RULES.find((rule) => rule.patterns.some((pattern) => pattern.test(searchable))) ?? null;
+  const patternMatch = TARGET_RULES.find((rule) => rule.patterns.some((pattern) => pattern.test(searchable)));
+  if (patternMatch) {
+    return patternMatch;
+  }
+  if (recurrence > 1) {
+    return TARGET_RULES.find((rule) => rule.target === ProactiveDetectionTarget.RECURRING_PAIN);
+  }
+  return null;
 }
 function buildExplanation(signal, targetRule, memoryReferences) {
   const description = normalizeText18(signal.description ?? signal.summary);
@@ -27051,7 +27059,7 @@ function buildExecutionPlan(signal, targetRule) {
       "high_risk_action",
       "permission_or_secret_mutation"
     ],
-    approvalBoundary: targetRule.target === ProactiveDetectionTarget.GOVERNANCE_PROBLEM || hasHighRiskTerms(signal) ? "GO + passkey may be required if remediation touches high-risk external effects" : "GO required before normal write or execution"
+    approvalBoundary: targetRule.target === ProactiveDetectionTarget.GOVERNANCE_PROBLEM || hasHighRiskTerms(signal) ? "GO + passkey required before deploy, secret, permission, settings, or other high-risk external effects; normal writes still require GO" : "GO required before normal write or execution"
   };
 }
 function buildBoundedSlices(signal, targetRule) {
