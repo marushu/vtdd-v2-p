@@ -797,6 +797,95 @@ test("remote Codex vps_runner progress exposes execution lead time from runner e
   assert.equal(progress.progress.leadTime.durations.total_lead_time.label, "4m 10s");
 });
 
+test("remote Codex vps_runner progress reconstructs lead time from GitHub comment runtime truth", async () => {
+  const progress = await retrieveRemoteCodexExecutionProgress({
+    executionId: "remote-codex-issue260-comment-truth",
+    repository: "sample-org/sunaba-eye",
+    issueNumber: 260,
+    branch: "codex/issue-260",
+    executorTransport: RemoteCodexExecutorTransport.VPS_RUNNER,
+    env: {
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_progress_token",
+      GITHUB_API_FETCH: async (url) => {
+        if (String(url).includes("/issues/260/comments")) {
+          return new Response(
+            JSON.stringify([
+              {
+                id: 26011,
+                html_url: "https://github.com/sample-org/sunaba-eye/issues/260#issuecomment-26011",
+                created_at: "2026-05-09T10:00:00.000Z",
+                body: "<!-- vtdd:vps-runner-execution:remote-codex-issue260-comment-truth -->"
+              },
+              {
+                id: 26012,
+                html_url: "https://github.com/sample-org/sunaba-eye/issues/260#issuecomment-26012",
+                created_at: "2026-05-09T10:01:00.000Z",
+                updated_at: "2026-05-09T10:01:00.000Z",
+                body: "<!-- vtdd:vps-runner-event:remote-codex-issue260-comment-truth -->\nnot json"
+              },
+              {
+                id: 26013,
+                html_url: "https://github.com/sample-org/sunaba-eye/issues/260#issuecomment-26013",
+                created_at: "2026-05-09T10:04:45.000Z",
+                updated_at: "2026-05-09T10:04:45.000Z",
+                body: [
+                  "<!-- vtdd:vps-runner-event:remote-codex-issue260-comment-truth -->",
+                  "Lead time:",
+                  "- Queue wait: 12s",
+                  "- Codex execution: 3m 42s",
+                  "- PR creation: 8s",
+                  "- Total lead time: 4m 45s",
+                  "",
+                  "```json",
+                  JSON.stringify({
+                    status: "completed",
+                    lastEvent: "execution_completed",
+                    currentStep: "completed",
+                    updatedAt: "2026-05-09T10:04:45.000Z",
+                    leadTime: {
+                      queued_at: "2026-05-09T10:00:00.000Z",
+                      picked_up_at: "2026-05-09T10:00:12.000Z",
+                      codex_started_at: "2026-05-09T10:00:20.000Z",
+                      branch_pushed_at: "2026-05-09T10:04:02.000Z",
+                      pr_created_at: "2026-05-09T10:04:10.000Z",
+                      completed_at: "2026-05-09T10:04:45.000Z",
+                      failed_at: null,
+                      durations: {
+                        queue_wait_duration: { seconds: 12, label: "12s" },
+                        codex_execution_duration: { seconds: 222, label: "3m 42s" },
+                        pr_creation_duration: { seconds: 8, label: "8s" },
+                        total_lead_time: { seconds: 285, label: "4m 45s" }
+                      }
+                    }
+                  }),
+                  "```"
+                ].join("\n")
+              }
+            ]),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        if (String(url).includes("/pulls?")) {
+          return new Response(JSON.stringify([]), {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          });
+        }
+        return new Response(JSON.stringify({ message: "Branch not found" }), {
+          status: 404,
+          headers: { "content-type": "application/json" }
+        });
+      }
+    }
+  });
+
+  assert.equal(progress.ok, true);
+  assert.equal(progress.progress.status, RemoteCodexExecutionStatus.COMPLETED);
+  assert.equal(progress.progress.leadTime.pr_created_at, "2026-05-09T10:04:10.000Z");
+  assert.equal(progress.progress.leadTime.completed_at, "2026-05-09T10:04:45.000Z");
+  assert.equal(progress.progress.leadTime.durations.total_lead_time.label, "4m 45s");
+});
+
 test("remote Codex vps_runner progress blocks stale queue without pickup evidence", async () => {
   const originalNow = Date.now;
   Date.now = () => Date.parse("2026-05-07T10:10:00Z");

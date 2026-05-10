@@ -23,6 +23,20 @@ test("execution lead time computes concise lifecycle durations", () => {
   assert.equal(leadTime.completed_at, null);
 });
 
+test("execution lead time prefers explicit completion over PR creation for total", () => {
+  const leadTime = buildExecutionLeadTime({
+    queuedAt: "2026-05-09T10:00:00.000Z",
+    branchPushedAt: "2026-05-09T10:04:02.000Z",
+    prCreatedAt: "2026-05-09T10:04:10.000Z",
+    completedAt: "2026-05-09T10:04:45.000Z"
+  });
+
+  assert.equal(leadTime.pr_created_at, "2026-05-09T10:04:10.000Z");
+  assert.equal(leadTime.completed_at, "2026-05-09T10:04:45.000Z");
+  assert.equal(leadTime.durations.pr_creation_duration.label, "8s");
+  assert.equal(leadTime.durations.total_lead_time.label, "4m 45s");
+});
+
 test("execution duration rejects missing or reversed timestamps", () => {
   assert.equal(buildExecutionDuration(null, "2026-05-09T10:00:00.000Z"), null);
   assert.equal(

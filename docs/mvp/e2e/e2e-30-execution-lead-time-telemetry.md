@@ -43,7 +43,35 @@ Observed result on 2026-05-10:
 - confirms missing or reversed timestamps produce `null` durations instead of misleading latency
 - confirms `pr_created_at` can remain distinct from `completed_at` for non-terminal PR-created events
 - confirms successful terminal VPS runner events can populate both `pr_created_at` and `completed_at`
+- confirms explicit `completed_at` is the total lead-time terminal timestamp when it is later than `pr_created_at`
+- confirms `vtddExecutionProgress` reconstructs lead time from GitHub-visible runner comment JSON and ignores malformed non-JSON event comments
 - confirms stale or missing runner pickup evidence remains a blocked/unverified runtime state instead of a success claim
+
+## Reproducible GitHub Comment Verification Path
+
+This revision does not claim live production E2E. The executable local
+verification path for the reviewer-raised GitHub-visible runtime truth risk is:
+
+```sh
+node --test test/remote-codex-executor.test.js --test-name-pattern "GitHub comment runtime truth"
+```
+
+That test feeds `vtddExecutionProgress` the same issue-comment shapes used by
+the VPS runner:
+- a `vtdd:vps-runner-execution` queue comment with `created_at`
+- a malformed matching runner event comment that must be ignored
+- a `vtdd:vps-runner-event` comment containing concise `Lead time:` lines and
+  JSON `leadTime` runtime truth
+
+The expected observable result is:
+- `progress.status` is `completed`
+- `progress.leadTime.pr_created_at` remains the PR creation timestamp
+- `progress.leadTime.completed_at` remains the completion timestamp
+- `progress.leadTime.durations.total_lead_time.label` is reconstructed from the
+  GitHub comment runtime truth
+
+This is contract evidence for the parser and Butler-facing progress path, not a
+substitute for live runner evidence.
 
 ## Live Evidence Status
 
@@ -51,11 +79,16 @@ Live GitHub runner E2E:
 - not run in this revision
 - blocked here by the instruction not to deploy or mutate external infrastructure beyond the bounded PR revision work
 - remains required before claiming Issue `#260` fully complete from production-like runtime truth
+- reviewer objection is preserved until a real runner execution comment and
+  `vtddExecutionProgress` readback from that same execution are attached as
+  evidence
 
 iPhone Butler live E2E:
 - not run in this revision
 - blocked here because no live iPhone Butler session or deployed runtime update was authorized
 - remains required before claiming the end-user Butler surface is fully verified
+- reviewer objection is preserved until a live Butler session reads and reports
+  `progress.leadTime` or `health.leadTime`
 
 ## Evidence Files
 

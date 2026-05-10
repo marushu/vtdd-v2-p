@@ -25,7 +25,10 @@ test("E2E-30 evidence doc records Issue 260 lead-time telemetry coverage", () =>
   assert.equal(doc.includes("failed_at"), true);
   assert.equal(doc.includes("vtddExecutionProgress"), true);
   assert.equal(doc.includes("vtddVpsRunnerStatus"), true);
+  assert.equal(doc.includes("GitHub comment runtime truth"), true);
+  assert.equal(doc.includes("explicit `completed_at` is the total lead-time terminal timestamp"), true);
   assert.equal(doc.includes("not run in this revision"), true);
+  assert.equal(doc.includes("reviewer objection is preserved"), true);
   assert.equal(doc.includes("must not be described as complete"), true);
 });
 

@@ -13,8 +13,8 @@
 - GitHub-visible VPS runner state/event comments include concise Lead time lines and JSON `leadTime` runtime truth.
 - Queue wait, Codex execution, PR creation, and total lead time durations are computed with readable labels.
 - Lead-time duration calculation and formatting are shared by Butler progress reconstruction and VPS runner comment publishing.
-- `pr_created_at` remains distinct from `completed_at`; PR creation can end total lead-time calculation without falsifying a completed timestamp.
-- Reviewer objection is preserved: live GitHub runner E2E and iPhone Butler live E2E remain explicitly unverified.
+- `pr_created_at` and `completed_at` have separate meanings: PR creation can end total lead-time calculation before completion exists, and explicit completion becomes the terminal timestamp when present.
+- Reviewer objection is preserved: live GitHub runner E2E and iPhone Butler live E2E remain explicitly unverified, with a reproducible local GitHub comment runtime-truth verification path documented.
 - GitHub CI passed on PR #269: `guarded-policy`, `test`, and `review`.
 - PR #261 was inspected only through GitHub read operations; no push was made to `codex/issue-260`.
 
@@ -29,10 +29,10 @@ None.
 
 ## Verification Evidence
 
-- Unit: `npm test` passed locally on 2026-05-10: 615 tests passed.
-- Integration: `node --test test/execution-lead-time.test.js test/vps-runner-script.test.js test/remote-codex-executor.test.js test/e2e-30-execution-lead-time-telemetry.test.js test/custom-gpt-setup-docs.test.js` passed locally on 2026-05-10: 81 tests passed.
+- Unit: `npm test` passed locally on 2026-05-10: 617 tests passed; runtime setup manifest parity check passed.
+- Integration: `node --test test/execution-lead-time.test.js test/remote-codex-executor.test.js test/e2e-30-execution-lead-time-telemetry.test.js` passed locally on 2026-05-10: 37 tests passed.
 - CI: PR #269 `guarded-policy`, `test`, and `review` checks passed on 2026-05-10.
-- E2E: Not run live; covered by runtime progress/comment contract tests for happy-path and stale/failure boundaries. Reviewer-raised live GitHub runner E2E and iPhone Butler live E2E remain unverified.
+- E2E: Not run live; covered by runtime progress/comment contract tests for happy-path, stale/failure boundaries, malformed GitHub comment tolerance, and `pr_created_at` / `completed_at` terminal semantics. Reviewer-raised live GitHub runner E2E and iPhone Butler live E2E remain unverified.
 - Manual: Inspected docs/pr-template-model.md, scripts/render-pr-body.mjs, and scripts/validate-pr-body.mjs before drafting; read GitHub Issue #267, Issue #260, and PR #261 runtime truth with `gh` on 2026-05-10.
 - Evidence path/link: src/core/execution-lead-time.js; src/core/remote-codex-executor.js; scripts/run-vps-runner.mjs; test/execution-lead-time.test.js; test/remote-codex-executor.test.js; test/vps-runner-script.test.js; docs/mvp/e2e/e2e-30-execution-lead-time-telemetry.md
 
@@ -58,6 +58,7 @@ None.
 ## Extra changes (if any)
 
 - Gemini reviewer code-duplication risk from PR #261 remains addressed by centralizing lead-time duration calculation and formatting in src/core/execution-lead-time.js.
+- Gemini reviewer ambiguity risk around `pr_created_at` and `completed_at` is addressed with explicit tests and E2E documentation; live E2E objections remain preserved rather than erased.
 - PR #261 is superseded by this fresh PR; no additional push was made to PR #261.
 
 <!-- VTDD metadata -->
