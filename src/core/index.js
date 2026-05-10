@@ -154,6 +154,14 @@ export {
 export { evaluateExecutionPolicy } from "./policy.js";
 export { evaluateButlerExecution } from "./butler-orchestrator.js";
 export {
+  ButlerBatchConflictRisk,
+  ButlerBatchExecutionStage,
+  ButlerBatchIssueDisposition,
+  buildButlerBatchHandoffQueue,
+  buildButlerIssueBatchPlan,
+  monitorButlerBatchDevelopment
+} from "./butler-batch-planning.js";
+export {
   CodexGoal,
   ExecutionTransferMode,
   evaluateExecutionContinuity
