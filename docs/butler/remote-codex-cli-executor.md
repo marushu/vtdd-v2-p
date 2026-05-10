@@ -244,6 +244,15 @@ Required runner environment:
   runner state updates while Codex CLI or `gh` subprocesses are running.
   Defaults to `120`. Set to `0` only when heartbeat updates are intentionally
   disabled.
+- Optional `VTDD_VPS_RUNNER_MAX_CONCURRENT_EXECUTIONS`: maximum pending VPS
+  runner executions to pick up in one run. Defaults to `3`. Each selected
+  execution receives its own workspace under `VTDD_VPS_RUNNER_WORKDIR`, its own
+  Codex subprocess, and GitHub-visible runner state/heartbeat comments. The
+  runner skips additional pending entries for the same `repository + branch`
+  during the same pool run to avoid branch collisions.
+- Optional per-repository config `maxConcurrentExecutions`: caps concurrent
+  worker slots for that repository within the global pool, allowing one busy
+  repository to leave slots available for other allowlisted repositories.
 
 Dry-run pickup check:
 

@@ -15,6 +15,7 @@ const EVENT_MARKER_RE = /<!--\s*vtdd:vps-runner-event:([a-zA-Z0-9._:-]+)\s*-->/;
 const CANCELED_MARKER_RE = /<!--\s*vtdd:vps-runner-canceled:([a-zA-Z0-9._:-]+)\s*-->/;
 const DEFAULT_API_BASE_URL = "https://api.github.com";
 const DEFAULT_HEARTBEAT_SECONDS = 120;
+const DEFAULT_MAX_CONCURRENT_EXECUTIONS = 3;
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const MILESTONE_MENTION_EVENTS = new Set([
   "picked_up",
@@ -74,25 +75,40 @@ async function runVpsRunnerOnce({
   allowedRepositories,
   repositoryPolicies,
   workRoot,
-  dryRun = false
+  dryRun = false,
+  maxConcurrentExecutions
 }) {
   const policies = normalizeRepositoryPolicies({ allowedRepositories, repositoryPolicies });
+  const concurrencyLimit = normalizeMaxConcurrentExecutions(maxConcurrentExecutions ?? process.env.VTDD_VPS_RUNNER_MAX_CONCURRENT_EXECUTIONS);
   const candidates = [];
   for (const repository of policies.map((policy) => policy.repository)) {
     const comments = await readRecentIssueComments({ githubFetch, repository });
     candidates.push(...selectPendingVpsRunnerExecutions({ comments, repositoryPolicies: policies }));
   }
 
-  const execution = candidates.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))[0];
-  if (execution) {
+  const executions = selectRunnableVpsRunnerExecutions({
+    candidates: candidates.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt)),
+    repositoryPolicies: policies,
+    maxConcurrentExecutions: concurrencyLimit
+  });
+  if (executions.length > 0) {
     if (dryRun) {
+      const selected = executions
+        .map((execution) => `${execution.payload.executionId} for ${execution.payload.repository}#${execution.payload.issueNumber}`)
+        .join(", ");
       return {
         ok: true,
-        message: `Dry run selected ${execution.payload.executionId} for ${execution.payload.repository}#${execution.payload.issueNumber}.`
+        message: `Dry run selected ${executions.length} VPS runner execution(s): ${selected}.`
       };
     }
 
-    return executeVpsRunnerExecution({ githubFetch, token, workRoot, execution });
+    return executeVpsRunnerWorkerPool({
+      githubFetch,
+      token,
+      workRoot,
+      executions,
+      maxConcurrentExecutions: concurrencyLimit
+    });
   }
 
   const reviewerFallbacks = [];
@@ -114,6 +130,41 @@ async function runVpsRunnerOnce({
   }
 
   return executeVpsReviewerFallback({ token, reviewerFallback });
+}
+
+async function executeVpsRunnerWorkerPool({ githubFetch, token, workRoot, executions, maxConcurrentExecutions }) {
+  const runningExecutions = new Map();
+  const limitedExecutions = executions.slice(0, maxConcurrentExecutions);
+  const results = await Promise.all(
+    limitedExecutions.map(async (execution, index) => {
+      const slotId = `slot-${index + 1}`;
+      runningExecutions.set(execution.payload.executionId, {
+        slotId,
+        executionId: execution.payload.executionId,
+        repository: execution.payload.repository,
+        branch: execution.payload.branch,
+        startedAt: new Date().toISOString()
+      });
+      try {
+        return await executeVpsRunnerExecution({ githubFetch, token, workRoot, execution });
+      } catch (error) {
+        return {
+          ok: false,
+          reason: error instanceof Error ? error.message : String(error)
+        };
+      } finally {
+        runningExecutions.delete(execution.payload.executionId);
+      }
+    })
+  );
+
+  const succeeded = results.filter((result) => result?.ok).length;
+  const failed = results.length - succeeded;
+  return {
+    ok: failed === 0,
+    message: `VPS runner worker pool completed ${results.length} execution(s): ${succeeded} succeeded, ${failed} failed.`,
+    results
+  };
 }
 
 async function executeVpsRunnerExecution({ githubFetch, token, workRoot, execution }) {
@@ -404,6 +455,44 @@ function selectPendingVpsRunnerExecutions({ comments, allowedRepositories, repos
   );
 }
 
+function selectRunnableVpsRunnerExecutions({ candidates, repositoryPolicies, maxConcurrentExecutions }) {
+  const limit = normalizeMaxConcurrentExecutions(maxConcurrentExecutions);
+  const policies = normalizeRepositoryPolicies({ repositoryPolicies });
+  const selected = [];
+  const branchLocks = new Set();
+  const repositoryCounts = new Map();
+
+  for (const candidate of candidates || []) {
+    if (selected.length >= limit) {
+      break;
+    }
+
+    const repository = candidate?.payload?.repository;
+    const branch = candidate?.payload?.branch;
+    const branchLock = buildVpsRunnerBranchLockKey({ repository, branch });
+    if (!repository || !branch || branchLocks.has(branchLock)) {
+      continue;
+    }
+
+    const policy = policies.find((item) => item.repository === repository);
+    const repositoryLimit = normalizeOptionalConcurrencyLimit(policy?.maxConcurrentExecutions);
+    const repositoryCount = repositoryCounts.get(repository) || 0;
+    if (repositoryLimit && repositoryCount >= repositoryLimit) {
+      continue;
+    }
+
+    selected.push(candidate);
+    branchLocks.add(branchLock);
+    repositoryCounts.set(repository, repositoryCount + 1);
+  }
+
+  return selected;
+}
+
+function buildVpsRunnerBranchLockKey({ repository, branch } = {}) {
+  return `${normalizeRepository(repository)}:${normalizeText(branch)}`;
+}
+
 function buildVpsRunnerCompletionFinalEvent({ payload } = {}) {
   return isPrRevisionGoal(payload?.codexGoal) ? "pr_updated" : "pr_created";
 }
@@ -473,7 +562,7 @@ function normalizeRepositoryPolicies({ allowedRepositories, repositoryPolicies, 
 }
 
 function normalizeRepositoryPolicy(policy = {}) {
-  return {
+  const normalized = {
     repository: normalizeRepository(policy.repository),
     baseRefs: normalizeStringList(policy.baseRefs).length > 0 ? normalizeStringList(policy.baseRefs) : ["main"],
     branchPrefixes:
@@ -481,6 +570,11 @@ function normalizeRepositoryPolicy(policy = {}) {
         ? normalizeStringList(policy.branchPrefixes || policy.branchPrefix)
         : ["codex/"]
   };
+  const maxConcurrentExecutions = normalizeOptionalConcurrencyLimit(policy.maxConcurrentExecutions ?? policy.maxConcurrent);
+  if (maxConcurrentExecutions) {
+    normalized.maxConcurrentExecutions = maxConcurrentExecutions;
+  }
+  return normalized;
 }
 
 function validateVpsRunnerPayloadPolicy(payload, policies) {
@@ -1635,6 +1729,25 @@ function normalizeStringList(value) {
   return values.map(normalizeText).filter(Boolean);
 }
 
+function normalizeMaxConcurrentExecutions(value) {
+  const number = Number(value ?? DEFAULT_MAX_CONCURRENT_EXECUTIONS);
+  if (!Number.isFinite(number) || number < 1) {
+    return DEFAULT_MAX_CONCURRENT_EXECUTIONS;
+  }
+  return Math.floor(number);
+}
+
+function normalizeOptionalConcurrencyLimit(value) {
+  if (value === undefined || value === null || value === "") {
+    return null;
+  }
+  const number = Number(value);
+  if (!Number.isFinite(number) || number < 1) {
+    return null;
+  }
+  return Math.floor(number);
+}
+
 function safePathSegment(value) {
   return String(value || "").replace(/[^A-Za-z0-9_.-]+/g, "_");
 }
@@ -1689,5 +1802,6 @@ export {
   runVpsRunnerOnce,
   summarizeDiagnosticText,
   selectPendingVpsReviewerFallbacks,
-  selectPendingVpsRunnerExecutions
+  selectPendingVpsRunnerExecutions,
+  selectRunnableVpsRunnerExecutions
 };

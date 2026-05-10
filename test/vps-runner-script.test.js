@@ -23,7 +23,8 @@ import {
   runVpsRunnerOnce,
   summarizeDiagnosticText,
   selectPendingVpsReviewerFallbacks,
-  selectPendingVpsRunnerExecutions
+  selectPendingVpsRunnerExecutions,
+  selectRunnableVpsRunnerExecutions
 } from "../scripts/run-vps-runner.mjs";
 
 test("VPS runner parses bounded queue comment payload", () => {
@@ -203,6 +204,110 @@ test("VPS runner repository policies allow per-repo base refs and branch prefixe
 
   assert.equal(selected.length, 1);
   assert.equal(selected[0].payload.executionId, "tomio-1");
+});
+
+test("VPS runner selects a bounded parallel worker pool without branch collisions", () => {
+  const candidates = [
+    {
+      createdAt: "2026-05-07T10:00:00Z",
+      payload: {
+        executionId: "exec-1",
+        repository: "sample-org/vtdd-v2",
+        issueNumber: 280,
+        branch: "codex/issue-280-a"
+      }
+    },
+    {
+      createdAt: "2026-05-07T10:01:00Z",
+      payload: {
+        executionId: "exec-2",
+        repository: "sample-org/vtdd-v2",
+        issueNumber: 281,
+        branch: "codex/issue-280-b"
+      }
+    },
+    {
+      createdAt: "2026-05-07T10:02:00Z",
+      payload: {
+        executionId: "exec-3",
+        repository: "sample-org/vtdd-v2",
+        issueNumber: 282,
+        branch: "codex/issue-280-a"
+      }
+    },
+    {
+      createdAt: "2026-05-07T10:03:00Z",
+      payload: {
+        executionId: "exec-4",
+        repository: "sample-org/vtdd-v2",
+        issueNumber: 283,
+        branch: "codex/issue-280-c"
+      }
+    }
+  ];
+
+  const selected = selectRunnableVpsRunnerExecutions({
+    candidates,
+    maxConcurrentExecutions: 3,
+    repositoryPolicies: normalizeRepositoryPolicies({
+      allowedRepositories: ["sample-org/vtdd-v2"]
+    })
+  });
+
+  assert.deepEqual(
+    selected.map((execution) => execution.payload.executionId),
+    ["exec-1", "exec-2", "exec-4"]
+  );
+});
+
+test("VPS runner honors per-repository concurrency caps while avoiding starvation across repositories", () => {
+  const candidates = [
+    {
+      createdAt: "2026-05-07T10:00:00Z",
+      payload: {
+        executionId: "repo-a-1",
+        repository: "sample-org/repo-a",
+        issueNumber: 1,
+        branch: "codex/issue-1"
+      }
+    },
+    {
+      createdAt: "2026-05-07T10:01:00Z",
+      payload: {
+        executionId: "repo-a-2",
+        repository: "sample-org/repo-a",
+        issueNumber: 2,
+        branch: "codex/issue-2"
+      }
+    },
+    {
+      createdAt: "2026-05-07T10:02:00Z",
+      payload: {
+        executionId: "repo-b-1",
+        repository: "sample-org/repo-b",
+        issueNumber: 3,
+        branch: "codex/issue-3"
+      }
+    }
+  ];
+
+  const selected = selectRunnableVpsRunnerExecutions({
+    candidates,
+    maxConcurrentExecutions: 3,
+    repositoryPolicies: normalizeRepositoryPolicies({
+      config: {
+        repositories: {
+          "sample-org/repo-a": { maxConcurrentExecutions: 1 },
+          "sample-org/repo-b": { maxConcurrentExecutions: 1 }
+        }
+      }
+    })
+  });
+
+  assert.deepEqual(
+    selected.map((execution) => execution.payload.executionId),
+    ["repo-a-1", "repo-b-1"]
+  );
 });
 
 test("VPS runner loads repository policies from config file", async () => {
@@ -699,11 +804,75 @@ test("VPS runner dry run reports selected execution without side effects", async
   });
 
   assert.equal(result.ok, true);
-  assert.equal(result.message.includes("Dry run selected exec-1"), true);
+  assert.equal(result.message.includes("Dry run selected 1 VPS runner execution(s): exec-1"), true);
   assert.deepEqual(calls, [
     "/repos/sample-org/vtdd-v2/issues?state=open&sort=updated&direction=desc&per_page=100",
     "/repos/sample-org/vtdd-v2/issues/157/comments?per_page=100"
   ]);
+});
+
+test("VPS runner dry run reports multiple selected executions up to the worker pool limit", async () => {
+  const result = await runVpsRunnerOnce({
+    token: "ghs_test",
+    allowedRepositories: ["sample-org/vtdd-v2"],
+    workRoot: "/tmp/vtdd-runner-test",
+    dryRun: true,
+    maxConcurrentExecutions: 2,
+    githubFetch: async (url) => {
+      if (url.includes("/issues?")) {
+        return [{ number: 157 }, { number: 158 }, { number: 159 }];
+      }
+      if (url.includes("/issues/157/comments")) {
+        return [
+          {
+            id: 1,
+            html_url: "https://github.com/sample-org/vtdd-v2/issues/157#issuecomment-1",
+            created_at: "2026-05-07T10:00:00Z",
+            body: queueComment({
+              executionId: "exec-1",
+              repository: "sample-org/vtdd-v2",
+              issueNumber: 157,
+              branch: "codex/issue-157"
+            })
+          }
+        ];
+      }
+      if (url.includes("/issues/158/comments")) {
+        return [
+          {
+            id: 2,
+            html_url: "https://github.com/sample-org/vtdd-v2/issues/158#issuecomment-2",
+            created_at: "2026-05-07T10:01:00Z",
+            body: queueComment({
+              executionId: "exec-2",
+              repository: "sample-org/vtdd-v2",
+              issueNumber: 158,
+              branch: "codex/issue-158"
+            })
+          }
+        ];
+      }
+      return [
+        {
+          id: 3,
+          html_url: "https://github.com/sample-org/vtdd-v2/issues/159#issuecomment-3",
+          created_at: "2026-05-07T10:02:00Z",
+          body: queueComment({
+            executionId: "exec-3",
+            repository: "sample-org/vtdd-v2",
+            issueNumber: 159,
+            branch: "codex/issue-159"
+          })
+        }
+      ];
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.message.includes("Dry run selected 2 VPS runner execution(s)"), true);
+  assert.equal(result.message.includes("exec-1"), true);
+  assert.equal(result.message.includes("exec-2"), true);
+  assert.equal(result.message.includes("exec-3"), false);
 });
 
 test("VPS runner creates a fresh branch when the requested branch already exists remotely", async () => {
