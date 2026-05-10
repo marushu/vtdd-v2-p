@@ -20,6 +20,9 @@ const MILESTONE_MENTION_EVENTS = new Set([
   "branch_pushed",
   "pr_created",
   "pr_updated",
+  "conflict_resolved",
+  "no_changes",
+  "merge_retry_ready",
   "pull_request_created",
   "pull_request_updated",
   "review_result_changed",
@@ -307,6 +310,7 @@ async function executeVpsRunnerExecution({ githubFetch, token, workRoot, executi
         })) || pullRequestAuthor;
     }
 
+    const completionFinalEvent = buildVpsRunnerCompletionFinalEvent({ payload });
     await postVpsRunnerEvent({
       githubFetch,
       payload,
@@ -316,26 +320,15 @@ async function executeVpsRunnerExecution({ githubFetch, token, workRoot, executi
       }),
       event: {
         status: "completed",
-        lastEvent: isPrRevisionGoal(payload.codexGoal) ? "pull_request_updated" : "pull_request_created",
-        currentStep: isPrRevisionGoal(payload.codexGoal) ? "pull_request_updated" : "pull_request_created",
-        branch: payload.branch,
-        pr: prUrl
-      }
-    });
-
-    await postVpsRunnerEvent({
-      githubFetch,
-      payload,
-      notification: buildVpsRunnerNotificationContext({
-        ...notification,
-        pullRequestAuthor
-      }),
-      event: {
-        status: "completed",
-        lastEvent: "execution_completed",
+        lastEvent: completionFinalEvent,
+        finalEvent: completionFinalEvent,
         currentStep: "completed",
         branch: payload.branch,
-        pr: prUrl
+        pr: prUrl,
+        finalEventReason:
+          completionFinalEvent === "pr_updated"
+            ? "The VPS runner pushed revision changes and updated the existing pull request."
+            : "The VPS runner created a pull request for the bounded execution branch."
       }
     });
 
@@ -392,6 +385,10 @@ function selectPendingVpsRunnerExecutions({ comments, allowedRepositories, repos
   return [...queues.values()].filter(
     (queue) => !terminalEvents.has(queue.payload.executionId) && !runningEvents.has(queue.payload.executionId)
   );
+}
+
+function buildVpsRunnerCompletionFinalEvent({ payload } = {}) {
+  return isPrRevisionGoal(payload?.codexGoal) ? "pr_updated" : "pr_created";
 }
 
 function selectPendingVpsReviewerFallbacks({ comments, allowedRepositories, repositoryPolicies }) {
@@ -856,7 +853,14 @@ function updateVpsRunnerLifecycleForEvent({ lifecycle, event, now }) {
   if (lastEvent === "branch_pushed" && !next.branchPushedAt) {
     next.branchPushedAt = timestamp;
   }
-  if ((status === "pr_created" || lastEvent === "pull_request_created" || lastEvent === "pull_request_updated") && !next.prCreatedAt) {
+  if (
+    (status === "pr_created" ||
+      lastEvent === "pr_created" ||
+      lastEvent === "pr_updated" ||
+      lastEvent === "pull_request_created" ||
+      lastEvent === "pull_request_updated") &&
+    !next.prCreatedAt
+  ) {
     next.prCreatedAt = timestamp;
   }
   if (status === "completed" && !next.completedAt) {
@@ -1384,6 +1388,7 @@ function resolveVpsRunnerMention({ event, notification } = {}) {
 
 function isVpsRunnerMentionMilestone(event = {}) {
   const candidates = [
+    normalizeText(event.finalEvent),
     normalizeText(event.notificationEvent),
     normalizeText(event.status),
     normalizeText(event.lastEvent),
@@ -1406,6 +1411,7 @@ function formatVpsRunnerMilestoneLead({ event, mention } = {}) {
 
 function getVpsRunnerMilestoneLabel(event = {}) {
   const candidates = [
+    normalizeText(event.finalEvent),
     normalizeText(event.notificationEvent),
     normalizeText(event.status),
     normalizeText(event.lastEvent),
@@ -1420,6 +1426,9 @@ function getVpsRunnerMilestoneLabel(event = {}) {
     branch_pushed: "branch pushed",
     pr_created: "PR created",
     pr_updated: "PR updated",
+    conflict_resolved: "conflict resolved",
+    no_changes: "no changes",
+    merge_retry_ready: "merge retry ready",
     pull_request_created: "PR created",
     pull_request_updated: "PR updated",
     review_result_changed: "review result changed",
@@ -1573,6 +1582,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 
 export {
   buildFreshExecutionBranchCandidates,
+  buildVpsRunnerCompletionFinalEvent,
   buildCodexExecutionPrompt,
   buildCodexExecArgs,
   buildGuardedPullRequestBody,
