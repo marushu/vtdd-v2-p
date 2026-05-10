@@ -82,7 +82,13 @@ test("remote Codex execution request accepts explicit bounded PR revision goal o
         approvalScopeMatched: true,
         runtimeTruth: {
           runtimeState: {
-            activeBranch: "codex/issue-161"
+            activeBranch: "codex/issue-161",
+            pullRequest: {
+              number: 161,
+              state: "open",
+              headRef: "codex/issue-161",
+              headSha: "sha-161"
+            }
           }
         }
       }
@@ -97,6 +103,91 @@ test("remote Codex execution request accepts explicit bounded PR revision goal o
 
   assert.equal(result.ok, true);
   assert.equal(result.request.codexGoal, RemoteCodexDispatchGoal.REVISE_PR);
+  assert.deepEqual(result.request.revisionTarget, {
+    number: 161,
+    url: null,
+    state: "open",
+    headRef: "codex/issue-161",
+    headSha: "sha-161"
+  });
+});
+
+test("remote Codex execution request rejects revise_pr without an open locked target PR", () => {
+  const result = createRemoteCodexExecutionRequest({
+    payload: {
+      actorRole: ActorRole.BUTLER,
+      issueContext: { issueNumber: 251 },
+      continuationContext: {
+        codexGoal: RemoteCodexDispatchGoal.REVISE_PR
+      },
+      policyInput: {
+        approvalPhrase: "GO",
+        targetConfirmed: true,
+        approvalScopeMatched: true,
+        runtimeTruth: {
+          runtimeState: {
+            activeBranch: "codex/issue-251",
+            pullRequest: {
+              number: 279,
+              state: "closed",
+              headRef: "codex/issue-251",
+              headSha: "old-sha"
+            }
+          }
+        }
+      }
+    },
+    gatewayResult: {
+      repository: "sample-org/vtdd-v2",
+      executionContinuity: {
+        codexGoal: "wait_for_review"
+      }
+    }
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.issues.includes("revise_pr target PR must be open"), true);
+});
+
+test("remote Codex execution request pins revise_pr branch to target PR headRef", () => {
+  const result = createRemoteCodexExecutionRequest({
+    payload: {
+      actorRole: ActorRole.BUTLER,
+      issueContext: { issueNumber: 251 },
+      executionTarget: {
+        branch: "codex/issue-251"
+      },
+      continuationContext: {
+        codexGoal: RemoteCodexDispatchGoal.REVISE_PR
+      },
+      policyInput: {
+        approvalPhrase: "GO",
+        targetConfirmed: true,
+        approvalScopeMatched: true,
+        runtimeTruth: {
+          runtimeState: {
+            activeBranch: "codex/issue-251",
+            pullRequest: {
+              number: 285,
+              state: "open",
+              headRef: "codex/issue-251-v2",
+              headSha: "fresh-sha"
+            }
+          }
+        }
+      }
+    },
+    gatewayResult: {
+      repository: "sample-org/vtdd-v2",
+      executionContinuity: {
+        codexGoal: "wait_for_review"
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.request.branch, "codex/issue-251-v2");
+  assert.equal(result.request.revisionTarget.number, 285);
 });
 
 test("remote Codex execution request rejects wait-only continuity goal before workflow dispatch", () => {
@@ -589,7 +680,13 @@ test("remote Codex vps_runner dispatch preserves bounded PR revision goal", asyn
         approvalScopeMatched: true,
         runtimeTruth: {
           runtimeState: {
-            activeBranch: "codex/add-pr-ready-authority"
+            activeBranch: "codex/add-pr-ready-authority",
+            pullRequest: {
+              number: 204,
+              state: "open",
+              headRef: "codex/add-pr-ready-authority",
+              headSha: "sha-204"
+            }
           }
         }
       }
@@ -620,6 +717,8 @@ test("remote Codex vps_runner dispatch preserves bounded PR revision goal", asyn
   const body = JSON.parse(calls[0].init.body).body;
   assert.equal(body.includes('"codexGoal": "revise_pr"'), true);
   assert.equal(body.includes('"branch": "codex/add-pr-ready-authority"'), true);
+  assert.equal(body.includes('"number": 204'), true);
+  assert.equal(body.includes('"headSha": "sha-204"'), true);
 });
 
 test("remote Codex vps_runner progress reads queue comment and target PR truth", async () => {
@@ -676,6 +775,64 @@ test("remote Codex vps_runner progress reads queue comment and target PR truth",
   assert.equal(progress.progress.runnerEvent.status, RemoteCodexExecutionStatus.IN_PROGRESS);
   assert.equal(progress.progress.blocker, null);
   assert.equal(calls.length, 2);
+});
+
+test("remote Codex vps_runner progress exposes stale branch ambiguity when only closed PRs match", async () => {
+  const progress = await retrieveRemoteCodexExecutionProgress({
+    executionId: "remote-codex-issue251-vps",
+    repository: "sample-org/vtdd-v2",
+    issueNumber: 251,
+    branch: "codex/issue-251",
+    executorTransport: RemoteCodexExecutorTransport.VPS_RUNNER,
+    env: {
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_progress_token",
+      GITHUB_API_FETCH: async (url) => {
+        if (String(url).includes("/issues/251/comments")) {
+          return new Response(
+            JSON.stringify([
+              {
+                id: 25101,
+                html_url: "https://github.com/sample-org/vtdd-v2/issues/251#issuecomment-25101",
+                created_at: "2026-05-10T10:00:00Z",
+                body: "<!-- vtdd:vps-runner-execution:remote-codex-issue251-vps -->"
+              }
+            ]),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        if (String(url).includes("/pulls?")) {
+          return new Response(
+            JSON.stringify([
+              {
+                number: 279,
+                html_url: "https://github.com/sample-org/vtdd-v2/pull/279",
+                state: "closed",
+                title: "Stale conflicted PR",
+                head: {
+                  ref: "codex/issue-251",
+                  sha: "old-sha"
+                }
+              }
+            ]),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        return new Response(
+          JSON.stringify({
+            name: "codex/issue-251",
+            commit: { sha: "old-sha" }
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        );
+      }
+    }
+  });
+
+  assert.equal(progress.ok, true);
+  assert.equal(progress.progress.pullRequest, null);
+  assert.equal(progress.progress.staleBranchAmbiguity.error, "stale_branch_pr_ambiguity");
+  assert.equal(progress.progress.staleBranchAmbiguity.pullRequests[0].number, 279);
+  assert.equal(progress.progress.staleBranchAmbiguity.pullRequests[0].state, "closed");
 });
 
 test("remote Codex vps_runner cancel appends canceled marker to execution queue comment", async () => {

@@ -1,5 +1,10 @@
 export function buildButlerReviewSynthesis(input = {}) {
   const pullRequest = normalizePullRequest(input.pullRequest);
+  const branchAttribution = buildBranchAttribution({
+    pullRequest,
+    revisionTarget: input.revisionTarget,
+    expectedBranch: input.expectedBranch ?? input.branch
+  });
   if (!pullRequest.exists) {
     return {
       available: false,
@@ -23,6 +28,8 @@ export function buildButlerReviewSynthesis(input = {}) {
       title: pullRequest.title,
       baseRef: pullRequest.baseRef,
       headRef: pullRequest.headRef,
+      headSha: pullRequest.headSha,
+      branchAttribution,
       mergeability: pullRequest.mergeability
     },
     reviewerSignal: {
@@ -40,7 +47,8 @@ export function buildButlerReviewSynthesis(input = {}) {
     humanDecisionFocus: buildHumanDecisionFocus({
       pullRequest,
       reviewLoop,
-      codexGoal
+      codexGoal,
+      branchAttribution
     }),
     nextSuggestedActions
   };
@@ -84,9 +92,12 @@ function buildHeadline({ pullRequest, reviewLoop }) {
   return `${base} Reviewer evidence is not yet available.`;
 }
 
-function buildHumanDecisionFocus({ pullRequest, reviewLoop, codexGoal }) {
+function buildHumanDecisionFocus({ pullRequest, reviewLoop, codexGoal, branchAttribution }) {
   const focus = [];
 
+  if (branchAttribution.warning) {
+    focus.push(branchAttribution.warning);
+  }
   if (pullRequest.mergeability.status === "conflict") {
     focus.push("Runtime truth shows PR merge conflicts; do not recommend merge even if reviewer evidence is approve.");
     if (pullRequest.mergeability.freshBranchSuggestion) {
@@ -181,11 +192,43 @@ function normalizePullRequest(value) {
     title: normalizeText(input.title) || null,
     baseRef: normalizeText(input.baseRef) || normalizeText(input.base?.ref) || null,
     headRef: normalizeText(input.headRef) || normalizeText(input.head?.ref) || null,
+    headSha: normalizeText(input.headSha) || normalizeText(input.head?.sha) || null,
     mergeability: normalizeMergeability(input),
     updatedSinceReview: input.updatedSinceReview === true,
     issueComments: Array.isArray(input.issueComments) ? input.issueComments : [],
     reviewComments: Array.isArray(input.reviewComments) ? input.reviewComments : [],
     reviews: Array.isArray(input.reviews) ? input.reviews : []
+  };
+}
+
+function buildBranchAttribution({ pullRequest, revisionTarget, expectedBranch }) {
+  const target = revisionTarget && typeof revisionTarget === "object" ? revisionTarget : {};
+  const expectedHeadRef =
+    normalizeText(target.headRef) ||
+    normalizeText(target.head?.ref) ||
+    normalizeText(expectedBranch) ||
+    null;
+  const expectedHeadSha =
+    normalizeText(target.headSha) ||
+    normalizeText(target.head?.sha) ||
+    null;
+  const mismatches = [];
+  if (expectedHeadRef && pullRequest.headRef && expectedHeadRef !== pullRequest.headRef) {
+    mismatches.push(`headRef expected ${expectedHeadRef} but runtime truth shows ${pullRequest.headRef}`);
+  }
+  if (expectedHeadSha && pullRequest.headSha && expectedHeadSha !== pullRequest.headSha) {
+    mismatches.push(`headSha expected ${expectedHeadSha} but runtime truth shows ${pullRequest.headSha}`);
+  }
+  return {
+    expectedHeadRef,
+    expectedHeadSha,
+    actualHeadRef: pullRequest.headRef,
+    actualHeadSha: pullRequest.headSha,
+    mismatch: mismatches.length > 0,
+    warning:
+      mismatches.length > 0
+        ? `Branch attribution mismatch for PR #${pullRequest.number}: ${mismatches.join("; ")}. Do not dispatch revise_pr until the target PR lock is refreshed.`
+        : null
   };
 }
 
