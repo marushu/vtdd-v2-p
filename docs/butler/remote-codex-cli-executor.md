@@ -341,12 +341,21 @@ durations for queue wait, Codex execution, PR creation, and total lead time.
 The same values are rendered as short GitHub-visible lines such as
 `Queue wait: 12s` and `Codex execution: 3m 42s`.
 
+When the VPS runner reports `status: completed`, the same GitHub-visible event
+must also carry an explicit terminal outcome in `finalEvent` and `lastEvent`.
+Valid terminal outcomes include `pr_created`, `pr_updated`,
+`conflict_resolved`, `blocked`, `failed`, `no_changes`, and
+`merge_retry_ready`. Butler must use that terminal outcome, not the bare word
+`completed`, when explaining whether the runner created a PR, updated a PR,
+resolved a conflict, made no changes, or stopped with a visible blocker.
+
 Runner event comments may include a GitHub mention only as a notification
 mirror; the JSON event payload and branch / PR evidence remain the runtime
 truth. The mention target is selected in this priority order when a login is
 available and not a bot or notification-blocked actor: queue comment author,
 Issue author, PR author, approval / GO actor, then no mention. Mentions are
 limited to milestone events (`picked_up`, `branch_pushed`, `pr_created`,
+`pr_updated`, `conflict_resolved`, `no_changes`, `merge_retry_ready`,
 `blocked`, `failed`, `stale`, `deploy_required`, `completed`). Heartbeat and
 progress-poll comments must not mention anyone.
 

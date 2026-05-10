@@ -6,6 +6,7 @@ import {
   buildCodexExecArgs,
   buildGuardedPullRequestBody,
   buildPullRequestBody,
+  buildVpsRunnerCompletionFinalEvent,
   buildVpsRunnerEventComment,
   buildVpsRunnerStateComment,
   buildVpsRunnerPullRequestContext,
@@ -555,6 +556,66 @@ test("VPS runner completed event records both PR creation and completion timesta
   assert.equal(parsed.event.leadTime.completed_at, "2026-05-09T10:04:10.000Z");
   assert.equal(parsed.event.leadTime.durations.pr_creation_duration.label, "8s");
   assert.equal(parsed.event.leadTime.durations.total_lead_time.label, "4m 10s");
+});
+
+test("VPS runner completed event exposes a GitHub-visible final event", async () => {
+  const calls = [];
+  const payload = {
+    executionId: "exec-final-event-1",
+    repository: "sample-org/vtdd-v2",
+    issueNumber: 264,
+    lifecycle: {
+      queuedAt: "2026-05-09T10:00:00.000Z",
+      pickedUpAt: "2026-05-09T10:00:12.000Z",
+      codexStartedAt: "2026-05-09T10:00:20.000Z",
+      branchPushedAt: "2026-05-09T10:04:02.000Z"
+    }
+  };
+
+  await postVpsRunnerEvent({
+    githubFetch: async (url, init = {}) => {
+      calls.push({ url, init });
+      return { id: 26401 };
+    },
+    payload,
+    event: {
+      status: "completed",
+      lastEvent: "pr_updated",
+      finalEvent: "pr_updated",
+      currentStep: "completed",
+      updatedAt: "2026-05-09T10:04:10.000Z",
+      branch: "codex/issue-264",
+      pr: "https://github.com/sample-org/vtdd-v2/pull/264",
+      finalEventReason: "The VPS runner pushed revision changes and updated the existing pull request."
+    }
+  });
+
+  const body = calls[0].init.body.body;
+  const parsed = parseVpsRunnerEventComment(body);
+
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.event.status, "completed");
+  assert.equal(parsed.event.lastEvent, "pr_updated");
+  assert.equal(parsed.event.finalEvent, "pr_updated");
+  assert.equal(parsed.event.finalEventReason.includes("updated the existing pull request"), true);
+  assert.equal(parsed.event.leadTime.pr_created_at, "2026-05-09T10:04:10.000Z");
+  assert.equal(parsed.event.leadTime.completed_at, "2026-05-09T10:04:10.000Z");
+  assert.equal(body.includes("VTDD milestone: PR updated."), true);
+});
+
+test("VPS runner maps completed execution goals to explicit final events", () => {
+  assert.equal(
+    buildVpsRunnerCompletionFinalEvent({
+      payload: { codexGoal: "open_pr" }
+    }),
+    "pr_created"
+  );
+  assert.equal(
+    buildVpsRunnerCompletionFinalEvent({
+      payload: { codexGoal: "revise_pr" }
+    }),
+    "pr_updated"
+  );
 });
 
 test("VPS runner diagnostic summaries redact secrets and stay short", () => {
