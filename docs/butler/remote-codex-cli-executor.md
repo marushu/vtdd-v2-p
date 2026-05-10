@@ -334,6 +334,12 @@ runner reports failure and no target PR exists, Butler must surface the raw
 failure as blocked. If the latest running event is older than the stale
 threshold, Butler must surface `vps_runner_event_stale` with the last step and
 age instead of treating an existing pushed branch as healthy progress forever.
+Runner state/event payloads also carry concise lead-time telemetry under
+`leadTime`: `queued_at`, `picked_up_at`, `codex_started_at`,
+`branch_pushed_at`, `pr_created_at`, `completed_at`, `failed_at`, and derived
+durations for queue wait, Codex execution, PR creation, and total lead time.
+The same values are rendered as short GitHub-visible lines such as
+`Queue wait: 12s` and `Codex execution: 3m 42s`.
 
 Runner event comments may include a GitHub mention only as a notification
 mirror; the JSON event payload and branch / PR evidence remain the runtime
@@ -348,9 +354,9 @@ For explicit VPS runner health checks, Butler uses `vtddVpsRunnerStatus`. The
 status check is read-only and is derived from the same GitHub queue comment,
 runner state/event comments, branch, and PR truth as `vtddExecutionProgress`. It
 returns a short `health` summary with `runnerStatus`, `runnerAlive`,
-`lastSeenAt`, `heartbeatAt`, queue pickup state, `currentStep`, and a safe
-`reasonCode` / `reason` when the runner is stale, unavailable, or not yet
-picked up. This endpoint does not SSH into the VPS, stream logs, mutate
+`lastSeenAt`, `heartbeatAt`, queue pickup state, `leadTime`, `currentStep`, and
+a safe `reasonCode` / `reason` when the runner is stale, unavailable, or not
+yet picked up. This endpoint does not SSH into the VPS, stream logs, mutate
 credentials, deploy, merge, close Issues, or administer the runner.
 
 When Codex reaches an approval or scope boundary, the observable return path is
