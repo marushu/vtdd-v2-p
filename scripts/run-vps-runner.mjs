@@ -101,7 +101,7 @@ async function runVpsRunnerOnce({
 }
 
 async function executeVpsRunnerExecution({ githubFetch, token, workRoot, execution }) {
-  const { payload } = execution;
+  let payload = { ...execution.payload };
   const env = buildRunnerCommandEnv({ token });
   const issue = await githubFetch(`/repos/${payload.repository}/issues/${payload.issueNumber}`);
   let notification = buildVpsRunnerNotificationContext({
@@ -131,7 +131,11 @@ async function executeVpsRunnerExecution({ githubFetch, token, workRoot, executi
       notification,
       currentStep: "gh_repo_clone"
     });
-    await checkoutVpsRunnerBranch({ payload, cwd: workspace, env });
+    const branchCheckout = await checkoutVpsRunnerBranch({ payload, cwd: workspace, env });
+    payload = {
+      ...payload,
+      branch: branchCheckout.branch || payload.branch
+    };
 
     const pullRequestContext = isPrRevisionGoal(payload.codexGoal)
       ? await buildVpsRunnerPullRequestContext({ githubFetch, payload })
@@ -150,7 +154,9 @@ async function executeVpsRunnerExecution({ githubFetch, token, workRoot, executi
         status: "branch_created",
         lastEvent: "branch_pushed",
         currentStep: "branch_pushed",
-        branch: payload.branch
+        branch: payload.branch,
+        originalBranch: branchCheckout.originalBranch,
+        branchRecovery: branchCheckout.recovered ? branchCheckout : undefined
       }
     });
 
@@ -969,19 +975,89 @@ async function runTrackedVpsCommand(command, args, options = {}) {
   }
 }
 
-async function checkoutVpsRunnerBranch({ payload, cwd, env }) {
+async function checkoutVpsRunnerBranch({ payload, cwd, env, run = runCommand }) {
   if (isPrRevisionGoal(payload.codexGoal)) {
-    await runCommand("git", ["fetch", "origin", payload.branch], { cwd, env });
-    await runCommand("git", ["checkout", "-B", payload.branch, `origin/${payload.branch}`], { cwd, env });
-    return;
+    await run("git", ["fetch", "origin", payload.branch], { cwd, env });
+    await run("git", ["checkout", "-B", payload.branch, `origin/${payload.branch}`], { cwd, env });
+    return {
+      branch: payload.branch,
+      originalBranch: payload.branch,
+      recovered: false,
+      reason: "revision_branch_reused"
+    };
   }
 
-  await runCommand("git", ["fetch", "origin", payload.baseRef || "main"], { cwd, env });
-  await runCommand("git", ["checkout", "-B", payload.branch, `origin/${payload.baseRef || "main"}`], {
-    cwd,
-    env
-  });
-  await runCommand("git", ["push", "-u", "origin", payload.branch], { cwd, env });
+  const originalBranch = payload.branch;
+  const baseRef = payload.baseRef || "main";
+  await run("git", ["fetch", "origin", baseRef], { cwd, env });
+
+  let pushRecovery = null;
+  const candidates = buildFreshExecutionBranchCandidates(originalBranch);
+  for (const branch of candidates) {
+    if (await remoteBranchExists({ branch, cwd, env, run })) {
+      continue;
+    }
+
+    await run("git", ["checkout", "-B", branch, `origin/${baseRef}`], {
+      cwd,
+      env
+    });
+
+    try {
+      await run("git", ["push", "-u", "origin", branch], { cwd, env });
+      return {
+        branch,
+        originalBranch,
+        baseRef,
+        recovered: branch !== originalBranch || Boolean(pushRecovery),
+        reason:
+          branch === originalBranch
+            ? "fresh_branch_created"
+            : pushRecovery
+              ? "push_rejected_retry"
+              : "remote_branch_collision",
+        pushRecovery
+      };
+    } catch (error) {
+      if (!isNonFastForwardPushFailure(error)) {
+        throw error;
+      }
+      pushRecovery = {
+        failedBranch: branch,
+        error: "non_fast_forward_push_rejected",
+        reason: summarizeDiagnosticText(error?.stderr || error?.message, 300)
+      };
+    }
+  }
+
+  throw new Error(`Unable to create a fresh execution branch for ${originalBranch}; all generated candidates collided.`);
+}
+
+function buildFreshExecutionBranchCandidates(branch, now = new Date()) {
+  const base = normalizeText(branch);
+  const candidates = [base];
+  for (let version = 2; version <= 20; version += 1) {
+    candidates.push(`${base}-v${version}`);
+  }
+  candidates.push(`${base}-${formatBranchTimestamp(now)}`);
+  return candidates;
+}
+
+function formatBranchTimestamp(date) {
+  return date
+    .toISOString()
+    .replace(/[-:]/g, "")
+    .replace(/\..+$/, "Z");
+}
+
+async function remoteBranchExists({ branch, cwd, env, run = runCommand }) {
+  const result = await run("git", ["ls-remote", "--heads", "origin", branch], { cwd, env });
+  return Boolean(result.stdout.trim());
+}
+
+function isNonFastForwardPushFailure(error) {
+  const text = `${error?.stderr || ""}\n${error?.stdout || ""}\n${error?.message || ""}`;
+  return /non-fast-forward|fetch first|remote contains work|updates were rejected|tip of your current branch is behind/i.test(text);
 }
 
 function buildPullRequestBody(payload) {
@@ -1343,6 +1419,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 }
 
 export {
+  buildFreshExecutionBranchCandidates,
   buildCodexExecutionPrompt,
   buildCodexExecArgs,
   buildGuardedPullRequestBody,
@@ -1350,8 +1427,10 @@ export {
   buildVpsRunnerEventComment,
   buildVpsRunnerStateComment,
   buildVpsRunnerPullRequestContext,
+  checkoutVpsRunnerBranch,
   classifyVpsRunnerFailure,
   formatPullRequestContext,
+  isNonFastForwardPushFailure,
   loadVpsRunnerRepositoryPolicies,
   normalizeRepositoryPolicies,
   parseVpsRunnerEventComment,
