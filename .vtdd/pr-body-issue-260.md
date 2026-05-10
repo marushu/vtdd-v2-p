@@ -51,7 +51,7 @@ None.
 ## Extra changes (if any)
 
 - Gemini reviewer code-duplication risk addressed by centralizing lead-time duration calculation and formatting in src/core/execution-lead-time.js.
-- Gemini reviewer PR-body mismatch is addressed in this guarded PR body draft; live GitHub PR body update remains a separate GitHub-side action.
+- Gemini reviewer PR-body mismatch is addressed by this guarded PR body draft and the live PR body sync for PR #261.
 
 <!-- VTDD metadata -->
 - Issue: #260
