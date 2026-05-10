@@ -1,4 +1,5 @@
 import { validateReviewerResponse } from "./reviewer-contract.js";
+import { normalizeMentionLogin } from "./github-mention.js";
 
 export const GEMINI_PR_REVIEW_MARKER = "<!-- vtdd:reviewer=gemini -->";
 export const REVIEWER_OBJECTION_RESOLUTION_MARKER = "<!-- vtdd:reviewer-objection-resolution -->";
@@ -247,9 +248,11 @@ export function formatGeminiReviewComment(input = {}) {
   const criticalFindings = normalizeStringArray(review.criticalFindings);
   const risks = normalizeStringArray(review.risks);
   const recommendedAction = normalizeText(review.recommendedAction) || "manual_review";
+  const notificationMention = normalizeMentionLogin(input.notificationMention);
 
-  return [
+  const lines = [
     GEMINI_PR_REVIEW_MARKER,
+    ...(notificationMention ? [`@${notificationMention} VTDD milestone: review result changed.`] : []),
     "## VTDD Gemini Critical Review",
     "",
     `- Trigger: \`${trigger}\``,
@@ -263,7 +266,9 @@ export function formatGeminiReviewComment(input = {}) {
     formatListOrFallback(risks, "- None reported."),
     "",
     "_Reviewer remains critique-only. Human keeps revision GO / merge GO + real passkey authority._"
-  ].join("\n");
+  ];
+
+  return lines.join("\n");
 }
 
 export function findExistingGeminiReviewComment(comments = []) {

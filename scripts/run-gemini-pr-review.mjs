@@ -11,6 +11,8 @@ import {
   findExistingGeminiReviewComment,
   formatCodexReviewFallbackComment,
   formatGeminiReviewComment,
+  parseGeminiReviewComment,
+  resolveOperatorMention,
   resolveGeminiReviewTrigger
 } from "../src/core/index.js";
 
@@ -40,6 +42,7 @@ async function main() {
   const reviewComments = await githubFetch(`/repos/${repository}/pulls/${prNumber}/comments?per_page=100`);
   const reviews = await githubFetch(`/repos/${repository}/pulls/${prNumber}/reviews?per_page=100`);
   const existingFallbackComment = findExistingCodexReviewFallbackComment(issueComments);
+  const existingReviewComment = findExistingGeminiReviewComment(issueComments);
 
   if (!process.env.GEMINI_API_KEY) {
     console.log("Skipping Gemini PR review: GEMINI_API_KEY is not configured.");
@@ -79,7 +82,8 @@ async function main() {
         reason: "gemini_temporarily_unavailable",
         deliveryMode: "vps_codex_cli",
         repository,
-        pullRequestNumber: prNumber
+        pullRequestNumber: prNumber,
+        notificationMention: resolveOperatorMention([pullRequest?.user?.login, payload?.sender?.login])
       });
       if (existingFallbackComment) {
         await githubFetch(`/repos/${repository}/issues/comments/${existingFallbackComment.id}`, {
@@ -106,9 +110,14 @@ async function main() {
   const commentBody = formatGeminiReviewComment({
     review: reviewResult.review,
     trigger: triggerResult.value.trigger,
-    model
+    model,
+    notificationMention: shouldMentionGeminiReviewResult({
+      existingComment: existingReviewComment,
+      recommendedAction: reviewResult.review.recommendedAction
+    })
+      ? resolveOperatorMention([pullRequest?.user?.login, payload?.sender?.login])
+      : ""
   });
-  const existingComment = findExistingGeminiReviewComment(issueComments);
 
   if (existingFallbackComment) {
     await githubFetch(`/repos/${repository}/issues/comments/${existingFallbackComment.id}`, {
@@ -117,8 +126,8 @@ async function main() {
     console.log(`Cleared Codex reviewer fallback request on PR #${prNumber}.`);
   }
 
-  if (existingComment) {
-    await githubFetch(`/repos/${repository}/issues/comments/${existingComment.id}`, {
+  if (existingReviewComment) {
+    await githubFetch(`/repos/${repository}/issues/comments/${existingReviewComment.id}`, {
       method: "PATCH",
       body: { body: commentBody }
     });
@@ -188,6 +197,12 @@ function mustGetEnv(name) {
     throw new Error(`${name} is required`);
   }
   return value;
+}
+
+function shouldMentionGeminiReviewResult({ existingComment, recommendedAction }) {
+  const currentAction = String(recommendedAction || "").trim().toLowerCase() || "manual_review";
+  const existing = parseGeminiReviewComment(existingComment);
+  return !existing || existing.recommendedAction !== currentAction;
 }
 
 main().catch((error) => {

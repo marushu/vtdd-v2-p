@@ -3,7 +3,10 @@ import {
   ReviewerRecommendedAction,
   buildPullRequestDiff,
   buildPullRequestReviewContext,
-  formatCodexReviewFallbackComment
+  findExistingCodexReviewFallbackComment,
+  formatCodexReviewFallbackComment,
+  parseCodexReviewFallbackComment,
+  resolveOperatorMention
 } from "../src/core/index.js";
 
 async function main() {
@@ -28,6 +31,7 @@ async function main() {
     `/repos/${repository}/pulls/${prNumber}/comments?per_page=100`
   );
   const reviews = await githubFetchAll(githubFetch, `/repos/${repository}/pulls/${prNumber}/reviews?per_page=100`);
+  const existingFallbackComment = findExistingCodexReviewFallbackComment(issueComments);
   const prDiff = buildPullRequestDiff(files);
   const context = buildPullRequestReviewContext({
     repository,
@@ -55,7 +59,13 @@ async function main() {
         reason,
         deliveryMode,
         blocker: failure.blocker,
-        rawReview: failure.rawFailure
+        rawReview: failure.rawFailure,
+        notificationMention: shouldMentionCodexFallback({
+          existingComment: existingFallbackComment,
+          status: "blocked"
+        })
+          ? resolveOperatorMention([pullRequest?.user?.login])
+          : ""
       })
     });
     console.log(`Recorded Codex fallback blocker state on PR #${prNumber}: ${failure.blocker}.`);
@@ -72,7 +82,14 @@ async function main() {
     recommendedAction: normalizedReview.recommendedAction,
     criticalFindings: normalizedReview.criticalFindings,
     risks: normalizedReview.risks,
-    rawReview: review.stdout
+    rawReview: review.stdout,
+    notificationMention: shouldMentionCodexFallback({
+      existingComment: existingFallbackComment,
+      status: "completed",
+      recommendedAction: normalizedReview.recommendedAction
+    })
+      ? resolveOperatorMention([pullRequest?.user?.login])
+      : ""
   });
 
   const result = await upsertCodexFallbackComment({
@@ -217,6 +234,16 @@ function normalizeRecommendedAction(value) {
   return Object.values(ReviewerRecommendedAction).includes(normalized)
     ? normalized
     : ReviewerRecommendedAction.MANUAL_REVIEW;
+}
+
+function shouldMentionCodexFallback({ existingComment, status, recommendedAction }) {
+  const existing = parseCodexReviewFallbackComment(existingComment);
+  if (!existing) {
+    return true;
+  }
+  const nextStatus = String(status || "").trim().toLowerCase();
+  const nextAction = String(recommendedAction || "").trim().toLowerCase() || null;
+  return existing.status !== nextStatus || existing.recommendedAction !== nextAction;
 }
 
 function normalizeStringArray(value) {

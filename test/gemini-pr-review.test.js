@@ -9,7 +9,9 @@ import {
   extractReviewerResponseFromGemini,
   findExistingGeminiReviewComment,
   formatGeminiReviewComment,
+  normalizeMentionLogin,
   parseGeminiReviewComment,
+  resolveOperatorMention,
   resolveGeminiReviewTrigger
 } from "../src/core/index.js";
 
@@ -260,6 +262,35 @@ test("formatGeminiReviewComment renders marker and sections", () => {
   assert.equal(body.includes(GEMINI_PR_REVIEW_MARKER), true);
   assert.equal(body.includes("VTDD Gemini Critical Review"), true);
   assert.equal(body.includes("request_changes"), true);
+});
+
+test("formatGeminiReviewComment can render a short operator milestone mention", () => {
+  const body = formatGeminiReviewComment({
+    trigger: "pull_request_target:synchronize",
+    model: "gemini-2.5-flash",
+    notificationMention: "marushu",
+    review: {
+      criticalFindings: ["No major blocking issues found."],
+      risks: ["Human should still verify before merge."],
+      recommendedAction: "approve"
+    }
+  });
+
+  assert.equal(body.split("\n")[1], "@marushu VTDD milestone: review result changed.");
+  assert.equal(body.includes("Recommended action: `approve`"), true);
+});
+
+test("shared mention normalization filters non-operator GitHub actors", () => {
+  assert.equal(normalizeMentionLogin("marushu"), "marushu");
+  assert.equal(normalizeMentionLogin("github-actions[bot]"), "");
+  assert.equal(normalizeMentionLogin("vtdd-codex-bot"), "");
+  assert.equal(normalizeMentionLogin("ghost"), "");
+  assert.equal(normalizeMentionLogin("app/vtdd-codex"), "");
+});
+
+test("shared operator mention resolution falls back to the first mentionable actor", () => {
+  assert.equal(resolveOperatorMention(["github-actions[bot]", "issue-owner", "pr-owner"]), "issue-owner");
+  assert.equal(resolveOperatorMention(["ghost", "unknown", "github-actions[bot]"]), "");
 });
 
 test("findExistingGeminiReviewComment locates prior marker comment", () => {

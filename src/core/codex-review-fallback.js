@@ -1,3 +1,5 @@
+import { normalizeMentionLogin } from "./github-mention.js";
+
 export const CODEX_REVIEW_FALLBACK_MARKER = "<!-- vtdd:reviewer=codex-fallback -->";
 
 export const CodexReviewFallbackStatus = Object.freeze({
@@ -22,9 +24,11 @@ export function formatCodexReviewFallbackComment(input = {}) {
   const rawReview = normalizeText(input.rawReview);
   const repository = normalizeText(input.repository);
   const pullRequestNumber = normalizeText(input.pullRequestNumber);
+  const notificationMention = normalizeMentionLogin(input.notificationMention);
 
   const lines = [
     CODEX_REVIEW_FALLBACK_MARKER,
+    ...(notificationMention ? [`@${notificationMention} VTDD milestone: ${formatFallbackMilestoneLabel(status, recommendedAction)}.`] : []),
     "## VTDD Codex Reviewer Fallback Request",
     "",
     `- Status: \`${status}\``,
@@ -230,4 +234,20 @@ function normalizeStringArray(value) {
 
 function normalizeText(value) {
   return String(value ?? "").trim();
+}
+
+function formatFallbackMilestoneLabel(status, recommendedAction) {
+  if (status === CodexReviewFallbackStatus.REQUESTED) {
+    return "manual review required";
+  }
+  if (status === CodexReviewFallbackStatus.BLOCKED) {
+    return "reviewer blocked";
+  }
+  if (recommendedAction === "request_changes") {
+    return "review requested changes";
+  }
+  if (recommendedAction === "approve") {
+    return "review approved";
+  }
+  return "manual review required";
 }

@@ -235,6 +235,7 @@ test("VPS runner milestone event mentions queue comment author", () => {
     }
   });
 
+  assert.equal(body.split("\n")[1], "@alice VTDD milestone: branch pushed.");
   assert.equal(body.includes("@alice"), true);
   assert.equal(body.includes("@bob"), false);
   assert.equal(parseVpsRunnerEventComment(body).ok, true);
@@ -307,7 +308,7 @@ test("VPS runner notification omits mention when no mentionable actor exists", (
   });
 
   assert.equal(body.includes("@"), false);
-  assert.equal(body.includes("VTDD VPS runner event."), true);
+  assert.equal(body.includes("VTDD milestone: failed."), true);
 });
 
 test("VPS runner state comment remains compatible with runner event parsing", () => {

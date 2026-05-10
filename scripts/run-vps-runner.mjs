@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { parseCodexReviewFallbackComment } from "../src/core/index.js";
+import { normalizeMentionLogin, parseCodexReviewFallbackComment } from "../src/core/index.js";
 import { renderPrBody } from "./render-pr-body.mjs";
 import { validatePrBody } from "./validate-pr-body.mjs";
 
@@ -18,11 +18,22 @@ const MILESTONE_MENTION_EVENTS = new Set([
   "picked_up",
   "branch_pushed",
   "pr_created",
+  "pr_updated",
+  "pull_request_created",
+  "pull_request_updated",
+  "review_result_changed",
+  "manual_review_required",
+  "ready_for_review_completed",
+  "merge_ready_reached",
   "blocked",
   "failed",
   "stale",
   "deploy_required",
-  "completed"
+  "completed",
+  "runner_failed",
+  "request_changes",
+  "manual_review",
+  "approve"
 ]);
 
 async function main() {
@@ -295,6 +306,22 @@ async function executeVpsRunnerExecution({ githubFetch, token, workRoot, executi
       }
     });
 
+    await postVpsRunnerEvent({
+      githubFetch,
+      payload,
+      notification: buildVpsRunnerNotificationContext({
+        ...notification,
+        pullRequestAuthor
+      }),
+      event: {
+        status: "completed",
+        lastEvent: "execution_completed",
+        currentStep: "completed",
+        branch: payload.branch,
+        pr: prUrl
+      }
+    });
+
     return { ok: true, message: `VPS runner execution completed: ${prUrl}` };
   } catch (error) {
     const rawFailure = classifyVpsRunnerFailure(error);
@@ -507,10 +534,7 @@ function parseVpsRunnerEventComment(body) {
 function buildVpsRunnerEventComment({ executionId, event, notification } = {}) {
   const mention = resolveVpsRunnerMention({ event, notification });
   const lines = [`<!-- vtdd:vps-runner-event:${executionId} -->`];
-  if (mention) {
-    lines.push(`@${mention}`);
-  }
-  lines.push("VTDD VPS runner event.", "", fencedJson(event));
+  lines.push(formatVpsRunnerMilestoneLead({ event, mention }), "", fencedJson(event));
   return lines.join("\n");
 }
 
@@ -1284,15 +1308,52 @@ function isVpsRunnerMentionMilestone(event = {}) {
   return candidates.some((candidate) => MILESTONE_MENTION_EVENTS.has(candidate));
 }
 
+function formatVpsRunnerMilestoneLead({ event, mention } = {}) {
+  if (!isVpsRunnerMentionMilestone(event)) {
+    return "VTDD VPS runner event.";
+  }
+  const label = getVpsRunnerMilestoneLabel(event);
+  const prefix = mention ? `@${mention} ` : "";
+  return `${prefix}VTDD milestone: ${label}.`;
+}
+
+function getVpsRunnerMilestoneLabel(event = {}) {
+  const candidates = [
+    normalizeText(event.notificationEvent),
+    normalizeText(event.status),
+    normalizeText(event.lastEvent),
+    normalizeText(event.currentStep)
+  ];
+  if (normalizeText(event.lastEvent) === "runner_started") {
+    candidates.unshift("picked_up");
+  }
+  const matched = candidates.find((candidate) => MILESTONE_MENTION_EVENTS.has(candidate));
+  const labels = {
+    picked_up: "execution picked up",
+    branch_pushed: "branch pushed",
+    pr_created: "PR created",
+    pr_updated: "PR updated",
+    pull_request_created: "PR created",
+    pull_request_updated: "PR updated",
+    review_result_changed: "review result changed",
+    manual_review_required: "manual review required",
+    ready_for_review_completed: "ready for review completed",
+    merge_ready_reached: "merge-ready reached",
+    blocked: "blocked",
+    failed: "failed",
+    stale: "stale",
+    deploy_required: "deploy required",
+    completed: "completed",
+    runner_failed: "failed",
+    request_changes: "review requested changes",
+    manual_review: "manual review required",
+    approve: "review approved"
+  };
+  return labels[matched] || "runtime event";
+}
+
 function isMentionableGitHubLogin(value) {
-  const login = normalizeGitHubLogin(value);
-  if (!login) {
-    return false;
-  }
-  if (["ghost", "unknown"].includes(login.toLowerCase())) {
-    return false;
-  }
-  return true;
+  return Boolean(normalizeMentionLogin(value));
 }
 
 function redactDiagnosticText(value) {
