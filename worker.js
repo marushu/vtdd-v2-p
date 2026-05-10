@@ -26804,6 +26804,27 @@ var AREA_KEYWORDS = Object.freeze([
   }
 ]);
 
+// src/core/owner-cognitive-load.js
+var ButlerOperationalResponsibility = Object.freeze({
+  BLOCKER_DETECTION: "blocker_detection",
+  ISSUE_PROPOSAL: "issue_proposal",
+  REMEDIATION_PLANNING: "remediation_planning",
+  DEPENDENCY_TRACKING: "dependency_tracking",
+  ORCHESTRATION: "orchestration",
+  OPERATIONAL_TELEMETRY: "operational_telemetry",
+  PRIORITY_SUGGESTION: "priority_suggestion",
+  EXECUTION_MONITORING: "execution_monitoring",
+  RECURRING_PAIN_DETECTION: "recurring_pain_detection",
+  RUNTIME_TRUTH_OBSERVATION: "runtime_truth_observation"
+});
+var HumanOperationalResponsibility = Object.freeze({
+  INTENT: "intent",
+  STRATEGIC_DIRECTION: "strategic_direction",
+  APPROVAL: "approval",
+  GOVERNANCE_BOUNDARIES: "governance_boundaries",
+  FINAL_DECISION: "final_decision"
+});
+
 // src/core/reviewer-operator-summary.js
 var ReviewerOperatorSeverity = Object.freeze({
   CRITICAL: "\u81F4\u547D\u7684",
