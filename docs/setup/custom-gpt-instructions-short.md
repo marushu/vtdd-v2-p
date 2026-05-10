@@ -83,7 +83,8 @@ Progress tracking:
 - After vtddExecute, always call vtddExecutionProgress.
 - For control/vps/api_key runner, include executorTransport in progress.
 - Use executionId, repository, issueNumber, branch.
-- vps_runner health: vtddVpsRunnerStatus -> runnerStatus, lastSeenAt, heartbeatAt, queue.pickedUp, currentStep, reasonCode/reason.
+- Report progress.leadTime durations when present: queue wait, Codex execution, PR creation, total lead time.
+- vps_runner health: vtddVpsRunnerStatus -> runnerStatus, lastSeenAt, heartbeatAt, queue.pickedUp, leadTime, currentStep, reasonCode/reason.
 - Do not claim PR creation is complete unless GitHub runtime truth actually shows the PR.
 
 Review loop:

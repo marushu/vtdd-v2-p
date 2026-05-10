@@ -331,6 +331,33 @@ test("VPS runner state comment remains compatible with runner event parsing", ()
   assert.equal(parsed.event.currentStep, "codex_subprocess");
 });
 
+test("VPS runner state comment exposes concise lead time before JSON runtime truth", () => {
+  const body = buildVpsRunnerStateComment({
+    executionId: "exec-lead-time-1",
+    event: {
+      status: "running",
+      lastEvent: "branch_pushed",
+      leadTime: {
+        queued_at: "2026-05-09T10:00:00.000Z",
+        picked_up_at: "2026-05-09T10:00:12.000Z",
+        codex_started_at: "2026-05-09T10:00:20.000Z",
+        branch_pushed_at: "2026-05-09T10:04:02.000Z",
+        durations: {
+          queue_wait_duration: { seconds: 12, label: "12s" },
+          codex_execution_duration: { seconds: 222, label: "3m 42s" }
+        }
+      }
+    }
+  });
+  const parsed = parseVpsRunnerEventComment(body);
+
+  assert.equal(body.includes("Lead time:"), true);
+  assert.equal(body.includes("- Queue wait: 12s"), true);
+  assert.equal(body.includes("- Codex execution: 3m 42s"), true);
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.event.leadTime.durations.queue_wait_duration.label, "12s");
+});
+
 test("VPS runner heartbeat updates existing state comment instead of posting a new comment", async () => {
   const calls = [];
   const payload = {
@@ -455,6 +482,79 @@ test("VPS runner milestone events still create new comments", async () => {
   assert.equal(calls[0].url, "/repos/sample-org/vtdd-v2/issues/226/comments");
   assert.equal(calls[0].init.method, "POST");
   assert.equal(calls[0].init.body.body.includes("vtdd:vps-runner-event:exec-branch-1"), true);
+});
+
+test("VPS runner lead time keeps pr_created_at distinct from completed_at", async () => {
+  const calls = [];
+  const payload = {
+    executionId: "exec-pr-created-1",
+    repository: "sample-org/vtdd-v2",
+    issueNumber: 260,
+    lifecycle: {
+      queuedAt: "2026-05-09T10:00:00.000Z",
+      pickedUpAt: "2026-05-09T10:00:12.000Z",
+      codexStartedAt: "2026-05-09T10:00:20.000Z",
+      branchPushedAt: "2026-05-09T10:04:02.000Z"
+    }
+  };
+
+  await postVpsRunnerEvent({
+    githubFetch: async (url, init = {}) => {
+      calls.push({ url, init });
+      return { id: 26003 };
+    },
+    payload,
+    event: {
+      status: "pr_created",
+      lastEvent: "pull_request_created",
+      currentStep: "pull_request_created",
+      updatedAt: "2026-05-09T10:04:10.000Z"
+    }
+  });
+
+  const parsed = parseVpsRunnerEventComment(calls[0].init.body.body);
+
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.event.leadTime.pr_created_at, "2026-05-09T10:04:10.000Z");
+  assert.equal(parsed.event.leadTime.completed_at, null);
+  assert.equal(parsed.event.leadTime.durations.total_lead_time.label, "4m 10s");
+});
+
+test("VPS runner completed event records both PR creation and completion timestamps", async () => {
+  const calls = [];
+  const payload = {
+    executionId: "exec-completed-1",
+    repository: "sample-org/vtdd-v2",
+    issueNumber: 260,
+    lifecycle: {
+      queuedAt: "2026-05-09T10:00:00.000Z",
+      pickedUpAt: "2026-05-09T10:00:12.000Z",
+      codexStartedAt: "2026-05-09T10:00:20.000Z",
+      branchPushedAt: "2026-05-09T10:04:02.000Z"
+    }
+  };
+
+  await postVpsRunnerEvent({
+    githubFetch: async (url, init = {}) => {
+      calls.push({ url, init });
+      return { id: 26004 };
+    },
+    payload,
+    event: {
+      status: "completed",
+      lastEvent: "pull_request_created",
+      currentStep: "pull_request_created",
+      updatedAt: "2026-05-09T10:04:10.000Z"
+    }
+  });
+
+  const parsed = parseVpsRunnerEventComment(calls[0].init.body.body);
+
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.event.leadTime.pr_created_at, "2026-05-09T10:04:10.000Z");
+  assert.equal(parsed.event.leadTime.completed_at, "2026-05-09T10:04:10.000Z");
+  assert.equal(parsed.event.leadTime.durations.pr_creation_duration.label, "8s");
+  assert.equal(parsed.event.leadTime.durations.total_lead_time.label, "4m 10s");
 });
 
 test("VPS runner diagnostic summaries redact secrets and stay short", () => {
@@ -782,6 +882,8 @@ test("VPS runner PR body satisfies guarded PR template markers", () => {
   assert.equal(body.includes("## Surface Update Checklist"), true);
   assert.equal(body.includes("Execution ID: remote-codex-issue194-test"), true);
   assert.equal(body.includes("No merge or deploy is performed by the VPS runner."), true);
+  assert.equal(body.includes("issue-specific live E2E must be recorded separately"), true);
+  assert.equal(body.includes("Not run by VPS runner; Butler must read progress"), true);
 });
 
 test("VPS runner preserves a guarded-policy-compliant PR body candidate", () => {

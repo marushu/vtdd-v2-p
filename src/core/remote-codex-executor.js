@@ -1,6 +1,7 @@
 import { ActorRole } from "./types.js";
 import { resolveGitHubAppInstallationToken } from "./github-app-repository-index.js";
 import { isBoundRemoteCodexHandoff } from "./remote-codex-handoff-scope.js";
+import { buildExecutionLeadTime } from "./execution-lead-time.js";
 
 export const REMOTE_CODEX_WORKFLOW_FILE = "remote-codex-executor.yml";
 
@@ -725,6 +726,12 @@ async function retrieveCodexCloudGitHubCommentProgress({
       targetRepository: repository,
       issueNumber,
       branch: branchState.branch,
+      leadTime: buildRemoteCodexLeadTime({
+        queuedAt: normalizeText(delegationComment.created_at),
+        branchPushedAt: normalizeText(branchState.branch?.createdAt),
+        prCreatedAt: normalizeText(pullRequest.pullRequest?.createdAt),
+        completedAt: normalizeText(pullRequest.pullRequest?.createdAt)
+      }),
       delegationCommentId: normalizePositiveInteger(delegationComment.id),
       delegationCommentUrl: normalizeText(delegationComment.html_url) || null,
       status: pullRequest.pullRequest
@@ -806,7 +813,13 @@ async function retrieveVpsRunnerGitHubQueueProgress({
     return branchState;
   }
 
-  const runnerEvent = findLatestVpsRunnerEvent({ comments, queueComment });
+  const runnerEvents = findVpsRunnerEvents({ comments, queueComment });
+  const runnerEvent = selectLatestVpsRunnerEvent(runnerEvents);
+  const leadTime = buildVpsRunnerProgressLeadTime({
+    queueComment,
+    runnerEvents,
+    pullRequest: pullRequest.pullRequest
+  });
   const runnerEventStaleBlocker =
     runnerEvent && !pullRequest.pullRequest
       ? buildVpsRunnerEventStaleBlocker({ runnerEvent, env })
@@ -840,6 +853,7 @@ async function retrieveVpsRunnerGitHubQueueProgress({
       status,
       pullRequest: pullRequest.pullRequest,
       runnerEvent,
+      leadTime,
       blocker: failureBlocker ?? runnerEventStaleBlocker ?? staleBlocker
     }
   };
@@ -910,7 +924,9 @@ async function findPullRequestForBranch({ repository, branch, token, env }) {
           number: normalizePositiveInteger(pull.number),
           url: normalizeText(pull.html_url) || null,
           state: normalizeText(pull.state) || null,
-          title: normalizeText(pull.title) || null
+          title: normalizeText(pull.title) || null,
+          createdAt: normalizeText(pull.created_at) || null,
+          updatedAt: normalizeText(pull.updated_at) || null
         }
       : null
   };
@@ -1016,6 +1032,10 @@ function buildCodexCloudPickupBlocker({ delegationComment, env }) {
 }
 
 function findLatestVpsRunnerEvent({ comments, queueComment }) {
+  return selectLatestVpsRunnerEvent(findVpsRunnerEvents({ comments, queueComment }));
+}
+
+function findVpsRunnerEvents({ comments, queueComment }) {
   const queueCommentId = normalizePositiveInteger(queueComment?.id) ?? 0;
   const laterComments = comments.filter((comment) => {
     const commentId = normalizePositiveInteger(comment?.id) ?? 0;
@@ -1033,14 +1053,18 @@ function findLatestVpsRunnerEvent({ comments, queueComment }) {
       if (!payload) {
         return null;
       }
-      const status = normalizeVpsRunnerEventStatus(payload.status);
+      const rawStatus = normalizeText(payload.status);
+      const status = normalizeVpsRunnerEventStatus(rawStatus);
+      const leadTime = normalizeObject(payload.leadTime);
       return {
         commentId: normalizePositiveInteger(comment?.id),
         commentUrl: normalizeText(comment?.html_url) || null,
+        rawStatus,
         status,
         lastEvent: normalizeText(payload.lastEvent) || null,
         currentStep: normalizeText(payload.currentStep) || null,
         heartbeatAt: normalizeText(payload.heartbeatAt) || null,
+        leadTime,
         rawFailure: normalizeObject(payload.rawFailure),
         command: normalizeObject(payload.command),
         branch: normalizeText(payload.branch) || null,
@@ -1055,7 +1079,11 @@ function findLatestVpsRunnerEvent({ comments, queueComment }) {
     })
     .filter(Boolean);
 
-  return events
+  return events;
+}
+
+function selectLatestVpsRunnerEvent(events) {
+  return [...(Array.isArray(events) ? events : [])]
     .sort((left, right) => {
       const leftUpdatedAt = Date.parse(normalizeText(left?.updatedAt));
       const rightUpdatedAt = Date.parse(normalizeText(right?.updatedAt));
@@ -1065,6 +1093,55 @@ function findLatestVpsRunnerEvent({ comments, queueComment }) {
       return (normalizePositiveInteger(left?.commentId) ?? 0) - (normalizePositiveInteger(right?.commentId) ?? 0);
     })
     .at(-1) || null;
+}
+
+function buildVpsRunnerProgressLeadTime({ queueComment, runnerEvents, pullRequest }) {
+  const latestWithLeadTime = [...(Array.isArray(runnerEvents) ? runnerEvents : [])]
+    .reverse()
+    .find((event) => Object.keys(normalizeObject(event?.leadTime)).length > 0);
+  const eventLeadTime = normalizeObject(latestWithLeadTime?.leadTime);
+  const timestamps = {
+    queuedAt: normalizeText(eventLeadTime.queued_at) || normalizeText(queueComment?.created_at),
+    pickedUpAt: normalizeText(eventLeadTime.picked_up_at),
+    codexStartedAt: normalizeText(eventLeadTime.codex_started_at),
+    branchPushedAt: normalizeText(eventLeadTime.branch_pushed_at),
+    prCreatedAt: normalizeText(eventLeadTime.pr_created_at) || normalizeText(pullRequest?.createdAt),
+    completedAt: normalizeText(eventLeadTime.completed_at),
+    failedAt: normalizeText(eventLeadTime.failed_at)
+  };
+
+  for (const event of runnerEvents || []) {
+    const updatedAt = normalizeText(event?.updatedAt);
+    if (!timestamps.pickedUpAt && ["picked_up", "runner_started"].includes(normalizeText(event?.lastEvent))) {
+      timestamps.pickedUpAt = updatedAt;
+    }
+    if (!timestamps.codexStartedAt && (normalizeText(event?.currentStep) === "codex_subprocess" || normalizeText(event?.lastEvent) === "codex_started" || normalizeText(event?.lastEvent) === "codex_subprocess_started")) {
+      timestamps.codexStartedAt = updatedAt;
+    }
+    if (!timestamps.branchPushedAt && normalizeText(event?.lastEvent) === "branch_pushed") {
+      timestamps.branchPushedAt = updatedAt;
+    }
+    if (!timestamps.prCreatedAt && ["pull_request_created", "pull_request_updated"].includes(normalizeText(event?.lastEvent))) {
+      timestamps.prCreatedAt = updatedAt;
+    }
+    if (!timestamps.completedAt && normalizeText(event?.rawStatus) === RemoteCodexExecutionStatus.COMPLETED) {
+      timestamps.completedAt = updatedAt;
+    }
+    if (!timestamps.failedAt && normalizeText(event?.status) === RemoteCodexExecutionStatus.BLOCKED && Object.keys(normalizeObject(event?.rawFailure)).length > 0) {
+      timestamps.failedAt = updatedAt;
+    }
+  }
+
+  return buildRemoteCodexLeadTime(timestamps);
+}
+
+function buildRemoteCodexLeadTime(timestamps = {}) {
+  return buildExecutionLeadTime(timestamps, { normalizeTimestamp });
+}
+
+function normalizeTimestamp(value) {
+  const text = normalizeText(value);
+  return Number.isFinite(Date.parse(text)) ? text : null;
 }
 
 function buildVpsRunnerEventStaleBlocker({ runnerEvent, env }) {
@@ -1164,6 +1241,7 @@ function buildVpsRunnerHealthStatus({ progress, env }) {
       commentId: normalizePositiveInteger(progress?.queueCommentId),
       commentUrl: normalizeText(progress?.queueCommentUrl) || null
     },
+    leadTime: normalizeObject(progress?.leadTime),
     currentStep,
     progressStatus: normalizeText(progress?.status) || RemoteCodexExecutionStatus.UNKNOWN,
     reason: unavailableReason?.reason || null,
