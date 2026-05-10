@@ -9,6 +9,7 @@
 - GitHub-visible VPS runner state/event comments include concise Lead time lines and JSON leadTime runtime truth.
 - Queue wait, Codex execution, PR creation, and total lead time durations are computed with readable labels.
 - Lead-time duration calculation and formatting are shared by Butler progress reconstruction and VPS runner comment publishing.
+- `pr_created_at` remains distinct from `completed_at`; PR creation can end total lead-time calculation without falsifying a completed timestamp.
 - Existing execution flow remains compatible; existing event parsing and tests pass.
 
 ## Unsatisfied Success Criteria
@@ -21,8 +22,8 @@ None.
 
 ## Verification Evidence
 
-- Unit: npm test (605 tests passed).
-- Integration: node --test test/execution-lead-time.test.js test/vps-runner-script.test.js test/remote-codex-executor.test.js (67 tests passed).
+- Unit: npm test (606 tests passed).
+- Integration: node --test test/execution-lead-time.test.js test/vps-runner-script.test.js test/remote-codex-executor.test.js (68 tests passed).
 - E2E: Not run live; covered by runtime progress/comment contract tests for happy-path and stale/failure boundaries.
 - Manual: Inspected docs/pr-template-model.md, scripts/render-pr-body.mjs, scripts/validate-pr-body.mjs before drafting.
 - Evidence path/link: src/core/execution-lead-time.js; test/execution-lead-time.test.js; test/remote-codex-executor.test.js; test/vps-runner-script.test.js; docs/butler/remote-codex-cli-executor.md
@@ -50,6 +51,7 @@ None.
 ## Extra changes (if any)
 
 - Gemini reviewer code-duplication risk addressed by centralizing lead-time duration calculation and formatting in src/core/execution-lead-time.js.
+- Gemini reviewer PR-body mismatch is addressed in this guarded PR body draft; live GitHub PR body update remains a separate GitHub-side action.
 
 <!-- VTDD metadata -->
 - Issue: #260
