@@ -24,6 +24,10 @@ test("formatCodexReviewFallbackComment renders marker and requested fallback sta
 
   assert.equal(body.includes(CODEX_REVIEW_FALLBACK_MARKER), true);
   assert.equal(body.includes("- Status: `requested`"), true);
+  assert.equal(body.includes("## Operator Summary"), true);
+  assert.equal(body.includes("推奨: merge 非推奨（review 未完了）"), true);
+  assert.equal(body.includes("merge blocker: はい"), true);
+  assert.equal(body.includes("severity: 重要"), true);
   assert.equal(body.includes("- Delivery mode: `vps_codex_cli`"), true);
   assert.equal(body.includes("@codex review"), false);
   assert.equal(body.includes("VTDD-managed workflow execution"), true);
@@ -43,6 +47,9 @@ test("formatCodexReviewFallbackComment can render a short operator milestone men
   });
 
   assert.equal(body.split("\n")[1], "@marushu VTDD milestone: review requested changes.");
+  assert.equal(body.split("\n")[2], "## Operator Summary");
+  assert.equal(body.includes("推奨: merge 非推奨"), true);
+  assert.equal(body.includes("severity: 重要"), true);
   assert.equal(body.includes("- Status: `completed`"), true);
   assert.equal(body.includes("- Recommended action: `request_changes`"), true);
 });
@@ -147,6 +154,8 @@ test("formatCodexReviewFallbackComment renders raw blocked failure details", () 
   });
 
   assert.equal(body.includes("- Status: `blocked`"), true);
+  assert.equal(body.includes("推奨: merge 非推奨（reviewer blocked）"), true);
+  assert.equal(body.includes("severity: 致命的"), true);
   assert.equal(body.includes("- Blocker: `openai_quota_exceeded`"), true);
   assert.equal(body.includes("### Raw Failure"), true);
   assert.equal(body.includes("ERROR: Quota exceeded."), true);

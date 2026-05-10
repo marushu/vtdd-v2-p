@@ -1,5 +1,6 @@
 import { validateReviewerResponse } from "./reviewer-contract.js";
 import { normalizeMentionLogin } from "./github-mention.js";
+import { formatReviewerOperatorSummary } from "./reviewer-operator-summary.js";
 
 export const GEMINI_PR_REVIEW_MARKER = "<!-- vtdd:reviewer=gemini -->";
 export const REVIEWER_OBJECTION_RESOLUTION_MARKER = "<!-- vtdd:reviewer-objection-resolution -->";
@@ -253,6 +254,13 @@ export function formatGeminiReviewComment(input = {}) {
   const lines = [
     GEMINI_PR_REVIEW_MARKER,
     ...(notificationMention ? [`@${notificationMention} VTDD milestone: review result changed.`] : []),
+    formatReviewerOperatorSummary({
+      reviewer: "gemini",
+      recommendedAction,
+      criticalFindings,
+      risks
+    }),
+    "",
     "## VTDD Gemini Critical Review",
     "",
     `- Trigger: \`${trigger}\``,

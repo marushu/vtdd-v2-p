@@ -1,4 +1,5 @@
 import { normalizeMentionLogin } from "./github-mention.js";
+import { formatReviewerOperatorSummary } from "./reviewer-operator-summary.js";
 
 export const CODEX_REVIEW_FALLBACK_MARKER = "<!-- vtdd:reviewer=codex-fallback -->";
 
@@ -29,6 +30,15 @@ export function formatCodexReviewFallbackComment(input = {}) {
   const lines = [
     CODEX_REVIEW_FALLBACK_MARKER,
     ...(notificationMention ? [`@${notificationMention} VTDD milestone: ${formatFallbackMilestoneLabel(status, recommendedAction)}.`] : []),
+    formatReviewerOperatorSummary({
+      reviewer: "codex-fallback",
+      status,
+      recommendedAction,
+      criticalFindings,
+      risks,
+      blocker
+    }),
+    "",
     "## VTDD Codex Reviewer Fallback Request",
     "",
     `- Status: \`${status}\``,

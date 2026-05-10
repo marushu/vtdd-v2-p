@@ -260,8 +260,15 @@ test("formatGeminiReviewComment renders marker and sections", () => {
   });
 
   assert.equal(body.includes(GEMINI_PR_REVIEW_MARKER), true);
+  assert.equal(body.includes("## Operator Summary"), true);
+  assert.equal(body.includes("推奨: merge 非推奨"), true);
+  assert.equal(body.includes("merge blocker: はい"), true);
+  assert.equal(body.includes("severity: 重要"), true);
+  assert.equal(body.indexOf("## Operator Summary") < body.indexOf("## VTDD Gemini Critical Review"), true);
   assert.equal(body.includes("VTDD Gemini Critical Review"), true);
   assert.equal(body.includes("request_changes"), true);
+  assert.equal(body.includes("### Critical Findings"), true);
+  assert.equal(body.includes("Scope drift around issue traceability."), true);
 });
 
 test("formatGeminiReviewComment can render a short operator milestone mention", () => {
@@ -277,6 +284,10 @@ test("formatGeminiReviewComment can render a short operator milestone mention", 
   });
 
   assert.equal(body.split("\n")[1], "@marushu VTDD milestone: review result changed.");
+  assert.equal(body.split("\n")[2], "## Operator Summary");
+  assert.equal(body.includes("推奨: merge 可能（残リスク確認）"), true);
+  assert.equal(body.includes("merge blocker: いいえ"), true);
+  assert.equal(body.includes("severity: 軽微"), true);
   assert.equal(body.includes("Recommended action: `approve`"), true);
 });
 
