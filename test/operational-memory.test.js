@@ -83,6 +83,37 @@ test("operational memory can surface cross-repository experience for a different
   assert.equal(crossRepoReference.layer, OperationalMemoryLayer.LONG_TERM_OPERATIONAL_MEMORY);
 });
 
+test("default operational memory retrieval preserves relevance-heavy ranking score", async () => {
+  const provider = createInMemoryMemoryProvider();
+  await provider.store({
+    id: "direct-query-match",
+    type: MemoryRecordType.DECISION_LOG,
+    content: {
+      decision: "Branch collision remediation must stay visible for branch collision queries"
+    },
+    metadata: {
+      repository: "repo-a/vtdd"
+    },
+    priority: 50,
+    tags: ["decision_log"],
+    createdAt: "2026-05-10T00:00:00Z"
+  });
+
+  const result = await retrieveOperationalMemory(provider, {
+    text: "branch collision",
+    repository: "repo-b/vtdd",
+    limit: 1,
+    now: "2026-05-10T00:00:00.000Z"
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.compactContext[0].id, "direct-query-match");
+  assert.equal(result.compactContext[0].rankingMode, "default");
+  assert.equal(result.compactContext[0].scoreSignals.relevance, 100);
+  assert.equal(result.compactContext[0].scoreSignals.similarity, 100);
+  assert.equal(result.compactContext[0].score, 67);
+});
+
 test("operational memory rejects missing providers with a retrieval-safe error", async () => {
   const result = await retrieveOperationalMemory(null, {
     text: "anything"
@@ -119,6 +150,7 @@ test("runtime-triggered retrieval integrates PR conflict memory into Butler prop
   assert.equal(result.trigger, RuntimeMemoryTrigger.PR);
   assert.equal(result.runtimeTruth.overridesMemory, true);
   assert.equal(result.compactContext[0].id, "repair-branch-collision");
+  assert.equal(result.compactContext[0].rankingMode, "runtime_triggered");
   assert.equal(result.compactContext[0].crossRepository, true);
   assert.equal(result.recurringPain.detected, true);
   assert.equal(result.proposalIntegration.remediationProposal.recommended, true);

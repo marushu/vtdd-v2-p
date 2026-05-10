@@ -24495,6 +24495,7 @@ async function retrieveRuntimeTriggeredOperationalMemory(provider, input = {}) {
     text: runtimeText,
     repository: input.repository ?? input.runtimeTruth?.repository,
     runtimeTruth: input.runtimeTruth,
+    rankingMode: "runtime_triggered",
     limit: input.limit,
     now: input.now
   });
@@ -24546,6 +24547,7 @@ async function retrieveOperationalMemory(provider, input = {}) {
   const now = normalizeTimestamp3(input.now) || (/* @__PURE__ */ new Date()).toISOString();
   const currentRepository = normalizeText14(input.repository);
   const runtimeTruth = normalizeRuntimeTruth2(input.runtimeTruth);
+  const rankingMode = normalizeOperationalMemoryRankingMode(input.rankingMode);
   try {
     const structuredRecords = await retrieveStructuredOperationalRecords(provider, {
       limit: Math.max(limit * 4, limit)
@@ -24558,7 +24560,8 @@ async function retrieveOperationalMemory(provider, input = {}) {
       (record) => toOperationalMemoryReference(record, {
         queryText,
         now,
-        currentRepository
+        currentRepository,
+        rankingMode
       })
     ).filter(Boolean).sort(compareOperationalMemoryReferences).slice(0, limit);
     return {
@@ -24629,7 +24632,8 @@ function toOperationalMemoryReference(record, input = {}) {
     crossRepository: Boolean(currentRepository && repository && repository !== currentRepository),
     createdAt: normalizeText14(record?.createdAt) || null,
     tags,
-    score: calculateOperationalMemoryScore(scoreSignals),
+    score: input.rankingMode === "runtime_triggered" ? calculateRuntimeTriggeredOperationalMemoryScore(scoreSignals) : calculateOperationalMemoryScore(scoreSignals),
+    rankingMode: input.rankingMode,
     scoreSignals,
     use: "background_reference"
   };
@@ -24716,6 +24720,11 @@ function scoreRecency(createdAt, now) {
 }
 function calculateOperationalMemoryScore(signals) {
   return Math.round(
+    signals.relevance * 0.4 + signals.governanceImportance * 0.25 + signals.recurrence * 0.2 + signals.recency * 0.15
+  );
+}
+function calculateRuntimeTriggeredOperationalMemoryScore(signals) {
+  return Math.round(
     signals.recurrence * 0.22 + signals.governanceImportance * 0.2 + signals.operationalImpact * 0.18 + signals.similarity * 0.18 + signals.recency * 0.12 + signals.emotionalIntensity * 0.1
   );
 }
@@ -24797,6 +24806,9 @@ function normalizeRuntimeMemoryTrigger(value) {
     return normalized;
   }
   return null;
+}
+function normalizeOperationalMemoryRankingMode(value) {
+  return normalizeText14(value) === "runtime_triggered" ? "runtime_triggered" : "default";
 }
 function buildRuntimeTriggeredQueryText(input = {}) {
   const parts = [

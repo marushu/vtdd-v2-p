@@ -141,6 +141,7 @@ export async function retrieveRuntimeTriggeredOperationalMemory(provider, input 
     text: runtimeText,
     repository: input.repository ?? input.runtimeTruth?.repository,
     runtimeTruth: input.runtimeTruth,
+    rankingMode: "runtime_triggered",
     limit: input.limit,
     now: input.now
   });
@@ -197,6 +198,7 @@ export async function retrieveOperationalMemory(provider, input = {}) {
   const now = normalizeTimestamp(input.now) || new Date().toISOString();
   const currentRepository = normalizeText(input.repository);
   const runtimeTruth = normalizeRuntimeTruth(input.runtimeTruth);
+  const rankingMode = normalizeOperationalMemoryRankingMode(input.rankingMode);
 
   try {
     const structuredRecords = await retrieveStructuredOperationalRecords(provider, {
@@ -214,7 +216,8 @@ export async function retrieveOperationalMemory(provider, input = {}) {
         toOperationalMemoryReference(record, {
           queryText,
           now,
-          currentRepository
+          currentRepository,
+          rankingMode
         })
       )
       .filter(Boolean)
@@ -296,7 +299,11 @@ function toOperationalMemoryReference(record, input = {}) {
     crossRepository: Boolean(currentRepository && repository && repository !== currentRepository),
     createdAt: normalizeText(record?.createdAt) || null,
     tags,
-    score: calculateOperationalMemoryScore(scoreSignals),
+    score:
+      input.rankingMode === "runtime_triggered"
+        ? calculateRuntimeTriggeredOperationalMemoryScore(scoreSignals)
+        : calculateOperationalMemoryScore(scoreSignals),
+    rankingMode: input.rankingMode,
     scoreSignals,
     use: "background_reference"
   };
@@ -319,6 +326,7 @@ function scoreRelevance(textBlob, queryText) {
 }
 
 function scoreSimilarity(textBlob, queryText) {
+  // Runtime-triggered retrieval uses lexical overlap as the current similarity proxy.
   return scoreRelevance(textBlob, queryText);
 }
 
@@ -395,6 +403,15 @@ function scoreRecency(createdAt, now) {
 }
 
 function calculateOperationalMemoryScore(signals) {
+  return Math.round(
+    signals.relevance * 0.4 +
+      signals.governanceImportance * 0.25 +
+      signals.recurrence * 0.2 +
+      signals.recency * 0.15
+  );
+}
+
+function calculateRuntimeTriggeredOperationalMemoryScore(signals) {
   return Math.round(
     signals.recurrence * 0.22 +
       signals.governanceImportance * 0.2 +
@@ -507,6 +524,10 @@ function normalizeRuntimeMemoryTrigger(value) {
     return normalized;
   }
   return null;
+}
+
+function normalizeOperationalMemoryRankingMode(value) {
+  return normalizeText(value) === "runtime_triggered" ? "runtime_triggered" : "default";
 }
 
 function buildRuntimeTriggeredQueryText(input = {}) {
