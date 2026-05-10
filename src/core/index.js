@@ -206,10 +206,12 @@ export {
 export {
   buildCustomGptRecoveryBundle,
   CustomGptSetupArtifact,
+  CustomGptSetupChannel,
   evaluateButlerSelfParity,
   evaluateRuntimeSetupManifestParity,
   renderCustomGptRecoveryPage,
   RUNTIME_SETUP_MANIFEST,
+  VTDD_SETUP_REPOSITORY,
   retrieveCustomGptSetupArtifact
 } from "./custom-gpt-setup-artifacts.js";
 export { GitHubReadResource, retrieveGitHubReadPlane } from "./github-read-plane.js";

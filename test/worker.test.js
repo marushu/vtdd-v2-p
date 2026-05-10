@@ -124,18 +124,21 @@ test("worker returns health", async () => {
   assert.equal(body.autonomyMode, AutonomyMode.NORMAL);
 });
 
-test("worker setup recovery page opens without Action auth and prompts for repository", async () => {
+test("worker setup recovery page opens without Action auth and defaults to VTDD repo", async () => {
   const response = await worker.fetch(new Request("https://example.com/setup/recovery"));
 
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type"), /text\/html/);
   const html = await response.text();
   assert.equal(html.includes("VTDD Butler setup recovery"), true);
-  assert.equal(html.includes("name=\"repository\""), true);
+  assert.equal(html.includes("Recovery repo: marushu/vtdd-v2-p"), true);
+  assert.equal(html.includes("setup/latest"), true);
+  assert.equal(html.includes("setup/known-good"), true);
+  assert.equal(html.includes("name=\"repository\""), false);
   assert.equal(html.includes("Bearer test-token"), false);
 });
 
-test("worker setup recovery page renders copy-ready schema and short-min bundle", async () => {
+test("worker setup latest page renders copy-ready schema and short-min bundle for VTDD repo", async () => {
   const canonicalOpenApi = [
     "openapi: 3.1.1",
     "servers:",
@@ -161,11 +164,12 @@ test("worker setup recovery page renders copy-ready schema and short-min bundle"
   const shortMin = "VTDD Butler short-min instructions";
 
   const response = await worker.fetch(
-    new Request("https://example.com/setup/recovery?repository=sample-org/vtdd-v2-p&ref=main"),
+    new Request("https://example.com/setup/latest?ref=main"),
     {
       GITHUB_APP_INSTALLATION_TOKEN: "ghs_setup_read",
       GITHUB_API_FETCH: async (url) => {
         const parsed = new URL(url);
+        assert.equal(parsed.pathname.startsWith("/repos/marushu/vtdd-v2-p/"), true);
         if (parsed.pathname.endsWith("/commits/main")) {
           return new Response(JSON.stringify({ sha: "b".repeat(40) }), {
             status: 200,
@@ -193,12 +197,77 @@ test("worker setup recovery page renders copy-ready schema and short-min bundle"
 
   assert.equal(response.status, 200);
   const html = await response.text();
+  assert.equal(html.includes("latest setup bundle"), true);
+  assert.equal(html.includes("Recovery repo: marushu/vtdd-v2-p"), true);
   assert.equal(html.includes("Copy-ready Action Schema"), true);
   assert.equal(html.includes("Copy-ready custom-gpt-instructions-short-min.md"), true);
   assert.equal(html.includes("  - url: https://example.com"), true);
   assert.equal(html.includes("VTDD Butler short-min instructions"), true);
   assert.equal(html.includes("knownGoodCommitSha: " + "b".repeat(40)), true);
+  assert.equal(html.includes("Rollback は setup/known-good で copy-ready になります。latest は現在の候補確認用です。"), true);
   assert.equal(html.includes("No secret values, tokens, or approval grants are displayed."), true);
+  assert.equal(html.includes("ghs_setup_read"), false);
+});
+
+test("worker setup known-good page renders rollback copy-ready bundle from known-good commit", async () => {
+  const canonicalOpenApi = [
+    "openapi: 3.1.1",
+    "servers:",
+    "  - url: https://your-runtime-host.example.workers.dev",
+    "paths:",
+    "  /health:",
+    "    get:",
+    "      operationId: getHealth",
+    "  /v2/retrieve/setup-artifact:",
+    "    get:",
+    "      operationId: vtddRetrieveSetupArtifact",
+    "  /v2/retrieve/self-parity:",
+    "    get:",
+    "      operationId: vtddRetrieveSelfParity"
+  ].join("\n");
+  const canonicalInstructions = [
+    "vtddRetrieveSetupArtifact",
+    "vtddRetrieveSelfParity",
+    "Action Schema update required",
+    "Instructions update required",
+    "Cloudflare deploy update required"
+  ].join("\n");
+  const shortMin = "VTDD Butler known-good short-min instructions";
+  const knownGoodSha = "c".repeat(40);
+
+  const response = await worker.fetch(new Request("https://example.com/setup/known-good"), {
+    GITHUB_APP_INSTALLATION_TOKEN: "ghs_setup_read",
+    VTDD_KNOWN_GOOD_COMMIT_SHA: knownGoodSha,
+    GITHUB_API_FETCH: async (url) => {
+      const parsed = new URL(url);
+      assert.equal(parsed.pathname.startsWith("/repos/marushu/vtdd-v2-p/"), true);
+      assert.equal(parsed.searchParams.get("ref"), knownGoodSha);
+      const isShortMin = parsed.pathname.endsWith(
+        "/docs/setup/custom-gpt-instructions-short-min.md"
+      );
+      const isInstructions = parsed.pathname.endsWith("/docs/setup/custom-gpt-instructions.md");
+      return new Response(
+        JSON.stringify({
+          sha: isShortMin ? "known-short-min-sha" : isInstructions ? "known-instructions-sha" : "known-openapi-sha",
+          encoding: "base64",
+          content: Buffer.from(
+            isShortMin ? shortMin : isInstructions ? canonicalInstructions : canonicalOpenApi,
+            "utf8"
+          ).toString("base64")
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    }
+  });
+
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.equal(html.includes("known-good setup bundle"), true);
+  assert.equal(html.includes("Copy Rollback Bundle"), true);
+  assert.equal(html.includes(`channel: known_good`), true);
+  assert.equal(html.includes(`ref: ${knownGoodSha}`), true);
+  assert.equal(html.includes(`knownGoodCommitSha: ${knownGoodSha}`), true);
+  assert.equal(html.includes(shortMin), true);
   assert.equal(html.includes("ghs_setup_read"), false);
 });
 
