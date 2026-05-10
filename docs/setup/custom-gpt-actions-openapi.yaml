@@ -1167,6 +1167,74 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/VtddGenericResponse"
+  /v2/retrieve/operational-memory:
+    get:
+      operationId: vtddRetrieveOperationalMemory
+      summary: Retrieve compact ranked operational memory for Butler continuity.
+      parameters:
+        - name: text
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: repository
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: currentState
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: runtimeTruthSource
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: checkedAt
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: responseMode
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - action_visible
+          description: Use action_visible in the Custom GPT Action test screen so non-2xx retrieve failures return ok:false JSON with httpStatus/error/reason/issues instead of a ClientResponseError transport label.
+      responses:
+        "200":
+          description: Operational memory retrieval result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "401":
+          description: Missing machine auth
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "403":
+          description: Invalid machine auth
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "503":
+          description: Operational memory retrieval unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
   /v2/retrieve/github:
     get:
       operationId: vtddRetrieveGitHub

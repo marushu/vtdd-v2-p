@@ -1,0 +1,96 @@
+# Operational Memory Layer
+
+This document is the Issue #249 architecture contract for Butler operational
+memory. It extends the existing memory schema and provider contracts without
+creating Cloudflare resources or replacing runtime truth.
+
+## Intent
+
+Butler memory is persistent operational cognition, not generic chat history.
+The layer exists to preserve durable judgment context across conversations,
+repositories, and execution sessions while keeping current runtime truth
+separate from historical memory.
+
+## Layers
+
+### Layer 1: Immediate Context
+
+- Scope: current conversation and runtime input
+- Storage: ephemeral runtime input
+- Role: highest-precedence current context
+- Persistence: not persisted by this layer
+
+### Layer 2: Active Operational Memory
+
+- Scope: recent issues, PRs, blockers, executions, reviews, approvals, and
+  working state
+- Storage contract: `memory_provider`
+- Record families: `working_memory`, `execution_log`, `proposal_log`,
+  `approval_log`
+- Role: preserve current handoff, active blocker, and review context
+
+### Layer 3: Long-Term Operational Memory
+
+- Scope: historical failures, remediation, governance philosophy, recurring
+  pain, rejected approaches, and operational preferences
+- Storage contract: `memory_provider`
+- Record families: `constitution`, `decision_log`, `repair_case`,
+  `temperature_note`
+- Role: preserve operational continuity across sessions and repositories
+
+### Layer 4: Semantic Operational Patterns
+
+- Scope: cross-project heuristics, preferred workflows, disliked operational
+  patterns, successful orchestration approaches, review patterns, CI instability
+  history, and proposal history
+- Storage contract: `memory_provider.query`
+- Record families: `decision_log`, `repair_case`, `proposal_log`,
+  `execution_log`
+- Role: retrieve relevant operational patterns without replacing structured
+  lookup or runtime truth
+
+## Storage Candidates
+
+The architecture remains provider-agnostic. Valid storage candidates are:
+
+- Cloudflare D1
+- Cloudflare Vectorize
+- Cloudflare R2
+- Durable Objects
+
+This contract does not require provisioning any of them. Runtime code should
+continue to depend on the memory provider interface.
+
+## Retrieval Contract
+
+Operational memory retrieval must return compact references, not a full memory
+dump. Ranking uses:
+
+- relevance to the current request
+- recency
+- governance importance
+- recurrence
+
+The output must preserve the distinction between:
+
+- current runtime truth, which can override historical memory for current state
+- memory references, which are background operational evidence
+
+## Non-Goals
+
+- generic chatbot memory
+- unrestricted autonomous execution
+- personality simulation
+
+## Runtime Entry Point
+
+`retrieveOperationalMemory(provider, input)` implements this contract in
+`src/core/operational-memory.js`.
+
+The function returns:
+
+- the four-layer architecture
+- compact ranked references
+- references grouped by layer
+- score signals for relevance, recency, governance importance, and recurrence
+- an explicit memory-use rule that prevents memory from overriding runtime truth

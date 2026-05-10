@@ -4763,6 +4763,65 @@ test("worker cross-memory route honors action-schema text and semantic parameter
   );
 });
 
+test("worker returns compact operational memory through retrieve route", async () => {
+  const provider = createInMemoryMemoryProvider();
+  await provider.store({
+    id: "operational-decision-1",
+    type: MemoryRecordType.DECISION_LOG,
+    content: {
+      decision: "Recurring reviewer blockers must be surfaced before PR completion claims",
+      rationale: "Historical blocker recurrence should reduce owner re-explanation.",
+      recurrenceCount: 3
+    },
+    metadata: {
+      repository: "repo-a/vtdd",
+      recurrenceCount: 3
+    },
+    priority: 96,
+    tags: ["decision_log", "reviewer", "blocker", "policy", "recurring"],
+    createdAt: "2026-05-01T00:00:00Z"
+  });
+  await provider.store({
+    id: "operational-working-1",
+    type: MemoryRecordType.WORKING_MEMORY,
+    content: {
+      note: "Current branch is waiting on reviewer blocker reconciliation."
+    },
+    metadata: {
+      repository: "repo-b/vtdd"
+    },
+    priority: 70,
+    tags: ["working_memory", "reviewer"],
+    createdAt: "2026-05-09T00:00:00Z"
+  });
+
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/v2/retrieve/operational-memory?text=reviewer%20blocker%20policy&repository=repo-b/vtdd&currentState=reviewer%20blocked&runtimeTruthSource=github_app&checkedAt=2026-05-10T01%3A00%3A00Z&limit=2",
+      {
+        headers: {
+          authorization: "Bearer test-token"
+        }
+      }
+    ),
+    {
+      ...gatewayAuthEnv,
+      MEMORY_PROVIDER: provider
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.queryText, "reviewer blocker policy");
+  assert.equal(body.memoryUseRule, "runtime_truth_current_state_overrides_memory_background_reference");
+  assert.equal(body.runtimeTruth.overridesMemory, true);
+  assert.equal(body.compactContext.length, 2);
+  assert.equal(body.compactContext[0].id, "operational-decision-1");
+  assert.equal(body.compactContext[0].crossRepository, true);
+  assert.equal(body.retrievalSignals.dumpedAllMemory, false);
+});
+
 test("worker returns not_found for unknown route", async () => {
   const response = await worker.fetch(new Request("https://example.com/unknown"));
   assert.equal(response.status, 404);
