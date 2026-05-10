@@ -21112,7 +21112,8 @@ function buildButlerReviewSynthesis(input = {}) {
       state: pullRequest.state,
       title: pullRequest.title,
       baseRef: pullRequest.baseRef,
-      headRef: pullRequest.headRef
+      headRef: pullRequest.headRef,
+      mergeability: pullRequest.mergeability
     },
     reviewerSignal: {
       reviewer: reviewLoop.reviewer,
@@ -21136,9 +21137,8 @@ function buildButlerReviewSynthesis(input = {}) {
 }
 function buildHeadline({ pullRequest, reviewLoop }) {
   const base = `PR #${pullRequest.number} is ${pullRequest.state || "open"}.`;
-  if (reviewLoop.reviewerStatus === "gemini_review_available" && reviewLoop.reviewerEvidence?.recommendedAction === "approve") {
-    const url = reviewLoop.reviewerEvidence.url ? ` Approve evidence: ${reviewLoop.reviewerEvidence.url}` : "";
-    return `${base} Gemini reviewer action is approve.${url}`;
+  if (pullRequest.mergeability.status === "conflict") {
+    return `${base} Merge conflict runtime truth is present; Butler should propose a fresh branch / fresh PR instead of merge.`;
   }
   if (reviewLoop.reviewerStatus === "codex_review_blocked") {
     return `${base} Gemini is temporarily unavailable and non-manual Codex fallback is currently blocked by platform or repository configuration.`;
@@ -21152,13 +21152,35 @@ function buildHeadline({ pullRequest, reviewLoop }) {
   if (reviewLoop.unresolvedReviewCommentsCount > 0) {
     return `${base} ${reviewLoop.unresolvedReviewCommentsCount} unresolved reviewer objections remain.`;
   }
+  if (reviewLoop.reviewerStatus === "gemini_review_available" && reviewLoop.reviewerEvidence?.recommendedAction === "approve") {
+    if (pullRequest.mergeability.status === "unverified") {
+      return `${base} PR conflict runtime truth is unverified; Butler must re-read runtime truth before merge judgment.`;
+    }
+    const url = reviewLoop.reviewerEvidence.url ? ` Approve evidence: ${reviewLoop.reviewerEvidence.url}` : "";
+    return `${base} Gemini reviewer action is approve.${url}`;
+  }
   if (reviewLoop.reviewCommentsCount > 0) {
     return `${base} Reviewer feedback exists and should be checked before human GO.`;
+  }
+  if (pullRequest.mergeability.status === "unverified") {
+    return `${base} PR conflict runtime truth is unverified; Butler must re-read runtime truth before merge judgment.`;
   }
   return `${base} Reviewer evidence is not yet available.`;
 }
 function buildHumanDecisionFocus({ pullRequest, reviewLoop, codexGoal }) {
   const focus = [];
+  if (pullRequest.mergeability.status === "conflict") {
+    focus.push("Runtime truth shows PR merge conflicts; do not recommend merge even if reviewer evidence is approve.");
+    if (pullRequest.mergeability.freshBranchSuggestion) {
+      focus.push(pullRequest.mergeability.freshBranchSuggestion);
+    }
+  }
+  if (pullRequest.mergeability.status === "unverified") {
+    focus.push("PR conflict runtime truth is unverified; call vtddRetrieveGitHub(pulls) again before any merge recommendation.");
+  }
+  if (pullRequest.mergeability.warning) {
+    focus.push(pullRequest.mergeability.warning);
+  }
   if (reviewLoop.unresolvedReviewCommentsCount > 0) {
     focus.push("Meaningful reviewer objections remain unresolved; do not issue merge GO + real passkey yet.");
   }
@@ -21227,6 +21249,7 @@ function normalizePullRequest(value) {
     title: normalizeText4(input.title) || null,
     baseRef: normalizeText4(input.baseRef) || normalizeText4(input.base?.ref) || null,
     headRef: normalizeText4(input.headRef) || normalizeText4(input.head?.ref) || null,
+    mergeability: normalizeMergeability(input),
     updatedSinceReview: input.updatedSinceReview === true,
     issueComments: Array.isArray(input.issueComments) ? input.issueComments : [],
     reviewComments: Array.isArray(input.reviewComments) ? input.reviewComments : [],
@@ -21258,6 +21281,36 @@ function normalizeReviewerEvidence(value) {
     updatedAt: normalizeText4(input.updatedAt) || null,
     includesCreatedEdit: input.includesCreatedEdit === true
   };
+}
+function normalizeMergeability(input) {
+  const raw = input.mergeability && typeof input.mergeability === "object" ? input.mergeability : {};
+  const mergeable = typeof input.mergeable === "boolean" ? input.mergeable : normalizeNullableBoolean(raw.mergeable);
+  const mergeableState = normalizeText4(input.mergeableState) || normalizeText4(input.mergeable_state) || normalizeText4(raw.state) || normalizeText4(raw.mergeableState) || null;
+  const mergeConflict = input.mergeConflict === true || raw.hasConflict === true || mergeable === false || mergeableState === "dirty";
+  const mergeBlocked = input.mergeBlocked === true || raw.blocked === true || mergeConflict;
+  const mergeBlockedReason = normalizeText4(input.mergeBlockedReason) || normalizeText4(raw.blockedReason) || (mergeConflict ? "pull_request_has_merge_conflicts" : null);
+  const warning = normalizeText4(input.mergeWarning) || normalizeText4(raw.warning) || null;
+  const freshBranchSuggestion = normalizeText4(input.freshBranchSuggestion) || normalizeText4(raw.freshBranchSuggestion) || null;
+  const conflictFiles = Array.isArray(input.conflictFiles) ? input.conflictFiles : Array.isArray(raw.conflictFiles) ? raw.conflictFiles : null;
+  const conflictFilesSource = normalizeText4(input.conflictFilesSource) || normalizeText4(raw.conflictFilesSource) || null;
+  const verified = typeof mergeable === "boolean" || Boolean(mergeableState);
+  const status = mergeConflict ? "conflict" : verified ? "verified" : "unverified";
+  return {
+    status,
+    verified,
+    mergeable,
+    mergeableState,
+    mergeConflict,
+    mergeBlocked,
+    mergeBlockedReason,
+    warning,
+    freshBranchSuggestion,
+    conflictFiles,
+    conflictFilesSource
+  };
+}
+function normalizeNullableBoolean(value) {
+  return typeof value === "boolean" ? value : null;
 }
 function normalizeStringArray(value) {
   return (Array.isArray(value) ? value : []).map(normalizeText4).filter(Boolean);
@@ -26989,7 +27042,13 @@ function evaluateExecutionContinuity(input = {}) {
         exists: pullRequest.exists,
         number: pullRequest.number,
         url: pullRequest.url,
-        state: pullRequest.state
+        state: pullRequest.state,
+        mergeable: pullRequest.mergeable,
+        mergeableState: pullRequest.mergeableState,
+        mergeConflict: pullRequest.mergeConflict,
+        mergeBlocked: pullRequest.mergeBlocked,
+        mergeBlockedReason: pullRequest.mergeBlockedReason,
+        mergeabilityVerified: pullRequest.mergeabilityVerified
       },
       reviewLoop: {
         reviewer: review.reviewer,
@@ -27105,6 +27164,9 @@ function determineCodexGoal({ pullRequest, review }) {
   if (!pullRequest.exists) {
     return CodexGoal.OPEN_PR;
   }
+  if (pullRequest.mergeConflict) {
+    return CodexGoal.REVISE_PR;
+  }
   if (review.unresolvedReviewCommentsCount > 0) {
     return CodexGoal.REVISE_PR;
   }
@@ -27113,6 +27175,9 @@ function determineCodexGoal({ pullRequest, review }) {
 function buildNextSuggestedActions({ pullRequest, review, codexGoal }) {
   if (!pullRequest.exists) {
     return ["continue_bounded_coding", "open_pull_request", "request_gemini_review"];
+  }
+  if (pullRequest.mergeConflict) {
+    return ["create_fresh_branch", "open_fresh_pull_request", "summarize_for_human"];
   }
   if (review.reviewerStatus === "codex_review_requested") {
     return ["wait_for_codex_review", "summarize_for_human"];
@@ -27131,6 +27196,9 @@ function buildNextSuggestedActions({ pullRequest, review, codexGoal }) {
   }
   if (review.reviewerStatus === "review_unavailable") {
     return ["rerun_gemini_review", "summarize_for_human"];
+  }
+  if (pullRequest.mergeabilityVerified === false) {
+    return ["refresh_pull_request_runtime_truth", "summarize_for_human"];
   }
   return ["summarize_for_human", "wait_for_human_go"];
 }
@@ -27161,6 +27229,18 @@ function normalizeGitHubRuntime(value) {
       title: normalizeText20(pullRequestInput.title) || null,
       baseRef: normalizeText20(pullRequestInput.baseRef) || normalizeText20(pullRequestInput.base?.ref) || null,
       headRef: normalizeText20(pullRequestInput.headRef) || normalizeText20(pullRequestInput.head?.ref) || null,
+      mergeable: normalizeNullableBoolean2(pullRequestInput.mergeable),
+      mergeableState: normalizeText20(pullRequestInput.mergeableState) || normalizeText20(pullRequestInput.mergeable_state) || normalizeText20(pullRequestInput.mergeability?.state) || null,
+      mergeConflict: pullRequestInput.mergeConflict === true || pullRequestInput.mergeability?.hasConflict === true || normalizeNullableBoolean2(pullRequestInput.mergeable) === false || normalizeText20(pullRequestInput.mergeableState) === "dirty" || normalizeText20(pullRequestInput.mergeable_state) === "dirty" || normalizeText20(pullRequestInput.mergeability?.state) === "dirty",
+      mergeBlocked: pullRequestInput.mergeBlocked === true || pullRequestInput.mergeability?.blocked === true,
+      mergeBlockedReason: normalizeText20(pullRequestInput.mergeBlockedReason) || normalizeText20(pullRequestInput.mergeability?.blockedReason) || null,
+      mergeWarning: normalizeText20(pullRequestInput.mergeWarning) || normalizeText20(pullRequestInput.mergeability?.warning) || null,
+      freshBranchSuggestion: normalizeText20(pullRequestInput.freshBranchSuggestion) || normalizeText20(pullRequestInput.mergeability?.freshBranchSuggestion) || null,
+      conflictFiles: Array.isArray(pullRequestInput.conflictFiles) ? pullRequestInput.conflictFiles : Array.isArray(pullRequestInput.mergeability?.conflictFiles) ? pullRequestInput.mergeability.conflictFiles : null,
+      conflictFilesSource: normalizeText20(pullRequestInput.conflictFilesSource) || normalizeText20(pullRequestInput.mergeability?.conflictFilesSource) || null,
+      mergeabilityVerified: typeof pullRequestInput.mergeable === "boolean" || Boolean(
+        normalizeText20(pullRequestInput.mergeableState) || normalizeText20(pullRequestInput.mergeable_state) || normalizeText20(pullRequestInput.mergeability?.state)
+      ),
       reviewCommentsCount: normalizeCount2(pullRequestInput.reviewCommentsCount),
       unresolvedReviewCommentsCount: normalizeCount2(
         pullRequestInput.unresolvedReviewCommentsCount
@@ -27194,6 +27274,9 @@ function normalizeNumber2(value) {
     return null;
   }
   return numeric;
+}
+function normalizeNullableBoolean2(value) {
+  return typeof value === "boolean" ? value : null;
 }
 function normalizeText20(value) {
   return String(value ?? "").trim();

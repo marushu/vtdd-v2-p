@@ -22,7 +22,8 @@ export function buildButlerReviewSynthesis(input = {}) {
       state: pullRequest.state,
       title: pullRequest.title,
       baseRef: pullRequest.baseRef,
-      headRef: pullRequest.headRef
+      headRef: pullRequest.headRef,
+      mergeability: pullRequest.mergeability
     },
     reviewerSignal: {
       reviewer: reviewLoop.reviewer,
@@ -47,14 +48,8 @@ export function buildButlerReviewSynthesis(input = {}) {
 
 function buildHeadline({ pullRequest, reviewLoop }) {
   const base = `PR #${pullRequest.number} is ${pullRequest.state || "open"}.`;
-  if (
-    reviewLoop.reviewerStatus === "gemini_review_available" &&
-    reviewLoop.reviewerEvidence?.recommendedAction === "approve"
-  ) {
-    const url = reviewLoop.reviewerEvidence.url
-      ? ` Approve evidence: ${reviewLoop.reviewerEvidence.url}`
-      : "";
-    return `${base} Gemini reviewer action is approve.${url}`;
+  if (pullRequest.mergeability.status === "conflict") {
+    return `${base} Merge conflict runtime truth is present; Butler should propose a fresh branch / fresh PR instead of merge.`;
   }
   if (reviewLoop.reviewerStatus === "codex_review_blocked") {
     return `${base} Gemini is temporarily unavailable and non-manual Codex fallback is currently blocked by platform or repository configuration.`;
@@ -68,8 +63,23 @@ function buildHeadline({ pullRequest, reviewLoop }) {
   if (reviewLoop.unresolvedReviewCommentsCount > 0) {
     return `${base} ${reviewLoop.unresolvedReviewCommentsCount} unresolved reviewer objections remain.`;
   }
+  if (
+    reviewLoop.reviewerStatus === "gemini_review_available" &&
+    reviewLoop.reviewerEvidence?.recommendedAction === "approve"
+  ) {
+    if (pullRequest.mergeability.status === "unverified") {
+      return `${base} PR conflict runtime truth is unverified; Butler must re-read runtime truth before merge judgment.`;
+    }
+    const url = reviewLoop.reviewerEvidence.url
+      ? ` Approve evidence: ${reviewLoop.reviewerEvidence.url}`
+      : "";
+    return `${base} Gemini reviewer action is approve.${url}`;
+  }
   if (reviewLoop.reviewCommentsCount > 0) {
     return `${base} Reviewer feedback exists and should be checked before human GO.`;
+  }
+  if (pullRequest.mergeability.status === "unverified") {
+    return `${base} PR conflict runtime truth is unverified; Butler must re-read runtime truth before merge judgment.`;
   }
   return `${base} Reviewer evidence is not yet available.`;
 }
@@ -77,6 +87,18 @@ function buildHeadline({ pullRequest, reviewLoop }) {
 function buildHumanDecisionFocus({ pullRequest, reviewLoop, codexGoal }) {
   const focus = [];
 
+  if (pullRequest.mergeability.status === "conflict") {
+    focus.push("Runtime truth shows PR merge conflicts; do not recommend merge even if reviewer evidence is approve.");
+    if (pullRequest.mergeability.freshBranchSuggestion) {
+      focus.push(pullRequest.mergeability.freshBranchSuggestion);
+    }
+  }
+  if (pullRequest.mergeability.status === "unverified") {
+    focus.push("PR conflict runtime truth is unverified; call vtddRetrieveGitHub(pulls) again before any merge recommendation.");
+  }
+  if (pullRequest.mergeability.warning) {
+    focus.push(pullRequest.mergeability.warning);
+  }
   if (reviewLoop.unresolvedReviewCommentsCount > 0) {
     focus.push("Meaningful reviewer objections remain unresolved; do not issue merge GO + real passkey yet.");
   }
@@ -159,6 +181,7 @@ function normalizePullRequest(value) {
     title: normalizeText(input.title) || null,
     baseRef: normalizeText(input.baseRef) || normalizeText(input.base?.ref) || null,
     headRef: normalizeText(input.headRef) || normalizeText(input.head?.ref) || null,
+    mergeability: normalizeMergeability(input),
     updatedSinceReview: input.updatedSinceReview === true,
     issueComments: Array.isArray(input.issueComments) ? input.issueComments : [],
     reviewComments: Array.isArray(input.reviewComments) ? input.reviewComments : [],
@@ -192,6 +215,57 @@ function normalizeReviewerEvidence(value) {
     updatedAt: normalizeText(input.updatedAt) || null,
     includesCreatedEdit: input.includesCreatedEdit === true
   };
+}
+
+function normalizeMergeability(input) {
+  const raw = input.mergeability && typeof input.mergeability === "object" ? input.mergeability : {};
+  const mergeable = typeof input.mergeable === "boolean" ? input.mergeable : normalizeNullableBoolean(raw.mergeable);
+  const mergeableState =
+    normalizeText(input.mergeableState) ||
+    normalizeText(input.mergeable_state) ||
+    normalizeText(raw.state) ||
+    normalizeText(raw.mergeableState) ||
+    null;
+  const mergeConflict =
+    input.mergeConflict === true ||
+    raw.hasConflict === true ||
+    mergeable === false ||
+    mergeableState === "dirty";
+  const mergeBlocked = input.mergeBlocked === true || raw.blocked === true || mergeConflict;
+  const mergeBlockedReason =
+    normalizeText(input.mergeBlockedReason) ||
+    normalizeText(raw.blockedReason) ||
+    (mergeConflict ? "pull_request_has_merge_conflicts" : null);
+  const warning = normalizeText(input.mergeWarning) || normalizeText(raw.warning) || null;
+  const freshBranchSuggestion =
+    normalizeText(input.freshBranchSuggestion) || normalizeText(raw.freshBranchSuggestion) || null;
+  const conflictFiles = Array.isArray(input.conflictFiles)
+    ? input.conflictFiles
+    : Array.isArray(raw.conflictFiles)
+      ? raw.conflictFiles
+      : null;
+  const conflictFilesSource =
+    normalizeText(input.conflictFilesSource) || normalizeText(raw.conflictFilesSource) || null;
+  const verified = typeof mergeable === "boolean" || Boolean(mergeableState);
+  const status = mergeConflict ? "conflict" : verified ? "verified" : "unverified";
+
+  return {
+    status,
+    verified,
+    mergeable,
+    mergeableState,
+    mergeConflict,
+    mergeBlocked,
+    mergeBlockedReason,
+    warning,
+    freshBranchSuggestion,
+    conflictFiles,
+    conflictFilesSource
+  };
+}
+
+function normalizeNullableBoolean(value) {
+  return typeof value === "boolean" ? value : null;
 }
 
 function normalizeStringArray(value) {

@@ -110,15 +110,92 @@ test("execution continuity treats approve-only Gemini reviewer comment as non-bl
   assert.equal(result.value.codexGoal, CodexGoal.WAIT_FOR_REVIEW);
   assert.equal(
     result.value.butlerReviewSynthesis.headline,
-    "PR #28 is open. Gemini reviewer action is approve. Approve evidence: https://github.com/example/repo/pull/28#issuecomment-4317590536"
+    "PR #28 is open. PR conflict runtime truth is unverified; Butler must re-read runtime truth before merge judgment."
   );
+  assert.equal(result.value.butlerReviewSynthesis.prState.mergeability.status, "unverified");
   assert.equal(
     result.value.butlerReviewSynthesis.humanDecisionFocus.includes(
       "Gemini updates its existing marker comment; GitHub may show the original comment time, so use the current marker body and evidence URL."
     ),
     true
   );
-  assert.deepEqual(result.value.nextSuggestedActions, ["summarize_for_human", "wait_for_human_go"]);
+  assert.deepEqual(result.value.nextSuggestedActions, [
+    "refresh_pull_request_runtime_truth",
+    "summarize_for_human"
+  ]);
+});
+
+test("execution continuity proposes a fresh PR when approved runtime truth has conflicts", () => {
+  const result = evaluateExecutionContinuity({
+    actorRole: ActorRole.BUTLER,
+    mode: TaskMode.EXECUTION,
+    runtimeTruth: {
+      runtimeState: {
+        activeBranch: "codex/issue-284",
+        pullRequest: {
+          number: 281,
+          url: "https://github.com/example/repo/pull/281",
+          state: "open",
+          title: "Approved conflict",
+          mergeable: false,
+          mergeableState: "dirty",
+          mergeConflict: true,
+          mergeBlockedReason: "pull_request_has_merge_conflicts",
+          mergeWarning:
+            "Warning: PR merge conflicts were detected before merge. Resolve conflicts or recreate a fresh branch before attempting the merge API.",
+          freshBranchSuggestion:
+            "Recreate a fresh branch from the current base branch, replay the scoped changes, and open/update the PR before retrying merge.",
+          issueComments: [
+            {
+              user: { login: "vtdd-codex[bot]" },
+              body: "<!-- vtdd:reviewer=gemini -->\n## VTDD Gemini Critical Review\n\n- Recommended action: `approve`"
+            }
+          ]
+        }
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.value.codexGoal, CodexGoal.REVISE_PR);
+  assert.equal(result.value.pullRequest.mergeConflict, true);
+  assert.equal(result.value.pullRequest.mergeBlockedReason, "pull_request_has_merge_conflicts");
+  assert.deepEqual(result.value.nextSuggestedActions, [
+    "create_fresh_branch",
+    "open_fresh_pull_request",
+    "summarize_for_human"
+  ]);
+  assert.equal(result.value.butlerReviewSynthesis.prState.mergeability.status, "conflict");
+  assert.equal(
+    result.value.butlerReviewSynthesis.humanDecisionFocus.includes(
+      "Runtime truth shows PR merge conflicts; do not recommend merge even if reviewer evidence is approve."
+    ),
+    true
+  );
+});
+
+test("execution continuity marks missing PR conflict truth as unverified before merge judgment", () => {
+  const result = evaluateExecutionContinuity({
+    actorRole: ActorRole.BUTLER,
+    mode: TaskMode.EXECUTION,
+    runtimeTruth: {
+      runtimeState: {
+        activeBranch: "codex/issue-284",
+        pullRequest: {
+          number: 279,
+          url: "https://github.com/example/repo/pull/279",
+          state: "open",
+          title: "Unknown mergeability"
+        }
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.value.pullRequest.mergeabilityVerified, false);
+  assert.deepEqual(result.value.nextSuggestedActions, ["rerun_gemini_review", "summarize_for_human"]);
+  assert.equal(result.value.butlerReviewSynthesis.prState.mergeability.status, "unverified");
+  assert.match(result.value.butlerReviewSynthesis.headline, /conflict runtime truth is unverified/);
 });
 
 test("execution continuity exposes Codex fallback requested when Gemini is temporarily unavailable", () => {
@@ -179,7 +256,10 @@ test("execution continuity exposes Codex fallback review as available when VTDD 
   assert.equal(result.value.reviewLoop.reviewer, "codex");
   assert.equal(result.value.reviewLoop.reviewerStatus, "codex_review_available");
   assert.equal(result.value.reviewLoop.criticalReviewPending, false);
-  assert.deepEqual(result.value.nextSuggestedActions, ["summarize_for_human", "wait_for_human_go"]);
+  assert.deepEqual(result.value.nextSuggestedActions, [
+    "refresh_pull_request_runtime_truth",
+    "summarize_for_human"
+  ]);
 });
 
 test("execution continuity surfaces Codex fallback blocker when non-manual review cannot start", () => {

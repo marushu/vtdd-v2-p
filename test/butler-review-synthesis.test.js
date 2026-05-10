@@ -81,8 +81,9 @@ test("butler review synthesis does not present approve-only Gemini review as unr
   assert.equal(result.available, true);
   assert.equal(
     result.headline,
-    "PR #28 is open. Gemini reviewer action is approve. Approve evidence: https://github.com/example/repo/pull/28#issuecomment-1"
+    "PR #28 is open. PR conflict runtime truth is unverified; Butler must re-read runtime truth before merge judgment."
   );
+  assert.equal(result.prState.mergeability.status, "unverified");
   assert.deepEqual(result.reviewerSignal.reviewerEvidence, {
     reviewer: "gemini",
     recommendedAction: "approve",
@@ -102,6 +103,87 @@ test("butler review synthesis does not present approve-only Gemini review as unr
       "Meaningful reviewer objections remain unresolved; do not issue merge GO + real passkey yet."
     ),
     false
+  );
+});
+
+test("butler review synthesis blocks merge recommendation when approved PR has conflicts", () => {
+  const result = buildButlerReviewSynthesis({
+    pullRequest: {
+      number: 281,
+      url: "https://github.com/example/repo/pull/281",
+      state: "open",
+      title: "Approved but conflicted",
+      mergeable: false,
+      mergeableState: "dirty",
+      mergeConflict: true,
+      mergeBlocked: true,
+      mergeBlockedReason: "pull_request_has_merge_conflicts",
+      mergeWarning:
+        "Warning: PR merge conflicts were detected before merge. Resolve conflicts or recreate a fresh branch before attempting the merge API.",
+      freshBranchSuggestion:
+        "Recreate a fresh branch from the current base branch, replay the scoped changes, and open/update the PR before retrying merge.",
+      conflictFiles: null,
+      conflictFilesSource: "not_provided_by_github_pull_request_endpoint"
+    },
+    reviewLoop: {
+      reviewer: "gemini",
+      reviewerStatus: "gemini_review_available",
+      reviewerEvidence: {
+        reviewer: "gemini",
+        recommendedAction: "approve",
+        url: "https://github.com/example/repo/pull/281#issuecomment-1"
+      },
+      reviewCommentsCount: 1,
+      unresolvedReviewCommentsCount: 0,
+      criticalReviewPending: false
+    },
+    nextSuggestedActions: ["create_fresh_branch", "open_fresh_pull_request"]
+  });
+
+  assert.equal(result.available, true);
+  assert.match(result.headline, /Merge conflict runtime truth is present/);
+  assert.equal(result.prState.mergeability.status, "conflict");
+  assert.equal(result.prState.mergeability.mergeConflict, true);
+  assert.equal(result.prState.mergeability.mergeBlockedReason, "pull_request_has_merge_conflicts");
+  assert.equal(
+    result.humanDecisionFocus.includes(
+      "Runtime truth shows PR merge conflicts; do not recommend merge even if reviewer evidence is approve."
+    ),
+    true
+  );
+  assert.equal(result.humanDecisionFocus.some((line) => line.includes("Recreate a fresh branch")), true);
+  assert.deepEqual(result.nextSuggestedActions, ["create_fresh_branch", "open_fresh_pull_request"]);
+});
+
+test("butler review synthesis marks missing conflict runtime truth as unverified", () => {
+  const result = buildButlerReviewSynthesis({
+    pullRequest: {
+      number: 279,
+      url: "https://github.com/example/repo/pull/279",
+      state: "open",
+      title: "Needs runtime truth"
+    },
+    reviewLoop: {
+      reviewer: "gemini",
+      reviewerStatus: "gemini_review_available",
+      reviewerEvidence: {
+        reviewer: "gemini",
+        recommendedAction: "approve"
+      },
+      reviewCommentsCount: 1,
+      unresolvedReviewCommentsCount: 0
+    },
+    nextSuggestedActions: ["refresh_pull_request_runtime_truth", "summarize_for_human"]
+  });
+
+  assert.equal(result.prState.mergeability.status, "unverified");
+  assert.equal(result.prState.mergeability.verified, false);
+  assert.match(result.headline, /conflict runtime truth is unverified/);
+  assert.equal(
+    result.humanDecisionFocus.includes(
+      "PR conflict runtime truth is unverified; call vtddRetrieveGitHub(pulls) again before any merge recommendation."
+    ),
+    true
   );
 });
 

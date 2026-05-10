@@ -14,12 +14,14 @@ const MATRIX_PATH = path.join(process.cwd(), "docs", "mvp", "issue-to-e2e-matrix
 
 test("E2E-31 evidence doc records PR mergeability preflight runs and live-E2E blocker", () => {
   const doc = fs.readFileSync(DOC_PATH, "utf8");
-  assert.equal(doc.includes("Issues:\n- `#265`"), true);
+  assert.equal(doc.includes("Issues:\n- `#284`"), true);
   assert.equal(
-    doc.includes("node --test test/github-read-plane.test.js test/github-high-risk-plane.test.js test/worker.test.js"),
+    doc.includes("node --test test/butler-review-synthesis.test.js test/execution-continuity.test.js test/github-read-plane.test.js test/github-high-risk-plane.test.js"),
     true
   );
   assert.equal(doc.includes("`vtddRetrieveGitHub(pulls)` exposes `mergeable`"), true);
+  assert.equal(doc.includes("Butler synthesis keeps PR mergeability status in `prState.mergeability`"), true);
+  assert.equal(doc.includes("approve-state reviewer evidence does not override conflict runtime truth"), true);
   assert.equal(doc.includes("performs `GET /pulls/{pull_number}` before `PUT /pulls/{pull_number}/merge`"), true);
   assert.equal(doc.includes("returns `github_high_risk_preflight_blocked` before calling the merge API"), true);
   assert.equal(doc.includes("Live E2E against a real conflicting GitHub PR was not run in this revision."), true);
@@ -31,7 +33,7 @@ test("E2E-31 evidence doc records PR mergeability preflight runs and live-E2E bl
 test("issue-to-e2e matrix references E2E-31 without overclaiming completion", () => {
   const doc = fs.readFileSync(MATRIX_PATH, "utf8");
   assert.equal(doc.includes("## E2E-31 PR mergeability preflight"), true);
-  assert.equal(doc.includes("- Issues: `#265`"), true);
+  assert.equal(doc.includes("- Issues: `#284` (`#265` remains related background)"), true);
   assert.equal(doc.includes("docs/mvp/e2e/e2e-31-pr-mergeability-preflight.md"), true);
   assert.equal(doc.includes("read-only live harness, skipped until a human supplies a conflicting PR fixture"), true);
   assert.equal(doc.includes("- Status: `partial`"), true);

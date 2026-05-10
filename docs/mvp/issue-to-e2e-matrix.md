@@ -634,20 +634,27 @@ Status values used below:
 
 ## E2E-31 PR mergeability preflight
 
-- Issues: `#265`
+- Issues: `#284` (`#265` remains related background)
 - Happy path:
   - Butler can read PR mergeability runtime truth through `vtddRetrieveGitHub(pulls)`
   - `pull_merge` reads PR runtime truth before dispatching the merge API
+  - Butler synthesis preserves PR mergeability truth before merge judgment
 - Boundary path:
   - conflict/dirty PR runtime truth blocks before `PUT /merge`
   - conflict diagnostics include a warning and fresh-branch recreation suggestion
+  - approve-state reviewer evidence does not override conflict runtime truth
+  - missing conflict truth is explicit as unverified before merge judgment
   - file-level conflict truth is not fabricated when the GitHub PR endpoint does not provide it
 - Implementation evidence:
   - `src/core/github-mergeability.js`
   - `src/core/github-read-plane.js`
   - `src/core/github-high-risk-plane.js`
+  - `src/core/butler-review-synthesis.js`
+  - `src/core/execution-continuity.js`
   - `src/worker.js`
 - Test evidence:
+  - `test/butler-review-synthesis.test.js`
+  - `test/execution-continuity.test.js`
   - `test/github-read-plane.test.js`
   - `test/github-high-risk-plane.test.js`
   - `test/worker.test.js`
