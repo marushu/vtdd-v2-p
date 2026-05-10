@@ -113,6 +113,10 @@ async function runVpsRunnerOnce({
 
 async function executeVpsRunnerExecution({ githubFetch, token, workRoot, execution }) {
   let payload = { ...execution.payload };
+  payload.lifecycle = normalizeVpsRunnerLifecycle({
+    ...payload.lifecycle,
+    queuedAt: execution.createdAt
+  });
   const env = buildRunnerCommandEnv({ token });
   const issue = await githubFetch(`/repos/${payload.repository}/issues/${payload.issueNumber}`);
   let notification = buildVpsRunnerNotificationContext({
@@ -126,7 +130,8 @@ async function executeVpsRunnerExecution({ githubFetch, token, workRoot, executi
     notification,
     event: {
       status: "running",
-      lastEvent: "runner_started",
+      lastEvent: "picked_up",
+      currentStep: "picked_up",
       queueCommentId: execution.commentId
     }
   });
@@ -163,8 +168,8 @@ async function executeVpsRunnerExecution({ githubFetch, token, workRoot, executi
       notification,
       event: {
         status: "branch_created",
-        lastEvent: "branch_pushed",
-        currentStep: "branch_pushed",
+        lastEvent: "branch_created",
+        currentStep: "branch_created",
         branch: payload.branch,
         originalBranch: branchCheckout.originalBranch,
         branchRecovery: branchCheckout.recovered ? branchCheckout : undefined
@@ -192,6 +197,17 @@ async function executeVpsRunnerExecution({ githubFetch, token, workRoot, executi
         env
       });
       await runCommand("git", ["push", "origin", payload.branch], { cwd: workspace, env });
+      await postVpsRunnerEvent({
+        githubFetch,
+        payload,
+        notification,
+        event: {
+          status: "running",
+          lastEvent: "branch_pushed",
+          currentStep: "branch_pushed",
+          branch: payload.branch
+        }
+      });
     }
 
     if (isPrRevisionGoal(payload.codexGoal) && !hasWorkingTreeChanges) {
@@ -534,7 +550,9 @@ function parseVpsRunnerEventComment(body) {
 function buildVpsRunnerEventComment({ executionId, event, notification } = {}) {
   const mention = resolveVpsRunnerMention({ event, notification });
   const lines = [`<!-- vtdd:vps-runner-event:${executionId} -->`];
-  lines.push(formatVpsRunnerMilestoneLead({ event, mention }), "", fencedJson(event));
+  lines.push(formatVpsRunnerMilestoneLead({ event, mention }), "");
+  lines.push(...formatLeadTimeCommentLines(event?.leadTime));
+  lines.push(fencedJson(event));
   return lines.join("\n");
 }
 
@@ -544,6 +562,7 @@ function buildVpsRunnerStateComment({ executionId, event }) {
     `<!-- vtdd:vps-runner-event:${executionId} -->`,
     "VTDD VPS runner state.",
     "",
+    ...formatLeadTimeCommentLines(event?.leadTime),
     fencedJson(event)
   ].join("\n");
 }
@@ -790,11 +809,18 @@ async function executeVpsReviewerFallback({ token, reviewerFallback }) {
 }
 
 async function postVpsRunnerEvent({ githubFetch, payload, event, notification }) {
+  const now = new Date().toISOString();
+  payload.lifecycle = updateVpsRunnerLifecycleForEvent({
+    lifecycle: payload.lifecycle,
+    event,
+    now
+  });
   const eventPayload = {
     ...event,
     executionId: payload.executionId,
     repository: payload.repository,
-    issueNumber: payload.issueNumber
+    issueNumber: payload.issueNumber,
+    leadTime: buildVpsRunnerLeadTime(payload.lifecycle)
   };
 
   if (shouldUpdateVpsRunnerState(eventPayload)) {
@@ -811,6 +837,110 @@ async function postVpsRunnerEvent({ githubFetch, payload, event, notification })
       })
     }
   });
+}
+
+function updateVpsRunnerLifecycleForEvent({ lifecycle, event, now }) {
+  const next = normalizeVpsRunnerLifecycle(lifecycle);
+  const lastEvent = normalizeText(event?.lastEvent);
+  const currentStep = normalizeText(event?.currentStep);
+  const status = normalizeText(event?.status);
+  const timestamp = normalizeText(event?.updatedAt) || normalizeText(event?.heartbeatAt) || now;
+
+  if ((lastEvent === "picked_up" || lastEvent === "runner_started") && !next.pickedUpAt) {
+    next.pickedUpAt = timestamp;
+  }
+  if ((currentStep === "codex_subprocess" || lastEvent === "codex_started" || lastEvent === "codex_subprocess_started") && !next.codexStartedAt) {
+    next.codexStartedAt = timestamp;
+  }
+  if (lastEvent === "branch_pushed" && !next.branchPushedAt) {
+    next.branchPushedAt = timestamp;
+  }
+  if ((status === "pr_created" || lastEvent === "pull_request_created" || lastEvent === "pull_request_updated") && !next.prCreatedAt) {
+    next.prCreatedAt = timestamp;
+  }
+  if ((status === "completed" || status === "pr_created") && !next.completedAt) {
+    next.completedAt = timestamp;
+  }
+  if (status === "failed" && !next.failedAt) {
+    next.failedAt = timestamp;
+  }
+  return next;
+}
+
+function normalizeVpsRunnerLifecycle(value = {}) {
+  return {
+    queuedAt: normalizeIsoTimestamp(value.queuedAt ?? value.queued_at),
+    pickedUpAt: normalizeIsoTimestamp(value.pickedUpAt ?? value.picked_up_at),
+    codexStartedAt: normalizeIsoTimestamp(value.codexStartedAt ?? value.codex_started_at),
+    branchPushedAt: normalizeIsoTimestamp(value.branchPushedAt ?? value.branch_pushed_at),
+    prCreatedAt: normalizeIsoTimestamp(value.prCreatedAt ?? value.pr_created_at),
+    completedAt: normalizeIsoTimestamp(value.completedAt ?? value.completed_at),
+    failedAt: normalizeIsoTimestamp(value.failedAt ?? value.failed_at)
+  };
+}
+
+function buildVpsRunnerLeadTime(lifecycle = {}) {
+  const normalized = normalizeVpsRunnerLifecycle(lifecycle);
+  const terminalAt = normalized.completedAt || normalized.failedAt || normalized.prCreatedAt || null;
+  return {
+    queued_at: normalized.queuedAt || null,
+    picked_up_at: normalized.pickedUpAt || null,
+    codex_started_at: normalized.codexStartedAt || null,
+    branch_pushed_at: normalized.branchPushedAt || null,
+    pr_created_at: normalized.prCreatedAt || null,
+    completed_at: normalized.completedAt || null,
+    failed_at: normalized.failedAt || null,
+    durations: {
+      queue_wait_duration: buildDuration(normalized.queuedAt, normalized.pickedUpAt),
+      codex_execution_duration: buildDuration(normalized.codexStartedAt, normalized.branchPushedAt || normalized.prCreatedAt || normalized.completedAt || normalized.failedAt),
+      pr_creation_duration: buildDuration(normalized.branchPushedAt, normalized.prCreatedAt),
+      total_lead_time: buildDuration(normalized.queuedAt, terminalAt)
+    }
+  };
+}
+
+function buildDuration(start, end) {
+  const startMs = Date.parse(normalizeText(start));
+  const endMs = Date.parse(normalizeText(end));
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs < startMs) {
+    return null;
+  }
+  const seconds = Math.round((endMs - startMs) / 1000);
+  return {
+    seconds,
+    label: formatDurationSeconds(seconds)
+  };
+}
+
+function formatDurationSeconds(seconds) {
+  if (!Number.isFinite(seconds)) {
+    return null;
+  }
+  if (seconds < 60) {
+    return `${seconds}s`;
+  }
+  const minutes = Math.floor(seconds / 60);
+  const remainder = seconds % 60;
+  if (minutes < 60) {
+    return remainder ? `${minutes}m ${remainder}s` : `${minutes}m`;
+  }
+  const hours = Math.floor(minutes / 60);
+  const minuteRemainder = minutes % 60;
+  return minuteRemainder ? `${hours}h ${minuteRemainder}m` : `${hours}h`;
+}
+
+function formatLeadTimeCommentLines(leadTime) {
+  const durations = leadTime?.durations || {};
+  const entries = [
+    ["Queue wait", durations.queue_wait_duration],
+    ["Codex execution", durations.codex_execution_duration],
+    ["PR creation", durations.pr_creation_duration],
+    ["Total lead time", durations.total_lead_time]
+  ].filter(([, duration]) => duration?.label);
+  if (entries.length === 0) {
+    return [];
+  }
+  return ["Lead time:", ...entries.map(([label, duration]) => `- ${label}: ${duration.label}`), ""];
 }
 
 function shouldUpdateVpsRunnerState(event) {
@@ -1411,6 +1541,11 @@ function fencedJson(value) {
 
 function normalizeText(value) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function normalizeIsoTimestamp(value) {
+  const text = normalizeText(value);
+  return Number.isFinite(Date.parse(text)) ? text : "";
 }
 
 function normalizeGitHubLogin(value) {

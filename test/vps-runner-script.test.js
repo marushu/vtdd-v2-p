@@ -331,6 +331,33 @@ test("VPS runner state comment remains compatible with runner event parsing", ()
   assert.equal(parsed.event.currentStep, "codex_subprocess");
 });
 
+test("VPS runner state comment exposes concise lead time before JSON runtime truth", () => {
+  const body = buildVpsRunnerStateComment({
+    executionId: "exec-lead-time-1",
+    event: {
+      status: "running",
+      lastEvent: "branch_pushed",
+      leadTime: {
+        queued_at: "2026-05-09T10:00:00.000Z",
+        picked_up_at: "2026-05-09T10:00:12.000Z",
+        codex_started_at: "2026-05-09T10:00:20.000Z",
+        branch_pushed_at: "2026-05-09T10:04:02.000Z",
+        durations: {
+          queue_wait_duration: { seconds: 12, label: "12s" },
+          codex_execution_duration: { seconds: 222, label: "3m 42s" }
+        }
+      }
+    }
+  });
+  const parsed = parseVpsRunnerEventComment(body);
+
+  assert.equal(body.includes("Lead time:"), true);
+  assert.equal(body.includes("- Queue wait: 12s"), true);
+  assert.equal(body.includes("- Codex execution: 3m 42s"), true);
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.event.leadTime.durations.queue_wait_duration.label, "12s");
+});
+
 test("VPS runner heartbeat updates existing state comment instead of posting a new comment", async () => {
   const calls = [];
   const payload = {
