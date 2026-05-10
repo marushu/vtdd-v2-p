@@ -25019,6 +25019,1490 @@ function deny6(rule, reason) {
   return { allowed: false, blockedByRule: rule, reason };
 }
 
+// src/core/execution-lead-time.js
+function normalizeText16(value) {
+  return String(value ?? "").trim();
+}
+function defaultNormalizeTimestamp(value) {
+  const text = normalizeText16(value);
+  return Number.isFinite(Date.parse(text)) ? text : null;
+}
+function buildExecutionLeadTime(timestamps = {}, options = {}) {
+  const normalizeTimestamp5 = options.normalizeTimestamp || defaultNormalizeTimestamp;
+  const queuedAt = normalizeTimestamp5(timestamps.queuedAt ?? timestamps.queued_at);
+  const pickedUpAt = normalizeTimestamp5(timestamps.pickedUpAt ?? timestamps.picked_up_at);
+  const codexStartedAt = normalizeTimestamp5(timestamps.codexStartedAt ?? timestamps.codex_started_at);
+  const branchPushedAt = normalizeTimestamp5(timestamps.branchPushedAt ?? timestamps.branch_pushed_at);
+  const prCreatedAt = normalizeTimestamp5(timestamps.prCreatedAt ?? timestamps.pr_created_at);
+  const completedAt = normalizeTimestamp5(timestamps.completedAt ?? timestamps.completed_at);
+  const failedAt = normalizeTimestamp5(timestamps.failedAt ?? timestamps.failed_at);
+  const terminalAt = completedAt || failedAt || prCreatedAt || null;
+  return {
+    queued_at: queuedAt,
+    picked_up_at: pickedUpAt,
+    codex_started_at: codexStartedAt,
+    branch_pushed_at: branchPushedAt,
+    pr_created_at: prCreatedAt,
+    completed_at: completedAt,
+    failed_at: failedAt,
+    durations: {
+      queue_wait_duration: buildExecutionDuration(queuedAt, pickedUpAt),
+      codex_execution_duration: buildExecutionDuration(
+        codexStartedAt,
+        branchPushedAt || prCreatedAt || completedAt || failedAt
+      ),
+      pr_creation_duration: buildExecutionDuration(branchPushedAt, prCreatedAt),
+      total_lead_time: buildExecutionDuration(queuedAt, terminalAt)
+    }
+  };
+}
+function buildExecutionDuration(start, end) {
+  const startMs = Date.parse(normalizeText16(start));
+  const endMs = Date.parse(normalizeText16(end));
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs < startMs) {
+    return null;
+  }
+  const seconds = Math.round((endMs - startMs) / 1e3);
+  return {
+    seconds,
+    label: formatExecutionDurationSeconds(seconds)
+  };
+}
+function formatExecutionDurationSeconds(seconds) {
+  if (!Number.isFinite(seconds)) {
+    return null;
+  }
+  if (seconds < 60) {
+    return `${seconds}s`;
+  }
+  const minutes = Math.floor(seconds / 60);
+  const remainder = seconds % 60;
+  if (minutes < 60) {
+    return remainder ? `${minutes}m ${remainder}s` : `${minutes}m`;
+  }
+  const hours = Math.floor(minutes / 60);
+  const minuteRemainder = minutes % 60;
+  return minuteRemainder ? `${hours}h ${minuteRemainder}m` : `${hours}h`;
+}
+
+// src/core/remote-codex-executor.js
+var REMOTE_CODEX_WORKFLOW_FILE = "remote-codex-executor.yml";
+var RemoteCodexExecutorTransport = Object.freeze({
+  CODEX_CLOUD_GITHUB_COMMENT: "codex_cloud_github_comment",
+  CODEX_CLOUD_CLI_CONTROL_RUNNER: "codex_cloud_cli_control_runner",
+  VPS_RUNNER: "vps_runner",
+  API_KEY_RUNNER: "api_key_runner"
+});
+var REMOTE_CODEX_EXECUTOR_TRANSPORT_REGISTRY = Object.freeze({
+  [RemoteCodexExecutorTransport.CODEX_CLOUD_GITHUB_COMMENT]: Object.freeze({
+    id: RemoteCodexExecutorTransport.CODEX_CLOUD_GITHUB_COMMENT,
+    label: "Codex Cloud GitHub comment transport",
+    ownerBoundary: "operator_owned_chatgpt_codex_github_integration",
+    credentialModel: "chatgpt_managed_codex_github_integration",
+    billingModel: "chatgpt_codex_subscription_no_openai_api_key",
+    default: true,
+    optIn: false,
+    requestOnlyUntilRuntimeEvidence: true,
+    successEvidence: ["github_branch", "github_pull_request"]
+  }),
+  [RemoteCodexExecutorTransport.CODEX_CLOUD_CLI_CONTROL_RUNNER]: Object.freeze({
+    id: RemoteCodexExecutorTransport.CODEX_CLOUD_CLI_CONTROL_RUNNER,
+    label: "Codex Cloud CLI control runner",
+    ownerBoundary: "user_owned_private_control_repository_or_trusted_runner",
+    credentialModel: "chatgpt_managed_codex_auth_json",
+    billingModel: "chatgpt_codex_subscription_plus_user_owned_runner_cost",
+    default: false,
+    optIn: true,
+    usesOpenAiApiKey: false,
+    successEvidence: ["github_workflow_run", "github_branch", "github_pull_request"]
+  }),
+  [RemoteCodexExecutorTransport.VPS_RUNNER]: Object.freeze({
+    id: RemoteCodexExecutorTransport.VPS_RUNNER,
+    label: "User-owned VPS runner",
+    ownerBoundary: "user_owned_trusted_persistent_host",
+    credentialModel: "user_owned_runner_credentials",
+    billingModel: "user_owned_vps_cost",
+    default: false,
+    optIn: true,
+    implemented: true,
+    requestQueue: "github_issue_comment",
+    successEvidence: ["runner_execution_log", "github_branch", "github_pull_request"]
+  }),
+  [RemoteCodexExecutorTransport.API_KEY_RUNNER]: Object.freeze({
+    id: RemoteCodexExecutorTransport.API_KEY_RUNNER,
+    label: "OpenAI API key runner",
+    ownerBoundary: "user_owned_control_repository_or_trusted_runner",
+    credentialModel: "openai_api_key",
+    billingModel: "openai_api_billing_separate_from_chatgpt_codex_subscription",
+    default: false,
+    optIn: true,
+    usesOpenAiApiKey: true,
+    successEvidence: ["github_workflow_run", "github_branch", "github_pull_request"]
+  })
+});
+var RemoteCodexExecutionStatus = Object.freeze({
+  QUEUED: "queued",
+  IN_PROGRESS: "in_progress",
+  COMPLETED: "completed",
+  BLOCKED: "blocked",
+  UNKNOWN: "unknown"
+});
+var RemoteCodexDispatchGoal = Object.freeze({
+  OPEN_PR: "open_pr",
+  REVISE_PR: "revise_pr",
+  RESPOND_TO_REVIEW: "respond_to_review"
+});
+var REMOTE_CODEX_DISPATCH_GOALS = new Set(Object.values(RemoteCodexDispatchGoal));
+function createRemoteCodexExecutionRequest(input = {}) {
+  const gatewayResult = input?.gatewayResult ?? {};
+  const payload = input?.payload ?? {};
+  const issueContext = normalizeObject8(payload.issueContext);
+  const runtimeState = normalizeObject8(payload?.policyInput?.runtimeTruth?.runtimeState);
+  const continuationContext = normalizeObject8(payload.continuationContext);
+  const handoff = normalizeObject8(continuationContext.handoff);
+  const approvalScopeMatched = payload?.policyInput?.approvalScopeMatched === true || isBoundRemoteCodexHandoff({
+    continuationContext,
+    issueContext,
+    policyInput: payload?.policyInput
+  });
+  const issueNumber = normalizePositiveInteger3(
+    issueContext.issueNumber ?? handoff.relatedIssue ?? payload.relatedIssue
+  );
+  const request = {
+    executionId: normalizeText17(input?.executionId) || buildExecutionId({ issueNumber }),
+    actorRole: normalizeText17(payload.actorRole),
+    repository: normalizeText17(gatewayResult.repository),
+    issueNumber,
+    branch: normalizeText17(runtimeState.activeBranch) || normalizeText17(payload?.executionTarget?.branch) || (issueNumber ? `codex/issue-${issueNumber}` : ""),
+    baseRef: normalizeText17(payload?.executionTarget?.baseRef) || normalizeText17(runtimeState.baseRef) || "main",
+    codexGoal: normalizeText17(continuationContext.codexGoal) || normalizeText17(payload?.executionTarget?.codexGoal) || normalizeText17(gatewayResult?.executionContinuity?.codexGoal),
+    approvalPhrase: normalizeText17(payload?.policyInput?.approvalPhrase),
+    approvalActor: normalizeText17(payload?.policyInput?.approvalActor) || normalizeText17(payload?.policyInput?.goActor) || normalizeText17(payload?.sender?.login),
+    targetConfirmed: payload?.policyInput?.targetConfirmed === true,
+    approvalScopeMatched,
+    handoffRequired: continuationContext.requiresHandoff === true,
+    handoff: Object.keys(handoff).length > 0 ? {
+      issueTraceable: handoff.issueTraceable === true,
+      approvalScopeMatched: handoff.approvalScopeMatched === true,
+      summary: normalizeText17(handoff.summary),
+      relatedIssue: normalizePositiveInteger3(handoff.relatedIssue)
+    } : null
+  };
+  const issues = [];
+  if (request.actorRole !== ActorRole.BUTLER) {
+    issues.push("remote Codex execution must be initiated from Butler role");
+  }
+  if (!request.repository) {
+    issues.push("repository is required");
+  }
+  if (!request.issueNumber) {
+    issues.push("issueNumber is required");
+  }
+  if (!request.branch) {
+    issues.push("branch is required");
+  }
+  if (!request.codexGoal) {
+    issues.push("codexGoal is required");
+  } else if (!REMOTE_CODEX_DISPATCH_GOALS.has(request.codexGoal)) {
+    issues.push("codexGoal must be open_pr, revise_pr, or respond_to_review");
+  }
+  if (!request.baseRef) {
+    issues.push("baseRef is required");
+  }
+  if (!request.targetConfirmed) {
+    issues.push("targetConfirmed must be true");
+  }
+  if (!request.approvalScopeMatched) {
+    issues.push("approvalScopeMatched must be true");
+  }
+  if (!request.approvalPhrase) {
+    issues.push("approvalPhrase is required");
+  }
+  if (request.handoffRequired && !request.handoff) {
+    issues.push("handoff is required when handoffRequired is true");
+  }
+  return issues.length > 0 ? { ok: false, issues } : { ok: true, request };
+}
+async function dispatchRemoteCodexExecution(input = {}) {
+  const requestValidation = createRemoteCodexExecutionRequest(input);
+  if (!requestValidation.ok) {
+    return {
+      ok: false,
+      status: 422,
+      blockedByRule: "remote_codex_execution_request_invalid",
+      reason: "remote Codex execution request is invalid",
+      issues: requestValidation.issues
+    };
+  }
+  const request = requestValidation.request;
+  const token = await resolveGitHubExecutionToken(input?.env);
+  if (!token.ok) {
+    return {
+      ok: false,
+      status: 503,
+      error: "github_execution_token_unavailable",
+      reason: token.reason
+    };
+  }
+  const transport = resolveExecutorTransport(input, { requireRequestAcknowledgment: true });
+  if (!transport.ok) {
+    return {
+      ok: false,
+      status: 422,
+      error: transport.error,
+      reason: transport.reason,
+      issues: transport.issues
+    };
+  }
+  if (transport.value === RemoteCodexExecutorTransport.CODEX_CLOUD_GITHUB_COMMENT) {
+    return dispatchCodexCloudGitHubComment({ request, token: token.value, env: input?.env });
+  }
+  if (transport.value === RemoteCodexExecutorTransport.VPS_RUNNER) {
+    return dispatchVpsRunnerGitHubQueue({ request, token: token.value, env: input?.env });
+  }
+  return dispatchControlRepositoryWorkflow({
+    request,
+    token: token.value,
+    env: input?.env,
+    transport: transport.value
+  });
+}
+async function dispatchControlRepositoryWorkflow({ request, token, env, transport }) {
+  const controlRepository = resolveControlRepository(env);
+  if (!controlRepository) {
+    return {
+      ok: false,
+      status: 503,
+      error: "control_repository_unavailable",
+      reason: "VTDD_GITHUB_ACTIONS_REPOSITORY must be configured"
+    };
+  }
+  const workflowFile = normalizeText17(env?.REMOTE_CODEX_WORKFLOW_FILE) || REMOTE_CODEX_WORKFLOW_FILE;
+  const workflowRef = normalizeText17(env?.REMOTE_CODEX_WORKFLOW_REF) || "main";
+  const apiBaseUrl = normalizeText17(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
+  const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
+  const dispatchUrl = `${apiBaseUrl}/repos/${encodeURIComponentRepository2(
+    controlRepository
+  )}/actions/workflows/${encodeURIComponent(workflowFile)}/dispatches`;
+  const dispatchBody = {
+    ref: workflowRef,
+    inputs: {
+      execution_id: request.executionId,
+      target_repository: request.repository,
+      target_issue_number: String(request.issueNumber),
+      target_branch: request.branch,
+      base_ref: request.baseRef,
+      codex_goal: request.codexGoal,
+      approval_phrase: request.approvalPhrase,
+      handoff_json: request.handoff ? JSON.stringify(request.handoff) : ""
+    }
+  };
+  let response;
+  try {
+    response = await fetchImpl(dispatchUrl, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${token}`,
+        accept: "application/vnd.github+json",
+        "content-type": "application/json; charset=utf-8",
+        "x-github-api-version": "2022-11-28",
+        "user-agent": "vtdd-v2-remote-codex-executor"
+      },
+      body: JSON.stringify(dispatchBody)
+    });
+  } catch {
+    return {
+      ok: false,
+      status: 503,
+      error: "remote_codex_dispatch_failed",
+      reason: "failed to dispatch remote Codex workflow"
+    };
+  }
+  if (!response.ok) {
+    const body = await readJsonSafe3(response);
+    return {
+      ok: false,
+      status: response.status,
+      error: "remote_codex_dispatch_failed",
+      reason: normalizeText17(body?.message) || "GitHub workflow dispatch failed"
+    };
+  }
+  const progress = await retrieveControlRepositoryWorkflowProgress({
+    executionId: request.executionId,
+    token,
+    env,
+    transport
+  });
+  return {
+    ok: true,
+    execution: {
+      executionId: request.executionId,
+      transport,
+      controlRepository,
+      workflowFile,
+      workflowRef,
+      targetRepository: request.repository,
+      issueNumber: request.issueNumber,
+      branch: request.branch,
+      baseRef: request.baseRef,
+      codexGoal: request.codexGoal,
+      approvalScopeMatched: request.approvalScopeMatched,
+      workflowRunId: progress.ok ? progress.progress.workflowRunId : null,
+      workflowUrl: progress.ok ? progress.progress.workflowUrl : null,
+      workflowConclusion: progress.ok ? progress.progress.conclusion : null,
+      progressLookup: progress.ok ? null : {
+        error: progress.error,
+        reason: progress.reason
+      },
+      status: RemoteCodexExecutionStatus.QUEUED
+    }
+  };
+}
+async function retrieveRemoteCodexExecutionProgress(input = {}) {
+  const executionId = normalizeText17(input?.executionId);
+  if (!executionId) {
+    return {
+      ok: false,
+      status: 422,
+      error: "execution_id_required",
+      reason: "executionId is required"
+    };
+  }
+  const token = await resolveGitHubExecutionToken(input?.env);
+  if (!token.ok) {
+    return {
+      ok: false,
+      status: 503,
+      error: "github_execution_token_unavailable",
+      reason: token.reason
+    };
+  }
+  const transport = resolveExecutorTransport(input, { requireRequestAcknowledgment: false });
+  if (!transport.ok) {
+    return {
+      ok: false,
+      status: 422,
+      error: transport.error,
+      reason: transport.reason,
+      issues: transport.issues
+    };
+  }
+  if (transport.value === RemoteCodexExecutorTransport.CODEX_CLOUD_GITHUB_COMMENT) {
+    return retrieveCodexCloudGitHubCommentProgress({
+      executionId,
+      repository: normalizeText17(input?.repository),
+      issueNumber: normalizePositiveInteger3(input?.issueNumber),
+      branch: normalizeText17(input?.branch),
+      token: token.value,
+      env: input?.env
+    });
+  }
+  if (transport.value === RemoteCodexExecutorTransport.VPS_RUNNER) {
+    return retrieveVpsRunnerGitHubQueueProgress({
+      executionId,
+      repository: normalizeText17(input?.repository),
+      issueNumber: normalizePositiveInteger3(input?.issueNumber),
+      branch: normalizeText17(input?.branch),
+      token: token.value,
+      env: input?.env
+    });
+  }
+  return retrieveControlRepositoryWorkflowProgress({
+    executionId,
+    token: token.value,
+    env: input?.env,
+    transport: transport.value,
+    repository: normalizeText17(input?.repository),
+    branch: normalizeText17(input?.branch)
+  });
+}
+async function retrieveVpsRunnerHealthStatus(input = {}) {
+  const progress = await retrieveRemoteCodexExecutionProgress({
+    ...input,
+    executorTransport: RemoteCodexExecutorTransport.VPS_RUNNER
+  });
+  if (!progress.ok) {
+    return progress;
+  }
+  return {
+    ok: true,
+    health: buildVpsRunnerHealthStatus({
+      progress: progress.progress,
+      env: input?.env
+    }),
+    progress: progress.progress
+  };
+}
+async function retrieveControlRepositoryWorkflowProgress({
+  executionId,
+  token,
+  env,
+  transport,
+  repository,
+  branch
+}) {
+  const controlRepository = resolveControlRepository(env);
+  if (!controlRepository) {
+    return {
+      ok: false,
+      status: 503,
+      error: "control_repository_unavailable",
+      reason: "VTDD_GITHUB_ACTIONS_REPOSITORY must be configured"
+    };
+  }
+  const workflowFile = normalizeText17(env?.REMOTE_CODEX_WORKFLOW_FILE) || REMOTE_CODEX_WORKFLOW_FILE;
+  const apiBaseUrl = normalizeText17(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
+  const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
+  const progressUrl = `${apiBaseUrl}/repos/${encodeURIComponentRepository2(
+    controlRepository
+  )}/actions/workflows/${encodeURIComponent(workflowFile)}/runs?event=workflow_dispatch&per_page=30`;
+  let response;
+  try {
+    response = await fetchImpl(progressUrl, {
+      method: "GET",
+      headers: {
+        authorization: `Bearer ${token}`,
+        accept: "application/vnd.github+json",
+        "x-github-api-version": "2022-11-28",
+        "user-agent": "vtdd-v2-remote-codex-executor"
+      }
+    });
+  } catch {
+    return {
+      ok: false,
+      status: 503,
+      error: "remote_codex_progress_failed",
+      reason: "failed to read remote Codex workflow progress"
+    };
+  }
+  const body = await readJsonSafe3(response);
+  if (!response.ok) {
+    return {
+      ok: false,
+      status: response.status,
+      error: "remote_codex_progress_failed",
+      reason: normalizeText17(body?.message) || "GitHub workflow runs lookup failed"
+    };
+  }
+  const runs = Array.isArray(body?.workflow_runs) ? body.workflow_runs : [];
+  const run = runs.find((item) => matchesExecutionId(item, executionId));
+  if (!run) {
+    return {
+      ok: false,
+      status: 404,
+      error: "remote_codex_execution_not_found",
+      reason: "no remote Codex workflow run matched executionId"
+    };
+  }
+  const targetRepository = normalizeText17(repository);
+  const targetBranch = normalizeText17(branch);
+  const pullRequest = targetRepository && targetBranch ? await findPullRequestForBranch({
+    repository: targetRepository,
+    branch: targetBranch,
+    token,
+    env
+  }) : { ok: true, pullRequest: null };
+  if (!pullRequest.ok) {
+    return pullRequest;
+  }
+  const branchState = targetRepository && targetBranch && !pullRequest.pullRequest ? await findBranch({
+    repository: targetRepository,
+    branch: targetBranch,
+    token,
+    env
+  }) : { ok: true, branch: null };
+  if (!branchState.ok) {
+    return branchState;
+  }
+  const runStatus = normalizeRunStatus(run.status);
+  const conclusion = normalizeText17(run.conclusion) || null;
+  const targetRuntimeTruth = buildControlRunnerTargetRuntimeTruth({
+    runStatus,
+    conclusion,
+    targetRepository,
+    targetBranch,
+    pullRequest: pullRequest.pullRequest,
+    branch: branchState.branch
+  });
+  return {
+    ok: true,
+    progress: {
+      executionId,
+      transport,
+      controlRepository,
+      workflowFile,
+      workflowRunId: normalizePositiveInteger3(run.id),
+      workflowUrl: normalizeText17(run.html_url) || null,
+      status: runStatus,
+      conclusion,
+      branch: normalizeText17(run.head_branch) || null,
+      targetRuntimeTruth,
+      displayTitle: normalizeText17(run.display_title) || null,
+      startedAt: normalizeText17(run.run_started_at) || null,
+      updatedAt: normalizeText17(run.updated_at) || null
+    }
+  };
+}
+async function dispatchCodexCloudGitHubComment({ request, token, env }) {
+  const apiBaseUrl = normalizeText17(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
+  const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
+  const commentUrl = `${apiBaseUrl}/repos/${encodeURIComponentRepository2(
+    request.repository
+  )}/issues/${encodeURIComponent(String(request.issueNumber))}/comments`;
+  const body = buildCodexCloudGitHubComment({ request });
+  let response;
+  try {
+    response = await fetchImpl(commentUrl, {
+      method: "POST",
+      headers: githubJsonHeaders({ token }),
+      body: JSON.stringify({ body })
+    });
+  } catch {
+    return {
+      ok: false,
+      status: 503,
+      error: "remote_codex_dispatch_failed",
+      reason: "failed to post Codex Cloud GitHub delegation comment"
+    };
+  }
+  const responseBody = await readJsonSafe3(response);
+  if (!response.ok) {
+    return {
+      ok: false,
+      status: response.status,
+      error: "remote_codex_dispatch_failed",
+      reason: normalizeText17(responseBody?.message) || "GitHub issue comment creation failed"
+    };
+  }
+  return {
+    ok: true,
+    execution: {
+      executionId: request.executionId,
+      transport: RemoteCodexExecutorTransport.CODEX_CLOUD_GITHUB_COMMENT,
+      targetRepository: request.repository,
+      issueNumber: request.issueNumber,
+      branch: request.branch,
+      baseRef: request.baseRef,
+      codexGoal: request.codexGoal,
+      approvalScopeMatched: request.approvalScopeMatched,
+      commentId: normalizePositiveInteger3(responseBody?.id),
+      commentUrl: normalizeText17(responseBody?.html_url) || null,
+      status: RemoteCodexExecutionStatus.QUEUED
+    }
+  };
+}
+async function dispatchVpsRunnerGitHubQueue({ request, token, env }) {
+  const apiBaseUrl = normalizeText17(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
+  const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
+  const commentUrl = `${apiBaseUrl}/repos/${encodeURIComponentRepository2(
+    request.repository
+  )}/issues/${encodeURIComponent(String(request.issueNumber))}/comments`;
+  const body = buildVpsRunnerGitHubQueueComment({ request });
+  let response;
+  try {
+    response = await fetchImpl(commentUrl, {
+      method: "POST",
+      headers: githubJsonHeaders({ token }),
+      body: JSON.stringify({ body })
+    });
+  } catch {
+    return {
+      ok: false,
+      status: 503,
+      error: "vps_runner_dispatch_failed",
+      reason: "failed to post VPS runner GitHub queue comment"
+    };
+  }
+  const responseBody = await readJsonSafe3(response);
+  if (!response.ok) {
+    return {
+      ok: false,
+      status: response.status,
+      error: "vps_runner_dispatch_failed",
+      reason: normalizeText17(responseBody?.message) || "GitHub issue comment creation failed"
+    };
+  }
+  return {
+    ok: true,
+    execution: {
+      executionId: request.executionId,
+      transport: RemoteCodexExecutorTransport.VPS_RUNNER,
+      targetRepository: request.repository,
+      issueNumber: request.issueNumber,
+      branch: request.branch,
+      baseRef: request.baseRef,
+      codexGoal: request.codexGoal,
+      approvalScopeMatched: request.approvalScopeMatched,
+      queueCommentId: normalizePositiveInteger3(responseBody?.id),
+      queueCommentUrl: normalizeText17(responseBody?.html_url) || null,
+      status: RemoteCodexExecutionStatus.QUEUED
+    }
+  };
+}
+async function retrieveCodexCloudGitHubCommentProgress({
+  executionId,
+  repository,
+  issueNumber,
+  branch,
+  token,
+  env
+}) {
+  if (!repository || !issueNumber) {
+    return {
+      ok: false,
+      status: 422,
+      error: "remote_codex_progress_scope_required",
+      reason: "repository and issueNumber are required for Codex Cloud GitHub comment progress"
+    };
+  }
+  const apiBaseUrl = normalizeText17(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
+  const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
+  const commentsUrl = `${apiBaseUrl}/repos/${encodeURIComponentRepository2(
+    repository
+  )}/issues/${encodeURIComponent(String(issueNumber))}/comments?per_page=100`;
+  let commentsResponse;
+  try {
+    commentsResponse = await fetchImpl(commentsUrl, {
+      method: "GET",
+      headers: githubJsonHeaders({ token })
+    });
+  } catch {
+    return {
+      ok: false,
+      status: 503,
+      error: "remote_codex_progress_failed",
+      reason: "failed to read Codex Cloud delegation comments"
+    };
+  }
+  const commentsBody = await readJsonSafe3(commentsResponse);
+  if (!commentsResponse.ok) {
+    return {
+      ok: false,
+      status: commentsResponse.status,
+      error: "remote_codex_progress_failed",
+      reason: normalizeText17(commentsBody?.message) || "GitHub issue comments lookup failed"
+    };
+  }
+  const comments = Array.isArray(commentsBody) ? commentsBody : [];
+  const delegationComment = comments.find(
+    (comment) => normalizeText17(comment?.body).includes(`vtdd:remote-codex-execution:${executionId}`)
+  );
+  if (!delegationComment) {
+    return {
+      ok: false,
+      status: 404,
+      error: "remote_codex_execution_not_found",
+      reason: "no Codex Cloud GitHub delegation comment matched executionId"
+    };
+  }
+  const pullRequest = branch ? await findPullRequestForBranch({ repository, branch, token, env }) : { ok: true, pullRequest: null };
+  if (!pullRequest.ok) {
+    return pullRequest;
+  }
+  const branchState = branch && !pullRequest.pullRequest ? await findBranch({ repository, branch, token, env }) : { ok: true, branch: null };
+  if (!branchState.ok) {
+    return branchState;
+  }
+  const connectorBlocker = !pullRequest.pullRequest && !branchState.branch ? findCodexCloudConnectorBlocker({ comments, delegationComment }) : null;
+  const pickupBlocker = !pullRequest.pullRequest && !branchState.branch && !connectorBlocker ? buildCodexCloudPickupBlocker({ delegationComment, env }) : null;
+  return {
+    ok: true,
+    progress: {
+      executionId,
+      transport: RemoteCodexExecutorTransport.CODEX_CLOUD_GITHUB_COMMENT,
+      targetRepository: repository,
+      issueNumber,
+      branch: branchState.branch,
+      leadTime: buildRemoteCodexLeadTime({
+        queuedAt: normalizeText17(delegationComment.created_at),
+        branchPushedAt: normalizeText17(branchState.branch?.createdAt),
+        prCreatedAt: normalizeText17(pullRequest.pullRequest?.createdAt),
+        completedAt: normalizeText17(pullRequest.pullRequest?.createdAt)
+      }),
+      delegationCommentId: normalizePositiveInteger3(delegationComment.id),
+      delegationCommentUrl: normalizeText17(delegationComment.html_url) || null,
+      status: pullRequest.pullRequest ? RemoteCodexExecutionStatus.COMPLETED : branchState.branch ? RemoteCodexExecutionStatus.IN_PROGRESS : connectorBlocker ? RemoteCodexExecutionStatus.BLOCKED : pickupBlocker ? RemoteCodexExecutionStatus.BLOCKED : RemoteCodexExecutionStatus.QUEUED,
+      pullRequest: pullRequest.pullRequest,
+      blocker: connectorBlocker ?? pickupBlocker
+    }
+  };
+}
+async function retrieveVpsRunnerGitHubQueueProgress({
+  executionId,
+  repository,
+  issueNumber,
+  branch,
+  token,
+  env
+}) {
+  if (!repository || !issueNumber) {
+    return {
+      ok: false,
+      status: 422,
+      error: "vps_runner_progress_scope_required",
+      reason: "repository and issueNumber are required for VPS runner progress"
+    };
+  }
+  const apiBaseUrl = normalizeText17(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
+  const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
+  let comments;
+  try {
+    comments = await readAllIssueComments({
+      apiBaseUrl,
+      repository,
+      issueNumber,
+      token,
+      fetchImpl
+    });
+  } catch (error) {
+    return {
+      ok: false,
+      status: error?.status || 503,
+      error: "vps_runner_progress_failed",
+      reason: normalizeText17(error?.message) || "failed to read VPS runner queue comments"
+    };
+  }
+  const queueComment = comments.find(
+    (comment) => normalizeText17(comment?.body).includes(`vtdd:vps-runner-execution:${executionId}`)
+  );
+  if (!queueComment) {
+    return {
+      ok: false,
+      status: 404,
+      error: "vps_runner_execution_not_found",
+      reason: "no VPS runner queue comment matched executionId"
+    };
+  }
+  const pullRequest = branch ? await findPullRequestForBranch({ repository, branch, token, env }) : { ok: true, pullRequest: null };
+  if (!pullRequest.ok) {
+    return pullRequest;
+  }
+  const branchState = branch && !pullRequest.pullRequest ? await findBranch({ repository, branch, token, env }) : { ok: true, branch: null };
+  if (!branchState.ok) {
+    return branchState;
+  }
+  const runnerEvents = findVpsRunnerEvents({ comments, queueComment });
+  const runnerEvent = selectLatestVpsRunnerEvent(runnerEvents);
+  const leadTime = buildVpsRunnerProgressLeadTime({
+    queueComment,
+    runnerEvents,
+    pullRequest: pullRequest.pullRequest
+  });
+  const runnerEventStaleBlocker = runnerEvent && !pullRequest.pullRequest ? buildVpsRunnerEventStaleBlocker({ runnerEvent, env }) : null;
+  const staleBlocker = !pullRequest.pullRequest && !branchState.branch && !runnerEvent ? buildVpsRunnerPickupBlocker({ queueComment, env }) : null;
+  const failureBlocker = !pullRequest.pullRequest && runnerEvent?.status === RemoteCodexExecutionStatus.BLOCKED ? runnerEvent.rawFailure : null;
+  const status = pullRequest.pullRequest ? RemoteCodexExecutionStatus.COMPLETED : failureBlocker || runnerEventStaleBlocker || staleBlocker ? RemoteCodexExecutionStatus.BLOCKED : branchState.branch ? RemoteCodexExecutionStatus.IN_PROGRESS : runnerEvent?.status || RemoteCodexExecutionStatus.QUEUED;
+  return {
+    ok: true,
+    progress: {
+      executionId,
+      transport: RemoteCodexExecutorTransport.VPS_RUNNER,
+      targetRepository: repository,
+      issueNumber,
+      branch: branchState.branch,
+      queueCommentId: normalizePositiveInteger3(queueComment.id),
+      queueCommentUrl: normalizeText17(queueComment.html_url) || null,
+      status,
+      pullRequest: pullRequest.pullRequest,
+      runnerEvent,
+      leadTime,
+      blocker: failureBlocker ?? runnerEventStaleBlocker ?? staleBlocker
+    }
+  };
+}
+async function readAllIssueComments({ apiBaseUrl, repository, issueNumber, token, fetchImpl }) {
+  const comments = [];
+  for (let page = 1; ; page += 1) {
+    const commentsUrl = `${apiBaseUrl}/repos/${encodeURIComponentRepository2(
+      repository
+    )}/issues/${encodeURIComponent(String(issueNumber))}/comments?per_page=100&page=${page}`;
+    const response = await fetchImpl(commentsUrl, {
+      method: "GET",
+      headers: githubJsonHeaders({ token })
+    });
+    const body = await readJsonSafe3(response);
+    if (!response.ok) {
+      const error = new Error(normalizeText17(body?.message) || "GitHub issue comments lookup failed");
+      error.status = response.status;
+      throw error;
+    }
+    const pageComments = Array.isArray(body) ? body : [];
+    comments.push(...pageComments);
+    if (pageComments.length < 100) {
+      return comments;
+    }
+  }
+}
+async function findPullRequestForBranch({ repository, branch, token, env }) {
+  const apiBaseUrl = normalizeText17(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
+  const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
+  const [owner] = repository.split("/");
+  const pullsUrl = `${apiBaseUrl}/repos/${encodeURIComponentRepository2(
+    repository
+  )}/pulls?state=all&head=${encodeURIComponent(`${owner}:${branch}`)}&per_page=10`;
+  let response;
+  try {
+    response = await fetchImpl(pullsUrl, {
+      method: "GET",
+      headers: githubJsonHeaders({ token })
+    });
+  } catch {
+    return {
+      ok: false,
+      status: 503,
+      error: "remote_codex_progress_failed",
+      reason: "failed to read pull requests for Codex Cloud delegation"
+    };
+  }
+  const body = await readJsonSafe3(response);
+  if (!response.ok) {
+    return {
+      ok: false,
+      status: response.status,
+      error: "remote_codex_progress_failed",
+      reason: normalizeText17(body?.message) || "GitHub pull request lookup failed"
+    };
+  }
+  const pull = Array.isArray(body) ? body[0] : null;
+  return {
+    ok: true,
+    pullRequest: pull ? {
+      number: normalizePositiveInteger3(pull.number),
+      url: normalizeText17(pull.html_url) || null,
+      state: normalizeText17(pull.state) || null,
+      title: normalizeText17(pull.title) || null,
+      createdAt: normalizeText17(pull.created_at) || null,
+      updatedAt: normalizeText17(pull.updated_at) || null
+    } : null
+  };
+}
+async function findBranch({ repository, branch, token, env }) {
+  const apiBaseUrl = normalizeText17(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
+  const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
+  const branchUrl = `${apiBaseUrl}/repos/${encodeURIComponentRepository2(
+    repository
+  )}/branches/${encodeURIComponent(branch)}`;
+  let response;
+  try {
+    response = await fetchImpl(branchUrl, {
+      method: "GET",
+      headers: githubJsonHeaders({ token })
+    });
+  } catch {
+    return {
+      ok: false,
+      status: 503,
+      error: "remote_codex_progress_failed",
+      reason: "failed to read branch for Codex Cloud delegation"
+    };
+  }
+  const body = await readJsonSafe3(response);
+  if (response.status === 404) {
+    return { ok: true, branch: null };
+  }
+  if (!response.ok) {
+    return {
+      ok: false,
+      status: response.status,
+      error: "remote_codex_progress_failed",
+      reason: normalizeText17(body?.message) || "GitHub branch lookup failed"
+    };
+  }
+  return {
+    ok: true,
+    branch: {
+      name: normalizeText17(body?.name) || branch,
+      url: normalizeText17(body?._links?.html) || null,
+      sha: normalizeText17(body?.commit?.sha) || null
+    }
+  };
+}
+function findCodexCloudConnectorBlocker({ comments, delegationComment }) {
+  const delegationId = normalizePositiveInteger3(delegationComment?.id) ?? 0;
+  const laterComments = comments.filter((comment) => {
+    const commentId = normalizePositiveInteger3(comment?.id) ?? 0;
+    return !delegationId || commentId > delegationId;
+  });
+  const blockerComment = laterComments.find((comment) => {
+    const author = normalizeText17(comment?.user?.login).toLowerCase();
+    const body = normalizeText17(comment?.body).toLowerCase();
+    return author.includes("chatgpt-codex-connector") && (body.includes("create a codex account and connect to github") || body.includes("to use codex here"));
+  });
+  if (!blockerComment) {
+    return null;
+  }
+  return {
+    error: "codex_cloud_connector_required",
+    reason: "Codex Cloud connector is not ready for this repository or account",
+    commentId: normalizePositiveInteger3(blockerComment.id),
+    commentUrl: normalizeText17(blockerComment.html_url) || null
+  };
+}
+function buildCodexCloudPickupBlocker({ delegationComment, env }) {
+  const graceSeconds = normalizeNonNegativeNumber(
+    env?.CODEX_CLOUD_PICKUP_GRACE_SECONDS ?? 300
+  );
+  const createdAt = Date.parse(normalizeText17(delegationComment?.created_at));
+  if (!Number.isFinite(createdAt)) {
+    return null;
+  }
+  const ageSeconds = Math.floor((Date.now() - createdAt) / 1e3);
+  if (ageSeconds < graceSeconds) {
+    return null;
+  }
+  return {
+    error: "codex_cloud_pickup_not_observed",
+    reason: "Codex Cloud did not create a branch or PR from the delegation comment within the pickup grace period",
+    commentId: normalizePositiveInteger3(delegationComment?.id),
+    commentUrl: normalizeText17(delegationComment?.html_url) || null,
+    graceSeconds,
+    ageSeconds
+  };
+}
+function findVpsRunnerEvents({ comments, queueComment }) {
+  const queueCommentId = normalizePositiveInteger3(queueComment?.id) ?? 0;
+  const laterComments = comments.filter((comment) => {
+    const commentId = normalizePositiveInteger3(comment?.id) ?? 0;
+    return !queueCommentId || commentId > queueCommentId;
+  });
+  const events = laterComments.map((comment) => {
+    const body = normalizeText17(comment?.body);
+    const marker = `vtdd:vps-runner-event:${extractVpsExecutionIdFromQueueComment(queueComment)}`;
+    if (!body.includes(marker)) {
+      return null;
+    }
+    const payload = extractFirstJsonFence(body);
+    if (!payload) {
+      return null;
+    }
+    const rawStatus = normalizeText17(payload.status);
+    const status = normalizeVpsRunnerEventStatus(rawStatus);
+    const leadTime = normalizeObject8(payload.leadTime);
+    return {
+      commentId: normalizePositiveInteger3(comment?.id),
+      commentUrl: normalizeText17(comment?.html_url) || null,
+      rawStatus,
+      status,
+      lastEvent: normalizeText17(payload.lastEvent) || null,
+      currentStep: normalizeText17(payload.currentStep) || null,
+      heartbeatAt: normalizeText17(payload.heartbeatAt) || null,
+      leadTime,
+      rawFailure: normalizeObject8(payload.rawFailure),
+      command: normalizeObject8(payload.command),
+      branch: normalizeText17(payload.branch) || null,
+      pullRequest: normalizeObject8(payload.pullRequest),
+      updatedAt: normalizeText17(payload.updatedAt) || normalizeText17(payload.heartbeatAt) || normalizeText17(comment?.updated_at) || normalizeText17(comment?.created_at) || null
+    };
+  }).filter(Boolean);
+  return events;
+}
+function selectLatestVpsRunnerEvent(events) {
+  return [...Array.isArray(events) ? events : []].sort((left, right) => {
+    const leftUpdatedAt = Date.parse(normalizeText17(left?.updatedAt));
+    const rightUpdatedAt = Date.parse(normalizeText17(right?.updatedAt));
+    if (Number.isFinite(leftUpdatedAt) && Number.isFinite(rightUpdatedAt) && leftUpdatedAt !== rightUpdatedAt) {
+      return leftUpdatedAt - rightUpdatedAt;
+    }
+    return (normalizePositiveInteger3(left?.commentId) ?? 0) - (normalizePositiveInteger3(right?.commentId) ?? 0);
+  }).at(-1) || null;
+}
+function buildVpsRunnerProgressLeadTime({ queueComment, runnerEvents, pullRequest }) {
+  const latestWithLeadTime = [...Array.isArray(runnerEvents) ? runnerEvents : []].reverse().find((event) => Object.keys(normalizeObject8(event?.leadTime)).length > 0);
+  const eventLeadTime = normalizeObject8(latestWithLeadTime?.leadTime);
+  const timestamps = {
+    queuedAt: normalizeText17(eventLeadTime.queued_at) || normalizeText17(queueComment?.created_at),
+    pickedUpAt: normalizeText17(eventLeadTime.picked_up_at),
+    codexStartedAt: normalizeText17(eventLeadTime.codex_started_at),
+    branchPushedAt: normalizeText17(eventLeadTime.branch_pushed_at),
+    prCreatedAt: normalizeText17(eventLeadTime.pr_created_at) || normalizeText17(pullRequest?.createdAt),
+    completedAt: normalizeText17(eventLeadTime.completed_at),
+    failedAt: normalizeText17(eventLeadTime.failed_at)
+  };
+  for (const event of runnerEvents || []) {
+    const updatedAt = normalizeText17(event?.updatedAt);
+    if (!timestamps.pickedUpAt && ["picked_up", "runner_started"].includes(normalizeText17(event?.lastEvent))) {
+      timestamps.pickedUpAt = updatedAt;
+    }
+    if (!timestamps.codexStartedAt && (normalizeText17(event?.currentStep) === "codex_subprocess" || normalizeText17(event?.lastEvent) === "codex_started" || normalizeText17(event?.lastEvent) === "codex_subprocess_started")) {
+      timestamps.codexStartedAt = updatedAt;
+    }
+    if (!timestamps.branchPushedAt && normalizeText17(event?.lastEvent) === "branch_pushed") {
+      timestamps.branchPushedAt = updatedAt;
+    }
+    if (!timestamps.prCreatedAt && ["pull_request_created", "pull_request_updated"].includes(normalizeText17(event?.lastEvent))) {
+      timestamps.prCreatedAt = updatedAt;
+    }
+    if (!timestamps.completedAt && normalizeText17(event?.rawStatus) === RemoteCodexExecutionStatus.COMPLETED) {
+      timestamps.completedAt = updatedAt;
+    }
+    if (!timestamps.failedAt && normalizeText17(event?.status) === RemoteCodexExecutionStatus.BLOCKED && Object.keys(normalizeObject8(event?.rawFailure)).length > 0) {
+      timestamps.failedAt = updatedAt;
+    }
+  }
+  return buildRemoteCodexLeadTime(timestamps);
+}
+function buildRemoteCodexLeadTime(timestamps = {}) {
+  return buildExecutionLeadTime(timestamps, { normalizeTimestamp: normalizeTimestamp4 });
+}
+function normalizeTimestamp4(value) {
+  const text = normalizeText17(value);
+  return Number.isFinite(Date.parse(text)) ? text : null;
+}
+function buildVpsRunnerEventStaleBlocker({ runnerEvent, env }) {
+  const staleSeconds = normalizeNonNegativeNumber(env?.VPS_RUNNER_EVENT_STALE_SECONDS ?? 600);
+  const updatedAt = Date.parse(normalizeText17(runnerEvent?.updatedAt));
+  if (!Number.isFinite(updatedAt)) {
+    return null;
+  }
+  if (![RemoteCodexExecutionStatus.IN_PROGRESS, RemoteCodexExecutionStatus.UNKNOWN].includes(runnerEvent?.status)) {
+    return null;
+  }
+  const ageSeconds = Math.floor((Date.now() - updatedAt) / 1e3);
+  if (ageSeconds < staleSeconds) {
+    return null;
+  }
+  return {
+    error: "vps_runner_event_stale",
+    reason: "VPS runner last reported a running step but has not posted a heartbeat or terminal event within the stale threshold",
+    commentId: normalizePositiveInteger3(runnerEvent?.commentId),
+    commentUrl: normalizeText17(runnerEvent?.commentUrl) || null,
+    lastEvent: normalizeText17(runnerEvent?.lastEvent) || null,
+    currentStep: normalizeText17(runnerEvent?.currentStep) || null,
+    lastUpdatedAt: normalizeText17(runnerEvent?.updatedAt) || null,
+    staleSeconds,
+    ageSeconds
+  };
+}
+function buildVpsRunnerPickupBlocker({ queueComment, env }) {
+  const graceSeconds = normalizeNonNegativeNumber(env?.VPS_RUNNER_PICKUP_GRACE_SECONDS ?? 300);
+  const createdAt = Date.parse(normalizeText17(queueComment?.created_at));
+  if (!Number.isFinite(createdAt)) {
+    return null;
+  }
+  const ageSeconds = Math.floor((Date.now() - createdAt) / 1e3);
+  if (ageSeconds < graceSeconds) {
+    return null;
+  }
+  return {
+    error: "vps_runner_pickup_not_observed",
+    reason: "VPS runner did not report pickup and no target branch or PR was observed within the pickup grace period",
+    commentId: normalizePositiveInteger3(queueComment?.id),
+    commentUrl: normalizeText17(queueComment?.html_url) || null,
+    graceSeconds,
+    ageSeconds
+  };
+}
+function buildVpsRunnerHealthStatus({ progress, env }) {
+  const runnerEvent = normalizeObject8(progress?.runnerEvent);
+  const blocker = normalizeObject8(progress?.blocker);
+  const pullRequest = normalizeObject8(progress?.pullRequest);
+  const branch = normalizeObject8(progress?.branch);
+  const lastSeenAt = normalizeText17(runnerEvent.updatedAt) || normalizeText17(runnerEvent.heartbeatAt) || null;
+  const heartbeatAt = normalizeText17(runnerEvent.heartbeatAt) || null;
+  const queuePickedUp = Boolean(
+    Object.keys(runnerEvent).length > 0 || Object.keys(branch).length > 0 || Object.keys(pullRequest).length > 0
+  );
+  const queueStatus = blocker.error === "vps_runner_pickup_not_observed" ? "stale" : queuePickedUp ? "picked_up" : "queued";
+  const currentStep = normalizeText17(runnerEvent.currentStep) || normalizeText17(runnerEvent.lastEvent) || (Object.keys(pullRequest).length > 0 ? "pull_request_observed" : Object.keys(branch).length > 0 ? "branch_observed" : "queue_waiting");
+  const unavailableReason = buildVpsRunnerUnavailableReason({ progress, blocker });
+  const runnerAlive = unavailableReason ? false : Boolean(lastSeenAt);
+  const runnerStatus = runnerAlive ? "alive" : "unavailable";
+  return {
+    executionId: normalizeText17(progress?.executionId) || null,
+    transport: RemoteCodexExecutorTransport.VPS_RUNNER,
+    runnerStatus,
+    runnerAlive,
+    lastSeenAt,
+    heartbeatAt,
+    queue: {
+      status: queueStatus,
+      pickedUp: queuePickedUp,
+      commentId: normalizePositiveInteger3(progress?.queueCommentId),
+      commentUrl: normalizeText17(progress?.queueCommentUrl) || null
+    },
+    leadTime: normalizeObject8(progress?.leadTime),
+    currentStep,
+    progressStatus: normalizeText17(progress?.status) || RemoteCodexExecutionStatus.UNKNOWN,
+    reason: unavailableReason?.reason || null,
+    reasonCode: unavailableReason?.code || null,
+    staleThresholdSeconds: normalizeNonNegativeNumber(env?.VPS_RUNNER_EVENT_STALE_SECONDS ?? 600)
+  };
+}
+function buildVpsRunnerUnavailableReason({ progress, blocker }) {
+  const progressStatus = normalizeText17(progress?.status);
+  const code = normalizeText17(blocker?.error);
+  if (code) {
+    return {
+      code,
+      reason: normalizeText17(blocker.reason) || "VPS runner status is unavailable from safe GitHub runtime truth"
+    };
+  }
+  if (progressStatus === RemoteCodexExecutionStatus.QUEUED) {
+    return {
+      code: "vps_runner_pickup_pending",
+      reason: "VPS runner pickup has not been observed yet"
+    };
+  }
+  if (!normalizeText17(progress?.runnerEvent?.updatedAt) && !normalizeText17(progress?.runnerEvent?.heartbeatAt)) {
+    return {
+      code: "vps_runner_last_seen_missing",
+      reason: "VPS runner has not reported a heartbeat or event timestamp"
+    };
+  }
+  return null;
+}
+function buildControlRunnerTargetRuntimeTruth({
+  runStatus,
+  conclusion,
+  targetRepository,
+  targetBranch,
+  pullRequest,
+  branch
+}) {
+  if (!targetRepository || !targetBranch) {
+    const missing = [];
+    if (!targetRepository) {
+      missing.push("targetRepository");
+    }
+    if (!targetBranch) {
+      missing.push("targetBranch");
+    }
+    return {
+      status: RemoteCodexExecutionStatus.BLOCKED,
+      targetRepository: targetRepository || null,
+      targetBranch: targetBranch || null,
+      branch: null,
+      pullRequest: null,
+      blocker: {
+        error: "remote_codex_target_runtime_truth_unavailable",
+        reason: "remote Codex control-runner progress requires target repository and branch to verify GitHub-visible runtime evidence",
+        missing
+      }
+    };
+  }
+  const status = pullRequest ? RemoteCodexExecutionStatus.COMPLETED : branch ? RemoteCodexExecutionStatus.IN_PROGRESS : runStatus === RemoteCodexExecutionStatus.COMPLETED ? RemoteCodexExecutionStatus.BLOCKED : runStatus;
+  const blocker = status === RemoteCodexExecutionStatus.BLOCKED && conclusion && conclusion !== "success" ? {
+    error: "remote_codex_workflow_failed",
+    reason: "remote Codex control-runner workflow completed without GitHub-visible branch or PR evidence",
+    conclusion,
+    targetRepository,
+    targetBranch
+  } : status === RemoteCodexExecutionStatus.BLOCKED ? {
+    error: "remote_codex_runtime_evidence_missing",
+    reason: "remote Codex control-runner workflow completed but no target branch or PR was observed",
+    targetRepository,
+    targetBranch
+  } : null;
+  return {
+    status,
+    targetRepository,
+    targetBranch,
+    branch,
+    pullRequest,
+    blocker
+  };
+}
+function buildCodexCloudGitHubComment({ request }) {
+  const lines = [
+    `<!-- vtdd:remote-codex-execution:${request.executionId} -->`,
+    "@codex please implement this bounded development task and open or update the PR.",
+    "",
+    "VTDD-managed Codex Cloud delegation request.",
+    "",
+    "Bounded execution contract:",
+    `- Repository: ${request.repository}`,
+    `- Issue: #${request.issueNumber}`,
+    `- Branch: ${request.branch}`,
+    `- Base ref: ${request.baseRef}`,
+    `- Goal: ${request.codexGoal}`,
+    "- Canonical spec: this GitHub Issue",
+    "- Runtime truth: current GitHub branch / diff / PR / review comments",
+    "- Completion target: create or update a pull request",
+    "- PR body requirement: before creating or updating a PR, inspect `docs/pr-template-model.md`, `scripts/render-pr-body.mjs`, and `scripts/validate-pr-body.mjs` in the target repository.",
+    "- Required PR body markers: `## This PR satisfies Intent`, `## Satisfied Success Criteria`, `## Unsatisfied Success Criteria`, `## Verification Evidence`, `## Surface Update Checklist`.",
+    "",
+    "Rules:",
+    "- Do not expand scope beyond the Issue.",
+    "- Do not merge.",
+    "- Do not deploy.",
+    "- Preserve reviewer objections for Butler/human judgment.",
+    "- If the Issue or runtime truth is insufficient, stop and comment with the blocked reason."
+  ];
+  if (request.handoff) {
+    lines.push("", "Handoff:", fencedJson(request.handoff));
+  }
+  return lines.join("\n");
+}
+function buildVpsRunnerGitHubQueueComment({ request }) {
+  const payload = {
+    executionId: request.executionId,
+    transport: RemoteCodexExecutorTransport.VPS_RUNNER,
+    repository: request.repository,
+    issueNumber: request.issueNumber,
+    branch: request.branch,
+    baseRef: request.baseRef,
+    codexGoal: request.codexGoal,
+    approvalScopeMatched: request.approvalScopeMatched,
+    approvalActor: request.approvalActor,
+    handoff: request.handoff
+  };
+  const lines = [
+    `<!-- vtdd:vps-runner-execution:${request.executionId} -->`,
+    "VTDD-managed VPS runner execution request.",
+    "",
+    "Bounded execution contract:",
+    `- Repository: ${request.repository}`,
+    `- Issue: #${request.issueNumber}`,
+    `- Branch: ${request.branch}`,
+    `- Base ref: ${request.baseRef}`,
+    `- Goal: ${request.codexGoal}`,
+    "- Canonical spec: this GitHub Issue",
+    "- Runtime truth: current GitHub branch / diff / PR / review comments",
+    "- Completion target: create or update a pull request",
+    "- PR body requirement: Codex must inspect `docs/pr-template-model.md`, `scripts/render-pr-body.mjs`, and `scripts/validate-pr-body.mjs`; the VPS runner will validate and normalize the PR body again before create/update.",
+    "- Required PR body markers: `## This PR satisfies Intent`, `## Satisfied Success Criteria`, `## Unsatisfied Success Criteria`, `## Verification Evidence`, `## Surface Update Checklist`.",
+    "",
+    "Rules:",
+    "- Do not expand scope beyond the Issue.",
+    "- Do not merge.",
+    "- Do not deploy.",
+    "- Preserve reviewer objections for Butler/human judgment.",
+    "- If the Issue or runtime truth is insufficient, stop and comment with the blocked reason.",
+    "",
+    "Runner payload:",
+    fencedJson(payload)
+  ];
+  return lines.join("\n");
+}
+function resolveExecutorTransport(input = {}, options = {}) {
+  const requestValue = normalizeText17(
+    input?.executorTransport ?? input?.payload?.executorTransport ?? input?.payload?.continuationContext?.executorTransport
+  );
+  const envValue = normalizeText17(input?.env?.REMOTE_CODEX_EXECUTOR_TRANSPORT);
+  const value = requestValue || envValue;
+  if (!value) {
+    const configuredControlRepository = resolveControlRepository(input?.env);
+    return {
+      ok: true,
+      value: configuredControlRepository ? RemoteCodexExecutorTransport.CODEX_CLOUD_CLI_CONTROL_RUNNER : RemoteCodexExecutorTransport.CODEX_CLOUD_GITHUB_COMMENT
+    };
+  }
+  const metadata = REMOTE_CODEX_EXECUTOR_TRANSPORT_REGISTRY[value];
+  if (!metadata) {
+    return {
+      ok: false,
+      error: "remote_codex_transport_unknown",
+      reason: "executorTransport is not registered",
+      issues: [`unsupported executorTransport: ${value}`]
+    };
+  }
+  if (value === RemoteCodexExecutorTransport.API_KEY_RUNNER) {
+    const requestSelected = requestValue === RemoteCodexExecutorTransport.API_KEY_RUNNER;
+    const acknowledged = input?.apiKeyRunnerAcknowledged === true || input?.payload?.apiKeyRunnerAcknowledged === true || input?.payload?.continuationContext?.apiKeyRunnerAcknowledged === true;
+    if (requestSelected && options.requireRequestAcknowledgment !== false && !acknowledged) {
+      return {
+        ok: false,
+        error: "api_key_runner_approval_required",
+        reason: "api_key_runner requires explicit human approval because it uses OPENAI_API_KEY",
+        issues: ["api_key_runner_acknowledgment_required"]
+      };
+    }
+  }
+  return { ok: true, value };
+}
+function githubJsonHeaders({ token }) {
+  return {
+    authorization: `Bearer ${token}`,
+    accept: "application/vnd.github+json",
+    "content-type": "application/json; charset=utf-8",
+    "x-github-api-version": "2022-11-28",
+    "user-agent": "vtdd-v2-remote-codex-executor"
+  };
+}
+function fencedJson(value) {
+  return ["```json", JSON.stringify(value, null, 2), "```"].join("\n");
+}
+async function resolveGitHubExecutionToken(env) {
+  const directToken = normalizeText17(
+    env?.GITHUB_APP_INSTALLATION_TOKEN ?? env?.VTDD_GITHUB_ACTIONS_TOKEN
+  );
+  if (directToken) {
+    return { ok: true, value: directToken };
+  }
+  const mintedToken = await resolveGitHubAppInstallationToken({
+    env,
+    fetchImpl: typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch,
+    apiBaseUrl: normalizeText17(env?.GITHUB_API_BASE_URL) || "https://api.github.com"
+  });
+  if (mintedToken.ok) {
+    return { ok: true, value: mintedToken.token };
+  }
+  if (mintedToken.warning) {
+    return {
+      ok: false,
+      reason: mintedToken.warning
+    };
+  }
+  const provider = env?.GITHUB_APP_INSTALLATION_TOKEN_PROVIDER;
+  if (typeof provider === "function") {
+    try {
+      const provided = normalizeText17(await provider());
+      if (provided) {
+        return { ok: true, value: provided };
+      }
+    } catch {
+      return {
+        ok: false,
+        reason: "GitHub execution token provider failed"
+      };
+    }
+  }
+  return {
+    ok: false,
+    reason: "GitHub execution token is not configured"
+  };
+}
+function resolveControlRepository(env) {
+  return normalizeText17(env?.VTDD_GITHUB_ACTIONS_REPOSITORY ?? env?.GITHUB_REPOSITORY);
+}
+function matchesExecutionId(run, executionId) {
+  const displayTitle = normalizeText17(run?.display_title);
+  const name = normalizeText17(run?.name);
+  return displayTitle.includes(executionId) || name.includes(executionId);
+}
+function extractVpsExecutionIdFromQueueComment(queueComment) {
+  const body = normalizeText17(queueComment?.body);
+  const match = body.match(/vtdd:vps-runner-execution:([a-zA-Z0-9._:-]+)/);
+  return match ? match[1] : "";
+}
+function extractFirstJsonFence(text) {
+  const match = normalizeText17(text).match(/```json\s*([\s\S]*?)```/);
+  if (!match) {
+    return null;
+  }
+  try {
+    return JSON.parse(match[1]);
+  } catch {
+    return null;
+  }
+}
+function normalizeVpsRunnerEventStatus(value) {
+  const normalized = normalizeText17(value).toLowerCase();
+  if (normalized === "running" || normalized === "in_progress" || normalized === "branch_created") {
+    return RemoteCodexExecutionStatus.IN_PROGRESS;
+  }
+  if (normalized === "pr_created" || normalized === "completed") {
+    return RemoteCodexExecutionStatus.COMPLETED;
+  }
+  if (normalized === "failed" || normalized === "blocked") {
+    return RemoteCodexExecutionStatus.BLOCKED;
+  }
+  if (normalized === "queued" || normalized === "requested") {
+    return RemoteCodexExecutionStatus.QUEUED;
+  }
+  return RemoteCodexExecutionStatus.UNKNOWN;
+}
+function normalizeRunStatus(value) {
+  const normalized = normalizeText17(value).toLowerCase();
+  if (normalized === "queued" || normalized === "waiting" || normalized === "requested") {
+    return RemoteCodexExecutionStatus.QUEUED;
+  }
+  if (normalized === "in_progress" || normalized === "pending" || normalized === "action_required") {
+    return RemoteCodexExecutionStatus.IN_PROGRESS;
+  }
+  if (normalized === "completed") {
+    return RemoteCodexExecutionStatus.COMPLETED;
+  }
+  return RemoteCodexExecutionStatus.UNKNOWN;
+}
+function buildExecutionId({ issueNumber }) {
+  const issuePart = issueNumber ? `issue${issueNumber}` : "issue0";
+  const randomPart = Math.random().toString(36).slice(2, 8);
+  return `remote-codex-${issuePart}-${randomPart}`;
+}
+function encodeURIComponentRepository2(repository) {
+  return repository.split("/").map((part) => encodeURIComponent(part)).join("/");
+}
+function normalizeObject8(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+  return value;
+}
+function normalizeText17(value) {
+  return String(value ?? "").trim();
+}
+function normalizePositiveInteger3(value) {
+  const numeric = Number(value);
+  if (!Number.isInteger(numeric) || numeric <= 0) {
+    return null;
+  }
+  return numeric;
+}
+function normalizeNonNegativeNumber(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric < 0) {
+    return 300;
+  }
+  return numeric;
+}
+async function readJsonSafe3(response) {
+  try {
+    return await response.json();
+  } catch {
+    return {};
+  }
+}
+
+// src/core/butler-batch-planning.js
+var ButlerBatchConflictRisk = Object.freeze({
+  LOW: "low",
+  MEDIUM: "medium",
+  HIGH: "high"
+});
+var ButlerBatchIssueDisposition = Object.freeze({
+  PROPOSED: "proposed",
+  WAITING_DEPENDENCY: "waiting_dependency",
+  WAITING_CONFLICT: "waiting_conflict",
+  WAITING_CAPACITY: "waiting_capacity",
+  BLOCKED_RUNTIME_TRUTH: "blocked_runtime_truth"
+});
+var ButlerBatchExecutionStage = Object.freeze({
+  QUEUED: "queued",
+  IN_PROGRESS: "in_progress",
+  BLOCKED: "blocked",
+  PR_CREATED: "pr_created",
+  REVIEW: "review",
+  MERGE_READY: "merge_ready",
+  UNKNOWN: "unknown"
+});
+var AREA_KEYWORDS = Object.freeze([
+  {
+    pattern: /\b(butler|orchestrator|管制|batch|planning|parallel)\b/i,
+    areas: ["src/core/butler-orchestrator.js", "src/core/butler-batch-planning.js", "docs/butler"]
+  },
+  {
+    pattern: /\b(github|issue|issues|pull request|pr|runtime truth|read)\b/i,
+    areas: ["src/core/github-read-plane.js", "src/core/github-write-plane.js", "docs/security/github-operation-plane.md"]
+  },
+  {
+    pattern: /\b(codex|handoff|executor|runner|queued|in_progress|blocked)\b/i,
+    areas: ["src/core/remote-codex-executor.js", "src/core/remote-codex-handoff-scope.js", "docs/butler/remote-codex-cli-executor.md"]
+  },
+  {
+    pattern: /\b(review|reviewer|gemini|merge-ready|merge ready|checks?)\b/i,
+    areas: ["src/core/gemini-pr-review.js", "src/core/reviewer-contract.js", "docs/butler/review-protocol.md"]
+  },
+  {
+    pattern: /\b(memory|rag|decision log|proposal log)\b/i,
+    areas: ["src/core/memory-provider.js", "src/core/memory-schema.js", "docs/memory"]
+  },
+  {
+    pattern: /\b(deploy|cloudflare|production|passkey)\b/i,
+    areas: ["src/core/deploy-production-plane.js", "src/core/passkey-approval.js", "docs/security"]
+  }
+]);
+
 // src/core/reviewer-operator-summary.js
 var ReviewerOperatorSeverity = Object.freeze({
   CRITICAL: "\u81F4\u547D\u7684",
@@ -25038,7 +26522,7 @@ var CodexReviewFallbackBlocker = Object.freeze({
   CODEX_CONNECTOR_NOT_CONFIGURED: "codex_connector_not_configured"
 });
 function parseCodexReviewFallbackComment(comment = {}) {
-  const body = normalizeText16(typeof comment === "string" ? comment : comment?.body);
+  const body = normalizeText18(typeof comment === "string" ? comment : comment?.body);
   if (!body || !containsMarker(body)) {
     return null;
   }
@@ -25059,8 +26543,8 @@ function parseCodexReviewFallbackComment(comment = {}) {
   };
 }
 function parseCodexConnectorSetupComment(comment = {}) {
-  const body = normalizeText16(typeof comment === "string" ? comment : comment?.body);
-  const author = normalizeText16(comment?.author?.login ?? comment?.user?.login);
+  const body = normalizeText18(typeof comment === "string" ? comment : comment?.body);
+  const author = normalizeText18(comment?.author?.login ?? comment?.user?.login);
   if (!isCodexConnectorAuthor(author) || !isCodexConnectorSetupBody(body)) {
     return null;
   }
@@ -25074,13 +26558,13 @@ function parseCodexConnectorSetupComment(comment = {}) {
   };
 }
 function containsMarker(value) {
-  return normalizeText16(value).includes(CODEX_REVIEW_FALLBACK_MARKER);
+  return normalizeText18(value).includes(CODEX_REVIEW_FALLBACK_MARKER);
 }
 function isCodexConnectorAuthor(value) {
-  return normalizeText16(value).toLowerCase() === "chatgpt-codex-connector";
+  return normalizeText18(value).toLowerCase() === "chatgpt-codex-connector";
 }
 function isCodexConnectorSetupBody(value) {
-  const body = normalizeText16(value).toLowerCase();
+  const body = normalizeText18(value).toLowerCase();
   return body.includes("to use codex here") && body.includes("connect to github");
 }
 function determineBlocking({ status, recommendedAction, blocker }) {
@@ -25094,41 +26578,41 @@ function determineBlocking({ status, recommendedAction, blocker }) {
   if (blocker) {
     return true;
   }
-  return normalizeText16(recommendedAction) !== "approve";
+  return normalizeText18(recommendedAction) !== "approve";
 }
 function extractBacktickedValue(body, label) {
   const pattern = new RegExp(`- ${escapeRegExp(label)}: \\\`([^\\\`]+)\\\``);
   const match = body.match(pattern);
-  return normalizeText16(match?.[1]);
+  return normalizeText18(match?.[1]);
 }
 function escapeRegExp(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 function normalizeFallbackStatus(value) {
-  const normalized = normalizeText16(value).toLowerCase();
+  const normalized = normalizeText18(value).toLowerCase();
   return Object.values(CodexReviewFallbackStatus).includes(normalized) ? normalized : "";
 }
-function normalizeText16(value) {
+function normalizeText18(value) {
   return String(value ?? "").trim();
 }
 
 // src/core/gemini-pr-review.js
 var GEMINI_PR_REVIEW_MARKER = "<!-- vtdd:reviewer=gemini -->";
 function parseGeminiReviewComment(comment = {}) {
-  const body = normalizeText17(typeof comment === "string" ? comment : comment?.body);
+  const body = normalizeText19(typeof comment === "string" ? comment : comment?.body);
   if (!body || !containsMarker2(body)) {
     return null;
   }
   const recommendedActionMatch = body.match(/^- Recommended action:\s*`([^`]+)`/m);
-  const recommendedAction = normalizeText17(recommendedActionMatch?.[1]).toLowerCase() || "manual_review";
+  const recommendedAction = normalizeText19(recommendedActionMatch?.[1]).toLowerCase() || "manual_review";
   const source = typeof comment === "object" && comment !== null ? comment : {};
-  const createdAt = normalizeText17(source.createdAt ?? source.created_at);
-  const updatedAt = normalizeText17(source.updatedAt ?? source.updated_at);
+  const createdAt = normalizeText19(source.createdAt ?? source.created_at);
+  const updatedAt = normalizeText19(source.updatedAt ?? source.updated_at);
   return {
     reviewer: "gemini",
     recommendedAction,
     blocking: recommendedAction === "request_changes" || recommendedAction === "manual_review",
-    url: normalizeText17(source.url ?? source.htmlUrl ?? source.html_url) || null,
+    url: normalizeText19(source.url ?? source.htmlUrl ?? source.html_url) || null,
     createdAt: createdAt || null,
     updatedAt: updatedAt || null,
     includesCreatedEdit: source.includesCreatedEdit === true || Boolean(createdAt) && Boolean(updatedAt) && createdAt !== updatedAt,
@@ -25136,9 +26620,9 @@ function parseGeminiReviewComment(comment = {}) {
   };
 }
 function containsMarker2(value) {
-  return normalizeText17(value).includes(GEMINI_PR_REVIEW_MARKER);
+  return normalizeText19(value).includes(GEMINI_PR_REVIEW_MARKER);
 }
-function normalizeText17(value) {
+function normalizeText19(value) {
   return String(value ?? "").trim();
 }
 
@@ -25344,23 +26828,23 @@ function normalizeGitHubRuntime(value) {
   const runtime = value && typeof value === "object" ? value : {};
   const pullRequestInput = runtime.pullRequest && typeof runtime.pullRequest === "object" ? runtime.pullRequest : {};
   return {
-    activeBranch: normalizeText18(runtime.activeBranch) || null,
+    activeBranch: normalizeText20(runtime.activeBranch) || null,
     pullRequest: {
       exists: Boolean(
-        normalizeText18(pullRequestInput.url) || Number.isInteger(Number(pullRequestInput.number)) || normalizeText18(pullRequestInput.state)
+        normalizeText20(pullRequestInput.url) || Number.isInteger(Number(pullRequestInput.number)) || normalizeText20(pullRequestInput.state)
       ),
       number: normalizeNumber2(pullRequestInput.number),
-      url: normalizeText18(pullRequestInput.url) || null,
-      state: normalizeText18(pullRequestInput.state) || null,
-      title: normalizeText18(pullRequestInput.title) || null,
-      baseRef: normalizeText18(pullRequestInput.baseRef) || normalizeText18(pullRequestInput.base?.ref) || null,
-      headRef: normalizeText18(pullRequestInput.headRef) || normalizeText18(pullRequestInput.head?.ref) || null,
+      url: normalizeText20(pullRequestInput.url) || null,
+      state: normalizeText20(pullRequestInput.state) || null,
+      title: normalizeText20(pullRequestInput.title) || null,
+      baseRef: normalizeText20(pullRequestInput.baseRef) || normalizeText20(pullRequestInput.base?.ref) || null,
+      headRef: normalizeText20(pullRequestInput.headRef) || normalizeText20(pullRequestInput.head?.ref) || null,
       reviewCommentsCount: normalizeCount2(pullRequestInput.reviewCommentsCount),
       unresolvedReviewCommentsCount: normalizeCount2(
         pullRequestInput.unresolvedReviewCommentsCount
       ),
       updatedSinceReview: pullRequestInput.updatedSinceReview === true,
-      reviewer: normalizeText18(pullRequestInput.reviewer) || "gemini",
+      reviewer: normalizeText20(pullRequestInput.reviewer) || "gemini",
       issueComments: Array.isArray(pullRequestInput.issueComments) ? pullRequestInput.issueComments : [],
       reviewComments: Array.isArray(pullRequestInput.reviewComments) ? pullRequestInput.reviewComments : [],
       reviews: Array.isArray(pullRequestInput.reviews) ? pullRequestInput.reviews : []
@@ -25389,7 +26873,7 @@ function normalizeNumber2(value) {
   }
   return numeric;
 }
-function normalizeText18(value) {
+function normalizeText20(value) {
   return String(value ?? "").trim();
 }
 function deny7(rule, reason) {
@@ -25398,1441 +26882,6 @@ function deny7(rule, reason) {
     rule,
     reason
   };
-}
-
-// src/core/execution-lead-time.js
-function normalizeText19(value) {
-  return String(value ?? "").trim();
-}
-function defaultNormalizeTimestamp(value) {
-  const text = normalizeText19(value);
-  return Number.isFinite(Date.parse(text)) ? text : null;
-}
-function buildExecutionLeadTime(timestamps = {}, options = {}) {
-  const normalizeTimestamp5 = options.normalizeTimestamp || defaultNormalizeTimestamp;
-  const queuedAt = normalizeTimestamp5(timestamps.queuedAt ?? timestamps.queued_at);
-  const pickedUpAt = normalizeTimestamp5(timestamps.pickedUpAt ?? timestamps.picked_up_at);
-  const codexStartedAt = normalizeTimestamp5(timestamps.codexStartedAt ?? timestamps.codex_started_at);
-  const branchPushedAt = normalizeTimestamp5(timestamps.branchPushedAt ?? timestamps.branch_pushed_at);
-  const prCreatedAt = normalizeTimestamp5(timestamps.prCreatedAt ?? timestamps.pr_created_at);
-  const completedAt = normalizeTimestamp5(timestamps.completedAt ?? timestamps.completed_at);
-  const failedAt = normalizeTimestamp5(timestamps.failedAt ?? timestamps.failed_at);
-  const terminalAt = completedAt || failedAt || prCreatedAt || null;
-  return {
-    queued_at: queuedAt,
-    picked_up_at: pickedUpAt,
-    codex_started_at: codexStartedAt,
-    branch_pushed_at: branchPushedAt,
-    pr_created_at: prCreatedAt,
-    completed_at: completedAt,
-    failed_at: failedAt,
-    durations: {
-      queue_wait_duration: buildExecutionDuration(queuedAt, pickedUpAt),
-      codex_execution_duration: buildExecutionDuration(
-        codexStartedAt,
-        branchPushedAt || prCreatedAt || completedAt || failedAt
-      ),
-      pr_creation_duration: buildExecutionDuration(branchPushedAt, prCreatedAt),
-      total_lead_time: buildExecutionDuration(queuedAt, terminalAt)
-    }
-  };
-}
-function buildExecutionDuration(start, end) {
-  const startMs = Date.parse(normalizeText19(start));
-  const endMs = Date.parse(normalizeText19(end));
-  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs < startMs) {
-    return null;
-  }
-  const seconds = Math.round((endMs - startMs) / 1e3);
-  return {
-    seconds,
-    label: formatExecutionDurationSeconds(seconds)
-  };
-}
-function formatExecutionDurationSeconds(seconds) {
-  if (!Number.isFinite(seconds)) {
-    return null;
-  }
-  if (seconds < 60) {
-    return `${seconds}s`;
-  }
-  const minutes = Math.floor(seconds / 60);
-  const remainder = seconds % 60;
-  if (minutes < 60) {
-    return remainder ? `${minutes}m ${remainder}s` : `${minutes}m`;
-  }
-  const hours = Math.floor(minutes / 60);
-  const minuteRemainder = minutes % 60;
-  return minuteRemainder ? `${hours}h ${minuteRemainder}m` : `${hours}h`;
-}
-
-// src/core/remote-codex-executor.js
-var REMOTE_CODEX_WORKFLOW_FILE = "remote-codex-executor.yml";
-var RemoteCodexExecutorTransport = Object.freeze({
-  CODEX_CLOUD_GITHUB_COMMENT: "codex_cloud_github_comment",
-  CODEX_CLOUD_CLI_CONTROL_RUNNER: "codex_cloud_cli_control_runner",
-  VPS_RUNNER: "vps_runner",
-  API_KEY_RUNNER: "api_key_runner"
-});
-var REMOTE_CODEX_EXECUTOR_TRANSPORT_REGISTRY = Object.freeze({
-  [RemoteCodexExecutorTransport.CODEX_CLOUD_GITHUB_COMMENT]: Object.freeze({
-    id: RemoteCodexExecutorTransport.CODEX_CLOUD_GITHUB_COMMENT,
-    label: "Codex Cloud GitHub comment transport",
-    ownerBoundary: "operator_owned_chatgpt_codex_github_integration",
-    credentialModel: "chatgpt_managed_codex_github_integration",
-    billingModel: "chatgpt_codex_subscription_no_openai_api_key",
-    default: true,
-    optIn: false,
-    requestOnlyUntilRuntimeEvidence: true,
-    successEvidence: ["github_branch", "github_pull_request"]
-  }),
-  [RemoteCodexExecutorTransport.CODEX_CLOUD_CLI_CONTROL_RUNNER]: Object.freeze({
-    id: RemoteCodexExecutorTransport.CODEX_CLOUD_CLI_CONTROL_RUNNER,
-    label: "Codex Cloud CLI control runner",
-    ownerBoundary: "user_owned_private_control_repository_or_trusted_runner",
-    credentialModel: "chatgpt_managed_codex_auth_json",
-    billingModel: "chatgpt_codex_subscription_plus_user_owned_runner_cost",
-    default: false,
-    optIn: true,
-    usesOpenAiApiKey: false,
-    successEvidence: ["github_workflow_run", "github_branch", "github_pull_request"]
-  }),
-  [RemoteCodexExecutorTransport.VPS_RUNNER]: Object.freeze({
-    id: RemoteCodexExecutorTransport.VPS_RUNNER,
-    label: "User-owned VPS runner",
-    ownerBoundary: "user_owned_trusted_persistent_host",
-    credentialModel: "user_owned_runner_credentials",
-    billingModel: "user_owned_vps_cost",
-    default: false,
-    optIn: true,
-    implemented: true,
-    requestQueue: "github_issue_comment",
-    successEvidence: ["runner_execution_log", "github_branch", "github_pull_request"]
-  }),
-  [RemoteCodexExecutorTransport.API_KEY_RUNNER]: Object.freeze({
-    id: RemoteCodexExecutorTransport.API_KEY_RUNNER,
-    label: "OpenAI API key runner",
-    ownerBoundary: "user_owned_control_repository_or_trusted_runner",
-    credentialModel: "openai_api_key",
-    billingModel: "openai_api_billing_separate_from_chatgpt_codex_subscription",
-    default: false,
-    optIn: true,
-    usesOpenAiApiKey: true,
-    successEvidence: ["github_workflow_run", "github_branch", "github_pull_request"]
-  })
-});
-var RemoteCodexExecutionStatus = Object.freeze({
-  QUEUED: "queued",
-  IN_PROGRESS: "in_progress",
-  COMPLETED: "completed",
-  BLOCKED: "blocked",
-  UNKNOWN: "unknown"
-});
-var RemoteCodexDispatchGoal = Object.freeze({
-  OPEN_PR: "open_pr",
-  REVISE_PR: "revise_pr",
-  RESPOND_TO_REVIEW: "respond_to_review"
-});
-var REMOTE_CODEX_DISPATCH_GOALS = new Set(Object.values(RemoteCodexDispatchGoal));
-function createRemoteCodexExecutionRequest(input = {}) {
-  const gatewayResult = input?.gatewayResult ?? {};
-  const payload = input?.payload ?? {};
-  const issueContext = normalizeObject8(payload.issueContext);
-  const runtimeState = normalizeObject8(payload?.policyInput?.runtimeTruth?.runtimeState);
-  const continuationContext = normalizeObject8(payload.continuationContext);
-  const handoff = normalizeObject8(continuationContext.handoff);
-  const approvalScopeMatched = payload?.policyInput?.approvalScopeMatched === true || isBoundRemoteCodexHandoff({
-    continuationContext,
-    issueContext,
-    policyInput: payload?.policyInput
-  });
-  const issueNumber = normalizePositiveInteger3(
-    issueContext.issueNumber ?? handoff.relatedIssue ?? payload.relatedIssue
-  );
-  const request = {
-    executionId: normalizeText20(input?.executionId) || buildExecutionId({ issueNumber }),
-    actorRole: normalizeText20(payload.actorRole),
-    repository: normalizeText20(gatewayResult.repository),
-    issueNumber,
-    branch: normalizeText20(runtimeState.activeBranch) || normalizeText20(payload?.executionTarget?.branch) || (issueNumber ? `codex/issue-${issueNumber}` : ""),
-    baseRef: normalizeText20(payload?.executionTarget?.baseRef) || normalizeText20(runtimeState.baseRef) || "main",
-    codexGoal: normalizeText20(continuationContext.codexGoal) || normalizeText20(payload?.executionTarget?.codexGoal) || normalizeText20(gatewayResult?.executionContinuity?.codexGoal),
-    approvalPhrase: normalizeText20(payload?.policyInput?.approvalPhrase),
-    approvalActor: normalizeText20(payload?.policyInput?.approvalActor) || normalizeText20(payload?.policyInput?.goActor) || normalizeText20(payload?.sender?.login),
-    targetConfirmed: payload?.policyInput?.targetConfirmed === true,
-    approvalScopeMatched,
-    handoffRequired: continuationContext.requiresHandoff === true,
-    handoff: Object.keys(handoff).length > 0 ? {
-      issueTraceable: handoff.issueTraceable === true,
-      approvalScopeMatched: handoff.approvalScopeMatched === true,
-      summary: normalizeText20(handoff.summary),
-      relatedIssue: normalizePositiveInteger3(handoff.relatedIssue)
-    } : null
-  };
-  const issues = [];
-  if (request.actorRole !== ActorRole.BUTLER) {
-    issues.push("remote Codex execution must be initiated from Butler role");
-  }
-  if (!request.repository) {
-    issues.push("repository is required");
-  }
-  if (!request.issueNumber) {
-    issues.push("issueNumber is required");
-  }
-  if (!request.branch) {
-    issues.push("branch is required");
-  }
-  if (!request.codexGoal) {
-    issues.push("codexGoal is required");
-  } else if (!REMOTE_CODEX_DISPATCH_GOALS.has(request.codexGoal)) {
-    issues.push("codexGoal must be open_pr, revise_pr, or respond_to_review");
-  }
-  if (!request.baseRef) {
-    issues.push("baseRef is required");
-  }
-  if (!request.targetConfirmed) {
-    issues.push("targetConfirmed must be true");
-  }
-  if (!request.approvalScopeMatched) {
-    issues.push("approvalScopeMatched must be true");
-  }
-  if (!request.approvalPhrase) {
-    issues.push("approvalPhrase is required");
-  }
-  if (request.handoffRequired && !request.handoff) {
-    issues.push("handoff is required when handoffRequired is true");
-  }
-  return issues.length > 0 ? { ok: false, issues } : { ok: true, request };
-}
-async function dispatchRemoteCodexExecution(input = {}) {
-  const requestValidation = createRemoteCodexExecutionRequest(input);
-  if (!requestValidation.ok) {
-    return {
-      ok: false,
-      status: 422,
-      blockedByRule: "remote_codex_execution_request_invalid",
-      reason: "remote Codex execution request is invalid",
-      issues: requestValidation.issues
-    };
-  }
-  const request = requestValidation.request;
-  const token = await resolveGitHubExecutionToken(input?.env);
-  if (!token.ok) {
-    return {
-      ok: false,
-      status: 503,
-      error: "github_execution_token_unavailable",
-      reason: token.reason
-    };
-  }
-  const transport = resolveExecutorTransport(input, { requireRequestAcknowledgment: true });
-  if (!transport.ok) {
-    return {
-      ok: false,
-      status: 422,
-      error: transport.error,
-      reason: transport.reason,
-      issues: transport.issues
-    };
-  }
-  if (transport.value === RemoteCodexExecutorTransport.CODEX_CLOUD_GITHUB_COMMENT) {
-    return dispatchCodexCloudGitHubComment({ request, token: token.value, env: input?.env });
-  }
-  if (transport.value === RemoteCodexExecutorTransport.VPS_RUNNER) {
-    return dispatchVpsRunnerGitHubQueue({ request, token: token.value, env: input?.env });
-  }
-  return dispatchControlRepositoryWorkflow({
-    request,
-    token: token.value,
-    env: input?.env,
-    transport: transport.value
-  });
-}
-async function dispatchControlRepositoryWorkflow({ request, token, env, transport }) {
-  const controlRepository = resolveControlRepository(env);
-  if (!controlRepository) {
-    return {
-      ok: false,
-      status: 503,
-      error: "control_repository_unavailable",
-      reason: "VTDD_GITHUB_ACTIONS_REPOSITORY must be configured"
-    };
-  }
-  const workflowFile = normalizeText20(env?.REMOTE_CODEX_WORKFLOW_FILE) || REMOTE_CODEX_WORKFLOW_FILE;
-  const workflowRef = normalizeText20(env?.REMOTE_CODEX_WORKFLOW_REF) || "main";
-  const apiBaseUrl = normalizeText20(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
-  const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
-  const dispatchUrl = `${apiBaseUrl}/repos/${encodeURIComponentRepository2(
-    controlRepository
-  )}/actions/workflows/${encodeURIComponent(workflowFile)}/dispatches`;
-  const dispatchBody = {
-    ref: workflowRef,
-    inputs: {
-      execution_id: request.executionId,
-      target_repository: request.repository,
-      target_issue_number: String(request.issueNumber),
-      target_branch: request.branch,
-      base_ref: request.baseRef,
-      codex_goal: request.codexGoal,
-      approval_phrase: request.approvalPhrase,
-      handoff_json: request.handoff ? JSON.stringify(request.handoff) : ""
-    }
-  };
-  let response;
-  try {
-    response = await fetchImpl(dispatchUrl, {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${token}`,
-        accept: "application/vnd.github+json",
-        "content-type": "application/json; charset=utf-8",
-        "x-github-api-version": "2022-11-28",
-        "user-agent": "vtdd-v2-remote-codex-executor"
-      },
-      body: JSON.stringify(dispatchBody)
-    });
-  } catch {
-    return {
-      ok: false,
-      status: 503,
-      error: "remote_codex_dispatch_failed",
-      reason: "failed to dispatch remote Codex workflow"
-    };
-  }
-  if (!response.ok) {
-    const body = await readJsonSafe3(response);
-    return {
-      ok: false,
-      status: response.status,
-      error: "remote_codex_dispatch_failed",
-      reason: normalizeText20(body?.message) || "GitHub workflow dispatch failed"
-    };
-  }
-  const progress = await retrieveControlRepositoryWorkflowProgress({
-    executionId: request.executionId,
-    token,
-    env,
-    transport
-  });
-  return {
-    ok: true,
-    execution: {
-      executionId: request.executionId,
-      transport,
-      controlRepository,
-      workflowFile,
-      workflowRef,
-      targetRepository: request.repository,
-      issueNumber: request.issueNumber,
-      branch: request.branch,
-      baseRef: request.baseRef,
-      codexGoal: request.codexGoal,
-      approvalScopeMatched: request.approvalScopeMatched,
-      workflowRunId: progress.ok ? progress.progress.workflowRunId : null,
-      workflowUrl: progress.ok ? progress.progress.workflowUrl : null,
-      workflowConclusion: progress.ok ? progress.progress.conclusion : null,
-      progressLookup: progress.ok ? null : {
-        error: progress.error,
-        reason: progress.reason
-      },
-      status: RemoteCodexExecutionStatus.QUEUED
-    }
-  };
-}
-async function retrieveRemoteCodexExecutionProgress(input = {}) {
-  const executionId = normalizeText20(input?.executionId);
-  if (!executionId) {
-    return {
-      ok: false,
-      status: 422,
-      error: "execution_id_required",
-      reason: "executionId is required"
-    };
-  }
-  const token = await resolveGitHubExecutionToken(input?.env);
-  if (!token.ok) {
-    return {
-      ok: false,
-      status: 503,
-      error: "github_execution_token_unavailable",
-      reason: token.reason
-    };
-  }
-  const transport = resolveExecutorTransport(input, { requireRequestAcknowledgment: false });
-  if (!transport.ok) {
-    return {
-      ok: false,
-      status: 422,
-      error: transport.error,
-      reason: transport.reason,
-      issues: transport.issues
-    };
-  }
-  if (transport.value === RemoteCodexExecutorTransport.CODEX_CLOUD_GITHUB_COMMENT) {
-    return retrieveCodexCloudGitHubCommentProgress({
-      executionId,
-      repository: normalizeText20(input?.repository),
-      issueNumber: normalizePositiveInteger3(input?.issueNumber),
-      branch: normalizeText20(input?.branch),
-      token: token.value,
-      env: input?.env
-    });
-  }
-  if (transport.value === RemoteCodexExecutorTransport.VPS_RUNNER) {
-    return retrieveVpsRunnerGitHubQueueProgress({
-      executionId,
-      repository: normalizeText20(input?.repository),
-      issueNumber: normalizePositiveInteger3(input?.issueNumber),
-      branch: normalizeText20(input?.branch),
-      token: token.value,
-      env: input?.env
-    });
-  }
-  return retrieveControlRepositoryWorkflowProgress({
-    executionId,
-    token: token.value,
-    env: input?.env,
-    transport: transport.value,
-    repository: normalizeText20(input?.repository),
-    branch: normalizeText20(input?.branch)
-  });
-}
-async function retrieveVpsRunnerHealthStatus(input = {}) {
-  const progress = await retrieveRemoteCodexExecutionProgress({
-    ...input,
-    executorTransport: RemoteCodexExecutorTransport.VPS_RUNNER
-  });
-  if (!progress.ok) {
-    return progress;
-  }
-  return {
-    ok: true,
-    health: buildVpsRunnerHealthStatus({
-      progress: progress.progress,
-      env: input?.env
-    }),
-    progress: progress.progress
-  };
-}
-async function retrieveControlRepositoryWorkflowProgress({
-  executionId,
-  token,
-  env,
-  transport,
-  repository,
-  branch
-}) {
-  const controlRepository = resolveControlRepository(env);
-  if (!controlRepository) {
-    return {
-      ok: false,
-      status: 503,
-      error: "control_repository_unavailable",
-      reason: "VTDD_GITHUB_ACTIONS_REPOSITORY must be configured"
-    };
-  }
-  const workflowFile = normalizeText20(env?.REMOTE_CODEX_WORKFLOW_FILE) || REMOTE_CODEX_WORKFLOW_FILE;
-  const apiBaseUrl = normalizeText20(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
-  const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
-  const progressUrl = `${apiBaseUrl}/repos/${encodeURIComponentRepository2(
-    controlRepository
-  )}/actions/workflows/${encodeURIComponent(workflowFile)}/runs?event=workflow_dispatch&per_page=30`;
-  let response;
-  try {
-    response = await fetchImpl(progressUrl, {
-      method: "GET",
-      headers: {
-        authorization: `Bearer ${token}`,
-        accept: "application/vnd.github+json",
-        "x-github-api-version": "2022-11-28",
-        "user-agent": "vtdd-v2-remote-codex-executor"
-      }
-    });
-  } catch {
-    return {
-      ok: false,
-      status: 503,
-      error: "remote_codex_progress_failed",
-      reason: "failed to read remote Codex workflow progress"
-    };
-  }
-  const body = await readJsonSafe3(response);
-  if (!response.ok) {
-    return {
-      ok: false,
-      status: response.status,
-      error: "remote_codex_progress_failed",
-      reason: normalizeText20(body?.message) || "GitHub workflow runs lookup failed"
-    };
-  }
-  const runs = Array.isArray(body?.workflow_runs) ? body.workflow_runs : [];
-  const run = runs.find((item) => matchesExecutionId(item, executionId));
-  if (!run) {
-    return {
-      ok: false,
-      status: 404,
-      error: "remote_codex_execution_not_found",
-      reason: "no remote Codex workflow run matched executionId"
-    };
-  }
-  const targetRepository = normalizeText20(repository);
-  const targetBranch = normalizeText20(branch);
-  const pullRequest = targetRepository && targetBranch ? await findPullRequestForBranch({
-    repository: targetRepository,
-    branch: targetBranch,
-    token,
-    env
-  }) : { ok: true, pullRequest: null };
-  if (!pullRequest.ok) {
-    return pullRequest;
-  }
-  const branchState = targetRepository && targetBranch && !pullRequest.pullRequest ? await findBranch({
-    repository: targetRepository,
-    branch: targetBranch,
-    token,
-    env
-  }) : { ok: true, branch: null };
-  if (!branchState.ok) {
-    return branchState;
-  }
-  const runStatus = normalizeRunStatus(run.status);
-  const conclusion = normalizeText20(run.conclusion) || null;
-  const targetRuntimeTruth = buildControlRunnerTargetRuntimeTruth({
-    runStatus,
-    conclusion,
-    targetRepository,
-    targetBranch,
-    pullRequest: pullRequest.pullRequest,
-    branch: branchState.branch
-  });
-  return {
-    ok: true,
-    progress: {
-      executionId,
-      transport,
-      controlRepository,
-      workflowFile,
-      workflowRunId: normalizePositiveInteger3(run.id),
-      workflowUrl: normalizeText20(run.html_url) || null,
-      status: runStatus,
-      conclusion,
-      branch: normalizeText20(run.head_branch) || null,
-      targetRuntimeTruth,
-      displayTitle: normalizeText20(run.display_title) || null,
-      startedAt: normalizeText20(run.run_started_at) || null,
-      updatedAt: normalizeText20(run.updated_at) || null
-    }
-  };
-}
-async function dispatchCodexCloudGitHubComment({ request, token, env }) {
-  const apiBaseUrl = normalizeText20(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
-  const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
-  const commentUrl = `${apiBaseUrl}/repos/${encodeURIComponentRepository2(
-    request.repository
-  )}/issues/${encodeURIComponent(String(request.issueNumber))}/comments`;
-  const body = buildCodexCloudGitHubComment({ request });
-  let response;
-  try {
-    response = await fetchImpl(commentUrl, {
-      method: "POST",
-      headers: githubJsonHeaders({ token }),
-      body: JSON.stringify({ body })
-    });
-  } catch {
-    return {
-      ok: false,
-      status: 503,
-      error: "remote_codex_dispatch_failed",
-      reason: "failed to post Codex Cloud GitHub delegation comment"
-    };
-  }
-  const responseBody = await readJsonSafe3(response);
-  if (!response.ok) {
-    return {
-      ok: false,
-      status: response.status,
-      error: "remote_codex_dispatch_failed",
-      reason: normalizeText20(responseBody?.message) || "GitHub issue comment creation failed"
-    };
-  }
-  return {
-    ok: true,
-    execution: {
-      executionId: request.executionId,
-      transport: RemoteCodexExecutorTransport.CODEX_CLOUD_GITHUB_COMMENT,
-      targetRepository: request.repository,
-      issueNumber: request.issueNumber,
-      branch: request.branch,
-      baseRef: request.baseRef,
-      codexGoal: request.codexGoal,
-      approvalScopeMatched: request.approvalScopeMatched,
-      commentId: normalizePositiveInteger3(responseBody?.id),
-      commentUrl: normalizeText20(responseBody?.html_url) || null,
-      status: RemoteCodexExecutionStatus.QUEUED
-    }
-  };
-}
-async function dispatchVpsRunnerGitHubQueue({ request, token, env }) {
-  const apiBaseUrl = normalizeText20(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
-  const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
-  const commentUrl = `${apiBaseUrl}/repos/${encodeURIComponentRepository2(
-    request.repository
-  )}/issues/${encodeURIComponent(String(request.issueNumber))}/comments`;
-  const body = buildVpsRunnerGitHubQueueComment({ request });
-  let response;
-  try {
-    response = await fetchImpl(commentUrl, {
-      method: "POST",
-      headers: githubJsonHeaders({ token }),
-      body: JSON.stringify({ body })
-    });
-  } catch {
-    return {
-      ok: false,
-      status: 503,
-      error: "vps_runner_dispatch_failed",
-      reason: "failed to post VPS runner GitHub queue comment"
-    };
-  }
-  const responseBody = await readJsonSafe3(response);
-  if (!response.ok) {
-    return {
-      ok: false,
-      status: response.status,
-      error: "vps_runner_dispatch_failed",
-      reason: normalizeText20(responseBody?.message) || "GitHub issue comment creation failed"
-    };
-  }
-  return {
-    ok: true,
-    execution: {
-      executionId: request.executionId,
-      transport: RemoteCodexExecutorTransport.VPS_RUNNER,
-      targetRepository: request.repository,
-      issueNumber: request.issueNumber,
-      branch: request.branch,
-      baseRef: request.baseRef,
-      codexGoal: request.codexGoal,
-      approvalScopeMatched: request.approvalScopeMatched,
-      queueCommentId: normalizePositiveInteger3(responseBody?.id),
-      queueCommentUrl: normalizeText20(responseBody?.html_url) || null,
-      status: RemoteCodexExecutionStatus.QUEUED
-    }
-  };
-}
-async function retrieveCodexCloudGitHubCommentProgress({
-  executionId,
-  repository,
-  issueNumber,
-  branch,
-  token,
-  env
-}) {
-  if (!repository || !issueNumber) {
-    return {
-      ok: false,
-      status: 422,
-      error: "remote_codex_progress_scope_required",
-      reason: "repository and issueNumber are required for Codex Cloud GitHub comment progress"
-    };
-  }
-  const apiBaseUrl = normalizeText20(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
-  const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
-  const commentsUrl = `${apiBaseUrl}/repos/${encodeURIComponentRepository2(
-    repository
-  )}/issues/${encodeURIComponent(String(issueNumber))}/comments?per_page=100`;
-  let commentsResponse;
-  try {
-    commentsResponse = await fetchImpl(commentsUrl, {
-      method: "GET",
-      headers: githubJsonHeaders({ token })
-    });
-  } catch {
-    return {
-      ok: false,
-      status: 503,
-      error: "remote_codex_progress_failed",
-      reason: "failed to read Codex Cloud delegation comments"
-    };
-  }
-  const commentsBody = await readJsonSafe3(commentsResponse);
-  if (!commentsResponse.ok) {
-    return {
-      ok: false,
-      status: commentsResponse.status,
-      error: "remote_codex_progress_failed",
-      reason: normalizeText20(commentsBody?.message) || "GitHub issue comments lookup failed"
-    };
-  }
-  const comments = Array.isArray(commentsBody) ? commentsBody : [];
-  const delegationComment = comments.find(
-    (comment) => normalizeText20(comment?.body).includes(`vtdd:remote-codex-execution:${executionId}`)
-  );
-  if (!delegationComment) {
-    return {
-      ok: false,
-      status: 404,
-      error: "remote_codex_execution_not_found",
-      reason: "no Codex Cloud GitHub delegation comment matched executionId"
-    };
-  }
-  const pullRequest = branch ? await findPullRequestForBranch({ repository, branch, token, env }) : { ok: true, pullRequest: null };
-  if (!pullRequest.ok) {
-    return pullRequest;
-  }
-  const branchState = branch && !pullRequest.pullRequest ? await findBranch({ repository, branch, token, env }) : { ok: true, branch: null };
-  if (!branchState.ok) {
-    return branchState;
-  }
-  const connectorBlocker = !pullRequest.pullRequest && !branchState.branch ? findCodexCloudConnectorBlocker({ comments, delegationComment }) : null;
-  const pickupBlocker = !pullRequest.pullRequest && !branchState.branch && !connectorBlocker ? buildCodexCloudPickupBlocker({ delegationComment, env }) : null;
-  return {
-    ok: true,
-    progress: {
-      executionId,
-      transport: RemoteCodexExecutorTransport.CODEX_CLOUD_GITHUB_COMMENT,
-      targetRepository: repository,
-      issueNumber,
-      branch: branchState.branch,
-      leadTime: buildRemoteCodexLeadTime({
-        queuedAt: normalizeText20(delegationComment.created_at),
-        branchPushedAt: normalizeText20(branchState.branch?.createdAt),
-        prCreatedAt: normalizeText20(pullRequest.pullRequest?.createdAt),
-        completedAt: normalizeText20(pullRequest.pullRequest?.createdAt)
-      }),
-      delegationCommentId: normalizePositiveInteger3(delegationComment.id),
-      delegationCommentUrl: normalizeText20(delegationComment.html_url) || null,
-      status: pullRequest.pullRequest ? RemoteCodexExecutionStatus.COMPLETED : branchState.branch ? RemoteCodexExecutionStatus.IN_PROGRESS : connectorBlocker ? RemoteCodexExecutionStatus.BLOCKED : pickupBlocker ? RemoteCodexExecutionStatus.BLOCKED : RemoteCodexExecutionStatus.QUEUED,
-      pullRequest: pullRequest.pullRequest,
-      blocker: connectorBlocker ?? pickupBlocker
-    }
-  };
-}
-async function retrieveVpsRunnerGitHubQueueProgress({
-  executionId,
-  repository,
-  issueNumber,
-  branch,
-  token,
-  env
-}) {
-  if (!repository || !issueNumber) {
-    return {
-      ok: false,
-      status: 422,
-      error: "vps_runner_progress_scope_required",
-      reason: "repository and issueNumber are required for VPS runner progress"
-    };
-  }
-  const apiBaseUrl = normalizeText20(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
-  const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
-  let comments;
-  try {
-    comments = await readAllIssueComments({
-      apiBaseUrl,
-      repository,
-      issueNumber,
-      token,
-      fetchImpl
-    });
-  } catch (error) {
-    return {
-      ok: false,
-      status: error?.status || 503,
-      error: "vps_runner_progress_failed",
-      reason: normalizeText20(error?.message) || "failed to read VPS runner queue comments"
-    };
-  }
-  const queueComment = comments.find(
-    (comment) => normalizeText20(comment?.body).includes(`vtdd:vps-runner-execution:${executionId}`)
-  );
-  if (!queueComment) {
-    return {
-      ok: false,
-      status: 404,
-      error: "vps_runner_execution_not_found",
-      reason: "no VPS runner queue comment matched executionId"
-    };
-  }
-  const pullRequest = branch ? await findPullRequestForBranch({ repository, branch, token, env }) : { ok: true, pullRequest: null };
-  if (!pullRequest.ok) {
-    return pullRequest;
-  }
-  const branchState = branch && !pullRequest.pullRequest ? await findBranch({ repository, branch, token, env }) : { ok: true, branch: null };
-  if (!branchState.ok) {
-    return branchState;
-  }
-  const runnerEvents = findVpsRunnerEvents({ comments, queueComment });
-  const runnerEvent = selectLatestVpsRunnerEvent(runnerEvents);
-  const leadTime = buildVpsRunnerProgressLeadTime({
-    queueComment,
-    runnerEvents,
-    pullRequest: pullRequest.pullRequest
-  });
-  const runnerEventStaleBlocker = runnerEvent && !pullRequest.pullRequest ? buildVpsRunnerEventStaleBlocker({ runnerEvent, env }) : null;
-  const staleBlocker = !pullRequest.pullRequest && !branchState.branch && !runnerEvent ? buildVpsRunnerPickupBlocker({ queueComment, env }) : null;
-  const failureBlocker = !pullRequest.pullRequest && runnerEvent?.status === RemoteCodexExecutionStatus.BLOCKED ? runnerEvent.rawFailure : null;
-  const status = pullRequest.pullRequest ? RemoteCodexExecutionStatus.COMPLETED : failureBlocker || runnerEventStaleBlocker || staleBlocker ? RemoteCodexExecutionStatus.BLOCKED : branchState.branch ? RemoteCodexExecutionStatus.IN_PROGRESS : runnerEvent?.status || RemoteCodexExecutionStatus.QUEUED;
-  return {
-    ok: true,
-    progress: {
-      executionId,
-      transport: RemoteCodexExecutorTransport.VPS_RUNNER,
-      targetRepository: repository,
-      issueNumber,
-      branch: branchState.branch,
-      queueCommentId: normalizePositiveInteger3(queueComment.id),
-      queueCommentUrl: normalizeText20(queueComment.html_url) || null,
-      status,
-      pullRequest: pullRequest.pullRequest,
-      runnerEvent,
-      leadTime,
-      blocker: failureBlocker ?? runnerEventStaleBlocker ?? staleBlocker
-    }
-  };
-}
-async function readAllIssueComments({ apiBaseUrl, repository, issueNumber, token, fetchImpl }) {
-  const comments = [];
-  for (let page = 1; ; page += 1) {
-    const commentsUrl = `${apiBaseUrl}/repos/${encodeURIComponentRepository2(
-      repository
-    )}/issues/${encodeURIComponent(String(issueNumber))}/comments?per_page=100&page=${page}`;
-    const response = await fetchImpl(commentsUrl, {
-      method: "GET",
-      headers: githubJsonHeaders({ token })
-    });
-    const body = await readJsonSafe3(response);
-    if (!response.ok) {
-      const error = new Error(normalizeText20(body?.message) || "GitHub issue comments lookup failed");
-      error.status = response.status;
-      throw error;
-    }
-    const pageComments = Array.isArray(body) ? body : [];
-    comments.push(...pageComments);
-    if (pageComments.length < 100) {
-      return comments;
-    }
-  }
-}
-async function findPullRequestForBranch({ repository, branch, token, env }) {
-  const apiBaseUrl = normalizeText20(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
-  const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
-  const [owner] = repository.split("/");
-  const pullsUrl = `${apiBaseUrl}/repos/${encodeURIComponentRepository2(
-    repository
-  )}/pulls?state=all&head=${encodeURIComponent(`${owner}:${branch}`)}&per_page=10`;
-  let response;
-  try {
-    response = await fetchImpl(pullsUrl, {
-      method: "GET",
-      headers: githubJsonHeaders({ token })
-    });
-  } catch {
-    return {
-      ok: false,
-      status: 503,
-      error: "remote_codex_progress_failed",
-      reason: "failed to read pull requests for Codex Cloud delegation"
-    };
-  }
-  const body = await readJsonSafe3(response);
-  if (!response.ok) {
-    return {
-      ok: false,
-      status: response.status,
-      error: "remote_codex_progress_failed",
-      reason: normalizeText20(body?.message) || "GitHub pull request lookup failed"
-    };
-  }
-  const pull = Array.isArray(body) ? body[0] : null;
-  return {
-    ok: true,
-    pullRequest: pull ? {
-      number: normalizePositiveInteger3(pull.number),
-      url: normalizeText20(pull.html_url) || null,
-      state: normalizeText20(pull.state) || null,
-      title: normalizeText20(pull.title) || null,
-      createdAt: normalizeText20(pull.created_at) || null,
-      updatedAt: normalizeText20(pull.updated_at) || null
-    } : null
-  };
-}
-async function findBranch({ repository, branch, token, env }) {
-  const apiBaseUrl = normalizeText20(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
-  const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
-  const branchUrl = `${apiBaseUrl}/repos/${encodeURIComponentRepository2(
-    repository
-  )}/branches/${encodeURIComponent(branch)}`;
-  let response;
-  try {
-    response = await fetchImpl(branchUrl, {
-      method: "GET",
-      headers: githubJsonHeaders({ token })
-    });
-  } catch {
-    return {
-      ok: false,
-      status: 503,
-      error: "remote_codex_progress_failed",
-      reason: "failed to read branch for Codex Cloud delegation"
-    };
-  }
-  const body = await readJsonSafe3(response);
-  if (response.status === 404) {
-    return { ok: true, branch: null };
-  }
-  if (!response.ok) {
-    return {
-      ok: false,
-      status: response.status,
-      error: "remote_codex_progress_failed",
-      reason: normalizeText20(body?.message) || "GitHub branch lookup failed"
-    };
-  }
-  return {
-    ok: true,
-    branch: {
-      name: normalizeText20(body?.name) || branch,
-      url: normalizeText20(body?._links?.html) || null,
-      sha: normalizeText20(body?.commit?.sha) || null
-    }
-  };
-}
-function findCodexCloudConnectorBlocker({ comments, delegationComment }) {
-  const delegationId = normalizePositiveInteger3(delegationComment?.id) ?? 0;
-  const laterComments = comments.filter((comment) => {
-    const commentId = normalizePositiveInteger3(comment?.id) ?? 0;
-    return !delegationId || commentId > delegationId;
-  });
-  const blockerComment = laterComments.find((comment) => {
-    const author = normalizeText20(comment?.user?.login).toLowerCase();
-    const body = normalizeText20(comment?.body).toLowerCase();
-    return author.includes("chatgpt-codex-connector") && (body.includes("create a codex account and connect to github") || body.includes("to use codex here"));
-  });
-  if (!blockerComment) {
-    return null;
-  }
-  return {
-    error: "codex_cloud_connector_required",
-    reason: "Codex Cloud connector is not ready for this repository or account",
-    commentId: normalizePositiveInteger3(blockerComment.id),
-    commentUrl: normalizeText20(blockerComment.html_url) || null
-  };
-}
-function buildCodexCloudPickupBlocker({ delegationComment, env }) {
-  const graceSeconds = normalizeNonNegativeNumber(
-    env?.CODEX_CLOUD_PICKUP_GRACE_SECONDS ?? 300
-  );
-  const createdAt = Date.parse(normalizeText20(delegationComment?.created_at));
-  if (!Number.isFinite(createdAt)) {
-    return null;
-  }
-  const ageSeconds = Math.floor((Date.now() - createdAt) / 1e3);
-  if (ageSeconds < graceSeconds) {
-    return null;
-  }
-  return {
-    error: "codex_cloud_pickup_not_observed",
-    reason: "Codex Cloud did not create a branch or PR from the delegation comment within the pickup grace period",
-    commentId: normalizePositiveInteger3(delegationComment?.id),
-    commentUrl: normalizeText20(delegationComment?.html_url) || null,
-    graceSeconds,
-    ageSeconds
-  };
-}
-function findVpsRunnerEvents({ comments, queueComment }) {
-  const queueCommentId = normalizePositiveInteger3(queueComment?.id) ?? 0;
-  const laterComments = comments.filter((comment) => {
-    const commentId = normalizePositiveInteger3(comment?.id) ?? 0;
-    return !queueCommentId || commentId > queueCommentId;
-  });
-  const events = laterComments.map((comment) => {
-    const body = normalizeText20(comment?.body);
-    const marker = `vtdd:vps-runner-event:${extractVpsExecutionIdFromQueueComment(queueComment)}`;
-    if (!body.includes(marker)) {
-      return null;
-    }
-    const payload = extractFirstJsonFence(body);
-    if (!payload) {
-      return null;
-    }
-    const rawStatus = normalizeText20(payload.status);
-    const status = normalizeVpsRunnerEventStatus(rawStatus);
-    const leadTime = normalizeObject8(payload.leadTime);
-    return {
-      commentId: normalizePositiveInteger3(comment?.id),
-      commentUrl: normalizeText20(comment?.html_url) || null,
-      rawStatus,
-      status,
-      lastEvent: normalizeText20(payload.lastEvent) || null,
-      currentStep: normalizeText20(payload.currentStep) || null,
-      heartbeatAt: normalizeText20(payload.heartbeatAt) || null,
-      leadTime,
-      rawFailure: normalizeObject8(payload.rawFailure),
-      command: normalizeObject8(payload.command),
-      branch: normalizeText20(payload.branch) || null,
-      pullRequest: normalizeObject8(payload.pullRequest),
-      updatedAt: normalizeText20(payload.updatedAt) || normalizeText20(payload.heartbeatAt) || normalizeText20(comment?.updated_at) || normalizeText20(comment?.created_at) || null
-    };
-  }).filter(Boolean);
-  return events;
-}
-function selectLatestVpsRunnerEvent(events) {
-  return [...Array.isArray(events) ? events : []].sort((left, right) => {
-    const leftUpdatedAt = Date.parse(normalizeText20(left?.updatedAt));
-    const rightUpdatedAt = Date.parse(normalizeText20(right?.updatedAt));
-    if (Number.isFinite(leftUpdatedAt) && Number.isFinite(rightUpdatedAt) && leftUpdatedAt !== rightUpdatedAt) {
-      return leftUpdatedAt - rightUpdatedAt;
-    }
-    return (normalizePositiveInteger3(left?.commentId) ?? 0) - (normalizePositiveInteger3(right?.commentId) ?? 0);
-  }).at(-1) || null;
-}
-function buildVpsRunnerProgressLeadTime({ queueComment, runnerEvents, pullRequest }) {
-  const latestWithLeadTime = [...Array.isArray(runnerEvents) ? runnerEvents : []].reverse().find((event) => Object.keys(normalizeObject8(event?.leadTime)).length > 0);
-  const eventLeadTime = normalizeObject8(latestWithLeadTime?.leadTime);
-  const timestamps = {
-    queuedAt: normalizeText20(eventLeadTime.queued_at) || normalizeText20(queueComment?.created_at),
-    pickedUpAt: normalizeText20(eventLeadTime.picked_up_at),
-    codexStartedAt: normalizeText20(eventLeadTime.codex_started_at),
-    branchPushedAt: normalizeText20(eventLeadTime.branch_pushed_at),
-    prCreatedAt: normalizeText20(eventLeadTime.pr_created_at) || normalizeText20(pullRequest?.createdAt),
-    completedAt: normalizeText20(eventLeadTime.completed_at),
-    failedAt: normalizeText20(eventLeadTime.failed_at)
-  };
-  for (const event of runnerEvents || []) {
-    const updatedAt = normalizeText20(event?.updatedAt);
-    if (!timestamps.pickedUpAt && ["picked_up", "runner_started"].includes(normalizeText20(event?.lastEvent))) {
-      timestamps.pickedUpAt = updatedAt;
-    }
-    if (!timestamps.codexStartedAt && (normalizeText20(event?.currentStep) === "codex_subprocess" || normalizeText20(event?.lastEvent) === "codex_started" || normalizeText20(event?.lastEvent) === "codex_subprocess_started")) {
-      timestamps.codexStartedAt = updatedAt;
-    }
-    if (!timestamps.branchPushedAt && normalizeText20(event?.lastEvent) === "branch_pushed") {
-      timestamps.branchPushedAt = updatedAt;
-    }
-    if (!timestamps.prCreatedAt && ["pull_request_created", "pull_request_updated"].includes(normalizeText20(event?.lastEvent))) {
-      timestamps.prCreatedAt = updatedAt;
-    }
-    if (!timestamps.completedAt && normalizeText20(event?.rawStatus) === RemoteCodexExecutionStatus.COMPLETED) {
-      timestamps.completedAt = updatedAt;
-    }
-    if (!timestamps.failedAt && normalizeText20(event?.status) === RemoteCodexExecutionStatus.BLOCKED && Object.keys(normalizeObject8(event?.rawFailure)).length > 0) {
-      timestamps.failedAt = updatedAt;
-    }
-  }
-  return buildRemoteCodexLeadTime(timestamps);
-}
-function buildRemoteCodexLeadTime(timestamps = {}) {
-  return buildExecutionLeadTime(timestamps, { normalizeTimestamp: normalizeTimestamp4 });
-}
-function normalizeTimestamp4(value) {
-  const text = normalizeText20(value);
-  return Number.isFinite(Date.parse(text)) ? text : null;
-}
-function buildVpsRunnerEventStaleBlocker({ runnerEvent, env }) {
-  const staleSeconds = normalizeNonNegativeNumber(env?.VPS_RUNNER_EVENT_STALE_SECONDS ?? 600);
-  const updatedAt = Date.parse(normalizeText20(runnerEvent?.updatedAt));
-  if (!Number.isFinite(updatedAt)) {
-    return null;
-  }
-  if (![RemoteCodexExecutionStatus.IN_PROGRESS, RemoteCodexExecutionStatus.UNKNOWN].includes(runnerEvent?.status)) {
-    return null;
-  }
-  const ageSeconds = Math.floor((Date.now() - updatedAt) / 1e3);
-  if (ageSeconds < staleSeconds) {
-    return null;
-  }
-  return {
-    error: "vps_runner_event_stale",
-    reason: "VPS runner last reported a running step but has not posted a heartbeat or terminal event within the stale threshold",
-    commentId: normalizePositiveInteger3(runnerEvent?.commentId),
-    commentUrl: normalizeText20(runnerEvent?.commentUrl) || null,
-    lastEvent: normalizeText20(runnerEvent?.lastEvent) || null,
-    currentStep: normalizeText20(runnerEvent?.currentStep) || null,
-    lastUpdatedAt: normalizeText20(runnerEvent?.updatedAt) || null,
-    staleSeconds,
-    ageSeconds
-  };
-}
-function buildVpsRunnerPickupBlocker({ queueComment, env }) {
-  const graceSeconds = normalizeNonNegativeNumber(env?.VPS_RUNNER_PICKUP_GRACE_SECONDS ?? 300);
-  const createdAt = Date.parse(normalizeText20(queueComment?.created_at));
-  if (!Number.isFinite(createdAt)) {
-    return null;
-  }
-  const ageSeconds = Math.floor((Date.now() - createdAt) / 1e3);
-  if (ageSeconds < graceSeconds) {
-    return null;
-  }
-  return {
-    error: "vps_runner_pickup_not_observed",
-    reason: "VPS runner did not report pickup and no target branch or PR was observed within the pickup grace period",
-    commentId: normalizePositiveInteger3(queueComment?.id),
-    commentUrl: normalizeText20(queueComment?.html_url) || null,
-    graceSeconds,
-    ageSeconds
-  };
-}
-function buildVpsRunnerHealthStatus({ progress, env }) {
-  const runnerEvent = normalizeObject8(progress?.runnerEvent);
-  const blocker = normalizeObject8(progress?.blocker);
-  const pullRequest = normalizeObject8(progress?.pullRequest);
-  const branch = normalizeObject8(progress?.branch);
-  const lastSeenAt = normalizeText20(runnerEvent.updatedAt) || normalizeText20(runnerEvent.heartbeatAt) || null;
-  const heartbeatAt = normalizeText20(runnerEvent.heartbeatAt) || null;
-  const queuePickedUp = Boolean(
-    Object.keys(runnerEvent).length > 0 || Object.keys(branch).length > 0 || Object.keys(pullRequest).length > 0
-  );
-  const queueStatus = blocker.error === "vps_runner_pickup_not_observed" ? "stale" : queuePickedUp ? "picked_up" : "queued";
-  const currentStep = normalizeText20(runnerEvent.currentStep) || normalizeText20(runnerEvent.lastEvent) || (Object.keys(pullRequest).length > 0 ? "pull_request_observed" : Object.keys(branch).length > 0 ? "branch_observed" : "queue_waiting");
-  const unavailableReason = buildVpsRunnerUnavailableReason({ progress, blocker });
-  const runnerAlive = unavailableReason ? false : Boolean(lastSeenAt);
-  const runnerStatus = runnerAlive ? "alive" : "unavailable";
-  return {
-    executionId: normalizeText20(progress?.executionId) || null,
-    transport: RemoteCodexExecutorTransport.VPS_RUNNER,
-    runnerStatus,
-    runnerAlive,
-    lastSeenAt,
-    heartbeatAt,
-    queue: {
-      status: queueStatus,
-      pickedUp: queuePickedUp,
-      commentId: normalizePositiveInteger3(progress?.queueCommentId),
-      commentUrl: normalizeText20(progress?.queueCommentUrl) || null
-    },
-    leadTime: normalizeObject8(progress?.leadTime),
-    currentStep,
-    progressStatus: normalizeText20(progress?.status) || RemoteCodexExecutionStatus.UNKNOWN,
-    reason: unavailableReason?.reason || null,
-    reasonCode: unavailableReason?.code || null,
-    staleThresholdSeconds: normalizeNonNegativeNumber(env?.VPS_RUNNER_EVENT_STALE_SECONDS ?? 600)
-  };
-}
-function buildVpsRunnerUnavailableReason({ progress, blocker }) {
-  const progressStatus = normalizeText20(progress?.status);
-  const code = normalizeText20(blocker?.error);
-  if (code) {
-    return {
-      code,
-      reason: normalizeText20(blocker.reason) || "VPS runner status is unavailable from safe GitHub runtime truth"
-    };
-  }
-  if (progressStatus === RemoteCodexExecutionStatus.QUEUED) {
-    return {
-      code: "vps_runner_pickup_pending",
-      reason: "VPS runner pickup has not been observed yet"
-    };
-  }
-  if (!normalizeText20(progress?.runnerEvent?.updatedAt) && !normalizeText20(progress?.runnerEvent?.heartbeatAt)) {
-    return {
-      code: "vps_runner_last_seen_missing",
-      reason: "VPS runner has not reported a heartbeat or event timestamp"
-    };
-  }
-  return null;
-}
-function buildControlRunnerTargetRuntimeTruth({
-  runStatus,
-  conclusion,
-  targetRepository,
-  targetBranch,
-  pullRequest,
-  branch
-}) {
-  if (!targetRepository || !targetBranch) {
-    const missing = [];
-    if (!targetRepository) {
-      missing.push("targetRepository");
-    }
-    if (!targetBranch) {
-      missing.push("targetBranch");
-    }
-    return {
-      status: RemoteCodexExecutionStatus.BLOCKED,
-      targetRepository: targetRepository || null,
-      targetBranch: targetBranch || null,
-      branch: null,
-      pullRequest: null,
-      blocker: {
-        error: "remote_codex_target_runtime_truth_unavailable",
-        reason: "remote Codex control-runner progress requires target repository and branch to verify GitHub-visible runtime evidence",
-        missing
-      }
-    };
-  }
-  const status = pullRequest ? RemoteCodexExecutionStatus.COMPLETED : branch ? RemoteCodexExecutionStatus.IN_PROGRESS : runStatus === RemoteCodexExecutionStatus.COMPLETED ? RemoteCodexExecutionStatus.BLOCKED : runStatus;
-  const blocker = status === RemoteCodexExecutionStatus.BLOCKED && conclusion && conclusion !== "success" ? {
-    error: "remote_codex_workflow_failed",
-    reason: "remote Codex control-runner workflow completed without GitHub-visible branch or PR evidence",
-    conclusion,
-    targetRepository,
-    targetBranch
-  } : status === RemoteCodexExecutionStatus.BLOCKED ? {
-    error: "remote_codex_runtime_evidence_missing",
-    reason: "remote Codex control-runner workflow completed but no target branch or PR was observed",
-    targetRepository,
-    targetBranch
-  } : null;
-  return {
-    status,
-    targetRepository,
-    targetBranch,
-    branch,
-    pullRequest,
-    blocker
-  };
-}
-function buildCodexCloudGitHubComment({ request }) {
-  const lines = [
-    `<!-- vtdd:remote-codex-execution:${request.executionId} -->`,
-    "@codex please implement this bounded development task and open or update the PR.",
-    "",
-    "VTDD-managed Codex Cloud delegation request.",
-    "",
-    "Bounded execution contract:",
-    `- Repository: ${request.repository}`,
-    `- Issue: #${request.issueNumber}`,
-    `- Branch: ${request.branch}`,
-    `- Base ref: ${request.baseRef}`,
-    `- Goal: ${request.codexGoal}`,
-    "- Canonical spec: this GitHub Issue",
-    "- Runtime truth: current GitHub branch / diff / PR / review comments",
-    "- Completion target: create or update a pull request",
-    "- PR body requirement: before creating or updating a PR, inspect `docs/pr-template-model.md`, `scripts/render-pr-body.mjs`, and `scripts/validate-pr-body.mjs` in the target repository.",
-    "- Required PR body markers: `## This PR satisfies Intent`, `## Satisfied Success Criteria`, `## Unsatisfied Success Criteria`, `## Verification Evidence`, `## Surface Update Checklist`.",
-    "",
-    "Rules:",
-    "- Do not expand scope beyond the Issue.",
-    "- Do not merge.",
-    "- Do not deploy.",
-    "- Preserve reviewer objections for Butler/human judgment.",
-    "- If the Issue or runtime truth is insufficient, stop and comment with the blocked reason."
-  ];
-  if (request.handoff) {
-    lines.push("", "Handoff:", fencedJson(request.handoff));
-  }
-  return lines.join("\n");
-}
-function buildVpsRunnerGitHubQueueComment({ request }) {
-  const payload = {
-    executionId: request.executionId,
-    transport: RemoteCodexExecutorTransport.VPS_RUNNER,
-    repository: request.repository,
-    issueNumber: request.issueNumber,
-    branch: request.branch,
-    baseRef: request.baseRef,
-    codexGoal: request.codexGoal,
-    approvalScopeMatched: request.approvalScopeMatched,
-    approvalActor: request.approvalActor,
-    handoff: request.handoff
-  };
-  const lines = [
-    `<!-- vtdd:vps-runner-execution:${request.executionId} -->`,
-    "VTDD-managed VPS runner execution request.",
-    "",
-    "Bounded execution contract:",
-    `- Repository: ${request.repository}`,
-    `- Issue: #${request.issueNumber}`,
-    `- Branch: ${request.branch}`,
-    `- Base ref: ${request.baseRef}`,
-    `- Goal: ${request.codexGoal}`,
-    "- Canonical spec: this GitHub Issue",
-    "- Runtime truth: current GitHub branch / diff / PR / review comments",
-    "- Completion target: create or update a pull request",
-    "- PR body requirement: Codex must inspect `docs/pr-template-model.md`, `scripts/render-pr-body.mjs`, and `scripts/validate-pr-body.mjs`; the VPS runner will validate and normalize the PR body again before create/update.",
-    "- Required PR body markers: `## This PR satisfies Intent`, `## Satisfied Success Criteria`, `## Unsatisfied Success Criteria`, `## Verification Evidence`, `## Surface Update Checklist`.",
-    "",
-    "Rules:",
-    "- Do not expand scope beyond the Issue.",
-    "- Do not merge.",
-    "- Do not deploy.",
-    "- Preserve reviewer objections for Butler/human judgment.",
-    "- If the Issue or runtime truth is insufficient, stop and comment with the blocked reason.",
-    "",
-    "Runner payload:",
-    fencedJson(payload)
-  ];
-  return lines.join("\n");
-}
-function resolveExecutorTransport(input = {}, options = {}) {
-  const requestValue = normalizeText20(
-    input?.executorTransport ?? input?.payload?.executorTransport ?? input?.payload?.continuationContext?.executorTransport
-  );
-  const envValue = normalizeText20(input?.env?.REMOTE_CODEX_EXECUTOR_TRANSPORT);
-  const value = requestValue || envValue;
-  if (!value) {
-    const configuredControlRepository = resolveControlRepository(input?.env);
-    return {
-      ok: true,
-      value: configuredControlRepository ? RemoteCodexExecutorTransport.CODEX_CLOUD_CLI_CONTROL_RUNNER : RemoteCodexExecutorTransport.CODEX_CLOUD_GITHUB_COMMENT
-    };
-  }
-  const metadata = REMOTE_CODEX_EXECUTOR_TRANSPORT_REGISTRY[value];
-  if (!metadata) {
-    return {
-      ok: false,
-      error: "remote_codex_transport_unknown",
-      reason: "executorTransport is not registered",
-      issues: [`unsupported executorTransport: ${value}`]
-    };
-  }
-  if (value === RemoteCodexExecutorTransport.API_KEY_RUNNER) {
-    const requestSelected = requestValue === RemoteCodexExecutorTransport.API_KEY_RUNNER;
-    const acknowledged = input?.apiKeyRunnerAcknowledged === true || input?.payload?.apiKeyRunnerAcknowledged === true || input?.payload?.continuationContext?.apiKeyRunnerAcknowledged === true;
-    if (requestSelected && options.requireRequestAcknowledgment !== false && !acknowledged) {
-      return {
-        ok: false,
-        error: "api_key_runner_approval_required",
-        reason: "api_key_runner requires explicit human approval because it uses OPENAI_API_KEY",
-        issues: ["api_key_runner_acknowledgment_required"]
-      };
-    }
-  }
-  return { ok: true, value };
-}
-function githubJsonHeaders({ token }) {
-  return {
-    authorization: `Bearer ${token}`,
-    accept: "application/vnd.github+json",
-    "content-type": "application/json; charset=utf-8",
-    "x-github-api-version": "2022-11-28",
-    "user-agent": "vtdd-v2-remote-codex-executor"
-  };
-}
-function fencedJson(value) {
-  return ["```json", JSON.stringify(value, null, 2), "```"].join("\n");
-}
-async function resolveGitHubExecutionToken(env) {
-  const directToken = normalizeText20(
-    env?.GITHUB_APP_INSTALLATION_TOKEN ?? env?.VTDD_GITHUB_ACTIONS_TOKEN
-  );
-  if (directToken) {
-    return { ok: true, value: directToken };
-  }
-  const mintedToken = await resolveGitHubAppInstallationToken({
-    env,
-    fetchImpl: typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch,
-    apiBaseUrl: normalizeText20(env?.GITHUB_API_BASE_URL) || "https://api.github.com"
-  });
-  if (mintedToken.ok) {
-    return { ok: true, value: mintedToken.token };
-  }
-  if (mintedToken.warning) {
-    return {
-      ok: false,
-      reason: mintedToken.warning
-    };
-  }
-  const provider = env?.GITHUB_APP_INSTALLATION_TOKEN_PROVIDER;
-  if (typeof provider === "function") {
-    try {
-      const provided = normalizeText20(await provider());
-      if (provided) {
-        return { ok: true, value: provided };
-      }
-    } catch {
-      return {
-        ok: false,
-        reason: "GitHub execution token provider failed"
-      };
-    }
-  }
-  return {
-    ok: false,
-    reason: "GitHub execution token is not configured"
-  };
-}
-function resolveControlRepository(env) {
-  return normalizeText20(env?.VTDD_GITHUB_ACTIONS_REPOSITORY ?? env?.GITHUB_REPOSITORY);
-}
-function matchesExecutionId(run, executionId) {
-  const displayTitle = normalizeText20(run?.display_title);
-  const name = normalizeText20(run?.name);
-  return displayTitle.includes(executionId) || name.includes(executionId);
-}
-function extractVpsExecutionIdFromQueueComment(queueComment) {
-  const body = normalizeText20(queueComment?.body);
-  const match = body.match(/vtdd:vps-runner-execution:([a-zA-Z0-9._:-]+)/);
-  return match ? match[1] : "";
-}
-function extractFirstJsonFence(text) {
-  const match = normalizeText20(text).match(/```json\s*([\s\S]*?)```/);
-  if (!match) {
-    return null;
-  }
-  try {
-    return JSON.parse(match[1]);
-  } catch {
-    return null;
-  }
-}
-function normalizeVpsRunnerEventStatus(value) {
-  const normalized = normalizeText20(value).toLowerCase();
-  if (normalized === "running" || normalized === "in_progress" || normalized === "branch_created") {
-    return RemoteCodexExecutionStatus.IN_PROGRESS;
-  }
-  if (normalized === "pr_created" || normalized === "completed") {
-    return RemoteCodexExecutionStatus.COMPLETED;
-  }
-  if (normalized === "failed" || normalized === "blocked") {
-    return RemoteCodexExecutionStatus.BLOCKED;
-  }
-  if (normalized === "queued" || normalized === "requested") {
-    return RemoteCodexExecutionStatus.QUEUED;
-  }
-  return RemoteCodexExecutionStatus.UNKNOWN;
-}
-function normalizeRunStatus(value) {
-  const normalized = normalizeText20(value).toLowerCase();
-  if (normalized === "queued" || normalized === "waiting" || normalized === "requested") {
-    return RemoteCodexExecutionStatus.QUEUED;
-  }
-  if (normalized === "in_progress" || normalized === "pending" || normalized === "action_required") {
-    return RemoteCodexExecutionStatus.IN_PROGRESS;
-  }
-  if (normalized === "completed") {
-    return RemoteCodexExecutionStatus.COMPLETED;
-  }
-  return RemoteCodexExecutionStatus.UNKNOWN;
-}
-function buildExecutionId({ issueNumber }) {
-  const issuePart = issueNumber ? `issue${issueNumber}` : "issue0";
-  const randomPart = Math.random().toString(36).slice(2, 8);
-  return `remote-codex-${issuePart}-${randomPart}`;
-}
-function encodeURIComponentRepository2(repository) {
-  return repository.split("/").map((part) => encodeURIComponent(part)).join("/");
-}
-function normalizeObject8(value) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {};
-  }
-  return value;
-}
-function normalizeText20(value) {
-  return String(value ?? "").trim();
-}
-function normalizePositiveInteger3(value) {
-  const numeric = Number(value);
-  if (!Number.isInteger(numeric) || numeric <= 0) {
-    return null;
-  }
-  return numeric;
-}
-function normalizeNonNegativeNumber(value) {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric) || numeric < 0) {
-    return 300;
-  }
-  return numeric;
-}
-async function readJsonSafe3(response) {
-  try {
-    return await response.json();
-  } catch {
-    return {};
-  }
 }
 
 // src/core/gemini-review-failure.js
