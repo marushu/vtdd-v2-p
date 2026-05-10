@@ -1,4 +1,5 @@
 import { resolveGitHubAppInstallationToken } from "./github-app-repository-index.js";
+import { normalizePullRequestMergeability } from "./github-mergeability.js";
 
 const GITHUB_API_BASE_URL = "https://api.github.com";
 const GITHUB_API_VERSION = "2022-11-28";
@@ -338,6 +339,7 @@ function normalizeIssueComment(item) {
 }
 
 function normalizePullRequest(item) {
+  const mergeability = normalizePullRequestMergeability(item);
   return {
     number: normalizePositiveInteger(item?.number),
     title: normalizeText(item?.title),
@@ -355,6 +357,16 @@ function normalizePullRequest(item) {
     merged: item?.merged === true || Boolean(normalizeText(item?.merged_at)),
     mergedAt: normalizeText(item?.merged_at),
     mergeCommitSha: normalizeText(item?.merge_commit_sha),
+    mergeable: mergeability.mergeable,
+    mergeableState: mergeability.state,
+    mergeConflict: mergeability.hasConflict,
+    mergeBlocked: mergeability.blocked,
+    mergeBlockedReason: mergeability.blockedReason,
+    mergeWarning: mergeability.warning,
+    freshBranchSuggestion: mergeability.freshBranchSuggestion,
+    conflictFiles: mergeability.conflictFiles,
+    conflictFilesSource: mergeability.conflictFilesSource,
+    mergeability,
     htmlUrl: normalizeText(item?.html_url)
   };
 }

@@ -3511,6 +3511,16 @@ test("worker uses bound default fetch for GitHub merge authority dispatch", asyn
   globalThis.fetch = async function workerRuntimeFetch(url, init) {
     assert.equal(this, globalThis);
     calls.push({ url, init });
+    if (calls.length === 1) {
+      return new Response(
+        JSON.stringify({
+          mergeable: true,
+          mergeable_state: "clean",
+          html_url: "https://github.com/sample-org/vtdd-v2-p/pull/21"
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    }
     if (init?.method === "PUT") {
       return new Response(
         JSON.stringify({
@@ -3568,7 +3578,7 @@ test("worker uses bound default fetch for GitHub merge authority dispatch", asyn
     assert.equal(body.authorityAction.runtimeTruth.mergedAt, "2026-05-09T01:02:03Z");
     assert.deepEqual(
       calls.map((call) => call.init.method),
-      ["PUT", "GET"]
+      ["GET", "PUT", "GET"]
     );
   } finally {
     globalThis.fetch = originalFetch;
@@ -3625,7 +3635,16 @@ test("worker returns GitHub merge diagnostics to same-origin passkey operator", 
     {
       MEMORY_PROVIDER: provider,
       GITHUB_APP_INSTALLATION_TOKEN: "ghs_high_risk",
-      GITHUB_API_FETCH: async () => {
+      GITHUB_API_FETCH: async (url, init) => {
+        if (init?.method === "GET") {
+          return new Response(
+            JSON.stringify({
+              mergeable: true,
+              mergeable_state: "clean"
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
         throw new TypeError("fetch failed");
       }
     }

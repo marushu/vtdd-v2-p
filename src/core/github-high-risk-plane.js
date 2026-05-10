@@ -1,5 +1,6 @@
 import { evaluateApprovalGrant } from "./passkey-approval.js";
 import { resolveGitHubAppInstallationToken } from "./github-app-repository-index.js";
+import { normalizePullRequestMergeability } from "./github-mergeability.js";
 import {
   getGitHubAppOperation,
   GitHubAppOperationTier
@@ -296,6 +297,11 @@ async function executePullReadyForReview(input) {
 
 async function executePullMerge(input) {
   const encodedRepository = encodeURIComponentRepository(input.repository);
+  const preflight = await readPullRuntimeTruthBeforeMerge({ ...input, encodedRepository });
+  if (!preflight.ok) {
+    return preflight;
+  }
+
   let response;
   const requestUrl = `${input.apiBaseUrl}/repos/${encodedRepository}/pulls/${input.pullNumber}/merge`;
   try {
@@ -365,6 +371,76 @@ async function executePullMerge(input) {
       htmlUrl:
         normalizeText(runtimeTruth.pull?.htmlUrl) || `https://github.com/${input.repository}/pull/${input.pullNumber}`,
       runtimeTruth: runtimeTruth.pull
+    }
+  };
+}
+
+async function readPullRuntimeTruthBeforeMerge(input) {
+  const requestUrl = `${input.apiBaseUrl}/repos/${input.encodedRepository}/pulls/${input.pullNumber}`;
+  let response;
+  try {
+    response = await input.fetchImpl(requestUrl, {
+      method: "GET",
+      headers: githubJsonHeaders({ token: input.token })
+    });
+  } catch (error) {
+    return {
+      ok: false,
+      status: 503,
+      error: "github_high_risk_failed",
+      reason: `failed to read GitHub pull request runtime truth before merge: ${errorMessage(error)}`,
+      issues: ["github_merge_preflight_fetch_exception"],
+      diagnostics: {
+        operation: input.operation,
+        requestMethod: "GET",
+        requestUrl,
+        exceptionName: errorName(error),
+        exceptionMessage: errorMessage(error)
+      }
+    };
+  }
+
+  const responseBody = await readJsonSafe(response);
+  if (!response.ok) {
+    return {
+      ok: false,
+      status: response.status,
+      error: "github_high_risk_failed",
+      reason: normalizeText(responseBody?.message) || "failed to read GitHub pull request runtime truth before merge",
+      diagnostics: {
+        operation: input.operation,
+        requestMethod: "GET",
+        requestUrl,
+        githubStatus: response.status,
+        githubMessage: normalizeText(responseBody?.message) || null,
+        githubDocumentationUrl: normalizeText(responseBody?.documentation_url) || null
+      }
+    };
+  }
+
+  const mergeability = normalizePullRequestMergeability(responseBody);
+  if (!mergeability.blocked) {
+    return { ok: true, mergeability };
+  }
+
+  return {
+    ok: false,
+    status: 409,
+    error: "github_high_risk_preflight_blocked",
+    reason: mergeability.warning,
+    issues: ["github_merge_preflight_blocked", mergeability.blockedReason].filter(Boolean),
+    diagnostics: {
+      operation: input.operation,
+      requestMethod: "GET",
+      requestUrl,
+      mergeable: mergeability.mergeable,
+      mergeableState: mergeability.state,
+      mergeConflict: mergeability.hasConflict,
+      mergeBlockedReason: mergeability.blockedReason,
+      freshBranchSuggestion: mergeability.freshBranchSuggestion,
+      conflictFiles: mergeability.conflictFiles,
+      conflictFilesSource: mergeability.conflictFilesSource,
+      htmlUrl: normalizeText(responseBody?.html_url) || null
     }
   };
 }
