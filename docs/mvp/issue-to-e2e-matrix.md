@@ -609,6 +609,29 @@ Status values used below:
   - `docs/mvp/e2e/e2e-29-direct-passkey-operator-link-guidance.md`
 - Status: `e2e_evidenced_pending_human_closure`
 
+## E2E-30 Execution lead-time telemetry
+
+- Issues: `#260`
+- Happy path:
+  - execution lifecycle timestamps and concise durations are visible through
+    Butler-facing progress/status contracts and GitHub runner comments
+- Boundary path:
+  - missing, reversed, stale, or not-yet-live evidence remains null, blocked,
+    or explicitly unverified instead of being reported as complete
+- Implementation evidence:
+  - `src/core/execution-lead-time.js`
+  - `src/core/remote-codex-executor.js`
+  - `scripts/run-vps-runner.mjs`
+  - `docs/setup/custom-gpt-instructions.md`
+- Test evidence:
+  - `test/execution-lead-time.test.js`
+  - `test/vps-runner-script.test.js`
+  - `test/remote-codex-executor.test.js`
+  - `test/custom-gpt-setup-docs.test.js`
+- Run evidence:
+  - `docs/mvp/e2e/e2e-30-execution-lead-time-telemetry.md`
+- Status: `implemented_pending_e2e`
+
 ## E2E-26 Governed production deploy from passkey operator
 
 - Issues: `#82`

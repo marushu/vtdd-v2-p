@@ -315,7 +315,7 @@ async function executeVpsRunnerExecution({ githubFetch, token, workRoot, executi
         pullRequestAuthor
       }),
       event: {
-        status: "pr_created",
+        status: "completed",
         lastEvent: isPrRevisionGoal(payload.codexGoal) ? "pull_request_updated" : "pull_request_created",
         currentStep: isPrRevisionGoal(payload.codexGoal) ? "pull_request_updated" : "pull_request_created",
         branch: payload.branch,
@@ -1185,13 +1185,13 @@ function buildPullRequestBody(payload) {
     nonGoals: "None.",
     unit: "Not run by VPS runner.",
     integration: "Not run by VPS runner.",
-    e2e: "GitHub branch / PR creation is the runtime evidence for this handoff.",
+    e2e: "GitHub branch / PR creation proves the handoff only; issue-specific live E2E must be recorded separately.",
     manual: "VPS runner executed the bounded Codex handoff.",
     evidencePath: `Issue #${payload.issueNumber}, branch ${payload.branch || "not provided"}, execution ${payload.executionId}`,
     cloudflareDeploy: "Not performed.",
     actionSchemaUpdate: "Not required.",
     instructionsUpdate: "Not required.",
-    iphoneButlerE2E: "Progress must be read through vtddExecutionProgress / GitHub runtime truth.",
+    iphoneButlerE2E: "Not run by VPS runner; Butler must read progress through vtddExecutionProgress / GitHub runtime truth.",
     rules: [
       "Queued handoff alone is not success.",
       "GitHub branch / PR / raw failure are runtime truth.",
