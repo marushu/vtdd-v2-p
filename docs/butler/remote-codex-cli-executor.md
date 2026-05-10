@@ -260,6 +260,19 @@ Dry-run pickup check:
 node scripts/run-vps-runner.mjs --dry-run
 ```
 
+Local worker-pool subprocess smoke check:
+
+```sh
+VTDD_VPS_RUNNER_MAX_CONCURRENT_EXECUTIONS=3 node scripts/run-vps-runner.mjs --local-concurrency-smoke
+```
+
+This local smoke mode does not read GitHub, write GitHub comments, clone
+repositories, run Codex, deploy, or mutate credentials. It exercises the same
+worker-pool scheduler with real local subprocesses and writes per-execution
+`started.json` / `completed.json` files into isolated workspaces so an operator
+can verify that multiple worker slots overlapped before running a live VPS
+queue.
+
 One-shot execution:
 
 ```sh

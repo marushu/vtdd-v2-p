@@ -44,6 +44,15 @@ const MILESTONE_MENTION_EVENTS = new Set([
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
+  if (options.localConcurrencySmoke) {
+    const smoke = await runVpsRunnerLocalConcurrencySmoke({
+      workRoot: process.env.VTDD_VPS_RUNNER_WORKDIR || path.join(os.tmpdir(), "vtdd-vps-runner-smoke"),
+      maxConcurrentExecutions: process.env.VTDD_VPS_RUNNER_MAX_CONCURRENT_EXECUTIONS
+    });
+    console.log(JSON.stringify(smoke, null, 2));
+    return;
+  }
+
   const token = mustGetEnv("GITHUB_TOKEN", process.env.GITHUB_TOKEN || process.env.GH_TOKEN);
   const repositoryPolicies = await loadVpsRunnerRepositoryPolicies({ env: process.env });
   const workRoot = process.env.VTDD_VPS_RUNNER_WORKDIR || path.join(os.homedir(), "vtdd-runner", "workspaces");
@@ -132,7 +141,14 @@ async function runVpsRunnerOnce({
   return executeVpsReviewerFallback({ token, reviewerFallback });
 }
 
-async function executeVpsRunnerWorkerPool({ githubFetch, token, workRoot, executions, maxConcurrentExecutions }) {
+async function executeVpsRunnerWorkerPool({
+  githubFetch,
+  token,
+  workRoot,
+  executions,
+  maxConcurrentExecutions,
+  executeExecution = executeVpsRunnerExecution
+}) {
   const runningExecutions = new Map();
   const limitedExecutions = executions.slice(0, maxConcurrentExecutions);
   const results = await Promise.all(
@@ -146,7 +162,7 @@ async function executeVpsRunnerWorkerPool({ githubFetch, token, workRoot, execut
         startedAt: new Date().toISOString()
       });
       try {
-        return await executeVpsRunnerExecution({ githubFetch, token, workRoot, execution });
+        return await executeExecution({ githubFetch, token, workRoot, execution, runningExecutions, slotId });
       } catch (error) {
         return {
           ok: false,
@@ -164,6 +180,72 @@ async function executeVpsRunnerWorkerPool({ githubFetch, token, workRoot, execut
     ok: failed === 0,
     message: `VPS runner worker pool completed ${results.length} execution(s): ${succeeded} succeeded, ${failed} failed.`,
     results
+  };
+}
+
+async function runVpsRunnerLocalConcurrencySmoke({
+  workRoot,
+  maxConcurrentExecutions,
+  executionCount,
+  subprocessHoldMs = 250
+} = {}) {
+  const limit = normalizeMaxConcurrentExecutions(maxConcurrentExecutions);
+  const count = normalizePositiveInteger(executionCount) || Math.max(limit, 2);
+  const smokeRoot = path.join(workRoot || os.tmpdir(), `local-concurrency-${Date.now()}`);
+  const executions = Array.from({ length: count }, (_, index) => ({
+    createdAt: new Date(Date.now() + index).toISOString(),
+    payload: {
+      executionId: `local-smoke-${index + 1}`,
+      repository: "local/smoke",
+      issueNumber: 280 + index,
+      branch: `codex/local-smoke-${index + 1}`
+    }
+  }));
+  const startedAt = Date.now();
+  const result = await executeVpsRunnerWorkerPool({
+    githubFetch: async () => ({}),
+    token: "local-smoke-token",
+    workRoot: smokeRoot,
+    executions,
+    maxConcurrentExecutions: limit,
+    executeExecution: async ({ workRoot: poolWorkRoot, execution, runningExecutions, slotId }) => {
+      const workspace = path.join(poolWorkRoot, safePathSegment(execution.payload.executionId));
+      await fs.mkdir(workspace, { recursive: true });
+      const script = [
+        "const fs = require('node:fs');",
+        "const path = require('node:path');",
+        "const workspace = process.argv[1];",
+        "const executionId = process.argv[2];",
+        "const slotId = process.argv[3];",
+        "const holdMs = Number(process.argv[4]);",
+        "fs.writeFileSync(path.join(workspace, 'started.json'), JSON.stringify({ executionId, slotId, pid: process.pid, startedAt: Date.now() }));",
+        "setTimeout(() => {",
+        "  fs.writeFileSync(path.join(workspace, 'completed.json'), JSON.stringify({ executionId, slotId, pid: process.pid, completedAt: Date.now() }));",
+        "}, holdMs);"
+      ].join("\n");
+      await runCommand(process.execPath, ["-e", script, workspace, execution.payload.executionId, slotId, String(subprocessHoldMs)], {
+        cwd: workspace,
+        env: process.env
+      });
+      return {
+        ok: true,
+        executionId: execution.payload.executionId,
+        slotId,
+        workspace,
+        observedRunningExecutions: runningExecutions.size
+      };
+    }
+  });
+
+  return {
+    ok: result.ok,
+    mode: "local_concurrency_smoke",
+    executionCount: count,
+    selectedExecutionCount: Math.min(count, limit),
+    maxConcurrentExecutions: limit,
+    elapsedMs: Date.now() - startedAt,
+    workRoot: smokeRoot,
+    results: result.results
   };
 }
 
@@ -1768,7 +1850,8 @@ function mustGetEnv(name, value = process.env[name]) {
 
 function parseArgs(args) {
   return {
-    dryRun: args.includes("--dry-run")
+    dryRun: args.includes("--dry-run"),
+    localConcurrencySmoke: args.includes("--local-concurrency-smoke")
   };
 }
 
@@ -1799,6 +1882,8 @@ export {
   parseVpsRunnerEventComment,
   parseVpsRunnerQueueComment,
   postVpsRunnerEvent,
+  executeVpsRunnerWorkerPool,
+  runVpsRunnerLocalConcurrencySmoke,
   runVpsRunnerOnce,
   summarizeDiagnosticText,
   selectPendingVpsReviewerFallbacks,

@@ -1,5 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import {
   buildFreshExecutionBranchCandidates,
   buildCodexExecutionPrompt,
@@ -20,6 +23,8 @@ import {
   parseVpsRunnerEventComment,
   parseVpsRunnerQueueComment,
   postVpsRunnerEvent,
+  executeVpsRunnerWorkerPool,
+  runVpsRunnerLocalConcurrencySmoke,
   runVpsRunnerOnce,
   summarizeDiagnosticText,
   selectPendingVpsReviewerFallbacks,
@@ -873,6 +878,67 @@ test("VPS runner dry run reports multiple selected executions up to the worker p
   assert.equal(result.message.includes("exec-1"), true);
   assert.equal(result.message.includes("exec-2"), true);
   assert.equal(result.message.includes("exec-3"), false);
+});
+
+test("VPS runner worker pool can run multiple real subprocesses concurrently in isolated workspaces", async () => {
+  const workRoot = await fs.mkdtemp(path.join(os.tmpdir(), "vtdd-vps-worker-pool-"));
+  const smoke = await runVpsRunnerLocalConcurrencySmoke({
+    workRoot,
+    maxConcurrentExecutions: 3,
+    executionCount: 3,
+    subprocessHoldMs: 500
+  });
+
+  assert.equal(smoke.ok, true);
+  assert.equal(smoke.selectedExecutionCount, 3);
+  assert.equal(smoke.results.length, 3);
+  assert.equal(new Set(smoke.results.map((result) => result.workspace)).size, 3);
+  assert.equal(Math.max(...smoke.results.map((result) => result.observedRunningExecutions)), 3);
+
+  const runtimeTruth = await Promise.all(
+    smoke.results.map(async (result) => {
+      const started = JSON.parse(await fs.readFile(path.join(result.workspace, "started.json"), "utf8"));
+      const completed = JSON.parse(await fs.readFile(path.join(result.workspace, "completed.json"), "utf8"));
+      return { result, started, completed };
+    })
+  );
+  const firstCompletedAt = Math.min(...runtimeTruth.map((item) => item.completed.completedAt));
+  const lastStartedAt = Math.max(...runtimeTruth.map((item) => item.started.startedAt));
+
+  assert.equal(runtimeTruth.every((item) => item.started.pid === item.completed.pid), true);
+  assert.equal(runtimeTruth.every((item) => item.started.executionId === item.result.executionId), true);
+  assert.equal(lastStartedAt < firstCompletedAt, true);
+});
+
+test("VPS runner worker pool reports failed subprocess slots without hiding other results", async () => {
+  const executions = ["exec-ok", "exec-fail"].map((executionId, index) => ({
+    createdAt: `2026-05-07T10:0${index}:00Z`,
+    payload: {
+      executionId,
+      repository: "sample-org/vtdd-v2",
+      issueNumber: 280 + index,
+      branch: `codex/${executionId}`
+    }
+  }));
+
+  const result = await executeVpsRunnerWorkerPool({
+    githubFetch: async () => ({}),
+    token: "ghs_test",
+    workRoot: "/tmp/vtdd-runner-worker-pool-failure",
+    executions,
+    maxConcurrentExecutions: 2,
+    executeExecution: async ({ execution }) => {
+      if (execution.payload.executionId === "exec-fail") {
+        throw new Error("simulated subprocess failure");
+      }
+      return { ok: true, executionId: execution.payload.executionId };
+    }
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.results.length, 2);
+  assert.equal(result.results.find((item) => item.executionId === "exec-ok").ok, true);
+  assert.equal(result.results.find((item) => item.reason === "simulated subprocess failure").ok, false);
 });
 
 test("VPS runner creates a fresh branch when the requested branch already exists remotely", async () => {
