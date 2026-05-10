@@ -105,12 +105,22 @@ export function createRemoteCodexExecutionRequest(input = {}) {
   const issueNumber = normalizePositiveInteger(
     issueContext.issueNumber ?? handoff.relatedIssue ?? payload.relatedIssue
   );
+  const codexGoal =
+    normalizeText(continuationContext.codexGoal) ||
+    normalizeText(payload?.executionTarget?.codexGoal) ||
+    normalizeText(gatewayResult?.executionContinuity?.codexGoal);
+  const revisionTarget = normalizeRevisionTarget({
+    runtimeState,
+    executionTarget: normalizeObject(payload?.executionTarget),
+    handoff
+  });
   const request = {
     executionId: normalizeText(input?.executionId) || buildExecutionId({ issueNumber }),
     actorRole: normalizeText(payload.actorRole),
     repository: normalizeText(gatewayResult.repository),
     issueNumber,
     branch:
+      (codexGoal === RemoteCodexDispatchGoal.REVISE_PR ? revisionTarget.headRef : "") ||
       normalizeText(runtimeState.activeBranch) ||
       normalizeText(payload?.executionTarget?.branch) ||
       (issueNumber ? `codex/issue-${issueNumber}` : ""),
@@ -118,10 +128,7 @@ export function createRemoteCodexExecutionRequest(input = {}) {
       normalizeText(payload?.executionTarget?.baseRef) ||
       normalizeText(runtimeState.baseRef) ||
       "main",
-    codexGoal:
-      normalizeText(continuationContext.codexGoal) ||
-      normalizeText(payload?.executionTarget?.codexGoal) ||
-      normalizeText(gatewayResult?.executionContinuity?.codexGoal),
+    codexGoal,
     approvalPhrase: normalizeText(payload?.policyInput?.approvalPhrase),
     approvalActor:
       normalizeText(payload?.policyInput?.approvalActor) ||
@@ -130,13 +137,15 @@ export function createRemoteCodexExecutionRequest(input = {}) {
     targetConfirmed: payload?.policyInput?.targetConfirmed === true,
     approvalScopeMatched,
     handoffRequired: continuationContext.requiresHandoff === true,
+    revisionTarget,
     handoff:
       Object.keys(handoff).length > 0
         ? {
             issueTraceable: handoff.issueTraceable === true,
             approvalScopeMatched: handoff.approvalScopeMatched === true,
             summary: normalizeText(handoff.summary),
-            relatedIssue: normalizePositiveInteger(handoff.relatedIssue)
+            relatedIssue: normalizePositiveInteger(handoff.relatedIssue),
+            targetPullRequest: revisionTarget
           }
         : null
   };
@@ -174,8 +183,87 @@ export function createRemoteCodexExecutionRequest(input = {}) {
   if (request.handoffRequired && !request.handoff) {
     issues.push("handoff is required when handoffRequired is true");
   }
+  if (request.codexGoal === RemoteCodexDispatchGoal.REVISE_PR) {
+    issues.push(...validateRevisionTarget(request));
+  }
 
   return issues.length > 0 ? { ok: false, issues } : { ok: true, request };
+}
+
+function validateRevisionTarget(request) {
+  const issues = [];
+  const target = request.revisionTarget;
+  if (!target.number) {
+    issues.push("revise_pr requires target PR number from runtime truth or handoff");
+  }
+  if (!target.headRef) {
+    issues.push("revise_pr requires target PR headRef from runtime truth or handoff");
+  }
+  if (!target.headSha) {
+    issues.push("revise_pr requires target PR headSha from runtime truth or handoff");
+  }
+  if (target.state !== "open") {
+    issues.push("revise_pr target PR must be open");
+  }
+  if (target.headRef && request.branch !== target.headRef) {
+    issues.push("revise_pr branch must match target PR headRef");
+  }
+  return issues;
+}
+
+function normalizeRevisionTarget({ runtimeState, executionTarget, handoff }) {
+  const pullRequest = normalizeObject(runtimeState.pullRequest);
+  const handoffTarget = normalizeObject(
+    handoff.targetPullRequest ?? handoff.pullRequest ?? handoff.pr
+  );
+  const executionTargetPull = normalizeObject(executionTarget.pullRequest);
+  return {
+    number: normalizePositiveInteger(
+      executionTarget.prNumber ??
+        executionTarget.pullRequestNumber ??
+        executionTargetPull.number ??
+        handoff.prNumber ??
+        handoff.pullRequestNumber ??
+        handoffTarget.number ??
+        pullRequest.number
+    ),
+    url:
+      normalizeText(executionTarget.prUrl) ||
+      normalizeText(executionTargetPull.url) ||
+      normalizeText(handoff.prUrl) ||
+      normalizeText(handoffTarget.url) ||
+      normalizeText(pullRequest.url) ||
+      null,
+    state:
+      normalizeText(
+        executionTarget.prState ||
+          executionTargetPull.state ||
+          handoff.prState ||
+          handoffTarget.state ||
+          pullRequest.state
+      ).toLowerCase() ||
+      null,
+    headRef:
+      normalizeText(executionTarget.headRef) ||
+      normalizeText(executionTargetPull.headRef) ||
+      normalizeText(executionTargetPull.head?.ref) ||
+      normalizeText(handoff.headRef) ||
+      normalizeText(handoffTarget.headRef) ||
+      normalizeText(handoffTarget.head?.ref) ||
+      normalizeText(pullRequest.headRef) ||
+      normalizeText(pullRequest.head?.ref) ||
+      null,
+    headSha:
+      normalizeText(executionTarget.headSha) ||
+      normalizeText(executionTargetPull.headSha) ||
+      normalizeText(executionTargetPull.head?.sha) ||
+      normalizeText(handoff.headSha) ||
+      normalizeText(handoffTarget.headSha) ||
+      normalizeText(handoffTarget.head?.sha) ||
+      normalizeText(pullRequest.headSha) ||
+      normalizeText(pullRequest.head?.sha) ||
+      null
+  };
 }
 
 export async function dispatchRemoteCodexExecution(input = {}) {
@@ -256,6 +344,12 @@ async function dispatchControlRepositoryWorkflow({ request, token, env, transpor
       target_branch: request.branch,
       base_ref: request.baseRef,
       codex_goal: request.codexGoal,
+      target_pr_number: request.revisionTarget.number
+        ? String(request.revisionTarget.number)
+        : "",
+      target_pr_head_ref: request.revisionTarget.headRef || "",
+      target_pr_head_sha: request.revisionTarget.headSha || "",
+      target_pr_state: request.revisionTarget.state || "",
       approval_phrase: request.approvalPhrase,
       handoff_json: request.handoff ? JSON.stringify(request.handoff) : ""
     }
@@ -313,6 +407,7 @@ async function dispatchControlRepositoryWorkflow({ request, token, env, transpor
       branch: request.branch,
       baseRef: request.baseRef,
       codexGoal: request.codexGoal,
+      revisionTarget: request.revisionTarget,
       approvalScopeMatched: request.approvalScopeMatched,
       workflowRunId: progress.ok ? progress.progress.workflowRunId : null,
       workflowUrl: progress.ok ? progress.progress.workflowUrl : null,
@@ -704,6 +799,7 @@ async function dispatchCodexCloudGitHubComment({ request, token, env }) {
       branch: request.branch,
       baseRef: request.baseRef,
       codexGoal: request.codexGoal,
+      revisionTarget: request.revisionTarget,
       approvalScopeMatched: request.approvalScopeMatched,
       commentId: normalizePositiveInteger(responseBody?.id),
       commentUrl: normalizeText(responseBody?.html_url) || null,
@@ -875,6 +971,7 @@ async function retrieveCodexCloudGitHubCommentProgress({
               ? RemoteCodexExecutionStatus.BLOCKED
               : RemoteCodexExecutionStatus.QUEUED,
       pullRequest: pullRequest.pullRequest,
+      staleBranchAmbiguity: pullRequest.staleBranchAmbiguity,
       blocker: connectorBlocker ?? pickupBlocker
     }
   };
@@ -997,6 +1094,7 @@ async function retrieveVpsRunnerGitHubQueueProgress({
       queueCommentUrl: normalizeText(queueComment.html_url) || null,
       status,
       pullRequest: pullRequest.pullRequest,
+      staleBranchAmbiguity: pullRequest.staleBranchAmbiguity,
       runnerEvent,
       cancellation,
       leadTime,
@@ -1095,19 +1193,34 @@ async function findPullRequestForBranch({ repository, branch, token, env }) {
     };
   }
 
-  const pull = Array.isArray(body) ? body[0] : null;
+  const pulls = Array.isArray(body) ? body : [];
+  const pull = pulls.find((item) => normalizeText(item?.state) === "open") || null;
+  const staleBranchAmbiguity =
+    !pull && pulls.length > 0
+      ? {
+          error: "stale_branch_pr_ambiguity",
+          reason:
+            "target branch is associated only with non-open pull requests; revise_pr must not target this branch without a fresh open PR lock",
+          pullRequests: pulls.map(normalizeRuntimePullRequest)
+        }
+      : null;
   return {
     ok: true,
-    pullRequest: pull
-      ? {
-          number: normalizePositiveInteger(pull.number),
-          url: normalizeText(pull.html_url) || null,
-          state: normalizeText(pull.state) || null,
-          title: normalizeText(pull.title) || null,
-          createdAt: normalizeText(pull.created_at) || null,
-          updatedAt: normalizeText(pull.updated_at) || null
-        }
-      : null
+    pullRequest: pull ? normalizeRuntimePullRequest(pull) : null,
+    staleBranchAmbiguity
+  };
+}
+
+function normalizeRuntimePullRequest(pull) {
+  return {
+    number: normalizePositiveInteger(pull?.number),
+    url: normalizeText(pull?.html_url) || null,
+    state: normalizeText(pull?.state) || null,
+    title: normalizeText(pull?.title) || null,
+    headRef: normalizeText(pull?.head?.ref) || null,
+    headSha: normalizeText(pull?.head?.sha) || null,
+    createdAt: normalizeText(pull?.created_at) || null,
+    updatedAt: normalizeText(pull?.updated_at) || null
   };
 }
 
@@ -1663,6 +1776,14 @@ function buildCodexCloudGitHubComment({ request }) {
     `- Branch: ${request.branch}`,
     `- Base ref: ${request.baseRef}`,
     `- Goal: ${request.codexGoal}`,
+    ...(request.codexGoal === RemoteCodexDispatchGoal.REVISE_PR
+      ? [
+          `- Target PR: #${request.revisionTarget.number}`,
+          `- Target PR state: ${request.revisionTarget.state}`,
+          `- Target PR headRef: ${request.revisionTarget.headRef}`,
+          `- Target PR headSha: ${request.revisionTarget.headSha}`
+        ]
+      : []),
     "- Canonical spec: this GitHub Issue",
     "- Runtime truth: current GitHub branch / diff / PR / review comments",
     "- Completion target: create or update a pull request",
@@ -1693,6 +1814,7 @@ function buildVpsRunnerGitHubQueueComment({ request }) {
     branch: request.branch,
     baseRef: request.baseRef,
     codexGoal: request.codexGoal,
+    revisionTarget: request.revisionTarget,
     approvalScopeMatched: request.approvalScopeMatched,
     approvalActor: request.approvalActor,
     handoff: request.handoff
@@ -1707,6 +1829,14 @@ function buildVpsRunnerGitHubQueueComment({ request }) {
     `- Branch: ${request.branch}`,
     `- Base ref: ${request.baseRef}`,
     `- Goal: ${request.codexGoal}`,
+    ...(request.codexGoal === RemoteCodexDispatchGoal.REVISE_PR
+      ? [
+          `- Target PR: #${request.revisionTarget.number}`,
+          `- Target PR state: ${request.revisionTarget.state}`,
+          `- Target PR headRef: ${request.revisionTarget.headRef}`,
+          `- Target PR headSha: ${request.revisionTarget.headSha}`
+        ]
+      : []),
     "- Canonical spec: this GitHub Issue",
     "- Runtime truth: current GitHub branch / diff / PR / review comments",
     "- Completion target: create or update a pull request",

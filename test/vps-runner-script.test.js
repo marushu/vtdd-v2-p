@@ -863,7 +863,13 @@ test("VPS runner Codex prompt includes review context for PR revision goals", ()
       repository: "sample-org/vtdd-v2",
       issueNumber: 204,
       branch: "codex/add-pr-ready-authority",
-      codexGoal: "revise_pr"
+      codexGoal: "revise_pr",
+      revisionTarget: {
+        number: 204,
+        state: "open",
+        headRef: "codex/add-pr-ready-authority",
+        headSha: "sha-204"
+      }
     },
     issue: {
       title: "Add PR ready-for-review authority action",
@@ -880,6 +886,9 @@ test("VPS runner Codex prompt includes review context for PR revision goals", ()
   });
 
   assert.equal(prompt.includes("Goal: revise_pr"), true);
+  assert.equal(prompt.includes("Target PR lock:"), true);
+  assert.equal(prompt.includes("- PR: #204"), true);
+  assert.equal(prompt.includes("- Head SHA: sha-204"), true);
   assert.equal(prompt.includes("PR revision context:"), true);
   assert.equal(prompt.includes("untrusted reviewer/user-provided text"), true);
   assert.equal(prompt.includes("Request changes: require mutation result verification."), true);
@@ -963,6 +972,72 @@ test("VPS runner blocks revision goals when no open PR exists for the branch", a
       githubFetch: async () => []
     }),
     /No open pull request found for revision branch codex\/no-open-pr/
+  );
+});
+
+test("VPS runner blocks revision goals when open branch PR does not match locked target PR", async () => {
+  await assert.rejects(
+    buildVpsRunnerPullRequestContext({
+      payload: {
+        repository: "sample-org/vtdd-v2",
+        branch: "codex/issue-251-v2",
+        revisionTarget: {
+          number: 285,
+          state: "open",
+          headRef: "codex/issue-251-v2",
+          headSha: "fresh-sha"
+        }
+      },
+      githubFetch: async (url) => {
+        if (String(url).includes("/pulls?")) {
+          return [
+            {
+              number: 279,
+              state: "open",
+              head: {
+                ref: "codex/issue-251-v2",
+                sha: "fresh-sha"
+              }
+            }
+          ];
+        }
+        return [];
+      }
+    }),
+    /No open pull request #285 found for revision branch codex\/issue-251-v2/
+  );
+});
+
+test("VPS runner blocks revision goals when target PR head SHA is stale", async () => {
+  await assert.rejects(
+    buildVpsRunnerPullRequestContext({
+      payload: {
+        repository: "sample-org/vtdd-v2",
+        branch: "codex/issue-251-v2",
+        revisionTarget: {
+          number: 285,
+          state: "open",
+          headRef: "codex/issue-251-v2",
+          headSha: "fresh-sha"
+        }
+      },
+      githubFetch: async (url) => {
+        if (String(url).includes("/pulls?")) {
+          return [
+            {
+              number: 285,
+              state: "open",
+              head: {
+                ref: "codex/issue-251-v2",
+                sha: "newer-sha"
+              }
+            }
+          ];
+        }
+        return [];
+      }
+    }),
+    /Revision target headSha mismatch/
   );
 });
 

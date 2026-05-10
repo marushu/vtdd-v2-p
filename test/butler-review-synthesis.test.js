@@ -249,3 +249,31 @@ test("butler review synthesis surfaces Codex fallback blocker plainly", () => {
     true
   );
 });
+
+test("butler review synthesis warns when revise target branch attribution mismatches runtime truth", () => {
+  const result = buildButlerReviewSynthesis({
+    pullRequest: {
+      number: 285,
+      url: "https://github.com/example/repo/pull/285",
+      state: "open",
+      title: "Fresh replacement PR",
+      headRef: "codex/issue-251-v2",
+      headSha: "fresh-sha"
+    },
+    revisionTarget: {
+      number: 285,
+      headRef: "codex/issue-251",
+      headSha: "old-sha"
+    },
+    codexGoal: "revise_pr"
+  });
+
+  assert.equal(result.prState.branchAttribution.mismatch, true);
+  assert.match(result.prState.branchAttribution.warning, /Branch attribution mismatch/);
+  assert.equal(
+    result.humanDecisionFocus.some((line) =>
+      line.includes("Do not dispatch revise_pr until the target PR lock is refreshed")
+    ),
+    true
+  );
+});

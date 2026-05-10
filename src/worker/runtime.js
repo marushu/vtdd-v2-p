@@ -1458,8 +1458,23 @@ async function resolveRemoteCodexHandoffRuntimeTruth({
   }
 
   const issueNumber = normalizeIssue(payload?.issueContext?.issueNumber);
+  const continuationContext =
+    payload?.continuationContext && typeof payload.continuationContext === "object"
+      ? payload.continuationContext
+      : {};
+  const handoff =
+    continuationContext.handoff && typeof continuationContext.handoff === "object"
+      ? continuationContext.handoff
+      : {};
+  const handoffTarget =
+    handoff.targetPullRequest && typeof handoff.targetPullRequest === "object"
+      ? handoff.targetPullRequest
+      : {};
   const activeBranch =
     normalizeText(runtimeState.activeBranch) ||
+    normalizeText(handoff.headRef) ||
+    normalizeText(handoffTarget.headRef) ||
+    normalizeText(handoffTarget.head?.ref) ||
     normalizeText(payload?.executionTarget?.branch) ||
     (issueNumber ? `codex/issue-${issueNumber}` : "");
   const [repositoryOwner] = repositoryResolution.repository.split("/");
@@ -1510,7 +1525,8 @@ async function resolveRemoteCodexHandoffRuntimeTruth({
           ...runtimeState,
           activeBranch,
           branch: branchRecord ?? null,
-          pullRequest: pullRequest ?? { exists: false },
+          pullRequest: pullRequest.pullRequest ?? { exists: false },
+          staleBranchAmbiguity: pullRequest.staleBranchAmbiguity ?? null,
           workflowRuns: workflowRuns.read?.records ?? []
         }
       }
@@ -1524,20 +1540,48 @@ function selectPullRequestForBranch(records, target) {
   const branch = normalizeText(target?.branch);
   const owner = normalizeText(target?.owner);
   const selected = items.find(
+    (item) =>
+      normalizeText(item?.state) === "open" &&
+      normalizeText(item?.headRef) === branch &&
+      normalizeText(item?.headOwner) === owner
+  );
+  const staleItems = items.filter(
     (item) => normalizeText(item?.headRef) === branch && normalizeText(item?.headOwner) === owner
   );
   if (!selected) {
-    return { exists: false };
+    return {
+      pullRequest: { exists: false },
+      staleBranchAmbiguity:
+        staleItems.length > 0
+          ? {
+              error: "stale_branch_pr_ambiguity",
+              reason:
+                "target branch is associated only with non-open pull requests; revise_pr must not target this branch without a fresh open PR lock",
+              pullRequests: staleItems.map((item) => ({
+                number: item.number ?? null,
+                url: item.htmlUrl ?? null,
+                state: item.state ?? null,
+                title: item.title ?? null,
+                headRef: item.headRef ?? null,
+                headSha: item.headSha ?? null,
+                baseRef: item.baseRef ?? null
+              }))
+            }
+          : null
+    };
   }
   return {
-    exists: true,
-    number: selected.number ?? null,
-    url: selected.htmlUrl ?? null,
-    state: selected.state ?? null,
-    title: selected.title ?? null,
-    headRef: selected.headRef ?? null,
-    headSha: selected.headSha ?? null,
-    baseRef: selected.baseRef ?? null
+    pullRequest: {
+      exists: true,
+      number: selected.number ?? null,
+      url: selected.htmlUrl ?? null,
+      state: selected.state ?? null,
+      title: selected.title ?? null,
+      headRef: selected.headRef ?? null,
+      headSha: selected.headSha ?? null,
+      baseRef: selected.baseRef ?? null
+    },
+    staleBranchAmbiguity: null
   };
 }
 
