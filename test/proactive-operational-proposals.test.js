@@ -84,7 +84,33 @@ test("proactive engine detects governance problems without bypassing approval bo
   assert.equal(proposal.executionPlan.requiresGO, true);
   assert.match(proposal.executionPlan.approvalBoundary, /GO \+ passkey required/);
   assert.doesNotMatch(proposal.executionPlan.approvalBoundary, /may be required/);
+  assert.match(proposal.issueDraft.body, /must wait for GO \+ passkey before any deploy/);
+  assert.equal(
+    proposal.askForGO.approvalBoundary,
+    "proposal_only_until_go_passkey_for_high_risk_effects"
+  );
   assert.equal(proposal.executionPlan.prohibitedUntilApproved.includes("high_risk_action"), true);
+});
+
+test("proactive engine mirrors high-risk approval boundary in user-facing issue drafts", () => {
+  const result = buildProactiveOperationalProposals({
+    signals: [
+      {
+        title: "Runtime remediation may mutate repository settings",
+        description: "The proposal would change repository settings after detecting the gap.",
+        target: ProactiveDetectionTarget.OPERATIONAL_GAP,
+        evidence: ["Repository settings change is part of the remediation path"]
+      }
+    ]
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.proposalSurface.grantsExecutorAuthorization, false);
+
+  const proposal = result.proposals[0];
+  assert.match(proposal.issueDraft.body, /must wait for GO \+ passkey/);
+  assert.match(proposal.issueDraft.body, /settings/);
+  assert.match(proposal.executionPlan.approvalBoundary, /GO \+ passkey required/);
 });
 
 test("proactive engine detects recurrence-only runtime signals as recurring pain", () => {
@@ -226,7 +252,44 @@ test("gateway exposes proactive proposals as approval-bound Butler output", () =
 
   assert.equal(result.allowed, true);
   assert.equal(result.proactiveOperationalProposals.ok, true);
+  assert.equal(result.proactiveOperationalProposals.proposalSurface.actorRole, "butler");
+  assert.equal(result.proactiveOperationalProposals.proposalSurface.grantsExecutorAuthorization, false);
   assert.equal(result.proactiveOperationalProposals.summary.executes, false);
   assert.equal(result.proactiveOperationalProposals.proposals[0].askForGO.required, true);
   assert.match(result.proactiveOperationalProposals.proposals[0].issueDraft.body, /GO Boundary/);
+});
+
+test("gateway does not expose proactive proposals as executor authorization", () => {
+  const result = runMvpGateway({
+    phase: "exploration",
+    actorRole: ActorRole.EXECUTOR,
+    policyInput: {
+      actionType: ActionType.READ,
+      mode: "read_only",
+      repositoryInput: "marushu/vtdd-v2-p",
+      targetConfirmed: true,
+      runtimeTruth: { runtimeAvailable: false, safeFallbackChosen: true },
+      credential: { model: "github_app", tier: CredentialTier.READ },
+      consent: {
+        grantedCategories: [ConsentCategory.READ]
+      },
+      issueTraceable: false
+    },
+    proactiveOperations: {
+      recurringPain: [
+        {
+          title: "Recurring proposal failure creates owner cognitive load",
+          recurrenceCount: 2
+        }
+      ]
+    }
+  });
+
+  assert.equal(result.allowed, true);
+  assert.equal(result.proactiveOperationalProposals.ok, false);
+  assert.equal(
+    result.proactiveOperationalProposals.reason,
+    "proactive_operational_proposals_are_butler_only"
+  );
+  assert.equal(result.proactiveOperationalProposals.proposalSurface.grantsExecutorAuthorization, false);
 });

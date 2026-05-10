@@ -45,6 +45,11 @@ The engine classifies signals into the Issue #252 target families:
 The returned execution plan is always `proposal_only` and marks execution as
 approval-bound.
 
+Gateway exposure is Butler-only. If `proactiveOperations` is supplied for a
+non-Butler actor, the gateway returns a non-authorizing rejection object instead
+of proposal content. The proposal surface must not be interpreted as executor
+authorization.
+
 ## Priority Model
 
 Priority scoring combines the Issue #252 factors:
@@ -88,7 +93,10 @@ Butler must not:
   infrastructure from proposal context
 
 If a remediation would touch high-risk external effects, the proposal must keep
-that work blocked until the applicable `GO + passkey` path is satisfied.
+that work blocked until the applicable `GO + passkey` path is satisfied. The
+same boundary must appear in both the execution plan and the user-facing Issue
+draft GO Boundary so the proposal does not understate deploy, secret,
+permission, settings, destructive, merge, or other high-risk external effects.
 
 ## Runtime Entry Point
 

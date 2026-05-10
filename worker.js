@@ -26907,6 +26907,12 @@ function buildProactiveOperationalProposals(input = {}) {
       mustNot: ["silently_execute_high_risk_actions", "bypass_approval_boundaries"],
       execution: "approval_bound"
     },
+    proposalSurface: {
+      actorRole: "butler",
+      scope: "proposal_only",
+      grantsExecutorAuthorization: false,
+      requiresOwnerApprovalBeforeWrite: true
+    },
     proposals: detected,
     priorityModel: { ...PRIORITY_WEIGHTS },
     summary: {
@@ -26929,6 +26935,7 @@ function buildDetectedOpportunity(signal, context) {
   const priority = scorePriority(signal, targetRule, context);
   const relatedMemory = selectRelatedMemory(signal, context.memoryReferences, 3);
   const duplicateCandidates = findDuplicateCandidates(signal, context.existingIssues);
+  const approvalBoundary = buildApprovalBoundary(signal, targetRule);
   return {
     id: normalizeText18(signal.id) || makeStableId(targetRule.target, title),
     target: targetRule.target,
@@ -26941,15 +26948,15 @@ function buildDetectedOpportunity(signal, context) {
     relatedMemory,
     duplicateCandidates,
     remediationPlan: buildRemediationPlan(signal, targetRule, relatedMemory),
-    issueDraft: buildIssueDraft({ signal, targetRule, title, explanation, priority, relatedMemory }),
-    executionPlan: buildExecutionPlan(signal, targetRule),
+    issueDraft: buildIssueDraft({ signal, targetRule, title, explanation, priority, relatedMemory, approvalBoundary }),
+    executionPlan: buildExecutionPlan(approvalBoundary),
     boundedImplementationSlices: buildBoundedSlices(signal, targetRule),
     priority,
     dependencyOrdering: buildDependencyOrdering(signal, targetRule),
     askForGO: {
       required: true,
-      prompt: "\u3053\u306E issue draft / remediation plan \u3067 GitHub Issue \u5316\u307E\u305F\u306F\u5B9F\u88C5\u7740\u624B\u3059\u308B\u306A\u3089 GO \u3068\u8A00\u3063\u3066\u304F\u3060\u3055\u3044\u3002",
-      approvalBoundary: "proposal_only_until_human_go"
+      prompt: approvalBoundary.highRisk ? "\u3053\u306E issue draft / remediation plan \u3067 GitHub Issue \u5316\u307E\u305F\u306F\u9AD8\u30EA\u30B9\u30AF remediation \u306B\u9032\u3080\u306A\u3089\u3001\u901A\u5E38 write \u306F GO\u3001\u9AD8\u30EA\u30B9\u30AF\u5916\u90E8\u52B9\u679C\u306F GO + passkey \u3092\u660E\u793A\u3057\u3066\u304F\u3060\u3055\u3044\u3002" : "\u3053\u306E issue draft / remediation plan \u3067 GitHub Issue \u5316\u307E\u305F\u306F\u5B9F\u88C5\u7740\u624B\u3059\u308B\u306A\u3089 GO \u3068\u8A00\u3063\u3066\u304F\u3060\u3055\u3044\u3002",
+      approvalBoundary: approvalBoundary.code
     }
   };
 }
@@ -27017,7 +27024,7 @@ function buildRemediationPlan(signal, targetRule, relatedMemory) {
     "Present the exact Issue draft and wait for human GO before any GitHub write."
   ].filter(Boolean);
 }
-function buildIssueDraft({ signal, targetRule, title, explanation, priority, relatedMemory }) {
+function buildIssueDraft({ signal, targetRule, title, explanation, priority, relatedMemory, approvalBoundary }) {
   const bodySections = [
     "## Problem",
     explanation,
@@ -27035,7 +27042,7 @@ function buildIssueDraft({ signal, targetRule, title, explanation, priority, rel
     relatedMemory.length > 0 ? relatedMemory.map((item) => `- ${item.id || item.title}: ${item.summary || item.title}`).join("\n") : "- No related operational memory reference found.",
     "",
     "## GO Boundary",
-    "Butler may propose and prioritize this Issue, but must wait for human GO before creating the Issue or executing remediation."
+    approvalBoundary.issueDraftText
   ];
   return {
     title,
@@ -27043,7 +27050,7 @@ function buildIssueDraft({ signal, targetRule, title, explanation, priority, rel
     labels: ["proposal", `target:${targetRule.target}`, `priority:${priority.recommendation}`]
   };
 }
-function buildExecutionPlan(signal, targetRule) {
+function buildExecutionPlan(approvalBoundary) {
   return {
     status: "proposal_only",
     requiresGO: true,
@@ -27059,7 +27066,24 @@ function buildExecutionPlan(signal, targetRule) {
       "high_risk_action",
       "permission_or_secret_mutation"
     ],
-    approvalBoundary: targetRule.target === ProactiveDetectionTarget.GOVERNANCE_PROBLEM || hasHighRiskTerms(signal) ? "GO + passkey required before deploy, secret, permission, settings, or other high-risk external effects; normal writes still require GO" : "GO required before normal write or execution"
+    approvalBoundary: approvalBoundary.executionPlanText
+  };
+}
+function buildApprovalBoundary(signal, targetRule) {
+  const highRisk = targetRule.target === ProactiveDetectionTarget.GOVERNANCE_PROBLEM || hasHighRiskTerms(signal);
+  if (highRisk) {
+    return {
+      highRisk,
+      code: "proposal_only_until_go_passkey_for_high_risk_effects",
+      issueDraftText: "Butler may propose and prioritize this Issue. Butler must wait for human GO before creating the Issue or normal write/implementation handoff, and must wait for GO + passkey before any deploy, secret, permission, settings, destructive, merge, or other high-risk external effect.",
+      executionPlanText: "GO + passkey required before deploy, secret, permission, settings, destructive, merge, or other high-risk external effects; normal writes still require GO"
+    };
+  }
+  return {
+    highRisk,
+    code: "proposal_only_until_human_go",
+    issueDraftText: "Butler may propose and prioritize this Issue, but must wait for human GO before creating the Issue or executing remediation.",
+    executionPlanText: "GO required before normal write or execution"
   };
 }
 function buildBoundedSlices(signal, targetRule) {
@@ -28092,7 +28116,8 @@ function runMvpGateway(input, runtimeContext = {}) {
     memoryWrite: memoryPlan.value,
     proactiveOperationalProposals: buildProactivePlan({
       input,
-      repository: execution.repository
+      repository: execution.repository,
+      actorRole
     })
   };
 }
@@ -28148,10 +28173,21 @@ function prepareMemoryPlan(memoryRecord) {
     }
   };
 }
-function buildProactivePlan({ input, repository }) {
+function buildProactivePlan({ input, repository, actorRole }) {
   const proactiveInput = input?.proactiveOperations;
   if (!proactiveInput || typeof proactiveInput !== "object" || Array.isArray(proactiveInput)) {
     return null;
+  }
+  if (actorRole !== ActorRole.BUTLER) {
+    return {
+      ok: false,
+      proposalSurface: {
+        actorRole,
+        scope: "not_available",
+        grantsExecutorAuthorization: false
+      },
+      reason: "proactive_operational_proposals_are_butler_only"
+    };
   }
   return buildProactiveOperationalProposals({
     ...proactiveInput,

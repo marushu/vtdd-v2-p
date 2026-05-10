@@ -112,6 +112,12 @@ export function buildProactiveOperationalProposals(input = {}) {
       mustNot: ["silently_execute_high_risk_actions", "bypass_approval_boundaries"],
       execution: "approval_bound"
     },
+    proposalSurface: {
+      actorRole: "butler",
+      scope: "proposal_only",
+      grantsExecutorAuthorization: false,
+      requiresOwnerApprovalBeforeWrite: true
+    },
     proposals: detected,
     priorityModel: { ...PRIORITY_WEIGHTS },
     summary: {
@@ -136,6 +142,7 @@ function buildDetectedOpportunity(signal, context) {
   const priority = scorePriority(signal, targetRule, context);
   const relatedMemory = selectRelatedMemory(signal, context.memoryReferences, 3);
   const duplicateCandidates = findDuplicateCandidates(signal, context.existingIssues);
+  const approvalBoundary = buildApprovalBoundary(signal, targetRule);
 
   return {
     id: normalizeText(signal.id) || makeStableId(targetRule.target, title),
@@ -149,16 +156,18 @@ function buildDetectedOpportunity(signal, context) {
     relatedMemory,
     duplicateCandidates,
     remediationPlan: buildRemediationPlan(signal, targetRule, relatedMemory),
-    issueDraft: buildIssueDraft({ signal, targetRule, title, explanation, priority, relatedMemory }),
-    executionPlan: buildExecutionPlan(signal, targetRule),
+    issueDraft: buildIssueDraft({ signal, targetRule, title, explanation, priority, relatedMemory, approvalBoundary }),
+    executionPlan: buildExecutionPlan(approvalBoundary),
     boundedImplementationSlices: buildBoundedSlices(signal, targetRule),
     priority,
     dependencyOrdering: buildDependencyOrdering(signal, targetRule),
     askForGO: {
       required: true,
       prompt:
-        "この issue draft / remediation plan で GitHub Issue 化または実装着手するなら GO と言ってください。",
-      approvalBoundary: "proposal_only_until_human_go"
+        approvalBoundary.highRisk
+          ? "この issue draft / remediation plan で GitHub Issue 化または高リスク remediation に進むなら、通常 write は GO、高リスク外部効果は GO + passkey を明示してください。"
+          : "この issue draft / remediation plan で GitHub Issue 化または実装着手するなら GO と言ってください。",
+      approvalBoundary: approvalBoundary.code
     }
   };
 }
@@ -241,7 +250,7 @@ function buildRemediationPlan(signal, targetRule, relatedMemory) {
   ].filter(Boolean);
 }
 
-function buildIssueDraft({ signal, targetRule, title, explanation, priority, relatedMemory }) {
+function buildIssueDraft({ signal, targetRule, title, explanation, priority, relatedMemory, approvalBoundary }) {
   const bodySections = [
     "## Problem",
     explanation,
@@ -263,7 +272,7 @@ function buildIssueDraft({ signal, targetRule, title, explanation, priority, rel
       : "- No related operational memory reference found.",
     "",
     "## GO Boundary",
-    "Butler may propose and prioritize this Issue, but must wait for human GO before creating the Issue or executing remediation."
+    approvalBoundary.issueDraftText
   ];
 
   return {
@@ -273,7 +282,7 @@ function buildIssueDraft({ signal, targetRule, title, explanation, priority, rel
   };
 }
 
-function buildExecutionPlan(signal, targetRule) {
+function buildExecutionPlan(approvalBoundary) {
   return {
     status: "proposal_only",
     requiresGO: true,
@@ -289,10 +298,29 @@ function buildExecutionPlan(signal, targetRule) {
       "high_risk_action",
       "permission_or_secret_mutation"
     ],
-    approvalBoundary:
-      targetRule.target === ProactiveDetectionTarget.GOVERNANCE_PROBLEM || hasHighRiskTerms(signal)
-        ? "GO + passkey required before deploy, secret, permission, settings, or other high-risk external effects; normal writes still require GO"
-        : "GO required before normal write or execution"
+    approvalBoundary: approvalBoundary.executionPlanText
+  };
+}
+
+function buildApprovalBoundary(signal, targetRule) {
+  const highRisk = targetRule.target === ProactiveDetectionTarget.GOVERNANCE_PROBLEM || hasHighRiskTerms(signal);
+  if (highRisk) {
+    return {
+      highRisk,
+      code: "proposal_only_until_go_passkey_for_high_risk_effects",
+      issueDraftText:
+        "Butler may propose and prioritize this Issue. Butler must wait for human GO before creating the Issue or normal write/implementation handoff, and must wait for GO + passkey before any deploy, secret, permission, settings, destructive, merge, or other high-risk external effect.",
+      executionPlanText:
+        "GO + passkey required before deploy, secret, permission, settings, destructive, merge, or other high-risk external effects; normal writes still require GO"
+    };
+  }
+
+  return {
+    highRisk,
+    code: "proposal_only_until_human_go",
+    issueDraftText:
+      "Butler may propose and prioritize this Issue, but must wait for human GO before creating the Issue or executing remediation.",
+    executionPlanText: "GO required before normal write or execution"
   };
 }
 

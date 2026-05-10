@@ -108,7 +108,8 @@ export function runMvpGateway(input, runtimeContext = {}) {
     memoryWrite: memoryPlan.value,
     proactiveOperationalProposals: buildProactivePlan({
       input,
-      repository: execution.repository
+      repository: execution.repository,
+      actorRole
     })
   };
 }
@@ -169,10 +170,21 @@ function prepareMemoryPlan(memoryRecord) {
   };
 }
 
-function buildProactivePlan({ input, repository }) {
+function buildProactivePlan({ input, repository, actorRole }) {
   const proactiveInput = input?.proactiveOperations;
   if (!proactiveInput || typeof proactiveInput !== "object" || Array.isArray(proactiveInput)) {
     return null;
+  }
+  if (actorRole !== ActorRole.BUTLER) {
+    return {
+      ok: false,
+      proposalSurface: {
+        actorRole,
+        scope: "not_available",
+        grantsExecutorAuthorization: false
+      },
+      reason: "proactive_operational_proposals_are_butler_only"
+    };
   }
 
   return buildProactiveOperationalProposals({
