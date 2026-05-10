@@ -162,6 +162,11 @@ export {
   monitorButlerBatchDevelopment
 } from "./butler-batch-planning.js";
 export {
+  ProactiveDetectionTarget,
+  ProactiveProposalStage,
+  buildProactiveOperationalProposals
+} from "./proactive-operational-proposals.js";
+export {
   CodexGoal,
   ExecutionTransferMode,
   evaluateExecutionContinuity

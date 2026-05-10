@@ -2,6 +2,7 @@ import { evaluateButlerExecution } from "./butler-orchestrator.js";
 import { buildConversationAssist } from "./conversation-assist.js";
 import { evaluateExecutionContinuity } from "./execution-continuity.js";
 import { evaluateExecutionPolicy } from "./policy.js";
+import { buildProactiveOperationalProposals } from "./proactive-operational-proposals.js";
 import { buildRetrievalPlan } from "./retrieval-contract.js";
 import { evaluateMemorySafety, sanitizeMemoryPayload } from "./memory-safety.js";
 import { createInitialWorkflowState, transitionWorkflow } from "./state-machine.js";
@@ -104,7 +105,11 @@ export function runMvpGateway(input, runtimeContext = {}) {
     executionContinuity: continuity.value,
     autonomyMode: execution.autonomyMode ?? policyInput.autonomyMode ?? null,
     requiredApproval: execution.requiredApproval ?? null,
-    memoryWrite: memoryPlan.value
+    memoryWrite: memoryPlan.value,
+    proactiveOperationalProposals: buildProactivePlan({
+      input,
+      repository: execution.repository
+    })
   };
 }
 
@@ -164,6 +169,26 @@ function prepareMemoryPlan(memoryRecord) {
   };
 }
 
+function buildProactivePlan({ input, repository }) {
+  const proactiveInput = input?.proactiveOperations;
+  if (!proactiveInput || typeof proactiveInput !== "object" || Array.isArray(proactiveInput)) {
+    return null;
+  }
+
+  return buildProactiveOperationalProposals({
+    ...proactiveInput,
+    repository:
+      normalizeText(proactiveInput.repository) ||
+      normalizeText(repository) ||
+      normalizeText(input?.policyInput?.repositoryInput),
+    operationalMemory: proactiveInput.operationalMemory ?? input?.operationalMemory,
+    openIssues:
+      proactiveInput.openIssues ??
+      input?.openIssues ??
+      input?.policyInput?.runtimeTruth?.openIssues,
+    githubRuntimeTruth: proactiveInput.githubRuntimeTruth ?? input?.policyInput?.runtimeTruth
+  });
+}
 
 function deny(rule, reason, detail = {}) {
   return {
