@@ -84,7 +84,7 @@ test("deploy-production workflow enforces the MVP production deploy boundary", (
 
 test("wrangler config fixes worker runtime entry and production environment", () => {
   const wrangler = fs.readFileSync(WRANGLER_PATH, "utf8");
-  assert.equal(wrangler.includes('main = "src/worker.js"'), true);
+  assert.equal(wrangler.includes('main = "worker.js"'), true);
   assert.equal(wrangler.includes("[env.production]"), true);
   assert.equal(wrangler.includes('name = "vtdd-v2-mvp"'), true);
   assert.equal(wrangler.includes(OWNER_D1_DATABASE_ID), false);

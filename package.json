@@ -4,8 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build:worker": "node scripts/build-worker.mjs",
+    "check:generated-worker": "node scripts/check-generated-worker.mjs",
     "check:self-parity": "node scripts/check-runtime-self-parity.mjs",
-    "test": "node --test && npm run check:self-parity",
+    "test": "node --test && npm run check:self-parity && npm run check:generated-worker",
     "pr-body:validate": "node scripts/validate-pr-body.mjs .github/pull_request_template.md"
   },
   "engines": {
@@ -14,5 +16,8 @@
   "dependencies": {
     "@simplewebauthn/server": "^13.3.0",
     "tweetnacl-sealedbox-js": "^1.2.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.12"
   }
 }
