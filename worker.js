@@ -28758,6 +28758,7 @@ function normalizeIssueComment(item) {
   };
 }
 function normalizePullRequest2(item) {
+  const mergeability = normalizePullRequestMergeability(item);
   return {
     number: normalizePositiveInteger5(item?.number),
     title: normalizeText25(item?.title),
@@ -28771,8 +28772,77 @@ function normalizePullRequest2(item) {
     merged: item?.merged === true || Boolean(normalizeText25(item?.merged_at)),
     mergedAt: normalizeText25(item?.merged_at),
     mergeCommitSha: normalizeText25(item?.merge_commit_sha),
+    mergeable: mergeability.mergeable,
+    mergeableState: mergeability.state,
+    mergeConflict: mergeability.hasConflict,
+    mergeBlocked: mergeability.blocked,
+    mergeBlockedReason: mergeability.blockedReason,
+    mergeWarning: mergeability.warning,
+    freshBranchSuggestion: mergeability.freshBranchSuggestion,
+    conflictFiles: mergeability.conflictFiles,
+    conflictFilesSource: mergeability.conflictFilesSource,
+    mergeability,
     htmlUrl: normalizeText25(item?.html_url)
   };
+}
+function normalizePullRequestMergeability(item) {
+  const mergeable = typeof item?.mergeable === "boolean" ? item.mergeable : null;
+  const state = normalizeText25(item?.mergeable_state);
+  const draft = item?.draft === true;
+  const merged = item?.merged === true || Boolean(normalizeText25(item?.merged_at));
+  const hasConflict2 = mergeable === false || state === "dirty";
+  const isUnknown = mergeable === null || state === "unknown";
+  const blockedReason = normalizeMergeBlockedReason({ draft, hasConflict: hasConflict2, isUnknown, merged, state });
+  const blocked2 = Boolean(blockedReason);
+  const warning = blocked2 ? normalizeMergeWarning({ hasConflict: hasConflict2, isUnknown, state, blockedReason }) : null;
+  const freshBranchSuggestion = hasConflict2 ? "Recreate a fresh branch from the current base branch, replay the scoped changes, and open/update the PR before retrying merge." : null;
+  return {
+    mergeable,
+    state: state || null,
+    hasConflict: hasConflict2,
+    blocked: blocked2,
+    blockedReason,
+    warning,
+    freshBranchSuggestion,
+    conflictFiles: null,
+    conflictFilesSource: "not_provided_by_github_pull_request_endpoint"
+  };
+}
+function normalizeMergeBlockedReason({ draft, hasConflict: hasConflict2, isUnknown, merged, state }) {
+  if (merged) {
+    return null;
+  }
+  if (draft) {
+    return "pull_request_is_draft";
+  }
+  if (hasConflict2) {
+    return "pull_request_has_merge_conflicts";
+  }
+  if (isUnknown) {
+    return "pull_request_mergeability_unknown";
+  }
+  if (state === "blocked") {
+    return "pull_request_merge_blocked";
+  }
+  if (state === "behind") {
+    return "pull_request_branch_behind_base";
+  }
+  if (state === "unstable") {
+    return "pull_request_checks_unstable";
+  }
+  return null;
+}
+function normalizeMergeWarning({ hasConflict: hasConflict2, isUnknown, state, blockedReason }) {
+  if (hasConflict2) {
+    return "Warning: PR merge conflicts were detected before merge. Resolve conflicts or recreate a fresh branch before attempting the merge API.";
+  }
+  if (isUnknown) {
+    return "Warning: GitHub has not finished computing PR mergeability. Re-read PR runtime truth before attempting merge.";
+  }
+  if (state === "behind") {
+    return "Warning: PR branch is behind the base branch. Update or recreate the branch before attempting merge.";
+  }
+  return `Warning: PR merge is blocked (${blockedReason}). Resolve the blocking condition before attempting merge.`;
 }
 function normalizePullReview(item) {
   return {
@@ -29909,6 +29979,10 @@ async function executePullReadyForReview(input) {
 }
 async function executePullMerge(input) {
   const encodedRepository = encodeURIComponentRepository6(input.repository);
+  const preflight = await readPullRuntimeTruthBeforeMerge({ ...input, encodedRepository });
+  if (!preflight.ok) {
+    return preflight;
+  }
   let response;
   const requestUrl = `${input.apiBaseUrl}/repos/${encodedRepository}/pulls/${input.pullNumber}/merge`;
   try {
@@ -29976,6 +30050,131 @@ async function executePullMerge(input) {
       runtimeTruth: runtimeTruth.pull
     }
   };
+}
+async function readPullRuntimeTruthBeforeMerge(input) {
+  const requestUrl = `${input.apiBaseUrl}/repos/${input.encodedRepository}/pulls/${input.pullNumber}`;
+  let response;
+  try {
+    response = await input.fetchImpl(requestUrl, {
+      method: "GET",
+      headers: githubJsonHeaders3({ token: input.token })
+    });
+  } catch (error) {
+    return {
+      ok: false,
+      status: 503,
+      error: "github_high_risk_failed",
+      reason: `failed to read GitHub pull request runtime truth before merge: ${errorMessage(error)}`,
+      issues: ["github_merge_preflight_fetch_exception"],
+      diagnostics: {
+        operation: input.operation,
+        requestMethod: "GET",
+        requestUrl,
+        exceptionName: errorName(error),
+        exceptionMessage: errorMessage(error)
+      }
+    };
+  }
+  const responseBody = await readJsonSafe8(response);
+  if (!response.ok) {
+    return {
+      ok: false,
+      status: response.status,
+      error: "github_high_risk_failed",
+      reason: normalizeText28(responseBody?.message) || "failed to read GitHub pull request runtime truth before merge",
+      diagnostics: {
+        operation: input.operation,
+        requestMethod: "GET",
+        requestUrl,
+        githubStatus: response.status,
+        githubMessage: normalizeText28(responseBody?.message) || null,
+        githubDocumentationUrl: normalizeText28(responseBody?.documentation_url) || null
+      }
+    };
+  }
+  const mergeability = normalizePullMergePreflight(responseBody);
+  if (!mergeability.blocked) {
+    return { ok: true, mergeability };
+  }
+  return {
+    ok: false,
+    status: 409,
+    error: "github_high_risk_preflight_blocked",
+    reason: mergeability.warning,
+    issues: ["github_merge_preflight_blocked", mergeability.blockedReason].filter(Boolean),
+    diagnostics: {
+      operation: input.operation,
+      requestMethod: "GET",
+      requestUrl,
+      mergeable: mergeability.mergeable,
+      mergeableState: mergeability.state,
+      mergeConflict: mergeability.hasConflict,
+      mergeBlockedReason: mergeability.blockedReason,
+      freshBranchSuggestion: mergeability.freshBranchSuggestion,
+      conflictFiles: mergeability.conflictFiles,
+      conflictFilesSource: mergeability.conflictFilesSource,
+      htmlUrl: normalizeText28(responseBody?.html_url) || null
+    }
+  };
+}
+function normalizePullMergePreflight(item) {
+  const mergeable = typeof item?.mergeable === "boolean" ? item.mergeable : null;
+  const state = normalizeText28(item?.mergeable_state);
+  const draft = item?.draft === true;
+  const merged = item?.merged === true || Boolean(normalizeText28(item?.merged_at));
+  const hasConflict2 = mergeable === false || state === "dirty";
+  const isUnknown = mergeable === null || state === "unknown";
+  const blockedReason = normalizePullMergeBlockedReason({ draft, hasConflict: hasConflict2, isUnknown, merged, state });
+  const blocked2 = Boolean(blockedReason);
+  const warning = blocked2 ? normalizePullMergeWarning({ hasConflict: hasConflict2, isUnknown, state, blockedReason }) : null;
+  const freshBranchSuggestion = hasConflict2 ? "Recreate a fresh branch from the current base branch, replay the scoped changes, and open/update the PR before retrying merge." : null;
+  return {
+    mergeable,
+    state: state || null,
+    hasConflict: hasConflict2,
+    blocked: blocked2,
+    blockedReason,
+    warning,
+    freshBranchSuggestion,
+    conflictFiles: null,
+    conflictFilesSource: "not_provided_by_github_pull_request_endpoint"
+  };
+}
+function normalizePullMergeBlockedReason({ draft, hasConflict: hasConflict2, isUnknown, merged, state }) {
+  if (merged) {
+    return null;
+  }
+  if (draft) {
+    return "pull_request_is_draft";
+  }
+  if (hasConflict2) {
+    return "pull_request_has_merge_conflicts";
+  }
+  if (isUnknown) {
+    return "pull_request_mergeability_unknown";
+  }
+  if (state === "blocked") {
+    return "pull_request_merge_blocked";
+  }
+  if (state === "behind") {
+    return "pull_request_branch_behind_base";
+  }
+  if (state === "unstable") {
+    return "pull_request_checks_unstable";
+  }
+  return null;
+}
+function normalizePullMergeWarning({ hasConflict: hasConflict2, isUnknown, state, blockedReason }) {
+  if (hasConflict2) {
+    return "Warning: PR merge conflicts were detected before merge. Resolve conflicts or recreate a fresh branch before attempting the merge API.";
+  }
+  if (isUnknown) {
+    return "Warning: GitHub has not finished computing PR mergeability. Re-read PR runtime truth before attempting merge.";
+  }
+  if (state === "behind") {
+    return "Warning: PR branch is behind the base branch. Update or recreate the branch before attempting merge.";
+  }
+  return `Warning: PR merge is blocked (${blockedReason}). Resolve the blocking condition before attempting merge.`;
 }
 async function readPullRuntimeTruthAfterMerge(input) {
   const requestUrl = `${input.apiBaseUrl}/repos/${input.encodedRepository}/pulls/${input.pullNumber}`;

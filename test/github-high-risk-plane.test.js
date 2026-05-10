@@ -162,11 +162,29 @@ test("github high-risk plane merges a pull request with scoped approval grant", 
       GITHUB_APP_INSTALLATION_TOKEN: "ghs_high_risk",
       GITHUB_API_FETCH: async (url, init) => {
         calls.push({ url, init });
+        if (calls.length === 1) {
+          return new Response(
+            JSON.stringify({
+              mergeable: true,
+              mergeable_state: "clean",
+              html_url: "https://github.com/sample-org/vtdd-v2-p/pull/21"
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        if (init?.method === "PUT") {
+          return new Response(
+            JSON.stringify({
+              sha: "abc123",
+              merged: true,
+              message: "Pull Request successfully merged"
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
         return new Response(
           JSON.stringify({
-            sha: "abc123",
             merged: true,
-            message: "Pull Request successfully merged",
             merged_at: "2026-05-09T01:02:03Z",
             merge_commit_sha: "def456",
             html_url: "https://github.com/sample-org/vtdd-v2-p/pull/21"
@@ -186,8 +204,9 @@ test("github high-risk plane merges a pull request with scoped approval grant", 
     mergeCommitSha: "def456",
     htmlUrl: "https://github.com/sample-org/vtdd-v2-p/pull/21"
   });
-  assert.equal(calls[0].init.method, "PUT");
-  assert.equal(calls[1].init.method, "GET");
+  assert.equal(calls[0].init.method, "GET");
+  assert.equal(calls[1].init.method, "PUT");
+  assert.equal(calls[2].init.method, "GET");
 });
 
 test("github high-risk plane binds default fetch for Cloudflare Worker merge dispatch", async () => {
@@ -196,6 +215,16 @@ test("github high-risk plane binds default fetch for Cloudflare Worker merge dis
   globalThis.fetch = async function cloudflareLikeFetch(url, init) {
     assert.equal(this, globalThis);
     calls.push({ url, init });
+    if (calls.length === 1) {
+      return new Response(
+        JSON.stringify({
+          mergeable: true,
+          mergeable_state: "clean",
+          html_url: "https://github.com/sample-org/vtdd-v2-p/pull/21"
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    }
     if (init?.method === "PUT") {
       return new Response(
         JSON.stringify({
@@ -237,11 +266,53 @@ test("github high-risk plane binds default fetch for Cloudflare Worker merge dis
     assert.equal(result.authorityAction.runtimeTruth.mergedAt, "2026-05-09T01:02:03Z");
     assert.deepEqual(
       calls.map((call) => call.init.method),
-      ["PUT", "GET"]
+      ["GET", "PUT", "GET"]
     );
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test("github high-risk plane blocks merge before merge API when pull request has conflicts", async () => {
+  const calls = [];
+  const result = await executeGitHubHighRiskPlane({
+    operation: GitHubHighRiskOperation.PULL_MERGE,
+    repository: "sample-org/vtdd-v2-p",
+    issueNumber: 55,
+    pullNumber: 21,
+    mergeMethod: "squash",
+    approvalPhrase: "GO",
+    targetConfirmed: true,
+    approvalGrant: mergeGrant,
+    approvalScope: mergeGrant.scope,
+    env: {
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_high_risk",
+      GITHUB_API_FETCH: async (url, init) => {
+        calls.push({ url, init });
+        return new Response(
+          JSON.stringify({
+            mergeable: false,
+            mergeable_state: "dirty",
+            html_url: "https://github.com/sample-org/vtdd-v2-p/pull/21"
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        );
+      }
+    }
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.status, 409);
+  assert.equal(result.error, "github_high_risk_preflight_blocked");
+  assert.equal(result.issues.includes("pull_request_has_merge_conflicts"), true);
+  assert.match(result.reason, /merge conflicts were detected before merge/);
+  assert.equal(result.diagnostics.requestMethod, "GET");
+  assert.equal(result.diagnostics.mergeable, false);
+  assert.equal(result.diagnostics.mergeableState, "dirty");
+  assert.equal(result.diagnostics.mergeConflict, true);
+  assert.match(result.diagnostics.freshBranchSuggestion, /Recreate a fresh branch/);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].init.method, "GET");
 });
 
 test("github high-risk plane marks draft pull request ready for review with scoped approval grant", async () => {
@@ -401,7 +472,16 @@ test("github high-risk plane surfaces merge fetch exception diagnostics", async 
     approvalScope: mergeGrant.scope,
     env: {
       GITHUB_APP_INSTALLATION_TOKEN: "ghs_high_risk",
-      GITHUB_API_FETCH: async () => {
+      GITHUB_API_FETCH: async (url, init) => {
+        if (init?.method === "GET") {
+          return new Response(
+            JSON.stringify({
+              mergeable: true,
+              mergeable_state: "clean"
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
         throw new TypeError("fetch failed");
       }
     }

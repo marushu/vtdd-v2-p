@@ -162,6 +162,8 @@ test("github read plane exposes pull request merge truth when reading a specific
             merged: true,
             merged_at: "2026-04-29T03:00:45Z",
             merge_commit_sha: "c9ad3c36ed5032bfb4f02bb79d65a8806bcd1047",
+            mergeable: true,
+            mergeable_state: "clean",
             html_url: "https://github.com/sample-org/vtdd-v2-p/pull/114"
           }),
           { status: 200, headers: { "content-type": "application/json" } }
@@ -179,6 +181,96 @@ test("github read plane exposes pull request merge truth when reading a specific
   assert.equal(result.read.records[0].mergeCommitSha, "c9ad3c36ed5032bfb4f02bb79d65a8806bcd1047");
   assert.equal(result.read.records[0].headSha, "d8755b961c6db1a5555320abf067d459686f48b8");
   assert.equal(result.read.records[0].baseSha, "83ba6135f3a01c27948a018c721135a301d938fe");
+  assert.equal(result.read.records[0].mergeable, true);
+  assert.equal(result.read.records[0].mergeableState, "clean");
+  assert.equal(result.read.records[0].mergeConflict, false);
+  assert.equal(result.read.records[0].mergeBlocked, false);
+  assert.equal(result.read.records[0].mergeability.state, "clean");
+});
+
+test("github read plane exposes pull request merge conflict truth before merge", async () => {
+  const result = await retrieveGitHubReadPlane({
+    resource: GitHubReadResource.PULLS,
+    repository: "sample-org/vtdd-v2-p",
+    pullNumber: 261,
+    env: {
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_pull_read",
+      GITHUB_API_FETCH: async () =>
+        new Response(
+          JSON.stringify({
+            number: 261,
+            title: "Merge conflict example",
+            state: "open",
+            draft: false,
+            head: {
+              ref: "codex/conflicting-branch",
+              sha: "conflict-head-sha",
+              repo: {
+                full_name: "sample-org/vtdd-v2-p",
+                owner: { login: "sample-org" }
+              }
+            },
+            base: { ref: "main", sha: "base-sha" },
+            merged: false,
+            merged_at: null,
+            merge_commit_sha: null,
+            mergeable: false,
+            mergeable_state: "dirty",
+            html_url: "https://github.com/sample-org/vtdd-v2-p/pull/261"
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        )
+    }
+  });
+
+  assert.equal(result.ok, true);
+  const pull = result.read.records[0];
+  assert.equal(pull.mergeable, false);
+  assert.equal(pull.mergeableState, "dirty");
+  assert.equal(pull.mergeConflict, true);
+  assert.equal(pull.mergeBlocked, true);
+  assert.equal(pull.mergeBlockedReason, "pull_request_has_merge_conflicts");
+  assert.match(pull.mergeWarning, /merge conflicts were detected before merge/);
+  assert.match(pull.freshBranchSuggestion, /Recreate a fresh branch/);
+  assert.equal(pull.conflictFiles, null);
+  assert.equal(pull.conflictFilesSource, "not_provided_by_github_pull_request_endpoint");
+  assert.equal(pull.mergeability.hasConflict, true);
+});
+
+test("github read plane warns when pull request mergeability is still computing", async () => {
+  const result = await retrieveGitHubReadPlane({
+    resource: GitHubReadResource.PULLS,
+    repository: "sample-org/vtdd-v2-p",
+    pullNumber: 265,
+    env: {
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_pull_read",
+      GITHUB_API_FETCH: async () =>
+        new Response(
+          JSON.stringify({
+            number: 265,
+            title: "Mergeability pending example",
+            state: "open",
+            draft: false,
+            head: { ref: "codex/issue-265", sha: "head-sha" },
+            base: { ref: "main", sha: "base-sha" },
+            mergeable: null,
+            mergeable_state: "unknown",
+            html_url: "https://github.com/sample-org/vtdd-v2-p/pull/265"
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        )
+    }
+  });
+
+  assert.equal(result.ok, true);
+  const pull = result.read.records[0];
+  assert.equal(pull.mergeable, null);
+  assert.equal(pull.mergeableState, "unknown");
+  assert.equal(pull.mergeConflict, false);
+  assert.equal(pull.mergeBlocked, true);
+  assert.equal(pull.mergeBlockedReason, "pull_request_mergeability_unknown");
+  assert.match(pull.mergeWarning, /Re-read PR runtime truth before attempting merge/);
+  assert.equal(pull.freshBranchSuggestion, null);
 });
 
 test("github read plane can filter pull requests by exact head owner and branch", async () => {
