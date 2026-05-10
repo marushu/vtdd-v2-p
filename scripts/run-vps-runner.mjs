@@ -6,6 +6,7 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { parseCodexReviewFallbackComment } from "../src/core/index.js";
+import { buildExecutionLeadTime } from "../src/core/execution-lead-time.js";
 import { renderPrBody } from "./render-pr-body.mjs";
 import { validatePrBody } from "./validate-pr-body.mjs";
 
@@ -856,53 +857,9 @@ function normalizeVpsRunnerLifecycle(value = {}) {
 }
 
 function buildVpsRunnerLeadTime(lifecycle = {}) {
-  const normalized = normalizeVpsRunnerLifecycle(lifecycle);
-  const terminalAt = normalized.completedAt || normalized.failedAt || normalized.prCreatedAt || null;
-  return {
-    queued_at: normalized.queuedAt || null,
-    picked_up_at: normalized.pickedUpAt || null,
-    codex_started_at: normalized.codexStartedAt || null,
-    branch_pushed_at: normalized.branchPushedAt || null,
-    pr_created_at: normalized.prCreatedAt || null,
-    completed_at: normalized.completedAt || null,
-    failed_at: normalized.failedAt || null,
-    durations: {
-      queue_wait_duration: buildDuration(normalized.queuedAt, normalized.pickedUpAt),
-      codex_execution_duration: buildDuration(normalized.codexStartedAt, normalized.branchPushedAt || normalized.prCreatedAt || normalized.completedAt || normalized.failedAt),
-      pr_creation_duration: buildDuration(normalized.branchPushedAt, normalized.prCreatedAt),
-      total_lead_time: buildDuration(normalized.queuedAt, terminalAt)
-    }
-  };
-}
-
-function buildDuration(start, end) {
-  const startMs = Date.parse(normalizeText(start));
-  const endMs = Date.parse(normalizeText(end));
-  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs < startMs) {
-    return null;
-  }
-  const seconds = Math.round((endMs - startMs) / 1000);
-  return {
-    seconds,
-    label: formatDurationSeconds(seconds)
-  };
-}
-
-function formatDurationSeconds(seconds) {
-  if (!Number.isFinite(seconds)) {
-    return null;
-  }
-  if (seconds < 60) {
-    return `${seconds}s`;
-  }
-  const minutes = Math.floor(seconds / 60);
-  const remainder = seconds % 60;
-  if (minutes < 60) {
-    return remainder ? `${minutes}m ${remainder}s` : `${minutes}m`;
-  }
-  const hours = Math.floor(minutes / 60);
-  const minuteRemainder = minutes % 60;
-  return minuteRemainder ? `${hours}h ${minuteRemainder}m` : `${hours}h`;
+  return buildExecutionLeadTime(normalizeVpsRunnerLifecycle(lifecycle), {
+    normalizeTimestamp: normalizeIsoTimestamp
+  });
 }
 
 function formatLeadTimeCommentLines(leadTime) {
