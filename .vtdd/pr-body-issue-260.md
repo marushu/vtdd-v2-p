@@ -22,10 +22,10 @@ None.
 
 ## Verification Evidence
 
-- Unit: npm test (606 tests passed).
-- Integration: node --test test/execution-lead-time.test.js test/vps-runner-script.test.js test/remote-codex-executor.test.js (68 tests passed).
-- E2E: Not run live; covered by runtime progress/comment contract tests for happy-path and stale/failure boundaries.
-- Manual: Inspected docs/pr-template-model.md, scripts/render-pr-body.mjs, scripts/validate-pr-body.mjs before drafting.
+- Unit: npm test (609 tests passed on 2026-05-10).
+- Integration: node --test test/execution-lead-time.test.js test/vps-runner-script.test.js test/remote-codex-executor.test.js test/e2e-30-execution-lead-time-telemetry.test.js test/custom-gpt-setup-docs.test.js (81 tests passed on 2026-05-10).
+- E2E: Not run live; covered by runtime progress/comment contract tests for happy-path and stale/failure boundaries. Reviewer-raised live GitHub runner E2E and iPhone Butler live E2E remain unverified.
+- Manual: Inspected docs/pr-template-model.md, scripts/render-pr-body.mjs, scripts/validate-pr-body.mjs before drafting; read GitHub Issue #260 and PR #261 runtime truth with gh on 2026-05-10.
 - Evidence path/link: src/core/execution-lead-time.js; test/execution-lead-time.test.js; test/remote-codex-executor.test.js; test/vps-runner-script.test.js; docs/butler/remote-codex-cli-executor.md
 
 ## Surface Update Checklist
@@ -55,5 +55,5 @@ None.
 
 <!-- VTDD metadata -->
 - Issue: #260
-- Execution ID: remote-codex-issue260-737qrr
+- Execution ID: remote-codex-issue260-iogni0
 - Goal: revise_pr
