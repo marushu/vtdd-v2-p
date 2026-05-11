@@ -44,6 +44,7 @@ function renderPrBody(options = {}) {
   const executionId = options.executionId || "Not provided.";
   const codexGoal = options.codexGoal || "Not provided.";
   const evidencePath = options.evidencePath || "Not provided.";
+  const butler = options.butler || {};
 
   return `## This PR satisfies Intent
 
@@ -73,6 +74,17 @@ ${options.nonGoals || "None."}
 - E2E: ${options.e2e || "None."}
 - Manual: ${options.manual || "None."}
 - Evidence path/link: ${evidencePath}
+
+## Butler Completion Contract
+
+- Owner goal: ${options.ownerGoal || butler.ownerGoal || "Not provided."}
+- Butler entrypoint: ${options.butlerEntrypoint || butler.entrypoint || "Not provided."}
+- Action Schema exposure: ${options.actionSchemaExposure || butler.actionSchemaExposure || "Not provided."}
+- Runtime path: ${options.runtimePath || butler.runtimePath || "Not provided."}
+- Runner/runtime truth: ${options.runtimeTruth || butler.runtimeTruth || "Not provided."}
+- Authority boundary: ${options.authorityBoundary || butler.authorityBoundary || "Not provided."}
+- E2E evidence: ${options.butlerE2E || butler.e2eEvidence || "Not provided."}
+- Completion status: ${options.completionStatus || butler.completionStatus || "incomplete"}
 
 ## Surface Update Checklist
 

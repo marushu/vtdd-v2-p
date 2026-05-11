@@ -7,6 +7,25 @@ The assistant must prevent drift, preserve issue traceability, and avoid specula
 
 This file exists to stop the exact failure mode where implementation appears to progress while required behavior remains unimplemented.
 
+## Butler Completion Gate
+
+In this repository, a feature is incomplete unless Butler can complete the
+owner-facing workflow without the owner opening Mac desktop Codex.
+
+A change is not complete merely because code, docs, routes, schemas, or tests
+exist. Completion requires all of:
+
+- Butler natural-language intent can reach the capability.
+- Custom GPT Action Schema exposes the required operationId/tool.
+- Runtime route and runner path are connected.
+- Required authority boundary is explicit: GO, passkey, approval grant, or forbidden.
+- Runtime truth reports success/failure and relevant before/after state.
+- E2E evidence proves the Butler-facing workflow.
+- PR body maps Issue criteria to implementation and E2E evidence.
+
+If any item is missing, report the work as incomplete/unconnected. Do not claim
+implementation complete.
+
 ## Non-Negotiable Rules
 
 1. Do not reinterpret scope words (including "MVP") on your own.

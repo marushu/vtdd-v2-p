@@ -1128,11 +1128,13 @@ test("VPS runner PR body satisfies guarded PR template markers", () => {
   assert.equal(body.includes("## Satisfied Success Criteria"), true);
   assert.equal(body.includes("## Unsatisfied Success Criteria"), true);
   assert.equal(body.includes("## Verification Evidence"), true);
+  assert.equal(body.includes("## Butler Completion Contract"), true);
   assert.equal(body.includes("## Surface Update Checklist"), true);
   assert.equal(body.includes("Execution ID: remote-codex-issue194-test"), true);
   assert.equal(body.includes("No merge or deploy is performed by the VPS runner."), true);
   assert.equal(body.includes("issue-specific live E2E must be recorded separately"), true);
   assert.equal(body.includes("Not run by VPS runner; Butler must read progress"), true);
+  assert.equal(body.includes("Completion status: incomplete"), true);
 });
 
 test("VPS runner preserves a guarded-policy-compliant PR body candidate", () => {
@@ -1178,8 +1180,10 @@ test("VPS runner normalizes malformed PR body candidates with canonical template
   assert.equal(normalized.body.includes("## Satisfied Success Criteria"), true);
   assert.equal(normalized.body.includes("## Unsatisfied Success Criteria"), true);
   assert.equal(normalized.body.includes("## Verification Evidence"), true);
+  assert.equal(normalized.body.includes("## Butler Completion Contract"), true);
   assert.equal(normalized.body.includes("## Surface Update Checklist"), true);
   assert.equal(normalized.body.includes("Issue #213"), true);
+  assert.equal(normalized.body.includes("Completion status: incomplete"), true);
 });
 
 test("VPS runner classifies unauthenticated Codex CLI as raw auth failure", () => {

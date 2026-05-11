@@ -24,6 +24,7 @@ jobs:
             "## Satisfied Success Criteria"
             "## Unsatisfied Success Criteria"
             "## Verification Evidence"
+            "## Butler Completion Contract"
             "## Surface Update Checklist"
           )
 
@@ -33,6 +34,68 @@ jobs:
               exit 1
             fi
           done
+
+      - name: Validate Butler completion contract
+        shell: bash
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          body="${PR_BODY:-}"
+          contract="$(printf '%s' "$body" | awk '/^## Butler Completion Contract/{flag=1; next} /^## /{flag=0} flag')"
+          required_fields=(
+            "Owner goal"
+            "Butler entrypoint"
+            "Action Schema exposure"
+            "Runtime path"
+            "Runner/runtime truth"
+            "Authority boundary"
+            "E2E evidence"
+            "Completion status"
+          )
+
+          for field in "${required_fields[@]}"; do
+            line="$(printf '%s\n' "$contract" | grep -E "^- ${field}: .+" || true)"
+            if [ -z "$line" ]; then
+              echo "Missing or empty Butler Completion Contract field: $field"
+              exit 1
+            fi
+            value="${line#- ${field}: }"
+            value="$(printf '%s' "$value" | tr '[:upper:]' '[:lower:]' | sed -E 's/[[:space:]]+$//')"
+            case "$value" in
+              ""|"none"|"none."|"not required"|"not required."|"not provided"|"not provided."|"todo"|"tbd")
+                echo "Butler Completion Contract field is not filled: $field"
+                exit 1
+                ;;
+            esac
+          done
+
+          status_line="$(printf '%s\n' "$contract" | grep -E "^- Completion status: .+")"
+          status="${status_line#- Completion status: }"
+          status="$(printf '%s' "$status" | tr '[:upper:]' '[:lower:]' | sed -E 's/[[:space:]]+$//')"
+          case "$status" in
+            complete|incomplete|unconnected) ;;
+            *)
+              echo "Butler Completion Contract status must be complete, incomplete, or unconnected."
+              exit 1
+              ;;
+          esac
+
+          if printf '%s' "$body" | awk '/^## Unsatisfied Success Criteria/{flag=1; next} /^## /{flag=0} flag' | grep -Eiq '^[[:space:]]*(- )?none\.?[[:space:]]*$' && [ "$status" != "complete" ]; then
+            echo "PR claims no unsatisfied Success Criteria but Butler Completion Contract is not complete."
+            exit 1
+          fi
+
+          if [ "$status" = "complete" ]; then
+            e2e_line="$(printf '%s\n' "$contract" | grep -E "^- E2E evidence: .+")"
+            e2e_value="${e2e_line#- E2E evidence: }"
+            e2e_value="$(printf '%s' "$e2e_value" | tr '[:upper:]' '[:lower:]' | sed -E 's/[[:space:]]+$//')"
+            case "$e2e_value" in
+              ""|"none"|"none."|"not required"|"not required."|"not provided"|"not provided."|"todo"|"tbd")
+                echo "Butler Completion Contract status is complete but Butler-facing E2E evidence is missing."
+                exit 1
+                ;;
+            esac
+          fi
 
       - name: Guard Closes usage with E2E evidence pointers
         shell: bash
@@ -47,6 +110,14 @@ jobs:
             fi
             if ! printf '%s' "$body" | grep -Eq 'Evidence path/link:'; then
               echo "PR uses Closes but evidence path/link slot is missing."
+              exit 1
+            fi
+            contract="$(printf '%s' "$body" | awk '/^## Butler Completion Contract/{flag=1; next} /^## /{flag=0} flag')"
+            status_line="$(printf '%s\n' "$contract" | grep -E "^- Completion status: .+")"
+            status="${status_line#- Completion status: }"
+            status="$(printf '%s' "$status" | tr '[:upper:]' '[:lower:]' | sed -E 's/[[:space:]]+$//')"
+            if [ "$status" != "complete" ]; then
+              echo "PR uses Closes but Butler Completion Contract status is not complete."
               exit 1
             fi
           fi
