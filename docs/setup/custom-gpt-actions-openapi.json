@@ -1066,6 +1066,180 @@
         }
       }
     },
+    "/v2/action/memory-write": {
+      "post": {
+        "operationId": "vtddWriteOperationalMemory",
+        "summary": "Persist a structured VTDD operational memory candidate after Butler shows it and receives GO.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "recordType",
+                  "confirmed"
+                ],
+                "properties": {
+                  "recordType": {
+                    "type": "string",
+                    "enum": [
+                      "decision_log",
+                      "proposal_log",
+                      "working_memory",
+                      "repair_case"
+                    ]
+                  },
+                  "confirmed": {
+                    "type": "boolean",
+                    "description": "True only after Butler shows the structured memory candidate and the human replies GO."
+                  },
+                  "ownerConsent": {
+                    "type": "string",
+                    "description": "Optional natural GO evidence. Do not ask the human for raw JSON."
+                  },
+                  "repository": {
+                    "type": "string"
+                  },
+                  "relatedIssue": {
+                    "type": "integer"
+                  },
+                  "summary": {
+                    "type": "string"
+                  },
+                  "details": {
+                    "type": "string"
+                  },
+                  "decision": {
+                    "type": "string"
+                  },
+                  "rationale": {
+                    "type": "string"
+                  },
+                  "decidedBy": {
+                    "type": "string"
+                  },
+                  "supersededBy": {
+                    "type": "string"
+                  },
+                  "hypothesis": {
+                    "type": "string"
+                  },
+                  "options": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "concerns": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "unresolvedQuestions": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "proposedBy": {
+                    "type": "string"
+                  },
+                  "rejectedReasons": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "option": {
+                          "type": "string"
+                        },
+                        "reason": {
+                          "type": "string"
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  },
+                  "tags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "priority": {
+                    "type": "integer"
+                  },
+                  "timestamp": {
+                    "type": "string"
+                  },
+                  "responseMode": {
+                    "type": "string",
+                    "enum": [
+                      "action_visible"
+                    ],
+                    "description": "Use action_visible from Custom GPT so memory write failures return ok:false JSON instead of an Action transport failure."
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Memory write persisted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing machine auth",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Invalid machine auth",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Memory write blocked or invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Memory provider unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v2/action/github-authority": {
       "post": {
         "operationId": "vtddGitHubAuthority",
