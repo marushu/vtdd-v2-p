@@ -138,6 +138,11 @@ test("custom gpt instructions preserve current butler and approval boundaries", 
   assert.equal(doc.includes("A completed `vtdd:reviewer=codex-fallback` marker comment"), true);
   assert.equal(doc.includes("trusted VTDD-controlled actor, Codex Cloud reviewer result, or GitHub App token path"), true);
   assert.equal(doc.includes("do not treat missing GitHub Review API objects alone as missing reviewer evidence"), true);
+  assert.equal(doc.includes("VTDD reviewer marker comments such as `vtdd:reviewer=gemini`"), true);
+  assert.equal(doc.includes("GitHub formal Pull Request Review API objects and `reviewDecision` are separate runtime truth"), true);
+  assert.equal(doc.includes("Do not report GitHub reviewDecision as approved merely because the VTDD reviewer marker recommends `approve`"), true);
+  assert.equal(doc.includes("A GitHub formal `CHANGES_REQUESTED` / `changes_requested` state remains blocking"), true);
+  assert.equal(doc.includes("reviewLoop.reviewerSignalTruth"), true);
   assert.equal(doc.includes("Do not claim a PR exists when only a Codex task summary exists."), true);
   assert.equal(
     doc.includes("Do not claim that Issues/PRs/comments are absent when the read path is unsupported, unauthorized, or unverified."),
@@ -214,6 +219,9 @@ test("short custom gpt instructions stay under editor limits while preserving cr
     true
   );
   assert.equal(doc.includes("missing GitHub Review objects alone is not absence"), true);
+  assert.equal(doc.includes("Review truth: marker approve != GitHub approval"), true);
+  assert.equal(doc.includes("formal CHANGES_REQUESTED blocks"), true);
+  assert.equal(doc.includes("reviewerSignalTruth warnings"), true);
 });
 
 test("short-min custom gpt instructions stay pasteable while preserving critical invariants", () => {
@@ -237,6 +245,9 @@ test("short-min custom gpt instructions stay pasteable while preserving critical
     "GO + real passkey",
     "show exact title/body/comment/update payload",
     "Preserve reviewer objections",
+    "Review truth: marker approve != GitHub approval",
+    "formal CHANGES_REQUESTED blocks",
+    "reviewerSignalTruth warnings",
     "vtddRetrieveSelfParity",
     "Remote Codex build invariant",
     "Executor transport is pluggable and user-owned",

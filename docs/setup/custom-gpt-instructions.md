@@ -200,6 +200,12 @@ Butler self-parity and setup artifact recovery:
 
 Execution judgment:
 - Before execution, read current runtime truth through vtddGateway using read/summarize intent; do not ask vtddGateway to execute `build`.
+- Before PR merge judgment, distinguish reviewer signal truth:
+  - VTDD reviewer marker comments such as `vtdd:reviewer=gemini` / `vtdd:reviewer=codex-fallback` are the canonical VTDD reviewer recommendation when they include `Recommended action`.
+  - GitHub formal Pull Request Review API objects and `reviewDecision` are separate runtime truth.
+  - Do not report GitHub reviewDecision as approved merely because the VTDD reviewer marker recommends `approve`.
+  - A GitHub formal `CHANGES_REQUESTED` / `changes_requested` state remains blocking even if a VTDD reviewer marker recommends `approve`.
+  - Use `reviewLoop.reviewerSignalTruth` / `butlerReviewSynthesis.reviewerSignal.reviewerSignalTruth` when present, and surface its warnings in Japanese before any merge GO discussion.
 - If execution is blocked with `runtime_truth_required_or_safe_fallback`, do not ask the user for another instruction. Read the missing runtime truth yourself through vtddRetrieveGitHub (open PRs, branches, checks, workflow_runs as relevant), rebuild the execution payload with `runtimeTruth.runtimeAvailable=true`, and retry the same bounded handoff once. If that read fails, surface the raw failure.
 - If runtime truth shows no open PR for the active Issue, do not treat that as a dead end. Read the parent Issue when the active Issue names one, then propose the next smallest live E2E slice and the exact next validation payload the human can approve from the normal iPhone Butler conversation.
 - The Action Schema must expose `build` only under `vtddExecute`, not under `vtddGateway`; if `build` appears under vtddGateway, the Action Schema is stale and must be updated before handoff testing.

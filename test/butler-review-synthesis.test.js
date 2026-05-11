@@ -100,6 +100,12 @@ test("butler review synthesis does not present approve-only Gemini review as unr
   );
   assert.equal(
     result.humanDecisionFocus.includes(
+      "VTDD reviewer marker recommends approve, but GitHub formal PR review approval is absent; do not report GitHub reviewDecision as approved."
+    ),
+    false
+  );
+  assert.equal(
+    result.humanDecisionFocus.includes(
       "Meaningful reviewer objections remain unresolved; do not issue merge GO + real passkey yet."
     ),
     false
@@ -153,6 +159,71 @@ test("butler review synthesis blocks merge recommendation when approved PR has c
   );
   assert.equal(result.humanDecisionFocus.some((line) => line.includes("Recreate a fresh branch")), true);
   assert.deepEqual(result.nextSuggestedActions, ["create_fresh_branch", "open_fresh_pull_request"]);
+});
+
+test("butler review synthesis separates VTDD reviewer marker truth from GitHub formal review truth", () => {
+  const result = buildButlerReviewSynthesis({
+    pullRequest: {
+      number: 296,
+      url: "https://github.com/example/repo/pull/296",
+      state: "open",
+      title: "Reviewer signal truth",
+      mergeable: true,
+      mergeableState: "clean"
+    },
+    reviewLoop: {
+      reviewer: "gemini",
+      reviewerStatus: "gemini_review_available",
+      reviewerEvidence: {
+        reviewer: "gemini",
+        recommendedAction: "approve",
+        url: "https://github.com/example/repo/pull/296#issuecomment-1"
+      },
+      reviewerSignalTruth: {
+        canonicalSource: "vtdd_reviewer_marker_comment",
+        canonicalReviewer: "gemini",
+        reviewerStatus: "gemini_review_available",
+        recommendedAction: "approve",
+        vtddReviewerMarkerPresent: true,
+        githubFormalReview: {
+          source: "github_formal_review_objects",
+          reviewDecision: null,
+          hasFormalApproval: false,
+          approvalCount: 0,
+          blocking: false,
+          latestStates: []
+        },
+        mergeReviewTruth: {
+          satisfied: true,
+          blocked: false,
+          reason: "vtdd_reviewer_marker_approve_no_formal_blocker"
+        },
+        warnings: [
+          "VTDD reviewer marker recommends approve, but GitHub formal PR review approval is absent; do not report GitHub reviewDecision as approved."
+        ]
+      },
+      reviewCommentsCount: 1,
+      unresolvedReviewCommentsCount: 0,
+      criticalReviewPending: false
+    },
+    nextSuggestedActions: ["summarize_for_human", "wait_for_human_go"]
+  });
+
+  assert.equal(result.reviewerSignal.reviewerSignalTruth.canonicalSource, "vtdd_reviewer_marker_comment");
+  assert.equal(result.reviewerSignal.reviewerSignalTruth.githubFormalReview.hasFormalApproval, false);
+  assert.equal(result.reviewerSignal.reviewerSignalTruth.mergeReviewTruth.satisfied, true);
+  assert.equal(
+    result.humanDecisionFocus.includes(
+      "VTDD reviewer marker recommends approve, but GitHub formal PR review approval is absent; do not report GitHub reviewDecision as approved."
+    ),
+    true
+  );
+  assert.equal(
+    result.humanDecisionFocus.includes(
+      "GitHub formal review truth: reviewDecision=none, approvals=0, blocking=false."
+    ),
+    true
+  );
 });
 
 test("butler review synthesis marks missing conflict runtime truth as unverified", () => {

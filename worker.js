@@ -21126,6 +21126,7 @@ function buildButlerReviewSynthesis(input = {}) {
       reviewer: reviewLoop.reviewer,
       reviewerStatus: reviewLoop.reviewerStatus,
       reviewerEvidence: reviewLoop.reviewerEvidence,
+      reviewerSignalTruth: reviewLoop.reviewerSignalTruth,
       reviewCommentsCount: reviewLoop.reviewCommentsCount,
       unresolvedReviewCommentsCount: reviewLoop.unresolvedReviewCommentsCount,
       criticalReviewPending: reviewLoop.criticalReviewPending,
@@ -21218,6 +21219,15 @@ function buildHumanDecisionFocus({ pullRequest, reviewLoop, codexGoal, branchAtt
     const url = reviewLoop.reviewerEvidence.url ? ` ${reviewLoop.reviewerEvidence.url}` : "";
     focus.push(`Latest ${reviewLoop.reviewer} reviewer action is ${action}.${url}`);
   }
+  for (const warning of reviewLoop.reviewerSignalTruth?.warnings ?? []) {
+    focus.push(warning);
+  }
+  if (reviewLoop.reviewerSignalTruth?.githubFormalReview) {
+    const formal = reviewLoop.reviewerSignalTruth.githubFormalReview;
+    focus.push(
+      `GitHub formal review truth: reviewDecision=${formal.reviewDecision || "none"}, approvals=${formal.approvalCount}, blocking=${formal.blocking === true}.`
+    );
+  }
   if (reviewLoop.reviewer === "gemini" && reviewLoop.reviewerEvidence?.includesCreatedEdit) {
     focus.push(
       "Gemini updates its existing marker comment; GitHub may show the original comment time, so use the current marker body and evidence URL."
@@ -21294,9 +21304,40 @@ function normalizeReviewLoop(value) {
     reviewer: normalizeText4(input.reviewer) || "gemini",
     reviewerStatus: normalizeText4(input.reviewerStatus) || "review_unavailable",
     reviewerEvidence: normalizeReviewerEvidence(input.reviewerEvidence),
+    reviewerSignalTruth: normalizeReviewerSignalTruth(input.reviewerSignalTruth),
     reviewCommentsCount: normalizeCount(input.reviewCommentsCount),
     unresolvedReviewCommentsCount: normalizeCount(input.unresolvedReviewCommentsCount),
     criticalReviewPending: input.criticalReviewPending === true
+  };
+}
+function normalizeReviewerSignalTruth(value) {
+  const input = value && typeof value === "object" ? value : {};
+  if (!normalizeText4(input.canonicalSource) && !input.githubFormalReview) {
+    return null;
+  }
+  const formal = input.githubFormalReview && typeof input.githubFormalReview === "object" ? input.githubFormalReview : {};
+  const mergeReviewTruth = input.mergeReviewTruth && typeof input.mergeReviewTruth === "object" ? input.mergeReviewTruth : {};
+  return {
+    canonicalSource: normalizeText4(input.canonicalSource) || "none",
+    canonicalReviewer: normalizeText4(input.canonicalReviewer) || null,
+    reviewerStatus: normalizeText4(input.reviewerStatus) || null,
+    recommendedAction: normalizeText4(input.recommendedAction) || null,
+    vtddReviewerMarkerPresent: input.vtddReviewerMarkerPresent === true,
+    githubFormalReview: {
+      source: normalizeText4(formal.source) || "github_formal_review_objects",
+      reviewDecision: normalizeText4(formal.reviewDecision) || null,
+      hasFormalApproval: formal.hasFormalApproval === true,
+      approvalCount: normalizeCount(formal.approvalCount),
+      blocking: formal.blocking === true,
+      blockingReason: normalizeText4(formal.blockingReason) || null,
+      latestStates: Array.isArray(formal.latestStates) ? formal.latestStates.map(normalizeText4).filter(Boolean) : []
+    },
+    mergeReviewTruth: {
+      satisfied: mergeReviewTruth.satisfied === true,
+      blocked: mergeReviewTruth.blocked === true,
+      reason: normalizeText4(mergeReviewTruth.reason) || null
+    },
+    warnings: normalizeStringArray(input.warnings)
   };
 }
 function normalizeReviewerEvidence(value) {
@@ -27221,6 +27262,7 @@ function evaluateExecutionContinuity(input = {}) {
         reviewer: review.reviewer,
         reviewerStatus: review.reviewerStatus,
         reviewerEvidence: review.reviewerEvidence,
+        reviewerSignalTruth: review.reviewerSignalTruth,
         reviewCommentsCount: review.reviewCommentsCount,
         unresolvedReviewCommentsCount: review.unresolvedReviewCommentsCount,
         criticalReviewPending: review.criticalReviewPending,
@@ -27238,6 +27280,7 @@ function evaluateExecutionContinuity(input = {}) {
           reviewer: review.reviewer,
           reviewerStatus: review.reviewerStatus,
           reviewerEvidence: review.reviewerEvidence,
+          reviewerSignalTruth: review.reviewerSignalTruth,
           reviewCommentsCount: review.reviewCommentsCount,
           unresolvedReviewCommentsCount: review.unresolvedReviewCommentsCount,
           criticalReviewPending: review.criticalReviewPending
@@ -27286,16 +27329,25 @@ function validateHandoffRequirement({ actorRole, continuation }) {
 function buildReviewState(pullRequest) {
   const parsedGeminiSignals = collectGeminiReviewerSignals(pullRequest);
   const codexFallback = collectCodexFallbackSignals(pullRequest);
+  const formalReviewTruth = collectFormalReviewTruth(pullRequest);
   const reviewCommentsCount = parsedGeminiSignals.totalCount > 0 ? parsedGeminiSignals.totalCount : codexFallback.completed ? 1 : pullRequest.reviewCommentsCount;
   const unresolvedReviewCommentsCount = parsedGeminiSignals.totalCount > 0 ? parsedGeminiSignals.blockingCount : codexFallback.completed ? codexFallback.blocking ? 1 : 0 : pullRequest.unresolvedReviewCommentsCount;
   const reviewerStatus = codexFallback.completed ? "codex_review_available" : codexFallback.blocked ? "codex_review_blocked" : codexFallback.requested ? "codex_review_requested" : reviewCommentsCount > 0 ? "gemini_review_available" : "review_unavailable";
   const reviewer = reviewerStatus.startsWith("codex_review") ? "codex" : pullRequest.reviewer;
-  const criticalReviewPending = pullRequest.exists && (reviewerStatus === "codex_review_requested" || reviewerStatus === "codex_review_blocked" || reviewCommentsCount > 0 && unresolvedReviewCommentsCount > 0);
+  const reviewerEvidence = reviewerStatus.startsWith("codex_review") ? codexFallback.latestEvidence : parsedGeminiSignals.latestEvidence;
+  const reviewerSignalTruth = buildReviewerSignalTruth({
+    reviewer,
+    reviewerStatus,
+    reviewerEvidence,
+    formalReviewTruth
+  });
+  const criticalReviewPending = pullRequest.exists && (reviewerStatus === "codex_review_requested" || reviewerStatus === "codex_review_blocked" || reviewerSignalTruth.mergeReviewTruth.blocked || reviewCommentsCount > 0 && unresolvedReviewCommentsCount > 0);
   const rerunReviewer = pullRequest.exists && reviewerStatus !== "codex_review_requested" && reviewerStatus !== "codex_review_blocked" && (pullRequest.updatedSinceReview || unresolvedReviewCommentsCount > 0);
   return {
     reviewer,
     reviewerStatus,
-    reviewerEvidence: parsedGeminiSignals.latestEvidence,
+    reviewerEvidence,
+    reviewerSignalTruth,
     reviewCommentsCount,
     unresolvedReviewCommentsCount,
     criticalReviewPending,
@@ -27324,7 +27376,73 @@ function collectCodexFallbackSignals(pullRequest) {
     requested: latest?.status === "requested",
     completed: latest?.status === "completed",
     blocked: latest?.status === "blocked",
-    blocking: latest?.blocking === true
+    blocking: latest?.blocking === true,
+    latestEvidence: latest?.status === "completed" ? {
+      reviewer: "codex",
+      recommendedAction: latest.recommendedAction || "manual_review",
+      url: latest.url || null,
+      createdAt: latest.createdAt || null,
+      updatedAt: latest.updatedAt || null,
+      includesCreatedEdit: latest.includesCreatedEdit === true
+    } : null
+  };
+}
+function collectFormalReviewTruth(pullRequest) {
+  const reviews = Array.isArray(pullRequest.reviews) ? pullRequest.reviews : [];
+  const latestByReviewer = /* @__PURE__ */ new Map();
+  for (const review of reviews) {
+    const reviewer = normalizeText20(review?.user?.login) || normalizeText20(review?.author) || "unknown";
+    latestByReviewer.set(reviewer, normalizeReviewState(review?.state));
+  }
+  const latestStates = [...latestByReviewer.values()].filter(Boolean);
+  const reviewDecision = normalizeReviewState(pullRequest.reviewDecision);
+  const blocking = reviewDecision === "changes_requested" || latestStates.includes("changes_requested");
+  const approvalCount = latestStates.filter((state) => state === "approved").length;
+  const hasFormalApproval = reviewDecision === "approved" || approvalCount > 0;
+  return {
+    source: "github_formal_review_objects",
+    reviewDecision: reviewDecision || null,
+    hasFormalApproval,
+    approvalCount,
+    blocking,
+    blockingReason: blocking ? "github_formal_review_changes_requested" : null,
+    latestStates
+  };
+}
+function buildReviewerSignalTruth({ reviewer, reviewerStatus, reviewerEvidence, formalReviewTruth }) {
+  const recommendedAction = normalizeText20(reviewerEvidence?.recommendedAction).toLowerCase() || null;
+  const vtddReviewerMarkerPresent = Boolean(recommendedAction);
+  const markerBlocks = recommendedAction === "request_changes" || recommendedAction === "manual_review";
+  const formalBlocks = formalReviewTruth.blocking === true;
+  const satisfied = vtddReviewerMarkerPresent && recommendedAction === "approve" && !formalBlocks;
+  const blocked2 = markerBlocks || formalBlocks;
+  const warnings = [];
+  if (recommendedAction === "approve" && !formalReviewTruth.hasFormalApproval) {
+    warnings.push(
+      "VTDD reviewer marker recommends approve, but GitHub formal PR review approval is absent; do not report GitHub reviewDecision as approved."
+    );
+  }
+  if (formalBlocks) {
+    warnings.push(
+      "GitHub formal review truth has requested changes; it remains blocking even if a VTDD reviewer marker recommends approve."
+    );
+  }
+  if (!vtddReviewerMarkerPresent) {
+    warnings.push("No VTDD reviewer marker recommendation is available.");
+  }
+  return {
+    canonicalSource: vtddReviewerMarkerPresent ? "vtdd_reviewer_marker_comment" : "none",
+    canonicalReviewer: vtddReviewerMarkerPresent ? reviewer : null,
+    reviewerStatus,
+    recommendedAction,
+    vtddReviewerMarkerPresent,
+    githubFormalReview: formalReviewTruth,
+    mergeReviewTruth: {
+      satisfied,
+      blocked: blocked2,
+      reason: blocked2 ? formalReviewTruth.blockingReason || "vtdd_reviewer_marker_blocks_merge" : satisfied ? "vtdd_reviewer_marker_approve_no_formal_blocker" : "reviewer_signal_missing"
+    },
+    warnings
   };
 }
 function determineCodexGoal({ pullRequest, review }) {
@@ -27335,6 +27453,9 @@ function determineCodexGoal({ pullRequest, review }) {
     return CodexGoal.REVISE_PR;
   }
   if (review.unresolvedReviewCommentsCount > 0) {
+    return CodexGoal.REVISE_PR;
+  }
+  if (review.reviewerSignalTruth?.mergeReviewTruth?.blocked) {
     return CodexGoal.REVISE_PR;
   }
   return CodexGoal.WAIT_FOR_REVIEW;
@@ -27414,6 +27535,7 @@ function normalizeGitHubRuntime(value) {
       ),
       updatedSinceReview: pullRequestInput.updatedSinceReview === true,
       reviewer: normalizeText20(pullRequestInput.reviewer) || "gemini",
+      reviewDecision: normalizeText20(pullRequestInput.reviewDecision) || normalizeText20(pullRequestInput.review_decision) || null,
       issueComments: Array.isArray(pullRequestInput.issueComments) ? pullRequestInput.issueComments : [],
       reviewComments: Array.isArray(pullRequestInput.reviewComments) ? pullRequestInput.reviewComments : [],
       reviews: Array.isArray(pullRequestInput.reviews) ? pullRequestInput.reviews : []
@@ -27444,6 +27566,22 @@ function normalizeNumber2(value) {
 }
 function normalizeNullableBoolean2(value) {
   return typeof value === "boolean" ? value : null;
+}
+function normalizeReviewState(value) {
+  const normalized = normalizeText20(value).toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+  if (normalized === "approved") {
+    return "approved";
+  }
+  if (normalized === "changes_requested") {
+    return "changes_requested";
+  }
+  if (normalized === "review_required") {
+    return "review_required";
+  }
+  return normalized;
 }
 function normalizeText20(value) {
   return String(value ?? "").trim();
