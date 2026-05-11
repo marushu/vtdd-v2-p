@@ -553,12 +553,36 @@ function parseVpsRunnerQueueComment(body) {
   if (!normalized.approvalScopeMatched) {
     issues.push("approvalScopeMatched must be true");
   }
+  if (isPrRevisionGoal(normalized.codexGoal)) {
+    issues.push(...validateQueuedRevisionTarget(normalized));
+  }
 
   if (issues.length > 0) {
     return { ok: false, reason: "vps_runner_payload_invalid", executionId: marker[1], issues };
   }
 
   return { ok: true, executionId: normalized.executionId, payload: normalized };
+}
+
+function validateQueuedRevisionTarget(payload) {
+  const issues = [];
+  const target = payload.revisionTarget || {};
+  if (!target.number) {
+    issues.push("revise_pr requires target PR number");
+  }
+  if (target.state !== "open") {
+    issues.push("revise_pr target PR must be open");
+  }
+  if (!target.headRef) {
+    issues.push("revise_pr requires target PR headRef");
+  }
+  if (!target.headSha) {
+    issues.push("revise_pr requires target PR headSha");
+  }
+  if (target.headRef && payload.branch !== target.headRef) {
+    issues.push("revise_pr branch must match target PR headRef");
+  }
+  return issues;
 }
 
 function parseVpsRunnerEventComment(body) {
@@ -1237,6 +1261,10 @@ async function runTrackedVpsCommand(command, args, options = {}) {
 
 async function checkoutVpsRunnerBranch({ payload, cwd, env, run = runCommand }) {
   if (isPrRevisionGoal(payload.codexGoal)) {
+    const revisionTargetIssues = validateQueuedRevisionTarget(payload);
+    if (revisionTargetIssues.length > 0) {
+      throw new Error(`Invalid revise_pr target lock: ${revisionTargetIssues.join("; ")}`);
+    }
     await run("git", ["fetch", "origin", payload.branch], { cwd, env });
     await run("git", ["checkout", "-B", payload.branch, `origin/${payload.branch}`], { cwd, env });
     return {
