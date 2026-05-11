@@ -394,8 +394,18 @@ export async function buildCustomGptRecoveryBundle(input = {}) {
 
   const knownGoodCommit =
     channel === CustomGptSetupChannel.KNOWN_GOOD
-      ? await resolveKnownGoodCommitSha({ repository, ref: requestedRef, env })
+      ? resolveConfiguredKnownGoodCommitSha({ ref: requestedRef, env })
       : null;
+  if (channel === CustomGptSetupChannel.KNOWN_GOOD && !knownGoodCommit?.sha) {
+    return {
+      ok: false,
+      status: 503,
+      error: "known_good_setup_unavailable",
+      reason:
+        "known-good setup requires VTDD_KNOWN_GOOD_COMMIT_SHA or an explicit 40-character ref"
+    };
+  }
+
   const ref =
     channel === CustomGptSetupChannel.KNOWN_GOOD
       ? knownGoodCommit?.sha || requestedRef
@@ -540,7 +550,7 @@ export function renderCustomGptRecoveryPage(input = {}) {
     pre, textarea { width: 100%; box-sizing: border-box; white-space: pre; overflow: auto; border: 1px solid color-mix(in srgb, CanvasText 18%, transparent); border-radius: 8px; padding: 12px; background: color-mix(in srgb, CanvasText 5%, Canvas); color: CanvasText; font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
     textarea { min-height: 320px; resize: vertical; }
     .meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 8px; }
-    .meta div { padding: 10px; border: 1px solid color-mix(in srgb, CanvasText 14%, transparent); border-radius: 8px; }
+    .meta div { min-width: 0; padding: 10px; border: 1px solid color-mix(in srgb, CanvasText 14%, transparent); border-radius: 8px; overflow-wrap: anywhere; }
     .nav { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
     .nav strong { margin-right: auto; }
     .channel { text-transform: none; }
@@ -610,6 +620,19 @@ function validateCustomGptSetupArtifactRequest({ artifact, repository }) {
     issues.push("repository is required");
   }
   return issues.length > 0 ? { ok: false, issues } : { ok: true };
+}
+
+function resolveConfiguredKnownGoodCommitSha({ ref, env }) {
+  const configured = normalizeText(env?.[KNOWN_GOOD_COMMIT_ENV]);
+  if (/^[a-f0-9]{40}$/i.test(configured)) {
+    return { sha: configured, source: KNOWN_GOOD_COMMIT_ENV };
+  }
+
+  if (/^[a-f0-9]{40}$/i.test(ref)) {
+    return { sha: ref, source: "ref" };
+  }
+
+  return { sha: null, source: "unconfigured" };
 }
 
 async function resolveKnownGoodCommitSha({ repository, ref, env }) {

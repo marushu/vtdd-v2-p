@@ -39,6 +39,8 @@ test("production deploy doc defines the governed GitHub Actions deploy path", ()
   assert.equal(doc.includes("must not be committed"), true);
   assert.equal(doc.includes("`wrangler.production.local.toml`"), true);
   assert.equal(doc.includes("`wrangler.production.generated.toml`"), true);
+  assert.equal(doc.includes("`VTDD_KNOWN_GOOD_COMMIT_SHA`"), true);
+  assert.equal(doc.includes("must not silently treat `main` as known-good"), true);
 });
 
 test("deploy-production workflow enforces the MVP production deploy boundary", () => {
@@ -68,9 +70,23 @@ test("deploy-production workflow enforces the MVP production deploy boundary", (
   );
   assert.equal(workflow.includes("Generate production Wrangler config"), true);
   assert.equal(workflow.includes("VTDD_GITHUB_ACTIONS_REPOSITORY: ${{ github.repository }}"), true);
+  assert.equal(workflow.includes("VTDD_KNOWN_GOOD_COMMIT_SHA: ${{ vars.VTDD_KNOWN_GOOD_COMMIT_SHA }}"), true);
   assert.equal(workflow.includes("[env.production.vars]"), true);
   assert.equal(
     workflow.includes('VTDD_GITHUB_ACTIONS_REPOSITORY = "$VTDD_GITHUB_ACTIONS_REPOSITORY"'),
+    true
+  );
+  assert.equal(workflow.includes('if [ -n "$VTDD_KNOWN_GOOD_COMMIT_SHA" ]; then'), true);
+  assert.equal(
+    workflow.includes('[[ ! "$VTDD_KNOWN_GOOD_COMMIT_SHA" =~ ^[0-9a-fA-F]{40}$ ]]'),
+    true
+  );
+  assert.equal(
+    workflow.includes("VTDD_KNOWN_GOOD_COMMIT_SHA must be a 40-character commit SHA."),
+    true
+  );
+  assert.equal(
+    workflow.includes('VTDD_KNOWN_GOOD_COMMIT_SHA = "$VTDD_KNOWN_GOOD_COMMIT_SHA"'),
     true
   );
   assert.equal(workflow.includes("[[env.production.d1_databases]]"), true);

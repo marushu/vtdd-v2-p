@@ -103,6 +103,7 @@ jobs:
           CLOUDFLARE_D1_DATABASE_ID: ${{ secrets.CLOUDFLARE_D1_DATABASE_ID }}
           CLOUDFLARE_D1_DATABASE_NAME: ${{ vars.CLOUDFLARE_D1_DATABASE_NAME || 'vtdd-memory' }}
           VTDD_GITHUB_ACTIONS_REPOSITORY: ${{ github.repository }}
+          VTDD_KNOWN_GOOD_COMMIT_SHA: ${{ vars.VTDD_KNOWN_GOOD_COMMIT_SHA }}
         shell: bash
         run: |
           cp wrangler.toml wrangler.production.generated.toml
@@ -110,6 +111,17 @@ jobs:
 
           [env.production.vars]
           VTDD_GITHUB_ACTIONS_REPOSITORY = "$VTDD_GITHUB_ACTIONS_REPOSITORY"
+          EOF
+          if [ -n "$VTDD_KNOWN_GOOD_COMMIT_SHA" ]; then
+            if [[ ! "$VTDD_KNOWN_GOOD_COMMIT_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
+              echo "VTDD_KNOWN_GOOD_COMMIT_SHA must be a 40-character commit SHA."
+              exit 1
+            fi
+            cat >> wrangler.production.generated.toml <<EOF
+          VTDD_KNOWN_GOOD_COMMIT_SHA = "$VTDD_KNOWN_GOOD_COMMIT_SHA"
+          EOF
+          fi
+          cat >> wrangler.production.generated.toml <<EOF
 
           [[env.production.d1_databases]]
           binding = "VTDD_MEMORY_D1"

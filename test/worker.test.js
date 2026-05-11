@@ -271,6 +271,38 @@ test("worker setup known-good page renders rollback copy-ready bundle from known
   assert.equal(html.includes("ghs_setup_read"), false);
 });
 
+test("worker setup known-good page does not silently treat main as known-good", async () => {
+  const response = await worker.fetch(new Request("https://example.com/setup/known-good"), {
+    GITHUB_APP_INSTALLATION_TOKEN: "ghs_setup_read",
+    GITHUB_API_FETCH: async () => {
+      throw new Error("known-good must not resolve main as fallback");
+    }
+  });
+
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.equal(html.includes("Recovery bundle unavailable."), true);
+  assert.equal(html.includes("known-good setup requires VTDD_KNOWN_GOOD_COMMIT_SHA"), true);
+  assert.equal(html.includes("Copy-ready Action Schema"), false);
+  assert.equal(html.includes("Copy-ready custom-gpt-instructions-short-min.md"), false);
+});
+
+test("worker setup known-good page rejects malformed configured known-good refs", async () => {
+  const response = await worker.fetch(new Request("https://example.com/setup/known-good"), {
+    GITHUB_APP_INSTALLATION_TOKEN: "ghs_setup_read",
+    VTDD_KNOWN_GOOD_COMMIT_SHA: "main",
+    GITHUB_API_FETCH: async () => {
+      throw new Error("malformed known-good config must not fetch artifacts");
+    }
+  });
+
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.equal(html.includes("Recovery bundle unavailable."), true);
+  assert.equal(html.includes("known-good setup requires VTDD_KNOWN_GOOD_COMMIT_SHA"), true);
+  assert.equal(html.includes("Copy Rollback Bundle"), false);
+});
+
 test("worker health reflects guarded absence mode when runtime env sets it", async () => {
   const response = await worker.fetch(new Request("https://example.com/health"), {
     VTDD_AUTONOMY_MODE: "guarded_absence"
