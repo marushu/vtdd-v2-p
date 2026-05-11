@@ -237,6 +237,14 @@ jobs:
             --e2e "None. Remote Codex handoff opens the PR; repository-specific evidence is added in follow-up iteration." \
             --manual "GitHub PR creation path triggered from remote Codex workflow." \
             --evidencePath ".github/workflows/remote-codex-executor.yml" \
+            --ownerGoal "Open a bounded remote Codex PR without claiming completion before review." \
+            --butlerEntrypoint "Butler dispatch through remote Codex workflow." \
+            --actionSchemaExposure "Not changed by this generated PR body; surface changes must be stated by the implementation PR." \
+            --runtimePath ".github/workflows/remote-codex-executor.yml creates the PR body and PR." \
+            --runtimeTruth "GitHub workflow result, PR URL, and subsequent reviewer/runtime checks." \
+            --authorityBoundary "No merge, issue close, deploy, credential mutation, or destructive cleanup." \
+            --butlerE2E "Remote Codex handoff PR creation only; implementation E2E remains unsatisfied until follow-up evidence is added." \
+            --completionStatus "incomplete" \
             --rules "Current Reality Guard\nEvidence Discipline\nChange Size and PR Discipline" \
             --outOfScope "Merge\nIssue closure\nDeploy\nCredential mutation" \
             --executionId "${EXECUTION_ID}" \

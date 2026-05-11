@@ -8,7 +8,7 @@
     "check:generated-worker": "node scripts/check-generated-worker.mjs",
     "check:self-parity": "node scripts/check-runtime-self-parity.mjs",
     "test": "node --test && npm run check:self-parity && npm run check:generated-worker",
-    "pr-body:validate": "node scripts/validate-pr-body.mjs .github/pull_request_template.md"
+    "pr-body:validate": "node scripts/validate-pr-body.mjs --template .github/pull_request_template.md"
   },
   "engines": {
     "node": ">=20"

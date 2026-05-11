@@ -15,6 +15,8 @@ Goal:
 - confirm the remote Codex workflow uses the helper-generated PR body instead of ad hoc text
 - confirm the VPS runner validates and normalizes malformed or missing PR body
   markers before PR create/update
+- confirm PRs cannot omit the Butler Completion Contract or use placeholder
+  values to claim completion without Butler-facing E2E evidence
 
 ## Happy-path Run
 
@@ -28,6 +30,9 @@ Observed result on 2026-04-27:
 - passed
 - confirms the helper renders all required guarded-policy headings
 - confirms the validator accepts a helper-rendered PR body
+- confirms the helper renders the Butler Completion Contract with explicit
+  owner goal, Butler entrypoint, Action Schema exposure, runtime path,
+  runner/runtime truth, authority boundary, E2E evidence, and completion status
 - confirms the remote Codex workflow uses the helper-generated `--body-file` path instead of handwritten body text
 - confirms the VPS runner open_pr path normalizes a malformed candidate PR
   body with `renderPrBody()` before PR creation
@@ -44,6 +49,9 @@ node --test test/pr-body-guardrail.test.js test/remote-codex-workflow.test.js te
 Observed result on 2026-04-27:
 - passed
 - confirms validation fails when required evidence markers are missing
+- confirms validation fails when the Butler Completion Contract is missing
+- confirms `Closes #...` PR bodies fail unless the Butler Completion Contract
+  is `complete` and includes Butler-facing E2E evidence
 - confirms the guardrail trips locally before the repository spends Actions time on the same missing-marker failure
 - confirms the workflow path still preserves the required PR evidence structure after helper integration
 - confirms existing PR body normalization is required because PR `#212`

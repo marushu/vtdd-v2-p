@@ -23,6 +23,17 @@ None.
 - Manual:
 - Evidence path/link:
 
+## Butler Completion Contract
+
+- Owner goal:
+- Butler entrypoint:
+- Action Schema exposure:
+- Runtime path:
+- Runner/runtime truth:
+- Authority boundary:
+- E2E evidence:
+- Completion status:
+
 ## Surface Update Checklist
 
 - Cloudflare deploy:

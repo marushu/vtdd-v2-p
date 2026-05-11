@@ -12,10 +12,11 @@ Every PR should contain these sections in this order:
 3. `Unsatisfied Success Criteria`
 4. `Non-goal violations`
 5. `Verification Evidence`
-6. `Surface Update Checklist`
-7. `Related Constitution Rules`
-8. `Out-of-scope but NOT implemented`
-9. `Extra changes (if any)`
+6. `Butler Completion Contract`
+7. `Surface Update Checklist`
+8. `Related Constitution Rules`
+9. `Out-of-scope but NOT implemented`
+10. `Extra changes (if any)`
 
 ## Section Purpose
 
@@ -40,6 +41,18 @@ Call out any violation of declared non-goals, or state `None.` when there are no
 Record executed verification (unit/integration/E2E/manual), results, and where
 the evidence is visible.
 
+### `Butler Completion Contract`
+
+Record whether the change is actually reachable and governable from Butler as
+the owner-facing control plane. This section must identify the owner goal,
+Butler entrypoint, Action Schema exposure, runtime path, runner/runtime truth,
+authority boundary, Butler-facing E2E evidence, and completion status.
+
+Use `complete` only when Butler can complete the owner-facing workflow and the
+PR provides Butler-facing E2E evidence. Use `incomplete` or `unconnected` when
+any required connection is missing. PRs that use `Closes #...` must be
+`complete`.
+
 ### `Surface Update Checklist`
 
 Record whether the PR requires Cloudflare deploy, Custom GPT Action Schema
@@ -62,6 +75,9 @@ Call out any extra changes that were necessary, or state `None.` when there are 
 
 The PR template should make spec alignment and drift visible. It should not
 attempt to automate code quality judgment or prescribe implementation style.
+
+It must not let authors claim completion from isolated code, docs, routes,
+schemas, or tests. Completion is judged from the Butler owner-facing workflow.
 
 ## Guardrail Usage
 
