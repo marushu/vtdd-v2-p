@@ -492,6 +492,138 @@ test("worker accepts natural Butler read without internal read consent field", a
   assert.equal(body.repository, "sample-org/vtdd-v2");
 });
 
+test("worker writes confirmed operational memory and retrieves it back", async () => {
+  const provider = createInMemoryMemoryProvider();
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/action/memory-write", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        recordType: "decision_log",
+        confirmed: true,
+        repository: "sample-org/vtdd-v2",
+        relatedIssue: 251,
+        decision: "Use shared RAG as the Butler, VPS Codex CLI, and Mac Codex handoff memory.",
+        rationale: "All surfaces need the same operational context to avoid drift.",
+        decidedBy: "owner_and_butler",
+        responseMode: "action_visible"
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      MEMORY_PROVIDER: provider
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.memoryWritePersisted.recordType, "decision_log");
+  assert.equal(body.memoryWritePersisted.relatedIssue, 251);
+  assert.equal(body.postWriteRetrieval.sourceCounts.decision_log, 1);
+});
+
+test("worker blocks operational memory write until Butler gets GO", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/action/memory-write", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        recordType: "working_memory",
+        repository: "sample-org/vtdd-v2",
+        relatedIssue: 251,
+        summary: "This should not persist without explicit GO."
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      MEMORY_PROVIDER: createInMemoryMemoryProvider()
+    }
+  );
+
+  assert.equal(response.status, 422);
+  const body = await response.json();
+  assert.equal(body.error, "memory_write_confirmation_required");
+});
+
+test("worker blocks operational memory writes containing secrets", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/action/memory-write", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        recordType: "working_memory",
+        confirmed: true,
+        repository: "sample-org/vtdd-v2",
+        relatedIssue: 251,
+        summary: "token: should-not-be-stored"
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      MEMORY_PROVIDER: createInMemoryMemoryProvider()
+    }
+  );
+
+  assert.equal(response.status, 422);
+  const body = await response.json();
+  assert.equal(body.error, "memory_write_blocked");
+  assert.equal(body.blockedByRule, "memory_must_exclude_secrets");
+});
+
+test("worker blocks operational memory writes containing secrets in tags", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/action/memory-write", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        recordType: "working_memory",
+        confirmed: true,
+        repository: "sample-org/vtdd-v2",
+        relatedIssue: 251,
+        summary: "Safe summary text.",
+        tags: ["token: should-not-be-stored"]
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      MEMORY_PROVIDER: createInMemoryMemoryProvider()
+    }
+  );
+
+  assert.equal(response.status, 422);
+  const body = await response.json();
+  assert.equal(body.error, "memory_write_blocked");
+  assert.equal(body.blockedByRule, "memory_must_exclude_secrets");
+});
+
+test("worker includes post-write retrieval for working memory writes", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/action/memory-write", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        recordType: "working_memory",
+        confirmed: true,
+        repository: "sample-org/vtdd-v2",
+        relatedIssue: 251,
+        summary: "Butler should verify the memory surface immediately after persistence."
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      MEMORY_PROVIDER: createInMemoryMemoryProvider()
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.memoryWritePersisted.recordType, "working_memory");
+  assert.equal(body.memoryWritePersisted.relatedIssue, 251);
+  assert.equal(body.postWriteRetrieval.relatedIssue, 251);
+});
+
 test("worker does not override explicit Butler read consent categories", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/v2/gateway", {

@@ -52,6 +52,7 @@ test("custom gpt instructions preserve current butler and approval boundaries", 
   assert.equal(doc.includes("vtddGateway"), true);
   assert.equal(doc.includes("vtddExecute"), true);
   assert.equal(doc.includes("vtddWriteGitHub"), true);
+  assert.equal(doc.includes("vtddWriteOperationalMemory"), true);
   assert.equal(doc.includes("vtddGitHubAuthority"), true);
   assert.equal(doc.includes("vtddDeployProduction"), true);
   assert.equal(doc.includes("vtddSyncGitHubActionsSecret"), true);
@@ -70,6 +71,8 @@ test("custom gpt instructions preserve current butler and approval boundaries", 
   assert.equal(doc.includes("no relevant RAG/memory hit is found, say so"), true);
   assert.equal(doc.includes("do not invent past precedent"), true);
   assert.equal(doc.includes("current state is governed by GitHub runtime truth"), true);
+  assert.equal(doc.includes("show a compact structured memory candidate, ask the human for GO"), true);
+  assert.equal(doc.includes("Do not store full transcripts, secrets, or raw sensitive material"), true);
   assert.equal(doc.includes("Current natural GO\n  binding is supported for `issue_create`, `issue_comment_create`, and\n  `pull_comment_create`"), true);
   assert.equal(doc.includes("If the human says something like \"この内容で Issue 作って\""), true);
   assert.equal(doc.includes("この title/body で Issue を作成するなら「GO」と言ってください"), true);
@@ -330,6 +333,8 @@ test("custom gpt openapi json parses and exposes paths as an object", () => {
   assert.equal(typeof doc.paths["/v2/gateway"], "object");
   assert.equal(typeof doc.paths["/v2/action/execute"], "object");
   assert.equal(typeof doc.paths["/v2/action/github"], "object");
+  assert.equal(typeof doc.paths["/v2/action/memory-write"], "object");
+  assert.equal(doc.paths["/v2/action/memory-write"].post.operationId, "vtddWriteOperationalMemory");
   assert.equal(
     doc.paths["/v2/action/github"].post.requestBody.content["application/json"].schema.properties.operation.enum.includes(
       "issue_create"
@@ -463,6 +468,7 @@ test("custom gpt openapi json exposes JSON bodies for Butler action auth failure
   const doc = JSON.parse(fs.readFileSync(OPENAPI_JSON_PATH, "utf8"));
   const routes = [
     ["/v2/action/github", "post"],
+    ["/v2/action/memory-write", "post"],
     ["/v2/action/repository-nickname", "post"],
     ["/v2/action/repository-nickname/delete", "post"],
     ["/v2/retrieve/constitution", "get"],

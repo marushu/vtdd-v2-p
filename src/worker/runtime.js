@@ -16,6 +16,7 @@ import {
   executeDeployProductionPlane,
   executeGitHubActionsSecretSync,
   evaluateButlerSelfParity,
+  evaluateMemorySafety,
   executeGitHubHighRiskPlane,
   inferRelatedIssueFromGatewayInput,
   inferRelatedIssueFromProposalGatewayInput,
@@ -196,6 +197,23 @@ export default {
       }
 
       return handleGitHubWritePlaneRequest(request, env);
+    }
+
+    if (request.method === "POST" && isApiPath(url.pathname, "/action/memory-write")) {
+      const auth = authorizeGatewayRequest({
+        request,
+        env,
+        apiSuffix: "/action/memory-write"
+      });
+      if (!auth.ok) {
+        return json(auth.status, {
+          ok: false,
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+
+      return handleMemoryWriteRequest(request, env);
     }
 
     if (request.method === "POST" && isApiPath(url.pathname, "/action/github-authority")) {
@@ -810,6 +828,315 @@ async function handleRetrieveApprovalGrantRequest(url, env) {
       scope: normalizeScopeSnapshot(record.content.scope)
     }
   });
+}
+
+async function handleMemoryWriteRequest(request, env) {
+  const payload = await readJson(request);
+  const confirmed = payload?.confirmed === true || normalize(payload?.ownerConsent) === "go";
+  if (!confirmed) {
+    return json(422, {
+      ok: false,
+      error: "memory_write_confirmation_required",
+      reason: "memory write requires Butler to show the structured memory candidate and receive GO"
+    });
+  }
+
+  const memoryRecord = buildMemoryWriteRecord(payload);
+  if (!memoryRecord.ok) {
+    return json(422, {
+      ok: false,
+      error: "memory_write_request_invalid",
+      reason: memoryRecord.reason,
+      issues: memoryRecord.issues ?? []
+    });
+  }
+
+  const safety = evaluateMemorySafety({
+    recordType: memoryRecord.record.recordType,
+    content: memoryRecord.record.content,
+    metadata: {
+      ...memoryRecord.record.metadata,
+      tags: memoryRecord.record.tags
+    }
+  });
+  if (!safety.ok) {
+    return json(422, {
+      ok: false,
+      error: "memory_write_blocked",
+      blockedByRule: safety.rule,
+      reason: safety.reason,
+      findings: safety.findings ?? []
+    });
+  }
+
+  const provider = resolveMemoryProvider(env);
+  const providerValidation = validateMemoryProvider(provider);
+  if (!providerValidation.ok) {
+    return json(503, {
+      ok: false,
+      error: "memory_provider_unavailable",
+      reason: "valid memory provider is required for operational memory writes"
+    });
+  }
+
+  const gatewayInput = {
+    phase: normalizeText(payload.phase) || "execution",
+    actorRole: normalizeText(payload.actorRole) || "butler",
+    memoryRecord: {
+      recordType: memoryRecord.record.recordType,
+      content: memoryRecord.record.content,
+      metadata: memoryRecord.record.metadata
+    }
+  };
+  const gatewayResult = {
+    repository: normalizeText(payload.repository) || null
+  };
+
+  if (memoryRecord.record.recordType === MemoryRecordType.DECISION_LOG) {
+    const persisted = await appendDecisionLogFromGateway(provider, gatewayInput, gatewayResult);
+    return memoryWriteResponse({ persisted, provider, relatedIssue: memoryRecord.relatedIssue });
+  }
+
+  if (memoryRecord.record.recordType === MemoryRecordType.PROPOSAL_LOG) {
+    const persisted = await appendProposalLogFromGateway(provider, gatewayInput, gatewayResult);
+    return memoryWriteResponse({ persisted, provider, relatedIssue: memoryRecord.relatedIssue });
+  }
+
+  const created = createMemoryRecord({
+    id: makeOperationalMemoryRecordId(memoryRecord.record),
+    type: memoryRecord.record.recordType,
+    content: memoryRecord.record.content,
+    metadata: memoryRecord.record.metadata,
+    priority: memoryRecord.record.priority,
+    tags: memoryRecord.record.tags,
+    createdAt: memoryRecord.record.timestamp
+  });
+  if (!created.ok) {
+    return json(422, {
+      ok: false,
+      error: "memory_record_invalid",
+      reason: "memory record does not satisfy the shared memory schema",
+      issues: created.issues
+    });
+  }
+
+  const stored = await provider.store(created.record);
+  if (!stored?.ok) {
+    return json(503, {
+      ok: false,
+      error: "memory_write_failed",
+      reason: "failed to persist operational memory",
+      issues: Array.isArray(stored?.issues) ? stored.issues : []
+    });
+  }
+
+  const postWriteRetrieval = await retrievePostWriteMemory({
+    provider,
+    relatedIssue: memoryRecord.relatedIssue
+  });
+
+  return json(200, {
+    ok: true,
+    memoryWritePersisted: {
+      recordId: stored.record.id,
+      recordType: stored.record.type,
+      relatedIssue: memoryRecord.relatedIssue,
+      timestamp: stored.record.createdAt
+    },
+    postWriteRetrieval
+  });
+}
+
+async function memoryWriteResponse({ persisted, provider, relatedIssue }) {
+  if (!persisted.ok) {
+    return json(persisted.status ?? 503, {
+      ok: false,
+      error: persisted.error ?? "memory_write_failed",
+      blockedByRule: persisted.blockedByRule ?? null,
+      reason: persisted.reason,
+      issues: persisted.issues ?? []
+    });
+  }
+
+  const postWriteRetrieval = await retrievePostWriteMemory({ provider, relatedIssue });
+
+  return json(200, {
+    ok: true,
+    memoryWritePersisted: {
+      recordId: persisted.record.id,
+      recordType: persisted.record.type,
+      relatedIssue: persisted.entry.relatedIssue ?? relatedIssue ?? null,
+      timestamp: persisted.entry.timestamp
+    },
+    postWriteRetrieval
+  });
+}
+
+async function retrievePostWriteMemory({ provider, relatedIssue }) {
+  if (!relatedIssue) {
+    return null;
+  }
+
+  const retrieved = await retrieveCrossIssueMemoryIndex(provider, {
+    phase: "execution",
+    relatedIssue,
+    limit: 5,
+    displayMode: "short"
+  });
+  return retrieved.ok
+    ? formatCrossRetrievalOutput(retrieved, "short")
+    : { ok: false, error: retrieved.error, reason: retrieved.reason };
+}
+
+function buildMemoryWriteRecord(payload = {}) {
+  const recordType = normalizeMemoryWriteRecordType(payload.recordType ?? payload.type);
+  if (!recordType) {
+    return {
+      ok: false,
+      reason: "recordType must be decision_log, proposal_log, working_memory, or repair_case",
+      issues: ["recordType is required"]
+    };
+  }
+
+  const relatedIssue = normalizeIssue(payload.relatedIssue);
+  const repository = normalizeText(payload.repository) || null;
+  const timestamp = normalizeText(payload.timestamp) || new Date().toISOString();
+  const metadata = {
+    ...normalizeObject(payload.metadata),
+    relatedIssue,
+    repository,
+    source: "butler_memory_write_action",
+    fullCasualChat: false
+  };
+
+  if (recordType === MemoryRecordType.DECISION_LOG) {
+    return {
+      ok: true,
+      relatedIssue,
+      record: {
+        recordType,
+        content: {
+          decision: normalizeText(payload.decision ?? payload.summary),
+          rationale: normalizeText(payload.rationale),
+          relatedIssue,
+          decidedBy: normalizeText(payload.decidedBy) || "butler_with_owner_go",
+          timestamp,
+          supersededBy: normalizeText(payload.supersededBy) || null
+        },
+        metadata,
+        timestamp,
+        priority: normalizeMemoryPriority(payload.priority, 90),
+        tags: buildMemoryWriteTags({ recordType, relatedIssue, repository, extraTags: payload.tags })
+      }
+    };
+  }
+
+  if (recordType === MemoryRecordType.PROPOSAL_LOG) {
+    return {
+      ok: true,
+      relatedIssue,
+      record: {
+        recordType,
+        content: {
+          hypothesis: normalizeText(payload.hypothesis ?? payload.summary),
+          options: normalizeStringArray(payload.options),
+          rejectedReasons: normalizeRejectedReasons(payload.rejectedReasons),
+          concerns: normalizeStringArray(payload.concerns),
+          unresolvedQuestions: normalizeStringArray(payload.unresolvedQuestions),
+          relatedIssue,
+          proposedBy: normalizeText(payload.proposedBy) || "butler_with_owner_go",
+          timestamp
+        },
+        metadata,
+        timestamp,
+        priority: normalizeMemoryPriority(payload.priority, 80),
+        tags: buildMemoryWriteTags({ recordType, relatedIssue, repository, extraTags: payload.tags })
+      }
+    };
+  }
+
+  const summary = normalizeText(payload.summary);
+  if (!summary) {
+    return {
+      ok: false,
+      reason: "summary is required for working_memory and repair_case",
+      issues: ["summary is required"]
+    };
+  }
+
+  return {
+    ok: true,
+    relatedIssue,
+    record: {
+      recordType,
+      content: {
+        summary,
+        details: normalizeText(payload.details) || null,
+        relatedIssue,
+        repository,
+        timestamp
+      },
+      metadata,
+      timestamp,
+      priority: normalizeMemoryPriority(payload.priority, recordType === MemoryRecordType.REPAIR_CASE ? 85 : 60),
+      tags: buildMemoryWriteTags({ recordType, relatedIssue, repository, extraTags: payload.tags })
+    }
+  };
+}
+
+function normalizeMemoryWriteRecordType(value) {
+  const type = normalize(value);
+  if (
+    [
+      MemoryRecordType.DECISION_LOG,
+      MemoryRecordType.PROPOSAL_LOG,
+      MemoryRecordType.WORKING_MEMORY,
+      MemoryRecordType.REPAIR_CASE
+    ].includes(type)
+  ) {
+    return type;
+  }
+  return "";
+}
+
+function normalizeMemoryPriority(value, fallback) {
+  const numeric = Number(value ?? fallback);
+  if (!Number.isFinite(numeric)) {
+    return fallback;
+  }
+  return Math.max(0, Math.min(100, Math.round(numeric)));
+}
+
+function buildMemoryWriteTags({ recordType, relatedIssue, repository, extraTags }) {
+  const tags = [
+    recordType,
+    relatedIssue ? `issue:${relatedIssue}` : null,
+    repository ? `repo:${normalizeTag(repository.replace("/", "_"))}` : null,
+    ...normalizeStringArray(extraTags)
+  ].filter(Boolean);
+  return [...new Set(tags)];
+}
+
+function normalizeStringArray(value) {
+  const values = Array.isArray(value) ? value : value === undefined ? [] : [value];
+  return values.map(normalizeText).filter(Boolean);
+}
+
+function normalizeRejectedReasons(value) {
+  const values = Array.isArray(value) ? value : [];
+  return values
+    .map((item) => ({
+      option: normalizeText(item?.option),
+      reason: normalizeText(item?.reason)
+    }))
+    .filter((item) => item.option && item.reason);
+}
+
+function makeOperationalMemoryRecordId(record) {
+  const issuePart = normalizeIssue(record.content?.relatedIssue) ?? "none";
+  const timestampPart = normalizeText(record.timestamp).replace(/[^0-9]/g, "").slice(0, 14);
+  const summaryPart = normalizeTag(record.content?.summary ?? record.recordType).slice(0, 40);
+  return `${record.recordType}_${issuePart}_${timestampPart}_${summaryPart}`;
 }
 
 async function handleRetrieveGitHubReadPlaneRequest(url, env) {
