@@ -107,6 +107,16 @@ test("execution continuity treats approve-only Gemini reviewer comment as non-bl
   assert.equal(result.value.reviewLoop.reviewCommentsCount, 1);
   assert.equal(result.value.reviewLoop.unresolvedReviewCommentsCount, 0);
   assert.equal(result.value.reviewLoop.criticalReviewPending, false);
+  assert.equal(result.value.reviewLoop.reviewerSignalTruth.canonicalSource, "vtdd_reviewer_marker_comment");
+  assert.equal(result.value.reviewLoop.reviewerSignalTruth.recommendedAction, "approve");
+  assert.equal(result.value.reviewLoop.reviewerSignalTruth.githubFormalReview.hasFormalApproval, false);
+  assert.equal(result.value.reviewLoop.reviewerSignalTruth.mergeReviewTruth.satisfied, true);
+  assert.equal(
+    result.value.reviewLoop.reviewerSignalTruth.warnings.includes(
+      "VTDD reviewer marker recommends approve, but GitHub formal PR review approval is absent; do not report GitHub reviewDecision as approved."
+    ),
+    true
+  );
   assert.equal(result.value.codexGoal, CodexGoal.WAIT_FOR_REVIEW);
   assert.equal(
     result.value.butlerReviewSynthesis.headline,
@@ -123,6 +133,49 @@ test("execution continuity treats approve-only Gemini reviewer comment as non-bl
     "refresh_pull_request_runtime_truth",
     "summarize_for_human"
   ]);
+});
+
+test("execution continuity treats GitHub formal changes requested as blocking even with VTDD marker approve", () => {
+  const result = evaluateExecutionContinuity({
+    actorRole: ActorRole.BUTLER,
+    mode: TaskMode.EXECUTION,
+    runtimeTruth: {
+      runtimeState: {
+        activeBranch: "codex/reviewer-truth",
+        pullRequest: {
+          number: 296,
+          url: "https://github.com/example/repo/pull/296",
+          state: "open",
+          title: "Reviewer signal truth",
+          reviewer: "gemini",
+          reviewDecision: "CHANGES_REQUESTED",
+          reviews: [{ user: { login: "human-reviewer" }, state: "CHANGES_REQUESTED" }],
+          issueComments: [
+            {
+              user: { login: "vtdd-codex[bot]" },
+              body: "<!-- vtdd:reviewer=gemini -->\n## VTDD Gemini Critical Review\n\n- Recommended action: `approve`",
+              url: "https://github.com/example/repo/pull/296#issuecomment-1"
+            }
+          ]
+        }
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.value.codexGoal, CodexGoal.REVISE_PR);
+  assert.equal(result.value.reviewLoop.criticalReviewPending, true);
+  assert.equal(result.value.reviewLoop.reviewerSignalTruth.mergeReviewTruth.blocked, true);
+  assert.equal(
+    result.value.reviewLoop.reviewerSignalTruth.mergeReviewTruth.reason,
+    "github_formal_review_changes_requested"
+  );
+  assert.equal(
+    result.value.butlerReviewSynthesis.humanDecisionFocus.includes(
+      "GitHub formal review truth has requested changes; it remains blocking even if a VTDD reviewer marker recommends approve."
+    ),
+    true
+  );
 });
 
 test("execution continuity proposes a fresh PR when approved runtime truth has conflicts", () => {

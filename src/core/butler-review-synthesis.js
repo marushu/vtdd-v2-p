@@ -36,6 +36,7 @@ export function buildButlerReviewSynthesis(input = {}) {
       reviewer: reviewLoop.reviewer,
       reviewerStatus: reviewLoop.reviewerStatus,
       reviewerEvidence: reviewLoop.reviewerEvidence,
+      reviewerSignalTruth: reviewLoop.reviewerSignalTruth,
       reviewCommentsCount: reviewLoop.reviewCommentsCount,
       unresolvedReviewCommentsCount: reviewLoop.unresolvedReviewCommentsCount,
       criticalReviewPending: reviewLoop.criticalReviewPending,
@@ -135,6 +136,15 @@ function buildHumanDecisionFocus({ pullRequest, reviewLoop, codexGoal, branchAtt
     const action = reviewLoop.reviewerEvidence.recommendedAction;
     const url = reviewLoop.reviewerEvidence.url ? ` ${reviewLoop.reviewerEvidence.url}` : "";
     focus.push(`Latest ${reviewLoop.reviewer} reviewer action is ${action}.${url}`);
+  }
+  for (const warning of reviewLoop.reviewerSignalTruth?.warnings ?? []) {
+    focus.push(warning);
+  }
+  if (reviewLoop.reviewerSignalTruth?.githubFormalReview) {
+    const formal = reviewLoop.reviewerSignalTruth.githubFormalReview;
+    focus.push(
+      `GitHub formal review truth: reviewDecision=${formal.reviewDecision || "none"}, approvals=${formal.approvalCount}, blocking=${formal.blocking === true}.`
+    );
   }
   if (reviewLoop.reviewer === "gemini" && reviewLoop.reviewerEvidence?.includesCreatedEdit) {
     focus.push(
@@ -238,9 +248,45 @@ function normalizeReviewLoop(value) {
     reviewer: normalizeText(input.reviewer) || "gemini",
     reviewerStatus: normalizeText(input.reviewerStatus) || "review_unavailable",
     reviewerEvidence: normalizeReviewerEvidence(input.reviewerEvidence),
+    reviewerSignalTruth: normalizeReviewerSignalTruth(input.reviewerSignalTruth),
     reviewCommentsCount: normalizeCount(input.reviewCommentsCount),
     unresolvedReviewCommentsCount: normalizeCount(input.unresolvedReviewCommentsCount),
     criticalReviewPending: input.criticalReviewPending === true
+  };
+}
+
+function normalizeReviewerSignalTruth(value) {
+  const input = value && typeof value === "object" ? value : {};
+  if (!normalizeText(input.canonicalSource) && !input.githubFormalReview) {
+    return null;
+  }
+  const formal = input.githubFormalReview && typeof input.githubFormalReview === "object"
+    ? input.githubFormalReview
+    : {};
+  const mergeReviewTruth = input.mergeReviewTruth && typeof input.mergeReviewTruth === "object"
+    ? input.mergeReviewTruth
+    : {};
+  return {
+    canonicalSource: normalizeText(input.canonicalSource) || "none",
+    canonicalReviewer: normalizeText(input.canonicalReviewer) || null,
+    reviewerStatus: normalizeText(input.reviewerStatus) || null,
+    recommendedAction: normalizeText(input.recommendedAction) || null,
+    vtddReviewerMarkerPresent: input.vtddReviewerMarkerPresent === true,
+    githubFormalReview: {
+      source: normalizeText(formal.source) || "github_formal_review_objects",
+      reviewDecision: normalizeText(formal.reviewDecision) || null,
+      hasFormalApproval: formal.hasFormalApproval === true,
+      approvalCount: normalizeCount(formal.approvalCount),
+      blocking: formal.blocking === true,
+      blockingReason: normalizeText(formal.blockingReason) || null,
+      latestStates: Array.isArray(formal.latestStates) ? formal.latestStates.map(normalizeText).filter(Boolean) : []
+    },
+    mergeReviewTruth: {
+      satisfied: mergeReviewTruth.satisfied === true,
+      blocked: mergeReviewTruth.blocked === true,
+      reason: normalizeText(mergeReviewTruth.reason) || null
+    },
+    warnings: normalizeStringArray(input.warnings)
   };
 }
 

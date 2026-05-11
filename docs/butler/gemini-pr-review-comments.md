@@ -116,6 +116,17 @@ marker comment URL. If GitHub displays the original comment timestamp, Butler
 must explain that the marker comment was updated and the current body is the
 latest reviewer evidence.
 
+The VTDD reviewer marker comment is the canonical VTDD reviewer signal for
+Butler synthesis. It must not be confused with GitHub formal Pull Request
+Review API objects or GitHub `reviewDecision` state. If a marker recommends
+`approve` but no GitHub formal approval exists, Butler may report the marker
+as reviewer evidence, but must not say the GitHub review decision is approved.
+
+GitHub formal review objects remain separate runtime truth. A formal
+`CHANGES_REQUESTED` / `changes_requested` state is blocking even when the VTDD
+reviewer marker recommends `approve`, and Butler must route the PR back to
+bounded revision instead of merge judgment.
+
 When Gemini becomes available again after a fallback request, VTDD should
 return to Gemini-first behavior and clear the stale Codex fallback request
 state.
