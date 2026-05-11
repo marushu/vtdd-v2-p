@@ -97,3 +97,14 @@ The function returns:
 - references grouped by layer
 - score signals for relevance, recency, governance importance, and recurrence
 - an explicit memory-use rule that prevents memory from overriding runtime truth
+
+## Operator Bridge
+
+`scripts/vtdd-memory.mjs` provides the shared-memory operator bridge for Issue
+#251. It lets Mac Codex and VPS Codex CLI inspect or write structured memory
+records while preserving the same schema, memory-safety checks, and runtime
+truth boundary described here.
+
+The bridge is documented in `docs/memory/vtdd-memory-bridge.md`. It must not be
+used to store full chat transcripts, secrets, or owner-specific runtime
+configuration in Git.
