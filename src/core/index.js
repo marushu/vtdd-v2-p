@@ -219,6 +219,20 @@ export {
 export { runMvpGateway } from "./mvp-gateway.js";
 export { executeDeployProductionPlane } from "./deploy-production-plane.js";
 export {
+  VPS_RUNNER_UPDATE_EVENT_MARKER,
+  VPS_RUNNER_UPDATE_QUEUE_MARKER,
+  VpsRunnerUpdateActionType,
+  VpsRunnerUpdateStatus,
+  buildVpsRunnerUpdateApprovalScope,
+  buildVpsRunnerUpdateEventComment,
+  buildVpsRunnerUpdateQueueComment,
+  parseVpsRunnerUpdateQueueComment,
+  requestVpsRunnerUpdate,
+  retrieveVpsRunnerUpdateStatus,
+  validateVpsRunnerUpdateApprovalGrant,
+  validateVpsRunnerUpdateRequest
+} from "./vps-runner-update.js";
+export {
   resolveGatewayAliasRegistryFromGitHubApp,
   resolveGitHubAppInstallationToken
 } from "./github-app-repository-index.js";

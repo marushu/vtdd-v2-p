@@ -1774,6 +1774,200 @@
         }
       }
     },
+    "/v2/action/vps-runner-update": {
+      "post": {
+        "operationId": "vtddVpsRunnerUpdate",
+        "summary": "Queue approval-bound VPS runner self-update/restart through GitHub-visible runtime truth.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "repository",
+                  "issueNumber",
+                  "actionType",
+                  "policyInput"
+                ],
+                "properties": {
+                  "repository": {
+                    "type": "string",
+                    "description": "Canonical owner/repo repository."
+                  },
+                  "issueNumber": {
+                    "type": "integer",
+                    "description": "Issue that owns the bounded update request."
+                  },
+                  "ref": {
+                    "type": "string",
+                    "enum": [
+                      "main"
+                    ],
+                    "description": "Runner self-update ref. Only main is allowed."
+                  },
+                  "phase": {
+                    "type": "string",
+                    "default": "execution"
+                  },
+                  "actionType": {
+                    "type": "string",
+                    "enum": [
+                      "vps_runner_update_restart",
+                      "vps_runner_update_reload"
+                    ]
+                  },
+                  "policyInput": {
+                    "type": "object",
+                    "required": [
+                      "approvalPhrase",
+                      "approvalGrantId"
+                    ],
+                    "properties": {
+                      "approvalPhrase": {
+                        "type": "string",
+                        "enum": [
+                          "GO"
+                        ]
+                      },
+                      "approvalGrantId": {
+                        "type": "string"
+                      },
+                      "actionType": {
+                        "type": "string"
+                      },
+                      "ref": {
+                        "type": "string"
+                      }
+                    },
+                    "additionalProperties": true
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "VPS runner update queued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing machine auth"
+          },
+          "403": {
+            "description": "Invalid machine auth or same-origin browser auth"
+          },
+          "422": {
+            "description": "VPS runner update request or approval invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "VPS runner update queue failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/action/vps-runner-update-status": {
+      "get": {
+        "operationId": "vtddVpsRunnerUpdateStatus",
+        "summary": "Read VPS runner self-update status, commit SHA, version, and lastSeenAt.",
+        "parameters": [
+          {
+            "name": "updateId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "repository",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "issueNumber",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "VPS runner update runtime truth",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing machine auth"
+          },
+          "403": {
+            "description": "Invalid machine auth"
+          },
+          "404": {
+            "description": "VPS runner update not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "VPS runner update status request invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "VPS runner update status lookup failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v2/retrieve/constitution": {
       "get": {
         "operationId": "vtddRetrieveConstitution",
@@ -2111,6 +2305,116 @@
           },
           "503": {
             "description": "Cross-memory retrieval unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/retrieve/operational-memory": {
+      "get": {
+        "operationId": "vtddRetrieveOperationalMemory",
+        "summary": "Retrieve compact ranked operational memory for Butler continuity.",
+        "parameters": [
+          {
+            "name": "text",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "repository",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "currentState",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "runtimeTruthSource",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "checkedAt",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "responseMode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "action_visible"
+              ]
+            },
+            "description": "Use action_visible in the Custom GPT Action test screen so non-2xx retrieve failures return ok:false JSON with httpStatus/error/reason/issues instead of a ClientResponseError transport label."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operational memory retrieval result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationalMemoryResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing machine auth",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Invalid machine auth",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Operational memory retrieval unavailable",
             "content": {
               "application/json": {
                 "schema": {
@@ -2574,116 +2878,6 @@
           },
           "404": {
             "description": "Approval grant not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/VtddGenericResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v2/retrieve/operational-memory": {
-      "get": {
-        "operationId": "vtddRetrieveOperationalMemory",
-        "summary": "Retrieve compact ranked operational memory for Butler continuity.",
-        "parameters": [
-          {
-            "name": "text",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "repository",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "currentState",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "runtimeTruthSource",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "checkedAt",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer"
-            }
-          },
-          {
-            "name": "responseMode",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "action_visible"
-              ]
-            },
-            "description": "Use action_visible in the Custom GPT Action test screen so non-2xx retrieve failures return ok:false JSON with httpStatus/error/reason/issues instead of a ClientResponseError transport label."
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Operational memory retrieval result",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OperationalMemoryResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing machine auth",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/VtddGenericResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Invalid machine auth",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/VtddGenericResponse"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Operational memory retrieval unavailable",
             "content": {
               "application/json": {
                 "schema": {

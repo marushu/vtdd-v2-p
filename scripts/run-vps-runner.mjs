@@ -5,7 +5,14 @@ import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { normalizeMentionLogin, parseCodexReviewFallbackComment } from "../src/core/index.js";
+import {
+  VpsRunnerUpdateActionType,
+  VpsRunnerUpdateStatus,
+  buildVpsRunnerUpdateEventComment,
+  normalizeMentionLogin,
+  parseCodexReviewFallbackComment,
+  parseVpsRunnerUpdateQueueComment
+} from "../src/core/index.js";
 import { buildExecutionLeadTime } from "../src/core/execution-lead-time.js";
 import { renderPrBody } from "./render-pr-body.mjs";
 import { validatePrBody } from "./validate-pr-body.mjs";
@@ -78,9 +85,23 @@ async function runVpsRunnerOnce({
 }) {
   const policies = normalizeRepositoryPolicies({ allowedRepositories, repositoryPolicies });
   const candidates = [];
+  const updateCandidates = [];
   for (const repository of policies.map((policy) => policy.repository)) {
     const comments = await readRecentIssueComments({ githubFetch, repository });
+    updateCandidates.push(...selectPendingVpsRunnerUpdates({ comments, repositoryPolicies: policies }));
     candidates.push(...selectPendingVpsRunnerExecutions({ comments, repositoryPolicies: policies }));
+  }
+
+  const update = updateCandidates.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))[0];
+  if (update) {
+    if (dryRun) {
+      return {
+        ok: true,
+        message: `Dry run selected VPS runner update ${update.payload.updateId} for ${update.payload.repository}#${update.payload.issueNumber}.`
+      };
+    }
+
+    return executeVpsRunnerSelfUpdate({ githubFetch, payload: update.payload });
   }
 
   const execution = candidates.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))[0];
@@ -359,6 +380,122 @@ async function executeVpsRunnerExecution({ githubFetch, token, workRoot, executi
   }
 }
 
+async function executeVpsRunnerSelfUpdate({ githubFetch, payload }) {
+  const repoRoot = path.resolve(SCRIPT_DIR, "..");
+  const updatePayload = {
+    ...payload,
+    lifecycle: normalizeVpsRunnerLifecycle({
+      queuedAt: payload.requestedAt
+    })
+  };
+  const startedAt = new Date().toISOString();
+  const previousCommitSha = await readGitSha({ cwd: repoRoot }).catch(() => "");
+  await postVpsRunnerUpdateEvent({
+    githubFetch,
+    payload: updatePayload,
+    event: {
+      status: VpsRunnerUpdateStatus.RUNNING,
+      lastEvent: "picked_up",
+      currentStep: "picked_up",
+      previousCommitSha,
+      commitSha: previousCommitSha,
+      runnerVersion: await readRunnerVersion({ cwd: repoRoot }).catch(() => ""),
+      lastSeenAt: startedAt,
+      updatedAt: startedAt
+    }
+  });
+
+  try {
+    await assertRunnerRepositoryMatches({ payload: updatePayload, cwd: repoRoot });
+    await runTrackedVpsRunnerUpdateCommand("git", ["fetch", "origin", updatePayload.ref], {
+      cwd: repoRoot,
+      githubFetch,
+      payload: updatePayload,
+      currentStep: "git_fetch"
+    });
+    await runTrackedVpsRunnerUpdateCommand("git", ["checkout", updatePayload.ref], {
+      cwd: repoRoot,
+      githubFetch,
+      payload: updatePayload,
+      currentStep: "git_checkout_main"
+    });
+    await runTrackedVpsRunnerUpdateCommand("git", ["pull", "--ff-only", "origin", updatePayload.ref], {
+      cwd: repoRoot,
+      githubFetch,
+      payload: updatePayload,
+      currentStep: "git_pull_ff_only"
+    });
+    const commitSha = await readGitSha({ cwd: repoRoot });
+    const runnerVersion = await readRunnerVersion({ cwd: repoRoot });
+    const restartCommand = resolveVpsRunnerRestartCommand({
+      actionType: updatePayload.actionType,
+      env: process.env
+    });
+    if (!restartCommand.ok) {
+      throw new Error(restartCommand.reason);
+    }
+    const restartAt = new Date().toISOString();
+    await postVpsRunnerUpdateEvent({
+      githubFetch,
+      payload: updatePayload,
+      event: {
+        status: VpsRunnerUpdateStatus.RUNNING,
+        lastEvent: `${restartCommand.mode}_started`,
+        currentStep: restartCommand.mode,
+        previousCommitSha,
+        commitSha,
+        runnerVersion,
+        lastSeenAt: restartAt,
+        updatedAt: restartAt,
+        command: {
+          name: restartCommand.name,
+          mode: restartCommand.mode,
+          phase: "started"
+        }
+      }
+    });
+    await runCommand(restartCommand.name, restartCommand.args, { cwd: repoRoot, env: process.env });
+    const completedAt = new Date().toISOString();
+    await postVpsRunnerUpdateEvent({
+      githubFetch,
+      payload: updatePayload,
+      event: {
+        status: VpsRunnerUpdateStatus.COMPLETED,
+        lastEvent: `${restartCommand.mode}_completed`,
+        currentStep: "completed",
+        previousCommitSha,
+        commitSha,
+        runnerVersion,
+        lastSeenAt: completedAt,
+        updatedAt: completedAt
+      }
+    });
+    return {
+      ok: true,
+      message: `VPS runner update completed: ${updatePayload.repository}#${updatePayload.issueNumber} ${commitSha}`
+    };
+  } catch (error) {
+    const failedAt = new Date().toISOString();
+    const rawFailure = classifyVpsRunnerUpdateFailure(error);
+    await postVpsRunnerUpdateEvent({
+      githubFetch,
+      payload: updatePayload,
+      event: {
+        status: VpsRunnerUpdateStatus.FAILED,
+        lastEvent: "update_failed",
+        currentStep: "failed",
+        previousCommitSha,
+        commitSha: await readGitSha({ cwd: repoRoot }).catch(() => previousCommitSha),
+        runnerVersion: await readRunnerVersion({ cwd: repoRoot }).catch(() => ""),
+        lastSeenAt: failedAt,
+        updatedAt: failedAt,
+        rawFailure
+      }
+    });
+    return { ok: false, reason: rawFailure.reason };
+  }
+}
+
 function selectPendingVpsRunnerExecutions({ comments, allowedRepositories, repositoryPolicies }) {
   const policies = normalizeRepositoryPolicies({ allowedRepositories, repositoryPolicies });
   const queues = new Map();
@@ -402,6 +539,52 @@ function selectPendingVpsRunnerExecutions({ comments, allowedRepositories, repos
       !terminalEvents.has(queue.payload.executionId) &&
       !runningEvents.has(queue.payload.executionId)
   );
+}
+
+function selectPendingVpsRunnerUpdates({ comments, allowedRepositories, repositoryPolicies }) {
+  const policies = normalizeRepositoryPolicies({ allowedRepositories, repositoryPolicies });
+  const queues = new Map();
+  const terminalEvents = new Set();
+  const runningEvents = new Set();
+
+  for (const comment of comments) {
+    const queue = parseVpsRunnerUpdateQueueComment(comment.body);
+    if (queue.ok && validateVpsRunnerUpdatePayloadPolicy(queue.payload, policies).ok) {
+      queues.set(queue.payload.updateId, {
+        ...queue,
+        commentId: comment.id,
+        commentUrl: comment.html_url,
+        createdAt: comment.created_at
+      });
+      continue;
+    }
+
+    const event = parseVpsRunnerUpdateEventComment(comment.body);
+    if (!event.ok) {
+      continue;
+    }
+    if ([VpsRunnerUpdateStatus.COMPLETED, VpsRunnerUpdateStatus.FAILED].includes(event.event.status)) {
+      terminalEvents.add(event.updateId);
+    }
+    if (event.event.status === VpsRunnerUpdateStatus.RUNNING) {
+      runningEvents.add(event.updateId);
+    }
+  }
+
+  return [...queues.values()].filter(
+    (queue) => !terminalEvents.has(queue.payload.updateId) && !runningEvents.has(queue.payload.updateId)
+  );
+}
+
+function validateVpsRunnerUpdatePayloadPolicy(payload, policies) {
+  const policy = policies.find((item) => item.repository === payload.repository);
+  if (!policy) {
+    return { ok: false, reason: "repository_not_allowlisted" };
+  }
+  if (!policy.baseRefs.includes(payload.ref || "main")) {
+    return { ok: false, reason: "ref_not_allowlisted" };
+  }
+  return { ok: true, policy };
 }
 
 function buildVpsRunnerCompletionFinalEvent({ payload } = {}) {
@@ -598,6 +781,26 @@ function parseVpsRunnerEventComment(body) {
   return { ok: true, executionId: marker[1], event };
 }
 
+function parseVpsRunnerUpdateEventComment(body) {
+  const text = String(body || "");
+  const marker = text.match(/<!--\s*vtdd:vps-runner-update-event:([a-zA-Z0-9._:-]+)\s*-->/);
+  if (!marker) {
+    return { ok: false, reason: "vps_runner_update_event_marker_missing" };
+  }
+  const event = extractFirstJsonFence(text);
+  if (!event) {
+    return { ok: false, reason: "vps_runner_update_event_payload_missing", updateId: marker[1] };
+  }
+  return {
+    ok: true,
+    updateId: marker[1],
+    event: {
+      ...event,
+      status: normalizeText(event.status) || VpsRunnerUpdateStatus.RUNNING
+    }
+  };
+}
+
 function parseVpsRunnerCancellationMarker(body, { executionId } = {}) {
   const text = String(body || "");
   const marker = text.match(CANCELED_MARKER_RE);
@@ -731,6 +934,147 @@ function classifyVpsRunnerFailure(error) {
     error: "vps_runner_execution_failed",
     reason
   };
+}
+
+function classifyVpsRunnerUpdateFailure(error) {
+  const reason = error instanceof Error ? error.message : String(error);
+  if (/not configured|unsupported restart/i.test(reason)) {
+    return {
+      error: "vps_runner_restart_unavailable",
+      reason
+    };
+  }
+  if (/repository mismatch/i.test(reason)) {
+    return {
+      error: "vps_runner_update_repository_mismatch",
+      reason
+    };
+  }
+  if (/git .*failed|Command failed: git|non-fast-forward|not possible to fast-forward/i.test(reason)) {
+    return {
+      error: "vps_runner_update_git_failed",
+      reason
+    };
+  }
+  return {
+    error: "vps_runner_update_failed",
+    reason
+  };
+}
+
+async function assertRunnerRepositoryMatches({ payload, cwd }) {
+  const origin = await runCommand("git", ["config", "--get", "remote.origin.url"], {
+    cwd,
+    env: process.env
+  });
+  const normalized = normalizeGitRemoteRepository(origin.stdout);
+  if (normalized && normalized === payload.repository) {
+    return;
+  }
+  throw new Error(
+    `VPS runner repository mismatch: queue targets ${payload.repository}, but runner origin is ${normalized || "unknown"}`
+  );
+}
+
+async function readGitSha({ cwd }) {
+  const result = await runCommand("git", ["rev-parse", "HEAD"], { cwd, env: process.env });
+  return normalizeText(result.stdout);
+}
+
+async function readRunnerVersion({ cwd }) {
+  try {
+    const packageJson = JSON.parse(await fs.readFile(path.join(cwd, "package.json"), "utf8"));
+    return normalizeText(packageJson.version) || "unknown";
+  } catch {
+    return "unknown";
+  }
+}
+
+function resolveVpsRunnerRestartCommand({ actionType, env = process.env } = {}) {
+  const mode =
+    actionType === VpsRunnerUpdateActionType.UPDATE_RELOAD ? "reload" : "restart";
+  const strategy = normalizeText(env.VTDD_VPS_RUNNER_RESTART_STRATEGY);
+  if (!strategy) {
+    return {
+      ok: false,
+      reason: "VTDD_VPS_RUNNER_RESTART_STRATEGY is not configured"
+    };
+  }
+  if (strategy === "none") {
+    return {
+      ok: true,
+      mode,
+      name: "true",
+      args: []
+    };
+  }
+  if (strategy === "systemctl_user") {
+    const service = normalizeSystemdUnit(env.VTDD_VPS_RUNNER_SERVICE);
+    if (!service) {
+      return { ok: false, reason: "VTDD_VPS_RUNNER_SERVICE is required for systemctl_user restart" };
+    }
+    return {
+      ok: true,
+      mode,
+      name: "systemctl",
+      args: ["--user", mode, service]
+    };
+  }
+  if (strategy === "systemctl") {
+    const service = normalizeSystemdUnit(env.VTDD_VPS_RUNNER_SERVICE);
+    if (!service) {
+      return { ok: false, reason: "VTDD_VPS_RUNNER_SERVICE is required for systemctl restart" };
+    }
+    return {
+      ok: true,
+      mode,
+      name: "systemctl",
+      args: [mode, service]
+    };
+  }
+  if (strategy === "pm2") {
+    const processName = normalizeProcessName(env.VTDD_VPS_RUNNER_PM2_PROCESS);
+    if (!processName) {
+      return { ok: false, reason: "VTDD_VPS_RUNNER_PM2_PROCESS is required for pm2 reload" };
+    }
+    return {
+      ok: true,
+      mode: "reload",
+      name: "pm2",
+      args: ["reload", processName]
+    };
+  }
+  return {
+    ok: false,
+    reason: `unsupported restart strategy: ${strategy}`
+  };
+}
+
+function normalizeGitRemoteRepository(value) {
+  const text = normalizeText(value).replace(/\.git$/, "");
+  const ssh = text.match(/^git@github\.com:([^/]+\/[^/]+)$/);
+  if (ssh) {
+    return normalizeRepository(ssh[1]);
+  }
+  try {
+    const url = new URL(text);
+    if (url.hostname !== "github.com") {
+      return "";
+    }
+    return normalizeRepository(url.pathname.replace(/^\//, ""));
+  } catch {
+    return normalizeRepository(text);
+  }
+}
+
+function normalizeSystemdUnit(value) {
+  const text = normalizeText(value);
+  return /^[A-Za-z0-9_.@:-]+\.service$/.test(text) ? text : "";
+}
+
+function normalizeProcessName(value) {
+  const text = normalizeText(value);
+  return /^[A-Za-z0-9_.@:-]+$/.test(text) ? text : "";
 }
 
 function buildCodexExecArgs({ env = {} } = {}) {
@@ -957,6 +1301,100 @@ async function postVpsRunnerEvent({ githubFetch, payload, event, notification })
       })
     }
   });
+}
+
+async function postVpsRunnerUpdateEvent({ githubFetch, payload, event }) {
+  const now = new Date().toISOString();
+  const eventPayload = {
+    ...event,
+    updateId: payload.updateId,
+    repository: payload.repository,
+    issueNumber: payload.issueNumber,
+    ref: payload.ref,
+    phase: payload.phase,
+    actionType: payload.actionType,
+    lastSeenAt: normalizeIsoTimestamp(event.lastSeenAt) || now,
+    updatedAt: normalizeIsoTimestamp(event.updatedAt) || now
+  };
+  return githubFetch(`/repos/${payload.repository}/issues/${payload.issueNumber}/comments`, {
+    method: "POST",
+    body: {
+      body: buildVpsRunnerUpdateEventComment({
+        updateId: payload.updateId,
+        event: eventPayload
+      })
+    }
+  });
+}
+
+async function runTrackedVpsRunnerUpdateCommand(command, args, { githubFetch, payload, currentStep, cwd }) {
+  const startedAt = new Date().toISOString();
+  await postVpsRunnerUpdateEvent({
+    githubFetch,
+    payload,
+    event: {
+      status: VpsRunnerUpdateStatus.RUNNING,
+      lastEvent: `${currentStep}_started`,
+      currentStep,
+      commitSha: await readGitSha({ cwd }).catch(() => ""),
+      runnerVersion: await readRunnerVersion({ cwd }).catch(() => ""),
+      lastSeenAt: startedAt,
+      updatedAt: startedAt,
+      command: {
+        name: command,
+        phase: "started",
+        exitCode: null,
+        stderrSummary: null
+      }
+    }
+  });
+  try {
+    const result = await runCommand(command, args, { cwd, env: process.env });
+    const completedAt = new Date().toISOString();
+    await postVpsRunnerUpdateEvent({
+      githubFetch,
+      payload,
+      event: {
+        status: VpsRunnerUpdateStatus.RUNNING,
+        lastEvent: `${currentStep}_completed`,
+        currentStep,
+        commitSha: await readGitSha({ cwd }).catch(() => ""),
+        runnerVersion: await readRunnerVersion({ cwd }).catch(() => ""),
+        lastSeenAt: completedAt,
+        updatedAt: completedAt,
+        command: {
+          name: command,
+          phase: "completed",
+          exitCode: 0,
+          stderrSummary: summarizeDiagnosticText(result.stderr)
+        }
+      }
+    });
+    return result;
+  } catch (error) {
+    const failedAt = new Date().toISOString();
+    await postVpsRunnerUpdateEvent({
+      githubFetch,
+      payload,
+      event: {
+        status: VpsRunnerUpdateStatus.FAILED,
+        lastEvent: `${currentStep}_failed`,
+        currentStep,
+        commitSha: await readGitSha({ cwd }).catch(() => ""),
+        runnerVersion: await readRunnerVersion({ cwd }).catch(() => ""),
+        lastSeenAt: failedAt,
+        updatedAt: failedAt,
+        command: {
+          name: command,
+          phase: "completed",
+          exitCode: Number.isInteger(error?.exitCode) ? error.exitCode : null,
+          stderrSummary: summarizeDiagnosticText(error?.stderr || error?.message)
+        },
+        rawFailure: classifyVpsRunnerUpdateFailure(error)
+      }
+    });
+    throw error;
+  }
 }
 
 async function assertVpsRunnerNotCanceled({ githubFetch, payload, checkpoint, notification }) {
@@ -1765,16 +2203,22 @@ export {
   buildVpsRunnerPullRequestContext,
   checkoutVpsRunnerBranch,
   classifyVpsRunnerFailure,
+  classifyVpsRunnerUpdateFailure,
+  executeVpsRunnerSelfUpdate,
   formatPullRequestContext,
   isNonFastForwardPushFailure,
   loadVpsRunnerRepositoryPolicies,
   normalizeRepositoryPolicies,
   parseVpsRunnerCancellationMarker,
   parseVpsRunnerEventComment,
+  parseVpsRunnerUpdateEventComment,
   parseVpsRunnerQueueComment,
   postVpsRunnerEvent,
+  postVpsRunnerUpdateEvent,
+  resolveVpsRunnerRestartCommand,
   runVpsRunnerOnce,
   summarizeDiagnosticText,
   selectPendingVpsReviewerFallbacks,
+  selectPendingVpsRunnerUpdates,
   selectPendingVpsRunnerExecutions
 };

@@ -1673,8 +1673,10 @@ test("worker serves VPS runner admin passkey operator mode", async () => {
   assert.equal(html.includes("VPS Runner Admin"), true);
   assert.equal(html.includes('id="repo-input" value="sample-org/private-repo"'), true);
   assert.equal(html.includes('id="issue-input" value="157"'), true);
-  assert.equal(html.includes('id="action-type-input" value="destructive"'), true);
+  assert.equal(html.includes('id="action-type-input" value="vps_runner_update_restart"'), true);
   assert.equal(html.includes('id="risk-kind-input" value="vps_runner_admin"'), true);
+  assert.equal(html.includes('id="ref-input" value="main"'), true);
+  assert.equal(html.includes('id="vps-update-button"'), true);
   assert.equal(html.includes("文字列としての passkey は承認ではありません"), true);
 });
 
@@ -4056,6 +4058,119 @@ test("worker returns raw deploy context when workflow dispatch is unverified", a
   assert.equal(body.deploy.repository, "sample-org/vtdd-v2-p");
   assert.equal(body.deploy.workflowFile, "deploy-production.yml");
   assert.equal(body.deploy.runtimeUrl, "https://sample-user-vtdd.example.workers.dev");
+});
+
+test("worker queues VPS runner update with scoped passkey approval", async () => {
+  const provider = createInMemoryMemoryProvider();
+  const calls = [];
+  await provider.store({
+    id: "approval-vps-update-123",
+    type: MemoryRecordType.APPROVAL_LOG,
+    content: {
+      kind: "passkey_grant",
+      status: "verified",
+      approvalId: "approval-vps-update-123",
+      expiresAt: "2099-01-01T00:00:00.000Z",
+      scope: {
+        actionType: "vps_runner_update_restart",
+        highRiskKind: "vps_runner_admin",
+        repositoryInput: "sample-org/vtdd-v2-p",
+        issueNumber: "294",
+        relatedIssue: "294",
+        phase: "execution",
+        ref: "main"
+      }
+    },
+    metadata: { source: "test" },
+    priority: 90,
+    tags: ["passkey_grant"],
+    createdAt: "2026-05-11T00:00:00.000Z"
+  });
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/action/vps-runner-update", {
+      method: "POST",
+      headers: {
+        ...gatewayAuthHeaders,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        repository: "sample-org/vtdd-v2-p",
+        issueNumber: 294,
+        ref: "main",
+        phase: "execution",
+        actionType: "vps_runner_update_restart",
+        policyInput: {
+          approvalPhrase: "GO",
+          approvalGrantId: "approval-vps-update-123",
+          actionType: "vps_runner_update_restart",
+          ref: "main"
+        }
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      MEMORY_PROVIDER: provider,
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_update",
+      GITHUB_API_FETCH: async (url, init) => {
+        calls.push({ url: String(url), init });
+        return new Response(
+          JSON.stringify({
+            id: 294001,
+            html_url: "https://github.com/sample-org/vtdd-v2-p/issues/294#issuecomment-294001"
+          }),
+          { status: 201, headers: { "content-type": "application/json" } }
+        );
+      }
+    }
+  );
+
+  assert.equal(response.status, 202);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.update.status, "queued");
+  assert.equal(body.update.ref, "main");
+  assert.equal(calls[0].url.includes("/issues/294/comments"), true);
+  assert.equal(JSON.parse(calls[0].init.body).body.includes("vtdd:vps-runner-update:"), true);
+});
+
+test("worker reads VPS runner update status runtime truth", async () => {
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/v2/action/vps-runner-update-status?updateId=vps-update-294&repository=sample-org/vtdd-v2-p&issueNumber=294",
+      {
+        headers: gatewayAuthHeaders
+      }
+    ),
+    {
+      ...gatewayAuthEnv,
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_update",
+      GITHUB_API_FETCH: async () =>
+        new Response(
+          JSON.stringify([
+            {
+              id: 1,
+              html_url: "https://github.com/sample-org/vtdd-v2-p/issues/294#issuecomment-1",
+              created_at: "2026-05-11T00:00:00Z",
+              body: `<!-- vtdd:vps-runner-update:vps-update-294 -->\n\`\`\`json\n{"updateId":"vps-update-294","operation":"vps_runner_update","repository":"sample-org/vtdd-v2-p","issueNumber":294,"ref":"main","phase":"execution","actionType":"vps_runner_update_restart","approvalScopeMatched":true}\n\`\`\``
+            },
+            {
+              id: 2,
+              html_url: "https://github.com/sample-org/vtdd-v2-p/issues/294#issuecomment-2",
+              created_at: "2026-05-11T00:01:00Z",
+              body: `<!-- vtdd:vps-runner-update-event:vps-update-294 -->\n\`\`\`json\n{"status":"completed","updateId":"vps-update-294","repository":"sample-org/vtdd-v2-p","issueNumber":294,"ref":"main","phase":"execution","actionType":"vps_runner_update_restart","runnerVersion":"1.2.3","commitSha":"abc123","lastSeenAt":"2026-05-11T00:01:00.000Z","updatedAt":"2026-05-11T00:01:00.000Z"}\n\`\`\``
+            }
+          ]),
+          { status: 200, headers: { "content-type": "application/json" } }
+        )
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.update.status, "completed");
+  assert.equal(body.update.commitSha, "abc123");
+  assert.equal(body.update.lastSeenAt, "2026-05-11T00:01:00.000Z");
 });
 
 test("worker syncs OPENAI_API_KEY through approval-bound GitHub Actions secret route", async () => {

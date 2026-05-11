@@ -32,8 +32,10 @@ import {
   retrieveCustomGptSetupArtifact,
   renderPasskeyOperatorPage,
   renderCustomGptRecoveryPage,
+  requestVpsRunnerUpdate,
   sanitizeGitHubActionsSecretSyncErrorMessage,
   RepositoryNicknameMode,
+  retrieveVpsRunnerUpdateStatus,
   resolveGatewayAliasRegistryFromGitHubApp,
   resolveRepositoryTarget,
   GitHubHighRiskOperation,
@@ -390,6 +392,58 @@ export default {
       return json(200, {
         ok: true,
         cancellation: cancellation.cancellation
+      });
+    }
+
+    if (request.method === "POST" && isApiPath(url.pathname, "/action/vps-runner-update")) {
+      const auth = authorizePasskeyBrowserOrMachineRequest({
+        request,
+        env,
+        apiSuffix: "/action/vps-runner-update"
+      });
+      if (!auth.ok) {
+        return json(auth.status, {
+          ok: false,
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+
+      return handleVpsRunnerUpdateRequest(request, env);
+    }
+
+    if (request.method === "GET" && isApiPath(url.pathname, "/action/vps-runner-update-status")) {
+      const auth = authorizeGatewayRequest({
+        request,
+        env,
+        apiSuffix: "/action/vps-runner-update-status"
+      });
+      if (!auth.ok) {
+        return json(auth.status, {
+          ok: false,
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+
+      const status = await retrieveVpsRunnerUpdateStatus({
+        updateId: url.searchParams.get("updateId"),
+        repository: url.searchParams.get("repository"),
+        issueNumber: url.searchParams.get("issueNumber"),
+        env
+      });
+      if (!status.ok) {
+        return json(status.status ?? 503, {
+          ok: false,
+          error: status.error,
+          reason: status.reason,
+          issues: status.issues ?? []
+        });
+      }
+
+      return json(200, {
+        ok: true,
+        update: status.update
       });
     }
 
@@ -1178,6 +1232,72 @@ async function handleDeployProductionRequest(request, env) {
   });
 }
 
+async function handleVpsRunnerUpdateRequest(request, env) {
+  const payload = await readJson(request);
+  if (!payload || typeof payload !== "object") {
+    return json(422, {
+      ok: false,
+      error: "request_body_required",
+      reason: "valid JSON request body is required"
+    });
+  }
+
+  const policyInput =
+    payload.policyInput && typeof payload.policyInput === "object" ? payload.policyInput : {};
+  const repository = normalizeText(payload.repository);
+  const issueNumber = normalizePositiveInteger(payload.issueNumber);
+  const ref = normalizeText(payload.ref) || "main";
+  const phase = normalizeText(payload.phase) || "execution";
+  const actionType = normalizeText(payload.actionType || policyInput.actionType);
+  const resolvedApprovalGrant = await resolveApprovalGrant({
+    payload: {
+      phase,
+      highRiskKind: "vps_runner_admin",
+      repositoryInput: repository,
+      issueNumber,
+      ref
+    },
+    policyInput: {
+      ...policyInput,
+      actionType,
+      repositoryInput: repository,
+      highRiskKind: "vps_runner_admin",
+      ref,
+      issueTraceability: {
+        relatedIssue: issueNumber || null
+      }
+    },
+    env
+  });
+
+  const update = await requestVpsRunnerUpdate({
+    repository,
+    issueNumber,
+    ref,
+    phase,
+    actionType,
+    approvalPhrase: policyInput.approvalPhrase,
+    approvalGrantId: policyInput.approvalGrantId,
+    approvalGrant: payload.approvalGrant ?? policyInput.approvalGrant ?? resolvedApprovalGrant.approvalGrant,
+    approvalActor: normalizeText(policyInput.approvalActor || payload.approvalActor),
+    env
+  });
+
+  if (!update.ok) {
+    return json(update.status ?? 503, {
+      ok: false,
+      error: update.error ?? "vps_runner_update_failed",
+      reason: update.reason,
+      issues: update.issues ?? []
+    });
+  }
+
+  return json(202, {
+    ok: true,
+    update: update.update
+  });
+}
+
 async function handleGitHubActionsSecretSyncRequest(request, env) {
   const payload = await readJson(request);
   if (!payload || typeof payload !== "object") {
@@ -1282,6 +1402,7 @@ function handlePasskeyOperatorPageRequest(request) {
     repositoryInput: url.searchParams.get("repositoryInput"),
     issueNumber: url.searchParams.get("issueNumber"),
     pullNumber: url.searchParams.get("pullNumber"),
+    ref: url.searchParams.get("ref") || "main",
     phase: url.searchParams.get("phase") || "execution",
     actionType: requestedActionType,
     highRiskKind: requestedHighRiskKind,
@@ -2122,6 +2243,7 @@ function buildApprovalScopeSnapshot({ payload, policyInput }) {
     repositoryInput: identityFields.has("repository")
       ? policyInput?.repositoryInput ?? payload?.repositoryInput
       : undefined,
+    ref: policyInput?.ref ?? payload?.ref,
     issueNumber: identityFields.has("issueNumber")
       ? issueContext.issueNumber ?? payload?.issueNumber
       : undefined,

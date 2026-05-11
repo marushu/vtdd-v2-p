@@ -1164,6 +1164,131 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/VtddGenericResponse"
+  /v2/action/vps-runner-update:
+    post:
+      operationId: vtddVpsRunnerUpdate
+      summary: Queue approval-bound VPS runner self-update/restart through GitHub-visible runtime truth.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - repository
+                - issueNumber
+                - actionType
+                - policyInput
+              properties:
+                repository:
+                  type: string
+                  description: Canonical owner/repo repository.
+                issueNumber:
+                  type: integer
+                  description: Issue that owns the bounded update request.
+                ref:
+                  type: string
+                  enum:
+                    - main
+                  description: Runner self-update ref. Only main is allowed.
+                phase:
+                  type: string
+                  default: execution
+                actionType:
+                  type: string
+                  enum:
+                    - vps_runner_update_restart
+                    - vps_runner_update_reload
+                policyInput:
+                  type: object
+                  required:
+                    - approvalPhrase
+                    - approvalGrantId
+                  properties:
+                    approvalPhrase:
+                      type: string
+                      enum:
+                        - GO
+                    approvalGrantId:
+                      type: string
+                    actionType:
+                      type: string
+                    ref:
+                      type: string
+                  additionalProperties: true
+              additionalProperties: false
+      responses:
+        "202":
+          description: VPS runner update queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "401":
+          description: Missing machine auth
+        "403":
+          description: Invalid machine auth or same-origin browser auth
+        "422":
+          description: VPS runner update request or approval invalid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "503":
+          description: VPS runner update queue failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+  /v2/action/vps-runner-update-status:
+    get:
+      operationId: vtddVpsRunnerUpdateStatus
+      summary: Read VPS runner self-update status, commit SHA, version, and lastSeenAt.
+      parameters:
+        - name: updateId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: repository
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: issueNumber
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: VPS runner update runtime truth
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "401":
+          description: Missing machine auth
+        "403":
+          description: Invalid machine auth
+        "404":
+          description: VPS runner update not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "422":
+          description: VPS runner update status request invalid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "503":
+          description: VPS runner update status lookup failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
   /v2/retrieve/constitution:
     get:
       operationId: vtddRetrieveConstitution

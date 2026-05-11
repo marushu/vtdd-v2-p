@@ -9,6 +9,7 @@ export function renderPasskeyOperatorPage(input = {}) {
   const repoDefault = escapeHtml(input.repositoryInput || "");
   const issueDefault = escapeHtml(input.issueNumber || "");
   const pullNumberDefault = escapeHtml(input.pullNumber || "");
+  const refDefault = escapeHtml(input.ref || "main");
   const phaseDefault = escapeHtml(input.phase || "execution");
   const actionTypeDefault = escapeHtml(input.actionType || defaultActionTypeForMode(operatorMode));
   const highRiskKindDefault = escapeHtml(input.highRiskKind || defaultHighRiskKindForMode(operatorMode));
@@ -189,6 +190,8 @@ export function renderPasskeyOperatorPage(input = {}) {
           <input id="issue-input" value="${issueDefault}" placeholder="15" />
           <label for="phase-input">Phase</label>
           <input id="phase-input" value="${phaseDefault}" />
+          <label for="ref-input">Ref</label>
+          <input id="ref-input" value="${refDefault}" />
           <label for="action-type-input">Action Type</label>
           <input id="action-type-input" value="${actionTypeDefault}" />
           <label for="risk-kind-input">High-risk Kind</label>
@@ -257,8 +260,12 @@ export function renderPasskeyOperatorPage(input = {}) {
 
         <section data-operator-section="vps-runner-admin"${hiddenAttribute(!sectionVisibility.vpsRunnerAdmin)}>
           <h2>7. VPS Runner Admin</h2>
-          <p class="muted">VPS runner の repo allowlist 追加、runner restart、smoke などの管理操作用 approval です。ここでは real passkey で短命の <code>approvalGrantId</code> だけを発行します。VPS 操作そのものは GitHub queue と runner event に残る bounded command として別途実行されます。</p>
-          <p class="muted"><code>actionType=destructive</code> / <code>highRiskKind=vps_runner_admin</code> の approvalGrantId が必要です。文字列としての passkey は承認ではありません。</p>
+          <p class="muted">VPS runner self-update/restart 用の bounded operation です。real passkey approval 後、same-origin の update queue に要求を書き込み、runner event で commit SHA と lastSeenAt を確認します。</p>
+          <div class="row">
+            <button id="vps-update-button">Queue VPS update</button>
+          </div>
+          <p class="muted"><code>actionType=vps_runner_update_restart</code> または <code>vps_runner_update_reload</code> / <code>highRiskKind=vps_runner_admin</code> の approvalGrantId が必要です。文字列としての passkey は承認ではありません。</p>
+          <pre id="vps-update-output"></pre>
         </section>
       </div>
     </main>
@@ -270,6 +277,7 @@ export function renderPasskeyOperatorPage(input = {}) {
       const deployOutput = document.getElementById("deploy-output");
       const mergeOutput = document.getElementById("merge-output");
       const openaiSecretSyncOutput = document.getElementById("openai-secret-sync-output");
+      const vpsUpdateOutput = document.getElementById("vps-update-output");
       const copyApprovalGrantButton = document.getElementById("copy-approval-grant-button");
       const autoCopyApprovalGrantInput = document.getElementById("auto-copy-approval-grant-input");
       const deployRunLink = document.getElementById("deploy-run-link");
@@ -481,6 +489,7 @@ export function renderPasskeyOperatorPage(input = {}) {
             headers: { "content-type": "application/json" },
             body: JSON.stringify({
               phase: document.getElementById("phase-input").value || "execution",
+              ref: document.getElementById("ref-input").value || "main",
               highRiskKind: document.getElementById("risk-kind-input").value,
               repositoryInput: document.getElementById("repo-input").value,
               issueNumber: Number(document.getElementById("issue-input").value || 0) || null,
@@ -491,7 +500,8 @@ export function renderPasskeyOperatorPage(input = {}) {
               policyInput: {
                 actionType: document.getElementById("action-type-input").value,
                 repositoryInput: document.getElementById("repo-input").value,
-                highRiskKind: document.getElementById("risk-kind-input").value
+                highRiskKind: document.getElementById("risk-kind-input").value,
+                ref: document.getElementById("ref-input").value || "main"
               }
             })
           });
@@ -690,6 +700,39 @@ export function renderPasskeyOperatorPage(input = {}) {
         }
       });
 
+      document.getElementById("vps-update-button").addEventListener("click", async () => {
+        try {
+          if (!latestApprovalGrantId) {
+            throw new Error("approvalGrantId is required before VPS runner update");
+          }
+          vpsUpdateOutput.textContent = "VPS runner update request...";
+          const updateResponse = await fetch("${apiBase}/action/vps-runner-update", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              repository: document.getElementById("repo-input").value,
+              issueNumber: Number(document.getElementById("issue-input").value || 0) || null,
+              ref: document.getElementById("ref-input").value || "main",
+              phase: document.getElementById("phase-input").value || "execution",
+              actionType: document.getElementById("action-type-input").value,
+              policyInput: {
+                approvalPhrase: "GO",
+                approvalGrantId: latestApprovalGrantId,
+                actionType: document.getElementById("action-type-input").value,
+                ref: document.getElementById("ref-input").value || "main"
+              }
+            })
+          });
+          const updateBody = await readResponseBody(updateResponse);
+          if (!updateResponse.ok) {
+            throw responseError(updateBody, "VPS runner update failed");
+          }
+          vpsUpdateOutput.textContent = JSON.stringify(updateBody, null, 2);
+        } catch (error) {
+          vpsUpdateOutput.textContent = String(error);
+        }
+      });
+
       function decodeRegistrationOptions(options) {
         return {
           ...options,
@@ -851,6 +894,9 @@ function defaultActionTypeForMode(operatorMode) {
   }
   if (operatorMode === "merge") {
     return "merge";
+  }
+  if (operatorMode === "vps") {
+    return "vps_runner_update_restart";
   }
   return "destructive";
 }

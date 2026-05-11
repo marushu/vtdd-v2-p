@@ -157,7 +157,7 @@ test("passkey operator page focuses merge mode on approval and PR merge sections
 test("passkey operator page focuses secret sync modes without hiding the required approval section", () => {
   const githubAppSecretHtml = renderPasskeyOperatorPage({
     repositoryInput: "marushu/vtdd-v2-p",
-    actionType: "destructive",
+    actionType: "vps_runner_update_restart",
     highRiskKind: "github_app_secret_sync"
   });
   assert.equal(githubAppSecretHtml.includes('<section data-operator-section="approval">'), true);
@@ -181,7 +181,7 @@ test("passkey operator page focuses VPS runner admin mode on real approval only"
   const html = renderPasskeyOperatorPage({
     repositoryInput: "sample-org/private-repo",
     issueNumber: 157,
-    actionType: "destructive",
+    actionType: "vps_runner_update_restart",
     highRiskKind: "vps_runner_admin"
   });
 
@@ -191,8 +191,9 @@ test("passkey operator page focuses VPS runner admin mode on real approval only"
   assert.equal(html.includes('<section data-operator-section="pr-merge" hidden>'), true);
   assert.equal(html.includes('<section data-operator-section="github-app-secret-sync" hidden>'), true);
   assert.equal(html.includes('<section data-operator-section="github-actions-secret-sync" hidden>'), true);
-  assert.equal(html.includes('id="action-type-input" value="destructive"'), true);
+  assert.equal(html.includes('id="action-type-input" value="vps_runner_update_restart"'), true);
   assert.equal(html.includes('id="risk-kind-input" value="vps_runner_admin"'), true);
+  assert.equal(html.includes('id="ref-input" value="main"'), true);
   assert.equal(html.includes("文字列としての passkey は承認ではありません"), true);
 });
 
@@ -202,8 +203,9 @@ test("passkey operator page fills VPS runner admin defaults from explicit mode",
     repositoryInput: "sample-org/private-repo"
   });
 
-  assert.equal(html.includes('id="action-type-input" value="destructive"'), true);
+  assert.equal(html.includes('id="action-type-input" value="vps_runner_update_restart"'), true);
   assert.equal(html.includes('id="risk-kind-input" value="vps_runner_admin"'), true);
+  assert.equal(html.includes('id="vps-update-button"'), true);
   assert.equal(html.includes('<section data-operator-section="vps-runner-admin">'), true);
 });
 

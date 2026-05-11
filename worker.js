@@ -20013,6 +20013,7 @@ function normalizeScopeSnapshot(scope = {}) {
     actionType: normalizeText3(scope.actionType),
     highRiskKind: normalizeText3(scope.highRiskKind),
     repositoryInput: normalizeText3(scope.repositoryInput),
+    ref: normalizeText3(scope.ref),
     issueNumber: normalizeText3(scope.issueNumber),
     pullNumber: normalizeText3(scope.pullNumber),
     relatedIssue: normalizeText3(scope.relatedIssue),
@@ -20234,6 +20235,7 @@ function renderPasskeyOperatorPage(input = {}) {
   const repoDefault = escapeHtml(input.repositoryInput || "");
   const issueDefault = escapeHtml(input.issueNumber || "");
   const pullNumberDefault = escapeHtml(input.pullNumber || "");
+  const refDefault = escapeHtml(input.ref || "main");
   const phaseDefault = escapeHtml(input.phase || "execution");
   const actionTypeDefault = escapeHtml(input.actionType || defaultActionTypeForMode(operatorMode));
   const highRiskKindDefault = escapeHtml(input.highRiskKind || defaultHighRiskKindForMode(operatorMode));
@@ -20410,6 +20412,8 @@ function renderPasskeyOperatorPage(input = {}) {
           <input id="issue-input" value="${issueDefault}" placeholder="15" />
           <label for="phase-input">Phase</label>
           <input id="phase-input" value="${phaseDefault}" />
+          <label for="ref-input">Ref</label>
+          <input id="ref-input" value="${refDefault}" />
           <label for="action-type-input">Action Type</label>
           <input id="action-type-input" value="${actionTypeDefault}" />
           <label for="risk-kind-input">High-risk Kind</label>
@@ -20478,8 +20482,12 @@ function renderPasskeyOperatorPage(input = {}) {
 
         <section data-operator-section="vps-runner-admin"${hiddenAttribute(!sectionVisibility.vpsRunnerAdmin)}>
           <h2>7. VPS Runner Admin</h2>
-          <p class="muted">VPS runner \u306E repo allowlist \u8FFD\u52A0\u3001runner restart\u3001smoke \u306A\u3069\u306E\u7BA1\u7406\u64CD\u4F5C\u7528 approval \u3067\u3059\u3002\u3053\u3053\u3067\u306F real passkey \u3067\u77ED\u547D\u306E <code>approvalGrantId</code> \u3060\u3051\u3092\u767A\u884C\u3057\u307E\u3059\u3002VPS \u64CD\u4F5C\u305D\u306E\u3082\u306E\u306F GitHub queue \u3068 runner event \u306B\u6B8B\u308B bounded command \u3068\u3057\u3066\u5225\u9014\u5B9F\u884C\u3055\u308C\u307E\u3059\u3002</p>
-          <p class="muted"><code>actionType=destructive</code> / <code>highRiskKind=vps_runner_admin</code> \u306E approvalGrantId \u304C\u5FC5\u8981\u3067\u3059\u3002\u6587\u5B57\u5217\u3068\u3057\u3066\u306E passkey \u306F\u627F\u8A8D\u3067\u306F\u3042\u308A\u307E\u305B\u3093\u3002</p>
+          <p class="muted">VPS runner self-update/restart \u7528\u306E bounded operation \u3067\u3059\u3002real passkey approval \u5F8C\u3001same-origin \u306E update queue \u306B\u8981\u6C42\u3092\u66F8\u304D\u8FBC\u307F\u3001runner event \u3067 commit SHA \u3068 lastSeenAt \u3092\u78BA\u8A8D\u3057\u307E\u3059\u3002</p>
+          <div class="row">
+            <button id="vps-update-button">Queue VPS update</button>
+          </div>
+          <p class="muted"><code>actionType=vps_runner_update_restart</code> \u307E\u305F\u306F <code>vps_runner_update_reload</code> / <code>highRiskKind=vps_runner_admin</code> \u306E approvalGrantId \u304C\u5FC5\u8981\u3067\u3059\u3002\u6587\u5B57\u5217\u3068\u3057\u3066\u306E passkey \u306F\u627F\u8A8D\u3067\u306F\u3042\u308A\u307E\u305B\u3093\u3002</p>
+          <pre id="vps-update-output"></pre>
         </section>
       </div>
     </main>
@@ -20491,6 +20499,7 @@ function renderPasskeyOperatorPage(input = {}) {
       const deployOutput = document.getElementById("deploy-output");
       const mergeOutput = document.getElementById("merge-output");
       const openaiSecretSyncOutput = document.getElementById("openai-secret-sync-output");
+      const vpsUpdateOutput = document.getElementById("vps-update-output");
       const copyApprovalGrantButton = document.getElementById("copy-approval-grant-button");
       const autoCopyApprovalGrantInput = document.getElementById("auto-copy-approval-grant-input");
       const deployRunLink = document.getElementById("deploy-run-link");
@@ -20702,6 +20711,7 @@ function renderPasskeyOperatorPage(input = {}) {
             headers: { "content-type": "application/json" },
             body: JSON.stringify({
               phase: document.getElementById("phase-input").value || "execution",
+              ref: document.getElementById("ref-input").value || "main",
               highRiskKind: document.getElementById("risk-kind-input").value,
               repositoryInput: document.getElementById("repo-input").value,
               issueNumber: Number(document.getElementById("issue-input").value || 0) || null,
@@ -20712,7 +20722,8 @@ function renderPasskeyOperatorPage(input = {}) {
               policyInput: {
                 actionType: document.getElementById("action-type-input").value,
                 repositoryInput: document.getElementById("repo-input").value,
-                highRiskKind: document.getElementById("risk-kind-input").value
+                highRiskKind: document.getElementById("risk-kind-input").value,
+                ref: document.getElementById("ref-input").value || "main"
               }
             })
           });
@@ -20911,6 +20922,39 @@ function renderPasskeyOperatorPage(input = {}) {
         }
       });
 
+      document.getElementById("vps-update-button").addEventListener("click", async () => {
+        try {
+          if (!latestApprovalGrantId) {
+            throw new Error("approvalGrantId is required before VPS runner update");
+          }
+          vpsUpdateOutput.textContent = "VPS runner update request...";
+          const updateResponse = await fetch("${apiBase}/action/vps-runner-update", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              repository: document.getElementById("repo-input").value,
+              issueNumber: Number(document.getElementById("issue-input").value || 0) || null,
+              ref: document.getElementById("ref-input").value || "main",
+              phase: document.getElementById("phase-input").value || "execution",
+              actionType: document.getElementById("action-type-input").value,
+              policyInput: {
+                approvalPhrase: "GO",
+                approvalGrantId: latestApprovalGrantId,
+                actionType: document.getElementById("action-type-input").value,
+                ref: document.getElementById("ref-input").value || "main"
+              }
+            })
+          });
+          const updateBody = await readResponseBody(updateResponse);
+          if (!updateResponse.ok) {
+            throw responseError(updateBody, "VPS runner update failed");
+          }
+          vpsUpdateOutput.textContent = JSON.stringify(updateBody, null, 2);
+        } catch (error) {
+          vpsUpdateOutput.textContent = String(error);
+        }
+      });
+
       function decodeRegistrationOptions(options) {
         return {
           ...options,
@@ -21064,6 +21108,9 @@ function defaultActionTypeForMode(operatorMode) {
   }
   if (operatorMode === "merge") {
     return "merge";
+  }
+  if (operatorMode === "vps") {
+    return "vps_runner_update_restart";
   }
   return "destructive";
 }
@@ -28293,9 +28340,527 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// src/core/vps-runner-update.js
+var VPS_RUNNER_UPDATE_QUEUE_MARKER = "vtdd:vps-runner-update";
+var VPS_RUNNER_UPDATE_EVENT_MARKER = "vtdd:vps-runner-update-event";
+var VpsRunnerUpdateActionType = Object.freeze({
+  UPDATE_RESTART: "vps_runner_update_restart",
+  UPDATE_RELOAD: "vps_runner_update_reload"
+});
+var VpsRunnerUpdateStatus = Object.freeze({
+  QUEUED: "queued",
+  RUNNING: "running",
+  COMPLETED: "completed",
+  FAILED: "failed",
+  STALE: "stale"
+});
+var ALLOWED_ACTION_TYPES = new Set(Object.values(VpsRunnerUpdateActionType));
+var DEFAULT_REF = "main";
+var GITHUB_API_VERSION4 = "2022-11-28";
+var GITHUB_USER_AGENT = "vtdd-v2-vps-runner-update";
+async function requestVpsRunnerUpdate(input = {}) {
+  const validation = validateVpsRunnerUpdateRequest(input);
+  if (!validation.ok) {
+    return {
+      ok: false,
+      status: 422,
+      error: "vps_runner_update_request_invalid",
+      reason: validation.issues.join(", "),
+      issues: validation.issues
+    };
+  }
+  const request = validation.request;
+  const approvalValidation = validateVpsRunnerUpdateApprovalGrant({
+    approvalGrant: input.approvalGrant,
+    request
+  });
+  if (!approvalValidation.ok) {
+    return {
+      ok: false,
+      status: 422,
+      error: "vps_runner_update_approval_invalid",
+      reason: approvalValidation.reason,
+      issues: [approvalValidation.reason]
+    };
+  }
+  const tokenResolution = await resolveGitHubAppInstallationToken({
+    env: input.env,
+    fetchImpl: resolveFetch(input.env),
+    apiBaseUrl: normalizeApiBaseUrl4(input.env?.GITHUB_API_BASE_URL)
+  });
+  if (!tokenResolution.ok) {
+    return {
+      ok: false,
+      status: 503,
+      error: "github_execution_token_unavailable",
+      reason: tokenResolution.warning || "GitHub App installation token is unavailable for VPS runner update queue"
+    };
+  }
+  const apiBaseUrl = normalizeApiBaseUrl4(input.env?.GITHUB_API_BASE_URL);
+  const fetchImpl = resolveFetch(input.env);
+  const commentUrl = `${apiBaseUrl}/repos/${encodeURIComponentRepository4(
+    request.repository
+  )}/issues/${encodeURIComponent(String(request.issueNumber))}/comments`;
+  const body = buildVpsRunnerUpdateQueueComment({ request });
+  let response;
+  try {
+    response = await fetchImpl(commentUrl, {
+      method: "POST",
+      headers: githubJsonHeaders2({ token: tokenResolution.token }),
+      body: JSON.stringify({ body })
+    });
+  } catch {
+    return {
+      ok: false,
+      status: 503,
+      error: "vps_runner_update_dispatch_failed",
+      reason: "failed to post VPS runner update queue comment"
+    };
+  }
+  const responseBody = await readJsonSafe5(response);
+  if (!response.ok) {
+    return {
+      ok: false,
+      status: response.status,
+      error: "vps_runner_update_dispatch_failed",
+      reason: normalizeText24(responseBody?.message) || "GitHub issue comment creation failed"
+    };
+  }
+  return {
+    ok: true,
+    update: {
+      updateId: request.updateId,
+      repository: request.repository,
+      issueNumber: request.issueNumber,
+      ref: request.ref,
+      phase: request.phase,
+      actionType: request.actionType,
+      status: VpsRunnerUpdateStatus.QUEUED,
+      queueCommentId: normalizePositiveInteger5(responseBody?.id),
+      queueCommentUrl: normalizeText24(responseBody?.html_url) || null
+    }
+  };
+}
+async function retrieveVpsRunnerUpdateStatus(input = {}) {
+  const repository = normalizeRepository(input.repository);
+  const issueNumber = normalizePositiveInteger5(input.issueNumber);
+  const updateId = normalizeUpdateId(input.updateId);
+  const issues = [];
+  if (!repository) {
+    issues.push("repository is required");
+  }
+  if (!issueNumber) {
+    issues.push("issueNumber is required");
+  }
+  if (!updateId) {
+    issues.push("updateId is required");
+  }
+  if (issues.length > 0) {
+    return {
+      ok: false,
+      status: 422,
+      error: "vps_runner_update_status_request_invalid",
+      reason: issues.join(", "),
+      issues
+    };
+  }
+  const tokenResolution = await resolveGitHubAppInstallationToken({
+    env: input.env,
+    fetchImpl: resolveFetch(input.env),
+    apiBaseUrl: normalizeApiBaseUrl4(input.env?.GITHUB_API_BASE_URL)
+  });
+  if (!tokenResolution.ok) {
+    return {
+      ok: false,
+      status: 503,
+      error: "github_execution_token_unavailable",
+      reason: tokenResolution.warning || "GitHub App installation token is unavailable for VPS runner update status"
+    };
+  }
+  const apiBaseUrl = normalizeApiBaseUrl4(input.env?.GITHUB_API_BASE_URL);
+  const fetchImpl = resolveFetch(input.env);
+  let comments;
+  try {
+    comments = await readAllIssueComments2({
+      apiBaseUrl,
+      repository,
+      issueNumber,
+      token: tokenResolution.token,
+      fetchImpl
+    });
+  } catch (error) {
+    return {
+      ok: false,
+      status: error?.status || 503,
+      error: "vps_runner_update_status_failed",
+      reason: normalizeText24(error?.message) || "failed to read VPS runner update comments"
+    };
+  }
+  const queueComment = comments.find(
+    (comment) => normalizeText24(comment?.body).includes(`${VPS_RUNNER_UPDATE_QUEUE_MARKER}:${updateId}`)
+  );
+  if (!queueComment) {
+    return {
+      ok: false,
+      status: 404,
+      error: "vps_runner_update_not_found",
+      reason: "no VPS runner update queue comment matched updateId"
+    };
+  }
+  const queuePayload = parseVpsRunnerUpdateQueueComment(queueComment?.body);
+  const events = comments.filter((comment) => normalizeText24(comment?.body).includes(`${VPS_RUNNER_UPDATE_EVENT_MARKER}:${updateId}`)).map((comment) => ({
+    commentId: normalizePositiveInteger5(comment?.id),
+    commentUrl: normalizeText24(comment?.html_url) || null,
+    createdAt: normalizeText24(comment?.created_at) || null,
+    event: extractFirstJsonFence2(comment?.body)
+  })).filter((item) => item.event).map((item) => ({
+    ...item,
+    event: normalizeVpsRunnerUpdateEvent(item.event)
+  }));
+  const latest = selectLatestUpdateEvent(events);
+  const staleBlocker = !latest && queueComment ? buildUpdatePickupStaleBlocker({
+    queueComment,
+    env: input.env
+  }) : latest?.event?.status === VpsRunnerUpdateStatus.RUNNING ? buildUpdateEventStaleBlocker({
+    latest,
+    env: input.env
+  }) : null;
+  return {
+    ok: true,
+    update: {
+      updateId,
+      repository,
+      issueNumber,
+      ref: queuePayload.payload?.ref || DEFAULT_REF,
+      phase: queuePayload.payload?.phase || "execution",
+      actionType: queuePayload.payload?.actionType || null,
+      status: staleBlocker ? VpsRunnerUpdateStatus.STALE : latest?.event?.status || VpsRunnerUpdateStatus.QUEUED,
+      queueCommentId: normalizePositiveInteger5(queueComment?.id),
+      queueCommentUrl: normalizeText24(queueComment?.html_url) || null,
+      lastSeenAt: latest?.event?.lastSeenAt || latest?.event?.updatedAt || null,
+      runnerVersion: latest?.event?.runnerVersion || null,
+      commitSha: latest?.event?.commitSha || null,
+      currentStep: latest?.event?.currentStep || null,
+      latestEvent: latest?.event || null,
+      blocker: latest?.event?.rawFailure || staleBlocker || null
+    }
+  };
+}
+function validateVpsRunnerUpdateRequest(input = {}) {
+  const repository = normalizeRepository(input.repository);
+  const issueNumber = normalizePositiveInteger5(input.issueNumber);
+  const ref = normalizeRef(input.ref || DEFAULT_REF);
+  const phase = normalizeText24(input.phase) || "execution";
+  const actionType = normalizeText24(input.actionType);
+  const updateId = normalizeUpdateId(input.updateId) || buildVpsRunnerUpdateId({ issueNumber });
+  const approvalPhrase = normalizeText24(input.approvalPhrase);
+  const approvalGrantId = normalizeText24(input.approvalGrantId || input.approvalGrant?.approvalId);
+  const approvalActor = normalizeText24(input.approvalActor);
+  const issues = [];
+  if (!repository) {
+    issues.push("repository is required");
+  }
+  if (!issueNumber) {
+    issues.push("issueNumber is required");
+  }
+  if (ref !== DEFAULT_REF) {
+    issues.push("ref must be main for VPS runner self-update");
+  }
+  if (!phase) {
+    issues.push("phase is required");
+  }
+  if (!ALLOWED_ACTION_TYPES.has(actionType)) {
+    issues.push("actionType must be vps_runner_update_restart or vps_runner_update_reload");
+  }
+  if (approvalPhrase !== "GO") {
+    issues.push("approvalPhrase must be GO");
+  }
+  if (!approvalGrantId) {
+    issues.push("approvalGrantId is required");
+  }
+  return issues.length > 0 ? { ok: false, issues } : {
+    ok: true,
+    request: {
+      updateId,
+      repository,
+      issueNumber,
+      ref,
+      phase,
+      actionType,
+      approvalGrantId,
+      approvalActor,
+      requestedAt: (/* @__PURE__ */ new Date()).toISOString()
+    }
+  };
+}
+function validateVpsRunnerUpdateApprovalGrant({ approvalGrant, request } = {}) {
+  const scope = buildVpsRunnerUpdateApprovalScope(request);
+  const grantValidation = evaluateApprovalGrant({
+    approvalGrant,
+    scope
+  });
+  return grantValidation.ok ? { ok: true } : {
+    ok: false,
+    reason: grantValidation.reason
+  };
+}
+function buildVpsRunnerUpdateApprovalScope(request = {}) {
+  return {
+    actionType: normalizeText24(request.actionType),
+    highRiskKind: "vps_runner_admin",
+    repositoryInput: normalizeRepository(request.repository),
+    issueNumber: normalizeText24(request.issueNumber),
+    relatedIssue: normalizeText24(request.issueNumber),
+    phase: normalizeText24(request.phase) || "execution",
+    ref: normalizeRef(request.ref || DEFAULT_REF)
+  };
+}
+function buildVpsRunnerUpdateQueueComment({ request }) {
+  const payload = {
+    updateId: request.updateId,
+    operation: "vps_runner_update",
+    repository: request.repository,
+    issueNumber: request.issueNumber,
+    ref: request.ref,
+    phase: request.phase,
+    actionType: request.actionType,
+    approvalScopeMatched: true,
+    approvalActor: request.approvalActor || null,
+    requestedAt: request.requestedAt || (/* @__PURE__ */ new Date()).toISOString()
+  };
+  return [
+    `<!-- ${VPS_RUNNER_UPDATE_QUEUE_MARKER}:${request.updateId} -->`,
+    "VTDD-managed VPS runner self-update request.",
+    "",
+    "Bounded update contract:",
+    `- Repository: ${request.repository}`,
+    `- Issue: #${request.issueNumber}`,
+    `- Ref: ${request.ref}`,
+    `- Phase: ${request.phase}`,
+    `- Action Type: ${request.actionType}`,
+    "- Operation: allowlisted git fetch / checkout main / pull --ff-only plus configured restart/reload",
+    "- Runtime truth: GitHub update queue and runner event comments",
+    "",
+    "Rules:",
+    "- Do not execute arbitrary shell commands.",
+    "- Do not merge.",
+    "- Do not deploy Cloudflare.",
+    "- Do not print secrets.",
+    "",
+    "Runner payload:",
+    fencedJson2(payload)
+  ].join("\n");
+}
+function parseVpsRunnerUpdateQueueComment(body) {
+  const text = normalizeText24(body);
+  const marker = text.match(/vtdd:vps-runner-update:([a-zA-Z0-9._:-]+)/);
+  if (!marker) {
+    return { ok: false, reason: "vps_runner_update_marker_missing" };
+  }
+  const payload = extractFirstJsonFence2(text);
+  if (!payload) {
+    return { ok: false, reason: "vps_runner_update_payload_missing", updateId: marker[1] };
+  }
+  const normalized = {
+    updateId: normalizeUpdateId(payload.updateId),
+    operation: normalizeText24(payload.operation),
+    repository: normalizeRepository(payload.repository),
+    issueNumber: normalizePositiveInteger5(payload.issueNumber),
+    ref: normalizeRef(payload.ref || DEFAULT_REF),
+    phase: normalizeText24(payload.phase) || "execution",
+    actionType: normalizeText24(payload.actionType),
+    approvalScopeMatched: payload.approvalScopeMatched === true,
+    approvalActor: normalizeText24(payload.approvalActor),
+    requestedAt: normalizeText24(payload.requestedAt)
+  };
+  const issues = [];
+  if (normalized.updateId !== marker[1]) {
+    issues.push("updateId does not match queue marker");
+  }
+  if (normalized.operation !== "vps_runner_update") {
+    issues.push("operation must be vps_runner_update");
+  }
+  if (!normalized.repository) {
+    issues.push("repository is required");
+  }
+  if (!normalized.issueNumber) {
+    issues.push("issueNumber is required");
+  }
+  if (normalized.ref !== DEFAULT_REF) {
+    issues.push("ref must be main");
+  }
+  if (!ALLOWED_ACTION_TYPES.has(normalized.actionType)) {
+    issues.push("actionType must be allowlisted");
+  }
+  if (!normalized.approvalScopeMatched) {
+    issues.push("approvalScopeMatched must be true");
+  }
+  return issues.length > 0 ? { ok: false, reason: "vps_runner_update_payload_invalid", updateId: marker[1], issues } : { ok: true, updateId: normalized.updateId, payload: normalized };
+}
+function normalizeVpsRunnerUpdateEvent(event = {}) {
+  return {
+    status: normalizeUpdateStatus(event.status),
+    updateId: normalizeUpdateId(event.updateId),
+    repository: normalizeRepository(event.repository),
+    issueNumber: normalizePositiveInteger5(event.issueNumber),
+    ref: normalizeRef(event.ref || DEFAULT_REF),
+    phase: normalizeText24(event.phase),
+    actionType: normalizeText24(event.actionType),
+    currentStep: normalizeText24(event.currentStep) || null,
+    lastEvent: normalizeText24(event.lastEvent) || null,
+    lastSeenAt: normalizeText24(event.lastSeenAt) || null,
+    runnerVersion: normalizeText24(event.runnerVersion) || null,
+    commitSha: normalizeText24(event.commitSha) || null,
+    previousCommitSha: normalizeText24(event.previousCommitSha) || null,
+    updatedAt: normalizeText24(event.updatedAt) || normalizeText24(event.lastSeenAt) || null,
+    rawFailure: event.rawFailure && typeof event.rawFailure === "object" ? event.rawFailure : null
+  };
+}
+function normalizeUpdateStatus(value) {
+  const status = normalizeText24(value);
+  return Object.values(VpsRunnerUpdateStatus).includes(status) ? status : VpsRunnerUpdateStatus.RUNNING;
+}
+function buildUpdatePickupStaleBlocker({ queueComment, env }) {
+  const graceSeconds = normalizeNonNegativeNumber2(env?.VPS_RUNNER_UPDATE_PICKUP_GRACE_SECONDS ?? 300);
+  const createdAt = Date.parse(normalizeText24(queueComment?.created_at));
+  if (!Number.isFinite(createdAt)) {
+    return null;
+  }
+  const ageSeconds = Math.floor((Date.now() - createdAt) / 1e3);
+  if (ageSeconds < graceSeconds) {
+    return null;
+  }
+  return {
+    error: "vps_runner_update_pickup_not_observed",
+    reason: "VPS runner did not report self-update pickup within the pickup grace period",
+    graceSeconds,
+    ageSeconds
+  };
+}
+function buildUpdateEventStaleBlocker({ latest, env }) {
+  const staleSeconds = normalizeNonNegativeNumber2(env?.VPS_RUNNER_UPDATE_STALE_SECONDS ?? 600);
+  const updatedAt = Date.parse(normalizeText24(latest?.event?.updatedAt));
+  if (!Number.isFinite(updatedAt)) {
+    return null;
+  }
+  const ageSeconds = Math.floor((Date.now() - updatedAt) / 1e3);
+  if (ageSeconds < staleSeconds) {
+    return null;
+  }
+  return {
+    error: "vps_runner_update_event_stale",
+    reason: "VPS runner self-update is running but has not posted a fresh event within the stale threshold",
+    staleSeconds,
+    ageSeconds
+  };
+}
+function selectLatestUpdateEvent(events) {
+  return [...Array.isArray(events) ? events : []].sort((left, right) => {
+    const leftUpdatedAt = Date.parse(normalizeText24(left?.event?.updatedAt));
+    const rightUpdatedAt = Date.parse(normalizeText24(right?.event?.updatedAt));
+    if (Number.isFinite(leftUpdatedAt) && Number.isFinite(rightUpdatedAt) && leftUpdatedAt !== rightUpdatedAt) {
+      return leftUpdatedAt - rightUpdatedAt;
+    }
+    return (left.commentId || 0) - (right.commentId || 0);
+  }).at(-1) || null;
+}
+async function readAllIssueComments2({ apiBaseUrl, repository, issueNumber, token, fetchImpl }) {
+  const comments = [];
+  for (let page = 1; ; page += 1) {
+    const response = await fetchImpl(
+      `${apiBaseUrl}/repos/${encodeURIComponentRepository4(repository)}/issues/${encodeURIComponent(
+        String(issueNumber)
+      )}/comments?per_page=100&page=${page}`,
+      {
+        method: "GET",
+        headers: githubJsonHeaders2({ token })
+      }
+    );
+    const body = await readJsonSafe5(response);
+    if (!response.ok) {
+      const error = new Error(normalizeText24(body?.message) || "GitHub issue comments lookup failed");
+      error.status = response.status;
+      throw error;
+    }
+    const pageComments = Array.isArray(body) ? body : [];
+    comments.push(...pageComments);
+    if (pageComments.length < 100) {
+      return comments;
+    }
+  }
+}
+function buildVpsRunnerUpdateId({ issueNumber }) {
+  return `vps-update-issue${issueNumber || "unknown"}-${Date.now().toString(36)}`;
+}
+function normalizeUpdateId(value) {
+  const text = normalizeText24(value);
+  return /^[A-Za-z0-9._:-]+$/.test(text) ? text : "";
+}
+function normalizeRepository(value) {
+  const text = normalizeText24(value);
+  return /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(text) ? text : "";
+}
+function normalizeRef(value) {
+  const text = normalizeText24(value);
+  return /^[A-Za-z0-9._/-]+$/.test(text) ? text : "";
+}
+function normalizePositiveInteger5(value) {
+  const number = Number(value);
+  return Number.isInteger(number) && number > 0 ? number : 0;
+}
+function normalizeNonNegativeNumber2(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0 ? number : 0;
+}
+function normalizeText24(value) {
+  return String(value ?? "").trim();
+}
+function normalizeApiBaseUrl4(value) {
+  return normalizeText24(value) || "https://api.github.com";
+}
+function resolveFetch(env = {}) {
+  return typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
+}
+function encodeURIComponentRepository4(repository) {
+  const [owner = "", name = ""] = normalizeText24(repository).split("/");
+  return `${encodeURIComponent(owner)}/${encodeURIComponent(name)}`;
+}
+function githubJsonHeaders2({ token }) {
+  return {
+    authorization: `Bearer ${token}`,
+    accept: "application/vnd.github+json",
+    "content-type": "application/json; charset=utf-8",
+    "x-github-api-version": GITHUB_API_VERSION4,
+    "user-agent": GITHUB_USER_AGENT
+  };
+}
+async function readJsonSafe5(response) {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+function extractFirstJsonFence2(text) {
+  const fenced = String(text || "").match(/```json\s*([\s\S]*?)```/i);
+  if (!fenced) {
+    return null;
+  }
+  try {
+    return JSON.parse(fenced[1]);
+  } catch {
+    return null;
+  }
+}
+function fencedJson2(value) {
+  return `\`\`\`json
+${JSON.stringify(value, null, 2)}
+\`\`\``;
+}
+
 // src/core/custom-gpt-setup-artifacts.js
 var GITHUB_API_BASE_URL3 = "https://api.github.com";
-var GITHUB_API_VERSION4 = "2022-11-28";
+var GITHUB_API_VERSION5 = "2022-11-28";
 var GITHUB_API_USER_AGENT4 = "vtdd-v2-custom-gpt-setup-artifacts";
 var CustomGptSetupArtifact = Object.freeze({
   INSTRUCTIONS: "instructions",
@@ -28337,6 +28902,8 @@ var RUNTIME_SETUP_MANIFEST = Object.freeze({
     "/v2/action/progress",
     "/v2/action/vps-runner-status",
     "/v2/action/vps-runner-cancel",
+    "/v2/action/vps-runner-update",
+    "/v2/action/vps-runner-update-status",
     "/v2/retrieve/constitution",
     "/v2/retrieve/decisions",
     "/v2/retrieve/proposals",
@@ -28361,6 +28928,8 @@ var RUNTIME_SETUP_MANIFEST = Object.freeze({
     "vtddExecutionProgress",
     "vtddVpsRunnerStatus",
     "vtddVpsRunnerCancel",
+    "vtddVpsRunnerUpdate",
+    "vtddVpsRunnerUpdateStatus",
     "vtddRetrieveConstitution",
     "vtddRetrieveDecisionLogs",
     "vtddRetrieveProposalLogs",
@@ -28384,6 +28953,8 @@ var RUNTIME_SETUP_MANIFEST = Object.freeze({
     "vtddExecutionProgress",
     "vtddVpsRunnerStatus",
     "vtddVpsRunnerCancel",
+    "vtddVpsRunnerUpdate",
+    "vtddVpsRunnerUpdateStatus",
     "vtddRetrieveConstitution",
     "vtddRetrieveDecisionLogs",
     "vtddRetrieveProposalLogs",
@@ -28406,12 +28977,12 @@ var CustomGptSetupChannel = Object.freeze({
   KNOWN_GOOD: "known_good"
 });
 async function retrieveCustomGptSetupArtifact(input = {}) {
-  const artifact = normalizeText24(input.artifact);
-  const repository = normalizeText24(input.repository);
-  const ref = normalizeText24(input.ref) || "main";
+  const artifact = normalizeText25(input.artifact);
+  const repository = normalizeText25(input.repository);
+  const ref = normalizeText25(input.ref) || "main";
   const env = input.env ?? {};
   const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
-  const apiBaseUrl = normalizeApiBaseUrl4(env?.GITHUB_API_BASE_URL);
+  const apiBaseUrl = normalizeApiBaseUrl5(env?.GITHUB_API_BASE_URL);
   const validation = validateCustomGptSetupArtifactRequest({ artifact, repository });
   if (!validation.ok) {
     return {
@@ -28440,7 +29011,7 @@ async function retrieveCustomGptSetupArtifact(input = {}) {
       headers: {
         authorization: `Bearer ${tokenResolution.token}`,
         accept: "application/vnd.github+json",
-        "x-github-api-version": GITHUB_API_VERSION4,
+        "x-github-api-version": GITHUB_API_VERSION5,
         "user-agent": GITHUB_API_USER_AGENT4
       }
     });
@@ -28452,13 +29023,13 @@ async function retrieveCustomGptSetupArtifact(input = {}) {
       reason: `failed to retrieve canonical setup artifact: ${artifact}`
     };
   }
-  const body = await readJsonSafe5(response);
+  const body = await readJsonSafe6(response);
   if (!response.ok) {
     return {
       ok: false,
       status: response.status,
       error: "custom_gpt_setup_artifact_unavailable",
-      reason: normalizeText24(body?.message) || `GitHub read failed for setup artifact: ${artifact}`
+      reason: normalizeText25(body?.message) || `GitHub read failed for setup artifact: ${artifact}`
     };
   }
   const content = decodeGitHubFileContent(body?.content, body?.encoding);
@@ -28477,15 +29048,15 @@ async function retrieveCustomGptSetupArtifact(input = {}) {
       repository,
       ref,
       path: spec.path,
-      sha: normalizeText24(body?.sha) || null,
+      sha: normalizeText25(body?.sha) || null,
       contentType: spec.contentType,
       content
     }
   };
 }
 async function evaluateButlerSelfParity(input = {}) {
-  const repository = normalizeText24(input.repository);
-  const ref = normalizeText24(input.ref) || "main";
+  const repository = normalizeText25(input.repository);
+  const ref = normalizeText25(input.ref) || "main";
   const runtimeOrigin = normalizeOrigin(input.runtimeOrigin);
   const issueNumber = normalizeIssueNumber(input.issueNumber);
   const env = input.env ?? {};
@@ -28616,9 +29187,9 @@ function evaluateRuntimeSetupManifestParity(input = {}) {
   };
 }
 async function buildCustomGptRecoveryBundle(input = {}) {
-  const repository = normalizeText24(input.repository) || VTDD_SETUP_REPOSITORY;
+  const repository = normalizeText25(input.repository) || VTDD_SETUP_REPOSITORY;
   const channel = normalizeSetupChannel(input.channel);
-  const requestedRef = normalizeText24(input.ref) || "main";
+  const requestedRef = normalizeText25(input.ref) || "main";
   const runtimeOrigin = normalizeOrigin(input.runtimeOrigin);
   const issueNumber = normalizeIssueNumber(input.issueNumber);
   const env = input.env ?? {};
@@ -28723,8 +29294,8 @@ async function buildCustomGptRecoveryBundle(input = {}) {
 }
 function renderCustomGptRecoveryPage(input = {}) {
   const runtimeOrigin = normalizeOrigin(input.runtimeOrigin);
-  const repository = normalizeText24(input.repository) || VTDD_SETUP_REPOSITORY;
-  const ref = normalizeText24(input.ref) || "main";
+  const repository = normalizeText25(input.repository) || VTDD_SETUP_REPOSITORY;
+  const ref = normalizeText25(input.ref) || "main";
   const issueNumber = normalizeIssueNumber(input.issueNumber);
   const channel = normalizeSetupChannel(input.channel);
   const recovery = input.recovery ?? null;
@@ -28819,7 +29390,7 @@ function validateCustomGptSetupArtifactRequest({ artifact, repository }) {
   return issues.length > 0 ? { ok: false, issues } : { ok: true };
 }
 async function resolveKnownGoodCommitSha({ repository, ref, env }) {
-  const configured = normalizeText24(env?.[KNOWN_GOOD_COMMIT_ENV]);
+  const configured = normalizeText25(env?.[KNOWN_GOOD_COMMIT_ENV]);
   if (configured) {
     return { sha: configured, source: KNOWN_GOOD_COMMIT_ENV };
   }
@@ -28827,7 +29398,7 @@ async function resolveKnownGoodCommitSha({ repository, ref, env }) {
     return { sha: ref, source: "ref" };
   }
   const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
-  const apiBaseUrl = normalizeApiBaseUrl4(env?.GITHUB_API_BASE_URL);
+  const apiBaseUrl = normalizeApiBaseUrl5(env?.GITHUB_API_BASE_URL);
   const tokenResolution = await resolveGitHubAppInstallationToken({ env, fetchImpl, apiBaseUrl });
   if (!tokenResolution.ok) {
     return { sha: null, source: "unverified" };
@@ -28840,17 +29411,17 @@ async function resolveKnownGoodCommitSha({ repository, ref, env }) {
         headers: {
           authorization: `Bearer ${tokenResolution.token}`,
           accept: "application/vnd.github+json",
-          "x-github-api-version": GITHUB_API_VERSION4,
+          "x-github-api-version": GITHUB_API_VERSION5,
           "user-agent": GITHUB_API_USER_AGENT4
         }
       }
     );
-    const body = await readJsonSafe5(response);
+    const body = await readJsonSafe6(response);
     if (!response.ok) {
       return { sha: null, source: "unverified" };
     }
     return {
-      sha: normalizeText24(body?.sha) || null,
+      sha: normalizeText25(body?.sha) || null,
       source: "github_commit_ref"
     };
   } catch {
@@ -28936,7 +29507,7 @@ function renderRecoveryBundleSections(recovery) {
     </section>`;
 }
 function normalizeSetupChannel(value) {
-  const normalized = normalizeText24(value).replace(/-/g, "_");
+  const normalized = normalizeText25(value).replace(/-/g, "_");
   return normalized === CustomGptSetupChannel.KNOWN_GOOD ? CustomGptSetupChannel.KNOWN_GOOD : CustomGptSetupChannel.LATEST;
 }
 function countCodePoints(value) {
@@ -28964,11 +29535,11 @@ function extractInstructionTokens(content, operationIds) {
   return requiredTokens.filter((token) => content.includes(token));
 }
 function decodeGitHubFileContent(content, encoding) {
-  const normalizedEncoding = normalizeText24(encoding) || "base64";
+  const normalizedEncoding = normalizeText25(encoding) || "base64";
   if (normalizedEncoding !== "base64") {
     return null;
   }
-  const normalizedContent = normalizeText24(content)?.replace(/\n/g, "");
+  const normalizedContent = normalizeText25(content)?.replace(/\n/g, "");
   if (!normalizedContent) {
     return null;
   }
@@ -28982,8 +29553,8 @@ function decodeGitHubFileContent(content, encoding) {
   }
   return Buffer.from(normalizedContent, "base64").toString("utf8");
 }
-function normalizeApiBaseUrl4(value) {
-  const normalized = normalizeText24(value);
+function normalizeApiBaseUrl5(value) {
+  const normalized = normalizeText25(value);
   return normalized ? normalized.replace(/\/+$/, "") : GITHUB_API_BASE_URL3;
 }
 function buildPasskeyOperatorUrl({ origin, repository, phase, actionType, highRiskKind, issueNumber }) {
@@ -28998,7 +29569,7 @@ function buildPasskeyOperatorUrl({ origin, repository, phase, actionType, highRi
   return url.toString();
 }
 function normalizeOrigin(value) {
-  const normalized = normalizeText24(value);
+  const normalized = normalizeText25(value);
   if (!normalized) {
     return "";
   }
@@ -29018,13 +29589,13 @@ function normalizeIssueNumber(value) {
 function encodeRepository(repository) {
   return repository.split("/").map((segment) => encodeURIComponent(segment)).join("/");
 }
-function normalizeText24(value) {
+function normalizeText25(value) {
   if (typeof value !== "string") {
     return "";
   }
   return value.trim();
 }
-async function readJsonSafe5(response) {
+async function readJsonSafe6(response) {
   try {
     return await response.json();
   } catch {
@@ -29037,9 +29608,9 @@ var CONFLICT_FILES_SOURCE = "not_provided_by_github_pull_request_endpoint";
 var FRESH_BRANCH_SUGGESTION = "Recreate a fresh branch from the current base branch, replay the scoped changes, and open/update the PR before retrying merge.";
 function normalizePullRequestMergeability(item) {
   const mergeable = typeof item?.mergeable === "boolean" ? item.mergeable : null;
-  const state = normalizeText25(item?.mergeable_state);
+  const state = normalizeText26(item?.mergeable_state);
   const draft = item?.draft === true;
-  const merged = item?.merged === true || Boolean(normalizeText25(item?.merged_at));
+  const merged = item?.merged === true || Boolean(normalizeText26(item?.merged_at));
   const hasConflict2 = mergeable === false || state === "dirty";
   const isUnknown = mergeable === null || state === "unknown";
   const blockedReason = normalizeMergeBlockedReason({ draft, hasConflict: hasConflict2, isUnknown, merged, state });
@@ -29093,13 +29664,13 @@ function normalizeMergeWarning({ hasConflict: hasConflict2, isUnknown, state, bl
   }
   return `Warning: PR merge is blocked (${blockedReason}). Resolve the blocking condition before attempting merge.`;
 }
-function normalizeText25(value) {
+function normalizeText26(value) {
   return typeof value === "string" && value.trim() ? value.trim() : "";
 }
 
 // src/core/github-read-plane.js
 var GITHUB_API_BASE_URL4 = "https://api.github.com";
-var GITHUB_API_VERSION5 = "2022-11-28";
+var GITHUB_API_VERSION6 = "2022-11-28";
 var GITHUB_API_USER_AGENT5 = "vtdd-v2-github-read-plane";
 var INSTALLATION_REPOSITORIES_PATH2 = "/installation/repositories";
 var GitHubReadResource = Object.freeze({
@@ -29114,18 +29685,18 @@ var GitHubReadResource = Object.freeze({
   BRANCHES: "branches"
 });
 async function retrieveGitHubReadPlane(input = {}) {
-  const resource = normalizeText26(input.resource);
-  const repository = normalizeText26(input.repository);
-  const issueNumber = normalizePositiveInteger5(input.issueNumber);
-  const pullNumber = normalizePositiveInteger5(input.pullNumber);
-  const branch = normalizeText26(input.branch);
-  const head = normalizeText26(input.head);
-  const ref = normalizeText26(input.ref) || branch;
-  const state = normalizeText26(input.state) || "open";
+  const resource = normalizeText27(input.resource);
+  const repository = normalizeText27(input.repository);
+  const issueNumber = normalizePositiveInteger6(input.issueNumber);
+  const pullNumber = normalizePositiveInteger6(input.pullNumber);
+  const branch = normalizeText27(input.branch);
+  const head = normalizeText27(input.head);
+  const ref = normalizeText27(input.ref) || branch;
+  const state = normalizeText27(input.state) || "open";
   const limit = normalizeLimit6(input.limit, 20);
   const env = input.env ?? {};
   const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
-  const apiBaseUrl = normalizeApiBaseUrl5(env?.GITHUB_API_BASE_URL);
+  const apiBaseUrl = normalizeApiBaseUrl6(env?.GITHUB_API_BASE_URL);
   const tokenResolution = await resolveGitHubAppInstallationToken({ env, fetchImpl, apiBaseUrl });
   if (!tokenResolution.ok) {
     return {
@@ -29219,7 +29790,7 @@ async function fetchGitHubReadResource(input) {
       headers: {
         authorization: `Bearer ${token}`,
         accept: "application/vnd.github+json",
-        "x-github-api-version": GITHUB_API_VERSION5,
+        "x-github-api-version": GITHUB_API_VERSION6,
         "user-agent": GITHUB_API_USER_AGENT5
       }
     });
@@ -29231,13 +29802,13 @@ async function fetchGitHubReadResource(input) {
       reason: `failed to read GitHub resource: ${resource}`
     };
   }
-  const body = await readJsonSafe6(response);
+  const body = await readJsonSafe7(response);
   if (!response.ok) {
     return {
       ok: false,
       status: response.status,
       error: "github_read_failed",
-      reason: normalizeText26(body?.message) || `GitHub read failed for ${resource}`
+      reason: normalizeText27(body?.message) || `GitHub read failed for ${resource}`
     };
   }
   return {
@@ -29266,7 +29837,7 @@ function buildGitHubReadRequest({
   limit,
   apiBaseUrl
 }) {
-  const encodedRepository = repository ? encodeURIComponentRepository4(repository) : "";
+  const encodedRepository = repository ? encodeURIComponentRepository5(repository) : "";
   if (resource === GitHubReadResource.REPOSITORIES) {
     return {
       url: `${apiBaseUrl}${INSTALLATION_REPOSITORIES_PATH2}?per_page=${limit}`
@@ -29367,51 +29938,51 @@ function normalizeGitHubReadRecords(resource, body) {
 }
 function normalizeRepositories(items) {
   return items.map((item) => ({
-    fullName: normalizeText26(item?.full_name),
-    name: normalizeText26(item?.name),
+    fullName: normalizeText27(item?.full_name),
+    name: normalizeText27(item?.name),
     visibility: item?.private === true ? "private" : "public",
-    defaultBranch: normalizeText26(item?.default_branch),
-    htmlUrl: normalizeText26(item?.html_url)
+    defaultBranch: normalizeText27(item?.default_branch),
+    htmlUrl: normalizeText27(item?.html_url)
   }));
 }
 function normalizeIssue5(item) {
   return {
-    number: normalizePositiveInteger5(item?.number),
-    title: normalizeText26(item?.title),
-    body: normalizeText26(item?.body),
-    state: normalizeText26(item?.state),
-    htmlUrl: normalizeText26(item?.html_url),
-    author: normalizeText26(item?.user?.login)
+    number: normalizePositiveInteger6(item?.number),
+    title: normalizeText27(item?.title),
+    body: normalizeText27(item?.body),
+    state: normalizeText27(item?.state),
+    htmlUrl: normalizeText27(item?.html_url),
+    author: normalizeText27(item?.user?.login)
   };
 }
 function normalizeIssueComment(item) {
-  const createdAt = normalizeText26(item?.created_at);
-  const updatedAt = normalizeText26(item?.updated_at);
+  const createdAt = normalizeText27(item?.created_at);
+  const updatedAt = normalizeText27(item?.updated_at);
   return {
-    id: normalizePositiveInteger5(item?.id),
-    body: normalizeText26(item?.body),
-    author: normalizeText26(item?.user?.login),
+    id: normalizePositiveInteger6(item?.id),
+    body: normalizeText27(item?.body),
+    author: normalizeText27(item?.user?.login),
     createdAt,
     updatedAt,
     includesCreatedEdit: Boolean(createdAt) && Boolean(updatedAt) && createdAt !== updatedAt,
-    htmlUrl: normalizeText26(item?.html_url)
+    htmlUrl: normalizeText27(item?.html_url)
   };
 }
 function normalizePullRequest2(item) {
   const mergeability = normalizePullRequestMergeability(item);
   return {
-    number: normalizePositiveInteger5(item?.number),
-    title: normalizeText26(item?.title),
-    state: normalizeText26(item?.state),
+    number: normalizePositiveInteger6(item?.number),
+    title: normalizeText27(item?.title),
+    state: normalizeText27(item?.state),
     draft: item?.draft === true,
-    headRef: normalizeText26(item?.head?.ref),
-    headSha: normalizeText26(item?.head?.sha),
-    headOwner: normalizeText26(item?.head?.repo?.owner?.login) || normalizeText26(item?.head?.user?.login) || normalizeText26(item?.head?.repo?.full_name).split("/")[0] || null,
-    baseRef: normalizeText26(item?.base?.ref),
-    baseSha: normalizeText26(item?.base?.sha),
-    merged: item?.merged === true || Boolean(normalizeText26(item?.merged_at)),
-    mergedAt: normalizeText26(item?.merged_at),
-    mergeCommitSha: normalizeText26(item?.merge_commit_sha),
+    headRef: normalizeText27(item?.head?.ref),
+    headSha: normalizeText27(item?.head?.sha),
+    headOwner: normalizeText27(item?.head?.repo?.owner?.login) || normalizeText27(item?.head?.user?.login) || normalizeText27(item?.head?.repo?.full_name).split("/")[0] || null,
+    baseRef: normalizeText27(item?.base?.ref),
+    baseSha: normalizeText27(item?.base?.sha),
+    merged: item?.merged === true || Boolean(normalizeText27(item?.merged_at)),
+    mergedAt: normalizeText27(item?.merged_at),
+    mergeCommitSha: normalizeText27(item?.merge_commit_sha),
     mergeable: mergeability.mergeable,
     mergeableState: mergeability.state,
     mergeConflict: mergeability.hasConflict,
@@ -29422,68 +29993,68 @@ function normalizePullRequest2(item) {
     conflictFiles: mergeability.conflictFiles,
     conflictFilesSource: mergeability.conflictFilesSource,
     mergeability,
-    htmlUrl: normalizeText26(item?.html_url)
+    htmlUrl: normalizeText27(item?.html_url)
   };
 }
 function normalizePullReview(item) {
   return {
-    id: normalizePositiveInteger5(item?.id),
-    state: normalizeText26(item?.state),
-    body: normalizeText26(item?.body),
-    author: normalizeText26(item?.user?.login),
-    submittedAt: normalizeText26(item?.submitted_at),
-    htmlUrl: normalizeText26(item?.html_url)
+    id: normalizePositiveInteger6(item?.id),
+    state: normalizeText27(item?.state),
+    body: normalizeText27(item?.body),
+    author: normalizeText27(item?.user?.login),
+    submittedAt: normalizeText27(item?.submitted_at),
+    htmlUrl: normalizeText27(item?.html_url)
   };
 }
 function normalizePullReviewComment(item) {
-  const createdAt = normalizeText26(item?.created_at);
-  const updatedAt = normalizeText26(item?.updated_at);
+  const createdAt = normalizeText27(item?.created_at);
+  const updatedAt = normalizeText27(item?.updated_at);
   return {
-    id: normalizePositiveInteger5(item?.id),
-    path: normalizeText26(item?.path),
-    body: normalizeText26(item?.body),
-    author: normalizeText26(item?.user?.login),
+    id: normalizePositiveInteger6(item?.id),
+    path: normalizeText27(item?.path),
+    body: normalizeText27(item?.body),
+    author: normalizeText27(item?.user?.login),
     createdAt,
     updatedAt,
     includesCreatedEdit: Boolean(createdAt) && Boolean(updatedAt) && createdAt !== updatedAt,
-    htmlUrl: normalizeText26(item?.html_url)
+    htmlUrl: normalizeText27(item?.html_url)
   };
 }
 function normalizeCheckRun(item) {
   return {
-    id: normalizePositiveInteger5(item?.id),
-    name: normalizeText26(item?.name),
-    status: normalizeText26(item?.status),
-    conclusion: normalizeText26(item?.conclusion),
-    htmlUrl: normalizeText26(item?.html_url)
+    id: normalizePositiveInteger6(item?.id),
+    name: normalizeText27(item?.name),
+    status: normalizeText27(item?.status),
+    conclusion: normalizeText27(item?.conclusion),
+    htmlUrl: normalizeText27(item?.html_url)
   };
 }
 function normalizeWorkflowRun2(item) {
   return {
-    id: normalizePositiveInteger5(item?.id),
-    name: normalizeText26(item?.name),
-    status: normalizeText26(item?.status),
-    conclusion: normalizeText26(item?.conclusion),
-    headBranch: normalizeText26(item?.head_branch),
-    htmlUrl: normalizeText26(item?.html_url)
+    id: normalizePositiveInteger6(item?.id),
+    name: normalizeText27(item?.name),
+    status: normalizeText27(item?.status),
+    conclusion: normalizeText27(item?.conclusion),
+    headBranch: normalizeText27(item?.head_branch),
+    htmlUrl: normalizeText27(item?.html_url)
   };
 }
 function normalizeBranch(item) {
   return {
-    name: normalizeText26(item?.name),
+    name: normalizeText27(item?.name),
     protected: item?.protected === true,
-    sha: normalizeText26(item?.commit?.sha),
-    htmlUrl: normalizeText26(item?.commit?.url)
+    sha: normalizeText27(item?.commit?.sha),
+    htmlUrl: normalizeText27(item?.commit?.url)
   };
 }
-function readJsonSafe6(response) {
-  return response.json().catch(async () => ({ message: normalizeText26(await response.text().catch(() => "")) }));
+function readJsonSafe7(response) {
+  return response.json().catch(async () => ({ message: normalizeText27(await response.text().catch(() => "")) }));
 }
-function encodeURIComponentRepository4(repository) {
+function encodeURIComponentRepository5(repository) {
   return String(repository ?? "").trim().split("/").map((segment) => encodeURIComponent(segment)).join("/");
 }
-function normalizeApiBaseUrl5(value) {
-  const text = normalizeText26(value);
+function normalizeApiBaseUrl6(value) {
+  const text = normalizeText27(value);
   return text ? text.replace(/\/+$/, "") : GITHUB_API_BASE_URL4;
 }
 function normalizeLimit6(value, fallback) {
@@ -29493,17 +30064,17 @@ function normalizeLimit6(value, fallback) {
   }
   return Math.min(parsed, 100);
 }
-function normalizePositiveInteger5(value) {
+function normalizePositiveInteger6(value) {
   const parsed = Number.parseInt(String(value ?? ""), 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
-function normalizeText26(value) {
+function normalizeText27(value) {
   return String(value ?? "").trim();
 }
 
 // src/core/github-write-plane.js
 var GITHUB_API_BASE_URL5 = "https://api.github.com";
-var GITHUB_API_VERSION6 = "2022-11-28";
+var GITHUB_API_VERSION7 = "2022-11-28";
 var GITHUB_API_USER_AGENT6 = "vtdd-v2-github-write-plane";
 var GitHubWriteOperation = Object.freeze({
   ISSUE_CREATE: "issue_create",
@@ -29515,19 +30086,19 @@ var GitHubWriteOperation = Object.freeze({
   PULL_COMMENT_CREATE: "pull_comment_create"
 });
 async function executeGitHubWritePlane(input = {}) {
-  const operation = normalizeText27(input.operation);
-  const repository = normalizeText27(input.repository);
-  const issueNumber = normalizePositiveInteger6(input.issueNumber);
-  const pullNumber = normalizePositiveInteger6(input.pullNumber);
-  const commentId = normalizePositiveInteger6(input.commentId);
-  const branch = normalizeText27(input.branch);
-  const baseRef = normalizeText27(input.baseRef) || "main";
-  const title = normalizeText27(input.title);
+  const operation = normalizeText28(input.operation);
+  const repository = normalizeText28(input.repository);
+  const issueNumber = normalizePositiveInteger7(input.issueNumber);
+  const pullNumber = normalizePositiveInteger7(input.pullNumber);
+  const commentId = normalizePositiveInteger7(input.commentId);
+  const branch = normalizeText28(input.branch);
+  const baseRef = normalizeText28(input.baseRef) || "main";
+  const title = normalizeText28(input.title);
   const body = normalizeBody(input.body);
-  const head = normalizeText27(input.head) || branch;
+  const head = normalizeText28(input.head) || branch;
   const env = input.env ?? {};
   const fetchImpl = resolveGitHubWriteFetch(env);
-  const apiBaseUrl = normalizeApiBaseUrl6(env?.GITHUB_API_BASE_URL);
+  const apiBaseUrl = normalizeApiBaseUrl7(env?.GITHUB_API_BASE_URL);
   const validation = validateGitHubWriteRequest({
     operation,
     repository,
@@ -29538,7 +30109,7 @@ async function executeGitHubWritePlane(input = {}) {
     head,
     title,
     body,
-    approvalPhrase: normalizeText27(input.approvalPhrase),
+    approvalPhrase: normalizeText28(input.approvalPhrase),
     targetConfirmed: input.targetConfirmed === true,
     approvalScopeMatched: input.approvalScopeMatched === true
   });
@@ -29590,7 +30161,7 @@ function validateGitHubWriteRequest(input) {
   if (!input.approvalScopeMatched) {
     issues.push("approvalScopeMatched must be true");
   }
-  if (normalizeText27(input.approvalPhrase).toUpperCase() !== "GO") {
+  if (normalizeText28(input.approvalPhrase).toUpperCase() !== "GO") {
     issues.push("approvalPhrase must be GO");
   }
   if ((input.operation === GitHubWriteOperation.ISSUE_COMMENT_CREATE || input.operation === GitHubWriteOperation.ISSUE_COMMENT_UPDATE) && !input.issueNumber) {
@@ -29638,7 +30209,7 @@ async function dispatchGitHubWrite(input) {
   try {
     response = await input.fetchImpl(request.url, {
       method: request.method,
-      headers: githubJsonHeaders2({ token: input.token }),
+      headers: githubJsonHeaders3({ token: input.token }),
       body: request.body ? JSON.stringify(request.body) : void 0
     });
   } catch (error) {
@@ -29656,13 +30227,13 @@ async function dispatchGitHubWrite(input) {
       })
     };
   }
-  const responseBody = await readJsonSafe7(response);
+  const responseBody = await readJsonSafe8(response);
   if (!response.ok) {
     return {
       ok: false,
       status: response.status,
       error: "github_write_failed",
-      reason: normalizeText27(responseBody?.message) || `GitHub write failed for ${input.operation}`
+      reason: normalizeText28(responseBody?.message) || `GitHub write failed for ${input.operation}`
     };
   }
   return {
@@ -29679,7 +30250,7 @@ async function dispatchGitHubWrite(input) {
   };
 }
 async function buildGitHubWriteRequest(input) {
-  const encodedRepository = encodeURIComponentRepository5(input.repository);
+  const encodedRepository = encodeURIComponentRepository6(input.repository);
   if (input.operation === GitHubWriteOperation.ISSUE_CREATE) {
     return {
       ok: true,
@@ -29768,14 +30339,14 @@ async function buildGitHubWriteRequest(input) {
   };
 }
 async function resolveRefSha({ repository, ref, token, fetchImpl, apiBaseUrl }) {
-  const encodedRepository = encodeURIComponentRepository5(repository);
+  const encodedRepository = encodeURIComponentRepository6(repository);
   let response;
   try {
     response = await fetchImpl(
       `${apiBaseUrl}/repos/${encodedRepository}/git/ref/heads/${encodeURIComponent(ref)}`,
       {
         method: "GET",
-        headers: githubJsonHeaders2({ token })
+        headers: githubJsonHeaders3({ token })
       }
     );
   } catch {
@@ -29786,16 +30357,16 @@ async function resolveRefSha({ repository, ref, token, fetchImpl, apiBaseUrl }) 
       reason: `failed to resolve base ref sha for ${ref}`
     };
   }
-  const body = await readJsonSafe7(response);
+  const body = await readJsonSafe8(response);
   if (!response.ok) {
     return {
       ok: false,
       status: response.status,
       error: "github_write_failed",
-      reason: normalizeText27(body?.message) || `failed to resolve base ref sha for ${ref}`
+      reason: normalizeText28(body?.message) || `failed to resolve base ref sha for ${ref}`
     };
   }
-  const sha = normalizeText27(body?.object?.sha);
+  const sha = normalizeText28(body?.object?.sha);
   if (!sha) {
     return {
       ok: false,
@@ -29811,50 +30382,50 @@ function normalizeGitHubWriteResult(input) {
   return {
     operation: input.operation,
     repository: input.repository,
-    issueNumber: input.issueNumber ?? normalizePositiveInteger6(responseBody?.number) ?? null,
-    pullNumber: normalizePositiveInteger6(responseBody?.number) ?? input.pullNumber ?? null,
+    issueNumber: input.issueNumber ?? normalizePositiveInteger7(responseBody?.number) ?? null,
+    pullNumber: normalizePositiveInteger7(responseBody?.number) ?? input.pullNumber ?? null,
     branch: input.branch || null,
     baseRef: input.baseRef || null,
-    commentId: normalizePositiveInteger6(responseBody?.id),
-    nodeId: normalizeText27(responseBody?.node_id) || null,
-    url: normalizeText27(responseBody?.html_url) || null,
-    state: normalizeText27(responseBody?.state) || null,
-    title: normalizeText27(responseBody?.title) || null,
-    ref: normalizeText27(responseBody?.ref) || null
+    commentId: normalizePositiveInteger7(responseBody?.id),
+    nodeId: normalizeText28(responseBody?.node_id) || null,
+    url: normalizeText28(responseBody?.html_url) || null,
+    state: normalizeText28(responseBody?.state) || null,
+    title: normalizeText28(responseBody?.title) || null,
+    ref: normalizeText28(responseBody?.ref) || null
   };
 }
-function githubJsonHeaders2({ token }) {
+function githubJsonHeaders3({ token }) {
   return {
     authorization: `Bearer ${token}`,
     accept: "application/vnd.github+json",
     "content-type": "application/json; charset=utf-8",
-    "x-github-api-version": GITHUB_API_VERSION6,
+    "x-github-api-version": GITHUB_API_VERSION7,
     "user-agent": GITHUB_API_USER_AGENT6
   };
 }
-async function readJsonSafe7(response) {
+async function readJsonSafe8(response) {
   try {
     return await response.json();
   } catch {
     return null;
   }
 }
-function normalizeText27(value) {
+function normalizeText28(value) {
   return String(value ?? "").trim();
 }
 function normalizeBody(value) {
   const text = typeof value === "string" ? value : String(value ?? "");
   return text.trim();
 }
-function normalizePositiveInteger6(value) {
+function normalizePositiveInteger7(value) {
   const number = Number.parseInt(String(value ?? ""), 10);
   return Number.isInteger(number) && number > 0 ? number : null;
 }
-function normalizeApiBaseUrl6(value) {
-  const normalized = normalizeText27(value);
+function normalizeApiBaseUrl7(value) {
+  const normalized = normalizeText28(value);
   return normalized || GITHUB_API_BASE_URL5;
 }
-function encodeURIComponentRepository5(repository) {
+function encodeURIComponentRepository6(repository) {
   return repository.split("/").map((segment) => encodeURIComponent(segment)).join("/");
 }
 function resolveGitHubWriteFetch(env) {
@@ -29873,7 +30444,7 @@ function buildGitHubWriteFetchExceptionDiagnostics({ operation, method, url, err
   };
 }
 function sanitizeGitHubWriteDiagnosticText(value) {
-  return normalizeText27(value).replace(/sk-[A-Za-z0-9_-]+/g, "[REDACTED_OPENAI_KEY]").replace(/gh[psuro]_[A-Za-z0-9_]+/g, "[REDACTED_GITHUB_TOKEN]").replace(/Bearer\s+[A-Za-z0-9_.=-]+/gi, "Bearer [REDACTED]").replace(/(authorization|api[_-]?key|token|secret)(["'\s:=]+)([^"'\s<>&]+)/gi, "$1$2[REDACTED]").replace(/\/Users\/[^\s"'<>]+/g, "/Users/[REDACTED_PATH]").slice(0, 500);
+  return normalizeText28(value).replace(/sk-[A-Za-z0-9_-]+/g, "[REDACTED_OPENAI_KEY]").replace(/gh[psuro]_[A-Za-z0-9_]+/g, "[REDACTED_GITHUB_TOKEN]").replace(/Bearer\s+[A-Za-z0-9_.=-]+/gi, "Bearer [REDACTED]").replace(/(authorization|api[_-]?key|token|secret)(["'\s:=]+)([^"'\s<>&]+)/gi, "$1$2[REDACTED]").replace(/\/Users\/[^\s"'<>]+/g, "/Users/[REDACTED_PATH]").slice(0, 500);
 }
 
 // src/core/github-app-operation-registry.js
@@ -30009,10 +30580,10 @@ var NATURAL_GO_ENABLED_OPERATIONS = /* @__PURE__ */ new Set([
   GitHubWriteOperation.PULL_COMMENT_CREATE
 ]);
 function getGitHubAppOperation(operation) {
-  return GitHubAppOperationRegistry[normalizeText28(operation)] ?? null;
+  return GitHubAppOperationRegistry[normalizeText29(operation)] ?? null;
 }
 function bindNaturalGitHubWriteApproval({ payload, policyInput }) {
-  if (policyInput?.targetConfirmed === true && policyInput?.approvalScopeMatched === true && normalizeText28(policyInput?.approvalPhrase)) {
+  if (policyInput?.targetConfirmed === true && policyInput?.approvalScopeMatched === true && normalizeText29(policyInput?.approvalPhrase)) {
     return policyInput;
   }
   if (!canBindNaturalGitHubWriteApproval(payload)) {
@@ -30026,7 +30597,7 @@ function bindNaturalGitHubWriteApproval({ payload, policyInput }) {
   };
 }
 function canBindNaturalGitHubWriteApproval(payload) {
-  const operation = normalizeText28(payload?.operation);
+  const operation = normalizeText29(payload?.operation);
   const operationConfig = getGitHubAppOperation(operation);
   if (!operationConfig || operationConfig.tier !== GitHubAppOperationTier.NORMAL_GO || operationConfig.naturalGoEnabled === false || !NATURAL_GO_ENABLED_OPERATIONS.has(operation)) {
     return false;
@@ -30039,7 +30610,7 @@ function canBindNaturalGitHubWriteApproval(payload) {
     return false;
   }
   const presentedPayload = normalizeObject9(naturalApproval.presentedPayload);
-  if (normalizeText28(presentedPayload.operation) !== operation) {
+  if (normalizeText29(presentedPayload.operation) !== operation) {
     return false;
   }
   return operationConfig.naturalGoIdentityFields.every(
@@ -30057,10 +30628,10 @@ function fieldMatchesPresentedPayload({ field, payload, presentedPayload }) {
     return Boolean(normalizeBody2(actual)) && normalizeBody2(actual) === normalizeBody2(presented);
   }
   if (["issueNumber", "pullNumber", "commentId"].includes(field)) {
-    const actualNumber = normalizePositiveInteger7(actual);
-    return Boolean(actualNumber) && actualNumber === normalizePositiveInteger7(presented);
+    const actualNumber = normalizePositiveInteger8(actual);
+    return Boolean(actualNumber) && actualNumber === normalizePositiveInteger8(presented);
   }
-  return Boolean(normalizeText28(actual)) && normalizeText28(actual) === normalizeText28(presented);
+  return Boolean(normalizeText29(actual)) && normalizeText29(actual) === normalizeText29(presented);
 }
 function readPayloadIdentityField(payload, field) {
   if (field === "issueNumber") {
@@ -30069,18 +30640,18 @@ function readPayloadIdentityField(payload, field) {
   return payload?.[field];
 }
 function containsGoToken(value) {
-  return /(^|[^A-Za-z0-9_])GO([^A-Za-z0-9_]|$)/i.test(normalizeText28(value));
+  return /(^|[^A-Za-z0-9_])GO([^A-Za-z0-9_]|$)/i.test(normalizeText29(value));
 }
 function normalizeObject9(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
-function normalizeText28(value) {
+function normalizeText29(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 function normalizeBody2(value) {
   return typeof value === "string" ? value : "";
 }
-function normalizePositiveInteger7(value) {
+function normalizePositiveInteger8(value) {
   const number = Number(value);
   return Number.isInteger(number) && number > 0 ? number : null;
 }
@@ -30308,7 +30879,7 @@ var GitHubOwnerOperationInventory = Object.freeze([
 
 // src/core/github-high-risk-plane.js
 var GITHUB_API_BASE_URL6 = "https://api.github.com";
-var GITHUB_API_VERSION7 = "2022-11-28";
+var GITHUB_API_VERSION8 = "2022-11-28";
 var GITHUB_API_USER_AGENT7 = "vtdd-v2-github-high-risk-plane";
 var GitHubHighRiskOperation = Object.freeze({
   PULL_READY_FOR_REVIEW: "pull_ready_for_review",
@@ -30316,20 +30887,20 @@ var GitHubHighRiskOperation = Object.freeze({
   ISSUE_CLOSE: "issue_close"
 });
 async function executeGitHubHighRiskPlane(input = {}) {
-  const operation = normalizeText29(input.operation);
-  const repository = normalizeText29(input.repository);
-  const issueNumber = normalizePositiveInteger8(input.issueNumber);
-  const pullNumber = normalizePositiveInteger8(input.pullNumber);
+  const operation = normalizeText30(input.operation);
+  const repository = normalizeText30(input.repository);
+  const issueNumber = normalizePositiveInteger9(input.issueNumber);
+  const pullNumber = normalizePositiveInteger9(input.pullNumber);
   const mergeMethod = normalizeMergeMethod(input.mergeMethod);
-  const commitTitle = normalizeText29(input.commitTitle);
+  const commitTitle = normalizeText30(input.commitTitle);
   const commitMessage = normalizeBody3(input.commitMessage);
-  const approvalPhrase = normalizeText29(input.approvalPhrase);
+  const approvalPhrase = normalizeText30(input.approvalPhrase);
   const targetConfirmed = input.targetConfirmed === true;
   const approvalScope = input.approvalScope ?? null;
   const approvalGrant = input.approvalGrant ?? null;
   const env = input.env ?? {};
   const fetchImpl = resolveGitHubHighRiskFetch(env);
-  const apiBaseUrl = normalizeApiBaseUrl7(env?.GITHUB_API_BASE_URL);
+  const apiBaseUrl = normalizeApiBaseUrl8(env?.GITHUB_API_BASE_URL);
   const validation = validateGitHubHighRiskRequest({
     operation,
     repository,
@@ -30395,7 +30966,7 @@ function validateGitHubHighRiskRequest(input) {
   if (!input.targetConfirmed) {
     issues.push("targetConfirmed must be true");
   }
-  if (normalizeText29(input.approvalPhrase).toUpperCase() !== "GO") {
+  if (normalizeText30(input.approvalPhrase).toUpperCase() !== "GO") {
     issues.push("approvalPhrase must be GO");
   }
   if (input.operation === GitHubHighRiskOperation.PULL_MERGE && input.mergeMethod && !["merge", "squash", "rebase"].includes(input.mergeMethod)) {
@@ -30459,13 +31030,13 @@ async function dispatchGitHubHighRisk(input) {
   };
 }
 async function executePullReadyForReview(input) {
-  const encodedRepository = encodeURIComponentRepository6(input.repository);
+  const encodedRepository = encodeURIComponentRepository7(input.repository);
   const prUrl = `${input.apiBaseUrl}/repos/${encodedRepository}/pulls/${input.pullNumber}`;
   let prResponse;
   try {
     prResponse = await input.fetchImpl(prUrl, {
       method: "GET",
-      headers: githubJsonHeaders3({ token: input.token })
+      headers: githubJsonHeaders4({ token: input.token })
     });
   } catch (error) {
     return {
@@ -30475,13 +31046,13 @@ async function executePullReadyForReview(input) {
       reason: `failed to read pull request before ready-for-review: ${errorMessage(error)}`
     };
   }
-  const prBody = await readJsonSafe8(prResponse);
+  const prBody = await readJsonSafe9(prResponse);
   if (!prResponse.ok) {
     return {
       ok: false,
       status: prResponse.status,
       error: "github_high_risk_failed",
-      reason: normalizeText29(prBody?.message) || "failed to read pull request before ready-for-review"
+      reason: normalizeText30(prBody?.message) || "failed to read pull request before ready-for-review"
     };
   }
   if (prBody?.draft !== true) {
@@ -30493,11 +31064,11 @@ async function executePullReadyForReview(input) {
         pullNumber: input.pullNumber,
         readyForReview: true,
         changed: false,
-        htmlUrl: normalizeText29(prBody?.html_url) || `https://github.com/${input.repository}/pull/${input.pullNumber}`
+        htmlUrl: normalizeText30(prBody?.html_url) || `https://github.com/${input.repository}/pull/${input.pullNumber}`
       }
     };
   }
-  const nodeId = normalizeText29(prBody?.node_id);
+  const nodeId = normalizeText30(prBody?.node_id);
   if (!nodeId) {
     return {
       ok: false,
@@ -30511,7 +31082,7 @@ async function executePullReadyForReview(input) {
   try {
     mutationResponse = await input.fetchImpl(graphqlUrl, {
       method: "POST",
-      headers: githubJsonHeaders3({ token: input.token }),
+      headers: githubJsonHeaders4({ token: input.token }),
       body: JSON.stringify({
         query: "mutation MarkPullRequestReadyForReview($pullRequestId: ID!) { markPullRequestReadyForReview(input: { pullRequestId: $pullRequestId }) { pullRequest { isDraft url number } } }",
         variables: {
@@ -30527,14 +31098,14 @@ async function executePullReadyForReview(input) {
       reason: `failed to mark pull request ready for review: ${errorMessage(error)}`
     };
   }
-  const mutationBody = await readJsonSafe8(mutationResponse);
+  const mutationBody = await readJsonSafe9(mutationResponse);
   const graphqlErrors = Array.isArray(mutationBody?.errors) ? mutationBody.errors : [];
   if (!mutationResponse.ok || graphqlErrors.length > 0) {
     return {
       ok: false,
       status: mutationResponse.status,
       error: "github_high_risk_failed",
-      reason: normalizeText29(graphqlErrors[0]?.message) || normalizeText29(mutationBody?.message) || "GitHub ready-for-review mutation failed"
+      reason: normalizeText30(graphqlErrors[0]?.message) || normalizeText30(mutationBody?.message) || "GitHub ready-for-review mutation failed"
     };
   }
   const pull = mutationBody?.data?.markPullRequestReadyForReview?.pullRequest;
@@ -30554,12 +31125,12 @@ async function executePullReadyForReview(input) {
       pullNumber: Number(pull?.number ?? input.pullNumber),
       readyForReview: true,
       changed: true,
-      htmlUrl: normalizeText29(pull?.url) || `https://github.com/${input.repository}/pull/${input.pullNumber}`
+      htmlUrl: normalizeText30(pull?.url) || `https://github.com/${input.repository}/pull/${input.pullNumber}`
     }
   };
 }
 async function executePullMerge(input) {
-  const encodedRepository = encodeURIComponentRepository6(input.repository);
+  const encodedRepository = encodeURIComponentRepository7(input.repository);
   const preflight = await readPullRuntimeTruthBeforeMerge({ ...input, encodedRepository });
   if (!preflight.ok) {
     return preflight;
@@ -30571,7 +31142,7 @@ async function executePullMerge(input) {
       requestUrl,
       {
         method: "PUT",
-        headers: githubJsonHeaders3({ token: input.token }),
+        headers: githubJsonHeaders4({ token: input.token }),
         body: JSON.stringify(
           compactObject({
             merge_method: input.mergeMethod,
@@ -30597,20 +31168,20 @@ async function executePullMerge(input) {
       }
     };
   }
-  const responseBody = await readJsonSafe8(response);
+  const responseBody = await readJsonSafe9(response);
   if (!response.ok) {
     return {
       ok: false,
       status: response.status,
       error: "github_high_risk_failed",
-      reason: normalizeText29(responseBody?.message) || "GitHub merge failed",
+      reason: normalizeText30(responseBody?.message) || "GitHub merge failed",
       diagnostics: {
         operation: input.operation,
         requestMethod: "PUT",
         requestUrl,
         githubStatus: response.status,
-        githubMessage: normalizeText29(responseBody?.message) || null,
-        githubDocumentationUrl: normalizeText29(responseBody?.documentation_url) || null
+        githubMessage: normalizeText30(responseBody?.message) || null,
+        githubDocumentationUrl: normalizeText30(responseBody?.documentation_url) || null
       }
     };
   }
@@ -30625,9 +31196,9 @@ async function executePullMerge(input) {
       repository: input.repository,
       pullNumber: input.pullNumber,
       merged: responseBody?.merged === true,
-      sha: normalizeText29(responseBody?.sha) || null,
-      message: normalizeText29(responseBody?.message) || null,
-      htmlUrl: normalizeText29(runtimeTruth.pull?.htmlUrl) || `https://github.com/${input.repository}/pull/${input.pullNumber}`,
+      sha: normalizeText30(responseBody?.sha) || null,
+      message: normalizeText30(responseBody?.message) || null,
+      htmlUrl: normalizeText30(runtimeTruth.pull?.htmlUrl) || `https://github.com/${input.repository}/pull/${input.pullNumber}`,
       runtimeTruth: runtimeTruth.pull
     }
   };
@@ -30638,7 +31209,7 @@ async function readPullRuntimeTruthBeforeMerge(input) {
   try {
     response = await input.fetchImpl(requestUrl, {
       method: "GET",
-      headers: githubJsonHeaders3({ token: input.token })
+      headers: githubJsonHeaders4({ token: input.token })
     });
   } catch (error) {
     return {
@@ -30656,20 +31227,20 @@ async function readPullRuntimeTruthBeforeMerge(input) {
       }
     };
   }
-  const responseBody = await readJsonSafe8(response);
+  const responseBody = await readJsonSafe9(response);
   if (!response.ok) {
     return {
       ok: false,
       status: response.status,
       error: "github_high_risk_failed",
-      reason: normalizeText29(responseBody?.message) || "failed to read GitHub pull request runtime truth before merge",
+      reason: normalizeText30(responseBody?.message) || "failed to read GitHub pull request runtime truth before merge",
       diagnostics: {
         operation: input.operation,
         requestMethod: "GET",
         requestUrl,
         githubStatus: response.status,
-        githubMessage: normalizeText29(responseBody?.message) || null,
-        githubDocumentationUrl: normalizeText29(responseBody?.documentation_url) || null
+        githubMessage: normalizeText30(responseBody?.message) || null,
+        githubDocumentationUrl: normalizeText30(responseBody?.documentation_url) || null
       }
     };
   }
@@ -30694,7 +31265,7 @@ async function readPullRuntimeTruthBeforeMerge(input) {
       freshBranchSuggestion: mergeability.freshBranchSuggestion,
       conflictFiles: mergeability.conflictFiles,
       conflictFilesSource: mergeability.conflictFilesSource,
-      htmlUrl: normalizeText29(responseBody?.html_url) || null
+      htmlUrl: normalizeText30(responseBody?.html_url) || null
     }
   };
 }
@@ -30704,7 +31275,7 @@ async function readPullRuntimeTruthAfterMerge(input) {
   try {
     response = await input.fetchImpl(requestUrl, {
       method: "GET",
-      headers: githubJsonHeaders3({ token: input.token })
+      headers: githubJsonHeaders4({ token: input.token })
     });
   } catch (error) {
     return {
@@ -30722,42 +31293,42 @@ async function readPullRuntimeTruthAfterMerge(input) {
       }
     };
   }
-  const responseBody = await readJsonSafe8(response);
+  const responseBody = await readJsonSafe9(response);
   if (!response.ok) {
     return {
       ok: false,
       status: response.status,
       error: "github_high_risk_failed",
-      reason: normalizeText29(responseBody?.message) || "failed to read GitHub pull request runtime truth after merge",
+      reason: normalizeText30(responseBody?.message) || "failed to read GitHub pull request runtime truth after merge",
       diagnostics: {
         operation: input.operation,
         requestMethod: "GET",
         requestUrl,
         githubStatus: response.status,
-        githubMessage: normalizeText29(responseBody?.message) || null,
-        githubDocumentationUrl: normalizeText29(responseBody?.documentation_url) || null
+        githubMessage: normalizeText30(responseBody?.message) || null,
+        githubDocumentationUrl: normalizeText30(responseBody?.documentation_url) || null
       }
     };
   }
   return {
     ok: true,
     pull: {
-      merged: responseBody?.merged === true || Boolean(normalizeText29(responseBody?.merged_at)),
-      mergedAt: normalizeText29(responseBody?.merged_at) || null,
-      mergeCommitSha: normalizeText29(responseBody?.merge_commit_sha) || null,
-      htmlUrl: normalizeText29(responseBody?.html_url) || null
+      merged: responseBody?.merged === true || Boolean(normalizeText30(responseBody?.merged_at)),
+      mergedAt: normalizeText30(responseBody?.merged_at) || null,
+      mergeCommitSha: normalizeText30(responseBody?.merge_commit_sha) || null,
+      htmlUrl: normalizeText30(responseBody?.html_url) || null
     }
   };
 }
 async function executeBoundedIssueClose(input) {
-  const encodedRepository = encodeURIComponentRepository6(input.repository);
+  const encodedRepository = encodeURIComponentRepository7(input.repository);
   let prResponse;
   try {
     prResponse = await input.fetchImpl(
       `${input.apiBaseUrl}/repos/${encodedRepository}/pulls/${input.pullNumber}`,
       {
         method: "GET",
-        headers: githubJsonHeaders3({ token: input.token })
+        headers: githubJsonHeaders4({ token: input.token })
       }
     );
   } catch {
@@ -30768,16 +31339,16 @@ async function executeBoundedIssueClose(input) {
       reason: "failed to verify merged pull request state"
     };
   }
-  const prBody = await readJsonSafe8(prResponse);
+  const prBody = await readJsonSafe9(prResponse);
   if (!prResponse.ok) {
     return {
       ok: false,
       status: prResponse.status,
       error: "github_high_risk_failed",
-      reason: normalizeText29(prBody?.message) || "failed to read pull request before issue close"
+      reason: normalizeText30(prBody?.message) || "failed to read pull request before issue close"
     };
   }
-  if (!normalizeText29(prBody?.merged_at)) {
+  if (!normalizeText30(prBody?.merged_at)) {
     return {
       ok: false,
       status: 422,
@@ -30791,7 +31362,7 @@ async function executeBoundedIssueClose(input) {
       `${input.apiBaseUrl}/repos/${encodedRepository}/issues/${input.issueNumber}`,
       {
         method: "PATCH",
-        headers: githubJsonHeaders3({ token: input.token }),
+        headers: githubJsonHeaders4({ token: input.token }),
         body: JSON.stringify({ state: "closed" })
       }
     );
@@ -30803,13 +31374,13 @@ async function executeBoundedIssueClose(input) {
       reason: "failed to execute bounded issue close"
     };
   }
-  const closeBody = await readJsonSafe8(closeResponse);
+  const closeBody = await readJsonSafe9(closeResponse);
   if (!closeResponse.ok) {
     return {
       ok: false,
       status: closeResponse.status,
       error: "github_high_risk_failed",
-      reason: normalizeText29(closeBody?.message) || "GitHub issue close failed"
+      reason: normalizeText30(closeBody?.message) || "GitHub issue close failed"
     };
   }
   return {
@@ -30819,41 +31390,41 @@ async function executeBoundedIssueClose(input) {
       repository: input.repository,
       issueNumber: input.issueNumber,
       pullNumber: input.pullNumber,
-      issueState: normalizeText29(closeBody?.state) || "closed",
-      mergedAt: normalizeText29(prBody?.merged_at) || null,
-      htmlUrl: normalizeText29(closeBody?.html_url) || `https://github.com/${input.repository}/issues/${input.issueNumber}`
+      issueState: normalizeText30(closeBody?.state) || "closed",
+      mergedAt: normalizeText30(prBody?.merged_at) || null,
+      htmlUrl: normalizeText30(closeBody?.html_url) || `https://github.com/${input.repository}/issues/${input.issueNumber}`
     }
   };
 }
-function githubJsonHeaders3({ token }) {
+function githubJsonHeaders4({ token }) {
   return {
     authorization: `Bearer ${token}`,
     accept: "application/vnd.github+json",
     "content-type": "application/json",
-    "x-github-api-version": GITHUB_API_VERSION7,
+    "x-github-api-version": GITHUB_API_VERSION8,
     "user-agent": GITHUB_API_USER_AGENT7
   };
 }
 function compactObject(input = {}) {
   return Object.fromEntries(Object.entries(input).filter(([, value]) => value !== void 0));
 }
-function normalizePositiveInteger8(value) {
+function normalizePositiveInteger9(value) {
   const parsed = Number.parseInt(String(value ?? ""), 10);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 function normalizeMergeMethod(value) {
-  const text = normalizeText29(value).toLowerCase();
+  const text = normalizeText30(value).toLowerCase();
   return text || null;
 }
 function normalizeBody3(value) {
   const text = String(value ?? "");
   return text.trim() ? text : "";
 }
-function normalizeApiBaseUrl7(value) {
-  const normalized = normalizeText29(value);
+function normalizeApiBaseUrl8(value) {
+  const normalized = normalizeText30(value);
   return normalized ? normalized.replace(/\/+$/, "") : GITHUB_API_BASE_URL6;
 }
-function encodeURIComponentRepository6(repository) {
+function encodeURIComponentRepository7(repository) {
   return repository.split("/").map((part) => encodeURIComponent(part)).join("/");
 }
 function resolveGitHubHighRiskFetch(env) {
@@ -30862,7 +31433,7 @@ function resolveGitHubHighRiskFetch(env) {
   }
   return globalThis.fetch.bind(globalThis);
 }
-async function readJsonSafe8(response) {
+async function readJsonSafe9(response) {
   const text = await response.text();
   if (!text) {
     return null;
@@ -30873,7 +31444,7 @@ async function readJsonSafe8(response) {
     return null;
   }
 }
-function normalizeText29(value) {
+function normalizeText30(value) {
   return String(value ?? "").trim();
 }
 function errorName(error) {
@@ -30881,9 +31452,9 @@ function errorName(error) {
 }
 function errorMessage(error) {
   if (error instanceof Error) {
-    return normalizeText29(error.message) || error.name || "unknown error";
+    return normalizeText30(error.message) || error.name || "unknown error";
   }
-  return normalizeText29(error) || "unknown error";
+  return normalizeText30(error) || "unknown error";
 }
 
 // src/worker/runtime.js
@@ -31182,6 +31753,53 @@ var runtime_default = {
         cancellation: cancellation.cancellation
       });
     }
+    if (request.method === "POST" && isApiPath(url.pathname, "/action/vps-runner-update")) {
+      const auth = authorizePasskeyBrowserOrMachineRequest({
+        request,
+        env,
+        apiSuffix: "/action/vps-runner-update"
+      });
+      if (!auth.ok) {
+        return json(auth.status, {
+          ok: false,
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+      return handleVpsRunnerUpdateRequest(request, env);
+    }
+    if (request.method === "GET" && isApiPath(url.pathname, "/action/vps-runner-update-status")) {
+      const auth = authorizeGatewayRequest({
+        request,
+        env,
+        apiSuffix: "/action/vps-runner-update-status"
+      });
+      if (!auth.ok) {
+        return json(auth.status, {
+          ok: false,
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+      const status = await retrieveVpsRunnerUpdateStatus({
+        updateId: url.searchParams.get("updateId"),
+        repository: url.searchParams.get("repository"),
+        issueNumber: url.searchParams.get("issueNumber"),
+        env
+      });
+      if (!status.ok) {
+        return json(status.status ?? 503, {
+          ok: false,
+          error: status.error,
+          reason: status.reason,
+          issues: status.issues ?? []
+        });
+      }
+      return json(200, {
+        ok: true,
+        update: status.update
+      });
+    }
     if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/approval-grant")) {
       const auth = authorizeGatewayRequest({ request, env, apiSuffix: "/retrieve/approval-grant" });
       if (!auth.ok) {
@@ -31455,9 +32073,9 @@ async function handleRetrieveCrossIssueRequest(url, env) {
   const limit = normalizeLimit7(url.searchParams.get("limit"), 5);
   const relatedIssue = normalizeIssue6(url.searchParams.get("relatedIssue"));
   const issueNumber = normalizeIssue6(url.searchParams.get("issueNumber"));
-  const issueTitle = normalizeText30(url.searchParams.get("issueTitle"));
-  const issueUrl = normalizeText30(url.searchParams.get("issueUrl"));
-  const queryText = normalizeText30(url.searchParams.get("text")) || normalizeText30(url.searchParams.get("q"));
+  const issueTitle = normalizeText31(url.searchParams.get("issueTitle"));
+  const issueUrl = normalizeText31(url.searchParams.get("issueUrl"));
+  const queryText = normalizeText31(url.searchParams.get("text")) || normalizeText31(url.searchParams.get("q"));
   const semanticEnabled = parseBooleanQueryParam(url.searchParams.get("semantic"));
   const retrieved = await retrieveCrossIssueMemoryIndex(provider, {
     phase,
@@ -31495,8 +32113,8 @@ async function handleRetrieveCrossIssueRequest(url, env) {
 async function handleRetrieveOperationalMemoryRequest(url, env) {
   const provider = resolveMemoryProvider(env);
   const limit = normalizeLimit7(url.searchParams.get("limit"), 8);
-  const queryText = normalizeText30(url.searchParams.get("text")) || normalizeText30(url.searchParams.get("q"));
-  const repository = normalizeText30(url.searchParams.get("repository"));
+  const queryText = normalizeText31(url.searchParams.get("text")) || normalizeText31(url.searchParams.get("q"));
+  const repository = normalizeText31(url.searchParams.get("repository"));
   const runtimeTruth = buildRetrieveRuntimeTruth(url);
   const retrieved = await retrieveOperationalMemory(provider, {
     text: queryText,
@@ -31534,7 +32152,7 @@ async function handleRetrieveApprovalGrantRequest(url, env) {
       reason: "valid memory provider is required for approval grant retrieval"
     });
   }
-  const approvalId = normalizeText30(url.searchParams.get("approvalId"));
+  const approvalId = normalizeText31(url.searchParams.get("approvalId"));
   if (!approvalId) {
     return retrieveErrorJson(url, 422, {
       ok: false,
@@ -31543,7 +32161,7 @@ async function handleRetrieveApprovalGrantRequest(url, env) {
     });
   }
   const record = await findApprovalRecordById(provider, approvalId);
-  if (!record || normalizeText30(record?.content?.kind) !== "passkey_grant") {
+  if (!record || normalizeText31(record?.content?.kind) !== "passkey_grant") {
     return retrieveErrorJson(url, 404, {
       ok: false,
       error: "approval_grant_not_found",
@@ -31553,10 +32171,10 @@ async function handleRetrieveApprovalGrantRequest(url, env) {
   return json(200, {
     ok: true,
     approvalGrant: {
-      approvalId: normalizeText30(record.content.approvalId) || record.id,
+      approvalId: normalizeText31(record.content.approvalId) || record.id,
       verified: record.content.status === "verified",
-      verifiedAt: normalizeText30(record.content.verifiedAt) || null,
-      expiresAt: normalizeText30(record.content.expiresAt) || null,
+      verifiedAt: normalizeText31(record.content.verifiedAt) || null,
+      expiresAt: normalizeText31(record.content.expiresAt) || null,
       scope: normalizeScopeSnapshot(record.content.scope)
     }
   });
@@ -31588,9 +32206,9 @@ async function handleRetrieveGitHubReadPlaneRequest(url, env) {
 }
 async function handleRetrieveCustomGptSetupArtifactRequest(url, env) {
   const retrieved = await retrieveCustomGptSetupArtifact({
-    artifact: normalizeText30(url.searchParams.get("artifact")),
-    repository: normalizeText30(url.searchParams.get("repository")),
-    ref: normalizeText30(url.searchParams.get("ref")),
+    artifact: normalizeText31(url.searchParams.get("artifact")),
+    repository: normalizeText31(url.searchParams.get("repository")),
+    ref: normalizeText31(url.searchParams.get("ref")),
     env
   });
   if (!retrieved.ok) {
@@ -31608,8 +32226,8 @@ async function handleRetrieveCustomGptSetupArtifactRequest(url, env) {
 }
 async function handleRetrieveButlerSelfParityRequest(url, env) {
   const parity = await evaluateButlerSelfParity({
-    repository: normalizeText30(url.searchParams.get("repository")),
-    ref: normalizeText30(url.searchParams.get("ref")),
+    repository: normalizeText31(url.searchParams.get("repository")),
+    ref: normalizeText31(url.searchParams.get("ref")),
     issueNumber: normalizeIssue6(url.searchParams.get("issueNumber")),
     runtimeOrigin: url.origin,
     env
@@ -31715,7 +32333,7 @@ async function handleGitHubWritePlaneRequest(request, env) {
   });
 }
 function wantsActionVisibleGitHubWriteErrors(payload) {
-  const responseMode = normalizeText30(payload?.responseMode);
+  const responseMode = normalizeText31(payload?.responseMode);
   return responseMode === "action_visible";
 }
 function retrieveErrorJson(url, status, body = {}) {
@@ -31725,23 +32343,23 @@ function retrieveErrorJson(url, status, body = {}) {
   return json(200, {
     ok: false,
     httpStatus: status,
-    error: normalizeText30(body.error) || "retrieve_failed",
-    reason: normalizeText30(body.reason) || null,
+    error: normalizeText31(body.error) || "retrieve_failed",
+    reason: normalizeText31(body.reason) || null,
     issues: Array.isArray(body.issues) ? body.issues : [],
     diagnostics: {
-      route: normalizeText30(url?.pathname) || null,
+      route: normalizeText31(url?.pathname) || null,
       responseMode: "action_visible",
       rootCause: "Custom GPT Action test screen can surface non-2xx retrieve responses as ClientResponseError; this envelope preserves error/reason/issues for debugging."
     }
   });
 }
 function wantsActionVisibleRetrieveErrors(url) {
-  const responseMode = normalizeText30(url?.searchParams?.get("responseMode"));
+  const responseMode = normalizeText31(url?.searchParams?.get("responseMode"));
   return responseMode === "action_visible";
 }
 function validateConsistentIssueScope({ payload, issueContext }) {
-  const payloadIssueNumber = normalizePositiveInteger9(payload?.issueNumber);
-  const contextIssueNumber = normalizePositiveInteger9(issueContext?.issueNumber);
+  const payloadIssueNumber = normalizePositiveInteger10(payload?.issueNumber);
+  const contextIssueNumber = normalizePositiveInteger10(issueContext?.issueNumber);
   if (payloadIssueNumber && contextIssueNumber && payloadIssueNumber !== contextIssueNumber) {
     return {
       ok: false,
@@ -31770,10 +32388,10 @@ async function handleGitHubHighRiskPlaneRequest(request, env) {
       issues: issueScopeValidation.issues
     });
   }
-  const operation = normalizeText30(payload.operation);
-  const repository = normalizeText30(payload.repository);
+  const operation = normalizeText31(payload.operation);
+  const repository = normalizeText31(payload.repository);
   const scopedIssueNumber = issueContext.issueNumber ?? payload.issueNumber ?? null;
-  const phase = normalizeText30(payload.phase) || "execution";
+  const phase = normalizeText31(payload.phase) || "execution";
   const highRiskKind = operation;
   const actionType = mapGitHubHighRiskOperationToActionType(operation);
   const approvalScope = buildApprovalScopeSnapshot({
@@ -31855,7 +32473,7 @@ async function handleDeployProductionRequest(request, env) {
   const policyInput = payload.policyInput && typeof payload.policyInput === "object" ? payload.policyInput : {};
   const resolvedApprovalGrant = await resolveApprovalGrant({
     payload: {
-      phase: normalizeText30(payload.phase) || "execution",
+      phase: normalizeText31(payload.phase) || "execution",
       highRiskKind: "deploy_production",
       repositoryInput: payload.repository
     },
@@ -31889,6 +32507,66 @@ async function handleDeployProductionRequest(request, env) {
     deploy: executed.deploy
   });
 }
+async function handleVpsRunnerUpdateRequest(request, env) {
+  const payload = await readJson(request);
+  if (!payload || typeof payload !== "object") {
+    return json(422, {
+      ok: false,
+      error: "request_body_required",
+      reason: "valid JSON request body is required"
+    });
+  }
+  const policyInput = payload.policyInput && typeof payload.policyInput === "object" ? payload.policyInput : {};
+  const repository = normalizeText31(payload.repository);
+  const issueNumber = normalizePositiveInteger10(payload.issueNumber);
+  const ref = normalizeText31(payload.ref) || "main";
+  const phase = normalizeText31(payload.phase) || "execution";
+  const actionType = normalizeText31(payload.actionType || policyInput.actionType);
+  const resolvedApprovalGrant = await resolveApprovalGrant({
+    payload: {
+      phase,
+      highRiskKind: "vps_runner_admin",
+      repositoryInput: repository,
+      issueNumber,
+      ref
+    },
+    policyInput: {
+      ...policyInput,
+      actionType,
+      repositoryInput: repository,
+      highRiskKind: "vps_runner_admin",
+      ref,
+      issueTraceability: {
+        relatedIssue: issueNumber || null
+      }
+    },
+    env
+  });
+  const update = await requestVpsRunnerUpdate({
+    repository,
+    issueNumber,
+    ref,
+    phase,
+    actionType,
+    approvalPhrase: policyInput.approvalPhrase,
+    approvalGrantId: policyInput.approvalGrantId,
+    approvalGrant: payload.approvalGrant ?? policyInput.approvalGrant ?? resolvedApprovalGrant.approvalGrant,
+    approvalActor: normalizeText31(policyInput.approvalActor || payload.approvalActor),
+    env
+  });
+  if (!update.ok) {
+    return json(update.status ?? 503, {
+      ok: false,
+      error: update.error ?? "vps_runner_update_failed",
+      reason: update.reason,
+      issues: update.issues ?? []
+    });
+  }
+  return json(202, {
+    ok: true,
+    update: update.update
+  });
+}
 async function handleGitHubActionsSecretSyncRequest(request, env) {
   const payload = await readJson(request);
   if (!payload || typeof payload !== "object") {
@@ -31901,7 +32579,7 @@ async function handleGitHubActionsSecretSyncRequest(request, env) {
   const policyInput = payload.policyInput && typeof payload.policyInput === "object" ? payload.policyInput : {};
   const resolvedApprovalGrant = await resolveApprovalGrant({
     payload: {
-      phase: normalizeText30(payload.phase) || "execution",
+      phase: normalizeText31(payload.phase) || "execution",
       highRiskKind: "github_actions_secret_sync",
       repositoryInput: payload.repository
     },
@@ -31940,7 +32618,7 @@ async function handleGitHubActionsSecretSyncRequest(request, env) {
 }
 async function handleCustomGptRecoveryPageRequest(url, env) {
   const channel = url.pathname === "/setup/known-good" ? CustomGptSetupChannel.KNOWN_GOOD : CustomGptSetupChannel.LATEST;
-  const ref = normalizeText30(url.searchParams.get("ref")) || "main";
+  const ref = normalizeText31(url.searchParams.get("ref")) || "main";
   const issueNumber = normalizeIssue6(url.searchParams.get("issueNumber"));
   const bundle = await buildCustomGptRecoveryBundle({
     channel,
@@ -31978,6 +32656,7 @@ function handlePasskeyOperatorPageRequest(request) {
     repositoryInput: url.searchParams.get("repositoryInput"),
     issueNumber: url.searchParams.get("issueNumber"),
     pullNumber: url.searchParams.get("pullNumber"),
+    ref: url.searchParams.get("ref") || "main",
     phase: url.searchParams.get("phase") || "execution",
     actionType: requestedActionType,
     highRiskKind: requestedHighRiskKind,
@@ -31996,7 +32675,7 @@ function handlePasskeyOperatorPageRequest(request) {
   });
 }
 function normalizeOptionalHttpUrl(value) {
-  const text = normalizeText30(value);
+  const text = normalizeText31(value);
   if (!text) {
     return "";
   }
@@ -32011,7 +32690,7 @@ function normalizeOptionalHttpUrl(value) {
   }
 }
 function normalizeOperatorReturnUrl(value) {
-  const text = normalizeText30(value);
+  const text = normalizeText31(value);
   if (!text) {
     return "";
   }
@@ -32119,7 +32798,7 @@ async function resolveRemoteCodexHandoffRuntimeTruth({
   const continuationContext = payload?.continuationContext && typeof payload.continuationContext === "object" ? payload.continuationContext : {};
   const handoff = continuationContext.handoff && typeof continuationContext.handoff === "object" ? continuationContext.handoff : {};
   const handoffTarget = handoff.targetPullRequest && typeof handoff.targetPullRequest === "object" ? handoff.targetPullRequest : {};
-  const activeBranch = normalizeText30(runtimeState.activeBranch) || normalizeText30(handoff.headRef) || normalizeText30(handoffTarget.headRef) || normalizeText30(handoffTarget.head?.ref) || normalizeText30(payload?.executionTarget?.branch) || (issueNumber ? `codex/issue-${issueNumber}` : "");
+  const activeBranch = normalizeText31(runtimeState.activeBranch) || normalizeText31(handoff.headRef) || normalizeText31(handoffTarget.headRef) || normalizeText31(handoffTarget.head?.ref) || normalizeText31(payload?.executionTarget?.branch) || (issueNumber ? `codex/issue-${issueNumber}` : "");
   const [repositoryOwner] = repositoryResolution.repository.split("/");
   const [pulls, branches, workflowRuns] = await Promise.all([
     retrieveGitHubReadPlane({
@@ -32177,13 +32856,13 @@ async function resolveRemoteCodexHandoffRuntimeTruth({
 }
 function selectPullRequestForBranch(records, target) {
   const items = Array.isArray(records) ? records : [];
-  const branch = normalizeText30(target?.branch);
-  const owner = normalizeText30(target?.owner);
+  const branch = normalizeText31(target?.branch);
+  const owner = normalizeText31(target?.owner);
   const selected = items.find(
-    (item) => normalizeText30(item?.state) === "open" && normalizeText30(item?.headRef) === branch && normalizeText30(item?.headOwner) === owner
+    (item) => normalizeText31(item?.state) === "open" && normalizeText31(item?.headRef) === branch && normalizeText31(item?.headOwner) === owner
   );
   const staleItems = items.filter(
-    (item) => normalizeText30(item?.headRef) === branch && normalizeText30(item?.headOwner) === owner
+    (item) => normalizeText31(item?.headRef) === branch && normalizeText31(item?.headOwner) === owner
   );
   if (!selected) {
     return {
@@ -32243,8 +32922,8 @@ function normalizeButlerReadConsentPayload(payload) {
 }
 function normalizeRemoteCodexHandoffPayload(payload) {
   const policyInput = payload?.policyInput && typeof payload.policyInput === "object" ? payload.policyInput : {};
-  const actionType = normalizeText30(policyInput.actionType);
-  const actorRole = normalizeText30(payload?.actorRole);
+  const actionType = normalizeText31(policyInput.actionType);
+  const actorRole = normalizeText31(payload?.actorRole);
   const issueNumber = normalizeIssue6(payload?.issueContext?.issueNumber);
   if (actorRole !== "butler" || actionType !== "build" || !issueNumber) {
     return payload;
@@ -32256,7 +32935,7 @@ function normalizeRemoteCodexHandoffPayload(payload) {
   const grantedCategories = Array.isArray(consent.grantedCategories) ? consent.grantedCategories : [];
   const goGranted = policyInput.go === true;
   const normalizedGrantedCategories = goGranted ? mergeGrantedConsentCategories(grantedCategories, ["read", "propose", "execute"]) : grantedCategories;
-  const requestedExecutorTransport = normalizeText30(
+  const requestedExecutorTransport = normalizeText31(
     payload?.executorTransport ?? continuationContext.executorTransport
   );
   const apiKeyRunnerAcknowledged = payload?.apiKeyRunnerAcknowledged === true || continuationContext.apiKeyRunnerAcknowledged === true || goGranted && requestedExecutorTransport === "api_key_runner";
@@ -32272,7 +32951,7 @@ function normalizeRemoteCodexHandoffPayload(payload) {
         issueTraceable: handoff.issueTraceable === false ? false : true,
         approvalScopeMatched: handoff.approvalScopeMatched === false ? false : true,
         relatedIssue: normalizeIssue6(handoff.relatedIssue) ?? issueNumber,
-        summary: normalizeText30(handoff.summary) || `Issue #${issueNumber} bounded remote Codex handoff`
+        summary: normalizeText31(handoff.summary) || `Issue #${issueNumber} bounded remote Codex handoff`
       }
     },
     policyInput: {
@@ -32282,7 +32961,7 @@ function normalizeRemoteCodexHandoffPayload(payload) {
         ...consent,
         grantedCategories: normalizedGrantedCategories
       },
-      approvalPhrase: normalizeText30(policyInput.approvalPhrase) || (goGranted ? "GO" : ""),
+      approvalPhrase: normalizeText31(policyInput.approvalPhrase) || (goGranted ? "GO" : ""),
       issueTraceability: {
         ...issueTraceability,
         relatedIssue: normalizeIssue6(issueTraceability.relatedIssue) ?? issueNumber,
@@ -32300,7 +32979,7 @@ function mergeGrantedConsentCategories(current, required) {
   const seen = /* @__PURE__ */ new Set();
   const merged = [];
   for (const category of [...current, ...required]) {
-    const text = normalizeText30(category);
+    const text = normalizeText31(category);
     const key = normalize7(text);
     if (!text || seen.has(key)) {
       continue;
@@ -32311,7 +32990,7 @@ function mergeGrantedConsentCategories(current, required) {
   return merged;
 }
 function normalizeTraceRefs(value, fallback) {
-  if (Array.isArray(value) && value.some((item) => Boolean(normalizeText30(item)))) {
+  if (Array.isArray(value) && value.some((item) => Boolean(normalizeText31(item)))) {
     return value;
   }
   return [fallback];
@@ -32330,7 +33009,7 @@ async function resolveRuntimeAliasRegistry({ baseAliasRegistry, env }) {
         "repository nickname registry read unverified",
         stored.error,
         stored.reason
-      ].map(normalizeText30).filter(Boolean).join(": ")
+      ].map(normalizeText31).filter(Boolean).join(": ")
     ]
   };
 }
@@ -32447,7 +33126,7 @@ async function handleRepositoryNicknameDeleteRequest(request, env) {
   });
 }
 function normalizeCanonicalRepositoryInput(value) {
-  const text = normalizeText30(value).toLowerCase();
+  const text = normalizeText31(value).toLowerCase();
   if (!/^[a-z0-9_.-]+\/[a-z0-9_.-]+$/.test(text)) {
     return "";
   }
@@ -32469,8 +33148,8 @@ async function handlePasskeyRegistrationOptionsRequest(request, env) {
     rpID: env?.VTDD_PASSKEY_RP_ID || new URL(request.url).hostname,
     rpName: env?.VTDD_PASSKEY_RP_NAME || "VTDD",
     origin: env?.VTDD_PASSKEY_ORIGIN || new URL(request.url).origin,
-    operatorId: normalizeText30(body?.operatorId) || "vtdd-operator",
-    operatorLabel: normalizeText30(body?.operatorLabel) || "VTDD Operator"
+    operatorId: normalizeText31(body?.operatorId) || "vtdd-operator",
+    operatorLabel: normalizeText31(body?.operatorLabel) || "VTDD Operator"
   });
   if (!created.ok) {
     return json(422, {
@@ -32504,7 +33183,7 @@ async function handlePasskeyRegistrationVerifyRequest(request, env) {
     });
   }
   const body = await readJson(request);
-  const sessionId = normalizeText30(body?.sessionId);
+  const sessionId = normalizeText31(body?.sessionId);
   const sessionRecord = await findApprovalRecordById(provider, sessionId);
   if (!sessionRecord) {
     return json(404, {
@@ -32588,7 +33267,7 @@ async function handlePasskeyApprovalVerifyRequest(request, env) {
     });
   }
   const body = await readJson(request);
-  const sessionId = normalizeText30(body?.sessionId);
+  const sessionId = normalizeText31(body?.sessionId);
   const sessionRecord = await findApprovalRecordById(provider, sessionId);
   if (!sessionRecord) {
     return json(404, {
@@ -32624,7 +33303,7 @@ function appendWarnings(result, warnings) {
     return result;
   }
   const currentWarnings = Array.isArray(result?.warnings) ? result.warnings : [];
-  const merged = new Set([...currentWarnings, ...warnings].map(normalizeText30).filter(Boolean));
+  const merged = new Set([...currentWarnings, ...warnings].map(normalizeText31).filter(Boolean));
   return {
     ...result,
     warnings: [...merged]
@@ -32636,7 +33315,7 @@ async function resolveApprovalGrant({ payload, policyInput, env }) {
   if (!validation.ok) {
     return { approvalGrant: null };
   }
-  const approvalId = normalizeText30(policyInput?.approvalGrantId);
+  const approvalId = normalizeText31(policyInput?.approvalGrantId);
   if (!approvalId) {
     return { approvalGrant: null };
   }
@@ -32671,6 +33350,7 @@ function buildApprovalScopeSnapshot({ payload, policyInput }) {
     actionType: policyInput?.actionType,
     highRiskKind: payload?.highRiskKind ?? policyInput?.highRiskKind,
     repositoryInput: identityFields.has("repository") ? policyInput?.repositoryInput ?? payload?.repositoryInput : void 0,
+    ref: policyInput?.ref ?? payload?.ref,
     issueNumber: identityFields.has("issueNumber") ? issueContext.issueNumber ?? payload?.issueNumber : void 0,
     pullNumber: identityFields.has("pullNumber") ? payload?.pullNumber : void 0,
     relatedIssue: identityFields.has("relatedIssue") ? traceability.relatedIssue ?? issueContext.issueNumber ?? payload?.relatedIssue : void 0,
@@ -32687,7 +33367,7 @@ function mapGitHubHighRiskOperationToActionType(operation) {
   if (operation === GitHubHighRiskOperation.ISSUE_CLOSE) {
     return "issue_close";
   }
-  return normalizeText30(operation);
+  return normalizeText31(operation);
 }
 async function retrieveRegisteredPasskeys(provider) {
   const records = await provider.retrieve({
@@ -32704,7 +33384,7 @@ async function purgeExpiredPasskeyArtifacts(provider) {
     type: MemoryRecordType.APPROVAL_LOG,
     limit: MAX_MEMORY_LIMIT
   });
-  const expiredIds = records.filter((record) => isExpiredPasskeyEphemeralRecord(record)).map((record) => normalizeText30(record?.id)).filter(Boolean);
+  const expiredIds = records.filter((record) => isExpiredPasskeyEphemeralRecord(record)).map((record) => normalizeText31(record?.id)).filter(Boolean);
   if (expiredIds.length === 0) {
     return { ok: true, deletedCount: 0 };
   }
@@ -32719,7 +33399,7 @@ async function findApprovalRecordById(provider, recordId) {
     text: recordId,
     limit: 50
   });
-  return records.find((record) => normalizeText30(record?.id) === recordId) ?? records.find((record) => normalizeText30(record?.content?.approvalId) === recordId) ?? records.find((record) => normalizeText30(record?.content?.sessionId) === recordId) ?? null;
+  return records.find((record) => normalizeText31(record?.id) === recordId) ?? records.find((record) => normalizeText31(record?.content?.approvalId) === recordId) ?? records.find((record) => normalizeText31(record?.content?.sessionId) === recordId) ?? null;
 }
 async function appendGuardedAbsenceExecutionLog({ payload, gatewayOutcome, env }) {
   const policyInput = normalizeObject10(payload?.policyInput);
@@ -32737,7 +33417,7 @@ async function appendGuardedAbsenceExecutionLog({ payload, gatewayOutcome, env }
   }
   const nowIso = (/* @__PURE__ */ new Date()).toISOString();
   const body = normalizeObject10(gatewayOutcome?.body);
-  const blockedByRule = normalizeText30(body.blockedByRule) || null;
+  const blockedByRule = normalizeText31(body.blockedByRule) || null;
   const recordInput = {
     id: buildGuardedAbsenceExecutionLogId({
       actionType: policyInput.actionType,
@@ -32746,15 +33426,15 @@ async function appendGuardedAbsenceExecutionLog({ payload, gatewayOutcome, env }
     type: MemoryRecordType.EXECUTION_LOG,
     content: {
       mode: autonomyMode,
-      phase: normalizeText30(payload?.phase) || "execution",
-      actorRole: normalizeText30(payload?.actorRole) || null,
-      actionType: normalizeText30(policyInput.actionType) || null,
+      phase: normalizeText31(payload?.phase) || "execution",
+      actorRole: normalizeText31(payload?.actorRole) || null,
+      actionType: normalizeText31(policyInput.actionType) || null,
       allowed: body.allowed === true,
       blockedByRule,
-      reason: normalizeText30(body.reason) || null,
-      repositoryInput: normalizeText30(policyInput.repositoryInput) || null,
-      repository: normalizeText30(body.repository) || null,
-      requiredApproval: normalizeText30(body.requiredApproval) || null,
+      reason: normalizeText31(body.reason) || null,
+      repositoryInput: normalizeText31(policyInput.repositoryInput) || null,
+      repository: normalizeText31(body.repository) || null,
+      requiredApproval: normalizeText31(body.requiredApproval) || null,
       stopCategory: classifyGuardedStopCategory(blockedByRule)
     },
     metadata: {
@@ -33004,8 +33684,8 @@ function buildCrossRetrievalInput({ payload, responseBody, crossRetrievalRequest
   const relatedIssue = crossRetrievalRequest.relatedIssue ?? responseBody?.memoryWritePersisted?.relatedIssue ?? inferRelatedIssueFromGatewayInput(payload) ?? inferRelatedIssueFromProposalGatewayInput(payload);
   const issueContextInput = payload?.issueContext ?? {};
   const issueNumber = normalizeIssue6(issueContextInput.issueNumber) ?? relatedIssue;
-  const issueTitle = normalizeText30(issueContextInput.issueTitle);
-  const issueUrl = normalizeText30(issueContextInput.issueUrl);
+  const issueTitle = normalizeText31(issueContextInput.issueTitle);
+  const issueUrl = normalizeText31(issueContextInput.issueUrl);
   return {
     phase: crossRetrievalRequest.phase,
     limit: crossRetrievalRequest.limit,
@@ -33046,7 +33726,7 @@ function normalizeCrossRetrievalRequest(request) {
     limit: normalizeLimit7(value.limit, 5),
     displayMode: normalize7(value.displayMode) === "expanded" ? "expanded" : "short",
     relatedIssue: normalizeIssue6(value.relatedIssue),
-    text: normalizeText30(value.text) || normalizeText30(value.queryHint) || null,
+    text: normalizeText31(value.text) || normalizeText31(value.queryHint) || null,
     semanticRetrieval: normalizeSemanticRetrievalRequest(value.semanticRetrieval)
   };
 }
@@ -33063,9 +33743,9 @@ function parseBooleanQueryParam(value) {
   return normalized === "true" || normalized === "1" || normalized === "yes";
 }
 function buildRetrieveRuntimeTruth(url) {
-  const currentState = normalizeText30(url.searchParams.get("currentState"));
-  const source = normalizeText30(url.searchParams.get("runtimeTruthSource"));
-  const checkedAt = normalizeText30(url.searchParams.get("checkedAt"));
+  const currentState = normalizeText31(url.searchParams.get("currentState"));
+  const source = normalizeText31(url.searchParams.get("runtimeTruthSource"));
+  const checkedAt = normalizeText31(url.searchParams.get("checkedAt"));
   if (!currentState && !source && !checkedAt) {
     return null;
   }
@@ -33123,7 +33803,7 @@ function createD1MemoryIndexAdapter(d1) {
         record.id,
         record.type,
         record.content === null || record.content === void 0 ? null : JSON.stringify(record.content),
-        normalizeText30(record.contentRef) || null,
+        normalizeText31(record.contentRef) || null,
         JSON.stringify(record.metadata ?? {}),
         Number(record.priority ?? 50),
         JSON.stringify(record.tags ?? []),
@@ -33132,22 +33812,22 @@ function createD1MemoryIndexAdapter(d1) {
     },
     async queryRecords(filter = {}) {
       await ensureSchema();
-      const ids = Array.isArray(filter.ids) ? filter.ids.map((item) => normalizeText30(item)).filter(Boolean) : [];
-      const type = normalizeText30(filter.type);
+      const ids = Array.isArray(filter.ids) ? filter.ids.map((item) => normalizeText31(item)).filter(Boolean) : [];
+      const type = normalizeText31(filter.type);
       const limit = normalizeMemoryLimit(filter.limit);
       const statement = buildMemorySelectStatement({ ids, type });
       const result = await d1.prepare(statement.sql).bind(...statement.params).all();
       const rows = Array.isArray(result?.results) ? result.results : [];
       let records = rows.map(mapStoredMemoryRecord).filter(Boolean);
       if (Array.isArray(filter.tags) && filter.tags.length > 0) {
-        const requiredTags = filter.tags.map((tag) => normalizeText30(tag).toLowerCase()).filter(Boolean);
+        const requiredTags = filter.tags.map((tag) => normalizeText31(tag).toLowerCase()).filter(Boolean);
         records = records.filter(
           (record) => requiredTags.every(
-            (tag) => Array.isArray(record.tags) && record.tags.some((recordTag) => normalizeText30(recordTag).toLowerCase() === tag)
+            (tag) => Array.isArray(record.tags) && record.tags.some((recordTag) => normalizeText31(recordTag).toLowerCase() === tag)
           )
         );
       }
-      const queryText = normalizeText30(filter.text).toLowerCase();
+      const queryText = normalizeText31(filter.text).toLowerCase();
       if (queryText) {
         records = records.filter((record) => JSON.stringify(record).toLowerCase().includes(queryText));
       }
@@ -33166,7 +33846,7 @@ function createD1MemoryIndexAdapter(d1) {
     },
     async deleteRecords(input = {}) {
       await ensureSchema();
-      const ids = Array.isArray(input?.ids) ? input.ids.map((item) => normalizeText30(item)).filter(Boolean) : [];
+      const ids = Array.isArray(input?.ids) ? input.ids.map((item) => normalizeText31(item)).filter(Boolean) : [];
       if (ids.length === 0) {
         return { ok: true, deletedCount: 0 };
       }
@@ -33238,14 +33918,14 @@ function mapStoredMemoryRecord(row) {
     return null;
   }
   return {
-    id: normalizeText30(row.id),
-    type: normalizeText30(row.type),
+    id: normalizeText31(row.id),
+    type: normalizeText31(row.type),
     content: row.content_json ? safeParseJson(row.content_json) : null,
-    contentRef: normalizeText30(row.content_ref) || void 0,
+    contentRef: normalizeText31(row.content_ref) || void 0,
     metadata: safeParseJson(row.metadata_json, {}),
     priority: Number(row.priority ?? 50),
     tags: safeParseJson(row.tags_json, []),
-    createdAt: normalizeText30(row.created_at)
+    createdAt: normalizeText31(row.created_at)
   };
 }
 function resolveMemoryBlobThreshold(env) {
@@ -33272,7 +33952,7 @@ function safeParseJson(value, fallback = null) {
 function attachGatewayWarning(gatewayOutcome, warning) {
   const body = normalizeObject10(gatewayOutcome?.body);
   const warnings = Array.isArray(body.warnings) ? body.warnings : [];
-  const merged = [...new Set([...warnings, normalizeText30(warning)].filter(Boolean))];
+  const merged = [...new Set([...warnings, normalizeText31(warning)].filter(Boolean))];
   return {
     status: gatewayOutcome.status,
     body: {
@@ -33317,11 +33997,11 @@ function classifyGuardedStopCategory(blockedByRule) {
 function authorizeGatewayRequest({ request, env, apiSuffix = "/gateway" }) {
   const runtimeEnv = env ?? {};
   const routeLabel = `/${CANONICAL_API_PREFIX.replace(/^\//, "")}${apiSuffix} (legacy ${LEGACY_API_PREFIX}${apiSuffix} is also accepted)`;
-  const bearerToken = normalizeText30(
+  const bearerToken = normalizeText31(
     runtimeEnv.VTDD_GATEWAY_BEARER_TOKEN ?? runtimeEnv.MVP_GATEWAY_BEARER_TOKEN
   );
   if (bearerToken) {
-    const authorizationHeader = normalizeText30(request.headers.get("authorization"));
+    const authorizationHeader = normalizeText31(request.headers.get("authorization"));
     const provided = parseBearerToken(request.headers.get("authorization"));
     if (!authorizationHeader) {
       return {
@@ -33346,11 +34026,11 @@ function authorizeGatewayRequest({ request, env, apiSuffix = "/gateway" }) {
       reason: `provided bearer token is invalid for ${routeLabel}`
     };
   }
-  const accessClientId = normalizeText30(runtimeEnv.CF_ACCESS_CLIENT_ID);
-  const accessClientSecret = normalizeText30(runtimeEnv.CF_ACCESS_CLIENT_SECRET);
+  const accessClientId = normalizeText31(runtimeEnv.CF_ACCESS_CLIENT_ID);
+  const accessClientSecret = normalizeText31(runtimeEnv.CF_ACCESS_CLIENT_SECRET);
   if (accessClientId || accessClientSecret) {
-    const providedId = normalizeText30(request.headers.get("cf-access-client-id"));
-    const providedSecret = normalizeText30(request.headers.get("cf-access-client-secret"));
+    const providedId = normalizeText31(request.headers.get("cf-access-client-id"));
+    const providedSecret = normalizeText31(request.headers.get("cf-access-client-secret"));
     if (!providedId && !providedSecret) {
       return {
         ok: false,
@@ -33415,7 +34095,7 @@ function authorizePasskeyBrowserOrMachineRequest({ request, env, apiSuffix }) {
   return machineAuth;
 }
 function isSameOriginBrowserRequest(request) {
-  const originHeader = normalizeText30(request.headers.get("origin"));
+  const originHeader = normalizeText31(request.headers.get("origin"));
   const fetchSite = normalize7(request.headers.get("sec-fetch-site"));
   const contentType = normalize7(request.headers.get("content-type"));
   if (!originHeader) {
@@ -33481,18 +34161,18 @@ function html(status, body) {
 function normalize7(value) {
   return String(value ?? "").trim().toLowerCase();
 }
-function normalizeText30(value) {
+function normalizeText31(value) {
   return String(value ?? "").trim();
 }
-function normalizePositiveInteger9(value) {
+function normalizePositiveInteger10(value) {
   const number = Number(value);
   return Number.isInteger(number) && number > 0 ? number : null;
 }
 function normalizeTag3(value) {
-  return normalizeText30(value).toLowerCase().replace(/[^a-z0-9:_-]+/g, "_");
+  return normalizeText31(value).toLowerCase().replace(/[^a-z0-9:_-]+/g, "_");
 }
 function parseBearerToken(value) {
-  const text = normalizeText30(value);
+  const text = normalizeText31(value);
   if (!text) {
     return "";
   }
@@ -33500,7 +34180,7 @@ function parseBearerToken(value) {
   if (normalize7(scheme) !== "bearer") {
     return "";
   }
-  return normalizeText30(token);
+  return normalizeText31(token);
 }
 function isApiPath(pathname, suffix) {
   return pathname === `${CANONICAL_API_PREFIX}${suffix}` || pathname === `${LEGACY_API_PREFIX}${suffix}`;
