@@ -114,6 +114,10 @@ export function createRemoteCodexExecutionRequest(input = {}) {
     executionTarget: normalizeObject(payload?.executionTarget),
     handoff
   });
+  const revisionTargetConflicts = collectRevisionTargetConflicts({
+    executionTarget: normalizeObject(payload?.executionTarget),
+    handoff
+  });
   const request = {
     executionId: normalizeText(input?.executionId) || buildExecutionId({ issueNumber }),
     actorRole: normalizeText(payload.actorRole),
@@ -185,6 +189,7 @@ export function createRemoteCodexExecutionRequest(input = {}) {
   }
   if (request.codexGoal === RemoteCodexDispatchGoal.REVISE_PR) {
     issues.push(...validateRevisionTarget(request));
+    issues.push(...revisionTargetConflicts);
   }
 
   return issues.length > 0 ? { ok: false, issues } : { ok: true, request };
@@ -263,6 +268,66 @@ function normalizeRevisionTarget({ runtimeState, executionTarget, handoff }) {
       normalizeText(pullRequest.headSha) ||
       normalizeText(pullRequest.head?.sha) ||
       null
+  };
+}
+
+function collectRevisionTargetConflicts({ executionTarget, handoff }) {
+  const sources = [
+    normalizeRevisionTargetSource("executionTarget", {
+      number: executionTarget.prNumber ?? executionTarget.pullRequestNumber,
+      state: executionTarget.prState,
+      headRef: executionTarget.headRef,
+      headSha: executionTarget.headSha,
+      pullRequest: executionTarget.pullRequest
+    }),
+    normalizeRevisionTargetSource("handoff", {
+      number: handoff.prNumber ?? handoff.pullRequestNumber,
+      state: handoff.prState,
+      headRef: handoff.headRef,
+      headSha: handoff.headSha,
+      pullRequest: handoff.targetPullRequest ?? handoff.pullRequest ?? handoff.pr
+    })
+  ].filter((source) => source.present);
+
+  const issues = [];
+  for (let index = 0; index < sources.length; index += 1) {
+    for (let nextIndex = index + 1; nextIndex < sources.length; nextIndex += 1) {
+      const left = sources[index];
+      const right = sources[nextIndex];
+      for (const field of ["number", "state", "headRef", "headSha"]) {
+        if (left[field] && right[field] && left[field] !== right[field]) {
+          issues.push(
+            `revise_pr target ${field} mismatch between ${left.source} and ${right.source}`
+          );
+        }
+      }
+    }
+  }
+
+  return issues;
+}
+
+function normalizeRevisionTargetSource(source, value = {}) {
+  const input = value && typeof value === "object" ? value : {};
+  const pullRequest = normalizeObject(input.pullRequest);
+  const target = {
+    source,
+    number: normalizePositiveInteger(input.number ?? pullRequest.number),
+    state: normalizeText(input.state ?? pullRequest.state).toLowerCase() || null,
+    headRef:
+      normalizeText(input.headRef) ||
+      normalizeText(pullRequest.headRef) ||
+      normalizeText(pullRequest.head?.ref) ||
+      null,
+    headSha:
+      normalizeText(input.headSha) ||
+      normalizeText(pullRequest.headSha) ||
+      normalizeText(pullRequest.head?.sha) ||
+      null
+  };
+  return {
+    ...target,
+    present: Boolean(target.number || target.state || target.headRef || target.headSha)
   };
 }
 

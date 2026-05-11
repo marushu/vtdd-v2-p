@@ -68,6 +68,80 @@ test("VPS runner rejects queue comments without scoped approval", () => {
   assert.equal(parsed.issues.includes("approvalScopeMatched must be true"), true);
 });
 
+test("VPS runner rejects revise_pr queue payload without open target PR lock", () => {
+  const parsed = parseVpsRunnerQueueComment(`<!-- vtdd:vps-runner-execution:remote-codex-issue251-vps -->
+\`\`\`json
+{
+  "executionId": "remote-codex-issue251-vps",
+  "transport": "vps_runner",
+  "repository": "sample-org/vtdd-v2",
+  "issueNumber": 251,
+  "branch": "codex/issue-251",
+  "baseRef": "main",
+  "codexGoal": "revise_pr",
+  "approvalScopeMatched": true,
+  "revisionTarget": {
+    "number": 279,
+    "state": "closed",
+    "headRef": "codex/issue-251",
+    "headSha": "old-sha"
+  }
+}
+\`\`\``);
+
+  assert.equal(parsed.ok, false);
+  assert.equal(parsed.reason, "vps_runner_payload_invalid");
+  assert.equal(parsed.issues.includes("revise_pr target PR must be open"), true);
+});
+
+test("VPS runner rejects revise_pr queue payload when branch differs from target PR headRef", () => {
+  const parsed = parseVpsRunnerQueueComment(`<!-- vtdd:vps-runner-execution:remote-codex-issue251-vps -->
+\`\`\`json
+{
+  "executionId": "remote-codex-issue251-vps",
+  "transport": "vps_runner",
+  "repository": "sample-org/vtdd-v2",
+  "issueNumber": 251,
+  "branch": "codex/issue-251",
+  "baseRef": "main",
+  "codexGoal": "revise_pr",
+  "approvalScopeMatched": true,
+  "revisionTarget": {
+    "number": 285,
+    "state": "open",
+    "headRef": "codex/issue-251-v2",
+    "headSha": "fresh-sha"
+  }
+}
+\`\`\``);
+
+  assert.equal(parsed.ok, false);
+  assert.equal(parsed.reason, "vps_runner_payload_invalid");
+  assert.equal(parsed.issues.includes("revise_pr branch must match target PR headRef"), true);
+});
+
+test("VPS runner checkout blocks revise_pr when target lock is incomplete", async () => {
+  await assert.rejects(
+    checkoutVpsRunnerBranch({
+      payload: {
+        codexGoal: "revise_pr",
+        branch: "codex/issue-251",
+        revisionTarget: {
+          number: 285,
+          state: "open",
+          headRef: "codex/issue-251-v2"
+        }
+      },
+      cwd: "/tmp/vtdd-test",
+      env: {},
+      run: async () => {
+        throw new Error("git must not run for invalid revision target");
+      }
+    }),
+    /Invalid revise_pr target lock: revise_pr requires target PR headSha; revise_pr branch must match target PR headRef/
+  );
+});
+
 test("VPS runner selects only allowlisted pending queues", () => {
   const comments = [
     {

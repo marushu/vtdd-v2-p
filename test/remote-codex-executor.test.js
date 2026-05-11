@@ -190,6 +190,61 @@ test("remote Codex execution request pins revise_pr branch to target PR headRef"
   assert.equal(result.request.revisionTarget.number, 285);
 });
 
+test("remote Codex execution request blocks conflicting revise_pr target locks", () => {
+  const result = createRemoteCodexExecutionRequest({
+    payload: {
+      actorRole: ActorRole.BUTLER,
+      issueContext: { issueNumber: 251 },
+      executionTarget: {
+        prNumber: 279,
+        prState: "closed",
+        headRef: "codex/issue-251",
+        headSha: "old-sha"
+      },
+      continuationContext: {
+        codexGoal: RemoteCodexDispatchGoal.REVISE_PR,
+        handoff: {
+          issueTraceable: true,
+          approvalScopeMatched: true,
+          relatedIssue: 251,
+          summary: "Revise fresh replacement PR only",
+          targetPullRequest: {
+            number: 285,
+            state: "open",
+            headRef: "codex/issue-251-v2",
+            headSha: "fresh-sha"
+          }
+        }
+      },
+      policyInput: {
+        approvalPhrase: "GO",
+        targetConfirmed: true,
+        approvalScopeMatched: true
+      }
+    },
+    gatewayResult: {
+      repository: "sample-org/vtdd-v2",
+      executionContinuity: {
+        codexGoal: "wait_for_review"
+      }
+    }
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(
+    result.issues.includes("revise_pr target number mismatch between executionTarget and handoff"),
+    true
+  );
+  assert.equal(
+    result.issues.includes("revise_pr target headRef mismatch between executionTarget and handoff"),
+    true
+  );
+  assert.equal(
+    result.issues.includes("revise_pr target headSha mismatch between executionTarget and handoff"),
+    true
+  );
+});
+
 test("remote Codex execution request rejects wait-only continuity goal before workflow dispatch", () => {
   const result = createRemoteCodexExecutionRequest({
     payload: {
