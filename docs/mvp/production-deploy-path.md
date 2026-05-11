@@ -63,6 +63,14 @@ If `/setup/known-good` should expose a rollback bundle, set repository variable
 before dispatching production deploy. If this variable is absent, the Worker
 must not silently treat `main` as known-good.
 
+If production deploy completion should notify the operator through GitHub
+Mobile / Apple Watch, set repository variable
+`VTDD_DEPLOY_NOTIFICATION_ISSUE_NUMBER` to a GitHub Issue number in the target
+repository. The workflow posts a short comment that mentions the repository owner,
+includes the run URL and deployed commit SHA, and intentionally omits approval
+grant ids, tokens, and other secret values. If the variable is absent,
+the deploy still runs and the mention notification is skipped.
+
 ## Approval Boundary (`GO + passkey`)
 
 `deploy-production` workflow is manual (`workflow_dispatch`) and requires:
@@ -89,4 +97,6 @@ The workflow validates the grant through `/v2/retrieve/approval-grant` using
 
 - Branch restriction: deploy job runs only when ref is `main`
 - Pre-deploy checks: approval grant validation and `npm test`
+- Deploy completion notification: optional GitHub Issue comment controlled by
+  `VTDD_DEPLOY_NOTIFICATION_ISSUE_NUMBER`
 - Future hardening (out-of-scope for MVP): external passkey attestation service, staged rollout, rollback automation
