@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   ActorRole,
+  DEFAULT_EXECUTION_PREFLIGHT_REQUIRED_REPO_FILES,
   RemoteCodexDispatchGoal,
   RemoteCodexExecutorTransport,
   RemoteCodexExecutionStatus,
@@ -66,6 +67,10 @@ test("remote Codex execution request is built from gateway result and payload", 
   assert.equal(result.request.branch, "codex/issue-6");
   assert.equal(result.request.baseRef, "main");
   assert.equal(result.request.codexGoal, "open_pr");
+  assert.deepEqual(
+    result.request.preflightPolicy.requiredRepoFiles,
+    DEFAULT_EXECUTION_PREFLIGHT_REQUIRED_REPO_FILES
+  );
 });
 
 test("remote Codex execution request accepts explicit bounded PR revision goal override", () => {

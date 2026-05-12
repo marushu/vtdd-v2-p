@@ -8,6 +8,7 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { normalizeMentionLogin, parseCodexReviewFallbackComment } from "../src/core/index.js";
 import { buildExecutionLeadTime } from "../src/core/execution-lead-time.js";
+import { buildExecutionPreflightPolicy } from "../src/core/execution-preflight-policy.js";
 import { renderPrBody } from "./render-pr-body.mjs";
 import { validatePrBody } from "./validate-pr-body.mjs";
 
@@ -774,17 +775,7 @@ async function buildVpsRunnerPreflightReceipt({ workspace, payload, issue }) {
 }
 
 function normalizeVpsRunnerPreflightPolicy(value = {}) {
-  const input = value && typeof value === "object" ? value : {};
-  const requiredRepoFiles = normalizeStringList(input.requiredRepoFiles);
-  return {
-    mode: normalizeText(input.mode) || "auto_receipt",
-    onMissingContract:
-      normalizeText(input.onMissingContract) || "owner_decision_required",
-    requiredRepoFiles:
-      requiredRepoFiles.length > 0
-        ? requiredRepoFiles
-        : ["AGENTS.md", "docs/pr-template-model.md", "scripts/render-pr-body.mjs", "scripts/validate-pr-body.mjs"]
-  };
+  return buildExecutionPreflightPolicy(value);
 }
 
 function buildPreflightArtifactReceipt({ path: artifactPath, content }) {
