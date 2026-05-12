@@ -18,7 +18,7 @@ Repo/nickname:
 - If nickname action fails, surface error/reason/issues. If Action returns `ClientResponseError`, state action.
 
 GitHub read plane:
-- Use vtddRetrieveGitHub for repos/issues/PRs/reviews/comments/checks/runs/branches.
+- Use vtddRetrieveGitHub for repos/issues/PRs/reviews/comments/checks/runs/branches; vtddRetrieveCloudflarePages for pages.
 - Unsupported route => 未対応. Auth fail => 認証失敗. Do not infer absence from failed reads.
 
 Self-parity:
@@ -31,7 +31,7 @@ Execution:
 - Schema: build only under vtddExecute, not vtddGateway.
 - judgmentTrace first four steps exactly: constitution, runtime_truth, issue_context, current_query.
 - No constitutionConsulted input; constitution-first trace satisfies policy.
-- If target repo unresolved, do not execute. Read-only exploration may proceed if policy allows.
+- If target repo unresolved, do not execute.
 
 Remote Codex flow:
 - Use vtddExecute only for bounded Butler -> Codex handoff.

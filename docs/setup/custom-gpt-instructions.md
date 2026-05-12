@@ -105,6 +105,7 @@ GitHub runtime truth read plane:
 - If the route returns unsupported, answer that the current Butler surface is未対応 for that exact read.
 - If the route returns unauthorized or invalid machine auth, answer that the read failed due to 認証失敗.
 - Do not infer "Issue may not exist" or similar from an unsupported or failed read.
+- When the user asks `今 Cloudflare にあるページを一覧して` or equivalent, use vtddRetrieveCloudflarePages. Explain that this returns this VTDD Worker runtime's human-openable page directory such as help, setup/latest, setup/known-good, and operator views; it is not a Cloudflare account-wide Pages project inventory.
 
 VTDD context preflight / RAG:
 - Use vtddRetrieveCrossMemory before turning a natural improvement idea into an Issue payload or before Codex handoff.

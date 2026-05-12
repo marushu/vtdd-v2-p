@@ -21089,6 +21089,259 @@ function escapeHtml(value) {
   return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
 }
 
+// src/core/help-guide-page.js
+function renderVtddHelpGuidePage(input = {}) {
+  const runtimeOrigin = normalizeOrigin(input.runtimeOrigin);
+  const directory = buildVtddCloudflarePageDirectory({ runtimeOrigin });
+  const setupLatestHref = "/setup/latest";
+  const setupKnownGoodHref = "/setup/known-good";
+  const passkeyOperatorHref = "/v2/approval/passkey/operator";
+  return `<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VTDD help guide</title>
+  <style>
+    :root { color-scheme: light dark; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    body { margin: 0; background: Canvas; color: CanvasText; }
+    main { width: min(100% - 24px, 1120px); margin: 0 auto; padding: 24px 0 56px; }
+    h1 { font-size: 1.7rem; line-height: 1.2; margin: 0 0 10px; }
+    h2 { font-size: 1.08rem; margin: 30px 0 10px; }
+    h3 { font-size: .96rem; margin: 18px 0 8px; }
+    p, li { line-height: 1.6; }
+    a { color: LinkText; }
+    code { font: .92em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .lede { max-width: 860px; opacity: .9; }
+    .nav, .notice, .panel, .route { border: 1px solid color-mix(in srgb, CanvasText 16%, transparent); border-radius: 8px; }
+    .nav { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 12px; margin: 18px 0 22px; }
+    .nav strong { margin-right: auto; }
+    .nav a, .button { display: inline-flex; align-items: center; min-height: 36px; padding: 0 10px; border: 1px solid color-mix(in srgb, CanvasText 20%, transparent); border-radius: 6px; background: ButtonFace; color: ButtonText; text-decoration: none; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(245px, 1fr)); gap: 10px; }
+    .panel, .notice { padding: 14px; }
+    .panel strong { display: block; margin-bottom: 4px; }
+    .notice { background: color-mix(in srgb, CanvasText 4%, Canvas); margin: 14px 0; }
+    .route { padding: 12px; margin: 10px 0; overflow-wrap: anywhere; }
+    .route strong { display: block; margin-bottom: 4px; }
+    .flow { display: grid; gap: 8px; margin: 12px 0; }
+    .flow div { padding: 10px 12px; border-left: 4px solid color-mix(in srgb, CanvasText 32%, transparent); background: color-mix(in srgb, CanvasText 5%, Canvas); }
+    .small { font-size: .88rem; opacity: .82; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>VTDD help guide</h1>
+    <p class="lede">VTDD \u306F Butler \u306E\u81EA\u7136\u8A00\u8A9E intent \u3092\u3001Worker \u306E runtime truth \u3068 policy gate \u3092\u901A\u3057\u3066 GitHub / runner / reviewer \u3078\u63A5\u7D9A\u3059\u308B\u305F\u3081\u306E public core \u3067\u3059\u3002\u3053\u306E\u30DA\u30FC\u30B8\u306F\u64CD\u4F5C\u306E\u5165\u53E3\u3001\u52D5\u304F\u7D4C\u8DEF\u3001\u6A29\u9650\u5883\u754C\u3001\u3088\u304F\u3042\u308B\u4F7F\u3044\u65B9\u3092\u78BA\u8A8D\u3059\u308B\u305F\u3081\u306E\u8AAD\u307F\u53D6\u308A\u5C02\u7528\u30AC\u30A4\u30C9\u3067\u3059\u3002</p>
+
+    <section class="nav" aria-label="Guide navigation">
+      <strong>Runtime: ${escapeHtml2(runtimeOrigin)}</strong>
+      <a href="#features">\u6A5F\u80FD</a>
+      <a href="#paths">\u7D4C\u8DEF</a>
+      <a href="#usage">\u4F7F\u3044\u65B9</a>
+      <a href="#authority">\u6A29\u9650</a>
+      <a href="#setup">setup/recovery</a>
+      <a href="#forks">fork\u5229\u7528</a>
+    </section>
+
+    <section class="notice">
+      <strong>Safety boundary</strong>
+      <p>No secret values, tokens, approval grants, owner-specific runtime URLs, or operator bootstrap values are displayed here. Custom domains such as an owner-operated VTDD domain are deployment choices, not public/core defaults.</p>
+      <p class="small">Butler \u306B\u300C\u4ECA Cloudflare \u306B\u3042\u308B\u30DA\u30FC\u30B8\u3092\u4E00\u89A7\u3057\u3066\u300D\u3068\u983C\u3080\u3068\u3001<code>vtddRetrieveCloudflarePages</code> \u3067\u3053\u306E runtime \u306E\u30DA\u30FC\u30B8\u7D22\u5F15\u3092\u53D6\u5F97\u3067\u304D\u307E\u3059\u3002</p>
+    </section>
+
+    <section id="features">
+      <h2>\u4E3B\u8981\u6A5F\u80FD</h2>
+      <div class="grid">
+        <div class="panel"><strong>Butler judgment</strong>\u4F1A\u8A71\u306E\u610F\u56F3\u3092 constitution\u3001runtime truth\u3001Issue context\u3001\u73FE\u5728\u306E\u4F9D\u983C\u306E\u9806\u306B\u8A55\u4FA1\u3057\u307E\u3059\u3002</div>
+        <div class="panel"><strong>Repository resolution</strong>alias / nickname / GitHub App repository index \u3067\u5BFE\u8C61\u3092\u89E3\u6C7A\u3057\u307E\u3059\u3002default repository \u306F\u3042\u308A\u307E\u305B\u3093\u3002</div>
+        <div class="panel"><strong>GitHub read plane</strong>repository\u3001Issue\u3001PR\u3001review\u3001checks\u3001workflow runs\u3001branch state \u3092 Butler \u304C\u8AAD\u3081\u308B runtime truth \u3068\u3057\u3066\u8FD4\u3057\u307E\u3059\u3002</div>
+        <div class="panel"><strong>GitHub write plane</strong>\u30B3\u30E1\u30F3\u30C8\u3001PR\u66F4\u65B0\u3001runner queue \u306A\u3069\u901A\u5E38 write \u3092 approval boundary \u306B\u6CBF\u3063\u3066\u5B9F\u884C\u3057\u307E\u3059\u3002</div>
+        <div class="panel"><strong>High-risk authority plane</strong>merge\u3001Issue close\u3001secret sync\u3001deploy \u306A\u3069\u9AD8\u30EA\u30B9\u30AF\u64CD\u4F5C\u306F GO + passkey \u307E\u305F\u306F\u660E\u793A\u7684\u306A\u7981\u6B62\u5883\u754C\u3092\u901A\u308A\u307E\u3059\u3002</div>
+        <div class="panel"><strong>Runner / reviewer loop</strong>Butler -> Codex runner -> PR -> reviewer -> Butler summary \u306E GitHub-visible loop \u3092\u6271\u3044\u307E\u3059\u3002</div>
+        <div class="panel"><strong>Memory / retrieval</strong>constitution\u3001decision log\u3001proposal log\u3001operational memory \u3092\u8AAD\u3093\u3067\u5224\u65AD\u306E\u524D\u63D0\u3092\u5FA9\u5143\u3057\u307E\u3059\u3002</div>
+        <div class="panel"><strong>Setup recovery</strong>Action Schema / Instructions \u304C\u58CA\u308C\u305F\u6642\u306B\u30D6\u30E9\u30A6\u30B6\u304B\u3089\u5FA9\u65E7 bundle \u3092\u30B3\u30D4\u30FC\u3067\u304D\u307E\u3059\u3002</div>
+      </div>
+    </section>
+
+    <section id="paths">
+      <h2>\u52D5\u304F\u7D4C\u8DEF</h2>
+      <div class="flow">
+        <div><strong>1. Human -> Butler</strong>\u4EBA\u9593\u306F\u901A\u5E38\u3001\u81EA\u7136\u8A00\u8A9E\u3067\u300C\u3069\u306E repo / Issue / PR \u306B\u4F55\u3092\u3057\u305F\u3044\u304B\u300D\u3092\u4F1D\u3048\u307E\u3059\u3002</div>
+        <div><strong>2. Butler -> Worker</strong>Butler \u306F Action Schema \u306E operationId \u3092\u4F7F\u3063\u3066 Worker \u306E <code>/v2/*</code> route \u3092\u547C\u3073\u307E\u3059\u3002</div>
+        <div><strong>3. Worker -> policy / runtime truth</strong>Worker \u306F\u5BFE\u8C61\u89E3\u6C7A\u3001Issue traceability\u3001approval boundary\u3001current GitHub state \u3092\u78BA\u8A8D\u3057\u307E\u3059\u3002</div>
+        <div><strong>4. Worker -> GitHub / runner / reviewer</strong>\u8A31\u53EF\u3055\u308C\u305F read/write/runner/reviewer operation \u3060\u3051\u304C\u5916\u90E8\u3078\u51FA\u307E\u3059\u3002</div>
+        <div><strong>5. GitHub-visible evidence -> Butler</strong>\u7D50\u679C\u306F status\u3001before/after state\u3001PR/Issue/comment/workflow state \u3068\u3057\u3066 Butler \u304C\u518D\u8AAD\u8FBC\u3067\u304D\u307E\u3059\u3002</div>
+      </div>
+    </section>
+
+    <section id="usage">
+      <h2>\u3053\u3046\u3044\u3046\u6642\u306F\u3053\u3046\u4F7F\u3046</h2>
+      <div class="grid">
+        <div class="panel"><strong>\u4ECA\u306E\u72B6\u614B\u3092\u77E5\u308A\u305F\u3044</strong>Butler \u306B repo / Issue / PR \u3092\u81EA\u7136\u8A00\u8A9E\u3067\u6307\u5B9A\u3057\u3001runtime truth \u306E\u8AAD\u307F\u53D6\u308A\u3092\u4F9D\u983C\u3057\u307E\u3059\u3002</div>
+        <div class="panel"><strong>\u5B9F\u88C5\u3092\u59CB\u3081\u305F\u3044</strong>\u5BFE\u8C61 Issue \u3068 Success Criteria \u3092\u56FA\u5B9A\u3057\u3001Butler \u304C bounded execution contract \u3092\u4F5C\u3063\u3066\u304B\u3089 runner \u306B\u6E21\u3057\u307E\u3059\u3002</div>
+        <div class="panel"><strong>PR\u3092\u76F4\u3057\u305F\u3044</strong>Butler \u304C reviewer comment \u3068 PR state \u3092\u8AAD\u307F\u3001revise_pr \u3068\u3057\u3066 runner \u306B\u6E21\u305B\u308B\u304B\u78BA\u8A8D\u3057\u307E\u3059\u3002</div>
+        <div class="panel"><strong>merge\u3057\u305F\u3044</strong>Butler \u304C checks\u3001reviewer signal\u3001mergeability\u3001Issue evidence \u3092\u78BA\u8A8D\u3057\u3001\u5FC5\u8981\u306A approval boundary \u3092\u63D0\u793A\u3057\u307E\u3059\u3002</div>
+        <div class="panel"><strong>Action Schema \u304C\u58CA\u308C\u305F</strong>\u3053\u306E runtime \u306E setup/recovery page \u3092\u76F4\u63A5\u958B\u304D\u3001known-good \u307E\u305F\u306F latest bundle \u3092\u30B3\u30D4\u30FC\u3057\u307E\u3059\u3002</div>
+        <div class="panel"><strong>deploy\u3084secret\u66F4\u65B0\u3092\u3057\u305F\u3044</strong>GO + passkey \u3068\u5BFE\u8C61 scope \u304C\u5FC5\u8981\u3067\u3059\u3002Worker \u306F secret \u5024\u3092\u3053\u306E\u30DA\u30FC\u30B8\u306B\u8868\u793A\u3057\u307E\u305B\u3093\u3002</div>
+      </div>
+    </section>
+
+    <section id="authority">
+      <h2>\u6A29\u9650\u5883\u754C</h2>
+      <div class="route"><strong>Allowed without GO</strong>\u8AAD\u307F\u53D6\u308A\u3001\u72B6\u614B\u78BA\u8A8D\u3001\u8AAC\u660E\u3001proposal\u3001\u4F4E\u30EA\u30B9\u30AF\u306A\u6848\u5185\u3002\u5B9F\u884C\u80FD\u529B\u3068\u306F\u533A\u5225\u3057\u307E\u3059\u3002</div>
+      <div class="route"><strong>GO required</strong>bounded implementation dispatch\u3001\u901A\u5E38 write\u3001PR review/comment \u306A\u3069\u3001Issue scope \u3068 runtime truth \u306B\u63A5\u7D9A\u3055\u308C\u305F\u64CD\u4F5C\u3002</div>
+      <div class="route"><strong>GO + passkey required</strong>deploy\u3001credential mutation\u3001permission mutation\u3001high-risk GitHub operation\u3001destructive/high-blast-radius operation\u3002</div>
+      <div class="route"><strong>Forbidden / stop</strong>\u5BFE\u8C61 repo \u672A\u89E3\u6C7A\u3001Issue traceability \u4E0D\u8DB3\u3001owner-specific runtime \u4F9D\u5B58\u3001secret \u8868\u793A\u3001scope conflict\u3001reviewer objection \u306E\u697D\u89B3\u7684\u306A\u7121\u8996\u3002</div>
+    </section>
+
+    <section id="setup">
+      <h2>setup/recovery \u3068\u901A\u5E38 operation \u306E\u9055\u3044</h2>
+      <p>setup/recovery \u306F Butler Action \u304C\u58CA\u308C\u3066\u3082\u30D6\u30E9\u30A6\u30B6\u304B\u3089\u76F4\u63A5\u958B\u3051\u308B\u5FA9\u65E7\u5C0E\u7DDA\u3067\u3059\u3002\u901A\u5E38 operation \u306E default repository \u5316\u3001merge/deploy authority \u7DE9\u548C\u3001secret \u8868\u793A\u306F\u884C\u3044\u307E\u305B\u3093\u3002</p>
+      <p>
+        <a class="button" href="${escapeAttribute(setupLatestHref)}">setup/latest</a>
+        <a class="button" href="${escapeAttribute(setupKnownGoodHref)}">setup/known-good</a>
+        <a class="button" href="${escapeAttribute(passkeyOperatorHref)}">passkey operator</a>
+      </p>
+      <p class="small">Custom GPT Action Schema / Instructions \u306E copy-ready bundle \u306F setup pages \u306B\u3042\u308A\u307E\u3059\u3002\u3053\u306E help guide \u306F\u8AAC\u660E\u7528\u3067\u3042\u308A\u3001setup bundle \u306E\u4EE3\u66FF\u3067\u306F\u3042\u308A\u307E\u305B\u3093\u3002</p>
+    </section>
+
+    <section id="pages">
+      <h2>Cloudflare \u4E0A\u306E\u30DA\u30FC\u30B8\u4E00\u89A7</h2>
+      <p>\u3053\u306E\u4E00\u89A7\u306F Cloudflare \u30A2\u30AB\u30A6\u30F3\u30C8\u5168\u4F53\u3067\u306F\u306A\u304F\u3001\u3053\u306E VTDD Worker runtime \u304C\u516C\u958B\u3057\u3066\u3044\u308B\u4EBA\u9593\u5411\u3051\u30DA\u30FC\u30B8\u3067\u3059\u3002</p>
+      <div class="grid">
+        ${directory.pages.map(
+    (page) => `<div class="panel"><strong>${escapeHtml2(page.label)}</strong><a href="${escapeAttribute(page.path)}">${escapeHtml2(page.path)}</a><p>${escapeHtml2(page.description)}</p><p class="small">Authority: ${escapeHtml2(page.authority)}</p></div>`
+  ).join("")}
+      </div>
+    </section>
+
+    <section id="forks">
+      <h2>fork / clone \u3057\u3066\u4F7F\u3046\u5834\u5408</h2>
+      <p>\u3053\u306E repository \u306F public canonical core \u3067\u3042\u308A\u3001shared hosted runtime \u3067\u306F\u3042\u308A\u307E\u305B\u3093\u3002\u5229\u7528\u8005\u306F\u81EA\u5206\u306E GitHub\u3001Cloudflare\u3001ChatGPT/Codex\u3001reviewer provider\u3001secrets\u3001runtime domain \u3092\u7528\u610F\u3057\u307E\u3059\u3002</p>
+      <div class="grid">
+        <div class="panel"><strong>GitHub</strong>\u81EA\u5206\u306E repository / GitHub App / Actions / branch protection \u3092\u4F7F\u3044\u307E\u3059\u3002</div>
+        <div class="panel"><strong>Cloudflare</strong>\u81EA\u5206\u306E Worker\u3001D1/R2/Vectorize bindings\u3001custom domain \u3092\u4F7F\u3044\u307E\u3059\u3002</div>
+        <div class="panel"><strong>Butler surface</strong>\u81EA\u5206\u306E Custom GPT \u307E\u305F\u306F\u5C06\u6765\u306E Butler surface \u3092\u81EA\u5206\u306E runtime \u306B\u63A5\u7D9A\u3057\u307E\u3059\u3002</div>
+        <div class="panel"><strong>Reviewer / runner</strong>\u81EA\u5206\u306E reviewer provider \u3068 trusted runner capacity \u3092\u9078\u3073\u307E\u3059\u3002</div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>`;
+}
+function buildVtddCloudflarePageDirectory(input = {}) {
+  const runtimeOrigin = normalizeOrigin(input.runtimeOrigin);
+  const pages = [
+    {
+      id: "help",
+      label: "Help guide",
+      path: "/help",
+      url: buildRuntimeUrl(runtimeOrigin, "/help"),
+      description: "VTDD \u306E\u6A5F\u80FD\u3001\u7D4C\u8DEF\u3001\u4F7F\u3044\u65B9\u3001\u6A29\u9650\u5883\u754C\u3001fork \u5229\u7528\u5883\u754C\u3092\u8AAD\u3080\u305F\u3081\u306E\u5165\u53E3\u3067\u3059\u3002",
+      audience: ["owner", "operator", "fork_user"],
+      authority: "read_only"
+    },
+    {
+      id: "guide",
+      label: "Guide alias",
+      path: "/guide",
+      url: buildRuntimeUrl(runtimeOrigin, "/guide"),
+      description: "/help \u3068\u540C\u3058\u30AC\u30A4\u30C9\u3092\u958B\u304F\u5225\u540D\u3067\u3059\u3002",
+      audience: ["owner", "operator", "fork_user"],
+      authority: "read_only"
+    },
+    {
+      id: "setup_recovery",
+      label: "Setup recovery",
+      path: "/setup/recovery",
+      url: buildRuntimeUrl(runtimeOrigin, "/setup/recovery"),
+      description: "Action Schema / Instructions \u304C\u58CA\u308C\u305F\u6642\u306B\u5FA9\u65E7\u5C0E\u7DDA\u3078\u5165\u308B\u30DA\u30FC\u30B8\u3067\u3059\u3002",
+      audience: ["owner", "operator"],
+      authority: "read_only_recovery"
+    },
+    {
+      id: "setup_latest",
+      label: "Latest setup bundle",
+      path: "/setup/latest",
+      url: buildRuntimeUrl(runtimeOrigin, "/setup/latest"),
+      description: "\u73FE\u5728\u306E repository source of truth \u304B\u3089 copy-ready setup bundle \u3092\u8868\u793A\u3057\u307E\u3059\u3002",
+      audience: ["owner", "operator"],
+      authority: "read_only_recovery"
+    },
+    {
+      id: "setup_known_good",
+      label: "Known-good setup bundle",
+      path: "/setup/known-good",
+      url: buildRuntimeUrl(runtimeOrigin, "/setup/known-good"),
+      description: "\u6700\u5F8C\u306B\u5B89\u5B9A\u78BA\u8A8D\u3055\u308C\u305F known-good setup bundle \u3092\u8868\u793A\u3057\u307E\u3059\u3002",
+      audience: ["owner", "operator"],
+      authority: "read_only_recovery"
+    },
+    {
+      id: "passkey_operator",
+      label: "Passkey operator",
+      path: "/v2/approval/passkey/operator",
+      url: buildRuntimeUrl(runtimeOrigin, "/v2/approval/passkey/operator"),
+      description: "GO + passkey \u304C\u5FC5\u8981\u306A deploy\u3001merge\u3001secret sync \u306A\u3069\u306E operator helper \u3067\u3059\u3002",
+      audience: ["owner", "operator"],
+      authority: "go_plus_passkey_required_for_execution"
+    },
+    {
+      id: "deploy_operator",
+      label: "Deploy operator view",
+      path: "/v2/approval/passkey/operator?mode=deploy&actionType=deploy_production&highRiskKind=deploy_production&phase=execution",
+      url: buildRuntimeUrl(
+        runtimeOrigin,
+        "/v2/approval/passkey/operator?mode=deploy&actionType=deploy_production&highRiskKind=deploy_production&phase=execution"
+      ),
+      description: "production deploy approval \u3092\u767A\u884C\u30FB\u5B9F\u884C\u3059\u308B\u305F\u3081\u306E operator view \u3067\u3059\u3002",
+      audience: ["owner", "operator"],
+      authority: "go_plus_passkey_required"
+    }
+  ];
+  return {
+    ok: true,
+    runtimeOrigin,
+    listMeaning: "worker_hosted_human_pages",
+    notIncluded: [
+      "Cloudflare account-wide Pages projects",
+      "secrets",
+      "tokens",
+      "approval grant values",
+      "owner-specific runtime defaults"
+    ],
+    naturalLanguageIntent: "\u4ECA Cloudflare \u306B\u3042\u308B\u30DA\u30FC\u30B8\u3092\u4E00\u89A7\u3057\u3066",
+    pages
+  };
+}
+function normalizeOrigin(value) {
+  const text = normalizeText4(value);
+  if (!text) {
+    return "this runtime";
+  }
+  try {
+    return new URL(text).origin;
+  } catch {
+    return text;
+  }
+}
+function normalizeText4(value) {
+  return String(value ?? "").trim();
+}
+function buildRuntimeUrl(origin, path) {
+  try {
+    return new URL(path, `${origin}/`).href;
+  } catch {
+    return path;
+  }
+}
+function escapeHtml2(value) {
+  return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+function escapeAttribute(value) {
+  return escapeHtml2(value).replace(/'/g, "&#39;");
+}
+
 // src/core/butler-review-synthesis.js
 function buildButlerReviewSynthesis(input = {}) {
   const pullRequest = normalizePullRequest(input.pullRequest);
@@ -21105,7 +21358,7 @@ function buildButlerReviewSynthesis(input = {}) {
     };
   }
   const reviewLoop = normalizeReviewLoop(input.reviewLoop);
-  const codexGoal = normalizeText4(input.codexGoal) || "wait_for_review";
+  const codexGoal = normalizeText5(input.codexGoal) || "wait_for_review";
   const nextSuggestedActions = normalizeStringArray(input.nextSuggestedActions);
   const recentSignals = collectRecentSignals(pullRequest);
   return {
@@ -21246,31 +21499,31 @@ function collectRecentSignals(pullRequest) {
 function summarizeComments(comments) {
   const list = Array.isArray(comments) ? comments : [];
   return list.slice(-3).map((item) => {
-    const author = normalizeText4(item?.user?.login) || normalizeText4(item?.author) || "unknown";
-    const body = normalizeText4(item?.body);
+    const author = normalizeText5(item?.user?.login) || normalizeText5(item?.author) || "unknown";
+    const body = normalizeText5(item?.body);
     return body ? `${author}: ${body}` : null;
   }).filter(Boolean);
 }
 function summarizeReviews(reviews) {
   const list = Array.isArray(reviews) ? reviews : [];
   return list.slice(-3).map((item) => {
-    const author = normalizeText4(item?.user?.login) || "unknown";
-    const state = normalizeText4(item?.state) || "COMMENTED";
-    const body = normalizeText4(item?.body);
+    const author = normalizeText5(item?.user?.login) || "unknown";
+    const state = normalizeText5(item?.state) || "COMMENTED";
+    const body = normalizeText5(item?.body);
     return body ? `${author} (${state}): ${body}` : `${author} (${state})`;
   }).filter(Boolean);
 }
 function normalizePullRequest(value) {
   const input = value && typeof value === "object" ? value : {};
   return {
-    exists: Boolean(normalizeNumber(input.number)) || Boolean(normalizeText4(input.url)) || Boolean(normalizeText4(input.state)),
+    exists: Boolean(normalizeNumber(input.number)) || Boolean(normalizeText5(input.url)) || Boolean(normalizeText5(input.state)),
     number: normalizeNumber(input.number),
-    url: normalizeText4(input.url) || null,
-    state: normalizeText4(input.state) || "open",
-    title: normalizeText4(input.title) || null,
-    baseRef: normalizeText4(input.baseRef) || normalizeText4(input.base?.ref) || null,
-    headRef: normalizeText4(input.headRef) || normalizeText4(input.head?.ref) || null,
-    headSha: normalizeText4(input.headSha) || normalizeText4(input.head?.sha) || null,
+    url: normalizeText5(input.url) || null,
+    state: normalizeText5(input.state) || "open",
+    title: normalizeText5(input.title) || null,
+    baseRef: normalizeText5(input.baseRef) || normalizeText5(input.base?.ref) || null,
+    headRef: normalizeText5(input.headRef) || normalizeText5(input.head?.ref) || null,
+    headSha: normalizeText5(input.headSha) || normalizeText5(input.head?.sha) || null,
     mergeability: normalizeMergeability(input),
     updatedSinceReview: input.updatedSinceReview === true,
     issueComments: Array.isArray(input.issueComments) ? input.issueComments : [],
@@ -21280,8 +21533,8 @@ function normalizePullRequest(value) {
 }
 function buildBranchAttribution({ pullRequest, revisionTarget, expectedBranch }) {
   const target = revisionTarget && typeof revisionTarget === "object" ? revisionTarget : {};
-  const expectedHeadRef = normalizeText4(target.headRef) || normalizeText4(target.head?.ref) || normalizeText4(expectedBranch) || null;
-  const expectedHeadSha = normalizeText4(target.headSha) || normalizeText4(target.head?.sha) || null;
+  const expectedHeadRef = normalizeText5(target.headRef) || normalizeText5(target.head?.ref) || normalizeText5(expectedBranch) || null;
+  const expectedHeadSha = normalizeText5(target.headSha) || normalizeText5(target.head?.sha) || null;
   const mismatches = [];
   if (expectedHeadRef && pullRequest.headRef && expectedHeadRef !== pullRequest.headRef) {
     mismatches.push(`headRef expected ${expectedHeadRef} but runtime truth shows ${pullRequest.headRef}`);
@@ -21301,8 +21554,8 @@ function buildBranchAttribution({ pullRequest, revisionTarget, expectedBranch })
 function normalizeReviewLoop(value) {
   const input = value && typeof value === "object" ? value : {};
   return {
-    reviewer: normalizeText4(input.reviewer) || "gemini",
-    reviewerStatus: normalizeText4(input.reviewerStatus) || "review_unavailable",
+    reviewer: normalizeText5(input.reviewer) || "gemini",
+    reviewerStatus: normalizeText5(input.reviewerStatus) || "review_unavailable",
     reviewerEvidence: normalizeReviewerEvidence(input.reviewerEvidence),
     reviewerSignalTruth: normalizeReviewerSignalTruth(input.reviewerSignalTruth),
     reviewCommentsCount: normalizeCount(input.reviewCommentsCount),
@@ -21312,60 +21565,60 @@ function normalizeReviewLoop(value) {
 }
 function normalizeReviewerSignalTruth(value) {
   const input = value && typeof value === "object" ? value : {};
-  if (!normalizeText4(input.canonicalSource) && !input.githubFormalReview) {
+  if (!normalizeText5(input.canonicalSource) && !input.githubFormalReview) {
     return null;
   }
   const formal = input.githubFormalReview && typeof input.githubFormalReview === "object" ? input.githubFormalReview : {};
   const mergeReviewTruth = input.mergeReviewTruth && typeof input.mergeReviewTruth === "object" ? input.mergeReviewTruth : {};
   return {
-    canonicalSource: normalizeText4(input.canonicalSource) || "none",
-    canonicalReviewer: normalizeText4(input.canonicalReviewer) || null,
-    reviewerStatus: normalizeText4(input.reviewerStatus) || null,
-    recommendedAction: normalizeText4(input.recommendedAction) || null,
+    canonicalSource: normalizeText5(input.canonicalSource) || "none",
+    canonicalReviewer: normalizeText5(input.canonicalReviewer) || null,
+    reviewerStatus: normalizeText5(input.reviewerStatus) || null,
+    recommendedAction: normalizeText5(input.recommendedAction) || null,
     vtddReviewerMarkerPresent: input.vtddReviewerMarkerPresent === true,
     githubFormalReview: {
-      source: normalizeText4(formal.source) || "github_formal_review_objects",
-      reviewDecision: normalizeText4(formal.reviewDecision) || null,
+      source: normalizeText5(formal.source) || "github_formal_review_objects",
+      reviewDecision: normalizeText5(formal.reviewDecision) || null,
       hasFormalApproval: formal.hasFormalApproval === true,
       approvalCount: normalizeCount(formal.approvalCount),
       blocking: formal.blocking === true,
-      blockingReason: normalizeText4(formal.blockingReason) || null,
-      latestStates: Array.isArray(formal.latestStates) ? formal.latestStates.map(normalizeText4).filter(Boolean) : []
+      blockingReason: normalizeText5(formal.blockingReason) || null,
+      latestStates: Array.isArray(formal.latestStates) ? formal.latestStates.map(normalizeText5).filter(Boolean) : []
     },
     mergeReviewTruth: {
       satisfied: mergeReviewTruth.satisfied === true,
       blocked: mergeReviewTruth.blocked === true,
-      reason: normalizeText4(mergeReviewTruth.reason) || null
+      reason: normalizeText5(mergeReviewTruth.reason) || null
     },
     warnings: normalizeStringArray(input.warnings)
   };
 }
 function normalizeReviewerEvidence(value) {
   const input = value && typeof value === "object" ? value : {};
-  const recommendedAction = normalizeText4(input.recommendedAction).toLowerCase();
+  const recommendedAction = normalizeText5(input.recommendedAction).toLowerCase();
   if (!recommendedAction) {
     return null;
   }
   return {
-    reviewer: normalizeText4(input.reviewer) || null,
+    reviewer: normalizeText5(input.reviewer) || null,
     recommendedAction,
-    url: normalizeText4(input.url) || null,
-    createdAt: normalizeText4(input.createdAt) || null,
-    updatedAt: normalizeText4(input.updatedAt) || null,
+    url: normalizeText5(input.url) || null,
+    createdAt: normalizeText5(input.createdAt) || null,
+    updatedAt: normalizeText5(input.updatedAt) || null,
     includesCreatedEdit: input.includesCreatedEdit === true
   };
 }
 function normalizeMergeability(input) {
   const raw = input.mergeability && typeof input.mergeability === "object" ? input.mergeability : {};
   const mergeable = typeof input.mergeable === "boolean" ? input.mergeable : normalizeNullableBoolean(raw.mergeable);
-  const mergeableState = normalizeText4(input.mergeableState) || normalizeText4(input.mergeable_state) || normalizeText4(raw.state) || normalizeText4(raw.mergeableState) || null;
+  const mergeableState = normalizeText5(input.mergeableState) || normalizeText5(input.mergeable_state) || normalizeText5(raw.state) || normalizeText5(raw.mergeableState) || null;
   const mergeConflict = input.mergeConflict === true || raw.hasConflict === true || mergeable === false || mergeableState === "dirty";
   const mergeBlocked = input.mergeBlocked === true || raw.blocked === true || mergeConflict;
-  const mergeBlockedReason = normalizeText4(input.mergeBlockedReason) || normalizeText4(raw.blockedReason) || (mergeConflict ? "pull_request_has_merge_conflicts" : null);
-  const warning = normalizeText4(input.mergeWarning) || normalizeText4(raw.warning) || null;
-  const freshBranchSuggestion = normalizeText4(input.freshBranchSuggestion) || normalizeText4(raw.freshBranchSuggestion) || null;
+  const mergeBlockedReason = normalizeText5(input.mergeBlockedReason) || normalizeText5(raw.blockedReason) || (mergeConflict ? "pull_request_has_merge_conflicts" : null);
+  const warning = normalizeText5(input.mergeWarning) || normalizeText5(raw.warning) || null;
+  const freshBranchSuggestion = normalizeText5(input.freshBranchSuggestion) || normalizeText5(raw.freshBranchSuggestion) || null;
   const conflictFiles = Array.isArray(input.conflictFiles) ? input.conflictFiles : Array.isArray(raw.conflictFiles) ? raw.conflictFiles : null;
-  const conflictFilesSource = normalizeText4(input.conflictFilesSource) || normalizeText4(raw.conflictFilesSource) || null;
+  const conflictFilesSource = normalizeText5(input.conflictFilesSource) || normalizeText5(raw.conflictFilesSource) || null;
   const verified = typeof mergeable === "boolean" || Boolean(mergeableState);
   const status = mergeConflict ? "conflict" : verified ? "verified" : "unverified";
   return {
@@ -21386,9 +21639,9 @@ function normalizeNullableBoolean(value) {
   return typeof value === "boolean" ? value : null;
 }
 function normalizeStringArray(value) {
-  return (Array.isArray(value) ? value : []).map(normalizeText4).filter(Boolean);
+  return (Array.isArray(value) ? value : []).map(normalizeText5).filter(Boolean);
 }
-function normalizeText4(value) {
+function normalizeText5(value) {
   return String(value ?? "").trim();
 }
 function normalizeCount(value) {
@@ -21409,7 +21662,7 @@ function normalizeNumber(value) {
 // src/core/deploy-approval-grant.js
 function validateDeployApprovalGrant(input = {}) {
   const approvalGrant = input.approvalGrant ?? null;
-  const repositoryInput = normalizeText5(input.repositoryInput);
+  const repositoryInput = normalizeText6(input.repositoryInput);
   const now = new Date(input.now ?? Date.now());
   if (!approvalGrant || approvalGrant.verified !== true) {
     return {
@@ -21417,7 +21670,7 @@ function validateDeployApprovalGrant(input = {}) {
       issues: ["real approvalGrant is required for deploy_production"]
     };
   }
-  const expiresAt = normalizeText5(approvalGrant.expiresAt);
+  const expiresAt = normalizeText6(approvalGrant.expiresAt);
   if (!expiresAt || Number.isNaN(Date.parse(expiresAt)) || Date.parse(expiresAt) <= now.valueOf()) {
     return {
       ok: false,
@@ -21425,19 +21678,19 @@ function validateDeployApprovalGrant(input = {}) {
     };
   }
   const scope = approvalGrant.scope ?? {};
-  if (normalizeText5(scope.actionType) !== ActionType.DEPLOY_PRODUCTION) {
+  if (normalizeText6(scope.actionType) !== ActionType.DEPLOY_PRODUCTION) {
     return {
       ok: false,
       issues: ["approvalGrant scope.actionType must be deploy_production"]
     };
   }
-  if (normalizeText5(scope.highRiskKind) !== ActionType.DEPLOY_PRODUCTION) {
+  if (normalizeText6(scope.highRiskKind) !== ActionType.DEPLOY_PRODUCTION) {
     return {
       ok: false,
       issues: ["approvalGrant scope.highRiskKind must be deploy_production"]
     };
   }
-  if (normalizeText5(scope.repositoryInput) !== repositoryInput) {
+  if (normalizeText6(scope.repositoryInput) !== repositoryInput) {
     return {
       ok: false,
       issues: ["approvalGrant scope.repositoryInput must match target repo"]
@@ -21445,7 +21698,7 @@ function validateDeployApprovalGrant(input = {}) {
   }
   return { ok: true };
 }
-function normalizeText5(value) {
+function normalizeText6(value) {
   return String(value ?? "").trim();
 }
 
@@ -21503,8 +21756,8 @@ async function resolveGitHubAppInstallationToken({ env, fetchImpl, apiBaseUrl } 
   const resolvedFetchImpl = fetchImpl ?? resolveGitHubFetch(env);
   const resolvedApiBaseUrl = normalizeApiBaseUrl(apiBaseUrl ?? env?.GITHUB_API_BASE_URL);
   const enforceMintedToken = toBoolean(env?.GITHUB_APP_ENFORCE_MINTED_INSTALLATION_TOKEN);
-  const appId = normalizeText6(env?.GITHUB_APP_ID);
-  const installationId = normalizeText6(env?.GITHUB_APP_INSTALLATION_ID);
+  const appId = normalizeText7(env?.GITHUB_APP_ID);
+  const installationId = normalizeText7(env?.GITHUB_APP_INSTALLATION_ID);
   const privateKey = resolveGitHubAppPrivateKey(env);
   if (appId || installationId || privateKey) {
     if (!appId || !installationId || !privateKey) {
@@ -21543,7 +21796,7 @@ async function resolveGitHubAppInstallationToken({ env, fetchImpl, apiBaseUrl } 
     };
     return { ok: true, token: minted.token };
   }
-  const directToken = normalizeText6(env?.GITHUB_APP_INSTALLATION_TOKEN);
+  const directToken = normalizeText7(env?.GITHUB_APP_INSTALLATION_TOKEN);
   if (directToken) {
     if (enforceMintedToken) {
       return {
@@ -21558,7 +21811,7 @@ async function resolveGitHubAppInstallationToken({ env, fetchImpl, apiBaseUrl } 
     return { ok: false };
   }
   try {
-    const token = normalizeText6(await tokenProvider());
+    const token = normalizeText7(await tokenProvider());
     if (token) {
       if (enforceMintedToken) {
         return {
@@ -21622,7 +21875,7 @@ async function mintInstallationToken({
       warning: `github app repository index skipped: installation token mint failed (${failure.reason})`
     };
   }
-  const token = normalizeText6(body?.token);
+  const token = normalizeText7(body?.token);
   if (!token) {
     return {
       ok: false,
@@ -21645,7 +21898,7 @@ async function createGitHubAppJwt({ appId, privateKey, env, nowSeconds }) {
   const provider = env?.GITHUB_APP_JWT_PROVIDER;
   if (typeof provider === "function") {
     try {
-      const token = normalizeText6(
+      const token = normalizeText7(
         await provider({
           appId,
           issuedAt: nowSeconds - 60,
@@ -21723,7 +21976,7 @@ async function fetchGitHubInstallationRepositories({ token, fetchImpl, apiBaseUr
 async function readJsonSafe(response) {
   try {
     const text = await response.text();
-    if (!normalizeText6(text)) {
+    if (!normalizeText7(text)) {
       return {};
     }
     try {
@@ -21738,9 +21991,9 @@ async function readJsonSafe(response) {
   }
 }
 function classifyApiFailure(response, body) {
-  const message = normalizeText6(body?.message) || normalizeText6(body?.error) || normalizeText6(body?.__rawText) || buildStatusFallbackMessage(response);
-  const remaining = normalizeText6(response.headers.get("x-ratelimit-remaining"));
-  const retryAfter = normalizeText6(response.headers.get("retry-after"));
+  const message = normalizeText7(body?.message) || normalizeText7(body?.error) || normalizeText7(body?.__rawText) || buildStatusFallbackMessage(response);
+  const remaining = normalizeText7(response.headers.get("x-ratelimit-remaining"));
+  const retryAfter = normalizeText7(response.headers.get("retry-after"));
   if (response.status === 401) {
     return {
       ok: false,
@@ -21771,14 +22024,14 @@ function classifyApiFailure(response, body) {
 }
 function buildStatusFallbackMessage(response) {
   const status = Number(response?.status);
-  const statusText = normalizeText6(response?.statusText);
+  const statusText = normalizeText7(response?.statusText);
   if (statusText) {
     return `github api returned status ${status} (${statusText})`;
   }
   return `github api returned status ${status}`;
 }
 function sanitizeApiBodySnippet(value) {
-  const normalized = normalizeText6(value).replace(/\s+/g, " ");
+  const normalized = normalizeText7(value).replace(/\s+/g, " ");
   if (!normalized) {
     return "";
   }
@@ -21789,7 +22042,7 @@ function buildRepositoryIndexWarning(result) {
     return `github app repository index unavailable: ${result.reason}`;
   }
   if (result.error === "rate_limited") {
-    const retryAfter = normalizeText6(result.retryAfter);
+    const retryAfter = normalizeText7(result.retryAfter);
     const retryMessage = retryAfter ? ` retry_after=${retryAfter}s` : "";
     return `github app repository index unavailable: rate limited by GitHub API.${retryMessage}`;
   }
@@ -21799,7 +22052,7 @@ function buildRepositoryIndexWarning(result) {
   if (result.error === "network_error") {
     return "github app repository index unavailable: network request failed";
   }
-  return `github app repository index unavailable: ${normalizeText6(result.reason) || "unknown error"}`;
+  return `github app repository index unavailable: ${normalizeText7(result.reason) || "unknown error"}`;
 }
 function isUsableCachedToken(cacheKey, nowSeconds) {
   if (!installationTokenCache) {
@@ -21814,14 +22067,14 @@ function isUsableCachedToken(cacheKey, nowSeconds) {
   return installationTokenCache.expiresAt > nowSeconds + TOKEN_REFRESH_MARGIN_SECONDS;
 }
 function resolveTokenExpirySeconds(value, nowSeconds) {
-  const parsed = Date.parse(normalizeText6(value));
+  const parsed = Date.parse(normalizeText7(value));
   if (Number.isFinite(parsed) && parsed > 0) {
     return Math.floor(parsed / 1e3);
   }
   return nowSeconds + 50 * 60;
 }
 function hasNextPage(linkHeader) {
-  const link = normalizeText6(linkHeader);
+  const link = normalizeText7(linkHeader);
   return link.includes('rel="next"');
 }
 function normalizeLiveRepository(repository) {
@@ -21829,7 +22082,7 @@ function normalizeLiveRepository(repository) {
   if (!canonicalRepo) {
     return null;
   }
-  const repoName = normalizeText6(repository?.name) || canonicalRepo.split("/")[1];
+  const repoName = normalizeText7(repository?.name) || canonicalRepo.split("/")[1];
   return {
     canonicalRepo,
     productName: repoName || null,
@@ -21890,7 +22143,7 @@ function normalizeAliasRegistry(aliasRegistry) {
     }
     records.push({
       canonicalRepo,
-      productName: normalizeText6(item?.productName) || null,
+      productName: normalizeText7(item?.productName) || null,
       visibility: normalizeVisibility(item),
       aliases: mergeAliases(item?.aliases)
     });
@@ -21898,7 +22151,7 @@ function normalizeAliasRegistry(aliasRegistry) {
   return records;
 }
 function normalizeCanonicalRepo(value) {
-  const normalized = normalizeText6(value).toLowerCase();
+  const normalized = normalizeText7(value).toLowerCase();
   if (!normalized || !normalized.includes("/")) {
     return "";
   }
@@ -21911,7 +22164,7 @@ function normalizeVisibility(value) {
   if (value?.private === false) {
     return "public";
   }
-  const normalized = normalizeText6(value?.visibility).toLowerCase();
+  const normalized = normalizeText7(value?.visibility).toLowerCase();
   if (normalized === "private" || normalized === "public" || normalized === "internal") {
     return normalized;
   }
@@ -21935,7 +22188,7 @@ function normalizeAliasKey(value) {
   return normalizeAlias(value).toLowerCase().replace(/[^a-z0-9\u3040-\u30ff\u4e00-\u9faf]+/g, "");
 }
 function normalizeApiBaseUrl(value) {
-  const text = normalizeText6(value);
+  const text = normalizeText7(value);
   if (!text) {
     return GITHUB_API_BASE_URL;
   }
@@ -21971,7 +22224,7 @@ async function signGitHubAppJwt({ appId, privateKey, nowSeconds }) {
   return `${signingInput}.${base64UrlEncodeBytes(new Uint8Array(signature))}`;
 }
 function resolveGitHubAppPrivateKey(env) {
-  const base64Value = normalizeText6(env?.GITHUB_APP_PRIVATE_KEY_BASE64);
+  const base64Value = normalizeText7(env?.GITHUB_APP_PRIVATE_KEY_BASE64);
   if (base64Value) {
     try {
       return normalizeGitHubAppPrivateKeyValue(decodeToUtf8(base64Value));
@@ -21982,7 +22235,7 @@ function resolveGitHubAppPrivateKey(env) {
   return normalizeGitHubAppPrivateKeyValue(env?.GITHUB_APP_PRIVATE_KEY);
 }
 function normalizeGitHubAppPrivateKeyValue(value) {
-  const normalized = normalizeText6(value);
+  const normalized = normalizeText7(value);
   if (!normalized) {
     return "";
   }
@@ -21990,7 +22243,7 @@ function normalizeGitHubAppPrivateKeyValue(value) {
   return unquoted.replaceAll("\\n", "\n");
 }
 function decodePemPrivateKey(value) {
-  const pem = normalizeText6(value);
+  const pem = normalizeText7(value);
   const body = pem.replaceAll("-----BEGIN PRIVATE KEY-----", "").replaceAll("-----END PRIVATE KEY-----", "").replace(/\s+/g, "");
   return decodeBase64ToBytes(body);
 }
@@ -22036,10 +22289,10 @@ function readNowSeconds(env) {
   return Math.floor(Date.now() / 1e3);
 }
 function toBoolean(value) {
-  const normalized = normalizeText6(value).toLowerCase();
+  const normalized = normalizeText7(value).toLowerCase();
   return normalized === "true" || normalized === "1" || normalized === "yes" || normalized === "on";
 }
-function normalizeText6(value) {
+function normalizeText7(value) {
   return String(value ?? "").trim();
 }
 
@@ -22049,9 +22302,9 @@ var GITHUB_API_VERSION2 = "2022-11-28";
 var GITHUB_API_USER_AGENT2 = "vtdd-v2-github-actions-secret-sync";
 var ALLOWED_ACTIONS_SECRET_NAMES = /* @__PURE__ */ new Set(["OPENAI_API_KEY"]);
 async function executeGitHubActionsSecretSync(input = {}) {
-  const repository = normalizeText7(input.repository);
-  const secretName = normalizeText7(input.secretName);
-  const secretValue = normalizeText7(input.secretValue);
+  const repository = normalizeText8(input.repository);
+  const secretName = normalizeText8(input.secretName);
+  const secretValue = normalizeText8(input.secretValue);
   const approvalGrant = input.approvalGrant ?? null;
   const env = input.env ?? {};
   const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
@@ -22106,11 +22359,11 @@ async function executeGitHubActionsSecretSync(input = {}) {
       ok: false,
       status: publicKeyResponse.status,
       error: "github_actions_secret_sync_failed",
-      reason: normalizeText7(publicKeyBody?.message) || "GitHub Actions secret public key read failed"
+      reason: normalizeText8(publicKeyBody?.message) || "GitHub Actions secret public key read failed"
     };
   }
-  const keyId = normalizeText7(publicKeyBody?.key_id);
-  const key = normalizeText7(publicKeyBody?.key);
+  const keyId = normalizeText8(publicKeyBody?.key_id);
+  const key = normalizeText8(publicKeyBody?.key);
   if (!keyId || !key) {
     return {
       ok: false,
@@ -22157,7 +22410,7 @@ async function executeGitHubActionsSecretSync(input = {}) {
       ok: false,
       status: putResponse.status,
       error: "github_actions_secret_sync_failed",
-      reason: normalizeText7(putBody?.message) || "GitHub Actions secret write failed"
+      reason: normalizeText8(putBody?.message) || "GitHub Actions secret write failed"
     };
   }
   return {
@@ -22197,7 +22450,7 @@ function validateGitHubActionsSecretSyncRequest({
 }
 function validateGitHubActionsSecretSyncApprovalGrant(input = {}) {
   const approvalGrant = input.approvalGrant ?? null;
-  const repository = normalizeText7(input.repository);
+  const repository = normalizeText8(input.repository);
   const now = new Date(input.now ?? Date.now());
   if (!approvalGrant || approvalGrant.verified !== true) {
     return {
@@ -22205,7 +22458,7 @@ function validateGitHubActionsSecretSyncApprovalGrant(input = {}) {
       issues: ["real approvalGrant is required for GitHub Actions secret sync"]
     };
   }
-  const expiresAt = normalizeText7(approvalGrant.expiresAt);
+  const expiresAt = normalizeText8(approvalGrant.expiresAt);
   if (!expiresAt || Number.isNaN(Date.parse(expiresAt)) || Date.parse(expiresAt) <= now.valueOf()) {
     return {
       ok: false,
@@ -22213,13 +22466,13 @@ function validateGitHubActionsSecretSyncApprovalGrant(input = {}) {
     };
   }
   const scope = approvalGrant.scope ?? {};
-  if (normalizeText7(scope.repositoryInput) !== repository) {
+  if (normalizeText8(scope.repositoryInput) !== repository) {
     return {
       ok: false,
       issues: ["approvalGrant scope.repositoryInput must match target repo"]
     };
   }
-  if (normalizeText7(scope.highRiskKind) !== "github_actions_secret_sync") {
+  if (normalizeText8(scope.highRiskKind) !== "github_actions_secret_sync") {
     return {
       ok: false,
       issues: ["approvalGrant scope.highRiskKind must be github_actions_secret_sync"]
@@ -22247,21 +22500,21 @@ function githubHeaders(token) {
   };
 }
 function encodeURIComponentRepository(repository) {
-  const [owner = "", name = ""] = normalizeText7(repository).split("/");
+  const [owner = "", name = ""] = normalizeText8(repository).split("/");
   return `${encodeURIComponent(owner)}/${encodeURIComponent(name)}`;
 }
 async function readJsonSafe2(response) {
   return response.json().catch(() => ({}));
 }
 function normalizeApiBaseUrl2(value) {
-  const normalized = normalizeText7(value);
+  const normalized = normalizeText8(value);
   return normalized ? normalized.replace(/\/+$/, "") : GITHUB_API_BASE_URL2;
 }
-function normalizeText7(value) {
+function normalizeText8(value) {
   return String(value ?? "").trim();
 }
 function base64ToBytes(value) {
-  const normalized = normalizeText7(value);
+  const normalized = normalizeText8(value);
   if (typeof atob === "function") {
     return Uint8Array.from(atob(normalized), (char) => char.charCodeAt(0));
   }
@@ -22286,7 +22539,7 @@ function bytesToBase64(bytes) {
   throw new Error("base64 encoder unavailable");
 }
 function sanitizeGitHubActionsSecretSyncErrorMessage(error) {
-  return normalizeText7(error instanceof Error ? error.message : error).replace(/sk-[A-Za-z0-9_-]+/g, "[REDACTED_OPENAI_KEY]").replace(/(authorization|api[_-]?key|token|secret)(["'\s:=]+)([^"'\s<>&]+)/gi, "$1$2[REDACTED]").slice(0, 500);
+  return normalizeText8(error instanceof Error ? error.message : error).replace(/sk-[A-Za-z0-9_-]+/g, "[REDACTED_OPENAI_KEY]").replace(/(authorization|api[_-]?key|token|secret)(["'\s:=]+)([^"'\s<>&]+)/gi, "$1$2[REDACTED]").slice(0, 500);
 }
 
 // src/core/credential-boundary.js
@@ -22752,10 +23005,10 @@ var ACTIONS_REQUIRING_TARGET_CONFIRMATION = /* @__PURE__ */ new Set([
   ActionType.EXTERNAL_PUBLISH
 ]);
 function evaluateTargetConfirmationBoundary(input = {}) {
-  const mode = normalizeText8(input.mode).toLowerCase();
-  const actionType = normalizeText8(input.actionType).toLowerCase();
-  const repository = normalizeText8(input.repository);
-  const via = normalizeText8(input.via).toLowerCase();
+  const mode = normalizeText9(input.mode).toLowerCase();
+  const actionType = normalizeText9(input.actionType).toLowerCase();
+  const repository = normalizeText9(input.repository);
+  const via = normalizeText9(input.via).toLowerCase();
   if (mode !== TaskMode.EXECUTION) {
     return { ok: true };
   }
@@ -22776,7 +23029,7 @@ function evaluateTargetConfirmationBoundary(input = {}) {
     via: "alias"
   };
 }
-function normalizeText8(value) {
+function normalizeText9(value) {
   return String(value ?? "").trim();
 }
 
@@ -23276,12 +23529,12 @@ var PROPOSAL_LOG_FIELDS = Object.freeze([
 ]);
 function createDecisionLogEntry(input) {
   const candidate = {
-    decision: normalizeText9(input?.decision),
-    rationale: normalizeText9(input?.rationale),
+    decision: normalizeText10(input?.decision),
+    rationale: normalizeText10(input?.rationale),
     relatedIssue: normalizeIssue(input?.relatedIssue),
-    decidedBy: normalizeText9(input?.decidedBy),
+    decidedBy: normalizeText10(input?.decidedBy),
     timestamp: normalizeTimestamp2(input?.timestamp),
-    supersededBy: input?.supersededBy ? normalizeText9(input?.supersededBy) : null
+    supersededBy: input?.supersededBy ? normalizeText10(input?.supersededBy) : null
   };
   const validation = validateDecisionLogEntry(candidate);
   if (!validation.ok) {
@@ -23313,13 +23566,13 @@ function validateDecisionLogEntry(entry) {
 }
 function createProposalLogEntry(input) {
   const candidate = {
-    hypothesis: normalizeText9(input?.hypothesis),
+    hypothesis: normalizeText10(input?.hypothesis),
     options: normalizeStringArray3(input?.options),
     rejectedReasons: normalizeRejectedReasons(input?.rejectedReasons),
     concerns: normalizeStringArray3(input?.concerns),
     unresolvedQuestions: normalizeStringArray3(input?.unresolvedQuestions),
     relatedIssue: input?.relatedIssue ? normalizeIssue(input?.relatedIssue) : null,
-    proposedBy: normalizeText9(input?.proposedBy),
+    proposedBy: normalizeText10(input?.proposedBy),
     timestamp: normalizeTimestamp2(input?.timestamp)
   };
   const validation = validateProposalLogEntry(candidate);
@@ -23349,7 +23602,7 @@ function validateProposalLogEntry(entry) {
   }
   return issues.length > 0 ? { ok: false, issues } : { ok: true };
 }
-function normalizeText9(value) {
+function normalizeText10(value) {
   const text = String(value ?? "").trim();
   return text.length > 0 ? text : "";
 }
@@ -23368,15 +23621,15 @@ function normalizeStringArray3(value) {
   if (!Array.isArray(value)) {
     return [];
   }
-  return value.map((item) => normalizeText9(item)).filter(Boolean);
+  return value.map((item) => normalizeText10(item)).filter(Boolean);
 }
 function normalizeRejectedReasons(value) {
   if (!Array.isArray(value)) {
     return [];
   }
   return value.map((item) => ({
-    option: normalizeText9(item?.option),
-    reason: normalizeText9(item?.reason)
+    option: normalizeText10(item?.option),
+    reason: normalizeText10(item?.reason)
   })).filter((item) => item.option && item.reason);
 }
 function isIsoTimestamp2(value) {
@@ -23437,7 +23690,7 @@ async function appendDecisionLogFromGateway(provider, gatewayInput = {}, gateway
       status: 503,
       error: "memory_write_failed",
       reason: "failed to persist decision log",
-      details: normalizeText10(error?.message) || "unknown provider error"
+      details: normalizeText11(error?.message) || "unknown provider error"
     };
   }
 }
@@ -23465,7 +23718,7 @@ async function retrieveDecisionLogReferences(provider, input = {}) {
       status: 503,
       error: "memory_read_failed",
       reason: "failed to retrieve decision logs",
-      details: normalizeText10(error?.message) || "unknown provider error"
+      details: normalizeText11(error?.message) || "unknown provider error"
     };
   }
   const references = records.map(toDecisionReference).filter(Boolean).filter((item) => relatedIssue ? item.relatedIssue === relatedIssue : true).slice(0, limit);
@@ -23497,7 +23750,7 @@ function createCanonicalDecisionFromGateway(gatewayInput = {}) {
   return createDecisionLogEntry(candidate);
 }
 function buildDecisionMemoryRecord({ entry, gatewayInput, gatewayResult }) {
-  const repository = normalizeText10(gatewayResult?.repository);
+  const repository = normalizeText11(gatewayResult?.repository);
   const decidedByTag = normalizeTag(entry.decidedBy);
   const phaseTag = normalizeTag(gatewayInput?.phase);
   const recordId = makeRecordId(entry);
@@ -23529,14 +23782,14 @@ function toDecisionReference(record) {
     return null;
   }
   return {
-    id: normalizeText10(record?.id),
+    id: normalizeText11(record?.id),
     decision: entry.decision,
     rationale: entry.rationale,
     relatedIssue: entry.relatedIssue,
     decidedBy: entry.decidedBy,
     timestamp: entry.timestamp,
     supersededBy: entry.supersededBy ?? null,
-    repository: normalizeText10(record?.metadata?.repository) || null
+    repository: normalizeText11(record?.metadata?.repository) || null
   };
 }
 function normalizeDecisionEntry(content) {
@@ -23577,7 +23830,7 @@ function normalizeIssue2(value) {
 }
 function firstText(...values) {
   for (const value of values) {
-    const text = normalizeText10(value);
+    const text = normalizeText11(value);
     if (text) {
       return text;
     }
@@ -23593,11 +23846,11 @@ function firstNumber(...values) {
   }
   return -1;
 }
-function normalizeText10(value) {
+function normalizeText11(value) {
   return String(value ?? "").trim();
 }
 function normalizeTag(value) {
-  return normalizeText10(value).toLowerCase().replace(/[^a-z0-9:_-]+/g, "_");
+  return normalizeText11(value).toLowerCase().replace(/[^a-z0-9:_-]+/g, "_");
 }
 function normalizeLimit(value, fallback) {
   const numeric = Number(value ?? fallback);
@@ -23656,7 +23909,7 @@ async function appendProposalLogFromGateway(provider, gatewayInput = {}, gateway
       status: 503,
       error: "memory_write_failed",
       reason: "failed to persist proposal log",
-      details: normalizeText11(error?.message) || "unknown provider error"
+      details: normalizeText12(error?.message) || "unknown provider error"
     };
   }
 }
@@ -23684,7 +23937,7 @@ async function retrieveProposalLogReferences(provider, input = {}) {
       status: 503,
       error: "memory_read_failed",
       reason: "failed to retrieve proposal logs",
-      details: normalizeText11(error?.message) || "unknown provider error"
+      details: normalizeText12(error?.message) || "unknown provider error"
     };
   }
   const references = records.map(toProposalReference).filter(Boolean).filter((item) => relatedIssue ? item.relatedIssue === relatedIssue : true).slice(0, limit);
@@ -23718,7 +23971,7 @@ function createCanonicalProposalFromGateway(gatewayInput = {}) {
   return createProposalLogEntry(candidate);
 }
 function buildProposalMemoryRecord({ entry, gatewayInput, gatewayResult }) {
-  const repository = normalizeText11(gatewayResult?.repository);
+  const repository = normalizeText12(gatewayResult?.repository);
   const proposedByTag = normalizeTag2(entry.proposedBy);
   const phaseTag = normalizeTag2(gatewayInput?.phase);
   const issuePart = entry.relatedIssue ? String(entry.relatedIssue) : "none";
@@ -23749,7 +24002,7 @@ function toProposalReference(record) {
     return null;
   }
   return {
-    id: normalizeText11(record?.id),
+    id: normalizeText12(record?.id),
     hypothesis: entry.hypothesis,
     options: entry.options,
     rejectedReasons: entry.rejectedReasons,
@@ -23758,7 +24011,7 @@ function toProposalReference(record) {
     relatedIssue: entry.relatedIssue ?? null,
     proposedBy: entry.proposedBy,
     timestamp: entry.timestamp,
-    repository: normalizeText11(record?.metadata?.repository) || null
+    repository: normalizeText12(record?.metadata?.repository) || null
   };
 }
 function normalizeProposalEntry(content) {
@@ -23798,7 +24051,7 @@ function normalizeIssue3(value) {
 }
 function firstText2(...values) {
   for (const value of values) {
-    const text = normalizeText11(value);
+    const text = normalizeText12(value);
     if (text) {
       return text;
     }
@@ -23821,11 +24074,11 @@ function firstRejectedReasons(...values) {
   }
   return [];
 }
-function normalizeText11(value) {
+function normalizeText12(value) {
   return String(value ?? "").trim();
 }
 function normalizeTag2(value) {
-  return normalizeText11(value).toLowerCase().replace(/[^a-z0-9:_-]+/g, "_");
+  return normalizeText12(value).toLowerCase().replace(/[^a-z0-9:_-]+/g, "_");
 }
 function normalizeLimit2(value, fallback) {
   const numeric = Number(value ?? fallback);
@@ -23920,7 +24173,7 @@ function buildRetrievalPlan(input) {
   };
 }
 function buildSemanticRetrievalPolicy(input = {}) {
-  const queryText = normalizeText12(input.queryText);
+  const queryText = normalizeText13(input.queryText);
   const enabled = input.enabled === true && Boolean(queryText);
   const mode = enabled ? normalizeSemanticMode(input.mode) : SemanticRetrievalMode.DISABLED;
   const maxPerSource = normalizeLimit3(input.maxPerSource, 4);
@@ -24023,10 +24276,10 @@ function normalizeUseCases(value) {
   if (!Array.isArray(value) || value.length === 0) {
     return [...DEFAULT_RETRIEVAL_QUALITY_USE_CASES];
   }
-  const normalized = value.map(normalizeText12).filter(Boolean);
+  const normalized = value.map(normalizeText13).filter(Boolean);
   return normalized.length > 0 ? normalized : [...DEFAULT_RETRIEVAL_QUALITY_USE_CASES];
 }
-function normalizeText12(value) {
+function normalizeText13(value) {
   return String(value ?? "").trim();
 }
 function sortSemanticReferences(references) {
@@ -24060,7 +24313,7 @@ function dedupeReferences(references) {
   return [...map.values()];
 }
 function createReferenceKey(reference) {
-  const id = normalizeText12(reference?.id);
+  const id = normalizeText13(reference?.id);
   if (id) {
     return `id:${id}`;
   }
@@ -24082,7 +24335,7 @@ async function retrieveCrossIssueMemoryIndex(provider, input = {}) {
   const phase = normalizePhase2(input.phase);
   const limit = normalizeLimit4(input.limit, DEFAULT_LIMIT);
   const relatedIssue = normalizeIssue4(input.relatedIssue);
-  const queryText = normalizeText13(input.text);
+  const queryText = normalizeText14(input.text);
   const issueContext = normalizeIssueContext(input.issueContext, relatedIssue);
   const runtimeTruth = normalizeRuntimeTruth(input.runtimeTruth);
   const semanticRetrievalInput = normalizeSemanticRetrievalInput(
@@ -24166,14 +24419,14 @@ async function retrieveCrossIssueMemoryIndex(provider, input = {}) {
       status: 503,
       error: "memory_read_failed",
       reason: "failed to retrieve cross-issue memory index",
-      details: normalizeText13(error?.message) || "unknown provider error"
+      details: normalizeText14(error?.message) || "unknown provider error"
     };
   }
 }
 async function retrievePrContextReferences(provider, input = {}) {
   const limit = normalizeLimit4(input.limit, DEFAULT_LIMIT);
   const relatedIssue = normalizeIssue4(input.relatedIssue);
-  const text = normalizeText13(input.text);
+  const text = normalizeText14(input.text);
   const records = await provider.retrieve({
     type: MemoryRecordType.EXECUTION_LOG,
     limit: Math.max(limit * 4, limit)
@@ -24183,36 +24436,36 @@ async function retrievePrContextReferences(provider, input = {}) {
 }
 function toConstitutionReference(record) {
   return {
-    id: normalizeText13(record?.id),
-    title: normalizeText13(record?.content?.title) || "constitution_rule",
-    summary: normalizeText13(record?.content?.description) || normalizeText13(record?.content?.rule) || null,
-    version: normalizeText13(record?.metadata?.version) || null,
-    timestamp: normalizeText13(record?.createdAt) || null
+    id: normalizeText14(record?.id),
+    title: normalizeText14(record?.content?.title) || "constitution_rule",
+    summary: normalizeText14(record?.content?.description) || normalizeText14(record?.content?.rule) || null,
+    version: normalizeText14(record?.metadata?.version) || null,
+    timestamp: normalizeText14(record?.createdAt) || null
   };
 }
 function toPrContextReference(record) {
   const metadata = normalizeObject5(record?.metadata);
   const content = normalizeObject5(record?.content);
-  const tags = Array.isArray(record?.tags) ? record.tags.map(normalizeText13) : [];
-  const hasPrSignal = hasTagPrefix(tags, "pr:") || hasTag(tags, "pr_context") || hasTag(tags, "review_summary") || normalizeText13(metadata.kind) === "pr_context" || normalizeText13(metadata.kind) === "pr_review_summary" || Number.isInteger(Number(metadata.prNumber)) || Number.isInteger(Number(content.prNumber));
+  const tags = Array.isArray(record?.tags) ? record.tags.map(normalizeText14) : [];
+  const hasPrSignal = hasTagPrefix(tags, "pr:") || hasTag(tags, "pr_context") || hasTag(tags, "review_summary") || normalizeText14(metadata.kind) === "pr_context" || normalizeText14(metadata.kind) === "pr_review_summary" || Number.isInteger(Number(metadata.prNumber)) || Number.isInteger(Number(content.prNumber));
   if (!hasPrSignal) {
     return null;
   }
-  const summary = normalizeText13(content.summary) || normalizeText13(content.note) || normalizeText13(content.result);
+  const summary = normalizeText14(content.summary) || normalizeText14(content.note) || normalizeText14(content.result);
   const relatedIssue = normalizeIssue4(content.relatedIssue ?? metadata.relatedIssue);
   const prNumber = normalizeIssue4(content.prNumber ?? metadata.prNumber);
-  const reviewer = normalizeText13(content.reviewer) || normalizeText13(metadata.reviewer) || null;
-  const repository = normalizeText13(metadata.repository) || null;
-  const status = normalizeText13(content.status) || normalizeText13(metadata.status) || null;
+  const reviewer = normalizeText14(content.reviewer) || normalizeText14(metadata.reviewer) || null;
+  const repository = normalizeText14(metadata.repository) || null;
+  const status = normalizeText14(content.status) || normalizeText14(metadata.status) || null;
   return {
-    id: normalizeText13(record?.id),
+    id: normalizeText14(record?.id),
     prNumber,
     relatedIssue,
     summary: summary || null,
     reviewer,
     status,
     repository,
-    timestamp: normalizeText13(record?.createdAt) || null
+    timestamp: normalizeText14(record?.createdAt) || null
   };
 }
 function flattenByPlan(planSources, candidates, limit) {
@@ -24316,7 +24569,7 @@ function normalizeQueriedRecords(queryResult) {
   return [];
 }
 function resolveSemanticAdapter(queryResult) {
-  const adapter = normalizeText13(queryResult?.adapter);
+  const adapter = normalizeText14(queryResult?.adapter);
   return adapter || "memory_provider.query";
 }
 function createEmptySourceMap() {
@@ -24331,7 +24584,7 @@ function createEmptySourceMap() {
   };
 }
 function toSemanticSourceReference(record) {
-  const type = normalizeText13(record?.type).toLowerCase();
+  const type = normalizeText14(record?.type).toLowerCase();
   const score = normalizeSemanticScore(
     record?.semanticScore ?? record?.score ?? normalizeObject5(record?.metadata).semanticScore
   );
@@ -24375,35 +24628,35 @@ function withSemanticScore(reference, semanticScore) {
 }
 function toDecisionLogReference(record) {
   const content = normalizeObject5(record?.content);
-  const decision = normalizeText13(content.decision);
+  const decision = normalizeText14(content.decision);
   if (!decision) {
     return null;
   }
   return {
-    id: normalizeText13(record?.id),
+    id: normalizeText14(record?.id),
     decision,
-    rationale: normalizeText13(content.rationale) || null,
+    rationale: normalizeText14(content.rationale) || null,
     relatedIssue: normalizeIssue4(content.relatedIssue ?? normalizeObject5(record?.metadata).relatedIssue),
-    decidedBy: normalizeText13(content.decidedBy) || null,
-    timestamp: normalizeText13(content.timestamp) || normalizeText13(record?.createdAt) || null,
-    supersededBy: normalizeText13(content.supersededBy) || null,
-    repository: normalizeText13(normalizeObject5(record?.metadata).repository) || null
+    decidedBy: normalizeText14(content.decidedBy) || null,
+    timestamp: normalizeText14(content.timestamp) || normalizeText14(record?.createdAt) || null,
+    supersededBy: normalizeText14(content.supersededBy) || null,
+    repository: normalizeText14(normalizeObject5(record?.metadata).repository) || null
   };
 }
 function toProposalLogReference(record) {
   const content = normalizeObject5(record?.content);
-  const hypothesis = normalizeText13(content.hypothesis);
+  const hypothesis = normalizeText14(content.hypothesis);
   if (!hypothesis) {
     return null;
   }
   return {
-    id: normalizeText13(record?.id),
+    id: normalizeText14(record?.id),
     hypothesis,
     options: Array.isArray(content.options) ? content.options : [],
     relatedIssue: normalizeIssue4(content.relatedIssue ?? normalizeObject5(record?.metadata).relatedIssue),
-    proposedBy: normalizeText13(content.proposedBy) || null,
-    timestamp: normalizeText13(content.timestamp) || normalizeText13(record?.createdAt) || null,
-    repository: normalizeText13(normalizeObject5(record?.metadata).repository) || null
+    proposedBy: normalizeText14(content.proposedBy) || null,
+    timestamp: normalizeText14(content.timestamp) || normalizeText14(record?.createdAt) || null,
+    repository: normalizeText14(normalizeObject5(record?.metadata).repository) || null
   };
 }
 function shouldKeepSemanticReference(reference, source, relatedIssue) {
@@ -24423,8 +24676,8 @@ function normalizeIssueContext(issueContext, relatedIssue) {
   }
   return {
     issueNumber,
-    issueTitle: normalizeText13(context.issueTitle) || null,
-    issueUrl: normalizeText13(context.issueUrl) || null
+    issueTitle: normalizeText14(context.issueTitle) || null,
+    issueUrl: normalizeText14(context.issueUrl) || null
   };
 }
 function normalizeRuntimeTruth(runtimeTruth) {
@@ -24434,8 +24687,8 @@ function normalizeRuntimeTruth(runtimeTruth) {
   }
   return {
     runtimeAvailable: Boolean(value.runtimeAvailable),
-    source: normalizeText13(value.source) || null,
-    checkedAt: normalizeText13(value.checkedAt) || null
+    source: normalizeText14(value.source) || null,
+    checkedAt: normalizeText14(value.checkedAt) || null
   };
 }
 function hasTagPrefix(tags, prefix) {
@@ -24451,11 +24704,11 @@ function normalizeObject5(value) {
   }
   return value;
 }
-function normalizeText13(value) {
+function normalizeText14(value) {
   return String(value ?? "").trim();
 }
 function normalizePhase2(value) {
-  const phase = normalizeText13(value).toLowerCase();
+  const phase = normalizeText14(value).toLowerCase();
   if (phase === "execution" || phase === "exploration") {
     return phase;
   }
@@ -24476,7 +24729,7 @@ function normalizeLimit4(value, fallback) {
   return Math.min(Math.floor(numeric), 200);
 }
 function normalizeSemanticMode2(value) {
-  const mode = normalizeText13(value).toLowerCase();
+  const mode = normalizeText14(value).toLowerCase();
   if (mode === SemanticRetrievalMode.ASSISTIVE) {
     return SemanticRetrievalMode.ASSISTIVE;
   }
@@ -24603,9 +24856,9 @@ async function retrieveOperationalMemory(provider, input = {}) {
     };
   }
   const limit = normalizeLimit5(input.limit, DEFAULT_LIMIT2);
-  const queryText = normalizeText14(input.text);
+  const queryText = normalizeText15(input.text);
   const now = normalizeTimestamp3(input.now) || (/* @__PURE__ */ new Date()).toISOString();
-  const currentRepository = normalizeText14(input.repository);
+  const currentRepository = normalizeText15(input.repository);
   const runtimeTruth = normalizeRuntimeTruth2(input.runtimeTruth);
   try {
     const structuredRecords = await retrieveStructuredOperationalRecords(provider, {
@@ -24648,7 +24901,7 @@ async function retrieveOperationalMemory(provider, input = {}) {
       status: 503,
       error: "operational_memory_read_failed",
       reason: "failed to retrieve operational memory",
-      details: normalizeText14(error?.message) || "unknown provider error"
+      details: normalizeText15(error?.message) || "unknown provider error"
     };
   }
 }
@@ -24667,9 +24920,9 @@ function toOperationalMemoryReference(record, input = {}) {
   const metadata = normalizeObject6(record?.metadata);
   const content = normalizeObject6(record?.content);
   const tags = normalizeTags2(record?.tags);
-  const queryText = normalizeText14(input.queryText);
-  const repository = normalizeText14(metadata.repository ?? content.repository);
-  const currentRepository = normalizeText14(input.currentRepository);
+  const queryText = normalizeText15(input.queryText);
+  const repository = normalizeText15(metadata.repository ?? content.repository);
+  const currentRepository = normalizeText15(input.currentRepository);
   const textBlob = `${JSON.stringify(content)} ${JSON.stringify(metadata)} ${tags.join(" ")}`.toLowerCase();
   const scoreSignals = {
     relevance: scoreRelevance(textBlob, queryText),
@@ -24678,14 +24931,14 @@ function toOperationalMemoryReference(record, input = {}) {
     recency: scoreRecency(record?.createdAt, input.now)
   };
   return {
-    id: normalizeText14(record?.id),
+    id: normalizeText15(record?.id),
     layer,
-    type: normalizeText14(record?.type),
+    type: normalizeText15(record?.type),
     title: resolveTitle(record),
     summary: resolveSummary(record),
     repository: repository || null,
     crossRepository: Boolean(currentRepository && repository && repository !== currentRepository),
-    createdAt: normalizeText14(record?.createdAt) || null,
+    createdAt: normalizeText15(record?.createdAt) || null,
     tags,
     score: calculateOperationalMemoryScore(scoreSignals),
     scoreSignals,
@@ -24693,7 +24946,7 @@ function toOperationalMemoryReference(record, input = {}) {
   };
 }
 function resolveLayerForType(type) {
-  return MEMORY_TYPE_LAYER_MAP[normalizeText14(type)] ?? null;
+  return MEMORY_TYPE_LAYER_MAP[normalizeText15(type)] ?? null;
 }
 function scoreRelevance(textBlob, queryText) {
   if (!queryText) {
@@ -24770,14 +25023,14 @@ function mergeRecords(primary, secondary) {
   return [...map.values()];
 }
 function createRecordMergeKey(record) {
-  const id = normalizeText14(record?.id);
+  const id = normalizeText15(record?.id);
   if (id) {
     return `id:${id}`;
   }
   return [
     "shape",
-    normalizeText14(record?.type),
-    normalizeText14(record?.createdAt),
+    normalizeText15(record?.type),
+    normalizeText15(record?.createdAt),
     resolveTitle(record),
     resolveSummary(record)
   ].join(":");
@@ -24793,11 +25046,11 @@ function normalizeQueriedRecords2(value) {
 }
 function resolveTitle(record) {
   const content = normalizeObject6(record?.content);
-  return normalizeText14(content.title) || normalizeText14(content.decision) || normalizeText14(content.hypothesis) || normalizeText14(content.failurePattern) || normalizeText14(content.summary) || normalizeText14(content.note) || normalizeText14(record?.id);
+  return normalizeText15(content.title) || normalizeText15(content.decision) || normalizeText15(content.hypothesis) || normalizeText15(content.failurePattern) || normalizeText15(content.summary) || normalizeText15(content.note) || normalizeText15(record?.id);
 }
 function resolveSummary(record) {
   const content = normalizeObject6(record?.content);
-  return normalizeText14(content.summary) || normalizeText14(content.rationale) || normalizeText14(content.remediation) || normalizeText14(content.description) || normalizeText14(content.note) || normalizeText14(content.result) || null;
+  return normalizeText15(content.summary) || normalizeText15(content.rationale) || normalizeText15(content.remediation) || normalizeText15(content.description) || normalizeText15(content.note) || normalizeText15(content.result) || null;
 }
 function normalizeRuntimeTruth2(value) {
   const runtimeTruth = normalizeObject6(value);
@@ -24805,9 +25058,9 @@ function normalizeRuntimeTruth2(value) {
     return null;
   }
   return {
-    currentState: normalizeText14(runtimeTruth.currentState) || null,
-    source: normalizeText14(runtimeTruth.source) || null,
-    checkedAt: normalizeText14(runtimeTruth.checkedAt) || null,
+    currentState: normalizeText15(runtimeTruth.currentState) || null,
+    source: normalizeText15(runtimeTruth.source) || null,
+    checkedAt: normalizeText15(runtimeTruth.checkedAt) || null,
     overridesMemory: true
   };
 }
@@ -24822,7 +25075,7 @@ function normalizeTags2(value) {
   if (!Array.isArray(value)) {
     return [];
   }
-  return value.map((item) => normalizeText14(item).toLowerCase()).filter(Boolean);
+  return value.map((item) => normalizeText15(item).toLowerCase()).filter(Boolean);
 }
 function normalizeLimit5(value, fallback) {
   const numeric = Number(value ?? fallback);
@@ -24832,7 +25085,7 @@ function normalizeLimit5(value, fallback) {
   return Math.min(Math.floor(numeric), 50);
 }
 function normalizeTimestamp3(value) {
-  const text = normalizeText14(value);
+  const text = normalizeText15(value);
   if (!text || !Number.isFinite(Date.parse(text))) {
     return null;
   }
@@ -24844,11 +25097,11 @@ function normalizeObject6(value) {
   }
   return value;
 }
-function normalizeText14(value) {
+function normalizeText15(value) {
   return String(value ?? "").trim();
 }
 function tokenize(value) {
-  return normalizeText14(value).toLowerCase().split(/[^a-z0-9_#-]+/).map((token) => token.trim()).filter(Boolean);
+  return normalizeText15(value).toLowerCase().split(/[^a-z0-9_#-]+/).map((token) => token.trim()).filter(Boolean);
 }
 
 // src/core/judgment-order.js
@@ -25073,14 +25326,14 @@ function isBoundRemoteCodexHandoff(input = {}) {
   const issueContext = normalizeObject7(input?.issueContext);
   const issueNumber = normalizePositiveInteger2(issueContext.issueNumber);
   const relatedIssue = normalizePositiveInteger2(handoff.relatedIssue);
-  return context.requiresHandoff === true && handoff.issueTraceable === true && handoff.approvalScopeMatched === true && Boolean(normalizeText15(handoff.summary)) && issueNumber !== null && relatedIssue === issueNumber && hasBoundIssueTraceability(input?.policyInput, issueNumber);
+  return context.requiresHandoff === true && handoff.issueTraceable === true && handoff.approvalScopeMatched === true && Boolean(normalizeText16(handoff.summary)) && issueNumber !== null && relatedIssue === issueNumber && hasBoundIssueTraceability(input?.policyInput, issueNumber);
 }
 function hasBoundIssueTraceability(policyInput, issueNumber) {
   const traceability = normalizeObject7(policyInput?.issueTraceability);
   return normalizePositiveInteger2(traceability.relatedIssue) === issueNumber && hasTextArray(traceability.intentRefs) && hasTextArray(traceability.successCriteriaRefs) && hasTextArray(traceability.nonGoalRefs);
 }
 function hasTextArray(value) {
-  return Array.isArray(value) && value.some((item) => Boolean(normalizeText15(item)));
+  return Array.isArray(value) && value.some((item) => Boolean(normalizeText16(item)));
 }
 function normalizeObject7(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -25088,7 +25341,7 @@ function normalizeObject7(value) {
   }
   return value;
 }
-function normalizeText15(value) {
+function normalizeText16(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 function normalizePositiveInteger2(value) {
@@ -25146,11 +25399,11 @@ function deny6(rule, reason) {
 }
 
 // src/core/execution-lead-time.js
-function normalizeText16(value) {
+function normalizeText17(value) {
   return String(value ?? "").trim();
 }
 function defaultNormalizeTimestamp(value) {
-  const text = normalizeText16(value);
+  const text = normalizeText17(value);
   return Number.isFinite(Date.parse(text)) ? text : null;
 }
 function buildExecutionLeadTime(timestamps = {}, options = {}) {
@@ -25183,8 +25436,8 @@ function buildExecutionLeadTime(timestamps = {}, options = {}) {
   };
 }
 function buildExecutionDuration(start, end) {
-  const startMs = Date.parse(normalizeText16(start));
-  const endMs = Date.parse(normalizeText16(end));
+  const startMs = Date.parse(normalizeText17(start));
+  const endMs = Date.parse(normalizeText17(end));
   if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs < startMs) {
     return null;
   }
@@ -25300,7 +25553,7 @@ function createRemoteCodexExecutionRequest(input = {}) {
   const issueNumber = normalizePositiveInteger3(
     issueContext.issueNumber ?? handoff.relatedIssue ?? payload.relatedIssue
   );
-  const codexGoal = normalizeText17(continuationContext.codexGoal) || normalizeText17(payload?.executionTarget?.codexGoal) || normalizeText17(gatewayResult?.executionContinuity?.codexGoal);
+  const codexGoal = normalizeText18(continuationContext.codexGoal) || normalizeText18(payload?.executionTarget?.codexGoal) || normalizeText18(gatewayResult?.executionContinuity?.codexGoal);
   const revisionTarget = normalizeRevisionTarget({
     runtimeState,
     executionTarget: normalizeObject8(payload?.executionTarget),
@@ -25311,15 +25564,15 @@ function createRemoteCodexExecutionRequest(input = {}) {
     handoff
   });
   const request = {
-    executionId: normalizeText17(input?.executionId) || buildExecutionId({ issueNumber }),
-    actorRole: normalizeText17(payload.actorRole),
-    repository: normalizeText17(gatewayResult.repository),
+    executionId: normalizeText18(input?.executionId) || buildExecutionId({ issueNumber }),
+    actorRole: normalizeText18(payload.actorRole),
+    repository: normalizeText18(gatewayResult.repository),
     issueNumber,
-    branch: (codexGoal === RemoteCodexDispatchGoal.REVISE_PR ? revisionTarget.headRef : "") || normalizeText17(runtimeState.activeBranch) || normalizeText17(payload?.executionTarget?.branch) || (issueNumber ? `codex/issue-${issueNumber}` : ""),
-    baseRef: normalizeText17(payload?.executionTarget?.baseRef) || normalizeText17(runtimeState.baseRef) || "main",
+    branch: (codexGoal === RemoteCodexDispatchGoal.REVISE_PR ? revisionTarget.headRef : "") || normalizeText18(runtimeState.activeBranch) || normalizeText18(payload?.executionTarget?.branch) || (issueNumber ? `codex/issue-${issueNumber}` : ""),
+    baseRef: normalizeText18(payload?.executionTarget?.baseRef) || normalizeText18(runtimeState.baseRef) || "main",
     codexGoal,
-    approvalPhrase: normalizeText17(payload?.policyInput?.approvalPhrase),
-    approvalActor: normalizeText17(payload?.policyInput?.approvalActor) || normalizeText17(payload?.policyInput?.goActor) || normalizeText17(payload?.sender?.login),
+    approvalPhrase: normalizeText18(payload?.policyInput?.approvalPhrase),
+    approvalActor: normalizeText18(payload?.policyInput?.approvalActor) || normalizeText18(payload?.policyInput?.goActor) || normalizeText18(payload?.sender?.login),
     targetConfirmed: payload?.policyInput?.targetConfirmed === true,
     approvalScopeMatched,
     handoffRequired: continuationContext.requiresHandoff === true,
@@ -25327,7 +25580,7 @@ function createRemoteCodexExecutionRequest(input = {}) {
     handoff: Object.keys(handoff).length > 0 ? {
       issueTraceable: handoff.issueTraceable === true,
       approvalScopeMatched: handoff.approvalScopeMatched === true,
-      summary: normalizeText17(handoff.summary),
+      summary: normalizeText18(handoff.summary),
       relatedIssue: normalizePositiveInteger3(handoff.relatedIssue),
       targetPullRequest: revisionTarget
     } : null
@@ -25401,12 +25654,12 @@ function normalizeRevisionTarget({ runtimeState, executionTarget, handoff }) {
     number: normalizePositiveInteger3(
       executionTarget.prNumber ?? executionTarget.pullRequestNumber ?? executionTargetPull.number ?? handoff.prNumber ?? handoff.pullRequestNumber ?? handoffTarget.number ?? pullRequest.number
     ),
-    url: normalizeText17(executionTarget.prUrl) || normalizeText17(executionTargetPull.url) || normalizeText17(handoff.prUrl) || normalizeText17(handoffTarget.url) || normalizeText17(pullRequest.url) || null,
-    state: normalizeText17(
+    url: normalizeText18(executionTarget.prUrl) || normalizeText18(executionTargetPull.url) || normalizeText18(handoff.prUrl) || normalizeText18(handoffTarget.url) || normalizeText18(pullRequest.url) || null,
+    state: normalizeText18(
       executionTarget.prState || executionTargetPull.state || handoff.prState || handoffTarget.state || pullRequest.state
     ).toLowerCase() || null,
-    headRef: normalizeText17(executionTarget.headRef) || normalizeText17(executionTargetPull.headRef) || normalizeText17(executionTargetPull.head?.ref) || normalizeText17(handoff.headRef) || normalizeText17(handoffTarget.headRef) || normalizeText17(handoffTarget.head?.ref) || normalizeText17(pullRequest.headRef) || normalizeText17(pullRequest.head?.ref) || null,
-    headSha: normalizeText17(executionTarget.headSha) || normalizeText17(executionTargetPull.headSha) || normalizeText17(executionTargetPull.head?.sha) || normalizeText17(handoff.headSha) || normalizeText17(handoffTarget.headSha) || normalizeText17(handoffTarget.head?.sha) || normalizeText17(pullRequest.headSha) || normalizeText17(pullRequest.head?.sha) || null
+    headRef: normalizeText18(executionTarget.headRef) || normalizeText18(executionTargetPull.headRef) || normalizeText18(executionTargetPull.head?.ref) || normalizeText18(handoff.headRef) || normalizeText18(handoffTarget.headRef) || normalizeText18(handoffTarget.head?.ref) || normalizeText18(pullRequest.headRef) || normalizeText18(pullRequest.head?.ref) || null,
+    headSha: normalizeText18(executionTarget.headSha) || normalizeText18(executionTargetPull.headSha) || normalizeText18(executionTargetPull.head?.sha) || normalizeText18(handoff.headSha) || normalizeText18(handoffTarget.headSha) || normalizeText18(handoffTarget.head?.sha) || normalizeText18(pullRequest.headSha) || normalizeText18(pullRequest.head?.sha) || null
   };
 }
 function collectRevisionTargetConflicts({ executionTarget, handoff }) {
@@ -25448,9 +25701,9 @@ function normalizeRevisionTargetSource(source, value = {}) {
   const target = {
     source,
     number: normalizePositiveInteger3(input.number ?? pullRequest.number),
-    state: normalizeText17(input.state ?? pullRequest.state).toLowerCase() || null,
-    headRef: normalizeText17(input.headRef) || normalizeText17(pullRequest.headRef) || normalizeText17(pullRequest.head?.ref) || null,
-    headSha: normalizeText17(input.headSha) || normalizeText17(pullRequest.headSha) || normalizeText17(pullRequest.head?.sha) || null
+    state: normalizeText18(input.state ?? pullRequest.state).toLowerCase() || null,
+    headRef: normalizeText18(input.headRef) || normalizeText18(pullRequest.headRef) || normalizeText18(pullRequest.head?.ref) || null,
+    headSha: normalizeText18(input.headSha) || normalizeText18(pullRequest.headSha) || normalizeText18(pullRequest.head?.sha) || null
   };
   return {
     ...target,
@@ -25511,9 +25764,9 @@ async function dispatchControlRepositoryWorkflow({ request, token, env, transpor
       reason: "VTDD_GITHUB_ACTIONS_REPOSITORY must be configured"
     };
   }
-  const workflowFile = normalizeText17(env?.REMOTE_CODEX_WORKFLOW_FILE) || REMOTE_CODEX_WORKFLOW_FILE;
-  const workflowRef = normalizeText17(env?.REMOTE_CODEX_WORKFLOW_REF) || "main";
-  const apiBaseUrl = normalizeText17(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
+  const workflowFile = normalizeText18(env?.REMOTE_CODEX_WORKFLOW_FILE) || REMOTE_CODEX_WORKFLOW_FILE;
+  const workflowRef = normalizeText18(env?.REMOTE_CODEX_WORKFLOW_REF) || "main";
+  const apiBaseUrl = normalizeText18(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
   const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
   const dispatchUrl = `${apiBaseUrl}/repos/${encodeURIComponentRepository2(
     controlRepository
@@ -25562,7 +25815,7 @@ async function dispatchControlRepositoryWorkflow({ request, token, env, transpor
       ok: false,
       status: response.status,
       error: "remote_codex_dispatch_failed",
-      reason: normalizeText17(body?.message) || "GitHub workflow dispatch failed"
+      reason: normalizeText18(body?.message) || "GitHub workflow dispatch failed"
     };
   }
   const progress = await retrieveControlRepositoryWorkflowProgress({
@@ -25598,7 +25851,7 @@ async function dispatchControlRepositoryWorkflow({ request, token, env, transpor
   };
 }
 async function retrieveRemoteCodexExecutionProgress(input = {}) {
-  const executionId = normalizeText17(input?.executionId);
+  const executionId = normalizeText18(input?.executionId);
   if (!executionId) {
     return {
       ok: false,
@@ -25629,9 +25882,9 @@ async function retrieveRemoteCodexExecutionProgress(input = {}) {
   if (transport.value === RemoteCodexExecutorTransport.CODEX_CLOUD_GITHUB_COMMENT) {
     return retrieveCodexCloudGitHubCommentProgress({
       executionId,
-      repository: normalizeText17(input?.repository),
+      repository: normalizeText18(input?.repository),
       issueNumber: normalizePositiveInteger3(input?.issueNumber),
-      branch: normalizeText17(input?.branch),
+      branch: normalizeText18(input?.branch),
       token: token.value,
       env: input?.env
     });
@@ -25639,9 +25892,9 @@ async function retrieveRemoteCodexExecutionProgress(input = {}) {
   if (transport.value === RemoteCodexExecutorTransport.VPS_RUNNER) {
     return retrieveVpsRunnerGitHubQueueProgress({
       executionId,
-      repository: normalizeText17(input?.repository),
+      repository: normalizeText18(input?.repository),
       issueNumber: normalizePositiveInteger3(input?.issueNumber),
-      branch: normalizeText17(input?.branch),
+      branch: normalizeText18(input?.branch),
       token: token.value,
       env: input?.env
     });
@@ -25651,8 +25904,8 @@ async function retrieveRemoteCodexExecutionProgress(input = {}) {
     token: token.value,
     env: input?.env,
     transport: transport.value,
-    repository: normalizeText17(input?.repository),
-    branch: normalizeText17(input?.branch)
+    repository: normalizeText18(input?.repository),
+    branch: normalizeText18(input?.branch)
   });
 }
 async function retrieveVpsRunnerHealthStatus(input = {}) {
@@ -25673,12 +25926,12 @@ async function retrieveVpsRunnerHealthStatus(input = {}) {
   };
 }
 async function cancelVpsRunnerQueue(input = {}) {
-  const repository = normalizeText17(input?.repository);
+  const repository = normalizeText18(input?.repository);
   const issueNumber = normalizePositiveInteger3(input?.issueNumber);
-  const executionId = normalizeText17(input?.executionId);
+  const executionId = normalizeText18(input?.executionId);
   const mode = normalizeVpsRunnerCancelMode(input?.mode, { executionId, issueNumber });
-  const reason = normalizeText17(input?.reason) || "Canceled by Butler request.";
-  const actor = normalizeText17(input?.actor) || null;
+  const reason = normalizeText18(input?.reason) || "Canceled by Butler request.";
+  const actor = normalizeText18(input?.actor) || null;
   const issues = [];
   if (!repository) {
     issues.push("repository is required");
@@ -25710,7 +25963,7 @@ async function cancelVpsRunnerQueue(input = {}) {
       reason: token.reason
     };
   }
-  const apiBaseUrl = normalizeText17(input?.env?.GITHUB_API_BASE_URL) || "https://api.github.com";
+  const apiBaseUrl = normalizeText18(input?.env?.GITHUB_API_BASE_URL) || "https://api.github.com";
   const fetchImpl = typeof input?.env?.GITHUB_API_FETCH === "function" ? input.env.GITHUB_API_FETCH.bind(input.env) : fetch;
   let comments;
   try {
@@ -25720,7 +25973,7 @@ async function cancelVpsRunnerQueue(input = {}) {
       ok: false,
       status: error?.status || 503,
       error: "vps_runner_cancel_failed",
-      reason: normalizeText17(error?.message) || "failed to read VPS runner queue comments"
+      reason: normalizeText18(error?.message) || "failed to read VPS runner queue comments"
     };
   }
   const queueStates = buildVpsRunnerQueueStates(comments);
@@ -25765,7 +26018,7 @@ async function cancelVpsRunnerQueue(input = {}) {
       executionId: target.executionId,
       issueNumber: target.issueNumber,
       queueCommentId: normalizePositiveInteger3(target.comment?.id),
-      queueCommentUrl: normalizeText17(target.comment?.html_url) || null,
+      queueCommentUrl: normalizeText18(target.comment?.html_url) || null,
       previousState: target.lifecycle,
       runningCancelRequested: cancellation.runningCancelRequested
     });
@@ -25804,8 +26057,8 @@ async function retrieveControlRepositoryWorkflowProgress({
       reason: "VTDD_GITHUB_ACTIONS_REPOSITORY must be configured"
     };
   }
-  const workflowFile = normalizeText17(env?.REMOTE_CODEX_WORKFLOW_FILE) || REMOTE_CODEX_WORKFLOW_FILE;
-  const apiBaseUrl = normalizeText17(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
+  const workflowFile = normalizeText18(env?.REMOTE_CODEX_WORKFLOW_FILE) || REMOTE_CODEX_WORKFLOW_FILE;
+  const apiBaseUrl = normalizeText18(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
   const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
   const progressUrl = `${apiBaseUrl}/repos/${encodeURIComponentRepository2(
     controlRepository
@@ -25835,7 +26088,7 @@ async function retrieveControlRepositoryWorkflowProgress({
       ok: false,
       status: response.status,
       error: "remote_codex_progress_failed",
-      reason: normalizeText17(body?.message) || "GitHub workflow runs lookup failed"
+      reason: normalizeText18(body?.message) || "GitHub workflow runs lookup failed"
     };
   }
   const runs = Array.isArray(body?.workflow_runs) ? body.workflow_runs : [];
@@ -25848,8 +26101,8 @@ async function retrieveControlRepositoryWorkflowProgress({
       reason: "no remote Codex workflow run matched executionId"
     };
   }
-  const targetRepository = normalizeText17(repository);
-  const targetBranch = normalizeText17(branch);
+  const targetRepository = normalizeText18(repository);
+  const targetBranch = normalizeText18(branch);
   const pullRequest = targetRepository && targetBranch ? await findPullRequestForBranch({
     repository: targetRepository,
     branch: targetBranch,
@@ -25869,7 +26122,7 @@ async function retrieveControlRepositoryWorkflowProgress({
     return branchState;
   }
   const runStatus = normalizeRunStatus(run.status);
-  const conclusion = normalizeText17(run.conclusion) || null;
+  const conclusion = normalizeText18(run.conclusion) || null;
   const targetRuntimeTruth = buildControlRunnerTargetRuntimeTruth({
     runStatus,
     conclusion,
@@ -25886,19 +26139,19 @@ async function retrieveControlRepositoryWorkflowProgress({
       controlRepository,
       workflowFile,
       workflowRunId: normalizePositiveInteger3(run.id),
-      workflowUrl: normalizeText17(run.html_url) || null,
+      workflowUrl: normalizeText18(run.html_url) || null,
       status: runStatus,
       conclusion,
-      branch: normalizeText17(run.head_branch) || null,
+      branch: normalizeText18(run.head_branch) || null,
       targetRuntimeTruth,
-      displayTitle: normalizeText17(run.display_title) || null,
-      startedAt: normalizeText17(run.run_started_at) || null,
-      updatedAt: normalizeText17(run.updated_at) || null
+      displayTitle: normalizeText18(run.display_title) || null,
+      startedAt: normalizeText18(run.run_started_at) || null,
+      updatedAt: normalizeText18(run.updated_at) || null
     }
   };
 }
 async function dispatchCodexCloudGitHubComment({ request, token, env }) {
-  const apiBaseUrl = normalizeText17(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
+  const apiBaseUrl = normalizeText18(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
   const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
   const commentUrl = `${apiBaseUrl}/repos/${encodeURIComponentRepository2(
     request.repository
@@ -25925,7 +26178,7 @@ async function dispatchCodexCloudGitHubComment({ request, token, env }) {
       ok: false,
       status: response.status,
       error: "remote_codex_dispatch_failed",
-      reason: normalizeText17(responseBody?.message) || "GitHub issue comment creation failed"
+      reason: normalizeText18(responseBody?.message) || "GitHub issue comment creation failed"
     };
   }
   return {
@@ -25941,13 +26194,13 @@ async function dispatchCodexCloudGitHubComment({ request, token, env }) {
       revisionTarget: request.revisionTarget,
       approvalScopeMatched: request.approvalScopeMatched,
       commentId: normalizePositiveInteger3(responseBody?.id),
-      commentUrl: normalizeText17(responseBody?.html_url) || null,
+      commentUrl: normalizeText18(responseBody?.html_url) || null,
       status: RemoteCodexExecutionStatus.QUEUED
     }
   };
 }
 async function dispatchVpsRunnerGitHubQueue({ request, token, env }) {
-  const apiBaseUrl = normalizeText17(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
+  const apiBaseUrl = normalizeText18(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
   const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
   const commentUrl = `${apiBaseUrl}/repos/${encodeURIComponentRepository2(
     request.repository
@@ -25974,7 +26227,7 @@ async function dispatchVpsRunnerGitHubQueue({ request, token, env }) {
       ok: false,
       status: response.status,
       error: "vps_runner_dispatch_failed",
-      reason: normalizeText17(responseBody?.message) || "GitHub issue comment creation failed"
+      reason: normalizeText18(responseBody?.message) || "GitHub issue comment creation failed"
     };
   }
   return {
@@ -25989,7 +26242,7 @@ async function dispatchVpsRunnerGitHubQueue({ request, token, env }) {
       codexGoal: request.codexGoal,
       approvalScopeMatched: request.approvalScopeMatched,
       queueCommentId: normalizePositiveInteger3(responseBody?.id),
-      queueCommentUrl: normalizeText17(responseBody?.html_url) || null,
+      queueCommentUrl: normalizeText18(responseBody?.html_url) || null,
       status: RemoteCodexExecutionStatus.QUEUED
     }
   };
@@ -26010,7 +26263,7 @@ async function retrieveCodexCloudGitHubCommentProgress({
       reason: "repository and issueNumber are required for Codex Cloud GitHub comment progress"
     };
   }
-  const apiBaseUrl = normalizeText17(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
+  const apiBaseUrl = normalizeText18(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
   const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
   const commentsUrl = `${apiBaseUrl}/repos/${encodeURIComponentRepository2(
     repository
@@ -26035,12 +26288,12 @@ async function retrieveCodexCloudGitHubCommentProgress({
       ok: false,
       status: commentsResponse.status,
       error: "remote_codex_progress_failed",
-      reason: normalizeText17(commentsBody?.message) || "GitHub issue comments lookup failed"
+      reason: normalizeText18(commentsBody?.message) || "GitHub issue comments lookup failed"
     };
   }
   const comments = Array.isArray(commentsBody) ? commentsBody : [];
   const delegationComment = comments.find(
-    (comment) => normalizeText17(comment?.body).includes(`vtdd:remote-codex-execution:${executionId}`)
+    (comment) => normalizeText18(comment?.body).includes(`vtdd:remote-codex-execution:${executionId}`)
   );
   if (!delegationComment) {
     return {
@@ -26069,13 +26322,13 @@ async function retrieveCodexCloudGitHubCommentProgress({
       issueNumber,
       branch: branchState.branch,
       leadTime: buildRemoteCodexLeadTime({
-        queuedAt: normalizeText17(delegationComment.created_at),
-        branchPushedAt: normalizeText17(branchState.branch?.createdAt),
-        prCreatedAt: normalizeText17(pullRequest.pullRequest?.createdAt),
-        completedAt: normalizeText17(pullRequest.pullRequest?.createdAt)
+        queuedAt: normalizeText18(delegationComment.created_at),
+        branchPushedAt: normalizeText18(branchState.branch?.createdAt),
+        prCreatedAt: normalizeText18(pullRequest.pullRequest?.createdAt),
+        completedAt: normalizeText18(pullRequest.pullRequest?.createdAt)
       }),
       delegationCommentId: normalizePositiveInteger3(delegationComment.id),
-      delegationCommentUrl: normalizeText17(delegationComment.html_url) || null,
+      delegationCommentUrl: normalizeText18(delegationComment.html_url) || null,
       status: pullRequest.pullRequest ? RemoteCodexExecutionStatus.COMPLETED : branchState.branch ? RemoteCodexExecutionStatus.IN_PROGRESS : connectorBlocker ? RemoteCodexExecutionStatus.BLOCKED : pickupBlocker ? RemoteCodexExecutionStatus.BLOCKED : RemoteCodexExecutionStatus.QUEUED,
       pullRequest: pullRequest.pullRequest,
       staleBranchAmbiguity: pullRequest.staleBranchAmbiguity,
@@ -26099,7 +26352,7 @@ async function retrieveVpsRunnerGitHubQueueProgress({
       reason: "repository and issueNumber are required for VPS runner progress"
     };
   }
-  const apiBaseUrl = normalizeText17(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
+  const apiBaseUrl = normalizeText18(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
   const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
   let comments;
   try {
@@ -26115,11 +26368,11 @@ async function retrieveVpsRunnerGitHubQueueProgress({
       ok: false,
       status: error?.status || 503,
       error: "vps_runner_progress_failed",
-      reason: normalizeText17(error?.message) || "failed to read VPS runner queue comments"
+      reason: normalizeText18(error?.message) || "failed to read VPS runner queue comments"
     };
   }
   const queueComment = comments.find(
-    (comment) => normalizeText17(comment?.body).includes(`vtdd:vps-runner-execution:${executionId}`)
+    (comment) => normalizeText18(comment?.body).includes(`vtdd:vps-runner-execution:${executionId}`)
   );
   if (!queueComment) {
     return {
@@ -26155,7 +26408,7 @@ async function retrieveVpsRunnerGitHubQueueProgress({
     mode: cancellation.mode || null,
     runningCancelRequested: cancellation.runningCancelRequested === true,
     queueCommentId: normalizePositiveInteger3(queueComment.id),
-    queueCommentUrl: normalizeText17(queueComment.html_url) || null
+    queueCommentUrl: normalizeText18(queueComment.html_url) || null
   } : null;
   const status = cancellation ? RemoteCodexExecutionStatus.CANCELED : pullRequest.pullRequest ? RemoteCodexExecutionStatus.COMPLETED : failureBlocker || runnerEventStaleBlocker || staleBlocker ? RemoteCodexExecutionStatus.BLOCKED : branchState.branch ? RemoteCodexExecutionStatus.IN_PROGRESS : runnerEvent?.status || RemoteCodexExecutionStatus.QUEUED;
   return {
@@ -26167,7 +26420,7 @@ async function retrieveVpsRunnerGitHubQueueProgress({
       issueNumber,
       branch: branchState.branch,
       queueCommentId: normalizePositiveInteger3(queueComment.id),
-      queueCommentUrl: normalizeText17(queueComment.html_url) || null,
+      queueCommentUrl: normalizeText18(queueComment.html_url) || null,
       status,
       pullRequest: pullRequest.pullRequest,
       staleBranchAmbiguity: pullRequest.staleBranchAmbiguity,
@@ -26190,7 +26443,7 @@ async function readAllIssueComments({ apiBaseUrl, repository, issueNumber, token
     });
     const body = await readJsonSafe3(response);
     if (!response.ok) {
-      const error = new Error(normalizeText17(body?.message) || "GitHub issue comments lookup failed");
+      const error = new Error(normalizeText18(body?.message) || "GitHub issue comments lookup failed");
       error.status = response.status;
       throw error;
     }
@@ -26211,7 +26464,7 @@ async function readRecentRepositoryIssueComments({ apiBaseUrl, repository, token
   });
   const issuesBody = await readJsonSafe3(issuesResponse);
   if (!issuesResponse.ok) {
-    const error = new Error(normalizeText17(issuesBody?.message) || "GitHub issues lookup failed");
+    const error = new Error(normalizeText18(issuesBody?.message) || "GitHub issues lookup failed");
     error.status = issuesResponse.status;
     throw error;
   }
@@ -26234,7 +26487,7 @@ async function readRecentRepositoryIssueComments({ apiBaseUrl, repository, token
   return comments;
 }
 async function findPullRequestForBranch({ repository, branch, token, env }) {
-  const apiBaseUrl = normalizeText17(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
+  const apiBaseUrl = normalizeText18(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
   const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
   const [owner] = repository.split("/");
   const pullsUrl = `${apiBaseUrl}/repos/${encodeURIComponentRepository2(
@@ -26260,11 +26513,11 @@ async function findPullRequestForBranch({ repository, branch, token, env }) {
       ok: false,
       status: response.status,
       error: "remote_codex_progress_failed",
-      reason: normalizeText17(body?.message) || "GitHub pull request lookup failed"
+      reason: normalizeText18(body?.message) || "GitHub pull request lookup failed"
     };
   }
   const pulls = Array.isArray(body) ? body : [];
-  const pull = pulls.find((item) => normalizeText17(item?.state) === "open") || null;
+  const pull = pulls.find((item) => normalizeText18(item?.state) === "open") || null;
   const staleBranchAmbiguity = !pull && pulls.length > 0 ? {
     error: "stale_branch_pr_ambiguity",
     reason: "target branch is associated only with non-open pull requests; revise_pr must not target this branch without a fresh open PR lock",
@@ -26279,17 +26532,17 @@ async function findPullRequestForBranch({ repository, branch, token, env }) {
 function normalizeRuntimePullRequest(pull) {
   return {
     number: normalizePositiveInteger3(pull?.number),
-    url: normalizeText17(pull?.html_url) || null,
-    state: normalizeText17(pull?.state) || null,
-    title: normalizeText17(pull?.title) || null,
-    headRef: normalizeText17(pull?.head?.ref) || null,
-    headSha: normalizeText17(pull?.head?.sha) || null,
-    createdAt: normalizeText17(pull?.created_at) || null,
-    updatedAt: normalizeText17(pull?.updated_at) || null
+    url: normalizeText18(pull?.html_url) || null,
+    state: normalizeText18(pull?.state) || null,
+    title: normalizeText18(pull?.title) || null,
+    headRef: normalizeText18(pull?.head?.ref) || null,
+    headSha: normalizeText18(pull?.head?.sha) || null,
+    createdAt: normalizeText18(pull?.created_at) || null,
+    updatedAt: normalizeText18(pull?.updated_at) || null
   };
 }
 async function findBranch({ repository, branch, token, env }) {
-  const apiBaseUrl = normalizeText17(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
+  const apiBaseUrl = normalizeText18(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
   const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
   const branchUrl = `${apiBaseUrl}/repos/${encodeURIComponentRepository2(
     repository
@@ -26317,15 +26570,15 @@ async function findBranch({ repository, branch, token, env }) {
       ok: false,
       status: response.status,
       error: "remote_codex_progress_failed",
-      reason: normalizeText17(body?.message) || "GitHub branch lookup failed"
+      reason: normalizeText18(body?.message) || "GitHub branch lookup failed"
     };
   }
   return {
     ok: true,
     branch: {
-      name: normalizeText17(body?.name) || branch,
-      url: normalizeText17(body?._links?.html) || null,
-      sha: normalizeText17(body?.commit?.sha) || null
+      name: normalizeText18(body?.name) || branch,
+      url: normalizeText18(body?._links?.html) || null,
+      sha: normalizeText18(body?.commit?.sha) || null
     }
   };
 }
@@ -26336,8 +26589,8 @@ function findCodexCloudConnectorBlocker({ comments, delegationComment }) {
     return !delegationId || commentId > delegationId;
   });
   const blockerComment = laterComments.find((comment) => {
-    const author = normalizeText17(comment?.user?.login).toLowerCase();
-    const body = normalizeText17(comment?.body).toLowerCase();
+    const author = normalizeText18(comment?.user?.login).toLowerCase();
+    const body = normalizeText18(comment?.body).toLowerCase();
     return author.includes("chatgpt-codex-connector") && (body.includes("create a codex account and connect to github") || body.includes("to use codex here"));
   });
   if (!blockerComment) {
@@ -26347,14 +26600,14 @@ function findCodexCloudConnectorBlocker({ comments, delegationComment }) {
     error: "codex_cloud_connector_required",
     reason: "Codex Cloud connector is not ready for this repository or account",
     commentId: normalizePositiveInteger3(blockerComment.id),
-    commentUrl: normalizeText17(blockerComment.html_url) || null
+    commentUrl: normalizeText18(blockerComment.html_url) || null
   };
 }
 function buildCodexCloudPickupBlocker({ delegationComment, env }) {
   const graceSeconds = normalizeNonNegativeNumber(
     env?.CODEX_CLOUD_PICKUP_GRACE_SECONDS ?? 300
   );
-  const createdAt = Date.parse(normalizeText17(delegationComment?.created_at));
+  const createdAt = Date.parse(normalizeText18(delegationComment?.created_at));
   if (!Number.isFinite(createdAt)) {
     return null;
   }
@@ -26366,7 +26619,7 @@ function buildCodexCloudPickupBlocker({ delegationComment, env }) {
     error: "codex_cloud_pickup_not_observed",
     reason: "Codex Cloud did not create a branch or PR from the delegation comment within the pickup grace period",
     commentId: normalizePositiveInteger3(delegationComment?.id),
-    commentUrl: normalizeText17(delegationComment?.html_url) || null,
+    commentUrl: normalizeText18(delegationComment?.html_url) || null,
     graceSeconds,
     ageSeconds
   };
@@ -26378,7 +26631,7 @@ function findVpsRunnerEvents({ comments, queueComment }) {
     return !queueCommentId || commentId > queueCommentId;
   });
   const events = laterComments.map((comment) => {
-    const body = normalizeText17(comment?.body);
+    const body = normalizeText18(comment?.body);
     const marker = `vtdd:vps-runner-event:${extractVpsExecutionIdFromQueueComment(queueComment)}`;
     if (!body.includes(marker)) {
       return null;
@@ -26387,23 +26640,23 @@ function findVpsRunnerEvents({ comments, queueComment }) {
     if (!payload) {
       return null;
     }
-    const rawStatus = normalizeText17(payload.status);
+    const rawStatus = normalizeText18(payload.status);
     const status = normalizeVpsRunnerEventStatus(rawStatus);
     const leadTime = normalizeObject8(payload.leadTime);
     return {
       commentId: normalizePositiveInteger3(comment?.id),
-      commentUrl: normalizeText17(comment?.html_url) || null,
+      commentUrl: normalizeText18(comment?.html_url) || null,
       rawStatus,
       status,
-      lastEvent: normalizeText17(payload.lastEvent) || null,
-      currentStep: normalizeText17(payload.currentStep) || null,
-      heartbeatAt: normalizeText17(payload.heartbeatAt) || null,
+      lastEvent: normalizeText18(payload.lastEvent) || null,
+      currentStep: normalizeText18(payload.currentStep) || null,
+      heartbeatAt: normalizeText18(payload.heartbeatAt) || null,
       leadTime,
       rawFailure: normalizeObject8(payload.rawFailure),
       command: normalizeObject8(payload.command),
-      branch: normalizeText17(payload.branch) || null,
+      branch: normalizeText18(payload.branch) || null,
       pullRequest: normalizeObject8(payload.pullRequest),
-      updatedAt: normalizeText17(payload.updatedAt) || normalizeText17(payload.heartbeatAt) || normalizeText17(comment?.updated_at) || normalizeText17(comment?.created_at) || null
+      updatedAt: normalizeText18(payload.updatedAt) || normalizeText18(payload.heartbeatAt) || normalizeText18(comment?.updated_at) || normalizeText18(comment?.created_at) || null
     };
   }).filter(Boolean);
   return events;
@@ -26434,9 +26687,9 @@ function buildVpsRunnerQueueStates(comments) {
     }
     const list = eventsByExecution.get(eventExecutionId) || [];
     list.push({
-      rawStatus: normalizeText17(payload.status),
+      rawStatus: normalizeText18(payload.status),
       status: normalizeVpsRunnerEventStatus(payload.status),
-      updatedAt: normalizeText17(payload.updatedAt) || normalizeText17(payload.heartbeatAt) || normalizeText17(comment?.updated_at) || normalizeText17(comment?.created_at)
+      updatedAt: normalizeText18(payload.updatedAt) || normalizeText18(payload.heartbeatAt) || normalizeText18(comment?.updated_at) || normalizeText18(comment?.created_at)
     });
     eventsByExecution.set(eventExecutionId, list);
   }
@@ -26460,7 +26713,7 @@ async function patchVpsRunnerQueueCancellation({ apiBaseUrl, repository, token, 
       reason: "queue comment id is missing"
     };
   }
-  const body = `${normalizeText17(comment?.body)}
+  const body = `${normalizeText18(comment?.body)}
 
 ${buildVpsRunnerCanceledMarker(cancellation)}`;
   const response = await fetchImpl(
@@ -26477,7 +26730,7 @@ ${buildVpsRunnerCanceledMarker(cancellation)}`;
       ok: false,
       status: response.status,
       error: "vps_runner_cancel_failed",
-      reason: normalizeText17(responseBody?.message) || "GitHub queue comment update failed"
+      reason: normalizeText18(responseBody?.message) || "GitHub queue comment update failed"
     };
   }
   return { ok: true };
@@ -26491,7 +26744,7 @@ function buildVpsRunnerCanceledMarker(cancellation) {
   ].join("\n");
 }
 function parseVpsRunnerCancellationFromQueueComment(comment) {
-  const body = normalizeText17(comment?.body);
+  const body = normalizeText18(comment?.body);
   const executionId = extractVpsExecutionIdFromQueueComment(comment);
   if (!executionId || !body.includes(`vtdd:vps-runner-canceled:${executionId}`)) {
     return null;
@@ -26501,24 +26754,24 @@ function parseVpsRunnerCancellationFromQueueComment(comment) {
   return {
     status: "canceled",
     executionId,
-    mode: normalizeText17(payload?.mode) || null,
-    reason: normalizeText17(payload?.reason) || null,
-    actor: normalizeText17(payload?.actor) || null,
-    canceledAt: normalizeText17(payload?.canceledAt) || null,
+    mode: normalizeText18(payload?.mode) || null,
+    reason: normalizeText18(payload?.reason) || null,
+    actor: normalizeText18(payload?.actor) || null,
+    canceledAt: normalizeText18(payload?.canceledAt) || null,
     runningCancelRequested: payload?.runningCancelRequested === true,
     commentId: normalizePositiveInteger3(comment?.id),
-    commentUrl: normalizeText17(comment?.html_url) || null
+    commentUrl: normalizeText18(comment?.html_url) || null
   };
 }
 function extractVpsExecutionIdFromEventComment(comment) {
-  const body = normalizeText17(comment?.body);
+  const body = normalizeText18(comment?.body);
   const match = body.match(/vtdd:vps-runner-event:([a-zA-Z0-9._:-]+)/);
   return match ? match[1] : "";
 }
 function selectLatestVpsRunnerEvent(events) {
   return [...Array.isArray(events) ? events : []].sort((left, right) => {
-    const leftUpdatedAt = Date.parse(normalizeText17(left?.updatedAt));
-    const rightUpdatedAt = Date.parse(normalizeText17(right?.updatedAt));
+    const leftUpdatedAt = Date.parse(normalizeText18(left?.updatedAt));
+    const rightUpdatedAt = Date.parse(normalizeText18(right?.updatedAt));
     if (Number.isFinite(leftUpdatedAt) && Number.isFinite(rightUpdatedAt) && leftUpdatedAt !== rightUpdatedAt) {
       return leftUpdatedAt - rightUpdatedAt;
     }
@@ -26529,32 +26782,32 @@ function buildVpsRunnerProgressLeadTime({ queueComment, runnerEvents, pullReques
   const latestWithLeadTime = [...Array.isArray(runnerEvents) ? runnerEvents : []].reverse().find((event) => Object.keys(normalizeObject8(event?.leadTime)).length > 0);
   const eventLeadTime = normalizeObject8(latestWithLeadTime?.leadTime);
   const timestamps = {
-    queuedAt: normalizeText17(eventLeadTime.queued_at) || normalizeText17(queueComment?.created_at),
-    pickedUpAt: normalizeText17(eventLeadTime.picked_up_at),
-    codexStartedAt: normalizeText17(eventLeadTime.codex_started_at),
-    branchPushedAt: normalizeText17(eventLeadTime.branch_pushed_at),
-    prCreatedAt: normalizeText17(eventLeadTime.pr_created_at) || normalizeText17(pullRequest?.createdAt),
-    completedAt: normalizeText17(eventLeadTime.completed_at),
-    failedAt: normalizeText17(eventLeadTime.failed_at)
+    queuedAt: normalizeText18(eventLeadTime.queued_at) || normalizeText18(queueComment?.created_at),
+    pickedUpAt: normalizeText18(eventLeadTime.picked_up_at),
+    codexStartedAt: normalizeText18(eventLeadTime.codex_started_at),
+    branchPushedAt: normalizeText18(eventLeadTime.branch_pushed_at),
+    prCreatedAt: normalizeText18(eventLeadTime.pr_created_at) || normalizeText18(pullRequest?.createdAt),
+    completedAt: normalizeText18(eventLeadTime.completed_at),
+    failedAt: normalizeText18(eventLeadTime.failed_at)
   };
   for (const event of runnerEvents || []) {
-    const updatedAt = normalizeText17(event?.updatedAt);
-    if (!timestamps.pickedUpAt && ["picked_up", "runner_started"].includes(normalizeText17(event?.lastEvent))) {
+    const updatedAt = normalizeText18(event?.updatedAt);
+    if (!timestamps.pickedUpAt && ["picked_up", "runner_started"].includes(normalizeText18(event?.lastEvent))) {
       timestamps.pickedUpAt = updatedAt;
     }
-    if (!timestamps.codexStartedAt && (normalizeText17(event?.currentStep) === "codex_subprocess" || normalizeText17(event?.lastEvent) === "codex_started" || normalizeText17(event?.lastEvent) === "codex_subprocess_started")) {
+    if (!timestamps.codexStartedAt && (normalizeText18(event?.currentStep) === "codex_subprocess" || normalizeText18(event?.lastEvent) === "codex_started" || normalizeText18(event?.lastEvent) === "codex_subprocess_started")) {
       timestamps.codexStartedAt = updatedAt;
     }
-    if (!timestamps.branchPushedAt && normalizeText17(event?.lastEvent) === "branch_pushed") {
+    if (!timestamps.branchPushedAt && normalizeText18(event?.lastEvent) === "branch_pushed") {
       timestamps.branchPushedAt = updatedAt;
     }
-    if (!timestamps.prCreatedAt && ["pull_request_created", "pull_request_updated"].includes(normalizeText17(event?.lastEvent))) {
+    if (!timestamps.prCreatedAt && ["pull_request_created", "pull_request_updated"].includes(normalizeText18(event?.lastEvent))) {
       timestamps.prCreatedAt = updatedAt;
     }
-    if (!timestamps.completedAt && normalizeText17(event?.rawStatus) === RemoteCodexExecutionStatus.COMPLETED) {
+    if (!timestamps.completedAt && normalizeText18(event?.rawStatus) === RemoteCodexExecutionStatus.COMPLETED) {
       timestamps.completedAt = updatedAt;
     }
-    if (!timestamps.failedAt && normalizeText17(event?.status) === RemoteCodexExecutionStatus.BLOCKED && Object.keys(normalizeObject8(event?.rawFailure)).length > 0) {
+    if (!timestamps.failedAt && normalizeText18(event?.status) === RemoteCodexExecutionStatus.BLOCKED && Object.keys(normalizeObject8(event?.rawFailure)).length > 0) {
       timestamps.failedAt = updatedAt;
     }
   }
@@ -26564,12 +26817,12 @@ function buildRemoteCodexLeadTime(timestamps = {}) {
   return buildExecutionLeadTime(timestamps, { normalizeTimestamp: normalizeTimestamp4 });
 }
 function normalizeTimestamp4(value) {
-  const text = normalizeText17(value);
+  const text = normalizeText18(value);
   return Number.isFinite(Date.parse(text)) ? text : null;
 }
 function buildVpsRunnerEventStaleBlocker({ runnerEvent, env }) {
   const staleSeconds = normalizeNonNegativeNumber(env?.VPS_RUNNER_EVENT_STALE_SECONDS ?? 600);
-  const updatedAt = Date.parse(normalizeText17(runnerEvent?.updatedAt));
+  const updatedAt = Date.parse(normalizeText18(runnerEvent?.updatedAt));
   if (!Number.isFinite(updatedAt)) {
     return null;
   }
@@ -26584,17 +26837,17 @@ function buildVpsRunnerEventStaleBlocker({ runnerEvent, env }) {
     error: "vps_runner_event_stale",
     reason: "VPS runner last reported a running step but has not posted a heartbeat or terminal event within the stale threshold",
     commentId: normalizePositiveInteger3(runnerEvent?.commentId),
-    commentUrl: normalizeText17(runnerEvent?.commentUrl) || null,
-    lastEvent: normalizeText17(runnerEvent?.lastEvent) || null,
-    currentStep: normalizeText17(runnerEvent?.currentStep) || null,
-    lastUpdatedAt: normalizeText17(runnerEvent?.updatedAt) || null,
+    commentUrl: normalizeText18(runnerEvent?.commentUrl) || null,
+    lastEvent: normalizeText18(runnerEvent?.lastEvent) || null,
+    currentStep: normalizeText18(runnerEvent?.currentStep) || null,
+    lastUpdatedAt: normalizeText18(runnerEvent?.updatedAt) || null,
     staleSeconds,
     ageSeconds
   };
 }
 function buildVpsRunnerPickupBlocker({ queueComment, env }) {
   const graceSeconds = normalizeNonNegativeNumber(env?.VPS_RUNNER_PICKUP_GRACE_SECONDS ?? 300);
-  const createdAt = Date.parse(normalizeText17(queueComment?.created_at));
+  const createdAt = Date.parse(normalizeText18(queueComment?.created_at));
   if (!Number.isFinite(createdAt)) {
     return null;
   }
@@ -26606,7 +26859,7 @@ function buildVpsRunnerPickupBlocker({ queueComment, env }) {
     error: "vps_runner_pickup_not_observed",
     reason: "VPS runner did not report pickup and no target branch or PR was observed within the pickup grace period",
     commentId: normalizePositiveInteger3(queueComment?.id),
-    commentUrl: normalizeText17(queueComment?.html_url) || null,
+    commentUrl: normalizeText18(queueComment?.html_url) || null,
     graceSeconds,
     ageSeconds
   };
@@ -26617,18 +26870,18 @@ function buildVpsRunnerHealthStatus({ progress, env }) {
   const pullRequest = normalizeObject8(progress?.pullRequest);
   const branch = normalizeObject8(progress?.branch);
   const cancellation = normalizeObject8(progress?.cancellation);
-  const lastSeenAt = normalizeText17(runnerEvent.updatedAt) || normalizeText17(runnerEvent.heartbeatAt) || null;
-  const heartbeatAt = normalizeText17(runnerEvent.heartbeatAt) || null;
+  const lastSeenAt = normalizeText18(runnerEvent.updatedAt) || normalizeText18(runnerEvent.heartbeatAt) || null;
+  const heartbeatAt = normalizeText18(runnerEvent.heartbeatAt) || null;
   const queuePickedUp = Boolean(
     Object.keys(runnerEvent).length > 0 || Object.keys(branch).length > 0 || Object.keys(pullRequest).length > 0
   );
   const queueStatus = Object.keys(cancellation).length > 0 ? "canceled" : blocker.error === "vps_runner_pickup_not_observed" ? "stale" : queuePickedUp ? "picked_up" : "queued";
-  const currentStep = normalizeText17(runnerEvent.currentStep) || normalizeText17(runnerEvent.lastEvent) || (Object.keys(pullRequest).length > 0 ? "pull_request_observed" : Object.keys(branch).length > 0 ? "branch_observed" : "queue_waiting");
+  const currentStep = normalizeText18(runnerEvent.currentStep) || normalizeText18(runnerEvent.lastEvent) || (Object.keys(pullRequest).length > 0 ? "pull_request_observed" : Object.keys(branch).length > 0 ? "branch_observed" : "queue_waiting");
   const unavailableReason = buildVpsRunnerUnavailableReason({ progress, blocker });
   const runnerAlive = unavailableReason ? false : Boolean(lastSeenAt);
   const runnerStatus = runnerAlive ? "alive" : "unavailable";
   return {
-    executionId: normalizeText17(progress?.executionId) || null,
+    executionId: normalizeText18(progress?.executionId) || null,
     transport: RemoteCodexExecutorTransport.VPS_RUNNER,
     runnerStatus,
     runnerAlive,
@@ -26638,11 +26891,11 @@ function buildVpsRunnerHealthStatus({ progress, env }) {
       status: queueStatus,
       pickedUp: queuePickedUp,
       commentId: normalizePositiveInteger3(progress?.queueCommentId),
-      commentUrl: normalizeText17(progress?.queueCommentUrl) || null
+      commentUrl: normalizeText18(progress?.queueCommentUrl) || null
     },
     leadTime: normalizeObject8(progress?.leadTime),
     currentStep,
-    progressStatus: normalizeText17(progress?.status) || RemoteCodexExecutionStatus.UNKNOWN,
+    progressStatus: normalizeText18(progress?.status) || RemoteCodexExecutionStatus.UNKNOWN,
     cancellation: Object.keys(cancellation).length > 0 ? cancellation : null,
     reason: unavailableReason?.reason || null,
     reasonCode: unavailableReason?.code || null,
@@ -26650,12 +26903,12 @@ function buildVpsRunnerHealthStatus({ progress, env }) {
   };
 }
 function buildVpsRunnerUnavailableReason({ progress, blocker }) {
-  const progressStatus = normalizeText17(progress?.status);
-  const code = normalizeText17(blocker?.error);
+  const progressStatus = normalizeText18(progress?.status);
+  const code = normalizeText18(blocker?.error);
   if (code) {
     return {
       code,
-      reason: normalizeText17(blocker.reason) || "VPS runner status is unavailable from safe GitHub runtime truth"
+      reason: normalizeText18(blocker.reason) || "VPS runner status is unavailable from safe GitHub runtime truth"
     };
   }
   if (progressStatus === RemoteCodexExecutionStatus.QUEUED) {
@@ -26670,7 +26923,7 @@ function buildVpsRunnerUnavailableReason({ progress, blocker }) {
       reason: "VPS runner execution was canceled by Butler request"
     };
   }
-  if (!normalizeText17(progress?.runnerEvent?.updatedAt) && !normalizeText17(progress?.runnerEvent?.heartbeatAt)) {
+  if (!normalizeText18(progress?.runnerEvent?.updatedAt) && !normalizeText18(progress?.runnerEvent?.heartbeatAt)) {
     return {
       code: "vps_runner_last_seen_missing",
       reason: "VPS runner has not reported a heartbeat or event timestamp"
@@ -26815,10 +27068,10 @@ function buildVpsRunnerGitHubQueueComment({ request }) {
   return lines.join("\n");
 }
 function resolveExecutorTransport(input = {}, options = {}) {
-  const requestValue = normalizeText17(
+  const requestValue = normalizeText18(
     input?.executorTransport ?? input?.payload?.executorTransport ?? input?.payload?.continuationContext?.executorTransport
   );
-  const envValue = normalizeText17(input?.env?.REMOTE_CODEX_EXECUTOR_TRANSPORT);
+  const envValue = normalizeText18(input?.env?.REMOTE_CODEX_EXECUTOR_TRANSPORT);
   const value = requestValue || envValue;
   if (!value) {
     const configuredControlRepository = resolveControlRepository(input?.env);
@@ -26863,7 +27116,7 @@ function fencedJson(value) {
   return ["```json", JSON.stringify(value, null, 2), "```"].join("\n");
 }
 async function resolveGitHubExecutionToken(env) {
-  const directToken = normalizeText17(
+  const directToken = normalizeText18(
     env?.GITHUB_APP_INSTALLATION_TOKEN ?? env?.VTDD_GITHUB_ACTIONS_TOKEN
   );
   if (directToken) {
@@ -26872,7 +27125,7 @@ async function resolveGitHubExecutionToken(env) {
   const mintedToken = await resolveGitHubAppInstallationToken({
     env,
     fetchImpl: typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch,
-    apiBaseUrl: normalizeText17(env?.GITHUB_API_BASE_URL) || "https://api.github.com"
+    apiBaseUrl: normalizeText18(env?.GITHUB_API_BASE_URL) || "https://api.github.com"
   });
   if (mintedToken.ok) {
     return { ok: true, value: mintedToken.token };
@@ -26886,7 +27139,7 @@ async function resolveGitHubExecutionToken(env) {
   const provider = env?.GITHUB_APP_INSTALLATION_TOKEN_PROVIDER;
   if (typeof provider === "function") {
     try {
-      const provided = normalizeText17(await provider());
+      const provided = normalizeText18(await provider());
       if (provided) {
         return { ok: true, value: provided };
       }
@@ -26903,20 +27156,20 @@ async function resolveGitHubExecutionToken(env) {
   };
 }
 function resolveControlRepository(env) {
-  return normalizeText17(env?.VTDD_GITHUB_ACTIONS_REPOSITORY ?? env?.GITHUB_REPOSITORY);
+  return normalizeText18(env?.VTDD_GITHUB_ACTIONS_REPOSITORY ?? env?.GITHUB_REPOSITORY);
 }
 function matchesExecutionId(run, executionId) {
-  const displayTitle = normalizeText17(run?.display_title);
-  const name = normalizeText17(run?.name);
+  const displayTitle = normalizeText18(run?.display_title);
+  const name = normalizeText18(run?.name);
   return displayTitle.includes(executionId) || name.includes(executionId);
 }
 function extractVpsExecutionIdFromQueueComment(queueComment) {
-  const body = normalizeText17(queueComment?.body);
+  const body = normalizeText18(queueComment?.body);
   const match = body.match(/vtdd:vps-runner-execution:([a-zA-Z0-9._:-]+)/);
   return match ? match[1] : "";
 }
 function extractFirstJsonFence(text) {
-  const match = normalizeText17(text).match(/```json\s*([\s\S]*?)```/);
+  const match = normalizeText18(text).match(/```json\s*([\s\S]*?)```/);
   if (!match) {
     return null;
   }
@@ -26927,7 +27180,7 @@ function extractFirstJsonFence(text) {
   }
 }
 function normalizeVpsRunnerEventStatus(value) {
-  const normalized = normalizeText17(value).toLowerCase();
+  const normalized = normalizeText18(value).toLowerCase();
   if (normalized === "running" || normalized === "in_progress" || normalized === "branch_created") {
     return RemoteCodexExecutionStatus.IN_PROGRESS;
   }
@@ -26946,7 +27199,7 @@ function normalizeVpsRunnerEventStatus(value) {
   return RemoteCodexExecutionStatus.UNKNOWN;
 }
 function normalizeVpsRunnerCancelMode(value, { executionId, issueNumber } = {}) {
-  const normalized = normalizeText17(value).toLowerCase();
+  const normalized = normalizeText18(value).toLowerCase();
   if (normalized === "execution" || normalized === "execution_id") {
     return VpsRunnerCancelMode.EXECUTION;
   }
@@ -26965,7 +27218,7 @@ function normalizeVpsRunnerCancelMode(value, { executionId, issueNumber } = {}) 
   return VpsRunnerCancelMode.DRAIN_PENDING;
 }
 function normalizeRunStatus(value) {
-  const normalized = normalizeText17(value).toLowerCase();
+  const normalized = normalizeText18(value).toLowerCase();
   if (normalized === "queued" || normalized === "waiting" || normalized === "requested") {
     return RemoteCodexExecutionStatus.QUEUED;
   }
@@ -26991,7 +27244,7 @@ function normalizeObject8(value) {
   }
   return value;
 }
-function normalizeText17(value) {
+function normalizeText18(value) {
   return String(value ?? "").trim();
 }
 function normalizePositiveInteger3(value) {
@@ -27105,7 +27358,7 @@ var CodexReviewFallbackBlocker = Object.freeze({
   CODEX_CONNECTOR_NOT_CONFIGURED: "codex_connector_not_configured"
 });
 function parseCodexReviewFallbackComment(comment = {}) {
-  const body = normalizeText18(typeof comment === "string" ? comment : comment?.body);
+  const body = normalizeText19(typeof comment === "string" ? comment : comment?.body);
   if (!body || !containsMarker(body)) {
     return null;
   }
@@ -27126,8 +27379,8 @@ function parseCodexReviewFallbackComment(comment = {}) {
   };
 }
 function parseCodexConnectorSetupComment(comment = {}) {
-  const body = normalizeText18(typeof comment === "string" ? comment : comment?.body);
-  const author = normalizeText18(comment?.author?.login ?? comment?.user?.login);
+  const body = normalizeText19(typeof comment === "string" ? comment : comment?.body);
+  const author = normalizeText19(comment?.author?.login ?? comment?.user?.login);
   if (!isCodexConnectorAuthor(author) || !isCodexConnectorSetupBody(body)) {
     return null;
   }
@@ -27141,13 +27394,13 @@ function parseCodexConnectorSetupComment(comment = {}) {
   };
 }
 function containsMarker(value) {
-  return normalizeText18(value).includes(CODEX_REVIEW_FALLBACK_MARKER);
+  return normalizeText19(value).includes(CODEX_REVIEW_FALLBACK_MARKER);
 }
 function isCodexConnectorAuthor(value) {
-  return normalizeText18(value).toLowerCase() === "chatgpt-codex-connector";
+  return normalizeText19(value).toLowerCase() === "chatgpt-codex-connector";
 }
 function isCodexConnectorSetupBody(value) {
-  const body = normalizeText18(value).toLowerCase();
+  const body = normalizeText19(value).toLowerCase();
   return body.includes("to use codex here") && body.includes("connect to github");
 }
 function determineBlocking({ status, recommendedAction, blocker }) {
@@ -27161,41 +27414,41 @@ function determineBlocking({ status, recommendedAction, blocker }) {
   if (blocker) {
     return true;
   }
-  return normalizeText18(recommendedAction) !== "approve";
+  return normalizeText19(recommendedAction) !== "approve";
 }
 function extractBacktickedValue(body, label) {
   const pattern = new RegExp(`- ${escapeRegExp(label)}: \\\`([^\\\`]+)\\\``);
   const match = body.match(pattern);
-  return normalizeText18(match?.[1]);
+  return normalizeText19(match?.[1]);
 }
 function escapeRegExp(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 function normalizeFallbackStatus(value) {
-  const normalized = normalizeText18(value).toLowerCase();
+  const normalized = normalizeText19(value).toLowerCase();
   return Object.values(CodexReviewFallbackStatus).includes(normalized) ? normalized : "";
 }
-function normalizeText18(value) {
+function normalizeText19(value) {
   return String(value ?? "").trim();
 }
 
 // src/core/gemini-pr-review.js
 var GEMINI_PR_REVIEW_MARKER = "<!-- vtdd:reviewer=gemini -->";
 function parseGeminiReviewComment(comment = {}) {
-  const body = normalizeText19(typeof comment === "string" ? comment : comment?.body);
+  const body = normalizeText20(typeof comment === "string" ? comment : comment?.body);
   if (!body || !containsMarker2(body)) {
     return null;
   }
   const recommendedActionMatch = body.match(/^- Recommended action:\s*`([^`]+)`/m);
-  const recommendedAction = normalizeText19(recommendedActionMatch?.[1]).toLowerCase() || "manual_review";
+  const recommendedAction = normalizeText20(recommendedActionMatch?.[1]).toLowerCase() || "manual_review";
   const source = typeof comment === "object" && comment !== null ? comment : {};
-  const createdAt = normalizeText19(source.createdAt ?? source.created_at);
-  const updatedAt = normalizeText19(source.updatedAt ?? source.updated_at);
+  const createdAt = normalizeText20(source.createdAt ?? source.created_at);
+  const updatedAt = normalizeText20(source.updatedAt ?? source.updated_at);
   return {
     reviewer: "gemini",
     recommendedAction,
     blocking: recommendedAction === "request_changes" || recommendedAction === "manual_review",
-    url: normalizeText19(source.url ?? source.htmlUrl ?? source.html_url) || null,
+    url: normalizeText20(source.url ?? source.htmlUrl ?? source.html_url) || null,
     createdAt: createdAt || null,
     updatedAt: updatedAt || null,
     includesCreatedEdit: source.includesCreatedEdit === true || Boolean(createdAt) && Boolean(updatedAt) && createdAt !== updatedAt,
@@ -27203,9 +27456,9 @@ function parseGeminiReviewComment(comment = {}) {
   };
 }
 function containsMarker2(value) {
-  return normalizeText19(value).includes(GEMINI_PR_REVIEW_MARKER);
+  return normalizeText20(value).includes(GEMINI_PR_REVIEW_MARKER);
 }
-function normalizeText19(value) {
+function normalizeText20(value) {
   return String(value ?? "").trim();
 }
 
@@ -27391,7 +27644,7 @@ function collectFormalReviewTruth(pullRequest) {
   const reviews = Array.isArray(pullRequest.reviews) ? pullRequest.reviews : [];
   const latestByReviewer = /* @__PURE__ */ new Map();
   for (const review of reviews) {
-    const reviewer = normalizeText20(review?.user?.login) || normalizeText20(review?.author) || "unknown";
+    const reviewer = normalizeText21(review?.user?.login) || normalizeText21(review?.author) || "unknown";
     latestByReviewer.set(reviewer, normalizeReviewState(review?.state));
   }
   const latestStates = [...latestByReviewer.values()].filter(Boolean);
@@ -27410,7 +27663,7 @@ function collectFormalReviewTruth(pullRequest) {
   };
 }
 function buildReviewerSignalTruth({ reviewer, reviewerStatus, reviewerEvidence, formalReviewTruth }) {
-  const recommendedAction = normalizeText20(reviewerEvidence?.recommendedAction).toLowerCase() || null;
+  const recommendedAction = normalizeText21(reviewerEvidence?.recommendedAction).toLowerCase() || null;
   const vtddReviewerMarkerPresent = Boolean(recommendedAction);
   const markerBlocks = recommendedAction === "request_changes" || recommendedAction === "manual_review";
   const formalBlocks = formalReviewTruth.blocking === true;
@@ -27506,36 +27759,36 @@ function normalizeGitHubRuntime(value) {
   const runtime = value && typeof value === "object" ? value : {};
   const pullRequestInput = runtime.pullRequest && typeof runtime.pullRequest === "object" ? runtime.pullRequest : {};
   return {
-    activeBranch: normalizeText20(runtime.activeBranch) || null,
+    activeBranch: normalizeText21(runtime.activeBranch) || null,
     pullRequest: {
       exists: Boolean(
-        normalizeText20(pullRequestInput.url) || Number.isInteger(Number(pullRequestInput.number)) || normalizeText20(pullRequestInput.state)
+        normalizeText21(pullRequestInput.url) || Number.isInteger(Number(pullRequestInput.number)) || normalizeText21(pullRequestInput.state)
       ),
       number: normalizeNumber2(pullRequestInput.number),
-      url: normalizeText20(pullRequestInput.url) || null,
-      state: normalizeText20(pullRequestInput.state) || null,
-      title: normalizeText20(pullRequestInput.title) || null,
-      baseRef: normalizeText20(pullRequestInput.baseRef) || normalizeText20(pullRequestInput.base?.ref) || null,
-      headRef: normalizeText20(pullRequestInput.headRef) || normalizeText20(pullRequestInput.head?.ref) || null,
+      url: normalizeText21(pullRequestInput.url) || null,
+      state: normalizeText21(pullRequestInput.state) || null,
+      title: normalizeText21(pullRequestInput.title) || null,
+      baseRef: normalizeText21(pullRequestInput.baseRef) || normalizeText21(pullRequestInput.base?.ref) || null,
+      headRef: normalizeText21(pullRequestInput.headRef) || normalizeText21(pullRequestInput.head?.ref) || null,
       mergeable: normalizeNullableBoolean2(pullRequestInput.mergeable),
-      mergeableState: normalizeText20(pullRequestInput.mergeableState) || normalizeText20(pullRequestInput.mergeable_state) || normalizeText20(pullRequestInput.mergeability?.state) || null,
-      mergeConflict: pullRequestInput.mergeConflict === true || pullRequestInput.mergeability?.hasConflict === true || normalizeNullableBoolean2(pullRequestInput.mergeable) === false || normalizeText20(pullRequestInput.mergeableState) === "dirty" || normalizeText20(pullRequestInput.mergeable_state) === "dirty" || normalizeText20(pullRequestInput.mergeability?.state) === "dirty",
+      mergeableState: normalizeText21(pullRequestInput.mergeableState) || normalizeText21(pullRequestInput.mergeable_state) || normalizeText21(pullRequestInput.mergeability?.state) || null,
+      mergeConflict: pullRequestInput.mergeConflict === true || pullRequestInput.mergeability?.hasConflict === true || normalizeNullableBoolean2(pullRequestInput.mergeable) === false || normalizeText21(pullRequestInput.mergeableState) === "dirty" || normalizeText21(pullRequestInput.mergeable_state) === "dirty" || normalizeText21(pullRequestInput.mergeability?.state) === "dirty",
       mergeBlocked: pullRequestInput.mergeBlocked === true || pullRequestInput.mergeability?.blocked === true,
-      mergeBlockedReason: normalizeText20(pullRequestInput.mergeBlockedReason) || normalizeText20(pullRequestInput.mergeability?.blockedReason) || null,
-      mergeWarning: normalizeText20(pullRequestInput.mergeWarning) || normalizeText20(pullRequestInput.mergeability?.warning) || null,
-      freshBranchSuggestion: normalizeText20(pullRequestInput.freshBranchSuggestion) || normalizeText20(pullRequestInput.mergeability?.freshBranchSuggestion) || null,
+      mergeBlockedReason: normalizeText21(pullRequestInput.mergeBlockedReason) || normalizeText21(pullRequestInput.mergeability?.blockedReason) || null,
+      mergeWarning: normalizeText21(pullRequestInput.mergeWarning) || normalizeText21(pullRequestInput.mergeability?.warning) || null,
+      freshBranchSuggestion: normalizeText21(pullRequestInput.freshBranchSuggestion) || normalizeText21(pullRequestInput.mergeability?.freshBranchSuggestion) || null,
       conflictFiles: Array.isArray(pullRequestInput.conflictFiles) ? pullRequestInput.conflictFiles : Array.isArray(pullRequestInput.mergeability?.conflictFiles) ? pullRequestInput.mergeability.conflictFiles : null,
-      conflictFilesSource: normalizeText20(pullRequestInput.conflictFilesSource) || normalizeText20(pullRequestInput.mergeability?.conflictFilesSource) || null,
+      conflictFilesSource: normalizeText21(pullRequestInput.conflictFilesSource) || normalizeText21(pullRequestInput.mergeability?.conflictFilesSource) || null,
       mergeabilityVerified: typeof pullRequestInput.mergeable === "boolean" || Boolean(
-        normalizeText20(pullRequestInput.mergeableState) || normalizeText20(pullRequestInput.mergeable_state) || normalizeText20(pullRequestInput.mergeability?.state)
+        normalizeText21(pullRequestInput.mergeableState) || normalizeText21(pullRequestInput.mergeable_state) || normalizeText21(pullRequestInput.mergeability?.state)
       ),
       reviewCommentsCount: normalizeCount2(pullRequestInput.reviewCommentsCount),
       unresolvedReviewCommentsCount: normalizeCount2(
         pullRequestInput.unresolvedReviewCommentsCount
       ),
       updatedSinceReview: pullRequestInput.updatedSinceReview === true,
-      reviewer: normalizeText20(pullRequestInput.reviewer) || "gemini",
-      reviewDecision: normalizeText20(pullRequestInput.reviewDecision) || normalizeText20(pullRequestInput.review_decision) || null,
+      reviewer: normalizeText21(pullRequestInput.reviewer) || "gemini",
+      reviewDecision: normalizeText21(pullRequestInput.reviewDecision) || normalizeText21(pullRequestInput.review_decision) || null,
       issueComments: Array.isArray(pullRequestInput.issueComments) ? pullRequestInput.issueComments : [],
       reviewComments: Array.isArray(pullRequestInput.reviewComments) ? pullRequestInput.reviewComments : [],
       reviews: Array.isArray(pullRequestInput.reviews) ? pullRequestInput.reviews : []
@@ -27568,7 +27821,7 @@ function normalizeNullableBoolean2(value) {
   return typeof value === "boolean" ? value : null;
 }
 function normalizeReviewState(value) {
-  const normalized = normalizeText20(value).toLowerCase();
+  const normalized = normalizeText21(value).toLowerCase();
   if (!normalized) {
     return null;
   }
@@ -27583,7 +27836,7 @@ function normalizeReviewState(value) {
   }
   return normalized;
 }
-function normalizeText20(value) {
+function normalizeText21(value) {
   return String(value ?? "").trim();
 }
 function deny7(rule, reason) {
@@ -27608,14 +27861,14 @@ var ConversationIntent = Object.freeze({
   RECALL_CONTEXT: "recall_context"
 });
 function buildConversationAssist(input) {
-  const userText = normalizeText21(input?.conversation?.userText);
-  const currentRepository = normalizeText21(input?.conversation?.currentRepository);
+  const userText = normalizeText22(input?.conversation?.userText);
+  const currentRepository = normalizeText22(input?.conversation?.currentRepository);
   const repositoryCandidates = Array.isArray(input?.repositoryCandidates) ? input.repositoryCandidates : [];
-  const blockedByRule = normalizeText21(input?.blockedByRule);
-  const requiredConsent = normalizeText21(input?.requiredConsent);
+  const blockedByRule = normalizeText22(input?.blockedByRule);
+  const requiredConsent = normalizeText22(input?.requiredConsent);
   const detectedIntent = detectConversationIntent(userText);
   const mentionedRepository = matchRepositoryFromText(userText, repositoryCandidates);
-  const activeRepository = currentRepository || normalizeText21(input?.repository) || null;
+  const activeRepository = currentRepository || normalizeText22(input?.repository) || null;
   const issueMentions = extractIssueMentions(userText);
   const crossRetrievalDisplayMode = determineCrossRetrievalDisplayMode(userText);
   const assist = {
@@ -27734,7 +27987,7 @@ function buildRepositoryMatchKeys(candidate) {
       keys.add(normalizeLoose(alias));
     }
   }
-  const canonical = normalizeText21(candidate?.canonicalRepo);
+  const canonical = normalizeText22(candidate?.canonicalRepo);
   const [owner, repo] = canonical.split("/");
   keys.add(normalizeLoose(owner));
   keys.add(normalizeLoose(repo));
@@ -27749,11 +28002,11 @@ function buildConsentPrompt(requiredConsent) {
 function hasKeyword(text, keywords) {
   return keywords.some((keyword) => text.includes(keyword));
 }
-function normalizeText21(value) {
+function normalizeText22(value) {
   return String(value ?? "").trim().toLowerCase();
 }
 function normalizeLoose(value) {
-  return normalizeText21(value).replace(/[^a-z0-9\u3040-\u30ff\u4e00-\u9faf]+/g, "");
+  return normalizeText22(value).replace(/[^a-z0-9\u3040-\u30ff\u4e00-\u9faf]+/g, "");
 }
 function extractIssueMentions(text) {
   if (!text) {
@@ -28164,13 +28417,13 @@ function normalizeRole(value) {
 function collectRepositoryCandidates(aliasRegistry) {
   const registry = Array.isArray(aliasRegistry) ? aliasRegistry : [];
   return registry.map((item) => ({
-    canonicalRepo: normalizeText22(item?.canonicalRepo),
-    productName: normalizeText22(item?.productName) || null,
-    visibility: normalizeText22(item?.visibility) || "unknown",
-    aliases: Array.isArray(item?.aliases) ? item.aliases.map(normalizeText22).filter(Boolean) : []
+    canonicalRepo: normalizeText23(item?.canonicalRepo),
+    productName: normalizeText23(item?.productName) || null,
+    visibility: normalizeText23(item?.visibility) || "unknown",
+    aliases: Array.isArray(item?.aliases) ? item.aliases.map(normalizeText23).filter(Boolean) : []
   })).filter((item) => Boolean(item.canonicalRepo));
 }
-function normalizeText22(value) {
+function normalizeText23(value) {
   return String(value ?? "").trim();
 }
 
@@ -28180,11 +28433,11 @@ var GITHUB_API_USER_AGENT3 = "vtdd-v2-deploy-production-plane";
 var DEFAULT_DEPLOY_WORKFLOW_FILE = "deploy-production.yml";
 var DEFAULT_DEPLOY_WORKFLOW_REF = "main";
 async function executeDeployProductionPlane(input = {}) {
-  const repository = normalizeText23(input.repository);
-  const runtimeUrl = normalizeText23(input.runtimeUrl);
-  const approvalPhrase = normalizeText23(input.approvalPhrase);
+  const repository = normalizeText24(input.repository);
+  const runtimeUrl = normalizeText24(input.runtimeUrl);
+  const approvalPhrase = normalizeText24(input.approvalPhrase);
   const approvalGrant = input.approvalGrant ?? null;
-  const approvalGrantId = normalizeText23(input.approvalGrantId) || normalizeText23(approvalGrant?.approvalId);
+  const approvalGrantId = normalizeText24(input.approvalGrantId) || normalizeText24(approvalGrant?.approvalId);
   const env = input.env ?? {};
   const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
   const apiBaseUrl = normalizeApiBaseUrl3(env?.GITHUB_API_BASE_URL);
@@ -28213,9 +28466,9 @@ async function executeDeployProductionPlane(input = {}) {
       reason: tokenResolution.warning || "GitHub App installation token is unavailable for deploy dispatch"
     };
   }
-  const workflowRepository = normalizeText23(env?.DEPLOY_WORKFLOW_REPOSITORY) || normalizeText23(env?.VTDD_GITHUB_ACTIONS_REPOSITORY) || repository;
-  const workflowFile = normalizeText23(env?.DEPLOY_WORKFLOW_FILE) || DEFAULT_DEPLOY_WORKFLOW_FILE;
-  const workflowRef = normalizeText23(env?.DEPLOY_WORKFLOW_REF) || DEFAULT_DEPLOY_WORKFLOW_REF;
+  const workflowRepository = normalizeText24(env?.DEPLOY_WORKFLOW_REPOSITORY) || normalizeText24(env?.VTDD_GITHUB_ACTIONS_REPOSITORY) || repository;
+  const workflowFile = normalizeText24(env?.DEPLOY_WORKFLOW_FILE) || DEFAULT_DEPLOY_WORKFLOW_FILE;
+  const workflowRef = normalizeText24(env?.DEPLOY_WORKFLOW_REF) || DEFAULT_DEPLOY_WORKFLOW_REF;
   const deployBase = {
     repository,
     workflowRepository,
@@ -28264,7 +28517,7 @@ async function executeDeployProductionPlane(input = {}) {
       ok: false,
       status: response.status,
       error: "deploy_dispatch_failed",
-      reason: normalizeText23(body?.message) || "GitHub deploy workflow dispatch failed",
+      reason: normalizeText24(body?.message) || "GitHub deploy workflow dispatch failed",
       deploy: {
         ...deployBase,
         status: "dispatch_failed"
@@ -28350,7 +28603,7 @@ async function verifyDeployWorkflowRun({
     if (!response.ok) {
       return {
         ok: false,
-        reason: normalizeText23(body?.message) || "GitHub accepted deploy dispatch, but workflow runs could not be read"
+        reason: normalizeText24(body?.message) || "GitHub accepted deploy dispatch, but workflow runs could not be read"
       };
     }
     const run = normalizeWorkflowRun(body?.workflow_runs?.[0]);
@@ -28396,27 +28649,27 @@ function validateDeployProductionRequest({
   return issues.length > 0 ? { ok: false, issues } : { ok: true };
 }
 function encodeURIComponentRepository3(repository) {
-  const [owner = "", name = ""] = normalizeText23(repository).split("/");
+  const [owner = "", name = ""] = normalizeText24(repository).split("/");
   return `${encodeURIComponent(owner)}/${encodeURIComponent(name)}`;
 }
 function normalizeWorkflowRun(run) {
   const id = normalizePositiveInteger4(run?.id, null);
-  const htmlUrl = normalizeText23(run?.html_url);
+  const htmlUrl = normalizeText24(run?.html_url);
   if (!id || !htmlUrl) {
     return null;
   }
   return {
     id,
     htmlUrl,
-    status: normalizeText23(run?.status),
-    conclusion: normalizeText23(run?.conclusion)
+    status: normalizeText24(run?.status),
+    conclusion: normalizeText24(run?.conclusion)
   };
 }
 async function readJsonSafe4(response) {
   return response.json().catch(() => ({}));
 }
 function normalizeApiBaseUrl3(value) {
-  const normalized = normalizeText23(value);
+  const normalized = normalizeText24(value);
   return normalized || "https://api.github.com";
 }
 function normalizePositiveInteger4(value, fallback) {
@@ -28427,7 +28680,7 @@ function normalizeNonNegativeInteger(value, fallback) {
   const numeric = Number(value);
   return Number.isInteger(numeric) && numeric >= 0 ? numeric : fallback;
 }
-function normalizeText23(value) {
+function normalizeText24(value) {
   return String(value ?? "").trim();
 }
 function sleep(ms) {
@@ -28485,6 +28738,7 @@ var RUNTIME_SETUP_MANIFEST = Object.freeze({
     "/v2/retrieve/cross",
     "/v2/retrieve/operational-memory",
     "/v2/retrieve/github",
+    "/v2/retrieve/cloudflare-pages",
     "/v2/retrieve/repository-nicknames",
     "/v2/retrieve/approval-grant",
     "/v2/retrieve/setup-artifact",
@@ -28510,6 +28764,7 @@ var RUNTIME_SETUP_MANIFEST = Object.freeze({
     "vtddRetrieveCrossMemory",
     "vtddRetrieveOperationalMemory",
     "vtddRetrieveGitHub",
+    "vtddRetrieveCloudflarePages",
     "vtddRetrieveRepositoryNicknames",
     "vtddRetrieveApprovalGrant",
     "vtddRetrieveSetupArtifact",
@@ -28534,6 +28789,7 @@ var RUNTIME_SETUP_MANIFEST = Object.freeze({
     "vtddRetrieveCrossMemory",
     "vtddRetrieveOperationalMemory",
     "vtddRetrieveGitHub",
+    "vtddRetrieveCloudflarePages",
     "vtddRetrieveRepositoryNicknames",
     "vtddRetrieveSetupArtifact",
     "vtddRetrieveSelfParity",
@@ -28550,9 +28806,9 @@ var CustomGptSetupChannel = Object.freeze({
   KNOWN_GOOD: "known_good"
 });
 async function retrieveCustomGptSetupArtifact(input = {}) {
-  const artifact = normalizeText24(input.artifact);
-  const repository = normalizeText24(input.repository);
-  const ref = normalizeText24(input.ref) || "main";
+  const artifact = normalizeText25(input.artifact);
+  const repository = normalizeText25(input.repository);
+  const ref = normalizeText25(input.ref) || "main";
   const env = input.env ?? {};
   const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
   const apiBaseUrl = normalizeApiBaseUrl4(env?.GITHUB_API_BASE_URL);
@@ -28602,7 +28858,7 @@ async function retrieveCustomGptSetupArtifact(input = {}) {
       ok: false,
       status: response.status,
       error: "custom_gpt_setup_artifact_unavailable",
-      reason: normalizeText24(body?.message) || `GitHub read failed for setup artifact: ${artifact}`
+      reason: normalizeText25(body?.message) || `GitHub read failed for setup artifact: ${artifact}`
     };
   }
   const content = decodeGitHubFileContent(body?.content, body?.encoding);
@@ -28621,16 +28877,16 @@ async function retrieveCustomGptSetupArtifact(input = {}) {
       repository,
       ref,
       path: spec.path,
-      sha: normalizeText24(body?.sha) || null,
+      sha: normalizeText25(body?.sha) || null,
       contentType: spec.contentType,
       content
     }
   };
 }
 async function evaluateButlerSelfParity(input = {}) {
-  const repository = normalizeText24(input.repository);
-  const ref = normalizeText24(input.ref) || "main";
-  const runtimeOrigin = normalizeOrigin(input.runtimeOrigin);
+  const repository = normalizeText25(input.repository);
+  const ref = normalizeText25(input.ref) || "main";
+  const runtimeOrigin = normalizeOrigin2(input.runtimeOrigin);
   const issueNumber = normalizeIssueNumber(input.issueNumber);
   const env = input.env ?? {};
   const instructions = await retrieveCustomGptSetupArtifact({
@@ -28760,10 +29016,10 @@ function evaluateRuntimeSetupManifestParity(input = {}) {
   };
 }
 async function buildCustomGptRecoveryBundle(input = {}) {
-  const repository = normalizeText24(input.repository) || VTDD_SETUP_REPOSITORY;
+  const repository = normalizeText25(input.repository) || VTDD_SETUP_REPOSITORY;
   const channel = normalizeSetupChannel(input.channel);
-  const requestedRef = normalizeText24(input.ref) || "main";
-  const runtimeOrigin = normalizeOrigin(input.runtimeOrigin);
+  const requestedRef = normalizeText25(input.ref) || "main";
+  const runtimeOrigin = normalizeOrigin2(input.runtimeOrigin);
   const issueNumber = normalizeIssueNumber(input.issueNumber);
   const env = input.env ?? {};
   if (!runtimeOrigin) {
@@ -28874,9 +29130,9 @@ async function buildCustomGptRecoveryBundle(input = {}) {
   };
 }
 function renderCustomGptRecoveryPage(input = {}) {
-  const runtimeOrigin = normalizeOrigin(input.runtimeOrigin);
-  const repository = normalizeText24(input.repository) || VTDD_SETUP_REPOSITORY;
-  const ref = normalizeText24(input.ref) || "main";
+  const runtimeOrigin = normalizeOrigin2(input.runtimeOrigin);
+  const repository = normalizeText25(input.repository) || VTDD_SETUP_REPOSITORY;
+  const ref = normalizeText25(input.ref) || "main";
   const issueNumber = normalizeIssueNumber(input.issueNumber);
   const channel = normalizeSetupChannel(input.channel);
   const recovery = input.recovery ?? null;
@@ -28921,12 +29177,12 @@ function renderCustomGptRecoveryPage(input = {}) {
   <main>
     <h1>VTDD Butler setup recovery</h1>
     <section class="nav">
-      <strong>Recovery repo: ${escapeHtml2(repository)}</strong>
-      <a class="button" href="${escapeAttribute(latestHref)}">setup/latest</a>
-      <a class="button" href="${escapeAttribute(knownGoodHref)}">setup/known-good</a>
+      <strong>Recovery repo: ${escapeHtml3(repository)}</strong>
+      <a class="button" href="${escapeAttribute2(latestHref)}">setup/latest</a>
+      <a class="button" href="${escapeAttribute2(knownGoodHref)}">setup/known-good</a>
     </section>
-    ${error ? `<section class="warning"><strong>Recovery bundle unavailable.</strong><p>${escapeHtml2(error.reason || error.error || "unknown error")}</p></section>` : ""}
-    ${recovery ? renderRecoveryBundleSections(recovery) : `<p class="small">${escapeHtml2(runtimeOrigin)} \u5411\u3051\u306E ${escapeHtml2(channel)} setup bundle \u3092\u8AAD\u307F\u8FBC\u3093\u3067\u3044\u307E\u3059\u3002repo \u5165\u529B\u306F\u4E0D\u8981\u3067\u3059\u3002</p>`}
+    ${error ? `<section class="warning"><strong>Recovery bundle unavailable.</strong><p>${escapeHtml3(error.reason || error.error || "unknown error")}</p></section>` : ""}
+    ${recovery ? renderRecoveryBundleSections(recovery) : `<p class="small">${escapeHtml3(runtimeOrigin)} \u5411\u3051\u306E ${escapeHtml3(channel)} setup bundle \u3092\u8AAD\u307F\u8FBC\u3093\u3067\u3044\u307E\u3059\u3002repo \u5165\u529B\u306F\u4E0D\u8981\u3067\u3059\u3002</p>`}
   </main>
   <script>
     document.addEventListener("click", async (event) => {
@@ -28971,7 +29227,7 @@ function validateCustomGptSetupArtifactRequest({ artifact, repository }) {
   return issues.length > 0 ? { ok: false, issues } : { ok: true };
 }
 function resolveConfiguredKnownGoodCommitSha({ ref, env }) {
-  const configured = normalizeText24(env?.[KNOWN_GOOD_COMMIT_ENV]);
+  const configured = normalizeText25(env?.[KNOWN_GOOD_COMMIT_ENV]);
   if (/^[a-f0-9]{40}$/i.test(configured)) {
     return { sha: configured, source: KNOWN_GOOD_COMMIT_ENV };
   }
@@ -28981,7 +29237,7 @@ function resolveConfiguredKnownGoodCommitSha({ ref, env }) {
   return { sha: null, source: "unconfigured" };
 }
 async function resolveKnownGoodCommitSha({ repository, ref, env }) {
-  const configured = normalizeText24(env?.[KNOWN_GOOD_COMMIT_ENV]);
+  const configured = normalizeText25(env?.[KNOWN_GOOD_COMMIT_ENV]);
   if (configured) {
     return { sha: configured, source: KNOWN_GOOD_COMMIT_ENV };
   }
@@ -29012,7 +29268,7 @@ async function resolveKnownGoodCommitSha({ repository, ref, env }) {
       return { sha: null, source: "unverified" };
     }
     return {
-      sha: normalizeText24(body?.sha) || null,
+      sha: normalizeText25(body?.sha) || null,
       source: "github_commit_ref"
     };
   } catch {
@@ -29039,33 +29295,33 @@ function renderRecoveryBundleSections(recovery) {
     ${warning}
     <section class="status">
       <div class="meta">
-        <div><strong>Bundle</strong><br><span class="channel">${escapeHtml2(recovery.channelLabel)}</span></div>
-        <div><strong>Worker URL</strong><br>${escapeHtml2(recovery.runtimeOrigin)}</div>
-        <div><strong>Repository</strong><br>${escapeHtml2(recovery.repository)}</div>
-        <div><strong>${recovery.channel === CustomGptSetupChannel.KNOWN_GOOD ? "Known-good ref" : "Latest ref"}</strong><br>${escapeHtml2(recovery.ref)}</div>
-        <div><strong>Known-good commit</strong><br>${escapeHtml2(rollback.knownGoodCommitSha || "unverified")}</div>
-        <div><strong>Self-parity</strong><br>${escapeHtml2(selfParity.runtimeParity)}</div>
-        <div><strong>Deploy state</strong><br>${escapeHtml2(recovery.runtime.deployState)}</div>
+        <div><strong>Bundle</strong><br><span class="channel">${escapeHtml3(recovery.channelLabel)}</span></div>
+        <div><strong>Worker URL</strong><br>${escapeHtml3(recovery.runtimeOrigin)}</div>
+        <div><strong>Repository</strong><br>${escapeHtml3(recovery.repository)}</div>
+        <div><strong>${recovery.channel === CustomGptSetupChannel.KNOWN_GOOD ? "Known-good ref" : "Latest ref"}</strong><br>${escapeHtml3(recovery.ref)}</div>
+        <div><strong>Known-good commit</strong><br>${escapeHtml3(rollback.knownGoodCommitSha || "unverified")}</div>
+        <div><strong>Self-parity</strong><br>${escapeHtml3(selfParity.runtimeParity)}</div>
+        <div><strong>Deploy state</strong><br>${escapeHtml3(recovery.runtime.deployState)}</div>
         <div><strong>short-min length</strong><br>${instructions.characterCount} / ${instructions.characterLimit}</div>
         <div><strong>Safety</strong><br>No secret values, tokens, or approval grants are displayed.</div>
       </div>
     </section>
     <section>
       <h2>Copy-ready Action Schema</h2>
-      <p class="small">${escapeHtml2(actionSchema.path)}; servers.url = ${escapeHtml2(actionSchema.serverUrl)}</p>
+      <p class="small">${escapeHtml3(actionSchema.path)}; servers.url = ${escapeHtml3(actionSchema.serverUrl)}</p>
       <p><button type="button" data-copy-target="action-schema" data-copy-label="Copy Action Schema">Copy Action Schema</button></p>
-      <textarea id="action-schema" spellcheck="false">${escapeHtml2(actionSchema.content)}</textarea>
+      <textarea id="action-schema" spellcheck="false">${escapeHtml3(actionSchema.content)}</textarea>
     </section>
     <section>
       <h2>Copy-ready custom-gpt-instructions-short-min.md</h2>
-      <p class="small">${escapeHtml2(instructions.path)}</p>
+      <p class="small">${escapeHtml3(instructions.path)}</p>
       <p><button type="button" data-copy-target="instructions-short-min" data-copy-label="Copy Instructions">Copy Instructions</button></p>
-      <textarea id="instructions-short-min" spellcheck="false">${escapeHtml2(instructions.content)}</textarea>
+      <textarea id="instructions-short-min" spellcheck="false">${escapeHtml3(instructions.content)}</textarea>
     </section>
     <section>
       <h2>Known-good rollback bundle</h2>
       ${rollback.rollbackReady ? `<p><button type="button" data-copy-target="rollback-bundle" data-copy-label="Copy Rollback Bundle">Copy Rollback Bundle</button></p>` : `<p class="small">Rollback \u306F setup/known-good \u3067 copy-ready \u306B\u306A\u308A\u307E\u3059\u3002latest \u306F\u73FE\u5728\u306E\u5019\u88DC\u78BA\u8A8D\u7528\u3067\u3059\u3002</p>`}
-      <pre>${escapeHtml2(
+      <pre>${escapeHtml3(
     [
       `repository: ${recovery.repository}`,
       `channel: ${recovery.channel}`,
@@ -29080,7 +29336,7 @@ function renderRecoveryBundleSections(recovery) {
       ...rollback.restoreOrder.map((item, index) => `  ${index + 1}. ${item}`)
     ].join("\n")
   )}</pre>
-      ${rollback.rollbackReady ? `<textarea id="rollback-bundle" spellcheck="false">${escapeHtml2(
+      ${rollback.rollbackReady ? `<textarea id="rollback-bundle" spellcheck="false">${escapeHtml3(
     [
       `repository: ${recovery.repository}`,
       `channel: ${recovery.channel}`,
@@ -29098,17 +29354,17 @@ function renderRecoveryBundleSections(recovery) {
     </section>`;
 }
 function normalizeSetupChannel(value) {
-  const normalized = normalizeText24(value).replace(/-/g, "_");
+  const normalized = normalizeText25(value).replace(/-/g, "_");
   return normalized === CustomGptSetupChannel.KNOWN_GOOD ? CustomGptSetupChannel.KNOWN_GOOD : CustomGptSetupChannel.LATEST;
 }
 function countCodePoints(value) {
   return Array.from(String(value ?? "")).length;
 }
-function escapeHtml2(value) {
+function escapeHtml3(value) {
   return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
-function escapeAttribute(value) {
-  return escapeHtml2(value);
+function escapeAttribute2(value) {
+  return escapeHtml3(value);
 }
 function extractOpenApiRoutes(content) {
   return [...content.matchAll(/^ {2}(\/[^:\n]+):$/gm)].map((match) => match[1]);
@@ -29126,11 +29382,11 @@ function extractInstructionTokens(content, operationIds) {
   return requiredTokens.filter((token) => content.includes(token));
 }
 function decodeGitHubFileContent(content, encoding) {
-  const normalizedEncoding = normalizeText24(encoding) || "base64";
+  const normalizedEncoding = normalizeText25(encoding) || "base64";
   if (normalizedEncoding !== "base64") {
     return null;
   }
-  const normalizedContent = normalizeText24(content)?.replace(/\n/g, "");
+  const normalizedContent = normalizeText25(content)?.replace(/\n/g, "");
   if (!normalizedContent) {
     return null;
   }
@@ -29145,7 +29401,7 @@ function decodeGitHubFileContent(content, encoding) {
   return Buffer.from(normalizedContent, "base64").toString("utf8");
 }
 function normalizeApiBaseUrl4(value) {
-  const normalized = normalizeText24(value);
+  const normalized = normalizeText25(value);
   return normalized ? normalized.replace(/\/+$/, "") : GITHUB_API_BASE_URL3;
 }
 function buildPasskeyOperatorUrl({ origin, repository, phase, actionType, highRiskKind, issueNumber }) {
@@ -29159,8 +29415,8 @@ function buildPasskeyOperatorUrl({ origin, repository, phase, actionType, highRi
   }
   return url.toString();
 }
-function normalizeOrigin(value) {
-  const normalized = normalizeText24(value);
+function normalizeOrigin2(value) {
+  const normalized = normalizeText25(value);
   if (!normalized) {
     return "";
   }
@@ -29180,7 +29436,7 @@ function normalizeIssueNumber(value) {
 function encodeRepository(repository) {
   return repository.split("/").map((segment) => encodeURIComponent(segment)).join("/");
 }
-function normalizeText24(value) {
+function normalizeText25(value) {
   if (typeof value !== "string") {
     return "";
   }
@@ -29199,9 +29455,9 @@ var CONFLICT_FILES_SOURCE = "not_provided_by_github_pull_request_endpoint";
 var FRESH_BRANCH_SUGGESTION = "Recreate a fresh branch from the current base branch, replay the scoped changes, and open/update the PR before retrying merge.";
 function normalizePullRequestMergeability(item) {
   const mergeable = typeof item?.mergeable === "boolean" ? item.mergeable : null;
-  const state = normalizeText25(item?.mergeable_state);
+  const state = normalizeText26(item?.mergeable_state);
   const draft = item?.draft === true;
-  const merged = item?.merged === true || Boolean(normalizeText25(item?.merged_at));
+  const merged = item?.merged === true || Boolean(normalizeText26(item?.merged_at));
   const hasConflict2 = mergeable === false || state === "dirty";
   const isUnknown = mergeable === null || state === "unknown";
   const blockedReason = normalizeMergeBlockedReason({ draft, hasConflict: hasConflict2, isUnknown, merged, state });
@@ -29255,7 +29511,7 @@ function normalizeMergeWarning({ hasConflict: hasConflict2, isUnknown, state, bl
   }
   return `Warning: PR merge is blocked (${blockedReason}). Resolve the blocking condition before attempting merge.`;
 }
-function normalizeText25(value) {
+function normalizeText26(value) {
   return typeof value === "string" && value.trim() ? value.trim() : "";
 }
 
@@ -29276,14 +29532,14 @@ var GitHubReadResource = Object.freeze({
   BRANCHES: "branches"
 });
 async function retrieveGitHubReadPlane(input = {}) {
-  const resource = normalizeText26(input.resource);
-  const repository = normalizeText26(input.repository);
+  const resource = normalizeText27(input.resource);
+  const repository = normalizeText27(input.repository);
   const issueNumber = normalizePositiveInteger5(input.issueNumber);
   const pullNumber = normalizePositiveInteger5(input.pullNumber);
-  const branch = normalizeText26(input.branch);
-  const head = normalizeText26(input.head);
-  const ref = normalizeText26(input.ref) || branch;
-  const state = normalizeText26(input.state) || "open";
+  const branch = normalizeText27(input.branch);
+  const head = normalizeText27(input.head);
+  const ref = normalizeText27(input.ref) || branch;
+  const state = normalizeText27(input.state) || "open";
   const limit = normalizeLimit6(input.limit, 20);
   const env = input.env ?? {};
   const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
@@ -29399,7 +29655,7 @@ async function fetchGitHubReadResource(input) {
       ok: false,
       status: response.status,
       error: "github_read_failed",
-      reason: normalizeText26(body?.message) || `GitHub read failed for ${resource}`
+      reason: normalizeText27(body?.message) || `GitHub read failed for ${resource}`
     };
   }
   return {
@@ -29529,51 +29785,51 @@ function normalizeGitHubReadRecords(resource, body) {
 }
 function normalizeRepositories(items) {
   return items.map((item) => ({
-    fullName: normalizeText26(item?.full_name),
-    name: normalizeText26(item?.name),
+    fullName: normalizeText27(item?.full_name),
+    name: normalizeText27(item?.name),
     visibility: item?.private === true ? "private" : "public",
-    defaultBranch: normalizeText26(item?.default_branch),
-    htmlUrl: normalizeText26(item?.html_url)
+    defaultBranch: normalizeText27(item?.default_branch),
+    htmlUrl: normalizeText27(item?.html_url)
   }));
 }
 function normalizeIssue5(item) {
   return {
     number: normalizePositiveInteger5(item?.number),
-    title: normalizeText26(item?.title),
-    body: normalizeText26(item?.body),
-    state: normalizeText26(item?.state),
-    htmlUrl: normalizeText26(item?.html_url),
-    author: normalizeText26(item?.user?.login)
+    title: normalizeText27(item?.title),
+    body: normalizeText27(item?.body),
+    state: normalizeText27(item?.state),
+    htmlUrl: normalizeText27(item?.html_url),
+    author: normalizeText27(item?.user?.login)
   };
 }
 function normalizeIssueComment(item) {
-  const createdAt = normalizeText26(item?.created_at);
-  const updatedAt = normalizeText26(item?.updated_at);
+  const createdAt = normalizeText27(item?.created_at);
+  const updatedAt = normalizeText27(item?.updated_at);
   return {
     id: normalizePositiveInteger5(item?.id),
-    body: normalizeText26(item?.body),
-    author: normalizeText26(item?.user?.login),
+    body: normalizeText27(item?.body),
+    author: normalizeText27(item?.user?.login),
     createdAt,
     updatedAt,
     includesCreatedEdit: Boolean(createdAt) && Boolean(updatedAt) && createdAt !== updatedAt,
-    htmlUrl: normalizeText26(item?.html_url)
+    htmlUrl: normalizeText27(item?.html_url)
   };
 }
 function normalizePullRequest2(item) {
   const mergeability = normalizePullRequestMergeability(item);
   return {
     number: normalizePositiveInteger5(item?.number),
-    title: normalizeText26(item?.title),
-    state: normalizeText26(item?.state),
+    title: normalizeText27(item?.title),
+    state: normalizeText27(item?.state),
     draft: item?.draft === true,
-    headRef: normalizeText26(item?.head?.ref),
-    headSha: normalizeText26(item?.head?.sha),
-    headOwner: normalizeText26(item?.head?.repo?.owner?.login) || normalizeText26(item?.head?.user?.login) || normalizeText26(item?.head?.repo?.full_name).split("/")[0] || null,
-    baseRef: normalizeText26(item?.base?.ref),
-    baseSha: normalizeText26(item?.base?.sha),
-    merged: item?.merged === true || Boolean(normalizeText26(item?.merged_at)),
-    mergedAt: normalizeText26(item?.merged_at),
-    mergeCommitSha: normalizeText26(item?.merge_commit_sha),
+    headRef: normalizeText27(item?.head?.ref),
+    headSha: normalizeText27(item?.head?.sha),
+    headOwner: normalizeText27(item?.head?.repo?.owner?.login) || normalizeText27(item?.head?.user?.login) || normalizeText27(item?.head?.repo?.full_name).split("/")[0] || null,
+    baseRef: normalizeText27(item?.base?.ref),
+    baseSha: normalizeText27(item?.base?.sha),
+    merged: item?.merged === true || Boolean(normalizeText27(item?.merged_at)),
+    mergedAt: normalizeText27(item?.merged_at),
+    mergeCommitSha: normalizeText27(item?.merge_commit_sha),
     mergeable: mergeability.mergeable,
     mergeableState: mergeability.state,
     mergeConflict: mergeability.hasConflict,
@@ -29584,68 +29840,68 @@ function normalizePullRequest2(item) {
     conflictFiles: mergeability.conflictFiles,
     conflictFilesSource: mergeability.conflictFilesSource,
     mergeability,
-    htmlUrl: normalizeText26(item?.html_url)
+    htmlUrl: normalizeText27(item?.html_url)
   };
 }
 function normalizePullReview(item) {
   return {
     id: normalizePositiveInteger5(item?.id),
-    state: normalizeText26(item?.state),
-    body: normalizeText26(item?.body),
-    author: normalizeText26(item?.user?.login),
-    submittedAt: normalizeText26(item?.submitted_at),
-    htmlUrl: normalizeText26(item?.html_url)
+    state: normalizeText27(item?.state),
+    body: normalizeText27(item?.body),
+    author: normalizeText27(item?.user?.login),
+    submittedAt: normalizeText27(item?.submitted_at),
+    htmlUrl: normalizeText27(item?.html_url)
   };
 }
 function normalizePullReviewComment(item) {
-  const createdAt = normalizeText26(item?.created_at);
-  const updatedAt = normalizeText26(item?.updated_at);
+  const createdAt = normalizeText27(item?.created_at);
+  const updatedAt = normalizeText27(item?.updated_at);
   return {
     id: normalizePositiveInteger5(item?.id),
-    path: normalizeText26(item?.path),
-    body: normalizeText26(item?.body),
-    author: normalizeText26(item?.user?.login),
+    path: normalizeText27(item?.path),
+    body: normalizeText27(item?.body),
+    author: normalizeText27(item?.user?.login),
     createdAt,
     updatedAt,
     includesCreatedEdit: Boolean(createdAt) && Boolean(updatedAt) && createdAt !== updatedAt,
-    htmlUrl: normalizeText26(item?.html_url)
+    htmlUrl: normalizeText27(item?.html_url)
   };
 }
 function normalizeCheckRun(item) {
   return {
     id: normalizePositiveInteger5(item?.id),
-    name: normalizeText26(item?.name),
-    status: normalizeText26(item?.status),
-    conclusion: normalizeText26(item?.conclusion),
-    htmlUrl: normalizeText26(item?.html_url)
+    name: normalizeText27(item?.name),
+    status: normalizeText27(item?.status),
+    conclusion: normalizeText27(item?.conclusion),
+    htmlUrl: normalizeText27(item?.html_url)
   };
 }
 function normalizeWorkflowRun2(item) {
   return {
     id: normalizePositiveInteger5(item?.id),
-    name: normalizeText26(item?.name),
-    status: normalizeText26(item?.status),
-    conclusion: normalizeText26(item?.conclusion),
-    headBranch: normalizeText26(item?.head_branch),
-    htmlUrl: normalizeText26(item?.html_url)
+    name: normalizeText27(item?.name),
+    status: normalizeText27(item?.status),
+    conclusion: normalizeText27(item?.conclusion),
+    headBranch: normalizeText27(item?.head_branch),
+    htmlUrl: normalizeText27(item?.html_url)
   };
 }
 function normalizeBranch(item) {
   return {
-    name: normalizeText26(item?.name),
+    name: normalizeText27(item?.name),
     protected: item?.protected === true,
-    sha: normalizeText26(item?.commit?.sha),
-    htmlUrl: normalizeText26(item?.commit?.url)
+    sha: normalizeText27(item?.commit?.sha),
+    htmlUrl: normalizeText27(item?.commit?.url)
   };
 }
 function readJsonSafe6(response) {
-  return response.json().catch(async () => ({ message: normalizeText26(await response.text().catch(() => "")) }));
+  return response.json().catch(async () => ({ message: normalizeText27(await response.text().catch(() => "")) }));
 }
 function encodeURIComponentRepository4(repository) {
   return String(repository ?? "").trim().split("/").map((segment) => encodeURIComponent(segment)).join("/");
 }
 function normalizeApiBaseUrl5(value) {
-  const text = normalizeText26(value);
+  const text = normalizeText27(value);
   return text ? text.replace(/\/+$/, "") : GITHUB_API_BASE_URL4;
 }
 function normalizeLimit6(value, fallback) {
@@ -29659,7 +29915,7 @@ function normalizePositiveInteger5(value) {
   const parsed = Number.parseInt(String(value ?? ""), 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
-function normalizeText26(value) {
+function normalizeText27(value) {
   return String(value ?? "").trim();
 }
 
@@ -29677,16 +29933,16 @@ var GitHubWriteOperation = Object.freeze({
   PULL_COMMENT_CREATE: "pull_comment_create"
 });
 async function executeGitHubWritePlane(input = {}) {
-  const operation = normalizeText27(input.operation);
-  const repository = normalizeText27(input.repository);
+  const operation = normalizeText28(input.operation);
+  const repository = normalizeText28(input.repository);
   const issueNumber = normalizePositiveInteger6(input.issueNumber);
   const pullNumber = normalizePositiveInteger6(input.pullNumber);
   const commentId = normalizePositiveInteger6(input.commentId);
-  const branch = normalizeText27(input.branch);
-  const baseRef = normalizeText27(input.baseRef) || "main";
-  const title = normalizeText27(input.title);
+  const branch = normalizeText28(input.branch);
+  const baseRef = normalizeText28(input.baseRef) || "main";
+  const title = normalizeText28(input.title);
   const body = normalizeBody(input.body);
-  const head = normalizeText27(input.head) || branch;
+  const head = normalizeText28(input.head) || branch;
   const env = input.env ?? {};
   const fetchImpl = resolveGitHubWriteFetch(env);
   const apiBaseUrl = normalizeApiBaseUrl6(env?.GITHUB_API_BASE_URL);
@@ -29700,7 +29956,7 @@ async function executeGitHubWritePlane(input = {}) {
     head,
     title,
     body,
-    approvalPhrase: normalizeText27(input.approvalPhrase),
+    approvalPhrase: normalizeText28(input.approvalPhrase),
     targetConfirmed: input.targetConfirmed === true,
     approvalScopeMatched: input.approvalScopeMatched === true
   });
@@ -29752,7 +30008,7 @@ function validateGitHubWriteRequest(input) {
   if (!input.approvalScopeMatched) {
     issues.push("approvalScopeMatched must be true");
   }
-  if (normalizeText27(input.approvalPhrase).toUpperCase() !== "GO") {
+  if (normalizeText28(input.approvalPhrase).toUpperCase() !== "GO") {
     issues.push("approvalPhrase must be GO");
   }
   if ((input.operation === GitHubWriteOperation.ISSUE_COMMENT_CREATE || input.operation === GitHubWriteOperation.ISSUE_COMMENT_UPDATE) && !input.issueNumber) {
@@ -29824,7 +30080,7 @@ async function dispatchGitHubWrite(input) {
       ok: false,
       status: response.status,
       error: "github_write_failed",
-      reason: normalizeText27(responseBody?.message) || `GitHub write failed for ${input.operation}`
+      reason: normalizeText28(responseBody?.message) || `GitHub write failed for ${input.operation}`
     };
   }
   return {
@@ -29954,10 +30210,10 @@ async function resolveRefSha({ repository, ref, token, fetchImpl, apiBaseUrl }) 
       ok: false,
       status: response.status,
       error: "github_write_failed",
-      reason: normalizeText27(body?.message) || `failed to resolve base ref sha for ${ref}`
+      reason: normalizeText28(body?.message) || `failed to resolve base ref sha for ${ref}`
     };
   }
-  const sha = normalizeText27(body?.object?.sha);
+  const sha = normalizeText28(body?.object?.sha);
   if (!sha) {
     return {
       ok: false,
@@ -29978,11 +30234,11 @@ function normalizeGitHubWriteResult(input) {
     branch: input.branch || null,
     baseRef: input.baseRef || null,
     commentId: normalizePositiveInteger6(responseBody?.id),
-    nodeId: normalizeText27(responseBody?.node_id) || null,
-    url: normalizeText27(responseBody?.html_url) || null,
-    state: normalizeText27(responseBody?.state) || null,
-    title: normalizeText27(responseBody?.title) || null,
-    ref: normalizeText27(responseBody?.ref) || null
+    nodeId: normalizeText28(responseBody?.node_id) || null,
+    url: normalizeText28(responseBody?.html_url) || null,
+    state: normalizeText28(responseBody?.state) || null,
+    title: normalizeText28(responseBody?.title) || null,
+    ref: normalizeText28(responseBody?.ref) || null
   };
 }
 function githubJsonHeaders2({ token }) {
@@ -30001,7 +30257,7 @@ async function readJsonSafe7(response) {
     return null;
   }
 }
-function normalizeText27(value) {
+function normalizeText28(value) {
   return String(value ?? "").trim();
 }
 function normalizeBody(value) {
@@ -30013,7 +30269,7 @@ function normalizePositiveInteger6(value) {
   return Number.isInteger(number) && number > 0 ? number : null;
 }
 function normalizeApiBaseUrl6(value) {
-  const normalized = normalizeText27(value);
+  const normalized = normalizeText28(value);
   return normalized || GITHUB_API_BASE_URL5;
 }
 function encodeURIComponentRepository5(repository) {
@@ -30035,7 +30291,7 @@ function buildGitHubWriteFetchExceptionDiagnostics({ operation, method, url, err
   };
 }
 function sanitizeGitHubWriteDiagnosticText(value) {
-  return normalizeText27(value).replace(/sk-[A-Za-z0-9_-]+/g, "[REDACTED_OPENAI_KEY]").replace(/gh[psuro]_[A-Za-z0-9_]+/g, "[REDACTED_GITHUB_TOKEN]").replace(/Bearer\s+[A-Za-z0-9_.=-]+/gi, "Bearer [REDACTED]").replace(/(authorization|api[_-]?key|token|secret)(["'\s:=]+)([^"'\s<>&]+)/gi, "$1$2[REDACTED]").replace(/\/Users\/[^\s"'<>]+/g, "/Users/[REDACTED_PATH]").slice(0, 500);
+  return normalizeText28(value).replace(/sk-[A-Za-z0-9_-]+/g, "[REDACTED_OPENAI_KEY]").replace(/gh[psuro]_[A-Za-z0-9_]+/g, "[REDACTED_GITHUB_TOKEN]").replace(/Bearer\s+[A-Za-z0-9_.=-]+/gi, "Bearer [REDACTED]").replace(/(authorization|api[_-]?key|token|secret)(["'\s:=]+)([^"'\s<>&]+)/gi, "$1$2[REDACTED]").replace(/\/Users\/[^\s"'<>]+/g, "/Users/[REDACTED_PATH]").slice(0, 500);
 }
 
 // src/core/github-app-operation-registry.js
@@ -30171,10 +30427,10 @@ var NATURAL_GO_ENABLED_OPERATIONS = /* @__PURE__ */ new Set([
   GitHubWriteOperation.PULL_COMMENT_CREATE
 ]);
 function getGitHubAppOperation(operation) {
-  return GitHubAppOperationRegistry[normalizeText28(operation)] ?? null;
+  return GitHubAppOperationRegistry[normalizeText29(operation)] ?? null;
 }
 function bindNaturalGitHubWriteApproval({ payload, policyInput }) {
-  if (policyInput?.targetConfirmed === true && policyInput?.approvalScopeMatched === true && normalizeText28(policyInput?.approvalPhrase)) {
+  if (policyInput?.targetConfirmed === true && policyInput?.approvalScopeMatched === true && normalizeText29(policyInput?.approvalPhrase)) {
     return policyInput;
   }
   if (!canBindNaturalGitHubWriteApproval(payload)) {
@@ -30188,7 +30444,7 @@ function bindNaturalGitHubWriteApproval({ payload, policyInput }) {
   };
 }
 function canBindNaturalGitHubWriteApproval(payload) {
-  const operation = normalizeText28(payload?.operation);
+  const operation = normalizeText29(payload?.operation);
   const operationConfig = getGitHubAppOperation(operation);
   if (!operationConfig || operationConfig.tier !== GitHubAppOperationTier.NORMAL_GO || operationConfig.naturalGoEnabled === false || !NATURAL_GO_ENABLED_OPERATIONS.has(operation)) {
     return false;
@@ -30201,7 +30457,7 @@ function canBindNaturalGitHubWriteApproval(payload) {
     return false;
   }
   const presentedPayload = normalizeObject9(naturalApproval.presentedPayload);
-  if (normalizeText28(presentedPayload.operation) !== operation) {
+  if (normalizeText29(presentedPayload.operation) !== operation) {
     return false;
   }
   return operationConfig.naturalGoIdentityFields.every(
@@ -30222,7 +30478,7 @@ function fieldMatchesPresentedPayload({ field, payload, presentedPayload }) {
     const actualNumber = normalizePositiveInteger7(actual);
     return Boolean(actualNumber) && actualNumber === normalizePositiveInteger7(presented);
   }
-  return Boolean(normalizeText28(actual)) && normalizeText28(actual) === normalizeText28(presented);
+  return Boolean(normalizeText29(actual)) && normalizeText29(actual) === normalizeText29(presented);
 }
 function readPayloadIdentityField(payload, field) {
   if (field === "issueNumber") {
@@ -30231,12 +30487,12 @@ function readPayloadIdentityField(payload, field) {
   return payload?.[field];
 }
 function containsGoToken(value) {
-  return /(^|[^A-Za-z0-9_])GO([^A-Za-z0-9_]|$)/i.test(normalizeText28(value));
+  return /(^|[^A-Za-z0-9_])GO([^A-Za-z0-9_]|$)/i.test(normalizeText29(value));
 }
 function normalizeObject9(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
-function normalizeText28(value) {
+function normalizeText29(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 function normalizeBody2(value) {
@@ -30478,14 +30734,14 @@ var GitHubHighRiskOperation = Object.freeze({
   ISSUE_CLOSE: "issue_close"
 });
 async function executeGitHubHighRiskPlane(input = {}) {
-  const operation = normalizeText29(input.operation);
-  const repository = normalizeText29(input.repository);
+  const operation = normalizeText30(input.operation);
+  const repository = normalizeText30(input.repository);
   const issueNumber = normalizePositiveInteger8(input.issueNumber);
   const pullNumber = normalizePositiveInteger8(input.pullNumber);
   const mergeMethod = normalizeMergeMethod(input.mergeMethod);
-  const commitTitle = normalizeText29(input.commitTitle);
+  const commitTitle = normalizeText30(input.commitTitle);
   const commitMessage = normalizeBody3(input.commitMessage);
-  const approvalPhrase = normalizeText29(input.approvalPhrase);
+  const approvalPhrase = normalizeText30(input.approvalPhrase);
   const targetConfirmed = input.targetConfirmed === true;
   const approvalScope = input.approvalScope ?? null;
   const approvalGrant = input.approvalGrant ?? null;
@@ -30557,7 +30813,7 @@ function validateGitHubHighRiskRequest(input) {
   if (!input.targetConfirmed) {
     issues.push("targetConfirmed must be true");
   }
-  if (normalizeText29(input.approvalPhrase).toUpperCase() !== "GO") {
+  if (normalizeText30(input.approvalPhrase).toUpperCase() !== "GO") {
     issues.push("approvalPhrase must be GO");
   }
   if (input.operation === GitHubHighRiskOperation.PULL_MERGE && input.mergeMethod && !["merge", "squash", "rebase"].includes(input.mergeMethod)) {
@@ -30643,7 +30899,7 @@ async function executePullReadyForReview(input) {
       ok: false,
       status: prResponse.status,
       error: "github_high_risk_failed",
-      reason: normalizeText29(prBody?.message) || "failed to read pull request before ready-for-review"
+      reason: normalizeText30(prBody?.message) || "failed to read pull request before ready-for-review"
     };
   }
   if (prBody?.draft !== true) {
@@ -30655,11 +30911,11 @@ async function executePullReadyForReview(input) {
         pullNumber: input.pullNumber,
         readyForReview: true,
         changed: false,
-        htmlUrl: normalizeText29(prBody?.html_url) || `https://github.com/${input.repository}/pull/${input.pullNumber}`
+        htmlUrl: normalizeText30(prBody?.html_url) || `https://github.com/${input.repository}/pull/${input.pullNumber}`
       }
     };
   }
-  const nodeId = normalizeText29(prBody?.node_id);
+  const nodeId = normalizeText30(prBody?.node_id);
   if (!nodeId) {
     return {
       ok: false,
@@ -30696,7 +30952,7 @@ async function executePullReadyForReview(input) {
       ok: false,
       status: mutationResponse.status,
       error: "github_high_risk_failed",
-      reason: normalizeText29(graphqlErrors[0]?.message) || normalizeText29(mutationBody?.message) || "GitHub ready-for-review mutation failed"
+      reason: normalizeText30(graphqlErrors[0]?.message) || normalizeText30(mutationBody?.message) || "GitHub ready-for-review mutation failed"
     };
   }
   const pull = mutationBody?.data?.markPullRequestReadyForReview?.pullRequest;
@@ -30716,7 +30972,7 @@ async function executePullReadyForReview(input) {
       pullNumber: Number(pull?.number ?? input.pullNumber),
       readyForReview: true,
       changed: true,
-      htmlUrl: normalizeText29(pull?.url) || `https://github.com/${input.repository}/pull/${input.pullNumber}`
+      htmlUrl: normalizeText30(pull?.url) || `https://github.com/${input.repository}/pull/${input.pullNumber}`
     }
   };
 }
@@ -30765,14 +31021,14 @@ async function executePullMerge(input) {
       ok: false,
       status: response.status,
       error: "github_high_risk_failed",
-      reason: normalizeText29(responseBody?.message) || "GitHub merge failed",
+      reason: normalizeText30(responseBody?.message) || "GitHub merge failed",
       diagnostics: {
         operation: input.operation,
         requestMethod: "PUT",
         requestUrl,
         githubStatus: response.status,
-        githubMessage: normalizeText29(responseBody?.message) || null,
-        githubDocumentationUrl: normalizeText29(responseBody?.documentation_url) || null
+        githubMessage: normalizeText30(responseBody?.message) || null,
+        githubDocumentationUrl: normalizeText30(responseBody?.documentation_url) || null
       }
     };
   }
@@ -30787,9 +31043,9 @@ async function executePullMerge(input) {
       repository: input.repository,
       pullNumber: input.pullNumber,
       merged: responseBody?.merged === true,
-      sha: normalizeText29(responseBody?.sha) || null,
-      message: normalizeText29(responseBody?.message) || null,
-      htmlUrl: normalizeText29(runtimeTruth.pull?.htmlUrl) || `https://github.com/${input.repository}/pull/${input.pullNumber}`,
+      sha: normalizeText30(responseBody?.sha) || null,
+      message: normalizeText30(responseBody?.message) || null,
+      htmlUrl: normalizeText30(runtimeTruth.pull?.htmlUrl) || `https://github.com/${input.repository}/pull/${input.pullNumber}`,
       runtimeTruth: runtimeTruth.pull
     }
   };
@@ -30824,14 +31080,14 @@ async function readPullRuntimeTruthBeforeMerge(input) {
       ok: false,
       status: response.status,
       error: "github_high_risk_failed",
-      reason: normalizeText29(responseBody?.message) || "failed to read GitHub pull request runtime truth before merge",
+      reason: normalizeText30(responseBody?.message) || "failed to read GitHub pull request runtime truth before merge",
       diagnostics: {
         operation: input.operation,
         requestMethod: "GET",
         requestUrl,
         githubStatus: response.status,
-        githubMessage: normalizeText29(responseBody?.message) || null,
-        githubDocumentationUrl: normalizeText29(responseBody?.documentation_url) || null
+        githubMessage: normalizeText30(responseBody?.message) || null,
+        githubDocumentationUrl: normalizeText30(responseBody?.documentation_url) || null
       }
     };
   }
@@ -30856,7 +31112,7 @@ async function readPullRuntimeTruthBeforeMerge(input) {
       freshBranchSuggestion: mergeability.freshBranchSuggestion,
       conflictFiles: mergeability.conflictFiles,
       conflictFilesSource: mergeability.conflictFilesSource,
-      htmlUrl: normalizeText29(responseBody?.html_url) || null
+      htmlUrl: normalizeText30(responseBody?.html_url) || null
     }
   };
 }
@@ -30890,24 +31146,24 @@ async function readPullRuntimeTruthAfterMerge(input) {
       ok: false,
       status: response.status,
       error: "github_high_risk_failed",
-      reason: normalizeText29(responseBody?.message) || "failed to read GitHub pull request runtime truth after merge",
+      reason: normalizeText30(responseBody?.message) || "failed to read GitHub pull request runtime truth after merge",
       diagnostics: {
         operation: input.operation,
         requestMethod: "GET",
         requestUrl,
         githubStatus: response.status,
-        githubMessage: normalizeText29(responseBody?.message) || null,
-        githubDocumentationUrl: normalizeText29(responseBody?.documentation_url) || null
+        githubMessage: normalizeText30(responseBody?.message) || null,
+        githubDocumentationUrl: normalizeText30(responseBody?.documentation_url) || null
       }
     };
   }
   return {
     ok: true,
     pull: {
-      merged: responseBody?.merged === true || Boolean(normalizeText29(responseBody?.merged_at)),
-      mergedAt: normalizeText29(responseBody?.merged_at) || null,
-      mergeCommitSha: normalizeText29(responseBody?.merge_commit_sha) || null,
-      htmlUrl: normalizeText29(responseBody?.html_url) || null
+      merged: responseBody?.merged === true || Boolean(normalizeText30(responseBody?.merged_at)),
+      mergedAt: normalizeText30(responseBody?.merged_at) || null,
+      mergeCommitSha: normalizeText30(responseBody?.merge_commit_sha) || null,
+      htmlUrl: normalizeText30(responseBody?.html_url) || null
     }
   };
 }
@@ -30936,10 +31192,10 @@ async function executeBoundedIssueClose(input) {
       ok: false,
       status: prResponse.status,
       error: "github_high_risk_failed",
-      reason: normalizeText29(prBody?.message) || "failed to read pull request before issue close"
+      reason: normalizeText30(prBody?.message) || "failed to read pull request before issue close"
     };
   }
-  if (!normalizeText29(prBody?.merged_at)) {
+  if (!normalizeText30(prBody?.merged_at)) {
     return {
       ok: false,
       status: 422,
@@ -30971,7 +31227,7 @@ async function executeBoundedIssueClose(input) {
       ok: false,
       status: closeResponse.status,
       error: "github_high_risk_failed",
-      reason: normalizeText29(closeBody?.message) || "GitHub issue close failed"
+      reason: normalizeText30(closeBody?.message) || "GitHub issue close failed"
     };
   }
   return {
@@ -30981,9 +31237,9 @@ async function executeBoundedIssueClose(input) {
       repository: input.repository,
       issueNumber: input.issueNumber,
       pullNumber: input.pullNumber,
-      issueState: normalizeText29(closeBody?.state) || "closed",
-      mergedAt: normalizeText29(prBody?.merged_at) || null,
-      htmlUrl: normalizeText29(closeBody?.html_url) || `https://github.com/${input.repository}/issues/${input.issueNumber}`
+      issueState: normalizeText30(closeBody?.state) || "closed",
+      mergedAt: normalizeText30(prBody?.merged_at) || null,
+      htmlUrl: normalizeText30(closeBody?.html_url) || `https://github.com/${input.repository}/issues/${input.issueNumber}`
     }
   };
 }
@@ -31004,7 +31260,7 @@ function normalizePositiveInteger8(value) {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 function normalizeMergeMethod(value) {
-  const text = normalizeText29(value).toLowerCase();
+  const text = normalizeText30(value).toLowerCase();
   return text || null;
 }
 function normalizeBody3(value) {
@@ -31012,7 +31268,7 @@ function normalizeBody3(value) {
   return text.trim() ? text : "";
 }
 function normalizeApiBaseUrl7(value) {
-  const normalized = normalizeText29(value);
+  const normalized = normalizeText30(value);
   return normalized ? normalized.replace(/\/+$/, "") : GITHUB_API_BASE_URL6;
 }
 function encodeURIComponentRepository6(repository) {
@@ -31035,7 +31291,7 @@ async function readJsonSafe8(response) {
     return null;
   }
 }
-function normalizeText29(value) {
+function normalizeText30(value) {
   return String(value ?? "").trim();
 }
 function errorName(error) {
@@ -31043,9 +31299,9 @@ function errorName(error) {
 }
 function errorMessage(error) {
   if (error instanceof Error) {
-    return normalizeText29(error.message) || error.name || "unknown error";
+    return normalizeText30(error.message) || error.name || "unknown error";
   }
-  return normalizeText29(error) || "unknown error";
+  return normalizeText30(error) || "unknown error";
 }
 
 // src/worker/runtime.js
@@ -31076,6 +31332,14 @@ var runtime_default = {
     }
     if (request.method === "GET" && (url.pathname === "/setup" || url.pathname === "/setup/recovery" || url.pathname === "/setup/latest" || url.pathname === "/setup/known-good")) {
       return handleCustomGptRecoveryPageRequest(url, env);
+    }
+    if (request.method === "GET" && (url.pathname === "/help" || url.pathname === "/guide")) {
+      return html(
+        200,
+        renderVtddHelpGuidePage({
+          runtimeOrigin: url.origin
+        })
+      );
     }
     if (request.method === "GET" && isApiPath(url.pathname, "/approval/passkey/operator")) {
       await purgeExpiredPasskeyArtifacts(resolveMemoryProvider(env));
@@ -31504,6 +31768,21 @@ var runtime_default = {
       }
       return handleRetrieveGitHubReadPlaneRequest(url, env);
     }
+    if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/cloudflare-pages")) {
+      const auth = authorizeGatewayRequest({
+        request,
+        env,
+        apiSuffix: "/retrieve/cloudflare-pages"
+      });
+      if (!auth.ok) {
+        return retrieveErrorJson(url, auth.status, {
+          ok: false,
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+      return handleRetrieveCloudflarePagesRequest(url);
+    }
     if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/setup-artifact")) {
       const auth = authorizeGatewayRequest({ request, env, apiSuffix: "/retrieve/setup-artifact" });
       if (!auth.ok) {
@@ -31632,9 +31911,9 @@ async function handleRetrieveCrossIssueRequest(url, env) {
   const limit = normalizeLimit7(url.searchParams.get("limit"), 5);
   const relatedIssue = normalizeIssue6(url.searchParams.get("relatedIssue"));
   const issueNumber = normalizeIssue6(url.searchParams.get("issueNumber"));
-  const issueTitle = normalizeText30(url.searchParams.get("issueTitle"));
-  const issueUrl = normalizeText30(url.searchParams.get("issueUrl"));
-  const queryText = normalizeText30(url.searchParams.get("text")) || normalizeText30(url.searchParams.get("q"));
+  const issueTitle = normalizeText31(url.searchParams.get("issueTitle"));
+  const issueUrl = normalizeText31(url.searchParams.get("issueUrl"));
+  const queryText = normalizeText31(url.searchParams.get("text")) || normalizeText31(url.searchParams.get("q"));
   const semanticEnabled = parseBooleanQueryParam(url.searchParams.get("semantic"));
   const retrieved = await retrieveCrossIssueMemoryIndex(provider, {
     phase,
@@ -31672,8 +31951,8 @@ async function handleRetrieveCrossIssueRequest(url, env) {
 async function handleRetrieveOperationalMemoryRequest(url, env) {
   const provider = resolveMemoryProvider(env);
   const limit = normalizeLimit7(url.searchParams.get("limit"), 8);
-  const queryText = normalizeText30(url.searchParams.get("text")) || normalizeText30(url.searchParams.get("q"));
-  const repository = normalizeText30(url.searchParams.get("repository"));
+  const queryText = normalizeText31(url.searchParams.get("text")) || normalizeText31(url.searchParams.get("q"));
+  const repository = normalizeText31(url.searchParams.get("repository"));
   const runtimeTruth = buildRetrieveRuntimeTruth(url);
   const retrieved = await retrieveOperationalMemory(provider, {
     text: queryText,
@@ -31711,7 +31990,7 @@ async function handleRetrieveApprovalGrantRequest(url, env) {
       reason: "valid memory provider is required for approval grant retrieval"
     });
   }
-  const approvalId = normalizeText30(url.searchParams.get("approvalId"));
+  const approvalId = normalizeText31(url.searchParams.get("approvalId"));
   if (!approvalId) {
     return retrieveErrorJson(url, 422, {
       ok: false,
@@ -31720,7 +31999,7 @@ async function handleRetrieveApprovalGrantRequest(url, env) {
     });
   }
   const record = await findApprovalRecordById(provider, approvalId);
-  if (!record || normalizeText30(record?.content?.kind) !== "passkey_grant") {
+  if (!record || normalizeText31(record?.content?.kind) !== "passkey_grant") {
     return retrieveErrorJson(url, 404, {
       ok: false,
       error: "approval_grant_not_found",
@@ -31730,10 +32009,10 @@ async function handleRetrieveApprovalGrantRequest(url, env) {
   return json(200, {
     ok: true,
     approvalGrant: {
-      approvalId: normalizeText30(record.content.approvalId) || record.id,
+      approvalId: normalizeText31(record.content.approvalId) || record.id,
       verified: record.content.status === "verified",
-      verifiedAt: normalizeText30(record.content.verifiedAt) || null,
-      expiresAt: normalizeText30(record.content.expiresAt) || null,
+      verifiedAt: normalizeText31(record.content.verifiedAt) || null,
+      expiresAt: normalizeText31(record.content.expiresAt) || null,
       scope: normalizeScopeSnapshot(record.content.scope)
     }
   });
@@ -31784,8 +32063,8 @@ async function handleMemoryWriteRequest(request, env) {
     });
   }
   const gatewayInput = {
-    phase: normalizeText30(payload.phase) || "execution",
-    actorRole: normalizeText30(payload.actorRole) || "butler",
+    phase: normalizeText31(payload.phase) || "execution",
+    actorRole: normalizeText31(payload.actorRole) || "butler",
     memoryRecord: {
       recordType: memoryRecord.record.recordType,
       content: memoryRecord.record.content,
@@ -31793,7 +32072,7 @@ async function handleMemoryWriteRequest(request, env) {
     }
   };
   const gatewayResult = {
-    repository: normalizeText30(payload.repository) || null
+    repository: normalizeText31(payload.repository) || null
   };
   if (memoryRecord.record.recordType === MemoryRecordType.DECISION_LOG) {
     const persisted = await appendDecisionLogFromGateway(provider, gatewayInput, gatewayResult);
@@ -31888,8 +32167,8 @@ function buildMemoryWriteRecord(payload = {}) {
     };
   }
   const relatedIssue = normalizeIssue6(payload.relatedIssue);
-  const repository = normalizeText30(payload.repository) || null;
-  const timestamp = normalizeText30(payload.timestamp) || (/* @__PURE__ */ new Date()).toISOString();
+  const repository = normalizeText31(payload.repository) || null;
+  const timestamp = normalizeText31(payload.timestamp) || (/* @__PURE__ */ new Date()).toISOString();
   const metadata = {
     ...normalizeObject10(payload.metadata),
     relatedIssue,
@@ -31904,12 +32183,12 @@ function buildMemoryWriteRecord(payload = {}) {
       record: {
         recordType,
         content: {
-          decision: normalizeText30(payload.decision ?? payload.summary),
-          rationale: normalizeText30(payload.rationale),
+          decision: normalizeText31(payload.decision ?? payload.summary),
+          rationale: normalizeText31(payload.rationale),
           relatedIssue,
-          decidedBy: normalizeText30(payload.decidedBy) || "butler_with_owner_go",
+          decidedBy: normalizeText31(payload.decidedBy) || "butler_with_owner_go",
           timestamp,
-          supersededBy: normalizeText30(payload.supersededBy) || null
+          supersededBy: normalizeText31(payload.supersededBy) || null
         },
         metadata,
         timestamp,
@@ -31925,13 +32204,13 @@ function buildMemoryWriteRecord(payload = {}) {
       record: {
         recordType,
         content: {
-          hypothesis: normalizeText30(payload.hypothesis ?? payload.summary),
+          hypothesis: normalizeText31(payload.hypothesis ?? payload.summary),
           options: normalizeStringArray4(payload.options),
           rejectedReasons: normalizeRejectedReasons2(payload.rejectedReasons),
           concerns: normalizeStringArray4(payload.concerns),
           unresolvedQuestions: normalizeStringArray4(payload.unresolvedQuestions),
           relatedIssue,
-          proposedBy: normalizeText30(payload.proposedBy) || "butler_with_owner_go",
+          proposedBy: normalizeText31(payload.proposedBy) || "butler_with_owner_go",
           timestamp
         },
         metadata,
@@ -31941,7 +32220,7 @@ function buildMemoryWriteRecord(payload = {}) {
       }
     };
   }
-  const summary = normalizeText30(payload.summary);
+  const summary = normalizeText31(payload.summary);
   if (!summary) {
     return {
       ok: false,
@@ -31956,7 +32235,7 @@ function buildMemoryWriteRecord(payload = {}) {
       recordType,
       content: {
         summary,
-        details: normalizeText30(payload.details) || null,
+        details: normalizeText31(payload.details) || null,
         relatedIssue,
         repository,
         timestamp
@@ -31998,18 +32277,18 @@ function buildMemoryWriteTags({ recordType, relatedIssue, repository, extraTags 
 }
 function normalizeStringArray4(value) {
   const values = Array.isArray(value) ? value : value === void 0 ? [] : [value];
-  return values.map(normalizeText30).filter(Boolean);
+  return values.map(normalizeText31).filter(Boolean);
 }
 function normalizeRejectedReasons2(value) {
   const values = Array.isArray(value) ? value : [];
   return values.map((item) => ({
-    option: normalizeText30(item?.option),
-    reason: normalizeText30(item?.reason)
+    option: normalizeText31(item?.option),
+    reason: normalizeText31(item?.reason)
   })).filter((item) => item.option && item.reason);
 }
 function makeOperationalMemoryRecordId(record) {
   const issuePart = normalizeIssue6(record.content?.relatedIssue) ?? "none";
-  const timestampPart = normalizeText30(record.timestamp).replace(/[^0-9]/g, "").slice(0, 14);
+  const timestampPart = normalizeText31(record.timestamp).replace(/[^0-9]/g, "").slice(0, 14);
   const summaryPart = normalizeTag3(record.content?.summary ?? record.recordType).slice(0, 40);
   return `${record.recordType}_${issuePart}_${timestampPart}_${summaryPart}`;
 }
@@ -32040,9 +32319,9 @@ async function handleRetrieveGitHubReadPlaneRequest(url, env) {
 }
 async function handleRetrieveCustomGptSetupArtifactRequest(url, env) {
   const retrieved = await retrieveCustomGptSetupArtifact({
-    artifact: normalizeText30(url.searchParams.get("artifact")),
-    repository: normalizeText30(url.searchParams.get("repository")),
-    ref: normalizeText30(url.searchParams.get("ref")),
+    artifact: normalizeText31(url.searchParams.get("artifact")),
+    repository: normalizeText31(url.searchParams.get("repository")),
+    ref: normalizeText31(url.searchParams.get("ref")),
     env
   });
   if (!retrieved.ok) {
@@ -32058,10 +32337,13 @@ async function handleRetrieveCustomGptSetupArtifactRequest(url, env) {
     artifact: retrieved.artifact
   });
 }
+function handleRetrieveCloudflarePagesRequest(url) {
+  return json(200, buildVtddCloudflarePageDirectory({ runtimeOrigin: url.origin }));
+}
 async function handleRetrieveButlerSelfParityRequest(url, env) {
   const parity = await evaluateButlerSelfParity({
-    repository: normalizeText30(url.searchParams.get("repository")),
-    ref: normalizeText30(url.searchParams.get("ref")),
+    repository: normalizeText31(url.searchParams.get("repository")),
+    ref: normalizeText31(url.searchParams.get("ref")),
     issueNumber: normalizeIssue6(url.searchParams.get("issueNumber")),
     runtimeOrigin: url.origin,
     env
@@ -32167,7 +32449,7 @@ async function handleGitHubWritePlaneRequest(request, env) {
   });
 }
 function wantsActionVisibleGitHubWriteErrors(payload) {
-  const responseMode = normalizeText30(payload?.responseMode);
+  const responseMode = normalizeText31(payload?.responseMode);
   return responseMode === "action_visible";
 }
 function retrieveErrorJson(url, status, body = {}) {
@@ -32177,18 +32459,18 @@ function retrieveErrorJson(url, status, body = {}) {
   return json(200, {
     ok: false,
     httpStatus: status,
-    error: normalizeText30(body.error) || "retrieve_failed",
-    reason: normalizeText30(body.reason) || null,
+    error: normalizeText31(body.error) || "retrieve_failed",
+    reason: normalizeText31(body.reason) || null,
     issues: Array.isArray(body.issues) ? body.issues : [],
     diagnostics: {
-      route: normalizeText30(url?.pathname) || null,
+      route: normalizeText31(url?.pathname) || null,
       responseMode: "action_visible",
       rootCause: "Custom GPT Action test screen can surface non-2xx retrieve responses as ClientResponseError; this envelope preserves error/reason/issues for debugging."
     }
   });
 }
 function wantsActionVisibleRetrieveErrors(url) {
-  const responseMode = normalizeText30(url?.searchParams?.get("responseMode"));
+  const responseMode = normalizeText31(url?.searchParams?.get("responseMode"));
   return responseMode === "action_visible";
 }
 function validateConsistentIssueScope({ payload, issueContext }) {
@@ -32222,10 +32504,10 @@ async function handleGitHubHighRiskPlaneRequest(request, env) {
       issues: issueScopeValidation.issues
     });
   }
-  const operation = normalizeText30(payload.operation);
-  const repository = normalizeText30(payload.repository);
+  const operation = normalizeText31(payload.operation);
+  const repository = normalizeText31(payload.repository);
   const scopedIssueNumber = issueContext.issueNumber ?? payload.issueNumber ?? null;
-  const phase = normalizeText30(payload.phase) || "execution";
+  const phase = normalizeText31(payload.phase) || "execution";
   const highRiskKind = operation;
   const actionType = mapGitHubHighRiskOperationToActionType(operation);
   const approvalScope = buildApprovalScopeSnapshot({
@@ -32307,7 +32589,7 @@ async function handleDeployProductionRequest(request, env) {
   const policyInput = payload.policyInput && typeof payload.policyInput === "object" ? payload.policyInput : {};
   const resolvedApprovalGrant = await resolveApprovalGrant({
     payload: {
-      phase: normalizeText30(payload.phase) || "execution",
+      phase: normalizeText31(payload.phase) || "execution",
       highRiskKind: "deploy_production",
       repositoryInput: payload.repository
     },
@@ -32355,7 +32637,7 @@ async function handleGitHubActionsSecretSyncRequest(request, env) {
   const policyInput = payload.policyInput && typeof payload.policyInput === "object" ? payload.policyInput : {};
   const resolvedApprovalGrant = await resolveApprovalGrant({
     payload: {
-      phase: normalizeText30(payload.phase) || "execution",
+      phase: normalizeText31(payload.phase) || "execution",
       highRiskKind: "github_actions_secret_sync",
       repositoryInput: payload.repository
     },
@@ -32394,7 +32676,7 @@ async function handleGitHubActionsSecretSyncRequest(request, env) {
 }
 async function handleCustomGptRecoveryPageRequest(url, env) {
   const channel = url.pathname === "/setup/known-good" ? CustomGptSetupChannel.KNOWN_GOOD : CustomGptSetupChannel.LATEST;
-  const ref = normalizeText30(url.searchParams.get("ref")) || "main";
+  const ref = normalizeText31(url.searchParams.get("ref")) || "main";
   const issueNumber = normalizeIssue6(url.searchParams.get("issueNumber"));
   const bundle = await buildCustomGptRecoveryBundle({
     channel,
@@ -32450,7 +32732,7 @@ function handlePasskeyOperatorPageRequest(request) {
   });
 }
 function normalizeOptionalHttpUrl(value) {
-  const text = normalizeText30(value);
+  const text = normalizeText31(value);
   if (!text) {
     return "";
   }
@@ -32465,7 +32747,7 @@ function normalizeOptionalHttpUrl(value) {
   }
 }
 function normalizeOperatorReturnUrl(value) {
-  const text = normalizeText30(value);
+  const text = normalizeText31(value);
   if (!text) {
     return "";
   }
@@ -32573,7 +32855,7 @@ async function resolveRemoteCodexHandoffRuntimeTruth({
   const continuationContext = payload?.continuationContext && typeof payload.continuationContext === "object" ? payload.continuationContext : {};
   const handoff = continuationContext.handoff && typeof continuationContext.handoff === "object" ? continuationContext.handoff : {};
   const handoffTarget = handoff.targetPullRequest && typeof handoff.targetPullRequest === "object" ? handoff.targetPullRequest : {};
-  const activeBranch = normalizeText30(runtimeState.activeBranch) || normalizeText30(handoff.headRef) || normalizeText30(handoffTarget.headRef) || normalizeText30(handoffTarget.head?.ref) || normalizeText30(payload?.executionTarget?.branch) || (issueNumber ? `codex/issue-${issueNumber}` : "");
+  const activeBranch = normalizeText31(runtimeState.activeBranch) || normalizeText31(handoff.headRef) || normalizeText31(handoffTarget.headRef) || normalizeText31(handoffTarget.head?.ref) || normalizeText31(payload?.executionTarget?.branch) || (issueNumber ? `codex/issue-${issueNumber}` : "");
   const [repositoryOwner] = repositoryResolution.repository.split("/");
   const [pulls, branches, workflowRuns] = await Promise.all([
     retrieveGitHubReadPlane({
@@ -32631,13 +32913,13 @@ async function resolveRemoteCodexHandoffRuntimeTruth({
 }
 function selectPullRequestForBranch(records, target) {
   const items = Array.isArray(records) ? records : [];
-  const branch = normalizeText30(target?.branch);
-  const owner = normalizeText30(target?.owner);
+  const branch = normalizeText31(target?.branch);
+  const owner = normalizeText31(target?.owner);
   const selected = items.find(
-    (item) => normalizeText30(item?.state) === "open" && normalizeText30(item?.headRef) === branch && normalizeText30(item?.headOwner) === owner
+    (item) => normalizeText31(item?.state) === "open" && normalizeText31(item?.headRef) === branch && normalizeText31(item?.headOwner) === owner
   );
   const staleItems = items.filter(
-    (item) => normalizeText30(item?.headRef) === branch && normalizeText30(item?.headOwner) === owner
+    (item) => normalizeText31(item?.headRef) === branch && normalizeText31(item?.headOwner) === owner
   );
   if (!selected) {
     return {
@@ -32697,8 +32979,8 @@ function normalizeButlerReadConsentPayload(payload) {
 }
 function normalizeRemoteCodexHandoffPayload(payload) {
   const policyInput = payload?.policyInput && typeof payload.policyInput === "object" ? payload.policyInput : {};
-  const actionType = normalizeText30(policyInput.actionType);
-  const actorRole = normalizeText30(payload?.actorRole);
+  const actionType = normalizeText31(policyInput.actionType);
+  const actorRole = normalizeText31(payload?.actorRole);
   const issueNumber = normalizeIssue6(payload?.issueContext?.issueNumber);
   if (actorRole !== "butler" || actionType !== "build" || !issueNumber) {
     return payload;
@@ -32710,7 +32992,7 @@ function normalizeRemoteCodexHandoffPayload(payload) {
   const grantedCategories = Array.isArray(consent.grantedCategories) ? consent.grantedCategories : [];
   const goGranted = policyInput.go === true;
   const normalizedGrantedCategories = goGranted ? mergeGrantedConsentCategories(grantedCategories, ["read", "propose", "execute"]) : grantedCategories;
-  const requestedExecutorTransport = normalizeText30(
+  const requestedExecutorTransport = normalizeText31(
     payload?.executorTransport ?? continuationContext.executorTransport
   );
   const apiKeyRunnerAcknowledged = payload?.apiKeyRunnerAcknowledged === true || continuationContext.apiKeyRunnerAcknowledged === true || goGranted && requestedExecutorTransport === "api_key_runner";
@@ -32726,7 +33008,7 @@ function normalizeRemoteCodexHandoffPayload(payload) {
         issueTraceable: handoff.issueTraceable === false ? false : true,
         approvalScopeMatched: handoff.approvalScopeMatched === false ? false : true,
         relatedIssue: normalizeIssue6(handoff.relatedIssue) ?? issueNumber,
-        summary: normalizeText30(handoff.summary) || `Issue #${issueNumber} bounded remote Codex handoff`
+        summary: normalizeText31(handoff.summary) || `Issue #${issueNumber} bounded remote Codex handoff`
       }
     },
     policyInput: {
@@ -32736,7 +33018,7 @@ function normalizeRemoteCodexHandoffPayload(payload) {
         ...consent,
         grantedCategories: normalizedGrantedCategories
       },
-      approvalPhrase: normalizeText30(policyInput.approvalPhrase) || (goGranted ? "GO" : ""),
+      approvalPhrase: normalizeText31(policyInput.approvalPhrase) || (goGranted ? "GO" : ""),
       issueTraceability: {
         ...issueTraceability,
         relatedIssue: normalizeIssue6(issueTraceability.relatedIssue) ?? issueNumber,
@@ -32754,7 +33036,7 @@ function mergeGrantedConsentCategories(current, required) {
   const seen = /* @__PURE__ */ new Set();
   const merged = [];
   for (const category of [...current, ...required]) {
-    const text = normalizeText30(category);
+    const text = normalizeText31(category);
     const key = normalize7(text);
     if (!text || seen.has(key)) {
       continue;
@@ -32765,7 +33047,7 @@ function mergeGrantedConsentCategories(current, required) {
   return merged;
 }
 function normalizeTraceRefs(value, fallback) {
-  if (Array.isArray(value) && value.some((item) => Boolean(normalizeText30(item)))) {
+  if (Array.isArray(value) && value.some((item) => Boolean(normalizeText31(item)))) {
     return value;
   }
   return [fallback];
@@ -32784,7 +33066,7 @@ async function resolveRuntimeAliasRegistry({ baseAliasRegistry, env }) {
         "repository nickname registry read unverified",
         stored.error,
         stored.reason
-      ].map(normalizeText30).filter(Boolean).join(": ")
+      ].map(normalizeText31).filter(Boolean).join(": ")
     ]
   };
 }
@@ -32901,7 +33183,7 @@ async function handleRepositoryNicknameDeleteRequest(request, env) {
   });
 }
 function normalizeCanonicalRepositoryInput(value) {
-  const text = normalizeText30(value).toLowerCase();
+  const text = normalizeText31(value).toLowerCase();
   if (!/^[a-z0-9_.-]+\/[a-z0-9_.-]+$/.test(text)) {
     return "";
   }
@@ -32923,8 +33205,8 @@ async function handlePasskeyRegistrationOptionsRequest(request, env) {
     rpID: env?.VTDD_PASSKEY_RP_ID || new URL(request.url).hostname,
     rpName: env?.VTDD_PASSKEY_RP_NAME || "VTDD",
     origin: env?.VTDD_PASSKEY_ORIGIN || new URL(request.url).origin,
-    operatorId: normalizeText30(body?.operatorId) || "vtdd-operator",
-    operatorLabel: normalizeText30(body?.operatorLabel) || "VTDD Operator"
+    operatorId: normalizeText31(body?.operatorId) || "vtdd-operator",
+    operatorLabel: normalizeText31(body?.operatorLabel) || "VTDD Operator"
   });
   if (!created.ok) {
     return json(422, {
@@ -32958,7 +33240,7 @@ async function handlePasskeyRegistrationVerifyRequest(request, env) {
     });
   }
   const body = await readJson(request);
-  const sessionId = normalizeText30(body?.sessionId);
+  const sessionId = normalizeText31(body?.sessionId);
   const sessionRecord = await findApprovalRecordById(provider, sessionId);
   if (!sessionRecord) {
     return json(404, {
@@ -33042,7 +33324,7 @@ async function handlePasskeyApprovalVerifyRequest(request, env) {
     });
   }
   const body = await readJson(request);
-  const sessionId = normalizeText30(body?.sessionId);
+  const sessionId = normalizeText31(body?.sessionId);
   const sessionRecord = await findApprovalRecordById(provider, sessionId);
   if (!sessionRecord) {
     return json(404, {
@@ -33078,7 +33360,7 @@ function appendWarnings(result, warnings) {
     return result;
   }
   const currentWarnings = Array.isArray(result?.warnings) ? result.warnings : [];
-  const merged = new Set([...currentWarnings, ...warnings].map(normalizeText30).filter(Boolean));
+  const merged = new Set([...currentWarnings, ...warnings].map(normalizeText31).filter(Boolean));
   return {
     ...result,
     warnings: [...merged]
@@ -33090,7 +33372,7 @@ async function resolveApprovalGrant({ payload, policyInput, env }) {
   if (!validation.ok) {
     return { approvalGrant: null };
   }
-  const approvalId = normalizeText30(policyInput?.approvalGrantId);
+  const approvalId = normalizeText31(policyInput?.approvalGrantId);
   if (!approvalId) {
     return { approvalGrant: null };
   }
@@ -33141,7 +33423,7 @@ function mapGitHubHighRiskOperationToActionType(operation) {
   if (operation === GitHubHighRiskOperation.ISSUE_CLOSE) {
     return "issue_close";
   }
-  return normalizeText30(operation);
+  return normalizeText31(operation);
 }
 async function retrieveRegisteredPasskeys(provider) {
   const records = await provider.retrieve({
@@ -33158,7 +33440,7 @@ async function purgeExpiredPasskeyArtifacts(provider) {
     type: MemoryRecordType.APPROVAL_LOG,
     limit: MAX_MEMORY_LIMIT
   });
-  const expiredIds = records.filter((record) => isExpiredPasskeyEphemeralRecord(record)).map((record) => normalizeText30(record?.id)).filter(Boolean);
+  const expiredIds = records.filter((record) => isExpiredPasskeyEphemeralRecord(record)).map((record) => normalizeText31(record?.id)).filter(Boolean);
   if (expiredIds.length === 0) {
     return { ok: true, deletedCount: 0 };
   }
@@ -33173,7 +33455,7 @@ async function findApprovalRecordById(provider, recordId) {
     text: recordId,
     limit: 50
   });
-  return records.find((record) => normalizeText30(record?.id) === recordId) ?? records.find((record) => normalizeText30(record?.content?.approvalId) === recordId) ?? records.find((record) => normalizeText30(record?.content?.sessionId) === recordId) ?? null;
+  return records.find((record) => normalizeText31(record?.id) === recordId) ?? records.find((record) => normalizeText31(record?.content?.approvalId) === recordId) ?? records.find((record) => normalizeText31(record?.content?.sessionId) === recordId) ?? null;
 }
 async function appendGuardedAbsenceExecutionLog({ payload, gatewayOutcome, env }) {
   const policyInput = normalizeObject10(payload?.policyInput);
@@ -33191,7 +33473,7 @@ async function appendGuardedAbsenceExecutionLog({ payload, gatewayOutcome, env }
   }
   const nowIso = (/* @__PURE__ */ new Date()).toISOString();
   const body = normalizeObject10(gatewayOutcome?.body);
-  const blockedByRule = normalizeText30(body.blockedByRule) || null;
+  const blockedByRule = normalizeText31(body.blockedByRule) || null;
   const recordInput = {
     id: buildGuardedAbsenceExecutionLogId({
       actionType: policyInput.actionType,
@@ -33200,15 +33482,15 @@ async function appendGuardedAbsenceExecutionLog({ payload, gatewayOutcome, env }
     type: MemoryRecordType.EXECUTION_LOG,
     content: {
       mode: autonomyMode,
-      phase: normalizeText30(payload?.phase) || "execution",
-      actorRole: normalizeText30(payload?.actorRole) || null,
-      actionType: normalizeText30(policyInput.actionType) || null,
+      phase: normalizeText31(payload?.phase) || "execution",
+      actorRole: normalizeText31(payload?.actorRole) || null,
+      actionType: normalizeText31(policyInput.actionType) || null,
       allowed: body.allowed === true,
       blockedByRule,
-      reason: normalizeText30(body.reason) || null,
-      repositoryInput: normalizeText30(policyInput.repositoryInput) || null,
-      repository: normalizeText30(body.repository) || null,
-      requiredApproval: normalizeText30(body.requiredApproval) || null,
+      reason: normalizeText31(body.reason) || null,
+      repositoryInput: normalizeText31(policyInput.repositoryInput) || null,
+      repository: normalizeText31(body.repository) || null,
+      requiredApproval: normalizeText31(body.requiredApproval) || null,
       stopCategory: classifyGuardedStopCategory(blockedByRule)
     },
     metadata: {
@@ -33458,8 +33740,8 @@ function buildCrossRetrievalInput({ payload, responseBody, crossRetrievalRequest
   const relatedIssue = crossRetrievalRequest.relatedIssue ?? responseBody?.memoryWritePersisted?.relatedIssue ?? inferRelatedIssueFromGatewayInput(payload) ?? inferRelatedIssueFromProposalGatewayInput(payload);
   const issueContextInput = payload?.issueContext ?? {};
   const issueNumber = normalizeIssue6(issueContextInput.issueNumber) ?? relatedIssue;
-  const issueTitle = normalizeText30(issueContextInput.issueTitle);
-  const issueUrl = normalizeText30(issueContextInput.issueUrl);
+  const issueTitle = normalizeText31(issueContextInput.issueTitle);
+  const issueUrl = normalizeText31(issueContextInput.issueUrl);
   return {
     phase: crossRetrievalRequest.phase,
     limit: crossRetrievalRequest.limit,
@@ -33500,7 +33782,7 @@ function normalizeCrossRetrievalRequest(request) {
     limit: normalizeLimit7(value.limit, 5),
     displayMode: normalize7(value.displayMode) === "expanded" ? "expanded" : "short",
     relatedIssue: normalizeIssue6(value.relatedIssue),
-    text: normalizeText30(value.text) || normalizeText30(value.queryHint) || null,
+    text: normalizeText31(value.text) || normalizeText31(value.queryHint) || null,
     semanticRetrieval: normalizeSemanticRetrievalRequest(value.semanticRetrieval)
   };
 }
@@ -33517,9 +33799,9 @@ function parseBooleanQueryParam(value) {
   return normalized === "true" || normalized === "1" || normalized === "yes";
 }
 function buildRetrieveRuntimeTruth(url) {
-  const currentState = normalizeText30(url.searchParams.get("currentState"));
-  const source = normalizeText30(url.searchParams.get("runtimeTruthSource"));
-  const checkedAt = normalizeText30(url.searchParams.get("checkedAt"));
+  const currentState = normalizeText31(url.searchParams.get("currentState"));
+  const source = normalizeText31(url.searchParams.get("runtimeTruthSource"));
+  const checkedAt = normalizeText31(url.searchParams.get("checkedAt"));
   if (!currentState && !source && !checkedAt) {
     return null;
   }
@@ -33577,7 +33859,7 @@ function createD1MemoryIndexAdapter(d1) {
         record.id,
         record.type,
         record.content === null || record.content === void 0 ? null : JSON.stringify(record.content),
-        normalizeText30(record.contentRef) || null,
+        normalizeText31(record.contentRef) || null,
         JSON.stringify(record.metadata ?? {}),
         Number(record.priority ?? 50),
         JSON.stringify(record.tags ?? []),
@@ -33586,22 +33868,22 @@ function createD1MemoryIndexAdapter(d1) {
     },
     async queryRecords(filter = {}) {
       await ensureSchema();
-      const ids = Array.isArray(filter.ids) ? filter.ids.map((item) => normalizeText30(item)).filter(Boolean) : [];
-      const type = normalizeText30(filter.type);
+      const ids = Array.isArray(filter.ids) ? filter.ids.map((item) => normalizeText31(item)).filter(Boolean) : [];
+      const type = normalizeText31(filter.type);
       const limit = normalizeMemoryLimit(filter.limit);
       const statement = buildMemorySelectStatement({ ids, type });
       const result = await d1.prepare(statement.sql).bind(...statement.params).all();
       const rows = Array.isArray(result?.results) ? result.results : [];
       let records = rows.map(mapStoredMemoryRecord).filter(Boolean);
       if (Array.isArray(filter.tags) && filter.tags.length > 0) {
-        const requiredTags = filter.tags.map((tag) => normalizeText30(tag).toLowerCase()).filter(Boolean);
+        const requiredTags = filter.tags.map((tag) => normalizeText31(tag).toLowerCase()).filter(Boolean);
         records = records.filter(
           (record) => requiredTags.every(
-            (tag) => Array.isArray(record.tags) && record.tags.some((recordTag) => normalizeText30(recordTag).toLowerCase() === tag)
+            (tag) => Array.isArray(record.tags) && record.tags.some((recordTag) => normalizeText31(recordTag).toLowerCase() === tag)
           )
         );
       }
-      const queryText = normalizeText30(filter.text).toLowerCase();
+      const queryText = normalizeText31(filter.text).toLowerCase();
       if (queryText) {
         records = records.filter((record) => JSON.stringify(record).toLowerCase().includes(queryText));
       }
@@ -33620,7 +33902,7 @@ function createD1MemoryIndexAdapter(d1) {
     },
     async deleteRecords(input = {}) {
       await ensureSchema();
-      const ids = Array.isArray(input?.ids) ? input.ids.map((item) => normalizeText30(item)).filter(Boolean) : [];
+      const ids = Array.isArray(input?.ids) ? input.ids.map((item) => normalizeText31(item)).filter(Boolean) : [];
       if (ids.length === 0) {
         return { ok: true, deletedCount: 0 };
       }
@@ -33692,14 +33974,14 @@ function mapStoredMemoryRecord(row) {
     return null;
   }
   return {
-    id: normalizeText30(row.id),
-    type: normalizeText30(row.type),
+    id: normalizeText31(row.id),
+    type: normalizeText31(row.type),
     content: row.content_json ? safeParseJson(row.content_json) : null,
-    contentRef: normalizeText30(row.content_ref) || void 0,
+    contentRef: normalizeText31(row.content_ref) || void 0,
     metadata: safeParseJson(row.metadata_json, {}),
     priority: Number(row.priority ?? 50),
     tags: safeParseJson(row.tags_json, []),
-    createdAt: normalizeText30(row.created_at)
+    createdAt: normalizeText31(row.created_at)
   };
 }
 function resolveMemoryBlobThreshold(env) {
@@ -33726,7 +34008,7 @@ function safeParseJson(value, fallback = null) {
 function attachGatewayWarning(gatewayOutcome, warning) {
   const body = normalizeObject10(gatewayOutcome?.body);
   const warnings = Array.isArray(body.warnings) ? body.warnings : [];
-  const merged = [...new Set([...warnings, normalizeText30(warning)].filter(Boolean))];
+  const merged = [...new Set([...warnings, normalizeText31(warning)].filter(Boolean))];
   return {
     status: gatewayOutcome.status,
     body: {
@@ -33771,11 +34053,11 @@ function classifyGuardedStopCategory(blockedByRule) {
 function authorizeGatewayRequest({ request, env, apiSuffix = "/gateway" }) {
   const runtimeEnv = env ?? {};
   const routeLabel = `/${CANONICAL_API_PREFIX.replace(/^\//, "")}${apiSuffix} (legacy ${LEGACY_API_PREFIX}${apiSuffix} is also accepted)`;
-  const bearerToken = normalizeText30(
+  const bearerToken = normalizeText31(
     runtimeEnv.VTDD_GATEWAY_BEARER_TOKEN ?? runtimeEnv.MVP_GATEWAY_BEARER_TOKEN
   );
   if (bearerToken) {
-    const authorizationHeader = normalizeText30(request.headers.get("authorization"));
+    const authorizationHeader = normalizeText31(request.headers.get("authorization"));
     const provided = parseBearerToken(request.headers.get("authorization"));
     if (!authorizationHeader) {
       return {
@@ -33800,11 +34082,11 @@ function authorizeGatewayRequest({ request, env, apiSuffix = "/gateway" }) {
       reason: `provided bearer token is invalid for ${routeLabel}`
     };
   }
-  const accessClientId = normalizeText30(runtimeEnv.CF_ACCESS_CLIENT_ID);
-  const accessClientSecret = normalizeText30(runtimeEnv.CF_ACCESS_CLIENT_SECRET);
+  const accessClientId = normalizeText31(runtimeEnv.CF_ACCESS_CLIENT_ID);
+  const accessClientSecret = normalizeText31(runtimeEnv.CF_ACCESS_CLIENT_SECRET);
   if (accessClientId || accessClientSecret) {
-    const providedId = normalizeText30(request.headers.get("cf-access-client-id"));
-    const providedSecret = normalizeText30(request.headers.get("cf-access-client-secret"));
+    const providedId = normalizeText31(request.headers.get("cf-access-client-id"));
+    const providedSecret = normalizeText31(request.headers.get("cf-access-client-secret"));
     if (!providedId && !providedSecret) {
       return {
         ok: false,
@@ -33869,7 +34151,7 @@ function authorizePasskeyBrowserOrMachineRequest({ request, env, apiSuffix }) {
   return machineAuth;
 }
 function isSameOriginBrowserRequest(request) {
-  const originHeader = normalizeText30(request.headers.get("origin"));
+  const originHeader = normalizeText31(request.headers.get("origin"));
   const fetchSite = normalize7(request.headers.get("sec-fetch-site"));
   const contentType = normalize7(request.headers.get("content-type"));
   if (!originHeader) {
@@ -33935,7 +34217,7 @@ function html(status, body) {
 function normalize7(value) {
   return String(value ?? "").trim().toLowerCase();
 }
-function normalizeText30(value) {
+function normalizeText31(value) {
   return String(value ?? "").trim();
 }
 function normalizePositiveInteger9(value) {
@@ -33943,10 +34225,10 @@ function normalizePositiveInteger9(value) {
   return Number.isInteger(number) && number > 0 ? number : null;
 }
 function normalizeTag3(value) {
-  return normalizeText30(value).toLowerCase().replace(/[^a-z0-9:_-]+/g, "_");
+  return normalizeText31(value).toLowerCase().replace(/[^a-z0-9:_-]+/g, "_");
 }
 function parseBearerToken(value) {
-  const text = normalizeText30(value);
+  const text = normalizeText31(value);
   if (!text) {
     return "";
   }
@@ -33954,7 +34236,7 @@ function parseBearerToken(value) {
   if (normalize7(scheme) !== "bearer") {
     return "";
   }
-  return normalizeText30(token);
+  return normalizeText31(token);
 }
 function isApiPath(pathname, suffix) {
   return pathname === `${CANONICAL_API_PREFIX}${suffix}` || pathname === `${LEGACY_API_PREFIX}${suffix}`;
