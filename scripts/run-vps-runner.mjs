@@ -1583,11 +1583,11 @@ function isVpsRunnerMentionMilestone(event = {}) {
 
 function formatVpsRunnerMilestoneLead({ event, mention } = {}) {
   if (!isVpsRunnerMentionMilestone(event)) {
-    return "VTDD VPS runner event.";
+    return "VTDD VPS runner event。";
   }
   const label = getVpsRunnerMilestoneLabel(event);
   const prefix = mention ? `@${mention} ` : "";
-  return `${prefix}VTDD milestone: ${label}.`;
+  return `${prefix}VTDD マイルストーン: ${label}。`;
 }
 
 function getVpsRunnerMilestoneLabel(event = {}) {
@@ -1603,28 +1603,28 @@ function getVpsRunnerMilestoneLabel(event = {}) {
   }
   const matched = candidates.find((candidate) => MILESTONE_MENTION_EVENTS.has(candidate));
   const labels = {
-    picked_up: "execution picked up",
-    branch_pushed: "branch pushed",
-    pr_created: "PR created",
-    pr_updated: "PR updated",
-    conflict_resolved: "conflict resolved",
-    no_changes: "no changes",
-    merge_retry_ready: "merge retry ready",
-    pull_request_created: "PR created",
-    pull_request_updated: "PR updated",
-    review_result_changed: "review result changed",
-    manual_review_required: "manual review required",
-    ready_for_review_completed: "ready for review completed",
-    merge_ready_reached: "merge-ready reached",
-    blocked: "blocked",
-    failed: "failed",
-    stale: "stale",
-    deploy_required: "deploy required",
-    completed: "completed",
-    runner_failed: "failed",
-    request_changes: "review requested changes",
-    manual_review: "manual review required",
-    approve: "review approved"
+    picked_up: "実行を開始しました",
+    branch_pushed: "branch を push しました",
+    pr_created: "PR を作成しました",
+    pr_updated: "PR を更新しました",
+    conflict_resolved: "conflict を解消しました",
+    no_changes: "変更なしです",
+    merge_retry_ready: "merge retry 可能です",
+    pull_request_created: "PR を作成しました",
+    pull_request_updated: "PR を更新しました",
+    review_result_changed: "review 結果が変わりました",
+    manual_review_required: "manual review が必要です",
+    ready_for_review_completed: "Draft 解除が完了しました",
+    merge_ready_reached: "merge-ready に到達しました",
+    blocked: "block されました",
+    failed: "失敗しました",
+    stale: "stale です",
+    deploy_required: "deploy が必要です",
+    completed: "完了しました",
+    runner_failed: "失敗しました",
+    request_changes: "review が変更要求を出しました",
+    manual_review: "manual review が必要です",
+    approve: "review は approve です"
   };
   return labels[matched] || "runtime event";
 }

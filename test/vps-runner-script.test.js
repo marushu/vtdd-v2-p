@@ -349,7 +349,7 @@ test("VPS runner milestone event mentions queue comment author", () => {
     }
   });
 
-  assert.equal(body.split("\n")[1], "@alice VTDD milestone: branch pushed.");
+  assert.equal(body.split("\n")[1], "@alice VTDD マイルストーン: branch を push しました。");
   assert.equal(body.includes("@alice"), true);
   assert.equal(body.includes("@bob"), false);
   assert.equal(parseVpsRunnerEventComment(body).ok, true);
@@ -422,7 +422,7 @@ test("VPS runner notification omits mention when no mentionable actor exists", (
   });
 
   assert.equal(body.includes("@"), false);
-  assert.equal(body.includes("VTDD milestone: failed."), true);
+  assert.equal(body.includes("VTDD マイルストーン: 失敗しました。"), true);
 });
 
 test("VPS runner state comment remains compatible with runner event parsing", () => {
@@ -713,7 +713,7 @@ test("VPS runner completed event exposes a GitHub-visible final event", async ()
   assert.equal(parsed.event.finalEventReason.includes("updated the existing pull request"), true);
   assert.equal(parsed.event.leadTime.pr_created_at, "2026-05-09T10:04:10.000Z");
   assert.equal(parsed.event.leadTime.completed_at, "2026-05-09T10:04:10.000Z");
-  assert.equal(body.includes("VTDD milestone: PR updated."), true);
+  assert.equal(body.includes("VTDD マイルストーン: PR を更新しました。"), true);
 });
 
 test("VPS runner maps completed execution goals to explicit final events", () => {
