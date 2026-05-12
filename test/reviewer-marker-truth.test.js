@@ -60,7 +60,7 @@ test("reviewer marker truth normalizes Codex fallback evidence with body for rea
   const result = collectCodexFallbackSignals({
     issueComments: [
       {
-        user: { login: "github-actions[bot]" },
+        user: { login: "vtdd-codex[bot]" },
         body: [
           "<!-- vtdd:reviewer=codex-fallback -->",
           "## VTDD Codex Reviewer Fallback Request",
@@ -97,7 +97,7 @@ test("reviewer marker truth ignores untrusted Codex connector setup blockers", (
         ].join("\n")
       },
       {
-        user: { login: "github-actions[bot]" },
+        user: { login: "vtdd-codex[bot]" },
         body: [
           "<!-- vtdd:reviewer=codex-fallback -->",
           "## VTDD Codex Reviewer Fallback Request",
@@ -141,7 +141,7 @@ test("reviewer marker truth lets newer completed Codex fallback supersede older 
         body: "To use Codex here, [create a Codex account and connect to github](https://chatgpt.com/codex/cloud/settings/connectors)."
       },
       {
-        user: { login: "github-actions[bot]" },
+        user: { login: "vtdd-codex[bot]" },
         createdAt: "2026-05-12T04:50:00Z",
         body: [
           "<!-- vtdd:reviewer=codex-fallback -->",
@@ -166,7 +166,7 @@ test("reviewer marker truth keeps newer connector blocker over older Codex fallb
   const result = collectCodexFallbackSignals({
     issueComments: [
       {
-        user: { login: "github-actions[bot]" },
+        user: { login: "vtdd-codex[bot]" },
         createdAt: "2026-05-12T04:40:00Z",
         body: [
           "<!-- vtdd:reviewer=codex-fallback -->",

@@ -63,8 +63,7 @@ export function isTrustedReviewerMarkerComment(comment) {
   ).toLowerCase();
   return [
     "vtdd-codex",
-    "vtdd-codex[bot]",
-    "github-actions[bot]"
+    "vtdd-codex[bot]"
   ].includes(author);
 }
 
