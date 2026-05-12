@@ -9,7 +9,8 @@
 
 ## Unsatisfied Success Criteria
 
-None.
+- Remaining scoped work or owner-facing connections are still open outside this PR slice.
+- Replace with `None.` only when this PR is truly complete.
 
 ## Non-goal violations
 
@@ -25,14 +26,14 @@ None.
 
 ## Butler Completion Contract
 
-- Owner goal:
-- Butler entrypoint:
-- Action Schema exposure:
-- Runtime path:
-- Runner/runtime truth:
-- Authority boundary:
-- E2E evidence:
-- Completion status:
+- Owner goal: See Intent and Success Criteria sections for the scoped owner-facing goal.
+- Butler entrypoint: Unchanged or not yet connected in this PR slice.
+- Action Schema exposure: Unchanged in this PR slice unless stated otherwise below.
+- Runtime path: See this PR's scoped implementation/evidence description.
+- Runner/runtime truth: See verification evidence and runtime path notes in this PR.
+- Authority boundary: Unchanged; no new high-risk authority is introduced in this PR slice unless stated otherwise.
+- E2E evidence: Unconnected in this PR slice; Butler-facing E2E remains open.
+- Completion status: unconnected
 
 ## Surface Update Checklist
 

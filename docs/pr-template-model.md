@@ -30,7 +30,9 @@ List the success criteria already satisfied by this PR.
 
 ### `Unsatisfied Success Criteria`
 
-Call out remaining criteria explicitly, or state `None.` when there are none.
+Call out remaining criteria explicitly. Use `None.` only when the PR is truly
+complete. Partial or unconnected PRs should keep at least one explicit
+remaining item instead of leaving this section empty.
 
 ### `Non-goal violations`
 
@@ -52,6 +54,10 @@ Use `complete` only when Butler can complete the owner-facing workflow and the
 PR provides Butler-facing E2E evidence. Use `incomplete` or `unconnected` when
 any required connection is missing. PRs that use `Closes #...` must be
 `complete`.
+
+Canonical renderer defaults should already emit passable non-placeholder text
+for this section. Authors should edit those lines to become more specific, not
+erase them back to empty placeholders.
 
 ### `Surface Update Checklist`
 
@@ -82,7 +88,9 @@ schemas, or tests. Completion is judged from the Butler owner-facing workflow.
 ## Guardrail Usage
 
 Use `scripts/render-pr-body.mjs` to generate a valid starting body instead of
-hand-writing the headings. Validate the result locally with
+hand-writing the headings. The renderer must emit a validator-passable
+partial/unconnected template by default so that AI-authored PRs do not fail on
+empty Butler contract placeholders. Validate the result locally with
 `node scripts/validate-pr-body.mjs <path>` before `gh pr create` or
 `gh pr edit --body-file`.
 
