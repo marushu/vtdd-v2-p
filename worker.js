@@ -21504,8 +21504,9 @@ function collectGeminiReviewerSignals(pullRequest = {}) {
 }
 function collectCodexFallbackSignals(pullRequest = {}) {
   const comments = [...Array.isArray(pullRequest.issueComments) ? pullRequest.issueComments : []];
-  const parsed = comments.filter(isTrustedReviewerMarkerComment).sort(compareReviewerMarkerComments).map(parseCodexReviewFallbackComment).filter(Boolean);
-  const connectorBlockers = comments.map(parseCodexConnectorSetupComment).filter(Boolean);
+  const trustedComments = comments.filter(isTrustedReviewerMarkerComment).sort(compareReviewerMarkerComments);
+  const parsed = trustedComments.map(parseCodexReviewFallbackComment).filter(Boolean);
+  const connectorBlockers = comments.filter(isTrustedCodexConnectorSetupComment).sort(compareReviewerMarkerComments).map(parseCodexConnectorSetupComment).filter(Boolean);
   const latestConnectorBlocker = connectorBlockers.at(-1) ?? null;
   const latest = latestConnectorBlocker ?? parsed.at(-1) ?? null;
   return {
@@ -21531,10 +21532,14 @@ function isTrustedReviewerMarkerComment(comment) {
   return [
     "vtdd-codex",
     "vtdd-codex[bot]",
-    "github-actions[bot]",
-    "codex",
-    "codex[bot]"
+    "github-actions[bot]"
   ].includes(author);
+}
+function isTrustedCodexConnectorSetupComment(comment) {
+  const author = normalizeText7(
+    comment?.user?.login ?? comment?.author?.login ?? comment?.author
+  ).toLowerCase();
+  return author === "chatgpt-codex-connector";
 }
 function collectFormalReviewTruth(pullRequest = {}) {
   const reviews = Array.isArray(pullRequest.reviews) ? pullRequest.reviews : [];

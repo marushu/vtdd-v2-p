@@ -83,6 +83,55 @@ test("reviewer marker truth normalizes Codex fallback evidence with body for rea
   assert.equal(result.latestEvidence.body.includes("Critical Findings"), true);
 });
 
+test("reviewer marker truth ignores untrusted Codex connector setup blockers", () => {
+  const result = collectCodexFallbackSignals({
+    issueComments: [
+      {
+        user: { login: "random-user" },
+        body: [
+          "<!-- vtdd:reviewer=codex-fallback -->",
+          "## VTDD Codex Reviewer Fallback Request",
+          "",
+          "- Status: `blocked`",
+          "- Reason: `github_connector_setup_required`"
+        ].join("\n")
+      },
+      {
+        user: { login: "github-actions[bot]" },
+        body: [
+          "<!-- vtdd:reviewer=codex-fallback -->",
+          "## VTDD Codex Reviewer Fallback Request",
+          "",
+          "- Status: `completed`",
+          "- Recommended action: `approve`",
+          "",
+          "### Critical Findings",
+          "- None"
+        ].join("\n")
+      }
+    ]
+  });
+
+  assert.equal(result.blocked, false);
+  assert.equal(result.completed, true);
+  assert.equal(result.latestEvidence.recommendedAction, "approve");
+});
+
+test("reviewer marker truth accepts Codex connector setup blockers only from connector actor", () => {
+  const result = collectCodexFallbackSignals({
+    issueComments: [
+      {
+        user: { login: "chatgpt-codex-connector" },
+        body: "To use Codex here, [create a Codex account and connect to github](https://chatgpt.com/codex/cloud/settings/connectors)."
+      }
+    ]
+  });
+
+  assert.equal(result.blocked, true);
+  assert.equal(result.completed, false);
+  assert.equal(result.latestEvidence, null);
+});
+
 test("reviewer marker truth keeps formal changes-requested blocking over marker approval", () => {
   const formalReviewTruth = collectFormalReviewTruth({
     reviewDecision: "APPROVED",

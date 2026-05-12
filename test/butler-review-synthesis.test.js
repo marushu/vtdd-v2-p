@@ -517,7 +517,7 @@ test("butler review synthesis derives Codex fallback completed marker from PR is
       mergeableState: "clean",
       issueComments: [
         {
-          user: { login: "codex" },
+          user: { login: "vtdd-codex" },
           url: "https://github.com/example/repo/pull/314#issuecomment-2",
           body: [
             "<!-- vtdd:reviewer=codex-fallback -->",
