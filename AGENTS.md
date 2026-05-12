@@ -308,6 +308,8 @@ It must not be interpreted as a blanket prohibition for non-RAG operational logs
 - No "while we are here" edits.
 - No unrelated refactors in implementation PRs.
 - Keep docs-only PRs and runtime PRs separable when possible.
+- For PR body create/update, never use freehand `gh pr create --body` or `gh pr edit --body`.
+- Use the repository canonical path: `scripts/prepare-pr-body-file.mjs` and then `gh pr create/edit --body-file`.
 - If a new guardrail or process correction is needed, land it in its own PR
   rather than mixing it into an implementation slice.
 

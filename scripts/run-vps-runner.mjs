@@ -8,8 +8,8 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { normalizeMentionLogin, parseCodexReviewFallbackComment } from "../src/core/index.js";
 import { buildExecutionLeadTime } from "../src/core/execution-lead-time.js";
+import { prepareGuardedPullRequestBody, prepareGuardedPullRequestBodyFile } from "./prepare-pr-body-file.mjs";
 import { renderPrBody } from "./render-pr-body.mjs";
-import { validatePrBody } from "./validate-pr-body.mjs";
 
 const QUEUE_MARKER_RE = /<!--\s*vtdd:vps-runner-execution:([a-zA-Z0-9._:-]+)\s*-->/;
 const EVENT_MARKER_RE = /<!--\s*vtdd:vps-runner-event:([a-zA-Z0-9._:-]+)\s*-->/;
@@ -285,10 +285,10 @@ async function executeVpsRunnerExecution({ githubFetch, token, workRoot, executi
         return { ok: false, reason: normalized.reason };
       }
       if (normalized.normalized) {
-        const bodyFile = await writePullRequestBodyFile({
+        const bodyFile = await writePreparedPullRequestBodyFile({
           workspace,
           payload,
-          body: normalized.body
+          candidateBody: existingPullRequest.body
         });
         await runTrackedVpsCommand("gh", ["pr", "edit", String(existingPullRequest.number || prUrl), "--repo", payload.repository, "--body-file", bodyFile], {
           cwd: workspace,
@@ -308,6 +308,11 @@ async function executeVpsRunnerExecution({ githubFetch, token, workRoot, executi
         await postVpsRunnerPrBodyBlockedEvent({ githubFetch, payload, normalized, notification });
         return { ok: false, reason: normalized.reason };
       }
+      const bodyFile = await writePreparedPullRequestBodyFile({
+        workspace,
+        payload,
+        candidateBody: extractCodexPrBodyDraft(payload)
+      });
       const pr = await runTrackedVpsCommand(
         "gh",
         [
@@ -320,8 +325,8 @@ async function executeVpsRunnerExecution({ githubFetch, token, workRoot, executi
           payload.branch,
           "--title",
           `Issue #${payload.issueNumber}: VTDD VPS runner handoff`,
-          "--body",
-          normalized.body
+          "--body-file",
+          bodyFile
         ],
         {
           cwd: workspace,
@@ -695,7 +700,7 @@ function buildCodexExecutionPrompt({
     "- Do not deploy.",
     "- Do not mutate secrets, permissions, repository settings, or external infrastructure.",
     "- If the Issue is ambiguous or blocked, leave a clear note in the working tree and stop.",
-    "- Before drafting or relying on a PR body, inspect the repository PR body contract: docs/pr-template-model.md, scripts/render-pr-body.mjs, and scripts/validate-pr-body.mjs.",
+    "- Before drafting or relying on a PR body, inspect the repository PR body contract: docs/pr-template-model.md, scripts/prepare-pr-body-file.mjs, scripts/render-pr-body.mjs, and scripts/validate-pr-body.mjs.",
     "- Any PR body draft must include these guarded-policy markers: ## This PR satisfies Intent; ## Satisfied Success Criteria; ## Unsatisfied Success Criteria; ## Verification Evidence; ## Butler Completion Contract; ## Surface Update Checklist.",
     "",
     `Goal: ${goal}`,
@@ -783,7 +788,7 @@ function normalizeVpsRunnerPreflightPolicy(value = {}) {
     requiredRepoFiles:
       requiredRepoFiles.length > 0
         ? requiredRepoFiles
-        : ["AGENTS.md", "docs/pr-template-model.md", "scripts/render-pr-body.mjs", "scripts/validate-pr-body.mjs"]
+        : ["AGENTS.md", "docs/pr-template-model.md", "scripts/prepare-pr-body-file.mjs", "scripts/render-pr-body.mjs", "scripts/validate-pr-body.mjs"]
   };
 }
 
@@ -1528,36 +1533,10 @@ function buildPullRequestBody(payload) {
 }
 
 function buildGuardedPullRequestBody({ payload, candidateBody } = {}) {
-  const candidate = typeof candidateBody === "string" ? candidateBody : "";
-  const candidateValidation = candidate.trim()
-    ? validatePrBody(candidate)
-    : { ok: false, errors: ["PR body candidate is missing."] };
-  if (candidateValidation.ok) {
-    return {
-      ok: true,
-      body: candidate,
-      normalized: false,
-      validationErrors: []
-    };
-  }
-
-  const canonicalBody = buildPullRequestBody(payload || {});
-  const canonicalValidation = validatePrBody(canonicalBody);
-  if (!canonicalValidation.ok) {
-    return {
-      ok: false,
-      reason: "VPS runner could not render a guarded-policy-compliant PR body.",
-      validationErrors: candidateValidation.errors,
-      canonicalErrors: canonicalValidation.errors
-    };
-  }
-
-  return {
-    ok: true,
-    body: canonicalBody,
-    normalized: true,
-    validationErrors: candidateValidation.errors
-  };
+  return prepareGuardedPullRequestBody({
+    candidateBody,
+    renderBody: () => buildPullRequestBody(payload || {})
+  });
 }
 
 function extractCodexPrBodyDraft(payload = {}) {
@@ -1570,9 +1549,16 @@ function extractCodexPrBodyDraft(payload = {}) {
   );
 }
 
-async function writePullRequestBodyFile({ workspace, payload, body }) {
+async function writePreparedPullRequestBodyFile({ workspace, payload, candidateBody }) {
   const bodyFile = path.join(os.tmpdir(), `vtdd-vps-runner-pr-body-${safePathSegment(payload.executionId)}.md`);
-  await fs.writeFile(bodyFile, body, "utf8");
+  const prepared = await prepareGuardedPullRequestBodyFile({
+    outputPath: bodyFile,
+    candidateBody,
+    renderBody: () => buildPullRequestBody(payload || {})
+  });
+  if (!prepared.ok) {
+    throw new Error(prepared.reason || "Failed to prepare guarded PR body file.");
+  }
   return bodyFile;
 }
 

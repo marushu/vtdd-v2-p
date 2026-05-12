@@ -226,7 +226,7 @@ jobs:
             exit 1
           fi
 
-          node scripts/render-pr-body.mjs \
+          node scripts/prepare-pr-body-file.mjs \
             --output /tmp/vtdd-remote-codex-pr-body.md \
             --issue "${TARGET_ISSUE_NUMBER}" \
             --intent "Remote Codex execution result for issue #${TARGET_ISSUE_NUMBER} is being opened as a bounded PR for review." \
@@ -249,8 +249,6 @@ jobs:
             --outOfScope "Merge\nIssue closure\nDeploy\nCredential mutation" \
             --executionId "${EXECUTION_ID}" \
             --codexGoal "${CODEX_GOAL}"
-
-          node scripts/validate-pr-body.mjs /tmp/vtdd-remote-codex-pr-body.md
 
           gh pr create \
             --repo "$TARGET_REPOSITORY" \

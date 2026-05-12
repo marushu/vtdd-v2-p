@@ -1285,6 +1285,13 @@ test("VPS runner normalizes malformed PR body candidates with canonical template
   assert.equal(normalized.body.includes("Completion status: incomplete"), true);
 });
 
+test("VPS runner create path uses prepared body-file helper instead of freehand --body", async () => {
+  const source = await fs.readFile(path.join(process.cwd(), "scripts", "run-vps-runner.mjs"), "utf8");
+  assert.equal(source.includes('import { prepareGuardedPullRequestBody, prepareGuardedPullRequestBodyFile } from "./prepare-pr-body-file.mjs";'), true);
+  assert.equal(source.includes('"--body-file",\n          bodyFile'), true);
+  assert.equal(source.includes('"--body",\n          normalized.body'), false);
+});
+
 test("VPS runner classifies unauthenticated Codex CLI as raw auth failure", () => {
   const failure = classifyVpsRunnerFailure(
     new Error("codex exec failed: unexpected status 401 Unauthorized: Missing bearer authentication")

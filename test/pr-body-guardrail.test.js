@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 
+import { prepareGuardedPullRequestBody, prepareGuardedPullRequestBodyFile } from "../scripts/prepare-pr-body-file.mjs";
 import { renderPrBody } from "../scripts/render-pr-body.mjs";
 import { validatePrBody } from "../scripts/validate-pr-body.mjs";
 
@@ -146,4 +147,59 @@ test("validate-pr-body CLI template mode accepts the canonical template structur
     },
   );
   assert.match(output, /PR body template validation passed/);
+});
+
+test("prepare-pr-body-file preserves a valid candidate body", async () => {
+  const candidate = renderPrBody({
+    issue: "57",
+    intent: "Preserve valid candidate.",
+    satisfied: "Body already matches the canonical contract.",
+    unsatisfied: "Human review remains pending.",
+    evidencePath: "docs/pr-template-model.md",
+    ownerGoal: "Keep a valid PR body unchanged.",
+    butlerEntrypoint: "PR body helper.",
+    actionSchemaExposure: "No schema change.",
+    runtimePath: "scripts/prepare-pr-body-file.mjs.",
+    runtimeTruth: "Local validator pass.",
+    authorityBoundary: "No high-risk operation.",
+    butlerE2E: "Not required for this guardrail path.",
+    completionStatus: "incomplete",
+  });
+  const prepared = prepareGuardedPullRequestBody({
+    candidateBody: candidate,
+    renderBody: () => "should not be used"
+  });
+
+  assert.equal(prepared.ok, true);
+  assert.equal(prepared.normalized, false);
+  assert.equal(prepared.body, candidate);
+});
+
+test("prepare-pr-body-file normalizes malformed candidate into canonical body file", async () => {
+  const tmpdir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "vtdd-pr-body-prepare-"));
+  const file = path.join(tmpdir, "body.md");
+  const prepared = await prepareGuardedPullRequestBodyFile({
+    outputPath: file,
+    candidateBody: "## Summary\n\nBroken.",
+    renderBody: () =>
+      renderPrBody({
+        issue: "57",
+        intent: "Normalize malformed candidate.",
+        satisfied: "Canonical helper rewrites the body.",
+        unsatisfied: "Human review remains pending.",
+        evidencePath: "docs/pr-template-model.md",
+        ownerGoal: "Avoid freehand PR body drift.",
+        butlerEntrypoint: "PR body helper.",
+        actionSchemaExposure: "No schema change.",
+        runtimePath: "scripts/prepare-pr-body-file.mjs.",
+        runtimeTruth: "Local validator pass.",
+        authorityBoundary: "No high-risk operation.",
+        butlerE2E: "Not required for this guardrail path.",
+        completionStatus: "incomplete",
+      })
+  });
+
+  assert.equal(prepared.ok, true);
+  assert.equal(prepared.normalized, true);
+  assert.equal((await fs.promises.readFile(file, "utf8")).includes("## This PR satisfies Intent"), true);
 });

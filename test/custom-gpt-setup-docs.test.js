@@ -79,6 +79,9 @@ test("custom gpt instructions preserve current butler and approval boundaries", 
   assert.equal(doc.includes("Current natural GO\n  binding is supported for `issue_create`, `issue_comment_create`, and\n  `pull_comment_create`"), true);
   assert.equal(doc.includes("If an implementation request does not already name an existing Issue"), true);
   assert.equal(doc.includes("the next safe write is usually `issue_create`, not Codex handoff"), true);
+  assert.equal(doc.includes("never freehand the PR body"), true);
+  assert.equal(doc.includes("scripts/prepare-pr-body-file.mjs"), true);
+  assert.equal(doc.includes("validated `--body-file` path"), true);
   assert.equal(doc.includes("If the human says something like \"この内容で Issue 作って\""), true);
   assert.equal(doc.includes("この title/body で Issue を作成するなら「GO」と言ってください"), true);
   assert.equal(doc.includes("Do not ask the human to say `targetConfirmed=true`"), true);
@@ -181,6 +184,9 @@ test("short custom gpt instructions stay under editor limits while preserving cr
   assert.equal(doc.includes("#303 is the regression example"), true);
   assert.equal(doc.includes("For normal GO writes (`issue_create`, `issue_comment_create`, `pull_comment_create`)"), true);
   assert.equal(doc.includes("the next safe write is Issue creation first"), true);
+  assert.equal(doc.includes("no freehand `--body`"), true);
+  assert.equal(doc.includes("scripts/prepare-pr-body-file.mjs"), true);
+  assert.equal(doc.includes("`--body-file`"), true);
   assert.equal(doc.includes("ask only `GO`"), true);
   assert.equal(doc.includes("Never ask targetConfirmed/approvalScopeMatched/approvalPhrase/raw JSON"), true);
   assert.equal(doc.includes("Nickname memory is user-owned alias data"), true);
@@ -257,6 +263,9 @@ test("short-min custom gpt instructions stay pasteable while preserving critical
     "continuationContext.handoff.relatedIssue",
     "GO + real passkey",
     "show exact title/body/comment/update payload",
+    "no freehand `--body`",
+    "scripts/prepare-pr-body-file.mjs",
+    "`--body-file`",
     "For implementation without an existing Issue, do issue_create first",
     "Preserve reviewer objections",
     "Review truth: marker approve != GitHub approval",
