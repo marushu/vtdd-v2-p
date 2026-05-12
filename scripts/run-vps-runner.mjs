@@ -3,6 +3,7 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import crypto from "node:crypto";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { normalizeMentionLogin, parseCodexReviewFallbackComment } from "../src/core/index.js";
@@ -160,6 +161,30 @@ async function executeVpsRunnerExecution({ githubFetch, token, workRoot, executi
       ...payload,
       branch: branchCheckout.branch || payload.branch
     };
+    const preflight = await buildVpsRunnerPreflightReceipt({
+      workspace,
+      payload,
+      issue
+    });
+    await postVpsRunnerEvent({
+      githubFetch,
+      payload,
+      notification,
+      event: {
+        status: preflight.ok ? "running" : "blocked",
+        lastEvent: preflight.ok ? "context_preflight_completed" : "context_preflight_blocked",
+        currentStep: "context_preflight",
+        preflight
+      }
+    });
+    if (!preflight.ok) {
+      return {
+        ok: false,
+        reason:
+          preflight.reason ||
+          "VPS runner preflight receipt could not be created. Butler/owner decision is required before reissue."
+      };
+    }
 
     const pullRequestContext = isPrRevisionGoal(payload.codexGoal)
       ? await buildVpsRunnerPullRequestContext({ githubFetch, payload })
@@ -184,7 +209,7 @@ async function executeVpsRunnerExecution({ githubFetch, token, workRoot, executi
       }
     });
 
-    const prompt = buildCodexExecutionPrompt({ payload, issue, pullRequestContext });
+    const prompt = buildCodexExecutionPrompt({ payload, issue, pullRequestContext, preflight });
     await assertVpsRunnerNotCanceled({ githubFetch, payload, checkpoint: "before_codex", notification });
     await runTrackedVpsCommand("codex", buildCodexExecArgs({ env: process.env }), {
       cwd: workspace,
@@ -531,7 +556,9 @@ function parseVpsRunnerQueueComment(body) {
     revisionTarget: normalizeRevisionTarget(payload.revisionTarget ?? payload.targetPullRequest),
     approvalScopeMatched: payload.approvalScopeMatched === true,
     approvalActor: normalizeGitHubLogin(payload.approvalActor),
-    handoff: payload.handoff || null
+    handoff: payload.handoff || null,
+    issueTraceability: payload.issueTraceability || null,
+    preflightPolicy: normalizeVpsRunnerPreflightPolicy(payload.preflightPolicy)
   };
 
   const issues = [];
@@ -552,6 +579,9 @@ function parseVpsRunnerQueueComment(body) {
   }
   if (!normalized.approvalScopeMatched) {
     issues.push("approvalScopeMatched must be true");
+  }
+  if (normalized.issueTraceability?.issueTraceable !== true) {
+    issues.push("issueTraceability.issueTraceable must be true");
   }
   if (isPrRevisionGoal(normalized.codexGoal)) {
     issues.push(...validateQueuedRevisionTarget(normalized));
@@ -640,7 +670,12 @@ function buildVpsRunnerStateComment({ executionId, event }) {
   ].join("\n");
 }
 
-function buildCodexExecutionPrompt({ payload, issue = {}, pullRequestContext = null }) {
+function buildCodexExecutionPrompt({
+  payload,
+  issue = {},
+  pullRequestContext = null,
+  preflight = null
+}) {
   const goal = normalizeText(payload.codexGoal);
   const lines = [
     `Implement the bounded VTDD task for ${payload.repository} issue #${payload.issueNumber}.`,
@@ -649,6 +684,9 @@ function buildCodexExecutionPrompt({ payload, issue = {}, pullRequestContext = n
     `Title: ${normalizeText(issue.title) || "(missing title)"}`,
     "",
     normalizeText(issue.body) || "(missing issue body)",
+    "",
+    "Context preflight receipt:",
+    formatVpsRunnerPreflightReceipt(preflight),
     "",
     "Hard boundaries:",
     "- Use the GitHub Issue as the canonical spec.",
@@ -690,6 +728,105 @@ function buildCodexExecutionPrompt({ payload, issue = {}, pullRequestContext = n
   }
 
   lines.push("When you finish, leave the working tree ready for commit.");
+  return lines.join("\n");
+}
+
+async function buildVpsRunnerPreflightReceipt({ workspace, payload, issue }) {
+  const policy = normalizeVpsRunnerPreflightPolicy(payload?.preflightPolicy);
+  const missing = [];
+  const artifacts = [];
+  for (const relativePath of policy.requiredRepoFiles) {
+    const absolutePath = path.join(workspace, relativePath);
+    try {
+      const content = await fs.readFile(absolutePath, "utf8");
+      artifacts.push(buildPreflightArtifactReceipt({ path: relativePath, content }));
+    } catch (error) {
+      missing.push({
+        path: relativePath,
+        error: error?.code || "read_failed"
+      });
+    }
+  }
+
+  const issueReceipt = {
+    number: normalizePositiveInteger(issue?.number ?? payload?.issueNumber),
+    title: normalizeText(issue?.title) || "(missing issue title)",
+    bodyExcerpt: truncateForPrompt(normalizeText(issue?.body) || "(missing issue body)", 1200)
+  };
+
+  const receipt = {
+    ok: missing.length === 0 && issueReceipt.number > 0,
+    mode: policy.mode,
+    onMissingContract: policy.onMissingContract,
+    issue: issueReceipt,
+    artifacts,
+    missing,
+    createdAt: new Date().toISOString()
+  };
+  if (!receipt.ok) {
+    receipt.reason =
+      missing.length > 0
+        ? `Required preflight inputs are missing: ${missing.map((item) => item.path).join(", ")}. Butler/owner must confirm the next action before reissuing the bounded request.`
+        : "Canonical Issue could not be resolved for preflight.";
+  }
+  payload.preflightReceipt = receipt;
+  return receipt;
+}
+
+function normalizeVpsRunnerPreflightPolicy(value = {}) {
+  const input = value && typeof value === "object" ? value : {};
+  const requiredRepoFiles = normalizeStringList(input.requiredRepoFiles);
+  return {
+    mode: normalizeText(input.mode) || "auto_receipt",
+    onMissingContract:
+      normalizeText(input.onMissingContract) || "owner_decision_required",
+    requiredRepoFiles:
+      requiredRepoFiles.length > 0
+        ? requiredRepoFiles
+        : ["AGENTS.md", "docs/pr-template-model.md", "scripts/render-pr-body.mjs", "scripts/validate-pr-body.mjs"]
+  };
+}
+
+function buildPreflightArtifactReceipt({ path: artifactPath, content }) {
+  const excerptLines = String(content || "")
+    .split("\n")
+    .slice(0, 12)
+    .join("\n");
+  return {
+    path: artifactPath,
+    sha1: crypto.createHash("sha1").update(String(content || "")).digest("hex"),
+    lineCount: String(content || "").split("\n").length,
+    excerpt: truncateForPrompt(excerptLines, 1200)
+  };
+}
+
+function formatVpsRunnerPreflightReceipt(preflight) {
+  if (!preflight || typeof preflight !== "object") {
+    return "(missing preflight receipt)";
+  }
+  const lines = [
+    `- Mode: ${normalizeText(preflight.mode) || "unknown"}`,
+    `- Missing-contract fallback: ${normalizeText(preflight.onMissingContract) || "unknown"}`,
+    `- Canonical Issue: #${normalizePositiveInteger(preflight?.issue?.number) || "missing"} ${normalizeText(preflight?.issue?.title) || ""}`.trim()
+  ];
+  const artifacts = Array.isArray(preflight.artifacts) ? preflight.artifacts : [];
+  if (artifacts.length === 0) {
+    lines.push("- Artifacts: (none)");
+  } else {
+    lines.push("- Read artifacts:");
+    for (const artifact of artifacts) {
+      lines.push(`  - ${artifact.path} sha1=${artifact.sha1}`);
+    }
+  }
+  const missing = Array.isArray(preflight.missing) ? preflight.missing : [];
+  if (missing.length > 0) {
+    lines.push("- Missing artifacts:");
+    for (const item of missing) {
+      lines.push(`  - ${item.path} (${item.error || "missing"})`);
+    }
+  }
+  lines.push("- Issue excerpt:");
+  lines.push(indentForPrompt(normalizeText(preflight?.issue?.bodyExcerpt) || "(missing issue body)"));
   return lines.join("\n");
 }
 
@@ -1766,6 +1903,7 @@ export {
   buildVpsRunnerCompletionFinalEvent,
   buildCodexExecutionPrompt,
   buildCodexExecArgs,
+  buildVpsRunnerPreflightReceipt,
   buildGuardedPullRequestBody,
   buildPullRequestBody,
   buildVpsRunnerEventComment,

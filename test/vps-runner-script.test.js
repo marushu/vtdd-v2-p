@@ -1,11 +1,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import {
   buildFreshExecutionBranchCandidates,
   buildCodexExecutionPrompt,
   buildCodexExecArgs,
   buildGuardedPullRequestBody,
   buildPullRequestBody,
+  buildVpsRunnerPreflightReceipt,
   buildVpsRunnerCompletionFinalEvent,
   buildVpsRunnerEventComment,
   buildVpsRunnerStateComment,
@@ -39,7 +43,13 @@ VTDD-managed VPS runner execution request.
   "branch": "codex/issue-157",
   "baseRef": "main",
   "codexGoal": "open_pr",
-  "approvalScopeMatched": true
+  "approvalScopeMatched": true,
+  "issueTraceability": {
+    "canonicalSpec": "github_issue",
+    "issueNumber": 157,
+    "relatedIssue": 157,
+    "issueTraceable": true
+  }
 }
 \`\`\``);
 
@@ -59,7 +69,10 @@ test("VPS runner rejects queue comments without scoped approval", () => {
   "repository": "sample-org/vtdd-v2",
   "issueNumber": 157,
   "branch": "codex/issue-157",
-  "approvalScopeMatched": false
+  "approvalScopeMatched": false,
+  "issueTraceability": {
+    "issueTraceable": true
+  }
 }
 \`\`\``);
 
@@ -80,6 +93,9 @@ test("VPS runner rejects revise_pr queue payload without open target PR lock", (
   "baseRef": "main",
   "codexGoal": "revise_pr",
   "approvalScopeMatched": true,
+  "issueTraceability": {
+    "issueTraceable": true
+  },
   "revisionTarget": {
     "number": 279,
     "state": "closed",
@@ -106,6 +122,9 @@ test("VPS runner rejects revise_pr queue payload when branch differs from target
   "baseRef": "main",
   "codexGoal": "revise_pr",
   "approvalScopeMatched": true,
+  "issueTraceability": {
+    "issueTraceable": true
+  },
   "revisionTarget": {
     "number": 285,
     "state": "open",
@@ -916,6 +935,17 @@ test("VPS runner Codex prompt preserves high-risk boundaries", () => {
     issue: {
       title: "Smoke test",
       body: "Create a small smoke evidence file."
+    },
+    preflight: {
+      mode: "auto_receipt",
+      onMissingContract: "owner_decision_required",
+      issue: {
+        number: 157,
+        title: "Smoke test",
+        bodyExcerpt: "Create a small smoke evidence file."
+      },
+      artifacts: [{ path: "AGENTS.md", sha1: "abc123" }],
+      missing: []
     }
   });
 
@@ -927,8 +957,77 @@ test("VPS runner Codex prompt preserves high-risk boundaries", () => {
   assert.equal(prompt.includes("docs/pr-template-model.md"), true);
   assert.equal(prompt.includes("scripts/render-pr-body.mjs"), true);
   assert.equal(prompt.includes("scripts/validate-pr-body.mjs"), true);
+  assert.equal(prompt.includes("Context preflight receipt:"), true);
+  assert.equal(prompt.includes("AGENTS.md sha1=abc123"), true);
+  assert.equal(prompt.includes("owner_decision_required"), true);
   assert.equal(prompt.includes("## This PR satisfies Intent"), true);
   assert.equal(prompt.includes("## Surface Update Checklist"), true);
+});
+
+test("VPS runner builds preflight receipt from canonical repo files", async () => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "vtdd-preflight-"));
+  await fs.writeFile(path.join(tempRoot, "AGENTS.md"), "Do not silently downscope active Issues.\n");
+  await fs.mkdir(path.join(tempRoot, "docs"), { recursive: true });
+  await fs.mkdir(path.join(tempRoot, "scripts"), { recursive: true });
+  await fs.writeFile(path.join(tempRoot, "docs/pr-template-model.md"), "PR template contract\n");
+  await fs.writeFile(path.join(tempRoot, "scripts/render-pr-body.mjs"), "export function renderPrBody() {}\n");
+  await fs.writeFile(path.join(tempRoot, "scripts/validate-pr-body.mjs"), "export function validatePrBody() {}\n");
+
+  const payload = {
+    issueNumber: 307,
+    preflightPolicy: {
+      mode: "auto_receipt",
+      onMissingContract: "owner_decision_required",
+      requiredRepoFiles: [
+        "AGENTS.md",
+        "docs/pr-template-model.md",
+        "scripts/render-pr-body.mjs",
+        "scripts/validate-pr-body.mjs"
+      ]
+    }
+  };
+
+  const receipt = await buildVpsRunnerPreflightReceipt({
+    workspace: tempRoot,
+    payload,
+    issue: {
+      number: 307,
+      title: "Issue-first guardrail",
+      body: "実行前に canonical contract を読む"
+    }
+  });
+
+  assert.equal(receipt.ok, true);
+  assert.equal(receipt.artifacts.length, 4);
+  assert.equal(receipt.issue.number, 307);
+  assert.equal(payload.preflightReceipt.ok, true);
+});
+
+test("VPS runner preflight receipt requires owner decision when required files are missing", async () => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "vtdd-preflight-missing-"));
+  await fs.writeFile(path.join(tempRoot, "AGENTS.md"), "Do not silently downscope active Issues.\n");
+  const payload = {
+    issueNumber: 307,
+    preflightPolicy: {
+      mode: "auto_receipt",
+      onMissingContract: "owner_decision_required",
+      requiredRepoFiles: ["AGENTS.md", "docs/pr-template-model.md"]
+    }
+  };
+
+  const receipt = await buildVpsRunnerPreflightReceipt({
+    workspace: tempRoot,
+    payload,
+    issue: {
+      number: 307,
+      title: "Issue-first guardrail",
+      body: "実行前に canonical contract を読む"
+    }
+  });
+
+  assert.equal(receipt.ok, false);
+  assert.equal(receipt.onMissingContract, "owner_decision_required");
+  assert.equal(receipt.missing[0].path, "docs/pr-template-model.md");
 });
 
 test("VPS runner Codex prompt includes review context for PR revision goals", () => {
@@ -1236,7 +1335,13 @@ function queueComment({
   "branch": "${branch}",
   "baseRef": "${baseRef}",
   "codexGoal": "open_pr",
-  "approvalScopeMatched": true
+  "approvalScopeMatched": true,
+  "issueTraceability": {
+    "canonicalSpec": "github_issue",
+    "issueNumber": ${issueNumber},
+    "relatedIssue": ${issueNumber},
+    "issueTraceable": true
+  }
 }
 \`\`\``;
 }
