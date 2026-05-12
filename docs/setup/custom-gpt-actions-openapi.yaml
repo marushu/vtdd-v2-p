@@ -1695,6 +1695,40 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/VtddGenericResponse"
+  /v2/retrieve/cloudflare-pages:
+    get:
+      operationId: vtddRetrieveCloudflarePages
+      summary: List human-openable pages hosted by this VTDD Worker runtime.
+      security:
+        - GatewayBearerAuth: []
+      parameters:
+        - name: responseMode
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - action_visible
+          description: Use action_visible in the Custom GPT Action test screen so non-2xx retrieve failures return ok:false JSON with httpStatus/error/reason/issues instead of a ClientResponseError transport label.
+      responses:
+        "200":
+          description: Worker-hosted page directory
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "401":
+          description: Missing machine auth
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "403":
+          description: Invalid machine auth
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
   /v2/retrieve/setup-artifact:
     get:
       operationId: vtddRetrieveSetupArtifact

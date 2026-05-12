@@ -61,6 +61,7 @@ test("evaluateButlerSelfParity reports deploy update required when canonical set
   const canonicalInstructions = [
     "vtddGateway",
     "vtddRetrieveGitHub",
+    "vtddRetrieveCloudflarePages",
     "vtddRetrieveConstitution",
     "vtddRetrieveDecisionLogs",
     "vtddRetrieveProposalLogs",
@@ -81,6 +82,7 @@ test("evaluateButlerSelfParity reports deploy update required when canonical set
     "  /v2/retrieve/decisions:",
     "  /v2/retrieve/proposals:",
     "  /v2/retrieve/cross:",
+    "  /v2/retrieve/cloudflare-pages:",
     "  /v2/retrieve/setup-artifact:",
     "  /v2/retrieve/self-parity:",
     "    get:",
@@ -91,6 +93,7 @@ test("evaluateButlerSelfParity reports deploy update required when canonical set
     "      operationId: vtddRetrieveDecisionLogs",
     "      operationId: vtddRetrieveProposalLogs",
     "      operationId: vtddRetrieveCrossMemory",
+    "      operationId: vtddRetrieveCloudflarePages",
     "      operationId: vtddRetrieveSetupArtifact",
     "      operationId: vtddRetrieveSelfParity",
     "      operationId: vtddBrandNewParityRoute"
@@ -163,6 +166,7 @@ test("evaluateButlerSelfParity treats current nickname and secret sync actions a
     "vtddRetrieveCrossMemory",
     "vtddRetrieveOperationalMemory",
     "vtddRetrieveGitHub",
+    "vtddRetrieveCloudflarePages",
     "vtddRetrieveRepositoryNicknames",
     "vtddRetrieveSetupArtifact",
     "vtddRetrieveSelfParity",
@@ -226,6 +230,9 @@ test("evaluateButlerSelfParity treats current nickname and secret sync actions a
     "  /v2/retrieve/approval-grant:",
     "    get:",
     "      operationId: vtddRetrieveApprovalGrant",
+    "  /v2/retrieve/cloudflare-pages:",
+    "    get:",
+    "      operationId: vtddRetrieveCloudflarePages",
     "  /v2/retrieve/setup-artifact:",
     "    get:",
     "      operationId: vtddRetrieveSetupArtifact",
@@ -281,6 +288,9 @@ test("buildCustomGptRecoveryBundle expands Worker URL and reports short-min leng
     "  /health:",
     "    get:",
     "      operationId: getHealth",
+    "  /v2/retrieve/cloudflare-pages:",
+    "    get:",
+    "      operationId: vtddRetrieveCloudflarePages",
     "  /v2/retrieve/setup-artifact:",
     "    get:",
     "      operationId: vtddRetrieveSetupArtifact",
@@ -289,6 +299,7 @@ test("buildCustomGptRecoveryBundle expands Worker URL and reports short-min leng
     "      operationId: vtddRetrieveSelfParity"
   ].join("\n");
   const canonicalInstructions = [
+    "vtddRetrieveCloudflarePages",
     "vtddRetrieveSetupArtifact",
     "vtddRetrieveSelfParity",
     "Action Schema update required",

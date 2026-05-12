@@ -42,6 +42,7 @@ export {
   verifyPasskeyRegistration
 } from "./passkey-approval.js";
 export { renderPasskeyOperatorPage } from "./passkey-operator-page.js";
+export { buildVtddCloudflarePageDirectory, renderVtddHelpGuidePage } from "./help-guide-page.js";
 export { buildButlerReviewSynthesis } from "./butler-review-synthesis.js";
 export { validateDeployApprovalGrant } from "./deploy-approval-grant.js";
 export {

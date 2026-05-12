@@ -277,6 +277,7 @@ test("custom gpt openapi doc exposes current gateway, execute, and progress rout
   assert.equal(doc.includes("/v2/action/repository-nickname/delete:"), true);
   assert.equal(doc.includes("/v2/action/progress:"), true);
   assert.equal(doc.includes("/v2/retrieve/github:"), true);
+  assert.equal(doc.includes("/v2/retrieve/cloudflare-pages:"), true);
   assert.equal(doc.includes("/v2/retrieve/repository-nicknames:"), true);
   assert.equal(doc.includes("/v2/retrieve/setup-artifact:"), true);
   assert.equal(doc.includes("/v2/retrieve/self-parity:"), true);
@@ -290,6 +291,7 @@ test("custom gpt openapi doc exposes current gateway, execute, and progress rout
   assert.equal(doc.includes("operationId: vtddRetrieveProposalLogs"), true);
   assert.equal(doc.includes("operationId: vtddRetrieveCrossMemory"), true);
   assert.equal(doc.includes("operationId: vtddRetrieveOperationalMemory"), true);
+  assert.equal(doc.includes("operationId: vtddRetrieveCloudflarePages"), true);
   assert.equal(doc.includes("OperationalMemoryResponse:"), true);
   assert.equal(doc.includes("$ref: \"#/components/schemas/OperationalMemoryResponse\""), true);
   assert.equal(doc.includes("GatewayBearerAuth"), true);
@@ -394,6 +396,7 @@ test("custom gpt openapi json parses and exposes paths as an object", () => {
     ]
   );
   assert.equal(typeof doc.paths["/v2/retrieve/github"], "object");
+  assert.equal(typeof doc.paths["/v2/retrieve/cloudflare-pages"], "object");
   assert.equal(typeof doc.paths["/v2/retrieve/repository-nicknames"], "object");
   assert.equal(typeof doc.paths["/v2/retrieve/setup-artifact"], "object");
   assert.equal(typeof doc.paths["/v2/retrieve/self-parity"], "object");
@@ -407,6 +410,10 @@ test("custom gpt openapi json parses and exposes paths as an object", () => {
   assert.equal(doc.paths["/v2/retrieve/decisions"].get.operationId, "vtddRetrieveDecisionLogs");
   assert.equal(doc.paths["/v2/retrieve/proposals"].get.operationId, "vtddRetrieveProposalLogs");
   assert.equal(doc.paths["/v2/retrieve/cross"].get.operationId, "vtddRetrieveCrossMemory");
+  assert.equal(
+    doc.paths["/v2/retrieve/cloudflare-pages"].get.operationId,
+    "vtddRetrieveCloudflarePages"
+  );
   assert.equal(
     doc.paths["/v2/retrieve/operational-memory"].get.responses["200"].content["application/json"].schema.$ref,
     "#/components/schemas/OperationalMemoryResponse"
@@ -477,6 +484,7 @@ test("custom gpt openapi json exposes JSON bodies for Butler action auth failure
     ["/v2/retrieve/cross", "get"],
     ["/v2/retrieve/operational-memory", "get"],
     ["/v2/retrieve/github", "get"],
+    ["/v2/retrieve/cloudflare-pages", "get"],
     ["/v2/retrieve/repository-nicknames", "get"],
     ["/v2/retrieve/setup-artifact", "get"],
     ["/v2/retrieve/approval-grant", "get"],
@@ -501,6 +509,7 @@ test("custom gpt retrieve actions expose action-visible response mode for test-s
     "/v2/retrieve/cross",
     "/v2/retrieve/operational-memory",
     "/v2/retrieve/github",
+    "/v2/retrieve/cloudflare-pages",
     "/v2/retrieve/repository-nicknames",
     "/v2/retrieve/setup-artifact",
     "/v2/retrieve/self-parity",

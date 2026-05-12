@@ -138,6 +138,59 @@ test("worker setup recovery page opens without Action auth and defaults to VTDD 
   assert.equal(html.includes("Bearer test-token"), false);
 });
 
+test("worker help guide opens without Action auth and documents safe operation boundaries", async () => {
+  const response = await worker.fetch(new Request("https://example.com/help"));
+
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get("content-type"), /text\/html/);
+  const html = await response.text();
+  assert.equal(html.includes("VTDD help guide"), true);
+  assert.equal(html.includes("Butler -> Worker"), true);
+  assert.equal(html.includes("GO + passkey required"), true);
+  assert.equal(html.includes("setup/latest"), true);
+  assert.equal(html.includes("setup/known-good"), true);
+  assert.equal(html.includes("Cloudflare 上のページ一覧"), true);
+  assert.equal(html.includes("vtddRetrieveCloudflarePages"), true);
+  assert.equal(html.includes("fork / clone して使う場合"), true);
+  assert.equal(html.includes("shared hosted runtime ではありません"), true);
+  assert.equal(html.includes("No secret values, tokens, approval grants"), true);
+  assert.equal(html.includes("vtdd.hibou-web.com"), false);
+  assert.equal(html.includes("Bearer test-token"), false);
+});
+
+test("worker returns Butler-facing Cloudflare page directory", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/retrieve/cloudflare-pages", {
+      headers: gatewayAuthHeaders
+    }),
+    gatewayAuthEnv
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.runtimeOrigin, "https://example.com");
+  assert.equal(body.naturalLanguageIntent, "今 Cloudflare にあるページを一覧して");
+  assert.equal(body.listMeaning, "worker_hosted_human_pages");
+  assert.equal(body.notIncluded.includes("secrets"), true);
+  assert.equal(body.notIncluded.includes("owner-specific runtime defaults"), true);
+  assert.equal(body.pages.some((page) => page.path === "/help"), true);
+  assert.equal(body.pages.some((page) => page.path === "/setup/latest"), true);
+  assert.equal(body.pages.some((page) => page.path === "/setup/known-good"), true);
+  assert.equal(body.pages.some((page) => page.id === "deploy_operator"), true);
+  assert.equal(JSON.stringify(body).includes("vtdd.hibou-web.com"), false);
+  assert.equal(JSON.stringify(body).includes("Bearer test-token"), false);
+});
+
+test("worker guide alias opens the same help guide surface", async () => {
+  const response = await worker.fetch(new Request("https://example.com/guide"));
+
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.equal(html.includes("VTDD help guide"), true);
+  assert.equal(html.includes("Runtime: https://example.com"), true);
+});
+
 test("worker setup latest page renders copy-ready schema and short-min bundle for VTDD repo", async () => {
   const canonicalOpenApi = [
     "openapi: 3.1.1",
@@ -147,6 +200,9 @@ test("worker setup latest page renders copy-ready schema and short-min bundle fo
     "  /health:",
     "    get:",
     "      operationId: getHealth",
+    "  /v2/retrieve/cloudflare-pages:",
+    "    get:",
+    "      operationId: vtddRetrieveCloudflarePages",
     "  /v2/retrieve/setup-artifact:",
     "    get:",
     "      operationId: vtddRetrieveSetupArtifact",
@@ -155,6 +211,7 @@ test("worker setup latest page renders copy-ready schema and short-min bundle fo
     "      operationId: vtddRetrieveSelfParity"
   ].join("\n");
   const canonicalInstructions = [
+    "vtddRetrieveCloudflarePages",
     "vtddRetrieveSetupArtifact",
     "vtddRetrieveSelfParity",
     "Action Schema update required",
@@ -218,6 +275,9 @@ test("worker setup known-good page renders rollback copy-ready bundle from known
     "  /health:",
     "    get:",
     "      operationId: getHealth",
+    "  /v2/retrieve/cloudflare-pages:",
+    "    get:",
+    "      operationId: vtddRetrieveCloudflarePages",
     "  /v2/retrieve/setup-artifact:",
     "    get:",
     "      operationId: vtddRetrieveSetupArtifact",
@@ -226,6 +286,7 @@ test("worker setup known-good page renders rollback copy-ready bundle from known
     "      operationId: vtddRetrieveSelfParity"
   ].join("\n");
   const canonicalInstructions = [
+    "vtddRetrieveCloudflarePages",
     "vtddRetrieveSetupArtifact",
     "vtddRetrieveSelfParity",
     "Action Schema update required",
@@ -2758,7 +2819,7 @@ test("worker returns canonical Custom GPT setup artifacts", async () => {
           JSON.stringify({
             sha: "instructions-sha",
             encoding: "base64",
-            content: Buffer.from("vtddRetrieveSetupArtifact\nvtddRetrieveSelfParity", "utf8").toString(
+            content: Buffer.from("vtddRetrieveCloudflarePages\nvtddRetrieveSetupArtifact\nvtddRetrieveSelfParity", "utf8").toString(
               "base64"
             )
           }),
@@ -2799,6 +2860,7 @@ test("worker returns Butler self-parity summary", async () => {
                     "vtddGateway",
                     "vtddDeployProduction",
                     "vtddRetrieveGitHub",
+                    "vtddRetrieveCloudflarePages",
                     "vtddRetrieveSetupArtifact",
                     "vtddRetrieveSelfParity",
                     "Action Schema update required",
@@ -2810,12 +2872,14 @@ test("worker returns Butler self-parity summary", async () => {
                     "  /v2/gateway:",
                     "  /v2/action/deploy:",
                     "  /v2/retrieve/github:",
+                    "  /v2/retrieve/cloudflare-pages:",
                     "  /v2/retrieve/setup-artifact:",
                     "  /v2/retrieve/self-parity:",
                     "    get:",
                     "      operationId: vtddGateway",
                     "      operationId: vtddDeployProduction",
                     "      operationId: vtddRetrieveGitHub",
+                    "      operationId: vtddRetrieveCloudflarePages",
                     "      operationId: vtddRetrieveSetupArtifact",
                     "      operationId: vtddRetrieveSelfParity"
                   ].join("\n"),
@@ -2869,6 +2933,7 @@ test("worker returns deploy recovery operator url in self-parity when runtime is
                     "vtddGateway",
                     "vtddDeployProduction",
                     "vtddRetrieveGitHub",
+                    "vtddRetrieveCloudflarePages",
                     "vtddRetrieveSetupArtifact",
                     "vtddRetrieveSelfParity",
                     "Action Schema update required",
@@ -2880,12 +2945,14 @@ test("worker returns deploy recovery operator url in self-parity when runtime is
                     "  /v2/gateway:",
                     "  /v2/action/deploy:",
                     "  /v2/retrieve/github:",
+                    "  /v2/retrieve/cloudflare-pages:",
                     "  /v2/retrieve/setup-artifact:",
                     "  /v2/retrieve/self-parity:",
                     "    get:",
                     "      operationId: vtddGateway",
                     "      operationId: vtddDeployProduction",
                     "      operationId: vtddRetrieveGitHub",
+                    "      operationId: vtddRetrieveCloudflarePages",
                     "      operationId: vtddRetrieveSetupArtifact",
                     "      operationId: vtddRetrieveSelfParity",
                     "      operationId: vtddBrandNewParityRoute"

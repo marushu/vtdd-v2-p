@@ -33,6 +33,8 @@ import {
   retrieveCustomGptSetupArtifact,
   renderPasskeyOperatorPage,
   renderCustomGptRecoveryPage,
+  buildVtddCloudflarePageDirectory,
+  renderVtddHelpGuidePage,
   sanitizeGitHubActionsSecretSyncErrorMessage,
   RepositoryNicknameMode,
   resolveGatewayAliasRegistryFromGitHubApp,
@@ -90,6 +92,15 @@ export default {
         url.pathname === "/setup/known-good")
     ) {
       return handleCustomGptRecoveryPageRequest(url, env);
+    }
+
+    if (request.method === "GET" && (url.pathname === "/help" || url.pathname === "/guide")) {
+      return html(
+        200,
+        renderVtddHelpGuidePage({
+          runtimeOrigin: url.origin
+        })
+      );
     }
 
     if (request.method === "GET" && isApiPath(url.pathname, "/approval/passkey/operator")) {
@@ -565,6 +576,22 @@ export default {
         });
       }
       return handleRetrieveGitHubReadPlaneRequest(url, env);
+    }
+
+    if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/cloudflare-pages")) {
+      const auth = authorizeGatewayRequest({
+        request,
+        env,
+        apiSuffix: "/retrieve/cloudflare-pages"
+      });
+      if (!auth.ok) {
+        return retrieveErrorJson(url, auth.status, {
+          ok: false,
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+      return handleRetrieveCloudflarePagesRequest(url);
     }
 
     if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/setup-artifact")) {
@@ -1188,6 +1215,10 @@ async function handleRetrieveCustomGptSetupArtifactRequest(url, env) {
     ok: true,
     artifact: retrieved.artifact
   });
+}
+
+function handleRetrieveCloudflarePagesRequest(url) {
+  return json(200, buildVtddCloudflarePageDirectory({ runtimeOrigin: url.origin }));
 }
 
 async function handleRetrieveButlerSelfParityRequest(url, env) {
