@@ -41,12 +41,17 @@ test("production deploy doc defines the governed GitHub Actions deploy path", ()
   assert.equal(doc.includes("`wrangler.production.generated.toml`"), true);
   assert.equal(doc.includes("`VTDD_KNOWN_GOOD_COMMIT_SHA`"), true);
   assert.equal(doc.includes("must not silently treat `main` as known-good"), true);
+  assert.equal(doc.includes("`VTDD_DEPLOY_NOTIFICATION_ISSUE_NUMBER`"), true);
+  assert.equal(doc.includes("mentions the repository owner"), true);
+  assert.equal(doc.includes("intentionally omits approval"), true);
+  assert.equal(doc.includes("grant ids, tokens, and other secret values"), true);
 });
 
 test("deploy-production workflow enforces the MVP production deploy boundary", () => {
   const workflow = fs.readFileSync(WORKFLOW_PATH, "utf8");
   assert.equal(workflow.includes("name: deploy-production"), true);
   assert.equal(workflow.includes("workflow_dispatch:"), true);
+  assert.equal(workflow.includes("issues: write"), true);
   assert.equal(workflow.includes("if: github.ref == 'refs/heads/main'"), true);
   assert.equal(workflow.includes("environment: production"), true);
   assert.equal(workflow.includes('github.event.inputs.approval_phrase }}" != "GO"'), true);
@@ -96,6 +101,31 @@ test("deploy-production workflow enforces the MVP production deploy boundary", (
     workflow.includes("command: deploy --config wrangler.production.generated.toml --env production"),
     true
   );
+  assert.equal(workflow.includes("Notify deploy completion"), true);
+  assert.equal(workflow.includes("if: always()"), true);
+  assert.equal(
+    workflow.includes("DEPLOY_NOTIFICATION_ISSUE_NUMBER: ${{ vars.VTDD_DEPLOY_NOTIFICATION_ISSUE_NUMBER }}"),
+    true
+  );
+  assert.equal(
+    workflow.includes('VTDD_DEPLOY_NOTIFICATION_ISSUE_NUMBER is not set; skipping GitHub mention notification.'),
+    true
+  );
+  assert.equal(
+    workflow.includes('[[ ! "$DEPLOY_NOTIFICATION_ISSUE_NUMBER" =~ ^[0-9]+$ ]]'),
+    true
+  );
+  assert.equal(workflow.includes("@${REPOSITORY_OWNER} deploy-production finished"), true);
+  assert.equal(workflow.includes("- Run: ${RUN_URL}"), true);
+  assert.equal(
+    workflow.includes("No approval grant id, token, or secret value is included."),
+    true
+  );
+  assert.equal(
+    workflow.includes("repos/${REPOSITORY}/issues/${DEPLOY_NOTIFICATION_ISSUE_NUMBER}/comments"),
+    true
+  );
+  assert.equal(workflow.includes("approval_grant_id=${{"), false);
 });
 
 test("wrangler config fixes worker runtime entry and production environment", () => {
