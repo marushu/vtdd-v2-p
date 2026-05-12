@@ -596,7 +596,10 @@ function statusChecksPassed(value) {
   return checks.every((check) => {
     const conclusion = normalizeText(check?.conclusion).toLowerCase();
     const state = normalizeText(check?.state || check?.status).toLowerCase();
-    return conclusion === "success" || conclusion === "skipped" || state === "success" || state === "completed";
+    if (conclusion) {
+      return conclusion === "success" || conclusion === "skipped";
+    }
+    return state === "success";
   });
 }
 

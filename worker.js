@@ -21495,7 +21495,7 @@ function collectGeminiReviewerSignals(pullRequest = {}) {
     ...Array.isArray(pullRequest.issueComments) ? pullRequest.issueComments : [],
     ...Array.isArray(pullRequest.reviewComments) ? pullRequest.reviewComments : []
   ];
-  const parsed = comments.filter(isTrustedReviewerMarkerComment).map(parseGeminiReviewComment).filter(Boolean);
+  const parsed = comments.filter(isTrustedReviewerMarkerComment).sort(compareReviewerMarkerComments).map(parseGeminiReviewComment).filter(Boolean);
   return {
     totalCount: parsed.length,
     blockingCount: parsed.filter((signal) => signal.blocking).length,
@@ -21504,7 +21504,7 @@ function collectGeminiReviewerSignals(pullRequest = {}) {
 }
 function collectCodexFallbackSignals(pullRequest = {}) {
   const comments = [...Array.isArray(pullRequest.issueComments) ? pullRequest.issueComments : []];
-  const parsed = comments.filter(isTrustedReviewerMarkerComment).map(parseCodexReviewFallbackComment).filter(Boolean);
+  const parsed = comments.filter(isTrustedReviewerMarkerComment).sort(compareReviewerMarkerComments).map(parseCodexReviewFallbackComment).filter(Boolean);
   const connectorBlockers = comments.map(parseCodexConnectorSetupComment).filter(Boolean);
   const latestConnectorBlocker = connectorBlockers.at(-1) ?? null;
   const latest = latestConnectorBlocker ?? parsed.at(-1) ?? null;
@@ -21609,6 +21609,35 @@ function normalizeReviewState(value) {
     return "review_required";
   }
   return normalized;
+}
+function compareReviewerMarkerComments(left, right) {
+  const leftTime = reviewerMarkerCommentTime(left);
+  const rightTime = reviewerMarkerCommentTime(right);
+  if (leftTime === rightTime) {
+    return 0;
+  }
+  if (!leftTime) {
+    return -1;
+  }
+  if (!rightTime) {
+    return 1;
+  }
+  return leftTime - rightTime;
+}
+function reviewerMarkerCommentTime(comment) {
+  const candidates = [
+    comment?.updatedAt,
+    comment?.updated_at,
+    comment?.createdAt,
+    comment?.created_at
+  ];
+  for (const candidate of candidates) {
+    const time = Date.parse(normalizeText7(candidate));
+    if (Number.isFinite(time)) {
+      return time;
+    }
+  }
+  return 0;
 }
 function normalizeText7(value) {
   return String(value ?? "").trim();
@@ -22102,7 +22131,10 @@ function statusChecksPassed(value) {
   return checks.every((check) => {
     const conclusion = normalizeText8(check?.conclusion).toLowerCase();
     const state = normalizeText8(check?.state || check?.status).toLowerCase();
-    return conclusion === "success" || conclusion === "skipped" || state === "success" || state === "completed";
+    if (conclusion) {
+      return conclusion === "success" || conclusion === "skipped";
+    }
+    return state === "success";
   });
 }
 function requiredPrBodySectionsPresent(value) {

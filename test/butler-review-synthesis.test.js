@@ -438,6 +438,41 @@ test("butler review synthesis recommends ready-for-review for approved draft PR 
   );
 });
 
+test("butler review synthesis does not treat completed failed checks as ready for review", () => {
+  const result = buildButlerReviewSynthesis({
+    pullRequest: {
+      number: 313,
+      url: "https://github.com/example/repo/pull/313",
+      state: "open",
+      draft: true,
+      title: "Approved draft with failed check",
+      prBodyComplete: true,
+      unsatisfiedSuccessCriteriaNone: true,
+      mergeable: true,
+      mergeableState: "clean",
+      statusCheckRollup: [{ name: "guarded-policy", status: "COMPLETED", conclusion: "FAILURE" }],
+      issueComments: [
+        {
+          user: { login: "vtdd-codex" },
+          body: [
+            "<!-- vtdd:reviewer=gemini -->",
+            "## VTDD Gemini Critical Review",
+            "",
+            "- Recommended action: `approve`",
+            "",
+            "### Critical Findings",
+            "- None"
+          ].join("\n")
+        }
+      ]
+    }
+  });
+
+  assert.equal(result.reviewerSignal.readyForReviewRecommendation.ready, false);
+  assert.equal(result.reviewerSignal.readyForReviewRecommendation.missing.includes("checks_passed"), true);
+  assert.equal(result.nextSuggestedActions.includes("mark_pull_request_ready_for_review"), false);
+});
+
 test("butler review synthesis does not clear critical findings with vague none-like text", () => {
   const result = buildButlerReviewSynthesis({
     pullRequest: {

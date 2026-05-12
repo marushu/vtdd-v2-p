@@ -36,6 +36,26 @@ test("reviewer marker truth collects trusted Gemini markers and ignores untruste
   assert.equal(result.latestEvidence.url, "https://github.com/example/repo/pull/1#issuecomment-1");
 });
 
+test("reviewer marker truth selects latest trusted marker by timestamp when comment order is stale", () => {
+  const result = collectGeminiReviewerSignals({
+    issueComments: [
+      {
+        user: { login: "vtdd-codex" },
+        createdAt: "2026-05-12T04:40:00Z",
+        body: "<!-- vtdd:reviewer=gemini -->\n## VTDD Gemini Critical Review\n\n- Recommended action: `approve`"
+      },
+      {
+        user: { login: "vtdd-codex" },
+        createdAt: "2026-05-12T04:30:00Z",
+        body: "<!-- vtdd:reviewer=gemini -->\n## VTDD Gemini Critical Review\n\n- Recommended action: `request_changes`"
+      }
+    ]
+  });
+
+  assert.equal(result.totalCount, 2);
+  assert.equal(result.latestEvidence.recommendedAction, "approve");
+});
+
 test("reviewer marker truth normalizes Codex fallback evidence with body for readiness checks", () => {
   const result = collectCodexFallbackSignals({
     issueComments: [

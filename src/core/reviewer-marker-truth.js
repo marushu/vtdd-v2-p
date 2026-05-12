@@ -11,6 +11,7 @@ export function collectGeminiReviewerSignals(pullRequest = {}) {
   ];
   const parsed = comments
     .filter(isTrustedReviewerMarkerComment)
+    .sort(compareReviewerMarkerComments)
     .map(parseGeminiReviewComment)
     .filter(Boolean);
 
@@ -25,6 +26,7 @@ export function collectCodexFallbackSignals(pullRequest = {}) {
   const comments = [...(Array.isArray(pullRequest.issueComments) ? pullRequest.issueComments : [])];
   const parsed = comments
     .filter(isTrustedReviewerMarkerComment)
+    .sort(compareReviewerMarkerComments)
     .map(parseCodexReviewFallbackComment)
     .filter(Boolean);
   const connectorBlockers = comments.map(parseCodexConnectorSetupComment).filter(Boolean);
@@ -154,6 +156,37 @@ function normalizeReviewState(value) {
     return "review_required";
   }
   return normalized;
+}
+
+function compareReviewerMarkerComments(left, right) {
+  const leftTime = reviewerMarkerCommentTime(left);
+  const rightTime = reviewerMarkerCommentTime(right);
+  if (leftTime === rightTime) {
+    return 0;
+  }
+  if (!leftTime) {
+    return -1;
+  }
+  if (!rightTime) {
+    return 1;
+  }
+  return leftTime - rightTime;
+}
+
+function reviewerMarkerCommentTime(comment) {
+  const candidates = [
+    comment?.updatedAt,
+    comment?.updated_at,
+    comment?.createdAt,
+    comment?.created_at
+  ];
+  for (const candidate of candidates) {
+    const time = Date.parse(normalizeText(candidate));
+    if (Number.isFinite(time)) {
+      return time;
+    }
+  }
+  return 0;
 }
 
 function normalizeText(value) {
