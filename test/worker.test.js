@@ -4212,14 +4212,22 @@ test("worker returns raw deploy context when workflow dispatch is unverified", a
     }
   );
 
-  assert.equal(response.status, 503);
+  assert.equal(response.status, 202);
   const body = await response.json();
-  assert.equal(body.ok, false);
-  assert.equal(body.error, "deploy_dispatch_unverified");
-  assert.equal(body.deploy.status, "dispatch_unverified");
+  assert.equal(body.ok, true);
+  assert.equal(body.warning, "deploy_dispatch_unverified");
+  assert.equal(
+    body.reason,
+    "GitHub accepted deploy dispatch, but no deploy-production workflow run was observed"
+  );
+  assert.equal(body.deploy.status, "dispatch_accepted_unverified");
   assert.equal(body.deploy.repository, "sample-org/vtdd-v2-p");
   assert.equal(body.deploy.workflowFile, "deploy-production.yml");
   assert.equal(body.deploy.runtimeUrl, "https://sample-user-vtdd.example.workers.dev");
+  assert.equal(
+    body.deploy.workflowRunsUrl,
+    "https://github.com/sample-org/vtdd-v2-p/actions/workflows/deploy-production.yml"
+  );
 });
 
 test("worker syncs OPENAI_API_KEY through approval-bound GitHub Actions secret route", async () => {

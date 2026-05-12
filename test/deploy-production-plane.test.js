@@ -56,7 +56,7 @@ test("deploy production plane dispatches governed workflow with GO + passkey inp
   assert.equal(body.inputs.runtime_url, "https://sample-user-vtdd.example.workers.dev");
 });
 
-test("deploy production plane blocks when dispatch cannot be observed as a workflow run", async () => {
+test("deploy production plane does not fail when accepted dispatch is not immediately observable", async () => {
   const result = await executeDeployProductionPlane({
     repository: "sample-org/vtdd-v2-p",
     runtimeUrl: "https://sample-user-vtdd.example.workers.dev",
@@ -88,11 +88,17 @@ test("deploy production plane blocks when dispatch cannot be observed as a workf
     }
   });
 
-  assert.equal(result.ok, false);
-  assert.equal(result.error, "deploy_dispatch_unverified");
-  assert.equal(result.deploy.status, "dispatch_unverified");
+  assert.equal(result.ok, true);
+  assert.equal(result.warning, "deploy_dispatch_unverified");
+  assert.equal(result.deploy.status, "dispatch_accepted_unverified");
   assert.equal(result.deploy.workflowFile, "deploy-production.yml");
   assert.equal(result.deploy.repository, "sample-org/vtdd-v2-p");
+  assert.equal(
+    result.deploy.workflowRunsUrl,
+    "https://github.com/sample-org/vtdd-v2-p/actions/workflows/deploy-production.yml"
+  );
+  assert.equal(result.deploy.runStatus, "unknown");
+  assert.equal(result.deploy.runConclusion, "unknown");
 });
 
 test("deploy production plane blocks missing GO + passkey inputs", async () => {
