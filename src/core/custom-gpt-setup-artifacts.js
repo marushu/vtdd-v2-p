@@ -411,7 +411,7 @@ export async function buildCustomGptRecoveryBundle(input = {}) {
       ? knownGoodCommit?.sha || requestedRef
       : requestedRef;
 
-  const [openapi, instructionsShortMin, selfParity, latestCommit] = await Promise.all([
+  const [openapi, instructionsShortMin, selfParity] = await Promise.all([
     retrieveCustomGptSetupArtifact({
       artifact: CustomGptSetupArtifact.OPENAPI_YAML,
       repository,
@@ -430,10 +430,7 @@ export async function buildCustomGptRecoveryBundle(input = {}) {
       runtimeOrigin,
       issueNumber,
       env
-    }),
-    channel === CustomGptSetupChannel.LATEST
-      ? resolveKnownGoodCommitSha({ repository, ref, env })
-      : Promise.resolve(null)
+    })
   ]);
 
   const failed = [openapi, instructionsShortMin, selfParity].find((result) => !result.ok);
@@ -479,27 +476,24 @@ export async function buildCustomGptRecoveryBundle(input = {}) {
         limitExceeded: instructionsLimitExceeded,
         content: instructions
       },
-      rollback: {
-        knownGoodCommitSha:
-          channel === CustomGptSetupChannel.KNOWN_GOOD
-            ? knownGoodCommit?.sha
-            : latestCommit?.sha,
-        knownGoodCommitSource:
-          channel === CustomGptSetupChannel.KNOWN_GOOD
-            ? knownGoodCommit?.source
-            : latestCommit?.source,
-        rollbackReady: channel === CustomGptSetupChannel.KNOWN_GOOD,
-        bundleArtifacts: [
-          openapi.artifact.path,
-          instructionsShortMin.artifact.path
-        ],
-        restoreOrder: [
-          "Copy Action Schema into the Custom GPT Action Schema editor.",
-          "Copy short-min instructions into the Custom GPT Instructions editor.",
-          "Confirm the Action Schema server URL matches this Worker origin.",
-          "Run /health directly from the browser before relying on Butler Actions."
-        ]
-      },
+      rollback:
+        channel === CustomGptSetupChannel.KNOWN_GOOD
+          ? {
+              knownGoodCommitSha: knownGoodCommit?.sha,
+              knownGoodCommitSource: knownGoodCommit?.source,
+              rollbackReady: true,
+              bundleArtifacts: [
+                openapi.artifact.path,
+                instructionsShortMin.artifact.path
+              ],
+              restoreOrder: [
+                "Copy Action Schema into the Custom GPT Action Schema editor.",
+                "Copy short-min instructions into the Custom GPT Instructions editor.",
+                "Confirm the Action Schema server URL matches this Worker origin.",
+                "Run /health directly from the browser before relying on Butler Actions."
+              ]
+            }
+          : null,
       runtime: {
         selfParity: selfParity.selfParity,
         deployState: selfParity.selfParity.runtimeParity
@@ -635,49 +629,6 @@ function resolveConfiguredKnownGoodCommitSha({ ref, env }) {
   return { sha: null, source: "unconfigured" };
 }
 
-async function resolveKnownGoodCommitSha({ repository, ref, env }) {
-  const configured = normalizeText(env?.[KNOWN_GOOD_COMMIT_ENV]);
-  if (configured) {
-    return { sha: configured, source: KNOWN_GOOD_COMMIT_ENV };
-  }
-
-  if (/^[a-f0-9]{40}$/i.test(ref)) {
-    return { sha: ref, source: "ref" };
-  }
-
-  const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
-  const apiBaseUrl = normalizeApiBaseUrl(env?.GITHUB_API_BASE_URL);
-  const tokenResolution = await resolveGitHubAppInstallationToken({ env, fetchImpl, apiBaseUrl });
-  if (!tokenResolution.ok) {
-    return { sha: null, source: "unverified" };
-  }
-
-  try {
-    const response = await fetchImpl(
-      `${apiBaseUrl}/repos/${encodeRepository(repository)}/commits/${encodeURIComponent(ref)}`,
-      {
-        method: "GET",
-        headers: {
-          authorization: `Bearer ${tokenResolution.token}`,
-          accept: "application/vnd.github+json",
-          "x-github-api-version": GITHUB_API_VERSION,
-          "user-agent": GITHUB_API_USER_AGENT
-        }
-      }
-    );
-    const body = await readJsonSafe(response);
-    if (!response.ok) {
-      return { sha: null, source: "unverified" };
-    }
-    return {
-      sha: normalizeText(body?.sha) || null,
-      source: "github_commit_ref"
-    };
-  } catch {
-    return { sha: null, source: "unverified" };
-  }
-}
-
 function expandOpenApiServerUrl(content, runtimeOrigin) {
   const expanded = content.replace(
     /(^servers:\n\s*-\s*url:\s*)([^\n]+)$/m,
@@ -706,7 +657,11 @@ function renderRecoveryBundleSections(recovery) {
         <div><strong>Worker URL</strong><br>${escapeHtml(recovery.runtimeOrigin)}</div>
         <div><strong>Repository</strong><br>${escapeHtml(recovery.repository)}</div>
         <div><strong>${recovery.channel === CustomGptSetupChannel.KNOWN_GOOD ? "Known-good ref" : "Latest ref"}</strong><br>${escapeHtml(recovery.ref)}</div>
-        <div><strong>Known-good commit</strong><br>${escapeHtml(rollback.knownGoodCommitSha || "unverified")}</div>
+        ${
+          rollback
+            ? `<div><strong>Known-good commit</strong><br>${escapeHtml(rollback.knownGoodCommitSha || "unverified")}</div>`
+            : `<div><strong>Rollback</strong><br>Use setup/known-good only when reverting to the previous working artifacts.</div>`
+        }
         <div><strong>Self-parity</strong><br>${escapeHtml(selfParity.runtimeParity)}</div>
         <div><strong>Deploy state</strong><br>${escapeHtml(recovery.runtime.deployState)}</div>
         <div><strong>short-min length</strong><br>${instructions.characterCount} / ${instructions.characterLimit}</div>
@@ -725,31 +680,12 @@ function renderRecoveryBundleSections(recovery) {
       <p><button type="button" data-copy-target="instructions-short-min" data-copy-label="Copy Instructions">Copy Instructions</button></p>
       <textarea id="instructions-short-min" spellcheck="false">${escapeHtml(instructions.content)}</textarea>
     </section>
-    <section>
-      <h2>Known-good rollback bundle</h2>
-      ${
-        rollback.rollbackReady
-          ? `<p><button type="button" data-copy-target="rollback-bundle" data-copy-label="Copy Rollback Bundle">Copy Rollback Bundle</button></p>`
-          : `<p class="small">Rollback は setup/known-good で copy-ready になります。latest は現在の候補確認用です。</p>`
-      }
-      <pre>${escapeHtml(
-        [
-          `repository: ${recovery.repository}`,
-          `channel: ${recovery.channel}`,
-          `ref: ${recovery.ref}`,
-          `knownGoodCommitSha: ${rollback.knownGoodCommitSha || "unverified"}`,
-          `knownGoodCommitSource: ${rollback.knownGoodCommitSource}`,
-          `actionSchemaPath: ${actionSchema.path}`,
-          `instructionsShortMinPath: ${instructions.path}`,
-          `selfParity: ${selfParity.runtimeParity}`,
-          `deployState: ${recovery.runtime.deployState}`,
-          "restoreOrder:",
-          ...rollback.restoreOrder.map((item, index) => `  ${index + 1}. ${item}`)
-        ].join("\n")
-      )}</pre>
-      ${
-        rollback.rollbackReady
-          ? `<textarea id="rollback-bundle" spellcheck="false">${escapeHtml(
+    ${
+      rollback
+        ? `<section>
+            <h2>Known-good rollback bundle</h2>
+            <p><button type="button" data-copy-target="rollback-bundle" data-copy-label="Copy Rollback Bundle">Copy Rollback Bundle</button></p>
+            <pre>${escapeHtml(
               [
                 `repository: ${recovery.repository}`,
                 `channel: ${recovery.channel}`,
@@ -763,10 +699,28 @@ function renderRecoveryBundleSections(recovery) {
                 "restoreOrder:",
                 ...rollback.restoreOrder.map((item, index) => `  ${index + 1}. ${item}`)
               ].join("\n")
-            )}</textarea>`
-          : ""
-      }
-    </section>`;
+            )}</pre>
+            <textarea id="rollback-bundle" spellcheck="false">${escapeHtml(
+              [
+                `repository: ${recovery.repository}`,
+                `channel: ${recovery.channel}`,
+                `ref: ${recovery.ref}`,
+                `knownGoodCommitSha: ${rollback.knownGoodCommitSha || "unverified"}`,
+                `knownGoodCommitSource: ${rollback.knownGoodCommitSource}`,
+                `actionSchemaPath: ${actionSchema.path}`,
+                `instructionsShortMinPath: ${instructions.path}`,
+                `selfParity: ${selfParity.runtimeParity}`,
+                `deployState: ${recovery.runtime.deployState}`,
+                "restoreOrder:",
+                ...rollback.restoreOrder.map((item, index) => `  ${index + 1}. ${item}`)
+              ].join("\n")
+            )}</textarea>
+          </section>`
+        : `<section>
+            <h2>Latest candidate only</h2>
+            <p class="small">setup/latest は更新候補だけを表示します。期待通りに動かなかった場合は setup/known-good から直前の動作済み Action Schema / Instructions に戻してください。</p>
+          </section>`
+    }`;
 }
 
 function normalizeSetupChannel(value) {

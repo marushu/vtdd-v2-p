@@ -58,10 +58,18 @@ such as `wrangler.production.local.toml`. For GitHub Actions deploys, store the
 D1 database id in `CLOUDFLARE_D1_DATABASE_ID`; the workflow generates an
 uncommitted `wrangler.production.generated.toml` at deploy time.
 
-If `/setup/known-good` should expose a rollback bundle, set repository variable
-`VTDD_KNOWN_GOOD_COMMIT_SHA` to the last human-verified stable setup commit
-before dispatching production deploy. If this variable is absent, the Worker
-must not silently treat `main` as known-good.
+When Action Schema or Custom GPT Instructions are updated, `/setup/known-good`
+is the rollback bundle for the previous working setup artifacts. Set repository
+variable `VTDD_KNOWN_GOOD_COMMIT_SHA` to the last human-verified working setup
+commit before dispatching the production deploy that promotes new
+`/setup/latest` artifacts. If this variable is absent, the Worker must not
+silently treat `main` as known-good.
+
+`/setup/latest` and `/setup/known-good` are always valid recovery surfaces to
+open on request. `latest` shows the current update candidate only; it must not
+mix in known-good rollback bundle content. `known-good` shows the previous
+working rollback bundle when `VTDD_KNOWN_GOOD_COMMIT_SHA` is configured, and
+otherwise reports that known-good is unavailable.
 
 If production deploy completion should notify the operator through GitHub
 Mobile / Apple Watch, set repository variable

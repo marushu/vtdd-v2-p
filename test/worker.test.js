@@ -170,12 +170,7 @@ test("worker setup latest page renders copy-ready schema and short-min bundle fo
       GITHUB_API_FETCH: async (url) => {
         const parsed = new URL(url);
         assert.equal(parsed.pathname.startsWith("/repos/marushu/vtdd-v2-p/"), true);
-        if (parsed.pathname.endsWith("/commits/main")) {
-          return new Response(JSON.stringify({ sha: "b".repeat(40) }), {
-            status: 200,
-            headers: { "content-type": "application/json" }
-          });
-        }
+        assert.equal(parsed.pathname.endsWith("/commits/main"), false);
         const isShortMin = parsed.pathname.endsWith(
           "/docs/setup/custom-gpt-instructions-short-min.md"
         );
@@ -199,12 +194,16 @@ test("worker setup latest page renders copy-ready schema and short-min bundle fo
   const html = await response.text();
   assert.equal(html.includes("latest setup bundle"), true);
   assert.equal(html.includes("Recovery repo: marushu/vtdd-v2-p"), true);
+  assert.equal(html.includes('href="/setup/latest"'), true);
+  assert.equal(html.includes('href="/setup/known-good"'), true);
   assert.equal(html.includes("Copy-ready Action Schema"), true);
   assert.equal(html.includes("Copy-ready custom-gpt-instructions-short-min.md"), true);
   assert.equal(html.includes("  - url: https://example.com"), true);
   assert.equal(html.includes("VTDD Butler short-min instructions"), true);
-  assert.equal(html.includes("knownGoodCommitSha: " + "b".repeat(40)), true);
-  assert.equal(html.includes("Rollback は setup/known-good で copy-ready になります。latest は現在の候補確認用です。"), true);
+  assert.equal(html.includes("Known-good rollback bundle"), false);
+  assert.equal(html.includes("knownGoodCommitSha:"), false);
+  assert.equal(html.includes("Latest candidate only"), true);
+  assert.equal(html.includes("setup/latest は更新候補だけを表示します"), true);
   assert.equal(html.includes("No secret values, tokens, or approval grants are displayed."), true);
   assert.equal(html.includes("ghs_setup_read"), false);
 });
@@ -263,6 +262,8 @@ test("worker setup known-good page renders rollback copy-ready bundle from known
   assert.equal(response.status, 200);
   const html = await response.text();
   assert.equal(html.includes("known-good setup bundle"), true);
+  assert.equal(html.includes('href="/setup/latest"'), true);
+  assert.equal(html.includes('href="/setup/known-good"'), true);
   assert.equal(html.includes("Copy Rollback Bundle"), true);
   assert.equal(html.includes(`channel: known_good`), true);
   assert.equal(html.includes(`ref: ${knownGoodSha}`), true);

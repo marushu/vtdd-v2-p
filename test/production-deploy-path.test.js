@@ -40,7 +40,12 @@ test("production deploy doc defines the governed GitHub Actions deploy path", ()
   assert.equal(doc.includes("`wrangler.production.local.toml`"), true);
   assert.equal(doc.includes("`wrangler.production.generated.toml`"), true);
   assert.equal(doc.includes("`VTDD_KNOWN_GOOD_COMMIT_SHA`"), true);
-  assert.equal(doc.includes("must not silently treat `main` as known-good"), true);
+  assert.equal(doc.includes("rollback bundle for the previous working setup artifacts"), true);
+  assert.equal(doc.includes("last human-verified working setup"), true);
+  assert.match(doc, /must not\s+silently treat `main` as known-good/);
+  assert.equal(doc.includes("always valid recovery surfaces to"), true);
+  assert.equal(doc.includes("latest` shows the current update candidate only"), true);
+  assert.equal(doc.includes("must not\nmix in known-good rollback bundle content"), true);
   assert.equal(doc.includes("`VTDD_DEPLOY_NOTIFICATION_ISSUE_NUMBER`"), true);
   assert.equal(doc.includes("mentions the repository owner"), true);
   assert.equal(doc.includes("intentionally omits approval"), true);

@@ -306,12 +306,7 @@ test("buildCustomGptRecoveryBundle expands Worker URL and reports short-min leng
       GITHUB_APP_INSTALLATION_TOKEN: "ghs_setup_read",
       GITHUB_API_FETCH: async (url) => {
         const parsed = new URL(url);
-        if (parsed.pathname.endsWith("/commits/main")) {
-          return new Response(JSON.stringify({ sha: "a".repeat(40) }), {
-            status: 200,
-            headers: { "content-type": "application/json" }
-          });
-        }
+        assert.equal(parsed.pathname.endsWith("/commits/main"), false);
         const isShortMin = parsed.pathname.endsWith(
           "/docs/setup/custom-gpt-instructions-short-min.md"
         );
@@ -340,7 +335,7 @@ test("buildCustomGptRecoveryBundle expands Worker URL and reports short-min leng
   assert.equal(result.recovery.actionSchema.serverUrl, "https://sample-user-vtdd.example.workers.dev");
   assert.equal(result.recovery.instructionsShortMin.characterCount, shortMin.length);
   assert.equal(result.recovery.instructionsShortMin.limitExceeded, false);
-  assert.equal(result.recovery.rollback.knownGoodCommitSha, "a".repeat(40));
+  assert.equal(result.recovery.rollback, null);
   assert.equal(result.recovery.runtime.deployState, "in_sync");
   assert.deepEqual(result.recovery.safety, {
     displaysSecrets: false,
