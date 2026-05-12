@@ -86,6 +86,9 @@ hand-writing the headings. Validate the result locally with
 `node scripts/validate-pr-body.mjs <path>` before `gh pr create` or
 `gh pr edit --body-file`.
 
+Do not use `gh pr create --body ...` or `gh pr edit --body ...` with freehand
+text. Canonical flow is `render -> validate -> --body-file`.
+
 ## Non-goals
 
 This model does not define:

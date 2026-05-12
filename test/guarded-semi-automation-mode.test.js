@@ -44,6 +44,20 @@ test("required checks workflow includes guarded-policy and test jobs", () => {
   assert.equal(workflow.includes("test:"), true);
 });
 
+test("required checks workflow reruns on PR body edits and reads current PR body", () => {
+  const workflow = fs.readFileSync(WORKFLOW_PATH, "utf8");
+  assert.equal(workflow.includes("pull_request:"), true);
+  assert.equal(workflow.includes("types:"), true);
+  assert.equal(workflow.includes("- edited"), true);
+  assert.equal(workflow.includes("name: Fetch current PR body"), true);
+  assert.equal(
+    workflow.includes('gh api "repos/${REPOSITORY}/pulls/${PULL_NUMBER}" --jq \'.body // ""\''),
+    true
+  );
+  assert.equal(workflow.includes('body="$(cat "$PR_BODY_FILE")"'), true);
+  assert.equal(workflow.includes("github.event.pull_request.body"), false);
+});
+
 test("CODEOWNERS file exists for review gate wiring", () => {
   const codeowners = fs.readFileSync(CODEOWNERS_PATH, "utf8");
   assert.equal(codeowners.includes("@marushu"), true);

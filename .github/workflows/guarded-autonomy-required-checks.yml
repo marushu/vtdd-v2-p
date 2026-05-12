@@ -4,6 +4,11 @@ on:
   pull_request:
     branches:
       - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - edited
 
 permissions:
   contents: read
@@ -13,12 +18,24 @@ jobs:
   guarded-policy:
     runs-on: ubuntu-latest
     steps:
+      - name: Fetch current PR body
+        id: pr-body
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          PULL_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          pr_body_file="$RUNNER_TEMP/current-pr-body.md"
+          gh api "repos/${REPOSITORY}/pulls/${PULL_NUMBER}" --jq '.body // ""' > "$pr_body_file"
+          printf 'path=%s\n' "$pr_body_file" >> "$GITHUB_OUTPUT"
+
       - name: Validate PR evidence sections
         shell: bash
         env:
-          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_BODY_FILE: ${{ steps.pr-body.outputs.path }}
         run: |
-          body="${PR_BODY:-}"
+          body="$(cat "$PR_BODY_FILE")"
           required_markers=(
             "## This PR satisfies Intent"
             "## Satisfied Success Criteria"
@@ -38,9 +55,9 @@ jobs:
       - name: Validate Butler completion contract
         shell: bash
         env:
-          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_BODY_FILE: ${{ steps.pr-body.outputs.path }}
         run: |
-          body="${PR_BODY:-}"
+          body="$(cat "$PR_BODY_FILE")"
           contract="$(printf '%s' "$body" | awk '/^## Butler Completion Contract/{flag=1; next} /^## /{flag=0} flag')"
           required_fields=(
             "Owner goal"
@@ -100,9 +117,9 @@ jobs:
       - name: Guard Closes usage with E2E evidence pointers
         shell: bash
         env:
-          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_BODY_FILE: ${{ steps.pr-body.outputs.path }}
         run: |
-          body="${PR_BODY:-}"
+          body="$(cat "$PR_BODY_FILE")"
           if printf '%s' "$body" | grep -Eiq 'Closes #[0-9]+'; then
             if ! printf '%s' "$body" | grep -Eq 'E2E:'; then
               echo "PR uses Closes but E2E slot is missing."
