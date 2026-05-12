@@ -343,7 +343,7 @@ function parseReviewerMachineMeta(body) {
   }
   try {
     const parsed = JSON.parse(match[1]);
-    return normalizeObject(parsed);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
   } catch {
     return {};
   }

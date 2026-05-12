@@ -178,9 +178,16 @@ test("formatCodexReviewFallbackComment renders raw blocked failure details", () 
 
 test("fallback script reviews GitHub API diff without checking out untrusted PR code", () => {
   assert.equal(fallbackScript.includes("buildPullRequestDiff"), true);
+  assert.equal(fallbackScript.includes("CODEX_FALLBACK_DIFF_CHARACTERS = 180000"), true);
+  assert.equal(
+    fallbackScript.includes("buildPullRequestDiff(files, { maxCharacters: CODEX_FALLBACK_DIFF_CHARACTERS })"),
+    true
+  );
   assert.equal(fallbackScript.includes("buildPullRequestReviewContext"), true);
   assert.equal(fallbackScript.includes("shell command の実行や filesystem の検査はしないでください。"), true);
   assert.equal(fallbackScript.includes("criticalFindings[] と risks[] の各説明文は日本語"), true);
+  assert.equal(fallbackScript.includes("generated `worker.js` の diff は reviewer prompt では意図的に省略"), true);
+  assert.equal(fallbackScript.includes("GitHub App token を mint"), true);
   assert.equal(fallbackScript.includes('["exec", "--skip-git-repo-check", "--ephemeral", "-"]'), true);
   assert.equal(fallbackScript.includes("buildCodexExecutionEnv(process.env)"), true);
   assert.equal(fallbackScript.includes("env: process.env"), false);

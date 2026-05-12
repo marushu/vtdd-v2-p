@@ -9,6 +9,8 @@ import {
   resolveOperatorMention
 } from "../src/core/index.js";
 
+const CODEX_FALLBACK_DIFF_CHARACTERS = 180000;
+
 async function main() {
   const repository = mustGetEnv("TARGET_REPOSITORY");
   const prNumber = mustGetEnv("TARGET_PR_NUMBER");
@@ -32,7 +34,7 @@ async function main() {
   );
   const reviews = await githubFetchAll(githubFetch, `/repos/${repository}/pulls/${prNumber}/reviews?per_page=100`);
   const existingFallbackComment = findExistingCodexReviewFallbackComment(issueComments);
-  const prDiff = buildPullRequestDiff(files);
+  const prDiff = buildPullRequestDiff(files, { maxCharacters: CODEX_FALLBACK_DIFF_CHARACTERS });
   const context = buildPullRequestReviewContext({
     repository,
     trigger,
@@ -110,6 +112,8 @@ function buildCodexFallbackReviewPrompt({ context, prDiff }) {
     "merge や実行の提案はしないでください。",
     "criticalFindings[] と risks[] の各説明文は日本語で書いてください。",
     "ファイルパス、コード識別子、API 名、enum 値は原文のままで構いません。",
+    "generated `worker.js` の diff は reviewer prompt では意図的に省略されます。source diff と PR body の `check:generated-worker` evidence で整合性を確認してください。",
+    "reviewer marker の writeback workflow は GitHub App token を mint して `GITHUB_TOKEN` に使う設計です。comment author は `vtdd-codex` / `vtdd-codex[bot]` を trusted とし、一般 user comment は trusted marker として扱いません。",
     "Return strict JSON with these fields only:",
     "{",
     '  "criticalFindings": ["..."],',

@@ -21520,7 +21520,7 @@ function parseReviewerMachineMeta2(body) {
   }
   try {
     const parsed = JSON.parse(match[1]);
-    return normalizeObject3(parsed);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
   } catch {
     return {};
   }
@@ -21530,9 +21530,6 @@ function containsMarker2(value) {
 }
 function normalizeText6(value) {
   return String(value ?? "").trim();
-}
-function normalizeObject3(value) {
-  return value && typeof value === "object" ? value : {};
 }
 
 // src/core/reviewer-marker-truth.js
@@ -24303,15 +24300,15 @@ async function retrieveDecisionLogReferences(provider, input = {}) {
 }
 function inferRelatedIssueFromGatewayInput(gatewayInput = {}) {
   const memoryRecord = gatewayInput?.memoryRecord ?? {};
-  const content = normalizeObject4(memoryRecord.content);
-  const metadata = normalizeObject4(memoryRecord.metadata);
+  const content = normalizeObject3(memoryRecord.content);
+  const metadata = normalizeObject3(memoryRecord.metadata);
   const issue = normalizeIssue2(content.relatedIssue ?? metadata.relatedIssue);
   return issue > 0 ? issue : null;
 }
 function createCanonicalDecisionFromGateway(gatewayInput = {}) {
   const memoryRecord = gatewayInput?.memoryRecord ?? {};
-  const content = normalizeObject4(memoryRecord.content);
-  const metadata = normalizeObject4(memoryRecord.metadata);
+  const content = normalizeObject3(memoryRecord.content);
+  const metadata = normalizeObject3(memoryRecord.metadata);
   const rawContent = memoryRecord.content;
   const candidate = {
     decision: firstText(content.decision, typeof rawContent === "string" ? rawContent : ""),
@@ -24367,7 +24364,7 @@ function toDecisionReference(record) {
   };
 }
 function normalizeDecisionEntry(content) {
-  const candidate = normalizeObject4(content);
+  const candidate = normalizeObject3(content);
   if (Object.keys(candidate).length > 0) {
     const validated = createDecisionLogEntry(candidate);
     return validated.ok ? validated.entry : null;
@@ -24389,7 +24386,7 @@ function makeRecordId(entry) {
   const randomPart = Math.random().toString(36).slice(2, 8);
   return `decision_${issuePart}_${timestampPart}_${randomPart}`;
 }
-function normalizeObject4(value) {
+function normalizeObject3(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return {};
   }
@@ -24522,15 +24519,15 @@ async function retrieveProposalLogReferences(provider, input = {}) {
 }
 function inferRelatedIssueFromProposalGatewayInput(gatewayInput = {}) {
   const memoryRecord = gatewayInput?.memoryRecord ?? {};
-  const content = normalizeObject5(memoryRecord.content);
-  const metadata = normalizeObject5(memoryRecord.metadata);
+  const content = normalizeObject4(memoryRecord.content);
+  const metadata = normalizeObject4(memoryRecord.metadata);
   const issue = normalizeIssue3(content.relatedIssue ?? metadata.relatedIssue);
   return issue > 0 ? issue : null;
 }
 function createCanonicalProposalFromGateway(gatewayInput = {}) {
   const memoryRecord = gatewayInput?.memoryRecord ?? {};
-  const content = normalizeObject5(memoryRecord.content);
-  const metadata = normalizeObject5(memoryRecord.metadata);
+  const content = normalizeObject4(memoryRecord.content);
+  const metadata = normalizeObject4(memoryRecord.metadata);
   const rawContent = memoryRecord.content;
   const candidate = {
     hypothesis: firstText2(content.hypothesis, typeof rawContent === "string" ? rawContent : ""),
@@ -24589,7 +24586,7 @@ function toProposalReference(record) {
   };
 }
 function normalizeProposalEntry(content) {
-  const candidate = normalizeObject5(content);
+  const candidate = normalizeObject4(content);
   if (Object.keys(candidate).length > 0) {
     const validated = createProposalLogEntry(candidate);
     return validated.ok ? validated.entry : null;
@@ -24610,7 +24607,7 @@ function makeRecordId2({ issuePart, timestamp }) {
   const randomPart = Math.random().toString(36).slice(2, 8);
   return `proposal_${issuePart}_${timestampPart}_${randomPart}`;
 }
-function normalizeObject5(value) {
+function normalizeObject4(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return {};
   }
@@ -25018,8 +25015,8 @@ function toConstitutionReference(record) {
   };
 }
 function toPrContextReference(record) {
-  const metadata = normalizeObject6(record?.metadata);
-  const content = normalizeObject6(record?.content);
+  const metadata = normalizeObject5(record?.metadata);
+  const content = normalizeObject5(record?.content);
   const tags = Array.isArray(record?.tags) ? record.tags.map(normalizeText17) : [];
   const hasPrSignal = hasTagPrefix(tags, "pr:") || hasTag(tags, "pr_context") || hasTag(tags, "review_summary") || normalizeText17(metadata.kind) === "pr_context" || normalizeText17(metadata.kind) === "pr_review_summary" || Number.isInteger(Number(metadata.prNumber)) || Number.isInteger(Number(content.prNumber));
   if (!hasPrSignal) {
@@ -25059,7 +25056,7 @@ function flattenByPlan(planSources, candidates, limit) {
   return flattened;
 }
 function normalizeSemanticRetrievalInput(value, queryText, limit) {
-  const semantic = normalizeObject6(value);
+  const semantic = normalizeObject5(value);
   const enabled = semantic.enabled === true && Boolean(queryText);
   return {
     enabled,
@@ -25160,7 +25157,7 @@ function createEmptySourceMap() {
 function toSemanticSourceReference(record) {
   const type = normalizeText17(record?.type).toLowerCase();
   const score = normalizeSemanticScore(
-    record?.semanticScore ?? record?.score ?? normalizeObject6(record?.metadata).semanticScore
+    record?.semanticScore ?? record?.score ?? normalizeObject5(record?.metadata).semanticScore
   );
   if (type === MemoryRecordType.CONSTITUTION) {
     return {
@@ -25201,7 +25198,7 @@ function withSemanticScore(reference, semanticScore) {
   };
 }
 function toDecisionLogReference(record) {
-  const content = normalizeObject6(record?.content);
+  const content = normalizeObject5(record?.content);
   const decision = normalizeText17(content.decision);
   if (!decision) {
     return null;
@@ -25210,15 +25207,15 @@ function toDecisionLogReference(record) {
     id: normalizeText17(record?.id),
     decision,
     rationale: normalizeText17(content.rationale) || null,
-    relatedIssue: normalizeIssue4(content.relatedIssue ?? normalizeObject6(record?.metadata).relatedIssue),
+    relatedIssue: normalizeIssue4(content.relatedIssue ?? normalizeObject5(record?.metadata).relatedIssue),
     decidedBy: normalizeText17(content.decidedBy) || null,
     timestamp: normalizeText17(content.timestamp) || normalizeText17(record?.createdAt) || null,
     supersededBy: normalizeText17(content.supersededBy) || null,
-    repository: normalizeText17(normalizeObject6(record?.metadata).repository) || null
+    repository: normalizeText17(normalizeObject5(record?.metadata).repository) || null
   };
 }
 function toProposalLogReference(record) {
-  const content = normalizeObject6(record?.content);
+  const content = normalizeObject5(record?.content);
   const hypothesis = normalizeText17(content.hypothesis);
   if (!hypothesis) {
     return null;
@@ -25227,10 +25224,10 @@ function toProposalLogReference(record) {
     id: normalizeText17(record?.id),
     hypothesis,
     options: Array.isArray(content.options) ? content.options : [],
-    relatedIssue: normalizeIssue4(content.relatedIssue ?? normalizeObject6(record?.metadata).relatedIssue),
+    relatedIssue: normalizeIssue4(content.relatedIssue ?? normalizeObject5(record?.metadata).relatedIssue),
     proposedBy: normalizeText17(content.proposedBy) || null,
     timestamp: normalizeText17(content.timestamp) || normalizeText17(record?.createdAt) || null,
-    repository: normalizeText17(normalizeObject6(record?.metadata).repository) || null
+    repository: normalizeText17(normalizeObject5(record?.metadata).repository) || null
   };
 }
 function shouldKeepSemanticReference(reference, source, relatedIssue) {
@@ -25243,7 +25240,7 @@ function shouldKeepSemanticReference(reference, source, relatedIssue) {
   return true;
 }
 function normalizeIssueContext(issueContext, relatedIssue) {
-  const context = normalizeObject6(issueContext);
+  const context = normalizeObject5(issueContext);
   const issueNumber = normalizeIssue4(context.issueNumber ?? relatedIssue);
   if (!issueNumber) {
     return null;
@@ -25255,7 +25252,7 @@ function normalizeIssueContext(issueContext, relatedIssue) {
   };
 }
 function normalizeRuntimeTruth(runtimeTruth) {
-  const value = normalizeObject6(runtimeTruth);
+  const value = normalizeObject5(runtimeTruth);
   if (Object.keys(value).length === 0) {
     return null;
   }
@@ -25272,7 +25269,7 @@ function hasTag(tags, target) {
   const normalizedTarget = target.toLowerCase();
   return tags.some((tag) => tag.toLowerCase() === normalizedTarget);
 }
-function normalizeObject6(value) {
+function normalizeObject5(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return {};
   }
@@ -25491,8 +25488,8 @@ function toOperationalMemoryReference(record, input = {}) {
   if (!layer) {
     return null;
   }
-  const metadata = normalizeObject7(record?.metadata);
-  const content = normalizeObject7(record?.content);
+  const metadata = normalizeObject6(record?.metadata);
+  const content = normalizeObject6(record?.content);
   const tags = normalizeTags2(record?.tags);
   const queryText = normalizeText18(input.queryText);
   const repository = normalizeText18(metadata.repository ?? content.repository);
@@ -25541,8 +25538,8 @@ function scoreGovernanceImportance(record, tags) {
   return Math.min(100, Math.round(priority * 0.55 + tagScore + typeScore));
 }
 function scoreRecurrence(record, tags) {
-  const metadata = normalizeObject7(record?.metadata);
-  const content = normalizeObject7(record?.content);
+  const metadata = normalizeObject6(record?.metadata);
+  const content = normalizeObject6(record?.content);
   const count = Number(metadata.recurrenceCount ?? content.recurrenceCount ?? 0);
   const tagScore = tags.includes("recurring") || tags.includes("recurrence") ? 40 : 0;
   const numericScore = Number.isFinite(count) && count > 0 ? Math.min(60, count * 15) : 0;
@@ -25619,15 +25616,15 @@ function normalizeQueriedRecords2(value) {
   return [];
 }
 function resolveTitle(record) {
-  const content = normalizeObject7(record?.content);
+  const content = normalizeObject6(record?.content);
   return normalizeText18(content.title) || normalizeText18(content.decision) || normalizeText18(content.hypothesis) || normalizeText18(content.failurePattern) || normalizeText18(content.summary) || normalizeText18(content.note) || normalizeText18(record?.id);
 }
 function resolveSummary(record) {
-  const content = normalizeObject7(record?.content);
+  const content = normalizeObject6(record?.content);
   return normalizeText18(content.summary) || normalizeText18(content.rationale) || normalizeText18(content.remediation) || normalizeText18(content.description) || normalizeText18(content.note) || normalizeText18(content.result) || null;
 }
 function normalizeRuntimeTruth2(value) {
-  const runtimeTruth = normalizeObject7(value);
+  const runtimeTruth = normalizeObject6(value);
   if (Object.keys(runtimeTruth).length === 0) {
     return null;
   }
@@ -25665,7 +25662,7 @@ function normalizeTimestamp3(value) {
   }
   return text;
 }
-function normalizeObject7(value) {
+function normalizeObject6(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return {};
   }
@@ -25895,21 +25892,21 @@ function deny5(rule, reason, detail = {}) {
 
 // src/core/remote-codex-handoff-scope.js
 function isBoundRemoteCodexHandoff(input = {}) {
-  const context = normalizeObject8(input?.continuationContext);
-  const handoff = normalizeObject8(context.handoff);
-  const issueContext = normalizeObject8(input?.issueContext);
+  const context = normalizeObject7(input?.continuationContext);
+  const handoff = normalizeObject7(context.handoff);
+  const issueContext = normalizeObject7(input?.issueContext);
   const issueNumber = normalizePositiveInteger2(issueContext.issueNumber);
   const relatedIssue = normalizePositiveInteger2(handoff.relatedIssue);
   return context.requiresHandoff === true && handoff.issueTraceable === true && handoff.approvalScopeMatched === true && Boolean(normalizeText19(handoff.summary)) && issueNumber !== null && relatedIssue === issueNumber && hasBoundIssueTraceability(input?.policyInput, issueNumber);
 }
 function hasBoundIssueTraceability(policyInput, issueNumber) {
-  const traceability = normalizeObject8(policyInput?.issueTraceability);
+  const traceability = normalizeObject7(policyInput?.issueTraceability);
   return normalizePositiveInteger2(traceability.relatedIssue) === issueNumber && hasTextArray(traceability.intentRefs) && hasTextArray(traceability.successCriteriaRefs) && hasTextArray(traceability.nonGoalRefs);
 }
 function hasTextArray(value) {
   return Array.isArray(value) && value.some((item) => Boolean(normalizeText19(item)));
 }
-function normalizeObject8(value) {
+function normalizeObject7(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return {};
   }
@@ -26115,10 +26112,10 @@ var REMOTE_CODEX_DISPATCH_GOALS = new Set(Object.values(RemoteCodexDispatchGoal)
 function createRemoteCodexExecutionRequest(input = {}) {
   const gatewayResult = input?.gatewayResult ?? {};
   const payload = input?.payload ?? {};
-  const issueContext = normalizeObject9(payload.issueContext);
-  const runtimeState = normalizeObject9(payload?.policyInput?.runtimeTruth?.runtimeState);
-  const continuationContext = normalizeObject9(payload.continuationContext);
-  const handoff = normalizeObject9(continuationContext.handoff);
+  const issueContext = normalizeObject8(payload.issueContext);
+  const runtimeState = normalizeObject8(payload?.policyInput?.runtimeTruth?.runtimeState);
+  const continuationContext = normalizeObject8(payload.continuationContext);
+  const handoff = normalizeObject8(continuationContext.handoff);
   const approvalScopeMatched = payload?.policyInput?.approvalScopeMatched === true || isBoundRemoteCodexHandoff({
     continuationContext,
     issueContext,
@@ -26130,11 +26127,11 @@ function createRemoteCodexExecutionRequest(input = {}) {
   const codexGoal = normalizeText21(continuationContext.codexGoal) || normalizeText21(payload?.executionTarget?.codexGoal) || normalizeText21(gatewayResult?.executionContinuity?.codexGoal);
   const revisionTarget = normalizeRevisionTarget({
     runtimeState,
-    executionTarget: normalizeObject9(payload?.executionTarget),
+    executionTarget: normalizeObject8(payload?.executionTarget),
     handoff
   });
   const revisionTargetConflicts = collectRevisionTargetConflicts({
-    executionTarget: normalizeObject9(payload?.executionTarget),
+    executionTarget: normalizeObject8(payload?.executionTarget),
     handoff
   });
   const request = {
@@ -26219,11 +26216,11 @@ function validateRevisionTarget(request) {
   return issues;
 }
 function normalizeRevisionTarget({ runtimeState, executionTarget, handoff }) {
-  const pullRequest = normalizeObject9(runtimeState.pullRequest);
-  const handoffTarget = normalizeObject9(
+  const pullRequest = normalizeObject8(runtimeState.pullRequest);
+  const handoffTarget = normalizeObject8(
     handoff.targetPullRequest ?? handoff.pullRequest ?? handoff.pr
   );
-  const executionTargetPull = normalizeObject9(executionTarget.pullRequest);
+  const executionTargetPull = normalizeObject8(executionTarget.pullRequest);
   return {
     number: normalizePositiveInteger3(
       executionTarget.prNumber ?? executionTarget.pullRequestNumber ?? executionTargetPull.number ?? handoff.prNumber ?? handoff.pullRequestNumber ?? handoffTarget.number ?? pullRequest.number
@@ -26271,7 +26268,7 @@ function collectRevisionTargetConflicts({ executionTarget, handoff }) {
 }
 function normalizeRevisionTargetSource(source, value = {}) {
   const input = value && typeof value === "object" ? value : {};
-  const pullRequest = normalizeObject9(input.pullRequest);
+  const pullRequest = normalizeObject8(input.pullRequest);
   const target = {
     source,
     number: normalizePositiveInteger3(input.number ?? pullRequest.number),
@@ -27216,7 +27213,7 @@ function findVpsRunnerEvents({ comments, queueComment }) {
     }
     const rawStatus = normalizeText21(payload.status);
     const status = normalizeVpsRunnerEventStatus(rawStatus);
-    const leadTime = normalizeObject9(payload.leadTime);
+    const leadTime = normalizeObject8(payload.leadTime);
     return {
       commentId: normalizePositiveInteger3(comment?.id),
       commentUrl: normalizeText21(comment?.html_url) || null,
@@ -27226,10 +27223,10 @@ function findVpsRunnerEvents({ comments, queueComment }) {
       currentStep: normalizeText21(payload.currentStep) || null,
       heartbeatAt: normalizeText21(payload.heartbeatAt) || null,
       leadTime,
-      rawFailure: normalizeObject9(payload.rawFailure),
-      command: normalizeObject9(payload.command),
+      rawFailure: normalizeObject8(payload.rawFailure),
+      command: normalizeObject8(payload.command),
       branch: normalizeText21(payload.branch) || null,
-      pullRequest: normalizeObject9(payload.pullRequest),
+      pullRequest: normalizeObject8(payload.pullRequest),
       updatedAt: normalizeText21(payload.updatedAt) || normalizeText21(payload.heartbeatAt) || normalizeText21(comment?.updated_at) || normalizeText21(comment?.created_at) || null
     };
   }).filter(Boolean);
@@ -27353,8 +27350,8 @@ function selectLatestVpsRunnerEvent(events) {
   }).at(-1) || null;
 }
 function buildVpsRunnerProgressLeadTime({ queueComment, runnerEvents, pullRequest }) {
-  const latestWithLeadTime = [...Array.isArray(runnerEvents) ? runnerEvents : []].reverse().find((event) => Object.keys(normalizeObject9(event?.leadTime)).length > 0);
-  const eventLeadTime = normalizeObject9(latestWithLeadTime?.leadTime);
+  const latestWithLeadTime = [...Array.isArray(runnerEvents) ? runnerEvents : []].reverse().find((event) => Object.keys(normalizeObject8(event?.leadTime)).length > 0);
+  const eventLeadTime = normalizeObject8(latestWithLeadTime?.leadTime);
   const timestamps = {
     queuedAt: normalizeText21(eventLeadTime.queued_at) || normalizeText21(queueComment?.created_at),
     pickedUpAt: normalizeText21(eventLeadTime.picked_up_at),
@@ -27381,7 +27378,7 @@ function buildVpsRunnerProgressLeadTime({ queueComment, runnerEvents, pullReques
     if (!timestamps.completedAt && normalizeText21(event?.rawStatus) === RemoteCodexExecutionStatus.COMPLETED) {
       timestamps.completedAt = updatedAt;
     }
-    if (!timestamps.failedAt && normalizeText21(event?.status) === RemoteCodexExecutionStatus.BLOCKED && Object.keys(normalizeObject9(event?.rawFailure)).length > 0) {
+    if (!timestamps.failedAt && normalizeText21(event?.status) === RemoteCodexExecutionStatus.BLOCKED && Object.keys(normalizeObject8(event?.rawFailure)).length > 0) {
       timestamps.failedAt = updatedAt;
     }
   }
@@ -27439,11 +27436,11 @@ function buildVpsRunnerPickupBlocker({ queueComment, env }) {
   };
 }
 function buildVpsRunnerHealthStatus({ progress, env }) {
-  const runnerEvent = normalizeObject9(progress?.runnerEvent);
-  const blocker = normalizeObject9(progress?.blocker);
-  const pullRequest = normalizeObject9(progress?.pullRequest);
-  const branch = normalizeObject9(progress?.branch);
-  const cancellation = normalizeObject9(progress?.cancellation);
+  const runnerEvent = normalizeObject8(progress?.runnerEvent);
+  const blocker = normalizeObject8(progress?.blocker);
+  const pullRequest = normalizeObject8(progress?.pullRequest);
+  const branch = normalizeObject8(progress?.branch);
+  const cancellation = normalizeObject8(progress?.cancellation);
   const lastSeenAt = normalizeText21(runnerEvent.updatedAt) || normalizeText21(runnerEvent.heartbeatAt) || null;
   const heartbeatAt = normalizeText21(runnerEvent.heartbeatAt) || null;
   const queuePickedUp = Boolean(
@@ -27467,7 +27464,7 @@ function buildVpsRunnerHealthStatus({ progress, env }) {
       commentId: normalizePositiveInteger3(progress?.queueCommentId),
       commentUrl: normalizeText21(progress?.queueCommentUrl) || null
     },
-    leadTime: normalizeObject9(progress?.leadTime),
+    leadTime: normalizeObject8(progress?.leadTime),
     currentStep,
     progressStatus: normalizeText21(progress?.status) || RemoteCodexExecutionStatus.UNKNOWN,
     cancellation: Object.keys(cancellation).length > 0 ? cancellation : null,
@@ -27812,7 +27809,7 @@ function buildExecutionId({ issueNumber }) {
 function encodeURIComponentRepository2(repository) {
   return repository.split("/").map((part) => encodeURIComponent(part)).join("/");
 }
-function normalizeObject9(value) {
+function normalizeObject8(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return {};
   }
@@ -30793,14 +30790,14 @@ function canBindNaturalGitHubWriteApproval(payload) {
   if (!operationConfig || operationConfig.tier !== GitHubAppOperationTier.NORMAL_GO || operationConfig.naturalGoEnabled === false || !NATURAL_GO_ENABLED_OPERATIONS.has(operation)) {
     return false;
   }
-  const naturalApproval = normalizeObject10(payload?.naturalApproval);
+  const naturalApproval = normalizeObject9(payload?.naturalApproval);
   if (naturalApproval.exactPayloadPresented !== true || naturalApproval.repositoryResolved !== true) {
     return false;
   }
   if (!containsGoToken(naturalApproval.userText)) {
     return false;
   }
-  const presentedPayload = normalizeObject10(naturalApproval.presentedPayload);
+  const presentedPayload = normalizeObject9(naturalApproval.presentedPayload);
   if (normalizeText30(presentedPayload.operation) !== operation) {
     return false;
   }
@@ -30833,7 +30830,7 @@ function readPayloadIdentityField(payload, field) {
 function containsGoToken(value) {
   return /(^|[^A-Za-z0-9_])GO([^A-Za-z0-9_]|$)/i.test(normalizeText30(value));
 }
-function normalizeObject10(value) {
+function normalizeObject9(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 function normalizeText30(value) {
@@ -32514,7 +32511,7 @@ function buildMemoryWriteRecord(payload = {}) {
   const repository = normalizeText32(payload.repository) || null;
   const timestamp = normalizeText32(payload.timestamp) || (/* @__PURE__ */ new Date()).toISOString();
   const metadata = {
-    ...normalizeObject11(payload.metadata),
+    ...normalizeObject10(payload.metadata),
     relatedIssue,
     repository,
     source: "butler_memory_write_action",
@@ -33737,8 +33734,8 @@ async function resolveApprovalGrant({ payload, policyInput, env }) {
   };
 }
 function buildApprovalScopeSnapshot({ payload, policyInput }) {
-  const issueContext = normalizeObject11(payload?.issueContext);
-  const traceability = normalizeObject11(policyInput?.issueTraceability);
+  const issueContext = normalizeObject10(payload?.issueContext);
+  const traceability = normalizeObject10(policyInput?.issueTraceability);
   const operationConfig = getGitHubAppOperation(payload?.highRiskKind ?? policyInput?.highRiskKind);
   const identityFields = new Set(operationConfig?.authorityScopeIdentityFields ?? [
     "repository",
@@ -33802,7 +33799,7 @@ async function findApprovalRecordById(provider, recordId) {
   return records.find((record) => normalizeText32(record?.id) === recordId) ?? records.find((record) => normalizeText32(record?.content?.approvalId) === recordId) ?? records.find((record) => normalizeText32(record?.content?.sessionId) === recordId) ?? null;
 }
 async function appendGuardedAbsenceExecutionLog({ payload, gatewayOutcome, env }) {
-  const policyInput = normalizeObject11(payload?.policyInput);
+  const policyInput = normalizeObject10(payload?.policyInput);
   const autonomyMode = normalizeAutonomyMode(policyInput.autonomyMode);
   if (autonomyMode !== AutonomyMode.GUARDED_ABSENCE) {
     return gatewayOutcome;
@@ -33816,7 +33813,7 @@ async function appendGuardedAbsenceExecutionLog({ payload, gatewayOutcome, env }
     );
   }
   const nowIso = (/* @__PURE__ */ new Date()).toISOString();
-  const body = normalizeObject11(gatewayOutcome?.body);
+  const body = normalizeObject10(gatewayOutcome?.body);
   const blockedByRule = normalizeText32(body.blockedByRule) || null;
   const recordInput = {
     id: buildGuardedAbsenceExecutionLogId({
@@ -34350,7 +34347,7 @@ function safeParseJson(value, fallback = null) {
   }
 }
 function attachGatewayWarning(gatewayOutcome, warning) {
-  const body = normalizeObject11(gatewayOutcome?.body);
+  const body = normalizeObject10(gatewayOutcome?.body);
   const warnings = Array.isArray(body.warnings) ? body.warnings : [];
   const merged = [...new Set([...warnings, normalizeText32(warning)].filter(Boolean))];
   return {
@@ -34535,7 +34532,7 @@ function normalizeIssue6(value) {
   }
   return numeric;
 }
-function normalizeObject11(value) {
+function normalizeObject10(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return {};
   }
