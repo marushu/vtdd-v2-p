@@ -938,7 +938,7 @@ test("VPS runner Codex prompt preserves high-risk boundaries", () => {
     },
     preflight: {
       mode: "auto_receipt",
-      onMissingContract: "proposal_only",
+      onMissingContract: "owner_decision_required",
       issue: {
         number: 157,
         title: "Smoke test",
@@ -959,7 +959,7 @@ test("VPS runner Codex prompt preserves high-risk boundaries", () => {
   assert.equal(prompt.includes("scripts/validate-pr-body.mjs"), true);
   assert.equal(prompt.includes("Context preflight receipt:"), true);
   assert.equal(prompt.includes("AGENTS.md sha1=abc123"), true);
-  assert.equal(prompt.includes("proposal_only"), true);
+  assert.equal(prompt.includes("owner_decision_required"), true);
   assert.equal(prompt.includes("## This PR satisfies Intent"), true);
   assert.equal(prompt.includes("## Surface Update Checklist"), true);
 });
@@ -977,7 +977,7 @@ test("VPS runner builds preflight receipt from canonical repo files", async () =
     issueNumber: 307,
     preflightPolicy: {
       mode: "auto_receipt",
-      onMissingContract: "proposal_only",
+      onMissingContract: "owner_decision_required",
       requiredRepoFiles: [
         "AGENTS.md",
         "docs/pr-template-model.md",
@@ -1003,14 +1003,14 @@ test("VPS runner builds preflight receipt from canonical repo files", async () =
   assert.equal(payload.preflightReceipt.ok, true);
 });
 
-test("VPS runner preflight receipt falls back to proposal-only when required files are missing", async () => {
+test("VPS runner preflight receipt requires owner decision when required files are missing", async () => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "vtdd-preflight-missing-"));
   await fs.writeFile(path.join(tempRoot, "AGENTS.md"), "Do not silently downscope active Issues.\n");
   const payload = {
     issueNumber: 307,
     preflightPolicy: {
       mode: "auto_receipt",
-      onMissingContract: "proposal_only",
+      onMissingContract: "owner_decision_required",
       requiredRepoFiles: ["AGENTS.md", "docs/pr-template-model.md"]
     }
   };
@@ -1026,7 +1026,7 @@ test("VPS runner preflight receipt falls back to proposal-only when required fil
   });
 
   assert.equal(receipt.ok, false);
-  assert.equal(receipt.onMissingContract, "proposal_only");
+  assert.equal(receipt.onMissingContract, "owner_decision_required");
   assert.equal(receipt.missing[0].path, "docs/pr-template-model.md");
 });
 

@@ -180,7 +180,9 @@ async function executeVpsRunnerExecution({ githubFetch, token, workRoot, executi
     if (!preflight.ok) {
       return {
         ok: false,
-        reason: preflight.reason || "VPS runner preflight receipt could not be created."
+        reason:
+          preflight.reason ||
+          "VPS runner preflight receipt could not be created. Butler/owner decision is required before reissue."
       };
     }
 
@@ -764,7 +766,7 @@ async function buildVpsRunnerPreflightReceipt({ workspace, payload, issue }) {
   if (!receipt.ok) {
     receipt.reason =
       missing.length > 0
-        ? `Required preflight inputs are missing: ${missing.map((item) => item.path).join(", ")}`
+        ? `Required preflight inputs are missing: ${missing.map((item) => item.path).join(", ")}. Butler/owner must confirm the next action before reissuing the bounded request.`
         : "Canonical Issue could not be resolved for preflight.";
   }
   payload.preflightReceipt = receipt;
@@ -776,7 +778,8 @@ function normalizeVpsRunnerPreflightPolicy(value = {}) {
   const requiredRepoFiles = normalizeStringList(input.requiredRepoFiles);
   return {
     mode: normalizeText(input.mode) || "auto_receipt",
-    onMissingContract: normalizeText(input.onMissingContract) || "proposal_only",
+    onMissingContract:
+      normalizeText(input.onMissingContract) || "owner_decision_required",
     requiredRepoFiles:
       requiredRepoFiles.length > 0
         ? requiredRepoFiles
