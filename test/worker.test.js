@@ -182,6 +182,198 @@ test("worker returns Butler-facing Cloudflare page directory", async () => {
   assert.equal(JSON.stringify(body).includes("Bearer test-token"), false);
 });
 
+test("worker MCP initialize returns tools capability and server info", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/mcp", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-03-26",
+          capabilities: {},
+          clientInfo: { name: "codex", version: "test" }
+        }
+      })
+    }),
+    gatewayAuthEnv
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("mcp-protocol-version"), "2025-03-26");
+  const body = await response.json();
+  assert.equal(body.result.serverInfo.name, "vtdd-mcp");
+  assert.equal(body.result.capabilities.tools.listChanged, false);
+});
+
+test("worker MCP tools/list exposes shared VTDD retrieval catalog", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/mcp", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 2,
+        method: "tools/list",
+        params: {}
+      })
+    }),
+    gatewayAuthEnv
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  const names = body.result.tools.map((tool) => tool.name);
+  assert.deepEqual(names, [
+    "vtdd_runtime_truth",
+    "vtdd_review_truth",
+    "vtdd_search_operational_memory",
+    "vtdd_recall_implementation",
+    "vtdd_pr_status",
+    "vtdd_issue_status"
+  ]);
+});
+
+test("worker MCP search_operational_memory tool reuses operational memory retrieval", async () => {
+  const provider = createInMemoryMemoryProvider();
+  await provider.store({
+    id: "operational-memory-mcp-1",
+    type: MemoryRecordType.DECISION_LOG,
+    content: {
+      decision: "MCP clients should read the same runtime truth as Butler.",
+      rationale: "Shared memory parity is the point of vtdd-mcp-ver."
+    },
+    metadata: { repository: "sample-org/vtdd-v2-p" },
+    priority: 95,
+    tags: ["decision_log", "mcp", "parity"],
+    createdAt: "2026-05-12T00:00:00Z"
+  });
+
+  const response = await worker.fetch(
+    new Request("https://example.com/mcp", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 3,
+        method: "tools/call",
+        params: {
+          name: "vtdd_search_operational_memory",
+          arguments: {
+            text: "runtime truth parity",
+            repository: "sample-org/vtdd-v2-p",
+            currentState: "MCP route under implementation",
+            runtimeTruthSource: "github_app"
+          }
+        }
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      MEMORY_PROVIDER: provider
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  const payload = JSON.parse(body.result.content[0].text);
+  assert.equal(body.result.isError, false);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.memoryUseRule, "runtime_truth_current_state_overrides_memory_background_reference");
+  assert.equal(payload.compactContext[0].id, "operational-memory-mcp-1");
+});
+
+test("worker MCP review_truth tool returns review synthesis from GitHub runtime truth", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/mcp", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 4,
+        method: "tools/call",
+        params: {
+          name: "vtdd_review_truth",
+          arguments: {
+            repository: "sample-org/vtdd-v2-p",
+            pullNumber: 46
+          }
+        }
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_pull_read",
+      GITHUB_API_FETCH: async (url) => {
+        const parsed = new URL(url);
+        if (parsed.pathname.endsWith("/repos/sample-org/vtdd-v2-p/pulls/46")) {
+          return new Response(
+            JSON.stringify({
+              number: 46,
+              title: "Issue #318: Add VTDD MCP gateway",
+              state: "open",
+              draft: false,
+              head: { ref: "codex/issue-318-vtdd-mcp-gateway", sha: "abc123" },
+              base: { ref: "main", sha: "def456" },
+              mergeable: true,
+              mergeable_state: "clean",
+              html_url: "https://github.com/sample-org/vtdd-v2-p/pull/46"
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        if (parsed.pathname.endsWith("/repos/sample-org/vtdd-v2-p/pulls/46/reviews")) {
+          return new Response(
+            JSON.stringify([
+              {
+                id: 1,
+                state: "APPROVED",
+                body: "looks good",
+                user: { login: "reviewer" },
+                submitted_at: "2026-05-12T01:00:00Z",
+                html_url: "https://github.com/sample-org/vtdd-v2-p/pull/46#pullrequestreview-1"
+              }
+            ]),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        if (parsed.pathname.endsWith("/repos/sample-org/vtdd-v2-p/issues/46/comments")) {
+          return new Response(
+            JSON.stringify([
+              {
+                id: 10,
+                body: "<!-- vtdd:reviewer=gemini -->\n## VTDD Gemini Critical Review\n\n- Recommended action: `approve`",
+                user: { login: "vtdd-codex[bot]" },
+                created_at: "2026-05-12T01:10:00Z",
+                updated_at: "2026-05-12T01:10:00Z",
+                html_url: "https://github.com/sample-org/vtdd-v2-p/pull/46#issuecomment-1"
+              }
+            ]),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        if (parsed.pathname.endsWith("/repos/sample-org/vtdd-v2-p/pulls/46/comments")) {
+          return new Response(JSON.stringify([]), {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          });
+        }
+        throw new Error(`unexpected GitHub API url: ${parsed.pathname}`);
+      }
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  const payload = JSON.parse(body.result.content[0].text);
+  assert.equal(body.result.isError, false);
+  assert.equal(payload.reviewTruth.reviewerStatus, "gemini_review_available");
+  assert.equal(payload.reviewTruth.reviewerSignalTruth.mergeReviewTruth.blocked, false);
+  assert.equal(payload.butlerReviewSynthesis.available, true);
+});
+
 test("worker guide alias opens the same help guide surface", async () => {
   const response = await worker.fetch(new Request("https://example.com/guide"));
 
