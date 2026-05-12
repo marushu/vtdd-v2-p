@@ -1,0 +1,45 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+
+const DOC_PATH = path.join(process.cwd(), "docs", "architecture", "vtdd-mcp-ver.md");
+
+test("vtdd-mcp-ver architecture doc keeps Butler while converging Mac and VPS on shared truth", () => {
+  const doc = fs.readFileSync(DOC_PATH, "utf8");
+  assert.equal(doc.includes("Butler stays in place"), true);
+  assert.equal(doc.includes("Mac Codex"), true);
+  assert.equal(doc.includes("VPS Codex CLI"), true);
+  assert.equal(doc.includes("same memory, runtime truth, review truth, and implementation recall"), true);
+  assert.equal(doc.includes("Butler -> Action Schema -> VTDD core"), true);
+  assert.equal(doc.includes("Mac Codex -> MCP -> VTDD core"), true);
+  assert.equal(doc.includes("VPS Codex CLI -> MCP -> VTDD core"), true);
+});
+
+test("vtdd-mcp-ver architecture doc preserves governance over MCP", () => {
+  const doc = fs.readFileSync(DOC_PATH, "utf8");
+  assert.equal(doc.includes("MCP is an interface layer inside that system."), true);
+  assert.equal(doc.includes("MCP is not the source of truth"), true);
+  assert.equal(doc.includes("MCP must not create a separate weaker or stronger governance model."), true);
+  assert.equal(doc.includes("High-risk operations remain `GO + passkey`."), true);
+  assert.equal(doc.includes("MCP is not permanently read-only."), true);
+});
+
+test("vtdd-mcp-ver architecture doc defines shared implementation recall contract", () => {
+  const doc = fs.readFileSync(DOC_PATH, "utf8");
+  assert.equal(doc.includes("vtdd_recall_implementation"), true);
+  assert.equal(doc.includes("repository"), true);
+  assert.equal(doc.includes("related Issue"), true);
+  assert.equal(doc.includes("related PR"), true);
+  assert.equal(doc.includes("reviewer objections and resolutions"), true);
+  assert.equal(doc.includes("\"runtimeStatus\": \"merged | open_pr | stale | unknown\""), true);
+});
+
+test("vtdd-mcp-ver architecture doc maps preserved assets and harness boundary", () => {
+  const doc = fs.readFileSync(DOC_PATH, "utf8");
+  assert.equal(doc.includes("Keep As Core"), true);
+  assert.equal(doc.includes("Expose Through MCP"), true);
+  assert.equal(doc.includes("Keep Action Schema Only For Now"), true);
+  assert.equal(doc.includes("Codex App Server / exec-server"), true);
+  assert.equal(doc.includes("Current VPS execution is a user-owned Codex CLI process wrapper."), true);
+});
