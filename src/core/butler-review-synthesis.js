@@ -1,3 +1,9 @@
+import {
+  parseCodexConnectorSetupComment,
+  parseCodexReviewFallbackComment
+} from "./codex-review-fallback.js";
+import { parseGeminiReviewComment } from "./gemini-pr-review.js";
+
 export function buildButlerReviewSynthesis(input = {}) {
   const pullRequest = normalizePullRequest(input.pullRequest);
   const branchAttribution = buildBranchAttribution({
@@ -13,9 +19,22 @@ export function buildButlerReviewSynthesis(input = {}) {
     };
   }
 
-  const reviewLoop = normalizeReviewLoop(input.reviewLoop);
+  const reviewLoop = buildEffectiveReviewLoop({
+    explicitReviewLoop: input.reviewLoop,
+    pullRequest
+  });
   const codexGoal = normalizeText(input.codexGoal) || "wait_for_review";
-  const nextSuggestedActions = normalizeStringArray(input.nextSuggestedActions);
+  const readyForReviewRecommendation = buildReadyForReviewRecommendation({
+    pullRequest,
+    reviewLoop,
+    preflight: input.readyForReviewPreflight
+  });
+  const nextSuggestedActions = buildNextSuggestedActions({
+    explicitActions: input.nextSuggestedActions,
+    pullRequest,
+    reviewLoop,
+    readyForReviewRecommendation
+  });
   const recentSignals = collectRecentSignals(pullRequest);
 
   return {
@@ -41,6 +60,7 @@ export function buildButlerReviewSynthesis(input = {}) {
       unresolvedReviewCommentsCount: reviewLoop.unresolvedReviewCommentsCount,
       criticalReviewPending: reviewLoop.criticalReviewPending,
       updatedSinceReview: pullRequest.updatedSinceReview,
+      readyForReviewRecommendation,
       recentIssueComments: recentSignals.issueComments,
       recentReviewComments: recentSignals.reviewComments,
       recentReviews: recentSignals.reviews
@@ -49,7 +69,8 @@ export function buildButlerReviewSynthesis(input = {}) {
       pullRequest,
       reviewLoop,
       codexGoal,
-      branchAttribution
+      branchAttribution,
+      readyForReviewRecommendation
     }),
     nextSuggestedActions
   };
@@ -76,6 +97,9 @@ function buildHeadline({ pullRequest, reviewLoop }) {
     reviewLoop.reviewerStatus === "gemini_review_available" &&
     reviewLoop.reviewerEvidence?.recommendedAction === "approve"
   ) {
+    if (pullRequest.draft) {
+      return `${base} Gemini reviewer action is approve, but the PR is draft; Butler should discuss Draft解除 / Ready for review before any merge path.`;
+    }
     if (pullRequest.mergeability.status === "unverified") {
       return `${base} PR conflict runtime truth is unverified; Butler must re-read runtime truth before merge judgment.`;
     }
@@ -93,7 +117,13 @@ function buildHeadline({ pullRequest, reviewLoop }) {
   return `${base} Reviewer evidence is not yet available.`;
 }
 
-function buildHumanDecisionFocus({ pullRequest, reviewLoop, codexGoal, branchAttribution }) {
+function buildHumanDecisionFocus({
+  pullRequest,
+  reviewLoop,
+  codexGoal,
+  branchAttribution,
+  readyForReviewRecommendation
+}) {
   const focus = [];
 
   if (branchAttribution.warning) {
@@ -137,6 +167,11 @@ function buildHumanDecisionFocus({ pullRequest, reviewLoop, codexGoal, branchAtt
     const url = reviewLoop.reviewerEvidence.url ? ` ${reviewLoop.reviewerEvidence.url}` : "";
     focus.push(`Latest ${reviewLoop.reviewer} reviewer action is ${action}.${url}`);
   }
+  if (reviewLoop.reviewerSignalTruth?.mergeReviewTruth?.blocked) {
+    focus.push(
+      "VTDD reviewer marker is not approve; summarize the reviewer findings for the owner, apply bounded fixes if requested, and rerun reviewer coverage before merge GO."
+    );
+  }
   for (const warning of reviewLoop.reviewerSignalTruth?.warnings ?? []) {
     focus.push(warning);
   }
@@ -149,6 +184,15 @@ function buildHumanDecisionFocus({ pullRequest, reviewLoop, codexGoal, branchAtt
   if (reviewLoop.reviewer === "gemini" && reviewLoop.reviewerEvidence?.includesCreatedEdit) {
     focus.push(
       "Gemini updates its existing marker comment; GitHub may show the original comment time, so use the current marker body and evidence URL."
+    );
+  }
+  if (readyForReviewRecommendation.ready) {
+    focus.push(
+      "Draft PR has approve reviewer marker, passing checks, complete PR body, no unsatisfied Success Criteria, and no critical findings; recommend Draft解除 / Ready for review, not merge."
+    );
+  } else if (pullRequest.draft && reviewLoop.reviewerEvidence?.recommendedAction === "approve") {
+    focus.push(
+      `PR is draft; merge is unavailable. Missing Ready for review preflight: ${readyForReviewRecommendation.missing.join(", ") || "unknown"}.`
     );
   }
   focus.push("Human remains the final authority for revision GO and merge GO + real passkey.");
@@ -199,15 +243,228 @@ function normalizePullRequest(value) {
     number: normalizeNumber(input.number),
     url: normalizeText(input.url) || null,
     state: normalizeText(input.state) || "open",
+    draft: input.draft === true || input.isDraft === true,
     title: normalizeText(input.title) || null,
     baseRef: normalizeText(input.baseRef) || normalizeText(input.base?.ref) || null,
     headRef: normalizeText(input.headRef) || normalizeText(input.head?.ref) || null,
     headSha: normalizeText(input.headSha) || normalizeText(input.head?.sha) || null,
+    reviewDecision: normalizeText(input.reviewDecision) || normalizeText(input.review_decision) || null,
+    body: normalizeText(input.body) || null,
+    prBodyComplete: input.prBodyComplete === true,
+    unsatisfiedSuccessCriteriaNone: input.unsatisfiedSuccessCriteriaNone === true,
+    statusCheckRollup: Array.isArray(input.statusCheckRollup) ? input.statusCheckRollup : [],
+    checksPassed: input.checksPassed === true,
     mergeability: normalizeMergeability(input),
     updatedSinceReview: input.updatedSinceReview === true,
     issueComments: Array.isArray(input.issueComments) ? input.issueComments : [],
     reviewComments: Array.isArray(input.reviewComments) ? input.reviewComments : [],
     reviews: Array.isArray(input.reviews) ? input.reviews : []
+  };
+}
+
+function buildEffectiveReviewLoop({ explicitReviewLoop, pullRequest }) {
+  const explicit = normalizeReviewLoop(explicitReviewLoop);
+  const inferred = inferReviewLoopFromPullRequest(pullRequest);
+  const explicitHasEvidence =
+    Boolean(explicit.reviewerEvidence) ||
+    Boolean(explicit.reviewerSignalTruth?.vtddReviewerMarkerPresent) ||
+    explicit.reviewerStatus !== "review_unavailable";
+  if (!inferred.reviewerEvidence && !inferred.reviewerSignalTruth?.vtddReviewerMarkerPresent) {
+    return explicit;
+  }
+  if (inferred.reviewerSignalTruth?.vtddReviewerMarkerPresent) {
+    return {
+      ...inferred,
+      reviewCommentsCount: Math.max(explicit.reviewCommentsCount, inferred.reviewCommentsCount),
+      unresolvedReviewCommentsCount: Math.max(
+        explicit.unresolvedReviewCommentsCount,
+        inferred.unresolvedReviewCommentsCount
+      ),
+      criticalReviewPending: explicit.criticalReviewPending || inferred.criticalReviewPending
+    };
+  }
+  if (!explicitHasEvidence) {
+    return inferred;
+  }
+  return {
+    reviewer: explicit.reviewer || inferred.reviewer,
+    reviewerStatus:
+      explicit.reviewerStatus !== "review_unavailable" ? explicit.reviewerStatus : inferred.reviewerStatus,
+    reviewerEvidence: explicit.reviewerEvidence ?? inferred.reviewerEvidence,
+    reviewerSignalTruth: explicit.reviewerSignalTruth ?? inferred.reviewerSignalTruth,
+    reviewCommentsCount: Math.max(explicit.reviewCommentsCount, inferred.reviewCommentsCount),
+    unresolvedReviewCommentsCount: Math.max(
+      explicit.unresolvedReviewCommentsCount,
+      inferred.unresolvedReviewCommentsCount
+    ),
+    criticalReviewPending: explicit.criticalReviewPending || inferred.criticalReviewPending
+  };
+}
+
+function inferReviewLoopFromPullRequest(pullRequest) {
+  const gemini = collectGeminiReviewerSignals(pullRequest);
+  const codexFallback = collectCodexFallbackSignals(pullRequest);
+  const formalReviewTruth = collectFormalReviewTruth(pullRequest);
+  const reviewerStatus = codexFallback.completed
+    ? "codex_review_available"
+    : codexFallback.blocked
+      ? "codex_review_blocked"
+      : codexFallback.requested
+        ? "codex_review_requested"
+        : gemini.totalCount > 0
+          ? "gemini_review_available"
+          : "review_unavailable";
+  const reviewer = reviewerStatus.startsWith("codex_review") ? "codex" : "gemini";
+  const reviewerEvidence = reviewerStatus.startsWith("codex_review")
+    ? codexFallback.latestEvidence
+    : gemini.latestEvidence;
+  const reviewerSignalTruth = buildReviewerSignalTruth({
+    reviewer,
+    reviewerStatus,
+    reviewerEvidence,
+    formalReviewTruth
+  });
+
+  return {
+    reviewer,
+    reviewerStatus,
+    reviewerEvidence,
+    reviewerSignalTruth,
+    reviewCommentsCount: gemini.totalCount > 0 ? gemini.totalCount : codexFallback.completed ? 1 : 0,
+    unresolvedReviewCommentsCount:
+      gemini.totalCount > 0 ? gemini.blockingCount : codexFallback.completed && codexFallback.blocking ? 1 : 0,
+    criticalReviewPending:
+      reviewerStatus === "codex_review_requested" ||
+      reviewerStatus === "codex_review_blocked" ||
+      reviewerSignalTruth.mergeReviewTruth.blocked
+  };
+}
+
+function collectGeminiReviewerSignals(pullRequest) {
+  const comments = [
+    ...(Array.isArray(pullRequest.issueComments) ? pullRequest.issueComments : []),
+    ...(Array.isArray(pullRequest.reviewComments) ? pullRequest.reviewComments : [])
+  ];
+  const parsed = comments
+    .filter(isTrustedReviewerMarkerComment)
+    .map(parseGeminiReviewComment)
+    .filter(Boolean);
+
+  return {
+    totalCount: parsed.length,
+    blockingCount: parsed.filter((signal) => signal.blocking).length,
+    latestEvidence: parsed.at(-1) ?? null
+  };
+}
+
+function collectCodexFallbackSignals(pullRequest) {
+  const comments = [...(Array.isArray(pullRequest.issueComments) ? pullRequest.issueComments : [])];
+  const parsed = comments
+    .filter(isTrustedReviewerMarkerComment)
+    .map(parseCodexReviewFallbackComment)
+    .filter(Boolean);
+  const connectorBlockers = comments.map(parseCodexConnectorSetupComment).filter(Boolean);
+  const latestConnectorBlocker = connectorBlockers.at(-1) ?? null;
+  const latest = latestConnectorBlocker ?? parsed.at(-1) ?? null;
+
+  return {
+    requested: latest?.status === "requested",
+    completed: latest?.status === "completed",
+    blocked: latest?.status === "blocked",
+    blocking: latest?.blocking === true,
+    latestEvidence: latest?.status === "completed"
+      ? {
+          reviewer: "codex",
+          recommendedAction: latest.recommendedAction || "manual_review",
+          url: latest.url || null,
+          createdAt: latest.createdAt || null,
+          updatedAt: latest.updatedAt || null,
+          includesCreatedEdit: latest.includesCreatedEdit === true,
+          body: latest.body || null
+        }
+      : null
+  };
+}
+
+function isTrustedReviewerMarkerComment(comment) {
+  const author = normalizeText(
+    comment?.user?.login ??
+      comment?.author?.login ??
+      comment?.author
+  ).toLowerCase();
+  return [
+    "vtdd-codex",
+    "vtdd-codex[bot]",
+    "github-actions[bot]",
+    "codex",
+    "codex[bot]"
+  ].includes(author);
+}
+
+function collectFormalReviewTruth(pullRequest) {
+  const latestByReviewer = new Map();
+  for (const review of pullRequest.reviews) {
+    const reviewer = normalizeText(review?.user?.login) || normalizeText(review?.author) || "unknown";
+    latestByReviewer.set(reviewer, normalizeReviewState(review?.state));
+  }
+
+  const latestStates = [...latestByReviewer.values()].filter(Boolean);
+  const reviewDecision = normalizeReviewState(pullRequest.reviewDecision);
+  const blocking = reviewDecision === "changes_requested" || latestStates.includes("changes_requested");
+  const approvalCount = latestStates.filter((state) => state === "approved").length;
+  const hasFormalApproval = reviewDecision === "approved" || approvalCount > 0;
+
+  return {
+    source: "github_formal_review_objects",
+    reviewDecision: reviewDecision || null,
+    hasFormalApproval,
+    approvalCount,
+    blocking,
+    blockingReason: blocking ? "github_formal_review_changes_requested" : null,
+    latestStates
+  };
+}
+
+function buildReviewerSignalTruth({ reviewer, reviewerStatus, reviewerEvidence, formalReviewTruth }) {
+  const recommendedAction = normalizeText(reviewerEvidence?.recommendedAction).toLowerCase() || null;
+  const vtddReviewerMarkerPresent = Boolean(recommendedAction);
+  const markerBlocks = recommendedAction === "request_changes" || recommendedAction === "manual_review";
+  const formalBlocks = formalReviewTruth.blocking === true;
+  const satisfied = vtddReviewerMarkerPresent && recommendedAction === "approve" && !formalBlocks;
+  const blocked = markerBlocks || formalBlocks;
+  const warnings = [];
+
+  if (recommendedAction === "approve" && !formalReviewTruth.hasFormalApproval) {
+    warnings.push(
+      "VTDD reviewer marker recommends approve, but GitHub formal PR review approval is absent; do not report GitHub reviewDecision as approved."
+    );
+  }
+  if (formalBlocks) {
+    warnings.push(
+      "GitHub formal review truth has requested changes; it remains blocking even if a VTDD reviewer marker recommends approve."
+    );
+  }
+  if (!vtddReviewerMarkerPresent) {
+    warnings.push("No VTDD reviewer marker recommendation is available.");
+  }
+
+  return {
+    canonicalSource: vtddReviewerMarkerPresent ? "vtdd_reviewer_marker_comment" : "none",
+    canonicalReviewer: vtddReviewerMarkerPresent ? reviewer : null,
+    reviewerStatus,
+    recommendedAction,
+    vtddReviewerMarkerPresent,
+    githubFormalReview: formalReviewTruth,
+    mergeReviewTruth: {
+      satisfied,
+      blocked,
+      reason: blocked
+        ? formalReviewTruth.blockingReason || "vtdd_reviewer_marker_blocks_merge"
+        : satisfied
+          ? "vtdd_reviewer_marker_approve_no_formal_blocker"
+          : "reviewer_signal_missing"
+    },
+    warnings
   };
 }
 
@@ -240,6 +497,78 @@ function buildBranchAttribution({ pullRequest, revisionTarget, expectedBranch })
         ? `Branch attribution mismatch for PR #${pullRequest.number}: ${mismatches.join("; ")}. Do not dispatch revise_pr until the target PR lock is refreshed.`
         : null
   };
+}
+
+function buildReadyForReviewRecommendation({ pullRequest, reviewLoop, preflight }) {
+  const provided = preflight && typeof preflight === "object" ? preflight : {};
+  const approvedReviewerMarker =
+    reviewLoop.reviewerSignalTruth?.vtddReviewerMarkerPresent === true &&
+    reviewLoop.reviewerSignalTruth?.recommendedAction === "approve" &&
+    reviewLoop.reviewerSignalTruth?.mergeReviewTruth?.blocked !== true;
+  const checksPassed = provided.checksPassed === true || pullRequest.checksPassed || statusChecksPassed(pullRequest.statusCheckRollup);
+  const prBodyComplete =
+    provided.prBodyComplete === true ||
+    pullRequest.prBodyComplete ||
+    requiredPrBodySectionsPresent(pullRequest.body);
+  const unsatisfiedSuccessCriteriaNone =
+    provided.unsatisfiedSuccessCriteriaNone === true ||
+    pullRequest.unsatisfiedSuccessCriteriaNone ||
+    prBodyUnsatisfiedSuccessCriteriaNone(pullRequest.body);
+  const noCriticalFindings =
+    provided.noCriticalFindings === true ||
+    reviewerCommentHasNoCriticalFindings(reviewLoop.reviewerEvidence?.body);
+  const missing = [];
+
+  if (!pullRequest.draft) missing.push("draft_pr");
+  if (!approvedReviewerMarker) missing.push("approve_reviewer_marker");
+  if (!noCriticalFindings) missing.push("critical_findings_none");
+  if (!checksPassed) missing.push("checks_passed");
+  if (!prBodyComplete) missing.push("pr_body_complete");
+  if (!unsatisfiedSuccessCriteriaNone) missing.push("unsatisfied_success_criteria_none");
+
+  return {
+    ready: missing.length === 0,
+    action: missing.length === 0 ? "mark_pull_request_ready_for_review" : null,
+    authorityBoundary: "bounded GO for draft metadata; merge still requires GO + passkey",
+    missing
+  };
+}
+
+function buildNextSuggestedActions({
+  explicitActions,
+  pullRequest,
+  reviewLoop,
+  readyForReviewRecommendation
+}) {
+  const explicit = normalizeStringArray(explicitActions);
+  if (explicit.length > 0) {
+    if (readyForReviewRecommendation.ready && !explicit.includes("mark_pull_request_ready_for_review")) {
+      return ["mark_pull_request_ready_for_review", ...explicit];
+    }
+    return explicit;
+  }
+  if (readyForReviewRecommendation.ready) {
+    return ["mark_pull_request_ready_for_review", "summarize_for_human"];
+  }
+  if (pullRequest.mergeability.status === "conflict") {
+    return ["create_fresh_branch", "open_fresh_pull_request", "summarize_for_human"];
+  }
+  if (reviewLoop.reviewerStatus === "codex_review_requested") {
+    return ["wait_for_codex_review", "summarize_for_human"];
+  }
+  if (reviewLoop.reviewerStatus === "codex_review_blocked") {
+    return ["surface_reviewer_platform_blocker", "summarize_for_human"];
+  }
+  if (reviewLoop.reviewerSignalTruth?.mergeReviewTruth?.blocked) {
+    return ["summarize_reviewer_feedback", "apply_pr_feedback", "rerun_gemini_review"];
+  }
+  if (reviewLoop.reviewerStatus === "review_unavailable") {
+    return ["rerun_gemini_review", "summarize_for_human"];
+  }
+  if (pullRequest.mergeability.status === "unverified") {
+    return ["refresh_pull_request_runtime_truth", "summarize_for_human"];
+  }
+  return ["summarize_for_human", "wait_for_human_go"];
 }
 
 function normalizeReviewLoop(value) {
@@ -296,7 +625,7 @@ function normalizeReviewerEvidence(value) {
   if (!recommendedAction) {
     return null;
   }
-  return {
+  const evidence = {
     reviewer: normalizeText(input.reviewer) || null,
     recommendedAction,
     url: normalizeText(input.url) || null,
@@ -304,6 +633,11 @@ function normalizeReviewerEvidence(value) {
     updatedAt: normalizeText(input.updatedAt) || null,
     includesCreatedEdit: input.includesCreatedEdit === true
   };
+  const body = normalizeText(input.body);
+  if (body) {
+    evidence.body = body;
+  }
+  return evidence;
 }
 
 function normalizeMergeability(input) {
@@ -379,4 +713,94 @@ function normalizeNumber(value) {
     return null;
   }
   return numeric;
+}
+
+function normalizeReviewState(value) {
+  const normalized = normalizeText(value).toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+  if (normalized === "approved") {
+    return "approved";
+  }
+  if (normalized === "changes_requested") {
+    return "changes_requested";
+  }
+  if (normalized === "review_required") {
+    return "review_required";
+  }
+  return normalized;
+}
+
+function statusChecksPassed(value) {
+  const checks = Array.isArray(value) ? value : [];
+  if (checks.length === 0) {
+    return false;
+  }
+  return checks.every((check) => {
+    const conclusion = normalizeText(check?.conclusion).toLowerCase();
+    const state = normalizeText(check?.state || check?.status).toLowerCase();
+    return conclusion === "success" || conclusion === "skipped" || state === "success" || state === "completed";
+  });
+}
+
+function requiredPrBodySectionsPresent(value) {
+  const body = normalizeText(value);
+  if (!body) {
+    return false;
+  }
+  return [
+    "## This PR satisfies Intent",
+    "## Satisfied Success Criteria",
+    "## Unsatisfied Success Criteria",
+    "## Verification Evidence",
+    "## Butler Completion Contract",
+    "## Surface Update Checklist"
+  ].every((heading) => body.includes(heading));
+}
+
+function prBodyUnsatisfiedSuccessCriteriaNone(value) {
+  const section = extractMarkdownSection(value, "Unsatisfied Success Criteria");
+  if (!section) {
+    return false;
+  }
+  const normalized = section.toLowerCase();
+  return normalized.includes("none") || normalized.includes("なし") || normalized.includes("ありません");
+}
+
+function reviewerCommentHasNoCriticalFindings(value) {
+  const section = extractMarkdownSection(value, "Critical Findings");
+  if (!section) {
+    return false;
+  }
+  const findings = section
+    .split("\n")
+    .map((line) => normalizeText(line).replace(/^[-*]\s+/, ""))
+    .filter(Boolean);
+  if (findings.length === 0) {
+    return false;
+  }
+  return findings.every(isNoCriticalFindingLine);
+}
+
+function extractMarkdownSection(value, heading) {
+  const body = normalizeText(value);
+  if (!body) {
+    return "";
+  }
+  const escaped = heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = body.match(new RegExp(`^#{2,3}\\s+${escaped}\\s*$([\\s\\S]*?)(?=^#{2,3}\\s+|(?![\\s\\S]))`, "im"));
+  return normalizeText(match?.[1]);
+}
+
+function isNoCriticalFindingLine(value) {
+  const normalized = normalizeText(value)
+    .toLowerCase()
+    .replace(/[.。]+$/g, "");
+  return [
+    "none",
+    "none reported",
+    "no critical findings",
+    "no critical findings reported"
+  ].includes(normalized);
 }

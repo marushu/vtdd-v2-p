@@ -79,8 +79,11 @@ export function parseCodexReviewFallbackComment(comment = {}) {
     (body.includes("@codex review") ? CodexReviewFallbackStatus.REQUESTED : "");
   const recommendedAction = extractBacktickedValue(body, "Recommended action");
   const blocker = extractBacktickedValue(body, "Blocker");
+  const source = typeof comment === "object" && comment !== null ? comment : {};
+  const createdAt = normalizeText(source.createdAt ?? source.created_at);
+  const updatedAt = normalizeText(source.updatedAt ?? source.updated_at);
 
-  return {
+  const parsed = {
     reviewer: "codex",
     status: normalizeFallbackStatus(status) || CodexReviewFallbackStatus.REQUESTED,
     blocking: determineBlocking({
@@ -92,6 +95,20 @@ export function parseCodexReviewFallbackComment(comment = {}) {
     blocker: blocker || null,
     body
   };
+  const url = normalizeText(source.url ?? source.htmlUrl ?? source.html_url);
+  if (url) {
+    parsed.url = url;
+  }
+  if (createdAt) {
+    parsed.createdAt = createdAt;
+  }
+  if (updatedAt) {
+    parsed.updatedAt = updatedAt;
+  }
+  if (source.includesCreatedEdit === true || (Boolean(createdAt) && Boolean(updatedAt) && createdAt !== updatedAt)) {
+    parsed.includesCreatedEdit = true;
+  }
+  return parsed;
 }
 
 export function parseCodexConnectorSetupComment(comment = {}) {

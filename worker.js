@@ -21342,6 +21342,153 @@ function escapeAttribute(value) {
   return escapeHtml2(value).replace(/'/g, "&#39;");
 }
 
+// src/core/reviewer-operator-summary.js
+var ReviewerOperatorSeverity = Object.freeze({
+  CRITICAL: "\u81F4\u547D\u7684",
+  IMPORTANT: "\u91CD\u8981",
+  MINOR: "\u8EFD\u5FAE",
+  INFO: "\u60C5\u5831\u306E\u307F"
+});
+
+// src/core/codex-review-fallback.js
+var CODEX_REVIEW_FALLBACK_MARKER = "<!-- vtdd:reviewer=codex-fallback -->";
+var CodexReviewFallbackStatus = Object.freeze({
+  REQUESTED: "requested",
+  COMPLETED: "completed",
+  BLOCKED: "blocked"
+});
+var CodexReviewFallbackBlocker = Object.freeze({
+  CODEX_CONNECTOR_NOT_CONFIGURED: "codex_connector_not_configured"
+});
+function parseCodexReviewFallbackComment(comment = {}) {
+  const body = normalizeText5(typeof comment === "string" ? comment : comment?.body);
+  if (!body || !containsMarker(body)) {
+    return null;
+  }
+  const status = extractBacktickedValue(body, "Status") || (body.includes("@codex review") ? CodexReviewFallbackStatus.REQUESTED : "");
+  const recommendedAction = extractBacktickedValue(body, "Recommended action");
+  const blocker = extractBacktickedValue(body, "Blocker");
+  const source = typeof comment === "object" && comment !== null ? comment : {};
+  const createdAt = normalizeText5(source.createdAt ?? source.created_at);
+  const updatedAt = normalizeText5(source.updatedAt ?? source.updated_at);
+  const parsed = {
+    reviewer: "codex",
+    status: normalizeFallbackStatus(status) || CodexReviewFallbackStatus.REQUESTED,
+    blocking: determineBlocking({
+      status,
+      recommendedAction,
+      blocker
+    }),
+    recommendedAction: recommendedAction || null,
+    blocker: blocker || null,
+    body
+  };
+  const url = normalizeText5(source.url ?? source.htmlUrl ?? source.html_url);
+  if (url) {
+    parsed.url = url;
+  }
+  if (createdAt) {
+    parsed.createdAt = createdAt;
+  }
+  if (updatedAt) {
+    parsed.updatedAt = updatedAt;
+  }
+  if (source.includesCreatedEdit === true || Boolean(createdAt) && Boolean(updatedAt) && createdAt !== updatedAt) {
+    parsed.includesCreatedEdit = true;
+  }
+  return parsed;
+}
+function parseCodexConnectorSetupComment(comment = {}) {
+  const body = normalizeText5(typeof comment === "string" ? comment : comment?.body);
+  const author = normalizeText5(comment?.author?.login ?? comment?.user?.login);
+  if (!isCodexConnectorAuthor(author) || !isCodexConnectorSetupBody(body)) {
+    return null;
+  }
+  return {
+    reviewer: "codex",
+    status: CodexReviewFallbackStatus.BLOCKED,
+    blocking: true,
+    recommendedAction: null,
+    blocker: CodexReviewFallbackBlocker.CODEX_CONNECTOR_NOT_CONFIGURED,
+    body
+  };
+}
+function containsMarker(value) {
+  return normalizeText5(value).includes(CODEX_REVIEW_FALLBACK_MARKER);
+}
+function isCodexConnectorAuthor(value) {
+  return normalizeText5(value).toLowerCase() === "chatgpt-codex-connector";
+}
+function isCodexConnectorSetupBody(value) {
+  const body = normalizeText5(value).toLowerCase();
+  return body.includes("to use codex here") && body.includes("connect to github");
+}
+function determineBlocking({ status, recommendedAction, blocker }) {
+  const normalizedStatus = normalizeFallbackStatus(status);
+  if (normalizedStatus === CodexReviewFallbackStatus.BLOCKED) {
+    return true;
+  }
+  if (normalizedStatus === CodexReviewFallbackStatus.REQUESTED) {
+    return true;
+  }
+  if (blocker) {
+    return true;
+  }
+  return normalizeText5(recommendedAction) !== "approve";
+}
+function extractBacktickedValue(body, label) {
+  const pattern = new RegExp(`- ${escapeRegExp(label)}: \\\`([^\\\`]+)\\\``);
+  const match = body.match(pattern);
+  return normalizeText5(match?.[1]);
+}
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+function normalizeFallbackStatus(value) {
+  const normalized = normalizeText5(value).toLowerCase();
+  return Object.values(CodexReviewFallbackStatus).includes(normalized) ? normalized : "";
+}
+function normalizeText5(value) {
+  return String(value ?? "").trim();
+}
+
+// src/core/reviewer-contract.js
+var ReviewerRecommendedAction = Object.freeze({
+  APPROVE: "approve",
+  REQUEST_CHANGES: "request_changes",
+  MANUAL_REVIEW: "manual_review"
+});
+
+// src/core/gemini-pr-review.js
+var GEMINI_PR_REVIEW_MARKER = "<!-- vtdd:reviewer=gemini -->";
+function parseGeminiReviewComment(comment = {}) {
+  const body = normalizeText6(typeof comment === "string" ? comment : comment?.body);
+  if (!body || !containsMarker2(body)) {
+    return null;
+  }
+  const recommendedActionMatch = body.match(/^- Recommended action:\s*`([^`]+)`/m);
+  const recommendedAction = normalizeText6(recommendedActionMatch?.[1]).toLowerCase() || "manual_review";
+  const source = typeof comment === "object" && comment !== null ? comment : {};
+  const createdAt = normalizeText6(source.createdAt ?? source.created_at);
+  const updatedAt = normalizeText6(source.updatedAt ?? source.updated_at);
+  return {
+    reviewer: "gemini",
+    recommendedAction,
+    blocking: recommendedAction === "request_changes" || recommendedAction === "manual_review",
+    url: normalizeText6(source.url ?? source.htmlUrl ?? source.html_url) || null,
+    createdAt: createdAt || null,
+    updatedAt: updatedAt || null,
+    includesCreatedEdit: source.includesCreatedEdit === true || Boolean(createdAt) && Boolean(updatedAt) && createdAt !== updatedAt,
+    body
+  };
+}
+function containsMarker2(value) {
+  return normalizeText6(value).includes(GEMINI_PR_REVIEW_MARKER);
+}
+function normalizeText6(value) {
+  return String(value ?? "").trim();
+}
+
 // src/core/butler-review-synthesis.js
 function buildButlerReviewSynthesis(input = {}) {
   const pullRequest = normalizePullRequest(input.pullRequest);
@@ -21357,9 +21504,22 @@ function buildButlerReviewSynthesis(input = {}) {
       nextSuggestedActions: normalizeStringArray(input.nextSuggestedActions)
     };
   }
-  const reviewLoop = normalizeReviewLoop(input.reviewLoop);
-  const codexGoal = normalizeText5(input.codexGoal) || "wait_for_review";
-  const nextSuggestedActions = normalizeStringArray(input.nextSuggestedActions);
+  const reviewLoop = buildEffectiveReviewLoop({
+    explicitReviewLoop: input.reviewLoop,
+    pullRequest
+  });
+  const codexGoal = normalizeText7(input.codexGoal) || "wait_for_review";
+  const readyForReviewRecommendation = buildReadyForReviewRecommendation({
+    pullRequest,
+    reviewLoop,
+    preflight: input.readyForReviewPreflight
+  });
+  const nextSuggestedActions = buildNextSuggestedActions({
+    explicitActions: input.nextSuggestedActions,
+    pullRequest,
+    reviewLoop,
+    readyForReviewRecommendation
+  });
   const recentSignals = collectRecentSignals(pullRequest);
   return {
     available: true,
@@ -21384,6 +21544,7 @@ function buildButlerReviewSynthesis(input = {}) {
       unresolvedReviewCommentsCount: reviewLoop.unresolvedReviewCommentsCount,
       criticalReviewPending: reviewLoop.criticalReviewPending,
       updatedSinceReview: pullRequest.updatedSinceReview,
+      readyForReviewRecommendation,
       recentIssueComments: recentSignals.issueComments,
       recentReviewComments: recentSignals.reviewComments,
       recentReviews: recentSignals.reviews
@@ -21392,7 +21553,8 @@ function buildButlerReviewSynthesis(input = {}) {
       pullRequest,
       reviewLoop,
       codexGoal,
-      branchAttribution
+      branchAttribution,
+      readyForReviewRecommendation
     }),
     nextSuggestedActions
   };
@@ -21415,6 +21577,9 @@ function buildHeadline({ pullRequest, reviewLoop }) {
     return `${base} ${reviewLoop.unresolvedReviewCommentsCount} unresolved reviewer objections remain.`;
   }
   if (reviewLoop.reviewerStatus === "gemini_review_available" && reviewLoop.reviewerEvidence?.recommendedAction === "approve") {
+    if (pullRequest.draft) {
+      return `${base} Gemini reviewer action is approve, but the PR is draft; Butler should discuss Draft\u89E3\u9664 / Ready for review before any merge path.`;
+    }
     if (pullRequest.mergeability.status === "unverified") {
       return `${base} PR conflict runtime truth is unverified; Butler must re-read runtime truth before merge judgment.`;
     }
@@ -21429,7 +21594,13 @@ function buildHeadline({ pullRequest, reviewLoop }) {
   }
   return `${base} Reviewer evidence is not yet available.`;
 }
-function buildHumanDecisionFocus({ pullRequest, reviewLoop, codexGoal, branchAttribution }) {
+function buildHumanDecisionFocus({
+  pullRequest,
+  reviewLoop,
+  codexGoal,
+  branchAttribution,
+  readyForReviewRecommendation
+}) {
   const focus = [];
   if (branchAttribution.warning) {
     focus.push(branchAttribution.warning);
@@ -21472,6 +21643,11 @@ function buildHumanDecisionFocus({ pullRequest, reviewLoop, codexGoal, branchAtt
     const url = reviewLoop.reviewerEvidence.url ? ` ${reviewLoop.reviewerEvidence.url}` : "";
     focus.push(`Latest ${reviewLoop.reviewer} reviewer action is ${action}.${url}`);
   }
+  if (reviewLoop.reviewerSignalTruth?.mergeReviewTruth?.blocked) {
+    focus.push(
+      "VTDD reviewer marker is not approve; summarize the reviewer findings for the owner, apply bounded fixes if requested, and rerun reviewer coverage before merge GO."
+    );
+  }
   for (const warning of reviewLoop.reviewerSignalTruth?.warnings ?? []) {
     focus.push(warning);
   }
@@ -21484,6 +21660,15 @@ function buildHumanDecisionFocus({ pullRequest, reviewLoop, codexGoal, branchAtt
   if (reviewLoop.reviewer === "gemini" && reviewLoop.reviewerEvidence?.includesCreatedEdit) {
     focus.push(
       "Gemini updates its existing marker comment; GitHub may show the original comment time, so use the current marker body and evidence URL."
+    );
+  }
+  if (readyForReviewRecommendation.ready) {
+    focus.push(
+      "Draft PR has approve reviewer marker, passing checks, complete PR body, no unsatisfied Success Criteria, and no critical findings; recommend Draft\u89E3\u9664 / Ready for review, not merge."
+    );
+  } else if (pullRequest.draft && reviewLoop.reviewerEvidence?.recommendedAction === "approve") {
+    focus.push(
+      `PR is draft; merge is unavailable. Missing Ready for review preflight: ${readyForReviewRecommendation.missing.join(", ") || "unknown"}.`
     );
   }
   focus.push("Human remains the final authority for revision GO and merge GO + real passkey.");
@@ -21499,31 +21684,38 @@ function collectRecentSignals(pullRequest) {
 function summarizeComments(comments) {
   const list = Array.isArray(comments) ? comments : [];
   return list.slice(-3).map((item) => {
-    const author = normalizeText5(item?.user?.login) || normalizeText5(item?.author) || "unknown";
-    const body = normalizeText5(item?.body);
+    const author = normalizeText7(item?.user?.login) || normalizeText7(item?.author) || "unknown";
+    const body = normalizeText7(item?.body);
     return body ? `${author}: ${body}` : null;
   }).filter(Boolean);
 }
 function summarizeReviews(reviews) {
   const list = Array.isArray(reviews) ? reviews : [];
   return list.slice(-3).map((item) => {
-    const author = normalizeText5(item?.user?.login) || "unknown";
-    const state = normalizeText5(item?.state) || "COMMENTED";
-    const body = normalizeText5(item?.body);
+    const author = normalizeText7(item?.user?.login) || "unknown";
+    const state = normalizeText7(item?.state) || "COMMENTED";
+    const body = normalizeText7(item?.body);
     return body ? `${author} (${state}): ${body}` : `${author} (${state})`;
   }).filter(Boolean);
 }
 function normalizePullRequest(value) {
   const input = value && typeof value === "object" ? value : {};
   return {
-    exists: Boolean(normalizeNumber(input.number)) || Boolean(normalizeText5(input.url)) || Boolean(normalizeText5(input.state)),
+    exists: Boolean(normalizeNumber(input.number)) || Boolean(normalizeText7(input.url)) || Boolean(normalizeText7(input.state)),
     number: normalizeNumber(input.number),
-    url: normalizeText5(input.url) || null,
-    state: normalizeText5(input.state) || "open",
-    title: normalizeText5(input.title) || null,
-    baseRef: normalizeText5(input.baseRef) || normalizeText5(input.base?.ref) || null,
-    headRef: normalizeText5(input.headRef) || normalizeText5(input.head?.ref) || null,
-    headSha: normalizeText5(input.headSha) || normalizeText5(input.head?.sha) || null,
+    url: normalizeText7(input.url) || null,
+    state: normalizeText7(input.state) || "open",
+    draft: input.draft === true || input.isDraft === true,
+    title: normalizeText7(input.title) || null,
+    baseRef: normalizeText7(input.baseRef) || normalizeText7(input.base?.ref) || null,
+    headRef: normalizeText7(input.headRef) || normalizeText7(input.head?.ref) || null,
+    headSha: normalizeText7(input.headSha) || normalizeText7(input.head?.sha) || null,
+    reviewDecision: normalizeText7(input.reviewDecision) || normalizeText7(input.review_decision) || null,
+    body: normalizeText7(input.body) || null,
+    prBodyComplete: input.prBodyComplete === true,
+    unsatisfiedSuccessCriteriaNone: input.unsatisfiedSuccessCriteriaNone === true,
+    statusCheckRollup: Array.isArray(input.statusCheckRollup) ? input.statusCheckRollup : [],
+    checksPassed: input.checksPassed === true,
     mergeability: normalizeMergeability(input),
     updatedSinceReview: input.updatedSinceReview === true,
     issueComments: Array.isArray(input.issueComments) ? input.issueComments : [],
@@ -21531,10 +21723,170 @@ function normalizePullRequest(value) {
     reviews: Array.isArray(input.reviews) ? input.reviews : []
   };
 }
+function buildEffectiveReviewLoop({ explicitReviewLoop, pullRequest }) {
+  const explicit = normalizeReviewLoop(explicitReviewLoop);
+  const inferred = inferReviewLoopFromPullRequest(pullRequest);
+  const explicitHasEvidence = Boolean(explicit.reviewerEvidence) || Boolean(explicit.reviewerSignalTruth?.vtddReviewerMarkerPresent) || explicit.reviewerStatus !== "review_unavailable";
+  if (!inferred.reviewerEvidence && !inferred.reviewerSignalTruth?.vtddReviewerMarkerPresent) {
+    return explicit;
+  }
+  if (inferred.reviewerSignalTruth?.vtddReviewerMarkerPresent) {
+    return {
+      ...inferred,
+      reviewCommentsCount: Math.max(explicit.reviewCommentsCount, inferred.reviewCommentsCount),
+      unresolvedReviewCommentsCount: Math.max(
+        explicit.unresolvedReviewCommentsCount,
+        inferred.unresolvedReviewCommentsCount
+      ),
+      criticalReviewPending: explicit.criticalReviewPending || inferred.criticalReviewPending
+    };
+  }
+  if (!explicitHasEvidence) {
+    return inferred;
+  }
+  return {
+    reviewer: explicit.reviewer || inferred.reviewer,
+    reviewerStatus: explicit.reviewerStatus !== "review_unavailable" ? explicit.reviewerStatus : inferred.reviewerStatus,
+    reviewerEvidence: explicit.reviewerEvidence ?? inferred.reviewerEvidence,
+    reviewerSignalTruth: explicit.reviewerSignalTruth ?? inferred.reviewerSignalTruth,
+    reviewCommentsCount: Math.max(explicit.reviewCommentsCount, inferred.reviewCommentsCount),
+    unresolvedReviewCommentsCount: Math.max(
+      explicit.unresolvedReviewCommentsCount,
+      inferred.unresolvedReviewCommentsCount
+    ),
+    criticalReviewPending: explicit.criticalReviewPending || inferred.criticalReviewPending
+  };
+}
+function inferReviewLoopFromPullRequest(pullRequest) {
+  const gemini = collectGeminiReviewerSignals(pullRequest);
+  const codexFallback = collectCodexFallbackSignals(pullRequest);
+  const formalReviewTruth = collectFormalReviewTruth(pullRequest);
+  const reviewerStatus = codexFallback.completed ? "codex_review_available" : codexFallback.blocked ? "codex_review_blocked" : codexFallback.requested ? "codex_review_requested" : gemini.totalCount > 0 ? "gemini_review_available" : "review_unavailable";
+  const reviewer = reviewerStatus.startsWith("codex_review") ? "codex" : "gemini";
+  const reviewerEvidence = reviewerStatus.startsWith("codex_review") ? codexFallback.latestEvidence : gemini.latestEvidence;
+  const reviewerSignalTruth = buildReviewerSignalTruth({
+    reviewer,
+    reviewerStatus,
+    reviewerEvidence,
+    formalReviewTruth
+  });
+  return {
+    reviewer,
+    reviewerStatus,
+    reviewerEvidence,
+    reviewerSignalTruth,
+    reviewCommentsCount: gemini.totalCount > 0 ? gemini.totalCount : codexFallback.completed ? 1 : 0,
+    unresolvedReviewCommentsCount: gemini.totalCount > 0 ? gemini.blockingCount : codexFallback.completed && codexFallback.blocking ? 1 : 0,
+    criticalReviewPending: reviewerStatus === "codex_review_requested" || reviewerStatus === "codex_review_blocked" || reviewerSignalTruth.mergeReviewTruth.blocked
+  };
+}
+function collectGeminiReviewerSignals(pullRequest) {
+  const comments = [
+    ...Array.isArray(pullRequest.issueComments) ? pullRequest.issueComments : [],
+    ...Array.isArray(pullRequest.reviewComments) ? pullRequest.reviewComments : []
+  ];
+  const parsed = comments.filter(isTrustedReviewerMarkerComment).map(parseGeminiReviewComment).filter(Boolean);
+  return {
+    totalCount: parsed.length,
+    blockingCount: parsed.filter((signal) => signal.blocking).length,
+    latestEvidence: parsed.at(-1) ?? null
+  };
+}
+function collectCodexFallbackSignals(pullRequest) {
+  const comments = [...Array.isArray(pullRequest.issueComments) ? pullRequest.issueComments : []];
+  const parsed = comments.filter(isTrustedReviewerMarkerComment).map(parseCodexReviewFallbackComment).filter(Boolean);
+  const connectorBlockers = comments.map(parseCodexConnectorSetupComment).filter(Boolean);
+  const latestConnectorBlocker = connectorBlockers.at(-1) ?? null;
+  const latest = latestConnectorBlocker ?? parsed.at(-1) ?? null;
+  return {
+    requested: latest?.status === "requested",
+    completed: latest?.status === "completed",
+    blocked: latest?.status === "blocked",
+    blocking: latest?.blocking === true,
+    latestEvidence: latest?.status === "completed" ? {
+      reviewer: "codex",
+      recommendedAction: latest.recommendedAction || "manual_review",
+      url: latest.url || null,
+      createdAt: latest.createdAt || null,
+      updatedAt: latest.updatedAt || null,
+      includesCreatedEdit: latest.includesCreatedEdit === true,
+      body: latest.body || null
+    } : null
+  };
+}
+function isTrustedReviewerMarkerComment(comment) {
+  const author = normalizeText7(
+    comment?.user?.login ?? comment?.author?.login ?? comment?.author
+  ).toLowerCase();
+  return [
+    "vtdd-codex",
+    "vtdd-codex[bot]",
+    "github-actions[bot]",
+    "codex",
+    "codex[bot]"
+  ].includes(author);
+}
+function collectFormalReviewTruth(pullRequest) {
+  const latestByReviewer = /* @__PURE__ */ new Map();
+  for (const review of pullRequest.reviews) {
+    const reviewer = normalizeText7(review?.user?.login) || normalizeText7(review?.author) || "unknown";
+    latestByReviewer.set(reviewer, normalizeReviewState(review?.state));
+  }
+  const latestStates = [...latestByReviewer.values()].filter(Boolean);
+  const reviewDecision = normalizeReviewState(pullRequest.reviewDecision);
+  const blocking = reviewDecision === "changes_requested" || latestStates.includes("changes_requested");
+  const approvalCount = latestStates.filter((state) => state === "approved").length;
+  const hasFormalApproval = reviewDecision === "approved" || approvalCount > 0;
+  return {
+    source: "github_formal_review_objects",
+    reviewDecision: reviewDecision || null,
+    hasFormalApproval,
+    approvalCount,
+    blocking,
+    blockingReason: blocking ? "github_formal_review_changes_requested" : null,
+    latestStates
+  };
+}
+function buildReviewerSignalTruth({ reviewer, reviewerStatus, reviewerEvidence, formalReviewTruth }) {
+  const recommendedAction = normalizeText7(reviewerEvidence?.recommendedAction).toLowerCase() || null;
+  const vtddReviewerMarkerPresent = Boolean(recommendedAction);
+  const markerBlocks = recommendedAction === "request_changes" || recommendedAction === "manual_review";
+  const formalBlocks = formalReviewTruth.blocking === true;
+  const satisfied = vtddReviewerMarkerPresent && recommendedAction === "approve" && !formalBlocks;
+  const blocked2 = markerBlocks || formalBlocks;
+  const warnings = [];
+  if (recommendedAction === "approve" && !formalReviewTruth.hasFormalApproval) {
+    warnings.push(
+      "VTDD reviewer marker recommends approve, but GitHub formal PR review approval is absent; do not report GitHub reviewDecision as approved."
+    );
+  }
+  if (formalBlocks) {
+    warnings.push(
+      "GitHub formal review truth has requested changes; it remains blocking even if a VTDD reviewer marker recommends approve."
+    );
+  }
+  if (!vtddReviewerMarkerPresent) {
+    warnings.push("No VTDD reviewer marker recommendation is available.");
+  }
+  return {
+    canonicalSource: vtddReviewerMarkerPresent ? "vtdd_reviewer_marker_comment" : "none",
+    canonicalReviewer: vtddReviewerMarkerPresent ? reviewer : null,
+    reviewerStatus,
+    recommendedAction,
+    vtddReviewerMarkerPresent,
+    githubFormalReview: formalReviewTruth,
+    mergeReviewTruth: {
+      satisfied,
+      blocked: blocked2,
+      reason: blocked2 ? formalReviewTruth.blockingReason || "vtdd_reviewer_marker_blocks_merge" : satisfied ? "vtdd_reviewer_marker_approve_no_formal_blocker" : "reviewer_signal_missing"
+    },
+    warnings
+  };
+}
 function buildBranchAttribution({ pullRequest, revisionTarget, expectedBranch }) {
   const target = revisionTarget && typeof revisionTarget === "object" ? revisionTarget : {};
-  const expectedHeadRef = normalizeText5(target.headRef) || normalizeText5(target.head?.ref) || normalizeText5(expectedBranch) || null;
-  const expectedHeadSha = normalizeText5(target.headSha) || normalizeText5(target.head?.sha) || null;
+  const expectedHeadRef = normalizeText7(target.headRef) || normalizeText7(target.head?.ref) || normalizeText7(expectedBranch) || null;
+  const expectedHeadSha = normalizeText7(target.headSha) || normalizeText7(target.head?.sha) || null;
   const mismatches = [];
   if (expectedHeadRef && pullRequest.headRef && expectedHeadRef !== pullRequest.headRef) {
     mismatches.push(`headRef expected ${expectedHeadRef} but runtime truth shows ${pullRequest.headRef}`);
@@ -21551,11 +21903,68 @@ function buildBranchAttribution({ pullRequest, revisionTarget, expectedBranch })
     warning: mismatches.length > 0 ? `Branch attribution mismatch for PR #${pullRequest.number}: ${mismatches.join("; ")}. Do not dispatch revise_pr until the target PR lock is refreshed.` : null
   };
 }
+function buildReadyForReviewRecommendation({ pullRequest, reviewLoop, preflight }) {
+  const provided = preflight && typeof preflight === "object" ? preflight : {};
+  const approvedReviewerMarker = reviewLoop.reviewerSignalTruth?.vtddReviewerMarkerPresent === true && reviewLoop.reviewerSignalTruth?.recommendedAction === "approve" && reviewLoop.reviewerSignalTruth?.mergeReviewTruth?.blocked !== true;
+  const checksPassed = provided.checksPassed === true || pullRequest.checksPassed || statusChecksPassed(pullRequest.statusCheckRollup);
+  const prBodyComplete = provided.prBodyComplete === true || pullRequest.prBodyComplete || requiredPrBodySectionsPresent(pullRequest.body);
+  const unsatisfiedSuccessCriteriaNone = provided.unsatisfiedSuccessCriteriaNone === true || pullRequest.unsatisfiedSuccessCriteriaNone || prBodyUnsatisfiedSuccessCriteriaNone(pullRequest.body);
+  const noCriticalFindings = provided.noCriticalFindings === true || reviewerCommentHasNoCriticalFindings(reviewLoop.reviewerEvidence?.body);
+  const missing = [];
+  if (!pullRequest.draft) missing.push("draft_pr");
+  if (!approvedReviewerMarker) missing.push("approve_reviewer_marker");
+  if (!noCriticalFindings) missing.push("critical_findings_none");
+  if (!checksPassed) missing.push("checks_passed");
+  if (!prBodyComplete) missing.push("pr_body_complete");
+  if (!unsatisfiedSuccessCriteriaNone) missing.push("unsatisfied_success_criteria_none");
+  return {
+    ready: missing.length === 0,
+    action: missing.length === 0 ? "mark_pull_request_ready_for_review" : null,
+    authorityBoundary: "bounded GO for draft metadata; merge still requires GO + passkey",
+    missing
+  };
+}
+function buildNextSuggestedActions({
+  explicitActions,
+  pullRequest,
+  reviewLoop,
+  readyForReviewRecommendation
+}) {
+  const explicit = normalizeStringArray(explicitActions);
+  if (explicit.length > 0) {
+    if (readyForReviewRecommendation.ready && !explicit.includes("mark_pull_request_ready_for_review")) {
+      return ["mark_pull_request_ready_for_review", ...explicit];
+    }
+    return explicit;
+  }
+  if (readyForReviewRecommendation.ready) {
+    return ["mark_pull_request_ready_for_review", "summarize_for_human"];
+  }
+  if (pullRequest.mergeability.status === "conflict") {
+    return ["create_fresh_branch", "open_fresh_pull_request", "summarize_for_human"];
+  }
+  if (reviewLoop.reviewerStatus === "codex_review_requested") {
+    return ["wait_for_codex_review", "summarize_for_human"];
+  }
+  if (reviewLoop.reviewerStatus === "codex_review_blocked") {
+    return ["surface_reviewer_platform_blocker", "summarize_for_human"];
+  }
+  if (reviewLoop.reviewerSignalTruth?.mergeReviewTruth?.blocked) {
+    return ["summarize_reviewer_feedback", "apply_pr_feedback", "rerun_gemini_review"];
+  }
+  if (reviewLoop.reviewerStatus === "review_unavailable") {
+    return ["rerun_gemini_review", "summarize_for_human"];
+  }
+  if (pullRequest.mergeability.status === "unverified") {
+    return ["refresh_pull_request_runtime_truth", "summarize_for_human"];
+  }
+  return ["summarize_for_human", "wait_for_human_go"];
+}
 function normalizeReviewLoop(value) {
   const input = value && typeof value === "object" ? value : {};
   return {
-    reviewer: normalizeText5(input.reviewer) || "gemini",
-    reviewerStatus: normalizeText5(input.reviewerStatus) || "review_unavailable",
+    reviewer: normalizeText7(input.reviewer) || "gemini",
+    reviewerStatus: normalizeText7(input.reviewerStatus) || "review_unavailable",
     reviewerEvidence: normalizeReviewerEvidence(input.reviewerEvidence),
     reviewerSignalTruth: normalizeReviewerSignalTruth(input.reviewerSignalTruth),
     reviewCommentsCount: normalizeCount(input.reviewCommentsCount),
@@ -21565,60 +21974,65 @@ function normalizeReviewLoop(value) {
 }
 function normalizeReviewerSignalTruth(value) {
   const input = value && typeof value === "object" ? value : {};
-  if (!normalizeText5(input.canonicalSource) && !input.githubFormalReview) {
+  if (!normalizeText7(input.canonicalSource) && !input.githubFormalReview) {
     return null;
   }
   const formal = input.githubFormalReview && typeof input.githubFormalReview === "object" ? input.githubFormalReview : {};
   const mergeReviewTruth = input.mergeReviewTruth && typeof input.mergeReviewTruth === "object" ? input.mergeReviewTruth : {};
   return {
-    canonicalSource: normalizeText5(input.canonicalSource) || "none",
-    canonicalReviewer: normalizeText5(input.canonicalReviewer) || null,
-    reviewerStatus: normalizeText5(input.reviewerStatus) || null,
-    recommendedAction: normalizeText5(input.recommendedAction) || null,
+    canonicalSource: normalizeText7(input.canonicalSource) || "none",
+    canonicalReviewer: normalizeText7(input.canonicalReviewer) || null,
+    reviewerStatus: normalizeText7(input.reviewerStatus) || null,
+    recommendedAction: normalizeText7(input.recommendedAction) || null,
     vtddReviewerMarkerPresent: input.vtddReviewerMarkerPresent === true,
     githubFormalReview: {
-      source: normalizeText5(formal.source) || "github_formal_review_objects",
-      reviewDecision: normalizeText5(formal.reviewDecision) || null,
+      source: normalizeText7(formal.source) || "github_formal_review_objects",
+      reviewDecision: normalizeText7(formal.reviewDecision) || null,
       hasFormalApproval: formal.hasFormalApproval === true,
       approvalCount: normalizeCount(formal.approvalCount),
       blocking: formal.blocking === true,
-      blockingReason: normalizeText5(formal.blockingReason) || null,
-      latestStates: Array.isArray(formal.latestStates) ? formal.latestStates.map(normalizeText5).filter(Boolean) : []
+      blockingReason: normalizeText7(formal.blockingReason) || null,
+      latestStates: Array.isArray(formal.latestStates) ? formal.latestStates.map(normalizeText7).filter(Boolean) : []
     },
     mergeReviewTruth: {
       satisfied: mergeReviewTruth.satisfied === true,
       blocked: mergeReviewTruth.blocked === true,
-      reason: normalizeText5(mergeReviewTruth.reason) || null
+      reason: normalizeText7(mergeReviewTruth.reason) || null
     },
     warnings: normalizeStringArray(input.warnings)
   };
 }
 function normalizeReviewerEvidence(value) {
   const input = value && typeof value === "object" ? value : {};
-  const recommendedAction = normalizeText5(input.recommendedAction).toLowerCase();
+  const recommendedAction = normalizeText7(input.recommendedAction).toLowerCase();
   if (!recommendedAction) {
     return null;
   }
-  return {
-    reviewer: normalizeText5(input.reviewer) || null,
+  const evidence = {
+    reviewer: normalizeText7(input.reviewer) || null,
     recommendedAction,
-    url: normalizeText5(input.url) || null,
-    createdAt: normalizeText5(input.createdAt) || null,
-    updatedAt: normalizeText5(input.updatedAt) || null,
+    url: normalizeText7(input.url) || null,
+    createdAt: normalizeText7(input.createdAt) || null,
+    updatedAt: normalizeText7(input.updatedAt) || null,
     includesCreatedEdit: input.includesCreatedEdit === true
   };
+  const body = normalizeText7(input.body);
+  if (body) {
+    evidence.body = body;
+  }
+  return evidence;
 }
 function normalizeMergeability(input) {
   const raw = input.mergeability && typeof input.mergeability === "object" ? input.mergeability : {};
   const mergeable = typeof input.mergeable === "boolean" ? input.mergeable : normalizeNullableBoolean(raw.mergeable);
-  const mergeableState = normalizeText5(input.mergeableState) || normalizeText5(input.mergeable_state) || normalizeText5(raw.state) || normalizeText5(raw.mergeableState) || null;
+  const mergeableState = normalizeText7(input.mergeableState) || normalizeText7(input.mergeable_state) || normalizeText7(raw.state) || normalizeText7(raw.mergeableState) || null;
   const mergeConflict = input.mergeConflict === true || raw.hasConflict === true || mergeable === false || mergeableState === "dirty";
   const mergeBlocked = input.mergeBlocked === true || raw.blocked === true || mergeConflict;
-  const mergeBlockedReason = normalizeText5(input.mergeBlockedReason) || normalizeText5(raw.blockedReason) || (mergeConflict ? "pull_request_has_merge_conflicts" : null);
-  const warning = normalizeText5(input.mergeWarning) || normalizeText5(raw.warning) || null;
-  const freshBranchSuggestion = normalizeText5(input.freshBranchSuggestion) || normalizeText5(raw.freshBranchSuggestion) || null;
+  const mergeBlockedReason = normalizeText7(input.mergeBlockedReason) || normalizeText7(raw.blockedReason) || (mergeConflict ? "pull_request_has_merge_conflicts" : null);
+  const warning = normalizeText7(input.mergeWarning) || normalizeText7(raw.warning) || null;
+  const freshBranchSuggestion = normalizeText7(input.freshBranchSuggestion) || normalizeText7(raw.freshBranchSuggestion) || null;
   const conflictFiles = Array.isArray(input.conflictFiles) ? input.conflictFiles : Array.isArray(raw.conflictFiles) ? raw.conflictFiles : null;
-  const conflictFilesSource = normalizeText5(input.conflictFilesSource) || normalizeText5(raw.conflictFilesSource) || null;
+  const conflictFilesSource = normalizeText7(input.conflictFilesSource) || normalizeText7(raw.conflictFilesSource) || null;
   const verified = typeof mergeable === "boolean" || Boolean(mergeableState);
   const status = mergeConflict ? "conflict" : verified ? "verified" : "unverified";
   return {
@@ -21639,9 +22053,9 @@ function normalizeNullableBoolean(value) {
   return typeof value === "boolean" ? value : null;
 }
 function normalizeStringArray(value) {
-  return (Array.isArray(value) ? value : []).map(normalizeText5).filter(Boolean);
+  return (Array.isArray(value) ? value : []).map(normalizeText7).filter(Boolean);
 }
-function normalizeText5(value) {
+function normalizeText7(value) {
   return String(value ?? "").trim();
 }
 function normalizeCount(value) {
@@ -21658,11 +22072,89 @@ function normalizeNumber(value) {
   }
   return numeric;
 }
+function normalizeReviewState(value) {
+  const normalized = normalizeText7(value).toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+  if (normalized === "approved") {
+    return "approved";
+  }
+  if (normalized === "changes_requested") {
+    return "changes_requested";
+  }
+  if (normalized === "review_required") {
+    return "review_required";
+  }
+  return normalized;
+}
+function statusChecksPassed(value) {
+  const checks = Array.isArray(value) ? value : [];
+  if (checks.length === 0) {
+    return false;
+  }
+  return checks.every((check) => {
+    const conclusion = normalizeText7(check?.conclusion).toLowerCase();
+    const state = normalizeText7(check?.state || check?.status).toLowerCase();
+    return conclusion === "success" || conclusion === "skipped" || state === "success" || state === "completed";
+  });
+}
+function requiredPrBodySectionsPresent(value) {
+  const body = normalizeText7(value);
+  if (!body) {
+    return false;
+  }
+  return [
+    "## This PR satisfies Intent",
+    "## Satisfied Success Criteria",
+    "## Unsatisfied Success Criteria",
+    "## Verification Evidence",
+    "## Butler Completion Contract",
+    "## Surface Update Checklist"
+  ].every((heading) => body.includes(heading));
+}
+function prBodyUnsatisfiedSuccessCriteriaNone(value) {
+  const section = extractMarkdownSection(value, "Unsatisfied Success Criteria");
+  if (!section) {
+    return false;
+  }
+  const normalized = section.toLowerCase();
+  return normalized.includes("none") || normalized.includes("\u306A\u3057") || normalized.includes("\u3042\u308A\u307E\u305B\u3093");
+}
+function reviewerCommentHasNoCriticalFindings(value) {
+  const section = extractMarkdownSection(value, "Critical Findings");
+  if (!section) {
+    return false;
+  }
+  const findings = section.split("\n").map((line) => normalizeText7(line).replace(/^[-*]\s+/, "")).filter(Boolean);
+  if (findings.length === 0) {
+    return false;
+  }
+  return findings.every(isNoCriticalFindingLine);
+}
+function extractMarkdownSection(value, heading) {
+  const body = normalizeText7(value);
+  if (!body) {
+    return "";
+  }
+  const escaped = heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = body.match(new RegExp(`^#{2,3}\\s+${escaped}\\s*$([\\s\\S]*?)(?=^#{2,3}\\s+|(?![\\s\\S]))`, "im"));
+  return normalizeText7(match?.[1]);
+}
+function isNoCriticalFindingLine(value) {
+  const normalized = normalizeText7(value).toLowerCase().replace(/[.。]+$/g, "");
+  return [
+    "none",
+    "none reported",
+    "no critical findings",
+    "no critical findings reported"
+  ].includes(normalized);
+}
 
 // src/core/deploy-approval-grant.js
 function validateDeployApprovalGrant(input = {}) {
   const approvalGrant = input.approvalGrant ?? null;
-  const repositoryInput = normalizeText6(input.repositoryInput);
+  const repositoryInput = normalizeText8(input.repositoryInput);
   const now = new Date(input.now ?? Date.now());
   if (!approvalGrant || approvalGrant.verified !== true) {
     return {
@@ -21670,7 +22162,7 @@ function validateDeployApprovalGrant(input = {}) {
       issues: ["real approvalGrant is required for deploy_production"]
     };
   }
-  const expiresAt = normalizeText6(approvalGrant.expiresAt);
+  const expiresAt = normalizeText8(approvalGrant.expiresAt);
   if (!expiresAt || Number.isNaN(Date.parse(expiresAt)) || Date.parse(expiresAt) <= now.valueOf()) {
     return {
       ok: false,
@@ -21678,19 +22170,19 @@ function validateDeployApprovalGrant(input = {}) {
     };
   }
   const scope = approvalGrant.scope ?? {};
-  if (normalizeText6(scope.actionType) !== ActionType.DEPLOY_PRODUCTION) {
+  if (normalizeText8(scope.actionType) !== ActionType.DEPLOY_PRODUCTION) {
     return {
       ok: false,
       issues: ["approvalGrant scope.actionType must be deploy_production"]
     };
   }
-  if (normalizeText6(scope.highRiskKind) !== ActionType.DEPLOY_PRODUCTION) {
+  if (normalizeText8(scope.highRiskKind) !== ActionType.DEPLOY_PRODUCTION) {
     return {
       ok: false,
       issues: ["approvalGrant scope.highRiskKind must be deploy_production"]
     };
   }
-  if (normalizeText6(scope.repositoryInput) !== repositoryInput) {
+  if (normalizeText8(scope.repositoryInput) !== repositoryInput) {
     return {
       ok: false,
       issues: ["approvalGrant scope.repositoryInput must match target repo"]
@@ -21698,7 +22190,7 @@ function validateDeployApprovalGrant(input = {}) {
   }
   return { ok: true };
 }
-function normalizeText6(value) {
+function normalizeText8(value) {
   return String(value ?? "").trim();
 }
 
@@ -21756,8 +22248,8 @@ async function resolveGitHubAppInstallationToken({ env, fetchImpl, apiBaseUrl } 
   const resolvedFetchImpl = fetchImpl ?? resolveGitHubFetch(env);
   const resolvedApiBaseUrl = normalizeApiBaseUrl(apiBaseUrl ?? env?.GITHUB_API_BASE_URL);
   const enforceMintedToken = toBoolean(env?.GITHUB_APP_ENFORCE_MINTED_INSTALLATION_TOKEN);
-  const appId = normalizeText7(env?.GITHUB_APP_ID);
-  const installationId = normalizeText7(env?.GITHUB_APP_INSTALLATION_ID);
+  const appId = normalizeText9(env?.GITHUB_APP_ID);
+  const installationId = normalizeText9(env?.GITHUB_APP_INSTALLATION_ID);
   const privateKey = resolveGitHubAppPrivateKey(env);
   if (appId || installationId || privateKey) {
     if (!appId || !installationId || !privateKey) {
@@ -21796,7 +22288,7 @@ async function resolveGitHubAppInstallationToken({ env, fetchImpl, apiBaseUrl } 
     };
     return { ok: true, token: minted.token };
   }
-  const directToken = normalizeText7(env?.GITHUB_APP_INSTALLATION_TOKEN);
+  const directToken = normalizeText9(env?.GITHUB_APP_INSTALLATION_TOKEN);
   if (directToken) {
     if (enforceMintedToken) {
       return {
@@ -21811,7 +22303,7 @@ async function resolveGitHubAppInstallationToken({ env, fetchImpl, apiBaseUrl } 
     return { ok: false };
   }
   try {
-    const token = normalizeText7(await tokenProvider());
+    const token = normalizeText9(await tokenProvider());
     if (token) {
       if (enforceMintedToken) {
         return {
@@ -21875,7 +22367,7 @@ async function mintInstallationToken({
       warning: `github app repository index skipped: installation token mint failed (${failure.reason})`
     };
   }
-  const token = normalizeText7(body?.token);
+  const token = normalizeText9(body?.token);
   if (!token) {
     return {
       ok: false,
@@ -21898,7 +22390,7 @@ async function createGitHubAppJwt({ appId, privateKey, env, nowSeconds }) {
   const provider = env?.GITHUB_APP_JWT_PROVIDER;
   if (typeof provider === "function") {
     try {
-      const token = normalizeText7(
+      const token = normalizeText9(
         await provider({
           appId,
           issuedAt: nowSeconds - 60,
@@ -21976,7 +22468,7 @@ async function fetchGitHubInstallationRepositories({ token, fetchImpl, apiBaseUr
 async function readJsonSafe(response) {
   try {
     const text = await response.text();
-    if (!normalizeText7(text)) {
+    if (!normalizeText9(text)) {
       return {};
     }
     try {
@@ -21991,9 +22483,9 @@ async function readJsonSafe(response) {
   }
 }
 function classifyApiFailure(response, body) {
-  const message = normalizeText7(body?.message) || normalizeText7(body?.error) || normalizeText7(body?.__rawText) || buildStatusFallbackMessage(response);
-  const remaining = normalizeText7(response.headers.get("x-ratelimit-remaining"));
-  const retryAfter = normalizeText7(response.headers.get("retry-after"));
+  const message = normalizeText9(body?.message) || normalizeText9(body?.error) || normalizeText9(body?.__rawText) || buildStatusFallbackMessage(response);
+  const remaining = normalizeText9(response.headers.get("x-ratelimit-remaining"));
+  const retryAfter = normalizeText9(response.headers.get("retry-after"));
   if (response.status === 401) {
     return {
       ok: false,
@@ -22024,14 +22516,14 @@ function classifyApiFailure(response, body) {
 }
 function buildStatusFallbackMessage(response) {
   const status = Number(response?.status);
-  const statusText = normalizeText7(response?.statusText);
+  const statusText = normalizeText9(response?.statusText);
   if (statusText) {
     return `github api returned status ${status} (${statusText})`;
   }
   return `github api returned status ${status}`;
 }
 function sanitizeApiBodySnippet(value) {
-  const normalized = normalizeText7(value).replace(/\s+/g, " ");
+  const normalized = normalizeText9(value).replace(/\s+/g, " ");
   if (!normalized) {
     return "";
   }
@@ -22042,7 +22534,7 @@ function buildRepositoryIndexWarning(result) {
     return `github app repository index unavailable: ${result.reason}`;
   }
   if (result.error === "rate_limited") {
-    const retryAfter = normalizeText7(result.retryAfter);
+    const retryAfter = normalizeText9(result.retryAfter);
     const retryMessage = retryAfter ? ` retry_after=${retryAfter}s` : "";
     return `github app repository index unavailable: rate limited by GitHub API.${retryMessage}`;
   }
@@ -22052,7 +22544,7 @@ function buildRepositoryIndexWarning(result) {
   if (result.error === "network_error") {
     return "github app repository index unavailable: network request failed";
   }
-  return `github app repository index unavailable: ${normalizeText7(result.reason) || "unknown error"}`;
+  return `github app repository index unavailable: ${normalizeText9(result.reason) || "unknown error"}`;
 }
 function isUsableCachedToken(cacheKey, nowSeconds) {
   if (!installationTokenCache) {
@@ -22067,14 +22559,14 @@ function isUsableCachedToken(cacheKey, nowSeconds) {
   return installationTokenCache.expiresAt > nowSeconds + TOKEN_REFRESH_MARGIN_SECONDS;
 }
 function resolveTokenExpirySeconds(value, nowSeconds) {
-  const parsed = Date.parse(normalizeText7(value));
+  const parsed = Date.parse(normalizeText9(value));
   if (Number.isFinite(parsed) && parsed > 0) {
     return Math.floor(parsed / 1e3);
   }
   return nowSeconds + 50 * 60;
 }
 function hasNextPage(linkHeader) {
-  const link = normalizeText7(linkHeader);
+  const link = normalizeText9(linkHeader);
   return link.includes('rel="next"');
 }
 function normalizeLiveRepository(repository) {
@@ -22082,7 +22574,7 @@ function normalizeLiveRepository(repository) {
   if (!canonicalRepo) {
     return null;
   }
-  const repoName = normalizeText7(repository?.name) || canonicalRepo.split("/")[1];
+  const repoName = normalizeText9(repository?.name) || canonicalRepo.split("/")[1];
   return {
     canonicalRepo,
     productName: repoName || null,
@@ -22143,7 +22635,7 @@ function normalizeAliasRegistry(aliasRegistry) {
     }
     records.push({
       canonicalRepo,
-      productName: normalizeText7(item?.productName) || null,
+      productName: normalizeText9(item?.productName) || null,
       visibility: normalizeVisibility(item),
       aliases: mergeAliases(item?.aliases)
     });
@@ -22151,7 +22643,7 @@ function normalizeAliasRegistry(aliasRegistry) {
   return records;
 }
 function normalizeCanonicalRepo(value) {
-  const normalized = normalizeText7(value).toLowerCase();
+  const normalized = normalizeText9(value).toLowerCase();
   if (!normalized || !normalized.includes("/")) {
     return "";
   }
@@ -22164,7 +22656,7 @@ function normalizeVisibility(value) {
   if (value?.private === false) {
     return "public";
   }
-  const normalized = normalizeText7(value?.visibility).toLowerCase();
+  const normalized = normalizeText9(value?.visibility).toLowerCase();
   if (normalized === "private" || normalized === "public" || normalized === "internal") {
     return normalized;
   }
@@ -22188,7 +22680,7 @@ function normalizeAliasKey(value) {
   return normalizeAlias(value).toLowerCase().replace(/[^a-z0-9\u3040-\u30ff\u4e00-\u9faf]+/g, "");
 }
 function normalizeApiBaseUrl(value) {
-  const text = normalizeText7(value);
+  const text = normalizeText9(value);
   if (!text) {
     return GITHUB_API_BASE_URL;
   }
@@ -22224,7 +22716,7 @@ async function signGitHubAppJwt({ appId, privateKey, nowSeconds }) {
   return `${signingInput}.${base64UrlEncodeBytes(new Uint8Array(signature))}`;
 }
 function resolveGitHubAppPrivateKey(env) {
-  const base64Value = normalizeText7(env?.GITHUB_APP_PRIVATE_KEY_BASE64);
+  const base64Value = normalizeText9(env?.GITHUB_APP_PRIVATE_KEY_BASE64);
   if (base64Value) {
     try {
       return normalizeGitHubAppPrivateKeyValue(decodeToUtf8(base64Value));
@@ -22235,7 +22727,7 @@ function resolveGitHubAppPrivateKey(env) {
   return normalizeGitHubAppPrivateKeyValue(env?.GITHUB_APP_PRIVATE_KEY);
 }
 function normalizeGitHubAppPrivateKeyValue(value) {
-  const normalized = normalizeText7(value);
+  const normalized = normalizeText9(value);
   if (!normalized) {
     return "";
   }
@@ -22243,7 +22735,7 @@ function normalizeGitHubAppPrivateKeyValue(value) {
   return unquoted.replaceAll("\\n", "\n");
 }
 function decodePemPrivateKey(value) {
-  const pem = normalizeText7(value);
+  const pem = normalizeText9(value);
   const body = pem.replaceAll("-----BEGIN PRIVATE KEY-----", "").replaceAll("-----END PRIVATE KEY-----", "").replace(/\s+/g, "");
   return decodeBase64ToBytes(body);
 }
@@ -22289,10 +22781,10 @@ function readNowSeconds(env) {
   return Math.floor(Date.now() / 1e3);
 }
 function toBoolean(value) {
-  const normalized = normalizeText7(value).toLowerCase();
+  const normalized = normalizeText9(value).toLowerCase();
   return normalized === "true" || normalized === "1" || normalized === "yes" || normalized === "on";
 }
-function normalizeText7(value) {
+function normalizeText9(value) {
   return String(value ?? "").trim();
 }
 
@@ -22302,9 +22794,9 @@ var GITHUB_API_VERSION2 = "2022-11-28";
 var GITHUB_API_USER_AGENT2 = "vtdd-v2-github-actions-secret-sync";
 var ALLOWED_ACTIONS_SECRET_NAMES = /* @__PURE__ */ new Set(["OPENAI_API_KEY"]);
 async function executeGitHubActionsSecretSync(input = {}) {
-  const repository = normalizeText8(input.repository);
-  const secretName = normalizeText8(input.secretName);
-  const secretValue = normalizeText8(input.secretValue);
+  const repository = normalizeText10(input.repository);
+  const secretName = normalizeText10(input.secretName);
+  const secretValue = normalizeText10(input.secretValue);
   const approvalGrant = input.approvalGrant ?? null;
   const env = input.env ?? {};
   const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
@@ -22359,11 +22851,11 @@ async function executeGitHubActionsSecretSync(input = {}) {
       ok: false,
       status: publicKeyResponse.status,
       error: "github_actions_secret_sync_failed",
-      reason: normalizeText8(publicKeyBody?.message) || "GitHub Actions secret public key read failed"
+      reason: normalizeText10(publicKeyBody?.message) || "GitHub Actions secret public key read failed"
     };
   }
-  const keyId = normalizeText8(publicKeyBody?.key_id);
-  const key = normalizeText8(publicKeyBody?.key);
+  const keyId = normalizeText10(publicKeyBody?.key_id);
+  const key = normalizeText10(publicKeyBody?.key);
   if (!keyId || !key) {
     return {
       ok: false,
@@ -22410,7 +22902,7 @@ async function executeGitHubActionsSecretSync(input = {}) {
       ok: false,
       status: putResponse.status,
       error: "github_actions_secret_sync_failed",
-      reason: normalizeText8(putBody?.message) || "GitHub Actions secret write failed"
+      reason: normalizeText10(putBody?.message) || "GitHub Actions secret write failed"
     };
   }
   return {
@@ -22450,7 +22942,7 @@ function validateGitHubActionsSecretSyncRequest({
 }
 function validateGitHubActionsSecretSyncApprovalGrant(input = {}) {
   const approvalGrant = input.approvalGrant ?? null;
-  const repository = normalizeText8(input.repository);
+  const repository = normalizeText10(input.repository);
   const now = new Date(input.now ?? Date.now());
   if (!approvalGrant || approvalGrant.verified !== true) {
     return {
@@ -22458,7 +22950,7 @@ function validateGitHubActionsSecretSyncApprovalGrant(input = {}) {
       issues: ["real approvalGrant is required for GitHub Actions secret sync"]
     };
   }
-  const expiresAt = normalizeText8(approvalGrant.expiresAt);
+  const expiresAt = normalizeText10(approvalGrant.expiresAt);
   if (!expiresAt || Number.isNaN(Date.parse(expiresAt)) || Date.parse(expiresAt) <= now.valueOf()) {
     return {
       ok: false,
@@ -22466,13 +22958,13 @@ function validateGitHubActionsSecretSyncApprovalGrant(input = {}) {
     };
   }
   const scope = approvalGrant.scope ?? {};
-  if (normalizeText8(scope.repositoryInput) !== repository) {
+  if (normalizeText10(scope.repositoryInput) !== repository) {
     return {
       ok: false,
       issues: ["approvalGrant scope.repositoryInput must match target repo"]
     };
   }
-  if (normalizeText8(scope.highRiskKind) !== "github_actions_secret_sync") {
+  if (normalizeText10(scope.highRiskKind) !== "github_actions_secret_sync") {
     return {
       ok: false,
       issues: ["approvalGrant scope.highRiskKind must be github_actions_secret_sync"]
@@ -22500,21 +22992,21 @@ function githubHeaders(token) {
   };
 }
 function encodeURIComponentRepository(repository) {
-  const [owner = "", name = ""] = normalizeText8(repository).split("/");
+  const [owner = "", name = ""] = normalizeText10(repository).split("/");
   return `${encodeURIComponent(owner)}/${encodeURIComponent(name)}`;
 }
 async function readJsonSafe2(response) {
   return response.json().catch(() => ({}));
 }
 function normalizeApiBaseUrl2(value) {
-  const normalized = normalizeText8(value);
+  const normalized = normalizeText10(value);
   return normalized ? normalized.replace(/\/+$/, "") : GITHUB_API_BASE_URL2;
 }
-function normalizeText8(value) {
+function normalizeText10(value) {
   return String(value ?? "").trim();
 }
 function base64ToBytes(value) {
-  const normalized = normalizeText8(value);
+  const normalized = normalizeText10(value);
   if (typeof atob === "function") {
     return Uint8Array.from(atob(normalized), (char) => char.charCodeAt(0));
   }
@@ -22539,7 +23031,7 @@ function bytesToBase64(bytes) {
   throw new Error("base64 encoder unavailable");
 }
 function sanitizeGitHubActionsSecretSyncErrorMessage(error) {
-  return normalizeText8(error instanceof Error ? error.message : error).replace(/sk-[A-Za-z0-9_-]+/g, "[REDACTED_OPENAI_KEY]").replace(/(authorization|api[_-]?key|token|secret)(["'\s:=]+)([^"'\s<>&]+)/gi, "$1$2[REDACTED]").slice(0, 500);
+  return normalizeText10(error instanceof Error ? error.message : error).replace(/sk-[A-Za-z0-9_-]+/g, "[REDACTED_OPENAI_KEY]").replace(/(authorization|api[_-]?key|token|secret)(["'\s:=]+)([^"'\s<>&]+)/gi, "$1$2[REDACTED]").slice(0, 500);
 }
 
 // src/core/credential-boundary.js
@@ -23005,10 +23497,10 @@ var ACTIONS_REQUIRING_TARGET_CONFIRMATION = /* @__PURE__ */ new Set([
   ActionType.EXTERNAL_PUBLISH
 ]);
 function evaluateTargetConfirmationBoundary(input = {}) {
-  const mode = normalizeText9(input.mode).toLowerCase();
-  const actionType = normalizeText9(input.actionType).toLowerCase();
-  const repository = normalizeText9(input.repository);
-  const via = normalizeText9(input.via).toLowerCase();
+  const mode = normalizeText11(input.mode).toLowerCase();
+  const actionType = normalizeText11(input.actionType).toLowerCase();
+  const repository = normalizeText11(input.repository);
+  const via = normalizeText11(input.via).toLowerCase();
   if (mode !== TaskMode.EXECUTION) {
     return { ok: true };
   }
@@ -23029,7 +23521,7 @@ function evaluateTargetConfirmationBoundary(input = {}) {
     via: "alias"
   };
 }
-function normalizeText9(value) {
+function normalizeText11(value) {
   return String(value ?? "").trim();
 }
 
@@ -23477,13 +23969,6 @@ function recordToText(record) {
   });
 }
 
-// src/core/reviewer-contract.js
-var ReviewerRecommendedAction = Object.freeze({
-  APPROVE: "approve",
-  REQUEST_CHANGES: "request_changes",
-  MANUAL_REVIEW: "manual_review"
-});
-
 // src/core/constitution-schema.js
 var REQUIRED_CONSTITUTION_RULE_IDS = Object.freeze([
   "no_build_without_explicit_go",
@@ -23529,12 +24014,12 @@ var PROPOSAL_LOG_FIELDS = Object.freeze([
 ]);
 function createDecisionLogEntry(input) {
   const candidate = {
-    decision: normalizeText10(input?.decision),
-    rationale: normalizeText10(input?.rationale),
+    decision: normalizeText12(input?.decision),
+    rationale: normalizeText12(input?.rationale),
     relatedIssue: normalizeIssue(input?.relatedIssue),
-    decidedBy: normalizeText10(input?.decidedBy),
+    decidedBy: normalizeText12(input?.decidedBy),
     timestamp: normalizeTimestamp2(input?.timestamp),
-    supersededBy: input?.supersededBy ? normalizeText10(input?.supersededBy) : null
+    supersededBy: input?.supersededBy ? normalizeText12(input?.supersededBy) : null
   };
   const validation = validateDecisionLogEntry(candidate);
   if (!validation.ok) {
@@ -23566,13 +24051,13 @@ function validateDecisionLogEntry(entry) {
 }
 function createProposalLogEntry(input) {
   const candidate = {
-    hypothesis: normalizeText10(input?.hypothesis),
+    hypothesis: normalizeText12(input?.hypothesis),
     options: normalizeStringArray3(input?.options),
     rejectedReasons: normalizeRejectedReasons(input?.rejectedReasons),
     concerns: normalizeStringArray3(input?.concerns),
     unresolvedQuestions: normalizeStringArray3(input?.unresolvedQuestions),
     relatedIssue: input?.relatedIssue ? normalizeIssue(input?.relatedIssue) : null,
-    proposedBy: normalizeText10(input?.proposedBy),
+    proposedBy: normalizeText12(input?.proposedBy),
     timestamp: normalizeTimestamp2(input?.timestamp)
   };
   const validation = validateProposalLogEntry(candidate);
@@ -23602,7 +24087,7 @@ function validateProposalLogEntry(entry) {
   }
   return issues.length > 0 ? { ok: false, issues } : { ok: true };
 }
-function normalizeText10(value) {
+function normalizeText12(value) {
   const text = String(value ?? "").trim();
   return text.length > 0 ? text : "";
 }
@@ -23621,15 +24106,15 @@ function normalizeStringArray3(value) {
   if (!Array.isArray(value)) {
     return [];
   }
-  return value.map((item) => normalizeText10(item)).filter(Boolean);
+  return value.map((item) => normalizeText12(item)).filter(Boolean);
 }
 function normalizeRejectedReasons(value) {
   if (!Array.isArray(value)) {
     return [];
   }
   return value.map((item) => ({
-    option: normalizeText10(item?.option),
-    reason: normalizeText10(item?.reason)
+    option: normalizeText12(item?.option),
+    reason: normalizeText12(item?.reason)
   })).filter((item) => item.option && item.reason);
 }
 function isIsoTimestamp2(value) {
@@ -23690,7 +24175,7 @@ async function appendDecisionLogFromGateway(provider, gatewayInput = {}, gateway
       status: 503,
       error: "memory_write_failed",
       reason: "failed to persist decision log",
-      details: normalizeText11(error?.message) || "unknown provider error"
+      details: normalizeText13(error?.message) || "unknown provider error"
     };
   }
 }
@@ -23718,7 +24203,7 @@ async function retrieveDecisionLogReferences(provider, input = {}) {
       status: 503,
       error: "memory_read_failed",
       reason: "failed to retrieve decision logs",
-      details: normalizeText11(error?.message) || "unknown provider error"
+      details: normalizeText13(error?.message) || "unknown provider error"
     };
   }
   const references = records.map(toDecisionReference).filter(Boolean).filter((item) => relatedIssue ? item.relatedIssue === relatedIssue : true).slice(0, limit);
@@ -23750,7 +24235,7 @@ function createCanonicalDecisionFromGateway(gatewayInput = {}) {
   return createDecisionLogEntry(candidate);
 }
 function buildDecisionMemoryRecord({ entry, gatewayInput, gatewayResult }) {
-  const repository = normalizeText11(gatewayResult?.repository);
+  const repository = normalizeText13(gatewayResult?.repository);
   const decidedByTag = normalizeTag(entry.decidedBy);
   const phaseTag = normalizeTag(gatewayInput?.phase);
   const recordId = makeRecordId(entry);
@@ -23782,14 +24267,14 @@ function toDecisionReference(record) {
     return null;
   }
   return {
-    id: normalizeText11(record?.id),
+    id: normalizeText13(record?.id),
     decision: entry.decision,
     rationale: entry.rationale,
     relatedIssue: entry.relatedIssue,
     decidedBy: entry.decidedBy,
     timestamp: entry.timestamp,
     supersededBy: entry.supersededBy ?? null,
-    repository: normalizeText11(record?.metadata?.repository) || null
+    repository: normalizeText13(record?.metadata?.repository) || null
   };
 }
 function normalizeDecisionEntry(content) {
@@ -23830,7 +24315,7 @@ function normalizeIssue2(value) {
 }
 function firstText(...values) {
   for (const value of values) {
-    const text = normalizeText11(value);
+    const text = normalizeText13(value);
     if (text) {
       return text;
     }
@@ -23846,11 +24331,11 @@ function firstNumber(...values) {
   }
   return -1;
 }
-function normalizeText11(value) {
+function normalizeText13(value) {
   return String(value ?? "").trim();
 }
 function normalizeTag(value) {
-  return normalizeText11(value).toLowerCase().replace(/[^a-z0-9:_-]+/g, "_");
+  return normalizeText13(value).toLowerCase().replace(/[^a-z0-9:_-]+/g, "_");
 }
 function normalizeLimit(value, fallback) {
   const numeric = Number(value ?? fallback);
@@ -23909,7 +24394,7 @@ async function appendProposalLogFromGateway(provider, gatewayInput = {}, gateway
       status: 503,
       error: "memory_write_failed",
       reason: "failed to persist proposal log",
-      details: normalizeText12(error?.message) || "unknown provider error"
+      details: normalizeText14(error?.message) || "unknown provider error"
     };
   }
 }
@@ -23937,7 +24422,7 @@ async function retrieveProposalLogReferences(provider, input = {}) {
       status: 503,
       error: "memory_read_failed",
       reason: "failed to retrieve proposal logs",
-      details: normalizeText12(error?.message) || "unknown provider error"
+      details: normalizeText14(error?.message) || "unknown provider error"
     };
   }
   const references = records.map(toProposalReference).filter(Boolean).filter((item) => relatedIssue ? item.relatedIssue === relatedIssue : true).slice(0, limit);
@@ -23971,7 +24456,7 @@ function createCanonicalProposalFromGateway(gatewayInput = {}) {
   return createProposalLogEntry(candidate);
 }
 function buildProposalMemoryRecord({ entry, gatewayInput, gatewayResult }) {
-  const repository = normalizeText12(gatewayResult?.repository);
+  const repository = normalizeText14(gatewayResult?.repository);
   const proposedByTag = normalizeTag2(entry.proposedBy);
   const phaseTag = normalizeTag2(gatewayInput?.phase);
   const issuePart = entry.relatedIssue ? String(entry.relatedIssue) : "none";
@@ -24002,7 +24487,7 @@ function toProposalReference(record) {
     return null;
   }
   return {
-    id: normalizeText12(record?.id),
+    id: normalizeText14(record?.id),
     hypothesis: entry.hypothesis,
     options: entry.options,
     rejectedReasons: entry.rejectedReasons,
@@ -24011,7 +24496,7 @@ function toProposalReference(record) {
     relatedIssue: entry.relatedIssue ?? null,
     proposedBy: entry.proposedBy,
     timestamp: entry.timestamp,
-    repository: normalizeText12(record?.metadata?.repository) || null
+    repository: normalizeText14(record?.metadata?.repository) || null
   };
 }
 function normalizeProposalEntry(content) {
@@ -24051,7 +24536,7 @@ function normalizeIssue3(value) {
 }
 function firstText2(...values) {
   for (const value of values) {
-    const text = normalizeText12(value);
+    const text = normalizeText14(value);
     if (text) {
       return text;
     }
@@ -24074,11 +24559,11 @@ function firstRejectedReasons(...values) {
   }
   return [];
 }
-function normalizeText12(value) {
+function normalizeText14(value) {
   return String(value ?? "").trim();
 }
 function normalizeTag2(value) {
-  return normalizeText12(value).toLowerCase().replace(/[^a-z0-9:_-]+/g, "_");
+  return normalizeText14(value).toLowerCase().replace(/[^a-z0-9:_-]+/g, "_");
 }
 function normalizeLimit2(value, fallback) {
   const numeric = Number(value ?? fallback);
@@ -24173,7 +24658,7 @@ function buildRetrievalPlan(input) {
   };
 }
 function buildSemanticRetrievalPolicy(input = {}) {
-  const queryText = normalizeText13(input.queryText);
+  const queryText = normalizeText15(input.queryText);
   const enabled = input.enabled === true && Boolean(queryText);
   const mode = enabled ? normalizeSemanticMode(input.mode) : SemanticRetrievalMode.DISABLED;
   const maxPerSource = normalizeLimit3(input.maxPerSource, 4);
@@ -24276,10 +24761,10 @@ function normalizeUseCases(value) {
   if (!Array.isArray(value) || value.length === 0) {
     return [...DEFAULT_RETRIEVAL_QUALITY_USE_CASES];
   }
-  const normalized = value.map(normalizeText13).filter(Boolean);
+  const normalized = value.map(normalizeText15).filter(Boolean);
   return normalized.length > 0 ? normalized : [...DEFAULT_RETRIEVAL_QUALITY_USE_CASES];
 }
-function normalizeText13(value) {
+function normalizeText15(value) {
   return String(value ?? "").trim();
 }
 function sortSemanticReferences(references) {
@@ -24313,7 +24798,7 @@ function dedupeReferences(references) {
   return [...map.values()];
 }
 function createReferenceKey(reference) {
-  const id = normalizeText13(reference?.id);
+  const id = normalizeText15(reference?.id);
   if (id) {
     return `id:${id}`;
   }
@@ -24335,7 +24820,7 @@ async function retrieveCrossIssueMemoryIndex(provider, input = {}) {
   const phase = normalizePhase2(input.phase);
   const limit = normalizeLimit4(input.limit, DEFAULT_LIMIT);
   const relatedIssue = normalizeIssue4(input.relatedIssue);
-  const queryText = normalizeText14(input.text);
+  const queryText = normalizeText16(input.text);
   const issueContext = normalizeIssueContext(input.issueContext, relatedIssue);
   const runtimeTruth = normalizeRuntimeTruth(input.runtimeTruth);
   const semanticRetrievalInput = normalizeSemanticRetrievalInput(
@@ -24419,14 +24904,14 @@ async function retrieveCrossIssueMemoryIndex(provider, input = {}) {
       status: 503,
       error: "memory_read_failed",
       reason: "failed to retrieve cross-issue memory index",
-      details: normalizeText14(error?.message) || "unknown provider error"
+      details: normalizeText16(error?.message) || "unknown provider error"
     };
   }
 }
 async function retrievePrContextReferences(provider, input = {}) {
   const limit = normalizeLimit4(input.limit, DEFAULT_LIMIT);
   const relatedIssue = normalizeIssue4(input.relatedIssue);
-  const text = normalizeText14(input.text);
+  const text = normalizeText16(input.text);
   const records = await provider.retrieve({
     type: MemoryRecordType.EXECUTION_LOG,
     limit: Math.max(limit * 4, limit)
@@ -24436,36 +24921,36 @@ async function retrievePrContextReferences(provider, input = {}) {
 }
 function toConstitutionReference(record) {
   return {
-    id: normalizeText14(record?.id),
-    title: normalizeText14(record?.content?.title) || "constitution_rule",
-    summary: normalizeText14(record?.content?.description) || normalizeText14(record?.content?.rule) || null,
-    version: normalizeText14(record?.metadata?.version) || null,
-    timestamp: normalizeText14(record?.createdAt) || null
+    id: normalizeText16(record?.id),
+    title: normalizeText16(record?.content?.title) || "constitution_rule",
+    summary: normalizeText16(record?.content?.description) || normalizeText16(record?.content?.rule) || null,
+    version: normalizeText16(record?.metadata?.version) || null,
+    timestamp: normalizeText16(record?.createdAt) || null
   };
 }
 function toPrContextReference(record) {
   const metadata = normalizeObject5(record?.metadata);
   const content = normalizeObject5(record?.content);
-  const tags = Array.isArray(record?.tags) ? record.tags.map(normalizeText14) : [];
-  const hasPrSignal = hasTagPrefix(tags, "pr:") || hasTag(tags, "pr_context") || hasTag(tags, "review_summary") || normalizeText14(metadata.kind) === "pr_context" || normalizeText14(metadata.kind) === "pr_review_summary" || Number.isInteger(Number(metadata.prNumber)) || Number.isInteger(Number(content.prNumber));
+  const tags = Array.isArray(record?.tags) ? record.tags.map(normalizeText16) : [];
+  const hasPrSignal = hasTagPrefix(tags, "pr:") || hasTag(tags, "pr_context") || hasTag(tags, "review_summary") || normalizeText16(metadata.kind) === "pr_context" || normalizeText16(metadata.kind) === "pr_review_summary" || Number.isInteger(Number(metadata.prNumber)) || Number.isInteger(Number(content.prNumber));
   if (!hasPrSignal) {
     return null;
   }
-  const summary = normalizeText14(content.summary) || normalizeText14(content.note) || normalizeText14(content.result);
+  const summary = normalizeText16(content.summary) || normalizeText16(content.note) || normalizeText16(content.result);
   const relatedIssue = normalizeIssue4(content.relatedIssue ?? metadata.relatedIssue);
   const prNumber = normalizeIssue4(content.prNumber ?? metadata.prNumber);
-  const reviewer = normalizeText14(content.reviewer) || normalizeText14(metadata.reviewer) || null;
-  const repository = normalizeText14(metadata.repository) || null;
-  const status = normalizeText14(content.status) || normalizeText14(metadata.status) || null;
+  const reviewer = normalizeText16(content.reviewer) || normalizeText16(metadata.reviewer) || null;
+  const repository = normalizeText16(metadata.repository) || null;
+  const status = normalizeText16(content.status) || normalizeText16(metadata.status) || null;
   return {
-    id: normalizeText14(record?.id),
+    id: normalizeText16(record?.id),
     prNumber,
     relatedIssue,
     summary: summary || null,
     reviewer,
     status,
     repository,
-    timestamp: normalizeText14(record?.createdAt) || null
+    timestamp: normalizeText16(record?.createdAt) || null
   };
 }
 function flattenByPlan(planSources, candidates, limit) {
@@ -24569,7 +25054,7 @@ function normalizeQueriedRecords(queryResult) {
   return [];
 }
 function resolveSemanticAdapter(queryResult) {
-  const adapter = normalizeText14(queryResult?.adapter);
+  const adapter = normalizeText16(queryResult?.adapter);
   return adapter || "memory_provider.query";
 }
 function createEmptySourceMap() {
@@ -24584,7 +25069,7 @@ function createEmptySourceMap() {
   };
 }
 function toSemanticSourceReference(record) {
-  const type = normalizeText14(record?.type).toLowerCase();
+  const type = normalizeText16(record?.type).toLowerCase();
   const score = normalizeSemanticScore(
     record?.semanticScore ?? record?.score ?? normalizeObject5(record?.metadata).semanticScore
   );
@@ -24628,35 +25113,35 @@ function withSemanticScore(reference, semanticScore) {
 }
 function toDecisionLogReference(record) {
   const content = normalizeObject5(record?.content);
-  const decision = normalizeText14(content.decision);
+  const decision = normalizeText16(content.decision);
   if (!decision) {
     return null;
   }
   return {
-    id: normalizeText14(record?.id),
+    id: normalizeText16(record?.id),
     decision,
-    rationale: normalizeText14(content.rationale) || null,
+    rationale: normalizeText16(content.rationale) || null,
     relatedIssue: normalizeIssue4(content.relatedIssue ?? normalizeObject5(record?.metadata).relatedIssue),
-    decidedBy: normalizeText14(content.decidedBy) || null,
-    timestamp: normalizeText14(content.timestamp) || normalizeText14(record?.createdAt) || null,
-    supersededBy: normalizeText14(content.supersededBy) || null,
-    repository: normalizeText14(normalizeObject5(record?.metadata).repository) || null
+    decidedBy: normalizeText16(content.decidedBy) || null,
+    timestamp: normalizeText16(content.timestamp) || normalizeText16(record?.createdAt) || null,
+    supersededBy: normalizeText16(content.supersededBy) || null,
+    repository: normalizeText16(normalizeObject5(record?.metadata).repository) || null
   };
 }
 function toProposalLogReference(record) {
   const content = normalizeObject5(record?.content);
-  const hypothesis = normalizeText14(content.hypothesis);
+  const hypothesis = normalizeText16(content.hypothesis);
   if (!hypothesis) {
     return null;
   }
   return {
-    id: normalizeText14(record?.id),
+    id: normalizeText16(record?.id),
     hypothesis,
     options: Array.isArray(content.options) ? content.options : [],
     relatedIssue: normalizeIssue4(content.relatedIssue ?? normalizeObject5(record?.metadata).relatedIssue),
-    proposedBy: normalizeText14(content.proposedBy) || null,
-    timestamp: normalizeText14(content.timestamp) || normalizeText14(record?.createdAt) || null,
-    repository: normalizeText14(normalizeObject5(record?.metadata).repository) || null
+    proposedBy: normalizeText16(content.proposedBy) || null,
+    timestamp: normalizeText16(content.timestamp) || normalizeText16(record?.createdAt) || null,
+    repository: normalizeText16(normalizeObject5(record?.metadata).repository) || null
   };
 }
 function shouldKeepSemanticReference(reference, source, relatedIssue) {
@@ -24676,8 +25161,8 @@ function normalizeIssueContext(issueContext, relatedIssue) {
   }
   return {
     issueNumber,
-    issueTitle: normalizeText14(context.issueTitle) || null,
-    issueUrl: normalizeText14(context.issueUrl) || null
+    issueTitle: normalizeText16(context.issueTitle) || null,
+    issueUrl: normalizeText16(context.issueUrl) || null
   };
 }
 function normalizeRuntimeTruth(runtimeTruth) {
@@ -24687,8 +25172,8 @@ function normalizeRuntimeTruth(runtimeTruth) {
   }
   return {
     runtimeAvailable: Boolean(value.runtimeAvailable),
-    source: normalizeText14(value.source) || null,
-    checkedAt: normalizeText14(value.checkedAt) || null
+    source: normalizeText16(value.source) || null,
+    checkedAt: normalizeText16(value.checkedAt) || null
   };
 }
 function hasTagPrefix(tags, prefix) {
@@ -24704,11 +25189,11 @@ function normalizeObject5(value) {
   }
   return value;
 }
-function normalizeText14(value) {
+function normalizeText16(value) {
   return String(value ?? "").trim();
 }
 function normalizePhase2(value) {
-  const phase = normalizeText14(value).toLowerCase();
+  const phase = normalizeText16(value).toLowerCase();
   if (phase === "execution" || phase === "exploration") {
     return phase;
   }
@@ -24729,7 +25214,7 @@ function normalizeLimit4(value, fallback) {
   return Math.min(Math.floor(numeric), 200);
 }
 function normalizeSemanticMode2(value) {
-  const mode = normalizeText14(value).toLowerCase();
+  const mode = normalizeText16(value).toLowerCase();
   if (mode === SemanticRetrievalMode.ASSISTIVE) {
     return SemanticRetrievalMode.ASSISTIVE;
   }
@@ -24856,9 +25341,9 @@ async function retrieveOperationalMemory(provider, input = {}) {
     };
   }
   const limit = normalizeLimit5(input.limit, DEFAULT_LIMIT2);
-  const queryText = normalizeText15(input.text);
+  const queryText = normalizeText17(input.text);
   const now = normalizeTimestamp3(input.now) || (/* @__PURE__ */ new Date()).toISOString();
-  const currentRepository = normalizeText15(input.repository);
+  const currentRepository = normalizeText17(input.repository);
   const runtimeTruth = normalizeRuntimeTruth2(input.runtimeTruth);
   try {
     const structuredRecords = await retrieveStructuredOperationalRecords(provider, {
@@ -24901,7 +25386,7 @@ async function retrieveOperationalMemory(provider, input = {}) {
       status: 503,
       error: "operational_memory_read_failed",
       reason: "failed to retrieve operational memory",
-      details: normalizeText15(error?.message) || "unknown provider error"
+      details: normalizeText17(error?.message) || "unknown provider error"
     };
   }
 }
@@ -24920,9 +25405,9 @@ function toOperationalMemoryReference(record, input = {}) {
   const metadata = normalizeObject6(record?.metadata);
   const content = normalizeObject6(record?.content);
   const tags = normalizeTags2(record?.tags);
-  const queryText = normalizeText15(input.queryText);
-  const repository = normalizeText15(metadata.repository ?? content.repository);
-  const currentRepository = normalizeText15(input.currentRepository);
+  const queryText = normalizeText17(input.queryText);
+  const repository = normalizeText17(metadata.repository ?? content.repository);
+  const currentRepository = normalizeText17(input.currentRepository);
   const textBlob = `${JSON.stringify(content)} ${JSON.stringify(metadata)} ${tags.join(" ")}`.toLowerCase();
   const scoreSignals = {
     relevance: scoreRelevance(textBlob, queryText),
@@ -24931,14 +25416,14 @@ function toOperationalMemoryReference(record, input = {}) {
     recency: scoreRecency(record?.createdAt, input.now)
   };
   return {
-    id: normalizeText15(record?.id),
+    id: normalizeText17(record?.id),
     layer,
-    type: normalizeText15(record?.type),
+    type: normalizeText17(record?.type),
     title: resolveTitle(record),
     summary: resolveSummary(record),
     repository: repository || null,
     crossRepository: Boolean(currentRepository && repository && repository !== currentRepository),
-    createdAt: normalizeText15(record?.createdAt) || null,
+    createdAt: normalizeText17(record?.createdAt) || null,
     tags,
     score: calculateOperationalMemoryScore(scoreSignals),
     scoreSignals,
@@ -24946,7 +25431,7 @@ function toOperationalMemoryReference(record, input = {}) {
   };
 }
 function resolveLayerForType(type) {
-  return MEMORY_TYPE_LAYER_MAP[normalizeText15(type)] ?? null;
+  return MEMORY_TYPE_LAYER_MAP[normalizeText17(type)] ?? null;
 }
 function scoreRelevance(textBlob, queryText) {
   if (!queryText) {
@@ -25023,14 +25508,14 @@ function mergeRecords(primary, secondary) {
   return [...map.values()];
 }
 function createRecordMergeKey(record) {
-  const id = normalizeText15(record?.id);
+  const id = normalizeText17(record?.id);
   if (id) {
     return `id:${id}`;
   }
   return [
     "shape",
-    normalizeText15(record?.type),
-    normalizeText15(record?.createdAt),
+    normalizeText17(record?.type),
+    normalizeText17(record?.createdAt),
     resolveTitle(record),
     resolveSummary(record)
   ].join(":");
@@ -25046,11 +25531,11 @@ function normalizeQueriedRecords2(value) {
 }
 function resolveTitle(record) {
   const content = normalizeObject6(record?.content);
-  return normalizeText15(content.title) || normalizeText15(content.decision) || normalizeText15(content.hypothesis) || normalizeText15(content.failurePattern) || normalizeText15(content.summary) || normalizeText15(content.note) || normalizeText15(record?.id);
+  return normalizeText17(content.title) || normalizeText17(content.decision) || normalizeText17(content.hypothesis) || normalizeText17(content.failurePattern) || normalizeText17(content.summary) || normalizeText17(content.note) || normalizeText17(record?.id);
 }
 function resolveSummary(record) {
   const content = normalizeObject6(record?.content);
-  return normalizeText15(content.summary) || normalizeText15(content.rationale) || normalizeText15(content.remediation) || normalizeText15(content.description) || normalizeText15(content.note) || normalizeText15(content.result) || null;
+  return normalizeText17(content.summary) || normalizeText17(content.rationale) || normalizeText17(content.remediation) || normalizeText17(content.description) || normalizeText17(content.note) || normalizeText17(content.result) || null;
 }
 function normalizeRuntimeTruth2(value) {
   const runtimeTruth = normalizeObject6(value);
@@ -25058,9 +25543,9 @@ function normalizeRuntimeTruth2(value) {
     return null;
   }
   return {
-    currentState: normalizeText15(runtimeTruth.currentState) || null,
-    source: normalizeText15(runtimeTruth.source) || null,
-    checkedAt: normalizeText15(runtimeTruth.checkedAt) || null,
+    currentState: normalizeText17(runtimeTruth.currentState) || null,
+    source: normalizeText17(runtimeTruth.source) || null,
+    checkedAt: normalizeText17(runtimeTruth.checkedAt) || null,
     overridesMemory: true
   };
 }
@@ -25075,7 +25560,7 @@ function normalizeTags2(value) {
   if (!Array.isArray(value)) {
     return [];
   }
-  return value.map((item) => normalizeText15(item).toLowerCase()).filter(Boolean);
+  return value.map((item) => normalizeText17(item).toLowerCase()).filter(Boolean);
 }
 function normalizeLimit5(value, fallback) {
   const numeric = Number(value ?? fallback);
@@ -25085,7 +25570,7 @@ function normalizeLimit5(value, fallback) {
   return Math.min(Math.floor(numeric), 50);
 }
 function normalizeTimestamp3(value) {
-  const text = normalizeText15(value);
+  const text = normalizeText17(value);
   if (!text || !Number.isFinite(Date.parse(text))) {
     return null;
   }
@@ -25097,11 +25582,11 @@ function normalizeObject6(value) {
   }
   return value;
 }
-function normalizeText15(value) {
+function normalizeText17(value) {
   return String(value ?? "").trim();
 }
 function tokenize(value) {
-  return normalizeText15(value).toLowerCase().split(/[^a-z0-9_#-]+/).map((token) => token.trim()).filter(Boolean);
+  return normalizeText17(value).toLowerCase().split(/[^a-z0-9_#-]+/).map((token) => token.trim()).filter(Boolean);
 }
 
 // src/core/judgment-order.js
@@ -25326,14 +25811,14 @@ function isBoundRemoteCodexHandoff(input = {}) {
   const issueContext = normalizeObject7(input?.issueContext);
   const issueNumber = normalizePositiveInteger2(issueContext.issueNumber);
   const relatedIssue = normalizePositiveInteger2(handoff.relatedIssue);
-  return context.requiresHandoff === true && handoff.issueTraceable === true && handoff.approvalScopeMatched === true && Boolean(normalizeText16(handoff.summary)) && issueNumber !== null && relatedIssue === issueNumber && hasBoundIssueTraceability(input?.policyInput, issueNumber);
+  return context.requiresHandoff === true && handoff.issueTraceable === true && handoff.approvalScopeMatched === true && Boolean(normalizeText18(handoff.summary)) && issueNumber !== null && relatedIssue === issueNumber && hasBoundIssueTraceability(input?.policyInput, issueNumber);
 }
 function hasBoundIssueTraceability(policyInput, issueNumber) {
   const traceability = normalizeObject7(policyInput?.issueTraceability);
   return normalizePositiveInteger2(traceability.relatedIssue) === issueNumber && hasTextArray(traceability.intentRefs) && hasTextArray(traceability.successCriteriaRefs) && hasTextArray(traceability.nonGoalRefs);
 }
 function hasTextArray(value) {
-  return Array.isArray(value) && value.some((item) => Boolean(normalizeText16(item)));
+  return Array.isArray(value) && value.some((item) => Boolean(normalizeText18(item)));
 }
 function normalizeObject7(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -25341,7 +25826,7 @@ function normalizeObject7(value) {
   }
   return value;
 }
-function normalizeText16(value) {
+function normalizeText18(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 function normalizePositiveInteger2(value) {
@@ -25399,11 +25884,11 @@ function deny6(rule, reason) {
 }
 
 // src/core/execution-lead-time.js
-function normalizeText17(value) {
+function normalizeText19(value) {
   return String(value ?? "").trim();
 }
 function defaultNormalizeTimestamp(value) {
-  const text = normalizeText17(value);
+  const text = normalizeText19(value);
   return Number.isFinite(Date.parse(text)) ? text : null;
 }
 function buildExecutionLeadTime(timestamps = {}, options = {}) {
@@ -25436,8 +25921,8 @@ function buildExecutionLeadTime(timestamps = {}, options = {}) {
   };
 }
 function buildExecutionDuration(start, end) {
-  const startMs = Date.parse(normalizeText17(start));
-  const endMs = Date.parse(normalizeText17(end));
+  const startMs = Date.parse(normalizeText19(start));
+  const endMs = Date.parse(normalizeText19(end));
   if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs < startMs) {
     return null;
   }
@@ -25553,7 +26038,7 @@ function createRemoteCodexExecutionRequest(input = {}) {
   const issueNumber = normalizePositiveInteger3(
     issueContext.issueNumber ?? handoff.relatedIssue ?? payload.relatedIssue
   );
-  const codexGoal = normalizeText18(continuationContext.codexGoal) || normalizeText18(payload?.executionTarget?.codexGoal) || normalizeText18(gatewayResult?.executionContinuity?.codexGoal);
+  const codexGoal = normalizeText20(continuationContext.codexGoal) || normalizeText20(payload?.executionTarget?.codexGoal) || normalizeText20(gatewayResult?.executionContinuity?.codexGoal);
   const revisionTarget = normalizeRevisionTarget({
     runtimeState,
     executionTarget: normalizeObject8(payload?.executionTarget),
@@ -25564,15 +26049,15 @@ function createRemoteCodexExecutionRequest(input = {}) {
     handoff
   });
   const request = {
-    executionId: normalizeText18(input?.executionId) || buildExecutionId({ issueNumber }),
-    actorRole: normalizeText18(payload.actorRole),
-    repository: normalizeText18(gatewayResult.repository),
+    executionId: normalizeText20(input?.executionId) || buildExecutionId({ issueNumber }),
+    actorRole: normalizeText20(payload.actorRole),
+    repository: normalizeText20(gatewayResult.repository),
     issueNumber,
-    branch: (codexGoal === RemoteCodexDispatchGoal.REVISE_PR ? revisionTarget.headRef : "") || normalizeText18(runtimeState.activeBranch) || normalizeText18(payload?.executionTarget?.branch) || (issueNumber ? `codex/issue-${issueNumber}` : ""),
-    baseRef: normalizeText18(payload?.executionTarget?.baseRef) || normalizeText18(runtimeState.baseRef) || "main",
+    branch: (codexGoal === RemoteCodexDispatchGoal.REVISE_PR ? revisionTarget.headRef : "") || normalizeText20(runtimeState.activeBranch) || normalizeText20(payload?.executionTarget?.branch) || (issueNumber ? `codex/issue-${issueNumber}` : ""),
+    baseRef: normalizeText20(payload?.executionTarget?.baseRef) || normalizeText20(runtimeState.baseRef) || "main",
     codexGoal,
-    approvalPhrase: normalizeText18(payload?.policyInput?.approvalPhrase),
-    approvalActor: normalizeText18(payload?.policyInput?.approvalActor) || normalizeText18(payload?.policyInput?.goActor) || normalizeText18(payload?.sender?.login),
+    approvalPhrase: normalizeText20(payload?.policyInput?.approvalPhrase),
+    approvalActor: normalizeText20(payload?.policyInput?.approvalActor) || normalizeText20(payload?.policyInput?.goActor) || normalizeText20(payload?.sender?.login),
     targetConfirmed: payload?.policyInput?.targetConfirmed === true,
     approvalScopeMatched,
     handoffRequired: continuationContext.requiresHandoff === true,
@@ -25580,7 +26065,7 @@ function createRemoteCodexExecutionRequest(input = {}) {
     handoff: Object.keys(handoff).length > 0 ? {
       issueTraceable: handoff.issueTraceable === true,
       approvalScopeMatched: handoff.approvalScopeMatched === true,
-      summary: normalizeText18(handoff.summary),
+      summary: normalizeText20(handoff.summary),
       relatedIssue: normalizePositiveInteger3(handoff.relatedIssue),
       targetPullRequest: revisionTarget
     } : null
@@ -25654,12 +26139,12 @@ function normalizeRevisionTarget({ runtimeState, executionTarget, handoff }) {
     number: normalizePositiveInteger3(
       executionTarget.prNumber ?? executionTarget.pullRequestNumber ?? executionTargetPull.number ?? handoff.prNumber ?? handoff.pullRequestNumber ?? handoffTarget.number ?? pullRequest.number
     ),
-    url: normalizeText18(executionTarget.prUrl) || normalizeText18(executionTargetPull.url) || normalizeText18(handoff.prUrl) || normalizeText18(handoffTarget.url) || normalizeText18(pullRequest.url) || null,
-    state: normalizeText18(
+    url: normalizeText20(executionTarget.prUrl) || normalizeText20(executionTargetPull.url) || normalizeText20(handoff.prUrl) || normalizeText20(handoffTarget.url) || normalizeText20(pullRequest.url) || null,
+    state: normalizeText20(
       executionTarget.prState || executionTargetPull.state || handoff.prState || handoffTarget.state || pullRequest.state
     ).toLowerCase() || null,
-    headRef: normalizeText18(executionTarget.headRef) || normalizeText18(executionTargetPull.headRef) || normalizeText18(executionTargetPull.head?.ref) || normalizeText18(handoff.headRef) || normalizeText18(handoffTarget.headRef) || normalizeText18(handoffTarget.head?.ref) || normalizeText18(pullRequest.headRef) || normalizeText18(pullRequest.head?.ref) || null,
-    headSha: normalizeText18(executionTarget.headSha) || normalizeText18(executionTargetPull.headSha) || normalizeText18(executionTargetPull.head?.sha) || normalizeText18(handoff.headSha) || normalizeText18(handoffTarget.headSha) || normalizeText18(handoffTarget.head?.sha) || normalizeText18(pullRequest.headSha) || normalizeText18(pullRequest.head?.sha) || null
+    headRef: normalizeText20(executionTarget.headRef) || normalizeText20(executionTargetPull.headRef) || normalizeText20(executionTargetPull.head?.ref) || normalizeText20(handoff.headRef) || normalizeText20(handoffTarget.headRef) || normalizeText20(handoffTarget.head?.ref) || normalizeText20(pullRequest.headRef) || normalizeText20(pullRequest.head?.ref) || null,
+    headSha: normalizeText20(executionTarget.headSha) || normalizeText20(executionTargetPull.headSha) || normalizeText20(executionTargetPull.head?.sha) || normalizeText20(handoff.headSha) || normalizeText20(handoffTarget.headSha) || normalizeText20(handoffTarget.head?.sha) || normalizeText20(pullRequest.headSha) || normalizeText20(pullRequest.head?.sha) || null
   };
 }
 function collectRevisionTargetConflicts({ executionTarget, handoff }) {
@@ -25701,9 +26186,9 @@ function normalizeRevisionTargetSource(source, value = {}) {
   const target = {
     source,
     number: normalizePositiveInteger3(input.number ?? pullRequest.number),
-    state: normalizeText18(input.state ?? pullRequest.state).toLowerCase() || null,
-    headRef: normalizeText18(input.headRef) || normalizeText18(pullRequest.headRef) || normalizeText18(pullRequest.head?.ref) || null,
-    headSha: normalizeText18(input.headSha) || normalizeText18(pullRequest.headSha) || normalizeText18(pullRequest.head?.sha) || null
+    state: normalizeText20(input.state ?? pullRequest.state).toLowerCase() || null,
+    headRef: normalizeText20(input.headRef) || normalizeText20(pullRequest.headRef) || normalizeText20(pullRequest.head?.ref) || null,
+    headSha: normalizeText20(input.headSha) || normalizeText20(pullRequest.headSha) || normalizeText20(pullRequest.head?.sha) || null
   };
   return {
     ...target,
@@ -25764,9 +26249,9 @@ async function dispatchControlRepositoryWorkflow({ request, token, env, transpor
       reason: "VTDD_GITHUB_ACTIONS_REPOSITORY must be configured"
     };
   }
-  const workflowFile = normalizeText18(env?.REMOTE_CODEX_WORKFLOW_FILE) || REMOTE_CODEX_WORKFLOW_FILE;
-  const workflowRef = normalizeText18(env?.REMOTE_CODEX_WORKFLOW_REF) || "main";
-  const apiBaseUrl = normalizeText18(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
+  const workflowFile = normalizeText20(env?.REMOTE_CODEX_WORKFLOW_FILE) || REMOTE_CODEX_WORKFLOW_FILE;
+  const workflowRef = normalizeText20(env?.REMOTE_CODEX_WORKFLOW_REF) || "main";
+  const apiBaseUrl = normalizeText20(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
   const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
   const dispatchUrl = `${apiBaseUrl}/repos/${encodeURIComponentRepository2(
     controlRepository
@@ -25815,7 +26300,7 @@ async function dispatchControlRepositoryWorkflow({ request, token, env, transpor
       ok: false,
       status: response.status,
       error: "remote_codex_dispatch_failed",
-      reason: normalizeText18(body?.message) || "GitHub workflow dispatch failed"
+      reason: normalizeText20(body?.message) || "GitHub workflow dispatch failed"
     };
   }
   const progress = await retrieveControlRepositoryWorkflowProgress({
@@ -25851,7 +26336,7 @@ async function dispatchControlRepositoryWorkflow({ request, token, env, transpor
   };
 }
 async function retrieveRemoteCodexExecutionProgress(input = {}) {
-  const executionId = normalizeText18(input?.executionId);
+  const executionId = normalizeText20(input?.executionId);
   if (!executionId) {
     return {
       ok: false,
@@ -25882,9 +26367,9 @@ async function retrieveRemoteCodexExecutionProgress(input = {}) {
   if (transport.value === RemoteCodexExecutorTransport.CODEX_CLOUD_GITHUB_COMMENT) {
     return retrieveCodexCloudGitHubCommentProgress({
       executionId,
-      repository: normalizeText18(input?.repository),
+      repository: normalizeText20(input?.repository),
       issueNumber: normalizePositiveInteger3(input?.issueNumber),
-      branch: normalizeText18(input?.branch),
+      branch: normalizeText20(input?.branch),
       token: token.value,
       env: input?.env
     });
@@ -25892,9 +26377,9 @@ async function retrieveRemoteCodexExecutionProgress(input = {}) {
   if (transport.value === RemoteCodexExecutorTransport.VPS_RUNNER) {
     return retrieveVpsRunnerGitHubQueueProgress({
       executionId,
-      repository: normalizeText18(input?.repository),
+      repository: normalizeText20(input?.repository),
       issueNumber: normalizePositiveInteger3(input?.issueNumber),
-      branch: normalizeText18(input?.branch),
+      branch: normalizeText20(input?.branch),
       token: token.value,
       env: input?.env
     });
@@ -25904,8 +26389,8 @@ async function retrieveRemoteCodexExecutionProgress(input = {}) {
     token: token.value,
     env: input?.env,
     transport: transport.value,
-    repository: normalizeText18(input?.repository),
-    branch: normalizeText18(input?.branch)
+    repository: normalizeText20(input?.repository),
+    branch: normalizeText20(input?.branch)
   });
 }
 async function retrieveVpsRunnerHealthStatus(input = {}) {
@@ -25926,12 +26411,12 @@ async function retrieveVpsRunnerHealthStatus(input = {}) {
   };
 }
 async function cancelVpsRunnerQueue(input = {}) {
-  const repository = normalizeText18(input?.repository);
+  const repository = normalizeText20(input?.repository);
   const issueNumber = normalizePositiveInteger3(input?.issueNumber);
-  const executionId = normalizeText18(input?.executionId);
+  const executionId = normalizeText20(input?.executionId);
   const mode = normalizeVpsRunnerCancelMode(input?.mode, { executionId, issueNumber });
-  const reason = normalizeText18(input?.reason) || "Canceled by Butler request.";
-  const actor = normalizeText18(input?.actor) || null;
+  const reason = normalizeText20(input?.reason) || "Canceled by Butler request.";
+  const actor = normalizeText20(input?.actor) || null;
   const issues = [];
   if (!repository) {
     issues.push("repository is required");
@@ -25963,7 +26448,7 @@ async function cancelVpsRunnerQueue(input = {}) {
       reason: token.reason
     };
   }
-  const apiBaseUrl = normalizeText18(input?.env?.GITHUB_API_BASE_URL) || "https://api.github.com";
+  const apiBaseUrl = normalizeText20(input?.env?.GITHUB_API_BASE_URL) || "https://api.github.com";
   const fetchImpl = typeof input?.env?.GITHUB_API_FETCH === "function" ? input.env.GITHUB_API_FETCH.bind(input.env) : fetch;
   let comments;
   try {
@@ -25973,7 +26458,7 @@ async function cancelVpsRunnerQueue(input = {}) {
       ok: false,
       status: error?.status || 503,
       error: "vps_runner_cancel_failed",
-      reason: normalizeText18(error?.message) || "failed to read VPS runner queue comments"
+      reason: normalizeText20(error?.message) || "failed to read VPS runner queue comments"
     };
   }
   const queueStates = buildVpsRunnerQueueStates(comments);
@@ -26018,7 +26503,7 @@ async function cancelVpsRunnerQueue(input = {}) {
       executionId: target.executionId,
       issueNumber: target.issueNumber,
       queueCommentId: normalizePositiveInteger3(target.comment?.id),
-      queueCommentUrl: normalizeText18(target.comment?.html_url) || null,
+      queueCommentUrl: normalizeText20(target.comment?.html_url) || null,
       previousState: target.lifecycle,
       runningCancelRequested: cancellation.runningCancelRequested
     });
@@ -26057,8 +26542,8 @@ async function retrieveControlRepositoryWorkflowProgress({
       reason: "VTDD_GITHUB_ACTIONS_REPOSITORY must be configured"
     };
   }
-  const workflowFile = normalizeText18(env?.REMOTE_CODEX_WORKFLOW_FILE) || REMOTE_CODEX_WORKFLOW_FILE;
-  const apiBaseUrl = normalizeText18(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
+  const workflowFile = normalizeText20(env?.REMOTE_CODEX_WORKFLOW_FILE) || REMOTE_CODEX_WORKFLOW_FILE;
+  const apiBaseUrl = normalizeText20(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
   const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
   const progressUrl = `${apiBaseUrl}/repos/${encodeURIComponentRepository2(
     controlRepository
@@ -26088,7 +26573,7 @@ async function retrieveControlRepositoryWorkflowProgress({
       ok: false,
       status: response.status,
       error: "remote_codex_progress_failed",
-      reason: normalizeText18(body?.message) || "GitHub workflow runs lookup failed"
+      reason: normalizeText20(body?.message) || "GitHub workflow runs lookup failed"
     };
   }
   const runs = Array.isArray(body?.workflow_runs) ? body.workflow_runs : [];
@@ -26101,8 +26586,8 @@ async function retrieveControlRepositoryWorkflowProgress({
       reason: "no remote Codex workflow run matched executionId"
     };
   }
-  const targetRepository = normalizeText18(repository);
-  const targetBranch = normalizeText18(branch);
+  const targetRepository = normalizeText20(repository);
+  const targetBranch = normalizeText20(branch);
   const pullRequest = targetRepository && targetBranch ? await findPullRequestForBranch({
     repository: targetRepository,
     branch: targetBranch,
@@ -26122,7 +26607,7 @@ async function retrieveControlRepositoryWorkflowProgress({
     return branchState;
   }
   const runStatus = normalizeRunStatus(run.status);
-  const conclusion = normalizeText18(run.conclusion) || null;
+  const conclusion = normalizeText20(run.conclusion) || null;
   const targetRuntimeTruth = buildControlRunnerTargetRuntimeTruth({
     runStatus,
     conclusion,
@@ -26139,19 +26624,19 @@ async function retrieveControlRepositoryWorkflowProgress({
       controlRepository,
       workflowFile,
       workflowRunId: normalizePositiveInteger3(run.id),
-      workflowUrl: normalizeText18(run.html_url) || null,
+      workflowUrl: normalizeText20(run.html_url) || null,
       status: runStatus,
       conclusion,
-      branch: normalizeText18(run.head_branch) || null,
+      branch: normalizeText20(run.head_branch) || null,
       targetRuntimeTruth,
-      displayTitle: normalizeText18(run.display_title) || null,
-      startedAt: normalizeText18(run.run_started_at) || null,
-      updatedAt: normalizeText18(run.updated_at) || null
+      displayTitle: normalizeText20(run.display_title) || null,
+      startedAt: normalizeText20(run.run_started_at) || null,
+      updatedAt: normalizeText20(run.updated_at) || null
     }
   };
 }
 async function dispatchCodexCloudGitHubComment({ request, token, env }) {
-  const apiBaseUrl = normalizeText18(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
+  const apiBaseUrl = normalizeText20(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
   const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
   const commentUrl = `${apiBaseUrl}/repos/${encodeURIComponentRepository2(
     request.repository
@@ -26178,7 +26663,7 @@ async function dispatchCodexCloudGitHubComment({ request, token, env }) {
       ok: false,
       status: response.status,
       error: "remote_codex_dispatch_failed",
-      reason: normalizeText18(responseBody?.message) || "GitHub issue comment creation failed"
+      reason: normalizeText20(responseBody?.message) || "GitHub issue comment creation failed"
     };
   }
   return {
@@ -26194,13 +26679,13 @@ async function dispatchCodexCloudGitHubComment({ request, token, env }) {
       revisionTarget: request.revisionTarget,
       approvalScopeMatched: request.approvalScopeMatched,
       commentId: normalizePositiveInteger3(responseBody?.id),
-      commentUrl: normalizeText18(responseBody?.html_url) || null,
+      commentUrl: normalizeText20(responseBody?.html_url) || null,
       status: RemoteCodexExecutionStatus.QUEUED
     }
   };
 }
 async function dispatchVpsRunnerGitHubQueue({ request, token, env }) {
-  const apiBaseUrl = normalizeText18(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
+  const apiBaseUrl = normalizeText20(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
   const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
   const commentUrl = `${apiBaseUrl}/repos/${encodeURIComponentRepository2(
     request.repository
@@ -26227,7 +26712,7 @@ async function dispatchVpsRunnerGitHubQueue({ request, token, env }) {
       ok: false,
       status: response.status,
       error: "vps_runner_dispatch_failed",
-      reason: normalizeText18(responseBody?.message) || "GitHub issue comment creation failed"
+      reason: normalizeText20(responseBody?.message) || "GitHub issue comment creation failed"
     };
   }
   return {
@@ -26242,7 +26727,7 @@ async function dispatchVpsRunnerGitHubQueue({ request, token, env }) {
       codexGoal: request.codexGoal,
       approvalScopeMatched: request.approvalScopeMatched,
       queueCommentId: normalizePositiveInteger3(responseBody?.id),
-      queueCommentUrl: normalizeText18(responseBody?.html_url) || null,
+      queueCommentUrl: normalizeText20(responseBody?.html_url) || null,
       status: RemoteCodexExecutionStatus.QUEUED
     }
   };
@@ -26263,7 +26748,7 @@ async function retrieveCodexCloudGitHubCommentProgress({
       reason: "repository and issueNumber are required for Codex Cloud GitHub comment progress"
     };
   }
-  const apiBaseUrl = normalizeText18(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
+  const apiBaseUrl = normalizeText20(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
   const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
   const commentsUrl = `${apiBaseUrl}/repos/${encodeURIComponentRepository2(
     repository
@@ -26288,12 +26773,12 @@ async function retrieveCodexCloudGitHubCommentProgress({
       ok: false,
       status: commentsResponse.status,
       error: "remote_codex_progress_failed",
-      reason: normalizeText18(commentsBody?.message) || "GitHub issue comments lookup failed"
+      reason: normalizeText20(commentsBody?.message) || "GitHub issue comments lookup failed"
     };
   }
   const comments = Array.isArray(commentsBody) ? commentsBody : [];
   const delegationComment = comments.find(
-    (comment) => normalizeText18(comment?.body).includes(`vtdd:remote-codex-execution:${executionId}`)
+    (comment) => normalizeText20(comment?.body).includes(`vtdd:remote-codex-execution:${executionId}`)
   );
   if (!delegationComment) {
     return {
@@ -26322,13 +26807,13 @@ async function retrieveCodexCloudGitHubCommentProgress({
       issueNumber,
       branch: branchState.branch,
       leadTime: buildRemoteCodexLeadTime({
-        queuedAt: normalizeText18(delegationComment.created_at),
-        branchPushedAt: normalizeText18(branchState.branch?.createdAt),
-        prCreatedAt: normalizeText18(pullRequest.pullRequest?.createdAt),
-        completedAt: normalizeText18(pullRequest.pullRequest?.createdAt)
+        queuedAt: normalizeText20(delegationComment.created_at),
+        branchPushedAt: normalizeText20(branchState.branch?.createdAt),
+        prCreatedAt: normalizeText20(pullRequest.pullRequest?.createdAt),
+        completedAt: normalizeText20(pullRequest.pullRequest?.createdAt)
       }),
       delegationCommentId: normalizePositiveInteger3(delegationComment.id),
-      delegationCommentUrl: normalizeText18(delegationComment.html_url) || null,
+      delegationCommentUrl: normalizeText20(delegationComment.html_url) || null,
       status: pullRequest.pullRequest ? RemoteCodexExecutionStatus.COMPLETED : branchState.branch ? RemoteCodexExecutionStatus.IN_PROGRESS : connectorBlocker ? RemoteCodexExecutionStatus.BLOCKED : pickupBlocker ? RemoteCodexExecutionStatus.BLOCKED : RemoteCodexExecutionStatus.QUEUED,
       pullRequest: pullRequest.pullRequest,
       staleBranchAmbiguity: pullRequest.staleBranchAmbiguity,
@@ -26352,7 +26837,7 @@ async function retrieveVpsRunnerGitHubQueueProgress({
       reason: "repository and issueNumber are required for VPS runner progress"
     };
   }
-  const apiBaseUrl = normalizeText18(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
+  const apiBaseUrl = normalizeText20(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
   const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
   let comments;
   try {
@@ -26368,11 +26853,11 @@ async function retrieveVpsRunnerGitHubQueueProgress({
       ok: false,
       status: error?.status || 503,
       error: "vps_runner_progress_failed",
-      reason: normalizeText18(error?.message) || "failed to read VPS runner queue comments"
+      reason: normalizeText20(error?.message) || "failed to read VPS runner queue comments"
     };
   }
   const queueComment = comments.find(
-    (comment) => normalizeText18(comment?.body).includes(`vtdd:vps-runner-execution:${executionId}`)
+    (comment) => normalizeText20(comment?.body).includes(`vtdd:vps-runner-execution:${executionId}`)
   );
   if (!queueComment) {
     return {
@@ -26408,7 +26893,7 @@ async function retrieveVpsRunnerGitHubQueueProgress({
     mode: cancellation.mode || null,
     runningCancelRequested: cancellation.runningCancelRequested === true,
     queueCommentId: normalizePositiveInteger3(queueComment.id),
-    queueCommentUrl: normalizeText18(queueComment.html_url) || null
+    queueCommentUrl: normalizeText20(queueComment.html_url) || null
   } : null;
   const status = cancellation ? RemoteCodexExecutionStatus.CANCELED : pullRequest.pullRequest ? RemoteCodexExecutionStatus.COMPLETED : failureBlocker || runnerEventStaleBlocker || staleBlocker ? RemoteCodexExecutionStatus.BLOCKED : branchState.branch ? RemoteCodexExecutionStatus.IN_PROGRESS : runnerEvent?.status || RemoteCodexExecutionStatus.QUEUED;
   return {
@@ -26420,7 +26905,7 @@ async function retrieveVpsRunnerGitHubQueueProgress({
       issueNumber,
       branch: branchState.branch,
       queueCommentId: normalizePositiveInteger3(queueComment.id),
-      queueCommentUrl: normalizeText18(queueComment.html_url) || null,
+      queueCommentUrl: normalizeText20(queueComment.html_url) || null,
       status,
       pullRequest: pullRequest.pullRequest,
       staleBranchAmbiguity: pullRequest.staleBranchAmbiguity,
@@ -26443,7 +26928,7 @@ async function readAllIssueComments({ apiBaseUrl, repository, issueNumber, token
     });
     const body = await readJsonSafe3(response);
     if (!response.ok) {
-      const error = new Error(normalizeText18(body?.message) || "GitHub issue comments lookup failed");
+      const error = new Error(normalizeText20(body?.message) || "GitHub issue comments lookup failed");
       error.status = response.status;
       throw error;
     }
@@ -26464,7 +26949,7 @@ async function readRecentRepositoryIssueComments({ apiBaseUrl, repository, token
   });
   const issuesBody = await readJsonSafe3(issuesResponse);
   if (!issuesResponse.ok) {
-    const error = new Error(normalizeText18(issuesBody?.message) || "GitHub issues lookup failed");
+    const error = new Error(normalizeText20(issuesBody?.message) || "GitHub issues lookup failed");
     error.status = issuesResponse.status;
     throw error;
   }
@@ -26487,7 +26972,7 @@ async function readRecentRepositoryIssueComments({ apiBaseUrl, repository, token
   return comments;
 }
 async function findPullRequestForBranch({ repository, branch, token, env }) {
-  const apiBaseUrl = normalizeText18(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
+  const apiBaseUrl = normalizeText20(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
   const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
   const [owner] = repository.split("/");
   const pullsUrl = `${apiBaseUrl}/repos/${encodeURIComponentRepository2(
@@ -26513,11 +26998,11 @@ async function findPullRequestForBranch({ repository, branch, token, env }) {
       ok: false,
       status: response.status,
       error: "remote_codex_progress_failed",
-      reason: normalizeText18(body?.message) || "GitHub pull request lookup failed"
+      reason: normalizeText20(body?.message) || "GitHub pull request lookup failed"
     };
   }
   const pulls = Array.isArray(body) ? body : [];
-  const pull = pulls.find((item) => normalizeText18(item?.state) === "open") || null;
+  const pull = pulls.find((item) => normalizeText20(item?.state) === "open") || null;
   const staleBranchAmbiguity = !pull && pulls.length > 0 ? {
     error: "stale_branch_pr_ambiguity",
     reason: "target branch is associated only with non-open pull requests; revise_pr must not target this branch without a fresh open PR lock",
@@ -26532,17 +27017,17 @@ async function findPullRequestForBranch({ repository, branch, token, env }) {
 function normalizeRuntimePullRequest(pull) {
   return {
     number: normalizePositiveInteger3(pull?.number),
-    url: normalizeText18(pull?.html_url) || null,
-    state: normalizeText18(pull?.state) || null,
-    title: normalizeText18(pull?.title) || null,
-    headRef: normalizeText18(pull?.head?.ref) || null,
-    headSha: normalizeText18(pull?.head?.sha) || null,
-    createdAt: normalizeText18(pull?.created_at) || null,
-    updatedAt: normalizeText18(pull?.updated_at) || null
+    url: normalizeText20(pull?.html_url) || null,
+    state: normalizeText20(pull?.state) || null,
+    title: normalizeText20(pull?.title) || null,
+    headRef: normalizeText20(pull?.head?.ref) || null,
+    headSha: normalizeText20(pull?.head?.sha) || null,
+    createdAt: normalizeText20(pull?.created_at) || null,
+    updatedAt: normalizeText20(pull?.updated_at) || null
   };
 }
 async function findBranch({ repository, branch, token, env }) {
-  const apiBaseUrl = normalizeText18(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
+  const apiBaseUrl = normalizeText20(env?.GITHUB_API_BASE_URL) || "https://api.github.com";
   const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
   const branchUrl = `${apiBaseUrl}/repos/${encodeURIComponentRepository2(
     repository
@@ -26570,15 +27055,15 @@ async function findBranch({ repository, branch, token, env }) {
       ok: false,
       status: response.status,
       error: "remote_codex_progress_failed",
-      reason: normalizeText18(body?.message) || "GitHub branch lookup failed"
+      reason: normalizeText20(body?.message) || "GitHub branch lookup failed"
     };
   }
   return {
     ok: true,
     branch: {
-      name: normalizeText18(body?.name) || branch,
-      url: normalizeText18(body?._links?.html) || null,
-      sha: normalizeText18(body?.commit?.sha) || null
+      name: normalizeText20(body?.name) || branch,
+      url: normalizeText20(body?._links?.html) || null,
+      sha: normalizeText20(body?.commit?.sha) || null
     }
   };
 }
@@ -26589,8 +27074,8 @@ function findCodexCloudConnectorBlocker({ comments, delegationComment }) {
     return !delegationId || commentId > delegationId;
   });
   const blockerComment = laterComments.find((comment) => {
-    const author = normalizeText18(comment?.user?.login).toLowerCase();
-    const body = normalizeText18(comment?.body).toLowerCase();
+    const author = normalizeText20(comment?.user?.login).toLowerCase();
+    const body = normalizeText20(comment?.body).toLowerCase();
     return author.includes("chatgpt-codex-connector") && (body.includes("create a codex account and connect to github") || body.includes("to use codex here"));
   });
   if (!blockerComment) {
@@ -26600,14 +27085,14 @@ function findCodexCloudConnectorBlocker({ comments, delegationComment }) {
     error: "codex_cloud_connector_required",
     reason: "Codex Cloud connector is not ready for this repository or account",
     commentId: normalizePositiveInteger3(blockerComment.id),
-    commentUrl: normalizeText18(blockerComment.html_url) || null
+    commentUrl: normalizeText20(blockerComment.html_url) || null
   };
 }
 function buildCodexCloudPickupBlocker({ delegationComment, env }) {
   const graceSeconds = normalizeNonNegativeNumber(
     env?.CODEX_CLOUD_PICKUP_GRACE_SECONDS ?? 300
   );
-  const createdAt = Date.parse(normalizeText18(delegationComment?.created_at));
+  const createdAt = Date.parse(normalizeText20(delegationComment?.created_at));
   if (!Number.isFinite(createdAt)) {
     return null;
   }
@@ -26619,7 +27104,7 @@ function buildCodexCloudPickupBlocker({ delegationComment, env }) {
     error: "codex_cloud_pickup_not_observed",
     reason: "Codex Cloud did not create a branch or PR from the delegation comment within the pickup grace period",
     commentId: normalizePositiveInteger3(delegationComment?.id),
-    commentUrl: normalizeText18(delegationComment?.html_url) || null,
+    commentUrl: normalizeText20(delegationComment?.html_url) || null,
     graceSeconds,
     ageSeconds
   };
@@ -26631,7 +27116,7 @@ function findVpsRunnerEvents({ comments, queueComment }) {
     return !queueCommentId || commentId > queueCommentId;
   });
   const events = laterComments.map((comment) => {
-    const body = normalizeText18(comment?.body);
+    const body = normalizeText20(comment?.body);
     const marker = `vtdd:vps-runner-event:${extractVpsExecutionIdFromQueueComment(queueComment)}`;
     if (!body.includes(marker)) {
       return null;
@@ -26640,23 +27125,23 @@ function findVpsRunnerEvents({ comments, queueComment }) {
     if (!payload) {
       return null;
     }
-    const rawStatus = normalizeText18(payload.status);
+    const rawStatus = normalizeText20(payload.status);
     const status = normalizeVpsRunnerEventStatus(rawStatus);
     const leadTime = normalizeObject8(payload.leadTime);
     return {
       commentId: normalizePositiveInteger3(comment?.id),
-      commentUrl: normalizeText18(comment?.html_url) || null,
+      commentUrl: normalizeText20(comment?.html_url) || null,
       rawStatus,
       status,
-      lastEvent: normalizeText18(payload.lastEvent) || null,
-      currentStep: normalizeText18(payload.currentStep) || null,
-      heartbeatAt: normalizeText18(payload.heartbeatAt) || null,
+      lastEvent: normalizeText20(payload.lastEvent) || null,
+      currentStep: normalizeText20(payload.currentStep) || null,
+      heartbeatAt: normalizeText20(payload.heartbeatAt) || null,
       leadTime,
       rawFailure: normalizeObject8(payload.rawFailure),
       command: normalizeObject8(payload.command),
-      branch: normalizeText18(payload.branch) || null,
+      branch: normalizeText20(payload.branch) || null,
       pullRequest: normalizeObject8(payload.pullRequest),
-      updatedAt: normalizeText18(payload.updatedAt) || normalizeText18(payload.heartbeatAt) || normalizeText18(comment?.updated_at) || normalizeText18(comment?.created_at) || null
+      updatedAt: normalizeText20(payload.updatedAt) || normalizeText20(payload.heartbeatAt) || normalizeText20(comment?.updated_at) || normalizeText20(comment?.created_at) || null
     };
   }).filter(Boolean);
   return events;
@@ -26687,9 +27172,9 @@ function buildVpsRunnerQueueStates(comments) {
     }
     const list = eventsByExecution.get(eventExecutionId) || [];
     list.push({
-      rawStatus: normalizeText18(payload.status),
+      rawStatus: normalizeText20(payload.status),
       status: normalizeVpsRunnerEventStatus(payload.status),
-      updatedAt: normalizeText18(payload.updatedAt) || normalizeText18(payload.heartbeatAt) || normalizeText18(comment?.updated_at) || normalizeText18(comment?.created_at)
+      updatedAt: normalizeText20(payload.updatedAt) || normalizeText20(payload.heartbeatAt) || normalizeText20(comment?.updated_at) || normalizeText20(comment?.created_at)
     });
     eventsByExecution.set(eventExecutionId, list);
   }
@@ -26713,7 +27198,7 @@ async function patchVpsRunnerQueueCancellation({ apiBaseUrl, repository, token, 
       reason: "queue comment id is missing"
     };
   }
-  const body = `${normalizeText18(comment?.body)}
+  const body = `${normalizeText20(comment?.body)}
 
 ${buildVpsRunnerCanceledMarker(cancellation)}`;
   const response = await fetchImpl(
@@ -26730,7 +27215,7 @@ ${buildVpsRunnerCanceledMarker(cancellation)}`;
       ok: false,
       status: response.status,
       error: "vps_runner_cancel_failed",
-      reason: normalizeText18(responseBody?.message) || "GitHub queue comment update failed"
+      reason: normalizeText20(responseBody?.message) || "GitHub queue comment update failed"
     };
   }
   return { ok: true };
@@ -26744,7 +27229,7 @@ function buildVpsRunnerCanceledMarker(cancellation) {
   ].join("\n");
 }
 function parseVpsRunnerCancellationFromQueueComment(comment) {
-  const body = normalizeText18(comment?.body);
+  const body = normalizeText20(comment?.body);
   const executionId = extractVpsExecutionIdFromQueueComment(comment);
   if (!executionId || !body.includes(`vtdd:vps-runner-canceled:${executionId}`)) {
     return null;
@@ -26754,24 +27239,24 @@ function parseVpsRunnerCancellationFromQueueComment(comment) {
   return {
     status: "canceled",
     executionId,
-    mode: normalizeText18(payload?.mode) || null,
-    reason: normalizeText18(payload?.reason) || null,
-    actor: normalizeText18(payload?.actor) || null,
-    canceledAt: normalizeText18(payload?.canceledAt) || null,
+    mode: normalizeText20(payload?.mode) || null,
+    reason: normalizeText20(payload?.reason) || null,
+    actor: normalizeText20(payload?.actor) || null,
+    canceledAt: normalizeText20(payload?.canceledAt) || null,
     runningCancelRequested: payload?.runningCancelRequested === true,
     commentId: normalizePositiveInteger3(comment?.id),
-    commentUrl: normalizeText18(comment?.html_url) || null
+    commentUrl: normalizeText20(comment?.html_url) || null
   };
 }
 function extractVpsExecutionIdFromEventComment(comment) {
-  const body = normalizeText18(comment?.body);
+  const body = normalizeText20(comment?.body);
   const match = body.match(/vtdd:vps-runner-event:([a-zA-Z0-9._:-]+)/);
   return match ? match[1] : "";
 }
 function selectLatestVpsRunnerEvent(events) {
   return [...Array.isArray(events) ? events : []].sort((left, right) => {
-    const leftUpdatedAt = Date.parse(normalizeText18(left?.updatedAt));
-    const rightUpdatedAt = Date.parse(normalizeText18(right?.updatedAt));
+    const leftUpdatedAt = Date.parse(normalizeText20(left?.updatedAt));
+    const rightUpdatedAt = Date.parse(normalizeText20(right?.updatedAt));
     if (Number.isFinite(leftUpdatedAt) && Number.isFinite(rightUpdatedAt) && leftUpdatedAt !== rightUpdatedAt) {
       return leftUpdatedAt - rightUpdatedAt;
     }
@@ -26782,32 +27267,32 @@ function buildVpsRunnerProgressLeadTime({ queueComment, runnerEvents, pullReques
   const latestWithLeadTime = [...Array.isArray(runnerEvents) ? runnerEvents : []].reverse().find((event) => Object.keys(normalizeObject8(event?.leadTime)).length > 0);
   const eventLeadTime = normalizeObject8(latestWithLeadTime?.leadTime);
   const timestamps = {
-    queuedAt: normalizeText18(eventLeadTime.queued_at) || normalizeText18(queueComment?.created_at),
-    pickedUpAt: normalizeText18(eventLeadTime.picked_up_at),
-    codexStartedAt: normalizeText18(eventLeadTime.codex_started_at),
-    branchPushedAt: normalizeText18(eventLeadTime.branch_pushed_at),
-    prCreatedAt: normalizeText18(eventLeadTime.pr_created_at) || normalizeText18(pullRequest?.createdAt),
-    completedAt: normalizeText18(eventLeadTime.completed_at),
-    failedAt: normalizeText18(eventLeadTime.failed_at)
+    queuedAt: normalizeText20(eventLeadTime.queued_at) || normalizeText20(queueComment?.created_at),
+    pickedUpAt: normalizeText20(eventLeadTime.picked_up_at),
+    codexStartedAt: normalizeText20(eventLeadTime.codex_started_at),
+    branchPushedAt: normalizeText20(eventLeadTime.branch_pushed_at),
+    prCreatedAt: normalizeText20(eventLeadTime.pr_created_at) || normalizeText20(pullRequest?.createdAt),
+    completedAt: normalizeText20(eventLeadTime.completed_at),
+    failedAt: normalizeText20(eventLeadTime.failed_at)
   };
   for (const event of runnerEvents || []) {
-    const updatedAt = normalizeText18(event?.updatedAt);
-    if (!timestamps.pickedUpAt && ["picked_up", "runner_started"].includes(normalizeText18(event?.lastEvent))) {
+    const updatedAt = normalizeText20(event?.updatedAt);
+    if (!timestamps.pickedUpAt && ["picked_up", "runner_started"].includes(normalizeText20(event?.lastEvent))) {
       timestamps.pickedUpAt = updatedAt;
     }
-    if (!timestamps.codexStartedAt && (normalizeText18(event?.currentStep) === "codex_subprocess" || normalizeText18(event?.lastEvent) === "codex_started" || normalizeText18(event?.lastEvent) === "codex_subprocess_started")) {
+    if (!timestamps.codexStartedAt && (normalizeText20(event?.currentStep) === "codex_subprocess" || normalizeText20(event?.lastEvent) === "codex_started" || normalizeText20(event?.lastEvent) === "codex_subprocess_started")) {
       timestamps.codexStartedAt = updatedAt;
     }
-    if (!timestamps.branchPushedAt && normalizeText18(event?.lastEvent) === "branch_pushed") {
+    if (!timestamps.branchPushedAt && normalizeText20(event?.lastEvent) === "branch_pushed") {
       timestamps.branchPushedAt = updatedAt;
     }
-    if (!timestamps.prCreatedAt && ["pull_request_created", "pull_request_updated"].includes(normalizeText18(event?.lastEvent))) {
+    if (!timestamps.prCreatedAt && ["pull_request_created", "pull_request_updated"].includes(normalizeText20(event?.lastEvent))) {
       timestamps.prCreatedAt = updatedAt;
     }
-    if (!timestamps.completedAt && normalizeText18(event?.rawStatus) === RemoteCodexExecutionStatus.COMPLETED) {
+    if (!timestamps.completedAt && normalizeText20(event?.rawStatus) === RemoteCodexExecutionStatus.COMPLETED) {
       timestamps.completedAt = updatedAt;
     }
-    if (!timestamps.failedAt && normalizeText18(event?.status) === RemoteCodexExecutionStatus.BLOCKED && Object.keys(normalizeObject8(event?.rawFailure)).length > 0) {
+    if (!timestamps.failedAt && normalizeText20(event?.status) === RemoteCodexExecutionStatus.BLOCKED && Object.keys(normalizeObject8(event?.rawFailure)).length > 0) {
       timestamps.failedAt = updatedAt;
     }
   }
@@ -26817,12 +27302,12 @@ function buildRemoteCodexLeadTime(timestamps = {}) {
   return buildExecutionLeadTime(timestamps, { normalizeTimestamp: normalizeTimestamp4 });
 }
 function normalizeTimestamp4(value) {
-  const text = normalizeText18(value);
+  const text = normalizeText20(value);
   return Number.isFinite(Date.parse(text)) ? text : null;
 }
 function buildVpsRunnerEventStaleBlocker({ runnerEvent, env }) {
   const staleSeconds = normalizeNonNegativeNumber(env?.VPS_RUNNER_EVENT_STALE_SECONDS ?? 600);
-  const updatedAt = Date.parse(normalizeText18(runnerEvent?.updatedAt));
+  const updatedAt = Date.parse(normalizeText20(runnerEvent?.updatedAt));
   if (!Number.isFinite(updatedAt)) {
     return null;
   }
@@ -26837,17 +27322,17 @@ function buildVpsRunnerEventStaleBlocker({ runnerEvent, env }) {
     error: "vps_runner_event_stale",
     reason: "VPS runner last reported a running step but has not posted a heartbeat or terminal event within the stale threshold",
     commentId: normalizePositiveInteger3(runnerEvent?.commentId),
-    commentUrl: normalizeText18(runnerEvent?.commentUrl) || null,
-    lastEvent: normalizeText18(runnerEvent?.lastEvent) || null,
-    currentStep: normalizeText18(runnerEvent?.currentStep) || null,
-    lastUpdatedAt: normalizeText18(runnerEvent?.updatedAt) || null,
+    commentUrl: normalizeText20(runnerEvent?.commentUrl) || null,
+    lastEvent: normalizeText20(runnerEvent?.lastEvent) || null,
+    currentStep: normalizeText20(runnerEvent?.currentStep) || null,
+    lastUpdatedAt: normalizeText20(runnerEvent?.updatedAt) || null,
     staleSeconds,
     ageSeconds
   };
 }
 function buildVpsRunnerPickupBlocker({ queueComment, env }) {
   const graceSeconds = normalizeNonNegativeNumber(env?.VPS_RUNNER_PICKUP_GRACE_SECONDS ?? 300);
-  const createdAt = Date.parse(normalizeText18(queueComment?.created_at));
+  const createdAt = Date.parse(normalizeText20(queueComment?.created_at));
   if (!Number.isFinite(createdAt)) {
     return null;
   }
@@ -26859,7 +27344,7 @@ function buildVpsRunnerPickupBlocker({ queueComment, env }) {
     error: "vps_runner_pickup_not_observed",
     reason: "VPS runner did not report pickup and no target branch or PR was observed within the pickup grace period",
     commentId: normalizePositiveInteger3(queueComment?.id),
-    commentUrl: normalizeText18(queueComment?.html_url) || null,
+    commentUrl: normalizeText20(queueComment?.html_url) || null,
     graceSeconds,
     ageSeconds
   };
@@ -26870,18 +27355,18 @@ function buildVpsRunnerHealthStatus({ progress, env }) {
   const pullRequest = normalizeObject8(progress?.pullRequest);
   const branch = normalizeObject8(progress?.branch);
   const cancellation = normalizeObject8(progress?.cancellation);
-  const lastSeenAt = normalizeText18(runnerEvent.updatedAt) || normalizeText18(runnerEvent.heartbeatAt) || null;
-  const heartbeatAt = normalizeText18(runnerEvent.heartbeatAt) || null;
+  const lastSeenAt = normalizeText20(runnerEvent.updatedAt) || normalizeText20(runnerEvent.heartbeatAt) || null;
+  const heartbeatAt = normalizeText20(runnerEvent.heartbeatAt) || null;
   const queuePickedUp = Boolean(
     Object.keys(runnerEvent).length > 0 || Object.keys(branch).length > 0 || Object.keys(pullRequest).length > 0
   );
   const queueStatus = Object.keys(cancellation).length > 0 ? "canceled" : blocker.error === "vps_runner_pickup_not_observed" ? "stale" : queuePickedUp ? "picked_up" : "queued";
-  const currentStep = normalizeText18(runnerEvent.currentStep) || normalizeText18(runnerEvent.lastEvent) || (Object.keys(pullRequest).length > 0 ? "pull_request_observed" : Object.keys(branch).length > 0 ? "branch_observed" : "queue_waiting");
+  const currentStep = normalizeText20(runnerEvent.currentStep) || normalizeText20(runnerEvent.lastEvent) || (Object.keys(pullRequest).length > 0 ? "pull_request_observed" : Object.keys(branch).length > 0 ? "branch_observed" : "queue_waiting");
   const unavailableReason = buildVpsRunnerUnavailableReason({ progress, blocker });
   const runnerAlive = unavailableReason ? false : Boolean(lastSeenAt);
   const runnerStatus = runnerAlive ? "alive" : "unavailable";
   return {
-    executionId: normalizeText18(progress?.executionId) || null,
+    executionId: normalizeText20(progress?.executionId) || null,
     transport: RemoteCodexExecutorTransport.VPS_RUNNER,
     runnerStatus,
     runnerAlive,
@@ -26891,11 +27376,11 @@ function buildVpsRunnerHealthStatus({ progress, env }) {
       status: queueStatus,
       pickedUp: queuePickedUp,
       commentId: normalizePositiveInteger3(progress?.queueCommentId),
-      commentUrl: normalizeText18(progress?.queueCommentUrl) || null
+      commentUrl: normalizeText20(progress?.queueCommentUrl) || null
     },
     leadTime: normalizeObject8(progress?.leadTime),
     currentStep,
-    progressStatus: normalizeText18(progress?.status) || RemoteCodexExecutionStatus.UNKNOWN,
+    progressStatus: normalizeText20(progress?.status) || RemoteCodexExecutionStatus.UNKNOWN,
     cancellation: Object.keys(cancellation).length > 0 ? cancellation : null,
     reason: unavailableReason?.reason || null,
     reasonCode: unavailableReason?.code || null,
@@ -26903,12 +27388,12 @@ function buildVpsRunnerHealthStatus({ progress, env }) {
   };
 }
 function buildVpsRunnerUnavailableReason({ progress, blocker }) {
-  const progressStatus = normalizeText18(progress?.status);
-  const code = normalizeText18(blocker?.error);
+  const progressStatus = normalizeText20(progress?.status);
+  const code = normalizeText20(blocker?.error);
   if (code) {
     return {
       code,
-      reason: normalizeText18(blocker.reason) || "VPS runner status is unavailable from safe GitHub runtime truth"
+      reason: normalizeText20(blocker.reason) || "VPS runner status is unavailable from safe GitHub runtime truth"
     };
   }
   if (progressStatus === RemoteCodexExecutionStatus.QUEUED) {
@@ -26923,7 +27408,7 @@ function buildVpsRunnerUnavailableReason({ progress, blocker }) {
       reason: "VPS runner execution was canceled by Butler request"
     };
   }
-  if (!normalizeText18(progress?.runnerEvent?.updatedAt) && !normalizeText18(progress?.runnerEvent?.heartbeatAt)) {
+  if (!normalizeText20(progress?.runnerEvent?.updatedAt) && !normalizeText20(progress?.runnerEvent?.heartbeatAt)) {
     return {
       code: "vps_runner_last_seen_missing",
       reason: "VPS runner has not reported a heartbeat or event timestamp"
@@ -27068,10 +27553,10 @@ function buildVpsRunnerGitHubQueueComment({ request }) {
   return lines.join("\n");
 }
 function resolveExecutorTransport(input = {}, options = {}) {
-  const requestValue = normalizeText18(
+  const requestValue = normalizeText20(
     input?.executorTransport ?? input?.payload?.executorTransport ?? input?.payload?.continuationContext?.executorTransport
   );
-  const envValue = normalizeText18(input?.env?.REMOTE_CODEX_EXECUTOR_TRANSPORT);
+  const envValue = normalizeText20(input?.env?.REMOTE_CODEX_EXECUTOR_TRANSPORT);
   const value = requestValue || envValue;
   if (!value) {
     const configuredControlRepository = resolveControlRepository(input?.env);
@@ -27116,7 +27601,7 @@ function fencedJson(value) {
   return ["```json", JSON.stringify(value, null, 2), "```"].join("\n");
 }
 async function resolveGitHubExecutionToken(env) {
-  const directToken = normalizeText18(
+  const directToken = normalizeText20(
     env?.GITHUB_APP_INSTALLATION_TOKEN ?? env?.VTDD_GITHUB_ACTIONS_TOKEN
   );
   if (directToken) {
@@ -27125,7 +27610,7 @@ async function resolveGitHubExecutionToken(env) {
   const mintedToken = await resolveGitHubAppInstallationToken({
     env,
     fetchImpl: typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch,
-    apiBaseUrl: normalizeText18(env?.GITHUB_API_BASE_URL) || "https://api.github.com"
+    apiBaseUrl: normalizeText20(env?.GITHUB_API_BASE_URL) || "https://api.github.com"
   });
   if (mintedToken.ok) {
     return { ok: true, value: mintedToken.token };
@@ -27139,7 +27624,7 @@ async function resolveGitHubExecutionToken(env) {
   const provider = env?.GITHUB_APP_INSTALLATION_TOKEN_PROVIDER;
   if (typeof provider === "function") {
     try {
-      const provided = normalizeText18(await provider());
+      const provided = normalizeText20(await provider());
       if (provided) {
         return { ok: true, value: provided };
       }
@@ -27156,20 +27641,20 @@ async function resolveGitHubExecutionToken(env) {
   };
 }
 function resolveControlRepository(env) {
-  return normalizeText18(env?.VTDD_GITHUB_ACTIONS_REPOSITORY ?? env?.GITHUB_REPOSITORY);
+  return normalizeText20(env?.VTDD_GITHUB_ACTIONS_REPOSITORY ?? env?.GITHUB_REPOSITORY);
 }
 function matchesExecutionId(run, executionId) {
-  const displayTitle = normalizeText18(run?.display_title);
-  const name = normalizeText18(run?.name);
+  const displayTitle = normalizeText20(run?.display_title);
+  const name = normalizeText20(run?.name);
   return displayTitle.includes(executionId) || name.includes(executionId);
 }
 function extractVpsExecutionIdFromQueueComment(queueComment) {
-  const body = normalizeText18(queueComment?.body);
+  const body = normalizeText20(queueComment?.body);
   const match = body.match(/vtdd:vps-runner-execution:([a-zA-Z0-9._:-]+)/);
   return match ? match[1] : "";
 }
 function extractFirstJsonFence(text) {
-  const match = normalizeText18(text).match(/```json\s*([\s\S]*?)```/);
+  const match = normalizeText20(text).match(/```json\s*([\s\S]*?)```/);
   if (!match) {
     return null;
   }
@@ -27180,7 +27665,7 @@ function extractFirstJsonFence(text) {
   }
 }
 function normalizeVpsRunnerEventStatus(value) {
-  const normalized = normalizeText18(value).toLowerCase();
+  const normalized = normalizeText20(value).toLowerCase();
   if (normalized === "running" || normalized === "in_progress" || normalized === "branch_created") {
     return RemoteCodexExecutionStatus.IN_PROGRESS;
   }
@@ -27199,7 +27684,7 @@ function normalizeVpsRunnerEventStatus(value) {
   return RemoteCodexExecutionStatus.UNKNOWN;
 }
 function normalizeVpsRunnerCancelMode(value, { executionId, issueNumber } = {}) {
-  const normalized = normalizeText18(value).toLowerCase();
+  const normalized = normalizeText20(value).toLowerCase();
   if (normalized === "execution" || normalized === "execution_id") {
     return VpsRunnerCancelMode.EXECUTION;
   }
@@ -27218,7 +27703,7 @@ function normalizeVpsRunnerCancelMode(value, { executionId, issueNumber } = {}) 
   return VpsRunnerCancelMode.DRAIN_PENDING;
 }
 function normalizeRunStatus(value) {
-  const normalized = normalizeText18(value).toLowerCase();
+  const normalized = normalizeText20(value).toLowerCase();
   if (normalized === "queued" || normalized === "waiting" || normalized === "requested") {
     return RemoteCodexExecutionStatus.QUEUED;
   }
@@ -27244,7 +27729,7 @@ function normalizeObject8(value) {
   }
   return value;
 }
-function normalizeText18(value) {
+function normalizeText20(value) {
   return String(value ?? "").trim();
 }
 function normalizePositiveInteger3(value) {
@@ -27339,129 +27824,6 @@ var HumanOperationalResponsibility = Object.freeze({
   FINAL_DECISION: "final_decision"
 });
 
-// src/core/reviewer-operator-summary.js
-var ReviewerOperatorSeverity = Object.freeze({
-  CRITICAL: "\u81F4\u547D\u7684",
-  IMPORTANT: "\u91CD\u8981",
-  MINOR: "\u8EFD\u5FAE",
-  INFO: "\u60C5\u5831\u306E\u307F"
-});
-
-// src/core/codex-review-fallback.js
-var CODEX_REVIEW_FALLBACK_MARKER = "<!-- vtdd:reviewer=codex-fallback -->";
-var CodexReviewFallbackStatus = Object.freeze({
-  REQUESTED: "requested",
-  COMPLETED: "completed",
-  BLOCKED: "blocked"
-});
-var CodexReviewFallbackBlocker = Object.freeze({
-  CODEX_CONNECTOR_NOT_CONFIGURED: "codex_connector_not_configured"
-});
-function parseCodexReviewFallbackComment(comment = {}) {
-  const body = normalizeText19(typeof comment === "string" ? comment : comment?.body);
-  if (!body || !containsMarker(body)) {
-    return null;
-  }
-  const status = extractBacktickedValue(body, "Status") || (body.includes("@codex review") ? CodexReviewFallbackStatus.REQUESTED : "");
-  const recommendedAction = extractBacktickedValue(body, "Recommended action");
-  const blocker = extractBacktickedValue(body, "Blocker");
-  return {
-    reviewer: "codex",
-    status: normalizeFallbackStatus(status) || CodexReviewFallbackStatus.REQUESTED,
-    blocking: determineBlocking({
-      status,
-      recommendedAction,
-      blocker
-    }),
-    recommendedAction: recommendedAction || null,
-    blocker: blocker || null,
-    body
-  };
-}
-function parseCodexConnectorSetupComment(comment = {}) {
-  const body = normalizeText19(typeof comment === "string" ? comment : comment?.body);
-  const author = normalizeText19(comment?.author?.login ?? comment?.user?.login);
-  if (!isCodexConnectorAuthor(author) || !isCodexConnectorSetupBody(body)) {
-    return null;
-  }
-  return {
-    reviewer: "codex",
-    status: CodexReviewFallbackStatus.BLOCKED,
-    blocking: true,
-    recommendedAction: null,
-    blocker: CodexReviewFallbackBlocker.CODEX_CONNECTOR_NOT_CONFIGURED,
-    body
-  };
-}
-function containsMarker(value) {
-  return normalizeText19(value).includes(CODEX_REVIEW_FALLBACK_MARKER);
-}
-function isCodexConnectorAuthor(value) {
-  return normalizeText19(value).toLowerCase() === "chatgpt-codex-connector";
-}
-function isCodexConnectorSetupBody(value) {
-  const body = normalizeText19(value).toLowerCase();
-  return body.includes("to use codex here") && body.includes("connect to github");
-}
-function determineBlocking({ status, recommendedAction, blocker }) {
-  const normalizedStatus = normalizeFallbackStatus(status);
-  if (normalizedStatus === CodexReviewFallbackStatus.BLOCKED) {
-    return true;
-  }
-  if (normalizedStatus === CodexReviewFallbackStatus.REQUESTED) {
-    return true;
-  }
-  if (blocker) {
-    return true;
-  }
-  return normalizeText19(recommendedAction) !== "approve";
-}
-function extractBacktickedValue(body, label) {
-  const pattern = new RegExp(`- ${escapeRegExp(label)}: \\\`([^\\\`]+)\\\``);
-  const match = body.match(pattern);
-  return normalizeText19(match?.[1]);
-}
-function escapeRegExp(value) {
-  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-function normalizeFallbackStatus(value) {
-  const normalized = normalizeText19(value).toLowerCase();
-  return Object.values(CodexReviewFallbackStatus).includes(normalized) ? normalized : "";
-}
-function normalizeText19(value) {
-  return String(value ?? "").trim();
-}
-
-// src/core/gemini-pr-review.js
-var GEMINI_PR_REVIEW_MARKER = "<!-- vtdd:reviewer=gemini -->";
-function parseGeminiReviewComment(comment = {}) {
-  const body = normalizeText20(typeof comment === "string" ? comment : comment?.body);
-  if (!body || !containsMarker2(body)) {
-    return null;
-  }
-  const recommendedActionMatch = body.match(/^- Recommended action:\s*`([^`]+)`/m);
-  const recommendedAction = normalizeText20(recommendedActionMatch?.[1]).toLowerCase() || "manual_review";
-  const source = typeof comment === "object" && comment !== null ? comment : {};
-  const createdAt = normalizeText20(source.createdAt ?? source.created_at);
-  const updatedAt = normalizeText20(source.updatedAt ?? source.updated_at);
-  return {
-    reviewer: "gemini",
-    recommendedAction,
-    blocking: recommendedAction === "request_changes" || recommendedAction === "manual_review",
-    url: normalizeText20(source.url ?? source.htmlUrl ?? source.html_url) || null,
-    createdAt: createdAt || null,
-    updatedAt: updatedAt || null,
-    includesCreatedEdit: source.includesCreatedEdit === true || Boolean(createdAt) && Boolean(updatedAt) && createdAt !== updatedAt,
-    body
-  };
-}
-function containsMarker2(value) {
-  return normalizeText20(value).includes(GEMINI_PR_REVIEW_MARKER);
-}
-function normalizeText20(value) {
-  return String(value ?? "").trim();
-}
-
 // src/core/execution-continuity.js
 var ExecutionTransferMode = Object.freeze({
   RESUME: "resume",
@@ -27539,13 +27901,13 @@ function evaluateExecutionContinuity(input = {}) {
           criticalReviewPending: review.criticalReviewPending
         },
         codexGoal,
-        nextSuggestedActions: buildNextSuggestedActions({
+        nextSuggestedActions: buildNextSuggestedActions2({
           pullRequest,
           review,
           codexGoal
         })
       }),
-      nextSuggestedActions: buildNextSuggestedActions({
+      nextSuggestedActions: buildNextSuggestedActions2({
         pullRequest,
         review,
         codexGoal
@@ -27580,15 +27942,15 @@ function validateHandoffRequirement({ actorRole, continuation }) {
   return { ok: true };
 }
 function buildReviewState(pullRequest) {
-  const parsedGeminiSignals = collectGeminiReviewerSignals(pullRequest);
-  const codexFallback = collectCodexFallbackSignals(pullRequest);
-  const formalReviewTruth = collectFormalReviewTruth(pullRequest);
+  const parsedGeminiSignals = collectGeminiReviewerSignals2(pullRequest);
+  const codexFallback = collectCodexFallbackSignals2(pullRequest);
+  const formalReviewTruth = collectFormalReviewTruth2(pullRequest);
   const reviewCommentsCount = parsedGeminiSignals.totalCount > 0 ? parsedGeminiSignals.totalCount : codexFallback.completed ? 1 : pullRequest.reviewCommentsCount;
   const unresolvedReviewCommentsCount = parsedGeminiSignals.totalCount > 0 ? parsedGeminiSignals.blockingCount : codexFallback.completed ? codexFallback.blocking ? 1 : 0 : pullRequest.unresolvedReviewCommentsCount;
   const reviewerStatus = codexFallback.completed ? "codex_review_available" : codexFallback.blocked ? "codex_review_blocked" : codexFallback.requested ? "codex_review_requested" : reviewCommentsCount > 0 ? "gemini_review_available" : "review_unavailable";
   const reviewer = reviewerStatus.startsWith("codex_review") ? "codex" : pullRequest.reviewer;
   const reviewerEvidence = reviewerStatus.startsWith("codex_review") ? codexFallback.latestEvidence : parsedGeminiSignals.latestEvidence;
-  const reviewerSignalTruth = buildReviewerSignalTruth({
+  const reviewerSignalTruth = buildReviewerSignalTruth2({
     reviewer,
     reviewerStatus,
     reviewerEvidence,
@@ -27607,21 +27969,21 @@ function buildReviewState(pullRequest) {
     rerunReviewer
   };
 }
-function collectGeminiReviewerSignals(pullRequest) {
+function collectGeminiReviewerSignals2(pullRequest) {
   const comments = [
     ...Array.isArray(pullRequest.issueComments) ? pullRequest.issueComments : [],
     ...Array.isArray(pullRequest.reviewComments) ? pullRequest.reviewComments : []
   ];
-  const parsed = comments.map(parseGeminiReviewComment).filter(Boolean);
+  const parsed = comments.filter(isTrustedReviewerMarkerComment2).map(parseGeminiReviewComment).filter(Boolean);
   return {
     totalCount: parsed.length,
     blockingCount: parsed.filter((signal) => signal.blocking).length,
     latestEvidence: parsed.at(-1) ?? null
   };
 }
-function collectCodexFallbackSignals(pullRequest) {
+function collectCodexFallbackSignals2(pullRequest) {
   const comments = [...Array.isArray(pullRequest.issueComments) ? pullRequest.issueComments : []];
-  const parsed = comments.map(parseCodexReviewFallbackComment).filter(Boolean);
+  const parsed = comments.filter(isTrustedReviewerMarkerComment2).map(parseCodexReviewFallbackComment).filter(Boolean);
   const connectorBlockers = comments.map(parseCodexConnectorSetupComment).filter(Boolean);
   const latestConnectorBlocker = connectorBlockers.at(-1) ?? null;
   const latest = latestConnectorBlocker ?? parsed.at(-1) ?? null;
@@ -27640,15 +28002,27 @@ function collectCodexFallbackSignals(pullRequest) {
     } : null
   };
 }
-function collectFormalReviewTruth(pullRequest) {
+function isTrustedReviewerMarkerComment2(comment) {
+  const author = normalizeText21(
+    comment?.user?.login ?? comment?.author?.login ?? comment?.author
+  ).toLowerCase();
+  return [
+    "vtdd-codex",
+    "vtdd-codex[bot]",
+    "github-actions[bot]",
+    "codex",
+    "codex[bot]"
+  ].includes(author);
+}
+function collectFormalReviewTruth2(pullRequest) {
   const reviews = Array.isArray(pullRequest.reviews) ? pullRequest.reviews : [];
   const latestByReviewer = /* @__PURE__ */ new Map();
   for (const review of reviews) {
     const reviewer = normalizeText21(review?.user?.login) || normalizeText21(review?.author) || "unknown";
-    latestByReviewer.set(reviewer, normalizeReviewState(review?.state));
+    latestByReviewer.set(reviewer, normalizeReviewState2(review?.state));
   }
   const latestStates = [...latestByReviewer.values()].filter(Boolean);
-  const reviewDecision = normalizeReviewState(pullRequest.reviewDecision);
+  const reviewDecision = normalizeReviewState2(pullRequest.reviewDecision);
   const blocking = reviewDecision === "changes_requested" || latestStates.includes("changes_requested");
   const approvalCount = latestStates.filter((state) => state === "approved").length;
   const hasFormalApproval = reviewDecision === "approved" || approvalCount > 0;
@@ -27662,7 +28036,7 @@ function collectFormalReviewTruth(pullRequest) {
     latestStates
   };
 }
-function buildReviewerSignalTruth({ reviewer, reviewerStatus, reviewerEvidence, formalReviewTruth }) {
+function buildReviewerSignalTruth2({ reviewer, reviewerStatus, reviewerEvidence, formalReviewTruth }) {
   const recommendedAction = normalizeText21(reviewerEvidence?.recommendedAction).toLowerCase() || null;
   const vtddReviewerMarkerPresent = Boolean(recommendedAction);
   const markerBlocks = recommendedAction === "request_changes" || recommendedAction === "manual_review";
@@ -27713,7 +28087,7 @@ function determineCodexGoal({ pullRequest, review }) {
   }
   return CodexGoal.WAIT_FOR_REVIEW;
 }
-function buildNextSuggestedActions({ pullRequest, review, codexGoal }) {
+function buildNextSuggestedActions2({ pullRequest, review, codexGoal }) {
   if (!pullRequest.exists) {
     return ["continue_bounded_coding", "open_pull_request", "request_gemini_review"];
   }
@@ -27820,7 +28194,7 @@ function normalizeNumber2(value) {
 function normalizeNullableBoolean2(value) {
   return typeof value === "boolean" ? value : null;
 }
-function normalizeReviewState(value) {
+function normalizeReviewState2(value) {
   const normalized = normalizeText21(value).toLowerCase();
   if (!normalized) {
     return null;

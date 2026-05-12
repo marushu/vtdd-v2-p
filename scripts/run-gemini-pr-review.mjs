@@ -120,26 +120,68 @@ async function main() {
   });
 
   if (existingFallbackComment) {
-    await githubFetch(`/repos/${repository}/issues/comments/${existingFallbackComment.id}`, {
-      method: "DELETE"
+    await deleteIssueCommentIfPresent({
+      githubFetch,
+      repository,
+      comment: existingFallbackComment
     });
     console.log(`Cleared Codex reviewer fallback request on PR #${prNumber}.`);
   }
 
+  const writeResult = await upsertGeminiReviewComment({
+    githubFetch,
+    repository,
+    prNumber,
+    existingReviewComment,
+    body: commentBody
+  });
+  console.log(`${writeResult === "updated" ? "Updated" : "Created"} Gemini review comment on PR #${prNumber}.`);
+}
+
+async function upsertGeminiReviewComment({
+  githubFetch,
+  repository,
+  prNumber,
+  existingReviewComment,
+  body
+}) {
   if (existingReviewComment) {
-    await githubFetch(`/repos/${repository}/issues/comments/${existingReviewComment.id}`, {
-      method: "PATCH",
-      body: { body: commentBody }
-    });
-    console.log(`Updated Gemini review comment on PR #${prNumber}.`);
-    return;
+    try {
+      await githubFetch(`/repos/${repository}/issues/comments/${existingReviewComment.id}`, {
+        method: "PATCH",
+        body: { body }
+      });
+      return "updated";
+    } catch (error) {
+      if (!isGitHubNotFound(error)) {
+        throw error;
+      }
+      console.log("Existing Gemini review comment was not found; creating a new marker comment.");
+    }
   }
 
   await githubFetch(`/repos/${repository}/issues/${prNumber}/comments`, {
     method: "POST",
-    body: { body: commentBody }
+    body: { body }
   });
-  console.log(`Created Gemini review comment on PR #${prNumber}.`);
+  return "created";
+}
+
+async function deleteIssueCommentIfPresent({ githubFetch, repository, comment }) {
+  try {
+    await githubFetch(`/repos/${repository}/issues/comments/${comment.id}`, {
+      method: "DELETE"
+    });
+  } catch (error) {
+    if (!isGitHubNotFound(error)) {
+      throw error;
+    }
+    console.log(`Issue comment ${comment.id} was already absent.`);
+  }
+}
+
+function isGitHubNotFound(error) {
+  return /\(404\)/.test(String(error?.message || ""));
 }
 
 function createGitHubFetch({ apiBaseUrl, token }) {

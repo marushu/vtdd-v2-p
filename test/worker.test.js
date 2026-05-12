@@ -555,6 +555,84 @@ test("worker gateway returns PR revision loop guidance for Butler summaries", as
   assert.equal(body.executionContinuity.nextSuggestedActions.includes("rerun_gemini_review"), true);
 });
 
+test("worker gateway surfaces VTDD reviewer marker comments as Butler review truth", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/gateway", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        phase: "execution",
+        actorRole: ActorRole.BUTLER,
+        surfaceContext: {
+          surface: "custom_gpt",
+          judgmentModelId: "vtdd-butler-core-v1"
+        },
+        judgmentTrace: validButlerJudgmentTrace,
+        policyInput: {
+          actionType: ActionType.ISSUE_CREATE,
+          mode: TaskMode.EXECUTION,
+          repositoryInput: "vtdd",
+          aliasRegistry,
+          targetConfirmed: true,
+          constitutionConsulted: true,
+          runtimeTruth: {
+            runtimeAvailable: true,
+            runtimeState: {
+              activeBranch: "codex/issue-312",
+              pullRequest: {
+                number: 312,
+                url: "https://github.com/example/repo/pull/312",
+                state: "open",
+                title: "Reviewer marker truth",
+                reviewer: "gemini",
+                mergeable: true,
+                mergeableState: "clean",
+                reviews: [],
+                issueComments: [
+                  {
+                    user: { login: "vtdd-codex[bot]" },
+                    url: "https://github.com/example/repo/pull/312#issuecomment-1",
+                    body: [
+                      "<!-- vtdd:reviewer=gemini -->",
+                      "## VTDD Gemini Critical Review",
+                      "",
+                      "- Recommended action: `approve`",
+                      "",
+                      "### Critical Findings",
+                      "- None reported."
+                    ].join("\n")
+                  }
+                ]
+              }
+            }
+          },
+          credential: { model: "github_app", tier: CredentialTier.EXECUTE },
+          consent: { grantedCategories: [ConsentCategory.PROPOSE] },
+          approvalPhrase: "GO issue create",
+          approvalScopeMatched: true,
+          issueTraceable: true,
+          go: true,
+          passkey: false
+        }
+      })
+    }),
+    gatewayAuthEnv
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  const synthesis = body.executionContinuity.butlerReviewSynthesis;
+  assert.equal(synthesis.reviewerSignal.reviewerEvidence.recommendedAction, "approve");
+  assert.equal(synthesis.reviewerSignal.reviewerSignalTruth.canonicalSource, "vtdd_reviewer_marker_comment");
+  assert.equal(synthesis.reviewerSignal.reviewerSignalTruth.githubFormalReview.hasFormalApproval, false);
+  assert.equal(
+    synthesis.humanDecisionFocus.includes(
+      "VTDD reviewer marker recommends approve, but GitHub formal PR review approval is absent; do not report GitHub reviewDecision as approved."
+    ),
+    true
+  );
+});
+
 test("worker accepts natural Butler read without internal read consent field", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/v2/gateway", {

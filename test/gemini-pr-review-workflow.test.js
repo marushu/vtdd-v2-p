@@ -44,6 +44,14 @@ test("Gemini review script defaults Codex fallback to VPS Codex CLI transport", 
   assert.equal(script.includes("/actions/workflows/codex-pr-review-fallback.yml/dispatches"), false);
 });
 
+test("Gemini review script falls back to create when marker comment update sees 404", () => {
+  const script = fs.readFileSync("scripts/run-gemini-pr-review.mjs", "utf8");
+  assert.equal(script.includes("upsertGeminiReviewComment"), true);
+  assert.equal(script.includes("Existing Gemini review comment was not found; creating a new marker comment."), true);
+  assert.equal(script.includes("isGitHubNotFound"), true);
+  assert.equal(script.includes('method: "POST"'), true);
+});
+
 test("Codex fallback workflow runs reviewer-only Codex CLI and writes back via GitHub App token", () => {
   assert.equal(fallbackWorkflow.includes("name: codex-pr-review-fallback"), true);
   assert.equal(fallbackWorkflow.includes("pull_request_number"), true);

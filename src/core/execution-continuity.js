@@ -199,7 +199,10 @@ function collectGeminiReviewerSignals(pullRequest) {
     ...(Array.isArray(pullRequest.issueComments) ? pullRequest.issueComments : []),
     ...(Array.isArray(pullRequest.reviewComments) ? pullRequest.reviewComments : [])
   ];
-  const parsed = comments.map(parseGeminiReviewComment).filter(Boolean);
+  const parsed = comments
+    .filter(isTrustedReviewerMarkerComment)
+    .map(parseGeminiReviewComment)
+    .filter(Boolean);
 
   return {
     totalCount: parsed.length,
@@ -210,7 +213,10 @@ function collectGeminiReviewerSignals(pullRequest) {
 
 function collectCodexFallbackSignals(pullRequest) {
   const comments = [...(Array.isArray(pullRequest.issueComments) ? pullRequest.issueComments : [])];
-  const parsed = comments.map(parseCodexReviewFallbackComment).filter(Boolean);
+  const parsed = comments
+    .filter(isTrustedReviewerMarkerComment)
+    .map(parseCodexReviewFallbackComment)
+    .filter(Boolean);
   const connectorBlockers = comments.map(parseCodexConnectorSetupComment).filter(Boolean);
   const latestConnectorBlocker = connectorBlockers.at(-1) ?? null;
   const latest = latestConnectorBlocker ?? parsed.at(-1) ?? null;
@@ -231,6 +237,21 @@ function collectCodexFallbackSignals(pullRequest) {
         }
       : null
   };
+}
+
+function isTrustedReviewerMarkerComment(comment) {
+  const author = normalizeText(
+    comment?.user?.login ??
+      comment?.author?.login ??
+      comment?.author
+  ).toLowerCase();
+  return [
+    "vtdd-codex",
+    "vtdd-codex[bot]",
+    "github-actions[bot]",
+    "codex",
+    "codex[bot]"
+  ].includes(author);
 }
 
 function collectFormalReviewTruth(pullRequest) {
