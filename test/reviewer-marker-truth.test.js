@@ -1,0 +1,86 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {
+  buildReviewerSignalTruth,
+  collectCodexFallbackSignals,
+  collectFormalReviewTruth,
+  collectGeminiReviewerSignals
+} from "../src/core/reviewer-marker-truth.js";
+
+test("reviewer marker truth collects trusted Gemini markers and ignores untrusted copies", () => {
+  const result = collectGeminiReviewerSignals({
+    issueComments: [
+      {
+        user: { login: "random-user" },
+        body: "<!-- vtdd:reviewer=gemini -->\n## VTDD Gemini Critical Review\n\n- Recommended action: `approve`"
+      },
+      {
+        user: { login: "vtdd-codex" },
+        body: [
+          "<!-- vtdd:reviewer=gemini -->",
+          "## VTDD Gemini Critical Review",
+          "",
+          "- Recommended action: `request_changes`",
+          "",
+          "### Critical Findings",
+          "- Runtime path is not connected."
+        ].join("\n"),
+        url: "https://github.com/example/repo/pull/1#issuecomment-1"
+      }
+    ]
+  });
+
+  assert.equal(result.totalCount, 1);
+  assert.equal(result.blockingCount, 1);
+  assert.equal(result.latestEvidence.recommendedAction, "request_changes");
+  assert.equal(result.latestEvidence.url, "https://github.com/example/repo/pull/1#issuecomment-1");
+});
+
+test("reviewer marker truth normalizes Codex fallback evidence with body for readiness checks", () => {
+  const result = collectCodexFallbackSignals({
+    issueComments: [
+      {
+        user: { login: "github-actions[bot]" },
+        body: [
+          "<!-- vtdd:reviewer=codex-fallback -->",
+          "## VTDD Codex Reviewer Fallback Request",
+          "",
+          "- Status: `completed`",
+          "- Recommended action: `approve`",
+          "",
+          "### Critical Findings",
+          "- None"
+        ].join("\n"),
+        url: "https://github.com/example/repo/pull/2#issuecomment-2"
+      }
+    ]
+  });
+
+  assert.equal(result.completed, true);
+  assert.equal(result.blocking, false);
+  assert.equal(result.latestEvidence.reviewer, "codex");
+  assert.equal(result.latestEvidence.recommendedAction, "approve");
+  assert.equal(result.latestEvidence.body.includes("Critical Findings"), true);
+});
+
+test("reviewer marker truth keeps formal changes-requested blocking over marker approval", () => {
+  const formalReviewTruth = collectFormalReviewTruth({
+    reviewDecision: "APPROVED",
+    reviews: [
+      { user: { login: "gemini" }, state: "APPROVED" },
+      { user: { login: "maintainer" }, state: "CHANGES_REQUESTED" }
+    ]
+  });
+  const signalTruth = buildReviewerSignalTruth({
+    reviewer: "gemini",
+    reviewerStatus: "gemini_review_available",
+    reviewerEvidence: { recommendedAction: "approve" },
+    formalReviewTruth
+  });
+
+  assert.equal(formalReviewTruth.hasFormalApproval, true);
+  assert.equal(formalReviewTruth.blocking, true);
+  assert.equal(signalTruth.mergeReviewTruth.satisfied, false);
+  assert.equal(signalTruth.mergeReviewTruth.blocked, true);
+  assert.equal(signalTruth.mergeReviewTruth.reason, "github_formal_review_changes_requested");
+});
