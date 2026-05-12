@@ -166,13 +166,15 @@ export function buildGeminiReviewRequestBody(input = {}) {
       parts: [
         {
           text: [
-            "You are VTDD's Gemini reviewer.",
-            "You are critique-only.",
-            "You do not execute fixes, decide merge, or erase uncertainty.",
+            "あなたは VTDD の Gemini レビュアーです。",
+            "批判的レビューだけを行います。",
+            "修正の実行、merge 判断、不確実性の消去は行いません。",
             "Return JSON only.",
             "The JSON must contain criticalFindings[], risks[], and recommendedAction.",
             "recommendedAction must be one of: approve, request_changes, manual_review.",
-            "If there are no critical findings, keep criticalFindings empty and put at least one residual risk in risks."
+            "criticalFindings[] と risks[] の各説明文は日本語で書いてください。",
+            "ファイルパス、コード識別子、API 名、enum 値は原文のままで構いません。",
+            "重要指摘がない場合は criticalFindings を空にし、risks に日本語の残リスクを少なくとも 1 件入れてください。"
           ].join(" ")
         }
       ]
@@ -253,7 +255,7 @@ export function formatGeminiReviewComment(input = {}) {
 
   const lines = [
     GEMINI_PR_REVIEW_MARKER,
-    ...(notificationMention ? [`@${notificationMention} VTDD milestone: review result changed.`] : []),
+    ...(notificationMention ? [`@${notificationMention} VTDD マイルストーン: review 結果が変わりました。`] : []),
     formatReviewerOperatorSummary({
       reviewer: "gemini",
       recommendedAction,
@@ -261,19 +263,19 @@ export function formatGeminiReviewComment(input = {}) {
       risks
     }),
     "",
-    "## VTDD Gemini Critical Review",
+    "## VTDD Gemini 批判レビュー",
     "",
-    `- Trigger: \`${trigger}\``,
-    `- Model: \`${model}\``,
+    `- Trigger（契機）: \`${trigger}\``,
+    `- Model（モデル）: \`${model}\``,
     `- Recommended action: \`${recommendedAction}\``,
     "",
     "### Critical Findings",
-    formatListOrFallback(criticalFindings, "- None reported."),
+    formatListOrFallback(criticalFindings, "- 重要指摘なし。"),
     "",
     "### Risks",
-    formatListOrFallback(risks, "- None reported."),
+    formatListOrFallback(risks, "- 残リスクなし。"),
     "",
-    "_Reviewer remains critique-only. Human keeps revision GO / merge GO + real passkey authority._"
+    "_レビュアーは批判専用です。revision GO / merge GO + real passkey の権限は人間が保持します。_"
   ];
 
   return lines.join("\n");

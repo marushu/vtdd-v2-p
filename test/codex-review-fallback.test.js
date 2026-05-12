@@ -28,9 +28,9 @@ test("formatCodexReviewFallbackComment renders marker and requested fallback sta
   assert.equal(body.includes("推奨: merge 非推奨（review 未完了）"), true);
   assert.equal(body.includes("merge blocker: はい"), true);
   assert.equal(body.includes("severity: 重要"), true);
-  assert.equal(body.includes("- Delivery mode: `vps_codex_cli`"), true);
+  assert.equal(body.includes("- Delivery mode（実行経路）: `vps_codex_cli`"), true);
   assert.equal(body.includes("@codex review"), false);
-  assert.equal(body.includes("VTDD-managed workflow execution"), true);
+  assert.equal(body.includes("VTDD 管理の workflow 実行"), true);
   assert.equal(body.includes("- Repository: `marushu/vtdd-v2-p`"), true);
   assert.equal(body.includes("- Pull request: #152"), true);
   assert.equal(body.includes("gemini_temporarily_unavailable"), true);
@@ -46,7 +46,7 @@ test("formatCodexReviewFallbackComment can render a short operator milestone men
     notificationMention: "marushu"
   });
 
-  assert.equal(body.split("\n")[1], "@marushu VTDD milestone: review requested changes.");
+  assert.equal(body.split("\n")[1], "@marushu VTDD マイルストーン: review が変更要求を出しました。");
   assert.equal(body.split("\n")[2], "## Operator Summary");
   assert.equal(body.includes("推奨: merge 非推奨"), true);
   assert.equal(body.includes("severity: 重要"), true);
@@ -164,7 +164,8 @@ test("formatCodexReviewFallbackComment renders raw blocked failure details", () 
 test("fallback script reviews GitHub API diff without checking out untrusted PR code", () => {
   assert.equal(fallbackScript.includes("buildPullRequestDiff"), true);
   assert.equal(fallbackScript.includes("buildPullRequestReviewContext"), true);
-  assert.equal(fallbackScript.includes("Do not run shell commands or inspect the filesystem."), true);
+  assert.equal(fallbackScript.includes("shell command の実行や filesystem の検査はしないでください。"), true);
+  assert.equal(fallbackScript.includes("criticalFindings[] と risks[] の各説明文は日本語"), true);
   assert.equal(fallbackScript.includes('["exec", "--skip-git-repo-check", "--ephemeral", "-"]'), true);
   assert.equal(fallbackScript.includes("buildCodexExecutionEnv(process.env)"), true);
   assert.equal(fallbackScript.includes("env: process.env"), false);

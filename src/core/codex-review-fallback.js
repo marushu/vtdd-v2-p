@@ -29,7 +29,7 @@ export function formatCodexReviewFallbackComment(input = {}) {
 
   const lines = [
     CODEX_REVIEW_FALLBACK_MARKER,
-    ...(notificationMention ? [`@${notificationMention} VTDD milestone: ${formatFallbackMilestoneLabel(status, recommendedAction)}.`] : []),
+    ...(notificationMention ? [`@${notificationMention} VTDD マイルストーン: ${formatFallbackMilestoneLabel(status, recommendedAction)}。`] : []),
     formatReviewerOperatorSummary({
       reviewer: "codex-fallback",
       status,
@@ -39,12 +39,12 @@ export function formatCodexReviewFallbackComment(input = {}) {
       blocker
     }),
     "",
-    "## VTDD Codex Reviewer Fallback Request",
+    "## VTDD Codex fallback レビュー",
     "",
     `- Status: \`${status}\``,
-    `- Trigger: \`${trigger}\``,
-    `- Reason: \`${reason}\``,
-    `- Delivery mode: \`${deliveryMode}\``,
+    `- Trigger（契機）: \`${trigger}\``,
+    `- Reason（理由）: \`${reason}\``,
+    `- Delivery mode（実行経路）: \`${deliveryMode}\``,
     "",
     ...buildStatusSection({
       status,
@@ -58,7 +58,7 @@ export function formatCodexReviewFallbackComment(input = {}) {
       pullRequestNumber
     }),
     "",
-    "_Reviewer remains critique-only. Human keeps revision GO / merge GO + real passkey authority._"
+    "_レビュアーは批判専用です。revision GO / merge GO + real passkey の権限は人間が保持します。_"
   ];
 
   return lines.join("\n");
@@ -159,9 +159,9 @@ function buildStatusSection({
     return [
       `- Blocker: \`${blocker || "codex_fallback_unavailable"}\``,
       "",
-      "Gemini critical review is temporarily unavailable, and non-manual Codex fallback could not be started from the current repository/runtime configuration.",
+      "Gemini の批判レビューが一時的に使えず、現在の repository/runtime 設定では非手動の Codex fallback も開始できませんでした。",
       ...(rawReview
-        ? ["", "### Raw Failure", "", "```text", rawReview, "```"]
+        ? ["", "### Raw Failure（失敗詳細）", "", "```text", rawReview, "```"]
         : [])
     ];
   }
@@ -171,30 +171,30 @@ function buildStatusSection({
       `- Recommended action: \`${recommendedAction}\``,
       "",
       "### Critical Findings",
-      ...formatListOrFallback(criticalFindings, "- None reported."),
+      ...formatListOrFallback(criticalFindings, "- 重要指摘なし。"),
       "",
       "### Risks",
-      ...formatListOrFallback(risks, "- None reported."),
+      ...formatListOrFallback(risks, "- 残リスクなし。"),
       ...(rawReview
-        ? ["", "### Raw Codex Output", "", "```text", rawReview, "```"]
+        ? ["", "### Raw Codex Output（Codex 生出力）", "", "```text", rawReview, "```"]
         : [])
     ];
   }
 
   if (deliveryMode === "codex_cloud_github_comment") {
     return [
-      "Gemini critical review is temporarily unavailable.",
-      "VTDD has requested Codex Cloud review through the GitHub comment transport.",
-      "This request does not use `OPENAI_API_KEY`; it is a request-state only until Codex returns a completed reviewer marker.",
+      "Gemini の批判レビューが一時的に使えません。",
+      "VTDD は GitHub コメント経由で Codex Cloud review を依頼しました。",
+      "この依頼は `OPENAI_API_KEY` を使いません。Codex が completed の reviewer marker を返すまでは request-state として扱います。",
       "",
       "@codex review",
       "",
-      "Please perform a critique-only VTDD reviewer pass for this pull request.",
-      "Return or update a `vtdd:reviewer=codex-fallback` completed comment with `Recommended action`, `Critical Findings`, and `Risks`.",
+      "この pull request に対して、批判専用の VTDD reviewer pass を実行してください。",
+      "`Recommended action`, `Critical Findings`, `Risks` を含む completed の `vtdd:reviewer=codex-fallback` コメントを返すか更新してください。",
       ...(repository || pullRequestNumber
         ? [
             "",
-            "### Target",
+            "### Target（対象）",
             ...(repository ? [`- Repository: \`${repository}\``] : []),
             ...(pullRequestNumber ? [`- Pull request: #${pullRequestNumber}`] : [])
           ]
@@ -203,12 +203,12 @@ function buildStatusSection({
   }
 
   return [
-    "Gemini critical review is temporarily unavailable.",
-    "Non-manual Codex fallback review has been dispatched through VTDD-managed workflow execution.",
+    "Gemini の批判レビューが一時的に使えません。",
+    "VTDD 管理の workflow 実行で、非手動の Codex fallback review を開始しました。",
     ...(repository || pullRequestNumber
       ? [
           "",
-          "### Target",
+          "### Target（対象）",
           ...(repository ? [`- Repository: \`${repository}\``] : []),
           ...(pullRequestNumber ? [`- Pull request: #${pullRequestNumber}`] : [])
         ]
@@ -265,16 +265,16 @@ function normalizeText(value) {
 
 function formatFallbackMilestoneLabel(status, recommendedAction) {
   if (status === CodexReviewFallbackStatus.REQUESTED) {
-    return "manual review required";
+    return "manual review が必要です";
   }
   if (status === CodexReviewFallbackStatus.BLOCKED) {
-    return "reviewer blocked";
+    return "reviewer が block されました";
   }
   if (recommendedAction === "request_changes") {
-    return "review requested changes";
+    return "review が変更要求を出しました";
   }
   if (recommendedAction === "approve") {
-    return "review approved";
+    return "review は approve です";
   }
-  return "manual review required";
+  return "manual review が必要です";
 }

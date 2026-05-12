@@ -211,6 +211,18 @@ test("buildGeminiReviewRequestBody requires diff and context", () => {
   );
 });
 
+test("buildGeminiReviewRequestBody asks for Japanese-first reviewer output", () => {
+  const body = buildGeminiReviewRequestBody({
+    prDiff: "diff --git a/file b/file",
+    context: "PR context"
+  });
+  const instruction = body.systemInstruction.parts[0].text;
+
+  assert.equal(instruction.includes("批判的レビューだけを行います"), true);
+  assert.equal(instruction.includes("criticalFindings[] と risks[] の各説明文は日本語"), true);
+  assert.equal(instruction.includes("recommendedAction must be one of: approve, request_changes, manual_review."), true);
+});
+
 test("extractReviewerResponseFromGemini validates JSON output", () => {
   const result = extractReviewerResponseFromGemini({
     candidates: [
@@ -264,8 +276,8 @@ test("formatGeminiReviewComment renders marker and sections", () => {
   assert.equal(body.includes("推奨: merge 非推奨"), true);
   assert.equal(body.includes("merge blocker: はい"), true);
   assert.equal(body.includes("severity: 重要"), true);
-  assert.equal(body.indexOf("## Operator Summary") < body.indexOf("## VTDD Gemini Critical Review"), true);
-  assert.equal(body.includes("VTDD Gemini Critical Review"), true);
+  assert.equal(body.indexOf("## Operator Summary") < body.indexOf("## VTDD Gemini 批判レビュー"), true);
+  assert.equal(body.includes("VTDD Gemini 批判レビュー"), true);
   assert.equal(body.includes("request_changes"), true);
   assert.equal(body.includes("### Critical Findings"), true);
   assert.equal(body.includes("Scope drift around issue traceability."), true);
@@ -283,7 +295,7 @@ test("formatGeminiReviewComment can render a short operator milestone mention", 
     }
   });
 
-  assert.equal(body.split("\n")[1], "@marushu VTDD milestone: review result changed.");
+  assert.equal(body.split("\n")[1], "@marushu VTDD マイルストーン: review 結果が変わりました。");
   assert.equal(body.split("\n")[2], "## Operator Summary");
   assert.equal(body.includes("推奨: merge 可能（残リスク確認）"), true);
   assert.equal(body.includes("merge blocker: いいえ"), true);

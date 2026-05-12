@@ -22190,7 +22190,10 @@ function isNoCriticalFindingLine(value) {
     "none",
     "none reported",
     "no critical findings",
-    "no critical findings reported"
+    "no critical findings reported",
+    "\u91CD\u8981\u6307\u6458\u306A\u3057",
+    "\u91CD\u5927\u306Ablocking issue \u306F\u898B\u3064\u304B\u308A\u307E\u305B\u3093",
+    "\u91CD\u5927\u306A blocking issue \u306F\u898B\u3064\u304B\u308A\u307E\u305B\u3093"
   ].includes(normalized);
 }
 

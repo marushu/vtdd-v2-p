@@ -660,6 +660,9 @@ function isNoCriticalFindingLine(value) {
     "none",
     "none reported",
     "no critical findings",
-    "no critical findings reported"
+    "no critical findings reported",
+    "重要指摘なし",
+    "重大なblocking issue は見つかりません",
+    "重大な blocking issue は見つかりません"
   ].includes(normalized);
 }

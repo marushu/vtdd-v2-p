@@ -103,19 +103,21 @@ async function main() {
 
 function buildCodexFallbackReviewPrompt({ context, prDiff }) {
   return [
-    "You are the VTDD fallback reviewer.",
-    "Act only as a critique-only reviewer.",
-    "Do not run shell commands or inspect the filesystem.",
-    "Review only the PR context and diff provided in this prompt.",
-    "Do not propose merge or execution.",
+    "あなたは VTDD の fallback reviewer です。",
+    "批判専用の reviewer としてだけ振る舞ってください。",
+    "shell command の実行や filesystem の検査はしないでください。",
+    "この prompt に含まれる PR context と diff だけを review してください。",
+    "merge や実行の提案はしないでください。",
+    "criticalFindings[] と risks[] の各説明文は日本語で書いてください。",
+    "ファイルパス、コード識別子、API 名、enum 値は原文のままで構いません。",
     "Return strict JSON with these fields only:",
     "{",
     '  "criticalFindings": ["..."],',
     '  "risks": ["..."],',
     '  "recommendedAction": "approve|request_changes|manual_review"',
     "}",
-    'If there are no major issues, set criticalFindings to ["No major blocking issues found."], risks to ["Human should still verify the PR before revision GO or merge GO + real passkey."], and recommendedAction to "approve".',
-    'If the provided diff or context is insufficient for critique, set recommendedAction to "manual_review" and explain exactly what is missing.',
+    '重大な問題がない場合は criticalFindings を ["重大な blocking issue は見つかりません。"], risks を ["revision GO または merge GO + real passkey の前に、人間が PR を最終確認する必要があります。"], recommendedAction を "approve" にしてください。',
+    '提供された diff や context が批判レビューに不足している場合は recommendedAction を "manual_review" にし、何が不足しているかを日本語で具体的に説明してください。',
     "",
     "PR context:",
     context,
@@ -221,9 +223,9 @@ function normalizeReviewerResult(parsed, rawOutput) {
   }
 
   return {
-    criticalFindings: ["Codex fallback review returned unstructured output."],
+    criticalFindings: ["Codex fallback review が構造化されていない出力を返しました。"],
     risks: [
-      "Human should inspect the raw Codex review output before revision GO or merge GO + real passkey."
+      "revision GO または merge GO + real passkey の前に、人間が Codex review の生出力を確認する必要があります。"
     ],
     recommendedAction: ReviewerRecommendedAction.MANUAL_REVIEW
   };
