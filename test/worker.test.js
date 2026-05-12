@@ -208,6 +208,66 @@ test("worker MCP initialize returns tools capability and server info", async () 
   assert.equal(body.result.capabilities.tools.listChanged, false);
 });
 
+test("worker MCP GET returns machine-endpoint guidance instead of plain text 405", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/mcp", {
+      method: "GET",
+      headers: gatewayAuthHeaders
+    }),
+    gatewayAuthEnv
+  );
+
+  assert.equal(response.status, 405);
+  assert.equal(response.headers.get("allow"), "POST");
+  const body = await response.json();
+  assert.equal(body.error, "mcp_post_required");
+  assert.equal(body.protectedResourceMetadataUrl, "https://example.com/.well-known/oauth-protected-resource/mcp");
+});
+
+test("worker MCP protected resource metadata endpoint is available", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/.well-known/oauth-protected-resource/mcp", {
+      method: "GET"
+    }),
+    gatewayAuthEnv
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.resource, "https://example.com/mcp");
+  assert.equal(body.resource_name, "VTDD MCP");
+  assert.equal(body.resource_documentation, "https://example.com/help#paths");
+  assert.deepEqual(body.bearer_methods_supported, ["header"]);
+});
+
+test("worker MCP unauthorized response advertises protected resource metadata", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/mcp", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 99,
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-03-26",
+          capabilities: {},
+          clientInfo: { name: "codex", version: "test" }
+        }
+      })
+    }),
+    gatewayAuthEnv
+  );
+
+  assert.equal(response.status, 401);
+  assert.equal(
+    response.headers.get("www-authenticate"),
+    'Bearer realm="vtdd-mcp", resource_metadata="https://example.com/.well-known/oauth-protected-resource/mcp"'
+  );
+});
+
 test("worker MCP tools/list exposes shared VTDD retrieval catalog", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/mcp", {

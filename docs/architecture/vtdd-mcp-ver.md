@@ -255,6 +255,38 @@ VPS Codex CLI -> MCP -> VTDD core
 
 This creates shared read and recall first without replacing Butler.
 
+## Canonical Codex MCP Connection
+
+Mac Codex and VPS Codex CLI must not rely on ad hoc shell quoting when they
+connect to VTDD MCP.
+
+The canonical bridge path is the repository wrapper:
+
+`scripts/run-vtdd-mcp-remote.sh`
+
+Required environment:
+
+- `VTDD_MCP_TOKEN`: bearer token for the VTDD MCP surface when auth is enabled
+
+Canonical add command shape:
+
+```bash
+export VTDD_MCP_TOKEN=...
+codex mcp add vtdd -- /absolute/path/to/scripts/run-vtdd-mcp-remote.sh https://your-vtdd-runtime.example.com/mcp
+```
+
+Local verification shape:
+
+```bash
+export VTDD_MCP_TOKEN=vtdd-local-test
+codex mcp add vtdd-local -- /absolute/path/to/scripts/run-vtdd-mcp-remote.sh http://127.0.0.1:8788/mcp
+codex exec -s read-only -C /path/to/repo "vtdd-local MCP を使って、利用可能な tool 名だけを改行区切りで返して。説明はいらない。"
+```
+
+The wrapper exists because freehand `mcp-remote` CLI invocation can break the
+`Authorization: Bearer ...` header by shell word-splitting and cause Codex-side
+transport/auth failures even when the remote MCP server itself is healthy.
+
 ## Execution Harness Boundary
 
 Current VPS execution is a user-owned Codex CLI process wrapper.

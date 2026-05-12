@@ -1,5 +1,6 @@
 export function renderVtddHelpGuidePage(input = {}) {
   const runtimeOrigin = normalizeOrigin(input.runtimeOrigin);
+  const mcpPath = normalizePath(input.mcpPath || "/mcp");
   const directory = buildVtddCloudflarePageDirectory({ runtimeOrigin });
   const setupLatestHref = "/setup/latest";
   const setupKnownGoodHref = "/setup/known-good";
@@ -68,6 +69,7 @@ export function renderVtddHelpGuidePage(input = {}) {
         <div class="panel"><strong>High-risk authority plane</strong>merge、Issue close、secret sync、deploy など高リスク操作は GO + passkey または明示的な禁止境界を通ります。</div>
         <div class="panel"><strong>Runner / reviewer loop</strong>Butler -> Codex runner -> PR -> reviewer -> Butler summary の GitHub-visible loop を扱います。</div>
         <div class="panel"><strong>Memory / retrieval</strong>constitution、decision log、proposal log、operational memory を読んで判断の前提を復元します。</div>
+        <div class="panel"><strong>MCP read surface</strong>Mac Codex / VPS Codex CLI は <code>${escapeHtml(mcpPath)}</code> を通じて Butler と同じ runtime truth / review truth / memory recall を読みます。</div>
         <div class="panel"><strong>Setup recovery</strong>Action Schema / Instructions が壊れた時にブラウザから復旧 bundle をコピーできます。</div>
       </div>
     </section>
@@ -81,6 +83,7 @@ export function renderVtddHelpGuidePage(input = {}) {
         <div><strong>4. Worker -> GitHub / runner / reviewer</strong>許可された read/write/runner/reviewer operation だけが外部へ出ます。</div>
         <div><strong>5. GitHub-visible evidence -> Butler</strong>結果は status、before/after state、PR/Issue/comment/workflow state として Butler が再読込できます。</div>
       </div>
+      <div class="route"><strong>Machine path</strong><code>${escapeHtml(mcpPath)}</code> は人間向けページではなく、Mac Codex / VPS Codex CLI が VTDD MCP tool catalog を読むための machine endpoint です。</div>
     </section>
 
     <section id="usage">
@@ -251,6 +254,14 @@ function buildRuntimeUrl(origin, path) {
   } catch {
     return path;
   }
+}
+
+function normalizePath(value) {
+  const text = normalizeText(value);
+  if (!text) {
+    return "/mcp";
+  }
+  return text.startsWith("/") ? text : `/${text}`;
 }
 
 function escapeHtml(value) {

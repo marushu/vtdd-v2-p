@@ -43,3 +43,12 @@ test("vtdd-mcp-ver architecture doc maps preserved assets and harness boundary",
   assert.equal(doc.includes("Codex App Server / exec-server"), true);
   assert.equal(doc.includes("Current VPS execution is a user-owned Codex CLI process wrapper."), true);
 });
+
+test("vtdd-mcp-ver architecture doc defines canonical Codex MCP bridge path", () => {
+  const doc = fs.readFileSync(DOC_PATH, "utf8");
+  assert.equal(doc.includes("Canonical Codex MCP Connection"), true);
+  assert.equal(doc.includes("scripts/run-vtdd-mcp-remote.sh"), true);
+  assert.equal(doc.includes("VTDD_MCP_TOKEN"), true);
+  assert.equal(doc.includes("codex mcp add vtdd -- /absolute/path/to/scripts/run-vtdd-mcp-remote.sh"), true);
+  assert.equal(doc.includes("Authorization: Bearer"), true);
+});
