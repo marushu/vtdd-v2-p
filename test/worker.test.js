@@ -205,7 +205,7 @@ test("worker MCP initialize returns tools capability and server info", async () 
   assert.equal(response.headers.get("mcp-protocol-version"), "2025-03-26");
   const body = await response.json();
   assert.equal(body.result.serverInfo.name, "vtdd-mcp");
-  assert.equal(body.result.capabilities.tools.listChanged, false);
+  assert.equal(body.result.capabilities.tools.listChanged, true);
 });
 
 test("worker MCP GET returns machine-endpoint guidance instead of plain text 405", async () => {

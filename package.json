@@ -15,8 +15,10 @@
     "node": ">=20"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@simplewebauthn/server": "^13.3.0",
-    "tweetnacl-sealedbox-js": "^1.2.0"
+    "tweetnacl-sealedbox-js": "^1.2.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "esbuild": "^0.25.12"
