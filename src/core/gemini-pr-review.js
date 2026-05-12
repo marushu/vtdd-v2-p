@@ -272,6 +272,7 @@ export function formatGeminiReviewComment(input = {}) {
 
   const lines = [
     GEMINI_PR_REVIEW_MARKER,
+    formatReviewerMachineMeta({ reviewer: "gemini", recommendedAction }),
     ...(notificationMention ? [`@${notificationMention} VTDD マイルストーン: review 結果が変わりました。`] : []),
     formatReviewerOperatorSummary({
       reviewer: "gemini",
@@ -311,8 +312,9 @@ export function parseGeminiReviewComment(comment = {}) {
     return null;
   }
 
+  const machineMeta = parseReviewerMachineMeta(body);
   const recommendedActionMatch = body.match(/^- Recommended action:\s*`([^`]+)`/m);
-  const recommendedAction = normalizeText(recommendedActionMatch?.[1]).toLowerCase() || "manual_review";
+  const recommendedAction = normalizeText(machineMeta.recommendedAction ?? recommendedActionMatch?.[1]).toLowerCase() || "manual_review";
   const source = typeof comment === "object" && comment !== null ? comment : {};
   const createdAt = normalizeText(source.createdAt ?? source.created_at);
   const updatedAt = normalizeText(source.updatedAt ?? source.updated_at);
@@ -328,6 +330,23 @@ export function parseGeminiReviewComment(comment = {}) {
     includesCreatedEdit: source.includesCreatedEdit === true || (Boolean(createdAt) && Boolean(updatedAt) && createdAt !== updatedAt),
     body
   };
+}
+
+function formatReviewerMachineMeta(value = {}) {
+  return `<!-- vtdd:reviewer-meta ${JSON.stringify(value)} -->`;
+}
+
+function parseReviewerMachineMeta(body) {
+  const match = normalizeText(body).match(/<!--\s*vtdd:reviewer-meta\s+({[\s\S]*?})\s*-->/);
+  if (!match) {
+    return {};
+  }
+  try {
+    const parsed = JSON.parse(match[1]);
+    return normalizeObject(parsed);
+  } catch {
+    return {};
+  }
 }
 
 function summarizeComments(comments) {

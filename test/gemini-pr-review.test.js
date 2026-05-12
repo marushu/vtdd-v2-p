@@ -292,6 +292,7 @@ test("formatGeminiReviewComment renders marker and sections", () => {
   });
 
   assert.equal(body.includes(GEMINI_PR_REVIEW_MARKER), true);
+  assert.equal(body.includes("vtdd:reviewer-meta"), true);
   assert.equal(body.includes("## Operator Summary"), true);
   assert.equal(body.includes("推奨: merge 非推奨"), true);
   assert.equal(body.includes("merge blocker: はい"), true);
@@ -315,12 +316,25 @@ test("formatGeminiReviewComment can render a short operator milestone mention", 
     }
   });
 
-  assert.equal(body.split("\n")[1], "@marushu VTDD マイルストーン: review 結果が変わりました。");
-  assert.equal(body.split("\n")[2], "## Operator Summary");
+  assert.equal(body.split("\n")[2], "@marushu VTDD マイルストーン: review 結果が変わりました。");
+  assert.equal(body.split("\n")[3], "## Operator Summary");
   assert.equal(body.includes("推奨: merge 可能（残リスク確認）"), true);
   assert.equal(body.includes("merge blocker: いいえ"), true);
   assert.equal(body.includes("severity: 軽微"), true);
   assert.equal(body.includes("Recommended action: `approve`"), true);
+});
+
+test("parseGeminiReviewComment prefers machine metadata over markdown labels", () => {
+  const parsed = parseGeminiReviewComment({
+    body: `${GEMINI_PR_REVIEW_MARKER}
+<!-- vtdd:reviewer-meta {"reviewer":"gemini","recommendedAction":"approve"} -->
+## VTDD Gemini 批判レビュー
+
+- 推奨アクション: \`request_changes\``
+  });
+
+  assert.equal(parsed.recommendedAction, "approve");
+  assert.equal(parsed.blocking, false);
 });
 
 test("shared mention normalization filters non-operator GitHub actors", () => {

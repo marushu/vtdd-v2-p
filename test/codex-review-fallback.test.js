@@ -23,6 +23,7 @@ test("formatCodexReviewFallbackComment renders marker and requested fallback sta
   });
 
   assert.equal(body.includes(CODEX_REVIEW_FALLBACK_MARKER), true);
+  assert.equal(body.includes("vtdd:reviewer-meta"), true);
   assert.equal(body.includes("- Status: `requested`"), true);
   assert.equal(body.includes("## Operator Summary"), true);
   assert.equal(body.includes("推奨: merge 非推奨（review 未完了）"), true);
@@ -46,8 +47,8 @@ test("formatCodexReviewFallbackComment can render a short operator milestone men
     notificationMention: "marushu"
   });
 
-  assert.equal(body.split("\n")[1], "@marushu VTDD マイルストーン: review が変更要求を出しました。");
-  assert.equal(body.split("\n")[2], "## Operator Summary");
+  assert.equal(body.split("\n")[2], "@marushu VTDD マイルストーン: review が変更要求を出しました。");
+  assert.equal(body.split("\n")[3], "## Operator Summary");
   assert.equal(body.includes("推奨: merge 非推奨"), true);
   assert.equal(body.includes("severity: 重要"), true);
   assert.equal(body.includes("- Status: `completed`"), true);
@@ -97,6 +98,20 @@ test("parseCodexReviewFallbackComment exposes completed fallback reviewer state"
     blocker: null,
     body
   });
+});
+
+test("parseCodexReviewFallbackComment prefers machine metadata over markdown labels", () => {
+  const body = `${CODEX_REVIEW_FALLBACK_MARKER}
+<!-- vtdd:reviewer-meta {"reviewer":"codex-fallback","status":"completed","recommendedAction":"approve"} -->
+## VTDD Codex fallback レビュー
+
+- 状態: \`requested\`
+- 推奨アクション: \`manual_review\``;
+  const parsed = parseCodexReviewFallbackComment(body);
+
+  assert.equal(parsed.status, "completed");
+  assert.equal(parsed.recommendedAction, "approve");
+  assert.equal(parsed.blocking, false);
 });
 
 test("parseCodexReviewFallbackComment exposes blocked fallback reviewer state", () => {

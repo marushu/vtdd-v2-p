@@ -29,6 +29,12 @@ export function formatCodexReviewFallbackComment(input = {}) {
 
   const lines = [
     CODEX_REVIEW_FALLBACK_MARKER,
+    formatReviewerMachineMeta({
+      reviewer: "codex-fallback",
+      status,
+      recommendedAction,
+      blocker: blocker || null
+    }),
     ...(notificationMention ? [`@${notificationMention} VTDD マイルストーン: ${formatFallbackMilestoneLabel(status, recommendedAction)}。`] : []),
     formatReviewerOperatorSummary({
       reviewer: "codex-fallback",
@@ -74,11 +80,13 @@ export function parseCodexReviewFallbackComment(comment = {}) {
     return null;
   }
 
+  const machineMeta = parseReviewerMachineMeta(body);
   const status =
+    normalizeText(machineMeta.status) ||
     extractBacktickedValue(body, "Status") ||
     (body.includes("@codex review") ? CodexReviewFallbackStatus.REQUESTED : "");
-  const recommendedAction = extractBacktickedValue(body, "Recommended action");
-  const blocker = extractBacktickedValue(body, "Blocker");
+  const recommendedAction = normalizeText(machineMeta.recommendedAction) || extractBacktickedValue(body, "Recommended action");
+  const blocker = normalizeText(machineMeta.blocker) || extractBacktickedValue(body, "Blocker");
   const source = typeof comment === "object" && comment !== null ? comment : {};
   const createdAt = normalizeText(source.createdAt ?? source.created_at);
   const updatedAt = normalizeText(source.updatedAt ?? source.updated_at);
@@ -109,6 +117,23 @@ export function parseCodexReviewFallbackComment(comment = {}) {
     parsed.includesCreatedEdit = true;
   }
   return parsed;
+}
+
+function formatReviewerMachineMeta(value = {}) {
+  return `<!-- vtdd:reviewer-meta ${JSON.stringify(value)} -->`;
+}
+
+function parseReviewerMachineMeta(body) {
+  const match = normalizeText(body).match(/<!--\s*vtdd:reviewer-meta\s+({[\s\S]*?})\s*-->/);
+  if (!match) {
+    return {};
+  }
+  try {
+    const parsed = JSON.parse(match[1]);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
 }
 
 export function parseCodexConnectorSetupComment(comment = {}) {
