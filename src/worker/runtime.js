@@ -1,5 +1,6 @@
 import {
   AutonomyMode,
+  ActorRole,
   buildCustomGptRecoveryBundle,
   CustomGptSetupChannel,
   MemoryRecordType,
@@ -16,6 +17,7 @@ import {
   executeDeployProductionPlane,
   executeGitHubActionsSecretSync,
   evaluateButlerSelfParity,
+  evaluateExecutionContinuity,
   evaluateMemorySafety,
   executeGitHubHighRiskPlane,
   inferRelatedIssueFromGatewayInput,
@@ -61,6 +63,12 @@ const JSON_HEADERS = {
 
 const CANONICAL_API_PREFIX = "/v2";
 const LEGACY_API_PREFIX = "/mvp";
+const MCP_PATH = "/mcp";
+const MCP_PROTOCOL_VERSION = "2025-03-26";
+const MCP_SERVER_INFO = Object.freeze({
+  name: "vtdd-mcp",
+  version: "0.1.0"
+});
 const AUTONOMY_MODE_ENV = "VTDD_AUTONOMY_MODE";
 const LEGACY_AUTONOMY_MODE_ENV = "MVP_AUTONOMY_MODE";
 const MEMORY_D1_BINDING = "VTDD_MEMORY_D1";
@@ -101,6 +109,18 @@ export default {
           runtimeOrigin: url.origin
         })
       );
+    }
+
+    if ((request.method === "POST" || request.method === "GET") && url.pathname === MCP_PATH) {
+      const auth = authorizeGatewayRequest({ request, env, apiSuffix: MCP_PATH });
+      if (!auth.ok) {
+        return json(auth.status, {
+          ok: false,
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+      return handleMcpRequest({ request, env, url });
     }
 
     if (request.method === "GET" && isApiPath(url.pathname, "/approval/passkey/operator")) {
@@ -1266,6 +1286,781 @@ async function handleRetrieveRepositoryNicknamesRequest(env) {
     recordCount: retrieved.aliasRegistry.length,
     aliasRegistry: retrieved.aliasRegistry
   });
+}
+
+async function handleMcpRequest({ request, env, url }) {
+  if (request.method === "GET") {
+    return new Response("VTDD MCP endpoint requires an MCP client.", {
+      status: 405,
+      headers: {
+        "content-type": "text/plain; charset=utf-8",
+        "mcp-protocol-version": MCP_PROTOCOL_VERSION
+      }
+    });
+  }
+
+  const payload = await readJson(request);
+  if (Array.isArray(payload)) {
+    return mcpJsonResponse(400, {
+      jsonrpc: "2.0",
+      id: null,
+      error: {
+        code: -32600,
+        message: "Batch requests are not supported."
+      }
+    });
+  }
+
+  const id = Object.prototype.hasOwnProperty.call(payload ?? {}, "id") ? payload.id : null;
+  const method = normalizeText(payload?.method);
+  const params = normalizeObject(payload?.params);
+
+  if (method === "notifications/initialized") {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        "mcp-protocol-version": MCP_PROTOCOL_VERSION
+      }
+    });
+  }
+
+  if (method === "initialize") {
+    const protocolVersion = normalizeText(params.protocolVersion) || MCP_PROTOCOL_VERSION;
+    return mcpResultResponse(id, {
+      protocolVersion,
+      capabilities: {
+        tools: {
+          listChanged: false
+        }
+      },
+      serverInfo: MCP_SERVER_INFO,
+      instructions:
+        "VTDD MCP は Butler と同じ runtime truth / review truth / operational memory を読むための read-first surface です。現在の truth は runtime truth を優先し、memory は補助として扱ってください。"
+    }, protocolVersion);
+  }
+
+  if (method === "ping") {
+    return mcpResultResponse(id, {});
+  }
+
+  if (method === "tools/list") {
+    return mcpResultResponse(id, {
+      tools: buildMcpToolDefinitions()
+    });
+  }
+
+  if (method === "tools/call") {
+    const toolName = normalizeText(params.name);
+    const toolArguments = normalizeObject(params.arguments);
+    const result = await executeMcpToolCall({
+      toolName,
+      toolArguments,
+      env,
+      runtimeOrigin: url.origin
+    });
+
+    if (!result.ok) {
+      return mcpResultResponse(id, {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(
+              {
+                ok: false,
+                error: result.error,
+                reason: result.reason,
+                issues: result.issues ?? []
+              },
+              null,
+              2
+            )
+          }
+        ],
+        isError: true
+      });
+    }
+
+    return mcpResultResponse(id, {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(result.value, null, 2)
+        }
+      ],
+      isError: false
+    });
+  }
+
+  return mcpErrorResponse(id, -32601, `Unsupported MCP method: ${method || "unknown"}`);
+}
+
+function buildMcpToolDefinitions() {
+  return [
+    {
+      name: "vtdd_runtime_truth",
+      description:
+        "指定した repository / Issue / PR / branch の current runtime truth を返します。GitHub state が current truth です。",
+      inputSchema: {
+        type: "object",
+        properties: {
+          repository: { type: "string", description: "owner/repo 形式の repository。" },
+          issueNumber: { type: "integer", description: "対象 Issue 番号。" },
+          pullNumber: { type: "integer", description: "対象 Pull Request 番号。" },
+          branch: { type: "string", description: "対象 branch 名。" },
+          includeChecks: { type: "boolean", description: "check runs を含めるか。" },
+          includeWorkflowRuns: { type: "boolean", description: "workflow runs を含めるか。" },
+          limit: { type: "integer", description: "一覧系 read の最大件数。" }
+        },
+        required: ["repository"]
+      }
+    },
+    {
+      name: "vtdd_review_truth",
+      description:
+        "指定 PR の reviewer truth を返します。GitHub formal reviews、VTDD reviewer markers、blocking 状態、次の安全な action をまとめます。",
+      inputSchema: {
+        type: "object",
+        properties: {
+          repository: { type: "string", description: "owner/repo 形式の repository。" },
+          pullNumber: { type: "integer", description: "対象 Pull Request 番号。" }
+        },
+        required: ["repository", "pullNumber"]
+      }
+    },
+    {
+      name: "vtdd_search_operational_memory",
+      description:
+        "structured operational memory を検索します。runtime truth を currentState として添えると memory との差異も返せます。",
+      inputSchema: {
+        type: "object",
+        properties: {
+          text: { type: "string", description: "検索テキスト。" },
+          repository: { type: "string", description: "owner/repo 形式の repository。" },
+          currentState: { type: "string", description: "現在の runtime truth の短い説明。" },
+          runtimeTruthSource: { type: "string", description: "runtime truth source。" },
+          checkedAt: { type: "string", description: "runtime truth observed timestamp (ISO8601)." },
+          limit: { type: "integer", description: "返す compact context の最大件数。" }
+        },
+        required: ["text"]
+      }
+    },
+    {
+      name: "vtdd_recall_implementation",
+      description:
+        "『あれどうやって実装したっけ？』に答えるための shared implementation recall を返します。",
+      inputSchema: {
+        type: "object",
+        properties: {
+          repository: { type: "string", description: "owner/repo 形式の repository。" },
+          issueNumber: { type: "integer", description: "関連 Issue 番号。" },
+          pullNumber: { type: "integer", description: "関連 Pull Request 番号。" },
+          text: { type: "string", description: "実装 recall の補助クエリ。" },
+          limit: { type: "integer", description: "memory references の最大件数。" }
+        },
+        required: ["repository"]
+      }
+    },
+    {
+      name: "vtdd_pr_status",
+      description:
+        "指定 PR の state / checks / review truth を Butler と同じ runtime truth モデルで返します。",
+      inputSchema: {
+        type: "object",
+        properties: {
+          repository: { type: "string", description: "owner/repo 形式の repository。" },
+          pullNumber: { type: "integer", description: "対象 Pull Request 番号。" }
+        },
+        required: ["repository", "pullNumber"]
+      }
+    },
+    {
+      name: "vtdd_issue_status",
+      description:
+        "指定 Issue の intent / body / memory references / blockers を返します。",
+      inputSchema: {
+        type: "object",
+        properties: {
+          repository: { type: "string", description: "owner/repo 形式の repository。" },
+          issueNumber: { type: "integer", description: "対象 Issue 番号。" },
+          limit: { type: "integer", description: "memory references の最大件数。" }
+        },
+        required: ["repository", "issueNumber"]
+      }
+    }
+  ];
+}
+
+async function executeMcpToolCall({ toolName, toolArguments, env, runtimeOrigin }) {
+  if (toolName === "vtdd_runtime_truth") {
+    return executeMcpRuntimeTruth(toolArguments, env);
+  }
+  if (toolName === "vtdd_review_truth") {
+    return executeMcpReviewTruth(toolArguments, env);
+  }
+  if (toolName === "vtdd_search_operational_memory") {
+    return executeMcpOperationalMemorySearch(toolArguments, env);
+  }
+  if (toolName === "vtdd_recall_implementation") {
+    return executeMcpImplementationRecall(toolArguments, env);
+  }
+  if (toolName === "vtdd_pr_status") {
+    return executeMcpPrStatus(toolArguments, env);
+  }
+  if (toolName === "vtdd_issue_status") {
+    return executeMcpIssueStatus(toolArguments, env, runtimeOrigin);
+  }
+  return {
+    ok: false,
+    error: "mcp_tool_unknown",
+    reason: `unknown MCP tool: ${toolName || "unknown"}`
+  };
+}
+
+async function executeMcpRuntimeTruth(argumentsInput, env) {
+  const repository = normalizeText(argumentsInput.repository);
+  if (!repository) {
+    return {
+      ok: false,
+      error: "repository_required",
+      reason: "repository is required"
+    };
+  }
+
+  const issueNumber = normalizeIssue(argumentsInput.issueNumber);
+  const pullNumber = normalizeIssue(argumentsInput.pullNumber);
+  const branch = normalizeText(argumentsInput.branch);
+  const limit = normalizeLimit(argumentsInput.limit, 10);
+  const includeChecks = argumentsInput.includeChecks !== false;
+  const includeWorkflowRuns = argumentsInput.includeWorkflowRuns === true;
+
+  const issue = issueNumber
+    ? await readGitHubResource({
+        resource: "issues",
+        repository,
+        issueNumber,
+        env
+      })
+    : { ok: true, records: [] };
+  if (!issue.ok) {
+    return issue;
+  }
+
+  const pull = pullNumber
+    ? await readGitHubResource({
+        resource: "pulls",
+        repository,
+        pullNumber,
+        env
+      })
+    : { ok: true, records: [] };
+  if (!pull.ok) {
+    return pull;
+  }
+
+  const activePull = pull.records?.[0] ?? null;
+  const ref = branch || activePull?.headRef || "";
+  const checks =
+    includeChecks && ref
+      ? await readGitHubResource({
+          resource: "checks",
+          repository,
+          ref,
+          limit,
+          env
+        })
+      : { ok: true, records: [] };
+  if (!checks.ok) {
+    return checks;
+  }
+
+  const workflowRuns =
+    includeWorkflowRuns && (branch || activePull?.headRef)
+      ? await readGitHubResource({
+          resource: "workflow_runs",
+          repository,
+          branch: branch || activePull?.headRef,
+          limit,
+          env
+        })
+      : { ok: true, records: [] };
+  if (!workflowRuns.ok) {
+    return workflowRuns;
+  }
+
+  const branches = branch
+    ? await readGitHubResource({
+        resource: "branches",
+        repository,
+        branch,
+        env
+      })
+    : { ok: true, records: [] };
+  if (!branches.ok) {
+    return branches;
+  }
+
+  return {
+    ok: true,
+    value: {
+      ok: true,
+      repository,
+      issue: issue.records?.[0] ?? null,
+      pullRequest: activePull,
+      checks: checks.records ?? [],
+      workflowRuns: workflowRuns.records ?? [],
+      branch: branches.records?.[0] ?? null,
+      sourceOfTruth: "github_runtime_truth"
+    }
+  };
+}
+
+async function executeMcpReviewTruth(argumentsInput, env) {
+  const repository = normalizeText(argumentsInput.repository);
+  const pullNumber = normalizeIssue(argumentsInput.pullNumber);
+  if (!repository || !pullNumber) {
+    return {
+      ok: false,
+      error: "repository_and_pull_required",
+      reason: "repository and pullNumber are required"
+    };
+  }
+
+  const pull = await readGitHubResource({ resource: "pulls", repository, pullNumber, env });
+  if (!pull.ok || !pull.records?.[0]) {
+    return pull.ok
+      ? {
+          ok: false,
+          error: "pull_not_found",
+          reason: "pull request runtime truth was not found"
+        }
+      : pull;
+  }
+
+  const reviews = await readGitHubResource({
+    resource: "pull_reviews",
+    repository,
+    pullNumber,
+    env
+  });
+  if (!reviews.ok) {
+    return reviews;
+  }
+
+  const issueComments = await readGitHubResource({
+    resource: "issue_comments",
+    repository,
+    issueNumber: pullNumber,
+    env
+  });
+  if (!issueComments.ok) {
+    return issueComments;
+  }
+
+  const reviewComments = await readGitHubResource({
+    resource: "pull_review_comments",
+    repository,
+    pullNumber,
+    env
+  });
+  if (!reviewComments.ok) {
+    return reviewComments;
+  }
+
+  const continuity = evaluateExecutionContinuity({
+    mode: TaskMode.EXECUTION,
+    actorRole: ActorRole.BUTLER,
+    continuationContext: { requiresHandoff: false },
+    runtimeTruth: {
+      runtimeState: {
+        activeBranch: pull.records[0].headRef,
+        pullRequest: {
+          ...pull.records[0],
+          issueComments: issueComments.records ?? [],
+          reviewComments: reviewComments.records ?? [],
+          reviews: reviews.records ?? [],
+          reviewCommentsCount: Array.isArray(reviewComments.records) ? reviewComments.records.length : 0,
+          unresolvedReviewCommentsCount: Array.isArray(reviewComments.records)
+            ? reviewComments.records.length
+            : 0,
+          reviewer: "gemini",
+          updatedSinceReview: false
+        }
+      }
+    }
+  });
+
+  if (!continuity.ok) {
+    return {
+      ok: false,
+      error: continuity.rule ?? "review_truth_unavailable",
+      reason: continuity.reason || "failed to build review truth"
+    };
+  }
+
+  return {
+    ok: true,
+    value: {
+      ok: true,
+      repository,
+      pullNumber,
+      reviewTruth: continuity.value.reviewLoop,
+      butlerReviewSynthesis: continuity.value.butlerReviewSynthesis,
+      nextSuggestedActions: continuity.value.nextSuggestedActions,
+      sourceOfTruth: continuity.value.sourceOfTruth
+    }
+  };
+}
+
+async function executeMcpOperationalMemorySearch(argumentsInput, env) {
+  const text = normalizeText(argumentsInput.text);
+  if (!text) {
+    return {
+      ok: false,
+      error: "text_required",
+      reason: "text is required"
+    };
+  }
+
+  const query = new URLSearchParams();
+  query.set("text", text);
+  if (normalizeText(argumentsInput.repository)) {
+    query.set("repository", normalizeText(argumentsInput.repository));
+  }
+  if (normalizeText(argumentsInput.currentState)) {
+    query.set("currentState", normalizeText(argumentsInput.currentState));
+  }
+  if (normalizeText(argumentsInput.runtimeTruthSource)) {
+    query.set("runtimeTruthSource", normalizeText(argumentsInput.runtimeTruthSource));
+  }
+  if (normalizeText(argumentsInput.checkedAt)) {
+    query.set("checkedAt", normalizeText(argumentsInput.checkedAt));
+  }
+  if (normalizePositiveInteger(argumentsInput.limit)) {
+    query.set("limit", String(normalizePositiveInteger(argumentsInput.limit)));
+  }
+
+  const response = await handleRetrieveOperationalMemoryRequest(
+    new URL(`https://mcp.local${CANONICAL_API_PREFIX}/retrieve/operational-memory?${query.toString()}`),
+    env
+  );
+  return responseToMcpToolResult(response);
+}
+
+async function executeMcpImplementationRecall(argumentsInput, env) {
+  const repository = normalizeText(argumentsInput.repository);
+  if (!repository) {
+    return {
+      ok: false,
+      error: "repository_required",
+      reason: "repository is required"
+    };
+  }
+
+  const issueNumber = normalizeIssue(argumentsInput.issueNumber);
+  const pullNumber = normalizeIssue(argumentsInput.pullNumber);
+  const text = normalizeText(argumentsInput.text);
+  const limit = normalizeLimit(argumentsInput.limit, 8);
+
+  const decisionLogs = issueNumber
+    ? await readDecisionLogReferences({ env, relatedIssue: issueNumber, limit: 5 })
+    : { ok: true, references: [] };
+  if (!decisionLogs.ok) {
+    return decisionLogs;
+  }
+
+  const proposalLogs = issueNumber
+    ? await readProposalLogReferences({ env, relatedIssue: issueNumber, limit: 5 })
+    : { ok: true, references: [] };
+  if (!proposalLogs.ok) {
+    return proposalLogs;
+  }
+
+  const cross = issueNumber
+    ? await readCrossIssueMemory({
+        env,
+        relatedIssue: issueNumber,
+        issueNumber,
+        text,
+        limit
+      })
+    : { ok: true, body: null };
+  if (!cross.ok) {
+    return cross;
+  }
+
+  const issue = issueNumber
+    ? await readGitHubResource({ resource: "issues", repository, issueNumber, env })
+    : { ok: true, records: [] };
+  if (!issue.ok) {
+    return issue;
+  }
+
+  const pull = pullNumber
+    ? await readGitHubResource({ resource: "pulls", repository, pullNumber, env })
+    : { ok: true, records: [] };
+  if (!pull.ok) {
+    return pull;
+  }
+
+  const pullRecord = pull.records?.[0] ?? null;
+  const runtimeStatus = pullRecord
+    ? pullRecord.merged
+      ? "merged"
+      : pullRecord.state === "open"
+        ? "open_pr"
+        : "unknown"
+    : "unknown";
+
+  return {
+    ok: true,
+    value: {
+      repository,
+      issueNumber: issueNumber ?? null,
+      pullNumber: pullNumber ?? null,
+      commits: [pullRecord?.headSha, pullRecord?.mergeCommitSha].filter(Boolean),
+      files: [],
+      tests: [],
+      evidence: [
+        ...(cross.body?.orderedReferences ?? []).map((item) => item?.url || item?.id).filter(Boolean),
+        pullRecord?.htmlUrl
+      ].filter(Boolean),
+      decisions: (decisionLogs.references ?? []).map((item) => item.summary || item.id).filter(Boolean),
+      reviewerResolutions: (proposalLogs.references ?? []).map((item) => item.summary || item.id).filter(Boolean),
+      runtimeStatus,
+      relatedIssue: issue.records?.[0] ?? null,
+      relatedPullRequest: pullRecord,
+      memoryReferences: cross.body?.orderedReferences ?? []
+    }
+  };
+}
+
+async function executeMcpPrStatus(argumentsInput, env) {
+  const repository = normalizeText(argumentsInput.repository);
+  const pullNumber = normalizeIssue(argumentsInput.pullNumber);
+  if (!repository || !pullNumber) {
+    return {
+      ok: false,
+      error: "repository_and_pull_required",
+      reason: "repository and pullNumber are required"
+    };
+  }
+
+  const runtimeTruth = await executeMcpRuntimeTruth(
+    {
+      repository,
+      pullNumber,
+      includeChecks: true,
+      includeWorkflowRuns: true
+    },
+    env
+  );
+  if (!runtimeTruth.ok) {
+    return runtimeTruth;
+  }
+
+  const reviewTruth = await executeMcpReviewTruth({ repository, pullNumber }, env);
+  if (!reviewTruth.ok) {
+    return reviewTruth;
+  }
+
+  return {
+    ok: true,
+    value: {
+      ok: true,
+      repository,
+      pullNumber,
+      runtimeTruth: runtimeTruth.value,
+      reviewTruth: reviewTruth.value.reviewTruth,
+      butlerReviewSynthesis: reviewTruth.value.butlerReviewSynthesis,
+      nextSuggestedActions: reviewTruth.value.nextSuggestedActions
+    }
+  };
+}
+
+async function executeMcpIssueStatus(argumentsInput, env, runtimeOrigin) {
+  const repository = normalizeText(argumentsInput.repository);
+  const issueNumber = normalizeIssue(argumentsInput.issueNumber);
+  if (!repository || !issueNumber) {
+    return {
+      ok: false,
+      error: "repository_and_issue_required",
+      reason: "repository and issueNumber are required"
+    };
+  }
+
+  const issue = await readGitHubResource({ resource: "issues", repository, issueNumber, env });
+  if (!issue.ok) {
+    return issue;
+  }
+
+  const cross = await readCrossIssueMemory({
+    env,
+    relatedIssue: issueNumber,
+    issueNumber,
+    limit: normalizeLimit(argumentsInput.limit, 8)
+  });
+  if (!cross.ok) {
+    return cross;
+  }
+
+  return {
+    ok: true,
+    value: {
+      ok: true,
+      repository,
+      issueNumber,
+      issue: issue.records?.[0] ?? null,
+      blockers: (cross.body?.orderedReferences ?? []).map((item) => item.summary || item.id).filter(Boolean),
+      memoryReferences: cross.body?.orderedReferences ?? [],
+      runtimeOrigin
+    }
+  };
+}
+
+async function readGitHubResource(input) {
+  const retrieved = await retrieveGitHubReadPlane({
+    ...input,
+    env: input.env
+  });
+  if (!retrieved.ok) {
+    return {
+      ok: false,
+      error: retrieved.error ?? "github_read_failed",
+      reason: retrieved.reason,
+      issues: retrieved.issues ?? []
+    };
+  }
+  return {
+    ok: true,
+    records: Array.isArray(retrieved.read?.records) ? retrieved.read.records : []
+  };
+}
+
+async function readDecisionLogReferences({ env, relatedIssue, limit }) {
+  const provider = resolveMemoryProvider(env);
+  const validation = validateMemoryProvider(provider);
+  if (!validation.ok) {
+    return {
+      ok: false,
+      error: "memory_provider_unavailable",
+      reason: "valid memory provider is required for decision log retrieval"
+    };
+  }
+  const retrieved = await retrieveDecisionLogReferences(provider, { relatedIssue, limit });
+  if (!retrieved.ok) {
+    return {
+      ok: false,
+      error: retrieved.error ?? "memory_read_failed",
+      reason: retrieved.reason
+    };
+  }
+  return {
+    ok: true,
+    references: retrieved.references
+  };
+}
+
+async function readProposalLogReferences({ env, relatedIssue, limit }) {
+  const provider = resolveMemoryProvider(env);
+  const validation = validateMemoryProvider(provider);
+  if (!validation.ok) {
+    return {
+      ok: false,
+      error: "memory_provider_unavailable",
+      reason: "valid memory provider is required for proposal log retrieval"
+    };
+  }
+  const retrieved = await retrieveProposalLogReferences(provider, { relatedIssue, limit });
+  if (!retrieved.ok) {
+    return {
+      ok: false,
+      error: retrieved.error ?? "memory_read_failed",
+      reason: retrieved.reason
+    };
+  }
+  return {
+    ok: true,
+    references: retrieved.references
+  };
+}
+
+async function readCrossIssueMemory({ env, relatedIssue, issueNumber, text, limit }) {
+  const provider = resolveMemoryProvider(env);
+  const retrieved = await retrieveCrossIssueMemoryIndex(provider, {
+    phase: "execution",
+    relatedIssue,
+    limit,
+    text: normalizeText(text) || null,
+    semanticRetrieval: {
+      enabled: Boolean(normalizeText(text)),
+      mode: normalizeText(text) ? "assistive" : "disabled"
+    },
+    issueContext: issueNumber
+      ? {
+          issueNumber,
+          issueTitle: null,
+          issueUrl: null
+        }
+      : null
+  });
+  if (!retrieved.ok) {
+    return {
+      ok: false,
+      error: retrieved.error ?? "memory_read_failed",
+      reason: retrieved.reason
+    };
+  }
+  return {
+    ok: true,
+    body: {
+      retrievalPlan: retrieved.retrievalPlan,
+      relatedIssue: retrieved.relatedIssue,
+      queryText: retrieved.queryText,
+      primaryReference: retrieved.primaryReference,
+      orderedReferences: retrieved.orderedReferences
+    }
+  };
+}
+
+async function responseToMcpToolResult(response) {
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok || body?.ok === false) {
+    return {
+      ok: false,
+      error: body?.error ?? "mcp_tool_failed",
+      reason: body?.reason ?? `request failed with status ${response.status}`,
+      issues: body?.issues ?? []
+    };
+  }
+  return {
+    ok: true,
+    value: body
+  };
+}
+
+function mcpJsonResponse(status, body, protocolVersion = MCP_PROTOCOL_VERSION) {
+  return json(status, body, {
+    "mcp-protocol-version": protocolVersion
+  });
+}
+
+function mcpResultResponse(id, result, protocolVersion = MCP_PROTOCOL_VERSION) {
+  return mcpJsonResponse(200, {
+    jsonrpc: "2.0",
+    id,
+    result
+  }, protocolVersion);
+}
+
+function mcpErrorResponse(id, code, message, protocolVersion = MCP_PROTOCOL_VERSION) {
+  return mcpJsonResponse(200, {
+    jsonrpc: "2.0",
+    id,
+    error: {
+      code,
+      message
+    }
+  }, protocolVersion);
 }
 
 async function safeRetrieveStoredAliasRegistry(provider) {
