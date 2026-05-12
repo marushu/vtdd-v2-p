@@ -47,8 +47,7 @@ test("vtdd-mcp-ver architecture doc maps preserved assets and harness boundary",
 test("vtdd-mcp-ver architecture doc defines canonical Codex MCP bridge path", () => {
   const doc = fs.readFileSync(DOC_PATH, "utf8");
   assert.equal(doc.includes("Canonical Codex MCP Connection"), true);
-  assert.equal(doc.includes("scripts/run-vtdd-mcp-remote.sh"), true);
   assert.equal(doc.includes("VTDD_MCP_TOKEN"), true);
-  assert.equal(doc.includes("codex mcp add vtdd -- /absolute/path/to/scripts/run-vtdd-mcp-remote.sh"), true);
-  assert.equal(doc.includes("Authorization: Bearer"), true);
+  assert.equal(doc.includes("codex mcp add vtdd --url https://your-vtdd-runtime.example.com/mcp --bearer-token-env-var VTDD_MCP_TOKEN"), true);
+  assert.equal(doc.includes("bearer-token discovery hints"), true);
 });

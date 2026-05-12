@@ -31347,7 +31347,6 @@ var MCP_PATH = "/mcp";
 var MCP_PROTOCOL_VERSION = "2025-03-26";
 var MCP_PROTECTED_RESOURCE_METADATA_PATH = "/.well-known/oauth-protected-resource";
 var MCP_PROTECTED_RESOURCE_METADATA_MIRROR_PATH = `${MCP_PROTECTED_RESOURCE_METADATA_PATH}/mcp`;
-var MCP_AUTHORIZATION_SERVER_METADATA_PATH = "/.well-known/oauth-authorization-server";
 var MCP_SERVER_INFO = Object.freeze({
   name: "vtdd-mcp",
   version: "0.1.0"
@@ -31386,9 +31385,6 @@ var runtime_default = {
     }
     if (request.method === "GET" && (url.pathname === MCP_PROTECTED_RESOURCE_METADATA_PATH || url.pathname === MCP_PROTECTED_RESOURCE_METADATA_MIRROR_PATH)) {
       return json(200, buildMcpProtectedResourceMetadata(url));
-    }
-    if (request.method === "GET" && url.pathname === MCP_AUTHORIZATION_SERVER_METADATA_PATH) {
-      return json(200, buildMcpAuthorizationServerMetadata(url));
     }
     if ((request.method === "POST" || request.method === "GET") && url.pathname === MCP_PATH) {
       const auth = authorizeGatewayRequest({ request, env, apiSuffix: MCP_PATH });
@@ -33136,20 +33132,7 @@ function buildMcpProtectedResourceMetadata(url) {
     resource_name: "VTDD MCP",
     resource_documentation: buildRuntimeUrl2(url.origin, "/help#paths"),
     bearer_methods_supported: ["header"],
-    scopes_supported: ["vtdd:mcp:read"],
-    authorization_servers: [url.origin]
-  };
-}
-function buildMcpAuthorizationServerMetadata(url) {
-  return {
-    issuer: url.origin,
-    authorization_endpoint: buildRuntimeUrl2(url.origin, "/authorize"),
-    token_endpoint: buildRuntimeUrl2(url.origin, "/token"),
-    registration_endpoint: buildRuntimeUrl2(url.origin, "/register"),
-    response_types_supported: ["code"],
-    grant_types_supported: ["authorization_code", "refresh_token"],
-    token_endpoint_auth_methods_supported: ["none"],
-    code_challenge_methods_supported: ["S256"]
+    scopes_supported: ["vtdd:mcp:read"]
   };
 }
 function buildMcpUnauthorizedHeaders(url, baseHeaders = {}) {

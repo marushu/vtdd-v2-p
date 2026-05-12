@@ -238,6 +238,7 @@ test("worker MCP protected resource metadata endpoint is available", async () =>
   assert.equal(body.resource_name, "VTDD MCP");
   assert.equal(body.resource_documentation, "https://example.com/help#paths");
   assert.deepEqual(body.bearer_methods_supported, ["header"]);
+  assert.equal("authorization_servers" in body, false);
 });
 
 test("worker MCP unauthorized response advertises protected resource metadata", async () => {
