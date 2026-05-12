@@ -2,7 +2,6 @@ import { ActorRole } from "./types.js";
 import { resolveGitHubAppInstallationToken } from "./github-app-repository-index.js";
 import { isBoundRemoteCodexHandoff } from "./remote-codex-handoff-scope.js";
 import { buildExecutionLeadTime } from "./execution-lead-time.js";
-import { buildExecutionPreflightPolicy } from "./execution-preflight-policy.js";
 
 export const REMOTE_CODEX_WORKFLOW_FILE = "remote-codex-executor.yml";
 
@@ -1932,6 +1931,19 @@ function buildVpsRunnerGitHubQueueComment({ request }) {
   ];
 
   return lines.join("\n");
+}
+
+function buildExecutionPreflightPolicy() {
+  return {
+    mode: "auto_receipt",
+    onMissingContract: "owner_decision_required",
+    requiredRepoFiles: [
+      "AGENTS.md",
+      "docs/pr-template-model.md",
+      "scripts/render-pr-body.mjs",
+      "scripts/validate-pr-body.mjs"
+    ]
+  };
 }
 
 function resolveExecutorTransport(input = {}, options = {}) {

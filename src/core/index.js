@@ -173,11 +173,6 @@ export {
   evaluateExecutionContinuity
 } from "./execution-continuity.js";
 export {
-  DEFAULT_EXECUTION_PREFLIGHT_POLICY,
-  DEFAULT_EXECUTION_PREFLIGHT_REQUIRED_REPO_FILES,
-  buildExecutionPreflightPolicy
-} from "./execution-preflight-policy.js";
-export {
   REMOTE_CODEX_WORKFLOW_FILE,
   RemoteCodexDispatchGoal,
   RemoteCodexExecutorTransport,
