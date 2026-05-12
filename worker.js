@@ -54782,14 +54782,13 @@ async function handleRetrieveRepositoryNicknamesRequest(env) {
   });
 }
 async function handleMcpRequest({ request, env, url }) {
-  const acceptHeader = normalize7(request.headers.get("accept"));
-  if (request.method === "GET" && !acceptHeader.includes("text/event-stream")) {
+  if (request.method === "GET") {
     return json(
       405,
       {
         ok: false,
         error: "mcp_post_required",
-        reason: "VTDD MCP endpoint requires MCP JSON-RPC POST requests.",
+        reason: "VTDD MCP endpoint requires MCP JSON-RPC POST requests. This stateless read surface does not expose an SSE GET stream.",
         protectedResourceMetadataUrl: buildRuntimeUrl2(
           url.origin,
           MCP_PROTECTED_RESOURCE_METADATA_MIRROR_PATH

@@ -224,6 +224,23 @@ test("worker MCP GET returns machine-endpoint guidance instead of plain text 405
   assert.equal(body.protectedResourceMetadataUrl, "https://example.com/.well-known/oauth-protected-resource/mcp");
 });
 
+test("worker MCP GET with SSE accept still returns 405 for stateless JSON mode", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/mcp", {
+      method: "GET",
+      headers: {
+        ...gatewayAuthHeaders,
+        accept: "text/event-stream"
+      }
+    }),
+    gatewayAuthEnv
+  );
+
+  assert.equal(response.status, 405);
+  const body = await response.json();
+  assert.equal(body.error, "mcp_post_required");
+});
+
 test("worker MCP protected resource metadata endpoint is available", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/.well-known/oauth-protected-resource/mcp", {
