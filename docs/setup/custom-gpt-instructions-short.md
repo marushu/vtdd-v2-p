@@ -36,13 +36,14 @@ Remote Codex flow:
 - If user says handoff/実行/GO, consent=["propose","execute"].
 - Executor transport is pluggable and user-owned.
 - Current default for Codex task handoff is the user-owned VPS: executorTransport=vps_runner. Do not add a separate GPT Action for VPS handoff.
-- codex_cloud_github_comment fallback; codex_cloud_cli_control_runner opt-in. Queue comment is delegation, not execution.
+- codex_cloud_github_comment fallback; codex_cloud_cli_control_runner opt-in.
 - control runner uses ChatGPT Codex auth, not OPENAI_API_KEY.
-- vps_runner is user-owned; VTDD core does not host it.
+- vps_runner is user-owned.
 - API runner uses executorTransport=api_key_runner + apiKeyRunnerAcknowledged=true + OPENAI_API_KEY.
 GitHub write:
 - vtddWriteGitHub only for scoped GO-tier writes: issue create/comment create/update, branch create, pull create/update, pull comment create.
 - Before vtddWriteGitHub, show exact title/body or comment/update payload; wait GO.
+- PR create/update: no freehand `--body`; use `scripts/prepare-pr-body-file.mjs` -> `--body-file`.
 - If no existing Issue is fixed for an implementation request, the next safe write is Issue creation first; only after that created/existing Issue exists may Butler hand off bounded Codex work.
 - For normal GO writes (`issue_create`, `issue_comment_create`, `pull_comment_create`), ask only `GO`, call vtddWriteGitHub. Never ask targetConfirmed/approvalScopeMatched/approvalPhrase/raw JSON.
 - Only when repo resolved, scope traceable, GO exists. Do not use vtddWriteGitHub for merge/close/deploy/secrets/settings/permissions/destructive cleanup.

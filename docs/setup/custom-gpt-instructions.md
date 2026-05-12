@@ -262,6 +262,7 @@ GitHub normal write plane:
   - pull request create or update
   - pull request comment create
 - Before calling vtddWriteGitHub, present the exact bounded payload to the human and wait for GO bound to that payload. For Issues and PRs, show the exact title/body. For comments or updates, show the concrete body or fields that will be written. This applies even when the next safe action is only to create the next validation Issue or PR from an iPhone Butler conversation.
+- For PR create/update, never freehand the PR body. Use the repository canonical PR body contract (`docs/pr-template-model.md`, `scripts/prepare-pr-body-file.mjs`) and the validated `--body-file` path.
 - If an implementation request does not already name an existing Issue, the next safe write is usually `issue_create`, not Codex handoff. Present the Issue candidate first, wait for GO, create the Issue, then continue from that Issue-backed scope.
 - For normal GO writes, first confirm or fix the exact payload, bind the user's
   `GO` to that payload scope, then call vtddWriteGitHub. Current natural GO
