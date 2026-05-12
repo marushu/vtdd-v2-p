@@ -140,6 +140,13 @@ export function createRemoteCodexExecutionRequest(input = {}) {
       normalizeText(payload?.sender?.login),
     targetConfirmed: payload?.policyInput?.targetConfirmed === true,
     approvalScopeMatched,
+    issueTraceability: {
+      canonicalSpec: "github_issue",
+      issueNumber,
+      relatedIssue: issueNumber,
+      issueTraceable: issueNumber > 0
+    },
+    preflightPolicy: buildExecutionPreflightPolicy(),
     handoffRequired: continuationContext.requiresHandoff === true,
     revisionTarget,
     handoff:
@@ -1882,7 +1889,9 @@ function buildVpsRunnerGitHubQueueComment({ request }) {
     revisionTarget: request.revisionTarget,
     approvalScopeMatched: request.approvalScopeMatched,
     approvalActor: request.approvalActor,
-    handoff: request.handoff
+    handoff: request.handoff,
+    issueTraceability: request.issueTraceability,
+    preflightPolicy: request.preflightPolicy
   };
   const lines = [
     `<!-- vtdd:vps-runner-execution:${request.executionId} -->`,
@@ -1906,6 +1915,8 @@ function buildVpsRunnerGitHubQueueComment({ request }) {
     "- Runtime truth: current GitHub branch / diff / PR / review comments",
     "- Completion target: create or update a pull request",
     "- PR body requirement: Codex must inspect `docs/pr-template-model.md`, `scripts/render-pr-body.mjs`, and `scripts/validate-pr-body.mjs`; the VPS runner will validate and normalize the PR body again before create/update.",
+    "- Context preflight requirement: the VPS runner will automatically read `AGENTS.md`, the canonical Issue, and the PR body contract files, then generate a machine-readable preflight receipt before Codex starts editing.",
+    "- Missing preflight inputs do not authorize speculative implementation; the runner must fall back to proposal-only with an explicit blocked reason.",
     "- Required PR body markers: `## This PR satisfies Intent`, `## Satisfied Success Criteria`, `## Unsatisfied Success Criteria`, `## Verification Evidence`, `## Surface Update Checklist`.",
     "",
     "Rules:",
@@ -1920,6 +1931,19 @@ function buildVpsRunnerGitHubQueueComment({ request }) {
   ];
 
   return lines.join("\n");
+}
+
+function buildExecutionPreflightPolicy() {
+  return {
+    mode: "auto_receipt",
+    onMissingContract: "proposal_only",
+    requiredRepoFiles: [
+      "AGENTS.md",
+      "docs/pr-template-model.md",
+      "scripts/render-pr-body.mjs",
+      "scripts/validate-pr-body.mjs"
+    ]
+  };
 }
 
 function resolveExecutorTransport(input = {}, options = {}) {
