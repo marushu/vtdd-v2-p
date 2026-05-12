@@ -120,6 +120,10 @@ test("custom gpt instructions preserve current butler and approval boundaries", 
   assert.equal(doc.includes("Merge requires explicit human GO + real passkey."), true);
   assert.equal(doc.includes("Action Schema update required"), true);
   assert.equal(doc.includes("Instructions update required"), true);
+  assert.equal(doc.includes("When deploy is required, show only the required deploy operator link."), true);
+  assert.equal(doc.includes("When Action Schema update is required, show only the required canonical Action Schema artifact/link."), true);
+  assert.equal(doc.includes("When Instructions update is required, show only the required canonical Instructions artifact/link."), true);
+  assert.equal(doc.includes("Do not show `/setup/latest`, `/setup/known-good`, or other confirmation/inspection URLs"), true);
   assert.equal(doc.includes("runtime is in sync, do not overclaim that the current Custom GPT editor is also in sync"), true);
   assert.equal(doc.includes("surface the returned `error`, `reason`, and `issues` plainly in Japanese"), true);
   assert.equal(doc.includes("Do not collapse nickname failures into vague guesses"), true);
@@ -208,6 +212,9 @@ test("short custom gpt instructions stay under editor limits while preserving cr
   assert.equal(doc.includes("Cloudflare deploy update required"), true);
   assert.equal(doc.includes("Action Schema update required"), true);
   assert.equal(doc.includes("Instructions update required"), true);
+  assert.equal(doc.includes("show only required item(s): deploy operator, Action Schema artifact, or Instructions artifact"), true);
+  assert.equal(doc.includes("State Action Schema/Instructions required or not required"), true);
+  assert.equal(doc.includes("Do not show setup/latest, setup/known-good, or confirmation URLs unless the user asks to verify"), true);
   assert.equal(doc.includes("selfParity.deployRecovery.operatorMarkdownLink or operatorUrl"), true);
   assert.equal(doc.includes("selfParity.deployOperatorMarkdownLink"), true);
   assert.equal(doc.includes("<actual selfParity.deployOperatorUrl>"), true);
@@ -252,6 +259,7 @@ test("short-min custom gpt instructions stay pasteable while preserving critical
     "formal CHANGES_REQUESTED blocks",
     "reviewerSignalTruth warnings",
     "vtddRetrieveSelfParity",
+    "Do not show setup/latest, setup/known-good",
     "Remote Codex build invariant",
     "Executor transport is pluggable and user-owned",
     "executorTransport=vps_runner",

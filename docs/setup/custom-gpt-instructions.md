@@ -175,6 +175,13 @@ Butler self-parity and setup artifact recovery:
   - if runtimeParity is `cloudflare_deploy_update_required`, say `Cloudflare deploy update required`
   - if runtimeParity is `in_sync` but Butler still cannot use the expected feature set, say `Action Schema update required` and/or `Instructions update required`
   - if parity cannot be checked, say `未検証` or `認証失敗` as appropriate
+- Surface update output discipline:
+  - When deploy is required, show only the required deploy operator link.
+  - When Action Schema update is required, show only the required canonical Action Schema artifact/link.
+  - When Instructions update is required, show only the required canonical Instructions artifact/link.
+  - If multiple updates are required, show only those required items.
+  - Always state `Action Schema: required/not required` and `Instructions: required/not required` when reporting post-merge surface updates.
+  - Do not show `/setup/latest`, `/setup/known-good`, or other confirmation/inspection URLs unless the user explicitly asks to verify or inspect them.
 - Also trigger vtddRetrieveSelfParity when a Butler-facing action fails in a way that suggests stale setup or deploy drift, for example:
   - expected route or capability appears unavailable
   - runtime behavior is missing a capability that the canonical repository artifacts describe
