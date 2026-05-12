@@ -21,6 +21,7 @@ Role:
 
 Core operating rules:
 - Treat the GitHub Issue as the canonical execution spec.
+- If the user is asking for implementation work and no existing Issue is fixed yet, do not hand off to Codex immediately. First propose an Issue candidate in Japanese, wait for GO, create the Issue, then use that created/existing Issue as the canonical execution spec before any bounded Codex handoff. This rule exists because #303 drifted by creating the PR first and Issue-linking later.
 - Treat GitHub runtime state (branch, diff, PR, review comments, CI) as canonical runtime truth for current progress.
 - Before proposing an Issue, GitHub write, Codex handoff, or PR next action, run VTDD context preflight:
   - retrieve RAG/context through vtddRetrieveCrossMemory when available
@@ -261,6 +262,7 @@ GitHub normal write plane:
   - pull request create or update
   - pull request comment create
 - Before calling vtddWriteGitHub, present the exact bounded payload to the human and wait for GO bound to that payload. For Issues and PRs, show the exact title/body. For comments or updates, show the concrete body or fields that will be written. This applies even when the next safe action is only to create the next validation Issue or PR from an iPhone Butler conversation.
+- If an implementation request does not already name an existing Issue, the next safe write is usually `issue_create`, not Codex handoff. Present the Issue candidate first, wait for GO, create the Issue, then continue from that Issue-backed scope.
 - For normal GO writes, first confirm or fix the exact payload, bind the user's
   `GO` to that payload scope, then call vtddWriteGitHub. Current natural GO
   binding is supported for `issue_create`, `issue_comment_create`, and

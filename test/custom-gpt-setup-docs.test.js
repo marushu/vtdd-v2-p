@@ -68,12 +68,17 @@ test("custom gpt instructions preserve current butler and approval boundaries", 
   assert.equal(doc.includes("vtddRetrieveProposalLogs"), true);
   assert.equal(doc.includes("vtddRetrieveCrossMemory"), true);
   assert.equal(doc.includes("Before proposing an Issue, GitHub write, Codex handoff, or PR next action"), true);
+  assert.equal(doc.includes("If the user is asking for implementation work and no existing Issue is fixed yet"), true);
+  assert.equal(doc.includes("First propose an Issue candidate in Japanese, wait for GO, create the Issue"), true);
+  assert.equal(doc.includes("#303 drifted by creating the PR first and Issue-linking later"), true);
   assert.equal(doc.includes("no relevant RAG/memory hit is found, say so"), true);
   assert.equal(doc.includes("do not invent past precedent"), true);
   assert.equal(doc.includes("current state is governed by GitHub runtime truth"), true);
   assert.equal(doc.includes("show a compact structured memory candidate, ask the human for GO"), true);
   assert.equal(doc.includes("Do not store full transcripts, secrets, or raw sensitive material"), true);
   assert.equal(doc.includes("Current natural GO\n  binding is supported for `issue_create`, `issue_comment_create`, and\n  `pull_comment_create`"), true);
+  assert.equal(doc.includes("If an implementation request does not already name an existing Issue"), true);
+  assert.equal(doc.includes("the next safe write is usually `issue_create`, not Codex handoff"), true);
   assert.equal(doc.includes("If the human says something like \"この内容で Issue 作って\""), true);
   assert.equal(doc.includes("この title/body で Issue を作成するなら「GO」と言ってください"), true);
   assert.equal(doc.includes("Do not ask the human to say `targetConfirmed=true`"), true);
@@ -172,7 +177,10 @@ test("short custom gpt instructions stay under editor limits while preserving cr
   assert.equal(doc.includes("no RAG hit OK"), true);
   assert.equal(doc.includes("never invent"), true);
   assert.equal(doc.includes("Runtime truth > memory"), true);
+  assert.equal(doc.includes("propose an Issue candidate first, wait for GO, create the Issue, then hand off"), true);
+  assert.equal(doc.includes("#303 is the regression example"), true);
   assert.equal(doc.includes("For normal GO writes (`issue_create`, `issue_comment_create`, `pull_comment_create`)"), true);
+  assert.equal(doc.includes("the next safe write is Issue creation first"), true);
   assert.equal(doc.includes("ask only `GO`"), true);
   assert.equal(doc.includes("Never ask targetConfirmed/approvalScopeMatched/approvalPhrase/raw JSON"), true);
   assert.equal(doc.includes("Nickname memory is user-owned alias data"), true);
@@ -237,6 +245,8 @@ test("short-min custom gpt instructions stay pasteable while preserving critical
 
   const criticalTokens = [
     "Issue is canonical spec",
+    "propose the Issue first, wait GO, create it, then hand off",
+    "#303 is the regression example",
     "GitHub/runtime state is progress truth",
     "Do not assume a default repository.",
     "vtddExecute handoff must use actionType=build",
@@ -247,6 +257,7 @@ test("short-min custom gpt instructions stay pasteable while preserving critical
     "continuationContext.handoff.relatedIssue",
     "GO + real passkey",
     "show exact title/body/comment/update payload",
+    "For implementation without an existing Issue, do issue_create first",
     "Preserve reviewer objections",
     "Review truth: marker approve != GitHub approval",
     "formal CHANGES_REQUESTED blocks",
