@@ -16,7 +16,51 @@ import {
   resolveGeminiReviewTrigger
 } from "../src/core/index.js";
 
-async function main() {
+export function isPullRequestReviewable(pullRequest = {}) {
+  const state = String(pullRequest?.state || "").trim().toLowerCase();
+  if (String(pullRequest?.merged_at || "").trim()) {
+    return {
+      reviewable: false,
+      reason: "pull_request_already_merged"
+    };
+  }
+  if (state && state !== "open") {
+    return {
+      reviewable: false,
+      reason: `pull_request_not_open:${state}`
+    };
+  }
+  return {
+    reviewable: true,
+    reason: null
+  };
+}
+
+async function getCurrentPullRequest({ githubFetch, repository, prNumber }) {
+  return githubFetch(`/repos/${repository}/pulls/${prNumber}`);
+}
+
+async function ensurePullRequestReviewable({ githubFetch, repository, prNumber, writePhase }) {
+  const currentPullRequest = await getCurrentPullRequest({ githubFetch, repository, prNumber });
+  const reviewable = isPullRequestReviewable(currentPullRequest);
+  if (!reviewable.reviewable) {
+    console.log(
+      `Skipping Gemini PR review writeback during ${writePhase}: ${reviewable.reason} on PR #${prNumber}.`
+    );
+    return {
+      ok: false,
+      pullRequest: currentPullRequest,
+      reason: reviewable.reason
+    };
+  }
+  return {
+    ok: true,
+    pullRequest: currentPullRequest,
+    reason: null
+  };
+}
+
+export async function main() {
   const eventName = mustGetEnv("GITHUB_EVENT_NAME");
   const repository = mustGetEnv("GITHUB_REPOSITORY");
   const eventPath = mustGetEnv("GITHUB_EVENT_PATH");
@@ -36,7 +80,7 @@ async function main() {
   const githubFetch = createGitHubFetch({ apiBaseUrl, token: githubToken });
   const prNumber = triggerResult.value.pullRequestNumber;
 
-  const pullRequest = await githubFetch(`/repos/${repository}/pulls/${prNumber}`);
+  const pullRequest = await getCurrentPullRequest({ githubFetch, repository, prNumber });
   const files = await githubFetch(`/repos/${repository}/pulls/${prNumber}/files?per_page=100`);
   const issueComments = await githubFetch(`/repos/${repository}/issues/${prNumber}/comments?per_page=100`);
   const reviewComments = await githubFetch(`/repos/${repository}/pulls/${prNumber}/comments?per_page=100`);
@@ -76,6 +120,15 @@ async function main() {
   } catch (error) {
     const failure = classifyGeminiReviewFailure(error instanceof Error ? error : {});
     if (failure.kind === GeminiReviewFailureKind.TEMPORARY_UNAVAILABLE) {
+      const reviewable = await ensurePullRequestReviewable({
+        githubFetch,
+        repository,
+        prNumber,
+        writePhase: "codex_fallback_request"
+      });
+      if (!reviewable.ok) {
+        return;
+      }
       const fallbackBody = formatCodexReviewFallbackComment({
         status: "requested",
         trigger: triggerResult.value.trigger,
@@ -118,6 +171,16 @@ async function main() {
       ? resolveOperatorMention([pullRequest?.user?.login, payload?.sender?.login])
       : ""
   });
+
+  const reviewable = await ensurePullRequestReviewable({
+    githubFetch,
+    repository,
+    prNumber,
+    writePhase: existingReviewComment ? "gemini_review_update" : "gemini_review_create"
+  });
+  if (!reviewable.ok) {
+    return;
+  }
 
   if (existingFallbackComment) {
     await githubFetch(`/repos/${repository}/issues/comments/${existingFallbackComment.id}`, {
@@ -205,7 +268,9 @@ function shouldMentionGeminiReviewResult({ existingComment, recommendedAction })
   return !existing || existing.recommendedAction !== currentAction;
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exitCode = 1;
-});
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  });
+}
