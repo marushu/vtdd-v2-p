@@ -65,6 +65,8 @@ const CANONICAL_API_PREFIX = "/v2";
 const LEGACY_API_PREFIX = "/mvp";
 const MCP_PATH = "/mcp";
 const MCP_PROTOCOL_VERSION = "2025-03-26";
+const MCP_PROTECTED_RESOURCE_METADATA_PATH = "/.well-known/oauth-protected-resource";
+const MCP_PROTECTED_RESOURCE_METADATA_MIRROR_PATH = `${MCP_PROTECTED_RESOURCE_METADATA_PATH}/mcp`;
 const MCP_SERVER_INFO = Object.freeze({
   name: "vtdd-mcp",
   version: "0.1.0"
@@ -106,19 +108,30 @@ export default {
       return html(
         200,
         renderVtddHelpGuidePage({
-          runtimeOrigin: url.origin
+          runtimeOrigin: url.origin,
+          mcpPath: MCP_PATH
         })
       );
+    }
+
+    if (
+      request.method === "GET" &&
+      (url.pathname === MCP_PROTECTED_RESOURCE_METADATA_PATH ||
+        url.pathname === MCP_PROTECTED_RESOURCE_METADATA_MIRROR_PATH)
+    ) {
+      return json(200, buildMcpProtectedResourceMetadata(url));
     }
 
     if ((request.method === "POST" || request.method === "GET") && url.pathname === MCP_PATH) {
       const auth = authorizeGatewayRequest({ request, env, apiSuffix: MCP_PATH });
       if (!auth.ok) {
+        const headers =
+          auth.status === 401 ? buildMcpUnauthorizedHeaders(url, auth.headers ?? {}) : auth.headers ?? {};
         return json(auth.status, {
           ok: false,
           error: "unauthorized",
           reason: auth.reason
-        });
+        }, headers);
       }
       return handleMcpRequest({ request, env, url });
     }
@@ -1290,13 +1303,22 @@ async function handleRetrieveRepositoryNicknamesRequest(env) {
 
 async function handleMcpRequest({ request, env, url }) {
   if (request.method === "GET") {
-    return new Response("VTDD MCP endpoint requires an MCP client.", {
-      status: 405,
-      headers: {
-        "content-type": "text/plain; charset=utf-8",
-        "mcp-protocol-version": MCP_PROTOCOL_VERSION
+    return json(
+      405,
+      {
+        ok: false,
+        error: "mcp_post_required",
+        reason: "VTDD MCP endpoint requires MCP JSON-RPC POST requests.",
+        protectedResourceMetadataUrl: buildRuntimeUrl(
+          url.origin,
+          MCP_PROTECTED_RESOURCE_METADATA_MIRROR_PATH
+        )
+      },
+      {
+        "mcp-protocol-version": MCP_PROTOCOL_VERSION,
+        allow: "POST"
       }
-    });
+    );
   }
 
   const payload = await readJson(request);
@@ -2061,6 +2083,36 @@ function mcpErrorResponse(id, code, message, protocolVersion = MCP_PROTOCOL_VERS
       message
     }
   }, protocolVersion);
+}
+
+function buildMcpProtectedResourceMetadata(url) {
+  const resource = buildRuntimeUrl(url.origin, MCP_PATH);
+  return {
+    resource,
+    resource_name: "VTDD MCP",
+    resource_documentation: buildRuntimeUrl(url.origin, "/help#paths"),
+    bearer_methods_supported: ["header"],
+    scopes_supported: ["vtdd:mcp:read"]
+  };
+}
+
+function buildMcpUnauthorizedHeaders(url, baseHeaders = {}) {
+  return {
+    ...baseHeaders,
+    "www-authenticate": `Bearer realm="vtdd-mcp", resource_metadata="${buildRuntimeUrl(
+      url.origin,
+      MCP_PROTECTED_RESOURCE_METADATA_MIRROR_PATH
+    )}"`,
+    "mcp-protocol-version": MCP_PROTOCOL_VERSION
+  };
+}
+
+function buildRuntimeUrl(origin, path) {
+  try {
+    return new URL(path, `${origin}/`).href;
+  } catch {
+    return path;
+  }
 }
 
 async function safeRetrieveStoredAliasRegistry(provider) {

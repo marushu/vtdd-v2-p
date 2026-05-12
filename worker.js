@@ -21092,6 +21092,7 @@ function escapeHtml(value) {
 // src/core/help-guide-page.js
 function renderVtddHelpGuidePage(input = {}) {
   const runtimeOrigin = normalizeOrigin(input.runtimeOrigin);
+  const mcpPath = normalizePath(input.mcpPath || "/mcp");
   const directory = buildVtddCloudflarePageDirectory({ runtimeOrigin });
   const setupLatestHref = "/setup/latest";
   const setupKnownGoodHref = "/setup/known-good";
@@ -21159,6 +21160,7 @@ function renderVtddHelpGuidePage(input = {}) {
         <div class="panel"><strong>High-risk authority plane</strong>merge\u3001Issue close\u3001secret sync\u3001deploy \u306A\u3069\u9AD8\u30EA\u30B9\u30AF\u64CD\u4F5C\u306F GO + passkey \u307E\u305F\u306F\u660E\u793A\u7684\u306A\u7981\u6B62\u5883\u754C\u3092\u901A\u308A\u307E\u3059\u3002</div>
         <div class="panel"><strong>Runner / reviewer loop</strong>Butler -> Codex runner -> PR -> reviewer -> Butler summary \u306E GitHub-visible loop \u3092\u6271\u3044\u307E\u3059\u3002</div>
         <div class="panel"><strong>Memory / retrieval</strong>constitution\u3001decision log\u3001proposal log\u3001operational memory \u3092\u8AAD\u3093\u3067\u5224\u65AD\u306E\u524D\u63D0\u3092\u5FA9\u5143\u3057\u307E\u3059\u3002</div>
+        <div class="panel"><strong>MCP read surface</strong>Mac Codex / VPS Codex CLI \u306F <code>${escapeHtml2(mcpPath)}</code> \u3092\u901A\u3058\u3066 Butler \u3068\u540C\u3058 runtime truth / review truth / memory recall \u3092\u8AAD\u307F\u307E\u3059\u3002</div>
         <div class="panel"><strong>Setup recovery</strong>Action Schema / Instructions \u304C\u58CA\u308C\u305F\u6642\u306B\u30D6\u30E9\u30A6\u30B6\u304B\u3089\u5FA9\u65E7 bundle \u3092\u30B3\u30D4\u30FC\u3067\u304D\u307E\u3059\u3002</div>
       </div>
     </section>
@@ -21172,6 +21174,7 @@ function renderVtddHelpGuidePage(input = {}) {
         <div><strong>4. Worker -> GitHub / runner / reviewer</strong>\u8A31\u53EF\u3055\u308C\u305F read/write/runner/reviewer operation \u3060\u3051\u304C\u5916\u90E8\u3078\u51FA\u307E\u3059\u3002</div>
         <div><strong>5. GitHub-visible evidence -> Butler</strong>\u7D50\u679C\u306F status\u3001before/after state\u3001PR/Issue/comment/workflow state \u3068\u3057\u3066 Butler \u304C\u518D\u8AAD\u8FBC\u3067\u304D\u307E\u3059\u3002</div>
       </div>
+      <div class="route"><strong>Machine path</strong><code>${escapeHtml2(mcpPath)}</code> \u306F\u4EBA\u9593\u5411\u3051\u30DA\u30FC\u30B8\u3067\u306F\u306A\u304F\u3001Mac Codex / VPS Codex CLI \u304C VTDD MCP tool catalog \u3092\u8AAD\u3080\u305F\u3081\u306E machine endpoint \u3067\u3059\u3002</div>
     </section>
 
     <section id="usage">
@@ -21334,6 +21337,13 @@ function buildRuntimeUrl(origin, path) {
   } catch {
     return path;
   }
+}
+function normalizePath(value) {
+  const text = normalizeText4(value);
+  if (!text) {
+    return "/mcp";
+  }
+  return text.startsWith("/") ? text : `/${text}`;
 }
 function escapeHtml2(value) {
   return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -31335,6 +31345,8 @@ var CANONICAL_API_PREFIX = "/v2";
 var LEGACY_API_PREFIX = "/mvp";
 var MCP_PATH = "/mcp";
 var MCP_PROTOCOL_VERSION = "2025-03-26";
+var MCP_PROTECTED_RESOURCE_METADATA_PATH = "/.well-known/oauth-protected-resource";
+var MCP_PROTECTED_RESOURCE_METADATA_MIRROR_PATH = `${MCP_PROTECTED_RESOURCE_METADATA_PATH}/mcp`;
 var MCP_SERVER_INFO = Object.freeze({
   name: "vtdd-mcp",
   version: "0.1.0"
@@ -31366,18 +31378,23 @@ var runtime_default = {
       return html(
         200,
         renderVtddHelpGuidePage({
-          runtimeOrigin: url.origin
+          runtimeOrigin: url.origin,
+          mcpPath: MCP_PATH
         })
       );
+    }
+    if (request.method === "GET" && (url.pathname === MCP_PROTECTED_RESOURCE_METADATA_PATH || url.pathname === MCP_PROTECTED_RESOURCE_METADATA_MIRROR_PATH)) {
+      return json(200, buildMcpProtectedResourceMetadata(url));
     }
     if ((request.method === "POST" || request.method === "GET") && url.pathname === MCP_PATH) {
       const auth = authorizeGatewayRequest({ request, env, apiSuffix: MCP_PATH });
       if (!auth.ok) {
+        const headers = auth.status === 401 ? buildMcpUnauthorizedHeaders(url, auth.headers ?? {}) : auth.headers ?? {};
         return json(auth.status, {
           ok: false,
           error: "unauthorized",
           reason: auth.reason
-        });
+        }, headers);
       }
       return handleMcpRequest({ request, env, url });
     }
@@ -32424,13 +32441,22 @@ async function handleRetrieveRepositoryNicknamesRequest(env) {
 }
 async function handleMcpRequest({ request, env, url }) {
   if (request.method === "GET") {
-    return new Response("VTDD MCP endpoint requires an MCP client.", {
-      status: 405,
-      headers: {
-        "content-type": "text/plain; charset=utf-8",
-        "mcp-protocol-version": MCP_PROTOCOL_VERSION
+    return json(
+      405,
+      {
+        ok: false,
+        error: "mcp_post_required",
+        reason: "VTDD MCP endpoint requires MCP JSON-RPC POST requests.",
+        protectedResourceMetadataUrl: buildRuntimeUrl2(
+          url.origin,
+          MCP_PROTECTED_RESOURCE_METADATA_MIRROR_PATH
+        )
+      },
+      {
+        "mcp-protocol-version": MCP_PROTOCOL_VERSION,
+        allow: "POST"
       }
-    });
+    );
   }
   const payload = await readJson(request);
   if (Array.isArray(payload)) {
@@ -33098,6 +33124,33 @@ function mcpErrorResponse(id, code, message, protocolVersion = MCP_PROTOCOL_VERS
       message
     }
   }, protocolVersion);
+}
+function buildMcpProtectedResourceMetadata(url) {
+  const resource = buildRuntimeUrl2(url.origin, MCP_PATH);
+  return {
+    resource,
+    resource_name: "VTDD MCP",
+    resource_documentation: buildRuntimeUrl2(url.origin, "/help#paths"),
+    bearer_methods_supported: ["header"],
+    scopes_supported: ["vtdd:mcp:read"]
+  };
+}
+function buildMcpUnauthorizedHeaders(url, baseHeaders = {}) {
+  return {
+    ...baseHeaders,
+    "www-authenticate": `Bearer realm="vtdd-mcp", resource_metadata="${buildRuntimeUrl2(
+      url.origin,
+      MCP_PROTECTED_RESOURCE_METADATA_MIRROR_PATH
+    )}"`,
+    "mcp-protocol-version": MCP_PROTOCOL_VERSION
+  };
+}
+function buildRuntimeUrl2(origin, path) {
+  try {
+    return new URL(path, `${origin}/`).href;
+  } catch {
+    return path;
+  }
 }
 async function safeRetrieveStoredAliasRegistry(provider) {
   try {

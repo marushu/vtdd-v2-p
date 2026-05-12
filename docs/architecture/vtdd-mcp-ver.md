@@ -255,6 +255,32 @@ VPS Codex CLI -> MCP -> VTDD core
 
 This creates shared read and recall first without replacing Butler.
 
+## Canonical Codex MCP Connection
+
+Mac Codex and VPS Codex CLI use the VTDD MCP endpoint directly.
+
+Required environment:
+
+- `VTDD_MCP_TOKEN`: bearer token for the VTDD MCP surface when auth is enabled
+
+Canonical add command shape:
+
+```bash
+export VTDD_MCP_TOKEN=...
+codex mcp add vtdd --url https://your-vtdd-runtime.example.com/mcp --bearer-token-env-var VTDD_MCP_TOKEN
+```
+
+Local verification shape:
+
+```bash
+export VTDD_MCP_TOKEN=vtdd-local-test
+codex mcp add vtdd-local --url http://127.0.0.1:8788/mcp --bearer-token-env-var VTDD_MCP_TOKEN
+codex exec -s read-only -C /path/to/repo "vtdd-local MCP を使って、利用可能な tool 名だけを改行区切りで返して。説明はいらない。"
+```
+
+The MCP runtime must expose bearer-token discovery hints that let Codex resolve
+the protected resource and connect without inventing a parallel OAuth flow.
+
 ## Execution Harness Boundary
 
 Current VPS execution is a user-owned Codex CLI process wrapper.

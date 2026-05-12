@@ -3,3 +3,4 @@ credentials/
 wrangler.local.toml
 wrangler.*.local.toml
 wrangler.production.generated.toml
+.wrangler/
