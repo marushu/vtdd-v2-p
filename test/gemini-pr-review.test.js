@@ -143,6 +143,26 @@ test("buildPullRequestDiff truncates large diffs", () => {
   assert.equal(diff.includes("[diff truncated]"), true);
 });
 
+test("buildPullRequestDiff keeps source diffs ahead of generated worker diff", () => {
+  const diff = buildPullRequestDiff([
+    {
+      filename: "worker.js",
+      status: "modified",
+      patch: "generated".repeat(100)
+    },
+    {
+      filename: "src/core/reviewer-marker-truth.js",
+      status: "modified",
+      patch: "@@ source fix"
+    }
+  ]);
+
+  assert.equal(diff.indexOf("src/core/reviewer-marker-truth.js") < diff.indexOf("worker.js"), true);
+  assert.equal(diff.includes("@@ source fix"), true);
+  assert.equal(diff.includes("generated file diff omitted"), true);
+  assert.equal(diff.includes("generatedgenerated"), false);
+});
+
 test("buildPullRequestReviewContext includes bounded PR metadata", () => {
   const context = buildPullRequestReviewContext({
     repository: "sample/repo",

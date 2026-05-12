@@ -92,10 +92,12 @@ export function buildPullRequestDiff(files = [], options = {}) {
   const maxCharacters = normalizePositiveInteger(options.maxCharacters) || MAX_DIFF_CHARACTERS;
   const chunks = [];
 
-  for (const file of files) {
+  for (const file of prioritizeReviewDiffFiles(files)) {
     const name = normalizeText(file?.filename) || "unknown";
     const status = normalizeText(file?.status) || "modified";
-    const patch = normalizeText(file?.patch);
+    const patch = isGeneratedReviewDiffFile(name)
+      ? "[generated file diff omitted from reviewer prompt; verify with generated-worker parity evidence and source diffs]"
+      : normalizeText(file?.patch);
     const fileChunk = [
       `diff --git a/${name} b/${name}`,
       `status: ${status}`,
@@ -109,6 +111,21 @@ export function buildPullRequestDiff(files = [], options = {}) {
     return joined;
   }
   return `${joined.slice(0, maxCharacters)}\n\n[diff truncated]`;
+}
+
+function prioritizeReviewDiffFiles(files = []) {
+  return [...(Array.isArray(files) ? files : [])].sort((left, right) => {
+    const leftGenerated = isGeneratedReviewDiffFile(normalizeText(left?.filename));
+    const rightGenerated = isGeneratedReviewDiffFile(normalizeText(right?.filename));
+    if (leftGenerated === rightGenerated) {
+      return 0;
+    }
+    return leftGenerated ? 1 : -1;
+  });
+}
+
+function isGeneratedReviewDiffFile(filename) {
+  return filename === "worker.js";
 }
 
 export function buildPullRequestReviewContext(input = {}) {
