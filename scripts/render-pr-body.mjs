@@ -38,13 +38,59 @@ function bulletize(value, fallback = "None.") {
   return lines.map((line) => `- ${line.replace(/^- /, "")}`).join("\n");
 }
 
+function normalizeCompletionStatus(value) {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
+  if (!normalized) {
+    return "unconnected";
+  }
+  if (normalized === "partial" || normalized === "in_progress" || normalized === "in-progress") {
+    return "incomplete";
+  }
+  if (["complete", "incomplete", "unconnected"].includes(normalized)) {
+    return normalized;
+  }
+  return normalized;
+}
+
+function defaultUnsatisfiedCriteria(status) {
+  if (status === "complete") {
+    return "None.";
+  }
+  return "- Remaining scoped work or owner-facing connections are still open outside this PR slice.";
+}
+
+function defaultButlerContract(status) {
+  const unconnectedE2E =
+    status === "complete"
+      ? "Required and must be listed explicitly."
+      : "Unconnected in this PR slice; Butler-facing E2E remains open.";
+
+  return {
+    ownerGoal: "See Intent and Success Criteria sections for the scoped owner-facing goal.",
+    entrypoint: "Unchanged or not yet connected in this PR slice.",
+    actionSchemaExposure: "Unchanged in this PR slice unless stated otherwise below.",
+    runtimePath: "See this PR's scoped implementation/evidence description.",
+    runtimeTruth: "See verification evidence and runtime path notes in this PR.",
+    authorityBoundary: "Unchanged; no new high-risk authority is introduced in this PR slice unless stated otherwise.",
+    e2eEvidence: unconnectedE2E,
+    completionStatus: status
+  };
+}
+
 function renderPrBody(options = {}) {
   const issue = options.issue ? `#${options.issue}` : null;
   const issueLink = issue ? ` ${issue}` : "";
   const executionId = options.executionId || "Not provided.";
   const codexGoal = options.codexGoal || "Not provided.";
   const evidencePath = options.evidencePath || "Not provided.";
-  const butler = options.butler || {};
+  const status = normalizeCompletionStatus(options.completionStatus || options.butler?.completionStatus);
+  const butlerDefaults = defaultButlerContract(status);
+  const butler = {
+    ...butlerDefaults,
+    ...(options.butler || {})
+  };
 
   return `## This PR satisfies Intent
 
@@ -61,7 +107,7 @@ ${bulletize(options.satisfied, "- None yet.")}
 
 ## Unsatisfied Success Criteria
 
-${bulletize(options.unsatisfied, "None.")}
+${bulletize(options.unsatisfied, defaultUnsatisfiedCriteria(status))}
 
 ## Non-goal violations
 
@@ -77,14 +123,14 @@ ${options.nonGoals || "None."}
 
 ## Butler Completion Contract
 
-- Owner goal: ${options.ownerGoal || butler.ownerGoal || "Not provided."}
-- Butler entrypoint: ${options.butlerEntrypoint || butler.entrypoint || "Not provided."}
-- Action Schema exposure: ${options.actionSchemaExposure || butler.actionSchemaExposure || "Not provided."}
-- Runtime path: ${options.runtimePath || butler.runtimePath || "Not provided."}
-- Runner/runtime truth: ${options.runtimeTruth || butler.runtimeTruth || "Not provided."}
-- Authority boundary: ${options.authorityBoundary || butler.authorityBoundary || "Not provided."}
-- E2E evidence: ${options.butlerE2E || butler.e2eEvidence || "Not provided."}
-- Completion status: ${options.completionStatus || butler.completionStatus || "incomplete"}
+- Owner goal: ${options.ownerGoal || butler.ownerGoal}
+- Butler entrypoint: ${options.butlerEntrypoint || butler.entrypoint}
+- Action Schema exposure: ${options.actionSchemaExposure || butler.actionSchemaExposure}
+- Runtime path: ${options.runtimePath || butler.runtimePath}
+- Runner/runtime truth: ${options.runtimeTruth || butler.runtimeTruth}
+- Authority boundary: ${options.authorityBoundary || butler.authorityBoundary}
+- E2E evidence: ${options.butlerE2E || butler.e2eEvidence}
+- Completion status: ${status}
 
 ## Surface Update Checklist
 

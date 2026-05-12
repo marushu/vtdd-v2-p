@@ -24,6 +24,17 @@ test("renderPrBody includes all guarded-policy headings", () => {
   assert.match(body, /## Surface Update Checklist/);
 });
 
+test("renderPrBody default partial template passes validator without Butler placeholders", () => {
+  const body = renderPrBody({
+    issue: "57",
+    intent: "Prevent repeated PR body guard failures.",
+    satisfied: "Helper generates all required sections."
+  });
+
+  const result = validatePrBody(body);
+  assert.equal(result.ok, true);
+});
+
 test("validatePrBody fails when required markers are missing", () => {
   const result = validatePrBody("## Summary\n\nNot enough.");
   assert.equal(result.ok, false);
@@ -49,6 +60,19 @@ test("validatePrBody accepts rendered body", () => {
     butlerE2E: "Not required because this PR does not close a runtime Issue.",
     completionStatus: "incomplete",
   });
+  const result = validatePrBody(body);
+  assert.equal(result.ok, true);
+});
+
+test("renderPrBody normalizes partial completion status into incomplete", () => {
+  const body = renderPrBody({
+    issue: "57",
+    intent: "Prevent repeated PR body guard failures.",
+    satisfied: "Helper generates all required sections.",
+    completionStatus: "partial"
+  });
+
+  assert.match(body, /- Completion status: incomplete/);
   const result = validatePrBody(body);
   assert.equal(result.ok, true);
 });

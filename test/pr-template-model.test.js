@@ -40,10 +40,13 @@ test("pr template contains canonical sections in order", () => {
   }
 });
 
-test("pr template uses plain None markers for empty sections", () => {
+test("pr template keeps explicit remaining-work guidance for partial PRs", () => {
   const template = fs.readFileSync(TEMPLATE_PATH, "utf8");
 
-  assert.match(template, /## Unsatisfied Success Criteria\s+None\./);
+  assert.match(
+    template,
+    /## Unsatisfied Success Criteria\s+- Remaining scoped work or owner-facing connections are still open outside this PR slice\./
+  );
   assert.match(template, /## Non-goal violations\s+None\./);
   assert.match(template, /## Extra changes \(if any\)\s+None\./);
 });
