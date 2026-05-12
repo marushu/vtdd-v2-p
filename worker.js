@@ -28222,7 +28222,8 @@ async function executeDeployProductionPlane(input = {}) {
     workflowFile,
     workflowRef,
     approvalGrantId,
-    runtimeUrl
+    runtimeUrl,
+    workflowRunsUrl: `https://github.com/${workflowRepository}/actions/workflows/${workflowFile}`
   };
   const dispatchUrl = `${apiBaseUrl}/repos/${encodeURIComponentRepository3(
     workflowRepository
@@ -28282,13 +28283,14 @@ async function executeDeployProductionPlane(input = {}) {
   });
   if (!observedRun.ok) {
     return {
-      ok: false,
-      status: 503,
-      error: "deploy_dispatch_unverified",
+      ok: true,
+      warning: "deploy_dispatch_unverified",
       reason: observedRun.reason,
       deploy: {
         ...deployBase,
-        status: "dispatch_unverified"
+        status: "dispatch_accepted_unverified",
+        runStatus: "unknown",
+        runConclusion: "unknown"
       }
     };
   }
@@ -28314,8 +28316,9 @@ async function verifyDeployWorkflowRun({
   fetchImpl,
   env
 }) {
-  const attempts = normalizePositiveInteger4(env?.DEPLOY_DISPATCH_VERIFY_ATTEMPTS, 3);
-  const delayMs = normalizeNonNegativeInteger(env?.DEPLOY_DISPATCH_VERIFY_DELAY_MS, 1e3);
+  const attempts = normalizePositiveInteger4(env?.DEPLOY_DISPATCH_VERIFY_ATTEMPTS, 8);
+  const delayMs = normalizeNonNegativeInteger(env?.DEPLOY_DISPATCH_VERIFY_DELAY_MS, 1500);
+  const createdLowerBound = new Date(Math.max(0, Date.parse(dispatchedAt) - 12e4)).toISOString();
   const runsUrl = new URL(`${apiBaseUrl}/repos/${encodeURIComponentRepository3(
     workflowRepository
   )}/actions/workflows/${encodeURIComponent(
@@ -28323,7 +28326,7 @@ async function verifyDeployWorkflowRun({
   )}/runs`);
   runsUrl.searchParams.set("branch", workflowRef);
   runsUrl.searchParams.set("event", "workflow_dispatch");
-  runsUrl.searchParams.set("created", `>=${dispatchedAt}`);
+  runsUrl.searchParams.set("created", `>=${createdLowerBound}`);
   runsUrl.searchParams.set("per_page", "10");
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     let response;
@@ -32335,6 +32338,8 @@ async function handleDeployProductionRequest(request, env) {
   }
   return json(202, {
     ok: true,
+    warning: executed.warning ?? void 0,
+    reason: executed.reason ?? void 0,
     deploy: executed.deploy
   });
 }

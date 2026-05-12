@@ -1501,6 +1501,8 @@ async function handleDeployProductionRequest(request, env) {
 
   return json(202, {
     ok: true,
+    warning: executed.warning ?? undefined,
+    reason: executed.reason ?? undefined,
     deploy: executed.deploy
   });
 }
