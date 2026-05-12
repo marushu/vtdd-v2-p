@@ -24,19 +24,17 @@ export function collectGeminiReviewerSignals(pullRequest = {}) {
 
 export function collectCodexFallbackSignals(pullRequest = {}) {
   const comments = [...(Array.isArray(pullRequest.issueComments) ? pullRequest.issueComments : [])];
-  const trustedComments = comments
+  const parsed = comments
     .filter(isTrustedReviewerMarkerComment)
-    .sort(compareReviewerMarkerComments);
-  const parsed = trustedComments
     .map(parseCodexReviewFallbackComment)
     .filter(Boolean);
   const connectorBlockers = comments
     .filter(isTrustedCodexConnectorSetupComment)
-    .sort(compareReviewerMarkerComments)
     .map(parseCodexConnectorSetupComment)
     .filter(Boolean);
-  const latestConnectorBlocker = connectorBlockers.at(-1) ?? null;
-  const latest = latestConnectorBlocker ?? parsed.at(-1) ?? null;
+  const latest = [...parsed, ...connectorBlockers]
+    .sort(compareReviewerMarkerComments)
+    .at(-1) ?? null;
 
   return {
     requested: latest?.status === "requested",

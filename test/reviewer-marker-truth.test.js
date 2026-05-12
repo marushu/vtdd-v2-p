@@ -132,6 +132,63 @@ test("reviewer marker truth accepts Codex connector setup blockers only from con
   assert.equal(result.latestEvidence, null);
 });
 
+test("reviewer marker truth lets newer completed Codex fallback supersede older connector blocker", () => {
+  const result = collectCodexFallbackSignals({
+    issueComments: [
+      {
+        user: { login: "chatgpt-codex-connector" },
+        createdAt: "2026-05-12T04:40:00Z",
+        body: "To use Codex here, [create a Codex account and connect to github](https://chatgpt.com/codex/cloud/settings/connectors)."
+      },
+      {
+        user: { login: "github-actions[bot]" },
+        createdAt: "2026-05-12T04:50:00Z",
+        body: [
+          "<!-- vtdd:reviewer=codex-fallback -->",
+          "## VTDD Codex Reviewer Fallback Request",
+          "",
+          "- Status: `completed`",
+          "- Recommended action: `approve`",
+          "",
+          "### Critical Findings",
+          "- 重要指摘なし。"
+        ].join("\n")
+      }
+    ]
+  });
+
+  assert.equal(result.blocked, false);
+  assert.equal(result.completed, true);
+  assert.equal(result.latestEvidence.recommendedAction, "approve");
+});
+
+test("reviewer marker truth keeps newer connector blocker over older Codex fallback", () => {
+  const result = collectCodexFallbackSignals({
+    issueComments: [
+      {
+        user: { login: "github-actions[bot]" },
+        createdAt: "2026-05-12T04:40:00Z",
+        body: [
+          "<!-- vtdd:reviewer=codex-fallback -->",
+          "## VTDD Codex Reviewer Fallback Request",
+          "",
+          "- Status: `completed`",
+          "- Recommended action: `approve`"
+        ].join("\n")
+      },
+      {
+        user: { login: "chatgpt-codex-connector" },
+        createdAt: "2026-05-12T04:50:00Z",
+        body: "To use Codex here, [create a Codex account and connect to github](https://chatgpt.com/codex/cloud/settings/connectors)."
+      }
+    ]
+  });
+
+  assert.equal(result.blocked, true);
+  assert.equal(result.completed, false);
+  assert.equal(result.latestEvidence, null);
+});
+
 test("reviewer marker truth keeps formal changes-requested blocking over marker approval", () => {
   const formalReviewTruth = collectFormalReviewTruth({
     reviewDecision: "APPROVED",

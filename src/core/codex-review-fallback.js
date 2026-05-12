@@ -117,8 +117,11 @@ export function parseCodexConnectorSetupComment(comment = {}) {
   if (!isCodexConnectorAuthor(author) || !isCodexConnectorSetupBody(body)) {
     return null;
   }
+  const source = typeof comment === "object" && comment !== null ? comment : {};
+  const createdAt = normalizeText(source.createdAt ?? source.created_at);
+  const updatedAt = normalizeText(source.updatedAt ?? source.updated_at);
 
-  return {
+  const parsed = {
     reviewer: "codex",
     status: CodexReviewFallbackStatus.BLOCKED,
     blocking: true,
@@ -126,6 +129,20 @@ export function parseCodexConnectorSetupComment(comment = {}) {
     blocker: CodexReviewFallbackBlocker.CODEX_CONNECTOR_NOT_CONFIGURED,
     body
   };
+  const url = normalizeText(source.url ?? source.htmlUrl ?? source.html_url);
+  if (url) {
+    parsed.url = url;
+  }
+  if (createdAt) {
+    parsed.createdAt = createdAt;
+  }
+  if (updatedAt) {
+    parsed.updatedAt = updatedAt;
+  }
+  if (source.includesCreatedEdit === true || (Boolean(createdAt) && Boolean(updatedAt) && createdAt !== updatedAt)) {
+    parsed.includesCreatedEdit = true;
+  }
+  return parsed;
 }
 
 function containsMarker(value) {

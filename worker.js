@@ -21404,7 +21404,10 @@ function parseCodexConnectorSetupComment(comment = {}) {
   if (!isCodexConnectorAuthor(author) || !isCodexConnectorSetupBody(body)) {
     return null;
   }
-  return {
+  const source = typeof comment === "object" && comment !== null ? comment : {};
+  const createdAt = normalizeText5(source.createdAt ?? source.created_at);
+  const updatedAt = normalizeText5(source.updatedAt ?? source.updated_at);
+  const parsed = {
     reviewer: "codex",
     status: CodexReviewFallbackStatus.BLOCKED,
     blocking: true,
@@ -21412,6 +21415,20 @@ function parseCodexConnectorSetupComment(comment = {}) {
     blocker: CodexReviewFallbackBlocker.CODEX_CONNECTOR_NOT_CONFIGURED,
     body
   };
+  const url = normalizeText5(source.url ?? source.htmlUrl ?? source.html_url);
+  if (url) {
+    parsed.url = url;
+  }
+  if (createdAt) {
+    parsed.createdAt = createdAt;
+  }
+  if (updatedAt) {
+    parsed.updatedAt = updatedAt;
+  }
+  if (source.includesCreatedEdit === true || Boolean(createdAt) && Boolean(updatedAt) && createdAt !== updatedAt) {
+    parsed.includesCreatedEdit = true;
+  }
+  return parsed;
 }
 function containsMarker(value) {
   return normalizeText5(value).includes(CODEX_REVIEW_FALLBACK_MARKER);
@@ -21504,11 +21521,9 @@ function collectGeminiReviewerSignals(pullRequest = {}) {
 }
 function collectCodexFallbackSignals(pullRequest = {}) {
   const comments = [...Array.isArray(pullRequest.issueComments) ? pullRequest.issueComments : []];
-  const trustedComments = comments.filter(isTrustedReviewerMarkerComment).sort(compareReviewerMarkerComments);
-  const parsed = trustedComments.map(parseCodexReviewFallbackComment).filter(Boolean);
-  const connectorBlockers = comments.filter(isTrustedCodexConnectorSetupComment).sort(compareReviewerMarkerComments).map(parseCodexConnectorSetupComment).filter(Boolean);
-  const latestConnectorBlocker = connectorBlockers.at(-1) ?? null;
-  const latest = latestConnectorBlocker ?? parsed.at(-1) ?? null;
+  const parsed = comments.filter(isTrustedReviewerMarkerComment).map(parseCodexReviewFallbackComment).filter(Boolean);
+  const connectorBlockers = comments.filter(isTrustedCodexConnectorSetupComment).map(parseCodexConnectorSetupComment).filter(Boolean);
+  const latest = [...parsed, ...connectorBlockers].sort(compareReviewerMarkerComments).at(-1) ?? null;
   return {
     requested: latest?.status === "requested",
     completed: latest?.status === "completed",
