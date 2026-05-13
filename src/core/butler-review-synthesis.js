@@ -1,3 +1,5 @@
+import { normalizeText } from "./text-normalization.js";
+
 export function buildButlerReviewSynthesis(input = {}) {
   const pullRequest = normalizePullRequest(input.pullRequest);
   const branchAttribution = buildBranchAttribution({
@@ -444,10 +446,6 @@ function normalizeNullableBoolean(value) {
 
 function normalizeStringArray(value) {
   return (Array.isArray(value) ? value : []).map(normalizeText).filter(Boolean);
-}
-
-function normalizeText(value) {
-  return String(value ?? "").trim();
 }
 
 function normalizeCount(value) {

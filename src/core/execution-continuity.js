@@ -8,6 +8,7 @@ import {
   buildReviewResponseSummary,
   parseGeminiReviewComment
 } from "./gemini-pr-review.js";
+import { normalizeText } from "./text-normalization.js";
 import { ActorRole, TaskMode } from "./types.js";
 
 export const ExecutionTransferMode = Object.freeze({
@@ -632,10 +633,6 @@ function normalizeReviewState(value) {
     return "review_required";
   }
   return normalized;
-}
-
-function normalizeText(value) {
-  return String(value ?? "").trim();
 }
 
 function deny(rule, reason) {
