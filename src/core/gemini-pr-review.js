@@ -235,15 +235,19 @@ function reviewSignalSortTime(signal) {
 
 function isAfterReviewerMarker(comment, reviewerSignal) {
   const reviewerTime = reviewSignalSortTime(reviewerSignal);
-  const responseTime = normalizeCommentSortTime(comment);
-  if (!reviewerTime || !responseTime) {
-    return true;
+  const responseTime = normalizeCommentCreatedTime(comment);
+  if (!isValidIsoTime(reviewerTime) || !isValidIsoTime(responseTime)) {
+    return false;
   }
-  return compareIsoText(responseTime, reviewerTime) >= 0;
+  return Date.parse(responseTime) > Date.parse(reviewerTime);
 }
 
-function normalizeCommentSortTime(comment) {
-  return normalizeText(comment?.updatedAt ?? comment?.updated_at ?? comment?.createdAt ?? comment?.created_at);
+function normalizeCommentCreatedTime(comment) {
+  return normalizeText(comment?.createdAt ?? comment?.created_at);
+}
+
+function isValidIsoTime(value) {
+  return Number.isFinite(Date.parse(normalizeText(value)));
 }
 
 function compareIsoText(left, right) {
