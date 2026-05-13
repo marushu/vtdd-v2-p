@@ -34507,7 +34507,7 @@ function sortResponseCommentsByCreatedAt(comments) {
 }
 function parseGeminiReviewComment(comment = {}) {
   const body = normalizeText20(typeof comment === "string" ? comment : comment?.body);
-  if (!body || !containsMarker2(body)) {
+  if (!body || !containsGeminiReviewMarker(body)) {
     return null;
   }
   const recommendedActionMatch = body.match(/^- Recommended action:\s*`([^`]+)`/m);
@@ -34614,7 +34614,7 @@ function extractFirstMarkdownListSection(body, headings) {
 function uniqueTextList(values) {
   return [...new Set(values.map(normalizeText20).filter(Boolean))];
 }
-function containsMarker2(value) {
+function containsGeminiReviewMarker(value) {
   return normalizeText20(value).includes(GEMINI_PR_REVIEW_MARKER);
 }
 function isTrustedReviewerObjectionResolution(value) {

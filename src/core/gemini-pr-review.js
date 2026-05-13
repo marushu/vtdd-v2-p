@@ -34,7 +34,10 @@ export function resolveGeminiReviewTrigger(input = {}) {
     if (!issue.pull_request) {
       return skip("issue_comment_not_for_pull_request");
     }
-    if (!isTrustedReviewerObjectionResolution(comment.body) && (isBotTriggered(payload) || containsMarker(comment.body))) {
+    if (
+      !isTrustedReviewerObjectionResolution(comment.body) &&
+      (isBotTriggered(payload) || containsReviewerMarker(comment.body))
+    ) {
       return skip("bot_or_marker_comment");
     }
     return {
@@ -53,7 +56,7 @@ export function resolveGeminiReviewTrigger(input = {}) {
     if (!["submitted", "edited"].includes(normalizeText(payload.action))) {
       return skip("unsupported_pull_request_review_action");
     }
-    if (isBotTriggered(payload) || containsMarker(review.body)) {
+    if (isBotTriggered(payload) || containsReviewerMarker(review.body)) {
       return skip("bot_or_marker_review");
     }
     return {
@@ -72,7 +75,7 @@ export function resolveGeminiReviewTrigger(input = {}) {
     if (!["created", "edited"].includes(normalizeText(payload.action))) {
       return skip("unsupported_pull_request_review_comment_action");
     }
-    if (isBotTriggered(payload) || containsMarker(comment.body)) {
+    if (isBotTriggered(payload) || containsReviewerMarker(comment.body)) {
       return skip("bot_or_marker_review_comment");
     }
     return {
@@ -447,14 +450,14 @@ export function formatGeminiReviewComment(input = {}) {
 
 export function findExistingGeminiReviewComment(comments = []) {
   return (
-    comments.find((comment) => containsMarker(comment?.body)) ??
+    comments.find((comment) => containsGeminiReviewMarker(comment?.body)) ??
     null
   );
 }
 
 export function parseGeminiReviewComment(comment = {}) {
   const body = normalizeText(typeof comment === "string" ? comment : comment?.body);
-  if (!body || !containsMarker(body)) {
+  if (!body || !containsGeminiReviewMarker(body)) {
     return null;
   }
 
@@ -609,7 +612,7 @@ function uniqueTextList(values) {
 function summarizeComments(comments) {
   const list = Array.isArray(comments) ? comments : [];
   return list
-    .filter((comment) => !containsMarker(comment?.body) || isTrustedReviewerObjectionResolution(comment?.body))
+    .filter((comment) => !containsReviewerMarker(comment?.body) || isTrustedReviewerObjectionResolution(comment?.body))
     .slice(-MAX_CONTEXT_COMMENTS)
     .map((comment) => {
       const author = normalizeText(comment?.user?.login) || "unknown";
@@ -651,7 +654,11 @@ function isBotTriggered(payload) {
   return senderLogin.endsWith("[bot]");
 }
 
-function containsMarker(value) {
+function containsReviewerMarker(value) {
+  return /<!--\s*vtdd:reviewer=[^>\s]+\s*-->/.test(normalizeText(value));
+}
+
+function containsGeminiReviewMarker(value) {
   return normalizeText(value).includes(GEMINI_PR_REVIEW_MARKER);
 }
 
