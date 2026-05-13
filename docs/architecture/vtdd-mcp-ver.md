@@ -311,6 +311,51 @@ codex exec \
 The MCP runtime must expose bearer-token discovery hints that let Codex resolve
 the protected resource and connect without inventing a parallel OAuth flow.
 
+## Live Parity Verification
+
+Mac Codex と VPS Codex CLI は、接続できるだけでは不十分である。
+
+同じ repository / Issue / PR に対して、同じ shared truth を返すことを
+確認する必要がある。
+
+Canonical parity targets:
+
+- `vtdd_runtime_truth`
+- `vtdd_review_truth`
+- `vtdd_recall_implementation`
+
+Canonical parity prompts:
+
+```text
+vtdd MCP を使って、marushu/vtdd-v2-p の runtime truth を JSON そのままで返して。説明不要。
+```
+
+```text
+vtdd MCP を使って、marushu/vtdd-v2-p の PR #328 の review truth を JSON そのままで返して。説明不要。
+```
+
+```text
+vtdd MCP を使って、marushu/vtdd-v2-p の Issue #318 の implementation recall を JSON そのままで返して。説明不要。
+```
+
+Mac Codex と VPS Codex CLI で比較する最小項目:
+
+- repository
+- issue / pull request target
+- sourceOfTruth / runtimeStatus
+- blocking review state
+- next safe action
+- files / tests / evidence references
+
+Parity is not complete unless both surfaces can answer the same target with
+materially matching truth.
+
+If one surface succeeds and the other does not, record that as:
+
+- connection established but parity incomplete
+
+Do not describe one-sided success as shared-memory/shared-truth completion.
+
 ## Execution Harness Boundary
 
 Current VPS execution is a user-owned Codex CLI process wrapper.

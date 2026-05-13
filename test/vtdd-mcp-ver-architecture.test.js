@@ -55,3 +55,13 @@ test("vtdd-mcp-ver architecture doc defines canonical Codex MCP bridge path", ()
   assert.equal(doc.includes("request_user_input"), true);
   assert.equal(doc.includes("bearer-token discovery hints"), true);
 });
+
+test("vtdd-mcp-ver architecture doc defines live parity verification across Mac and VPS", () => {
+  const doc = fs.readFileSync(DOC_PATH, "utf8");
+  assert.equal(doc.includes("Live Parity Verification"), true);
+  assert.equal(doc.includes("vtdd_review_truth"), true);
+  assert.equal(doc.includes("PR #328 の review truth"), true);
+  assert.equal(doc.includes("Issue #318 の implementation recall"), true);
+  assert.equal(doc.includes("connection established but parity incomplete"), true);
+  assert.equal(doc.includes("Do not describe one-sided success as shared-memory/shared-truth completion."), true);
+});
