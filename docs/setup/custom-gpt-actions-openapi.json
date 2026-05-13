@@ -2360,7 +2360,8 @@
                 "pull_review_comments",
                 "checks",
                 "workflow_runs",
-                "branches"
+                "branches",
+                "contents"
               ]
             }
           },
@@ -2396,16 +2397,24 @@
               "type": "string"
             }
           },
-          {
-            "name": "ref",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "state",
+            {
+              "name": "ref",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "path",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "state",
             "in": "query",
             "required": false,
             "schema": {

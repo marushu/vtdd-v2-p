@@ -328,6 +328,8 @@ test("custom gpt openapi doc exposes current gateway, execute, and progress rout
   assert.equal(doc.includes("- issue_create"), true);
   assert.equal(doc.includes("pullNumber"), true);
   assert.equal(doc.includes("workflow_runs"), true);
+  assert.equal(doc.includes("- contents"), true);
+  assert.equal(doc.includes("name: path"), true);
   assert.equal(doc.includes("enum:\n                - vtdd-butler-core-v1"), true);
   assert.equal(doc.includes("requiresHandoff:"), true);
   assert.equal(doc.includes("- relatedIssue"), true);

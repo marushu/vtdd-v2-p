@@ -1613,6 +1613,7 @@ paths:
               - checks
               - workflow_runs
               - branches
+              - contents
         - name: repository
           in: query
           required: false
@@ -1634,6 +1635,11 @@ paths:
           schema:
             type: string
         - name: ref
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: path
           in: query
           required: false
           schema:

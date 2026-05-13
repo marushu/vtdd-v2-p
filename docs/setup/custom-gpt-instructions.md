@@ -92,6 +92,7 @@ GitHub runtime truth read plane:
   - checks
   - workflow runs
   - branches
+  - repository file or directory contents
 - Map natural language into resource names yourself:
   - repositories
   - issues
@@ -102,6 +103,8 @@ GitHub runtime truth read plane:
   - checks
   - workflow_runs
   - branches
+  - contents
+- For `このファイルについて説明して`, source/doc file reads, or directory listings, use resource=`contents` with `repository`, `path`, and optional `ref`. Explain from returned `snippet` / `content` and cite `path` / `htmlUrl`.
 - For read requests, prefer vtddRetrieveGitHub over speculative explanation.
 - If the route returns unsupported, answer that the current Butler surface is未対応 for that exact read.
 - If the route returns unauthorized or invalid machine auth, answer that the read failed due to 認証失敗.

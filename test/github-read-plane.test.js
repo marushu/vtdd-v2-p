@@ -444,6 +444,117 @@ test("github read plane reads pull reviews, review comments, checks, workflow ru
   assert.equal(branches.read.records[0].sha, "abc123");
 });
 
+test("github read plane reads repository file contents with snippet and html source", async () => {
+  const calls = [];
+  const result = await retrieveGitHubReadPlane({
+    resource: GitHubReadResource.CONTENTS,
+    repository: "sample-org/vtdd-v2-p",
+    path: "docs/butler/capability-matrix.md",
+    ref: "main",
+    env: {
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_contents_read",
+      GITHUB_API_FETCH: async (url) => {
+        calls.push(url);
+        return new Response(
+          JSON.stringify({
+            type: "file",
+            name: "capability-matrix.md",
+            path: "docs/butler/capability-matrix.md",
+            sha: "file-sha",
+            size: 38,
+            encoding: "base64",
+            content: Buffer.from("# Butler Capability Matrix\n\nrepo read", "utf8").toString("base64"),
+            html_url: "https://github.com/sample-org/vtdd-v2-p/blob/main/docs/butler/capability-matrix.md",
+            download_url:
+              "https://raw.githubusercontent.com/sample-org/vtdd-v2-p/main/docs/butler/capability-matrix.md"
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        );
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(calls[0].includes("/repos/sample-org/vtdd-v2-p/contents/docs/butler/capability-matrix.md"), true);
+  assert.equal(calls[0].includes("ref=main"), true);
+  assert.equal(result.read.path, "docs/butler/capability-matrix.md");
+  assert.equal(result.read.records[0].type, "file");
+  assert.equal(result.read.records[0].snippet.includes("Butler Capability Matrix"), true);
+  assert.equal(result.read.records[0].contentTruncated, false);
+  assert.equal(result.read.records[0].truncationNotice, null);
+  assert.equal(
+    result.read.records[0].htmlUrl,
+    "https://github.com/sample-org/vtdd-v2-p/blob/main/docs/butler/capability-matrix.md"
+  );
+});
+
+test("github read plane marks truncated repository file contents", async () => {
+  const result = await retrieveGitHubReadPlane({
+    resource: GitHubReadResource.CONTENTS,
+    repository: "sample-org/vtdd-v2-p",
+    path: "src/large.js",
+    env: {
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_contents_read",
+      GITHUB_API_FETCH: async () =>
+        new Response(
+          JSON.stringify({
+            type: "file",
+            name: "large.js",
+            path: "src/large.js",
+            sha: "large-sha",
+            size: 13000,
+            encoding: "base64",
+            content: Buffer.from("x".repeat(13001), "utf8").toString("base64"),
+            html_url: "https://github.com/sample-org/vtdd-v2-p/blob/main/src/large.js"
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        )
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.read.records[0].content.length, 12000);
+  assert.equal(result.read.records[0].contentTruncated, true);
+  assert.match(result.read.records[0].truncationNotice, /truncated/);
+});
+
+test("github read plane reads repository directory contents as entries", async () => {
+  const result = await retrieveGitHubReadPlane({
+    resource: GitHubReadResource.CONTENTS,
+    repository: "sample-org/vtdd-v2-p",
+    path: "docs",
+    env: {
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_contents_read",
+      GITHUB_API_FETCH: async () =>
+        new Response(
+          JSON.stringify([
+            {
+              type: "dir",
+              name: "butler",
+              path: "docs/butler",
+              sha: "dir-sha",
+              html_url: "https://github.com/sample-org/vtdd-v2-p/tree/main/docs/butler"
+            },
+            {
+              type: "file",
+              name: "README.md",
+              path: "docs/README.md",
+              sha: "readme-sha",
+              size: 100,
+              html_url: "https://github.com/sample-org/vtdd-v2-p/blob/main/docs/README.md"
+            }
+          ]),
+          { status: 200, headers: { "content-type": "application/json" } }
+        )
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.read.records.length, 2);
+  assert.equal(result.read.records[0].type, "dir");
+  assert.equal(result.read.records[0].path, "docs/butler");
+});
+
 test("github read plane rejects unsupported resources and missing required identifiers", async () => {
   const unsupported = await retrieveGitHubReadPlane({
     resource: "milestones",

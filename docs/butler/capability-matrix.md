@@ -52,7 +52,7 @@ governed action surface, and cite remediation Issue #244.
 
 | Operation family | Current status | Required Butler action surface | Boundary / runtime truth |
 |---|---:|---|---|
-| repository read | `supported` | `github_read.repository` | read-only GitHub runtime truth |
+| repository read | `supported` | `github_read.repository`, `github_read.contents` | read-only GitHub runtime truth |
 | issue read/create/comment create/comment update | `supported` | `github_read.issue`, `github_write.issue_create`, `github_write.issue_comment_create`, `github_write.issue_comment_update` | reads are ungated; writes require exact payload + human GO and readback |
 | issue body/title/state/labels/assignees/milestone update | `unsupported` | `github_write.issue_update` | remediation: #244; do not fall back to GitHub UI as steady state |
 | bounded issue close after scoped merge | `gated` | `github_high_risk.issue_close` | explicit GO + real passkey; verify merged PR then issue state |
@@ -103,6 +103,7 @@ governed action surface, and cite remediation Issue #244.
 | deploy operator | `partial-live` | Deploy operator and dispatch have worked in conversation; repeatability and post-dispatch tracking need proof. | Ask Butler for deploy URL, dispatch, and verify run/self-parity/health. |
 | self-parity check | `verified-live` | Butler has returned `runtimeParity: in_sync`. | Continue using before/after surface updates. |
 | setup artifact retrieve | `source-only` | Source/tests cover canonical setup artifacts. | Butler retrieves Instructions/OpenAPI links or content on demand. |
+| repo file/directory contents read | `source-only` | Source route `vtddRetrieveGitHub resource=contents` reads file snippets and directory entries through GitHub App-backed runtime truth. | Ask Butler on iPhone to explain a known file and list a known docs directory, then compare `path`/`htmlUrl` with GitHub UI. |
 | surface update guidance | `source-only` | #153 now requires clickable URLs for Instructions/Action Schema/operator. | After a PR changes surfaces, Butler reports required/not-required surfaces and links. |
 | auth/transport failure surfacing | `partial-live` | Some `ClientResponseError` raw surfacing improved; still inconsistent. | Force/read a known failure and verify action/status/body/error/reason/issues are not hidden. |
 

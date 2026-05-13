@@ -3369,6 +3369,43 @@ test("worker returns GitHub issues through read plane route", async () => {
   assert.equal(body.read.records[0].body, "## Intent\nExpose Issue text to Butler.");
 });
 
+test("worker returns GitHub repository file contents through read plane route", async () => {
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/v2/retrieve/github?resource=contents&repository=sample-org/vtdd-v2-p&path=src%2Fcore%2Findex.js&ref=main",
+      {
+        headers: gatewayAuthHeaders
+      }
+    ),
+    {
+      ...gatewayAuthEnv,
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_contents_read",
+      GITHUB_API_FETCH: async () =>
+        new Response(
+          JSON.stringify({
+            type: "file",
+            name: "index.js",
+            path: "src/core/index.js",
+            sha: "index-sha",
+            size: 32,
+            encoding: "base64",
+            content: Buffer.from("export { retrieveGitHubReadPlane };", "utf8").toString("base64"),
+            html_url: "https://github.com/sample-org/vtdd-v2-p/blob/main/src/core/index.js"
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        )
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.read.resource, "contents");
+  assert.equal(body.read.path, "src/core/index.js");
+  assert.equal(body.read.records[0].snippet, "export { retrieveGitHubReadPlane };");
+  assert.equal(body.read.records[0].htmlUrl, "https://github.com/sample-org/vtdd-v2-p/blob/main/src/core/index.js");
+});
+
 test("worker returns unsupported for unknown GitHub read resources", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/v2/retrieve/github?resource=milestones", {

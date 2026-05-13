@@ -36890,7 +36890,8 @@ var GitHubReadResource = Object.freeze({
   PULL_REVIEW_COMMENTS: "pull_review_comments",
   CHECKS: "checks",
   WORKFLOW_RUNS: "workflow_runs",
-  BRANCHES: "branches"
+  BRANCHES: "branches",
+  CONTENTS: "contents"
 });
 async function retrieveGitHubReadPlane(input = {}) {
   const resource = normalizeText26(input.resource);
@@ -36898,6 +36899,7 @@ async function retrieveGitHubReadPlane(input = {}) {
   const issueNumber = normalizePositiveInteger5(input.issueNumber);
   const pullNumber = normalizePositiveInteger5(input.pullNumber);
   const branch = normalizeText26(input.branch);
+  const path = normalizeRepositoryPath(input.path);
   const head = normalizeText26(input.head);
   const ref = normalizeText26(input.ref) || branch;
   const state = normalizeText26(input.state) || "open";
@@ -36936,6 +36938,7 @@ async function retrieveGitHubReadPlane(input = {}) {
     issueNumber,
     pullNumber,
     ref,
+    path,
     branch,
     head,
     state,
@@ -36971,6 +36974,7 @@ async function fetchGitHubReadResource(input) {
     issueNumber,
     pullNumber,
     ref,
+    path,
     branch,
     head,
     state,
@@ -36985,6 +36989,7 @@ async function fetchGitHubReadResource(input) {
     issueNumber,
     pullNumber,
     ref,
+    path,
     branch,
     head,
     state,
@@ -37028,6 +37033,7 @@ async function fetchGitHubReadResource(input) {
       pullNumber: pullNumber || null,
       branch: branch || null,
       ref: ref || null,
+      path: path || null,
       state,
       records: normalizeGitHubReadRecords(resource, body)
     }
@@ -37039,6 +37045,7 @@ function buildGitHubReadRequest({
   issueNumber,
   pullNumber,
   ref,
+  path,
   branch,
   head,
   state,
@@ -37109,6 +37116,13 @@ function buildGitHubReadRequest({
       url: `${apiBaseUrl}/repos/${encodedRepository}/branches?per_page=${limit}`
     };
   }
+  if (resource === GitHubReadResource.CONTENTS) {
+    const url = new URL(`${apiBaseUrl}/repos/${encodedRepository}/contents/${encodeRepositoryPath(path)}`);
+    if (ref) {
+      url.searchParams.set("ref", ref);
+    }
+    return { url: url.toString() };
+  }
   return { url: `${apiBaseUrl}/repos/${encodedRepository}` };
 }
 function normalizeGitHubReadRecords(resource, body) {
@@ -37141,6 +37155,9 @@ function normalizeGitHubReadRecords(resource, body) {
   }
   if (resource === GitHubReadResource.BRANCHES) {
     return Array.isArray(body) ? body.map(normalizeBranch) : [normalizeBranch(body)];
+  }
+  if (resource === GitHubReadResource.CONTENTS) {
+    return Array.isArray(body) ? body.map(normalizeContentItem) : [normalizeContentItem(body)];
   }
   return [];
 }
@@ -37255,11 +37272,51 @@ function normalizeBranch(item) {
     htmlUrl: normalizeText26(item?.commit?.url)
   };
 }
+function normalizeContentItem(item) {
+  const type = normalizeText26(item?.type);
+  const content = type === "file" ? decodeGitHubContent(item?.content, item?.encoding) : "";
+  return {
+    type,
+    path: normalizeText26(item?.path),
+    name: normalizeText26(item?.name),
+    sha: normalizeText26(item?.sha),
+    size: normalizePositiveInteger5(item?.size),
+    encoding: normalizeText26(item?.encoding),
+    content: content.slice(0, 12e3),
+    contentTruncated: content.length > 12e3,
+    truncationNotice: content.length > 12e3 ? "content is truncated; ask for a narrower path or hand off to Codex for full-file analysis" : null,
+    snippet: content.slice(0, 4e3),
+    downloadUrl: normalizeText26(item?.download_url),
+    htmlUrl: normalizeText26(item?.html_url)
+  };
+}
 function readJsonSafe6(response) {
   return response.json().catch(async () => ({ message: normalizeText26(await response.text().catch(() => "")) }));
 }
 function encodeURIComponentRepository4(repository) {
   return String(repository ?? "").trim().split("/").map((segment) => encodeURIComponent(segment)).join("/");
+}
+function encodeRepositoryPath(path) {
+  return normalizeRepositoryPath(path).split("/").filter(Boolean).map((segment) => encodeURIComponent(segment)).join("/");
+}
+function normalizeRepositoryPath(value) {
+  return String(value ?? "").trim().replace(/^\/+/, "").replace(/\/{2,}/g, "/");
+}
+function decodeGitHubContent(content, encoding) {
+  if (normalizeText26(encoding) !== "base64") {
+    return normalizeText26(content);
+  }
+  const compact = normalizeText26(content).replace(/\s+/g, "");
+  if (!compact) {
+    return "";
+  }
+  try {
+    const binary = typeof atob === "function" ? atob(compact) : Buffer.from(compact, "base64").toString("binary");
+    const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+    return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+  } catch {
+    return "";
+  }
 }
 function normalizeApiBaseUrl5(value) {
   const text = normalizeText26(value);
@@ -55186,6 +55243,7 @@ async function handleRetrieveGitHubReadPlaneRequest(url, env) {
     pullNumber: url.searchParams.get("pullNumber"),
     branch: url.searchParams.get("branch"),
     ref: url.searchParams.get("ref"),
+    path: url.searchParams.get("path"),
     state: url.searchParams.get("state"),
     limit: url.searchParams.get("limit"),
     env

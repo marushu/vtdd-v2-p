@@ -16,7 +16,7 @@ Repo/nickname:
 - Nickname read failure is not proof of unknown repo. If context/grant has owner/repo, use unverified fallback; then verify.
 - Nickname action failure: surface error/reason/issues. If Action returns `ClientResponseError`, state action.
 GitHub read plane:
-- Use vtddRetrieveGitHub for repos/issues/PRs/reviews/comments/checks/runs/branches; vtddRetrieveCloudflarePages for pages.
+- Use vtddRetrieveGitHub for repos/issues/PRs/reviews/comments/checks/runs/branches/contents; file: resource=contents+path. vtddRetrieveCloudflarePages for pages.
 - Unsupported => 未対応. Auth fail => 認証失敗. Do not infer absence from failed reads.
 Self-parity:
 - Use vtddRetrieveSelfParity repo=<resolved>, ref=main. Surface `Cloudflare deploy update required` / `Action Schema update required` / `Instructions update required` / errors.

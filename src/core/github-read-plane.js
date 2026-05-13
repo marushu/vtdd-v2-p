@@ -15,7 +15,8 @@ export const GitHubReadResource = Object.freeze({
   PULL_REVIEW_COMMENTS: "pull_review_comments",
   CHECKS: "checks",
   WORKFLOW_RUNS: "workflow_runs",
-  BRANCHES: "branches"
+  BRANCHES: "branches",
+  CONTENTS: "contents"
 });
 
 export async function retrieveGitHubReadPlane(input = {}) {
@@ -24,6 +25,7 @@ export async function retrieveGitHubReadPlane(input = {}) {
   const issueNumber = normalizePositiveInteger(input.issueNumber);
   const pullNumber = normalizePositiveInteger(input.pullNumber);
   const branch = normalizeText(input.branch);
+  const path = normalizeRepositoryPath(input.path);
   const head = normalizeText(input.head);
   const ref = normalizeText(input.ref) || branch;
   const state = normalizeText(input.state) || "open";
@@ -65,6 +67,7 @@ export async function retrieveGitHubReadPlane(input = {}) {
     issueNumber,
     pullNumber,
     ref,
+    path,
     branch,
     head,
     state,
@@ -111,6 +114,7 @@ async function fetchGitHubReadResource(input) {
     issueNumber,
     pullNumber,
     ref,
+    path,
     branch,
     head,
     state,
@@ -126,6 +130,7 @@ async function fetchGitHubReadResource(input) {
     issueNumber,
     pullNumber,
     ref,
+    path,
     branch,
     head,
     state,
@@ -172,6 +177,7 @@ async function fetchGitHubReadResource(input) {
       pullNumber: pullNumber || null,
       branch: branch || null,
       ref: ref || null,
+      path: path || null,
       state,
       records: normalizeGitHubReadRecords(resource, body)
     }
@@ -184,6 +190,7 @@ function buildGitHubReadRequest({
   issueNumber,
   pullNumber,
   ref,
+  path,
   branch,
   head,
   state,
@@ -266,6 +273,14 @@ function buildGitHubReadRequest({
     };
   }
 
+  if (resource === GitHubReadResource.CONTENTS) {
+    const url = new URL(`${apiBaseUrl}/repos/${encodedRepository}/contents/${encodeRepositoryPath(path)}`);
+    if (ref) {
+      url.searchParams.set("ref", ref);
+    }
+    return { url: url.toString() };
+  }
+
   return { url: `${apiBaseUrl}/repos/${encodedRepository}` };
 }
 
@@ -299,6 +314,9 @@ function normalizeGitHubReadRecords(resource, body) {
   }
   if (resource === GitHubReadResource.BRANCHES) {
     return Array.isArray(body) ? body.map(normalizeBranch) : [normalizeBranch(body)];
+  }
+  if (resource === GitHubReadResource.CONTENTS) {
+    return Array.isArray(body) ? body.map(normalizeContentItem) : [normalizeContentItem(body)];
   }
   return [];
 }
@@ -427,6 +445,28 @@ function normalizeBranch(item) {
   };
 }
 
+function normalizeContentItem(item) {
+  const type = normalizeText(item?.type);
+  const content = type === "file" ? decodeGitHubContent(item?.content, item?.encoding) : "";
+  return {
+    type,
+    path: normalizeText(item?.path),
+    name: normalizeText(item?.name),
+    sha: normalizeText(item?.sha),
+    size: normalizePositiveInteger(item?.size),
+    encoding: normalizeText(item?.encoding),
+    content: content.slice(0, 12000),
+    contentTruncated: content.length > 12000,
+    truncationNotice:
+      content.length > 12000
+        ? "content is truncated; ask for a narrower path or hand off to Codex for full-file analysis"
+        : null,
+    snippet: content.slice(0, 4000),
+    downloadUrl: normalizeText(item?.download_url),
+    htmlUrl: normalizeText(item?.html_url)
+  };
+}
+
 function readJsonSafe(response) {
   return response
     .json()
@@ -439,6 +479,41 @@ function encodeURIComponentRepository(repository) {
     .split("/")
     .map((segment) => encodeURIComponent(segment))
     .join("/");
+}
+
+function encodeRepositoryPath(path) {
+  return normalizeRepositoryPath(path)
+    .split("/")
+    .filter(Boolean)
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+}
+
+function normalizeRepositoryPath(value) {
+  return String(value ?? "")
+    .trim()
+    .replace(/^\/+/, "")
+    .replace(/\/{2,}/g, "/");
+}
+
+function decodeGitHubContent(content, encoding) {
+  if (normalizeText(encoding) !== "base64") {
+    return normalizeText(content);
+  }
+  const compact = normalizeText(content).replace(/\s+/g, "");
+  if (!compact) {
+    return "";
+  }
+  try {
+    const binary =
+      typeof atob === "function"
+        ? atob(compact)
+        : Buffer.from(compact, "base64").toString("binary");
+    const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+    return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+  } catch {
+    return "";
+  }
 }
 
 function normalizeApiBaseUrl(value) {
