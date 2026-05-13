@@ -34888,6 +34888,10 @@ function buildReviewTimelineItem(comment) {
       summary: `Codex connector blocker: ${connector.blocker}`
     };
   }
+  const unknownReviewerMarker = parseUnknownReviewerMarker(comment);
+  if (unknownReviewerMarker) {
+    return unknownReviewerMarker;
+  }
   if (normalizeText5(comment?.body).includes(REVIEWER_OBJECTION_RESOLUTION_MARKER)) {
     return {
       type: "reviewer_objection_resolution",
@@ -34902,6 +34906,25 @@ function buildReviewTimelineItem(comment) {
     };
   }
   return null;
+}
+function parseUnknownReviewerMarker(comment) {
+  const body = normalizeText5(comment?.body);
+  const match = body.match(/<!--\s*vtdd:reviewer=([^>\s]+)\s*-->/);
+  if (!match) {
+    return null;
+  }
+  const reviewer = normalizeText5(match[1]) || "unknown";
+  return {
+    type: "reviewer_marker_unparsed",
+    reviewer,
+    status: "manual_review",
+    recommendedAction: "manual_review",
+    blocking: true,
+    url: normalizeCommentUrl(comment),
+    createdAt: normalizeCommentCreatedAt(comment),
+    updatedAt: normalizeCommentUpdatedAt(comment),
+    summary: `Unparsed reviewer marker requires manual review: ${reviewer}`
+  };
 }
 function compareTimelineItems(left, right) {
   const leftTime = timelineTimestamp(left);

@@ -475,6 +475,45 @@ test("execution continuity normalizes timeline text fields consistently", () => 
   );
 });
 
+test("execution continuity surfaces unparsed reviewer markers as manual review blockers", () => {
+  const result = evaluateExecutionContinuity({
+    actorRole: ActorRole.BUTLER,
+    mode: TaskMode.EXECUTION,
+    runtimeTruth: {
+      runtimeState: {
+        activeBranch: "codex/issue-270",
+        pullRequest: {
+          number: 273,
+          url: "https://github.com/example/repo/pull/273",
+          state: "open",
+          title: "Unknown reviewer marker",
+          issueComments: [
+            {
+              user: { login: "reviewer-bot" },
+              url: "https://github.com/example/repo/pull/273#issuecomment-unknown",
+              created_at: "2026-05-13T06:00:00Z",
+              body: "<!-- vtdd:reviewer=future-reviewer -->\n## Changed marker format"
+            }
+          ]
+        }
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.value.reviewLoop.reviewTimeline[0], {
+    type: "reviewer_marker_unparsed",
+    reviewer: "future-reviewer",
+    status: "manual_review",
+    recommendedAction: "manual_review",
+    blocking: true,
+    url: "https://github.com/example/repo/pull/273#issuecomment-unknown",
+    createdAt: "2026-05-13T06:00:00Z",
+    updatedAt: null,
+    summary: "Unparsed reviewer marker requires manual review: future-reviewer"
+  });
+});
+
 test("execution continuity surfaces Codex fallback blocker when non-manual review cannot start", () => {
   const result = evaluateExecutionContinuity({
     actorRole: ActorRole.BUTLER,
