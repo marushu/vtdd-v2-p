@@ -189,7 +189,6 @@ test("fallback script reviews GitHub API diff without checking out untrusted PR 
   assert.equal(fallbackScript.includes("buildCodexExecutionEnv(process.env)"), true);
   assert.equal(fallbackScript.includes("env: process.env"), false);
   assert.equal(fallbackScript.includes("githubFetchAll"), true);
-  assert.equal(fallbackScript.includes("latestIssueComments"), true);
   assert.equal(fallbackScript.includes('rel="next"'), true);
   assert.equal(fallbackScript.includes('["exec", "review"'), false);
   assert.equal(fallbackScript.includes("CODEX_REVIEW_WORKTREE"), false);
@@ -197,8 +196,17 @@ test("fallback script reviews GitHub API diff without checking out untrusted PR 
 
 test("fallback script records blocked marker comments for unavailable Codex review", () => {
   assert.equal(fallbackScript.includes("classifyCodexFallbackFailure"), true);
-  assert.equal(fallbackScript.includes("upsertCodexFallbackComment"), true);
+  assert.equal(fallbackScript.includes("createCodexFallbackComment"), true);
   assert.equal(fallbackScript.includes("openai_quota_exceeded"), true);
   assert.equal(fallbackScript.includes("openai_api_key_invalid_or_missing"), true);
   assert.equal(fallbackScript.includes('status: "blocked"'), true);
+});
+
+test("fallback script appends reviewer comments instead of updating prior markers", () => {
+  assert.equal(fallbackScript.includes("findExistingCodexReviewFallbackComment(issueComments)"), true);
+  assert.equal(fallbackScript.includes("shouldMentionCodexFallback"), true);
+  assert.equal(fallbackScript.includes("method: \"PATCH\""), false);
+  assert.equal(fallbackScript.includes("method: \"DELETE\""), false);
+  assert.equal(fallbackScript.includes("/issues/${prNumber}/comments"), true);
+  assert.equal(fallbackScript.includes("/issues/comments/"), false);
 });

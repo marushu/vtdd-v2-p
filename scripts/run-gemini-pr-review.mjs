@@ -41,8 +41,8 @@ async function main() {
   const issueComments = await githubFetch(`/repos/${repository}/issues/${prNumber}/comments?per_page=100`);
   const reviewComments = await githubFetch(`/repos/${repository}/pulls/${prNumber}/comments?per_page=100`);
   const reviews = await githubFetch(`/repos/${repository}/pulls/${prNumber}/reviews?per_page=100`);
-  const existingFallbackComment = findExistingCodexReviewFallbackComment(issueComments);
   const existingReviewComment = findExistingGeminiReviewComment(issueComments);
+  const existingFallbackComment = findExistingCodexReviewFallbackComment(issueComments);
 
   if (!process.env.GEMINI_API_KEY) {
     console.log("Skipping Gemini PR review: GEMINI_API_KEY is not configured.");
@@ -85,17 +85,10 @@ async function main() {
         pullRequestNumber: prNumber,
         notificationMention: resolveOperatorMention([pullRequest?.user?.login, payload?.sender?.login])
       });
-      if (existingFallbackComment) {
-        await githubFetch(`/repos/${repository}/issues/comments/${existingFallbackComment.id}`, {
-          method: "PATCH",
-          body: { body: fallbackBody }
-        });
-      } else {
-        await githubFetch(`/repos/${repository}/issues/${prNumber}/comments`, {
-          method: "POST",
-          body: { body: fallbackBody }
-        });
-      }
+      await githubFetch(`/repos/${repository}/issues/${prNumber}/comments`, {
+        method: "POST",
+        body: { body: fallbackBody }
+      });
 
       console.log(`Requested VPS Codex reviewer fallback on PR #${prNumber}.`);
       return;
@@ -118,22 +111,6 @@ async function main() {
       ? resolveOperatorMention([pullRequest?.user?.login, payload?.sender?.login])
       : ""
   });
-
-  if (existingFallbackComment) {
-    await githubFetch(`/repos/${repository}/issues/comments/${existingFallbackComment.id}`, {
-      method: "DELETE"
-    });
-    console.log(`Cleared Codex reviewer fallback request on PR #${prNumber}.`);
-  }
-
-  if (existingReviewComment) {
-    await githubFetch(`/repos/${repository}/issues/comments/${existingReviewComment.id}`, {
-      method: "PATCH",
-      body: { body: commentBody }
-    });
-    console.log(`Updated Gemini review comment on PR #${prNumber}.`);
-    return;
-  }
 
   await githubFetch(`/repos/${repository}/issues/${prNumber}/comments`, {
     method: "POST",

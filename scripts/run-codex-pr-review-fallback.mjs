@@ -49,7 +49,7 @@ async function main() {
     review = await runCodexReview({ prompt });
   } catch (error) {
     const failure = classifyCodexFallbackFailure(error);
-    await upsertCodexFallbackComment({
+    await createCodexFallbackComment({
       githubFetch,
       repository,
       prNumber,
@@ -92,13 +92,13 @@ async function main() {
       : ""
   });
 
-  const result = await upsertCodexFallbackComment({
+  await createCodexFallbackComment({
     githubFetch,
     repository,
     prNumber,
     body
   });
-  console.log(`${result === "updated" ? "Updated" : "Created"} Codex fallback review comment on PR #${prNumber}.`);
+  console.log(`Created Codex fallback review comment on PR #${prNumber}.`);
 }
 
 function buildCodexFallbackReviewPrompt({ context, prDiff }) {
@@ -257,28 +257,11 @@ function normalizeStringArray(value) {
     .filter(Boolean);
 }
 
-async function upsertCodexFallbackComment({ githubFetch, repository, prNumber, body }) {
-  const latestIssueComments = await githubFetchAll(
-    githubFetch,
-    `/repos/${repository}/issues/${prNumber}/comments?per_page=100`
-  );
-  const existing = latestIssueComments.find((comment) =>
-    String(comment?.body || "").includes("<!-- vtdd:reviewer=codex-fallback -->")
-  );
-
-  if (existing) {
-    await githubFetch(`/repos/${repository}/issues/comments/${existing.id}`, {
-      method: "PATCH",
-      body: { body }
-    });
-    return "updated";
-  }
-
+async function createCodexFallbackComment({ githubFetch, repository, prNumber, body }) {
   await githubFetch(`/repos/${repository}/issues/${prNumber}/comments`, {
     method: "POST",
     body: { body }
   });
-  return "created";
 }
 
 function classifyCodexFallbackFailure(error) {
