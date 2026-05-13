@@ -358,6 +358,7 @@ test("worker MCP search_operational_memory tool reuses operational memory retrie
   const body = await response.json();
   const payload = JSON.parse(body.result.content[0].text);
   assert.equal(body.result.isError, false);
+  assert.deepEqual(body.result.structuredContent, payload);
   assert.equal(payload.ok, true);
   assert.equal(payload.memoryUseRule, "runtime_truth_current_state_overrides_memory_background_reference");
   assert.equal(payload.compactContext[0].id, "operational-memory-mcp-1");
