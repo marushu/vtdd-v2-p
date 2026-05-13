@@ -1495,39 +1495,39 @@ function buildPullRequestBody(payload) {
     issue: payload.issueNumber,
     executionId: payload.executionId,
     codexGoal: payload.codexGoal || "open_pr",
-    intent: `VPS runner handoff for Issue #${payload.issueNumber}.`,
+    intent: `Issue #${payload.issueNumber} の bounded handoff を VPS runner で実行し、後でownerが再開できるようにGitHub-visibleなdraft PRとして残す。`,
     satisfied: [
-      "VPS runner created the target branch.",
-      "VPS runner opened this draft PR as GitHub-visible runtime truth."
+      "VPS runner が target branch を作成した。",
+      "VPS runner が GitHub-visible runtime truth として draft PR を作成した。"
     ].join("\n"),
-    unsatisfied: "Human review and merge remain pending.",
+    unsatisfied: "human review と merge は未完了。Issue固有のE2E evidence も別途記録が必要。",
     nonGoals: "None.",
-    unit: "Not run by VPS runner.",
-    integration: "Not run by VPS runner.",
-    e2e: "GitHub branch / PR creation proves the handoff only; issue-specific live E2E must be recorded separately.",
-    manual: "VPS runner executed the bounded Codex handoff.",
+    unit: "VPS runner では未実行。",
+    integration: "VPS runner では未実行。",
+    e2e: "GitHub branch / PR creation は handoff の証拠のみ。Issue固有の live E2E は別途記録する必要がある。",
+    manual: "VPS runner が bounded Codex handoff を実行した。",
     evidencePath: `Issue #${payload.issueNumber}, branch ${payload.branch || "not provided"}, execution ${payload.executionId}`,
-    ownerGoal: "Open a bounded Codex implementation PR through Butler/VPS runner without claiming merge-ready completion.",
-    butlerEntrypoint: "Butler dispatches the bounded request and reads progress through vtddExecutionProgress / GitHub runtime truth.",
-    actionSchemaExposure: "Existing Butler execution/progress surface; this PR body does not add an Action Schema operation.",
-    runtimePath: "VPS runner queue comment -> scripts/run-vps-runner.mjs -> Git branch/commit/push -> draft PR.",
-    runtimeTruth: `GitHub issue/PR comments, branch ${payload.branch || "not provided"}, and execution ${payload.executionId || "not provided"}.`,
-    authorityBoundary: "VPS runner opens a draft PR only; merge, issue close, deploy, credentials, permissions, and cleanup remain blocked without explicit governed approval.",
-    butlerE2E: "Handoff PR creation only; issue-specific Butler-facing E2E remains unsatisfied until recorded by the scoped implementation PR.",
+    ownerGoal: "Butler/VPS runner 経由で bounded Codex implementation PR を作る。ただし merge-ready completion とは主張しない。",
+    butlerEntrypoint: "Butler が bounded request を dispatch し、vtddExecutionProgress / GitHub runtime truth で進捗を読む。",
+    actionSchemaExposure: "既存の Butler execution/progress surface。今回のPR body は Action Schema operation を追加しない。",
+    runtimePath: "VPS runner queue comment -> scripts/run-vps-runner.mjs -> Git branch/commit/push -> draft PR。",
+    runtimeTruth: `GitHub issue/PR comments、branch ${payload.branch || "not provided"}、execution ${payload.executionId || "not provided"}。`,
+    authorityBoundary: "VPS runner は draft PR 作成のみ。merge、Issue close、deploy、credential、permission、cleanup は明示的な governed approval なしでは blocked。",
+    butlerE2E: "handoff PR creation のみ。Issue固有の Butler-facing E2E は scoped implementation PR で記録されるまで未完了。",
     completionStatus: "incomplete",
-    cloudflareDeploy: "Not performed.",
-    actionSchemaUpdate: "Not required.",
-    instructionsUpdate: "Not required.",
-    iphoneButlerE2E: "Not run by VPS runner; Butler must read progress through vtddExecutionProgress / GitHub runtime truth.",
+    cloudflareDeploy: "実行しない。",
+    actionSchemaUpdate: "不要。",
+    instructionsUpdate: "不要。",
+    iphoneButlerE2E: "VPS runner では未実行。Butler は vtddExecutionProgress / GitHub runtime truth で進捗を読む必要がある。",
     rules: [
-      "Queued handoff alone is not success.",
-      "GitHub branch / PR / raw failure are runtime truth.",
-      "No merge or deploy is performed by the VPS runner."
+      "queued handoff だけでは成功ではない。",
+      "GitHub branch / PR / raw failure が runtime truth。",
+      "VPS runner は merge も deploy も実行しない。"
     ].join("\n"),
     outOfScope: [
-      "Merge.",
-      "Deploy.",
-      "Secret, permission, or repository settings mutation."
+      "merge。",
+      "deploy。",
+      "secret、permission、repository settings mutation。"
     ].join("\n")
   });
 }

@@ -53,6 +53,15 @@ constrain interpretation or execution.
 The template should guide better spec input quality, but should not force
 implementation method or excessive narrative detail.
 
+Owner-facing Issue prose is Japanese-first by default. Issue create/edit must
+use `scripts/prepare-issue-body-file.mjs` or `scripts/validate-issue-body.mjs`
+before `gh issue create/edit --body-file` so the repository does not depend on
+an agent remembering this rule.
+
+Issue text should include enough recovery context for the owner to resume later:
+why the Issue exists, what current state it preserves, and what the next safe
+action is.
+
 ## Non-goals
 
 This model does not define:

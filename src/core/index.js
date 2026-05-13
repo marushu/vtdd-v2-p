@@ -240,6 +240,17 @@ export { GitHubReadResource, retrieveGitHubReadPlane } from "./github-read-plane
 export { GitHubWriteOperation, executeGitHubWritePlane } from "./github-write-plane.js";
 export { normalizeMentionLogin, resolveOperatorMention } from "./github-mention.js";
 export {
+  SHRINKING_PHRASES,
+  findBareIssueOrPullRequestReferences,
+  validateOwnerFacingJapaneseFirst
+} from "./owner-facing-language.js";
+export {
+  REQUIRED_ISSUE_SECTIONS,
+  extractIssueSections,
+  renderIssueBody,
+  validateIssueBody
+} from "./issue-body.js";
+export {
   GitHubAppOperationRegistry,
   GitHubAppOperationTier,
   bindNaturalGitHubWriteApproval,

@@ -7,6 +7,7 @@
     "build:worker": "node scripts/build-worker.mjs",
     "check:generated-worker": "node scripts/check-generated-worker.mjs",
     "check:self-parity": "node scripts/check-runtime-self-parity.mjs",
+    "issue-body:validate": "node scripts/validate-issue-body.mjs --template .github/ISSUE_TEMPLATE/spec-issue.md",
     "memory": "node scripts/vtdd-memory.mjs",
     "test": "node --test && npm run check:self-parity && npm run check:generated-worker",
     "pr-body:validate": "node scripts/validate-pr-body.mjs --template .github/pull_request_template.md"

@@ -81,7 +81,7 @@ function defaultButlerContract(status) {
 
 function renderPrBody(options = {}) {
   const issue = options.issue ? `#${options.issue}` : null;
-  const issueLink = issue ? ` ${issue}` : "";
+  const issueLink = issue ? ` Issue ${issue}` : "";
   const executionId = options.executionId || "Not provided.";
   const codexGoal = options.codexGoal || "Not provided.";
   const evidencePath = options.evidencePath || "Not provided.";

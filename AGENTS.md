@@ -310,6 +310,9 @@ It must not be interpreted as a blanket prohibition for non-RAG operational logs
 - Keep docs-only PRs and runtime PRs separable when possible.
 - For PR body create/update, never use freehand `gh pr create --body` or `gh pr edit --body`.
 - Use the repository canonical path: `scripts/prepare-pr-body-file.mjs` and then `gh pr create/edit --body-file`.
+- For Issue create/update, never use freehand `gh issue create --body` or `gh issue edit --body`.
+- Use the repository canonical path: `scripts/prepare-issue-body-file.mjs` or `scripts/validate-issue-body.mjs`, then pass the validated file with `gh issue create/edit --body-file`.
+- Owner-facing Issue, PR, review, Codex追加修正コメント, and RAG memory candidate prose must be Japanese-first unless the user explicitly requests another language.
 - If a new guardrail or process correction is needed, land it in its own PR
   rather than mixing it into an implementation slice.
 
