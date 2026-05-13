@@ -24,6 +24,19 @@ test("renderPrBody includes all guarded-policy headings", () => {
   assert.match(body, /## Surface Update Checklist/);
 });
 
+test("renderPrBody default guidance is Japanese-first while headings remain stable", () => {
+  const body = renderPrBody({
+    issue: "316"
+  });
+
+  assert.match(body, /## This PR satisfies Intent/);
+  assert.match(body, /#316 の部分進捗です。/);
+  assert.match(body, /このPRスライス外に、未接続または未完了の owner-facing 作業が残っています。/);
+  assert.match(body, /Owner goal: このPRが扱う owner-facing goal/);
+  assert.match(body, /Butler-facing E2E は未実施です。/);
+  assert.match(body, /Cloudflare deploy: 不要。/);
+});
+
 test("renderPrBody default partial template passes validator without Butler placeholders", () => {
   const body = renderPrBody({
     issue: "57",
