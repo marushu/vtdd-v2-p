@@ -36349,7 +36349,12 @@ function renderCustomGptRecoveryPage(input = {}) {
       <a class="button" href="${escapeAttribute2(latestHref)}">setup/latest</a>
       <a class="button" href="${escapeAttribute2(knownGoodHref)}">setup/known-good</a>
     </section>
-    ${error2 ? `<section class="warning"><strong>Recovery bundle unavailable.</strong><p>${escapeHtml3(error2.reason || error2.error || "unknown error")}</p></section>` : ""}
+    ${error2 ? renderRecoveryUnavailableSection({
+    error: error2,
+    channel,
+    latestHref,
+    knownGoodHref
+  }) : ""}
     ${recovery ? renderRecoveryBundleSections(recovery) : `<p class="small">${escapeHtml3(runtimeOrigin)} \u5411\u3051\u306E ${escapeHtml3(channel)} setup bundle \u3092\u8AAD\u307F\u8FBC\u3093\u3067\u3044\u307E\u3059\u3002repo \u5165\u529B\u306F\u4E0D\u8981\u3067\u3059\u3002</p>`}
   </main>
   <script>
@@ -36372,6 +36377,30 @@ function renderCustomGptRecoveryPage(input = {}) {
   <\/script>
 </body>
 </html>`;
+}
+function renderRecoveryUnavailableSection({ error: error2, channel, latestHref, knownGoodHref }) {
+  const reason = error2?.reason || error2?.error || "unknown error";
+  if (channel !== CustomGptSetupChannel.KNOWN_GOOD) {
+    return `<section class="warning"><strong>Recovery bundle unavailable.</strong><p>${escapeHtml3(reason)}</p></section>`;
+  }
+  return `<section class="warning">
+      <strong>Known-good bundle is not configured yet.</strong>
+      <p>${escapeHtml3(reason)}</p>
+      <p>\u3053\u306E\u30DA\u30FC\u30B8\u81EA\u4F53\u306F\u5FA9\u65E7\u5C0E\u7DDA\u3068\u3057\u3066\u958B\u3051\u3066\u3044\u307E\u3059\u3002main/latest \u3092 known-good \u3068\u3057\u3066 silent fallback \u3057\u306A\u3044\u305F\u3081\u3001rollback bundle \u306F\u8868\u793A\u3057\u3066\u3044\u307E\u305B\u3093\u3002</p>
+      <p><a class="button" href="${escapeAttribute2(latestHref)}">Open setup/latest instead</a></p>
+      <pre>${escapeHtml3(
+    [
+      "known-good unavailable",
+      "reason: VTDD_KNOWN_GOOD_COMMIT_SHA is missing or invalid",
+      `knownGoodUrl: ${knownGoodHref}`,
+      `latestFallbackUrl: ${latestHref}`,
+      "nextSteps:",
+      "  1. Use setup/latest only as the current candidate bundle.",
+      "  2. After a human verifies a working setup commit, set VTDD_KNOWN_GOOD_COMMIT_SHA to that 40-character commit SHA.",
+      "  3. Do not treat main/latest as known-good automatically."
+    ].join("\n")
+  )}</pre>
+    </section>`;
 }
 function buildSetupPageHref({ path, ref, issueNumber }) {
   const params = new URLSearchParams();
