@@ -49,5 +49,9 @@ test("vtdd-mcp-ver architecture doc defines canonical Codex MCP bridge path", ()
   assert.equal(doc.includes("Canonical Codex MCP Connection"), true);
   assert.equal(doc.includes("VTDD_MCP_TOKEN"), true);
   assert.equal(doc.includes("codex mcp add vtdd --url https://your-vtdd-runtime.example.com/mcp --bearer-token-env-var VTDD_MCP_TOKEN"), true);
+  assert.equal(doc.includes("default_tools_approval_mode=\"approve\""), true);
+  assert.equal(doc.includes("approval_mode=\"approve\""), true);
+  assert.equal(doc.includes("user cancelled MCP tool call"), true);
+  assert.equal(doc.includes("request_user_input"), true);
   assert.equal(doc.includes("bearer-token discovery hints"), true);
 });
