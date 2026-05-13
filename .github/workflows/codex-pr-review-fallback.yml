@@ -73,7 +73,7 @@ jobs:
           owner: ${{ github.repository_owner }}
 
       - name: Checkout trusted reviewer source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: ${{ github.repository }}
           ref: ${{ github.ref }}
@@ -82,9 +82,9 @@ jobs:
           persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
           cache-dependency-path: trusted/package-lock.json
 
