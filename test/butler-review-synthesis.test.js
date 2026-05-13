@@ -321,6 +321,105 @@ test("butler review synthesis surfaces Codex fallback blocker plainly", () => {
   );
 });
 
+test("butler review synthesis includes review timeline and latest timeline focus", () => {
+  const result = buildButlerReviewSynthesis({
+    pullRequest: {
+      number: 270,
+      url: "https://github.com/example/repo/pull/270",
+      state: "open",
+      title: "Timeline summary"
+    },
+    reviewLoop: {
+      reviewer: "gemini",
+      reviewerStatus: "gemini_review_available",
+      reviewerEvidence: {
+        reviewer: "gemini",
+        recommendedAction: "approve",
+        url: "https://github.com/example/repo/pull/270#issuecomment-review"
+      },
+      reviewTimeline: [
+        {
+          type: "gemini_review",
+          reviewer: "gemini",
+          status: "request_changes",
+          recommendedAction: "request_changes",
+          blocking: true,
+          url: "https://github.com/example/repo/pull/270#issuecomment-old",
+          createdAt: "2026-05-13T03:00:00Z",
+          summary: "Gemini reviewer action: request_changes"
+        },
+        {
+          type: "gemini_review",
+          reviewer: "gemini",
+          status: "approve",
+          recommendedAction: "approve",
+          blocking: false,
+          url: "https://github.com/example/repo/pull/270#issuecomment-review",
+          createdAt: "2026-05-13T03:02:00Z",
+          summary: "Gemini reviewer action: approve"
+        }
+      ],
+      reviewCommentsCount: 2,
+      unresolvedReviewCommentsCount: 0,
+      criticalReviewPending: false
+    },
+    nextSuggestedActions: ["summarize_for_human"]
+  });
+
+  assert.deepEqual(result.reviewerSignal.reviewTimeline.map((item) => item.status), [
+    "request_changes",
+    "approve"
+  ]);
+  assert.equal(
+    result.humanDecisionFocus.includes(
+      "Latest review timeline item: gemini_review, status=approve https://github.com/example/repo/pull/270#issuecomment-review"
+    ),
+    true
+  );
+});
+
+test("butler review synthesis normalizes review timeline text fields", () => {
+  const result = buildButlerReviewSynthesis({
+    pullRequest: {
+      number: 272,
+      url: "https://github.com/example/repo/pull/272",
+      state: "open",
+      title: "Timeline normalization"
+    },
+    reviewLoop: {
+      reviewer: "gemini",
+      reviewerStatus: "gemini_review_available",
+      reviewTimeline: [
+        {
+          type: " gemini_review ",
+          reviewer: " gemini ",
+          status: " approve ",
+          recommendedAction: " approve ",
+          blocking: false,
+          url: " https://github.com/example/repo/pull/272#issuecomment-review ",
+          createdAt: " 2026-05-13T05:00:00Z ",
+          updatedAt: " 2026-05-13T05:01:00Z ",
+          summary: " Gemini reviewer action: approve "
+        }
+      ],
+      reviewCommentsCount: 1,
+      unresolvedReviewCommentsCount: 0
+    }
+  });
+
+  assert.deepEqual(result.reviewerSignal.reviewTimeline[0], {
+    type: "gemini_review",
+    reviewer: "gemini",
+    status: "approve",
+    recommendedAction: "approve",
+    blocking: false,
+    url: "https://github.com/example/repo/pull/272#issuecomment-review",
+    createdAt: "2026-05-13T05:00:00Z",
+    updatedAt: "2026-05-13T05:01:00Z",
+    summary: "Gemini reviewer action: approve"
+  });
+});
+
 test("butler review synthesis warns when revise target branch attribution mismatches runtime truth", () => {
   const result = buildButlerReviewSynthesis({
     pullRequest: {

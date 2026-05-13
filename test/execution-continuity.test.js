@@ -372,6 +372,187 @@ test("execution continuity exposes Codex fallback review as available when VTDD 
   ]);
 });
 
+test("execution continuity exposes reviewer marker timeline in chronological order", () => {
+  const result = evaluateExecutionContinuity({
+    actorRole: ActorRole.BUTLER,
+    mode: TaskMode.EXECUTION,
+    runtimeTruth: {
+      runtimeState: {
+        activeBranch: "codex/issue-270",
+        pullRequest: {
+          number: 270,
+          url: "https://github.com/example/repo/pull/270",
+          state: "open",
+          title: "Review timeline",
+          issueComments: [
+            {
+              user: { login: "vtdd-codex[bot]" },
+              url: "https://github.com/example/repo/pull/270#issuecomment-review",
+              created_at: "2026-05-13T03:00:00Z",
+              updated_at: "2026-05-13T03:00:00Z",
+              body: "<!-- vtdd:reviewer=gemini -->\n## VTDD Gemini レビュー\n\n- Recommended action: `request_changes`\n\n### 重要指摘\n- needs response"
+            },
+            {
+              user: { login: "marushu" },
+              url: "https://github.com/example/repo/pull/270#issuecomment-response",
+              created_at: "2026-05-13T03:01:00Z",
+              body: "<!-- vtdd:reviewer-objection-resolution -->\nAddresses: critical-1\nEvidence: npm test"
+            }
+          ],
+          reviewComments: [
+            {
+              user: { login: "vtdd-codex[bot]" },
+              url: "https://github.com/example/repo/pull/270#discussion-fallback",
+              created_at: "2026-05-13T02:59:00Z",
+              body: "<!-- vtdd:reviewer=codex-fallback -->\n- Status: `requested`"
+            }
+          ]
+        }
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.value.reviewLoop.reviewTimeline.map((item) => item.type), [
+    "codex_fallback",
+    "gemini_review",
+    "reviewer_objection_resolution"
+  ]);
+  assert.deepEqual(result.value.butlerReviewSynthesis.reviewerSignal.reviewTimeline.map((item) => item.type), [
+    "codex_fallback",
+    "gemini_review",
+    "reviewer_objection_resolution"
+  ]);
+  assert.equal(
+    result.value.butlerReviewSynthesis.humanDecisionFocus.some((line) =>
+      line.includes("Latest review timeline item: reviewer_objection_resolution")
+    ),
+    true
+  );
+});
+
+test("execution continuity normalizes timeline text fields consistently", () => {
+  const result = evaluateExecutionContinuity({
+    actorRole: ActorRole.BUTLER,
+    mode: TaskMode.EXECUTION,
+    runtimeTruth: {
+      runtimeState: {
+        activeBranch: "codex/issue-270",
+        pullRequest: {
+          number: 271,
+          url: "https://github.com/example/repo/pull/271",
+          state: "open",
+          title: "Review timeline normalization",
+          issueComments: [
+            {
+              user: { login: "vtdd-codex[bot]" },
+              url: " https://github.com/example/repo/pull/271#issuecomment-review ",
+              created_at: " 2026-05-13T04:00:00Z ",
+              updated_at: " 2026-05-13T04:01:00Z ",
+              body: "  <!-- vtdd:reviewer=gemini -->\n## VTDD Gemini レビュー\n\n- Recommended action: `approve`  "
+            }
+          ]
+        }
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.value.reviewLoop.reviewTimeline[0], {
+    type: "gemini_review",
+    reviewer: "gemini",
+    status: "approve",
+    recommendedAction: "approve",
+    blocking: false,
+    url: "https://github.com/example/repo/pull/271#issuecomment-review",
+    createdAt: "2026-05-13T04:00:00Z",
+    updatedAt: "2026-05-13T04:01:00Z",
+    summary: "Gemini reviewer action: approve"
+  });
+  assert.equal(
+    result.value.butlerReviewSynthesis.reviewerSignal.reviewTimeline[0].createdAt,
+    "2026-05-13T04:00:00Z"
+  );
+});
+
+test("execution continuity surfaces unparsed reviewer markers as manual review blockers", () => {
+  const result = evaluateExecutionContinuity({
+    actorRole: ActorRole.BUTLER,
+    mode: TaskMode.EXECUTION,
+    runtimeTruth: {
+      runtimeState: {
+        activeBranch: "codex/issue-270",
+        pullRequest: {
+          number: 273,
+          url: "https://github.com/example/repo/pull/273",
+          state: "open",
+          title: "Unknown reviewer marker",
+          issueComments: [
+            {
+              user: { login: "reviewer-bot" },
+              url: "https://github.com/example/repo/pull/273#issuecomment-unknown",
+              created_at: "2026-05-13T06:00:00Z",
+              body: "<!-- vtdd:reviewer=future-reviewer -->\n## Changed marker format"
+            }
+          ]
+        }
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.value.reviewLoop.reviewTimeline[0], {
+    type: "reviewer_marker_unparsed",
+    reviewer: "future-reviewer",
+    status: "manual_review",
+    recommendedAction: "manual_review",
+    blocking: true,
+    url: "https://github.com/example/repo/pull/273#issuecomment-unknown",
+    createdAt: "2026-05-13T06:00:00Z",
+    updatedAt: null,
+    summary: "Unparsed reviewer marker requires manual review: future-reviewer"
+  });
+});
+
+test("execution continuity treats malformed known reviewer marker content as manual review", () => {
+  const result = evaluateExecutionContinuity({
+    actorRole: ActorRole.BUTLER,
+    mode: TaskMode.EXECUTION,
+    runtimeTruth: {
+      runtimeState: {
+        activeBranch: "codex/issue-270",
+        pullRequest: {
+          number: 274,
+          url: "https://github.com/example/repo/pull/274",
+          state: "open",
+          title: "Malformed known reviewer marker",
+          issueComments: [
+            {
+              user: { login: "vtdd-codex[bot]" },
+              url: "https://github.com/example/repo/pull/274#issuecomment-malformed",
+              created_at: "2026-05-13T07:00:00Z",
+              body: "<!-- vtdd:reviewer=gemini -->\n## VTDD Gemini レビュー\n\n- Action changed format: approve"
+            }
+          ]
+        }
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.value.reviewLoop.reviewTimeline[0], {
+    type: "gemini_review",
+    reviewer: "gemini",
+    status: "manual_review",
+    recommendedAction: "manual_review",
+    blocking: true,
+    url: "https://github.com/example/repo/pull/274#issuecomment-malformed",
+    createdAt: "2026-05-13T07:00:00Z",
+    updatedAt: null,
+    summary: "Gemini reviewer action: manual_review"
+  });
+});
+
 test("execution continuity surfaces Codex fallback blocker when non-manual review cannot start", () => {
   const result = evaluateExecutionContinuity({
     actorRole: ActorRole.BUTLER,
