@@ -58,22 +58,22 @@ function defaultUnsatisfiedCriteria(status) {
   if (status === "complete") {
     return "None.";
   }
-  return "- Remaining scoped work or owner-facing connections are still open outside this PR slice.";
+  return "- このPRスライス外に、未接続または未完了の owner-facing 作業が残っています。";
 }
 
 function defaultButlerContract(status) {
   const unconnectedE2E =
     status === "complete"
-      ? "Required and must be listed explicitly."
-      : "Unconnected in this PR slice; Butler-facing E2E remains open.";
+      ? "必須。実行した Butler-facing E2E evidence を明記してください。"
+      : "このPRスライスでは未接続。Butler-facing E2E は未実施です。";
 
   return {
-    ownerGoal: "See Intent and Success Criteria sections for the scoped owner-facing goal.",
-    entrypoint: "Unchanged or not yet connected in this PR slice.",
-    actionSchemaExposure: "Unchanged in this PR slice unless stated otherwise below.",
-    runtimePath: "See this PR's scoped implementation/evidence description.",
-    runtimeTruth: "See verification evidence and runtime path notes in this PR.",
-    authorityBoundary: "Unchanged; no new high-risk authority is introduced in this PR slice unless stated otherwise.",
+    ownerGoal: "このPRが扱う owner-facing goal は Intent / Success Criteria に記載しています。",
+    entrypoint: "このPRスライスでは未変更、またはまだ未接続です。",
+    actionSchemaExposure: "このPRスライスでは未変更です。変更がある場合は下に明記します。",
+    runtimePath: "このPRの実装内容と evidence に記載した runtime path を参照してください。",
+    runtimeTruth: "このPRの verification evidence と runtime path notes を参照してください。",
+    authorityBoundary: "未変更。このPRスライスでは新しい high-risk authority を追加していません。",
     e2eEvidence: unconnectedE2E,
     completionStatus: status
   };
@@ -97,13 +97,13 @@ function renderPrBody(options = {}) {
 ${bulletize(
   options.intent,
   issue
-    ? `- Partial progress for ${issue}. Replace this line with the scoped Intent mapping before merge.`
-    : "- Replace this line with the scoped Intent mapping before merge.",
+    ? `- ${issue} の部分進捗です。merge 前に、この行を scoped Intent mapping に置き換えてください。`
+    : "- merge 前に、この行を scoped Intent mapping に置き換えてください。",
 )}
 
 ## Satisfied Success Criteria
 
-${bulletize(options.satisfied, "- None yet.")}
+${bulletize(options.satisfied, "- まだありません。")}
 
 ## Unsatisfied Success Criteria
 
@@ -134,14 +134,14 @@ ${options.nonGoals || "None."}
 
 ## Surface Update Checklist
 
-- Cloudflare deploy: ${options.cloudflareDeploy || "Not required."}
-- Custom GPT Action Schema update: ${options.actionSchemaUpdate || "Not required."}
-- Custom GPT Instructions update: ${options.instructionsUpdate || "Not required."}
-- iPhone Butler live E2E: ${options.iphoneButlerE2E || "Not required."}
+- Cloudflare deploy: ${options.cloudflareDeploy || "不要。"}
+- Custom GPT Action Schema update: ${options.actionSchemaUpdate || "不要。"}
+- Custom GPT Instructions update: ${options.instructionsUpdate || "不要。"}
+- iPhone Butler live E2E: ${options.iphoneButlerE2E || "不要。"}
 
 ## Related Constitution Rules
 
-${bulletize(options.rules, "- Add the governing Constitution rules here.")}
+${bulletize(options.rules, "- このPRを制約した Constitution rules を記載してください。")}
 
 ## Out-of-scope but NOT implemented
 

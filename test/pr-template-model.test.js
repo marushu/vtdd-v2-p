@@ -45,10 +45,20 @@ test("pr template keeps explicit remaining-work guidance for partial PRs", () =>
 
   assert.match(
     template,
-    /## Unsatisfied Success Criteria\s+- Remaining scoped work or owner-facing connections are still open outside this PR slice\./
+    /## Unsatisfied Success Criteria\s+- このPRスライス外に、未接続または未完了の owner-facing 作業が残っています。/
   );
   assert.match(template, /## Non-goal violations\s+None\./);
   assert.match(template, /## Extra changes \(if any\)\s+None\./);
+});
+
+test("pr template docs require Japanese-first owner-facing body guidance", () => {
+  const doc = fs.readFileSync(DOC_PATH, "utf8");
+  const template = fs.readFileSync(TEMPLATE_PATH, "utf8");
+
+  assert.match(doc, /Owner-facing prose in generated PR bodies should be Japanese-first by default\./);
+  assert.match(doc, /canonical section headings remain stable English guarded-policy markers/);
+  assert.match(template, /Owner goal: このPRが扱う owner-facing goal/);
+  assert.match(template, /Butler-facing E2E は未実施です。/);
 });
 
 test("pr template includes explicit verification slots", () => {

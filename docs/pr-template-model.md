@@ -85,6 +85,14 @@ attempt to automate code quality judgment or prescribe implementation style.
 It must not let authors claim completion from isolated code, docs, routes,
 schemas, or tests. Completion is judged from the Butler owner-facing workflow.
 
+Owner-facing prose in generated PR bodies should be Japanese-first by default.
+The canonical section headings remain stable English guarded-policy markers,
+but the default explanatory text, Butler Completion Contract guidance, and
+remaining-work examples should be immediately readable by the owner in
+Japanese. Machine-readable values such as `complete`, `incomplete`,
+`unconnected`, route names, operationIds, and evidence commands must remain
+stable.
+
 ## Guardrail Usage
 
 Use `scripts/render-pr-body.mjs` to generate a valid starting body instead of
@@ -93,6 +101,10 @@ partial/unconnected template by default so that AI-authored PRs do not fail on
 empty Butler contract placeholders. Validate the result locally with
 `node scripts/validate-pr-body.mjs <path>` before `gh pr create` or
 `gh pr edit --body-file`.
+
+When the renderer fills default text, it should prefer Japanese owner-facing
+guidance. Authors may keep technical identifiers in English where they are
+literal route names, operationIds, commands, or enum values.
 
 Do not use `gh pr create --body ...` or `gh pr edit --body ...` with freehand
 text. Canonical flow is `render -> validate -> --body-file`.

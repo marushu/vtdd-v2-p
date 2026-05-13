@@ -9,8 +9,8 @@
 
 ## Unsatisfied Success Criteria
 
-- Remaining scoped work or owner-facing connections are still open outside this PR slice.
-- Replace with `None.` only when this PR is truly complete.
+- このPRスライス外に、未接続または未完了の owner-facing 作業が残っています。
+- このPRが本当に完了状態のときだけ `None.` に置き換えてください。
 
 ## Non-goal violations
 
@@ -26,13 +26,13 @@ None.
 
 ## Butler Completion Contract
 
-- Owner goal: See Intent and Success Criteria sections for the scoped owner-facing goal.
-- Butler entrypoint: Unchanged or not yet connected in this PR slice.
-- Action Schema exposure: Unchanged in this PR slice unless stated otherwise below.
-- Runtime path: See this PR's scoped implementation/evidence description.
-- Runner/runtime truth: See verification evidence and runtime path notes in this PR.
-- Authority boundary: Unchanged; no new high-risk authority is introduced in this PR slice unless stated otherwise.
-- E2E evidence: Unconnected in this PR slice; Butler-facing E2E remains open.
+- Owner goal: このPRが扱う owner-facing goal は Intent / Success Criteria に記載しています。
+- Butler entrypoint: このPRスライスでは未変更、またはまだ未接続です。
+- Action Schema exposure: このPRスライスでは未変更です。変更がある場合は下に明記します。
+- Runtime path: このPRの実装内容と evidence に記載した runtime path を参照してください。
+- Runner/runtime truth: このPRの verification evidence と runtime path notes を参照してください。
+- Authority boundary: 未変更。このPRスライスでは新しい high-risk authority を追加していません。
+- E2E evidence: このPRスライスでは未接続。Butler-facing E2E は未実施です。
 - Completion status: unconnected
 
 ## Surface Update Checklist
