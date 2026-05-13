@@ -270,12 +270,42 @@ export VTDD_MCP_TOKEN=...
 codex mcp add vtdd --url https://your-vtdd-runtime.example.com/mcp --bearer-token-env-var VTDD_MCP_TOKEN
 ```
 
+Canonical `codex exec` config shape:
+
+```bash
+export VTDD_MCP_TOKEN=...
+codex exec \
+  --ignore-user-config \
+  -c 'mcp_servers.vtdd.url="https://your-vtdd-runtime.example.com/mcp"' \
+  -c 'mcp_servers.vtdd.bearer_token_env_var="VTDD_MCP_TOKEN"' \
+  -c 'mcp_servers.vtdd.default_tools_approval_mode="approve"' \
+  -c 'mcp_servers.vtdd.tools.vtdd_runtime_truth.approval_mode="approve"' \
+  -s read-only \
+  -C /path/to/repo \
+  'vtdd MCP を使って runtime truth を返して。JSONそのまま。'
+```
+
+`codex exec` では raw MCP tool call の approval が `request_user_input` に
+流れるため、approval mode を明示しないと
+`user cancelled MCP tool call` で止まることがある。
+
+The canonical VTDD Codex path therefore includes explicit MCP approval config
+for trusted read tools on both Mac Codex and VPS Codex CLI.
+
 Local verification shape:
 
 ```bash
 export VTDD_MCP_TOKEN=vtdd-local-test
 codex mcp add vtdd-local --url http://127.0.0.1:8788/mcp --bearer-token-env-var VTDD_MCP_TOKEN
-codex exec -s read-only -C /path/to/repo "vtdd-local MCP を使って、利用可能な tool 名だけを改行区切りで返して。説明はいらない。"
+codex exec \
+  --ignore-user-config \
+  -c 'mcp_servers.vtdd-local.url="http://127.0.0.1:8788/mcp"' \
+  -c 'mcp_servers.vtdd-local.bearer_token_env_var="VTDD_MCP_TOKEN"' \
+  -c 'mcp_servers.vtdd-local.default_tools_approval_mode="approve"' \
+  -c 'mcp_servers.vtdd-local.tools.vtdd_runtime_truth.approval_mode="approve"' \
+  -s read-only \
+  -C /path/to/repo \
+  'vtdd-local MCP を使って、marushu/vtdd-v2-p の runtime truth を JSON そのままで返して。説明不要。'
 ```
 
 The MCP runtime must expose bearer-token discovery hints that let Codex resolve
