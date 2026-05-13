@@ -34390,14 +34390,19 @@ function buildReviewResponseSummary(input = {}) {
     ...Array.isArray(input.issueComments) ? input.issueComments : [],
     ...Array.isArray(input.reviewComments) ? input.reviewComments : []
   ];
-  const latestReviewer = comments.map(parseGeminiReviewComment).filter(Boolean).at(-1);
+  const latestReviewer = collectLatestGeminiReviewerComment(comments);
   if (!latestReviewer || latestReviewer.recommendedAction !== "request_changes") {
     return null;
   }
-  const responseComments = comments.filter((comment) => isTrustedReviewerObjectionResolution(comment?.body)).map((comment) => ({
+  const responseComments = sortResponseCommentsByCreatedAt(excludeAmbiguousResponseCommentTimes(comments.filter(
+    (comment) => isTrustedReviewerObjectionResolutionComment(comment) && isAfterReviewerMarker(comment, latestReviewer)
+  ).map((comment) => ({
     url: normalizeText20(comment?.url ?? comment?.htmlUrl ?? comment?.html_url) || null,
+    author: normalizeCommentAuthor(comment) || null,
+    createdAt: normalizeText20(comment?.createdAt ?? comment?.created_at) || null,
+    updatedAt: normalizeText20(comment?.updatedAt ?? comment?.updated_at) || null,
     body: normalizeMultilineText(comment?.body)
-  })).filter((comment) => comment.body);
+  })).filter((comment) => comment.body)));
   const responseText = responseComments.map((comment) => comment.body).join("\n\n");
   const criticalFindings = latestReviewer.criticalFindings;
   const risks = latestReviewer.risks;
@@ -34424,6 +34429,50 @@ function buildReviewResponseSummary(input = {}) {
     unresolvedItems,
     complete: unresolvedItems.length === 0
   };
+}
+function collectLatestGeminiReviewerComment(comments) {
+  const reviewerSignals = (Array.isArray(comments) ? comments : []).map(parseGeminiReviewComment).filter(Boolean).map((signal) => ({
+    signal,
+    sortTime: reviewSignalSortTime(signal)
+  })).filter(({ sortTime }) => isValidIsoTime(sortTime)).sort((left, right) => Date.parse(left.sortTime) - Date.parse(right.sortTime));
+  const latest = reviewerSignals.at(-1);
+  if (!latest) {
+    return null;
+  }
+  const latestTime = Date.parse(latest.sortTime);
+  const sameLatestTimeCount = reviewerSignals.filter(({ sortTime }) => Date.parse(sortTime) === latestTime).length;
+  if (sameLatestTimeCount > 1) {
+    return null;
+  }
+  return latest.signal;
+}
+function reviewSignalSortTime(signal) {
+  return normalizeText20(signal?.updatedAt) || normalizeText20(signal?.createdAt);
+}
+function isAfterReviewerMarker(comment, reviewerSignal) {
+  const reviewerTime = reviewSignalSortTime(reviewerSignal);
+  const responseTime = normalizeCommentCreatedTime(comment);
+  if (!isValidIsoTime(reviewerTime) || !isValidIsoTime(responseTime)) {
+    return false;
+  }
+  return Date.parse(responseTime) > Date.parse(reviewerTime);
+}
+function normalizeCommentCreatedTime(comment) {
+  return normalizeText20(comment?.createdAt ?? comment?.created_at);
+}
+function isValidIsoTime(value) {
+  return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(normalizeText20(value));
+}
+function excludeAmbiguousResponseCommentTimes(comments) {
+  const counts = /* @__PURE__ */ new Map();
+  for (const comment of comments) {
+    const time3 = normalizeText20(comment?.createdAt);
+    counts.set(time3, (counts.get(time3) || 0) + 1);
+  }
+  return comments.filter((comment) => counts.get(normalizeText20(comment?.createdAt)) === 1);
+}
+function sortResponseCommentsByCreatedAt(comments) {
+  return [...comments].sort((left, right) => Date.parse(left.createdAt) - Date.parse(right.createdAt));
 }
 function parseGeminiReviewComment(comment = {}) {
   const body = normalizeText20(typeof comment === "string" ? comment : comment?.body);
@@ -34539,6 +34588,17 @@ function containsMarker2(value) {
 }
 function isTrustedReviewerObjectionResolution(value) {
   return normalizeText20(value).includes(REVIEWER_OBJECTION_RESOLUTION_MARKER);
+}
+function isTrustedReviewerObjectionResolutionComment(comment) {
+  return isTrustedReviewerObjectionResolution(comment?.body) && isTrustedCommentAuthor(comment);
+}
+function isTrustedCommentAuthor(comment) {
+  const author = normalizeCommentAuthor(comment).toLowerCase();
+  const association = normalizeText20(comment?.authorAssociation ?? comment?.author_association).toUpperCase();
+  return author === "vtdd-codex" || author === "vtdd-codex[bot]" || association === "OWNER" || association === "MEMBER" || association === "COLLABORATOR";
+}
+function normalizeCommentAuthor(comment) {
+  return normalizeText20(comment?.user?.login ?? comment?.author?.login ?? comment?.author);
 }
 function normalizeInlineText(value) {
   return normalizeMultilineText(value).replace(/\s+/g, " ").trim();

@@ -206,6 +206,8 @@ test("buildReviewResponseSummary maps request_changes findings to response evide
   const reviewerComment = {
     user: { login: "vtdd-codex[bot]" },
     url: "https://github.com/example/repo/pull/207#issuecomment-review",
+    created_at: "2026-05-13T01:00:00Z",
+    updated_at: "2026-05-13T01:00:00Z",
     body: `${GEMINI_PR_REVIEW_MARKER}
 ## VTDD Gemini レビュー
 
@@ -220,6 +222,7 @@ test("buildReviewResponseSummary maps request_changes findings to response evide
   const responseComment = {
     user: { login: "vtdd-codex[bot]" },
     url: "https://github.com/example/repo/pull/207#issuecomment-response",
+    created_at: "2026-05-13T01:01:00Z",
     body: `${REVIEWER_OBJECTION_RESOLUTION_MARKER}
 ## VTDD Reviewer Objection Resolution
 
@@ -251,6 +254,8 @@ test("buildReviewResponseSummary supports explicit critical finding ids and unre
   const reviewerComment = {
     user: { login: "vtdd-codex[bot]" },
     url: "https://github.com/example/repo/pull/314#issuecomment-review",
+    created_at: "2026-05-13T02:00:00Z",
+    updated_at: "2026-05-13T02:00:00Z",
     body: `${GEMINI_PR_REVIEW_MARKER}
 ## VTDD Gemini レビュー
 
@@ -265,6 +270,7 @@ test("buildReviewResponseSummary supports explicit critical finding ids and unre
   };
   const responseComment = {
     user: { login: "vtdd-codex[bot]" },
+    created_at: "2026-05-13T02:01:00Z",
     body: `${REVIEWER_OBJECTION_RESOLUTION_MARKER}
 ## VTDD Reviewer Objection Resolution
 
@@ -286,6 +292,463 @@ Unresolved: critical-2 remains blocked until deploy/live Butler E2E is authorize
   assert.deepEqual(summary.unresolvedItems, ["live E2E is not available in this slice"]);
   assert.match(formatReviewResponseSummary(summary), /critical-1: addressed/);
   assert.match(formatReviewResponseSummary(summary), /critical-2: unresolved/);
+});
+
+test("buildReviewResponseSummary chooses latest reviewer marker by timestamp across comment arrays", () => {
+  const olderReviewComment = {
+    user: { login: "vtdd-codex[bot]" },
+    url: "https://github.com/example/repo/pull/314#discussion-old",
+    created_at: "2026-05-13T01:00:00Z",
+    updated_at: "2026-05-13T01:00:00Z",
+    body: `${GEMINI_PR_REVIEW_MARKER}
+## VTDD Gemini レビュー
+
+- Recommended action: \`request_changes\`
+
+### 重要指摘
+- old finding should not be latest`
+  };
+  const newerIssueComment = {
+    user: { login: "vtdd-codex[bot]" },
+    url: "https://github.com/example/repo/pull/314#issuecomment-new",
+    created_at: "2026-05-13T02:00:00Z",
+    updated_at: "2026-05-13T02:30:00Z",
+    body: `${GEMINI_PR_REVIEW_MARKER}
+## VTDD Gemini レビュー
+
+- Recommended action: \`request_changes\`
+
+### 重要指摘
+- latest finding must be used`
+  };
+  const responseComment = {
+    user: { login: "marushu" },
+    author_association: "OWNER",
+    created_at: "2026-05-13T02:31:00Z",
+    body: `${REVIEWER_OBJECTION_RESOLUTION_MARKER}
+Addresses: critical-1
+Evidence: npm test`
+  };
+
+  const summary = buildReviewResponseSummary({
+    pullRequest: {},
+    issueComments: [newerIssueComment, responseComment],
+    reviewComments: [olderReviewComment]
+  });
+
+  assert.equal(summary.reviewerCommentUrl, "https://github.com/example/repo/pull/314#issuecomment-new");
+  assert.deepEqual(summary.criticalFindings, ["latest finding must be used"]);
+  assert.deepEqual(summary.unresolvedItems, []);
+});
+
+test("buildReviewResponseSummary ignores stale and untrusted objection resolution comments", () => {
+  const reviewerComment = {
+    user: { login: "vtdd-codex[bot]" },
+    url: "https://github.com/example/repo/pull/314#issuecomment-review",
+    created_at: "2026-05-13T03:00:00Z",
+    updated_at: "2026-05-13T03:00:00Z",
+    body: `${GEMINI_PR_REVIEW_MARKER}
+## VTDD Gemini レビュー
+
+- Recommended action: \`request_changes\`
+
+### 重要指摘
+- trusted response must be after current review`
+  };
+  const staleOwnerResponse = {
+    user: { login: "marushu" },
+    author_association: "OWNER",
+    created_at: "2026-05-13T02:00:00Z",
+    body: `${REVIEWER_OBJECTION_RESOLUTION_MARKER}
+Addresses: critical-1
+Evidence: old npm test`
+  };
+  const untrustedNewResponse = {
+    user: { login: "external-user" },
+    author_association: "NONE",
+    created_at: "2026-05-13T03:01:00Z",
+    body: `${REVIEWER_OBJECTION_RESOLUTION_MARKER}
+Addresses: critical-1
+Evidence: untrusted claim`
+  };
+
+  const summary = buildReviewResponseSummary({
+    pullRequest: {},
+    issueComments: [staleOwnerResponse, reviewerComment, untrustedNewResponse]
+  });
+
+  assert.deepEqual(summary.responseCommentUrls, []);
+  assert.deepEqual(summary.findingResponses.map((item) => [item.id, item.status]), [
+    ["critical-1", "unresolved"]
+  ]);
+  assert.deepEqual(summary.unresolvedItems, ["trusted response must be after current review"]);
+  assert.equal(summary.complete, false);
+});
+
+test("buildReviewResponseSummary excludes response comments without a valid created_at boundary", () => {
+  const reviewerComment = {
+    user: { login: "vtdd-codex[bot]" },
+    created_at: "2026-05-13T04:00:00Z",
+    updated_at: "2026-05-13T04:00:00Z",
+    body: `${GEMINI_PR_REVIEW_MARKER}
+## VTDD Gemini レビュー
+
+- Recommended action: \`request_changes\`
+
+### 重要指摘
+- evidence needs a trustworthy timestamp`
+  };
+  const missingTimestampResponse = {
+    user: { login: "marushu" },
+    author_association: "OWNER",
+    body: `${REVIEWER_OBJECTION_RESOLUTION_MARKER}
+Addresses: critical-1
+Evidence: missing timestamp`
+  };
+  const invalidTimestampResponse = {
+    user: { login: "marushu" },
+    author_association: "OWNER",
+    created_at: "not-a-date",
+    body: `${REVIEWER_OBJECTION_RESOLUTION_MARKER}
+Addresses: critical-1
+Evidence: invalid timestamp`
+  };
+
+  const summary = buildReviewResponseSummary({
+    pullRequest: {},
+    issueComments: [reviewerComment, missingTimestampResponse, invalidTimestampResponse]
+  });
+
+  assert.deepEqual(summary.responseCommentUrls, []);
+  assert.deepEqual(summary.findingResponses.map((item) => [item.id, item.status]), [
+    ["critical-1", "unresolved"]
+  ]);
+  assert.deepEqual(summary.unresolvedItems, ["evidence needs a trustworthy timestamp"]);
+});
+
+test("buildReviewResponseSummary uses response created_at, not updated_at, for stale exclusion", () => {
+  const reviewerComment = {
+    user: { login: "vtdd-codex[bot]" },
+    created_at: "2026-05-13T05:00:00Z",
+    updated_at: "2026-05-13T05:00:00Z",
+    body: `${GEMINI_PR_REVIEW_MARKER}
+## VTDD Gemini レビュー
+
+- Recommended action: \`request_changes\`
+
+### 重要指摘
+- old edited response must not count`
+  };
+  const editedOldResponse = {
+    user: { login: "marushu" },
+    author_association: "OWNER",
+    created_at: "2026-05-13T04:59:00Z",
+    updated_at: "2026-05-13T05:01:00Z",
+    body: `${REVIEWER_OBJECTION_RESOLUTION_MARKER}
+Addresses: critical-1
+Evidence: edited after reviewer marker`
+  };
+
+  const summary = buildReviewResponseSummary({
+    pullRequest: {},
+    issueComments: [editedOldResponse, reviewerComment]
+  });
+
+  assert.deepEqual(summary.responseCommentUrls, []);
+  assert.deepEqual(summary.findingResponses.map((item) => [item.id, item.status]), [
+    ["critical-1", "unresolved"]
+  ]);
+  assert.deepEqual(summary.unresolvedItems, ["old edited response must not count"]);
+});
+
+test("buildReviewResponseSummary treats same-timestamp response comments as unresolved", () => {
+  const reviewerComment = {
+    user: { login: "vtdd-codex[bot]" },
+    created_at: "2026-05-13T06:00:00Z",
+    updated_at: "2026-05-13T06:00:00Z",
+    body: `${GEMINI_PR_REVIEW_MARKER}
+## VTDD Gemini レビュー
+
+- Recommended action: \`request_changes\`
+
+### 重要指摘
+- same timestamp is ambiguous`
+  };
+  const sameTimestampResponse = {
+    user: { login: "marushu" },
+    author_association: "OWNER",
+    created_at: "2026-05-13T06:00:00Z",
+    body: `${REVIEWER_OBJECTION_RESOLUTION_MARKER}
+Addresses: critical-1
+Evidence: same timestamp`
+  };
+
+  const summary = buildReviewResponseSummary({
+    pullRequest: {},
+    issueComments: [reviewerComment, sameTimestampResponse]
+  });
+
+  assert.deepEqual(summary.responseCommentUrls, []);
+  assert.deepEqual(summary.findingResponses.map((item) => [item.id, item.status]), [
+    ["critical-1", "unresolved"]
+  ]);
+  assert.deepEqual(summary.unresolvedItems, ["same timestamp is ambiguous"]);
+});
+
+test("buildReviewResponseSummary ignores reviewer markers without valid timestamps", () => {
+  const invalidReviewerComment = {
+    user: { login: "vtdd-codex[bot]" },
+    created_at: "not-a-date",
+    updated_at: "zzzz-invalid",
+    body: `${GEMINI_PR_REVIEW_MARKER}
+## VTDD Gemini レビュー
+
+- Recommended action: \`request_changes\`
+
+### 重要指摘
+- invalid reviewer marker must not become latest`
+  };
+  const validApproveComment = {
+    user: { login: "vtdd-codex[bot]" },
+    created_at: "2026-05-13T07:00:00Z",
+    updated_at: "2026-05-13T07:00:00Z",
+    body: `${GEMINI_PR_REVIEW_MARKER}
+## VTDD Gemini レビュー
+
+- Recommended action: \`approve\`
+
+### 重要指摘
+- 報告なし。`
+  };
+  const responseComment = {
+    user: { login: "marushu" },
+    author_association: "OWNER",
+    created_at: "2026-05-13T07:01:00Z",
+    body: `${REVIEWER_OBJECTION_RESOLUTION_MARKER}
+Addresses: critical-1
+Evidence: invalid marker should be ignored`
+  };
+
+  const summary = buildReviewResponseSummary({
+    pullRequest: {},
+    issueComments: [validApproveComment, invalidReviewerComment, responseComment]
+  });
+
+  assert.equal(summary, null);
+});
+
+test("buildReviewResponseSummary treats same-timestamp reviewer markers as ambiguous", () => {
+  const firstReviewerComment = {
+    user: { login: "vtdd-codex[bot]" },
+    created_at: "2026-05-13T08:00:00Z",
+    updated_at: "2026-05-13T08:00:00Z",
+    body: `${GEMINI_PR_REVIEW_MARKER}
+## VTDD Gemini レビュー
+
+- Recommended action: \`request_changes\`
+
+### 重要指摘
+- first same-time finding`
+  };
+  const secondReviewerComment = {
+    user: { login: "vtdd-codex[bot]" },
+    created_at: "2026-05-13T08:00:00Z",
+    updated_at: "2026-05-13T08:00:00Z",
+    body: `${GEMINI_PR_REVIEW_MARKER}
+## VTDD Gemini レビュー
+
+- Recommended action: \`request_changes\`
+
+### 重要指摘
+- second same-time finding`
+  };
+  const responseComment = {
+    user: { login: "marushu" },
+    author_association: "OWNER",
+    created_at: "2026-05-13T08:01:00Z",
+    body: `${REVIEWER_OBJECTION_RESOLUTION_MARKER}
+Addresses: critical-1
+Evidence: array order must not choose a reviewer marker`
+  };
+
+  const summary = buildReviewResponseSummary({
+    pullRequest: {},
+    issueComments: [firstReviewerComment, responseComment],
+    reviewComments: [secondReviewerComment]
+  });
+
+  assert.equal(summary, null);
+});
+
+test("buildReviewResponseSummary uses reviewer updated_at as the explicit latest marker revision time", () => {
+  const olderEditedReviewerComment = {
+    user: { login: "vtdd-codex[bot]" },
+    url: "https://github.com/example/repo/pull/314#issuecomment-edited",
+    created_at: "2026-05-13T08:30:00Z",
+    updated_at: "2026-05-13T09:30:00Z",
+    body: `${GEMINI_PR_REVIEW_MARKER}
+## VTDD Gemini レビュー
+
+- Recommended action: \`request_changes\`
+
+### 重要指摘
+- edited reviewer marker is latest content`
+  };
+  const newerCreatedReviewerComment = {
+    user: { login: "vtdd-codex[bot]" },
+    url: "https://github.com/example/repo/pull/314#issuecomment-created",
+    created_at: "2026-05-13T09:00:00Z",
+    updated_at: "2026-05-13T09:00:00Z",
+    body: `${GEMINI_PR_REVIEW_MARKER}
+## VTDD Gemini レビュー
+
+- Recommended action: \`request_changes\`
+
+### 重要指摘
+- created later but edited marker should win`
+  };
+  const responseComment = {
+    user: { login: "marushu" },
+    author_association: "OWNER",
+    created_at: "2026-05-13T09:31:00Z",
+    body: `${REVIEWER_OBJECTION_RESOLUTION_MARKER}
+Addresses: critical-1
+Evidence: npm test`
+  };
+
+  const summary = buildReviewResponseSummary({
+    pullRequest: {},
+    issueComments: [olderEditedReviewerComment, responseComment],
+    reviewComments: [newerCreatedReviewerComment]
+  });
+
+  assert.equal(summary.reviewerCommentUrl, "https://github.com/example/repo/pull/314#issuecomment-edited");
+  assert.deepEqual(summary.criticalFindings, ["edited reviewer marker is latest content"]);
+});
+
+test("buildReviewResponseSummary excludes trusted response comments with duplicate created_at timestamps", () => {
+  const reviewerComment = {
+    user: { login: "vtdd-codex[bot]" },
+    created_at: "2026-05-13T10:00:00Z",
+    updated_at: "2026-05-13T10:00:00Z",
+    body: `${GEMINI_PR_REVIEW_MARKER}
+## VTDD Gemini レビュー
+
+- Recommended action: \`request_changes\`
+
+### 重要指摘
+- duplicate response timestamps are ambiguous`
+  };
+  const firstResponse = {
+    user: { login: "marushu" },
+    author_association: "OWNER",
+    url: "https://github.com/example/repo/pull/314#issuecomment-response-1",
+    created_at: "2026-05-13T10:01:00Z",
+    body: `${REVIEWER_OBJECTION_RESOLUTION_MARKER}
+Addresses: critical-1
+Evidence: first same-time response`
+  };
+  const secondResponse = {
+    user: { login: "marushu" },
+    author_association: "OWNER",
+    url: "https://github.com/example/repo/pull/314#issuecomment-response-2",
+    created_at: "2026-05-13T10:01:00Z",
+    body: `${REVIEWER_OBJECTION_RESOLUTION_MARKER}
+Addresses: critical-1
+Evidence: second same-time response`
+  };
+
+  const summary = buildReviewResponseSummary({
+    pullRequest: {},
+    issueComments: [reviewerComment, firstResponse],
+    reviewComments: [secondResponse]
+  });
+
+  assert.deepEqual(summary.responseCommentUrls, []);
+  assert.deepEqual(summary.findingResponses.map((item) => [item.id, item.status]), [
+    ["critical-1", "unresolved"]
+  ]);
+  assert.deepEqual(summary.unresolvedItems, ["duplicate response timestamps are ambiguous"]);
+});
+
+test("buildReviewResponseSummary sorts trusted response comments by created_at across comment arrays", () => {
+  const reviewerComment = {
+    user: { login: "vtdd-codex[bot]" },
+    created_at: "2026-05-13T11:00:00Z",
+    updated_at: "2026-05-13T11:00:00Z",
+    body: `${GEMINI_PR_REVIEW_MARKER}
+## VTDD Gemini レビュー
+
+- Recommended action: \`request_changes\`
+
+### 重要指摘
+- first response evidence
+- second response evidence`
+  };
+  const laterIssueResponse = {
+    user: { login: "marushu" },
+    author_association: "OWNER",
+    url: "https://github.com/example/repo/pull/314#issuecomment-later",
+    created_at: "2026-05-13T11:03:00Z",
+    body: `${REVIEWER_OBJECTION_RESOLUTION_MARKER}
+Addresses: critical-2
+Evidence: second response evidence`
+  };
+  const earlierReviewResponse = {
+    user: { login: "marushu" },
+    author_association: "OWNER",
+    url: "https://github.com/example/repo/pull/314#discussion-earlier",
+    created_at: "2026-05-13T11:02:00Z",
+    body: `${REVIEWER_OBJECTION_RESOLUTION_MARKER}
+Addresses: critical-1
+Evidence: first response evidence`
+  };
+
+  const summary = buildReviewResponseSummary({
+    pullRequest: {},
+    issueComments: [reviewerComment, laterIssueResponse],
+    reviewComments: [earlierReviewResponse]
+  });
+
+  assert.deepEqual(summary.responseCommentUrls, [
+    "https://github.com/example/repo/pull/314#discussion-earlier",
+    "https://github.com/example/repo/pull/314#issuecomment-later"
+  ]);
+  assert.deepEqual(summary.unresolvedItems, []);
+});
+
+test("buildReviewResponseSummary rejects non-GitHub-ISO timestamp strings", () => {
+  const reviewerComment = {
+    user: { login: "vtdd-codex[bot]" },
+    created_at: "2026-05-13T12:00:00Z",
+    updated_at: "2026-05-13T12:00:00Z",
+    body: `${GEMINI_PR_REVIEW_MARKER}
+## VTDD Gemini レビュー
+
+- Recommended action: \`request_changes\`
+
+### 重要指摘
+- ambiguous date string must not count`
+  };
+  const ambiguousResponse = {
+    user: { login: "marushu" },
+    author_association: "OWNER",
+    created_at: "May 13 2026 12:01:00",
+    body: `${REVIEWER_OBJECTION_RESOLUTION_MARKER}
+Addresses: critical-1
+Evidence: ambiguous date string`
+  };
+
+  const summary = buildReviewResponseSummary({
+    pullRequest: {},
+    issueComments: [reviewerComment, ambiguousResponse]
+  });
+
+  assert.deepEqual(summary.responseCommentUrls, []);
+  assert.deepEqual(summary.findingResponses.map((item) => [item.id, item.status]), [
+    ["critical-1", "unresolved"]
+  ]);
+  assert.deepEqual(summary.unresolvedItems, ["ambiguous date string must not count"]);
 });
 
 test("parseGeminiReviewComment accepts legacy English reviewer sections", () => {
@@ -324,6 +787,8 @@ test("buildPullRequestReviewContext passes unresolved response summary to Gemini
       {
         user: { login: "vtdd-codex[bot]" },
         url: "https://github.com/example/repo/pull/314#issuecomment-review",
+        created_at: "2026-05-13T10:30:00Z",
+        updated_at: "2026-05-13T10:30:00Z",
         body: `${GEMINI_PR_REVIEW_MARKER}
 ## VTDD Gemini レビュー
 
