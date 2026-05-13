@@ -119,6 +119,12 @@ export function buildPullRequestReviewContext(input = {}) {
   const issueComments = summarizeComments(input.issueComments);
   const reviewComments = summarizeComments(input.reviewComments);
   const reviews = summarizeReviews(input.reviews);
+  const reviewResponseSummary = buildReviewResponseSummary({
+    pullRequest,
+    files,
+    issueComments: input.issueComments,
+    reviewComments: input.reviewComments
+  });
 
   const fileSummary = files.map((file) => {
     const filename = normalizeText(file?.filename) || "unknown";
@@ -147,7 +153,93 @@ export function buildPullRequestReviewContext(input = {}) {
     reviewComments.length > 0 ? reviewComments.join("\n") : "[no recent review comments]",
     "",
     "Recent reviews:",
-    reviews.length > 0 ? reviews.join("\n") : "[no recent reviews]"
+    reviews.length > 0 ? reviews.join("\n") : "[no recent reviews]",
+    "",
+    "Review response summary:",
+    reviewResponseSummary
+      ? formatReviewResponseSummary(reviewResponseSummary)
+      : "[no request_changes response summary]"
+  ].join("\n");
+}
+
+export function buildReviewResponseSummary(input = {}) {
+  const pullRequest = normalizeObject(input.pullRequest);
+  const comments = [
+    ...(Array.isArray(input.issueComments) ? input.issueComments : []),
+    ...(Array.isArray(input.reviewComments) ? input.reviewComments : [])
+  ];
+  const latestReviewer = comments.map(parseGeminiReviewComment).filter(Boolean).at(-1);
+  if (!latestReviewer || latestReviewer.recommendedAction !== "request_changes") {
+    return null;
+  }
+
+  const responseComments = comments
+    .filter((comment) => isTrustedReviewerObjectionResolution(comment?.body))
+    .map((comment) => ({
+      url: normalizeText(comment?.url ?? comment?.htmlUrl ?? comment?.html_url) || null,
+      body: normalizeMultilineText(comment?.body)
+    }))
+    .filter((comment) => comment.body);
+  const responseText = responseComments.map((comment) => comment.body).join("\n\n");
+  const criticalFindings = latestReviewer.criticalFindings;
+  const risks = latestReviewer.risks;
+  const findingResponses = criticalFindings.map((finding, index) =>
+    mapFindingResponse({
+      finding,
+      index,
+      responseText
+    })
+  );
+  const unresolvedItems = findingResponses
+    .filter((item) => item.status !== "addressed")
+    .map((item) => item.finding);
+
+  return {
+    reviewerCommentUrl: latestReviewer.url,
+    currentRecommendedAction: latestReviewer.recommendedAction,
+    criticalFindings,
+    risks,
+    findingResponses,
+    filesChangedInResponse: summarizeChangedFiles(input.files),
+    testsEvidenceRun: extractReviewResponseEvidence({
+      pullRequestBody: pullRequest.body,
+      responseText
+    }),
+    responseCommentUrls: responseComments.map((comment) => comment.url).filter(Boolean),
+    unresolvedItems,
+    complete: unresolvedItems.length === 0
+  };
+}
+
+export function formatReviewResponseSummary(summary = {}) {
+  const criticalFindings = normalizeStringArray(summary.criticalFindings);
+  const risks = normalizeStringArray(summary.risks);
+  const filesChanged = normalizeStringArray(summary.filesChangedInResponse);
+  const testsEvidence = normalizeStringArray(summary.testsEvidenceRun);
+  const unresolvedItems = normalizeStringArray(summary.unresolvedItems);
+  const responseUrls = normalizeStringArray(summary.responseCommentUrls);
+  const findingResponses = Array.isArray(summary.findingResponses) ? summary.findingResponses : [];
+
+  return [
+    `Reviewer comment URL: ${normalizeText(summary.reviewerCommentUrl) || "not provided"}`,
+    `Current recommended action: ${normalizeText(summary.currentRecommendedAction) || "unknown"}`,
+    "Critical findings:",
+    formatIndentedList(criticalFindings, "- none"),
+    "Risks:",
+    formatIndentedList(risks, "- none"),
+    "Finding response map:",
+    findingResponses.length > 0
+      ? findingResponses.map(formatFindingResponseLine).join("\n")
+      : "- none",
+    "Files changed in response:",
+    formatIndentedList(filesChanged, "- not provided"),
+    "Tests/evidence run:",
+    formatIndentedList(testsEvidence, "- not provided"),
+    "Response comment URLs:",
+    formatIndentedList(responseUrls, "- not provided"),
+    "Unresolved items:",
+    formatIndentedList(unresolvedItems, "- none"),
+    `Response completeness: ${summary.complete === true ? "complete" : "incomplete"}`
   ].join("\n");
 }
 
@@ -303,6 +395,8 @@ export function parseGeminiReviewComment(comment = {}) {
   return {
     reviewer: "gemini",
     recommendedAction,
+    criticalFindings: extractFirstMarkdownListSection(body, ["### 重要指摘", "### Critical Findings"]),
+    risks: extractFirstMarkdownListSection(body, ["### 残リスク", "### Risks"]),
     blocking:
       recommendedAction === "request_changes" || recommendedAction === "manual_review",
     url: normalizeText(source.url ?? source.htmlUrl ?? source.html_url) || null,
@@ -311,6 +405,133 @@ export function parseGeminiReviewComment(comment = {}) {
     includesCreatedEdit: source.includesCreatedEdit === true || (Boolean(createdAt) && Boolean(updatedAt) && createdAt !== updatedAt),
     body
   };
+}
+
+function extractReviewResponseEvidence({ pullRequestBody, responseText }) {
+  return uniqueTextList([
+    ...extractEvidenceLines(pullRequestBody),
+    ...extractEvidenceLines(responseText)
+  ]);
+}
+
+function extractEvidenceLines(value) {
+  const text = normalizeMultilineText(value);
+  if (!text) {
+    return [];
+  }
+  return text
+    .split("\n")
+    .map((line) => line.trim().replace(/^- /, ""))
+    .filter((line) => /(^|\b)(Unit|Integration|E2E|Manual|Evidence path\/link|test|npm test|node --test|検証|証跡|evidence)(:|\b)/i.test(line));
+}
+
+function summarizeChangedFiles(files) {
+  return (Array.isArray(files) ? files : [])
+    .map((file) => {
+      const filename = normalizeText(file?.filename) || normalizeText(file?.path);
+      const status = normalizeText(file?.status);
+      if (!filename) {
+        return null;
+      }
+      return status ? `${filename} (${status})` : filename;
+    })
+    .filter(Boolean);
+}
+
+function isFindingMapped(finding, responseText) {
+  const normalizedFinding = normalizeInlineText(finding).toLowerCase();
+  const normalizedResponse = normalizeInlineText(responseText).toLowerCase();
+  return Boolean(normalizedFinding) && normalizedResponse.includes(normalizedFinding);
+}
+
+function mapFindingResponse({ finding, index, responseText }) {
+  const id = `critical-${index + 1}`;
+  const status = resolveFindingResponseStatus({ id, finding, responseText });
+  return {
+    id,
+    finding,
+    status,
+    evidence: extractFindingEvidence({ id, finding, responseText })
+  };
+}
+
+function resolveFindingResponseStatus({ id, finding, responseText }) {
+  const normalizedResponse = normalizeInlineText(responseText).toLowerCase();
+  if (!normalizedResponse) {
+    return "unresolved";
+  }
+  if (hasResponseDirective(normalizedResponse, ["unresolved", "未解決", "未対応"], id, finding)) {
+    return "unresolved";
+  }
+  if (hasResponseDirective(normalizedResponse, ["addresses", "addressed", "fixes", "resolved", "対応済み", "解決済み"], id, finding)) {
+    return "addressed";
+  }
+  return isFindingMapped(finding, responseText) ? "addressed" : "unresolved";
+}
+
+function hasResponseDirective(normalizedResponse, verbs, id, finding) {
+  const normalizedFinding = normalizeInlineText(finding).toLowerCase();
+  return verbs.some((verb) => {
+    const normalizedVerb = normalizeInlineText(verb).toLowerCase();
+    return (
+      normalizedResponse.includes(`${normalizedVerb}: ${id}`) ||
+      normalizedResponse.includes(`${normalizedVerb} ${id}`) ||
+      (normalizedFinding && normalizedResponse.includes(`${normalizedVerb}: ${normalizedFinding}`))
+    );
+  });
+}
+
+function extractFindingEvidence({ id, finding, responseText }) {
+  const normalizedFinding = normalizeInlineText(finding).toLowerCase();
+  return normalizeMultilineText(responseText)
+    .split("\n")
+    .map((line) => line.trim().replace(/^- /, ""))
+    .filter((line) => {
+      const normalizedLine = normalizeInlineText(line).toLowerCase();
+      return normalizedLine.includes(id) || (normalizedFinding && normalizedLine.includes(normalizedFinding));
+    });
+}
+
+function extractMarkdownListSection(body, heading) {
+  const text = normalizeMultilineText(body);
+  const start = text.indexOf(heading);
+  if (start < 0) {
+    return [];
+  }
+  const section = text.slice(start + heading.length).split(/\n### |\n## /)[0] || "";
+  return section
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith("- "))
+    .map((line) => line.replace(/^- /, "").trim())
+    .filter((line) => line && line !== "報告なし。");
+}
+
+function extractFirstMarkdownListSection(body, headings) {
+  for (const heading of headings) {
+    const values = extractMarkdownListSection(body, heading);
+    if (values.length > 0) {
+      return values;
+    }
+  }
+  return [];
+}
+
+function formatIndentedList(values, fallback) {
+  if (!values.length) {
+    return fallback;
+  }
+  return values.map((value) => `- ${value}`).join("\n");
+}
+
+function formatFindingResponseLine(item) {
+  const evidence = normalizeStringArray(item.evidence);
+  const suffix = evidence.length > 0 ? ` evidence=${evidence.slice(0, 2).join(" | ")}` : "";
+  return `- ${normalizeText(item.id)}: ${normalizeText(item.status) || "unresolved"} - ${normalizeText(item.finding)}${suffix}`;
+}
+
+function uniqueTextList(values) {
+  return [...new Set(values.map(normalizeText).filter(Boolean))];
 }
 
 function summarizeComments(comments) {

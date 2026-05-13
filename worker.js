@@ -28246,6 +28246,7 @@ function buildButlerReviewSynthesis(input = {}) {
       reviewerStatus: reviewLoop.reviewerStatus,
       reviewerEvidence: reviewLoop.reviewerEvidence,
       reviewerSignalTruth: reviewLoop.reviewerSignalTruth,
+      reviewResponseSummary: reviewLoop.reviewResponseSummary,
       reviewCommentsCount: reviewLoop.reviewCommentsCount,
       unresolvedReviewCommentsCount: reviewLoop.unresolvedReviewCommentsCount,
       criticalReviewPending: reviewLoop.criticalReviewPending,
@@ -28323,6 +28324,18 @@ function buildHumanDecisionFocus({ pullRequest, reviewLoop, codexGoal, branchAtt
   }
   if (pullRequest.updatedSinceReview) {
     focus.push("The PR changed after the last review signal; reviewer evidence should be refreshed against the current diff.");
+  }
+  if (reviewLoop.reviewResponseSummary?.currentRecommendedAction) {
+    const summary = reviewLoop.reviewResponseSummary;
+    focus.push(
+      `Review response summary: currentAction=${summary.currentRecommendedAction}, completeness=${summary.complete ? "complete" : "incomplete"}.`
+    );
+    if (summary.reviewerCommentUrl) {
+      focus.push(`Reviewer request_changes evidence: ${summary.reviewerCommentUrl}`);
+    }
+    for (const item of summary.unresolvedItems.slice(0, 3)) {
+      focus.push(`Unmapped reviewer finding: ${item}`);
+    }
   }
   if (codexGoal === "revise_pr") {
     focus.push("Codex should apply bounded PR revisions before Butler asks for merge judgment.");
@@ -28424,10 +28437,46 @@ function normalizeReviewLoop(value) {
     reviewerStatus: normalizeText5(input.reviewerStatus) || "review_unavailable",
     reviewerEvidence: normalizeReviewerEvidence(input.reviewerEvidence),
     reviewerSignalTruth: normalizeReviewerSignalTruth(input.reviewerSignalTruth),
+    reviewResponseSummary: normalizeReviewResponseSummary(input.reviewResponseSummary),
     reviewCommentsCount: normalizeCount(input.reviewCommentsCount),
     unresolvedReviewCommentsCount: normalizeCount(input.unresolvedReviewCommentsCount),
     criticalReviewPending: input.criticalReviewPending === true
   };
+}
+function normalizeReviewResponseSummary(value) {
+  const input = value && typeof value === "object" ? value : {};
+  const action = normalizeText5(input.currentRecommendedAction);
+  if (!action) {
+    return null;
+  }
+  return {
+    reviewerCommentUrl: normalizeText5(input.reviewerCommentUrl) || null,
+    currentRecommendedAction: action,
+    criticalFindings: normalizeStringArray(input.criticalFindings),
+    risks: normalizeStringArray(input.risks),
+    findingResponses: normalizeFindingResponses(input.findingResponses),
+    filesChangedInResponse: normalizeStringArray(input.filesChangedInResponse),
+    testsEvidenceRun: normalizeStringArray(input.testsEvidenceRun),
+    responseCommentUrls: normalizeStringArray(input.responseCommentUrls),
+    unresolvedItems: normalizeStringArray(input.unresolvedItems),
+    complete: input.complete === true
+  };
+}
+function normalizeFindingResponses(value) {
+  return (Array.isArray(value) ? value : []).map((item) => {
+    const input = item && typeof item === "object" ? item : {};
+    const id = normalizeText5(input.id);
+    const finding = normalizeText5(input.finding);
+    if (!id && !finding) {
+      return null;
+    }
+    return {
+      id: id || null,
+      finding: finding || null,
+      status: normalizeText5(input.status) || "unresolved",
+      evidence: normalizeStringArray(input.evidence)
+    };
+  }).filter(Boolean);
 }
 function normalizeReviewerSignalTruth(value) {
   const input = value && typeof value === "object" ? value : {};
@@ -34334,6 +34383,48 @@ function normalizeText19(value) {
 
 // src/core/gemini-pr-review.js
 var GEMINI_PR_REVIEW_MARKER = "<!-- vtdd:reviewer=gemini -->";
+var REVIEWER_OBJECTION_RESOLUTION_MARKER = "<!-- vtdd:reviewer-objection-resolution -->";
+function buildReviewResponseSummary(input = {}) {
+  const pullRequest = normalizeObject9(input.pullRequest);
+  const comments = [
+    ...Array.isArray(input.issueComments) ? input.issueComments : [],
+    ...Array.isArray(input.reviewComments) ? input.reviewComments : []
+  ];
+  const latestReviewer = comments.map(parseGeminiReviewComment).filter(Boolean).at(-1);
+  if (!latestReviewer || latestReviewer.recommendedAction !== "request_changes") {
+    return null;
+  }
+  const responseComments = comments.filter((comment) => isTrustedReviewerObjectionResolution(comment?.body)).map((comment) => ({
+    url: normalizeText20(comment?.url ?? comment?.htmlUrl ?? comment?.html_url) || null,
+    body: normalizeMultilineText(comment?.body)
+  })).filter((comment) => comment.body);
+  const responseText = responseComments.map((comment) => comment.body).join("\n\n");
+  const criticalFindings = latestReviewer.criticalFindings;
+  const risks = latestReviewer.risks;
+  const findingResponses = criticalFindings.map(
+    (finding, index) => mapFindingResponse({
+      finding,
+      index,
+      responseText
+    })
+  );
+  const unresolvedItems = findingResponses.filter((item) => item.status !== "addressed").map((item) => item.finding);
+  return {
+    reviewerCommentUrl: latestReviewer.url,
+    currentRecommendedAction: latestReviewer.recommendedAction,
+    criticalFindings,
+    risks,
+    findingResponses,
+    filesChangedInResponse: summarizeChangedFiles(input.files),
+    testsEvidenceRun: extractReviewResponseEvidence({
+      pullRequestBody: pullRequest.body,
+      responseText
+    }),
+    responseCommentUrls: responseComments.map((comment) => comment.url).filter(Boolean),
+    unresolvedItems,
+    complete: unresolvedItems.length === 0
+  };
+}
 function parseGeminiReviewComment(comment = {}) {
   const body = normalizeText20(typeof comment === "string" ? comment : comment?.body);
   if (!body || !containsMarker2(body)) {
@@ -34347,6 +34438,8 @@ function parseGeminiReviewComment(comment = {}) {
   return {
     reviewer: "gemini",
     recommendedAction,
+    criticalFindings: extractFirstMarkdownListSection(body, ["### \u91CD\u8981\u6307\u6458", "### Critical Findings"]),
+    risks: extractFirstMarkdownListSection(body, ["### \u6B8B\u30EA\u30B9\u30AF", "### Risks"]),
     blocking: recommendedAction === "request_changes" || recommendedAction === "manual_review",
     url: normalizeText20(source.url ?? source.htmlUrl ?? source.html_url) || null,
     createdAt: createdAt || null,
@@ -34355,11 +34448,109 @@ function parseGeminiReviewComment(comment = {}) {
     body
   };
 }
+function extractReviewResponseEvidence({ pullRequestBody, responseText }) {
+  return uniqueTextList([
+    ...extractEvidenceLines(pullRequestBody),
+    ...extractEvidenceLines(responseText)
+  ]);
+}
+function extractEvidenceLines(value) {
+  const text = normalizeMultilineText(value);
+  if (!text) {
+    return [];
+  }
+  return text.split("\n").map((line) => line.trim().replace(/^- /, "")).filter((line) => /(^|\b)(Unit|Integration|E2E|Manual|Evidence path\/link|test|npm test|node --test|検証|証跡|evidence)(:|\b)/i.test(line));
+}
+function summarizeChangedFiles(files) {
+  return (Array.isArray(files) ? files : []).map((file) => {
+    const filename = normalizeText20(file?.filename) || normalizeText20(file?.path);
+    const status = normalizeText20(file?.status);
+    if (!filename) {
+      return null;
+    }
+    return status ? `${filename} (${status})` : filename;
+  }).filter(Boolean);
+}
+function isFindingMapped(finding, responseText) {
+  const normalizedFinding = normalizeInlineText(finding).toLowerCase();
+  const normalizedResponse = normalizeInlineText(responseText).toLowerCase();
+  return Boolean(normalizedFinding) && normalizedResponse.includes(normalizedFinding);
+}
+function mapFindingResponse({ finding, index, responseText }) {
+  const id = `critical-${index + 1}`;
+  const status = resolveFindingResponseStatus({ id, finding, responseText });
+  return {
+    id,
+    finding,
+    status,
+    evidence: extractFindingEvidence({ id, finding, responseText })
+  };
+}
+function resolveFindingResponseStatus({ id, finding, responseText }) {
+  const normalizedResponse = normalizeInlineText(responseText).toLowerCase();
+  if (!normalizedResponse) {
+    return "unresolved";
+  }
+  if (hasResponseDirective(normalizedResponse, ["unresolved", "\u672A\u89E3\u6C7A", "\u672A\u5BFE\u5FDC"], id, finding)) {
+    return "unresolved";
+  }
+  if (hasResponseDirective(normalizedResponse, ["addresses", "addressed", "fixes", "resolved", "\u5BFE\u5FDC\u6E08\u307F", "\u89E3\u6C7A\u6E08\u307F"], id, finding)) {
+    return "addressed";
+  }
+  return isFindingMapped(finding, responseText) ? "addressed" : "unresolved";
+}
+function hasResponseDirective(normalizedResponse, verbs, id, finding) {
+  const normalizedFinding = normalizeInlineText(finding).toLowerCase();
+  return verbs.some((verb) => {
+    const normalizedVerb = normalizeInlineText(verb).toLowerCase();
+    return normalizedResponse.includes(`${normalizedVerb}: ${id}`) || normalizedResponse.includes(`${normalizedVerb} ${id}`) || normalizedFinding && normalizedResponse.includes(`${normalizedVerb}: ${normalizedFinding}`);
+  });
+}
+function extractFindingEvidence({ id, finding, responseText }) {
+  const normalizedFinding = normalizeInlineText(finding).toLowerCase();
+  return normalizeMultilineText(responseText).split("\n").map((line) => line.trim().replace(/^- /, "")).filter((line) => {
+    const normalizedLine = normalizeInlineText(line).toLowerCase();
+    return normalizedLine.includes(id) || normalizedFinding && normalizedLine.includes(normalizedFinding);
+  });
+}
+function extractMarkdownListSection(body, heading) {
+  const text = normalizeMultilineText(body);
+  const start = text.indexOf(heading);
+  if (start < 0) {
+    return [];
+  }
+  const section = text.slice(start + heading.length).split(/\n### |\n## /)[0] || "";
+  return section.split("\n").map((line) => line.trim()).filter((line) => line.startsWith("- ")).map((line) => line.replace(/^- /, "").trim()).filter((line) => line && line !== "\u5831\u544A\u306A\u3057\u3002");
+}
+function extractFirstMarkdownListSection(body, headings) {
+  for (const heading of headings) {
+    const values = extractMarkdownListSection(body, heading);
+    if (values.length > 0) {
+      return values;
+    }
+  }
+  return [];
+}
+function uniqueTextList(values) {
+  return [...new Set(values.map(normalizeText20).filter(Boolean))];
+}
 function containsMarker2(value) {
   return normalizeText20(value).includes(GEMINI_PR_REVIEW_MARKER);
 }
+function isTrustedReviewerObjectionResolution(value) {
+  return normalizeText20(value).includes(REVIEWER_OBJECTION_RESOLUTION_MARKER);
+}
+function normalizeInlineText(value) {
+  return normalizeMultilineText(value).replace(/\s+/g, " ").trim();
+}
+function normalizeMultilineText(value) {
+  return String(value ?? "").trim();
+}
 function normalizeText20(value) {
   return String(value ?? "").trim();
+}
+function normalizeObject9(value) {
+  return value && typeof value === "object" ? value : {};
 }
 
 // src/core/execution-continuity.js
@@ -34416,6 +34607,7 @@ function evaluateExecutionContinuity(input = {}) {
         reviewerStatus: review.reviewerStatus,
         reviewerEvidence: review.reviewerEvidence,
         reviewerSignalTruth: review.reviewerSignalTruth,
+        reviewResponseSummary: review.reviewResponseSummary,
         reviewCommentsCount: review.reviewCommentsCount,
         unresolvedReviewCommentsCount: review.unresolvedReviewCommentsCount,
         criticalReviewPending: review.criticalReviewPending,
@@ -34434,6 +34626,7 @@ function evaluateExecutionContinuity(input = {}) {
           reviewerStatus: review.reviewerStatus,
           reviewerEvidence: review.reviewerEvidence,
           reviewerSignalTruth: review.reviewerSignalTruth,
+          reviewResponseSummary: review.reviewResponseSummary,
           reviewCommentsCount: review.reviewCommentsCount,
           unresolvedReviewCommentsCount: review.unresolvedReviewCommentsCount,
           criticalReviewPending: review.criticalReviewPending
@@ -34488,11 +34681,18 @@ function buildReviewState(pullRequest) {
   const reviewerStatus = codexFallback.completed ? "codex_review_available" : codexFallback.blocked ? "codex_review_blocked" : codexFallback.requested ? "codex_review_requested" : reviewCommentsCount > 0 ? "gemini_review_available" : "review_unavailable";
   const reviewer = reviewerStatus.startsWith("codex_review") ? "codex" : pullRequest.reviewer;
   const reviewerEvidence = reviewerStatus.startsWith("codex_review") ? codexFallback.latestEvidence : parsedGeminiSignals.latestEvidence;
+  const reviewResponseSummary = buildReviewResponseSummary({
+    pullRequest,
+    files: pullRequest.files,
+    issueComments: pullRequest.issueComments,
+    reviewComments: pullRequest.reviewComments
+  });
   const reviewerSignalTruth = buildReviewerSignalTruth({
     reviewer,
     reviewerStatus,
     reviewerEvidence,
-    formalReviewTruth
+    formalReviewTruth,
+    reviewResponseSummary
   });
   const criticalReviewPending = pullRequest.exists && (reviewerStatus === "codex_review_requested" || reviewerStatus === "codex_review_blocked" || reviewerSignalTruth.mergeReviewTruth.blocked || reviewCommentsCount > 0 && unresolvedReviewCommentsCount > 0);
   const rerunReviewer = pullRequest.exists && reviewerStatus !== "codex_review_requested" && reviewerStatus !== "codex_review_blocked" && (pullRequest.updatedSinceReview || unresolvedReviewCommentsCount > 0);
@@ -34501,6 +34701,7 @@ function buildReviewState(pullRequest) {
     reviewerStatus,
     reviewerEvidence,
     reviewerSignalTruth,
+    reviewResponseSummary,
     reviewCommentsCount,
     unresolvedReviewCommentsCount,
     criticalReviewPending,
@@ -34562,13 +34763,14 @@ function collectFormalReviewTruth(pullRequest) {
     latestStates
   };
 }
-function buildReviewerSignalTruth({ reviewer, reviewerStatus, reviewerEvidence, formalReviewTruth }) {
+function buildReviewerSignalTruth({ reviewer, reviewerStatus, reviewerEvidence, formalReviewTruth, reviewResponseSummary }) {
   const recommendedAction = normalizeText21(reviewerEvidence?.recommendedAction).toLowerCase() || null;
   const vtddReviewerMarkerPresent = Boolean(recommendedAction);
   const markerBlocks = recommendedAction === "request_changes" || recommendedAction === "manual_review";
   const formalBlocks = formalReviewTruth.blocking === true;
-  const satisfied = vtddReviewerMarkerPresent && recommendedAction === "approve" && !formalBlocks;
-  const blocked2 = markerBlocks || formalBlocks;
+  const responseBlocks = reviewResponseSummary?.complete === false;
+  const satisfied = vtddReviewerMarkerPresent && recommendedAction === "approve" && !formalBlocks && !responseBlocks;
+  const blocked2 = markerBlocks || formalBlocks || responseBlocks;
   const warnings = [];
   if (recommendedAction === "approve" && !formalReviewTruth.hasFormalApproval) {
     warnings.push(
@@ -34578,6 +34780,11 @@ function buildReviewerSignalTruth({ reviewer, reviewerStatus, reviewerEvidence, 
   if (formalBlocks) {
     warnings.push(
       "GitHub formal review truth has requested changes; it remains blocking even if a VTDD reviewer marker recommends approve."
+    );
+  }
+  if (responseBlocks) {
+    warnings.push(
+      "Review response summary has unmapped critical findings; the PR is incomplete until each finding is addressed or explicitly unresolved."
     );
   }
   if (!vtddReviewerMarkerPresent) {
@@ -34593,7 +34800,7 @@ function buildReviewerSignalTruth({ reviewer, reviewerStatus, reviewerEvidence, 
     mergeReviewTruth: {
       satisfied,
       blocked: blocked2,
-      reason: blocked2 ? formalReviewTruth.blockingReason || "vtdd_reviewer_marker_blocks_merge" : satisfied ? "vtdd_reviewer_marker_approve_no_formal_blocker" : "reviewer_signal_missing"
+      reason: blocked2 ? formalReviewTruth.blockingReason || (responseBlocks ? "review_response_unmapped_critical_findings" : "vtdd_reviewer_marker_blocks_merge") : satisfied ? "vtdd_reviewer_marker_approve_no_formal_blocker" : "reviewer_signal_missing"
     },
     warnings
   };
@@ -34691,7 +34898,8 @@ function normalizeGitHubRuntime(value) {
       reviewDecision: normalizeText21(pullRequestInput.reviewDecision) || normalizeText21(pullRequestInput.review_decision) || null,
       issueComments: Array.isArray(pullRequestInput.issueComments) ? pullRequestInput.issueComments : [],
       reviewComments: Array.isArray(pullRequestInput.reviewComments) ? pullRequestInput.reviewComments : [],
-      reviews: Array.isArray(pullRequestInput.reviews) ? pullRequestInput.reviews : []
+      reviews: Array.isArray(pullRequestInput.reviews) ? pullRequestInput.reviews : [],
+      files: Array.isArray(pullRequestInput.files) ? pullRequestInput.files : []
     }
   };
 }
@@ -37349,14 +37557,14 @@ function canBindNaturalGitHubWriteApproval(payload) {
   if (!operationConfig || operationConfig.tier !== GitHubAppOperationTier.NORMAL_GO || operationConfig.naturalGoEnabled === false || !NATURAL_GO_ENABLED_OPERATIONS.has(operation)) {
     return false;
   }
-  const naturalApproval = normalizeObject9(payload?.naturalApproval);
+  const naturalApproval = normalizeObject10(payload?.naturalApproval);
   if (naturalApproval.exactPayloadPresented !== true || naturalApproval.repositoryResolved !== true) {
     return false;
   }
   if (!containsGoToken(naturalApproval.userText)) {
     return false;
   }
-  const presentedPayload = normalizeObject9(naturalApproval.presentedPayload);
+  const presentedPayload = normalizeObject10(naturalApproval.presentedPayload);
   if (normalizeText29(presentedPayload.operation) !== operation) {
     return false;
   }
@@ -37389,7 +37597,7 @@ function readPayloadIdentityField(payload, field) {
 function containsGoToken(value) {
   return /(^|[^A-Za-z0-9_])GO([^A-Za-z0-9_]|$)/i.test(normalizeText29(value));
 }
-function normalizeObject9(value) {
+function normalizeObject10(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 function normalizeText29(value) {
@@ -54580,7 +54788,7 @@ function buildMemoryWriteRecord(payload = {}) {
   const repository = normalizeText31(payload.repository) || null;
   const timestamp = normalizeText31(payload.timestamp) || (/* @__PURE__ */ new Date()).toISOString();
   const metadata = {
-    ...normalizeObject10(payload.metadata),
+    ...normalizeObject11(payload.metadata),
     relatedIssue,
     repository,
     source: "butler_memory_write_action",
@@ -55196,11 +55404,11 @@ async function executeMcpImplementationRecall(argumentsInput, env) {
   const pullRecord = pull.records?.[0] ?? null;
   const runtimeStatus = pullRecord ? pullRecord.merged ? "merged" : pullRecord.state === "open" ? "open_pr" : "unknown" : "unknown";
   const memoryReferences = cross.body?.orderedReferences ?? [];
-  const prContextReferences = memoryReferences.filter((item) => normalizeText31(item?.source) === "pr_context").map((item) => normalizeObject10(item?.reference));
+  const prContextReferences = memoryReferences.filter((item) => normalizeText31(item?.source) === "pr_context").map((item) => normalizeObject11(item?.reference));
   const memoryCommits = prContextReferences.flatMap((item) => normalizeTextList2(item.commits));
-  const files = uniqueTextList(prContextReferences.flatMap((item) => normalizeTextList2(item.files)));
-  const tests = uniqueTextList(prContextReferences.flatMap((item) => normalizeTextList2(item.tests)));
-  const evidence = uniqueTextList([
+  const files = uniqueTextList2(prContextReferences.flatMap((item) => normalizeTextList2(item.files)));
+  const tests = uniqueTextList2(prContextReferences.flatMap((item) => normalizeTextList2(item.tests)));
+  const evidence = uniqueTextList2([
     ...prContextReferences.flatMap((item) => normalizeTextList2(item.evidence)),
     ...memoryReferences.map((item) => item?.reference?.url || item?.reference?.id || item?.url || item?.id),
     pullRecord?.htmlUrl
@@ -55211,7 +55419,7 @@ async function executeMcpImplementationRecall(argumentsInput, env) {
       repository,
       issueNumber: issueNumber ?? null,
       pullNumber: pullNumber ?? null,
-      commits: uniqueTextList([pullRecord?.headSha, pullRecord?.mergeCommitSha, ...memoryCommits]),
+      commits: uniqueTextList2([pullRecord?.headSha, pullRecord?.mergeCommitSha, ...memoryCommits]),
       files,
       tests,
       evidence,
@@ -56451,8 +56659,8 @@ async function resolveApprovalGrant({ payload, policyInput, env }) {
   };
 }
 function buildApprovalScopeSnapshot({ payload, policyInput }) {
-  const issueContext = normalizeObject10(payload?.issueContext);
-  const traceability = normalizeObject10(policyInput?.issueTraceability);
+  const issueContext = normalizeObject11(payload?.issueContext);
+  const traceability = normalizeObject11(policyInput?.issueTraceability);
   const operationConfig = getGitHubAppOperation(payload?.highRiskKind ?? policyInput?.highRiskKind);
   const identityFields = new Set(operationConfig?.authorityScopeIdentityFields ?? [
     "repository",
@@ -56516,7 +56724,7 @@ async function findApprovalRecordById(provider, recordId) {
   return records.find((record2) => normalizeText31(record2?.id) === recordId) ?? records.find((record2) => normalizeText31(record2?.content?.approvalId) === recordId) ?? records.find((record2) => normalizeText31(record2?.content?.sessionId) === recordId) ?? null;
 }
 async function appendGuardedAbsenceExecutionLog({ payload, gatewayOutcome, env }) {
-  const policyInput = normalizeObject10(payload?.policyInput);
+  const policyInput = normalizeObject11(payload?.policyInput);
   const autonomyMode = normalizeAutonomyMode(policyInput.autonomyMode);
   if (autonomyMode !== AutonomyMode.GUARDED_ABSENCE) {
     return gatewayOutcome;
@@ -56530,7 +56738,7 @@ async function appendGuardedAbsenceExecutionLog({ payload, gatewayOutcome, env }
     );
   }
   const nowIso = (/* @__PURE__ */ new Date()).toISOString();
-  const body = normalizeObject10(gatewayOutcome?.body);
+  const body = normalizeObject11(gatewayOutcome?.body);
   const blockedByRule = normalizeText31(body.blockedByRule) || null;
   const recordInput = {
     id: buildGuardedAbsenceExecutionLogId({
@@ -57064,7 +57272,7 @@ function safeParseJson(value, fallback = null) {
   }
 }
 function attachGatewayWarning(gatewayOutcome, warning) {
-  const body = normalizeObject10(gatewayOutcome?.body);
+  const body = normalizeObject11(gatewayOutcome?.body);
   const warnings = Array.isArray(body.warnings) ? body.warnings : [];
   const merged = [...new Set([...warnings, normalizeText31(warning)].filter(Boolean))];
   return {
@@ -57249,7 +57457,7 @@ function normalizeIssue6(value) {
   }
   return numeric;
 }
-function normalizeObject10(value) {
+function normalizeObject11(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return {};
   }
@@ -57262,7 +57470,7 @@ function normalizeTextList2(value) {
   const text = normalizeText31(value);
   return text ? [text] : [];
 }
-function uniqueTextList(value) {
+function uniqueTextList2(value) {
   return [...new Set(normalizeTextList2(value))];
 }
 function json(status, body, extraHeaders = {}) {

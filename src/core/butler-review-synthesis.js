@@ -37,6 +37,7 @@ export function buildButlerReviewSynthesis(input = {}) {
       reviewerStatus: reviewLoop.reviewerStatus,
       reviewerEvidence: reviewLoop.reviewerEvidence,
       reviewerSignalTruth: reviewLoop.reviewerSignalTruth,
+      reviewResponseSummary: reviewLoop.reviewResponseSummary,
       reviewCommentsCount: reviewLoop.reviewCommentsCount,
       unresolvedReviewCommentsCount: reviewLoop.unresolvedReviewCommentsCount,
       criticalReviewPending: reviewLoop.criticalReviewPending,
@@ -122,6 +123,18 @@ function buildHumanDecisionFocus({ pullRequest, reviewLoop, codexGoal, branchAtt
   }
   if (pullRequest.updatedSinceReview) {
     focus.push("The PR changed after the last review signal; reviewer evidence should be refreshed against the current diff.");
+  }
+  if (reviewLoop.reviewResponseSummary?.currentRecommendedAction) {
+    const summary = reviewLoop.reviewResponseSummary;
+    focus.push(
+      `Review response summary: currentAction=${summary.currentRecommendedAction}, completeness=${summary.complete ? "complete" : "incomplete"}.`
+    );
+    if (summary.reviewerCommentUrl) {
+      focus.push(`Reviewer request_changes evidence: ${summary.reviewerCommentUrl}`);
+    }
+    for (const item of summary.unresolvedItems.slice(0, 3)) {
+      focus.push(`Unmapped reviewer finding: ${item}`);
+    }
   }
   if (codexGoal === "revise_pr") {
     focus.push("Codex should apply bounded PR revisions before Butler asks for merge judgment.");
@@ -249,10 +262,50 @@ function normalizeReviewLoop(value) {
     reviewerStatus: normalizeText(input.reviewerStatus) || "review_unavailable",
     reviewerEvidence: normalizeReviewerEvidence(input.reviewerEvidence),
     reviewerSignalTruth: normalizeReviewerSignalTruth(input.reviewerSignalTruth),
+    reviewResponseSummary: normalizeReviewResponseSummary(input.reviewResponseSummary),
     reviewCommentsCount: normalizeCount(input.reviewCommentsCount),
     unresolvedReviewCommentsCount: normalizeCount(input.unresolvedReviewCommentsCount),
     criticalReviewPending: input.criticalReviewPending === true
   };
+}
+
+function normalizeReviewResponseSummary(value) {
+  const input = value && typeof value === "object" ? value : {};
+  const action = normalizeText(input.currentRecommendedAction);
+  if (!action) {
+    return null;
+  }
+  return {
+    reviewerCommentUrl: normalizeText(input.reviewerCommentUrl) || null,
+    currentRecommendedAction: action,
+    criticalFindings: normalizeStringArray(input.criticalFindings),
+    risks: normalizeStringArray(input.risks),
+    findingResponses: normalizeFindingResponses(input.findingResponses),
+    filesChangedInResponse: normalizeStringArray(input.filesChangedInResponse),
+    testsEvidenceRun: normalizeStringArray(input.testsEvidenceRun),
+    responseCommentUrls: normalizeStringArray(input.responseCommentUrls),
+    unresolvedItems: normalizeStringArray(input.unresolvedItems),
+    complete: input.complete === true
+  };
+}
+
+function normalizeFindingResponses(value) {
+  return (Array.isArray(value) ? value : [])
+    .map((item) => {
+      const input = item && typeof item === "object" ? item : {};
+      const id = normalizeText(input.id);
+      const finding = normalizeText(input.finding);
+      if (!id && !finding) {
+        return null;
+      }
+      return {
+        id: id || null,
+        finding: finding || null,
+        status: normalizeText(input.status) || "unresolved",
+        evidence: normalizeStringArray(input.evidence)
+      };
+    })
+    .filter(Boolean);
 }
 
 function normalizeReviewerSignalTruth(value) {

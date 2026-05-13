@@ -251,6 +251,60 @@ test("execution continuity marks missing PR conflict truth as unverified before 
   assert.match(result.value.butlerReviewSynthesis.headline, /conflict runtime truth is unverified/);
 });
 
+test("execution continuity blocks readiness when request_changes finding is not mapped to a response", () => {
+  const result = evaluateExecutionContinuity({
+    actorRole: ActorRole.BUTLER,
+    mode: TaskMode.EXECUTION,
+    runtimeTruth: {
+      runtimeState: {
+        activeBranch: "codex/issue-314",
+        pullRequest: {
+          number: 314,
+          url: "https://github.com/example/repo/pull/314",
+          state: "open",
+          title: "Reviewer response summary",
+          files: [{ filename: "src/core/gemini-pr-review.js", status: "modified" }],
+          issueComments: [
+            {
+              user: { login: "vtdd-codex[bot]" },
+              url: "https://github.com/example/repo/pull/314#issuecomment-review",
+              body: "<!-- vtdd:reviewer=gemini -->\n## VTDD Gemini レビュー\n\n- Recommended action: `request_changes`\n\n### 重要指摘\n- response summary is missing\n\n### 残リスク\n- rerun evidence must include the response packet"
+            },
+            {
+              user: { login: "vtdd-codex[bot]" },
+              url: "https://github.com/example/repo/pull/314#issuecomment-response",
+              body: "<!-- vtdd:reviewer-objection-resolution -->\n## VTDD Reviewer Objection Resolution\n\nEvidence: node --test test/gemini-pr-review.test.js"
+            }
+          ]
+        }
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.value.codexGoal, CodexGoal.REVISE_PR);
+  assert.equal(result.value.reviewLoop.reviewResponseSummary.complete, false);
+  assert.deepEqual(result.value.reviewLoop.reviewResponseSummary.unresolvedItems, [
+    "response summary is missing"
+  ]);
+  assert.equal(
+    result.value.reviewLoop.reviewerSignalTruth.mergeReviewTruth.reason,
+    "review_response_unmapped_critical_findings"
+  );
+  assert.equal(
+    result.value.butlerReviewSynthesis.humanDecisionFocus.includes(
+      "Review response summary: currentAction=request_changes, completeness=incomplete."
+    ),
+    true
+  );
+  assert.equal(
+    result.value.butlerReviewSynthesis.humanDecisionFocus.includes(
+      "Unmapped reviewer finding: response summary is missing"
+    ),
+    true
+  );
+});
+
 test("execution continuity exposes Codex fallback requested when Gemini is temporarily unavailable", () => {
   const result = evaluateExecutionContinuity({
     actorRole: ActorRole.BUTLER,

@@ -6,8 +6,10 @@ import {
   buildGeminiReviewRequestBody,
   buildPullRequestDiff,
   buildPullRequestReviewContext,
+  buildReviewResponseSummary,
   extractReviewerResponseFromGemini,
   findExistingGeminiReviewComment,
+  formatReviewResponseSummary,
   formatGeminiReviewComment,
   normalizeMentionLogin,
   parseGeminiReviewComment,
@@ -200,6 +202,150 @@ The manual-test objection has been addressed because revision-applied marker is 
   assert.equal(context.includes("revision-applied marker is present"), true);
 });
 
+test("buildReviewResponseSummary maps request_changes findings to response evidence", () => {
+  const reviewerComment = {
+    user: { login: "vtdd-codex[bot]" },
+    url: "https://github.com/example/repo/pull/207#issuecomment-review",
+    body: `${GEMINI_PR_REVIEW_MARKER}
+## VTDD Gemini レビュー
+
+- Recommended action: \`request_changes\`
+
+### 重要指摘
+- manual-test objection must be addressed
+
+### 残リスク
+- rerun evidence must be visible`
+  };
+  const responseComment = {
+    user: { login: "vtdd-codex[bot]" },
+    url: "https://github.com/example/repo/pull/207#issuecomment-response",
+    body: `${REVIEWER_OBJECTION_RESOLUTION_MARKER}
+## VTDD Reviewer Objection Resolution
+
+Addressed finding: manual-test objection must be addressed
+Evidence: node --test test/gemini-pr-review.test.js`
+  };
+
+  const summary = buildReviewResponseSummary({
+    pullRequest: {
+      body: "- Unit: node --test test/gemini-pr-review.test.js"
+    },
+    files: [{ filename: "test/gemini-pr-review.test.js", status: "modified" }],
+    issueComments: [reviewerComment, responseComment]
+  });
+
+  assert.equal(summary.currentRecommendedAction, "request_changes");
+  assert.deepEqual(summary.criticalFindings, ["manual-test objection must be addressed"]);
+  assert.deepEqual(summary.unresolvedItems, []);
+  assert.deepEqual(summary.findingResponses.map((item) => [item.id, item.status]), [
+    ["critical-1", "addressed"]
+  ]);
+  assert.equal(summary.complete, true);
+  assert.equal(summary.filesChangedInResponse.includes("test/gemini-pr-review.test.js (modified)"), true);
+  assert.equal(summary.testsEvidenceRun.some((item) => item.includes("node --test")), true);
+  assert.equal(formatReviewResponseSummary(summary).includes("Response completeness: complete"), true);
+});
+
+test("buildReviewResponseSummary supports explicit critical finding ids and unresolved directives", () => {
+  const reviewerComment = {
+    user: { login: "vtdd-codex[bot]" },
+    url: "https://github.com/example/repo/pull/314#issuecomment-review",
+    body: `${GEMINI_PR_REVIEW_MARKER}
+## VTDD Gemini レビュー
+
+- Recommended action: \`request_changes\`
+
+### 重要指摘
+- response summary needs explicit mapping
+- live E2E is not available in this slice
+
+### 残リスク
+- explicit mapping must stay machine-readable`
+  };
+  const responseComment = {
+    user: { login: "vtdd-codex[bot]" },
+    body: `${REVIEWER_OBJECTION_RESOLUTION_MARKER}
+## VTDD Reviewer Objection Resolution
+
+Addresses: critical-1
+Evidence: node --test test/gemini-pr-review.test.js
+Unresolved: critical-2 remains blocked until deploy/live Butler E2E is authorized.`
+  };
+
+  const summary = buildReviewResponseSummary({
+    pullRequest: {},
+    files: [],
+    issueComments: [reviewerComment, responseComment]
+  });
+
+  assert.deepEqual(summary.findingResponses.map((item) => [item.id, item.status]), [
+    ["critical-1", "addressed"],
+    ["critical-2", "unresolved"]
+  ]);
+  assert.deepEqual(summary.unresolvedItems, ["live E2E is not available in this slice"]);
+  assert.match(formatReviewResponseSummary(summary), /critical-1: addressed/);
+  assert.match(formatReviewResponseSummary(summary), /critical-2: unresolved/);
+});
+
+test("parseGeminiReviewComment accepts legacy English reviewer sections", () => {
+  const parsed = parseGeminiReviewComment({
+    body: `${GEMINI_PR_REVIEW_MARKER}
+## VTDD Gemini Critical Review
+
+- Recommended action: \`request_changes\`
+
+### Critical Findings
+- English finding still parses
+
+### Risks
+- English risk still parses`
+  });
+
+  assert.deepEqual(parsed.criticalFindings, ["English finding still parses"]);
+  assert.deepEqual(parsed.risks, ["English risk still parses"]);
+});
+
+test("buildPullRequestReviewContext passes unresolved response summary to Gemini rerun input", () => {
+  const context = buildPullRequestReviewContext({
+    repository: "sample/repo",
+    trigger: "issue_comment:created",
+    pullRequest: {
+      number: 314,
+      title: "Carry reviewer response evidence",
+      body: "PR body",
+      state: "open",
+      base: { ref: "main" },
+      head: { ref: "codex/issue-314" },
+      user: { login: "marushu" }
+    },
+    files: [{ filename: "src/core/gemini-pr-review.js", status: "modified" }],
+    issueComments: [
+      {
+        user: { login: "vtdd-codex[bot]" },
+        url: "https://github.com/example/repo/pull/314#issuecomment-review",
+        body: `${GEMINI_PR_REVIEW_MARKER}
+## VTDD Gemini レビュー
+
+- Recommended action: \`request_changes\`
+
+### 重要指摘
+- response summary is missing
+
+### 残リスク
+- reviewer context may lose evidence`
+      }
+    ],
+    reviewComments: [],
+    reviews: []
+  });
+
+  assert.equal(context.includes("Review response summary:"), true);
+  assert.equal(context.includes("Current recommended action: request_changes"), true);
+  assert.equal(context.includes("response summary is missing"), true);
+  assert.equal(context.includes("Response completeness: incomplete"), true);
+});
+
 test("buildGeminiReviewRequestBody requires diff and context", () => {
   assert.throws(
     () => buildGeminiReviewRequestBody({ prDiff: "", context: "x" }),
@@ -345,6 +491,8 @@ test("parseGeminiReviewComment treats approve as non-blocking reviewer evidence"
   assert.deepEqual(parsed, {
     reviewer: "gemini",
     recommendedAction: "approve",
+    criticalFindings: [],
+    risks: [],
     blocking: false,
     url: "https://github.com/example/repo/pull/28#issuecomment-1",
     createdAt: "2026-05-05T06:15:35Z",
