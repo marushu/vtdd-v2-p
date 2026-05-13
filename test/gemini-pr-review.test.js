@@ -130,6 +130,57 @@ test("issue_comment on PR from Gemini marker still skips self-trigger loop", () 
   assert.equal(result.value.reason, "bot_or_marker_comment");
 });
 
+test("issue_comment on PR from Codex fallback marker skips self-trigger loop", () => {
+  const result = resolveGeminiReviewTrigger({
+    eventName: "issue_comment",
+    payload: {
+      issue: {
+        number: 347,
+        pull_request: {
+          url: "https://api.github.com/repos/marushu/vtdd-v2-p/pulls/347"
+        }
+      },
+      comment: {
+        body: `<!-- vtdd:reviewer=codex-fallback -->
+## VTDD Codex fallback レビュー
+
+- Recommended action: \`request_changes\``
+      },
+      sender: {
+        login: "vtdd-codex"
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.value.shouldReview, false);
+  assert.equal(result.value.reason, "bot_or_marker_comment");
+});
+
+test("issue_comment on PR from future reviewer marker skips self-trigger loop", () => {
+  const result = resolveGeminiReviewTrigger({
+    eventName: "issue_comment",
+    payload: {
+      issue: {
+        number: 347,
+        pull_request: {
+          url: "https://api.github.com/repos/marushu/vtdd-v2-p/pulls/347"
+        }
+      },
+      comment: {
+        body: "<!-- vtdd:reviewer=future-reviewer -->\n## Future reviewer"
+      },
+      sender: {
+        login: "marushu"
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.value.shouldReview, false);
+  assert.equal(result.value.reason, "bot_or_marker_comment");
+});
+
 test("buildPullRequestDiff truncates large diffs", () => {
   const diff = buildPullRequestDiff(
     [
