@@ -31328,6 +31328,10 @@ function toPrContextReference(record2) {
     prNumber,
     relatedIssue,
     summary: summary || null,
+    commits: normalizeTextList(content.commits ?? metadata.commits),
+    files: normalizeTextList(content.files ?? content.changedFiles ?? metadata.files ?? metadata.changedFiles),
+    tests: normalizeTextList(content.tests ?? metadata.tests),
+    evidence: normalizeTextList(content.evidence ?? content.evidenceLinks ?? metadata.evidence),
     reviewer,
     status,
     repository,
@@ -31569,6 +31573,13 @@ function normalizeObject5(value) {
     return {};
   }
   return value;
+}
+function normalizeTextList(value) {
+  if (Array.isArray(value)) {
+    return value.map(normalizeText14).filter(Boolean);
+  }
+  const text = normalizeText14(value);
+  return text ? [text] : [];
 }
 function normalizeText14(value) {
   return String(value ?? "").trim();
@@ -55184,25 +55195,32 @@ async function executeMcpImplementationRecall(argumentsInput, env) {
   }
   const pullRecord = pull.records?.[0] ?? null;
   const runtimeStatus = pullRecord ? pullRecord.merged ? "merged" : pullRecord.state === "open" ? "open_pr" : "unknown" : "unknown";
+  const memoryReferences = cross.body?.orderedReferences ?? [];
+  const prContextReferences = memoryReferences.filter((item) => normalizeText31(item?.source) === "pr_context").map((item) => normalizeObject10(item?.reference));
+  const memoryCommits = prContextReferences.flatMap((item) => normalizeTextList2(item.commits));
+  const files = uniqueTextList(prContextReferences.flatMap((item) => normalizeTextList2(item.files)));
+  const tests = uniqueTextList(prContextReferences.flatMap((item) => normalizeTextList2(item.tests)));
+  const evidence = uniqueTextList([
+    ...prContextReferences.flatMap((item) => normalizeTextList2(item.evidence)),
+    ...memoryReferences.map((item) => item?.reference?.url || item?.reference?.id || item?.url || item?.id),
+    pullRecord?.htmlUrl
+  ]);
   return {
     ok: true,
     value: {
       repository,
       issueNumber: issueNumber ?? null,
       pullNumber: pullNumber ?? null,
-      commits: [pullRecord?.headSha, pullRecord?.mergeCommitSha].filter(Boolean),
-      files: [],
-      tests: [],
-      evidence: [
-        ...(cross.body?.orderedReferences ?? []).map((item) => item?.url || item?.id).filter(Boolean),
-        pullRecord?.htmlUrl
-      ].filter(Boolean),
-      decisions: (decisionLogs.references ?? []).map((item) => item.summary || item.id).filter(Boolean),
-      reviewerResolutions: (proposalLogs.references ?? []).map((item) => item.summary || item.id).filter(Boolean),
+      commits: uniqueTextList([pullRecord?.headSha, pullRecord?.mergeCommitSha, ...memoryCommits]),
+      files,
+      tests,
+      evidence,
+      decisions: (decisionLogs.references ?? []).map((item) => item.decision || item.summary || item.id).filter(Boolean),
+      reviewerResolutions: (proposalLogs.references ?? []).map((item) => item.hypothesis || item.summary || item.id).filter(Boolean),
       runtimeStatus,
       relatedIssue: issue2.records?.[0] ?? null,
       relatedPullRequest: pullRecord,
-      memoryReferences: cross.body?.orderedReferences ?? []
+      memoryReferences
     }
   };
 }
@@ -57236,6 +57254,16 @@ function normalizeObject10(value) {
     return {};
   }
   return value;
+}
+function normalizeTextList2(value) {
+  if (Array.isArray(value)) {
+    return value.map(normalizeText31).filter(Boolean);
+  }
+  const text = normalizeText31(value);
+  return text ? [text] : [];
+}
+function uniqueTextList(value) {
+  return [...new Set(normalizeTextList2(value))];
 }
 function json(status, body, extraHeaders = {}) {
   return new Response(JSON.stringify(body), {

@@ -453,6 +453,161 @@ test("worker MCP review_truth tool returns review synthesis from GitHub runtime 
   assert.equal(payload.butlerReviewSynthesis.available, true);
 });
 
+test("worker MCP recall_implementation combines structured memory with GitHub runtime truth", async () => {
+  const provider = createInMemoryMemoryProvider();
+  await provider.store({
+    id: "decision-318-recall",
+    type: MemoryRecordType.DECISION_LOG,
+    content: {
+      decision: "MCP implementation recall must be sourced from structured memory and runtime truth.",
+      rationale: "Butler, Mac Codex, and VPS Codex CLI need the same answer without chat history.",
+      relatedIssue: 318,
+      decidedBy: "owner",
+      timestamp: "2026-05-13T02:00:00Z",
+      supersededBy: null
+    },
+    metadata: { repository: "sample-org/vtdd-v2-p" },
+    priority: 95,
+    tags: ["decision_log", "issue:318"],
+    createdAt: "2026-05-13T02:00:00Z"
+  });
+  await provider.store({
+    id: "proposal-318-recall",
+    type: MemoryRecordType.PROPOSAL_LOG,
+    content: {
+      hypothesis: "Reviewer objections are resolved by proving the MCP recall path with an E2E-shaped worker test.",
+      options: ["memory-only", "memory-plus-runtime"],
+      rejectedReasons: [{ option: "memory-only", reason: "runtime status would be stale" }],
+      concerns: ["recall drift"],
+      unresolvedQuestions: [],
+      relatedIssue: 318,
+      proposedBy: "owner",
+      timestamp: "2026-05-13T02:05:00Z"
+    },
+    metadata: { repository: "sample-org/vtdd-v2-p" },
+    priority: 90,
+    tags: ["proposal_log", "issue:318"],
+    createdAt: "2026-05-13T02:05:00Z"
+  });
+  await provider.store({
+    id: "execution-318-pr331",
+    type: MemoryRecordType.EXECUTION_LOG,
+    content: {
+      summary: "PR #331 fixed the canonical live parity verification prompt.",
+      relatedIssue: 318,
+      prNumber: 331,
+      commits: ["ba9ea30"],
+      files: ["docs/architecture/vtdd-mcp-ver.md", "test/vtdd-mcp-ver-architecture.test.js"],
+      tests: ["node --test test/vtdd-mcp-ver-architecture.test.js"],
+      evidence: ["https://github.com/sample-org/vtdd-v2-p/pull/331"]
+    },
+    metadata: {
+      kind: "pr_context",
+      repository: "sample-org/vtdd-v2-p",
+      relatedIssue: 318,
+      prNumber: 331
+    },
+    priority: 88,
+    tags: ["pr_context", "issue:318", "pr:331"],
+    createdAt: "2026-05-13T02:10:00Z"
+  });
+
+  const response = await worker.fetch(
+    new Request("https://example.com/mcp", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 5,
+        method: "tools/call",
+        params: {
+          name: "vtdd_recall_implementation",
+          arguments: {
+            repository: "sample-org/vtdd-v2-p",
+            issueNumber: 318,
+            pullNumber: 331,
+            text: "live parity verification prompt",
+            limit: 8
+          }
+        }
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      MEMORY_PROVIDER: provider,
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_recall_read",
+      GITHUB_API_FETCH: async (url) => {
+        const parsed = new URL(url);
+        if (parsed.pathname.endsWith("/repos/sample-org/vtdd-v2-p/issues/318")) {
+          return new Response(
+            JSON.stringify({
+              number: 318,
+              title: "epic: vtdd-mcp-ver",
+              body: "Implementation recall must not depend on chat history.",
+              state: "open",
+              html_url: "https://github.com/sample-org/vtdd-v2-p/issues/318",
+              user: { login: "owner" }
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        if (parsed.pathname.endsWith("/repos/sample-org/vtdd-v2-p/pulls/331")) {
+          return new Response(
+            JSON.stringify({
+              number: 331,
+              title: "Issue #318: define MCP live parity verification",
+              state: "closed",
+              draft: false,
+              merged: true,
+              merged_at: "2026-05-13T01:35:00Z",
+              merge_commit_sha: "merge331",
+              head: { ref: "codex/issue-318-mcp-live-parity", sha: "head331" },
+              base: { ref: "main", sha: "base331" },
+              html_url: "https://github.com/sample-org/vtdd-v2-p/pull/331"
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        throw new Error(`unexpected GitHub API url: ${parsed.pathname}`);
+      }
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  const payload = JSON.parse(body.result.content[0].text);
+  assert.equal(body.result.isError, false);
+  assert.deepEqual(body.result.structuredContent, payload);
+  assert.equal(payload.repository, "sample-org/vtdd-v2-p");
+  assert.equal(payload.issueNumber, 318);
+  assert.equal(payload.pullNumber, 331);
+  assert.equal(payload.runtimeStatus, "merged");
+  assert.deepEqual(payload.commits, ["head331", "merge331", "ba9ea30"]);
+  assert.deepEqual(payload.files, [
+    "docs/architecture/vtdd-mcp-ver.md",
+    "test/vtdd-mcp-ver-architecture.test.js"
+  ]);
+  assert.deepEqual(payload.tests, ["node --test test/vtdd-mcp-ver-architecture.test.js"]);
+  assert.equal(
+    payload.decisions.includes(
+      "MCP implementation recall must be sourced from structured memory and runtime truth."
+    ),
+    true
+  );
+  assert.equal(
+    payload.reviewerResolutions.includes(
+      "Reviewer objections are resolved by proving the MCP recall path with an E2E-shaped worker test."
+    ),
+    true
+  );
+  assert.equal(
+    payload.evidence.includes("https://github.com/sample-org/vtdd-v2-p/pull/331"),
+    true
+  );
+  assert.equal(payload.relatedIssue.title, "epic: vtdd-mcp-ver");
+  assert.equal(payload.relatedPullRequest.merged, true);
+});
+
 test("worker guide alias opens the same help guide surface", async () => {
   const response = await worker.fetch(new Request("https://example.com/guide"));
 
