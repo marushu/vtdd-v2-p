@@ -169,10 +169,12 @@ export function buildGeminiReviewRequestBody(input = {}) {
             "You are VTDD's Gemini reviewer.",
             "You are critique-only.",
             "You do not execute fixes, decide merge, or erase uncertainty.",
+            "Write criticalFindings and risks in Japanese-first owner-facing prose.",
+            "Keep recommendedAction as the machine-readable enum value.",
             "Return JSON only.",
             "The JSON must contain criticalFindings[], risks[], and recommendedAction.",
             "recommendedAction must be one of: approve, request_changes, manual_review.",
-            "If there are no critical findings, keep criticalFindings empty and put at least one residual risk in risks."
+            "If there are no critical findings, keep criticalFindings empty and put at least one residual risk in risks in Japanese."
           ].join(" ")
         }
       ]
@@ -253,7 +255,7 @@ export function formatGeminiReviewComment(input = {}) {
 
   const lines = [
     GEMINI_PR_REVIEW_MARKER,
-    ...(notificationMention ? [`@${notificationMention} VTDD milestone: review result changed.`] : []),
+    ...(notificationMention ? [`@${notificationMention} VTDD milestone: review 結果が更新されました。`] : []),
     formatReviewerOperatorSummary({
       reviewer: "gemini",
       recommendedAction,
@@ -261,19 +263,19 @@ export function formatGeminiReviewComment(input = {}) {
       risks
     }),
     "",
-    "## VTDD Gemini Critical Review",
+    "## VTDD Gemini レビュー",
     "",
     `- Trigger: \`${trigger}\``,
     `- Model: \`${model}\``,
     `- Recommended action: \`${recommendedAction}\``,
     "",
-    "### Critical Findings",
-    formatListOrFallback(criticalFindings, "- None reported."),
+    "### 重要指摘",
+    formatListOrFallback(criticalFindings, "- 報告なし。"),
     "",
-    "### Risks",
-    formatListOrFallback(risks, "- None reported."),
+    "### 残リスク",
+    formatListOrFallback(risks, "- 報告なし。"),
     "",
-    "_Reviewer remains critique-only. Human keeps revision GO / merge GO + real passkey authority._"
+    "_Reviewer は批評専用です。修正 GO / merge GO + real passkey authority は人間が保持します。_"
   ];
 
   return lines.join("\n");
