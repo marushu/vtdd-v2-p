@@ -1357,7 +1357,7 @@ function createVtddMcpServer({ env, runtimeOrigin }) {
     {
       description:
         "指定した repository / Issue / PR / branch の current runtime truth を返します。GitHub state が current truth です。",
-      inputSchema: z.object({
+      inputSchema: {
         repository: z.string().min(1).describe("owner/repo 形式の repository。"),
         issueNumber: z.number().int().positive().optional().describe("対象 Issue 番号。"),
         pullNumber: z.number().int().positive().optional().describe("対象 Pull Request 番号。"),
@@ -1365,7 +1365,7 @@ function createVtddMcpServer({ env, runtimeOrigin }) {
         includeChecks: z.boolean().optional().describe("check runs を含めるか。"),
         includeWorkflowRuns: z.boolean().optional().describe("workflow runs を含めるか。"),
         limit: z.number().int().positive().optional().describe("一覧系 read の最大件数。")
-      })
+      }
     },
     async (args) => buildMcpToolResult(await executeMcpRuntimeTruth(args, env))
   );
@@ -1375,10 +1375,10 @@ function createVtddMcpServer({ env, runtimeOrigin }) {
     {
       description:
         "指定 PR の reviewer truth を返します。GitHub formal reviews、VTDD reviewer markers、blocking 状態、次の安全な action をまとめます。",
-      inputSchema: z.object({
+      inputSchema: {
         repository: z.string().min(1).describe("owner/repo 形式の repository。"),
         pullNumber: z.number().int().positive().describe("対象 Pull Request 番号。")
-      })
+      }
     },
     async (args) => buildMcpToolResult(await executeMcpReviewTruth(args, env))
   );
@@ -1388,14 +1388,14 @@ function createVtddMcpServer({ env, runtimeOrigin }) {
     {
       description:
         "structured operational memory を検索します。runtime truth を currentState として添えると memory との差異も返せます。",
-      inputSchema: z.object({
+      inputSchema: {
         text: z.string().min(1).describe("検索テキスト。"),
         repository: z.string().optional().describe("owner/repo 形式の repository。"),
         currentState: z.string().optional().describe("現在の runtime truth の短い説明。"),
         runtimeTruthSource: z.string().optional().describe("runtime truth source。"),
         checkedAt: z.string().optional().describe("runtime truth observed timestamp (ISO8601)."),
         limit: z.number().int().positive().optional().describe("返す compact context の最大件数。")
-      })
+      }
     },
     async (args) => buildMcpToolResult(await executeMcpOperationalMemorySearch(args, env))
   );
@@ -1405,13 +1405,13 @@ function createVtddMcpServer({ env, runtimeOrigin }) {
     {
       description:
         "『あれどうやって実装したっけ？』に答えるための shared implementation recall を返します。",
-      inputSchema: z.object({
+      inputSchema: {
         repository: z.string().min(1).describe("owner/repo 形式の repository。"),
         issueNumber: z.number().int().positive().optional().describe("関連 Issue 番号。"),
         pullNumber: z.number().int().positive().optional().describe("関連 Pull Request 番号。"),
         text: z.string().optional().describe("実装 recall の補助クエリ。"),
         limit: z.number().int().positive().optional().describe("memory references の最大件数。")
-      })
+      }
     },
     async (args) => buildMcpToolResult(await executeMcpImplementationRecall(args, env))
   );
@@ -1421,10 +1421,10 @@ function createVtddMcpServer({ env, runtimeOrigin }) {
     {
       description:
         "指定 PR の state / checks / review truth を Butler と同じ runtime truth モデルで返します。",
-      inputSchema: z.object({
+      inputSchema: {
         repository: z.string().min(1).describe("owner/repo 形式の repository。"),
         pullNumber: z.number().int().positive().describe("対象 Pull Request 番号。")
-      })
+      }
     },
     async (args) => buildMcpToolResult(await executeMcpPrStatus(args, env))
   );
@@ -1433,11 +1433,11 @@ function createVtddMcpServer({ env, runtimeOrigin }) {
     "vtdd_issue_status",
     {
       description: "指定 Issue の intent / body / memory references / blockers を返します。",
-      inputSchema: z.object({
+      inputSchema: {
         repository: z.string().min(1).describe("owner/repo 形式の repository。"),
         issueNumber: z.number().int().positive().describe("対象 Issue 番号。"),
         limit: z.number().int().positive().optional().describe("memory references の最大件数。")
-      })
+      }
     },
     async (args) => buildMcpToolResult(await executeMcpIssueStatus(args, env, runtimeOrigin))
   );
@@ -1474,6 +1474,7 @@ function buildMcpToolResult(result) {
         text: JSON.stringify(result.value, null, 2)
       }
     ],
+    structuredContent: result.value,
     isError: false
   };
 }

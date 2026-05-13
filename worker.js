@@ -54827,7 +54827,7 @@ function createVtddMcpServer({ env, runtimeOrigin }) {
     "vtdd_runtime_truth",
     {
       description: "\u6307\u5B9A\u3057\u305F repository / Issue / PR / branch \u306E current runtime truth \u3092\u8FD4\u3057\u307E\u3059\u3002GitHub state \u304C current truth \u3067\u3059\u3002",
-      inputSchema: object2({
+      inputSchema: {
         repository: string2().min(1).describe("owner/repo \u5F62\u5F0F\u306E repository\u3002"),
         issueNumber: number2().int().positive().optional().describe("\u5BFE\u8C61 Issue \u756A\u53F7\u3002"),
         pullNumber: number2().int().positive().optional().describe("\u5BFE\u8C61 Pull Request \u756A\u53F7\u3002"),
@@ -54835,7 +54835,7 @@ function createVtddMcpServer({ env, runtimeOrigin }) {
         includeChecks: boolean2().optional().describe("check runs \u3092\u542B\u3081\u308B\u304B\u3002"),
         includeWorkflowRuns: boolean2().optional().describe("workflow runs \u3092\u542B\u3081\u308B\u304B\u3002"),
         limit: number2().int().positive().optional().describe("\u4E00\u89A7\u7CFB read \u306E\u6700\u5927\u4EF6\u6570\u3002")
-      })
+      }
     },
     async (args) => buildMcpToolResult(await executeMcpRuntimeTruth(args, env))
   );
@@ -54843,10 +54843,10 @@ function createVtddMcpServer({ env, runtimeOrigin }) {
     "vtdd_review_truth",
     {
       description: "\u6307\u5B9A PR \u306E reviewer truth \u3092\u8FD4\u3057\u307E\u3059\u3002GitHub formal reviews\u3001VTDD reviewer markers\u3001blocking \u72B6\u614B\u3001\u6B21\u306E\u5B89\u5168\u306A action \u3092\u307E\u3068\u3081\u307E\u3059\u3002",
-      inputSchema: object2({
+      inputSchema: {
         repository: string2().min(1).describe("owner/repo \u5F62\u5F0F\u306E repository\u3002"),
         pullNumber: number2().int().positive().describe("\u5BFE\u8C61 Pull Request \u756A\u53F7\u3002")
-      })
+      }
     },
     async (args) => buildMcpToolResult(await executeMcpReviewTruth(args, env))
   );
@@ -54854,14 +54854,14 @@ function createVtddMcpServer({ env, runtimeOrigin }) {
     "vtdd_search_operational_memory",
     {
       description: "structured operational memory \u3092\u691C\u7D22\u3057\u307E\u3059\u3002runtime truth \u3092 currentState \u3068\u3057\u3066\u6DFB\u3048\u308B\u3068 memory \u3068\u306E\u5DEE\u7570\u3082\u8FD4\u305B\u307E\u3059\u3002",
-      inputSchema: object2({
+      inputSchema: {
         text: string2().min(1).describe("\u691C\u7D22\u30C6\u30AD\u30B9\u30C8\u3002"),
         repository: string2().optional().describe("owner/repo \u5F62\u5F0F\u306E repository\u3002"),
         currentState: string2().optional().describe("\u73FE\u5728\u306E runtime truth \u306E\u77ED\u3044\u8AAC\u660E\u3002"),
         runtimeTruthSource: string2().optional().describe("runtime truth source\u3002"),
         checkedAt: string2().optional().describe("runtime truth observed timestamp (ISO8601)."),
         limit: number2().int().positive().optional().describe("\u8FD4\u3059 compact context \u306E\u6700\u5927\u4EF6\u6570\u3002")
-      })
+      }
     },
     async (args) => buildMcpToolResult(await executeMcpOperationalMemorySearch(args, env))
   );
@@ -54869,13 +54869,13 @@ function createVtddMcpServer({ env, runtimeOrigin }) {
     "vtdd_recall_implementation",
     {
       description: "\u300E\u3042\u308C\u3069\u3046\u3084\u3063\u3066\u5B9F\u88C5\u3057\u305F\u3063\u3051\uFF1F\u300F\u306B\u7B54\u3048\u308B\u305F\u3081\u306E shared implementation recall \u3092\u8FD4\u3057\u307E\u3059\u3002",
-      inputSchema: object2({
+      inputSchema: {
         repository: string2().min(1).describe("owner/repo \u5F62\u5F0F\u306E repository\u3002"),
         issueNumber: number2().int().positive().optional().describe("\u95A2\u9023 Issue \u756A\u53F7\u3002"),
         pullNumber: number2().int().positive().optional().describe("\u95A2\u9023 Pull Request \u756A\u53F7\u3002"),
         text: string2().optional().describe("\u5B9F\u88C5 recall \u306E\u88DC\u52A9\u30AF\u30A8\u30EA\u3002"),
         limit: number2().int().positive().optional().describe("memory references \u306E\u6700\u5927\u4EF6\u6570\u3002")
-      })
+      }
     },
     async (args) => buildMcpToolResult(await executeMcpImplementationRecall(args, env))
   );
@@ -54883,10 +54883,10 @@ function createVtddMcpServer({ env, runtimeOrigin }) {
     "vtdd_pr_status",
     {
       description: "\u6307\u5B9A PR \u306E state / checks / review truth \u3092 Butler \u3068\u540C\u3058 runtime truth \u30E2\u30C7\u30EB\u3067\u8FD4\u3057\u307E\u3059\u3002",
-      inputSchema: object2({
+      inputSchema: {
         repository: string2().min(1).describe("owner/repo \u5F62\u5F0F\u306E repository\u3002"),
         pullNumber: number2().int().positive().describe("\u5BFE\u8C61 Pull Request \u756A\u53F7\u3002")
-      })
+      }
     },
     async (args) => buildMcpToolResult(await executeMcpPrStatus(args, env))
   );
@@ -54894,11 +54894,11 @@ function createVtddMcpServer({ env, runtimeOrigin }) {
     "vtdd_issue_status",
     {
       description: "\u6307\u5B9A Issue \u306E intent / body / memory references / blockers \u3092\u8FD4\u3057\u307E\u3059\u3002",
-      inputSchema: object2({
+      inputSchema: {
         repository: string2().min(1).describe("owner/repo \u5F62\u5F0F\u306E repository\u3002"),
         issueNumber: number2().int().positive().describe("\u5BFE\u8C61 Issue \u756A\u53F7\u3002"),
         limit: number2().int().positive().optional().describe("memory references \u306E\u6700\u5927\u4EF6\u6570\u3002")
-      })
+      }
     },
     async (args) => buildMcpToolResult(await executeMcpIssueStatus(args, env, runtimeOrigin))
   );
@@ -54932,6 +54932,7 @@ function buildMcpToolResult(result) {
         text: JSON.stringify(result.value, null, 2)
       }
     ],
+    structuredContent: result.value,
     isError: false
   };
 }
