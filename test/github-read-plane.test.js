@@ -550,9 +550,36 @@ test("github read plane reads repository directory contents as entries", async (
   });
 
   assert.equal(result.ok, true);
+  assert.equal(result.read.path, "docs");
   assert.equal(result.read.records.length, 2);
   assert.equal(result.read.records[0].type, "dir");
   assert.equal(result.read.records[0].path, "docs/butler");
+  assert.equal(result.read.records[0].htmlUrl, "https://github.com/sample-org/vtdd-v2-p/tree/main/docs/butler");
+});
+
+test("github read plane rejects unsafe repository content paths before fetch", async () => {
+  const rejectedPaths = ["../issues", "docs/../src", "docs/./setup", "docs//setup", "docs\\setup"];
+
+  for (const path of rejectedPaths) {
+    let fetchCalled = false;
+    const result = await retrieveGitHubReadPlane({
+      resource: GitHubReadResource.CONTENTS,
+      repository: "sample-org/vtdd-v2-p",
+      path,
+      env: {
+        GITHUB_APP_INSTALLATION_TOKEN: "ghs_contents_read",
+        GITHUB_API_FETCH: async () => {
+          fetchCalled = true;
+          return new Response("{}", { status: 200, headers: { "content-type": "application/json" } });
+        }
+      }
+    });
+
+    assert.equal(result.ok, false);
+    assert.equal(result.status, 422);
+    assert.equal(fetchCalled, false);
+    assert.match(result.reason, /path/);
+  }
 });
 
 test("github read plane rejects unsupported resources and missing required identifiers", async () => {

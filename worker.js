@@ -36899,11 +36899,12 @@ async function retrieveGitHubReadPlane(input = {}) {
   const issueNumber = normalizePositiveInteger5(input.issueNumber);
   const pullNumber = normalizePositiveInteger5(input.pullNumber);
   const branch = normalizeText26(input.branch);
-  const path = normalizeRepositoryPath(input.path);
   const head = normalizeText26(input.head);
   const ref = normalizeText26(input.ref) || branch;
   const state = normalizeText26(input.state) || "open";
   const limit = normalizeLimit6(input.limit, 20);
+  const pathValidation = validateRepositoryPath(input.path);
+  const path = pathValidation.path;
   const env = input.env ?? {};
   const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
   const apiBaseUrl = normalizeApiBaseUrl5(env?.GITHUB_API_BASE_URL);
@@ -36921,7 +36922,8 @@ async function retrieveGitHubReadPlane(input = {}) {
     repository,
     issueNumber,
     pullNumber,
-    ref
+    ref,
+    pathValidation
   });
   if (!validation.ok) {
     return {
@@ -36948,7 +36950,7 @@ async function retrieveGitHubReadPlane(input = {}) {
     apiBaseUrl
   });
 }
-function validateGitHubReadRequest({ resource, repository, issueNumber, pullNumber, ref }) {
+function validateGitHubReadRequest({ resource, repository, issueNumber, pullNumber, ref, pathValidation }) {
   const issues = [];
   if (!Object.values(GitHubReadResource).includes(resource)) {
     issues.push("resource is unsupported");
@@ -36964,6 +36966,9 @@ function validateGitHubReadRequest({ resource, repository, issueNumber, pullNumb
   }
   if (resource === GitHubReadResource.CHECKS && !ref) {
     issues.push("ref or branch is required for checks");
+  }
+  if (resource === GitHubReadResource.CONTENTS && !pathValidation.ok) {
+    issues.push(pathValidation.reason);
   }
   return issues.length > 0 ? { ok: false, issues } : { ok: true };
 }
@@ -37117,7 +37122,9 @@ function buildGitHubReadRequest({
     };
   }
   if (resource === GitHubReadResource.CONTENTS) {
-    const url = new URL(`${apiBaseUrl}/repos/${encodedRepository}/contents/${encodeRepositoryPath(path)}`);
+    const encodedPath = encodeRepositoryPath(path);
+    const suffix = encodedPath ? `/${encodedPath}` : "";
+    const url = new URL(`${apiBaseUrl}/repos/${encodedRepository}/contents${suffix}`);
     if (ref) {
       url.searchParams.set("ref", ref);
     }
@@ -37297,10 +37304,33 @@ function encodeURIComponentRepository4(repository) {
   return String(repository ?? "").trim().split("/").map((segment) => encodeURIComponent(segment)).join("/");
 }
 function encodeRepositoryPath(path) {
-  return normalizeRepositoryPath(path).split("/").filter(Boolean).map((segment) => encodeURIComponent(segment)).join("/");
+  return String(path ?? "").split("/").filter(Boolean).map((segment) => encodeURIComponent(segment)).join("/");
 }
-function normalizeRepositoryPath(value) {
-  return String(value ?? "").trim().replace(/^\/+/, "").replace(/\/{2,}/g, "/");
+function validateRepositoryPath(value) {
+  const text = String(value ?? "").trim();
+  if (!text) {
+    return { ok: true, path: "" };
+  }
+  if (text.includes("\\") || text.includes("\0")) {
+    return {
+      ok: false,
+      path: "",
+      reason: "path contains unsupported characters"
+    };
+  }
+  const path = text.replace(/^\/+|\/+$/g, "");
+  if (!path) {
+    return { ok: true, path: "" };
+  }
+  const segments = path.split("/");
+  if (segments.some((segment) => segment === "" || segment === "." || segment === "..")) {
+    return {
+      ok: false,
+      path: "",
+      reason: "path must not contain empty, dot, or dot-dot segments"
+    };
+  }
+  return { ok: true, path };
 }
 function decodeGitHubContent(content, encoding) {
   if (normalizeText26(encoding) !== "base64") {
