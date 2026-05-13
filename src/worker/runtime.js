@@ -56,6 +56,9 @@ import {
   verifyPasskeyApproval,
   verifyPasskeyRegistration
 } from "../core/index.js";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
+import * as z from "zod";
 
 const JSON_HEADERS = {
   "content-type": "application/json; charset=utf-8"
@@ -71,6 +74,8 @@ const MCP_SERVER_INFO = Object.freeze({
   name: "vtdd-mcp",
   version: "0.1.0"
 });
+const MCP_INSTRUCTIONS =
+  "VTDD MCP は Butler と同じ runtime truth / review truth / operational memory を読むための read-first surface です。現在の truth は runtime truth を優先し、memory は補助として扱ってください。";
 const AUTONOMY_MODE_ENV = "VTDD_AUTONOMY_MODE";
 const LEGACY_AUTONOMY_MODE_ENV = "MVP_AUTONOMY_MODE";
 const MEMORY_D1_BINDING = "VTDD_MEMORY_D1";
@@ -1308,7 +1313,8 @@ async function handleMcpRequest({ request, env, url }) {
       {
         ok: false,
         error: "mcp_post_required",
-        reason: "VTDD MCP endpoint requires MCP JSON-RPC POST requests.",
+        reason:
+          "VTDD MCP endpoint requires MCP JSON-RPC POST requests. This stateless read surface does not expose an SSE GET stream.",
         protectedResourceMetadataUrl: buildRuntimeUrl(
           url.origin,
           MCP_PROTECTED_RESOURCE_METADATA_MIRROR_PATH
@@ -1320,196 +1326,170 @@ async function handleMcpRequest({ request, env, url }) {
       }
     );
   }
-
-  const payload = await readJson(request);
-  if (Array.isArray(payload)) {
-    return mcpJsonResponse(400, {
-      jsonrpc: "2.0",
-      id: null,
-      error: {
-        code: -32600,
-        message: "Batch requests are not supported."
-      }
-    });
-  }
-
-  const id = Object.prototype.hasOwnProperty.call(payload ?? {}, "id") ? payload.id : null;
-  const method = normalizeText(payload?.method);
-  const params = normalizeObject(payload?.params);
-
-  if (method === "notifications/initialized") {
-    return new Response(null, {
-      status: 204,
-      headers: {
-        "mcp-protocol-version": MCP_PROTOCOL_VERSION
-      }
-    });
-  }
-
-  if (method === "initialize") {
-    const protocolVersion = normalizeText(params.protocolVersion) || MCP_PROTOCOL_VERSION;
-    return mcpResultResponse(id, {
-      protocolVersion,
-      capabilities: {
-        tools: {
-          listChanged: false
-        }
-      },
-      serverInfo: MCP_SERVER_INFO,
-      instructions:
-        "VTDD MCP は Butler と同じ runtime truth / review truth / operational memory を読むための read-first surface です。現在の truth は runtime truth を優先し、memory は補助として扱ってください。"
-    }, protocolVersion);
-  }
-
-  if (method === "ping") {
-    return mcpResultResponse(id, {});
-  }
-
-  if (method === "tools/list") {
-    return mcpResultResponse(id, {
-      tools: buildMcpToolDefinitions()
-    });
-  }
-
-  if (method === "tools/call") {
-    const toolName = normalizeText(params.name);
-    const toolArguments = normalizeObject(params.arguments);
-    const result = await executeMcpToolCall({
-      toolName,
-      toolArguments,
-      env,
-      runtimeOrigin: url.origin
-    });
-
-    if (!result.ok) {
-      return mcpResultResponse(id, {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              {
-                ok: false,
-                error: result.error,
-                reason: result.reason,
-                issues: result.issues ?? []
-              },
-              null,
-              2
-            )
-          }
-        ],
-        isError: true
-      });
-    }
-
-    return mcpResultResponse(id, {
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify(result.value, null, 2)
-        }
-      ],
-      isError: false
-    });
-  }
-
-  return mcpErrorResponse(id, -32601, `Unsupported MCP method: ${method || "unknown"}`);
+  const server = createVtddMcpServer({ env, runtimeOrigin: url.origin });
+  const transport = new WebStandardStreamableHTTPServerTransport({
+    sessionIdGenerator: undefined,
+    enableJsonResponse: true
+  });
+  await server.connect(transport);
+  const response = await transport.handleRequest(normalizeMcpTransportRequest(request));
+  return withMcpProtocolVersionHeader(response);
 }
 
-function buildMcpToolDefinitions() {
-  return [
+function normalizeMcpTransportRequest(request) {
+  const headers = new Headers(request.headers);
+  if (!normalizeText(headers.get("accept"))) {
+    headers.set("accept", "application/json, text/event-stream");
+  }
+  if (!normalizeText(headers.get("mcp-protocol-version"))) {
+    headers.set("mcp-protocol-version", MCP_PROTOCOL_VERSION);
+  }
+  return new Request(request, { headers });
+}
+
+function createVtddMcpServer({ env, runtimeOrigin }) {
+  const server = new McpServer(MCP_SERVER_INFO, {
+    instructions: MCP_INSTRUCTIONS
+  });
+
+  server.registerTool(
+    "vtdd_runtime_truth",
     {
-      name: "vtdd_runtime_truth",
       description:
         "指定した repository / Issue / PR / branch の current runtime truth を返します。GitHub state が current truth です。",
       inputSchema: {
-        type: "object",
-        properties: {
-          repository: { type: "string", description: "owner/repo 形式の repository。" },
-          issueNumber: { type: "integer", description: "対象 Issue 番号。" },
-          pullNumber: { type: "integer", description: "対象 Pull Request 番号。" },
-          branch: { type: "string", description: "対象 branch 名。" },
-          includeChecks: { type: "boolean", description: "check runs を含めるか。" },
-          includeWorkflowRuns: { type: "boolean", description: "workflow runs を含めるか。" },
-          limit: { type: "integer", description: "一覧系 read の最大件数。" }
-        },
-        required: ["repository"]
+        repository: z.string().min(1).describe("owner/repo 形式の repository。"),
+        issueNumber: z.number().int().positive().optional().describe("対象 Issue 番号。"),
+        pullNumber: z.number().int().positive().optional().describe("対象 Pull Request 番号。"),
+        branch: z.string().optional().describe("対象 branch 名。"),
+        includeChecks: z.boolean().optional().describe("check runs を含めるか。"),
+        includeWorkflowRuns: z.boolean().optional().describe("workflow runs を含めるか。"),
+        limit: z.number().int().positive().optional().describe("一覧系 read の最大件数。")
       }
     },
+    async (args) => buildMcpToolResult(await executeMcpRuntimeTruth(args, env))
+  );
+
+  server.registerTool(
+    "vtdd_review_truth",
     {
-      name: "vtdd_review_truth",
       description:
         "指定 PR の reviewer truth を返します。GitHub formal reviews、VTDD reviewer markers、blocking 状態、次の安全な action をまとめます。",
       inputSchema: {
-        type: "object",
-        properties: {
-          repository: { type: "string", description: "owner/repo 形式の repository。" },
-          pullNumber: { type: "integer", description: "対象 Pull Request 番号。" }
-        },
-        required: ["repository", "pullNumber"]
+        repository: z.string().min(1).describe("owner/repo 形式の repository。"),
+        pullNumber: z.number().int().positive().describe("対象 Pull Request 番号。")
       }
     },
+    async (args) => buildMcpToolResult(await executeMcpReviewTruth(args, env))
+  );
+
+  server.registerTool(
+    "vtdd_search_operational_memory",
     {
-      name: "vtdd_search_operational_memory",
       description:
         "structured operational memory を検索します。runtime truth を currentState として添えると memory との差異も返せます。",
       inputSchema: {
-        type: "object",
-        properties: {
-          text: { type: "string", description: "検索テキスト。" },
-          repository: { type: "string", description: "owner/repo 形式の repository。" },
-          currentState: { type: "string", description: "現在の runtime truth の短い説明。" },
-          runtimeTruthSource: { type: "string", description: "runtime truth source。" },
-          checkedAt: { type: "string", description: "runtime truth observed timestamp (ISO8601)." },
-          limit: { type: "integer", description: "返す compact context の最大件数。" }
-        },
-        required: ["text"]
+        text: z.string().min(1).describe("検索テキスト。"),
+        repository: z.string().optional().describe("owner/repo 形式の repository。"),
+        currentState: z.string().optional().describe("現在の runtime truth の短い説明。"),
+        runtimeTruthSource: z.string().optional().describe("runtime truth source。"),
+        checkedAt: z.string().optional().describe("runtime truth observed timestamp (ISO8601)."),
+        limit: z.number().int().positive().optional().describe("返す compact context の最大件数。")
       }
     },
+    async (args) => buildMcpToolResult(await executeMcpOperationalMemorySearch(args, env))
+  );
+
+  server.registerTool(
+    "vtdd_recall_implementation",
     {
-      name: "vtdd_recall_implementation",
       description:
         "『あれどうやって実装したっけ？』に答えるための shared implementation recall を返します。",
       inputSchema: {
-        type: "object",
-        properties: {
-          repository: { type: "string", description: "owner/repo 形式の repository。" },
-          issueNumber: { type: "integer", description: "関連 Issue 番号。" },
-          pullNumber: { type: "integer", description: "関連 Pull Request 番号。" },
-          text: { type: "string", description: "実装 recall の補助クエリ。" },
-          limit: { type: "integer", description: "memory references の最大件数。" }
-        },
-        required: ["repository"]
+        repository: z.string().min(1).describe("owner/repo 形式の repository。"),
+        issueNumber: z.number().int().positive().optional().describe("関連 Issue 番号。"),
+        pullNumber: z.number().int().positive().optional().describe("関連 Pull Request 番号。"),
+        text: z.string().optional().describe("実装 recall の補助クエリ。"),
+        limit: z.number().int().positive().optional().describe("memory references の最大件数。")
       }
     },
+    async (args) => buildMcpToolResult(await executeMcpImplementationRecall(args, env))
+  );
+
+  server.registerTool(
+    "vtdd_pr_status",
     {
-      name: "vtdd_pr_status",
       description:
         "指定 PR の state / checks / review truth を Butler と同じ runtime truth モデルで返します。",
       inputSchema: {
-        type: "object",
-        properties: {
-          repository: { type: "string", description: "owner/repo 形式の repository。" },
-          pullNumber: { type: "integer", description: "対象 Pull Request 番号。" }
-        },
-        required: ["repository", "pullNumber"]
+        repository: z.string().min(1).describe("owner/repo 形式の repository。"),
+        pullNumber: z.number().int().positive().describe("対象 Pull Request 番号。")
       }
     },
+    async (args) => buildMcpToolResult(await executeMcpPrStatus(args, env))
+  );
+
+  server.registerTool(
+    "vtdd_issue_status",
     {
-      name: "vtdd_issue_status",
-      description:
-        "指定 Issue の intent / body / memory references / blockers を返します。",
+      description: "指定 Issue の intent / body / memory references / blockers を返します。",
       inputSchema: {
-        type: "object",
-        properties: {
-          repository: { type: "string", description: "owner/repo 形式の repository。" },
-          issueNumber: { type: "integer", description: "対象 Issue 番号。" },
-          limit: { type: "integer", description: "memory references の最大件数。" }
-        },
-        required: ["repository", "issueNumber"]
+        repository: z.string().min(1).describe("owner/repo 形式の repository。"),
+        issueNumber: z.number().int().positive().describe("対象 Issue 番号。"),
+        limit: z.number().int().positive().optional().describe("memory references の最大件数。")
       }
-    }
-  ];
+    },
+    async (args) => buildMcpToolResult(await executeMcpIssueStatus(args, env, runtimeOrigin))
+  );
+
+  return server;
+}
+
+function buildMcpToolResult(result) {
+  if (!result.ok) {
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(
+            {
+              ok: false,
+              error: result.error,
+              reason: result.reason,
+              issues: result.issues ?? []
+            },
+            null,
+            2
+          )
+        }
+      ],
+      isError: true
+    };
+  }
+
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify(result.value, null, 2)
+      }
+    ],
+    structuredContent: result.value,
+    isError: false
+  };
+}
+
+function withMcpProtocolVersionHeader(response) {
+  if (normalizeText(response.headers.get("mcp-protocol-version"))) {
+    return response;
+  }
+  const headers = new Headers(response.headers);
+  headers.set("mcp-protocol-version", MCP_PROTOCOL_VERSION);
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers
+  });
 }
 
 async function executeMcpToolCall({ toolName, toolArguments, env, runtimeOrigin }) {

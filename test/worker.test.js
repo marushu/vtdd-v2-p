@@ -205,7 +205,7 @@ test("worker MCP initialize returns tools capability and server info", async () 
   assert.equal(response.headers.get("mcp-protocol-version"), "2025-03-26");
   const body = await response.json();
   assert.equal(body.result.serverInfo.name, "vtdd-mcp");
-  assert.equal(body.result.capabilities.tools.listChanged, false);
+  assert.equal(body.result.capabilities.tools.listChanged, true);
 });
 
 test("worker MCP GET returns machine-endpoint guidance instead of plain text 405", async () => {
@@ -222,6 +222,23 @@ test("worker MCP GET returns machine-endpoint guidance instead of plain text 405
   const body = await response.json();
   assert.equal(body.error, "mcp_post_required");
   assert.equal(body.protectedResourceMetadataUrl, "https://example.com/.well-known/oauth-protected-resource/mcp");
+});
+
+test("worker MCP GET with SSE accept still returns 405 for stateless JSON mode", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/mcp", {
+      method: "GET",
+      headers: {
+        ...gatewayAuthHeaders,
+        accept: "text/event-stream"
+      }
+    }),
+    gatewayAuthEnv
+  );
+
+  assert.equal(response.status, 405);
+  const body = await response.json();
+  assert.equal(body.error, "mcp_post_required");
 });
 
 test("worker MCP protected resource metadata endpoint is available", async () => {
@@ -341,6 +358,7 @@ test("worker MCP search_operational_memory tool reuses operational memory retrie
   const body = await response.json();
   const payload = JSON.parse(body.result.content[0].text);
   assert.equal(body.result.isError, false);
+  assert.deepEqual(body.result.structuredContent, payload);
   assert.equal(payload.ok, true);
   assert.equal(payload.memoryUseRule, "runtime_truth_current_state_overrides_memory_background_reference");
   assert.equal(payload.compactContext[0].id, "operational-memory-mcp-1");
