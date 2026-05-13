@@ -113,7 +113,7 @@ jobs:
           owner: ${{ github.repository_owner }}
 
       - name: Checkout target repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: ${{ env.TARGET_REPOSITORY }}
           ref: ${{ env.BASE_REF }}
@@ -129,9 +129,9 @@ jobs:
           git checkout -B "$TARGET_BRANCH"
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version: 24
 
       - name: Install Codex CLI
         shell: bash
