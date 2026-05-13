@@ -671,6 +671,86 @@ Evidence: second same-time response`
   assert.deepEqual(summary.unresolvedItems, ["duplicate response timestamps are ambiguous"]);
 });
 
+test("buildReviewResponseSummary sorts trusted response comments by created_at across comment arrays", () => {
+  const reviewerComment = {
+    user: { login: "vtdd-codex[bot]" },
+    created_at: "2026-05-13T11:00:00Z",
+    updated_at: "2026-05-13T11:00:00Z",
+    body: `${GEMINI_PR_REVIEW_MARKER}
+## VTDD Gemini レビュー
+
+- Recommended action: \`request_changes\`
+
+### 重要指摘
+- first response evidence
+- second response evidence`
+  };
+  const laterIssueResponse = {
+    user: { login: "marushu" },
+    author_association: "OWNER",
+    url: "https://github.com/example/repo/pull/314#issuecomment-later",
+    created_at: "2026-05-13T11:03:00Z",
+    body: `${REVIEWER_OBJECTION_RESOLUTION_MARKER}
+Addresses: critical-2
+Evidence: second response evidence`
+  };
+  const earlierReviewResponse = {
+    user: { login: "marushu" },
+    author_association: "OWNER",
+    url: "https://github.com/example/repo/pull/314#discussion-earlier",
+    created_at: "2026-05-13T11:02:00Z",
+    body: `${REVIEWER_OBJECTION_RESOLUTION_MARKER}
+Addresses: critical-1
+Evidence: first response evidence`
+  };
+
+  const summary = buildReviewResponseSummary({
+    pullRequest: {},
+    issueComments: [reviewerComment, laterIssueResponse],
+    reviewComments: [earlierReviewResponse]
+  });
+
+  assert.deepEqual(summary.responseCommentUrls, [
+    "https://github.com/example/repo/pull/314#discussion-earlier",
+    "https://github.com/example/repo/pull/314#issuecomment-later"
+  ]);
+  assert.deepEqual(summary.unresolvedItems, []);
+});
+
+test("buildReviewResponseSummary rejects non-GitHub-ISO timestamp strings", () => {
+  const reviewerComment = {
+    user: { login: "vtdd-codex[bot]" },
+    created_at: "2026-05-13T12:00:00Z",
+    updated_at: "2026-05-13T12:00:00Z",
+    body: `${GEMINI_PR_REVIEW_MARKER}
+## VTDD Gemini レビュー
+
+- Recommended action: \`request_changes\`
+
+### 重要指摘
+- ambiguous date string must not count`
+  };
+  const ambiguousResponse = {
+    user: { login: "marushu" },
+    author_association: "OWNER",
+    created_at: "May 13 2026 12:01:00",
+    body: `${REVIEWER_OBJECTION_RESOLUTION_MARKER}
+Addresses: critical-1
+Evidence: ambiguous date string`
+  };
+
+  const summary = buildReviewResponseSummary({
+    pullRequest: {},
+    issueComments: [reviewerComment, ambiguousResponse]
+  });
+
+  assert.deepEqual(summary.responseCommentUrls, []);
+  assert.deepEqual(summary.findingResponses.map((item) => [item.id, item.status]), [
+    ["critical-1", "unresolved"]
+  ]);
+  assert.deepEqual(summary.unresolvedItems, ["ambiguous date string must not count"]);
+});
+
 test("parseGeminiReviewComment accepts legacy English reviewer sections", () => {
   const parsed = parseGeminiReviewComment({
     body: `${GEMINI_PR_REVIEW_MARKER}

@@ -34394,7 +34394,7 @@ function buildReviewResponseSummary(input = {}) {
   if (!latestReviewer || latestReviewer.recommendedAction !== "request_changes") {
     return null;
   }
-  const responseComments = excludeAmbiguousResponseCommentTimes(comments.filter(
+  const responseComments = sortResponseCommentsByCreatedAt(excludeAmbiguousResponseCommentTimes(comments.filter(
     (comment) => isTrustedReviewerObjectionResolutionComment(comment) && isAfterReviewerMarker(comment, latestReviewer)
   ).map((comment) => ({
     url: normalizeText20(comment?.url ?? comment?.htmlUrl ?? comment?.html_url) || null,
@@ -34402,7 +34402,7 @@ function buildReviewResponseSummary(input = {}) {
     createdAt: normalizeText20(comment?.createdAt ?? comment?.created_at) || null,
     updatedAt: normalizeText20(comment?.updatedAt ?? comment?.updated_at) || null,
     body: normalizeMultilineText(comment?.body)
-  })).filter((comment) => comment.body));
+  })).filter((comment) => comment.body)));
   const responseText = responseComments.map((comment) => comment.body).join("\n\n");
   const criticalFindings = latestReviewer.criticalFindings;
   const risks = latestReviewer.risks;
@@ -34461,7 +34461,7 @@ function normalizeCommentCreatedTime(comment) {
   return normalizeText20(comment?.createdAt ?? comment?.created_at);
 }
 function isValidIsoTime(value) {
-  return Number.isFinite(Date.parse(normalizeText20(value)));
+  return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(normalizeText20(value));
 }
 function excludeAmbiguousResponseCommentTimes(comments) {
   const counts = /* @__PURE__ */ new Map();
@@ -34470,6 +34470,9 @@ function excludeAmbiguousResponseCommentTimes(comments) {
     counts.set(time3, (counts.get(time3) || 0) + 1);
   }
   return comments.filter((comment) => counts.get(normalizeText20(comment?.createdAt)) === 1);
+}
+function sortResponseCommentsByCreatedAt(comments) {
+  return [...comments].sort((left, right) => Date.parse(left.createdAt) - Date.parse(right.createdAt));
 }
 function parseGeminiReviewComment(comment = {}) {
   const body = normalizeText20(typeof comment === "string" ? comment : comment?.body);
