@@ -75,6 +75,8 @@ test("custom gpt instructions preserve current butler and approval boundaries", 
   assert.equal(doc.includes("do not invent past precedent"), true);
   assert.equal(doc.includes("current state is governed by GitHub runtime truth"), true);
   assert.equal(doc.includes("show a compact structured memory candidate, ask the human for GO"), true);
+  assert.equal(doc.includes("origin, short user words, tensionNote, restartTriggers, and outcome"), true);
+  assert.equal(doc.includes("not a personality assessment"), true);
   assert.equal(doc.includes("Do not store full transcripts, secrets, or raw sensitive material"), true);
   assert.equal(doc.includes("Current natural GO\n  binding is supported for `issue_create`, `issue_comment_create`, and\n  `pull_comment_create`"), true);
   assert.equal(doc.includes("If an implementation request does not already name an existing Issue"), true);
@@ -357,6 +359,23 @@ test("custom gpt openapi json parses and exposes paths as an object", () => {
   assert.equal(typeof doc.paths["/v2/action/github"], "object");
   assert.equal(typeof doc.paths["/v2/action/memory-write"], "object");
   assert.equal(doc.paths["/v2/action/memory-write"].post.operationId, "vtddWriteOperationalMemory");
+  const memoryWriteProps =
+    doc.paths["/v2/action/memory-write"].post.requestBody.content["application/json"].schema.properties;
+  assert.equal(memoryWriteProps.recordType.enum.includes("temperature_note"), true);
+  assert.equal(typeof memoryWriteProps.origin, "object");
+  assert.equal(typeof memoryWriteProps.userWords, "object");
+  assert.equal(typeof memoryWriteProps.tensionNote, "object");
+  assert.equal(memoryWriteProps.origin.additionalProperties, false);
+  assert.deepEqual(Object.keys(memoryWriteProps.origin.properties), ["surface", "moment", "trigger", "sourceUrl"]);
+  assert.equal(memoryWriteProps.tensionNote.additionalProperties, false);
+  assert.deepEqual(Object.keys(memoryWriteProps.tensionNote.properties), [
+    "summary",
+    "intensity",
+    "mode",
+    "whyItMatters"
+  ]);
+  assert.deepEqual(memoryWriteProps.tensionNote.properties.intensity.enum, ["low", "medium", "high"]);
+  assert.equal(memoryWriteProps.outcome.additionalProperties, false);
   assert.equal(
     doc.paths["/v2/action/github"].post.requestBody.content["application/json"].schema.properties.operation.enum.includes(
       "issue_create"

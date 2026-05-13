@@ -55012,7 +55012,7 @@ function buildMemoryWriteRecord(payload = {}) {
   if (!recordType2) {
     return {
       ok: false,
-      reason: "recordType must be decision_log, proposal_log, working_memory, or repair_case",
+      reason: "recordType must be decision_log, proposal_log, working_memory, temperature_note, or repair_case",
       issues: ["recordType is required"]
     };
   }
@@ -55074,7 +55074,7 @@ function buildMemoryWriteRecord(payload = {}) {
   if (!summary) {
     return {
       ok: false,
-      reason: "summary is required for working_memory and repair_case",
+      reason: "summary is required for working_memory, temperature_note, and repair_case",
       issues: ["summary is required"]
     };
   }
@@ -55086,6 +55086,11 @@ function buildMemoryWriteRecord(payload = {}) {
       content: {
         summary,
         details: normalizeText30(payload.details) || null,
+        origin: normalizeMemoryOrigin(payload.origin),
+        userWords: normalizeStringArray4(payload.userWords ?? payload.user_words).slice(0, 3),
+        tensionNote: normalizeMemoryTensionNote(payload.tensionNote ?? payload.tension_note),
+        restartTriggers: normalizeStringArray4(payload.restartTriggers ?? payload.restart_triggers),
+        outcome: normalizeMemoryOutcome(payload.outcome),
         relatedIssue,
         repository,
         timestamp
@@ -55103,11 +55108,39 @@ function normalizeMemoryWriteRecordType(value) {
     MemoryRecordType.DECISION_LOG,
     MemoryRecordType.PROPOSAL_LOG,
     MemoryRecordType.WORKING_MEMORY,
+    MemoryRecordType.TEMPERATURE_NOTE,
     MemoryRecordType.REPAIR_CASE
   ].includes(type)) {
     return type;
   }
   return "";
+}
+function normalizeMemoryOrigin(value) {
+  const origin = normalizeObject11(value);
+  return {
+    surface: normalizeText30(origin.surface) || null,
+    moment: normalizeText30(origin.moment) || null,
+    trigger: normalizeText30(origin.trigger) || null,
+    sourceUrl: normalizeText30(origin.sourceUrl ?? origin.source_url) || null
+  };
+}
+function normalizeMemoryTensionNote(value) {
+  const note = normalizeObject11(value);
+  return {
+    summary: normalizeText30(note.summary) || null,
+    intensity: normalizeText30(note.intensity) || null,
+    mode: normalizeText30(note.mode) || null,
+    whyItMatters: normalizeText30(note.whyItMatters ?? note.why_it_matters) || null
+  };
+}
+function normalizeMemoryOutcome(value) {
+  const outcome = normalizeObject11(value);
+  return {
+    status: normalizeText30(outcome.status) || null,
+    issue: normalizeText30(outcome.issue) || null,
+    pullRequest: normalizeText30(outcome.pullRequest ?? outcome.pull_request) || null,
+    notes: normalizeText30(outcome.notes) || null
+  };
 }
 function normalizeMemoryPriority(value, fallback) {
   const numeric = Number(value ?? fallback);

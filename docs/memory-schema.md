@@ -23,7 +23,14 @@ These families are required by Issue #2 and form the core VTDD memory model.
 ### `temperature_note`
 - Purpose: preserve user intent temperature such as urgency, preference, and
   avoidance direction
-- Typical content: desired direction, avoid list, current emphasis
+- Typical content: desired direction, avoid list, current emphasis, origin,
+  short user words, tension note, restart triggers
+
+`temperature_note` records are recall hooks, not personality labels. They may
+preserve where an idea came from, what the owner briefly said, and why the
+moment's tension matters for later restart. They must not store full casual
+conversation transcripts, secrets, or "avoid being scolded" style compliance
+notes.
 
 ### `repair_case`
 - Purpose: retain concrete failure and recovery knowledge

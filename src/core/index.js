@@ -251,6 +251,10 @@ export {
   validateIssueBody
 } from "./issue-body.js";
 export {
+  MEMORY_CANDIDATE_CONFIRMATION_PROMPT,
+  buildRagMemoryCandidate
+} from "./rag-memory-candidate.js";
+export {
   GitHubAppOperationRegistry,
   GitHubAppOperationTier,
   bindNaturalGitHubWriteApproval,

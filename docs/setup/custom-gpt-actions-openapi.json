@@ -1087,6 +1087,7 @@
                       "decision_log",
                       "proposal_log",
                       "working_memory",
+                      "temperature_note",
                       "repair_case"
                     ]
                   },
@@ -1179,6 +1180,82 @@
                       "action_visible"
                     ],
                     "description": "Use action_visible from Custom GPT so memory write failures return ok:false JSON instead of an Action transport failure."
+                  },
+                  "origin": {
+                    "type": "object",
+                    "description": "Recall-hook provenance such as surface, moment, trigger, and sourceUrl.",
+                    "additionalProperties": false,
+                    "properties": {
+                      "surface": {
+                        "type": "string"
+                      },
+                      "moment": {
+                        "type": "string"
+                      },
+                      "trigger": {
+                        "type": "string"
+                      },
+                      "sourceUrl": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "userWords": {
+                    "type": "array",
+                    "description": "Short owner words or paraphrases that help later recall. Do not send full transcripts.",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "tensionNote": {
+                    "type": "object",
+                    "description": "Structured tension note for recall, not personality judgment.",
+                    "additionalProperties": false,
+                    "properties": {
+                      "summary": {
+                        "type": "string"
+                      },
+                      "intensity": {
+                        "type": "string",
+                        "enum": [
+                          "low",
+                          "medium",
+                          "high"
+                        ]
+                      },
+                      "mode": {
+                        "type": "string"
+                      },
+                      "whyItMatters": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "restartTriggers": {
+                    "type": "array",
+                    "description": "Short phrases that help the owner resume later.",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "outcome": {
+                    "type": "object",
+                    "description": "Compact outcome such as issue, PR, status, or notes.",
+                    "additionalProperties": false,
+                    "properties": {
+                      "status": {
+                        "type": "string"
+                      },
+                      "issue": {
+                        "type": "string"
+                      },
+                      "pullRequest": {
+                        "type": "string"
+                      },
+                      "notes": {
+                        "type": "string"
+                      }
+                    }
                   }
                 },
                 "additionalProperties": false

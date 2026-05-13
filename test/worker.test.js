@@ -1047,6 +1047,56 @@ test("worker writes confirmed operational memory and retrieves it back", async (
   assert.equal(body.postWriteRetrieval.sourceCounts.decision_log, 1);
 });
 
+test("worker writes confirmed temperature note memory with recall hooks", async () => {
+  const provider = createInMemoryMemoryProvider();
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/action/memory-write", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        confirmed: true,
+        recordType: "temperature_note",
+        repository: "marushu/vtdd-v2-p",
+        relatedIssue: 343,
+        summary: "テンションノートを RAG の recall hook として保存する。",
+        origin: {
+          surface: "Butler",
+          moment: "Issue #343 implementation",
+          trigger: "owner が後で思い出せる記憶候補を求めた"
+        },
+        userWords: ["俺は、すぐに忘れるんだよ"],
+        tensionNote: {
+          summary: "再開性重視の温度が高い",
+          intensity: "high",
+          mode: "復帰文脈固定",
+          whyItMatters: "後で戻った時に判断理由を思い出すため"
+        },
+        restartTriggers: ["Issue #343", "テンションノート"],
+        outcome: {
+          status: "implemented"
+        }
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      MEMORY_PROVIDER: provider
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.memoryWritePersisted.recordType, "temperature_note");
+
+  const records = await provider.retrieve({
+    type: MemoryRecordType.TEMPERATURE_NOTE,
+    limit: 1
+  });
+  assert.equal(records.length, 1);
+  assert.equal(records[0].content.origin.surface, "Butler");
+  assert.equal(records[0].content.userWords[0], "俺は、すぐに忘れるんだよ");
+  assert.equal(records[0].content.tensionNote.intensity, "high");
+});
+
 test("worker blocks operational memory write until Butler gets GO", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/v2/action/memory-write", {

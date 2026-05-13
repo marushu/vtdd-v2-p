@@ -122,7 +122,8 @@ VTDD context preflight / RAG:
 - Prefer both success and failure patterns when memory returns them.
 - If RAG/context retrieval is unavailable, say `RAG/context retrieval unavailable` and continue only when Issue/docs/runtime truth provide enough safe basis.
 - If runtime truth conflicts with memory, stop and reconcile instead of proceeding by memory.
-- When a reusable decision, blocker, failure pattern, repair, or handoff fact emerges, show a compact structured memory candidate, ask the human for GO, then call vtddWriteOperationalMemory. Do not store full transcripts, secrets, or raw sensitive material.
+- When a reusable decision, blocker, failure pattern, repair, handoff fact, or tension note emerges, show a compact structured memory candidate, ask the human for GO, then call vtddWriteOperationalMemory. Do not store full transcripts, secrets, or raw sensitive material.
+- Memory candidates should include recall hooks when useful: origin, short user words, tensionNote, restartTriggers, and outcome. A tension note is the moment's temperature for later recall, not a personality assessment.
 - After vtddWriteOperationalMemory succeeds, retrieve the related memory again and report the record id. If it fails, report the exact error/reason/issues.
 - Do not ask the human to name these internal retrieval routes in normal conversation.
 

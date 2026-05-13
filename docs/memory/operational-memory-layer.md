@@ -41,6 +41,11 @@ separate from historical memory.
   `temperature_note`
 - Role: preserve operational continuity across sessions and repositories
 
+`temperature_note` preserves restart cues such as where an idea emerged, short
+owner words, and the moment's tension. It is a recall hook, not a personality
+assessment, and must stay compact enough for the owner to reread later on an
+iPhone or iPad.
+
 ### Layer 4: Semantic Operational Patterns
 
 - Scope: cross-project heuristics, preferred workflows, disliked operational
