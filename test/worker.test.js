@@ -3217,6 +3217,71 @@ test("worker returns GitHub issues through read plane route", async () => {
   assert.equal(body.read.records[0].body, "## Intent\nExpose Issue text to Butler.");
 });
 
+test("worker returns startup preflight with GitHub truth and explicit unverified sources", async () => {
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/v2/retrieve/startup-preflight?repository=sample-org/vtdd-v2-p&issueNumber=344&text=startup%20preflight&limit=5",
+      {
+        headers: gatewayAuthHeaders
+      }
+    ),
+    {
+      ...gatewayAuthEnv,
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_preflight_read",
+      GITHUB_API_FETCH: async (url) => {
+        const parsed = new URL(url);
+        if (parsed.pathname.endsWith("/issues")) {
+          return new Response(
+            JSON.stringify([
+              {
+                number: 344,
+                title: "startup preflight",
+                state: "open",
+                html_url: "https://github.com/sample-org/vtdd-v2-p/issues/344",
+                user: { login: "marushu" }
+              }
+            ]),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        if (parsed.pathname.endsWith("/pulls")) {
+          return new Response(
+            JSON.stringify([
+              {
+                number: 347,
+                title: "Issue #341 repository contents",
+                state: "open",
+                head: { ref: "codex/issue-341", sha: "head-sha" },
+                base: { ref: "main", sha: "base-sha" },
+                html_url: "https://github.com/sample-org/vtdd-v2-p/pull/347"
+              }
+            ]),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        return new Response(JSON.stringify({ message: "setup artifact unavailable in this fixture" }), {
+          status: 404,
+          headers: { "content-type": "application/json" }
+        });
+      }
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.preflight.repository, "sample-org/vtdd-v2-p");
+  assert.equal(body.preflight.issueNumber, 344);
+  assert.equal(body.preflight.identity.iphoneFirst, true);
+  assert.equal(body.preflight.runtimeTruth.openIssues.status, "verified");
+  assert.equal(body.preflight.runtimeTruth.openIssues.records[0].number, 344);
+  assert.equal(body.preflight.runtimeTruth.openPulls.records[0].number, 347);
+  assert.equal(body.preflight.runtimeTruth.selfParity.status, "unverified");
+  assert.equal(body.preflight.memory.status, "unverified");
+  assert.equal(body.preflight.surfaceCapabilities[0].surface, "Butler");
+  assert.equal(body.preflight.unresolved.includes("self-parity 未確認"), true);
+});
+
 test("worker returns unsupported for unknown GitHub read resources", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/v2/retrieve/github?resource=milestones", {

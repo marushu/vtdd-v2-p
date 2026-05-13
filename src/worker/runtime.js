@@ -604,6 +604,22 @@ export default {
       return handleRetrieveOperationalMemoryRequest(url, env);
     }
 
+    if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/startup-preflight")) {
+      const auth = authorizeGatewayRequest({
+        request,
+        env,
+        apiSuffix: "/retrieve/startup-preflight"
+      });
+      if (!auth.ok) {
+        return retrieveErrorJson(url, auth.status, {
+          ok: false,
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+      return handleRetrieveStartupPreflightRequest(url, env);
+    }
+
     if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/github")) {
       const auth = authorizeGatewayRequest({ request, env, apiSuffix: "/retrieve/github" });
       if (!auth.ok) {
@@ -1230,6 +1246,166 @@ async function handleRetrieveGitHubReadPlaneRequest(url, env) {
     ok: true,
     read: retrieved.read
   });
+}
+
+async function handleRetrieveStartupPreflightRequest(url, env) {
+  const repository = normalizeText(url.searchParams.get("repository"));
+  if (!repository) {
+    return retrieveErrorJson(url, 422, {
+      ok: false,
+      error: "startup_preflight_request_invalid",
+      reason: "repository is required",
+      issues: ["repository is required"]
+    });
+  }
+
+  const issueNumber = normalizeIssue(url.searchParams.get("issueNumber"));
+  const ref = normalizeText(url.searchParams.get("ref")) || "main";
+  const text = normalizeText(url.searchParams.get("text")) || "startup preflight";
+  const limit = normalizeLimit(url.searchParams.get("limit"), 5);
+  const checkedAt = new Date().toISOString();
+
+  const [openIssues, openPulls, selfParity, memory] = await Promise.all([
+    readGitHubResource({
+      resource: "issues",
+      repository,
+      state: "open",
+      limit,
+      env
+    }),
+    readGitHubResource({
+      resource: "pulls",
+      repository,
+      state: "open",
+      limit,
+      env
+    }),
+    evaluateButlerSelfParity({
+      repository,
+      ref,
+      apiBaseUrl: new URL(url).origin,
+      issueNumber,
+      env
+    }),
+    readCrossIssueMemory({
+      env,
+      relatedIssue: issueNumber,
+      issueNumber,
+      text,
+      limit
+    })
+  ]);
+
+  return json(200, {
+    ok: true,
+    preflight: {
+      repository,
+      ref,
+      issueNumber,
+      checkedAt,
+      sourceOrder: [
+        "explicit user instruction",
+        "active Issue text",
+        "canonical docs",
+        "GitHub runtime truth",
+        "RAG memory as context"
+      ],
+      identity: {
+        vtdd: "GitHub が正本。Issue が起点。runtime truth は memory より優先。",
+        iphoneFirst: true,
+        localTerminalRequiredForButler: false
+      },
+      runtimeTruth: {
+        openIssues: summarizePreflightRead(openIssues),
+        openPulls: summarizePreflightRead(openPulls),
+        selfParity: selfParity.ok
+          ? {
+              status: "verified",
+              runtimeParity: selfParity.selfParity.runtimeParity,
+              requiredSurfaceUpdates: selfParity.selfParity.requiredSurfaceUpdates ?? []
+            }
+          : {
+              status: "unverified",
+              reason: selfParity.reason ?? "self-parity unavailable"
+            }
+      },
+      memory: memory.ok
+        ? {
+            status: "verified",
+            references: memory.body?.orderedReferences ?? []
+          }
+        : {
+            status: "unverified",
+            reason: memory.reason ?? memory.error ?? "RAG/context retrieval unavailable"
+          },
+      surfaceCapabilities: buildStartupPreflightSurfaceCapabilities(),
+      unresolved: buildStartupPreflightUnresolved({ openIssues, openPulls, selfParity, memory }),
+      nextAction: "未確認がある場合は推測で作業を始めず、該当 Issue / PR / deploy / Custom GPT editor update を確認する。"
+    }
+  });
+}
+
+function summarizePreflightRead(result) {
+  if (!result.ok) {
+    return {
+      status: "unverified",
+      reason: result.reason ?? result.error ?? "GitHub runtime truth unavailable",
+      records: []
+    };
+  }
+  return {
+    status: "verified",
+    records: result.records.slice(0, 10).map((record) => ({
+      number: record.number ?? null,
+      title: record.title ?? record.name ?? "",
+      state: record.state ?? "",
+      htmlUrl: record.htmlUrl ?? ""
+    }))
+  };
+}
+
+function buildStartupPreflightSurfaceCapabilities() {
+  return [
+    {
+      surface: "Butler",
+      can: [
+        "GitHub runtime truth read through Actions",
+        "normal GO-tier GitHub writes",
+        "bounded Codex handoff request"
+      ],
+      cannot: ["local terminal operation", "local server operation", "repo source read without a deployed read surface"],
+      fallback: "When direct repo/source read is unavailable, classify whether VPS Codex CLI / runner should be used."
+    },
+    {
+      surface: "mac Codex",
+      can: ["local repository read", "code edit", "local test execution", "PR creation"],
+      cannot: ["owner iPhone-only normal operation", "deploy or credential mutation without GO + passkey"],
+      fallback: "Use only when desktop access is available or explicitly delegated."
+    },
+    {
+      surface: "VPS Codex CLI",
+      can: ["server-side repo work when runner/auth is healthy", "terminal-based recovery path"],
+      cannot: ["act as Butler's normal iPhone UI", "high-risk operation without GO + passkey"],
+      fallback: "Use for Butler-delegated terminal/server work after capability classification."
+    }
+  ];
+}
+
+function buildStartupPreflightUnresolved({ openIssues, openPulls, selfParity, memory }) {
+  const unresolved = [];
+  if (!openIssues.ok) {
+    unresolved.push("open Issue runtime truth 未確認");
+  }
+  if (!openPulls.ok) {
+    unresolved.push("open PR runtime truth 未確認");
+  }
+  if (!selfParity.ok) {
+    unresolved.push("self-parity 未確認");
+  }
+  if (!memory.ok) {
+    unresolved.push("RAG/context retrieval 未確認");
+  }
+  return unresolved;
 }
 
 async function handleRetrieveCustomGptSetupArtifactRequest(url, env) {

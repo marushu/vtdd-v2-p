@@ -36048,6 +36048,7 @@ var RUNTIME_SETUP_MANIFEST = Object.freeze({
     "/v2/retrieve/proposals",
     "/v2/retrieve/cross",
     "/v2/retrieve/operational-memory",
+    "/v2/retrieve/startup-preflight",
     "/v2/retrieve/github",
     "/v2/retrieve/cloudflare-pages",
     "/v2/retrieve/repository-nicknames",
@@ -36074,6 +36075,7 @@ var RUNTIME_SETUP_MANIFEST = Object.freeze({
     "vtddRetrieveProposalLogs",
     "vtddRetrieveCrossMemory",
     "vtddRetrieveOperationalMemory",
+    "vtddRetrieveStartupPreflight",
     "vtddRetrieveGitHub",
     "vtddRetrieveCloudflarePages",
     "vtddRetrieveRepositoryNicknames",
@@ -36099,6 +36101,7 @@ var RUNTIME_SETUP_MANIFEST = Object.freeze({
     "vtddRetrieveProposalLogs",
     "vtddRetrieveCrossMemory",
     "vtddRetrieveOperationalMemory",
+    "vtddRetrieveStartupPreflight",
     "vtddRetrieveGitHub",
     "vtddRetrieveCloudflarePages",
     "vtddRetrieveRepositoryNicknames",
@@ -54607,6 +54610,21 @@ var runtime_default = {
       }
       return handleRetrieveOperationalMemoryRequest(url, env);
     }
+    if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/startup-preflight")) {
+      const auth = authorizeGatewayRequest({
+        request,
+        env,
+        apiSuffix: "/retrieve/startup-preflight"
+      });
+      if (!auth.ok) {
+        return retrieveErrorJson(url, auth.status, {
+          ok: false,
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+      return handleRetrieveStartupPreflightRequest(url, env);
+    }
     if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/github")) {
       const auth = authorizeGatewayRequest({ request, env, apiSuffix: "/retrieve/github" });
       if (!auth.ok) {
@@ -55166,6 +55184,155 @@ async function handleRetrieveGitHubReadPlaneRequest(url, env) {
     ok: true,
     read: retrieved.read
   });
+}
+async function handleRetrieveStartupPreflightRequest(url, env) {
+  const repository = normalizeText30(url.searchParams.get("repository"));
+  if (!repository) {
+    return retrieveErrorJson(url, 422, {
+      ok: false,
+      error: "startup_preflight_request_invalid",
+      reason: "repository is required",
+      issues: ["repository is required"]
+    });
+  }
+  const issueNumber = normalizeIssue6(url.searchParams.get("issueNumber"));
+  const ref = normalizeText30(url.searchParams.get("ref")) || "main";
+  const text = normalizeText30(url.searchParams.get("text")) || "startup preflight";
+  const limit = normalizeLimit7(url.searchParams.get("limit"), 5);
+  const checkedAt = (/* @__PURE__ */ new Date()).toISOString();
+  const [openIssues, openPulls, selfParity, memory] = await Promise.all([
+    readGitHubResource({
+      resource: "issues",
+      repository,
+      state: "open",
+      limit,
+      env
+    }),
+    readGitHubResource({
+      resource: "pulls",
+      repository,
+      state: "open",
+      limit,
+      env
+    }),
+    evaluateButlerSelfParity({
+      repository,
+      ref,
+      apiBaseUrl: new URL(url).origin,
+      issueNumber,
+      env
+    }),
+    readCrossIssueMemory({
+      env,
+      relatedIssue: issueNumber,
+      issueNumber,
+      text,
+      limit
+    })
+  ]);
+  return json(200, {
+    ok: true,
+    preflight: {
+      repository,
+      ref,
+      issueNumber,
+      checkedAt,
+      sourceOrder: [
+        "explicit user instruction",
+        "active Issue text",
+        "canonical docs",
+        "GitHub runtime truth",
+        "RAG memory as context"
+      ],
+      identity: {
+        vtdd: "GitHub \u304C\u6B63\u672C\u3002Issue \u304C\u8D77\u70B9\u3002runtime truth \u306F memory \u3088\u308A\u512A\u5148\u3002",
+        iphoneFirst: true,
+        localTerminalRequiredForButler: false
+      },
+      runtimeTruth: {
+        openIssues: summarizePreflightRead(openIssues),
+        openPulls: summarizePreflightRead(openPulls),
+        selfParity: selfParity.ok ? {
+          status: "verified",
+          runtimeParity: selfParity.selfParity.runtimeParity,
+          requiredSurfaceUpdates: selfParity.selfParity.requiredSurfaceUpdates ?? []
+        } : {
+          status: "unverified",
+          reason: selfParity.reason ?? "self-parity unavailable"
+        }
+      },
+      memory: memory.ok ? {
+        status: "verified",
+        references: memory.body?.orderedReferences ?? []
+      } : {
+        status: "unverified",
+        reason: memory.reason ?? memory.error ?? "RAG/context retrieval unavailable"
+      },
+      surfaceCapabilities: buildStartupPreflightSurfaceCapabilities(),
+      unresolved: buildStartupPreflightUnresolved({ openIssues, openPulls, selfParity, memory }),
+      nextAction: "\u672A\u78BA\u8A8D\u304C\u3042\u308B\u5834\u5408\u306F\u63A8\u6E2C\u3067\u4F5C\u696D\u3092\u59CB\u3081\u305A\u3001\u8A72\u5F53 Issue / PR / deploy / Custom GPT editor update \u3092\u78BA\u8A8D\u3059\u308B\u3002"
+    }
+  });
+}
+function summarizePreflightRead(result) {
+  if (!result.ok) {
+    return {
+      status: "unverified",
+      reason: result.reason ?? result.error ?? "GitHub runtime truth unavailable",
+      records: []
+    };
+  }
+  return {
+    status: "verified",
+    records: result.records.slice(0, 10).map((record2) => ({
+      number: record2.number ?? null,
+      title: record2.title ?? record2.name ?? "",
+      state: record2.state ?? "",
+      htmlUrl: record2.htmlUrl ?? ""
+    }))
+  };
+}
+function buildStartupPreflightSurfaceCapabilities() {
+  return [
+    {
+      surface: "Butler",
+      can: [
+        "GitHub runtime truth read through Actions",
+        "normal GO-tier GitHub writes",
+        "bounded Codex handoff request"
+      ],
+      cannot: ["local terminal operation", "local server operation", "repo source read without a deployed read surface"],
+      fallback: "When direct repo/source read is unavailable, classify whether VPS Codex CLI / runner should be used."
+    },
+    {
+      surface: "mac Codex",
+      can: ["local repository read", "code edit", "local test execution", "PR creation"],
+      cannot: ["owner iPhone-only normal operation", "deploy or credential mutation without GO + passkey"],
+      fallback: "Use only when desktop access is available or explicitly delegated."
+    },
+    {
+      surface: "VPS Codex CLI",
+      can: ["server-side repo work when runner/auth is healthy", "terminal-based recovery path"],
+      cannot: ["act as Butler's normal iPhone UI", "high-risk operation without GO + passkey"],
+      fallback: "Use for Butler-delegated terminal/server work after capability classification."
+    }
+  ];
+}
+function buildStartupPreflightUnresolved({ openIssues, openPulls, selfParity, memory }) {
+  const unresolved2 = [];
+  if (!openIssues.ok) {
+    unresolved2.push("open Issue runtime truth \u672A\u78BA\u8A8D");
+  }
+  if (!openPulls.ok) {
+    unresolved2.push("open PR runtime truth \u672A\u78BA\u8A8D");
+  }
+  if (!selfParity.ok) {
+    unresolved2.push("self-parity \u672A\u78BA\u8A8D");
+  }
+  if (!memory.ok) {
+    unresolved2.push("RAG/context retrieval \u672A\u78BA\u8A8D");
+  }
+  return unresolved2;
 }
 async function handleRetrieveCustomGptSetupArtifactRequest(url, env) {
   const retrieved = await retrieveCustomGptSetupArtifact({

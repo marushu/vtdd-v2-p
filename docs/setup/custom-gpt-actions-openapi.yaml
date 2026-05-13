@@ -1561,6 +1561,69 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/VtddGenericResponse"
+  /v2/retrieve/startup-preflight:
+    get:
+      operationId: vtddRetrieveStartupPreflight
+      summary: Retrieve shared startup preflight for Butler, mac Codex, and VPS Codex CLI.
+      parameters:
+        - name: repository
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: issueNumber
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: ref
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: text
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: responseMode
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - action_visible
+          description: Use action_visible in the Custom GPT Action test screen so non-2xx retrieve failures return ok:false JSON with httpStatus/error/reason/issues instead of a ClientResponseError transport label.
+      responses:
+        "200":
+          description: Startup preflight result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "401":
+          description: Missing machine auth
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "403":
+          description: Invalid machine auth
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "422":
+          description: Invalid startup preflight request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
   /v2/retrieve/github:
     get:
       operationId: vtddRetrieveGitHub
