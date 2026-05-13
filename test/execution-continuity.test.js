@@ -431,6 +431,50 @@ test("execution continuity exposes reviewer marker timeline in chronological ord
   );
 });
 
+test("execution continuity normalizes timeline text fields consistently", () => {
+  const result = evaluateExecutionContinuity({
+    actorRole: ActorRole.BUTLER,
+    mode: TaskMode.EXECUTION,
+    runtimeTruth: {
+      runtimeState: {
+        activeBranch: "codex/issue-270",
+        pullRequest: {
+          number: 271,
+          url: "https://github.com/example/repo/pull/271",
+          state: "open",
+          title: "Review timeline normalization",
+          issueComments: [
+            {
+              user: { login: "vtdd-codex[bot]" },
+              url: " https://github.com/example/repo/pull/271#issuecomment-review ",
+              created_at: " 2026-05-13T04:00:00Z ",
+              updated_at: " 2026-05-13T04:01:00Z ",
+              body: "  <!-- vtdd:reviewer=gemini -->\n## VTDD Gemini レビュー\n\n- Recommended action: `approve`  "
+            }
+          ]
+        }
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.value.reviewLoop.reviewTimeline[0], {
+    type: "gemini_review",
+    reviewer: "gemini",
+    status: "approve",
+    recommendedAction: "approve",
+    blocking: false,
+    url: "https://github.com/example/repo/pull/271#issuecomment-review",
+    createdAt: "2026-05-13T04:00:00Z",
+    updatedAt: "2026-05-13T04:01:00Z",
+    summary: "Gemini reviewer action: approve"
+  });
+  assert.equal(
+    result.value.butlerReviewSynthesis.reviewerSignal.reviewTimeline[0].createdAt,
+    "2026-05-13T04:00:00Z"
+  );
+});
+
 test("execution continuity surfaces Codex fallback blocker when non-manual review cannot start", () => {
   const result = evaluateExecutionContinuity({
     actorRole: ActorRole.BUTLER,
