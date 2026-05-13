@@ -211,6 +211,18 @@ test("buildGeminiReviewRequestBody requires diff and context", () => {
   );
 });
 
+test("buildGeminiReviewRequestBody asks for Japanese-first reviewer prose", () => {
+  const body = buildGeminiReviewRequestBody({
+    prDiff: "diff --git a/src/index.js b/src/index.js",
+    context: "PR context"
+  });
+  const instruction = body.systemInstruction.parts[0].text;
+
+  assert.equal(instruction.includes("Japanese-first owner-facing prose"), true);
+  assert.equal(instruction.includes("Keep recommendedAction as the machine-readable enum value."), true);
+  assert.equal(instruction.includes("risks in Japanese"), true);
+});
+
 test("extractReviewerResponseFromGemini validates JSON output", () => {
   const result = extractReviewerResponseFromGemini({
     candidates: [
@@ -253,8 +265,8 @@ test("formatGeminiReviewComment renders marker and sections", () => {
     trigger: "pull_request_target:opened",
     model: "gemini-2.5-flash",
     review: {
-      criticalFindings: ["Scope drift around issue traceability."],
-      risks: ["Human should confirm non-goals remain bounded."],
+      criticalFindings: ["Issue traceability の scope drift があります。"],
+      risks: ["人間が Non-goals の境界維持を確認してください。"],
       recommendedAction: "request_changes"
     }
   });
@@ -264,11 +276,13 @@ test("formatGeminiReviewComment renders marker and sections", () => {
   assert.equal(body.includes("推奨: merge 非推奨"), true);
   assert.equal(body.includes("merge blocker: はい"), true);
   assert.equal(body.includes("severity: 重要"), true);
-  assert.equal(body.indexOf("## Operator Summary") < body.indexOf("## VTDD Gemini Critical Review"), true);
-  assert.equal(body.includes("VTDD Gemini Critical Review"), true);
+  assert.equal(body.indexOf("## Operator Summary") < body.indexOf("## VTDD Gemini レビュー"), true);
+  assert.equal(body.includes("VTDD Gemini レビュー"), true);
   assert.equal(body.includes("request_changes"), true);
-  assert.equal(body.includes("### Critical Findings"), true);
-  assert.equal(body.includes("Scope drift around issue traceability."), true);
+  assert.equal(body.includes("### 重要指摘"), true);
+  assert.equal(body.includes("### 残リスク"), true);
+  assert.equal(body.includes("Issue traceability の scope drift があります。"), true);
+  assert.equal(body.includes("Reviewer は批評専用です。"), true);
 });
 
 test("formatGeminiReviewComment can render a short operator milestone mention", () => {
@@ -277,13 +291,13 @@ test("formatGeminiReviewComment can render a short operator milestone mention", 
     model: "gemini-2.5-flash",
     notificationMention: "marushu",
     review: {
-      criticalFindings: ["No major blocking issues found."],
-      risks: ["Human should still verify before merge."],
+      criticalFindings: ["重大 blocker は見つかりませんでした。"],
+      risks: ["merge 前に人間が残リスクを確認してください。"],
       recommendedAction: "approve"
     }
   });
 
-  assert.equal(body.split("\n")[1], "@marushu VTDD milestone: review result changed.");
+  assert.equal(body.split("\n")[1], "@marushu VTDD milestone: review 結果が更新されました。");
   assert.equal(body.split("\n")[2], "## Operator Summary");
   assert.equal(body.includes("推奨: merge 可能（残リスク確認）"), true);
   assert.equal(body.includes("merge blocker: いいえ"), true);

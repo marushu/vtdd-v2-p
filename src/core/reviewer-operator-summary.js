@@ -148,7 +148,7 @@ function buildHumanJudgment({ status, recommendedAction, blocking, blocker }) {
 
 function formatRecommendation({ status, recommendedAction, blocker }) {
   if (blocker || status === "blocked") {
-    return "merge 非推奨（reviewer blocked）";
+    return "merge 非推奨（reviewer 実行 blocked）";
   }
   if (status === "requested") {
     return "merge 非推奨（review 未完了）";
