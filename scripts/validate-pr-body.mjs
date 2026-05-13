@@ -2,6 +2,8 @@
 
 import fs from "node:fs";
 
+import { validateOwnerFacingJapaneseFirst } from "../src/core/owner-facing-language.js";
+
 const REQUIRED_MARKERS = [
   "## This PR satisfies Intent",
   "## Satisfied Success Criteria",
@@ -36,6 +38,7 @@ const PLACEHOLDER_VALUES = new Set([
 
 function validatePrBody(body, options = {}) {
   const errors = [];
+  const warnings = [];
   const templateMode = options.template === true;
   for (const marker of REQUIRED_MARKERS) {
     if (!body.includes(marker)) {
@@ -86,9 +89,20 @@ function validatePrBody(body, options = {}) {
     }
   }
 
+  const language = validateOwnerFacingJapaneseFirst(body, {
+    surface: "PR body",
+    requireJapanese: true,
+    requireRecoveryContext: false,
+    errorOnBareIssuePrReference: false,
+    minimumJapaneseCharacters: templateMode ? 20 : 20
+  });
+  errors.push(...language.errors);
+  warnings.push(...language.warnings);
+
   return {
     ok: errors.length === 0,
     errors,
+    warnings,
   };
 }
 
@@ -141,6 +155,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     process.exit(1);
   }
 
+  for (const warning of result.warnings || []) {
+    console.error(`warning: ${warning}`);
+  }
   console.log("PR body template validation passed.");
 }
 

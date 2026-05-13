@@ -1230,9 +1230,9 @@ test("VPS runner PR body satisfies guarded PR template markers", () => {
   assert.equal(body.includes("## Butler Completion Contract"), true);
   assert.equal(body.includes("## Surface Update Checklist"), true);
   assert.equal(body.includes("Execution ID: remote-codex-issue194-test"), true);
-  assert.equal(body.includes("No merge or deploy is performed by the VPS runner."), true);
-  assert.equal(body.includes("issue-specific live E2E must be recorded separately"), true);
-  assert.equal(body.includes("Not run by VPS runner; Butler must read progress"), true);
+  assert.equal(body.includes("VPS runner は merge も deploy も実行しない。"), true);
+  assert.equal(body.includes("Issue固有の live E2E は別途記録する必要がある。"), true);
+  assert.equal(body.includes("VPS runner では未実行。Butler は vtddExecutionProgress"), true);
   assert.equal(body.includes("Completion status: incomplete"), true);
 });
 

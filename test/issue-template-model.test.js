@@ -52,3 +52,12 @@ test("spec issue template includes completion and validation slots", () => {
   assert.match(template, /- E2E:/);
   assert.match(template, /- Evidence path\/link:/);
 });
+
+test("issue template model requires Japanese-first canonical writer guard", () => {
+  const doc = fs.readFileSync(DOC_PATH, "utf8");
+
+  assert.match(doc, /Owner-facing Issue prose is Japanese-first/);
+  assert.match(doc, /scripts\/prepare-issue-body-file\.mjs/);
+  assert.match(doc, /scripts\/validate-issue-body\.mjs/);
+  assert.match(doc, /recovery context/);
+});
