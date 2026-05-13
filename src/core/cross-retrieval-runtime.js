@@ -185,6 +185,10 @@ function toPrContextReference(record) {
     prNumber,
     relatedIssue,
     summary: summary || null,
+    commits: normalizeTextList(content.commits ?? metadata.commits),
+    files: normalizeTextList(content.files ?? content.changedFiles ?? metadata.files ?? metadata.changedFiles),
+    tests: normalizeTextList(content.tests ?? metadata.tests),
+    evidence: normalizeTextList(content.evidence ?? content.evidenceLinks ?? metadata.evidence),
     reviewer,
     status,
     repository,
@@ -461,6 +465,14 @@ function normalizeObject(value) {
     return {};
   }
   return value;
+}
+
+function normalizeTextList(value) {
+  if (Array.isArray(value)) {
+    return value.map(normalizeText).filter(Boolean);
+  }
+  const text = normalizeText(value);
+  return text ? [text] : [];
 }
 
 function normalizeText(value) {

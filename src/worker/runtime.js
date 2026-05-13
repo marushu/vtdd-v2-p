@@ -1812,6 +1812,18 @@ async function executeMcpImplementationRecall(argumentsInput, env) {
         ? "open_pr"
         : "unknown"
     : "unknown";
+  const memoryReferences = cross.body?.orderedReferences ?? [];
+  const prContextReferences = memoryReferences
+    .filter((item) => normalizeText(item?.source) === "pr_context")
+    .map((item) => normalizeObject(item?.reference));
+  const memoryCommits = prContextReferences.flatMap((item) => normalizeTextList(item.commits));
+  const files = uniqueTextList(prContextReferences.flatMap((item) => normalizeTextList(item.files)));
+  const tests = uniqueTextList(prContextReferences.flatMap((item) => normalizeTextList(item.tests)));
+  const evidence = uniqueTextList([
+    ...prContextReferences.flatMap((item) => normalizeTextList(item.evidence)),
+    ...memoryReferences.map((item) => item?.reference?.url || item?.reference?.id || item?.url || item?.id),
+    pullRecord?.htmlUrl
+  ]);
 
   return {
     ok: true,
@@ -1819,19 +1831,20 @@ async function executeMcpImplementationRecall(argumentsInput, env) {
       repository,
       issueNumber: issueNumber ?? null,
       pullNumber: pullNumber ?? null,
-      commits: [pullRecord?.headSha, pullRecord?.mergeCommitSha].filter(Boolean),
-      files: [],
-      tests: [],
-      evidence: [
-        ...(cross.body?.orderedReferences ?? []).map((item) => item?.url || item?.id).filter(Boolean),
-        pullRecord?.htmlUrl
-      ].filter(Boolean),
-      decisions: (decisionLogs.references ?? []).map((item) => item.summary || item.id).filter(Boolean),
-      reviewerResolutions: (proposalLogs.references ?? []).map((item) => item.summary || item.id).filter(Boolean),
+      commits: uniqueTextList([pullRecord?.headSha, pullRecord?.mergeCommitSha, ...memoryCommits]),
+      files,
+      tests,
+      evidence,
+      decisions: (decisionLogs.references ?? [])
+        .map((item) => item.decision || item.summary || item.id)
+        .filter(Boolean),
+      reviewerResolutions: (proposalLogs.references ?? [])
+        .map((item) => item.hypothesis || item.summary || item.id)
+        .filter(Boolean),
       runtimeStatus,
       relatedIssue: issue.records?.[0] ?? null,
       relatedPullRequest: pullRecord,
-      memoryReferences: cross.body?.orderedReferences ?? []
+      memoryReferences
     }
   };
 }
@@ -4241,6 +4254,18 @@ function normalizeObject(value) {
     return {};
   }
   return value;
+}
+
+function normalizeTextList(value) {
+  if (Array.isArray(value)) {
+    return value.map(normalizeText).filter(Boolean);
+  }
+  const text = normalizeText(value);
+  return text ? [text] : [];
+}
+
+function uniqueTextList(value) {
+  return [...new Set(normalizeTextList(value))];
 }
 
 function json(status, body, extraHeaders = {}) {
