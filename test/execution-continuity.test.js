@@ -514,6 +514,45 @@ test("execution continuity surfaces unparsed reviewer markers as manual review b
   });
 });
 
+test("execution continuity treats malformed known reviewer marker content as manual review", () => {
+  const result = evaluateExecutionContinuity({
+    actorRole: ActorRole.BUTLER,
+    mode: TaskMode.EXECUTION,
+    runtimeTruth: {
+      runtimeState: {
+        activeBranch: "codex/issue-270",
+        pullRequest: {
+          number: 274,
+          url: "https://github.com/example/repo/pull/274",
+          state: "open",
+          title: "Malformed known reviewer marker",
+          issueComments: [
+            {
+              user: { login: "vtdd-codex[bot]" },
+              url: "https://github.com/example/repo/pull/274#issuecomment-malformed",
+              created_at: "2026-05-13T07:00:00Z",
+              body: "<!-- vtdd:reviewer=gemini -->\n## VTDD Gemini レビュー\n\n- Action changed format: approve"
+            }
+          ]
+        }
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.value.reviewLoop.reviewTimeline[0], {
+    type: "gemini_review",
+    reviewer: "gemini",
+    status: "manual_review",
+    recommendedAction: "manual_review",
+    blocking: true,
+    url: "https://github.com/example/repo/pull/274#issuecomment-malformed",
+    createdAt: "2026-05-13T07:00:00Z",
+    updatedAt: null,
+    summary: "Gemini reviewer action: manual_review"
+  });
+});
+
 test("execution continuity surfaces Codex fallback blocker when non-manual review cannot start", () => {
   const result = evaluateExecutionContinuity({
     actorRole: ActorRole.BUTLER,
