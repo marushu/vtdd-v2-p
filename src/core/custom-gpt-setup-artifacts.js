@@ -571,7 +571,12 @@ export function renderCustomGptRecoveryPage(input = {}) {
     </section>
     ${
       error
-        ? `<section class="warning"><strong>Recovery bundle unavailable.</strong><p>${escapeHtml(error.reason || error.error || "unknown error")}</p></section>`
+        ? renderRecoveryUnavailableSection({
+            error,
+            channel,
+            latestHref,
+            knownGoodHref
+          })
         : ""
     }
     ${
@@ -600,6 +605,32 @@ export function renderCustomGptRecoveryPage(input = {}) {
   </script>
 </body>
 </html>`;
+}
+
+function renderRecoveryUnavailableSection({ error, channel, latestHref, knownGoodHref }) {
+  const reason = error?.reason || error?.error || "unknown error";
+  if (channel !== CustomGptSetupChannel.KNOWN_GOOD) {
+    return `<section class="warning"><strong>Recovery bundle unavailable.</strong><p>${escapeHtml(reason)}</p></section>`;
+  }
+
+  return `<section class="warning">
+      <strong>Known-good bundle is not configured yet.</strong>
+      <p>${escapeHtml(reason)}</p>
+      <p>このページ自体は復旧導線として開けています。main/latest を known-good として silent fallback しないため、rollback bundle は表示していません。</p>
+      <p><a class="button" href="${escapeAttribute(latestHref)}">Open setup/latest instead</a></p>
+      <pre>${escapeHtml(
+        [
+          "known-good unavailable",
+          "reason: VTDD_KNOWN_GOOD_COMMIT_SHA is missing or invalid",
+          `knownGoodUrl: ${knownGoodHref}`,
+          `latestFallbackUrl: ${latestHref}`,
+          "nextSteps:",
+          "  1. Use setup/latest only as the current candidate bundle.",
+          "  2. After a human verifies a working setup commit, set VTDD_KNOWN_GOOD_COMMIT_SHA to that 40-character commit SHA.",
+          "  3. Do not treat main/latest as known-good automatically."
+        ].join("\n")
+      )}</pre>
+    </section>`;
 }
 
 function buildSetupPageHref({ path, ref, issueNumber }) {

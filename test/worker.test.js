@@ -768,8 +768,12 @@ test("worker setup known-good page does not silently treat main as known-good", 
 
   assert.equal(response.status, 200);
   const html = await response.text();
-  assert.equal(html.includes("Recovery bundle unavailable."), true);
+  assert.equal(html.includes("Known-good bundle is not configured yet."), true);
+  assert.equal(html.includes("このページ自体は復旧導線として開けています。"), true);
   assert.equal(html.includes("known-good setup requires VTDD_KNOWN_GOOD_COMMIT_SHA"), true);
+  assert.equal(html.includes("Open setup/latest instead"), true);
+  assert.equal(html.includes("latestFallbackUrl: /setup/latest"), true);
+  assert.equal(html.includes("Do not treat main/latest as known-good automatically."), true);
   assert.equal(html.includes("Copy-ready Action Schema"), false);
   assert.equal(html.includes("Copy-ready custom-gpt-instructions-short-min.md"), false);
 });
@@ -785,7 +789,8 @@ test("worker setup known-good page rejects malformed configured known-good refs"
 
   assert.equal(response.status, 200);
   const html = await response.text();
-  assert.equal(html.includes("Recovery bundle unavailable."), true);
+  assert.equal(html.includes("Known-good bundle is not configured yet."), true);
+  assert.equal(html.includes("Open setup/latest instead"), true);
   assert.equal(html.includes("known-good setup requires VTDD_KNOWN_GOOD_COMMIT_SHA"), true);
   assert.equal(html.includes("Copy Rollback Bundle"), false);
 });
