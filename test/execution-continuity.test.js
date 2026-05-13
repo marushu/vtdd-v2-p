@@ -268,11 +268,14 @@ test("execution continuity blocks readiness when request_changes finding is not 
             {
               user: { login: "vtdd-codex[bot]" },
               url: "https://github.com/example/repo/pull/314#issuecomment-review",
+              created_at: "2026-05-13T10:00:00Z",
+              updated_at: "2026-05-13T10:00:00Z",
               body: "<!-- vtdd:reviewer=gemini -->\n## VTDD Gemini レビュー\n\n- Recommended action: `request_changes`\n\n### 重要指摘\n- response summary is missing\n\n### 残リスク\n- rerun evidence must include the response packet"
             },
             {
               user: { login: "vtdd-codex[bot]" },
               url: "https://github.com/example/repo/pull/314#issuecomment-response",
+              created_at: "2026-05-13T10:01:00Z",
               body: "<!-- vtdd:reviewer-objection-resolution -->\n## VTDD Reviewer Objection Resolution\n\nEvidence: node --test test/gemini-pr-review.test.js"
             }
           ]

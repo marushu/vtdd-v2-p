@@ -34431,10 +34431,20 @@ function buildReviewResponseSummary(input = {}) {
   };
 }
 function collectLatestGeminiReviewerComment(comments) {
-  return (Array.isArray(comments) ? comments : []).map(parseGeminiReviewComment).filter(Boolean).sort(compareReviewerSignals).at(-1) ?? null;
-}
-function compareReviewerSignals(left, right) {
-  return compareIsoText(reviewSignalSortTime(left), reviewSignalSortTime(right));
+  const reviewerSignals = (Array.isArray(comments) ? comments : []).map(parseGeminiReviewComment).filter(Boolean).map((signal) => ({
+    signal,
+    sortTime: reviewSignalSortTime(signal)
+  })).filter(({ sortTime }) => isValidIsoTime(sortTime)).sort((left, right) => Date.parse(left.sortTime) - Date.parse(right.sortTime));
+  const latest = reviewerSignals.at(-1);
+  if (!latest) {
+    return null;
+  }
+  const latestTime = Date.parse(latest.sortTime);
+  const sameLatestTimeCount = reviewerSignals.filter(({ sortTime }) => Date.parse(sortTime) === latestTime).length;
+  if (sameLatestTimeCount > 1) {
+    return null;
+  }
+  return latest.signal;
 }
 function reviewSignalSortTime(signal) {
   return normalizeText20(signal?.updatedAt) || normalizeText20(signal?.createdAt);
@@ -34452,14 +34462,6 @@ function normalizeCommentCreatedTime(comment) {
 }
 function isValidIsoTime(value) {
   return Number.isFinite(Date.parse(normalizeText20(value)));
-}
-function compareIsoText(left, right) {
-  const leftTime = Date.parse(left);
-  const rightTime = Date.parse(right);
-  if (Number.isFinite(leftTime) && Number.isFinite(rightTime)) {
-    return leftTime - rightTime;
-  }
-  return normalizeText20(left).localeCompare(normalizeText20(right));
 }
 function parseGeminiReviewComment(comment = {}) {
   const body = normalizeText20(typeof comment === "string" ? comment : comment?.body);

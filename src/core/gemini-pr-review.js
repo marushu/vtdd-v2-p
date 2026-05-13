@@ -218,15 +218,26 @@ export function buildReviewResponseSummary(input = {}) {
 }
 
 function collectLatestGeminiReviewerComment(comments) {
-  return (Array.isArray(comments) ? comments : [])
+  const reviewerSignals = (Array.isArray(comments) ? comments : [])
     .map(parseGeminiReviewComment)
     .filter(Boolean)
-    .sort(compareReviewerSignals)
-    .at(-1) ?? null;
-}
+    .map((signal) => ({
+      signal,
+      sortTime: reviewSignalSortTime(signal)
+    }))
+    .filter(({ sortTime }) => isValidIsoTime(sortTime))
+    .sort((left, right) => Date.parse(left.sortTime) - Date.parse(right.sortTime));
 
-function compareReviewerSignals(left, right) {
-  return compareIsoText(reviewSignalSortTime(left), reviewSignalSortTime(right));
+  const latest = reviewerSignals.at(-1);
+  if (!latest) {
+    return null;
+  }
+  const latestTime = Date.parse(latest.sortTime);
+  const sameLatestTimeCount = reviewerSignals.filter(({ sortTime }) => Date.parse(sortTime) === latestTime).length;
+  if (sameLatestTimeCount > 1) {
+    return null;
+  }
+  return latest.signal;
 }
 
 function reviewSignalSortTime(signal) {
