@@ -194,8 +194,10 @@ export {
   buildGeminiReviewRequestBody,
   buildPullRequestDiff,
   buildPullRequestReviewContext,
+  buildReviewResponseSummary,
   extractReviewerResponseFromGemini,
   findExistingGeminiReviewComment,
+  formatReviewResponseSummary,
   formatGeminiReviewComment,
   parseGeminiReviewComment,
   resolveGeminiReviewTrigger

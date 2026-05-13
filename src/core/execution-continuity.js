@@ -3,7 +3,7 @@ import {
   parseCodexConnectorSetupComment,
   parseCodexReviewFallbackComment
 } from "./codex-review-fallback.js";
-import { parseGeminiReviewComment } from "./gemini-pr-review.js";
+import { buildReviewResponseSummary, parseGeminiReviewComment } from "./gemini-pr-review.js";
 import { ActorRole, TaskMode } from "./types.js";
 
 export const ExecutionTransferMode = Object.freeze({
@@ -67,6 +67,7 @@ export function evaluateExecutionContinuity(input = {}) {
         reviewerStatus: review.reviewerStatus,
         reviewerEvidence: review.reviewerEvidence,
         reviewerSignalTruth: review.reviewerSignalTruth,
+        reviewResponseSummary: review.reviewResponseSummary,
         reviewCommentsCount: review.reviewCommentsCount,
         unresolvedReviewCommentsCount: review.unresolvedReviewCommentsCount,
         criticalReviewPending: review.criticalReviewPending,
@@ -85,6 +86,7 @@ export function evaluateExecutionContinuity(input = {}) {
           reviewerStatus: review.reviewerStatus,
           reviewerEvidence: review.reviewerEvidence,
           reviewerSignalTruth: review.reviewerSignalTruth,
+          reviewResponseSummary: review.reviewResponseSummary,
           reviewCommentsCount: review.reviewCommentsCount,
           unresolvedReviewCommentsCount: review.unresolvedReviewCommentsCount,
           criticalReviewPending: review.criticalReviewPending
@@ -164,11 +166,18 @@ function buildReviewState(pullRequest) {
   const reviewerEvidence = reviewerStatus.startsWith("codex_review")
     ? codexFallback.latestEvidence
     : parsedGeminiSignals.latestEvidence;
+  const reviewResponseSummary = buildReviewResponseSummary({
+    pullRequest,
+    files: pullRequest.files,
+    issueComments: pullRequest.issueComments,
+    reviewComments: pullRequest.reviewComments
+  });
   const reviewerSignalTruth = buildReviewerSignalTruth({
     reviewer,
     reviewerStatus,
     reviewerEvidence,
-    formalReviewTruth
+    formalReviewTruth,
+    reviewResponseSummary
   });
   const criticalReviewPending =
     pullRequest.exists &&
@@ -187,6 +196,7 @@ function buildReviewState(pullRequest) {
     reviewerStatus,
     reviewerEvidence,
     reviewerSignalTruth,
+    reviewResponseSummary,
     reviewCommentsCount,
     unresolvedReviewCommentsCount,
     criticalReviewPending,
@@ -260,17 +270,19 @@ function collectFormalReviewTruth(pullRequest) {
   };
 }
 
-function buildReviewerSignalTruth({ reviewer, reviewerStatus, reviewerEvidence, formalReviewTruth }) {
+function buildReviewerSignalTruth({ reviewer, reviewerStatus, reviewerEvidence, formalReviewTruth, reviewResponseSummary }) {
   const recommendedAction = normalizeText(reviewerEvidence?.recommendedAction).toLowerCase() || null;
   const vtddReviewerMarkerPresent = Boolean(recommendedAction);
   const markerBlocks =
     recommendedAction === "request_changes" || recommendedAction === "manual_review";
   const formalBlocks = formalReviewTruth.blocking === true;
+  const responseBlocks = reviewResponseSummary?.complete === false;
   const satisfied =
     vtddReviewerMarkerPresent &&
     recommendedAction === "approve" &&
-    !formalBlocks;
-  const blocked = markerBlocks || formalBlocks;
+    !formalBlocks &&
+    !responseBlocks;
+  const blocked = markerBlocks || formalBlocks || responseBlocks;
   const warnings = [];
 
   if (recommendedAction === "approve" && !formalReviewTruth.hasFormalApproval) {
@@ -281,6 +293,11 @@ function buildReviewerSignalTruth({ reviewer, reviewerStatus, reviewerEvidence, 
   if (formalBlocks) {
     warnings.push(
       "GitHub formal review truth has requested changes; it remains blocking even if a VTDD reviewer marker recommends approve."
+    );
+  }
+  if (responseBlocks) {
+    warnings.push(
+      "Review response summary has unmapped critical findings; the PR is incomplete until each finding is addressed or explicitly unresolved."
     );
   }
   if (!vtddReviewerMarkerPresent) {
@@ -298,7 +315,8 @@ function buildReviewerSignalTruth({ reviewer, reviewerStatus, reviewerEvidence, 
       satisfied,
       blocked,
       reason: blocked
-        ? formalReviewTruth.blockingReason || "vtdd_reviewer_marker_blocks_merge"
+        ? formalReviewTruth.blockingReason ||
+          (responseBlocks ? "review_response_unmapped_critical_findings" : "vtdd_reviewer_marker_blocks_merge")
         : satisfied
           ? "vtdd_reviewer_marker_approve_no_formal_blocker"
           : "reviewer_signal_missing"
@@ -449,7 +467,8 @@ function normalizeGitHubRuntime(value) {
         null,
       issueComments: Array.isArray(pullRequestInput.issueComments) ? pullRequestInput.issueComments : [],
       reviewComments: Array.isArray(pullRequestInput.reviewComments) ? pullRequestInput.reviewComments : [],
-      reviews: Array.isArray(pullRequestInput.reviews) ? pullRequestInput.reviews : []
+      reviews: Array.isArray(pullRequestInput.reviews) ? pullRequestInput.reviews : [],
+      files: Array.isArray(pullRequestInput.files) ? pullRequestInput.files : []
     }
   };
 }
