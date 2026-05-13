@@ -34390,12 +34390,17 @@ function buildReviewResponseSummary(input = {}) {
     ...Array.isArray(input.issueComments) ? input.issueComments : [],
     ...Array.isArray(input.reviewComments) ? input.reviewComments : []
   ];
-  const latestReviewer = comments.map(parseGeminiReviewComment).filter(Boolean).at(-1);
+  const latestReviewer = collectLatestGeminiReviewerComment(comments);
   if (!latestReviewer || latestReviewer.recommendedAction !== "request_changes") {
     return null;
   }
-  const responseComments = comments.filter((comment) => isTrustedReviewerObjectionResolution(comment?.body)).map((comment) => ({
+  const responseComments = comments.filter(
+    (comment) => isTrustedReviewerObjectionResolutionComment(comment) && isAfterReviewerMarker(comment, latestReviewer)
+  ).map((comment) => ({
     url: normalizeText20(comment?.url ?? comment?.htmlUrl ?? comment?.html_url) || null,
+    author: normalizeCommentAuthor(comment) || null,
+    createdAt: normalizeText20(comment?.createdAt ?? comment?.created_at) || null,
+    updatedAt: normalizeText20(comment?.updatedAt ?? comment?.updated_at) || null,
     body: normalizeMultilineText(comment?.body)
   })).filter((comment) => comment.body);
   const responseText = responseComments.map((comment) => comment.body).join("\n\n");
@@ -34424,6 +34429,34 @@ function buildReviewResponseSummary(input = {}) {
     unresolvedItems,
     complete: unresolvedItems.length === 0
   };
+}
+function collectLatestGeminiReviewerComment(comments) {
+  return (Array.isArray(comments) ? comments : []).map(parseGeminiReviewComment).filter(Boolean).sort(compareReviewerSignals).at(-1) ?? null;
+}
+function compareReviewerSignals(left, right) {
+  return compareIsoText(reviewSignalSortTime(left), reviewSignalSortTime(right));
+}
+function reviewSignalSortTime(signal) {
+  return normalizeText20(signal?.updatedAt) || normalizeText20(signal?.createdAt);
+}
+function isAfterReviewerMarker(comment, reviewerSignal) {
+  const reviewerTime = reviewSignalSortTime(reviewerSignal);
+  const responseTime = normalizeCommentSortTime(comment);
+  if (!reviewerTime || !responseTime) {
+    return true;
+  }
+  return compareIsoText(responseTime, reviewerTime) >= 0;
+}
+function normalizeCommentSortTime(comment) {
+  return normalizeText20(comment?.updatedAt ?? comment?.updated_at ?? comment?.createdAt ?? comment?.created_at);
+}
+function compareIsoText(left, right) {
+  const leftTime = Date.parse(left);
+  const rightTime = Date.parse(right);
+  if (Number.isFinite(leftTime) && Number.isFinite(rightTime)) {
+    return leftTime - rightTime;
+  }
+  return normalizeText20(left).localeCompare(normalizeText20(right));
 }
 function parseGeminiReviewComment(comment = {}) {
   const body = normalizeText20(typeof comment === "string" ? comment : comment?.body);
@@ -34539,6 +34572,17 @@ function containsMarker2(value) {
 }
 function isTrustedReviewerObjectionResolution(value) {
   return normalizeText20(value).includes(REVIEWER_OBJECTION_RESOLUTION_MARKER);
+}
+function isTrustedReviewerObjectionResolutionComment(comment) {
+  return isTrustedReviewerObjectionResolution(comment?.body) && isTrustedCommentAuthor(comment);
+}
+function isTrustedCommentAuthor(comment) {
+  const author = normalizeCommentAuthor(comment).toLowerCase();
+  const association = normalizeText20(comment?.authorAssociation ?? comment?.author_association).toUpperCase();
+  return author === "vtdd-codex" || author === "vtdd-codex[bot]" || association === "OWNER" || association === "MEMBER" || association === "COLLABORATOR";
+}
+function normalizeCommentAuthor(comment) {
+  return normalizeText20(comment?.user?.login ?? comment?.author?.login ?? comment?.author);
 }
 function normalizeInlineText(value) {
   return normalizeMultilineText(value).replace(/\s+/g, " ").trim();

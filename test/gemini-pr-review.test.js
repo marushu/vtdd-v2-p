@@ -288,6 +288,97 @@ Unresolved: critical-2 remains blocked until deploy/live Butler E2E is authorize
   assert.match(formatReviewResponseSummary(summary), /critical-2: unresolved/);
 });
 
+test("buildReviewResponseSummary chooses latest reviewer marker by timestamp across comment arrays", () => {
+  const olderReviewComment = {
+    user: { login: "vtdd-codex[bot]" },
+    url: "https://github.com/example/repo/pull/314#discussion-old",
+    created_at: "2026-05-13T01:00:00Z",
+    updated_at: "2026-05-13T01:00:00Z",
+    body: `${GEMINI_PR_REVIEW_MARKER}
+## VTDD Gemini レビュー
+
+- Recommended action: \`request_changes\`
+
+### 重要指摘
+- old finding should not be latest`
+  };
+  const newerIssueComment = {
+    user: { login: "vtdd-codex[bot]" },
+    url: "https://github.com/example/repo/pull/314#issuecomment-new",
+    created_at: "2026-05-13T02:00:00Z",
+    updated_at: "2026-05-13T02:30:00Z",
+    body: `${GEMINI_PR_REVIEW_MARKER}
+## VTDD Gemini レビュー
+
+- Recommended action: \`request_changes\`
+
+### 重要指摘
+- latest finding must be used`
+  };
+  const responseComment = {
+    user: { login: "marushu" },
+    author_association: "OWNER",
+    created_at: "2026-05-13T02:31:00Z",
+    body: `${REVIEWER_OBJECTION_RESOLUTION_MARKER}
+Addresses: critical-1
+Evidence: npm test`
+  };
+
+  const summary = buildReviewResponseSummary({
+    pullRequest: {},
+    issueComments: [newerIssueComment, responseComment],
+    reviewComments: [olderReviewComment]
+  });
+
+  assert.equal(summary.reviewerCommentUrl, "https://github.com/example/repo/pull/314#issuecomment-new");
+  assert.deepEqual(summary.criticalFindings, ["latest finding must be used"]);
+  assert.deepEqual(summary.unresolvedItems, []);
+});
+
+test("buildReviewResponseSummary ignores stale and untrusted objection resolution comments", () => {
+  const reviewerComment = {
+    user: { login: "vtdd-codex[bot]" },
+    url: "https://github.com/example/repo/pull/314#issuecomment-review",
+    created_at: "2026-05-13T03:00:00Z",
+    updated_at: "2026-05-13T03:00:00Z",
+    body: `${GEMINI_PR_REVIEW_MARKER}
+## VTDD Gemini レビュー
+
+- Recommended action: \`request_changes\`
+
+### 重要指摘
+- trusted response must be after current review`
+  };
+  const staleOwnerResponse = {
+    user: { login: "marushu" },
+    author_association: "OWNER",
+    created_at: "2026-05-13T02:00:00Z",
+    body: `${REVIEWER_OBJECTION_RESOLUTION_MARKER}
+Addresses: critical-1
+Evidence: old npm test`
+  };
+  const untrustedNewResponse = {
+    user: { login: "external-user" },
+    author_association: "NONE",
+    created_at: "2026-05-13T03:01:00Z",
+    body: `${REVIEWER_OBJECTION_RESOLUTION_MARKER}
+Addresses: critical-1
+Evidence: untrusted claim`
+  };
+
+  const summary = buildReviewResponseSummary({
+    pullRequest: {},
+    issueComments: [staleOwnerResponse, reviewerComment, untrustedNewResponse]
+  });
+
+  assert.deepEqual(summary.responseCommentUrls, []);
+  assert.deepEqual(summary.findingResponses.map((item) => [item.id, item.status]), [
+    ["critical-1", "unresolved"]
+  ]);
+  assert.deepEqual(summary.unresolvedItems, ["trusted response must be after current review"]);
+  assert.equal(summary.complete, false);
+});
+
 test("parseGeminiReviewComment accepts legacy English reviewer sections", () => {
   const parsed = parseGeminiReviewComment({
     body: `${GEMINI_PR_REVIEW_MARKER}
