@@ -173,7 +173,7 @@ export function buildReviewResponseSummary(input = {}) {
     return null;
   }
 
-  const responseComments = comments
+  const responseComments = excludeAmbiguousResponseCommentTimes(comments
     .filter((comment) =>
       isTrustedReviewerObjectionResolutionComment(comment) &&
       isAfterReviewerMarker(comment, latestReviewer)
@@ -185,7 +185,7 @@ export function buildReviewResponseSummary(input = {}) {
       updatedAt: normalizeText(comment?.updatedAt ?? comment?.updated_at) || null,
       body: normalizeMultilineText(comment?.body)
     }))
-    .filter((comment) => comment.body);
+    .filter((comment) => comment.body));
   const responseText = responseComments.map((comment) => comment.body).join("\n\n");
   const criticalFindings = latestReviewer.criticalFindings;
   const risks = latestReviewer.risks;
@@ -259,6 +259,15 @@ function normalizeCommentCreatedTime(comment) {
 
 function isValidIsoTime(value) {
   return Number.isFinite(Date.parse(normalizeText(value)));
+}
+
+function excludeAmbiguousResponseCommentTimes(comments) {
+  const counts = new Map();
+  for (const comment of comments) {
+    const time = normalizeText(comment?.createdAt);
+    counts.set(time, (counts.get(time) || 0) + 1);
+  }
+  return comments.filter((comment) => counts.get(normalizeText(comment?.createdAt)) === 1);
 }
 
 function compareIsoText(left, right) {

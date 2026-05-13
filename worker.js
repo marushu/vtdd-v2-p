@@ -34394,7 +34394,7 @@ function buildReviewResponseSummary(input = {}) {
   if (!latestReviewer || latestReviewer.recommendedAction !== "request_changes") {
     return null;
   }
-  const responseComments = comments.filter(
+  const responseComments = excludeAmbiguousResponseCommentTimes(comments.filter(
     (comment) => isTrustedReviewerObjectionResolutionComment(comment) && isAfterReviewerMarker(comment, latestReviewer)
   ).map((comment) => ({
     url: normalizeText20(comment?.url ?? comment?.htmlUrl ?? comment?.html_url) || null,
@@ -34402,7 +34402,7 @@ function buildReviewResponseSummary(input = {}) {
     createdAt: normalizeText20(comment?.createdAt ?? comment?.created_at) || null,
     updatedAt: normalizeText20(comment?.updatedAt ?? comment?.updated_at) || null,
     body: normalizeMultilineText(comment?.body)
-  })).filter((comment) => comment.body);
+  })).filter((comment) => comment.body));
   const responseText = responseComments.map((comment) => comment.body).join("\n\n");
   const criticalFindings = latestReviewer.criticalFindings;
   const risks = latestReviewer.risks;
@@ -34462,6 +34462,14 @@ function normalizeCommentCreatedTime(comment) {
 }
 function isValidIsoTime(value) {
   return Number.isFinite(Date.parse(normalizeText20(value)));
+}
+function excludeAmbiguousResponseCommentTimes(comments) {
+  const counts = /* @__PURE__ */ new Map();
+  for (const comment of comments) {
+    const time3 = normalizeText20(comment?.createdAt);
+    counts.set(time3, (counts.get(time3) || 0) + 1);
+  }
+  return comments.filter((comment) => counts.get(normalizeText20(comment?.createdAt)) === 1);
 }
 function parseGeminiReviewComment(comment = {}) {
   const body = normalizeText20(typeof comment === "string" ? comment : comment?.body);

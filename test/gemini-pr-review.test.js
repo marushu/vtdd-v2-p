@@ -626,6 +626,51 @@ Evidence: npm test`
   assert.deepEqual(summary.criticalFindings, ["edited reviewer marker is latest content"]);
 });
 
+test("buildReviewResponseSummary excludes trusted response comments with duplicate created_at timestamps", () => {
+  const reviewerComment = {
+    user: { login: "vtdd-codex[bot]" },
+    created_at: "2026-05-13T10:00:00Z",
+    updated_at: "2026-05-13T10:00:00Z",
+    body: `${GEMINI_PR_REVIEW_MARKER}
+## VTDD Gemini レビュー
+
+- Recommended action: \`request_changes\`
+
+### 重要指摘
+- duplicate response timestamps are ambiguous`
+  };
+  const firstResponse = {
+    user: { login: "marushu" },
+    author_association: "OWNER",
+    url: "https://github.com/example/repo/pull/314#issuecomment-response-1",
+    created_at: "2026-05-13T10:01:00Z",
+    body: `${REVIEWER_OBJECTION_RESOLUTION_MARKER}
+Addresses: critical-1
+Evidence: first same-time response`
+  };
+  const secondResponse = {
+    user: { login: "marushu" },
+    author_association: "OWNER",
+    url: "https://github.com/example/repo/pull/314#issuecomment-response-2",
+    created_at: "2026-05-13T10:01:00Z",
+    body: `${REVIEWER_OBJECTION_RESOLUTION_MARKER}
+Addresses: critical-1
+Evidence: second same-time response`
+  };
+
+  const summary = buildReviewResponseSummary({
+    pullRequest: {},
+    issueComments: [reviewerComment, firstResponse],
+    reviewComments: [secondResponse]
+  });
+
+  assert.deepEqual(summary.responseCommentUrls, []);
+  assert.deepEqual(summary.findingResponses.map((item) => [item.id, item.status]), [
+    ["critical-1", "unresolved"]
+  ]);
+  assert.deepEqual(summary.unresolvedItems, ["duplicate response timestamps are ambiguous"]);
+});
+
 test("parseGeminiReviewComment accepts legacy English reviewer sections", () => {
   const parsed = parseGeminiReviewComment({
     body: `${GEMINI_PR_REVIEW_MARKER}
