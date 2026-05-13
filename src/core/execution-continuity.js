@@ -3,7 +3,11 @@ import {
   parseCodexConnectorSetupComment,
   parseCodexReviewFallbackComment
 } from "./codex-review-fallback.js";
-import { buildReviewResponseSummary, parseGeminiReviewComment } from "./gemini-pr-review.js";
+import {
+  REVIEWER_OBJECTION_RESOLUTION_MARKER,
+  buildReviewResponseSummary,
+  parseGeminiReviewComment
+} from "./gemini-pr-review.js";
 import { ActorRole, TaskMode } from "./types.js";
 
 export const ExecutionTransferMode = Object.freeze({
@@ -68,6 +72,7 @@ export function evaluateExecutionContinuity(input = {}) {
         reviewerEvidence: review.reviewerEvidence,
         reviewerSignalTruth: review.reviewerSignalTruth,
         reviewResponseSummary: review.reviewResponseSummary,
+        reviewTimeline: review.reviewTimeline,
         reviewCommentsCount: review.reviewCommentsCount,
         unresolvedReviewCommentsCount: review.unresolvedReviewCommentsCount,
         criticalReviewPending: review.criticalReviewPending,
@@ -87,6 +92,7 @@ export function evaluateExecutionContinuity(input = {}) {
           reviewerEvidence: review.reviewerEvidence,
           reviewerSignalTruth: review.reviewerSignalTruth,
           reviewResponseSummary: review.reviewResponseSummary,
+          reviewTimeline: review.reviewTimeline,
           reviewCommentsCount: review.reviewCommentsCount,
           unresolvedReviewCommentsCount: review.unresolvedReviewCommentsCount,
           criticalReviewPending: review.criticalReviewPending
@@ -140,6 +146,7 @@ function buildReviewState(pullRequest) {
   const parsedGeminiSignals = collectGeminiReviewerSignals(pullRequest);
   const codexFallback = collectCodexFallbackSignals(pullRequest);
   const formalReviewTruth = collectFormalReviewTruth(pullRequest);
+  const reviewTimeline = buildReviewTimeline(pullRequest);
   const reviewCommentsCount =
     parsedGeminiSignals.totalCount > 0
       ? parsedGeminiSignals.totalCount
@@ -197,6 +204,7 @@ function buildReviewState(pullRequest) {
     reviewerEvidence,
     reviewerSignalTruth,
     reviewResponseSummary,
+    reviewTimeline,
     reviewCommentsCount,
     unresolvedReviewCommentsCount,
     criticalReviewPending,
@@ -241,6 +249,108 @@ function collectCodexFallbackSignals(pullRequest) {
         }
       : null
   };
+}
+
+function buildReviewTimeline(pullRequest) {
+  const comments = [
+    ...(Array.isArray(pullRequest.issueComments) ? pullRequest.issueComments : []),
+    ...(Array.isArray(pullRequest.reviewComments) ? pullRequest.reviewComments : [])
+  ];
+  return comments
+    .map((comment) => buildReviewTimelineItem(comment))
+    .filter(Boolean)
+    .sort(compareTimelineItems);
+}
+
+function buildReviewTimelineItem(comment) {
+  const gemini = parseGeminiReviewComment(comment);
+  if (gemini) {
+    return {
+      type: "gemini_review",
+      reviewer: "gemini",
+      status: gemini.recommendedAction,
+      recommendedAction: gemini.recommendedAction,
+      blocking: gemini.blocking === true,
+      url: gemini.url || normalizeCommentUrl(comment),
+      createdAt: gemini.createdAt || normalizeCommentCreatedAt(comment),
+      updatedAt: gemini.updatedAt || normalizeCommentUpdatedAt(comment),
+      summary: `Gemini reviewer action: ${gemini.recommendedAction}`
+    };
+  }
+
+  const codex = parseCodexReviewFallbackComment(comment);
+  if (codex) {
+    const action = codex.recommendedAction ? `, action=${codex.recommendedAction}` : "";
+    const blocker = codex.blocker ? `, blocker=${codex.blocker}` : "";
+    return {
+      type: "codex_fallback",
+      reviewer: "codex",
+      status: codex.status,
+      recommendedAction: codex.recommendedAction || null,
+      blocking: codex.blocking === true,
+      url: normalizeCommentUrl(comment),
+      createdAt: normalizeCommentCreatedAt(comment),
+      updatedAt: normalizeCommentUpdatedAt(comment),
+      summary: `Codex fallback status: ${codex.status}${action}${blocker}`
+    };
+  }
+
+  const connector = parseCodexConnectorSetupComment(comment);
+  if (connector) {
+    return {
+      type: "codex_connector_blocker",
+      reviewer: "codex",
+      status: connector.status,
+      recommendedAction: null,
+      blocking: true,
+      url: normalizeCommentUrl(comment),
+      createdAt: normalizeCommentCreatedAt(comment),
+      updatedAt: normalizeCommentUpdatedAt(comment),
+      summary: `Codex connector blocker: ${connector.blocker}`
+    };
+  }
+
+  if (normalizeText(comment?.body).includes(REVIEWER_OBJECTION_RESOLUTION_MARKER)) {
+    return {
+      type: "reviewer_objection_resolution",
+      reviewer: normalizeText(comment?.user?.login) || normalizeText(comment?.author?.login) || "unknown",
+      status: "posted",
+      recommendedAction: null,
+      blocking: false,
+      url: normalizeCommentUrl(comment),
+      createdAt: normalizeCommentCreatedAt(comment),
+      updatedAt: normalizeCommentUpdatedAt(comment),
+      summary: "Reviewer objection resolution posted"
+    };
+  }
+
+  return null;
+}
+
+function compareTimelineItems(left, right) {
+  const leftTime = timelineTimestamp(left);
+  const rightTime = timelineTimestamp(right);
+  if (leftTime !== rightTime) {
+    return leftTime - rightTime;
+  }
+  return normalizeText(left.url).localeCompare(normalizeText(right.url));
+}
+
+function timelineTimestamp(item) {
+  const parsed = Date.parse(normalizeText(item?.createdAt) || normalizeText(item?.updatedAt));
+  return Number.isFinite(parsed) ? parsed : Number.MAX_SAFE_INTEGER;
+}
+
+function normalizeCommentUrl(comment) {
+  return normalizeText(comment?.url ?? comment?.htmlUrl ?? comment?.html_url) || null;
+}
+
+function normalizeCommentCreatedAt(comment) {
+  return normalizeText(comment?.createdAt ?? comment?.created_at) || null;
+}
+
+function normalizeCommentUpdatedAt(comment) {
+  return normalizeText(comment?.updatedAt ?? comment?.updated_at) || null;
 }
 
 function collectFormalReviewTruth(pullRequest) {

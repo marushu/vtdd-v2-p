@@ -28247,6 +28247,7 @@ function buildButlerReviewSynthesis(input = {}) {
       reviewerEvidence: reviewLoop.reviewerEvidence,
       reviewerSignalTruth: reviewLoop.reviewerSignalTruth,
       reviewResponseSummary: reviewLoop.reviewResponseSummary,
+      reviewTimeline: reviewLoop.reviewTimeline,
       reviewCommentsCount: reviewLoop.reviewCommentsCount,
       unresolvedReviewCommentsCount: reviewLoop.unresolvedReviewCommentsCount,
       criticalReviewPending: reviewLoop.criticalReviewPending,
@@ -28351,6 +28352,13 @@ function buildHumanDecisionFocus({ pullRequest, reviewLoop, codexGoal, branchAtt
     const url = reviewLoop.reviewerEvidence.url ? ` ${reviewLoop.reviewerEvidence.url}` : "";
     focus.push(`Latest ${reviewLoop.reviewer} reviewer action is ${action}.${url}`);
   }
+  const latestTimelineItem = reviewLoop.reviewTimeline.at(-1);
+  if (latestTimelineItem) {
+    const url = latestTimelineItem.url ? ` ${latestTimelineItem.url}` : "";
+    focus.push(
+      `Latest review timeline item: ${latestTimelineItem.type}, status=${latestTimelineItem.status || "unknown"}${url}`
+    );
+  }
   for (const warning of reviewLoop.reviewerSignalTruth?.warnings ?? []) {
     focus.push(warning);
   }
@@ -28438,10 +28446,31 @@ function normalizeReviewLoop(value) {
     reviewerEvidence: normalizeReviewerEvidence(input.reviewerEvidence),
     reviewerSignalTruth: normalizeReviewerSignalTruth(input.reviewerSignalTruth),
     reviewResponseSummary: normalizeReviewResponseSummary(input.reviewResponseSummary),
+    reviewTimeline: normalizeReviewTimeline(input.reviewTimeline),
     reviewCommentsCount: normalizeCount(input.reviewCommentsCount),
     unresolvedReviewCommentsCount: normalizeCount(input.unresolvedReviewCommentsCount),
     criticalReviewPending: input.criticalReviewPending === true
   };
+}
+function normalizeReviewTimeline(value) {
+  return (Array.isArray(value) ? value : []).map((item) => {
+    const input = item && typeof item === "object" ? item : {};
+    const type = normalizeText5(input.type);
+    if (!type) {
+      return null;
+    }
+    return {
+      type,
+      reviewer: normalizeText5(input.reviewer) || null,
+      status: normalizeText5(input.status) || null,
+      recommendedAction: normalizeText5(input.recommendedAction) || null,
+      blocking: input.blocking === true,
+      url: normalizeText5(input.url) || null,
+      createdAt: normalizeText5(input.createdAt) || null,
+      updatedAt: normalizeText5(input.updatedAt) || null,
+      summary: normalizeText5(input.summary) || null
+    };
+  }).filter(Boolean);
 }
 function normalizeReviewResponseSummary(value) {
   const input = value && typeof value === "object" ? value : {};
@@ -34668,6 +34697,7 @@ function evaluateExecutionContinuity(input = {}) {
         reviewerEvidence: review.reviewerEvidence,
         reviewerSignalTruth: review.reviewerSignalTruth,
         reviewResponseSummary: review.reviewResponseSummary,
+        reviewTimeline: review.reviewTimeline,
         reviewCommentsCount: review.reviewCommentsCount,
         unresolvedReviewCommentsCount: review.unresolvedReviewCommentsCount,
         criticalReviewPending: review.criticalReviewPending,
@@ -34687,6 +34717,7 @@ function evaluateExecutionContinuity(input = {}) {
           reviewerEvidence: review.reviewerEvidence,
           reviewerSignalTruth: review.reviewerSignalTruth,
           reviewResponseSummary: review.reviewResponseSummary,
+          reviewTimeline: review.reviewTimeline,
           reviewCommentsCount: review.reviewCommentsCount,
           unresolvedReviewCommentsCount: review.unresolvedReviewCommentsCount,
           criticalReviewPending: review.criticalReviewPending
@@ -34736,6 +34767,7 @@ function buildReviewState(pullRequest) {
   const parsedGeminiSignals = collectGeminiReviewerSignals(pullRequest);
   const codexFallback = collectCodexFallbackSignals(pullRequest);
   const formalReviewTruth = collectFormalReviewTruth(pullRequest);
+  const reviewTimeline = buildReviewTimeline(pullRequest);
   const reviewCommentsCount = parsedGeminiSignals.totalCount > 0 ? parsedGeminiSignals.totalCount : codexFallback.completed ? 1 : pullRequest.reviewCommentsCount;
   const unresolvedReviewCommentsCount = parsedGeminiSignals.totalCount > 0 ? parsedGeminiSignals.blockingCount : codexFallback.completed ? codexFallback.blocking ? 1 : 0 : pullRequest.unresolvedReviewCommentsCount;
   const reviewerStatus = codexFallback.completed ? "codex_review_available" : codexFallback.blocked ? "codex_review_blocked" : codexFallback.requested ? "codex_review_requested" : reviewCommentsCount > 0 ? "gemini_review_available" : "review_unavailable";
@@ -34762,6 +34794,7 @@ function buildReviewState(pullRequest) {
     reviewerEvidence,
     reviewerSignalTruth,
     reviewResponseSummary,
+    reviewTimeline,
     reviewCommentsCount,
     unresolvedReviewCommentsCount,
     criticalReviewPending,
@@ -34800,6 +34833,94 @@ function collectCodexFallbackSignals(pullRequest) {
       includesCreatedEdit: latest.includesCreatedEdit === true
     } : null
   };
+}
+function buildReviewTimeline(pullRequest) {
+  const comments = [
+    ...Array.isArray(pullRequest.issueComments) ? pullRequest.issueComments : [],
+    ...Array.isArray(pullRequest.reviewComments) ? pullRequest.reviewComments : []
+  ];
+  return comments.map((comment) => buildReviewTimelineItem(comment)).filter(Boolean).sort(compareTimelineItems);
+}
+function buildReviewTimelineItem(comment) {
+  const gemini = parseGeminiReviewComment(comment);
+  if (gemini) {
+    return {
+      type: "gemini_review",
+      reviewer: "gemini",
+      status: gemini.recommendedAction,
+      recommendedAction: gemini.recommendedAction,
+      blocking: gemini.blocking === true,
+      url: gemini.url || normalizeCommentUrl(comment),
+      createdAt: gemini.createdAt || normalizeCommentCreatedAt(comment),
+      updatedAt: gemini.updatedAt || normalizeCommentUpdatedAt(comment),
+      summary: `Gemini reviewer action: ${gemini.recommendedAction}`
+    };
+  }
+  const codex = parseCodexReviewFallbackComment(comment);
+  if (codex) {
+    const action = codex.recommendedAction ? `, action=${codex.recommendedAction}` : "";
+    const blocker = codex.blocker ? `, blocker=${codex.blocker}` : "";
+    return {
+      type: "codex_fallback",
+      reviewer: "codex",
+      status: codex.status,
+      recommendedAction: codex.recommendedAction || null,
+      blocking: codex.blocking === true,
+      url: normalizeCommentUrl(comment),
+      createdAt: normalizeCommentCreatedAt(comment),
+      updatedAt: normalizeCommentUpdatedAt(comment),
+      summary: `Codex fallback status: ${codex.status}${action}${blocker}`
+    };
+  }
+  const connector = parseCodexConnectorSetupComment(comment);
+  if (connector) {
+    return {
+      type: "codex_connector_blocker",
+      reviewer: "codex",
+      status: connector.status,
+      recommendedAction: null,
+      blocking: true,
+      url: normalizeCommentUrl(comment),
+      createdAt: normalizeCommentCreatedAt(comment),
+      updatedAt: normalizeCommentUpdatedAt(comment),
+      summary: `Codex connector blocker: ${connector.blocker}`
+    };
+  }
+  if (normalizeText21(comment?.body).includes(REVIEWER_OBJECTION_RESOLUTION_MARKER)) {
+    return {
+      type: "reviewer_objection_resolution",
+      reviewer: normalizeText21(comment?.user?.login) || normalizeText21(comment?.author?.login) || "unknown",
+      status: "posted",
+      recommendedAction: null,
+      blocking: false,
+      url: normalizeCommentUrl(comment),
+      createdAt: normalizeCommentCreatedAt(comment),
+      updatedAt: normalizeCommentUpdatedAt(comment),
+      summary: "Reviewer objection resolution posted"
+    };
+  }
+  return null;
+}
+function compareTimelineItems(left, right) {
+  const leftTime = timelineTimestamp(left);
+  const rightTime = timelineTimestamp(right);
+  if (leftTime !== rightTime) {
+    return leftTime - rightTime;
+  }
+  return normalizeText21(left.url).localeCompare(normalizeText21(right.url));
+}
+function timelineTimestamp(item) {
+  const parsed = Date.parse(normalizeText21(item?.createdAt) || normalizeText21(item?.updatedAt));
+  return Number.isFinite(parsed) ? parsed : Number.MAX_SAFE_INTEGER;
+}
+function normalizeCommentUrl(comment) {
+  return normalizeText21(comment?.url ?? comment?.htmlUrl ?? comment?.html_url) || null;
+}
+function normalizeCommentCreatedAt(comment) {
+  return normalizeText21(comment?.createdAt ?? comment?.created_at) || null;
+}
+function normalizeCommentUpdatedAt(comment) {
+  return normalizeText21(comment?.updatedAt ?? comment?.updated_at) || null;
 }
 function collectFormalReviewTruth(pullRequest) {
   const reviews = Array.isArray(pullRequest.reviews) ? pullRequest.reviews : [];

@@ -38,6 +38,7 @@ export function buildButlerReviewSynthesis(input = {}) {
       reviewerEvidence: reviewLoop.reviewerEvidence,
       reviewerSignalTruth: reviewLoop.reviewerSignalTruth,
       reviewResponseSummary: reviewLoop.reviewResponseSummary,
+      reviewTimeline: reviewLoop.reviewTimeline,
       reviewCommentsCount: reviewLoop.reviewCommentsCount,
       unresolvedReviewCommentsCount: reviewLoop.unresolvedReviewCommentsCount,
       criticalReviewPending: reviewLoop.criticalReviewPending,
@@ -149,6 +150,13 @@ function buildHumanDecisionFocus({ pullRequest, reviewLoop, codexGoal, branchAtt
     const action = reviewLoop.reviewerEvidence.recommendedAction;
     const url = reviewLoop.reviewerEvidence.url ? ` ${reviewLoop.reviewerEvidence.url}` : "";
     focus.push(`Latest ${reviewLoop.reviewer} reviewer action is ${action}.${url}`);
+  }
+  const latestTimelineItem = reviewLoop.reviewTimeline.at(-1);
+  if (latestTimelineItem) {
+    const url = latestTimelineItem.url ? ` ${latestTimelineItem.url}` : "";
+    focus.push(
+      `Latest review timeline item: ${latestTimelineItem.type}, status=${latestTimelineItem.status || "unknown"}${url}`
+    );
   }
   for (const warning of reviewLoop.reviewerSignalTruth?.warnings ?? []) {
     focus.push(warning);
@@ -263,10 +271,34 @@ function normalizeReviewLoop(value) {
     reviewerEvidence: normalizeReviewerEvidence(input.reviewerEvidence),
     reviewerSignalTruth: normalizeReviewerSignalTruth(input.reviewerSignalTruth),
     reviewResponseSummary: normalizeReviewResponseSummary(input.reviewResponseSummary),
+    reviewTimeline: normalizeReviewTimeline(input.reviewTimeline),
     reviewCommentsCount: normalizeCount(input.reviewCommentsCount),
     unresolvedReviewCommentsCount: normalizeCount(input.unresolvedReviewCommentsCount),
     criticalReviewPending: input.criticalReviewPending === true
   };
+}
+
+function normalizeReviewTimeline(value) {
+  return (Array.isArray(value) ? value : [])
+    .map((item) => {
+      const input = item && typeof item === "object" ? item : {};
+      const type = normalizeText(input.type);
+      if (!type) {
+        return null;
+      }
+      return {
+        type,
+        reviewer: normalizeText(input.reviewer) || null,
+        status: normalizeText(input.status) || null,
+        recommendedAction: normalizeText(input.recommendedAction) || null,
+        blocking: input.blocking === true,
+        url: normalizeText(input.url) || null,
+        createdAt: normalizeText(input.createdAt) || null,
+        updatedAt: normalizeText(input.updatedAt) || null,
+        summary: normalizeText(input.summary) || null
+      };
+    })
+    .filter(Boolean);
 }
 
 function normalizeReviewResponseSummary(value) {

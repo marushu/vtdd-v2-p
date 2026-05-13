@@ -372,6 +372,65 @@ test("execution continuity exposes Codex fallback review as available when VTDD 
   ]);
 });
 
+test("execution continuity exposes reviewer marker timeline in chronological order", () => {
+  const result = evaluateExecutionContinuity({
+    actorRole: ActorRole.BUTLER,
+    mode: TaskMode.EXECUTION,
+    runtimeTruth: {
+      runtimeState: {
+        activeBranch: "codex/issue-270",
+        pullRequest: {
+          number: 270,
+          url: "https://github.com/example/repo/pull/270",
+          state: "open",
+          title: "Review timeline",
+          issueComments: [
+            {
+              user: { login: "vtdd-codex[bot]" },
+              url: "https://github.com/example/repo/pull/270#issuecomment-review",
+              created_at: "2026-05-13T03:00:00Z",
+              updated_at: "2026-05-13T03:00:00Z",
+              body: "<!-- vtdd:reviewer=gemini -->\n## VTDD Gemini レビュー\n\n- Recommended action: `request_changes`\n\n### 重要指摘\n- needs response"
+            },
+            {
+              user: { login: "marushu" },
+              url: "https://github.com/example/repo/pull/270#issuecomment-response",
+              created_at: "2026-05-13T03:01:00Z",
+              body: "<!-- vtdd:reviewer-objection-resolution -->\nAddresses: critical-1\nEvidence: npm test"
+            }
+          ],
+          reviewComments: [
+            {
+              user: { login: "vtdd-codex[bot]" },
+              url: "https://github.com/example/repo/pull/270#discussion-fallback",
+              created_at: "2026-05-13T02:59:00Z",
+              body: "<!-- vtdd:reviewer=codex-fallback -->\n- Status: `requested`"
+            }
+          ]
+        }
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.value.reviewLoop.reviewTimeline.map((item) => item.type), [
+    "codex_fallback",
+    "gemini_review",
+    "reviewer_objection_resolution"
+  ]);
+  assert.deepEqual(result.value.butlerReviewSynthesis.reviewerSignal.reviewTimeline.map((item) => item.type), [
+    "codex_fallback",
+    "gemini_review",
+    "reviewer_objection_resolution"
+  ]);
+  assert.equal(
+    result.value.butlerReviewSynthesis.humanDecisionFocus.some((line) =>
+      line.includes("Latest review timeline item: reviewer_objection_resolution")
+    ),
+    true
+  );
+});
+
 test("execution continuity surfaces Codex fallback blocker when non-manual review cannot start", () => {
   const result = evaluateExecutionContinuity({
     actorRole: ActorRole.BUTLER,
