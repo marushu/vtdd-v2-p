@@ -25,6 +25,17 @@ The sync target is GitHub Actions secrets:
 - `VTDD_GITHUB_APP_ID`
 - `VTDD_GITHUB_APP_PRIVATE_KEY`
 
+Role-specific GitHub App sync is also supported for actor-separated VTDD
+roles:
+
+| Role | App ID secret | Private key secret |
+| --- | --- | --- |
+| `legacy` | `VTDD_GITHUB_APP_ID` | `VTDD_GITHUB_APP_PRIVATE_KEY` |
+| `gemini-reviewer` | `VTDD_GEMINI_REVIEWER_APP_ID` | `VTDD_GEMINI_REVIEWER_APP_PRIVATE_KEY` |
+| `codex-fallback-reviewer` | `VTDD_CODEX_FALLBACK_REVIEWER_APP_ID` | `VTDD_CODEX_FALLBACK_REVIEWER_APP_PRIVATE_KEY` |
+| `mac-codex` | `VTDD_MAC_CODEX_APP_ID` | `VTDD_MAC_CODEX_APP_PRIVATE_KEY` |
+| `vps-codex-cli` | `VTDD_VPS_CODEX_CLI_APP_ID` | `VTDD_VPS_CODEX_CLI_APP_PRIVATE_KEY` |
+
 ## Boundary
 
 This is a high-risk operation because it mutates repository secrets.
@@ -40,6 +51,17 @@ Review the planned sync without mutation:
 
 ```bash
 node scripts/sync-github-app-actions-secrets.mjs --repo marushu/vtdd-v2-p
+```
+
+For a role-specific App private key that is not part of the legacy bootstrap
+vault:
+
+```bash
+node scripts/sync-github-app-actions-secrets.mjs \
+  --repo marushu/vtdd-v2-p \
+  --app-role gemini-reviewer \
+  --app-id 3706701 \
+  --private-key-path /path/to/vtdd-gemini-reviewer.private-key.pem
 ```
 
 ## Execute
@@ -59,6 +81,19 @@ Then execute the local bootstrap/update path with the returned
 node scripts/sync-github-app-actions-secrets.mjs \
   --repo marushu/vtdd-v2-p \
   --execute \
+  --runtime-url https://<your-runtime-host> \
+  --approval-grant-id <approvalGrantId>
+```
+
+Role-specific execution uses the same approval boundary:
+
+```bash
+node scripts/sync-github-app-actions-secrets.mjs \
+  --repo marushu/vtdd-v2-p \
+  --execute \
+  --app-role gemini-reviewer \
+  --app-id 3706701 \
+  --private-key-path /path/to/vtdd-gemini-reviewer.private-key.pem \
   --runtime-url https://<your-runtime-host> \
   --approval-grant-id <approvalGrantId>
 ```
@@ -88,6 +123,20 @@ node scripts/run-passkey-operator-helper.mjs \
   --runtime-url https://<your-runtime-host> \
   --repo marushu/vtdd-v2-p \
   --issue-number 15
+```
+
+For role-specific repair, start the helper with the role and key path it is
+allowed to serve. The Worker operator page will include the role in the sync
+request, and the helper refuses requests for a different role:
+
+```bash
+node scripts/run-passkey-operator-helper.mjs \
+  --runtime-url https://<your-runtime-host> \
+  --repo marushu/vtdd-v2-p \
+  --issue-number 351 \
+  --app-role gemini-reviewer \
+  --app-id 3706701 \
+  --private-key-path /path/to/vtdd-gemini-reviewer.private-key.pem
 ```
 
 This helper:

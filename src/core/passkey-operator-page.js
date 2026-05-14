@@ -14,6 +14,7 @@ export function renderPasskeyOperatorPage(input = {}) {
   const highRiskKindDefault = escapeHtml(input.highRiskKind || defaultHighRiskKindForMode(operatorMode));
   const mergeMethodDefault = escapeHtml(input.mergeMethod || "squash");
   const returnUrl = escapeHtml(input.returnUrl || "");
+  const githubAppRoleDefault = escapeHtml(input.githubAppRole || "legacy");
   const syncEnabled = input.syncEnabled === true;
   const syncMessage = escapeHtml(
     input.syncMessage ||
@@ -86,7 +87,8 @@ export function renderPasskeyOperatorPage(input = {}) {
         color: var(--muted);
         margin-bottom: 6px;
       }
-      input {
+      input,
+      select {
         width: 100%;
         box-sizing: border-box;
         padding: 10px 12px;
@@ -208,6 +210,14 @@ export function renderPasskeyOperatorPage(input = {}) {
         <section data-operator-section="github-app-secret-sync"${hiddenAttribute(!sectionVisibility.githubAppSecretSync)}>
           <h2>3. GitHub App Secret Sync</h2>
           <p class="muted">real passkey approval 後、この helper から <code>#15</code> の explicit operator bootstrap を実行します。</p>
+          <label for="github-app-role-input">GitHub App Role</label>
+          <select id="github-app-role-input">
+            ${renderGithubAppRoleOption("legacy", "Legacy vtdd-codex", githubAppRoleDefault)}
+            ${renderGithubAppRoleOption("gemini-reviewer", "VTDD Gemini Reviewer", githubAppRoleDefault)}
+            ${renderGithubAppRoleOption("codex-fallback-reviewer", "VTDD Codex Fallback Reviewer", githubAppRoleDefault)}
+            ${renderGithubAppRoleOption("mac-codex", "VTDD mac Codex", githubAppRoleDefault)}
+            ${renderGithubAppRoleOption("vps-codex-cli", "VTDD VPS Codex CLI", githubAppRoleDefault)}
+          </select>
           <div class="row">
             <button id="sync-button"${syncEnabled ? "" : " disabled"}>Sync GitHub App secrets</button>
           </div>
@@ -543,7 +553,8 @@ export function renderPasskeyOperatorPage(input = {}) {
             headers: { "content-type": "application/json" },
             body: JSON.stringify({
               approvalGrantId: latestApprovalGrantId,
-              repositoryInput: document.getElementById("repo-input").value
+              repositoryInput: document.getElementById("repo-input").value,
+              githubAppRole: document.getElementById("github-app-role-input").value
             })
           });
           const syncBody = await readResponseBody(syncResponse);
@@ -829,6 +840,11 @@ function resolveSectionVisibility(operatorMode) {
 
 function hiddenAttribute(hidden) {
   return hidden ? " hidden" : "";
+}
+
+function renderGithubAppRoleOption(value, label, selectedValue) {
+  const selected = value === selectedValue ? " selected" : "";
+  return `<option value="${escapeHtml(value)}"${selected}>${escapeHtml(label)}</option>`;
 }
 
 function normalizeOperatorMode(value) {

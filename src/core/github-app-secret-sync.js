@@ -2,8 +2,42 @@ import {
   DEFAULT_VTDD_VAULT_MANIFEST_PATH,
   loadDesktopBootstrapVault
 } from "./desktop-bootstrap-vault.js";
+import fs from "node:fs/promises";
+
+export const GITHUB_APP_SECRET_SYNC_ROLES = {
+  legacy: {
+    label: "Legacy vtdd-codex",
+    appIdSecretName: "VTDD_GITHUB_APP_ID",
+    privateKeySecretName: "VTDD_GITHUB_APP_PRIVATE_KEY"
+  },
+  "gemini-reviewer": {
+    label: "VTDD Gemini Reviewer",
+    appIdSecretName: "VTDD_GEMINI_REVIEWER_APP_ID",
+    privateKeySecretName: "VTDD_GEMINI_REVIEWER_APP_PRIVATE_KEY"
+  },
+  "codex-fallback-reviewer": {
+    label: "VTDD Codex Fallback Reviewer",
+    appIdSecretName: "VTDD_CODEX_FALLBACK_REVIEWER_APP_ID",
+    privateKeySecretName: "VTDD_CODEX_FALLBACK_REVIEWER_APP_PRIVATE_KEY"
+  },
+  "mac-codex": {
+    label: "VTDD mac Codex",
+    appIdSecretName: "VTDD_MAC_CODEX_APP_ID",
+    privateKeySecretName: "VTDD_MAC_CODEX_APP_PRIVATE_KEY"
+  },
+  "vps-codex-cli": {
+    label: "VTDD VPS Codex CLI",
+    appIdSecretName: "VTDD_VPS_CODEX_CLI_APP_ID",
+    privateKeySecretName: "VTDD_VPS_CODEX_CLI_APP_PRIVATE_KEY"
+  }
+};
 
 export async function loadGitHubAppSecretSource(input = {}) {
+  const role = normalizeGitHubAppSecretSyncRole(input.role);
+  if (role !== "legacy" || normalizeText(input.appId) || normalizeText(input.privateKeyPath)) {
+    return loadExplicitGitHubAppSecretSource({ ...input, role });
+  }
+
   const manifestPath = input.manifestPath || DEFAULT_VTDD_VAULT_MANIFEST_PATH;
   const vaultResult = await loadDesktopBootstrapVault({ manifestPath });
   if (!vaultResult.ok) {
@@ -15,6 +49,7 @@ export async function loadGitHubAppSecretSource(input = {}) {
     ok: true,
     source: {
       sourceType: "desktop_bootstrap_vault",
+      role,
       manifestPath: vault.manifestPath,
       appId: vault.githubApp.appId,
       installationId: vault.githubApp.installationId,
@@ -30,8 +65,13 @@ export function buildGitHubAppSecretSyncPlan(input = {}) {
   const source = input.source ?? {};
   const repo = normalizeText(input.repo);
   const execute = input.execute === true;
+  const role = normalizeGitHubAppSecretSyncRole(input.role || source.role);
+  const roleConfig = GITHUB_APP_SECRET_SYNC_ROLES[role];
   const issues = [];
 
+  if (!roleConfig) {
+    issues.push("unsupported GitHub App secret sync role");
+  }
   if (!repo) {
     issues.push("repo is required");
   }
@@ -51,13 +91,15 @@ export function buildGitHubAppSecretSyncPlan(input = {}) {
     plan: {
       repo,
       execute,
+      role,
+      roleLabel: roleConfig.label,
       secrets: [
         {
-          name: "VTDD_GITHUB_APP_ID",
+          name: roleConfig.appIdSecretName,
           value: source.appId
         },
         {
-          name: "VTDD_GITHUB_APP_PRIVATE_KEY",
+          name: roleConfig.privateKeySecretName,
           value: source.privateKey
         }
       ]
@@ -88,6 +130,63 @@ export async function executeGitHubAppSecretSync(input = {}) {
     result: {
       repo: plan.repo,
       synced: results
+    }
+  };
+}
+
+export function normalizeGitHubAppSecretSyncRole(value) {
+  const normalized = normalizeText(value) || "legacy";
+  return Object.hasOwn(GITHUB_APP_SECRET_SYNC_ROLES, normalized) ? normalized : "";
+}
+
+async function loadExplicitGitHubAppSecretSource(input = {}) {
+  const role = normalizeGitHubAppSecretSyncRole(input.role);
+  const appId = normalizeText(input.appId);
+  const privateKeyPath = normalizeText(input.privateKeyPath);
+  const issues = [];
+
+  if (!role) {
+    issues.push("unsupported GitHub App secret sync role");
+  }
+  if (!appId) {
+    issues.push("appId is required for role-specific GitHub App secret sync");
+  }
+  if (!privateKeyPath) {
+    issues.push("privateKeyPath is required for role-specific GitHub App secret sync");
+  }
+
+  let privateKey = "";
+  if (privateKeyPath) {
+    try {
+      privateKey = normalizeText(await fs.readFile(privateKeyPath, "utf8"));
+    } catch {
+      issues.push(`GitHub App private key file is unreadable: ${privateKeyPath}`);
+    }
+  }
+  if (privateKeyPath && !privateKey) {
+    issues.push("GitHub App private key file is empty or unreadable");
+  }
+
+  if (issues.length > 0) {
+    return { ok: false, issues };
+  }
+
+  const manifestPath = input.manifestPath || DEFAULT_VTDD_VAULT_MANIFEST_PATH;
+  const vaultResult = await loadDesktopBootstrapVault({ manifestPath }).catch(() => null);
+  const vault = vaultResult?.ok ? vaultResult.vault : null;
+
+  return {
+    ok: true,
+    source: {
+      sourceType: "explicit_role_private_key",
+      role,
+      manifestPath: vault?.manifestPath || normalizeText(input.manifestPath),
+      appId,
+      installationId: normalizeText(input.installationId),
+      privateKeyPath,
+      privateKey,
+      gatewayBearerTokenPath: vault?.gateway?.bearerTokenPath || "",
+      gatewayBearerToken: vault?.gateway?.bearerToken || ""
     }
   };
 }
