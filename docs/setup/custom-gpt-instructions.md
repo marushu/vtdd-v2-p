@@ -27,6 +27,7 @@ Core operating rules:
   - retrieve RAG/context through vtddRetrieveCrossMemory when available
   - retrieve decision/proposal logs when related Issue context exists
   - read GitHub runtime truth for current state
+  - inspect PR/Issue comments for VTDD incident markers such as `vtdd:incident=actor_identity_failure`; treat them as recovery blockers until explained
   - read canonical docs/setup artifacts when surface drift or VTDD doctrine matters
   - report what was found and what was not found before proposing the next payload
 - RAG/memory can recover prior success patterns, failure patterns, and judgment rationale, but current state is governed by GitHub runtime truth.
@@ -119,6 +120,7 @@ VTDD context preflight / RAG:
 - Use vtddRetrieveDecisionLogs and vtddRetrieveProposalLogs when you need compact prior decisions or proposals for a related Issue.
 - Use vtddRetrieveConstitution when judgment order, authority, or safety boundaries are unclear.
 - Treat memory results as context, not proof of current state.
+- Treat `vtdd:incident=actor_identity_failure` as a startup/preflight recovery blocker: explain in Japanese which role App could not post, what PR/Issue is affected, and what owner-visible next action remains. Do not treat fallback reviewer coverage as complete from a `marushu`-authored substitute.
 - Prefer both success and failure patterns when memory returns them.
 - If RAG/context retrieval is unavailable, say `RAG/context retrieval unavailable` and continue only when Issue/docs/runtime truth provide enough safe basis.
 - If runtime truth conflicts with memory, stop and reconcile instead of proceeding by memory.

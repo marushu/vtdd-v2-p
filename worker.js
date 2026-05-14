@@ -34666,6 +34666,7 @@ function normalizeObject9(value) {
 }
 
 // src/core/execution-continuity.js
+var ACTOR_IDENTITY_FAILURE_MARKER = "<!-- vtdd:incident=actor_identity_failure -->";
 var ExecutionTransferMode = Object.freeze({
   RESUME: "resume",
   HANDOFF_READY: "handoff_ready"
@@ -34840,8 +34841,10 @@ function collectCodexFallbackSignals(pullRequest) {
   const comments = [...Array.isArray(pullRequest.issueComments) ? pullRequest.issueComments : []];
   const parsed = comments.map(parseCodexReviewFallbackComment).filter(Boolean);
   const connectorBlockers = comments.map(parseCodexConnectorSetupComment).filter(Boolean);
+  const actorIdentityIncidents = comments.map(parseActorIdentityIncidentComment).filter(Boolean);
+  const latestActorIdentityIncident = actorIdentityIncidents.at(-1) ?? null;
   const latestConnectorBlocker = connectorBlockers.at(-1) ?? null;
-  const latest = latestConnectorBlocker ?? parsed.at(-1) ?? null;
+  const latest = latestActorIdentityIncident ?? latestConnectorBlocker ?? parsed.at(-1) ?? null;
   return {
     requested: latest?.status === "requested",
     completed: latest?.status === "completed",
@@ -34909,6 +34912,20 @@ function buildReviewTimelineItem(comment) {
       summary: `Codex connector blocker: ${connector.blocker}`
     };
   }
+  const actorIdentityIncident = parseActorIdentityIncidentComment(comment);
+  if (actorIdentityIncident) {
+    return {
+      type: "vtdd_incident",
+      reviewer: "vps_codex_cli",
+      status: "actor_identity_failure",
+      recommendedAction: "manual_review",
+      blocking: true,
+      url: normalizeCommentUrl(comment),
+      createdAt: normalizeCommentCreatedAt(comment),
+      updatedAt: normalizeCommentUpdatedAt(comment),
+      summary: actorIdentityIncident.summary
+    };
+  }
   const unknownReviewerMarker = parseUnknownReviewerMarker(comment);
   if (unknownReviewerMarker) {
     return unknownReviewerMarker;
@@ -34927,6 +34944,22 @@ function buildReviewTimelineItem(comment) {
     };
   }
   return null;
+}
+function parseActorIdentityIncidentComment(comment) {
+  const body = normalizeText5(comment?.body);
+  if (!body.includes(ACTOR_IDENTITY_FAILURE_MARKER)) {
+    return null;
+  }
+  return {
+    reviewer: "codex",
+    status: "blocked",
+    blocking: true,
+    blocker: "actor_identity_failure",
+    url: normalizeCommentUrl(comment),
+    createdAt: normalizeCommentCreatedAt(comment),
+    updatedAt: normalizeCommentUpdatedAt(comment),
+    summary: "Actor identity incident requires recovery before reviewer coverage is complete."
+  };
 }
 function parseUnknownReviewerMarker(comment) {
   const body = normalizeText5(comment?.body);
