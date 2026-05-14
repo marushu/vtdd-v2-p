@@ -444,6 +444,116 @@ test("github read plane reads pull reviews, review comments, checks, workflow ru
   assert.equal(branches.read.records[0].sha, "abc123");
 });
 
+test("github read plane reads repository contents, tree, and workflow job steps", async () => {
+  const responses = new Map([
+    [
+      "/repos/sample-org/vtdd-v2-p/contents/docs/setup/custom-gpt-instructions.md?ref=main",
+      {
+        name: "custom-gpt-instructions.md",
+        path: "docs/setup/custom-gpt-instructions.md",
+        type: "file",
+        size: 32,
+        sha: "instructions-sha",
+        encoding: "base64",
+        content: Buffer.from("Butler reads repo source truth.\n", "utf8").toString("base64"),
+        html_url:
+          "https://github.com/sample-org/vtdd-v2-p/blob/main/docs/setup/custom-gpt-instructions.md",
+        download_url:
+          "https://raw.githubusercontent.com/sample-org/vtdd-v2-p/main/docs/setup/custom-gpt-instructions.md"
+      }
+    ],
+    [
+      "/repos/sample-org/vtdd-v2-p/git/trees/main?recursive=1",
+      {
+        tree: [
+          {
+            path: "docs/setup/custom-gpt-instructions.md",
+            type: "blob",
+            mode: "100644",
+            sha: "instructions-sha",
+            size: 32,
+            url: "https://api.github.test/tree-entry"
+          }
+        ]
+      }
+    ],
+    [
+      "/repos/sample-org/vtdd-v2-p/actions/runs/4004/jobs?per_page=20",
+      {
+        jobs: [
+          {
+            id: 5005,
+            run_id: 4004,
+            name: "test",
+            status: "completed",
+            conclusion: "failure",
+            started_at: "2026-05-14T10:00:00Z",
+            completed_at: "2026-05-14T10:02:00Z",
+            html_url: "https://github.com/sample-org/vtdd-v2-p/actions/runs/4004/job/5005",
+            steps: [
+              {
+                name: "npm test",
+                status: "completed",
+                conclusion: "failure",
+                number: 3,
+                started_at: "2026-05-14T10:01:00Z",
+                completed_at: "2026-05-14T10:02:00Z"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  ]);
+
+  const env = {
+    GITHUB_APP_INSTALLATION_TOKEN: "ghs_read",
+    GITHUB_API_FETCH: async (url) => {
+      const parsed = new URL(url);
+      const key = `${parsed.pathname}${parsed.search}`;
+      const body = responses.get(key);
+      if (!body) {
+        return new Response(JSON.stringify({ message: `unexpected ${key}` }), { status: 404 });
+      }
+      return new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      });
+    }
+  };
+
+  const contents = await retrieveGitHubReadPlane({
+    resource: GitHubReadResource.CONTENTS,
+    repository: "sample-org/vtdd-v2-p",
+    path: "docs/setup/custom-gpt-instructions.md",
+    ref: "main",
+    env
+  });
+  const tree = await retrieveGitHubReadPlane({
+    resource: GitHubReadResource.TREE,
+    repository: "sample-org/vtdd-v2-p",
+    ref: "main",
+    env
+  });
+  const workflowJobs = await retrieveGitHubReadPlane({
+    resource: GitHubReadResource.WORKFLOW_JOBS,
+    repository: "sample-org/vtdd-v2-p",
+    runId: 4004,
+    env
+  });
+
+  assert.equal(contents.ok, true);
+  assert.equal(contents.read.records[0].path, "docs/setup/custom-gpt-instructions.md");
+  assert.equal(contents.read.records[0].content, "Butler reads repo source truth.\n");
+  assert.equal(contents.read.records[0].htmlUrl.includes("/blob/main/docs/setup/custom-gpt-instructions.md"), true);
+  assert.equal(tree.ok, true);
+  assert.equal(tree.read.records[0].path, "docs/setup/custom-gpt-instructions.md");
+  assert.equal(workflowJobs.ok, true);
+  assert.equal(workflowJobs.read.records[0].conclusion, "failure");
+  assert.equal(workflowJobs.read.records[0].steps[0].name, "npm test");
+  assert.equal(workflowJobs.read.records[0].steps[0].conclusion, "failure");
+});
+
 test("github read plane rejects unsupported resources and missing required identifiers", async () => {
   const unsupported = await retrieveGitHubReadPlane({
     resource: "milestones",
@@ -463,4 +573,14 @@ test("github read plane rejects unsupported resources and missing required ident
   });
   assert.equal(missingPullNumber.ok, false);
   assert.equal(missingPullNumber.reason.includes("pullNumber is required"), true);
+
+  const missingRunId = await retrieveGitHubReadPlane({
+    resource: GitHubReadResource.WORKFLOW_JOBS,
+    repository: "sample-org/vtdd-v2-p",
+    env: {
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_read"
+    }
+  });
+  assert.equal(missingRunId.ok, false);
+  assert.equal(missingRunId.reason.includes("runId is required"), true);
 });

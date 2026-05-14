@@ -15,7 +15,10 @@ export const GitHubReadResource = Object.freeze({
   PULL_REVIEW_COMMENTS: "pull_review_comments",
   CHECKS: "checks",
   WORKFLOW_RUNS: "workflow_runs",
-  BRANCHES: "branches"
+  WORKFLOW_JOBS: "workflow_jobs",
+  BRANCHES: "branches",
+  CONTENTS: "contents",
+  TREE: "tree"
 });
 
 export async function retrieveGitHubReadPlane(input = {}) {
@@ -26,6 +29,8 @@ export async function retrieveGitHubReadPlane(input = {}) {
   const branch = normalizeText(input.branch);
   const head = normalizeText(input.head);
   const ref = normalizeText(input.ref) || branch;
+  const path = normalizeRepositoryPath(input.path);
+  const runId = normalizePositiveInteger(input.runId);
   const state = normalizeText(input.state) || "open";
   const limit = normalizeLimit(input.limit, 20);
   const env = input.env ?? {};
@@ -47,7 +52,8 @@ export async function retrieveGitHubReadPlane(input = {}) {
     repository,
     issueNumber,
     pullNumber,
-    ref
+    ref,
+    runId
   });
   if (!validation.ok) {
     return {
@@ -65,6 +71,8 @@ export async function retrieveGitHubReadPlane(input = {}) {
     issueNumber,
     pullNumber,
     ref,
+    path,
+    runId,
     branch,
     head,
     state,
@@ -75,7 +83,7 @@ export async function retrieveGitHubReadPlane(input = {}) {
   });
 }
 
-function validateGitHubReadRequest({ resource, repository, issueNumber, pullNumber, ref }) {
+function validateGitHubReadRequest({ resource, repository, issueNumber, pullNumber, ref, runId }) {
   const issues = [];
   if (!Object.values(GitHubReadResource).includes(resource)) {
     issues.push("resource is unsupported");
@@ -101,6 +109,14 @@ function validateGitHubReadRequest({ resource, repository, issueNumber, pullNumb
     issues.push("ref or branch is required for checks");
   }
 
+  if (resource === GitHubReadResource.WORKFLOW_JOBS && !runId) {
+    issues.push("runId is required for workflow_jobs");
+  }
+
+  if (resource === GitHubReadResource.TREE && !ref) {
+    issues.push("ref or branch is required for tree");
+  }
+
   return issues.length > 0 ? { ok: false, issues } : { ok: true };
 }
 
@@ -111,6 +127,8 @@ async function fetchGitHubReadResource(input) {
     issueNumber,
     pullNumber,
     ref,
+    path,
+    runId,
     branch,
     head,
     state,
@@ -126,6 +144,8 @@ async function fetchGitHubReadResource(input) {
     issueNumber,
     pullNumber,
     ref,
+    path,
+    runId,
     branch,
     head,
     state,
@@ -184,6 +204,8 @@ function buildGitHubReadRequest({
   issueNumber,
   pullNumber,
   ref,
+  path,
+  runId,
   branch,
   head,
   state,
@@ -255,6 +277,12 @@ function buildGitHubReadRequest({
     return { url: url.toString() };
   }
 
+  if (resource === GitHubReadResource.WORKFLOW_JOBS) {
+    return {
+      url: `${apiBaseUrl}/repos/${encodedRepository}/actions/runs/${runId}/jobs?per_page=${limit}`
+    };
+  }
+
   if (resource === GitHubReadResource.BRANCHES) {
     if (branch) {
       return {
@@ -264,6 +292,25 @@ function buildGitHubReadRequest({
     return {
       url: `${apiBaseUrl}/repos/${encodedRepository}/branches?per_page=${limit}`
     };
+  }
+
+  if (resource === GitHubReadResource.CONTENTS) {
+    const encodedPath = path
+      .split("/")
+      .filter(Boolean)
+      .map((segment) => encodeURIComponent(segment))
+      .join("/");
+    const url = new URL(`${apiBaseUrl}/repos/${encodedRepository}/contents/${encodedPath}`);
+    if (ref) {
+      url.searchParams.set("ref", ref);
+    }
+    return { url: url.toString() };
+  }
+
+  if (resource === GitHubReadResource.TREE) {
+    const url = new URL(`${apiBaseUrl}/repos/${encodedRepository}/git/trees/${encodeURIComponent(ref)}`);
+    url.searchParams.set("recursive", "1");
+    return { url: url.toString() };
   }
 
   return { url: `${apiBaseUrl}/repos/${encodedRepository}` };
@@ -297,8 +344,17 @@ function normalizeGitHubReadRecords(resource, body) {
   if (resource === GitHubReadResource.WORKFLOW_RUNS) {
     return Array.isArray(body?.workflow_runs) ? body.workflow_runs.map(normalizeWorkflowRun) : [];
   }
+  if (resource === GitHubReadResource.WORKFLOW_JOBS) {
+    return Array.isArray(body?.jobs) ? body.jobs.map(normalizeWorkflowJob) : [];
+  }
   if (resource === GitHubReadResource.BRANCHES) {
     return Array.isArray(body) ? body.map(normalizeBranch) : [normalizeBranch(body)];
+  }
+  if (resource === GitHubReadResource.CONTENTS) {
+    return Array.isArray(body) ? body.map(normalizeContentEntry) : [normalizeContentEntry(body)];
+  }
+  if (resource === GitHubReadResource.TREE) {
+    return Array.isArray(body?.tree) ? body.tree.map(normalizeTreeEntry) : [];
   }
   return [];
 }
@@ -418,6 +474,29 @@ function normalizeWorkflowRun(item) {
   };
 }
 
+function normalizeWorkflowJob(item) {
+  return {
+    id: normalizePositiveInteger(item?.id),
+    runId: normalizePositiveInteger(item?.run_id),
+    name: normalizeText(item?.name),
+    status: normalizeText(item?.status),
+    conclusion: normalizeText(item?.conclusion),
+    startedAt: normalizeText(item?.started_at),
+    completedAt: normalizeText(item?.completed_at),
+    htmlUrl: normalizeText(item?.html_url),
+    steps: Array.isArray(item?.steps)
+      ? item.steps.map((step) => ({
+          name: normalizeText(step?.name),
+          status: normalizeText(step?.status),
+          conclusion: normalizeText(step?.conclusion),
+          number: normalizePositiveInteger(step?.number),
+          startedAt: normalizeText(step?.started_at),
+          completedAt: normalizeText(step?.completed_at)
+        }))
+      : []
+  };
+}
+
 function normalizeBranch(item) {
   return {
     name: normalizeText(item?.name),
@@ -425,6 +504,50 @@ function normalizeBranch(item) {
     sha: normalizeText(item?.commit?.sha),
     htmlUrl: normalizeText(item?.commit?.url)
   };
+}
+
+function normalizeContentEntry(item) {
+  const type = normalizeText(item?.type);
+  const content = type === "file" ? decodeGitHubTextContent(item?.content, item?.encoding) : null;
+  return {
+    name: normalizeText(item?.name),
+    path: normalizeText(item?.path),
+    type,
+    size: normalizePositiveInteger(item?.size),
+    sha: normalizeText(item?.sha),
+    htmlUrl: normalizeText(item?.html_url),
+    downloadUrl: normalizeText(item?.download_url) || null,
+    content,
+    encoding: content === null ? normalizeText(item?.encoding) || null : "utf-8"
+  };
+}
+
+function normalizeTreeEntry(item) {
+  return {
+    path: normalizeText(item?.path),
+    type: normalizeText(item?.type),
+    mode: normalizeText(item?.mode),
+    sha: normalizeText(item?.sha),
+    size: normalizePositiveInteger(item?.size),
+    url: normalizeText(item?.url)
+  };
+}
+
+function decodeGitHubTextContent(content, encoding) {
+  if (normalizeText(encoding) !== "base64") {
+    return null;
+  }
+  const compact = normalizeText(content).replace(/\s+/g, "");
+  if (!compact) {
+    return "";
+  }
+  try {
+    const binary = atob(compact);
+    const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+    return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+  } catch {
+    return null;
+  }
 }
 
 function readJsonSafe(response) {
@@ -461,4 +584,10 @@ function normalizePositiveInteger(value) {
 
 function normalizeText(value) {
   return String(value ?? "").trim();
+}
+
+function normalizeRepositoryPath(value) {
+  return normalizeText(value)
+    .replace(/^\/+/, "")
+    .replace(/\/{2,}/g, "/");
 }
