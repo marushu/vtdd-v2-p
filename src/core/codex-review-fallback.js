@@ -20,6 +20,7 @@ export function formatCodexReviewFallbackComment(input = {}) {
   const deliveryMode = normalizeText(input.deliveryMode) || "workflow_dispatch";
   const blocker = normalizeText(input.blocker);
   const recommendedAction = normalizeText(input.recommendedAction) || "manual_review";
+  const headSha = normalizeText(input.headSha);
   const criticalFindings = normalizeStringArray(input.criticalFindings);
   const risks = normalizeStringArray(input.risks);
   const rawReview = normalizeText(input.rawReview);
@@ -45,6 +46,7 @@ export function formatCodexReviewFallbackComment(input = {}) {
     `- Trigger: \`${trigger}\``,
     `- Reason: \`${reason}\``,
     `- Delivery mode: \`${deliveryMode}\``,
+    ...(headSha ? [`- Head SHA: \`${headSha}\``] : []),
     "",
     ...buildStatusSection({
       status,

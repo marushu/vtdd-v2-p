@@ -28,6 +28,12 @@ concurrency:
 
 jobs:
   review:
+    if: >-
+      ${{
+        github.event_name != 'issue_comment' ||
+        !contains(github.event.comment.body, '<!-- vtdd:reviewer=') ||
+        contains(github.event.comment.body, '<!-- vtdd:reviewer-objection-resolution -->')
+      }}
     runs-on: ubuntu-latest
     steps:
       - name: Detect GitHub App secret availability

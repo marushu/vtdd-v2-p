@@ -11,6 +11,7 @@ import {
   findExistingGeminiReviewComment,
   formatCodexReviewFallbackComment,
   formatGeminiReviewComment,
+  isReviewerTerminalApproved,
   parseGeminiReviewComment,
   resolveOperatorMention,
   resolveGeminiReviewTrigger
@@ -43,6 +44,16 @@ async function main() {
   const reviews = await githubFetch(`/repos/${repository}/pulls/${prNumber}/reviews?per_page=100`);
   const existingReviewComment = findExistingGeminiReviewComment(issueComments);
   const existingFallbackComment = findExistingCodexReviewFallbackComment(issueComments);
+  if (
+    triggerResult.value.trigger === "issue_comment:created" &&
+    isReviewerTerminalApproved({
+      comments: issueComments,
+      headSha: pullRequest?.head?.sha
+    })
+  ) {
+    console.log(`Skipping Gemini PR review: reviewer already approved current PR head on PR #${prNumber}.`);
+    return;
+  }
 
   if (!process.env.GEMINI_API_KEY) {
     console.log("Skipping Gemini PR review: GEMINI_API_KEY is not configured.");
@@ -83,6 +94,7 @@ async function main() {
         deliveryMode: "vps_codex_cli",
         repository,
         pullRequestNumber: prNumber,
+        headSha: pullRequest?.head?.sha,
         notificationMention: resolveOperatorMention([pullRequest?.user?.login, payload?.sender?.login])
       });
       await githubFetch(`/repos/${repository}/issues/${prNumber}/comments`, {
@@ -104,6 +116,7 @@ async function main() {
     review: reviewResult.review,
     trigger: triggerResult.value.trigger,
     model,
+    headSha: pullRequest?.head?.sha,
     notificationMention: shouldMentionGeminiReviewResult({
       existingComment: existingReviewComment,
       recommendedAction: reviewResult.review.recommendedAction

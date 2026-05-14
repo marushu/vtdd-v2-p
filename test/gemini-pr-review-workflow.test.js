@@ -37,6 +37,27 @@ test("Gemini review workflow still routes reviewer execution through the script 
   assert.equal(workflow.includes("issues: write"), false);
 });
 
+test("Gemini review workflow skips reviewer marker issue comments before dependency install", () => {
+  assert.equal(workflow.includes("github.event_name != 'issue_comment'"), true);
+  assert.equal(workflow.includes("!contains(github.event.comment.body, '<!-- vtdd:reviewer=')"), true);
+  assert.equal(
+    workflow.includes("contains(github.event.comment.body, '<!-- vtdd:reviewer-objection-resolution -->')"),
+    true
+  );
+  assert.equal(
+    workflow.indexOf("github.event_name != 'issue_comment'") <
+      workflow.indexOf("name: Detect GitHub App secret availability"),
+    true
+  );
+});
+
+test("Gemini review script stops issue-comment reruns when reviewer already approved", () => {
+  const script = fs.readFileSync("scripts/run-gemini-pr-review.mjs", "utf8");
+  assert.equal(script.includes("isReviewerTerminalApproved"), true);
+  assert.equal(script.includes("Skipping Gemini PR review: reviewer already approved current PR head"), true);
+  assert.equal(script.includes("headSha: pullRequest?.head?.sha"), true);
+});
+
 test("Gemini review script defaults Codex fallback to VPS Codex CLI transport", () => {
   const script = fs.readFileSync("scripts/run-gemini-pr-review.mjs", "utf8");
   assert.equal(script.includes('deliveryMode: "vps_codex_cli"'), true);
