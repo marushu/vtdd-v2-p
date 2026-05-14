@@ -8,6 +8,9 @@ const REQUIRED_MARKERS = [
   "## This PR satisfies Intent",
   "## Satisfied Success Criteria",
   "## Unsatisfied Success Criteria",
+  "## Dry-run Impact Report",
+  "## File / Line Hypotheses",
+  "## Hypothesis Retrospective",
   "## Verification Evidence",
   "## Butler Completion Contract",
   "## Surface Update Checklist",
@@ -22,6 +25,21 @@ const REQUIRED_BUTLER_FIELDS = [
   "Authority boundary",
   "E2E evidence",
   "Completion status",
+];
+
+const REQUIRED_DRY_RUN_FIELDS = [
+  "Target Issue",
+  "Implementing Success Criteria",
+  "Explicit Non-goals",
+  "Expected touched files/routes/workflows",
+  "Affected Issues",
+  "Affected PRs",
+  "Affected workflows",
+  "Affected runtime/operator surfaces",
+  "What may break if we patch narrowly",
+  "Unknowns to investigate before coding",
+  "Validation needed",
+  "Stop condition",
 ];
 
 const PLACEHOLDER_VALUES = new Set([
@@ -55,6 +73,25 @@ function validatePrBody(body, options = {}) {
     if (!templateMode && isPlaceholder(butlerFields[field])) {
       errors.push(`Butler Completion Contract field is not filled: ${field}`);
     }
+  }
+
+  const dryRunFields = extractSectionFields(body, "## Dry-run Impact Report");
+  for (const field of REQUIRED_DRY_RUN_FIELDS) {
+    if (!Object.hasOwn(dryRunFields, field)) {
+      errors.push(`Missing Dry-run Impact Report field: ${field}`);
+      continue;
+    }
+    if (!templateMode && isPlaceholder(dryRunFields[field])) {
+      errors.push(`Dry-run Impact Report field is not filled: ${field}`);
+    }
+  }
+
+  if (!templateMode && sectionLooksEmpty(body, "## File / Line Hypotheses")) {
+    errors.push("File / Line Hypotheses section is empty.");
+  }
+
+  if (!templateMode && sectionLooksEmpty(body, "## Hypothesis Retrospective")) {
+    errors.push("Hypothesis Retrospective section is empty.");
   }
 
   const completionStatus = normalizeValue(butlerFields["Completion status"]);
@@ -107,8 +144,12 @@ function validatePrBody(body, options = {}) {
 }
 
 function extractButlerFields(body) {
+  return extractSectionFields(body, "## Butler Completion Contract");
+}
+
+function extractSectionFields(body, heading) {
   const fields = {};
-  const section = body.split("## Butler Completion Contract")[1]?.split(/\n## /)[0] || "";
+  const section = body.split(heading)[1]?.split(/\n## /)[0] || "";
   for (const line of section.split("\n")) {
     const match = line.match(/^\s*-\s*([^:]+):\s*(.*)$/);
     if (match) {
@@ -116,6 +157,12 @@ function extractButlerFields(body) {
     }
   }
   return fields;
+}
+
+function sectionLooksEmpty(body, heading) {
+  const section = body.split(heading)[1]?.split(/\n## /)[0] || "";
+  const normalized = section.replace(/<!--[\s\S]*?-->/g, "").trim();
+  return isPlaceholder(normalized);
 }
 
 function normalizeValue(value) {

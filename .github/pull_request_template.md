@@ -16,6 +16,37 @@
 
 None.
 
+## Dry-run Impact Report
+
+- Target Issue:
+- Implementing Success Criteria:
+- Explicit Non-goals:
+- Expected touched files/routes/workflows:
+- Affected Issues:
+- Affected PRs:
+- Affected workflows:
+- Affected runtime/operator surfaces:
+- What may break if we patch narrowly:
+- Unknowns to investigate before coding:
+- Validation needed:
+- Stop condition:
+
+## File / Line Hypotheses
+
+- file: `path/to/file.js:line`
+  - hypothesis:
+  - risk if changed narrowly:
+  - validation:
+  - related Issue:
+
+## Hypothesis Retrospective
+
+- expected:
+- actual:
+- mismatch:
+- lesson:
+- should become RAG candidate:
+
 ## Verification Evidence
 
 - Unit:
