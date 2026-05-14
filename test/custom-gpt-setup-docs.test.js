@@ -79,6 +79,11 @@ test("custom gpt instructions preserve current butler and approval boundaries", 
   assert.equal(doc.includes("After writing a RAG checkpoint, confirm it with `vtddRetrieveOperationalMemory`"), true);
   assert.equal(doc.includes("Do not use `vtddRetrieveCrossMemory` as the only confirmation path for `working_memory` checkpoints"), true);
   assert.equal(doc.includes("Cross memory is decision/proposal/Issue oriented; operational memory is the checkpoint recall surface"), true);
+  assert.equal(doc.includes("At startup, distinguish the execution surfaces before proposing development work"), true);
+  assert.equal(doc.includes("Butler on iPhone/iPad must not assume the owner's Mac is awake"), true);
+  assert.equal(doc.includes("ChatGPT iPhone Codex cloud tasks can run in OpenAI-managed cloud environments"), true);
+  assert.equal(doc.includes("do not describe that as operating the local Mac Codex"), true);
+  assert.equal(doc.includes("Mac dependency detected"), true);
   assert.equal(doc.includes("Current natural GO\n  binding is supported for `issue_create`, `issue_comment_create`, and\n  `pull_comment_create`"), true);
   assert.equal(doc.includes("If an implementation request does not already name an existing Issue"), true);
   assert.equal(doc.includes("the next safe write is usually `issue_create`, not Codex handoff"), true);

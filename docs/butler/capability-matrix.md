@@ -48,6 +48,24 @@ GitHub UI fallback is not a steady-state answer. If an owner operation is
 unsupported, Butler must report that the operation is in scope, name the missing
 governed action surface, and cite remediation Issue #244.
 
+### Startup Surface Dependency Reading
+
+Issue #344 startup preflight must separate "can work from iPhone" from "can
+work only because the owner's Mac is currently awake." This distinction is
+owner-facing runtime truth, not trivia.
+
+| Surface | Mac required? | Current reading | Butler startup wording |
+|---|---:|---|---|
+| Butler Custom GPT on iPhone/iPad | no | Primary owner-facing surface. Can use configured Actions, GitHub runtime truth, RAG memory, passkey operator pages, and governed handoff routes. | Treat as the normal VTDD entrypoint. Do not ask for terminal/local server use during normal operation. |
+| ChatGPT iPhone Codex cloud | no for cloud tasks | Cloud task execution can run in an OpenAI-managed environment when the GitHub connector/environment is available. It is not the same as controlling the local Mac Codex. | Say `Codex cloud can run without the Mac when connector/env are available`; verify branch/PR/runtime evidence before claiming success. |
+| mac Codex | yes | Most capable local repair surface because it can use the local checkout, browser, and local credentials, but it disappears when the Mac sleeps or is offline. | Say `Mac dependency detected` if the proposed path needs local files, desktop/browser state, or unexported local credentials. |
+| VPS Codex CLI / runner | no for Mac | Owner-controlled always-on execution/reviewer fallback candidate. It should read repo truth and shared RAG, and it can provide terminal-like execution without an iPhone terminal app. | Prefer as the iPhone-safe fallback when Butler needs bounded implementation/review execution. |
+| Human GitHub UI from iPhone | no | Emergency manual fallback for merge/close/settings visibility, but not the intended steady-state VTDD operator path. | Use only as a clearly labeled fallback, not as proof that Butler completed the workflow. |
+
+Startup preflight should report any Mac dependency before handoff. If a task can
+be done through GitHub truth, runtime route, VPS runner, Codex cloud, or
+passkey operator, prefer that route over a Mac-only instruction.
+
 ### Owner-Operation Inventory Reading
 
 | Operation family | Current status | Required Butler action surface | Boundary / runtime truth |
