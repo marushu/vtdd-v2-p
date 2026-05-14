@@ -465,12 +465,22 @@ export async function buildCustomGptRecoveryBundle(input = {}) {
       ref,
       requestedRef,
       runtimeOrigin,
+      sourceCommitSha:
+        channel === CustomGptSetupChannel.KNOWN_GOOD
+          ? knownGoodCommit?.sha ?? null
+          : latestCommit?.sha ?? null,
+      sourceCommitSource:
+        channel === CustomGptSetupChannel.KNOWN_GOOD
+          ? knownGoodCommit?.source ?? "unverified"
+          : latestCommit?.source ?? "unverified",
       generatedAt: new Date().toISOString(),
       actionSchema: {
         path: openapi.artifact.path,
         sourceSha: openapi.artifact.sha,
         serverUrl: runtimeOrigin,
         contentType: openapi.artifact.contentType,
+        characterCount: countCodePoints(actionSchema),
+        byteCount: countUtf8Bytes(actionSchema),
         content: actionSchema
       },
       instructionsShortMin: {
@@ -479,6 +489,7 @@ export async function buildCustomGptRecoveryBundle(input = {}) {
         contentType: instructionsShortMin.artifact.contentType,
         characterLimit: INSTRUCTIONS_CHARACTER_LIMIT,
         characterCount: instructionsCharacterCount,
+        byteCount: countUtf8Bytes(instructions),
         limitExceeded: instructionsLimitExceeded,
         content: instructions
       },
@@ -486,11 +497,11 @@ export async function buildCustomGptRecoveryBundle(input = {}) {
         knownGoodCommitSha:
           channel === CustomGptSetupChannel.KNOWN_GOOD
             ? knownGoodCommit?.sha
-            : latestCommit?.sha,
+            : null,
         knownGoodCommitSource:
           channel === CustomGptSetupChannel.KNOWN_GOOD
             ? knownGoodCommit?.source
-            : latestCommit?.source,
+            : "not_checked_on_latest",
         rollbackReady: channel === CustomGptSetupChannel.KNOWN_GOOD,
         bundleArtifacts: [
           openapi.artifact.path,
@@ -740,41 +751,58 @@ function renderRecoveryBundleSections(recovery) {
         <div><strong>Worker URL</strong><br>${escapeHtml(recovery.runtimeOrigin)}</div>
         <div><strong>Repository</strong><br>${escapeHtml(recovery.repository)}</div>
         <div><strong>${recovery.channel === CustomGptSetupChannel.KNOWN_GOOD ? "Known-good ref" : "Latest ref"}</strong><br>${escapeHtml(recovery.ref)}</div>
-        <div><strong>Known-good commit</strong><br>${escapeHtml(rollback.knownGoodCommitSha || "unverified")}</div>
+        <div><strong>Bundle commit</strong><br>${escapeHtml(recovery.sourceCommitSha || "未確認")}</div>
+        <div><strong>Known-good commit</strong><br>${escapeHtml(rollback.knownGoodCommitSha || "未確認")}</div>
         <div><strong>Self-parity</strong><br>${escapeHtml(selfParity.runtimeParity)}</div>
         <div><strong>Deploy state</strong><br>${escapeHtml(recovery.runtime.deployState)}</div>
-        <div><strong>short-min length</strong><br>${instructions.characterCount} / ${instructions.characterLimit}</div>
+        <div><strong>Action Schema length</strong><br>${actionSchema.characterCount} chars / ${actionSchema.byteCount} bytes</div>
+        <div><strong>short-min length</strong><br>${instructions.characterCount} chars / ${instructions.byteCount} bytes / limit ${instructions.characterLimit}</div>
         <div><strong>Safety</strong><br>No secret values, tokens, or approval grants are displayed.</div>
       </div>
     </section>
     <section>
+      <h2>URL separation</h2>
+      <div class="meta">
+        <div><strong>Recovery page URL</strong><br>${escapeHtml(recovery.channel === CustomGptSetupChannel.KNOWN_GOOD ? "/setup/known-good" : "/setup/latest")}</div>
+        <div><strong>Runtime origin</strong><br>${escapeHtml(recovery.runtimeOrigin)}</div>
+        <div><strong>Action Schema server URL</strong><br>${escapeHtml(actionSchema.serverUrl)}</div>
+        <div><strong>Operator URL</strong><br>別用途。passkey / deploy / high-risk approval でのみ使う。</div>
+      </div>
+    </section>
+    <section>
       <h2>Copy-ready Action Schema</h2>
-      <p class="small">${escapeHtml(actionSchema.path)}; servers.url = ${escapeHtml(actionSchema.serverUrl)}</p>
+      <p class="small">source: ${escapeHtml(actionSchema.path)}; sourceSha: ${escapeHtml(actionSchema.sourceSha)}; copy payload: raw YAML, not URL encoded</p>
       <p><button type="button" data-copy-target="action-schema" data-copy-label="Copy Action Schema">Copy Action Schema</button></p>
       <textarea id="action-schema" spellcheck="false">${escapeHtml(actionSchema.content)}</textarea>
     </section>
     <section>
       <h2>Copy-ready custom-gpt-instructions-short-min.md</h2>
-      <p class="small">${escapeHtml(instructions.path)}</p>
+      <p class="small">source: ${escapeHtml(instructions.path)}; sourceSha: ${escapeHtml(instructions.sourceSha)}; copy payload: raw Markdown, not URL encoded</p>
       <p><button type="button" data-copy-target="instructions-short-min" data-copy-label="Copy Instructions">Copy Instructions</button></p>
       <textarea id="instructions-short-min" spellcheck="false">${escapeHtml(instructions.content)}</textarea>
     </section>
     <section>
-      <h2>Known-good rollback bundle</h2>
+      <h2>${rollback.rollbackReady ? "Known-good rollback bundle" : "Known-good status / rollback preview"}</h2>
       ${
         rollback.rollbackReady
           ? `<p><button type="button" data-copy-target="rollback-bundle" data-copy-label="Copy Rollback Bundle">Copy Rollback Bundle</button></p>`
-          : `<p class="small">Rollback は setup/known-good で copy-ready になります。latest は現在の候補確認用です。</p>`
+          : `<p class="small">Rollback は setup/known-good で copy-ready になります。latest は現在の候補確認用で、known-good としては未確認です。</p>`
       }
       <pre>${escapeHtml(
         [
           `repository: ${recovery.repository}`,
           `channel: ${recovery.channel}`,
           `ref: ${recovery.ref}`,
-          `knownGoodCommitSha: ${rollback.knownGoodCommitSha || "unverified"}`,
+          `bundleCommitSha: ${recovery.sourceCommitSha || "未確認"}`,
+          `bundleCommitSource: ${recovery.sourceCommitSource}`,
+          `knownGoodCommitSha: ${rollback.knownGoodCommitSha || "未確認"}`,
           `knownGoodCommitSource: ${rollback.knownGoodCommitSource}`,
           `actionSchemaPath: ${actionSchema.path}`,
+          `actionSchemaSourceSha: ${actionSchema.sourceSha}`,
+          `actionSchemaLength: ${actionSchema.characterCount} chars / ${actionSchema.byteCount} bytes`,
           `instructionsShortMinPath: ${instructions.path}`,
+          `instructionsShortMinSourceSha: ${instructions.sourceSha}`,
+          `instructionsShortMinLength: ${instructions.characterCount} chars / ${instructions.byteCount} bytes`,
           `selfParity: ${selfParity.runtimeParity}`,
           `deployState: ${recovery.runtime.deployState}`,
           "restoreOrder:",
@@ -788,10 +816,16 @@ function renderRecoveryBundleSections(recovery) {
                 `repository: ${recovery.repository}`,
                 `channel: ${recovery.channel}`,
                 `ref: ${recovery.ref}`,
-                `knownGoodCommitSha: ${rollback.knownGoodCommitSha || "unverified"}`,
+                `bundleCommitSha: ${recovery.sourceCommitSha || "未確認"}`,
+                `bundleCommitSource: ${recovery.sourceCommitSource}`,
+                `knownGoodCommitSha: ${rollback.knownGoodCommitSha || "未確認"}`,
                 `knownGoodCommitSource: ${rollback.knownGoodCommitSource}`,
                 `actionSchemaPath: ${actionSchema.path}`,
+                `actionSchemaSourceSha: ${actionSchema.sourceSha}`,
+                `actionSchemaLength: ${actionSchema.characterCount} chars / ${actionSchema.byteCount} bytes`,
                 `instructionsShortMinPath: ${instructions.path}`,
+                `instructionsShortMinSourceSha: ${instructions.sourceSha}`,
+                `instructionsShortMinLength: ${instructions.characterCount} chars / ${instructions.byteCount} bytes`,
                 `selfParity: ${selfParity.runtimeParity}`,
                 `deployState: ${recovery.runtime.deployState}`,
                 "restoreOrder:",
@@ -812,6 +846,10 @@ function normalizeSetupChannel(value) {
 
 function countCodePoints(value) {
   return Array.from(String(value ?? "")).length;
+}
+
+function countUtf8Bytes(value) {
+  return new TextEncoder().encode(String(value ?? "")).length;
 }
 
 function escapeHtml(value) {

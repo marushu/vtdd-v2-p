@@ -349,9 +349,14 @@ test("buildCustomGptRecoveryBundle expands Worker URL and reports short-min leng
     true
   );
   assert.equal(result.recovery.actionSchema.serverUrl, "https://sample-user-vtdd.example.workers.dev");
+  assert.equal(result.recovery.actionSchema.characterCount, result.recovery.actionSchema.content.length);
+  assert.equal(result.recovery.actionSchema.byteCount, Buffer.byteLength(result.recovery.actionSchema.content, "utf8"));
   assert.equal(result.recovery.instructionsShortMin.characterCount, shortMin.length);
+  assert.equal(result.recovery.instructionsShortMin.byteCount, Buffer.byteLength(shortMin, "utf8"));
   assert.equal(result.recovery.instructionsShortMin.limitExceeded, false);
-  assert.equal(result.recovery.rollback.knownGoodCommitSha, "a".repeat(40));
+  assert.equal(result.recovery.sourceCommitSha, "a".repeat(40));
+  assert.equal(result.recovery.rollback.knownGoodCommitSha, null);
+  assert.equal(result.recovery.rollback.knownGoodCommitSource, "not_checked_on_latest");
   assert.equal(result.recovery.runtime.deployState, "in_sync");
   assert.deepEqual(result.recovery.safety, {
     displaysSecrets: false,
