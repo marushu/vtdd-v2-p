@@ -19,3 +19,10 @@ test("desktop helper bridge passes role-specific GitHub App sync arguments", () 
   assert.equal(helperSource.includes("githubAppRole"), true);
   assert.equal(helperSource.includes("github_app_role_not_served"), true);
 });
+
+test("desktop helper bridge does not proxy local passkey WebAuthn APIs", () => {
+  assert.equal(helperSource.includes('url.pathname.startsWith("/api/approval/passkey/")'), false);
+  assert.equal(helperSource.includes("function proxyPasskeyApi"), false);
+  assert.equal(helperSource.includes("passkeyEnabled: false"), true);
+  assert.equal(helperSource.includes("この local helper は passkey/WebAuthn を実行しません。"), true);
+});

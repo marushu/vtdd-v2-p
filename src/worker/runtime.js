@@ -855,7 +855,6 @@ async function handleRetrieveOperationalMemoryRequest(url, env) {
 
 async function handleRetrieveApprovalGrantRequest(url, env) {
   const provider = resolveMemoryProvider(env);
-  await purgeExpiredPasskeyArtifacts(provider);
   const validation = validateMemoryProvider(provider);
   if (!validation.ok) {
     return retrieveErrorJson(url, 503, {
@@ -880,6 +879,13 @@ async function handleRetrieveApprovalGrantRequest(url, env) {
       ok: false,
       error: "approval_grant_not_found",
       reason: "matching passkey approval grant was not found"
+    });
+  }
+  if (isExpiredPasskeyEphemeralRecord(record)) {
+    return retrieveErrorJson(url, 410, {
+      ok: false,
+      error: "approval_grant_expired",
+      reason: "approval grant is expired. Worker origin で再承認して、新しい approvalGrantId を取得してください。"
     });
   }
 
@@ -2502,6 +2508,7 @@ function handlePasskeyOperatorPageRequest(request) {
     returnUrl: normalizeOperatorReturnUrl(url.searchParams.get("returnUrl")),
     operatorId: url.searchParams.get("operatorId") || "vtdd-operator",
     operatorLabel: url.searchParams.get("operatorLabel") || "VTDD Operator",
+    githubAppRole: url.searchParams.get("githubAppRole") || "legacy",
     syncEnabled,
     syncMessage: syncEnabled
       ? "approvalGrantId が取得済みなら実行できます。desktop helper bridge に接続します。"
@@ -3397,10 +3404,25 @@ async function findApprovalRecordById(provider, recordId) {
     text: recordId,
     limit: 50
   });
-  return (
+  const matched =
     records.find((record) => normalizeText(record?.id) === recordId) ??
     records.find((record) => normalizeText(record?.content?.approvalId) === recordId) ??
     records.find((record) => normalizeText(record?.content?.sessionId) === recordId) ??
+    null;
+  if (matched) {
+    return matched;
+  }
+  if (typeof provider.retrieve !== "function") {
+    return null;
+  }
+  const fallbackRecords = await provider.retrieve({
+    type: MemoryRecordType.APPROVAL_LOG,
+    limit: MAX_MEMORY_LIMIT
+  });
+  return (
+    fallbackRecords.find((record) => normalizeText(record?.id) === recordId) ??
+    fallbackRecords.find((record) => normalizeText(record?.content?.approvalId) === recordId) ??
+    fallbackRecords.find((record) => normalizeText(record?.content?.sessionId) === recordId) ??
     null
   );
 }

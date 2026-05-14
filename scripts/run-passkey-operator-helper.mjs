@@ -93,15 +93,13 @@ async function handleRequest({ request, response, state }) {
       issueNumber: state.issueNumber,
       highRiskKind: state.highRiskKind,
       githubAppRole: state.appRole,
-      syncEnabled: true
+      syncEnabled: true,
+      passkeyEnabled: false,
+      syncMessage:
+        "Worker origin で取得した approvalGrantId を貼り付けて実行します。この local helper は passkey/WebAuthn を実行しません。"
     });
     response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
     response.end(html);
-    return;
-  }
-
-  if (url.pathname.startsWith("/api/approval/passkey/")) {
-    await proxyPasskeyApi({ request, response, state, pathname: url.pathname.replace("/api", "/v2") });
     return;
   }
 
@@ -201,25 +199,6 @@ async function handleRequest({ request, response, state }) {
     ok: false,
     error: "not_found"
   }, corsHeaders);
-}
-
-async function proxyPasskeyApi({ request, response, state, pathname }) {
-  const endpoint = new URL(pathname, state.runtimeUrl);
-  const body =
-    request.method === "GET" || request.method === "HEAD" ? undefined : await readBody(request);
-  const proxied = await fetch(endpoint, {
-    method: request.method,
-    headers: {
-      authorization: `Bearer ${state.bearerToken}`,
-      "content-type": request.headers["content-type"] || "application/json"
-    },
-    body
-  });
-  const text = await proxied.text();
-  response.writeHead(proxied.status, {
-    "content-type": proxied.headers.get("content-type") || "application/json; charset=utf-8"
-  });
-  response.end(text);
 }
 
 function parseArgs(args) {
