@@ -52,6 +52,16 @@ test("remote Codex docs define private repository VPS Actions-minimization bound
   assert.equal(doc.includes("Actions cost is zero"), true);
 });
 
+test("remote Codex docs require VPS handoff note as restart context", () => {
+  const doc = read("docs/butler/remote-codex-cli-executor.md");
+
+  assert.equal(doc.includes("preflight receipt must also include a `handoffNote`"), true);
+  assert.equal(doc.includes("readable by Butler, mac Codex, and VPS Codex CLI"), true);
+  assert.equal(doc.includes("restart context,\nnot a substitute for GitHub runtime truth"), true);
+  assert.equal(doc.includes("RAG checkpoint candidates before handoff ends"), true);
+  assert.equal(doc.includes("surface the mismatch rather than guessing"), true);
+});
+
 test("reviewer policy requires explicit cost/account choice for API-key reviewers", () => {
   const doc = read("docs/security/reviewer-policy.md");
 

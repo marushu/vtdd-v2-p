@@ -1161,6 +1161,14 @@ test("VPS runner Codex prompt preserves high-risk boundaries", () => {
         title: "Smoke test",
         bodyExcerpt: "Create a small smoke evidence file."
       },
+      handoffNote: {
+        currentSurface: "VPS Codex CLI",
+        repository: "sample-org/vtdd-v2",
+        issueNumber: 157,
+        codexGoal: "open_pr",
+        nextSafeAction: "resume from the canonical Issue, GitHub runtime truth, RAG checkpoints, and this preflight receipt",
+        blockedReturnRoute: "If the issue/runtime truth is insufficient, stop and return a Japanese blocker comment for Butler/owner instead of guessing."
+      },
       artifacts: [{ path: "AGENTS.md", sha1: "abc123" }],
       missing: []
     }
@@ -1176,6 +1184,10 @@ test("VPS runner Codex prompt preserves high-risk boundaries", () => {
   assert.equal(prompt.includes("scripts/validate-pr-body.mjs"), true);
   assert.equal(prompt.includes("Context preflight receipt:"), true);
   assert.equal(prompt.includes("AGENTS.md sha1=abc123"), true);
+  assert.equal(prompt.includes("Handoff note:"), true);
+  assert.equal(prompt.includes("Current surface: VPS Codex CLI"), true);
+  assert.equal(prompt.includes("Next safe action: resume from the canonical Issue"), true);
+  assert.equal(prompt.includes("Japanese blocker comment for Butler/owner"), true);
   assert.equal(prompt.includes("owner_decision_required"), true);
   assert.equal(prompt.includes("## This PR satisfies Intent"), true);
   assert.equal(prompt.includes("## Surface Update Checklist"), true);
@@ -1191,7 +1203,11 @@ test("VPS runner builds preflight receipt from canonical repo files", async () =
   await fs.writeFile(path.join(tempRoot, "scripts/validate-pr-body.mjs"), "export function validatePrBody() {}\n");
 
   const payload = {
+    repository: "sample-org/vtdd-v2",
     issueNumber: 307,
+    branch: "codex/issue-307",
+    baseRef: "main",
+    codexGoal: "open_pr",
     preflightPolicy: {
       mode: "auto_receipt",
       onMissingContract: "owner_decision_required",
@@ -1217,7 +1233,17 @@ test("VPS runner builds preflight receipt from canonical repo files", async () =
   assert.equal(receipt.ok, true);
   assert.equal(receipt.artifacts.length, 4);
   assert.equal(receipt.issue.number, 307);
+  assert.equal(receipt.handoffNote.currentSurface, "VPS Codex CLI");
+  assert.deepEqual(receipt.handoffNote.nextReadableBy, ["Butler", "mac Codex", "VPS Codex CLI"]);
+  assert.equal(receipt.handoffNote.repository, "sample-org/vtdd-v2");
+  assert.equal(receipt.handoffNote.issueNumber, 307);
+  assert.equal(receipt.handoffNote.branch, "codex/issue-307");
+  assert.equal(receipt.handoffNote.baseRef, "main");
+  assert.equal(receipt.handoffNote.codexGoal, "open_pr");
+  assert.match(receipt.handoffNote.nextSafeAction, /RAG checkpoints/);
+  assert.match(receipt.handoffNote.blockedReturnRoute, /Butler\/owner/);
   assert.equal(payload.preflightReceipt.ok, true);
+  assert.equal(payload.preflightReceipt.handoffNote.issueNumber, 307);
 });
 
 test("VPS runner preflight receipt requires owner decision when required files are missing", async () => {
