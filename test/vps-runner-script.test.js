@@ -12,6 +12,7 @@ import {
   buildVpsRunnerPreflightReceipt,
   buildVpsRunnerCompletionFinalEvent,
   buildVpsRunnerEventComment,
+  buildVpsReviewerFallbackActorIdentityIncident,
   buildVpsRunnerStateComment,
   buildVpsRunnerPullRequestContext,
   checkoutVpsRunnerBranch,
@@ -25,6 +26,7 @@ import {
   parseVpsRunnerQueueComment,
   postVpsRunnerEvent,
   runVpsRunnerOnce,
+  resolveRoleGitHubAppInstallationToken,
   summarizeDiagnosticText,
   selectPendingVpsReviewerFallbacks,
   selectPendingVpsRunnerExecutions
@@ -1017,6 +1019,80 @@ test("VPS runner can reprocess Codex fallback requested comments for a new head 
 
   assert.equal(selected.length, 1);
   assert.equal(selected[0].pullRequestNumber, 22);
+});
+
+test("VPS runner does not reprocess Codex fallback requests after actor identity incident", () => {
+  const selected = selectPendingVpsReviewerFallbacks({
+    repositoryPolicies: normalizeRepositoryPolicies({
+      allowedRepositories: ["sample-org/vtdd-v2"]
+    }),
+    comments: [
+      {
+        id: 1,
+        created_at: "2026-05-14T11:50:00Z",
+        repository: "sample-org/vtdd-v2",
+        pullRequestNumber: 22,
+        headSha: "abc123",
+        body: [
+          "<!-- vtdd:reviewer=codex-fallback -->",
+          "- Status: `requested`",
+          "- Trigger: `pull_request_target:synchronize`",
+          "- Reason: `gemini_temporarily_unavailable`",
+          "- Delivery mode: `vps_codex_cli`",
+          "- Head SHA: `abc123`"
+        ].join("\n")
+      },
+      {
+        id: 2,
+        created_at: "2026-05-14T11:51:00Z",
+        repository: "sample-org/vtdd-v2",
+        pullRequestNumber: 22,
+        headSha: "abc123",
+        body: [
+          "@marushu 【要対応】VPS Codex CLI: PRレビュー結果を正しいBot名で投稿できません",
+          "",
+          "<!-- vtdd:incident=actor_identity_failure -->",
+          "",
+          "- Head SHA: `abc123`"
+        ].join("\n")
+      }
+    ]
+  });
+
+  assert.equal(selected.length, 0);
+});
+
+test("VPS runner actor identity incident starts with Japanese owner notification", () => {
+  const incident = buildVpsReviewerFallbackActorIdentityIncident({
+    reviewerFallback: {
+      repository: "marushu/vtdd-v2-p",
+      pullRequestNumber: 368,
+      headSha: "abc123"
+    },
+    reason: "VTDD Codex Fallback Reviewer GitHub App token unavailable: missing private key",
+    notifierAvailable: true
+  });
+
+  assert.equal(
+    incident.body.split("\n")[0],
+    "@marushu 【要対応】VPS Codex CLI: PRレビュー結果を正しいBot名で投稿できません"
+  );
+  assert.equal(incident.body.includes("<!-- vtdd:incident=actor_identity_failure -->"), true);
+  assert.equal(incident.body.includes("- Expected actor: `VTDD Codex Fallback Reviewer`"), true);
+  assert.equal(incident.body.includes("- Detected by: `VTDD VPS Codex CLI`"), true);
+  assert.equal(incident.body.includes("`marushu` として代替投稿することは禁止"), true);
+});
+
+test("VPS runner role App token resolution fails closed when role credentials are missing", async () => {
+  const result = await resolveRoleGitHubAppInstallationToken({
+    role: "codex_fallback_reviewer",
+    env: {},
+    apiBaseUrl: "https://api.github.com"
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.reason.includes("VTDD Codex Fallback Reviewer"), true);
+  assert.equal(result.reason.includes("missing app id, private key, installation id"), true);
 });
 
 test("VPS runner ignores untrusted approve markers when selecting Codex fallback requests", () => {

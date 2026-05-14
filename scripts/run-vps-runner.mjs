@@ -9,7 +9,8 @@ import { fileURLToPath } from "node:url";
 import {
   isReviewerTerminalApproved,
   normalizeMentionLogin,
-  parseCodexReviewFallbackComment
+  parseCodexReviewFallbackComment,
+  resolveGitHubAppInstallationToken
 } from "../src/core/index.js";
 import { buildExecutionLeadTime } from "../src/core/execution-lead-time.js";
 import { prepareGuardedPullRequestBody, prepareGuardedPullRequestBodyFile } from "./prepare-pr-body-file.mjs";
@@ -21,6 +22,23 @@ const CANCELED_MARKER_RE = /<!--\s*vtdd:vps-runner-canceled:([a-zA-Z0-9._:-]+)\s
 const DEFAULT_API_BASE_URL = "https://api.github.com";
 const DEFAULT_HEARTBEAT_SECONDS = 120;
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
+const VTDD_INCIDENT_ACTOR_IDENTITY_FAILURE_MARKER = "<!-- vtdd:incident=actor_identity_failure -->";
+const ROLE_GITHUB_APP_ENV = {
+  codex_fallback_reviewer: {
+    label: "VTDD Codex Fallback Reviewer",
+    appId: "VTDD_CODEX_FALLBACK_REVIEWER_APP_ID",
+    privateKey: "VTDD_CODEX_FALLBACK_REVIEWER_APP_PRIVATE_KEY",
+    privateKeyBase64: "VTDD_CODEX_FALLBACK_REVIEWER_APP_PRIVATE_KEY_BASE64",
+    installationId: "VTDD_CODEX_FALLBACK_REVIEWER_APP_INSTALLATION_ID"
+  },
+  vps_codex_cli: {
+    label: "VTDD VPS Codex CLI",
+    appId: "VTDD_VPS_CODEX_CLI_APP_ID",
+    privateKey: "VTDD_VPS_CODEX_CLI_APP_PRIVATE_KEY",
+    privateKeyBase64: "VTDD_VPS_CODEX_CLI_APP_PRIVATE_KEY_BASE64",
+    installationId: "VTDD_VPS_CODEX_CLI_APP_INSTALLATION_ID"
+  }
+};
 const MILESTONE_MENTION_EVENTS = new Set([
   "picked_up",
   "branch_pushed",
@@ -486,6 +504,15 @@ function selectPendingVpsReviewerFallbacks({ comments, allowedRepositories, repo
       ) {
         return null;
       }
+      if (
+        hasVpsReviewerFallbackActorIdentityIncident({
+          comments: samePullRequestComments,
+          after: comment.created_at,
+          headSha: normalizeText(comment.headSha)
+        })
+      ) {
+        return null;
+      }
       return {
         repository,
         pullRequestNumber,
@@ -493,7 +520,8 @@ function selectPendingVpsReviewerFallbacks({ comments, allowedRepositories, repo
         reason: extractBacktickedCommentValue(comment.body, "Reason") || "gemini_temporarily_unavailable",
         createdAt: comment.created_at,
         commentId: comment.id,
-        commentUrl: comment.html_url
+        commentUrl: comment.html_url,
+        headSha: normalizeText(comment.headSha)
       };
     })
     .filter(Boolean);
@@ -1080,8 +1108,22 @@ function truncateForPrompt(value, maxLength) {
 }
 
 async function executeVpsReviewerFallback({ token, reviewerFallback }) {
+  const apiBaseUrl = process.env.GITHUB_API_URL || DEFAULT_API_BASE_URL;
+  const fallbackToken = await resolveRoleGitHubAppInstallationToken({
+    role: "codex_fallback_reviewer",
+    env: process.env,
+    apiBaseUrl
+  });
+  if (!fallbackToken.ok) {
+    return handleVpsReviewerFallbackActorIdentityFailure({
+      reviewerFallback,
+      reason: fallbackToken.reason,
+      apiBaseUrl
+    });
+  }
+
   const env = {
-    ...buildRunnerCommandEnv({ token }),
+    ...buildRunnerCommandEnv({ token: fallbackToken.token }),
     TARGET_REPOSITORY: reviewerFallback.repository,
     TARGET_PR_NUMBER: String(reviewerFallback.pullRequestNumber),
     CODEX_FALLBACK_TRIGGER: reviewerFallback.trigger,
@@ -1105,6 +1147,174 @@ async function executeVpsReviewerFallback({ token, reviewerFallback }) {
       reason: error instanceof Error ? error.message : String(error)
     };
   }
+}
+
+async function handleVpsReviewerFallbackActorIdentityFailure({
+  reviewerFallback,
+  reason,
+  apiBaseUrl
+}) {
+  const notificationToken = await resolveRoleGitHubAppInstallationToken({
+    role: "vps_codex_cli",
+    env: process.env,
+    apiBaseUrl
+  });
+  const incident = buildVpsReviewerFallbackActorIdentityIncident({
+    reviewerFallback,
+    reason,
+    notifierAvailable: notificationToken.ok,
+    notifierReason: notificationToken.reason
+  });
+
+  if (!notificationToken.ok) {
+    return {
+      ok: false,
+      reason: incident.logSummary
+    };
+  }
+
+  const incidentFetch = createGitHubFetch({
+    token: notificationToken.token,
+    apiBaseUrl
+  });
+  await incidentFetch(`/repos/${reviewerFallback.repository}/issues/${reviewerFallback.pullRequestNumber}/comments`, {
+    method: "POST",
+    body: {
+      body: incident.body
+    }
+  });
+
+  return {
+    ok: false,
+    reason: incident.logSummary
+  };
+}
+
+function buildVpsReviewerFallbackActorIdentityIncident({
+  reviewerFallback,
+  reason,
+  notifierAvailable,
+  notifierReason
+}) {
+  const mention = resolveIncidentOperatorMention({ repository: reviewerFallback?.repository });
+  const headSha = normalizeText(reviewerFallback?.headSha) || "unknown";
+  const body = [
+    `${mention ? `@${mention} ` : ""}【要対応】VPS Codex CLI: PRレビュー結果を正しいBot名で投稿できません`,
+    "",
+    VTDD_INCIDENT_ACTOR_IDENTITY_FAILURE_MARKER,
+    "",
+    "## 何が起きたか",
+    "",
+    "`VTDD Codex Fallback Reviewer` として fallback review completed を投稿するための App token を用意できませんでした。",
+    "`marushu` として代替投稿することは禁止されているため、reviewer completed comment は投稿していません。",
+    "",
+    "## 影響",
+    "",
+    `- Repository: \`${normalizeRepository(reviewerFallback?.repository) || "unknown"}\``,
+    `- Pull request: #${normalizePositiveInteger(reviewerFallback?.pullRequestNumber) || "unknown"}`,
+    `- Head SHA: \`${headSha}\``,
+    "- Expected actor: `VTDD Codex Fallback Reviewer`",
+    "- Detected by: `VTDD VPS Codex CLI`",
+    "",
+    "## 次に必要なこと",
+    "",
+    "`VTDD_CODEX_FALLBACK_REVIEWER_APP_ID` / `VTDD_CODEX_FALLBACK_REVIEWER_APP_PRIVATE_KEY` / `VTDD_CODEX_FALLBACK_REVIEWER_APP_INSTALLATION_ID` を VPS runner から使える状態にしてください。",
+    "",
+    "## Runtime truth",
+    "",
+    `- failure: \`${sanitizeIncidentField(reason) || "fallback_reviewer_app_token_unavailable"}\``,
+    `- notifierAvailable: \`${notifierAvailable ? "true" : "false"}\``,
+    `- notifierReason: \`${sanitizeIncidentField(notifierReason) || "none"}\``
+  ].join("\n");
+
+  return {
+    body,
+    logSummary: [
+      "Codex fallback reviewer actor identity failure:",
+      sanitizeIncidentField(reason) || "fallback reviewer App token unavailable",
+      "Posting as marushu is forbidden.",
+      notifierAvailable
+        ? "Incident notification was posted by VTDD VPS Codex CLI."
+        : `Incident notification was not posted: ${sanitizeIncidentField(notifierReason) || "VPS Codex CLI App token unavailable"}.`
+    ].join(" ")
+  };
+}
+
+async function resolveRoleGitHubAppInstallationToken({ role, env = process.env, apiBaseUrl }) {
+  const names = ROLE_GITHUB_APP_ENV[role];
+  if (!names) {
+    return {
+      ok: false,
+      reason: `unknown GitHub App role: ${role}`
+    };
+  }
+  const roleEnv = buildRoleGitHubAppInstallationTokenEnv({ env, names });
+  const missing = [
+    ["app id", roleEnv.GITHUB_APP_ID],
+    ["private key", roleEnv.GITHUB_APP_PRIVATE_KEY || roleEnv.GITHUB_APP_PRIVATE_KEY_BASE64],
+    ["installation id", roleEnv.GITHUB_APP_INSTALLATION_ID]
+  ]
+    .filter(([, value]) => !normalizeText(value))
+    .map(([label]) => label);
+  if (missing.length > 0) {
+    return {
+      ok: false,
+      reason: `${names.label} GitHub App token unavailable: missing ${missing.join(", ")}`
+    };
+  }
+
+  const tokenResolution = await resolveGitHubAppInstallationToken({
+    env: roleEnv,
+    apiBaseUrl
+  });
+  if (!tokenResolution.ok) {
+    return {
+      ok: false,
+      reason: tokenResolution.warning || `${names.label} GitHub App token unavailable`
+    };
+  }
+  return {
+    ok: true,
+    token: tokenResolution.token
+  };
+}
+
+function buildRoleGitHubAppInstallationTokenEnv({ env = process.env, names }) {
+  return {
+    ...env,
+    GITHUB_APP_ID: env[names.appId],
+    GITHUB_APP_PRIVATE_KEY: env[names.privateKey],
+    GITHUB_APP_PRIVATE_KEY_BASE64: env[names.privateKeyBase64],
+    GITHUB_APP_INSTALLATION_ID: env[names.installationId]
+  };
+}
+
+function hasVpsReviewerFallbackActorIdentityIncident({ comments, after, headSha }) {
+  const afterTime = Date.parse(normalizeText(after));
+  const expectedHeadSha = normalizeText(headSha);
+  return comments.some((comment) => {
+    const body = String(comment?.body || "");
+    if (!body.includes(VTDD_INCIDENT_ACTOR_IDENTITY_FAILURE_MARKER)) {
+      return false;
+    }
+    const createdAt = Date.parse(normalizeText(comment?.created_at));
+    if (Number.isFinite(afterTime) && Number.isFinite(createdAt) && createdAt < afterTime) {
+      return false;
+    }
+    const incidentHeadSha = extractBacktickedCommentValue(body, "Head SHA");
+    return !expectedHeadSha || incidentHeadSha === expectedHeadSha || incidentHeadSha === "unknown";
+  });
+}
+
+function resolveIncidentOperatorMention({ repository }) {
+  const [owner] = normalizeRepository(repository).split("/", 1);
+  return normalizeMentionLogin(owner);
+}
+
+function sanitizeIncidentField(value) {
+  return redactDiagnosticText(value)
+    .replace(/`/g, "'")
+    .slice(0, 240);
 }
 
 async function postVpsRunnerEvent({ githubFetch, payload, event, notification }) {
@@ -1930,6 +2140,7 @@ export {
   buildGuardedPullRequestBody,
   buildPullRequestBody,
   buildVpsRunnerEventComment,
+  buildVpsReviewerFallbackActorIdentityIncident,
   buildVpsRunnerStateComment,
   buildVpsRunnerPullRequestContext,
   checkoutVpsRunnerBranch,
@@ -1943,6 +2154,7 @@ export {
   parseVpsRunnerQueueComment,
   postVpsRunnerEvent,
   runVpsRunnerOnce,
+  resolveRoleGitHubAppInstallationToken,
   summarizeDiagnosticText,
   selectPendingVpsReviewerFallbacks,
   selectPendingVpsRunnerExecutions
