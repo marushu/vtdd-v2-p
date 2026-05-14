@@ -5,6 +5,7 @@ import {
   buildPullRequestReviewContext,
   findExistingCodexReviewFallbackComment,
   formatCodexReviewFallbackComment,
+  isReviewerTerminalApproved,
   parseCodexReviewFallbackComment,
   resolveOperatorMention
 } from "../src/core/index.js";
@@ -32,6 +33,15 @@ async function main() {
   );
   const reviews = await githubFetchAll(githubFetch, `/repos/${repository}/pulls/${prNumber}/reviews?per_page=100`);
   const existingFallbackComment = findExistingCodexReviewFallbackComment(issueComments);
+  if (
+    isReviewerTerminalApproved({
+      comments: issueComments,
+      headSha: pullRequest?.head?.sha
+    })
+  ) {
+    console.log(`Skipping Codex fallback review: reviewer already approved current PR head on PR #${prNumber}.`);
+    return;
+  }
   const prDiff = buildPullRequestDiff(files);
   const context = buildPullRequestReviewContext({
     repository,
@@ -60,6 +70,7 @@ async function main() {
         deliveryMode,
         blocker: failure.blocker,
         rawReview: failure.rawFailure,
+        headSha: pullRequest?.head?.sha,
         notificationMention: shouldMentionCodexFallback({
           existingComment: existingFallbackComment,
           status: "blocked"
@@ -83,6 +94,7 @@ async function main() {
     criticalFindings: normalizedReview.criticalFindings,
     risks: normalizedReview.risks,
     rawReview: review.stdout,
+    headSha: pullRequest?.head?.sha,
     notificationMention: shouldMentionCodexFallback({
       existingComment: existingFallbackComment,
       status: "completed",

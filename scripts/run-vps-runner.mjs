@@ -6,7 +6,11 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { normalizeMentionLogin, parseCodexReviewFallbackComment } from "../src/core/index.js";
+import {
+  isReviewerTerminalApproved,
+  normalizeMentionLogin,
+  parseCodexReviewFallbackComment
+} from "../src/core/index.js";
 import { buildExecutionLeadTime } from "../src/core/execution-lead-time.js";
 import { prepareGuardedPullRequestBody, prepareGuardedPullRequestBodyFile } from "./prepare-pr-body-file.mjs";
 import { renderPrBody } from "./render-pr-body.mjs";
@@ -468,6 +472,20 @@ function selectPendingVpsReviewerFallbacks({ comments, allowedRepositories, repo
       if (!policies.some((policy) => policy.repository === repository)) {
         return null;
       }
+      const samePullRequestComments = comments.filter(
+        (candidate) =>
+          normalizeRepository(candidate.repository) === repository &&
+          normalizePositiveInteger(candidate.pullRequestNumber) === pullRequestNumber
+      );
+      if (
+        isReviewerTerminalApproved({
+          comments: samePullRequestComments,
+          after: comment.created_at,
+          headSha: normalizeText(comment.headSha)
+        })
+      ) {
+        return null;
+      }
       return {
         repository,
         pullRequestNumber,
@@ -897,16 +915,35 @@ async function readRecentPullRequestComments({ githubFetch, repository }) {
   const pulls = await githubFetch(`/repos/${repository}/pulls?state=open&sort=updated&direction=desc&per_page=100`);
   const comments = [];
   for (const pull of pulls) {
-    const issueComments = await githubFetch(`/repos/${repository}/issues/${pull.number}/comments?per_page=100`);
+    const issueComments = await readAllIssueCommentsForNumber({
+      githubFetch,
+      repository,
+      issueNumber: pull.number
+    });
     comments.push(
       ...issueComments.map((comment) => ({
         ...comment,
         repository,
-        pullRequestNumber: pull.number
+        pullRequestNumber: pull.number,
+        headSha: normalizeText(pull?.head?.sha)
       }))
     );
   }
   return comments;
+}
+
+async function readAllIssueCommentsForNumber({ githubFetch, repository, issueNumber }) {
+  const comments = [];
+  for (let page = 1; ; page += 1) {
+    const pageComments = await githubFetch(
+      `/repos/${repository}/issues/${issueNumber}/comments?per_page=100&page=${page}`
+    );
+    const normalized = Array.isArray(pageComments) ? pageComments : [];
+    comments.push(...normalized);
+    if (normalized.length < 100) {
+      return comments;
+    }
+  }
 }
 
 async function buildVpsRunnerPullRequestContext({ githubFetch, payload }) {

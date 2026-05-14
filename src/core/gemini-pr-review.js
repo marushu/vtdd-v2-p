@@ -419,6 +419,7 @@ export function formatGeminiReviewComment(input = {}) {
   const risks = normalizeStringArray(review.risks);
   const recommendedAction = normalizeText(review.recommendedAction) || "manual_review";
   const notificationMention = normalizeMentionLogin(input.notificationMention);
+  const headSha = normalizeText(input.headSha);
 
   const lines = [
     GEMINI_PR_REVIEW_MARKER,
@@ -434,6 +435,7 @@ export function formatGeminiReviewComment(input = {}) {
     "",
     `- Trigger: \`${trigger}\``,
     `- Model: \`${model}\``,
+    ...(headSha ? [`- Head SHA: \`${headSha}\``] : []),
     `- Recommended action: \`${recommendedAction}\``,
     "",
     "### 重要指摘",

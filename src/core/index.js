@@ -215,6 +215,7 @@ export {
   parseCodexConnectorSetupComment,
   parseCodexReviewFallbackComment
 } from "./codex-review-fallback.js";
+export { isReviewerTerminalApproved } from "./reviewer-terminal-state.js";
 export {
   GeminiReviewFailureKind,
   classifyGeminiReviewFailure
