@@ -619,3 +619,59 @@ test("execution continuity surfaces Codex connector setup comments as fallback b
     "PR #181 is open. Gemini is temporarily unavailable and non-manual Codex fallback is currently blocked by platform or repository configuration."
   );
 });
+
+test("execution continuity surfaces actor identity incidents as recovery blockers", () => {
+  const result = evaluateExecutionContinuity({
+    actorRole: ActorRole.BUTLER,
+    mode: TaskMode.EXECUTION,
+    runtimeTruth: {
+      runtimeState: {
+        activeBranch: "codex/issue-351",
+        pullRequest: {
+          number: 369,
+          url: "https://github.com/example/repo/pull/369",
+          state: "open",
+          title: "Actor identity recovery",
+          issueComments: [
+            {
+              user: { login: "vtdd-gemini-reviewer[bot]" },
+              body: "<!-- vtdd:reviewer=codex-fallback -->\n## VTDD Codex fallback レビュー\n\n- Status: `requested`\n- Delivery mode: `vps_codex_cli`\n- Head SHA: `abc123`",
+              url: "https://github.com/example/repo/pull/369#issuecomment-requested",
+              created_at: "2026-05-14T15:08:49Z"
+            },
+            {
+              user: { login: "vtdd-vps-codex-cli[bot]" },
+              body: [
+                "@marushu 【要対応】VPS Codex CLI: PRレビュー結果を正しいBot名で投稿できません",
+                "",
+                "<!-- vtdd:incident=actor_identity_failure -->",
+                "",
+                "- Expected actor: `VTDD Codex Fallback Reviewer`",
+                "- Detected by: `VTDD VPS Codex CLI`"
+              ].join("\n"),
+              url: "https://github.com/example/repo/pull/369#issuecomment-incident",
+              created_at: "2026-05-14T15:10:36Z"
+            }
+          ]
+        }
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.value.reviewLoop.reviewer, "codex");
+  assert.equal(result.value.reviewLoop.reviewerStatus, "codex_review_blocked");
+  assert.equal(result.value.reviewLoop.criticalReviewPending, true);
+  assert.deepEqual(result.value.nextSuggestedActions, ["surface_reviewer_platform_blocker", "summarize_for_human"]);
+  assert.deepEqual(result.value.reviewLoop.reviewTimeline.map((item) => item.type), [
+    "codex_fallback",
+    "vtdd_incident"
+  ]);
+  assert.equal(result.value.reviewLoop.reviewTimeline[1].status, "actor_identity_failure");
+  assert.equal(
+    result.value.butlerReviewSynthesis.humanDecisionFocus.includes(
+      "Gemini is temporarily unavailable and non-manual Codex fallback is blocked; do not treat reviewer coverage as satisfied."
+    ),
+    true
+  );
+});
