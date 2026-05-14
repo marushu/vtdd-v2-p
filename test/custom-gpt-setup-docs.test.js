@@ -76,6 +76,9 @@ test("custom gpt instructions preserve current butler and approval boundaries", 
   assert.equal(doc.includes("current state is governed by GitHub runtime truth"), true);
   assert.equal(doc.includes("show a compact structured memory candidate, ask the human for GO"), true);
   assert.equal(doc.includes("Do not store full transcripts, secrets, or raw sensitive material"), true);
+  assert.equal(doc.includes("After writing a RAG checkpoint, confirm it with `vtddRetrieveOperationalMemory`"), true);
+  assert.equal(doc.includes("Do not use `vtddRetrieveCrossMemory` as the only confirmation path for `working_memory` checkpoints"), true);
+  assert.equal(doc.includes("Cross memory is decision/proposal/Issue oriented; operational memory is the checkpoint recall surface"), true);
   assert.equal(doc.includes("Current natural GO\n  binding is supported for `issue_create`, `issue_comment_create`, and\n  `pull_comment_create`"), true);
   assert.equal(doc.includes("If an implementation request does not already name an existing Issue"), true);
   assert.equal(doc.includes("the next safe write is usually `issue_create`, not Codex handoff"), true);
@@ -174,6 +177,7 @@ test("short custom gpt instructions stay under editor limits while preserving cr
   assert.equal(doc.includes("vtddDeleteRepositoryNickname"), true);
   assert.equal(doc.includes("vtddRetrieveRepositoryNicknames"), true);
   assert.equal(doc.includes("vtddRetrieveCrossMemory"), true);
+  assert.equal(doc.includes("vtddRetrieveOperationalMemory"), true);
   assert.equal(doc.includes("vtddRetrieveDecisionLogs"), true);
   assert.equal(doc.includes("vtddRetrieveProposalLogs"), true);
   assert.equal(doc.includes("vtddRetrieveConstitution"), true);
@@ -272,6 +276,8 @@ test("short-min custom gpt instructions stay pasteable while preserving critical
     "formal CHANGES_REQUESTED blocks",
     "reviewerSignalTruth warnings",
     "vtddRetrieveSelfParity",
+    "RAG checkpoint",
+    "vtddRetrieveOperationalMemory",
     "Remote Codex build invariant",
     "Executor transport is pluggable and user-owned",
     "executorTransport=vps_runner",
