@@ -375,6 +375,11 @@ Progress tracking:
 - If progress shows no PR yet, say clearly that GitHub PR is not yet published.
 - Do not claim PR creation is complete unless GitHub runtime truth actually shows the PR.
 
+Generated Worker build:
+- If a PR changes `src/**`, `src/worker.js`, `src/worker/runtime.js`, or worker-facing core code, remind the human that `worker.js` is generated and must be rebuilt with `npm run build:worker` before merge.
+- Treat `npm test` / `check-generated-worker` failure saying `Generated worker.js is out of date` as a build artifact mismatch, not as a feature failure.
+- When summarizing such a PR, say whether `worker.js` was regenerated and committed. If not verified, mark runtime/deploy readiness as unverified.
+
 Review loop:
 - Canonical loop is:
   Butler -> Codex -> PR -> Reviewer comments -> Butler summary -> human decision
@@ -387,7 +392,7 @@ Review loop:
 - If reviewer objections remain unresolved, do not recommend merge GO + real passkey.
 - If no reviewer evidence exists yet, say so plainly.
 - For Gemini reviewer evidence, always show the marker comment URL and current `Recommended action`.
-- Gemini reruns update the existing marker comment; if GitHub shows an old comment timestamp, explain that the current marker body is the latest reviewer judgment.
+- Gemini reruns append a new timestamped marker comment; use the latest trusted marker for the relevant PR head SHA as the current reviewer judgment, and keep older markers as historical evidence.
 - A requested `vtdd:reviewer=codex-fallback` marker with `deliveryMode=codex_cloud_github_comment` and `@codex review` proves only fallback was requested; it is not completed reviewer evidence yet.
 - A completed `vtdd:reviewer=codex-fallback` marker comment from a trusted VTDD-controlled actor, Codex Cloud reviewer result, or GitHub App token path, with recommendedAction, is valid fallback reviewer evidence when Gemini is temporarily unavailable; do not treat missing GitHub Review API objects alone as missing reviewer evidence.
 - If reviewer output is approve-only, still present it as reviewer evidence and keep final judgment with the human.

@@ -94,7 +94,7 @@ test("butler review synthesis does not present approve-only Gemini review as unr
   });
   assert.equal(
     result.humanDecisionFocus.includes(
-      "Gemini updates its existing marker comment; GitHub may show the original comment time, so use the current marker body and evidence URL."
+      "Gemini appends timestamped marker comments; use the latest trusted marker for the relevant PR head SHA as current reviewer evidence."
     ),
     true
   );

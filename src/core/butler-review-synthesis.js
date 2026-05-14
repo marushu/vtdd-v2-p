@@ -171,7 +171,7 @@ function buildHumanDecisionFocus({ pullRequest, reviewLoop, codexGoal, branchAtt
   }
   if (reviewLoop.reviewer === "gemini" && reviewLoop.reviewerEvidence?.includesCreatedEdit) {
     focus.push(
-      "Gemini updates its existing marker comment; GitHub may show the original comment time, so use the current marker body and evidence URL."
+      "Gemini appends timestamped marker comments; use the latest trusted marker for the relevant PR head SHA as current reviewer evidence."
     );
   }
   focus.push("Human remains the final authority for revision GO and merge GO + real passkey.");

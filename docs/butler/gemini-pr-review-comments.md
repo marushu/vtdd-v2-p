@@ -33,7 +33,7 @@ must not hard-fail the PR solely for reviewer availability reasons.
 
 Preferred fallback:
 
-- VTDD posts or updates a `vtdd:reviewer=codex-fallback` request comment that
+- VTDD appends a timestamped `vtdd:reviewer=codex-fallback` request comment that
   targets the user-owned VPS Codex CLI reviewer transport
 - the default request path does not use `OPENAI_API_KEY`
 - the request remains request-state until the VPS reviewer runner returns a completed fallback
@@ -115,18 +115,23 @@ Gemini output must remain compatible with the existing reviewer contract:
 For this slice, the canonical return surface is a PR comment carrying that
 structured critique in a human-readable format.
 
-## Upsert Rule
+## Append Timeline Rule
 
-Gemini reruns must update the existing VTDD Gemini review comment when one is
-already present.
+Gemini reruns must append a new timestamped VTDD Gemini reviewer marker comment.
+Existing reviewer evidence must not be overwritten.
 
-The goal is to keep one current critical-review surface on the PR rather than
-creating uncontrolled repeated comments.
+The goal is to preserve a GitHub-visible reviewer timeline. Butler, mac Codex,
+and VPS Codex CLI must read the latest trusted marker for the relevant PR head
+SHA instead of assuming there is only one current reviewer comment.
 
 Butler summaries must present the current `Recommended action` and the Gemini
-marker comment URL. If GitHub displays the original comment timestamp, Butler
-must explain that the marker comment was updated and the current body is the
-latest reviewer evidence.
+marker comment URL from the latest trusted reviewer marker. Older marker
+comments remain historical evidence, not the current reviewer judgment.
+
+Append does not mean uncontrolled repetition. Reviewer marker comments must not
+self-trigger review loops, and an `approve` marker for the same PR head SHA is a
+terminal state unless a new commit, explicit trusted re-review request, or later
+blocking reviewer signal reopens review.
 
 The VTDD reviewer marker comment is the canonical VTDD reviewer signal for
 Butler synthesis. It must not be confused with GitHub formal Pull Request
@@ -139,9 +144,10 @@ GitHub formal review objects remain separate runtime truth. A formal
 reviewer marker recommends `approve`, and Butler must route the PR back to
 bounded revision instead of merge judgment.
 
-When Gemini becomes available again after a fallback request, VTDD should
-return to Gemini-first behavior and clear the stale Codex fallback request
-state.
+When Gemini becomes available again after a fallback request, VTDD should return
+to Gemini-first behavior by appending fresh Gemini reviewer evidence. Stale
+Codex fallback request comments remain historical evidence; Butler should treat
+the latest trusted marker for the relevant head SHA as current.
 
 ## Objection Resolution Re-Check
 
