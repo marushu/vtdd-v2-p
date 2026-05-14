@@ -19,6 +19,9 @@ test("renderPrBody includes all guarded-policy headings", () => {
   assert.match(body, /## This PR satisfies Intent/);
   assert.match(body, /## Satisfied Success Criteria/);
   assert.match(body, /## Unsatisfied Success Criteria/);
+  assert.match(body, /## Dry-run Impact Report/);
+  assert.match(body, /## File \/ Line Hypotheses/);
+  assert.match(body, /## Hypothesis Retrospective/);
   assert.match(body, /## Verification Evidence/);
   assert.match(body, /## Butler Completion Contract/);
   assert.match(body, /## Surface Update Checklist/);
@@ -34,6 +37,9 @@ test("renderPrBody default guidance is Japanese-first while headings remain stab
   assert.match(body, /このPRスライス外に、未接続または未完了の owner-facing 作業が残っています。/);
   assert.match(body, /Owner goal: このPRが扱う owner-facing goal/);
   assert.match(body, /Butler-facing E2E は未実施です。/);
+  assert.match(body, /Target Issue: Issue #316/);
+  assert.match(body, /この Issue だけを見て直すと壊れ得るもの/);
+  assert.match(body, /should become RAG candidate: 未判断。/);
   assert.match(body, /Cloudflare deploy: 不要。/);
 });
 
@@ -120,6 +126,85 @@ None.
 `);
   assert.equal(result.ok, false);
   assert.match(result.errors.join("\n"), /Missing PR template marker: ## Butler Completion Contract/);
+});
+
+test("validatePrBody fails when dry-run impact report is missing", () => {
+  const result = validatePrBody(`## This PR satisfies Intent
+
+- Add something.
+
+## Satisfied Success Criteria
+
+- Something.
+
+## Unsatisfied Success Criteria
+
+- Remaining work.
+
+## Non-goal violations
+
+None.
+
+## File / Line Hypotheses
+
+- file: \`src/example.js:1\`
+  - hypothesis: Something.
+
+## Hypothesis Retrospective
+
+- expected: Something.
+
+## Verification Evidence
+
+- Unit: None.
+- Integration: None.
+- E2E: None.
+- Manual: None.
+- Evidence path/link: None.
+
+## Butler Completion Contract
+
+- Owner goal: Some owner goal.
+- Butler entrypoint: Some entrypoint.
+- Action Schema exposure: No schema change.
+- Runtime path: Some path.
+- Runner/runtime truth: Some truth.
+- Authority boundary: No high-risk operation.
+- E2E evidence: Not required for this guardrail path.
+- Completion status: incomplete
+
+## Surface Update Checklist
+
+- Cloudflare deploy: Not required.
+- Custom GPT Action Schema update: Not required.
+- Custom GPT Instructions update: Not required.
+- iPhone Butler live E2E: Not required.
+`);
+
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /Missing PR template marker: ## Dry-run Impact Report/);
+});
+
+test("validatePrBody rejects empty dry-run impact fields", () => {
+  const body = renderPrBody({
+    issue: "360",
+    intent: "Issue #360 の dry-run impact gate を PR body に固定する。",
+    satisfied: "Dry-run sections are present.",
+    unsatisfied: "Issue #355 への適用 evidence は後続。",
+    dryRunExpectedTouched: "",
+    ownerGoal: "実装前の交通整理を PR に残す。",
+    butlerEntrypoint: "PR body guardrail.",
+    actionSchemaExposure: "No schema change.",
+    runtimePath: "scripts/validate-pr-body.mjs.",
+    runtimeTruth: "Validator pass/fail output.",
+    authorityBoundary: "No high-risk operation.",
+    butlerE2E: "Not required for this docs/process guardrail.",
+    completionStatus: "incomplete",
+  }).replace("- Expected touched files/routes/workflows: 想定ファイル、route、workflow、docs を明記してください。", "- Expected touched files/routes/workflows: None.");
+
+  const result = validatePrBody(body);
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /Dry-run Impact Report field is not filled: Expected touched files\/routes\/workflows/);
 });
 
 test("validatePrBody rejects closing PRs without complete Butler evidence", () => {

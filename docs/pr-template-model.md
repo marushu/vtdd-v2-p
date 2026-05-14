@@ -11,12 +11,15 @@ Every PR should contain these sections in this order:
 2. `Satisfied Success Criteria`
 3. `Unsatisfied Success Criteria`
 4. `Non-goal violations`
-5. `Verification Evidence`
-6. `Butler Completion Contract`
-7. `Surface Update Checklist`
-8. `Related Constitution Rules`
-9. `Out-of-scope but NOT implemented`
-10. `Extra changes (if any)`
+5. `Dry-run Impact Report`
+6. `File / Line Hypotheses`
+7. `Hypothesis Retrospective`
+8. `Verification Evidence`
+9. `Butler Completion Contract`
+10. `Surface Update Checklist`
+11. `Related Constitution Rules`
+12. `Out-of-scope but NOT implemented`
+13. `Extra changes (if any)`
 
 ## Section Purpose
 
@@ -37,6 +40,30 @@ remaining item instead of leaving this section empty.
 ### `Non-goal violations`
 
 Call out any violation of declared non-goals, or state `None.` when there are none.
+
+### `Dry-run Impact Report`
+
+Record the pre-implementation impact scan before the PR becomes an isolated
+patch. This section must name the target Issue, scoped success criteria,
+explicit non-goals, expected files/routes/workflows, affected Issues, affected
+PRs, affected workflows, affected runtime/operator surfaces, narrow patch risk,
+unknowns to investigate, validation needed, and stop condition.
+
+This section exists because VTDD changes often cross Butler, Worker, VPS Codex
+CLI, Custom GPT, GitHub Actions, RAG, and approval boundaries. A PR should make
+those links visible before claiming progress.
+
+### `File / Line Hypotheses`
+
+Record the implementation hypothesis before editing: likely files, suspicious
+functions or line ranges when known, why the area is suspect, what breaks if it
+is patched narrowly, and how the hypothesis will be verified.
+
+### `Hypothesis Retrospective`
+
+Record what changed after implementation. If the original hypothesis was wrong,
+state the mismatch and whether the lesson should become a RAG candidate. This
+section may remain `未実施` in an in-progress PR, but it must not disappear.
 
 ### `Verification Evidence`
 
@@ -98,7 +125,7 @@ stable.
 Use `scripts/render-pr-body.mjs` to generate a valid starting body instead of
 hand-writing the headings. The renderer must emit a validator-passable
 partial/unconnected template by default so that AI-authored PRs do not fail on
-empty Butler contract placeholders. Validate the result locally with
+empty dry-run or Butler contract placeholders. Validate the result locally with
 `node scripts/validate-pr-body.mjs <path>` before `gh pr create` or
 `gh pr edit --body-file`.
 

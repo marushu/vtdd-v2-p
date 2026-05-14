@@ -79,6 +79,33 @@ function defaultButlerContract(status) {
   };
 }
 
+function defaultDryRunReport(options = {}) {
+  const issue = options.issue ? `Issue #${options.issue}` : "対象 Issue を明記してください。";
+  return {
+    targetIssue: issue,
+    successCriteria: "このPRで実装する Success Criteria を明記してください。",
+    nonGoals: "このPRで触らない範囲を明記してください。",
+    expectedTouched: "想定ファイル、route、workflow、docs を明記してください。",
+    affectedIssues: "影響し得る Issue を明記してください。なければ `なし` と書いてください。",
+    affectedPrs: "影響し得る PR を明記してください。なければ `なし` と書いてください。",
+    affectedWorkflows: "影響し得る GitHub Actions / reviewer / deploy workflow を明記してください。",
+    affectedRuntimeSurfaces: "影響し得る Butler / Worker / VPS / operator / Custom GPT surface を明記してください。",
+    narrowPatchRisk: "この Issue だけを見て直すと壊れ得るものを明記してください。",
+    unknowns: "実装前に調べる未知を明記してください。",
+    validationNeeded: "必要な unit / integration / E2E / live verification を明記してください。",
+    stopCondition: "続行すると drift になる条件を明記してください。"
+  };
+}
+
+function defaultFileLineHypotheses() {
+  return {
+    hypotheses:
+      "- file: `未特定`\n  - hypothesis: 実装前に疑わしいファイル / 関数 / 行範囲を明記してください。\n  - risk if changed narrowly: 狭く直した場合の破綻リスクを明記してください。\n  - validation: 仮説の検証方法を明記してください。\n  - related Issue: 対象 Issue を明記してください。",
+    retrospective:
+      "- expected: PR merge 前または merge 後に、実際の結果と比較してください。\n- actual: 未実施。\n- mismatch: 未実施。\n- lesson: 未実施。\n- should become RAG candidate: 未判断。"
+  };
+}
+
 function renderPrBody(options = {}) {
   const issue = options.issue ? `#${options.issue}` : null;
   const issueLink = issue ? ` Issue ${issue}` : "";
@@ -90,6 +117,16 @@ function renderPrBody(options = {}) {
   const butler = {
     ...butlerDefaults,
     ...(options.butler || {})
+  };
+  const dryRunDefaults = defaultDryRunReport(options);
+  const dryRun = {
+    ...dryRunDefaults,
+    ...(options.dryRun || {})
+  };
+  const fileLineDefaults = defaultFileLineHypotheses();
+  const fileLine = {
+    ...fileLineDefaults,
+    ...(options.fileLine || {})
   };
 
   return `## This PR satisfies Intent
@@ -112,6 +149,29 @@ ${bulletize(options.unsatisfied, defaultUnsatisfiedCriteria(status))}
 ## Non-goal violations
 
 ${options.nonGoals || "None."}
+
+## Dry-run Impact Report
+
+- Target Issue: ${options.dryRunTargetIssue || dryRun.targetIssue}
+- Implementing Success Criteria: ${options.dryRunSuccessCriteria || dryRun.successCriteria}
+- Explicit Non-goals: ${options.dryRunNonGoals || dryRun.nonGoals}
+- Expected touched files/routes/workflows: ${options.dryRunExpectedTouched || dryRun.expectedTouched}
+- Affected Issues: ${options.dryRunAffectedIssues || dryRun.affectedIssues}
+- Affected PRs: ${options.dryRunAffectedPrs || dryRun.affectedPrs}
+- Affected workflows: ${options.dryRunAffectedWorkflows || dryRun.affectedWorkflows}
+- Affected runtime/operator surfaces: ${options.dryRunAffectedRuntimeSurfaces || dryRun.affectedRuntimeSurfaces}
+- What may break if we patch narrowly: ${options.dryRunNarrowPatchRisk || dryRun.narrowPatchRisk}
+- Unknowns to investigate before coding: ${options.dryRunUnknowns || dryRun.unknowns}
+- Validation needed: ${options.dryRunValidationNeeded || dryRun.validationNeeded}
+- Stop condition: ${options.dryRunStopCondition || dryRun.stopCondition}
+
+## File / Line Hypotheses
+
+${options.fileLineHypotheses || fileLine.hypotheses}
+
+## Hypothesis Retrospective
+
+${options.hypothesisRetrospective || fileLine.retrospective}
 
 ## Verification Evidence
 
