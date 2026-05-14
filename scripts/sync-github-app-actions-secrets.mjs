@@ -14,7 +14,11 @@ async function main() {
   const execute = args.execute === true;
 
   const sourceResult = await loadGitHubAppSecretSource({
-    manifestPath: args.manifestPath
+    manifestPath: args.manifestPath,
+    role: args.appRole,
+    appId: args.appId,
+    privateKeyPath: args.privateKeyPath,
+    installationId: args.installationId
   });
   if (!sourceResult.ok) {
     throw new Error(sourceResult.issues.join(", "));
@@ -23,6 +27,7 @@ async function main() {
   const planResult = buildGitHubAppSecretSyncPlan({
     repo,
     source: sourceResult.source,
+    role: args.appRole,
     execute
   });
   if (!planResult.ok) {
@@ -67,9 +72,10 @@ async function main() {
 function printDryRun(plan, source) {
   console.log("GitHub App secret sync dry-run");
   console.log(`repo: ${plan.repo}`);
-  console.log(`vault manifest: ${source.manifestPath}`);
+  console.log(`role: ${plan.role} (${plan.roleLabel})`);
+  console.log(`vault manifest: ${source.manifestPath || "[not used for role-specific key]"}`);
   console.log(`app id: ${source.appId}`);
-  console.log(`installation id: ${source.installationId}`);
+  console.log(`installation id: ${source.installationId || "[not provided]"}`);
   console.log(`private key path: ${source.privateKeyPath}`);
   console.log(
     `gateway bearer token path: ${source.gatewayBearerTokenPath || "[not configured in vault manifest]"}`
@@ -77,7 +83,7 @@ function printDryRun(plan, source) {
   console.log("secrets to sync:");
   for (const secret of plan.secrets) {
     const detail =
-      secret.name === "VTDD_GITHUB_APP_PRIVATE_KEY"
+      secret.name.endsWith("_PRIVATE_KEY")
         ? "[redacted private key content]"
         : secret.value;
     console.log(`- ${secret.name}: ${detail}`);
@@ -102,6 +108,26 @@ function parseArgs(args) {
     }
     if (current === "--manifest-path") {
       parsed.manifestPath = args[index + 1];
+      index += 1;
+      continue;
+    }
+    if (current === "--app-role") {
+      parsed.appRole = args[index + 1];
+      index += 1;
+      continue;
+    }
+    if (current === "--app-id") {
+      parsed.appId = args[index + 1];
+      index += 1;
+      continue;
+    }
+    if (current === "--private-key-path") {
+      parsed.privateKeyPath = args[index + 1];
+      index += 1;
+      continue;
+    }
+    if (current === "--installation-id") {
+      parsed.installationId = args[index + 1];
       index += 1;
       continue;
     }

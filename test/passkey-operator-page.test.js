@@ -162,6 +162,10 @@ test("passkey operator page focuses secret sync modes without hiding the require
   });
   assert.equal(githubAppSecretHtml.includes('<section data-operator-section="approval">'), true);
   assert.equal(githubAppSecretHtml.includes('<section data-operator-section="github-app-secret-sync">'), true);
+  assert.equal(githubAppSecretHtml.includes('<select id="github-app-role-input">'), true);
+  assert.equal(githubAppSecretHtml.includes('value="gemini-reviewer"'), true);
+  assert.equal(githubAppSecretHtml.includes("VTDD Gemini Reviewer"), true);
+  assert.equal(githubAppSecretHtml.includes("githubAppRole: document.getElementById"), true);
   assert.equal(githubAppSecretHtml.includes('<section data-operator-section="production-deploy" hidden>'), true);
   assert.equal(githubAppSecretHtml.includes('<section data-operator-section="pr-merge" hidden>'), true);
 

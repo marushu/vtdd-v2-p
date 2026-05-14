@@ -66,6 +66,43 @@ test("buildGitHubAppSecretSyncPlan targets actions secrets from source of truth"
   );
 });
 
+test("buildGitHubAppSecretSyncPlan targets role-specific Gemini reviewer secrets", () => {
+  const result = buildGitHubAppSecretSyncPlan({
+    repo: "marushu/vtdd-v2-p",
+    role: "gemini-reviewer",
+    source: {
+      appId: "3706701",
+      privateKey: "-----BEGIN PRIVATE KEY-----\nexample\n-----END PRIVATE KEY-----"
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.plan.role, "gemini-reviewer");
+  assert.deepEqual(
+    result.plan.secrets.map((secret) => secret.name),
+    ["VTDD_GEMINI_REVIEWER_APP_ID", "VTDD_GEMINI_REVIEWER_APP_PRIVATE_KEY"]
+  );
+});
+
+test("loadGitHubAppSecretSource can read explicit role private key material", async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "vtdd-role-app-sync-"));
+  const keyPath = path.join(tempDir, "gemini-private-key.pem");
+  await fs.writeFile(keyPath, "-----BEGIN PRIVATE KEY-----\nrole-example\n-----END PRIVATE KEY-----\n", "utf8");
+
+  const result = await loadGitHubAppSecretSource({
+    role: "gemini-reviewer",
+    appId: "3706701",
+    privateKeyPath: keyPath
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.source.sourceType, "explicit_role_private_key");
+  assert.equal(result.source.role, "gemini-reviewer");
+  assert.equal(result.source.appId, "3706701");
+  assert.equal(result.source.privateKeyPath, keyPath);
+  assert.equal(result.source.privateKey.includes("role-example"), true);
+});
+
 test("executeGitHubAppSecretSync calls runner for each target secret", async () => {
   const calls = [];
   const result = await executeGitHubAppSecretSync({
@@ -82,6 +119,28 @@ test("executeGitHubAppSecretSync calls runner for each target secret", async () 
 
   assert.equal(result.ok, true);
   assert.deepEqual(calls, ["VTDD_GITHUB_APP_ID", "VTDD_GITHUB_APP_PRIVATE_KEY"]);
+});
+
+test("executeGitHubAppSecretSync calls runner for role-specific target secrets", async () => {
+  const calls = [];
+  const result = await executeGitHubAppSecretSync({
+    repo: "marushu/vtdd-v2-p",
+    role: "codex-fallback-reviewer",
+    source: {
+      appId: "3706921",
+      privateKey: "-----BEGIN PRIVATE KEY-----\nexample\n-----END PRIVATE KEY-----"
+    },
+    runner: async (secret) => {
+      calls.push(secret.name);
+      return { ok: true, name: secret.name };
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(calls, [
+    "VTDD_CODEX_FALLBACK_REVIEWER_APP_ID",
+    "VTDD_CODEX_FALLBACK_REVIEWER_APP_PRIVATE_KEY"
+  ]);
 });
 
 test("GitHub App secret sync approval grant must match repo and high-risk kind", () => {

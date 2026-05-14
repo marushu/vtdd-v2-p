@@ -17,7 +17,11 @@ async function main() {
   }
 
   const sourceResult = await loadGitHubAppSecretSource({
-    manifestPath: args.manifestPath
+    manifestPath: args.manifestPath,
+    role: args.appRole,
+    appId: args.appId,
+    privateKeyPath: args.privateKeyPath,
+    installationId: args.installationId
   });
   if (!sourceResult.ok) {
     throw new Error(sourceResult.issues.join(", "));
@@ -45,7 +49,11 @@ async function main() {
     repo: normalizeText(args.repo || "marushu/vtdd-v2-p"),
     issueNumber: normalizeText(args.issueNumber || "15"),
     highRiskKind: normalizeText(args.highRiskKind || "github_app_secret_sync"),
-    manifestPath: normalizeText(args.manifestPath || sourceResult.source.manifestPath)
+    manifestPath: normalizeText(args.manifestPath || sourceResult.source.manifestPath),
+    appRole: normalizeText(args.appRole || sourceResult.source.role || "legacy"),
+    appId: normalizeText(args.appId || sourceResult.source.appId),
+    privateKeyPath: normalizeText(args.privateKeyPath || sourceResult.source.privateKeyPath),
+    installationId: normalizeText(args.installationId || sourceResult.source.installationId)
   };
 
   const server = http.createServer((request, response) =>
@@ -84,6 +92,7 @@ async function handleRequest({ request, response, state }) {
       repositoryInput: state.repo,
       issueNumber: state.issueNumber,
       highRiskKind: state.highRiskKind,
+      githubAppRole: state.appRole,
       syncEnabled: true
     });
     response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
@@ -100,11 +109,20 @@ async function handleRequest({ request, response, state }) {
     const body = await readJson(request);
     const approvalGrantId = normalizeText(body.approvalGrantId);
     const repo = normalizeText(body.repositoryInput || state.repo);
+    const appRole = normalizeText(body.githubAppRole || state.appRole);
     if (!approvalGrantId) {
       writeJson(response, 422, {
         ok: false,
         error: "approval_grant_id_required",
         reason: "approvalGrantId is required"
+      }, corsHeaders);
+      return;
+    }
+    if (appRole !== state.appRole) {
+      writeJson(response, 422, {
+        ok: false,
+        error: "github_app_role_not_served",
+        reason: `desktop helper is serving ${state.appRole}, not ${appRole}`
       }, corsHeaders);
       return;
     }
@@ -114,6 +132,12 @@ async function handleRequest({ request, response, state }) {
       "--repo",
       repo,
       "--execute",
+      "--app-role",
+      state.appRole,
+      "--app-id",
+      state.appId,
+      "--private-key-path",
+      state.privateKeyPath,
       "--runtime-url",
       state.runtimeUrl,
       "--approval-grant-id",
@@ -121,6 +145,9 @@ async function handleRequest({ request, response, state }) {
     ];
     if (state.manifestPath) {
       args.push("--manifest-path", state.manifestPath);
+    }
+    if (state.installationId) {
+      args.push("--installation-id", state.installationId);
     }
 
     const result = await execFileAsync(process.execPath, args, {
@@ -236,6 +263,26 @@ function parseArgs(args) {
     }
     if (current === "--manifest-path") {
       parsed.manifestPath = args[index + 1];
+      index += 1;
+      continue;
+    }
+    if (current === "--app-role") {
+      parsed.appRole = args[index + 1];
+      index += 1;
+      continue;
+    }
+    if (current === "--app-id") {
+      parsed.appId = args[index + 1];
+      index += 1;
+      continue;
+    }
+    if (current === "--private-key-path") {
+      parsed.privateKeyPath = args[index + 1];
+      index += 1;
+      continue;
+    }
+    if (current === "--installation-id") {
+      parsed.installationId = args[index + 1];
       index += 1;
     }
   }

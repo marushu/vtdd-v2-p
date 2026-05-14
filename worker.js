@@ -27095,6 +27095,7 @@ function renderPasskeyOperatorPage(input = {}) {
   const highRiskKindDefault = escapeHtml(input.highRiskKind || defaultHighRiskKindForMode(operatorMode));
   const mergeMethodDefault = escapeHtml(input.mergeMethod || "squash");
   const returnUrl = escapeHtml(input.returnUrl || "");
+  const githubAppRoleDefault = escapeHtml(input.githubAppRole || "legacy");
   const syncEnabled = input.syncEnabled === true;
   const syncMessage = escapeHtml(
     input.syncMessage || (syncEnabled ? "approvalGrantId \u304C\u53D6\u5F97\u6E08\u307F\u306A\u3089\u5B9F\u884C\u3067\u304D\u307E\u3059\u3002desktop helper bridge \u306B\u63A5\u7D9A\u3057\u307E\u3059\u3002" : "desktop maintenance required: local secret sync bridge \u304C\u672A\u63A5\u7D9A\u3067\u3059\u3002")
@@ -27163,7 +27164,8 @@ function renderPasskeyOperatorPage(input = {}) {
         color: var(--muted);
         margin-bottom: 6px;
       }
-      input {
+      input,
+      select {
         width: 100%;
         box-sizing: border-box;
         padding: 10px 12px;
@@ -27285,6 +27287,14 @@ function renderPasskeyOperatorPage(input = {}) {
         <section data-operator-section="github-app-secret-sync"${hiddenAttribute(!sectionVisibility.githubAppSecretSync)}>
           <h2>3. GitHub App Secret Sync</h2>
           <p class="muted">real passkey approval \u5F8C\u3001\u3053\u306E helper \u304B\u3089 <code>#15</code> \u306E explicit operator bootstrap \u3092\u5B9F\u884C\u3057\u307E\u3059\u3002</p>
+          <label for="github-app-role-input">GitHub App Role</label>
+          <select id="github-app-role-input">
+            ${renderGithubAppRoleOption("legacy", "Legacy vtdd-codex", githubAppRoleDefault)}
+            ${renderGithubAppRoleOption("gemini-reviewer", "VTDD Gemini Reviewer", githubAppRoleDefault)}
+            ${renderGithubAppRoleOption("codex-fallback-reviewer", "VTDD Codex Fallback Reviewer", githubAppRoleDefault)}
+            ${renderGithubAppRoleOption("mac-codex", "VTDD mac Codex", githubAppRoleDefault)}
+            ${renderGithubAppRoleOption("vps-codex-cli", "VTDD VPS Codex CLI", githubAppRoleDefault)}
+          </select>
           <div class="row">
             <button id="sync-button"${syncEnabled ? "" : " disabled"}>Sync GitHub App secrets</button>
           </div>
@@ -27620,7 +27630,8 @@ function renderPasskeyOperatorPage(input = {}) {
             headers: { "content-type": "application/json" },
             body: JSON.stringify({
               approvalGrantId: latestApprovalGrantId,
-              repositoryInput: document.getElementById("repo-input").value
+              repositoryInput: document.getElementById("repo-input").value,
+              githubAppRole: document.getElementById("github-app-role-input").value
             })
           });
           const syncBody = await readResponseBody(syncResponse);
@@ -27900,6 +27911,10 @@ function resolveSectionVisibility(operatorMode) {
 }
 function hiddenAttribute(hidden) {
   return hidden ? " hidden" : "";
+}
+function renderGithubAppRoleOption(value, label, selectedValue) {
+  const selected = value === selectedValue ? " selected" : "";
+  return `<option value="${escapeHtml(value)}"${selected}>${escapeHtml(label)}</option>`;
 }
 function normalizeOperatorMode(value) {
   const token = normalizeOperatorToken(value);
