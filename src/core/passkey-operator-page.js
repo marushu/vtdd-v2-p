@@ -1,6 +1,7 @@
 export function renderPasskeyOperatorPage(input = {}) {
   const operatorMode = resolvePasskeyOperatorMode(input);
-  const sectionVisibility = resolveSectionVisibility(operatorMode);
+  const passkeyEnabled = input.passkeyEnabled !== false;
+  const sectionVisibility = resolveSectionVisibility(operatorMode, { passkeyEnabled });
   const origin = escapeHtml(input.origin || "");
   const apiBase = escapeHtml(input.apiBase || "/v2");
   const syncApiBase = escapeHtml(input.syncApiBase || "");
@@ -218,6 +219,8 @@ export function renderPasskeyOperatorPage(input = {}) {
             ${renderGithubAppRoleOption("mac-codex", "VTDD mac Codex", githubAppRoleDefault)}
             ${renderGithubAppRoleOption("vps-codex-cli", "VTDD VPS Codex CLI", githubAppRoleDefault)}
           </select>
+          <label for="approval-grant-id-input">approvalGrantId</label>
+          <input id="approval-grant-id-input" value="" placeholder="approval:..." autocomplete="off" />
           <div class="row">
             <button id="sync-button"${syncEnabled ? "" : " disabled"}>Sync GitHub App secrets</button>
           </div>
@@ -541,7 +544,9 @@ export function renderPasskeyOperatorPage(input = {}) {
 
       document.getElementById("sync-button").addEventListener("click", async () => {
         try {
-          if (!latestApprovalGrantId) {
+          const pastedApprovalGrantId = document.getElementById("approval-grant-id-input").value.trim();
+          const approvalGrantId = latestApprovalGrantId || pastedApprovalGrantId;
+          if (!approvalGrantId) {
             throw new Error("approvalGrantId is required before secret sync");
           }
           if (!"${syncApiBase}") {
@@ -552,7 +557,7 @@ export function renderPasskeyOperatorPage(input = {}) {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({
-              approvalGrantId: latestApprovalGrantId,
+              approvalGrantId,
               repositoryInput: document.getElementById("repo-input").value,
               githubAppRole: document.getElementById("github-app-role-input").value
             })
@@ -825,11 +830,12 @@ export function resolvePasskeyOperatorMode(input = {}) {
   return "full";
 }
 
-function resolveSectionVisibility(operatorMode) {
+function resolveSectionVisibility(operatorMode, options = {}) {
   const full = operatorMode === "full";
+  const passkeyEnabled = options.passkeyEnabled !== false;
   return {
-    registration: true,
-    approval: true,
+    registration: passkeyEnabled,
+    approval: passkeyEnabled,
     githubAppSecretSync: full || operatorMode === "github_app_secret_sync",
     productionDeploy: full || operatorMode === "deploy",
     prMerge: full || operatorMode === "merge",

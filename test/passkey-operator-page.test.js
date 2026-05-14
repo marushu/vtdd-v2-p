@@ -33,6 +33,8 @@ test("passkey operator page can target explicit api base and sync endpoint", () 
   assert.equal(html.includes("Butler 会話に貼らず"), true);
   assert.equal(html.includes("Copy approvalGrantId"), true);
   assert.equal(html.includes("Auto-copy approvalGrantId after approval"), true);
+  assert.equal(html.includes('id="approval-grant-id-input"'), true);
+  assert.equal(html.includes("const approvalGrantId = latestApprovalGrantId || pastedApprovalGrantId"), true);
   assert.equal(html.includes('id="action-type-input" value="deploy_production"'), true);
   assert.equal(html.includes('repositoryInput: document.getElementById("repo-input").value'), true);
   assert.equal(html.includes('issueNumber: Number(document.getElementById("issue-input").value || 0) || null'), true);
@@ -179,6 +181,24 @@ test("passkey operator page focuses secret sync modes without hiding the require
   assert.equal(actionsSecretHtml.includes('<section data-operator-section="github-app-secret-sync" hidden>'), true);
   assert.equal(actionsSecretHtml.includes('<section data-operator-section="production-deploy" hidden>'), true);
   assert.equal(actionsSecretHtml.includes('<section data-operator-section="pr-merge" hidden>'), true);
+});
+
+test("passkey operator page supports local helper mode without passkey controls", () => {
+  const html = renderPasskeyOperatorPage({
+    apiBase: "/api",
+    repositoryInput: "marushu/vtdd-v2-p",
+    actionType: "destructive",
+    highRiskKind: "github_app_secret_sync",
+    githubAppRole: "gemini-reviewer",
+    syncEnabled: true,
+    passkeyEnabled: false
+  });
+
+  assert.equal(html.includes('<section data-operator-section="registration" hidden>'), true);
+  assert.equal(html.includes('<section data-operator-section="approval" hidden>'), true);
+  assert.equal(html.includes('<option value="gemini-reviewer" selected>VTDD Gemini Reviewer</option>'), true);
+  assert.equal(html.includes('id="approval-grant-id-input"'), true);
+  assert.equal(html.includes('fetch("/api/approval/passkey/challenge"'), true);
 });
 
 test("passkey operator page focuses VPS runner admin mode on real approval only", () => {

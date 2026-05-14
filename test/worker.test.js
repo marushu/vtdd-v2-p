@@ -2707,6 +2707,113 @@ test("worker returns approval grant through retrieve route", async () => {
   assert.equal(body.approvalGrant.scope.repositoryInput, "sample-org/vtdd-v2-p");
 });
 
+test("worker retrieves approval grant by id even when provider query misses", async () => {
+  const provider = createInMemoryMemoryProvider();
+  await provider.store({
+    id: "approval-query-miss",
+    type: MemoryRecordType.APPROVAL_LOG,
+    content: {
+      kind: "passkey_grant",
+      status: "verified",
+      approvalId: "approval-query-miss",
+      verifiedAt: "2026-04-25T00:00:00.000Z",
+      expiresAt: "2099-01-01T00:00:00.000Z",
+      scope: {
+        actionType: "destructive",
+        repositoryInput: "sample-org/vtdd-v2-p",
+        issueNumber: "15",
+        relatedIssue: "15",
+        phase: "execution",
+        highRiskKind: "github_app_secret_sync"
+      }
+    },
+    metadata: { source: "test" },
+    priority: 90,
+    tags: ["passkey_grant"],
+    createdAt: "2026-04-25T00:00:00.000Z"
+  });
+  const queryMissProvider = {
+    ...provider,
+    async query() {
+      return [];
+    }
+  };
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/retrieve/approval-grant?approvalId=approval-query-miss", {
+      headers: gatewayAuthHeaders
+    }),
+    {
+      ...gatewayAuthEnv,
+      MEMORY_PROVIDER: queryMissProvider
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.approvalGrant.approvalId, "approval-query-miss");
+});
+
+test("worker returns explicit expired approval grant error", async () => {
+  const provider = createInMemoryMemoryProvider();
+  await provider.store({
+    id: "approval-expired",
+    type: MemoryRecordType.APPROVAL_LOG,
+    content: {
+      kind: "passkey_grant",
+      status: "verified",
+      approvalId: "approval-expired",
+      verifiedAt: "2026-04-25T00:00:00.000Z",
+      expiresAt: "2000-01-01T00:00:00.000Z",
+      scope: {
+        actionType: "destructive",
+        repositoryInput: "sample-org/vtdd-v2-p",
+        issueNumber: "15",
+        relatedIssue: "15",
+        phase: "execution",
+        highRiskKind: "github_app_secret_sync"
+      }
+    },
+    metadata: { source: "test" },
+    priority: 90,
+    tags: ["passkey_grant"],
+    createdAt: "2026-04-25T00:00:00.000Z"
+  });
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/retrieve/approval-grant?approvalId=approval-expired", {
+      headers: gatewayAuthHeaders
+    }),
+    {
+      ...gatewayAuthEnv,
+      MEMORY_PROVIDER: provider
+    }
+  );
+
+  assert.equal(response.status, 410);
+  const body = await response.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.error, "approval_grant_expired");
+  assert.equal(body.reason.includes("再承認"), true);
+});
+
+test("worker passkey operator page preselects GitHub App role from query", async () => {
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/v2/approval/passkey/operator?actionType=destructive&highRiskKind=github_app_secret_sync&githubAppRole=gemini-reviewer",
+      {
+        headers: gatewayAuthHeaders
+      }
+    ),
+    gatewayAuthEnv
+  );
+
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.equal(html.includes('<option value="gemini-reviewer" selected>VTDD Gemini Reviewer</option>'), true);
+});
+
 test("worker returns GitHub repositories through read plane route", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/v2/retrieve/github?resource=repositories&limit=5", {

@@ -27081,7 +27081,8 @@ function normalize(value) {
 // src/core/passkey-operator-page.js
 function renderPasskeyOperatorPage(input = {}) {
   const operatorMode = resolvePasskeyOperatorMode(input);
-  const sectionVisibility = resolveSectionVisibility(operatorMode);
+  const passkeyEnabled = input.passkeyEnabled !== false;
+  const sectionVisibility = resolveSectionVisibility(operatorMode, { passkeyEnabled });
   const origin = escapeHtml(input.origin || "");
   const apiBase = escapeHtml(input.apiBase || "/v2");
   const syncApiBase = escapeHtml(input.syncApiBase || "");
@@ -27295,6 +27296,8 @@ function renderPasskeyOperatorPage(input = {}) {
             ${renderGithubAppRoleOption("mac-codex", "VTDD mac Codex", githubAppRoleDefault)}
             ${renderGithubAppRoleOption("vps-codex-cli", "VTDD VPS Codex CLI", githubAppRoleDefault)}
           </select>
+          <label for="approval-grant-id-input">approvalGrantId</label>
+          <input id="approval-grant-id-input" value="" placeholder="approval:..." autocomplete="off" />
           <div class="row">
             <button id="sync-button"${syncEnabled ? "" : " disabled"}>Sync GitHub App secrets</button>
           </div>
@@ -27618,7 +27621,9 @@ function renderPasskeyOperatorPage(input = {}) {
 
       document.getElementById("sync-button").addEventListener("click", async () => {
         try {
-          if (!latestApprovalGrantId) {
+          const pastedApprovalGrantId = document.getElementById("approval-grant-id-input").value.trim();
+          const approvalGrantId = latestApprovalGrantId || pastedApprovalGrantId;
+          if (!approvalGrantId) {
             throw new Error("approvalGrantId is required before secret sync");
           }
           if (!"${syncApiBase}") {
@@ -27629,7 +27634,7 @@ function renderPasskeyOperatorPage(input = {}) {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({
-              approvalGrantId: latestApprovalGrantId,
+              approvalGrantId,
               repositoryInput: document.getElementById("repo-input").value,
               githubAppRole: document.getElementById("github-app-role-input").value
             })
@@ -27897,11 +27902,12 @@ function resolvePasskeyOperatorMode(input = {}) {
   }
   return "full";
 }
-function resolveSectionVisibility(operatorMode) {
+function resolveSectionVisibility(operatorMode, options = {}) {
   const full = operatorMode === "full";
+  const passkeyEnabled = options.passkeyEnabled !== false;
   return {
-    registration: true,
-    approval: true,
+    registration: passkeyEnabled,
+    approval: passkeyEnabled,
     githubAppSecretSync: full || operatorMode === "github_app_secret_sync",
     productionDeploy: full || operatorMode === "deploy",
     prMerge: full || operatorMode === "merge",
@@ -54846,7 +54852,6 @@ async function handleRetrieveOperationalMemoryRequest(url, env) {
 }
 async function handleRetrieveApprovalGrantRequest(url, env) {
   const provider = resolveMemoryProvider(env);
-  await purgeExpiredPasskeyArtifacts(provider);
   const validation = validateMemoryProvider(provider);
   if (!validation.ok) {
     return retrieveErrorJson(url, 503, {
@@ -54869,6 +54874,13 @@ async function handleRetrieveApprovalGrantRequest(url, env) {
       ok: false,
       error: "approval_grant_not_found",
       reason: "matching passkey approval grant was not found"
+    });
+  }
+  if (isExpiredPasskeyEphemeralRecord(record2)) {
+    return retrieveErrorJson(url, 410, {
+      ok: false,
+      error: "approval_grant_expired",
+      reason: "approval grant is expired. Worker origin \u3067\u518D\u627F\u8A8D\u3057\u3066\u3001\u65B0\u3057\u3044 approvalGrantId \u3092\u53D6\u5F97\u3057\u3066\u304F\u3060\u3055\u3044\u3002"
     });
   }
   return json(200, {
@@ -56243,6 +56255,7 @@ function handlePasskeyOperatorPageRequest(request) {
     returnUrl: normalizeOperatorReturnUrl(url.searchParams.get("returnUrl")),
     operatorId: url.searchParams.get("operatorId") || "vtdd-operator",
     operatorLabel: url.searchParams.get("operatorLabel") || "VTDD Operator",
+    githubAppRole: url.searchParams.get("githubAppRole") || "legacy",
     syncEnabled,
     syncMessage: syncEnabled ? "approvalGrantId \u304C\u53D6\u5F97\u6E08\u307F\u306A\u3089\u5B9F\u884C\u3067\u304D\u307E\u3059\u3002desktop helper bridge \u306B\u63A5\u7D9A\u3057\u307E\u3059\u3002" : "desktop maintenance required: local secret sync bridge \u304C\u672A\u63A5\u7D9A\u3067\u3059\u3002"
   });
@@ -56977,7 +56990,18 @@ async function findApprovalRecordById(provider, recordId) {
     text: recordId,
     limit: 50
   });
-  return records.find((record2) => normalizeText30(record2?.id) === recordId) ?? records.find((record2) => normalizeText30(record2?.content?.approvalId) === recordId) ?? records.find((record2) => normalizeText30(record2?.content?.sessionId) === recordId) ?? null;
+  const matched = records.find((record2) => normalizeText30(record2?.id) === recordId) ?? records.find((record2) => normalizeText30(record2?.content?.approvalId) === recordId) ?? records.find((record2) => normalizeText30(record2?.content?.sessionId) === recordId) ?? null;
+  if (matched) {
+    return matched;
+  }
+  if (typeof provider.retrieve !== "function") {
+    return null;
+  }
+  const fallbackRecords = await provider.retrieve({
+    type: MemoryRecordType.APPROVAL_LOG,
+    limit: MAX_MEMORY_LIMIT
+  });
+  return fallbackRecords.find((record2) => normalizeText30(record2?.id) === recordId) ?? fallbackRecords.find((record2) => normalizeText30(record2?.content?.approvalId) === recordId) ?? fallbackRecords.find((record2) => normalizeText30(record2?.content?.sessionId) === recordId) ?? null;
 }
 async function appendGuardedAbsenceExecutionLog({ payload, gatewayOutcome, env }) {
   const policyInput = normalizeObject11(payload?.policyInput);
