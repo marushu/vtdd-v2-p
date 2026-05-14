@@ -21,7 +21,7 @@ for that role.
 | mac Codex executor | `VTDD mac Codex` | `.github/workflows/remote-codex-executor.yml` with `codex_actor=mac-codex` | `VTDD_MAC_CODEX_APP_ID`, `VTDD_MAC_CODEX_APP_PRIVATE_KEY` |
 | VPS Codex CLI executor | `VTDD VPS Codex CLI` | `.github/workflows/remote-codex-executor.yml` with `codex_actor=vps-codex-cli` | `VTDD_VPS_CODEX_CLI_APP_ID`, `VTDD_VPS_CODEX_CLI_APP_PRIVATE_KEY` |
 | Gemini reviewer | `VTDD Gemini Reviewer` | `.github/workflows/gemini-pr-review.yml` | `VTDD_GEMINI_REVIEWER_APP_ID`, `VTDD_GEMINI_REVIEWER_APP_PRIVATE_KEY` |
-| Codex fallback reviewer | `VTDD Codex Fallback Reviewer` | `.github/workflows/codex-pr-review-fallback.yml` | `VTDD_CODEX_FALLBACK_REVIEWER_APP_ID`, `VTDD_CODEX_FALLBACK_REVIEWER_APP_PRIVATE_KEY` |
+| Codex fallback reviewer | `VTDD Codex Fallback Reviewer` | `.github/workflows/codex-pr-review-fallback.yml`; VPS fallback writeback path | `VTDD_CODEX_FALLBACK_REVIEWER_APP_ID`, `VTDD_CODEX_FALLBACK_REVIEWER_APP_PRIVATE_KEY`, `VTDD_CODEX_FALLBACK_REVIEWER_APP_INSTALLATION_ID` on VPS |
 | Owner | `marushu` | Manual GitHub UI / owner-authorized administration | Owner login only |
 
 ## Authority Boundary
@@ -57,3 +57,22 @@ Until the new secrets are configured:
 - Remote Codex executor keeps `vtdd-codex` compatibility by default and uses
   `mac-codex` or `vps-codex-cli` only when that actor is selected and its
   secrets are configured.
+
+## Incident Visibility
+
+Actor identity failures are recovery incidents, not silent script failures.
+
+If the VPS fallback path cannot mint a `VTDD Codex Fallback Reviewer`
+installation access token, it must not post the completed reviewer marker as
+`marushu`. When `VTDD VPS Codex CLI` credentials are available, the VPS runner
+posts a Japanese-first `@marushu` incident comment instead:
+
+- first line is readable from iPhone / Apple Watch notifications,
+- body includes `<!-- vtdd:incident=actor_identity_failure -->`,
+- body names the expected actor, detected-by actor, affected PR, and next
+  credential setup action.
+
+If the VPS notifier App token is also unavailable, the runner must fail closed
+and log the incident reason. That state is incomplete for normal VTDD recovery
+until startup preflight can surface the incident through Butler / mac Codex /
+VPS Codex CLI.
