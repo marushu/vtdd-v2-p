@@ -125,7 +125,7 @@ test("execution continuity treats approve-only Gemini reviewer comment as non-bl
   assert.equal(result.value.butlerReviewSynthesis.prState.mergeability.status, "unverified");
   assert.equal(
     result.value.butlerReviewSynthesis.humanDecisionFocus.includes(
-      "Gemini updates its existing marker comment; GitHub may show the original comment time, so use the current marker body and evidence URL."
+      "Gemini appends timestamped marker comments; use the latest trusted marker for the relevant PR head SHA as current reviewer evidence."
     ),
     true
   );
