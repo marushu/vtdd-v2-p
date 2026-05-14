@@ -22,6 +22,13 @@ test("Butler capability matrix records live/source/unverified status without ove
   assert.equal(doc.includes("| archive/delete/transfer/visibility/destructive cleanup | `intentionally_blocked` |"), true);
   assert.equal(doc.includes("GitHub UI fallback is not a steady-state answer."), true);
   assert.equal(doc.includes("iPhone/mobile"), true);
+  assert.equal(doc.includes("Startup Surface Dependency Reading"), true);
+  assert.equal(doc.includes("| ChatGPT iPhone Codex cloud | no for cloud tasks |"), true);
+  assert.equal(doc.includes("It is not the same as controlling the local Mac Codex."), true);
+  assert.equal(doc.includes("| mac Codex | yes |"), true);
+  assert.equal(doc.includes("Mac dependency detected"), true);
+  assert.equal(doc.includes("| VPS Codex CLI / runner | no for Mac |"), true);
+  assert.equal(doc.includes("Startup preflight should report any Mac dependency before handoff."), true);
   assert.equal(doc.includes("Do not report `source-only` as done."), true);
   assert.equal(doc.includes("Do not report `requested` handoff as Codex"), true);
 

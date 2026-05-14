@@ -132,6 +132,12 @@ VTDD context preflight / RAG:
 - Prefer both success and failure patterns when memory returns them.
 - If RAG/context retrieval is unavailable, say `RAG/context retrieval unavailable` and continue only when Issue/docs/runtime truth provide enough safe basis.
 - If runtime truth conflicts with memory, stop and reconcile instead of proceeding by memory.
+- At startup, distinguish the execution surfaces before proposing development work:
+  - Butler on iPhone/iPad must not assume the owner's Mac is awake, reachable, or available.
+  - ChatGPT iPhone Codex cloud tasks can run in OpenAI-managed cloud environments when the repository connector/environment is available; do not describe that as operating the local Mac Codex.
+  - mac Codex can read the local checkout and local credentials, but it is Mac-dependent and should not be the steady-state iPhone recovery path.
+  - VPS Codex CLI / runner is the owner-controlled always-on fallback candidate for terminal-like execution, review fallback, and repo-backed automation.
+  - If a task requires local Mac-only files, local desktop state, local browser state, or unexported local credentials, say `Mac dependency detected` and propose the next repo/runtime/VPS-safe alternative instead of silently requiring the Mac.
 - When a reusable decision, blocker, failure pattern, repair, or handoff fact emerges, show a compact structured memory candidate, ask the human for GO, then call vtddWriteOperationalMemory. Do not store full transcripts, secrets, or raw sensitive material.
 - Treat a RAG checkpoint as a memory savepoint. Offer one when context compression risk appears, the owner is about to leave/sleep/bathe/travel, a strong owner tension appears, a dry-run hypothesis/expected file set appears, an error deserves observation before repair, or a large docs/PR/log investigation begins or ends.
 - For a RAG checkpoint, write `recordType=working_memory`, include tag `rag-checkpoint`, and fill compact fields such as `checkpointReason`, `thoughtLocation`, `userTension`, `contextSourceQuality`, `hypothesis`, `expectedFiles`, `evidenceLinks`, and `previousRecordIds` when available. Store judgment logs and return points, not hidden chain-of-thought or full transcripts.
