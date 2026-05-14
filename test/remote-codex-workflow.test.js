@@ -85,3 +85,18 @@ test("remote Codex workflow restricts api_key_runner to the control repository",
   assert.equal(workflow.includes('if [ "$TARGET_REPOSITORY" != "$GITHUB_REPOSITORY" ]; then'), true);
   assert.equal(workflow.includes("api_key_runner is restricted to this repository."), true);
 });
+
+test("remote Codex workflow can choose the GitHub App actor while preserving vtdd-codex compatibility", () => {
+  assert.equal(workflow.includes("codex_actor:"), true);
+  assert.equal(workflow.includes("default: \"vtdd-codex\""), true);
+  assert.equal(workflow.includes("vtdd-codex|mac-codex|vps-codex-cli"), true);
+  assert.equal(workflow.includes("name: Resolve GitHub App actor"), true);
+  assert.equal(workflow.includes("name: Mint legacy vtdd-codex GitHub App token"), true);
+  assert.equal(workflow.includes("VTDD_GITHUB_APP_ID"), true);
+  assert.equal(workflow.includes("VTDD_MAC_CODEX_APP_ID"), true);
+  assert.equal(workflow.includes("VTDD_MAC_CODEX_APP_PRIVATE_KEY"), true);
+  assert.equal(workflow.includes("VTDD_VPS_CODEX_CLI_APP_ID"), true);
+  assert.equal(workflow.includes("VTDD_VPS_CODEX_CLI_APP_PRIVATE_KEY"), true);
+  assert.equal(workflow.includes('git config user.name "$GIT_USER_NAME"'), true);
+  assert.equal(workflow.includes('`Actor: ${process.env.CODEX_ACTOR}`'), true);
+});

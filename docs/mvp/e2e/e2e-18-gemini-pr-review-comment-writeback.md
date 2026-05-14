@@ -40,7 +40,7 @@ node --test test/gemini-pr-review-workflow.test.js test/gemini-pr-review.test.js
 
 Observed result on 2026-04-26:
 - passed
-- confirms the workflow skips when `VTDD_GITHUB_APP_ID` / `VTDD_GITHUB_APP_PRIVATE_KEY` are not configured
+- confirms the workflow skips when `VTDD_GEMINI_REVIEWER_APP_ID` / `VTDD_GEMINI_REVIEWER_APP_PRIVATE_KEY` are not configured
 - confirms the workflow mints a GitHub App token and passes it as `GITHUB_TOKEN` to `scripts/run-gemini-pr-review.mjs`
 - confirms rerun triggers ignore the reviewer marker to avoid uncontrolled comment loops
 - confirms reviewer output remains PR-comment writeback only and does not grant execution credentials or merge authority

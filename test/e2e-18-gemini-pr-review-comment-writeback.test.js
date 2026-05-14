@@ -21,8 +21,8 @@ test("E2E-18 evidence doc records live Gemini reviewer writeback and boundary te
     doc.includes("node --test test/gemini-pr-review-workflow.test.js test/gemini-pr-review.test.js"),
     true
   );
-  assert.equal(doc.includes("VTDD_GITHUB_APP_ID"), true);
-  assert.equal(doc.includes("VTDD_GITHUB_APP_PRIVATE_KEY"), true);
+  assert.equal(doc.includes("VTDD_GEMINI_REVIEWER_APP_ID"), true);
+  assert.equal(doc.includes("VTDD_GEMINI_REVIEWER_APP_PRIVATE_KEY"), true);
   assert.equal(doc.includes("uncontrolled comment loops"), true);
 });
 
