@@ -36450,12 +36450,16 @@ async function buildCustomGptRecoveryBundle(input = {}) {
       ref,
       requestedRef,
       runtimeOrigin,
+      sourceCommitSha: channel === CustomGptSetupChannel.KNOWN_GOOD ? knownGoodCommit?.sha ?? null : latestCommit?.sha ?? null,
+      sourceCommitSource: channel === CustomGptSetupChannel.KNOWN_GOOD ? knownGoodCommit?.source ?? "unverified" : latestCommit?.source ?? "unverified",
       generatedAt: (/* @__PURE__ */ new Date()).toISOString(),
       actionSchema: {
         path: openapi.artifact.path,
         sourceSha: openapi.artifact.sha,
         serverUrl: runtimeOrigin,
         contentType: openapi.artifact.contentType,
+        characterCount: countCodePoints(actionSchema),
+        byteCount: countUtf8Bytes(actionSchema),
         content: actionSchema
       },
       instructionsShortMin: {
@@ -36464,12 +36468,13 @@ async function buildCustomGptRecoveryBundle(input = {}) {
         contentType: instructionsShortMin.artifact.contentType,
         characterLimit: INSTRUCTIONS_CHARACTER_LIMIT,
         characterCount: instructionsCharacterCount,
+        byteCount: countUtf8Bytes(instructions),
         limitExceeded: instructionsLimitExceeded,
         content: instructions
       },
       rollback: {
-        knownGoodCommitSha: channel === CustomGptSetupChannel.KNOWN_GOOD ? knownGoodCommit?.sha : latestCommit?.sha,
-        knownGoodCommitSource: channel === CustomGptSetupChannel.KNOWN_GOOD ? knownGoodCommit?.source : latestCommit?.source,
+        knownGoodCommitSha: channel === CustomGptSetupChannel.KNOWN_GOOD ? knownGoodCommit?.sha : null,
+        knownGoodCommitSource: channel === CustomGptSetupChannel.KNOWN_GOOD ? knownGoodCommit?.source : "not_checked_on_latest",
         rollbackReady: channel === CustomGptSetupChannel.KNOWN_GOOD,
         bundleArtifacts: [
           openapi.artifact.path,
@@ -36693,37 +36698,54 @@ function renderRecoveryBundleSections(recovery) {
         <div><strong>Worker URL</strong><br>${escapeHtml3(recovery.runtimeOrigin)}</div>
         <div><strong>Repository</strong><br>${escapeHtml3(recovery.repository)}</div>
         <div><strong>${recovery.channel === CustomGptSetupChannel.KNOWN_GOOD ? "Known-good ref" : "Latest ref"}</strong><br>${escapeHtml3(recovery.ref)}</div>
-        <div><strong>Known-good commit</strong><br>${escapeHtml3(rollback.knownGoodCommitSha || "unverified")}</div>
+        <div><strong>Bundle commit</strong><br>${escapeHtml3(recovery.sourceCommitSha || "\u672A\u78BA\u8A8D")}</div>
+        <div><strong>Known-good commit</strong><br>${escapeHtml3(rollback.knownGoodCommitSha || "\u672A\u78BA\u8A8D")}</div>
         <div><strong>Self-parity</strong><br>${escapeHtml3(selfParity.runtimeParity)}</div>
         <div><strong>Deploy state</strong><br>${escapeHtml3(recovery.runtime.deployState)}</div>
-        <div><strong>short-min length</strong><br>${instructions.characterCount} / ${instructions.characterLimit}</div>
+        <div><strong>Action Schema length</strong><br>${actionSchema.characterCount} chars / ${actionSchema.byteCount} bytes</div>
+        <div><strong>short-min length</strong><br>${instructions.characterCount} chars / ${instructions.byteCount} bytes / limit ${instructions.characterLimit}</div>
         <div><strong>Safety</strong><br>No secret values, tokens, or approval grants are displayed.</div>
       </div>
     </section>
     <section>
+      <h2>URL separation</h2>
+      <div class="meta">
+        <div><strong>Recovery page URL</strong><br>${escapeHtml3(recovery.channel === CustomGptSetupChannel.KNOWN_GOOD ? "/setup/known-good" : "/setup/latest")}</div>
+        <div><strong>Runtime origin</strong><br>${escapeHtml3(recovery.runtimeOrigin)}</div>
+        <div><strong>Action Schema server URL</strong><br>${escapeHtml3(actionSchema.serverUrl)}</div>
+        <div><strong>Operator URL</strong><br>\u5225\u7528\u9014\u3002passkey / deploy / high-risk approval \u3067\u306E\u307F\u4F7F\u3046\u3002</div>
+      </div>
+    </section>
+    <section>
       <h2>Copy-ready Action Schema</h2>
-      <p class="small">${escapeHtml3(actionSchema.path)}; servers.url = ${escapeHtml3(actionSchema.serverUrl)}</p>
+      <p class="small">source: ${escapeHtml3(actionSchema.path)}; sourceSha: ${escapeHtml3(actionSchema.sourceSha)}; copy payload: raw YAML, not URL encoded</p>
       <p><button type="button" data-copy-target="action-schema" data-copy-label="Copy Action Schema">Copy Action Schema</button></p>
       <textarea id="action-schema" spellcheck="false">${escapeHtml3(actionSchema.content)}</textarea>
     </section>
     <section>
       <h2>Copy-ready custom-gpt-instructions-short-min.md</h2>
-      <p class="small">${escapeHtml3(instructions.path)}</p>
+      <p class="small">source: ${escapeHtml3(instructions.path)}; sourceSha: ${escapeHtml3(instructions.sourceSha)}; copy payload: raw Markdown, not URL encoded</p>
       <p><button type="button" data-copy-target="instructions-short-min" data-copy-label="Copy Instructions">Copy Instructions</button></p>
       <textarea id="instructions-short-min" spellcheck="false">${escapeHtml3(instructions.content)}</textarea>
     </section>
     <section>
-      <h2>Known-good rollback bundle</h2>
-      ${rollback.rollbackReady ? `<p><button type="button" data-copy-target="rollback-bundle" data-copy-label="Copy Rollback Bundle">Copy Rollback Bundle</button></p>` : `<p class="small">Rollback \u306F setup/known-good \u3067 copy-ready \u306B\u306A\u308A\u307E\u3059\u3002latest \u306F\u73FE\u5728\u306E\u5019\u88DC\u78BA\u8A8D\u7528\u3067\u3059\u3002</p>`}
+      <h2>${rollback.rollbackReady ? "Known-good rollback bundle" : "Known-good status / rollback preview"}</h2>
+      ${rollback.rollbackReady ? `<p><button type="button" data-copy-target="rollback-bundle" data-copy-label="Copy Rollback Bundle">Copy Rollback Bundle</button></p>` : `<p class="small">Rollback \u306F setup/known-good \u3067 copy-ready \u306B\u306A\u308A\u307E\u3059\u3002latest \u306F\u73FE\u5728\u306E\u5019\u88DC\u78BA\u8A8D\u7528\u3067\u3001known-good \u3068\u3057\u3066\u306F\u672A\u78BA\u8A8D\u3067\u3059\u3002</p>`}
       <pre>${escapeHtml3(
     [
       `repository: ${recovery.repository}`,
       `channel: ${recovery.channel}`,
       `ref: ${recovery.ref}`,
-      `knownGoodCommitSha: ${rollback.knownGoodCommitSha || "unverified"}`,
+      `bundleCommitSha: ${recovery.sourceCommitSha || "\u672A\u78BA\u8A8D"}`,
+      `bundleCommitSource: ${recovery.sourceCommitSource}`,
+      `knownGoodCommitSha: ${rollback.knownGoodCommitSha || "\u672A\u78BA\u8A8D"}`,
       `knownGoodCommitSource: ${rollback.knownGoodCommitSource}`,
       `actionSchemaPath: ${actionSchema.path}`,
+      `actionSchemaSourceSha: ${actionSchema.sourceSha}`,
+      `actionSchemaLength: ${actionSchema.characterCount} chars / ${actionSchema.byteCount} bytes`,
       `instructionsShortMinPath: ${instructions.path}`,
+      `instructionsShortMinSourceSha: ${instructions.sourceSha}`,
+      `instructionsShortMinLength: ${instructions.characterCount} chars / ${instructions.byteCount} bytes`,
       `selfParity: ${selfParity.runtimeParity}`,
       `deployState: ${recovery.runtime.deployState}`,
       "restoreOrder:",
@@ -36735,10 +36757,16 @@ function renderRecoveryBundleSections(recovery) {
       `repository: ${recovery.repository}`,
       `channel: ${recovery.channel}`,
       `ref: ${recovery.ref}`,
-      `knownGoodCommitSha: ${rollback.knownGoodCommitSha || "unverified"}`,
+      `bundleCommitSha: ${recovery.sourceCommitSha || "\u672A\u78BA\u8A8D"}`,
+      `bundleCommitSource: ${recovery.sourceCommitSource}`,
+      `knownGoodCommitSha: ${rollback.knownGoodCommitSha || "\u672A\u78BA\u8A8D"}`,
       `knownGoodCommitSource: ${rollback.knownGoodCommitSource}`,
       `actionSchemaPath: ${actionSchema.path}`,
+      `actionSchemaSourceSha: ${actionSchema.sourceSha}`,
+      `actionSchemaLength: ${actionSchema.characterCount} chars / ${actionSchema.byteCount} bytes`,
       `instructionsShortMinPath: ${instructions.path}`,
+      `instructionsShortMinSourceSha: ${instructions.sourceSha}`,
+      `instructionsShortMinLength: ${instructions.characterCount} chars / ${instructions.byteCount} bytes`,
       `selfParity: ${selfParity.runtimeParity}`,
       `deployState: ${recovery.runtime.deployState}`,
       "restoreOrder:",
@@ -36753,6 +36781,9 @@ function normalizeSetupChannel(value) {
 }
 function countCodePoints(value) {
   return Array.from(String(value ?? "")).length;
+}
+function countUtf8Bytes(value) {
+  return new TextEncoder().encode(String(value ?? "")).length;
 }
 function escapeHtml3(value) {
   return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
