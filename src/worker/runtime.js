@@ -1137,6 +1137,19 @@ function buildMemoryWriteRecord(payload = {}) {
       content: {
         summary,
         details: normalizeText(payload.details) || null,
+        checkpointReason: normalizeText(payload.checkpointReason) || null,
+        thoughtLocation: normalizeText(payload.thoughtLocation) || null,
+        userTension: normalizeText(payload.userTension) || null,
+        contextSourceQuality: normalizeText(payload.contextSourceQuality) || null,
+        hypothesis: normalizeText(payload.hypothesis) || null,
+        expectedFiles: normalizeStringArray(payload.expectedFiles),
+        evidenceLinks: normalizeStringArray(payload.evidenceLinks),
+        previousRecordIds: normalizeStringArray(payload.previousRecordIds),
+        captureBoundary:
+          normalizeText(payload.captureBoundary) ||
+          (normalizeText(payload.checkpointReason)
+            ? "judgment_log_not_chain_of_thought"
+            : null),
         relatedIssue,
         repository,
         timestamp

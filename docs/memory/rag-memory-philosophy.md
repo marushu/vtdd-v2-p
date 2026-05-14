@@ -103,3 +103,38 @@ Store only what improves future judgment and recovery.
   - deletion plan.
 - Proposal/decision/execution records should remain compact and referenceable
   rather than transcript-heavy.
+
+## RAG Checkpoint Principle
+
+A RAG checkpoint is VTDD's memory savepoint. It is closer to pressing `Cmd+S`
+during a fragile creative session than to writing a polished final report.
+
+Capture small checkpoints when:
+
+- the owner says or implies "this is important",
+- strong tension, concern, anger, relief, or excitement changes the decision
+  context,
+- an implementation hypothesis or expected file set appears,
+- a dry-run finds a likely breakage point,
+- an error deserves observation before repair,
+- a large docs / PR / log investigation begins or ends,
+- context compression appears likely or has just happened,
+- the owner is about to sleep, bathe, travel, or otherwise lose the active
+  mental thread.
+
+The checkpoint should store a compact judgment log:
+
+- what was noticed,
+- why it matters,
+- where it came from,
+- the owner's tension at that moment,
+- related Issue / PR,
+- expected files or hypotheses,
+- evidence links when available,
+- whether the source context was full, compressed, externally verified, or
+  risky.
+
+Do not store raw full transcripts or hidden chain-of-thought as checkpoints.
+If a checkpoint is created after compression, mark it as lower-trust
+`compressed_context` or `missing_context_risk` until Issue / PR / runtime
+evidence verifies it.

@@ -19,6 +19,9 @@ These families are required by Issue #2 and form the core VTDD memory model.
 ### `working_memory`
 - Purpose: keep short-lived but operationally useful context
 - Typical content: current risk, pending ambiguity, active constraints
+- RAG checkpoint use: a compact memory savepoint captured before context
+  compression, sleep, travel, implementation, or large investigation changes the
+  active thread state
 
 ### `temperature_note`
 - Purpose: preserve user intent temperature such as urgency, preference, and
@@ -73,6 +76,34 @@ All memory records use the following shape:
 - Required
 - Structured payload for the record's primary meaning
 - Content shape may vary by `type`
+
+For a RAG checkpoint stored as `working_memory`, content should stay compact and
+may include:
+
+- `summary`
+- `details`
+- `checkpointReason`
+- `thoughtLocation`
+- `userTension`
+- `contextSourceQuality`
+- `hypothesis`
+- `expectedFiles`
+- `evidenceLinks`
+- `previousRecordIds`
+- `captureBoundary`
+- `relatedIssue`
+- `repository`
+- `timestamp`
+
+`captureBoundary` must describe the stored material as a judgment log or
+operational summary, not raw hidden chain-of-thought or full transcript capture.
+
+Suggested `contextSourceQuality` values:
+
+- `full_thread_context`: captured before compression from the active thread
+- `compressed_context`: reconstructed after compression and requiring caution
+- `external_evidence`: backed by Issue, PR, commit, log, or runtime truth
+- `missing_context_risk`: known context loss risk remains
 
 ### `metadata`
 - Required object
