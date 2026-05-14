@@ -334,6 +334,15 @@ Progress must be reconstructable from:
 - branch / PR state in GitHub runtime truth
 - VPS runner GitHub queue and event comments when using `vps_runner`
 
+For `vps_runner`, the preflight receipt must also include a `handoffNote`
+readable by Butler, mac Codex, and VPS Codex CLI. This note is restart context,
+not a substitute for GitHub runtime truth. It records the current surface, target
+repository, Issue, branch/base ref, Codex goal, the next safe action, the
+blocked-return route, and the expectation that important decisions or failed
+hypotheses should be offered as RAG checkpoint candidates before handoff ends.
+If the note and GitHub runtime truth conflict, Butler must follow runtime truth
+and surface the mismatch rather than guessing.
+
 For `codex_cloud_cli_control_runner`, the top-level progress `status` and
 `branch` describe the control workflow run for compatibility with existing
 consumers. Implementation success is reported separately under

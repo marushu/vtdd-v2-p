@@ -810,6 +810,7 @@ async function buildVpsRunnerPreflightReceipt({ workspace, payload, issue }) {
     mode: policy.mode,
     onMissingContract: policy.onMissingContract,
     issue: issueReceipt,
+    handoffNote: buildVpsRunnerHandoffNote({ payload, issueReceipt }),
     artifacts,
     missing,
     createdAt: new Date().toISOString()
@@ -822,6 +823,35 @@ async function buildVpsRunnerPreflightReceipt({ workspace, payload, issue }) {
   }
   payload.preflightReceipt = receipt;
   return receipt;
+}
+
+function buildVpsRunnerHandoffNote({ payload, issueReceipt }) {
+  const repository = normalizeRepository(payload?.repository);
+  const issueNumber = normalizePositiveInteger(issueReceipt?.number ?? payload?.issueNumber);
+  const codexGoal = normalizeText(payload?.codexGoal) || "unknown";
+  const branch = normalizeText(payload?.branch) || "";
+  const baseRef = normalizeText(payload?.baseRef) || "";
+  const currentSurface = "VPS Codex CLI";
+  const nextReadableBy = ["Butler", "mac Codex", "VPS Codex CLI"];
+  const nextSafeAction =
+    codexGoal === "revise_pr"
+      ? "resume from GitHub PR runtime truth, reviewer comments, and this preflight receipt"
+      : "resume from the canonical Issue, GitHub runtime truth, RAG checkpoints, and this preflight receipt";
+  return {
+    version: 1,
+    currentSurface,
+    nextReadableBy,
+    repository: repository || null,
+    issueNumber: issueNumber || null,
+    branch: branch || null,
+    baseRef: baseRef || null,
+    codexGoal,
+    nextSafeAction,
+    blockedReturnRoute:
+      "If the issue/runtime truth is insufficient, stop and return a Japanese blocker comment for Butler/owner instead of guessing.",
+    memoryExpectation:
+      "Important decisions, failed hypotheses, and restart context should be offered as RAG checkpoint candidates before handoff ends."
+  };
 }
 
 function normalizeVpsRunnerPreflightPolicy(value = {}) {
@@ -878,6 +908,16 @@ function formatVpsRunnerPreflightReceipt(preflight) {
   }
   lines.push("- Issue excerpt:");
   lines.push(indentForPrompt(normalizeText(preflight?.issue?.bodyExcerpt) || "(missing issue body)"));
+  if (preflight.handoffNote && typeof preflight.handoffNote === "object") {
+    const note = preflight.handoffNote;
+    lines.push("- Handoff note:");
+    lines.push(`  - Current surface: ${normalizeText(note.currentSurface) || "unknown"}`);
+    lines.push(`  - Repository: ${normalizeText(note.repository) || "unknown"}`);
+    lines.push(`  - Issue: #${normalizePositiveInteger(note.issueNumber) || "unknown"}`);
+    lines.push(`  - Goal: ${normalizeText(note.codexGoal) || "unknown"}`);
+    lines.push(`  - Next safe action: ${normalizeText(note.nextSafeAction) || "unknown"}`);
+    lines.push(`  - Blocked return route: ${normalizeText(note.blockedReturnRoute) || "unknown"}`);
+  }
   return lines.join("\n");
 }
 
