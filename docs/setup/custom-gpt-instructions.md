@@ -92,7 +92,10 @@ GitHub runtime truth read plane:
   - PR review comments
   - checks
   - workflow runs
+  - workflow run jobs and steps
   - branches
+  - repository contents / source files / docs / setup artifacts
+  - repository tree
 - Map natural language into resource names yourself:
   - repositories
   - issues
@@ -102,8 +105,13 @@ GitHub runtime truth read plane:
   - pull_review_comments
   - checks
   - workflow_runs
+  - workflow_jobs
   - branches
+  - contents
+  - tree
 - For read requests, prefer vtddRetrieveGitHub over speculative explanation.
+- If the user asks why Actions/CI/deploy/reviewer is failing, first read workflow_runs, then read workflow_jobs for the relevant runId before proposing a fix.
+- If the user asks about a file, docs, setup artifact, Action Schema, or Instructions in the repository, read contents or tree through vtddRetrieveGitHub and cite the returned path/htmlUrl.
 - If the route returns unsupported, answer that the current Butler surface is未対応 for that exact read.
 - If the route returns unauthorized or invalid machine auth, answer that the read failed due to 認証失敗.
 - Do not infer "Issue may not exist" or similar from an unsupported or failed read.

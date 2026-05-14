@@ -3369,6 +3369,96 @@ test("worker returns GitHub issues through read plane route", async () => {
   assert.equal(body.read.records[0].body, "## Intent\nExpose Issue text to Butler.");
 });
 
+test("worker returns repository contents and workflow job steps through read plane route", async () => {
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/v2/retrieve/github?resource=contents&repository=sample-org/vtdd-v2-p&path=AGENTS.md&ref=main",
+      {
+        headers: gatewayAuthHeaders
+      }
+    ),
+    {
+      ...gatewayAuthEnv,
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_repo_read",
+      GITHUB_API_FETCH: async (url) => {
+        const parsed = new URL(url);
+        if (parsed.pathname.endsWith("/contents/AGENTS.md")) {
+          return new Response(
+            JSON.stringify({
+              name: "AGENTS.md",
+              path: "AGENTS.md",
+              type: "file",
+              size: 28,
+              sha: "agents-sha",
+              encoding: "base64",
+              content: Buffer.from("Issue-driven source truth.\n", "utf8").toString("base64"),
+              html_url: "https://github.com/sample-org/vtdd-v2-p/blob/main/AGENTS.md",
+              download_url: "https://raw.githubusercontent.com/sample-org/vtdd-v2-p/main/AGENTS.md"
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        return new Response(JSON.stringify({ message: `unexpected ${parsed.pathname}` }), { status: 404 });
+      }
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.read.resource, "contents");
+  assert.equal(body.read.records[0].path, "AGENTS.md");
+  assert.equal(body.read.records[0].content, "Issue-driven source truth.\n");
+
+  const jobsResponse = await worker.fetch(
+    new Request(
+      "https://example.com/v2/retrieve/github?resource=workflow_jobs&repository=sample-org/vtdd-v2-p&runId=4004",
+      {
+        headers: gatewayAuthHeaders
+      }
+    ),
+    {
+      ...gatewayAuthEnv,
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_repo_read",
+      GITHUB_API_FETCH: async (url) => {
+        const parsed = new URL(url);
+        if (parsed.pathname.endsWith("/actions/runs/4004/jobs")) {
+          return new Response(
+            JSON.stringify({
+              jobs: [
+                {
+                  id: 5005,
+                  run_id: 4004,
+                  name: "test",
+                  status: "completed",
+                  conclusion: "failure",
+                  html_url: "https://github.com/sample-org/vtdd-v2-p/actions/runs/4004/job/5005",
+                  steps: [
+                    {
+                      name: "npm test",
+                      number: 3,
+                      status: "completed",
+                      conclusion: "failure"
+                    }
+                  ]
+                }
+              ]
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        return new Response(JSON.stringify({ message: `unexpected ${parsed.pathname}` }), { status: 404 });
+      }
+    }
+  );
+
+  assert.equal(jobsResponse.status, 200);
+  const jobsBody = await jobsResponse.json();
+  assert.equal(jobsBody.ok, true);
+  assert.equal(jobsBody.read.resource, "workflow_jobs");
+  assert.equal(jobsBody.read.records[0].steps[0].conclusion, "failure");
+});
+
 test("worker returns unsupported for unknown GitHub read resources", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/v2/retrieve/github?resource=milestones", {

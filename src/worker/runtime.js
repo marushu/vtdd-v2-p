@@ -1231,6 +1231,8 @@ async function handleRetrieveGitHubReadPlaneRequest(url, env) {
     pullNumber: url.searchParams.get("pullNumber"),
     branch: url.searchParams.get("branch"),
     ref: url.searchParams.get("ref"),
+    path: url.searchParams.get("path"),
+    runId: url.searchParams.get("runId"),
     state: url.searchParams.get("state"),
     limit: url.searchParams.get("limit"),
     env

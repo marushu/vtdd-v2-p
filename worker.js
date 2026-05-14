@@ -36923,7 +36923,10 @@ var GitHubReadResource = Object.freeze({
   PULL_REVIEW_COMMENTS: "pull_review_comments",
   CHECKS: "checks",
   WORKFLOW_RUNS: "workflow_runs",
-  BRANCHES: "branches"
+  WORKFLOW_JOBS: "workflow_jobs",
+  BRANCHES: "branches",
+  CONTENTS: "contents",
+  TREE: "tree"
 });
 async function retrieveGitHubReadPlane(input = {}) {
   const resource = normalizeText26(input.resource);
@@ -36933,6 +36936,8 @@ async function retrieveGitHubReadPlane(input = {}) {
   const branch = normalizeText26(input.branch);
   const head = normalizeText26(input.head);
   const ref = normalizeText26(input.ref) || branch;
+  const path = normalizeRepositoryPath(input.path);
+  const runId = normalizePositiveInteger5(input.runId);
   const state = normalizeText26(input.state) || "open";
   const limit = normalizeLimit6(input.limit, 20);
   const env = input.env ?? {};
@@ -36952,7 +36957,8 @@ async function retrieveGitHubReadPlane(input = {}) {
     repository,
     issueNumber,
     pullNumber,
-    ref
+    ref,
+    runId
   });
   if (!validation.ok) {
     return {
@@ -36969,6 +36975,8 @@ async function retrieveGitHubReadPlane(input = {}) {
     issueNumber,
     pullNumber,
     ref,
+    path,
+    runId,
     branch,
     head,
     state,
@@ -36978,7 +36986,7 @@ async function retrieveGitHubReadPlane(input = {}) {
     apiBaseUrl
   });
 }
-function validateGitHubReadRequest({ resource, repository, issueNumber, pullNumber, ref }) {
+function validateGitHubReadRequest({ resource, repository, issueNumber, pullNumber, ref, runId }) {
   const issues = [];
   if (!Object.values(GitHubReadResource).includes(resource)) {
     issues.push("resource is unsupported");
@@ -36995,6 +37003,12 @@ function validateGitHubReadRequest({ resource, repository, issueNumber, pullNumb
   if (resource === GitHubReadResource.CHECKS && !ref) {
     issues.push("ref or branch is required for checks");
   }
+  if (resource === GitHubReadResource.WORKFLOW_JOBS && !runId) {
+    issues.push("runId is required for workflow_jobs");
+  }
+  if (resource === GitHubReadResource.TREE && !ref) {
+    issues.push("ref or branch is required for tree");
+  }
   return issues.length > 0 ? { ok: false, issues } : { ok: true };
 }
 async function fetchGitHubReadResource(input) {
@@ -37004,6 +37018,8 @@ async function fetchGitHubReadResource(input) {
     issueNumber,
     pullNumber,
     ref,
+    path,
+    runId,
     branch,
     head,
     state,
@@ -37018,6 +37034,8 @@ async function fetchGitHubReadResource(input) {
     issueNumber,
     pullNumber,
     ref,
+    path,
+    runId,
     branch,
     head,
     state,
@@ -37072,6 +37090,8 @@ function buildGitHubReadRequest({
   issueNumber,
   pullNumber,
   ref,
+  path,
+  runId,
   branch,
   head,
   state,
@@ -37132,6 +37152,11 @@ function buildGitHubReadRequest({
     }
     return { url: url.toString() };
   }
+  if (resource === GitHubReadResource.WORKFLOW_JOBS) {
+    return {
+      url: `${apiBaseUrl}/repos/${encodedRepository}/actions/runs/${runId}/jobs?per_page=${limit}`
+    };
+  }
   if (resource === GitHubReadResource.BRANCHES) {
     if (branch) {
       return {
@@ -37141,6 +37166,19 @@ function buildGitHubReadRequest({
     return {
       url: `${apiBaseUrl}/repos/${encodedRepository}/branches?per_page=${limit}`
     };
+  }
+  if (resource === GitHubReadResource.CONTENTS) {
+    const encodedPath = path.split("/").filter(Boolean).map((segment) => encodeURIComponent(segment)).join("/");
+    const url = new URL(`${apiBaseUrl}/repos/${encodedRepository}/contents/${encodedPath}`);
+    if (ref) {
+      url.searchParams.set("ref", ref);
+    }
+    return { url: url.toString() };
+  }
+  if (resource === GitHubReadResource.TREE) {
+    const url = new URL(`${apiBaseUrl}/repos/${encodedRepository}/git/trees/${encodeURIComponent(ref)}`);
+    url.searchParams.set("recursive", "1");
+    return { url: url.toString() };
   }
   return { url: `${apiBaseUrl}/repos/${encodedRepository}` };
 }
@@ -37172,8 +37210,17 @@ function normalizeGitHubReadRecords(resource, body) {
   if (resource === GitHubReadResource.WORKFLOW_RUNS) {
     return Array.isArray(body?.workflow_runs) ? body.workflow_runs.map(normalizeWorkflowRun2) : [];
   }
+  if (resource === GitHubReadResource.WORKFLOW_JOBS) {
+    return Array.isArray(body?.jobs) ? body.jobs.map(normalizeWorkflowJob) : [];
+  }
   if (resource === GitHubReadResource.BRANCHES) {
     return Array.isArray(body) ? body.map(normalizeBranch) : [normalizeBranch(body)];
+  }
+  if (resource === GitHubReadResource.CONTENTS) {
+    return Array.isArray(body) ? body.map(normalizeContentEntry) : [normalizeContentEntry(body)];
+  }
+  if (resource === GitHubReadResource.TREE) {
+    return Array.isArray(body?.tree) ? body.tree.map(normalizeTreeEntry) : [];
   }
   return [];
 }
@@ -37280,6 +37327,26 @@ function normalizeWorkflowRun2(item) {
     htmlUrl: normalizeText26(item?.html_url)
   };
 }
+function normalizeWorkflowJob(item) {
+  return {
+    id: normalizePositiveInteger5(item?.id),
+    runId: normalizePositiveInteger5(item?.run_id),
+    name: normalizeText26(item?.name),
+    status: normalizeText26(item?.status),
+    conclusion: normalizeText26(item?.conclusion),
+    startedAt: normalizeText26(item?.started_at),
+    completedAt: normalizeText26(item?.completed_at),
+    htmlUrl: normalizeText26(item?.html_url),
+    steps: Array.isArray(item?.steps) ? item.steps.map((step) => ({
+      name: normalizeText26(step?.name),
+      status: normalizeText26(step?.status),
+      conclusion: normalizeText26(step?.conclusion),
+      number: normalizePositiveInteger5(step?.number),
+      startedAt: normalizeText26(step?.started_at),
+      completedAt: normalizeText26(step?.completed_at)
+    })) : []
+  };
+}
 function normalizeBranch(item) {
   return {
     name: normalizeText26(item?.name),
@@ -37287,6 +37354,47 @@ function normalizeBranch(item) {
     sha: normalizeText26(item?.commit?.sha),
     htmlUrl: normalizeText26(item?.commit?.url)
   };
+}
+function normalizeContentEntry(item) {
+  const type = normalizeText26(item?.type);
+  const content = type === "file" ? decodeGitHubTextContent(item?.content, item?.encoding) : null;
+  return {
+    name: normalizeText26(item?.name),
+    path: normalizeText26(item?.path),
+    type,
+    size: normalizePositiveInteger5(item?.size),
+    sha: normalizeText26(item?.sha),
+    htmlUrl: normalizeText26(item?.html_url),
+    downloadUrl: normalizeText26(item?.download_url) || null,
+    content,
+    encoding: content === null ? normalizeText26(item?.encoding) || null : "utf-8"
+  };
+}
+function normalizeTreeEntry(item) {
+  return {
+    path: normalizeText26(item?.path),
+    type: normalizeText26(item?.type),
+    mode: normalizeText26(item?.mode),
+    sha: normalizeText26(item?.sha),
+    size: normalizePositiveInteger5(item?.size),
+    url: normalizeText26(item?.url)
+  };
+}
+function decodeGitHubTextContent(content, encoding) {
+  if (normalizeText26(encoding) !== "base64") {
+    return null;
+  }
+  const compact = normalizeText26(content).replace(/\s+/g, "");
+  if (!compact) {
+    return "";
+  }
+  try {
+    const binary = atob(compact);
+    const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+    return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+  } catch {
+    return null;
+  }
 }
 function readJsonSafe6(response) {
   return response.json().catch(async () => ({ message: normalizeText26(await response.text().catch(() => "")) }));
@@ -37311,6 +37419,9 @@ function normalizePositiveInteger5(value) {
 }
 function normalizeText26(value) {
   return String(value ?? "").trim();
+}
+function normalizeRepositoryPath(value) {
+  return normalizeText26(value).replace(/^\/+/, "").replace(/\/{2,}/g, "/");
 }
 
 // src/core/github-write-plane.js
@@ -55219,6 +55330,8 @@ async function handleRetrieveGitHubReadPlaneRequest(url, env) {
     pullNumber: url.searchParams.get("pullNumber"),
     branch: url.searchParams.get("branch"),
     ref: url.searchParams.get("ref"),
+    path: url.searchParams.get("path"),
+    runId: url.searchParams.get("runId"),
     state: url.searchParams.get("state"),
     limit: url.searchParams.get("limit"),
     env

@@ -1612,7 +1612,10 @@ paths:
               - pull_review_comments
               - checks
               - workflow_runs
+              - workflow_jobs
               - branches
+              - contents
+              - tree
         - name: repository
           in: query
           required: false
@@ -1638,6 +1641,18 @@ paths:
           required: false
           schema:
             type: string
+        - name: path
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Repository path for contents reads. Omit for repository root.
+        - name: runId
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: GitHub Actions workflow run id for workflow_jobs reads.
         - name: state
           in: query
           required: false
