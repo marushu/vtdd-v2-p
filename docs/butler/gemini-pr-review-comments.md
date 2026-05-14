@@ -92,6 +92,18 @@ Gemini does not receive:
 - merge authority
 - deployment authority
 
+## GitHub Actor Boundary
+
+Gemini reviewer writeback must use the role-specific `VTDD Gemini Reviewer`
+GitHub App token. The Actions secrets are:
+
+- `VTDD_GEMINI_REVIEWER_APP_ID`
+- `VTDD_GEMINI_REVIEWER_APP_PRIVATE_KEY`
+
+The legacy shared `VTDD_GITHUB_APP_ID` / `VTDD_GITHUB_APP_PRIVATE_KEY` token
+must not be used for Gemini reviewer comments because it makes the GitHub
+timeline ambiguous about which VTDD role wrote the comment.
+
 ## Reviewer Output Boundary
 
 Gemini output must remain compatible with the existing reviewer contract:

@@ -64,12 +64,33 @@ jobs:
             exit 1
           fi
 
-      - name: Mint GitHub App token
+      - name: Detect Codex fallback reviewer GitHub App secrets
+        id: app_secrets
+        env:
+          VTDD_CODEX_FALLBACK_REVIEWER_APP_ID: ${{ secrets.VTDD_CODEX_FALLBACK_REVIEWER_APP_ID }}
+          VTDD_CODEX_FALLBACK_REVIEWER_APP_PRIVATE_KEY: ${{ secrets.VTDD_CODEX_FALLBACK_REVIEWER_APP_PRIVATE_KEY }}
+        shell: bash
+        run: |
+          if [ -n "$VTDD_CODEX_FALLBACK_REVIEWER_APP_ID" ] && [ -n "$VTDD_CODEX_FALLBACK_REVIEWER_APP_PRIVATE_KEY" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Stop when Codex fallback reviewer GitHub App secrets are missing
+        if: ${{ steps.app_secrets.outputs.configured != 'true' }}
+        shell: bash
+        run: |
+          echo "Codex fallback reviewer requires VTDD_CODEX_FALLBACK_REVIEWER_APP_ID / VTDD_CODEX_FALLBACK_REVIEWER_APP_PRIVATE_KEY."
+          exit 1
+
+      - name: Mint Codex fallback reviewer GitHub App token
+        if: ${{ steps.app_secrets.outputs.configured == 'true' }}
         id: app-token
         uses: actions/create-github-app-token@v1
         with:
-          app-id: ${{ secrets.VTDD_GITHUB_APP_ID }}
-          private-key: ${{ secrets.VTDD_GITHUB_APP_PRIVATE_KEY }}
+          app-id: ${{ secrets.VTDD_CODEX_FALLBACK_REVIEWER_APP_ID }}
+          private-key: ${{ secrets.VTDD_CODEX_FALLBACK_REVIEWER_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
 
       - name: Checkout trusted reviewer source

@@ -33,10 +33,10 @@ jobs:
       - name: Detect GitHub App secret availability
         id: app_secrets
         env:
-          VTDD_GITHUB_APP_ID: ${{ secrets.VTDD_GITHUB_APP_ID }}
-          VTDD_GITHUB_APP_PRIVATE_KEY: ${{ secrets.VTDD_GITHUB_APP_PRIVATE_KEY }}
+          VTDD_GEMINI_REVIEWER_APP_ID: ${{ secrets.VTDD_GEMINI_REVIEWER_APP_ID }}
+          VTDD_GEMINI_REVIEWER_APP_PRIVATE_KEY: ${{ secrets.VTDD_GEMINI_REVIEWER_APP_PRIVATE_KEY }}
         run: |
-          if [ -n "$VTDD_GITHUB_APP_ID" ] && [ -n "$VTDD_GITHUB_APP_PRIVATE_KEY" ]; then
+          if [ -n "$VTDD_GEMINI_REVIEWER_APP_ID" ] && [ -n "$VTDD_GEMINI_REVIEWER_APP_PRIVATE_KEY" ]; then
             echo "configured=true" >> "$GITHUB_OUTPUT"
           else
             echo "configured=false" >> "$GITHUB_OUTPUT"
@@ -45,7 +45,7 @@ jobs:
       - name: Skip when GitHub App secrets are not configured
         if: ${{ steps.app_secrets.outputs.configured != 'true' }}
         run: |
-          echo "Skipping Gemini review because VTDD_GITHUB_APP_ID / VTDD_GITHUB_APP_PRIVATE_KEY are not configured."
+          echo "Skipping Gemini review because VTDD_GEMINI_REVIEWER_APP_ID / VTDD_GEMINI_REVIEWER_APP_PRIVATE_KEY are not configured."
           exit 0
 
       - name: Mint GitHub App token
@@ -53,8 +53,8 @@ jobs:
         id: app-token
         uses: actions/create-github-app-token@v1
         with:
-          app-id: ${{ secrets.VTDD_GITHUB_APP_ID }}
-          private-key: ${{ secrets.VTDD_GITHUB_APP_PRIVATE_KEY }}
+          app-id: ${{ secrets.VTDD_GEMINI_REVIEWER_APP_ID }}
+          private-key: ${{ secrets.VTDD_GEMINI_REVIEWER_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
 
       - name: Checkout repository

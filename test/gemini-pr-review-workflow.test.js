@@ -11,9 +11,11 @@ const fallbackWorkflow = fs.readFileSync(
 test("Gemini review workflow skips when GitHub App secrets are not configured", () => {
   assert.equal(workflow.includes("name: Detect GitHub App secret availability"), true);
   assert.equal(
-    workflow.includes("Skipping Gemini review because VTDD_GITHUB_APP_ID / VTDD_GITHUB_APP_PRIVATE_KEY are not configured."),
+    workflow.includes("Skipping Gemini review because VTDD_GEMINI_REVIEWER_APP_ID / VTDD_GEMINI_REVIEWER_APP_PRIVATE_KEY are not configured."),
     true
   );
+  assert.equal(workflow.includes("VTDD_GEMINI_REVIEWER_APP_ID"), true);
+  assert.equal(workflow.includes("VTDD_GEMINI_REVIEWER_APP_PRIVATE_KEY"), true);
 });
 
 test("Gemini review workflow mints a GitHub App token and passes it to reviewer writeback", () => {
@@ -87,4 +89,21 @@ test("Codex fallback workflow runs reviewer-only Codex CLI and writes back via G
   assert.equal(fallbackWorkflow.includes("run: node trusted/scripts/run-codex-pr-review-fallback.mjs"), true);
   assert.equal(fallbackWorkflow.includes("OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}"), true);
   assert.equal(fallbackWorkflow.includes("GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}"), true);
+});
+
+test("Codex fallback workflow uses the dedicated fallback reviewer GitHub App", () => {
+  assert.equal(
+    fallbackWorkflow.includes("name: Detect Codex fallback reviewer GitHub App secrets"),
+    true
+  );
+  assert.equal(fallbackWorkflow.includes("VTDD_CODEX_FALLBACK_REVIEWER_APP_ID"), true);
+  assert.equal(fallbackWorkflow.includes("VTDD_CODEX_FALLBACK_REVIEWER_APP_PRIVATE_KEY"), true);
+  assert.equal(
+    fallbackWorkflow.includes("Codex fallback reviewer requires VTDD_CODEX_FALLBACK_REVIEWER_APP_ID / VTDD_CODEX_FALLBACK_REVIEWER_APP_PRIVATE_KEY."),
+    true
+  );
+  assert.equal(
+    fallbackWorkflow.includes("name: Mint Codex fallback reviewer GitHub App token"),
+    true
+  );
 });

@@ -40,6 +40,15 @@ on:
         description: "Optional handoff payload JSON"
         required: false
         type: string
+      codex_actor:
+        description: "GitHub App actor: vtdd-codex / mac-codex / vps-codex-cli"
+        required: false
+        default: "vtdd-codex"
+        type: choice
+        options:
+          - vtdd-codex
+          - mac-codex
+          - vps-codex-cli
 
 run-name: remote-codex-${{ inputs.execution_id }}
 
@@ -64,6 +73,7 @@ jobs:
       CODEX_GOAL: ${{ github.event.inputs.codex_goal }}
       APPROVAL_PHRASE: ${{ github.event.inputs.approval_phrase }}
       HANDOFF_JSON: ${{ github.event.inputs.handoff_json }}
+      CODEX_ACTOR: ${{ github.event.inputs.codex_actor || 'vtdd-codex' }}
     steps:
       - name: Enforce bounded GO
         shell: bash
@@ -103,13 +113,61 @@ jobs:
               exit 1
               ;;
           esac
+          case "$CODEX_ACTOR" in
+            vtdd-codex|mac-codex|vps-codex-cli) ;;
+            *)
+              echo "codex_actor must be vtdd-codex, mac-codex, or vps-codex-cli."
+              exit 1
+              ;;
+          esac
 
-      - name: Mint GitHub App token
-        id: app-token
+      - name: Resolve GitHub App actor
+        id: app-actor
+        shell: bash
+        run: |
+          case "$CODEX_ACTOR" in
+            mac-codex)
+              echo "token_output=mac" >> "$GITHUB_OUTPUT"
+              echo "git_user_name=vtdd-mac-codex[bot]" >> "$GITHUB_OUTPUT"
+              echo "git_user_email=vtdd-mac-codex[bot]@users.noreply.github.com" >> "$GITHUB_OUTPUT"
+              ;;
+            vps-codex-cli)
+              echo "token_output=vps" >> "$GITHUB_OUTPUT"
+              echo "git_user_name=vtdd-vps-codex-cli[bot]" >> "$GITHUB_OUTPUT"
+              echo "git_user_email=vtdd-vps-codex-cli[bot]@users.noreply.github.com" >> "$GITHUB_OUTPUT"
+              ;;
+            vtdd-codex)
+              echo "token_output=legacy" >> "$GITHUB_OUTPUT"
+              echo "git_user_name=vtdd-codex[bot]" >> "$GITHUB_OUTPUT"
+              echo "git_user_email=vtdd-codex[bot]@users.noreply.github.com" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+
+      - name: Mint legacy vtdd-codex GitHub App token
+        if: ${{ steps.app-actor.outputs.token_output == 'legacy' }}
+        id: app-token-legacy
         uses: actions/create-github-app-token@v1
         with:
           app-id: ${{ secrets.VTDD_GITHUB_APP_ID }}
           private-key: ${{ secrets.VTDD_GITHUB_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      - name: Mint mac Codex GitHub App token
+        if: ${{ steps.app-actor.outputs.token_output == 'mac' }}
+        id: app-token-mac
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.VTDD_MAC_CODEX_APP_ID }}
+          private-key: ${{ secrets.VTDD_MAC_CODEX_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      - name: Mint VPS Codex CLI GitHub App token
+        if: ${{ steps.app-actor.outputs.token_output == 'vps' }}
+        id: app-token-vps
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.VTDD_VPS_CODEX_CLI_APP_ID }}
+          private-key: ${{ secrets.VTDD_VPS_CODEX_CLI_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
 
       - name: Checkout target repository
@@ -117,7 +175,7 @@ jobs:
         with:
           repository: ${{ env.TARGET_REPOSITORY }}
           ref: ${{ env.BASE_REF }}
-          token: ${{ steps.app-token.outputs.token }}
+          token: ${{ steps.app-token-legacy.outputs.token || steps.app-token-mac.outputs.token || steps.app-token-vps.outputs.token }}
           fetch-depth: 0
           persist-credentials: false
           path: target-repo
@@ -167,6 +225,7 @@ jobs:
             `Issue: #${process.env.TARGET_ISSUE_NUMBER}`,
             `Branch: ${process.env.TARGET_BRANCH}`,
             `Goal: ${process.env.CODEX_GOAL}`,
+            `Actor: ${process.env.CODEX_ACTOR}`,
             `Handoff JSON: ${process.env.HANDOFF_JSON || ""}`,
             "",
             "Before making changes:",
@@ -189,10 +248,12 @@ jobs:
         working-directory: target-repo
         shell: bash
         env:
-          APP_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_TOKEN: ${{ steps.app-token-legacy.outputs.token || steps.app-token-mac.outputs.token || steps.app-token-vps.outputs.token }}
+          GIT_USER_NAME: ${{ steps.app-actor.outputs.git_user_name }}
+          GIT_USER_EMAIL: ${{ steps.app-actor.outputs.git_user_email }}
         run: |
-          git config user.name "vtdd-codex[bot]"
-          git config user.email "vtdd-codex[bot]@users.noreply.github.com"
+          git config user.name "$GIT_USER_NAME"
+          git config user.email "$GIT_USER_EMAIL"
 
           if git diff --quiet && git diff --cached --quiet; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
@@ -209,7 +270,7 @@ jobs:
         working-directory: target-repo
         shell: bash
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_TOKEN: ${{ steps.app-token-legacy.outputs.token || steps.app-token-mac.outputs.token || steps.app-token-vps.outputs.token }}
         run: |
           existing_url="$(gh pr view "$TARGET_BRANCH" \
             --repo "$TARGET_REPOSITORY" \

@@ -287,9 +287,16 @@ The optional machine-runner implementation path is GitHub Actions centered.
 - the workflow runs Codex CLI remotely
 - the workflow operates on the target repository and branch
 - progress is observed through GitHub Actions run state plus VTDD execution logs
+- the workflow accepts `codex_actor` so GitHub-visible writes can be attributed
+  to `vtdd-codex`, `mac-codex`, or `vps-codex-cli`
 
 This path must remain explicit opt-in because it depends on `OPENAI_API_KEY`.
 Do not present it as the only VTDD remote executor path.
+
+The `codex_actor` secret mapping is defined in
+`docs/security/github-app-actor-identity.md`. The default remains
+`vtdd-codex` for compatibility. Selecting `mac-codex` or `vps-codex-cli`
+requires the corresponding role-specific GitHub App secrets to be configured.
 
 ## Required Inputs
 
