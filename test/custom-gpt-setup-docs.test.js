@@ -184,6 +184,8 @@ test("short custom gpt instructions stay under editor limits while preserving cr
   assert.equal(doc.includes("no RAG hit OK"), true);
   assert.equal(doc.includes("never invent"), true);
   assert.equal(doc.includes("Runtime truth > memory"), true);
+  assert.equal(doc.includes("Reusable memory/RAG ckpt: show candidate with known repo/Issue"), true);
+  assert.equal(doc.includes("say unknown if missing"), true);
   assert.equal(doc.includes("propose an Issue candidate first, wait for GO, create the Issue, then hand off"), true);
   assert.equal(doc.includes("#303 is the regression example"), true);
   assert.equal(doc.includes("For normal GO writes (`issue_create`, `issue_comment_create`, `pull_comment_create`)"), true);
@@ -258,6 +260,9 @@ test("short-min custom gpt instructions stay pasteable while preserving critical
     "propose the Issue first, wait GO, create it, then hand off",
     "#303 is the regression example",
     "GitHub/runtime state is progress truth",
+    "Reusable memory/RAG checkpoint",
+    "show candidate with known repo/Issue",
+    "say unknown if missing",
     "Do not assume a default repository.",
     "vtddExecute handoff must use actionType=build",
     "requiresHandoff=true",
