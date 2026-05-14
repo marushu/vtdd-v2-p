@@ -1110,6 +1110,32 @@
                   "details": {
                     "type": "string"
                   },
+                  "checkpointReason": {
+                    "type": "string",
+                    "description": "Why this RAG checkpoint is being saved, such as context compression risk, owner leaving, dry-run hypothesis, or error observation."
+                  },
+                  "thoughtLocation": {
+                    "type": "string",
+                    "description": "Human-readable place where the thought emerged, without requiring raw transcript capture."
+                  },
+                  "userTension": {
+                    "type": "string",
+                    "description": "The owner's tension or mood relevant to future recall, expressed compactly."
+                  },
+                  "contextSourceQuality": {
+                    "type": "string",
+                    "enum": [
+                      "full_thread_context",
+                      "compressed_context",
+                      "external_evidence",
+                      "missing_context_risk"
+                    ],
+                    "description": "Whether the checkpoint came from full active context, compressed context, external evidence, or known context-loss risk."
+                  },
+                  "captureBoundary": {
+                    "type": "string",
+                    "description": "Must describe a judgment log or operational summary, not hidden chain-of-thought or full transcript capture."
+                  },
                   "decision": {
                     "type": "string"
                   },
@@ -1162,6 +1188,24 @@
                     }
                   },
                   "tags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "expectedFiles": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "evidenceLinks": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "previousRecordIds": {
                     "type": "array",
                     "items": {
                       "type": "string"

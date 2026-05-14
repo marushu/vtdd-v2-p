@@ -1148,6 +1148,51 @@ test("worker includes post-write retrieval for working memory writes", async () 
   assert.equal(body.postWriteRetrieval.relatedIssue, 251);
 });
 
+test("worker persists RAG checkpoint fields as working memory", async () => {
+  const provider = createInMemoryMemoryProvider();
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/action/memory-write", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        recordType: "working_memory",
+        confirmed: true,
+        repository: "sample-org/vtdd-v2",
+        relatedIssue: 361,
+        summary: "Save the current RAG checkpoint before context compression.",
+        checkpointReason: "Context compression risk before implementation.",
+        thoughtLocation: "Owner and Codex discussion before touching code.",
+        userTension: "Concerned that compressed context may create partial RAG.",
+        contextSourceQuality: "full_thread_context",
+        hypothesis: "Checkpoint schema should ride existing working_memory.",
+        expectedFiles: ["docs/memory-schema.md", "scripts/vtdd-memory.mjs"],
+        evidenceLinks: ["https://github.com/marushu/vtdd-v2-p/issues/361"],
+        previousRecordIds: ["decision_360_example"],
+        tags: ["rag-checkpoint"],
+        responseMode: "action_visible"
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      MEMORY_PROVIDER: provider
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.memoryWritePersisted.recordType, "working_memory");
+
+  const records = await provider.retrieve({ type: "working_memory", limit: 1 });
+  assert.equal(records[0].content.contextSourceQuality, "full_thread_context");
+  assert.deepEqual(records[0].content.expectedFiles, [
+    "docs/memory-schema.md",
+    "scripts/vtdd-memory.mjs"
+  ]);
+  assert.equal(records[0].content.captureBoundary, "judgment_log_not_chain_of_thought");
+  assert.equal(records[0].tags.includes("rag-checkpoint"), true);
+});
+
 test("worker does not override explicit Butler read consent categories", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/v2/gateway", {

@@ -56,6 +56,27 @@ node scripts/vtdd-memory.mjs retrieve-cross \
   --pretty true
 ```
 
+Write a RAG checkpoint through the Worker runtime:
+
+```sh
+node scripts/vtdd-memory.mjs write-runtime-checkpoint \
+  --runtime-url "$VTDD_RUNTIME_URL" \
+  --confirmed true \
+  --owner-consent "GO" \
+  --repository "owner/repo" \
+  --related-issue 361 \
+  --summary "Compact checkpoint summary." \
+  --checkpoint-reason "Context compression risk before implementation." \
+  --thought-location "Owner and Codex discussion before touching code." \
+  --user-tension "Concerned that compressed context may create partial RAG." \
+  --context-source-quality "full_thread_context" \
+  --hypothesis "Checkpoint schema should ride existing working_memory." \
+  --expected-file "docs/memory-schema.md" \
+  --expected-file "scripts/vtdd-memory.mjs" \
+  --tag "issue:361" \
+  --pretty true
+```
+
 Retrieve canonical cross memory directly from D1:
 
 ```sh
@@ -113,11 +134,15 @@ node scripts/vtdd-memory.mjs write-record \
 ## Safety Rules
 
 - Do not store full conversation transcripts by default.
+- Do not store raw hidden chain-of-thought. Store compact judgment logs:
+  observations, reasons, hypotheses, tensions, evidence, and next return points.
 - Do not store secrets, raw tokens, private keys, or owner-only credentials.
 - Do not treat memory as permission to deploy, merge, close issues, mutate
   credentials, or run destructive operations.
 - Use decision/proposal helpers when the record must be retrievable through
   cross-memory by `relatedIssue`.
+- Use runtime checkpoint writes from Mac Codex and VPS Codex CLI when the goal is
+  shared Butler-visible memory rather than direct Cloudflare administration.
 - Treat empty retrieval as an operational finding, not as proof that no
   relevant history exists.
 

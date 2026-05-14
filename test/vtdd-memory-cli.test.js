@@ -2,12 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  buildCheckpointPayload,
   buildCrossMemorySql,
   buildDecisionRecord,
   buildInsertRecordSql,
   buildInventorySql,
   buildProposalRecord,
   buildRuntimeCrossMemoryRequest,
+  buildRuntimeMemoryWriteRequest,
   parseArgs
 } from "../scripts/vtdd-memory.mjs";
 
@@ -112,4 +114,54 @@ test("runtime cross-memory request keeps auth in headers", () => {
   assert.equal(url.searchParams.get("text"), "shared rag harness");
   assert.equal(request.headers.authorization, "Bearer test-token");
   assert.equal(request.url.includes("test-token"), false);
+});
+
+test("buildCheckpointPayload creates a compact RAG checkpoint payload", () => {
+  const payload = buildCheckpointPayload({
+    confirmed: "true",
+    ownerConsent: "GO",
+    repository: "marushu/vtdd-v2-p",
+    relatedIssue: "361",
+    summary: "Save current RAG checkpoint before compression.",
+    checkpointReason: "Context compression risk.",
+    thoughtLocation: "Owner and Codex discussion.",
+    userTension: "Concerned but constructive.",
+    hypothesis: "Use working_memory as checkpoint.",
+    expectedFile: ["docs/memory-schema.md", "scripts/vtdd-memory.mjs"],
+    evidenceLink: "https://github.com/marushu/vtdd-v2-p/issues/361",
+    previousRecordId: "decision_360_example",
+    timestamp: "2026-05-14T09:30:00.000Z"
+  });
+
+  assert.equal(payload.recordType, "working_memory");
+  assert.equal(payload.confirmed, true);
+  assert.equal(payload.relatedIssue, 361);
+  assert.equal(payload.contextSourceQuality, "full_thread_context");
+  assert.equal(payload.captureBoundary, "judgment_log_not_chain_of_thought");
+  assert.deepEqual(payload.expectedFiles, ["docs/memory-schema.md", "scripts/vtdd-memory.mjs"]);
+  assert.equal(payload.tags.includes("rag-checkpoint"), true);
+  assert.equal(payload.tags.includes("memory-savepoint"), true);
+});
+
+test("runtime memory write request posts checkpoint without leaking auth into URL", () => {
+  const payload = buildCheckpointPayload({
+    confirmed: true,
+    relatedIssue: 361,
+    summary: "Checkpoint.",
+    timestamp: "2026-05-14T09:31:00.000Z"
+  });
+  const request = buildRuntimeMemoryWriteRequest({
+    runtimeUrl: "https://example.invalid",
+    env: {
+      VTDD_GATEWAY_BEARER_TOKEN: "test-token"
+    },
+    payload
+  });
+
+  const body = JSON.parse(request.body);
+  assert.equal(new URL(request.url).pathname, "/v2/action/memory-write");
+  assert.equal(request.headers.authorization, "Bearer test-token");
+  assert.equal(request.url.includes("test-token"), false);
+  assert.equal(body.recordType, "working_memory");
+  assert.equal(body.responseMode, "action_visible");
 });

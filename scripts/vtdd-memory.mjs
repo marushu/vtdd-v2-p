@@ -130,6 +130,65 @@ export function buildRuntimeCrossMemoryRequest(options) {
   };
 }
 
+export function buildRuntimeMemoryWriteRequest(options) {
+  const env = options.env ?? process.env;
+  const runtimeUrl = normalizeRequiredText(
+    options.runtimeUrl ?? env.VTDD_RUNTIME_URL,
+    "runtime-url"
+  );
+  const token = normalizeRequiredText(
+    env.VTDD_GATEWAY_BEARER_TOKEN,
+    "VTDD_GATEWAY_BEARER_TOKEN"
+  );
+  const payload = normalizeObject(options.payload);
+  if (payload.confirmed !== true) {
+    throw new Error("confirmed=true is required before writing memory through runtime");
+  }
+  const url = new URL("/v2/action/memory-write", runtimeUrl);
+
+  return {
+    url: url.toString(),
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({
+      ...payload,
+      responseMode: payload.responseMode ?? "action_visible"
+    })
+  };
+}
+
+export function buildCheckpointPayload(options) {
+  const relatedIssue = normalizePositiveInteger(options.relatedIssue, "relatedIssue");
+  const tags = mergeTags(options.tag ?? options.tags, [
+    `issue:${relatedIssue}`,
+    "rag-checkpoint",
+    "memory-savepoint"
+  ]);
+  return {
+    recordType: "working_memory",
+    confirmed: normalizeBoolean(options.confirmed),
+    ownerConsent: normalizeOptionalText(options.ownerConsent),
+    repository: normalizeOptionalText(options.repository),
+    relatedIssue,
+    summary: normalizeRequiredText(options.summary, "summary"),
+    details: normalizeOptionalText(options.details),
+    checkpointReason: normalizeOptionalText(options.checkpointReason),
+    thoughtLocation: normalizeOptionalText(options.thoughtLocation),
+    userTension: normalizeOptionalText(options.userTension),
+    contextSourceQuality: normalizeOptionalText(options.contextSourceQuality) || "full_thread_context",
+    hypothesis: normalizeOptionalText(options.hypothesis),
+    expectedFiles: normalizeList(options.expectedFile ?? options.expectedFiles),
+    evidenceLinks: normalizeList(options.evidenceLink ?? options.evidenceLinks),
+    previousRecordIds: normalizeList(options.previousRecordId ?? options.previousRecordIds),
+    captureBoundary: "judgment_log_not_chain_of_thought",
+    priority: options.priority ?? 75,
+    timestamp: options.timestamp ?? new Date().toISOString(),
+    tags
+  };
+}
+
 export function buildDecisionRecord(options) {
   const relatedIssue = normalizePositiveInteger(options.relatedIssue, "relatedIssue");
   const timestamp = options.timestamp ?? new Date().toISOString();
@@ -249,6 +308,27 @@ export async function runCli(argv = process.argv.slice(2), io = defaultIo) {
     return result;
   }
 
+  if (command === "write-runtime-checkpoint") {
+    const payload = buildCheckpointPayload({
+      ...options,
+      confirmed: normalizeBoolean(options.confirmed)
+    });
+    const request = buildRuntimeMemoryWriteRequest({ ...options, payload });
+    const response = await fetch(request.url, {
+      method: "POST",
+      headers: request.headers,
+      body: request.body
+    });
+    const text = await response.text();
+    const body = parseMaybeJson(text);
+    const result = { ok: response.ok, status: response.status, body };
+    io.writeJson(result, options);
+    if (!response.ok) {
+      throw new Error(`runtime memory write failed with status ${response.status}`);
+    }
+    return result;
+  }
+
   if (command === "write-decision") {
     const record = buildDecisionRecord(options);
     const result = writeRecordToD1(record, options);
@@ -351,6 +431,13 @@ function normalizeOptionalText(value) {
   return text || null;
 }
 
+function normalizeObject(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+  return value;
+}
+
 function normalizeList(value) {
   const items = Array.isArray(value) ? value : value === undefined ? [] : [value];
   return items
@@ -380,6 +467,16 @@ function parseJsonArray(value, label) {
     throw new Error(`${label} must be a JSON array`);
   }
   return parsed;
+}
+
+function normalizeBoolean(value) {
+  if (value === true || value === "true") {
+    return true;
+  }
+  if (value === false || value === "false" || value === undefined) {
+    return false;
+  }
+  throw new Error("boolean option must be true or false");
 }
 
 function parseMaybeJson(text) {

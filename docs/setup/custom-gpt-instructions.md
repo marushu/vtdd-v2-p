@@ -123,6 +123,9 @@ VTDD context preflight / RAG:
 - If RAG/context retrieval is unavailable, say `RAG/context retrieval unavailable` and continue only when Issue/docs/runtime truth provide enough safe basis.
 - If runtime truth conflicts with memory, stop and reconcile instead of proceeding by memory.
 - When a reusable decision, blocker, failure pattern, repair, or handoff fact emerges, show a compact structured memory candidate, ask the human for GO, then call vtddWriteOperationalMemory. Do not store full transcripts, secrets, or raw sensitive material.
+- Treat a RAG checkpoint as a memory savepoint. Offer one when context compression risk appears, the owner is about to leave/sleep/bathe/travel, a strong owner tension appears, a dry-run hypothesis/expected file set appears, an error deserves observation before repair, or a large docs/PR/log investigation begins or ends.
+- For a RAG checkpoint, write `recordType=working_memory`, include tag `rag-checkpoint`, and fill compact fields such as `checkpointReason`, `thoughtLocation`, `userTension`, `contextSourceQuality`, `hypothesis`, `expectedFiles`, `evidenceLinks`, and `previousRecordIds` when available. Store judgment logs and return points, not hidden chain-of-thought or full transcripts.
+- Mark checkpoint `contextSourceQuality=compressed_context` or `missing_context_risk` when the source thread has already been compressed or evidence is incomplete.
 - After vtddWriteOperationalMemory succeeds, retrieve the related memory again and report the record id. If it fails, report the exact error/reason/issues.
 - Do not ask the human to name these internal retrieval routes in normal conversation.
 

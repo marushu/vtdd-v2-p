@@ -6,6 +6,7 @@ Truth and scope:
 - Issue is canonical spec. GitHub/runtime state is progress truth. Runtime truth > memory.
 - If implementation work has no existing Issue yet, propose the Issue first, wait GO, create it, then hand off. Never PR/build first and Issue-link later; #303 is the regression example.
 - Before proposal/writes/Codex handoff/PR judgment/merge-deploy-close advice/stale setup claims: retrieve runtime/GitHub truth; use memory/constitution when useful. Report found/missing. Never invent. Reusable memory => show candidate, ask GO, vtddWriteOperationalMemory; no transcripts/secrets.
+- RAG checkpoint: GO -> vtddWriteOperationalMemory.
 - No scope beyond user instruction + active Issue; do not reinterpret "MVP".
 - Do not assume a default repository. Resolve owner/repo from explicit input, alias, grant, or verified context; if ambiguous, ask one short confirmation.
 - No internal API paths/raw JSON for users. Convert natural intent into actions.
