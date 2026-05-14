@@ -480,6 +480,9 @@ test("github read plane reads repository file contents with snippet and html sou
   assert.equal(result.read.path, "docs/butler/capability-matrix.md");
   assert.equal(result.read.records[0].type, "file");
   assert.equal(result.read.records[0].snippet.includes("Butler Capability Matrix"), true);
+  assert.equal(result.read.records[0].contentAvailable, true);
+  assert.equal(result.read.records[0].contentStatus, "content_available");
+  assert.equal(result.read.records[0].contentUnavailableReason, null);
   assert.equal(result.read.records[0].contentTruncated, false);
   assert.equal(result.read.records[0].truncationNotice, null);
   assert.equal(
@@ -513,9 +516,74 @@ test("github read plane marks truncated repository file contents", async () => {
   });
 
   assert.equal(result.ok, true);
+  assert.equal(result.read.records[0].contentAvailable, true);
+  assert.equal(result.read.records[0].contentStatus, "content_truncated");
   assert.equal(result.read.records[0].content.length, 12000);
   assert.equal(result.read.records[0].contentTruncated, true);
   assert.match(result.read.records[0].truncationNotice, /truncated/);
+});
+
+test("github read plane does not report missing large file content as complete", async () => {
+  const result = await retrieveGitHubReadPlane({
+    resource: GitHubReadResource.CONTENTS,
+    repository: "sample-org/vtdd-v2-p",
+    path: "src/large.js",
+    env: {
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_contents_read",
+      GITHUB_API_FETCH: async () =>
+        new Response(
+          JSON.stringify({
+            type: "file",
+            name: "large.js",
+            path: "src/large.js",
+            sha: "large-sha",
+            size: 13000,
+            html_url: "https://github.com/sample-org/vtdd-v2-p/blob/main/src/large.js"
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        )
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.read.records[0].contentAvailable, false);
+  assert.equal(result.read.records[0].contentStatus, "content_not_returned_large_file");
+  assert.match(result.read.records[0].contentUnavailableReason, /did not include/);
+  assert.equal(result.read.records[0].content, "");
+  assert.equal(result.read.records[0].snippet, "");
+  assert.equal(result.read.records[0].contentTruncated, true);
+  assert.match(result.read.records[0].truncationNotice, /not returned/);
+});
+
+test("github read plane does not report unsupported content encoding as complete", async () => {
+  const result = await retrieveGitHubReadPlane({
+    resource: GitHubReadResource.CONTENTS,
+    repository: "sample-org/vtdd-v2-p",
+    path: "src/binary.bin",
+    env: {
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_contents_read",
+      GITHUB_API_FETCH: async () =>
+        new Response(
+          JSON.stringify({
+            type: "file",
+            name: "binary.bin",
+            path: "src/binary.bin",
+            sha: "binary-sha",
+            size: 10,
+            encoding: "none",
+            content: "not-inline",
+            html_url: "https://github.com/sample-org/vtdd-v2-p/blob/main/src/binary.bin"
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        )
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.read.records[0].contentAvailable, false);
+  assert.equal(result.read.records[0].contentStatus, "unsupported_content_encoding");
+  assert.match(result.read.records[0].contentUnavailableReason, /unsupported/);
+  assert.equal(result.read.records[0].contentTruncated, false);
 });
 
 test("github read plane reads repository directory contents as entries", async () => {
@@ -554,7 +622,13 @@ test("github read plane reads repository directory contents as entries", async (
   assert.equal(result.read.records.length, 2);
   assert.equal(result.read.records[0].type, "dir");
   assert.equal(result.read.records[0].path, "docs/butler");
+  assert.equal(result.read.records[0].contentAvailable, false);
+  assert.equal(result.read.records[0].contentStatus, "directory_or_non_file_entry");
   assert.equal(result.read.records[0].htmlUrl, "https://github.com/sample-org/vtdd-v2-p/tree/main/docs/butler");
+  assert.equal(result.read.records[1].type, "file");
+  assert.equal(result.read.records[1].contentAvailable, false);
+  assert.equal(result.read.records[1].contentStatus, "content_not_returned");
+  assert.match(result.read.records[1].contentUnavailableReason, /did not include/);
 });
 
 test("github read plane rejects unsafe repository content paths before fetch", async () => {

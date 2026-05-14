@@ -455,23 +455,95 @@ function normalizeBranch(item) {
 
 function normalizeContentItem(item) {
   const type = normalizeText(item?.type);
-  const content = type === "file" ? decodeGitHubContent(item?.content, item?.encoding) : "";
+  const size = normalizePositiveInteger(item?.size);
+  const decoded = decodeGitHubContentItem({ item, type, size });
+  const content = decoded.content;
   return {
     type,
     path: normalizeText(item?.path),
     name: normalizeText(item?.name),
     sha: normalizeText(item?.sha),
-    size: normalizePositiveInteger(item?.size),
+    size,
     encoding: normalizeText(item?.encoding),
+    contentAvailable: decoded.available,
+    contentStatus: decoded.status,
+    contentUnavailableReason: decoded.unavailableReason,
     content: content.slice(0, 12000),
-    contentTruncated: content.length > 12000,
-    truncationNotice:
-      content.length > 12000
-        ? "content is truncated; ask for a narrower path or hand off to Codex for full-file analysis"
-        : null,
+    contentTruncated: decoded.truncated,
+    truncationNotice: decoded.truncationNotice,
     snippet: content.slice(0, 4000),
     downloadUrl: normalizeText(item?.download_url),
     htmlUrl: normalizeText(item?.html_url)
+  };
+}
+
+function decodeGitHubContentItem({ item, type, size }) {
+  if (type !== "file") {
+    return {
+      available: false,
+      content: "",
+      status: "directory_or_non_file_entry",
+      truncated: false,
+      truncationNotice: null,
+      unavailableReason: "contents API entry is not a file body"
+    };
+  }
+
+  const encoding = normalizeText(item?.encoding);
+  const hasContentField = Object.prototype.hasOwnProperty.call(item ?? {}, "content");
+  const rawContent = normalizeText(item?.content);
+  const sizeExceedsInlineLimit = Number.isFinite(size) && size > 12000;
+
+  if (!rawContent && !hasContentField) {
+    return {
+      available: false,
+      content: "",
+      status: sizeExceedsInlineLimit ? "content_not_returned_large_file" : "content_not_returned",
+      truncated: sizeExceedsInlineLimit,
+      truncationNotice: sizeExceedsInlineLimit
+        ? "content is not returned and file size exceeds inline limit; ask for a narrower path or hand off to Codex for full-file analysis"
+        : null,
+      unavailableReason: "GitHub response did not include file content"
+    };
+  }
+
+  if (encoding && encoding !== "base64") {
+    return {
+      available: false,
+      content: "",
+      status: "unsupported_content_encoding",
+      truncated: sizeExceedsInlineLimit,
+      truncationNotice: sizeExceedsInlineLimit
+        ? "content is not decoded and file size exceeds inline limit; ask for a narrower path or hand off to Codex for full-file analysis"
+        : null,
+      unavailableReason: `unsupported GitHub content encoding: ${encoding}`
+    };
+  }
+
+  const decoded = decodeGitHubContent(rawContent, encoding);
+  if (!decoded && rawContent) {
+    return {
+      available: false,
+      content: "",
+      status: "content_decode_failed",
+      truncated: sizeExceedsInlineLimit,
+      truncationNotice: sizeExceedsInlineLimit
+        ? "content could not be decoded and file size exceeds inline limit; ask for a narrower path or hand off to Codex for full-file analysis"
+        : null,
+      unavailableReason: "GitHub file content could not be decoded"
+    };
+  }
+
+  const decodedExceedsInlineLimit = decoded.length > 12000;
+  return {
+    available: true,
+    content: decoded,
+    status: decodedExceedsInlineLimit ? "content_truncated" : "content_available",
+    truncated: decodedExceedsInlineLimit,
+    truncationNotice: decodedExceedsInlineLimit
+      ? "content is truncated; ask for a narrower path or hand off to Codex for full-file analysis"
+      : null,
+    unavailableReason: null
   };
 }
 
