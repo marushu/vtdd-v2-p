@@ -3645,6 +3645,162 @@ test("worker returns Butler self-parity summary", async () => {
   );
 });
 
+test("worker returns Butler startup preflight from shared repo truth and memory", async () => {
+  const provider = createInMemoryMemoryProvider();
+  await provider.store({
+    id: "startup-preflight-memory-344",
+    type: MemoryRecordType.WORKING_MEMORY,
+    content: {
+      summary: "Issue #344 promotes thread-local Butler-first startup behavior into repo truth.",
+      checkpointReason: "avoid drift across Butler, mac Codex, and VPS Codex CLI",
+      userTension: "iPhone/iPad-first recovery must not depend on the Mac being awake"
+    },
+    metadata: { repository: "sample-org/vtdd-v2-p", relatedIssue: 344 },
+    priority: 90,
+    tags: ["working_memory", "rag-checkpoint", "startup-preflight", "issue:344"],
+    createdAt: "2026-05-15T00:00:00Z"
+  });
+
+  const sourceContent = {
+    "AGENTS.md": [
+      "# AGENTS.md",
+      "## Butler-First Operating Principle",
+      "VTDD is iPhone/iPad-first and handoff-first."
+    ].join("\n"),
+    "docs/butler/thread-independent-startup-contract.md": [
+      "# Thread-independent startup contract",
+      "threadLocalAssumptionsPromoted=false",
+      "Butler -> VPS Codex CLI"
+    ].join("\n"),
+    "docs/butler/capability-matrix.md": [
+      "# Butler capability matrix",
+      "Startup Surface Dependency Reading",
+      "Mac dependency detected"
+    ].join("\n"),
+    "docs/setup/custom-gpt-instructions.md": [
+      "vtddGateway",
+      "vtddDeployProduction",
+      "vtddRetrieveGitHub",
+      "vtddRetrieveCloudflarePages",
+      "vtddRetrieveSetupArtifact",
+      "vtddRetrieveSelfParity",
+      "vtddStartupPreflight",
+      "Action Schema update required",
+      "Instructions update required",
+      "Cloudflare deploy update required"
+    ].join("\n"),
+    "docs/setup/custom-gpt-actions-openapi.yaml": [
+      "paths:",
+      "  /v2/gateway:",
+      "  /v2/action/deploy:",
+      "  /v2/retrieve/github:",
+      "  /v2/retrieve/cloudflare-pages:",
+      "  /v2/retrieve/setup-artifact:",
+      "  /v2/retrieve/self-parity:",
+      "  /v2/retrieve/startup-preflight:",
+      "    get:",
+      "      operationId: vtddGateway",
+      "      operationId: vtddDeployProduction",
+      "      operationId: vtddRetrieveGitHub",
+      "      operationId: vtddRetrieveCloudflarePages",
+      "      operationId: vtddRetrieveSetupArtifact",
+      "      operationId: vtddRetrieveSelfParity",
+      "      operationId: vtddStartupPreflight"
+    ].join("\n")
+  };
+
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/v2/retrieve/startup-preflight?repository=sample-org/vtdd-v2-p&issueNumber=344&currentSurface=butler&phase=execution",
+      {
+        headers: gatewayAuthHeaders
+      }
+    ),
+    {
+      ...gatewayAuthEnv,
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_startup_read",
+      MEMORY_PROVIDER: provider,
+      GITHUB_API_FETCH: async (url) => {
+        const parsed = new URL(url);
+        if (parsed.pathname.endsWith("/docs/setup/known-good.json")) {
+          return new Response(JSON.stringify({ message: "Not Found" }), {
+            status: 404,
+            headers: { "content-type": "application/json" }
+          });
+        }
+        if (parsed.pathname.endsWith("/issues/344")) {
+          return new Response(
+            JSON.stringify({
+              number: 344,
+              title: "spec: Butler / mac Codex / VPS Codex CLI 共通 startup preflight",
+              body: "Intent: all surfaces read the same startup context before work.",
+              state: "open",
+              html_url: "https://github.com/sample-org/vtdd-v2-p/issues/344",
+              user: { login: "marushu" }
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        if (parsed.pathname.endsWith("/issues")) {
+          return new Response(
+            JSON.stringify([
+              {
+                number: 344,
+                title: "spec: Butler / mac Codex / VPS Codex CLI 共通 startup preflight",
+                body: "Intent: all surfaces read the same startup context before work.",
+                state: "open",
+                html_url: "https://github.com/sample-org/vtdd-v2-p/issues/344",
+                user: { login: "marushu" }
+              }
+            ]),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        if (parsed.pathname.includes("/contents/")) {
+          const decodedPath = decodeURIComponent(
+            parsed.pathname.split("/contents/")[1] || ""
+          );
+          const content = sourceContent[decodedPath];
+          if (!content) {
+            return new Response(JSON.stringify({ message: "Not Found" }), {
+              status: 404,
+              headers: { "content-type": "application/json" }
+            });
+          }
+          return new Response(
+            JSON.stringify({
+              name: decodedPath.split("/").pop(),
+              path: decodedPath,
+              type: "file",
+              sha: `${decodedPath.replace(/[^a-z0-9]/gi, "-")}-sha`,
+              html_url: `https://github.com/sample-org/vtdd-v2-p/blob/main/${decodedPath}`,
+              encoding: "base64",
+              content: Buffer.from(content, "utf8").toString("base64")
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        throw new Error(`unexpected GitHub API url: ${parsed.pathname}`);
+      }
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.startupPreflight.schemaVersion, "startup_preflight_v1");
+  assert.equal(body.startupPreflight.repository, "sample-org/vtdd-v2-p");
+  assert.equal(body.startupPreflight.issueNumber, 344);
+  assert.equal(body.startupPreflight.threadLocalAssumptionsPromoted, true);
+  assert.equal(body.startupPreflight.activeIssue.number, 344);
+  assert.equal(body.startupPreflight.memory.status, "read");
+  assert.equal(body.startupPreflight.memory.compactContext[0].id, "startup-preflight-memory-344");
+  assert.equal(body.startupPreflight.setup.status, "read");
+  assert.equal(body.startupPreflight.surfaceCapability.macRequired, false);
+  assert.equal(body.startupPreflight.gapClassification.includes("mac_codex_only_probe"), false);
+  assert.match(body.startupPreflight.nextSafeAction, /Issue #344/);
+});
+
 test("worker returns deploy recovery operator url in self-parity when runtime is stale", async () => {
   const response = await worker.fetch(
     new Request(

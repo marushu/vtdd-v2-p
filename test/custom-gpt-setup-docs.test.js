@@ -67,6 +67,8 @@ test("custom gpt instructions preserve current butler and approval boundaries", 
   assert.equal(doc.includes("vtddRetrieveDecisionLogs"), true);
   assert.equal(doc.includes("vtddRetrieveProposalLogs"), true);
   assert.equal(doc.includes("vtddRetrieveCrossMemory"), true);
+  assert.equal(doc.includes("vtddStartupPreflight"), true);
+  assert.equal(doc.includes("At conversation/work startup, prefer `vtddStartupPreflight`"), true);
   assert.equal(doc.includes("Before proposing an Issue, GitHub write, Codex handoff, or PR next action"), true);
   assert.equal(doc.includes("If the user is asking for implementation work and no existing Issue is fixed yet"), true);
   assert.equal(doc.includes("First propose an Issue candidate in Japanese, wait for GO, create the Issue"), true);
@@ -187,6 +189,7 @@ test("short custom gpt instructions stay under editor limits while preserving cr
   assert.equal(doc.includes("vtddRetrieveRepositoryNicknames"), true);
   assert.equal(doc.includes("vtddRetrieveCrossMemory"), true);
   assert.equal(doc.includes("vtddRetrieveOperationalMemory"), true);
+  assert.equal(doc.includes("vtddStartupPreflight"), true);
   assert.equal(doc.includes("vtddRetrieveDecisionLogs"), true);
   assert.equal(doc.includes("vtddRetrieveProposalLogs"), true);
   assert.equal(doc.includes("vtddRetrieveConstitution"), true);
@@ -298,6 +301,7 @@ test("short-min custom gpt instructions stay pasteable while preserving critical
     "Handoff前dry-run",
     "RAG checkpoint",
     "vtddRetrieveOperationalMemory",
+    "vtddStartupPreflight",
     "Remote Codex build invariant",
     "Executor transport is pluggable and user-owned",
     "executorTransport=vps_runner",
@@ -332,11 +336,13 @@ test("custom gpt openapi doc exposes current gateway, execute, and progress rout
   assert.equal(doc.includes("/v2/retrieve/decisions:"), true);
   assert.equal(doc.includes("/v2/retrieve/proposals:"), true);
   assert.equal(doc.includes("/v2/retrieve/cross:"), true);
+  assert.equal(doc.includes("/v2/retrieve/startup-preflight:"), true);
   assert.equal(doc.includes("operationId: vtddRetrieveConstitution"), true);
   assert.equal(doc.includes("operationId: vtddRetrieveDecisionLogs"), true);
   assert.equal(doc.includes("operationId: vtddRetrieveProposalLogs"), true);
   assert.equal(doc.includes("operationId: vtddRetrieveCrossMemory"), true);
   assert.equal(doc.includes("operationId: vtddRetrieveOperationalMemory"), true);
+  assert.equal(doc.includes("operationId: vtddStartupPreflight"), true);
   assert.equal(doc.includes("operationId: vtddRetrieveCloudflarePages"), true);
   assert.equal(doc.includes("OperationalMemoryResponse:"), true);
   assert.equal(doc.includes("$ref: \"#/components/schemas/OperationalMemoryResponse\""), true);
@@ -452,10 +458,15 @@ test("custom gpt openapi json parses and exposes paths as an object", () => {
   assert.equal(typeof doc.paths["/v2/retrieve/proposals"], "object");
   assert.equal(typeof doc.paths["/v2/retrieve/cross"], "object");
   assert.equal(typeof doc.paths["/v2/retrieve/operational-memory"], "object");
+  assert.equal(typeof doc.paths["/v2/retrieve/startup-preflight"], "object");
   assert.equal(doc.paths["/v2/retrieve/constitution"].get.operationId, "vtddRetrieveConstitution");
   assert.equal(doc.paths["/v2/retrieve/decisions"].get.operationId, "vtddRetrieveDecisionLogs");
   assert.equal(doc.paths["/v2/retrieve/proposals"].get.operationId, "vtddRetrieveProposalLogs");
   assert.equal(doc.paths["/v2/retrieve/cross"].get.operationId, "vtddRetrieveCrossMemory");
+  assert.equal(
+    doc.paths["/v2/retrieve/startup-preflight"].get.operationId,
+    "vtddStartupPreflight"
+  );
   assert.equal(
     doc.paths["/v2/retrieve/cloudflare-pages"].get.operationId,
     "vtddRetrieveCloudflarePages"
@@ -529,6 +540,7 @@ test("custom gpt openapi json exposes JSON bodies for Butler action auth failure
     ["/v2/retrieve/proposals", "get"],
     ["/v2/retrieve/cross", "get"],
     ["/v2/retrieve/operational-memory", "get"],
+    ["/v2/retrieve/startup-preflight", "get"],
     ["/v2/retrieve/github", "get"],
     ["/v2/retrieve/cloudflare-pages", "get"],
     ["/v2/retrieve/repository-nicknames", "get"],
@@ -554,6 +566,7 @@ test("custom gpt retrieve actions expose action-visible response mode for test-s
     "/v2/retrieve/proposals",
     "/v2/retrieve/cross",
     "/v2/retrieve/operational-memory",
+    "/v2/retrieve/startup-preflight",
     "/v2/retrieve/github",
     "/v2/retrieve/cloudflare-pages",
     "/v2/retrieve/repository-nicknames",

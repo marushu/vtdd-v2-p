@@ -604,6 +604,22 @@ export default {
       return handleRetrieveOperationalMemoryRequest(url, env);
     }
 
+    if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/startup-preflight")) {
+      const auth = authorizeGatewayRequest({
+        request,
+        env,
+        apiSuffix: "/retrieve/startup-preflight"
+      });
+      if (!auth.ok) {
+        return retrieveErrorJson(url, auth.status, {
+          ok: false,
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+      return handleRetrieveStartupPreflightRequest(url, env);
+    }
+
     if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/github")) {
       const auth = authorizeGatewayRequest({ request, env, apiSuffix: "/retrieve/github" });
       if (!auth.ok) {
@@ -851,6 +867,354 @@ async function handleRetrieveOperationalMemoryRequest(url, env) {
     referencesByLayer: retrieved.referencesByLayer,
     retrievalSignals: retrieved.retrievalSignals
   });
+}
+
+async function handleRetrieveStartupPreflightRequest(url, env) {
+  const repository = normalizeText(url.searchParams.get("repository"));
+  if (!repository) {
+    return retrieveErrorJson(url, 422, {
+      ok: false,
+      error: "startup_preflight_request_invalid",
+      reason: "repository is required",
+      issues: ["repository is required"]
+    });
+  }
+
+  const ref = normalizeText(url.searchParams.get("ref")) || "main";
+  const issueNumber = normalizeIssue(url.searchParams.get("issueNumber"));
+  const phase = normalizeText(url.searchParams.get("phase")) || "execution";
+  const currentSurface = normalizeText(url.searchParams.get("currentSurface")) || "butler";
+  const queryText =
+    normalizeText(url.searchParams.get("text")) ||
+    [
+      "VTDD startup preflight",
+      "Butler-first",
+      "iPhone iPad first",
+      "VPS Codex CLI",
+      issueNumber ? `Issue #${issueNumber}` : ""
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+  const startupPreflight = await buildStartupPreflight({
+    repository,
+    ref,
+    issueNumber,
+    phase,
+    currentSurface,
+    queryText,
+    runtimeOrigin: url.origin,
+    env
+  });
+
+  return json(200, {
+    ok: true,
+    startupPreflight
+  });
+}
+
+async function buildStartupPreflight({
+  repository,
+  ref,
+  issueNumber,
+  phase,
+  currentSurface,
+  queryText,
+  runtimeOrigin,
+  env
+}) {
+  const requiredSourcePaths = [
+    "AGENTS.md",
+    "docs/butler/thread-independent-startup-contract.md",
+    "docs/butler/capability-matrix.md"
+  ];
+  const [sourceResults, issueResult, openIssuesResult, memoryResult, parityResult] =
+    await Promise.all([
+      Promise.all(
+        requiredSourcePaths.map((path) =>
+          readStartupPreflightSource({ repository, ref, path, env })
+        )
+      ),
+      issueNumber
+        ? readStartupPreflightGitHub({
+            resource: "issues",
+            repository,
+            issueNumber,
+            env
+          })
+        : Promise.resolve({ ok: false, status: "not_requested", reason: "issueNumber is missing" }),
+      readStartupPreflightGitHub({
+        resource: "issues",
+        repository,
+        state: "open",
+        limit: 10,
+        env
+      }),
+      readStartupPreflightOperationalMemory({
+        repository,
+        queryText,
+        currentSurface,
+        phase,
+        env
+      }),
+      evaluateStartupPreflightSelfParity({
+        repository,
+        ref,
+        issueNumber,
+        runtimeOrigin,
+        env
+      })
+    ]);
+
+  const sources = sourceResults.map((result) => ({
+    path: result.path,
+    status: result.ok ? "read" : "未確認",
+    sha: result.record?.sha || null,
+    htmlUrl: result.record?.htmlUrl || null,
+    excerpt: result.ok ? compactExcerpt(result.record?.content, 420) : null,
+    reason: result.ok ? null : result.reason
+  }));
+  const missingSources = sources
+    .filter((source) => source.status !== "read")
+    .map((source) => ({ path: source.path, reason: source.reason || "unverified" }));
+
+  const issueRecords = issueResult.ok ? issueResult.read.records : [];
+  const activeIssue = issueRecords[0] ?? null;
+  const openIssues = openIssuesResult.ok ? openIssuesResult.read.records : [];
+  const threadLocalAssumptionsPromoted =
+    sources.some(
+      (source) =>
+        source.path === "AGENTS.md" &&
+        String(source.excerpt || "").includes("Butler-First Operating Principle")
+    ) &&
+    sources.some(
+      (source) =>
+        source.path === "docs/butler/thread-independent-startup-contract.md" &&
+        String(source.excerpt || "").includes("threadLocalAssumptionsPromoted")
+    );
+
+  return {
+    schemaVersion: "startup_preflight_v1",
+    issueNumber: issueNumber || null,
+    repository,
+    ref,
+    phase,
+    currentSurface,
+    generatedAt: new Date().toISOString(),
+    sourceOrder: [
+      "explicit_user_instruction",
+      "active_github_issue",
+      "AGENTS.md",
+      "thread_independent_startup_contract",
+      "github_runtime_truth",
+      "operational_memory",
+      "surface_capability"
+    ],
+    butlerFirstPrinciple: {
+      status: threadLocalAssumptionsPromoted ? "promoted" : "未確認",
+      summary:
+        "VTDD is iPhone/iPad-first and handoff-first. Butler is the owner delegate; VPS Codex CLI is the always-on execution surface; mac Codex is auxiliary, not the normal operating center.",
+      macCodexCompletionRule:
+        "If mac Codex performs a step Butler cannot perform, classify it as mac_codex_only_probe or a Butler/VPS/recovery gap, not VTDD completion."
+    },
+    threadLocalAssumptionsPromoted,
+    sources,
+    missingSources,
+    activeIssue: activeIssue
+      ? {
+          number: activeIssue.number,
+          title: activeIssue.title,
+          state: activeIssue.state,
+          htmlUrl: activeIssue.htmlUrl,
+          bodyExcerpt: compactExcerpt(activeIssue.body, 520)
+        }
+      : null,
+    openIssues: openIssues.map((issue) => ({
+      number: issue.number,
+      title: issue.title,
+      state: issue.state,
+      htmlUrl: issue.htmlUrl
+    })),
+    memory: memoryResult,
+    setup: parityResult,
+    surfaceCapability: buildStartupSurfaceCapability(currentSurface),
+    gapClassification: buildStartupGapClassification({ currentSurface, missingSources, memoryResult }),
+    nextSafeAction: buildStartupNextSafeAction({
+      issueNumber,
+      currentSurface,
+      missingSources,
+      memoryResult
+    }),
+    stopCondition:
+      "If repository/Issue/runtime/RAG/source truth is 未確認, do not claim Butler-complete execution. Ask for owner direction or create a bounded remediation Issue."
+  };
+}
+
+async function readStartupPreflightSource({ repository, ref, path, env }) {
+  const result = await readStartupPreflightGitHub({
+    resource: "contents",
+    repository,
+    ref,
+    path,
+    env
+  });
+  return {
+    ...result,
+    path,
+    record: result.ok ? result.read.records[0] : null
+  };
+}
+
+async function readStartupPreflightGitHub(input) {
+  try {
+    const result = await retrieveGitHubReadPlane(input);
+    if (!result.ok) {
+      return {
+        ok: false,
+        status: "未確認",
+        reason: result.reason || result.error || "github read failed",
+        issues: result.issues ?? []
+      };
+    }
+    return { ok: true, read: result.read };
+  } catch (error) {
+    return {
+      ok: false,
+      status: "未確認",
+      reason: normalizeText(error?.message) || "github read threw"
+    };
+  }
+}
+
+async function readStartupPreflightOperationalMemory({
+  repository,
+  queryText,
+  currentSurface,
+  phase,
+  env
+}) {
+  const provider = resolveMemoryProvider(env);
+  const result = await retrieveOperationalMemory(provider, {
+    text: queryText,
+    repository,
+    limit: 5,
+    runtimeTruth: {
+      currentState: `startup preflight from ${currentSurface}`,
+      runtimeTruthSource: "vtdd_startup_preflight",
+      checkedAt: new Date().toISOString(),
+      phase
+    }
+  });
+  if (!result.ok) {
+    return {
+      status: "未確認",
+      reason: result.reason || result.error || "operational memory unavailable",
+      compactContext: [],
+      retrievalSignals: []
+    };
+  }
+  return {
+    status: "read",
+    queryText: result.queryText,
+    memoryUseRule: result.memoryUseRule,
+    compactContext: result.compactContext,
+    retrievalSignals: result.retrievalSignals
+  };
+}
+
+async function evaluateStartupPreflightSelfParity({
+  repository,
+  ref,
+  issueNumber,
+  runtimeOrigin,
+  env
+}) {
+  const result = await evaluateButlerSelfParity({
+    repository,
+    ref,
+    issueNumber,
+    runtimeOrigin,
+    env
+  });
+  if (!result.ok) {
+    return {
+      status: "未確認",
+      reason: result.reason || result.error || "self parity unavailable"
+    };
+  }
+  return {
+    status: "read",
+    runtimeParity: result.selfParity.runtimeParity,
+    deployState: result.selfParity.surfaceUpdateChecklist?.cloudflareDeploy?.status || "未確認",
+    actionSchemaState:
+      result.selfParity.surfaceUpdateChecklist?.customGptActionSchema?.status || "未確認",
+    instructionsState:
+      result.selfParity.surfaceUpdateChecklist?.customGptInstructions?.status || "未確認",
+    deployOperatorUrl: result.selfParity.deployOperatorUrl || null
+  };
+}
+
+function buildStartupSurfaceCapability(currentSurface) {
+  const surface = normalizeText(currentSurface) || "butler";
+  if (surface === "mac_codex") {
+    return {
+      surface,
+      macRequired: true,
+      preferredRole: "auxiliary_or_repair",
+      ownerFacingWarning: "Mac dependency detected. Do not treat this as normal Butler completion."
+    };
+  }
+  if (surface === "vps_codex_cli" || surface === "vps_runner") {
+    return {
+      surface,
+      macRequired: false,
+      preferredRole: "always_on_execution_surface",
+      ownerFacingWarning: null
+    };
+  }
+  return {
+    surface,
+    macRequired: false,
+    preferredRole: "owner_delegate_entrypoint",
+    ownerFacingWarning: null
+  };
+}
+
+function buildStartupGapClassification({ currentSurface, missingSources, memoryResult }) {
+  const gaps = [];
+  if (normalizeText(currentSurface) === "mac_codex") {
+    gaps.push("mac_codex_only_probe");
+  }
+  if (missingSources.length > 0) {
+    gaps.push("butler_gap_found");
+  }
+  if (memoryResult.status !== "read") {
+    gaps.push("recovery_gap_found");
+  }
+  return gaps.length > 0 ? gaps : ["none"];
+}
+
+function buildStartupNextSafeAction({ issueNumber, currentSurface, missingSources, memoryResult }) {
+  if (missingSources.length > 0) {
+    return "不足している startup source を確認し、推測で実装を始めない。";
+  }
+  if (memoryResult.status !== "read") {
+    return "RAG/operational memory は未確認として扱い、GitHub runtime truth を優先して短い確認を owner に返す。";
+  }
+  if (normalizeText(currentSurface) === "mac_codex") {
+    return "mac Codex で進める前に、同じ作業を Butler/VPS Codex CLI に渡せるかを明示する。";
+  }
+  return issueNumber
+    ? `Issue #${issueNumber} の Intent / Success Criteria / Non-goals に沿って dry-run impact gate へ進む。`
+    : "対象 Issue を確認してから dry-run impact gate へ進む。";
+}
+
+function compactExcerpt(value, maxLength = 400) {
+  const text = normalizeText(value).replace(/\s+/g, " ");
+  if (text.length <= maxLength) {
+    return text;
+  }
+  return `${text.slice(0, Math.max(0, maxLength - 3))}...`;
 }
 
 async function handleRetrieveApprovalGrantRequest(url, env) {
