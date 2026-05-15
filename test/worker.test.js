@@ -3669,11 +3669,13 @@ test("worker returns Butler startup preflight from shared repo truth and memory"
   const sourceContent = {
     "AGENTS.md": [
       "# AGENTS.md",
+      "Purpose: ".padEnd(520, "x"),
       "## Butler-First Operating Principle",
       "VTDD is iPhone/iPad-first and handoff-first."
     ].join("\n"),
     "docs/butler/thread-independent-startup-contract.md": [
       "# Thread-independent startup contract",
+      "Startup source order: ".padEnd(520, "y"),
       "threadLocalAssumptionsPromoted=false",
       "Butler -> VPS Codex CLI"
     ].join("\n"),
@@ -3797,6 +3799,7 @@ test("worker returns Butler startup preflight from shared repo truth and memory"
   assert.equal(body.startupPreflight.repository, "sample-org/vtdd-v2-p");
   assert.equal(body.startupPreflight.issueNumber, 344);
   assert.equal(body.startupPreflight.threadLocalAssumptionsPromoted, true);
+  assert.equal(body.startupPreflight.butlerFirstPrinciple.status, "promoted");
   assert.equal(body.startupPreflight.activeIssue.number, 344);
   assert.equal(body.startupPreflight.memory.status, "read");
   assert.equal(body.startupPreflight.memory.compactContext[0].id, "startup-preflight-memory-344");

@@ -55617,11 +55617,15 @@ async function buildStartupPreflight({
   const issueRecords = issueResult.ok ? issueResult.read.records : [];
   const activeIssue = issueRecords[0] ?? null;
   const openIssues = openIssuesResult.ok ? openIssuesResult.read.records : [];
-  const threadLocalAssumptionsPromoted = sources.some(
-    (source) => source.path === "AGENTS.md" && String(source.excerpt || "").includes("Butler-First Operating Principle")
-  ) && sources.some(
-    (source) => source.path === "docs/butler/thread-independent-startup-contract.md" && String(source.excerpt || "").includes("threadLocalAssumptionsPromoted")
-  );
+  const threadLocalAssumptionsPromoted = startupSourceContentIncludes({
+    sourceResults,
+    path: "AGENTS.md",
+    text: "Butler-First Operating Principle"
+  }) && startupSourceContentIncludes({
+    sourceResults,
+    path: "docs/butler/thread-independent-startup-contract.md",
+    text: "threadLocalAssumptionsPromoted"
+  });
   return {
     schemaVersion: "startup_preflight_v1",
     issueNumber: issueNumber || null,
@@ -55820,6 +55824,11 @@ function buildStartupNextSafeAction({ issueNumber, currentSurface, missingSource
     return "mac Codex \u3067\u9032\u3081\u308B\u524D\u306B\u3001\u540C\u3058\u4F5C\u696D\u3092 Butler/VPS Codex CLI \u306B\u6E21\u305B\u308B\u304B\u3092\u660E\u793A\u3059\u308B\u3002";
   }
   return issueNumber ? `Issue #${issueNumber} \u306E Intent / Success Criteria / Non-goals \u306B\u6CBF\u3063\u3066 dry-run impact gate \u3078\u9032\u3080\u3002` : "\u5BFE\u8C61 Issue \u3092\u78BA\u8A8D\u3057\u3066\u304B\u3089 dry-run impact gate \u3078\u9032\u3080\u3002";
+}
+function startupSourceContentIncludes({ sourceResults, path, text }) {
+  return sourceResults.some(
+    (result) => result.ok && result.path === path && String(result.record?.content || "").includes(text)
+  );
 }
 function compactExcerpt(value, maxLength = 400) {
   const text = normalizeText30(value).replace(/\s+/g, " ");
