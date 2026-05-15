@@ -708,8 +708,8 @@ Status values used below:
 - Run evidence:
   - `docs/mvp/e2e/e2e-33-post-merge-verification.md`
 - Remaining blocker:
-  - live VPS post-merge verification against the merged PR is still required before closing Issue #397
-- Status: `partial`
+  - human GO is still required before closing Issue #397
+- Status: `e2e_evidenced_pending_human_closure`
 
 ## Current Completion Reading
 

@@ -42,18 +42,26 @@ Run evidence:
 - `node --test` passed locally with 805 passing tests and 1 skipped test.
 - `npm run check:self-parity` passed after Action Schema and setup instruction updates.
 - `npm run build:worker` regenerated `worker.js`.
+- PR #398 merged at `2026-05-15T14:23:29Z` with merge commit `9366aeef11f90d8e608b5e735fda7ff1fc07c35d`.
+- Deployed runtime `/setup/latest?ref=main` reported `Self-parity: in_sync` and `Deploy state: in_sync`.
+- Butler-equivalent `vtddExecute` dispatch created the VPS runner queue comment:
+  - <https://github.com/marushu/vtdd-v2-p/issues/397#issuecomment-4460661862>
+- VPS runner picked up the request:
+  - <https://github.com/marushu/vtdd-v2-p/issues/397#issuecomment-4460670769>
+- VPS runner posted terminal `post_merge_verification_completed` evidence:
+  - <https://github.com/marushu/vtdd-v2-p/issues/397#issuecomment-4460673355>
 
 Local verification caveat:
 
-- `npm test -- test/custom-gpt-setup-docs.test.js test/thread-independent-startup-contract.test.js test/remote-codex-executor.test.js test/vps-runner-script.test.js` reaches `npm run check:generated-worker`, which intentionally fails in the dirty worktree because `worker.js` has generated changes not yet committed. The generated file is included in this PR.
+- Before PR #398 was committed, `npm test -- test/custom-gpt-setup-docs.test.js test/thread-independent-startup-contract.test.js test/remote-codex-executor.test.js test/vps-runner-script.test.js` reached `npm run check:generated-worker`, which intentionally failed in the dirty worktree because `worker.js` had generated changes not yet committed.
+- After the generated file was committed, `npm run check:generated-worker` passed.
 
 Remaining live evidence:
 
-- This PR does not yet prove a live VPS timer consumed a real post-merge verification request after merge.
-- After this PR is merged and deployed, a follow-up Butler request should run `post_merge_verify` against the merged PR and record the resulting GitHub comment URL.
+- None for Issue #397. The live VPS post-merge verification path has recorded terminal GitHub-visible evidence.
 
 Non-goals:
 
 - Do not deploy from this PR.
 - Do not mutate credentials or GitHub App permissions.
-- Do not close Issue #397 from code/tests alone without post-merge live evidence and human GO.
+- Do not close Issue #397 without human GO, even though post-merge live evidence now exists.
