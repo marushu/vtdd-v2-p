@@ -8,6 +8,7 @@ import {
   buildCodexExecutionPrompt,
   buildCodexExecArgs,
   buildGuardedPullRequestBody,
+  buildPostMergePullTruth,
   buildPullRequestBody,
   buildVpsRunnerPreflightReceipt,
   buildVpsRunnerCompletionFinalEvent,
@@ -139,6 +140,97 @@ test("VPS runner rejects revise_pr queue payload when branch differs from target
   assert.equal(parsed.ok, false);
   assert.equal(parsed.reason, "vps_runner_payload_invalid");
   assert.equal(parsed.issues.includes("revise_pr branch must match target PR headRef"), true);
+});
+
+test("VPS runner parses post_merge_verify queue payload with merged target PR lock", () => {
+  const parsed = parseVpsRunnerQueueComment(`<!-- vtdd:vps-runner-execution:remote-codex-issue397-postmerge -->
+\`\`\`json
+{
+  "executionId": "remote-codex-issue397-postmerge",
+  "transport": "vps_runner",
+  "repository": "sample-org/vtdd-v2",
+  "issueNumber": 397,
+  "branch": "main",
+  "baseRef": "main",
+  "codexGoal": "post_merge_verify",
+  "approvalScopeMatched": true,
+  "issueTraceability": {
+    "issueTraceable": true
+  },
+  "revisionTarget": {
+    "number": 396,
+    "state": "closed",
+    "merged": true,
+    "mergedAt": "2026-05-15T13:43:25Z",
+    "mergeCommitSha": "merge-sha-396",
+    "headRef": "codex/issue-393",
+    "headSha": "head-sha-393",
+    "baseRef": "main"
+  }
+}
+\`\`\``);
+
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.payload.codexGoal, "post_merge_verify");
+  assert.equal(parsed.payload.branch, "main");
+  assert.equal(parsed.payload.revisionTarget.number, 396);
+  assert.equal(parsed.payload.revisionTarget.merged, true);
+  assert.equal(parsed.payload.revisionTarget.mergeCommitSha, "merge-sha-396");
+});
+
+test("VPS runner rejects post_merge_verify queue payload without target PR number", () => {
+  const parsed = parseVpsRunnerQueueComment(`<!-- vtdd:vps-runner-execution:remote-codex-issue397-postmerge -->
+\`\`\`json
+{
+  "executionId": "remote-codex-issue397-postmerge",
+  "transport": "vps_runner",
+  "repository": "sample-org/vtdd-v2",
+  "issueNumber": 397,
+  "branch": "main",
+  "baseRef": "main",
+  "codexGoal": "post_merge_verify",
+  "approvalScopeMatched": true,
+  "issueTraceability": {
+    "issueTraceable": true
+  },
+  "revisionTarget": {
+    "state": "closed",
+    "merged": true
+  }
+}
+\`\`\``);
+
+  assert.equal(parsed.ok, false);
+  assert.equal(parsed.reason, "vps_runner_payload_invalid");
+  assert.equal(parsed.issues.includes("post_merge_verify requires target PR number"), true);
+});
+
+test("VPS runner builds post-merge PR truth from GitHub pull response", () => {
+  const truth = buildPostMergePullTruth({
+    pull: {
+      number: 396,
+      html_url: "https://github.com/sample-org/vtdd-v2/pull/396",
+      state: "closed",
+      merged: true,
+      merged_at: "2026-05-15T13:43:25Z",
+      merge_commit_sha: "merge-sha-396",
+      base: { ref: "main" },
+      head: { ref: "codex/issue-393", sha: "head-sha-393" }
+    },
+    target: {}
+  });
+
+  assert.deepEqual(truth, {
+    number: 396,
+    url: "https://github.com/sample-org/vtdd-v2/pull/396",
+    state: "closed",
+    merged: true,
+    mergedAt: "2026-05-15T13:43:25Z",
+    mergeCommitSha: "merge-sha-396",
+    headRef: "codex/issue-393",
+    headSha: "head-sha-393",
+    baseRef: "main"
+  });
 });
 
 test("VPS runner checkout blocks revise_pr when target lock is incomplete", async () => {

@@ -124,6 +124,10 @@ not require a public inbound VPS API:
   issue-traceable queue comments
 - the VPS runner reports milestone events back as Issue comments with
   `<!-- vtdd:vps-runner-event:<executionId> -->`
+- for post-merge verification, Butler uses the same queue with
+  `codexGoal=post_merge_verify`; the VPS runner does not start Codex or create
+  a branch/PR, and instead verifies merged PR truth, VPS `main` sync, runner
+  timer/service state, and pending work snapshot
 - while long-running Codex CLI or `gh` commands are active, the VPS runner
   updates one runner state comment with
   `<!-- vtdd:vps-runner-state:<executionId> -->`; the state comment also keeps
@@ -382,10 +386,12 @@ The same values are rendered as short GitHub-visible lines such as
 When the VPS runner reports `status: completed`, the same GitHub-visible event
 must also carry an explicit terminal outcome in `finalEvent` and `lastEvent`.
 Valid terminal outcomes include `pr_created`, `pr_updated`,
+`post_merge_verification_completed`,
 `conflict_resolved`, `blocked`, `failed`, `no_changes`, and
 `merge_retry_ready`. Butler must use that terminal outcome, not the bare word
 `completed`, when explaining whether the runner created a PR, updated a PR,
-resolved a conflict, made no changes, or stopped with a visible blocker.
+verified post-merge runtime truth, resolved a conflict, made no changes, or
+stopped with a visible blocker.
 
 Runner event comments may include a GitHub mention only as a notification
 mirror; the JSON event payload and branch / PR evidence remain the runtime

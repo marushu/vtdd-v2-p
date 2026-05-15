@@ -428,7 +428,7 @@ test("custom gpt openapi json parses and exposes paths as an object", () => {
   assert.deepEqual(
     doc.components.schemas.VtddExecuteRequest.properties.continuationContext.properties
       .codexGoal.enum,
-    ["open_pr", "revise_pr", "respond_to_review"]
+    ["open_pr", "revise_pr", "respond_to_review", "post_merge_verify"]
   );
   assert.deepEqual(
     doc.paths["/v2/action/progress"].get.parameters.find(

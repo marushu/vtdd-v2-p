@@ -32647,7 +32647,8 @@ var VpsRunnerCancelMode = Object.freeze({
 var RemoteCodexDispatchGoal = Object.freeze({
   OPEN_PR: "open_pr",
   REVISE_PR: "revise_pr",
-  RESPOND_TO_REVIEW: "respond_to_review"
+  RESPOND_TO_REVIEW: "respond_to_review",
+  POST_MERGE_VERIFY: "post_merge_verify"
 });
 var REMOTE_CODEX_DISPATCH_GOALS = new Set(Object.values(RemoteCodexDispatchGoal));
 function createRemoteCodexExecutionRequest(input = {}) {
@@ -32675,13 +32676,14 @@ function createRemoteCodexExecutionRequest(input = {}) {
     executionTarget: normalizeObject8(payload?.executionTarget),
     handoff
   });
+  const baseRef = normalizeText18(payload?.executionTarget?.baseRef) || normalizeText18(runtimeState.baseRef) || normalizeText18(revisionTarget.baseRef) || "main";
   const request = {
     executionId: normalizeText18(input?.executionId) || buildExecutionId({ issueNumber }),
     actorRole: normalizeText18(payload.actorRole),
     repository: normalizeText18(gatewayResult.repository),
     issueNumber,
-    branch: (codexGoal === RemoteCodexDispatchGoal.REVISE_PR ? revisionTarget.headRef : "") || normalizeText18(runtimeState.activeBranch) || normalizeText18(payload?.executionTarget?.branch) || (issueNumber ? `codex/issue-${issueNumber}` : ""),
-    baseRef: normalizeText18(payload?.executionTarget?.baseRef) || normalizeText18(runtimeState.baseRef) || "main",
+    branch: (codexGoal === RemoteCodexDispatchGoal.POST_MERGE_VERIFY ? baseRef : "") || (codexGoal === RemoteCodexDispatchGoal.REVISE_PR ? revisionTarget.headRef : "") || normalizeText18(runtimeState.activeBranch) || normalizeText18(payload?.executionTarget?.branch) || (issueNumber ? `codex/issue-${issueNumber}` : ""),
+    baseRef,
     codexGoal,
     approvalPhrase: normalizeText18(payload?.policyInput?.approvalPhrase),
     approvalActor: normalizeText18(payload?.policyInput?.approvalActor) || normalizeText18(payload?.policyInput?.goActor) || normalizeText18(payload?.sender?.login),
@@ -32720,7 +32722,7 @@ function createRemoteCodexExecutionRequest(input = {}) {
   if (!request.codexGoal) {
     issues.push("codexGoal is required");
   } else if (!REMOTE_CODEX_DISPATCH_GOALS.has(request.codexGoal)) {
-    issues.push("codexGoal must be open_pr, revise_pr, or respond_to_review");
+    issues.push("codexGoal must be open_pr, revise_pr, respond_to_review, or post_merge_verify");
   }
   if (!request.baseRef) {
     issues.push("baseRef is required");
@@ -32740,6 +32742,9 @@ function createRemoteCodexExecutionRequest(input = {}) {
   if (request.codexGoal === RemoteCodexDispatchGoal.REVISE_PR) {
     issues.push(...validateRevisionTarget(request));
     issues.push(...revisionTargetConflicts);
+  }
+  if (request.codexGoal === RemoteCodexDispatchGoal.POST_MERGE_VERIFY) {
+    issues.push(...validatePostMergeVerificationTarget(request));
   }
   return issues.length > 0 ? { ok: false, issues } : { ok: true, request };
 }
@@ -32763,13 +32768,30 @@ function validateRevisionTarget(request) {
   }
   return issues;
 }
+function validatePostMergeVerificationTarget(request) {
+  const issues = [];
+  const target = request.revisionTarget;
+  if (!target.number) {
+    issues.push("post_merge_verify requires target PR number from runtime truth or handoff");
+  }
+  if (target.state && !["closed", "merged"].includes(target.state)) {
+    issues.push("post_merge_verify target PR must be closed or merged");
+  }
+  if (target.merged === false) {
+    issues.push("post_merge_verify target PR must be merged");
+  }
+  if (request.branch !== request.baseRef) {
+    issues.push("post_merge_verify branch must match baseRef");
+  }
+  return issues;
+}
 function normalizeRevisionTarget({ runtimeState, executionTarget, handoff }) {
   const pullRequest = normalizeObject8(runtimeState.pullRequest);
   const handoffTarget = normalizeObject8(
     handoff.targetPullRequest ?? handoff.pullRequest ?? handoff.pr
   );
   const executionTargetPull = normalizeObject8(executionTarget.pullRequest);
-  return {
+  const target = {
     number: normalizePositiveInteger3(
       executionTarget.prNumber ?? executionTarget.pullRequestNumber ?? executionTargetPull.number ?? handoff.prNumber ?? handoff.pullRequestNumber ?? handoffTarget.number ?? pullRequest.number
     ),
@@ -32780,6 +32802,23 @@ function normalizeRevisionTarget({ runtimeState, executionTarget, handoff }) {
     headRef: normalizeText18(executionTarget.headRef) || normalizeText18(executionTargetPull.headRef) || normalizeText18(executionTargetPull.head?.ref) || normalizeText18(handoff.headRef) || normalizeText18(handoffTarget.headRef) || normalizeText18(handoffTarget.head?.ref) || normalizeText18(pullRequest.headRef) || normalizeText18(pullRequest.head?.ref) || null,
     headSha: normalizeText18(executionTarget.headSha) || normalizeText18(executionTargetPull.headSha) || normalizeText18(executionTargetPull.head?.sha) || normalizeText18(handoff.headSha) || normalizeText18(handoffTarget.headSha) || normalizeText18(handoffTarget.head?.sha) || normalizeText18(pullRequest.headSha) || normalizeText18(pullRequest.head?.sha) || null
   };
+  const baseRef = normalizeText18(executionTarget.baseRef) || normalizeText18(executionTargetPull.baseRef) || normalizeText18(executionTargetPull.base?.ref) || normalizeText18(handoff.baseRef) || normalizeText18(handoffTarget.baseRef) || normalizeText18(handoffTarget.base?.ref) || normalizeText18(pullRequest.baseRef) || normalizeText18(pullRequest.base?.ref);
+  const merged = typeof executionTarget.merged === "boolean" ? executionTarget.merged : typeof executionTargetPull.merged === "boolean" ? executionTargetPull.merged : typeof handoff.merged === "boolean" ? handoff.merged : typeof handoffTarget.merged === "boolean" ? handoffTarget.merged : typeof pullRequest.merged === "boolean" ? pullRequest.merged : null;
+  const mergedAt = normalizeText18(executionTarget.mergedAt) || normalizeText18(executionTargetPull.mergedAt) || normalizeText18(executionTargetPull.merged_at) || normalizeText18(handoff.mergedAt) || normalizeText18(handoffTarget.mergedAt) || normalizeText18(handoffTarget.merged_at) || normalizeText18(pullRequest.mergedAt) || normalizeText18(pullRequest.merged_at);
+  const mergeCommitSha = normalizeText18(executionTarget.mergeCommitSha) || normalizeText18(executionTargetPull.mergeCommitSha) || normalizeText18(executionTargetPull.merge_commit_sha) || normalizeText18(handoff.mergeCommitSha) || normalizeText18(handoffTarget.mergeCommitSha) || normalizeText18(handoffTarget.merge_commit_sha) || normalizeText18(pullRequest.mergeCommitSha) || normalizeText18(pullRequest.merge_commit_sha);
+  if (baseRef) {
+    target.baseRef = baseRef;
+  }
+  if (merged !== null) {
+    target.merged = merged;
+  }
+  if (mergedAt) {
+    target.mergedAt = mergedAt;
+  }
+  if (mergeCommitSha) {
+    target.mergeCommitSha = mergeCommitSha;
+  }
+  return target;
 }
 function collectRevisionTargetConflicts({ executionTarget, handoff }) {
   const sources = [
@@ -33359,6 +33398,7 @@ async function dispatchVpsRunnerGitHubQueue({ request, token, env }) {
       branch: request.branch,
       baseRef: request.baseRef,
       codexGoal: request.codexGoal,
+      revisionTarget: request.revisionTarget,
       approvalScopeMatched: request.approvalScopeMatched,
       queueCommentId: normalizePositiveInteger3(responseBody?.id),
       queueCommentUrl: normalizeText18(responseBody?.html_url) || null,
@@ -34120,6 +34160,13 @@ function buildCodexCloudGitHubComment({ request }) {
       `- Target PR headRef: ${request.revisionTarget.headRef}`,
       `- Target PR headSha: ${request.revisionTarget.headSha}`
     ] : [],
+    ...request.codexGoal === RemoteCodexDispatchGoal.POST_MERGE_VERIFY ? [
+      `- Target PR: #${request.revisionTarget.number}`,
+      `- Target PR state: ${request.revisionTarget.state || "unknown"}`,
+      `- Target PR merged: ${request.revisionTarget.merged === false ? "false" : "true_or_unverified"}`,
+      `- Target PR mergedAt: ${request.revisionTarget.mergedAt || "unverified"}`,
+      `- Target PR mergeCommitSha: ${request.revisionTarget.mergeCommitSha || "unverified"}`
+    ] : [],
     "- Canonical spec: this GitHub Issue",
     "- Runtime truth: current GitHub branch / diff / PR / review comments",
     "- Completion target: create or update a pull request",
@@ -34170,9 +34217,16 @@ function buildVpsRunnerGitHubQueueComment({ request }) {
       `- Target PR headRef: ${request.revisionTarget.headRef}`,
       `- Target PR headSha: ${request.revisionTarget.headSha}`
     ] : [],
+    ...request.codexGoal === RemoteCodexDispatchGoal.POST_MERGE_VERIFY ? [
+      `- Target PR: #${request.revisionTarget.number}`,
+      `- Target PR state: ${request.revisionTarget.state || "unknown"}`,
+      `- Target PR merged: ${request.revisionTarget.merged === false ? "false" : "true_or_unverified"}`,
+      `- Target PR mergedAt: ${request.revisionTarget.mergedAt || "unverified"}`,
+      `- Target PR mergeCommitSha: ${request.revisionTarget.mergeCommitSha || "unverified"}`
+    ] : [],
     "- Canonical spec: this GitHub Issue",
     "- Runtime truth: current GitHub branch / diff / PR / review comments",
-    "- Completion target: create or update a pull request",
+    request.codexGoal === RemoteCodexDispatchGoal.POST_MERGE_VERIFY ? "- Completion target: verify post-merge runtime truth and post GitHub-visible evidence" : "- Completion target: create or update a pull request",
     "- PR body requirement: Codex must inspect `docs/pr-template-model.md`, `scripts/render-pr-body.mjs`, and `scripts/validate-pr-body.mjs`; the VPS runner will validate and normalize the PR body again before create/update.",
     "- Context preflight requirement: the VPS runner will automatically read `AGENTS.md`, `docs/butler/thread-independent-startup-contract.md`, the canonical Issue, and the PR body contract files, then generate a machine-readable preflight receipt before Codex starts editing.",
     "- Missing preflight inputs do not authorize speculative implementation; the runner must ask Butler/owner to confirm the next action, then wait for a reissued bounded request.",

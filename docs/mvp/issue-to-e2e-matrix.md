@@ -688,6 +688,29 @@ Status values used below:
   - `docs/mvp/e2e/e2e-26-governed-production-deploy-from-passkey-operator.md`
 - Status: `e2e_evidenced_pending_human_closure`
 
+## E2E-33 Butler-triggered post-merge verification
+
+- Issues: `#397`
+- Happy path:
+  - Butler can dispatch a bounded VPS runner request with `codexGoal=post_merge_verify` for an already merged PR, and the runner records GitHub-visible runtime truth evidence instead of opening mac Codex
+- Boundary path:
+  - missing PR number, unmerged target PR, base-branch mismatch, VPS main sync failure, inactive runner unit, or remaining pending runner work blocks completion instead of claiming Issue closure readiness
+- Implementation evidence:
+  - `src/core/remote-codex-executor.js`
+  - `scripts/run-vps-runner.mjs`
+  - `docs/butler/remote-codex-cli-executor.md`
+  - `docs/setup/custom-gpt-actions-openapi.yaml`
+  - `docs/setup/custom-gpt-instructions.md`
+- Test evidence:
+  - `test/remote-codex-executor.test.js`
+  - `test/vps-runner-script.test.js`
+  - `test/custom-gpt-setup-docs.test.js`
+- Run evidence:
+  - `docs/mvp/e2e/e2e-33-post-merge-verification.md`
+- Remaining blocker:
+  - live VPS post-merge verification against the merged PR is still required before closing Issue #397
+- Status: `partial`
+
 ## Current Completion Reading
 
 - Repository completion status: `partial`
