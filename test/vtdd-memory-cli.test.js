@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 
 import {
@@ -10,7 +13,9 @@ import {
   buildProposalRecord,
   buildRuntimeCrossMemoryRequest,
   buildRuntimeMemoryWriteRequest,
-  parseArgs
+  buildRuntimeOperationalMemoryRequest,
+  parseArgs,
+  withRuntimeMachineAuth
 } from "../scripts/vtdd-memory.mjs";
 
 test("parseArgs supports repeated option values", () => {
@@ -164,4 +169,87 @@ test("runtime memory write request posts checkpoint without leaking auth into UR
   assert.equal(request.url.includes("test-token"), false);
   assert.equal(body.recordType, "working_memory");
   assert.equal(body.responseMode, "action_visible");
+});
+
+test("runtime operational memory request keeps auth in headers", () => {
+  const request = buildRuntimeOperationalMemoryRequest({
+    runtimeUrl: "https://example.invalid",
+    env: {
+      VTDD_GATEWAY_BEARER_TOKEN: "test-token"
+    },
+    repository: "marushu/vtdd-v2-p",
+    text: "setup recovery latency",
+    currentState: "deploy confirmed",
+    runtimeTruthSource: "github_issue",
+    checkedAt: "2026-05-15T02:36:00Z",
+    limit: 3
+  });
+
+  const url = new URL(request.url);
+  assert.equal(url.pathname, "/v2/retrieve/operational-memory");
+  assert.equal(url.searchParams.get("repository"), "marushu/vtdd-v2-p");
+  assert.equal(url.searchParams.get("text"), "setup recovery latency");
+  assert.equal(url.searchParams.get("responseMode"), "action_visible");
+  assert.equal(request.headers.authorization, "Bearer test-token");
+  assert.equal(request.url.includes("test-token"), false);
+});
+
+test("runtime machine auth resolves gateway bearer token from desktop vault", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "vtdd-memory-vault-"));
+  await fs.mkdir(path.join(root, "github-app"), { recursive: true });
+  await fs.mkdir(path.join(root, "gateway"), { recursive: true });
+  await fs.writeFile(path.join(root, "github-app", "private-key.pem"), "private-key", "utf8");
+  await fs.writeFile(path.join(root, "gateway", "bearer-token.txt"), "vault-token", "utf8");
+  const manifestPath = path.join(root, "manifest.json");
+  await fs.writeFile(
+    manifestPath,
+    JSON.stringify({
+      version: 1,
+      githubApp: {
+        appId: "123",
+        installationId: "456",
+        privateKeyPath: "github-app/private-key.pem"
+      },
+      gateway: {
+        bearerTokenPath: "gateway/bearer-token.txt"
+      }
+    }),
+    "utf8"
+  );
+
+  const resolved = await withRuntimeMachineAuth({
+    manifestPath,
+    env: {},
+    runtimeUrl: "https://example.invalid"
+  });
+
+  assert.equal(resolved.env.VTDD_GATEWAY_BEARER_TOKEN, "vault-token");
+});
+
+test("runtime machine auth prefers environment token over desktop vault", async () => {
+  const resolved = await withRuntimeMachineAuth({
+    manifestPath: "/does/not/exist.json",
+    env: {
+      VTDD_GATEWAY_BEARER_TOKEN: "env-token"
+    },
+    runtimeUrl: "https://example.invalid"
+  });
+
+  assert.equal(resolved.env.VTDD_GATEWAY_BEARER_TOKEN, "env-token");
+});
+
+test("runtime machine auth reports desktop maintenance required without leaking token", async () => {
+  await assert.rejects(
+    () =>
+      withRuntimeMachineAuth({
+        manifestPath: "/does/not/exist.json",
+        env: {},
+        runtimeUrl: "https://example.invalid"
+      }),
+    (error) => {
+      assert.match(error.message, /desktop maintenance required: gateway_bearer_token_missing/);
+      assert.equal(error.message.includes("Bearer"), false);
+      return true;
+    }
+  );
 });

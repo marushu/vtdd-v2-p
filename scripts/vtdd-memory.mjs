@@ -2,6 +2,7 @@
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
+import { loadDesktopBootstrapVault } from "../src/core/desktop-bootstrap-vault.js";
 import { createDecisionLogEntry, createProposalLogEntry } from "../src/core/log-contracts.js";
 import { createMemoryRecord } from "../src/core/memory-schema.js";
 import { evaluateMemorySafety } from "../src/core/memory-safety.js";
@@ -159,6 +160,43 @@ export function buildRuntimeMemoryWriteRequest(options) {
   };
 }
 
+export function buildRuntimeOperationalMemoryRequest(options) {
+  const env = options.env ?? process.env;
+  const runtimeUrl = normalizeRequiredText(
+    options.runtimeUrl ?? env.VTDD_RUNTIME_URL,
+    "runtime-url"
+  );
+  const token = normalizeRequiredText(
+    env.VTDD_GATEWAY_BEARER_TOKEN,
+    "VTDD_GATEWAY_BEARER_TOKEN"
+  );
+  const url = new URL("/v2/retrieve/operational-memory", runtimeUrl);
+  url.searchParams.set("limit", String(normalizeLimit(options.limit ?? DEFAULT_LIMIT)));
+  url.searchParams.set("responseMode", "action_visible");
+  if (options.repository) {
+    url.searchParams.set("repository", String(options.repository));
+  }
+  if (options.text) {
+    url.searchParams.set("text", String(options.text));
+  }
+  if (options.currentState) {
+    url.searchParams.set("currentState", String(options.currentState));
+  }
+  if (options.runtimeTruthSource) {
+    url.searchParams.set("runtimeTruthSource", String(options.runtimeTruthSource));
+  }
+  if (options.checkedAt) {
+    url.searchParams.set("checkedAt", String(options.checkedAt));
+  }
+
+  return {
+    url: url.toString(),
+    headers: {
+      authorization: `Bearer ${token}`
+    }
+  };
+}
+
 export function buildCheckpointPayload(options) {
   const relatedIssue = normalizePositiveInteger(options.relatedIssue, "relatedIssue");
   const tags = mergeTags(options.tag ?? options.tags, [
@@ -288,7 +326,8 @@ export async function runCli(argv = process.argv.slice(2), io = defaultIo) {
   if (command === "retrieve-cross") {
     const transport = options.transport ?? inferTransport(options);
     if (transport === "runtime") {
-      const request = buildRuntimeCrossMemoryRequest(options);
+      const runtimeOptions = await withRuntimeMachineAuth(options);
+      const request = buildRuntimeCrossMemoryRequest(runtimeOptions);
       const response = await fetch(request.url, { headers: request.headers });
       const text = await response.text();
       const body = parseMaybeJson(text);
@@ -308,12 +347,27 @@ export async function runCli(argv = process.argv.slice(2), io = defaultIo) {
     return result;
   }
 
+  if (command === "retrieve-operational") {
+    const runtimeOptions = await withRuntimeMachineAuth(options);
+    const request = buildRuntimeOperationalMemoryRequest(runtimeOptions);
+    const response = await fetch(request.url, { headers: request.headers });
+    const text = await response.text();
+    const body = parseMaybeJson(text);
+    const result = { ok: response.ok, status: response.status, body };
+    io.writeJson(result, options);
+    if (!response.ok) {
+      throw new Error(`runtime retrieve-operational failed with status ${response.status}`);
+    }
+    return result;
+  }
+
   if (command === "write-runtime-checkpoint") {
+    const runtimeOptions = await withRuntimeMachineAuth(options);
     const payload = buildCheckpointPayload({
-      ...options,
+      ...runtimeOptions,
       confirmed: normalizeBoolean(options.confirmed)
     });
-    const request = buildRuntimeMemoryWriteRequest({ ...options, payload });
+    const request = buildRuntimeMemoryWriteRequest({ ...runtimeOptions, payload });
     const response = await fetch(request.url, {
       method: "POST",
       headers: request.headers,
@@ -351,6 +405,35 @@ export async function runCli(argv = process.argv.slice(2), io = defaultIo) {
   }
 
   throw new Error(`unknown command: ${command || "(missing)"}`);
+}
+
+export async function withRuntimeMachineAuth(options = {}) {
+  const env = options.env ?? process.env;
+  if (normalizeText(env.VTDD_GATEWAY_BEARER_TOKEN)) {
+    return options;
+  }
+
+  const vault = await loadDesktopBootstrapVault({
+    manifestPath: options.manifestPath
+  });
+  if (!vault.ok) {
+    throw new Error(
+      `desktop maintenance required: gateway_bearer_token_missing; ${vault.issues.join("; ")}`
+    );
+  }
+
+  const bearerToken = normalizeText(vault.vault?.gateway?.bearerToken);
+  if (!bearerToken) {
+    throw new Error("desktop maintenance required: gateway_bearer_token_missing");
+  }
+
+  return {
+    ...options,
+    env: {
+      ...env,
+      VTDD_GATEWAY_BEARER_TOKEN: bearerToken
+    }
+  };
 }
 
 function buildSafeMemoryRecord(input) {
@@ -429,6 +512,10 @@ function normalizeRequiredText(value, label) {
 function normalizeOptionalText(value) {
   const text = String(value ?? "").trim();
   return text || null;
+}
+
+function normalizeText(value) {
+  return String(value ?? "").trim();
 }
 
 function normalizeObject(value) {

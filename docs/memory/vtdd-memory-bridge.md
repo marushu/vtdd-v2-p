@@ -27,13 +27,21 @@ Use environment variables or equivalent command flags:
 - `VTDD_MEMORY_D1_DATABASE_NAME`: Cloudflare D1 database name for direct
   Wrangler operations.
 - `VTDD_RUNTIME_URL`: Worker runtime base URL for retrieve operations.
-- `VTDD_GATEWAY_BEARER_TOKEN`: machine-auth token for runtime retrieve
+- `VTDD_GATEWAY_BEARER_TOKEN`: machine-auth token for runtime retrieve/write
   operations.
+- `~/.vtdd/credentials/manifest.json`: optional desktop/VPS bootstrap vault
+  fallback. When `VTDD_GATEWAY_BEARER_TOKEN` is absent, the CLI may read
+  `gateway.bearerTokenPath` from this manifest and use that file's contents as
+  the runtime bearer token.
 
 Do not commit runtime URLs, database IDs, bearer tokens, account IDs, or owner
 specific bootstrap values into this repository.
 Do not pass bearer tokens as command-line flags; use the environment variable
 so the token is less likely to land in shell history or process logs.
+If neither the environment variable nor the bootstrap vault token path is
+available, the runtime memory commands must fail with `desktop maintenance
+required` instead of falling back to D1 direct writes or asking the operator to
+paste a secret into chat.
 
 ## Commands
 
@@ -76,6 +84,22 @@ node scripts/vtdd-memory.mjs write-runtime-checkpoint \
   --tag "issue:361" \
   --pretty true
 ```
+
+Confirm a RAG checkpoint through the same Worker runtime operational-memory
+surface:
+
+```sh
+node scripts/vtdd-memory.mjs retrieve-operational \
+  --runtime-url "$VTDD_RUNTIME_URL" \
+  --repository "owner/repo" \
+  --text "Compact checkpoint summary or tags." \
+  --limit 5 \
+  --pretty true
+```
+
+Mac Codex and VPS Codex CLI should use the same runtime write/retrieve contract
+for normal RAG checkpoint handling. Direct Wrangler/D1 writes remain an
+operator repair tool, not the default path for shared memory continuity.
 
 Retrieve canonical cross memory directly from D1:
 
