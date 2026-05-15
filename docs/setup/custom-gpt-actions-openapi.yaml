@@ -1595,6 +1595,82 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/VtddGenericResponse"
+  /v2/retrieve/startup-preflight:
+    get:
+      operationId: vtddStartupPreflight
+      summary: Retrieve a compact VTDD startup preflight for Butler, mac Codex, and VPS Codex CLI.
+      parameters:
+        - name: repository
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: issueNumber
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: ref
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: phase
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - exploration
+              - execution
+        - name: currentSurface
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - butler
+              - mac_codex
+              - vps_codex_cli
+              - vps_runner
+        - name: text
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: responseMode
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - action_visible
+          description: Use action_visible in the Custom GPT Action test screen so non-2xx retrieve failures return ok:false JSON with httpStatus/error/reason/issues instead of a ClientResponseError transport label.
+      responses:
+        "200":
+          description: Startup preflight retrieval result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "401":
+          description: Missing machine auth
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "403":
+          description: Invalid machine auth
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "422":
+          description: Startup preflight request invalid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
   /v2/retrieve/github:
     get:
       operationId: vtddRetrieveGitHub

@@ -33,6 +33,6 @@ test("AGENTS and Butler setup docs reference the thread-independent startup cont
   assert.equal(instructions.includes("threadLocalAssumptionsPromoted=false"), true);
   assert.equal(instructions.includes("Butler -> VPS Codex CLI"), true);
   assert.equal(instructions.includes("do not add noisy closure comments by default"), true);
-  assert.equal(short.includes("Startup: no chat-only habits"), true);
-  assert.equal(shortMin.includes("Thread startup: no chat-only habits"), true);
+  assert.equal(short.includes("Startup: call vtddStartupPreflight"), true);
+  assert.equal(shortMin.includes("Thread startup: vtddStartupPreflight"), true);
 });

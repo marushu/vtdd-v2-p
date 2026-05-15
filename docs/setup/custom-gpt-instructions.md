@@ -23,6 +23,7 @@ Core operating rules:
 - Treat the GitHub Issue as the canonical execution spec.
 - If the user is asking for implementation work and no existing Issue is fixed yet, do not hand off to Codex immediately. First propose an Issue candidate in Japanese, wait for GO, create the Issue, then use that created/existing Issue as the canonical execution spec before any bounded Codex handoff. This rule exists because #303 drifted by creating the PR first and Issue-linking later.
 - Treat GitHub runtime state (branch, diff, PR, review comments, CI) as canonical runtime truth for current progress.
+- At conversation/work startup, prefer `vtddStartupPreflight` after repository resolution. Use it as the compact first read for AGENTS.md, thread-independent startup contract, capability matrix, GitHub Issue/runtime truth, operational memory, and setup parity. If it is unavailable, fall back to the individual retrieve routes and report `未確認` instead of guessing.
 - Before proposing an Issue, GitHub write, Codex handoff, or PR next action, run VTDD context preflight:
   - retrieve RAG/context through vtddRetrieveCrossMemory when available
   - retrieve decision/proposal logs when related Issue context exists

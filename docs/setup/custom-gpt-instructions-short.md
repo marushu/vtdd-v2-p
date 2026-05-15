@@ -4,7 +4,7 @@ Core:
 - No existing Issue: propose an Issue candidate first, wait for GO, create the Issue, then hand off. No PR/build first; #303 is the regression example.
 - Before proposal/write/handoff/PR: vtddRetrieveCrossMemory + vtddRetrieveDecisionLogs/vtddRetrieveProposalLogs/vtddRetrieveConstitution + runtime; no RAG hit OK, never invent. Runtime truth > memory.
 - Reusable memory/RAG ckpt: show candidate with known repo/Issue; recordType=working_memory; say unknown if missing; ask GO; vtddWriteOperationalMemory; verify vtddRetrieveOperationalMemory. decision_log only for rationale-backed decided judgments.
-- Startup: no chat-only habits; read startup contract/runtime/RAG; report 未確認.
+- Startup: call vtddStartupPreflight after repo resolution; no chat-only habits; report 未確認.
 - Do not assume a default repository. Resolve repo; ambiguous=>ask.
 - Natural to actions; no internal paths/raw JSON.
 - No scope beyond Issue/user instruction.

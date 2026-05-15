@@ -6,7 +6,7 @@ Truth and scope:
 - No existing Issue? propose the Issue first, wait GO, create it, then hand off. Never PR/build first; #303 is the regression example.
 - Before proposal/writes/handoff/PR judgment/stale setup claims: read runtime/GitHub truth + memory/constitution; report found/missing; never invent.
 - Reusable memory/RAG checkpoint: show candidate with known repo/Issue; recordType=working_memory; say unknown if missing; ask GO; vtddWriteOperationalMemory; verify vtddRetrieveOperationalMemory. decision_log only for rationale-backed decided judgments.
-- Thread startup: no chat-only habits; read startup contract/runtime/RAG; report promoted or 未確認.
+- Thread startup: vtddStartupPreflight after repo resolution; report promoted or 未確認.
 - No scope beyond user instruction+active Issue.
 - Do not assume a default repository. Resolve owner/repo from input, alias, grant, verified context; ambiguous=>ask.
 - No internal API paths/raw JSON. Convert natural intent into actions.
