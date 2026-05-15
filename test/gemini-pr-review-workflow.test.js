@@ -58,6 +58,15 @@ test("Gemini review script stops issue-comment reruns when reviewer already appr
   assert.equal(script.includes("headSha: pullRequest?.head?.sha"), true);
 });
 
+test("Gemini review script stops reviewer comment storms before another review", () => {
+  const script = fs.readFileSync("scripts/run-gemini-pr-review.mjs", "utf8");
+  assert.equal(script.includes("detectGeminiReviewerRunaway"), true);
+  assert.equal(script.includes("formatGeminiReviewRunawayGuardComment"), true);
+  assert.equal(script.includes("VTDD_REVIEWER_RUNAWAY_WINDOW_MINUTES"), true);
+  assert.equal(script.includes("VTDD_REVIEWER_RUNAWAY_MAX_COMMENTS"), true);
+  assert.equal(script.includes("Skipping Gemini PR review: runaway guard triggered"), true);
+});
+
 test("Gemini review script defaults Codex fallback to VPS Codex CLI transport", () => {
   const script = fs.readFileSync("scripts/run-gemini-pr-review.mjs", "utf8");
   assert.equal(script.includes('deliveryMode: "vps_codex_cli"'), true);

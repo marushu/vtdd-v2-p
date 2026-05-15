@@ -2,15 +2,18 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   GEMINI_PR_REVIEW_MARKER,
+  GEMINI_REVIEW_RUNAWAY_GUARD_MARKER,
   REVIEWER_OBJECTION_RESOLUTION_MARKER,
   buildGeminiReviewRequestBody,
   buildPullRequestDiff,
   buildPullRequestReviewContext,
   buildReviewResponseSummary,
+  detectGeminiReviewerRunaway,
   extractReviewerResponseFromGemini,
   findExistingGeminiReviewComment,
   formatReviewResponseSummary,
   formatGeminiReviewComment,
+  formatGeminiReviewRunawayGuardComment,
   normalizeMentionLogin,
   parseGeminiReviewComment,
   resolveOperatorMention,
@@ -179,6 +182,92 @@ test("issue_comment on PR from future reviewer marker skips self-trigger loop", 
   assert.equal(result.ok, true);
   assert.equal(result.value.shouldReview, false);
   assert.equal(result.value.reason, "bot_or_marker_comment");
+});
+
+test("issue_comment on PR from runaway guard marker skips self-trigger loop", () => {
+  const result = resolveGeminiReviewTrigger({
+    eventName: "issue_comment",
+    payload: {
+      issue: {
+        number: 347,
+        pull_request: {
+          url: "https://api.github.com/repos/marushu/vtdd-v2-p/pulls/347"
+        }
+      },
+      comment: {
+        body: `${GEMINI_REVIEW_RUNAWAY_GUARD_MARKER}\nVTDD runaway guard`
+      },
+      sender: {
+        login: "vtdd-gemini-reviewer[bot]"
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.value.shouldReview, false);
+  assert.equal(result.value.reason, "bot_or_marker_comment");
+});
+
+test("Gemini reviewer runaway detector triggers on recent reviewer marker storm", () => {
+  const now = "2026-05-15T10:00:00.000Z";
+  const issueComments = Array.from({ length: 4 }, (_, index) => ({
+    created_at: `2026-05-15T09:5${index}:00.000Z`,
+    body: index % 2 === 0 ? GEMINI_PR_REVIEW_MARKER : "<!-- vtdd:reviewer=codex-fallback -->"
+  }));
+
+  const result = detectGeminiReviewerRunaway({
+    issueComments,
+    now,
+    windowMinutes: 15,
+    maxReviewerComments: 4
+  });
+
+  assert.equal(result.triggered, true);
+  assert.equal(result.reason, "reviewer_comment_storm");
+  assert.equal(result.recentReviewerCommentCount, 4);
+  assert.equal(result.shouldNotifyOwner, true);
+});
+
+test("Gemini reviewer runaway detector does not re-notify when guard already exists", () => {
+  const issueComments = [
+    ...Array.from({ length: 3 }, () => ({
+      created_at: "2026-05-15T10:00:00.000Z",
+      body: GEMINI_PR_REVIEW_MARKER
+    })),
+    {
+      created_at: "2026-05-15T10:01:00.000Z",
+      body: GEMINI_REVIEW_RUNAWAY_GUARD_MARKER
+    }
+  ];
+
+  const result = detectGeminiReviewerRunaway({
+    issueComments,
+    now: "2026-05-15T10:02:00.000Z",
+    windowMinutes: 10,
+    maxReviewerComments: 3
+  });
+
+  assert.equal(result.triggered, true);
+  assert.equal(result.shouldNotifyOwner, false);
+  assert.equal(result.existingGuardComment.body, GEMINI_REVIEW_RUNAWAY_GUARD_MARKER);
+});
+
+test("formatGeminiReviewRunawayGuardComment renders Japanese owner notification", () => {
+  const body = formatGeminiReviewRunawayGuardComment({
+    notificationMention: "marushu",
+    repository: "marushu/vtdd-v2-p",
+    pullRequestNumber: 347,
+    headSha: "abc123",
+    recentReviewerCommentCount: 622,
+    windowMinutes: 60,
+    maxReviewerComments: 20
+  });
+
+  assert.equal(body.includes(GEMINI_REVIEW_RUNAWAY_GUARD_MARKER), true);
+  assert.equal(body.includes("@marushu VTDD runaway guard"), true);
+  assert.equal(body.includes("Gemini reviewer loop を停止しました"), true);
+  assert.equal(body.includes("detected: 622 reviewer marker comments within 60 minutes"), true);
+  assert.equal(body.includes("resume condition"), true);
 });
 
 test("buildPullRequestDiff truncates large diffs", () => {
