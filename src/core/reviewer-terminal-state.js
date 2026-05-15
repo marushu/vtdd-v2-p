@@ -2,6 +2,14 @@ import { parseCodexReviewFallbackComment } from "./codex-review-fallback.js";
 import { parseGeminiReviewComment } from "./gemini-pr-review.js";
 
 function isReviewerTerminalApproved(input = {}) {
+  return hasReviewerTerminalState(input, (marker) => marker.terminal === true);
+}
+
+function isReviewerTerminalResolved(input = {}) {
+  return hasReviewerTerminalState(input, (marker) => marker.resolved === true);
+}
+
+function hasReviewerTerminalState(input = {}, predicate) {
   const comments = Array.isArray(input.comments) ? input.comments : [];
   const after = parseTime(input.after);
   const headSha = normalizeText(input.headSha);
@@ -17,7 +25,7 @@ function isReviewerTerminalApproved(input = {}) {
   }
 
   const latest = markers.at(-1);
-  return latest.terminal === true;
+  return predicate(latest);
 }
 
 function normalizeReviewerMarker(comment) {
@@ -27,9 +35,11 @@ function normalizeReviewerMarker(comment) {
 
   const gemini = parseGeminiReviewComment(comment);
   if (gemini) {
+    const approved = gemini.recommendedAction === "approve";
     return {
       reviewer: "gemini",
-      terminal: gemini.recommendedAction === "approve",
+      terminal: approved,
+      resolved: approved,
       blocking: gemini.blocking === true,
       headSha: extractHeadSha(comment?.body),
       time: parseTime(comment?.created_at ?? comment?.createdAt)
@@ -38,9 +48,12 @@ function normalizeReviewerMarker(comment) {
 
   const codex = parseCodexReviewFallbackComment(comment);
   if (codex) {
+    const completed = codex.status === "completed";
+    const blocked = codex.status === "blocked";
     return {
       reviewer: "codex-fallback",
-      terminal: codex.status === "completed" && codex.recommendedAction === "approve",
+      terminal: completed && codex.recommendedAction === "approve",
+      resolved: completed || blocked,
       blocking: codex.blocking === true,
       headSha: extractHeadSha(comment?.body),
       time: parseTime(comment?.created_at ?? comment?.createdAt)
@@ -60,7 +73,9 @@ function isTrustedReviewerComment(comment) {
     "vtdd-gemini-reviewer",
     "vtdd-gemini-reviewer[bot]",
     "vtdd-codex-fallback-reviewer",
-    "vtdd-codex-fallback-reviewer[bot]"
+    "vtdd-codex-fallback-reviewer[bot]",
+    "vtdd-vps-codex-cli",
+    "vtdd-vps-codex-cli[bot]"
   ]);
 
   if (trustedLogins.has(login)) {
@@ -84,4 +99,4 @@ function normalizeText(value) {
   return String(value ?? "").trim();
 }
 
-export { isReviewerTerminalApproved, isTrustedReviewerComment };
+export { isReviewerTerminalApproved, isReviewerTerminalResolved, isTrustedReviewerComment };
