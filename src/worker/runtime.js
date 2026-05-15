@@ -982,16 +982,17 @@ async function buildStartupPreflight({
   const activeIssue = issueRecords[0] ?? null;
   const openIssues = openIssuesResult.ok ? openIssuesResult.read.records : [];
   const threadLocalAssumptionsPromoted =
-    sources.some(
-      (source) =>
-        source.path === "AGENTS.md" &&
-        String(source.excerpt || "").includes("Butler-First Operating Principle")
-    ) &&
-    sources.some(
-      (source) =>
-        source.path === "docs/butler/thread-independent-startup-contract.md" &&
-        String(source.excerpt || "").includes("threadLocalAssumptionsPromoted")
-    );
+    startupSourceContentIncludes({
+      sourceResults,
+      path: "AGENTS.md",
+      text: "Butler-First Operating Principle"
+    }) &&
+    startupSourceContentIncludes({
+      sourceResults,
+      path: "docs/butler/thread-independent-startup-contract.md",
+      text: "threadLocalAssumptionsPromoted"
+    });
+  const butlerFirstPrincipleStatus = threadLocalAssumptionsPromoted ? "promoted" : "未確認";
 
   return {
     schemaVersion: "startup_preflight_v1",
@@ -1011,7 +1012,7 @@ async function buildStartupPreflight({
       "surface_capability"
     ],
     butlerFirstPrinciple: {
-      status: threadLocalAssumptionsPromoted ? "promoted" : "未確認",
+      status: butlerFirstPrincipleStatus,
       summary:
         "VTDD is iPhone/iPad-first and handoff-first. Butler is the owner delegate; VPS Codex CLI is the always-on execution surface; mac Codex is auxiliary, not the normal operating center.",
       macCodexCompletionRule:
@@ -1207,6 +1208,15 @@ function buildStartupNextSafeAction({ issueNumber, currentSurface, missingSource
   return issueNumber
     ? `Issue #${issueNumber} の Intent / Success Criteria / Non-goals に沿って dry-run impact gate へ進む。`
     : "対象 Issue を確認してから dry-run impact gate へ進む。";
+}
+
+function startupSourceContentIncludes({ sourceResults, path, text }) {
+  return sourceResults.some(
+    (result) =>
+      result.ok &&
+      result.path === path &&
+      String(result.record?.content || "").includes(text)
+  );
 }
 
 function compactExcerpt(value, maxLength = 400) {
