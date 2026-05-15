@@ -29277,8 +29277,76 @@ function normalizeGitHubAppPrivateKeyValue(value) {
 }
 function decodePemPrivateKey(value) {
   const pem = normalizeText7(value);
-  const body = pem.replaceAll("-----BEGIN PRIVATE KEY-----", "").replaceAll("-----END PRIVATE KEY-----", "").replace(/\s+/g, "");
-  return decodeBase64ToBytes(body);
+  const isPkcs1RsaPrivateKey = pem.includes("-----BEGIN RSA PRIVATE KEY-----");
+  const body = pem.replaceAll("-----BEGIN PRIVATE KEY-----", "").replaceAll("-----END PRIVATE KEY-----", "").replaceAll("-----BEGIN RSA PRIVATE KEY-----", "").replaceAll("-----END RSA PRIVATE KEY-----", "").replace(/\s+/g, "");
+  const keyBytes = decodeBase64ToBytes(body);
+  if (isPkcs1RsaPrivateKey) {
+    return wrapPkcs1RsaPrivateKeyAsPkcs8(keyBytes);
+  }
+  return keyBytes;
+}
+function wrapPkcs1RsaPrivateKeyAsPkcs8(pkcs1Bytes) {
+  return asn1Sequence([
+    asn1IntegerZero(),
+    asn1Sequence([
+      asn1ObjectIdentifier([1, 2, 840, 113549, 1, 1, 1]),
+      new Uint8Array([5, 0])
+    ]),
+    asn1OctetString(pkcs1Bytes)
+  ]);
+}
+function asn1IntegerZero() {
+  return new Uint8Array([2, 1, 0]);
+}
+function asn1Sequence(parts) {
+  return asn1Tlv(48, concatBytes(parts));
+}
+function asn1OctetString(bytes) {
+  return asn1Tlv(4, bytes);
+}
+function asn1ObjectIdentifier(parts) {
+  if (!Array.isArray(parts) || parts.length < 2) {
+    return asn1Tlv(6, new Uint8Array());
+  }
+  const encoded = [parts[0] * 40 + parts[1]];
+  for (const part of parts.slice(2)) {
+    encoded.push(...encodeBase128Integer(part));
+  }
+  return asn1Tlv(6, new Uint8Array(encoded));
+}
+function asn1Tlv(tag, value) {
+  return concatBytes([new Uint8Array([tag]), encodeAsn1Length(value.length), value]);
+}
+function encodeAsn1Length(length) {
+  if (length < 128) {
+    return new Uint8Array([length]);
+  }
+  const bytes = [];
+  let remaining = length;
+  while (remaining > 0) {
+    bytes.unshift(remaining & 255);
+    remaining >>= 8;
+  }
+  return new Uint8Array([128 | bytes.length, ...bytes]);
+}
+function encodeBase128Integer(value) {
+  const bytes = [value & 127];
+  let remaining = value >> 7;
+  while (remaining > 0) {
+    bytes.unshift(128 | remaining & 127);
+    remaining >>= 7;
+  }
+  return bytes;
+}
+function concatBytes(parts) {
+  const totalLength = parts.reduce((sum, part) => sum + part.length, 0);
+  const result = new Uint8Array(totalLength);
+  let offset = 0;
+  for (const part of parts) {
+    result.set(part, offset);
+    offset += part.length;
+  }
+  return result;
 }
 function encodeJwtPart(payload) {
   const json2 = JSON.stringify(payload);
