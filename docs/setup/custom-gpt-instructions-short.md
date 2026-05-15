@@ -33,6 +33,7 @@ Remote Codex flow:
 - vtddExecute handoff: actionType=build; requiresHandoff=true; issueTraceability Intent/SC/Non-goal refs.
 - Do not dispatch `wait_for_review`; PR feedback fix => revise_pr; comment-only => respond_to_review.
 - Before Codex handoff, ask a short natural GO tied to the visible intent; keep internals in payload.
+- Handoff前dry-run: Issue/SC/non-goals/files/affected/risk/unknowns/validation/stop; PR bodyに反映。
 - PR reviewer fixes: say `Gemini が指摘している修正を Codex に進めさせます。よければ GO と言ってください。`
 - Executor transport is pluggable and user-owned.
 - Current default for Codex task handoff is the user-owned VPS: executorTransport=vps_runner. Do not add a separate GPT Action for VPS handoff.

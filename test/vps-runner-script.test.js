@@ -1188,8 +1188,13 @@ test("VPS runner Codex prompt preserves high-risk boundaries", () => {
   assert.equal(prompt.includes("Current surface: VPS Codex CLI"), true);
   assert.equal(prompt.includes("Next safe action: resume from the canonical Issue"), true);
   assert.equal(prompt.includes("Japanese blocker comment for Butler/owner"), true);
+  assert.equal(prompt.includes("Before editing implementation files, write a Japanese owner-facing dry-run impact report"), true);
+  assert.equal(prompt.includes("Record file/line hypotheses before editing"), true);
   assert.equal(prompt.includes("owner_decision_required"), true);
   assert.equal(prompt.includes("## This PR satisfies Intent"), true);
+  assert.equal(prompt.includes("## Dry-run Impact Report"), true);
+  assert.equal(prompt.includes("## File / Line Hypotheses"), true);
+  assert.equal(prompt.includes("## Hypothesis Retrospective"), true);
   assert.equal(prompt.includes("## Surface Update Checklist"), true);
 });
 
