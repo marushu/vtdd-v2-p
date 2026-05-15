@@ -449,7 +449,8 @@
                 "enum": [
                   "open_pr",
                   "revise_pr",
-                  "respond_to_review"
+                  "respond_to_review",
+                  "post_merge_verify"
                 ]
               },
               "executorTransport": {
@@ -660,7 +661,8 @@
                 "enum": [
                   "open_pr",
                   "revise_pr",
-                  "respond_to_review"
+                  "respond_to_review",
+                  "post_merge_verify"
                 ]
               },
               "executorTransport": {

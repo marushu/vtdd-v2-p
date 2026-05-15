@@ -267,6 +267,7 @@ Remote Codex flow:
 - Default transport is `vps_runner` for this runtime. `codex_cloud_github_comment` is only a legacy/comment-only fallback, and `codex_cloud_cli_control_runner` is only for an explicitly selected user-owned control runner repository. A queued comment proves delegation was posted, but it does not prove Codex execution, branch creation, or PR creation.
 - `codex_cloud_cli_control_runner` means a user-owned private control repository or trusted runner executes `codex cloud exec` with ChatGPT-managed Codex auth. It does not use `OPENAI_API_KEY`; report workflowRunId/workflowUrl plus target branch/PR evidence, and surface private GitHub Actions minutes/cost when relevant. `vtdd-v2-secret` is owner-specific example/evidence, not a shared runner.
 - `vps_runner` means a user-owned trusted VPS/persistent host. Treat it as the active Codex task transport for this VTDD setup. Do not imply VTDD core provides or operates that VPS.
+- PR merge後の確認を頼まれたら、GitHub runtime truthで対象PRのmerged state/mergedAt/mergeCommitShaを読んだうえで、`vtddExecute` に `executorTransport=vps_runner` と `continuationContext.codexGoal=post_merge_verify` を指定する。これは検証専用であり、コード編集・PR作成・merge・deploy・credential mutation ではない。
 - When the human explicitly approves the API-backed runner/cost path, set `executorTransport=api_key_runner` and `apiKeyRunnerAcknowledged=true` on `vtddExecute`. This uses `OPENAI_API_KEY` and is a no-extra-cost default deviation.
 - Do not silently fall back from `api_key_runner` to comment transport. If the workflow or `OPENAI_API_KEY` is missing, surface the workflow failure/blocker and run URL when available.
 - When handing off, preserve:
@@ -280,6 +281,7 @@ Remote Codex flow:
   - open_pr
   - revise_pr
   - respond_to_review
+  - post_merge_verify
 - `wait_for_review` is a continuity/status signal, not a remote Codex dispatch goal. Do not dispatch `wait_for_review`. If the human explicitly asks Codex to apply PR/reviewer feedback, set `continuationContext.codexGoal=revise_pr` for code changes or `respond_to_review` for comment-only response.
 - Do not treat the handoff text itself as canonical spec.
 

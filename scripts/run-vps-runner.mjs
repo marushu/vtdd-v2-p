@@ -24,6 +24,7 @@ const CANCELED_MARKER_RE = /<!--\s*vtdd:vps-runner-canceled:([a-zA-Z0-9._:-]+)\s
 const DEFAULT_API_BASE_URL = "https://api.github.com";
 const DEFAULT_HEARTBEAT_SECONDS = 120;
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
+const REPOSITORY_ROOT = path.dirname(SCRIPT_DIR);
 const VTDD_INCIDENT_ACTOR_IDENTITY_FAILURE_MARKER = "<!-- vtdd:incident=actor_identity_failure -->";
 const ROLE_GITHUB_APP_ENV = {
   codex_fallback_reviewer: {
@@ -119,7 +120,13 @@ async function runVpsRunnerOnce({
       };
     }
 
-    return executeVpsRunnerExecution({ githubFetch, token, workRoot, execution });
+    return executeVpsRunnerExecution({
+      githubFetch,
+      token,
+      workRoot,
+      execution,
+      repositoryPolicies: policies
+    });
   }
 
   const reviewerFallbacks = [];
@@ -143,7 +150,13 @@ async function runVpsRunnerOnce({
   return executeVpsReviewerFallback({ token, reviewerFallback });
 }
 
-async function executeVpsRunnerExecution({ githubFetch, token, workRoot, execution }) {
+async function executeVpsRunnerExecution({
+  githubFetch,
+  token,
+  workRoot,
+  execution,
+  repositoryPolicies
+}) {
   let payload = { ...execution.payload };
   payload.lifecycle = normalizeVpsRunnerLifecycle({
     ...payload.lifecycle,
@@ -169,6 +182,16 @@ async function executeVpsRunnerExecution({ githubFetch, token, workRoot, executi
   });
 
   try {
+    if (isPostMergeVerificationGoal(payload.codexGoal)) {
+      return executeVpsPostMergeVerification({
+        githubFetch,
+        payload,
+        notification,
+        repositoryPolicies,
+        env
+      });
+    }
+
     await assertVpsRunnerNotCanceled({ githubFetch, payload, checkpoint: "before_clone", notification });
     const workspace = path.join(workRoot, safePathSegment(payload.repository), payload.executionId);
     await fs.mkdir(path.dirname(workspace), { recursive: true });
@@ -415,6 +438,230 @@ async function executeVpsRunnerExecution({ githubFetch, token, workRoot, executi
   }
 }
 
+async function executeVpsPostMergeVerification({
+  githubFetch,
+  payload,
+  notification,
+  repositoryPolicies,
+  env
+}) {
+  const result = await collectVpsPostMergeVerification({
+    githubFetch,
+    payload,
+    repositoryPolicies,
+    env
+  });
+  const ok = result.ok === true;
+  await postVpsRunnerEvent({
+    githubFetch,
+    payload,
+    notification,
+    event: {
+      status: ok ? "completed" : "blocked",
+      lastEvent: ok ? "post_merge_verification_completed" : "post_merge_verification_blocked",
+      finalEvent: ok ? "post_merge_verification_completed" : undefined,
+      currentStep: "post_merge_verification",
+      postMergeVerification: result,
+      blocker: ok
+        ? undefined
+        : {
+            error: "post_merge_verification_failed",
+            reason: result.reason,
+            actionRequired: result.actionRequired
+          }
+    }
+  });
+  return {
+    ok,
+    message: ok
+      ? `Post-merge verification completed for ${payload.repository}#${result.pullRequest.number}.`
+      : result.reason
+  };
+}
+
+async function collectVpsPostMergeVerification({ githubFetch, payload, repositoryPolicies, env }) {
+  const target = normalizeRevisionTarget(payload.revisionTarget);
+  const pullNumber = normalizePositiveInteger(target.number);
+  const pull = pullNumber
+    ? await githubFetch(`/repos/${payload.repository}/pulls/${pullNumber}`)
+    : null;
+  const prTruth = buildPostMergePullTruth({ pull, target });
+  const repoRoot = normalizeText(process.env.VTDD_VPS_RUNNER_REPO_ROOT) || REPOSITORY_ROOT;
+  const baseRef = normalizeText(payload.baseRef) || normalizeText(prTruth.baseRef) || "main";
+  const [mainSync, runnerStatus, pendingSnapshot] = await Promise.all([
+    collectVpsMainSyncStatus({
+      repoRoot,
+      baseRef,
+      mergeCommitSha: prTruth.mergeCommitSha,
+      env
+    }),
+    collectVpsRunnerSystemdStatus({ env: process.env }),
+    collectVpsRunnerPendingSnapshot({ githubFetch, repositoryPolicies })
+  ]);
+  const failedChecks = [];
+  if (!prTruth.merged) {
+    failedChecks.push("target PR is not merged");
+  }
+  if (!mainSync.ok) {
+    failedChecks.push("VPS main sync failed");
+  } else if (!mainSync.inSyncWithOrigin) {
+    failedChecks.push("VPS main is not in sync with origin");
+  } else if (prTruth.mergeCommitSha && !mainSync.mergeCommitReachable) {
+    failedChecks.push("merge commit is not reachable from VPS main");
+  }
+  if (!runnerStatus.timerActive) {
+    failedChecks.push("VPS runner timer is not active");
+  }
+  if (pendingSnapshot.pendingExecutionCount > 0 || pendingSnapshot.pendingReviewerFallbackCount > 0) {
+    failedChecks.push("VPS runner has pending work");
+  }
+
+  return {
+    ok: failedChecks.length === 0,
+    reason:
+      failedChecks.length > 0
+        ? `Post-merge verification needs attention: ${failedChecks.join("; ")}`
+        : "Post-merge verification passed.",
+    actionRequired:
+      failedChecks.length > 0
+        ? "Butler/owner should inspect the failed checks before starting the next bounded task."
+        : null,
+    repository: payload.repository,
+    issueNumber: payload.issueNumber,
+    branch: payload.branch,
+    baseRef,
+    pullRequest: prTruth,
+    vpsMain: mainSync,
+    runner: runnerStatus,
+    pending: pendingSnapshot,
+    checkedAt: new Date().toISOString()
+  };
+}
+
+function buildPostMergePullTruth({ pull, target }) {
+  const normalizedPull = pull && typeof pull === "object" ? pull : {};
+  return {
+    number: normalizePositiveInteger(normalizedPull.number ?? target.number),
+    url: normalizeText(normalizedPull.html_url ?? normalizedPull.url ?? target.url) || null,
+    state: normalizeText(normalizedPull.state || target.state) || null,
+    merged: normalizedPull.merged === true || target.merged === true,
+    mergedAt:
+      normalizeIsoTimestamp(normalizedPull.merged_at) ||
+      normalizeIsoTimestamp(target.mergedAt) ||
+      null,
+    mergeCommitSha:
+      normalizeText(normalizedPull.merge_commit_sha) || normalizeText(target.mergeCommitSha) || null,
+    headRef: normalizeText(normalizedPull.head?.ref || target.headRef) || null,
+    headSha: normalizeText(normalizedPull.head?.sha || target.headSha) || null,
+    baseRef: normalizeText(normalizedPull.base?.ref || target.baseRef) || null
+  };
+}
+
+async function collectVpsMainSyncStatus({ repoRoot, baseRef, mergeCommitSha, env }) {
+  const result = {
+    ok: false,
+    repoRoot,
+    baseRef,
+    headSha: null,
+    originHeadSha: null,
+    mergeCommitSha: normalizeText(mergeCommitSha) || null,
+    mergeCommitReachable: false,
+    inSyncWithOrigin: false,
+    error: null
+  };
+  try {
+    await runCommand("git", ["fetch", "origin", baseRef], { cwd: repoRoot, env });
+    await runCommand("git", ["checkout", baseRef], { cwd: repoRoot, env });
+    await runCommand("git", ["pull", "--ff-only", "origin", baseRef], { cwd: repoRoot, env });
+    const head = await runCommand("git", ["rev-parse", "HEAD"], { cwd: repoRoot, env });
+    const originHead = await runCommand("git", ["rev-parse", `origin/${baseRef}`], { cwd: repoRoot, env });
+    result.headSha = normalizeText(head.stdout) || null;
+    result.originHeadSha = normalizeText(originHead.stdout) || null;
+    result.inSyncWithOrigin = Boolean(result.headSha && result.headSha === result.originHeadSha);
+    if (result.mergeCommitSha) {
+      const reachable = await runCommand(
+        "git",
+        ["merge-base", "--is-ancestor", result.mergeCommitSha, "HEAD"],
+        { cwd: repoRoot, env }
+      ).then(
+        () => true,
+        () => false
+      );
+      result.mergeCommitReachable = reachable;
+    } else {
+      result.mergeCommitReachable = null;
+    }
+    result.ok = true;
+  } catch (error) {
+    result.error = summarizeDiagnosticText(error?.stderr || error?.message);
+  }
+  return result;
+}
+
+async function collectVpsRunnerSystemdStatus({ env }) {
+  const timerUnit = normalizeText(env.VTDD_VPS_RUNNER_TIMER_UNIT) || "vtdd-vps-runner.timer";
+  const serviceUnit = normalizeText(env.VTDD_VPS_RUNNER_SERVICE_UNIT) || "vtdd-vps-runner.service";
+  const [timer, service] = await Promise.all([
+    runCommandSafe("systemctl", ["--user", "is-active", timerUnit], { env }),
+    runCommandSafe("systemctl", ["--user", "is-active", serviceUnit], { env })
+  ]);
+  return {
+    timerUnit,
+    timerActive: normalizeText(timer.stdout) === "active",
+    timerStatus: normalizeText(timer.stdout) || (timer.exitCode === 0 ? "active" : "unknown"),
+    timerExitCode: timer.exitCode,
+    serviceUnit,
+    serviceActive: normalizeText(service.stdout) === "active",
+    serviceStatus: normalizeText(service.stdout) || (service.exitCode === 0 ? "active" : "unknown"),
+    serviceExitCode: service.exitCode,
+    checkedAt: new Date().toISOString()
+  };
+}
+
+async function collectVpsRunnerPendingSnapshot({ githubFetch, repositoryPolicies }) {
+  const policies = normalizeRepositoryPolicies({ repositoryPolicies });
+  const executions = [];
+  const reviewerFallbacks = [];
+  for (const repository of policies.map((policy) => policy.repository)) {
+    const issueComments = await readRecentIssueComments({ githubFetch, repository });
+    executions.push(...selectPendingVpsRunnerExecutions({ comments: issueComments, repositoryPolicies: policies }));
+    const pullComments = await readRecentPullRequestComments({ githubFetch, repository });
+    reviewerFallbacks.push(...selectPendingVpsReviewerFallbacks({ comments: pullComments, repositoryPolicies: policies }));
+  }
+  return {
+    pendingExecutionCount: executions.length,
+    pendingReviewerFallbackCount: reviewerFallbacks.length,
+    pendingExecutions: executions.map((item) => ({
+      executionId: item.payload.executionId,
+      repository: item.payload.repository,
+      issueNumber: item.payload.issueNumber,
+      codexGoal: item.payload.codexGoal
+    })),
+    pendingReviewerFallbacks: reviewerFallbacks.map((item) => ({
+      repository: item.repository,
+      pullRequestNumber: item.pullRequestNumber,
+      fallbackCommentId: item.commentId
+    }))
+  };
+}
+
+async function runCommandSafe(command, args, options = {}) {
+  try {
+    const result = await runCommand(command, args, options);
+    return {
+      exitCode: 0,
+      stdout: result.stdout,
+      stderr: result.stderr
+    };
+  } catch (error) {
+    return {
+      exitCode: Number.isInteger(error?.exitCode) ? error.exitCode : 1,
+      stdout: error?.stdout || "",
+      stderr: error?.stderr || error?.message || ""
+    };
+  }
+}
+
 function selectPendingVpsRunnerExecutions({ comments, allowedRepositories, repositoryPolicies }) {
   const policies = normalizeRepositoryPolicies({ allowedRepositories, repositoryPolicies });
   const queues = new Map();
@@ -461,6 +708,9 @@ function selectPendingVpsRunnerExecutions({ comments, allowedRepositories, repos
 }
 
 function buildVpsRunnerCompletionFinalEvent({ payload } = {}) {
+  if (isPostMergeVerificationGoal(payload?.codexGoal)) {
+    return "post_merge_verification_completed";
+  }
   return isPrRevisionGoal(payload?.codexGoal) ? "pr_updated" : "pr_created";
 }
 
@@ -471,7 +721,11 @@ function normalizeRevisionTarget(value = {}) {
     url: normalizeText(input.url ?? input.prUrl),
     state: normalizeText(input.state ?? input.prState).toLowerCase(),
     headRef: normalizeText(input.headRef ?? input.head?.ref),
-    headSha: normalizeText(input.headSha ?? input.head?.sha)
+    headSha: normalizeText(input.headSha ?? input.head?.sha),
+    baseRef: normalizeText(input.baseRef ?? input.base?.ref),
+    merged: typeof input.merged === "boolean" ? input.merged : null,
+    mergedAt: normalizeIsoTimestamp(input.mergedAt ?? input.merged_at),
+    mergeCommitSha: normalizeText(input.mergeCommitSha ?? input.merge_commit_sha)
   };
 }
 
@@ -582,6 +836,9 @@ function validateVpsRunnerPayloadPolicy(payload, policies) {
   if (!policy.baseRefs.includes(payload.baseRef || "main")) {
     return { ok: false, reason: "base_ref_not_allowlisted" };
   }
+  if (isPostMergeVerificationGoal(payload.codexGoal)) {
+    return { ok: true, policy };
+  }
   if (!policy.branchPrefixes.some((prefix) => payload.branch.startsWith(prefix))) {
     return { ok: false, reason: "branch_prefix_not_allowlisted" };
   }
@@ -641,12 +898,33 @@ function parseVpsRunnerQueueComment(body) {
   if (isPrRevisionGoal(normalized.codexGoal)) {
     issues.push(...validateQueuedRevisionTarget(normalized));
   }
+  if (isPostMergeVerificationGoal(normalized.codexGoal)) {
+    issues.push(...validateQueuedPostMergeVerificationTarget(normalized));
+  }
 
   if (issues.length > 0) {
     return { ok: false, reason: "vps_runner_payload_invalid", executionId: marker[1], issues };
   }
 
   return { ok: true, executionId: normalized.executionId, payload: normalized };
+}
+
+function validateQueuedPostMergeVerificationTarget(payload) {
+  const issues = [];
+  const target = payload.revisionTarget || {};
+  if (!target.number) {
+    issues.push("post_merge_verify requires target PR number");
+  }
+  if (target.state && !["closed", "merged"].includes(target.state)) {
+    issues.push("post_merge_verify target PR must be closed or merged");
+  }
+  if (target.merged === false) {
+    issues.push("post_merge_verify target PR must be merged");
+  }
+  if (payload.branch !== (payload.baseRef || "main")) {
+    issues.push("post_merge_verify branch must match baseRef");
+  }
+  return issues;
 }
 
 function validateQueuedRevisionTarget(payload) {
@@ -936,6 +1214,10 @@ function formatVpsRunnerPreflightReceipt(preflight) {
 
 function isPrRevisionGoal(goal) {
   return ["revise_pr", "respond_to_review"].includes(normalizeText(goal));
+}
+
+function isPostMergeVerificationGoal(goal) {
+  return normalizeText(goal) === "post_merge_verify";
 }
 
 function buildVpsRunnerCommitMessage(payload) {
@@ -2221,6 +2503,7 @@ export {
   buildCodexExecArgs,
   buildVpsRunnerPreflightReceipt,
   buildGuardedPullRequestBody,
+  buildPostMergePullTruth,
   buildPullRequestBody,
   buildVpsRunnerEventComment,
   buildVpsReviewerFallbackActorIdentityIncident,

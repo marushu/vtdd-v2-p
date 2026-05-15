@@ -270,7 +270,9 @@ test("remote Codex execution request rejects wait-only continuity goal before wo
   });
 
   assert.equal(result.ok, false);
-  assert.deepEqual(result.issues, ["codexGoal must be open_pr, revise_pr, or respond_to_review"]);
+  assert.deepEqual(result.issues, [
+    "codexGoal must be open_pr, revise_pr, respond_to_review, or post_merge_verify"
+  ]);
 });
 
 test("remote Codex execution request rejects non-string handoff approval refs", () => {
@@ -776,6 +778,66 @@ test("remote Codex vps_runner dispatch preserves bounded PR revision goal", asyn
   assert.equal(body.includes('"branch": "codex/add-pr-ready-authority"'), true);
   assert.equal(body.includes('"number": 204'), true);
   assert.equal(body.includes('"headSha": "sha-204"'), true);
+});
+
+test("remote Codex vps_runner dispatch preserves bounded post-merge verification goal", async () => {
+  const calls = [];
+  const dispatched = await dispatchRemoteCodexExecution({
+    payload: {
+      actorRole: ActorRole.BUTLER,
+      executorTransport: RemoteCodexExecutorTransport.VPS_RUNNER,
+      issueContext: { issueNumber: 397 },
+      continuationContext: {
+        codexGoal: RemoteCodexDispatchGoal.POST_MERGE_VERIFY
+      },
+      policyInput: {
+        approvalPhrase: "GO",
+        targetConfirmed: true,
+        approvalScopeMatched: true,
+        runtimeTruth: {
+          runtimeState: {
+            pullRequest: {
+              number: 396,
+              state: "closed",
+              merged: true,
+              mergedAt: "2026-05-15T13:43:25Z",
+              mergeCommitSha: "merge-sha-396",
+              baseRef: "main",
+              headRef: "codex/issue-393",
+              headSha: "head-sha-393"
+            }
+          }
+        }
+      }
+    },
+    gatewayResult: {
+      repository: "sample-org/vtdd-v2"
+    },
+    env: {
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_dispatch_token",
+      GITHUB_API_FETCH: async (url, init) => {
+        calls.push({ url, init });
+        return new Response(
+          JSON.stringify({
+            id: 39701,
+            html_url: "https://github.com/sample-org/vtdd-v2/issues/397#issuecomment-39701"
+          }),
+          { status: 201, headers: { "content-type": "application/json" } }
+        );
+      }
+    }
+  });
+
+  assert.equal(dispatched.ok, true);
+  assert.equal(dispatched.execution.transport, RemoteCodexExecutorTransport.VPS_RUNNER);
+  assert.equal(dispatched.execution.branch, "main");
+  assert.equal(dispatched.execution.revisionTarget.number, 396);
+  const body = JSON.parse(calls[0].init.body).body;
+  assert.equal(body.includes('"codexGoal": "post_merge_verify"'), true);
+  assert.equal(body.includes('"branch": "main"'), true);
+  assert.equal(body.includes('"number": 396'), true);
+  assert.equal(body.includes('"mergeCommitSha": "merge-sha-396"'), true);
+  assert.equal(body.includes("verify post-merge runtime truth"), true);
 });
 
 test("remote Codex vps_runner progress reads queue comment and target PR truth", async () => {
