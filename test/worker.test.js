@@ -696,6 +696,13 @@ test("worker setup latest page renders copy-ready schema and short-min bundle fo
   assert.equal(html.includes("Rollback は setup/known-good で copy-ready になります。latest は現在の候補確認用で、known-good としては未確認です。"), true);
   assert.equal(html.includes("Action Schema length"), true);
   assert.equal(html.includes("instructionsShortMinLength:"), true);
+  assert.equal(html.includes("Surface update checklist"), true);
+  assert.equal(html.includes("Latest / known-good comparison"), true);
+  assert.equal(html.includes("known_good_unavailable"), true);
+  assert.equal(html.includes("Cloudflare deploy"), true);
+  assert.equal(html.includes("not_required"), true);
+  assert.equal(html.includes("Custom GPT editor の現在値は runtime から読めない"), true);
+  assert.equal(html.includes("unverified_editor_state"), true);
   assert.equal(html.includes("No secret values, tokens, or approval grants are displayed."), true);
   assert.equal(html.includes("ghs_setup_read"), false);
 });
@@ -3591,6 +3598,16 @@ test("worker returns Butler self-parity summary", async () => {
     `[Open deploy operator](${body.selfParity.deployOperatorUrl})`
   );
   assert.equal(body.selfParity.deployRecovery, null);
+  assert.equal(body.selfParity.surfaceUpdateChecklist.cloudflareDeploy.status, "not_required");
+  assert.equal(body.selfParity.knownGoodComparison.status, "known_good_unavailable");
+  assert.equal(
+    body.selfParity.surfaceUpdateChecklist.customGptActionSchema.status,
+    "unverified_editor_state"
+  );
+  assert.equal(
+    body.selfParity.surfaceUpdateChecklist.customGptInstructions.sourceSha,
+    "instructions-sha"
+  );
 });
 
 test("worker returns deploy recovery operator url in self-parity when runtime is stale", async () => {
@@ -3661,6 +3678,11 @@ test("worker returns deploy recovery operator url in self-parity when runtime is
   assert.equal(
     body.selfParity.deployRecovery.operatorMarkdownLink,
     `[Open deploy operator](${body.selfParity.deployRecovery.operatorUrl})`
+  );
+  assert.equal(body.selfParity.surfaceUpdateChecklist.cloudflareDeploy.status, "required");
+  assert.equal(
+    body.selfParity.surfaceUpdateChecklist.cloudflareDeploy.operatorUrl,
+    body.selfParity.deployRecovery.operatorUrl
   );
 });
 

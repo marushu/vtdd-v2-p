@@ -358,9 +358,120 @@ test("buildCustomGptRecoveryBundle expands Worker URL and reports short-min leng
   assert.equal(result.recovery.rollback.knownGoodCommitSha, null);
   assert.equal(result.recovery.rollback.knownGoodCommitSource, "not_checked_on_latest");
   assert.equal(result.recovery.runtime.deployState, "in_sync");
+  assert.deepEqual(result.recovery.runtime.surfaceUpdateChecklist.cloudflareDeploy, {
+    status: "not_required",
+    reason: "Runtime manifest matches canonical setup routes, operationIds, and instruction tokens.",
+    operatorUrl: null,
+    operatorMarkdownLink: null
+  });
+  assert.equal(
+    result.recovery.runtime.surfaceUpdateChecklist.customGptActionSchema.status,
+    "unverified_editor_state"
+  );
+  assert.equal(
+    result.recovery.runtime.surfaceUpdateChecklist.customGptActionSchema.sourceSha,
+    "openapi-sha"
+  );
+  assert.equal(
+    result.recovery.runtime.surfaceUpdateChecklist.customGptInstructions.status,
+    "unverified_editor_state"
+  );
+  assert.equal(
+    result.recovery.runtime.surfaceUpdateChecklist.customGptInstructions.sourceSha,
+    "instructions-sha"
+  );
+  assert.equal(result.recovery.runtime.knownGoodComparison.status, "known_good_unavailable");
+  assert.equal(result.recovery.runtime.knownGoodComparison.updateJudgment, "unverified");
   assert.deepEqual(result.recovery.safety, {
     displaysSecrets: false,
     displaysTokens: false,
     displaysApprovalGrant: false
   });
+});
+
+test("buildCustomGptRecoveryBundle reports latest differs from configured known-good", async () => {
+  const latestOpenApi = [
+    "openapi: 3.1.1",
+    "servers:",
+    "  - url: https://your-runtime-host.example.workers.dev",
+    "paths:",
+    "  /health:",
+    "    get:",
+    "      operationId: getHealth",
+    "  /v2/retrieve/self-parity:",
+    "    get:",
+    "      operationId: vtddRetrieveSelfParity"
+  ].join("\n");
+  const latestInstructions = [
+    "vtddRetrieveSelfParity",
+    "Action Schema update required",
+    "Instructions update required",
+    "Cloudflare deploy update required"
+  ].join("\n");
+  const knownGoodOpenApi = latestOpenApi.replace("/v2/retrieve/self-parity", "/v2/retrieve/setup-artifact");
+  const knownGoodInstructions = latestInstructions.replace("vtddRetrieveSelfParity", "vtddRetrieveSetupArtifact");
+  const knownGoodSha = "c".repeat(40);
+
+  const result = await buildCustomGptRecoveryBundle({
+    repository: "sample-org/vtdd-v2-p",
+    ref: "main",
+    runtimeOrigin: "https://sample-user-vtdd.example.workers.dev",
+    env: {
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_setup_read",
+      VTDD_KNOWN_GOOD_COMMIT_SHA: knownGoodSha,
+      GITHUB_API_FETCH: async (url) => {
+        const parsed = new URL(url);
+        if (parsed.pathname.endsWith("/commits/main")) {
+          return new Response(JSON.stringify({ sha: "d".repeat(40) }), {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          });
+        }
+        const ref = parsed.searchParams.get("ref");
+        const isKnownGood = ref === knownGoodSha;
+        const isShortMin = parsed.pathname.endsWith(
+          "/docs/setup/custom-gpt-instructions-short-min.md"
+        );
+        const isInstructions = parsed.pathname.endsWith("/docs/setup/custom-gpt-instructions.md");
+        const content = isKnownGood
+          ? isInstructions || isShortMin
+            ? knownGoodInstructions
+            : knownGoodOpenApi
+          : isInstructions || isShortMin
+            ? latestInstructions
+            : latestOpenApi;
+        return new Response(
+          JSON.stringify({
+            sha: isKnownGood
+              ? isInstructions || isShortMin
+                ? "known-good-instructions-sha"
+                : "known-good-openapi-sha"
+              : isInstructions || isShortMin
+                ? "latest-instructions-sha"
+                : "latest-openapi-sha",
+            encoding: "base64",
+            content: encodeContent(content)
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        );
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.recovery.runtime.knownGoodComparison.status, "different");
+  assert.equal(
+    result.recovery.runtime.knownGoodComparison.updateJudgment,
+    "update_required_if_editor_is_known_good"
+  );
+  assert.equal(result.recovery.runtime.knownGoodComparison.actionSchema.status, "different");
+  assert.equal(result.recovery.runtime.knownGoodComparison.instructions.status, "different");
+  assert.equal(
+    result.recovery.runtime.surfaceUpdateChecklist.customGptActionSchema.status,
+    "update_required_if_editor_is_known_good"
+  );
+  assert.equal(
+    result.recovery.runtime.surfaceUpdateChecklist.customGptInstructions.status,
+    "update_required_if_editor_is_known_good"
+  );
 });
