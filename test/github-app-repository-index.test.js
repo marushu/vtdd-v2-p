@@ -353,6 +353,60 @@ test("github app index normalizes escaped private key newlines before jwt provid
   assert.equal(seenKey, "normalized");
 });
 
+test("github app index can mint installation token from PKCS#1 RSA private key", async () => {
+  const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+  const pkcs1Pem = privateKey.export({ type: "pkcs1", format: "pem" });
+  const calls = [];
+
+  const result = await resolveGatewayAliasRegistryFromGitHubApp({
+    policyInput: { aliasRegistry: [] },
+    env: {
+      GITHUB_APP_ID: "24680",
+      GITHUB_APP_INSTALLATION_ID: "13579",
+      GITHUB_APP_PRIVATE_KEY: pkcs1Pem,
+      GITHUB_API_FETCH: async (url, init = {}) => {
+        calls.push({ url, init });
+        if (String(url).includes("/app/installations/13579/access_tokens")) {
+          const authHeader = String(init?.headers?.authorization ?? "");
+          assert.equal(authHeader.startsWith("Bearer "), true);
+          return new Response(
+            JSON.stringify({
+              token: "ghs_minted_installation_token",
+              expires_at: "2030-01-01T00:00:00Z"
+            }),
+            {
+              status: 201,
+              headers: { "content-type": "application/json" }
+            }
+          );
+        }
+        return new Response(
+          JSON.stringify({
+            total_count: 1,
+            repositories: [
+              {
+                full_name: "sample-org/vtdd-v2",
+                name: "vtdd-v2",
+                private: true
+              }
+            ]
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          }
+        );
+      }
+    }
+  });
+
+  assert.equal(result.source, "github_app_live");
+  assert.equal(result.warnings.length, 0);
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].url.includes("/app/installations/13579/access_tokens"), true);
+  assert.equal(calls[1].url.includes("/installation/repositories"), true);
+});
+
 test("github app index can enforce minted-token mode and block static token fallback", async () => {
   const result = await resolveGatewayAliasRegistryFromGitHubApp({
     policyInput: {
