@@ -653,6 +653,12 @@ test("worker setup latest page renders copy-ready schema and short-min bundle fo
       GITHUB_API_FETCH: async (url) => {
         const parsed = new URL(url);
         assert.equal(parsed.pathname.startsWith("/repos/marushu/vtdd-v2-p/"), true);
+        if (parsed.pathname.endsWith("/docs/setup/known-good.json")) {
+          return new Response(JSON.stringify({ message: "Not Found" }), {
+            status: 404,
+            headers: { "content-type": "application/json" }
+          });
+        }
         if (parsed.pathname.endsWith("/commits/main")) {
           return new Response(JSON.stringify({ sha: "b".repeat(40) }), {
             status: 200,
@@ -779,8 +785,13 @@ test("worker setup known-good page renders rollback copy-ready bundle from known
 test("worker setup known-good page does not silently treat main as known-good", async () => {
   const response = await worker.fetch(new Request("https://example.com/setup/known-good"), {
     GITHUB_APP_INSTALLATION_TOKEN: "ghs_setup_read",
-    GITHUB_API_FETCH: async () => {
-      throw new Error("known-good must not resolve main as fallback");
+    GITHUB_API_FETCH: async (url) => {
+      const parsed = new URL(url);
+      assert.equal(parsed.pathname.endsWith("/docs/setup/known-good.json"), true);
+      return new Response(JSON.stringify({ message: "Not Found" }), {
+        status: 404,
+        headers: { "content-type": "application/json" }
+      });
     }
   });
 
@@ -788,7 +799,7 @@ test("worker setup known-good page does not silently treat main as known-good", 
   const html = await response.text();
   assert.equal(html.includes("Known-good bundle is not configured yet."), true);
   assert.equal(html.includes("このページ自体は復旧導線として開けています。"), true);
-  assert.equal(html.includes("known-good setup requires VTDD_KNOWN_GOOD_COMMIT_SHA"), true);
+  assert.equal(html.includes("known-good setup requires docs/setup/known-good.json"), true);
   assert.equal(html.includes("Open setup/latest instead"), true);
   assert.equal(html.includes("latestFallbackUrl: /setup/latest"), true);
   assert.equal(html.includes("Do not treat main/latest as known-good automatically."), true);
@@ -809,7 +820,7 @@ test("worker setup known-good page rejects malformed configured known-good refs"
   const html = await response.text();
   assert.equal(html.includes("Known-good bundle is not configured yet."), true);
   assert.equal(html.includes("Open setup/latest instead"), true);
-  assert.equal(html.includes("known-good setup requires VTDD_KNOWN_GOOD_COMMIT_SHA"), true);
+  assert.equal(html.includes("VTDD_KNOWN_GOOD_COMMIT_SHA must be a 40-character commit SHA"), true);
   assert.equal(html.includes("Copy Rollback Bundle"), false);
 });
 
@@ -3540,6 +3551,12 @@ test("worker returns Butler self-parity summary", async () => {
       GITHUB_APP_INSTALLATION_TOKEN: "ghs_setup_read",
       GITHUB_API_FETCH: async (url) => {
         const parsed = new URL(url);
+        if (parsed.pathname.endsWith("/docs/setup/known-good.json")) {
+          return new Response(JSON.stringify({ message: "Not Found" }), {
+            status: 404,
+            headers: { "content-type": "application/json" }
+          });
+        }
         const isInstructions = parsed.pathname.endsWith("/docs/setup/custom-gpt-instructions.md");
         return new Response(
           JSON.stringify({
@@ -3623,6 +3640,12 @@ test("worker returns deploy recovery operator url in self-parity when runtime is
       GITHUB_APP_INSTALLATION_TOKEN: "ghs_setup_read",
       GITHUB_API_FETCH: async (url) => {
         const parsed = new URL(url);
+        if (parsed.pathname.endsWith("/docs/setup/known-good.json")) {
+          return new Response(JSON.stringify({ message: "Not Found" }), {
+            status: 404,
+            headers: { "content-type": "application/json" }
+          });
+        }
         const isInstructions = parsed.pathname.endsWith("/docs/setup/custom-gpt-instructions.md");
         return new Response(
           JSON.stringify({

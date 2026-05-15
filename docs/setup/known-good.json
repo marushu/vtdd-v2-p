@@ -1,0 +1,6 @@
+{
+  "commitSha": "9a9d23e51fded7bd8dab427a73bbf97f3d7bbe0f",
+  "verifiedAt": "2026-05-15T02:10:23Z",
+  "source": "deploy-production",
+  "notes": "PR #378 merge commit. Deploy-production run 25896437582 completed successfully and /setup/latest exposed surface update checklist plus known-good comparison."
+}
