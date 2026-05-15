@@ -8,6 +8,7 @@ import { renderPasskeyOperatorPage } from "../src/core/index.js";
 const execFileAsync = promisify(execFile);
 const SCRIPT_DIR = path.dirname(new URL(import.meta.url).pathname);
 const SYNC_SCRIPT_PATH = path.join(SCRIPT_DIR, "sync-github-app-actions-secrets.mjs");
+const GATEWAY_BEARER_VAULT_SCRIPT_PATH = path.join(SCRIPT_DIR, "bootstrap-gateway-bearer-vault.mjs");
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
@@ -23,19 +24,12 @@ async function main() {
     privateKeyPath: args.privateKeyPath,
     installationId: args.installationId
   });
-  if (!sourceResult.ok) {
-    throw new Error(sourceResult.issues.join(", "));
-  }
+  const source = sourceResult.ok ? sourceResult.source : {};
   const bearerToken = normalizeText(
     args.gatewayBearerToken ||
       process.env.VTDD_GATEWAY_BEARER_TOKEN ||
-      sourceResult.source.gatewayBearerToken
+      source.gatewayBearerToken
   );
-  if (!bearerToken) {
-    throw new Error(
-      "gateway bearer token is required via --gateway-bearer-token, VTDD_GATEWAY_BEARER_TOKEN, or ~/.vtdd/credentials/manifest.json"
-    );
-  }
 
   const bind = normalizeText(args.bind || "127.0.0.1");
   const port = Number(args.port || 8789);
@@ -49,11 +43,13 @@ async function main() {
     repo: normalizeText(args.repo || "marushu/vtdd-v2-p"),
     issueNumber: normalizeText(args.issueNumber || "15"),
     highRiskKind: normalizeText(args.highRiskKind || "github_app_secret_sync"),
-    manifestPath: normalizeText(args.manifestPath || sourceResult.source.manifestPath),
-    appRole: normalizeText(args.appRole || sourceResult.source.role || "legacy"),
-    appId: normalizeText(args.appId || sourceResult.source.appId),
-    privateKeyPath: normalizeText(args.privateKeyPath || sourceResult.source.privateKeyPath),
-    installationId: normalizeText(args.installationId || sourceResult.source.installationId)
+    sourceOk: sourceResult.ok === true,
+    sourceIssues: sourceResult.issues ?? [],
+    manifestPath: normalizeText(args.manifestPath || source.manifestPath),
+    appRole: normalizeText(args.appRole || source.role || "legacy"),
+    appId: normalizeText(args.appId || source.appId),
+    privateKeyPath: normalizeText(args.privateKeyPath || source.privateKeyPath),
+    installationId: normalizeText(args.installationId || source.installationId)
   };
 
   const server = http.createServer((request, response) =>
@@ -79,7 +75,11 @@ async function handleRequest({ request, response, state }) {
   const url = new URL(request.url, `http://${request.headers.host || "localhost"}`);
   const corsHeaders = buildCorsHeaders(request.headers.origin);
 
-  if (request.method === "OPTIONS" && url.pathname === "/api/github-app-secret-sync/execute") {
+  if (
+    request.method === "OPTIONS" &&
+    (url.pathname === "/api/github-app-secret-sync/execute" ||
+      url.pathname === "/api/gateway-bearer-vault/bootstrap")
+  ) {
     response.writeHead(204, corsHeaders);
     response.end();
     return;
@@ -121,6 +121,15 @@ async function handleRequest({ request, response, state }) {
         ok: false,
         error: "github_app_role_not_served",
         reason: `desktop helper is serving ${state.appRole}, not ${appRole}`
+      }, corsHeaders);
+      return;
+    }
+    if (!state.sourceOk) {
+      writeJson(response, 503, {
+        ok: false,
+        error: "github_app_secret_source_unavailable",
+        reason: "GitHub App secret source is not configured for this helper",
+        issues: state.sourceIssues
       }, corsHeaders);
       return;
     }
@@ -177,7 +186,89 @@ async function handleRequest({ request, response, state }) {
     return;
   }
 
+  if (request.method === "POST" && url.pathname === "/api/gateway-bearer-vault/bootstrap") {
+    const body = await readJson(request);
+    const approvalGrantId = normalizeText(body.approvalGrantId);
+    const gatewayBearerToken = normalizeText(body.gatewayBearerToken);
+    if (!approvalGrantId) {
+      writeJson(response, 422, {
+        ok: false,
+        error: "approval_grant_id_required",
+        reason: "approvalGrantId is required"
+      }, corsHeaders);
+      return;
+    }
+    if (!gatewayBearerToken) {
+      writeJson(response, 422, {
+        ok: false,
+        error: "gateway_bearer_token_required",
+        reason: "gatewayBearerToken is required"
+      }, corsHeaders);
+      return;
+    }
+    const approvalVerification = await verifyGatewayBearerVaultApproval({
+      state,
+      approvalGrantId,
+      repositoryInput: normalizeText(body.repositoryInput || state.repo)
+    });
+    if (!approvalVerification.ok) {
+      writeJson(response, 403, {
+        ok: false,
+        error: "gateway_bearer_vault_approval_invalid",
+        reason: approvalVerification.reason,
+        diagnostics: approvalVerification.diagnostics
+      }, corsHeaders);
+      return;
+    }
+
+    const args = [
+      GATEWAY_BEARER_VAULT_SCRIPT_PATH,
+      "--token-stdin",
+      "--pretty"
+    ];
+    if (state.manifestPath) {
+      args.push("--manifest-path", state.manifestPath);
+    }
+
+    const result = await execFileWithInput(process.execPath, args, `${gatewayBearerToken}\n`, {
+      cwd: process.cwd(),
+      maxBuffer: 10 * 1024 * 1024
+    }).catch((error) => ({
+      ok: false,
+      stdout: error.stdout || "",
+      stderr: error.stderr || "",
+      reason: error instanceof Error ? error.message : String(error)
+    }));
+
+    if (result.ok === false) {
+      writeJson(response, 500, {
+        ok: false,
+        error: "gateway_bearer_vault_bootstrap_failed",
+        reason: redactSecretText(result.reason),
+        stdout: redactSecretText(normalizeText(result.stdout)),
+        stderr: redactSecretText(normalizeText(result.stderr))
+      }, corsHeaders);
+      return;
+    }
+
+    writeJson(response, 200, {
+      ok: true,
+      approvalGrantVerification: approvalVerification.status,
+      stdout: redactSecretText(normalizeText(result.stdout)),
+      stderr: redactSecretText(normalizeText(result.stderr))
+    }, corsHeaders);
+    return;
+  }
+
   if (request.method === "GET" && url.pathname === "/api/retrieve/approval-grant") {
+    if (!state.bearerToken) {
+      writeJson(response, 503, {
+        ok: false,
+        error: "gateway_bearer_token_missing",
+        reason: "gateway bearer token is not configured in this helper"
+      }, corsHeaders);
+      return;
+    }
     const endpoint = new URL("/v2/retrieve/approval-grant", state.runtimeUrl);
     if (url.searchParams.has("approvalId")) {
       endpoint.searchParams.set("approvalId", url.searchParams.get("approvalId"));
@@ -277,12 +368,82 @@ function readBody(request) {
   });
 }
 
+function execFileWithInput(file, args, input, options = {}) {
+  return new Promise((resolve, reject) => {
+    const child = execFile(file, args, options, (error, stdout, stderr) => {
+      if (error) {
+        error.stdout = stdout;
+        error.stderr = stderr;
+        reject(error);
+        return;
+      }
+      resolve({ stdout, stderr });
+    });
+    child.stdin.end(input);
+  });
+}
+
 async function readJson(request) {
   const body = await readBody(request);
   if (body.length === 0) {
     return {};
   }
   return JSON.parse(body.toString("utf8"));
+}
+
+async function verifyGatewayBearerVaultApproval({ state, approvalGrantId, repositoryInput }) {
+  if (!state.bearerToken) {
+    return {
+      ok: true,
+      status: "not_checked_initial_bootstrap_gateway_bearer_missing"
+    };
+  }
+  const endpoint = new URL("/v2/retrieve/approval-grant", state.runtimeUrl);
+  endpoint.searchParams.set("approvalId", approvalGrantId);
+  const response = await fetch(endpoint, {
+    headers: {
+      authorization: `Bearer ${state.bearerToken}`
+    }
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok || body?.ok === false) {
+    return {
+      ok: false,
+      reason: "approvalGrant could not be retrieved from runtime",
+      diagnostics: {
+        status: response.status,
+        error: body?.error || null
+      }
+    };
+  }
+  const approvalGrant = body?.approvalGrant;
+  const scope = approvalGrant?.scope ?? {};
+  const expectedRepo = normalizeText(repositoryInput);
+  if (approvalGrant?.verified !== true) {
+    return { ok: false, reason: "approvalGrant is not verified" };
+  }
+  if (normalizeText(scope.repositoryInput) !== expectedRepo) {
+    return {
+      ok: false,
+      reason: "approvalGrant scope.repositoryInput does not match target repository"
+    };
+  }
+  if (normalizeText(scope.actionType) !== "destructive") {
+    return {
+      ok: false,
+      reason: "approvalGrant scope.actionType must be destructive"
+    };
+  }
+  if (normalizeText(scope.highRiskKind) !== "gateway_bearer_vault_bootstrap") {
+    return {
+      ok: false,
+      reason: "approvalGrant scope.highRiskKind must be gateway_bearer_vault_bootstrap"
+    };
+  }
+  return {
+    ok: true,
+    status: "verified_runtime_approval_grant"
+  };
 }
 
 function writeJson(response, status, body, extraHeaders = {}) {
@@ -305,6 +466,12 @@ function buildCorsHeaders(origin) {
 
 function normalizeText(value) {
   return String(value ?? "").trim();
+}
+
+function redactSecretText(value) {
+  return String(value ?? "")
+    .replace(/sk-[A-Za-z0-9_-]+/g, "[REDACTED_OPENAI_KEY]")
+    .replace(/(authorization|api[_-]?key|token|secret)(["'\s:=]+)([^"'\s<>&]+)/gi, "$1$2[REDACTED]");
 }
 
 if (isDirectRun()) {

@@ -145,6 +145,9 @@ This helper:
 - proxies the real `/v2/approval/passkey/*` runtime with machine auth
 - executes `scripts/sync-github-app-actions-secrets.mjs` only after a real
   `approvalGrantId` has been issued
+- executes `scripts/bootstrap-gateway-bearer-vault.mjs` through stdin when an
+  operator explicitly pastes `VTDD_GATEWAY_BEARER_TOKEN` into the gateway vault
+  section
 
 It is an explicit operator helper for bootstrap/update/repair, not a setup
 wizard, not a background sync path, and not a steady-state runtime dependency.
@@ -175,6 +178,13 @@ Current contract:
 - the Worker runtime does not read `~/.vtdd` directly
 - the desktop helper remains the only component that reads the local bootstrap
   vault and executes the GitHub Actions secret mutation path
+
+The same `syncApiBase` bridge can bootstrap the local gateway bearer vault from
+the Worker-hosted page. Use `actionType=destructive` and
+`highRiskKind=gateway_bearer_vault_bootstrap`, paste the memo-app copy of
+`VTDD_GATEWAY_BEARER_TOKEN` into `Gateway Bearer Vault`, and submit it through
+the helper. The token must not be pasted into Butler chat, GitHub comments, RAG
+memory, stdout, or stderr.
 
 ## Non-goals
 

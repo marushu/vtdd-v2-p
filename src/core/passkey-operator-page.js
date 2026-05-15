@@ -273,8 +273,21 @@ export function renderPasskeyOperatorPage(input = {}) {
           <pre id="openai-secret-sync-output"></pre>
         </section>
 
+        <section data-operator-section="gateway-bearer-vault"${hiddenAttribute(!sectionVisibility.gatewayBearerVault)}>
+          <h2>7. Gateway Bearer Vault</h2>
+          <p class="muted">メモアプリ等に保管している <code>VTDD_GATEWAY_BEARER_TOKEN</code> を、この端末の local helper 経由で Mac/VPS vault に保存します。値は Butler 会話、GitHub コメント、RAG、レスポンス本文に表示しません。</p>
+          <label for="gateway-bearer-token-input">VTDD_GATEWAY_BEARER_TOKEN</label>
+          <input id="gateway-bearer-token-input" type="password" autocomplete="off" placeholder="token..." />
+          <div class="row">
+            <button id="gateway-bearer-vault-button"${syncEnabled ? "" : " disabled"}>Save gateway bearer to vault</button>
+          </div>
+          <p class="muted"><code>actionType=destructive</code> / <code>highRiskKind=gateway_bearer_vault_bootstrap</code> の approvalGrantId が必要です。<code>syncApiBase</code> が未指定の場合、このページから local vault へは書き込めません。</p>
+          <p class="muted">初回 bootstrap では既存 bearer token がなく、helper が approvalGrant を runtime 検証できない場合があります。その場合はレスポンスに <code>not_checked_initial_bootstrap_gateway_bearer_missing</code> と表示します。Repository / Issue / High-risk Kind を確認してから実行してください。</p>
+          <pre id="gateway-bearer-vault-output"></pre>
+        </section>
+
         <section data-operator-section="vps-runner-admin"${hiddenAttribute(!sectionVisibility.vpsRunnerAdmin)}>
-          <h2>7. VPS Runner Admin</h2>
+          <h2>8. VPS Runner Admin</h2>
           <p class="muted">VPS runner の repo allowlist 追加、runner restart、smoke などの管理操作用 approval です。ここでは real passkey で短命の <code>approvalGrantId</code> だけを発行します。VPS 操作そのものは GitHub queue と runner event に残る bounded command として別途実行されます。</p>
           <p class="muted"><code>actionType=destructive</code> / <code>highRiskKind=vps_runner_admin</code> の approvalGrantId が必要です。文字列としての passkey は承認ではありません。</p>
         </section>
@@ -288,6 +301,7 @@ export function renderPasskeyOperatorPage(input = {}) {
       const deployOutput = document.getElementById("deploy-output");
       const mergeOutput = document.getElementById("merge-output");
       const openaiSecretSyncOutput = document.getElementById("openai-secret-sync-output");
+      const gatewayBearerVaultOutput = document.getElementById("gateway-bearer-vault-output");
       const copyApprovalGrantButton = document.getElementById("copy-approval-grant-button");
       const autoCopyApprovalGrantInput = document.getElementById("auto-copy-approval-grant-input");
       const deployRunLink = document.getElementById("deploy-run-link");
@@ -712,6 +726,42 @@ export function renderPasskeyOperatorPage(input = {}) {
         }
       });
 
+      document.getElementById("gateway-bearer-vault-button").addEventListener("click", async () => {
+        try {
+          const pastedApprovalGrantId = document.getElementById("approval-grant-id-input").value.trim();
+          const approvalGrantId = latestApprovalGrantId || pastedApprovalGrantId;
+          if (!approvalGrantId) {
+            throw new Error("approvalGrantId is required before gateway bearer vault bootstrap");
+          }
+          if (!"${syncApiBase}") {
+            throw new Error("desktop maintenance required: local gateway bearer vault bridge is not configured");
+          }
+          const gatewayBearerTokenInput = document.getElementById("gateway-bearer-token-input");
+          const gatewayBearerToken = gatewayBearerTokenInput.value;
+          if (!gatewayBearerToken) {
+            throw new Error("VTDD_GATEWAY_BEARER_TOKEN is required");
+          }
+          gatewayBearerVaultOutput.textContent = "gateway bearer vault bootstrap request...";
+          const vaultResponse = await fetch("${syncApiBase}/gateway-bearer-vault/bootstrap", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              approvalGrantId,
+              repositoryInput: document.getElementById("repo-input").value,
+              gatewayBearerToken
+            })
+          });
+          const vaultBody = await readResponseBody(vaultResponse);
+          if (!vaultResponse.ok) {
+            throw responseError(vaultBody, "gateway bearer vault bootstrap failed");
+          }
+          gatewayBearerTokenInput.value = "";
+          gatewayBearerVaultOutput.textContent = JSON.stringify(vaultBody, null, 2);
+        } catch (error) {
+          gatewayBearerVaultOutput.textContent = String(error);
+        }
+      });
+
       function decodeRegistrationOptions(options) {
         return {
           ...options,
@@ -826,6 +876,9 @@ export function resolvePasskeyOperatorMode(input = {}) {
   if (highRiskKind === "github_actions_secret_sync") {
     return "github_actions_secret_sync";
   }
+  if (highRiskKind === "gateway_bearer_vault_bootstrap") {
+    return "gateway_bearer_vault";
+  }
   if (highRiskKind === "github_app_secret_sync") {
     return "github_app_secret_sync";
   }
@@ -846,6 +899,7 @@ function resolveSectionVisibility(operatorMode, options = {}) {
     productionDeploy: full || operatorMode === "deploy",
     prMerge: full || operatorMode === "merge",
     githubActionsSecretSync: full || operatorMode === "github_actions_secret_sync",
+    gatewayBearerVault: full || operatorMode === "gateway_bearer_vault",
     vpsRunnerAdmin: full || operatorMode === "vps"
   };
 }
@@ -861,7 +915,7 @@ function renderGithubAppRoleOption(value, label, selectedValue) {
 
 function normalizeOperatorMode(value) {
   const token = normalizeOperatorToken(value);
-  if (["full", "deploy", "merge", "github_app_secret_sync", "github_actions_secret_sync", "vps"].includes(token)) {
+  if (["full", "deploy", "merge", "github_app_secret_sync", "github_actions_secret_sync", "gateway_bearer_vault", "vps"].includes(token)) {
     return token;
   }
   if (token === "secret_sync") {
@@ -869,6 +923,9 @@ function normalizeOperatorMode(value) {
   }
   if (token === "openai_secret_sync" || token === "codex_secret_sync") {
     return "github_actions_secret_sync";
+  }
+  if (token === "gateway_vault" || token === "gateway_bearer") {
+    return "gateway_bearer_vault";
   }
   return "";
 }
@@ -892,6 +949,9 @@ function defaultHighRiskKindForMode(operatorMode) {
   }
   if (operatorMode === "github_actions_secret_sync") {
     return "github_actions_secret_sync";
+  }
+  if (operatorMode === "gateway_bearer_vault") {
+    return "gateway_bearer_vault_bootstrap";
   }
   if (operatorMode === "vps") {
     return "vps_runner_admin";
