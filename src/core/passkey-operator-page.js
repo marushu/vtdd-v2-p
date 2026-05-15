@@ -257,12 +257,17 @@ export function renderPasskeyOperatorPage(input = {}) {
         </section>
 
         <section data-operator-section="github-actions-secret-sync"${hiddenAttribute(!sectionVisibility.githubActionsSecretSync)}>
-          <h2>6. Codex Fallback Secret Sync</h2>
-          <p class="muted">Codex reviewer fallback 用の <code>OPENAI_API_KEY</code> を GitHub Actions secret に同期します。値は Butler 会話に貼らず、この operator page から送信します。</p>
+          <h2>6. GitHub Actions Secret Sync</h2>
+          <p class="muted">GitHub Actions secret を同期します。値は Butler 会話に貼らず、この operator page から送信します。<code>VTDD_GATEWAY_BEARER_TOKEN</code> は Actions secret だけではなく Worker secret / Custom GPT Action auth と一致している必要があります。</p>
+          <label for="github-actions-secret-name-input">Secret name</label>
+          <select id="github-actions-secret-name-input">
+            <option value="OPENAI_API_KEY">OPENAI_API_KEY</option>
+            <option value="VTDD_GATEWAY_BEARER_TOKEN">VTDD_GATEWAY_BEARER_TOKEN</option>
+          </select>
           <label for="openai-api-key-input">OPENAI_API_KEY</label>
           <input id="openai-api-key-input" type="password" autocomplete="off" placeholder="sk-..." />
           <div class="row">
-            <button id="openai-secret-sync-button">Sync OPENAI_API_KEY</button>
+            <button id="openai-secret-sync-button">Sync GitHub Actions secret</button>
           </div>
           <p class="muted"><code>actionType=destructive</code> / <code>highRiskKind=github_actions_secret_sync</code> の approvalGrantId が必要です。</p>
           <pre id="openai-secret-sync-output"></pre>
@@ -676,19 +681,20 @@ export function renderPasskeyOperatorPage(input = {}) {
       document.getElementById("openai-secret-sync-button").addEventListener("click", async () => {
         try {
           if (!latestApprovalGrantId) {
-            throw new Error("approvalGrantId is required before OPENAI_API_KEY secret sync");
+            throw new Error("approvalGrantId is required before GitHub Actions secret sync");
           }
+          const secretName = document.getElementById("github-actions-secret-name-input").value;
           const secretValue = document.getElementById("openai-api-key-input").value;
           if (!secretValue) {
-            throw new Error("OPENAI_API_KEY is required");
+            throw new Error(secretName + " is required");
           }
-          openaiSecretSyncOutput.textContent = "OPENAI_API_KEY secret sync request...";
+          openaiSecretSyncOutput.textContent = secretName + " secret sync request...";
           const syncResponse = await fetch("${apiBase}/action/github-actions-secret", {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({
               repository: document.getElementById("repo-input").value,
-              secretName: "OPENAI_API_KEY",
+              secretName,
               secretValue,
               policyInput: {
                 approvalGrantId: latestApprovalGrantId
@@ -697,7 +703,7 @@ export function renderPasskeyOperatorPage(input = {}) {
           });
           const syncBody = await readResponseBody(syncResponse);
           if (!syncResponse.ok) {
-            throw responseError(syncBody, "OPENAI_API_KEY secret sync failed");
+            throw responseError(syncBody, secretName + " secret sync failed");
           }
           document.getElementById("openai-api-key-input").value = "";
           openaiSecretSyncOutput.textContent = JSON.stringify(syncBody, null, 2);

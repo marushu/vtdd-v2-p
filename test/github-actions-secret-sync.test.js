@@ -16,7 +16,7 @@ const validApprovalGrant = {
   }
 };
 
-test("github actions secret sync writes only approved OPENAI_API_KEY without echoing the secret", async () => {
+test("github actions secret sync writes approved OPENAI_API_KEY without echoing the secret", async () => {
   const calls = [];
   const result = await executeGitHubActionsSecretSync({
     repository: "sample-org/vtdd-v2-p",
@@ -51,6 +51,40 @@ test("github actions secret sync writes only approved OPENAI_API_KEY without ech
   assert.equal(JSON.parse(calls[1].init.body).encrypted_value, "encrypted-secret");
 });
 
+test("github actions secret sync writes approved VTDD_GATEWAY_BEARER_TOKEN without echoing the secret", async () => {
+  const calls = [];
+  const result = await executeGitHubActionsSecretSync({
+    repository: "sample-org/vtdd-v2-p",
+    secretName: "VTDD_GATEWAY_BEARER_TOKEN",
+    secretValue: "gateway-test-secret",
+    approvalGrant: validApprovalGrant,
+    encryptSecret: async ({ publicKey, secretValue }) => {
+      assert.equal(publicKey, "public-key");
+      assert.equal(secretValue, "gateway-test-secret");
+      return "encrypted-gateway-secret";
+    },
+    env: {
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_secret",
+      GITHUB_API_FETCH: async (url, init) => {
+        calls.push({ url: String(url), init });
+        if (String(url).endsWith("/actions/secrets/public-key")) {
+          return new Response(JSON.stringify({ key_id: "key-123", key: "public-key" }), {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          });
+        }
+        return new Response(null, { status: 204 });
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.secretSync.secretName, "VTDD_GATEWAY_BEARER_TOKEN");
+  assert.equal(JSON.stringify(result).includes("gateway-test-secret"), false);
+  assert.equal(calls[1].url.endsWith("/actions/secrets/VTDD_GATEWAY_BEARER_TOKEN"), true);
+  assert.equal(JSON.parse(calls[1].init.body).encrypted_value, "encrypted-gateway-secret");
+});
+
 test("github actions secret sync blocks unapproved names and wrong passkey scope", async () => {
   const unsupported = await executeGitHubActionsSecretSync({
     repository: "sample-org/vtdd-v2-p",
@@ -63,7 +97,10 @@ test("github actions secret sync blocks unapproved names and wrong passkey scope
   });
   assert.equal(unsupported.ok, false);
   assert.equal(unsupported.error, "github_actions_secret_sync_request_invalid");
-  assert.equal(unsupported.issues.includes("secretName must be OPENAI_API_KEY"), true);
+  assert.equal(
+    unsupported.issues.includes("secretName must be OPENAI_API_KEY or VTDD_GATEWAY_BEARER_TOKEN"),
+    true
+  );
 
   const wrongScope = validateGitHubActionsSecretSyncApprovalGrant({
     repository: "sample-org/vtdd-v2-p",

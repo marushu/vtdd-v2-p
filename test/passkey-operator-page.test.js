@@ -23,7 +23,8 @@ test("passkey operator page can target explicit api base and sync endpoint", () 
   assert.equal(html.includes("readResponseBody"), true);
   assert.equal(html.includes("non_json_response"), true);
   assert.equal(html.includes("Sync GitHub App secrets"), true);
-  assert.equal(html.includes("Sync OPENAI_API_KEY"), true);
+  assert.equal(html.includes("Sync GitHub Actions secret"), true);
+  assert.equal(html.includes("VTDD_GATEWAY_BEARER_TOKEN"), true);
   assert.equal(html.includes("Dispatch production deploy"), true);
   assert.equal(html.includes("Dispatch PR merge"), true);
   assert.equal(html.includes("Open deploy run"), true);
@@ -178,6 +179,8 @@ test("passkey operator page focuses secret sync modes without hiding the require
   });
   assert.equal(actionsSecretHtml.includes('<section data-operator-section="approval">'), true);
   assert.equal(actionsSecretHtml.includes('<section data-operator-section="github-actions-secret-sync">'), true);
+  assert.equal(actionsSecretHtml.includes('<option value="VTDD_GATEWAY_BEARER_TOKEN">'), true);
+  assert.equal(actionsSecretHtml.includes("Worker secret / Custom GPT Action auth"), true);
   assert.equal(actionsSecretHtml.includes('<section data-operator-section="github-app-secret-sync" hidden>'), true);
   assert.equal(actionsSecretHtml.includes('<section data-operator-section="production-deploy" hidden>'), true);
   assert.equal(actionsSecretHtml.includes('<section data-operator-section="pr-merge" hidden>'), true);
