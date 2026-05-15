@@ -992,6 +992,7 @@ async function buildStartupPreflight({
       path: "docs/butler/thread-independent-startup-contract.md",
       text: "threadLocalAssumptionsPromoted"
     });
+  const butlerFirstPrincipleStatus = threadLocalAssumptionsPromoted ? "promoted" : "未確認";
 
   return {
     schemaVersion: "startup_preflight_v1",
@@ -1011,7 +1012,7 @@ async function buildStartupPreflight({
       "surface_capability"
     ],
     butlerFirstPrinciple: {
-      status: threadLocalAssumptionsPromoted ? "promoted" : "未確認",
+      status: butlerFirstPrincipleStatus,
       summary:
         "VTDD is iPhone/iPad-first and handoff-first. Butler is the owner delegate; VPS Codex CLI is the always-on execution surface; mac Codex is auxiliary, not the normal operating center.",
       macCodexCompletionRule:
