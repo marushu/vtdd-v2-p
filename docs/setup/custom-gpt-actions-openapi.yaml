@@ -989,7 +989,7 @@ paths:
   /v2/action/github-actions-secret:
     post:
       operationId: vtddSyncGitHubActionsSecret
-      summary: Sync an approved GitHub Actions secret such as OPENAI_API_KEY after GO plus real passkey approval.
+      summary: Sync an approved GitHub Actions secret such as OPENAI_API_KEY or VTDD_GATEWAY_BEARER_TOKEN after GO plus real passkey approval.
       requestBody:
         required: true
         content:
@@ -1003,6 +1003,7 @@ paths:
                   type: string
                   enum:
                     - OPENAI_API_KEY
+                    - VTDD_GATEWAY_BEARER_TOKEN
                 secretValue:
                   type: string
                 policyInput:

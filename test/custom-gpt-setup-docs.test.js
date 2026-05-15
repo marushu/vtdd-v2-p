@@ -141,6 +141,8 @@ test("custom gpt instructions preserve current butler and approval boundaries", 
   assert.equal(doc.includes("Action Schema update required"), true);
   assert.equal(doc.includes("Instructions update required"), true);
   assert.equal(doc.includes("runtime is in sync, do not overclaim that the current Custom GPT editor is also in sync"), true);
+  assert.equal(doc.includes("Custom GPT Action Authentication may not be sending the configured Bearer token"), true);
+  assert.equal(doc.includes("protected `/v2/retrieve/*` routes require `GatewayBearerAuth`"), true);
   assert.equal(doc.includes("surface the returned `error`, `reason`, and `issues` plainly in Japanese"), true);
   assert.equal(doc.includes("Do not collapse nickname failures into vague guesses"), true);
   assert.equal(doc.includes("If the Action surface reports `ClientResponseError`"), true);
@@ -243,6 +245,7 @@ test("short custom gpt instructions stay under editor limits while preserving cr
   assert.equal(doc.includes("Cloudflare deploy update required"), true);
   assert.equal(doc.includes("Action Schema update required"), true);
   assert.equal(doc.includes("Instructions update required"), true);
+  assert.equal(doc.includes("Protected retrieve auth/ClientResponseError=>check Action Bearer"), true);
   assert.equal(doc.includes("selfParity.deployRecovery.operatorMarkdownLink or operatorUrl"), true);
   assert.equal(doc.includes("selfParity.deployOperatorMarkdownLink"), true);
   assert.equal(doc.includes("<actual selfParity.deployOperatorUrl>"), true);
@@ -323,6 +326,7 @@ test("custom gpt openapi doc exposes current gateway, execute, and progress rout
   assert.equal(doc.includes("/v2/action/github-authority:"), true);
   assert.equal(doc.includes("/v2/action/deploy:"), true);
   assert.equal(doc.includes("/v2/action/github-actions-secret:"), true);
+  assert.equal(doc.includes("- VTDD_GATEWAY_BEARER_TOKEN"), true);
   assert.equal(doc.includes("/v2/action/repository-nickname:"), true);
   assert.equal(doc.includes("/v2/action/repository-nickname/delete:"), true);
   assert.equal(doc.includes("/v2/action/progress:"), true);
@@ -405,6 +409,12 @@ test("custom gpt openapi json parses and exposes paths as an object", () => {
   assert.equal(typeof doc.paths["/v2/action/github-authority"], "object");
   assert.equal(typeof doc.paths["/v2/action/deploy"], "object");
   assert.equal(typeof doc.paths["/v2/action/github-actions-secret"], "object");
+  assert.equal(
+    doc.paths["/v2/action/github-actions-secret"].post.requestBody.content[
+      "application/json"
+    ].schema.properties.secretName.enum.includes("VTDD_GATEWAY_BEARER_TOKEN"),
+    true
+  );
   assert.equal(typeof doc.paths["/v2/action/repository-nickname"], "object");
   assert.equal(typeof doc.paths["/v2/action/repository-nickname/delete"], "object");
   assert.equal(

@@ -21,6 +21,7 @@ GitHub read:
 - Unsupported => 未対応. Auth fail => 認証失敗. Do not infer absence from failed reads.
 Self-parity:
 - Use vtddRetrieveSelfParity repo=<resolved>, ref=main. Surface Cloudflare deploy update required / Action Schema update required / Instructions update required / errors.
+- Protected retrieve auth/ClientResponseError=>check Action Bearer; not nickname/Issue absent.
 - Parity unchecked=>`未検証`. If self-parity returns `ClientResponseError`, say unverified transport failure. vtddRetrieveSetupArtifact. in_sync runtime != editor sync.
 Execution:
 - Before execution, read runtime truth; when needed, vtddRetrieveGitHub PR/branch/checks/runs.

@@ -22,6 +22,7 @@ Repository and nickname:
 - Unsupported read=>未対応. Auth fail=>認証失敗. Do not infer absence from failed, unsupported, unauthorized, or unverified reads.
 Self-parity and setup drift:
 - For stale/outdated: vtddRetrieveSelfParity repo=<resolved>, ref=main; vtddRetrieveSetupArtifact.
+- Protected retrieve auth/ClientResponseError=>check Action Bearer; not nickname absent.
 - runtimeParity=cloudflare_deploy_update_required=>Cloudflare deploy update required. in_sync missing behavior=>Action Schema/Instructions update required.
 - Parity unchecked=>未検証 + error/reason/issues. ClientResponseError=>state action + unverified transport. runtime in_sync=>don't claim editor sync.
 Execution and remote Codex handoff:
