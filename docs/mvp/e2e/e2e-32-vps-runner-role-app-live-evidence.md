@@ -37,6 +37,9 @@ Post-fix verification:
 
 - `npm test -- test/vps-runner-script.test.js`
 - `npm run build:worker`
+- New head requested marker: <https://github.com/marushu/vtdd-v2-p/pull/396#issuecomment-4459115593>
+- Post-fix terminal comment: <https://github.com/marushu/vtdd-v2-p/pull/396#issuecomment-4459124956>
+- Post-fix dry-run on VPS branch returned: `No pending VPS runner execution found.`
 
 Non-goals:
 
