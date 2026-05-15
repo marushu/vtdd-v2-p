@@ -6,7 +6,8 @@ import os from "node:os";
 import path from "node:path";
 import {
   DEFAULT_VTDD_VAULT_MANIFEST_PATH,
-  loadDesktopBootstrapVault
+  loadDesktopBootstrapVault,
+  loadGitHubAppRoleCredentialsFromVault
 } from "../src/core/desktop-bootstrap-vault.js";
 
 test("desktop bootstrap vault loads referenced root credential files", async () => {
@@ -73,6 +74,45 @@ test("desktop bootstrap vault reports missing canonical manifest", async () => {
   assert.equal(result.issues[0].includes("desktop bootstrap vault manifest not found"), true);
 });
 
+test("desktop bootstrap vault loads role-specific GitHub App credentials", async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "vtdd-role-vault-"));
+  const credentialsDir = path.join(tempDir, "credentials");
+  await fs.mkdir(path.join(credentialsDir, "github-apps"), { recursive: true });
+  const keyPath = path.join(credentialsDir, "github-apps", "codex-fallback.pem");
+  const manifestPath = path.join(credentialsDir, "manifest.json");
+
+  await fs.writeFile(keyPath, "-----BEGIN RSA PRIVATE KEY-----\nrole-example\n-----END RSA PRIVATE KEY-----\n");
+  await fs.writeFile(
+    manifestPath,
+    JSON.stringify(
+      {
+        version: 1,
+        githubAppRoles: {
+          "codex-fallback-reviewer": {
+            appId: "3706921",
+            installationId: "132169447",
+            privateKeyPath: "github-apps/codex-fallback.pem"
+          }
+        }
+      },
+      null,
+      2
+    )
+  );
+
+  const result = await loadGitHubAppRoleCredentialsFromVault({
+    manifestPath,
+    role: "codex-fallback-reviewer"
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.role, "codex-fallback-reviewer");
+  assert.equal(result.credentials.appId, "3706921");
+  assert.equal(result.credentials.installationId, "132169447");
+  assert.equal(result.credentials.privateKeyPath, keyPath);
+  assert.equal(result.credentials.privateKey.includes("role-example"), true);
+});
+
 test("desktop bootstrap vault constants point to ~/.vtdd by default", () => {
   assert.equal(DEFAULT_VTDD_VAULT_MANIFEST_PATH.endsWith(".vtdd/credentials/manifest.json"), true);
 });
@@ -86,4 +126,6 @@ test("desktop bootstrap vault doc defines canonical path and desktop maintenance
   assert.equal(doc.includes("Short-lived execution credentials must not be stored here."), true);
   assert.equal(doc.includes("not the steady-state operational source"), true);
   assert.equal(doc.includes("steady-state VTDD operation should not require the local desktop vault"), true);
+  assert.equal(doc.includes("githubAppRoles.codex-fallback-reviewer"), true);
+  assert.equal(doc.includes("githubAppRoles.vps-codex-cli"), true);
 });

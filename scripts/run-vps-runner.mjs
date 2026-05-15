@@ -12,6 +12,7 @@ import {
   parseCodexReviewFallbackComment,
   resolveGitHubAppInstallationToken
 } from "../src/core/index.js";
+import { loadGitHubAppRoleCredentialsFromVault } from "../src/core/desktop-bootstrap-vault.js";
 import { buildExecutionLeadTime } from "../src/core/execution-lead-time.js";
 import { prepareGuardedPullRequestBody, prepareGuardedPullRequestBodyFile } from "./prepare-pr-body-file.mjs";
 import { renderPrBody } from "./render-pr-body.mjs";
@@ -26,6 +27,7 @@ const VTDD_INCIDENT_ACTOR_IDENTITY_FAILURE_MARKER = "<!-- vtdd:incident=actor_id
 const ROLE_GITHUB_APP_ENV = {
   codex_fallback_reviewer: {
     label: "VTDD Codex Fallback Reviewer",
+    vaultRole: "codex-fallback-reviewer",
     appId: "VTDD_CODEX_FALLBACK_REVIEWER_APP_ID",
     privateKey: "VTDD_CODEX_FALLBACK_REVIEWER_APP_PRIVATE_KEY",
     privateKeyBase64: "VTDD_CODEX_FALLBACK_REVIEWER_APP_PRIVATE_KEY_BASE64",
@@ -33,6 +35,7 @@ const ROLE_GITHUB_APP_ENV = {
   },
   vps_codex_cli: {
     label: "VTDD VPS Codex CLI",
+    vaultRole: "vps-codex-cli",
     appId: "VTDD_VPS_CODEX_CLI_APP_ID",
     privateKey: "VTDD_VPS_CODEX_CLI_APP_PRIVATE_KEY",
     privateKeyBase64: "VTDD_VPS_CODEX_CLI_APP_PRIVATE_KEY_BASE64",
@@ -1297,7 +1300,8 @@ async function resolveRoleGitHubAppInstallationToken({ role, env = process.env, 
       reason: `unknown GitHub App role: ${role}`
     };
   }
-  const roleEnv = buildRoleGitHubAppInstallationTokenEnv({ env, names });
+  const roleEnvResult = await buildRoleGitHubAppInstallationTokenEnv({ env, names });
+  const roleEnv = roleEnvResult.env;
   const missing = [
     ["app id", roleEnv.GITHUB_APP_ID],
     ["private key", roleEnv.GITHUB_APP_PRIVATE_KEY || roleEnv.GITHUB_APP_PRIVATE_KEY_BASE64],
@@ -1306,9 +1310,12 @@ async function resolveRoleGitHubAppInstallationToken({ role, env = process.env, 
     .filter(([, value]) => !normalizeText(value))
     .map(([label]) => label);
   if (missing.length > 0) {
+    const vaultReason = normalizeText(roleEnvResult.vaultIssues?.join("; "));
     return {
       ok: false,
-      reason: `${names.label} GitHub App token unavailable: missing ${missing.join(", ")}`
+      reason: `${names.label} GitHub App token unavailable: missing ${missing.join(", ")}${
+        vaultReason ? `; vault: ${vaultReason}` : ""
+      }`
     };
   }
 
@@ -1328,13 +1335,39 @@ async function resolveRoleGitHubAppInstallationToken({ role, env = process.env, 
   };
 }
 
-function buildRoleGitHubAppInstallationTokenEnv({ env = process.env, names }) {
-  return {
+async function buildRoleGitHubAppInstallationTokenEnv({ env = process.env, names }) {
+  const roleEnv = {
     ...env,
     GITHUB_APP_ID: env[names.appId],
     GITHUB_APP_PRIVATE_KEY: env[names.privateKey],
     GITHUB_APP_PRIVATE_KEY_BASE64: env[names.privateKeyBase64],
     GITHUB_APP_INSTALLATION_ID: env[names.installationId]
+  };
+  if (
+    normalizeText(roleEnv.GITHUB_APP_ID) &&
+    (normalizeText(roleEnv.GITHUB_APP_PRIVATE_KEY) || normalizeText(roleEnv.GITHUB_APP_PRIVATE_KEY_BASE64)) &&
+    normalizeText(roleEnv.GITHUB_APP_INSTALLATION_ID)
+  ) {
+    return { env: roleEnv, vaultIssues: [] };
+  }
+
+  const vaultResult = await loadGitHubAppRoleCredentialsFromVault({
+    role: names.vaultRole,
+    manifestPath: env.VTDD_VPS_RUNNER_CREDENTIALS_MANIFEST || env.VTDD_CREDENTIALS_MANIFEST
+  });
+  if (!vaultResult.ok) {
+    return { env: roleEnv, vaultIssues: vaultResult.issues || [] };
+  }
+
+  return {
+    env: {
+      ...roleEnv,
+      GITHUB_APP_ID: roleEnv.GITHUB_APP_ID || vaultResult.credentials.appId,
+      GITHUB_APP_PRIVATE_KEY: roleEnv.GITHUB_APP_PRIVATE_KEY || vaultResult.credentials.privateKey,
+      GITHUB_APP_INSTALLATION_ID:
+        roleEnv.GITHUB_APP_INSTALLATION_ID || vaultResult.credentials.installationId
+    },
+    vaultIssues: []
   };
 }
 
