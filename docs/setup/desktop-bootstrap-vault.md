@@ -20,6 +20,22 @@ The canonical local path is:
 
 - `~/.vtdd/credentials/manifest.json`
 
+For the gateway bearer token specifically, use the repository bootstrap helper
+instead of pasting the token into chat or a command argument:
+
+```bash
+printf '%s' "$VTDD_GATEWAY_BEARER_TOKEN" | node scripts/bootstrap-gateway-bearer-vault.mjs \
+  --token-stdin \
+  --pretty
+```
+
+The helper writes `gateway/bearer-token.txt`, updates
+`~/.vtdd/credentials/manifest.json`, keeps the token value out of stdout, and
+uses operator-only file modes where the filesystem supports them. `--generate`
+can create a new local token, but that token will not work against the deployed
+Worker until the Worker secret and Custom GPT Action auth are intentionally
+rotated through their own approval boundaries.
+
 ## Boundary
 
 This vault is:
