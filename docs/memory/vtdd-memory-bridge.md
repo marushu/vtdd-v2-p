@@ -43,6 +43,19 @@ available, the runtime memory commands must fail with `desktop maintenance
 required` instead of falling back to D1 direct writes or asking the operator to
 paste a secret into chat.
 
+Bootstrap the local gateway bearer token reference with:
+
+```sh
+printf '%s' "$VTDD_GATEWAY_BEARER_TOKEN" | node scripts/bootstrap-gateway-bearer-vault.mjs \
+  --token-stdin \
+  --pretty
+```
+
+This creates/updates `~/.vtdd/credentials/manifest.json` and
+`~/.vtdd/credentials/gateway/bearer-token.txt` without printing the token value.
+It only configures the local Mac/VPS caller. It does not rotate or sync Worker
+secrets, GitHub Actions secrets, or Custom GPT Action auth.
+
 ## Commands
 
 Inventory D1 memory records:
