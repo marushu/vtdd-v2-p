@@ -37038,6 +37038,17 @@ function renderRecoveryBundleSections(recovery) {
       </div>
     </section>
     <section>
+      <h2>Custom GPT Action Authentication</h2>
+      <p class="small">Action Schema \u3092\u8CBC\u308A\u76F4\u3057\u3066\u3082\u3001Custom GPT editor \u306E Authentication \u8A2D\u5B9A\u306F runtime \u304B\u3089\u8AAD\u3081\u307E\u305B\u3093\u3002protected retrieve \u304C ClientResponseError / \u8A8D\u8A3C\u5931\u6557\u306B\u306A\u308B\u5834\u5408\u306F\u3001Action \u306E Authentication \u3092\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002</p>
+      <div class="meta">
+        <div><strong>Authentication type</strong><br>API Key</div>
+        <div><strong>Auth type</strong><br>Bearer</div>
+        <div><strong>Header</strong><br>Authorization: Bearer &lt;VTDD_GATEWAY_BEARER_TOKEN&gt;</div>
+        <div><strong>Unauthenticated route</strong><br>/health only</div>
+      </div>
+      <p class="small">token value \u306F\u3053\u3053\u306B\u306F\u8868\u793A\u3057\u307E\u305B\u3093\u3002iPhone \u306E\u4FDD\u7BA1\u5834\u6240\u304B\u3089 Custom GPT Action Authentication \u306B\u8CBC\u308A\u76F4\u3057\u3066\u304F\u3060\u3055\u3044\u3002</p>
+    </section>
+    <section>
       <h2>Copy-ready Action Schema</h2>
       <p class="small">source: ${escapeHtml3(actionSchema.path)}; sourceSha: ${escapeHtml3(actionSchema.sourceSha)}; copy payload: raw YAML, not URL encoded</p>
       <p><button type="button" data-copy-target="action-schema" data-copy-label="Copy Action Schema">Copy Action Schema</button></p>

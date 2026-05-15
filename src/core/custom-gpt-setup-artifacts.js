@@ -921,6 +921,17 @@ function renderRecoveryBundleSections(recovery) {
       </div>
     </section>
     <section>
+      <h2>Custom GPT Action Authentication</h2>
+      <p class="small">Action Schema を貼り直しても、Custom GPT editor の Authentication 設定は runtime から読めません。protected retrieve が ClientResponseError / 認証失敗になる場合は、Action の Authentication を確認してください。</p>
+      <div class="meta">
+        <div><strong>Authentication type</strong><br>API Key</div>
+        <div><strong>Auth type</strong><br>Bearer</div>
+        <div><strong>Header</strong><br>Authorization: Bearer &lt;VTDD_GATEWAY_BEARER_TOKEN&gt;</div>
+        <div><strong>Unauthenticated route</strong><br>/health only</div>
+      </div>
+      <p class="small">token value はここには表示しません。iPhone の保管場所から Custom GPT Action Authentication に貼り直してください。</p>
+    </section>
+    <section>
       <h2>Copy-ready Action Schema</h2>
       <p class="small">source: ${escapeHtml(actionSchema.path)}; sourceSha: ${escapeHtml(actionSchema.sourceSha)}; copy payload: raw YAML, not URL encoded</p>
       <p><button type="button" data-copy-target="action-schema" data-copy-label="Copy Action Schema">Copy Action Schema</button></p>

@@ -229,6 +229,7 @@ Butler self-parity and setup artifact recovery:
   - openapi_json
 - When returning canonical setup artifacts, make it clear they are the repository canonical source, not proof that the current Custom GPT editor is already updated.
 - If a self-parity check says runtime is in sync, do not overclaim that the current Custom GPT editor is also in sync; editor-side drift can still require Action Schema or Instructions refresh.
+- If protected retrieve Actions such as `vtddRetrieveRepositoryNicknames` or `vtddStartupPreflight` return `ClientResponseError` / 認証失敗, do not conclude the nickname or Issue is missing. First report that Custom GPT Action Authentication may not be sending the configured Bearer token. `/health` is unauthenticated; protected `/v2/retrieve/*` routes require `GatewayBearerAuth`.
 - If any Butler action returns structured failure fields such as `error`, `reason`, or `issues`, summarize those exact fields in Japanese before proposing the next step.
 - Do not hide specific runtime failures behind generic summaries if the worker already returned a concrete cause.
 - If a self-parity Action fails with `ClientResponseError`, report it as an unverified Action transport failure with the action name, HTTP status if visible, visible body fields, and missing `error` / `reason` / `issues` fields; then say the Custom GPT Action Schema may need refresh if canonical schema exposes those fields.

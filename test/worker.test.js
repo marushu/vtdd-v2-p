@@ -694,6 +694,11 @@ test("worker setup latest page renders copy-ready schema and short-min bundle fo
   assert.equal(html.includes("VTDD Butler short-min instructions"), true);
   assert.equal(html.includes("URL separation"), true);
   assert.equal(html.includes("Action Schema server URL"), true);
+  assert.equal(html.includes("Custom GPT Action Authentication"), true);
+  assert.equal(html.includes("Authentication type"), true);
+  assert.equal(html.includes("Auth type"), true);
+  assert.equal(html.includes("Authorization: Bearer &lt;VTDD_GATEWAY_BEARER_TOKEN&gt;"), true);
+  assert.equal(html.includes("Unauthenticated route"), true);
   assert.equal(html.includes("copy payload: raw YAML, not URL encoded"), true);
   assert.equal(html.includes("copy payload: raw Markdown, not URL encoded"), true);
   assert.equal(html.includes("Bundle commit"), true);
