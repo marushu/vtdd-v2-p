@@ -102,6 +102,58 @@ export async function loadDesktopBootstrapVault(input = {}) {
   };
 }
 
+export async function loadGatewayBearerTokenFromVault(input = {}) {
+  const manifestPath = normalizeText(input.manifestPath) || DEFAULT_VTDD_VAULT_MANIFEST_PATH;
+  const manifestDir = path.dirname(manifestPath);
+
+  let manifest;
+  try {
+    const content = await fs.readFile(manifestPath, "utf8");
+    manifest = JSON.parse(content);
+  } catch (error) {
+    return {
+      ok: false,
+      issues: [
+        error?.code === "ENOENT"
+          ? `desktop bootstrap vault manifest not found: ${manifestPath}`
+          : `desktop bootstrap vault manifest is unreadable: ${manifestPath}`
+      ]
+    };
+  }
+
+  if (Number(manifest?.version) !== 1) {
+    return {
+      ok: false,
+      issues: ["desktop bootstrap vault manifest version must be 1"]
+    };
+  }
+
+  const bearerTokenPath = resolveReferencedPath(manifestDir, manifest?.gateway?.bearerTokenPath);
+  if (!bearerTokenPath) {
+    return {
+      ok: false,
+      issues: ["gateway.bearerTokenPath is required in desktop bootstrap vault manifest"]
+    };
+  }
+
+  const issues = [];
+  const bearerToken = await readOptionalTextFile(bearerTokenPath, issues);
+  if (!normalizeText(bearerToken)) {
+    issues.push("desktop bootstrap vault gateway bearer token file is empty or unreadable");
+  }
+  if (issues.length > 0) {
+    return { ok: false, issues };
+  }
+
+  return {
+    ok: true,
+    gateway: {
+      bearerTokenPath,
+      bearerToken
+    }
+  };
+}
+
 function resolveReferencedPath(manifestDir, referencedPath) {
   const normalized = normalizeText(referencedPath);
   if (!normalized) {
