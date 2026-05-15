@@ -1915,7 +1915,7 @@ function buildVpsRunnerGitHubQueueComment({ request }) {
     "- Runtime truth: current GitHub branch / diff / PR / review comments",
     "- Completion target: create or update a pull request",
     "- PR body requirement: Codex must inspect `docs/pr-template-model.md`, `scripts/render-pr-body.mjs`, and `scripts/validate-pr-body.mjs`; the VPS runner will validate and normalize the PR body again before create/update.",
-    "- Context preflight requirement: the VPS runner will automatically read `AGENTS.md`, the canonical Issue, and the PR body contract files, then generate a machine-readable preflight receipt before Codex starts editing.",
+    "- Context preflight requirement: the VPS runner will automatically read `AGENTS.md`, `docs/butler/thread-independent-startup-contract.md`, the canonical Issue, and the PR body contract files, then generate a machine-readable preflight receipt before Codex starts editing.",
     "- Missing preflight inputs do not authorize speculative implementation; the runner must ask Butler/owner to confirm the next action, then wait for a reissued bounded request.",
     "- Required PR body markers: `## This PR satisfies Intent`, `## Satisfied Success Criteria`, `## Unsatisfied Success Criteria`, `## Verification Evidence`, `## Surface Update Checklist`.",
     "",
@@ -1939,6 +1939,7 @@ function buildExecutionPreflightPolicy() {
     onMissingContract: "owner_decision_required",
     requiredRepoFiles: [
       "AGENTS.md",
+      "docs/butler/thread-independent-startup-contract.md",
       "docs/pr-template-model.md",
       "scripts/render-pr-body.mjs",
       "scripts/validate-pr-body.mjs"
