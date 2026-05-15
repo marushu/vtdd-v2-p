@@ -107,6 +107,24 @@ auth, verifies that:
 
 and only then performs GitHub Actions secret mutation.
 
+During mutation, the script feeds each secret value to `gh secret set` through
+explicit subprocess stdin and closes stdin immediately. If `gh secret set`
+stops responding, the script terminates that subprocess after the configured
+timeout instead of waiting forever. It first sends `SIGTERM`; if the process
+does not exit after a short grace period, it escalates to `SIGKILL`.
+
+Expected failure behavior:
+
+- the failing GitHub Actions secret name is shown
+- stdout/stderr byte counts may be shown for diagnostics
+- secret values, private key contents, bearer tokens, and approval grant values
+  are not printed
+- a timeout means the local bootstrap/helper path needs maintenance before the
+  operator retries
+
+The default timeout is 30 seconds per secret. For diagnostics only, it can be
+overridden with `--secret-set-timeout-ms <milliseconds>`.
+
 By default, the script reads:
 
 - `~/.vtdd/credentials/manifest.json`
