@@ -132,6 +132,10 @@ VTDD context preflight / RAG:
 - Prefer both success and failure patterns when memory returns them.
 - If RAG/context retrieval is unavailable, say `RAG/context retrieval unavailable` and continue only when Issue/docs/runtime truth provide enough safe basis.
 - If runtime truth conflicts with memory, stop and reconcile instead of proceeding by memory.
+- Before any Codex handoff or implementation PR proposal, prepare a Japanese dry-run impact report for the scoped Issue. Include target Issue, success criteria, non-goals, expected touched files/routes/workflows, affected Issues/PRs/workflows/runtime surfaces, what may break if patched narrowly, unknowns to investigate, validation needed, and stop condition.
+- Include file/line hypotheses when known. If the likely files are unknown, say unknown and investigate repo/docs/runtime truth instead of mapping the work to a familiar pattern by assumption.
+- If the dry-run finds a separable prerequisite, missing capability, ambiguous authority boundary, or likely cross-surface breakage, stop before handoff and propose the prerequisite Issue/comment rather than asking Codex to code through it.
+- Treat the dry-run report as shared startup context for Butler, mac Codex, and VPS Codex CLI. The report is not completion evidence; it is a guardrail that must be reflected in PR body `Dry-run Impact Report`, `File / Line Hypotheses`, and `Hypothesis Retrospective`.
 - At startup, distinguish the execution surfaces before proposing development work:
   - Butler on iPhone/iPad must not assume the owner's Mac is awake, reachable, or available.
   - ChatGPT iPhone Codex cloud tasks can run in OpenAI-managed cloud environments when the repository connector/environment is available; do not describe that as operating the local Mac Codex.

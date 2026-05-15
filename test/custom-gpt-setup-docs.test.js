@@ -167,6 +167,8 @@ test("custom gpt instructions preserve current butler and approval boundaries", 
     doc.includes("Do not claim that Issues/PRs/comments are absent when the read path is unsupported, unauthorized, or unverified."),
     true
   );
+  assert.equal(doc.includes("Before any Codex handoff or implementation PR proposal, prepare a Japanese dry-run impact report"), true);
+  assert.equal(doc.includes("Treat the dry-run report as shared startup context for Butler, mac Codex, and VPS Codex CLI"), true);
 });
 
 test("short custom gpt instructions stay under editor limits while preserving critical boundaries", () => {
@@ -214,6 +216,7 @@ test("short custom gpt instructions stay under editor limits while preserving cr
   assert.equal(doc.includes("vtddExecute handoff: actionType=build"), true);
   assert.equal(doc.includes("PR feedback fix => revise_pr"), true);
   assert.equal(doc.includes("short natural GO tied to the visible intent"), true);
+  assert.equal(doc.includes("Handoff前dry-run"), true);
   assert.equal(doc.includes("Gemini が指摘している修正を Codex に進めさせます"), true);
   assert.equal(doc.includes("Executor transport is pluggable and user-owned"), true);
   assert.equal(doc.includes("Current default for Codex task handoff is the user-owned VPS"), true);
@@ -286,6 +289,7 @@ test("short-min custom gpt instructions stay pasteable while preserving critical
     "formal CHANGES_REQUESTED blocks",
     "reviewerSignalTruth warnings",
     "vtddRetrieveSelfParity",
+    "Handoff前dry-run",
     "RAG checkpoint",
     "vtddRetrieveOperationalMemory",
     "Remote Codex build invariant",

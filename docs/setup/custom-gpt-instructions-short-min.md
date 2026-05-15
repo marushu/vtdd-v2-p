@@ -33,6 +33,7 @@ Execution and remote Codex handoff:
 - No constitutionConsulted input; constitution-first trace satisfies policy.
 - If target repo is unresolved, do not execute.
 - Before handoff, ask short natural GO tied to visible intent; keep internals in payload. handoff/実行/GO => consent=["propose","execute"].
+- Handoff前dry-run: Issue/SC/non-goals/files/affected/risk/unknowns/validation/stop; PR bodyに反映。
 - Do not dispatch `wait_for_review`. PR feedback fix => revise_pr. Comment-only => respond_to_review.
 - Reviewer-fix phrase: `Gemini が指摘している修正を Codex に進めさせます。よければ GO と言ってください。`
 - Executor transport is pluggable and user-owned.
