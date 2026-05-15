@@ -36285,6 +36285,14 @@ async function evaluateButlerSelfParity(input = {}) {
     instructions.artifact.content,
     RUNTIME_SETUP_MANIFEST.operationIds
   );
+  const knownGoodComparison = await compareKnownGoodSetupArtifacts({
+    repository,
+    ref,
+    runtimeOrigin,
+    env,
+    latestInstructions: instructions.artifact,
+    latestOpenapi: openapi.artifact
+  });
   const runtimeMissingRoutes = manifestParity.runtimeMissing.routes;
   const runtimeMissingOperationIds = manifestParity.runtimeMissing.operationIds;
   const runtimeMissingInstructionTokens = manifestParity.runtimeMissing.instructionTokens;
@@ -36310,6 +36318,14 @@ async function evaluateButlerSelfParity(input = {}) {
     "Cloudflare deploy update required.",
     deployOperatorMarkdownLink ? `Open the same-origin passkey operator helper: ${deployOperatorMarkdownLink}` : "Resolve the repository on the current Butler surface before generating a passkey operator helper URL."
   ];
+  const surfaceUpdateChecklist = buildSurfaceUpdateChecklist({
+    runtimeParity,
+    deployOperatorUrl,
+    deployOperatorMarkdownLink,
+    instructionsArtifact: instructions.artifact,
+    openapiArtifact: openapi.artifact,
+    knownGoodComparison
+  });
   return {
     ok: true,
     selfParity: {
@@ -36347,6 +36363,8 @@ async function evaluateButlerSelfParity(input = {}) {
         operatorUrl: deployOperatorUrl,
         operatorMarkdownLink: deployOperatorMarkdownLink
       } : null,
+      knownGoodComparison,
+      surfaceUpdateChecklist,
       recommendedActions
     }
   };
@@ -36489,7 +36507,9 @@ async function buildCustomGptRecoveryBundle(input = {}) {
       },
       runtime: {
         selfParity: selfParity.selfParity,
-        deployState: selfParity.selfParity.runtimeParity
+        deployState: selfParity.selfParity.runtimeParity,
+        knownGoodComparison: selfParity.selfParity.knownGoodComparison,
+        surfaceUpdateChecklist: selfParity.selfParity.surfaceUpdateChecklist
       },
       safety: {
         displaysSecrets: false,
@@ -36689,6 +36709,8 @@ function renderRecoveryBundleSections(recovery) {
   const actionSchema = recovery.actionSchema;
   const rollback = recovery.rollback;
   const selfParity = recovery.runtime.selfParity;
+  const surfaceUpdateChecklist = recovery.runtime.surfaceUpdateChecklist;
+  const knownGoodComparison = recovery.runtime.knownGoodComparison;
   const warning = instructions.limitExceeded ? `<section class="warning"><strong>Instructions exceed ${instructions.characterLimit} characters.</strong><p>${instructions.characterCount} characters. Shorten before pasting into the Custom GPT editor.</p></section>` : "";
   return `
     ${warning}
@@ -36707,6 +36729,8 @@ function renderRecoveryBundleSections(recovery) {
         <div><strong>Safety</strong><br>No secret values, tokens, or approval grants are displayed.</div>
       </div>
     </section>
+    ${renderSurfaceUpdateChecklist(surfaceUpdateChecklist)}
+    ${renderKnownGoodComparison(knownGoodComparison)}
     <section>
       <h2>URL separation</h2>
       <div class="meta">
@@ -36773,6 +36797,154 @@ function renderRecoveryBundleSections(recovery) {
       ...rollback.restoreOrder.map((item, index) => `  ${index + 1}. ${item}`)
     ].join("\n")
   )}</textarea>` : ""}
+    </section>`;
+}
+function buildSurfaceUpdateChecklist({
+  runtimeParity,
+  deployOperatorUrl,
+  deployOperatorMarkdownLink,
+  instructionsArtifact,
+  openapiArtifact,
+  knownGoodComparison
+}) {
+  const deployRequired = runtimeParity === "cloudflare_deploy_update_required";
+  const actionSchemaDiffers = knownGoodComparison?.actionSchema?.status === "different";
+  const instructionsDiffers = knownGoodComparison?.instructions?.status === "different";
+  return {
+    cloudflareDeploy: {
+      status: deployRequired ? "required" : "not_required",
+      reason: deployRequired ? "Canonical setup expects runtime capability that the deployed manifest does not advertise." : "Runtime manifest matches canonical setup routes, operationIds, and instruction tokens.",
+      operatorUrl: deployRequired ? deployOperatorUrl : null,
+      operatorMarkdownLink: deployRequired ? deployOperatorMarkdownLink : null
+    },
+    customGptActionSchema: {
+      status: actionSchemaDiffers ? "update_required_if_editor_is_known_good" : "unverified_editor_state",
+      reason: actionSchemaDiffers ? "Latest Action Schema differs from known-good. If the Custom GPT editor is still on known-good, Action Schema update required." : "VTDD runtime cannot read the current Custom GPT editor Action Schema. If this source SHA was not pasted after the last setup update, Action Schema update required.",
+      sourcePath: openapiArtifact?.path ?? "docs/setup/custom-gpt-actions-openapi.yaml",
+      sourceSha: openapiArtifact?.sha ?? null,
+      knownGoodSourceSha: knownGoodComparison?.actionSchema?.knownGoodSourceSha ?? null,
+      copyFrom: "/setup/latest",
+      copyPayload: "raw_yaml_not_url_encoded"
+    },
+    customGptInstructions: {
+      status: instructionsDiffers ? "update_required_if_editor_is_known_good" : "unverified_editor_state",
+      reason: instructionsDiffers ? "Latest Instructions differ from known-good. If the Custom GPT editor is still on known-good, Instructions update required." : "VTDD runtime cannot read the current Custom GPT editor Instructions. If this source SHA was not pasted after the last setup update, Instructions update required.",
+      sourcePath: instructionsArtifact?.path ?? "docs/setup/custom-gpt-instructions.md",
+      sourceSha: instructionsArtifact?.sha ?? null,
+      knownGoodSourceSha: knownGoodComparison?.instructions?.knownGoodSourceSha ?? null,
+      copyFrom: "/setup/latest",
+      copyPayload: "raw_markdown_not_url_encoded"
+    }
+  };
+}
+async function compareKnownGoodSetupArtifacts({
+  repository,
+  ref,
+  runtimeOrigin,
+  env,
+  latestInstructions,
+  latestOpenapi
+}) {
+  const knownGood = resolveConfiguredKnownGoodCommitSha({ ref: "", env });
+  if (!knownGood?.sha) {
+    return {
+      status: "known_good_unavailable",
+      knownGoodCommitSha: null,
+      knownGoodCommitSource: knownGood?.source ?? "unconfigured",
+      updateJudgment: "unverified",
+      summary: "known-good commit \u304C\u672A\u8A2D\u5B9A\u306E\u305F\u3081\u3001latest \u3068 known-good \u306E\u5DEE\u5206\u304B\u3089 Custom GPT \u66F4\u65B0\u8981\u5426\u3092\u5224\u65AD\u3067\u304D\u307E\u305B\u3093\u3002"
+    };
+  }
+  if (knownGood.sha === ref) {
+    return {
+      status: "same_ref",
+      knownGoodCommitSha: knownGood.sha,
+      knownGoodCommitSource: knownGood.source,
+      updateJudgment: "no_known_good_difference",
+      summary: "latest ref \u3068 known-good ref \u304C\u540C\u4E00\u3067\u3059\u3002"
+    };
+  }
+  const [knownGoodInstructions, knownGoodOpenapi] = await Promise.all([
+    retrieveCustomGptSetupArtifact({
+      artifact: CustomGptSetupArtifact.INSTRUCTIONS,
+      repository,
+      ref: knownGood.sha,
+      env
+    }),
+    retrieveCustomGptSetupArtifact({
+      artifact: CustomGptSetupArtifact.OPENAPI_YAML,
+      repository,
+      ref: knownGood.sha,
+      env
+    })
+  ]);
+  if (!knownGoodInstructions.ok || !knownGoodOpenapi.ok) {
+    const failed = [knownGoodInstructions, knownGoodOpenapi].find((result) => !result.ok);
+    return {
+      status: "comparison_unavailable",
+      knownGoodCommitSha: knownGood.sha,
+      knownGoodCommitSource: knownGood.source,
+      updateJudgment: "unverified",
+      reason: failed?.reason ?? "known-good setup artifact could not be read",
+      summary: "known-good artifact \u3092\u8AAD\u3081\u306A\u3044\u305F\u3081\u3001latest \u3068 known-good \u306E\u5DEE\u5206\u304B\u3089 Custom GPT \u66F4\u65B0\u8981\u5426\u3092\u5224\u65AD\u3067\u304D\u307E\u305B\u3093\u3002"
+    };
+  }
+  const latestActionSchema = expandOpenApiServerUrl(latestOpenapi.content, runtimeOrigin);
+  const knownGoodActionSchema = expandOpenApiServerUrl(
+    knownGoodOpenapi.artifact.content,
+    runtimeOrigin
+  );
+  const actionSchemaStatus = latestActionSchema === knownGoodActionSchema ? "same" : "different";
+  const instructionsStatus = latestInstructions.content === knownGoodInstructions.artifact.content ? "same" : "different";
+  const hasDifference = actionSchemaStatus === "different" || instructionsStatus === "different";
+  return {
+    status: hasDifference ? "different" : "same",
+    knownGoodCommitSha: knownGood.sha,
+    knownGoodCommitSource: knownGood.source,
+    updateJudgment: hasDifference ? "update_required_if_editor_is_known_good" : "no_known_good_difference",
+    summary: hasDifference ? "latest \u3068 known-good \u306B\u5DEE\u304C\u3042\u308A\u307E\u3059\u3002Custom GPT editor \u304C known-good \u306E\u307E\u307E\u306A\u3089\u66F4\u65B0\u304C\u5FC5\u8981\u3067\u3059\u3002" : "latest \u3068 known-good \u306E copy payload \u306F\u4E00\u81F4\u3057\u3066\u3044\u307E\u3059\u3002",
+    actionSchema: {
+      status: actionSchemaStatus,
+      latestSourceSha: latestOpenapi.sha,
+      knownGoodSourceSha: knownGoodOpenapi.artifact.sha
+    },
+    instructions: {
+      status: instructionsStatus,
+      latestSourceSha: latestInstructions.sha,
+      knownGoodSourceSha: knownGoodInstructions.artifact.sha
+    }
+  };
+}
+function renderSurfaceUpdateChecklist(checklist) {
+  if (!checklist) {
+    return "";
+  }
+  const deploy = checklist.cloudflareDeploy ?? {};
+  const actionSchema = checklist.customGptActionSchema ?? {};
+  const instructions = checklist.customGptInstructions ?? {};
+  return `<section>
+      <h2>Surface update checklist</h2>
+      <div class="meta">
+        <div><strong>Cloudflare deploy</strong><br>${escapeHtml3(deploy.status || "\u672A\u78BA\u8A8D")}<br><span class="small">${escapeHtml3(deploy.reason || "")}</span></div>
+        <div><strong>Custom GPT Action Schema</strong><br>${escapeHtml3(actionSchema.status || "\u672A\u78BA\u8A8D")}<br><span class="small">${escapeHtml3(actionSchema.sourcePath || "")}<br>sourceSha: ${escapeHtml3(actionSchema.sourceSha || "\u672A\u78BA\u8A8D")}</span></div>
+        <div><strong>Custom GPT Instructions</strong><br>${escapeHtml3(instructions.status || "\u672A\u78BA\u8A8D")}<br><span class="small">${escapeHtml3(instructions.sourcePath || "")}<br>sourceSha: ${escapeHtml3(instructions.sourceSha || "\u672A\u78BA\u8A8D")}</span></div>
+      </div>
+      <p class="small">Custom GPT editor \u306E\u73FE\u5728\u5024\u306F runtime \u304B\u3089\u8AAD\u3081\u306A\u3044\u305F\u3081\u3001editor \u5074\u306F\u672A\u691C\u8A3C\u3068\u3057\u3066\u8868\u793A\u3057\u307E\u3059\u3002\u6700\u5F8C\u306B\u8CBC\u3063\u305F sourceSha \u304C\u4E00\u81F4\u3057\u306A\u3044\u5834\u5408\u306F\u66F4\u65B0\u304C\u5FC5\u8981\u3067\u3059\u3002</p>
+    </section>`;
+}
+function renderKnownGoodComparison(comparison) {
+  if (!comparison) {
+    return "";
+  }
+  return `<section>
+      <h2>Latest / known-good comparison</h2>
+      <div class="meta">
+        <div><strong>Comparison</strong><br>${escapeHtml3(comparison.status || "\u672A\u78BA\u8A8D")}<br><span class="small">${escapeHtml3(comparison.summary || "")}</span></div>
+        <div><strong>Update judgment</strong><br>${escapeHtml3(comparison.updateJudgment || "unverified")}</div>
+        <div><strong>Known-good commit</strong><br>${escapeHtml3(comparison.knownGoodCommitSha || "\u672A\u78BA\u8A8D")}<br><span class="small">${escapeHtml3(comparison.knownGoodCommitSource || "")}</span></div>
+        <div><strong>Action Schema diff</strong><br>${escapeHtml3(comparison.actionSchema?.status || "\u672A\u78BA\u8A8D")}</div>
+        <div><strong>Instructions diff</strong><br>${escapeHtml3(comparison.instructions?.status || "\u672A\u78BA\u8A8D")}</div>
+      </div>
     </section>`;
 }
 function normalizeSetupChannel(value) {
