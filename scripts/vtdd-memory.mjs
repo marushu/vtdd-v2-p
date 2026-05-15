@@ -2,7 +2,7 @@
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-import { loadDesktopBootstrapVault } from "../src/core/desktop-bootstrap-vault.js";
+import { loadGatewayBearerTokenFromVault } from "../src/core/desktop-bootstrap-vault.js";
 import { createDecisionLogEntry, createProposalLogEntry } from "../src/core/log-contracts.js";
 import { createMemoryRecord } from "../src/core/memory-schema.js";
 import { evaluateMemorySafety } from "../src/core/memory-safety.js";
@@ -413,7 +413,7 @@ export async function withRuntimeMachineAuth(options = {}) {
     return options;
   }
 
-  const vault = await loadDesktopBootstrapVault({
+  const vault = await loadGatewayBearerTokenFromVault({
     manifestPath: options.manifestPath
   });
   if (!vault.ok) {
@@ -422,7 +422,7 @@ export async function withRuntimeMachineAuth(options = {}) {
     );
   }
 
-  const bearerToken = normalizeText(vault.vault?.gateway?.bearerToken);
+  const bearerToken = normalizeText(vault.gateway?.bearerToken);
   if (!bearerToken) {
     throw new Error("desktop maintenance required: gateway_bearer_token_missing");
   }

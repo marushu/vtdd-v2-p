@@ -196,20 +196,13 @@ test("runtime operational memory request keeps auth in headers", () => {
 
 test("runtime machine auth resolves gateway bearer token from desktop vault", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "vtdd-memory-vault-"));
-  await fs.mkdir(path.join(root, "github-app"), { recursive: true });
   await fs.mkdir(path.join(root, "gateway"), { recursive: true });
-  await fs.writeFile(path.join(root, "github-app", "private-key.pem"), "private-key", "utf8");
   await fs.writeFile(path.join(root, "gateway", "bearer-token.txt"), "vault-token", "utf8");
   const manifestPath = path.join(root, "manifest.json");
   await fs.writeFile(
     manifestPath,
     JSON.stringify({
       version: 1,
-      githubApp: {
-        appId: "123",
-        installationId: "456",
-        privateKeyPath: "github-app/private-key.pem"
-      },
       gateway: {
         bearerTokenPath: "gateway/bearer-token.txt"
       }
