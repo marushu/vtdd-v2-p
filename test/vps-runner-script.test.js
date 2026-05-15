@@ -976,6 +976,106 @@ test("VPS runner does not reprocess Codex fallback requested comments after revi
   assert.equal(selected.length, 0);
 });
 
+test("VPS runner does not reprocess Codex fallback requested comments after reviewer request changes", () => {
+  const selected = selectPendingVpsReviewerFallbacks({
+    repositoryPolicies: normalizeRepositoryPolicies({
+      allowedRepositories: ["sample-org/vtdd-v2"]
+    }),
+    comments: [
+      {
+        id: 1,
+        html_url: "https://github.com/sample-org/vtdd-v2/pull/22#issuecomment-1",
+        created_at: "2026-05-14T11:50:00Z",
+        repository: "sample-org/vtdd-v2",
+        pullRequestNumber: 22,
+        headSha: "abc123",
+        body: [
+          "<!-- vtdd:reviewer=codex-fallback -->",
+          "## VTDD Codex fallback レビュー",
+          "",
+          "- Status: `requested`",
+          "- Trigger: `issue_comment:created`",
+          "- Reason: `gemini_temporarily_unavailable`",
+          "- Delivery mode: `vps_codex_cli`",
+          "- Head SHA: `abc123`"
+        ].join("\n")
+      },
+      {
+        id: 2,
+        html_url: "https://github.com/sample-org/vtdd-v2/pull/22#issuecomment-2",
+        created_at: "2026-05-14T11:51:00Z",
+        user: { login: "vtdd-codex-fallback-reviewer[bot]" },
+        repository: "sample-org/vtdd-v2",
+        pullRequestNumber: 22,
+        headSha: "abc123",
+        body: [
+          "<!-- vtdd:reviewer=codex-fallback -->",
+          "## VTDD Codex fallback レビュー",
+          "",
+          "- Status: `completed`",
+          "- Trigger: `issue_comment:created`",
+          "- Reason: `gemini_temporarily_unavailable`",
+          "- Delivery mode: `vps_codex_cli`",
+          "- Head SHA: `abc123`",
+          "- Recommended action: `request_changes`"
+        ].join("\n")
+      }
+    ]
+  });
+
+  assert.equal(selected.length, 0);
+});
+
+test("VPS runner does not reprocess Codex fallback requested comments after reviewer blocked", () => {
+  const selected = selectPendingVpsReviewerFallbacks({
+    repositoryPolicies: normalizeRepositoryPolicies({
+      allowedRepositories: ["sample-org/vtdd-v2"]
+    }),
+    comments: [
+      {
+        id: 1,
+        html_url: "https://github.com/sample-org/vtdd-v2/pull/22#issuecomment-1",
+        created_at: "2026-05-14T11:50:00Z",
+        repository: "sample-org/vtdd-v2",
+        pullRequestNumber: 22,
+        headSha: "abc123",
+        body: [
+          "<!-- vtdd:reviewer=codex-fallback -->",
+          "## VTDD Codex fallback レビュー",
+          "",
+          "- Status: `requested`",
+          "- Trigger: `issue_comment:created`",
+          "- Reason: `gemini_temporarily_unavailable`",
+          "- Delivery mode: `vps_codex_cli`",
+          "- Head SHA: `abc123`"
+        ].join("\n")
+      },
+      {
+        id: 2,
+        html_url: "https://github.com/sample-org/vtdd-v2/pull/22#issuecomment-2",
+        created_at: "2026-05-14T11:51:00Z",
+        user: { login: "vtdd-vps-codex-cli[bot]" },
+        repository: "sample-org/vtdd-v2",
+        pullRequestNumber: 22,
+        headSha: "abc123",
+        body: [
+          "<!-- vtdd:reviewer=codex-fallback -->",
+          "## VTDD Codex fallback レビュー",
+          "",
+          "- Status: `blocked`",
+          "- Trigger: `issue_comment:created`",
+          "- Reason: `codex_fallback_unavailable`",
+          "- Delivery mode: `vps_codex_cli`",
+          "- Head SHA: `abc123`",
+          "- Blocker: `actor_identity_failure`"
+        ].join("\n")
+      }
+    ]
+  });
+
+  assert.equal(selected.length, 0);
+});
+
 test("VPS runner can reprocess Codex fallback requested comments for a new head SHA", () => {
   const selected = selectPendingVpsReviewerFallbacks({
     repositoryPolicies: normalizeRepositoryPolicies({

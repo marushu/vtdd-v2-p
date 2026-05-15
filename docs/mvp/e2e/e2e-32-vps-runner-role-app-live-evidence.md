@@ -16,6 +16,28 @@ Live evidence plan:
 4. Confirm that the terminal comment is a completed or blocked reviewer result.
 5. Confirm that the visible GitHub actor is the expected role App.
 
+Observed live run on PR #396:
+
+- Requested marker: <https://github.com/marushu/vtdd-v2-p/pull/396#issuecomment-4459051036>
+- VPS runner once result: `VPS Codex reviewer fallback completed for marushu/vtdd-v2-p#396.`
+- Expected visible actor was confirmed: `vtdd-codex-fallback-reviewer[bot]`.
+- Terminal comments were posted by the expected role App:
+  - <https://github.com/marushu/vtdd-v2-p/pull/396#issuecomment-4459055374>
+  - <https://github.com/marushu/vtdd-v2-p/pull/396#issuecomment-4459056235>
+  - <https://github.com/marushu/vtdd-v2-p/pull/396#issuecomment-4459061782>
+
+Boundary failure found:
+
+- The runner posted more than one `completed` comment when the completed result was `request_changes`.
+- Root cause: `selectPendingVpsReviewerFallbacks` only stopped on reviewer terminal approval. It did not treat `completed + request_changes` or `blocked` as a resolved fallback request.
+- Immediate containment: the requested marker was edited to `Status: blocked`, and the VPS runner timer was temporarily stopped before more comments accumulated.
+- Fix: VPS runner selection now uses reviewer resolved state for Codex fallback requests. `completed` and `blocked` are terminal for request consumption; only `approve` remains terminal approval for merge-readiness semantics.
+
+Post-fix verification:
+
+- `npm test -- test/vps-runner-script.test.js`
+- `npm run build:worker`
+
 Non-goals:
 
 - Do not change runtime behavior in this evidence PR.

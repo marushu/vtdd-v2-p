@@ -8,6 +8,7 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import {
   isReviewerTerminalApproved,
+  isReviewerTerminalResolved,
   normalizeMentionLogin,
   parseCodexReviewFallbackComment,
   resolveGitHubAppInstallationToken
@@ -499,7 +500,7 @@ function selectPendingVpsReviewerFallbacks({ comments, allowedRepositories, repo
           normalizePositiveInteger(candidate.pullRequestNumber) === pullRequestNumber
       );
       if (
-        isReviewerTerminalApproved({
+        isReviewerTerminalResolved({
           comments: samePullRequestComments,
           after: comment.created_at,
           headSha: normalizeText(comment.headSha)
