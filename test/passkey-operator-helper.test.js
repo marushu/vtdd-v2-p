@@ -20,6 +20,17 @@ test("desktop helper bridge passes role-specific GitHub App sync arguments", () 
   assert.equal(helperSource.includes("github_app_role_not_served"), true);
 });
 
+test("desktop helper bridge exposes gateway bearer vault bootstrap without printing token", () => {
+  assert.equal(helperSource.includes("/api/gateway-bearer-vault/bootstrap"), true);
+  assert.equal(helperSource.includes("bootstrap-gateway-bearer-vault.mjs"), true);
+  assert.equal(helperSource.includes("--token-stdin"), true);
+  assert.equal(helperSource.includes("gateway_bearer_vault_bootstrap_failed"), true);
+  assert.equal(helperSource.includes("gateway_bearer_vault_approval_invalid"), true);
+  assert.equal(helperSource.includes("not_checked_initial_bootstrap_gateway_bearer_missing"), true);
+  assert.equal(helperSource.includes("verified_runtime_approval_grant"), true);
+  assert.equal(helperSource.includes("redactSecretText"), true);
+});
+
 test("desktop helper bridge does not proxy local passkey WebAuthn APIs", () => {
   assert.equal(helperSource.includes('url.pathname.startsWith("/api/approval/passkey/")'), false);
   assert.equal(helperSource.includes("function proxyPasskeyApi"), false);

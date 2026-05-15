@@ -2387,7 +2387,25 @@ test("worker passkey operator page enables desktop secret sync bridge when syncA
   assert.equal(response.status, 200);
   const html = await response.text();
   assert.equal(html.includes('fetch("http://127.0.0.1:8789/api/github-app-secret-sync/execute"'), true);
+  assert.equal(html.includes('fetch("http://127.0.0.1:8789/api/gateway-bearer-vault/bootstrap"'), true);
   assert.equal(html.includes("desktop helper bridge に接続します"), true);
+});
+
+test("worker serves gateway bearer vault operator mode", async () => {
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/v2/approval/passkey/operator?repositoryInput=marushu%2Fvtdd-v2-p&issueNumber=380&highRiskKind=gateway_bearer_vault_bootstrap&syncApiBase=http%3A%2F%2F127.0.0.1%3A8789%2Fapi"
+    ),
+    gatewayAuthEnv
+  );
+
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.equal(html.includes("Gateway Bearer Vault"), true);
+  assert.equal(html.includes('id="issue-input" value="380"'), true);
+  assert.equal(html.includes('id="risk-kind-input" value="gateway_bearer_vault_bootstrap"'), true);
+  assert.equal(html.includes('id="gateway-bearer-token-input" type="password"'), true);
+  assert.equal(html.includes('fetch("http://127.0.0.1:8789/api/gateway-bearer-vault/bootstrap"'), true);
 });
 
 test("worker serves VPS runner admin passkey operator mode", async () => {

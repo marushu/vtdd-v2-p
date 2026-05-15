@@ -27350,8 +27350,21 @@ function renderPasskeyOperatorPage(input = {}) {
           <pre id="openai-secret-sync-output"></pre>
         </section>
 
+        <section data-operator-section="gateway-bearer-vault"${hiddenAttribute(!sectionVisibility.gatewayBearerVault)}>
+          <h2>7. Gateway Bearer Vault</h2>
+          <p class="muted">\u30E1\u30E2\u30A2\u30D7\u30EA\u7B49\u306B\u4FDD\u7BA1\u3057\u3066\u3044\u308B <code>VTDD_GATEWAY_BEARER_TOKEN</code> \u3092\u3001\u3053\u306E\u7AEF\u672B\u306E local helper \u7D4C\u7531\u3067 Mac/VPS vault \u306B\u4FDD\u5B58\u3057\u307E\u3059\u3002\u5024\u306F Butler \u4F1A\u8A71\u3001GitHub \u30B3\u30E1\u30F3\u30C8\u3001RAG\u3001\u30EC\u30B9\u30DD\u30F3\u30B9\u672C\u6587\u306B\u8868\u793A\u3057\u307E\u305B\u3093\u3002</p>
+          <label for="gateway-bearer-token-input">VTDD_GATEWAY_BEARER_TOKEN</label>
+          <input id="gateway-bearer-token-input" type="password" autocomplete="off" placeholder="token..." />
+          <div class="row">
+            <button id="gateway-bearer-vault-button"${syncEnabled ? "" : " disabled"}>Save gateway bearer to vault</button>
+          </div>
+          <p class="muted"><code>actionType=destructive</code> / <code>highRiskKind=gateway_bearer_vault_bootstrap</code> \u306E approvalGrantId \u304C\u5FC5\u8981\u3067\u3059\u3002<code>syncApiBase</code> \u304C\u672A\u6307\u5B9A\u306E\u5834\u5408\u3001\u3053\u306E\u30DA\u30FC\u30B8\u304B\u3089 local vault \u3078\u306F\u66F8\u304D\u8FBC\u3081\u307E\u305B\u3093\u3002</p>
+          <p class="muted">\u521D\u56DE bootstrap \u3067\u306F\u65E2\u5B58 bearer token \u304C\u306A\u304F\u3001helper \u304C approvalGrant \u3092 runtime \u691C\u8A3C\u3067\u304D\u306A\u3044\u5834\u5408\u304C\u3042\u308A\u307E\u3059\u3002\u305D\u306E\u5834\u5408\u306F\u30EC\u30B9\u30DD\u30F3\u30B9\u306B <code>not_checked_initial_bootstrap_gateway_bearer_missing</code> \u3068\u8868\u793A\u3057\u307E\u3059\u3002Repository / Issue / High-risk Kind \u3092\u78BA\u8A8D\u3057\u3066\u304B\u3089\u5B9F\u884C\u3057\u3066\u304F\u3060\u3055\u3044\u3002</p>
+          <pre id="gateway-bearer-vault-output"></pre>
+        </section>
+
         <section data-operator-section="vps-runner-admin"${hiddenAttribute(!sectionVisibility.vpsRunnerAdmin)}>
-          <h2>7. VPS Runner Admin</h2>
+          <h2>8. VPS Runner Admin</h2>
           <p class="muted">VPS runner \u306E repo allowlist \u8FFD\u52A0\u3001runner restart\u3001smoke \u306A\u3069\u306E\u7BA1\u7406\u64CD\u4F5C\u7528 approval \u3067\u3059\u3002\u3053\u3053\u3067\u306F real passkey \u3067\u77ED\u547D\u306E <code>approvalGrantId</code> \u3060\u3051\u3092\u767A\u884C\u3057\u307E\u3059\u3002VPS \u64CD\u4F5C\u305D\u306E\u3082\u306E\u306F GitHub queue \u3068 runner event \u306B\u6B8B\u308B bounded command \u3068\u3057\u3066\u5225\u9014\u5B9F\u884C\u3055\u308C\u307E\u3059\u3002</p>
           <p class="muted"><code>actionType=destructive</code> / <code>highRiskKind=vps_runner_admin</code> \u306E approvalGrantId \u304C\u5FC5\u8981\u3067\u3059\u3002\u6587\u5B57\u5217\u3068\u3057\u3066\u306E passkey \u306F\u627F\u8A8D\u3067\u306F\u3042\u308A\u307E\u305B\u3093\u3002</p>
         </section>
@@ -27365,6 +27378,7 @@ function renderPasskeyOperatorPage(input = {}) {
       const deployOutput = document.getElementById("deploy-output");
       const mergeOutput = document.getElementById("merge-output");
       const openaiSecretSyncOutput = document.getElementById("openai-secret-sync-output");
+      const gatewayBearerVaultOutput = document.getElementById("gateway-bearer-vault-output");
       const copyApprovalGrantButton = document.getElementById("copy-approval-grant-button");
       const autoCopyApprovalGrantInput = document.getElementById("auto-copy-approval-grant-input");
       const deployRunLink = document.getElementById("deploy-run-link");
@@ -27789,6 +27803,42 @@ function renderPasskeyOperatorPage(input = {}) {
         }
       });
 
+      document.getElementById("gateway-bearer-vault-button").addEventListener("click", async () => {
+        try {
+          const pastedApprovalGrantId = document.getElementById("approval-grant-id-input").value.trim();
+          const approvalGrantId = latestApprovalGrantId || pastedApprovalGrantId;
+          if (!approvalGrantId) {
+            throw new Error("approvalGrantId is required before gateway bearer vault bootstrap");
+          }
+          if (!"${syncApiBase}") {
+            throw new Error("desktop maintenance required: local gateway bearer vault bridge is not configured");
+          }
+          const gatewayBearerTokenInput = document.getElementById("gateway-bearer-token-input");
+          const gatewayBearerToken = gatewayBearerTokenInput.value;
+          if (!gatewayBearerToken) {
+            throw new Error("VTDD_GATEWAY_BEARER_TOKEN is required");
+          }
+          gatewayBearerVaultOutput.textContent = "gateway bearer vault bootstrap request...";
+          const vaultResponse = await fetch("${syncApiBase}/gateway-bearer-vault/bootstrap", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              approvalGrantId,
+              repositoryInput: document.getElementById("repo-input").value,
+              gatewayBearerToken
+            })
+          });
+          const vaultBody = await readResponseBody(vaultResponse);
+          if (!vaultResponse.ok) {
+            throw responseError(vaultBody, "gateway bearer vault bootstrap failed");
+          }
+          gatewayBearerTokenInput.value = "";
+          gatewayBearerVaultOutput.textContent = JSON.stringify(vaultBody, null, 2);
+        } catch (error) {
+          gatewayBearerVaultOutput.textContent = String(error);
+        }
+      });
+
       function decodeRegistrationOptions(options) {
         return {
           ...options,
@@ -27900,6 +27950,9 @@ function resolvePasskeyOperatorMode(input = {}) {
   if (highRiskKind === "github_actions_secret_sync") {
     return "github_actions_secret_sync";
   }
+  if (highRiskKind === "gateway_bearer_vault_bootstrap") {
+    return "gateway_bearer_vault";
+  }
   if (highRiskKind === "github_app_secret_sync") {
     return "github_app_secret_sync";
   }
@@ -27918,6 +27971,7 @@ function resolveSectionVisibility(operatorMode, options = {}) {
     productionDeploy: full || operatorMode === "deploy",
     prMerge: full || operatorMode === "merge",
     githubActionsSecretSync: full || operatorMode === "github_actions_secret_sync",
+    gatewayBearerVault: full || operatorMode === "gateway_bearer_vault",
     vpsRunnerAdmin: full || operatorMode === "vps"
   };
 }
@@ -27930,7 +27984,7 @@ function renderGithubAppRoleOption(value, label, selectedValue) {
 }
 function normalizeOperatorMode(value) {
   const token = normalizeOperatorToken(value);
-  if (["full", "deploy", "merge", "github_app_secret_sync", "github_actions_secret_sync", "vps"].includes(token)) {
+  if (["full", "deploy", "merge", "github_app_secret_sync", "github_actions_secret_sync", "gateway_bearer_vault", "vps"].includes(token)) {
     return token;
   }
   if (token === "secret_sync") {
@@ -27938,6 +27992,9 @@ function normalizeOperatorMode(value) {
   }
   if (token === "openai_secret_sync" || token === "codex_secret_sync") {
     return "github_actions_secret_sync";
+  }
+  if (token === "gateway_vault" || token === "gateway_bearer") {
+    return "gateway_bearer_vault";
   }
   return "";
 }
@@ -27959,6 +28016,9 @@ function defaultHighRiskKindForMode(operatorMode) {
   }
   if (operatorMode === "github_actions_secret_sync") {
     return "github_actions_secret_sync";
+  }
+  if (operatorMode === "gateway_bearer_vault") {
+    return "gateway_bearer_vault_bootstrap";
   }
   if (operatorMode === "vps") {
     return "vps_runner_admin";
