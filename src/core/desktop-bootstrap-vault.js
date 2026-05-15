@@ -154,6 +154,82 @@ export async function loadGatewayBearerTokenFromVault(input = {}) {
   };
 }
 
+export async function loadGitHubAppRoleCredentialsFromVault(input = {}) {
+  const manifestPath = normalizeText(input.manifestPath) || DEFAULT_VTDD_VAULT_MANIFEST_PATH;
+  const manifestDir = path.dirname(manifestPath);
+  const role = normalizeText(input.role);
+
+  if (!role) {
+    return {
+      ok: false,
+      issues: ["github app role is required in desktop bootstrap vault lookup"]
+    };
+  }
+
+  let manifest;
+  try {
+    const content = await fs.readFile(manifestPath, "utf8");
+    manifest = JSON.parse(content);
+  } catch (error) {
+    return {
+      ok: false,
+      issues: [
+        error?.code === "ENOENT"
+          ? `desktop bootstrap vault manifest not found: ${manifestPath}`
+          : `desktop bootstrap vault manifest is unreadable: ${manifestPath}`
+      ]
+    };
+  }
+
+  if (Number(manifest?.version) !== 1) {
+    return {
+      ok: false,
+      issues: ["desktop bootstrap vault manifest version must be 1"]
+    };
+  }
+
+  const roleRecord = manifest?.githubAppRoles?.[role] ?? manifest?.githubApps?.[role] ?? null;
+  if (!roleRecord || typeof roleRecord !== "object") {
+    return {
+      ok: false,
+      issues: [`githubAppRoles.${role} is required in desktop bootstrap vault manifest`]
+    };
+  }
+
+  const issues = [];
+  const privateKeyPath = resolveReferencedPath(manifestDir, roleRecord.privateKeyPath);
+  const privateKey = await readOptionalTextFile(privateKeyPath, issues);
+
+  if (!normalizeText(roleRecord.appId)) {
+    issues.push(`githubAppRoles.${role}.appId is required in desktop bootstrap vault manifest`);
+  }
+  if (!normalizeText(roleRecord.installationId)) {
+    issues.push(`githubAppRoles.${role}.installationId is required in desktop bootstrap vault manifest`);
+  }
+  if (!normalizeText(roleRecord.privateKeyPath)) {
+    issues.push(`githubAppRoles.${role}.privateKeyPath is required in desktop bootstrap vault manifest`);
+  }
+  if (normalizeText(roleRecord.privateKeyPath) && !normalizeText(privateKey)) {
+    issues.push(`desktop bootstrap vault GitHub App private key file is empty or unreadable for role ${role}`);
+  }
+
+  if (issues.length > 0) {
+    return { ok: false, issues };
+  }
+
+  return {
+    ok: true,
+    role,
+    manifestPath,
+    credentials: {
+      appId: normalizeText(roleRecord.appId),
+      installationId: normalizeText(roleRecord.installationId),
+      privateKeyPath,
+      privateKey
+    }
+  };
+}
+
 function resolveReferencedPath(manifestDir, referencedPath) {
   const normalized = normalizeText(referencedPath);
   if (!normalized) {

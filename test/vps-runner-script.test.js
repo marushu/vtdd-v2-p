@@ -1095,6 +1095,60 @@ test("VPS runner role App token resolution fails closed when role credentials ar
   assert.equal(result.reason.includes("missing app id, private key, installation id"), true);
 });
 
+test("VPS runner role App token resolution can read role credentials from vault manifest", async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "vtdd-vps-role-vault-"));
+  const credentialsDir = path.join(tempDir, "credentials");
+  await fs.mkdir(path.join(credentialsDir, "github-apps"), { recursive: true });
+  const keyPath = path.join(credentialsDir, "github-apps", "codex-fallback.pem");
+  const manifestPath = path.join(credentialsDir, "manifest.json");
+  await fs.writeFile(keyPath, "-----BEGIN PRIVATE KEY-----\nrole-example\n-----END PRIVATE KEY-----\n");
+  await fs.writeFile(
+    manifestPath,
+    JSON.stringify(
+      {
+        version: 1,
+        githubAppRoles: {
+          "codex-fallback-reviewer": {
+            appId: "3706921",
+            installationId: "132169447",
+            privateKeyPath: "github-apps/codex-fallback.pem"
+          }
+        }
+      },
+      null,
+      2
+    )
+  );
+
+  const calls = [];
+  const result = await resolveRoleGitHubAppInstallationToken({
+    role: "codex_fallback_reviewer",
+    apiBaseUrl: "https://api.github.invalid",
+    env: {
+      VTDD_VPS_RUNNER_CREDENTIALS_MANIFEST: manifestPath,
+      GITHUB_APP_JWT_PROVIDER: async () => "app_jwt_for_test",
+      GITHUB_API_FETCH: async (url, init = {}) => {
+        calls.push({ url, init });
+        return new Response(
+          JSON.stringify({
+            token: "ghs_role_installation_token",
+            expires_at: "2030-01-01T00:00:00Z"
+          }),
+          {
+            status: 201,
+            headers: { "content-type": "application/json" }
+          }
+        );
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.token, "ghs_role_installation_token");
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url.includes("/app/installations/132169447/access_tokens"), true);
+});
+
 test("VPS runner ignores untrusted approve markers when selecting Codex fallback requests", () => {
   const selected = selectPendingVpsReviewerFallbacks({
     repositoryPolicies: normalizeRepositoryPolicies({

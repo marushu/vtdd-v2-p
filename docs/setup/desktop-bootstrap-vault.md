@@ -66,6 +66,9 @@ Recommended layout:
     manifest.json
     github-app/
       private-key.pem
+    github-apps/
+      codex-fallback-reviewer.pem
+      vps-codex-cli.pem
     cloudflare/
       api-token.txt
     gateway/
@@ -87,6 +90,18 @@ Example:
     "appId": "3467409",
     "installationId": "126180737",
     "privateKeyPath": "github-app/private-key.pem"
+  },
+  "githubAppRoles": {
+    "codex-fallback-reviewer": {
+      "appId": "3706921",
+      "installationId": "132169447",
+      "privateKeyPath": "github-apps/codex-fallback-reviewer.pem"
+    },
+    "vps-codex-cli": {
+      "appId": "your-vps-codex-cli-app-id",
+      "installationId": "your-vps-codex-cli-installation-id",
+      "privateKeyPath": "github-apps/vps-codex-cli.pem"
+    }
   },
   "cloudflare": {
     "accountId": "your-cloudflare-account-id",
@@ -111,6 +126,10 @@ At minimum, the vault contract covers:
   - `appId`
   - `installationId`
   - private key path
+- role-specific GitHub App material for local/VPS repair paths
+  - `githubAppRoles.codex-fallback-reviewer`
+  - `githubAppRoles.vps-codex-cli`
+  - each role stores `appId`, `installationId`, and a private key path
 - Cloudflare root material
   - `accountId`
   - API token path
