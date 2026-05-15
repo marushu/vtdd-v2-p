@@ -36165,6 +36165,7 @@ var RUNTIME_SETUP_MANIFEST = Object.freeze({
 });
 var INSTRUCTIONS_CHARACTER_LIMIT = 8e3;
 var KNOWN_GOOD_COMMIT_ENV = "VTDD_KNOWN_GOOD_COMMIT_SHA";
+var KNOWN_GOOD_MANIFEST_PATH = "docs/setup/known-good.json";
 var VTDD_SETUP_REPOSITORY = "marushu/vtdd-v2-p";
 var CustomGptSetupChannel = Object.freeze({
   LATEST: "latest",
@@ -36413,17 +36414,17 @@ async function buildCustomGptRecoveryBundle(input = {}) {
       reason: "runtimeOrigin is required"
     };
   }
-  const knownGoodCommit = channel === CustomGptSetupChannel.KNOWN_GOOD ? resolveConfiguredKnownGoodCommitSha({ ref: requestedRef, env }) : null;
+  const knownGoodCommit = channel === CustomGptSetupChannel.KNOWN_GOOD ? await resolveKnownGoodCommitPointer({ repository, ref: requestedRef, env }) : null;
   if (channel === CustomGptSetupChannel.KNOWN_GOOD && !knownGoodCommit?.sha) {
     return {
       ok: false,
       status: 503,
       error: "known_good_setup_unavailable",
-      reason: "known-good setup requires VTDD_KNOWN_GOOD_COMMIT_SHA or an explicit 40-character ref"
+      reason: knownGoodCommit?.reason || "known-good setup requires docs/setup/known-good.json, VTDD_KNOWN_GOOD_COMMIT_SHA, or an explicit 40-character ref"
     };
   }
   const ref = channel === CustomGptSetupChannel.KNOWN_GOOD ? knownGoodCommit?.sha || requestedRef : requestedRef;
-  const [openapi, instructionsShortMin, selfParity, latestCommit] = await Promise.all([
+  const [openapi, instructionsShortMin, selfParity, latestCommit, knownGoodPointer] = await Promise.all([
     retrieveCustomGptSetupArtifact({
       artifact: CustomGptSetupArtifact.OPENAPI_YAML,
       repository,
@@ -36443,7 +36444,8 @@ async function buildCustomGptRecoveryBundle(input = {}) {
       issueNumber,
       env
     }),
-    channel === CustomGptSetupChannel.LATEST ? resolveKnownGoodCommitSha({ repository, ref, env }) : Promise.resolve(null)
+    channel === CustomGptSetupChannel.LATEST ? resolveKnownGoodCommitSha({ repository, ref, env }) : Promise.resolve(null),
+    channel === CustomGptSetupChannel.LATEST ? resolveKnownGoodCommitPointer({ repository, ref, env }) : Promise.resolve(knownGoodCommit)
   ]);
   const failed = [openapi, instructionsShortMin, selfParity].find((result) => !result.ok);
   if (failed) {
@@ -36491,9 +36493,12 @@ async function buildCustomGptRecoveryBundle(input = {}) {
         content: instructions
       },
       rollback: {
-        knownGoodCommitSha: channel === CustomGptSetupChannel.KNOWN_GOOD ? knownGoodCommit?.sha : null,
-        knownGoodCommitSource: channel === CustomGptSetupChannel.KNOWN_GOOD ? knownGoodCommit?.source : "not_checked_on_latest",
+        knownGoodCommitSha: channel === CustomGptSetupChannel.KNOWN_GOOD ? knownGoodCommit?.sha : knownGoodPointer?.sha ?? null,
+        knownGoodCommitSource: channel === CustomGptSetupChannel.KNOWN_GOOD ? knownGoodCommit?.source : knownGoodPointer?.source ?? "unconfigured",
         rollbackReady: channel === CustomGptSetupChannel.KNOWN_GOOD,
+        knownGoodManifestPath: KNOWN_GOOD_MANIFEST_PATH,
+        knownGoodManifestSha: knownGoodPointer?.manifestSha ?? null,
+        knownGoodVerifiedAt: knownGoodPointer?.verifiedAt ?? null,
         bundleArtifacts: [
           openapi.artifact.path,
           instructionsShortMin.artifact.path
@@ -36650,10 +36655,110 @@ function resolveConfiguredKnownGoodCommitSha({ ref, env }) {
   if (/^[a-f0-9]{40}$/i.test(configured)) {
     return { sha: configured, source: KNOWN_GOOD_COMMIT_ENV };
   }
+  if (configured) {
+    return {
+      sha: null,
+      source: KNOWN_GOOD_COMMIT_ENV,
+      reason: `${KNOWN_GOOD_COMMIT_ENV} must be a 40-character commit SHA`
+    };
+  }
   if (/^[a-f0-9]{40}$/i.test(ref)) {
     return { sha: ref, source: "ref" };
   }
   return { sha: null, source: "unconfigured" };
+}
+async function resolveKnownGoodCommitPointer({ repository, ref, env }) {
+  const configured = resolveConfiguredKnownGoodCommitSha({ ref, env });
+  if (configured.sha || configured.reason || configured.source === "ref") {
+    return configured;
+  }
+  const manifest = await retrieveKnownGoodManifest({ repository, ref, env });
+  if (manifest.ok) {
+    return {
+      sha: manifest.commitSha,
+      source: KNOWN_GOOD_MANIFEST_PATH,
+      manifestSha: manifest.manifestSha,
+      verifiedAt: manifest.verifiedAt
+    };
+  }
+  return {
+    sha: null,
+    source: manifest.source || "unconfigured",
+    reason: manifest.source === "unconfigured" ? `known-good setup requires ${KNOWN_GOOD_MANIFEST_PATH}, ${KNOWN_GOOD_COMMIT_ENV}, or an explicit 40-character ref` : manifest.reason
+  };
+}
+async function retrieveKnownGoodManifest({ repository, ref, env }) {
+  const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
+  const apiBaseUrl = normalizeApiBaseUrl4(env?.GITHUB_API_BASE_URL);
+  const tokenResolution = await resolveGitHubAppInstallationToken({ env, fetchImpl, apiBaseUrl });
+  if (!tokenResolution.ok) {
+    return {
+      ok: false,
+      source: "unverified",
+      reason: tokenResolution.warning || "GitHub App installation token is unavailable"
+    };
+  }
+  let response;
+  try {
+    response = await fetchImpl(
+      `${apiBaseUrl}/repos/${encodeRepository(repository)}/contents/${KNOWN_GOOD_MANIFEST_PATH}?ref=${encodeURIComponent(ref || "main")}`,
+      {
+        method: "GET",
+        headers: {
+          authorization: `Bearer ${tokenResolution.token}`,
+          accept: "application/vnd.github+json",
+          "x-github-api-version": GITHUB_API_VERSION4,
+          "user-agent": GITHUB_API_USER_AGENT4
+        }
+      }
+    );
+  } catch {
+    return {
+      ok: false,
+      source: "unverified",
+      reason: `failed to retrieve ${KNOWN_GOOD_MANIFEST_PATH}`
+    };
+  }
+  const body = await readJsonSafe5(response);
+  if (!response.ok) {
+    return {
+      ok: false,
+      source: response.status === 404 ? "unconfigured" : "unverified",
+      reason: normalizeText24(body?.message) || `${KNOWN_GOOD_MANIFEST_PATH} is unavailable at ${ref || "main"}`
+    };
+  }
+  const content = decodeGitHubFileContent(body?.content, body?.encoding);
+  if (!content) {
+    return {
+      ok: false,
+      source: "unverified",
+      reason: `${KNOWN_GOOD_MANIFEST_PATH} is unreadable`
+    };
+  }
+  let manifest;
+  try {
+    manifest = JSON.parse(content);
+  } catch {
+    return {
+      ok: false,
+      source: "unverified",
+      reason: `${KNOWN_GOOD_MANIFEST_PATH} is not valid JSON`
+    };
+  }
+  const commitSha = normalizeText24(manifest?.commitSha);
+  if (!/^[a-f0-9]{40}$/i.test(commitSha)) {
+    return {
+      ok: false,
+      source: "unverified",
+      reason: `${KNOWN_GOOD_MANIFEST_PATH} commitSha must be a 40-character commit SHA`
+    };
+  }
+  return {
+    ok: true,
+    commitSha,
+    manifestSha: normalizeText24(body?.sha) || null,
+    verifiedAt: normalizeText24(manifest?.verifiedAt) || null
+  };
 }
 async function resolveKnownGoodCommitSha({ repository, ref, env }) {
   const configured = normalizeText24(env?.[KNOWN_GOOD_COMMIT_ENV]);
@@ -36845,7 +36950,7 @@ async function compareKnownGoodSetupArtifacts({
   latestInstructions,
   latestOpenapi
 }) {
-  const knownGood = resolveConfiguredKnownGoodCommitSha({ ref: "", env });
+  const knownGood = await resolveKnownGoodCommitPointer({ repository, ref, env });
   if (!knownGood?.sha) {
     return {
       status: "known_good_unavailable",
