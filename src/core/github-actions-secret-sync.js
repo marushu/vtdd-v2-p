@@ -3,7 +3,7 @@ import { resolveGitHubAppInstallationToken } from "./github-app-repository-index
 const GITHUB_API_BASE_URL = "https://api.github.com";
 const GITHUB_API_VERSION = "2022-11-28";
 const GITHUB_API_USER_AGENT = "vtdd-v2-github-actions-secret-sync";
-const ALLOWED_ACTIONS_SECRET_NAMES = new Set(["OPENAI_API_KEY"]);
+const ALLOWED_ACTIONS_SECRET_NAMES = new Set(["OPENAI_API_KEY", "VTDD_GATEWAY_BEARER_TOKEN"]);
 
 export async function executeGitHubActionsSecretSync(input = {}) {
   const repository = normalizeText(input.repository);
@@ -150,7 +150,7 @@ export function validateGitHubActionsSecretSyncRequest({
     issues.push("repository is required");
   }
   if (!ALLOWED_ACTIONS_SECRET_NAMES.has(secretName)) {
-    issues.push("secretName must be OPENAI_API_KEY");
+    issues.push("secretName must be OPENAI_API_KEY or VTDD_GATEWAY_BEARER_TOKEN");
   }
   if (!secretValue) {
     issues.push("secretValue is required");

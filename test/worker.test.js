@@ -5094,6 +5094,74 @@ test("worker syncs OPENAI_API_KEY through approval-bound GitHub Actions secret r
   assert.equal(calls[1].url.endsWith("/actions/secrets/OPENAI_API_KEY"), true);
 });
 
+test("worker syncs VTDD_GATEWAY_BEARER_TOKEN through approval-bound GitHub Actions secret route", async () => {
+  const provider = createInMemoryMemoryProvider();
+  const calls = [];
+  await provider.store({
+    id: "approval-actions-gateway-secret-123",
+    type: MemoryRecordType.APPROVAL_LOG,
+    content: {
+      kind: "passkey_grant",
+      status: "verified",
+      approvalId: "approval-actions-gateway-secret-123",
+      expiresAt: "2099-01-01T00:00:00.000Z",
+      scope: {
+        actionType: "destructive",
+        highRiskKind: "github_actions_secret_sync",
+        repositoryInput: "sample-org/vtdd-v2-p",
+        phase: "execution"
+      }
+    },
+    metadata: { source: "test" },
+    priority: 90,
+    tags: ["passkey_grant"],
+    createdAt: "2026-04-28T00:00:00.000Z"
+  });
+
+  const response = await worker.fetch(
+    new Request("https://sample-user-vtdd.example.workers.dev/v2/action/github-actions-secret", {
+      method: "POST",
+      headers: {
+        ...gatewayAuthHeaders,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        repository: "sample-org/vtdd-v2-p",
+        secretName: "VTDD_GATEWAY_BEARER_TOKEN",
+        secretValue: "gateway-test-secret",
+        policyInput: {
+          approvalGrantId: "approval-actions-gateway-secret-123"
+        }
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      MEMORY_PROVIDER: provider,
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_secret",
+      GITHUB_API_FETCH: async (url, init) => {
+        calls.push({ url: String(url), init });
+        if (String(url).endsWith("/actions/secrets/public-key")) {
+          return new Response(
+            JSON.stringify({
+              key_id: "key-123",
+              key: "LW+MLFAtyNPENefjLqmydKkBGp4l5suTetSR9313Xm8="
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        return new Response(null, { status: 204 });
+      }
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.secretSync.secretName, "VTDD_GATEWAY_BEARER_TOKEN");
+  assert.equal(JSON.stringify(body).includes("gateway-test-secret"), false);
+  assert.equal(calls[1].url.endsWith("/actions/secrets/VTDD_GATEWAY_BEARER_TOKEN"), true);
+});
+
 test("worker allows same-origin browser OPENAI_API_KEY secret sync with approval grant", async () => {
   const provider = createInMemoryMemoryProvider();
   const calls = [];

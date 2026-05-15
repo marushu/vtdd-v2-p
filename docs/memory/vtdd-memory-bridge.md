@@ -56,6 +56,17 @@ This creates/updates `~/.vtdd/credentials/manifest.json` and
 It only configures the local Mac/VPS caller. It does not rotate or sync Worker
 secrets, GitHub Actions secrets, or Custom GPT Action auth.
 
+If the gateway bearer token is rotated, the same value must be aligned across:
+
+- the local Mac/VPS vault token file,
+- GitHub Actions secret `VTDD_GATEWAY_BEARER_TOKEN`,
+- the deployed Worker secret `VTDD_GATEWAY_BEARER_TOKEN`,
+- Custom GPT Action bearer auth.
+
+The operator page can sync the GitHub Actions secret under
+`highRiskKind=github_actions_secret_sync`, but Worker secret rotation and Custom
+GPT Action auth update remain separate explicit credential-update steps.
+
 ## Commands
 
 Inventory D1 memory records:
