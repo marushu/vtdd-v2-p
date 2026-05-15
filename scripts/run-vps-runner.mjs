@@ -866,7 +866,14 @@ function normalizeVpsRunnerPreflightPolicy(value = {}) {
     requiredRepoFiles:
       requiredRepoFiles.length > 0
         ? requiredRepoFiles
-        : ["AGENTS.md", "docs/pr-template-model.md", "scripts/prepare-pr-body-file.mjs", "scripts/render-pr-body.mjs", "scripts/validate-pr-body.mjs"]
+        : [
+            "AGENTS.md",
+            "docs/butler/thread-independent-startup-contract.md",
+            "docs/pr-template-model.md",
+            "scripts/prepare-pr-body-file.mjs",
+            "scripts/render-pr-body.mjs",
+            "scripts/validate-pr-body.mjs"
+          ]
   };
 }
 

@@ -73,6 +73,21 @@ Do not talk about executor / handoff / reviewer / claim behavior as if it were
 missing from scratch until you have explicitly checked for an existing contract,
 draft, test, or implementation anchor in-repo.
 
+## Thread-Independent Startup Contract
+
+Thread-local behavior is not a stable VTDD rule. If a behavior must survive a
+new chat thread, context compression, Butler handoff, mac Codex handoff, or VPS
+Codex CLI handoff, promote it into repository docs, Issue comments, or RAG.
+
+Before starting or resuming Issue-backed work, read
+`docs/butler/thread-independent-startup-contract.md` when startup behavior,
+handoff behavior, RAG recall, or cross-surface consistency is relevant.
+
+Startup/preflight must report whether thread-local assumptions have been
+promoted into durable repo/RAG state. If not, say
+`threadLocalAssumptionsPromoted=false` or `未確認`; do not proceed as if the
+current thread's implicit habits are canonical.
+
 ## Active-Issue Coverage Policy
 
 Default assumption: implementation scope covers all active Issues unless the user explicitly narrows scope.

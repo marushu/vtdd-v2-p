@@ -1251,6 +1251,51 @@ test("VPS runner builds preflight receipt from canonical repo files", async () =
   assert.equal(payload.preflightReceipt.handoffNote.issueNumber, 307);
 });
 
+test("VPS runner default preflight reads the thread-independent startup contract", async () => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "vtdd-preflight-default-"));
+  await fs.writeFile(path.join(tempRoot, "AGENTS.md"), "Thread-Independent Startup Contract\n");
+  await fs.mkdir(path.join(tempRoot, "docs", "butler"), { recursive: true });
+  await fs.mkdir(path.join(tempRoot, "scripts"), { recursive: true });
+  await fs.writeFile(
+    path.join(tempRoot, "docs", "butler", "thread-independent-startup-contract.md"),
+    "threadLocalAssumptionsPromoted=false\n"
+  );
+  await fs.writeFile(path.join(tempRoot, "docs", "pr-template-model.md"), "PR template contract\n");
+  await fs.writeFile(path.join(tempRoot, "scripts", "prepare-pr-body-file.mjs"), "prepare\n");
+  await fs.writeFile(path.join(tempRoot, "scripts", "render-pr-body.mjs"), "render\n");
+  await fs.writeFile(path.join(tempRoot, "scripts", "validate-pr-body.mjs"), "validate\n");
+
+  const payload = {
+    repository: "sample-org/vtdd-v2",
+    issueNumber: 344,
+    codexGoal: "open_pr"
+  };
+
+  const receipt = await buildVpsRunnerPreflightReceipt({
+    workspace: tempRoot,
+    payload,
+    issue: {
+      number: 344,
+      title: "共通起動前確認",
+      body: "Butler / mac Codex / VPS Codex CLI で同じ startup preflight を返す"
+    }
+  });
+
+  assert.equal(receipt.ok, true);
+  assert.equal(
+    receipt.artifacts.some(
+      (artifact) => artifact.path === "docs/butler/thread-independent-startup-contract.md"
+    ),
+    true
+  );
+  assert.equal(
+    payload.preflightReceipt.artifacts.some((artifact) =>
+      artifact.excerpt.includes("threadLocalAssumptionsPromoted=false")
+    ),
+    true
+  );
+});
+
 test("VPS runner preflight receipt requires owner decision when required files are missing", async () => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "vtdd-preflight-missing-"));
   await fs.writeFile(path.join(tempRoot, "AGENTS.md"), "Do not silently downscope active Issues.\n");
