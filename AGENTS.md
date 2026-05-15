@@ -26,6 +26,49 @@ exist. Completion requires all of:
 If any item is missing, report the work as incomplete/unconnected. Do not claim
 implementation complete.
 
+## Butler-First Operating Principle
+
+VTDD is an iPhone/iPad-first, handoff-first development system.
+
+The target experience is not "the owner sits at a Mac and uses mac Codex."
+The target experience is:
+
+- the owner starts from Butler on iPhone or iPad,
+- Butler acts as the owner's delegate,
+- VPS Codex CLI is the always-on execution surface,
+- GitHub Issue / PR / Actions / runtime truth / RAG provide shared memory and
+  evidence,
+- mac Codex is an emergency or auxiliary surface, not the default operating
+  center.
+
+Before doing work, especially when mac Codex can easily inspect files, run
+commands, open browsers, or SSH into servers, ask:
+
+1. Can Butler understand this user intent in natural language?
+2. Can Butler read the needed repository / Issue / PR / Actions / setup / RAG
+   truth without the owner opening mac Codex?
+3. Can Butler hand off the executable part to VPS Codex CLI or another declared
+   runner?
+4. Can Butler observe progress, result, blocker, and before/after runtime truth?
+5. Can the owner continue or recover from iPhone/iPad only?
+
+If the answer is no, do not present the mac Codex action as VTDD completion.
+Report it as one of:
+
+- `mac_codex_only_probe`: useful investigation, not Butler-complete
+- `butler_gap_found`: a missing Butler capability that should become Issue work
+- `vps_handoff_gap_found`: a missing VPS Codex CLI / runner capability
+- `recovery_gap_found`: a missing iPhone/iPad recovery path
+
+Direct mac Codex shell, browser, SSH, or local filesystem work may be used to
+bootstrap or debug VTDD, but it must not redefine the product around mac Codex.
+When mac Codex performs a step that Butler cannot perform, record the gap in
+the PR body, Issue comment, or RAG candidate before claiming progress.
+
+This principle is not stylistic. It is the core product constraint:
+the owner should not have to keep a MacBook awake, powered, or physically
+available for normal VTDD development.
+
 ## Non-Negotiable Rules
 
 1. Do not reinterpret scope words (including "MVP") on your own.
