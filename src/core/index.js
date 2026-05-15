@@ -187,6 +187,9 @@ export {
 } from "./remote-codex-executor.js";
 export {
   DEFAULT_GEMINI_REVIEW_MODEL,
+  DEFAULT_REVIEWER_RUNAWAY_MAX_COMMENTS,
+  DEFAULT_REVIEWER_RUNAWAY_WINDOW_MINUTES,
+  GEMINI_REVIEW_RUNAWAY_GUARD_MARKER,
   GEMINI_PR_REVIEW_MARKER,
   MAX_CONTEXT_COMMENTS,
   MAX_DIFF_CHARACTERS,
@@ -195,8 +198,10 @@ export {
   buildPullRequestDiff,
   buildPullRequestReviewContext,
   buildReviewResponseSummary,
+  detectGeminiReviewerRunaway,
   extractReviewerResponseFromGemini,
   findExistingGeminiReviewComment,
+  formatGeminiReviewRunawayGuardComment,
   formatReviewResponseSummary,
   formatGeminiReviewComment,
   parseGeminiReviewComment,

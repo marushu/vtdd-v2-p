@@ -133,6 +133,19 @@ self-trigger review loops, and an `approve` marker for the same PR head SHA is a
 terminal state unless a new commit, explicit trusted re-review request, or later
 blocking reviewer signal reopens review.
 
+## Runaway Guard
+
+If the Gemini reviewer sees too many trusted reviewer markers in a short time
+window, it must stop before making another Gemini call or appending another
+review. The workflow writes at most one GitHub-visible guard marker:
+
+`<!-- vtdd:reviewer=runaway-guard -->`
+
+That marker is owner-facing Japanese status. It states the stopped scope, the
+detected marker count, the threshold, and the resume condition. The marker uses
+the normal reviewer marker shape so the `issue_comment` trigger skips it before
+dependency install instead of creating a new review loop.
+
 The VTDD reviewer marker comment is the canonical VTDD reviewer signal for
 Butler synthesis. It must not be confused with GitHub formal Pull Request
 Review API objects or GitHub `reviewDecision` state. If a marker recommends

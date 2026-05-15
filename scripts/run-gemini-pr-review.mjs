@@ -2,15 +2,19 @@ import fs from "node:fs/promises";
 import {
   classifyGeminiReviewFailure,
   DEFAULT_GEMINI_REVIEW_MODEL,
+  DEFAULT_REVIEWER_RUNAWAY_MAX_COMMENTS,
+  DEFAULT_REVIEWER_RUNAWAY_WINDOW_MINUTES,
   GeminiReviewFailureKind,
   buildGeminiReviewRequestBody,
   buildPullRequestDiff,
   buildPullRequestReviewContext,
+  detectGeminiReviewerRunaway,
   extractReviewerResponseFromGemini,
   findExistingCodexReviewFallbackComment,
   findExistingGeminiReviewComment,
   formatCodexReviewFallbackComment,
   formatGeminiReviewComment,
+  formatGeminiReviewRunawayGuardComment,
   isReviewerTerminalApproved,
   parseGeminiReviewComment,
   resolveOperatorMention,
@@ -52,6 +56,33 @@ async function main() {
     })
   ) {
     console.log(`Skipping Gemini PR review: reviewer already approved current PR head on PR #${prNumber}.`);
+    return;
+  }
+
+  const runawayGuard = detectGeminiReviewerRunaway({
+    issueComments,
+    windowMinutes: parsePositiveInteger(process.env.VTDD_REVIEWER_RUNAWAY_WINDOW_MINUTES) || DEFAULT_REVIEWER_RUNAWAY_WINDOW_MINUTES,
+    maxReviewerComments: parsePositiveInteger(process.env.VTDD_REVIEWER_RUNAWAY_MAX_COMMENTS) || DEFAULT_REVIEWER_RUNAWAY_MAX_COMMENTS
+  });
+  if (runawayGuard.triggered) {
+    if (runawayGuard.shouldNotifyOwner) {
+      const guardBody = formatGeminiReviewRunawayGuardComment({
+        repository,
+        pullRequestNumber: prNumber,
+        headSha: pullRequest?.head?.sha,
+        windowMinutes: runawayGuard.windowMinutes,
+        maxReviewerComments: runawayGuard.maxReviewerComments,
+        recentReviewerCommentCount: runawayGuard.recentReviewerCommentCount,
+        notificationMention: resolveOperatorMention([pullRequest?.user?.login, payload?.sender?.login])
+      });
+      await githubFetch(`/repos/${repository}/issues/${prNumber}/comments`, {
+        method: "POST",
+        body: { body: guardBody }
+      });
+    }
+    console.log(
+      `Skipping Gemini PR review: runaway guard triggered on PR #${prNumber} (${runawayGuard.recentReviewerCommentCount}/${runawayGuard.maxReviewerComments} reviewer comments in ${runawayGuard.windowMinutes}m).`
+    );
     return;
   }
 
@@ -187,6 +218,11 @@ function mustGetEnv(name) {
     throw new Error(`${name} is required`);
   }
   return value;
+}
+
+function parsePositiveInteger(value) {
+  const numeric = Number(value);
+  return Number.isInteger(numeric) && numeric > 0 ? numeric : null;
 }
 
 function shouldMentionGeminiReviewResult({ existingComment, recommendedAction }) {

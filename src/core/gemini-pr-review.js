@@ -4,9 +4,12 @@ import { formatReviewerOperatorSummary } from "./reviewer-operator-summary.js";
 
 export const GEMINI_PR_REVIEW_MARKER = "<!-- vtdd:reviewer=gemini -->";
 export const REVIEWER_OBJECTION_RESOLUTION_MARKER = "<!-- vtdd:reviewer-objection-resolution -->";
+export const GEMINI_REVIEW_RUNAWAY_GUARD_MARKER = "<!-- vtdd:reviewer=runaway-guard -->";
 export const DEFAULT_GEMINI_REVIEW_MODEL = "gemini-2.5-flash";
 export const MAX_DIFF_CHARACTERS = 60000;
 export const MAX_CONTEXT_COMMENTS = 10;
+export const DEFAULT_REVIEWER_RUNAWAY_WINDOW_MINUTES = 30;
+export const DEFAULT_REVIEWER_RUNAWAY_MAX_COMMENTS = 20;
 
 export function resolveGeminiReviewTrigger(input = {}) {
   const eventName = normalizeText(input.eventName);
@@ -112,6 +115,65 @@ export function buildPullRequestDiff(files = [], options = {}) {
     return joined;
   }
   return `${joined.slice(0, maxCharacters)}\n\n[diff truncated]`;
+}
+
+export function detectGeminiReviewerRunaway(input = {}) {
+  const comments = Array.isArray(input.issueComments) ? input.issueComments : [];
+  const windowMinutes =
+    normalizePositiveInteger(input.windowMinutes) || DEFAULT_REVIEWER_RUNAWAY_WINDOW_MINUTES;
+  const maxReviewerComments =
+    normalizePositiveInteger(input.maxReviewerComments) || DEFAULT_REVIEWER_RUNAWAY_MAX_COMMENTS;
+  const nowMs = normalizeTimestampMs(input.now) ?? Date.now();
+  const windowStartMs = nowMs - windowMinutes * 60 * 1000;
+  const recentReviewerComments = comments.filter((comment) => {
+    const createdAtMs = normalizeTimestampMs(comment?.created_at);
+    if (!createdAtMs || createdAtMs < windowStartMs || createdAtMs > nowMs) {
+      return false;
+    }
+    const body = normalizeText(comment?.body);
+    return containsReviewerMarker(body) || body.includes("<!-- vtdd:reviewer=codex-fallback");
+  });
+  const existingGuardComment =
+    comments.find((comment) => normalizeText(comment?.body).includes(GEMINI_REVIEW_RUNAWAY_GUARD_MARKER)) ?? null;
+
+  return {
+    triggered: recentReviewerComments.length >= maxReviewerComments,
+    reason: recentReviewerComments.length >= maxReviewerComments ? "reviewer_comment_storm" : "within_threshold",
+    windowMinutes,
+    maxReviewerComments,
+    recentReviewerCommentCount: recentReviewerComments.length,
+    existingGuardComment,
+    shouldNotifyOwner: recentReviewerComments.length >= maxReviewerComments && !existingGuardComment
+  };
+}
+
+export function formatGeminiReviewRunawayGuardComment(input = {}) {
+  const notificationMention = normalizeMentionLogin(input.notificationMention);
+  const mentionPrefix = notificationMention ? `@${notificationMention} ` : "";
+  const repository = normalizeText(input.repository) || "unknown";
+  const pullRequestNumber = normalizePositiveInteger(input.pullRequestNumber) || "unknown";
+  const headSha = normalizeText(input.headSha) || "unknown";
+  const recentCount = normalizePositiveInteger(input.recentReviewerCommentCount) || 0;
+  const windowMinutes =
+    normalizePositiveInteger(input.windowMinutes) || DEFAULT_REVIEWER_RUNAWAY_WINDOW_MINUTES;
+  const maxReviewerComments =
+    normalizePositiveInteger(input.maxReviewerComments) || DEFAULT_REVIEWER_RUNAWAY_MAX_COMMENTS;
+  return [
+    GEMINI_REVIEW_RUNAWAY_GUARD_MARKER,
+    `${mentionPrefix}VTDD runaway guard: Gemini reviewer loop を停止しました。`.trim(),
+    "",
+    "## Operator Summary",
+    "",
+    "- status: stopped",
+    "- stopped scope: gemini-pr-review",
+    `- repository: ${repository}`,
+    `- pull request: #${pullRequestNumber}`,
+    `- headSha: ${headSha}`,
+    `- detected: ${recentCount} reviewer marker comments within ${windowMinutes} minutes`,
+    `- threshold: ${maxReviewerComments}`,
+    "- next: Issue / PR / reviewer marker timeline を確認し、原因を切り分けてから resume 条件を決めてください。",
+    "- resume condition: time window が落ち着く、または owner が原因確認後に明示的に再開判断するまで追加 Gemini review は行いません。"
+  ].join("\n");
 }
 
 export function buildPullRequestReviewContext(input = {}) {
@@ -706,6 +768,11 @@ function normalizePositiveInteger(value) {
     return null;
   }
   return numeric;
+}
+
+function normalizeTimestampMs(value) {
+  const timestamp = Date.parse(normalizeText(value));
+  return Number.isFinite(timestamp) ? timestamp : null;
 }
 
 function normalizeObject(value) {
