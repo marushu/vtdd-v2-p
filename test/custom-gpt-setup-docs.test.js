@@ -385,10 +385,16 @@ test("custom gpt self-parity action exposes issue close proof parameters", () =>
   assert.equal(selfParityParams.includes("pullNumber"), true);
 
   const yaml = fs.readFileSync(OPENAPI_PATH, "utf8");
+  const setupArtifactSection = yaml.slice(
+    yaml.indexOf("  /v2/retrieve/setup-artifact:"),
+    yaml.indexOf("  /v2/retrieve/self-parity:")
+  );
   const selfParitySection = yaml.slice(
     yaml.indexOf("  /v2/retrieve/self-parity:"),
     yaml.indexOf("  /v2/retrieve/approval-grant:")
   );
+  assert.equal(setupArtifactSection.includes("- name: issueNumber"), false);
+  assert.equal(setupArtifactSection.includes("- name: pullNumber"), false);
   assert.equal(selfParitySection.includes("- name: issueNumber"), true);
   assert.equal(selfParitySection.includes("- name: pullNumber"), true);
 });
