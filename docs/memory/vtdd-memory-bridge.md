@@ -135,7 +135,7 @@ unresolved:
 ```sh
 node scripts/vtdd-memory.mjs retrieve-operational \
   --runtime-url "$VTDD_RUNTIME_URL" \
-  --record-id "working_memory_343_20260516004245_issue_343_live_e2e_working_memory_" \
+  --record-id "working_memory_<issue>_<timestamp>_<slug>" \
   --limit 1 \
   --pretty true
 ```

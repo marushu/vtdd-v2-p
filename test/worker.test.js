@@ -1334,6 +1334,44 @@ test("worker does not overclaim missing explicit operational memory recordId", a
   assert.match(body.recordIdLookup.recoveryGuidance, /Do not claim retrieval success/);
 });
 
+test("worker reports cross-repository working memory explicit recordId boundary", async () => {
+  const provider = createInMemoryMemoryProvider();
+  await provider.store({
+    id: "working_memory_405_cross_repo_example",
+    type: MemoryRecordType.WORKING_MEMORY,
+    content: {
+      summary: "Checkpoint saved for another repository."
+    },
+    metadata: {
+      repository: "other/repo"
+    },
+    priority: 70,
+    tags: ["working_memory", "issue:405"],
+    createdAt: "2026-05-16T01:30:00.000Z"
+  });
+
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/v2/retrieve/operational-memory?repository=marushu/vtdd-v2-p&recordId=working_memory_405_cross_repo_example&limit=1",
+      {
+        headers: gatewayAuthHeaders
+      }
+    ),
+    {
+      ...gatewayAuthEnv,
+      MEMORY_PROVIDER: provider
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.recordIdLookup.found, true);
+  assert.equal(body.recordIdLookup.requestedRepository, "marushu/vtdd-v2-p");
+  assert.equal(body.recordIdLookup.recordRepository, "other/repo");
+  assert.equal(body.recordIdLookup.repositoryBoundary, "cross_repository_record_returned_by_explicit_record_id");
+  assert.equal(body.compactContext[0].crossRepository, true);
+});
+
 test("worker does not override explicit Butler read consent categories", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/v2/gateway", {

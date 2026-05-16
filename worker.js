@@ -31977,6 +31977,7 @@ async function retrieveOperationalMemory(provider, input = {}) {
   try {
     const recordIdRecords = recordId ? await provider.retrieve({
       ids: [recordId],
+      type: MemoryRecordType.WORKING_MEMORY,
       limit: 1
     }) : [];
     const structuredRecords = recordId ? [] : await retrieveStructuredOperationalRecords(provider, {

@@ -77,6 +77,54 @@ test("operational memory can surface cross-repository experience for a different
   assert.equal(crossRepoReference.layer, OperationalMemoryLayer.LONG_TERM_OPERATIONAL_MEMORY);
 });
 
+test("operational memory explicit recordId lookup is limited to working_memory recovery", async () => {
+  const provider = createInMemoryMemoryProvider();
+  await seedOperationalMemory(provider);
+
+  const result = await retrieveOperationalMemory(provider, {
+    recordId: "decision-reviewer-policy",
+    repository: "repo-b/vtdd",
+    limit: 1,
+    now: "2026-05-10T00:00:00.000Z"
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.recordIdLookup.found, false);
+  assert.equal(result.recordIdLookup.recordRepository, null);
+  assert.equal(result.recordIdLookup.repositoryBoundary, "record_id_not_found");
+  assert.deepEqual(result.compactContext, []);
+});
+
+test("operational memory explicit recordId lookup reports cross-repository working_memory boundary", async () => {
+  const provider = createInMemoryMemoryProvider();
+  await provider.store({
+    id: "working-other-repo",
+    type: MemoryRecordType.WORKING_MEMORY,
+    content: {
+      note: "Known checkpoint from another repository."
+    },
+    metadata: {
+      repository: "repo-a/vtdd"
+    },
+    priority: 70,
+    tags: ["working_memory"],
+    createdAt: "2026-05-09T00:00:00Z"
+  });
+
+  const result = await retrieveOperationalMemory(provider, {
+    recordId: "working-other-repo",
+    repository: "repo-b/vtdd",
+    limit: 1,
+    now: "2026-05-10T00:00:00.000Z"
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.recordIdLookup.found, true);
+  assert.equal(result.recordIdLookup.recordRepository, "repo-a/vtdd");
+  assert.equal(result.recordIdLookup.repositoryBoundary, "cross_repository_record_returned_by_explicit_record_id");
+  assert.equal(result.compactContext[0].crossRepository, true);
+});
+
 test("operational memory rejects missing providers with a retrieval-safe error", async () => {
   const result = await retrieveOperationalMemory(null, {
     text: "anything"

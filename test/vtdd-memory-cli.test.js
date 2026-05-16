@@ -34,6 +34,20 @@ test("parseArgs supports repeated option values", () => {
   assert.equal(parsed.options.relatedIssue, "251");
 });
 
+test("parseArgs maps record-id CLI option to runtime recordId", () => {
+  const parsed = parseArgs([
+    "retrieve-operational",
+    "--record-id",
+    "working_memory_405_repo_null_example",
+    "--runtime-url",
+    "https://example.invalid"
+  ]);
+
+  assert.equal(parsed.command, "retrieve-operational");
+  assert.equal(parsed.options.recordId, "working_memory_405_repo_null_example");
+  assert.equal(parsed.options.runtimeUrl, "https://example.invalid");
+});
+
 test("buildDecisionRecord creates canonical decision_log memory", () => {
   const record = buildDecisionRecord({
     id: "decision_251_test",

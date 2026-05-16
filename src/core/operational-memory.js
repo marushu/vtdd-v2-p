@@ -133,6 +133,7 @@ export async function retrieveOperationalMemory(provider, input = {}) {
     const recordIdRecords = recordId
       ? await provider.retrieve({
           ids: [recordId],
+          type: MemoryRecordType.WORKING_MEMORY,
           limit: 1
         })
       : [];
