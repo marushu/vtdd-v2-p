@@ -36595,6 +36595,7 @@ async function evaluateButlerSelfParity(input = {}) {
   const ref = normalizeText24(input.ref) || "main";
   const runtimeOrigin = normalizeOrigin2(input.runtimeOrigin);
   const issueNumber = normalizeIssueNumber(input.issueNumber);
+  const pullNumber = normalizeIssueNumber(input.pullNumber);
   const env = input.env ?? {};
   const instructions = await retrieveCustomGptSetupArtifact({
     artifact: CustomGptSetupArtifact.INSTRUCTIONS,
@@ -36653,6 +36654,23 @@ async function evaluateButlerSelfParity(input = {}) {
     issueNumber
   }) : null;
   const deployOperatorMarkdownLink = deployOperatorUrl ? `[Open deploy operator](${deployOperatorUrl})` : null;
+  const issueCloseOperatorUrl = repository && runtimeOrigin && issueNumber && pullNumber ? buildPasskeyOperatorUrl({
+    origin: runtimeOrigin,
+    repository,
+    phase: "execution",
+    actionType: "issue_close",
+    highRiskKind: "issue_close",
+    issueNumber,
+    pullNumber
+  }) : null;
+  const issueCloseOperatorMarkdownLink = issueCloseOperatorUrl ? `[Open issue close operator](${issueCloseOperatorUrl})` : null;
+  const issueCloseOperatorStatus = classifyIssueCloseOperatorStatus({
+    repository,
+    runtimeOrigin,
+    issueNumber,
+    pullNumber,
+    issueCloseOperatorUrl
+  });
   const recommendedActions = runtimeParity === "in_sync" ? [
     "If Butler cannot use the expected feature set from the current surface, Action Schema update required.",
     "If Butler cannot follow the expected behavior from the current surface, Instructions update required."
@@ -36696,6 +36714,20 @@ async function evaluateButlerSelfParity(input = {}) {
       staleCapabilities,
       deployOperatorUrl,
       deployOperatorMarkdownLink,
+      issueCloseOperatorUrl,
+      issueCloseOperatorMarkdownLink,
+      issueCloseOperator: issueCloseOperatorStatus.status !== "not_requested" ? {
+        actionType: "issue_close",
+        highRiskKind: "issue_close",
+        requires: ["GO", "real passkey", "merged pull proof"],
+        repository,
+        issueNumber,
+        pullNumber,
+        operatorUrl: issueCloseOperatorUrl,
+        operatorMarkdownLink: issueCloseOperatorMarkdownLink,
+        status: issueCloseOperatorStatus.status,
+        blockers: issueCloseOperatorStatus.blockers
+      } : null,
       deployRecovery: runtimeParity === "cloudflare_deploy_update_required" ? {
         actionType: "deploy_production",
         highRiskKind: "deploy_production",
@@ -37459,7 +37491,7 @@ function normalizeApiBaseUrl4(value) {
   const normalized = normalizeText24(value);
   return normalized ? normalized.replace(/\/+$/, "") : GITHUB_API_BASE_URL3;
 }
-function buildPasskeyOperatorUrl({ origin, repository, phase, actionType, highRiskKind, issueNumber }) {
+function buildPasskeyOperatorUrl({ origin, repository, phase, actionType, highRiskKind, issueNumber, pullNumber }) {
   const url = new URL("/v2/approval/passkey/operator", `${origin}/`);
   url.searchParams.set("repositoryInput", repository);
   url.searchParams.set("phase", phase || "execution");
@@ -37468,7 +37500,41 @@ function buildPasskeyOperatorUrl({ origin, repository, phase, actionType, highRi
   if (Number.isInteger(issueNumber) && issueNumber > 0) {
     url.searchParams.set("issueNumber", String(issueNumber));
   }
+  if (Number.isInteger(pullNumber) && pullNumber > 0) {
+    url.searchParams.set("pullNumber", String(pullNumber));
+  }
   return url.toString();
+}
+function classifyIssueCloseOperatorStatus({
+  repository,
+  runtimeOrigin,
+  issueNumber,
+  pullNumber,
+  issueCloseOperatorUrl
+}) {
+  if (issueCloseOperatorUrl) {
+    return { status: "ready", blockers: [] };
+  }
+  if (!issueNumber && !pullNumber) {
+    return { status: "not_requested", blockers: [] };
+  }
+  const blockers = [];
+  if (!repository) {
+    blockers.push("missing_repository");
+  }
+  if (!runtimeOrigin) {
+    blockers.push("missing_runtime_origin");
+  }
+  if (!issueNumber) {
+    blockers.push("missing_issue_number");
+  }
+  if (!pullNumber) {
+    blockers.push("missing_merged_pull_number");
+  }
+  return {
+    status: blockers[0] || "unavailable",
+    blockers
+  };
 }
 function normalizeOrigin2(value) {
   const normalized = normalizeText24(value);
@@ -38555,7 +38621,7 @@ var GitHubAppOperationRegistry = Object.freeze({
     passkey: {
       actionType: "issue_close",
       highRiskKind: "issue_close",
-      operatorUrlRequirements: ["repositoryInput", "phase", "issueNumber", "actionType", "highRiskKind"]
+      operatorUrlRequirements: ["repositoryInput", "phase", "issueNumber", "pullNumber", "actionType", "highRiskKind"]
     }
   },
   deploy_production: {
@@ -55926,7 +55992,8 @@ async function evaluateStartupPreflightSelfParity({
     deployState: result.selfParity.surfaceUpdateChecklist?.cloudflareDeploy?.status || "\u672A\u78BA\u8A8D",
     actionSchemaState: result.selfParity.surfaceUpdateChecklist?.customGptActionSchema?.status || "\u672A\u78BA\u8A8D",
     instructionsState: result.selfParity.surfaceUpdateChecklist?.customGptInstructions?.status || "\u672A\u78BA\u8A8D",
-    deployOperatorUrl: result.selfParity.deployOperatorUrl || null
+    deployOperatorUrl: result.selfParity.deployOperatorUrl || null,
+    issueCloseOperatorUrl: result.selfParity.issueCloseOperatorUrl || null
   };
 }
 function buildStartupSurfaceCapability(currentSurface) {
@@ -56407,6 +56474,7 @@ async function handleRetrieveButlerSelfParityRequest(url, env) {
     repository: normalizeText30(url.searchParams.get("repository")),
     ref: normalizeText30(url.searchParams.get("ref")),
     issueNumber: normalizeIssue6(url.searchParams.get("issueNumber")),
+    pullNumber: normalizeIssue6(url.searchParams.get("pullNumber")),
     runtimeOrigin: url.origin,
     env
   });

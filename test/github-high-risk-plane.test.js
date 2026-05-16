@@ -62,6 +62,7 @@ test("github app operation registry defines issue close authority scope and runt
     "repositoryInput",
     "phase",
     "issueNumber",
+    "pullNumber",
     "actionType",
     "highRiskKind"
   ]);

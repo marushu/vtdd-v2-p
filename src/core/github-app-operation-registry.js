@@ -95,7 +95,7 @@ export const GitHubAppOperationRegistry = Object.freeze({
     passkey: {
       actionType: "issue_close",
       highRiskKind: "issue_close",
-      operatorUrlRequirements: ["repositoryInput", "phase", "issueNumber", "actionType", "highRiskKind"]
+      operatorUrlRequirements: ["repositoryInput", "phase", "issueNumber", "pullNumber", "actionType", "highRiskKind"]
     }
   },
   deploy_production: {
