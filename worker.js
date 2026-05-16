@@ -37046,6 +37046,7 @@ function renderRecoveryBundleSections(recovery) {
   const selfParity = recovery.runtime.selfParity;
   const surfaceUpdateChecklist = recovery.runtime.surfaceUpdateChecklist;
   const knownGoodComparison = recovery.runtime.knownGoodComparison;
+  const isKnownGoodChannel = recovery.channel === CustomGptSetupChannel.KNOWN_GOOD;
   const warning = instructions.limitExceeded ? `<section class="warning"><strong>Instructions exceed ${instructions.characterLimit} characters.</strong><p>${instructions.characterCount} characters. Shorten before pasting into the Custom GPT editor.</p></section>` : "";
   return `
     ${warning}
@@ -37099,8 +37100,8 @@ function renderRecoveryBundleSections(recovery) {
       <textarea id="instructions-short-min" spellcheck="false">${escapeHtml3(instructions.content)}</textarea>
     </section>
     <section>
-      <h2>${rollback.rollbackReady ? "Known-good rollback bundle" : "Known-good status / rollback preview"}</h2>
-      ${rollback.rollbackReady ? `<p><button type="button" data-copy-target="rollback-bundle" data-copy-label="Copy Rollback Bundle">Copy Rollback Bundle</button></p>` : `<p class="small">Rollback \u306F setup/known-good \u3067 copy-ready \u306B\u306A\u308A\u307E\u3059\u3002latest \u306F\u73FE\u5728\u306E\u5019\u88DC\u78BA\u8A8D\u7528\u3067\u3001known-good \u3068\u3057\u3066\u306F\u672A\u78BA\u8A8D\u3067\u3059\u3002</p>`}
+      <h2>${isKnownGoodChannel ? "Known-good rollback bundle" : "Latest setup bundle metadata"}</h2>
+      ${rollback.rollbackReady ? `<p><button type="button" data-copy-target="rollback-bundle" data-copy-label="Copy Rollback Bundle">Copy Rollback Bundle</button></p>` : isKnownGoodChannel ? `<p class="small">Known-good rollback bundle \u306F\u307E\u3060 copy-ready \u3067\u306F\u3042\u308A\u307E\u305B\u3093\u3002known-good source \u3068 runtime parity \u3092\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002</p>` : `<p class="small">\u3053\u306E metadata \u306F /setup/latest \u306E\u73FE\u5728\u5019\u88DC\u3067\u3059\u3002Rollback copy-ready bundle \u306F /setup/known-good \u3067\u306E\u307F\u8868\u793A\u3057\u307E\u3059\u3002latest \u306F known-good \u3068\u3057\u3066\u306F\u672A\u78BA\u8A8D\u3067\u3059\u3002</p>`}
       <pre>${escapeHtml3(
     [
       `repository: ${recovery.repository}`,
