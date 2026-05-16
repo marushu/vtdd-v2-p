@@ -295,6 +295,20 @@ export async function evaluateButlerSelfParity(input = {}) {
   const deployOperatorMarkdownLink = deployOperatorUrl
     ? `[Open deploy operator](${deployOperatorUrl})`
     : null;
+  const githubAppSecretSyncOperatorUrl =
+    repository && runtimeOrigin
+      ? buildPasskeyOperatorUrl({
+          origin: runtimeOrigin,
+          repository,
+          phase: "execution",
+          actionType: "destructive",
+          highRiskKind: "github_app_secret_sync",
+          issueNumber
+        })
+      : null;
+  const githubAppSecretSyncOperatorMarkdownLink = githubAppSecretSyncOperatorUrl
+    ? `[Open GitHub App secret sync operator](${githubAppSecretSyncOperatorUrl})`
+    : null;
   const issueCloseOperatorUrl =
     repository && runtimeOrigin && issueNumber && pullNumber
       ? buildPasskeyOperatorUrl({
@@ -367,6 +381,35 @@ export async function evaluateButlerSelfParity(input = {}) {
       staleCapabilities,
       deployOperatorUrl,
       deployOperatorMarkdownLink,
+      githubAppSecretSyncOperatorUrl,
+      githubAppSecretSyncOperatorMarkdownLink,
+      githubAppSecretSyncOperator:
+        githubAppSecretSyncOperatorUrl
+          ? {
+              actionType: "destructive",
+              highRiskKind: "github_app_secret_sync",
+              requires: ["GO", "real passkey", "approval grant"],
+              repository,
+              issueNumber,
+              operatorUrl: githubAppSecretSyncOperatorUrl,
+              operatorMarkdownLink: githubAppSecretSyncOperatorMarkdownLink,
+              status: "ready",
+              blockers: []
+            }
+          : {
+              actionType: "destructive",
+              highRiskKind: "github_app_secret_sync",
+              requires: ["GO", "real passkey", "approval grant"],
+              repository,
+              issueNumber,
+              operatorUrl: null,
+              operatorMarkdownLink: null,
+              status: "blocked",
+              blockers: [
+                ...(!repository ? ["missing_repository"] : []),
+                ...(!runtimeOrigin ? ["missing_runtime_origin"] : [])
+              ]
+            },
       issueCloseOperatorUrl,
       issueCloseOperatorMarkdownLink,
       issueCloseOperator:

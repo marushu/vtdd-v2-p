@@ -159,6 +159,24 @@ test("passkey operator page fills safe approval defaults from explicit mode", ()
   assert.equal(issueCloseHtml.includes('id="risk-kind-input" value="issue_close"'), true);
   assert.equal(issueCloseHtml.includes('<section data-operator-section="issue-close">'), true);
   assert.equal(issueCloseHtml.includes('<section data-operator-section="pr-merge" hidden>'), true);
+
+  const githubAppSecretSyncHtml = renderPasskeyOperatorPage({
+    operatorMode: "github_app_secret_sync",
+    repositoryInput: "marushu/vtdd-v2-p"
+  });
+  assert.equal(githubAppSecretSyncHtml.includes('id="action-type-input" value="destructive"'), true);
+  assert.equal(
+    githubAppSecretSyncHtml.includes('id="risk-kind-input" value="github_app_secret_sync"'),
+    true
+  );
+  assert.equal(
+    githubAppSecretSyncHtml.includes('<section data-operator-section="github-app-secret-sync">'),
+    true
+  );
+  assert.equal(
+    githubAppSecretSyncHtml.includes('<section data-operator-section="production-deploy" hidden>'),
+    true
+  );
 });
 
 test("passkey operator page focuses merge mode on approval and PR merge sections", () => {

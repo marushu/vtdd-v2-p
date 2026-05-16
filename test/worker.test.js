@@ -2630,6 +2630,10 @@ test("worker passkey operator page enables desktop secret sync bridge when syncA
   const html = await response.text();
   assert.equal(html.includes('fetch("http://127.0.0.1:8789/api/github-app-secret-sync/execute"'), true);
   assert.equal(html.includes('fetch("http://127.0.0.1:8789/api/gateway-bearer-vault/bootstrap"'), true);
+  assert.equal(html.includes('<section data-operator-section="github-app-secret-sync">'), true);
+  assert.equal(html.includes('<section data-operator-section="production-deploy" hidden>'), true);
+  assert.equal(html.includes('id="action-type-input" value="destructive"'), true);
+  assert.equal(html.includes('id="risk-kind-input" value="github_app_secret_sync"'), true);
   assert.equal(html.includes("desktop helper bridge に接続します"), true);
 });
 
@@ -3874,6 +3878,15 @@ test("worker returns Butler self-parity summary", async () => {
     body.selfParity.deployOperatorMarkdownLink,
     `[Open deploy operator](${body.selfParity.deployOperatorUrl})`
   );
+  assert.equal(
+    body.selfParity.githubAppSecretSyncOperatorUrl,
+    "https://example.com/v2/approval/passkey/operator?repositoryInput=sample-org%2Fvtdd-v2-p&phase=execution&actionType=destructive&highRiskKind=github_app_secret_sync&issueNumber=91"
+  );
+  assert.equal(
+    body.selfParity.githubAppSecretSyncOperatorMarkdownLink,
+    `[Open GitHub App secret sync operator](${body.selfParity.githubAppSecretSyncOperatorUrl})`
+  );
+  assert.notEqual(body.selfParity.githubAppSecretSyncOperatorUrl, body.selfParity.deployOperatorUrl);
   assert.equal(
     body.selfParity.issueCloseOperatorUrl,
     "https://example.com/v2/approval/passkey/operator?repositoryInput=sample-org%2Fvtdd-v2-p&phase=execution&actionType=issue_close&highRiskKind=issue_close&issueNumber=91&pullNumber=148"
