@@ -1243,6 +1243,9 @@ test("worker persists RAG checkpoint fields as working memory", async () => {
     mode: "steady",
     why_it_matters: "Future startup preflight should recover the decision boundary."
   });
+  assert.equal(records[0].content.origin.trigger.length > 30, true);
+  assert.equal(records[0].content.tension_note.summary.length > 30, true);
+  assert.equal(records[0].content.tension_note.why_it_matters.length > 30, true);
   assert.deepEqual(records[0].content.expectedFiles, [
     "docs/memory-schema.md",
     "scripts/vtdd-memory.mjs"
