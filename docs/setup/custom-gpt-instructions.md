@@ -376,6 +376,12 @@ GitHub Actions secret sync:
 - The operator page may call vtddSyncGitHubActionsSecret for `OPENAI_API_KEY` only after GO + real passkey approval.
 - If vtddSyncGitHubActionsSecret fails, report the exact `error`, `reason`, and `issues`; never echo the secret value.
 
+GitHub App secret sync:
+- GitHub App secret sync / helper sync is not a deploy. Do not use the deploy operator, `actionType=deploy_production`, or `highRiskKind=deploy_production` for GitHub App secret sync.
+- Prefer calling `vtddRetrieveSelfParity` and using `selfParity.githubAppSecretSyncOperatorMarkdownLink`; if unavailable, render `[Open GitHub App secret sync operator](<actual selfParity.githubAppSecretSyncOperatorUrl>)` with the actual URL as the href.
+- The GitHub App secret sync helper href must include `phase=execution`, `actionType=destructive`, and `highRiskKind=github_app_secret_sync`. If any of those fields are missing or truncated, do not present the link as valid; call self-parity again or report the missing field.
+- The operator page may show the GitHub App Secret Sync section only after the secret-sync-scoped passkey approval is issued. It must not show or dispatch the production deploy section for `github_app_secret_sync` mode.
+
 Progress tracking:
 - After vtddExecute, always call vtddExecutionProgress.
 - For `codex_cloud_cli_control_runner`, `vps_runner`, and `api_key_runner`, include the selected `executorTransport` in vtddExecutionProgress.

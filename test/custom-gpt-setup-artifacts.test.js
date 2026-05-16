@@ -145,6 +145,26 @@ test("evaluateButlerSelfParity reports deploy update required when canonical set
     result.selfParity.deployOperatorMarkdownLink
   );
   assert.equal(
+    result.selfParity.githubAppSecretSyncOperatorUrl,
+    "https://sample-user-vtdd.example.workers.dev/v2/approval/passkey/operator?repositoryInput=sample-org%2Fvtdd-v2-p&phase=execution&actionType=destructive&highRiskKind=github_app_secret_sync&issueNumber=91"
+  );
+  assert.notEqual(result.selfParity.githubAppSecretSyncOperatorUrl, result.selfParity.deployOperatorUrl);
+  assert.equal(
+    result.selfParity.githubAppSecretSyncOperatorMarkdownLink,
+    `[Open GitHub App secret sync operator](${result.selfParity.githubAppSecretSyncOperatorUrl})`
+  );
+  assert.deepEqual(result.selfParity.githubAppSecretSyncOperator, {
+    actionType: "destructive",
+    highRiskKind: "github_app_secret_sync",
+    requires: ["GO", "real passkey", "approval grant"],
+    repository: "sample-org/vtdd-v2-p",
+    issueNumber: 91,
+    operatorUrl: result.selfParity.githubAppSecretSyncOperatorUrl,
+    operatorMarkdownLink: result.selfParity.githubAppSecretSyncOperatorMarkdownLink,
+    status: "ready",
+    blockers: []
+  });
+  assert.equal(
     result.selfParity.issueCloseOperatorUrl,
     "https://sample-user-vtdd.example.workers.dev/v2/approval/passkey/operator?repositoryInput=sample-org%2Fvtdd-v2-p&phase=execution&actionType=issue_close&highRiskKind=issue_close&issueNumber=91&pullNumber=148"
   );
@@ -297,6 +317,15 @@ test("evaluateButlerSelfParity treats current nickname and secret sync actions a
     result.selfParity.deployOperatorMarkdownLink,
     `[Open deploy operator](${result.selfParity.deployOperatorUrl})`
   );
+  assert.equal(
+    result.selfParity.githubAppSecretSyncOperatorUrl,
+    "https://sample-user-vtdd.example.workers.dev/v2/approval/passkey/operator?repositoryInput=sample-org%2Fvtdd-v2-p&phase=execution&actionType=destructive&highRiskKind=github_app_secret_sync"
+  );
+  assert.equal(
+    result.selfParity.githubAppSecretSyncOperatorMarkdownLink,
+    `[Open GitHub App secret sync operator](${result.selfParity.githubAppSecretSyncOperatorUrl})`
+  );
+  assert.notEqual(result.selfParity.githubAppSecretSyncOperatorUrl, result.selfParity.deployOperatorUrl);
   assert.equal(result.selfParity.issueCloseOperatorUrl, null);
   assert.equal(result.selfParity.issueCloseOperator, null);
   assert.equal(result.selfParity.deployRecovery, null);
