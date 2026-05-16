@@ -215,6 +215,12 @@ export function buildCheckpointPayload(options) {
     checkpointReason: normalizeOptionalText(options.checkpointReason),
     thoughtLocation: normalizeOptionalText(options.thoughtLocation),
     userTension: normalizeOptionalText(options.userTension),
+    origin: buildCheckpointOrigin(options),
+    user_words: normalizeBoundedList(options.userWord ?? options.userWords, {
+      maxItems: 3,
+      maxLength: 160
+    }),
+    tension_note: buildCheckpointTensionNote(options),
     contextSourceQuality: normalizeOptionalText(options.contextSourceQuality) || "full_thread_context",
     hypothesis: normalizeOptionalText(options.hypothesis),
     expectedFiles: normalizeList(options.expectedFile ?? options.expectedFiles),
@@ -225,6 +231,25 @@ export function buildCheckpointPayload(options) {
     timestamp: options.timestamp ?? new Date().toISOString(),
     tags
   };
+}
+
+function buildCheckpointOrigin(options = {}) {
+  const origin = {
+    surface: normalizeOptionalText(options.originSurface),
+    moment: normalizeOptionalText(options.originMoment),
+    trigger: normalizeOptionalText(options.originTrigger)
+  };
+  return Object.values(origin).some(Boolean) ? origin : null;
+}
+
+function buildCheckpointTensionNote(options = {}) {
+  const note = {
+    summary: normalizeOptionalText(options.tensionSummary),
+    intensity: normalizeOptionalText(options.tensionIntensity),
+    mode: normalizeOptionalText(options.tensionMode),
+    why_it_matters: normalizeOptionalText(options.tensionWhyItMatters)
+  };
+  return Object.values(note).some(Boolean) ? note : null;
 }
 
 export function buildDecisionRecord(options) {
@@ -531,6 +556,12 @@ function normalizeList(value) {
     .flatMap((item) => String(item ?? "").split("\n"))
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function normalizeBoundedList(value, { maxItems, maxLength }) {
+  return normalizeList(value)
+    .slice(0, maxItems)
+    .map((item) => item.slice(0, maxLength));
 }
 
 function mergeTags(input, requiredTags) {

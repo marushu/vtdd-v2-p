@@ -56104,6 +56104,12 @@ function buildMemoryWriteRecord(payload = {}) {
         checkpointReason: normalizeText30(payload.checkpointReason) || null,
         thoughtLocation: normalizeText30(payload.thoughtLocation) || null,
         userTension: normalizeText30(payload.userTension) || null,
+        origin: normalizeMemoryOrigin(payload.origin),
+        user_words: normalizeBoundedMemoryStringArray(
+          payload.user_words ?? payload.userWords ?? payload.userWord,
+          { maxItems: 3, maxLength: 160 }
+        ),
+        tension_note: normalizeTensionNote(payload.tension_note ?? payload.tensionNote),
         contextSourceQuality: normalizeText30(payload.contextSourceQuality) || null,
         hypothesis: normalizeText30(payload.hypothesis) || null,
         expectedFiles: normalizeStringArray4(payload.expectedFiles),
@@ -56152,6 +56158,33 @@ function buildMemoryWriteTags({ recordType: recordType2, relatedIssue, repositor
 function normalizeStringArray4(value) {
   const values = Array.isArray(value) ? value : value === void 0 ? [] : [value];
   return values.map(normalizeText30).filter(Boolean);
+}
+function normalizeBoundedMemoryStringArray(value, { maxItems, maxLength }) {
+  const values = Array.isArray(value) ? value : value === void 0 ? [] : [value];
+  return values.map((item) => normalizeMemoryRecallText(item, maxLength)).filter(Boolean).slice(0, maxItems);
+}
+function normalizeMemoryOrigin(value) {
+  const input = normalizeObject11(value);
+  const origin = {
+    surface: normalizeMemoryRecallText(input.surface, 80),
+    moment: normalizeMemoryRecallText(input.moment, 160),
+    trigger: normalizeMemoryRecallText(input.trigger, 240)
+  };
+  return Object.values(origin).some(Boolean) ? origin : null;
+}
+function normalizeTensionNote(value) {
+  const input = normalizeObject11(value);
+  const note = {
+    summary: normalizeMemoryRecallText(input.summary, 240),
+    intensity: normalizeMemoryRecallText(input.intensity, 40),
+    mode: normalizeMemoryRecallText(input.mode, 40),
+    why_it_matters: normalizeMemoryRecallText(input.why_it_matters ?? input.whyItMatters, 320)
+  };
+  return Object.values(note).some(Boolean) ? note : null;
+}
+function normalizeMemoryRecallText(value, maxLength) {
+  const text = String(value ?? "").trim();
+  return text ? text.slice(0, maxLength) : "";
 }
 function normalizeRejectedReasons2(value) {
   const values = Array.isArray(value) ? value : [];

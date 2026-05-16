@@ -131,6 +131,14 @@ test("buildCheckpointPayload creates a compact RAG checkpoint payload", () => {
     checkpointReason: "Context compression risk.",
     thoughtLocation: "Owner and Codex discussion.",
     userTension: "Concerned but constructive.",
+    originSurface: "mac_codex",
+    originMoment: "Issue #343 implementation start",
+    originTrigger: "Owner said それでいこう after #344 readiness audit.",
+    userWord: ["それでいこう", "続けよう"],
+    tensionSummary: "Owner accepted deferring #344 closure and moving to RAG recall hooks.",
+    tensionIntensity: "medium",
+    tensionMode: "steady",
+    tensionWhyItMatters: "Future Butler recall should recover why #343 became the next slice.",
     hypothesis: "Use working_memory as checkpoint.",
     expectedFile: ["docs/memory-schema.md", "scripts/vtdd-memory.mjs"],
     evidenceLink: "https://github.com/marushu/vtdd-v2-p/issues/361",
@@ -143,6 +151,18 @@ test("buildCheckpointPayload creates a compact RAG checkpoint payload", () => {
   assert.equal(payload.relatedIssue, 361);
   assert.equal(payload.contextSourceQuality, "full_thread_context");
   assert.equal(payload.captureBoundary, "judgment_log_not_chain_of_thought");
+  assert.deepEqual(payload.origin, {
+    surface: "mac_codex",
+    moment: "Issue #343 implementation start",
+    trigger: "Owner said それでいこう after #344 readiness audit."
+  });
+  assert.deepEqual(payload.user_words, ["それでいこう", "続けよう"]);
+  assert.deepEqual(payload.tension_note, {
+    summary: "Owner accepted deferring #344 closure and moving to RAG recall hooks.",
+    intensity: "medium",
+    mode: "steady",
+    why_it_matters: "Future Butler recall should recover why #343 became the next slice."
+  });
   assert.deepEqual(payload.expectedFiles, ["docs/memory-schema.md", "scripts/vtdd-memory.mjs"]);
   assert.equal(payload.tags.includes("rag-checkpoint"), true);
   assert.equal(payload.tags.includes("memory-savepoint"), true);

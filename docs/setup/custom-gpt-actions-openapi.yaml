@@ -762,6 +762,44 @@ paths:
                 userTension:
                   type: string
                   description: The owner's tension or mood relevant to future recall, expressed compactly.
+                origin:
+                  type: object
+                  description: Structured recall provenance for where the memory candidate arose.
+                  properties:
+                    surface:
+                      type: string
+                      maxLength: 80
+                    moment:
+                      type: string
+                      maxLength: 160
+                    trigger:
+                      type: string
+                      maxLength: 240
+                  additionalProperties: false
+                user_words:
+                  type: array
+                  description: A few short owner utterances that help future recall; not a transcript.
+                  maxItems: 3
+                  items:
+                    type: string
+                    maxLength: 160
+                tension_note:
+                  type: object
+                  description: Recall hook for the moment's temperature; not a personality evaluation.
+                  properties:
+                    summary:
+                      type: string
+                      maxLength: 240
+                    intensity:
+                      type: string
+                      maxLength: 40
+                    mode:
+                      type: string
+                      maxLength: 40
+                    why_it_matters:
+                      type: string
+                      maxLength: 320
+                  additionalProperties: false
                 contextSourceQuality:
                   type: string
                   enum:
