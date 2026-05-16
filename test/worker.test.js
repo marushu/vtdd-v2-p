@@ -3801,7 +3801,7 @@ test("worker returns canonical Custom GPT setup artifacts", async () => {
 test("worker returns Butler self-parity summary", async () => {
   const response = await worker.fetch(
     new Request(
-      "https://example.com/v2/retrieve/self-parity?repository=sample-org/vtdd-v2-p&ref=main&issueNumber=91",
+      "https://example.com/v2/retrieve/self-parity?repository=sample-org/vtdd-v2-p&ref=main&issueNumber=91&pullNumber=148",
       {
         headers: gatewayAuthHeaders
       }
@@ -3874,6 +3874,16 @@ test("worker returns Butler self-parity summary", async () => {
     body.selfParity.deployOperatorMarkdownLink,
     `[Open deploy operator](${body.selfParity.deployOperatorUrl})`
   );
+  assert.equal(
+    body.selfParity.issueCloseOperatorUrl,
+    "https://example.com/v2/approval/passkey/operator?repositoryInput=sample-org%2Fvtdd-v2-p&phase=execution&actionType=issue_close&highRiskKind=issue_close&issueNumber=91&pullNumber=148"
+  );
+  assert.equal(
+    body.selfParity.issueCloseOperatorMarkdownLink,
+    `[Open issue close operator](${body.selfParity.issueCloseOperatorUrl})`
+  );
+  assert.equal(body.selfParity.issueCloseOperator.status, "ready");
+  assert.deepEqual(body.selfParity.issueCloseOperator.blockers, []);
   assert.equal(body.selfParity.deployRecovery, null);
   assert.equal(body.selfParity.surfaceUpdateChecklist.cloudflareDeploy.status, "not_required");
   assert.equal(body.selfParity.knownGoodComparison.status, "known_good_unavailable");

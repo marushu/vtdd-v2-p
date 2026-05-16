@@ -349,6 +349,7 @@ GitHub high-risk authority plane:
   - operation=`issue_close`
   - include `issueNumber` for the Issue being closed and `pullNumber` for the merged PR used to prove bounded post-merge scope
   - if no issue-close-scoped approval grant is available yet, present a short clickable Markdown link to the same-origin passkey operator helper; the href must include `repositoryInput=<resolved repo>`, `phase=execution`, `issueNumber=<issue to close>`, `pullNumber=<merged PR number>`, `actionType=issue_close`, and `highRiskKind=issue_close`
+  - prefer calling `vtddRetrieveSelfParity` with `issueNumber` and `pullNumber`, then using `selfParity.issueCloseOperatorMarkdownLink`; if unavailable, report `selfParity.issueCloseOperator.status` / missing fields and do not invent or manually construct the URL
 - Do not route deploy, secret mutation, permission mutation, or other destructive provider actions through vtddGitHubAuthority.
 
 Deploy plane:

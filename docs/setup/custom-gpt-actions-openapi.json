@@ -2664,6 +2664,24 @@
             }
           },
           {
+            "name": "issueNumber",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Active Issue number when a passkey operator URL should be scoped to an Issue."
+          },
+          {
+            "name": "pullNumber",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Merged PR number used as bounded post-merge proof for issue_close operator links."
+          },
+          {
             "name": "responseMode",
             "in": "query",
             "required": false,

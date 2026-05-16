@@ -218,6 +218,7 @@ export async function evaluateButlerSelfParity(input = {}) {
   const ref = normalizeText(input.ref) || "main";
   const runtimeOrigin = normalizeOrigin(input.runtimeOrigin);
   const issueNumber = normalizeIssueNumber(input.issueNumber);
+  const pullNumber = normalizeIssueNumber(input.pullNumber);
   const env = input.env ?? {};
 
   const instructions = await retrieveCustomGptSetupArtifact({
@@ -294,6 +295,28 @@ export async function evaluateButlerSelfParity(input = {}) {
   const deployOperatorMarkdownLink = deployOperatorUrl
     ? `[Open deploy operator](${deployOperatorUrl})`
     : null;
+  const issueCloseOperatorUrl =
+    repository && runtimeOrigin && issueNumber && pullNumber
+      ? buildPasskeyOperatorUrl({
+          origin: runtimeOrigin,
+          repository,
+          phase: "execution",
+          actionType: "issue_close",
+          highRiskKind: "issue_close",
+          issueNumber,
+          pullNumber
+        })
+      : null;
+  const issueCloseOperatorMarkdownLink = issueCloseOperatorUrl
+    ? `[Open issue close operator](${issueCloseOperatorUrl})`
+    : null;
+  const issueCloseOperatorStatus = classifyIssueCloseOperatorStatus({
+    repository,
+    runtimeOrigin,
+    issueNumber,
+    pullNumber,
+    issueCloseOperatorUrl
+  });
 
   const recommendedActions =
     runtimeParity === "in_sync"
@@ -344,6 +367,23 @@ export async function evaluateButlerSelfParity(input = {}) {
       staleCapabilities,
       deployOperatorUrl,
       deployOperatorMarkdownLink,
+      issueCloseOperatorUrl,
+      issueCloseOperatorMarkdownLink,
+      issueCloseOperator:
+        issueCloseOperatorStatus.status !== "not_requested"
+          ? {
+              actionType: "issue_close",
+              highRiskKind: "issue_close",
+              requires: ["GO", "real passkey", "merged pull proof"],
+              repository,
+              issueNumber,
+              pullNumber,
+              operatorUrl: issueCloseOperatorUrl,
+              operatorMarkdownLink: issueCloseOperatorMarkdownLink,
+              status: issueCloseOperatorStatus.status,
+              blockers: issueCloseOperatorStatus.blockers
+            }
+          : null,
       deployRecovery:
         runtimeParity === "cloudflare_deploy_update_required"
           ? {
@@ -1245,7 +1285,7 @@ function normalizeApiBaseUrl(value) {
   return normalized ? normalized.replace(/\/+$/, "") : GITHUB_API_BASE_URL;
 }
 
-function buildPasskeyOperatorUrl({ origin, repository, phase, actionType, highRiskKind, issueNumber }) {
+function buildPasskeyOperatorUrl({ origin, repository, phase, actionType, highRiskKind, issueNumber, pullNumber }) {
   const url = new URL("/v2/approval/passkey/operator", `${origin}/`);
   url.searchParams.set("repositoryInput", repository);
   url.searchParams.set("phase", phase || "execution");
@@ -1254,7 +1294,44 @@ function buildPasskeyOperatorUrl({ origin, repository, phase, actionType, highRi
   if (Number.isInteger(issueNumber) && issueNumber > 0) {
     url.searchParams.set("issueNumber", String(issueNumber));
   }
+  if (Number.isInteger(pullNumber) && pullNumber > 0) {
+    url.searchParams.set("pullNumber", String(pullNumber));
+  }
   return url.toString();
+}
+
+function classifyIssueCloseOperatorStatus({
+  repository,
+  runtimeOrigin,
+  issueNumber,
+  pullNumber,
+  issueCloseOperatorUrl
+}) {
+  if (issueCloseOperatorUrl) {
+    return { status: "ready", blockers: [] };
+  }
+  if (!issueNumber && !pullNumber) {
+    return { status: "not_requested", blockers: [] };
+  }
+
+  const blockers = [];
+  if (!repository) {
+    blockers.push("missing_repository");
+  }
+  if (!runtimeOrigin) {
+    blockers.push("missing_runtime_origin");
+  }
+  if (!issueNumber) {
+    blockers.push("missing_issue_number");
+  }
+  if (!pullNumber) {
+    blockers.push("missing_merged_pull_number");
+  }
+
+  return {
+    status: blockers[0] || "unavailable",
+    blockers
+  };
 }
 
 function normalizeOrigin(value) {

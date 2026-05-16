@@ -1154,7 +1154,8 @@ async function evaluateStartupPreflightSelfParity({
       result.selfParity.surfaceUpdateChecklist?.customGptActionSchema?.status || "未確認",
     instructionsState:
       result.selfParity.surfaceUpdateChecklist?.customGptInstructions?.status || "未確認",
-    deployOperatorUrl: result.selfParity.deployOperatorUrl || null
+    deployOperatorUrl: result.selfParity.deployOperatorUrl || null,
+    issueCloseOperatorUrl: result.selfParity.issueCloseOperatorUrl || null
   };
 }
 
@@ -1702,6 +1703,7 @@ async function handleRetrieveButlerSelfParityRequest(url, env) {
     repository: normalizeText(url.searchParams.get("repository")),
     ref: normalizeText(url.searchParams.get("ref")),
     issueNumber: normalizeIssue(url.searchParams.get("issueNumber")),
+    pullNumber: normalizeIssue(url.searchParams.get("pullNumber")),
     runtimeOrigin: url.origin,
     env
   });

@@ -104,6 +104,7 @@ test("evaluateButlerSelfParity reports deploy update required when canonical set
     ref: "main",
     runtimeOrigin: "https://sample-user-vtdd.example.workers.dev",
     issueNumber: 91,
+    pullNumber: 148,
     env: {
       GITHUB_APP_INSTALLATION_TOKEN: "ghs_setup_read",
       GITHUB_API_FETCH: async (url) => {
@@ -143,6 +144,26 @@ test("evaluateButlerSelfParity reports deploy update required when canonical set
     result.selfParity.deployRecovery.operatorMarkdownLink,
     result.selfParity.deployOperatorMarkdownLink
   );
+  assert.equal(
+    result.selfParity.issueCloseOperatorUrl,
+    "https://sample-user-vtdd.example.workers.dev/v2/approval/passkey/operator?repositoryInput=sample-org%2Fvtdd-v2-p&phase=execution&actionType=issue_close&highRiskKind=issue_close&issueNumber=91&pullNumber=148"
+  );
+  assert.equal(
+    result.selfParity.issueCloseOperatorMarkdownLink,
+    `[Open issue close operator](${result.selfParity.issueCloseOperatorUrl})`
+  );
+  assert.deepEqual(result.selfParity.issueCloseOperator, {
+    actionType: "issue_close",
+    highRiskKind: "issue_close",
+    requires: ["GO", "real passkey", "merged pull proof"],
+    repository: "sample-org/vtdd-v2-p",
+    issueNumber: 91,
+    pullNumber: 148,
+    operatorUrl: result.selfParity.issueCloseOperatorUrl,
+    operatorMarkdownLink: result.selfParity.issueCloseOperatorMarkdownLink,
+    status: "ready",
+    blockers: []
+  });
   assert.equal(
     result.selfParity.recommendedActions.some((item) => item.includes("/v2/approval/passkey/operator")),
     true
@@ -276,7 +297,61 @@ test("evaluateButlerSelfParity treats current nickname and secret sync actions a
     result.selfParity.deployOperatorMarkdownLink,
     `[Open deploy operator](${result.selfParity.deployOperatorUrl})`
   );
+  assert.equal(result.selfParity.issueCloseOperatorUrl, null);
+  assert.equal(result.selfParity.issueCloseOperator, null);
   assert.equal(result.selfParity.deployRecovery, null);
+});
+
+test("evaluateButlerSelfParity reports issue close operator blockers without constructing a URL", async () => {
+  const canonicalOpenApi = [
+    "openapi: 3.1.1",
+    "paths:",
+    "  /v2/action/gateway:",
+    "    post:",
+    "      operationId: vtddGateway",
+    "  /v2/action/deploy-production:",
+    "    post:",
+    "      operationId: vtddDeployProduction",
+    "  /v2/retrieve/github:",
+    "    get:",
+    "      operationId: vtddRetrieveGitHub",
+    "  /v2/retrieve/self-parity:",
+    "    get:",
+    "      operationId: vtddRetrieveSelfParity"
+  ].join("\n");
+  const canonicalInstructions = [
+    "vtddGateway",
+    "vtddDeployProduction",
+    "vtddRetrieveGitHub",
+    "vtddRetrieveSelfParity"
+  ].join("\n");
+
+  const result = await evaluateButlerSelfParity({
+    repository: "sample-org/vtdd-v2-p",
+    ref: "main",
+    runtimeOrigin: "https://sample-user-vtdd.example.workers.dev",
+    issueNumber: 91,
+    env: {
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_setup_read",
+      GITHUB_API_FETCH: async (url) => {
+        const parsed = new URL(url);
+        const isInstructions = parsed.pathname.endsWith("/docs/setup/custom-gpt-instructions.md");
+        return new Response(
+          JSON.stringify({
+            sha: isInstructions ? "instructions-sha" : "openapi-sha",
+            encoding: "base64",
+            content: encodeContent(isInstructions ? canonicalInstructions : canonicalOpenApi)
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        );
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.selfParity.issueCloseOperatorUrl, null);
+  assert.equal(result.selfParity.issueCloseOperator.status, "missing_merged_pull_number");
+  assert.deepEqual(result.selfParity.issueCloseOperator.blockers, ["missing_merged_pull_number"]);
 });
 
 test("buildCustomGptRecoveryBundle expands Worker URL and reports short-min length", async () => {
