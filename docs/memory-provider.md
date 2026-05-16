@@ -74,6 +74,8 @@ or
 - Providers may use different storage backends internally, but the contract
   seen by VTDD must remain stable.
 - `retrieve` is for deterministic structured retrieval.
+- `retrieve({ ids, type })` must apply both filters. It must not ignore
+  `ids`, because runtime recovery paths depend on exact record-id matching.
 - `query` is for text search or semantic-style lookup behavior.
 - `validateRecord` must not mutate storage.
 

@@ -4433,6 +4433,12 @@ function createR2TextAdapter(bucket) {
 function buildMemorySelectStatement({ ids, type }) {
   if (ids.length > 0) {
     const placeholders = ids.map(() => "?").join(", ");
+    if (type) {
+      return {
+        sql: `SELECT * FROM vtdd_memory_records WHERE id IN (${placeholders}) AND type = ?`,
+        params: [...ids, type]
+      };
+    }
     return {
       sql: `SELECT * FROM vtdd_memory_records WHERE id IN (${placeholders})`,
       params: ids

@@ -95,7 +95,7 @@ test("operational memory explicit recordId lookup is limited to working_memory r
   assert.deepEqual(result.compactContext, []);
 });
 
-test("operational memory explicit recordId lookup reports cross-repository working_memory boundary", async () => {
+test("operational memory explicit recordId lookup blocks cross-repository working_memory disclosure", async () => {
   const provider = createInMemoryMemoryProvider();
   await provider.store({
     id: "working-other-repo",
@@ -119,10 +119,11 @@ test("operational memory explicit recordId lookup reports cross-repository worki
   });
 
   assert.equal(result.ok, true);
-  assert.equal(result.recordIdLookup.found, true);
-  assert.equal(result.recordIdLookup.recordRepository, "repo-a/vtdd");
-  assert.equal(result.recordIdLookup.repositoryBoundary, "cross_repository_record_returned_by_explicit_record_id");
-  assert.equal(result.compactContext[0].crossRepository, true);
+  assert.equal(result.recordIdLookup.found, false);
+  assert.equal(result.recordIdLookup.recordRepository, null);
+  assert.equal(result.recordIdLookup.repositoryBoundary, "record_id_repository_boundary_blocked");
+  assert.equal(result.recordIdLookup.blockedByRepositoryBoundary, true);
+  assert.deepEqual(result.compactContext, []);
 });
 
 test("operational memory rejects missing providers with a retrieval-safe error", async () => {

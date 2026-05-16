@@ -159,7 +159,15 @@ export async function retrieveOperationalMemory(provider, input = {}) {
         })
       )
       .filter(Boolean)[0] ?? null;
-    const candidates = mergeRecords(normalizeQueriedRecords(recordIdRecords), mergeRecords(structuredRecords, normalizeQueriedRecords(semanticRecords)))
+    const recordIdLookup = recordId
+      ? buildRecordIdLookup({
+          recordId,
+          reference: recordIdReference,
+          currentRepository
+        })
+      : null;
+    const recordIdContextRecords = recordIdLookup?.found ? normalizeQueriedRecords(recordIdRecords) : [];
+    const candidates = mergeRecords(recordIdContextRecords, mergeRecords(structuredRecords, normalizeQueriedRecords(semanticRecords)))
       .map((record) =>
         toOperationalMemoryReference(record, {
           queryText,
@@ -177,13 +185,7 @@ export async function retrieveOperationalMemory(provider, input = {}) {
       queryText: queryText || null,
       repository: currentRepository || null,
       runtimeTruth,
-      recordIdLookup: recordId
-        ? buildRecordIdLookup({
-            recordId,
-            reference: recordIdReference,
-            currentRepository
-          })
-        : null,
+      recordIdLookup,
       memoryUseRule: runtimeTruth
         ? "runtime_truth_current_state_overrides_memory_background_reference"
         : "memory_background_reference_only",
@@ -216,21 +218,25 @@ function buildRecordIdLookup({ recordId, reference, currentRepository }) {
   const repository = normalizeText(reference?.repository);
   const requestedRepository = normalizeText(currentRepository);
   const found = Boolean(reference);
+  const repositoryBoundaryBlocked = Boolean(found && repository && repository !== requestedRepository);
   const repositoryBoundary =
-    found && requestedRepository && !repository
+    repositoryBoundaryBlocked
+      ? "record_id_repository_boundary_blocked"
+      : found && requestedRepository && !repository
       ? "repo_null_record_returned_by_explicit_record_id"
-      : found && requestedRepository && repository && repository !== requestedRepository
-        ? "cross_repository_record_returned_by_explicit_record_id"
-        : found
-          ? "explicit_record_id_match"
-          : "record_id_not_found";
+      : found
+        ? "explicit_record_id_match"
+        : "record_id_not_found";
   return {
     recordId,
-    found,
+    found: found && !repositoryBoundaryBlocked,
     requestedRepository: requestedRepository || null,
-    recordRepository: repository || null,
+    recordRepository: repositoryBoundaryBlocked ? null : repository || null,
     repositoryBoundary,
-    recoveryGuidance: found
+    blockedByRepositoryBoundary: repositoryBoundaryBlocked,
+    recoveryGuidance: repositoryBoundaryBlocked
+      ? "Explicit recordId matched a repository-scoped record outside the requested repository. Do not return or summarize the record without the correct repository context."
+      : found
       ? "Explicit recordId lookup is a recovery path and does not imply the record matched the repository filter."
       : "No operational memory record matched the explicit recordId. Do not claim retrieval success for the target record."
   };
