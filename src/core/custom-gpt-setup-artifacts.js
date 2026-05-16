@@ -888,6 +888,7 @@ function renderRecoveryBundleSections(recovery) {
   const selfParity = recovery.runtime.selfParity;
   const surfaceUpdateChecklist = recovery.runtime.surfaceUpdateChecklist;
   const knownGoodComparison = recovery.runtime.knownGoodComparison;
+  const isKnownGoodChannel = recovery.channel === CustomGptSetupChannel.KNOWN_GOOD;
   const warning = instructions.limitExceeded
     ? `<section class="warning"><strong>Instructions exceed ${instructions.characterLimit} characters.</strong><p>${instructions.characterCount} characters. Shorten before pasting into the Custom GPT editor.</p></section>`
     : "";
@@ -944,11 +945,13 @@ function renderRecoveryBundleSections(recovery) {
       <textarea id="instructions-short-min" spellcheck="false">${escapeHtml(instructions.content)}</textarea>
     </section>
     <section>
-      <h2>${rollback.rollbackReady ? "Known-good rollback bundle" : "Known-good status / rollback preview"}</h2>
+      <h2>${isKnownGoodChannel ? "Known-good rollback bundle" : "Latest setup bundle metadata"}</h2>
       ${
         rollback.rollbackReady
           ? `<p><button type="button" data-copy-target="rollback-bundle" data-copy-label="Copy Rollback Bundle">Copy Rollback Bundle</button></p>`
-          : `<p class="small">Rollback は setup/known-good で copy-ready になります。latest は現在の候補確認用で、known-good としては未確認です。</p>`
+          : isKnownGoodChannel
+            ? `<p class="small">Known-good rollback bundle はまだ copy-ready ではありません。known-good source と runtime parity を確認してください。</p>`
+            : `<p class="small">この metadata は /setup/latest の現在候補です。Rollback copy-ready bundle は /setup/known-good でのみ表示します。latest は known-good としては未確認です。</p>`
       }
       <pre>${escapeHtml(
         [

@@ -697,6 +697,19 @@ test("worker setup latest page renders copy-ready schema and short-min bundle fo
   assert.equal(html.includes("Copy-ready custom-gpt-instructions-short-min.md"), true);
   assert.equal(html.includes("  - url: https://example.com"), true);
   assert.equal(html.includes("VTDD Butler short-min instructions"), true);
+  const actionSchemaTextarea = html.match(
+    /<textarea id="action-schema" spellcheck="false">([\s\S]*?)<\/textarea>/
+  )?.[1];
+  const instructionsTextarea = html.match(
+    /<textarea id="instructions-short-min" spellcheck="false">([\s\S]*?)<\/textarea>/
+  )?.[1];
+  assert.equal(actionSchemaTextarea?.includes("openapi: 3.1.1"), true);
+  assert.equal(actionSchemaTextarea?.includes("  - url: https://example.com"), true);
+  assert.equal(actionSchemaTextarea?.includes("openapi%3A"), false);
+  assert.equal(actionSchemaTextarea?.includes("%20-%20url"), false);
+  assert.equal(actionSchemaTextarea?.includes("[Open deploy operator]"), false);
+  assert.equal(instructionsTextarea?.includes(shortMin), true);
+  assert.equal(instructionsTextarea?.includes("VTDD%20Butler"), false);
   assert.equal(html.includes("URL separation"), true);
   assert.equal(html.includes("Action Schema server URL"), true);
   assert.equal(html.includes("Custom GPT Action Authentication"), true);
@@ -709,7 +722,9 @@ test("worker setup latest page renders copy-ready schema and short-min bundle fo
   assert.equal(html.includes("Bundle commit"), true);
   assert.equal(html.includes("bundleCommitSha: " + "b".repeat(40)), true);
   assert.equal(html.includes("knownGoodCommitSha: 未確認"), true);
-  assert.equal(html.includes("Rollback は setup/known-good で copy-ready になります。latest は現在の候補確認用で、known-good としては未確認です。"), true);
+  assert.equal(html.includes("Latest setup bundle metadata"), true);
+  assert.equal(html.includes("Rollback copy-ready bundle は /setup/known-good でのみ表示します。"), true);
+  assert.equal(html.includes("Known-good rollback bundle"), false);
   assert.equal(html.includes("Action Schema length"), true);
   assert.equal(html.includes("instructionsShortMinLength:"), true);
   assert.equal(html.includes("Surface update checklist"), true);
@@ -781,6 +796,7 @@ test("worker setup known-good page renders rollback copy-ready bundle from known
   assert.equal(response.status, 200);
   const html = await response.text();
   assert.equal(html.includes("known-good setup bundle"), true);
+  assert.equal(html.includes("Known-good rollback bundle"), true);
   assert.equal(html.includes("Copy Rollback Bundle"), true);
   assert.equal(html.includes(`channel: known_good`), true);
   assert.equal(html.includes(`ref: ${knownGoodSha}`), true);
@@ -815,6 +831,8 @@ test("worker setup known-good page does not silently treat main as known-good", 
   assert.equal(html.includes("Do not treat main/latest as known-good automatically."), true);
   assert.equal(html.includes("Copy-ready Action Schema"), false);
   assert.equal(html.includes("Copy-ready custom-gpt-instructions-short-min.md"), false);
+  assert.equal(html.includes("Known-good rollback bundle"), false);
+  assert.equal(html.includes("Latest setup bundle metadata"), false);
 });
 
 test("worker setup known-good page rejects malformed configured known-good refs", async () => {
