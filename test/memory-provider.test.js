@@ -2,7 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
+  EXPLORATION_HYPOTHESIS_STATUS,
   MEMORY_RECORD_FIELD_POLICY,
+  MEMORY_CHECKPOINT_CONTEXT_SOURCE_QUALITY,
   MEMORY_PROVIDER_FILTER_FIELDS,
   MEMORY_PROVIDER_METHODS,
   MEMORY_PROVIDER_QUERY_FIELDS,
@@ -78,6 +80,96 @@ test("memory field policy matches validation contract", () => {
   assert.equal(MEMORY_RECORD_FIELD_POLICY.priority, "integer_0_to_100");
   assert.equal(MEMORY_RECORD_FIELD_POLICY.tags, "string_array");
   assert.equal(MEMORY_RECORD_FIELD_POLICY.createdAt, "iso_8601_timestamp");
+});
+
+test("working memory validates meaningful exploration and tension checkpoint fields", () => {
+  const created = createMemoryRecord({
+    id: "working-415-meaningful",
+    type: MemoryRecordType.WORKING_MEMORY,
+    content: {
+      summary: "Checkpoint before implementation.",
+      contextSourceQuality: "full_thread_context",
+      captureBoundary: "judgment_log_not_chain_of_thought",
+      explorationHypothesis: {
+        summary: "Failure map retrieval likely belongs in operational-memory references.",
+        whySuspected: "Current retrieval exposes ranking but not rejected hypotheses.",
+        status: "open",
+        suspectedFiles: ["src/core/operational-memory.js"],
+        suspectedLines: [
+          {
+            file: "src/core/operational-memory.js",
+            lineStart: 180,
+            lineEnd: 260,
+            reason: "Reference shaping happens near scoring."
+          }
+        ]
+      },
+      rejectedHypotheses: [
+        {
+          summary: "Use repair_case for every failed hypothesis.",
+          whyRejected: "Unproven exploration should remain working_memory until repair is known.",
+          evidence: "Issue #415 Non-goal and repair_case boundary"
+        }
+      ],
+      tension_note: {
+        summary: "Concern that docs-only memory would overclaim completion.",
+        intensity: "medium",
+        mode: "drift-prevention",
+        why_it_matters: "Future actors must verify Action Schema and runtime path."
+      },
+      stopReason: {
+        summary: "Stop if Action Schema and runtime payload diverge."
+      },
+      uncertainty: {
+        summary: "Need parity between Butler, VPS Codex CLI, and mac Codex."
+      }
+    },
+    metadata: { source: "test", relatedIssue: 415 },
+    priority: 75,
+    tags: ["working_memory", "rag-checkpoint", "issue:415"],
+    createdAt: "2026-05-16T00:00:00Z"
+  });
+
+  assert.equal(created.ok, true);
+  assert.equal(MEMORY_CHECKPOINT_CONTEXT_SOURCE_QUALITY.includes("full_thread_context"), true);
+  assert.equal(EXPLORATION_HYPOTHESIS_STATUS.includes("rejected"), true);
+});
+
+test("working memory rejects malformed file line hypotheses", () => {
+  const invalid = validateMemoryRecord({
+    id: "working-415-invalid",
+    type: MemoryRecordType.WORKING_MEMORY,
+    content: {
+      summary: "Bad checkpoint.",
+      contextSourceQuality: "guesswork",
+      explorationHypothesis: {
+        summary: "Line is malformed.",
+        status: "maybe",
+        suspectedLines: [
+          {
+            lineStart: 0
+          }
+        ]
+      },
+      rejectedHypotheses: [
+        {
+          summary: "Missing reason."
+        }
+      ],
+      stopReason: "not structured"
+    },
+    metadata: { source: "test" },
+    priority: 75,
+    tags: ["working_memory"],
+    createdAt: "2026-05-16T00:00:00Z"
+  });
+
+  assert.equal(invalid.ok, false);
+  assert.equal(invalid.issues.includes("content.contextSourceQuality is invalid"), true);
+  assert.equal(invalid.issues.includes("content.explorationHypothesis.status is invalid"), true);
+  assert.equal(invalid.issues.includes("content.explorationHypothesis.suspectedLines[0].file is required"), true);
+  assert.equal(invalid.issues.includes("content.rejectedHypotheses[0].whyRejected is required"), true);
+  assert.equal(invalid.issues.includes("content.stopReason must be an object"), true);
 });
 
 test("memory provider docs list canonical methods and fields", () => {

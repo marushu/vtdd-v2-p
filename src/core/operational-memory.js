@@ -12,7 +12,9 @@ export const OperationalMemorySignal = Object.freeze({
   RELEVANCE: "relevance",
   RECENCY: "recency",
   GOVERNANCE_IMPORTANCE: "governance_importance",
-  RECURRENCE: "recurrence"
+  RECURRENCE: "recurrence",
+  OPERATIONAL_RISK: "operational_risk",
+  RECONSTRUCTION_VALUE: "reconstruction_value"
 });
 
 export const OPERATIONAL_MEMORY_STORAGE_CANDIDATES = Object.freeze([
@@ -104,7 +106,9 @@ export function buildOperationalMemoryArchitecture() {
       OperationalMemorySignal.RELEVANCE,
       OperationalMemorySignal.RECENCY,
       OperationalMemorySignal.GOVERNANCE_IMPORTANCE,
-      OperationalMemorySignal.RECURRENCE
+      OperationalMemorySignal.RECURRENCE,
+      OperationalMemorySignal.OPERATIONAL_RISK,
+      OperationalMemorySignal.RECONSTRUCTION_VALUE
     ],
     runtimeTruthRule:
       "runtime truth is evaluated separately and must override memory for current state"
@@ -196,6 +200,8 @@ export async function retrieveOperationalMemory(provider, input = {}) {
           OperationalMemorySignal.RELEVANCE,
           OperationalMemorySignal.GOVERNANCE_IMPORTANCE,
           OperationalMemorySignal.RECURRENCE,
+          OperationalMemorySignal.OPERATIONAL_RISK,
+          OperationalMemorySignal.RECONSTRUCTION_VALUE,
           OperationalMemorySignal.RECENCY
         ],
         limit,
@@ -268,7 +274,9 @@ function toOperationalMemoryReference(record, input = {}) {
     relevance: scoreRelevance(textBlob, queryText),
     governanceImportance: scoreGovernanceImportance(record, tags),
     recurrence: scoreRecurrence(record, tags),
-    recency: scoreRecency(record?.createdAt, input.now)
+    recency: scoreRecency(record?.createdAt, input.now),
+    operationalRisk: scoreOperationalRisk(record, tags),
+    reconstructionValue: scoreReconstructionValue(record, tags)
   };
 
   return {
@@ -281,6 +289,11 @@ function toOperationalMemoryReference(record, input = {}) {
     crossRepository: Boolean(currentRepository && repository && repository !== currentRepository),
     createdAt: normalizeText(record?.createdAt) || null,
     tags,
+    explorationHypothesis: resolveExplorationHypothesis(content),
+    failureMap: buildFailureMap(content),
+    successPattern: normalizeSummaryObject(content.successPattern),
+    tension: buildTensionReference(content),
+    handoffMemory: normalizeSummaryObject(content.handoffMemory),
     score: calculateOperationalMemoryScore(scoreSignals),
     scoreSignals,
     use: "background_reference"
@@ -321,6 +334,37 @@ function scoreRecurrence(record, tags) {
   return Math.min(100, Math.round(tagScore + numericScore));
 }
 
+function scoreOperationalRisk(record, tags) {
+  const content = normalizeObject(record?.content);
+  const metadata = normalizeObject(record?.metadata);
+  const riskTags = ["failure", "failed", "blocker", "risk", "stop", "uncertainty", "rejected", "tension"];
+  const tagScore = tags.filter((tag) => riskTags.includes(tag)).length * 14;
+  const failureScore = Object.keys(normalizeObject(content.failureReasoning)).length > 0 ? 35 : 0;
+  const stopScore = Object.keys(normalizeObject(content.stopReason)).length > 0 ? 25 : 0;
+  const uncertaintyScore = Object.keys(normalizeObject(content.uncertainty)).length > 0 ? 20 : 0;
+  const rejectedScore = Array.isArray(content.rejectedHypotheses) && content.rejectedHypotheses.length > 0 ? 25 : 0;
+  const repeatedFailureScore = Number(metadata.recurrenceCount ?? content.recurrenceCount ?? 0) > 0 ? 15 : 0;
+  return Math.min(100, tagScore + failureScore + stopScore + uncertaintyScore + rejectedScore + repeatedFailureScore);
+}
+
+function scoreReconstructionValue(record, tags) {
+  const content = normalizeObject(record?.content);
+  const reconstructionTags = ["handoff", "reconstruction", "rag-checkpoint", "file-line-hypothesis", "exploration"];
+  const tagScore = tags.filter((tag) => reconstructionTags.includes(tag)).length * 14;
+  const suspectedFilesScore = Array.isArray(content.suspectedFiles) && content.suspectedFiles.length > 0 ? 20 : 0;
+  const suspectedLinesScore = Array.isArray(content.suspectedLines) && content.suspectedLines.length > 0 ? 25 : 0;
+  const expectedFilesScore = Array.isArray(content.expectedFiles) && content.expectedFiles.length > 0 ? 15 : 0;
+  const explorationScore = Object.keys(normalizeObject(content.explorationHypothesis)).length > 0 ? 20 : 0;
+  const handoffScore = Object.keys(normalizeObject(content.handoffMemory)).length > 0 ? 20 : 0;
+  const contextRiskScore = ["compressed_context", "missing_context_risk"].includes(normalizeText(content.contextSourceQuality))
+    ? 15
+    : 0;
+  return Math.min(
+    100,
+    tagScore + suspectedFilesScore + suspectedLinesScore + expectedFilesScore + explorationScore + handoffScore + contextRiskScore
+  );
+}
+
 function scoreRecency(createdAt, now) {
   const created = Date.parse(createdAt);
   const current = Date.parse(now);
@@ -339,10 +383,12 @@ function scoreRecency(createdAt, now) {
 
 function calculateOperationalMemoryScore(signals) {
   return Math.round(
-    signals.relevance * 0.4 +
-      signals.governanceImportance * 0.25 +
-      signals.recurrence * 0.2 +
-      signals.recency * 0.15
+    signals.relevance * 0.3 +
+      signals.governanceImportance * 0.2 +
+      signals.recurrence * 0.15 +
+      signals.operationalRisk * 0.15 +
+      signals.reconstructionValue * 0.1 +
+      signals.recency * 0.1
   );
 }
 
@@ -427,6 +473,107 @@ function resolveSummary(record) {
   );
 }
 
+function resolveExplorationHypothesis(content) {
+  const structured = normalizeObject(content.explorationHypothesis);
+  if (Object.keys(structured).length > 0) {
+    return {
+      summary: normalizeText(structured.summary ?? structured.hypothesis) || null,
+      whySuspected: normalizeText(structured.whySuspected) || null,
+      status: normalizeText(structured.status) || null,
+      actualRootCause: normalizeText(structured.actualRootCause) || null,
+      suspectedFiles: normalizeTextArray(structured.suspectedFiles),
+      suspectedLines: normalizeSuspectedLines(structured.suspectedLines)
+    };
+  }
+  const hypothesis = normalizeText(content.hypothesis);
+  if (!hypothesis) {
+    return null;
+  }
+  return {
+    summary: hypothesis,
+    whySuspected: null,
+    status: null,
+    actualRootCause: null,
+    suspectedFiles: normalizeTextArray(content.suspectedFiles ?? content.expectedFiles),
+    suspectedLines: normalizeSuspectedLines(content.suspectedLines)
+  };
+}
+
+function buildFailureMap(content) {
+  const failureReasoning = normalizeSummaryObject(content.failureReasoning);
+  const stopReason = normalizeSummaryObject(content.stopReason);
+  const uncertainty = normalizeSummaryObject(content.uncertainty);
+  const rejectedHypotheses = normalizeRejectedHypotheses(content.rejectedHypotheses);
+  if (!failureReasoning && !stopReason && !uncertainty && rejectedHypotheses.length === 0) {
+    return null;
+  }
+  return {
+    failureReasoning,
+    stopReason,
+    uncertainty,
+    rejectedHypotheses,
+    inspectNextTime: normalizeText(content.failureReasoning?.inspectNextTime) || null
+  };
+}
+
+function buildTensionReference(content) {
+  const tensionNote = normalizeSummaryObject(content.tension_note);
+  const userTension = normalizeText(content.userTension);
+  if (!tensionNote && !userTension) {
+    return null;
+  }
+  return {
+    userTension: userTension || null,
+    note: tensionNote
+  };
+}
+
+function normalizeSummaryObject(value) {
+  const input = normalizeObject(value);
+  if (Object.keys(input).length === 0) {
+    return null;
+  }
+  return Object.fromEntries(
+    Object.entries(input)
+      .map(([key, item]) => [key, Array.isArray(item) ? normalizeTags(item) : normalizeText(item)])
+      .filter(([, item]) => (Array.isArray(item) ? item.length > 0 : Boolean(item)))
+  );
+}
+
+function normalizeRejectedHypotheses(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .map((item) => {
+      const input = normalizeObject(item);
+      return {
+        summary: normalizeText(input.summary ?? input.hypothesis) || null,
+        whyRejected: normalizeText(input.whyRejected ?? input.reason) || null,
+        evidence: normalizeText(input.evidence) || null
+      };
+    })
+    .filter((item) => item.summary || item.whyRejected);
+}
+
+function normalizeSuspectedLines(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .map((item) => {
+      const input = normalizeObject(item);
+      return {
+        file: normalizeText(input.file) || null,
+        line: Number.isInteger(Number(input.line)) ? Number(input.line) : null,
+        lineStart: Number.isInteger(Number(input.lineStart)) ? Number(input.lineStart) : null,
+        lineEnd: Number.isInteger(Number(input.lineEnd)) ? Number(input.lineEnd) : null,
+        reason: normalizeText(input.reason) || null
+      };
+    })
+    .filter((item) => item.file);
+}
+
 function normalizeRuntimeTruth(value) {
   const runtimeTruth = normalizeObject(value);
   if (Object.keys(runtimeTruth).length === 0) {
@@ -453,6 +600,13 @@ function normalizeTags(value) {
     return [];
   }
   return value.map((item) => normalizeText(item).toLowerCase()).filter(Boolean);
+}
+
+function normalizeTextArray(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.map((item) => normalizeText(item)).filter(Boolean);
 }
 
 function normalizeLimit(value, fallback) {

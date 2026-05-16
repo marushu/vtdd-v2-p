@@ -111,6 +111,12 @@ node scripts/vtdd-memory.mjs write-runtime-checkpoint \
   --tension-why-it-matters "Future Butler recall should recover why #343 became next." \
   --context-source-quality "full_thread_context" \
   --hypothesis "Checkpoint schema should ride existing working_memory." \
+  --exploration-hypothesis-json '{"summary":"Checkpoint schema should ride existing working_memory.","whySuspected":"Existing runtime already writes working_memory checkpoints.","status":"open","suspectedFiles":["docs/memory-schema.md","scripts/vtdd-memory.mjs"],"suspectedLines":[{"file":"scripts/vtdd-memory.mjs","lineStart":207,"lineEnd":235,"reason":"Runtime checkpoint payload is assembled here."}]}' \
+  --rejected-hypotheses-json '[{"summary":"Use decision_log for checkpoint saves.","whyRejected":"Checkpoints can be tentative and should not be promoted to decided rationale.","evidence":"docs/butler/thread-independent-startup-contract.md"}]' \
+  --stop-reason-json '{"summary":"Stop if Butler Action Schema and runtime payload diverge.","authorityBoundary":"owner_decision_required"}' \
+  --uncertainty-json '{"summary":"Unknown whether generated OpenAPI docs need parity updates.","unknowns":["yaml/json schema parity","runtime route payload"],"nextCheck":"Run setup docs tests."}' \
+  --failure-reasoning-json '{"whatFailed":"Prior actors could not reconstruct why a hypothesis was abandoned.","whyFailed":"Rejected hypotheses were not persisted.","inspectNextTime":"Retrieve failureMap before retrying."}' \
+  --success-pattern-json '{"whatWorked":"Saving suspected files before implementation made PR review traceable.","whyWorked":"The next actor could compare hypotheses with the actual diff.","reuseConditions":["Issue-backed implementation","bounded file set"]}' \
   --expected-file "docs/memory-schema.md" \
   --expected-file "scripts/vtdd-memory.mjs" \
   --tag "issue:361" \
@@ -207,6 +213,12 @@ node scripts/vtdd-memory.mjs write-record \
 - Do not store full conversation transcripts by default.
 - Do not store raw hidden chain-of-thought. Store compact judgment logs:
   observations, reasons, hypotheses, tensions, evidence, and next return points.
+- Store rejected hypotheses when they explain why a branch, workaround, or file
+  path was abandoned; "外した仮説" is part of reconstruction evidence.
+- Use structured `explorationHypothesis`, `suspectedFiles`, `suspectedLines`,
+  `stopReason`, `uncertainty`, `failureReasoning`, and `successPattern` fields
+  when the checkpoint is meant to survive Butler / VPS Codex CLI / mac Codex
+  handoff.
 - Do not store secrets, raw tokens, private keys, or owner-only credentials.
 - Do not treat memory as permission to deploy, merge, close issues, mutate
   credentials, or run destructive operations.

@@ -226,6 +226,15 @@ export function buildCheckpointPayload(options) {
     tension_note: buildCheckpointTensionNote(options),
     contextSourceQuality: normalizeOptionalText(options.contextSourceQuality) || "full_thread_context",
     hypothesis: normalizeOptionalText(options.hypothesis),
+    explorationHypothesis: parseOptionalJson(options.explorationHypothesisJson, "exploration-hypothesis-json"),
+    suspectedFiles: normalizeList(options.suspectedFile ?? options.suspectedFiles),
+    suspectedLines: parseOptionalJsonArray(options.suspectedLinesJson, "suspected-lines-json"),
+    rejectedHypotheses: parseOptionalJsonArray(options.rejectedHypothesesJson, "rejected-hypotheses-json"),
+    stopReason: parseOptionalJson(options.stopReasonJson, "stop-reason-json"),
+    uncertainty: parseOptionalJson(options.uncertaintyJson, "uncertainty-json"),
+    failureReasoning: parseOptionalJson(options.failureReasoningJson, "failure-reasoning-json"),
+    successPattern: parseOptionalJson(options.successPatternJson, "success-pattern-json"),
+    handoffMemory: parseOptionalJson(options.handoffMemoryJson, "handoff-memory-json"),
     expectedFiles: normalizeList(options.expectedFile ?? options.expectedFiles),
     evidenceLinks: normalizeList(options.evidenceLink ?? options.evidenceLinks),
     previousRecordIds: normalizeList(options.previousRecordId ?? options.previousRecordIds),
@@ -588,6 +597,20 @@ function parseJsonArray(value, label) {
     throw new Error(`${label} must be a JSON array`);
   }
   return parsed;
+}
+
+function parseOptionalJson(value, label) {
+  if (value === undefined) {
+    return null;
+  }
+  return parseJson(value, label);
+}
+
+function parseOptionalJsonArray(value, label) {
+  if (value === undefined) {
+    return [];
+  }
+  return parseJsonArray(value, label);
 }
 
 function normalizeBoolean(value) {

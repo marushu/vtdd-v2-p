@@ -31,6 +31,14 @@ test("operational memory architecture declares the four issue #249 layers and st
     architecture.retrievalSignals.includes(OperationalMemorySignal.GOVERNANCE_IMPORTANCE),
     true
   );
+  assert.equal(
+    architecture.retrievalSignals.includes(OperationalMemorySignal.OPERATIONAL_RISK),
+    true
+  );
+  assert.equal(
+    architecture.retrievalSignals.includes(OperationalMemorySignal.RECONSTRUCTION_VALUE),
+    true
+  );
 });
 
 test("operational memory returns compact ranked references instead of dumping all memory", async () => {
@@ -124,6 +132,118 @@ test("operational memory explicit recordId lookup blocks cross-repository workin
   assert.equal(result.recordIdLookup.repositoryBoundary, "record_id_repository_boundary_blocked");
   assert.equal(result.recordIdLookup.blockedByRepositoryBoundary, true);
   assert.deepEqual(result.compactContext, []);
+});
+
+test("operational memory retrieves failure map and rejected hypotheses for meaningful checkpoints", async () => {
+  const provider = createInMemoryMemoryProvider();
+  await provider.store({
+    id: "working-415-failure-map",
+    type: MemoryRecordType.WORKING_MEMORY,
+    content: {
+      summary: "Stale branch incident checkpoint.",
+      explorationHypothesis: {
+        summary: "The stale branch was caused by provider query lag.",
+        whySuspected: "Operational memory retrieval returned old context.",
+        status: "rejected",
+        suspectedFiles: ["src/core/operational-memory.js"],
+        suspectedLines: [
+          {
+            file: "src/core/operational-memory.js",
+            lineStart: 120,
+            lineEnd: 170,
+            reason: "Structured retrieval happens before semantic query."
+          }
+        ],
+        actualRootCause: "Branch pointer was stale before retrieval."
+      },
+      rejectedHypotheses: [
+        {
+          summary: "Provider query lag caused the stale branch.",
+          whyRejected: "GitHub runtime truth showed the branch pointer mismatch first.",
+          evidence: "branch ref check"
+        }
+      ],
+      failureReasoning: {
+        whatFailed: "Actor resumed from a stale branch.",
+        whyFailed: "Branch runtime truth was not checked before implementation.",
+        whyMissed: "The rejected hypothesis was not durable.",
+        inspectNextTime: "Check branch ref and failure map before editing."
+      },
+      stopReason: {
+        summary: "Stop if branch and Issue runtime truth disagree."
+      },
+      uncertainty: {
+        summary: "Unknown whether the runner picked up the current branch."
+      }
+    },
+    metadata: {
+      repository: "marushu/vtdd-v2-p",
+      recurrenceCount: 2
+    },
+    priority: 88,
+    tags: ["working_memory", "rag-checkpoint", "failure", "rejected", "file-line-hypothesis"],
+    createdAt: "2026-05-16T00:00:00Z"
+  });
+
+  const result = await retrieveOperationalMemory(provider, {
+    text: "stale branch rejected hypothesis failure map provider query lag",
+    repository: "marushu/vtdd-v2-p",
+    limit: 3,
+    now: "2026-05-16T01:00:00.000Z"
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.compactContext[0].id, "working-415-failure-map");
+  assert.equal(result.compactContext[0].failureMap.failureReasoning.whatFailed, "Actor resumed from a stale branch.");
+  assert.equal(result.compactContext[0].failureMap.rejectedHypotheses[0].whyRejected.includes("branch pointer"), true);
+  assert.equal(result.compactContext[0].explorationHypothesis.suspectedLines[0].file, "src/core/operational-memory.js");
+  assert.equal(result.compactContext[0].scoreSignals.operationalRisk > 0, true);
+  assert.equal(result.compactContext[0].scoreSignals.reconstructionValue > 0, true);
+});
+
+test("operational memory retrieves success pattern and tension checkpoint references", async () => {
+  const provider = createInMemoryMemoryProvider();
+  await provider.store({
+    id: "working-415-success-pattern",
+    type: MemoryRecordType.WORKING_MEMORY,
+    content: {
+      summary: "VPS pickup_not_observed checkpoint became recoverable.",
+      successPattern: {
+        whatWorked: "Retrieve failure map before runner retry.",
+        whyWorked: "The stop reason made the pickup gap explicit.",
+        reuseConditions: ["same runner", "same repository"],
+        hiddenConstraints: ["runtime truth still overrides memory"]
+      },
+      tension_note: {
+        summary: "Owner feared silent progress without observed pickup.",
+        intensity: "high",
+        mode: "handoff-risk",
+        why_it_matters: "Next actor must prove observation, not assume pickup."
+      },
+      handoffMemory: {
+        nextActorMustKnow: "Check runner truth before declaring progress."
+      }
+    },
+    metadata: {
+      repository: "marushu/vtdd-v2-p"
+    },
+    priority: 82,
+    tags: ["working_memory", "success", "handoff", "reconstruction"],
+    createdAt: "2026-05-16T00:30:00Z"
+  });
+
+  const result = await retrieveOperationalMemory(provider, {
+    text: "pickup observed runner retry success stop reason",
+    repository: "marushu/vtdd-v2-p",
+    limit: 3,
+    now: "2026-05-16T01:00:00.000Z"
+  });
+
+  assert.equal(result.ok, true);
+  const reference = result.compactContext.find((item) => item.id === "working-415-success-pattern");
+  assert.equal(reference.successPattern.whatWorked, "Retrieve failure map before runner retry.");
+  assert.equal(reference.tension.note.mode, "handoff-risk");
+  assert.equal(reference.handoffMemory.nextActorMustKnow, "Check runner truth before declaring progress.");
 });
 
 test("operational memory rejects missing providers with a retrieval-safe error", async () => {
