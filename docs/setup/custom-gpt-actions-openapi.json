@@ -2957,6 +2957,15 @@
             }
           },
           {
+            "name": "recordId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Explicit operational memory record id recovery path. Use when a known recordId must be checked even if repository was unresolved when saved."
+          },
+          {
             "name": "currentState",
             "in": "query",
             "required": false,

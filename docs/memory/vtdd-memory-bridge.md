@@ -129,6 +129,21 @@ node scripts/vtdd-memory.mjs retrieve-operational \
   --pretty true
 ```
 
+Recover a known `working_memory` checkpoint that was saved while repository was
+unresolved:
+
+```sh
+node scripts/vtdd-memory.mjs retrieve-operational \
+  --runtime-url "$VTDD_RUNTIME_URL" \
+  --record-id "working_memory_343_20260516004245_issue_343_live_e2e_working_memory_" \
+  --limit 1 \
+  --pretty true
+```
+
+If a repository is also supplied, an explicit `recordId` lookup may return a
+repo-null record as recovery evidence. Treat that as explicit record recovery,
+not proof that the record matched the repository-scoped search.
+
 Mac Codex and VPS Codex CLI should use the same runtime write/retrieve contract
 for normal RAG checkpoint handling. Direct Wrangler/D1 writes remain an
 operator repair tool, not the default path for shared memory continuity.

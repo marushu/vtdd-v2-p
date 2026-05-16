@@ -8,6 +8,7 @@ export const MEMORY_PROVIDER_METHODS = Object.freeze([
 ]);
 
 export const MEMORY_PROVIDER_FILTER_FIELDS = Object.freeze([
+  "ids",
   "type",
   "limit",
   "tags"
@@ -47,11 +48,15 @@ export function createInMemoryMemoryProvider() {
     },
 
     async retrieve(filter = {}) {
+      const ids = normalizeIds(filter.ids);
       const type = normalize(filter.type);
       const limit = normalizeLimit(filter.limit);
       const tags = normalizeTags(filter.tags);
 
       let items = [...records];
+      if (ids.length > 0) {
+        items = items.filter((item) => ids.includes(item.id));
+      }
       if (type) {
         items = items.filter((item) => item.type === type);
       }
@@ -59,6 +64,10 @@ export function createInMemoryMemoryProvider() {
         items = items.filter((item) => tags.every((tag) => item.tags.includes(tag)));
       }
       items.sort((a, b) => b.priority - a.priority || b.createdAt.localeCompare(a.createdAt));
+      if (ids.length > 0) {
+        const order = new Map(ids.map((id, index) => [id, index]));
+        items.sort((a, b) => (order.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (order.get(b.id) ?? Number.MAX_SAFE_INTEGER));
+      }
       return items.slice(0, limit);
     },
 

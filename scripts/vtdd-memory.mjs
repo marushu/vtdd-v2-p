@@ -179,6 +179,9 @@ export function buildRuntimeOperationalMemoryRequest(options) {
   if (options.text) {
     url.searchParams.set("text", String(options.text));
   }
+  if (options.recordId) {
+    url.searchParams.set("recordId", String(options.recordId));
+  }
   if (options.currentState) {
     url.searchParams.set("currentState", String(options.currentState));
   }

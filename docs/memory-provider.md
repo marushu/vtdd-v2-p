@@ -31,6 +31,7 @@ Every memory provider must expose these methods:
 ### `retrieve(filter = {})`
 - Purpose: retrieve records by structured filter
 - Supported filter fields:
+  - `ids`
   - `type`
   - `limit`
   - `tags`
