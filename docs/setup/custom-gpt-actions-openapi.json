@@ -51,6 +51,33 @@
         },
         "additionalProperties": true
       },
+      "VtddMemorySuspectedLine": {
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "properties": {
+          "file": {
+            "type": "string"
+          },
+          "line": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "lineStart": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "lineEnd": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
       "OperationalMemoryResponse": {
         "type": "object",
         "required": [
@@ -1152,6 +1179,100 @@
                   },
                   "hypothesis": {
                     "type": "string"
+                  },
+                  "explorationHypothesis": {
+                    "type": "object",
+                    "description": "Structured exploration hypothesis for meaningful checkpoints; use for suspected files/lines and whether the hypothesis is open, confirmed, rejected, superseded, or unknown.",
+                    "properties": {
+                      "summary": {
+                        "type": "string"
+                      },
+                      "whySuspected": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": [
+                          "open",
+                          "confirmed",
+                          "rejected",
+                          "superseded",
+                          "unknown"
+                        ]
+                      },
+                      "suspectedFiles": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "suspectedLines": {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/components/schemas/VtddMemorySuspectedLine"
+                        }
+                      },
+                      "actualRootCause": {
+                        "type": "string"
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "suspectedFiles": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "suspectedLines": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/VtddMemorySuspectedLine"
+                    }
+                  },
+                  "rejectedHypotheses": {
+                    "type": "array",
+                    "description": "Hypotheses that looked plausible but were later rejected; store them to prevent repeated exploration drift.",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "summary": {
+                          "type": "string"
+                        },
+                        "whyRejected": {
+                          "type": "string"
+                        },
+                        "evidence": {
+                          "type": "string"
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  },
+                  "stopReason": {
+                    "type": "object",
+                    "description": "Structured reason the actor stopped instead of continuing.",
+                    "additionalProperties": true
+                  },
+                  "uncertainty": {
+                    "type": "object",
+                    "description": "Structured uncertainty that future actors must resolve before claiming completion.",
+                    "additionalProperties": true
+                  },
+                  "failureReasoning": {
+                    "type": "object",
+                    "description": "Failure reasoning for unresolved or exploratory memory; use repair_case only after root cause and repair are known.",
+                    "additionalProperties": true
+                  },
+                  "successPattern": {
+                    "type": "object",
+                    "description": "Reusable success pattern with reuse conditions and hidden constraints.",
+                    "additionalProperties": true
+                  },
+                  "handoffMemory": {
+                    "type": "object",
+                    "description": "Reconstruction hints and hidden risks for the next actor.",
+                    "additionalProperties": true
                   },
                   "options": {
                     "type": "array",

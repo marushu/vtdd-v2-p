@@ -112,6 +112,8 @@ export {
 } from "./cross-retrieval-runtime.js";
 export { createInMemoryLogStore } from "./log-store.js";
 export {
+  EXPLORATION_HYPOTHESIS_STATUS,
+  MEMORY_CHECKPOINT_CONTEXT_SOURCE_QUALITY,
   MEMORY_RECORD_FIELD_POLICY,
   MemoryRecordType,
   REQUIRED_CORE_MEMORY_RECORD_TYPES,

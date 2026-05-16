@@ -26420,6 +26420,19 @@ var MEMORY_RECORD_FIELD_POLICY = Object.freeze({
   tags: "string_array",
   createdAt: "iso_8601_timestamp"
 });
+var MEMORY_CHECKPOINT_CONTEXT_SOURCE_QUALITY = Object.freeze([
+  "full_thread_context",
+  "compressed_context",
+  "external_evidence",
+  "missing_context_risk"
+]);
+var EXPLORATION_HYPOTHESIS_STATUS = Object.freeze([
+  "open",
+  "confirmed",
+  "rejected",
+  "superseded",
+  "unknown"
+]);
 function createMemoryRecord(input) {
   const record2 = {
     id: normalizeText2(input?.id),
@@ -26459,7 +26472,135 @@ function validateMemoryRecord(record2) {
   if (!isIsoTimestamp(record2?.createdAt)) {
     issues.push("createdAt must be ISO-8601");
   }
+  issues.push(...validateMeaningfulMemoryContent(record2));
   return issues.length > 0 ? { ok: false, issues } : { ok: true };
+}
+function validateMeaningfulMemoryContent(record2) {
+  const content = normalizeObject2(record2?.content);
+  if (Object.keys(content).length === 0) {
+    return [];
+  }
+  if (record2?.type === MemoryRecordType.WORKING_MEMORY) {
+    return validateWorkingMemoryCheckpointContent(content);
+  }
+  if (record2?.type === MemoryRecordType.REPAIR_CASE) {
+    return validateRepairCaseContent(content);
+  }
+  return [];
+}
+function validateWorkingMemoryCheckpointContent(content) {
+  const issues = [];
+  if (hasMeaningfulValue(content.contextSourceQuality) && !MEMORY_CHECKPOINT_CONTEXT_SOURCE_QUALITY.includes(normalizeText2(content.contextSourceQuality))) {
+    issues.push("content.contextSourceQuality is invalid");
+  }
+  if (hasMeaningfulValue(content.captureBoundary) && !normalizeText2(content.captureBoundary)) {
+    issues.push("content.captureBoundary must describe a judgment log or operational summary");
+  }
+  if (hasMeaningfulValue(content.explorationHypothesis)) {
+    issues.push(...validateExplorationHypothesis(content.explorationHypothesis, "content.explorationHypothesis"));
+  }
+  if (hasMeaningfulValue(content.suspectedFiles) && !isStringArray(content.suspectedFiles)) {
+    issues.push("content.suspectedFiles must be a string array");
+  }
+  if (hasMeaningfulValue(content.suspectedLines)) {
+    issues.push(...validateSuspectedLines(content.suspectedLines, "content.suspectedLines"));
+  }
+  if (hasMeaningfulValue(content.rejectedHypotheses)) {
+    issues.push(...validateRejectedHypotheses(content.rejectedHypotheses, "content.rejectedHypotheses"));
+  }
+  if (hasMeaningfulValue(content.tension_note)) {
+    issues.push(...validateStructuredObject(content.tension_note, "content.tension_note"));
+  }
+  if (hasMeaningfulValue(content.stopReason)) {
+    issues.push(...validateStructuredObject(content.stopReason, "content.stopReason"));
+  }
+  if (hasMeaningfulValue(content.uncertainty)) {
+    issues.push(...validateStructuredObject(content.uncertainty, "content.uncertainty"));
+  }
+  if (hasMeaningfulValue(content.failureReasoning)) {
+    issues.push(...validateStructuredObject(content.failureReasoning, "content.failureReasoning"));
+  }
+  if (hasMeaningfulValue(content.successPattern)) {
+    issues.push(...validateStructuredObject(content.successPattern, "content.successPattern"));
+  }
+  if (hasMeaningfulValue(content.handoffMemory)) {
+    issues.push(...validateStructuredObject(content.handoffMemory, "content.handoffMemory"));
+  }
+  return issues;
+}
+function validateRepairCaseContent(content) {
+  const issues = [];
+  if (hasMeaningfulValue(content.failureReasoning)) {
+    issues.push(...validateStructuredObject(content.failureReasoning, "content.failureReasoning"));
+  }
+  if (hasMeaningfulValue(content.successPattern)) {
+    issues.push(...validateStructuredObject(content.successPattern, "content.successPattern"));
+  }
+  if (hasMeaningfulValue(content.rejectedHypotheses)) {
+    issues.push(...validateRejectedHypotheses(content.rejectedHypotheses, "content.rejectedHypotheses"));
+  }
+  return issues;
+}
+function validateExplorationHypothesis(value, fieldName) {
+  const issues = [];
+  const input = normalizeObject2(value);
+  if (Object.keys(input).length === 0) {
+    return [`${fieldName} must be an object`];
+  }
+  if (!normalizeText2(input.summary ?? input.hypothesis)) {
+    issues.push(`${fieldName}.summary is required`);
+  }
+  if (input.status !== void 0 && !EXPLORATION_HYPOTHESIS_STATUS.includes(normalizeText2(input.status))) {
+    issues.push(`${fieldName}.status is invalid`);
+  }
+  if (input.suspectedFiles !== void 0 && !isStringArray(input.suspectedFiles)) {
+    issues.push(`${fieldName}.suspectedFiles must be a string array`);
+  }
+  if (input.suspectedLines !== void 0) {
+    issues.push(...validateSuspectedLines(input.suspectedLines, `${fieldName}.suspectedLines`));
+  }
+  return issues;
+}
+function validateSuspectedLines(value, fieldName) {
+  const issues = [];
+  if (!Array.isArray(value)) {
+    return [`${fieldName} must be an array`];
+  }
+  value.forEach((item, index) => {
+    const input = normalizeObject2(item);
+    if (Object.keys(input).length === 0) {
+      issues.push(`${fieldName}[${index}] must be an object`);
+      return;
+    }
+    if (!normalizeText2(input.file)) {
+      issues.push(`${fieldName}[${index}].file is required`);
+    }
+    for (const key of ["line", "lineStart", "lineEnd"]) {
+      if (hasMeaningfulValue(input[key]) && !isPositiveInteger(input[key])) {
+        issues.push(`${fieldName}[${index}].${key} must be a positive integer`);
+      }
+    }
+  });
+  return issues;
+}
+function validateRejectedHypotheses(value, fieldName) {
+  const issues = [];
+  if (!Array.isArray(value)) {
+    return [`${fieldName} must be an array`];
+  }
+  value.forEach((item, index) => {
+    const input = normalizeObject2(item);
+    if (!normalizeText2(input.summary ?? input.hypothesis)) {
+      issues.push(`${fieldName}[${index}].summary is required`);
+    }
+    if (!normalizeText2(input.whyRejected ?? input.reason)) {
+      issues.push(`${fieldName}[${index}].whyRejected is required`);
+    }
+  });
+  return issues;
+}
+function validateStructuredObject(value, fieldName) {
+  return Object.keys(normalizeObject2(value)).length === 0 ? [`${fieldName} must be an object`] : [];
 }
 function normalizeText2(value) {
   const text = String(value ?? "").trim();
@@ -26470,6 +26611,16 @@ function normalizeObject2(value) {
     return {};
   }
   return value;
+}
+function isStringArray(value) {
+  return Array.isArray(value) && value.every((item) => normalizeText2(item));
+}
+function isPositiveInteger(value) {
+  const numeric = Number(value);
+  return Number.isInteger(numeric) && numeric > 0;
+}
+function hasMeaningfulValue(value) {
+  return value !== void 0 && value !== null;
 }
 function normalizePriority(value) {
   const numeric = Number(value ?? 50);
@@ -31978,7 +32129,9 @@ var OperationalMemorySignal = Object.freeze({
   RELEVANCE: "relevance",
   RECENCY: "recency",
   GOVERNANCE_IMPORTANCE: "governance_importance",
-  RECURRENCE: "recurrence"
+  RECURRENCE: "recurrence",
+  OPERATIONAL_RISK: "operational_risk",
+  RECONSTRUCTION_VALUE: "reconstruction_value"
 });
 var OPERATIONAL_MEMORY_STORAGE_CANDIDATES = Object.freeze([
   "cloudflare_d1",
@@ -32064,7 +32217,9 @@ function buildOperationalMemoryArchitecture() {
       OperationalMemorySignal.RELEVANCE,
       OperationalMemorySignal.RECENCY,
       OperationalMemorySignal.GOVERNANCE_IMPORTANCE,
-      OperationalMemorySignal.RECURRENCE
+      OperationalMemorySignal.RECURRENCE,
+      OperationalMemorySignal.OPERATIONAL_RISK,
+      OperationalMemorySignal.RECONSTRUCTION_VALUE
     ],
     runtimeTruthRule: "runtime truth is evaluated separately and must override memory for current state"
   };
@@ -32133,6 +32288,8 @@ async function retrieveOperationalMemory(provider, input = {}) {
           OperationalMemorySignal.RELEVANCE,
           OperationalMemorySignal.GOVERNANCE_IMPORTANCE,
           OperationalMemorySignal.RECURRENCE,
+          OperationalMemorySignal.OPERATIONAL_RISK,
+          OperationalMemorySignal.RECONSTRUCTION_VALUE,
           OperationalMemorySignal.RECENCY
         ],
         limit,
@@ -32189,7 +32346,9 @@ function toOperationalMemoryReference(record2, input = {}) {
     relevance: scoreRelevance(textBlob, queryText),
     governanceImportance: scoreGovernanceImportance(record2, tags),
     recurrence: scoreRecurrence(record2, tags),
-    recency: scoreRecency(record2?.createdAt, input.now)
+    recency: scoreRecency(record2?.createdAt, input.now),
+    operationalRisk: scoreOperationalRisk(record2, tags),
+    reconstructionValue: scoreReconstructionValue(record2, tags)
   };
   return {
     id: normalizeText15(record2?.id),
@@ -32201,6 +32360,11 @@ function toOperationalMemoryReference(record2, input = {}) {
     crossRepository: Boolean(currentRepository && repository && repository !== currentRepository),
     createdAt: normalizeText15(record2?.createdAt) || null,
     tags,
+    explorationHypothesis: resolveExplorationHypothesis(content),
+    failureMap: buildFailureMap(content),
+    successPattern: normalizeSummaryObject(content.successPattern),
+    tension: buildTensionReference(content),
+    handoffMemory: normalizeSummaryObject(content.handoffMemory),
     score: calculateOperationalMemoryScore(scoreSignals),
     scoreSignals,
     use: "background_reference"
@@ -32235,6 +32399,33 @@ function scoreRecurrence(record2, tags) {
   const numericScore = Number.isFinite(count) && count > 0 ? Math.min(60, count * 15) : 0;
   return Math.min(100, Math.round(tagScore + numericScore));
 }
+function scoreOperationalRisk(record2, tags) {
+  const content = normalizeObject6(record2?.content);
+  const metadata = normalizeObject6(record2?.metadata);
+  const riskTags = ["failure", "failed", "blocker", "risk", "stop", "uncertainty", "rejected", "tension"];
+  const tagScore = tags.filter((tag) => riskTags.includes(tag)).length * 14;
+  const failureScore = Object.keys(normalizeObject6(content.failureReasoning)).length > 0 ? 35 : 0;
+  const stopScore = Object.keys(normalizeObject6(content.stopReason)).length > 0 ? 25 : 0;
+  const uncertaintyScore = Object.keys(normalizeObject6(content.uncertainty)).length > 0 ? 20 : 0;
+  const rejectedScore = Array.isArray(content.rejectedHypotheses) && content.rejectedHypotheses.length > 0 ? 25 : 0;
+  const repeatedFailureScore = Number(metadata.recurrenceCount ?? content.recurrenceCount ?? 0) > 0 ? 15 : 0;
+  return Math.min(100, tagScore + failureScore + stopScore + uncertaintyScore + rejectedScore + repeatedFailureScore);
+}
+function scoreReconstructionValue(record2, tags) {
+  const content = normalizeObject6(record2?.content);
+  const reconstructionTags = ["handoff", "reconstruction", "rag-checkpoint", "file-line-hypothesis", "exploration"];
+  const tagScore = tags.filter((tag) => reconstructionTags.includes(tag)).length * 14;
+  const suspectedFilesScore = Array.isArray(content.suspectedFiles) && content.suspectedFiles.length > 0 ? 20 : 0;
+  const suspectedLinesScore = Array.isArray(content.suspectedLines) && content.suspectedLines.length > 0 ? 25 : 0;
+  const expectedFilesScore = Array.isArray(content.expectedFiles) && content.expectedFiles.length > 0 ? 15 : 0;
+  const explorationScore = Object.keys(normalizeObject6(content.explorationHypothesis)).length > 0 ? 20 : 0;
+  const handoffScore = Object.keys(normalizeObject6(content.handoffMemory)).length > 0 ? 20 : 0;
+  const contextRiskScore = ["compressed_context", "missing_context_risk"].includes(normalizeText15(content.contextSourceQuality)) ? 15 : 0;
+  return Math.min(
+    100,
+    tagScore + suspectedFilesScore + suspectedLinesScore + expectedFilesScore + explorationScore + handoffScore + contextRiskScore
+  );
+}
 function scoreRecency(createdAt, now) {
   const created = Date.parse(createdAt);
   const current = Date.parse(now);
@@ -32252,7 +32443,7 @@ function scoreRecency(createdAt, now) {
 }
 function calculateOperationalMemoryScore(signals) {
   return Math.round(
-    signals.relevance * 0.4 + signals.governanceImportance * 0.25 + signals.recurrence * 0.2 + signals.recency * 0.15
+    signals.relevance * 0.3 + signals.governanceImportance * 0.2 + signals.recurrence * 0.15 + signals.operationalRisk * 0.15 + signals.reconstructionValue * 0.1 + signals.recency * 0.1
   );
 }
 function compareOperationalMemoryReferences(a, b) {
@@ -32313,6 +32504,95 @@ function resolveSummary(record2) {
   const content = normalizeObject6(record2?.content);
   return normalizeText15(content.summary) || normalizeText15(content.rationale) || normalizeText15(content.remediation) || normalizeText15(content.description) || normalizeText15(content.note) || normalizeText15(content.result) || null;
 }
+function resolveExplorationHypothesis(content) {
+  const structured = normalizeObject6(content.explorationHypothesis);
+  if (Object.keys(structured).length > 0) {
+    return {
+      summary: normalizeText15(structured.summary ?? structured.hypothesis) || null,
+      whySuspected: normalizeText15(structured.whySuspected) || null,
+      status: normalizeText15(structured.status) || null,
+      actualRootCause: normalizeText15(structured.actualRootCause) || null,
+      suspectedFiles: normalizeTextArray(structured.suspectedFiles),
+      suspectedLines: normalizeSuspectedLines(structured.suspectedLines)
+    };
+  }
+  const hypothesis = normalizeText15(content.hypothesis);
+  if (!hypothesis) {
+    return null;
+  }
+  return {
+    summary: hypothesis,
+    whySuspected: null,
+    status: null,
+    actualRootCause: null,
+    suspectedFiles: normalizeTextArray(content.suspectedFiles ?? content.expectedFiles),
+    suspectedLines: normalizeSuspectedLines(content.suspectedLines)
+  };
+}
+function buildFailureMap(content) {
+  const failureReasoning = normalizeSummaryObject(content.failureReasoning);
+  const stopReason = normalizeSummaryObject(content.stopReason);
+  const uncertainty = normalizeSummaryObject(content.uncertainty);
+  const rejectedHypotheses = normalizeRejectedHypotheses(content.rejectedHypotheses);
+  if (!failureReasoning && !stopReason && !uncertainty && rejectedHypotheses.length === 0) {
+    return null;
+  }
+  return {
+    failureReasoning,
+    stopReason,
+    uncertainty,
+    rejectedHypotheses,
+    inspectNextTime: normalizeText15(content.failureReasoning?.inspectNextTime) || null
+  };
+}
+function buildTensionReference(content) {
+  const tensionNote = normalizeSummaryObject(content.tension_note);
+  const userTension = normalizeText15(content.userTension);
+  if (!tensionNote && !userTension) {
+    return null;
+  }
+  return {
+    userTension: userTension || null,
+    note: tensionNote
+  };
+}
+function normalizeSummaryObject(value) {
+  const input = normalizeObject6(value);
+  if (Object.keys(input).length === 0) {
+    return null;
+  }
+  return Object.fromEntries(
+    Object.entries(input).map(([key, item]) => [key, Array.isArray(item) ? normalizeTags2(item) : normalizeText15(item)]).filter(([, item]) => Array.isArray(item) ? item.length > 0 : Boolean(item))
+  );
+}
+function normalizeRejectedHypotheses(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.map((item) => {
+    const input = normalizeObject6(item);
+    return {
+      summary: normalizeText15(input.summary ?? input.hypothesis) || null,
+      whyRejected: normalizeText15(input.whyRejected ?? input.reason) || null,
+      evidence: normalizeText15(input.evidence) || null
+    };
+  }).filter((item) => item.summary || item.whyRejected);
+}
+function normalizeSuspectedLines(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.map((item) => {
+    const input = normalizeObject6(item);
+    return {
+      file: normalizeText15(input.file) || null,
+      line: Number.isInteger(Number(input.line)) ? Number(input.line) : null,
+      lineStart: Number.isInteger(Number(input.lineStart)) ? Number(input.lineStart) : null,
+      lineEnd: Number.isInteger(Number(input.lineEnd)) ? Number(input.lineEnd) : null,
+      reason: normalizeText15(input.reason) || null
+    };
+  }).filter((item) => item.file);
+}
 function normalizeRuntimeTruth2(value) {
   const runtimeTruth = normalizeObject6(value);
   if (Object.keys(runtimeTruth).length === 0) {
@@ -32337,6 +32617,12 @@ function normalizeTags2(value) {
     return [];
   }
   return value.map((item) => normalizeText15(item).toLowerCase()).filter(Boolean);
+}
+function normalizeTextArray(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.map((item) => normalizeText15(item)).filter(Boolean);
 }
 function normalizeLimit5(value, fallback) {
   const numeric = Number(value ?? fallback);
@@ -56367,6 +56653,15 @@ function buildMemoryWriteRecord(payload = {}) {
         tension_note: normalizeTensionNote(payload.tension_note ?? payload.tensionNote),
         contextSourceQuality: normalizeText30(payload.contextSourceQuality) || null,
         hypothesis: normalizeText30(payload.hypothesis) || null,
+        explorationHypothesis: normalizeExplorationHypothesis(payload.explorationHypothesis),
+        suspectedFiles: normalizeStringArray4(payload.suspectedFiles),
+        suspectedLines: normalizeSuspectedLines2(payload.suspectedLines),
+        rejectedHypotheses: normalizeRejectedHypotheses2(payload.rejectedHypotheses),
+        stopReason: normalizeMemorySummaryObject(payload.stopReason),
+        uncertainty: normalizeMemorySummaryObject(payload.uncertainty),
+        failureReasoning: normalizeMemorySummaryObject(payload.failureReasoning),
+        successPattern: normalizeMemorySummaryObject(payload.successPattern),
+        handoffMemory: normalizeMemorySummaryObject(payload.handoffMemory),
         expectedFiles: normalizeStringArray4(payload.expectedFiles),
         evidenceLinks: normalizeStringArray4(payload.evidenceLinks),
         previousRecordIds: normalizeStringArray4(payload.previousRecordIds),
@@ -56436,6 +56731,64 @@ function normalizeTensionNote(value) {
     why_it_matters: normalizeMemoryRecallText(input.why_it_matters ?? input.whyItMatters, 320)
   };
   return Object.values(note).some(Boolean) ? note : null;
+}
+function normalizeExplorationHypothesis(value) {
+  const input = normalizeObject11(value);
+  const hypothesis = {
+    summary: normalizeMemoryRecallText(input.summary ?? input.hypothesis, 500),
+    whySuspected: normalizeMemoryRecallText(input.whySuspected, 500),
+    status: normalizeMemoryRecallText(input.status, 40),
+    suspectedFiles: normalizeStringArray4(input.suspectedFiles),
+    suspectedLines: normalizeSuspectedLines2(input.suspectedLines),
+    actualRootCause: normalizeMemoryRecallText(input.actualRootCause, 500)
+  };
+  return Object.values(hypothesis).some((item) => Array.isArray(item) ? item.length > 0 : Boolean(item)) ? hypothesis : null;
+}
+function normalizeSuspectedLines2(value) {
+  const values = Array.isArray(value) ? value : [];
+  return values.map((item) => {
+    const input = normalizeObject11(item);
+    return {
+      file: normalizeMemoryRecallText(input.file, 240),
+      line: normalizePositiveLine(input.line),
+      lineStart: normalizePositiveLine(input.lineStart),
+      lineEnd: normalizePositiveLine(input.lineEnd),
+      reason: normalizeMemoryRecallText(input.reason, 500)
+    };
+  }).filter((item) => item.file);
+}
+function normalizeRejectedHypotheses2(value) {
+  const values = Array.isArray(value) ? value : [];
+  return values.map((item) => {
+    const input = normalizeObject11(item);
+    return {
+      summary: normalizeMemoryRecallText(input.summary ?? input.hypothesis, 500),
+      whyRejected: normalizeMemoryRecallText(input.whyRejected ?? input.reason, 500),
+      evidence: normalizeMemoryRecallText(input.evidence, 500)
+    };
+  }).filter((item) => item.summary && item.whyRejected);
+}
+function normalizeMemorySummaryObject(value) {
+  const input = normalizeObject11(value);
+  const output = {};
+  for (const [key, item] of Object.entries(input)) {
+    if (Array.isArray(item)) {
+      const normalized2 = normalizeStringArray4(item);
+      if (normalized2.length > 0) {
+        output[key] = normalized2;
+      }
+      continue;
+    }
+    const normalized = normalizeMemoryRecallText(item, 600);
+    if (normalized) {
+      output[key] = normalized;
+    }
+  }
+  return Object.keys(output).length > 0 ? output : null;
+}
+function normalizePositiveLine(value) {
+  const numeric = Number(value);
+  return Number.isInteger(numeric) && numeric > 0 ? numeric : null;
 }
 function normalizeMemoryRecallText(value, maxLength) {
   const text = String(value ?? "").trim();

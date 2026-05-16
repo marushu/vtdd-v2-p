@@ -22,6 +22,10 @@ These families are required by Issue #2 and form the core VTDD memory model.
 - RAG checkpoint use: a compact memory savepoint captured before context
   compression, sleep, travel, implementation, or large investigation changes the
   active thread state
+- Meaningful checkpoint use: record the operational judgment that source code
+  cannot reconstruct later, including why a file was suspected, why an actor
+  stopped, which hypothesis failed, what uncertainty remained, and what the
+  next actor must not forget
 
 ### `temperature_note`
 - Purpose: preserve user intent temperature such as urgency, preference, and
@@ -31,6 +35,10 @@ These families are required by Issue #2 and form the core VTDD memory model.
 ### `repair_case`
 - Purpose: retain concrete failure and recovery knowledge
 - Typical content: failure pattern, detected cause, successful repair
+- Boundary: use `repair_case` only when the failure and recovery are known
+  enough to be reused. Use `working_memory.failureReasoning` when the actor is
+  still exploring a failure, stopping because of uncertainty, or preserving a
+  rejected hypothesis before the repair is proven.
 
 ## Operational Extension Record Families
 
@@ -90,6 +98,15 @@ may include:
 - `tension_note`
 - `contextSourceQuality`
 - `hypothesis`
+- `explorationHypothesis`
+- `suspectedFiles`
+- `suspectedLines`
+- `rejectedHypotheses`
+- `stopReason`
+- `uncertainty`
+- `failureReasoning`
+- `successPattern`
+- `handoffMemory`
 - `expectedFiles`
 - `evidenceLinks`
 - `previousRecordIds`
@@ -118,6 +135,107 @@ Suggested `contextSourceQuality` values:
 - `compressed_context`: reconstructed after compression and requiring caution
 - `external_evidence`: backed by Issue, PR, commit, log, or runtime truth
 - `missing_context_risk`: known context loss risk remains
+
+### Meaningful Checkpoint Content Fields
+
+`meaningful memory` means a compact operational judgment record. It is not a
+chat transcript, and it is not hidden chain-of-thought. It stores observable
+decision context that future Butler, VPS Codex CLI, or mac Codex actors can use
+to avoid drift:
+
+- what was suspected,
+- why it was suspected,
+- what failed or worked,
+- what was rejected,
+- why the actor stopped,
+- what uncertainty or tension mattered,
+- where to inspect next time,
+- what evidence or runtime truth anchored the checkpoint.
+
+For exploration and file/line hypotheses, use:
+
+```json
+{
+  "explorationHypothesis": {
+    "summary": "The memory retrieval bug may live in operational ranking.",
+    "whySuspected": "Repeated failures mention stale failure cases not being recalled.",
+    "status": "open | confirmed | rejected | superseded | unknown",
+    "suspectedFiles": ["src/core/operational-memory.js"],
+    "suspectedLines": [
+      {
+        "file": "src/core/operational-memory.js",
+        "lineStart": 210,
+        "lineEnd": 260,
+        "reason": "Ranking currently weights recurrence but not rejected hypotheses."
+      }
+    ],
+    "actualRootCause": null
+  }
+}
+```
+
+`suspectedFiles` is a string array. `suspectedLines` is an array of objects with
+`file` plus optional `line`, `lineStart`, `lineEnd`, and `reason`. These fields
+are hypotheses, not proof. If the hypothesis is wrong, preserve it in
+`rejectedHypotheses` instead of deleting the trail:
+
+```json
+{
+  "rejectedHypotheses": [
+    {
+      "summary": "The stale branch incident was caused by provider query lag.",
+      "whyRejected": "Runtime truth showed the branch pointer was wrong before provider query.",
+      "evidence": "GitHub branch/ref check"
+    }
+  ]
+}
+```
+
+For tension and stop capture, use structured objects:
+
+```json
+{
+  "tension_note": {
+    "summary": "Owner worried the implementation would look complete while Butler cannot use it.",
+    "intensity": "high",
+    "mode": "drift-prevention",
+    "why_it_matters": "Future actors must verify Butler-facing reachability before completion claims."
+  },
+  "stopReason": {
+    "summary": "Stopped before editing because Issue scope and runtime route did not match.",
+    "authorityBoundary": "owner_decision_required"
+  },
+  "uncertainty": {
+    "summary": "Unknown whether the Custom GPT Action Schema exposes the new field.",
+    "unknowns": ["schema parity", "runtime payload storage"],
+    "nextCheck": "Inspect OpenAPI and worker route before implementation."
+  }
+}
+```
+
+For failure and success reasoning, use:
+
+```json
+{
+  "failureReasoning": {
+    "whatFailed": "Butler could not reconstruct why a branch was abandoned.",
+    "whyFailed": "The rejected file hypothesis was never persisted.",
+    "whyMissed": "Only PR/runtime state was retained.",
+    "inspectNextTime": "Look for rejectedHypotheses and suspectedLines before retrying."
+  },
+  "successPattern": {
+    "whatWorked": "Retrieving failureReasoning before patch planning prevented repeat drift.",
+    "whyWorked": "The actor saw the previous stop reason and avoided the same path.",
+    "reuseConditions": ["same repository", "same Issue family", "runtime truth still current"],
+    "hiddenConstraints": ["memory is background reference, not current truth"]
+  }
+}
+```
+
+`repair_case` may also include `failureReasoning`, `successPattern`, and
+`rejectedHypotheses`, but only after the root cause and repair are known. While
+the actor is still uncertain, keep the record as `working_memory` so retrieval
+does not overstate it as a proven repair.
 
 ### `metadata`
 - Required object

@@ -1532,6 +1532,15 @@ function buildMemoryWriteRecord(payload = {}) {
         tension_note: normalizeTensionNote(payload.tension_note ?? payload.tensionNote),
         contextSourceQuality: normalizeText(payload.contextSourceQuality) || null,
         hypothesis: normalizeText(payload.hypothesis) || null,
+        explorationHypothesis: normalizeExplorationHypothesis(payload.explorationHypothesis),
+        suspectedFiles: normalizeStringArray(payload.suspectedFiles),
+        suspectedLines: normalizeSuspectedLines(payload.suspectedLines),
+        rejectedHypotheses: normalizeRejectedHypotheses(payload.rejectedHypotheses),
+        stopReason: normalizeMemorySummaryObject(payload.stopReason),
+        uncertainty: normalizeMemorySummaryObject(payload.uncertainty),
+        failureReasoning: normalizeMemorySummaryObject(payload.failureReasoning),
+        successPattern: normalizeMemorySummaryObject(payload.successPattern),
+        handoffMemory: normalizeMemorySummaryObject(payload.handoffMemory),
         expectedFiles: normalizeStringArray(payload.expectedFiles),
         evidenceLinks: normalizeStringArray(payload.evidenceLinks),
         previousRecordIds: normalizeStringArray(payload.previousRecordIds),
@@ -1617,6 +1626,75 @@ function normalizeTensionNote(value) {
     why_it_matters: normalizeMemoryRecallText(input.why_it_matters ?? input.whyItMatters, 320)
   };
   return Object.values(note).some(Boolean) ? note : null;
+}
+
+function normalizeExplorationHypothesis(value) {
+  const input = normalizeObject(value);
+  const hypothesis = {
+    summary: normalizeMemoryRecallText(input.summary ?? input.hypothesis, 500),
+    whySuspected: normalizeMemoryRecallText(input.whySuspected, 500),
+    status: normalizeMemoryRecallText(input.status, 40),
+    suspectedFiles: normalizeStringArray(input.suspectedFiles),
+    suspectedLines: normalizeSuspectedLines(input.suspectedLines),
+    actualRootCause: normalizeMemoryRecallText(input.actualRootCause, 500)
+  };
+  return Object.values(hypothesis).some((item) => (Array.isArray(item) ? item.length > 0 : Boolean(item)))
+    ? hypothesis
+    : null;
+}
+
+function normalizeSuspectedLines(value) {
+  const values = Array.isArray(value) ? value : [];
+  return values
+    .map((item) => {
+      const input = normalizeObject(item);
+      return {
+        file: normalizeMemoryRecallText(input.file, 240),
+        line: normalizePositiveLine(input.line),
+        lineStart: normalizePositiveLine(input.lineStart),
+        lineEnd: normalizePositiveLine(input.lineEnd),
+        reason: normalizeMemoryRecallText(input.reason, 500)
+      };
+    })
+    .filter((item) => item.file);
+}
+
+function normalizeRejectedHypotheses(value) {
+  const values = Array.isArray(value) ? value : [];
+  return values
+    .map((item) => {
+      const input = normalizeObject(item);
+      return {
+        summary: normalizeMemoryRecallText(input.summary ?? input.hypothesis, 500),
+        whyRejected: normalizeMemoryRecallText(input.whyRejected ?? input.reason, 500),
+        evidence: normalizeMemoryRecallText(input.evidence, 500)
+      };
+    })
+    .filter((item) => item.summary && item.whyRejected);
+}
+
+function normalizeMemorySummaryObject(value) {
+  const input = normalizeObject(value);
+  const output = {};
+  for (const [key, item] of Object.entries(input)) {
+    if (Array.isArray(item)) {
+      const normalized = normalizeStringArray(item);
+      if (normalized.length > 0) {
+        output[key] = normalized;
+      }
+      continue;
+    }
+    const normalized = normalizeMemoryRecallText(item, 600);
+    if (normalized) {
+      output[key] = normalized;
+    }
+  }
+  return Object.keys(output).length > 0 ? output : null;
+}
+
+function normalizePositiveLine(value) {
+  const numeric = Number(value);
+  return Number.isInteger(numeric) && numeric > 0 ? numeric : null;
 }
 
 function normalizeMemoryRecallText(value, maxLength) {

@@ -73,11 +73,38 @@ dump. Ranking uses:
 - recency
 - governance importance
 - recurrence
+- operational risk
+- reconstruction value
 
 The output must preserve the distinction between:
 
 - current runtime truth, which can override historical memory for current state
 - memory references, which are background operational evidence
+
+## Meaningful Memory Retrieval Rules
+
+Operational retrieval should surface meaningful memory when it helps the next
+actor reconstruct judgment, avoid repeated failure, or reuse a proven success
+pattern.
+
+Failure memory is exposed as a `failureMap` on compact references when the
+record contains failure reasoning, rejected hypotheses, stop reason, or
+uncertainty. The failure map is especially relevant for stale branch incidents,
+actor identity failures, pickup-not-observed cases, and other repeated
+operational failures.
+
+Success memory is exposed as `successPattern` when a record explains what
+worked, why it worked, reuse conditions, and hidden constraints. Retrieval may
+rank it higher when the query matches those reuse conditions, but runtime truth
+still decides current state.
+
+Exploration memory is exposed as `explorationHypothesis`, with suspected files
+and suspected lines. Rejected hypotheses remain retrievable because knowing
+what was wrong is part of drift prevention.
+
+Tension and stop memory is exposed as `tension` and `failureMap.stopReason` /
+`failureMap.uncertainty`. These fields are recall hooks for operational
+judgment, not personality analysis.
 
 ## Non-Goals
 
@@ -94,8 +121,11 @@ The function returns:
 
 - the four-layer architecture
 - compact ranked references
+- optional `explorationHypothesis`, `failureMap`, `successPattern`, `tension`,
+  and `handoffMemory` fields on references when present
 - references grouped by layer
 - score signals for relevance, recency, governance importance, and recurrence
+- score signals for operational risk and reconstruction value
 - an explicit memory-use rule that prevents memory from overriding runtime truth
 
 ## Operator Bridge

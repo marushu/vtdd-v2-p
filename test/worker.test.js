@@ -1234,6 +1234,53 @@ test("worker persists RAG checkpoint fields as working memory", async () => {
         },
         contextSourceQuality: "full_thread_context",
         hypothesis: "Checkpoint schema should ride existing working_memory.",
+        explorationHypothesis: {
+          summary: "Checkpoint schema should ride existing working_memory.",
+          whySuspected: "The runtime route already persists compact working memory.",
+          status: "open",
+          suspectedFiles: ["src/worker/runtime.js"],
+          suspectedLines: [
+            {
+              file: "src/worker/runtime.js",
+              lineStart: 1445,
+              lineEnd: 1545,
+              reason: "memory write record content is assembled in this range"
+            }
+          ]
+        },
+        suspectedFiles: ["src/worker/runtime.js"],
+        suspectedLines: [
+          {
+            file: "src/worker/runtime.js",
+            lineStart: 1445,
+            lineEnd: 1545,
+            reason: "memory write record content is assembled in this range"
+          }
+        ],
+        rejectedHypotheses: [
+          {
+            summary: "Use decision_log for tentative checkpoints.",
+            whyRejected: "Tentative checkpoint state is not a decided rationale.",
+            evidence: "thread-independent startup contract"
+          }
+        ],
+        stopReason: {
+          summary: "Stop if runtime and Action Schema diverge."
+        },
+        uncertainty: {
+          summary: "Need parity across Butler, mac Codex, and VPS Codex CLI."
+        },
+        failureReasoning: {
+          whatFailed: "Rejected hypotheses were previously lost.",
+          inspectNextTime: "Retrieve failureMap before repeating the investigation."
+        },
+        successPattern: {
+          whatWorked: "Persisting file/line hypotheses before implementation.",
+          reuseConditions: ["bounded Issue implementation"]
+        },
+        handoffMemory: {
+          nextActorMustKnow: "Checkpoint semantics are shared across surfaces."
+        },
         expectedFiles: ["docs/memory-schema.md", "scripts/vtdd-memory.mjs"],
         evidenceLinks: ["https://github.com/marushu/vtdd-v2-p/issues/361"],
         previousRecordIds: ["decision_360_example"],
@@ -1273,6 +1320,13 @@ test("worker persists RAG checkpoint fields as working memory", async () => {
     "docs/memory-schema.md",
     "scripts/vtdd-memory.mjs"
   ]);
+  assert.equal(records[0].content.explorationHypothesis.suspectedLines[0].file, "src/worker/runtime.js");
+  assert.equal(records[0].content.rejectedHypotheses[0].whyRejected.includes("Tentative checkpoint"), true);
+  assert.equal(records[0].content.stopReason.summary, "Stop if runtime and Action Schema diverge.");
+  assert.equal(records[0].content.uncertainty.summary.includes("parity"), true);
+  assert.equal(records[0].content.failureReasoning.inspectNextTime.includes("failureMap"), true);
+  assert.equal(records[0].content.successPattern.reuseConditions[0], "bounded Issue implementation");
+  assert.equal(records[0].content.handoffMemory.nextActorMustKnow.includes("shared"), true);
   assert.equal(records[0].content.captureBoundary, "judgment_log_not_chain_of_thought");
   assert.equal(records[0].tags.includes("rag-checkpoint"), true);
 });
