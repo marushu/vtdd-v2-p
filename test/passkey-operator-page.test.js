@@ -29,8 +29,10 @@ test("passkey operator page can target explicit api base and sync endpoint", () 
   assert.equal(html.includes("Save gateway bearer to vault"), true);
   assert.equal(html.includes("Dispatch production deploy"), true);
   assert.equal(html.includes("Dispatch PR merge"), true);
+  assert.equal(html.includes("Dispatch Issue close"), true);
   assert.equal(html.includes("Open deploy run"), true);
   assert.equal(html.includes("Open pull request"), true);
+  assert.equal(html.includes("Open closed issue"), true);
   assert.equal(html.includes("Return to Butler"), true);
   assert.equal(html.includes('href="https://chatgpt.com/g/example-butler"'), true);
   assert.equal(html.includes("Butler 会話に貼らず"), true);
@@ -95,12 +97,17 @@ test("passkey operator page can scope issue close approval to merged pull proof"
   });
 
   assert.equal(html.includes('<section data-operator-section="approval">'), true);
-  assert.equal(html.includes('<section data-operator-section="pr-merge">'), true);
+  assert.equal(html.includes('<section data-operator-section="pr-merge" hidden>'), true);
+  assert.equal(html.includes('<section data-operator-section="issue-close">'), true);
   assert.equal(html.includes('id="issue-input" value="157"'), true);
-  assert.equal(html.includes('id="pull-number-input" value="176"'), true);
+  assert.equal(html.includes('id="issue-close-pull-number-input" value="176"'), true);
   assert.equal(html.includes('id="action-type-input" value="issue_close"'), true);
   assert.equal(html.includes('id="risk-kind-input" value="issue_close"'), true);
-  assert.equal(html.includes('pullNumber: Number(document.getElementById("pull-number-input").value || 0) || null'), true);
+  assert.equal(html.includes("Dispatch Issue close"), true);
+  assert.equal(html.includes('operation: "issue_close"'), true);
+  assert.equal(html.includes('pullNumber: Number(document.getElementById("issue-close-pull-number-input").value || 0) || null'), true);
+  assert.equal(html.includes("Issue close request"), true);
+  assert.equal(html.includes("Open closed issue"), true);
 });
 
 test("passkey operator page focuses deploy mode on deploy approval and dispatch sections", () => {
@@ -116,6 +123,7 @@ test("passkey operator page focuses deploy mode on deploy approval and dispatch 
   assert.equal(html.includes('<section data-operator-section="approval">'), true);
   assert.equal(html.includes('<section data-operator-section="production-deploy">'), true);
   assert.equal(html.includes('<section data-operator-section="pr-merge" hidden>'), true);
+  assert.equal(html.includes('<section data-operator-section="issue-close" hidden>'), true);
   assert.equal(html.includes('<section data-operator-section="github-app-secret-sync" hidden>'), true);
   assert.equal(html.includes('<section data-operator-section="github-actions-secret-sync" hidden>'), true);
   assert.equal(html.includes("Dispatch production deploy"), true);
@@ -141,6 +149,16 @@ test("passkey operator page fills safe approval defaults from explicit mode", ()
   assert.equal(mergeHtml.includes('id="action-type-input" value="merge"'), true);
   assert.equal(mergeHtml.includes('id="risk-kind-input" value="pull_merge"'), true);
   assert.equal(mergeHtml.includes('<section data-operator-section="pr-merge">'), true);
+  assert.equal(mergeHtml.includes('<section data-operator-section="issue-close" hidden>'), true);
+
+  const issueCloseHtml = renderPasskeyOperatorPage({
+    operatorMode: "issue_close",
+    repositoryInput: "marushu/vtdd-v2-p"
+  });
+  assert.equal(issueCloseHtml.includes('id="action-type-input" value="issue_close"'), true);
+  assert.equal(issueCloseHtml.includes('id="risk-kind-input" value="issue_close"'), true);
+  assert.equal(issueCloseHtml.includes('<section data-operator-section="issue-close">'), true);
+  assert.equal(issueCloseHtml.includes('<section data-operator-section="pr-merge" hidden>'), true);
 });
 
 test("passkey operator page focuses merge mode on approval and PR merge sections", () => {
@@ -154,6 +172,7 @@ test("passkey operator page focuses merge mode on approval and PR merge sections
   assert.equal(html.includes('<section data-operator-section="registration">'), true);
   assert.equal(html.includes('<section data-operator-section="approval">'), true);
   assert.equal(html.includes('<section data-operator-section="pr-merge">'), true);
+  assert.equal(html.includes('<section data-operator-section="issue-close" hidden>'), true);
   assert.equal(html.includes('<section data-operator-section="production-deploy" hidden>'), true);
   assert.equal(html.includes('<section data-operator-section="github-app-secret-sync" hidden>'), true);
   assert.equal(html.includes('<section data-operator-section="github-actions-secret-sync" hidden>'), true);
@@ -173,6 +192,7 @@ test("passkey operator page focuses secret sync modes without hiding the require
   assert.equal(githubAppSecretHtml.includes("githubAppRole: document.getElementById"), true);
   assert.equal(githubAppSecretHtml.includes('<section data-operator-section="production-deploy" hidden>'), true);
   assert.equal(githubAppSecretHtml.includes('<section data-operator-section="pr-merge" hidden>'), true);
+  assert.equal(githubAppSecretHtml.includes('<section data-operator-section="issue-close" hidden>'), true);
 
   const actionsSecretHtml = renderPasskeyOperatorPage({
     repositoryInput: "marushu/vtdd-v2-p",
@@ -187,6 +207,7 @@ test("passkey operator page focuses secret sync modes without hiding the require
   assert.equal(actionsSecretHtml.includes('<section data-operator-section="github-app-secret-sync" hidden>'), true);
   assert.equal(actionsSecretHtml.includes('<section data-operator-section="production-deploy" hidden>'), true);
   assert.equal(actionsSecretHtml.includes('<section data-operator-section="pr-merge" hidden>'), true);
+  assert.equal(actionsSecretHtml.includes('<section data-operator-section="issue-close" hidden>'), true);
 });
 
 test("passkey operator page supports local helper mode without passkey controls", () => {
@@ -219,6 +240,7 @@ test("passkey operator page focuses VPS runner admin mode on real approval only"
   assert.equal(html.includes('<section data-operator-section="vps-runner-admin">'), true);
   assert.equal(html.includes('<section data-operator-section="production-deploy" hidden>'), true);
   assert.equal(html.includes('<section data-operator-section="pr-merge" hidden>'), true);
+  assert.equal(html.includes('<section data-operator-section="issue-close" hidden>'), true);
   assert.equal(html.includes('<section data-operator-section="github-app-secret-sync" hidden>'), true);
   assert.equal(html.includes('<section data-operator-section="github-actions-secret-sync" hidden>'), true);
   assert.equal(html.includes('<section data-operator-section="gateway-bearer-vault" hidden>'), true);
@@ -264,6 +286,7 @@ test("passkey operator page keeps the full maintenance view when no mode is infe
   assert.equal(html.includes('<section data-operator-section="github-app-secret-sync">'), true);
   assert.equal(html.includes('<section data-operator-section="production-deploy">'), true);
   assert.equal(html.includes('<section data-operator-section="pr-merge">'), true);
+  assert.equal(html.includes('<section data-operator-section="issue-close">'), true);
   assert.equal(html.includes('<section data-operator-section="github-actions-secret-sync">'), true);
   assert.equal(html.includes('<section data-operator-section="gateway-bearer-vault">'), true);
   assert.equal(html.includes('<section data-operator-section="vps-runner-admin">'), true);
@@ -490,6 +513,50 @@ test("passkey operator page exposes safe PR link from merge response", () => {
   });
   assert.equal(mergePrLink.href, "#");
   assert.equal(mergePrLink.hidden, true);
+});
+
+test("passkey operator page exposes safe issue link from issue close response", () => {
+  const issueCloseLink = {
+    href: "#",
+    hidden: true
+  };
+  const helpers = loadOperatorPageHelpers({
+    document: {
+      getElementById(id) {
+        if (id === "issue-close-link") {
+          return issueCloseLink;
+        }
+        return {
+          value: "",
+          textContent: "",
+          addEventListener() {}
+        };
+      }
+    }
+  });
+
+  helpers.showIssueCloseLink({
+    ok: true,
+    authorityAction: {
+      htmlUrl: "https://github.com/sample-org/vtdd-v2-p/issues/349"
+    }
+  });
+
+  assert.equal(issueCloseLink.href, "https://github.com/sample-org/vtdd-v2-p/issues/349");
+  assert.equal(issueCloseLink.hidden, false);
+
+  helpers.clearIssueCloseLink();
+  assert.equal(issueCloseLink.href, "#");
+  assert.equal(issueCloseLink.hidden, true);
+
+  helpers.showIssueCloseLink({
+    ok: true,
+    authorityAction: {
+      htmlUrl: "https://evil.example/sample-org/vtdd-v2-p/issues/349"
+    }
+  });
+  assert.equal(issueCloseLink.href, "#");
+  assert.equal(issueCloseLink.hidden, true);
 });
 
 function loadOperatorPageHelpers(overrides = {}) {

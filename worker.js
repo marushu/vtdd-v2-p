@@ -27333,8 +27333,21 @@ function renderPasskeyOperatorPage(input = {}) {
           <pre id="merge-output"></pre>
         </section>
 
+        <section data-operator-section="issue-close"${hiddenAttribute(!sectionVisibility.issueClose)}>
+          <h2>6. GitHub Issue Close</h2>
+          <p class="muted">Issue close \u7528\u306E real passkey approval \u5F8C\u3001\u3053\u306E helper \u304B\u3089 same-origin \u306E GitHub authority path \u3092 dispatch \u3057\u307E\u3059\u3002</p>
+          <label for="issue-close-pull-number-input">Merged Pull Number</label>
+          <input id="issue-close-pull-number-input" value="${pullNumberDefault}" placeholder="407" />
+          <div class="row">
+            <button id="issue-close-button">Dispatch Issue close</button>
+            <a class="button-link" id="issue-close-link" href="#" target="_blank" rel="noopener noreferrer" hidden>Open closed issue</a>
+          </div>
+          <p class="muted"><code>actionType=issue_close</code> / <code>highRiskKind=issue_close</code> \u306E approvalGrantId \u304C\u5FC5\u8981\u3067\u3059\u3002bounded issue close \u306F merged pull proof \u3092\u78BA\u8A8D\u3057\u3066\u304B\u3089\u5B9F\u884C\u3057\u307E\u3059\u3002</p>
+          <pre id="issue-close-output"></pre>
+        </section>
+
         <section data-operator-section="github-actions-secret-sync"${hiddenAttribute(!sectionVisibility.githubActionsSecretSync)}>
-          <h2>6. GitHub Actions Secret Sync</h2>
+          <h2>7. GitHub Actions Secret Sync</h2>
           <p class="muted">GitHub Actions secret \u3092\u540C\u671F\u3057\u307E\u3059\u3002\u5024\u306F Butler \u4F1A\u8A71\u306B\u8CBC\u3089\u305A\u3001\u3053\u306E operator page \u304B\u3089\u9001\u4FE1\u3057\u307E\u3059\u3002<code>VTDD_GATEWAY_BEARER_TOKEN</code> \u306F Actions secret \u3060\u3051\u3067\u306F\u306A\u304F Worker secret / Custom GPT Action auth \u3068\u4E00\u81F4\u3057\u3066\u3044\u308B\u5FC5\u8981\u304C\u3042\u308A\u307E\u3059\u3002</p>
           <label for="github-actions-secret-name-input">Secret name</label>
           <select id="github-actions-secret-name-input">
@@ -27351,7 +27364,7 @@ function renderPasskeyOperatorPage(input = {}) {
         </section>
 
         <section data-operator-section="gateway-bearer-vault"${hiddenAttribute(!sectionVisibility.gatewayBearerVault)}>
-          <h2>7. Gateway Bearer Vault</h2>
+          <h2>8. Gateway Bearer Vault</h2>
           <p class="muted">\u30E1\u30E2\u30A2\u30D7\u30EA\u7B49\u306B\u4FDD\u7BA1\u3057\u3066\u3044\u308B <code>VTDD_GATEWAY_BEARER_TOKEN</code> \u3092\u3001\u3053\u306E\u7AEF\u672B\u306E local helper \u7D4C\u7531\u3067 Mac/VPS vault \u306B\u4FDD\u5B58\u3057\u307E\u3059\u3002\u5024\u306F Butler \u4F1A\u8A71\u3001GitHub \u30B3\u30E1\u30F3\u30C8\u3001RAG\u3001\u30EC\u30B9\u30DD\u30F3\u30B9\u672C\u6587\u306B\u8868\u793A\u3057\u307E\u305B\u3093\u3002</p>
           <label for="gateway-bearer-token-input">VTDD_GATEWAY_BEARER_TOKEN</label>
           <input id="gateway-bearer-token-input" type="password" autocomplete="off" placeholder="token..." />
@@ -27364,7 +27377,7 @@ function renderPasskeyOperatorPage(input = {}) {
         </section>
 
         <section data-operator-section="vps-runner-admin"${hiddenAttribute(!sectionVisibility.vpsRunnerAdmin)}>
-          <h2>8. VPS Runner Admin</h2>
+          <h2>9. VPS Runner Admin</h2>
           <p class="muted">VPS runner \u306E repo allowlist \u8FFD\u52A0\u3001runner restart\u3001smoke \u306A\u3069\u306E\u7BA1\u7406\u64CD\u4F5C\u7528 approval \u3067\u3059\u3002\u3053\u3053\u3067\u306F real passkey \u3067\u77ED\u547D\u306E <code>approvalGrantId</code> \u3060\u3051\u3092\u767A\u884C\u3057\u307E\u3059\u3002VPS \u64CD\u4F5C\u305D\u306E\u3082\u306E\u306F GitHub queue \u3068 runner event \u306B\u6B8B\u308B bounded command \u3068\u3057\u3066\u5225\u9014\u5B9F\u884C\u3055\u308C\u307E\u3059\u3002</p>
           <p class="muted"><code>actionType=destructive</code> / <code>highRiskKind=vps_runner_admin</code> \u306E approvalGrantId \u304C\u5FC5\u8981\u3067\u3059\u3002\u6587\u5B57\u5217\u3068\u3057\u3066\u306E passkey \u306F\u627F\u8A8D\u3067\u306F\u3042\u308A\u307E\u305B\u3093\u3002</p>
         </section>
@@ -27377,12 +27390,14 @@ function renderPasskeyOperatorPage(input = {}) {
       const syncOutput = document.getElementById("sync-output");
       const deployOutput = document.getElementById("deploy-output");
       const mergeOutput = document.getElementById("merge-output");
+      const issueCloseOutput = document.getElementById("issue-close-output");
       const openaiSecretSyncOutput = document.getElementById("openai-secret-sync-output");
       const gatewayBearerVaultOutput = document.getElementById("gateway-bearer-vault-output");
       const copyApprovalGrantButton = document.getElementById("copy-approval-grant-button");
       const autoCopyApprovalGrantInput = document.getElementById("auto-copy-approval-grant-input");
       const deployRunLink = document.getElementById("deploy-run-link");
       const mergePrLink = document.getElementById("merge-pr-link");
+      const issueCloseLink = document.getElementById("issue-close-link");
       let latestApprovalGrantId = "";
 
       async function readResponseBody(response) {
@@ -27538,6 +27553,59 @@ function renderPasskeyOperatorPage(input = {}) {
         mergePrLink.hidden = false;
       }
 
+      function extractIssueCloseUrl(body) {
+        return body?.authorityAction?.htmlUrl || "";
+      }
+
+      function normalizeGitHubIssueUrl(value) {
+        const text = String(value || "");
+        if (!text) {
+          return "";
+        }
+        try {
+          const url = new URL(text);
+          if (url.protocol !== "https:" || url.hostname.toLowerCase() !== "github.com") {
+            return "";
+          }
+          if (!/\\/issues\\/\\d+(?:$|[/?#])/.test(url.pathname + url.search + url.hash)) {
+            return "";
+          }
+          return url.href;
+        } catch {
+          return "";
+        }
+      }
+
+      function clearIssueCloseLink() {
+        if (!issueCloseLink) {
+          return;
+        }
+        issueCloseLink.href = "#";
+        issueCloseLink.hidden = true;
+      }
+
+      function showIssueCloseLink(body) {
+        const issueUrl = normalizeGitHubIssueUrl(extractIssueCloseUrl(body));
+        if (!issueUrl || !issueCloseLink) {
+          return;
+        }
+        issueCloseLink.href = issueUrl;
+        issueCloseLink.hidden = false;
+      }
+
+      function readNumberInput(id) {
+        const input = document.getElementById(id);
+        return Number(input?.value || 0) || null;
+      }
+
+      function readApprovalPullNumber() {
+        const highRiskKind = document.getElementById("risk-kind-input").value;
+        if (highRiskKind === "issue_close") {
+          return readNumberInput("issue-close-pull-number-input") || readNumberInput("pull-number-input");
+        }
+        return readNumberInput("pull-number-input");
+      }
+
       copyApprovalGrantButton.addEventListener("click", async () => {
         try {
           await copyApprovalGrantIdToClipboard();
@@ -27593,7 +27661,7 @@ function renderPasskeyOperatorPage(input = {}) {
               highRiskKind: document.getElementById("risk-kind-input").value,
               repositoryInput: document.getElementById("repo-input").value,
               issueNumber: Number(document.getElementById("issue-input").value || 0) || null,
-              pullNumber: Number(document.getElementById("pull-number-input").value || 0) || null,
+              pullNumber: readApprovalPullNumber(),
               issueContext: {
                 issueNumber: Number(document.getElementById("issue-input").value || 0) || null
               },
@@ -27766,6 +27834,42 @@ function renderPasskeyOperatorPage(input = {}) {
           mergeOutput.textContent = JSON.stringify(readyBody, null, 2);
         } catch (error) {
           mergeOutput.textContent = String(error);
+        }
+      });
+
+      document.getElementById("issue-close-button").addEventListener("click", async () => {
+        try {
+          if (!latestApprovalGrantId) {
+            throw new Error("approvalGrantId is required before Issue close");
+          }
+          clearIssueCloseLink();
+          issueCloseOutput.textContent = "Issue close request...";
+          const issueCloseResponse = await fetch("${apiBase}/action/github-authority", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              operation: "issue_close",
+              repository: document.getElementById("repo-input").value,
+              issueNumber: Number(document.getElementById("issue-input").value || 0) || null,
+              pullNumber: Number(document.getElementById("issue-close-pull-number-input").value || 0) || null,
+              issueContext: {
+                issueNumber: Number(document.getElementById("issue-input").value || 0) || null
+              },
+              policyInput: {
+                approvalPhrase: "GO",
+                approvalGrantId: latestApprovalGrantId,
+                targetConfirmed: true
+              }
+            })
+          });
+          const issueCloseBody = await readResponseBody(issueCloseResponse);
+          if (!issueCloseResponse.ok) {
+            throw responseError(issueCloseBody, "Issue close failed");
+          }
+          showIssueCloseLink(issueCloseBody);
+          issueCloseOutput.textContent = JSON.stringify(issueCloseBody, null, 2);
+        } catch (error) {
+          issueCloseOutput.textContent = String(error);
         }
       });
 
@@ -27945,7 +28049,7 @@ function resolvePasskeyOperatorMode(input = {}) {
     return "merge";
   }
   if (actionType === "issue_close" || highRiskKind === "issue_close") {
-    return "merge";
+    return "issue_close";
   }
   if (highRiskKind === "github_actions_secret_sync") {
     return "github_actions_secret_sync";
@@ -27970,6 +28074,7 @@ function resolveSectionVisibility(operatorMode, options = {}) {
     githubAppSecretSync: full || operatorMode === "github_app_secret_sync",
     productionDeploy: full || operatorMode === "deploy",
     prMerge: full || operatorMode === "merge",
+    issueClose: full || operatorMode === "issue_close",
     githubActionsSecretSync: full || operatorMode === "github_actions_secret_sync",
     gatewayBearerVault: full || operatorMode === "gateway_bearer_vault",
     vpsRunnerAdmin: full || operatorMode === "vps"
@@ -27984,7 +28089,7 @@ function renderGithubAppRoleOption(value, label, selectedValue) {
 }
 function normalizeOperatorMode(value) {
   const token = normalizeOperatorToken(value);
-  if (["full", "deploy", "merge", "github_app_secret_sync", "github_actions_secret_sync", "gateway_bearer_vault", "vps"].includes(token)) {
+  if (["full", "deploy", "merge", "issue_close", "github_app_secret_sync", "github_actions_secret_sync", "gateway_bearer_vault", "vps"].includes(token)) {
     return token;
   }
   if (token === "secret_sync") {
@@ -28005,6 +28110,9 @@ function defaultActionTypeForMode(operatorMode) {
   if (operatorMode === "merge") {
     return "merge";
   }
+  if (operatorMode === "issue_close") {
+    return "issue_close";
+  }
   return "destructive";
 }
 function defaultHighRiskKindForMode(operatorMode) {
@@ -28013,6 +28121,9 @@ function defaultHighRiskKindForMode(operatorMode) {
   }
   if (operatorMode === "merge") {
     return "pull_merge";
+  }
+  if (operatorMode === "issue_close") {
+    return "issue_close";
   }
   if (operatorMode === "github_actions_secret_sync") {
     return "github_actions_secret_sync";
