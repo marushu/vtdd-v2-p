@@ -1231,13 +1231,16 @@
                     "description": "Structured recall provenance for where the memory candidate arose.",
                     "properties": {
                       "surface": {
-                        "type": "string"
+                        "type": "string",
+                        "maxLength": 80
                       },
                       "moment": {
-                        "type": "string"
+                        "type": "string",
+                        "maxLength": 160
                       },
                       "trigger": {
-                        "type": "string"
+                        "type": "string",
+                        "maxLength": 240
                       }
                     },
                     "additionalProperties": false
@@ -1256,16 +1259,20 @@
                     "description": "Recall hook for the moment's temperature; not a personality evaluation.",
                     "properties": {
                       "summary": {
-                        "type": "string"
+                        "type": "string",
+                        "maxLength": 240
                       },
                       "intensity": {
-                        "type": "string"
+                        "type": "string",
+                        "maxLength": 40
                       },
                       "mode": {
-                        "type": "string"
+                        "type": "string",
+                        "maxLength": 40
                       },
                       "why_it_matters": {
-                        "type": "string"
+                        "type": "string",
+                        "maxLength": 320
                       }
                     },
                     "additionalProperties": false

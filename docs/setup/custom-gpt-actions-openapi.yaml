@@ -768,10 +768,13 @@ paths:
                   properties:
                     surface:
                       type: string
+                      maxLength: 80
                     moment:
                       type: string
+                      maxLength: 160
                     trigger:
                       type: string
+                      maxLength: 240
                   additionalProperties: false
                 user_words:
                   type: array
@@ -786,12 +789,16 @@ paths:
                   properties:
                     summary:
                       type: string
+                      maxLength: 240
                     intensity:
                       type: string
+                      maxLength: 40
                     mode:
                       type: string
+                      maxLength: 40
                     why_it_matters:
                       type: string
+                      maxLength: 320
                   additionalProperties: false
                 contextSourceQuality:
                   type: string

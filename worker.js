@@ -56160,26 +56160,31 @@ function normalizeStringArray4(value) {
   return values.map(normalizeText30).filter(Boolean);
 }
 function normalizeBoundedMemoryStringArray(value, { maxItems, maxLength }) {
-  return normalizeStringArray4(value).slice(0, maxItems).map((item) => item.slice(0, maxLength));
+  const values = Array.isArray(value) ? value : value === void 0 ? [] : [value];
+  return values.map((item) => normalizeMemoryRecallText(item, maxLength)).filter(Boolean).slice(0, maxItems);
 }
 function normalizeMemoryOrigin(value) {
   const input = normalizeObject11(value);
   const origin = {
-    surface: normalizeText30(input.surface),
-    moment: normalizeText30(input.moment),
-    trigger: normalizeText30(input.trigger)
+    surface: normalizeMemoryRecallText(input.surface, 80),
+    moment: normalizeMemoryRecallText(input.moment, 160),
+    trigger: normalizeMemoryRecallText(input.trigger, 240)
   };
   return Object.values(origin).some(Boolean) ? origin : null;
 }
 function normalizeTensionNote(value) {
   const input = normalizeObject11(value);
   const note = {
-    summary: normalizeText30(input.summary),
-    intensity: normalizeText30(input.intensity),
-    mode: normalizeText30(input.mode),
-    why_it_matters: normalizeText30(input.why_it_matters ?? input.whyItMatters)
+    summary: normalizeMemoryRecallText(input.summary, 240),
+    intensity: normalizeMemoryRecallText(input.intensity, 40),
+    mode: normalizeMemoryRecallText(input.mode, 40),
+    why_it_matters: normalizeMemoryRecallText(input.why_it_matters ?? input.whyItMatters, 320)
   };
   return Object.values(note).some(Boolean) ? note : null;
+}
+function normalizeMemoryRecallText(value, maxLength) {
+  const text = String(value ?? "").trim();
+  return text ? text.slice(0, maxLength) : "";
 }
 function normalizeRejectedReasons2(value) {
   const values = Array.isArray(value) ? value : [];
