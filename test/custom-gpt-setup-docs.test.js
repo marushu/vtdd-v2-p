@@ -81,6 +81,10 @@ test("custom gpt instructions preserve current butler and approval boundaries", 
   assert.equal(doc.includes("use `recordType=working_memory` instead"), true);
   assert.equal(doc.includes("Do not store full transcripts, secrets, or raw sensitive material"), true);
   assert.equal(doc.includes("After writing a RAG checkpoint, confirm it with `vtddRetrieveOperationalMemory`"), true);
+  assert.equal(doc.includes("confirm by explicit `recordId` lookup instead of inventing a repository"), true);
+  assert.equal(doc.includes("repo_null_record_returned_by_explicit_record_id"), true);
+  assert.equal(doc.includes("record_id_repository_boundary_blocked"), true);
+  assert.equal(doc.includes("when it is present, do not describe `text` search results as if they were also queried"), true);
   assert.equal(doc.includes("Do not use `vtddRetrieveCrossMemory` as the only confirmation path for `working_memory` checkpoints"), true);
   assert.equal(doc.includes("Cross memory is decision/proposal/Issue oriented; operational memory is the checkpoint recall surface"), true);
   assert.equal(doc.includes("At startup, distinguish the execution surfaces before proposing development work"), true);

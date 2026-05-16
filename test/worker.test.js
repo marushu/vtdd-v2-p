@@ -101,8 +101,13 @@ function createFakeMemoryD1Binding() {
               const text = String(sql);
               let results = [...rows.values()];
               if (text.includes("WHERE id IN")) {
-                const idSet = new Set(params);
+                const typeParam = text.includes("AND type = ?") ? params[params.length - 1] : null;
+                const idParams = typeParam ? params.slice(0, -1) : params;
+                const idSet = new Set(idParams);
                 results = results.filter((row) => idSet.has(row.id));
+                if (typeParam) {
+                  results = results.filter((row) => row.type === typeParam);
+                }
               } else if (text.includes("WHERE type = ?")) {
                 results = results.filter((row) => row.type === params[0]);
               }
@@ -1252,6 +1257,172 @@ test("worker persists RAG checkpoint fields as working memory", async () => {
   ]);
   assert.equal(records[0].content.captureBoundary, "judgment_log_not_chain_of_thought");
   assert.equal(records[0].tags.includes("rag-checkpoint"), true);
+});
+
+test("worker retrieves repo-null working memory by explicit recordId recovery path", async () => {
+  const provider = createInMemoryMemoryProvider();
+  await provider.store({
+    id: "working_memory_343_repo_null_example",
+    type: MemoryRecordType.WORKING_MEMORY,
+    content: {
+      summary: "Issue #343 live E2E working memory checkpoint.",
+      repository: null,
+      origin: {
+        surface: "custom_gpt",
+        moment: "Issue #343 live E2E",
+        trigger: "Owner asked for the save candidate before GO."
+      },
+      user_words: ["まだ保存しないで。"],
+      tension_note: {
+        summary: "Save candidate should stay visible before GO.",
+        intensity: "low",
+        mode: "controlled_verification",
+        why_it_matters: "Future recovery should find the checkpoint even when repo was unknown."
+      },
+      relatedIssue: 343
+    },
+    metadata: {
+      repository: null,
+      relatedIssue: 343
+    },
+    priority: 60,
+    tags: ["working_memory", "issue:343", "rag-checkpoint"],
+    createdAt: "2026-05-16T00:42:45Z"
+  });
+
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/v2/retrieve/operational-memory?repository=marushu/vtdd-v2-p&recordId=working_memory_343_repo_null_example&limit=1",
+      {
+        headers: gatewayAuthHeaders
+      }
+    ),
+    {
+      ...gatewayAuthEnv,
+      MEMORY_PROVIDER: provider
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.compactContext.length, 1);
+  assert.equal(body.compactContext[0].id, "working_memory_343_repo_null_example");
+  assert.equal(body.compactContext[0].repository, null);
+  assert.equal(body.recordIdLookup.found, true);
+  assert.equal(body.recordIdLookup.requestedRepository, "marushu/vtdd-v2-p");
+  assert.equal(body.recordIdLookup.recordRepository, null);
+  assert.equal(body.recordIdLookup.repositoryBoundary, "repo_null_record_returned_by_explicit_record_id");
+  assert.equal(body.retrievalSignals.explicitRecordIdLookup, true);
+});
+
+test("worker does not overclaim missing explicit operational memory recordId", async () => {
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/v2/retrieve/operational-memory?repository=marushu/vtdd-v2-p&recordId=missing_memory_record&limit=1",
+      {
+        headers: gatewayAuthHeaders
+      }
+    ),
+    {
+      ...gatewayAuthEnv,
+      MEMORY_PROVIDER: createInMemoryMemoryProvider()
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.deepEqual(body.compactContext, []);
+  assert.equal(body.recordIdLookup.found, false);
+  assert.equal(body.recordIdLookup.repositoryBoundary, "record_id_not_found");
+  assert.match(body.recordIdLookup.recoveryGuidance, /Do not claim retrieval success/);
+});
+
+test("worker blocks cross-repository working memory explicit recordId disclosure", async () => {
+  const provider = createInMemoryMemoryProvider();
+  await provider.store({
+    id: "working_memory_405_cross_repo_example",
+    type: MemoryRecordType.WORKING_MEMORY,
+    content: {
+      summary: "Checkpoint saved for another repository."
+    },
+    metadata: {
+      repository: "other/repo"
+    },
+    priority: 70,
+    tags: ["working_memory", "issue:405"],
+    createdAt: "2026-05-16T01:30:00.000Z"
+  });
+
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/v2/retrieve/operational-memory?repository=marushu/vtdd-v2-p&recordId=working_memory_405_cross_repo_example&limit=1",
+      {
+        headers: gatewayAuthHeaders
+      }
+    ),
+    {
+      ...gatewayAuthEnv,
+      MEMORY_PROVIDER: provider
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.recordIdLookup.found, false);
+  assert.equal(body.recordIdLookup.requestedRepository, "marushu/vtdd-v2-p");
+  assert.equal(body.recordIdLookup.recordRepository, null);
+  assert.equal(body.recordIdLookup.repositoryBoundary, "record_id_repository_boundary_blocked");
+  assert.equal(body.recordIdLookup.blockedByRepositoryBoundary, true);
+  assert.deepEqual(body.compactContext, []);
+});
+
+test("worker D1 memory provider applies ids and type filters for explicit recordId lookup", async () => {
+  const d1 = createFakeMemoryD1Binding();
+  const writeResponse = await worker.fetch(
+    new Request("https://example.com/v2/action/memory-write", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        recordType: "decision_log",
+        confirmed: true,
+        repository: "marushu/vtdd-v2-p",
+        relatedIssue: 405,
+        decision: "Do not let explicit working_memory recovery return decision logs.",
+        rationale: "The runtime recordId path is scoped to working_memory recovery.",
+        decidedBy: "test",
+        responseMode: "action_visible"
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      VTDD_MEMORY_D1: d1
+    }
+  );
+  const writeBody = await writeResponse.json();
+  assert.equal(writeResponse.status, 200);
+  assert.equal(writeBody.ok, true);
+  assert.equal(Boolean(writeBody.memoryWritePersisted.recordId), true);
+
+  const retrieveResponse = await worker.fetch(
+    new Request(
+      `https://example.com/v2/retrieve/operational-memory?repository=marushu/vtdd-v2-p&recordId=${writeBody.memoryWritePersisted.recordId}&limit=1`,
+      {
+        headers: gatewayAuthHeaders
+      }
+    ),
+    {
+      ...gatewayAuthEnv,
+      VTDD_MEMORY_D1: d1
+    }
+  );
+  const retrieveBody = await retrieveResponse.json();
+
+  assert.equal(retrieveResponse.status, 200);
+  assert.equal(retrieveBody.recordIdLookup.found, false);
+  assert.equal(retrieveBody.recordIdLookup.repositoryBoundary, "record_id_not_found");
+  assert.deepEqual(retrieveBody.compactContext, []);
 });
 
 test("worker does not override explicit Butler read consent categories", async () => {

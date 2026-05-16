@@ -2957,6 +2957,15 @@
             }
           },
           {
+            "name": "recordId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Explicit working_memory record id recovery path. When supplied, normal text retrieval is not used; cross-repository records are blocked by repository boundary."
+          },
+          {
             "name": "currentState",
             "in": "query",
             "required": false,

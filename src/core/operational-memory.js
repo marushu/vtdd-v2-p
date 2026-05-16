@@ -124,22 +124,50 @@ export async function retrieveOperationalMemory(provider, input = {}) {
 
   const limit = normalizeLimit(input.limit, DEFAULT_LIMIT);
   const queryText = normalizeText(input.text);
+  const recordId = normalizeText(input.recordId);
   const now = normalizeTimestamp(input.now) || new Date().toISOString();
   const currentRepository = normalizeText(input.repository);
   const runtimeTruth = normalizeRuntimeTruth(input.runtimeTruth);
 
   try {
-    const structuredRecords = await retrieveStructuredOperationalRecords(provider, {
-      limit: Math.max(limit * 4, limit)
-    });
-    const semanticRecords = queryText
-      ? await provider.query({
-          text: queryText,
-          limit: Math.max(limit * 4, limit)
+    const recordIdRecords = recordId
+      ? await provider.retrieve({
+          ids: [recordId],
+          type: MemoryRecordType.WORKING_MEMORY,
+          limit: 1
         })
       : [];
+    const structuredRecords = recordId
+      ? []
+      : await retrieveStructuredOperationalRecords(provider, {
+          limit: Math.max(limit * 4, limit)
+        });
+    const semanticRecords =
+      queryText && !recordId
+        ? await provider.query({
+            text: queryText,
+            limit: Math.max(limit * 4, limit)
+          })
+        : [];
 
-    const candidates = mergeRecords(structuredRecords, normalizeQueriedRecords(semanticRecords))
+    const recordIdReference = normalizeQueriedRecords(recordIdRecords)
+      .map((record) =>
+        toOperationalMemoryReference(record, {
+          queryText,
+          now,
+          currentRepository
+        })
+      )
+      .filter(Boolean)[0] ?? null;
+    const recordIdLookup = recordId
+      ? buildRecordIdLookup({
+          recordId,
+          reference: recordIdReference,
+          currentRepository
+        })
+      : null;
+    const recordIdContextRecords = recordIdLookup?.found ? normalizeQueriedRecords(recordIdRecords) : [];
+    const candidates = mergeRecords(recordIdContextRecords, mergeRecords(structuredRecords, normalizeQueriedRecords(semanticRecords)))
       .map((record) =>
         toOperationalMemoryReference(record, {
           queryText,
@@ -157,6 +185,7 @@ export async function retrieveOperationalMemory(provider, input = {}) {
       queryText: queryText || null,
       repository: currentRepository || null,
       runtimeTruth,
+      recordIdLookup,
       memoryUseRule: runtimeTruth
         ? "runtime_truth_current_state_overrides_memory_background_reference"
         : "memory_background_reference_only",
@@ -170,7 +199,8 @@ export async function retrieveOperationalMemory(provider, input = {}) {
           OperationalMemorySignal.RECENCY
         ],
         limit,
-        dumpedAllMemory: false
+        dumpedAllMemory: false,
+        explicitRecordIdLookup: Boolean(recordId)
       }
     };
   } catch (error) {
@@ -182,6 +212,34 @@ export async function retrieveOperationalMemory(provider, input = {}) {
       details: normalizeText(error?.message) || "unknown provider error"
     };
   }
+}
+
+function buildRecordIdLookup({ recordId, reference, currentRepository }) {
+  const repository = normalizeText(reference?.repository);
+  const requestedRepository = normalizeText(currentRepository);
+  const found = Boolean(reference);
+  const repositoryBoundaryBlocked = Boolean(found && repository && repository !== requestedRepository);
+  const repositoryBoundary =
+    repositoryBoundaryBlocked
+      ? "record_id_repository_boundary_blocked"
+      : found && requestedRepository && !repository
+      ? "repo_null_record_returned_by_explicit_record_id"
+      : found
+        ? "explicit_record_id_match"
+        : "record_id_not_found";
+  return {
+    recordId,
+    found: found && !repositoryBoundaryBlocked,
+    requestedRepository: requestedRepository || null,
+    recordRepository: repositoryBoundaryBlocked ? null : repository || null,
+    repositoryBoundary,
+    blockedByRepositoryBoundary: repositoryBoundaryBlocked,
+    recoveryGuidance: repositoryBoundaryBlocked
+      ? "Explicit recordId matched a repository-scoped record outside the requested repository. Do not return or summarize the record without the correct repository context."
+      : found
+      ? "Explicit recordId lookup is a recovery path and does not imply the record matched the repository filter."
+      : "No operational memory record matched the explicit recordId. Do not claim retrieval success for the target record."
+  };
 }
 
 async function retrieveStructuredOperationalRecords(provider, input = {}) {

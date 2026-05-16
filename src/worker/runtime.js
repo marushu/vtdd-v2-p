@@ -839,11 +839,13 @@ async function handleRetrieveOperationalMemoryRequest(url, env) {
   const limit = normalizeLimit(url.searchParams.get("limit"), 8);
   const queryText =
     normalizeText(url.searchParams.get("text")) || normalizeText(url.searchParams.get("q"));
+  const recordId = normalizeText(url.searchParams.get("recordId"));
   const repository = normalizeText(url.searchParams.get("repository"));
   const runtimeTruth = buildRetrieveRuntimeTruth(url);
 
   const retrieved = await retrieveOperationalMemory(provider, {
     text: queryText,
+    recordId,
     repository,
     limit,
     runtimeTruth
@@ -862,6 +864,7 @@ async function handleRetrieveOperationalMemoryRequest(url, env) {
     queryText: retrieved.queryText,
     repository: retrieved.repository,
     runtimeTruth: retrieved.runtimeTruth,
+    recordIdLookup: retrieved.recordIdLookup,
     memoryUseRule: retrieved.memoryUseRule,
     compactContext: retrieved.compactContext,
     referencesByLayer: retrieved.referencesByLayer,
@@ -4430,6 +4433,12 @@ function createR2TextAdapter(bucket) {
 function buildMemorySelectStatement({ ids, type }) {
   if (ids.length > 0) {
     const placeholders = ids.map(() => "?").join(", ");
+    if (type) {
+      return {
+        sql: `SELECT * FROM vtdd_memory_records WHERE id IN (${placeholders}) AND type = ?`,
+        params: [...ids, type]
+      };
+    }
     return {
       sql: `SELECT * FROM vtdd_memory_records WHERE id IN (${placeholders})`,
       params: ids

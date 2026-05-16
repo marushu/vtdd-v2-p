@@ -34,6 +34,20 @@ test("parseArgs supports repeated option values", () => {
   assert.equal(parsed.options.relatedIssue, "251");
 });
 
+test("parseArgs maps record-id CLI option to runtime recordId", () => {
+  const parsed = parseArgs([
+    "retrieve-operational",
+    "--record-id",
+    "working_memory_405_repo_null_example",
+    "--runtime-url",
+    "https://example.invalid"
+  ]);
+
+  assert.equal(parsed.command, "retrieve-operational");
+  assert.equal(parsed.options.recordId, "working_memory_405_repo_null_example");
+  assert.equal(parsed.options.runtimeUrl, "https://example.invalid");
+});
+
 test("buildDecisionRecord creates canonical decision_log memory", () => {
   const record = buildDecisionRecord({
     id: "decision_251_test",
@@ -199,6 +213,7 @@ test("runtime operational memory request keeps auth in headers", () => {
     },
     repository: "marushu/vtdd-v2-p",
     text: "setup recovery latency",
+    recordId: "working_memory_343_repo_null_example",
     currentState: "deploy confirmed",
     runtimeTruthSource: "github_issue",
     checkedAt: "2026-05-15T02:36:00Z",
@@ -209,6 +224,7 @@ test("runtime operational memory request keeps auth in headers", () => {
   assert.equal(url.pathname, "/v2/retrieve/operational-memory");
   assert.equal(url.searchParams.get("repository"), "marushu/vtdd-v2-p");
   assert.equal(url.searchParams.get("text"), "setup recovery latency");
+  assert.equal(url.searchParams.get("recordId"), "working_memory_343_repo_null_example");
   assert.equal(url.searchParams.get("responseMode"), "action_visible");
   assert.equal(request.headers.authorization, "Bearer test-token");
   assert.equal(request.url.includes("test-token"), false);
