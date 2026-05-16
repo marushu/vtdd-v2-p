@@ -2583,6 +2583,27 @@ test("worker serves passkey operator page", async () => {
   assert.equal(html.includes('href="https://evil.example/phish"'), false);
 });
 
+test("worker serves issue close operator mode without falling back to PR merge UI", async () => {
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/v2/approval/passkey/operator?repositoryInput=marushu%2Fvtdd-v2-p&issueNumber=349&pullNumber=407&phase=execution&actionType=issue_close&highRiskKind=issue_close"
+    ),
+    gatewayAuthEnv
+  );
+
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.equal(html.includes("GitHub Issue Close"), true);
+  assert.equal(html.includes("Dispatch Issue close"), true);
+  assert.equal(html.includes('<section data-operator-section="issue-close">'), true);
+  assert.equal(html.includes('<section data-operator-section="pr-merge" hidden>'), true);
+  assert.equal(html.includes('id="issue-input" value="349"'), true);
+  assert.equal(html.includes('id="issue-close-pull-number-input" value="407"'), true);
+  assert.equal(html.includes('id="action-type-input" value="issue_close"'), true);
+  assert.equal(html.includes('id="risk-kind-input" value="issue_close"'), true);
+  assert.equal(html.includes('operation: "issue_close"'), true);
+});
+
 test("worker strips non-ChatGPT operator return urls", async () => {
   const response = await worker.fetch(
     new Request(
