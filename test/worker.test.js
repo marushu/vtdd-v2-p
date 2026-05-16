@@ -1197,6 +1197,18 @@ test("worker persists RAG checkpoint fields as working memory", async () => {
         checkpointReason: "Context compression risk before implementation.",
         thoughtLocation: "Owner and Codex discussion before touching code.",
         userTension: "Concerned that compressed context may create partial RAG.",
+        origin: {
+          surface: "mac_codex",
+          moment: "Issue #343 bounded change contract",
+          trigger: "Owner chose to move from Issue #344 to Issue #343."
+        },
+        user_words: ["それでいこう"],
+        tension_note: {
+          summary: "Owner wants the RAG recall hook without overclaiming #344.",
+          intensity: "medium",
+          mode: "steady",
+          why_it_matters: "Future startup preflight should recover the decision boundary."
+        },
         contextSourceQuality: "full_thread_context",
         hypothesis: "Checkpoint schema should ride existing working_memory.",
         expectedFiles: ["docs/memory-schema.md", "scripts/vtdd-memory.mjs"],
@@ -1219,6 +1231,18 @@ test("worker persists RAG checkpoint fields as working memory", async () => {
 
   const records = await provider.retrieve({ type: "working_memory", limit: 1 });
   assert.equal(records[0].content.contextSourceQuality, "full_thread_context");
+  assert.deepEqual(records[0].content.origin, {
+    surface: "mac_codex",
+    moment: "Issue #343 bounded change contract",
+    trigger: "Owner chose to move from Issue #344 to Issue #343."
+  });
+  assert.deepEqual(records[0].content.user_words, ["それでいこう"]);
+  assert.deepEqual(records[0].content.tension_note, {
+    summary: "Owner wants the RAG recall hook without overclaiming #344.",
+    intensity: "medium",
+    mode: "steady",
+    why_it_matters: "Future startup preflight should recover the decision boundary."
+  });
   assert.deepEqual(records[0].content.expectedFiles, [
     "docs/memory-schema.md",
     "scripts/vtdd-memory.mjs"

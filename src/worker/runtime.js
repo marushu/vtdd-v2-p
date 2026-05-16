@@ -1520,6 +1520,12 @@ function buildMemoryWriteRecord(payload = {}) {
         checkpointReason: normalizeText(payload.checkpointReason) || null,
         thoughtLocation: normalizeText(payload.thoughtLocation) || null,
         userTension: normalizeText(payload.userTension) || null,
+        origin: normalizeMemoryOrigin(payload.origin),
+        user_words: normalizeBoundedMemoryStringArray(
+          payload.user_words ?? payload.userWords ?? payload.userWord,
+          { maxItems: 3, maxLength: 160 }
+        ),
+        tension_note: normalizeTensionNote(payload.tension_note ?? payload.tensionNote),
         contextSourceQuality: normalizeText(payload.contextSourceQuality) || null,
         hypothesis: normalizeText(payload.hypothesis) || null,
         expectedFiles: normalizeStringArray(payload.expectedFiles),
@@ -1578,6 +1584,33 @@ function buildMemoryWriteTags({ recordType, relatedIssue, repository, extraTags 
 function normalizeStringArray(value) {
   const values = Array.isArray(value) ? value : value === undefined ? [] : [value];
   return values.map(normalizeText).filter(Boolean);
+}
+
+function normalizeBoundedMemoryStringArray(value, { maxItems, maxLength }) {
+  return normalizeStringArray(value)
+    .slice(0, maxItems)
+    .map((item) => item.slice(0, maxLength));
+}
+
+function normalizeMemoryOrigin(value) {
+  const input = normalizeObject(value);
+  const origin = {
+    surface: normalizeText(input.surface),
+    moment: normalizeText(input.moment),
+    trigger: normalizeText(input.trigger)
+  };
+  return Object.values(origin).some(Boolean) ? origin : null;
+}
+
+function normalizeTensionNote(value) {
+  const input = normalizeObject(value);
+  const note = {
+    summary: normalizeText(input.summary),
+    intensity: normalizeText(input.intensity),
+    mode: normalizeText(input.mode),
+    why_it_matters: normalizeText(input.why_it_matters ?? input.whyItMatters)
+  };
+  return Object.values(note).some(Boolean) ? note : null;
 }
 
 function normalizeRejectedReasons(value) {

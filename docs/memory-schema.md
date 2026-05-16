@@ -85,6 +85,9 @@ may include:
 - `checkpointReason`
 - `thoughtLocation`
 - `userTension`
+- `origin`
+- `user_words`
+- `tension_note`
 - `contextSourceQuality`
 - `hypothesis`
 - `expectedFiles`
@@ -97,6 +100,17 @@ may include:
 
 `captureBoundary` must describe the stored material as a judgment log or
 operational summary, not raw hidden chain-of-thought or full transcript capture.
+
+`origin` records where the memory candidate arose, such as `surface`,
+`moment`, and `trigger`. It is provenance for recall, not authority.
+
+`user_words` stores at most a few short owner utterances that help the owner
+recognize the moment later. It must not be a transcript.
+
+`tension_note` is a recall hook, not a personality evaluation. It may include
+`summary`, `intensity`, `mode`, and `why_it_matters` so Butler, mac Codex, and
+VPS Codex CLI can explain why the checkpoint mattered when the owner later asks
+"あれなんだったっけ？".
 
 Suggested `contextSourceQuality` values:
 

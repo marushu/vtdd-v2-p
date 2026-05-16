@@ -1225,6 +1225,50 @@
                       "action_visible"
                     ],
                     "description": "Use action_visible from Custom GPT so memory write failures return ok:false JSON instead of an Action transport failure."
+                  },
+                  "origin": {
+                    "type": "object",
+                    "description": "Structured recall provenance for where the memory candidate arose.",
+                    "properties": {
+                      "surface": {
+                        "type": "string"
+                      },
+                      "moment": {
+                        "type": "string"
+                      },
+                      "trigger": {
+                        "type": "string"
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "user_words": {
+                    "type": "array",
+                    "description": "A few short owner utterances that help future recall; not a transcript.",
+                    "maxItems": 3,
+                    "items": {
+                      "type": "string",
+                      "maxLength": 160
+                    }
+                  },
+                  "tension_note": {
+                    "type": "object",
+                    "description": "Recall hook for the moment's temperature; not a personality evaluation.",
+                    "properties": {
+                      "summary": {
+                        "type": "string"
+                      },
+                      "intensity": {
+                        "type": "string"
+                      },
+                      "mode": {
+                        "type": "string"
+                      },
+                      "why_it_matters": {
+                        "type": "string"
+                      }
+                    },
+                    "additionalProperties": false
                   }
                 },
                 "additionalProperties": false

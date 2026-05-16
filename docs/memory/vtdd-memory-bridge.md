@@ -101,6 +101,14 @@ node scripts/vtdd-memory.mjs write-runtime-checkpoint \
   --checkpoint-reason "Context compression risk before implementation." \
   --thought-location "Owner and Codex discussion before touching code." \
   --user-tension "Concerned that compressed context may create partial RAG." \
+  --origin-surface "mac_codex" \
+  --origin-moment "Issue #343 implementation start" \
+  --origin-trigger "Owner moved the next slice from Issue #344 to Issue #343." \
+  --user-word "それでいこう" \
+  --tension-summary "Owner accepted the #344/#343 boundary and wants recall hooks." \
+  --tension-intensity "medium" \
+  --tension-mode "steady" \
+  --tension-why-it-matters "Future Butler recall should recover why #343 became next." \
   --context-source-quality "full_thread_context" \
   --hypothesis "Checkpoint schema should ride existing working_memory." \
   --expected-file "docs/memory-schema.md" \

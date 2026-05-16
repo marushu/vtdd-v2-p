@@ -56104,6 +56104,12 @@ function buildMemoryWriteRecord(payload = {}) {
         checkpointReason: normalizeText30(payload.checkpointReason) || null,
         thoughtLocation: normalizeText30(payload.thoughtLocation) || null,
         userTension: normalizeText30(payload.userTension) || null,
+        origin: normalizeMemoryOrigin(payload.origin),
+        user_words: normalizeBoundedMemoryStringArray(
+          payload.user_words ?? payload.userWords ?? payload.userWord,
+          { maxItems: 3, maxLength: 160 }
+        ),
+        tension_note: normalizeTensionNote(payload.tension_note ?? payload.tensionNote),
         contextSourceQuality: normalizeText30(payload.contextSourceQuality) || null,
         hypothesis: normalizeText30(payload.hypothesis) || null,
         expectedFiles: normalizeStringArray4(payload.expectedFiles),
@@ -56152,6 +56158,28 @@ function buildMemoryWriteTags({ recordType: recordType2, relatedIssue, repositor
 function normalizeStringArray4(value) {
   const values = Array.isArray(value) ? value : value === void 0 ? [] : [value];
   return values.map(normalizeText30).filter(Boolean);
+}
+function normalizeBoundedMemoryStringArray(value, { maxItems, maxLength }) {
+  return normalizeStringArray4(value).slice(0, maxItems).map((item) => item.slice(0, maxLength));
+}
+function normalizeMemoryOrigin(value) {
+  const input = normalizeObject11(value);
+  const origin = {
+    surface: normalizeText30(input.surface),
+    moment: normalizeText30(input.moment),
+    trigger: normalizeText30(input.trigger)
+  };
+  return Object.values(origin).some(Boolean) ? origin : null;
+}
+function normalizeTensionNote(value) {
+  const input = normalizeObject11(value);
+  const note = {
+    summary: normalizeText30(input.summary),
+    intensity: normalizeText30(input.intensity),
+    mode: normalizeText30(input.mode),
+    why_it_matters: normalizeText30(input.why_it_matters ?? input.whyItMatters)
+  };
+  return Object.values(note).some(Boolean) ? note : null;
 }
 function normalizeRejectedReasons2(value) {
   const values = Array.isArray(value) ? value : [];
