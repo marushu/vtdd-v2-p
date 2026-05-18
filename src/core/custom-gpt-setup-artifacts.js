@@ -1302,10 +1302,10 @@ function evaluateActionSchemaDiagnostics({ openApiContent, runtimeOrigin }) {
   const hasSelfParity = operationIds.includes("vtddRetrieveSelfParity");
   const hasSetupArtifact = operationIds.includes("vtddRetrieveSetupArtifact");
   const hasSetupDiagnostics = operationIds.includes("vtddRetrieveSetupDiagnostics");
-  const executeBlock = extractYamlPathBlock(content, "/v2/action/execute");
-  const gatewayBlock = extractYamlPathBlock(content, "/v2/gateway");
-  const buildUnderExecute = executeBlock.includes("- build");
-  const buildUnderGateway = gatewayBlock.includes("- build");
+  const executeSchemaBlock = extractYamlSchemaBlock(content, "VtddExecuteRequest");
+  const gatewaySchemaBlock = extractYamlSchemaBlock(content, "VtddGatewayRequest");
+  const buildUnderExecute = executeSchemaBlock.includes("- build");
+  const buildUnderGateway = gatewaySchemaBlock.includes("- build");
   const serverUrl = extractOpenApiServerUrl(content);
   const expectedServerUrl = normalizeOrigin(runtimeOrigin);
   const serverUrlMatchesRuntime =
@@ -1490,14 +1490,14 @@ function normalizeObservedSetupFailure(input = {}) {
   };
 }
 
-function extractYamlPathBlock(content, path) {
+function extractYamlSchemaBlock(content, schemaName) {
   const value = String(content ?? "");
-  const marker = `  ${path}:`;
+  const marker = `    ${schemaName}:`;
   const start = value.indexOf(marker);
   if (start === -1) {
     return "";
   }
-  const next = value.slice(start + marker.length).search(/\n  \/[^\n]+:/);
+  const next = value.slice(start + marker.length).search(/\n    [A-Za-z0-9_.-]+:/);
   return next === -1 ? value.slice(start) : value.slice(start, start + marker.length + next);
 }
 

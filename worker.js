@@ -37810,10 +37810,10 @@ function evaluateActionSchemaDiagnostics({ openApiContent, runtimeOrigin }) {
   const hasSelfParity = operationIds.includes("vtddRetrieveSelfParity");
   const hasSetupArtifact = operationIds.includes("vtddRetrieveSetupArtifact");
   const hasSetupDiagnostics = operationIds.includes("vtddRetrieveSetupDiagnostics");
-  const executeBlock = extractYamlPathBlock(content, "/v2/action/execute");
-  const gatewayBlock = extractYamlPathBlock(content, "/v2/gateway");
-  const buildUnderExecute = executeBlock.includes("- build");
-  const buildUnderGateway = gatewayBlock.includes("- build");
+  const executeSchemaBlock = extractYamlSchemaBlock(content, "VtddExecuteRequest");
+  const gatewaySchemaBlock = extractYamlSchemaBlock(content, "VtddGatewayRequest");
+  const buildUnderExecute = executeSchemaBlock.includes("- build");
+  const buildUnderGateway = gatewaySchemaBlock.includes("- build");
   const serverUrl = extractOpenApiServerUrl(content);
   const expectedServerUrl = normalizeOrigin2(runtimeOrigin);
   const serverUrlMatchesRuntime = !expectedServerUrl || serverUrl === expectedServerUrl || serverUrl === "https://your-runtime-host.example.workers.dev";
@@ -37970,14 +37970,14 @@ function normalizeObservedSetupFailure(input = {}) {
     missingBodyFields: normalizeText24(input.missingBodyFields)
   };
 }
-function extractYamlPathBlock(content, path) {
+function extractYamlSchemaBlock(content, schemaName) {
   const value = String(content ?? "");
-  const marker = `  ${path}:`;
+  const marker = `    ${schemaName}:`;
   const start = value.indexOf(marker);
   if (start === -1) {
     return "";
   }
-  const next = value.slice(start + marker.length).search(/\n  \/[^\n]+:/);
+  const next = value.slice(start + marker.length).search(/\n    [A-Za-z0-9_.-]+:/);
   return next === -1 ? value.slice(start) : value.slice(start, start + marker.length + next);
 }
 function extractOpenApiServerUrl(content) {
