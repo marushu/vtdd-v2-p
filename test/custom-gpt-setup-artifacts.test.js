@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
 
 import {
   buildCustomGptRecoveryBundle,
@@ -64,6 +65,29 @@ test("evaluateCustomGptSetupDiagnostics classifies Action Schema, auth, and depl
     "    GatewayBearerAuth:",
     "      type: http",
     "      scheme: bearer",
+    "  schemas:",
+    "    VtddGatewayRequest:",
+    "      type: object",
+    "      properties:",
+    "        policyInput:",
+    "          type: object",
+    "          properties:",
+    "            actionType:",
+    "              type: string",
+    "              enum:",
+    "                - read",
+    "                - issue_create",
+    "    VtddExecuteRequest:",
+    "      type: object",
+    "      properties:",
+    "        policyInput:",
+    "          type: object",
+    "          properties:",
+    "            actionType:",
+    "              type: string",
+    "              enum:",
+    "                - read",
+    "                - build",
     "paths:",
     "  /v2/retrieve/self-parity:",
     "    get:",
@@ -79,8 +103,6 @@ test("evaluateCustomGptSetupDiagnostics classifies Action Schema, auth, and depl
     "  /v2/action/execute:",
     "    post:",
     "      operationId: vtddExecute",
-    "      enum:",
-    "        - build",
     "  /v2/action/not-deployed-yet:",
     "    post:",
     "      operationId: vtddBrandNewDiagnosticsAction"
@@ -142,6 +164,47 @@ test("evaluateCustomGptSetupDiagnostics classifies Action Schema, auth, and depl
     true
   );
   assert.equal(JSON.stringify(result.diagnostics).includes("ghs_setup_read"), false);
+});
+
+test("evaluateCustomGptSetupDiagnostics treats canonical OpenAPI execute build enum as valid", async () => {
+  const canonicalOpenApi = fs.readFileSync("docs/setup/custom-gpt-actions-openapi.yaml", "utf8");
+  const canonicalInstructions = fs.readFileSync("docs/setup/custom-gpt-instructions.md", "utf8");
+
+  const result = await evaluateCustomGptSetupDiagnostics({
+    repository: "sample-org/vtdd-v2-p",
+    ref: "main",
+    runtimeOrigin: "https://sample-user-vtdd.example.workers.dev",
+    env: {
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_setup_read",
+      GITHUB_API_FETCH: async (url) => {
+        const parsed = new URL(url);
+        if (parsed.pathname.endsWith("/docs/setup/known-good.json")) {
+          return new Response(
+            JSON.stringify({
+              sha: "known-good-manifest-sha",
+              encoding: "base64",
+              content: encodeContent(JSON.stringify({ commitSha: "a".repeat(40) }))
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        const isInstructions = parsed.pathname.endsWith("/docs/setup/custom-gpt-instructions.md");
+        return new Response(
+          JSON.stringify({
+            sha: isInstructions ? "latest-instructions-sha" : "latest-openapi-sha",
+            encoding: "base64",
+            content: encodeContent(isInstructions ? canonicalInstructions : canonicalOpenApi)
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        );
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.diagnostics.actionSchema.checks.buildUnderExecute, true);
+  assert.equal(result.diagnostics.actionSchema.checks.buildUnderGateway, false);
+  assert.equal(result.diagnostics.actionSchema.missing.includes("build enum under vtddExecute"), false);
 });
 
 test("retrieveCustomGptSetupArtifact rejects unsupported artifacts", async () => {
