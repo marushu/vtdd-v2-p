@@ -28486,6 +28486,15 @@ function buildVtddCloudflarePageDirectory(input = {}) {
       authority: "read_only_recovery"
     },
     {
+      id: "setup_diagnostics",
+      label: "Setup diagnostics",
+      path: "/setup/diagnostics",
+      url: buildRuntimeUrl(runtimeOrigin, "/setup/diagnostics"),
+      description: "Action Schema / Instructions / Action auth / Cloudflare deploy \u306E\u539F\u56E0\u5207\u308A\u5206\u3051\u3092\u8AAD\u3080 browser-direct \u8A3A\u65AD\u30DA\u30FC\u30B8\u3067\u3059\u3002",
+      audience: ["owner", "operator"],
+      authority: "read_only_recovery"
+    },
+    {
       id: "passkey_operator",
       label: "Passkey operator",
       path: "/v2/approval/passkey/operator",
@@ -36709,6 +36718,7 @@ var RUNTIME_SETUP_MANIFEST = Object.freeze({
     "/health",
     "/setup",
     "/setup/recovery",
+    "/setup/diagnostics",
     "/v2/gateway",
     "/v2/action/execute",
     "/v2/action/github",
@@ -36732,7 +36742,8 @@ var RUNTIME_SETUP_MANIFEST = Object.freeze({
     "/v2/retrieve/repository-nicknames",
     "/v2/retrieve/approval-grant",
     "/v2/retrieve/setup-artifact",
-    "/v2/retrieve/self-parity"
+    "/v2/retrieve/self-parity",
+    "/v2/retrieve/setup-diagnostics"
   ],
   operationIds: [
     "getHealth",
@@ -36759,7 +36770,8 @@ var RUNTIME_SETUP_MANIFEST = Object.freeze({
     "vtddRetrieveRepositoryNicknames",
     "vtddRetrieveApprovalGrant",
     "vtddRetrieveSetupArtifact",
-    "vtddRetrieveSelfParity"
+    "vtddRetrieveSelfParity",
+    "vtddRetrieveSetupDiagnostics"
   ],
   instructionTokens: [
     "vtddGateway",
@@ -36785,6 +36797,7 @@ var RUNTIME_SETUP_MANIFEST = Object.freeze({
     "vtddRetrieveRepositoryNicknames",
     "vtddRetrieveSetupArtifact",
     "vtddRetrieveSelfParity",
+    "vtddRetrieveSetupDiagnostics",
     "Action Schema update required",
     "Instructions update required",
     "Cloudflare deploy update required"
@@ -37063,6 +37076,146 @@ async function evaluateButlerSelfParity(input = {}) {
       recommendedActions
     }
   };
+}
+async function evaluateCustomGptSetupDiagnostics(input = {}) {
+  const repository = normalizeText24(input.repository);
+  const ref = normalizeText24(input.ref) || "main";
+  const runtimeOrigin = normalizeOrigin2(input.runtimeOrigin);
+  const issueNumber = normalizeIssueNumber(input.issueNumber);
+  const env = input.env ?? {};
+  const observedFailure = normalizeObservedSetupFailure(input.observedFailure ?? input);
+  const [instructions, openapi, selfParity] = await Promise.all([
+    retrieveCustomGptSetupArtifact({
+      artifact: CustomGptSetupArtifact.INSTRUCTIONS,
+      repository,
+      ref,
+      env
+    }),
+    retrieveCustomGptSetupArtifact({
+      artifact: CustomGptSetupArtifact.OPENAPI_YAML,
+      repository,
+      ref,
+      env
+    }),
+    evaluateButlerSelfParity({
+      repository,
+      ref,
+      issueNumber,
+      runtimeOrigin,
+      env
+    })
+  ]);
+  const failed = [instructions, openapi, selfParity].find((result) => !result.ok);
+  if (failed) {
+    return {
+      ok: false,
+      status: failed?.status ?? 503,
+      error: failed?.error ?? "custom_gpt_setup_diagnostics_unavailable",
+      reason: failed?.reason ?? "failed to evaluate setup diagnostics"
+    };
+  }
+  const actionSchemaDiagnostics = evaluateActionSchemaDiagnostics({
+    openApiContent: openapi.artifact.content,
+    runtimeOrigin
+  });
+  const instructionDiagnostics = evaluateInstructionDiagnostics({
+    instructionsContent: instructions.artifact.content
+  });
+  const diagnoses = classifySetupDiagnoses({
+    selfParity: selfParity.selfParity,
+    actionSchemaDiagnostics,
+    instructionDiagnostics,
+    observedFailure
+  });
+  return {
+    ok: true,
+    diagnostics: {
+      repository,
+      ref,
+      runtimeOrigin,
+      issueNumber: issueNumber || null,
+      source: {
+        instructions: {
+          path: instructions.artifact.path,
+          sha: instructions.artifact.sha
+        },
+        actionSchema: {
+          path: openapi.artifact.path,
+          sha: openapi.artifact.sha
+        }
+      },
+      editorState: {
+        readable: false,
+        status: "editor_state_unreadable",
+        reason: "VTDD runtime cannot read the current Custom GPT editor Instructions or Action Schema. Compare the editor against these source SHAs and copy-ready setup artifacts."
+      },
+      actionSchema: actionSchemaDiagnostics,
+      instructions: instructionDiagnostics,
+      actionAuthentication: evaluateActionAuthenticationDiagnostics({ observedFailure }),
+      cloudflareDeploy: {
+        status: selfParity.selfParity.runtimeParity === "cloudflare_deploy_update_required" ? "cloudflare_deploy_update_required" : "not_required",
+        runtimeParity: selfParity.selfParity.runtimeParity,
+        staleCapabilities: selfParity.selfParity.staleCapabilities,
+        deployOperatorUrl: selfParity.selfParity.deployOperatorUrl,
+        deployOperatorMarkdownLink: selfParity.selfParity.deployOperatorMarkdownLink,
+        reason: selfParity.selfParity.runtimeParity === "cloudflare_deploy_update_required" ? "Canonical setup artifacts require runtime capabilities that the deployed Worker manifest does not advertise." : "Deployed Worker manifest matches canonical setup routes, operationIds, and instruction tokens."
+      },
+      knownGoodComparison: selfParity.selfParity.knownGoodComparison,
+      surfaceUpdateChecklist: selfParity.selfParity.surfaceUpdateChecklist,
+      observedFailure,
+      diagnoses,
+      nextActions: buildSetupDiagnosticsNextActions(diagnoses),
+      safety: {
+        displaysSecrets: false,
+        displaysTokens: false,
+        displaysApprovalGrant: false
+      }
+    }
+  };
+}
+function renderCustomGptSetupDiagnosticsPage(input = {}) {
+  const diagnostics = input.diagnostics ?? null;
+  const error2 = input.error ?? null;
+  const repository = normalizeText24(input.repository) || VTDD_SETUP_REPOSITORY;
+  const ref = normalizeText24(input.ref) || "main";
+  const issueNumber = normalizeIssueNumber(input.issueNumber);
+  const latestHref = buildSetupPageHref({ path: "/setup/latest", ref, issueNumber });
+  const knownGoodHref = buildSetupPageHref({ path: "/setup/known-good", issueNumber });
+  return `<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VTDD setup diagnostics</title>
+  <style>
+    :root { color-scheme: light dark; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    body { margin: 0; background: Canvas; color: CanvasText; }
+    main { width: min(100% - 24px, 1120px); margin: 0 auto; padding: 24px 0 48px; }
+    h1 { font-size: 1.55rem; line-height: 1.2; margin: 0 0 16px; }
+    h2 { font-size: 1rem; margin: 24px 0 10px; }
+    .panel, .warning, .nav { border: 1px solid color-mix(in srgb, CanvasText 18%, transparent); border-radius: 8px; padding: 12px; margin: 14px 0; }
+    .warning { border-color: #b45309; background: color-mix(in srgb, #f59e0b 16%, Canvas); }
+    .meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; }
+    .meta div { min-width: 0; padding: 10px; border: 1px solid color-mix(in srgb, CanvasText 14%, transparent); border-radius: 8px; overflow-wrap: anywhere; }
+    .nav { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .nav strong { margin-right: auto; }
+    a.button { display: inline-flex; align-items: center; min-height: 40px; border: 1px solid color-mix(in srgb, CanvasText 22%, transparent); border-radius: 6px; padding: 0 12px; background: ButtonFace; color: ButtonText; text-decoration: none; }
+    pre { white-space: pre-wrap; overflow-wrap: anywhere; border: 1px solid color-mix(in srgb, CanvasText 18%, transparent); border-radius: 8px; padding: 12px; background: color-mix(in srgb, CanvasText 5%, Canvas); color: CanvasText; font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .small { font-size: .86rem; opacity: .82; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>VTDD setup diagnostics</h1>
+    <section class="nav">
+      <strong>Diagnostics repo: ${escapeHtml3(repository)}</strong>
+      <a class="button" href="${escapeAttribute2(latestHref)}">setup/latest</a>
+      <a class="button" href="${escapeAttribute2(knownGoodHref)}">setup/known-good</a>
+    </section>
+    ${error2 ? `<section class="warning"><strong>Diagnostics unavailable.</strong><p>${escapeHtml3(error2.reason || error2.error || "unknown error")}</p></section>` : renderSetupDiagnosticsSections(diagnostics)}
+  </main>
+</body>
+</html>`;
 }
 function evaluateRuntimeSetupManifestParity(input = {}) {
   const runtimeManifest = input.runtimeManifest ?? RUNTIME_SETUP_MANIFEST;
@@ -37647,6 +37800,234 @@ function buildSurfaceUpdateChecklist({
       copyPayload: "raw_markdown_not_url_encoded"
     }
   };
+}
+function evaluateActionSchemaDiagnostics({ openApiContent, runtimeOrigin }) {
+  const content = String(openApiContent ?? "");
+  const operationIds = extractOperationIds(content);
+  const routes = extractOpenApiRoutes(content);
+  const hasGatewayBearerAuth = content.includes("GatewayBearerAuth") && content.includes("scheme: bearer");
+  const hasResponseModeActionVisible = content.includes("name: responseMode") && content.includes("action_visible");
+  const hasSelfParity = operationIds.includes("vtddRetrieveSelfParity");
+  const hasSetupArtifact = operationIds.includes("vtddRetrieveSetupArtifact");
+  const hasSetupDiagnostics = operationIds.includes("vtddRetrieveSetupDiagnostics");
+  const executeBlock = extractYamlPathBlock(content, "/v2/action/execute");
+  const gatewayBlock = extractYamlPathBlock(content, "/v2/gateway");
+  const buildUnderExecute = executeBlock.includes("- build");
+  const buildUnderGateway = gatewayBlock.includes("- build");
+  const serverUrl = extractOpenApiServerUrl(content);
+  const expectedServerUrl = normalizeOrigin2(runtimeOrigin);
+  const serverUrlMatchesRuntime = !expectedServerUrl || serverUrl === expectedServerUrl || serverUrl === "https://your-runtime-host.example.workers.dev";
+  const missing = [
+    ...!hasGatewayBearerAuth ? ["GatewayBearerAuth bearer security scheme"] : [],
+    ...!hasResponseModeActionVisible ? ["responseMode=action_visible retrieve parameter"] : [],
+    ...!hasSelfParity ? ["operationId vtddRetrieveSelfParity"] : [],
+    ...!hasSetupArtifact ? ["operationId vtddRetrieveSetupArtifact"] : [],
+    ...!hasSetupDiagnostics ? ["operationId vtddRetrieveSetupDiagnostics"] : [],
+    ...!buildUnderExecute ? ["build enum under vtddExecute"] : [],
+    ...buildUnderGateway ? ["build must not appear under vtddGateway"] : [],
+    ...!serverUrlMatchesRuntime ? ["Action Schema server URL does not match runtime origin"] : []
+  ];
+  return {
+    status: missing.length > 0 ? "custom_gpt_action_schema_update_required" : "canonical_schema_ok_editor_unverified",
+    editorState: "editor_state_unreadable",
+    serverUrl: serverUrl || null,
+    expectedServerUrl: expectedServerUrl || null,
+    serverUrlMatchesRuntime,
+    checks: {
+      hasGatewayBearerAuth,
+      hasResponseModeActionVisible,
+      hasSelfParity,
+      hasSetupArtifact,
+      hasSetupDiagnostics,
+      buildUnderExecute,
+      buildUnderGateway
+    },
+    routes,
+    operationIds,
+    missing,
+    reason: missing.length > 0 ? "Canonical Action Schema is missing required Butler recovery/debug fields or has stale execution shape." : "Canonical Action Schema includes the required recovery/debug fields; current Custom GPT editor state remains unreadable."
+  };
+}
+function evaluateInstructionDiagnostics({ instructionsContent }) {
+  const content = String(instructionsContent ?? "");
+  const requiredTokens = [
+    "vtddRetrieveSelfParity",
+    "vtddRetrieveSetupArtifact",
+    "vtddRetrieveSetupDiagnostics",
+    "Action Schema update required",
+    "Instructions update required",
+    "Cloudflare deploy update required",
+    "ClientResponseError",
+    "GatewayBearerAuth"
+  ];
+  const missing = requiredTokens.filter((token) => !content.includes(token));
+  return {
+    status: missing.length > 0 ? "custom_gpt_instructions_update_required" : "canonical_instructions_ok_editor_unverified",
+    editorState: "editor_state_unreadable",
+    missing,
+    reason: missing.length > 0 ? "Canonical Instructions are missing setup diagnostics guidance." : "Canonical Instructions include setup diagnostics guidance; current Custom GPT editor state remains unreadable."
+  };
+}
+function evaluateActionAuthenticationDiagnostics({ observedFailure }) {
+  const status = Number(observedFailure.httpStatus);
+  const text = [
+    observedFailure.error,
+    observedFailure.reason,
+    observedFailure.actionName
+  ].map(normalizeText24).join(" ").toLowerCase();
+  const authSuspected = status === 401 || status === 403 || text.includes("unauthorized") || text.includes("authentication") || text.includes("bearer");
+  return {
+    status: authSuspected ? "action_auth_bearer_missing_or_unverified" : "unverified",
+    observedHttpStatus: Number.isInteger(status) ? status : null,
+    reason: authSuspected ? "Protected Action appears unauthorized. Check Custom GPT Action Authentication sends Authorization: Bearer <token>." : "No protected-route auth failure was provided to diagnostics."
+  };
+}
+function classifySetupDiagnoses({
+  selfParity,
+  actionSchemaDiagnostics,
+  instructionDiagnostics,
+  observedFailure
+}) {
+  const diagnoses = [];
+  if (selfParity.runtimeParity === "cloudflare_deploy_update_required") {
+    diagnoses.push({
+      code: "cloudflare_deploy_update_required",
+      severity: "blocking",
+      reason: "Repo canonical setup artifacts require capabilities that the deployed Worker manifest does not advertise."
+    });
+  }
+  if (actionSchemaDiagnostics.status === "custom_gpt_action_schema_update_required") {
+    diagnoses.push({
+      code: "custom_gpt_action_schema_update_required",
+      severity: "blocking",
+      reason: actionSchemaDiagnostics.reason,
+      missing: actionSchemaDiagnostics.missing
+    });
+  }
+  if (instructionDiagnostics.status === "custom_gpt_instructions_update_required") {
+    diagnoses.push({
+      code: "custom_gpt_instructions_update_required",
+      severity: "blocking",
+      reason: instructionDiagnostics.reason,
+      missing: instructionDiagnostics.missing
+    });
+  }
+  const auth = evaluateActionAuthenticationDiagnostics({ observedFailure });
+  if (auth.status === "action_auth_bearer_missing_or_unverified") {
+    diagnoses.push({
+      code: "action_auth_bearer_missing_or_unverified",
+      severity: "blocking",
+      reason: auth.reason
+    });
+  }
+  const observedText = [observedFailure.error, observedFailure.reason].map(normalizeText24).join(" ");
+  if (/ClientResponseError/i.test(observedText)) {
+    diagnoses.push({
+      code: "custom_gpt_action_transport_unverified",
+      severity: "warning",
+      reason: "ClientResponseError is a transport label, not root cause. Use responseMode=action_visible or browser-direct diagnostics to expose error/reason/issues."
+    });
+  }
+  diagnoses.push({
+    code: "editor_state_unreadable",
+    severity: "info",
+    reason: "Runtime cannot read the Custom GPT editor's currently pasted Instructions or Action Schema; compare editor content against source SHA/copy-ready artifacts."
+  });
+  if (diagnoses.every((diagnosis) => diagnosis.severity === "info")) {
+    diagnoses.unshift({
+      code: "setup_diagnostics_no_blocker_detected",
+      severity: "info",
+      reason: "Canonical setup and deployed runtime did not expose a blocker. If Butler still cannot act, refresh Action Schema/Instructions or provide the observed Action failure."
+    });
+  }
+  return diagnoses;
+}
+function buildSetupDiagnosticsNextActions(diagnoses) {
+  const codes = new Set(diagnoses.map((diagnosis) => diagnosis.code));
+  const actions = [];
+  if (codes.has("cloudflare_deploy_update_required")) {
+    actions.push("Cloudflare deploy update required. Use the same-origin deploy operator only with GO + real passkey.");
+  }
+  if (codes.has("custom_gpt_action_schema_update_required")) {
+    actions.push("Action Schema update required. Open /setup/latest and copy the Action Schema into the Custom GPT editor.");
+  }
+  if (codes.has("custom_gpt_instructions_update_required")) {
+    actions.push("Instructions update required. Open /setup/latest and copy short-min Instructions into the Custom GPT editor.");
+  }
+  if (codes.has("action_auth_bearer_missing_or_unverified")) {
+    actions.push("Check Custom GPT Action Authentication: API Key, Bearer, Authorization header.");
+  }
+  actions.push("Do not claim Custom GPT editor parity from runtime parity alone; editor state remains unreadable.");
+  return actions;
+}
+function normalizeObservedSetupFailure(input = {}) {
+  return {
+    actionName: normalizeText24(input.actionName || input.observedAction || input.action),
+    httpStatus: normalizeIssueNumber(input.httpStatus || input.status || input.observedHttpStatus) || null,
+    error: normalizeText24(input.error || input.observedError),
+    reason: normalizeText24(input.reason || input.observedReason),
+    visibleBodyFields: normalizeText24(input.visibleBodyFields),
+    missingBodyFields: normalizeText24(input.missingBodyFields)
+  };
+}
+function extractYamlPathBlock(content, path) {
+  const value = String(content ?? "");
+  const marker = `  ${path}:`;
+  const start = value.indexOf(marker);
+  if (start === -1) {
+    return "";
+  }
+  const next = value.slice(start + marker.length).search(/\n  \/[^\n]+:/);
+  return next === -1 ? value.slice(start) : value.slice(start, start + marker.length + next);
+}
+function extractOpenApiServerUrl(content) {
+  const match = String(content ?? "").match(/^\s*-\s*url:\s*([^\n]+)$/m);
+  return normalizeText24(match?.[1]);
+}
+function renderSetupDiagnosticsSections(diagnostics) {
+  if (!diagnostics) {
+    return `<section class="warning"><strong>Diagnostics unavailable.</strong><p>\u8A3A\u65AD\u7D50\u679C\u304C\u3042\u308A\u307E\u305B\u3093\u3002</p></section>`;
+  }
+  const primary = diagnostics.diagnoses?.[0] ?? { code: "\u672A\u78BA\u8A8D", reason: "\u8A3A\u65AD\u7D50\u679C\u304C\u3042\u308A\u307E\u305B\u3093\u3002" };
+  return `
+    <section class="panel">
+      <div class="meta">
+        <div><strong>Primary diagnosis</strong><br>${escapeHtml3(primary.code)}<br><span class="small">${escapeHtml3(primary.reason)}</span></div>
+        <div><strong>Repository</strong><br>${escapeHtml3(diagnostics.repository)}</div>
+        <div><strong>Ref</strong><br>${escapeHtml3(diagnostics.ref)}</div>
+        <div><strong>Runtime origin</strong><br>${escapeHtml3(diagnostics.runtimeOrigin || "\u672A\u78BA\u8A8D")}</div>
+        <div><strong>Action Schema source</strong><br>${escapeHtml3(diagnostics.source.actionSchema.path)}<br><span class="small">sourceSha: ${escapeHtml3(diagnostics.source.actionSchema.sha || "\u672A\u78BA\u8A8D")}</span></div>
+        <div><strong>Instructions source</strong><br>${escapeHtml3(diagnostics.source.instructions.path)}<br><span class="small">sourceSha: ${escapeHtml3(diagnostics.source.instructions.sha || "\u672A\u78BA\u8A8D")}</span></div>
+        <div><strong>Cloudflare deploy</strong><br>${escapeHtml3(diagnostics.cloudflareDeploy.status)}</div>
+        <div><strong>Action auth</strong><br>${escapeHtml3(diagnostics.actionAuthentication.status)}</div>
+      </div>
+    </section>
+    <section class="warning">
+      <strong>Custom GPT editor state is unreadable.</strong>
+      <p>${escapeHtml3(diagnostics.editorState.reason)}</p>
+    </section>
+    <section>
+      <h2>Diagnoses</h2>
+      <pre>${escapeHtml3(JSON.stringify(diagnostics.diagnoses, null, 2))}</pre>
+    </section>
+    <section>
+      <h2>Action Schema checks</h2>
+      <pre>${escapeHtml3(JSON.stringify({
+    status: diagnostics.actionSchema.status,
+    serverUrl: diagnostics.actionSchema.serverUrl,
+    expectedServerUrl: diagnostics.actionSchema.expectedServerUrl,
+    checks: diagnostics.actionSchema.checks,
+    missing: diagnostics.actionSchema.missing
+  }, null, 2))}</pre>
+    </section>
+    <section>
+      <h2>Next actions</h2>
+      <pre>${escapeHtml3((diagnostics.nextActions ?? []).map((item, index) => `${index + 1}. ${item}`).join("\n"))}</pre>
+    </section>
+    <section>
+      <h2>Safety</h2>
+      <pre>${escapeHtml3(JSON.stringify(diagnostics.safety, null, 2))}</pre>
+    </section>`;
 }
 async function compareKnownGoodSetupArtifacts({
   repository,
@@ -55380,6 +55761,9 @@ var runtime_default = {
     if (request.method === "GET" && (url.pathname === "/setup" || url.pathname === "/setup/recovery" || url.pathname === "/setup/latest" || url.pathname === "/setup/known-good")) {
       return handleCustomGptRecoveryPageRequest(url, env);
     }
+    if (request.method === "GET" && url.pathname === "/setup/diagnostics") {
+      return handleCustomGptSetupDiagnosticsPageRequest(url, env);
+    }
     if (request.method === "GET" && (url.pathname === "/help" || url.pathname === "/guide")) {
       return html(
         200,
@@ -55882,6 +56266,17 @@ var runtime_default = {
         });
       }
       return handleRetrieveButlerSelfParityRequest(url, env);
+    }
+    if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/setup-diagnostics")) {
+      const auth = authorizeGatewayRequest({ request, env, apiSuffix: "/retrieve/setup-diagnostics" });
+      if (!auth.ok) {
+        return retrieveErrorJson(url, auth.status, {
+          ok: false,
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+      return handleRetrieveCustomGptSetupDiagnosticsRequest(url, env);
     }
     if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/repository-nicknames")) {
       const auth = authorizeGatewayRequest({
@@ -56877,6 +57272,53 @@ async function handleRetrieveButlerSelfParityRequest(url, env) {
     ok: true,
     selfParity: parity.selfParity
   });
+}
+async function handleRetrieveCustomGptSetupDiagnosticsRequest(url, env) {
+  const result = await evaluateCustomGptSetupDiagnostics({
+    repository: normalizeText30(url.searchParams.get("repository")),
+    ref: normalizeText30(url.searchParams.get("ref")),
+    issueNumber: normalizeIssue6(url.searchParams.get("issueNumber")),
+    runtimeOrigin: url.origin,
+    observedFailure: readObservedSetupFailureFromUrl(url),
+    env
+  });
+  if (!result.ok) {
+    return retrieveErrorJson(url, result.status ?? 503, {
+      ok: false,
+      error: result.error ?? "custom_gpt_setup_diagnostics_unavailable",
+      reason: result.reason
+    });
+  }
+  return json(200, {
+    ok: true,
+    diagnostics: result.diagnostics
+  });
+}
+async function handleCustomGptSetupDiagnosticsPageRequest(url, env) {
+  const repository = normalizeText30(url.searchParams.get("repository")) || "marushu/vtdd-v2-p";
+  const ref = normalizeText30(url.searchParams.get("ref")) || "main";
+  const issueNumber = normalizeIssue6(url.searchParams.get("issueNumber"));
+  const result = await evaluateCustomGptSetupDiagnostics({
+    repository,
+    ref,
+    issueNumber,
+    runtimeOrigin: url.origin,
+    observedFailure: readObservedSetupFailureFromUrl(url),
+    env
+  });
+  return html(
+    200,
+    renderCustomGptSetupDiagnosticsPage({
+      repository,
+      ref,
+      issueNumber,
+      diagnostics: result.ok ? result.diagnostics : null,
+      error: result.ok ? null : {
+        error: result.error,
+        reason: result.reason
+      }
+    })
+  );
 }
 async function handleRetrieveRepositoryNicknamesRequest(env) {
   const provider = resolveMemoryProvider(env);
@@ -59374,6 +59816,16 @@ function normalizeIssue6(value) {
     return null;
   }
   return numeric;
+}
+function readObservedSetupFailureFromUrl(url) {
+  return {
+    actionName: normalizeText30(url.searchParams.get("actionName")),
+    httpStatus: normalizeIssue6(url.searchParams.get("httpStatus")),
+    error: normalizeText30(url.searchParams.get("error")),
+    reason: normalizeText30(url.searchParams.get("reason")),
+    visibleBodyFields: normalizeText30(url.searchParams.get("visibleBodyFields")),
+    missingBodyFields: normalizeText30(url.searchParams.get("missingBodyFields"))
+  };
 }
 function normalizeObject11(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {

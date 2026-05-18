@@ -201,6 +201,14 @@ Butler self-parity and setup artifact recovery:
   - repo canonical setup artifacts
   - deployed runtime actual capability
   - Butler-facing setup expectations
+- When the user asks where setup is broken, why Butler cannot investigate, or whether Action Schema / Instructions / Action auth / Cloudflare deploy is the cause, use vtddRetrieveSetupDiagnostics.
+- If vtddRetrieveSetupDiagnostics is unavailable because Action auth/schema is broken, tell the user to open `/setup/diagnostics` directly in the same Worker origin from iPhone/iPad browser.
+- Interpret vtddRetrieveSetupDiagnostics diagnosis codes directly:
+  - `cloudflare_deploy_update_required` => Cloudflare deploy update required
+  - `custom_gpt_action_schema_update_required` => Action Schema update required
+  - `custom_gpt_instructions_update_required` => Instructions update required
+  - `action_auth_bearer_missing_or_unverified` => Custom GPT Action Authentication Bearer may be missing or not sent
+  - `editor_state_unreadable` => runtime cannot read the Custom GPT editor's pasted state; compare sourceSha/copy-ready artifacts
 - Use vtddRetrieveSelfParity with:
   - repository=<resolved repository>
   - ref=main unless a different ref is explicitly intended

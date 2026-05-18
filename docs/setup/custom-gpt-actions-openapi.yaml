@@ -2109,6 +2109,85 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/VtddGenericResponse"
+  /v2/retrieve/setup-diagnostics:
+    get:
+      operationId: vtddRetrieveSetupDiagnostics
+      summary: Diagnose Custom GPT Action Schema, Instructions, Action auth, and Cloudflare deploy drift.
+      security:
+        - GatewayBearerAuth: []
+      parameters:
+        - name: repository
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: ref
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: issueNumber
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: actionName
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Butler Action name that failed, if visible.
+        - name: httpStatus
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: HTTP status visible from the Action failure, if visible.
+        - name: error
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Visible error field or transport label such as ClientResponseError.
+        - name: reason
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Visible reason text from the failed Action, if available.
+        - name: responseMode
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - action_visible
+          description: Use action_visible in the Custom GPT Action test screen so non-2xx retrieve failures return ok:false JSON with httpStatus/error/reason/issues instead of a ClientResponseError transport label.
+      responses:
+        "200":
+          description: Setup diagnostics result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "401":
+          description: Missing machine auth
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "403":
+          description: Invalid machine auth
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "503":
+          description: Setup diagnostics unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
   /v2/retrieve/approval-grant:
     get:
       operationId: vtddRetrieveApprovalGrant

@@ -339,6 +339,7 @@ test("custom gpt openapi doc exposes current gateway, execute, and progress rout
   assert.equal(doc.includes("/v2/retrieve/repository-nicknames:"), true);
   assert.equal(doc.includes("/v2/retrieve/setup-artifact:"), true);
   assert.equal(doc.includes("/v2/retrieve/self-parity:"), true);
+  assert.equal(doc.includes("/v2/retrieve/setup-diagnostics:"), true);
   assert.equal(doc.includes("/v2/retrieve/approval-grant:"), true);
   assert.equal(doc.includes("/v2/retrieve/constitution:"), true);
   assert.equal(doc.includes("/v2/retrieve/decisions:"), true);
@@ -352,6 +353,7 @@ test("custom gpt openapi doc exposes current gateway, execute, and progress rout
   assert.equal(doc.includes("operationId: vtddRetrieveOperationalMemory"), true);
   assert.equal(doc.includes("operationId: vtddStartupPreflight"), true);
   assert.equal(doc.includes("operationId: vtddRetrieveCloudflarePages"), true);
+  assert.equal(doc.includes("operationId: vtddRetrieveSetupDiagnostics"), true);
   assert.equal(doc.includes("OperationalMemoryResponse:"), true);
   assert.equal(doc.includes("$ref: \"#/components/schemas/OperationalMemoryResponse\""), true);
   assert.equal(doc.includes("GatewayBearerAuth"), true);
@@ -391,12 +393,18 @@ test("custom gpt self-parity action exposes issue close proof parameters", () =>
   );
   const selfParitySection = yaml.slice(
     yaml.indexOf("  /v2/retrieve/self-parity:"),
-    yaml.indexOf("  /v2/retrieve/approval-grant:")
+    yaml.indexOf("  /v2/retrieve/setup-diagnostics:")
   );
   assert.equal(setupArtifactSection.includes("- name: issueNumber"), false);
   assert.equal(setupArtifactSection.includes("- name: pullNumber"), false);
   assert.equal(selfParitySection.includes("- name: issueNumber"), true);
   assert.equal(selfParitySection.includes("- name: pullNumber"), true);
+  assert.equal(typeof openapiJson.paths["/v2/retrieve/setup-diagnostics"], "object");
+  const diagnosticsParams =
+    openapiJson.paths["/v2/retrieve/setup-diagnostics"].get.parameters.map((parameter) => parameter.name);
+  assert.equal(diagnosticsParams.includes("actionName"), true);
+  assert.equal(diagnosticsParams.includes("httpStatus"), true);
+  assert.equal(diagnosticsParams.includes("responseMode"), true);
 });
 
 test("custom gpt openapi keeps components.schemas while avoiding nested field refs", () => {
@@ -587,7 +595,8 @@ test("custom gpt openapi json exposes JSON bodies for Butler action auth failure
     ["/v2/retrieve/repository-nicknames", "get"],
     ["/v2/retrieve/setup-artifact", "get"],
     ["/v2/retrieve/approval-grant", "get"],
-    ["/v2/retrieve/self-parity", "get"]
+    ["/v2/retrieve/self-parity", "get"],
+    ["/v2/retrieve/setup-diagnostics", "get"]
   ];
 
   for (const [route, method] of routes) {
@@ -613,6 +622,7 @@ test("custom gpt retrieve actions expose action-visible response mode for test-s
     "/v2/retrieve/repository-nicknames",
     "/v2/retrieve/setup-artifact",
     "/v2/retrieve/self-parity",
+    "/v2/retrieve/setup-diagnostics",
     "/v2/retrieve/approval-grant"
   ];
 

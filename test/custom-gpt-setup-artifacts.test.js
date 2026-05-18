@@ -5,6 +5,7 @@ import {
   buildCustomGptRecoveryBundle,
   CustomGptSetupArtifact,
   evaluateButlerSelfParity,
+  evaluateCustomGptSetupDiagnostics,
   retrieveCustomGptSetupArtifact
 } from "../src/core/index.js";
 
@@ -43,6 +44,104 @@ test("retrieveCustomGptSetupArtifact returns canonical setup artifact content fr
   assert.equal(result.artifact.path, "docs/setup/custom-gpt-instructions.md");
   assert.equal(result.artifact.sha, "abc123");
   assert.equal(result.artifact.content.includes("vtddRetrieveSelfParity"), true);
+});
+
+test("evaluateCustomGptSetupDiagnostics classifies Action Schema, auth, and deploy drift", async () => {
+  const canonicalInstructions = [
+    "vtddRetrieveSelfParity",
+    "vtddRetrieveSetupArtifact",
+    "Action Schema update required",
+    "Instructions update required",
+    "Cloudflare deploy update required",
+    "ClientResponseError",
+    "GatewayBearerAuth"
+  ].join("\n");
+  const canonicalOpenApi = [
+    "servers:",
+    "  - url: https://your-runtime-host.example.workers.dev",
+    "components:",
+    "  securitySchemes:",
+    "    GatewayBearerAuth:",
+    "      type: http",
+    "      scheme: bearer",
+    "paths:",
+    "  /v2/retrieve/self-parity:",
+    "    get:",
+    "      operationId: vtddRetrieveSelfParity",
+    "      parameters:",
+    "        - name: responseMode",
+    "          schema:",
+    "            enum:",
+    "              - action_visible",
+    "  /v2/retrieve/setup-artifact:",
+    "    get:",
+    "      operationId: vtddRetrieveSetupArtifact",
+    "  /v2/action/execute:",
+    "    post:",
+    "      operationId: vtddExecute",
+    "      enum:",
+    "        - build",
+    "  /v2/action/not-deployed-yet:",
+    "    post:",
+    "      operationId: vtddBrandNewDiagnosticsAction"
+  ].join("\n");
+
+  const result = await evaluateCustomGptSetupDiagnostics({
+    repository: "sample-org/vtdd-v2-p",
+    ref: "main",
+    runtimeOrigin: "https://sample-user-vtdd.example.workers.dev",
+    observedFailure: {
+      actionName: "vtddRetrieveRepositoryNicknames",
+      httpStatus: 401,
+      error: "ClientResponseError",
+      reason: "unauthorized"
+    },
+    env: {
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_setup_read",
+      GITHUB_API_FETCH: async (url) => {
+        const parsed = new URL(url);
+        const isInstructions = parsed.pathname.endsWith("/docs/setup/custom-gpt-instructions.md");
+        const isKnownGood = /^[a-f0-9]{40}$/i.test(parsed.searchParams.get("ref") || "");
+        if (parsed.pathname.endsWith("/docs/setup/known-good.json")) {
+          return new Response(
+            JSON.stringify({
+              sha: "known-good-manifest-sha",
+              encoding: "base64",
+              content: encodeContent(JSON.stringify({ commitSha: "a".repeat(40) }))
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        return new Response(
+          JSON.stringify({
+            sha: `${isKnownGood ? "known-good" : "latest"}-${isInstructions ? "instructions" : "openapi"}-sha`,
+            encoding: "base64",
+            content: encodeContent(isInstructions ? canonicalInstructions : canonicalOpenApi)
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        );
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.diagnostics.actionSchema.status, "custom_gpt_action_schema_update_required");
+  assert.equal(
+    result.diagnostics.actionSchema.missing.includes("operationId vtddRetrieveSetupDiagnostics"),
+    true
+  );
+  assert.equal(result.diagnostics.cloudflareDeploy.status, "cloudflare_deploy_update_required");
+  assert.equal(
+    result.diagnostics.actionAuthentication.status,
+    "action_auth_bearer_missing_or_unverified"
+  );
+  assert.equal(
+    result.diagnostics.diagnoses.some(
+      (diagnosis) => diagnosis.code === "custom_gpt_action_transport_unverified"
+    ),
+    true
+  );
+  assert.equal(JSON.stringify(result.diagnostics).includes("ghs_setup_read"), false);
 });
 
 test("retrieveCustomGptSetupArtifact rejects unsupported artifacts", async () => {

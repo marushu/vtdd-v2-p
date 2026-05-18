@@ -182,6 +182,7 @@ test("worker returns Butler-facing Cloudflare page directory", async () => {
   assert.equal(body.pages.some((page) => page.path === "/help"), true);
   assert.equal(body.pages.some((page) => page.path === "/setup/latest"), true);
   assert.equal(body.pages.some((page) => page.path === "/setup/known-good"), true);
+  assert.equal(body.pages.some((page) => page.path === "/setup/diagnostics"), true);
   assert.equal(body.pages.some((page) => page.id === "deploy_operator"), true);
   assert.equal(JSON.stringify(body).includes("vtdd.hibou-web.com"), false);
   assert.equal(JSON.stringify(body).includes("Bearer test-token"), false);
@@ -735,6 +736,88 @@ test("worker setup latest page renders copy-ready schema and short-min bundle fo
   assert.equal(html.includes("Custom GPT editor の現在値は runtime から読めない"), true);
   assert.equal(html.includes("unverified_editor_state"), true);
   assert.equal(html.includes("No secret values, tokens, or approval grants are displayed."), true);
+  assert.equal(html.includes("ghs_setup_read"), false);
+});
+
+test("worker setup diagnostics page surfaces Action Schema and auth root-cause checks without Action auth", async () => {
+  const canonicalOpenApi = [
+    "openapi: 3.1.1",
+    "servers:",
+    "  - url: https://your-runtime-host.example.workers.dev",
+    "components:",
+    "  securitySchemes:",
+    "    GatewayBearerAuth:",
+    "      type: http",
+    "      scheme: bearer",
+    "paths:",
+    "  /v2/retrieve/setup-artifact:",
+    "    get:",
+    "      operationId: vtddRetrieveSetupArtifact",
+    "      parameters:",
+    "        - name: responseMode",
+    "          schema:",
+    "            enum:",
+    "              - action_visible",
+    "  /v2/retrieve/self-parity:",
+    "    get:",
+    "      operationId: vtddRetrieveSelfParity",
+    "  /v2/retrieve/setup-diagnostics:",
+    "    get:",
+    "      operationId: vtddRetrieveSetupDiagnostics",
+    "  /v2/action/execute:",
+    "    post:",
+    "      operationId: vtddExecute",
+    "      enum:",
+    "        - build"
+  ].join("\n");
+  const canonicalInstructions = [
+    "vtddRetrieveSelfParity",
+    "vtddRetrieveSetupArtifact",
+    "vtddRetrieveSetupDiagnostics",
+    "Action Schema update required",
+    "Instructions update required",
+    "Cloudflare deploy update required",
+    "ClientResponseError",
+    "GatewayBearerAuth"
+  ].join("\n");
+
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/setup/diagnostics?repository=marushu/vtdd-v2-p&error=ClientResponseError&httpStatus=401&reason=unauthorized"
+    ),
+    {
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_setup_read",
+      GITHUB_API_FETCH: async (url) => {
+        const parsed = new URL(url);
+        if (parsed.pathname.endsWith("/docs/setup/known-good.json")) {
+          return new Response(JSON.stringify({ message: "Not Found" }), {
+            status: 404,
+            headers: { "content-type": "application/json" }
+          });
+        }
+        const isInstructions = parsed.pathname.endsWith("/docs/setup/custom-gpt-instructions.md");
+        return new Response(
+          JSON.stringify({
+            sha: isInstructions ? "instructions-sha" : "openapi-sha",
+            encoding: "base64",
+            content: Buffer.from(isInstructions ? canonicalInstructions : canonicalOpenApi, "utf8").toString(
+              "base64"
+            )
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        );
+      }
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.equal(html.includes("VTDD setup diagnostics"), true);
+  assert.equal(html.includes("action_auth_bearer_missing_or_unverified"), true);
+  assert.equal(html.includes("custom_gpt_action_transport_unverified"), true);
+  assert.equal(html.includes("editor_state_unreadable"), true);
+  assert.equal(html.includes("Action Schema checks"), true);
+  assert.equal(html.includes("hasSetupDiagnostics"), true);
   assert.equal(html.includes("ghs_setup_read"), false);
 });
 

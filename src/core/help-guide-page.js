@@ -193,6 +193,15 @@ export function buildVtddCloudflarePageDirectory(input = {}) {
       authority: "read_only_recovery"
     },
     {
+      id: "setup_diagnostics",
+      label: "Setup diagnostics",
+      path: "/setup/diagnostics",
+      url: buildRuntimeUrl(runtimeOrigin, "/setup/diagnostics"),
+      description: "Action Schema / Instructions / Action auth / Cloudflare deploy の原因切り分けを読む browser-direct 診断ページです。",
+      audience: ["owner", "operator"],
+      authority: "read_only_recovery"
+    },
+    {
       id: "passkey_operator",
       label: "Passkey operator",
       path: "/v2/approval/passkey/operator",
