@@ -17,6 +17,7 @@ import {
   executeDeployProductionPlane,
   executeGitHubActionsSecretSync,
   evaluateButlerSelfParity,
+  evaluateCustomGptSetupDiagnostics,
   evaluateExecutionContinuity,
   evaluateMemorySafety,
   executeGitHubHighRiskPlane,
@@ -34,6 +35,7 @@ import {
   retrieveConstitution,
   retrieveCustomGptSetupArtifact,
   renderPasskeyOperatorPage,
+  renderCustomGptSetupDiagnosticsPage,
   renderCustomGptRecoveryPage,
   buildVtddCloudflarePageDirectory,
   renderVtddHelpGuidePage,
@@ -107,6 +109,10 @@ export default {
         url.pathname === "/setup/known-good")
     ) {
       return handleCustomGptRecoveryPageRequest(url, env);
+    }
+
+    if (request.method === "GET" && url.pathname === "/setup/diagnostics") {
+      return handleCustomGptSetupDiagnosticsPageRequest(url, env);
     }
 
     if (request.method === "GET" && (url.pathname === "/help" || url.pathname === "/guide")) {
@@ -670,6 +676,18 @@ export default {
         });
       }
       return handleRetrieveButlerSelfParityRequest(url, env);
+    }
+
+    if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/setup-diagnostics")) {
+      const auth = authorizeGatewayRequest({ request, env, apiSuffix: "/retrieve/setup-diagnostics" });
+      if (!auth.ok) {
+        return retrieveErrorJson(url, auth.status, {
+          ok: false,
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+      return handleRetrieveCustomGptSetupDiagnosticsRequest(url, env);
     }
 
     if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/repository-nicknames")) {
@@ -1798,6 +1816,60 @@ async function handleRetrieveButlerSelfParityRequest(url, env) {
     ok: true,
     selfParity: parity.selfParity
   });
+}
+
+async function handleRetrieveCustomGptSetupDiagnosticsRequest(url, env) {
+  const result = await evaluateCustomGptSetupDiagnostics({
+    repository: normalizeText(url.searchParams.get("repository")),
+    ref: normalizeText(url.searchParams.get("ref")),
+    issueNumber: normalizeIssue(url.searchParams.get("issueNumber")),
+    runtimeOrigin: url.origin,
+    observedFailure: readObservedSetupFailureFromUrl(url),
+    env
+  });
+
+  if (!result.ok) {
+    return retrieveErrorJson(url, result.status ?? 503, {
+      ok: false,
+      error: result.error ?? "custom_gpt_setup_diagnostics_unavailable",
+      reason: result.reason
+    });
+  }
+
+  return json(200, {
+    ok: true,
+    diagnostics: result.diagnostics
+  });
+}
+
+async function handleCustomGptSetupDiagnosticsPageRequest(url, env) {
+  const repository = normalizeText(url.searchParams.get("repository")) || "marushu/vtdd-v2-p";
+  const ref = normalizeText(url.searchParams.get("ref")) || "main";
+  const issueNumber = normalizeIssue(url.searchParams.get("issueNumber"));
+  const result = await evaluateCustomGptSetupDiagnostics({
+    repository,
+    ref,
+    issueNumber,
+    runtimeOrigin: url.origin,
+    observedFailure: readObservedSetupFailureFromUrl(url),
+    env
+  });
+
+  return html(
+    200,
+    renderCustomGptSetupDiagnosticsPage({
+      repository,
+      ref,
+      issueNumber,
+      diagnostics: result.ok ? result.diagnostics : null,
+      error: result.ok
+        ? null
+        : {
+            error: result.error,
+            reason: result.reason
+          }
+    })
+  );
 }
 
 async function handleRetrieveRepositoryNicknamesRequest(env) {
@@ -4787,6 +4859,17 @@ function normalizeIssue(value) {
     return null;
   }
   return numeric;
+}
+
+function readObservedSetupFailureFromUrl(url) {
+  return {
+    actionName: normalizeText(url.searchParams.get("actionName")),
+    httpStatus: normalizeIssue(url.searchParams.get("httpStatus")),
+    error: normalizeText(url.searchParams.get("error")),
+    reason: normalizeText(url.searchParams.get("reason")),
+    visibleBodyFields: normalizeText(url.searchParams.get("visibleBodyFields")),
+    missingBodyFields: normalizeText(url.searchParams.get("missingBodyFields"))
+  };
 }
 
 function normalizeObject(value) {
