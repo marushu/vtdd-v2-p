@@ -131,6 +131,10 @@ test("custom gpt instructions preserve current butler and approval boundaries", 
   assert.equal(doc.includes("Nickname read fast path"), true);
   assert.equal(doc.includes("do not preface with `確認します`"), true);
   assert.equal(doc.includes("Call vtddRetrieveRepositoryNicknames immediately as the first action"), true);
+  assert.equal(doc.includes("does not require GO, passkey, or a confirmation question"), true);
+  assert.equal(doc.includes("Do not ask `実行しますか？`; call the Action immediately"), true);
+  assert.equal(doc.includes("Do not run nickname retrieval for every VTDD request"), true);
+  assert.equal(doc.includes("explicit nickname list/read intents"), true);
   assert.equal(doc.includes("On nickname read success, do not call vtddStartupPreflight"), true);
   assert.equal(doc.includes("Reply compactly with only the nickname -> owner/repo mapping"), true);
   assert.equal(doc.includes("On nickname read failure, then and only then use the fallback ladder"), true);
@@ -222,7 +226,8 @@ test("short custom gpt instructions stay under editor limits while preserving cr
   assert.equal(doc.includes("ask only `GO`"), true);
   assert.equal(doc.includes("Never ask targetConfirmed/approvalScopeMatched/approvalPhrase/raw JSON"), true);
   assert.equal(doc.includes("Nickname memory is user-owned alias data"), true);
-  assert.equal(doc.includes("List=>no preface; read first; compact map"), true);
+  assert.equal(doc.includes("List=>no preface/no GO/no 実行しますか; read first; compact map"), true);
+  assert.equal(doc.includes("Do not run for every request"), true);
   assert.equal(doc.includes("non-owner/repo token like `ぶい の...`"), true);
   assert.equal(doc.includes("call nickname read/gateway first"), true);
   assert.equal(doc.includes("Nickname read failure is not proof of unknown repo"), true);
@@ -312,7 +317,7 @@ test("short-min custom gpt instructions stay pasteable while preserving critical
     "formal CHANGES_REQUESTED blocks",
     "reviewerSignalTruth warnings",
     "vtddRetrieveSelfParity",
-    "list=>no preface; direct read; compact map",
+    "list=>no preface/no GO/no 実行しますか; direct read; compact map; not every request",
     "Handoff前dry-run",
     "RAG checkpoint",
     "vtddRetrieveOperationalMemory",
