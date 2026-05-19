@@ -44,5 +44,6 @@ test("consent and approval docs contain canonical categories and levels", () => 
 
   assert.equal(doc.includes("`destructive` is the highest-risk consent category."), true);
   assert.equal(doc.includes("Approval must be bound to the target scope."), true);
-  assert.equal(doc.includes("`approvalPhrase` is required"), true);
+  assert.equal(doc.includes("`approvalPhrase` is required for `go` approval."), true);
+  assert.equal(doc.includes("signed `GO`"), true);
 });

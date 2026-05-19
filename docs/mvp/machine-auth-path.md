@@ -56,4 +56,4 @@ Cloudflare Access service token mode is a valid fallback when bearer auth cannot
 - Least privilege
   - only grant scopes required for API invocation path
   - keep `/setup/*` and browser-auth path separate from machine-auth API path
-  - keep high-risk execution controls (`GO + passkey`) unchanged
+  - keep high-risk execution controls (scoped passkey approval) unchanged

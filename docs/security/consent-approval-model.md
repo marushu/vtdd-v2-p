@@ -31,10 +31,13 @@ action on this specific scope proceed now?"
 
 - Consent and approval are separate checks.
 - `destructive` is the highest-risk consent category.
-- `approvalPhrase` is required whenever approval level is not `none`.
+- `approvalPhrase` is required for `go` approval.
 - Approval must be bound to the target scope.
-- High-risk operations require `GO + passkey`.
-- Merge and bounded post-merge completion tasks require explicit `GO + passkey`.
+- High-risk operations require a real, scoped passkey approval grant.
+- A real passkey approval grant includes scope confirmation and user
+  authentication, so it acts as signed `GO` for that one high-risk execution.
+- Merge and bounded post-merge completion tasks require explicit scoped passkey
+  approval.
 
 ## Canonical Action Mapping
 
@@ -76,7 +79,7 @@ level as `merge`:
 - deletion of the merged topic branch tied to that PR
 
 These tasks are not authorized by category consent alone and must not be
-inferred without explicit scoped `GO + passkey`.
+inferred without explicit scoped passkey approval.
 
 ## GitHub Operation Matrix
 
@@ -95,10 +98,11 @@ Bounded repository workflow operations may proceed with explicit scoped `GO`:
 - PR comment and scoped review iteration
 - deletion of the merged topic branch tied to that scoped PR
 
-### `GO + passkey`
+### `passkey approval`
 
 High-risk or administration-bearing GitHub operations require explicit scoped
-`GO + passkey`:
+passkey approval. The passkey page must show the action, repository, relevant
+Issue / PR, impact scope, and expiry before the user approves:
 
 - merge, when scoped criteria, tests, and mapped E2E evidence are present
 - post-merge issue close for the scoped work
@@ -122,14 +126,15 @@ alone, even when the GitHub App technically has the capability:
 - milestone completion judgment
 - issue closure without bounded scope linkage to the merged work
 - repository administration or permission mutation without explicit high-risk approval
-- destructive operation without explicit scoped `GO + passkey`
+- destructive operation without explicit scoped passkey approval
 - broad cleanup outside the currently scoped branch / PR / issue window
 - policy reinterpretation from "the app can do it" to "the app may do it now"
 
 ## Destructive Handling
 
 - Destructive operations must pass the `destructive` consent category.
-- Destructive operations require `go_passkey`.
+- Destructive operations require `go_passkey`, satisfied by a real scoped
+  passkey approval grant.
 - Scope binding is mandatory.
 - Destructive execution must not proceed from category consent alone.
 

@@ -91,7 +91,7 @@ test("github app operation registry defines issue close authority scope and runt
   ]);
 });
 
-test("merge now requires GO + passkey approval level in core policy", () => {
+test("merge requires scoped passkey approval level in core policy", () => {
   const denied = evaluateExecutionPolicy({
     actionType: ActionType.MERGE,
     mode: TaskMode.EXECUTION,
@@ -132,12 +132,11 @@ test("merge now requires GO + passkey approval level in core policy", () => {
     consent: {
       grantedCategories: [ConsentCategory.EXECUTE]
     },
-    approvalPhrase: "GO merge request",
     approvalGrant: mergeGrant,
     approvalScope: mergeGrant.scope,
     approvalScopeMatched: true,
     issueTraceable: true,
-    go: true,
+    go: false,
     passkey: false
   });
 

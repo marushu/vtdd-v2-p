@@ -24,7 +24,7 @@ Production deploy must remain a VTDD-governed high-risk action.
 
 Required invariants:
 
-- deploy requires `GO + passkey`
+- deploy requires scoped passkey approval
 - deploy authority must be short-lived or one-shot
 - GitHub Actions must not require permanent production deploy authority
 - a mistaken push to `main` must not immediately imply production deploy
@@ -60,7 +60,7 @@ Important:
 
 Flow:
 
-1. Operator gives `GO + passkey`
+1. Operator completes scoped passkey approval
 2. VTDD mints or injects one-shot deploy credential
 3. VTDD triggers a deploy-only workflow
 4. credential expires immediately after the run
@@ -80,7 +80,7 @@ Cons:
 
 Flow:
 
-1. Operator gives `GO + passkey`
+1. Operator completes scoped passkey approval
 2. VTDD obtains short-lived provider credential
 3. VTDD deploys directly to Cloudflare Workers
 

@@ -84,7 +84,7 @@ But none of these define the essence of VTDD V2.
 - alias/context-first repository resolution
 - no default repository
 - unresolved target blocks execution
-- high-risk actions require `GO + passkey`
+- high-risk actions require scoped passkey approval
 - reviewer is a blocking risk signal, not an executor
 - mobile-first operation should not require pasting secrets into chat answers
 

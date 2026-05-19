@@ -27197,6 +27197,31 @@ function evaluateApproval({
       reason: "approval must be bound to the target scope"
     };
   }
+  if (required2 === ApprovalLevel.GO_PASSKEY) {
+    const grantResult = evaluateApprovalGrant({
+      approvalGrant,
+      scope: approvalScope
+    });
+    if (grantResult.ok) {
+      return { ok: true, required: required2 };
+    }
+    const phrase2 = normalize(approvalPhrase);
+    if (!phrase2) {
+      return {
+        ok: false,
+        required: required2,
+        reason: grantResult.reason || "real scoped passkey approval grant is required"
+      };
+    }
+    if (go && passkey) {
+      return { ok: true, required: required2 };
+    }
+    return {
+      ok: false,
+      required: required2,
+      reason: passkey ? "high-risk action requires real scoped passkey approval or legacy explicit GO phrase plus passkey flag" : grantResult.reason || "real scoped passkey approval grant is required"
+    };
+  }
   const phrase = normalize(approvalPhrase);
   if (!phrase) {
     return {
@@ -27212,18 +27237,6 @@ function evaluateApproval({
       reason: "explicit GO is required before execution"
     };
   }
-  const grantResult = evaluateApprovalGrant({
-    approvalGrant,
-    scope: approvalScope
-  });
-  if (go && (passkey || grantResult.ok)) {
-    return { ok: true, required: required2 };
-  }
-  return {
-    ok: false,
-    required: required2,
-    reason: passkey ? "high-risk action requires GO + passkey" : grantResult.reason || "high-risk action requires GO + passkey"
-  };
 }
 function normalize(value) {
   return String(value ?? "").trim().toLowerCase();
@@ -27911,7 +27924,6 @@ function renderPasskeyOperatorPage(input = {}) {
               repository: repositoryInput,
               issueNumber: Number(document.getElementById("issue-input").value || 0) || null,
               policyInput: {
-                approvalPhrase: "GO",
                 approvalGrantId: latestApprovalGrantId
               }
             })
@@ -27946,7 +27958,6 @@ function renderPasskeyOperatorPage(input = {}) {
                 issueNumber: Number(document.getElementById("issue-input").value || 0) || null
               },
               policyInput: {
-                approvalPhrase: "GO",
                 approvalGrantId: latestApprovalGrantId,
                 targetConfirmed: true
               }
@@ -27981,7 +27992,6 @@ function renderPasskeyOperatorPage(input = {}) {
                 issueNumber: Number(document.getElementById("issue-input").value || 0) || null
               },
               policyInput: {
-                approvalPhrase: "GO",
                 approvalGrantId: latestApprovalGrantId,
                 targetConfirmed: true
               }
@@ -28017,7 +28027,6 @@ function renderPasskeyOperatorPage(input = {}) {
                 issueNumber: Number(document.getElementById("issue-input").value || 0) || null
               },
               policyInput: {
-                approvalPhrase: "GO",
                 approvalGrantId: latestApprovalGrantId,
                 targetConfirmed: true
               }
@@ -28372,7 +28381,7 @@ function renderVtddHelpGuidePage(input = {}) {
         <div class="panel"><strong>Repository resolution</strong>alias / nickname / GitHub App repository index \u3067\u5BFE\u8C61\u3092\u89E3\u6C7A\u3057\u307E\u3059\u3002default repository \u306F\u3042\u308A\u307E\u305B\u3093\u3002</div>
         <div class="panel"><strong>GitHub read plane</strong>repository\u3001Issue\u3001PR\u3001review\u3001checks\u3001workflow runs\u3001branch state \u3092 Butler \u304C\u8AAD\u3081\u308B runtime truth \u3068\u3057\u3066\u8FD4\u3057\u307E\u3059\u3002</div>
         <div class="panel"><strong>GitHub write plane</strong>\u30B3\u30E1\u30F3\u30C8\u3001PR\u66F4\u65B0\u3001runner queue \u306A\u3069\u901A\u5E38 write \u3092 approval boundary \u306B\u6CBF\u3063\u3066\u5B9F\u884C\u3057\u307E\u3059\u3002</div>
-        <div class="panel"><strong>High-risk authority plane</strong>merge\u3001Issue close\u3001secret sync\u3001deploy \u306A\u3069\u9AD8\u30EA\u30B9\u30AF\u64CD\u4F5C\u306F GO + passkey \u307E\u305F\u306F\u660E\u793A\u7684\u306A\u7981\u6B62\u5883\u754C\u3092\u901A\u308A\u307E\u3059\u3002</div>
+        <div class="panel"><strong>High-risk authority plane</strong>merge\u3001Issue close\u3001secret sync\u3001deploy \u306A\u3069\u9AD8\u30EA\u30B9\u30AF\u64CD\u4F5C\u306F scoped passkey approval \u307E\u305F\u306F\u660E\u793A\u7684\u306A\u7981\u6B62\u5883\u754C\u3092\u901A\u308A\u307E\u3059\u3002</div>
         <div class="panel"><strong>Runner / reviewer loop</strong>Butler -> Codex runner -> PR -> reviewer -> Butler summary \u306E GitHub-visible loop \u3092\u6271\u3044\u307E\u3059\u3002</div>
         <div class="panel"><strong>Memory / retrieval</strong>constitution\u3001decision log\u3001proposal log\u3001operational memory \u3092\u8AAD\u3093\u3067\u5224\u65AD\u306E\u524D\u63D0\u3092\u5FA9\u5143\u3057\u307E\u3059\u3002</div>
         <div class="panel"><strong>MCP read surface</strong>Mac Codex / VPS Codex CLI \u306F <code>${escapeHtml2(mcpPath)}</code> \u3092\u901A\u3058\u3066 Butler \u3068\u540C\u3058 runtime truth / review truth / memory recall \u3092\u8AAD\u307F\u307E\u3059\u3002</div>
@@ -28400,7 +28409,7 @@ function renderVtddHelpGuidePage(input = {}) {
         <div class="panel"><strong>PR\u3092\u76F4\u3057\u305F\u3044</strong>Butler \u304C reviewer comment \u3068 PR state \u3092\u8AAD\u307F\u3001revise_pr \u3068\u3057\u3066 runner \u306B\u6E21\u305B\u308B\u304B\u78BA\u8A8D\u3057\u307E\u3059\u3002</div>
         <div class="panel"><strong>merge\u3057\u305F\u3044</strong>Butler \u304C checks\u3001reviewer signal\u3001mergeability\u3001Issue evidence \u3092\u78BA\u8A8D\u3057\u3001\u5FC5\u8981\u306A approval boundary \u3092\u63D0\u793A\u3057\u307E\u3059\u3002</div>
         <div class="panel"><strong>Action Schema \u304C\u58CA\u308C\u305F</strong>\u3053\u306E runtime \u306E setup/recovery page \u3092\u76F4\u63A5\u958B\u304D\u3001known-good \u307E\u305F\u306F latest bundle \u3092\u30B3\u30D4\u30FC\u3057\u307E\u3059\u3002</div>
-        <div class="panel"><strong>deploy\u3084secret\u66F4\u65B0\u3092\u3057\u305F\u3044</strong>GO + passkey \u3068\u5BFE\u8C61 scope \u304C\u5FC5\u8981\u3067\u3059\u3002Worker \u306F secret \u5024\u3092\u3053\u306E\u30DA\u30FC\u30B8\u306B\u8868\u793A\u3057\u307E\u305B\u3093\u3002</div>
+        <div class="panel"><strong>deploy\u3084secret\u66F4\u65B0\u3092\u3057\u305F\u3044</strong>\u5BFE\u8C61 scope \u304C\u8868\u793A\u3055\u308C\u305F passkey approval \u304C\u5FC5\u8981\u3067\u3059\u3002Worker \u306F secret \u5024\u3092\u3053\u306E\u30DA\u30FC\u30B8\u306B\u8868\u793A\u3057\u307E\u305B\u3093\u3002</div>
       </div>
     </section>
 
@@ -28408,7 +28417,7 @@ function renderVtddHelpGuidePage(input = {}) {
       <h2>\u6A29\u9650\u5883\u754C</h2>
       <div class="route"><strong>Allowed without GO</strong>\u8AAD\u307F\u53D6\u308A\u3001\u72B6\u614B\u78BA\u8A8D\u3001\u8AAC\u660E\u3001proposal\u3001\u4F4E\u30EA\u30B9\u30AF\u306A\u6848\u5185\u3002\u5B9F\u884C\u80FD\u529B\u3068\u306F\u533A\u5225\u3057\u307E\u3059\u3002</div>
       <div class="route"><strong>GO required</strong>bounded implementation dispatch\u3001\u901A\u5E38 write\u3001PR review/comment \u306A\u3069\u3001Issue scope \u3068 runtime truth \u306B\u63A5\u7D9A\u3055\u308C\u305F\u64CD\u4F5C\u3002</div>
-      <div class="route"><strong>GO + passkey required</strong>deploy\u3001credential mutation\u3001permission mutation\u3001high-risk GitHub operation\u3001destructive/high-blast-radius operation\u3002</div>
+      <div class="route"><strong>passkey approval required</strong>deploy\u3001credential mutation\u3001permission mutation\u3001high-risk GitHub operation\u3001destructive/high-blast-radius operation\u3002</div>
       <div class="route"><strong>Forbidden / stop</strong>\u5BFE\u8C61 repo \u672A\u89E3\u6C7A\u3001Issue traceability \u4E0D\u8DB3\u3001owner-specific runtime \u4F9D\u5B58\u3001secret \u8868\u793A\u3001scope conflict\u3001reviewer objection \u306E\u697D\u89B3\u7684\u306A\u7121\u8996\u3002</div>
     </section>
 
@@ -28509,7 +28518,7 @@ function buildVtddCloudflarePageDirectory(input = {}) {
       label: "Passkey operator",
       path: "/v2/approval/passkey/operator",
       url: buildRuntimeUrl(runtimeOrigin, "/v2/approval/passkey/operator"),
-      description: "GO + passkey \u304C\u5FC5\u8981\u306A deploy\u3001merge\u3001secret sync \u306A\u3069\u306E operator helper \u3067\u3059\u3002",
+      description: "scope \u660E\u793A\u6E08\u307F passkey approval \u304C\u5FC5\u8981\u306A deploy\u3001merge\u3001secret sync \u306A\u3069\u306E operator helper \u3067\u3059\u3002",
       audience: ["owner", "operator"],
       authority: "go_plus_passkey_required_for_execution"
     },
@@ -36443,7 +36452,6 @@ var DEFAULT_DEPLOY_WORKFLOW_REF = "main";
 async function executeDeployProductionPlane(input = {}) {
   const repository = normalizeText23(input.repository);
   const runtimeUrl = normalizeText23(input.runtimeUrl);
-  const approvalPhrase = normalizeText23(input.approvalPhrase);
   const approvalGrant = input.approvalGrant ?? null;
   const approvalGrantId = normalizeText23(input.approvalGrantId) || normalizeText23(approvalGrant?.approvalId);
   const env = input.env ?? {};
@@ -36452,7 +36460,6 @@ async function executeDeployProductionPlane(input = {}) {
   const validation = validateDeployProductionRequest({
     repository,
     runtimeUrl,
-    approvalPhrase,
     approvalGrant,
     approvalGrantId
   });
@@ -36492,7 +36499,6 @@ async function executeDeployProductionPlane(input = {}) {
   const dispatchBody = {
     ref: workflowRef,
     inputs: {
-      approval_phrase: "GO",
       runtime_url: runtimeUrl,
       approval_grant_id: approvalGrantId
     }
@@ -36630,7 +36636,6 @@ async function verifyDeployWorkflowRun({
 function validateDeployProductionRequest({
   repository,
   runtimeUrl,
-  approvalPhrase,
   approvalGrant,
   approvalGrantId
 }) {
@@ -36640,9 +36645,6 @@ function validateDeployProductionRequest({
   }
   if (!runtimeUrl) {
     issues.push("runtimeUrl is required");
-  }
-  if (approvalPhrase !== "GO") {
-    issues.push("approvalPhrase must be GO");
   }
   if (!approvalGrantId) {
     issues.push("approvalGrantId is required");
@@ -39492,7 +39494,7 @@ var GitHubOwnerOperationInventory = Object.freeze([
     status: GitHubOwnerOperationStatus.UNSUPPORTED,
     requiredGitHubAppPermission: "issues:write",
     requiredButlerActionSurface: "github_write.issue_update",
-    requiredPasskeyOperatorBoundary: "exact payload + human GO for bounded edits; GO + passkey when closing after merge",
+    requiredPasskeyOperatorBoundary: "exact payload + human GO for bounded edits; scoped passkey approval when closing after merge",
     runtimeTruthVerificationMethod: "PATCH /repos/{owner}/{repo}/issues/{issue_number} then read back changed fields",
     remediationIssue: ISSUE_244
   },
@@ -39502,7 +39504,7 @@ var GitHubOwnerOperationInventory = Object.freeze([
     status: GitHubOwnerOperationStatus.GATED,
     requiredGitHubAppPermission: "issues:write and pull_requests:read",
     requiredButlerActionSurface: "github_high_risk.issue_close",
-    requiredPasskeyOperatorBoundary: "explicit GO + real passkey/operator approval",
+    requiredPasskeyOperatorBoundary: "scoped passkey approval",
     runtimeTruthVerificationMethod: "verify PR merged_at, PATCH issue state=closed, then read issue state",
     remediationIssue: null
   },
@@ -39522,7 +39524,7 @@ var GitHubOwnerOperationInventory = Object.freeze([
     status: GitHubOwnerOperationStatus.UNSUPPORTED,
     requiredGitHubAppPermission: "issues:write",
     requiredButlerActionSurface: "github_write.issue_comment_delete",
-    requiredPasskeyOperatorBoundary: "GO + passkey/operator approval when deletion is destructive or evidence-bearing",
+    requiredPasskeyOperatorBoundary: "scoped passkey approval when deletion is destructive or evidence-bearing",
     runtimeTruthVerificationMethod: "DELETE /repos/{owner}/{repo}/issues/comments/{comment_id} then verify comment is absent/tombstoned",
     remediationIssue: ISSUE_244
   },
@@ -39552,7 +39554,7 @@ var GitHubOwnerOperationInventory = Object.freeze([
     status: GitHubOwnerOperationStatus.UNSUPPORTED,
     requiredGitHubAppPermission: "pull_requests:write and issues:write",
     requiredButlerActionSurface: "github_write.pull_state_update",
-    requiredPasskeyOperatorBoundary: "exact payload + human GO; GO + passkey for destructive state transitions if policy marks high-risk",
+    requiredPasskeyOperatorBoundary: "exact payload + human GO; scoped passkey approval for destructive state transitions if policy marks high-risk",
     runtimeTruthVerificationMethod: "PATCH /pulls/{pull_number} or related PR endpoints, then read PR state",
     remediationIssue: ISSUE_244
   },
@@ -39562,7 +39564,7 @@ var GitHubOwnerOperationInventory = Object.freeze([
     status: GitHubOwnerOperationStatus.GATED,
     requiredGitHubAppPermission: "pull_requests:write",
     requiredButlerActionSurface: "github_high_risk.pull_ready_for_review",
-    requiredPasskeyOperatorBoundary: "explicit GO + real passkey/operator approval",
+    requiredPasskeyOperatorBoundary: "scoped passkey approval",
     runtimeTruthVerificationMethod: "read draft=true, GraphQL markPullRequestReadyForReview, then verify isDraft=false",
     remediationIssue: null
   },
@@ -39572,7 +39574,7 @@ var GitHubOwnerOperationInventory = Object.freeze([
     status: GitHubOwnerOperationStatus.GATED,
     requiredGitHubAppPermission: "pull_requests:write and contents:write",
     requiredButlerActionSurface: "github_high_risk.pull_merge",
-    requiredPasskeyOperatorBoundary: "explicit GO + real passkey/operator approval",
+    requiredPasskeyOperatorBoundary: "scoped passkey approval",
     runtimeTruthVerificationMethod: "PUT /pulls/{pull_number}/merge then read merged_at and merge_commit_sha",
     remediationIssue: null
   },
@@ -39592,7 +39594,7 @@ var GitHubOwnerOperationInventory = Object.freeze([
     status: GitHubOwnerOperationStatus.UNSUPPORTED,
     requiredGitHubAppPermission: "contents:write",
     requiredButlerActionSurface: "github_write.branch_ref_update_delete",
-    requiredPasskeyOperatorBoundary: "exact payload + human GO for scoped ref update; deletion only for merged scoped branch or GO + passkey if destructive",
+    requiredPasskeyOperatorBoundary: "exact payload + human GO for scoped ref update; deletion only for merged scoped branch or scoped passkey approval if destructive",
     runtimeTruthVerificationMethod: "PATCH/DELETE git refs, then read branch/ref absence or updated sha",
     remediationIssue: ISSUE_244
   },
@@ -39602,7 +39604,7 @@ var GitHubOwnerOperationInventory = Object.freeze([
     status: GitHubOwnerOperationStatus.UNSUPPORTED,
     requiredGitHubAppPermission: "actions:write and actions:read",
     requiredButlerActionSurface: "github_actions.workflow_governed_control",
-    requiredPasskeyOperatorBoundary: "exact payload + human GO for bounded dispatch/rerun; GO + passkey for cancel/destructive cleanup",
+    requiredPasskeyOperatorBoundary: "exact payload + human GO for bounded dispatch/rerun; scoped passkey approval for cancel/destructive cleanup",
     runtimeTruthVerificationMethod: "workflow dispatch/cancel/rerun API then read run status, conclusion, URL, and artifact state",
     remediationIssue: ISSUE_244
   },
@@ -39632,7 +39634,7 @@ var GitHubOwnerOperationInventory = Object.freeze([
     status: GitHubOwnerOperationStatus.GATED,
     requiredGitHubAppPermission: "secrets:write, variables:write, actions:write, environments:write as applicable",
     requiredButlerActionSurface: "github_actions_secret_sync and github_admin.variable_governed_change",
-    requiredPasskeyOperatorBoundary: "explicit GO + real passkey/operator approval; never expose raw secret material",
+    requiredPasskeyOperatorBoundary: "scoped passkey approval; never expose raw secret material",
     runtimeTruthVerificationMethod: "encrypted secret/variable write result plus metadata readback without raw value",
     remediationIssue: null
   },
@@ -39642,7 +39644,7 @@ var GitHubOwnerOperationInventory = Object.freeze([
     status: GitHubOwnerOperationStatus.UNSUPPORTED,
     requiredGitHubAppPermission: "contents:write and packages:write where applicable",
     requiredButlerActionSurface: "github_release.governed_release_control",
-    requiredPasskeyOperatorBoundary: "exact payload + human GO for draft metadata; GO + passkey for publish/delete",
+    requiredPasskeyOperatorBoundary: "exact payload + human GO for draft metadata; scoped passkey approval for publish/delete",
     runtimeTruthVerificationMethod: "release/tag/package API mutation then read release/tag/package state and URL",
     remediationIssue: ISSUE_244
   },
@@ -39685,7 +39687,6 @@ async function executeGitHubHighRiskPlane(input = {}) {
   const mergeMethod = normalizeMergeMethod(input.mergeMethod);
   const commitTitle = normalizeText29(input.commitTitle);
   const commitMessage = normalizeBody3(input.commitMessage);
-  const approvalPhrase = normalizeText29(input.approvalPhrase);
   const targetConfirmed = input.targetConfirmed === true;
   const approvalScope = input.approvalScope ?? null;
   const approvalGrant = input.approvalGrant ?? null;
@@ -39698,7 +39699,6 @@ async function executeGitHubHighRiskPlane(input = {}) {
     issueNumber,
     pullNumber,
     mergeMethod,
-    approvalPhrase,
     targetConfirmed,
     approvalGrant,
     approvalScope
@@ -39756,9 +39756,6 @@ function validateGitHubHighRiskRequest(input) {
   }
   if (!input.targetConfirmed) {
     issues.push("targetConfirmed must be true");
-  }
-  if (normalizeText29(input.approvalPhrase).toUpperCase() !== "GO") {
-    issues.push("approvalPhrase must be GO");
   }
   if (input.operation === GitHubHighRiskOperation.PULL_MERGE && input.mergeMethod && !["merge", "squash", "rebase"].includes(input.mergeMethod)) {
     issues.push("mergeMethod must be merge, squash, or rebase");
@@ -59898,7 +59895,7 @@ function renderV2DashboardPage({ runtimeOrigin }) {
     },
     {
       title: "Deploy passkey operator",
-      body: "production deploy \u306F GO + passkey \u306E\u5F8C\u308D\u3002approval grant \u3084 secret \u306F dashboard \u306B\u4FDD\u5B58\u3057\u306A\u3044\u3002",
+      body: "production deploy \u306F scope \u660E\u793A\u6E08\u307F passkey approval \u306E\u5F8C\u308D\u3002approval grant \u3084 secret \u306F dashboard \u306B\u4FDD\u5B58\u3057\u306A\u3044\u3002",
       href: `${origin}/v2/approval/passkey/operator?repositoryInput=${encodedRepository}&phase=execution&actionType=deploy_production&highRiskKind=deploy_production`
     }
   ];
@@ -59976,7 +59973,7 @@ function renderV2DashboardPage({ runtimeOrigin }) {
 
     <section class="panel danger">
       <h2>v3 Worker \u306E\u6271\u3044</h2>
-      <p><code>vtdd-v3-orchestrator.polished-tree-da7c.workers.dev</code> \u306F prototype \u3068\u3057\u3066\u6B8B\u3057\u307E\u3059\u3002\u524A\u9664\u306F Cloudflare Worker deletion \u306A\u306E\u3067 destructive operation \u3067\u3059\u3002\u5B9F\u884C\u3059\u308B\u5834\u5408\u306F GO + passkey \u3068\u524A\u9664\u5BFE\u8C61\u540D\u306E\u660E\u793A\u304C\u5FC5\u8981\u3067\u3059\u3002</p>
+      <p><code>vtdd-v3-orchestrator.polished-tree-da7c.workers.dev</code> \u306F prototype \u3068\u3057\u3066\u6B8B\u3057\u307E\u3059\u3002\u524A\u9664\u306F Cloudflare Worker deletion \u306A\u306E\u3067 destructive operation \u3067\u3059\u3002\u5B9F\u884C\u3059\u308B\u5834\u5408\u306F scope \u660E\u793A\u6E08\u307F passkey approval \u3068\u524A\u9664\u5BFE\u8C61\u540D\u306E\u660E\u793A\u304C\u5FC5\u8981\u3067\u3059\u3002</p>
       <ul>
         <li>\u524A\u9664\u524D\u306B v2 dashboard / deploy path \u304C\u672C\u756A\u53CD\u6620\u6E08\u307F\u3067\u3042\u308B\u3053\u3068\u3092\u78BA\u8A8D\u3059\u308B\u3002</li>
         <li>\u5FC5\u8981\u306A\u3089 v3 Worker \u306F disable / rename / delete \u306E\u9806\u306B\u691C\u8A0E\u3059\u308B\u3002</li>

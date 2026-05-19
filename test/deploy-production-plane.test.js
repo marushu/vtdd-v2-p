@@ -2,12 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { executeDeployProductionPlane } from "../src/core/index.js";
 
-test("deploy production plane dispatches governed workflow with GO + passkey inputs", async () => {
+test("deploy production plane dispatches governed workflow with scoped passkey approval inputs", async () => {
   const calls = [];
   const result = await executeDeployProductionPlane({
     repository: "sample-org/vtdd-v2-p",
     runtimeUrl: "https://sample-user-vtdd.example.workers.dev",
-    approvalPhrase: "GO",
     approvalGrantId: "approval-deploy-123",
     approvalGrant: {
       approvalId: "approval-deploy-123",
@@ -51,7 +50,7 @@ test("deploy production plane dispatches governed workflow with GO + passkey inp
   assert.equal(calls[0].url.includes("/actions/workflows/deploy-production.yml/dispatches"), true);
   assert.equal(calls[1].url.includes("/actions/workflows/deploy-production.yml/runs"), true);
   const body = JSON.parse(calls[0].init.body);
-  assert.equal(body.inputs.approval_phrase, "GO");
+  assert.equal("approval_phrase" in body.inputs, false);
   assert.equal(body.inputs.approval_grant_id, "approval-deploy-123");
   assert.equal(body.inputs.runtime_url, "https://sample-user-vtdd.example.workers.dev");
 });
@@ -60,7 +59,6 @@ test("deploy production plane does not fail when accepted dispatch is not immedi
   const result = await executeDeployProductionPlane({
     repository: "sample-org/vtdd-v2-p",
     runtimeUrl: "https://sample-user-vtdd.example.workers.dev",
-    approvalPhrase: "GO",
     approvalGrantId: "approval-deploy-123",
     approvalGrant: {
       approvalId: "approval-deploy-123",
@@ -101,11 +99,10 @@ test("deploy production plane does not fail when accepted dispatch is not immedi
   assert.equal(result.deploy.runConclusion, "unknown");
 });
 
-test("deploy production plane blocks missing GO + passkey inputs", async () => {
+test("deploy production plane blocks missing passkey approval inputs", async () => {
   const result = await executeDeployProductionPlane({
     repository: "sample-org/vtdd-v2-p",
     runtimeUrl: "",
-    approvalPhrase: "NO",
     approvalGrantId: "",
     approvalGrant: null,
     env: {}
@@ -114,7 +111,6 @@ test("deploy production plane blocks missing GO + passkey inputs", async () => {
   assert.equal(result.ok, false);
   assert.equal(result.error, "deploy_request_invalid");
   assert.equal(result.issues.includes("runtimeUrl is required"), true);
-  assert.equal(result.issues.includes("approvalPhrase must be GO"), true);
   assert.equal(result.issues.includes("real approvalGrant is required for deploy_production"), true);
 });
 
@@ -122,7 +118,6 @@ test("deploy production plane returns explicit unavailable category when deploy 
   const result = await executeDeployProductionPlane({
     repository: "sample-org/vtdd-v2-p",
     runtimeUrl: "https://sample-user-vtdd.example.workers.dev",
-    approvalPhrase: "GO",
     approvalGrantId: "approval-deploy-123",
     approvalGrant: {
       approvalId: "approval-deploy-123",

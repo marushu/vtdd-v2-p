@@ -219,7 +219,7 @@ test("validatePrBody rejects closing PRs without complete Butler evidence", () =
     actionSchemaExposure: "operationId exposed.",
     runtimePath: "Connected runtime path.",
     runtimeTruth: "Runtime truth reports success.",
-    authorityBoundary: "GO + passkey where required.",
+    authorityBoundary: "scoped passkey approval where required.",
     butlerE2E: "None.",
     completionStatus: "incomplete",
   });

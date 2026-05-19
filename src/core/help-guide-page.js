@@ -66,7 +66,7 @@ export function renderVtddHelpGuidePage(input = {}) {
         <div class="panel"><strong>Repository resolution</strong>alias / nickname / GitHub App repository index で対象を解決します。default repository はありません。</div>
         <div class="panel"><strong>GitHub read plane</strong>repository、Issue、PR、review、checks、workflow runs、branch state を Butler が読める runtime truth として返します。</div>
         <div class="panel"><strong>GitHub write plane</strong>コメント、PR更新、runner queue など通常 write を approval boundary に沿って実行します。</div>
-        <div class="panel"><strong>High-risk authority plane</strong>merge、Issue close、secret sync、deploy など高リスク操作は GO + passkey または明示的な禁止境界を通ります。</div>
+        <div class="panel"><strong>High-risk authority plane</strong>merge、Issue close、secret sync、deploy など高リスク操作は scoped passkey approval または明示的な禁止境界を通ります。</div>
         <div class="panel"><strong>Runner / reviewer loop</strong>Butler -> Codex runner -> PR -> reviewer -> Butler summary の GitHub-visible loop を扱います。</div>
         <div class="panel"><strong>Memory / retrieval</strong>constitution、decision log、proposal log、operational memory を読んで判断の前提を復元します。</div>
         <div class="panel"><strong>MCP read surface</strong>Mac Codex / VPS Codex CLI は <code>${escapeHtml(mcpPath)}</code> を通じて Butler と同じ runtime truth / review truth / memory recall を読みます。</div>
@@ -94,7 +94,7 @@ export function renderVtddHelpGuidePage(input = {}) {
         <div class="panel"><strong>PRを直したい</strong>Butler が reviewer comment と PR state を読み、revise_pr として runner に渡せるか確認します。</div>
         <div class="panel"><strong>mergeしたい</strong>Butler が checks、reviewer signal、mergeability、Issue evidence を確認し、必要な approval boundary を提示します。</div>
         <div class="panel"><strong>Action Schema が壊れた</strong>この runtime の setup/recovery page を直接開き、known-good または latest bundle をコピーします。</div>
-        <div class="panel"><strong>deployやsecret更新をしたい</strong>GO + passkey と対象 scope が必要です。Worker は secret 値をこのページに表示しません。</div>
+        <div class="panel"><strong>deployやsecret更新をしたい</strong>対象 scope が表示された passkey approval が必要です。Worker は secret 値をこのページに表示しません。</div>
       </div>
     </section>
 
@@ -102,7 +102,7 @@ export function renderVtddHelpGuidePage(input = {}) {
       <h2>権限境界</h2>
       <div class="route"><strong>Allowed without GO</strong>読み取り、状態確認、説明、proposal、低リスクな案内。実行能力とは区別します。</div>
       <div class="route"><strong>GO required</strong>bounded implementation dispatch、通常 write、PR review/comment など、Issue scope と runtime truth に接続された操作。</div>
-      <div class="route"><strong>GO + passkey required</strong>deploy、credential mutation、permission mutation、high-risk GitHub operation、destructive/high-blast-radius operation。</div>
+      <div class="route"><strong>passkey approval required</strong>deploy、credential mutation、permission mutation、high-risk GitHub operation、destructive/high-blast-radius operation。</div>
       <div class="route"><strong>Forbidden / stop</strong>対象 repo 未解決、Issue traceability 不足、owner-specific runtime 依存、secret 表示、scope conflict、reviewer objection の楽観的な無視。</div>
     </section>
 
@@ -206,7 +206,7 @@ export function buildVtddCloudflarePageDirectory(input = {}) {
       label: "Passkey operator",
       path: "/v2/approval/passkey/operator",
       url: buildRuntimeUrl(runtimeOrigin, "/v2/approval/passkey/operator"),
-      description: "GO + passkey が必要な deploy、merge、secret sync などの operator helper です。",
+      description: "scope 明示済み passkey approval が必要な deploy、merge、secret sync などの operator helper です。",
       audience: ["owner", "operator"],
       authority: "go_plus_passkey_required_for_execution"
     },

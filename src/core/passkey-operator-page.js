@@ -683,7 +683,6 @@ export function renderPasskeyOperatorPage(input = {}) {
               repository: repositoryInput,
               issueNumber: Number(document.getElementById("issue-input").value || 0) || null,
               policyInput: {
-                approvalPhrase: "GO",
                 approvalGrantId: latestApprovalGrantId
               }
             })
@@ -718,7 +717,6 @@ export function renderPasskeyOperatorPage(input = {}) {
                 issueNumber: Number(document.getElementById("issue-input").value || 0) || null
               },
               policyInput: {
-                approvalPhrase: "GO",
                 approvalGrantId: latestApprovalGrantId,
                 targetConfirmed: true
               }
@@ -753,7 +751,6 @@ export function renderPasskeyOperatorPage(input = {}) {
                 issueNumber: Number(document.getElementById("issue-input").value || 0) || null
               },
               policyInput: {
-                approvalPhrase: "GO",
                 approvalGrantId: latestApprovalGrantId,
                 targetConfirmed: true
               }
@@ -789,7 +786,6 @@ export function renderPasskeyOperatorPage(input = {}) {
                 issueNumber: Number(document.getElementById("issue-input").value || 0) || null
               },
               policyInput: {
-                approvalPhrase: "GO",
                 approvalGrantId: latestApprovalGrantId,
                 targetConfirmed: true
               }

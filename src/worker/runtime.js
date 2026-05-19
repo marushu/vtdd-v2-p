@@ -4937,7 +4937,7 @@ function renderV2DashboardPage({ runtimeOrigin }) {
     },
     {
       title: "Deploy passkey operator",
-      body: "production deploy は GO + passkey の後ろ。approval grant や secret は dashboard に保存しない。",
+      body: "production deploy は scope 明示済み passkey approval の後ろ。approval grant や secret は dashboard に保存しない。",
       href: `${origin}/v2/approval/passkey/operator?repositoryInput=${encodedRepository}&phase=execution&actionType=deploy_production&highRiskKind=deploy_production`
     }
   ];
@@ -5016,7 +5016,7 @@ function renderV2DashboardPage({ runtimeOrigin }) {
 
     <section class="panel danger">
       <h2>v3 Worker の扱い</h2>
-      <p><code>vtdd-v3-orchestrator.polished-tree-da7c.workers.dev</code> は prototype として残します。削除は Cloudflare Worker deletion なので destructive operation です。実行する場合は GO + passkey と削除対象名の明示が必要です。</p>
+      <p><code>vtdd-v3-orchestrator.polished-tree-da7c.workers.dev</code> は prototype として残します。削除は Cloudflare Worker deletion なので destructive operation です。実行する場合は scope 明示済み passkey approval と削除対象名の明示が必要です。</p>
       <ul>
         <li>削除前に v2 dashboard / deploy path が本番反映済みであることを確認する。</li>
         <li>必要なら v3 Worker は disable / rename / delete の順に検討する。</li>

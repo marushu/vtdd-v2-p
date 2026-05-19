@@ -9,7 +9,6 @@ const DEFAULT_DEPLOY_WORKFLOW_REF = "main";
 export async function executeDeployProductionPlane(input = {}) {
   const repository = normalizeText(input.repository);
   const runtimeUrl = normalizeText(input.runtimeUrl);
-  const approvalPhrase = normalizeText(input.approvalPhrase);
   const approvalGrant = input.approvalGrant ?? null;
   const approvalGrantId =
     normalizeText(input.approvalGrantId) || normalizeText(approvalGrant?.approvalId);
@@ -20,7 +19,6 @@ export async function executeDeployProductionPlane(input = {}) {
   const validation = validateDeployProductionRequest({
     repository,
     runtimeUrl,
-    approvalPhrase,
     approvalGrant,
     approvalGrantId
   });
@@ -66,7 +64,6 @@ export async function executeDeployProductionPlane(input = {}) {
   const dispatchBody = {
     ref: workflowRef,
     inputs: {
-      approval_phrase: "GO",
       runtime_url: runtimeUrl,
       approval_grant_id: approvalGrantId
     }
@@ -217,7 +214,6 @@ async function verifyDeployWorkflowRun({
 function validateDeployProductionRequest({
   repository,
   runtimeUrl,
-  approvalPhrase,
   approvalGrant,
   approvalGrantId
 }) {
@@ -227,9 +223,6 @@ function validateDeployProductionRequest({
   }
   if (!runtimeUrl) {
     issues.push("runtimeUrl is required");
-  }
-  if (approvalPhrase !== "GO") {
-    issues.push("approvalPhrase must be GO");
   }
   if (!approvalGrantId) {
     issues.push("approvalGrantId is required");

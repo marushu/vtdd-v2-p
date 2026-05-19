@@ -176,7 +176,44 @@ test("execution mode blocks ambiguous repository nickname", () => {
   assert.equal(result.blockedByRule, "unresolved_target_blocks_execution");
 });
 
-test("high-risk action requires GO + passkey", () => {
+const deployApprovalScope = {
+  actionType: ActionType.DEPLOY_PRODUCTION,
+  repositoryInput: "ledger",
+  issueNumber: "430",
+  relatedIssue: "430",
+  phase: "execution"
+};
+
+const validDeployApprovalGrant = {
+  verified: true,
+  expiresAt: "2099-01-01T00:00:00.000Z",
+  scope: deployApprovalScope
+};
+
+test("high-risk action accepts real scoped passkey approval grant without separate GO", () => {
+  const result = evaluateExecutionPolicy({
+    actionType: ActionType.DEPLOY_PRODUCTION,
+    mode: TaskMode.EXECUTION,
+    repositoryInput: "ledger",
+    aliasRegistry: registry,
+    targetConfirmed: true,
+    constitutionConsulted: true,
+    runtimeTruth: { runtimeAvailable: true },
+    credential: highRiskCredential,
+    consent: fullConsent,
+    approvalPhrase: "",
+    approvalScopeMatched: true,
+    approvalGrant: validDeployApprovalGrant,
+    approvalScope: deployApprovalScope,
+    issueTraceable: true,
+    go: false,
+    passkey: false
+  });
+  assert.equal(result.allowed, true);
+  assert.equal(result.requiredApproval, "go_passkey");
+});
+
+test("high-risk action still rejects missing real approval grant", () => {
   const result = evaluateExecutionPolicy({
     actionType: ActionType.DEPLOY_PRODUCTION,
     mode: TaskMode.EXECUTION,
@@ -196,7 +233,29 @@ test("high-risk action requires GO + passkey", () => {
   assert.equal(result.requiredApproval, "go_passkey");
 });
 
-test("merge requires explicit GO + passkey approval", () => {
+test("high-risk action rejects phrase-only passkey without separate GO", () => {
+  const result = evaluateExecutionPolicy({
+    actionType: ActionType.DEPLOY_PRODUCTION,
+    mode: TaskMode.EXECUTION,
+    repositoryInput: "ledger",
+    aliasRegistry: registry,
+    targetConfirmed: true,
+    constitutionConsulted: true,
+    runtimeTruth: { runtimeAvailable: true },
+    credential: highRiskCredential,
+    consent: fullConsent,
+    ...approvalContext,
+    approvalScope: deployApprovalScope,
+    issueTraceable: true,
+    go: false,
+    passkey: true
+  });
+  assert.equal(result.allowed, false);
+  assert.equal(result.blockedByRule, "approval_boundary");
+  assert.equal(result.reason.includes("real scoped passkey approval"), true);
+});
+
+test("merge requires scoped passkey approval or legacy explicit GO phrase plus passkey flag", () => {
   const result = evaluateExecutionPolicy({
     actionType: ActionType.MERGE,
     mode: TaskMode.EXECUTION,
@@ -216,7 +275,7 @@ test("merge requires explicit GO + passkey approval", () => {
   assert.equal(result.requiredApproval, "go_passkey");
 });
 
-test("guarded absence mode blocks merge even with GO + passkey", () => {
+test("guarded absence mode blocks merge even with scoped approval", () => {
   const result = evaluateExecutionPolicy({
     actionType: ActionType.MERGE,
     mode: TaskMode.EXECUTION,

@@ -24,7 +24,6 @@ export async function executeGitHubHighRiskPlane(input = {}) {
   const mergeMethod = normalizeMergeMethod(input.mergeMethod);
   const commitTitle = normalizeText(input.commitTitle);
   const commitMessage = normalizeBody(input.commitMessage);
-  const approvalPhrase = normalizeText(input.approvalPhrase);
   const targetConfirmed = input.targetConfirmed === true;
   const approvalScope = input.approvalScope ?? null;
   const approvalGrant = input.approvalGrant ?? null;
@@ -38,7 +37,6 @@ export async function executeGitHubHighRiskPlane(input = {}) {
     issueNumber,
     pullNumber,
     mergeMethod,
-    approvalPhrase,
     targetConfirmed,
     approvalGrant,
     approvalScope
@@ -106,9 +104,6 @@ function validateGitHubHighRiskRequest(input) {
 
   if (!input.targetConfirmed) {
     issues.push("targetConfirmed must be true");
-  }
-  if (normalizeText(input.approvalPhrase).toUpperCase() !== "GO") {
-    issues.push("approvalPhrase must be GO");
   }
   if (
     input.operation === GitHubHighRiskOperation.PULL_MERGE &&

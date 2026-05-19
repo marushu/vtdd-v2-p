@@ -96,6 +96,36 @@ export function evaluateApproval({
     };
   }
 
+  if (required === ApprovalLevel.GO_PASSKEY) {
+    const grantResult = evaluateApprovalGrant({
+      approvalGrant,
+      scope: approvalScope
+    });
+    if (grantResult.ok) {
+      return { ok: true, required };
+    }
+
+    const phrase = normalize(approvalPhrase);
+    if (!phrase) {
+      return {
+        ok: false,
+        required,
+        reason: grantResult.reason || "real scoped passkey approval grant is required"
+      };
+    }
+
+    if (go && passkey) {
+      return { ok: true, required };
+    }
+    return {
+      ok: false,
+      required,
+      reason: passkey
+        ? "high-risk action requires real scoped passkey approval or legacy explicit GO phrase plus passkey flag"
+        : grantResult.reason || "real scoped passkey approval grant is required"
+    };
+  }
+
   const phrase = normalize(approvalPhrase);
   if (!phrase) {
     return {
@@ -114,20 +144,6 @@ export function evaluateApproval({
           reason: "explicit GO is required before execution"
         };
   }
-  const grantResult = evaluateApprovalGrant({
-    approvalGrant,
-    scope: approvalScope
-  });
-  if (go && (passkey || grantResult.ok)) {
-    return { ok: true, required };
-  }
-  return {
-    ok: false,
-    required,
-    reason: passkey
-      ? "high-risk action requires GO + passkey"
-      : grantResult.reason || "high-risk action requires GO + passkey"
-  };
 }
 
 function normalize(value) {

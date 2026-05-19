@@ -45,8 +45,8 @@ Production must bind the VTDD memory D1 database as `VTDD_MEMORY_D1`.
 
 This binding is required for real passkey registration, approval challenge
 persistence, and approval grant retrieval. A production deploy that drops this
-binding breaks `GO + passkey` issuance and therefore blocks high-risk runtime
-operations.
+binding breaks scoped passkey approval issuance and therefore blocks high-risk
+runtime operations.
 
 Because this repository is public and reusable, owner-specific Cloudflare
 resource identifiers must not be committed to the shared `wrangler.toml`.
@@ -72,20 +72,18 @@ includes the run URL and deployed commit SHA, and intentionally omits approval
 grant ids, tokens, and other secret values. If the variable is absent,
 the deploy still runs and the mention notification is skipped.
 
-## Approval Boundary (`GO + passkey`)
+## Approval Boundary (scoped passkey approval)
 
 `deploy-production` workflow is manual (`workflow_dispatch`) and requires:
 
-- `approval_phrase=GO`
 - `runtime_url=<user-owned worker runtime>`
 - `approval_grant_id=<real passkey approval grant id>`
 - environment approval on `production`
 
 This encodes the MVP high-risk policy as:
 
-1. explicit GO phrase
-2. real WebAuthn/passkey approval grant validated against the worker runtime
-3. protected environment confirmation
+1. real WebAuthn/passkey approval grant validated against the worker runtime
+2. protected environment confirmation
 
 The workflow validates the grant through `/v2/retrieve/approval-grant` using
 `VTDD_GATEWAY_BEARER_TOKEN`, and the grant scope must match:

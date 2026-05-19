@@ -22,6 +22,6 @@ test("GitHub App actor identity doc maps VTDD roles to visible actors and secret
 test("GitHub App actor identity doc preserves authority and passkey boundaries", () => {
   assert.equal(doc.includes("Reviewer Apps are critique-only."), true);
   assert.equal(doc.includes("Executor Apps may push bounded branch changes"), true);
-  assert.equal(doc.includes("`GO + passkey`"), true);
+  assert.equal(doc.includes("scoped passkey approval"), true);
   assert.equal(doc.includes("Registering or updating those secrets is a high-risk external effect"), true);
 });
