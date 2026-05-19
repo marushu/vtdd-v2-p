@@ -135,6 +135,23 @@ test("worker serves v2 dashboard without exposing secrets", async () => {
   assert.match(response.headers.get("content-type"), /text\/html/);
   const body = await response.text();
   assert.equal(body.includes("VTDD v2 operational dashboard"), true);
+  assert.equal(body.includes("Butler main chat"), true);
+  assert.equal(body.includes("Butler と会話の準備"), true);
+  assert.equal(body.includes("自動更新なし"), true);
+  assert.equal(body.includes("meta refresh / polling を使いません"), true);
+  assert.equal(body.includes("Issue #433"), true);
+  assert.equal(body.includes("LLM 直結の返信は未接続です"), true);
+  assert.equal(body.includes("下書きメモ（未送信）"), true);
+  assert.equal(body.includes("入力を送らず状態を読む"), true);
+  assert.equal(body.includes('name="text"'), false);
+  assert.equal(/<meta[^>]+http-equiv=["']?refresh/i.test(body), false);
+  assert.equal(body.includes("setInterval("), false);
+  assert.equal(body.includes("setTimeout("), false);
+  assert.equal(body.includes("fetch("), false);
+  assert.equal(
+    body.includes("/v2/approval/passkey/operator?repositoryInput=marushu%2Fvtdd-v2-p"),
+    true
+  );
   assert.equal(body.includes("/v2/retrieve/startup-preflight"), true);
   assert.equal(body.includes("/v2/action/vps-runner-status"), true);
   assert.equal(body.includes("/v2/retrieve/operational-memory"), true);
@@ -145,7 +162,10 @@ test("worker serves v2 dashboard without exposing secrets", async () => {
 
   const alias = await worker.fetch(new Request("https://example.com/orchestrator"));
   assert.equal(alias.status, 200);
-  assert.equal((await alias.text()).includes("VTDD Butler"), true);
+  const aliasBody = await alias.text();
+  assert.equal(aliasBody.includes("VTDD Butler"), true);
+  assert.equal(aliasBody.includes("Butler main chat"), true);
+  assert.equal(aliasBody.includes("自動更新なし"), true);
 });
 
 test("worker setup recovery page opens without Action auth and defaults to VTDD repo", async () => {
