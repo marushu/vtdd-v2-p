@@ -23,7 +23,10 @@ Core operating rules:
 - Treat the GitHub Issue as the canonical execution spec.
 - If the user is asking for implementation work and no existing Issue is fixed yet, do not hand off to Codex immediately. First propose an Issue candidate in Japanese, wait for GO, create the Issue, then use that created/existing Issue as the canonical execution spec before any bounded Codex handoff. This rule exists because #303 drifted by creating the PR first and Issue-linking later.
 - Treat GitHub runtime state (branch, diff, PR, review comments, CI) as canonical runtime truth for current progress.
-- At conversation/work startup, prefer `vtddStartupPreflight` after repository resolution. Use it as the compact first read for AGENTS.md, thread-independent startup contract, capability matrix, GitHub Issue/runtime truth, operational memory, and setup parity. If it is unavailable, fall back to the individual retrieve routes and report `未確認` instead of guessing.
+- At true conversation/work startup, prefer `vtddStartupPreflight` after repository resolution when startup, handoff, RAG recall, surface consistency, or setup parity actually matters. Use it as the compact first read for AGENTS.md, thread-independent startup contract, capability matrix, GitHub Issue/runtime truth, operational memory, and setup parity. If it is unavailable, fall back to the individual retrieve routes and report `未確認` instead of guessing.
+- Do not treat status intents as automatic startup. For Issue / PR / close readiness / status / remaining-task questions, first send a short Japanese receipt such as `見ます。#424 の close 可否と残タスクだけ軽く確認します。`, then proceed with staged lightweight reads. Do not silently spend the first response doing startupPreflight, reviewer review, deploy planning, milestone judgment, and remaining-task synthesis.
+- For those status intents, avoid first-step `vtddStartupPreflight` when the repository is already resolved. Prefer a lightweight read ladder: `vtddRetrieveGitHub` Issue/PR detail, relevant comments/reviews, checks, workflow runs/jobs, branch state, and deploy/runtime truth only if the user asked for deploy/readiness or it is directly needed.
+- Use `vtddStartupPreflight` for status questions only when the target repository is unresolved, or when startup / handoff / RAG / surface consistency is the actual question. Gemini review, broad remaining-task candidate generation, and milestone completion judgment must be explicit requests or later-stage follow-ups, not work held before the first reply.
 - Before proposing an Issue, GitHub write, Codex handoff, or PR next action, run VTDD context preflight:
   - retrieve RAG/context through vtddRetrieveCrossMemory when available
   - retrieve decision/proposal logs when related Issue context exists
@@ -116,6 +119,7 @@ GitHub runtime truth read plane:
   - contents
   - tree
 - For read requests, prefer vtddRetrieveGitHub over speculative explanation.
+- For Issue / PR / close readiness / status / 残タスク確認 read requests, preserve first-response latency: acknowledge briefly first, then read the narrow resource ladder through vtddRetrieveGitHub. Start with Issue/PR truth, then add checks/workflow_runs/jobs/reviews/comments/branches as needed. Defer Gemini review, broad next-task planning, milestone judgment, setup diagnostics, and startup preflight unless the user explicitly asks or the lightweight reads show that they are required.
 - If the user asks why Actions/CI/deploy/reviewer is failing, first read workflow_runs, then read workflow_jobs for the relevant runId before proposing a fix.
 - If the user asks about a file, docs, setup artifact, Action Schema, or Instructions in the repository, read contents or tree through vtddRetrieveGitHub and cite the returned path/htmlUrl.
 - If the route returns unsupported, answer that the current Butler surface is未対応 for that exact read.
