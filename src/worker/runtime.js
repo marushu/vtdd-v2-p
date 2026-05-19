@@ -101,6 +101,16 @@ export default {
       });
     }
 
+    if (request.method === "GET" && url.pathname === "/status") {
+      return html(
+        200,
+        renderV2StatusPage({
+          runtimeOrigin: url.origin,
+          autonomyMode: resolveRuntimeAutonomyMode(env)
+        })
+      );
+    }
+
     if (
       request.method === "GET" &&
       (url.pathname === "/setup" ||
@@ -5020,7 +5030,7 @@ function renderV2DashboardPage({ runtimeOrigin }) {
         <h1>VTDD Butler</h1>
         <p>v2 の GitHub App / VPS runner / Gemini reviewer / RAG / passkey / runtime truth をそのまま使う dashboard 入口です。</p>
       </div>
-      <a class="button" href="${escapeDashboardHtml(origin)}/health">Health</a>
+      <a class="button" href="${escapeDashboardHtml(origin)}/status">Health</a>
     </header>
 
     <section class="panel cockpit" aria-label="Butler conversation cockpit">
@@ -5122,6 +5132,84 @@ function renderV2DashboardPage({ runtimeOrigin }) {
         <li>必要なら v3 Worker は disable / rename / delete の順に検討する。</li>
         <li>secret や approval grant は dashboard に表示しない。</li>
       </ul>
+    </section>
+  </main>
+</body>
+</html>`;
+}
+
+function renderV2StatusPage({ runtimeOrigin, autonomyMode }) {
+  const origin = normalize(runtimeOrigin);
+  const mode = "v2";
+  const resolvedAutonomyMode = normalizeText(autonomyMode) || "normal";
+  const cards = [
+    ["Worker", "正常", "Cloudflare Worker は応答しています。"],
+    ["Mode", mode, "現在の runtime mode です。"],
+    ["Autonomy", resolvedAutonomyMode, "guarded absence などの実行抑制状態を示します。"],
+    ["Dashboard", "利用可能", "/dashboard と /orchestrator は人間向け入口です。"],
+    ["Passkey", "same-origin", "高リスク操作は scope 明示済み passkey approval の後ろです。"],
+    ["Raw health", "JSON", "/health は API 互換の machine-readable endpoint として残します。"]
+  ];
+
+  return `<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VTDD v2 Status</title>
+  <style>
+    :root { color-scheme: light; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #182125; background: #f7faf7; }
+    body { margin: 0; }
+    main { width: min(1040px, calc(100% - 32px)); margin: 0 auto; padding: 28px 0 48px; }
+    header { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; margin-bottom: 20px; }
+    h1 { font-size: clamp(32px, 6vw, 52px); line-height: 1; margin: 8px 0; }
+    h2 { font-size: 24px; margin: 0 0 14px; }
+    h3 { margin: 0 0 8px; font-size: 19px; }
+    p { line-height: 1.7; color: #4d5c56; }
+    .eyebrow { color: #2c7658; font-size: 13px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+    .panel { background: #fff; border: 1px solid #dce5dd; border-radius: 8px; padding: 22px; box-shadow: 0 10px 30px rgba(28, 44, 35, .06); margin: 16px 0; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }
+    .card { border: 1px solid #dce5dd; border-radius: 8px; padding: 16px; background: #fbfdfb; }
+    .badge { display: inline-flex; align-items: center; border: 1px solid #c8d8cc; border-radius: 999px; padding: 4px 9px; color: #315245; background: #f7faf7; font-size: 13px; font-weight: 750; }
+    a.button, .card a { display: inline-flex; align-items: center; justify-content: center; border: 1px solid #b9cabe; border-radius: 7px; padding: 9px 12px; color: #0f513b; font-weight: 750; text-decoration: none; background: #f8fbf8; }
+    a.primary { background: #247a5b; color: #fff; border-color: #247a5b; }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+    .notice { border-color: #d8e6d5; background: #f7fcf8; }
+    code { color: #596860; }
+    @media (max-width: 640px) { header { display: block; } main { width: min(100% - 20px, 1040px); padding-top: 16px; } .actions a { width: 100%; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <p class="eyebrow">VTDD v2 status</p>
+        <h1>Runtime Status</h1>
+        <p>ブラウザで見るための health summary です。機械向け JSON は <code>/health</code> に残しています。</p>
+      </div>
+      <a class="button" href="${escapeDashboardHtml(origin)}/dashboard">Dashboard</a>
+    </header>
+
+    <section class="panel notice">
+      <h2>現在の状態</h2>
+      <p><span class="badge">正常</span></p>
+      <p>Worker は応答しています。ここでは secret、token、approval grant は表示しません。</p>
+      <div class="actions">
+        <a class="primary" href="${escapeDashboardHtml(origin)}/dashboard">Butler dashboard</a>
+        <a href="${escapeDashboardHtml(origin)}/health">raw /health JSON</a>
+        <a href="${escapeDashboardHtml(origin)}/v2/approval/passkey/operator?repositoryInput=marushu%2Fvtdd-v2-p">Passkey operator</a>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Summary</h2>
+      <div class="grid">
+        ${cards.map(([title, status, body]) => `<article class="card">
+          <h3>${escapeDashboardHtml(title)}</h3>
+          <p><span class="badge">${escapeDashboardHtml(status)}</span></p>
+          <p>${escapeDashboardHtml(body)}</p>
+        </article>`).join("")}
+      </div>
     </section>
   </main>
 </body>
