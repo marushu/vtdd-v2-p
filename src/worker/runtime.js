@@ -125,6 +125,10 @@ export default {
       );
     }
 
+    if (request.method === "GET" && (url.pathname === "/dashboard" || url.pathname === "/orchestrator")) {
+      return html(200, renderV2DashboardPage({ runtimeOrigin: url.origin }));
+    }
+
     if (
       request.method === "GET" &&
       (url.pathname === MCP_PROTECTED_RESOURCE_METADATA_PATH ||
@@ -4889,6 +4893,148 @@ function normalizeTextList(value) {
 
 function uniqueTextList(value) {
   return [...new Set(normalizeTextList(value))];
+}
+
+function renderV2DashboardPage({ runtimeOrigin }) {
+  const origin = normalize(runtimeOrigin);
+  const repository = "marushu/vtdd-v2-p";
+  const encodedRepository = encodeURIComponent(repository);
+  const surfaces = [
+    {
+      title: "Startup preflight",
+      body: "AGENTS.md、thread-independent startup、runtime truth、RAG、self parity を最初に読む入口。",
+      href: `${origin}/v2/retrieve/startup-preflight?repository=${encodedRepository}&currentSurface=dashboard&responseMode=action_visible`
+    },
+    {
+      title: "Execution progress",
+      body: "VPS Codex CLI / remote Codex execution の進捗確認。",
+      href: `${origin}/v2/action/progress?repository=${encodedRepository}&responseMode=action_visible`
+    },
+    {
+      title: "VPS runner status",
+      body: "runner health、queue、対象 execution の状態確認。",
+      href: `${origin}/v2/action/vps-runner-status?repository=${encodedRepository}&responseMode=action_visible`
+    },
+    {
+      title: "GitHub runtime truth",
+      body: "Issues、PRs、checks、workflow runs、reviewer comments を読む入口。",
+      href: `${origin}/v2/retrieve/github?repository=${encodedRepository}&include=open_prs,open_issues,workflow_runs,issue_comments&responseMode=action_visible`
+    },
+    {
+      title: "Operational RAG",
+      body: "decision / proposal / working memory の compact retrieval。runtime truth の代替ではない。",
+      href: `${origin}/v2/retrieve/operational-memory?repository=${encodedRepository}&limit=5&responseMode=action_visible`
+    },
+    {
+      title: "Self parity",
+      body: "Action Schema、Instructions、Cloudflare deploy freshness、operator URL を確認。",
+      href: `${origin}/v2/retrieve/self-parity?repository=${encodedRepository}&responseMode=action_visible`
+    },
+    {
+      title: "Setup diagnostics",
+      body: "Butler / Custom GPT / deploy drift の診断ページ。",
+      href: `${origin}/setup/diagnostics?repository=${encodedRepository}`
+    },
+    {
+      title: "Deploy passkey operator",
+      body: "production deploy は GO + passkey の後ろ。approval grant や secret は dashboard に保存しない。",
+      href: `${origin}/v2/approval/passkey/operator?repositoryInput=${encodedRepository}&phase=execution&actionType=deploy_production&highRiskKind=deploy_production`
+    }
+  ];
+  const workflows = [
+    ["remote-codex-executor", "https://github.com/marushu/vtdd-v2-p/actions/workflows/remote-codex-executor.yml"],
+    ["gemini-pr-review", "https://github.com/marushu/vtdd-v2-p/actions/workflows/gemini-pr-review.yml"],
+    ["codex-pr-review-fallback", "https://github.com/marushu/vtdd-v2-p/actions/workflows/codex-pr-review-fallback.yml"],
+    ["deploy-production", "https://github.com/marushu/vtdd-v2-p/actions/workflows/deploy-production.yml"]
+  ];
+
+  return `<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VTDD v2 Dashboard</title>
+  <style>
+    :root { color-scheme: light; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #182125; background: #f7faf7; }
+    body { margin: 0; }
+    main { width: min(1120px, calc(100% - 32px)); margin: 0 auto; padding: 28px 0 48px; }
+    header { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; margin-bottom: 20px; }
+    h1 { font-size: clamp(32px, 6vw, 56px); line-height: 1; margin: 8px 0; }
+    h2 { font-size: 24px; margin: 0 0 14px; }
+    p { line-height: 1.7; color: #4d5c56; }
+    .eyebrow { color: #2c7658; font-size: 13px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+    .panel { background: #fff; border: 1px solid #dce5dd; border-radius: 8px; padding: 22px; box-shadow: 0 10px 30px rgba(28, 44, 35, .06); margin: 16px 0; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+    .card { border: 1px solid #dce5dd; border-radius: 8px; padding: 16px; background: #fbfdfb; }
+    .card h3 { margin: 0 0 8px; font-size: 19px; }
+    a.button, .card a { display: inline-flex; align-items: center; justify-content: center; border: 1px solid #b9cabe; border-radius: 7px; padding: 9px 12px; color: #0f513b; font-weight: 750; text-decoration: none; }
+    .card a { margin-top: 8px; }
+    .notice { border-color: #e6c6a0; background: #fff8ef; }
+    .danger { border-color: #e3b4a7; background: #fff5f3; }
+    code { color: #596860; }
+    ul { margin: 0; padding-left: 20px; color: #4d5c56; line-height: 1.8; }
+    @media (max-width: 640px) { header { display: block; } main { width: min(100% - 20px, 1120px); padding-top: 16px; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <p class="eyebrow">VTDD v2 operational dashboard</p>
+        <h1>VTDD Butler</h1>
+        <p>v2 の GitHub App / VPS runner / Gemini reviewer / RAG / passkey / runtime truth をそのまま使う dashboard 入口です。</p>
+      </div>
+      <a class="button" href="${escapeDashboardHtml(origin)}/health">Health</a>
+    </header>
+
+    <section class="panel notice">
+      <h2>現在の判断</h2>
+      <p>v3 dashboard は prototype として扱い、実運用の本線は v2-p に戻します。この dashboard は新しい実行権限を持たず、既存の v2 runtime route へ owner を案内します。</p>
+    </section>
+
+    <section class="panel">
+      <h2>Runtime surfaces</h2>
+      <div class="grid">
+        ${surfaces.map((surface) => `<article class="card">
+          <h3>${escapeDashboardHtml(surface.title)}</h3>
+          <p>${escapeDashboardHtml(surface.body)}</p>
+          <a href="${escapeDashboardHtml(surface.href)}">開く</a>
+        </article>`).join("")}
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>GitHub workflows</h2>
+      <div class="grid">
+        ${workflows.map(([title, href]) => `<article class="card">
+          <h3>${escapeDashboardHtml(title)}</h3>
+          <p>GitHub Actions runtime truth / execution surface。</p>
+          <a href="${escapeDashboardHtml(href)}">GitHub Actions</a>
+        </article>`).join("")}
+      </div>
+    </section>
+
+    <section class="panel danger">
+      <h2>v3 Worker の扱い</h2>
+      <p><code>vtdd-v3-orchestrator.polished-tree-da7c.workers.dev</code> は prototype として残します。削除は Cloudflare Worker deletion なので destructive operation です。実行する場合は GO + passkey と削除対象名の明示が必要です。</p>
+      <ul>
+        <li>削除前に v2 dashboard / deploy path が本番反映済みであることを確認する。</li>
+        <li>必要なら v3 Worker は disable / rename / delete の順に検討する。</li>
+        <li>secret や approval grant は dashboard に表示しない。</li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>`;
+}
+
+function escapeDashboardHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
 }
 
 function json(status, body, extraHeaders = {}) {

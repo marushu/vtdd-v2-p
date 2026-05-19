@@ -55783,6 +55783,9 @@ var runtime_default = {
         })
       );
     }
+    if (request.method === "GET" && (url.pathname === "/dashboard" || url.pathname === "/orchestrator")) {
+      return html(200, renderV2DashboardPage({ runtimeOrigin: url.origin }));
+    }
     if (request.method === "GET" && (url.pathname === MCP_PROTECTED_RESOURCE_METADATA_PATH || url.pathname === MCP_PROTECTED_RESOURCE_METADATA_MIRROR_PATH)) {
       return json(200, buildMcpProtectedResourceMetadata(url));
     }
@@ -59852,6 +59855,140 @@ function normalizeTextList2(value) {
 }
 function uniqueTextList2(value) {
   return [...new Set(normalizeTextList2(value))];
+}
+function renderV2DashboardPage({ runtimeOrigin }) {
+  const origin = normalize7(runtimeOrigin);
+  const repository = "marushu/vtdd-v2-p";
+  const encodedRepository = encodeURIComponent(repository);
+  const surfaces = [
+    {
+      title: "Startup preflight",
+      body: "AGENTS.md\u3001thread-independent startup\u3001runtime truth\u3001RAG\u3001self parity \u3092\u6700\u521D\u306B\u8AAD\u3080\u5165\u53E3\u3002",
+      href: `${origin}/v2/retrieve/startup-preflight?repository=${encodedRepository}&currentSurface=dashboard&responseMode=action_visible`
+    },
+    {
+      title: "Execution progress",
+      body: "VPS Codex CLI / remote Codex execution \u306E\u9032\u6357\u78BA\u8A8D\u3002",
+      href: `${origin}/v2/action/progress?repository=${encodedRepository}&responseMode=action_visible`
+    },
+    {
+      title: "VPS runner status",
+      body: "runner health\u3001queue\u3001\u5BFE\u8C61 execution \u306E\u72B6\u614B\u78BA\u8A8D\u3002",
+      href: `${origin}/v2/action/vps-runner-status?repository=${encodedRepository}&responseMode=action_visible`
+    },
+    {
+      title: "GitHub runtime truth",
+      body: "Issues\u3001PRs\u3001checks\u3001workflow runs\u3001reviewer comments \u3092\u8AAD\u3080\u5165\u53E3\u3002",
+      href: `${origin}/v2/retrieve/github?repository=${encodedRepository}&include=open_prs,open_issues,workflow_runs,issue_comments&responseMode=action_visible`
+    },
+    {
+      title: "Operational RAG",
+      body: "decision / proposal / working memory \u306E compact retrieval\u3002runtime truth \u306E\u4EE3\u66FF\u3067\u306F\u306A\u3044\u3002",
+      href: `${origin}/v2/retrieve/operational-memory?repository=${encodedRepository}&limit=5&responseMode=action_visible`
+    },
+    {
+      title: "Self parity",
+      body: "Action Schema\u3001Instructions\u3001Cloudflare deploy freshness\u3001operator URL \u3092\u78BA\u8A8D\u3002",
+      href: `${origin}/v2/retrieve/self-parity?repository=${encodedRepository}&responseMode=action_visible`
+    },
+    {
+      title: "Setup diagnostics",
+      body: "Butler / Custom GPT / deploy drift \u306E\u8A3A\u65AD\u30DA\u30FC\u30B8\u3002",
+      href: `${origin}/setup/diagnostics?repository=${encodedRepository}`
+    },
+    {
+      title: "Deploy passkey operator",
+      body: "production deploy \u306F GO + passkey \u306E\u5F8C\u308D\u3002approval grant \u3084 secret \u306F dashboard \u306B\u4FDD\u5B58\u3057\u306A\u3044\u3002",
+      href: `${origin}/v2/approval/passkey/operator?repositoryInput=${encodedRepository}&phase=execution&actionType=deploy_production&highRiskKind=deploy_production`
+    }
+  ];
+  const workflows = [
+    ["remote-codex-executor", "https://github.com/marushu/vtdd-v2-p/actions/workflows/remote-codex-executor.yml"],
+    ["gemini-pr-review", "https://github.com/marushu/vtdd-v2-p/actions/workflows/gemini-pr-review.yml"],
+    ["codex-pr-review-fallback", "https://github.com/marushu/vtdd-v2-p/actions/workflows/codex-pr-review-fallback.yml"],
+    ["deploy-production", "https://github.com/marushu/vtdd-v2-p/actions/workflows/deploy-production.yml"]
+  ];
+  return `<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VTDD v2 Dashboard</title>
+  <style>
+    :root { color-scheme: light; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #182125; background: #f7faf7; }
+    body { margin: 0; }
+    main { width: min(1120px, calc(100% - 32px)); margin: 0 auto; padding: 28px 0 48px; }
+    header { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; margin-bottom: 20px; }
+    h1 { font-size: clamp(32px, 6vw, 56px); line-height: 1; margin: 8px 0; }
+    h2 { font-size: 24px; margin: 0 0 14px; }
+    p { line-height: 1.7; color: #4d5c56; }
+    .eyebrow { color: #2c7658; font-size: 13px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+    .panel { background: #fff; border: 1px solid #dce5dd; border-radius: 8px; padding: 22px; box-shadow: 0 10px 30px rgba(28, 44, 35, .06); margin: 16px 0; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+    .card { border: 1px solid #dce5dd; border-radius: 8px; padding: 16px; background: #fbfdfb; }
+    .card h3 { margin: 0 0 8px; font-size: 19px; }
+    a.button, .card a { display: inline-flex; align-items: center; justify-content: center; border: 1px solid #b9cabe; border-radius: 7px; padding: 9px 12px; color: #0f513b; font-weight: 750; text-decoration: none; }
+    .card a { margin-top: 8px; }
+    .notice { border-color: #e6c6a0; background: #fff8ef; }
+    .danger { border-color: #e3b4a7; background: #fff5f3; }
+    code { color: #596860; }
+    ul { margin: 0; padding-left: 20px; color: #4d5c56; line-height: 1.8; }
+    @media (max-width: 640px) { header { display: block; } main { width: min(100% - 20px, 1120px); padding-top: 16px; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <p class="eyebrow">VTDD v2 operational dashboard</p>
+        <h1>VTDD Butler</h1>
+        <p>v2 \u306E GitHub App / VPS runner / Gemini reviewer / RAG / passkey / runtime truth \u3092\u305D\u306E\u307E\u307E\u4F7F\u3046 dashboard \u5165\u53E3\u3067\u3059\u3002</p>
+      </div>
+      <a class="button" href="${escapeDashboardHtml(origin)}/health">Health</a>
+    </header>
+
+    <section class="panel notice">
+      <h2>\u73FE\u5728\u306E\u5224\u65AD</h2>
+      <p>v3 dashboard \u306F prototype \u3068\u3057\u3066\u6271\u3044\u3001\u5B9F\u904B\u7528\u306E\u672C\u7DDA\u306F v2-p \u306B\u623B\u3057\u307E\u3059\u3002\u3053\u306E dashboard \u306F\u65B0\u3057\u3044\u5B9F\u884C\u6A29\u9650\u3092\u6301\u305F\u305A\u3001\u65E2\u5B58\u306E v2 runtime route \u3078 owner \u3092\u6848\u5185\u3057\u307E\u3059\u3002</p>
+    </section>
+
+    <section class="panel">
+      <h2>Runtime surfaces</h2>
+      <div class="grid">
+        ${surfaces.map((surface) => `<article class="card">
+          <h3>${escapeDashboardHtml(surface.title)}</h3>
+          <p>${escapeDashboardHtml(surface.body)}</p>
+          <a href="${escapeDashboardHtml(surface.href)}">\u958B\u304F</a>
+        </article>`).join("")}
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>GitHub workflows</h2>
+      <div class="grid">
+        ${workflows.map(([title, href]) => `<article class="card">
+          <h3>${escapeDashboardHtml(title)}</h3>
+          <p>GitHub Actions runtime truth / execution surface\u3002</p>
+          <a href="${escapeDashboardHtml(href)}">GitHub Actions</a>
+        </article>`).join("")}
+      </div>
+    </section>
+
+    <section class="panel danger">
+      <h2>v3 Worker \u306E\u6271\u3044</h2>
+      <p><code>vtdd-v3-orchestrator.polished-tree-da7c.workers.dev</code> \u306F prototype \u3068\u3057\u3066\u6B8B\u3057\u307E\u3059\u3002\u524A\u9664\u306F Cloudflare Worker deletion \u306A\u306E\u3067 destructive operation \u3067\u3059\u3002\u5B9F\u884C\u3059\u308B\u5834\u5408\u306F GO + passkey \u3068\u524A\u9664\u5BFE\u8C61\u540D\u306E\u660E\u793A\u304C\u5FC5\u8981\u3067\u3059\u3002</p>
+      <ul>
+        <li>\u524A\u9664\u524D\u306B v2 dashboard / deploy path \u304C\u672C\u756A\u53CD\u6620\u6E08\u307F\u3067\u3042\u308B\u3053\u3068\u3092\u78BA\u8A8D\u3059\u308B\u3002</li>
+        <li>\u5FC5\u8981\u306A\u3089 v3 Worker \u306F disable / rename / delete \u306E\u9806\u306B\u691C\u8A0E\u3059\u308B\u3002</li>
+        <li>secret \u3084 approval grant \u306F dashboard \u306B\u8868\u793A\u3057\u306A\u3044\u3002</li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>`;
+}
+function escapeDashboardHtml(value) {
+  return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#39;");
 }
 function json(status, body, extraHeaders = {}) {
   return new Response(JSON.stringify(body), {
