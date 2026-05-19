@@ -3,6 +3,10 @@ name: deploy-production
 on:
   workflow_dispatch:
     inputs:
+      approval_phrase:
+        description: "Deprecated compatibility input from pre-#430 operators. Ignored; scoped approval_grant_id is authoritative."
+        required: false
+        type: string
       runtime_url:
         description: "Worker runtime URL used to validate the real passkey approval grant"
         required: true

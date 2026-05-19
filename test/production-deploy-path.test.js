@@ -53,7 +53,9 @@ test("deploy-production workflow enforces the MVP production deploy boundary", (
   assert.equal(workflow.includes("issues: write"), true);
   assert.equal(workflow.includes("if: github.ref == 'refs/heads/main'"), true);
   assert.equal(workflow.includes("environment: production"), true);
-  assert.equal(workflow.includes("approval_phrase"), false);
+  assert.equal(workflow.includes("approval_phrase:"), true);
+  assert.equal(workflow.includes("Deprecated compatibility input from pre-#430 operators"), true);
+  assert.equal(workflow.includes('github.event.inputs.approval_phrase }}" != "GO"'), false);
   assert.equal(workflow.includes('github.event.inputs.runtime_url'), true);
   assert.equal(workflow.includes('github.event.inputs.approval_grant_id'), true);
   assert.equal(workflow.includes("Preflight deploy credentials"), true);
