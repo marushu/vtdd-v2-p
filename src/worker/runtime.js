@@ -4947,6 +4947,24 @@ function renderV2DashboardPage({ runtimeOrigin }) {
     ["codex-pr-review-fallback", "https://github.com/marushu/vtdd-v2-p/actions/workflows/codex-pr-review-fallback.yml"],
     ["deploy-production", "https://github.com/marushu/vtdd-v2-p/actions/workflows/deploy-production.yml"]
   ];
+  const cockpitActions = [
+    {
+      label: "状態確認",
+      href: `${origin}/v2/retrieve/github?repository=${encodedRepository}&include=open_prs,open_issues,workflow_runs,issue_comments&responseMode=action_visible`
+    },
+    {
+      label: "進捗を見る",
+      href: `${origin}/v2/action/progress?repository=${encodedRepository}&responseMode=action_visible`
+    },
+    {
+      label: "RAG を読む",
+      href: `${origin}/v2/retrieve/operational-memory?repository=${encodedRepository}&limit=5&responseMode=action_visible`
+    },
+    {
+      label: "Passkey",
+      href: `${origin}/v2/approval/passkey/operator?repositoryInput=${encodedRepository}`
+    }
+  ];
 
   return `<!doctype html>
 <html lang="ja">
@@ -4957,23 +4975,41 @@ function renderV2DashboardPage({ runtimeOrigin }) {
   <style>
     :root { color-scheme: light; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #182125; background: #f7faf7; }
     body { margin: 0; }
-    main { width: min(1120px, calc(100% - 32px)); margin: 0 auto; padding: 28px 0 48px; }
+    main { width: min(1180px, calc(100% - 32px)); margin: 0 auto; padding: 28px 0 48px; }
     header { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; margin-bottom: 20px; }
     h1 { font-size: clamp(32px, 6vw, 56px); line-height: 1; margin: 8px 0; }
     h2 { font-size: 24px; margin: 0 0 14px; }
+    h3 { margin: 0 0 8px; }
     p { line-height: 1.7; color: #4d5c56; }
     .eyebrow { color: #2c7658; font-size: 13px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
     .panel { background: #fff; border: 1px solid #dce5dd; border-radius: 8px; padding: 22px; box-shadow: 0 10px 30px rgba(28, 44, 35, .06); margin: 16px 0; }
     .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
     .card { border: 1px solid #dce5dd; border-radius: 8px; padding: 16px; background: #fbfdfb; }
     .card h3 { margin: 0 0 8px; font-size: 19px; }
-    a.button, .card a { display: inline-flex; align-items: center; justify-content: center; border: 1px solid #b9cabe; border-radius: 7px; padding: 9px 12px; color: #0f513b; font-weight: 750; text-decoration: none; }
+    a.button, .card a, button { display: inline-flex; align-items: center; justify-content: center; border: 1px solid #b9cabe; border-radius: 7px; padding: 9px 12px; color: #0f513b; font-weight: 750; text-decoration: none; background: #f8fbf8; font: inherit; }
+    button.primary, a.primary { background: #247a5b; color: #fff; border-color: #247a5b; }
     .card a { margin-top: 8px; }
     .notice { border-color: #e6c6a0; background: #fff8ef; }
     .danger { border-color: #e3b4a7; background: #fff5f3; }
+    .cockpit { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(300px, .8fr); gap: 16px; align-items: stretch; }
+    .chat-shell { min-height: 560px; display: grid; grid-template-rows: auto 1fr auto; gap: 14px; }
+    .thread-header { display: flex; justify-content: space-between; gap: 12px; align-items: center; border-bottom: 1px solid #e5eee7; padding-bottom: 12px; }
+    .thread-list { display: grid; gap: 12px; align-content: start; }
+    .bubble { max-width: 86%; border: 1px solid #dce5dd; border-radius: 8px; padding: 14px; background: #fbfdfb; }
+    .bubble.owner { margin-left: auto; background: #eef7f2; border-color: #c8dfd2; }
+    .composer { display: grid; gap: 10px; border-top: 1px solid #e5eee7; padding-top: 12px; }
+    textarea { width: 100%; min-height: 120px; box-sizing: border-box; border: 1px solid #b9cabe; border-radius: 8px; padding: 12px; font: inherit; resize: vertical; background: #fff; color: #182125; }
+    .composer-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+    .inspector { display: grid; gap: 12px; align-content: start; }
+    .lane { border: 1px solid #dce5dd; border-radius: 8px; padding: 14px; background: #fbfdfb; }
+    .lane-title { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; margin-bottom: 8px; }
+    .pill { display: inline-flex; align-items: center; border: 1px solid #c8d8cc; border-radius: 999px; padding: 4px 9px; color: #315245; background: #f7faf7; font-size: 13px; font-weight: 750; }
+    .quick-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .muted { color: #63716b; }
     code { color: #596860; }
     ul { margin: 0; padding-left: 20px; color: #4d5c56; line-height: 1.8; }
-    @media (max-width: 640px) { header { display: block; } main { width: min(100% - 20px, 1120px); padding-top: 16px; } }
+    @media (max-width: 820px) { .cockpit { grid-template-columns: 1fr; } .chat-shell { min-height: 520px; } .bubble { max-width: 100%; } }
+    @media (max-width: 640px) { header { display: block; } main { width: min(100% - 20px, 1120px); padding-top: 16px; } .composer-actions a, .composer-actions button { width: 100%; } }
   </style>
 </head>
 <body>
@@ -4986,6 +5022,70 @@ function renderV2DashboardPage({ runtimeOrigin }) {
       </div>
       <a class="button" href="${escapeDashboardHtml(origin)}/health">Health</a>
     </header>
+
+    <section class="panel cockpit" aria-label="Butler conversation cockpit">
+      <div class="chat-shell">
+        <div class="thread-header">
+          <div>
+            <p class="eyebrow">Butler main chat</p>
+            <h2>Butler と会話の準備</h2>
+          </div>
+          <span class="pill">自動更新なし</span>
+        </div>
+
+        <div class="thread-list">
+          <article class="bubble">
+            <strong>Butler</strong>
+            <p>ご主人様、ここが v2 の新しい入口です。普段通り話し、必要になったら Issue 候補、開発 queue 候補、進行中 execution、passkey operator へ交通整理します。</p>
+          </article>
+          <article class="bubble owner">
+            <strong>Owner</strong>
+            <p>例: ぶいの PR 状態を見て。TOMIO に新しい開発を投げたい。dashboard の失敗 run を片付けたい。</p>
+          </article>
+          <article class="bubble">
+            <strong>Butler</strong>
+            <p>この MVP ではまだ LLM 直結の返信は未接続です。入力欄は送信されない下書きメモで、既存 v2 runtime truth へ進むための安全な控え室として使います。</p>
+          </article>
+        </div>
+
+        <div class="composer">
+          <label for="butler-message"><strong>下書きメモ（未送信）</strong></label>
+          <textarea id="butler-message" placeholder="Butler に話す内容。まだ保存も送信もせず、確認してから進めます。"></textarea>
+          <div class="composer-actions">
+            <a class="primary" href="${escapeDashboardHtml(origin)}/v2/retrieve/startup-preflight?repository=${encodedRepository}&currentSurface=dashboard&responseMode=action_visible">入力を送らず状態を読む</a>
+            ${cockpitActions.map((action) => `<a href="${escapeDashboardHtml(action.href)}">${escapeDashboardHtml(action.label)}</a>`).join("")}
+          </div>
+          <p class="muted">マイク中や入力中の画面破壊を避けるため、このページは meta refresh / polling を使いません。</p>
+        </div>
+      </div>
+
+      <aside class="inspector" aria-label="Butler organized state">
+        <div class="lane">
+          <div class="lane-title"><h3>関連 repo</h3><span class="pill">resolved</span></div>
+          <p><strong>${escapeDashboardHtml(repository)}</strong></p>
+          <p class="muted">nickname resolution / startup preflight / GitHub runtime truth は既存 v2 route で確認します。</p>
+        </div>
+        <div class="lane">
+          <div class="lane-title"><h3>Issue 候補</h3><span class="pill">draft</span></div>
+          <ul>
+            <li>会話入口の UI は Issue #433 として固定済み。</li>
+            <li>本物の双方向チャット、音声 overlay、ファイル upload は次の bounded Issue に分けます。</li>
+          </ul>
+        </div>
+        <div class="lane">
+          <div class="lane-title"><h3>開発 queue 候補</h3><span class="pill">manual handoff</span></div>
+          <p>今は既存 remote Codex / VPS runner workflow へ owner が明示的に進めます。dashboard から勝手に dispatch しません。</p>
+        </div>
+        <div class="lane">
+          <div class="lane-title"><h3>進行中 execution</h3><span class="pill">runtime truth</span></div>
+          <p>進捗は GitHub Actions / VPS runner status / execution progress route を source of truth として読みます。</p>
+          <div class="quick-actions">
+            <a href="${escapeDashboardHtml(origin)}/v2/action/vps-runner-status?repository=${encodedRepository}&responseMode=action_visible">runner</a>
+            <a href="${escapeDashboardHtml(origin)}/v2/action/progress?repository=${encodedRepository}&responseMode=action_visible">progress</a>
+          </div>
+        </div>
+      </aside>
+    </section>
 
     <section class="panel notice">
       <h2>現在の判断</h2>

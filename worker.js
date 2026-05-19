@@ -59905,6 +59905,24 @@ function renderV2DashboardPage({ runtimeOrigin }) {
     ["codex-pr-review-fallback", "https://github.com/marushu/vtdd-v2-p/actions/workflows/codex-pr-review-fallback.yml"],
     ["deploy-production", "https://github.com/marushu/vtdd-v2-p/actions/workflows/deploy-production.yml"]
   ];
+  const cockpitActions = [
+    {
+      label: "\u72B6\u614B\u78BA\u8A8D",
+      href: `${origin}/v2/retrieve/github?repository=${encodedRepository}&include=open_prs,open_issues,workflow_runs,issue_comments&responseMode=action_visible`
+    },
+    {
+      label: "\u9032\u6357\u3092\u898B\u308B",
+      href: `${origin}/v2/action/progress?repository=${encodedRepository}&responseMode=action_visible`
+    },
+    {
+      label: "RAG \u3092\u8AAD\u3080",
+      href: `${origin}/v2/retrieve/operational-memory?repository=${encodedRepository}&limit=5&responseMode=action_visible`
+    },
+    {
+      label: "Passkey",
+      href: `${origin}/v2/approval/passkey/operator?repositoryInput=${encodedRepository}`
+    }
+  ];
   return `<!doctype html>
 <html lang="ja">
 <head>
@@ -59914,23 +59932,41 @@ function renderV2DashboardPage({ runtimeOrigin }) {
   <style>
     :root { color-scheme: light; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #182125; background: #f7faf7; }
     body { margin: 0; }
-    main { width: min(1120px, calc(100% - 32px)); margin: 0 auto; padding: 28px 0 48px; }
+    main { width: min(1180px, calc(100% - 32px)); margin: 0 auto; padding: 28px 0 48px; }
     header { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; margin-bottom: 20px; }
     h1 { font-size: clamp(32px, 6vw, 56px); line-height: 1; margin: 8px 0; }
     h2 { font-size: 24px; margin: 0 0 14px; }
+    h3 { margin: 0 0 8px; }
     p { line-height: 1.7; color: #4d5c56; }
     .eyebrow { color: #2c7658; font-size: 13px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
     .panel { background: #fff; border: 1px solid #dce5dd; border-radius: 8px; padding: 22px; box-shadow: 0 10px 30px rgba(28, 44, 35, .06); margin: 16px 0; }
     .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
     .card { border: 1px solid #dce5dd; border-radius: 8px; padding: 16px; background: #fbfdfb; }
     .card h3 { margin: 0 0 8px; font-size: 19px; }
-    a.button, .card a { display: inline-flex; align-items: center; justify-content: center; border: 1px solid #b9cabe; border-radius: 7px; padding: 9px 12px; color: #0f513b; font-weight: 750; text-decoration: none; }
+    a.button, .card a, button { display: inline-flex; align-items: center; justify-content: center; border: 1px solid #b9cabe; border-radius: 7px; padding: 9px 12px; color: #0f513b; font-weight: 750; text-decoration: none; background: #f8fbf8; font: inherit; }
+    button.primary, a.primary { background: #247a5b; color: #fff; border-color: #247a5b; }
     .card a { margin-top: 8px; }
     .notice { border-color: #e6c6a0; background: #fff8ef; }
     .danger { border-color: #e3b4a7; background: #fff5f3; }
+    .cockpit { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(300px, .8fr); gap: 16px; align-items: stretch; }
+    .chat-shell { min-height: 560px; display: grid; grid-template-rows: auto 1fr auto; gap: 14px; }
+    .thread-header { display: flex; justify-content: space-between; gap: 12px; align-items: center; border-bottom: 1px solid #e5eee7; padding-bottom: 12px; }
+    .thread-list { display: grid; gap: 12px; align-content: start; }
+    .bubble { max-width: 86%; border: 1px solid #dce5dd; border-radius: 8px; padding: 14px; background: #fbfdfb; }
+    .bubble.owner { margin-left: auto; background: #eef7f2; border-color: #c8dfd2; }
+    .composer { display: grid; gap: 10px; border-top: 1px solid #e5eee7; padding-top: 12px; }
+    textarea { width: 100%; min-height: 120px; box-sizing: border-box; border: 1px solid #b9cabe; border-radius: 8px; padding: 12px; font: inherit; resize: vertical; background: #fff; color: #182125; }
+    .composer-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+    .inspector { display: grid; gap: 12px; align-content: start; }
+    .lane { border: 1px solid #dce5dd; border-radius: 8px; padding: 14px; background: #fbfdfb; }
+    .lane-title { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; margin-bottom: 8px; }
+    .pill { display: inline-flex; align-items: center; border: 1px solid #c8d8cc; border-radius: 999px; padding: 4px 9px; color: #315245; background: #f7faf7; font-size: 13px; font-weight: 750; }
+    .quick-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .muted { color: #63716b; }
     code { color: #596860; }
     ul { margin: 0; padding-left: 20px; color: #4d5c56; line-height: 1.8; }
-    @media (max-width: 640px) { header { display: block; } main { width: min(100% - 20px, 1120px); padding-top: 16px; } }
+    @media (max-width: 820px) { .cockpit { grid-template-columns: 1fr; } .chat-shell { min-height: 520px; } .bubble { max-width: 100%; } }
+    @media (max-width: 640px) { header { display: block; } main { width: min(100% - 20px, 1120px); padding-top: 16px; } .composer-actions a, .composer-actions button { width: 100%; } }
   </style>
 </head>
 <body>
@@ -59943,6 +59979,70 @@ function renderV2DashboardPage({ runtimeOrigin }) {
       </div>
       <a class="button" href="${escapeDashboardHtml(origin)}/health">Health</a>
     </header>
+
+    <section class="panel cockpit" aria-label="Butler conversation cockpit">
+      <div class="chat-shell">
+        <div class="thread-header">
+          <div>
+            <p class="eyebrow">Butler main chat</p>
+            <h2>Butler \u3068\u4F1A\u8A71\u306E\u6E96\u5099</h2>
+          </div>
+          <span class="pill">\u81EA\u52D5\u66F4\u65B0\u306A\u3057</span>
+        </div>
+
+        <div class="thread-list">
+          <article class="bubble">
+            <strong>Butler</strong>
+            <p>\u3054\u4E3B\u4EBA\u69D8\u3001\u3053\u3053\u304C v2 \u306E\u65B0\u3057\u3044\u5165\u53E3\u3067\u3059\u3002\u666E\u6BB5\u901A\u308A\u8A71\u3057\u3001\u5FC5\u8981\u306B\u306A\u3063\u305F\u3089 Issue \u5019\u88DC\u3001\u958B\u767A queue \u5019\u88DC\u3001\u9032\u884C\u4E2D execution\u3001passkey operator \u3078\u4EA4\u901A\u6574\u7406\u3057\u307E\u3059\u3002</p>
+          </article>
+          <article class="bubble owner">
+            <strong>Owner</strong>
+            <p>\u4F8B: \u3076\u3044\u306E PR \u72B6\u614B\u3092\u898B\u3066\u3002TOMIO \u306B\u65B0\u3057\u3044\u958B\u767A\u3092\u6295\u3052\u305F\u3044\u3002dashboard \u306E\u5931\u6557 run \u3092\u7247\u4ED8\u3051\u305F\u3044\u3002</p>
+          </article>
+          <article class="bubble">
+            <strong>Butler</strong>
+            <p>\u3053\u306E MVP \u3067\u306F\u307E\u3060 LLM \u76F4\u7D50\u306E\u8FD4\u4FE1\u306F\u672A\u63A5\u7D9A\u3067\u3059\u3002\u5165\u529B\u6B04\u306F\u9001\u4FE1\u3055\u308C\u306A\u3044\u4E0B\u66F8\u304D\u30E1\u30E2\u3067\u3001\u65E2\u5B58 v2 runtime truth \u3078\u9032\u3080\u305F\u3081\u306E\u5B89\u5168\u306A\u63A7\u3048\u5BA4\u3068\u3057\u3066\u4F7F\u3044\u307E\u3059\u3002</p>
+          </article>
+        </div>
+
+        <div class="composer">
+          <label for="butler-message"><strong>\u4E0B\u66F8\u304D\u30E1\u30E2\uFF08\u672A\u9001\u4FE1\uFF09</strong></label>
+          <textarea id="butler-message" placeholder="Butler \u306B\u8A71\u3059\u5185\u5BB9\u3002\u307E\u3060\u4FDD\u5B58\u3082\u9001\u4FE1\u3082\u305B\u305A\u3001\u78BA\u8A8D\u3057\u3066\u304B\u3089\u9032\u3081\u307E\u3059\u3002"></textarea>
+          <div class="composer-actions">
+            <a class="primary" href="${escapeDashboardHtml(origin)}/v2/retrieve/startup-preflight?repository=${encodedRepository}&currentSurface=dashboard&responseMode=action_visible">\u5165\u529B\u3092\u9001\u3089\u305A\u72B6\u614B\u3092\u8AAD\u3080</a>
+            ${cockpitActions.map((action) => `<a href="${escapeDashboardHtml(action.href)}">${escapeDashboardHtml(action.label)}</a>`).join("")}
+          </div>
+          <p class="muted">\u30DE\u30A4\u30AF\u4E2D\u3084\u5165\u529B\u4E2D\u306E\u753B\u9762\u7834\u58CA\u3092\u907F\u3051\u308B\u305F\u3081\u3001\u3053\u306E\u30DA\u30FC\u30B8\u306F meta refresh / polling \u3092\u4F7F\u3044\u307E\u305B\u3093\u3002</p>
+        </div>
+      </div>
+
+      <aside class="inspector" aria-label="Butler organized state">
+        <div class="lane">
+          <div class="lane-title"><h3>\u95A2\u9023 repo</h3><span class="pill">resolved</span></div>
+          <p><strong>${escapeDashboardHtml(repository)}</strong></p>
+          <p class="muted">nickname resolution / startup preflight / GitHub runtime truth \u306F\u65E2\u5B58 v2 route \u3067\u78BA\u8A8D\u3057\u307E\u3059\u3002</p>
+        </div>
+        <div class="lane">
+          <div class="lane-title"><h3>Issue \u5019\u88DC</h3><span class="pill">draft</span></div>
+          <ul>
+            <li>\u4F1A\u8A71\u5165\u53E3\u306E UI \u306F Issue #433 \u3068\u3057\u3066\u56FA\u5B9A\u6E08\u307F\u3002</li>
+            <li>\u672C\u7269\u306E\u53CC\u65B9\u5411\u30C1\u30E3\u30C3\u30C8\u3001\u97F3\u58F0 overlay\u3001\u30D5\u30A1\u30A4\u30EB upload \u306F\u6B21\u306E bounded Issue \u306B\u5206\u3051\u307E\u3059\u3002</li>
+          </ul>
+        </div>
+        <div class="lane">
+          <div class="lane-title"><h3>\u958B\u767A queue \u5019\u88DC</h3><span class="pill">manual handoff</span></div>
+          <p>\u4ECA\u306F\u65E2\u5B58 remote Codex / VPS runner workflow \u3078 owner \u304C\u660E\u793A\u7684\u306B\u9032\u3081\u307E\u3059\u3002dashboard \u304B\u3089\u52DD\u624B\u306B dispatch \u3057\u307E\u305B\u3093\u3002</p>
+        </div>
+        <div class="lane">
+          <div class="lane-title"><h3>\u9032\u884C\u4E2D execution</h3><span class="pill">runtime truth</span></div>
+          <p>\u9032\u6357\u306F GitHub Actions / VPS runner status / execution progress route \u3092 source of truth \u3068\u3057\u3066\u8AAD\u307F\u307E\u3059\u3002</p>
+          <div class="quick-actions">
+            <a href="${escapeDashboardHtml(origin)}/v2/action/vps-runner-status?repository=${encodedRepository}&responseMode=action_visible">runner</a>
+            <a href="${escapeDashboardHtml(origin)}/v2/action/progress?repository=${encodedRepository}&responseMode=action_visible">progress</a>
+          </div>
+        </div>
+      </aside>
+    </section>
 
     <section class="panel notice">
       <h2>\u73FE\u5728\u306E\u5224\u65AD</h2>
