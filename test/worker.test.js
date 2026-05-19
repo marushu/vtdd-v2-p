@@ -129,6 +129,20 @@ test("worker returns health", async () => {
   assert.equal(body.autonomyMode, AutonomyMode.NORMAL);
 });
 
+test("worker serves human-facing status page while keeping raw health JSON", async () => {
+  const response = await worker.fetch(new Request("https://example.com/status"));
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get("content-type"), /text\/html/);
+  const body = await response.text();
+  assert.equal(body.includes("VTDD v2 status"), true);
+  assert.equal(body.includes("Runtime Status"), true);
+  assert.equal(body.includes("raw /health JSON"), true);
+  assert.equal(body.includes("/dashboard"), true);
+  assert.equal(body.includes("/v2/approval/passkey/operator?repositoryInput=marushu%2Fvtdd-v2-p"), true);
+  assert.equal(body.includes("approvalGrantId"), false);
+  assert.equal(body.includes("CLOUDFLARE_API_TOKEN"), false);
+});
+
 test("worker serves v2 dashboard without exposing secrets", async () => {
   const response = await worker.fetch(new Request("https://example.com/dashboard"));
   assert.equal(response.status, 200);
@@ -152,6 +166,7 @@ test("worker serves v2 dashboard without exposing secrets", async () => {
     body.includes("/v2/approval/passkey/operator?repositoryInput=marushu%2Fvtdd-v2-p"),
     true
   );
+  assert.equal(body.includes('href="https://example.com/status">Health</a>'), true);
   assert.equal(body.includes("/v2/retrieve/startup-preflight"), true);
   assert.equal(body.includes("/v2/action/vps-runner-status"), true);
   assert.equal(body.includes("/v2/retrieve/operational-memory"), true);

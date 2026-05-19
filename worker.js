@@ -55765,6 +55765,15 @@ var runtime_default = {
         autonomyMode: resolveRuntimeAutonomyMode(env)
       });
     }
+    if (request.method === "GET" && url.pathname === "/status") {
+      return html(
+        200,
+        renderV2StatusPage({
+          runtimeOrigin: url.origin,
+          autonomyMode: resolveRuntimeAutonomyMode(env)
+        })
+      );
+    }
     if (request.method === "GET" && (url.pathname === "/setup" || url.pathname === "/setup/recovery" || url.pathname === "/setup/latest" || url.pathname === "/setup/known-good")) {
       return handleCustomGptRecoveryPageRequest(url, env);
     }
@@ -59977,7 +59986,7 @@ function renderV2DashboardPage({ runtimeOrigin }) {
         <h1>VTDD Butler</h1>
         <p>v2 \u306E GitHub App / VPS runner / Gemini reviewer / RAG / passkey / runtime truth \u3092\u305D\u306E\u307E\u307E\u4F7F\u3046 dashboard \u5165\u53E3\u3067\u3059\u3002</p>
       </div>
-      <a class="button" href="${escapeDashboardHtml(origin)}/health">Health</a>
+      <a class="button" href="${escapeDashboardHtml(origin)}/status">Health</a>
     </header>
 
     <section class="panel cockpit" aria-label="Butler conversation cockpit">
@@ -60079,6 +60088,82 @@ function renderV2DashboardPage({ runtimeOrigin }) {
         <li>\u5FC5\u8981\u306A\u3089 v3 Worker \u306F disable / rename / delete \u306E\u9806\u306B\u691C\u8A0E\u3059\u308B\u3002</li>
         <li>secret \u3084 approval grant \u306F dashboard \u306B\u8868\u793A\u3057\u306A\u3044\u3002</li>
       </ul>
+    </section>
+  </main>
+</body>
+</html>`;
+}
+function renderV2StatusPage({ runtimeOrigin, autonomyMode }) {
+  const origin = normalize7(runtimeOrigin);
+  const mode = "v2";
+  const resolvedAutonomyMode = normalizeText30(autonomyMode) || "normal";
+  const cards = [
+    ["Worker", "\u6B63\u5E38", "Cloudflare Worker \u306F\u5FDC\u7B54\u3057\u3066\u3044\u307E\u3059\u3002"],
+    ["Mode", mode, "\u73FE\u5728\u306E runtime mode \u3067\u3059\u3002"],
+    ["Autonomy", resolvedAutonomyMode, "guarded absence \u306A\u3069\u306E\u5B9F\u884C\u6291\u5236\u72B6\u614B\u3092\u793A\u3057\u307E\u3059\u3002"],
+    ["Dashboard", "\u5229\u7528\u53EF\u80FD", "/dashboard \u3068 /orchestrator \u306F\u4EBA\u9593\u5411\u3051\u5165\u53E3\u3067\u3059\u3002"],
+    ["Passkey", "same-origin", "\u9AD8\u30EA\u30B9\u30AF\u64CD\u4F5C\u306F scope \u660E\u793A\u6E08\u307F passkey approval \u306E\u5F8C\u308D\u3067\u3059\u3002"],
+    ["Raw health", "JSON", "/health \u306F API \u4E92\u63DB\u306E machine-readable endpoint \u3068\u3057\u3066\u6B8B\u3057\u307E\u3059\u3002"]
+  ];
+  return `<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VTDD v2 Status</title>
+  <style>
+    :root { color-scheme: light; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #182125; background: #f7faf7; }
+    body { margin: 0; }
+    main { width: min(1040px, calc(100% - 32px)); margin: 0 auto; padding: 28px 0 48px; }
+    header { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; margin-bottom: 20px; }
+    h1 { font-size: clamp(32px, 6vw, 52px); line-height: 1; margin: 8px 0; }
+    h2 { font-size: 24px; margin: 0 0 14px; }
+    h3 { margin: 0 0 8px; font-size: 19px; }
+    p { line-height: 1.7; color: #4d5c56; }
+    .eyebrow { color: #2c7658; font-size: 13px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+    .panel { background: #fff; border: 1px solid #dce5dd; border-radius: 8px; padding: 22px; box-shadow: 0 10px 30px rgba(28, 44, 35, .06); margin: 16px 0; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }
+    .card { border: 1px solid #dce5dd; border-radius: 8px; padding: 16px; background: #fbfdfb; }
+    .badge { display: inline-flex; align-items: center; border: 1px solid #c8d8cc; border-radius: 999px; padding: 4px 9px; color: #315245; background: #f7faf7; font-size: 13px; font-weight: 750; }
+    a.button, .card a { display: inline-flex; align-items: center; justify-content: center; border: 1px solid #b9cabe; border-radius: 7px; padding: 9px 12px; color: #0f513b; font-weight: 750; text-decoration: none; background: #f8fbf8; }
+    a.primary { background: #247a5b; color: #fff; border-color: #247a5b; }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+    .notice { border-color: #d8e6d5; background: #f7fcf8; }
+    code { color: #596860; }
+    @media (max-width: 640px) { header { display: block; } main { width: min(100% - 20px, 1040px); padding-top: 16px; } .actions a { width: 100%; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <p class="eyebrow">VTDD v2 status</p>
+        <h1>Runtime Status</h1>
+        <p>\u30D6\u30E9\u30A6\u30B6\u3067\u898B\u308B\u305F\u3081\u306E health summary \u3067\u3059\u3002\u6A5F\u68B0\u5411\u3051 JSON \u306F <code>/health</code> \u306B\u6B8B\u3057\u3066\u3044\u307E\u3059\u3002</p>
+      </div>
+      <a class="button" href="${escapeDashboardHtml(origin)}/dashboard">Dashboard</a>
+    </header>
+
+    <section class="panel notice">
+      <h2>\u73FE\u5728\u306E\u72B6\u614B</h2>
+      <p><span class="badge">\u6B63\u5E38</span></p>
+      <p>Worker \u306F\u5FDC\u7B54\u3057\u3066\u3044\u307E\u3059\u3002\u3053\u3053\u3067\u306F secret\u3001token\u3001approval grant \u306F\u8868\u793A\u3057\u307E\u305B\u3093\u3002</p>
+      <div class="actions">
+        <a class="primary" href="${escapeDashboardHtml(origin)}/dashboard">Butler dashboard</a>
+        <a href="${escapeDashboardHtml(origin)}/health">raw /health JSON</a>
+        <a href="${escapeDashboardHtml(origin)}/v2/approval/passkey/operator?repositoryInput=marushu%2Fvtdd-v2-p">Passkey operator</a>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Summary</h2>
+      <div class="grid">
+        ${cards.map(([title, status, body]) => `<article class="card">
+          <h3>${escapeDashboardHtml(title)}</h3>
+          <p><span class="badge">${escapeDashboardHtml(status)}</span></p>
+          <p>${escapeDashboardHtml(body)}</p>
+        </article>`).join("")}
+      </div>
     </section>
   </main>
 </body>
