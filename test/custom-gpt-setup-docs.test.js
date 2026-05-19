@@ -150,8 +150,8 @@ test("custom gpt instructions preserve current butler and approval boundaries", 
   assert.equal(doc.includes("still provide `selfParity.deployOperatorMarkdownLink`"), true);
   assert.equal(doc.includes("render `selfParity.deployOperatorUrl` as a short Markdown link"), true);
   assert.equal(doc.includes("phase=execution"), true);
-  assert.equal(doc.includes("High-risk actions require GO + passkey."), true);
-  assert.equal(doc.includes("Merge requires explicit human GO + real passkey."), true);
+  assert.equal(doc.includes("High-risk actions require scoped passkey approval."), true);
+  assert.equal(doc.includes("Merge requires explicit scoped passkey approval."), true);
   assert.equal(doc.includes("Action Schema update required"), true);
   assert.equal(doc.includes("Instructions update required"), true);
   assert.equal(doc.includes("runtime is in sync, do not overclaim that the current Custom GPT editor is also in sync"), true);

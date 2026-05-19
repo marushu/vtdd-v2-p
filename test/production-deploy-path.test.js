@@ -20,7 +20,6 @@ test("production deploy doc defines the governed GitHub Actions deploy path", ()
   assert.equal(doc.includes("Cloudflare Workers"), true);
   assert.equal(doc.includes("`wrangler deploy --env production`"), true);
   assert.equal(doc.includes("GitHub Environment `production`"), true);
-  assert.equal(doc.includes("`approval_phrase=GO`"), true);
   assert.equal(doc.includes("`approval_grant_id=<real passkey approval grant id>`"), true);
   assert.equal(doc.includes("`runtime_url=<user-owned worker runtime>`"), true);
   assert.equal(doc.includes("`VTDD_GATEWAY_BEARER_TOKEN`"), true);
@@ -54,7 +53,7 @@ test("deploy-production workflow enforces the MVP production deploy boundary", (
   assert.equal(workflow.includes("issues: write"), true);
   assert.equal(workflow.includes("if: github.ref == 'refs/heads/main'"), true);
   assert.equal(workflow.includes("environment: production"), true);
-  assert.equal(workflow.includes('github.event.inputs.approval_phrase }}" != "GO"'), true);
+  assert.equal(workflow.includes("approval_phrase"), false);
   assert.equal(workflow.includes('github.event.inputs.runtime_url'), true);
   assert.equal(workflow.includes('github.event.inputs.approval_grant_id'), true);
   assert.equal(workflow.includes("Preflight deploy credentials"), true);

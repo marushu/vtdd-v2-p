@@ -43,7 +43,7 @@ This is a high-risk operation because it mutates repository secrets.
 - it is not background automation
 - it is not normal Butler runtime
 - it must remain an explicit operator bootstrap step
-- it follows the current `GO + passkey` high-risk boundary
+- it follows the current scoped passkey approval high-risk boundary
 
 ## Dry-run First
 

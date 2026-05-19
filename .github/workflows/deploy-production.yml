@@ -3,10 +3,6 @@ name: deploy-production
 on:
   workflow_dispatch:
     inputs:
-      approval_phrase:
-        description: "Type GO to approve production deploy"
-        required: true
-        type: string
       runtime_url:
         description: "Worker runtime URL used to validate the real passkey approval grant"
         required: true
@@ -30,13 +26,9 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - name: Enforce GO + passkey boundary
+      - name: Enforce passkey approval boundary
         shell: bash
         run: |
-          if [ "${{ github.event.inputs.approval_phrase }}" != "GO" ]; then
-            echo "Approval phrase must be GO for production deploy."
-            exit 1
-          fi
           if [ -z "${{ github.event.inputs.runtime_url }}" ]; then
             echo "runtime_url is required for production deploy."
             exit 1
@@ -72,7 +64,7 @@ jobs:
             missing=1
           fi
           if [ "$missing" -ne 0 ]; then
-            echo "Configure the missing secrets before requesting GO + passkey for production deploy."
+            echo "Configure the missing secrets before requesting passkey approval for production deploy."
             exit 1
           fi
 

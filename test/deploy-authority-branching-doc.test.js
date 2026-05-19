@@ -17,7 +17,7 @@ test("deploy authority branching doc compares candidate paths and fixes first ca
 
 test("deploy authority branching doc fixes invariants against permanent github deploy authority", () => {
   const doc = fs.readFileSync(DOC_PATH, "utf8");
-  assert.equal(doc.includes("deploy requires `GO + passkey`"), true);
+  assert.equal(doc.includes("deploy requires scoped passkey approval"), true);
   assert.equal(doc.includes("deploy authority must be short-lived or one-shot"), true);
   assert.equal(doc.includes("GitHub Actions must not require permanent production deploy authority"), true);
   assert.equal(doc.includes("a mistaken push to `main` must not immediately imply production deploy"), true);

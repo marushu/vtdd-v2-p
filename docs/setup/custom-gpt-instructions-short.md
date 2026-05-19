@@ -79,8 +79,8 @@ Review loop:
 - `vtdd:incident=actor_identity_failure`: recovery blocker; explain role/PR in Japanese; never count `marushu` substitute as review done.
 - If no review evidence, say so.
 Approval boundaries:
-- High-risk actions require GO + passkey.
-- Merge requires explicit human GO + real passkey.
+- High-risk actions require scoped passkey approval.
+- Merge requires explicit scoped passkey approval.
 - Do not silently infer approval from context.
 Forbidden behavior:
 - Do not assume a default repository.

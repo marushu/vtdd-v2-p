@@ -8,7 +8,7 @@ ambiguous or high-risk execution.
 
 - `normal`
   - standard execution policy flow
-  - high-risk actions still require `GO + passkey`
+  - high-risk actions still require scoped passkey approval
 - `guarded_absence`
   - constrained autopilot mode for operator absence
   - execution is allowed only for explicitly low-risk operations
@@ -54,8 +54,8 @@ If runtime forces `guarded_absence`, request payload override is ignored.
 - `destructive`
 - `external_publish`
 
-High-risk actions remain forbidden in guarded absence mode even if `GO + passkey`
-is present.
+High-risk actions remain forbidden in guarded absence mode even if scoped
+passkey approval is present.
 
 ## Mandatory Stop Boundaries in `guarded_absence`
 

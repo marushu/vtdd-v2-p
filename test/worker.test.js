@@ -139,7 +139,7 @@ test("worker serves v2 dashboard without exposing secrets", async () => {
   assert.equal(body.includes("/v2/action/vps-runner-status"), true);
   assert.equal(body.includes("/v2/retrieve/operational-memory"), true);
   assert.equal(body.includes("gemini-pr-review"), true);
-  assert.equal(body.includes("GO + passkey"), true);
+  assert.equal(body.includes("passkey approval"), true);
   assert.equal(body.includes("approvalGrantId"), false);
   assert.equal(body.includes("CLOUDFLARE_API_TOKEN"), false);
 
@@ -170,7 +170,7 @@ test("worker help guide opens without Action auth and documents safe operation b
   const html = await response.text();
   assert.equal(html.includes("VTDD help guide"), true);
   assert.equal(html.includes("Butler -> Worker"), true);
-  assert.equal(html.includes("GO + passkey required"), true);
+  assert.equal(html.includes("passkey approval required"), true);
   assert.equal(html.includes("setup/latest"), true);
   assert.equal(html.includes("setup/known-good"), true);
   assert.equal(html.includes("Cloudflare 上のページ一覧"), true);
@@ -5474,6 +5474,7 @@ test("worker dispatches governed production deploy using the request origin as t
     dispatchBody.inputs.runtime_url,
     "https://sample-user-vtdd.example.workers.dev"
   );
+  assert.equal("approval_phrase" in dispatchBody.inputs, false);
 });
 
 test("worker allows same-origin browser governed production deploy with a real approval grant", async () => {
@@ -5513,7 +5514,6 @@ test("worker allows same-origin browser governed production deploy with a real a
       body: JSON.stringify({
         repository: "sample-org/vtdd-v2-p",
         policyInput: {
-          approvalPhrase: "GO",
           approvalGrantId: "approval-deploy-browser-123"
         }
       })
@@ -5556,6 +5556,7 @@ test("worker allows same-origin browser governed production deploy with a real a
     dispatchBody.inputs.runtime_url,
     "https://sample-user-vtdd.example.workers.dev"
   );
+  assert.equal("approval_phrase" in dispatchBody.inputs, false);
 });
 
 test("worker returns raw deploy context when workflow dispatch is unverified", async () => {

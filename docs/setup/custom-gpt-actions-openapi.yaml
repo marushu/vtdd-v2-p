@@ -992,7 +992,7 @@ paths:
   /v2/action/github-authority:
     post:
       operationId: vtddGitHubAuthority
-      summary: Execute approval-bound GitHub authority actions that require GO plus real passkey.
+      summary: Execute approval-bound GitHub authority actions that require scoped passkey approval.
       requestBody:
         required: true
         content:
@@ -1065,7 +1065,7 @@ paths:
   /v2/action/deploy:
     post:
       operationId: vtddDeployProduction
-      summary: Dispatch governed production deploy after GO plus real passkey approval.
+      summary: Dispatch governed production deploy after scoped passkey approval approval.
       requestBody:
         required: true
         content:
@@ -1114,7 +1114,7 @@ paths:
   /v2/action/github-actions-secret:
     post:
       operationId: vtddSyncGitHubActionsSecret
-      summary: Sync an approved GitHub Actions secret such as OPENAI_API_KEY or VTDD_GATEWAY_BEARER_TOKEN after GO plus real passkey approval.
+      summary: Sync an approved GitHub Actions secret such as OPENAI_API_KEY or VTDD_GATEWAY_BEARER_TOKEN after scoped passkey approval approval.
       requestBody:
         required: true
         content:

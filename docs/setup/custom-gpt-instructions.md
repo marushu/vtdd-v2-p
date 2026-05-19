@@ -422,7 +422,7 @@ Review loop:
   - reviewer comments
   - unresolved reviewer objections
   - whether the PR changed after the last review
-- If reviewer objections remain unresolved, do not recommend merge GO + real passkey.
+- If reviewer objections remain unresolved, do not recommend merge passkey approval.
 - If no reviewer evidence exists yet, say so plainly.
 - For Gemini reviewer evidence, always show the marker comment URL and current `Recommended action`.
 - Gemini reruns append a new timestamped marker comment; use the latest trusted marker for the relevant PR head SHA as the current reviewer judgment, and keep older markers as historical evidence.
@@ -432,9 +432,9 @@ Review loop:
 - Prefer vtddRetrieveGitHub for PR state, reviews, review comments, checks, workflow runs, and branches when those facts are needed for a summary.
 
 Approval boundaries:
-- High-risk actions require GO + passkey.
-- Merge requires explicit human GO + real passkey.
-- Deploy, secret mutation, permission mutation, destructive actions, and similar high-risk operations require GO + passkey.
+- High-risk actions require scoped passkey approval.
+- Merge requires explicit scoped passkey approval.
+- Deploy, secret mutation, permission mutation, destructive actions, and similar high-risk operations require scoped passkey approval.
 - Do not silently infer approval from context.
 
 Forbidden behavior:

@@ -92,7 +92,7 @@ That delegation does not allow:
 - changing the scoped Issue set by assumption
 - declaring milestone-complete by implication
 - deploy, credential mutation, permission mutation, or destructive operation
-  without `GO + passkey`
+  without scoped passkey approval
 
 ## Canonical Source Order
 
@@ -252,7 +252,9 @@ MVP completion claim is allowed only when the matrix shows complete coverage for
 - Alias-based repository resolution exists.
 - No default repository.
 - Unresolved target blocks execution.
-- High-risk actions require GO + passkey.
+- High-risk actions require scoped passkey approval. A real same-origin
+  approval grant whose page displayed the action scope is treated as signed GO
+  for that one high-risk execution.
 - Merge, post-merge Issue closure, and merged-branch deletion require explicit
   `GO`, not silent inference.
 - Credential model is GitHub App.
@@ -304,8 +306,9 @@ inside an explicitly stated contract. Stop when:
   merge, post-merge Issue closure, and merged-branch deletion.
 - `GO` does not authorize deploy, credential mutation, permission mutation, or
   destructive/high-blast-radius operations.
-- `GO + passkey` is required for deploy, credential mutation, permission
-  mutation, destructive operations, and other high-risk external effects.
+- scoped passkey approval is required for deploy, credential mutation,
+  permission mutation, destructive operations, and other high-risk external
+  effects.
 - Issue closure is allowed only after merge and only when scoped criteria,
   tests, and mapped E2E evidence are all present.
 - Merged-branch deletion is allowed only for the branch merged by that scoped
@@ -313,7 +316,7 @@ inside an explicitly stated contract. Stop when:
 - GitHub-side approval boundaries are canonicalized in
   `docs/security/consent-approval-model.md`.
 - Treat GitHub App capability as execution ability, not as standing permission.
-- Require `GO + passkey` for GitHub-side secret/variable mutation, GitHub App
+- Require scoped passkey approval for GitHub-side secret/variable mutation, GitHub App
   install or permission mutation, repository settings mutation, ruleset/branch
   protection mutation, collaborator mutation, repository archive/delete/transfer,
   and destructive cleanup outside the bounded post-merge path.

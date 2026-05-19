@@ -21,7 +21,7 @@ test("vtdd-mcp-ver architecture doc preserves governance over MCP", () => {
   assert.equal(doc.includes("MCP is an interface layer inside that system."), true);
   assert.equal(doc.includes("MCP is not the source of truth"), true);
   assert.equal(doc.includes("MCP must not create a separate weaker or stronger governance model."), true);
-  assert.equal(doc.includes("High-risk operations remain `GO + passkey`."), true);
+  assert.equal(doc.includes("High-risk operations remain governed by scoped passkey approval."), true);
   assert.equal(doc.includes("MCP is not permanently read-only."), true);
 });
 

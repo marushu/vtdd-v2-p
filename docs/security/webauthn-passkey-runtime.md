@@ -15,6 +15,11 @@ High-risk operations must be unlocked through a real WebAuthn/passkey
 challenge, verified by the worker runtime, and converted into a short-lived
 approval grant that Butler can use on the next high-risk request.
 
+When the same-origin approval page clearly displays the target scope before
+the user approves, that real passkey approval grant is treated as signed `GO`
+for that one scoped high-risk execution. Butler should not ask for a separate
+chat `GO` after the scoped passkey ceremony succeeds.
+
 ## Current Endpoints
 
 - `POST /v2/approval/passkey/register/options`

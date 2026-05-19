@@ -38,7 +38,7 @@ permission to act.
   mutation, and destructive operations still follow the repository authority
   boundary in `AGENTS.md` and `docs/security/consent-approval-model.md`.
 - GitHub App installation, permission, and Actions secret mutation require
-  `GO + passkey`.
+  scoped passkey approval.
 
 ## Secret Registration Boundary
 
@@ -47,7 +47,7 @@ them. Registering or updating those secrets is a high-risk external effect and
 is not completed by code changes alone.
 
 Before production use, the owner must approve syncing the App IDs and private
-keys into GitHub Actions secrets with `GO + passkey`.
+keys into GitHub Actions secrets with scoped passkey approval.
 
 Until the new secrets are configured:
 

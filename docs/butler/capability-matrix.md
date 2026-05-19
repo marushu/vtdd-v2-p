@@ -132,7 +132,7 @@ passkey operator, prefer that route over a Mac-only instruction.
 4. Codex fallback reviewer contract: Gemini/Codex, requested/completed/blocked (#156)
 5. Reviewer evidence aggregation: requested/completed/blocked without overclaiming
 6. Surface update guidance: Instructions/Action Schema/Cloudflare deploy links
-7. High-risk operator flows: merge/deploy/issue close under GO + passkey
+7. High-risk operator flows: merge/deploy/issue close under scoped passkey approval
 
 ## Completion Rule
 

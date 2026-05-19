@@ -227,7 +227,7 @@ The same operation classes apply regardless of surface:
 - permission mutation
 - destructive external changes
 
-High-risk operations remain `GO + passkey`.
+High-risk operations remain governed by scoped passkey approval.
 
 Butler, Mac Codex, and VPS Codex CLI must converge on the same capability
 registry. MCP is not permanently read-only. It simply must not skip governance.

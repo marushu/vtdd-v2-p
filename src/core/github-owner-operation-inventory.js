@@ -44,7 +44,7 @@ export const GitHubOwnerOperationInventory = Object.freeze([
     status: GitHubOwnerOperationStatus.UNSUPPORTED,
     requiredGitHubAppPermission: "issues:write",
     requiredButlerActionSurface: "github_write.issue_update",
-    requiredPasskeyOperatorBoundary: "exact payload + human GO for bounded edits; GO + passkey when closing after merge",
+    requiredPasskeyOperatorBoundary: "exact payload + human GO for bounded edits; scoped passkey approval when closing after merge",
     runtimeTruthVerificationMethod: "PATCH /repos/{owner}/{repo}/issues/{issue_number} then read back changed fields",
     remediationIssue: ISSUE_244
   },
@@ -54,7 +54,7 @@ export const GitHubOwnerOperationInventory = Object.freeze([
     status: GitHubOwnerOperationStatus.GATED,
     requiredGitHubAppPermission: "issues:write and pull_requests:read",
     requiredButlerActionSurface: "github_high_risk.issue_close",
-    requiredPasskeyOperatorBoundary: "explicit GO + real passkey/operator approval",
+    requiredPasskeyOperatorBoundary: "scoped passkey approval",
     runtimeTruthVerificationMethod: "verify PR merged_at, PATCH issue state=closed, then read issue state",
     remediationIssue: null
   },
@@ -74,7 +74,7 @@ export const GitHubOwnerOperationInventory = Object.freeze([
     status: GitHubOwnerOperationStatus.UNSUPPORTED,
     requiredGitHubAppPermission: "issues:write",
     requiredButlerActionSurface: "github_write.issue_comment_delete",
-    requiredPasskeyOperatorBoundary: "GO + passkey/operator approval when deletion is destructive or evidence-bearing",
+    requiredPasskeyOperatorBoundary: "scoped passkey approval when deletion is destructive or evidence-bearing",
     runtimeTruthVerificationMethod: "DELETE /repos/{owner}/{repo}/issues/comments/{comment_id} then verify comment is absent/tombstoned",
     remediationIssue: ISSUE_244
   },
@@ -104,7 +104,7 @@ export const GitHubOwnerOperationInventory = Object.freeze([
     status: GitHubOwnerOperationStatus.UNSUPPORTED,
     requiredGitHubAppPermission: "pull_requests:write and issues:write",
     requiredButlerActionSurface: "github_write.pull_state_update",
-    requiredPasskeyOperatorBoundary: "exact payload + human GO; GO + passkey for destructive state transitions if policy marks high-risk",
+    requiredPasskeyOperatorBoundary: "exact payload + human GO; scoped passkey approval for destructive state transitions if policy marks high-risk",
     runtimeTruthVerificationMethod: "PATCH /pulls/{pull_number} or related PR endpoints, then read PR state",
     remediationIssue: ISSUE_244
   },
@@ -114,7 +114,7 @@ export const GitHubOwnerOperationInventory = Object.freeze([
     status: GitHubOwnerOperationStatus.GATED,
     requiredGitHubAppPermission: "pull_requests:write",
     requiredButlerActionSurface: "github_high_risk.pull_ready_for_review",
-    requiredPasskeyOperatorBoundary: "explicit GO + real passkey/operator approval",
+    requiredPasskeyOperatorBoundary: "scoped passkey approval",
     runtimeTruthVerificationMethod: "read draft=true, GraphQL markPullRequestReadyForReview, then verify isDraft=false",
     remediationIssue: null
   },
@@ -124,7 +124,7 @@ export const GitHubOwnerOperationInventory = Object.freeze([
     status: GitHubOwnerOperationStatus.GATED,
     requiredGitHubAppPermission: "pull_requests:write and contents:write",
     requiredButlerActionSurface: "github_high_risk.pull_merge",
-    requiredPasskeyOperatorBoundary: "explicit GO + real passkey/operator approval",
+    requiredPasskeyOperatorBoundary: "scoped passkey approval",
     runtimeTruthVerificationMethod: "PUT /pulls/{pull_number}/merge then read merged_at and merge_commit_sha",
     remediationIssue: null
   },
@@ -144,7 +144,7 @@ export const GitHubOwnerOperationInventory = Object.freeze([
     status: GitHubOwnerOperationStatus.UNSUPPORTED,
     requiredGitHubAppPermission: "contents:write",
     requiredButlerActionSurface: "github_write.branch_ref_update_delete",
-    requiredPasskeyOperatorBoundary: "exact payload + human GO for scoped ref update; deletion only for merged scoped branch or GO + passkey if destructive",
+    requiredPasskeyOperatorBoundary: "exact payload + human GO for scoped ref update; deletion only for merged scoped branch or scoped passkey approval if destructive",
     runtimeTruthVerificationMethod: "PATCH/DELETE git refs, then read branch/ref absence or updated sha",
     remediationIssue: ISSUE_244
   },
@@ -154,7 +154,7 @@ export const GitHubOwnerOperationInventory = Object.freeze([
     status: GitHubOwnerOperationStatus.UNSUPPORTED,
     requiredGitHubAppPermission: "actions:write and actions:read",
     requiredButlerActionSurface: "github_actions.workflow_governed_control",
-    requiredPasskeyOperatorBoundary: "exact payload + human GO for bounded dispatch/rerun; GO + passkey for cancel/destructive cleanup",
+    requiredPasskeyOperatorBoundary: "exact payload + human GO for bounded dispatch/rerun; scoped passkey approval for cancel/destructive cleanup",
     runtimeTruthVerificationMethod: "workflow dispatch/cancel/rerun API then read run status, conclusion, URL, and artifact state",
     remediationIssue: ISSUE_244
   },
@@ -184,7 +184,7 @@ export const GitHubOwnerOperationInventory = Object.freeze([
     status: GitHubOwnerOperationStatus.GATED,
     requiredGitHubAppPermission: "secrets:write, variables:write, actions:write, environments:write as applicable",
     requiredButlerActionSurface: "github_actions_secret_sync and github_admin.variable_governed_change",
-    requiredPasskeyOperatorBoundary: "explicit GO + real passkey/operator approval; never expose raw secret material",
+    requiredPasskeyOperatorBoundary: "scoped passkey approval; never expose raw secret material",
     runtimeTruthVerificationMethod: "encrypted secret/variable write result plus metadata readback without raw value",
     remediationIssue: null
   },
@@ -194,7 +194,7 @@ export const GitHubOwnerOperationInventory = Object.freeze([
     status: GitHubOwnerOperationStatus.UNSUPPORTED,
     requiredGitHubAppPermission: "contents:write and packages:write where applicable",
     requiredButlerActionSurface: "github_release.governed_release_control",
-    requiredPasskeyOperatorBoundary: "exact payload + human GO for draft metadata; GO + passkey for publish/delete",
+    requiredPasskeyOperatorBoundary: "exact payload + human GO for draft metadata; scoped passkey approval for publish/delete",
     runtimeTruthVerificationMethod: "release/tag/package API mutation then read release/tag/package state and URL",
     remediationIssue: ISSUE_244
   },
