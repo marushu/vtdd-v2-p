@@ -366,6 +366,14 @@ export function renderPasskeyOperatorPage(input = {}) {
         return new Error(parts.join("\\n"));
       }
 
+      function readRequiredRepositoryInput() {
+        const repositoryInput = document.getElementById("repo-input").value.trim();
+        if (!repositoryInput) {
+          throw new Error("repositoryInput is required before approval/deploy. Deploy does not require issueNumber or pullNumber, but it does require owner/repo.");
+        }
+        return repositoryInput;
+      }
+
       async function copyText(text) {
         const value = String(text || "");
         if (!value) {
@@ -575,6 +583,7 @@ export function renderPasskeyOperatorPage(input = {}) {
 
       document.getElementById("approve-button").addEventListener("click", async () => {
         try {
+          const repositoryInput = readRequiredRepositoryInput();
           approveOutput.textContent = "approval challenge request...";
           const challengeResponse = await fetch("${apiBase}/approval/passkey/challenge", {
             method: "POST",
@@ -582,7 +591,7 @@ export function renderPasskeyOperatorPage(input = {}) {
             body: JSON.stringify({
               phase: document.getElementById("phase-input").value || "execution",
               highRiskKind: document.getElementById("risk-kind-input").value,
-              repositoryInput: document.getElementById("repo-input").value,
+              repositoryInput,
               issueNumber: Number(document.getElementById("issue-input").value || 0) || null,
               pullNumber: readApprovalPullNumber(),
               issueContext: {
@@ -590,7 +599,7 @@ export function renderPasskeyOperatorPage(input = {}) {
               },
               policyInput: {
                 actionType: document.getElementById("action-type-input").value,
-                repositoryInput: document.getElementById("repo-input").value,
+                repositoryInput,
                 highRiskKind: document.getElementById("risk-kind-input").value
               }
             })
@@ -664,13 +673,14 @@ export function renderPasskeyOperatorPage(input = {}) {
           if (!latestApprovalGrantId) {
             throw new Error("approvalGrantId is required before production deploy");
           }
+          const repositoryInput = readRequiredRepositoryInput();
           clearDeployRunLink();
           deployOutput.textContent = "production deploy request...";
           const deployResponse = await fetch("${apiBase}/action/deploy", {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({
-              repository: document.getElementById("repo-input").value,
+              repository: repositoryInput,
               issueNumber: Number(document.getElementById("issue-input").value || 0) || null,
               policyInput: {
                 approvalPhrase: "GO",

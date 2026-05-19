@@ -184,6 +184,14 @@ test("worker returns Butler-facing Cloudflare page directory", async () => {
   assert.equal(body.pages.some((page) => page.path === "/setup/known-good"), true);
   assert.equal(body.pages.some((page) => page.path === "/setup/diagnostics"), true);
   assert.equal(body.pages.some((page) => page.id === "deploy_operator"), true);
+  assert.equal(
+    body.pages.some(
+      (page) =>
+        page.id === "deploy_operator" &&
+        page.path.includes("repositoryInput=marushu%2Fvtdd-v2-p")
+    ),
+    true
+  );
   assert.equal(JSON.stringify(body).includes("vtdd.hibou-web.com"), false);
   assert.equal(JSON.stringify(body).includes("Bearer test-token"), false);
 });

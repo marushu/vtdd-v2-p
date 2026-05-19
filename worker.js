@@ -27594,6 +27594,14 @@ function renderPasskeyOperatorPage(input = {}) {
         return new Error(parts.join("\\n"));
       }
 
+      function readRequiredRepositoryInput() {
+        const repositoryInput = document.getElementById("repo-input").value.trim();
+        if (!repositoryInput) {
+          throw new Error("repositoryInput is required before approval/deploy. Deploy does not require issueNumber or pullNumber, but it does require owner/repo.");
+        }
+        return repositoryInput;
+      }
+
       async function copyText(text) {
         const value = String(text || "");
         if (!value) {
@@ -27803,6 +27811,7 @@ function renderPasskeyOperatorPage(input = {}) {
 
       document.getElementById("approve-button").addEventListener("click", async () => {
         try {
+          const repositoryInput = readRequiredRepositoryInput();
           approveOutput.textContent = "approval challenge request...";
           const challengeResponse = await fetch("${apiBase}/approval/passkey/challenge", {
             method: "POST",
@@ -27810,7 +27819,7 @@ function renderPasskeyOperatorPage(input = {}) {
             body: JSON.stringify({
               phase: document.getElementById("phase-input").value || "execution",
               highRiskKind: document.getElementById("risk-kind-input").value,
-              repositoryInput: document.getElementById("repo-input").value,
+              repositoryInput,
               issueNumber: Number(document.getElementById("issue-input").value || 0) || null,
               pullNumber: readApprovalPullNumber(),
               issueContext: {
@@ -27818,7 +27827,7 @@ function renderPasskeyOperatorPage(input = {}) {
               },
               policyInput: {
                 actionType: document.getElementById("action-type-input").value,
-                repositoryInput: document.getElementById("repo-input").value,
+                repositoryInput,
                 highRiskKind: document.getElementById("risk-kind-input").value
               }
             })
@@ -27892,13 +27901,14 @@ function renderPasskeyOperatorPage(input = {}) {
           if (!latestApprovalGrantId) {
             throw new Error("approvalGrantId is required before production deploy");
           }
+          const repositoryInput = readRequiredRepositoryInput();
           clearDeployRunLink();
           deployOutput.textContent = "production deploy request...";
           const deployResponse = await fetch("${apiBase}/action/deploy", {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({
-              repository: document.getElementById("repo-input").value,
+              repository: repositoryInput,
               issueNumber: Number(document.getElementById("issue-input").value || 0) || null,
               policyInput: {
                 approvalPhrase: "GO",
@@ -28506,10 +28516,10 @@ function buildVtddCloudflarePageDirectory(input = {}) {
     {
       id: "deploy_operator",
       label: "Deploy operator view",
-      path: "/v2/approval/passkey/operator?mode=deploy&actionType=deploy_production&highRiskKind=deploy_production&phase=execution",
+      path: "/v2/approval/passkey/operator?repositoryInput=marushu%2Fvtdd-v2-p&mode=deploy&actionType=deploy_production&highRiskKind=deploy_production&phase=execution",
       url: buildRuntimeUrl(
         runtimeOrigin,
-        "/v2/approval/passkey/operator?mode=deploy&actionType=deploy_production&highRiskKind=deploy_production&phase=execution"
+        "/v2/approval/passkey/operator?repositoryInput=marushu%2Fvtdd-v2-p&mode=deploy&actionType=deploy_production&highRiskKind=deploy_production&phase=execution"
       ),
       description: "production deploy approval \u3092\u767A\u884C\u30FB\u5B9F\u884C\u3059\u308B\u305F\u3081\u306E operator view \u3067\u3059\u3002",
       audience: ["owner", "operator"],
