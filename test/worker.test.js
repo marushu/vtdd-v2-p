@@ -148,15 +148,23 @@ test("worker serves v2 dashboard without exposing secrets", async () => {
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type"), /text\/html/);
   const body = await response.text();
-  assert.equal(body.includes("VTDD v2 operational dashboard"), true);
-  assert.equal(body.includes("Butler main chat"), true);
-  assert.equal(body.includes("Butler と会話の準備"), true);
+  assert.equal(body.includes("Butler chat shell"), true);
+  assert.equal(body.includes("dashboard main chat"), true);
+  assert.equal(body.includes("管理メニュー"), true);
+  assert.equal(body.includes("必要な時だけ開く"), true);
+  assert.equal(body.includes("color-scheme: light dark"), true);
+  assert.equal(body.includes("prefers-color-scheme: dark"), true);
   assert.equal(body.includes("自動更新なし"), true);
-  assert.equal(body.includes("meta refresh / polling を使いません"), true);
+  assert.equal(body.includes("自動更新・polling はありません"), true);
   assert.equal(body.includes("Issue #433"), true);
-  assert.equal(body.includes("LLM 直結の返信は未接続です"), true);
-  assert.equal(body.includes("下書きメモ（未送信）"), true);
-  assert.equal(body.includes("入力を送らず状態を読む"), true);
+  assert.equal(body.includes("未接続: この入力欄はまだ保存・送信・LLM 返信しません"), true);
+  assert.equal(body.includes("deploy が必要になった時は、普通のチャットと同じようにこの会話内へ scope 明示済みの passkey URL を出します"), true);
+  assert.equal(body.includes("実行 URL は会話例として常時表示しません"), true);
+  assert.equal(body.includes("deploy 用 passkey URL"), false);
+  assert.equal(body.includes("vtdd-v3-orchestrator.polished-tree-da7c.workers.dev"), false);
+  assert.equal(body.includes('href="#mobile-management"'), true);
+  assert.equal(body.includes("Butler V2 にメッセージ"), true);
+  assert.equal(body.includes("状態確認"), true);
   assert.equal(body.includes('name="text"'), false);
   assert.equal(/<meta[^>]+http-equiv=["']?refresh/i.test(body), false);
   assert.equal(body.includes("setInterval("), false);
@@ -166,7 +174,7 @@ test("worker serves v2 dashboard without exposing secrets", async () => {
     body.includes("/v2/approval/passkey/operator?repositoryInput=marushu%2Fvtdd-v2-p"),
     true
   );
-  assert.equal(body.includes('href="https://example.com/status">Health</a>'), true);
+  assert.equal(body.includes("/status"), true);
   assert.equal(body.includes("/v2/retrieve/startup-preflight"), true);
   assert.equal(body.includes("/v2/action/vps-runner-status"), true);
   assert.equal(body.includes("/v2/retrieve/operational-memory"), true);
@@ -179,7 +187,8 @@ test("worker serves v2 dashboard without exposing secrets", async () => {
   assert.equal(alias.status, 200);
   const aliasBody = await alias.text();
   assert.equal(aliasBody.includes("VTDD Butler"), true);
-  assert.equal(aliasBody.includes("Butler main chat"), true);
+  assert.equal(aliasBody.includes("dashboard main chat"), true);
+  assert.equal(aliasBody.includes("管理メニュー"), true);
   assert.equal(aliasBody.includes("自動更新なし"), true);
 });
 

@@ -59868,6 +59868,11 @@ function renderV2DashboardPage({ runtimeOrigin }) {
   const encodedRepository = encodeURIComponent(repository);
   const surfaces = [
     {
+      title: "Status page",
+      body: "\u4EBA\u9593\u5411\u3051\u306E runtime status\u3002raw /health JSON \u3067\u306F\u306A\u304F\u3001\u307E\u305A\u3053\u3053\u3092\u898B\u308B\u3002",
+      href: `${origin}/status`
+    },
+    {
       title: "Startup preflight",
       body: "AGENTS.md\u3001thread-independent startup\u3001runtime truth\u3001RAG\u3001self parity \u3092\u6700\u521D\u306B\u8AAD\u3080\u5165\u53E3\u3002",
       href: `${origin}/v2/retrieve/startup-preflight?repository=${encodedRepository}&currentSurface=dashboard&responseMode=action_visible`
@@ -59939,156 +59944,225 @@ function renderV2DashboardPage({ runtimeOrigin }) {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>VTDD v2 Dashboard</title>
   <style>
-    :root { color-scheme: light; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #182125; background: #f7faf7; }
-    body { margin: 0; }
-    main { width: min(1180px, calc(100% - 32px)); margin: 0 auto; padding: 28px 0 48px; }
-    header { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; margin-bottom: 20px; }
-    h1 { font-size: clamp(32px, 6vw, 56px); line-height: 1; margin: 8px 0; }
-    h2 { font-size: 24px; margin: 0 0 14px; }
-    h3 { margin: 0 0 8px; }
-    p { line-height: 1.7; color: #4d5c56; }
-    .eyebrow { color: #2c7658; font-size: 13px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
-    .panel { background: #fff; border: 1px solid #dce5dd; border-radius: 8px; padding: 22px; box-shadow: 0 10px 30px rgba(28, 44, 35, .06); margin: 16px 0; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
-    .card { border: 1px solid #dce5dd; border-radius: 8px; padding: 16px; background: #fbfdfb; }
-    .card h3 { margin: 0 0 8px; font-size: 19px; }
-    a.button, .card a, button { display: inline-flex; align-items: center; justify-content: center; border: 1px solid #b9cabe; border-radius: 7px; padding: 9px 12px; color: #0f513b; font-weight: 750; text-decoration: none; background: #f8fbf8; font: inherit; }
-    button.primary, a.primary { background: #247a5b; color: #fff; border-color: #247a5b; }
-    .card a { margin-top: 8px; }
-    .notice { border-color: #e6c6a0; background: #fff8ef; }
-    .danger { border-color: #e3b4a7; background: #fff5f3; }
-    .cockpit { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(300px, .8fr); gap: 16px; align-items: stretch; }
-    .chat-shell { min-height: 560px; display: grid; grid-template-rows: auto 1fr auto; gap: 14px; }
-    .thread-header { display: flex; justify-content: space-between; gap: 12px; align-items: center; border-bottom: 1px solid #e5eee7; padding-bottom: 12px; }
-    .thread-list { display: grid; gap: 12px; align-content: start; }
-    .bubble { max-width: 86%; border: 1px solid #dce5dd; border-radius: 8px; padding: 14px; background: #fbfdfb; }
-    .bubble.owner { margin-left: auto; background: #eef7f2; border-color: #c8dfd2; }
-    .composer { display: grid; gap: 10px; border-top: 1px solid #e5eee7; padding-top: 12px; }
-    textarea { width: 100%; min-height: 120px; box-sizing: border-box; border: 1px solid #b9cabe; border-radius: 8px; padding: 12px; font: inherit; resize: vertical; background: #fff; color: #182125; }
-    .composer-actions { display: flex; flex-wrap: wrap; gap: 10px; }
-    .inspector { display: grid; gap: 12px; align-content: start; }
-    .lane { border: 1px solid #dce5dd; border-radius: 8px; padding: 14px; background: #fbfdfb; }
-    .lane-title { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; margin-bottom: 8px; }
-    .pill { display: inline-flex; align-items: center; border: 1px solid #c8d8cc; border-radius: 999px; padding: 4px 9px; color: #315245; background: #f7faf7; font-size: 13px; font-weight: 750; }
-    .quick-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-    .muted { color: #63716b; }
-    code { color: #596860; }
-    ul { margin: 0; padding-left: 20px; color: #4d5c56; line-height: 1.8; }
-    @media (max-width: 820px) { .cockpit { grid-template-columns: 1fr; } .chat-shell { min-height: 520px; } .bubble { max-width: 100%; } }
-    @media (max-width: 640px) { header { display: block; } main { width: min(100% - 20px, 1120px); padding-top: 16px; } .composer-actions a, .composer-actions button { width: 100%; } }
+    :root {
+      color-scheme: light dark;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --page-bg: #f7f7f4;
+      --text: #151515;
+      --muted: #64645f;
+      --soft: #f0f0eb;
+      --panel: #ffffff;
+      --panel-strong: #fbfbf7;
+      --border: #ddddd5;
+      --button: #f4f4ef;
+      --owner-bubble: #171717;
+      --owner-text: #f7f7f4;
+      --shadow: rgba(20, 20, 20, .12);
+      color: var(--text);
+      background: var(--page-bg);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --page-bg: #050505;
+        --text: #f7f7f4;
+        --muted: #9d9d98;
+        --soft: #202020;
+        --panel: #101010;
+        --panel-strong: #171717;
+        --border: #2a2a2a;
+        --button: #171717;
+        --owner-bubble: #f2f2ee;
+        --owner-text: #111;
+        --shadow: rgba(0, 0, 0, .42);
+      }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--page-bg); }
+    main { min-height: 100dvh; display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 320px); gap: 18px; padding: 16px; }
+    h1, h2, h3, p { margin-top: 0; }
+    h1 { font-size: 22px; line-height: 1.1; margin-bottom: 4px; }
+    h2 { font-size: 19px; margin-bottom: 12px; }
+    h3 { font-size: 15px; margin-bottom: 8px; }
+    p { line-height: 1.65; color: var(--text); }
+    a { color: inherit; }
+    .app-shell { min-height: calc(100dvh - 32px); display: grid; grid-template-rows: auto 1fr auto; }
+    .topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 4px 2px 20px; }
+    .top-left, .top-right { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .round-button, .tool-button, .send-button, .icon-button { display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border); background: var(--button); color: var(--text); text-decoration: none; font: inherit; font-weight: 750; }
+    .round-button { width: 44px; height: 44px; border-radius: 999px; font-size: 24px; flex: 0 0 auto; }
+    .tool-button { min-height: 40px; border-radius: 999px; padding: 0 14px; }
+    .thread-title { min-width: 0; }
+    .thread-title span { display: block; color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .chat-scroll { min-height: 0; overflow: auto; padding: 8px 4px 118px; display: flex; flex-direction: column; gap: 22px; scrollbar-width: thin; }
+    .bubble { max-width: min(760px, 88%); color: var(--text); font-size: 17px; line-height: 1.72; }
+    .bubble strong { display: block; color: var(--muted); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 8px; }
+    .bubble p { color: var(--text); margin-bottom: 12px; }
+    .bubble ul { margin: 0; padding-left: 22px; color: var(--text); line-height: 1.85; }
+    .bubble.owner { align-self: flex-end; background: var(--owner-bubble); color: var(--owner-text); border-radius: 24px; padding: 12px 16px; }
+    .bubble.owner p { color: var(--owner-text); margin: 0; }
+    .connection-note { display: inline-flex; align-items: center; width: fit-content; border: 1px solid var(--border); border-radius: 999px; padding: 5px 10px; color: var(--muted); font-size: 13px; }
+    .chat-link { color: var(--text); text-decoration-thickness: 1px; text-underline-offset: 4px; font-weight: 750; }
+    .composer { position: fixed; left: 16px; right: 354px; bottom: max(16px, env(safe-area-inset-bottom)); display: grid; gap: 8px; z-index: 4; }
+    .composer-box { display: grid; grid-template-columns: 44px minmax(0, 1fr) 38px 44px; align-items: end; gap: 8px; min-height: 62px; padding: 8px; border: 1px solid var(--border); border-radius: 28px; background: var(--panel-strong); box-shadow: 0 16px 60px var(--shadow); }
+    textarea { width: 100%; min-height: 44px; max-height: 160px; border: 0; outline: 0; resize: vertical; padding: 10px 2px; color: var(--text); background: transparent; font: inherit; line-height: 1.45; }
+    textarea::placeholder { color: var(--muted); }
+    .icon-button { width: 38px; height: 38px; border-radius: 999px; font-size: 24px; }
+    .send-button { width: 44px; height: 44px; border-radius: 999px; background: var(--text); color: var(--page-bg); font-size: 22px; }
+    .composer-status { padding-left: 16px; color: var(--muted); font-size: 12px; }
+    .sidebar { position: sticky; top: 16px; align-self: start; max-height: calc(100dvh - 32px); overflow: auto; border: 1px solid var(--border); border-radius: 18px; background: var(--panel); }
+    .sidebar > summary { display: flex; justify-content: space-between; align-items: center; gap: 10px; min-height: 58px; padding: 14px; list-style: none; }
+    .sidebar > summary::-webkit-details-marker { display: none; }
+    .sidebar-content { display: grid; gap: 12px; padding: 0 14px 14px; }
+    .sidebar-header { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+    .eyebrow { color: var(--muted); font-size: 11px; font-weight: 850; letter-spacing: .1em; text-transform: uppercase; }
+    .lane, details { border: 1px solid var(--border); border-radius: 14px; padding: 12px; background: var(--panel-strong); }
+    .lane-title { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+    .pill { display: inline-flex; align-items: center; border: 1px solid var(--border); border-radius: 999px; padding: 3px 8px; color: var(--text); background: var(--soft); font-size: 12px; white-space: nowrap; }
+    .quick-actions, .surface-list { display: grid; gap: 8px; }
+    .quick-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .quick-actions a, .surface-list a { display: inline-flex; align-items: center; justify-content: center; min-height: 36px; border: 1px solid var(--border); border-radius: 10px; padding: 7px 9px; color: var(--text); text-decoration: none; background: var(--soft); font-weight: 750; font-size: 13px; text-align: center; }
+    summary { cursor: pointer; color: var(--text); font-weight: 800; }
+    .muted { color: var(--muted); }
+    code { color: var(--text); overflow-wrap: anywhere; }
+    .mobile-tools { display: none; }
+    .menu-callout { color: var(--muted); font-size: 12px; line-height: 1.55; }
+    @media (min-width: 1180px) {
+      .chat-scroll { align-items: center; }
+      .bubble.owner { margin-right: calc((100% - 760px) / 2); }
+    }
+    @media (max-width: 900px) {
+      main { display: block; padding: 14px 14px 0; }
+      .app-shell { min-height: 100dvh; }
+      .sidebar { display: none; }
+      .composer { left: 14px; right: 14px; }
+      .mobile-tools { display: block; margin: 0 0 140px; }
+      .chat-scroll { padding-bottom: 104px; }
+      .bubble { max-width: 100%; font-size: 16px; }
+      .bubble.owner { max-width: 82%; }
+      .topbar { padding-bottom: 18px; }
+    }
+    @media (max-width: 460px) {
+      main { padding: 12px 10px 0; }
+      .composer { left: 10px; right: 10px; }
+      .composer-box { grid-template-columns: 40px minmax(0, 1fr) 34px 40px; border-radius: 24px; }
+      .round-button { width: 40px; height: 40px; }
+      .tool-button { min-height: 38px; padding: 0 12px; }
+      .send-button { width: 40px; height: 40px; }
+      .icon-button { width: 34px; height: 34px; }
+    }
   </style>
 </head>
 <body>
   <main>
-    <header>
-      <div>
-        <p class="eyebrow">VTDD v2 operational dashboard</p>
-        <h1>VTDD Butler</h1>
-        <p>v2 \u306E GitHub App / VPS runner / Gemini reviewer / RAG / passkey / runtime truth \u3092\u305D\u306E\u307E\u307E\u4F7F\u3046 dashboard \u5165\u53E3\u3067\u3059\u3002</p>
-      </div>
-      <a class="button" href="${escapeDashboardHtml(origin)}/status">Health</a>
-    </header>
-
-    <section class="panel cockpit" aria-label="Butler conversation cockpit">
-      <div class="chat-shell">
-        <div class="thread-header">
-          <div>
-            <p class="eyebrow">Butler main chat</p>
-            <h2>Butler \u3068\u4F1A\u8A71\u306E\u6E96\u5099</h2>
+    <section class="app-shell" aria-label="Butler chat shell">
+      <header class="topbar">
+        <div class="top-left">
+          <a class="round-button" href="${escapeDashboardHtml(origin)}/dashboard" aria-label="\u30E1\u30CB\u30E5\u30FC">\u2261</a>
+          <div class="thread-title">
+            <h1>VTDD Butler</h1>
+            <span>${escapeDashboardHtml(repository)} \u30FB dashboard main chat</span>
           </div>
-          <span class="pill">\u81EA\u52D5\u66F4\u65B0\u306A\u3057</span>
         </div>
-
-        <div class="thread-list">
-          <article class="bubble">
-            <strong>Butler</strong>
-            <p>\u3054\u4E3B\u4EBA\u69D8\u3001\u3053\u3053\u304C v2 \u306E\u65B0\u3057\u3044\u5165\u53E3\u3067\u3059\u3002\u666E\u6BB5\u901A\u308A\u8A71\u3057\u3001\u5FC5\u8981\u306B\u306A\u3063\u305F\u3089 Issue \u5019\u88DC\u3001\u958B\u767A queue \u5019\u88DC\u3001\u9032\u884C\u4E2D execution\u3001passkey operator \u3078\u4EA4\u901A\u6574\u7406\u3057\u307E\u3059\u3002</p>
-          </article>
-          <article class="bubble owner">
-            <strong>Owner</strong>
-            <p>\u4F8B: \u3076\u3044\u306E PR \u72B6\u614B\u3092\u898B\u3066\u3002TOMIO \u306B\u65B0\u3057\u3044\u958B\u767A\u3092\u6295\u3052\u305F\u3044\u3002dashboard \u306E\u5931\u6557 run \u3092\u7247\u4ED8\u3051\u305F\u3044\u3002</p>
-          </article>
-          <article class="bubble">
-            <strong>Butler</strong>
-            <p>\u3053\u306E MVP \u3067\u306F\u307E\u3060 LLM \u76F4\u7D50\u306E\u8FD4\u4FE1\u306F\u672A\u63A5\u7D9A\u3067\u3059\u3002\u5165\u529B\u6B04\u306F\u9001\u4FE1\u3055\u308C\u306A\u3044\u4E0B\u66F8\u304D\u30E1\u30E2\u3067\u3001\u65E2\u5B58 v2 runtime truth \u3078\u9032\u3080\u305F\u3081\u306E\u5B89\u5168\u306A\u63A7\u3048\u5BA4\u3068\u3057\u3066\u4F7F\u3044\u307E\u3059\u3002</p>
-          </article>
+        <div class="top-right">
+          <a class="tool-button" href="#mobile-management">\u7BA1\u7406</a>
+          <a class="round-button" href="${escapeDashboardHtml(origin)}/v2/approval/passkey/operator?repositoryInput=${encodedRepository}" aria-label="Passkey">\u25C7</a>
         </div>
+      </header>
 
-        <div class="composer">
-          <label for="butler-message"><strong>\u4E0B\u66F8\u304D\u30E1\u30E2\uFF08\u672A\u9001\u4FE1\uFF09</strong></label>
-          <textarea id="butler-message" placeholder="Butler \u306B\u8A71\u3059\u5185\u5BB9\u3002\u307E\u3060\u4FDD\u5B58\u3082\u9001\u4FE1\u3082\u305B\u305A\u3001\u78BA\u8A8D\u3057\u3066\u304B\u3089\u9032\u3081\u307E\u3059\u3002"></textarea>
-          <div class="composer-actions">
-            <a class="primary" href="${escapeDashboardHtml(origin)}/v2/retrieve/startup-preflight?repository=${encodedRepository}&currentSurface=dashboard&responseMode=action_visible">\u5165\u529B\u3092\u9001\u3089\u305A\u72B6\u614B\u3092\u8AAD\u3080</a>
-            ${cockpitActions.map((action) => `<a href="${escapeDashboardHtml(action.href)}">${escapeDashboardHtml(action.label)}</a>`).join("")}
+      <div class="chat-scroll">
+        <article class="bubble owner">
+          <p>\u3053\u3053\u306F\u30AB\u30B9\u30BF\u30E0 GPT \u306E Butler\u3002</p>
+        </article>
+        <article class="bubble">
+          <strong>Butler</strong>
+          <p>\u306F\u3044\u3002\u79C1\u306F v2 \u306E Butler \u3068\u3057\u3066\u3001Issue \u99C6\u52D5\u30FBGitHub runtime truth\u30FBVPS runner\u30FBGemini reviewer\u30FBRAG\u30FBpasskey \u5883\u754C\u3092\u6271\u3044\u307E\u3059\u3002</p>
+          <p>\u3053\u306E\u753B\u9762\u306F\u4F1A\u8A71\u3092\u4E3B\u5F79\u306B\u3059\u308B\u305F\u3081\u306E chat-first shell \u3067\u3059\u3002\u7BA1\u7406\u753B\u9762\u306F\u53F3\u306E\u30B5\u30A4\u30C9\u30D0\u30FC\u3078\u9000\u907F\u3057\u307E\u3057\u305F\u3002</p>
+          <ul>
+            <li>\u95A2\u9023 repo: <code>${escapeDashboardHtml(repository)}</code></li>
+            <li>Issue \u5019\u88DC: #433 \u306E\u7D99\u7D9A\u30B9\u30E9\u30A4\u30B9</li>
+            <li>\u5B9F\u884C: \u307E\u3060 dashboard \u304B\u3089\u81EA\u52D5 dispatch \u3057\u307E\u305B\u3093</li>
+          </ul>
+        </article>
+        <article class="bubble owner">
+          <p>\u7BA1\u7406\u753B\u9762\u7684\u306A\u30E4\u30C4\u306F\u30B5\u30A4\u30C9\u30D0\u30FC\u306B\u7F6E\u3051\u3070\u826F\u304F\u306A\u3044\uFF1F</p>
+        </article>
+        <article class="bubble">
+          <strong>Butler</strong>
+          <p>\u305D\u306E\u65B9\u91DD\u3067\u9032\u3081\u307E\u3059\u3002\u4E2D\u592E\u306F\u30C1\u30E3\u30C3\u30C8\u3060\u3051\u3001\u72B6\u614B\u78BA\u8A8D\u30FB\u9032\u6357\u30FBRAG\u30FBworkflow\u30FBprototype cleanup \u306E\u6271\u3044\u306F\u30B5\u30A4\u30C9\u30D0\u30FC\u306E\u30E1\u30CB\u30E5\u30FC\u304B\u3089\u5FC5\u8981\u306A\u6642\u3060\u3051\u958B\u304D\u307E\u3059\u3002</p>
+          <p>deploy \u304C\u5FC5\u8981\u306B\u306A\u3063\u305F\u6642\u306F\u3001\u666E\u901A\u306E\u30C1\u30E3\u30C3\u30C8\u3068\u540C\u3058\u3088\u3046\u306B\u3053\u306E\u4F1A\u8A71\u5185\u3078 scope \u660E\u793A\u6E08\u307F\u306E passkey URL \u3092\u51FA\u3057\u307E\u3059\u3002\u3053\u306E shell \u306F\u307E\u3060\u672A\u63A5\u7D9A\u306A\u306E\u3067\u3001\u5B9F\u884C URL \u306F\u4F1A\u8A71\u4F8B\u3068\u3057\u3066\u5E38\u6642\u8868\u793A\u3057\u307E\u305B\u3093\u3002</p>
+          <span class="connection-note">\u672A\u63A5\u7D9A: \u3053\u306E\u5165\u529B\u6B04\u306F\u307E\u3060\u4FDD\u5B58\u30FB\u9001\u4FE1\u30FBLLM \u8FD4\u4FE1\u3057\u307E\u305B\u3093</span>
+        </article>
+
+        <details id="mobile-management" class="mobile-tools">
+          <summary>\u7BA1\u7406\u30E1\u30CB\u30E5\u30FC\u3092\u958B\u304F</summary>
+          <div class="surface-list">
+            ${surfaces.map((surface) => `<a href="${escapeDashboardHtml(surface.href)}">${escapeDashboardHtml(surface.title)}</a>`).join("")}
+            ${workflows.map(([title, href]) => `<a href="${escapeDashboardHtml(href)}">${escapeDashboardHtml(title)}</a>`).join("")}
           </div>
-          <p class="muted">\u30DE\u30A4\u30AF\u4E2D\u3084\u5165\u529B\u4E2D\u306E\u753B\u9762\u7834\u58CA\u3092\u907F\u3051\u308B\u305F\u3081\u3001\u3053\u306E\u30DA\u30FC\u30B8\u306F meta refresh / polling \u3092\u4F7F\u3044\u307E\u305B\u3093\u3002</p>
-        </div>
+        </details>
       </div>
 
-      <aside class="inspector" aria-label="Butler organized state">
+      <div class="composer" aria-label="Butler composer">
+        <div class="composer-box">
+          <span class="icon-button" aria-hidden="true">\uFF0B</span>
+          <textarea id="butler-message" placeholder="Butler V2 \u306B\u30E1\u30C3\u30BB\u30FC\u30B8..." aria-label="Butler V2 \u306B\u30E1\u30C3\u30BB\u30FC\u30B8\u3002\u73FE\u5728\u306F\u672A\u9001\u4FE1\u3067\u3059\u3002"></textarea>
+          <span class="icon-button" aria-hidden="true">\u266A</span>
+          <span class="send-button" aria-hidden="true">\u2191</span>
+        </div>
+        <div class="composer-status">\u672A\u63A5\u7D9A\u3002\u5165\u529B\u306F\u4FDD\u5B58\u3082\u9001\u4FE1\u3082\u3055\u308C\u307E\u305B\u3093\u3002\u81EA\u52D5\u66F4\u65B0\u30FBpolling \u306F\u3042\u308A\u307E\u305B\u3093\u3002</div>
+      </div>
+    </section>
+
+    <details id="tools" class="sidebar" aria-label="\u7BA1\u7406\u30B5\u30A4\u30C9\u30D0\u30FC\u30E1\u30CB\u30E5\u30FC">
+      <summary>
+        <span>
+          <span class="eyebrow">\u7BA1\u7406\u30E1\u30CB\u30E5\u30FC</span>
+          <strong>\u5FC5\u8981\u306A\u6642\u3060\u3051\u958B\u304F</strong>
+        </span>
+        <span class="pill">\u81EA\u52D5\u66F4\u65B0\u306A\u3057</span>
+      </summary>
+      <div class="sidebar-content">
+        <p class="menu-callout">\u72B6\u614B\u78BA\u8A8D\u3001\u9032\u6357\u3001RAG\u3001workflow \u306F\u3053\u3053\u304B\u3089\u9077\u79FB\u3057\u307E\u3059\u3002\u666E\u6BB5\u306E\u753B\u9762\u306F\u30C1\u30E3\u30C3\u30C8\u3092\u4E3B\u5F79\u306B\u3057\u307E\u3059\u3002</p>
+
         <div class="lane">
           <div class="lane-title"><h3>\u95A2\u9023 repo</h3><span class="pill">resolved</span></div>
           <p><strong>${escapeDashboardHtml(repository)}</strong></p>
-          <p class="muted">nickname resolution / startup preflight / GitHub runtime truth \u306F\u65E2\u5B58 v2 route \u3067\u78BA\u8A8D\u3057\u307E\u3059\u3002</p>
+          <p class="muted">nickname / startup preflight / GitHub runtime truth \u306F\u65E2\u5B58 v2 route \u3067\u78BA\u8A8D\u3057\u307E\u3059\u3002</p>
         </div>
+
         <div class="lane">
           <div class="lane-title"><h3>Issue \u5019\u88DC</h3><span class="pill">draft</span></div>
-          <ul>
-            <li>\u4F1A\u8A71\u5165\u53E3\u306E UI \u306F Issue #433 \u3068\u3057\u3066\u56FA\u5B9A\u6E08\u307F\u3002</li>
-            <li>\u672C\u7269\u306E\u53CC\u65B9\u5411\u30C1\u30E3\u30C3\u30C8\u3001\u97F3\u58F0 overlay\u3001\u30D5\u30A1\u30A4\u30EB upload \u306F\u6B21\u306E bounded Issue \u306B\u5206\u3051\u307E\u3059\u3002</li>
-          </ul>
+          <p>\u4F1A\u8A71\u5165\u53E3\u306E UI \u306F Issue #433 \u3068\u3057\u3066\u56FA\u5B9A\u6E08\u307F\u3002\u672C\u7269\u306E\u53CC\u65B9\u5411\u30C1\u30E3\u30C3\u30C8\u3001\u97F3\u58F0 overlay\u3001\u30D5\u30A1\u30A4\u30EB upload \u306F\u5225 Issue \u3067\u3059\u3002</p>
         </div>
-        <div class="lane">
-          <div class="lane-title"><h3>\u958B\u767A queue \u5019\u88DC</h3><span class="pill">manual handoff</span></div>
-          <p>\u4ECA\u306F\u65E2\u5B58 remote Codex / VPS runner workflow \u3078 owner \u304C\u660E\u793A\u7684\u306B\u9032\u3081\u307E\u3059\u3002dashboard \u304B\u3089\u52DD\u624B\u306B dispatch \u3057\u307E\u305B\u3093\u3002</p>
-        </div>
+
         <div class="lane">
           <div class="lane-title"><h3>\u9032\u884C\u4E2D execution</h3><span class="pill">runtime truth</span></div>
-          <p>\u9032\u6357\u306F GitHub Actions / VPS runner status / execution progress route \u3092 source of truth \u3068\u3057\u3066\u8AAD\u307F\u307E\u3059\u3002</p>
+          <p>\u9032\u6357\u306F GitHub Actions / VPS runner status / execution progress route \u304B\u3089\u8AAD\u307F\u307E\u3059\u3002</p>
           <div class="quick-actions">
-            <a href="${escapeDashboardHtml(origin)}/v2/action/vps-runner-status?repository=${encodedRepository}&responseMode=action_visible">runner</a>
-            <a href="${escapeDashboardHtml(origin)}/v2/action/progress?repository=${encodedRepository}&responseMode=action_visible">progress</a>
+            ${cockpitActions.map((action) => `<a href="${escapeDashboardHtml(action.href)}">${escapeDashboardHtml(action.label)}</a>`).join("")}
           </div>
         </div>
-      </aside>
-    </section>
 
-    <section class="panel notice">
-      <h2>\u73FE\u5728\u306E\u5224\u65AD</h2>
-      <p>v3 dashboard \u306F prototype \u3068\u3057\u3066\u6271\u3044\u3001\u5B9F\u904B\u7528\u306E\u672C\u7DDA\u306F v2-p \u306B\u623B\u3057\u307E\u3059\u3002\u3053\u306E dashboard \u306F\u65B0\u3057\u3044\u5B9F\u884C\u6A29\u9650\u3092\u6301\u305F\u305A\u3001\u65E2\u5B58\u306E v2 runtime route \u3078 owner \u3092\u6848\u5185\u3057\u307E\u3059\u3002</p>
-    </section>
+        <details>
+          <summary>Runtime surfaces</summary>
+          <div class="surface-list">
+            ${surfaces.map((surface) => `<a href="${escapeDashboardHtml(surface.href)}">${escapeDashboardHtml(surface.title)}</a>`).join("")}
+          </div>
+        </details>
 
-    <section class="panel">
-      <h2>Runtime surfaces</h2>
-      <div class="grid">
-        ${surfaces.map((surface) => `<article class="card">
-          <h3>${escapeDashboardHtml(surface.title)}</h3>
-          <p>${escapeDashboardHtml(surface.body)}</p>
-          <a href="${escapeDashboardHtml(surface.href)}">\u958B\u304F</a>
-        </article>`).join("")}
+        <details>
+          <summary>GitHub workflows</summary>
+          <div class="surface-list">
+            ${workflows.map(([title, href]) => `<a href="${escapeDashboardHtml(href)}">${escapeDashboardHtml(title)}</a>`).join("")}
+          </div>
+        </details>
+
+        <details>
+          <summary>Prototype cleanup</summary>
+          <p>v3 Worker prototype \u306E\u524A\u9664\u3084\u79FB\u884C\u306F destructive operation \u6271\u3044\u3067\u3059\u3002\u5FC5\u8981\u306B\u306A\u3063\u305F\u6642\u3060\u3051\u3001\u5BFE\u8C61 runtime \u3068 scope \u3092\u660E\u793A\u3057\u305F passkey approval \u3067\u6271\u3044\u307E\u3059\u3002</p>
+        </details>
       </div>
-    </section>
-
-    <section class="panel">
-      <h2>GitHub workflows</h2>
-      <div class="grid">
-        ${workflows.map(([title, href]) => `<article class="card">
-          <h3>${escapeDashboardHtml(title)}</h3>
-          <p>GitHub Actions runtime truth / execution surface\u3002</p>
-          <a href="${escapeDashboardHtml(href)}">GitHub Actions</a>
-        </article>`).join("")}
-      </div>
-    </section>
-
-    <section class="panel danger">
-      <h2>v3 Worker \u306E\u6271\u3044</h2>
-      <p><code>vtdd-v3-orchestrator.polished-tree-da7c.workers.dev</code> \u306F prototype \u3068\u3057\u3066\u6B8B\u3057\u307E\u3059\u3002\u524A\u9664\u306F Cloudflare Worker deletion \u306A\u306E\u3067 destructive operation \u3067\u3059\u3002\u5B9F\u884C\u3059\u308B\u5834\u5408\u306F scope \u660E\u793A\u6E08\u307F passkey approval \u3068\u524A\u9664\u5BFE\u8C61\u540D\u306E\u660E\u793A\u304C\u5FC5\u8981\u3067\u3059\u3002</p>
-      <ul>
-        <li>\u524A\u9664\u524D\u306B v2 dashboard / deploy path \u304C\u672C\u756A\u53CD\u6620\u6E08\u307F\u3067\u3042\u308B\u3053\u3068\u3092\u78BA\u8A8D\u3059\u308B\u3002</li>
-        <li>\u5FC5\u8981\u306A\u3089 v3 Worker \u306F disable / rename / delete \u306E\u9806\u306B\u691C\u8A0E\u3059\u308B\u3002</li>
-        <li>secret \u3084 approval grant \u306F dashboard \u306B\u8868\u793A\u3057\u306A\u3044\u3002</li>
-      </ul>
-    </section>
+    </details>
   </main>
 </body>
 </html>`;
