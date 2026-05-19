@@ -213,10 +213,10 @@ export function buildVtddCloudflarePageDirectory(input = {}) {
     {
       id: "deploy_operator",
       label: "Deploy operator view",
-      path: "/v2/approval/passkey/operator?mode=deploy&actionType=deploy_production&highRiskKind=deploy_production&phase=execution",
+      path: "/v2/approval/passkey/operator?repositoryInput=marushu%2Fvtdd-v2-p&mode=deploy&actionType=deploy_production&highRiskKind=deploy_production&phase=execution",
       url: buildRuntimeUrl(
         runtimeOrigin,
-        "/v2/approval/passkey/operator?mode=deploy&actionType=deploy_production&highRiskKind=deploy_production&phase=execution"
+        "/v2/approval/passkey/operator?repositoryInput=marushu%2Fvtdd-v2-p&mode=deploy&actionType=deploy_production&highRiskKind=deploy_production&phase=execution"
       ),
       description: "production deploy approval を発行・実行するための operator view です。",
       audience: ["owner", "operator"],

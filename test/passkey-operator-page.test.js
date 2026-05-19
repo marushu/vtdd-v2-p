@@ -42,6 +42,8 @@ test("passkey operator page can target explicit api base and sync endpoint", () 
   assert.equal(html.includes("const approvalGrantId = latestApprovalGrantId || pastedApprovalGrantId"), true);
   assert.equal(html.includes('id="action-type-input" value="deploy_production"'), true);
   assert.equal(html.includes('repositoryInput: document.getElementById("repo-input").value'), true);
+  assert.equal(html.includes("function readRequiredRepositoryInput()"), true);
+  assert.equal(html.includes("repositoryInput is required before approval/deploy"), true);
   assert.equal(html.includes('issueNumber: Number(document.getElementById("issue-input").value || 0) || null'), true);
 });
 
@@ -128,6 +130,23 @@ test("passkey operator page focuses deploy mode on deploy approval and dispatch 
   assert.equal(html.includes('<section data-operator-section="github-actions-secret-sync" hidden>'), true);
   assert.equal(html.includes("Dispatch production deploy"), true);
   assert.equal(html.includes("Return to Butler"), true);
+  assert.equal(html.includes('id="issue-input" value=""'), true);
+  assert.equal(html.includes('id="pull-number-input" value=""'), true);
+  assert.equal(html.includes('repository: repositoryInput'), true);
+});
+
+test("passkey operator page blocks approval and deploy before repositoryInput is present", () => {
+  const html = renderPasskeyOperatorPage({
+    operatorMode: "deploy",
+    actionType: "deploy_production",
+    highRiskKind: "deploy_production"
+  });
+
+  assert.equal(html.includes('id="repo-input" value=""'), true);
+  assert.equal(html.includes("const repositoryInput = readRequiredRepositoryInput();"), true);
+  assert.equal(html.includes("repositoryInput is required before approval/deploy"), true);
+  assert.equal(html.includes("Deploy does not require issueNumber or pullNumber"), true);
+  assert.equal(html.includes("repository: repositoryInput"), true);
 });
 
 test("passkey operator page fills safe approval defaults from explicit mode", () => {
