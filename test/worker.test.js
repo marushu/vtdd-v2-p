@@ -129,6 +129,25 @@ test("worker returns health", async () => {
   assert.equal(body.autonomyMode, AutonomyMode.NORMAL);
 });
 
+test("worker serves v2 dashboard without exposing secrets", async () => {
+  const response = await worker.fetch(new Request("https://example.com/dashboard"));
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get("content-type"), /text\/html/);
+  const body = await response.text();
+  assert.equal(body.includes("VTDD v2 operational dashboard"), true);
+  assert.equal(body.includes("/v2/retrieve/startup-preflight"), true);
+  assert.equal(body.includes("/v2/action/vps-runner-status"), true);
+  assert.equal(body.includes("/v2/retrieve/operational-memory"), true);
+  assert.equal(body.includes("gemini-pr-review"), true);
+  assert.equal(body.includes("GO + passkey"), true);
+  assert.equal(body.includes("approvalGrantId"), false);
+  assert.equal(body.includes("CLOUDFLARE_API_TOKEN"), false);
+
+  const alias = await worker.fetch(new Request("https://example.com/orchestrator"));
+  assert.equal(alias.status, 200);
+  assert.equal((await alias.text()).includes("VTDD Butler"), true);
+});
+
 test("worker setup recovery page opens without Action auth and defaults to VTDD repo", async () => {
   const response = await worker.fetch(new Request("https://example.com/setup/recovery"));
 
