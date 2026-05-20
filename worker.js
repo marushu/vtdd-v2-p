@@ -35502,8 +35502,7 @@ function collectGeminiReviewerSignals(pullRequest) {
   const parsed = comments.map(parseGeminiReviewComment).filter(Boolean).sort(compareTimelineItems);
   const currentHeadSha = normalizeText5(pullRequest.headSha);
   const currentHeadSignals = currentHeadSha ? parsed.filter((signal) => evidenceMatchesHead(signal, currentHeadSha)) : [];
-  const headlessSignals = currentHeadSha ? parsed.filter((signal) => !evidenceHasHead(signal)) : [];
-  const activeSignals = currentHeadSha ? currentHeadSignals.length > 0 ? currentHeadSignals : headlessSignals : parsed;
+  const activeSignals = currentHeadSha ? currentHeadSignals : parsed;
   return {
     totalCount: activeSignals.length,
     blockingCount: activeSignals.filter((signal) => signal.blocking).length,
@@ -35558,9 +35557,6 @@ function emptyCodexFallbackSignals() {
 function evidenceMatchesHead(evidence, headSha) {
   const normalizedHead = normalizeText5(headSha);
   return Boolean(normalizedHead && normalizeText5(evidence?.headSha) === normalizedHead);
-}
-function evidenceHasHead(evidence) {
-  return Boolean(normalizeText5(evidence?.headSha));
 }
 function evidenceTargetsDifferentHead(evidence, headSha) {
   const normalizedHead = normalizeText5(headSha);

@@ -1033,7 +1033,7 @@ test("worker MCP review_truth tool returns review synthesis from GitHub runtime 
             JSON.stringify([
               {
                 id: 10,
-                body: "<!-- vtdd:reviewer=gemini -->\n## VTDD Gemini Critical Review\n\n- Recommended action: `approve`",
+                body: "<!-- vtdd:reviewer=gemini -->\n## VTDD Gemini Critical Review\n\n- Head SHA: `abc123`\n- Recommended action: `approve`",
                 user: { login: "vtdd-codex[bot]" },
                 created_at: "2026-05-12T01:10:00Z",
                 updated_at: "2026-05-12T01:10:00Z",

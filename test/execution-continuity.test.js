@@ -212,6 +212,39 @@ test("execution continuity does not satisfy review truth from stale Gemini appro
   assert.deepEqual(result.value.nextSuggestedActions, ["rerun_gemini_review", "summarize_for_human"]);
 });
 
+test("execution continuity does not satisfy review truth from headless Gemini approve when PR head is known", () => {
+  const result = evaluateExecutionContinuity({
+    actorRole: ActorRole.BUTLER,
+    mode: TaskMode.EXECUTION,
+    runtimeTruth: {
+      runtimeState: {
+        activeBranch: "codex/issue-448",
+        pullRequest: {
+          number: 454,
+          url: "https://github.com/example/repo/pull/454",
+          state: "open",
+          title: "Auto merge reviewer truth",
+          reviewer: "gemini",
+          headSha: "new456",
+          issueComments: [
+            {
+              user: { login: "vtdd-codex[bot]" },
+              createdAt: "2026-05-20T01:00:00.000Z",
+              body: "<!-- vtdd:reviewer=gemini -->\n## VTDD Gemini レビュー\n\n- Recommended action: `approve`"
+            }
+          ]
+        }
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.value.reviewLoop.reviewerStatus, "review_unavailable");
+  assert.equal(result.value.reviewLoop.reviewerEvidence, null);
+  assert.equal(result.value.reviewLoop.reviewerSignalTruth.mergeReviewTruth.satisfied, false);
+  assert.deepEqual(result.value.nextSuggestedActions, ["rerun_gemini_review", "summarize_for_human"]);
+});
+
 test("execution continuity keeps global Codex blocker even with current-head Gemini approve", () => {
   const result = evaluateExecutionContinuity({
     actorRole: ActorRole.BUTLER,

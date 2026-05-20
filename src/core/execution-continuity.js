@@ -241,11 +241,8 @@ function collectGeminiReviewerSignals(pullRequest) {
   const currentHeadSignals = currentHeadSha
     ? parsed.filter((signal) => evidenceMatchesHead(signal, currentHeadSha))
     : [];
-  const headlessSignals = currentHeadSha
-    ? parsed.filter((signal) => !evidenceHasHead(signal))
-    : [];
   const activeSignals = currentHeadSha
-    ? (currentHeadSignals.length > 0 ? currentHeadSignals : headlessSignals)
+    ? currentHeadSignals
     : parsed;
 
   return {
@@ -313,10 +310,6 @@ function emptyCodexFallbackSignals() {
 function evidenceMatchesHead(evidence, headSha) {
   const normalizedHead = normalizeText(headSha);
   return Boolean(normalizedHead && normalizeText(evidence?.headSha) === normalizedHead);
-}
-
-function evidenceHasHead(evidence) {
-  return Boolean(normalizeText(evidence?.headSha));
 }
 
 function evidenceTargetsDifferentHead(evidence, headSha) {
