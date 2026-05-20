@@ -55799,6 +55799,33 @@ var runtime_default = {
         })
       );
     }
+    if (request.method === "GET" && url.pathname === "/dashboard/github") {
+      return html(200, await renderDashboardGitHubTruthPage({ url, env }));
+    }
+    if (request.method === "GET" && url.pathname === "/dashboard/preflight") {
+      return html(200, await renderDashboardPreflightPage({ url, env }));
+    }
+    if (request.method === "GET" && url.pathname === "/dashboard/progress") {
+      return html(200, await renderDashboardProgressPage({ url, env }));
+    }
+    if (request.method === "GET" && url.pathname === "/dashboard/vps-runner") {
+      return html(200, await renderDashboardVpsRunnerPage({ url, env }));
+    }
+    if (request.method === "GET" && url.pathname === "/dashboard/memory") {
+      return html(200, await renderDashboardMemoryPage({ url, env }));
+    }
+    if (request.method === "GET" && url.pathname === "/dashboard/self-parity") {
+      return html(200, await renderDashboardSelfParityPage({ url, env }));
+    }
+    if (request.method === "GET" && url.pathname === "/dashboard/notifications") {
+      return html(
+        200,
+        await renderDashboardNotificationsPage({
+          runtimeOrigin: url.origin,
+          dashboardEventStore: resolveDashboardEventStore(env)
+        })
+      );
+    }
     if (request.method === "GET" && (url.pathname === MCP_PROTECTED_RESOURCE_METADATA_PATH || url.pathname === MCP_PROTECTED_RESOURCE_METADATA_MIRROR_PATH)) {
       return json(200, buildMcpProtectedResourceMetadata(url));
     }
@@ -60120,6 +60147,386 @@ function renderDashboardDeployEvent(event) {
             <p class="muted">${escapeDashboardHtml(updatedAt || "updatedAt \u672A\u53D7\u4FE1")} \u30FB ${runLabel}</p>
           </div>`;
 }
+async function renderDashboardGitHubTruthPage({ url, env } = {}) {
+  const origin = normalize7(url?.origin);
+  const repository = normalizeCanonicalRepositoryInput(url?.searchParams?.get("repository")) || "marushu/vtdd-v2-p";
+  const [issues, pulls, workflowRuns] = await Promise.all([
+    retrieveGitHubReadPlane({
+      resource: "issues",
+      repository,
+      state: "open",
+      limit: 12,
+      env
+    }),
+    retrieveGitHubReadPlane({
+      resource: "pulls",
+      repository,
+      state: "open",
+      limit: 12,
+      env
+    }),
+    retrieveGitHubReadPlane({
+      resource: "workflow_runs",
+      repository,
+      limit: 8,
+      env
+    })
+  ]);
+  const failures = [issues, pulls, workflowRuns].filter((item) => !item.ok);
+  return renderDashboardUtilityPage({
+    title: "GitHub runtime truth",
+    subtitle: repository,
+    backHref: `${origin}/dashboard`,
+    body: `
+      <section class="hero">
+        <p>Butler / Action \u5411\u3051 JSON \u3067\u306F\u306A\u304F\u3001\u4EBA\u9593\u304C\u8AAD\u3080\u305F\u3081\u306E GitHub \u73FE\u5728\u5730\u3067\u3059\u3002</p>
+      </section>
+      ${failures.length > 0 ? renderDashboardNotice("\u4E00\u90E8\u306E GitHub runtime truth \u3092\u8AAD\u3081\u307E\u305B\u3093\u3067\u3057\u305F\u3002GitHub App / token \u8A2D\u5B9A\u3092\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002") : ""}
+      <div class="grid">
+        ${renderGitHubTruthLane("Open Issues", issues, renderIssueTruthCard)}
+        ${renderGitHubTruthLane("Open PRs", pulls, renderPullTruthCard)}
+        ${renderGitHubTruthLane("Workflow Runs", workflowRuns, renderWorkflowRunTruthCard)}
+      </div>
+    `
+  });
+}
+async function renderDashboardPreflightPage({ url, env } = {}) {
+  const origin = normalize7(url?.origin);
+  const repository = normalizeCanonicalRepositoryInput(url?.searchParams?.get("repository")) || "marushu/vtdd-v2-p";
+  const issueNumber = normalizeIssue6(url?.searchParams?.get("issueNumber"));
+  const phase = normalizeText30(url?.searchParams?.get("phase")) || "execution";
+  const currentSurface = normalizeText30(url?.searchParams?.get("currentSurface")) || "dashboard";
+  const startupPreflight = await buildStartupPreflight({
+    repository,
+    ref: normalizeText30(url?.searchParams?.get("ref")) || "main",
+    issueNumber,
+    phase,
+    currentSurface,
+    queryText: "VTDD dashboard startup preflight",
+    runtimeOrigin: origin,
+    env
+  });
+  return renderDashboardUtilityPage({
+    title: "Startup preflight",
+    subtitle: repository,
+    backHref: `${origin}/dashboard`,
+    body: `
+      <section class="hero">
+        <p>Butler \u304C\u6700\u521D\u306B\u8AAD\u3080\u3079\u304D AGENTS / Issue / runtime truth / RAG / self parity \u306E\u73FE\u5728\u5730\u3067\u3059\u3002</p>
+      </section>
+      <div class="grid">
+        <section class="lane">
+          <div class="lane-title"><h2>Source truth</h2><span class="pill">${startupPreflight.sources.length}\u4EF6</span></div>
+          ${startupPreflight.sources.map((source) => renderTruthRow(source.path, source.status, source.reason || source.sha || "")).join("")}
+        </section>
+        <section class="lane">
+          <div class="lane-title"><h2>Open Issues</h2><span class="pill">${startupPreflight.openIssues.length}\u4EF6</span></div>
+          ${startupPreflight.openIssues.length > 0 ? startupPreflight.openIssues.map((issue2) => renderLinkedTruthRow(`#${issue2.number} ${issue2.title}`, issue2.htmlUrl, issue2.state)).join("") : `<p class="muted">\u8A72\u5F53\u306A\u3057</p>`}
+        </section>
+        <section class="lane">
+          <div class="lane-title"><h2>Next safe action</h2><span class="pill">${escapeDashboardHtml(startupPreflight.butlerFirstPrinciple.status)}</span></div>
+          ${renderObjectSummary(startupPreflight.nextSafeAction)}
+        </section>
+      </div>
+    `
+  });
+}
+async function renderDashboardProgressPage({ url, env } = {}) {
+  const origin = normalize7(url?.origin);
+  const repository = normalizeCanonicalRepositoryInput(url?.searchParams?.get("repository")) || "marushu/vtdd-v2-p";
+  const progress = await retrieveRemoteCodexExecutionProgress({
+    executionId: url.searchParams.get("executionId"),
+    repository,
+    issueNumber: url.searchParams.get("issueNumber"),
+    branch: url.searchParams.get("branch"),
+    executorTransport: url.searchParams.get("executorTransport"),
+    env
+  });
+  return renderDashboardUtilityPage({
+    title: "Execution progress",
+    subtitle: repository,
+    backHref: `${origin}/dashboard`,
+    body: `
+      <section class="hero">
+        <p>VPS Codex CLI / remote Codex execution \u306E\u9032\u6357\u3092\u4EBA\u9593\u5411\u3051\u306B\u8868\u793A\u3057\u307E\u3059\u3002\u5165\u529B\u4E2D\u306B\u52DD\u624B\u306A\u81EA\u52D5\u66F4\u65B0\u306F\u3057\u307E\u305B\u3093\u3002</p>
+      </section>
+      ${progress.ok ? renderProgressSummary(progress.progress) : renderDashboardNotice(progress.reason || progress.error || "progress unavailable")}
+    `
+  });
+}
+async function renderDashboardVpsRunnerPage({ url, env } = {}) {
+  const origin = normalize7(url?.origin);
+  const repository = normalizeCanonicalRepositoryInput(url?.searchParams?.get("repository")) || "marushu/vtdd-v2-p";
+  const status = await retrieveVpsRunnerHealthStatus({
+    executionId: url.searchParams.get("executionId"),
+    repository,
+    issueNumber: url.searchParams.get("issueNumber"),
+    branch: url.searchParams.get("branch"),
+    env
+  });
+  return renderDashboardUtilityPage({
+    title: "VPS runner status",
+    subtitle: repository,
+    backHref: `${origin}/dashboard`,
+    body: `
+      <section class="hero">
+        <p>VPS runner \u306E health / queue / progress \u3092\u4EBA\u9593\u5411\u3051\u306B\u8868\u793A\u3057\u307E\u3059\u3002</p>
+      </section>
+      ${status.ok ? `<div class="grid">${renderStatusLane("Health", status.health)}${renderStatusLane("Progress", status.progress)}</div>` : renderDashboardNotice(status.reason || status.error || "runner status unavailable")}
+    `
+  });
+}
+async function renderDashboardMemoryPage({ url, env } = {}) {
+  const origin = normalize7(url?.origin);
+  const repository = normalizeCanonicalRepositoryInput(url?.searchParams?.get("repository")) || "marushu/vtdd-v2-p";
+  const retrieved = await retrieveOperationalMemory(resolveMemoryProvider(env), {
+    text: normalizeText30(url.searchParams.get("text")) || normalizeText30(url.searchParams.get("q")),
+    recordId: normalizeText30(url.searchParams.get("recordId")),
+    repository,
+    limit: normalizeLimit7(url.searchParams.get("limit"), 8),
+    runtimeTruth: buildRetrieveRuntimeTruth(url)
+  });
+  return renderDashboardUtilityPage({
+    title: "Operational RAG",
+    subtitle: repository,
+    backHref: `${origin}/dashboard`,
+    body: `
+      <section class="hero">
+        <p>decision / proposal / working memory \u306E compact retrieval \u3067\u3059\u3002runtime truth \u306E\u4EE3\u66FF\u3067\u306F\u3042\u308A\u307E\u305B\u3093\u3002</p>
+      </section>
+      ${retrieved.ok ? renderMemorySummary(retrieved) : renderDashboardNotice(retrieved.reason || retrieved.error || "memory unavailable")}
+    `
+  });
+}
+async function renderDashboardSelfParityPage({ url, env } = {}) {
+  const origin = normalize7(url?.origin);
+  const repository = normalizeCanonicalRepositoryInput(url?.searchParams?.get("repository")) || "marushu/vtdd-v2-p";
+  const parity = await evaluateButlerSelfParity({
+    repository,
+    ref: normalizeText30(url.searchParams.get("ref")),
+    issueNumber: normalizeIssue6(url.searchParams.get("issueNumber")),
+    pullNumber: normalizeIssue6(url.searchParams.get("pullNumber")),
+    runtimeOrigin: origin,
+    env
+  });
+  return renderDashboardUtilityPage({
+    title: "Self parity",
+    subtitle: repository,
+    backHref: `${origin}/dashboard`,
+    body: `
+      <section class="hero">
+        <p>Action Schema / Instructions / Cloudflare deploy freshness / operator URL \u306E\u81EA\u5DF1\u8A3A\u65AD\u3067\u3059\u3002</p>
+      </section>
+      ${parity.ok ? renderObjectSummary(parity.selfParity) : renderDashboardNotice(parity.reason || parity.error || "self parity unavailable")}
+    `
+  });
+}
+async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventStore } = {}) {
+  const origin = normalize7(runtimeOrigin);
+  const latestDeployEvent = await retrieveLatestDashboardEvent({
+    store: dashboardEventStore,
+    kind: "github_actions_workflow_run",
+    repository: "marushu/vtdd-v2-p",
+    workflowName: "deploy-production"
+  });
+  return renderDashboardUtilityPage({
+    title: "\u901A\u77E5\u30BB\u30F3\u30BF\u30FC",
+    subtitle: "dashboard events",
+    backHref: `${origin}/dashboard`,
+    body: `
+      <section class="hero">
+        <p>\u4ECA\u306F iOS Push / \u97F3 / PWA badge \u3067\u306F\u306A\u304F\u3001Worker \u306B\u5C4A\u3044\u305F dashboard event \u306E\u4EBA\u9593\u5411\u3051\u8868\u793A\u3067\u3059\u3002</p>
+        <p class="muted">\u6B21\u306E\u6BB5\u968E\u3067 Web Push \u8CFC\u8AAD\u3001\u901A\u77E5 permission\u3001\u901A\u77E5\u30BF\u30C3\u30D7\u9077\u79FB\u3092\u8FFD\u52A0\u3057\u307E\u3059\u3002</p>
+      </section>
+      <div class="grid single">
+        <section class="lane">
+          <div class="lane-title"><h2>deploy-production</h2><span class="pill">latest</span></div>
+          ${renderDashboardDeployEvent(latestDeployEvent)}
+        </section>
+      </div>
+    `
+  });
+}
+function renderGitHubTruthLane(title, result, renderCard) {
+  if (!result.ok) {
+    return `<section class="lane">
+      <div class="lane-title"><h2>${escapeDashboardHtml(title)}</h2><span class="pill danger">unavailable</span></div>
+      <p>${escapeDashboardHtml(result.reason || result.error || "GitHub read unavailable")}</p>
+    </section>`;
+  }
+  const records = Array.isArray(result.read?.records) ? result.read.records : [];
+  return `<section class="lane">
+    <div class="lane-title"><h2>${escapeDashboardHtml(title)}</h2><span class="pill">${records.length}\u4EF6</span></div>
+    ${records.length > 0 ? records.map(renderCard).join("") : `<p class="muted">\u8A72\u5F53\u306A\u3057</p>`}
+  </section>`;
+}
+function renderIssueTruthCard(issue2) {
+  return `<article class="truth-card">
+    <div class="truth-card-title"><a href="${escapeDashboardHtml(issue2.htmlUrl)}">#${escapeDashboardHtml(issue2.number)} ${escapeDashboardHtml(issue2.title)}</a></div>
+    <p>${escapeDashboardHtml(issue2.author || "unknown")} / ${escapeDashboardHtml(issue2.state || "open")}</p>
+  </article>`;
+}
+function renderPullTruthCard(pull) {
+  const state = pull.draft ? "draft" : pull.state || "open";
+  return `<article class="truth-card">
+    <div class="truth-card-title"><a href="${escapeDashboardHtml(pull.htmlUrl)}">#${escapeDashboardHtml(pull.number)} ${escapeDashboardHtml(pull.title)}</a></div>
+    <p>${escapeDashboardHtml(state)} / ${escapeDashboardHtml(pull.headRef || "head unknown")} -> ${escapeDashboardHtml(pull.baseRef || "base unknown")}</p>
+  </article>`;
+}
+function renderWorkflowRunTruthCard(run) {
+  const conclusion = run.conclusion || run.status || "unknown";
+  const badgeClass = conclusion === "success" ? "success" : conclusion === "failure" ? "danger" : "";
+  return `<article class="truth-card">
+    <div class="truth-card-title"><a href="${escapeDashboardHtml(run.htmlUrl)}">${escapeDashboardHtml(run.name || `run ${run.id}`)}</a></div>
+    <p><span class="pill ${badgeClass}">${escapeDashboardHtml(conclusion)}</span> ${escapeDashboardHtml(run.headBranch || "")}</p>
+  </article>`;
+}
+function renderDashboardNotice(message) {
+  return `<section class="notice">${escapeDashboardHtml(message)}</section>`;
+}
+function renderTruthRow(label, value, detail = "") {
+  return `<article class="truth-card">
+    <div class="truth-card-title"><strong>${escapeDashboardHtml(label)}</strong><span class="pill">${escapeDashboardHtml(value || "\u672A\u78BA\u8A8D")}</span></div>
+    ${detail ? `<p>${escapeDashboardHtml(detail)}</p>` : ""}
+  </article>`;
+}
+function renderLinkedTruthRow(label, href, detail = "") {
+  return `<article class="truth-card">
+    <div class="truth-card-title"><a href="${escapeDashboardHtml(href || "#")}">${escapeDashboardHtml(label)}</a></div>
+    ${detail ? `<p>${escapeDashboardHtml(detail)}</p>` : ""}
+  </article>`;
+}
+function renderProgressSummary(progress) {
+  return `<div class="grid single">
+    <section class="lane">
+      <div class="lane-title"><h2>Progress</h2><span class="pill">${escapeDashboardHtml(progress?.status || "\u672A\u78BA\u8A8D")}</span></div>
+      ${renderObjectSummary(progress)}
+    </section>
+  </div>`;
+}
+function renderStatusLane(title, value) {
+  return `<section class="lane">
+    <div class="lane-title"><h2>${escapeDashboardHtml(title)}</h2><span class="pill">summary</span></div>
+    ${renderObjectSummary(value)}
+  </section>`;
+}
+function renderMemorySummary(retrieved) {
+  const references = retrieved.referencesByLayer && typeof retrieved.referencesByLayer === "object" ? Object.entries(retrieved.referencesByLayer) : [];
+  return `<div class="grid">
+    <section class="lane">
+      <div class="lane-title"><h2>Compact context</h2><span class="pill">${escapeDashboardHtml(retrieved.architecture || "memory")}</span></div>
+      <p>${escapeDashboardHtml(retrieved.compactContext || "\u8A72\u5F53\u306A\u3057")}</p>
+    </section>
+    <section class="lane">
+      <div class="lane-title"><h2>References</h2><span class="pill">${references.length} layers</span></div>
+      ${references.length > 0 ? references.map(([layer, records]) => renderTruthRow(layer, Array.isArray(records) ? `${records.length}\u4EF6` : "\u672A\u78BA\u8A8D")).join("") : `<p class="muted">\u8A72\u5F53\u306A\u3057</p>`}
+    </section>
+    <section class="lane">
+      <div class="lane-title"><h2>Signals</h2><span class="pill">retrieval</span></div>
+      ${renderObjectSummary(retrieved.retrievalSignals)}
+    </section>
+  </div>`;
+}
+function renderObjectSummary(value, depth = 0) {
+  if (value === null || value === void 0 || value === "") {
+    return `<p class="muted">\u672A\u78BA\u8A8D</p>`;
+  }
+  if (typeof value !== "object") {
+    return `<p>${escapeDashboardHtml(String(value))}</p>`;
+  }
+  if (Array.isArray(value)) {
+    if (value.length === 0) {
+      return `<p class="muted">\u8A72\u5F53\u306A\u3057</p>`;
+    }
+    return value.slice(0, 8).map((item, index) => renderTruthRow(`#${index + 1}`, summarizeObjectValue(item))).join("");
+  }
+  const entries = Object.entries(value).filter(([, item]) => item !== void 0 && typeof item !== "function");
+  if (entries.length === 0) {
+    return `<p class="muted">\u8A72\u5F53\u306A\u3057</p>`;
+  }
+  return `<dl class="summary-list">
+    ${entries.slice(0, 16).map(([key, item]) => `
+      <div>
+        <dt>${escapeDashboardHtml(key)}</dt>
+        <dd>${depth < 1 && item && typeof item === "object" ? renderObjectSummary(item, depth + 1) : escapeDashboardHtml(summarizeObjectValue(item))}</dd>
+      </div>
+    `).join("")}
+  </dl>`;
+}
+function summarizeObjectValue(value) {
+  if (value === null || value === void 0 || value === "") {
+    return "\u672A\u78BA\u8A8D";
+  }
+  if (Array.isArray(value)) {
+    return `${value.length}\u4EF6`;
+  }
+  if (typeof value === "object") {
+    const title = value.title || value.name || value.status || value.state || value.id || value.number;
+    return title ? String(title) : `${Object.keys(value).length} fields`;
+  }
+  return String(value);
+}
+function renderDashboardUtilityPage({ title, subtitle, backHref, body }) {
+  return `<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${escapeDashboardHtml(title)} - VTDD Butler</title>
+  <style>
+    :root { color-scheme: light dark; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; --bg: #f7f7f4; --panel: #fff; --text: #151515; --muted: #62625d; --border: #deded6; --soft: #f0f0eb; }
+    @media (prefers-color-scheme: dark) { :root { --bg: #050505; --panel: #101010; --text: #f7f7f4; --muted: #a0a09a; --border: #2b2b2b; --soft: #1b1b1b; } }
+    * { box-sizing: border-box; }
+    html, body { max-width: 100%; overflow-x: hidden; }
+    body { margin: 0; background: var(--bg); color: var(--text); }
+    main { width: min(1120px, 100%); margin: 0 auto; padding: 16px; }
+    header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 18px; }
+    h1 { font-size: 24px; margin: 0 0 4px; }
+    h2 { font-size: 18px; margin: 0; }
+    p { line-height: 1.6; margin: 0 0 10px; }
+    a { color: inherit; text-underline-offset: 4px; }
+    .back, .actions a { display: inline-flex; min-height: 38px; align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: 999px; padding: 6px 12px; background: var(--soft); text-decoration: none; font-weight: 750; }
+    .hero, .lane, .notice { border: 1px solid var(--border); border-radius: 16px; background: var(--panel); padding: 14px; margin-bottom: 14px; }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+    .grid.single { grid-template-columns: minmax(0, 1fr); }
+    .lane-title, .truth-card-title { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+    .truth-card { border-top: 1px solid var(--border); padding: 11px 0; }
+    .truth-card:first-of-type { border-top: 0; }
+    .truth-card p, .muted { color: var(--muted); }
+    .summary-list { margin: 0; display: grid; gap: 8px; }
+    .summary-list div { display: grid; grid-template-columns: minmax(96px, 0.4fr) minmax(0, 1fr); gap: 10px; padding: 8px 0; border-top: 1px solid var(--border); }
+    .summary-list div:first-child { border-top: 0; }
+    .summary-list dt { color: var(--muted); font-size: 13px; }
+    .summary-list dd { margin: 0; overflow-wrap: anywhere; }
+    .pill { display: inline-flex; border: 1px solid var(--border); border-radius: 999px; padding: 3px 8px; background: var(--soft); font-size: 12px; white-space: nowrap; }
+    .pill.success { border-color: #7fb797; background: #e7f5ec; color: #145c34; }
+    .pill.danger { border-color: #d69b9b; background: #fff0f0; color: #8a1f1f; }
+    .deploy-event { border: 1px solid var(--border); border-radius: 12px; padding: 10px; margin: 10px 0; background: var(--soft); }
+    .deploy-event p { margin-bottom: 6px; font-size: 13px; }
+    code { overflow-wrap: anywhere; }
+    @media (max-width: 760px) {
+      main { padding: 12px; }
+      header { align-items: flex-start; }
+      .grid { grid-template-columns: minmax(0, 1fr); }
+      .summary-list div { grid-template-columns: minmax(0, 1fr); }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>${escapeDashboardHtml(title)}</h1>
+        <p class="muted">${escapeDashboardHtml(subtitle || "")}</p>
+      </div>
+      <a class="back" href="${escapeDashboardHtml(backHref || "/dashboard")}">Dashboard</a>
+    </header>
+    ${body}
+  </main>
+</body>
+</html>`;
+}
 function normalizeTextList2(value) {
   if (Array.isArray(value)) {
     return value.map(normalizeText30).filter(Boolean);
@@ -60143,38 +60550,43 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
   const surfaces = [
     {
       title: "Status page",
-      body: "\u4EBA\u9593\u5411\u3051\u306E runtime status\u3002raw /health JSON \u3067\u306F\u306A\u304F\u3001\u307E\u305A\u3053\u3053\u3092\u898B\u308B\u3002",
+      body: "\u4EBA\u9593\u5411\u3051\u306E runtime status\u3002\u307E\u305A\u3053\u3053\u3092\u898B\u308B\u3002",
       href: `${origin}/status`
     },
     {
       title: "Startup preflight",
       body: "AGENTS.md\u3001thread-independent startup\u3001runtime truth\u3001RAG\u3001self parity \u3092\u6700\u521D\u306B\u8AAD\u3080\u5165\u53E3\u3002",
-      href: `${origin}/v2/retrieve/startup-preflight?repository=${encodedRepository}&currentSurface=dashboard&responseMode=action_visible`
+      href: `${origin}/dashboard/preflight?repository=${encodedRepository}`
     },
     {
       title: "Execution progress",
       body: "VPS Codex CLI / remote Codex execution \u306E\u9032\u6357\u78BA\u8A8D\u3002",
-      href: `${origin}/v2/action/progress?repository=${encodedRepository}&responseMode=action_visible`
+      href: `${origin}/dashboard/progress?repository=${encodedRepository}`
     },
     {
       title: "VPS runner status",
       body: "runner health\u3001queue\u3001\u5BFE\u8C61 execution \u306E\u72B6\u614B\u78BA\u8A8D\u3002",
-      href: `${origin}/v2/action/vps-runner-status?repository=${encodedRepository}&responseMode=action_visible`
+      href: `${origin}/dashboard/vps-runner?repository=${encodedRepository}`
     },
     {
       title: "GitHub runtime truth",
       body: "Issues\u3001PRs\u3001checks\u3001workflow runs\u3001reviewer comments \u3092\u8AAD\u3080\u5165\u53E3\u3002",
-      href: `${origin}/v2/retrieve/github?repository=${encodedRepository}&include=open_prs,open_issues,workflow_runs,issue_comments&responseMode=action_visible`
+      href: `${origin}/dashboard/github?repository=${encodedRepository}`
+    },
+    {
+      title: "\u901A\u77E5\u30BB\u30F3\u30BF\u30FC",
+      body: "GitHub Actions / deploy \u304B\u3089 Worker \u306B\u5C4A\u3044\u305F dashboard event \u3092\u4EBA\u9593\u5411\u3051\u306B\u898B\u308B\u5165\u53E3\u3002",
+      href: `${origin}/dashboard/notifications`
     },
     {
       title: "Operational RAG",
       body: "decision / proposal / working memory \u306E compact retrieval\u3002runtime truth \u306E\u4EE3\u66FF\u3067\u306F\u306A\u3044\u3002",
-      href: `${origin}/v2/retrieve/operational-memory?repository=${encodedRepository}&limit=5&responseMode=action_visible`
+      href: `${origin}/dashboard/memory?repository=${encodedRepository}`
     },
     {
       title: "Self parity",
       body: "Action Schema\u3001Instructions\u3001Cloudflare deploy freshness\u3001operator URL \u3092\u78BA\u8A8D\u3002",
-      href: `${origin}/v2/retrieve/self-parity?repository=${encodedRepository}&responseMode=action_visible`
+      href: `${origin}/dashboard/self-parity?repository=${encodedRepository}`
     },
     {
       title: "Setup diagnostics",
@@ -60196,15 +60608,19 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
   const cockpitActions = [
     {
       label: "\u72B6\u614B\u78BA\u8A8D",
-      href: `${origin}/v2/retrieve/github?repository=${encodedRepository}&include=open_prs,open_issues,workflow_runs,issue_comments&responseMode=action_visible`
+      href: `${origin}/dashboard/github?repository=${encodedRepository}`
     },
     {
       label: "\u9032\u6357\u3092\u898B\u308B",
-      href: `${origin}/v2/action/progress?repository=${encodedRepository}&responseMode=action_visible`
+      href: `${origin}/dashboard/progress?repository=${encodedRepository}`
     },
     {
       label: "RAG \u3092\u8AAD\u3080",
-      href: `${origin}/v2/retrieve/operational-memory?repository=${encodedRepository}&limit=5&responseMode=action_visible`
+      href: `${origin}/dashboard/memory?repository=${encodedRepository}`
+    },
+    {
+      label: "\u901A\u77E5",
+      href: `${origin}/dashboard/notifications`
     },
     {
       label: "Passkey",
@@ -60493,8 +60909,7 @@ function renderV2StatusPage({ runtimeOrigin, autonomyMode }) {
     ["Mode", mode, "\u73FE\u5728\u306E runtime mode \u3067\u3059\u3002"],
     ["Autonomy", resolvedAutonomyMode, "guarded absence \u306A\u3069\u306E\u5B9F\u884C\u6291\u5236\u72B6\u614B\u3092\u793A\u3057\u307E\u3059\u3002"],
     ["Dashboard", "\u5229\u7528\u53EF\u80FD", "/dashboard \u3068 /orchestrator \u306F\u4EBA\u9593\u5411\u3051\u5165\u53E3\u3067\u3059\u3002"],
-    ["Passkey", "same-origin", "\u9AD8\u30EA\u30B9\u30AF\u64CD\u4F5C\u306F scope \u660E\u793A\u6E08\u307F passkey approval \u306E\u5F8C\u308D\u3067\u3059\u3002"],
-    ["Raw health", "JSON", "/health \u306F API \u4E92\u63DB\u306E machine-readable endpoint \u3068\u3057\u3066\u6B8B\u3057\u307E\u3059\u3002"]
+    ["Passkey", "same-origin", "\u9AD8\u30EA\u30B9\u30AF\u64CD\u4F5C\u306F scope \u660E\u793A\u6E08\u307F passkey approval \u306E\u5F8C\u308D\u3067\u3059\u3002"]
   ];
   return `<!doctype html>
 <html lang="ja">
@@ -60530,7 +60945,7 @@ function renderV2StatusPage({ runtimeOrigin, autonomyMode }) {
       <div>
         <p class="eyebrow">VTDD v2 status</p>
         <h1>Runtime Status</h1>
-        <p>\u30D6\u30E9\u30A6\u30B6\u3067\u898B\u308B\u305F\u3081\u306E health summary \u3067\u3059\u3002\u6A5F\u68B0\u5411\u3051 JSON \u306F <code>/health</code> \u306B\u6B8B\u3057\u3066\u3044\u307E\u3059\u3002</p>
+        <p>\u30D6\u30E9\u30A6\u30B6\u3067\u898B\u308B\u305F\u3081\u306E health summary \u3067\u3059\u3002</p>
       </div>
       <a class="button" href="${escapeDashboardHtml(origin)}/dashboard">Dashboard</a>
     </header>
@@ -60541,7 +60956,6 @@ function renderV2StatusPage({ runtimeOrigin, autonomyMode }) {
       <p>Worker \u306F\u5FDC\u7B54\u3057\u3066\u3044\u307E\u3059\u3002\u3053\u3053\u3067\u306F secret\u3001token\u3001approval grant \u306F\u8868\u793A\u3057\u307E\u305B\u3093\u3002</p>
       <div class="actions">
         <a class="primary" href="${escapeDashboardHtml(origin)}/dashboard">Butler dashboard</a>
-        <a href="${escapeDashboardHtml(origin)}/health">raw /health JSON</a>
         <a href="${escapeDashboardHtml(origin)}/v2/approval/passkey/operator?repositoryInput=marushu%2Fvtdd-v2-p">Passkey operator</a>
       </div>
     </section>

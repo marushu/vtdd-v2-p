@@ -155,14 +155,14 @@ test("worker returns health", async () => {
   assert.equal(body.autonomyMode, AutonomyMode.NORMAL);
 });
 
-test("worker serves human-facing status page while keeping raw health JSON", async () => {
+test("worker serves human-facing status page without raw JSON links", async () => {
   const response = await worker.fetch(new Request("https://example.com/status"));
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type"), /text\/html/);
   const body = await response.text();
   assert.equal(body.includes("VTDD v2 status"), true);
   assert.equal(body.includes("Runtime Status"), true);
-  assert.equal(body.includes("raw /health JSON"), true);
+  assert.equal(body.includes("raw /health JSON"), false);
   assert.equal(body.includes("/dashboard"), true);
   assert.equal(body.includes("/v2/approval/passkey/operator?repositoryInput=marushu%2Fvtdd-v2-p"), true);
   assert.equal(body.includes("approvalGrantId"), false);
@@ -196,6 +196,9 @@ test("worker serves v2 dashboard without exposing secrets", async () => {
   assert.equal(body.includes("直近 deploy event"), true);
   assert.equal(body.includes("Butler V2 にメッセージ"), true);
   assert.equal(body.includes("状態確認"), true);
+  assert.equal(body.includes("/dashboard/github?repository=marushu%2Fvtdd-v2-p"), true);
+  assert.equal(body.includes("/dashboard/notifications"), true);
+  assert.equal(body.includes("include=open_prs"), false);
   assert.equal(body.includes('name="text"'), false);
   assert.equal(/<meta[^>]+http-equiv=["']?refresh/i.test(body), false);
   assert.equal(body.includes("setInterval("), false);
@@ -206,9 +209,16 @@ test("worker serves v2 dashboard without exposing secrets", async () => {
     true
   );
   assert.equal(body.includes("/status"), true);
-  assert.equal(body.includes("/v2/retrieve/startup-preflight"), true);
-  assert.equal(body.includes("/v2/action/vps-runner-status"), true);
-  assert.equal(body.includes("/v2/retrieve/operational-memory"), true);
+  assert.equal(body.includes("/dashboard/preflight?repository=marushu%2Fvtdd-v2-p"), true);
+  assert.equal(body.includes("/dashboard/progress?repository=marushu%2Fvtdd-v2-p"), true);
+  assert.equal(body.includes("/dashboard/vps-runner?repository=marushu%2Fvtdd-v2-p"), true);
+  assert.equal(body.includes("/dashboard/memory?repository=marushu%2Fvtdd-v2-p"), true);
+  assert.equal(body.includes("/dashboard/self-parity?repository=marushu%2Fvtdd-v2-p"), true);
+  assert.equal(body.includes("/v2/retrieve/startup-preflight?repository=marushu%2Fvtdd-v2-p"), false);
+  assert.equal(body.includes("/v2/action/progress?repository=marushu%2Fvtdd-v2-p"), false);
+  assert.equal(body.includes("/v2/action/vps-runner-status?repository=marushu%2Fvtdd-v2-p"), false);
+  assert.equal(body.includes("/v2/retrieve/operational-memory?repository=marushu%2Fvtdd-v2-p"), false);
+  assert.equal(body.includes("/v2/retrieve/self-parity?repository=marushu%2Fvtdd-v2-p"), false);
   assert.equal(body.includes("gemini-pr-review"), true);
   assert.equal(body.includes("passkey approval"), true);
   assert.equal(body.includes("approvalGrantId"), false);
@@ -221,6 +231,132 @@ test("worker serves v2 dashboard without exposing secrets", async () => {
   assert.equal(aliasBody.includes("dashboard main chat"), true);
   assert.equal(aliasBody.includes("管理メニュー"), true);
   assert.equal(aliasBody.includes("自動更新なし"), true);
+});
+
+test("worker serves human-facing GitHub truth dashboard instead of raw action JSON", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/dashboard/github?repository=sample-org/vtdd-v2-p"),
+    {
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_read",
+      GITHUB_API_FETCH: async (url) => {
+        const parsed = new URL(url);
+        if (parsed.pathname.endsWith("/issues")) {
+          return new Response(
+            JSON.stringify([
+              {
+                number: 46,
+                title: "GitHub read plane",
+                state: "open",
+                html_url: "https://github.com/sample-org/vtdd-v2-p/issues/46",
+                user: { login: "marushu" }
+              }
+            ]),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        if (parsed.pathname.endsWith("/pulls")) {
+          return new Response(
+            JSON.stringify([
+              {
+                number: 47,
+                title: "Dashboard HTML",
+                state: "open",
+                draft: false,
+                html_url: "https://github.com/sample-org/vtdd-v2-p/pull/47",
+                head: { ref: "codex/dashboard", sha: "abc", repo: { owner: { login: "sample-org" } } },
+                base: { ref: "main", sha: "def" }
+              }
+            ]),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        if (parsed.pathname.endsWith("/actions/runs")) {
+          return new Response(
+            JSON.stringify({
+              workflow_runs: [
+                {
+                  id: 4800,
+                  name: "deploy-production",
+                  status: "completed",
+                  conclusion: "success",
+                  head_branch: "main",
+                  html_url: "https://github.com/sample-org/vtdd-v2-p/actions/runs/4800"
+                }
+              ]
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        return new Response(JSON.stringify({ message: `unexpected ${parsed.pathname}` }), {
+          status: 404,
+          headers: { "content-type": "application/json" }
+        });
+      }
+    }
+  );
+
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get("content-type"), /text\/html/);
+  const body = await response.text();
+  assert.equal(body.includes("GitHub runtime truth"), true);
+  assert.equal(body.includes("Open Issues"), true);
+  assert.equal(body.includes("#46 GitHub read plane"), true);
+  assert.equal(body.includes("Open PRs"), true);
+  assert.equal(body.includes("#47 Dashboard HTML"), true);
+  assert.equal(body.includes("Workflow Runs"), true);
+  assert.equal(body.includes("deploy-production"), true);
+  assert.equal(body.includes("raw issues JSON"), false);
+  assert.equal(body.includes("{\"ok\""), false);
+});
+
+test("worker serves human-facing dashboard pages for every management menu", async () => {
+  const routes = [
+    ["/dashboard/preflight?repository=sample-org/vtdd-v2-p", "Startup preflight", "raw preflight JSON"],
+    ["/dashboard/progress?repository=sample-org/vtdd-v2-p", "Execution progress", "raw progress JSON"],
+    ["/dashboard/vps-runner?repository=sample-org/vtdd-v2-p", "VPS runner status", "raw runner JSON"],
+    ["/dashboard/memory?repository=sample-org/vtdd-v2-p", "Operational RAG", "raw memory JSON"],
+    ["/dashboard/self-parity?repository=sample-org/vtdd-v2-p", "Self parity", "raw self parity JSON"]
+  ];
+
+  for (const [route, title, rawLabel] of routes) {
+    const response = await worker.fetch(new Request(`https://example.com${route}`));
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get("content-type"), /text\/html/);
+    const body = await response.text();
+    assert.equal(body.includes(title), true);
+    assert.equal(body.includes(rawLabel), false);
+    assert.equal(body.includes("{\"ok\""), false);
+  }
+});
+
+test("worker serves dashboard notification center for latest deploy event", async () => {
+  const store = createInMemoryDashboardEventStore();
+  await store.put({
+    id: "github_actions_workflow_run:marushu/vtdd-v2-p:deploy-production:26134526815",
+    kind: "github_actions_workflow_run",
+    repository: "marushu/vtdd-v2-p",
+    workflowName: "deploy-production",
+    runId: "26134526815",
+    runUrl: "https://github.com/marushu/vtdd-v2-p/actions/runs/26134526815",
+    status: "completed",
+    conclusion: "success",
+    headSha: "daad4fb023cf699b3ad531e0394e064fde2b5515",
+    headBranch: "main",
+    title: "deploy-production",
+    updatedAt: "2026-05-20T00:54:27Z"
+  });
+
+  const response = await worker.fetch(new Request("https://example.com/dashboard/notifications"), {
+    DASHBOARD_EVENT_STORE: store
+  });
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get("content-type"), /text\/html/);
+  const body = await response.text();
+  assert.equal(body.includes("通知センター"), true);
+  assert.equal(body.includes("iOS Push / 音 / PWA badge ではなく"), true);
+  assert.equal(body.includes("最新 deploy"), true);
+  assert.equal(body.includes("success"), true);
+  assert.equal(body.includes("26134526815"), true);
 });
 
 test("worker ingests GitHub Actions deploy completion event and shows it on dashboard", async () => {

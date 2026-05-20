@@ -146,6 +146,40 @@ export default {
       );
     }
 
+    if (request.method === "GET" && url.pathname === "/dashboard/github") {
+      return html(200, await renderDashboardGitHubTruthPage({ url, env }));
+    }
+
+    if (request.method === "GET" && url.pathname === "/dashboard/preflight") {
+      return html(200, await renderDashboardPreflightPage({ url, env }));
+    }
+
+    if (request.method === "GET" && url.pathname === "/dashboard/progress") {
+      return html(200, await renderDashboardProgressPage({ url, env }));
+    }
+
+    if (request.method === "GET" && url.pathname === "/dashboard/vps-runner") {
+      return html(200, await renderDashboardVpsRunnerPage({ url, env }));
+    }
+
+    if (request.method === "GET" && url.pathname === "/dashboard/memory") {
+      return html(200, await renderDashboardMemoryPage({ url, env }));
+    }
+
+    if (request.method === "GET" && url.pathname === "/dashboard/self-parity") {
+      return html(200, await renderDashboardSelfParityPage({ url, env }));
+    }
+
+    if (request.method === "GET" && url.pathname === "/dashboard/notifications") {
+      return html(
+        200,
+        await renderDashboardNotificationsPage({
+          runtimeOrigin: url.origin,
+          dashboardEventStore: resolveDashboardEventStore(env)
+        })
+      );
+    }
+
     if (
       request.method === "GET" &&
       (url.pathname === MCP_PROTECTED_RESOURCE_METADATA_PATH ||
@@ -5189,6 +5223,408 @@ function renderDashboardDeployEvent(event) {
           </div>`;
 }
 
+async function renderDashboardGitHubTruthPage({ url, env } = {}) {
+  const origin = normalize(url?.origin);
+  const repository = normalizeCanonicalRepositoryInput(url?.searchParams?.get("repository")) || "marushu/vtdd-v2-p";
+  const [issues, pulls, workflowRuns] = await Promise.all([
+    retrieveGitHubReadPlane({
+      resource: "issues",
+      repository,
+      state: "open",
+      limit: 12,
+      env
+    }),
+    retrieveGitHubReadPlane({
+      resource: "pulls",
+      repository,
+      state: "open",
+      limit: 12,
+      env
+    }),
+    retrieveGitHubReadPlane({
+      resource: "workflow_runs",
+      repository,
+      limit: 8,
+      env
+    })
+  ]);
+  const failures = [issues, pulls, workflowRuns].filter((item) => !item.ok);
+  return renderDashboardUtilityPage({
+    title: "GitHub runtime truth",
+    subtitle: repository,
+    backHref: `${origin}/dashboard`,
+    body: `
+      <section class="hero">
+        <p>Butler / Action 向け JSON ではなく、人間が読むための GitHub 現在地です。</p>
+      </section>
+      ${failures.length > 0 ? renderDashboardNotice("一部の GitHub runtime truth を読めませんでした。GitHub App / token 設定を確認してください。") : ""}
+      <div class="grid">
+        ${renderGitHubTruthLane("Open Issues", issues, renderIssueTruthCard)}
+        ${renderGitHubTruthLane("Open PRs", pulls, renderPullTruthCard)}
+        ${renderGitHubTruthLane("Workflow Runs", workflowRuns, renderWorkflowRunTruthCard)}
+      </div>
+    `
+  });
+}
+
+async function renderDashboardPreflightPage({ url, env } = {}) {
+  const origin = normalize(url?.origin);
+  const repository = normalizeCanonicalRepositoryInput(url?.searchParams?.get("repository")) || "marushu/vtdd-v2-p";
+  const issueNumber = normalizeIssue(url?.searchParams?.get("issueNumber"));
+  const phase = normalizeText(url?.searchParams?.get("phase")) || "execution";
+  const currentSurface = normalizeText(url?.searchParams?.get("currentSurface")) || "dashboard";
+  const startupPreflight = await buildStartupPreflight({
+    repository,
+    ref: normalizeText(url?.searchParams?.get("ref")) || "main",
+    issueNumber,
+    phase,
+    currentSurface,
+    queryText: "VTDD dashboard startup preflight",
+    runtimeOrigin: origin,
+    env
+  });
+  return renderDashboardUtilityPage({
+    title: "Startup preflight",
+    subtitle: repository,
+    backHref: `${origin}/dashboard`,
+    body: `
+      <section class="hero">
+        <p>Butler が最初に読むべき AGENTS / Issue / runtime truth / RAG / self parity の現在地です。</p>
+      </section>
+      <div class="grid">
+        <section class="lane">
+          <div class="lane-title"><h2>Source truth</h2><span class="pill">${startupPreflight.sources.length}件</span></div>
+          ${startupPreflight.sources.map((source) => renderTruthRow(source.path, source.status, source.reason || source.sha || "")).join("")}
+        </section>
+        <section class="lane">
+          <div class="lane-title"><h2>Open Issues</h2><span class="pill">${startupPreflight.openIssues.length}件</span></div>
+          ${startupPreflight.openIssues.length > 0 ? startupPreflight.openIssues.map((issue) => renderLinkedTruthRow(`#${issue.number} ${issue.title}`, issue.htmlUrl, issue.state)).join("") : `<p class="muted">該当なし</p>`}
+        </section>
+        <section class="lane">
+          <div class="lane-title"><h2>Next safe action</h2><span class="pill">${escapeDashboardHtml(startupPreflight.butlerFirstPrinciple.status)}</span></div>
+          ${renderObjectSummary(startupPreflight.nextSafeAction)}
+        </section>
+      </div>
+    `
+  });
+}
+
+async function renderDashboardProgressPage({ url, env } = {}) {
+  const origin = normalize(url?.origin);
+  const repository = normalizeCanonicalRepositoryInput(url?.searchParams?.get("repository")) || "marushu/vtdd-v2-p";
+  const progress = await retrieveRemoteCodexExecutionProgress({
+    executionId: url.searchParams.get("executionId"),
+    repository,
+    issueNumber: url.searchParams.get("issueNumber"),
+    branch: url.searchParams.get("branch"),
+    executorTransport: url.searchParams.get("executorTransport"),
+    env
+  });
+  return renderDashboardUtilityPage({
+    title: "Execution progress",
+    subtitle: repository,
+    backHref: `${origin}/dashboard`,
+    body: `
+      <section class="hero">
+        <p>VPS Codex CLI / remote Codex execution の進捗を人間向けに表示します。入力中に勝手な自動更新はしません。</p>
+      </section>
+      ${progress.ok ? renderProgressSummary(progress.progress) : renderDashboardNotice(progress.reason || progress.error || "progress unavailable")}
+    `
+  });
+}
+
+async function renderDashboardVpsRunnerPage({ url, env } = {}) {
+  const origin = normalize(url?.origin);
+  const repository = normalizeCanonicalRepositoryInput(url?.searchParams?.get("repository")) || "marushu/vtdd-v2-p";
+  const status = await retrieveVpsRunnerHealthStatus({
+    executionId: url.searchParams.get("executionId"),
+    repository,
+    issueNumber: url.searchParams.get("issueNumber"),
+    branch: url.searchParams.get("branch"),
+    env
+  });
+  return renderDashboardUtilityPage({
+    title: "VPS runner status",
+    subtitle: repository,
+    backHref: `${origin}/dashboard`,
+    body: `
+      <section class="hero">
+        <p>VPS runner の health / queue / progress を人間向けに表示します。</p>
+      </section>
+      ${status.ok ? `<div class="grid">${renderStatusLane("Health", status.health)}${renderStatusLane("Progress", status.progress)}</div>` : renderDashboardNotice(status.reason || status.error || "runner status unavailable")}
+    `
+  });
+}
+
+async function renderDashboardMemoryPage({ url, env } = {}) {
+  const origin = normalize(url?.origin);
+  const repository = normalizeCanonicalRepositoryInput(url?.searchParams?.get("repository")) || "marushu/vtdd-v2-p";
+  const retrieved = await retrieveOperationalMemory(resolveMemoryProvider(env), {
+    text: normalizeText(url.searchParams.get("text")) || normalizeText(url.searchParams.get("q")),
+    recordId: normalizeText(url.searchParams.get("recordId")),
+    repository,
+    limit: normalizeLimit(url.searchParams.get("limit"), 8),
+    runtimeTruth: buildRetrieveRuntimeTruth(url)
+  });
+  return renderDashboardUtilityPage({
+    title: "Operational RAG",
+    subtitle: repository,
+    backHref: `${origin}/dashboard`,
+    body: `
+      <section class="hero">
+        <p>decision / proposal / working memory の compact retrieval です。runtime truth の代替ではありません。</p>
+      </section>
+      ${retrieved.ok ? renderMemorySummary(retrieved) : renderDashboardNotice(retrieved.reason || retrieved.error || "memory unavailable")}
+    `
+  });
+}
+
+async function renderDashboardSelfParityPage({ url, env } = {}) {
+  const origin = normalize(url?.origin);
+  const repository = normalizeCanonicalRepositoryInput(url?.searchParams?.get("repository")) || "marushu/vtdd-v2-p";
+  const parity = await evaluateButlerSelfParity({
+    repository,
+    ref: normalizeText(url.searchParams.get("ref")),
+    issueNumber: normalizeIssue(url.searchParams.get("issueNumber")),
+    pullNumber: normalizeIssue(url.searchParams.get("pullNumber")),
+    runtimeOrigin: origin,
+    env
+  });
+  return renderDashboardUtilityPage({
+    title: "Self parity",
+    subtitle: repository,
+    backHref: `${origin}/dashboard`,
+    body: `
+      <section class="hero">
+        <p>Action Schema / Instructions / Cloudflare deploy freshness / operator URL の自己診断です。</p>
+      </section>
+      ${parity.ok ? renderObjectSummary(parity.selfParity) : renderDashboardNotice(parity.reason || parity.error || "self parity unavailable")}
+    `
+  });
+}
+
+async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventStore } = {}) {
+  const origin = normalize(runtimeOrigin);
+  const latestDeployEvent = await retrieveLatestDashboardEvent({
+    store: dashboardEventStore,
+    kind: "github_actions_workflow_run",
+    repository: "marushu/vtdd-v2-p",
+    workflowName: "deploy-production"
+  });
+  return renderDashboardUtilityPage({
+    title: "通知センター",
+    subtitle: "dashboard events",
+    backHref: `${origin}/dashboard`,
+    body: `
+      <section class="hero">
+        <p>今は iOS Push / 音 / PWA badge ではなく、Worker に届いた dashboard event の人間向け表示です。</p>
+        <p class="muted">次の段階で Web Push 購読、通知 permission、通知タップ遷移を追加します。</p>
+      </section>
+      <div class="grid single">
+        <section class="lane">
+          <div class="lane-title"><h2>deploy-production</h2><span class="pill">latest</span></div>
+          ${renderDashboardDeployEvent(latestDeployEvent)}
+        </section>
+      </div>
+    `
+  });
+}
+
+function renderGitHubTruthLane(title, result, renderCard) {
+  if (!result.ok) {
+    return `<section class="lane">
+      <div class="lane-title"><h2>${escapeDashboardHtml(title)}</h2><span class="pill danger">unavailable</span></div>
+      <p>${escapeDashboardHtml(result.reason || result.error || "GitHub read unavailable")}</p>
+    </section>`;
+  }
+  const records = Array.isArray(result.read?.records) ? result.read.records : [];
+  return `<section class="lane">
+    <div class="lane-title"><h2>${escapeDashboardHtml(title)}</h2><span class="pill">${records.length}件</span></div>
+    ${records.length > 0 ? records.map(renderCard).join("") : `<p class="muted">該当なし</p>`}
+  </section>`;
+}
+
+function renderIssueTruthCard(issue) {
+  return `<article class="truth-card">
+    <div class="truth-card-title"><a href="${escapeDashboardHtml(issue.htmlUrl)}">#${escapeDashboardHtml(issue.number)} ${escapeDashboardHtml(issue.title)}</a></div>
+    <p>${escapeDashboardHtml(issue.author || "unknown")} / ${escapeDashboardHtml(issue.state || "open")}</p>
+  </article>`;
+}
+
+function renderPullTruthCard(pull) {
+  const state = pull.draft ? "draft" : pull.state || "open";
+  return `<article class="truth-card">
+    <div class="truth-card-title"><a href="${escapeDashboardHtml(pull.htmlUrl)}">#${escapeDashboardHtml(pull.number)} ${escapeDashboardHtml(pull.title)}</a></div>
+    <p>${escapeDashboardHtml(state)} / ${escapeDashboardHtml(pull.headRef || "head unknown")} -> ${escapeDashboardHtml(pull.baseRef || "base unknown")}</p>
+  </article>`;
+}
+
+function renderWorkflowRunTruthCard(run) {
+  const conclusion = run.conclusion || run.status || "unknown";
+  const badgeClass = conclusion === "success" ? "success" : conclusion === "failure" ? "danger" : "";
+  return `<article class="truth-card">
+    <div class="truth-card-title"><a href="${escapeDashboardHtml(run.htmlUrl)}">${escapeDashboardHtml(run.name || `run ${run.id}`)}</a></div>
+    <p><span class="pill ${badgeClass}">${escapeDashboardHtml(conclusion)}</span> ${escapeDashboardHtml(run.headBranch || "")}</p>
+  </article>`;
+}
+
+function renderDashboardNotice(message) {
+  return `<section class="notice">${escapeDashboardHtml(message)}</section>`;
+}
+
+function renderTruthRow(label, value, detail = "") {
+  return `<article class="truth-card">
+    <div class="truth-card-title"><strong>${escapeDashboardHtml(label)}</strong><span class="pill">${escapeDashboardHtml(value || "未確認")}</span></div>
+    ${detail ? `<p>${escapeDashboardHtml(detail)}</p>` : ""}
+  </article>`;
+}
+
+function renderLinkedTruthRow(label, href, detail = "") {
+  return `<article class="truth-card">
+    <div class="truth-card-title"><a href="${escapeDashboardHtml(href || "#")}">${escapeDashboardHtml(label)}</a></div>
+    ${detail ? `<p>${escapeDashboardHtml(detail)}</p>` : ""}
+  </article>`;
+}
+
+function renderProgressSummary(progress) {
+  return `<div class="grid single">
+    <section class="lane">
+      <div class="lane-title"><h2>Progress</h2><span class="pill">${escapeDashboardHtml(progress?.status || "未確認")}</span></div>
+      ${renderObjectSummary(progress)}
+    </section>
+  </div>`;
+}
+
+function renderStatusLane(title, value) {
+  return `<section class="lane">
+    <div class="lane-title"><h2>${escapeDashboardHtml(title)}</h2><span class="pill">summary</span></div>
+    ${renderObjectSummary(value)}
+  </section>`;
+}
+
+function renderMemorySummary(retrieved) {
+  const references = retrieved.referencesByLayer && typeof retrieved.referencesByLayer === "object"
+    ? Object.entries(retrieved.referencesByLayer)
+    : [];
+  return `<div class="grid">
+    <section class="lane">
+      <div class="lane-title"><h2>Compact context</h2><span class="pill">${escapeDashboardHtml(retrieved.architecture || "memory")}</span></div>
+      <p>${escapeDashboardHtml(retrieved.compactContext || "該当なし")}</p>
+    </section>
+    <section class="lane">
+      <div class="lane-title"><h2>References</h2><span class="pill">${references.length} layers</span></div>
+      ${references.length > 0 ? references.map(([layer, records]) => renderTruthRow(layer, Array.isArray(records) ? `${records.length}件` : "未確認")).join("") : `<p class="muted">該当なし</p>`}
+    </section>
+    <section class="lane">
+      <div class="lane-title"><h2>Signals</h2><span class="pill">retrieval</span></div>
+      ${renderObjectSummary(retrieved.retrievalSignals)}
+    </section>
+  </div>`;
+}
+
+function renderObjectSummary(value, depth = 0) {
+  if (value === null || value === undefined || value === "") {
+    return `<p class="muted">未確認</p>`;
+  }
+  if (typeof value !== "object") {
+    return `<p>${escapeDashboardHtml(String(value))}</p>`;
+  }
+  if (Array.isArray(value)) {
+    if (value.length === 0) {
+      return `<p class="muted">該当なし</p>`;
+    }
+    return value.slice(0, 8).map((item, index) => renderTruthRow(`#${index + 1}`, summarizeObjectValue(item))).join("");
+  }
+  const entries = Object.entries(value).filter(([, item]) => item !== undefined && typeof item !== "function");
+  if (entries.length === 0) {
+    return `<p class="muted">該当なし</p>`;
+  }
+  return `<dl class="summary-list">
+    ${entries.slice(0, 16).map(([key, item]) => `
+      <div>
+        <dt>${escapeDashboardHtml(key)}</dt>
+        <dd>${depth < 1 && item && typeof item === "object" ? renderObjectSummary(item, depth + 1) : escapeDashboardHtml(summarizeObjectValue(item))}</dd>
+      </div>
+    `).join("")}
+  </dl>`;
+}
+
+function summarizeObjectValue(value) {
+  if (value === null || value === undefined || value === "") {
+    return "未確認";
+  }
+  if (Array.isArray(value)) {
+    return `${value.length}件`;
+  }
+  if (typeof value === "object") {
+    const title = value.title || value.name || value.status || value.state || value.id || value.number;
+    return title ? String(title) : `${Object.keys(value).length} fields`;
+  }
+  return String(value);
+}
+
+function renderDashboardUtilityPage({ title, subtitle, backHref, body }) {
+  return `<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${escapeDashboardHtml(title)} - VTDD Butler</title>
+  <style>
+    :root { color-scheme: light dark; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; --bg: #f7f7f4; --panel: #fff; --text: #151515; --muted: #62625d; --border: #deded6; --soft: #f0f0eb; }
+    @media (prefers-color-scheme: dark) { :root { --bg: #050505; --panel: #101010; --text: #f7f7f4; --muted: #a0a09a; --border: #2b2b2b; --soft: #1b1b1b; } }
+    * { box-sizing: border-box; }
+    html, body { max-width: 100%; overflow-x: hidden; }
+    body { margin: 0; background: var(--bg); color: var(--text); }
+    main { width: min(1120px, 100%); margin: 0 auto; padding: 16px; }
+    header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 18px; }
+    h1 { font-size: 24px; margin: 0 0 4px; }
+    h2 { font-size: 18px; margin: 0; }
+    p { line-height: 1.6; margin: 0 0 10px; }
+    a { color: inherit; text-underline-offset: 4px; }
+    .back, .actions a { display: inline-flex; min-height: 38px; align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: 999px; padding: 6px 12px; background: var(--soft); text-decoration: none; font-weight: 750; }
+    .hero, .lane, .notice { border: 1px solid var(--border); border-radius: 16px; background: var(--panel); padding: 14px; margin-bottom: 14px; }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+    .grid.single { grid-template-columns: minmax(0, 1fr); }
+    .lane-title, .truth-card-title { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+    .truth-card { border-top: 1px solid var(--border); padding: 11px 0; }
+    .truth-card:first-of-type { border-top: 0; }
+    .truth-card p, .muted { color: var(--muted); }
+    .summary-list { margin: 0; display: grid; gap: 8px; }
+    .summary-list div { display: grid; grid-template-columns: minmax(96px, 0.4fr) minmax(0, 1fr); gap: 10px; padding: 8px 0; border-top: 1px solid var(--border); }
+    .summary-list div:first-child { border-top: 0; }
+    .summary-list dt { color: var(--muted); font-size: 13px; }
+    .summary-list dd { margin: 0; overflow-wrap: anywhere; }
+    .pill { display: inline-flex; border: 1px solid var(--border); border-radius: 999px; padding: 3px 8px; background: var(--soft); font-size: 12px; white-space: nowrap; }
+    .pill.success { border-color: #7fb797; background: #e7f5ec; color: #145c34; }
+    .pill.danger { border-color: #d69b9b; background: #fff0f0; color: #8a1f1f; }
+    .deploy-event { border: 1px solid var(--border); border-radius: 12px; padding: 10px; margin: 10px 0; background: var(--soft); }
+    .deploy-event p { margin-bottom: 6px; font-size: 13px; }
+    code { overflow-wrap: anywhere; }
+    @media (max-width: 760px) {
+      main { padding: 12px; }
+      header { align-items: flex-start; }
+      .grid { grid-template-columns: minmax(0, 1fr); }
+      .summary-list div { grid-template-columns: minmax(0, 1fr); }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>${escapeDashboardHtml(title)}</h1>
+        <p class="muted">${escapeDashboardHtml(subtitle || "")}</p>
+      </div>
+      <a class="back" href="${escapeDashboardHtml(backHref || "/dashboard")}">Dashboard</a>
+    </header>
+    ${body}
+  </main>
+</body>
+</html>`;
+}
+
 function normalizeTextList(value) {
   if (Array.isArray(value)) {
     return value.map(normalizeText).filter(Boolean);
@@ -5214,38 +5650,43 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
   const surfaces = [
     {
       title: "Status page",
-      body: "人間向けの runtime status。raw /health JSON ではなく、まずここを見る。",
+      body: "人間向けの runtime status。まずここを見る。",
       href: `${origin}/status`
     },
     {
       title: "Startup preflight",
       body: "AGENTS.md、thread-independent startup、runtime truth、RAG、self parity を最初に読む入口。",
-      href: `${origin}/v2/retrieve/startup-preflight?repository=${encodedRepository}&currentSurface=dashboard&responseMode=action_visible`
+      href: `${origin}/dashboard/preflight?repository=${encodedRepository}`
     },
     {
       title: "Execution progress",
       body: "VPS Codex CLI / remote Codex execution の進捗確認。",
-      href: `${origin}/v2/action/progress?repository=${encodedRepository}&responseMode=action_visible`
+      href: `${origin}/dashboard/progress?repository=${encodedRepository}`
     },
     {
       title: "VPS runner status",
       body: "runner health、queue、対象 execution の状態確認。",
-      href: `${origin}/v2/action/vps-runner-status?repository=${encodedRepository}&responseMode=action_visible`
+      href: `${origin}/dashboard/vps-runner?repository=${encodedRepository}`
     },
     {
       title: "GitHub runtime truth",
       body: "Issues、PRs、checks、workflow runs、reviewer comments を読む入口。",
-      href: `${origin}/v2/retrieve/github?repository=${encodedRepository}&include=open_prs,open_issues,workflow_runs,issue_comments&responseMode=action_visible`
+      href: `${origin}/dashboard/github?repository=${encodedRepository}`
+    },
+    {
+      title: "通知センター",
+      body: "GitHub Actions / deploy から Worker に届いた dashboard event を人間向けに見る入口。",
+      href: `${origin}/dashboard/notifications`
     },
     {
       title: "Operational RAG",
       body: "decision / proposal / working memory の compact retrieval。runtime truth の代替ではない。",
-      href: `${origin}/v2/retrieve/operational-memory?repository=${encodedRepository}&limit=5&responseMode=action_visible`
+      href: `${origin}/dashboard/memory?repository=${encodedRepository}`
     },
     {
       title: "Self parity",
       body: "Action Schema、Instructions、Cloudflare deploy freshness、operator URL を確認。",
-      href: `${origin}/v2/retrieve/self-parity?repository=${encodedRepository}&responseMode=action_visible`
+      href: `${origin}/dashboard/self-parity?repository=${encodedRepository}`
     },
     {
       title: "Setup diagnostics",
@@ -5267,15 +5708,19 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
   const cockpitActions = [
     {
       label: "状態確認",
-      href: `${origin}/v2/retrieve/github?repository=${encodedRepository}&include=open_prs,open_issues,workflow_runs,issue_comments&responseMode=action_visible`
+      href: `${origin}/dashboard/github?repository=${encodedRepository}`
     },
     {
       label: "進捗を見る",
-      href: `${origin}/v2/action/progress?repository=${encodedRepository}&responseMode=action_visible`
+      href: `${origin}/dashboard/progress?repository=${encodedRepository}`
     },
     {
       label: "RAG を読む",
-      href: `${origin}/v2/retrieve/operational-memory?repository=${encodedRepository}&limit=5&responseMode=action_visible`
+      href: `${origin}/dashboard/memory?repository=${encodedRepository}`
+    },
+    {
+      label: "通知",
+      href: `${origin}/dashboard/notifications`
     },
     {
       label: "Passkey",
@@ -5566,8 +6011,7 @@ function renderV2StatusPage({ runtimeOrigin, autonomyMode }) {
     ["Mode", mode, "現在の runtime mode です。"],
     ["Autonomy", resolvedAutonomyMode, "guarded absence などの実行抑制状態を示します。"],
     ["Dashboard", "利用可能", "/dashboard と /orchestrator は人間向け入口です。"],
-    ["Passkey", "same-origin", "高リスク操作は scope 明示済み passkey approval の後ろです。"],
-    ["Raw health", "JSON", "/health は API 互換の machine-readable endpoint として残します。"]
+    ["Passkey", "same-origin", "高リスク操作は scope 明示済み passkey approval の後ろです。"]
   ];
 
   return `<!doctype html>
@@ -5604,7 +6048,7 @@ function renderV2StatusPage({ runtimeOrigin, autonomyMode }) {
       <div>
         <p class="eyebrow">VTDD v2 status</p>
         <h1>Runtime Status</h1>
-        <p>ブラウザで見るための health summary です。機械向け JSON は <code>/health</code> に残しています。</p>
+        <p>ブラウザで見るための health summary です。</p>
       </div>
       <a class="button" href="${escapeDashboardHtml(origin)}/dashboard">Dashboard</a>
     </header>
@@ -5615,7 +6059,6 @@ function renderV2StatusPage({ runtimeOrigin, autonomyMode }) {
       <p>Worker は応答しています。ここでは secret、token、approval grant は表示しません。</p>
       <div class="actions">
         <a class="primary" href="${escapeDashboardHtml(origin)}/dashboard">Butler dashboard</a>
-        <a href="${escapeDashboardHtml(origin)}/health">raw /health JSON</a>
         <a href="${escapeDashboardHtml(origin)}/v2/approval/passkey/operator?repositoryInput=marushu%2Fvtdd-v2-p">Passkey operator</a>
       </div>
     </section>
