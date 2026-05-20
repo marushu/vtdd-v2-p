@@ -4911,6 +4911,11 @@ function renderV2DashboardPage({ runtimeOrigin }) {
   const encodedRepository = encodeURIComponent(repository);
   const surfaces = [
     {
+      title: "Status page",
+      body: "人間向けの runtime status。raw /health JSON ではなく、まずここを見る。",
+      href: `${origin}/status`
+    },
+    {
       title: "Startup preflight",
       body: "AGENTS.md、thread-independent startup、runtime truth、RAG、self parity を最初に読む入口。",
       href: `${origin}/v2/retrieve/startup-preflight?repository=${encodedRepository}&currentSurface=dashboard&responseMode=action_visible`
@@ -4983,156 +4988,225 @@ function renderV2DashboardPage({ runtimeOrigin }) {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>VTDD v2 Dashboard</title>
   <style>
-    :root { color-scheme: light; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #182125; background: #f7faf7; }
-    body { margin: 0; }
-    main { width: min(1180px, calc(100% - 32px)); margin: 0 auto; padding: 28px 0 48px; }
-    header { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; margin-bottom: 20px; }
-    h1 { font-size: clamp(32px, 6vw, 56px); line-height: 1; margin: 8px 0; }
-    h2 { font-size: 24px; margin: 0 0 14px; }
-    h3 { margin: 0 0 8px; }
-    p { line-height: 1.7; color: #4d5c56; }
-    .eyebrow { color: #2c7658; font-size: 13px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
-    .panel { background: #fff; border: 1px solid #dce5dd; border-radius: 8px; padding: 22px; box-shadow: 0 10px 30px rgba(28, 44, 35, .06); margin: 16px 0; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
-    .card { border: 1px solid #dce5dd; border-radius: 8px; padding: 16px; background: #fbfdfb; }
-    .card h3 { margin: 0 0 8px; font-size: 19px; }
-    a.button, .card a, button { display: inline-flex; align-items: center; justify-content: center; border: 1px solid #b9cabe; border-radius: 7px; padding: 9px 12px; color: #0f513b; font-weight: 750; text-decoration: none; background: #f8fbf8; font: inherit; }
-    button.primary, a.primary { background: #247a5b; color: #fff; border-color: #247a5b; }
-    .card a { margin-top: 8px; }
-    .notice { border-color: #e6c6a0; background: #fff8ef; }
-    .danger { border-color: #e3b4a7; background: #fff5f3; }
-    .cockpit { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(300px, .8fr); gap: 16px; align-items: stretch; }
-    .chat-shell { min-height: 560px; display: grid; grid-template-rows: auto 1fr auto; gap: 14px; }
-    .thread-header { display: flex; justify-content: space-between; gap: 12px; align-items: center; border-bottom: 1px solid #e5eee7; padding-bottom: 12px; }
-    .thread-list { display: grid; gap: 12px; align-content: start; }
-    .bubble { max-width: 86%; border: 1px solid #dce5dd; border-radius: 8px; padding: 14px; background: #fbfdfb; }
-    .bubble.owner { margin-left: auto; background: #eef7f2; border-color: #c8dfd2; }
-    .composer { display: grid; gap: 10px; border-top: 1px solid #e5eee7; padding-top: 12px; }
-    textarea { width: 100%; min-height: 120px; box-sizing: border-box; border: 1px solid #b9cabe; border-radius: 8px; padding: 12px; font: inherit; resize: vertical; background: #fff; color: #182125; }
-    .composer-actions { display: flex; flex-wrap: wrap; gap: 10px; }
-    .inspector { display: grid; gap: 12px; align-content: start; }
-    .lane { border: 1px solid #dce5dd; border-radius: 8px; padding: 14px; background: #fbfdfb; }
-    .lane-title { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; margin-bottom: 8px; }
-    .pill { display: inline-flex; align-items: center; border: 1px solid #c8d8cc; border-radius: 999px; padding: 4px 9px; color: #315245; background: #f7faf7; font-size: 13px; font-weight: 750; }
-    .quick-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-    .muted { color: #63716b; }
-    code { color: #596860; }
-    ul { margin: 0; padding-left: 20px; color: #4d5c56; line-height: 1.8; }
-    @media (max-width: 820px) { .cockpit { grid-template-columns: 1fr; } .chat-shell { min-height: 520px; } .bubble { max-width: 100%; } }
-    @media (max-width: 640px) { header { display: block; } main { width: min(100% - 20px, 1120px); padding-top: 16px; } .composer-actions a, .composer-actions button { width: 100%; } }
+    :root {
+      color-scheme: light dark;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --page-bg: #f7f7f4;
+      --text: #151515;
+      --muted: #64645f;
+      --soft: #f0f0eb;
+      --panel: #ffffff;
+      --panel-strong: #fbfbf7;
+      --border: #ddddd5;
+      --button: #f4f4ef;
+      --owner-bubble: #171717;
+      --owner-text: #f7f7f4;
+      --shadow: rgba(20, 20, 20, .12);
+      color: var(--text);
+      background: var(--page-bg);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --page-bg: #050505;
+        --text: #f7f7f4;
+        --muted: #9d9d98;
+        --soft: #202020;
+        --panel: #101010;
+        --panel-strong: #171717;
+        --border: #2a2a2a;
+        --button: #171717;
+        --owner-bubble: #f2f2ee;
+        --owner-text: #111;
+        --shadow: rgba(0, 0, 0, .42);
+      }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--page-bg); }
+    main { min-height: 100dvh; display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 320px); gap: 18px; padding: 16px; }
+    h1, h2, h3, p { margin-top: 0; }
+    h1 { font-size: 22px; line-height: 1.1; margin-bottom: 4px; }
+    h2 { font-size: 19px; margin-bottom: 12px; }
+    h3 { font-size: 15px; margin-bottom: 8px; }
+    p { line-height: 1.65; color: var(--text); }
+    a { color: inherit; }
+    .app-shell { min-height: calc(100dvh - 32px); display: grid; grid-template-rows: auto 1fr auto; }
+    .topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 4px 2px 20px; }
+    .top-left, .top-right { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .round-button, .tool-button, .send-button, .icon-button { display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border); background: var(--button); color: var(--text); text-decoration: none; font: inherit; font-weight: 750; }
+    .round-button { width: 44px; height: 44px; border-radius: 999px; font-size: 24px; flex: 0 0 auto; }
+    .tool-button { min-height: 40px; border-radius: 999px; padding: 0 14px; }
+    .thread-title { min-width: 0; }
+    .thread-title span { display: block; color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .chat-scroll { min-height: 0; overflow: auto; padding: 8px 4px 118px; display: flex; flex-direction: column; gap: 22px; scrollbar-width: thin; }
+    .bubble { max-width: min(760px, 88%); color: var(--text); font-size: 17px; line-height: 1.72; }
+    .bubble strong { display: block; color: var(--muted); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 8px; }
+    .bubble p { color: var(--text); margin-bottom: 12px; }
+    .bubble ul { margin: 0; padding-left: 22px; color: var(--text); line-height: 1.85; }
+    .bubble.owner { align-self: flex-end; background: var(--owner-bubble); color: var(--owner-text); border-radius: 24px; padding: 12px 16px; }
+    .bubble.owner p { color: var(--owner-text); margin: 0; }
+    .connection-note { display: inline-flex; align-items: center; width: fit-content; border: 1px solid var(--border); border-radius: 999px; padding: 5px 10px; color: var(--muted); font-size: 13px; }
+    .chat-link { color: var(--text); text-decoration-thickness: 1px; text-underline-offset: 4px; font-weight: 750; }
+    .composer { position: fixed; left: 16px; right: 354px; bottom: max(16px, env(safe-area-inset-bottom)); display: grid; gap: 8px; z-index: 4; }
+    .composer-box { display: grid; grid-template-columns: 44px minmax(0, 1fr) 38px 44px; align-items: end; gap: 8px; min-height: 62px; padding: 8px; border: 1px solid var(--border); border-radius: 28px; background: var(--panel-strong); box-shadow: 0 16px 60px var(--shadow); }
+    textarea { width: 100%; min-height: 44px; max-height: 160px; border: 0; outline: 0; resize: vertical; padding: 10px 2px; color: var(--text); background: transparent; font: inherit; line-height: 1.45; }
+    textarea::placeholder { color: var(--muted); }
+    .icon-button { width: 38px; height: 38px; border-radius: 999px; font-size: 24px; }
+    .send-button { width: 44px; height: 44px; border-radius: 999px; background: var(--text); color: var(--page-bg); font-size: 22px; }
+    .composer-status { padding-left: 16px; color: var(--muted); font-size: 12px; }
+    .sidebar { position: sticky; top: 16px; align-self: start; max-height: calc(100dvh - 32px); overflow: auto; border: 1px solid var(--border); border-radius: 18px; background: var(--panel); }
+    .sidebar > summary { display: flex; justify-content: space-between; align-items: center; gap: 10px; min-height: 58px; padding: 14px; list-style: none; }
+    .sidebar > summary::-webkit-details-marker { display: none; }
+    .sidebar-content { display: grid; gap: 12px; padding: 0 14px 14px; }
+    .sidebar-header { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+    .eyebrow { color: var(--muted); font-size: 11px; font-weight: 850; letter-spacing: .1em; text-transform: uppercase; }
+    .lane, details { border: 1px solid var(--border); border-radius: 14px; padding: 12px; background: var(--panel-strong); }
+    .lane-title { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+    .pill { display: inline-flex; align-items: center; border: 1px solid var(--border); border-radius: 999px; padding: 3px 8px; color: var(--text); background: var(--soft); font-size: 12px; white-space: nowrap; }
+    .quick-actions, .surface-list { display: grid; gap: 8px; }
+    .quick-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .quick-actions a, .surface-list a { display: inline-flex; align-items: center; justify-content: center; min-height: 36px; border: 1px solid var(--border); border-radius: 10px; padding: 7px 9px; color: var(--text); text-decoration: none; background: var(--soft); font-weight: 750; font-size: 13px; text-align: center; }
+    summary { cursor: pointer; color: var(--text); font-weight: 800; }
+    .muted { color: var(--muted); }
+    code { color: var(--text); overflow-wrap: anywhere; }
+    .mobile-tools { display: none; }
+    .menu-callout { color: var(--muted); font-size: 12px; line-height: 1.55; }
+    @media (min-width: 1180px) {
+      .chat-scroll { align-items: center; }
+      .bubble.owner { margin-right: calc((100% - 760px) / 2); }
+    }
+    @media (max-width: 900px) {
+      main { display: block; padding: 14px 14px 0; }
+      .app-shell { min-height: 100dvh; }
+      .sidebar { display: none; }
+      .composer { left: 14px; right: 14px; }
+      .mobile-tools { display: block; margin: 0 0 140px; }
+      .chat-scroll { padding-bottom: 104px; }
+      .bubble { max-width: 100%; font-size: 16px; }
+      .bubble.owner { max-width: 82%; }
+      .topbar { padding-bottom: 18px; }
+    }
+    @media (max-width: 460px) {
+      main { padding: 12px 10px 0; }
+      .composer { left: 10px; right: 10px; }
+      .composer-box { grid-template-columns: 40px minmax(0, 1fr) 34px 40px; border-radius: 24px; }
+      .round-button { width: 40px; height: 40px; }
+      .tool-button { min-height: 38px; padding: 0 12px; }
+      .send-button { width: 40px; height: 40px; }
+      .icon-button { width: 34px; height: 34px; }
+    }
   </style>
 </head>
 <body>
   <main>
-    <header>
-      <div>
-        <p class="eyebrow">VTDD v2 operational dashboard</p>
-        <h1>VTDD Butler</h1>
-        <p>v2 の GitHub App / VPS runner / Gemini reviewer / RAG / passkey / runtime truth をそのまま使う dashboard 入口です。</p>
-      </div>
-      <a class="button" href="${escapeDashboardHtml(origin)}/status">Health</a>
-    </header>
-
-    <section class="panel cockpit" aria-label="Butler conversation cockpit">
-      <div class="chat-shell">
-        <div class="thread-header">
-          <div>
-            <p class="eyebrow">Butler main chat</p>
-            <h2>Butler と会話の準備</h2>
+    <section class="app-shell" aria-label="Butler chat shell">
+      <header class="topbar">
+        <div class="top-left">
+          <a class="round-button" href="${escapeDashboardHtml(origin)}/dashboard" aria-label="メニュー">≡</a>
+          <div class="thread-title">
+            <h1>VTDD Butler</h1>
+            <span>${escapeDashboardHtml(repository)} ・ dashboard main chat</span>
           </div>
-          <span class="pill">自動更新なし</span>
         </div>
-
-        <div class="thread-list">
-          <article class="bubble">
-            <strong>Butler</strong>
-            <p>ご主人様、ここが v2 の新しい入口です。普段通り話し、必要になったら Issue 候補、開発 queue 候補、進行中 execution、passkey operator へ交通整理します。</p>
-          </article>
-          <article class="bubble owner">
-            <strong>Owner</strong>
-            <p>例: ぶいの PR 状態を見て。TOMIO に新しい開発を投げたい。dashboard の失敗 run を片付けたい。</p>
-          </article>
-          <article class="bubble">
-            <strong>Butler</strong>
-            <p>この MVP ではまだ LLM 直結の返信は未接続です。入力欄は送信されない下書きメモで、既存 v2 runtime truth へ進むための安全な控え室として使います。</p>
-          </article>
+        <div class="top-right">
+          <a class="tool-button" href="#mobile-management">管理</a>
+          <a class="round-button" href="${escapeDashboardHtml(origin)}/v2/approval/passkey/operator?repositoryInput=${encodedRepository}" aria-label="Passkey">◇</a>
         </div>
+      </header>
 
-        <div class="composer">
-          <label for="butler-message"><strong>下書きメモ（未送信）</strong></label>
-          <textarea id="butler-message" placeholder="Butler に話す内容。まだ保存も送信もせず、確認してから進めます。"></textarea>
-          <div class="composer-actions">
-            <a class="primary" href="${escapeDashboardHtml(origin)}/v2/retrieve/startup-preflight?repository=${encodedRepository}&currentSurface=dashboard&responseMode=action_visible">入力を送らず状態を読む</a>
-            ${cockpitActions.map((action) => `<a href="${escapeDashboardHtml(action.href)}">${escapeDashboardHtml(action.label)}</a>`).join("")}
+      <div class="chat-scroll">
+        <article class="bubble owner">
+          <p>ここはカスタム GPT の Butler。</p>
+        </article>
+        <article class="bubble">
+          <strong>Butler</strong>
+          <p>はい。私は v2 の Butler として、Issue 駆動・GitHub runtime truth・VPS runner・Gemini reviewer・RAG・passkey 境界を扱います。</p>
+          <p>この画面は会話を主役にするための chat-first shell です。管理画面は右のサイドバーへ退避しました。</p>
+          <ul>
+            <li>関連 repo: <code>${escapeDashboardHtml(repository)}</code></li>
+            <li>Issue 候補: #433 の継続スライス</li>
+            <li>実行: まだ dashboard から自動 dispatch しません</li>
+          </ul>
+        </article>
+        <article class="bubble owner">
+          <p>管理画面的なヤツはサイドバーに置けば良くない？</p>
+        </article>
+        <article class="bubble">
+          <strong>Butler</strong>
+          <p>その方針で進めます。中央はチャットだけ、状態確認・進捗・RAG・workflow・prototype cleanup の扱いはサイドバーのメニューから必要な時だけ開きます。</p>
+          <p>deploy が必要になった時は、普通のチャットと同じようにこの会話内へ scope 明示済みの passkey URL を出します。この shell はまだ未接続なので、実行 URL は会話例として常時表示しません。</p>
+          <span class="connection-note">未接続: この入力欄はまだ保存・送信・LLM 返信しません</span>
+        </article>
+
+        <details id="mobile-management" class="mobile-tools">
+          <summary>管理メニューを開く</summary>
+          <div class="surface-list">
+            ${surfaces.map((surface) => `<a href="${escapeDashboardHtml(surface.href)}">${escapeDashboardHtml(surface.title)}</a>`).join("")}
+            ${workflows.map(([title, href]) => `<a href="${escapeDashboardHtml(href)}">${escapeDashboardHtml(title)}</a>`).join("")}
           </div>
-          <p class="muted">マイク中や入力中の画面破壊を避けるため、このページは meta refresh / polling を使いません。</p>
-        </div>
+        </details>
       </div>
 
-      <aside class="inspector" aria-label="Butler organized state">
+      <div class="composer" aria-label="Butler composer">
+        <div class="composer-box">
+          <span class="icon-button" aria-hidden="true">＋</span>
+          <textarea id="butler-message" placeholder="Butler V2 にメッセージ..." aria-label="Butler V2 にメッセージ。現在は未送信です。"></textarea>
+          <span class="icon-button" aria-hidden="true">♪</span>
+          <span class="send-button" aria-hidden="true">↑</span>
+        </div>
+        <div class="composer-status">未接続。入力は保存も送信もされません。自動更新・polling はありません。</div>
+      </div>
+    </section>
+
+    <details id="tools" class="sidebar" aria-label="管理サイドバーメニュー">
+      <summary>
+        <span>
+          <span class="eyebrow">管理メニュー</span>
+          <strong>必要な時だけ開く</strong>
+        </span>
+        <span class="pill">自動更新なし</span>
+      </summary>
+      <div class="sidebar-content">
+        <p class="menu-callout">状態確認、進捗、RAG、workflow はここから遷移します。普段の画面はチャットを主役にします。</p>
+
         <div class="lane">
           <div class="lane-title"><h3>関連 repo</h3><span class="pill">resolved</span></div>
           <p><strong>${escapeDashboardHtml(repository)}</strong></p>
-          <p class="muted">nickname resolution / startup preflight / GitHub runtime truth は既存 v2 route で確認します。</p>
+          <p class="muted">nickname / startup preflight / GitHub runtime truth は既存 v2 route で確認します。</p>
         </div>
+
         <div class="lane">
           <div class="lane-title"><h3>Issue 候補</h3><span class="pill">draft</span></div>
-          <ul>
-            <li>会話入口の UI は Issue #433 として固定済み。</li>
-            <li>本物の双方向チャット、音声 overlay、ファイル upload は次の bounded Issue に分けます。</li>
-          </ul>
+          <p>会話入口の UI は Issue #433 として固定済み。本物の双方向チャット、音声 overlay、ファイル upload は別 Issue です。</p>
         </div>
-        <div class="lane">
-          <div class="lane-title"><h3>開発 queue 候補</h3><span class="pill">manual handoff</span></div>
-          <p>今は既存 remote Codex / VPS runner workflow へ owner が明示的に進めます。dashboard から勝手に dispatch しません。</p>
-        </div>
+
         <div class="lane">
           <div class="lane-title"><h3>進行中 execution</h3><span class="pill">runtime truth</span></div>
-          <p>進捗は GitHub Actions / VPS runner status / execution progress route を source of truth として読みます。</p>
+          <p>進捗は GitHub Actions / VPS runner status / execution progress route から読みます。</p>
           <div class="quick-actions">
-            <a href="${escapeDashboardHtml(origin)}/v2/action/vps-runner-status?repository=${encodedRepository}&responseMode=action_visible">runner</a>
-            <a href="${escapeDashboardHtml(origin)}/v2/action/progress?repository=${encodedRepository}&responseMode=action_visible">progress</a>
+            ${cockpitActions.map((action) => `<a href="${escapeDashboardHtml(action.href)}">${escapeDashboardHtml(action.label)}</a>`).join("")}
           </div>
         </div>
-      </aside>
-    </section>
 
-    <section class="panel notice">
-      <h2>現在の判断</h2>
-      <p>v3 dashboard は prototype として扱い、実運用の本線は v2-p に戻します。この dashboard は新しい実行権限を持たず、既存の v2 runtime route へ owner を案内します。</p>
-    </section>
+        <details>
+          <summary>Runtime surfaces</summary>
+          <div class="surface-list">
+            ${surfaces.map((surface) => `<a href="${escapeDashboardHtml(surface.href)}">${escapeDashboardHtml(surface.title)}</a>`).join("")}
+          </div>
+        </details>
 
-    <section class="panel">
-      <h2>Runtime surfaces</h2>
-      <div class="grid">
-        ${surfaces.map((surface) => `<article class="card">
-          <h3>${escapeDashboardHtml(surface.title)}</h3>
-          <p>${escapeDashboardHtml(surface.body)}</p>
-          <a href="${escapeDashboardHtml(surface.href)}">開く</a>
-        </article>`).join("")}
+        <details>
+          <summary>GitHub workflows</summary>
+          <div class="surface-list">
+            ${workflows.map(([title, href]) => `<a href="${escapeDashboardHtml(href)}">${escapeDashboardHtml(title)}</a>`).join("")}
+          </div>
+        </details>
+
+        <details>
+          <summary>Prototype cleanup</summary>
+          <p>v3 Worker prototype の削除や移行は destructive operation 扱いです。必要になった時だけ、対象 runtime と scope を明示した passkey approval で扱います。</p>
+        </details>
       </div>
-    </section>
-
-    <section class="panel">
-      <h2>GitHub workflows</h2>
-      <div class="grid">
-        ${workflows.map(([title, href]) => `<article class="card">
-          <h3>${escapeDashboardHtml(title)}</h3>
-          <p>GitHub Actions runtime truth / execution surface。</p>
-          <a href="${escapeDashboardHtml(href)}">GitHub Actions</a>
-        </article>`).join("")}
-      </div>
-    </section>
-
-    <section class="panel danger">
-      <h2>v3 Worker の扱い</h2>
-      <p><code>vtdd-v3-orchestrator.polished-tree-da7c.workers.dev</code> は prototype として残します。削除は Cloudflare Worker deletion なので destructive operation です。実行する場合は scope 明示済み passkey approval と削除対象名の明示が必要です。</p>
-      <ul>
-        <li>削除前に v2 dashboard / deploy path が本番反映済みであることを確認する。</li>
-        <li>必要なら v3 Worker は disable / rename / delete の順に検討する。</li>
-        <li>secret や approval grant は dashboard に表示しない。</li>
-      </ul>
-    </section>
+    </details>
   </main>
 </body>
 </html>`;
