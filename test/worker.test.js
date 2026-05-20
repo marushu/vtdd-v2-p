@@ -331,6 +331,7 @@ test("worker serves human-facing dashboard pages for every management menu", asy
 
 test("worker serves dashboard notification center for latest deploy event", async () => {
   const store = createInMemoryDashboardEventStore();
+  const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
   await store.put({
     id: "github_actions_workflow_run:marushu/vtdd-v2-p:deploy-production:26134526815",
     kind: "github_actions_workflow_run",
@@ -343,7 +344,7 @@ test("worker serves dashboard notification center for latest deploy event", asyn
     headSha: "daad4fb023cf699b3ad531e0394e064fde2b5515",
     headBranch: "main",
     title: "deploy-production",
-    updatedAt: "2026-05-20T00:54:27Z"
+    updatedAt: fiveMinutesAgo
   });
 
   const response = await worker.fetch(new Request("https://example.com/dashboard/notifications"), {
@@ -357,6 +358,8 @@ test("worker serves dashboard notification center for latest deploy event", asyn
   assert.equal(body.includes("最新 deploy"), true);
   assert.equal(body.includes("success"), true);
   assert.equal(body.includes("26134526815"), true);
+  assert.equal(body.includes("5分前"), true);
+  assert.equal(body.includes(fiveMinutesAgo), true);
 });
 
 test("worker ingests GitHub Actions deploy completion event and shows it on dashboard", async () => {

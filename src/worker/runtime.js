@@ -5212,6 +5212,7 @@ function renderDashboardDeployEvent(event) {
   const conclusion = normalizeText(event.conclusion) || normalizeText(event.status) || "unknown";
   const badgeClass = conclusion === "success" ? "success" : conclusion === "failure" || conclusion === "cancelled" ? "danger" : "";
   const updatedAt = normalizeText(event.updatedAt);
+  const relativeUpdatedAt = formatDashboardRelativeTime(updatedAt);
   const sha = normalizeText(event.headSha);
   const shortSha = sha ? sha.slice(0, 7) : "unknown";
   const runUrl = normalizeText(event.runUrl);
@@ -5219,8 +5220,38 @@ function renderDashboardDeployEvent(event) {
   return `<div class="deploy-event">
             <div class="lane-title"><strong>最新 deploy</strong><span class="pill ${badgeClass}">${escapeDashboardHtml(conclusion)}</span></div>
             <p>${escapeDashboardHtml(event.workflowName || "deploy-production")} / <code>${escapeDashboardHtml(shortSha)}</code></p>
-            <p class="muted">${escapeDashboardHtml(updatedAt || "updatedAt 未受信")} ・ ${runLabel}</p>
+            <p class="muted">${escapeDashboardHtml(relativeUpdatedAt || "時刻未受信")} ・ ${escapeDashboardHtml(updatedAt || "updatedAt 未受信")} ・ ${runLabel}</p>
           </div>`;
+}
+
+function formatDashboardRelativeTime(value, now = new Date()) {
+  const timestamp = new Date(normalizeText(value));
+  const nowTime = now instanceof Date ? now.getTime() : new Date(now).getTime();
+  if (Number.isNaN(timestamp.getTime()) || Number.isNaN(nowTime)) {
+    return "";
+  }
+  const diffMs = Math.max(0, nowTime - timestamp.getTime());
+  const seconds = Math.floor(diffMs / 1000);
+  if (seconds < 60) {
+    return "たった今";
+  }
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) {
+    return `${minutes}分前`;
+  }
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) {
+    return `${hours}時間前`;
+  }
+  const days = Math.floor(hours / 24);
+  if (days < 30) {
+    return `${days}日前`;
+  }
+  const months = Math.floor(days / 30);
+  if (months < 12) {
+    return `${months}か月前`;
+  }
+  return `${Math.floor(months / 12)}年前`;
 }
 
 async function renderDashboardGitHubTruthPage({ url, env } = {}) {
