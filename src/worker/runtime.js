@@ -3648,7 +3648,7 @@ async function handleDashboardChatSocketRequest(request, url, env) {
 
 async function handleDashboardVpsRunnerSocketRequest(request, env) {
   const auth = authorizeGatewayRequest({
-    request,
+    request: withDashboardRunnerProtocolAuthorization(request),
     env,
     apiSuffix: "/dashboard/vps-runner/ws"
   });
@@ -3684,6 +3684,44 @@ async function handleDashboardVpsRunnerSocketRequest(request, env) {
     });
   }
   return room.fetch(request);
+}
+
+function withDashboardRunnerProtocolAuthorization(request) {
+  if (request.headers.get("authorization")) {
+    return request;
+  }
+  const protocol = normalizeText(request.headers.get("sec-websocket-protocol"));
+  const token = protocol
+    .split(",")
+    .map((item) => item.trim())
+    .find((item) => item.startsWith("vtdd-gateway-bearer-"));
+  if (!token) {
+    return request;
+  }
+  const encoded = token.slice("vtdd-gateway-bearer-".length);
+  const bearerToken = decodeBase64UrlText(encoded);
+  if (!bearerToken) {
+    return request;
+  }
+  const headers = new Headers(request.headers);
+  headers.set("authorization", `Bearer ${bearerToken}`);
+  return new Request(request, { headers });
+}
+
+function decodeBase64UrlText(value) {
+  const normalized = normalizeText(value);
+  if (!/^[A-Za-z0-9_-]+$/.test(normalized)) {
+    return "";
+  }
+  try {
+    const base64 = normalized.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, "=");
+    const binary = atob(padded);
+    const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+    return new TextDecoder().decode(bytes);
+  } catch {
+    return "";
+  }
 }
 
 async function handleDashboardChatThreadRequest(request, url, env) {
