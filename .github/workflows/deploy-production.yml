@@ -135,6 +135,51 @@ jobs:
           wranglerVersion: "4.83.0"
           command: deploy --config wrangler.production.generated.toml --env production
 
+      - name: Notify dashboard deploy event
+        if: always()
+        env:
+          VTDD_GATEWAY_BEARER_TOKEN: ${{ secrets.VTDD_GATEWAY_BEARER_TOKEN }}
+          DEPLOY_JOB_STATUS: ${{ job.status }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          DEPLOY_SHA: ${{ github.sha }}
+          DEPLOY_BRANCH: ${{ github.ref_name }}
+          RUNTIME_URL: ${{ github.event.inputs.runtime_url }}
+        shell: bash
+        run: |
+          if [ -z "$RUNTIME_URL" ]; then
+            echo "runtime_url is not set; skipping dashboard deploy event."
+            exit 0
+          fi
+          if [ -z "$VTDD_GATEWAY_BEARER_TOKEN" ]; then
+            echo "VTDD_GATEWAY_BEARER_TOKEN is not set; skipping dashboard deploy event."
+            exit 0
+          fi
+
+          event_body=$(node - <<'NODE'
+          const payload = {
+            repository: process.env.REPOSITORY,
+            workflowName: "deploy-production",
+            runId: process.env.RUN_ID,
+            runUrl: process.env.RUN_URL,
+            status: "completed",
+            conclusion: process.env.DEPLOY_JOB_STATUS,
+            headSha: process.env.DEPLOY_SHA,
+            headBranch: process.env.DEPLOY_BRANCH,
+            displayTitle: "deploy-production",
+            updatedAt: new Date().toISOString()
+          };
+          process.stdout.write(JSON.stringify(payload));
+          NODE
+          )
+
+          curl --fail-with-body --show-error --silent \
+            -X POST "${RUNTIME_URL%/}/v2/events/github-actions" \
+            -H "authorization: Bearer ${VTDD_GATEWAY_BEARER_TOKEN}" \
+            -H "content-type: application/json" \
+            --data "$event_body"
+
       - name: Notify deploy completion
         if: always()
         env:
