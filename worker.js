@@ -60251,8 +60251,9 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
       }
     }
     * { box-sizing: border-box; }
+    html, body { max-width: 100%; overflow-x: hidden; }
     body { margin: 0; background: var(--page-bg); }
-    main { min-height: 100dvh; display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 320px); gap: 18px; padding: 16px; }
+    main { width: 100%; min-height: 100dvh; display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 320px); gap: 18px; padding: 16px; overflow-x: hidden; }
     h1, h2, h3, p { margin-top: 0; }
     h1 { font-size: 22px; line-height: 1.1; margin-bottom: 4px; }
     h2 { font-size: 19px; margin-bottom: 12px; }
@@ -60263,12 +60264,15 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
     .topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 4px 2px 20px; }
     .top-left, .top-right { display: flex; align-items: center; gap: 10px; min-width: 0; }
     .round-button, .tool-button, .send-button, .icon-button { display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border); background: var(--button); color: var(--text); text-decoration: none; font: inherit; font-weight: 750; }
+    .menu-open { cursor: pointer; }
     .round-button { width: 44px; height: 44px; border-radius: 999px; font-size: 24px; flex: 0 0 auto; }
     .tool-button { min-height: 40px; border-radius: 999px; padding: 0 14px; }
     .thread-title { min-width: 0; }
+    .thread-title h1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .thread-title span { display: block; color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .chat-scroll { min-height: 0; overflow: auto; padding: 8px 4px 118px; display: flex; flex-direction: column; gap: 22px; scrollbar-width: thin; }
     .bubble { max-width: min(760px, 88%); color: var(--text); font-size: 17px; line-height: 1.72; }
+    .bubble, .bubble p, .bubble li { overflow-wrap: anywhere; }
     .bubble strong { display: block; color: var(--muted); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 8px; }
     .bubble p { color: var(--text); margin-bottom: 12px; }
     .bubble ul { margin: 0; padding-left: 22px; color: var(--text); line-height: 1.85; }
@@ -60302,7 +60306,8 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
     summary { cursor: pointer; color: var(--text); font-weight: 800; }
     .muted { color: var(--muted); }
     code { color: var(--text); overflow-wrap: anywhere; }
-    .mobile-tools { display: none; }
+    .menu-toggle { position: fixed; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+    .mobile-backdrop, .mobile-drawer { display: none; }
     .menu-callout { color: var(--muted); font-size: 12px; line-height: 1.55; }
     @media (min-width: 1180px) {
       .chat-scroll { align-items: center; }
@@ -60311,9 +60316,14 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
     @media (max-width: 900px) {
       main { display: block; padding: 14px 14px 0; }
       .app-shell { min-height: 100dvh; }
+      .topbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
       .sidebar { display: none; }
       .composer { left: 14px; right: 14px; }
-      .mobile-tools { display: block; margin: 0 0 140px; }
+      .mobile-backdrop { position: fixed; inset: 0; z-index: 10; background: rgba(0, 0, 0, .38); backdrop-filter: blur(2px); }
+      .mobile-drawer { position: fixed; top: 0; bottom: 0; left: 0; z-index: 11; width: min(86vw, 360px); overflow: auto; padding: max(16px, env(safe-area-inset-top)) 14px max(18px, env(safe-area-inset-bottom)); border-right: 1px solid var(--border); background: var(--panel); box-shadow: 18px 0 60px var(--shadow); }
+      .menu-toggle:checked ~ .mobile-backdrop, .menu-toggle:checked ~ .mobile-drawer { display: block; }
+      .mobile-drawer-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px; }
+      .mobile-drawer-content { display: grid; gap: 12px; }
       .chat-scroll { padding-bottom: 104px; }
       .bubble { max-width: 100%; font-size: 16px; }
       .bubble.owner { max-width: 82%; }
@@ -60333,19 +60343,54 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
 <body>
   <main>
     <section class="app-shell" aria-label="Butler chat shell">
+      <input class="menu-toggle" type="checkbox" id="mobile-menu-toggle" aria-hidden="true">
       <header class="topbar">
         <div class="top-left">
-          <a class="round-button" href="${escapeDashboardHtml(origin)}/dashboard" aria-label="\u30E1\u30CB\u30E5\u30FC">\u2261</a>
+          <label class="round-button menu-open" for="mobile-menu-toggle" aria-label="\u7BA1\u7406\u30E1\u30CB\u30E5\u30FC\u3092\u958B\u304F">\u2261</label>
           <div class="thread-title">
             <h1>VTDD Butler</h1>
             <span>${escapeDashboardHtml(repository)} \u30FB dashboard main chat</span>
           </div>
         </div>
         <div class="top-right">
-          <a class="tool-button" href="#mobile-management">\u7BA1\u7406</a>
+          <label class="tool-button menu-open" for="mobile-menu-toggle">\u7BA1\u7406</label>
           <a class="round-button" href="${escapeDashboardHtml(origin)}/v2/approval/passkey/operator?repositoryInput=${encodedRepository}" aria-label="Passkey">\u25C7</a>
         </div>
       </header>
+
+      <label class="mobile-backdrop" for="mobile-menu-toggle" aria-label="\u7BA1\u7406\u30E1\u30CB\u30E5\u30FC\u3092\u9589\u3058\u308B"></label>
+      <aside class="mobile-drawer" aria-label="\u30E2\u30D0\u30A4\u30EB\u7BA1\u7406\u30E1\u30CB\u30E5\u30FC">
+        <div class="mobile-drawer-header">
+          <span>
+            <span class="eyebrow">\u7BA1\u7406\u30E1\u30CB\u30E5\u30FC</span>
+            <strong>\u5FC5\u8981\u306A\u6642\u3060\u3051\u958B\u304F</strong>
+          </span>
+          <label class="round-button menu-open" for="mobile-menu-toggle" aria-label="\u7BA1\u7406\u30E1\u30CB\u30E5\u30FC\u3092\u9589\u3058\u308B">\xD7</label>
+        </div>
+        <div class="mobile-drawer-content">
+          <p class="menu-callout">\u72B6\u614B\u78BA\u8A8D\u3001\u9032\u6357\u3001RAG\u3001workflow \u306F\u3053\u3053\u304B\u3089\u958B\u304D\u307E\u3059\u3002\u901A\u77E5\u3067\u306F\u306A\u304F\u3001\u73FE\u5728\u306F dashboard \u5185\u306E\u72B6\u614B\u8868\u793A\u3067\u3059\u3002</p>
+          <div class="lane">
+            <div class="lane-title"><h3>\u9032\u884C\u4E2D execution</h3><span class="pill">runtime truth</span></div>
+            <p>GitHub Actions / VPS runner status / execution progress route \u304B\u3089\u8AAD\u307F\u307E\u3059\u3002</p>
+            ${renderDashboardDeployEvent(latestDeployEvent)}
+          </div>
+          <div class="quick-actions">
+            ${cockpitActions.map((action) => `<a href="${escapeDashboardHtml(action.href)}">${escapeDashboardHtml(action.label)}</a>`).join("")}
+          </div>
+          <details open>
+            <summary>Runtime surfaces</summary>
+            <div class="surface-list">
+              ${surfaces.map((surface) => `<a href="${escapeDashboardHtml(surface.href)}">${escapeDashboardHtml(surface.title)}</a>`).join("")}
+            </div>
+          </details>
+          <details>
+            <summary>GitHub workflows</summary>
+            <div class="surface-list">
+              ${workflows.map(([title, href]) => `<a href="${escapeDashboardHtml(href)}">${escapeDashboardHtml(title)}</a>`).join("")}
+            </div>
+          </details>
+        </div>
+      </aside>
 
       <div class="chat-scroll">
         <article class="bubble owner">
@@ -60371,13 +60416,6 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
           <span class="connection-note">\u672A\u63A5\u7D9A: \u3053\u306E\u5165\u529B\u6B04\u306F\u307E\u3060\u4FDD\u5B58\u30FB\u9001\u4FE1\u30FBLLM \u8FD4\u4FE1\u3057\u307E\u305B\u3093</span>
         </article>
 
-        <details id="mobile-management" class="mobile-tools">
-          <summary>\u7BA1\u7406\u30E1\u30CB\u30E5\u30FC\u3092\u958B\u304F</summary>
-          <div class="surface-list">
-            ${surfaces.map((surface) => `<a href="${escapeDashboardHtml(surface.href)}">${escapeDashboardHtml(surface.title)}</a>`).join("")}
-            ${workflows.map(([title, href]) => `<a href="${escapeDashboardHtml(href)}">${escapeDashboardHtml(title)}</a>`).join("")}
-          </div>
-        </details>
       </div>
 
       <div class="composer" aria-label="Butler composer">

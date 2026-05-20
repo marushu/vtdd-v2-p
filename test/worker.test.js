@@ -180,6 +180,8 @@ test("worker serves v2 dashboard without exposing secrets", async () => {
   assert.equal(body.includes("必要な時だけ開く"), true);
   assert.equal(body.includes("color-scheme: light dark"), true);
   assert.equal(body.includes("prefers-color-scheme: dark"), true);
+  assert.equal(body.includes("overflow-x: hidden"), true);
+  assert.equal(body.includes("grid-template-columns: minmax(0, 1fr) auto"), true);
   assert.equal(body.includes("自動更新なし"), true);
   assert.equal(body.includes("自動更新・polling はありません"), true);
   assert.equal(body.includes("Issue #433"), true);
@@ -188,7 +190,10 @@ test("worker serves v2 dashboard without exposing secrets", async () => {
   assert.equal(body.includes("実行 URL は会話例として常時表示しません"), true);
   assert.equal(body.includes("deploy 用 passkey URL"), false);
   assert.equal(body.includes("vtdd-v3-orchestrator.polished-tree-da7c.workers.dev"), false);
-  assert.equal(body.includes('href="#mobile-management"'), true);
+  assert.equal(body.includes('id="mobile-menu-toggle"'), true);
+  assert.equal(body.includes('for="mobile-menu-toggle"'), true);
+  assert.equal(body.includes("モバイル管理メニュー"), true);
+  assert.equal(body.includes("直近 deploy event"), true);
   assert.equal(body.includes("Butler V2 にメッセージ"), true);
   assert.equal(body.includes("状態確認"), true);
   assert.equal(body.includes('name="text"'), false);
