@@ -59602,9 +59602,9 @@ function createD1DashboardEventStore(d1) {
     },
     async latest(filter = {}) {
       await ensureSchema();
-      const kind = normalizeText30(filter.kind);
+      const kind = normalizeDashboardEventText(filter.kind);
       const repository = normalizeCanonicalRepositoryInput(filter.repository);
-      const workflowName = normalizeText30(filter.workflowName);
+      const workflowName = normalizeDashboardEventText(filter.workflowName);
       const clauses = [];
       const params = [];
       if (kind) {
@@ -59632,6 +59632,43 @@ function createD1DashboardEventStore(d1) {
       } catch {
         return null;
       }
+    },
+    async listRecent(filter = {}) {
+      await ensureSchema();
+      const kind = normalizeDashboardEventText(filter.kind);
+      const repository = normalizeCanonicalRepositoryInput(filter.repository);
+      const workflowName = normalizeDashboardEventText(filter.workflowName);
+      const since = normalizeIsoTimestamp(filter.since);
+      const limit = normalizeLimit7(filter.limit, 20);
+      const clauses = [];
+      const params = [];
+      if (kind) {
+        clauses.push("kind = ?");
+        params.push(kind);
+      }
+      if (repository) {
+        clauses.push("repository = ?");
+        params.push(repository);
+      }
+      if (workflowName) {
+        clauses.push("workflow_name = ?");
+        params.push(workflowName);
+      }
+      if (since) {
+        clauses.push("updated_at >= ?");
+        params.push(since);
+      }
+      const where = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
+      const result = await d1.prepare(
+        `SELECT payload_json FROM vtdd_dashboard_events ${where} ORDER BY updated_at DESC, created_at DESC LIMIT ?`
+      ).bind(...params, limit).all();
+      return (Array.isArray(result?.results) ? result.results : []).map((row) => {
+        try {
+          return row?.payload_json ? normalizeDashboardEventRecord(JSON.parse(row.payload_json)) : null;
+        } catch {
+          return null;
+        }
+      }).filter(Boolean);
     }
   };
   function ensureSchema() {
@@ -59643,6 +59680,9 @@ function createD1DashboardEventStore(d1) {
         await d1.exec(
           "CREATE INDEX IF NOT EXISTS idx_vtdd_dashboard_events_lookup ON vtdd_dashboard_events (kind, repository, workflow_name, updated_at DESC);"
         );
+        await d1.exec(
+          "CREATE INDEX IF NOT EXISTS idx_vtdd_dashboard_events_recent ON vtdd_dashboard_events (updated_at DESC, created_at DESC);"
+        );
       })();
     }
     return schemaPromise;
@@ -59653,20 +59693,23 @@ function normalizeDashboardEventRecord(event) {
   const updatedAt = normalizeIsoTimestamp(input.updatedAt) || (/* @__PURE__ */ new Date()).toISOString();
   const createdAt = normalizeIsoTimestamp(input.createdAt) || updatedAt;
   return {
-    id: normalizeText30(input.id),
-    kind: normalizeText30(input.kind),
+    id: normalizeDashboardEventText(input.id),
+    kind: normalizeDashboardEventText(input.kind),
     repository: normalizeCanonicalRepositoryInput(input.repository),
-    workflowName: normalizeText30(input.workflowName),
-    runId: normalizeText30(input.runId),
-    status: normalizeText30(input.status),
-    conclusion: normalizeText30(input.conclusion) || null,
-    headSha: normalizeText30(input.headSha) || null,
-    headBranch: normalizeText30(input.headBranch) || null,
-    runUrl: normalizeText30(input.runUrl) || null,
-    title: normalizeText30(input.title) || normalizeText30(input.workflowName),
+    workflowName: normalizeDashboardEventText(input.workflowName),
+    runId: normalizeDashboardEventText(input.runId),
+    status: normalizeDashboardEventText(input.status),
+    conclusion: normalizeDashboardEventText(input.conclusion) || null,
+    headSha: normalizeDashboardEventText(input.headSha) || null,
+    headBranch: normalizeDashboardEventText(input.headBranch) || null,
+    runUrl: normalizeDashboardEventText(input.runUrl) || null,
+    title: normalizeDashboardEventText(input.title) || normalizeDashboardEventText(input.workflowName),
     createdAt,
     updatedAt
   };
+}
+function normalizeDashboardEventText(value) {
+  return String(value ?? "").trim();
 }
 function createD1MemoryIndexAdapter(d1) {
   if (!d1 || typeof d1.prepare !== "function") {
@@ -60044,16 +60087,16 @@ function normalizeObject11(value) {
 function normalizeGitHubActionsEvent(payload) {
   const input = normalizeObject11(payload);
   const repository = normalizeCanonicalRepositoryInput(input.repository || input.githubRepository);
-  const workflowName = normalizeText30(input.workflowName || input.workflow || input.workflow_name);
-  const runId = normalizeText30(input.runId || input.run_id || input.databaseId || input.database_id);
-  const runUrl = normalizeText30(input.runUrl || input.run_url || input.url);
-  const status = normalizeText30(input.status || "completed").toLowerCase();
-  const conclusion = normalizeText30(input.conclusion || input.result).toLowerCase();
+  const workflowName = normalizeDashboardEventText(input.workflowName || input.workflow || input.workflow_name);
+  const runId = normalizeDashboardEventText(input.runId || input.run_id || input.databaseId || input.database_id);
+  const runUrl = normalizeDashboardEventText(input.runUrl || input.run_url || input.url);
+  const status = normalizeDashboardEventText(input.status || "completed").toLowerCase();
+  const conclusion = normalizeDashboardEventText(input.conclusion || input.result).toLowerCase();
   const updatedAt = normalizeIsoTimestamp(input.updatedAt || input.updated_at) || (/* @__PURE__ */ new Date()).toISOString();
   const createdAt = normalizeIsoTimestamp(input.createdAt || input.created_at) || updatedAt;
-  const headSha = normalizeText30(input.headSha || input.head_sha || input.sha);
-  const headBranch = normalizeText30(input.headBranch || input.head_branch || input.branch);
-  const title = normalizeText30(input.displayTitle || input.display_title || input.title);
+  const headSha = normalizeDashboardEventText(input.headSha || input.head_sha || input.sha);
+  const headBranch = normalizeDashboardEventText(input.headBranch || input.head_branch || input.branch);
+  const title = normalizeDashboardEventText(input.displayTitle || input.display_title || input.title);
   if (!repository) {
     return {
       ok: false,
@@ -60130,21 +60173,78 @@ async function retrieveLatestDashboardEvent({ store, kind, repository, workflowN
     return null;
   }
 }
+async function retrieveRecentDashboardEvents({ store, kind, repository, workflowName, since, limit } = {}) {
+  if (!store) {
+    return [];
+  }
+  if (typeof store.listRecent === "function") {
+    try {
+      return await store.listRecent({ kind, repository, workflowName, since, limit });
+    } catch {
+      return [];
+    }
+  }
+  if (typeof store.latest === "function") {
+    const latest = await retrieveLatestDashboardEvent({ store, kind, repository, workflowName });
+    if (!latest) {
+      return [];
+    }
+    const sinceTimestamp = normalizeIsoTimestamp(since);
+    if (!sinceTimestamp) {
+      return [latest];
+    }
+    const latestTime = new Date(normalizeText30(latest.updatedAt)).getTime();
+    const sinceTime = new Date(sinceTimestamp).getTime();
+    if (Number.isNaN(latestTime) || Number.isNaN(sinceTime) || latestTime < sinceTime) {
+      return [];
+    }
+    return [latest];
+  }
+  return [];
+}
 function renderDashboardDeployEvent(event) {
   if (!event) {
     return `<div class="deploy-event muted">\u76F4\u8FD1 deploy event: \u672A\u53D7\u4FE1</div>`;
   }
-  const conclusion = normalizeText30(event.conclusion) || normalizeText30(event.status) || "unknown";
+  const conclusion = normalizeDashboardEventText(event.conclusion) || normalizeDashboardEventText(event.status) || "unknown";
   const badgeClass = conclusion === "success" ? "success" : conclusion === "failure" || conclusion === "cancelled" ? "danger" : "";
-  const updatedAt = normalizeText30(event.updatedAt);
+  const updatedAt = normalizeDashboardEventText(event.updatedAt);
   const relativeUpdatedAt = formatDashboardRelativeTime(updatedAt);
-  const sha = normalizeText30(event.headSha);
+  const sha = normalizeDashboardEventText(event.headSha);
   const shortSha = sha ? sha.slice(0, 7) : "unknown";
-  const runUrl = normalizeText30(event.runUrl);
+  const runUrl = normalizeDashboardEventText(event.runUrl);
   const runLabel = runUrl ? `<a class="chat-link" href="${escapeDashboardHtml(runUrl)}">Actions run</a>` : "Actions run \u672A\u8A2D\u5B9A";
   return `<div class="deploy-event">
             <div class="lane-title"><strong>\u6700\u65B0 deploy</strong><span class="pill ${badgeClass}">${escapeDashboardHtml(conclusion)}</span></div>
             <p>${escapeDashboardHtml(event.workflowName || "deploy-production")} / <code>${escapeDashboardHtml(shortSha)}</code></p>
+            <p class="muted">${escapeDashboardHtml(relativeUpdatedAt || "\u6642\u523B\u672A\u53D7\u4FE1")} \u30FB ${escapeDashboardHtml(updatedAt || "updatedAt \u672A\u53D7\u4FE1")} \u30FB ${runLabel}</p>
+          </div>`;
+}
+function renderDashboardNotificationEvent(event) {
+  if (!event) {
+    return "";
+  }
+  const conclusion = normalizeDashboardEventText(event.conclusion) || normalizeDashboardEventText(event.status) || "unknown";
+  const badgeClass = conclusion === "success" ? "success" : conclusion === "failure" || conclusion === "cancelled" ? "danger" : "";
+  const updatedAt = normalizeDashboardEventText(event.updatedAt);
+  const relativeUpdatedAt = formatDashboardRelativeTime(updatedAt);
+  const repository = normalizeCanonicalRepositoryInput(event.repository) || "repository \u672A\u53D7\u4FE1";
+  const workflowName = normalizeDashboardEventText(event.workflowName) || normalizeDashboardEventText(event.kind) || "event";
+  const title = normalizeDashboardEventText(event.title) || workflowName;
+  const runId = normalizeDashboardEventText(event.runId);
+  const sha = normalizeDashboardEventText(event.headSha);
+  const shortSha = sha ? sha.slice(0, 7) : "";
+  const runUrl = normalizeDashboardEventText(event.runUrl);
+  const runLabel = runUrl ? `<a class="chat-link" href="${escapeDashboardHtml(runUrl)}">\u8A73\u7D30\u3092\u958B\u304F</a>` : "\u8A73\u7D30\u30EA\u30F3\u30AF\u672A\u53D7\u4FE1";
+  const meta2 = [
+    repository,
+    workflowName,
+    runId ? `run ${runId}` : "",
+    shortSha ? `sha ${shortSha}` : ""
+  ].filter(Boolean).join(" / ");
+  return `<div class="deploy-event">
+            <div class="lane-title"><strong>${escapeDashboardHtml(title)}</strong><span class="pill ${badgeClass}">${escapeDashboardHtml(conclusion)}</span></div>
+            <p>${escapeDashboardHtml(meta2)}</p>
             <p class="muted">${escapeDashboardHtml(relativeUpdatedAt || "\u6642\u523B\u672A\u53D7\u4FE1")} \u30FB ${escapeDashboardHtml(updatedAt || "updatedAt \u672A\u53D7\u4FE1")} \u30FB ${runLabel}</p>
           </div>`;
 }
@@ -60353,11 +60453,11 @@ async function renderDashboardSelfParityPage({ url, env } = {}) {
 }
 async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventStore } = {}) {
   const origin = normalize7(runtimeOrigin);
-  const latestDeployEvent = await retrieveLatestDashboardEvent({
+  const recentSince = new Date(Date.now() - 5 * 60 * 1e3).toISOString();
+  const recentEvents = await retrieveRecentDashboardEvents({
     store: dashboardEventStore,
-    kind: "github_actions_workflow_run",
-    repository: "marushu/vtdd-v2-p",
-    workflowName: "deploy-production"
+    since: recentSince,
+    limit: 20
   });
   return renderDashboardUtilityPage({
     title: "\u901A\u77E5\u30BB\u30F3\u30BF\u30FC",
@@ -60366,12 +60466,13 @@ async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventS
     body: `
       <section class="hero">
         <p>\u4ECA\u306F iOS Push / \u97F3 / PWA badge \u3067\u306F\u306A\u304F\u3001Worker \u306B\u5C4A\u3044\u305F dashboard event \u306E\u4EBA\u9593\u5411\u3051\u8868\u793A\u3067\u3059\u3002</p>
+        <p class="muted">VTDD \u3060\u3051\u3067\u306A\u304F\u3001\u4ED6 repo / \u4E26\u884C\u958B\u767A / queue / workflow \u304B\u3089\u5C4A\u3044\u305F\u30A4\u30D9\u30F3\u30C8\u3092\u76F4\u8FD15\u5206\u3060\u3051\u8868\u793A\u3057\u307E\u3059\u3002</p>
         <p class="muted">\u6B21\u306E\u6BB5\u968E\u3067 Web Push \u8CFC\u8AAD\u3001\u901A\u77E5 permission\u3001\u901A\u77E5\u30BF\u30C3\u30D7\u9077\u79FB\u3092\u8FFD\u52A0\u3057\u307E\u3059\u3002</p>
       </section>
       <div class="grid single">
         <section class="lane">
-          <div class="lane-title"><h2>deploy-production</h2><span class="pill">latest</span></div>
-          ${renderDashboardDeployEvent(latestDeployEvent)}
+          <div class="lane-title"><h2>\u6700\u65B0\u901A\u77E5</h2><span class="pill">\u76F4\u8FD15\u5206</span></div>
+          ${recentEvents.length > 0 ? recentEvents.map((event) => renderDashboardNotificationEvent(event)).join("") : `<p class="muted">\u76F4\u8FD15\u5206\u306E\u901A\u77E5\u306F\u3042\u308A\u307E\u305B\u3093\u3002</p>`}
         </section>
       </div>
     `

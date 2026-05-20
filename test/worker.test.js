@@ -58,6 +58,26 @@ function createInMemoryDashboardEventStore() {
       });
       matches.sort((left, right) => String(right.updatedAt).localeCompare(String(left.updatedAt)));
       return matches[0] ?? null;
+    },
+    async listRecent(filter = {}) {
+      const sinceTime = filter.since ? new Date(filter.since).getTime() : null;
+      const matches = [...events.values()].filter((event) => {
+        if (filter.kind && event.kind !== filter.kind) {
+          return false;
+        }
+        if (filter.repository && event.repository !== filter.repository) {
+          return false;
+        }
+        if (filter.workflowName && event.workflowName !== filter.workflowName) {
+          return false;
+        }
+        if (sinceTime && new Date(event.updatedAt).getTime() < sinceTime) {
+          return false;
+        }
+        return true;
+      });
+      matches.sort((left, right) => String(right.updatedAt).localeCompare(String(left.updatedAt)));
+      return matches.slice(0, Number(filter.limit) || 20);
     }
   };
 }
@@ -329,9 +349,11 @@ test("worker serves human-facing dashboard pages for every management menu", asy
   }
 });
 
-test("worker serves dashboard notification center for latest deploy event", async () => {
+test("worker serves dashboard notification center for recent events across repositories", async () => {
   const store = createInMemoryDashboardEventStore();
-  const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+  const fourMinutesAgo = new Date(Date.now() - 4 * 60 * 1000).toISOString();
+  const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+  const sixMinutesAgo = new Date(Date.now() - 6 * 60 * 1000).toISOString();
   await store.put({
     id: "github_actions_workflow_run:marushu/vtdd-v2-p:deploy-production:26134526815",
     kind: "github_actions_workflow_run",
@@ -344,7 +366,35 @@ test("worker serves dashboard notification center for latest deploy event", asyn
     headSha: "daad4fb023cf699b3ad531e0394e064fde2b5515",
     headBranch: "main",
     title: "deploy-production",
-    updatedAt: fiveMinutesAgo
+    updatedAt: fourMinutesAgo
+  });
+  await store.put({
+    id: "vps_runner_execution:marushu/sunabaeye:remote-codex-issue9",
+    kind: "vps_runner_execution",
+    repository: "marushu/sunabaeye",
+    workflowName: "remote-codex",
+    runId: "remote-codex-issue9",
+    runUrl: "https://example.com/progress/remote-codex-issue9?repository=marushu%2Fsunabaeye&source=dashboard-notification-center",
+    status: "running",
+    conclusion: "",
+    headSha: "abc1234567890",
+    headBranch: "codex/issue-9",
+    title: "SunabaEye queue pickup with long notification title",
+    updatedAt: twoMinutesAgo
+  });
+  await store.put({
+    id: "github_actions_workflow_run:marushu/old:deploy-production:old",
+    kind: "github_actions_workflow_run",
+    repository: "marushu/old",
+    workflowName: "deploy-production",
+    runId: "old",
+    runUrl: "https://example.com/old",
+    status: "completed",
+    conclusion: "failure",
+    headSha: "old1234567890",
+    headBranch: "main",
+    title: "old notification",
+    updatedAt: sixMinutesAgo
   });
 
   const response = await worker.fetch(new Request("https://example.com/dashboard/notifications"), {
@@ -355,11 +405,17 @@ test("worker serves dashboard notification center for latest deploy event", asyn
   const body = await response.text();
   assert.equal(body.includes("通知センター"), true);
   assert.equal(body.includes("iOS Push / 音 / PWA badge ではなく"), true);
-  assert.equal(body.includes("最新 deploy"), true);
+  assert.equal(body.includes("他 repo / 並行開発 / queue / workflow"), true);
+  assert.equal(body.includes("最新通知"), true);
   assert.equal(body.includes("success"), true);
   assert.equal(body.includes("26134526815"), true);
-  assert.equal(body.includes("5分前"), true);
-  assert.equal(body.includes(fiveMinutesAgo), true);
+  assert.equal(body.includes("4分前"), true);
+  assert.equal(body.includes(fourMinutesAgo), true);
+  assert.equal(body.includes("SunabaEye queue pickup with long notification title"), true);
+  assert.equal(body.includes("marushu/sunabaeye"), true);
+  assert.equal(body.includes("dashboard-notification-center"), true);
+  assert.equal(body.includes("2分前"), true);
+  assert.equal(body.includes("old notification"), false);
 });
 
 test("worker ingests GitHub Actions deploy completion event and shows it on dashboard", async () => {
