@@ -179,6 +179,7 @@ export {
   APPROVE_AUTO_MERGE_CANDIDATE_MARKER,
   APPROVE_AUTO_MERGE_EXECUTED_MARKER,
   ApproveAutoMergePolicyMode,
+  buildApproveAutoMergeMemoryRecord,
   evaluateApproveAutoMerge,
   formatApproveAutoMergeBlockedComment,
   formatApproveAutoMergeCandidateComment,

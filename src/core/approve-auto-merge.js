@@ -188,6 +188,7 @@ export function formatApproveAutoMergeExecutedComment(input = {}) {
   const evaluation = input.evaluation || {};
   const pullRequest = normalizePullRequest(input.pullRequest);
   const mergeResult = input.mergeResult && typeof input.mergeResult === "object" ? input.mergeResult : {};
+  const memoryWrite = normalizeAutoMergeMemoryWriteResult(input.memoryWrite);
   const lines = [
     APPROVE_AUTO_MERGE_EXECUTED_MARKER,
     "## VTDD 自動マージ実行済み",
@@ -205,20 +206,18 @@ export function formatApproveAutoMergeExecutedComment(input = {}) {
     "### 判定根拠",
     ...formatList(evaluation.evidence),
     "",
-    "### RAG 保存候補",
-    "",
-    "```json",
-    JSON.stringify(buildApproveAutoMergeMemoryCandidate({ evaluation, pullRequest, mergeResult }), null, 2),
-    "```",
+    "### RAG 保存",
+    ...formatAutoMergeMemoryWriteLines(memoryWrite),
     "",
     "_問題が起きた場合は `自動マージ` で検索し、このコメントから判断根拠を辿ってください。_"
   ];
   return lines.join("\n");
 }
 
-function buildApproveAutoMergeMemoryCandidate({ evaluation, pullRequest, mergeResult }) {
+export function buildApproveAutoMergeMemoryRecord({ evaluation, pullRequest, mergeResult }) {
   return {
     recordType: "working_memory",
+    confirmed: true,
     summary: `自動マージ実行: ${pullRequest.repository || "unknown"} PR #${pullRequest.number || "unknown"}`,
     relatedIssue: pullRequest.issueNumber || null,
     repository: pullRequest.repository || null,
@@ -239,6 +238,39 @@ function buildApproveAutoMergeMemoryCandidate({ evaluation, pullRequest, mergeRe
     ].filter(Boolean),
     priority: 75
   };
+}
+
+function normalizeAutoMergeMemoryWriteResult(value) {
+  const input = value && typeof value === "object" ? value : {};
+  return {
+    ok: input.ok === true,
+    recordId: normalizeText(input.recordId || input.memoryWritePersisted?.recordId),
+    recordType: normalizeText(input.recordType || input.memoryWritePersisted?.recordType),
+    error: normalizeText(input.error),
+    reason: normalizeText(input.reason)
+  };
+}
+
+function formatAutoMergeMemoryWriteLines(memoryWrite) {
+  if (memoryWrite.ok && memoryWrite.recordId) {
+    return [
+      "- status: `persisted`",
+      `- recordType: \`${memoryWrite.recordType || "working_memory"}\``,
+      `- recordId: \`${memoryWrite.recordId}\``
+    ];
+  }
+  if (memoryWrite.error || memoryWrite.reason) {
+    return [
+      "- status: `failed`",
+      `- error: \`${memoryWrite.error || "memory_write_failed"}\``,
+      `- reason: ${memoryWrite.reason || "RAG memory write did not return a persisted recordId."}`,
+      "- note: RAGへは保存されていません。このPRコメントは永続RAGの代替ではありません。"
+    ];
+  }
+  return [
+    "- status: `not_attempted`",
+    "- note: RAGへは保存されていません。このPRコメントは永続RAGの代替ではありません。"
+  ];
 }
 
 function evaluateRequiredChecks({ checkRuns, requiredChecks }) {
