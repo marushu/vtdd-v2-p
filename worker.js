@@ -27562,6 +27562,7 @@ function renderPasskeyOperatorPage(input = {}) {
       const deployRunLink = document.getElementById("deploy-run-link");
       const mergePrLink = document.getElementById("merge-pr-link");
       const issueCloseLink = document.getElementById("issue-close-link");
+      const operatorMode = "${escapeHtml(operatorMode)}";
       let latestApprovalGrantId = "";
 
       async function readResponseBody(response) {
@@ -27866,6 +27867,10 @@ function renderPasskeyOperatorPage(input = {}) {
           }
           latestApprovalGrantId = verifyBody?.approvalGrant?.approvalId || verifyBody?.approvalGrantId || "";
           approveOutput.textContent = JSON.stringify(verifyBody, null, 2);
+          if (operatorMode === "dashboard") {
+            window.location.assign("/dashboard");
+            return;
+          }
           if (latestApprovalGrantId && autoCopyApprovalGrantInput.checked) {
             try {
               await copyApprovalGrantIdToClipboard({ quiet: true });
@@ -28259,8 +28264,11 @@ function renderGithubAppRoleOption(value, label, selectedValue) {
 }
 function normalizeOperatorMode(value) {
   const token = normalizeOperatorToken(value);
-  if (["full", "deploy", "merge", "issue_close", "github_app_secret_sync", "github_actions_secret_sync", "gateway_bearer_vault", "vps"].includes(token)) {
+  if (["full", "deploy", "merge", "issue_close", "github_app_secret_sync", "github_actions_secret_sync", "gateway_bearer_vault", "vps", "dashboard"].includes(token)) {
     return token;
+  }
+  if (token === "dashboard_access") {
+    return "dashboard";
   }
   if (token === "secret_sync") {
     return "github_app_secret_sync";
@@ -28283,6 +28291,9 @@ function defaultActionTypeForMode(operatorMode) {
   if (operatorMode === "issue_close") {
     return "issue_close";
   }
+  if (operatorMode === "dashboard") {
+    return "read";
+  }
   return "destructive";
 }
 function defaultHighRiskKindForMode(operatorMode) {
@@ -28294,6 +28305,9 @@ function defaultHighRiskKindForMode(operatorMode) {
   }
   if (operatorMode === "issue_close") {
     return "issue_close";
+  }
+  if (operatorMode === "dashboard") {
+    return "dashboard_access";
   }
   if (operatorMode === "github_actions_secret_sync") {
     return "github_actions_secret_sync";
@@ -55808,6 +55822,8 @@ var MCP_SERVER_INFO = Object.freeze({
 });
 var MCP_INSTRUCTIONS = "VTDD MCP \u306F Butler \u3068\u540C\u3058 runtime truth / review truth / operational memory \u3092\u8AAD\u3080\u305F\u3081\u306E read-first surface \u3067\u3059\u3002\u73FE\u5728\u306E truth \u306F runtime truth \u3092\u512A\u5148\u3057\u3001memory \u306F\u88DC\u52A9\u3068\u3057\u3066\u6271\u3063\u3066\u304F\u3060\u3055\u3044\u3002";
 var CLOUDFLARE_ACCESS_JWKS_CACHE_TTL_MS = 5 * 60 * 1e3;
+var DASHBOARD_PASSKEY_SESSION_COOKIE = "vtdd_dashboard_session";
+var DASHBOARD_PASSKEY_SESSION_MAX_AGE_SECONDS = 60 * 60 * 8;
 var cloudflareAccessJwksCache = /* @__PURE__ */ new Map();
 var AUTONOMY_MODE_ENV = "VTDD_AUTONOMY_MODE";
 var LEGACY_AUTONOMY_MODE_ENV = "MVP_AUTONOMY_MODE";
@@ -59308,10 +59324,14 @@ async function handlePasskeyApprovalVerifyRequest(request, env) {
   }
   await provider.store(verified.updatedPasskeyRecord);
   await provider.store(verified.grantRecord);
+  const extraHeaders = {};
+  if (isDashboardPasskeyScope(verified.approvalGrant?.scope)) {
+    extraHeaders["set-cookie"] = buildDashboardPasskeySessionCookie(verified.approvalGrant);
+  }
   return json(200, {
     ok: true,
     approvalGrant: verified.approvalGrant
-  });
+  }, extraHeaders);
 }
 function appendWarnings(result, warnings) {
   if (!Array.isArray(warnings) || warnings.length === 0) {
@@ -60566,6 +60586,13 @@ async function authorizeDashboardRequest({ request, env, apiSuffix = "/dashboard
     return { ok: true, authType: "machine" };
   }
   const runtimeEnv = env ?? {};
+  const passkeyAuth = await authorizeDashboardPasskeySession({ request, env: runtimeEnv });
+  if (passkeyAuth.ok) {
+    return passkeyAuth;
+  }
+  if (passkeyAuth.blocking) {
+    return passkeyAuth;
+  }
   const routeLabel = `dashboard surface ${apiSuffix}`;
   const allowedEmails = parseAuthList(
     runtimeEnv.VTDD_DASHBOARD_ALLOWED_EMAILS ?? runtimeEnv.CF_ACCESS_ALLOWED_EMAILS
@@ -60648,6 +60675,78 @@ async function authorizeDashboardRequest({ request, env, apiSuffix = "/dashboard
     status: 403,
     reason: `Cloudflare Access identity is not allowed for ${routeLabel}`
   };
+}
+async function authorizeDashboardPasskeySession({ request, env }) {
+  const approvalId = parseCookieHeader(request.headers.get("cookie"))[DASHBOARD_PASSKEY_SESSION_COOKIE];
+  if (!approvalId) {
+    return { ok: false, blocking: false };
+  }
+  const provider = resolveMemoryProvider(env);
+  const validation = validateMemoryProvider(provider);
+  if (!validation.ok) {
+    return {
+      ok: false,
+      blocking: true,
+      status: 503,
+      reason: "dashboard passkey session cannot be verified because memory provider is unavailable"
+    };
+  }
+  const record2 = await findApprovalRecordById(provider, approvalId);
+  if (!record2 || normalizeText30(record2?.content?.kind) !== "passkey_grant") {
+    return {
+      ok: false,
+      blocking: true,
+      status: 401,
+      reason: "dashboard passkey session was not found; open the dashboard passkey sign-in link again"
+    };
+  }
+  if (isExpiredPasskeyEphemeralRecord(record2)) {
+    return {
+      ok: false,
+      blocking: true,
+      status: 401,
+      reason: "dashboard passkey session expired; open the dashboard passkey sign-in link again"
+    };
+  }
+  if (!isDashboardPasskeyScope(record2?.content?.scope)) {
+    return {
+      ok: false,
+      blocking: true,
+      status: 403,
+      reason: "passkey grant scope is not valid for dashboard access"
+    };
+  }
+  return {
+    ok: true,
+    authType: "passkey_dashboard_session",
+    subject: normalizeText30(record2?.content?.credentialId) || "passkey"
+  };
+}
+function isDashboardPasskeyScope(scope = {}) {
+  return normalizeText30(scope?.actionType) === "read" && normalizeText30(scope?.highRiskKind) === "dashboard_access";
+}
+function buildDashboardPasskeySessionCookie(approvalGrant = {}) {
+  const approvalId = normalizeText30(approvalGrant.approvalId);
+  return [
+    `${DASHBOARD_PASSKEY_SESSION_COOKIE}=${encodeURIComponent(approvalId)}`,
+    "Path=/",
+    `Max-Age=${DASHBOARD_PASSKEY_SESSION_MAX_AGE_SECONDS}`,
+    "HttpOnly",
+    "Secure",
+    "SameSite=Lax"
+  ].join("; ");
+}
+function parseCookieHeader(value) {
+  const cookies = {};
+  for (const part of normalizeText30(value).split(";")) {
+    const [rawName, ...rawValueParts] = part.split("=");
+    const name = normalizeText30(rawName);
+    if (!name) {
+      continue;
+    }
+    cookies[name] = decodeURIComponent(rawValueParts.join("=") || "");
+  }
+  return cookies;
 }
 function extractCloudflareAccessJwtIdentity(payload) {
   const custom2 = payload?.custom && typeof payload.custom === "object" ? payload.custom : {};
@@ -62137,6 +62236,7 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
 }
 function renderDashboardAuthRequiredPage({ runtimeOrigin, reason } = {}) {
   const origin = normalizeText30(runtimeOrigin);
+  const dashboardSignInUrl = `${origin || ""}/v2/approval/passkey/operator?mode=dashboard&repositoryInput=marushu%2Fvtdd-v2-p&phase=execution&actionType=read&highRiskKind=dashboard_access`;
   return `<!doctype html>
 <html lang="ja">
 <head>
@@ -62160,6 +62260,7 @@ function renderDashboardAuthRequiredPage({ runtimeOrigin, reason } = {}) {
       <h1>Dashboard auth required</h1>
       <p>\u3053\u306E dashboard \u306F owner-facing surface \u3067\u3059\u3002\u5BFE\u8C61\u306E GitHub / Cloudflare Access identity \u3067\u8A8D\u8A3C\u3055\u308C\u305F\u30E6\u30FC\u30B6\u30FC\u3001\u307E\u305F\u306F machine-authenticated service \u3060\u3051\u304C\u5229\u7528\u3067\u304D\u307E\u3059\u3002</p>
       <p><code>${escapeDashboardHtml(reason || "dashboard authentication required")}</code></p>
+      <p><a href="${escapeDashboardHtml(dashboardSignInUrl)}">Passkey \u3067 dashboard \u306B\u5165\u308B</a></p>
       <p><a href="${escapeDashboardHtml(origin || "/status")}/status">Status</a></p>
     </section>
   </main>

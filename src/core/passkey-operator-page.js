@@ -321,6 +321,7 @@ export function renderPasskeyOperatorPage(input = {}) {
       const deployRunLink = document.getElementById("deploy-run-link");
       const mergePrLink = document.getElementById("merge-pr-link");
       const issueCloseLink = document.getElementById("issue-close-link");
+      const operatorMode = "${escapeHtml(operatorMode)}";
       let latestApprovalGrantId = "";
 
       async function readResponseBody(response) {
@@ -625,6 +626,10 @@ export function renderPasskeyOperatorPage(input = {}) {
           }
           latestApprovalGrantId = verifyBody?.approvalGrant?.approvalId || verifyBody?.approvalGrantId || "";
           approveOutput.textContent = JSON.stringify(verifyBody, null, 2);
+          if (operatorMode === "dashboard") {
+            window.location.assign("/dashboard");
+            return;
+          }
           if (latestApprovalGrantId && autoCopyApprovalGrantInput.checked) {
             try {
               await copyApprovalGrantIdToClipboard({ quiet: true });
@@ -1026,8 +1031,11 @@ function renderGithubAppRoleOption(value, label, selectedValue) {
 
 function normalizeOperatorMode(value) {
   const token = normalizeOperatorToken(value);
-  if (["full", "deploy", "merge", "issue_close", "github_app_secret_sync", "github_actions_secret_sync", "gateway_bearer_vault", "vps"].includes(token)) {
+  if (["full", "deploy", "merge", "issue_close", "github_app_secret_sync", "github_actions_secret_sync", "gateway_bearer_vault", "vps", "dashboard"].includes(token)) {
     return token;
+  }
+  if (token === "dashboard_access") {
+    return "dashboard";
   }
   if (token === "secret_sync") {
     return "github_app_secret_sync";
@@ -1051,6 +1059,9 @@ function defaultActionTypeForMode(operatorMode) {
   if (operatorMode === "issue_close") {
     return "issue_close";
   }
+  if (operatorMode === "dashboard") {
+    return "read";
+  }
   return "destructive";
 }
 
@@ -1063,6 +1074,9 @@ function defaultHighRiskKindForMode(operatorMode) {
   }
   if (operatorMode === "issue_close") {
     return "issue_close";
+  }
+  if (operatorMode === "dashboard") {
+    return "dashboard_access";
   }
   if (operatorMode === "github_actions_secret_sync") {
     return "github_actions_secret_sync";

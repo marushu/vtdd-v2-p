@@ -257,6 +257,64 @@ test("worker rejects dashboard access when owner identity lacks a verified Acces
   assert.equal(body.includes("Cloudflare Access JWT assertion is required"), true);
 });
 
+test("worker serves v2 dashboard for valid dashboard passkey session", async () => {
+  const provider = createInMemoryMemoryProvider();
+  await provider.store({
+    id: "approval:dashboard-session",
+    type: MemoryRecordType.APPROVAL_LOG,
+    content: {
+      kind: "passkey_grant",
+      status: "verified",
+      approvalId: "approval:dashboard-session",
+      credentialId: "AQIDBA",
+      verifiedAt: "2026-05-20T00:00:00.000Z",
+      expiresAt: "2999-01-01T00:00:00.000Z",
+      scope: {
+        actionType: "read",
+        highRiskKind: "dashboard_access",
+        repositoryInput: "marushu/vtdd-v2-p",
+        phase: "execution"
+      }
+    },
+    metadata: { source: "test" },
+    priority: 96,
+    tags: ["passkey_grant", "passkey_approval", "verified"],
+    createdAt: "2026-05-20T00:00:00.000Z"
+  });
+
+  const response = await worker.fetch(
+    new Request("https://example.com/dashboard", {
+      headers: {
+        cookie: "vtdd_dashboard_session=approval%3Adashboard-session"
+      }
+    }),
+    {
+      MEMORY_PROVIDER: provider
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.text();
+  assert.equal(body.includes("VTDD v2 Dashboard"), true);
+});
+
+test("worker rejects stale dashboard passkey session cookies", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/dashboard", {
+      headers: {
+        cookie: "vtdd_dashboard_session=approval%3Amissing"
+      }
+    }),
+    {
+      MEMORY_PROVIDER: createInMemoryMemoryProvider()
+    }
+  );
+
+  assert.equal(response.status, 401);
+  const body = await response.text();
+  assert.equal(body.includes("dashboard passkey session was not found"), true);
+});
+
 test("worker rejects dashboard access when Access email header has no matching JWT email claim", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/dashboard", {
@@ -3565,6 +3623,19 @@ test("worker serves passkey operator page", async () => {
   assert.equal(html.includes('href="https://evil.example/phish"'), false);
 });
 
+test("worker serves dashboard passkey operator mode", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/approval/passkey/operator?mode=dashboard&repositoryInput=marushu%2Fvtdd-v2-p"),
+    gatewayAuthEnv
+  );
+
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.equal(html.includes('id="action-type-input" value="read"'), true);
+  assert.equal(html.includes('id="risk-kind-input" value="dashboard_access"'), true);
+  assert.equal(html.includes('const operatorMode = "dashboard"'), true);
+});
+
 test("worker serves issue close operator mode without falling back to PR merge UI", async () => {
   const response = await worker.fetch(
     new Request(
@@ -3865,6 +3936,81 @@ test("worker allows same-origin browser approval flow after passkey exists", asy
   assert.equal(verifyBody.approvalGrant.scope.repositoryInput, "marushu/vtdd-v2-p");
   assert.equal(verifyBody.approvalGrant.scope.issueNumber, "15");
   assert.equal(verifyBody.approvalGrant.scope.relatedIssue, "15");
+});
+
+test("worker sets dashboard session cookie after dashboard passkey approval", async () => {
+  const provider = createInMemoryMemoryProvider();
+  await provider.store({
+    id: "passkey:AQIDBA",
+    type: MemoryRecordType.WORKING_MEMORY,
+    content: {
+      kind: "passkey_registry",
+      credentialId: "AQIDBA",
+      publicKey: "BQYHCA",
+      counter: 1,
+      transports: ["internal"]
+    },
+    metadata: { source: "test" },
+    priority: 80,
+    tags: ["passkey_registry"],
+    createdAt: "2026-04-25T00:00:00.000Z"
+  });
+
+  const challenge = await worker.fetch(
+    new Request("https://example.com/v2/approval/passkey/challenge", {
+      method: "POST",
+      headers: {
+        origin: "https://example.com",
+        "sec-fetch-site": "same-origin",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        phase: "execution",
+        highRiskKind: "dashboard_access",
+        repositoryInput: "marushu/vtdd-v2-p",
+        policyInput: {
+          actionType: ActionType.READ,
+          repositoryInput: "marushu/vtdd-v2-p",
+          highRiskKind: "dashboard_access"
+        }
+      })
+    }),
+    {
+      MEMORY_PROVIDER: provider,
+      PASSKEY_ADAPTER: passkeyAdapter
+    }
+  );
+  assert.equal(challenge.status, 200);
+  const challengeBody = await challenge.json();
+
+  const verify = await worker.fetch(
+    new Request("https://example.com/v2/approval/passkey/verify", {
+      method: "POST",
+      headers: {
+        origin: "https://example.com",
+        "sec-fetch-site": "same-origin",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        sessionId: challengeBody.sessionId,
+        response: {
+          id: "AQIDBA",
+          response: {}
+        }
+      })
+    }),
+    {
+      MEMORY_PROVIDER: provider,
+      PASSKEY_ADAPTER: passkeyAdapter
+    }
+  );
+
+  assert.equal(verify.status, 200);
+  assert.match(verify.headers.get("set-cookie"), /vtdd_dashboard_session=approval%3A/);
+  assert.match(verify.headers.get("set-cookie"), /HttpOnly/);
+  assert.match(verify.headers.get("set-cookie"), /SameSite=Lax/);
+  const verifyBody = await verify.json();
+  assert.equal(verifyBody.approvalGrant.scope.highRiskKind, "dashboard_access");
 });
 
 test("worker gateway accepts high-risk approval grant resolved from memory", async () => {

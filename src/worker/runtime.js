@@ -79,6 +79,8 @@ const MCP_SERVER_INFO = Object.freeze({
 const MCP_INSTRUCTIONS =
   "VTDD MCP は Butler と同じ runtime truth / review truth / operational memory を読むための read-first surface です。現在の truth は runtime truth を優先し、memory は補助として扱ってください。";
 const CLOUDFLARE_ACCESS_JWKS_CACHE_TTL_MS = 5 * 60 * 1000;
+const DASHBOARD_PASSKEY_SESSION_COOKIE = "vtdd_dashboard_session";
+const DASHBOARD_PASSKEY_SESSION_MAX_AGE_SECONDS = 60 * 60 * 8;
 const cloudflareAccessJwksCache = new Map();
 const AUTONOMY_MODE_ENV = "VTDD_AUTONOMY_MODE";
 const LEGACY_AUTONOMY_MODE_ENV = "MVP_AUTONOMY_MODE";
@@ -4158,10 +4160,15 @@ async function handlePasskeyApprovalVerifyRequest(request, env) {
   await provider.store(verified.updatedPasskeyRecord);
   await provider.store(verified.grantRecord);
 
+  const extraHeaders = {};
+  if (isDashboardPasskeyScope(verified.approvalGrant?.scope)) {
+    extraHeaders["set-cookie"] = buildDashboardPasskeySessionCookie(verified.approvalGrant);
+  }
+
   return json(200, {
     ok: true,
     approvalGrant: verified.approvalGrant
-  });
+  }, extraHeaders);
 }
 
 function appendWarnings(result, warnings) {
@@ -5662,6 +5669,14 @@ async function authorizeDashboardRequest({ request, env, apiSuffix = "/dashboard
   }
 
   const runtimeEnv = env ?? {};
+  const passkeyAuth = await authorizeDashboardPasskeySession({ request, env: runtimeEnv });
+  if (passkeyAuth.ok) {
+    return passkeyAuth;
+  }
+  if (passkeyAuth.blocking) {
+    return passkeyAuth;
+  }
+
   const routeLabel = `dashboard surface ${apiSuffix}`;
   const allowedEmails = parseAuthList(
     runtimeEnv.VTDD_DASHBOARD_ALLOWED_EMAILS ?? runtimeEnv.CF_ACCESS_ALLOWED_EMAILS
@@ -5751,6 +5766,84 @@ async function authorizeDashboardRequest({ request, env, apiSuffix = "/dashboard
     status: 403,
     reason: `Cloudflare Access identity is not allowed for ${routeLabel}`
   };
+}
+
+async function authorizeDashboardPasskeySession({ request, env }) {
+  const approvalId = parseCookieHeader(request.headers.get("cookie"))[DASHBOARD_PASSKEY_SESSION_COOKIE];
+  if (!approvalId) {
+    return { ok: false, blocking: false };
+  }
+
+  const provider = resolveMemoryProvider(env);
+  const validation = validateMemoryProvider(provider);
+  if (!validation.ok) {
+    return {
+      ok: false,
+      blocking: true,
+      status: 503,
+      reason: "dashboard passkey session cannot be verified because memory provider is unavailable"
+    };
+  }
+
+  const record = await findApprovalRecordById(provider, approvalId);
+  if (!record || normalizeText(record?.content?.kind) !== "passkey_grant") {
+    return {
+      ok: false,
+      blocking: true,
+      status: 401,
+      reason: "dashboard passkey session was not found; open the dashboard passkey sign-in link again"
+    };
+  }
+  if (isExpiredPasskeyEphemeralRecord(record)) {
+    return {
+      ok: false,
+      blocking: true,
+      status: 401,
+      reason: "dashboard passkey session expired; open the dashboard passkey sign-in link again"
+    };
+  }
+  if (!isDashboardPasskeyScope(record?.content?.scope)) {
+    return {
+      ok: false,
+      blocking: true,
+      status: 403,
+      reason: "passkey grant scope is not valid for dashboard access"
+    };
+  }
+  return {
+    ok: true,
+    authType: "passkey_dashboard_session",
+    subject: normalizeText(record?.content?.credentialId) || "passkey"
+  };
+}
+
+function isDashboardPasskeyScope(scope = {}) {
+  return normalizeText(scope?.actionType) === "read" && normalizeText(scope?.highRiskKind) === "dashboard_access";
+}
+
+function buildDashboardPasskeySessionCookie(approvalGrant = {}) {
+  const approvalId = normalizeText(approvalGrant.approvalId);
+  return [
+    `${DASHBOARD_PASSKEY_SESSION_COOKIE}=${encodeURIComponent(approvalId)}`,
+    "Path=/",
+    `Max-Age=${DASHBOARD_PASSKEY_SESSION_MAX_AGE_SECONDS}`,
+    "HttpOnly",
+    "Secure",
+    "SameSite=Lax"
+  ].join("; ");
+}
+
+function parseCookieHeader(value) {
+  const cookies = {};
+  for (const part of normalizeText(value).split(";")) {
+    const [rawName, ...rawValueParts] = part.split("=");
+    const name = normalizeText(rawName);
+    if (!name) {
+      continue;
+    }
+    cookies[name] = decodeURIComponent(rawValueParts.join("=") || "");
+  }
+  return cookies;
 }
 
 function extractCloudflareAccessJwtIdentity(payload) {
@@ -7327,6 +7420,7 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
 
 function renderDashboardAuthRequiredPage({ runtimeOrigin, reason } = {}) {
   const origin = normalizeText(runtimeOrigin);
+  const dashboardSignInUrl = `${origin || ""}/v2/approval/passkey/operator?mode=dashboard&repositoryInput=marushu%2Fvtdd-v2-p&phase=execution&actionType=read&highRiskKind=dashboard_access`;
   return `<!doctype html>
 <html lang="ja">
 <head>
@@ -7350,6 +7444,7 @@ function renderDashboardAuthRequiredPage({ runtimeOrigin, reason } = {}) {
       <h1>Dashboard auth required</h1>
       <p>この dashboard は owner-facing surface です。対象の GitHub / Cloudflare Access identity で認証されたユーザー、または machine-authenticated service だけが利用できます。</p>
       <p><code>${escapeDashboardHtml(reason || "dashboard authentication required")}</code></p>
+      <p><a href="${escapeDashboardHtml(dashboardSignInUrl)}">Passkey で dashboard に入る</a></p>
       <p><a href="${escapeDashboardHtml(origin || "/status")}/status">Status</a></p>
     </section>
   </main>
