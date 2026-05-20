@@ -68,7 +68,19 @@ test("custom gpt instructions preserve current butler and approval boundaries", 
   assert.equal(doc.includes("vtddRetrieveProposalLogs"), true);
   assert.equal(doc.includes("vtddRetrieveCrossMemory"), true);
   assert.equal(doc.includes("vtddStartupPreflight"), true);
-  assert.equal(doc.includes("At conversation/work startup, prefer `vtddStartupPreflight`"), true);
+  assert.equal(doc.includes("At true conversation/work startup, prefer `vtddStartupPreflight`"), true);
+  assert.equal(doc.includes("Do not treat status intents as automatic startup."), true);
+  assert.equal(
+    doc.includes("For Issue / PR / close readiness / status / remaining-task questions, first send a short Japanese receipt"),
+    true
+  );
+  assert.equal(doc.includes("avoid first-step `vtddStartupPreflight` when the repository is already resolved"), true);
+  assert.equal(doc.includes("Prefer a lightweight read ladder: `vtddRetrieveGitHub` Issue/PR detail"), true);
+  assert.equal(
+    doc.includes("Use `vtddStartupPreflight` for status questions only when the target repository is unresolved"),
+    true
+  );
+  assert.equal(doc.includes("Gemini review, broad remaining-task candidate generation, and milestone completion judgment"), true);
   assert.equal(doc.includes("Before proposing an Issue, GitHub write, Codex handoff, or PR next action"), true);
   assert.equal(doc.includes("If the user is asking for implementation work and no existing Issue is fixed yet"), true);
   assert.equal(doc.includes("First propose an Issue candidate in Japanese, wait for GO, create the Issue"), true);
@@ -191,6 +203,8 @@ test("custom gpt instructions preserve current butler and approval boundaries", 
     doc.includes("Do not claim that Issues/PRs/comments are absent when the read path is unsupported, unauthorized, or unverified."),
     true
   );
+  assert.equal(doc.includes("For Issue / PR / close readiness / status / 残タスク確認 read requests"), true);
+  assert.equal(doc.includes("Start with Issue/PR truth, then add checks/workflow_runs/jobs/reviews/comments/branches as needed"), true);
   assert.equal(doc.includes("Before any Codex handoff or implementation PR proposal, prepare a Japanese dry-run impact report"), true);
   assert.equal(doc.includes("Treat the dry-run report as shared startup context for Butler, mac Codex, and VPS Codex CLI"), true);
 });
@@ -210,6 +224,9 @@ test("short custom gpt instructions stay under editor limits while preserving cr
   assert.equal(doc.includes("vtddRetrieveCrossMemory"), true);
   assert.equal(doc.includes("vtddRetrieveOperationalMemory"), true);
   assert.equal(doc.includes("vtddStartupPreflight"), true);
+  assert.equal(doc.includes("Status intent (Issue/PR/close readiness/status/残タスク): first reply short"), true);
+  assert.equal(doc.includes("skip first-step vtddStartupPreflight"), true);
+  assert.equal(doc.includes("Status read=>staged lightweight ladder before heavy preflight"), true);
   assert.equal(doc.includes("vtddRetrieveDecisionLogs"), true);
   assert.equal(doc.includes("vtddRetrieveProposalLogs"), true);
   assert.equal(doc.includes("vtddRetrieveConstitution"), true);
@@ -327,9 +344,13 @@ test("short-min custom gpt instructions stay pasteable while preserving critical
     "vtddRetrieveSelfParity",
     "list=>no preface/no GO/no 実行しますか; direct read; compact map; not every request",
     "Handoff前dry-run",
+    "Gemini が指摘している修正を Codex に進めさせます。よければ GO と言ってください。",
     "RAG checkpoint",
     "vtddRetrieveOperationalMemory",
     "vtddStartupPreflight",
+    "Status intent (Issue/PR/close readiness/status/残タスク): first reply short",
+    "avoid first-step vtddStartupPreflight",
+    "Status read=>lightweight ladder first",
     "Remote Codex build invariant",
     "Executor transport is pluggable and user-owned",
     "executorTransport=vps_runner",

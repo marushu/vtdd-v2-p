@@ -33,6 +33,8 @@ test("AGENTS and Butler setup docs reference the thread-independent startup cont
   assert.equal(instructions.includes("threadLocalAssumptionsPromoted=false"), true);
   assert.equal(instructions.includes("Butler -> VPS Codex CLI"), true);
   assert.equal(instructions.includes("do not add noisy closure comments by default"), true);
-  assert.equal(short.includes("Startup: call vtddStartupPreflight"), true);
-  assert.equal(shortMin.includes("Thread startup: vtddStartupPreflight"), true);
+  assert.equal(short.includes("Startup/handoff/RAG/surface consistency: vtddStartupPreflight after repo"), true);
+  assert.equal(short.includes("Status intent (Issue/PR/close readiness/status/残タスク): first reply short"), true);
+  assert.equal(shortMin.includes("Thread startup/handoff/RAG/surface consistency: vtddStartupPreflight after repo"), true);
+  assert.equal(shortMin.includes("Status intent (Issue/PR/close readiness/status/残タスク): first reply short"), true);
 });
