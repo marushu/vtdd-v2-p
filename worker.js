@@ -34694,47 +34694,49 @@ function buildVpsRunnerGitHubQueueComment({ request }) {
   };
   const lines = [
     `<!-- vtdd:vps-runner-execution:${request.executionId} -->`,
-    "VTDD-managed VPS runner execution request.",
+    "VTDD \u7BA1\u7406\u306E VPS runner \u5B9F\u884C\u30AD\u30E5\u30FC\u3067\u3059\u3002",
     "",
-    "Bounded execution contract:",
-    `- Repository: ${request.repository}`,
+    "\u3053\u306E\u30B3\u30E1\u30F3\u30C8\u306F dashboard \u3078\u306E\u8FD4\u4FE1\u3067\u306F\u3042\u308A\u307E\u305B\u3093\u3002VPS Codex CLI \u304C\u62FE\u3044\u3001\u5B8C\u4E86 event \u3092 runtime \u306B\u8FD4\u3057\u305F\u3082\u306E\u3060\u3051\u3092 dashboard \u306E\u8FD4\u4FE1\u3068\u3057\u3066\u6271\u3044\u307E\u3059\u3002",
+    "",
+    "\u5B9F\u884C\u5883\u754C:",
+    `- \u30EA\u30DD\u30B8\u30C8\u30EA: ${request.repository}`,
     `- Issue: #${request.issueNumber}`,
-    `- Branch: ${request.branch}`,
-    `- Base ref: ${request.baseRef}`,
-    `- Goal: ${request.codexGoal}`,
+    `- \u30D6\u30E9\u30F3\u30C1: ${request.branch}`,
+    `- base ref: ${request.baseRef}`,
+    `- goal: ${request.codexGoal}`,
     ...request.codexGoal === RemoteCodexDispatchGoal.REVISE_PR ? [
-      `- Target PR: #${request.revisionTarget.number}`,
-      `- Target PR state: ${request.revisionTarget.state}`,
-      `- Target PR headRef: ${request.revisionTarget.headRef}`,
-      `- Target PR headSha: ${request.revisionTarget.headSha}`
+      `- \u5BFE\u8C61 PR: #${request.revisionTarget.number}`,
+      `- \u5BFE\u8C61 PR state: ${request.revisionTarget.state}`,
+      `- \u5BFE\u8C61 PR headRef: ${request.revisionTarget.headRef}`,
+      `- \u5BFE\u8C61 PR headSha: ${request.revisionTarget.headSha}`
     ] : [],
     ...request.codexGoal === RemoteCodexDispatchGoal.POST_MERGE_VERIFY ? [
-      `- Target PR: #${request.revisionTarget.number}`,
-      `- Target PR state: ${request.revisionTarget.state || "unknown"}`,
-      `- Target PR merged: ${request.revisionTarget.merged === false ? "false" : "true_or_unverified"}`,
-      `- Target PR mergedAt: ${request.revisionTarget.mergedAt || "unverified"}`,
-      `- Target PR mergeCommitSha: ${request.revisionTarget.mergeCommitSha || "unverified"}`
+      `- \u5BFE\u8C61 PR: #${request.revisionTarget.number}`,
+      `- \u5BFE\u8C61 PR state: ${request.revisionTarget.state || "unknown"}`,
+      `- \u5BFE\u8C61 PR merged: ${request.revisionTarget.merged === false ? "false" : "true_or_unverified"}`,
+      `- \u5BFE\u8C61 PR mergedAt: ${request.revisionTarget.mergedAt || "unverified"}`,
+      `- \u5BFE\u8C61 PR mergeCommitSha: ${request.revisionTarget.mergeCommitSha || "unverified"}`
     ] : [],
-    "- Canonical spec: this GitHub Issue",
-    "- Runtime truth: current GitHub branch / diff / PR / review comments",
-    isDashboardChatTriage ? "- Completion target: post a dashboard chat triage response to the same thread" : request.codexGoal === RemoteCodexDispatchGoal.POST_MERGE_VERIFY ? "- Completion target: verify post-merge runtime truth and post GitHub-visible evidence" : "- Completion target: create or update a pull request",
+    "- \u6B63\u672C: \u3053\u306E GitHub Issue",
+    "- runtime truth: \u73FE\u5728\u306E GitHub branch / diff / PR / review comments",
+    isDashboardChatTriage ? "- \u5B8C\u4E86\u6761\u4EF6: dashboard chat triage \u306E\u8FD4\u4FE1 event \u3092\u540C\u3058 thread \u306B\u8FD4\u3059" : request.codexGoal === RemoteCodexDispatchGoal.POST_MERGE_VERIFY ? "- \u5B8C\u4E86\u6761\u4EF6: merge \u5F8C runtime truth \u3092\u691C\u8A3C\u3057\u3001GitHub-visible evidence \u3092\u6B8B\u3059" : "- \u5B8C\u4E86\u6761\u4EF6: pull request \u3092\u4F5C\u6210\u307E\u305F\u306F\u66F4\u65B0\u3059\u308B",
     ...isDashboardChatTriage ? [
-      "- PR body requirement: not applicable; dashboard chat triage must not create or update a PR.",
-      "- Context preflight requirement: the VPS runner will automatically read `AGENTS.md`, `docs/butler/thread-independent-startup-contract.md`, and the canonical Issue, then generate a machine-readable preflight receipt before Codex starts triage."
+      "- PR body requirement: \u4E0D\u8981\u3002dashboard chat triage \u306F PR \u3092\u4F5C\u6210\u30FB\u66F4\u65B0\u3057\u307E\u305B\u3093\u3002",
+      "- context preflight: VPS runner \u306F `AGENTS.md`\u3001`docs/butler/thread-independent-startup-contract.md`\u3001\u6B63\u672C Issue \u3092\u8AAD\u3093\u3067\u304B\u3089 triage \u3092\u958B\u59CB\u3057\u307E\u3059\u3002"
     ] : [
-      "- PR body requirement: Codex must inspect `docs/pr-template-model.md`, `scripts/render-pr-body.mjs`, and `scripts/validate-pr-body.mjs`; the VPS runner will validate and normalize the PR body again before create/update.",
-      "- Context preflight requirement: the VPS runner will automatically read `AGENTS.md`, `docs/butler/thread-independent-startup-contract.md`, the canonical Issue, and the PR body contract files, then generate a machine-readable preflight receipt before Codex starts editing.",
-      "- Required PR body markers: `## This PR satisfies Intent`, `## Satisfied Success Criteria`, `## Unsatisfied Success Criteria`, `## Verification Evidence`, `## Surface Update Checklist`."
+      "- PR body requirement: Codex \u306F `docs/pr-template-model.md`\u3001`scripts/render-pr-body.mjs`\u3001`scripts/validate-pr-body.mjs` \u3092\u78BA\u8A8D\u3057\u307E\u3059\u3002VPS runner \u3082 PR create/update \u524D\u306B\u691C\u8A3C\u30FB\u6B63\u898F\u5316\u3057\u307E\u3059\u3002",
+      "- context preflight: VPS runner \u306F `AGENTS.md`\u3001`docs/butler/thread-independent-startup-contract.md`\u3001\u6B63\u672C Issue\u3001PR body contract files \u3092\u8AAD\u3093\u3067\u304B\u3089\u7DE8\u96C6\u3092\u958B\u59CB\u3057\u307E\u3059\u3002",
+      "- \u5FC5\u9808 PR body markers: `## This PR satisfies Intent`, `## Satisfied Success Criteria`, `## Unsatisfied Success Criteria`, `## Verification Evidence`, `## Surface Update Checklist`."
     ],
-    "- Missing preflight inputs do not authorize speculative implementation; the runner must ask Butler/owner to confirm the next action, then wait for a reissued bounded request.",
+    "- preflight \u5165\u529B\u304C\u4E0D\u8DB3\u3057\u3066\u3044\u308B\u5834\u5408\u3001\u63A8\u6E2C\u5B9F\u88C5\u306F\u7981\u6B62\u3067\u3059\u3002runner \u306F Butler/owner \u306B\u6B21\u306E\u5224\u65AD\u3092\u6C42\u3081\u3001bounded request \u306E\u518D\u767A\u884C\u3092\u5F85\u3061\u307E\u3059\u3002",
     "",
-    "Rules:",
-    "- Do not expand scope beyond the Issue.",
-    ...isDashboardChatTriage ? ["- Do not edit files.", "- Do not commit.", "- Do not push.", "- Do not create or update PRs."] : [],
-    "- Do not merge.",
-    "- Do not deploy.",
-    "- Preserve reviewer objections for Butler/human judgment.",
-    "- If the Issue or runtime truth is insufficient, stop and comment with the blocked reason.",
+    "\u30EB\u30FC\u30EB:",
+    "- Issue \u306E\u7BC4\u56F2\u3092\u52DD\u624B\u306B\u5E83\u3052\u306A\u3044\u3002",
+    ...isDashboardChatTriage ? ["- \u30D5\u30A1\u30A4\u30EB\u7DE8\u96C6\u3057\u306A\u3044\u3002", "- commit \u3057\u306A\u3044\u3002", "- push \u3057\u306A\u3044\u3002", "- PR \u3092\u4F5C\u6210\u30FB\u66F4\u65B0\u3057\u306A\u3044\u3002"] : [],
+    "- merge \u3057\u306A\u3044\u3002",
+    "- deploy \u3057\u306A\u3044\u3002",
+    "- reviewer objection \u306F Butler/human judgment \u7528\u306B\u6B8B\u3059\u3002",
+    "- Issue \u307E\u305F\u306F runtime truth \u304C\u4E0D\u8DB3\u3057\u3066\u3044\u308B\u5834\u5408\u306F\u505C\u6B62\u3057\u3001\u65E5\u672C\u8A9E\u3067 blocker reason \u3092\u30B3\u30E1\u30F3\u30C8\u3059\u308B\u3002",
     "",
     "Runner payload:",
     fencedJson(payload)
@@ -61518,6 +61520,7 @@ function normalizeVpsRunnerDashboardEvent(payload) {
       text: buildVpsRunnerChatMessageText({
         repository,
         executionId,
+        issueNumber,
         status,
         currentStep,
         lastEvent,
@@ -61588,6 +61591,7 @@ function buildVpsRunnerDashboardTitle({ status, currentStep, lastEvent, message 
 function buildVpsRunnerChatMessageText({
   repository,
   executionId,
+  issueNumber,
   status,
   currentStep,
   lastEvent,
@@ -61596,27 +61600,51 @@ function buildVpsRunnerChatMessageText({
   progressUrl
 }) {
   const parts = [
-    `VPS Codex CLI \u304B\u3089\u66F4\u65B0\u3067\u3059\u3002`,
-    `repo: ${repository}`,
-    `execution: ${executionId}`,
-    `status: ${status}`
+    "VPS Codex CLI \u304B\u3089\u8FD4\u4FE1\u3067\u3059\u3002",
+    "",
+    "\u72B6\u614B:",
+    `- repo: ${repository}`,
+    `- execution: ${executionId}`,
+    `- status: ${formatVpsRunnerDashboardStatusForOwner(status)}`
   ];
+  if (issueNumber) {
+    parts.push(`- Issue: #${issueNumber}`);
+  }
   if (currentStep) {
-    parts.push(`step: ${currentStep}`);
+    parts.push(`- step: ${currentStep}`);
   }
   if (lastEvent) {
-    parts.push(`event: ${lastEvent}`);
+    parts.push(`- event: ${lastEvent}`);
   }
   if (branch) {
-    parts.push(`branch: ${branch}`);
+    parts.push(`- branch: ${branch}`);
   }
   if (message) {
+    parts.push("", "\u672C\u6587:");
     parts.push(message);
   }
   if (progressUrl) {
-    parts.push(`\u9032\u6357: ${progressUrl}`);
+    parts.push("", `\u9032\u6357: ${progressUrl}`);
   }
   return parts.join("\n");
+}
+function formatVpsRunnerDashboardStatusForOwner(status) {
+  if (status === "completed") {
+    return "\u5B8C\u4E86";
+  }
+  if (status === "running") {
+    return "\u5B9F\u884C\u4E2D";
+  }
+  if (status === "queued") {
+    return "\u5F85\u6A5F\u4E2D";
+  }
+  if (status === "blocked") {
+    return "\u505C\u6B62";
+  }
+  if (status === "canceled") {
+    return "\u30AD\u30E3\u30F3\u30BB\u30EB";
+  }
+  return status || "\u4E0D\u660E";
 }
 function normalizeDashboardUrl(value) {
   const text = sanitizeDashboardChatText(value);
@@ -62308,7 +62336,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .bubble { max-width: min(760px, 88%); color: var(--text); font-size: 17px; line-height: 1.72; }
     .bubble, .bubble p, .bubble li { overflow-wrap: anywhere; }
     .bubble strong { display: block; color: var(--muted); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 8px; }
-    .bubble p { color: var(--text); margin-bottom: 12px; }
+    .bubble p { color: var(--text); margin-bottom: 12px; white-space: pre-wrap; }
     .bubble ul { margin: 0; padding-left: 22px; color: var(--text); line-height: 1.85; }
     .bubble.owner { align-self: flex-end; background: var(--owner-bubble); color: var(--owner-text); border-radius: 24px; padding: 12px 16px; }
     .bubble.owner p { color: var(--owner-text); margin: 0; }
@@ -62555,10 +62583,33 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           article.appendChild(strong);
         }
         const paragraph = document.createElement("p");
-        paragraph.textContent = message.text || "\uFF08\u7A7A\u306E\u30E1\u30C3\u30BB\u30FC\u30B8\uFF09";
+        renderMessageText(paragraph, message.text || "\uFF08\u7A7A\u306E\u30E1\u30C3\u30BB\u30FC\u30B8\uFF09");
         article.appendChild(paragraph);
         log.appendChild(article);
         scrollToLatest();
+      }
+
+      function renderMessageText(container, text) {
+        const source = String(text || "");
+        const urlPattern = /https?:\\/\\/[^\\s<>"']+/g;
+        let cursor = 0;
+        for (const match of source.matchAll(urlPattern)) {
+          if (match.index > cursor) {
+            container.appendChild(document.createTextNode(source.slice(cursor, match.index)));
+          }
+          const href = match[0];
+          const link = document.createElement("a");
+          link.className = "chat-link";
+          link.href = href;
+          link.textContent = href;
+          link.target = "_blank";
+          link.rel = "noreferrer";
+          container.appendChild(link);
+          cursor = match.index + href.length;
+        }
+        if (cursor < source.length) {
+          container.appendChild(document.createTextNode(source.slice(cursor)));
+        }
       }
 
       function appendError(text) {
