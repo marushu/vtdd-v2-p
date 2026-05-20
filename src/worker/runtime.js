@@ -88,6 +88,7 @@ const MAX_MEMORY_LIMIT = 200;
 const memoryProviderCache = new WeakMap();
 const d1AdapterCache = new WeakMap();
 const dashboardEventStoreCache = new WeakMap();
+const dashboardChatStoreCache = new WeakMap();
 
 export default {
   async fetch(request, env) {
@@ -178,6 +179,14 @@ export default {
           dashboardEventStore: resolveDashboardEventStore(env)
         })
       );
+    }
+
+    if (request.method === "POST" && isApiPath(url.pathname, "/dashboard/chat/messages")) {
+      return handleDashboardChatMessageRequest(request, env);
+    }
+
+    if (request.method === "GET" && isDashboardChatThreadApiPath(url.pathname)) {
+      return handleDashboardChatThreadRequest(url, env);
     }
 
     if (
@@ -3067,6 +3076,61 @@ async function handleGitHubActionsEventRequest(request, env) {
   });
 }
 
+async function handleDashboardChatMessageRequest(request, env) {
+  const payload = await readJson(request);
+  const prepared = buildDashboardChatTurn(payload);
+  if (!prepared.ok) {
+    return json(422, {
+      ok: false,
+      error: prepared.error,
+      reason: prepared.reason
+    });
+  }
+
+  const store = resolveDashboardChatStore(env);
+  if (!store) {
+    return json(503, {
+      ok: false,
+      error: "dashboard_chat_store_unavailable",
+      reason: "dashboard Butler chat store is not configured"
+    });
+  }
+
+  const messages = await store.appendMany(prepared.threadId, prepared.messages);
+  return json(202, {
+    ok: true,
+    threadId: prepared.threadId,
+    messages
+  });
+}
+
+async function handleDashboardChatThreadRequest(url, env) {
+  const threadId = extractDashboardChatThreadId(url.pathname);
+  if (!threadId) {
+    return json(422, {
+      ok: false,
+      error: "thread_id_required",
+      reason: "threadId is required"
+    });
+  }
+  const store = resolveDashboardChatStore(env);
+  if (!store) {
+    return json(503, {
+      ok: false,
+      error: "dashboard_chat_store_unavailable",
+      reason: "dashboard Butler chat store is not configured"
+    });
+  }
+  const messages = await store.listThread(threadId, {
+    limit: normalizeLimit(url.searchParams.get("limit"), 80)
+  });
+  return json(200, {
+    ok: true,
+    threadId,
+    messages
+  });
+}
+
 async function handleGitHubActionsSecretSyncRequest(request, env) {
   const payload = await readJson(request);
   if (!payload || typeof payload !== "object") {
@@ -4568,6 +4632,31 @@ function resolveDashboardEventStore(env) {
   return store;
 }
 
+function resolveDashboardChatStore(env) {
+  if (!env || typeof env !== "object") {
+    return null;
+  }
+  const injectedStore = env.DASHBOARD_CHAT_STORE ?? null;
+  if (
+    injectedStore &&
+    typeof injectedStore.appendMany === "function" &&
+    typeof injectedStore.listThread === "function"
+  ) {
+    return injectedStore;
+  }
+
+  const d1Binding = env[MEMORY_D1_BINDING] ?? null;
+  if (!d1Binding || typeof d1Binding.prepare !== "function") {
+    return null;
+  }
+  if (dashboardChatStoreCache.has(d1Binding)) {
+    return dashboardChatStoreCache.get(d1Binding);
+  }
+  const store = createD1DashboardChatStore(d1Binding);
+  dashboardChatStoreCache.set(d1Binding, store);
+  return store;
+}
+
 function createD1DashboardEventStore(d1) {
   let schemaPromise = null;
   return {
@@ -4697,6 +4786,233 @@ function createD1DashboardEventStore(d1) {
       })();
     }
     return schemaPromise;
+  }
+}
+
+function createD1DashboardChatStore(d1) {
+  let schemaPromise = null;
+  return {
+    async appendMany(threadId, messages) {
+      const resolvedThreadId = normalizeDashboardThreadId(threadId);
+      if (!resolvedThreadId) {
+        return [];
+      }
+      const normalizedMessages = (Array.isArray(messages) ? messages : [])
+        .map((message) => normalizeDashboardChatMessage(message, { threadId: resolvedThreadId }))
+        .filter(Boolean);
+      if (normalizedMessages.length === 0) {
+        return [];
+      }
+
+      await ensureSchema();
+      for (const message of normalizedMessages) {
+        await d1
+          .prepare(
+            `INSERT OR REPLACE INTO vtdd_dashboard_chat_messages (
+               thread_id, message_id, role, repository, related_issue, status, text,
+               created_at, payload_json
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          )
+          .bind(
+            message.threadId,
+            message.messageId,
+            message.role,
+            message.repository,
+            message.relatedIssue,
+            message.status,
+            message.text,
+            message.createdAt,
+            JSON.stringify(message)
+          )
+          .run();
+      }
+      return normalizedMessages;
+    },
+
+    async listThread(threadId, filter = {}) {
+      const resolvedThreadId = normalizeDashboardThreadId(threadId);
+      if (!resolvedThreadId) {
+        return [];
+      }
+      await ensureSchema();
+      const limit = normalizeLimit(filter.limit, 80);
+      const result = await d1
+        .prepare(
+          `SELECT payload_json FROM vtdd_dashboard_chat_messages
+           WHERE thread_id = ?
+           ORDER BY created_at DESC, message_id DESC
+           LIMIT ?`
+        )
+        .bind(resolvedThreadId, limit)
+        .all();
+      return (Array.isArray(result?.results) ? result.results : [])
+        .map((row) => {
+          try {
+            return row?.payload_json
+              ? normalizeDashboardChatMessage(JSON.parse(row.payload_json), { threadId: resolvedThreadId })
+              : null;
+          } catch {
+            return null;
+          }
+        })
+        .filter(Boolean)
+        .reverse();
+    }
+  };
+
+  function ensureSchema() {
+    if (!schemaPromise) {
+      schemaPromise = (async () => {
+        await d1.exec(
+          "CREATE TABLE IF NOT EXISTS vtdd_dashboard_chat_messages (thread_id TEXT NOT NULL, message_id TEXT NOT NULL, role TEXT NOT NULL, repository TEXT, related_issue INTEGER, status TEXT NOT NULL, text TEXT NOT NULL, created_at TEXT NOT NULL, payload_json TEXT NOT NULL, PRIMARY KEY (thread_id, message_id));"
+        );
+        await d1.exec(
+          "CREATE INDEX IF NOT EXISTS idx_vtdd_dashboard_chat_messages_thread ON vtdd_dashboard_chat_messages (thread_id, created_at DESC);"
+        );
+      })();
+    }
+    return schemaPromise;
+  }
+}
+
+function buildDashboardChatTurn(payload) {
+  const input = normalizeObject(payload);
+  const repository = normalizeCanonicalRepositoryInput(input.repository);
+  if (!repository) {
+    return {
+      ok: false,
+      error: "repository_required",
+      reason: "repository is required for dashboard Butler chat"
+    };
+  }
+
+  const text = sanitizeDashboardChatText(input.text || input.message || input.body);
+  if (!text) {
+    return {
+      ok: false,
+      error: "message_required",
+      reason: "message text is required"
+    };
+  }
+
+  const threadId =
+    normalizeDashboardThreadId(input.threadId || input.thread_id) ||
+    `dashboard-main-${repository.replace("/", "-")}`;
+  const relatedIssue = normalizePositiveInteger(input.relatedIssue || input.issueNumber);
+  const now = new Date().toISOString();
+  const ownerMessage = normalizeDashboardChatMessage(
+    {
+      threadId,
+      role: "owner",
+      repository,
+      relatedIssue,
+      status: "sent",
+      text,
+      createdAt: now
+    },
+    { threadId }
+  );
+  const butlerMessage = normalizeDashboardChatMessage(
+    {
+      threadId,
+      role: "butler",
+      repository,
+      relatedIssue,
+      status: "replied",
+      text: buildDeterministicButlerChatReply({ text, repository, relatedIssue }),
+      createdAt: new Date(Date.parse(now) + 1).toISOString()
+    },
+    { threadId }
+  );
+
+  return {
+    ok: true,
+    threadId,
+    messages: [ownerMessage, butlerMessage]
+  };
+}
+
+function buildDeterministicButlerChatReply({ text, repository, relatedIssue }) {
+  const lowerText = normalizeText(text).toLowerCase();
+  const issuePhrase = relatedIssue ? ` Issue #${relatedIssue} として扱えます。` : "";
+  if (lowerText.includes("vps") || lowerText.includes("codex") || lowerText.includes("cli")) {
+    return `受け取りました。${repository} の会話として、この turn を dashboard chat thread に保存しました。VPS Codex CLI への実行 dispatch はまだ行わず、次スライスで runner の返信イベントを同じ chat thread に返します。${issuePhrase}`.trim();
+  }
+  if (lowerText.includes("issue") || lowerText.includes("作って") || lowerText.includes("実装")) {
+    return `受け取りました。${repository} の話として保存しました。ここから Issue 候補を整理し、実行が必要な場合は GO / passkey 境界を明示して開発 queue へ進めます。${issuePhrase}`.trim();
+  }
+  return `受け取りました。${repository} の Butler 会話として同じ thread に保存しました。今は dashboard chat runtime の初期接続なので、まずは会話履歴と返信を同じ画面で確認できます。${issuePhrase}`.trim();
+}
+
+function normalizeDashboardChatMessage(message, defaults = {}) {
+  const input = normalizeObject(message);
+  const threadId = normalizeDashboardThreadId(input.threadId || input.thread_id || defaults.threadId);
+  if (!threadId) {
+    return null;
+  }
+  const role = normalizeDashboardChatRole(input.role);
+  const createdAt = normalizeIsoTimestamp(input.createdAt || input.created_at) || new Date().toISOString();
+  return {
+    threadId,
+    messageId: normalizeDashboardEventText(input.messageId || input.message_id) || crypto.randomUUID(),
+    role,
+    repository: normalizeCanonicalRepositoryInput(input.repository) || null,
+    relatedIssue: normalizePositiveInteger(input.relatedIssue || input.issueNumber || input.related_issue),
+    status: normalizeDashboardChatStatus(input.status),
+    text: sanitizeDashboardChatText(input.text || input.message || input.body) || "（空のメッセージ）",
+    createdAt
+  };
+}
+
+function normalizeDashboardChatRole(value) {
+  const role = normalizeDashboardEventText(value).toLowerCase();
+  return ["owner", "butler", "runner", "system"].includes(role) ? role : "system";
+}
+
+function normalizeDashboardChatStatus(value) {
+  const status = normalizeDashboardEventText(value).toLowerCase();
+  return ["sent", "thinking", "replied", "blocked", "failed"].includes(status) ? status : "sent";
+}
+
+function normalizeDashboardThreadId(value) {
+  const text = normalizeDashboardEventText(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9_.:/-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+  return text.slice(0, 160);
+}
+
+function sanitizeDashboardChatText(value) {
+  const text = normalizeText(value)
+    .replace(/approval:[0-9a-f-]{20,}/gi, "[redacted-approval]")
+    .replace(/\bgh[psuor]_[A-Za-z0-9_]{20,}\b/g, "[redacted-token]")
+    .replace(/\bsk-proj-[A-Za-z0-9_-]{20,}\b/g, "[redacted-openai-key]")
+    .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]{12,}/gi, "Bearer [redacted]")
+    .replace(/\b(CLOUDFLARE_API_TOKEN|OPENAI_API_KEY|GITHUB_TOKEN)=\S+/gi, "$1=[redacted]");
+  return text.slice(0, 4000);
+}
+
+function isDashboardChatThreadApiPath(pathname) {
+  return (
+    pathname.startsWith(`${CANONICAL_API_PREFIX}/dashboard/chat/`) ||
+    pathname.startsWith(`${LEGACY_API_PREFIX}/dashboard/chat/`)
+  );
+}
+
+function extractDashboardChatThreadId(pathname) {
+  const prefix = pathname.startsWith(`${CANONICAL_API_PREFIX}/dashboard/chat/`)
+    ? `${CANONICAL_API_PREFIX}/dashboard/chat/`
+    : pathname.startsWith(`${LEGACY_API_PREFIX}/dashboard/chat/`)
+      ? `${LEGACY_API_PREFIX}/dashboard/chat/`
+      : "";
+  if (!prefix) {
+    return "";
+  }
+  try {
+    return normalizeDashboardThreadId(decodeURIComponent(pathname.slice(prefix.length)));
+  } catch {
+    return normalizeDashboardThreadId(pathname.slice(prefix.length));
   }
 }
 
@@ -5782,6 +6098,7 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
   const origin = normalize(runtimeOrigin);
   const repository = "marushu/vtdd-v2-p";
   const encodedRepository = encodeURIComponent(repository);
+  const chatThreadId = `dashboard-main-${repository.replace("/", "-")}`;
   const latestDeployEvent = await retrieveLatestDashboardEvent({
     store: dashboardEventStore,
     kind: "github_actions_workflow_run",
@@ -6050,18 +6367,18 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
         </div>
       </aside>
 
-      <div class="chat-scroll">
+      <div class="chat-scroll" id="butler-chat-log" data-thread-id="${escapeDashboardHtml(chatThreadId)}">
         <article class="bubble owner">
           <p>ここはカスタム GPT の Butler。</p>
         </article>
         <article class="bubble">
           <strong>Butler</strong>
           <p>はい。私は v2 の Butler として、Issue 駆動・GitHub runtime truth・VPS runner・Gemini reviewer・RAG・passkey 境界を扱います。</p>
-          <p>この画面は会話を主役にするための chat-first shell です。管理画面は右のサイドバーへ退避しました。</p>
+          <p>この画面は会話を主役にするための chat-first runtime です。管理画面は右のサイドバーへ退避しました。</p>
           <ul>
             <li>関連 repo: <code>${escapeDashboardHtml(repository)}</code></li>
             <li>Issue 候補: #433 の継続スライス</li>
-            <li>実行: まだ dashboard から自動 dispatch しません</li>
+            <li>会話: この画面から送信すると、同じ thread に Butler 返信が残ります</li>
           </ul>
         </article>
         <article class="bubble owner">
@@ -6070,21 +6387,21 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
         <article class="bubble">
           <strong>Butler</strong>
           <p>その方針で進めます。中央はチャットだけ、状態確認・進捗・RAG・workflow・prototype cleanup の扱いはサイドバーのメニューから必要な時だけ開きます。</p>
-          <p>deploy が必要になった時は、普通のチャットと同じようにこの会話内へ scope 明示済みの passkey URL を出します。この shell はまだ未接続なので、実行 URL は会話例として常時表示しません。</p>
-          <span class="connection-note">未接続: この入力欄はまだ保存・送信・LLM 返信しません</span>
+          <p>deploy が必要になった時は、普通のチャットと同じようにこの会話内へ scope 明示済みの passkey URL を出します。VPS Codex CLI への実行 dispatch は別 gate で扱います。</p>
+          <span class="connection-note">接続済み: Worker chat runtime に保存・返信します</span>
         </article>
 
       </div>
 
-      <div class="composer" aria-label="Butler composer">
+      <form class="composer" id="butler-chat-form" aria-label="Butler composer" data-endpoint="${escapeDashboardHtml(origin)}/v2/dashboard/chat/messages" data-thread-id="${escapeDashboardHtml(chatThreadId)}" data-repository="${escapeDashboardHtml(repository)}">
         <div class="composer-box">
           <span class="icon-button" aria-hidden="true">＋</span>
-          <textarea id="butler-message" placeholder="Butler V2 にメッセージ..." aria-label="Butler V2 にメッセージ。現在は未送信です。"></textarea>
+          <textarea id="butler-message" name="text" placeholder="Butler V2 にメッセージ..." aria-label="Butler V2 にメッセージ"></textarea>
           <span class="icon-button" aria-hidden="true">♪</span>
-          <span class="send-button" aria-hidden="true">↑</span>
+          <button class="send-button" type="submit" aria-label="Butler に送信">↑</button>
         </div>
-        <div class="composer-status">未接続。入力は保存も送信もされません。自動更新・polling はありません。</div>
-      </div>
+        <div class="composer-status" id="butler-chat-status">接続済み。送信するとこの thread に保存されます。自動更新・polling はありません。</div>
+      </form>
     </section>
 
     <details id="tools" class="sidebar" aria-label="管理サイドバーメニュー">
@@ -6139,6 +6456,78 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
       </div>
     </details>
   </main>
+  <script>
+    (() => {
+      const form = document.getElementById("butler-chat-form");
+      const log = document.getElementById("butler-chat-log");
+      const textarea = document.getElementById("butler-message");
+      const status = document.getElementById("butler-chat-status");
+      if (!form || !log || !textarea || !status) return;
+
+      const endpoint = form.dataset.endpoint;
+      const threadId = form.dataset.threadId;
+      const repository = form.dataset.repository;
+
+      function setStatus(text) {
+        status.textContent = text;
+      }
+
+      function appendMessage(message) {
+        const article = document.createElement("article");
+        article.className = message.role === "owner" ? "bubble owner" : "bubble";
+        if (message.role !== "owner") {
+          const strong = document.createElement("strong");
+          strong.textContent = message.role === "runner" ? "VPS Codex CLI" : "Butler";
+          article.appendChild(strong);
+        }
+        const paragraph = document.createElement("p");
+        paragraph.textContent = message.text || "（空のメッセージ）";
+        article.appendChild(paragraph);
+        log.appendChild(article);
+        article.scrollIntoView({ block: "end" });
+      }
+
+      function appendError(text) {
+        appendMessage({ role: "butler", text });
+      }
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const text = textarea.value.trim();
+        if (!text) {
+          textarea.focus();
+          return;
+        }
+        const submitButton = form.querySelector("button[type='submit']");
+        if (submitButton) submitButton.disabled = true;
+        setStatus("送信中です。Butler が同じ thread に返信します。");
+        try {
+          const response = await fetch(endpoint, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ threadId, repository, text })
+          });
+          const body = await response.json().catch(() => ({}));
+          if (!response.ok || !body.ok) {
+            appendError(body.reason || "送信に失敗しました。runtime truth を確認してください。");
+            setStatus("送信に失敗しました。");
+            return;
+          }
+          textarea.value = "";
+          for (const message of body.messages || []) {
+            appendMessage(message);
+          }
+          setStatus("保存済み。Butler 返信を同じ thread に追加しました。");
+        } catch {
+          appendError("Worker chat runtime に接続できませんでした。ネットワークまたは deploy 状態を確認してください。");
+          setStatus("接続に失敗しました。");
+        } finally {
+          if (submitButton) submitButton.disabled = false;
+          textarea.focus();
+        }
+      });
+    })();
+  </script>
 </body>
 </html>`;
 }

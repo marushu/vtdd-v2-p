@@ -82,6 +82,26 @@ function createInMemoryDashboardEventStore() {
   };
 }
 
+function createInMemoryDashboardChatStore() {
+  const messagesByThread = new Map();
+  return {
+    async appendMany(threadId, messages) {
+      const list = messagesByThread.get(threadId) ?? [];
+      const normalizedMessages = (Array.isArray(messages) ? messages : []).map((message) => ({
+        ...message,
+        threadId
+      }));
+      list.push(...normalizedMessages);
+      messagesByThread.set(threadId, list);
+      return normalizedMessages;
+    },
+    async listThread(threadId, filter = {}) {
+      const limit = Number(filter.limit) || 80;
+      return (messagesByThread.get(threadId) ?? []).slice(-limit);
+    }
+  };
+}
+
 const passkeyAdapter = {
   async generateRegistrationOptions(input) {
     return { challenge: input.challenge };
@@ -206,13 +226,16 @@ test("worker serves v2 dashboard without exposing secrets", async () => {
   assert.equal(body.includes("自動更新なし"), true);
   assert.equal(body.includes("自動更新・polling はありません"), true);
   assert.equal(body.includes("Issue #433"), true);
-  assert.equal(body.includes("未接続: この入力欄はまだ保存・送信・LLM 返信しません"), true);
+  assert.equal(body.includes("接続済み: Worker chat runtime に保存・返信します"), true);
   assert.equal(body.includes("deploy が必要になった時は、普通のチャットと同じようにこの会話内へ scope 明示済みの passkey URL を出します"), true);
-  assert.equal(body.includes("実行 URL は会話例として常時表示しません"), true);
+  assert.equal(body.includes("VPS Codex CLI への実行 dispatch は別 gate で扱います"), true);
   assert.equal(body.includes("deploy 用 passkey URL"), false);
   assert.equal(body.includes("vtdd-v3-orchestrator.polished-tree-da7c.workers.dev"), false);
   assert.equal(body.includes('id="mobile-menu-toggle"'), true);
   assert.equal(body.includes('for="mobile-menu-toggle"'), true);
+  assert.equal(body.includes('id="butler-chat-form"'), true);
+  assert.equal(body.includes('id="butler-chat-log"'), true);
+  assert.equal(body.includes("/v2/dashboard/chat/messages"), true);
   assert.equal(body.includes("モバイル管理メニュー"), true);
   assert.equal(body.includes("直近 deploy event"), true);
   assert.equal(body.includes("Butler V2 にメッセージ"), true);
@@ -222,11 +245,11 @@ test("worker serves v2 dashboard without exposing secrets", async () => {
   assert.equal(body.includes("/dashboard/notifications"), true);
   assert.equal(body.includes(">通知センター</a>"), true);
   assert.equal(body.includes("include=open_prs"), false);
-  assert.equal(body.includes('name="text"'), false);
+  assert.equal(body.includes('name="text"'), true);
   assert.equal(/<meta[^>]+http-equiv=["']?refresh/i.test(body), false);
   assert.equal(body.includes("setInterval("), false);
   assert.equal(body.includes("setTimeout("), false);
-  assert.equal(body.includes("fetch("), false);
+  assert.equal(body.includes("fetch("), true);
   assert.equal(
     body.includes("/v2/approval/passkey/operator?repositoryInput=marushu%2Fvtdd-v2-p"),
     true
@@ -255,6 +278,72 @@ test("worker serves v2 dashboard without exposing secrets", async () => {
   assert.equal(aliasBody.includes("dashboard main chat"), true);
   assert.equal(aliasBody.includes("管理メニュー"), true);
   assert.equal(aliasBody.includes("自動更新なし"), true);
+});
+
+test("worker appends dashboard Butler chat turn and retrieves the same thread", async () => {
+  const store = createInMemoryDashboardChatStore();
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/chat/messages", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        threadId: "dashboard-main-marushu-vtdd-v2-p",
+        repository: "marushu/vtdd-v2-p",
+        text: "VPS Codex CLI とリアルタイムに会話したい"
+      })
+    }),
+    { DASHBOARD_CHAT_STORE: store }
+  );
+
+  assert.equal(response.status, 202);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.threadId, "dashboard-main-marushu-vtdd-v2-p");
+  assert.equal(body.messages.length, 2);
+  assert.equal(body.messages[0].role, "owner");
+  assert.equal(body.messages[1].role, "butler");
+  assert.match(body.messages[1].text, /VPS Codex CLI/);
+
+  const retrieveResponse = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/chat/dashboard-main-marushu-vtdd-v2-p"),
+    { DASHBOARD_CHAT_STORE: store }
+  );
+  assert.equal(retrieveResponse.status, 200);
+  const retrieveBody = await retrieveResponse.json();
+  assert.equal(retrieveBody.ok, true);
+  assert.equal(retrieveBody.messages.length, 2);
+  assert.equal(retrieveBody.messages[0].text, "VPS Codex CLI とリアルタイムに会話したい");
+});
+
+test("worker redacts dashboard Butler chat sensitive material before returning and storing", async () => {
+  const store = createInMemoryDashboardChatStore();
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/chat/messages", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        threadId: "dashboard-main-marushu-vtdd-v2-p",
+        repository: "marushu/vtdd-v2-p",
+        text: "approval:15b6f20d-11b6-4f8b-8008-99e7d7397452 と Bearer supersecrettoken123 を貼った"
+      })
+    }),
+    { DASHBOARD_CHAT_STORE: store }
+  );
+
+  assert.equal(response.status, 202);
+  const body = await response.json();
+  assert.equal(body.messages[0].text.includes("approval:15b6f20d"), false);
+  assert.equal(body.messages[0].text.includes("supersecrettoken123"), false);
+  assert.equal(body.messages[0].text.includes("[redacted-approval]"), true);
+  assert.equal(body.messages[0].text.includes("Bearer [redacted]"), true);
+
+  const retrieveResponse = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/chat/dashboard-main-marushu-vtdd-v2-p"),
+    { DASHBOARD_CHAT_STORE: store }
+  );
+  const retrieveBody = await retrieveResponse.json();
+  assert.equal(JSON.stringify(retrieveBody).includes("approval:15b6f20d"), false);
+  assert.equal(JSON.stringify(retrieveBody).includes("supersecrettoken123"), false);
 });
 
 test("worker serves human-facing GitHub truth dashboard instead of raw action JSON", async () => {
@@ -471,7 +560,7 @@ test("worker ingests GitHub Actions deploy completion event and shows it on dash
   assert.equal(dashboardBody.includes("approval:must-not-persist"), false);
   assert.equal(dashboardBody.includes("secret-must-not-persist"), false);
   assert.equal(dashboardBody.includes("setInterval("), false);
-  assert.equal(dashboardBody.includes("fetch("), false);
+  assert.equal(dashboardBody.includes("fetch("), true);
 });
 
 test("worker rejects GitHub Actions deploy completion event without machine auth", async () => {

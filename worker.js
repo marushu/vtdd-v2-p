@@ -55772,6 +55772,7 @@ var MAX_MEMORY_LIMIT = 200;
 var memoryProviderCache = /* @__PURE__ */ new WeakMap();
 var d1AdapterCache = /* @__PURE__ */ new WeakMap();
 var dashboardEventStoreCache = /* @__PURE__ */ new WeakMap();
+var dashboardChatStoreCache = /* @__PURE__ */ new WeakMap();
 var runtime_default = {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -55842,6 +55843,12 @@ var runtime_default = {
           dashboardEventStore: resolveDashboardEventStore(env)
         })
       );
+    }
+    if (request.method === "POST" && isApiPath(url.pathname, "/dashboard/chat/messages")) {
+      return handleDashboardChatMessageRequest(request, env);
+    }
+    if (request.method === "GET" && isDashboardChatThreadApiPath(url.pathname)) {
+      return handleDashboardChatThreadRequest(url, env);
     }
     if (request.method === "GET" && (url.pathname === MCP_PROTECTED_RESOURCE_METADATA_PATH || url.pathname === MCP_PROTECTED_RESOURCE_METADATA_MIRROR_PATH)) {
       return json(200, buildMcpProtectedResourceMetadata(url));
@@ -58342,6 +58349,57 @@ async function handleGitHubActionsEventRequest(request, env) {
     event: event.event
   });
 }
+async function handleDashboardChatMessageRequest(request, env) {
+  const payload = await readJson(request);
+  const prepared = buildDashboardChatTurn(payload);
+  if (!prepared.ok) {
+    return json(422, {
+      ok: false,
+      error: prepared.error,
+      reason: prepared.reason
+    });
+  }
+  const store = resolveDashboardChatStore(env);
+  if (!store) {
+    return json(503, {
+      ok: false,
+      error: "dashboard_chat_store_unavailable",
+      reason: "dashboard Butler chat store is not configured"
+    });
+  }
+  const messages = await store.appendMany(prepared.threadId, prepared.messages);
+  return json(202, {
+    ok: true,
+    threadId: prepared.threadId,
+    messages
+  });
+}
+async function handleDashboardChatThreadRequest(url, env) {
+  const threadId = extractDashboardChatThreadId(url.pathname);
+  if (!threadId) {
+    return json(422, {
+      ok: false,
+      error: "thread_id_required",
+      reason: "threadId is required"
+    });
+  }
+  const store = resolveDashboardChatStore(env);
+  if (!store) {
+    return json(503, {
+      ok: false,
+      error: "dashboard_chat_store_unavailable",
+      reason: "dashboard Butler chat store is not configured"
+    });
+  }
+  const messages = await store.listThread(threadId, {
+    limit: normalizeLimit7(url.searchParams.get("limit"), 80)
+  });
+  return json(200, {
+    ok: true,
+    threadId,
+    messages
+  });
+}
 async function handleGitHubActionsSecretSyncRequest(request, env) {
   const payload = await readJson(request);
   if (!payload || typeof payload !== "object") {
@@ -59588,6 +59646,25 @@ function resolveDashboardEventStore(env) {
   dashboardEventStoreCache.set(d1Binding, store);
   return store;
 }
+function resolveDashboardChatStore(env) {
+  if (!env || typeof env !== "object") {
+    return null;
+  }
+  const injectedStore = env.DASHBOARD_CHAT_STORE ?? null;
+  if (injectedStore && typeof injectedStore.appendMany === "function" && typeof injectedStore.listThread === "function") {
+    return injectedStore;
+  }
+  const d1Binding = env[MEMORY_D1_BINDING] ?? null;
+  if (!d1Binding || typeof d1Binding.prepare !== "function") {
+    return null;
+  }
+  if (dashboardChatStoreCache.has(d1Binding)) {
+    return dashboardChatStoreCache.get(d1Binding);
+  }
+  const store = createD1DashboardChatStore(d1Binding);
+  dashboardChatStoreCache.set(d1Binding, store);
+  return store;
+}
 function createD1DashboardEventStore(d1) {
   let schemaPromise = null;
   return {
@@ -59703,6 +59780,186 @@ function createD1DashboardEventStore(d1) {
       })();
     }
     return schemaPromise;
+  }
+}
+function createD1DashboardChatStore(d1) {
+  let schemaPromise = null;
+  return {
+    async appendMany(threadId, messages) {
+      const resolvedThreadId = normalizeDashboardThreadId(threadId);
+      if (!resolvedThreadId) {
+        return [];
+      }
+      const normalizedMessages = (Array.isArray(messages) ? messages : []).map((message) => normalizeDashboardChatMessage(message, { threadId: resolvedThreadId })).filter(Boolean);
+      if (normalizedMessages.length === 0) {
+        return [];
+      }
+      await ensureSchema();
+      for (const message of normalizedMessages) {
+        await d1.prepare(
+          `INSERT OR REPLACE INTO vtdd_dashboard_chat_messages (
+               thread_id, message_id, role, repository, related_issue, status, text,
+               created_at, payload_json
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        ).bind(
+          message.threadId,
+          message.messageId,
+          message.role,
+          message.repository,
+          message.relatedIssue,
+          message.status,
+          message.text,
+          message.createdAt,
+          JSON.stringify(message)
+        ).run();
+      }
+      return normalizedMessages;
+    },
+    async listThread(threadId, filter = {}) {
+      const resolvedThreadId = normalizeDashboardThreadId(threadId);
+      if (!resolvedThreadId) {
+        return [];
+      }
+      await ensureSchema();
+      const limit = normalizeLimit7(filter.limit, 80);
+      const result = await d1.prepare(
+        `SELECT payload_json FROM vtdd_dashboard_chat_messages
+           WHERE thread_id = ?
+           ORDER BY created_at DESC, message_id DESC
+           LIMIT ?`
+      ).bind(resolvedThreadId, limit).all();
+      return (Array.isArray(result?.results) ? result.results : []).map((row) => {
+        try {
+          return row?.payload_json ? normalizeDashboardChatMessage(JSON.parse(row.payload_json), { threadId: resolvedThreadId }) : null;
+        } catch {
+          return null;
+        }
+      }).filter(Boolean).reverse();
+    }
+  };
+  function ensureSchema() {
+    if (!schemaPromise) {
+      schemaPromise = (async () => {
+        await d1.exec(
+          "CREATE TABLE IF NOT EXISTS vtdd_dashboard_chat_messages (thread_id TEXT NOT NULL, message_id TEXT NOT NULL, role TEXT NOT NULL, repository TEXT, related_issue INTEGER, status TEXT NOT NULL, text TEXT NOT NULL, created_at TEXT NOT NULL, payload_json TEXT NOT NULL, PRIMARY KEY (thread_id, message_id));"
+        );
+        await d1.exec(
+          "CREATE INDEX IF NOT EXISTS idx_vtdd_dashboard_chat_messages_thread ON vtdd_dashboard_chat_messages (thread_id, created_at DESC);"
+        );
+      })();
+    }
+    return schemaPromise;
+  }
+}
+function buildDashboardChatTurn(payload) {
+  const input = normalizeObject11(payload);
+  const repository = normalizeCanonicalRepositoryInput(input.repository);
+  if (!repository) {
+    return {
+      ok: false,
+      error: "repository_required",
+      reason: "repository is required for dashboard Butler chat"
+    };
+  }
+  const text = sanitizeDashboardChatText(input.text || input.message || input.body);
+  if (!text) {
+    return {
+      ok: false,
+      error: "message_required",
+      reason: "message text is required"
+    };
+  }
+  const threadId = normalizeDashboardThreadId(input.threadId || input.thread_id) || `dashboard-main-${repository.replace("/", "-")}`;
+  const relatedIssue = normalizePositiveInteger9(input.relatedIssue || input.issueNumber);
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const ownerMessage = normalizeDashboardChatMessage(
+    {
+      threadId,
+      role: "owner",
+      repository,
+      relatedIssue,
+      status: "sent",
+      text,
+      createdAt: now
+    },
+    { threadId }
+  );
+  const butlerMessage = normalizeDashboardChatMessage(
+    {
+      threadId,
+      role: "butler",
+      repository,
+      relatedIssue,
+      status: "replied",
+      text: buildDeterministicButlerChatReply({ text, repository, relatedIssue }),
+      createdAt: new Date(Date.parse(now) + 1).toISOString()
+    },
+    { threadId }
+  );
+  return {
+    ok: true,
+    threadId,
+    messages: [ownerMessage, butlerMessage]
+  };
+}
+function buildDeterministicButlerChatReply({ text, repository, relatedIssue }) {
+  const lowerText = normalizeText30(text).toLowerCase();
+  const issuePhrase = relatedIssue ? ` Issue #${relatedIssue} \u3068\u3057\u3066\u6271\u3048\u307E\u3059\u3002` : "";
+  if (lowerText.includes("vps") || lowerText.includes("codex") || lowerText.includes("cli")) {
+    return `\u53D7\u3051\u53D6\u308A\u307E\u3057\u305F\u3002${repository} \u306E\u4F1A\u8A71\u3068\u3057\u3066\u3001\u3053\u306E turn \u3092 dashboard chat thread \u306B\u4FDD\u5B58\u3057\u307E\u3057\u305F\u3002VPS Codex CLI \u3078\u306E\u5B9F\u884C dispatch \u306F\u307E\u3060\u884C\u308F\u305A\u3001\u6B21\u30B9\u30E9\u30A4\u30B9\u3067 runner \u306E\u8FD4\u4FE1\u30A4\u30D9\u30F3\u30C8\u3092\u540C\u3058 chat thread \u306B\u8FD4\u3057\u307E\u3059\u3002${issuePhrase}`.trim();
+  }
+  if (lowerText.includes("issue") || lowerText.includes("\u4F5C\u3063\u3066") || lowerText.includes("\u5B9F\u88C5")) {
+    return `\u53D7\u3051\u53D6\u308A\u307E\u3057\u305F\u3002${repository} \u306E\u8A71\u3068\u3057\u3066\u4FDD\u5B58\u3057\u307E\u3057\u305F\u3002\u3053\u3053\u304B\u3089 Issue \u5019\u88DC\u3092\u6574\u7406\u3057\u3001\u5B9F\u884C\u304C\u5FC5\u8981\u306A\u5834\u5408\u306F GO / passkey \u5883\u754C\u3092\u660E\u793A\u3057\u3066\u958B\u767A queue \u3078\u9032\u3081\u307E\u3059\u3002${issuePhrase}`.trim();
+  }
+  return `\u53D7\u3051\u53D6\u308A\u307E\u3057\u305F\u3002${repository} \u306E Butler \u4F1A\u8A71\u3068\u3057\u3066\u540C\u3058 thread \u306B\u4FDD\u5B58\u3057\u307E\u3057\u305F\u3002\u4ECA\u306F dashboard chat runtime \u306E\u521D\u671F\u63A5\u7D9A\u306A\u306E\u3067\u3001\u307E\u305A\u306F\u4F1A\u8A71\u5C65\u6B74\u3068\u8FD4\u4FE1\u3092\u540C\u3058\u753B\u9762\u3067\u78BA\u8A8D\u3067\u304D\u307E\u3059\u3002${issuePhrase}`.trim();
+}
+function normalizeDashboardChatMessage(message, defaults = {}) {
+  const input = normalizeObject11(message);
+  const threadId = normalizeDashboardThreadId(input.threadId || input.thread_id || defaults.threadId);
+  if (!threadId) {
+    return null;
+  }
+  const role = normalizeDashboardChatRole(input.role);
+  const createdAt = normalizeIsoTimestamp(input.createdAt || input.created_at) || (/* @__PURE__ */ new Date()).toISOString();
+  return {
+    threadId,
+    messageId: normalizeDashboardEventText(input.messageId || input.message_id) || crypto.randomUUID(),
+    role,
+    repository: normalizeCanonicalRepositoryInput(input.repository) || null,
+    relatedIssue: normalizePositiveInteger9(input.relatedIssue || input.issueNumber || input.related_issue),
+    status: normalizeDashboardChatStatus(input.status),
+    text: sanitizeDashboardChatText(input.text || input.message || input.body) || "\uFF08\u7A7A\u306E\u30E1\u30C3\u30BB\u30FC\u30B8\uFF09",
+    createdAt
+  };
+}
+function normalizeDashboardChatRole(value) {
+  const role = normalizeDashboardEventText(value).toLowerCase();
+  return ["owner", "butler", "runner", "system"].includes(role) ? role : "system";
+}
+function normalizeDashboardChatStatus(value) {
+  const status = normalizeDashboardEventText(value).toLowerCase();
+  return ["sent", "thinking", "replied", "blocked", "failed"].includes(status) ? status : "sent";
+}
+function normalizeDashboardThreadId(value) {
+  const text = normalizeDashboardEventText(value).toLowerCase().replace(/[^a-z0-9_.:/-]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+  return text.slice(0, 160);
+}
+function sanitizeDashboardChatText(value) {
+  const text = normalizeText30(value).replace(/approval:[0-9a-f-]{20,}/gi, "[redacted-approval]").replace(/\bgh[psuor]_[A-Za-z0-9_]{20,}\b/g, "[redacted-token]").replace(/\bsk-proj-[A-Za-z0-9_-]{20,}\b/g, "[redacted-openai-key]").replace(/\bBearer\s+[A-Za-z0-9._~+/=-]{12,}/gi, "Bearer [redacted]").replace(/\b(CLOUDFLARE_API_TOKEN|OPENAI_API_KEY|GITHUB_TOKEN)=\S+/gi, "$1=[redacted]");
+  return text.slice(0, 4e3);
+}
+function isDashboardChatThreadApiPath(pathname) {
+  return pathname.startsWith(`${CANONICAL_API_PREFIX}/dashboard/chat/`) || pathname.startsWith(`${LEGACY_API_PREFIX}/dashboard/chat/`);
+}
+function extractDashboardChatThreadId(pathname) {
+  const prefix = pathname.startsWith(`${CANONICAL_API_PREFIX}/dashboard/chat/`) ? `${CANONICAL_API_PREFIX}/dashboard/chat/` : pathname.startsWith(`${LEGACY_API_PREFIX}/dashboard/chat/`) ? `${LEGACY_API_PREFIX}/dashboard/chat/` : "";
+  if (!prefix) {
+    return "";
+  }
+  try {
+    return normalizeDashboardThreadId(decodeURIComponent(pathname.slice(prefix.length)));
+  } catch {
+    return normalizeDashboardThreadId(pathname.slice(prefix.length));
   }
 }
 function normalizeDashboardEventRecord(event) {
@@ -60689,6 +60946,7 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
   const origin = normalize7(runtimeOrigin);
   const repository = "marushu/vtdd-v2-p";
   const encodedRepository = encodeURIComponent(repository);
+  const chatThreadId = `dashboard-main-${repository.replace("/", "-")}`;
   const latestDeployEvent = await retrieveLatestDashboardEvent({
     store: dashboardEventStore,
     kind: "github_actions_workflow_run",
@@ -60956,18 +61214,18 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
         </div>
       </aside>
 
-      <div class="chat-scroll">
+      <div class="chat-scroll" id="butler-chat-log" data-thread-id="${escapeDashboardHtml(chatThreadId)}">
         <article class="bubble owner">
           <p>\u3053\u3053\u306F\u30AB\u30B9\u30BF\u30E0 GPT \u306E Butler\u3002</p>
         </article>
         <article class="bubble">
           <strong>Butler</strong>
           <p>\u306F\u3044\u3002\u79C1\u306F v2 \u306E Butler \u3068\u3057\u3066\u3001Issue \u99C6\u52D5\u30FBGitHub runtime truth\u30FBVPS runner\u30FBGemini reviewer\u30FBRAG\u30FBpasskey \u5883\u754C\u3092\u6271\u3044\u307E\u3059\u3002</p>
-          <p>\u3053\u306E\u753B\u9762\u306F\u4F1A\u8A71\u3092\u4E3B\u5F79\u306B\u3059\u308B\u305F\u3081\u306E chat-first shell \u3067\u3059\u3002\u7BA1\u7406\u753B\u9762\u306F\u53F3\u306E\u30B5\u30A4\u30C9\u30D0\u30FC\u3078\u9000\u907F\u3057\u307E\u3057\u305F\u3002</p>
+          <p>\u3053\u306E\u753B\u9762\u306F\u4F1A\u8A71\u3092\u4E3B\u5F79\u306B\u3059\u308B\u305F\u3081\u306E chat-first runtime \u3067\u3059\u3002\u7BA1\u7406\u753B\u9762\u306F\u53F3\u306E\u30B5\u30A4\u30C9\u30D0\u30FC\u3078\u9000\u907F\u3057\u307E\u3057\u305F\u3002</p>
           <ul>
             <li>\u95A2\u9023 repo: <code>${escapeDashboardHtml(repository)}</code></li>
             <li>Issue \u5019\u88DC: #433 \u306E\u7D99\u7D9A\u30B9\u30E9\u30A4\u30B9</li>
-            <li>\u5B9F\u884C: \u307E\u3060 dashboard \u304B\u3089\u81EA\u52D5 dispatch \u3057\u307E\u305B\u3093</li>
+            <li>\u4F1A\u8A71: \u3053\u306E\u753B\u9762\u304B\u3089\u9001\u4FE1\u3059\u308B\u3068\u3001\u540C\u3058 thread \u306B Butler \u8FD4\u4FE1\u304C\u6B8B\u308A\u307E\u3059</li>
           </ul>
         </article>
         <article class="bubble owner">
@@ -60976,21 +61234,21 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
         <article class="bubble">
           <strong>Butler</strong>
           <p>\u305D\u306E\u65B9\u91DD\u3067\u9032\u3081\u307E\u3059\u3002\u4E2D\u592E\u306F\u30C1\u30E3\u30C3\u30C8\u3060\u3051\u3001\u72B6\u614B\u78BA\u8A8D\u30FB\u9032\u6357\u30FBRAG\u30FBworkflow\u30FBprototype cleanup \u306E\u6271\u3044\u306F\u30B5\u30A4\u30C9\u30D0\u30FC\u306E\u30E1\u30CB\u30E5\u30FC\u304B\u3089\u5FC5\u8981\u306A\u6642\u3060\u3051\u958B\u304D\u307E\u3059\u3002</p>
-          <p>deploy \u304C\u5FC5\u8981\u306B\u306A\u3063\u305F\u6642\u306F\u3001\u666E\u901A\u306E\u30C1\u30E3\u30C3\u30C8\u3068\u540C\u3058\u3088\u3046\u306B\u3053\u306E\u4F1A\u8A71\u5185\u3078 scope \u660E\u793A\u6E08\u307F\u306E passkey URL \u3092\u51FA\u3057\u307E\u3059\u3002\u3053\u306E shell \u306F\u307E\u3060\u672A\u63A5\u7D9A\u306A\u306E\u3067\u3001\u5B9F\u884C URL \u306F\u4F1A\u8A71\u4F8B\u3068\u3057\u3066\u5E38\u6642\u8868\u793A\u3057\u307E\u305B\u3093\u3002</p>
-          <span class="connection-note">\u672A\u63A5\u7D9A: \u3053\u306E\u5165\u529B\u6B04\u306F\u307E\u3060\u4FDD\u5B58\u30FB\u9001\u4FE1\u30FBLLM \u8FD4\u4FE1\u3057\u307E\u305B\u3093</span>
+          <p>deploy \u304C\u5FC5\u8981\u306B\u306A\u3063\u305F\u6642\u306F\u3001\u666E\u901A\u306E\u30C1\u30E3\u30C3\u30C8\u3068\u540C\u3058\u3088\u3046\u306B\u3053\u306E\u4F1A\u8A71\u5185\u3078 scope \u660E\u793A\u6E08\u307F\u306E passkey URL \u3092\u51FA\u3057\u307E\u3059\u3002VPS Codex CLI \u3078\u306E\u5B9F\u884C dispatch \u306F\u5225 gate \u3067\u6271\u3044\u307E\u3059\u3002</p>
+          <span class="connection-note">\u63A5\u7D9A\u6E08\u307F: Worker chat runtime \u306B\u4FDD\u5B58\u30FB\u8FD4\u4FE1\u3057\u307E\u3059</span>
         </article>
 
       </div>
 
-      <div class="composer" aria-label="Butler composer">
+      <form class="composer" id="butler-chat-form" aria-label="Butler composer" data-endpoint="${escapeDashboardHtml(origin)}/v2/dashboard/chat/messages" data-thread-id="${escapeDashboardHtml(chatThreadId)}" data-repository="${escapeDashboardHtml(repository)}">
         <div class="composer-box">
           <span class="icon-button" aria-hidden="true">\uFF0B</span>
-          <textarea id="butler-message" placeholder="Butler V2 \u306B\u30E1\u30C3\u30BB\u30FC\u30B8..." aria-label="Butler V2 \u306B\u30E1\u30C3\u30BB\u30FC\u30B8\u3002\u73FE\u5728\u306F\u672A\u9001\u4FE1\u3067\u3059\u3002"></textarea>
+          <textarea id="butler-message" name="text" placeholder="Butler V2 \u306B\u30E1\u30C3\u30BB\u30FC\u30B8..." aria-label="Butler V2 \u306B\u30E1\u30C3\u30BB\u30FC\u30B8"></textarea>
           <span class="icon-button" aria-hidden="true">\u266A</span>
-          <span class="send-button" aria-hidden="true">\u2191</span>
+          <button class="send-button" type="submit" aria-label="Butler \u306B\u9001\u4FE1">\u2191</button>
         </div>
-        <div class="composer-status">\u672A\u63A5\u7D9A\u3002\u5165\u529B\u306F\u4FDD\u5B58\u3082\u9001\u4FE1\u3082\u3055\u308C\u307E\u305B\u3093\u3002\u81EA\u52D5\u66F4\u65B0\u30FBpolling \u306F\u3042\u308A\u307E\u305B\u3093\u3002</div>
-      </div>
+        <div class="composer-status" id="butler-chat-status">\u63A5\u7D9A\u6E08\u307F\u3002\u9001\u4FE1\u3059\u308B\u3068\u3053\u306E thread \u306B\u4FDD\u5B58\u3055\u308C\u307E\u3059\u3002\u81EA\u52D5\u66F4\u65B0\u30FBpolling \u306F\u3042\u308A\u307E\u305B\u3093\u3002</div>
+      </form>
     </section>
 
     <details id="tools" class="sidebar" aria-label="\u7BA1\u7406\u30B5\u30A4\u30C9\u30D0\u30FC\u30E1\u30CB\u30E5\u30FC">
@@ -61045,6 +61303,78 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
       </div>
     </details>
   </main>
+  <script>
+    (() => {
+      const form = document.getElementById("butler-chat-form");
+      const log = document.getElementById("butler-chat-log");
+      const textarea = document.getElementById("butler-message");
+      const status = document.getElementById("butler-chat-status");
+      if (!form || !log || !textarea || !status) return;
+
+      const endpoint = form.dataset.endpoint;
+      const threadId = form.dataset.threadId;
+      const repository = form.dataset.repository;
+
+      function setStatus(text) {
+        status.textContent = text;
+      }
+
+      function appendMessage(message) {
+        const article = document.createElement("article");
+        article.className = message.role === "owner" ? "bubble owner" : "bubble";
+        if (message.role !== "owner") {
+          const strong = document.createElement("strong");
+          strong.textContent = message.role === "runner" ? "VPS Codex CLI" : "Butler";
+          article.appendChild(strong);
+        }
+        const paragraph = document.createElement("p");
+        paragraph.textContent = message.text || "\uFF08\u7A7A\u306E\u30E1\u30C3\u30BB\u30FC\u30B8\uFF09";
+        article.appendChild(paragraph);
+        log.appendChild(article);
+        article.scrollIntoView({ block: "end" });
+      }
+
+      function appendError(text) {
+        appendMessage({ role: "butler", text });
+      }
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const text = textarea.value.trim();
+        if (!text) {
+          textarea.focus();
+          return;
+        }
+        const submitButton = form.querySelector("button[type='submit']");
+        if (submitButton) submitButton.disabled = true;
+        setStatus("\u9001\u4FE1\u4E2D\u3067\u3059\u3002Butler \u304C\u540C\u3058 thread \u306B\u8FD4\u4FE1\u3057\u307E\u3059\u3002");
+        try {
+          const response = await fetch(endpoint, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ threadId, repository, text })
+          });
+          const body = await response.json().catch(() => ({}));
+          if (!response.ok || !body.ok) {
+            appendError(body.reason || "\u9001\u4FE1\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002runtime truth \u3092\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002");
+            setStatus("\u9001\u4FE1\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002");
+            return;
+          }
+          textarea.value = "";
+          for (const message of body.messages || []) {
+            appendMessage(message);
+          }
+          setStatus("\u4FDD\u5B58\u6E08\u307F\u3002Butler \u8FD4\u4FE1\u3092\u540C\u3058 thread \u306B\u8FFD\u52A0\u3057\u307E\u3057\u305F\u3002");
+        } catch {
+          appendError("Worker chat runtime \u306B\u63A5\u7D9A\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F\u3002\u30CD\u30C3\u30C8\u30EF\u30FC\u30AF\u307E\u305F\u306F deploy \u72B6\u614B\u3092\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002");
+          setStatus("\u63A5\u7D9A\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002");
+        } finally {
+          if (submitButton) submitButton.disabled = false;
+          textarea.focus();
+        }
+      });
+    })();
+  <\/script>
 </body>
 </html>`;
 }
