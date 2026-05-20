@@ -58656,6 +58656,24 @@ async function handleDashboardChatMessageRequest(request, env) {
   }
   const payload = await readJson(request);
   const wantsVpsRunnerHandoff = shouldDispatchDashboardChatToVpsRunner(payload);
+  const nicknameListTurn = await buildDashboardRepositoryNicknameListTurn({ payload, env });
+  if (nicknameListTurn) {
+    const store2 = resolveDashboardChatStore(env);
+    if (!store2) {
+      return json(503, {
+        ok: false,
+        error: "dashboard_chat_store_unavailable",
+        reason: "dashboard Butler chat store is not configured"
+      });
+    }
+    const messages2 = await store2.appendMany(nicknameListTurn.threadId, nicknameListTurn.messages);
+    return json(202, {
+      ok: true,
+      threadId: nicknameListTurn.threadId,
+      messages: messages2,
+      execution: null
+    });
+  }
   const repositoryResolution = await resolveDashboardChatRepository({ payload, env });
   if (!repositoryResolution.ok) {
     return json(repositoryResolution.status ?? 422, {
@@ -60105,8 +60123,8 @@ async function resolveDashboardChatRepository({ payload, env }) {
       ok: false,
       status: 422,
       error: "repository_required",
-      reason: "repository or repository nickname is required before dashboard can hand off to VPS Codex CLI",
-      issues: ["top chat must include a repository target or open the dashboard with repositoryInput"]
+      reason: "\u5BFE\u8C61 repository \u304C\u672A\u6307\u5B9A\u3067\u3059\u3002VPS Codex CLI \u306B\u6E21\u3059\u524D\u306B\u3001repo/nickname \u3092\u6307\u5B9A\u3057\u3066\u304F\u3060\u3055\u3044\u3002\u4F8B: `\u3076\u3044 #450 \u306E\u6B8B\u308A Issue \u3068 PR \u3092\u78BA\u8A8D\u3057\u3066`\u3002\u767B\u9332\u6E08\u307F nickname \u3092\u78BA\u8A8D\u3059\u308B\u5834\u5408\u306F `\u767B\u9332\u6E08\u307F\u306E\u30CB\u30C3\u30AF\u30CD\u30FC\u30E0\u51FA\u3057\u3066` \u3068\u9001\u3063\u3066\u304F\u3060\u3055\u3044\u3002",
+      issues: ["dashboard top chat requires a repository target before VPS Codex CLI handoff"]
     };
   }
   const provider = resolveMemoryProvider(env);
@@ -60129,7 +60147,7 @@ async function resolveDashboardChatRepository({ payload, env }) {
     ok: false,
     status: resolved.ambiguous ? 409 : 422,
     error: resolved.ambiguous ? "repository_nickname_ambiguous" : "repository_unresolved",
-    reason: resolved.reason || "repository could not be resolved",
+    reason: resolved.ambiguous ? "\u5BFE\u8C61 repository nickname \u304C\u66D6\u6627\u3067\u3059\u3002\u5019\u88DC\u304B\u3089 1 \u3064\u3092 owner/repo \u5F62\u5F0F\u3067\u6307\u5B9A\u3057\u3066\u304F\u3060\u3055\u3044\u3002" : "\u5BFE\u8C61 repository nickname \u3092\u767B\u9332\u6E08\u307F alias \u304B\u3089\u89E3\u6C7A\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F\u3002`\u767B\u9332\u6E08\u307F\u306E\u30CB\u30C3\u30AF\u30CD\u30FC\u30E0\u51FA\u3057\u3066` \u3067\u5019\u88DC\u3092\u78BA\u8A8D\u3059\u308B\u304B\u3001owner/repo \u5F62\u5F0F\u3067\u6307\u5B9A\u3057\u3066\u304F\u3060\u3055\u3044\u3002",
     issues: registryResult.ok ? ["repository nickname could not be resolved"] : [registryResult.reason || "repository nickname registry could not be read"],
     candidates: resolved.candidates || []
   };
@@ -60438,6 +60456,77 @@ function buildDeterministicButlerChatReply({ text, repository, relatedIssue, wan
     return `\u53D7\u3051\u53D6\u308A\u307E\u3057\u305F\u3002${repository} \u306E\u8A71\u3068\u3057\u3066\u4FDD\u5B58\u3057\u307E\u3057\u305F\u3002\u3053\u3053\u304B\u3089 Issue \u5019\u88DC\u3092\u6574\u7406\u3057\u3001\u5B9F\u884C\u304C\u5FC5\u8981\u306A\u5834\u5408\u306F GO / passkey \u5883\u754C\u3092\u660E\u793A\u3057\u3066\u958B\u767A queue \u3078\u9032\u3081\u307E\u3059\u3002${issuePhrase}`.trim();
   }
   return `\u53D7\u3051\u53D6\u308A\u307E\u3057\u305F\u3002${repository} \u306E Butler \u4F1A\u8A71\u3068\u3057\u3066\u540C\u3058 thread \u306B\u4FDD\u5B58\u3057\u307E\u3057\u305F\u3002\u4ECA\u306F dashboard chat runtime \u306E\u521D\u671F\u63A5\u7D9A\u306A\u306E\u3067\u3001\u307E\u305A\u306F\u4F1A\u8A71\u5C65\u6B74\u3068\u8FD4\u4FE1\u3092\u540C\u3058\u753B\u9762\u3067\u78BA\u8A8D\u3067\u304D\u307E\u3059\u3002${issuePhrase}`.trim();
+}
+async function buildDashboardRepositoryNicknameListTurn({ payload, env }) {
+  const input = normalizeObject11(payload);
+  const text = sanitizeDashboardChatText(input.text || input.message || input.body);
+  if (!isDashboardRepositoryNicknameListRequest(text)) {
+    return null;
+  }
+  const threadId = normalizeDashboardThreadId(input.threadId || input.thread_id) || normalizeDashboardThreadId("dashboard-main-unresolved");
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const ownerMessage = normalizeDashboardChatMessage(
+    {
+      threadId,
+      role: "owner",
+      status: "sent",
+      text,
+      createdAt: now
+    },
+    { threadId }
+  );
+  const registryResult = await safeRetrieveStoredAliasRegistry(resolveMemoryProvider(env));
+  const butlerMessage = normalizeDashboardChatMessage(
+    {
+      threadId,
+      role: "butler",
+      status: registryResult.ok ? "replied" : "blocked",
+      text: formatDashboardRepositoryNicknameListReply(registryResult),
+      createdAt: new Date(Date.parse(now) + 1).toISOString()
+    },
+    { threadId }
+  );
+  return {
+    threadId,
+    messages: [ownerMessage, butlerMessage].filter(Boolean)
+  };
+}
+function isDashboardRepositoryNicknameListRequest(text) {
+  const normalized = normalizeDashboardEventText(text).toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+  return normalized.includes("\u30CB\u30C3\u30AF\u30CD\u30FC\u30E0") && (normalized.includes("\u4E00\u89A7") || normalized.includes("\u767B\u9332\u6E08") || normalized.includes("\u767B\u9332\u305A\u307F") || normalized.includes("\u51FA\u3057\u3066") || normalized.includes("\u898B\u305B\u3066") || normalized.includes("\u6559\u3048\u3066"));
+}
+function formatDashboardRepositoryNicknameListReply(registryResult) {
+  if (!registryResult?.ok) {
+    return [
+      "\u767B\u9332\u6E08\u307F\u30CB\u30C3\u30AF\u30CD\u30FC\u30E0\u3092\u8AAD\u3081\u307E\u305B\u3093\u3067\u3057\u305F\u3002",
+      "",
+      `\u7406\u7531: ${registryResult?.reason || "memory provider \u304C\u5229\u7528\u3067\u304D\u307E\u305B\u3093\u3002"}`,
+      "",
+      "\u3053\u306E\u72B6\u614B\u3067\u306F repo/nickname \u672A\u6307\u5B9A\u306E\u307E\u307E VPS Codex CLI \u306B\u6E21\u305B\u306A\u3044\u305F\u3081\u3001owner/repo \u5F62\u5F0F\u3067\u5BFE\u8C61 repository \u3092\u6307\u5B9A\u3057\u3066\u304F\u3060\u3055\u3044\u3002"
+    ].join("\n");
+  }
+  const entries = Array.isArray(registryResult.aliasRegistry) ? registryResult.aliasRegistry : [];
+  if (entries.length === 0) {
+    return [
+      "\u767B\u9332\u6E08\u307F\u30CB\u30C3\u30AF\u30CD\u30FC\u30E0\u306F\u3042\u308A\u307E\u305B\u3093\u3002",
+      "",
+      "\u3053\u306E\u72B6\u614B\u3067\u306F repo/nickname \u672A\u6307\u5B9A\u306E\u307E\u307E VPS Codex CLI \u306B\u6E21\u305B\u307E\u305B\u3093\u3002",
+      "\u307E\u305A `marushu/vtdd-v2-p` \u306E\u3088\u3046\u306B owner/repo \u5F62\u5F0F\u3067\u5BFE\u8C61 repository \u3092\u6307\u5B9A\u3057\u3066\u304F\u3060\u3055\u3044\u3002"
+    ].join("\n");
+  }
+  return [
+    "\u767B\u9332\u6E08\u307F\u30CB\u30C3\u30AF\u30CD\u30FC\u30E0\u3067\u3059\u3002",
+    "",
+    ...entries.map((entry) => {
+      const aliases = Array.isArray(entry.aliases) && entry.aliases.length > 0 ? entry.aliases.join(", ") : "\u306A\u3057";
+      return `- ${entry.canonicalRepo}: ${aliases}`;
+    }),
+    "",
+    "\u9001\u4FE1\u4F8B: `\u3076\u3044 #450 \u306E\u6B8B\u308A Issue \u3068 PR \u3092\u78BA\u8A8D\u3057\u3066`"
+  ].join("\n");
 }
 function shouldDispatchDashboardChatToVpsRunner(payload) {
   const input = normalizeObject11(payload);
