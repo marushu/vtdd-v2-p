@@ -4,6 +4,7 @@ import {
   APPROVE_AUTO_MERGE_CANDIDATE_MARKER,
   APPROVE_AUTO_MERGE_EXECUTED_MARKER,
   ApproveAutoMergePolicyMode,
+  buildApproveAutoMergeMemoryRecord,
   evaluateApproveAutoMerge,
   formatApproveAutoMergeCandidateComment,
   formatApproveAutoMergeExecutedComment,
@@ -118,6 +119,11 @@ test("approve auto merge evidence comments are searchable by 自動マージ", (
     mergeResult: {
       sha: "merge789",
       message: "Pull Request successfully merged"
+    },
+    memoryWrite: {
+      ok: true,
+      recordType: "working_memory",
+      recordId: "working_memory_448_auto_merge_10"
     }
   });
 
@@ -126,9 +132,59 @@ test("approve auto merge evidence comments are searchable by 自動マージ", (
   assert.equal(executed.includes(APPROVE_AUTO_MERGE_EXECUTED_MARKER), true);
   assert.equal(executed.includes("merge789"), true);
   assert.equal(executed.includes("自動マージ"), true);
-  assert.equal(executed.includes("RAG 保存候補"), true);
-  assert.equal(executed.includes('"recordType": "working_memory"'), true);
-  assert.equal(executed.includes('"auto_merge"'), true);
+  assert.equal(executed.includes("RAG 保存"), true);
+  assert.equal(executed.includes("status: `persisted`"), true);
+  assert.equal(executed.includes("working_memory_448_auto_merge_10"), true);
+});
+
+test("approve auto merge builds persisted working memory payload", () => {
+  const evaluation = evaluateApproveAutoMerge({
+    policyMode: ApproveAutoMergePolicyMode.APPROVE_AUTO_MERGE,
+    pullRequest: mergeablePullRequest,
+    reviewLoop: approvedReviewLoop,
+    checkRuns: successChecks
+  });
+  const record = buildApproveAutoMergeMemoryRecord({
+    pullRequest: mergeablePullRequest,
+    evaluation,
+    mergeResult: {
+      sha: "merge789",
+      message: "Pull Request successfully merged"
+    }
+  });
+
+  assert.equal(record.recordType, "working_memory");
+  assert.equal(record.confirmed, true);
+  assert.equal(record.repository, "sample-org/vtdd-v2-p");
+  assert.equal(record.relatedIssue, 448);
+  assert.equal(record.details.includes("Merge SHA: merge789"), true);
+  assert.equal(record.tags.includes("auto_merge"), true);
+});
+
+test("approve auto merge executed comment does not overclaim failed RAG persistence", () => {
+  const evaluation = evaluateApproveAutoMerge({
+    policyMode: ApproveAutoMergePolicyMode.APPROVE_AUTO_MERGE,
+    pullRequest: mergeablePullRequest,
+    reviewLoop: approvedReviewLoop,
+    checkRuns: successChecks
+  });
+  const executed = formatApproveAutoMergeExecutedComment({
+    pullRequest: mergeablePullRequest,
+    evaluation,
+    mergeResult: {
+      sha: "merge789",
+      message: "Pull Request successfully merged"
+    },
+    memoryWrite: {
+      ok: false,
+      error: "memory_write_failed",
+      reason: "runtime rejected the write"
+    }
+  });
+
+  assert.equal(executed.includes("status: `failed`"), true);
+  assert.equal(executed.includes("RAGへは保存されていません"), true);
+  assert.equal(executed.includes("status: `persisted`"), false);
 });
 
 test("Gemini reviewer parser preserves reviewed head SHA for auto merge gate", () => {

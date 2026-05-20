@@ -7,6 +7,7 @@ import {
   APPROVE_AUTO_MERGE_EXECUTED_MARKER,
   ActorRole,
   TaskMode,
+  buildApproveAutoMergeMemoryRecord,
   evaluateApproveAutoMerge,
   evaluateExecutionContinuity,
   formatApproveAutoMergeBlockedComment,
@@ -189,13 +190,21 @@ async function processPullRequest({ githubFetch, repository, pullNumber, eventNa
     }
   });
 
+  const memoryWrite = await persistApproveAutoMergeMemory({
+    env,
+    evaluation,
+    pullRequest: contextPull,
+    mergeResult
+  });
+
   await githubFetch(`/repos/${repository}/issues/${pullNumber}/comments`, {
     method: "POST",
     body: {
       body: formatApproveAutoMergeExecutedComment({
         pullRequest: contextPull,
         evaluation,
-        mergeResult
+        mergeResult,
+        memoryWrite
       })
     }
   });
@@ -210,6 +219,55 @@ async function processPullRequest({ githubFetch, repository, pullNumber, eventNa
   });
 
   console.log(`Auto-merged PR #${pullNumber}: ${mergeResult.sha || "sha unknown"}.`);
+}
+
+async function persistApproveAutoMergeMemory({ env, evaluation, pullRequest, mergeResult }) {
+  const runtimeUrl = String(env.VTDD_RUNTIME_URL || "").trim();
+  const token = String(env.VTDD_GATEWAY_BEARER_TOKEN || "").trim();
+  if (!runtimeUrl || !token) {
+    return {
+      ok: false,
+      error: "memory_write_not_configured",
+      reason: "VTDD_RUNTIME_URL or VTDD_GATEWAY_BEARER_TOKEN is missing."
+    };
+  }
+
+  const endpoint = new URL("/v2/action/memory-write", runtimeUrl);
+  let response;
+  try {
+    response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${token}`,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify(buildApproveAutoMergeMemoryRecord({ evaluation, pullRequest, mergeResult }))
+    });
+  } catch (error) {
+    return {
+      ok: false,
+      error: "memory_write_request_failed",
+      reason: error instanceof Error ? error.message : String(error)
+    };
+  }
+
+  const body = await readResponseJson(response);
+  if (!response.ok || body?.ok !== true || !body?.memoryWritePersisted?.recordId) {
+    return {
+      ok: false,
+      error: body?.error || "memory_write_failed",
+      reason:
+        body?.reason ||
+        `memory write returned HTTP ${response.status} without persisted recordId`
+    };
+  }
+
+  return {
+    ok: true,
+    recordId: body.memoryWritePersisted.recordId,
+    recordType: body.memoryWritePersisted.recordType,
+    timestamp: body.memoryWritePersisted.timestamp
+  };
 }
 
 async function notifyDashboardEvent({ env, repository, pullRequest, title, status, conclusion }) {
@@ -248,6 +306,18 @@ async function notifyDashboardEvent({ env, repository, pullRequest, title, statu
   if (!response.ok) {
     const text = await response.text();
     console.log(`Dashboard event notification failed with HTTP ${response.status}: ${text.slice(0, 240)}`);
+  }
+}
+
+async function readResponseJson(response) {
+  const text = await response.text();
+  if (!text) {
+    return null;
+  }
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { error: "invalid_json_response", reason: text.slice(0, 240) };
   }
 }
 
