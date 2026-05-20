@@ -87,6 +87,7 @@ const DEFAULT_MEMORY_LIMIT = 20;
 const MAX_MEMORY_LIMIT = 200;
 const memoryProviderCache = new WeakMap();
 const d1AdapterCache = new WeakMap();
+const dashboardEventStoreCache = new WeakMap();
 
 export default {
   async fetch(request, env) {
@@ -136,7 +137,13 @@ export default {
     }
 
     if (request.method === "GET" && (url.pathname === "/dashboard" || url.pathname === "/orchestrator")) {
-      return html(200, renderV2DashboardPage({ runtimeOrigin: url.origin }));
+      return html(
+        200,
+        await renderV2DashboardPage({
+          runtimeOrigin: url.origin,
+          dashboardEventStore: resolveDashboardEventStore(env)
+        })
+      );
     }
 
     if (
@@ -317,6 +324,23 @@ export default {
       }
 
       return handleDeployProductionRequest(request, env);
+    }
+
+    if (request.method === "POST" && isApiPath(url.pathname, "/events/github-actions")) {
+      const auth = authorizeGatewayRequest({
+        request,
+        env,
+        apiSuffix: "/events/github-actions"
+      });
+      if (!auth.ok) {
+        return json(auth.status, {
+          ok: false,
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+
+      return handleGitHubActionsEventRequest(request, env);
     }
 
     if (request.method === "POST" && isApiPath(url.pathname, "/action/github-actions-secret")) {
@@ -2982,6 +3006,33 @@ async function handleDeployProductionRequest(request, env) {
   });
 }
 
+async function handleGitHubActionsEventRequest(request, env) {
+  const payload = await readJson(request);
+  const event = normalizeGitHubActionsEvent(payload);
+  if (!event.ok) {
+    return json(422, {
+      ok: false,
+      error: event.error,
+      reason: event.reason
+    });
+  }
+
+  const store = resolveDashboardEventStore(env);
+  if (!store) {
+    return json(503, {
+      ok: false,
+      error: "dashboard_event_store_unavailable",
+      reason: "dashboard event store is not configured"
+    });
+  }
+
+  await store.put(event.event);
+  return json(202, {
+    ok: true,
+    event: event.event
+  });
+}
+
 async function handleGitHubActionsSecretSyncRequest(request, env) {
   const payload = await readJson(request);
   if (!payload || typeof payload !== "object") {
@@ -4458,6 +4509,138 @@ function resolveMemoryProvider(env) {
   return provider;
 }
 
+function resolveDashboardEventStore(env) {
+  if (!env || typeof env !== "object") {
+    return null;
+  }
+  const injectedStore = env.DASHBOARD_EVENT_STORE ?? null;
+  if (
+    injectedStore &&
+    typeof injectedStore.put === "function" &&
+    typeof injectedStore.latest === "function"
+  ) {
+    return injectedStore;
+  }
+
+  const d1Binding = env[MEMORY_D1_BINDING] ?? null;
+  if (!d1Binding || typeof d1Binding.prepare !== "function") {
+    return null;
+  }
+  if (dashboardEventStoreCache.has(d1Binding)) {
+    return dashboardEventStoreCache.get(d1Binding);
+  }
+  const store = createD1DashboardEventStore(d1Binding);
+  dashboardEventStoreCache.set(d1Binding, store);
+  return store;
+}
+
+function createD1DashboardEventStore(d1) {
+  let schemaPromise = null;
+  return {
+    async put(event) {
+      const normalized = normalizeDashboardEventRecord(event);
+      await ensureSchema();
+      await d1
+        .prepare(
+          `INSERT OR REPLACE INTO vtdd_dashboard_events (
+             id, kind, repository, workflow_name, run_id, status, conclusion,
+             head_sha, head_branch, run_url, title, created_at, updated_at, payload_json
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        )
+        .bind(
+          normalized.id,
+          normalized.kind,
+          normalized.repository,
+          normalized.workflowName,
+          normalized.runId,
+          normalized.status,
+          normalized.conclusion,
+          normalized.headSha,
+          normalized.headBranch,
+          normalized.runUrl,
+          normalized.title,
+          normalized.createdAt,
+          normalized.updatedAt,
+          JSON.stringify(normalized)
+        )
+        .run();
+      return normalized;
+    },
+
+    async latest(filter = {}) {
+      await ensureSchema();
+      const kind = normalizeText(filter.kind);
+      const repository = normalizeCanonicalRepositoryInput(filter.repository);
+      const workflowName = normalizeText(filter.workflowName);
+      const clauses = [];
+      const params = [];
+      if (kind) {
+        clauses.push("kind = ?");
+        params.push(kind);
+      }
+      if (repository) {
+        clauses.push("repository = ?");
+        params.push(repository);
+      }
+      if (workflowName) {
+        clauses.push("workflow_name = ?");
+        params.push(workflowName);
+      }
+      const where = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
+      const result = await d1
+        .prepare(
+          `SELECT payload_json FROM vtdd_dashboard_events ${where} ORDER BY updated_at DESC, created_at DESC LIMIT 1`
+        )
+        .bind(...params)
+        .all();
+      const row = Array.isArray(result?.results) ? result.results[0] : null;
+      if (!row?.payload_json) {
+        return null;
+      }
+      try {
+        return normalizeDashboardEventRecord(JSON.parse(row.payload_json));
+      } catch {
+        return null;
+      }
+    }
+  };
+
+  function ensureSchema() {
+    if (!schemaPromise) {
+      schemaPromise = (async () => {
+        await d1.exec(
+          "CREATE TABLE IF NOT EXISTS vtdd_dashboard_events (id TEXT PRIMARY KEY, kind TEXT NOT NULL, repository TEXT NOT NULL, workflow_name TEXT NOT NULL, run_id TEXT NOT NULL, status TEXT NOT NULL, conclusion TEXT, head_sha TEXT, head_branch TEXT, run_url TEXT, title TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, payload_json TEXT NOT NULL);"
+        );
+        await d1.exec(
+          "CREATE INDEX IF NOT EXISTS idx_vtdd_dashboard_events_lookup ON vtdd_dashboard_events (kind, repository, workflow_name, updated_at DESC);"
+        );
+      })();
+    }
+    return schemaPromise;
+  }
+}
+
+function normalizeDashboardEventRecord(event) {
+  const input = normalizeObject(event);
+  const updatedAt = normalizeIsoTimestamp(input.updatedAt) || new Date().toISOString();
+  const createdAt = normalizeIsoTimestamp(input.createdAt) || updatedAt;
+  return {
+    id: normalizeText(input.id),
+    kind: normalizeText(input.kind),
+    repository: normalizeCanonicalRepositoryInput(input.repository),
+    workflowName: normalizeText(input.workflowName),
+    runId: normalizeText(input.runId),
+    status: normalizeText(input.status),
+    conclusion: normalizeText(input.conclusion) || null,
+    headSha: normalizeText(input.headSha) || null,
+    headBranch: normalizeText(input.headBranch) || null,
+    runUrl: normalizeText(input.runUrl) || null,
+    title: normalizeText(input.title) || normalizeText(input.workflowName),
+    createdAt,
+    updatedAt
+  };
+}
+
 function createD1MemoryIndexAdapter(d1) {
   if (!d1 || typeof d1.prepare !== "function") {
     return null;
@@ -4893,6 +5076,119 @@ function normalizeObject(value) {
   return value;
 }
 
+function normalizeGitHubActionsEvent(payload) {
+  const input = normalizeObject(payload);
+  const repository = normalizeCanonicalRepositoryInput(input.repository || input.githubRepository);
+  const workflowName = normalizeText(input.workflowName || input.workflow || input.workflow_name);
+  const runId = normalizeText(input.runId || input.run_id || input.databaseId || input.database_id);
+  const runUrl = normalizeText(input.runUrl || input.run_url || input.url);
+  const status = normalizeText(input.status || "completed").toLowerCase();
+  const conclusion = normalizeText(input.conclusion || input.result).toLowerCase();
+  const updatedAt = normalizeIsoTimestamp(input.updatedAt || input.updated_at) || new Date().toISOString();
+  const createdAt = normalizeIsoTimestamp(input.createdAt || input.created_at) || updatedAt;
+  const headSha = normalizeText(input.headSha || input.head_sha || input.sha);
+  const headBranch = normalizeText(input.headBranch || input.head_branch || input.branch);
+  const title = normalizeText(input.displayTitle || input.display_title || input.title);
+
+  if (!repository) {
+    return {
+      ok: false,
+      error: "repository_required",
+      reason: "GitHub Actions event repository is required"
+    };
+  }
+  if (!workflowName) {
+    return {
+      ok: false,
+      error: "workflow_required",
+      reason: "GitHub Actions event workflowName is required"
+    };
+  }
+  if (!runId) {
+    return {
+      ok: false,
+      error: "run_id_required",
+      reason: "GitHub Actions event runId is required"
+    };
+  }
+  if (!["queued", "in_progress", "completed", "requested", "waiting"].includes(status)) {
+    return {
+      ok: false,
+      error: "status_unsupported",
+      reason: "GitHub Actions event status must be queued, in_progress, completed, requested, or waiting"
+    };
+  }
+  if (conclusion && !["success", "failure", "cancelled", "skipped", "timed_out", "action_required"].includes(conclusion)) {
+    return {
+      ok: false,
+      error: "conclusion_unsupported",
+      reason: "GitHub Actions event conclusion is not supported"
+    };
+  }
+
+  const event = {
+    id: `github-actions:${repository}:${workflowName}:${runId}`,
+    kind: "github_actions_workflow_run",
+    repository,
+    workflowName,
+    runId,
+    status,
+    conclusion: conclusion || null,
+    headSha: headSha || null,
+    headBranch: headBranch || null,
+    runUrl: runUrl || null,
+    title: title || workflowName,
+    createdAt,
+    updatedAt
+  };
+
+  return {
+    ok: true,
+    event
+  };
+}
+
+function normalizeIsoTimestamp(value) {
+  const text = normalizeText(value);
+  if (!text) {
+    return "";
+  }
+  const timestamp = new Date(text);
+  if (Number.isNaN(timestamp.getTime())) {
+    return "";
+  }
+  return timestamp.toISOString();
+}
+
+async function retrieveLatestDashboardEvent({ store, kind, repository, workflowName } = {}) {
+  if (!store || typeof store.latest !== "function") {
+    return null;
+  }
+  try {
+    return await store.latest({ kind, repository, workflowName });
+  } catch {
+    return null;
+  }
+}
+
+function renderDashboardDeployEvent(event) {
+  if (!event) {
+    return `<div class="deploy-event muted">直近 deploy event: 未受信</div>`;
+  }
+  const conclusion = normalizeText(event.conclusion) || normalizeText(event.status) || "unknown";
+  const badgeClass = conclusion === "success" ? "success" : conclusion === "failure" || conclusion === "cancelled" ? "danger" : "";
+  const updatedAt = normalizeText(event.updatedAt);
+  const sha = normalizeText(event.headSha);
+  const shortSha = sha ? sha.slice(0, 7) : "unknown";
+  const runUrl = normalizeText(event.runUrl);
+  const runLabel = runUrl ? `<a class="chat-link" href="${escapeDashboardHtml(runUrl)}">Actions run</a>` : "Actions run 未設定";
+  return `<div class="deploy-event">
+            <div class="lane-title"><strong>最新 deploy</strong><span class="pill ${badgeClass}">${escapeDashboardHtml(conclusion)}</span></div>
+            <p>${escapeDashboardHtml(event.workflowName || "deploy-production")} / <code>${escapeDashboardHtml(shortSha)}</code></p>
+            <p class="muted">${escapeDashboardHtml(updatedAt || "updatedAt 未受信")} ・ ${runLabel}</p>
+          </div>`;
+}
+
 function normalizeTextList(value) {
   if (Array.isArray(value)) {
     return value.map(normalizeText).filter(Boolean);
@@ -4905,10 +5201,16 @@ function uniqueTextList(value) {
   return [...new Set(normalizeTextList(value))];
 }
 
-function renderV2DashboardPage({ runtimeOrigin }) {
+async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}) {
   const origin = normalize(runtimeOrigin);
   const repository = "marushu/vtdd-v2-p";
   const encodedRepository = encodeURIComponent(repository);
+  const latestDeployEvent = await retrieveLatestDashboardEvent({
+    store: dashboardEventStore,
+    kind: "github_actions_workflow_run",
+    repository,
+    workflowName: "deploy-production"
+  });
   const surfaces = [
     {
       title: "Status page",
@@ -5062,6 +5364,10 @@ function renderV2DashboardPage({ runtimeOrigin }) {
     .lane, details { border: 1px solid var(--border); border-radius: 14px; padding: 12px; background: var(--panel-strong); }
     .lane-title { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
     .pill { display: inline-flex; align-items: center; border: 1px solid var(--border); border-radius: 999px; padding: 3px 8px; color: var(--text); background: var(--soft); font-size: 12px; white-space: nowrap; }
+    .pill.success { border-color: #7fb797; background: #e7f5ec; color: #145c34; }
+    .pill.danger { border-color: #d69b9b; background: #fff0f0; color: #8a1f1f; }
+    .deploy-event { border: 1px solid var(--border); border-radius: 12px; padding: 10px; margin: 10px 0; background: var(--soft); }
+    .deploy-event p { margin-bottom: 6px; font-size: 13px; line-height: 1.45; }
     .quick-actions, .surface-list { display: grid; gap: 8px; }
     .quick-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .quick-actions a, .surface-list a { display: inline-flex; align-items: center; justify-content: center; min-height: 36px; border: 1px solid var(--border); border-radius: 10px; padding: 7px 9px; color: var(--text); text-decoration: none; background: var(--soft); font-weight: 750; font-size: 13px; text-align: center; }
@@ -5182,6 +5488,7 @@ function renderV2DashboardPage({ runtimeOrigin }) {
         <div class="lane">
           <div class="lane-title"><h3>進行中 execution</h3><span class="pill">runtime truth</span></div>
           <p>進捗は GitHub Actions / VPS runner status / execution progress route から読みます。</p>
+          ${renderDashboardDeployEvent(latestDeployEvent)}
           <div class="quick-actions">
             ${cockpitActions.map((action) => `<a href="${escapeDashboardHtml(action.href)}">${escapeDashboardHtml(action.label)}</a>`).join("")}
           </div>

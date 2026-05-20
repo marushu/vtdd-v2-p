@@ -36,6 +36,32 @@ const gatewayAuthEnv = {
   VTDD_GATEWAY_BEARER_TOKEN: "test-token"
 };
 
+function createInMemoryDashboardEventStore() {
+  const events = new Map();
+  return {
+    async put(event) {
+      events.set(event.id, event);
+      return event;
+    },
+    async latest(filter = {}) {
+      const matches = [...events.values()].filter((event) => {
+        if (filter.kind && event.kind !== filter.kind) {
+          return false;
+        }
+        if (filter.repository && event.repository !== filter.repository) {
+          return false;
+        }
+        if (filter.workflowName && event.workflowName !== filter.workflowName) {
+          return false;
+        }
+        return true;
+      });
+      matches.sort((left, right) => String(right.updatedAt).localeCompare(String(left.updatedAt)));
+      return matches[0] ?? null;
+    }
+  };
+}
+
 const passkeyAdapter = {
   async generateRegistrationOptions(input) {
     return { challenge: input.challenge };
@@ -190,6 +216,80 @@ test("worker serves v2 dashboard without exposing secrets", async () => {
   assert.equal(aliasBody.includes("dashboard main chat"), true);
   assert.equal(aliasBody.includes("管理メニュー"), true);
   assert.equal(aliasBody.includes("自動更新なし"), true);
+});
+
+test("worker ingests GitHub Actions deploy completion event and shows it on dashboard", async () => {
+  const store = createInMemoryDashboardEventStore();
+  const eventResponse = await worker.fetch(
+    new Request("https://example.com/v2/events/github-actions", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        repository: "marushu/vtdd-v2-p",
+        workflowName: "deploy-production",
+        runId: "26133044458",
+        runUrl: "https://github.com/marushu/vtdd-v2-p/actions/runs/26133044458",
+        status: "completed",
+        conclusion: "success",
+        headSha: "ef55709c4f52b54f436417acc239ec03a0c999fd",
+        headBranch: "main",
+        displayTitle: "deploy-production",
+        updatedAt: "2026-05-20T00:10:01Z",
+        approvalGrantId: "approval:must-not-persist",
+        token: "secret-must-not-persist"
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      DASHBOARD_EVENT_STORE: store
+    }
+  );
+
+  assert.equal(eventResponse.status, 202);
+  const eventBody = await eventResponse.json();
+  assert.equal(eventBody.ok, true);
+  assert.equal(eventBody.event.runId, "26133044458");
+  assert.equal("approvalGrantId" in eventBody.event, false);
+  assert.equal("token" in eventBody.event, false);
+
+  const dashboardResponse = await worker.fetch(new Request("https://example.com/dashboard"), {
+    DASHBOARD_EVENT_STORE: store
+  });
+  assert.equal(dashboardResponse.status, 200);
+  const dashboardBody = await dashboardResponse.text();
+  assert.equal(dashboardBody.includes("最新 deploy"), true);
+  assert.equal(dashboardBody.includes("success"), true);
+  assert.equal(dashboardBody.includes("ef55709"), true);
+  assert.equal(
+    dashboardBody.includes("https://github.com/marushu/vtdd-v2-p/actions/runs/26133044458"),
+    true
+  );
+  assert.equal(dashboardBody.includes("approval:must-not-persist"), false);
+  assert.equal(dashboardBody.includes("secret-must-not-persist"), false);
+  assert.equal(dashboardBody.includes("setInterval("), false);
+  assert.equal(dashboardBody.includes("fetch("), false);
+});
+
+test("worker rejects GitHub Actions deploy completion event without machine auth", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/events/github-actions", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        repository: "marushu/vtdd-v2-p",
+        workflowName: "deploy-production",
+        runId: "26133044458",
+        status: "completed",
+        conclusion: "success"
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      DASHBOARD_EVENT_STORE: createInMemoryDashboardEventStore()
+    }
+  );
+
+  assert.equal(response.status, 401);
 });
 
 test("worker setup recovery page opens without Action auth and defaults to VTDD repo", async () => {
