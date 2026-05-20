@@ -182,6 +182,17 @@ async function executeVpsRunnerExecution({
   });
 
   try {
+    if (isDashboardChatTriageGoal(payload.codexGoal)) {
+      return executeVpsDashboardChatTriage({
+        githubFetch,
+        payload,
+        notification,
+        workRoot,
+        env,
+        issue
+      });
+    }
+
     if (isPostMergeVerificationGoal(payload.codexGoal)) {
       return executeVpsPostMergeVerification({
         githubFetch,
@@ -477,6 +488,121 @@ async function executeVpsPostMergeVerification({
       ? `Post-merge verification completed for ${payload.repository}#${result.pullRequest.number}.`
       : result.reason
   };
+}
+
+async function executeVpsDashboardChatTriage({ githubFetch, payload, notification, workRoot, env, issue }) {
+  await assertVpsRunnerNotCanceled({ githubFetch, payload, checkpoint: "before_triage_clone", notification });
+  const workspace = path.join(workRoot, safePathSegment(payload.repository), payload.executionId);
+  await fs.mkdir(path.dirname(workspace), { recursive: true });
+  await runCommand("rm", ["-rf", workspace], { env });
+  await runTrackedVpsCommand("gh", ["repo", "clone", payload.repository, workspace], {
+    env,
+    githubFetch,
+    payload,
+    notification,
+    currentStep: "dashboard_chat_repo_clone"
+  });
+  const preflight = await buildVpsRunnerPreflightReceipt({
+    workspace,
+    payload,
+    issue
+  });
+  await postVpsRunnerEvent({
+    githubFetch,
+    payload,
+    notification,
+    event: {
+      status: preflight.ok ? "running" : "blocked",
+      lastEvent: preflight.ok ? "context_preflight_completed" : "context_preflight_blocked",
+      currentStep: "context_preflight",
+      preflight
+    }
+  });
+  if (!preflight.ok) {
+    return {
+      ok: false,
+      reason:
+        preflight.reason ||
+        "VPS runner preflight receipt could not be created. Butler/owner decision is required before dashboard chat triage."
+    };
+  }
+  await assertVpsRunnerNotCanceled({ githubFetch, payload, checkpoint: "before_triage_codex", notification });
+  const prompt = buildDashboardChatTriagePrompt({ payload, issue, preflight });
+  const result = await runTrackedVpsCommand("codex", buildCodexExecArgs({ env: process.env }), {
+    cwd: workspace,
+    env: buildCodexExecutionEnv(process.env),
+    input: prompt,
+    maxBuffer: 1024 * 1024 * 12,
+    githubFetch,
+    payload,
+    notification,
+    currentStep: "dashboard_chat_triage"
+  });
+  await assertVpsRunnerNotCanceled({ githubFetch, payload, checkpoint: "after_triage_codex", notification });
+  const reply = summarizeDiagnosticText(result.stdout || result.stderr || "VPS Codex CLI completed dashboard chat triage.", 4000);
+  await postVpsRunnerEvent({
+    githubFetch,
+    payload,
+    notification,
+    event: {
+      status: "completed",
+      lastEvent: "dashboard_chat_triage_completed",
+      finalEvent: "dashboard_chat_triage_completed",
+      currentStep: "dashboard_chat_triage",
+      message: reply
+    }
+  });
+  return { ok: true, message: reply };
+}
+
+function buildDashboardChatTriagePrompt({ payload, issue = {}, preflight = null }) {
+  const handoff = payload?.handoff && typeof payload.handoff === "object" ? payload.handoff : {};
+  const ownerMessage = normalizeText(handoff.ownerMessage);
+  const repositoryInput = normalizeText(handoff.repositoryInput) || normalizeText(payload.repository);
+  return [
+    `You are VTDD Butler traffic control running on the user's VPS Codex CLI for ${payload.repository}.`,
+    "",
+    "Owner dashboard message:",
+    ownerMessage || "(missing dashboard owner message)",
+    "",
+    "Resolved target:",
+    `- repositoryInput: ${repositoryInput || "missing"}`,
+    `- repository: ${payload.repository}`,
+    `- queue issue: #${payload.issueNumber}`,
+    `- dashboardThreadId: ${normalizeText(handoff.dashboardThreadId) || "missing"}`,
+    "",
+    "Custom GPT parity requirement:",
+    "- Preserve every owner-facing capability that the Custom GPT Butler had.",
+    "- Treat the top dashboard chat as the natural-language Butler entrypoint, not as an open_pr form.",
+    "- Resolve repository/nickname intent before acting. If the target is ambiguous, ask one short Japanese confirmation question.",
+    "- Read GitHub runtime truth when the owner asks about Issues, PRs, checks, Actions, deploys, reviews, or remaining work.",
+    "- Use repository nickname semantics: no default repository, unresolved target blocks execution, ambiguous nickname blocks execution.",
+    "- Triage broad owner input into: answer from runtime truth, Issue split proposal, existing Issue linkage, bounded VPS execution handoff, approval URL needed, RAG candidate, or blocker.",
+    "- If Issue creation/splitting is needed, propose concrete Japanese Issue titles/bodies and say what approval/GO is needed; do not silently create or close Issues.",
+    "- If implementation is needed, name the target Issue/scope and required GO/passkey boundary before any execution.",
+    "- If deploy, merge, credential, permission, repository settings, destructive cleanup, or Issue close is requested, return the needed governed approval boundary instead of doing it.",
+    "- Never invent VPS replies. Return only what you can justify from repo/runtime truth and this dashboard message.",
+    "",
+    "Available local context:",
+    "- You are inside a fresh clone of the target repository.",
+    "- You may inspect files and use GitHub CLI/API if available to read runtime truth.",
+    "- Do not edit files, commit, push, create PRs, merge, deploy, mutate secrets, mutate permissions, or close Issues in dashboard_chat_triage.",
+    "",
+    "Context preflight receipt:",
+    formatVpsRunnerPreflightReceipt(preflight),
+    "",
+    "Queue Issue context:",
+    `Title: ${normalizeText(issue.title) || "(missing issue title)"}`,
+    "",
+    normalizeText(issue.body) || "(missing issue body)",
+    "",
+    "Reply format:",
+    "- Japanese first.",
+    "- Be concise but operational.",
+    "- Include the classification: answer / issue_split_proposal / existing_issue_link / execution_handoff_needed / approval_needed / rag_candidate / blocker.",
+    "- Include next action and any missing information.",
+    "- If you mention a GitHub item, include a clickable URL if known."
+  ].join("\n");
 }
 
 async function collectVpsPostMergeVerification({ githubFetch, payload, repositoryPolicies, env }) {
@@ -1214,6 +1340,10 @@ function formatVpsRunnerPreflightReceipt(preflight) {
 
 function isPrRevisionGoal(goal) {
   return ["revise_pr", "respond_to_review"].includes(normalizeText(goal));
+}
+
+function isDashboardChatTriageGoal(goal) {
+  return normalizeText(goal) === "dashboard_chat_triage";
 }
 
 function isPostMergeVerificationGoal(goal) {
@@ -2501,6 +2631,7 @@ export {
   buildFreshExecutionBranchCandidates,
   buildVpsRunnerCompletionFinalEvent,
   buildCodexExecutionPrompt,
+  buildDashboardChatTriagePrompt,
   buildCodexExecArgs,
   buildVpsRunnerPreflightReceipt,
   buildGuardedPullRequestBody,

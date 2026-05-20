@@ -299,6 +299,7 @@ export default {
         200,
         await renderV2DashboardPage({
           runtimeOrigin: url.origin,
+          url,
           dashboardEventStore: resolveDashboardEventStore(env)
         })
       );
@@ -3322,8 +3323,27 @@ async function handleDashboardChatMessageRequest(request, env) {
 
   const payload = await readJson(request);
   const wantsVpsRunnerHandoff = shouldDispatchDashboardChatToVpsRunner(payload);
+  const repositoryResolution = await resolveDashboardChatRepository({ payload, env });
+  if (!repositoryResolution.ok) {
+    return json(repositoryResolution.status ?? 422, {
+      ok: false,
+      error: repositoryResolution.error,
+      reason: repositoryResolution.reason,
+      issues: repositoryResolution.issues ?? [],
+      candidates: repositoryResolution.candidates ?? []
+    });
+  }
 
-  const prepared = buildDashboardChatTurn(payload, { wantsVpsRunnerHandoff });
+  const prepared = buildDashboardChatTurn(
+    {
+      ...payload,
+      repository: repositoryResolution.repository,
+      relatedIssue:
+        normalizePositiveInteger(payload?.relatedIssue || payload?.issueNumber) ||
+        extractIssueNumberFromDashboardChatText(payload?.text || payload?.message || payload?.body)
+    },
+    { wantsVpsRunnerHandoff }
+  );
   if (!prepared.ok) {
     return json(422, {
       ok: false,
@@ -3344,7 +3364,7 @@ async function handleDashboardChatMessageRequest(request, env) {
   let execution = null;
   let messagesToStore = prepared.messages;
   if (wantsVpsRunnerHandoff) {
-    const handoffPayload = buildDashboardVpsRunnerHandoffPayload({ payload, prepared });
+    const handoffPayload = buildDashboardVpsRunnerHandoffPayload({ payload, prepared, env });
     if (!handoffPayload.ok) {
       return json(422, {
         ok: false,
@@ -5012,6 +5032,58 @@ function resolveDashboardChatRoomStub(env, threadId) {
   return null;
 }
 
+async function resolveDashboardChatRepository({ payload, env }) {
+  const input = normalizeObject(payload);
+  const rawRepositoryInput =
+    normalizeDashboardEventText(input.repository || input.repositoryInput || input.repository_input) ||
+    extractRepositoryTokenFromDashboardChatText(input.text || input.message || input.body);
+  const canonicalRepository = normalizeCanonicalRepositoryInput(rawRepositoryInput);
+  if (canonicalRepository) {
+    return {
+      ok: true,
+      repository: canonicalRepository,
+      input: rawRepositoryInput,
+      via: "canonical"
+    };
+  }
+  if (!rawRepositoryInput) {
+    return {
+      ok: false,
+      status: 422,
+      error: "repository_required",
+      reason: "repository or repository nickname is required before dashboard can hand off to VPS Codex CLI",
+      issues: ["top chat must include a repository target or open the dashboard with repositoryInput"]
+    };
+  }
+
+  const provider = resolveMemoryProvider(env);
+  const registryResult = await safeRetrieveStoredAliasRegistry(provider);
+  const aliasRegistry = registryResult.ok ? registryResult.aliasRegistry : [];
+  const resolved = resolveRepositoryTarget({
+    input: rawRepositoryInput,
+    mode: TaskMode.EXECUTION,
+    aliasRegistry
+  });
+  if (resolved.resolved) {
+    return {
+      ok: true,
+      repository: resolved.repository,
+      input: rawRepositoryInput,
+      via: resolved.via || "alias"
+    };
+  }
+  return {
+    ok: false,
+    status: resolved.ambiguous ? 409 : 422,
+    error: resolved.ambiguous ? "repository_nickname_ambiguous" : "repository_unresolved",
+    reason: resolved.reason || "repository could not be resolved",
+    issues: registryResult.ok
+      ? ["repository nickname could not be resolved"]
+      : [registryResult.reason || "repository nickname registry could not be read"],
+    candidates: resolved.candidates || []
+  };
+}
+
 async function notifyDashboardChatRoom({ env, threadId, messages }) {
   const room = resolveDashboardChatRoomStub(env, threadId);
   if (!room || typeof room.fetch !== "function") {
@@ -5030,6 +5102,29 @@ async function notifyDashboardChatRoom({ env, threadId, messages }) {
   } catch {
     return false;
   }
+}
+
+function extractRepositoryTokenFromDashboardChatText(value) {
+  const text = sanitizeDashboardChatText(value);
+  if (!text) {
+    return "";
+  }
+  const canonicalMatch = text.match(/^[\s　]*([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)/);
+  if (canonicalMatch) {
+    return canonicalMatch[1];
+  }
+  const nicknameMatch = text.match(/^[\s　]*([^\s　#「『【\\/:]+)(?:\s+|[　]*の|[　]*を|[　]*で|[　]*に)/u);
+  return normalizeDashboardEventText(nicknameMatch?.[1]);
+}
+
+function extractIssueNumberFromDashboardChatText(value) {
+  const text = sanitizeDashboardChatText(value);
+  const match = text.match(/#([1-9][0-9]*)/);
+  return normalizePositiveInteger(match?.[1]);
+}
+
+function normalizeDashboardRepositoryInput(value) {
+  return normalizeDashboardEventText(value).toLowerCase();
 }
 
 function createD1DashboardEventStore(d1) {
@@ -5350,20 +5445,22 @@ function shouldDispatchDashboardChatToVpsRunner(payload) {
   );
 }
 
-function buildDashboardVpsRunnerHandoffPayload({ payload, prepared }) {
+function buildDashboardVpsRunnerHandoffPayload({ payload, prepared, env }) {
   const input = normalizeObject(payload);
   const issueNumber =
-    normalizePositiveInteger(input.issueNumber || input.relatedIssue) || prepared.relatedIssue;
+    normalizePositiveInteger(input.issueNumber || input.relatedIssue) ||
+    prepared.relatedIssue ||
+    normalizePositiveInteger(env?.VTDD_DASHBOARD_CHAT_TRIAGE_ISSUE_NUMBER);
   if (!issueNumber) {
     return {
       ok: false,
       error: "dashboard_vps_runner_issue_required",
-      reason: "issueNumber is required before dashboard can hand off a message to VPS Codex CLI",
-      issues: ["dashboard VPS runner handoff requires a GitHub Issue number"]
+      reason: "issueNumber or VTDD_DASHBOARD_CHAT_TRIAGE_ISSUE_NUMBER is required before dashboard can hand off a message to VPS Codex CLI",
+      issues: ["dashboard VPS runner handoff requires a GitHub Issue queue target"]
     };
   }
 
-  const codexGoal = normalizeDashboardEventText(input.codexGoal || input.goal || "open_pr").toLowerCase();
+  const codexGoal = normalizeDashboardEventText(input.codexGoal || input.goal || "dashboard_chat_triage").toLowerCase();
   const branch =
     normalizeDashboardEventText(input.branch || input.targetBranch) ||
     `codex/issue-${issueNumber}-dashboard-vps-chat`;
@@ -5387,6 +5484,10 @@ function buildDashboardVpsRunnerHandoffPayload({ payload, prepared }) {
           approvalScopeMatched: true,
           relatedIssue: issueNumber,
           summary,
+          ownerMessage: sanitizeDashboardChatText(input.text || input.message || input.body),
+          repositoryInput: normalizeDashboardRepositoryInput(
+            input.repositoryInput || input.repository_input || input.repository || prepared.repository
+          ),
           dashboardThreadId: prepared.threadId
         }
       },
@@ -7254,17 +7355,20 @@ function uniqueTextList(value) {
   return [...new Set(normalizeTextList(value))];
 }
 
-async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}) {
+async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore } = {}) {
   const origin = normalize(runtimeOrigin);
-  const repository = "marushu/vtdd-v2-p";
-  const encodedRepository = encodeURIComponent(repository);
-  const dashboardChatIssueNumber = 450;
-  const chatThreadId = `dashboard-main-${repository.replace("/", "-")}`;
+  const repositoryInput = normalizeDashboardRepositoryInput(
+    url?.searchParams?.get("repositoryInput") || url?.searchParams?.get("repository")
+  );
+  const dashboardIssueNumber = normalizePositiveInteger(url?.searchParams?.get("issueNumber"));
+  const dashboardTargetLabel = repositoryInput || "repo/nickname 未指定";
+  const encodedRepository = encodeURIComponent(repositoryInput);
+  const chatThreadId = `dashboard-main-${(repositoryInput || "unresolved").replace(/[^a-z0-9_.-]+/gi, "-")}`;
   const socketOrigin = origin.replace(/^http/i, "ws");
   const latestDeployEvent = await retrieveLatestDashboardEvent({
     store: dashboardEventStore,
     kind: "github_actions_workflow_run",
-    repository,
+    repository: normalizeCanonicalRepositoryInput(repositoryInput),
     workflowName: "deploy-production"
   });
   const surfaces = [
@@ -7486,7 +7590,7 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
           <label class="round-button menu-open" for="mobile-menu-toggle" aria-label="管理メニューを開く">≡</label>
           <div class="thread-title">
             <h1>VTDD Butler</h1>
-            <span>${escapeDashboardHtml(repository)} ・ dashboard main chat</span>
+            <span>${escapeDashboardHtml(dashboardTargetLabel)} ・ dashboard main chat</span>
           </div>
         </div>
         <div class="top-right">
@@ -7538,9 +7642,8 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
           <p>はい。私は v2 の Butler として、Issue 駆動・GitHub runtime truth・VPS runner・Gemini reviewer・RAG・passkey 境界を扱います。</p>
           <p>この画面は会話を主役にするための chat-first runtime です。管理画面は右のサイドバーへ退避しました。</p>
           <ul>
-            <li>関連 repo: <code>${escapeDashboardHtml(repository)}</code></li>
-            <li>Issue 候補: #433 の継続スライス</li>
-            <li>会話: この画面から送信すると、同じ thread に Butler 返信が残ります</li>
+            <li>関連 repo/nickname: <code>${escapeDashboardHtml(dashboardTargetLabel)}</code></li>
+            <li>会話: この画面から送信すると、VPS Codex CLI が repo 解決・Issue/PR/RAG/進捗/承認境界を交通整理します</li>
           </ul>
         </article>
         <article class="bubble owner">
@@ -7549,13 +7652,13 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
         <article class="bubble">
           <strong>Butler</strong>
           <p>その方針で進めます。中央はチャットだけ、状態確認・進捗・RAG・workflow・prototype cleanup の扱いはサイドバーのメニューから必要な時だけ開きます。</p>
-          <p>この dashboard からの送信は Issue #${dashboardChatIssueNumber} の VPS Codex CLI queue に渡します。返信として表示するのは runner から戻った event post だけです。</p>
+          <p>この dashboard からの送信は VPS Codex CLI の dashboard chat triage queue に渡します。返信として表示するのは runner から戻った event post だけです。</p>
           <span class="connection-note">接続済み: WebSocket で runner event post を待ちます</span>
         </article>
 
       </div>
 
-      <form class="composer" id="butler-chat-form" aria-label="Butler composer" data-endpoint="${escapeDashboardHtml(origin)}/v2/dashboard/chat/messages" data-thread-endpoint="${escapeDashboardHtml(origin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}" data-socket-endpoint="${escapeDashboardHtml(socketOrigin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}/ws" data-thread-id="${escapeDashboardHtml(chatThreadId)}" data-repository="${escapeDashboardHtml(repository)}" data-issue-number="${dashboardChatIssueNumber}" data-dispatch-to-vps-runner="true" data-codex-goal="open_pr">
+      <form class="composer" id="butler-chat-form" aria-label="Butler composer" data-endpoint="${escapeDashboardHtml(origin)}/v2/dashboard/chat/messages" data-thread-endpoint="${escapeDashboardHtml(origin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}" data-socket-endpoint="${escapeDashboardHtml(socketOrigin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}/ws" data-thread-id="${escapeDashboardHtml(chatThreadId)}" data-repository-input="${escapeDashboardHtml(repositoryInput)}" data-issue-number="${dashboardIssueNumber || ""}" data-dispatch-to-vps-runner="true" data-codex-goal="dashboard_chat_triage">
         <div class="composer-box">
           <textarea id="butler-message" name="text" placeholder="Butler V2 にメッセージ..." aria-label="Butler V2 にメッセージ"></textarea>
           <button class="send-button" type="submit" aria-label="Butler に送信">↑</button>
@@ -7577,13 +7680,13 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
 
         <div class="lane">
           <div class="lane-title"><h3>関連 repo</h3><span class="pill">resolved</span></div>
-          <p><strong>${escapeDashboardHtml(repository)}</strong></p>
+          <p><strong>${escapeDashboardHtml(dashboardTargetLabel)}</strong></p>
           <p class="muted">nickname / startup preflight / GitHub runtime truth は既存 v2 route で確認します。</p>
         </div>
 
         <div class="lane">
           <div class="lane-title"><h3>Issue 候補</h3><span class="pill">draft</span></div>
-          <p>会話入口の UI は Issue #433 として固定済み。本物の双方向チャット、音声 overlay、ファイル upload は別 Issue です。</p>
+          <p>トップチャットは Custom GPT 相当の自然文入口です。repo/nickname 解決、Issue/PR/RAG/進捗/承認境界を VPS Codex CLI に交通整理させます。</p>
         </div>
 
         <div class="lane">
@@ -7628,10 +7731,10 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
       const threadEndpoint = form.dataset.threadEndpoint;
       const socketEndpoint = form.dataset.socketEndpoint;
       const threadId = form.dataset.threadId;
-      const repository = form.dataset.repository;
+      const repositoryInput = form.dataset.repositoryInput;
       const issueNumber = Number.parseInt(form.dataset.issueNumber || "", 10);
       const dispatchToVpsRunner = form.dataset.dispatchToVpsRunner === "true";
-      const codexGoal = form.dataset.codexGoal || "open_pr";
+      const codexGoal = form.dataset.codexGoal || "dashboard_chat_triage";
       const initialMarkup = log.innerHTML;
 
       function updateComposerReserve() {
@@ -7765,7 +7868,7 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
             credentials: "same-origin",
             body: JSON.stringify({
               threadId,
-              repository,
+              repositoryInput,
               text,
               issueNumber,
               relatedIssue: issueNumber,

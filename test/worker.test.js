@@ -397,9 +397,9 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("overflow: hidden"), true);
   assert.equal(body.includes("grid-template-columns: minmax(0, 1fr) auto"), true);
   assert.equal(body.includes("WebSocket"), true);
-  assert.equal(body.includes("Issue #433"), true);
   assert.equal(body.includes("接続済み: WebSocket で runner event post を待ちます"), true);
-  assert.equal(body.includes("Issue #450 の VPS Codex CLI queue に渡します"), true);
+  assert.equal(body.includes("repo/nickname 未指定"), true);
+  assert.equal(body.includes("dashboard chat triage queue に渡します"), true);
   assert.equal(body.includes("返信として表示するのは runner から戻った event post だけです"), true);
   assert.equal(body.includes("deploy 用 passkey URL"), false);
   assert.equal(body.includes("vtdd-v3-orchestrator.polished-tree-da7c.workers.dev"), false);
@@ -411,10 +411,11 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes('aria-hidden="true">＋</span>'), false);
   assert.equal(body.includes('aria-hidden="true">♪</span>'), false);
   assert.equal(body.includes("/v2/dashboard/chat/messages"), true);
-  assert.equal(body.includes('data-thread-endpoint="https://example.com/v2/dashboard/chat/dashboard-main-marushu-vtdd-v2-p"'), true);
-  assert.equal(body.includes('data-socket-endpoint="wss://example.com/v2/dashboard/chat/dashboard-main-marushu-vtdd-v2-p/ws"'), true);
+  assert.equal(body.includes('data-thread-endpoint="https://example.com/v2/dashboard/chat/dashboard-main-unresolved"'), true);
+  assert.equal(body.includes('data-socket-endpoint="wss://example.com/v2/dashboard/chat/dashboard-main-unresolved/ws"'), true);
   assert.equal(body.includes('data-dispatch-to-vps-runner="true"'), true);
-  assert.equal(body.includes('data-issue-number="450"'), true);
+  assert.equal(body.includes('data-issue-number=""'), true);
+  assert.equal(body.includes('data-codex-goal="dashboard_chat_triage"'), true);
   assert.equal(body.includes('executorTransport: dispatchToVpsRunner ? "vps_runner" : undefined'), true);
   assert.equal(body.includes("new WebSocket(socketEndpoint)"), true);
   assert.equal(body.includes("VPS Codex CLI の runner event post を待っています"), true);
@@ -439,7 +440,7 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("Butler V2 にメッセージ"), true);
   assert.equal(body.includes("状態確認"), true);
   assert.equal(body.includes(">通知</a>"), true);
-  assert.equal(body.includes("/dashboard/github?repository=marushu%2Fvtdd-v2-p"), true);
+  assert.equal(body.includes("/dashboard/github?repository=marushu%2Fvtdd-v2-p"), false);
   assert.equal(body.includes("/dashboard/notifications"), true);
   assert.equal(body.includes(">通知センター</a>"), true);
   assert.equal(body.includes("include=open_prs"), false);
@@ -448,16 +449,13 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("setInterval("), false);
   assert.equal(body.includes("setTimeout("), false);
   assert.equal(body.includes("fetch("), true);
-  assert.equal(
-    body.includes("/v2/approval/passkey/operator?repositoryInput=marushu%2Fvtdd-v2-p"),
-    true
-  );
+  assert.equal(body.includes("repositoryInput=marushu%2Fvtdd-v2-p"), false);
   assert.equal(body.includes("/status"), true);
-  assert.equal(body.includes("/dashboard/preflight?repository=marushu%2Fvtdd-v2-p"), true);
-  assert.equal(body.includes("/dashboard/progress?repository=marushu%2Fvtdd-v2-p"), true);
-  assert.equal(body.includes("/dashboard/vps-runner?repository=marushu%2Fvtdd-v2-p"), true);
-  assert.equal(body.includes("/dashboard/memory?repository=marushu%2Fvtdd-v2-p"), true);
-  assert.equal(body.includes("/dashboard/self-parity?repository=marushu%2Fvtdd-v2-p"), true);
+  assert.equal(body.includes("/dashboard/preflight?repository=marushu%2Fvtdd-v2-p"), false);
+  assert.equal(body.includes("/dashboard/progress?repository=marushu%2Fvtdd-v2-p"), false);
+  assert.equal(body.includes("/dashboard/vps-runner?repository=marushu%2Fvtdd-v2-p"), false);
+  assert.equal(body.includes("/dashboard/memory?repository=marushu%2Fvtdd-v2-p"), false);
+  assert.equal(body.includes("/dashboard/self-parity?repository=marushu%2Fvtdd-v2-p"), false);
   assert.equal(body.includes("/v2/retrieve/startup-preflight?repository=marushu%2Fvtdd-v2-p"), false);
   assert.equal(body.includes("/v2/action/progress?repository=marushu%2Fvtdd-v2-p"), false);
   assert.equal(body.includes("/v2/action/vps-runner-status?repository=marushu%2Fvtdd-v2-p"), false);
@@ -585,7 +583,7 @@ test("worker dispatches authenticated dashboard chat handoff to VPS runner queue
         repository: "marushu/vtdd-v2-p",
         issueNumber: 450,
         dispatchToVpsRunner: true,
-        codexGoal: "open_pr",
+        codexGoal: "dashboard_chat_triage",
         branch: "codex/issue-450-dashboard-vps-chat",
         text: "VPS Codex CLI とこの dashboard thread で会話したい"
       })
@@ -615,6 +613,7 @@ test("worker dispatches authenticated dashboard chat handoff to VPS runner queue
   assert.equal(body.ok, true);
   assert.equal(body.execution.transport, "vps_runner");
   assert.equal(body.execution.issueNumber, 450);
+  assert.equal(body.execution.codexGoal, "dashboard_chat_triage");
   assert.equal(body.execution.branch, "codex/issue-450-dashboard-vps-chat");
   assert.equal(body.execution.queueCommentId, 45001);
   assert.equal(body.messages.length, 2);
@@ -624,6 +623,8 @@ test("worker dispatches authenticated dashboard chat handoff to VPS runner queue
   const queueBody = JSON.parse(calls[0].init.body).body;
   assert.equal(queueBody.includes("vtdd:vps-runner-execution:"), true);
   assert.equal(queueBody.includes('"transport": "vps_runner"'), true);
+  assert.equal(queueBody.includes('"codexGoal": "dashboard_chat_triage"'), true);
+  assert.equal(queueBody.includes('"ownerMessage": "VPS Codex CLI とこの dashboard thread で会話したい"'), true);
   assert.equal(queueBody.includes('"dashboardThreadId": "dashboard-main-marushu-vtdd-v2-p"'), true);
 
   const retrieveResponse = await worker.fetch(
@@ -661,6 +662,18 @@ test("worker allows dashboard passkey session to hand off chat to VPS runner que
     tags: ["passkey_grant", "passkey_approval", "verified"],
     createdAt: "2026-05-20T00:00:00.000Z"
   });
+  await provider.store({
+    id: "alias_registry:marushu/vtdd-v2-p",
+    type: MemoryRecordType.ALIAS_REGISTRY,
+    content: {
+      canonicalRepo: "marushu/vtdd-v2-p",
+      aliases: ["ぶい", "vtdd"]
+    },
+    metadata: { source: "test" },
+    priority: 60,
+    tags: ["alias_registry", "marushu/vtdd-v2-p"],
+    createdAt: "2026-05-20T00:00:00.000Z"
+  });
 
   const store = createInMemoryDashboardChatStore();
   const calls = [];
@@ -673,19 +686,17 @@ test("worker allows dashboard passkey session to hand off chat to VPS runner que
       },
       body: JSON.stringify({
         threadId: "dashboard-main-marushu-vtdd-v2-p",
-        repository: "marushu/vtdd-v2-p",
-        issueNumber: 450,
-        relatedIssue: 450,
+        repositoryInput: "ぶい",
         dispatchToVpsRunner: true,
         executorTransport: "vps_runner",
-        codexGoal: "open_pr",
-        text: "dashboard から VPS Codex CLI に投げる"
+        text: "ぶい #450 の残り Issue と PR を確認して交通整理して"
       })
     }),
     {
       MEMORY_PROVIDER: provider,
       DASHBOARD_CHAT_STORE: store,
       GITHUB_APP_INSTALLATION_TOKEN: "ghs_dashboard_passkey_vps",
+      VTDD_DASHBOARD_CHAT_TRIAGE_ISSUE_NUMBER: "450",
       GITHUB_API_FETCH: async (url, init) => {
         calls.push({ url, init });
         return new Response(
@@ -703,10 +714,15 @@ test("worker allows dashboard passkey session to hand off chat to VPS runner que
   const body = await response.json();
   assert.equal(body.ok, true);
   assert.equal(body.execution.transport, "vps_runner");
+  assert.equal(body.execution.targetRepository, "marushu/vtdd-v2-p");
+  assert.equal(body.execution.issueNumber, 450);
+  assert.equal(body.execution.codexGoal, "dashboard_chat_triage");
   assert.equal(body.messages[1].role, "system");
   assert.equal(calls.length, 1);
   const queueBody = JSON.parse(calls[0].init.body).body;
   assert.equal(queueBody.includes('"dashboardThreadId": "dashboard-main-marushu-vtdd-v2-p"'), true);
+  assert.equal(queueBody.includes('"repositoryInput": "ぶい"'), true);
+  assert.equal(queueBody.includes('"ownerMessage": "ぶい #450 の残り Issue と PR を確認して交通整理して"'), true);
 });
 
 test("worker rejects unauthenticated dashboard chat VPS runner dispatch", async () => {

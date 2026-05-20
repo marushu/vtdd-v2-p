@@ -76,6 +76,7 @@ export const VpsRunnerCancelMode = Object.freeze({
 });
 
 export const RemoteCodexDispatchGoal = Object.freeze({
+  DASHBOARD_CHAT_TRIAGE: "dashboard_chat_triage",
   OPEN_PR: "open_pr",
   REVISE_PR: "revise_pr",
   RESPOND_TO_REVIEW: "respond_to_review",
@@ -150,7 +151,7 @@ export function createRemoteCodexExecutionRequest(input = {}) {
       relatedIssue: issueNumber,
       issueTraceable: issueNumber > 0
     },
-    preflightPolicy: buildExecutionPreflightPolicy(),
+    preflightPolicy: buildExecutionPreflightPolicy({ codexGoal }),
     handoffRequired: continuationContext.requiresHandoff === true,
     revisionTarget,
     handoff:
@@ -160,6 +161,8 @@ export function createRemoteCodexExecutionRequest(input = {}) {
             approvalScopeMatched: handoff.approvalScopeMatched === true,
             summary: normalizeText(handoff.summary),
             relatedIssue: normalizePositiveInteger(handoff.relatedIssue),
+            ownerMessage: normalizeText(handoff.ownerMessage),
+            repositoryInput: normalizeText(handoff.repositoryInput),
             dashboardThreadId: normalizeText(handoff.dashboardThreadId),
             targetPullRequest: revisionTarget
           }
@@ -182,7 +185,7 @@ export function createRemoteCodexExecutionRequest(input = {}) {
   if (!request.codexGoal) {
     issues.push("codexGoal is required");
   } else if (!REMOTE_CODEX_DISPATCH_GOALS.has(request.codexGoal)) {
-    issues.push("codexGoal must be open_pr, revise_pr, respond_to_review, or post_merge_verify");
+    issues.push("codexGoal must be dashboard_chat_triage, open_pr, revise_pr, respond_to_review, or post_merge_verify");
   }
   if (!request.baseRef) {
     issues.push("baseRef is required");
@@ -1966,6 +1969,7 @@ function buildCodexCloudGitHubComment({ request }) {
 }
 
 function buildVpsRunnerGitHubQueueComment({ request }) {
+  const isDashboardChatTriage = request.codexGoal === RemoteCodexDispatchGoal.DASHBOARD_CHAT_TRIAGE;
   const payload = {
     executionId: request.executionId,
     transport: RemoteCodexExecutorTransport.VPS_RUNNER,
@@ -2010,16 +2014,26 @@ function buildVpsRunnerGitHubQueueComment({ request }) {
       : []),
     "- Canonical spec: this GitHub Issue",
     "- Runtime truth: current GitHub branch / diff / PR / review comments",
-    request.codexGoal === RemoteCodexDispatchGoal.POST_MERGE_VERIFY
-      ? "- Completion target: verify post-merge runtime truth and post GitHub-visible evidence"
-      : "- Completion target: create or update a pull request",
-    "- PR body requirement: Codex must inspect `docs/pr-template-model.md`, `scripts/render-pr-body.mjs`, and `scripts/validate-pr-body.mjs`; the VPS runner will validate and normalize the PR body again before create/update.",
-    "- Context preflight requirement: the VPS runner will automatically read `AGENTS.md`, `docs/butler/thread-independent-startup-contract.md`, the canonical Issue, and the PR body contract files, then generate a machine-readable preflight receipt before Codex starts editing.",
+    isDashboardChatTriage
+      ? "- Completion target: post a dashboard chat triage response to the same thread"
+      : request.codexGoal === RemoteCodexDispatchGoal.POST_MERGE_VERIFY
+        ? "- Completion target: verify post-merge runtime truth and post GitHub-visible evidence"
+        : "- Completion target: create or update a pull request",
+    ...(isDashboardChatTriage
+      ? [
+          "- PR body requirement: not applicable; dashboard chat triage must not create or update a PR.",
+          "- Context preflight requirement: the VPS runner will automatically read `AGENTS.md`, `docs/butler/thread-independent-startup-contract.md`, and the canonical Issue, then generate a machine-readable preflight receipt before Codex starts triage."
+        ]
+      : [
+          "- PR body requirement: Codex must inspect `docs/pr-template-model.md`, `scripts/render-pr-body.mjs`, and `scripts/validate-pr-body.mjs`; the VPS runner will validate and normalize the PR body again before create/update.",
+          "- Context preflight requirement: the VPS runner will automatically read `AGENTS.md`, `docs/butler/thread-independent-startup-contract.md`, the canonical Issue, and the PR body contract files, then generate a machine-readable preflight receipt before Codex starts editing.",
+          "- Required PR body markers: `## This PR satisfies Intent`, `## Satisfied Success Criteria`, `## Unsatisfied Success Criteria`, `## Verification Evidence`, `## Surface Update Checklist`."
+        ]),
     "- Missing preflight inputs do not authorize speculative implementation; the runner must ask Butler/owner to confirm the next action, then wait for a reissued bounded request.",
-    "- Required PR body markers: `## This PR satisfies Intent`, `## Satisfied Success Criteria`, `## Unsatisfied Success Criteria`, `## Verification Evidence`, `## Surface Update Checklist`.",
     "",
     "Rules:",
     "- Do not expand scope beyond the Issue.",
+    ...(isDashboardChatTriage ? ["- Do not edit files.", "- Do not commit.", "- Do not push.", "- Do not create or update PRs."] : []),
     "- Do not merge.",
     "- Do not deploy.",
     "- Preserve reviewer objections for Butler/human judgment.",
@@ -2032,17 +2046,22 @@ function buildVpsRunnerGitHubQueueComment({ request }) {
   return lines.join("\n");
 }
 
-function buildExecutionPreflightPolicy() {
-  return {
-    mode: "auto_receipt",
-    onMissingContract: "owner_decision_required",
-    requiredRepoFiles: [
-      "AGENTS.md",
-      "docs/butler/thread-independent-startup-contract.md",
+function buildExecutionPreflightPolicy({ codexGoal } = {}) {
+  const requiredRepoFiles = [
+    "AGENTS.md",
+    "docs/butler/thread-independent-startup-contract.md"
+  ];
+  if (codexGoal !== RemoteCodexDispatchGoal.DASHBOARD_CHAT_TRIAGE) {
+    requiredRepoFiles.push(
       "docs/pr-template-model.md",
       "scripts/render-pr-body.mjs",
       "scripts/validate-pr-body.mjs"
-    ]
+    );
+  }
+  return {
+    mode: "auto_receipt",
+    onMissingContract: "owner_decision_required",
+    requiredRepoFiles
   };
 }
 
