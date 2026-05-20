@@ -527,6 +527,8 @@ export function parseGeminiReviewComment(comment = {}) {
 
   const recommendedActionMatch = body.match(/^- Recommended action:\s*`([^`]+)`/m);
   const recommendedAction = normalizeText(recommendedActionMatch?.[1]).toLowerCase() || "manual_review";
+  const headShaMatch = body.match(/^- Head SHA:\s*`([^`]+)`/m);
+  const headSha = normalizeText(headShaMatch?.[1]) || null;
   const source = typeof comment === "object" && comment !== null ? comment : {};
   const createdAt = normalizeText(source.createdAt ?? source.created_at);
   const updatedAt = normalizeText(source.updatedAt ?? source.updated_at);
@@ -534,6 +536,7 @@ export function parseGeminiReviewComment(comment = {}) {
   return {
     reviewer: "gemini",
     recommendedAction,
+    ...(headSha ? { headSha } : {}),
     criticalFindings: extractFirstMarkdownListSection(body, ["### 重要指摘", "### Critical Findings"]),
     risks: extractFirstMarkdownListSection(body, ["### 残リスク", "### Risks"]),
     blocking:

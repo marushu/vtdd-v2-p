@@ -28901,6 +28901,7 @@ function normalizeReviewerSignalTruth(value) {
     canonicalReviewer: normalizeText5(input.canonicalReviewer) || null,
     reviewerStatus: normalizeText5(input.reviewerStatus) || null,
     recommendedAction: normalizeText5(input.recommendedAction) || null,
+    ...normalizeText5(input.reviewerHeadSha) ? { reviewerHeadSha: normalizeText5(input.reviewerHeadSha) } : {},
     vtddReviewerMarkerPresent: input.vtddReviewerMarkerPresent === true,
     githubFormalReview: {
       source: normalizeText5(formal.source) || "github_formal_review_objects",
@@ -28928,6 +28929,7 @@ function normalizeReviewerEvidence(value) {
   return {
     reviewer: normalizeText5(input.reviewer) || null,
     recommendedAction,
+    ...normalizeText5(input.headSha) ? { headSha: normalizeText5(input.headSha) } : {},
     url: normalizeText5(input.url) || null,
     createdAt: normalizeText5(input.createdAt) || null,
     updatedAt: normalizeText5(input.updatedAt) || null,
@@ -35017,6 +35019,7 @@ function parseCodexReviewFallbackComment(comment = {}) {
   }
   const status = extractBacktickedValue(body, "Status") || (body.includes("@codex review") ? CodexReviewFallbackStatus.REQUESTED : "");
   const recommendedAction = extractBacktickedValue(body, "Recommended action");
+  const headSha = extractBacktickedValue(body, "Head SHA");
   const blocker = extractBacktickedValue(body, "Blocker");
   return {
     reviewer: "codex",
@@ -35027,6 +35030,7 @@ function parseCodexReviewFallbackComment(comment = {}) {
       blocker
     }),
     recommendedAction: recommendedAction || null,
+    ...headSha ? { headSha } : {},
     blocker: blocker || null,
     body
   };
@@ -35185,12 +35189,15 @@ function parseGeminiReviewComment(comment = {}) {
   }
   const recommendedActionMatch = body.match(/^- Recommended action:\s*`([^`]+)`/m);
   const recommendedAction = normalizeText20(recommendedActionMatch?.[1]).toLowerCase() || "manual_review";
+  const headShaMatch = body.match(/^- Head SHA:\s*`([^`]+)`/m);
+  const headSha = normalizeText20(headShaMatch?.[1]) || null;
   const source = typeof comment === "object" && comment !== null ? comment : {};
   const createdAt = normalizeText20(source.createdAt ?? source.created_at);
   const updatedAt = normalizeText20(source.updatedAt ?? source.updated_at);
   return {
     reviewer: "gemini",
     recommendedAction,
+    ...headSha ? { headSha } : {},
     criticalFindings: extractFirstMarkdownListSection(body, ["### \u91CD\u8981\u6307\u6458", "### Critical Findings"]),
     risks: extractFirstMarkdownListSection(body, ["### \u6B8B\u30EA\u30B9\u30AF", "### Risks"]),
     blocking: recommendedAction === "request_changes" || recommendedAction === "manual_review",
@@ -35505,6 +35512,7 @@ function collectCodexFallbackSignals(pullRequest) {
     latestEvidence: latest?.status === "completed" ? {
       reviewer: "codex",
       recommendedAction: latest.recommendedAction || "manual_review",
+      ...latest.headSha ? { headSha: latest.headSha } : {},
       url: latest.url || null,
       createdAt: latest.createdAt || null,
       updatedAt: latest.updatedAt || null,
@@ -35527,6 +35535,7 @@ function buildReviewTimelineItem(comment) {
       reviewer: "gemini",
       status: gemini.recommendedAction,
       recommendedAction: gemini.recommendedAction,
+      ...gemini.headSha ? { headSha: gemini.headSha } : {},
       blocking: gemini.blocking === true,
       url: gemini.url || normalizeCommentUrl(comment),
       createdAt: gemini.createdAt || normalizeCommentCreatedAt(comment),
@@ -35543,6 +35552,7 @@ function buildReviewTimelineItem(comment) {
       reviewer: "codex",
       status: codex.status,
       recommendedAction: codex.recommendedAction || null,
+      ...codex.headSha ? { headSha: codex.headSha } : {},
       blocking: codex.blocking === true,
       url: normalizeCommentUrl(comment),
       createdAt: normalizeCommentCreatedAt(comment),
@@ -35707,6 +35717,7 @@ function buildReviewerSignalTruth({ reviewer, reviewerStatus, reviewerEvidence, 
     canonicalReviewer: vtddReviewerMarkerPresent ? reviewer : null,
     reviewerStatus,
     recommendedAction,
+    ...normalizeText5(reviewerEvidence?.headSha) ? { reviewerHeadSha: normalizeText5(reviewerEvidence?.headSha) } : {},
     vtddReviewerMarkerPresent,
     githubFormalReview: formalReviewTruth,
     mergeReviewTruth: {
@@ -35863,6 +35874,12 @@ function deny7(rule, reason) {
     reason
   };
 }
+
+// src/core/approve-auto-merge.js
+var ApproveAutoMergePolicyMode = Object.freeze({
+  MANUAL: "manual",
+  APPROVE_AUTO_MERGE: "approve_auto_merge"
+});
 
 // src/core/gemini-review-failure.js
 var GeminiReviewFailureKind = Object.freeze({

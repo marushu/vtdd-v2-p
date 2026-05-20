@@ -1,0 +1,99 @@
+name: approve-auto-merge
+
+on:
+  workflow_run:
+    workflows:
+      - guarded-autonomy-required-checks
+      - gemini-pr-review
+      - codex-pr-review-fallback
+    types:
+      - completed
+  pull_request_review:
+    types:
+      - submitted
+      - edited
+  issue_comment:
+    types:
+      - created
+      - edited
+  workflow_dispatch:
+    inputs:
+      target_pr_number:
+        description: "Target pull request number"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: read
+
+concurrency:
+  group: approve-auto-merge-${{ github.repository }}-${{ github.event.workflow_run.head_sha || github.event.pull_request.number || github.event.issue.number || github.event.inputs.target_pr_number || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  auto-merge:
+    runs-on: ubuntu-latest
+    env:
+      TARGET_PR_NUMBER: ${{ github.event.inputs.target_pr_number }}
+      VTDD_AUTO_MERGE_POLICY: ${{ vars.VTDD_AUTO_MERGE_POLICY || 'approve_auto_merge' }}
+      VTDD_AUTO_MERGE_REQUIRED_CHECKS: ${{ vars.VTDD_AUTO_MERGE_REQUIRED_CHECKS || 'guarded-policy,test,review' }}
+      VTDD_AUTO_MERGE_METHOD: ${{ vars.VTDD_AUTO_MERGE_METHOD || 'squash' }}
+      VTDD_RUNTIME_URL: ${{ vars.VTDD_RUNTIME_URL }}
+      VTDD_GATEWAY_BEARER_TOKEN: ${{ secrets.VTDD_GATEWAY_BEARER_TOKEN }}
+    steps:
+      - name: Detect auto merge GitHub App secrets
+        id: app_secrets
+        env:
+          VTDD_GITHUB_APP_ID: ${{ secrets.VTDD_GITHUB_APP_ID }}
+          VTDD_GITHUB_APP_PRIVATE_KEY: ${{ secrets.VTDD_GITHUB_APP_PRIVATE_KEY }}
+        shell: bash
+        run: |
+          if [ -n "$VTDD_GITHUB_APP_ID" ] && [ -n "$VTDD_GITHUB_APP_PRIVATE_KEY" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Stop when auto merge GitHub App secrets are missing
+        if: ${{ steps.app_secrets.outputs.configured != 'true' }}
+        shell: bash
+        run: |
+          echo "approve-auto-merge requires VTDD_GITHUB_APP_ID / VTDD_GITHUB_APP_PRIVATE_KEY."
+          exit 0
+
+      - name: Mint auto merge GitHub App token
+        if: ${{ steps.app_secrets.outputs.configured == 'true' }}
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.VTDD_GITHUB_APP_ID }}
+          private-key: ${{ secrets.VTDD_GITHUB_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      - name: Checkout trusted source
+        if: ${{ steps.app_secrets.outputs.configured == 'true' }}
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          token: ${{ steps.app-token.outputs.token }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Setup Node.js
+        if: ${{ steps.app_secrets.outputs.configured == 'true' }}
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        if: ${{ steps.app_secrets.outputs.configured == 'true' }}
+        run: npm ci
+
+      - name: Evaluate and execute approve auto merge
+        if: ${{ steps.app_secrets.outputs.configured == 'true' }}
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: node scripts/run-approve-auto-merge.mjs

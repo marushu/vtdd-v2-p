@@ -175,6 +175,17 @@ export {
   evaluateExecutionContinuity
 } from "./execution-continuity.js";
 export {
+  APPROVE_AUTO_MERGE_BLOCKED_MARKER,
+  APPROVE_AUTO_MERGE_CANDIDATE_MARKER,
+  APPROVE_AUTO_MERGE_EXECUTED_MARKER,
+  ApproveAutoMergePolicyMode,
+  evaluateApproveAutoMerge,
+  formatApproveAutoMergeBlockedComment,
+  formatApproveAutoMergeCandidateComment,
+  formatApproveAutoMergeExecutedComment,
+  resolveApproveAutoMergePolicy
+} from "./approve-auto-merge.js";
+export {
   REMOTE_CODEX_WORKFLOW_FILE,
   RemoteCodexDispatchGoal,
   RemoteCodexExecutorTransport,
