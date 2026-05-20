@@ -83,7 +83,7 @@ export class DashboardChatRoom {
   constructor(state, env) {
     this.ctx = state;
     this.env = env;
-    this.sessions = new Set();
+    this.sessions = new Map();
   }
 
   async fetch(request) {
@@ -105,6 +105,12 @@ export class DashboardChatRoom {
       return json(202, { ok: true, threadId });
     }
 
+    if (request.method === "POST" && url.pathname === "/dispatch") {
+      const payload = await readJson(request);
+      const result = await this.pushVpsRunnerJob(payload);
+      return json(result.ok ? 202 : 503, result);
+    }
+
     if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") {
       return json(426, {
         ok: false,
@@ -120,7 +126,10 @@ export class DashboardChatRoom {
       });
     }
 
-    const threadId = extractDashboardChatSocketThreadId(url.pathname);
+    const isVpsRunnerSocket = url.pathname.endsWith("/dashboard/vps-runner/ws") || url.pathname === "/vps-runner/ws";
+    const threadId = isVpsRunnerSocket
+      ? normalizeDashboardThreadId(url.searchParams.get("threadId") || url.searchParams.get("thread_id"))
+      : extractDashboardChatSocketThreadId(url.pathname);
     if (!threadId) {
       return json(422, {
         ok: false,
@@ -131,17 +140,22 @@ export class DashboardChatRoom {
 
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
+    const attachment = isVpsRunnerSocket ? { role: "vps_runner", threadId } : { role: "dashboard", threadId };
     if (typeof this.ctx?.acceptWebSocket === "function") {
-      server.serializeAttachment({ threadId });
+      server.serializeAttachment(attachment);
       this.ctx.acceptWebSocket(server);
     } else {
       server.accept();
-      this.sessions.add(server);
+      this.sessions.set(server, attachment);
       server.addEventListener("close", () => this.sessions.delete(server));
       server.addEventListener("error", () => this.sessions.delete(server));
-      server.addEventListener("message", (event) => this.handleSocketMessage(server, event?.data, threadId));
+      server.addEventListener("message", (event) => this.handleSocketMessage(server, event?.data, attachment));
     }
-    await this.sendThread(server, threadId);
+    if (isVpsRunnerSocket && isSocketOpen(server)) {
+      server.send(JSON.stringify({ type: "vps_runner_connected", ok: true }));
+    } else {
+      await this.sendThread(server, threadId);
+    }
 
     return new Response(null, {
       status: 101,
@@ -151,8 +165,7 @@ export class DashboardChatRoom {
 
   async webSocketMessage(socket, message) {
     const attachment = typeof socket.deserializeAttachment === "function" ? socket.deserializeAttachment() : null;
-    const threadId = normalizeDashboardThreadId(attachment?.threadId);
-    this.handleSocketMessage(socket, message, threadId);
+    await this.handleSocketMessage(socket, message, attachment);
   }
 
   webSocketClose(socket) {
@@ -163,11 +176,153 @@ export class DashboardChatRoom {
     this.sessions.delete(socket);
   }
 
-  handleSocketMessage(socket, message, threadId) {
-    const text = normalizeDashboardEventText(message).toLowerCase();
-    if (text === "ping" && isSocketOpen(socket)) {
+  async handleSocketMessage(socket, message, attachment = {}) {
+    const socketAttachment = attachment || this.sessions.get(socket) || {};
+    const threadId = normalizeDashboardThreadId(socketAttachment.threadId);
+    const text = normalizeDashboardEventText(message);
+    const lowerText = text.toLowerCase();
+    if (lowerText === "ping" && isSocketOpen(socket)) {
       socket.send(JSON.stringify({ type: "pong", ok: true, threadId }));
+      return;
     }
+    let payload = null;
+    try {
+      payload = text ? JSON.parse(text) : null;
+    } catch {
+      payload = null;
+    }
+    if (socketAttachment.role === "vps_runner") {
+      await this.acceptVpsRunnerReply(payload, socketAttachment);
+      return;
+    }
+    if (payload?.type === "owner_message") {
+      await this.acceptOwnerMessage({ socket, threadId, payload });
+    }
+  }
+
+  async acceptOwnerMessage({ socket, threadId, payload }) {
+    const text = sanitizeDashboardChatText(payload?.text || payload?.message || payload?.body);
+    if (!threadId || !text) {
+      if (isSocketOpen(socket)) {
+        socket.send(JSON.stringify({ type: "error", ok: false, reason: "message text is required" }));
+      }
+      return;
+    }
+    const repository = normalizeCanonicalRepositoryInput(payload?.repository || payload?.repositoryInput);
+    const relatedIssue = normalizePositiveInteger(payload?.relatedIssue || payload?.issueNumber);
+    const now = new Date().toISOString();
+    const ownerMessage = normalizeDashboardChatMessage(
+      {
+        threadId,
+        role: "owner",
+        repository,
+        relatedIssue,
+        status: "sent",
+        text,
+        createdAt: now
+      },
+      { threadId }
+    );
+    const thinkingMessage = normalizeDashboardChatMessage(
+      {
+        threadId,
+        role: "system",
+        repository,
+        relatedIssue,
+        status: "thinking",
+        text: "VPS Codex CLI に送信しました。返信を待っています。",
+        createdAt: new Date(Date.parse(now) + 1).toISOString()
+      },
+      { threadId }
+    );
+    const store = resolveDashboardChatStore(this.env);
+    const messages = store ? await store.appendMany(threadId, [ownerMessage, thinkingMessage]) : [ownerMessage, thinkingMessage].filter(Boolean);
+    await this.broadcastThread({ threadId, messages });
+    const pushed = await this.pushVpsRunnerJob({
+      type: "dashboard_chat_job",
+      threadId,
+      repository,
+      relatedIssue,
+      text,
+      codexGoal: normalizeDashboardEventText(payload?.codexGoal || "dashboard_chat_triage"),
+      createdAt: now
+    });
+    if (!pushed.ok) {
+      const failedMessage = normalizeDashboardChatMessage(
+        {
+          threadId,
+          role: "system",
+          repository,
+          relatedIssue,
+          status: "failed",
+          text: "VPS Codex CLI が WebSocket 接続されていないため送信できませんでした。runner 接続を確認してください。",
+          createdAt: new Date(Date.parse(now) + 2).toISOString()
+        },
+        { threadId }
+      );
+      const failedMessages = store ? await store.appendMany(threadId, [failedMessage]) : [failedMessage].filter(Boolean);
+      await this.broadcastThread({ threadId, messages: failedMessages });
+    }
+  }
+
+  async acceptVpsRunnerReply(payload, socketAttachment = {}) {
+    const socketThreadId = normalizeDashboardThreadId(socketAttachment.threadId);
+    const threadId = normalizeDashboardThreadId(payload?.threadId || payload?.thread_id || socketThreadId);
+    if (!threadId) {
+      return;
+    }
+    if (socketThreadId && threadId !== socketThreadId) {
+      return;
+    }
+    const message = normalizeDashboardChatMessage(
+      {
+        threadId,
+        role: "runner",
+        repository: payload?.repository,
+        relatedIssue: payload?.relatedIssue || payload?.issueNumber,
+        status: payload?.status === "failed" ? "failed" : "replied",
+        text: payload?.text || payload?.message || payload?.body,
+        createdAt: payload?.createdAt || payload?.updatedAt
+      },
+      { threadId }
+    );
+    const store = resolveDashboardChatStore(this.env);
+    const messages = store ? await store.appendMany(threadId, [message]) : [message].filter(Boolean);
+    await this.broadcastThread({ threadId, messages });
+  }
+
+  async pushVpsRunnerJob(payload) {
+    const job = {
+      type: "dashboard_chat_job",
+      jobId: normalizeDashboardEventText(payload?.jobId) || crypto.randomUUID(),
+      threadId: normalizeDashboardThreadId(payload?.threadId || payload?.thread_id),
+      repository: normalizeCanonicalRepositoryInput(payload?.repository),
+      relatedIssue: normalizePositiveInteger(payload?.relatedIssue || payload?.issueNumber),
+      text: sanitizeDashboardChatText(payload?.text || payload?.message || payload?.body),
+      codexGoal: normalizeDashboardEventText(payload?.codexGoal || "dashboard_chat_triage"),
+      createdAt: normalizeIsoTimestamp(payload?.createdAt) || new Date().toISOString()
+    };
+    const runners = this.connectedSockets().filter((socket) => this.getSocketAttachment(socket).role === "vps_runner");
+    if (runners.length === 0) {
+      return {
+        ok: false,
+        error: "vps_runner_not_connected",
+        reason: "VPS Codex CLI WebSocket is not connected"
+      };
+    }
+    const frame = JSON.stringify(job);
+    let pushed = 0;
+    for (const runner of runners) {
+      if (isSocketOpen(runner)) {
+        runner.send(frame);
+        pushed += 1;
+      }
+    }
+    return {
+      ok: pushed > 0,
+      pushed,
+      jobId: job.jobId
+    };
   }
 
   async broadcastThread({ threadId, messages = null }) {
@@ -179,7 +334,8 @@ export class DashboardChatRoom {
       messages: resolvedMessages
     });
     for (const socket of this.connectedSockets()) {
-      if (isSocketOpen(socket)) {
+      const attachment = this.getSocketAttachment(socket);
+      if (attachment.role !== "vps_runner" && (!attachment.threadId || attachment.threadId === threadId) && isSocketOpen(socket)) {
         socket.send(payload);
       }
     }
@@ -221,7 +377,14 @@ export class DashboardChatRoom {
     if (typeof this.ctx?.getWebSockets === "function") {
       return this.ctx.getWebSockets();
     }
-    return Array.from(this.sessions);
+    return Array.from(this.sessions.keys());
+  }
+
+  getSocketAttachment(socket) {
+    if (typeof socket?.deserializeAttachment === "function") {
+      return socket.deserializeAttachment() || {};
+    }
+    return this.sessions.get(socket) || {};
   }
 }
 const CLOUDFLARE_ACCESS_JWKS_CACHE_TTL_MS = 5 * 60 * 1000;
@@ -345,6 +508,21 @@ export default {
 
     if (request.method === "GET" && isDashboardChatSocketApiPath(url.pathname)) {
       return handleDashboardChatSocketRequest(request, url, env);
+    }
+
+    if (request.method === "GET" && isApiPath(url.pathname, "/dashboard/vps-runner/ws")) {
+      return handleDashboardVpsRunnerSocketRequest(request, env);
+    }
+
+    if (request.method === "GET" && isApiPath(url.pathname, "/dashboard/chat/search")) {
+      return handleDashboardChatSearchRequest(request, url, env);
+    }
+
+    if (
+      (request.method === "GET" || request.method === "POST") &&
+      isDashboardChatSummaryApiPath(url.pathname)
+    ) {
+      return handleDashboardChatSummaryRequest(request, url, env);
     }
 
     if (request.method === "GET" && isDashboardChatThreadApiPath(url.pathname)) {
@@ -3382,7 +3560,12 @@ async function handleDashboardChatMessageRequest(request, env) {
   let execution = null;
   let messagesToStore = prepared.messages;
   if (wantsVpsRunnerHandoff) {
-    const handoffPayload = buildDashboardVpsRunnerHandoffPayload({ payload, prepared, env });
+    const handoffPayload = buildDashboardVpsRunnerHandoffPayload({
+      payload,
+      prepared,
+      env,
+      runtimeUrl: new URL(request.url).origin
+    });
     if (!handoffPayload.ok) {
       return json(422, {
         ok: false,
@@ -3463,6 +3646,46 @@ async function handleDashboardChatSocketRequest(request, url, env) {
   return room.fetch(request);
 }
 
+async function handleDashboardVpsRunnerSocketRequest(request, env) {
+  const auth = authorizeGatewayRequest({
+    request,
+    env,
+    apiSuffix: "/dashboard/vps-runner/ws"
+  });
+  if (!auth.ok) {
+    return json(auth.status, {
+      ok: false,
+      error: "unauthorized",
+      reason: auth.reason
+    });
+  }
+  const url = new URL(request.url);
+  const threadId = normalizeDashboardThreadId(url.searchParams.get("threadId") || url.searchParams.get("thread_id"));
+  if (!threadId) {
+    return json(422, {
+      ok: false,
+      error: "thread_id_required",
+      reason: "threadId is required for VPS Codex CLI dashboard WebSocket"
+    });
+  }
+  const room = resolveDashboardChatRoomStub(env, threadId);
+  if (!room) {
+    return json(503, {
+      ok: false,
+      error: "dashboard_vps_runner_room_unavailable",
+      reason: "DASHBOARD_CHAT_ROOMS Durable Object binding is not configured"
+    });
+  }
+  if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") {
+    return json(426, {
+      ok: false,
+      error: "websocket_upgrade_required",
+      reason: "VPS Codex CLI push channel requires a WebSocket upgrade"
+    });
+  }
+  return room.fetch(request);
+}
+
 async function handleDashboardChatThreadRequest(request, url, env) {
   const auth = await authorizeDashboardRequest({
     request,
@@ -3496,10 +3719,109 @@ async function handleDashboardChatThreadRequest(request, url, env) {
   const messages = await store.listThread(threadId, {
     limit: normalizeLimit(url.searchParams.get("limit"), 80)
   });
+  const summary =
+    typeof store.getSummary === "function" ? await store.getSummary(threadId) : null;
   return json(200, {
     ok: true,
     threadId,
-    messages
+    messages,
+    summary
+  });
+}
+
+async function handleDashboardChatSearchRequest(request, url, env) {
+  const auth = await authorizeDashboardRequest({
+    request,
+    env,
+    apiSuffix: "/dashboard/chat/search"
+  });
+  if (!auth.ok) {
+    return json(auth.status, {
+      ok: false,
+      error: "dashboard_auth_required",
+      reason: auth.reason
+    });
+  }
+
+  const store = resolveDashboardChatStore(env);
+  if (!store || typeof store.search !== "function") {
+    return json(503, {
+      ok: false,
+      error: "dashboard_chat_search_unavailable",
+      reason: "dashboard Butler chat search store is not configured"
+    });
+  }
+  const results = await store.search({
+    text: url.searchParams.get("text") || url.searchParams.get("q"),
+    repository: url.searchParams.get("repository"),
+    relatedIssue: url.searchParams.get("relatedIssue") || url.searchParams.get("issueNumber"),
+    limit: normalizeLimit(url.searchParams.get("limit"), 20)
+  });
+  return json(200, {
+    ok: true,
+    results
+  });
+}
+
+async function handleDashboardChatSummaryRequest(request, url, env) {
+  const auth = await authorizeDashboardRequest({
+    request,
+    env,
+    apiSuffix: "/dashboard/chat/:threadId/summary"
+  });
+  if (!auth.ok) {
+    return json(auth.status, {
+      ok: false,
+      error: "dashboard_auth_required",
+      reason: auth.reason
+    });
+  }
+
+  const threadId = extractDashboardChatSummaryThreadId(url.pathname);
+  if (!threadId) {
+    return json(422, {
+      ok: false,
+      error: "thread_id_required",
+      reason: "threadId is required"
+    });
+  }
+  const store = resolveDashboardChatStore(env);
+  if (!store) {
+    return json(503, {
+      ok: false,
+      error: "dashboard_chat_store_unavailable",
+      reason: "dashboard Butler chat store is not configured"
+    });
+  }
+  if (request.method === "GET") {
+    const summary =
+      typeof store.getSummary === "function" ? await store.getSummary(threadId) : null;
+    return json(200, {
+      ok: true,
+      threadId,
+      summary
+    });
+  }
+  if (typeof store.putSummary !== "function") {
+    return json(503, {
+      ok: false,
+      error: "dashboard_chat_summary_unavailable",
+      reason: "dashboard Butler chat summary store is not configured"
+    });
+  }
+  const payload = await readJson(request);
+  const summary = await store.putSummary(threadId, payload);
+  if (!summary) {
+    return json(422, {
+      ok: false,
+      error: "summary_required",
+      reason: "summary text is required"
+    });
+  }
+  return json(200, {
+    ok: true,
+    threadId,
+    summary
   });
 }
 
@@ -5358,6 +5680,135 @@ function createD1DashboardChatStore(d1) {
         })
         .filter(Boolean)
         .reverse();
+    },
+
+    async putSummary(threadId, summary) {
+      const normalized = normalizeDashboardThreadSummary(summary, { threadId });
+      if (!normalized) {
+        return null;
+      }
+      await ensureSchema();
+      await d1
+        .prepare(
+          `INSERT OR REPLACE INTO vtdd_dashboard_thread_summaries (
+             thread_id, repository, related_issue, summary, decisions_json,
+             open_items_json, archived_until_message_id, updated_at, payload_json
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        )
+        .bind(
+          normalized.threadId,
+          normalized.repository,
+          normalized.relatedIssue,
+          normalized.summary,
+          JSON.stringify(normalized.decisions),
+          JSON.stringify(normalized.openItems),
+          normalized.archivedUntilMessageId,
+          normalized.updatedAt,
+          JSON.stringify(normalized)
+        )
+        .run();
+      return normalized;
+    },
+
+    async getSummary(threadId) {
+      const resolvedThreadId = normalizeDashboardThreadId(threadId);
+      if (!resolvedThreadId) {
+        return null;
+      }
+      await ensureSchema();
+      const result = await d1
+        .prepare("SELECT payload_json FROM vtdd_dashboard_thread_summaries WHERE thread_id = ? LIMIT 1")
+        .bind(resolvedThreadId)
+        .all();
+      const row = Array.isArray(result?.results) ? result.results[0] : null;
+      try {
+        return row?.payload_json
+          ? normalizeDashboardThreadSummary(JSON.parse(row.payload_json), { threadId: resolvedThreadId })
+          : null;
+      } catch {
+        return null;
+      }
+    },
+
+    async search(filter = {}) {
+      await ensureSchema();
+      const text = sanitizeDashboardChatText(filter.text || filter.q);
+      const repository = normalizeCanonicalRepositoryInput(filter.repository);
+      const relatedIssue = normalizePositiveInteger(filter.relatedIssue || filter.issueNumber);
+      const limit = normalizeLimit(filter.limit, 20);
+      const results = [];
+
+      const messageClauses = [];
+      const messageParams = [];
+      if (text) {
+        messageClauses.push("text LIKE ?");
+        messageParams.push(`%${text}%`);
+      }
+      if (repository) {
+        messageClauses.push("repository = ?");
+        messageParams.push(repository);
+      }
+      if (relatedIssue) {
+        messageClauses.push("related_issue = ?");
+        messageParams.push(relatedIssue);
+      }
+      const messageWhere = messageClauses.length > 0 ? `WHERE ${messageClauses.join(" AND ")}` : "";
+      const messageRows = await d1
+        .prepare(
+          `SELECT payload_json FROM vtdd_dashboard_chat_messages
+           ${messageWhere}
+           ORDER BY created_at DESC, message_id DESC
+           LIMIT ?`
+        )
+        .bind(...messageParams, limit)
+        .all();
+      for (const row of Array.isArray(messageRows?.results) ? messageRows.results : []) {
+        try {
+          const message = row?.payload_json ? normalizeDashboardChatMessage(JSON.parse(row.payload_json)) : null;
+          if (message) {
+            results.push({ kind: "message", threadId: message.threadId, message });
+          }
+        } catch {
+          // ignore malformed rows
+        }
+      }
+
+      const summaryClauses = [];
+      const summaryParams = [];
+      if (text) {
+        summaryClauses.push("(summary LIKE ? OR decisions_json LIKE ? OR open_items_json LIKE ?)");
+        summaryParams.push(`%${text}%`, `%${text}%`, `%${text}%`);
+      }
+      if (repository) {
+        summaryClauses.push("repository = ?");
+        summaryParams.push(repository);
+      }
+      if (relatedIssue) {
+        summaryClauses.push("related_issue = ?");
+        summaryParams.push(relatedIssue);
+      }
+      const summaryWhere = summaryClauses.length > 0 ? `WHERE ${summaryClauses.join(" AND ")}` : "";
+      const summaryRows = await d1
+        .prepare(
+          `SELECT payload_json FROM vtdd_dashboard_thread_summaries
+           ${summaryWhere}
+           ORDER BY updated_at DESC
+           LIMIT ?`
+        )
+        .bind(...summaryParams, limit)
+        .all();
+      for (const row of Array.isArray(summaryRows?.results) ? summaryRows.results : []) {
+        try {
+          const summary = row?.payload_json ? normalizeDashboardThreadSummary(JSON.parse(row.payload_json)) : null;
+          if (summary) {
+            results.push({ kind: "summary", threadId: summary.threadId, summary });
+          }
+        } catch {
+          // ignore malformed rows
+        }
+      }
+
+      return results.slice(0, limit);
     }
   };
 
@@ -5369,6 +5820,15 @@ function createD1DashboardChatStore(d1) {
         );
         await d1.exec(
           "CREATE INDEX IF NOT EXISTS idx_vtdd_dashboard_chat_messages_thread ON vtdd_dashboard_chat_messages (thread_id, created_at DESC);"
+        );
+        await d1.exec(
+          "CREATE INDEX IF NOT EXISTS idx_vtdd_dashboard_chat_messages_lookup ON vtdd_dashboard_chat_messages (repository, related_issue, created_at DESC);"
+        );
+        await d1.exec(
+          "CREATE TABLE IF NOT EXISTS vtdd_dashboard_thread_summaries (thread_id TEXT PRIMARY KEY, repository TEXT, related_issue INTEGER, summary TEXT NOT NULL, decisions_json TEXT NOT NULL, open_items_json TEXT NOT NULL, archived_until_message_id TEXT, updated_at TEXT NOT NULL, payload_json TEXT NOT NULL);"
+        );
+        await d1.exec(
+          "CREATE INDEX IF NOT EXISTS idx_vtdd_dashboard_thread_summaries_lookup ON vtdd_dashboard_thread_summaries (repository, related_issue, updated_at DESC);"
         );
       })();
     }
@@ -5550,7 +6010,7 @@ function shouldDispatchDashboardChatToVpsRunner(payload) {
   );
 }
 
-function buildDashboardVpsRunnerHandoffPayload({ payload, prepared, env }) {
+function buildDashboardVpsRunnerHandoffPayload({ payload, prepared, env, runtimeUrl }) {
   const input = normalizeObject(payload);
   const issueNumber =
     normalizePositiveInteger(input.issueNumber || input.relatedIssue) ||
@@ -5593,7 +6053,8 @@ function buildDashboardVpsRunnerHandoffPayload({ payload, prepared, env }) {
           repositoryInput: normalizeDashboardRepositoryInput(
             input.repositoryInput || input.repository_input || input.repository || prepared.repository
           ),
-          dashboardThreadId: prepared.threadId
+          dashboardThreadId: prepared.threadId,
+          dashboardRuntimeUrl: normalizeDashboardEventText(input.dashboardRuntimeUrl || runtimeUrl)
         }
       },
       executionTarget: {
@@ -5670,6 +6131,44 @@ function normalizeDashboardChatMessage(message, defaults = {}) {
   };
 }
 
+function normalizeDashboardThreadSummary(summary, defaults = {}) {
+  const input = normalizeObject(summary);
+  const threadId = normalizeDashboardThreadId(input.threadId || input.thread_id || defaults.threadId);
+  if (!threadId) {
+    return null;
+  }
+  const summaryText = sanitizeDashboardChatText(input.summary || input.text || input.body);
+  if (!summaryText) {
+    return null;
+  }
+  const decisions = normalizeStringList(input.decisions || input.decisionLog || input.decision_log);
+  const openItems = normalizeStringList(input.openItems || input.open_items || input.todo || input.todos);
+  return {
+    threadId,
+    repository: normalizeCanonicalRepositoryInput(input.repository || defaults.repository) || null,
+    relatedIssue: normalizePositiveInteger(
+      input.relatedIssue || input.issueNumber || input.related_issue || defaults.relatedIssue
+    ),
+    summary: summaryText,
+    decisions,
+    openItems,
+    archivedUntilMessageId:
+      normalizeDashboardEventText(
+        input.archivedUntilMessageId || input.archived_until_message_id || defaults.archivedUntilMessageId
+      ) || null,
+    updatedAt:
+      normalizeIsoTimestamp(input.updatedAt || input.updated_at || defaults.updatedAt) || new Date().toISOString()
+  };
+}
+
+function normalizeStringList(value) {
+  const list = Array.isArray(value) ? value : value ? [value] : [];
+  return list
+    .map((item) => sanitizeDashboardChatText(item))
+    .filter(Boolean)
+    .slice(0, 40);
+}
+
 function normalizeDashboardChatRole(value) {
   const role = normalizeDashboardEventText(value).toLowerCase();
   return ["owner", "butler", "runner", "system"].includes(role) ? role : "system";
@@ -5704,7 +6203,7 @@ function isDashboardChatThreadApiPath(pathname) {
   return (
     pathname.startsWith(`${CANONICAL_API_PREFIX}/dashboard/chat/`) ||
     pathname.startsWith(`${LEGACY_API_PREFIX}/dashboard/chat/`)
-  );
+  ) && !pathname.endsWith("/summary");
 }
 
 function isDashboardChatSocketApiPath(pathname) {
@@ -5741,6 +6240,17 @@ function extractDashboardChatThreadId(pathname) {
 
 function extractDashboardChatSocketThreadId(pathname) {
   return extractDashboardChatThreadId(pathname.replace(/\/ws$/, ""));
+}
+
+function isDashboardChatSummaryApiPath(pathname) {
+  return (
+    pathname.startsWith(`${CANONICAL_API_PREFIX}/dashboard/chat/`) ||
+    pathname.startsWith(`${LEGACY_API_PREFIX}/dashboard/chat/`)
+  ) && pathname.endsWith("/summary");
+}
+
+function extractDashboardChatSummaryThreadId(pathname) {
+  return extractDashboardChatThreadId(pathname.replace(/\/summary$/, ""));
 }
 
 function normalizeDashboardEventRecord(event) {
@@ -7784,18 +8294,18 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         <article class="bubble">
           <strong>Butler</strong>
           <p>その方針で進めます。中央はチャットだけ、状態確認・進捗・RAG・workflow・prototype cleanup の扱いはサイドバーのメニューから必要な時だけ開きます。</p>
-          <p>この dashboard からの送信は VPS Codex CLI の dashboard chat triage queue に渡します。返信として表示するのは runner から戻った event post だけです。</p>
-          <span class="connection-note">接続済み: WebSocket で runner event post を待ちます</span>
+          <p>この dashboard からの送信は WebSocket で VPS Codex CLI に直接 push します。GitHub Issue コメント queue は通常会話では使いません。</p>
+          <span class="connection-note">接続準備中: WebSocket で Butler と VPS Codex CLI に接続します</span>
         </article>
 
       </div>
 
-      <form class="composer" id="butler-chat-form" aria-label="Butler composer" data-endpoint="${escapeDashboardHtml(origin)}/v2/dashboard/chat/messages" data-thread-endpoint="${escapeDashboardHtml(origin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}" data-socket-endpoint="${escapeDashboardHtml(socketOrigin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}/ws" data-thread-id="${escapeDashboardHtml(chatThreadId)}" data-repository-input="${escapeDashboardHtml(repositoryInput)}" data-issue-number="${dashboardIssueNumber || ""}" data-dispatch-to-vps-runner="true" data-codex-goal="dashboard_chat_triage">
+      <form class="composer" id="butler-chat-form" aria-label="Butler composer" data-socket-endpoint="${escapeDashboardHtml(socketOrigin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}/ws" data-thread-endpoint="${escapeDashboardHtml(origin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}" data-thread-id="${escapeDashboardHtml(chatThreadId)}" data-repository-input="${escapeDashboardHtml(repositoryInput)}" data-issue-number="${dashboardIssueNumber || ""}" data-dispatch-to-vps-runner="true" data-codex-goal="dashboard_chat_triage">
         <div class="composer-box">
           <textarea id="butler-message" name="text" placeholder="Butler V2 にメッセージ..." aria-label="Butler V2 にメッセージ"></textarea>
           <button class="send-button" type="submit" aria-label="Butler に送信">↑</button>
         </div>
-        <div class="composer-status" id="butler-chat-status">接続済み。送信すると VPS Codex CLI queue に渡します。返信は runner event post だけを表示します。</div>
+        <div class="composer-status" id="butler-chat-status">接続準備中です。WebSocket 接続後に送信できます。</div>
       </form>
     </section>
 
@@ -7859,15 +8369,18 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       const status = document.getElementById("butler-chat-status");
       if (!form || !log || !textarea || !status) return;
 
-      const endpoint = form.dataset.endpoint;
-      const threadEndpoint = form.dataset.threadEndpoint;
       const socketEndpoint = form.dataset.socketEndpoint;
+      const threadEndpoint = form.dataset.threadEndpoint;
       const threadId = form.dataset.threadId;
       const repositoryInput = form.dataset.repositoryInput;
       const issueNumber = Number.parseInt(form.dataset.issueNumber || "", 10);
       const dispatchToVpsRunner = form.dataset.dispatchToVpsRunner === "true";
       const codexGoal = form.dataset.codexGoal || "dashboard_chat_triage";
       const initialMarkup = log.innerHTML;
+      let chatSocket = null;
+      let reconnectTimer = null;
+      let reconnectAttempt = 0;
+      let refreshingThread = false;
 
       function updateComposerReserve() {
         log.style.setProperty("--composer-reserve", Math.ceil(form.getBoundingClientRect().height) + "px");
@@ -7927,27 +8440,6 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         appendMessage({ role: "butler", text });
       }
 
-      function showThinking() {
-        const article = document.createElement("article");
-        article.className = "bubble thinking";
-        article.dataset.pending = "butler";
-        const paragraph = document.createElement("p");
-        const span = document.createElement("span");
-        span.className = "thinking-dots";
-        span.textContent = "考えています";
-        paragraph.appendChild(span);
-        article.appendChild(paragraph);
-        log.appendChild(article);
-        scrollToLatest();
-        return article;
-      }
-
-      function removeThinking(article) {
-        if (article && article.parentNode) {
-          article.parentNode.removeChild(article);
-        }
-      }
-
       function renderThread(messages) {
         if (!Array.isArray(messages) || messages.length === 0) {
           log.innerHTML = initialMarkup;
@@ -7961,48 +8453,79 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         scrollToLatest();
       }
 
-      function connectThreadSocket() {
-        if (!socketEndpoint || typeof WebSocket !== "function") {
-          setStatus("WebSocket を開始できません。runner 返信は再読み込みで確認してください。");
-          return;
-        }
-        const socket = new WebSocket(socketEndpoint);
-        socket.addEventListener("open", () => {
-          setStatus("WebSocket 接続済み。VPS Codex CLI の runner event post を待っています。");
-        });
-        socket.addEventListener("message", (event) => {
-          const body = JSON.parse(event.data || "{}");
-          if (body.type === "thread" && body.ok) {
-            renderThread(body.messages || []);
-          }
-        });
-        socket.addEventListener("close", () => {
-          setStatus("WebSocket が切れました。再読み込みすると最新 thread を確認できます。");
-        });
-        socket.addEventListener("error", () => {
-          setStatus("WebSocket 接続に失敗しました。再読み込みすると最新 thread を確認できます。");
-        });
-      }
-
       async function refreshThread() {
-        if (!threadEndpoint) return;
-        setStatus("会話履歴を読み込み中です。");
+        if (!threadEndpoint || refreshingThread) return;
+        refreshingThread = true;
         try {
           const response = await fetch(threadEndpoint, {
-            method: "GET",
             headers: { "accept": "application/json" },
             credentials: "same-origin"
           });
-          const body = await response.json().catch(() => ({}));
-          if (!response.ok || !body.ok) {
-            setStatus(body.reason || "会話履歴を読めませんでした。送信時に再試行します。");
+          if (!response.ok) {
+            setStatus("履歴の再取得に失敗しました。WebSocket を再接続しています。");
             return;
           }
-          renderThread(body.messages || []);
-          setStatus("接続済み。送信すると VPS Codex CLI queue に渡します。返信は runner event post だけを表示します。");
+          const body = await response.json();
+          if (body && body.ok) {
+            renderThread(body.messages || []);
+          }
         } catch {
-          setStatus("会話履歴を読めませんでした。送信時に再試行します。");
+          setStatus("履歴の再取得に失敗しました。WebSocket を再接続しています。");
+        } finally {
+          refreshingThread = false;
         }
+      }
+
+      function scheduleReconnect() {
+        if (reconnectTimer || !socketEndpoint || typeof WebSocket !== "function") return;
+        const delay = Math.min(10000, 1000 * Math.pow(2, reconnectAttempt));
+        reconnectAttempt += 1;
+        reconnectTimer = window.setTimeout(() => {
+          reconnectTimer = null;
+          connectThreadSocket();
+        }, delay);
+      }
+
+      function connectThreadSocket() {
+        if (!socketEndpoint || typeof WebSocket !== "function") {
+          setStatus("WebSocket を開始できません。dashboard Butler は送信できません。");
+          return;
+        }
+        if (chatSocket && (chatSocket.readyState === WebSocket.OPEN || chatSocket.readyState === WebSocket.CONNECTING)) {
+          return;
+        }
+        chatSocket = new WebSocket(socketEndpoint);
+        chatSocket.addEventListener("open", () => {
+          reconnectAttempt = 0;
+          if (reconnectTimer) {
+            window.clearTimeout(reconnectTimer);
+            reconnectTimer = null;
+          }
+          setStatus("WebSocket 接続済み。送信すると VPS Codex CLI に push します。");
+          refreshThread();
+        });
+        chatSocket.addEventListener("message", (event) => {
+          try {
+            const body = JSON.parse(event.data || "{}");
+            if (body.type === "thread" && body.ok) {
+              renderThread(body.messages || []);
+            } else if (body.type === "error") {
+              appendError(body.reason || "WebSocket message error");
+            }
+          } catch {
+            appendError("WebSocket message を読み取れませんでした。");
+          }
+        });
+        chatSocket.addEventListener("close", () => {
+          setStatus("WebSocket が切れました。履歴を再取得して再接続します。");
+          refreshThread();
+          scheduleReconnect();
+        });
+        chatSocket.addEventListener("error", () => {
+          setStatus("WebSocket 接続に失敗しました。履歴を再取得して再接続します。");
+          refreshThread();
+          scheduleReconnect();
+        });
       }
 
       form.addEventListener("submit", async (event) => {
@@ -8013,52 +8536,47 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           return;
         }
         const submitButton = form.querySelector("button[type='submit']");
-        if (submitButton) submitButton.disabled = true;
-        setStatus("送信中です。VPS Codex CLI queue に渡します。");
-        const thinking = showThinking();
-        try {
-          const response = await fetch(endpoint, {
-            method: "POST",
-            headers: { "content-type": "application/json", "accept": "application/json" },
-            credentials: "same-origin",
-            body: JSON.stringify({
-              threadId,
-              repositoryInput,
-              text,
-              issueNumber,
-              relatedIssue: issueNumber,
-              dispatchToVpsRunner,
-              executorTransport: dispatchToVpsRunner ? "vps_runner" : undefined,
-              codexGoal,
-              handoffSummary: "Dashboard Butler chat message from owner"
-            })
-          });
-          const body = await response.json().catch(() => ({}));
-          removeThinking(thinking);
-          if (!response.ok || !body.ok) {
-            appendError(body.reason || "送信に失敗しました。runtime truth を確認してください。");
-            setStatus("送信に失敗しました。");
-            return;
-          }
-          textarea.value = "";
-          for (const message of body.messages || []) {
-            appendMessage(message);
-          }
-          setStatus(body.execution ? "保存済み。VPS Codex CLI queue に渡しました。runner event post を待っています。" : "保存済み。Worker runtime に保存しました。");
-        } catch {
-          removeThinking(thinking);
-          appendError("Worker chat runtime に接続できませんでした。ネットワークまたは deploy 状態を確認してください。");
-          setStatus("接続に失敗しました。");
-        } finally {
-          if (submitButton) submitButton.disabled = false;
+        if (!chatSocket || chatSocket.readyState !== WebSocket.OPEN) {
+          setStatus("WebSocket 再接続中です。履歴を再取得しています。接続後にもう一度送信してください。");
+          await refreshThread();
+          scheduleReconnect();
           textarea.focus({ preventScroll: true });
-          updateComposerReserve();
+          return;
         }
+        if (submitButton) submitButton.disabled = true;
+        setStatus("送信中です。VPS Codex CLI に push します。");
+        chatSocket.send(JSON.stringify({
+          type: "owner_message",
+          threadId,
+          repositoryInput,
+          text,
+          issueNumber,
+          relatedIssue: issueNumber,
+          dispatchToVpsRunner,
+          executorTransport: dispatchToVpsRunner ? "vps_runner" : undefined,
+          codexGoal
+        }));
+        textarea.value = "";
+        setStatus("送信済み。VPS Codex CLI の返信を待っています。");
+        if (submitButton) submitButton.disabled = false;
+        textarea.focus({ preventScroll: true });
+        updateComposerReserve();
       });
 
       updateComposerReserve();
       window.addEventListener("resize", updateComposerReserve);
-      refreshThread();
+      window.addEventListener("online", () => {
+        setStatus("ネットワーク復帰を検知しました。履歴を再取得して再接続します。");
+        refreshThread();
+        scheduleReconnect();
+      });
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible" && (!chatSocket || chatSocket.readyState !== WebSocket.OPEN)) {
+          setStatus("画面復帰を検知しました。履歴を再取得して再接続します。");
+          refreshThread();
+          scheduleReconnect();
+        }
+      });
       connectThreadSocket();
     })();
   </script>

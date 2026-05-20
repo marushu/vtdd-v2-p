@@ -7,6 +7,7 @@ import {
   buildFreshExecutionBranchCandidates,
   buildCodexExecutionPrompt,
   buildDashboardChatTriagePrompt,
+  buildDashboardRunnerWebSocketUrl,
   buildCodexExecArgs,
   buildGuardedPullRequestBody,
   buildPostMergePullTruth,
@@ -19,6 +20,7 @@ import {
   buildVpsRunnerPullRequestContext,
   checkoutVpsRunnerBranch,
   classifyVpsRunnerFailure,
+  connectVpsDashboardWebSocketClient,
   formatPullRequestContext,
   isNonFastForwardPushFailure,
   loadVpsRunnerRepositoryPolicies,
@@ -565,6 +567,81 @@ test("VPS runner event records missing runtime dashboard delivery configuration"
     parsed.event.dashboardDelivery.reason,
     "VTDD_RUNTIME_URL or VTDD_GATEWAY_BEARER_TOKEN is missing"
   );
+});
+
+test("VPS runner builds dashboard WebSocket endpoint with machine thread id", () => {
+  assert.equal(
+    buildDashboardRunnerWebSocketUrl({
+      runtimeUrl: "https://vtdd-v2-mvp.example.workers.dev",
+      threadId: "dashboard-main-marushu-vtdd-v2-p"
+    }),
+    "wss://vtdd-v2-mvp.example.workers.dev/v2/dashboard/vps-runner/ws?threadId=dashboard-main-marushu-vtdd-v2-p"
+  );
+});
+
+test("VPS runner dashboard WebSocket client authenticates and handles dashboard jobs", async () => {
+  const sockets = [];
+  class FakeWebSocket {
+    constructor(url, protocols, options) {
+      this.url = url;
+      this.protocols = protocols;
+      this.options = options;
+      this.listeners = new Map();
+      this.sent = [];
+      sockets.push(this);
+    }
+    addEventListener(eventName, handler) {
+      this.listeners.set(eventName, handler);
+    }
+    send(body) {
+      this.sent.push(body);
+    }
+    emit(eventName, event) {
+      return this.listeners.get(eventName)?.(event);
+    }
+  }
+
+  const jobs = [];
+  const socket = await connectVpsDashboardWebSocketClient({
+    runtimeUrl: "https://vtdd-v2-mvp.example.workers.dev",
+    bearerToken: "gateway-token-for-test",
+    threadId: "dashboard-main-marushu-vtdd-v2-p",
+    WebSocketImpl: FakeWebSocket,
+    logger: { log() {}, error() {} },
+    onJob: async (job, runnerSocket) => {
+      jobs.push(job);
+      runnerSocket.send(
+        JSON.stringify({
+          threadId: job.threadId,
+          repository: job.repository,
+          issueNumber: job.relatedIssue,
+          status: "completed",
+          message: "VPS Codex CLI からの返信です。"
+        })
+      );
+    }
+  });
+
+  assert.equal(sockets.length, 1);
+  assert.equal(
+    sockets[0].url,
+    "wss://vtdd-v2-mvp.example.workers.dev/v2/dashboard/vps-runner/ws?threadId=dashboard-main-marushu-vtdd-v2-p"
+  );
+  assert.equal(sockets[0].options.headers.authorization, "Bearer gateway-token-for-test");
+
+  await socket.emit("message", {
+    data: JSON.stringify({
+      type: "dashboard_chat_job",
+      threadId: "dashboard-main-marushu-vtdd-v2-p",
+      repository: "marushu/vtdd-v2-p",
+      relatedIssue: 450,
+      text: "進捗は？"
+    })
+  });
+
+  assert.equal(jobs.length, 1);
+  assert.equal(jobs[0].text, "進捗は？");
+  assert.equal(JSON.parse(socket.sent[0]).message, "VPS Codex CLI からの返信です。");
 });
 
 test("VPS runner milestone event mentions queue comment author", () => {

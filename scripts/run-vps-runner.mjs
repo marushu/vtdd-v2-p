@@ -79,6 +79,17 @@ async function main() {
     apiBaseUrl: process.env.GITHUB_API_URL || DEFAULT_API_BASE_URL
   });
 
+  if (options.dashboardWs) {
+    await startVpsDashboardWebSocketRunner({
+      githubFetch,
+      token,
+      repositoryPolicies,
+      workRoot,
+      env: process.env
+    });
+    return;
+  }
+
   const result = await runVpsRunnerOnce({
     githubFetch,
     token,
@@ -94,6 +105,41 @@ async function main() {
   }
 
   console.log(result.message);
+}
+
+async function startVpsDashboardWebSocketRunner({
+  githubFetch,
+  token,
+  repositoryPolicies,
+  workRoot,
+  env = process.env,
+  WebSocketImpl = globalThis.WebSocket,
+  logger = console
+}) {
+  const threadId = normalizeText(env.VTDD_DASHBOARD_THREAD_ID);
+  if (!threadId) {
+    throw new Error("VTDD_DASHBOARD_THREAD_ID is required for dashboard WebSocket mode");
+  }
+  const runtimeUrl = mustGetEnv("VTDD_RUNTIME_URL", env.VTDD_RUNTIME_URL);
+  const bearerToken = mustGetEnv("VTDD_GATEWAY_BEARER_TOKEN", env.VTDD_GATEWAY_BEARER_TOKEN);
+  return connectVpsDashboardWebSocketClient({
+    runtimeUrl,
+    bearerToken,
+    threadId,
+    WebSocketImpl,
+    logger,
+    onJob: async (job, socket) => {
+      await executeVpsDashboardSocketJob({
+        githubFetch,
+        token,
+        workRoot,
+        job,
+        socket,
+        repositoryPolicies,
+        env
+      });
+    }
+  });
 }
 
 async function runVpsRunnerOnce({
@@ -553,6 +599,180 @@ async function executeVpsDashboardChatTriage({ githubFetch, payload, notificatio
     }
   });
   return { ok: true, message: reply };
+}
+
+function buildDashboardRunnerWebSocketUrl({ runtimeUrl, threadId }) {
+  const resolvedThreadId = normalizeText(threadId);
+  if (!resolvedThreadId) {
+    throw new Error("dashboard threadId is required");
+  }
+  const endpoint = new URL("/v2/dashboard/vps-runner/ws", runtimeUrl);
+  endpoint.protocol = endpoint.protocol === "http:" ? "ws:" : "wss:";
+  endpoint.searchParams.set("threadId", resolvedThreadId);
+  return endpoint.toString();
+}
+
+async function connectVpsDashboardWebSocketClient({
+  runtimeUrl,
+  bearerToken,
+  threadId,
+  WebSocketImpl = globalThis.WebSocket,
+  onJob,
+  logger = console
+}) {
+  if (typeof WebSocketImpl !== "function") {
+    throw new Error("WebSocket is not available in this Node runtime");
+  }
+  const socket = new WebSocketImpl(buildDashboardRunnerWebSocketUrl({ runtimeUrl, threadId }), [], {
+    headers: {
+      authorization: `Bearer ${bearerToken}`
+    }
+  });
+  addSocketListener(socket, "open", () => {
+    logger?.log?.(`Connected dashboard WebSocket runner for ${threadId}.`);
+  });
+  addSocketListener(socket, "message", async (event) => {
+    const raw = typeof event?.data === "string" ? event.data : event;
+    let payload;
+    try {
+      payload = JSON.parse(String(raw || "{}"));
+    } catch (error) {
+      sendDashboardSocketReply(socket, {
+        threadId,
+        status: "failed",
+        message: "VPS Codex CLI が dashboard job JSON を読み取れませんでした。"
+      });
+      return;
+    }
+    if (payload?.type !== "dashboard_chat_job") {
+      return;
+    }
+    try {
+      await onJob?.(payload, socket);
+    } catch (error) {
+      sendDashboardSocketReply(socket, {
+        threadId: normalizeText(payload.threadId) || threadId,
+        repository: normalizeRepository(payload.repository),
+        issueNumber: normalizePositiveInteger(payload.relatedIssue || payload.issueNumber),
+        status: "failed",
+        message: `VPS Codex CLI dashboard job failed: ${summarizeDiagnosticText(error?.message || String(error), 1000)}`
+      });
+    }
+  });
+  addSocketListener(socket, "close", () => {
+    logger?.error?.(`Dashboard WebSocket runner disconnected for ${threadId}.`);
+  });
+  addSocketListener(socket, "error", (error) => {
+    logger?.error?.(`Dashboard WebSocket runner error: ${error?.message || String(error)}`);
+  });
+  return socket;
+}
+
+function addSocketListener(socket, eventName, handler) {
+  if (typeof socket?.addEventListener === "function") {
+    socket.addEventListener(eventName, handler);
+    return;
+  }
+  if (typeof socket?.on === "function") {
+    socket.on(eventName, handler);
+  }
+}
+
+async function executeVpsDashboardSocketJob({
+  githubFetch,
+  token,
+  workRoot,
+  job,
+  socket,
+  repositoryPolicies,
+  env = process.env
+}) {
+  const payload = buildVpsDashboardSocketExecutionPayload(job);
+  const policies = normalizeRepositoryPolicies({ repositoryPolicies });
+  const policy = validateVpsRunnerPayloadPolicy(payload, policies);
+  if (!policy.ok) {
+    sendDashboardSocketReply(socket, {
+      threadId: payload.handoff.dashboardThreadId,
+      repository: payload.repository,
+      issueNumber: payload.issueNumber,
+      status: "blocked",
+      message: `VPS Codex CLI blocked dashboard job: ${policy.reason}`
+    });
+    return;
+  }
+  const commandEnv = buildRunnerCommandEnv({ token });
+  const issue = payload.issueNumber
+    ? await githubFetch(`/repos/${payload.repository}/issues/${payload.issueNumber}`)
+    : {};
+  const workspace = path.join(workRoot, safePathSegment(payload.repository), payload.executionId);
+  await fs.mkdir(path.dirname(workspace), { recursive: true });
+  await runCommand("rm", ["-rf", workspace], { env: commandEnv });
+  await runCommand("gh", ["repo", "clone", payload.repository, workspace], { env: commandEnv });
+  const preflight = await buildVpsRunnerPreflightReceipt({ workspace, payload, issue });
+  if (!preflight.ok) {
+    sendDashboardSocketReply(socket, {
+      threadId: payload.handoff.dashboardThreadId,
+      repository: payload.repository,
+      issueNumber: payload.issueNumber,
+      status: "blocked",
+      message:
+        preflight.reason ||
+        "VPS runner preflight receipt could not be created. Butler/owner decision is required before dashboard chat triage."
+    });
+    return;
+  }
+  const result = await runCommand("codex", buildCodexExecArgs({ env }), {
+    cwd: workspace,
+    env: buildCodexExecutionEnv(env),
+    input: buildDashboardChatTriagePrompt({ payload, issue, preflight }),
+    maxBuffer: 1024 * 1024 * 12
+  });
+  const reply = summarizeDiagnosticText(result.stdout || result.stderr || "VPS Codex CLI completed dashboard chat triage.", 4000);
+  sendDashboardSocketReply(socket, {
+    threadId: payload.handoff.dashboardThreadId,
+    repository: payload.repository,
+    issueNumber: payload.issueNumber,
+    status: "completed",
+    message: reply
+  });
+}
+
+function buildVpsDashboardSocketExecutionPayload(job) {
+  const repository = normalizeRepository(job?.repository);
+  const issueNumber = normalizePositiveInteger(job?.relatedIssue || job?.issueNumber);
+  const threadId = normalizeText(job?.threadId);
+  return {
+    executionId: `dashboard-ws-${Date.now()}-${crypto.randomUUID()}`,
+    repository,
+    issueNumber,
+    branch: `codex/dashboard-chat-${Date.now()}`,
+    baseRef: "main",
+    codexGoal: "dashboard_chat_triage",
+    approval: {
+      phrase: "GO",
+      issueTraceable: true
+    },
+    handoff: {
+      ownerMessage: normalizeText(job?.text),
+      repositoryInput: normalizeText(job?.repositoryInput) || repository,
+      dashboardThreadId: threadId
+    }
+  };
+}
+
+function sendDashboardSocketReply(socket, reply) {
+  if (typeof socket?.send !== "function") {
+    return;
+  }
+  socket.send(
+    JSON.stringify({
+      threadId: normalizeText(reply.threadId),
+      repository: normalizeRepository(reply.repository),
+      issueNumber: normalizePositiveInteger(reply.issueNumber),
+      status: normalizeText(reply.status) || "completed",
+      message: normalizeText(reply.message) || "VPS Codex CLI completed dashboard job."
+    })
+  );
 }
 
 function buildDashboardChatTriagePrompt({ payload, issue = {}, preflight = null }) {
@@ -2681,7 +2901,8 @@ function mustGetEnv(name, value = process.env[name]) {
 
 function parseArgs(args) {
   return {
-    dryRun: args.includes("--dry-run")
+    dryRun: args.includes("--dry-run"),
+    dashboardWs: args.includes("--dashboard-ws")
   };
 }
 
@@ -2697,6 +2918,7 @@ export {
   buildVpsRunnerCompletionFinalEvent,
   buildCodexExecutionPrompt,
   buildDashboardChatTriagePrompt,
+  buildDashboardRunnerWebSocketUrl,
   buildCodexExecArgs,
   buildVpsRunnerPreflightReceipt,
   buildGuardedPullRequestBody,
@@ -2708,6 +2930,7 @@ export {
   buildVpsRunnerPullRequestContext,
   checkoutVpsRunnerBranch,
   classifyVpsRunnerFailure,
+  connectVpsDashboardWebSocketClient,
   formatPullRequestContext,
   isNonFastForwardPushFailure,
   loadVpsRunnerRepositoryPolicies,
@@ -2717,6 +2940,7 @@ export {
   parseVpsRunnerQueueComment,
   postVpsRunnerEvent,
   runVpsRunnerOnce,
+  startVpsDashboardWebSocketRunner,
   resolveRoleGitHubAppInstallationToken,
   summarizeDiagnosticText,
   selectPendingVpsReviewerFallbacks,

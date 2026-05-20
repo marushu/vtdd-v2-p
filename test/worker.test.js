@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import worker from "../src/worker.js";
+import { DashboardChatRoom } from "../src/worker.js";
 import {
   ActionType,
   ActorRole,
@@ -102,10 +103,18 @@ function createInMemoryDashboardEventStore() {
 
 function createInMemoryDashboardChatStore() {
   const messagesByThread = new Map();
+  const summariesByThread = new Map();
   return {
     async appendMany(threadId, messages) {
       const list = messagesByThread.get(threadId) ?? [];
       const normalizedMessages = (Array.isArray(messages) ? messages : []).map((message) => ({
+        messageId: message.messageId || `${threadId}-${list.length + 1}`,
+        role: message.role || "system",
+        repository: message.repository || null,
+        relatedIssue: message.relatedIssue || message.issueNumber || null,
+        status: message.status || "sent",
+        text: message.text || "",
+        createdAt: message.createdAt || new Date().toISOString(),
         ...message,
         threadId
       }));
@@ -116,6 +125,46 @@ function createInMemoryDashboardChatStore() {
     async listThread(threadId, filter = {}) {
       const limit = Number(filter.limit) || 80;
       return (messagesByThread.get(threadId) ?? []).slice(-limit);
+    },
+    async putSummary(threadId, summary) {
+      const record = {
+        threadId,
+        repository: summary.repository || null,
+        relatedIssue: summary.relatedIssue || summary.issueNumber || null,
+        summary: summary.summary || summary.text || "",
+        decisions: Array.isArray(summary.decisions) ? summary.decisions : [],
+        openItems: Array.isArray(summary.openItems) ? summary.openItems : [],
+        archivedUntilMessageId: summary.archivedUntilMessageId || null,
+        updatedAt: summary.updatedAt || new Date().toISOString()
+      };
+      summariesByThread.set(threadId, record);
+      return record.summary ? record : null;
+    },
+    async getSummary(threadId) {
+      return summariesByThread.get(threadId) || null;
+    },
+    async search(filter = {}) {
+      const text = String(filter.text || filter.q || "");
+      const repository = filter.repository || "";
+      const relatedIssue = Number(filter.relatedIssue || filter.issueNumber) || null;
+      const limit = Number(filter.limit) || 20;
+      const results = [];
+      for (const [threadId, messages] of messagesByThread.entries()) {
+        for (const message of messages) {
+          if (text && !String(message.text || "").includes(text)) continue;
+          if (repository && message.repository !== repository) continue;
+          if (relatedIssue && message.relatedIssue !== relatedIssue) continue;
+          results.push({ kind: "message", threadId, message });
+        }
+      }
+      for (const [threadId, summary] of summariesByThread.entries()) {
+        const haystack = [summary.summary, ...summary.decisions, ...summary.openItems].join("\n");
+        if (text && !haystack.includes(text)) continue;
+        if (repository && summary.repository !== repository) continue;
+        if (relatedIssue && summary.relatedIssue !== relatedIssue) continue;
+        results.push({ kind: "summary", threadId, summary });
+      }
+      return results.slice(0, limit);
     }
   };
 }
@@ -136,6 +185,20 @@ function createMockDashboardChatRoomNamespace() {
           }
         };
       }
+    }
+  };
+}
+
+function createMockSocket(role, threadId) {
+  const sent = [];
+  return {
+    readyState: 1,
+    sent,
+    send(message) {
+      sent.push(String(message));
+    },
+    deserializeAttachment() {
+      return { role, threadId };
     }
   };
 }
@@ -397,10 +460,10 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("overflow: hidden"), true);
   assert.equal(body.includes("grid-template-columns: minmax(0, 1fr) auto"), true);
   assert.equal(body.includes("WebSocket"), true);
-  assert.equal(body.includes("接続済み: WebSocket で runner event post を待ちます"), true);
+  assert.equal(body.includes("接続準備中: WebSocket で Butler と VPS Codex CLI に接続します"), true);
   assert.equal(body.includes("repo/nickname 未指定"), true);
-  assert.equal(body.includes("dashboard chat triage queue に渡します"), true);
-  assert.equal(body.includes("返信として表示するのは runner から戻った event post だけです"), true);
+  assert.equal(body.includes("WebSocket で VPS Codex CLI に直接 push します"), true);
+  assert.equal(body.includes("GitHub Issue コメント queue は通常会話では使いません"), true);
   assert.equal(body.includes("deploy 用 passkey URL"), false);
   assert.equal(body.includes("vtdd-v3-orchestrator.polished-tree-da7c.workers.dev"), false);
   assert.equal(body.includes('id="mobile-menu-toggle"'), true);
@@ -410,7 +473,7 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes('class="icon-button"'), false);
   assert.equal(body.includes('aria-hidden="true">＋</span>'), false);
   assert.equal(body.includes('aria-hidden="true">♪</span>'), false);
-  assert.equal(body.includes("/v2/dashboard/chat/messages"), true);
+  assert.equal(body.includes("/v2/dashboard/chat/messages"), false);
   assert.equal(body.includes('data-thread-endpoint="https://example.com/v2/dashboard/chat/dashboard-main-unresolved"'), true);
   assert.equal(body.includes('data-socket-endpoint="wss://example.com/v2/dashboard/chat/dashboard-main-unresolved/ws"'), true);
   assert.equal(body.includes('data-dispatch-to-vps-runner="true"'), true);
@@ -418,17 +481,21 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes('data-codex-goal="dashboard_chat_triage"'), true);
   assert.equal(body.includes('executorTransport: dispatchToVpsRunner ? "vps_runner" : undefined'), true);
   assert.equal(body.includes("new WebSocket(socketEndpoint)"), true);
-  assert.equal(body.includes("VPS Codex CLI の runner event post を待っています"), true);
   assert.equal(body.includes("function refreshThread()"), true);
+  assert.equal(body.includes("function scheduleReconnect()"), true);
+  assert.equal(body.includes("履歴を再取得して再接続します"), true);
+  assert.equal(body.includes("document.addEventListener(\"visibilitychange\""), true);
+  assert.equal(body.includes("window.addEventListener(\"online\""), true);
+  assert.equal(body.includes("VPS Codex CLI に push します"), true);
   assert.equal(body.includes("function updateComposerReserve()"), true);
   assert.equal(body.includes("function scrollToLatest()"), true);
-  assert.equal(body.includes("function showThinking()"), true);
-  assert.equal(body.includes("function removeThinking("), true);
+  assert.equal(body.includes("function showThinking()"), false);
+  assert.equal(body.includes("function removeThinking("), false);
   assert.equal(body.includes("function renderMessageText("), true);
   assert.equal(body.includes("white-space: pre-wrap"), true);
   assert.equal(body.includes("urlPattern"), true);
   assert.equal(body.includes('link.className = "chat-link"'), true);
-  assert.equal(body.includes("考えています"), true);
+  assert.equal(body.includes("考えています"), false);
   assert.equal(body.includes("thinking-dots"), true);
   assert.equal(body.includes("grid-template-rows: auto minmax(0, 1fr) auto"), true);
   assert.equal(body.includes("height: 100dvh"), true);
@@ -438,7 +505,7 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("--composer-reserve"), true);
   assert.equal(body.includes("background: var(--page-bg)"), true);
   assert.equal(body.includes('credentials: "same-origin"'), true);
-  assert.equal(body.includes("会話履歴を読み込み中です"), true);
+  assert.equal(body.includes("会話履歴を読み込み中です"), false);
   assert.equal(body.includes("モバイル管理メニュー"), true);
   assert.equal(body.includes("直近 deploy event"), true);
   assert.equal(body.includes("Butler V2 にメッセージ"), true);
@@ -451,8 +518,8 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes('name="text"'), true);
   assert.equal(/<meta[^>]+http-equiv=["']?refresh/i.test(body), false);
   assert.equal(body.includes("setInterval("), false);
-  assert.equal(body.includes("setTimeout("), false);
-  assert.equal(body.includes("fetch("), true);
+  assert.equal(body.includes("setTimeout("), true);
+  assert.equal(body.includes("fetch(threadEndpoint"), true);
   assert.equal(body.includes("repositoryInput=marushu%2Fvtdd-v2-p"), false);
   assert.equal(body.includes("/status"), true);
   assert.equal(body.includes("/dashboard/preflight?repository=marushu%2Fvtdd-v2-p"), false);
@@ -520,6 +587,73 @@ test("worker appends dashboard Butler chat turn and retrieves the same thread", 
   assert.equal(retrieveBody.ok, true);
   assert.equal(retrieveBody.messages.length, 2);
   assert.equal(retrieveBody.messages[0].text, "VPS Codex CLI とリアルタイムに会話したい");
+  assert.equal(retrieveBody.summary, null);
+});
+
+test("worker stores dashboard Butler thread summaries and searches archived context", async () => {
+  const store = createInMemoryDashboardChatStore();
+  await store.appendMany("dashboard-main-marushu-vtdd-v2-p", [
+    {
+      role: "owner",
+      repository: "marushu/vtdd-v2-p",
+      relatedIssue: 450,
+      status: "sent",
+      text: "長いスレッドを分割して検索できるようにして",
+      createdAt: "2026-05-20T00:00:00.000Z"
+    }
+  ]);
+  await store.appendMany("dashboard-main-other", [
+    {
+      role: "owner",
+      repository: "marushu/other",
+      relatedIssue: 1,
+      status: "sent",
+      text: "別リポジトリの話",
+      createdAt: "2026-05-20T00:00:01.000Z"
+    }
+  ]);
+
+  const summaryResponse = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/chat/dashboard-main-marushu-vtdd-v2-p/summary", {
+      method: "POST",
+      headers: { ...dashboardAccessHeaders, "content-type": "application/json" },
+      body: JSON.stringify({
+        repository: "marushu/vtdd-v2-p",
+        relatedIssue: 450,
+        summary: "Butler chat は長期スレッドを要約し、古い文脈をアーカイブ検索へ寄せる。",
+        decisions: ["直近表示は短く保ち、過去文脈は検索する"],
+        openItems: ["LLM 自動仕分けは次スライス"]
+      })
+    }),
+    { ...dashboardAccessEnv, DASHBOARD_CHAT_STORE: store }
+  );
+  assert.equal(summaryResponse.status, 200);
+  const summaryBody = await summaryResponse.json();
+  assert.equal(summaryBody.ok, true);
+  assert.equal(summaryBody.summary.relatedIssue, 450);
+
+  const threadResponse = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/chat/dashboard-main-marushu-vtdd-v2-p", {
+      headers: dashboardAccessHeaders
+    }),
+    { ...dashboardAccessEnv, DASHBOARD_CHAT_STORE: store }
+  );
+  assert.equal(threadResponse.status, 200);
+  const threadBody = await threadResponse.json();
+  assert.equal(threadBody.summary.summary.includes("アーカイブ検索"), true);
+
+  const searchResponse = await worker.fetch(
+    new Request(
+      "https://example.com/v2/dashboard/chat/search?text=%E3%82%A2%E3%83%BC%E3%82%AB%E3%82%A4%E3%83%96&repository=marushu%2Fvtdd-v2-p&relatedIssue=450",
+      { headers: dashboardAccessHeaders }
+    ),
+    { ...dashboardAccessEnv, DASHBOARD_CHAT_STORE: store }
+  );
+  assert.equal(searchResponse.status, 200);
+  const searchBody = await searchResponse.json();
+  assert.equal(searchBody.ok, true);
+  assert.equal(searchBody.results.some((result) => result.kind === "summary"), true);
+  assert.equal(searchBody.results.every((result) => result.threadId === "dashboard-main-marushu-vtdd-v2-p"), true);
 });
 
 test("worker appends dashboard Butler chat turn with dashboard passkey session cookie", async () => {
@@ -873,6 +1007,175 @@ test("worker requires WebSocket upgrade for dashboard chat live updates", async 
   assert.equal(rooms.calls.length, 0);
 });
 
+test("worker exposes machine-authenticated VPS runner WebSocket push channel", async () => {
+  const rooms = createMockDashboardChatRoomNamespace();
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/vps-runner/ws?threadId=dashboard-main-marushu-vtdd-v2-p", {
+      headers: gatewayAuthHeaders
+    }),
+    { ...gatewayAuthEnv, DASHBOARD_CHAT_ROOMS: rooms.namespace }
+  );
+
+  assert.equal(response.status, 426);
+  const body = await response.json();
+  assert.equal(body.error, "websocket_upgrade_required");
+  assert.equal(rooms.calls.length, 0);
+
+  const unauthorized = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/vps-runner/ws?threadId=dashboard-main-marushu-vtdd-v2-p"),
+    { ...gatewayAuthEnv, DASHBOARD_CHAT_ROOMS: rooms.namespace }
+  );
+  assert.equal(unauthorized.status, 401);
+
+  const missingThread = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/vps-runner/ws", {
+      headers: gatewayAuthHeaders
+    }),
+    { ...gatewayAuthEnv, DASHBOARD_CHAT_ROOMS: rooms.namespace }
+  );
+  assert.equal(missingThread.status, 422);
+  const missingBody = await missingThread.json();
+  assert.equal(missingBody.error, "thread_id_required");
+});
+
+test("DashboardChatRoom pushes owner messages to a runner socket in the same thread room", async () => {
+  const store = createInMemoryDashboardChatStore();
+  const room = new DashboardChatRoom(
+    {
+      getWebSockets() {
+        return [dashboardSocket, runnerSocket];
+      }
+    },
+    { DASHBOARD_CHAT_STORE: store }
+  );
+  const dashboardSocket = createMockSocket("dashboard", "dashboard-main-marushu-vtdd-v2-p");
+  const runnerSocket = createMockSocket("vps_runner", "dashboard-main-marushu-vtdd-v2-p");
+
+  await room.webSocketMessage(
+    dashboardSocket,
+    JSON.stringify({
+      type: "owner_message",
+      threadId: "dashboard-main-marushu-vtdd-v2-p",
+      repositoryInput: "marushu/vtdd-v2-p",
+      issueNumber: 450,
+      text: "進捗は？"
+    })
+  );
+
+  assert.equal(runnerSocket.sent.length, 1);
+  const job = JSON.parse(runnerSocket.sent[0]);
+  assert.equal(job.type, "dashboard_chat_job");
+  assert.equal(job.threadId, "dashboard-main-marushu-vtdd-v2-p");
+  assert.equal(job.repository, "marushu/vtdd-v2-p");
+  assert.equal(job.relatedIssue, 450);
+  assert.equal(job.text, "進捗は？");
+
+  assert.equal(dashboardSocket.sent.length, 1);
+  const broadcast = JSON.parse(dashboardSocket.sent[0]);
+  assert.equal(broadcast.type, "thread");
+  assert.equal(broadcast.messages.length, 2);
+  assert.equal(broadcast.messages[0].role, "owner");
+  assert.equal(broadcast.messages[1].status, "thinking");
+});
+
+test("DashboardChatRoom broadcasts VPS runner replies to dashboard sockets in the same thread room", async () => {
+  const store = createInMemoryDashboardChatStore();
+  const dashboardSocket = createMockSocket("dashboard", "dashboard-main-marushu-vtdd-v2-p");
+  const runnerSocket = createMockSocket("vps_runner", "dashboard-main-marushu-vtdd-v2-p");
+  const room = new DashboardChatRoom(
+    {
+      getWebSockets() {
+        return [dashboardSocket, runnerSocket];
+      }
+    },
+    { DASHBOARD_CHAT_STORE: store }
+  );
+
+  await room.webSocketMessage(
+    runnerSocket,
+    JSON.stringify({
+      threadId: "dashboard-main-marushu-vtdd-v2-p",
+      repository: "marushu/vtdd-v2-p",
+      issueNumber: 450,
+      status: "completed",
+      message: "VPS Codex CLI からの返信です。"
+    })
+  );
+
+  assert.equal(dashboardSocket.sent.length, 1);
+  const broadcast = JSON.parse(dashboardSocket.sent[0]);
+  assert.equal(broadcast.threadId, "dashboard-main-marushu-vtdd-v2-p");
+  assert.equal(broadcast.messages.length, 1);
+  assert.equal(broadcast.messages[0].role, "runner");
+  assert.equal(broadcast.messages[0].status, "replied");
+  assert.equal(broadcast.messages[0].text, "VPS Codex CLI からの返信です。");
+  assert.equal(runnerSocket.sent.length, 0);
+});
+
+test("DashboardChatRoom rejects VPS runner replies for a different thread room", async () => {
+  const store = createInMemoryDashboardChatStore();
+  const dashboardSocket = createMockSocket("dashboard", "dashboard-main-marushu-vtdd-v2-p");
+  const runnerSocket = createMockSocket("vps_runner", "dashboard-main-marushu-vtdd-v2-p");
+  const room = new DashboardChatRoom(
+    {
+      getWebSockets() {
+        return [dashboardSocket, runnerSocket];
+      }
+    },
+    { DASHBOARD_CHAT_STORE: store }
+  );
+
+  await room.webSocketMessage(
+    runnerSocket,
+    JSON.stringify({
+      threadId: "dashboard-main-other",
+      repository: "marushu/vtdd-v2-p",
+      issueNumber: 450,
+      status: "completed",
+      message: "別 thread に混ざってはいけない返信"
+    })
+  );
+
+  assert.equal(dashboardSocket.sent.length, 0);
+  assert.equal(runnerSocket.sent.length, 0);
+  assert.equal((await store.listThread("dashboard-main-marushu-vtdd-v2-p")).length, 0);
+  assert.equal((await store.listThread("dashboard-main-other")).length, 0);
+});
+
+test("DashboardChatRoom stores a visible failure when no runner socket is connected", async () => {
+  const store = createInMemoryDashboardChatStore();
+  const dashboardSocket = createMockSocket("dashboard", "dashboard-main-marushu-vtdd-v2-p");
+  const room = new DashboardChatRoom(
+    {
+      getWebSockets() {
+        return [dashboardSocket];
+      }
+    },
+    { DASHBOARD_CHAT_STORE: store }
+  );
+
+  await room.webSocketMessage(
+    dashboardSocket,
+    JSON.stringify({
+      type: "owner_message",
+      threadId: "dashboard-main-marushu-vtdd-v2-p",
+      repositoryInput: "marushu/vtdd-v2-p",
+      issueNumber: 450,
+      text: "返事ある？"
+    })
+  );
+
+  assert.equal(dashboardSocket.sent.length, 2);
+  const failureBroadcast = JSON.parse(dashboardSocket.sent[1]);
+  assert.equal(failureBroadcast.messages.length, 1);
+  assert.equal(failureBroadcast.messages[0].status, "failed");
+  assert.equal(failureBroadcast.messages[0].text.includes("WebSocket 接続されていない"), true);
+
+  const stored = await store.listThread("dashboard-main-marushu-vtdd-v2-p");
+  assert.equal(stored.length, 3);
+  assert.equal(stored[2].status, "failed");
+});
+
 test("worker redacts dashboard Butler chat sensitive material before returning and storing", async () => {
   const store = createInMemoryDashboardChatStore();
   const response = await worker.fetch(
@@ -1140,7 +1443,7 @@ test("worker ingests GitHub Actions deploy completion event and shows it on dash
   assert.equal(dashboardBody.includes("approval:must-not-persist"), false);
   assert.equal(dashboardBody.includes("secret-must-not-persist"), false);
   assert.equal(dashboardBody.includes("setInterval("), false);
-  assert.equal(dashboardBody.includes("fetch("), true);
+  assert.equal(dashboardBody.includes("fetch(threadEndpoint"), true);
 });
 
 test("worker rejects GitHub Actions deploy completion event without machine auth", async () => {
