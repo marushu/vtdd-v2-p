@@ -101,6 +101,10 @@ jobs:
           CLOUDFLARE_D1_DATABASE_NAME: ${{ vars.CLOUDFLARE_D1_DATABASE_NAME || 'vtdd-memory' }}
           VTDD_GITHUB_ACTIONS_REPOSITORY: ${{ github.repository }}
           VTDD_KNOWN_GOOD_COMMIT_SHA: ${{ vars.VTDD_KNOWN_GOOD_COMMIT_SHA }}
+          VTDD_DASHBOARD_ALLOWED_EMAILS: ${{ vars.VTDD_DASHBOARD_ALLOWED_EMAILS }}
+          VTDD_DASHBOARD_ALLOWED_GITHUB_LOGINS: ${{ vars.VTDD_DASHBOARD_ALLOWED_GITHUB_LOGINS }}
+          CF_ACCESS_TEAM_DOMAIN: ${{ vars.CF_ACCESS_TEAM_DOMAIN }}
+          CF_ACCESS_AUD: ${{ vars.CF_ACCESS_AUD }}
         shell: bash
         run: |
           cp wrangler.toml wrangler.production.generated.toml
@@ -109,6 +113,25 @@ jobs:
           [env.production.vars]
           VTDD_GITHUB_ACTIONS_REPOSITORY = "$VTDD_GITHUB_ACTIONS_REPOSITORY"
           EOF
+          append_toml_var() {
+            local key="$1"
+            local value="$2"
+            if [ -n "$value" ]; then
+              node -e 'const [key, value] = process.argv.slice(1); console.log(`${key} = ${JSON.stringify(value)}`);' "$key" "$value" >> wrangler.production.generated.toml
+            fi
+          }
+          if [ -n "$VTDD_DASHBOARD_ALLOWED_EMAILS" ]; then
+            append_toml_var "VTDD_DASHBOARD_ALLOWED_EMAILS" "$VTDD_DASHBOARD_ALLOWED_EMAILS"
+          fi
+          if [ -n "$VTDD_DASHBOARD_ALLOWED_GITHUB_LOGINS" ]; then
+            append_toml_var "VTDD_DASHBOARD_ALLOWED_GITHUB_LOGINS" "$VTDD_DASHBOARD_ALLOWED_GITHUB_LOGINS"
+          fi
+          if [ -n "$CF_ACCESS_TEAM_DOMAIN" ]; then
+            append_toml_var "CF_ACCESS_TEAM_DOMAIN" "$CF_ACCESS_TEAM_DOMAIN"
+          fi
+          if [ -n "$CF_ACCESS_AUD" ]; then
+            append_toml_var "CF_ACCESS_AUD" "$CF_ACCESS_AUD"
+          fi
           if [ -n "$VTDD_KNOWN_GOOD_COMMIT_SHA" ]; then
             if [[ ! "$VTDD_KNOWN_GOOD_COMMIT_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
               echo "VTDD_KNOWN_GOOD_COMMIT_SHA must be a 40-character commit SHA."

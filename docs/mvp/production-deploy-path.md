@@ -72,6 +72,22 @@ includes the run URL and deployed commit SHA, and intentionally omits approval
 grant ids, tokens, and other secret values. If the variable is absent,
 the deploy still runs and the mention notification is skipped.
 
+Dashboard pages are owner-facing surfaces, not public documentation pages.
+Set at least one repository variable before deploy:
+
+- `VTDD_DASHBOARD_ALLOWED_EMAILS`
+- `VTDD_DASHBOARD_ALLOWED_GITHUB_LOGINS`
+
+Also set both Cloudflare Access JWT validation variables:
+
+- `CF_ACCESS_TEAM_DOMAIN`
+- `CF_ACCESS_AUD`
+
+The Worker fails closed when neither allowlist is configured, or when Access JWT
+validation is not configured. Browser access is accepted only when Cloudflare
+Access supplies a matching identity and a valid `Cf-Access-Jwt-Assertion`.
+Service-to-service dashboard event ingestion still uses machine auth.
+
 ## Approval Boundary (scoped passkey approval)
 
 `deploy-production` workflow is manual (`workflow_dispatch`) and requires:
