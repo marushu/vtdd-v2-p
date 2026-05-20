@@ -80,6 +80,7 @@ export function parseCodexReviewFallbackComment(comment = {}) {
     extractBacktickedValue(body, "Status") ||
     (body.includes("@codex review") ? CodexReviewFallbackStatus.REQUESTED : "");
   const recommendedAction = extractBacktickedValue(body, "Recommended action");
+  const headSha = extractBacktickedValue(body, "Head SHA");
   const blocker = extractBacktickedValue(body, "Blocker");
 
   return {
@@ -91,6 +92,7 @@ export function parseCodexReviewFallbackComment(comment = {}) {
       blocker
     }),
     recommendedAction: recommendedAction || null,
+    ...(headSha ? { headSha } : {}),
     blocker: blocker || null,
     body
   };

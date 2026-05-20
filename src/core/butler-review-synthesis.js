@@ -358,6 +358,9 @@ function normalizeReviewerSignalTruth(value) {
     canonicalReviewer: normalizeText(input.canonicalReviewer) || null,
     reviewerStatus: normalizeText(input.reviewerStatus) || null,
     recommendedAction: normalizeText(input.recommendedAction) || null,
+    ...(normalizeText(input.reviewerHeadSha)
+      ? { reviewerHeadSha: normalizeText(input.reviewerHeadSha) }
+      : {}),
     vtddReviewerMarkerPresent: input.vtddReviewerMarkerPresent === true,
     githubFormalReview: {
       source: normalizeText(formal.source) || "github_formal_review_objects",
@@ -386,6 +389,7 @@ function normalizeReviewerEvidence(value) {
   return {
     reviewer: normalizeText(input.reviewer) || null,
     recommendedAction,
+    ...(normalizeText(input.headSha) ? { headSha: normalizeText(input.headSha) } : {}),
     url: normalizeText(input.url) || null,
     createdAt: normalizeText(input.createdAt) || null,
     updatedAt: normalizeText(input.updatedAt) || null,

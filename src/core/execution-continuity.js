@@ -244,9 +244,10 @@ function collectCodexFallbackSignals(pullRequest) {
     blocked: latest?.status === "blocked",
     blocking: latest?.blocking === true,
     latestEvidence: latest?.status === "completed"
-      ? {
+        ? {
           reviewer: "codex",
           recommendedAction: latest.recommendedAction || "manual_review",
+          ...(latest.headSha ? { headSha: latest.headSha } : {}),
           url: latest.url || null,
           createdAt: latest.createdAt || null,
           updatedAt: latest.updatedAt || null,
@@ -275,6 +276,7 @@ function buildReviewTimelineItem(comment) {
       reviewer: "gemini",
       status: gemini.recommendedAction,
       recommendedAction: gemini.recommendedAction,
+      ...(gemini.headSha ? { headSha: gemini.headSha } : {}),
       blocking: gemini.blocking === true,
       url: gemini.url || normalizeCommentUrl(comment),
       createdAt: gemini.createdAt || normalizeCommentCreatedAt(comment),
@@ -292,6 +294,7 @@ function buildReviewTimelineItem(comment) {
       reviewer: "codex",
       status: codex.status,
       recommendedAction: codex.recommendedAction || null,
+      ...(codex.headSha ? { headSha: codex.headSha } : {}),
       blocking: codex.blocking === true,
       url: normalizeCommentUrl(comment),
       createdAt: normalizeCommentCreatedAt(comment),
@@ -481,6 +484,9 @@ function buildReviewerSignalTruth({ reviewer, reviewerStatus, reviewerEvidence, 
     canonicalReviewer: vtddReviewerMarkerPresent ? reviewer : null,
     reviewerStatus,
     recommendedAction,
+    ...(normalizeText(reviewerEvidence?.headSha)
+      ? { reviewerHeadSha: normalizeText(reviewerEvidence?.headSha) }
+      : {}),
     vtddReviewerMarkerPresent,
     githubFormalReview: formalReviewTruth,
     mergeReviewTruth: {
