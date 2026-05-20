@@ -3148,7 +3148,19 @@ async function handleVpsRunnerEventRequest(request, env) {
 
 async function handleDashboardChatMessageRequest(request, env) {
   const payload = await readJson(request);
-  const prepared = buildDashboardChatTurn(payload);
+  const wantsVpsRunnerHandoff = shouldDispatchDashboardChatToVpsRunner(payload);
+  if (wantsVpsRunnerHandoff) {
+    const auth = authorizeGatewayRequest({ request, env, apiSuffix: "/dashboard/chat/messages" });
+    if (!auth.ok) {
+      return json(auth.status, {
+        ok: false,
+        error: "dashboard_vps_runner_dispatch_unauthorized",
+        reason: auth.reason
+      });
+    }
+  }
+
+  const prepared = buildDashboardChatTurn(payload, { wantsVpsRunnerHandoff });
   if (!prepared.ok) {
     return json(422, {
       ok: false,
@@ -3166,11 +3178,46 @@ async function handleDashboardChatMessageRequest(request, env) {
     });
   }
 
-  const messages = await store.appendMany(prepared.threadId, prepared.messages);
+  let execution = null;
+  let messagesToStore = prepared.messages;
+  if (wantsVpsRunnerHandoff) {
+    const handoffPayload = buildDashboardVpsRunnerHandoffPayload({ payload, prepared });
+    if (!handoffPayload.ok) {
+      return json(422, {
+        ok: false,
+        error: handoffPayload.error,
+        reason: handoffPayload.reason,
+        issues: handoffPayload.issues
+      });
+    }
+
+    const dispatched = await dispatchRemoteCodexExecution({
+      gatewayResult: { repository: prepared.repository },
+      payload: handoffPayload.payload,
+      executorTransport: "vps_runner",
+      env
+    });
+    if (!dispatched.ok) {
+      return json(dispatched.status ?? 502, {
+        ok: false,
+        error: dispatched.error ?? dispatched.blockedByRule ?? "dashboard_vps_runner_dispatch_failed",
+        reason: dispatched.reason,
+        issues: dispatched.issues ?? []
+      });
+    }
+    execution = dispatched.execution;
+    messagesToStore = [
+      ...prepared.messages,
+      buildDashboardVpsRunnerQueuedMessage({ prepared, execution })
+    ].filter(Boolean);
+  }
+
+  const messages = await store.appendMany(prepared.threadId, messagesToStore);
   return json(202, {
     ok: true,
     threadId: prepared.threadId,
-    messages
+    messages,
+    execution
   });
 }
 
@@ -4956,7 +5003,7 @@ function createD1DashboardChatStore(d1) {
   }
 }
 
-function buildDashboardChatTurn(payload) {
+function buildDashboardChatTurn(payload, options = {}) {
   const input = normalizeObject(payload);
   const repository = normalizeCanonicalRepositoryInput(input.repository);
   if (!repository) {
@@ -5000,7 +5047,12 @@ function buildDashboardChatTurn(payload) {
       repository,
       relatedIssue,
       status: "replied",
-      text: buildDeterministicButlerChatReply({ text, repository, relatedIssue }),
+      text: buildDeterministicButlerChatReply({
+        text,
+        repository,
+        relatedIssue,
+        wantsVpsRunnerHandoff: options.wantsVpsRunnerHandoff === true
+      }),
       createdAt: new Date(Date.parse(now) + 1).toISOString()
     },
     { threadId }
@@ -5008,14 +5060,19 @@ function buildDashboardChatTurn(payload) {
 
   return {
     ok: true,
+    repository,
+    relatedIssue,
     threadId,
     messages: [ownerMessage, butlerMessage]
   };
 }
 
-function buildDeterministicButlerChatReply({ text, repository, relatedIssue }) {
+function buildDeterministicButlerChatReply({ text, repository, relatedIssue, wantsVpsRunnerHandoff = false }) {
   const lowerText = normalizeText(text).toLowerCase();
   const issuePhrase = relatedIssue ? ` Issue #${relatedIssue} として扱えます。` : "";
+  if (wantsVpsRunnerHandoff) {
+    return `受け取りました。${repository} の Issue #${relatedIssue || "未指定"} に紐づけて、VPS Codex CLI への bounded handoff を作成します。runner からの進捗は同じ dashboard chat thread に返します。`.trim();
+  }
   if (lowerText.includes("vps") || lowerText.includes("codex") || lowerText.includes("cli")) {
     return `受け取りました。${repository} の会話として、この turn を dashboard chat thread に保存しました。VPS Codex CLI への実行 dispatch はまだ行わず、次スライスで runner の返信イベントを同じ chat thread に返します。${issuePhrase}`.trim();
   }
@@ -5023,6 +5080,109 @@ function buildDeterministicButlerChatReply({ text, repository, relatedIssue }) {
     return `受け取りました。${repository} の話として保存しました。ここから Issue 候補を整理し、実行が必要な場合は GO / passkey 境界を明示して開発 queue へ進めます。${issuePhrase}`.trim();
   }
   return `受け取りました。${repository} の Butler 会話として同じ thread に保存しました。今は dashboard chat runtime の初期接続なので、まずは会話履歴と返信を同じ画面で確認できます。${issuePhrase}`.trim();
+}
+
+function shouldDispatchDashboardChatToVpsRunner(payload) {
+  const input = normalizeObject(payload);
+  return (
+    input.dispatchToVpsRunner === true ||
+    input.vpsRunnerHandoff === true ||
+    normalizeDashboardEventText(input.executorTransport).toLowerCase() === "vps_runner"
+  );
+}
+
+function buildDashboardVpsRunnerHandoffPayload({ payload, prepared }) {
+  const input = normalizeObject(payload);
+  const issueNumber =
+    normalizePositiveInteger(input.issueNumber || input.relatedIssue) || prepared.relatedIssue;
+  if (!issueNumber) {
+    return {
+      ok: false,
+      error: "dashboard_vps_runner_issue_required",
+      reason: "issueNumber is required before dashboard can hand off a message to VPS Codex CLI",
+      issues: ["dashboard VPS runner handoff requires a GitHub Issue number"]
+    };
+  }
+
+  const codexGoal = normalizeDashboardEventText(input.codexGoal || input.goal || "open_pr").toLowerCase();
+  const branch =
+    normalizeDashboardEventText(input.branch || input.targetBranch) ||
+    `codex/issue-${issueNumber}-dashboard-vps-chat`;
+  const baseRef = normalizeDashboardEventText(input.baseRef || input.base_ref) || "main";
+  const summary =
+    normalizeDashboardEventText(input.handoffSummary || input.summary) ||
+    `Dashboard chat VPS runner handoff for Issue #${issueNumber}`;
+
+  return {
+    ok: true,
+    payload: {
+      actorRole: ActorRole.BUTLER,
+      executorTransport: "vps_runner",
+      issueContext: { issueNumber },
+      continuationContext: {
+        requiresHandoff: true,
+        executorTransport: "vps_runner",
+        codexGoal,
+        handoff: {
+          issueTraceable: true,
+          approvalScopeMatched: true,
+          relatedIssue: issueNumber,
+          summary,
+          dashboardThreadId: prepared.threadId
+        }
+      },
+      executionTarget: {
+        codexGoal,
+        branch,
+        baseRef
+      },
+      policyInput: {
+        actionType: "build",
+        mode: "execution",
+        repositoryInput: prepared.repository,
+        targetConfirmed: true,
+        approvalScopeMatched: true,
+        runtimeTruth: {
+          runtimeAvailable: true,
+          runtimeState: {
+            activeBranch: branch,
+            baseRef
+          }
+        },
+        consent: { grantedCategories: ["read", "propose", "execute"] },
+        approvalPhrase: "GO",
+        issueTraceable: true,
+        issueTraceability: {
+          relatedIssue: issueNumber,
+          intentRefs: [`#${issueNumber} Intent`],
+          successCriteriaRefs: [`#${issueNumber} Success Criteria`],
+          nonGoalRefs: [`#${issueNumber} Non-goals`]
+        },
+        go: true,
+        passkey: false
+      }
+    }
+  };
+}
+
+function buildDashboardVpsRunnerQueuedMessage({ prepared, execution }) {
+  if (!execution) {
+    return null;
+  }
+  const issuePhrase = execution.issueNumber ? `Issue #${execution.issueNumber}` : "対象Issue";
+  const queuePhrase = execution.queueCommentUrl ? ` queue: ${execution.queueCommentUrl}` : "";
+  return normalizeDashboardChatMessage(
+    {
+      threadId: prepared.threadId,
+      role: "runner",
+      repository: prepared.repository,
+      relatedIssue: execution.issueNumber || prepared.relatedIssue,
+      status: "thinking",
+      text: `VPS Codex CLI に ${issuePhrase} の bounded handoff を渡しました。実行状態は runner event としてこの thread に戻ります。${queuePhrase}`,
+      createdAt: new Date(Date.now() + 2).toISOString()
+    },
+    { threadId: prepared.threadId }
+  );
 }
 
 function normalizeDashboardChatMessage(message, defaults = {}) {

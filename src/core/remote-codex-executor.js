@@ -160,6 +160,7 @@ export function createRemoteCodexExecutionRequest(input = {}) {
             approvalScopeMatched: handoff.approvalScopeMatched === true,
             summary: normalizeText(handoff.summary),
             relatedIssue: normalizePositiveInteger(handoff.relatedIssue),
+            dashboardThreadId: normalizeText(handoff.dashboardThreadId),
             targetPullRequest: revisionTarget
           }
         : null
