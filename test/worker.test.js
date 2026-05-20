@@ -1976,6 +1976,10 @@ test("worker includes post-write retrieval for working memory writes", async () 
   assert.equal(body.ok, true);
   assert.equal(body.memoryWritePersisted.recordType, "working_memory");
   assert.equal(body.memoryWritePersisted.relatedIssue, 251);
+  assert.match(body.memoryWritePersisted.recordId, /^mem_[0-9a-f-]{36}$/);
+  assert.equal(body.memoryWritePersisted.recordId.includes("working_memory"), false);
+  assert.equal(body.memoryWritePersisted.recordId.includes("251"), false);
+  assert.equal(body.memoryWritePersisted.recordId.includes("Butler"), false);
   assert.equal(body.postWriteRetrieval.relatedIssue, 251);
 });
 
