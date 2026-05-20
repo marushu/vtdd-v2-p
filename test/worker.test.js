@@ -43,6 +43,9 @@ function createInMemoryDashboardEventStore() {
       events.set(event.id, event);
       return event;
     },
+    async delete(eventId) {
+      return events.delete(eventId);
+    },
     async latest(filter = {}) {
       const matches = [...events.values()].filter((event) => {
         if (filter.kind && event.kind !== filter.kind) {
@@ -583,6 +586,143 @@ test("worker rejects GitHub Actions deploy completion event without machine auth
   );
 
   assert.equal(response.status, 401);
+});
+
+test("worker ingests VPS runner event into notifications and Butler chat thread", async () => {
+  const eventStore = createInMemoryDashboardEventStore();
+  const chatStore = createInMemoryDashboardChatStore();
+  const eventResponse = await worker.fetch(
+    new Request("https://example.com/v2/events/vps-runner", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        repository: "marushu/vtdd-v2-p",
+        executionId: "remote-codex-issue452-chat",
+        threadId: "dashboard-main-marushu-vtdd-v2-p",
+        issueNumber: 452,
+        status: "running",
+        currentStep: "codex_subprocess",
+        lastEvent: "codex_started",
+        branch: "codex/issue-452-vps-runner-chat-events",
+        progressUrl:
+          "https://vtdd-v2-mvp.example/progress/remote-codex-issue452-chat?token=secret-must-not-persist",
+        message:
+          "VPS Codex CLI が作業を開始しました。approval:15b6f20d-11b6-4f8b-8008-99e7d7397452",
+        updatedAt: new Date(Date.now() - 60 * 1000).toISOString()
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      DASHBOARD_EVENT_STORE: eventStore,
+      DASHBOARD_CHAT_STORE: chatStore
+    }
+  );
+
+  assert.equal(eventResponse.status, 202);
+  const eventBody = await eventResponse.json();
+  assert.equal(eventBody.ok, true);
+  assert.equal(eventBody.event.kind, "vps_runner_execution");
+  assert.equal(eventBody.event.repository, "marushu/vtdd-v2-p");
+  assert.equal(eventBody.event.runId, "remote-codex-issue452-chat");
+  assert.equal(eventBody.event.status, "running");
+  assert.equal(eventBody.event.runUrl.includes("secret-must-not-persist"), false);
+  assert.equal(JSON.stringify(eventBody).includes("approval:15b6f20d"), false);
+  assert.equal(JSON.stringify(eventBody).includes("secret-must-not-persist"), false);
+  assert.equal(eventBody.threadId, "dashboard-main-marushu-vtdd-v2-p");
+  assert.equal(eventBody.messages[0].role, "runner");
+  assert.equal(eventBody.messages[0].status, "thinking");
+  assert.equal(eventBody.messages[0].relatedIssue, 452);
+  assert.equal(eventBody.messages[0].text.includes("VPS Codex CLI"), true);
+  assert.equal(eventBody.messages[0].text.includes("codex_subprocess"), true);
+
+  const chatResponse = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/chat/dashboard-main-marushu-vtdd-v2-p"),
+    { DASHBOARD_CHAT_STORE: chatStore }
+  );
+  assert.equal(chatResponse.status, 200);
+  const chatBody = await chatResponse.json();
+  assert.equal(chatBody.messages.length, 1);
+  assert.equal(chatBody.messages[0].role, "runner");
+  assert.equal(JSON.stringify(chatBody).includes("approval:15b6f20d"), false);
+  assert.equal(JSON.stringify(chatBody).includes("secret-must-not-persist"), false);
+
+  const notificationsResponse = await worker.fetch(
+    new Request("https://example.com/dashboard/notifications"),
+    { DASHBOARD_EVENT_STORE: eventStore }
+  );
+  assert.equal(notificationsResponse.status, 200);
+  const notificationsBody = await notificationsResponse.text();
+  assert.equal(notificationsBody.includes("通知センター"), true);
+  assert.equal(notificationsBody.includes("remote-codex-issue452-chat"), true);
+  assert.equal(notificationsBody.includes("marushu/vtdd-v2-p"), true);
+  assert.equal(notificationsBody.includes("codex_subprocess"), true);
+  assert.equal(notificationsBody.includes("secret-must-not-persist"), false);
+});
+
+test("worker rejects VPS runner event without machine auth", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/events/vps-runner", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        repository: "marushu/vtdd-v2-p",
+        executionId: "remote-codex-issue452-chat",
+        status: "running"
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      DASHBOARD_EVENT_STORE: createInMemoryDashboardEventStore(),
+      DASHBOARD_CHAT_STORE: createInMemoryDashboardChatStore()
+    }
+  );
+
+  assert.equal(response.status, 401);
+});
+
+test("worker rolls back VPS runner notification when Butler chat append fails", async () => {
+  const eventStore = createInMemoryDashboardEventStore();
+  const chatStore = {
+    async appendMany() {
+      throw new Error("chat append failed");
+    },
+    async listThread() {
+      return [];
+    }
+  };
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/events/vps-runner", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        repository: "marushu/vtdd-v2-p",
+        executionId: "remote-codex-issue452-partial-write",
+        threadId: "dashboard-main-marushu-vtdd-v2-p",
+        issueNumber: 452,
+        status: "running",
+        currentStep: "codex_subprocess"
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      DASHBOARD_EVENT_STORE: eventStore,
+      DASHBOARD_CHAT_STORE: chatStore
+    }
+  );
+
+  assert.equal(response.status, 502);
+  const body = await response.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.error, "dashboard_event_chat_append_failed");
+  assert.equal(body.rollback.notificationDeleted, true);
+
+  const latest = await eventStore.latest({
+    kind: "vps_runner_execution",
+    repository: "marushu/vtdd-v2-p",
+    workflowName: "vps-runner"
+  });
+  assert.equal(latest, null);
 });
 
 test("worker setup recovery page opens without Action auth and defaults to VTDD repo", async () => {
