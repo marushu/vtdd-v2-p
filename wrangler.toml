@@ -2,5 +2,17 @@ name = "vtdd-v2-mvp"
 main = "worker.js"
 compatibility_date = "2026-04-15"
 
+[[durable_objects.bindings]]
+name = "DASHBOARD_CHAT_ROOMS"
+class_name = "DashboardChatRoom"
+
+[[migrations]]
+tag = "v1-dashboard-chat-rooms"
+new_sqlite_classes = ["DashboardChatRoom"]
+
 [env.production]
 name = "vtdd-v2-mvp"
+
+[[env.production.durable_objects.bindings]]
+name = "DASHBOARD_CHAT_ROOMS"
+class_name = "DashboardChatRoom"

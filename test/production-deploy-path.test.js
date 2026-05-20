@@ -170,6 +170,9 @@ test("wrangler config fixes worker runtime entry and production environment", ()
   assert.equal(wrangler.includes('main = "worker.js"'), true);
   assert.equal(wrangler.includes("[env.production]"), true);
   assert.equal(wrangler.includes('name = "vtdd-v2-mvp"'), true);
+  assert.equal(wrangler.includes('name = "DASHBOARD_CHAT_ROOMS"'), true);
+  assert.equal(wrangler.includes('class_name = "DashboardChatRoom"'), true);
+  assert.equal(wrangler.includes('new_sqlite_classes = ["DashboardChatRoom"]'), true);
   assert.equal(wrangler.includes(OWNER_D1_DATABASE_ID), false);
   assert.equal(wrangler.includes("database_id"), false);
 });

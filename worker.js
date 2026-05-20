@@ -55828,6 +55828,138 @@ var MCP_SERVER_INFO = Object.freeze({
   version: "0.1.0"
 });
 var MCP_INSTRUCTIONS = "VTDD MCP \u306F Butler \u3068\u540C\u3058 runtime truth / review truth / operational memory \u3092\u8AAD\u3080\u305F\u3081\u306E read-first surface \u3067\u3059\u3002\u73FE\u5728\u306E truth \u306F runtime truth \u3092\u512A\u5148\u3057\u3001memory \u306F\u88DC\u52A9\u3068\u3057\u3066\u6271\u3063\u3066\u304F\u3060\u3055\u3044\u3002";
+var DashboardChatRoom = class {
+  constructor(state, env) {
+    this.ctx = state;
+    this.env = env;
+    this.sessions = /* @__PURE__ */ new Set();
+  }
+  async fetch(request) {
+    const url = new URL(request.url);
+    if (request.method === "POST" && url.pathname === "/broadcast") {
+      const payload = await readJson(request);
+      const threadId2 = normalizeDashboardThreadId(payload.threadId || payload.thread_id);
+      if (!threadId2) {
+        return json(422, {
+          ok: false,
+          error: "thread_id_required",
+          reason: "threadId is required"
+        });
+      }
+      await this.broadcastThread({
+        threadId: threadId2,
+        messages: Array.isArray(payload.messages) ? payload.messages : null
+      });
+      return json(202, { ok: true, threadId: threadId2 });
+    }
+    if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") {
+      return json(426, {
+        ok: false,
+        error: "websocket_upgrade_required",
+        reason: "dashboard chat room requires a WebSocket upgrade"
+      });
+    }
+    if (typeof WebSocketPair !== "function") {
+      return json(501, {
+        ok: false,
+        error: "websocket_runtime_unavailable",
+        reason: "WebSocketPair is not available in this runtime"
+      });
+    }
+    const threadId = extractDashboardChatSocketThreadId(url.pathname);
+    if (!threadId) {
+      return json(422, {
+        ok: false,
+        error: "thread_id_required",
+        reason: "threadId is required"
+      });
+    }
+    const pair = new WebSocketPair();
+    const [client, server] = Object.values(pair);
+    if (typeof this.ctx?.acceptWebSocket === "function") {
+      server.serializeAttachment({ threadId });
+      this.ctx.acceptWebSocket(server);
+    } else {
+      server.accept();
+      this.sessions.add(server);
+      server.addEventListener("close", () => this.sessions.delete(server));
+      server.addEventListener("error", () => this.sessions.delete(server));
+      server.addEventListener("message", (event) => this.handleSocketMessage(server, event?.data, threadId));
+    }
+    await this.sendThread(server, threadId);
+    return new Response(null, {
+      status: 101,
+      webSocket: client
+    });
+  }
+  async webSocketMessage(socket, message) {
+    const attachment = typeof socket.deserializeAttachment === "function" ? socket.deserializeAttachment() : null;
+    const threadId = normalizeDashboardThreadId(attachment?.threadId);
+    this.handleSocketMessage(socket, message, threadId);
+  }
+  webSocketClose(socket) {
+    this.sessions.delete(socket);
+  }
+  webSocketError(socket) {
+    this.sessions.delete(socket);
+  }
+  handleSocketMessage(socket, message, threadId) {
+    const text = normalizeDashboardEventText(message).toLowerCase();
+    if (text === "ping" && isSocketOpen(socket)) {
+      socket.send(JSON.stringify({ type: "pong", ok: true, threadId }));
+    }
+  }
+  async broadcastThread({ threadId, messages = null }) {
+    const resolvedMessages = Array.isArray(messages) ? messages : await this.listThreadMessages(threadId);
+    const payload = JSON.stringify({
+      type: "thread",
+      ok: true,
+      threadId,
+      messages: resolvedMessages
+    });
+    for (const socket of this.connectedSockets()) {
+      if (isSocketOpen(socket)) {
+        socket.send(payload);
+      }
+    }
+  }
+  async sendThread(socket, threadId) {
+    if (!isSocketOpen(socket)) return;
+    try {
+      socket.send(
+        JSON.stringify({
+          type: "thread",
+          ok: true,
+          threadId,
+          messages: await this.listThreadMessages(threadId)
+        })
+      );
+    } catch (error2) {
+      if (isSocketOpen(socket)) {
+        socket.send(
+          JSON.stringify({
+            type: "error",
+            ok: false,
+            reason: sanitizeDashboardChatText(error2?.message || "dashboard chat room failed")
+          })
+        );
+      }
+    }
+  }
+  async listThreadMessages(threadId) {
+    const store = resolveDashboardChatStore(this.env);
+    if (!store) {
+      return [];
+    }
+    return store.listThread(threadId, { limit: 80 });
+  }
+  connectedSockets() {
+    if (typeof this.ctx?.getWebSockets === "function") {
+      return this.ctx.getWebSockets();
+    }
+    return Array.from(this.sessions);
+  }
+};
 var CLOUDFLARE_ACCESS_JWKS_CACHE_TTL_MS = 5 * 60 * 1e3;
 var DASHBOARD_PASSKEY_SESSION_COOKIE = "vtdd_dashboard_session";
 var DASHBOARD_PASSKEY_SESSION_MAX_AGE_SECONDS = 60 * 60 * 8;
@@ -55922,6 +56054,9 @@ var runtime_default = {
     }
     if (request.method === "POST" && isApiPath(url.pathname, "/dashboard/chat/messages")) {
       return handleDashboardChatMessageRequest(request, env);
+    }
+    if (request.method === "GET" && isDashboardChatSocketApiPath(url.pathname)) {
+      return handleDashboardChatSocketRequest(request, url, env);
     }
     if (request.method === "GET" && isDashboardChatThreadApiPath(url.pathname)) {
       return handleDashboardChatThreadRequest(request, url, env);
@@ -58479,11 +58614,13 @@ async function handleVpsRunnerEventRequest(request, env) {
       }
     });
   }
+  const webSocketBroadcast = await notifyDashboardChatRoom({ env, threadId: event.threadId, messages });
   return json(202, {
     ok: true,
     event: event.event,
     threadId: event.threadId,
-    messages
+    messages,
+    webSocketBroadcast
   });
 }
 async function handleDashboardChatMessageRequest(request, env) {
@@ -58501,16 +58638,6 @@ async function handleDashboardChatMessageRequest(request, env) {
   }
   const payload = await readJson(request);
   const wantsVpsRunnerHandoff = shouldDispatchDashboardChatToVpsRunner(payload);
-  if (wantsVpsRunnerHandoff) {
-    const auth = authorizeGatewayRequest({ request, env, apiSuffix: "/dashboard/chat/messages" });
-    if (!auth.ok) {
-      return json(auth.status, {
-        ok: false,
-        error: "dashboard_vps_runner_dispatch_unauthorized",
-        reason: auth.reason
-      });
-    }
-  }
   const prepared = buildDashboardChatTurn(payload, { wantsVpsRunnerHandoff });
   if (!prepared.ok) {
     return json(422, {
@@ -58566,6 +58693,44 @@ async function handleDashboardChatMessageRequest(request, env) {
     messages,
     execution
   });
+}
+async function handleDashboardChatSocketRequest(request, url, env) {
+  const auth = await authorizeDashboardRequest({
+    request,
+    env,
+    apiSuffix: "/dashboard/chat/:threadId/ws"
+  });
+  if (!auth.ok) {
+    return json(auth.status, {
+      ok: false,
+      error: "dashboard_auth_required",
+      reason: auth.reason
+    });
+  }
+  const threadId = extractDashboardChatSocketThreadId(url.pathname);
+  if (!threadId) {
+    return json(422, {
+      ok: false,
+      error: "thread_id_required",
+      reason: "threadId is required"
+    });
+  }
+  const room = resolveDashboardChatRoomStub(env, threadId);
+  if (!room) {
+    return json(503, {
+      ok: false,
+      error: "dashboard_chat_room_unavailable",
+      reason: "DASHBOARD_CHAT_ROOMS Durable Object binding is not configured"
+    });
+  }
+  if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") {
+    return json(426, {
+      ok: false,
+      error: "websocket_upgrade_required",
+      reason: "dashboard chat updates require a WebSocket upgrade"
+    });
+  }
+  return room.fetch(request);
 }
 async function handleDashboardChatThreadRequest(request, url, env) {
   const auth = await authorizeDashboardRequest({
@@ -59874,6 +60039,39 @@ function resolveDashboardChatStore(env) {
   dashboardChatStoreCache.set(d1Binding, store);
   return store;
 }
+function resolveDashboardChatRoomStub(env, threadId) {
+  const namespace = env?.DASHBOARD_CHAT_ROOMS ?? null;
+  const roomName = normalizeDashboardThreadId(threadId);
+  if (!namespace || !roomName) {
+    return null;
+  }
+  if (typeof namespace.getByName === "function") {
+    return namespace.getByName(roomName);
+  }
+  if (typeof namespace.idFromName === "function" && typeof namespace.get === "function") {
+    return namespace.get(namespace.idFromName(roomName));
+  }
+  return null;
+}
+async function notifyDashboardChatRoom({ env, threadId, messages }) {
+  const room = resolveDashboardChatRoomStub(env, threadId);
+  if (!room || typeof room.fetch !== "function") {
+    return false;
+  }
+  try {
+    const response = await room.fetch("https://dashboard-chat-room.internal/broadcast", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        threadId,
+        messages: Array.isArray(messages) ? messages : []
+      })
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
 function createD1DashboardEventStore(d1) {
   let schemaPromise = null;
   return {
@@ -60102,7 +60300,7 @@ function buildDashboardChatTurn(payload, options = {}) {
     },
     { threadId }
   );
-  const butlerMessage = normalizeDashboardChatMessage(
+  const butlerMessage = options.wantsVpsRunnerHandoff === true ? null : normalizeDashboardChatMessage(
     {
       threadId,
       role: "butler",
@@ -60112,8 +60310,7 @@ function buildDashboardChatTurn(payload, options = {}) {
       text: buildDeterministicButlerChatReply({
         text,
         repository,
-        relatedIssue,
-        wantsVpsRunnerHandoff: options.wantsVpsRunnerHandoff === true
+        relatedIssue
       }),
       createdAt: new Date(Date.parse(now) + 1).toISOString()
     },
@@ -60124,7 +60321,7 @@ function buildDashboardChatTurn(payload, options = {}) {
     repository,
     relatedIssue,
     threadId,
-    messages: [ownerMessage, butlerMessage]
+    messages: [ownerMessage, butlerMessage].filter(Boolean)
   };
 }
 function buildDeterministicButlerChatReply({ text, repository, relatedIssue, wantsVpsRunnerHandoff = false }) {
@@ -60220,11 +60417,11 @@ function buildDashboardVpsRunnerQueuedMessage({ prepared, execution }) {
   return normalizeDashboardChatMessage(
     {
       threadId: prepared.threadId,
-      role: "runner",
+      role: "system",
       repository: prepared.repository,
       relatedIssue: execution.issueNumber || prepared.relatedIssue,
       status: "thinking",
-      text: `VPS Codex CLI \u306B ${issuePhrase} \u306E bounded handoff \u3092\u6E21\u3057\u307E\u3057\u305F\u3002\u5B9F\u884C\u72B6\u614B\u306F runner event \u3068\u3057\u3066\u3053\u306E thread \u306B\u623B\u308A\u307E\u3059\u3002${queuePhrase}`,
+      text: `VPS Codex CLI queue \u306B ${issuePhrase} \u306E bounded handoff \u3092\u6E21\u3057\u307E\u3057\u305F\u3002\u3053\u308C\u306F\u8FD4\u4FE1\u3067\u306F\u3042\u308A\u307E\u305B\u3093\u3002runner \u304B\u3089\u306E event post \u3060\u3051\u3092\u8FD4\u4FE1\u3068\u3057\u3066\u3053\u306E thread \u306B\u8868\u793A\u3057\u307E\u3059\u3002${queuePhrase}`,
       createdAt: new Date(Date.now() + 2).toISOString()
     },
     { threadId: prepared.threadId }
@@ -60268,6 +60465,9 @@ function sanitizeDashboardChatText(value) {
 function isDashboardChatThreadApiPath(pathname) {
   return pathname.startsWith(`${CANONICAL_API_PREFIX}/dashboard/chat/`) || pathname.startsWith(`${LEGACY_API_PREFIX}/dashboard/chat/`);
 }
+function isDashboardChatSocketApiPath(pathname) {
+  return (pathname.startsWith(`${CANONICAL_API_PREFIX}/dashboard/chat/`) || pathname.startsWith(`${LEGACY_API_PREFIX}/dashboard/chat/`)) && pathname.endsWith("/ws");
+}
 function isDashboardPagePath(pathname) {
   return pathname === "/dashboard" || pathname.startsWith("/dashboard/") || pathname === "/orchestrator" || pathname.startsWith("/orchestrator/");
 }
@@ -60281,6 +60481,9 @@ function extractDashboardChatThreadId(pathname) {
   } catch {
     return normalizeDashboardThreadId(pathname.slice(prefix.length));
   }
+}
+function extractDashboardChatSocketThreadId(pathname) {
+  return extractDashboardChatThreadId(pathname.replace(/\/ws$/, ""));
 }
 function normalizeDashboardEventRecord(event) {
   const input = normalizeObject11(event);
@@ -61847,7 +62050,9 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
   const origin = normalize7(runtimeOrigin);
   const repository = "marushu/vtdd-v2-p";
   const encodedRepository = encodeURIComponent(repository);
+  const dashboardChatIssueNumber = 450;
   const chatThreadId = `dashboard-main-${repository.replace("/", "-")}`;
+  const socketOrigin = origin.replace(/^http/i, "ws");
   const latestDeployEvent = await retrieveLatestDashboardEvent({
     store: dashboardEventStore,
     kind: "github_actions_workflow_run",
@@ -62135,18 +62340,18 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
         <article class="bubble">
           <strong>Butler</strong>
           <p>\u305D\u306E\u65B9\u91DD\u3067\u9032\u3081\u307E\u3059\u3002\u4E2D\u592E\u306F\u30C1\u30E3\u30C3\u30C8\u3060\u3051\u3001\u72B6\u614B\u78BA\u8A8D\u30FB\u9032\u6357\u30FBRAG\u30FBworkflow\u30FBprototype cleanup \u306E\u6271\u3044\u306F\u30B5\u30A4\u30C9\u30D0\u30FC\u306E\u30E1\u30CB\u30E5\u30FC\u304B\u3089\u5FC5\u8981\u306A\u6642\u3060\u3051\u958B\u304D\u307E\u3059\u3002</p>
-          <p>deploy \u304C\u5FC5\u8981\u306B\u306A\u3063\u305F\u6642\u306F\u3001\u666E\u901A\u306E\u30C1\u30E3\u30C3\u30C8\u3068\u540C\u3058\u3088\u3046\u306B\u3053\u306E\u4F1A\u8A71\u5185\u3078 scope \u660E\u793A\u6E08\u307F\u306E passkey URL \u3092\u51FA\u3057\u307E\u3059\u3002VPS Codex CLI \u3078\u306E\u5B9F\u884C dispatch \u306F\u5225 gate \u3067\u6271\u3044\u307E\u3059\u3002</p>
-          <span class="connection-note">\u63A5\u7D9A\u6E08\u307F: Worker chat runtime \u306B\u4FDD\u5B58\u30FB\u8FD4\u4FE1\u3057\u307E\u3059</span>
+          <p>\u3053\u306E dashboard \u304B\u3089\u306E\u9001\u4FE1\u306F Issue #${dashboardChatIssueNumber} \u306E VPS Codex CLI queue \u306B\u6E21\u3057\u307E\u3059\u3002\u8FD4\u4FE1\u3068\u3057\u3066\u8868\u793A\u3059\u308B\u306E\u306F runner \u304B\u3089\u623B\u3063\u305F event post \u3060\u3051\u3067\u3059\u3002</p>
+          <span class="connection-note">\u63A5\u7D9A\u6E08\u307F: WebSocket \u3067 runner event post \u3092\u5F85\u3061\u307E\u3059</span>
         </article>
 
       </div>
 
-      <form class="composer" id="butler-chat-form" aria-label="Butler composer" data-endpoint="${escapeDashboardHtml(origin)}/v2/dashboard/chat/messages" data-thread-endpoint="${escapeDashboardHtml(origin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}" data-thread-id="${escapeDashboardHtml(chatThreadId)}" data-repository="${escapeDashboardHtml(repository)}">
+      <form class="composer" id="butler-chat-form" aria-label="Butler composer" data-endpoint="${escapeDashboardHtml(origin)}/v2/dashboard/chat/messages" data-thread-endpoint="${escapeDashboardHtml(origin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}" data-socket-endpoint="${escapeDashboardHtml(socketOrigin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}/ws" data-thread-id="${escapeDashboardHtml(chatThreadId)}" data-repository="${escapeDashboardHtml(repository)}" data-issue-number="${dashboardChatIssueNumber}" data-dispatch-to-vps-runner="true" data-codex-goal="open_pr">
         <div class="composer-box">
           <textarea id="butler-message" name="text" placeholder="Butler V2 \u306B\u30E1\u30C3\u30BB\u30FC\u30B8..." aria-label="Butler V2 \u306B\u30E1\u30C3\u30BB\u30FC\u30B8"></textarea>
           <button class="send-button" type="submit" aria-label="Butler \u306B\u9001\u4FE1">\u2191</button>
         </div>
-        <div class="composer-status" id="butler-chat-status">\u63A5\u7D9A\u6E08\u307F\u3002\u9001\u4FE1\u3059\u308B\u3068\u3053\u306E thread \u306B\u4FDD\u5B58\u3055\u308C\u307E\u3059\u3002\u81EA\u52D5\u66F4\u65B0\u30FBpolling \u306F\u3042\u308A\u307E\u305B\u3093\u3002</div>
+        <div class="composer-status" id="butler-chat-status">\u63A5\u7D9A\u6E08\u307F\u3002\u9001\u4FE1\u3059\u308B\u3068 VPS Codex CLI queue \u306B\u6E21\u3057\u307E\u3059\u3002\u8FD4\u4FE1\u306F runner event post \u3060\u3051\u3092\u8868\u793A\u3057\u307E\u3059\u3002</div>
       </form>
     </section>
 
@@ -62156,7 +62361,7 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
           <span class="eyebrow">\u7BA1\u7406\u30E1\u30CB\u30E5\u30FC</span>
           <strong>\u5FC5\u8981\u306A\u6642\u3060\u3051\u958B\u304F</strong>
         </span>
-        <span class="pill">\u81EA\u52D5\u66F4\u65B0\u306A\u3057</span>
+        <span class="pill">WebSocket</span>
       </summary>
       <div class="sidebar-content">
         <p class="menu-callout">\u72B6\u614B\u78BA\u8A8D\u3001\u9032\u6357\u3001RAG\u3001workflow \u306F\u3053\u3053\u304B\u3089\u9077\u79FB\u3057\u307E\u3059\u3002\u666E\u6BB5\u306E\u753B\u9762\u306F\u30C1\u30E3\u30C3\u30C8\u3092\u4E3B\u5F79\u306B\u3057\u307E\u3059\u3002</p>
@@ -62212,8 +62417,12 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
 
       const endpoint = form.dataset.endpoint;
       const threadEndpoint = form.dataset.threadEndpoint;
+      const socketEndpoint = form.dataset.socketEndpoint;
       const threadId = form.dataset.threadId;
       const repository = form.dataset.repository;
+      const issueNumber = Number.parseInt(form.dataset.issueNumber || "", 10);
+      const dispatchToVpsRunner = form.dataset.dispatchToVpsRunner === "true";
+      const codexGoal = form.dataset.codexGoal || "open_pr";
       const initialMarkup = log.innerHTML;
 
       function updateComposerReserve() {
@@ -62237,7 +62446,7 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
         article.className = message.role === "owner" ? "bubble owner" : "bubble";
         if (message.role !== "owner") {
           const strong = document.createElement("strong");
-          strong.textContent = message.role === "runner" ? "VPS Codex CLI" : "Butler";
+          strong.textContent = message.role === "runner" ? "VPS Codex CLI" : message.role === "system" ? "SYSTEM" : "Butler";
           article.appendChild(strong);
         }
         const paragraph = document.createElement("p");
@@ -62285,6 +62494,29 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
         scrollToLatest();
       }
 
+      function connectThreadSocket() {
+        if (!socketEndpoint || typeof WebSocket !== "function") {
+          setStatus("WebSocket \u3092\u958B\u59CB\u3067\u304D\u307E\u305B\u3093\u3002runner \u8FD4\u4FE1\u306F\u518D\u8AAD\u307F\u8FBC\u307F\u3067\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002");
+          return;
+        }
+        const socket = new WebSocket(socketEndpoint);
+        socket.addEventListener("open", () => {
+          setStatus("WebSocket \u63A5\u7D9A\u6E08\u307F\u3002VPS Codex CLI \u306E runner event post \u3092\u5F85\u3063\u3066\u3044\u307E\u3059\u3002");
+        });
+        socket.addEventListener("message", (event) => {
+          const body = JSON.parse(event.data || "{}");
+          if (body.type === "thread" && body.ok) {
+            renderThread(body.messages || []);
+          }
+        });
+        socket.addEventListener("close", () => {
+          setStatus("WebSocket \u304C\u5207\u308C\u307E\u3057\u305F\u3002\u518D\u8AAD\u307F\u8FBC\u307F\u3059\u308B\u3068\u6700\u65B0 thread \u3092\u78BA\u8A8D\u3067\u304D\u307E\u3059\u3002");
+        });
+        socket.addEventListener("error", () => {
+          setStatus("WebSocket \u63A5\u7D9A\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u518D\u8AAD\u307F\u8FBC\u307F\u3059\u308B\u3068\u6700\u65B0 thread \u3092\u78BA\u8A8D\u3067\u304D\u307E\u3059\u3002");
+        });
+      }
+
       async function refreshThread() {
         if (!threadEndpoint) return;
         setStatus("\u4F1A\u8A71\u5C65\u6B74\u3092\u8AAD\u307F\u8FBC\u307F\u4E2D\u3067\u3059\u3002");
@@ -62300,7 +62532,7 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
             return;
           }
           renderThread(body.messages || []);
-          setStatus("\u63A5\u7D9A\u6E08\u307F\u3002\u9001\u4FE1\u3059\u308B\u3068\u3053\u306E thread \u306B\u4FDD\u5B58\u3055\u308C\u307E\u3059\u3002\u81EA\u52D5\u66F4\u65B0\u30FBpolling \u306F\u3042\u308A\u307E\u305B\u3093\u3002");
+          setStatus("\u63A5\u7D9A\u6E08\u307F\u3002\u9001\u4FE1\u3059\u308B\u3068 VPS Codex CLI queue \u306B\u6E21\u3057\u307E\u3059\u3002\u8FD4\u4FE1\u306F runner event post \u3060\u3051\u3092\u8868\u793A\u3057\u307E\u3059\u3002");
         } catch {
           setStatus("\u4F1A\u8A71\u5C65\u6B74\u3092\u8AAD\u3081\u307E\u305B\u3093\u3067\u3057\u305F\u3002\u9001\u4FE1\u6642\u306B\u518D\u8A66\u884C\u3057\u307E\u3059\u3002");
         }
@@ -62315,14 +62547,24 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
         }
         const submitButton = form.querySelector("button[type='submit']");
         if (submitButton) submitButton.disabled = true;
-        setStatus("\u9001\u4FE1\u4E2D\u3067\u3059\u3002Butler \u304C\u540C\u3058 thread \u306B\u8FD4\u4FE1\u3057\u307E\u3059\u3002");
+        setStatus("\u9001\u4FE1\u4E2D\u3067\u3059\u3002VPS Codex CLI queue \u306B\u6E21\u3057\u307E\u3059\u3002");
         const thinking = showThinking();
         try {
           const response = await fetch(endpoint, {
             method: "POST",
             headers: { "content-type": "application/json", "accept": "application/json" },
             credentials: "same-origin",
-            body: JSON.stringify({ threadId, repository, text })
+            body: JSON.stringify({
+              threadId,
+              repository,
+              text,
+              issueNumber,
+              relatedIssue: issueNumber,
+              dispatchToVpsRunner,
+              executorTransport: dispatchToVpsRunner ? "vps_runner" : undefined,
+              codexGoal,
+              handoffSummary: "Dashboard Butler chat message from owner"
+            })
           });
           const body = await response.json().catch(() => ({}));
           removeThinking(thinking);
@@ -62335,7 +62577,7 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
           for (const message of body.messages || []) {
             appendMessage(message);
           }
-          setStatus("\u4FDD\u5B58\u6E08\u307F\u3002Butler \u8FD4\u4FE1\u3092\u540C\u3058 thread \u306B\u8FFD\u52A0\u3057\u307E\u3057\u305F\u3002");
+          setStatus(body.execution ? "\u4FDD\u5B58\u6E08\u307F\u3002VPS Codex CLI queue \u306B\u6E21\u3057\u307E\u3057\u305F\u3002runner event post \u3092\u5F85\u3063\u3066\u3044\u307E\u3059\u3002" : "\u4FDD\u5B58\u6E08\u307F\u3002Worker runtime \u306B\u4FDD\u5B58\u3057\u307E\u3057\u305F\u3002");
         } catch {
           removeThinking(thinking);
           appendError("Worker chat runtime \u306B\u63A5\u7D9A\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F\u3002\u30CD\u30C3\u30C8\u30EF\u30FC\u30AF\u307E\u305F\u306F deploy \u72B6\u614B\u3092\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002");
@@ -62350,6 +62592,7 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
       updateComposerReserve();
       window.addEventListener("resize", updateComposerReserve);
       refreshThread();
+      connectThreadSocket();
     })();
   <\/script>
 </body>
@@ -62494,6 +62737,9 @@ function normalizePositiveInteger9(value) {
   const number3 = Number(value);
   return Number.isInteger(number3) && number3 > 0 ? number3 : null;
 }
+function isSocketOpen(socket) {
+  return socket?.readyState === 1 || typeof WebSocket !== "undefined" && socket?.readyState === WebSocket.OPEN;
+}
 function normalizeTag3(value) {
   return normalizeText30(value).toLowerCase().replace(/[^a-z0-9:_-]+/g, "_");
 }
@@ -62515,5 +62761,6 @@ function isApiPath(pathname, suffix) {
 // src/worker.js
 var worker_default = runtime_default;
 export {
+  DashboardChatRoom,
   worker_default as default
 };
