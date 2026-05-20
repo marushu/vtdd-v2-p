@@ -36,7 +36,7 @@ import {
 
 test("VPS runner parses bounded queue comment payload", () => {
   const parsed = parseVpsRunnerQueueComment(`<!-- vtdd:vps-runner-execution:remote-codex-issue157-vps -->
-VTDD-managed VPS runner execution request.
+VTDD 管理の VPS runner 実行キューです。
 
 \`\`\`json
 {
@@ -479,6 +479,94 @@ test("VPS runner event preserves dashboard chat thread from handoff payload", as
   assert.equal(parsed.event.threadId, "dashboard-main-marushu-vtdd-v2-p");
 });
 
+test("VPS runner event posts dashboard thread events to runtime", async () => {
+  const githubCalls = [];
+  const runtimeCalls = [];
+  await postVpsRunnerEvent({
+    githubFetch: async (url, init = {}) => {
+      githubCalls.push({ url, init });
+      return { id: 45003 };
+    },
+    fetchImpl: async (url, init = {}) => {
+      runtimeCalls.push({ url: String(url), init });
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 202,
+        headers: { "content-type": "application/json" }
+      });
+    },
+    env: {
+      VTDD_RUNTIME_URL: "https://vtdd-v2-mvp.example.workers.dev",
+      VTDD_GATEWAY_BEARER_TOKEN: "gateway-token-for-test"
+    },
+    payload: {
+      executionId: "exec-dashboard-runtime",
+      repository: "marushu/vtdd-v2-p",
+      issueNumber: 450,
+      handoff: {
+        dashboardThreadId: "dashboard-main-marushu-vtdd-v2-p"
+      }
+    },
+    event: {
+      status: "completed",
+      lastEvent: "dashboard_chat_triage_completed",
+      finalEvent: "dashboard_chat_triage_completed",
+      currentStep: "dashboard_chat_triage",
+      message: "分類: answer\n次は Issue #450 の live E2E を確認します。"
+    }
+  });
+
+  assert.equal(runtimeCalls.length, 1);
+  assert.equal(runtimeCalls[0].url, "https://vtdd-v2-mvp.example.workers.dev/v2/events/vps-runner");
+  assert.equal(runtimeCalls[0].init.method, "POST");
+  assert.equal(runtimeCalls[0].init.headers.authorization, "Bearer gateway-token-for-test");
+  const runtimeBody = JSON.parse(runtimeCalls[0].init.body);
+  assert.equal(runtimeBody.threadId, "dashboard-main-marushu-vtdd-v2-p");
+  assert.equal(runtimeBody.status, "completed");
+  assert.equal(runtimeBody.lastEvent, "dashboard_chat_triage_completed");
+  assert.equal(runtimeBody.message.includes("分類: answer"), true);
+
+  const parsed = parseVpsRunnerEventComment(githubCalls[0].init.body.body);
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.event.dashboardDelivery.status, "delivered");
+  assert.equal(
+    parsed.event.dashboardDelivery.endpoint,
+    "https://vtdd-v2-mvp.example.workers.dev/v2/events/vps-runner"
+  );
+});
+
+test("VPS runner event records missing runtime dashboard delivery configuration", async () => {
+  const calls = [];
+  await postVpsRunnerEvent({
+    githubFetch: async (url, init = {}) => {
+      calls.push({ url, init });
+      return { id: 45004 };
+    },
+    payload: {
+      executionId: "exec-dashboard-missing-runtime",
+      repository: "marushu/vtdd-v2-p",
+      issueNumber: 450,
+      handoff: {
+        dashboardThreadId: "dashboard-main-marushu-vtdd-v2-p"
+      }
+    },
+    event: {
+      status: "completed",
+      lastEvent: "dashboard_chat_triage_completed",
+      currentStep: "dashboard_chat_triage",
+      message: "完了"
+    },
+    env: {}
+  });
+
+  const parsed = parseVpsRunnerEventComment(calls[0].init.body.body);
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.event.dashboardDelivery.status, "skipped");
+  assert.equal(
+    parsed.event.dashboardDelivery.reason,
+    "VTDD_RUNTIME_URL or VTDD_GATEWAY_BEARER_TOKEN is missing"
+  );
+});
+
 test("VPS runner milestone event mentions queue comment author", () => {
   const body = buildVpsRunnerEventComment({
     executionId: "exec-mention",
@@ -492,7 +580,7 @@ test("VPS runner milestone event mentions queue comment author", () => {
     }
   });
 
-  assert.equal(body.split("\n")[1], "@alice VTDD milestone: branch pushed.");
+  assert.equal(body.split("\n")[1], "@alice VTDD milestone: branch を push しました。");
   assert.equal(body.includes("@alice"), true);
   assert.equal(body.includes("@bob"), false);
   assert.equal(parseVpsRunnerEventComment(body).ok, true);
@@ -565,7 +653,7 @@ test("VPS runner notification omits mention when no mentionable actor exists", (
   });
 
   assert.equal(body.includes("@"), false);
-  assert.equal(body.includes("VTDD milestone: failed."), true);
+  assert.equal(body.includes("VTDD milestone: 失敗しました。"), true);
 });
 
 test("VPS runner state comment remains compatible with runner event parsing", () => {
@@ -608,9 +696,9 @@ test("VPS runner state comment exposes concise lead time before JSON runtime tru
   });
   const parsed = parseVpsRunnerEventComment(body);
 
-  assert.equal(body.includes("Lead time:"), true);
-  assert.equal(body.includes("- Queue wait: 12s"), true);
-  assert.equal(body.includes("- Codex execution: 3m 42s"), true);
+  assert.equal(body.includes("所要時間:"), true);
+  assert.equal(body.includes("- queue 待ち: 12s"), true);
+  assert.equal(body.includes("- Codex 実行: 3m 42s"), true);
   assert.equal(parsed.ok, true);
   assert.equal(parsed.event.leadTime.durations.queue_wait_duration.label, "12s");
 });
@@ -856,7 +944,7 @@ test("VPS runner completed event exposes a GitHub-visible final event", async ()
   assert.equal(parsed.event.finalEventReason.includes("updated the existing pull request"), true);
   assert.equal(parsed.event.leadTime.pr_created_at, "2026-05-09T10:04:10.000Z");
   assert.equal(parsed.event.leadTime.completed_at, "2026-05-09T10:04:10.000Z");
-  assert.equal(body.includes("VTDD milestone: PR updated."), true);
+  assert.equal(body.includes("VTDD milestone: PR を更新しました。"), true);
 });
 
 test("VPS runner maps completed execution goals to explicit final events", () => {

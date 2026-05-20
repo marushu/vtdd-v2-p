@@ -6686,6 +6686,7 @@ function normalizeVpsRunnerDashboardEvent(payload) {
       text: buildVpsRunnerChatMessageText({
         repository,
         executionId,
+        issueNumber,
         status,
         currentStep,
         lastEvent,
@@ -6762,6 +6763,7 @@ function buildVpsRunnerDashboardTitle({ status, currentStep, lastEvent, message 
 function buildVpsRunnerChatMessageText({
   repository,
   executionId,
+  issueNumber,
   status,
   currentStep,
   lastEvent,
@@ -6770,27 +6772,52 @@ function buildVpsRunnerChatMessageText({
   progressUrl
 }) {
   const parts = [
-    `VPS Codex CLI から更新です。`,
-    `repo: ${repository}`,
-    `execution: ${executionId}`,
-    `status: ${status}`
+    "VPS Codex CLI から返信です。",
+    "",
+    "状態:",
+    `- repo: ${repository}`,
+    `- execution: ${executionId}`,
+    `- status: ${formatVpsRunnerDashboardStatusForOwner(status)}`
   ];
+  if (issueNumber) {
+    parts.push(`- Issue: #${issueNumber}`);
+  }
   if (currentStep) {
-    parts.push(`step: ${currentStep}`);
+    parts.push(`- step: ${currentStep}`);
   }
   if (lastEvent) {
-    parts.push(`event: ${lastEvent}`);
+    parts.push(`- event: ${lastEvent}`);
   }
   if (branch) {
-    parts.push(`branch: ${branch}`);
+    parts.push(`- branch: ${branch}`);
   }
   if (message) {
+    parts.push("", "本文:");
     parts.push(message);
   }
   if (progressUrl) {
-    parts.push(`進捗: ${progressUrl}`);
+    parts.push("", `進捗: ${progressUrl}`);
   }
   return parts.join("\n");
+}
+
+function formatVpsRunnerDashboardStatusForOwner(status) {
+  if (status === "completed") {
+    return "完了";
+  }
+  if (status === "running") {
+    return "実行中";
+  }
+  if (status === "queued") {
+    return "待機中";
+  }
+  if (status === "blocked") {
+    return "停止";
+  }
+  if (status === "canceled") {
+    return "キャンセル";
+  }
+  return status || "不明";
 }
 
 function normalizeDashboardUrl(value) {
@@ -7515,7 +7542,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .bubble { max-width: min(760px, 88%); color: var(--text); font-size: 17px; line-height: 1.72; }
     .bubble, .bubble p, .bubble li { overflow-wrap: anywhere; }
     .bubble strong { display: block; color: var(--muted); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 8px; }
-    .bubble p { color: var(--text); margin-bottom: 12px; }
+    .bubble p { color: var(--text); margin-bottom: 12px; white-space: pre-wrap; }
     .bubble ul { margin: 0; padding-left: 22px; color: var(--text); line-height: 1.85; }
     .bubble.owner { align-self: flex-end; background: var(--owner-bubble); color: var(--owner-text); border-radius: 24px; padding: 12px 16px; }
     .bubble.owner p { color: var(--owner-text); margin: 0; }
@@ -7762,10 +7789,33 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           article.appendChild(strong);
         }
         const paragraph = document.createElement("p");
-        paragraph.textContent = message.text || "（空のメッセージ）";
+        renderMessageText(paragraph, message.text || "（空のメッセージ）");
         article.appendChild(paragraph);
         log.appendChild(article);
         scrollToLatest();
+      }
+
+      function renderMessageText(container, text) {
+        const source = String(text || "");
+        const urlPattern = /https?:\\/\\/[^\\s<>"']+/g;
+        let cursor = 0;
+        for (const match of source.matchAll(urlPattern)) {
+          if (match.index > cursor) {
+            container.appendChild(document.createTextNode(source.slice(cursor, match.index)));
+          }
+          const href = match[0];
+          const link = document.createElement("a");
+          link.className = "chat-link";
+          link.href = href;
+          link.textContent = href;
+          link.target = "_blank";
+          link.rel = "noreferrer";
+          container.appendChild(link);
+          cursor = match.index + href.length;
+        }
+        if (cursor < source.length) {
+          container.appendChild(document.createTextNode(source.slice(cursor)));
+        }
       }
 
       function appendError(text) {

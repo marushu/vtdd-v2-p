@@ -748,12 +748,12 @@ test("remote Codex vps_runner dispatch posts a GitHub-backed queue comment", asy
   assert.equal(calls[0].init.method, "POST");
   const body = JSON.parse(calls[0].init.body).body;
   assert.equal(body.includes("vtdd:vps-runner-execution:"), true);
-  assert.equal(body.includes("VTDD-managed VPS runner execution request."), true);
+  assert.equal(body.includes("VTDD 管理の VPS runner 実行キューです。"), true);
   assert.equal(body.includes('"transport": "vps_runner"'), true);
   assert.equal(body.includes('"repository": "sample-org/sunaba-eye"'), true);
   assert.equal(body.includes('"approvalActor": "requester"'), true);
   assert.equal(body.includes("@marushu"), false);
-  assert.equal(body.includes("Do not merge."), true);
+  assert.equal(body.includes("merge しない。"), true);
   assert.equal(body.includes("docs/butler/thread-independent-startup-contract.md"), true);
   assert.equal(body.includes("docs/pr-template-model.md"), true);
   assert.equal(body.includes("scripts/render-pr-body.mjs"), true);
@@ -820,10 +820,10 @@ test("remote Codex vps_runner dashboard chat triage queue does not masquerade as
   assert.equal(body.includes('"codexGoal": "dashboard_chat_triage"'), true);
   assert.equal(body.includes('"ownerMessage": "ぶい の残り Issue と PR を確認して交通整理して"'), true);
   assert.equal(body.includes('"repositoryInput": "ぶい"'), true);
-  assert.equal(body.includes("Completion target: post a dashboard chat triage response to the same thread"), true);
-  assert.equal(body.includes("dashboard chat triage must not create or update a PR"), true);
-  assert.equal(body.includes("Do not create or update PRs."), true);
-  assert.equal(body.includes("Completion target: create or update a pull request"), false);
+  assert.equal(body.includes("完了条件: dashboard chat triage の返信 event を同じ thread に返す"), true);
+  assert.equal(body.includes("dashboard chat triage は PR を作成・更新しません"), true);
+  assert.equal(body.includes("PR を作成・更新しない。"), true);
+  assert.equal(body.includes("完了条件: pull request を作成または更新する"), false);
   assert.equal(body.includes("Required PR body markers"), false);
   assert.equal(body.includes("docs/pr-template-model.md"), false);
   assert.equal(body.includes("scripts/render-pr-body.mjs"), false);
@@ -944,7 +944,7 @@ test("remote Codex vps_runner dispatch preserves bounded post-merge verification
   assert.equal(body.includes('"branch": "main"'), true);
   assert.equal(body.includes('"number": 396'), true);
   assert.equal(body.includes('"mergeCommitSha": "merge-sha-396"'), true);
-  assert.equal(body.includes("verify post-merge runtime truth"), true);
+  assert.equal(body.includes("merge 後 runtime truth を検証"), true);
 });
 
 test("remote Codex vps_runner progress reads queue comment and target PR truth", async () => {

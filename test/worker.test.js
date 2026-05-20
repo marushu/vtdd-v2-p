@@ -424,6 +424,10 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("function scrollToLatest()"), true);
   assert.equal(body.includes("function showThinking()"), true);
   assert.equal(body.includes("function removeThinking("), true);
+  assert.equal(body.includes("function renderMessageText("), true);
+  assert.equal(body.includes("white-space: pre-wrap"), true);
+  assert.equal(body.includes("urlPattern"), true);
+  assert.equal(body.includes('link.className = "chat-link"'), true);
   assert.equal(body.includes("考えています"), true);
   assert.equal(body.includes("thinking-dots"), true);
   assert.equal(body.includes("grid-template-rows: auto minmax(0, 1fr) auto"), true);
@@ -1141,6 +1145,9 @@ test("worker ingests VPS runner event into notifications and Butler chat thread"
   assert.equal(eventBody.messages[0].status, "thinking");
   assert.equal(eventBody.messages[0].relatedIssue, 452);
   assert.equal(eventBody.messages[0].text.includes("VPS Codex CLI"), true);
+  assert.equal(eventBody.messages[0].text.includes("\n状態:\n- repo: marushu/vtdd-v2-p"), true);
+  assert.equal(eventBody.messages[0].text.includes("- status: 実行中"), true);
+  assert.equal(eventBody.messages[0].text.includes("\n本文:\nVPS Codex CLI が作業を開始しました。"), true);
   assert.equal(eventBody.messages[0].text.includes("codex_subprocess"), true);
   assert.equal(rooms.calls.length, 1);
   assert.equal(rooms.calls[0].name, "dashboard-main-marushu-vtdd-v2-p");
@@ -3311,7 +3318,7 @@ test("worker dispatches VPS runner execution by posting a bounded queue comment"
   assert.equal(queueBody.includes('"transport": "vps_runner"'), true);
   assert.equal(queueBody.includes('"repository": "sample-org/vtdd-v2"'), true);
   assert.equal(queueBody.includes('"branch": "codex/issue-157-vps-worker-dispatch"'), true);
-  assert.equal(queueBody.includes("- Do not merge."), true);
+  assert.equal(queueBody.includes("- merge しない。"), true);
 });
 
 test("worker normalizes minimal Butler API-backed handoff into bounded remote Codex execution", async () => {

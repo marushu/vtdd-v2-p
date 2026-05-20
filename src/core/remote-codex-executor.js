@@ -1987,57 +1987,59 @@ function buildVpsRunnerGitHubQueueComment({ request }) {
   };
   const lines = [
     `<!-- vtdd:vps-runner-execution:${request.executionId} -->`,
-    "VTDD-managed VPS runner execution request.",
+    "VTDD 管理の VPS runner 実行キューです。",
     "",
-    "Bounded execution contract:",
-    `- Repository: ${request.repository}`,
+    "このコメントは dashboard への返信ではありません。VPS Codex CLI が拾い、完了 event を runtime に返したものだけを dashboard の返信として扱います。",
+    "",
+    "実行境界:",
+    `- リポジトリ: ${request.repository}`,
     `- Issue: #${request.issueNumber}`,
-    `- Branch: ${request.branch}`,
-    `- Base ref: ${request.baseRef}`,
-    `- Goal: ${request.codexGoal}`,
+    `- ブランチ: ${request.branch}`,
+    `- base ref: ${request.baseRef}`,
+    `- goal: ${request.codexGoal}`,
     ...(request.codexGoal === RemoteCodexDispatchGoal.REVISE_PR
       ? [
-          `- Target PR: #${request.revisionTarget.number}`,
-          `- Target PR state: ${request.revisionTarget.state}`,
-          `- Target PR headRef: ${request.revisionTarget.headRef}`,
-          `- Target PR headSha: ${request.revisionTarget.headSha}`
+          `- 対象 PR: #${request.revisionTarget.number}`,
+          `- 対象 PR state: ${request.revisionTarget.state}`,
+          `- 対象 PR headRef: ${request.revisionTarget.headRef}`,
+          `- 対象 PR headSha: ${request.revisionTarget.headSha}`
         ]
       : []),
     ...(request.codexGoal === RemoteCodexDispatchGoal.POST_MERGE_VERIFY
       ? [
-          `- Target PR: #${request.revisionTarget.number}`,
-          `- Target PR state: ${request.revisionTarget.state || "unknown"}`,
-          `- Target PR merged: ${request.revisionTarget.merged === false ? "false" : "true_or_unverified"}`,
-          `- Target PR mergedAt: ${request.revisionTarget.mergedAt || "unverified"}`,
-          `- Target PR mergeCommitSha: ${request.revisionTarget.mergeCommitSha || "unverified"}`
+          `- 対象 PR: #${request.revisionTarget.number}`,
+          `- 対象 PR state: ${request.revisionTarget.state || "unknown"}`,
+          `- 対象 PR merged: ${request.revisionTarget.merged === false ? "false" : "true_or_unverified"}`,
+          `- 対象 PR mergedAt: ${request.revisionTarget.mergedAt || "unverified"}`,
+          `- 対象 PR mergeCommitSha: ${request.revisionTarget.mergeCommitSha || "unverified"}`
         ]
       : []),
-    "- Canonical spec: this GitHub Issue",
-    "- Runtime truth: current GitHub branch / diff / PR / review comments",
+    "- 正本: この GitHub Issue",
+    "- runtime truth: 現在の GitHub branch / diff / PR / review comments",
     isDashboardChatTriage
-      ? "- Completion target: post a dashboard chat triage response to the same thread"
+      ? "- 完了条件: dashboard chat triage の返信 event を同じ thread に返す"
       : request.codexGoal === RemoteCodexDispatchGoal.POST_MERGE_VERIFY
-        ? "- Completion target: verify post-merge runtime truth and post GitHub-visible evidence"
-        : "- Completion target: create or update a pull request",
+        ? "- 完了条件: merge 後 runtime truth を検証し、GitHub-visible evidence を残す"
+        : "- 完了条件: pull request を作成または更新する",
     ...(isDashboardChatTriage
       ? [
-          "- PR body requirement: not applicable; dashboard chat triage must not create or update a PR.",
-          "- Context preflight requirement: the VPS runner will automatically read `AGENTS.md`, `docs/butler/thread-independent-startup-contract.md`, and the canonical Issue, then generate a machine-readable preflight receipt before Codex starts triage."
+          "- PR body requirement: 不要。dashboard chat triage は PR を作成・更新しません。",
+          "- context preflight: VPS runner は `AGENTS.md`、`docs/butler/thread-independent-startup-contract.md`、正本 Issue を読んでから triage を開始します。"
         ]
       : [
-          "- PR body requirement: Codex must inspect `docs/pr-template-model.md`, `scripts/render-pr-body.mjs`, and `scripts/validate-pr-body.mjs`; the VPS runner will validate and normalize the PR body again before create/update.",
-          "- Context preflight requirement: the VPS runner will automatically read `AGENTS.md`, `docs/butler/thread-independent-startup-contract.md`, the canonical Issue, and the PR body contract files, then generate a machine-readable preflight receipt before Codex starts editing.",
-          "- Required PR body markers: `## This PR satisfies Intent`, `## Satisfied Success Criteria`, `## Unsatisfied Success Criteria`, `## Verification Evidence`, `## Surface Update Checklist`."
+          "- PR body requirement: Codex は `docs/pr-template-model.md`、`scripts/render-pr-body.mjs`、`scripts/validate-pr-body.mjs` を確認します。VPS runner も PR create/update 前に検証・正規化します。",
+          "- context preflight: VPS runner は `AGENTS.md`、`docs/butler/thread-independent-startup-contract.md`、正本 Issue、PR body contract files を読んでから編集を開始します。",
+          "- 必須 PR body markers: `## This PR satisfies Intent`, `## Satisfied Success Criteria`, `## Unsatisfied Success Criteria`, `## Verification Evidence`, `## Surface Update Checklist`."
         ]),
-    "- Missing preflight inputs do not authorize speculative implementation; the runner must ask Butler/owner to confirm the next action, then wait for a reissued bounded request.",
+    "- preflight 入力が不足している場合、推測実装は禁止です。runner は Butler/owner に次の判断を求め、bounded request の再発行を待ちます。",
     "",
-    "Rules:",
-    "- Do not expand scope beyond the Issue.",
-    ...(isDashboardChatTriage ? ["- Do not edit files.", "- Do not commit.", "- Do not push.", "- Do not create or update PRs."] : []),
-    "- Do not merge.",
-    "- Do not deploy.",
-    "- Preserve reviewer objections for Butler/human judgment.",
-    "- If the Issue or runtime truth is insufficient, stop and comment with the blocked reason.",
+    "ルール:",
+    "- Issue の範囲を勝手に広げない。",
+    ...(isDashboardChatTriage ? ["- ファイル編集しない。", "- commit しない。", "- push しない。", "- PR を作成・更新しない。"] : []),
+    "- merge しない。",
+    "- deploy しない。",
+    "- reviewer objection は Butler/human judgment 用に残す。",
+    "- Issue または runtime truth が不足している場合は停止し、日本語で blocker reason をコメントする。",
     "",
     "Runner payload:",
     fencedJson(payload)

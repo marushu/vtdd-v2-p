@@ -1122,7 +1122,7 @@ function buildVpsRunnerStateComment({ executionId, event }) {
   return [
     `<!-- vtdd:vps-runner-state:${executionId} -->`,
     `<!-- vtdd:vps-runner-event:${executionId} -->`,
-    "VTDD VPS runner state.",
+    "VTDD VPS runner 状態です。",
     "",
     ...formatLeadTimeCommentLines(event?.leadTime),
     fencedJson(event)
@@ -1812,7 +1812,7 @@ function sanitizeIncidentField(value) {
     .slice(0, 240);
 }
 
-async function postVpsRunnerEvent({ githubFetch, payload, event, notification }) {
+async function postVpsRunnerEvent({ githubFetch, payload, event, notification, env = process.env, fetchImpl = globalThis.fetch }) {
   const now = new Date().toISOString();
   payload.lifecycle = updateVpsRunnerLifecycleForEvent({
     lifecycle: payload.lifecycle,
@@ -1832,6 +1832,12 @@ async function postVpsRunnerEvent({ githubFetch, payload, event, notification })
     return upsertVpsRunnerStateComment({ githubFetch, payload, event: eventPayload });
   }
 
+  eventPayload.dashboardDelivery = await postVpsRunnerDashboardEvent({
+    eventPayload,
+    env,
+    fetchImpl
+  });
+
   return githubFetch(`/repos/${payload.repository}/issues/${payload.issueNumber}/comments`, {
     method: "POST",
     body: {
@@ -1842,6 +1848,65 @@ async function postVpsRunnerEvent({ githubFetch, payload, event, notification })
       })
     }
   });
+}
+
+async function postVpsRunnerDashboardEvent({ eventPayload, env = process.env, fetchImpl = globalThis.fetch }) {
+  if (!normalizeText(eventPayload?.threadId)) {
+    return {
+      status: "skipped",
+      reason: "dashboard threadId is missing"
+    };
+  }
+  const runtimeUrl = normalizeText(env?.VTDD_RUNTIME_URL);
+  const bearerToken = normalizeText(env?.VTDD_GATEWAY_BEARER_TOKEN);
+  if (!runtimeUrl || !bearerToken) {
+    return {
+      status: "skipped",
+      reason: "VTDD_RUNTIME_URL or VTDD_GATEWAY_BEARER_TOKEN is missing"
+    };
+  }
+  if (typeof fetchImpl !== "function") {
+    return {
+      status: "failed",
+      reason: "fetch is not available"
+    };
+  }
+
+  let endpoint;
+  try {
+    endpoint = new URL("/v2/events/vps-runner", runtimeUrl);
+  } catch (error) {
+    return {
+      status: "failed",
+      reason: "VTDD_RUNTIME_URL is not a valid URL"
+    };
+  }
+
+  try {
+    const response = await fetchImpl(endpoint, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${bearerToken}`,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify(eventPayload)
+    });
+    if (!response || response.ok !== true) {
+      return {
+        status: "failed",
+        reason: `runtime event post failed with HTTP ${response?.status || "unknown"}`
+      };
+    }
+    return {
+      status: "delivered",
+      endpoint: endpoint.origin + endpoint.pathname
+    };
+  } catch (error) {
+    return {
+      status: "failed",
+      reason: summarizeDiagnosticText(error?.message || String(error), 240)
+    };
+  }
 }
 
 async function assertVpsRunnerNotCanceled({ githubFetch, payload, checkpoint, notification }) {
@@ -1947,15 +2012,15 @@ function buildVpsRunnerLeadTime(lifecycle = {}) {
 function formatLeadTimeCommentLines(leadTime) {
   const durations = leadTime?.durations || {};
   const entries = [
-    ["Queue wait", durations.queue_wait_duration],
-    ["Codex execution", durations.codex_execution_duration],
-    ["PR creation", durations.pr_creation_duration],
-    ["Total lead time", durations.total_lead_time]
+    ["queue 待ち", durations.queue_wait_duration],
+    ["Codex 実行", durations.codex_execution_duration],
+    ["PR 作成", durations.pr_creation_duration],
+    ["合計", durations.total_lead_time]
   ].filter(([, duration]) => duration?.label);
   if (entries.length === 0) {
     return [];
   }
-  return ["Lead time:", ...entries.map(([label, duration]) => `- ${label}: ${duration.label}`), ""];
+  return ["所要時間:", ...entries.map(([label, duration]) => `- ${label}: ${duration.label}`), ""];
 }
 
 function shouldUpdateVpsRunnerState(event) {
@@ -2449,11 +2514,11 @@ function isVpsRunnerMentionMilestone(event = {}) {
 
 function formatVpsRunnerMilestoneLead({ event, mention } = {}) {
   if (!isVpsRunnerMentionMilestone(event)) {
-    return "VTDD VPS runner event.";
+    return "VTDD VPS runner event です。";
   }
   const label = getVpsRunnerMilestoneLabel(event);
   const prefix = mention ? `@${mention} ` : "";
-  return `${prefix}VTDD milestone: ${label}.`;
+  return `${prefix}VTDD milestone: ${label}。`;
 }
 
 function getVpsRunnerMilestoneLabel(event = {}) {
@@ -2469,30 +2534,30 @@ function getVpsRunnerMilestoneLabel(event = {}) {
   }
   const matched = candidates.find((candidate) => MILESTONE_MENTION_EVENTS.has(candidate));
   const labels = {
-    picked_up: "execution picked up",
-    branch_pushed: "branch pushed",
-    pr_created: "PR created",
-    pr_updated: "PR updated",
-    conflict_resolved: "conflict resolved",
-    no_changes: "no changes",
-    merge_retry_ready: "merge retry ready",
-    pull_request_created: "PR created",
-    pull_request_updated: "PR updated",
-    review_result_changed: "review result changed",
-    manual_review_required: "manual review required",
-    ready_for_review_completed: "ready for review completed",
-    merge_ready_reached: "merge-ready reached",
-    blocked: "blocked",
-    failed: "failed",
-    stale: "stale",
-    deploy_required: "deploy required",
-    completed: "completed",
-    runner_failed: "failed",
-    request_changes: "review requested changes",
-    manual_review: "manual review required",
-    approve: "review approved"
+    picked_up: "実行を拾いました",
+    branch_pushed: "branch を push しました",
+    pr_created: "PR を作成しました",
+    pr_updated: "PR を更新しました",
+    conflict_resolved: "conflict を解消しました",
+    no_changes: "差分なしです",
+    merge_retry_ready: "merge retry 可能です",
+    pull_request_created: "PR を作成しました",
+    pull_request_updated: "PR を更新しました",
+    review_result_changed: "review 結果が変わりました",
+    manual_review_required: "manual review が必要です",
+    ready_for_review_completed: "ready-for-review が完了しました",
+    merge_ready_reached: "merge-ready に到達しました",
+    blocked: "blocker で停止しました",
+    failed: "失敗しました",
+    stale: "stale です",
+    deploy_required: "deploy が必要です",
+    completed: "完了しました",
+    runner_failed: "runner が失敗しました",
+    request_changes: "review で修正要求があります",
+    manual_review: "manual review が必要です",
+    approve: "review approve です"
   };
-  return labels[matched] || "runtime event";
+  return labels[matched] || "runtime event です";
 }
 
 function isMentionableGitHubLogin(value) {
