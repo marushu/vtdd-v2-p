@@ -152,6 +152,10 @@ test("custom gpt instructions preserve current butler and approval boundaries", 
   assert.equal(doc.includes("phase=execution"), true);
   assert.equal(doc.includes("High-risk actions require scoped passkey approval."), true);
   assert.equal(doc.includes("Merge requires explicit scoped passkey approval."), true);
+  assert.equal(doc.includes("Same-origin passkey registration is not a public first-viewer bootstrap"), true);
+  assert.equal(doc.includes("browser registration requires `VTDD_PASSKEY_BOOTSTRAP_TOKEN` or machine auth"), true);
+  assert.equal(doc.includes("Do not put the bootstrap token in a URL, PR body, Issue comment, RAG memory, chat history, or Custom GPT Instructions"), true);
+  assert.equal(doc.includes("Action Schema does not need a new operationId for this boundary"), true);
   assert.equal(doc.includes("Action Schema update required"), true);
   assert.equal(doc.includes("Instructions update required"), true);
   assert.equal(doc.includes("runtime is in sync, do not overclaim that the current Custom GPT editor is also in sync"), true);
@@ -269,6 +273,9 @@ test("short custom gpt instructions stay under editor limits while preserving cr
   assert.equal(doc.includes("bare URL"), true);
   assert.equal(doc.includes("phase=execution"), true);
   assert.equal(doc.includes("GO + real passkey"), true);
+  assert.equal(doc.includes("First passkey browser registration is not public first-viewer setup"), true);
+  assert.equal(doc.includes("requires VTDD_PASSKEY_BOOTSTRAP_TOKEN or machine auth"), true);
+  assert.equal(doc.includes("No Action Schema operationId change is needed for this boundary"), true);
   assert.equal(doc.includes("openai_api_key_not_configured"), true);
   assert.equal(doc.includes("If vtddDeployProduction fails, say the exact deploy error/reason/issues"), true);
   assert.equal(
@@ -307,6 +314,7 @@ test("short-min custom gpt instructions stay pasteable while preserving critical
     "policyInput.issueTraceability.relatedIssue",
     "continuationContext.handoff.relatedIssue",
     "GO + real passkey",
+    "first browser registration requires VTDD_PASSKEY_BOOTSTRAP_TOKEN or machine auth",
     "show exact title/body/comment/update payload",
     "no freehand `--body`",
     "scripts/prepare-pr-body-file.mjs",

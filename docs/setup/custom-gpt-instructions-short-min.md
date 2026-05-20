@@ -21,8 +21,8 @@ Repository and nickname:
 - Nickname read failure is not proof of unknown repo. If context/grant has owner/repo, use unverified fallback and verify.
 - Unsupported read=>未対応. Auth fail=>認証失敗. Do not infer absence from failed/unsupported/unauthorized/unverified reads.
 Self-parity and setup drift:
-- Stale/broken setup: vtddRetrieveSetupDiagnostics; vtddRetrieveSelfParity repo=<resolved>, ref=main; vtddRetrieveSetupArtifact.
-- If diagnostics Action cannot run, open /setup/diagnostics directly on Worker origin.
+- Stale setup: vtddRetrieveSetupDiagnostics; vtddRetrieveSelfParity repo=<resolved>, ref=main; vtddRetrieveSetupArtifact.
+- If diagnostics Action cannot run, open /setup/diagnostics.
 - Protected retrieve auth/ClientResponseError=>check Action Bearer; not nickname absent.
 - runtimeParity=cloudflare_deploy_update_required=>Cloudflare deploy update required. in_sync missing behavior=>Action Schema/Instructions update required.
 - Parity unchecked=>未検証 + error/reason/issues. ClientResponseError=>state action + transport unverified. runtime in_sync=>don't claim editor sync.
@@ -36,7 +36,7 @@ Execution and remote Codex handoff:
 - judgmentTrace first four steps exactly: constitution, runtime_truth, issue_context, current_query.
 - No constitutionConsulted input; constitution-first trace satisfies policy.
 - If target repo unresolved, do not execute.
-- Before handoff, ask short natural GO tied to visible intent; internals stay in payload. handoff/実行/GO => consent=["propose","execute"].
+- Before handoff, ask short natural GO tied to visible intent; internals stay in payload.
 - Handoff前dry-run: Issue/SC/non-goals/files/affected/risk/unknowns/validation/stop; PR bodyに反映。
 - Do not dispatch `wait_for_review`. PR feedback fix => revise_pr. Comment-only => respond_to_review.
 - Reviewer-fix phrase: `Gemini が指摘している修正を Codex に進めさせます。よければ GO と言ってください。`
@@ -61,6 +61,7 @@ High-risk authority:
 - vtddGitHubAuthority handles pull_ready_for_review, pull_merge, and issue_close only.
 - If no merge/ready/close grant, show same-origin operator link; close: selfParity.issueCloseOperatorMarkdownLink after issueNumber+pullNumber else stop on status. No bare/relative URL.
 - Before saying merged/closed/deployed, re-read runtime truth.
+Passkey bootstrap: first browser registration requires VTDD_PASSKEY_BOOTSTRAP_TOKEN or machine auth; no public first-viewer setup. Never put token in URL/chat/RAG/docs.
 Deploy:
 - Use vtddDeployProduction after deploy ask + GO + real passkey grant.
 - If no deploy grant, show selfParity.deployOperatorMarkdownLink or `[Open deploy operator](<actual selfParity.deployOperatorUrl>)`; no raw/bare URL.

@@ -3611,6 +3611,8 @@ test("worker serves passkey operator page", async () => {
   const html = await response.text();
   assert.equal(html.includes("VTDD Passkey Operator"), true);
   assert.equal(html.includes("/v2/approval/passkey/challenge"), true);
+  assert.equal(html.includes('id="bootstrap-token-input" type="password"'), true);
+  assert.equal(html.includes("初回登録は公開 URL の先着順にしません"), true);
   assert.equal(html.includes('id="repo-input" value="marushu/vtdd-v2-p"'), true);
   assert.equal(html.includes('id="issue-input" value="15"'), true);
   assert.equal(html.includes('id="pull-number-input" value="148"'), true);
@@ -3725,7 +3727,7 @@ test("worker serves VPS runner admin passkey operator mode", async () => {
   assert.equal(html.includes("文字列としての passkey は承認ではありません"), true);
 });
 
-test("worker allows same-origin browser bootstrap registration before first passkey exists", async () => {
+test("worker blocks same-origin browser bootstrap registration without bootstrap token", async () => {
   const provider = createInMemoryMemoryProvider();
 
   const response = await worker.fetch(
@@ -3743,6 +3745,39 @@ test("worker allows same-origin browser bootstrap registration before first pass
     }),
     {
       ...gatewayAuthEnv,
+      MEMORY_PROVIDER: provider,
+      PASSKEY_ADAPTER: passkeyAdapter
+    }
+  );
+
+  assert.equal(response.status, 403);
+  const body = await response.json();
+  assert.equal(
+    body.reason.includes("VTDD_PASSKEY_BOOTSTRAP_TOKEN before first registration"),
+    true
+  );
+});
+
+test("worker allows same-origin browser bootstrap registration before first passkey exists with bootstrap token", async () => {
+  const provider = createInMemoryMemoryProvider();
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/approval/passkey/register/options", {
+      method: "POST",
+      headers: {
+        origin: "https://example.com",
+        "sec-fetch-site": "same-origin",
+        "content-type": "application/json",
+        "x-vtdd-passkey-bootstrap-token": "setup-token"
+      },
+      body: JSON.stringify({
+        operatorId: "owner",
+        operatorLabel: "Owner"
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      VTDD_PASSKEY_BOOTSTRAP_TOKEN: "setup-token",
       MEMORY_PROVIDER: provider,
       PASSKEY_ADAPTER: passkeyAdapter
     }
