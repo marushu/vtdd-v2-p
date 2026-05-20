@@ -60137,6 +60137,7 @@ function renderDashboardDeployEvent(event) {
   const conclusion = normalizeText30(event.conclusion) || normalizeText30(event.status) || "unknown";
   const badgeClass = conclusion === "success" ? "success" : conclusion === "failure" || conclusion === "cancelled" ? "danger" : "";
   const updatedAt = normalizeText30(event.updatedAt);
+  const relativeUpdatedAt = formatDashboardRelativeTime(updatedAt);
   const sha = normalizeText30(event.headSha);
   const shortSha = sha ? sha.slice(0, 7) : "unknown";
   const runUrl = normalizeText30(event.runUrl);
@@ -60144,8 +60145,37 @@ function renderDashboardDeployEvent(event) {
   return `<div class="deploy-event">
             <div class="lane-title"><strong>\u6700\u65B0 deploy</strong><span class="pill ${badgeClass}">${escapeDashboardHtml(conclusion)}</span></div>
             <p>${escapeDashboardHtml(event.workflowName || "deploy-production")} / <code>${escapeDashboardHtml(shortSha)}</code></p>
-            <p class="muted">${escapeDashboardHtml(updatedAt || "updatedAt \u672A\u53D7\u4FE1")} \u30FB ${runLabel}</p>
+            <p class="muted">${escapeDashboardHtml(relativeUpdatedAt || "\u6642\u523B\u672A\u53D7\u4FE1")} \u30FB ${escapeDashboardHtml(updatedAt || "updatedAt \u672A\u53D7\u4FE1")} \u30FB ${runLabel}</p>
           </div>`;
+}
+function formatDashboardRelativeTime(value, now = /* @__PURE__ */ new Date()) {
+  const timestamp = new Date(normalizeText30(value));
+  const nowTime = now instanceof Date ? now.getTime() : new Date(now).getTime();
+  if (Number.isNaN(timestamp.getTime()) || Number.isNaN(nowTime)) {
+    return "";
+  }
+  const diffMs = Math.max(0, nowTime - timestamp.getTime());
+  const seconds = Math.floor(diffMs / 1e3);
+  if (seconds < 60) {
+    return "\u305F\u3063\u305F\u4ECA";
+  }
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) {
+    return `${minutes}\u5206\u524D`;
+  }
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) {
+    return `${hours}\u6642\u9593\u524D`;
+  }
+  const days = Math.floor(hours / 24);
+  if (days < 30) {
+    return `${days}\u65E5\u524D`;
+  }
+  const months = Math.floor(days / 30);
+  if (months < 12) {
+    return `${months}\u304B\u6708\u524D`;
+  }
+  return `${Math.floor(months / 12)}\u5E74\u524D`;
 }
 async function renderDashboardGitHubTruthPage({ url, env } = {}) {
   const origin = normalize7(url?.origin);
