@@ -174,11 +174,33 @@ jobs:
           NODE
           )
 
-          curl --fail-with-body --show-error --silent \
-            -X POST "${RUNTIME_URL%/}/v2/events/github-actions" \
-            -H "authorization: Bearer ${VTDD_GATEWAY_BEARER_TOKEN}" \
-            -H "content-type: application/json" \
-            --data "$event_body"
+          event_endpoint="${RUNTIME_URL%/}/v2/events/github-actions"
+          event_sent=0
+          for attempt in 1 2 3 4 5 6; do
+            response_file="$(mktemp)"
+            http_code="$(
+              curl --show-error --silent \
+                -o "$response_file" \
+                -w "%{http_code}" \
+                -X POST "$event_endpoint" \
+                -H "authorization: Bearer ${VTDD_GATEWAY_BEARER_TOKEN}" \
+                -H "content-type: application/json" \
+                --data "$event_body" || true
+            )"
+            if [ "$http_code" -ge 200 ] && [ "$http_code" -lt 300 ]; then
+              event_sent=1
+              rm -f "$response_file"
+              break
+            fi
+            echo "dashboard deploy event notification attempt ${attempt} failed with HTTP ${http_code}; retrying after Worker propagation delay."
+            sed -E 's/(approval:[a-zA-Z0-9-]+|gh[psuor]_[A-Za-z0-9_]+)/[redacted]/g' "$response_file" || true
+            rm -f "$response_file"
+            sleep 5
+          done
+
+          if [ "$event_sent" -ne 1 ]; then
+            echo "dashboard deploy event notification did not reach Worker after retries; deploy remains successful, but dashboard may be stale until the next event."
+          fi
 
       - name: Notify deploy completion
         if: always()
