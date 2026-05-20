@@ -6242,7 +6242,9 @@ function html(status, body) {
   return new Response(body, {
     status,
     headers: {
-      "content-type": "text/html; charset=utf-8"
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": "no-store, no-cache, must-revalidate, max-age=0",
+      pragma: "no-cache"
     }
   });
 }
