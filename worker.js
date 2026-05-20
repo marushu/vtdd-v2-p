@@ -61986,7 +61986,7 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
     .app-shell { min-height: calc(100dvh - 32px); display: grid; grid-template-rows: auto 1fr auto; }
     .topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 4px 2px 20px; }
     .top-left, .top-right { display: flex; align-items: center; gap: 10px; min-width: 0; }
-    .round-button, .tool-button, .send-button, .icon-button { display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border); background: var(--button); color: var(--text); text-decoration: none; font: inherit; font-weight: 750; }
+    .round-button, .tool-button, .send-button { display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border); background: var(--button); color: var(--text); text-decoration: none; font: inherit; font-weight: 750; }
     .menu-open { cursor: pointer; }
     .round-button { width: 44px; height: 44px; border-radius: 999px; font-size: 24px; flex: 0 0 auto; }
     .tool-button { min-height: 40px; border-radius: 999px; padding: 0 14px; }
@@ -62004,10 +62004,9 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
     .connection-note { display: inline-flex; align-items: center; width: fit-content; border: 1px solid var(--border); border-radius: 999px; padding: 5px 10px; color: var(--muted); font-size: 13px; }
     .chat-link { color: var(--text); text-decoration-thickness: 1px; text-underline-offset: 4px; font-weight: 750; }
     .composer { position: fixed; left: 16px; right: 354px; bottom: max(16px, env(safe-area-inset-bottom)); display: grid; gap: 8px; z-index: 4; }
-    .composer-box { display: grid; grid-template-columns: 44px minmax(0, 1fr) 38px 44px; align-items: end; gap: 8px; min-height: 62px; padding: 8px; border: 1px solid var(--border); border-radius: 28px; background: var(--panel-strong); box-shadow: 0 16px 60px var(--shadow); }
+    .composer-box { display: grid; grid-template-columns: minmax(0, 1fr) 44px; align-items: end; gap: 8px; min-height: 62px; padding: 8px; border: 1px solid var(--border); border-radius: 28px; background: var(--panel-strong); box-shadow: 0 16px 60px var(--shadow); }
     textarea { width: 100%; min-height: 44px; max-height: 160px; border: 0; outline: 0; resize: vertical; padding: 10px 2px; color: var(--text); background: transparent; font: inherit; line-height: 1.45; }
     textarea::placeholder { color: var(--muted); }
-    .icon-button { width: 38px; height: 38px; border-radius: 999px; font-size: 24px; }
     .send-button { width: 44px; height: 44px; border-radius: 999px; background: var(--text); color: var(--page-bg); font-size: 22px; }
     .composer-status { padding-left: 16px; color: var(--muted); font-size: 12px; }
     .sidebar { position: sticky; top: 16px; align-self: start; max-height: calc(100dvh - 32px); overflow: auto; border: 1px solid var(--border); border-radius: 18px; background: var(--panel); }
@@ -62055,11 +62054,10 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
     @media (max-width: 460px) {
       main { padding: 12px 10px 0; }
       .composer { left: 10px; right: 10px; }
-      .composer-box { grid-template-columns: 40px minmax(0, 1fr) 34px 40px; border-radius: 24px; }
+      .composer-box { grid-template-columns: minmax(0, 1fr) 40px; border-radius: 24px; }
       .round-button { width: 40px; height: 40px; }
       .tool-button { min-height: 38px; padding: 0 12px; }
       .send-button { width: 40px; height: 40px; }
-      .icon-button { width: 34px; height: 34px; }
     }
   </style>
 </head>
@@ -62141,11 +62139,9 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
 
       </div>
 
-      <form class="composer" id="butler-chat-form" aria-label="Butler composer" data-endpoint="${escapeDashboardHtml(origin)}/v2/dashboard/chat/messages" data-thread-id="${escapeDashboardHtml(chatThreadId)}" data-repository="${escapeDashboardHtml(repository)}">
+      <form class="composer" id="butler-chat-form" aria-label="Butler composer" data-endpoint="${escapeDashboardHtml(origin)}/v2/dashboard/chat/messages" data-thread-endpoint="${escapeDashboardHtml(origin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}" data-thread-id="${escapeDashboardHtml(chatThreadId)}" data-repository="${escapeDashboardHtml(repository)}">
         <div class="composer-box">
-          <span class="icon-button" aria-hidden="true">\uFF0B</span>
           <textarea id="butler-message" name="text" placeholder="Butler V2 \u306B\u30E1\u30C3\u30BB\u30FC\u30B8..." aria-label="Butler V2 \u306B\u30E1\u30C3\u30BB\u30FC\u30B8"></textarea>
-          <span class="icon-button" aria-hidden="true">\u266A</span>
           <button class="send-button" type="submit" aria-label="Butler \u306B\u9001\u4FE1">\u2191</button>
         </div>
         <div class="composer-status" id="butler-chat-status">\u63A5\u7D9A\u6E08\u307F\u3002\u9001\u4FE1\u3059\u308B\u3068\u3053\u306E thread \u306B\u4FDD\u5B58\u3055\u308C\u307E\u3059\u3002\u81EA\u52D5\u66F4\u65B0\u30FBpolling \u306F\u3042\u308A\u307E\u305B\u3093\u3002</div>
@@ -62213,8 +62209,10 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
       if (!form || !log || !textarea || !status) return;
 
       const endpoint = form.dataset.endpoint;
+      const threadEndpoint = form.dataset.threadEndpoint;
       const threadId = form.dataset.threadId;
       const repository = form.dataset.repository;
+      const initialMarkup = log.innerHTML;
 
       function setStatus(text) {
         status.textContent = text;
@@ -62239,6 +62237,38 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
         appendMessage({ role: "butler", text });
       }
 
+      function renderThread(messages) {
+        if (!Array.isArray(messages) || messages.length === 0) {
+          log.innerHTML = initialMarkup;
+          return;
+        }
+        log.replaceChildren();
+        for (const message of messages) {
+          appendMessage(message);
+        }
+      }
+
+      async function refreshThread() {
+        if (!threadEndpoint) return;
+        setStatus("\u4F1A\u8A71\u5C65\u6B74\u3092\u8AAD\u307F\u8FBC\u307F\u4E2D\u3067\u3059\u3002");
+        try {
+          const response = await fetch(threadEndpoint, {
+            method: "GET",
+            headers: { "accept": "application/json" },
+            credentials: "same-origin"
+          });
+          const body = await response.json().catch(() => ({}));
+          if (!response.ok || !body.ok) {
+            setStatus(body.reason || "\u4F1A\u8A71\u5C65\u6B74\u3092\u8AAD\u3081\u307E\u305B\u3093\u3067\u3057\u305F\u3002\u9001\u4FE1\u6642\u306B\u518D\u8A66\u884C\u3057\u307E\u3059\u3002");
+            return;
+          }
+          renderThread(body.messages || []);
+          setStatus("\u63A5\u7D9A\u6E08\u307F\u3002\u9001\u4FE1\u3059\u308B\u3068\u3053\u306E thread \u306B\u4FDD\u5B58\u3055\u308C\u307E\u3059\u3002\u81EA\u52D5\u66F4\u65B0\u30FBpolling \u306F\u3042\u308A\u307E\u305B\u3093\u3002");
+        } catch {
+          setStatus("\u4F1A\u8A71\u5C65\u6B74\u3092\u8AAD\u3081\u307E\u305B\u3093\u3067\u3057\u305F\u3002\u9001\u4FE1\u6642\u306B\u518D\u8A66\u884C\u3057\u307E\u3059\u3002");
+        }
+      }
+
       form.addEventListener("submit", async (event) => {
         event.preventDefault();
         const text = textarea.value.trim();
@@ -62252,7 +62282,8 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
         try {
           const response = await fetch(endpoint, {
             method: "POST",
-            headers: { "content-type": "application/json" },
+            headers: { "content-type": "application/json", "accept": "application/json" },
+            credentials: "same-origin",
             body: JSON.stringify({ threadId, repository, text })
           });
           const body = await response.json().catch(() => ({}));
@@ -62274,6 +62305,8 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
           textarea.focus();
         }
       });
+
+      refreshThread();
     })();
   <\/script>
 </body>

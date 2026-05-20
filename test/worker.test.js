@@ -388,7 +388,14 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes('for="mobile-menu-toggle"'), true);
   assert.equal(body.includes('id="butler-chat-form"'), true);
   assert.equal(body.includes('id="butler-chat-log"'), true);
+  assert.equal(body.includes('class="icon-button"'), false);
+  assert.equal(body.includes('aria-hidden="true">＋</span>'), false);
+  assert.equal(body.includes('aria-hidden="true">♪</span>'), false);
   assert.equal(body.includes("/v2/dashboard/chat/messages"), true);
+  assert.equal(body.includes('data-thread-endpoint="https://example.com/v2/dashboard/chat/dashboard-main-marushu-vtdd-v2-p"'), true);
+  assert.equal(body.includes("function refreshThread()"), true);
+  assert.equal(body.includes('credentials: "same-origin"'), true);
+  assert.equal(body.includes("会話履歴を読み込み中です"), true);
   assert.equal(body.includes("モバイル管理メニュー"), true);
   assert.equal(body.includes("直近 deploy event"), true);
   assert.equal(body.includes("Butler V2 にメッセージ"), true);
@@ -473,6 +480,59 @@ test("worker appends dashboard Butler chat turn and retrieves the same thread", 
   assert.equal(retrieveBody.ok, true);
   assert.equal(retrieveBody.messages.length, 2);
   assert.equal(retrieveBody.messages[0].text, "VPS Codex CLI とリアルタイムに会話したい");
+});
+
+test("worker appends dashboard Butler chat turn with dashboard passkey session cookie", async () => {
+  const provider = createInMemoryMemoryProvider();
+  await provider.store({
+    id: "approval:dashboard-chat-session",
+    type: MemoryRecordType.APPROVAL_LOG,
+    content: {
+      kind: "passkey_grant",
+      status: "verified",
+      approvalId: "approval:dashboard-chat-session",
+      credentialId: "AQIDBA",
+      verifiedAt: "2026-05-20T00:00:00.000Z",
+      expiresAt: "2999-01-01T00:00:00.000Z",
+      scope: {
+        actionType: "read",
+        highRiskKind: "dashboard_access",
+        repositoryInput: "marushu/vtdd-v2-p",
+        phase: "execution"
+      }
+    },
+    metadata: { source: "test" },
+    priority: 96,
+    tags: ["passkey_grant", "passkey_approval", "verified"],
+    createdAt: "2026-05-20T00:00:00.000Z"
+  });
+
+  const store = createInMemoryDashboardChatStore();
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/chat/messages", {
+      method: "POST",
+      headers: {
+        cookie: "vtdd_dashboard_session=approval%3Adashboard-chat-session",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        threadId: "dashboard-main-marushu-vtdd-v2-p",
+        repository: "marushu/vtdd-v2-p",
+        text: "dashboard passkey session から Butler に送る"
+      })
+    }),
+    {
+      MEMORY_PROVIDER: provider,
+      DASHBOARD_CHAT_STORE: store
+    }
+  );
+
+  assert.equal(response.status, 202);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.messages.length, 2);
+  assert.equal(body.messages[0].role, "owner");
+  assert.equal(body.messages[1].role, "butler");
 });
 
 test("worker dispatches authenticated dashboard chat handoff to VPS runner queue", async () => {
