@@ -58391,7 +58391,21 @@ async function handleVpsRunnerEventRequest(request, env) {
     });
   }
   await eventStore.put(event.event);
-  const messages = await chatStore.appendMany(event.threadId, [event.chatMessage]);
+  let messages;
+  try {
+    messages = await chatStore.appendMany(event.threadId, [event.chatMessage]);
+  } catch (error2) {
+    await eventStore.delete(event.event.id);
+    return json(502, {
+      ok: false,
+      error: "dashboard_event_chat_append_failed",
+      reason: "VPS runner event was not saved because Butler chat append failed",
+      rollback: {
+        eventId: event.event.id,
+        notificationDeleted: true
+      }
+    });
+  }
   return json(202, {
     ok: true,
     event: event.event,
@@ -59682,7 +59696,7 @@ function resolveDashboardEventStore(env) {
     return null;
   }
   const injectedStore = env.DASHBOARD_EVENT_STORE ?? null;
-  if (injectedStore && typeof injectedStore.put === "function" && typeof injectedStore.latest === "function") {
+  if (injectedStore && typeof injectedStore.put === "function" && typeof injectedStore.delete === "function" && typeof injectedStore.latest === "function") {
     return injectedStore;
   }
   const d1Binding = env[MEMORY_D1_BINDING] ?? null;
@@ -59743,6 +59757,15 @@ function createD1DashboardEventStore(d1) {
         JSON.stringify(normalized)
       ).run();
       return normalized;
+    },
+    async delete(eventId) {
+      const id = normalizeDashboardEventText(eventId);
+      if (!id) {
+        return false;
+      }
+      await ensureSchema();
+      await d1.prepare("DELETE FROM vtdd_dashboard_events WHERE id = ?").bind(id).run();
+      return true;
     },
     async latest(filter = {}) {
       await ensureSchema();

@@ -43,6 +43,9 @@ function createInMemoryDashboardEventStore() {
       events.set(event.id, event);
       return event;
     },
+    async delete(eventId) {
+      return events.delete(eventId);
+    },
     async latest(filter = {}) {
       const matches = [...events.values()].filter((event) => {
         if (filter.kind && event.kind !== filter.kind) {
@@ -675,6 +678,51 @@ test("worker rejects VPS runner event without machine auth", async () => {
   );
 
   assert.equal(response.status, 401);
+});
+
+test("worker rolls back VPS runner notification when Butler chat append fails", async () => {
+  const eventStore = createInMemoryDashboardEventStore();
+  const chatStore = {
+    async appendMany() {
+      throw new Error("chat append failed");
+    },
+    async listThread() {
+      return [];
+    }
+  };
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/events/vps-runner", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        repository: "marushu/vtdd-v2-p",
+        executionId: "remote-codex-issue452-partial-write",
+        threadId: "dashboard-main-marushu-vtdd-v2-p",
+        issueNumber: 452,
+        status: "running",
+        currentStep: "codex_subprocess"
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      DASHBOARD_EVENT_STORE: eventStore,
+      DASHBOARD_CHAT_STORE: chatStore
+    }
+  );
+
+  assert.equal(response.status, 502);
+  const body = await response.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.error, "dashboard_event_chat_append_failed");
+  assert.equal(body.rollback.notificationDeleted, true);
+
+  const latest = await eventStore.latest({
+    kind: "vps_runner_execution",
+    repository: "marushu/vtdd-v2-p",
+    workflowName: "vps-runner"
+  });
+  assert.equal(latest, null);
 });
 
 test("worker setup recovery page opens without Action auth and defaults to VTDD repo", async () => {
