@@ -6080,18 +6080,31 @@ async function authorizePasskeyRegistrationRequest({ request, env, apiSuffix }) 
   const provider = resolveMemoryProvider(env);
   const validation = validateMemoryProvider(provider);
   if (!validation.ok) {
-    return browserAuth;
+    return {
+      ok: false,
+      status: 503,
+      reason: "valid memory provider is required before browser passkey registration can be authorized"
+    };
   }
 
   const passkeys = await retrieveRegisteredPasskeys(provider);
-  if (passkeys.length === 0) {
+  if (passkeys.length > 0) {
+    return {
+      ok: false,
+      status: 403,
+      reason: "browser passkey registration is blocked after the first passkey is registered"
+    };
+  }
+
+  const bootstrapTokenAuth = authorizePasskeyBootstrapTokenRequest({ request, env });
+  if (bootstrapTokenAuth.ok) {
     return browserAuth;
   }
 
   return {
     ok: false,
-    status: 403,
-    reason: "browser bootstrap registration is allowed only before the first passkey is registered"
+    status: bootstrapTokenAuth.status,
+    reason: bootstrapTokenAuth.reason
   };
 }
 
@@ -6104,6 +6117,36 @@ function authorizePasskeyBrowserOrMachineRequest({ request, env, apiSuffix }) {
     return { ok: true };
   }
   return machineAuth;
+}
+
+function authorizePasskeyBootstrapTokenRequest({ request, env }) {
+  const expectedToken = normalizeText(env?.VTDD_PASSKEY_BOOTSTRAP_TOKEN);
+  if (!expectedToken) {
+    return {
+      ok: false,
+      status: 403,
+      reason: "browser passkey bootstrap token is not configured; use machine auth or configure VTDD_PASSKEY_BOOTSTRAP_TOKEN before first registration"
+    };
+  }
+
+  const providedToken =
+    normalizeText(request.headers.get("x-vtdd-passkey-bootstrap-token")) ||
+    normalizeText(request.headers.get("x-passkey-bootstrap-token"));
+  if (!providedToken) {
+    return {
+      ok: false,
+      status: 401,
+      reason: "browser passkey bootstrap token is required before first passkey registration"
+    };
+  }
+  if (providedToken !== expectedToken) {
+    return {
+      ok: false,
+      status: 403,
+      reason: "browser passkey bootstrap token is invalid"
+    };
+  }
+  return { ok: true };
 }
 
 function isSameOriginBrowserRequest(request) {

@@ -366,6 +366,13 @@ GitHub high-risk authority plane:
   - prefer calling `vtddRetrieveSelfParity` with `issueNumber` and `pullNumber`, then using `selfParity.issueCloseOperatorMarkdownLink`; if unavailable, report `selfParity.issueCloseOperator.status` / missing fields and do not invent or manually construct the URL
 - Do not route deploy, secret mutation, permission mutation, or other destructive provider actions through vtddGitHubAuthority.
 
+Passkey bootstrap boundary:
+- Same-origin passkey registration is not a public first-viewer bootstrap. Before the first passkey exists, browser registration requires `VTDD_PASSKEY_BOOTSTRAP_TOKEN` or machine auth.
+- Do not tell the human that anyone can initialize a public Worker URL by opening the passkey operator first.
+- Do not put the bootstrap token in a URL, PR body, Issue comment, RAG memory, chat history, or Custom GPT Instructions. If the human must register the first passkey from the browser, direct them to the passkey operator's Bootstrap Token field.
+- After at least one passkey exists, additional browser registration is blocked unless a future scoped management flow explicitly changes that boundary.
+- Action Schema does not need a new operationId for this boundary. Treat it as passkey operator/runtime behavior and keep setup parity checks focused on Instructions when this guidance changes.
+
 Deploy plane:
 - Use vtddDeployProduction for governed production deploy execution after the human explicitly requests deploy.
 - vtddDeployProduction requires:

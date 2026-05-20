@@ -27418,10 +27418,12 @@ function renderPasskeyOperatorPage(input = {}) {
           <input id="operator-id" value="${registrationDefaultOperatorId}" />
           <label for="operator-label">Operator Label</label>
           <input id="operator-label" value="${registrationDefaultOperatorLabel}" />
+          <label for="bootstrap-token-input">Bootstrap Token</label>
+          <input id="bootstrap-token-input" type="password" autocomplete="one-time-code" placeholder="\u521D\u56DE\u767B\u9332\u6642\u306E\u307F" />
           <div class="row">
             <button id="register-button">Register passkey</button>
           </div>
-          <p class="muted">\u767B\u9332\u306F 1 \u56DE\u3067\u5341\u5206\u3067\u3059\u3002\u8907\u6570\u30C7\u30D0\u30A4\u30B9\u3092\u4F7F\u3046\u5834\u5408\u306F\u5FC5\u8981\u306B\u5FDC\u3058\u3066\u8FFD\u52A0\u767B\u9332\u3057\u307E\u3059\u3002</p>
+          <p class="muted">\u521D\u56DE\u767B\u9332\u306F\u516C\u958B URL \u306E\u5148\u7740\u9806\u306B\u3057\u307E\u305B\u3093\u3002bootstrap token \u307E\u305F\u306F machine auth \u304C\u5FC5\u8981\u3067\u3059\u3002</p>
           <pre id="register-output"></pre>
         </section>
 
@@ -27790,9 +27792,14 @@ function renderPasskeyOperatorPage(input = {}) {
       document.getElementById("register-button").addEventListener("click", async () => {
         try {
           registerOutput.textContent = "register options request...";
+          const bootstrapToken = document.getElementById("bootstrap-token-input").value.trim();
+          const registrationHeaders = { "content-type": "application/json" };
+          if (bootstrapToken) {
+            registrationHeaders["x-vtdd-passkey-bootstrap-token"] = bootstrapToken;
+          }
           const optionsResponse = await fetch("${apiBase}/approval/passkey/register/options", {
             method: "POST",
-            headers: { "content-type": "application/json" },
+            headers: registrationHeaders,
             body: JSON.stringify({
               operatorId: document.getElementById("operator-id").value,
               operatorLabel: document.getElementById("operator-label").value
@@ -27807,7 +27814,7 @@ function renderPasskeyOperatorPage(input = {}) {
           const credential = await navigator.credentials.create({ publicKey });
           const verifyResponse = await fetch("${apiBase}/approval/passkey/register/verify", {
             method: "POST",
-            headers: { "content-type": "application/json" },
+            headers: registrationHeaders,
             body: JSON.stringify({
               sessionId: optionsBody.sessionId,
               response: encodeRegistrationCredential(credential)
@@ -60955,16 +60962,28 @@ async function authorizePasskeyRegistrationRequest({ request, env, apiSuffix }) 
   const provider = resolveMemoryProvider(env);
   const validation = validateMemoryProvider(provider);
   if (!validation.ok) {
-    return browserAuth;
+    return {
+      ok: false,
+      status: 503,
+      reason: "valid memory provider is required before browser passkey registration can be authorized"
+    };
   }
   const passkeys = await retrieveRegisteredPasskeys(provider);
-  if (passkeys.length === 0) {
+  if (passkeys.length > 0) {
+    return {
+      ok: false,
+      status: 403,
+      reason: "browser passkey registration is blocked after the first passkey is registered"
+    };
+  }
+  const bootstrapTokenAuth = authorizePasskeyBootstrapTokenRequest({ request, env });
+  if (bootstrapTokenAuth.ok) {
     return browserAuth;
   }
   return {
     ok: false,
-    status: 403,
-    reason: "browser bootstrap registration is allowed only before the first passkey is registered"
+    status: bootstrapTokenAuth.status,
+    reason: bootstrapTokenAuth.reason
   };
 }
 function authorizePasskeyBrowserOrMachineRequest({ request, env, apiSuffix }) {
@@ -60976,6 +60995,32 @@ function authorizePasskeyBrowserOrMachineRequest({ request, env, apiSuffix }) {
     return { ok: true };
   }
   return machineAuth;
+}
+function authorizePasskeyBootstrapTokenRequest({ request, env }) {
+  const expectedToken = normalizeText30(env?.VTDD_PASSKEY_BOOTSTRAP_TOKEN);
+  if (!expectedToken) {
+    return {
+      ok: false,
+      status: 403,
+      reason: "browser passkey bootstrap token is not configured; use machine auth or configure VTDD_PASSKEY_BOOTSTRAP_TOKEN before first registration"
+    };
+  }
+  const providedToken = normalizeText30(request.headers.get("x-vtdd-passkey-bootstrap-token")) || normalizeText30(request.headers.get("x-passkey-bootstrap-token"));
+  if (!providedToken) {
+    return {
+      ok: false,
+      status: 401,
+      reason: "browser passkey bootstrap token is required before first passkey registration"
+    };
+  }
+  if (providedToken !== expectedToken) {
+    return {
+      ok: false,
+      status: 403,
+      reason: "browser passkey bootstrap token is invalid"
+    };
+  }
+  return { ok: true };
 }
 function isSameOriginBrowserRequest(request) {
   const originHeader = normalizeText30(request.headers.get("origin"));

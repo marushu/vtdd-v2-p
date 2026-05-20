@@ -177,10 +177,12 @@ export function renderPasskeyOperatorPage(input = {}) {
           <input id="operator-id" value="${registrationDefaultOperatorId}" />
           <label for="operator-label">Operator Label</label>
           <input id="operator-label" value="${registrationDefaultOperatorLabel}" />
+          <label for="bootstrap-token-input">Bootstrap Token</label>
+          <input id="bootstrap-token-input" type="password" autocomplete="one-time-code" placeholder="初回登録時のみ" />
           <div class="row">
             <button id="register-button">Register passkey</button>
           </div>
-          <p class="muted">登録は 1 回で十分です。複数デバイスを使う場合は必要に応じて追加登録します。</p>
+          <p class="muted">初回登録は公開 URL の先着順にしません。bootstrap token または machine auth が必要です。</p>
           <pre id="register-output"></pre>
         </section>
 
@@ -549,9 +551,14 @@ export function renderPasskeyOperatorPage(input = {}) {
       document.getElementById("register-button").addEventListener("click", async () => {
         try {
           registerOutput.textContent = "register options request...";
+          const bootstrapToken = document.getElementById("bootstrap-token-input").value.trim();
+          const registrationHeaders = { "content-type": "application/json" };
+          if (bootstrapToken) {
+            registrationHeaders["x-vtdd-passkey-bootstrap-token"] = bootstrapToken;
+          }
           const optionsResponse = await fetch("${apiBase}/approval/passkey/register/options", {
             method: "POST",
-            headers: { "content-type": "application/json" },
+            headers: registrationHeaders,
             body: JSON.stringify({
               operatorId: document.getElementById("operator-id").value,
               operatorLabel: document.getElementById("operator-label").value
@@ -566,7 +573,7 @@ export function renderPasskeyOperatorPage(input = {}) {
           const credential = await navigator.credentials.create({ publicKey });
           const verifyResponse = await fetch("${apiBase}/approval/passkey/register/verify", {
             method: "POST",
-            headers: { "content-type": "application/json" },
+            headers: registrationHeaders,
             body: JSON.stringify({
               sessionId: optionsBody.sessionId,
               response: encodeRegistrationCredential(credential)
