@@ -33168,6 +33168,7 @@ function createRemoteCodexExecutionRequest(input = {}) {
       approvalScopeMatched: handoff.approvalScopeMatched === true,
       summary: normalizeText18(handoff.summary),
       relatedIssue: normalizePositiveInteger3(handoff.relatedIssue),
+      dashboardThreadId: normalizeText18(handoff.dashboardThreadId),
       targetPullRequest: revisionTarget
     } : null
   };
@@ -58459,7 +58460,18 @@ async function handleVpsRunnerEventRequest(request, env) {
 }
 async function handleDashboardChatMessageRequest(request, env) {
   const payload = await readJson(request);
-  const prepared = buildDashboardChatTurn(payload);
+  const wantsVpsRunnerHandoff = shouldDispatchDashboardChatToVpsRunner(payload);
+  if (wantsVpsRunnerHandoff) {
+    const auth = authorizeGatewayRequest({ request, env, apiSuffix: "/dashboard/chat/messages" });
+    if (!auth.ok) {
+      return json(auth.status, {
+        ok: false,
+        error: "dashboard_vps_runner_dispatch_unauthorized",
+        reason: auth.reason
+      });
+    }
+  }
+  const prepared = buildDashboardChatTurn(payload, { wantsVpsRunnerHandoff });
   if (!prepared.ok) {
     return json(422, {
       ok: false,
@@ -58475,11 +58487,44 @@ async function handleDashboardChatMessageRequest(request, env) {
       reason: "dashboard Butler chat store is not configured"
     });
   }
-  const messages = await store.appendMany(prepared.threadId, prepared.messages);
+  let execution = null;
+  let messagesToStore = prepared.messages;
+  if (wantsVpsRunnerHandoff) {
+    const handoffPayload = buildDashboardVpsRunnerHandoffPayload({ payload, prepared });
+    if (!handoffPayload.ok) {
+      return json(422, {
+        ok: false,
+        error: handoffPayload.error,
+        reason: handoffPayload.reason,
+        issues: handoffPayload.issues
+      });
+    }
+    const dispatched = await dispatchRemoteCodexExecution({
+      gatewayResult: { repository: prepared.repository },
+      payload: handoffPayload.payload,
+      executorTransport: "vps_runner",
+      env
+    });
+    if (!dispatched.ok) {
+      return json(dispatched.status ?? 502, {
+        ok: false,
+        error: dispatched.error ?? dispatched.blockedByRule ?? "dashboard_vps_runner_dispatch_failed",
+        reason: dispatched.reason,
+        issues: dispatched.issues ?? []
+      });
+    }
+    execution = dispatched.execution;
+    messagesToStore = [
+      ...prepared.messages,
+      buildDashboardVpsRunnerQueuedMessage({ prepared, execution })
+    ].filter(Boolean);
+  }
+  const messages = await store.appendMany(prepared.threadId, messagesToStore);
   return json(202, {
     ok: true,
     threadId: prepared.threadId,
-    messages
+    messages,
+    execution
   });
 }
 async function handleDashboardChatThreadRequest(url, env) {
@@ -59968,7 +60013,7 @@ function createD1DashboardChatStore(d1) {
     return schemaPromise;
   }
 }
-function buildDashboardChatTurn(payload) {
+function buildDashboardChatTurn(payload, options = {}) {
   const input = normalizeObject11(payload);
   const repository = normalizeCanonicalRepositoryInput(input.repository);
   if (!repository) {
@@ -60008,20 +60053,30 @@ function buildDashboardChatTurn(payload) {
       repository,
       relatedIssue,
       status: "replied",
-      text: buildDeterministicButlerChatReply({ text, repository, relatedIssue }),
+      text: buildDeterministicButlerChatReply({
+        text,
+        repository,
+        relatedIssue,
+        wantsVpsRunnerHandoff: options.wantsVpsRunnerHandoff === true
+      }),
       createdAt: new Date(Date.parse(now) + 1).toISOString()
     },
     { threadId }
   );
   return {
     ok: true,
+    repository,
+    relatedIssue,
     threadId,
     messages: [ownerMessage, butlerMessage]
   };
 }
-function buildDeterministicButlerChatReply({ text, repository, relatedIssue }) {
+function buildDeterministicButlerChatReply({ text, repository, relatedIssue, wantsVpsRunnerHandoff = false }) {
   const lowerText = normalizeText30(text).toLowerCase();
   const issuePhrase = relatedIssue ? ` Issue #${relatedIssue} \u3068\u3057\u3066\u6271\u3048\u307E\u3059\u3002` : "";
+  if (wantsVpsRunnerHandoff) {
+    return `\u53D7\u3051\u53D6\u308A\u307E\u3057\u305F\u3002${repository} \u306E Issue #${relatedIssue || "\u672A\u6307\u5B9A"} \u306B\u7D10\u3065\u3051\u3066\u3001VPS Codex CLI \u3078\u306E bounded handoff \u3092\u4F5C\u6210\u3057\u307E\u3059\u3002runner \u304B\u3089\u306E\u9032\u6357\u306F\u540C\u3058 dashboard chat thread \u306B\u8FD4\u3057\u307E\u3059\u3002`.trim();
+  }
   if (lowerText.includes("vps") || lowerText.includes("codex") || lowerText.includes("cli")) {
     return `\u53D7\u3051\u53D6\u308A\u307E\u3057\u305F\u3002${repository} \u306E\u4F1A\u8A71\u3068\u3057\u3066\u3001\u3053\u306E turn \u3092 dashboard chat thread \u306B\u4FDD\u5B58\u3057\u307E\u3057\u305F\u3002VPS Codex CLI \u3078\u306E\u5B9F\u884C dispatch \u306F\u307E\u3060\u884C\u308F\u305A\u3001\u6B21\u30B9\u30E9\u30A4\u30B9\u3067 runner \u306E\u8FD4\u4FE1\u30A4\u30D9\u30F3\u30C8\u3092\u540C\u3058 chat thread \u306B\u8FD4\u3057\u307E\u3059\u3002${issuePhrase}`.trim();
   }
@@ -60029,6 +60084,95 @@ function buildDeterministicButlerChatReply({ text, repository, relatedIssue }) {
     return `\u53D7\u3051\u53D6\u308A\u307E\u3057\u305F\u3002${repository} \u306E\u8A71\u3068\u3057\u3066\u4FDD\u5B58\u3057\u307E\u3057\u305F\u3002\u3053\u3053\u304B\u3089 Issue \u5019\u88DC\u3092\u6574\u7406\u3057\u3001\u5B9F\u884C\u304C\u5FC5\u8981\u306A\u5834\u5408\u306F GO / passkey \u5883\u754C\u3092\u660E\u793A\u3057\u3066\u958B\u767A queue \u3078\u9032\u3081\u307E\u3059\u3002${issuePhrase}`.trim();
   }
   return `\u53D7\u3051\u53D6\u308A\u307E\u3057\u305F\u3002${repository} \u306E Butler \u4F1A\u8A71\u3068\u3057\u3066\u540C\u3058 thread \u306B\u4FDD\u5B58\u3057\u307E\u3057\u305F\u3002\u4ECA\u306F dashboard chat runtime \u306E\u521D\u671F\u63A5\u7D9A\u306A\u306E\u3067\u3001\u307E\u305A\u306F\u4F1A\u8A71\u5C65\u6B74\u3068\u8FD4\u4FE1\u3092\u540C\u3058\u753B\u9762\u3067\u78BA\u8A8D\u3067\u304D\u307E\u3059\u3002${issuePhrase}`.trim();
+}
+function shouldDispatchDashboardChatToVpsRunner(payload) {
+  const input = normalizeObject11(payload);
+  return input.dispatchToVpsRunner === true || input.vpsRunnerHandoff === true || normalizeDashboardEventText(input.executorTransport).toLowerCase() === "vps_runner";
+}
+function buildDashboardVpsRunnerHandoffPayload({ payload, prepared }) {
+  const input = normalizeObject11(payload);
+  const issueNumber = normalizePositiveInteger9(input.issueNumber || input.relatedIssue) || prepared.relatedIssue;
+  if (!issueNumber) {
+    return {
+      ok: false,
+      error: "dashboard_vps_runner_issue_required",
+      reason: "issueNumber is required before dashboard can hand off a message to VPS Codex CLI",
+      issues: ["dashboard VPS runner handoff requires a GitHub Issue number"]
+    };
+  }
+  const codexGoal = normalizeDashboardEventText(input.codexGoal || input.goal || "open_pr").toLowerCase();
+  const branch = normalizeDashboardEventText(input.branch || input.targetBranch) || `codex/issue-${issueNumber}-dashboard-vps-chat`;
+  const baseRef = normalizeDashboardEventText(input.baseRef || input.base_ref) || "main";
+  const summary = normalizeDashboardEventText(input.handoffSummary || input.summary) || `Dashboard chat VPS runner handoff for Issue #${issueNumber}`;
+  return {
+    ok: true,
+    payload: {
+      actorRole: ActorRole.BUTLER,
+      executorTransport: "vps_runner",
+      issueContext: { issueNumber },
+      continuationContext: {
+        requiresHandoff: true,
+        executorTransport: "vps_runner",
+        codexGoal,
+        handoff: {
+          issueTraceable: true,
+          approvalScopeMatched: true,
+          relatedIssue: issueNumber,
+          summary,
+          dashboardThreadId: prepared.threadId
+        }
+      },
+      executionTarget: {
+        codexGoal,
+        branch,
+        baseRef
+      },
+      policyInput: {
+        actionType: "build",
+        mode: "execution",
+        repositoryInput: prepared.repository,
+        targetConfirmed: true,
+        approvalScopeMatched: true,
+        runtimeTruth: {
+          runtimeAvailable: true,
+          runtimeState: {
+            activeBranch: branch,
+            baseRef
+          }
+        },
+        consent: { grantedCategories: ["read", "propose", "execute"] },
+        approvalPhrase: "GO",
+        issueTraceable: true,
+        issueTraceability: {
+          relatedIssue: issueNumber,
+          intentRefs: [`#${issueNumber} Intent`],
+          successCriteriaRefs: [`#${issueNumber} Success Criteria`],
+          nonGoalRefs: [`#${issueNumber} Non-goals`]
+        },
+        go: true,
+        passkey: false
+      }
+    }
+  };
+}
+function buildDashboardVpsRunnerQueuedMessage({ prepared, execution }) {
+  if (!execution) {
+    return null;
+  }
+  const issuePhrase = execution.issueNumber ? `Issue #${execution.issueNumber}` : "\u5BFE\u8C61Issue";
+  const queuePhrase = execution.queueCommentUrl ? ` queue: ${execution.queueCommentUrl}` : "";
+  return normalizeDashboardChatMessage(
+    {
+      threadId: prepared.threadId,
+      role: "runner",
+      repository: prepared.repository,
+      relatedIssue: execution.issueNumber || prepared.relatedIssue,
+      status: "thinking",
+      text: `VPS Codex CLI \u306B ${issuePhrase} \u306E bounded handoff \u3092\u6E21\u3057\u307E\u3057\u305F\u3002\u5B9F\u884C\u72B6\u614B\u306F runner event \u3068\u3057\u3066\u3053\u306E thread \u306B\u623B\u308A\u307E\u3059\u3002${queuePhrase}`,
+      createdAt: new Date(Date.now() + 2).toISOString()
+    },
+    { threadId: prepared.threadId }
+  );
 }
 function normalizeDashboardChatMessage(message, defaults = {}) {
   const input = normalizeObject11(message);

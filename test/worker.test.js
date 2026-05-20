@@ -318,6 +318,93 @@ test("worker appends dashboard Butler chat turn and retrieves the same thread", 
   assert.equal(retrieveBody.messages[0].text, "VPS Codex CLI とリアルタイムに会話したい");
 });
 
+test("worker dispatches authenticated dashboard chat handoff to VPS runner queue", async () => {
+  const store = createInMemoryDashboardChatStore();
+  const calls = [];
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/chat/messages", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        threadId: "dashboard-main-marushu-vtdd-v2-p",
+        repository: "marushu/vtdd-v2-p",
+        issueNumber: 450,
+        dispatchToVpsRunner: true,
+        codexGoal: "open_pr",
+        branch: "codex/issue-450-dashboard-vps-chat",
+        text: "VPS Codex CLI とこの dashboard thread で会話したい"
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      DASHBOARD_CHAT_STORE: store,
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_dashboard_vps",
+      GITHUB_API_FETCH: async (url, init) => {
+        calls.push({ url, init });
+        if (String(url).includes("/issues/450/comments")) {
+          return new Response(
+            JSON.stringify({
+              id: 45001,
+              html_url: "https://github.com/marushu/vtdd-v2-p/issues/450#issuecomment-45001"
+            }),
+            { status: 201, headers: { "content-type": "application/json" } }
+          );
+        }
+        throw new Error(`unexpected url ${url}`);
+      }
+    }
+  );
+
+  assert.equal(response.status, 202);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.execution.transport, "vps_runner");
+  assert.equal(body.execution.issueNumber, 450);
+  assert.equal(body.execution.branch, "codex/issue-450-dashboard-vps-chat");
+  assert.equal(body.execution.queueCommentId, 45001);
+  assert.equal(body.messages.length, 3);
+  assert.equal(body.messages[2].role, "runner");
+  assert.match(body.messages[2].text, /VPS Codex CLI/);
+
+  const queueBody = JSON.parse(calls[0].init.body).body;
+  assert.equal(queueBody.includes("vtdd:vps-runner-execution:"), true);
+  assert.equal(queueBody.includes('"transport": "vps_runner"'), true);
+  assert.equal(queueBody.includes('"dashboardThreadId": "dashboard-main-marushu-vtdd-v2-p"'), true);
+
+  const retrieveResponse = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/chat/dashboard-main-marushu-vtdd-v2-p"),
+    { DASHBOARD_CHAT_STORE: store }
+  );
+  const retrieveBody = await retrieveResponse.json();
+  assert.equal(retrieveBody.messages.length, 3);
+  assert.equal(retrieveBody.messages[2].status, "thinking");
+});
+
+test("worker rejects unauthenticated dashboard chat VPS runner dispatch", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/chat/messages", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        threadId: "dashboard-main-marushu-vtdd-v2-p",
+        repository: "marushu/vtdd-v2-p",
+        issueNumber: 450,
+        dispatchToVpsRunner: true,
+        text: "VPS に渡して"
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      DASHBOARD_CHAT_STORE: createInMemoryDashboardChatStore()
+    }
+  );
+
+  assert.equal(response.status, 401);
+  const body = await response.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.error, "dashboard_vps_runner_dispatch_unauthorized");
+});
+
 test("worker redacts dashboard Butler chat sensitive material before returning and storing", async () => {
   const store = createInMemoryDashboardChatStore();
   const response = await worker.fetch(

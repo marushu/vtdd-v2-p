@@ -1694,6 +1694,7 @@ async function postVpsRunnerEvent({ githubFetch, payload, event, notification })
     executionId: payload.executionId,
     repository: payload.repository,
     issueNumber: payload.issueNumber,
+    threadId: normalizeText(payload?.handoff?.dashboardThreadId || payload?.dashboardThreadId),
     leadTime: buildVpsRunnerLeadTime(payload.lifecycle)
   };
 

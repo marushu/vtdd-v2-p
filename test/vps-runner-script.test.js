@@ -449,6 +449,35 @@ test("VPS runner event comment is parseable by execution id", () => {
   assert.equal(parsed.event.rawFailure.error, "codex_auth_unavailable");
 });
 
+test("VPS runner event preserves dashboard chat thread from handoff payload", async () => {
+  const calls = [];
+  await postVpsRunnerEvent({
+    githubFetch: async (url, init = {}) => {
+      calls.push({ url, init });
+      return { id: 45002 };
+    },
+    payload: {
+      executionId: "exec-dashboard-thread",
+      repository: "marushu/vtdd-v2-p",
+      issueNumber: 450,
+      handoff: {
+        dashboardThreadId: "dashboard-main-marushu-vtdd-v2-p"
+      }
+    },
+    event: {
+      status: "branch_created",
+      lastEvent: "branch_created",
+      currentStep: "branch_created",
+      updatedAt: "2026-05-20T00:00:00.000Z"
+    }
+  });
+
+  const body = calls[0].init.body.body;
+  const parsed = parseVpsRunnerEventComment(body);
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.event.threadId, "dashboard-main-marushu-vtdd-v2-p");
+});
+
 test("VPS runner milestone event mentions queue comment author", () => {
   const body = buildVpsRunnerEventComment({
     executionId: "exec-mention",
