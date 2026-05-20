@@ -135,6 +135,159 @@ test("execution continuity treats approve-only Gemini reviewer comment as non-bl
   ]);
 });
 
+test("execution continuity prefers current-head Gemini approve over stale Codex fallback request changes", () => {
+  const result = evaluateExecutionContinuity({
+    actorRole: ActorRole.BUTLER,
+    mode: TaskMode.EXECUTION,
+    runtimeTruth: {
+      runtimeState: {
+        activeBranch: "codex/issue-452",
+        pullRequest: {
+          number: 453,
+          url: "https://github.com/example/repo/pull/453",
+          state: "open",
+          title: "Dashboard runner chat events",
+          reviewer: "gemini",
+          headSha: "new456",
+          mergeable: true,
+          mergeableState: "clean",
+          issueComments: [
+            {
+              user: { login: "vtdd-codex[bot]" },
+              createdAt: "2026-05-20T01:00:00.000Z",
+              body: "<!-- vtdd:reviewer=codex-fallback -->\n## VTDD Codex fallback レビュー\n\n- Status: `completed`\n- Head SHA: `old123`\n- Recommended action: `request_changes`\n\n### 重要指摘\n- old head still needed changes"
+            },
+            {
+              user: { login: "vtdd-codex[bot]" },
+              createdAt: "2026-05-20T01:05:00.000Z",
+              body: "<!-- vtdd:reviewer=gemini -->\n## VTDD Gemini レビュー\n\n- Head SHA: `new456`\n- Recommended action: `approve`\n\n### 残リスク\n- none"
+            }
+          ]
+        }
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.value.reviewLoop.reviewer, "gemini");
+  assert.equal(result.value.reviewLoop.reviewerStatus, "gemini_review_available");
+  assert.equal(result.value.reviewLoop.reviewerEvidence.recommendedAction, "approve");
+  assert.equal(result.value.reviewLoop.reviewerEvidence.headSha, "new456");
+  assert.equal(result.value.reviewLoop.unresolvedReviewCommentsCount, 0);
+  assert.equal(result.value.reviewLoop.criticalReviewPending, false);
+  assert.equal(result.value.reviewLoop.reviewerSignalTruth.mergeReviewTruth.satisfied, true);
+  assert.equal(result.value.nextSuggestedActions.includes("apply_pr_feedback"), false);
+});
+
+test("execution continuity does not satisfy review truth from stale Gemini approve when current head is unreviewed", () => {
+  const result = evaluateExecutionContinuity({
+    actorRole: ActorRole.BUTLER,
+    mode: TaskMode.EXECUTION,
+    runtimeTruth: {
+      runtimeState: {
+        activeBranch: "codex/issue-448",
+        pullRequest: {
+          number: 454,
+          url: "https://github.com/example/repo/pull/454",
+          state: "open",
+          title: "Auto merge reviewer truth",
+          reviewer: "gemini",
+          headSha: "new456",
+          issueComments: [
+            {
+              user: { login: "vtdd-codex[bot]" },
+              createdAt: "2026-05-20T01:00:00.000Z",
+              body: "<!-- vtdd:reviewer=gemini -->\n## VTDD Gemini レビュー\n\n- Head SHA: `old123`\n- Recommended action: `approve`"
+            }
+          ]
+        }
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.value.reviewLoop.reviewerStatus, "review_unavailable");
+  assert.equal(result.value.reviewLoop.reviewerEvidence, null);
+  assert.equal(result.value.reviewLoop.reviewerSignalTruth.mergeReviewTruth.satisfied, false);
+  assert.deepEqual(result.value.nextSuggestedActions, ["rerun_gemini_review", "summarize_for_human"]);
+});
+
+test("execution continuity does not satisfy review truth from headless Gemini approve when PR head is known", () => {
+  const result = evaluateExecutionContinuity({
+    actorRole: ActorRole.BUTLER,
+    mode: TaskMode.EXECUTION,
+    runtimeTruth: {
+      runtimeState: {
+        activeBranch: "codex/issue-448",
+        pullRequest: {
+          number: 454,
+          url: "https://github.com/example/repo/pull/454",
+          state: "open",
+          title: "Auto merge reviewer truth",
+          reviewer: "gemini",
+          headSha: "new456",
+          issueComments: [
+            {
+              user: { login: "vtdd-codex[bot]" },
+              createdAt: "2026-05-20T01:00:00.000Z",
+              body: "<!-- vtdd:reviewer=gemini -->\n## VTDD Gemini レビュー\n\n- Recommended action: `approve`"
+            }
+          ]
+        }
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.value.reviewLoop.reviewerStatus, "review_unavailable");
+  assert.equal(result.value.reviewLoop.reviewerEvidence, null);
+  assert.equal(result.value.reviewLoop.reviewerSignalTruth.mergeReviewTruth.satisfied, false);
+  assert.deepEqual(result.value.nextSuggestedActions, ["rerun_gemini_review", "summarize_for_human"]);
+});
+
+test("execution continuity keeps global Codex blocker even with current-head Gemini approve", () => {
+  const result = evaluateExecutionContinuity({
+    actorRole: ActorRole.BUTLER,
+    mode: TaskMode.EXECUTION,
+    runtimeTruth: {
+      runtimeState: {
+        activeBranch: "codex/issue-448",
+        pullRequest: {
+          number: 454,
+          url: "https://github.com/example/repo/pull/454",
+          state: "open",
+          title: "Auto merge reviewer truth",
+          reviewer: "gemini",
+          headSha: "new456",
+          issueComments: [
+            {
+              user: { login: "vtdd-codex[bot]" },
+              createdAt: "2026-05-20T01:00:00.000Z",
+              body: "<!-- vtdd:reviewer=codex-fallback -->\n## VTDD Codex fallback レビュー\n\n- Status: `completed`\n- Head SHA: `old123`\n- Recommended action: `request_changes`"
+            },
+            {
+              user: { login: "vtdd-codex[bot]" },
+              createdAt: "2026-05-20T01:05:00.000Z",
+              body: "<!-- vtdd:reviewer=gemini -->\n## VTDD Gemini レビュー\n\n- Head SHA: `new456`\n- Recommended action: `approve`"
+            },
+            {
+              user: { login: "chatgpt-codex-connector" },
+              createdAt: "2026-05-20T01:10:00.000Z",
+              body: "To use Codex here, [create a Codex account and connect to github](https://chatgpt.com/codex/cloud/settings/connectors)."
+            }
+          ]
+        }
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.value.reviewLoop.reviewer, "codex");
+  assert.equal(result.value.reviewLoop.reviewerStatus, "codex_review_blocked");
+  assert.equal(result.value.reviewLoop.criticalReviewPending, true);
+  assert.deepEqual(result.value.nextSuggestedActions, ["surface_reviewer_platform_blocker", "summarize_for_human"]);
+});
+
 test("execution continuity treats GitHub formal changes requested as blocking even with VTDD marker approve", () => {
   const result = evaluateExecutionContinuity({
     actorRole: ActorRole.BUTLER,
