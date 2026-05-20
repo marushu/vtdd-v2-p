@@ -105,7 +105,9 @@ test("deploy-production workflow enforces the MVP production deploy boundary", (
   assert.equal(workflow.includes("Notify deploy completion"), true);
   assert.equal(workflow.includes("Notify dashboard deploy event"), true);
   assert.equal(workflow.includes("/v2/events/github-actions"), true);
-  assert.equal(workflow.includes("curl --fail-with-body"), true);
+  assert.equal(workflow.includes("for attempt in 1 2 3 4 5 6"), true);
+  assert.equal(workflow.includes("retrying after Worker propagation delay"), true);
+  assert.equal(workflow.includes("deploy remains successful, but dashboard may be stale until the next event"), true);
   assert.equal(workflow.includes("authorization: Bearer ${VTDD_GATEWAY_BEARER_TOKEN}"), true);
   assert.equal(workflow.includes('approvalGrantId'), false);
   assert.equal(workflow.includes("if: always()"), true);
