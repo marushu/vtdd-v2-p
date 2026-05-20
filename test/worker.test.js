@@ -394,6 +394,10 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("/v2/dashboard/chat/messages"), true);
   assert.equal(body.includes('data-thread-endpoint="https://example.com/v2/dashboard/chat/dashboard-main-marushu-vtdd-v2-p"'), true);
   assert.equal(body.includes("function refreshThread()"), true);
+  assert.equal(body.includes("function updateComposerReserve()"), true);
+  assert.equal(body.includes("function scrollToLatest()"), true);
+  assert.equal(body.includes("--composer-reserve"), true);
+  assert.equal(body.includes("background: var(--page-bg)"), true);
   assert.equal(body.includes('credentials: "same-origin"'), true);
   assert.equal(body.includes("会話履歴を読み込み中です"), true);
   assert.equal(body.includes("モバイル管理メニュー"), true);

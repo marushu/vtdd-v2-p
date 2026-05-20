@@ -61993,7 +61993,7 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
     .thread-title { min-width: 0; }
     .thread-title h1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .thread-title span { display: block; color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .chat-scroll { min-height: 0; overflow: auto; padding: 8px 4px 118px; display: flex; flex-direction: column; gap: 22px; scrollbar-width: thin; }
+    .chat-scroll { min-height: 0; overflow: auto; padding: 8px 4px var(--composer-reserve, 156px); scroll-padding-bottom: var(--composer-reserve, 156px); display: flex; flex-direction: column; gap: 22px; scrollbar-width: thin; }
     .bubble { max-width: min(760px, 88%); color: var(--text); font-size: 17px; line-height: 1.72; }
     .bubble, .bubble p, .bubble li { overflow-wrap: anywhere; }
     .bubble strong { display: block; color: var(--muted); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 8px; }
@@ -62003,7 +62003,7 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
     .bubble.owner p { color: var(--owner-text); margin: 0; }
     .connection-note { display: inline-flex; align-items: center; width: fit-content; border: 1px solid var(--border); border-radius: 999px; padding: 5px 10px; color: var(--muted); font-size: 13px; }
     .chat-link { color: var(--text); text-decoration-thickness: 1px; text-underline-offset: 4px; font-weight: 750; }
-    .composer { position: fixed; left: 16px; right: 354px; bottom: max(16px, env(safe-area-inset-bottom)); display: grid; gap: 8px; z-index: 4; }
+    .composer { position: fixed; left: 16px; right: 354px; bottom: 0; display: grid; gap: 8px; z-index: 4; padding: 14px 0 max(16px, env(safe-area-inset-bottom)); background: var(--page-bg); }
     .composer-box { display: grid; grid-template-columns: minmax(0, 1fr) 44px; align-items: end; gap: 8px; min-height: 62px; padding: 8px; border: 1px solid var(--border); border-radius: 28px; background: var(--panel-strong); box-shadow: 0 16px 60px var(--shadow); }
     textarea { width: 100%; min-height: 44px; max-height: 160px; border: 0; outline: 0; resize: vertical; padding: 10px 2px; color: var(--text); background: transparent; font: inherit; line-height: 1.45; }
     textarea::placeholder { color: var(--muted); }
@@ -62046,7 +62046,7 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
       .menu-toggle:checked ~ .mobile-backdrop, .menu-toggle:checked ~ .mobile-drawer { display: block; }
       .mobile-drawer-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px; }
       .mobile-drawer-content { display: grid; gap: 12px; }
-      .chat-scroll { padding-bottom: 104px; }
+      .chat-scroll { padding-bottom: var(--composer-reserve, 170px); }
       .bubble { max-width: 100%; font-size: 16px; }
       .bubble.owner { max-width: 82%; }
       .topbar { padding-bottom: 18px; }
@@ -62214,6 +62214,16 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
       const repository = form.dataset.repository;
       const initialMarkup = log.innerHTML;
 
+      function updateComposerReserve() {
+        const reserve = Math.ceil(form.getBoundingClientRect().height + 36);
+        log.style.setProperty("--composer-reserve", reserve + "px");
+      }
+
+      function scrollToLatest() {
+        updateComposerReserve();
+        log.scrollTop = log.scrollHeight;
+      }
+
       function setStatus(text) {
         status.textContent = text;
       }
@@ -62230,7 +62240,7 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
         paragraph.textContent = message.text || "\uFF08\u7A7A\u306E\u30E1\u30C3\u30BB\u30FC\u30B8\uFF09";
         article.appendChild(paragraph);
         log.appendChild(article);
-        article.scrollIntoView({ block: "end" });
+        scrollToLatest();
       }
 
       function appendError(text) {
@@ -62240,12 +62250,14 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
       function renderThread(messages) {
         if (!Array.isArray(messages) || messages.length === 0) {
           log.innerHTML = initialMarkup;
+          scrollToLatest();
           return;
         }
         log.replaceChildren();
         for (const message of messages) {
           appendMessage(message);
         }
+        scrollToLatest();
       }
 
       async function refreshThread() {
@@ -62303,9 +62315,12 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
         } finally {
           if (submitButton) submitButton.disabled = false;
           textarea.focus();
+          updateComposerReserve();
         }
       });
 
+      updateComposerReserve();
+      window.addEventListener("resize", updateComposerReserve);
       refreshThread();
     })();
   <\/script>
