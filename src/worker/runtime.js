@@ -1829,10 +1829,7 @@ function normalizeRejectedReasons(value) {
 }
 
 function makeOperationalMemoryRecordId(record) {
-  const issuePart = normalizeIssue(record.content?.relatedIssue) ?? "none";
-  const timestampPart = normalizeText(record.timestamp).replace(/[^0-9]/g, "").slice(0, 14);
-  const summaryPart = normalizeTag(record.content?.summary ?? record.recordType).slice(0, 40);
-  return `${record.recordType}_${issuePart}_${timestampPart}_${summaryPart}`;
+  return `mem_${crypto.randomUUID()}`;
 }
 
 async function handleRetrieveGitHubReadPlaneRequest(url, env) {

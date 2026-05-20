@@ -57349,10 +57349,7 @@ function normalizeRejectedReasons2(value) {
   })).filter((item) => item.option && item.reason);
 }
 function makeOperationalMemoryRecordId(record2) {
-  const issuePart = normalizeIssue6(record2.content?.relatedIssue) ?? "none";
-  const timestampPart = normalizeText30(record2.timestamp).replace(/[^0-9]/g, "").slice(0, 14);
-  const summaryPart = normalizeTag3(record2.content?.summary ?? record2.recordType).slice(0, 40);
-  return `${record2.recordType}_${issuePart}_${timestampPart}_${summaryPart}`;
+  return `mem_${crypto.randomUUID()}`;
 }
 async function handleRetrieveGitHubReadPlaneRequest(url, env) {
   const retrieved = await retrieveGitHubReadPlane({
