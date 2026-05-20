@@ -374,7 +374,7 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("必要な時だけ開く"), true);
   assert.equal(body.includes("color-scheme: light dark"), true);
   assert.equal(body.includes("prefers-color-scheme: dark"), true);
-  assert.equal(body.includes("overflow-x: hidden"), true);
+  assert.equal(body.includes("overflow: hidden"), true);
   assert.equal(body.includes("grid-template-columns: minmax(0, 1fr) auto"), true);
   assert.equal(body.includes("自動更新なし"), true);
   assert.equal(body.includes("自動更新・polling はありません"), true);
@@ -396,6 +396,15 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("function refreshThread()"), true);
   assert.equal(body.includes("function updateComposerReserve()"), true);
   assert.equal(body.includes("function scrollToLatest()"), true);
+  assert.equal(body.includes("function showThinking()"), true);
+  assert.equal(body.includes("function removeThinking("), true);
+  assert.equal(body.includes("考えています"), true);
+  assert.equal(body.includes("thinking-dots"), true);
+  assert.equal(body.includes("grid-template-rows: auto minmax(0, 1fr) auto"), true);
+  assert.equal(body.includes("height: 100dvh"), true);
+  assert.equal(body.includes("overflow: hidden"), true);
+  assert.equal(body.includes("requestAnimationFrame"), true);
+  assert.equal(body.includes("preventScroll: true"), true);
   assert.equal(body.includes("--composer-reserve"), true);
   assert.equal(body.includes("background: var(--page-bg)"), true);
   assert.equal(body.includes('credentials: "same-origin"'), true);
