@@ -729,6 +729,74 @@ test("worker allows dashboard passkey session to hand off chat to VPS runner que
   assert.equal(queueBody.includes('"ownerMessage": "ぶい #450 の残り Issue と PR を確認して交通整理して"'), true);
 });
 
+test("worker returns registered dashboard repository nicknames in Japanese without VPS handoff", async () => {
+  const provider = createInMemoryMemoryProvider();
+  await provider.store({
+    id: "alias_registry:marushu/vtdd-v2-p",
+    type: MemoryRecordType.ALIAS_REGISTRY,
+    content: {
+      canonicalRepo: "marushu/vtdd-v2-p",
+      aliases: ["ぶい", "vtdd"]
+    },
+    metadata: { source: "test" },
+    priority: 60,
+    tags: ["alias_registry", "marushu/vtdd-v2-p"],
+    createdAt: "2026-05-20T00:00:00.000Z"
+  });
+  const store = createInMemoryDashboardChatStore();
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/chat/messages", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        threadId: "dashboard-main-unresolved",
+        dispatchToVpsRunner: true,
+        text: "登録済みのニックネーム出して"
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      MEMORY_PROVIDER: provider,
+      DASHBOARD_CHAT_STORE: store
+    }
+  );
+
+  assert.equal(response.status, 202);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.execution, null);
+  assert.equal(body.messages.length, 2);
+  assert.equal(body.messages[1].role, "butler");
+  assert.equal(body.messages[1].text.includes("登録済みニックネームです。"), true);
+  assert.equal(body.messages[1].text.includes("- marushu/vtdd-v2-p: ぶい, vtdd"), true);
+});
+
+test("worker rejects dashboard chat handoff without repository using Japanese owner-facing reason", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/chat/messages", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        threadId: "dashboard-main-unresolved",
+        dispatchToVpsRunner: true,
+        text: "VPS Codex CLI の返事を確認するテスト。"
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      DASHBOARD_CHAT_STORE: createInMemoryDashboardChatStore()
+    }
+  );
+
+  assert.equal(response.status, 422);
+  const body = await response.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.error, "repository_unresolved");
+  assert.equal(body.reason.includes("対象 repository nickname を登録済み alias から解決できませんでした"), true);
+  assert.equal(body.reason.includes("target repository could not be resolved"), false);
+});
+
 test("worker rejects unauthenticated dashboard chat VPS runner dispatch", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/v2/dashboard/chat/messages", {
