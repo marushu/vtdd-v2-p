@@ -344,6 +344,7 @@ test("short-min custom gpt instructions stay pasteable while preserving critical
     "vtddRetrieveSelfParity",
     "list=>no preface/no GO/no 実行しますか; direct read; compact map; not every request",
     "Handoff前dry-run",
+    "Gemini が指摘している修正を Codex に進めさせます。よければ GO と言ってください。",
     "RAG checkpoint",
     "vtddRetrieveOperationalMemory",
     "vtddStartupPreflight",

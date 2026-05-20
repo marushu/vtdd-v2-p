@@ -58,8 +58,8 @@ Passkey bootstrap:
 - If api_key_runner hits openai_api_key_not_configured, use vtddSyncGitHubActionsSecret; never ask in chat.
 - GitHub App secret sync != deploy operator.
 - After vtddExecute, call vtddExecutionProgress; include executorTransport, executionId, repo, issueNumber, branch, leadTime.
-- vps_runner health: vtddVpsRunnerStatus -> runnerStatus/leadTime/currentStep/reason.
-- vps_runner cancel/drain: vtddVpsRunnerCancel marker only.
+- vps_runner health: vtddVpsRunnerStatus -> runnerStatus/lastSeenAt/heartbeatAt/currentStep/reasonCode/reason.
+- vps_runner cancel/drain: vtddVpsRunnerCancel mode=execution/issue_pending/drain_pending; marker only.
 - Do not claim PR creation complete unless GitHub runtime truth shows the PR.
 - For a PR, summarize state, CI, reviewers, objections.
 - If objections remain, do not recommend merge GO+passkey.
