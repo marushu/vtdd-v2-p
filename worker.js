@@ -35458,7 +35458,7 @@ function buildReviewState(pullRequest) {
     codexFallback.latestSignal ?? codexFallback.latestEvidence,
     currentHeadSha
   );
-  const effectiveCodexFallback = geminiEvidenceMatchesCurrentHead && codexFallbackStaleForCurrentHead ? emptyCodexFallbackSignals() : codexFallback;
+  const effectiveCodexFallback = geminiEvidenceMatchesCurrentHead && codexFallbackStaleForCurrentHead && !codexFallback.globalBlocker ? emptyCodexFallbackSignals() : codexFallback;
   const formalReviewTruth = collectFormalReviewTruth(pullRequest);
   const reviewTimeline = buildReviewTimeline(pullRequest);
   const reviewCommentsCount = parsedGeminiSignals.totalCount > 0 ? parsedGeminiSignals.totalCount : effectiveCodexFallback.completed ? 1 : pullRequest.reviewCommentsCount;
@@ -35502,7 +35502,8 @@ function collectGeminiReviewerSignals(pullRequest) {
   const parsed = comments.map(parseGeminiReviewComment).filter(Boolean).sort(compareTimelineItems);
   const currentHeadSha = normalizeText5(pullRequest.headSha);
   const currentHeadSignals = currentHeadSha ? parsed.filter((signal) => evidenceMatchesHead(signal, currentHeadSha)) : [];
-  const activeSignals = currentHeadSignals.length > 0 ? currentHeadSignals : parsed;
+  const headlessSignals = currentHeadSha ? parsed.filter((signal) => !evidenceHasHead(signal)) : [];
+  const activeSignals = currentHeadSha ? currentHeadSignals.length > 0 ? currentHeadSignals : headlessSignals : parsed;
   return {
     totalCount: activeSignals.length,
     blockingCount: activeSignals.filter((signal) => signal.blocking).length,
@@ -35530,6 +35531,7 @@ function collectCodexFallbackSignals(pullRequest) {
     completed: latest?.status === "completed",
     blocked: latest?.status === "blocked",
     blocking: latest?.blocking === true,
+    globalBlocker: Boolean(latestActorIdentityIncident || latestConnectorBlocker),
     latestSignal: latest,
     latestEvidence: latest?.status === "completed" ? {
       reviewer: "codex",
@@ -35548,6 +35550,7 @@ function emptyCodexFallbackSignals() {
     completed: false,
     blocked: false,
     blocking: false,
+    globalBlocker: false,
     latestSignal: null,
     latestEvidence: null
   };
@@ -35555,6 +35558,9 @@ function emptyCodexFallbackSignals() {
 function evidenceMatchesHead(evidence, headSha) {
   const normalizedHead = normalizeText5(headSha);
   return Boolean(normalizedHead && normalizeText5(evidence?.headSha) === normalizedHead);
+}
+function evidenceHasHead(evidence) {
+  return Boolean(normalizeText5(evidence?.headSha));
 }
 function evidenceTargetsDifferentHead(evidence, headSha) {
   const normalizedHead = normalizeText5(headSha);
