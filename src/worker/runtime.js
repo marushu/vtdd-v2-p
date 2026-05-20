@@ -7155,16 +7155,16 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
       }
     }
     * { box-sizing: border-box; }
-    html, body { max-width: 100%; overflow-x: hidden; }
+    html, body { max-width: 100%; height: 100%; overflow: hidden; }
     body { margin: 0; background: var(--page-bg); }
-    main { width: 100%; min-height: 100dvh; display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 320px); gap: 18px; padding: 16px; overflow-x: hidden; }
+    main { width: 100%; height: 100dvh; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 320px); gap: 18px; padding: 16px; overflow: hidden; }
     h1, h2, h3, p { margin-top: 0; }
     h1 { font-size: 22px; line-height: 1.1; margin-bottom: 4px; }
     h2 { font-size: 19px; margin-bottom: 12px; }
     h3 { font-size: 15px; margin-bottom: 8px; }
     p { line-height: 1.65; color: var(--text); }
     a { color: inherit; }
-    .app-shell { min-height: calc(100dvh - 32px); display: grid; grid-template-rows: auto 1fr auto; }
+    .app-shell { height: calc(100dvh - 32px); min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; overflow: hidden; }
     .topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 4px 2px 20px; }
     .top-left, .top-right { display: flex; align-items: center; gap: 10px; min-width: 0; }
     .round-button, .tool-button, .send-button { display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border); background: var(--button); color: var(--text); text-decoration: none; font: inherit; font-weight: 750; }
@@ -7174,7 +7174,7 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
     .thread-title { min-width: 0; }
     .thread-title h1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .thread-title span { display: block; color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .chat-scroll { min-height: 0; overflow: auto; padding: 8px 4px var(--composer-reserve, 156px); scroll-padding-bottom: var(--composer-reserve, 156px); display: flex; flex-direction: column; gap: 22px; scrollbar-width: thin; }
+    .chat-scroll { min-height: 0; overflow: auto; padding: 8px 4px 28px; scroll-padding-bottom: 28px; display: flex; flex-direction: column; gap: 22px; scrollbar-width: thin; }
     .bubble { max-width: min(760px, 88%); color: var(--text); font-size: 17px; line-height: 1.72; }
     .bubble, .bubble p, .bubble li { overflow-wrap: anywhere; }
     .bubble strong { display: block; color: var(--muted); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 8px; }
@@ -7182,9 +7182,12 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
     .bubble ul { margin: 0; padding-left: 22px; color: var(--text); line-height: 1.85; }
     .bubble.owner { align-self: flex-end; background: var(--owner-bubble); color: var(--owner-text); border-radius: 24px; padding: 12px 16px; }
     .bubble.owner p { color: var(--owner-text); margin: 0; }
+    .bubble.thinking { color: var(--muted); }
+    .thinking-dots::after { content: ""; display: inline-block; width: 1.4em; text-align: left; animation: thinkingDots 1.2s steps(4, end) infinite; }
+    @keyframes thinkingDots { 0% { content: ""; } 25% { content: "."; } 50% { content: ".."; } 75%, 100% { content: "..."; } }
     .connection-note { display: inline-flex; align-items: center; width: fit-content; border: 1px solid var(--border); border-radius: 999px; padding: 5px 10px; color: var(--muted); font-size: 13px; }
     .chat-link { color: var(--text); text-decoration-thickness: 1px; text-underline-offset: 4px; font-weight: 750; }
-    .composer { position: fixed; left: 16px; right: 354px; bottom: 0; display: grid; gap: 8px; z-index: 4; padding: 14px 0 max(16px, env(safe-area-inset-bottom)); background: var(--page-bg); }
+    .composer { min-width: 0; display: grid; gap: 8px; z-index: 4; padding: 14px 0 max(16px, env(safe-area-inset-bottom)); background: var(--page-bg); }
     .composer-box { display: grid; grid-template-columns: minmax(0, 1fr) 44px; align-items: end; gap: 8px; min-height: 62px; padding: 8px; border: 1px solid var(--border); border-radius: 28px; background: var(--panel-strong); box-shadow: 0 16px 60px var(--shadow); }
     textarea { width: 100%; min-height: 44px; max-height: 160px; border: 0; outline: 0; resize: vertical; padding: 10px 2px; color: var(--text); background: transparent; font: inherit; line-height: 1.45; }
     textarea::placeholder { color: var(--muted); }
@@ -7218,23 +7221,22 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
     }
     @media (max-width: 900px) {
       main { display: block; padding: 14px 14px 0; }
-      .app-shell { min-height: 100dvh; }
+      .app-shell { height: calc(100dvh - 14px); }
       .topbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
       .sidebar { display: none; }
-      .composer { left: 14px; right: 14px; }
       .mobile-backdrop { position: fixed; inset: 0; z-index: 10; background: rgba(0, 0, 0, .38); backdrop-filter: blur(2px); }
       .mobile-drawer { position: fixed; top: 0; bottom: 0; left: 0; z-index: 11; width: min(86vw, 360px); overflow: auto; padding: max(16px, env(safe-area-inset-top)) 14px max(18px, env(safe-area-inset-bottom)); border-right: 1px solid var(--border); background: var(--panel); box-shadow: 18px 0 60px var(--shadow); }
       .menu-toggle:checked ~ .mobile-backdrop, .menu-toggle:checked ~ .mobile-drawer { display: block; }
       .mobile-drawer-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px; }
       .mobile-drawer-content { display: grid; gap: 12px; }
-      .chat-scroll { padding-bottom: var(--composer-reserve, 170px); }
+      .chat-scroll { padding-bottom: 28px; }
       .bubble { max-width: 100%; font-size: 16px; }
       .bubble.owner { max-width: 82%; }
       .topbar { padding-bottom: 18px; }
     }
     @media (max-width: 460px) {
       main { padding: 12px 10px 0; }
-      .composer { left: 10px; right: 10px; }
+      .app-shell { height: calc(100dvh - 12px); }
       .composer-box { grid-template-columns: minmax(0, 1fr) 40px; border-radius: 24px; }
       .round-button { width: 40px; height: 40px; }
       .tool-button { min-height: 38px; padding: 0 12px; }
@@ -7396,13 +7398,15 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
       const initialMarkup = log.innerHTML;
 
       function updateComposerReserve() {
-        const reserve = Math.ceil(form.getBoundingClientRect().height + 36);
-        log.style.setProperty("--composer-reserve", reserve + "px");
+        log.style.setProperty("--composer-reserve", Math.ceil(form.getBoundingClientRect().height) + "px");
       }
 
       function scrollToLatest() {
         updateComposerReserve();
         log.scrollTop = log.scrollHeight;
+        requestAnimationFrame(() => {
+          log.scrollTop = log.scrollHeight;
+        });
       }
 
       function setStatus(text) {
@@ -7426,6 +7430,27 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
 
       function appendError(text) {
         appendMessage({ role: "butler", text });
+      }
+
+      function showThinking() {
+        const article = document.createElement("article");
+        article.className = "bubble thinking";
+        article.dataset.pending = "butler";
+        const paragraph = document.createElement("p");
+        const span = document.createElement("span");
+        span.className = "thinking-dots";
+        span.textContent = "考えています";
+        paragraph.appendChild(span);
+        article.appendChild(paragraph);
+        log.appendChild(article);
+        scrollToLatest();
+        return article;
+      }
+
+      function removeThinking(article) {
+        if (article && article.parentNode) {
+          article.parentNode.removeChild(article);
+        }
       }
 
       function renderThread(messages) {
@@ -7472,6 +7497,7 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
         const submitButton = form.querySelector("button[type='submit']");
         if (submitButton) submitButton.disabled = true;
         setStatus("送信中です。Butler が同じ thread に返信します。");
+        const thinking = showThinking();
         try {
           const response = await fetch(endpoint, {
             method: "POST",
@@ -7480,6 +7506,7 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
             body: JSON.stringify({ threadId, repository, text })
           });
           const body = await response.json().catch(() => ({}));
+          removeThinking(thinking);
           if (!response.ok || !body.ok) {
             appendError(body.reason || "送信に失敗しました。runtime truth を確認してください。");
             setStatus("送信に失敗しました。");
@@ -7491,11 +7518,12 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
           }
           setStatus("保存済み。Butler 返信を同じ thread に追加しました。");
         } catch {
+          removeThinking(thinking);
           appendError("Worker chat runtime に接続できませんでした。ネットワークまたは deploy 状態を確認してください。");
           setStatus("接続に失敗しました。");
         } finally {
           if (submitButton) submitButton.disabled = false;
-          textarea.focus();
+          textarea.focus({ preventScroll: true });
           updateComposerReserve();
         }
       });
