@@ -6,6 +6,7 @@ import path from "node:path";
 import {
   buildFreshExecutionBranchCandidates,
   buildCodexExecutionPrompt,
+  buildDashboardChatTriagePrompt,
   buildCodexExecArgs,
   buildGuardedPullRequestBody,
   buildPostMergePullTruth,
@@ -1471,6 +1472,58 @@ test("VPS runner Codex prompt preserves high-risk boundaries", () => {
   assert.equal(prompt.includes("## File / Line Hypotheses"), true);
   assert.equal(prompt.includes("## Hypothesis Retrospective"), true);
   assert.equal(prompt.includes("## Surface Update Checklist"), true);
+});
+
+test("VPS runner dashboard chat triage prompt preserves Custom GPT parity and blocks mutation", () => {
+  const prompt = buildDashboardChatTriagePrompt({
+    payload: {
+      repository: "marushu/vtdd-v2-p",
+      issueNumber: 450,
+      codexGoal: "dashboard_chat_triage",
+      handoff: {
+        ownerMessage: "ぶい の残り Issue と PR 確認して交通整理して",
+        repositoryInput: "ぶい",
+        dashboardThreadId: "dashboard-main-vtdd"
+      }
+    },
+    issue: {
+      title: "Dashboard Butler chat",
+      body: "Top chat must preserve Custom GPT Butler capabilities."
+    },
+    preflight: {
+      ok: true,
+      mode: "auto_receipt",
+      onMissingContract: "owner_decision_required",
+      issue: {
+        number: 450,
+        title: "Dashboard Butler chat",
+        bodyExcerpt: "Top chat must preserve Custom GPT Butler capabilities."
+      },
+      handoffNote: {
+        currentSurface: "VPS Codex CLI",
+        repository: "marushu/vtdd-v2-p",
+        issueNumber: 450,
+        codexGoal: "dashboard_chat_triage",
+        nextSafeAction: "resume from the canonical Issue, GitHub runtime truth, RAG checkpoints, and this preflight receipt",
+        blockedReturnRoute: "If the issue/runtime truth is insufficient, stop and return a Japanese blocker comment for Butler/owner instead of guessing."
+      },
+      artifacts: [{ path: "AGENTS.md", sha1: "abc123" }],
+      missing: []
+    }
+  });
+
+  assert.equal(prompt.includes("Custom GPT parity requirement:"), true);
+  assert.equal(prompt.includes("natural-language Butler entrypoint"), true);
+  assert.equal(prompt.includes("repository/nickname"), true);
+  assert.equal(prompt.includes("Issue split proposal"), true);
+  assert.equal(prompt.includes("existing Issue linkage"), true);
+  assert.equal(prompt.includes("GitHub runtime truth"), true);
+  assert.equal(prompt.includes("RAG"), true);
+  assert.equal(prompt.includes("approval URL needed"), true);
+  assert.equal(prompt.includes("Do not edit files, commit, push, create PRs, merge, deploy"), true);
+  assert.equal(prompt.includes("ぶい の残り Issue と PR 確認して交通整理して"), true);
+  assert.equal(prompt.includes("Context preflight receipt:"), true);
+  assert.equal(prompt.includes("AGENTS.md sha1=abc123"), true);
 });
 
 test("VPS runner builds preflight receipt from canonical repo files", async () => {
