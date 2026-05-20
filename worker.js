@@ -56019,6 +56019,21 @@ var runtime_default = {
       }
       return handleGitHubActionsEventRequest(request, env);
     }
+    if (request.method === "POST" && isApiPath(url.pathname, "/events/vps-runner")) {
+      const auth = authorizeGatewayRequest({
+        request,
+        env,
+        apiSuffix: "/events/vps-runner"
+      });
+      if (!auth.ok) {
+        return json(auth.status, {
+          ok: false,
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+      return handleVpsRunnerEventRequest(request, env);
+    }
     if (request.method === "POST" && isApiPath(url.pathname, "/action/github-actions-secret")) {
       const auth = authorizePasskeyBrowserOrMachineRequest({
         request,
@@ -58349,6 +58364,41 @@ async function handleGitHubActionsEventRequest(request, env) {
     event: event.event
   });
 }
+async function handleVpsRunnerEventRequest(request, env) {
+  const payload = await readJson(request);
+  const event = normalizeVpsRunnerDashboardEvent(payload);
+  if (!event.ok) {
+    return json(422, {
+      ok: false,
+      error: event.error,
+      reason: event.reason
+    });
+  }
+  const eventStore = resolveDashboardEventStore(env);
+  if (!eventStore) {
+    return json(503, {
+      ok: false,
+      error: "dashboard_event_store_unavailable",
+      reason: "dashboard event store is not configured"
+    });
+  }
+  const chatStore = resolveDashboardChatStore(env);
+  if (!chatStore) {
+    return json(503, {
+      ok: false,
+      error: "dashboard_chat_store_unavailable",
+      reason: "dashboard Butler chat store is not configured"
+    });
+  }
+  await eventStore.put(event.event);
+  const messages = await chatStore.appendMany(event.threadId, [event.chatMessage]);
+  return json(202, {
+    ok: true,
+    event: event.event,
+    threadId: event.threadId,
+    messages
+  });
+}
 async function handleDashboardChatMessageRequest(request, env) {
   const payload = await readJson(request);
   const prepared = buildDashboardChatTurn(payload);
@@ -59945,7 +59995,7 @@ function normalizeDashboardThreadId(value) {
   return text.slice(0, 160);
 }
 function sanitizeDashboardChatText(value) {
-  const text = normalizeText30(value).replace(/approval:[0-9a-f-]{20,}/gi, "[redacted-approval]").replace(/\bgh[psuor]_[A-Za-z0-9_]{20,}\b/g, "[redacted-token]").replace(/\bsk-proj-[A-Za-z0-9_-]{20,}\b/g, "[redacted-openai-key]").replace(/\bBearer\s+[A-Za-z0-9._~+/=-]{12,}/gi, "Bearer [redacted]").replace(/\b(CLOUDFLARE_API_TOKEN|OPENAI_API_KEY|GITHUB_TOKEN)=\S+/gi, "$1=[redacted]");
+  const text = normalizeText30(value).replace(/approval:[0-9a-f-]{20,}/gi, "[redacted-approval]").replace(/\bgh[psuor]_[A-Za-z0-9_]{20,}\b/g, "[redacted-token]").replace(/\bsk-proj-[A-Za-z0-9_-]{20,}\b/g, "[redacted-openai-key]").replace(/\bBearer\s+[A-Za-z0-9._~+/=-]{12,}/gi, "Bearer [redacted]").replace(/\b(CLOUDFLARE_API_TOKEN|OPENAI_API_KEY|GITHUB_TOKEN)=\S+/gi, "$1=[redacted]").replace(/([?&](?:token|approvalGrantId|approval_grant_id|key|secret)=)[^&\s]+/gi, "$1[redacted]");
   return text.slice(0, 4e3);
 }
 function isDashboardChatThreadApiPath(pathname) {
@@ -60425,6 +60475,186 @@ function normalizeGitHubActionsEvent(payload) {
     ok: true,
     event
   };
+}
+function normalizeVpsRunnerDashboardEvent(payload) {
+  const input = normalizeObject11(payload);
+  const repository = normalizeCanonicalRepositoryInput(input.repository || input.githubRepository);
+  const executionId = normalizeDashboardEventText(
+    input.executionId || input.execution_id || input.runId || input.run_id
+  );
+  const rawStatus = normalizeDashboardEventText(input.status || input.runnerStatus || "running").toLowerCase();
+  const status = normalizeVpsRunnerDashboardStatus(rawStatus);
+  const conclusion = normalizeVpsRunnerDashboardConclusion(input.conclusion || input.result || rawStatus);
+  const currentStep = sanitizeDashboardChatText(input.currentStep || input.current_step);
+  const lastEvent = sanitizeDashboardChatText(input.lastEvent || input.last_event || input.event);
+  const message = sanitizeDashboardChatText(input.message || input.summary || input.text || input.reason);
+  const updatedAt = normalizeIsoTimestamp(input.updatedAt || input.updated_at || input.heartbeatAt) || (/* @__PURE__ */ new Date()).toISOString();
+  const createdAt = normalizeIsoTimestamp(input.createdAt || input.created_at) || updatedAt;
+  const issueNumber = normalizePositiveInteger9(input.issueNumber || input.issue_number || input.relatedIssue);
+  const branch = sanitizeDashboardChatText(input.branch || input.headBranch || input.head_branch);
+  const progressUrl = normalizeDashboardUrl(input.progressUrl || input.progress_url || input.runUrl || input.run_url || input.url);
+  const threadId = normalizeDashboardThreadId(input.threadId || input.thread_id) || normalizeDashboardThreadId(`execution-${executionId}`);
+  const title = buildVpsRunnerDashboardTitle({ status, currentStep, lastEvent, message });
+  if (!repository) {
+    return {
+      ok: false,
+      error: "repository_required",
+      reason: "VPS runner event repository is required"
+    };
+  }
+  if (!executionId) {
+    return {
+      ok: false,
+      error: "execution_id_required",
+      reason: "VPS runner event executionId is required"
+    };
+  }
+  if (!status) {
+    return {
+      ok: false,
+      error: "status_unsupported",
+      reason: "VPS runner event status is not supported"
+    };
+  }
+  const event = {
+    id: `vps-runner:${repository}:${executionId}:${lastEvent || status}:${updatedAt}`,
+    kind: "vps_runner_execution",
+    repository,
+    workflowName: "vps-runner",
+    runId: executionId,
+    status,
+    conclusion,
+    headSha: null,
+    headBranch: branch || null,
+    runUrl: progressUrl || null,
+    title,
+    createdAt,
+    updatedAt
+  };
+  const chatMessage = normalizeDashboardChatMessage(
+    {
+      threadId,
+      role: "runner",
+      repository,
+      relatedIssue: issueNumber,
+      status: mapVpsRunnerStatusToChatStatus(status),
+      text: buildVpsRunnerChatMessageText({
+        repository,
+        executionId,
+        status,
+        currentStep,
+        lastEvent,
+        message,
+        branch,
+        progressUrl
+      }),
+      createdAt: updatedAt
+    },
+    { threadId }
+  );
+  return {
+    ok: true,
+    event,
+    threadId,
+    chatMessage
+  };
+}
+function normalizeVpsRunnerDashboardStatus(value) {
+  const status = normalizeDashboardEventText(value).toLowerCase();
+  if (["queued", "requested", "waiting"].includes(status)) {
+    return "queued";
+  }
+  if (["running", "in_progress", "picked_up", "started", "codex_subprocess"].includes(status)) {
+    return "running";
+  }
+  if (["completed", "success", "done", "merged", "pr_created"].includes(status)) {
+    return "completed";
+  }
+  if (["blocked", "failed", "failure", "error"].includes(status)) {
+    return "blocked";
+  }
+  if (["canceled", "cancelled"].includes(status)) {
+    return "canceled";
+  }
+  return "";
+}
+function normalizeVpsRunnerDashboardConclusion(value) {
+  const conclusion = normalizeDashboardEventText(value).toLowerCase();
+  if (["success", "completed", "done", "merged", "pr_created"].includes(conclusion)) {
+    return "success";
+  }
+  if (["failure", "failed", "blocked", "error"].includes(conclusion)) {
+    return "failure";
+  }
+  if (["cancelled", "canceled"].includes(conclusion)) {
+    return "cancelled";
+  }
+  return null;
+}
+function mapVpsRunnerStatusToChatStatus(status) {
+  if (status === "queued" || status === "running") {
+    return "thinking";
+  }
+  if (status === "completed") {
+    return "replied";
+  }
+  if (status === "canceled") {
+    return "blocked";
+  }
+  return "failed";
+}
+function buildVpsRunnerDashboardTitle({ status, currentStep, lastEvent, message }) {
+  const prefix = currentStep || lastEvent || `VPS runner ${status}`;
+  const title = message ? `${prefix}: ${message}` : prefix;
+  return title.slice(0, 160);
+}
+function buildVpsRunnerChatMessageText({
+  repository,
+  executionId,
+  status,
+  currentStep,
+  lastEvent,
+  message,
+  branch,
+  progressUrl
+}) {
+  const parts = [
+    `VPS Codex CLI \u304B\u3089\u66F4\u65B0\u3067\u3059\u3002`,
+    `repo: ${repository}`,
+    `execution: ${executionId}`,
+    `status: ${status}`
+  ];
+  if (currentStep) {
+    parts.push(`step: ${currentStep}`);
+  }
+  if (lastEvent) {
+    parts.push(`event: ${lastEvent}`);
+  }
+  if (branch) {
+    parts.push(`branch: ${branch}`);
+  }
+  if (message) {
+    parts.push(message);
+  }
+  if (progressUrl) {
+    parts.push(`\u9032\u6357: ${progressUrl}`);
+  }
+  return parts.join("\n");
+}
+function normalizeDashboardUrl(value) {
+  const text = sanitizeDashboardChatText(value);
+  if (!text) {
+    return "";
+  }
+  try {
+    const url = new URL(text);
+    if (url.protocol !== "https:" && url.protocol !== "http:") {
+      return "";
+    }
+    return url.toString();
+  } catch {
+    return "";
+  }
 }
 function normalizeIsoTimestamp(value) {
   const text = normalizeText30(value);
