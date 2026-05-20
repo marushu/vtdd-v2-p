@@ -193,6 +193,7 @@ test("worker serves v2 dashboard without exposing secrets", async () => {
   const response = await worker.fetch(new Request("https://example.com/dashboard"));
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type"), /text\/html/);
+  assert.match(response.headers.get("cache-control"), /no-store/);
   const body = await response.text();
   assert.equal(body.includes("Butler chat shell"), true);
   assert.equal(body.includes("dashboard main chat"), true);
@@ -216,8 +217,10 @@ test("worker serves v2 dashboard without exposing secrets", async () => {
   assert.equal(body.includes("直近 deploy event"), true);
   assert.equal(body.includes("Butler V2 にメッセージ"), true);
   assert.equal(body.includes("状態確認"), true);
+  assert.equal(body.includes(">通知</a>"), true);
   assert.equal(body.includes("/dashboard/github?repository=marushu%2Fvtdd-v2-p"), true);
   assert.equal(body.includes("/dashboard/notifications"), true);
+  assert.equal(body.includes(">通知センター</a>"), true);
   assert.equal(body.includes("include=open_prs"), false);
   assert.equal(body.includes('name="text"'), false);
   assert.equal(/<meta[^>]+http-equiv=["']?refresh/i.test(body), false);
@@ -246,6 +249,7 @@ test("worker serves v2 dashboard without exposing secrets", async () => {
 
   const alias = await worker.fetch(new Request("https://example.com/orchestrator"));
   assert.equal(alias.status, 200);
+  assert.match(alias.headers.get("cache-control"), /no-store/);
   const aliasBody = await alias.text();
   assert.equal(aliasBody.includes("VTDD Butler"), true);
   assert.equal(aliasBody.includes("dashboard main chat"), true);
