@@ -35449,13 +35449,23 @@ function validateHandoffRequirement({ actorRole, continuation }) {
 function buildReviewState(pullRequest) {
   const parsedGeminiSignals = collectGeminiReviewerSignals(pullRequest);
   const codexFallback = collectCodexFallbackSignals(pullRequest);
+  const currentHeadSha = normalizeText5(pullRequest.headSha);
+  const geminiEvidenceMatchesCurrentHead = evidenceMatchesHead(
+    parsedGeminiSignals.latestEvidence,
+    currentHeadSha
+  );
+  const codexFallbackStaleForCurrentHead = evidenceTargetsDifferentHead(
+    codexFallback.latestSignal ?? codexFallback.latestEvidence,
+    currentHeadSha
+  );
+  const effectiveCodexFallback = geminiEvidenceMatchesCurrentHead && codexFallbackStaleForCurrentHead ? emptyCodexFallbackSignals() : codexFallback;
   const formalReviewTruth = collectFormalReviewTruth(pullRequest);
   const reviewTimeline = buildReviewTimeline(pullRequest);
-  const reviewCommentsCount = parsedGeminiSignals.totalCount > 0 ? parsedGeminiSignals.totalCount : codexFallback.completed ? 1 : pullRequest.reviewCommentsCount;
-  const unresolvedReviewCommentsCount = parsedGeminiSignals.totalCount > 0 ? parsedGeminiSignals.blockingCount : codexFallback.completed ? codexFallback.blocking ? 1 : 0 : pullRequest.unresolvedReviewCommentsCount;
-  const reviewerStatus = codexFallback.completed ? "codex_review_available" : codexFallback.blocked ? "codex_review_blocked" : codexFallback.requested ? "codex_review_requested" : reviewCommentsCount > 0 ? "gemini_review_available" : "review_unavailable";
+  const reviewCommentsCount = parsedGeminiSignals.totalCount > 0 ? parsedGeminiSignals.totalCount : effectiveCodexFallback.completed ? 1 : pullRequest.reviewCommentsCount;
+  const unresolvedReviewCommentsCount = parsedGeminiSignals.totalCount > 0 ? parsedGeminiSignals.blockingCount : effectiveCodexFallback.completed ? effectiveCodexFallback.blocking ? 1 : 0 : pullRequest.unresolvedReviewCommentsCount;
+  const reviewerStatus = effectiveCodexFallback.completed ? "codex_review_available" : effectiveCodexFallback.blocked ? "codex_review_blocked" : effectiveCodexFallback.requested ? "codex_review_requested" : reviewCommentsCount > 0 ? "gemini_review_available" : "review_unavailable";
   const reviewer = reviewerStatus.startsWith("codex_review") ? "codex" : pullRequest.reviewer;
-  const reviewerEvidence = reviewerStatus.startsWith("codex_review") ? codexFallback.latestEvidence : parsedGeminiSignals.latestEvidence;
+  const reviewerEvidence = reviewerStatus.startsWith("codex_review") ? effectiveCodexFallback.latestEvidence : parsedGeminiSignals.latestEvidence;
   const reviewResponseSummary = buildReviewResponseSummary({
     pullRequest,
     files: pullRequest.files,
@@ -35489,16 +35499,27 @@ function collectGeminiReviewerSignals(pullRequest) {
     ...Array.isArray(pullRequest.issueComments) ? pullRequest.issueComments : [],
     ...Array.isArray(pullRequest.reviewComments) ? pullRequest.reviewComments : []
   ];
-  const parsed = comments.map(parseGeminiReviewComment).filter(Boolean);
+  const parsed = comments.map(parseGeminiReviewComment).filter(Boolean).sort(compareTimelineItems);
+  const currentHeadSha = normalizeText5(pullRequest.headSha);
+  const currentHeadSignals = currentHeadSha ? parsed.filter((signal) => evidenceMatchesHead(signal, currentHeadSha)) : [];
+  const activeSignals = currentHeadSignals.length > 0 ? currentHeadSignals : parsed;
   return {
-    totalCount: parsed.length,
-    blockingCount: parsed.filter((signal) => signal.blocking).length,
-    latestEvidence: parsed.at(-1) ?? null
+    totalCount: activeSignals.length,
+    blockingCount: activeSignals.filter((signal) => signal.blocking).length,
+    latestEvidence: activeSignals.at(-1) ?? null
   };
 }
 function collectCodexFallbackSignals(pullRequest) {
   const comments = [...Array.isArray(pullRequest.issueComments) ? pullRequest.issueComments : []];
-  const parsed = comments.map(parseCodexReviewFallbackComment).filter(Boolean);
+  const parsed = comments.map((comment) => {
+    const signal = parseCodexReviewFallbackComment(comment);
+    return signal ? {
+      ...signal,
+      url: normalizeCommentUrl(comment),
+      createdAt: normalizeCommentCreatedAt(comment),
+      updatedAt: normalizeCommentUpdatedAt(comment)
+    } : null;
+  }).filter(Boolean).sort(compareTimelineItems);
   const connectorBlockers = comments.map(parseCodexConnectorSetupComment).filter(Boolean);
   const actorIdentityIncidents = comments.map(parseActorIdentityIncidentComment).filter(Boolean);
   const latestActorIdentityIncident = actorIdentityIncidents.at(-1) ?? null;
@@ -35509,6 +35530,7 @@ function collectCodexFallbackSignals(pullRequest) {
     completed: latest?.status === "completed",
     blocked: latest?.status === "blocked",
     blocking: latest?.blocking === true,
+    latestSignal: latest,
     latestEvidence: latest?.status === "completed" ? {
       reviewer: "codex",
       recommendedAction: latest.recommendedAction || "manual_review",
@@ -35519,6 +35541,25 @@ function collectCodexFallbackSignals(pullRequest) {
       includesCreatedEdit: latest.includesCreatedEdit === true
     } : null
   };
+}
+function emptyCodexFallbackSignals() {
+  return {
+    requested: false,
+    completed: false,
+    blocked: false,
+    blocking: false,
+    latestSignal: null,
+    latestEvidence: null
+  };
+}
+function evidenceMatchesHead(evidence, headSha) {
+  const normalizedHead = normalizeText5(headSha);
+  return Boolean(normalizedHead && normalizeText5(evidence?.headSha) === normalizedHead);
+}
+function evidenceTargetsDifferentHead(evidence, headSha) {
+  const normalizedHead = normalizeText5(headSha);
+  const evidenceHead = normalizeText5(evidence?.headSha);
+  return Boolean(normalizedHead && evidenceHead && evidenceHead !== normalizedHead);
 }
 function buildReviewTimeline(pullRequest) {
   const comments = [
@@ -35800,6 +35841,7 @@ function normalizeGitHubRuntime(value) {
       title: normalizeText5(pullRequestInput.title) || null,
       baseRef: normalizeText5(pullRequestInput.baseRef) || normalizeText5(pullRequestInput.base?.ref) || null,
       headRef: normalizeText5(pullRequestInput.headRef) || normalizeText5(pullRequestInput.head?.ref) || null,
+      headSha: normalizeText5(pullRequestInput.headSha) || normalizeText5(pullRequestInput.head_sha) || normalizeText5(pullRequestInput.head?.sha) || null,
       mergeable: normalizeNullableBoolean2(pullRequestInput.mergeable),
       mergeableState: normalizeText5(pullRequestInput.mergeableState) || normalizeText5(pullRequestInput.mergeable_state) || normalizeText5(pullRequestInput.mergeability?.state) || null,
       mergeConflict: pullRequestInput.mergeConflict === true || pullRequestInput.mergeability?.hasConflict === true || normalizeNullableBoolean2(pullRequestInput.mergeable) === false || normalizeText5(pullRequestInput.mergeableState) === "dirty" || normalizeText5(pullRequestInput.mergeable_state) === "dirty" || normalizeText5(pullRequestInput.mergeability?.state) === "dirty",

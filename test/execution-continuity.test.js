@@ -135,6 +135,50 @@ test("execution continuity treats approve-only Gemini reviewer comment as non-bl
   ]);
 });
 
+test("execution continuity prefers current-head Gemini approve over stale Codex fallback request changes", () => {
+  const result = evaluateExecutionContinuity({
+    actorRole: ActorRole.BUTLER,
+    mode: TaskMode.EXECUTION,
+    runtimeTruth: {
+      runtimeState: {
+        activeBranch: "codex/issue-452",
+        pullRequest: {
+          number: 453,
+          url: "https://github.com/example/repo/pull/453",
+          state: "open",
+          title: "Dashboard runner chat events",
+          reviewer: "gemini",
+          headSha: "new456",
+          mergeable: true,
+          mergeableState: "clean",
+          issueComments: [
+            {
+              user: { login: "vtdd-codex[bot]" },
+              createdAt: "2026-05-20T01:00:00.000Z",
+              body: "<!-- vtdd:reviewer=codex-fallback -->\n## VTDD Codex fallback レビュー\n\n- Status: `completed`\n- Head SHA: `old123`\n- Recommended action: `request_changes`\n\n### 重要指摘\n- old head still needed changes"
+            },
+            {
+              user: { login: "vtdd-codex[bot]" },
+              createdAt: "2026-05-20T01:05:00.000Z",
+              body: "<!-- vtdd:reviewer=gemini -->\n## VTDD Gemini レビュー\n\n- Head SHA: `new456`\n- Recommended action: `approve`\n\n### 残リスク\n- none"
+            }
+          ]
+        }
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.value.reviewLoop.reviewer, "gemini");
+  assert.equal(result.value.reviewLoop.reviewerStatus, "gemini_review_available");
+  assert.equal(result.value.reviewLoop.reviewerEvidence.recommendedAction, "approve");
+  assert.equal(result.value.reviewLoop.reviewerEvidence.headSha, "new456");
+  assert.equal(result.value.reviewLoop.unresolvedReviewCommentsCount, 0);
+  assert.equal(result.value.reviewLoop.criticalReviewPending, false);
+  assert.equal(result.value.reviewLoop.reviewerSignalTruth.mergeReviewTruth.satisfied, true);
+  assert.equal(result.value.nextSuggestedActions.includes("apply_pr_feedback"), false);
+});
+
 test("execution continuity treats GitHub formal changes requested as blocking even with VTDD marker approve", () => {
   const result = evaluateExecutionContinuity({
     actorRole: ActorRole.BUTLER,

@@ -148,25 +148,38 @@ function validateHandoffRequirement({ actorRole, continuation }) {
 function buildReviewState(pullRequest) {
   const parsedGeminiSignals = collectGeminiReviewerSignals(pullRequest);
   const codexFallback = collectCodexFallbackSignals(pullRequest);
+  const currentHeadSha = normalizeText(pullRequest.headSha);
+  const geminiEvidenceMatchesCurrentHead = evidenceMatchesHead(
+    parsedGeminiSignals.latestEvidence,
+    currentHeadSha
+  );
+  const codexFallbackStaleForCurrentHead = evidenceTargetsDifferentHead(
+    codexFallback.latestSignal ?? codexFallback.latestEvidence,
+    currentHeadSha
+  );
+  const effectiveCodexFallback =
+    geminiEvidenceMatchesCurrentHead && codexFallbackStaleForCurrentHead
+      ? emptyCodexFallbackSignals()
+      : codexFallback;
   const formalReviewTruth = collectFormalReviewTruth(pullRequest);
   const reviewTimeline = buildReviewTimeline(pullRequest);
   const reviewCommentsCount =
     parsedGeminiSignals.totalCount > 0
       ? parsedGeminiSignals.totalCount
-      : codexFallback.completed
+      : effectiveCodexFallback.completed
         ? 1
         : pullRequest.reviewCommentsCount;
   const unresolvedReviewCommentsCount =
     parsedGeminiSignals.totalCount > 0
       ? parsedGeminiSignals.blockingCount
-      : codexFallback.completed
-        ? (codexFallback.blocking ? 1 : 0)
+      : effectiveCodexFallback.completed
+        ? (effectiveCodexFallback.blocking ? 1 : 0)
         : pullRequest.unresolvedReviewCommentsCount;
-  const reviewerStatus = codexFallback.completed
+  const reviewerStatus = effectiveCodexFallback.completed
     ? "codex_review_available"
-    : codexFallback.blocked
+    : effectiveCodexFallback.blocked
       ? "codex_review_blocked"
-      : codexFallback.requested
+      : effectiveCodexFallback.requested
         ? "codex_review_requested"
         : reviewCommentsCount > 0
           ? "gemini_review_available"
@@ -174,7 +187,7 @@ function buildReviewState(pullRequest) {
   const reviewer =
     reviewerStatus.startsWith("codex_review") ? "codex" : pullRequest.reviewer;
   const reviewerEvidence = reviewerStatus.startsWith("codex_review")
-    ? codexFallback.latestEvidence
+    ? effectiveCodexFallback.latestEvidence
     : parsedGeminiSignals.latestEvidence;
   const reviewResponseSummary = buildReviewResponseSummary({
     pullRequest,
@@ -220,18 +233,39 @@ function collectGeminiReviewerSignals(pullRequest) {
     ...(Array.isArray(pullRequest.issueComments) ? pullRequest.issueComments : []),
     ...(Array.isArray(pullRequest.reviewComments) ? pullRequest.reviewComments : [])
   ];
-  const parsed = comments.map(parseGeminiReviewComment).filter(Boolean);
+  const parsed = comments
+    .map(parseGeminiReviewComment)
+    .filter(Boolean)
+    .sort(compareTimelineItems);
+  const currentHeadSha = normalizeText(pullRequest.headSha);
+  const currentHeadSignals = currentHeadSha
+    ? parsed.filter((signal) => evidenceMatchesHead(signal, currentHeadSha))
+    : [];
+  const activeSignals = currentHeadSignals.length > 0 ? currentHeadSignals : parsed;
 
   return {
-    totalCount: parsed.length,
-    blockingCount: parsed.filter((signal) => signal.blocking).length,
-    latestEvidence: parsed.at(-1) ?? null
+    totalCount: activeSignals.length,
+    blockingCount: activeSignals.filter((signal) => signal.blocking).length,
+    latestEvidence: activeSignals.at(-1) ?? null
   };
 }
 
 function collectCodexFallbackSignals(pullRequest) {
   const comments = [...(Array.isArray(pullRequest.issueComments) ? pullRequest.issueComments : [])];
-  const parsed = comments.map(parseCodexReviewFallbackComment).filter(Boolean);
+  const parsed = comments
+    .map((comment) => {
+      const signal = parseCodexReviewFallbackComment(comment);
+      return signal
+        ? {
+          ...signal,
+          url: normalizeCommentUrl(comment),
+          createdAt: normalizeCommentCreatedAt(comment),
+          updatedAt: normalizeCommentUpdatedAt(comment)
+        }
+        : null;
+    })
+    .filter(Boolean)
+    .sort(compareTimelineItems);
   const connectorBlockers = comments.map(parseCodexConnectorSetupComment).filter(Boolean);
   const actorIdentityIncidents = comments.map(parseActorIdentityIncidentComment).filter(Boolean);
   const latestActorIdentityIncident = actorIdentityIncidents.at(-1) ?? null;
@@ -243,6 +277,7 @@ function collectCodexFallbackSignals(pullRequest) {
     completed: latest?.status === "completed",
     blocked: latest?.status === "blocked",
     blocking: latest?.blocking === true,
+    latestSignal: latest,
     latestEvidence: latest?.status === "completed"
         ? {
           reviewer: "codex",
@@ -255,6 +290,28 @@ function collectCodexFallbackSignals(pullRequest) {
         }
       : null
   };
+}
+
+function emptyCodexFallbackSignals() {
+  return {
+    requested: false,
+    completed: false,
+    blocked: false,
+    blocking: false,
+    latestSignal: null,
+    latestEvidence: null
+  };
+}
+
+function evidenceMatchesHead(evidence, headSha) {
+  const normalizedHead = normalizeText(headSha);
+  return Boolean(normalizedHead && normalizeText(evidence?.headSha) === normalizedHead);
+}
+
+function evidenceTargetsDifferentHead(evidence, headSha) {
+  const normalizedHead = normalizeText(headSha);
+  const evidenceHead = normalizeText(evidence?.headSha);
+  return Boolean(normalizedHead && evidenceHead && evidenceHead !== normalizedHead);
 }
 
 function buildReviewTimeline(pullRequest) {
@@ -591,6 +648,11 @@ function normalizeGitHubRuntime(value) {
       title: normalizeText(pullRequestInput.title) || null,
       baseRef: normalizeText(pullRequestInput.baseRef) || normalizeText(pullRequestInput.base?.ref) || null,
       headRef: normalizeText(pullRequestInput.headRef) || normalizeText(pullRequestInput.head?.ref) || null,
+      headSha:
+        normalizeText(pullRequestInput.headSha) ||
+        normalizeText(pullRequestInput.head_sha) ||
+        normalizeText(pullRequestInput.head?.sha) ||
+        null,
       mergeable: normalizeNullableBoolean(pullRequestInput.mergeable),
       mergeableState:
         normalizeText(pullRequestInput.mergeableState) ||
