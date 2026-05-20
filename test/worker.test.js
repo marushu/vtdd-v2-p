@@ -36,6 +36,21 @@ const gatewayAuthEnv = {
   VTDD_GATEWAY_BEARER_TOKEN: "test-token"
 };
 
+const dashboardAccessHeaders = {
+  "cf-access-authenticated-user-email": "owner@example.com",
+  "cf-access-jwt-assertion": "test-access-jwt"
+};
+
+const dashboardAccessEnv = {
+  VTDD_DASHBOARD_ALLOWED_EMAILS: "owner@example.com",
+  CF_ACCESS_JWT_VERIFIER: async (token) => ({
+    ok: token === "test-access-jwt",
+    status: token === "test-access-jwt" ? 200 : 403,
+    reason: token === "test-access-jwt" ? undefined : "test access jwt invalid",
+    payload: token === "test-access-jwt" ? { email: "owner@example.com", exp: 4102444800 } : null
+  })
+};
+
 function createInMemoryDashboardEventStore() {
   const events = new Map();
   return {
@@ -212,8 +227,85 @@ test("worker serves human-facing status page without raw JSON links", async () =
   assert.equal(body.includes("CLOUDFLARE_API_TOKEN"), false);
 });
 
-test("worker serves v2 dashboard without exposing secrets", async () => {
+test("worker rejects dashboard access without owner identity", async () => {
   const response = await worker.fetch(new Request("https://example.com/dashboard"));
+  assert.equal(response.status, 401);
+  assert.match(response.headers.get("content-type"), /text\/html/);
+  const body = await response.text();
+  assert.equal(body.includes("Dashboard auth required"), true);
+  assert.equal(body.includes("owner-facing surface"), true);
+});
+
+test("worker rejects unlisted dashboard subpaths before they can become public pages", async () => {
+  const response = await worker.fetch(new Request("https://example.com/dashboard/future-page"));
+  assert.equal(response.status, 401);
+  const body = await response.text();
+  assert.equal(body.includes("Dashboard auth required"), true);
+});
+
+test("worker rejects dashboard access when owner identity lacks a verified Access JWT", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/dashboard", {
+      headers: {
+        "cf-access-authenticated-user-email": "owner@example.com"
+      }
+    }),
+    dashboardAccessEnv
+  );
+  assert.equal(response.status, 401);
+  const body = await response.text();
+  assert.equal(body.includes("Cloudflare Access JWT assertion is required"), true);
+});
+
+test("worker rejects dashboard access when Access email header has no matching JWT email claim", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/dashboard", {
+      headers: {
+        "cf-access-authenticated-user-email": "owner@example.com",
+        "cf-access-jwt-assertion": "login-only-access-jwt"
+      }
+    }),
+    {
+      VTDD_DASHBOARD_ALLOWED_EMAILS: "owner@example.com",
+      CF_ACCESS_JWT_VERIFIER: async () => ({
+        ok: true,
+        payload: { login: "owner-login", exp: 4102444800 }
+      })
+    }
+  );
+  assert.equal(response.status, 403);
+  const body = await response.text();
+  assert.equal(body.includes("verified JWT has no email claim"), true);
+});
+
+test("worker rejects dashboard access when identity header does not match verified Access JWT", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/dashboard", {
+      headers: {
+        "cf-access-authenticated-user-email": "owner@example.com",
+        "cf-access-jwt-assertion": "non-owner-access-jwt"
+      }
+    }),
+    {
+      VTDD_DASHBOARD_ALLOWED_EMAILS: "owner@example.com",
+      CF_ACCESS_JWT_VERIFIER: async () => ({
+        ok: true,
+        payload: { email: "other@example.com", exp: 4102444800 }
+      })
+    }
+  );
+  assert.equal(response.status, 403);
+  const body = await response.text();
+  assert.equal(body.includes("does not match the verified JWT identity"), true);
+});
+
+test("worker serves v2 dashboard for allowed owner identity without exposing secrets", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/dashboard", {
+      headers: dashboardAccessHeaders
+    }),
+    dashboardAccessEnv
+  );
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type"), /text\/html/);
   assert.match(response.headers.get("cache-control"), /no-store/);
@@ -273,7 +365,12 @@ test("worker serves v2 dashboard without exposing secrets", async () => {
   assert.equal(body.includes("approvalGrantId"), false);
   assert.equal(body.includes("CLOUDFLARE_API_TOKEN"), false);
 
-  const alias = await worker.fetch(new Request("https://example.com/orchestrator"));
+  const alias = await worker.fetch(
+    new Request("https://example.com/orchestrator", {
+      headers: dashboardAccessHeaders
+    }),
+    dashboardAccessEnv
+  );
   assert.equal(alias.status, 200);
   assert.match(alias.headers.get("cache-control"), /no-store/);
   const aliasBody = await alias.text();
@@ -288,14 +385,14 @@ test("worker appends dashboard Butler chat turn and retrieves the same thread", 
   const response = await worker.fetch(
     new Request("https://example.com/v2/dashboard/chat/messages", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { ...dashboardAccessHeaders, "content-type": "application/json" },
       body: JSON.stringify({
         threadId: "dashboard-main-marushu-vtdd-v2-p",
         repository: "marushu/vtdd-v2-p",
         text: "VPS Codex CLI とリアルタイムに会話したい"
       })
     }),
-    { DASHBOARD_CHAT_STORE: store }
+    { ...dashboardAccessEnv, DASHBOARD_CHAT_STORE: store }
   );
 
   assert.equal(response.status, 202);
@@ -308,8 +405,10 @@ test("worker appends dashboard Butler chat turn and retrieves the same thread", 
   assert.match(body.messages[1].text, /VPS Codex CLI/);
 
   const retrieveResponse = await worker.fetch(
-    new Request("https://example.com/v2/dashboard/chat/dashboard-main-marushu-vtdd-v2-p"),
-    { DASHBOARD_CHAT_STORE: store }
+    new Request("https://example.com/v2/dashboard/chat/dashboard-main-marushu-vtdd-v2-p", {
+      headers: dashboardAccessHeaders
+    }),
+    { ...dashboardAccessEnv, DASHBOARD_CHAT_STORE: store }
   );
   assert.equal(retrieveResponse.status, 200);
   const retrieveBody = await retrieveResponse.json();
@@ -372,8 +471,10 @@ test("worker dispatches authenticated dashboard chat handoff to VPS runner queue
   assert.equal(queueBody.includes('"dashboardThreadId": "dashboard-main-marushu-vtdd-v2-p"'), true);
 
   const retrieveResponse = await worker.fetch(
-    new Request("https://example.com/v2/dashboard/chat/dashboard-main-marushu-vtdd-v2-p"),
-    { DASHBOARD_CHAT_STORE: store }
+    new Request("https://example.com/v2/dashboard/chat/dashboard-main-marushu-vtdd-v2-p", {
+      headers: dashboardAccessHeaders
+    }),
+    { ...dashboardAccessEnv, DASHBOARD_CHAT_STORE: store }
   );
   const retrieveBody = await retrieveResponse.json();
   assert.equal(retrieveBody.messages.length, 3);
@@ -402,11 +503,10 @@ test("worker rejects unauthenticated dashboard chat VPS runner dispatch", async 
   assert.equal(response.status, 401);
   const body = await response.json();
   assert.equal(body.ok, false);
-  assert.equal(body.error, "dashboard_vps_runner_dispatch_unauthorized");
+  assert.equal(body.error, "dashboard_auth_required");
 });
 
-test("worker redacts dashboard Butler chat sensitive material before returning and storing", async () => {
-  const store = createInMemoryDashboardChatStore();
+test("worker rejects unauthenticated dashboard chat writes even without VPS dispatch", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/v2/dashboard/chat/messages", {
       method: "POST",
@@ -414,10 +514,34 @@ test("worker redacts dashboard Butler chat sensitive material before returning a
       body: JSON.stringify({
         threadId: "dashboard-main-marushu-vtdd-v2-p",
         repository: "marushu/vtdd-v2-p",
+        text: "public post should not land in dashboard"
+      })
+    }),
+    {
+      ...dashboardAccessEnv,
+      DASHBOARD_CHAT_STORE: createInMemoryDashboardChatStore()
+    }
+  );
+
+  assert.equal(response.status, 401);
+  const body = await response.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.error, "dashboard_auth_required");
+});
+
+test("worker redacts dashboard Butler chat sensitive material before returning and storing", async () => {
+  const store = createInMemoryDashboardChatStore();
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/chat/messages", {
+      method: "POST",
+      headers: { ...dashboardAccessHeaders, "content-type": "application/json" },
+      body: JSON.stringify({
+        threadId: "dashboard-main-marushu-vtdd-v2-p",
+        repository: "marushu/vtdd-v2-p",
         text: "approval:15b6f20d-11b6-4f8b-8008-99e7d7397452 と Bearer supersecrettoken123 を貼った"
       })
     }),
-    { DASHBOARD_CHAT_STORE: store }
+    { ...dashboardAccessEnv, DASHBOARD_CHAT_STORE: store }
   );
 
   assert.equal(response.status, 202);
@@ -428,8 +552,10 @@ test("worker redacts dashboard Butler chat sensitive material before returning a
   assert.equal(body.messages[0].text.includes("Bearer [redacted]"), true);
 
   const retrieveResponse = await worker.fetch(
-    new Request("https://example.com/v2/dashboard/chat/dashboard-main-marushu-vtdd-v2-p"),
-    { DASHBOARD_CHAT_STORE: store }
+    new Request("https://example.com/v2/dashboard/chat/dashboard-main-marushu-vtdd-v2-p", {
+      headers: dashboardAccessHeaders
+    }),
+    { ...dashboardAccessEnv, DASHBOARD_CHAT_STORE: store }
   );
   const retrieveBody = await retrieveResponse.json();
   assert.equal(JSON.stringify(retrieveBody).includes("approval:15b6f20d"), false);
@@ -438,8 +564,11 @@ test("worker redacts dashboard Butler chat sensitive material before returning a
 
 test("worker serves human-facing GitHub truth dashboard instead of raw action JSON", async () => {
   const response = await worker.fetch(
-    new Request("https://example.com/dashboard/github?repository=sample-org/vtdd-v2-p"),
+    new Request("https://example.com/dashboard/github?repository=sample-org/vtdd-v2-p", {
+      headers: dashboardAccessHeaders
+    }),
     {
+      ...dashboardAccessEnv,
       GITHUB_APP_INSTALLATION_TOKEN: "ghs_read",
       GITHUB_API_FETCH: async (url) => {
         const parsed = new URL(url);
@@ -522,7 +651,12 @@ test("worker serves human-facing dashboard pages for every management menu", asy
   ];
 
   for (const [route, title, rawLabel] of routes) {
-    const response = await worker.fetch(new Request(`https://example.com${route}`));
+    const response = await worker.fetch(
+      new Request(`https://example.com${route}`, {
+        headers: dashboardAccessHeaders
+      }),
+      dashboardAccessEnv
+    );
     assert.equal(response.status, 200);
     assert.match(response.headers.get("content-type"), /text\/html/);
     const body = await response.text();
@@ -580,9 +714,15 @@ test("worker serves dashboard notification center for recent events across repos
     updatedAt: sixMinutesAgo
   });
 
-  const response = await worker.fetch(new Request("https://example.com/dashboard/notifications"), {
-    DASHBOARD_EVENT_STORE: store
-  });
+  const response = await worker.fetch(
+    new Request("https://example.com/dashboard/notifications", {
+      headers: dashboardAccessHeaders
+    }),
+    {
+      ...dashboardAccessEnv,
+      DASHBOARD_EVENT_STORE: store
+    }
+  );
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type"), /text\/html/);
   const body = await response.text();
@@ -635,9 +775,15 @@ test("worker ingests GitHub Actions deploy completion event and shows it on dash
   assert.equal("approvalGrantId" in eventBody.event, false);
   assert.equal("token" in eventBody.event, false);
 
-  const dashboardResponse = await worker.fetch(new Request("https://example.com/dashboard"), {
-    DASHBOARD_EVENT_STORE: store
-  });
+  const dashboardResponse = await worker.fetch(
+    new Request("https://example.com/dashboard", {
+      headers: dashboardAccessHeaders
+    }),
+    {
+      ...dashboardAccessEnv,
+      DASHBOARD_EVENT_STORE: store
+    }
+  );
   assert.equal(dashboardResponse.status, 200);
   const dashboardBody = await dashboardResponse.text();
   assert.equal(dashboardBody.includes("最新 deploy"), true);
@@ -723,8 +869,10 @@ test("worker ingests VPS runner event into notifications and Butler chat thread"
   assert.equal(eventBody.messages[0].text.includes("codex_subprocess"), true);
 
   const chatResponse = await worker.fetch(
-    new Request("https://example.com/v2/dashboard/chat/dashboard-main-marushu-vtdd-v2-p"),
-    { DASHBOARD_CHAT_STORE: chatStore }
+    new Request("https://example.com/v2/dashboard/chat/dashboard-main-marushu-vtdd-v2-p", {
+      headers: dashboardAccessHeaders
+    }),
+    { ...dashboardAccessEnv, DASHBOARD_CHAT_STORE: chatStore }
   );
   assert.equal(chatResponse.status, 200);
   const chatBody = await chatResponse.json();
@@ -734,8 +882,10 @@ test("worker ingests VPS runner event into notifications and Butler chat thread"
   assert.equal(JSON.stringify(chatBody).includes("secret-must-not-persist"), false);
 
   const notificationsResponse = await worker.fetch(
-    new Request("https://example.com/dashboard/notifications"),
-    { DASHBOARD_EVENT_STORE: eventStore }
+    new Request("https://example.com/dashboard/notifications", {
+      headers: dashboardAccessHeaders
+    }),
+    { ...dashboardAccessEnv, DASHBOARD_EVENT_STORE: eventStore }
   );
   assert.equal(notificationsResponse.status, 200);
   const notificationsBody = await notificationsResponse.text();

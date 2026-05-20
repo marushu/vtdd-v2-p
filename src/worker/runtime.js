@@ -78,6 +78,8 @@ const MCP_SERVER_INFO = Object.freeze({
 });
 const MCP_INSTRUCTIONS =
   "VTDD MCP は Butler と同じ runtime truth / review truth / operational memory を読むための read-first surface です。現在の truth は runtime truth を優先し、memory は補助として扱ってください。";
+const CLOUDFLARE_ACCESS_JWKS_CACHE_TTL_MS = 5 * 60 * 1000;
+const cloudflareAccessJwksCache = new Map();
 const AUTONOMY_MODE_ENV = "VTDD_AUTONOMY_MODE";
 const LEGACY_AUTONOMY_MODE_ENV = "MVP_AUTONOMY_MODE";
 const MEMORY_D1_BINDING = "VTDD_MEMORY_D1";
@@ -137,6 +139,13 @@ export default {
       );
     }
 
+    if (request.method === "GET" && isDashboardPagePath(url.pathname)) {
+      const auth = await authorizeDashboardRequest({ request, env, apiSuffix: url.pathname });
+      if (!auth.ok) {
+        return html(auth.status, renderDashboardAuthRequiredPage({ runtimeOrigin: url.origin, reason: auth.reason }));
+      }
+    }
+
     if (request.method === "GET" && (url.pathname === "/dashboard" || url.pathname === "/orchestrator")) {
       return html(
         200,
@@ -186,7 +195,7 @@ export default {
     }
 
     if (request.method === "GET" && isDashboardChatThreadApiPath(url.pathname)) {
-      return handleDashboardChatThreadRequest(url, env);
+      return handleDashboardChatThreadRequest(request, url, env);
     }
 
     if (
@@ -3144,6 +3153,19 @@ async function handleVpsRunnerEventRequest(request, env) {
 }
 
 async function handleDashboardChatMessageRequest(request, env) {
+  const dashboardAuth = await authorizeDashboardRequest({
+    request,
+    env,
+    apiSuffix: "/dashboard/chat/messages"
+  });
+  if (!dashboardAuth.ok) {
+    return json(dashboardAuth.status, {
+      ok: false,
+      error: "dashboard_auth_required",
+      reason: dashboardAuth.reason
+    });
+  }
+
   const payload = await readJson(request);
   const wantsVpsRunnerHandoff = shouldDispatchDashboardChatToVpsRunner(payload);
   if (wantsVpsRunnerHandoff) {
@@ -3218,7 +3240,20 @@ async function handleDashboardChatMessageRequest(request, env) {
   });
 }
 
-async function handleDashboardChatThreadRequest(url, env) {
+async function handleDashboardChatThreadRequest(request, url, env) {
+  const auth = await authorizeDashboardRequest({
+    request,
+    env,
+    apiSuffix: "/dashboard/chat/:threadId"
+  });
+  if (!auth.ok) {
+    return json(auth.status, {
+      ok: false,
+      error: "dashboard_auth_required",
+      reason: auth.reason
+    });
+  }
+
   const threadId = extractDashboardChatThreadId(url.pathname);
   if (!threadId) {
     return json(422, {
@@ -5239,6 +5274,15 @@ function isDashboardChatThreadApiPath(pathname) {
   );
 }
 
+function isDashboardPagePath(pathname) {
+  return (
+    pathname === "/dashboard" ||
+    pathname.startsWith("/dashboard/") ||
+    pathname === "/orchestrator" ||
+    pathname.startsWith("/orchestrator/")
+  );
+}
+
 function extractDashboardChatThreadId(pathname) {
   const prefix = pathname.startsWith(`${CANONICAL_API_PREFIX}/dashboard/chat/`)
     ? `${CANONICAL_API_PREFIX}/dashboard/chat/`
@@ -5609,6 +5653,324 @@ function authorizeGatewayRequest({ request, env, apiSuffix = "/gateway" }) {
     status: 503,
     reason: `machine auth runtime is not configured for ${routeLabel}`
   };
+}
+
+async function authorizeDashboardRequest({ request, env, apiSuffix = "/dashboard" }) {
+  const machineAuth = authorizeGatewayRequest({ request, env, apiSuffix });
+  if (machineAuth.ok) {
+    return { ok: true, authType: "machine" };
+  }
+
+  const runtimeEnv = env ?? {};
+  const routeLabel = `dashboard surface ${apiSuffix}`;
+  const allowedEmails = parseAuthList(
+    runtimeEnv.VTDD_DASHBOARD_ALLOWED_EMAILS ?? runtimeEnv.CF_ACCESS_ALLOWED_EMAILS
+  );
+  const allowedLogins = parseAuthList(
+    runtimeEnv.VTDD_DASHBOARD_ALLOWED_GITHUB_LOGINS ?? runtimeEnv.CF_ACCESS_ALLOWED_GITHUB_LOGINS
+  );
+  const accessEmail = normalize(request.headers.get("cf-access-authenticated-user-email"));
+  const accessLogin = normalize(
+    request.headers.get("cf-access-authenticated-user-login") ||
+      request.headers.get("x-github-login") ||
+      request.headers.get("x-github-username")
+  );
+  const accessJwt = normalizeText(request.headers.get("cf-access-jwt-assertion"));
+
+  if (!accessEmail && !accessLogin) {
+    return {
+      ok: false,
+      status: 401,
+      reason: `Cloudflare Access authenticated owner identity is required for ${routeLabel}`
+    };
+  }
+  if (allowedEmails.length === 0 && allowedLogins.length === 0) {
+    return {
+      ok: false,
+      status: 503,
+      reason:
+        "dashboard owner allowlist is not configured (set VTDD_DASHBOARD_ALLOWED_EMAILS or VTDD_DASHBOARD_ALLOWED_GITHUB_LOGINS)"
+    };
+  }
+  if (!accessJwt) {
+    return {
+      ok: false,
+      status: 401,
+      reason: `Cloudflare Access JWT assertion is required for ${routeLabel}`
+    };
+  }
+  const jwtVerification = await verifyCloudflareAccessJwt({ token: accessJwt, env: runtimeEnv });
+  if (!jwtVerification.ok) {
+    return {
+      ok: false,
+      status: jwtVerification.status ?? 403,
+      reason: jwtVerification.reason
+    };
+  }
+  const jwtIdentity = extractCloudflareAccessJwtIdentity(jwtVerification.payload);
+  if (accessEmail && !jwtIdentity.email) {
+    return {
+      ok: false,
+      status: 403,
+      reason: "Cloudflare Access email header is present but the verified JWT has no email claim"
+    };
+  }
+  if (accessEmail && accessEmail !== jwtIdentity.email) {
+    return {
+      ok: false,
+      status: 403,
+      reason: "Cloudflare Access email header does not match the verified JWT identity"
+    };
+  }
+  if (accessLogin && !jwtIdentity.login) {
+    return {
+      ok: false,
+      status: 403,
+      reason: "Cloudflare Access login header is present but the verified JWT has no login claim"
+    };
+  }
+  if (accessLogin && accessLogin !== jwtIdentity.login) {
+    return {
+      ok: false,
+      status: 403,
+      reason: "Cloudflare Access login header does not match the verified JWT identity"
+    };
+  }
+  if (
+    (jwtIdentity.email && allowedEmails.includes(jwtIdentity.email)) ||
+    (jwtIdentity.login && allowedLogins.includes(jwtIdentity.login))
+  ) {
+    return {
+      ok: true,
+      authType: "cloudflare_access",
+      subject: jwtIdentity.login || jwtIdentity.email
+    };
+  }
+  return {
+    ok: false,
+    status: 403,
+    reason: `Cloudflare Access identity is not allowed for ${routeLabel}`
+  };
+}
+
+function extractCloudflareAccessJwtIdentity(payload) {
+  const custom = payload?.custom && typeof payload.custom === "object" ? payload.custom : {};
+  return {
+    email: normalize(payload?.email || payload?.identity?.email || custom.email),
+    login: normalize(
+      payload?.github_login ||
+        payload?.login ||
+        payload?.username ||
+        payload?.identity?.github_login ||
+        payload?.identity?.login ||
+        payload?.identity?.username ||
+        custom.github_login ||
+        custom.login ||
+        custom.username
+    )
+  };
+}
+
+function parseAuthList(value) {
+  return normalizeText(value)
+    .split(/[\s,]+/)
+    .map((item) => normalize(item))
+    .filter(Boolean);
+}
+
+async function verifyCloudflareAccessJwt({ token, env }) {
+  if (typeof env?.CF_ACCESS_JWT_VERIFIER === "function") {
+    return env.CF_ACCESS_JWT_VERIFIER(token);
+  }
+
+  const teamDomain = normalizeCloudflareAccessTeamDomain(env?.CF_ACCESS_TEAM_DOMAIN);
+  const expectedAudience = normalizeText(env?.CF_ACCESS_AUD);
+  if (!teamDomain || !expectedAudience) {
+    return {
+      ok: false,
+      status: 503,
+      reason: "Cloudflare Access JWT validation is not configured (set CF_ACCESS_TEAM_DOMAIN and CF_ACCESS_AUD)"
+    };
+  }
+
+  const parsed = parseJwt(token);
+  if (!parsed.ok) {
+    return parsed;
+  }
+  if (normalizeText(parsed.header.alg) !== "RS256") {
+    return {
+      ok: false,
+      status: 403,
+      reason: "Cloudflare Access JWT must use RS256"
+    };
+  }
+  if (normalizeText(parsed.payload.iss).replace(/\/$/, "") !== `https://${teamDomain}`) {
+    return {
+      ok: false,
+      status: 403,
+      reason: "Cloudflare Access JWT issuer does not match configured team domain"
+    };
+  }
+  const aud = Array.isArray(parsed.payload.aud) ? parsed.payload.aud : [parsed.payload.aud];
+  if (!aud.map((item) => normalizeText(item)).includes(expectedAudience)) {
+    return {
+      ok: false,
+      status: 403,
+      reason: "Cloudflare Access JWT audience does not match configured application audience"
+    };
+  }
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  if (!Number.isFinite(parsed.payload.exp)) {
+    return {
+      ok: false,
+      status: 403,
+      reason: "Cloudflare Access JWT expiration claim is required"
+    };
+  }
+  if (parsed.payload.exp <= nowSeconds) {
+    return {
+      ok: false,
+      status: 403,
+      reason: "Cloudflare Access JWT is expired"
+    };
+  }
+  if (parsed.payload.nbf !== undefined && !Number.isFinite(parsed.payload.nbf)) {
+    return {
+      ok: false,
+      status: 403,
+      reason: "Cloudflare Access JWT not-before claim must be numeric"
+    };
+  }
+  if (Number.isFinite(parsed.payload.nbf) && parsed.payload.nbf > nowSeconds) {
+    return {
+      ok: false,
+      status: 403,
+      reason: "Cloudflare Access JWT is not valid yet"
+    };
+  }
+
+  const jwks = await fetchCloudflareAccessJwks({ teamDomain, env });
+  if (!jwks.ok) {
+    return jwks;
+  }
+  const jwk = (jwks.keys || []).find((candidate) => normalizeText(candidate.kid) === normalizeText(parsed.header.kid));
+  if (!jwk) {
+    return {
+      ok: false,
+      status: 403,
+      reason: "Cloudflare Access JWT key id is not trusted"
+    };
+  }
+
+  const key = await crypto.subtle.importKey(
+    "jwk",
+    jwk,
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    false,
+    ["verify"]
+  );
+  const verified = await crypto.subtle.verify(
+    "RSASSA-PKCS1-v1_5",
+    key,
+    parsed.signature,
+    new TextEncoder().encode(parsed.signingInput)
+  );
+  if (!verified) {
+    return {
+      ok: false,
+      status: 403,
+      reason: "Cloudflare Access JWT signature is invalid"
+    };
+  }
+
+  return { ok: true, payload: parsed.payload };
+}
+
+function normalizeCloudflareAccessTeamDomain(value) {
+  const text = normalizeText(value).replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+  return text || "";
+}
+
+async function fetchCloudflareAccessJwks({ teamDomain, env }) {
+  const fetcher = env?.CF_ACCESS_JWKS_FETCH ?? fetch;
+  const jwksUrl = normalizeText(env?.CF_ACCESS_JWKS_URL) || `https://${teamDomain}/cdn-cgi/access/certs`;
+  const now = Date.now();
+  const cached = cloudflareAccessJwksCache.get(jwksUrl);
+  if (cached && cached.expiresAt > now) {
+    return {
+      ok: true,
+      keys: cached.keys
+    };
+  }
+  try {
+    const response = await fetcher(jwksUrl);
+    if (!response.ok) {
+      return {
+        ok: false,
+        status: 503,
+        reason: `Cloudflare Access JWKS fetch failed with HTTP ${response.status}`
+      };
+    }
+    const body = await response.json();
+    const keys = Array.isArray(body.keys) ? body.keys : [];
+    cloudflareAccessJwksCache.set(jwksUrl, {
+      keys,
+      expiresAt: now + CLOUDFLARE_ACCESS_JWKS_CACHE_TTL_MS
+    });
+    return {
+      ok: true,
+      keys
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      status: 503,
+      reason: `Cloudflare Access JWKS fetch failed: ${sanitizeErrorMessage(error)}`
+    };
+  }
+}
+
+function parseJwt(token) {
+  const parts = normalizeText(token).split(".");
+  if (parts.length !== 3) {
+    return {
+      ok: false,
+      status: 403,
+      reason: "Cloudflare Access JWT is malformed"
+    };
+  }
+  try {
+    return {
+      ok: true,
+      header: JSON.parse(base64UrlDecodeText(parts[0])),
+      payload: JSON.parse(base64UrlDecodeText(parts[1])),
+      signature: base64UrlDecodeBytes(parts[2]),
+      signingInput: `${parts[0]}.${parts[1]}`
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      status: 403,
+      reason: `Cloudflare Access JWT could not be decoded: ${sanitizeErrorMessage(error)}`
+    };
+  }
+}
+
+function base64UrlDecodeText(value) {
+  return new TextDecoder().decode(base64UrlDecodeBytes(value));
+}
+
+function base64UrlDecodeBytes(value) {
+  const normalized = normalizeText(value).replace(/-/g, "+").replace(/_/g, "/");
+  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+  if (typeof atob === "function") {
+    return Uint8Array.from(atob(padded), (char) => char.charCodeAt(0));
+  }
+  return Uint8Array.from(Buffer.from(padded, "base64"));
+}
+
+function sanitizeErrorMessage(error) {
+  return normalizeText(error?.message || error).replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/g, "Bearer [redacted]");
 }
 
 async function authorizePasskeyRegistrationRequest({ request, env, apiSuffix }) {
@@ -6959,6 +7321,38 @@ async function renderV2DashboardPage({ runtimeOrigin, dashboardEventStore } = {}
       });
     })();
   </script>
+</body>
+</html>`;
+}
+
+function renderDashboardAuthRequiredPage({ runtimeOrigin, reason } = {}) {
+  const origin = normalizeText(runtimeOrigin);
+  return `<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dashboard auth required</title>
+  <style>
+    :root { color-scheme: light; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #17211d; background: #f8faf8; }
+    body { margin: 0; }
+    main { width: min(720px, calc(100% - 32px)); margin: 0 auto; padding: 56px 0; }
+    .panel { background: #fff; border: 1px solid #d8e2dc; border-radius: 8px; padding: 24px; box-shadow: 0 12px 32px rgba(24, 37, 31, .08); }
+    h1 { margin: 0 0 12px; font-size: 30px; }
+    p { line-height: 1.7; color: #4d5c56; }
+    a { color: #176b4d; font-weight: 750; }
+    code { color: #5f6c66; }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="panel">
+      <h1>Dashboard auth required</h1>
+      <p>この dashboard は owner-facing surface です。対象の GitHub / Cloudflare Access identity で認証されたユーザー、または machine-authenticated service だけが利用できます。</p>
+      <p><code>${escapeDashboardHtml(reason || "dashboard authentication required")}</code></p>
+      <p><a href="${escapeDashboardHtml(origin || "/status")}/status">Status</a></p>
+    </section>
+  </main>
 </body>
 </html>`;
 }

@@ -44,6 +44,14 @@ test("production deploy doc defines the governed GitHub Actions deploy path", ()
   assert.equal(doc.includes("mentions the repository owner"), true);
   assert.equal(doc.includes("intentionally omits approval"), true);
   assert.equal(doc.includes("grant ids, tokens, and other secret values"), true);
+  assert.equal(doc.includes("Dashboard pages are owner-facing surfaces"), true);
+  assert.equal(doc.includes("`VTDD_DASHBOARD_ALLOWED_EMAILS`"), true);
+  assert.equal(doc.includes("`VTDD_DASHBOARD_ALLOWED_GITHUB_LOGINS`"), true);
+  assert.equal(doc.includes("`CF_ACCESS_TEAM_DOMAIN`"), true);
+  assert.equal(doc.includes("`CF_ACCESS_AUD`"), true);
+  assert.equal(doc.includes("`Cf-Access-Jwt-Assertion`"), true);
+  assert.equal(doc.includes("fails closed"), true);
+  assert.equal(doc.includes("Cloudflare Access"), true);
 });
 
 test("deploy-production workflow enforces the MVP production deploy boundary", () => {
@@ -77,11 +85,32 @@ test("deploy-production workflow enforces the MVP production deploy boundary", (
   assert.equal(workflow.includes("Generate production Wrangler config"), true);
   assert.equal(workflow.includes("VTDD_GITHUB_ACTIONS_REPOSITORY: ${{ github.repository }}"), true);
   assert.equal(workflow.includes("VTDD_KNOWN_GOOD_COMMIT_SHA: ${{ vars.VTDD_KNOWN_GOOD_COMMIT_SHA }}"), true);
+  assert.equal(workflow.includes("VTDD_DASHBOARD_ALLOWED_EMAILS: ${{ vars.VTDD_DASHBOARD_ALLOWED_EMAILS }}"), true);
+  assert.equal(
+    workflow.includes("VTDD_DASHBOARD_ALLOWED_GITHUB_LOGINS: ${{ vars.VTDD_DASHBOARD_ALLOWED_GITHUB_LOGINS }}"),
+    true
+  );
+  assert.equal(workflow.includes("CF_ACCESS_TEAM_DOMAIN: ${{ vars.CF_ACCESS_TEAM_DOMAIN }}"), true);
+  assert.equal(workflow.includes("CF_ACCESS_AUD: ${{ vars.CF_ACCESS_AUD }}"), true);
   assert.equal(workflow.includes("[env.production.vars]"), true);
   assert.equal(
     workflow.includes('VTDD_GITHUB_ACTIONS_REPOSITORY = "$VTDD_GITHUB_ACTIONS_REPOSITORY"'),
     true
   );
+  assert.equal(workflow.includes("append_toml_var()"), true);
+  assert.equal(workflow.includes("JSON.stringify(value)"), true);
+  assert.equal(
+    workflow.includes('append_toml_var "VTDD_DASHBOARD_ALLOWED_EMAILS" "$VTDD_DASHBOARD_ALLOWED_EMAILS"'),
+    true
+  );
+  assert.equal(
+    workflow.includes(
+      'append_toml_var "VTDD_DASHBOARD_ALLOWED_GITHUB_LOGINS" "$VTDD_DASHBOARD_ALLOWED_GITHUB_LOGINS"'
+    ),
+    true
+  );
+  assert.equal(workflow.includes('append_toml_var "CF_ACCESS_TEAM_DOMAIN" "$CF_ACCESS_TEAM_DOMAIN"'), true);
+  assert.equal(workflow.includes('append_toml_var "CF_ACCESS_AUD" "$CF_ACCESS_AUD"'), true);
   assert.equal(workflow.includes('if [ -n "$VTDD_KNOWN_GOOD_COMMIT_SHA" ]; then'), true);
   assert.equal(
     workflow.includes('[[ ! "$VTDD_KNOWN_GOOD_COMMIT_SHA" =~ ^[0-9a-fA-F]{40}$ ]]'),
