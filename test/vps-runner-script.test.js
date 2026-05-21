@@ -9,6 +9,7 @@ import {
   buildDashboardChatTriagePrompt,
   buildDashboardGeneralChatPrompt,
   buildVpsDashboardActionBridgeGuide,
+  buildVpsDashboardReadOnlyBridgeGuide,
   buildDashboardRunnerWebSocketUrl,
   buildCodexExecArgs,
   buildCodexExecutionEnv,
@@ -1738,10 +1739,11 @@ test("VPS runner dashboard chat triage prompt preserves Custom GPT parity and bl
   assert.equal(prompt.includes("ぶい の残り Issue と PR 確認して交通整理して"), true);
   assert.equal(prompt.includes("Context preflight receipt:"), true);
   assert.equal(prompt.includes("AGENTS.md sha1=abc123"), true);
-  assert.equal(prompt.includes("Runtime Action bridge:"), true);
-  assert.equal(prompt.includes("vtddRetrieveGitHub: GET /v2/retrieve/github"), true);
+  assert.equal(prompt.includes("Runtime read-only bridge:"), true);
+  assert.equal(prompt.includes("Runtime write/action bridge for Issue-backed bounded VTDD work:"), true);
   assert.equal(prompt.includes("vtddExecute: POST /v2/action/execute"), true);
   assert.equal(prompt.includes("vtddDeployProduction: POST /v2/action/deploy"), true);
+  assert.equal(prompt.includes("GO alone does not authorize deploy"), true);
 });
 
 test("VPS runner general dashboard chat prompt allows normal conversation without Issue preflight", () => {
@@ -1759,9 +1761,10 @@ test("VPS runner general dashboard chat prompt allows normal conversation withou
   assert.equal(prompt.includes("今日は何月何日？日本時間を答えて"), true);
   assert.equal(prompt.includes("Answer as a normal Butler conversation"), true);
   assert.equal(prompt.includes("Do not require GitHub Issue preflight for general chat"), true);
-  assert.equal(prompt.includes("Runtime Action bridge:"), true);
+  assert.equal(prompt.includes("Runtime read-only bridge:"), true);
   assert.equal(prompt.includes("vtddRetrieveRepositoryNicknames: GET /v2/retrieve/repository-nicknames"), true);
-  assert.equal(prompt.includes("vtddWriteOperationalMemory: POST /v2/action/memory-write"), true);
+  assert.equal(prompt.includes("vtddWriteOperationalMemory: POST /v2/action/memory-write"), false);
+  assert.equal(prompt.includes("vtddDeployProduction: POST /v2/action/deploy"), false);
   assert.equal(prompt.includes("Do not edit files, commit, push, create PRs, merge, deploy"), true);
 });
 
@@ -1771,10 +1774,22 @@ test("VPS runner dashboard action bridge exposes Action Schema operations withou
   assert.equal(guide.includes("${VTDD_RUNTIME_URL}"), true);
   assert.equal(guide.includes("${VTDD_GATEWAY_BEARER_TOKEN}"), true);
   assert.equal(guide.includes("gateway-token-for-test"), false);
+  assert.equal(guide.includes("Runtime write/action bridge for Issue-backed bounded VTDD work:"), true);
   assert.equal(guide.includes("vtddGateway: POST /v2/gateway"), true);
   assert.equal(guide.includes("vtddGitHubAuthority: POST /v2/action/github-authority"), true);
   assert.equal(guide.includes("vtddSyncGitHubActionsSecret: POST /v2/action/github-actions-secret"), true);
-  assert.equal(guide.includes("High-risk operations require scoped passkey approval"), true);
+  assert.equal(guide.includes("High-risk operations require scoped passkey approval exactly"), true);
+  assert.equal(guide.includes("GO alone does not authorize deploy"), true);
+});
+
+test("VPS runner read-only dashboard bridge excludes write and high-risk operations", () => {
+  const guide = buildVpsDashboardReadOnlyBridgeGuide();
+
+  assert.equal(guide.includes("Runtime read-only bridge:"), true);
+  assert.equal(guide.includes("vtddRetrieveGitHub: GET /v2/retrieve/github"), true);
+  assert.equal(guide.includes("vtddWriteGitHub: POST /v2/action/github"), false);
+  assert.equal(guide.includes("vtddDeployProduction: POST /v2/action/deploy"), false);
+  assert.equal(guide.includes("Do not treat archived setup-wizard behavior as active runtime scope"), true);
 });
 
 test("VPS runner Codex execution env exposes runtime action bridge credentials to the CLI process", () => {

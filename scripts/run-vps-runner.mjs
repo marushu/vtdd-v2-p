@@ -823,7 +823,7 @@ function buildDashboardGeneralChatPrompt({ payload }) {
     "- If the owner is asking a general question, answer directly in Japanese.",
     "- Do not edit files, commit, push, create PRs, merge, deploy, mutate secrets, mutate permissions, or close Issues.",
     "",
-    buildVpsDashboardActionBridgeGuide(),
+    buildVpsDashboardReadOnlyBridgeGuide(),
     "",
     "Reply format:",
     "- Japanese first.",
@@ -904,15 +904,14 @@ function buildDashboardChatTriagePrompt({ payload, issue = {}, preflight = null 
   ].join("\n");
 }
 
-function buildVpsDashboardActionBridgeGuide() {
+function buildVpsDashboardReadOnlyBridgeGuide() {
   return [
-    "Runtime Action bridge:",
-    "- You may call the deployed VTDD runtime from this VPS Codex CLI when the owner asks for VTDD work.",
+    "Runtime read-only bridge:",
+    "- You may call read-only VTDD runtime routes from this VPS Codex CLI when the owner asks for VTDD status, memory, repository, or setup facts.",
     "- Use environment variables only; do not print or expose VTDD_GATEWAY_BEARER_TOKEN.",
     "- Base URL: ${VTDD_RUNTIME_URL}",
     "- Auth header: Authorization: Bearer ${VTDD_GATEWAY_BEARER_TOKEN}",
     "- curl pattern for GET: curl -sS -H \"Authorization: Bearer ${VTDD_GATEWAY_BEARER_TOKEN}\" \"${VTDD_RUNTIME_URL}<path>?<query>\"",
-    "- curl pattern for POST: curl -sS -X POST -H \"Authorization: Bearer ${VTDD_GATEWAY_BEARER_TOKEN}\" -H \"content-type: application/json\" --data '<json>' \"${VTDD_RUNTIME_URL}<path>\"",
     "",
     "Read/retrieve operations available to mirror Custom GPT Actions:",
     "- vtddRetrieveGitHub: GET /v2/retrieve/github",
@@ -929,6 +928,19 @@ function buildVpsDashboardActionBridgeGuide() {
     "- vtddRetrieveCloudflarePages: GET /v2/retrieve/cloudflare-pages",
     "- vtddRetrieveApprovalGrant: GET /v2/retrieve/approval-grant",
     "",
+    "Setup retrieval routes are read-only recovery/diagnostic surfaces. Do not treat archived setup-wizard behavior as active runtime scope.",
+    "Do not call write/action/high-risk routes from general chat unless the owner has moved into an Issue-backed bounded action and the runtime approval boundary is satisfied."
+  ].join("\n");
+}
+
+function buildVpsDashboardActionBridgeGuide() {
+  return [
+    buildVpsDashboardReadOnlyBridgeGuide(),
+    "",
+    "Runtime write/action bridge for Issue-backed bounded VTDD work:",
+    "- Use these only after the owner request is tied to a repository/Issue or an explicit bounded runtime action.",
+    "- curl pattern for POST: curl -sS -X POST -H \"Authorization: Bearer ${VTDD_GATEWAY_BEARER_TOKEN}\" -H \"content-type: application/json\" --data '<json>' \"${VTDD_RUNTIME_URL}<path>\"",
+    "",
     "Write/action operations available only under the same approval boundaries as Custom GPT Actions:",
     "- vtddGateway: POST /v2/gateway",
     "- vtddExecute: POST /v2/action/execute",
@@ -940,7 +952,7 @@ function buildVpsDashboardActionBridgeGuide() {
     "- vtddVpsRunnerStatus: GET /v2/action/vps-runner-status",
     "- vtddVpsRunnerCancel: POST /v2/action/vps-runner-cancel",
     "",
-    "High-risk operations require scoped passkey approval or explicit GO exactly as the runtime requires:",
+    "High-risk operations require scoped passkey approval exactly as the runtime requires. GO alone does not authorize deploy, credential mutation, permission mutation, repository administration, merge, destructive cleanup, or Issue close.",
     "- vtddGitHubAuthority: POST /v2/action/github-authority",
     "- vtddDeployProduction: POST /v2/action/deploy",
     "- vtddSyncGitHubActionsSecret: POST /v2/action/github-actions-secret",
@@ -3046,6 +3058,7 @@ export {
   buildDashboardChatTriagePrompt,
   buildDashboardGeneralChatPrompt,
   buildVpsDashboardActionBridgeGuide,
+  buildVpsDashboardReadOnlyBridgeGuide,
   buildDashboardRunnerWebSocketUrl,
   buildCodexExecArgs,
   buildCodexExecutionEnv,
