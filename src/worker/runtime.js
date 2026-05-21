@@ -215,15 +215,79 @@ export class DashboardChatRoom {
       }
       return;
     }
-    const repositoryResolution = await resolveDashboardChatRepository({
-      payload: { ...normalizeObject(payload), text },
-      env: this.env
-    });
-    const repository = repositoryResolution.ok ? repositoryResolution.repository : "";
     const relatedIssue =
       normalizePositiveInteger(payload?.relatedIssue || payload?.issueNumber) || extractIssueNumberFromDashboardChatText(text);
     const now = new Date().toISOString();
+    const store = resolveDashboardChatStore(this.env);
+    const nicknameListTurn = await buildDashboardRepositoryNicknameListTurn({
+      payload: { ...normalizeObject(payload), text, threadId },
+      env: this.env
+    });
+    if (nicknameListTurn) {
+      const ownerMessage = normalizeDashboardChatMessage(
+        {
+          threadId: nicknameListTurn.threadId,
+          role: "owner",
+          relatedIssue,
+          status: "sent",
+          text,
+          createdAt: now
+        },
+        { threadId: nicknameListTurn.threadId }
+      );
+      const replyMessages = nicknameListTurn.messages.filter((message) => message.role !== "owner");
+      const messages = store
+        ? await store.appendMany(nicknameListTurn.threadId, [ownerMessage, ...replyMessages])
+        : [ownerMessage, ...replyMessages].filter(Boolean);
+      await this.broadcastThread({ threadId: nicknameListTurn.threadId, messages });
+      return;
+    }
+    const localReply = buildDashboardLocalButlerReply(text);
+    if (localReply) {
+      const ownerMessage = normalizeDashboardChatMessage(
+        {
+          threadId,
+          role: "owner",
+          relatedIssue,
+          status: "sent",
+          text,
+          createdAt: now
+        },
+        { threadId }
+      );
+      const butlerMessage = normalizeDashboardChatMessage(
+        {
+          threadId,
+          role: "butler",
+          relatedIssue,
+          status: "replied",
+          text: localReply,
+          createdAt: new Date(Date.parse(now) + 1).toISOString()
+        },
+        { threadId }
+      );
+      const messages = store ? await store.appendMany(threadId, [ownerMessage, butlerMessage]) : [ownerMessage, butlerMessage].filter(Boolean);
+      await this.broadcastThread({ threadId, messages });
+      return;
+    }
+    const repositoryResolution = await resolveDashboardChatRepository({
+      payload: { ...normalizeObject(payload), text, threadId },
+      env: this.env
+    });
+    const repository = repositoryResolution.ok ? repositoryResolution.repository : "";
     if (!repositoryResolution.ok) {
+      const ownerMessage = normalizeDashboardChatMessage(
+        {
+          threadId,
+          role: "owner",
+          repository,
+          relatedIssue,
+          status: "sent",
+          text,
+          createdAt: now
+        },
+        { threadId }
+      );
       const failedMessage = normalizeDashboardChatMessage(
         {
           threadId,
@@ -236,8 +300,7 @@ export class DashboardChatRoom {
         },
         { threadId }
       );
-      const store = resolveDashboardChatStore(this.env);
-      const messages = store ? await store.appendMany(threadId, [failedMessage]) : [failedMessage].filter(Boolean);
+      const messages = store ? await store.appendMany(threadId, [ownerMessage, failedMessage]) : [ownerMessage, failedMessage].filter(Boolean);
       await this.broadcastThread({ threadId, messages });
       return;
     }
@@ -265,7 +328,6 @@ export class DashboardChatRoom {
       },
       { threadId }
     );
-    const store = resolveDashboardChatStore(this.env);
     const messages = store ? await store.appendMany(threadId, [ownerMessage, thinkingMessage]) : [ownerMessage, thinkingMessage].filter(Boolean);
     await this.broadcastThread({ threadId, messages });
     const pushed = await this.pushVpsRunnerJob({
@@ -5465,6 +5527,18 @@ async function resolveDashboardChatRepository({ payload, env }) {
     };
   }
   if (!rawRepositoryInput) {
+    const threadContextRepository = await resolveDashboardThreadContextRepository({
+      threadId: input.threadId || input.thread_id,
+      env
+    });
+    if (threadContextRepository) {
+      return {
+        ok: true,
+        repository: threadContextRepository,
+        input: threadContextRepository,
+        via: "thread_context"
+      };
+    }
     return {
       ok: false,
       status: 422,
@@ -5505,6 +5579,51 @@ async function resolveDashboardChatRepository({ payload, env }) {
   };
 }
 
+async function resolveDashboardThreadContextRepository({ threadId, env } = {}) {
+  const normalizedThreadId = normalizeDashboardThreadId(threadId);
+  if (!normalizedThreadId) {
+    return "";
+  }
+  const store = resolveDashboardChatStore(env);
+  if (!store || typeof store.listThread !== "function") {
+    return "";
+  }
+  try {
+    const messages = await store.listThread(normalizedThreadId, { limit: 20 });
+    const latestWithRepository = [...(Array.isArray(messages) ? messages : [])]
+      .reverse()
+      .find((message) => normalizeCanonicalRepositoryInput(message?.repository));
+    return normalizeCanonicalRepositoryInput(latestWithRepository?.repository);
+  } catch {
+    return "";
+  }
+}
+
+function buildDashboardLocalButlerReply(value) {
+  const text = sanitizeDashboardChatText(value);
+  if (!text) {
+    return "";
+  }
+  if (/(君|あなた|お前|butler|Butler|VTDD).{0,8}(誰|だれ|何者)|^(誰|だれ)ですか|who are you/i.test(text)) {
+    return [
+      "私は VTDD Butler です。",
+      "iPhone / iPad からの自然文を受け取り、repo/nickname、Issue、PR、RAG、VPS Codex CLI、承認境界を交通整理します。",
+      "実装や調査が必要な依頼は、対象 repo を解決してから VPS Codex CLI に渡します。例: `ぶいの残りタスクを確認して`。"
+    ].join("\n");
+  }
+  if (/(何ができる|なにができる|使い方|ヘルプ|help|カスタムGPT.*できること|できること)/i.test(text)) {
+    return [
+      "この dashboard Butler では、自然文を次の入口に仕分けます。",
+      "- repo/nickname 付きの作業依頼: VPS Codex CLI に push します。",
+      "- `登録済みのニックネーム出して`: 登録済み alias を表示します。",
+      "- `君は誰？` / `何ができる？`: この画面で直接答えます。",
+      "- 同じ thread に repo 文脈が残っている場合: `進捗は？` のような続きの依頼もその repo 文脈で扱います。",
+      "高リスク操作、deploy、credential、merge、Issue close は passkey / GO 境界を越えない限り実行しません。"
+    ].join("\n");
+  }
+  return "";
+}
+
 async function notifyDashboardChatRoom({ env, threadId, messages }) {
   const room = resolveDashboardChatRoomStub(env, threadId);
   if (!room || typeof room.fetch !== "function") {
@@ -5534,7 +5653,7 @@ function extractRepositoryTokenFromDashboardChatText(value) {
   if (canonicalMatch) {
     return canonicalMatch[1];
   }
-  const nicknameMatch = text.match(/^[\s　]*([^\s　#「『【\\/:]+)(?:\s+|[　]*の|[　]*を|[　]*で|[　]*に)/u);
+  const nicknameMatch = text.match(/^[\s　]*([^\s　#「『【\\/:]+?)(?:\s+|[　]*の|[　]*を|[　]*で|[　]*に)/u);
   return normalizeDashboardEventText(nicknameMatch?.[1]);
 }
 
