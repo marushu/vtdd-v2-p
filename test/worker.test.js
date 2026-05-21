@@ -1021,6 +1021,19 @@ test("worker exposes machine-authenticated VPS runner WebSocket push channel", a
   assert.equal(body.error, "websocket_upgrade_required");
   assert.equal(rooms.calls.length, 0);
 
+  const protocolToken = Buffer.from(gatewayAuthEnv.VTDD_GATEWAY_BEARER_TOKEN, "utf8").toString("base64url");
+  const protocolAuthorized = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/vps-runner/ws?threadId=dashboard-main-marushu-vtdd-v2-p", {
+      headers: {
+        "sec-websocket-protocol": `vtdd-vps-runner, vtdd-gateway-bearer-${protocolToken}`
+      }
+    }),
+    { ...gatewayAuthEnv, DASHBOARD_CHAT_ROOMS: rooms.namespace }
+  );
+  assert.equal(protocolAuthorized.status, 426);
+  const protocolBody = await protocolAuthorized.json();
+  assert.equal(protocolBody.error, "websocket_upgrade_required");
+
   const unauthorized = await worker.fetch(
     new Request("https://example.com/v2/dashboard/vps-runner/ws?threadId=dashboard-main-marushu-vtdd-v2-p"),
     { ...gatewayAuthEnv, DASHBOARD_CHAT_ROOMS: rooms.namespace }
