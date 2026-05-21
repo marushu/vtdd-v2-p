@@ -242,68 +242,11 @@ export class DashboardChatRoom {
       await this.broadcastThread({ threadId: nicknameListTurn.threadId, messages });
       return;
     }
-    const localReply = buildDashboardLocalButlerReply(text);
-    if (localReply) {
-      const ownerMessage = normalizeDashboardChatMessage(
-        {
-          threadId,
-          role: "owner",
-          relatedIssue,
-          status: "sent",
-          text,
-          createdAt: now
-        },
-        { threadId }
-      );
-      const butlerMessage = normalizeDashboardChatMessage(
-        {
-          threadId,
-          role: "butler",
-          relatedIssue,
-          status: "replied",
-          text: localReply,
-          createdAt: new Date(Date.parse(now) + 1).toISOString()
-        },
-        { threadId }
-      );
-      const messages = store ? await store.appendMany(threadId, [ownerMessage, butlerMessage]) : [ownerMessage, butlerMessage].filter(Boolean);
-      await this.broadcastThread({ threadId, messages });
-      return;
-    }
     const repositoryResolution = await resolveDashboardChatRepository({
       payload: { ...normalizeObject(payload), text, threadId },
       env: this.env
     });
     const repository = repositoryResolution.ok ? repositoryResolution.repository : "";
-    if (!repositoryResolution.ok) {
-      const ownerMessage = normalizeDashboardChatMessage(
-        {
-          threadId,
-          role: "owner",
-          repository,
-          relatedIssue,
-          status: "sent",
-          text,
-          createdAt: now
-        },
-        { threadId }
-      );
-      const failedMessage = normalizeDashboardChatMessage(
-        {
-          threadId,
-          role: "system",
-          repository,
-          relatedIssue,
-          status: "failed",
-          text: repositoryResolution.reason,
-          createdAt: now
-        },
-        { threadId }
-      );
-      const messages = store ? await store.appendMany(threadId, [ownerMessage, failedMessage]) : [ownerMessage, failedMessage].filter(Boolean);
-      await this.broadcastThread({ threadId, messages });
-      return;
-    }
     const ownerMessage = normalizeDashboardChatMessage(
       {
         threadId,
@@ -335,6 +278,7 @@ export class DashboardChatRoom {
       threadId,
       repository,
       repositoryInput: repositoryResolution.input || payload?.repositoryInput || payload?.repository,
+      repositoryResolution,
       relatedIssue,
       text,
       codexGoal: normalizeDashboardEventText(payload?.codexGoal || "dashboard_chat_triage"),
@@ -391,6 +335,7 @@ export class DashboardChatRoom {
       threadId: normalizeDashboardThreadId(payload?.threadId || payload?.thread_id),
       repository: normalizeCanonicalRepositoryInput(payload?.repository),
       repositoryInput: normalizeDashboardEventText(payload?.repositoryInput || payload?.repository_input),
+      repositoryResolution: normalizeObject(payload?.repositoryResolution || payload?.repository_resolution),
       relatedIssue: normalizePositiveInteger(payload?.relatedIssue || payload?.issueNumber),
       text: sanitizeDashboardChatText(payload?.text || payload?.message || payload?.body),
       codexGoal: normalizeDashboardEventText(payload?.codexGoal || "dashboard_chat_triage"),
@@ -5514,9 +5459,10 @@ function resolveDashboardChatRoomStub(env, threadId) {
 
 async function resolveDashboardChatRepository({ payload, env }) {
   const input = normalizeObject(payload);
+  const text = input.text || input.message || input.body;
   const rawRepositoryInput =
     normalizeDashboardEventText(input.repository || input.repositoryInput || input.repository_input) ||
-    extractRepositoryTokenFromDashboardChatText(input.text || input.message || input.body);
+    extractRepositoryTokenFromDashboardChatText(text);
   const canonicalRepository = normalizeCanonicalRepositoryInput(rawRepositoryInput);
   if (canonicalRepository) {
     return {
@@ -5527,17 +5473,19 @@ async function resolveDashboardChatRepository({ payload, env }) {
     };
   }
   if (!rawRepositoryInput) {
-    const threadContextRepository = await resolveDashboardThreadContextRepository({
-      threadId: input.threadId || input.thread_id,
-      env
-    });
-    if (threadContextRepository) {
-      return {
-        ok: true,
-        repository: threadContextRepository,
-        input: threadContextRepository,
-        via: "thread_context"
-      };
+    if (shouldUseDashboardThreadRepositoryContext(text)) {
+      const threadContextRepository = await resolveDashboardThreadContextRepository({
+        threadId: input.threadId || input.thread_id,
+        env
+      });
+      if (threadContextRepository) {
+        return {
+          ok: true,
+          repository: threadContextRepository,
+          input: threadContextRepository,
+          via: "thread_context"
+        };
+      }
     }
     return {
       ok: false,
@@ -5599,29 +5547,17 @@ async function resolveDashboardThreadContextRepository({ threadId, env } = {}) {
   }
 }
 
-function buildDashboardLocalButlerReply(value) {
+function shouldUseDashboardThreadRepositoryContext(value) {
   const text = sanitizeDashboardChatText(value);
   if (!text) {
-    return "";
+    return false;
   }
-  if (/(君|あなた|お前|butler|Butler|VTDD).{0,8}(誰|だれ|何者)|^(誰|だれ)ですか|who are you/i.test(text)) {
-    return [
-      "私は VTDD Butler です。",
-      "iPhone / iPad からの自然文を受け取り、repo/nickname、Issue、PR、RAG、VPS Codex CLI、承認境界を交通整理します。",
-      "実装や調査が必要な依頼は、対象 repo を解決してから VPS Codex CLI に渡します。例: `ぶいの残りタスクを確認して`。"
-    ].join("\n");
+  if (/#\d+\b/.test(text)) {
+    return true;
   }
-  if (/(何ができる|なにができる|使い方|ヘルプ|help|カスタムGPT.*できること|できること)/i.test(text)) {
-    return [
-      "この dashboard Butler では、自然文を次の入口に仕分けます。",
-      "- repo/nickname 付きの作業依頼: VPS Codex CLI に push します。",
-      "- `登録済みのニックネーム出して`: 登録済み alias を表示します。",
-      "- `君は誰？` / `何ができる？`: この画面で直接答えます。",
-      "- 同じ thread に repo 文脈が残っている場合: `進捗は？` のような続きの依頼もその repo 文脈で扱います。",
-      "高リスク操作、deploy、credential、merge、Issue close は passkey / GO 境界を越えない限り実行しません。"
-    ].join("\n");
-  }
-  return "";
+  return /(\bissue\b|\bissues\b|\bpr\b|\bpull request\b|\bactions?\b|\bci\b|\brag\b|\bvps\b|\bcodex\b|\brunner\b|Issue|PR|残り|タスク|進捗|状況|確認|見て|調べて|レビュー|指摘|マージ|merge|デプロイ|deploy|実装|修正|直して|壊れ|バグ|エラー|失敗|ブロッカー|close|クローズ|返信|保存|検索|thread|スレッド)/i.test(
+    text
+  );
 }
 
 async function notifyDashboardChatRoom({ env, threadId, messages }) {

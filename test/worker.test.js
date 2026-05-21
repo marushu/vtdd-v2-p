@@ -1194,7 +1194,7 @@ test("DashboardChatRoom resolves Japanese no-particle nickname requests before V
   assert.equal(job.repositoryInput, "ぶい");
 });
 
-test("DashboardChatRoom blocks unresolved repository owner messages before VPS handoff", async () => {
+test("DashboardChatRoom forwards unresolved repository work to VPS runner for conversational handling", async () => {
   const store = createInMemoryDashboardChatStore();
   const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
   const runnerSocket = createMockSocket("vps_runner", "dashboard-main-unresolved");
@@ -1216,18 +1216,23 @@ test("DashboardChatRoom blocks unresolved repository owner messages before VPS h
     })
   );
 
-  assert.equal(runnerSocket.sent.length, 0);
+  assert.equal(runnerSocket.sent.length, 1);
+  const job = JSON.parse(runnerSocket.sent[0]);
+  assert.equal(job.text, "VPS Codex CLI 疎通テスト。今の #450 の残りを短く返して。");
+  assert.equal(job.repository, "");
+  assert.equal(job.relatedIssue, 450);
+  assert.equal(job.repositoryResolution.ok, false);
   assert.equal(dashboardSocket.sent.length, 1);
   const broadcast = JSON.parse(dashboardSocket.sent[0]);
   assert.equal(broadcast.messages.length, 2);
   assert.equal(broadcast.messages[0].role, "owner");
   assert.equal(broadcast.messages[0].text, "VPS Codex CLI 疎通テスト。今の #450 の残りを短く返して。");
-  assert.equal(broadcast.messages[1].status, "failed");
-  assert.equal(broadcast.messages[1].text.includes("対象 repository"), true);
+  assert.equal(broadcast.messages[1].status, "thinking");
+  assert.equal(broadcast.messages[1].text.includes("VPS Codex CLI に送信しました"), true);
   assert.equal(broadcast.messages[1].relatedIssue, 450);
 });
 
-test("DashboardChatRoom answers local Butler identity questions without repository handoff", async () => {
+test("DashboardChatRoom forwards identity questions to VPS runner instead of answering in the Worker", async () => {
   const store = createInMemoryDashboardChatStore();
   const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
   const runnerSocket = createMockSocket("vps_runner", "dashboard-main-unresolved");
@@ -1249,16 +1254,20 @@ test("DashboardChatRoom answers local Butler identity questions without reposito
     })
   );
 
-  assert.equal(runnerSocket.sent.length, 0);
+  assert.equal(runnerSocket.sent.length, 1);
+  const job = JSON.parse(runnerSocket.sent[0]);
+  assert.equal(job.text, "君は誰？");
+  assert.equal(job.repository, "");
+  assert.equal(job.repositoryResolution.ok, false);
   assert.equal(dashboardSocket.sent.length, 1);
   const broadcast = JSON.parse(dashboardSocket.sent[0]);
   assert.equal(broadcast.messages.length, 2);
   assert.equal(broadcast.messages[0].role, "owner");
-  assert.equal(broadcast.messages[1].role, "butler");
-  assert.equal(broadcast.messages[1].text.includes("私は VTDD Butler です"), true);
+  assert.equal(broadcast.messages[1].role, "system");
+  assert.equal(broadcast.messages[1].status, "thinking");
 });
 
-test("DashboardChatRoom answers local capability questions without repository handoff", async () => {
+test("DashboardChatRoom forwards capability questions to VPS runner instead of answering in the Worker", async () => {
   const store = createInMemoryDashboardChatStore();
   const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
   const runnerSocket = createMockSocket("vps_runner", "dashboard-main-unresolved");
@@ -1280,12 +1289,62 @@ test("DashboardChatRoom answers local capability questions without repository ha
     })
   );
 
-  assert.equal(runnerSocket.sent.length, 0);
+  assert.equal(runnerSocket.sent.length, 1);
+  const job = JSON.parse(runnerSocket.sent[0]);
+  assert.equal(job.text, "何ができる？");
+  assert.equal(job.repository, "");
+  assert.equal(job.repositoryResolution.ok, false);
   const broadcast = JSON.parse(dashboardSocket.sent[0]);
   assert.equal(broadcast.messages.length, 2);
   assert.equal(broadcast.messages[0].role, "owner");
-  assert.equal(broadcast.messages[1].role, "butler");
-  assert.equal(broadcast.messages[1].text.includes("自然文を次の入口に仕分けます"), true);
+  assert.equal(broadcast.messages[1].role, "system");
+  assert.equal(broadcast.messages[1].status, "thinking");
+});
+
+test("DashboardChatRoom forwards general date questions to VPS runner even when thread has repository context", async () => {
+  const store = createInMemoryDashboardChatStore();
+  await store.appendMany("dashboard-main-unresolved", [
+    {
+      role: "runner",
+      repository: "marushu/vtdd-v2-p",
+      relatedIssue: 450,
+      status: "replied",
+      text: "Issue #450 の返答です。",
+      createdAt: "2026-05-21T00:00:00.000Z"
+    }
+  ]);
+  const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
+  const runnerSocket = createMockSocket("vps_runner", "dashboard-main-unresolved");
+  const room = new DashboardChatRoom(
+    {
+      getWebSockets() {
+        return [dashboardSocket, runnerSocket];
+      }
+    },
+    { DASHBOARD_CHAT_STORE: store, MEMORY_PROVIDER: createInMemoryMemoryProvider() }
+  );
+
+  await room.webSocketMessage(
+    dashboardSocket,
+    JSON.stringify({
+      type: "owner_message",
+      threadId: "dashboard-main-unresolved",
+      text: "今日は何月何日？日本時間を答えて"
+    })
+  );
+
+  assert.equal(runnerSocket.sent.length, 1);
+  const job = JSON.parse(runnerSocket.sent[0]);
+  assert.equal(job.text, "今日は何月何日？日本時間を答えて");
+  assert.equal(job.repository, "");
+  assert.equal(job.repositoryResolution.ok, false);
+  assert.equal(dashboardSocket.sent.length, 1);
+  const broadcast = JSON.parse(dashboardSocket.sent[0]);
+  assert.equal(broadcast.messages.length, 2);
+  assert.equal(broadcast.messages[0].role, "owner");
+  assert.equal(broadcast.messages[0].text, "今日は何月何日？日本時間を答えて");
+  assert.equal(broadcast.messages[1].role, "system");
+  assert.equal(broadcast.messages[1].status, "thinking");
 });
 
 test("DashboardChatRoom uses same-thread repository context for follow-up owner messages", async () => {

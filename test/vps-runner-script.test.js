@@ -7,6 +7,7 @@ import {
   buildFreshExecutionBranchCandidates,
   buildCodexExecutionPrompt,
   buildDashboardChatTriagePrompt,
+  buildDashboardGeneralChatPrompt,
   buildDashboardRunnerWebSocketUrl,
   buildCodexExecArgs,
   buildGuardedPullRequestBody,
@@ -1735,6 +1736,24 @@ test("VPS runner dashboard chat triage prompt preserves Custom GPT parity and bl
   assert.equal(prompt.includes("ぶい の残り Issue と PR 確認して交通整理して"), true);
   assert.equal(prompt.includes("Context preflight receipt:"), true);
   assert.equal(prompt.includes("AGENTS.md sha1=abc123"), true);
+});
+
+test("VPS runner general dashboard chat prompt allows normal conversation without Issue preflight", () => {
+  const prompt = buildDashboardGeneralChatPrompt({
+    payload: {
+      conversationOnly: true,
+      handoff: {
+        ownerMessage: "今日は何月何日？日本時間を答えて",
+        dashboardThreadId: "dashboard-main"
+      }
+    }
+  });
+
+  assert.equal(prompt.includes("Owner dashboard message:"), true);
+  assert.equal(prompt.includes("今日は何月何日？日本時間を答えて"), true);
+  assert.equal(prompt.includes("Answer as a normal Butler conversation"), true);
+  assert.equal(prompt.includes("Do not require GitHub Issue preflight for general chat"), true);
+  assert.equal(prompt.includes("Do not edit files, commit, push, create PRs, merge, deploy"), true);
 });
 
 test("VPS runner builds preflight receipt from canonical repo files", async () => {

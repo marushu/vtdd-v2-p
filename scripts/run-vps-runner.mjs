@@ -716,6 +716,20 @@ async function executeVpsDashboardSocketJob({
   env = process.env
 }) {
   const payload = buildVpsDashboardSocketExecutionPayload(job);
+  if (payload.conversationOnly) {
+    const result = await runCommand("codex", buildCodexExecArgs({ env }), {
+      env: buildCodexExecutionEnv(env),
+      input: buildDashboardGeneralChatPrompt({ payload }),
+      maxBuffer: 1024 * 1024 * 12
+    });
+    const reply = summarizeDiagnosticText(result.stdout || result.stderr || "VPS Codex CLI completed dashboard chat.", 4000);
+    sendDashboardSocketReply(socket, {
+      threadId: payload.handoff.dashboardThreadId,
+      status: "completed",
+      message: reply
+    });
+    return;
+  }
   const policies = normalizeRepositoryPolicies({ repositoryPolicies });
   const policy = validateVpsRunnerPayloadPolicy(payload, policies);
   if (!policy.ok) {
@@ -769,6 +783,8 @@ function buildVpsDashboardSocketExecutionPayload(job) {
   const repository = normalizeRepository(job?.repository);
   const issueNumber = normalizePositiveInteger(job?.relatedIssue || job?.issueNumber);
   const threadId = normalizeText(job?.threadId);
+  const repositoryResolution = job?.repositoryResolution && typeof job.repositoryResolution === "object" ? job.repositoryResolution : {};
+  const conversationOnly = !repository && !issueNumber;
   return {
     executionId: `dashboard-ws-${Date.now()}-${crypto.randomUUID()}`,
     repository,
@@ -776,12 +792,42 @@ function buildVpsDashboardSocketExecutionPayload(job) {
     branch: `codex/dashboard-chat-${Date.now()}`,
     baseRef: "main",
     codexGoal: "dashboard_chat_triage",
+    conversationOnly,
+    repositoryResolution: {
+      ok: repositoryResolution.ok === true,
+      error: normalizeText(repositoryResolution.error),
+      reason: normalizeText(repositoryResolution.reason),
+      via: normalizeText(repositoryResolution.via)
+    },
     handoff: {
       ownerMessage: normalizeText(job?.text),
       repositoryInput: normalizeText(job?.repositoryInput) || repository,
       dashboardThreadId: threadId
     }
   };
+}
+
+function buildDashboardGeneralChatPrompt({ payload }) {
+  const handoff = payload?.handoff && typeof payload.handoff === "object" ? payload.handoff : {};
+  const ownerMessage = normalizeText(handoff.ownerMessage);
+  return [
+    "You are VTDD Butler running on the user's VPS Codex CLI.",
+    "",
+    "Owner dashboard message:",
+    ownerMessage || "(missing dashboard owner message)",
+    "",
+    "Dashboard routing:",
+    "- This message did not resolve to a repository/Issue execution target.",
+    "- Answer as a normal Butler conversation. Do not require GitHub Issue preflight for general chat.",
+    "- If the owner is asking for repository work, explain in Japanese that repo/nickname or owner/repo is needed, and give one short example.",
+    "- If the owner is asking a general question, answer directly in Japanese.",
+    "- Do not edit files, commit, push, create PRs, merge, deploy, mutate secrets, mutate permissions, or close Issues.",
+    "",
+    "Reply format:",
+    "- Japanese first.",
+    "- Be concise.",
+    "- Do not mention internal JSON, WebSocket, preflight, or queue unless it is the actual answer."
+  ].join("\n");
 }
 
 function sendDashboardSocketReply(socket, reply) {
@@ -2947,6 +2993,7 @@ export {
   buildVpsRunnerCompletionFinalEvent,
   buildCodexExecutionPrompt,
   buildDashboardChatTriagePrompt,
+  buildDashboardGeneralChatPrompt,
   buildDashboardRunnerWebSocketUrl,
   buildCodexExecArgs,
   buildVpsRunnerPreflightReceipt,
