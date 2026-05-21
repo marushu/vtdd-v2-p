@@ -1100,6 +1100,80 @@ test("DashboardChatRoom pushes owner messages to a runner socket in the same thr
   assert.equal(broadcast.messages[1].status, "thinking");
 });
 
+test("DashboardChatRoom resolves repository nicknames before pushing unresolved-thread owner messages", async () => {
+  const provider = createInMemoryMemoryProvider();
+  await provider.store({
+    id: "alias_registry:marushu/vtdd-v2-p",
+    type: MemoryRecordType.ALIAS_REGISTRY,
+    content: {
+      canonicalRepo: "marushu/vtdd-v2-p",
+      aliases: ["ぶい", "vtdd"]
+    },
+    metadata: { source: "test" },
+    priority: 60,
+    tags: ["alias_registry", "marushu/vtdd-v2-p"],
+    createdAt: "2026-05-20T00:00:00.000Z"
+  });
+  const store = createInMemoryDashboardChatStore();
+  const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
+  const runnerSocket = createMockSocket("vps_runner", "dashboard-main-unresolved");
+  const room = new DashboardChatRoom(
+    {
+      getWebSockets() {
+        return [dashboardSocket, runnerSocket];
+      }
+    },
+    { DASHBOARD_CHAT_STORE: store, MEMORY_PROVIDER: provider }
+  );
+
+  await room.webSocketMessage(
+    dashboardSocket,
+    JSON.stringify({
+      type: "owner_message",
+      threadId: "dashboard-main-unresolved",
+      text: "ぶい #450 の残りを短く返して"
+    })
+  );
+
+  assert.equal(runnerSocket.sent.length, 1);
+  const job = JSON.parse(runnerSocket.sent[0]);
+  assert.equal(job.threadId, "dashboard-main-unresolved");
+  assert.equal(job.repository, "marushu/vtdd-v2-p");
+  assert.equal(job.repositoryInput, "ぶい");
+  assert.equal(job.relatedIssue, 450);
+});
+
+test("DashboardChatRoom blocks unresolved repository owner messages before VPS handoff", async () => {
+  const store = createInMemoryDashboardChatStore();
+  const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
+  const runnerSocket = createMockSocket("vps_runner", "dashboard-main-unresolved");
+  const room = new DashboardChatRoom(
+    {
+      getWebSockets() {
+        return [dashboardSocket, runnerSocket];
+      }
+    },
+    { DASHBOARD_CHAT_STORE: store, MEMORY_PROVIDER: createInMemoryMemoryProvider() }
+  );
+
+  await room.webSocketMessage(
+    dashboardSocket,
+    JSON.stringify({
+      type: "owner_message",
+      threadId: "dashboard-main-unresolved",
+      text: "VPS Codex CLI 疎通テスト。今の #450 の残りを短く返して。"
+    })
+  );
+
+  assert.equal(runnerSocket.sent.length, 0);
+  assert.equal(dashboardSocket.sent.length, 1);
+  const broadcast = JSON.parse(dashboardSocket.sent[0]);
+  assert.equal(broadcast.messages.length, 1);
+  assert.equal(broadcast.messages[0].status, "failed");
+  assert.equal(broadcast.messages[0].text.includes("対象 repository"), true);
+  assert.equal(broadcast.messages[0].relatedIssue, 450);
+});
+
 test("DashboardChatRoom broadcasts VPS runner replies to dashboard sockets in the same thread room", async () => {
   const store = createInMemoryDashboardChatStore();
   const dashboardSocket = createMockSocket("dashboard", "dashboard-main-marushu-vtdd-v2-p");

@@ -215,9 +215,32 @@ export class DashboardChatRoom {
       }
       return;
     }
-    const repository = normalizeCanonicalRepositoryInput(payload?.repository || payload?.repositoryInput);
-    const relatedIssue = normalizePositiveInteger(payload?.relatedIssue || payload?.issueNumber);
+    const repositoryResolution = await resolveDashboardChatRepository({
+      payload: { ...normalizeObject(payload), text },
+      env: this.env
+    });
+    const repository = repositoryResolution.ok ? repositoryResolution.repository : "";
+    const relatedIssue =
+      normalizePositiveInteger(payload?.relatedIssue || payload?.issueNumber) || extractIssueNumberFromDashboardChatText(text);
     const now = new Date().toISOString();
+    if (!repositoryResolution.ok) {
+      const failedMessage = normalizeDashboardChatMessage(
+        {
+          threadId,
+          role: "system",
+          repository,
+          relatedIssue,
+          status: "failed",
+          text: repositoryResolution.reason,
+          createdAt: now
+        },
+        { threadId }
+      );
+      const store = resolveDashboardChatStore(this.env);
+      const messages = store ? await store.appendMany(threadId, [failedMessage]) : [failedMessage].filter(Boolean);
+      await this.broadcastThread({ threadId, messages });
+      return;
+    }
     const ownerMessage = normalizeDashboardChatMessage(
       {
         threadId,
@@ -249,6 +272,7 @@ export class DashboardChatRoom {
       type: "dashboard_chat_job",
       threadId,
       repository,
+      repositoryInput: repositoryResolution.input || payload?.repositoryInput || payload?.repository,
       relatedIssue,
       text,
       codexGoal: normalizeDashboardEventText(payload?.codexGoal || "dashboard_chat_triage"),
@@ -304,6 +328,7 @@ export class DashboardChatRoom {
       jobId: normalizeDashboardEventText(payload?.jobId) || crypto.randomUUID(),
       threadId: normalizeDashboardThreadId(payload?.threadId || payload?.thread_id),
       repository: normalizeCanonicalRepositoryInput(payload?.repository),
+      repositoryInput: normalizeDashboardEventText(payload?.repositoryInput || payload?.repository_input),
       relatedIssue: normalizePositiveInteger(payload?.relatedIssue || payload?.issueNumber),
       text: sanitizeDashboardChatText(payload?.text || payload?.message || payload?.body),
       codexGoal: normalizeDashboardEventText(payload?.codexGoal || "dashboard_chat_triage"),
