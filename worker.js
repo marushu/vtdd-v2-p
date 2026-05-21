@@ -55991,68 +55991,11 @@ var DashboardChatRoom = class {
       await this.broadcastThread({ threadId: nicknameListTurn.threadId, messages: messages2 });
       return;
     }
-    const localReply = buildDashboardLocalButlerReply(text);
-    if (localReply) {
-      const ownerMessage2 = normalizeDashboardChatMessage(
-        {
-          threadId,
-          role: "owner",
-          relatedIssue,
-          status: "sent",
-          text,
-          createdAt: now
-        },
-        { threadId }
-      );
-      const butlerMessage = normalizeDashboardChatMessage(
-        {
-          threadId,
-          role: "butler",
-          relatedIssue,
-          status: "replied",
-          text: localReply,
-          createdAt: new Date(Date.parse(now) + 1).toISOString()
-        },
-        { threadId }
-      );
-      const messages2 = store ? await store.appendMany(threadId, [ownerMessage2, butlerMessage]) : [ownerMessage2, butlerMessage].filter(Boolean);
-      await this.broadcastThread({ threadId, messages: messages2 });
-      return;
-    }
     const repositoryResolution = await resolveDashboardChatRepository({
       payload: { ...normalizeObject11(payload), text, threadId },
       env: this.env
     });
     const repository = repositoryResolution.ok ? repositoryResolution.repository : "";
-    if (!repositoryResolution.ok) {
-      const ownerMessage2 = normalizeDashboardChatMessage(
-        {
-          threadId,
-          role: "owner",
-          repository,
-          relatedIssue,
-          status: "sent",
-          text,
-          createdAt: now
-        },
-        { threadId }
-      );
-      const failedMessage = normalizeDashboardChatMessage(
-        {
-          threadId,
-          role: "system",
-          repository,
-          relatedIssue,
-          status: "failed",
-          text: repositoryResolution.reason,
-          createdAt: now
-        },
-        { threadId }
-      );
-      const messages2 = store ? await store.appendMany(threadId, [ownerMessage2, failedMessage]) : [ownerMessage2, failedMessage].filter(Boolean);
-      await this.broadcastThread({ threadId, messages: messages2 });
-      return;
-    }
     const ownerMessage = normalizeDashboardChatMessage(
       {
         threadId,
@@ -56084,6 +56027,7 @@ var DashboardChatRoom = class {
       threadId,
       repository,
       repositoryInput: repositoryResolution.input || payload?.repositoryInput || payload?.repository,
+      repositoryResolution,
       relatedIssue,
       text,
       codexGoal: normalizeDashboardEventText(payload?.codexGoal || "dashboard_chat_triage"),
@@ -56138,6 +56082,7 @@ var DashboardChatRoom = class {
       threadId: normalizeDashboardThreadId(payload?.threadId || payload?.thread_id),
       repository: normalizeCanonicalRepositoryInput(payload?.repository),
       repositoryInput: normalizeDashboardEventText(payload?.repositoryInput || payload?.repository_input),
+      repositoryResolution: normalizeObject11(payload?.repositoryResolution || payload?.repository_resolution),
       relatedIssue: normalizePositiveInteger9(payload?.relatedIssue || payload?.issueNumber),
       text: sanitizeDashboardChatText(payload?.text || payload?.message || payload?.body),
       codexGoal: normalizeDashboardEventText(payload?.codexGoal || "dashboard_chat_triage"),
@@ -60537,7 +60482,8 @@ function resolveDashboardChatRoomStub(env, threadId) {
 }
 async function resolveDashboardChatRepository({ payload, env }) {
   const input = normalizeObject11(payload);
-  const rawRepositoryInput = normalizeDashboardEventText(input.repository || input.repositoryInput || input.repository_input) || extractRepositoryTokenFromDashboardChatText(input.text || input.message || input.body);
+  const text = input.text || input.message || input.body;
+  const rawRepositoryInput = normalizeDashboardEventText(input.repository || input.repositoryInput || input.repository_input) || extractRepositoryTokenFromDashboardChatText(text);
   const canonicalRepository = normalizeCanonicalRepositoryInput(rawRepositoryInput);
   if (canonicalRepository) {
     return {
@@ -60548,17 +60494,19 @@ async function resolveDashboardChatRepository({ payload, env }) {
     };
   }
   if (!rawRepositoryInput) {
-    const threadContextRepository = await resolveDashboardThreadContextRepository({
-      threadId: input.threadId || input.thread_id,
-      env
-    });
-    if (threadContextRepository) {
-      return {
-        ok: true,
-        repository: threadContextRepository,
-        input: threadContextRepository,
-        via: "thread_context"
-      };
+    if (shouldUseDashboardThreadRepositoryContext(text)) {
+      const threadContextRepository = await resolveDashboardThreadContextRepository({
+        threadId: input.threadId || input.thread_id,
+        env
+      });
+      if (threadContextRepository) {
+        return {
+          ok: true,
+          repository: threadContextRepository,
+          input: threadContextRepository,
+          via: "thread_context"
+        };
+      }
     }
     return {
       ok: false,
@@ -60610,29 +60558,17 @@ async function resolveDashboardThreadContextRepository({ threadId, env } = {}) {
     return "";
   }
 }
-function buildDashboardLocalButlerReply(value) {
+function shouldUseDashboardThreadRepositoryContext(value) {
   const text = sanitizeDashboardChatText(value);
   if (!text) {
-    return "";
+    return false;
   }
-  if (/(君|あなた|お前|butler|Butler|VTDD).{0,8}(誰|だれ|何者)|^(誰|だれ)ですか|who are you/i.test(text)) {
-    return [
-      "\u79C1\u306F VTDD Butler \u3067\u3059\u3002",
-      "iPhone / iPad \u304B\u3089\u306E\u81EA\u7136\u6587\u3092\u53D7\u3051\u53D6\u308A\u3001repo/nickname\u3001Issue\u3001PR\u3001RAG\u3001VPS Codex CLI\u3001\u627F\u8A8D\u5883\u754C\u3092\u4EA4\u901A\u6574\u7406\u3057\u307E\u3059\u3002",
-      "\u5B9F\u88C5\u3084\u8ABF\u67FB\u304C\u5FC5\u8981\u306A\u4F9D\u983C\u306F\u3001\u5BFE\u8C61 repo \u3092\u89E3\u6C7A\u3057\u3066\u304B\u3089 VPS Codex CLI \u306B\u6E21\u3057\u307E\u3059\u3002\u4F8B: `\u3076\u3044\u306E\u6B8B\u308A\u30BF\u30B9\u30AF\u3092\u78BA\u8A8D\u3057\u3066`\u3002"
-    ].join("\n");
+  if (/#\d+\b/.test(text)) {
+    return true;
   }
-  if (/(何ができる|なにができる|使い方|ヘルプ|help|カスタムGPT.*できること|できること)/i.test(text)) {
-    return [
-      "\u3053\u306E dashboard Butler \u3067\u306F\u3001\u81EA\u7136\u6587\u3092\u6B21\u306E\u5165\u53E3\u306B\u4ED5\u5206\u3051\u307E\u3059\u3002",
-      "- repo/nickname \u4ED8\u304D\u306E\u4F5C\u696D\u4F9D\u983C: VPS Codex CLI \u306B push \u3057\u307E\u3059\u3002",
-      "- `\u767B\u9332\u6E08\u307F\u306E\u30CB\u30C3\u30AF\u30CD\u30FC\u30E0\u51FA\u3057\u3066`: \u767B\u9332\u6E08\u307F alias \u3092\u8868\u793A\u3057\u307E\u3059\u3002",
-      "- `\u541B\u306F\u8AB0\uFF1F` / `\u4F55\u304C\u3067\u304D\u308B\uFF1F`: \u3053\u306E\u753B\u9762\u3067\u76F4\u63A5\u7B54\u3048\u307E\u3059\u3002",
-      "- \u540C\u3058 thread \u306B repo \u6587\u8108\u304C\u6B8B\u3063\u3066\u3044\u308B\u5834\u5408: `\u9032\u6357\u306F\uFF1F` \u306E\u3088\u3046\u306A\u7D9A\u304D\u306E\u4F9D\u983C\u3082\u305D\u306E repo \u6587\u8108\u3067\u6271\u3044\u307E\u3059\u3002",
-      "\u9AD8\u30EA\u30B9\u30AF\u64CD\u4F5C\u3001deploy\u3001credential\u3001merge\u3001Issue close \u306F passkey / GO \u5883\u754C\u3092\u8D8A\u3048\u306A\u3044\u9650\u308A\u5B9F\u884C\u3057\u307E\u305B\u3093\u3002"
-    ].join("\n");
-  }
-  return "";
+  return /(\bissue\b|\bissues\b|\bpr\b|\bpull request\b|\bactions?\b|\bci\b|\brag\b|\bvps\b|\bcodex\b|\brunner\b|Issue|PR|残り|タスク|進捗|状況|確認|見て|調べて|レビュー|指摘|マージ|merge|デプロイ|deploy|実装|修正|直して|壊れ|バグ|エラー|失敗|ブロッカー|close|クローズ|返信|保存|検索|thread|スレッド)/i.test(
+    text
+  );
 }
 async function notifyDashboardChatRoom({ env, threadId, messages }) {
   const room = resolveDashboardChatRoomStub(env, threadId);
