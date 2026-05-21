@@ -901,7 +901,7 @@ function buildDashboardChatTriagePrompt({ payload, issue = {}, preflight = null 
   ].join("\n");
 }
 
-function buildVpsDashboardReadOnlyBridgeGuide() {
+function buildVpsDashboardActionReadBridgeGuide() {
   return [
     "Runtime read-only bridge:",
     "- You may call read-only VTDD runtime routes from this VPS Codex CLI when the owner asks for VTDD status, memory, repository, or setup facts.",
@@ -928,7 +928,7 @@ function buildVpsDashboardReadOnlyBridgeGuide() {
 
 function buildVpsDashboardActionBridgeGuide() {
   return [
-    buildVpsDashboardReadOnlyBridgeGuide(),
+    buildVpsDashboardActionReadBridgeGuide(),
     "",
     "Runtime write/action bridge for Issue-backed bounded VTDD work:",
     "- Use these only after the owner request is tied to a repository/Issue or an explicit bounded runtime action.",
@@ -945,7 +945,10 @@ function buildVpsDashboardActionBridgeGuide() {
     "- vtddVpsRunnerStatus: GET /v2/action/vps-runner-status",
     "- vtddVpsRunnerCancel: POST /v2/action/vps-runner-cancel",
     "",
-    "High-risk operations require scoped passkey approval exactly as the runtime requires. GO alone does not authorize deploy, credential mutation, permission mutation, repository administration, merge, destructive cleanup, or Issue close.",
+    "High-risk operation guidance:",
+    "- Do not call high-risk routes from dashboard chat just because they are listed here.",
+    "- When the owner asks for deploy, credential mutation, permission mutation, repository administration, merge, destructive cleanup, or Issue close, return approval_needed with the required scoped passkey boundary.",
+    "- If a scoped approval grant is missing or mismatched, runtime routes must reject the request. GO alone does not authorize deploy, credential mutation, permission mutation, repository administration, merge, destructive cleanup, or Issue close.",
     "- vtddGitHubAuthority: POST /v2/action/github-authority",
     "- vtddDeployProduction: POST /v2/action/deploy",
     "- vtddSyncGitHubActionsSecret: POST /v2/action/github-actions-secret",
@@ -3052,7 +3055,7 @@ export {
   buildDashboardChatTriagePrompt,
   buildDashboardGeneralChatPrompt,
   buildVpsDashboardActionBridgeGuide,
-  buildVpsDashboardReadOnlyBridgeGuide,
+  buildVpsDashboardActionReadBridgeGuide,
   buildDashboardRunnerWebSocketUrl,
   buildCodexExecArgs,
   buildCodexExecutionEnv,

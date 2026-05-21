@@ -9,7 +9,7 @@ import {
   buildDashboardChatTriagePrompt,
   buildDashboardGeneralChatPrompt,
   buildVpsDashboardActionBridgeGuide,
-  buildVpsDashboardReadOnlyBridgeGuide,
+  buildVpsDashboardActionReadBridgeGuide,
   buildDashboardRunnerWebSocketUrl,
   buildCodexExecArgs,
   buildCodexExecutionEnv,
@@ -1778,12 +1778,14 @@ test("VPS runner dashboard action bridge exposes Action Schema operations withou
   assert.equal(guide.includes("vtddGateway: POST /v2/gateway"), true);
   assert.equal(guide.includes("vtddGitHubAuthority: POST /v2/action/github-authority"), true);
   assert.equal(guide.includes("vtddSyncGitHubActionsSecret: POST /v2/action/github-actions-secret"), true);
-  assert.equal(guide.includes("High-risk operations require scoped passkey approval exactly"), true);
+  assert.equal(guide.includes("High-risk operation guidance:"), true);
+  assert.equal(guide.includes("Do not call high-risk routes from dashboard chat just because they are listed here."), true);
+  assert.equal(guide.includes("return approval_needed with the required scoped passkey boundary"), true);
   assert.equal(guide.includes("GO alone does not authorize deploy"), true);
 });
 
-test("VPS runner read-only dashboard bridge excludes write and high-risk operations", () => {
-  const guide = buildVpsDashboardReadOnlyBridgeGuide();
+test("VPS runner action read bridge excludes sensitive and high-risk retrieval operations", () => {
+  const guide = buildVpsDashboardActionReadBridgeGuide();
 
   assert.equal(guide.includes("Runtime read-only bridge:"), true);
   assert.equal(guide.includes("vtddRetrieveGitHub: GET /v2/retrieve/github"), true);
