@@ -1761,8 +1761,8 @@ test("VPS runner general dashboard chat prompt allows normal conversation withou
   assert.equal(prompt.includes("今日は何月何日？日本時間を答えて"), true);
   assert.equal(prompt.includes("Answer as a normal Butler conversation"), true);
   assert.equal(prompt.includes("Do not require GitHub Issue preflight for general chat"), true);
-  assert.equal(prompt.includes("Runtime read-only bridge:"), true);
-  assert.equal(prompt.includes("vtddRetrieveRepositoryNicknames: GET /v2/retrieve/repository-nicknames"), true);
+  assert.equal(prompt.includes("Runtime read-only bridge:"), false);
+  assert.equal(prompt.includes("vtddRetrieveRepositoryNicknames: GET /v2/retrieve/repository-nicknames"), false);
   assert.equal(prompt.includes("vtddWriteOperationalMemory: POST /v2/action/memory-write"), false);
   assert.equal(prompt.includes("vtddDeployProduction: POST /v2/action/deploy"), false);
   assert.equal(prompt.includes("Do not edit files, commit, push, create PRs, merge, deploy"), true);
@@ -1787,23 +1787,29 @@ test("VPS runner read-only dashboard bridge excludes write and high-risk operati
 
   assert.equal(guide.includes("Runtime read-only bridge:"), true);
   assert.equal(guide.includes("vtddRetrieveGitHub: GET /v2/retrieve/github"), true);
+  assert.equal(guide.includes("vtddRetrieveApprovalGrant: GET /v2/retrieve/approval-grant"), false);
+  assert.equal(guide.includes("vtddRetrieveSetupDiagnostics: GET /v2/retrieve/setup-diagnostics"), false);
+  assert.equal(guide.includes("vtddRetrieveSetupArtifact: GET /v2/retrieve/setup-artifact"), false);
   assert.equal(guide.includes("vtddWriteGitHub: POST /v2/action/github"), false);
   assert.equal(guide.includes("vtddDeployProduction: POST /v2/action/deploy"), false);
-  assert.equal(guide.includes("Do not treat archived setup-wizard behavior as active runtime scope"), true);
 });
 
-test("VPS runner Codex execution env exposes runtime action bridge credentials to the CLI process", () => {
-  const env = buildCodexExecutionEnv({
+test("VPS runner Codex execution env keeps runtime bridge credentials scoped opt-in", () => {
+  const source = {
     HOME: "/tmp/home",
     PATH: "/usr/bin",
     VTDD_RUNTIME_URL: "https://vtdd-v2-mvp.example.workers.dev",
     VTDD_GATEWAY_BEARER_TOKEN: "gateway-token-for-test",
     SECRET_NOT_ALLOWED: "do-not-copy"
-  });
+  };
+  const defaultEnv = buildCodexExecutionEnv(source);
+  const bridgeEnv = buildCodexExecutionEnv(source, { includeRuntimeBridge: true });
 
-  assert.equal(env.VTDD_RUNTIME_URL, "https://vtdd-v2-mvp.example.workers.dev");
-  assert.equal(env.VTDD_GATEWAY_BEARER_TOKEN, "gateway-token-for-test");
-  assert.equal(env.SECRET_NOT_ALLOWED, undefined);
+  assert.equal(defaultEnv.VTDD_RUNTIME_URL, undefined);
+  assert.equal(defaultEnv.VTDD_GATEWAY_BEARER_TOKEN, undefined);
+  assert.equal(bridgeEnv.VTDD_RUNTIME_URL, "https://vtdd-v2-mvp.example.workers.dev");
+  assert.equal(bridgeEnv.VTDD_GATEWAY_BEARER_TOKEN, "gateway-token-for-test");
+  assert.equal(bridgeEnv.SECRET_NOT_ALLOWED, undefined);
 });
 
 test("VPS runner builds preflight receipt from canonical repo files", async () => {

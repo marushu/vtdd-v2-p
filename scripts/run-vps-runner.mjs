@@ -576,7 +576,7 @@ async function executeVpsDashboardChatTriage({ githubFetch, payload, notificatio
   const prompt = buildDashboardChatTriagePrompt({ payload, issue, preflight });
   const result = await runTrackedVpsCommand("codex", buildCodexExecArgs({ env: process.env }), {
     cwd: workspace,
-    env: buildCodexExecutionEnv(process.env),
+    env: buildCodexExecutionEnv(process.env, { includeRuntimeBridge: true }),
     input: prompt,
     maxBuffer: 1024 * 1024 * 12,
     githubFetch,
@@ -765,7 +765,7 @@ async function executeVpsDashboardSocketJob({
   }
   const result = await runCommand("codex", buildCodexExecArgs({ env }), {
     cwd: workspace,
-    env: buildCodexExecutionEnv(env),
+    env: buildCodexExecutionEnv(env, { includeRuntimeBridge: true }),
     input: buildDashboardChatTriagePrompt({ payload, issue, preflight }),
     maxBuffer: 1024 * 1024 * 12
   });
@@ -822,9 +822,6 @@ function buildDashboardGeneralChatPrompt({ payload }) {
     "- If the owner is asking for repository work, explain in Japanese that repo/nickname or owner/repo is needed, and give one short example.",
     "- If the owner is asking a general question, answer directly in Japanese.",
     "- Do not edit files, commit, push, create PRs, merge, deploy, mutate secrets, mutate permissions, or close Issues.",
-    "",
-    buildVpsDashboardReadOnlyBridgeGuide(),
-    "",
     "Reply format:",
     "- Japanese first.",
     "- Be concise.",
@@ -920,15 +917,11 @@ function buildVpsDashboardReadOnlyBridgeGuide() {
     "- vtddRetrieveCrossMemory: GET /v2/retrieve/cross",
     "- vtddStartupPreflight: GET /v2/retrieve/startup-preflight",
     "- vtddRetrieveSelfParity: GET /v2/retrieve/self-parity",
-    "- vtddRetrieveSetupDiagnostics: GET /v2/retrieve/setup-diagnostics",
-    "- vtddRetrieveSetupArtifact: GET /v2/retrieve/setup-artifact",
     "- vtddRetrieveConstitution: GET /v2/retrieve/constitution",
     "- vtddRetrieveDecisionLogs: GET /v2/retrieve/decisions",
     "- vtddRetrieveProposalLogs: GET /v2/retrieve/proposals",
     "- vtddRetrieveCloudflarePages: GET /v2/retrieve/cloudflare-pages",
-    "- vtddRetrieveApprovalGrant: GET /v2/retrieve/approval-grant",
     "",
-    "Setup retrieval routes are read-only recovery/diagnostic surfaces. Do not treat archived setup-wizard behavior as active runtime scope.",
     "Do not call write/action/high-risk routes from general chat unless the owner has moved into an Issue-backed bounded action and the runtime approval boundary is satisfied."
   ].join("\n");
 }
@@ -2937,7 +2930,7 @@ function buildRunnerCommandEnv({ token }) {
   };
 }
 
-function buildCodexExecutionEnv(env) {
+function buildCodexExecutionEnv(env, { includeRuntimeBridge = false } = {}) {
   const allowedNames = [
     "CI",
     "CODEX_HOME",
@@ -2947,11 +2940,12 @@ function buildCodexExecutionEnv(env) {
     "PATH",
     "RUNNER_TEMP",
     "TMPDIR",
-    "VTDD_GATEWAY_BEARER_TOKEN",
-    "VTDD_RUNTIME_URL",
     "XDG_CACHE_HOME",
     "XDG_CONFIG_HOME"
   ];
+  if (includeRuntimeBridge) {
+    allowedNames.push("VTDD_GATEWAY_BEARER_TOKEN", "VTDD_RUNTIME_URL");
+  }
   return Object.fromEntries(
     allowedNames
       .map((name) => [name, env[name]])
