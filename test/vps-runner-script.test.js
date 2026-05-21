@@ -8,6 +8,7 @@ import {
   buildCodexExecutionPrompt,
   buildDashboardChatTriagePrompt,
   buildDashboardGeneralChatPrompt,
+  buildVpsDashboardSocketExecutionPayload,
   buildVpsDashboardActionBridgeGuide,
   buildVpsDashboardActionReadBridgeGuide,
   buildDashboardRunnerWebSocketUrl,
@@ -35,6 +36,7 @@ import {
   postVpsRunnerEvent,
   runVpsRunnerOnce,
   resolveRoleGitHubAppInstallationToken,
+  summarizeDashboardReplyText,
   summarizeDiagnosticText,
   selectPendingVpsReviewerFallbacks,
   selectPendingVpsRunnerExecutions
@@ -694,6 +696,21 @@ test("VPS runner dashboard WebSocket client reconnects after disconnect", async 
   assert.equal(sockets[1].protocols[0], "vtdd-vps-runner");
 });
 
+test("VPS runner treats unresolved dashboard issue-only jobs as conversation", () => {
+  const payload = buildVpsDashboardSocketExecutionPayload({
+    type: "dashboard_chat_job",
+    threadId: "dashboard-main-unresolved",
+    repository: "",
+    repositoryResolution: { ok: false, error: "repository_required" },
+    relatedIssue: 450,
+    text: "今の #450 の残りを短く返して"
+  });
+
+  assert.equal(payload.repository, "");
+  assert.equal(payload.issueNumber, 450);
+  assert.equal(payload.conversationOnly, true);
+});
+
 test("VPS runner milestone event mentions queue comment author", () => {
   const body = buildVpsRunnerEventComment({
     executionId: "exec-mention",
@@ -1105,6 +1122,28 @@ test("VPS runner diagnostic summaries redact secrets and stay short", () => {
   assert.equal(summary.includes("[REDACTED_API_KEY]"), true);
   assert.equal(summary.endsWith("[truncated]"), true);
   assert.equal(summary.length <= 192, true);
+});
+
+test("VPS runner dashboard replies preserve readable line breaks", () => {
+  const summary = summarizeDashboardReplyText(
+    [
+      "分類: `answer / existing_issue_link`",
+      "",
+      "#450 の残りはこれだけです。",
+      "",
+      "- #450 はまだ OPEN",
+      "- open PR は 0 件",
+      "",
+      "残り作業:",
+      "1. dashboard live E2E",
+      "2. 証跡を残す"
+    ].join("\n"),
+    4000
+  );
+
+  assert.equal(summary.includes("\n\n- #450 はまだ OPEN\n- open PR は 0 件"), true);
+  assert.equal(summary.includes("OPEN - open PR"), false);
+  assert.equal(summary.includes("\n1. dashboard live E2E\n2. 証跡を残す"), true);
 });
 
 test("VPS runner dry run reports selected execution without side effects", async () => {
