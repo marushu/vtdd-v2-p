@@ -157,8 +157,15 @@ export class DashboardChatRoom {
       await this.sendThread(server, threadId);
     }
 
+    const responseHeaders = new Headers();
+    const responseProtocol = selectDashboardWebSocketResponseProtocol(request.headers.get("sec-websocket-protocol"));
+    if (responseProtocol) {
+      responseHeaders.set("sec-websocket-protocol", responseProtocol);
+    }
+
     return new Response(null, {
       status: 101,
+      headers: responseHeaders,
       webSocket: client
     });
   }
@@ -3644,6 +3651,14 @@ async function handleDashboardChatSocketRequest(request, url, env) {
     });
   }
   return room.fetch(request);
+}
+
+export function selectDashboardWebSocketResponseProtocol(value) {
+  const protocols = normalizeText(value)
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return protocols.includes("vtdd-vps-runner") ? "vtdd-vps-runner" : "";
 }
 
 async function handleDashboardVpsRunnerSocketRequest(request, env) {
