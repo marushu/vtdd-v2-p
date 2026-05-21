@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import worker from "../src/worker.js";
-import { DashboardChatRoom } from "../src/worker.js";
+import { DashboardChatRoom, selectDashboardWebSocketResponseProtocol } from "../src/worker.js";
 import {
   ActionType,
   ActorRole,
@@ -1049,6 +1049,15 @@ test("worker exposes machine-authenticated VPS runner WebSocket push channel", a
   assert.equal(missingThread.status, 422);
   const missingBody = await missingThread.json();
   assert.equal(missingBody.error, "thread_id_required");
+});
+
+test("DashboardChatRoom selects VPS runner WebSocket subprotocol without echoing bearer token", () => {
+  const selected = selectDashboardWebSocketResponseProtocol(
+    "vtdd-vps-runner, vtdd-gateway-bearer-redacted-test-token"
+  );
+
+  assert.equal(selected, "vtdd-vps-runner");
+  assert.equal(selected.includes("bearer"), false);
 });
 
 test("DashboardChatRoom pushes owner messages to a runner socket in the same thread room", async () => {
