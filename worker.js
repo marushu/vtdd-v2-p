@@ -62947,8 +62947,12 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .chat-scroll { min-height: 0; overflow: auto; padding: 8px 4px 28px; scroll-padding-bottom: 28px; display: flex; flex-direction: column; gap: 22px; scrollbar-width: thin; }
     .bubble { max-width: min(760px, 88%); color: var(--text); font-size: 17px; line-height: 1.72; }
     .bubble, .bubble p, .bubble li { overflow-wrap: anywhere; }
+    .bubble-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
     .bubble strong { display: block; color: var(--muted); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 8px; }
+    .bubble-header strong { margin-bottom: 0; }
     .bubble p { color: var(--text); margin-bottom: 12px; white-space: pre-wrap; }
+    .copy-message { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border: 1px solid var(--border); border-radius: 999px; background: var(--button); color: var(--text); font-size: 15px; line-height: 1; cursor: pointer; }
+    .copy-message:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
     .bubble ul { margin: 0; padding-left: 22px; color: var(--text); line-height: 1.85; }
     .bubble.owner { align-self: flex-end; background: var(--owner-bubble); color: var(--owner-text); border-radius: 24px; padding: 12px 16px; }
     .bubble.owner p { color: var(--owner-text); margin: 0; }
@@ -63172,6 +63176,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       let reconnectTimer = null;
       let reconnectAttempt = 0;
       let refreshingThread = false;
+      const messagesById = new Map();
 
       function updateComposerReserve() {
         log.style.setProperty("--composer-reserve", Math.ceil(form.getBoundingClientRect().height) + "px");
@@ -63193,9 +63198,20 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         const article = document.createElement("article");
         article.className = message.role === "owner" ? "bubble owner" : "bubble";
         if (message.role !== "owner") {
+          const header = document.createElement("div");
+          header.className = "bubble-header";
           const strong = document.createElement("strong");
           strong.textContent = message.role === "runner" ? "VPS Codex CLI" : message.role === "system" ? "SYSTEM" : "Butler";
-          article.appendChild(strong);
+          header.appendChild(strong);
+          const copyButton = document.createElement("button");
+          copyButton.className = "copy-message";
+          copyButton.type = "button";
+          copyButton.textContent = "\u29C9";
+          copyButton.setAttribute("aria-label", "\u8FD4\u4FE1\u3092\u30B3\u30D4\u30FC");
+          copyButton.title = "\u8FD4\u4FE1\u3092\u30B3\u30D4\u30FC";
+          copyButton.addEventListener("click", () => copyMessageText(copyButton, message.text || ""));
+          header.appendChild(copyButton);
+          article.appendChild(header);
         }
         const paragraph = document.createElement("p");
         renderMessageText(paragraph, message.text || "\uFF08\u7A7A\u306E\u30E1\u30C3\u30BB\u30FC\u30B8\uFF09");
@@ -63227,18 +63243,65 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         }
       }
 
+      async function copyMessageText(button, text) {
+        const source = String(text || "");
+        try {
+          if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(source);
+          } else {
+            const copySource = document.createElement("textarea");
+            copySource.value = source;
+            copySource.setAttribute("readonly", "");
+            copySource.style.position = "fixed";
+            copySource.style.left = "-9999px";
+            document.body.appendChild(copySource);
+            copySource.select();
+            document.execCommand("copy");
+            copySource.remove();
+          }
+          const previous = button.textContent;
+          button.textContent = "\u2713";
+          window.setTimeout(() => {
+            button.textContent = previous;
+          }, 1200);
+        } catch {
+          setStatus("\u30B3\u30D4\u30FC\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u9577\u62BC\u3057\u3067\u672C\u6587\u3092\u9078\u629E\u3057\u3066\u304F\u3060\u3055\u3044\u3002");
+        }
+      }
+
       function appendError(text) {
         appendMessage({ role: "butler", text });
       }
 
-      function renderThread(messages) {
+      function messageKey(message) {
+        if (message && message.messageId) return String(message.messageId);
+        return [
+          message?.role || "system",
+          message?.status || "sent",
+          message?.createdAt || "",
+          message?.repository || "",
+          message?.relatedIssue || "",
+          message?.text || ""
+        ].join("\\u001f");
+      }
+
+      function renderThread(messages, options = {}) {
+        const replace = options.replace === true;
+        if (replace) {
+          messagesById.clear();
+        }
         if (!Array.isArray(messages) || messages.length === 0) {
-          log.innerHTML = initialMarkup;
+          if (replace || messagesById.size === 0) {
+            log.innerHTML = initialMarkup;
+          }
           scrollToLatest();
           return;
         }
-        log.replaceChildren();
         for (const message of messages) {
+          messagesById.set(messageKey(message), message);
+        }
+        log.replaceChildren();
+        for (const message of messagesById.values()) {
           appendMessage(message);
         }
         scrollToLatest();
@@ -63258,7 +63321,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           }
           const body = await response.json();
           if (body && body.ok) {
-            renderThread(body.messages || []);
+            renderThread(body.messages || [], { replace: true });
           }
         } catch {
           setStatus("\u5C65\u6B74\u306E\u518D\u53D6\u5F97\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002WebSocket \u3092\u518D\u63A5\u7D9A\u3057\u3066\u3044\u307E\u3059\u3002");
@@ -63299,7 +63362,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           try {
             const body = JSON.parse(event.data || "{}");
             if (body.type === "thread" && body.ok) {
-              renderThread(body.messages || []);
+              renderThread(body.messages || [], { replace: false });
             } else if (body.type === "error") {
               appendError(body.reason || "WebSocket message error");
             }
