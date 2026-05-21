@@ -8464,7 +8464,6 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       let reconnectAttempt = 0;
       let refreshingThread = false;
       const messagesById = new Map();
-      let syntheticMessageIndex = 0;
 
       function updateComposerReserve() {
         log.style.setProperty("--composer-reserve", Math.ceil(form.getBoundingClientRect().height) + "px");
@@ -8563,13 +8562,23 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 
       function messageKey(message) {
         if (message && message.messageId) return String(message.messageId);
-        syntheticMessageIndex += 1;
-        return "local-" + syntheticMessageIndex;
+        return [
+          message?.role || "system",
+          message?.status || "sent",
+          message?.createdAt || "",
+          message?.repository || "",
+          message?.relatedIssue || "",
+          message?.text || ""
+        ].join("\\u001f");
       }
 
-      function renderThread(messages) {
+      function renderThread(messages, options = {}) {
+        const replace = options.replace === true;
+        if (replace) {
+          messagesById.clear();
+        }
         if (!Array.isArray(messages) || messages.length === 0) {
-          if (messagesById.size === 0) {
+          if (replace || messagesById.size === 0) {
             log.innerHTML = initialMarkup;
           }
           scrollToLatest();
@@ -8599,7 +8608,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           }
           const body = await response.json();
           if (body && body.ok) {
-            renderThread(body.messages || []);
+            renderThread(body.messages || [], { replace: true });
           }
         } catch {
           setStatus("履歴の再取得に失敗しました。WebSocket を再接続しています。");
@@ -8640,7 +8649,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           try {
             const body = JSON.parse(event.data || "{}");
             if (body.type === "thread" && body.ok) {
-              renderThread(body.messages || []);
+              renderThread(body.messages || [], { replace: false });
             } else if (body.type === "error") {
               appendError(body.reason || "WebSocket message error");
             }

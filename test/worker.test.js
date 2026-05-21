@@ -498,6 +498,10 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes('className = "copy-message"'), true);
   assert.equal(body.includes("const messagesById = new Map()"), true);
   assert.equal(body.includes("messagesById.set(messageKey(message), message)"), true);
+  assert.equal(body.includes("messagesById.clear()"), true);
+  assert.equal(body.includes("message?.createdAt"), true);
+  assert.equal(body.includes('renderThread(body.messages || [], { replace: true })'), true);
+  assert.equal(body.includes('renderThread(body.messages || [], { replace: false })'), true);
   assert.equal(body.includes("white-space: pre-wrap"), true);
   assert.equal(body.includes("urlPattern"), true);
   assert.equal(body.includes('link.className = "chat-link"'), true);
