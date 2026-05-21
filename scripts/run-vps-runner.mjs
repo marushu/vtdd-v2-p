@@ -576,7 +576,7 @@ async function executeVpsDashboardChatTriage({ githubFetch, payload, notificatio
   const prompt = buildDashboardChatTriagePrompt({ payload, issue, preflight });
   const result = await runTrackedVpsCommand("codex", buildCodexExecArgs({ env: process.env }), {
     cwd: workspace,
-    env: buildCodexExecutionEnv(process.env),
+    env: buildCodexExecutionEnv(process.env, { includeRuntimeBridge: true }),
     input: prompt,
     maxBuffer: 1024 * 1024 * 12,
     githubFetch,
@@ -765,7 +765,7 @@ async function executeVpsDashboardSocketJob({
   }
   const result = await runCommand("codex", buildCodexExecArgs({ env }), {
     cwd: workspace,
-    env: buildCodexExecutionEnv(env),
+    env: buildCodexExecutionEnv(env, { includeRuntimeBridge: true }),
     input: buildDashboardChatTriagePrompt({ payload, issue, preflight }),
     maxBuffer: 1024 * 1024 * 12
   });
@@ -822,7 +822,6 @@ function buildDashboardGeneralChatPrompt({ payload }) {
     "- If the owner is asking for repository work, explain in Japanese that repo/nickname or owner/repo is needed, and give one short example.",
     "- If the owner is asking a general question, answer directly in Japanese.",
     "- Do not edit files, commit, push, create PRs, merge, deploy, mutate secrets, mutate permissions, or close Issues.",
-    "",
     "Reply format:",
     "- Japanese first.",
     "- Be concise.",
@@ -878,6 +877,8 @@ function buildDashboardChatTriagePrompt({ payload, issue = {}, preflight = null 
     "- If deploy, merge, credential, permission, repository settings, destructive cleanup, or Issue close is requested, return the needed governed approval boundary instead of doing it.",
     "- Never invent VPS replies. Return only what you can justify from repo/runtime truth and this dashboard message.",
     "",
+    buildVpsDashboardActionBridgeGuide(),
+    "",
     "Available local context:",
     "- You are inside a fresh clone of the target repository.",
     "- You may inspect files and use GitHub CLI/API if available to read runtime truth.",
@@ -897,6 +898,62 @@ function buildDashboardChatTriagePrompt({ payload, issue = {}, preflight = null 
     "- Include the classification: answer / issue_split_proposal / existing_issue_link / execution_handoff_needed / approval_needed / rag_candidate / blocker.",
     "- Include next action and any missing information.",
     "- If you mention a GitHub item, include a clickable URL if known."
+  ].join("\n");
+}
+
+function buildVpsDashboardActionReadBridgeGuide() {
+  return [
+    "Runtime read-only bridge:",
+    "- You may call read-only VTDD runtime routes from this VPS Codex CLI when the owner asks for VTDD status, memory, repository, or setup facts.",
+    "- Use environment variables only; do not print or expose VTDD_GATEWAY_BEARER_TOKEN.",
+    "- Base URL: ${VTDD_RUNTIME_URL}",
+    "- Auth header: Authorization: Bearer ${VTDD_GATEWAY_BEARER_TOKEN}",
+    "- curl pattern for GET: curl -sS -H \"Authorization: Bearer ${VTDD_GATEWAY_BEARER_TOKEN}\" \"${VTDD_RUNTIME_URL}<path>?<query>\"",
+    "",
+    "Read/retrieve operations available to mirror Custom GPT Actions:",
+    "- vtddRetrieveGitHub: GET /v2/retrieve/github",
+    "- vtddRetrieveRepositoryNicknames: GET /v2/retrieve/repository-nicknames",
+    "- vtddRetrieveOperationalMemory: GET /v2/retrieve/operational-memory",
+    "- vtddRetrieveCrossMemory: GET /v2/retrieve/cross",
+    "- vtddStartupPreflight: GET /v2/retrieve/startup-preflight",
+    "- vtddRetrieveSelfParity: GET /v2/retrieve/self-parity",
+    "- vtddRetrieveConstitution: GET /v2/retrieve/constitution",
+    "- vtddRetrieveDecisionLogs: GET /v2/retrieve/decisions",
+    "- vtddRetrieveProposalLogs: GET /v2/retrieve/proposals",
+    "- vtddRetrieveCloudflarePages: GET /v2/retrieve/cloudflare-pages",
+    "",
+    "Do not call write/action/high-risk routes from general chat unless the owner has moved into an Issue-backed bounded action and the runtime approval boundary is satisfied."
+  ].join("\n");
+}
+
+function buildVpsDashboardActionBridgeGuide() {
+  return [
+    buildVpsDashboardActionReadBridgeGuide(),
+    "",
+    "Runtime write/action bridge for Issue-backed bounded VTDD work:",
+    "- Use these only after the owner request is tied to a repository/Issue or an explicit bounded runtime action.",
+    "- curl pattern for POST: curl -sS -X POST -H \"Authorization: Bearer ${VTDD_GATEWAY_BEARER_TOKEN}\" -H \"content-type: application/json\" --data '<json>' \"${VTDD_RUNTIME_URL}<path>\"",
+    "",
+    "Write/action operations available only under the same approval boundaries as Custom GPT Actions:",
+    "- vtddGateway: POST /v2/gateway",
+    "- vtddExecute: POST /v2/action/execute",
+    "- vtddWriteGitHub: POST /v2/action/github",
+    "- vtddWriteOperationalMemory: POST /v2/action/memory-write",
+    "- vtddUpsertRepositoryNickname: POST /v2/action/repository-nickname",
+    "- vtddDeleteRepositoryNickname: POST /v2/action/repository-nickname/delete",
+    "- vtddExecutionProgress: GET /v2/action/progress",
+    "- vtddVpsRunnerStatus: GET /v2/action/vps-runner-status",
+    "- vtddVpsRunnerCancel: POST /v2/action/vps-runner-cancel",
+    "",
+    "High-risk operation guidance:",
+    "- Do not call high-risk routes from dashboard chat just because they are listed here.",
+    "- When the owner asks for deploy, credential mutation, permission mutation, repository administration, merge, destructive cleanup, or Issue close, return approval_needed with the required scoped passkey boundary.",
+    "- If a scoped approval grant is missing or mismatched, runtime routes must reject the request. GO alone does not authorize deploy, credential mutation, permission mutation, repository administration, merge, destructive cleanup, or Issue close.",
+    "- vtddGitHubAuthority: POST /v2/action/github-authority",
+    "- vtddDeployProduction: POST /v2/action/deploy",
+    "- vtddSyncGitHubActionsSecret: POST /v2/action/github-actions-secret",
+    "",
+    "Use the Action bridge when it gives better runtime truth than local files. If a call fails, report the exact Japanese blocker without hiding it."
   ].join("\n");
 }
 
@@ -2876,7 +2933,7 @@ function buildRunnerCommandEnv({ token }) {
   };
 }
 
-function buildCodexExecutionEnv(env) {
+function buildCodexExecutionEnv(env, { includeRuntimeBridge = false } = {}) {
   const allowedNames = [
     "CI",
     "CODEX_HOME",
@@ -2889,6 +2946,9 @@ function buildCodexExecutionEnv(env) {
     "XDG_CACHE_HOME",
     "XDG_CONFIG_HOME"
   ];
+  if (includeRuntimeBridge) {
+    allowedNames.push("VTDD_GATEWAY_BEARER_TOKEN", "VTDD_RUNTIME_URL");
+  }
   return Object.fromEntries(
     allowedNames
       .map((name) => [name, env[name]])
@@ -2994,8 +3054,11 @@ export {
   buildCodexExecutionPrompt,
   buildDashboardChatTriagePrompt,
   buildDashboardGeneralChatPrompt,
+  buildVpsDashboardActionBridgeGuide,
+  buildVpsDashboardActionReadBridgeGuide,
   buildDashboardRunnerWebSocketUrl,
   buildCodexExecArgs,
+  buildCodexExecutionEnv,
   buildVpsRunnerPreflightReceipt,
   buildGuardedPullRequestBody,
   buildPostMergePullTruth,
