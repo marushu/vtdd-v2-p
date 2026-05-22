@@ -62841,12 +62841,16 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .bubble .message-body ul { margin: 0; }
     .bubble .message-body li + li { margin-top: 4px; }
     .bubble .message-body code { font-size: .94em; }
+    .bubble .message-body pre { margin: 0; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--panel-strong); overflow-x: auto; white-space: pre; }
+    .bubble .message-body pre code { display: block; font-size: 14px; line-height: 1.55; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
     .bubble .message-body strong { display: inline; color: inherit; font-size: inherit; letter-spacing: 0; text-transform: none; margin: 0; font-weight: 800; }
     .copy-message { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border: 1px solid var(--border); border-radius: 999px; background: var(--button); color: var(--text); font-size: 15px; line-height: 1; cursor: pointer; }
     .copy-message:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
     .bubble ul { margin: 0; padding-left: 22px; color: var(--text); line-height: 1.85; }
-    .bubble.owner { align-self: flex-end; background: var(--owner-bubble); color: var(--owner-text); border-radius: 24px; padding: 12px 16px; }
+    .bubble.owner { position: relative; align-self: flex-end; background: var(--owner-bubble); color: var(--owner-text); border-radius: 24px; padding: 12px 16px; }
     .bubble.owner p { color: var(--owner-text); margin: 0; }
+    .bubble.owner .copy-message { position: absolute; top: -12px; left: -12px; width: 28px; height: 28px; background: var(--panel-strong); color: var(--text); opacity: .86; }
+    .bubble.owner .copy-message:hover, .bubble.owner .copy-message:focus-visible { opacity: 1; }
     .bubble.thinking { color: var(--muted); }
     .thinking-dots::after { content: ""; display: inline-block; width: 1.4em; text-align: left; animation: thinkingDots 1.2s steps(4, end) infinite; }
     @keyframes thinkingDots { 0% { content: ""; } 25% { content: "."; } 50% { content: ".."; } 75%, 100% { content: "..."; } }
@@ -62987,9 +62991,9 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 
       </div>
 
-      <form class="composer" id="butler-chat-form" aria-label="Butler composer" data-socket-endpoint="${escapeDashboardHtml(socketOrigin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}/ws" data-thread-endpoint="${escapeDashboardHtml(origin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}" data-thread-id="${escapeDashboardHtml(chatThreadId)}" data-repository-input="${escapeDashboardHtml(repositoryInput)}" data-issue-number="${dashboardIssueNumber || ""}">
+      <form class="composer" id="butler-chat-form" aria-label="Butler composer" autocomplete="off" data-socket-endpoint="${escapeDashboardHtml(socketOrigin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}/ws" data-thread-endpoint="${escapeDashboardHtml(origin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}" data-thread-id="${escapeDashboardHtml(chatThreadId)}" data-repository-input="${escapeDashboardHtml(repositoryInput)}" data-issue-number="${dashboardIssueNumber || ""}">
         <div class="composer-box">
-          <textarea id="butler-message" name="text" placeholder="Butler V2 \u306B\u30E1\u30C3\u30BB\u30FC\u30B8..." aria-label="Butler V2 \u306B\u30E1\u30C3\u30BB\u30FC\u30B8"></textarea>
+          <textarea id="butler-message" name="text" placeholder="Butler V2 \u306B\u30E1\u30C3\u30BB\u30FC\u30B8..." aria-label="Butler V2 \u306B\u30E1\u30C3\u30BB\u30FC\u30B8" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="send"></textarea>
           <button class="send-button" type="submit" aria-label="Butler \u306B\u9001\u4FE1">\u2191</button>
         </div>
         <div class="composer-status" id="butler-chat-status">\u63A5\u7D9A\u6E96\u5099\u4E2D\u3067\u3059\u3002WebSocket \u63A5\u7D9A\u5F8C\u306B\u9001\u4FE1\u3067\u304D\u307E\u3059\u3002</div>
@@ -63105,11 +63109,20 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       function appendMessage(message) {
         const article = document.createElement("article");
         article.className = message.role === "owner" ? "bubble owner" : "bubble";
-        if (message.role !== "owner") {
+        if (message.role === "owner") {
+          const copyButton = document.createElement("button");
+          copyButton.className = "copy-message";
+          copyButton.type = "button";
+          copyButton.textContent = "\u29C9";
+          copyButton.setAttribute("aria-label", "\u81EA\u5206\u306E\u767A\u8A00\u3092\u30B3\u30D4\u30FC");
+          copyButton.title = "\u81EA\u5206\u306E\u767A\u8A00\u3092\u30B3\u30D4\u30FC";
+          copyButton.addEventListener("click", () => copyMessageText(copyButton, message.text || ""));
+          article.appendChild(copyButton);
+        } else if (message.role === "butler") {
           const header = document.createElement("div");
           header.className = "bubble-header";
           const strong = document.createElement("strong");
-          strong.textContent = message.role === "system" ? "SYSTEM" : "Butler";
+          strong.textContent = "Butler";
           header.appendChild(strong);
           const copyButton = document.createElement("button");
           copyButton.className = "copy-message";
@@ -63119,6 +63132,13 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           copyButton.title = "\u8FD4\u4FE1\u3092\u30B3\u30D4\u30FC";
           copyButton.addEventListener("click", () => copyMessageText(copyButton, message.text || ""));
           header.appendChild(copyButton);
+          article.appendChild(header);
+        } else if (message.role === "system") {
+          const header = document.createElement("div");
+          header.className = "bubble-header";
+          const strong = document.createElement("strong");
+          strong.textContent = "SYSTEM";
+          header.appendChild(strong);
           article.appendChild(header);
         }
         const body = document.createElement("div");
@@ -63132,10 +63152,32 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       function renderMessageText(container, text) {
         const source = String(text || "");
         const lines = source.replace(/\\r\\n/g, "\\n").split("\\n");
+        const fence = String.fromCharCode(96, 96, 96);
         let index = 0;
         while (index < lines.length) {
           if (!lines[index].trim()) {
             index += 1;
+            continue;
+          }
+          if (lines[index].trim().startsWith(fence)) {
+            const language = lines[index].trim().slice(fence.length).trim();
+            const codeLines = [];
+            index += 1;
+            while (index < lines.length && !lines[index].trim().startsWith(fence)) {
+              codeLines.push(lines[index]);
+              index += 1;
+            }
+            if (index < lines.length && lines[index].trim().startsWith(fence)) {
+              index += 1;
+            }
+            const pre = document.createElement("pre");
+            const code = document.createElement("code");
+            if (language) {
+              code.dataset.language = language;
+            }
+            code.textContent = codeLines.join("\\n");
+            pre.appendChild(code);
+            container.appendChild(pre);
             continue;
           }
           if (/^\\s*-\\s+/.test(lines[index])) {
