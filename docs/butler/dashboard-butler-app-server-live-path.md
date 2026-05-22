@@ -80,9 +80,35 @@ Shared durable truth:
 - deploy evidence
 - dashboard thread records
 
+## Implemented bridge slice
+
+PR for this slice introduces the first separate Dashboard app-server route:
+
+- Worker route: `GET /v2/dashboard/app-server/ws`
+- Durable Object role: `app_server_bridge`
+- Dashboard -> bridge message: `app_server_turn_requested`
+- Bridge -> Dashboard messages:
+  - `app_server_status`
+  - `app_server_reply_delta`
+  - `app_server_reply`
+  - `app_server_turn_failed`
+- VPS bridge script: `scripts/run-dashboard-app-server-bridge.mjs`
+
+The bridge uses the generated `codex app-server` protocol shape:
+
+- `initialize`
+- `thread/start`
+- `thread/resume`
+- `turn/start`
+- notifications including `item/agentMessage/delta` and `turn/completed`
+
+The old Dashboard `codex exec` runner WebSocket remains deleted. If no
+Dashboard app-server bridge is connected, Dashboard Butler records the owner
+message and reports the bridge as unavailable; it does not pretend to have sent
+the turn to VPS Codex CLI.
+
 ## Non-goals for this decision
 
-- Do not implement the app-server bridge in this document.
 - Do not deploy.
 - Do not mutate credentials, permissions, repository settings, or secrets.
 - Do not close Issue #450.
