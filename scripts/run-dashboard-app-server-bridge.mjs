@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import process from "node:process";
 
 const DEFAULT_SCHEMA = "vtdd.dashboard.app_server_bridge.v1";
+const DANGER_FULL_ACCESS_SANDBOX = "danger-full-access";
 
 export function buildAppServerInitializeRequest(id = 1) {
   return {
@@ -22,7 +23,8 @@ export function buildAppServerInitializeRequest(id = 1) {
   };
 }
 
-export function buildAppServerThreadStartRequest({ id, cwd = process.cwd(), developerInstructions = "" } = {}) {
+export function buildAppServerThreadStartRequest({ id, cwd = process.cwd(), developerInstructions = "", sandboxMode = "" } = {}) {
+  const sandbox = buildAppServerSandboxOverrides(sandboxMode);
   return {
     method: "thread/start",
     id,
@@ -38,14 +40,15 @@ export function buildAppServerThreadStartRequest({ id, cwd = process.cwd(), deve
           "Reply in Japanese by default."
         ].join("\n"),
       threadSource: "app_server",
-      sandbox: "danger-full-access",
+      ...(sandbox.threadSandbox ? { sandbox: sandbox.threadSandbox } : {}),
       experimentalRawEvents: false,
       persistExtendedHistory: false
     }
   };
 }
 
-export function buildAppServerThreadResumeRequest({ id, codexThreadId, cwd = process.cwd() } = {}) {
+export function buildAppServerThreadResumeRequest({ id, codexThreadId, cwd = process.cwd(), sandboxMode = "" } = {}) {
+  const sandbox = buildAppServerSandboxOverrides(sandboxMode);
   return {
     method: "thread/resume",
     id,
@@ -53,14 +56,15 @@ export function buildAppServerThreadResumeRequest({ id, codexThreadId, cwd = pro
       threadId: codexThreadId,
       cwd,
       approvalPolicy: "on-request",
-      sandbox: "danger-full-access",
+      ...(sandbox.threadSandbox ? { sandbox: sandbox.threadSandbox } : {}),
       excludeTurns: true,
       persistExtendedHistory: false
     }
   };
 }
 
-export function buildAppServerTurnStartRequest({ id, codexThreadId, text, cwd = process.cwd() } = {}) {
+export function buildAppServerTurnStartRequest({ id, codexThreadId, text, cwd = process.cwd(), sandboxMode = "" } = {}) {
+  const sandbox = buildAppServerSandboxOverrides(sandboxMode);
   return {
     method: "turn/start",
     id,
@@ -75,9 +79,23 @@ export function buildAppServerTurnStartRequest({ id, codexThreadId, text, cwd = 
       ],
       cwd,
       approvalPolicy: "on-request",
-      sandboxPolicy: {
-        type: "dangerFullAccess"
-      }
+      ...(sandbox.turnSandboxPolicy ? { sandboxPolicy: sandbox.turnSandboxPolicy } : {})
+    }
+  };
+}
+
+export function buildAppServerSandboxOverrides(sandboxMode = "") {
+  const normalized = String(sandboxMode || "").trim().toLowerCase();
+  if (!normalized) {
+    return {};
+  }
+  if (normalized !== DANGER_FULL_ACCESS_SANDBOX) {
+    throw new Error(`unsupported dashboard app-server sandbox mode: ${sandboxMode}`);
+  }
+  return {
+    threadSandbox: DANGER_FULL_ACCESS_SANDBOX,
+    turnSandboxPolicy: {
+      type: "dangerFullAccess"
     }
   };
 }
@@ -256,6 +274,7 @@ export async function handleDashboardTurnRequest({
   appServer,
   sendDashboardEvent,
   cwd = process.cwd(),
+  sandboxMode = "",
   turnTimeoutMs = 10 * 60 * 1000
 }) {
   const dashboardThreadId = String(request.threadId || "");
@@ -272,9 +291,9 @@ export async function handleDashboardTurnRequest({
 
   let codexThreadId = request.codexThreadId || null;
   if (codexThreadId) {
-    await appServer.request(buildAppServerThreadResumeRequest({ id: appServer.nextRequestId(), codexThreadId, cwd }));
+    await appServer.request(buildAppServerThreadResumeRequest({ id: appServer.nextRequestId(), codexThreadId, cwd, sandboxMode }));
   } else {
-    const started = await appServer.request(buildAppServerThreadStartRequest({ id: appServer.nextRequestId(), cwd }));
+    const started = await appServer.request(buildAppServerThreadStartRequest({ id: appServer.nextRequestId(), cwd, sandboxMode }));
     codexThreadId = started?.thread?.id || null;
     await sendDashboardEvent({
       type: "app_server_status",
@@ -339,7 +358,7 @@ export async function handleDashboardTurnRequest({
     void sendDashboardEvent(event);
   });
   try {
-    const startedTurn = await appServer.request(buildAppServerTurnStartRequest({ id: appServer.nextRequestId(), codexThreadId, text, cwd }));
+    const startedTurn = await appServer.request(buildAppServerTurnStartRequest({ id: appServer.nextRequestId(), codexThreadId, text, cwd, sandboxMode }));
     const startedTurnId = String(startedTurn?.turn?.id || "");
     if (activeTurnId && startedTurnId && activeTurnId !== startedTurnId) {
       throw new Error("codex app-server returned a different turn id than the active notification stream");
@@ -359,7 +378,8 @@ export function parseBridgeArgs(argv = process.argv.slice(2), env = process.env)
     runtimeUrl: env.VTDD_RUNTIME_URL || "",
     token: env.VTDD_GATEWAY_BEARER_TOKEN || env.MVP_GATEWAY_BEARER_TOKEN || "",
     threadId: env.VTDD_DASHBOARD_THREAD_ID || "",
-    cwd: env.VTDD_DASHBOARD_CODEX_CWD || process.cwd()
+    cwd: env.VTDD_DASHBOARD_CODEX_CWD || process.cwd(),
+    sandboxMode: env.VTDD_DASHBOARD_APP_SERVER_SANDBOX || ""
   };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -367,6 +387,7 @@ export function parseBridgeArgs(argv = process.argv.slice(2), env = process.env)
     if (arg === "--token") options.token = argv[++index] || "";
     if (arg === "--thread-id") options.threadId = argv[++index] || "";
     if (arg === "--cwd") options.cwd = argv[++index] || "";
+    if (arg === "--sandbox") options.sandboxMode = argv[++index] || "";
   }
   return options;
 }
@@ -412,7 +433,8 @@ export async function runDashboardAppServerBridge(options = parseBridgeArgs()) {
             request: payload,
             appServer,
             sendDashboardEvent,
-            cwd: options.cwd
+            cwd: options.cwd,
+            sandboxMode: options.sandboxMode
           })
         )
         .catch((error) => {
