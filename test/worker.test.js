@@ -871,7 +871,7 @@ test("worker allows dashboard passkey session chat without VPS runner handoff", 
   assert.equal(calls.length, 0);
 });
 
-test("worker returns registered dashboard repository nicknames in Japanese without VPS handoff", async () => {
+test("worker does not answer dashboard nickname requests from the alias registry shortcut", async () => {
   const provider = createInMemoryMemoryProvider();
   await provider.store({
     id: "alias_registry:marushu/vtdd-v2-p",
@@ -909,9 +909,13 @@ test("worker returns registered dashboard repository nicknames in Japanese witho
   assert.equal(body.ok, true);
   assert.equal(body.execution, null);
   assert.equal(body.messages.length, 2);
+  assert.equal(body.messages[0].role, "owner");
+  assert.equal(body.messages[0].text, "登録済みのニックネーム出して");
   assert.equal(body.messages[1].role, "butler");
-  assert.equal(body.messages[1].text.includes("登録済みニックネームです。"), true);
-  assert.equal(body.messages[1].text.includes("- marushu/vtdd-v2-p: ぶい, vtdd"), true);
+  assert.equal(body.messages[1].status, "blocked");
+  assert.equal(body.messages[1].text.includes("登録済みニックネームです。"), false);
+  assert.equal(body.messages[1].text.includes("- marushu/vtdd-v2-p: ぶい, vtdd"), false);
+  assert.match(body.messages[1].text, /app-server/);
 });
 
 test("worker stores dashboard chat without repository instead of dispatching handoff", async () => {
@@ -1350,7 +1354,7 @@ test("DashboardChatRoom rejects spoofed app-server events from dashboard sockets
   assert.deepEqual(await store.listThread("dashboard-main-unresolved"), []);
 });
 
-test("DashboardChatRoom returns nickname list without repository handoff", async () => {
+test("DashboardChatRoom sends nickname requests to connected app-server bridge", async () => {
   const provider = createInMemoryMemoryProvider();
   await provider.store({
     id: "alias_registry:marushu/vtdd-v2-p",
@@ -1366,11 +1370,11 @@ test("DashboardChatRoom returns nickname list without repository handoff", async
   });
   const store = createInMemoryDashboardChatStore();
   const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
-  const runnerSocket = createMockSocket("vps_runner", "dashboard-main-unresolved");
+  const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-unresolved");
   const room = new DashboardChatRoom(
     {
       getWebSockets() {
-        return [dashboardSocket, runnerSocket];
+        return [dashboardSocket, bridgeSocket];
       }
     },
     { DASHBOARD_CHAT_STORE: store, MEMORY_PROVIDER: provider }
@@ -1385,12 +1389,20 @@ test("DashboardChatRoom returns nickname list without repository handoff", async
     })
   );
 
-  assert.equal(runnerSocket.sent.length, 0);
+  assert.equal(bridgeSocket.sent.length, 1);
+  const turnRequest = JSON.parse(bridgeSocket.sent[0]);
+  assert.equal(turnRequest.type, "app_server_turn_requested");
+  assert.equal(turnRequest.text, "登録済みのニックネーム出して");
+  assert.equal(turnRequest.repository, null);
+  assert.equal(turnRequest.authority.ordinaryConversationAllowed, true);
+
   const broadcast = JSON.parse(dashboardSocket.sent[0]);
-  assert.equal(broadcast.messages.length, 2);
+  assert.equal(broadcast.messages.length, 1);
   assert.equal(broadcast.messages[0].role, "owner");
-  assert.equal(broadcast.messages[1].text.includes("登録済みニックネームです。"), true);
-  assert.equal(broadcast.messages[1].text.includes("- marushu/vtdd-v2-p: ぶい, vtdd"), true);
+  assert.equal(broadcast.messages[0].text, "登録済みのニックネーム出して");
+  const status = JSON.parse(dashboardSocket.sent[1]);
+  assert.equal(status.type, "transient_status");
+  assert.equal(status.status, "thinking");
 });
 
 test("worker redacts dashboard Butler chat sensitive material before returning and storing", async () => {
