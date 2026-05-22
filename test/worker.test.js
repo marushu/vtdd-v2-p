@@ -1204,6 +1204,53 @@ test("DashboardChatRoom maps app-server replies back into the dashboard thread",
   assert.equal(broadcast.messages[0].text, "今日は日本時間で 2026年5月22日です。");
 });
 
+test("DashboardChatRoom does not persist app-server reply deltas as chat messages", async () => {
+  const store = createInMemoryDashboardChatStore();
+  const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
+  const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-unresolved");
+  const storage = createMockDurableObjectStorage();
+  const room = new DashboardChatRoom(
+    {
+      storage,
+      getWebSockets() {
+        return [dashboardSocket, bridgeSocket];
+      }
+    },
+    { DASHBOARD_CHAT_STORE: store }
+  );
+
+  await room.webSocketMessage(
+    bridgeSocket,
+    JSON.stringify({
+      type: "app_server_reply_delta",
+      threadId: "dashboard-main-unresolved",
+      codexThreadId: "codex-thread-450",
+      delta: "日本"
+    })
+  );
+
+  assert.equal(storage.values.get("app_server_thread:dashboard-main-unresolved").codexThreadId, "codex-thread-450");
+  assert.equal((await store.listThread("dashboard-main-unresolved")).length, 0);
+  assert.equal(dashboardSocket.sent.length, 1);
+  assert.equal(JSON.parse(dashboardSocket.sent[0]).messages.length, 0);
+
+  await room.webSocketMessage(
+    bridgeSocket,
+    JSON.stringify({
+      type: "app_server_reply",
+      threadId: "dashboard-main-unresolved",
+      codexThreadId: "codex-thread-450",
+      text: "日本時間では、今日は 05月22日 20時09分です。"
+    })
+  );
+
+  const stored = await store.listThread("dashboard-main-unresolved");
+  assert.equal(stored.length, 1);
+  assert.equal(stored[0].role, "butler");
+  assert.equal(stored[0].status, "replied");
+  assert.equal(stored[0].text, "日本時間では、今日は 05月22日 20時09分です。");
+});
+
 test("DashboardChatRoom rejects app-server bridge events for a different dashboard thread", async () => {
   const store = createInMemoryDashboardChatStore();
   const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");

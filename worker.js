@@ -60542,7 +60542,8 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
   const relatedIssue = normalizePositiveInteger9(input.relatedIssue || input.issueNumber);
   const createdAt = normalizeIsoTimestamp(input.createdAt) || (/* @__PURE__ */ new Date()).toISOString();
   const messages = [];
-  if (eventType === "app_server_reply_delta" || eventType === "app_server_reply") {
+  if (eventType === "app_server_reply_delta") {
+  } else if (eventType === "app_server_reply") {
     if (text) {
       messages.push(
         normalizeDashboardChatMessage(
@@ -60551,7 +60552,7 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
             role: "butler",
             repository,
             relatedIssue,
-            status: eventType === "app_server_reply_delta" ? "thinking" : "replied",
+            status: "replied",
             text,
             createdAt
           },
