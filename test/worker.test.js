@@ -1140,6 +1140,35 @@ test("DashboardChatRoom sends ordinary owner turns to connected app-server bridg
   assert.match(broadcast.messages[1].text, /app-server/);
 });
 
+test("DashboardChatRoom sends each owner turn to only one app-server bridge for a thread", async () => {
+  const provider = createInMemoryMemoryProvider();
+  const store = createInMemoryDashboardChatStore();
+  const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
+  const primaryBridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-unresolved");
+  const duplicateBridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-unresolved");
+  const room = new DashboardChatRoom(
+    {
+      getWebSockets() {
+        return [dashboardSocket, primaryBridgeSocket, duplicateBridgeSocket];
+      }
+    },
+    { DASHBOARD_CHAT_STORE: store, MEMORY_PROVIDER: provider }
+  );
+
+  await room.webSocketMessage(
+    dashboardSocket,
+    JSON.stringify({
+      type: "owner_message",
+      threadId: "dashboard-main-unresolved",
+      text: "重複実行しない？"
+    })
+  );
+
+  assert.equal(primaryBridgeSocket.sent.length, 1);
+  assert.equal(duplicateBridgeSocket.sent.length, 0);
+  assert.equal(JSON.parse(primaryBridgeSocket.sent[0]).type, "app_server_turn_requested");
+});
+
 test("DashboardChatRoom maps app-server replies back into the dashboard thread", async () => {
   const store = createInMemoryDashboardChatStore();
   const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
@@ -1173,6 +1202,40 @@ test("DashboardChatRoom maps app-server replies back into the dashboard thread",
   assert.equal(broadcast.messages[0].role, "butler");
   assert.equal(broadcast.messages[0].status, "replied");
   assert.equal(broadcast.messages[0].text, "今日は日本時間で 2026年5月22日です。");
+});
+
+test("DashboardChatRoom rejects app-server bridge events for a different dashboard thread", async () => {
+  const store = createInMemoryDashboardChatStore();
+  const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
+  const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-unresolved");
+  const storage = createMockDurableObjectStorage();
+  const room = new DashboardChatRoom(
+    {
+      storage,
+      getWebSockets() {
+        return [dashboardSocket, bridgeSocket];
+      }
+    },
+    { DASHBOARD_CHAT_STORE: store }
+  );
+
+  await room.webSocketMessage(
+    bridgeSocket,
+    JSON.stringify({
+      type: "app_server_reply",
+      threadId: "dashboard-other",
+      codexThreadId: "codex-thread-other",
+      text: "別 thread への返信"
+    })
+  );
+
+  assert.equal(storage.values.has("app_server_thread:dashboard-other"), false);
+  assert.equal(dashboardSocket.sent.length, 0);
+  assert.equal(bridgeSocket.sent.length, 1);
+  const error = JSON.parse(bridgeSocket.sent[0]);
+  assert.equal(error.type, "error");
+  assert.equal(error.ok, false);
+  assert.match(error.reason, /threadId/);
 });
 
 test("DashboardChatRoom rejects spoofed app-server events from dashboard sockets", async () => {

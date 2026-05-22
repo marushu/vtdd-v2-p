@@ -314,9 +314,7 @@ export class DashboardChatRoom {
       },
       authority: buildDashboardAppServerAuthorityHint({ repository, relatedIssue, text })
     };
-    for (const bridgeSocket of bridgeSockets) {
-      this.sendSocket(bridgeSocket, turnRequest);
-    }
+    this.sendSocket(bridgeSockets[0], turnRequest);
   }
 
   async acceptAppServerBridgeMessage({ socket, attachment, payload }) {
@@ -328,6 +326,15 @@ export class DashboardChatRoom {
         type: "error",
         ok: false,
         reason: normalized.reason
+      });
+      return;
+    }
+    const attachmentThreadId = normalizeDashboardThreadId(attachment?.threadId);
+    if (attachmentThreadId && normalized.threadId !== attachmentThreadId) {
+      this.sendSocket(socket, {
+        type: "error",
+        ok: false,
+        reason: "bridge threadId does not match the connected dashboard thread"
       });
       return;
     }
