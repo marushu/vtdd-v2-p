@@ -301,7 +301,7 @@ export class JsonLineAppServerClient {
       } catch {
         continue;
       }
-      if (message.id && this.pending.has(message.id)) {
+      if (message.id !== undefined && message.id !== null && this.pending.has(message.id)) {
         const pending = this.pending.get(message.id);
         this.pending.delete(message.id);
         if (message.error) {

@@ -1133,11 +1133,9 @@ test("DashboardChatRoom sends ordinary owner turns to connected app-server bridg
 
   assert.equal(dashboardSocket.sent.length, 1);
   const broadcast = JSON.parse(dashboardSocket.sent[0]);
-  assert.equal(broadcast.messages.length, 2);
+  assert.equal(broadcast.messages.length, 1);
   assert.equal(broadcast.messages[0].role, "owner");
-  assert.equal(broadcast.messages[1].role, "butler");
-  assert.equal(broadcast.messages[1].status, "thinking");
-  assert.match(broadcast.messages[1].text, /app-server/);
+  assert.equal(broadcast.messages[0].text, "今日は何月何日？日本時間を答えて");
 });
 
 test("DashboardChatRoom sends each owner turn to only one app-server bridge for a thread", async () => {
@@ -1231,8 +1229,7 @@ test("DashboardChatRoom does not persist app-server reply deltas as chat message
 
   assert.equal(storage.values.get("app_server_thread:dashboard-main-unresolved").codexThreadId, "codex-thread-450");
   assert.equal((await store.listThread("dashboard-main-unresolved")).length, 0);
-  assert.equal(dashboardSocket.sent.length, 1);
-  assert.equal(JSON.parse(dashboardSocket.sent[0]).messages.length, 0);
+  assert.equal(dashboardSocket.sent.length, 0);
 
   await room.webSocketMessage(
     bridgeSocket,
@@ -1249,6 +1246,41 @@ test("DashboardChatRoom does not persist app-server reply deltas as chat message
   assert.equal(stored[0].role, "butler");
   assert.equal(stored[0].status, "replied");
   assert.equal(stored[0].text, "日本時間では、今日は 05月22日 20時09分です。");
+});
+
+test("DashboardChatRoom sends app-server thinking status as transient UI state", async () => {
+  const store = createInMemoryDashboardChatStore();
+  const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
+  const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-unresolved");
+  const storage = createMockDurableObjectStorage();
+  const room = new DashboardChatRoom(
+    {
+      storage,
+      getWebSockets() {
+        return [dashboardSocket, bridgeSocket];
+      }
+    },
+    { DASHBOARD_CHAT_STORE: store }
+  );
+
+  await room.webSocketMessage(
+    bridgeSocket,
+    JSON.stringify({
+      type: "app_server_status",
+      status: "thinking",
+      threadId: "dashboard-main-unresolved",
+      codexThreadId: "codex-thread-450",
+      text: "codex app-server が応答を生成しています。"
+    })
+  );
+
+  assert.equal(storage.values.get("app_server_thread:dashboard-main-unresolved").codexThreadId, "codex-thread-450");
+  assert.equal((await store.listThread("dashboard-main-unresolved")).length, 0);
+  assert.equal(dashboardSocket.sent.length, 1);
+  const status = JSON.parse(dashboardSocket.sent[0]);
+  assert.equal(status.type, "transient_status");
+  assert.equal(status.status, "thinking");
+  assert.equal(status.text, "codex app-server が応答を生成しています。");
 });
 
 test("DashboardChatRoom rejects app-server bridge events for a different dashboard thread", async () => {

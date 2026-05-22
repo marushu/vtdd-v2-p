@@ -282,19 +282,7 @@ export class DashboardChatRoom {
       return;
     }
 
-    const pendingMessage = normalizeDashboardChatMessage(
-      {
-        threadId,
-        role: "butler",
-        repository,
-        relatedIssue,
-        status: "thinking",
-        text: "codex app-server に送信しました。返信を待っています。",
-        createdAt: new Date(Date.parse(now) + 1).toISOString()
-      },
-      { threadId }
-    );
-    const messages = store ? await store.appendMany(threadId, [ownerMessage, pendingMessage]) : [ownerMessage, pendingMessage].filter(Boolean);
+    const messages = store ? await store.appendMany(threadId, [ownerMessage]) : [ownerMessage].filter(Boolean);
     await this.broadcastThread({ threadId, messages });
     const mapping = await this.readAppServerThreadMapping(threadId);
     const turnRequest = {
@@ -344,8 +332,14 @@ export class DashboardChatRoom {
         updatedAt: normalized.createdAt
       });
     }
+    if (normalized.transientStatus) {
+      await this.broadcastTransientStatus({
+        threadId: normalized.threadId,
+        status: normalized.transientStatus,
+        text: normalized.text
+      });
+    }
     if (normalized.messages.length === 0) {
-      await this.broadcastThread({ threadId: normalized.threadId });
       return;
     }
     const store = resolveDashboardChatStore(this.env);
@@ -362,6 +356,27 @@ export class DashboardChatRoom {
       ok: true,
       threadId,
       messages: resolvedMessages
+    });
+    for (const socket of this.connectedSockets()) {
+      const attachment = this.getSocketAttachment(socket);
+      if (
+        attachment.role !== "vps_runner" &&
+        attachment.role !== "app_server_bridge" &&
+        (!attachment.threadId || attachment.threadId === threadId) &&
+        isSocketOpen(socket)
+      ) {
+        socket.send(payload);
+      }
+    }
+  }
+
+  async broadcastTransientStatus({ threadId, status, text }) {
+    const payload = JSON.stringify({
+      type: "transient_status",
+      ok: true,
+      threadId,
+      status,
+      text
     });
     for (const socket of this.connectedSockets()) {
       const attachment = this.getSocketAttachment(socket);
@@ -5562,6 +5577,7 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
   const relatedIssue = normalizePositiveInteger(input.relatedIssue || input.issueNumber);
   const createdAt = normalizeIsoTimestamp(input.createdAt) || new Date().toISOString();
   const messages = [];
+  let transientStatus = "";
   if (eventType === "app_server_reply_delta") {
     // Streaming deltas are transport progress, not durable chat messages.
   } else if (eventType === "app_server_reply") {
@@ -5597,26 +5613,15 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
       )
     );
   } else if (eventType === "app_server_status") {
-    messages.push(
-      normalizeDashboardChatMessage(
-        {
-          threadId,
-          role: "system",
-          repository,
-          relatedIssue,
-          status: status === "replied" ? "replied" : "thinking",
-          text: text || "codex app-server is working.",
-          createdAt
-        },
-        { threadId }
-      )
-    );
+    transientStatus = status === "replied" ? "replied" : "thinking";
   }
   return {
     ok: true,
     threadId,
     codexThreadId,
     createdAt,
+    text,
+    transientStatus,
     messages: messages.filter(Boolean)
   };
 }
@@ -8266,7 +8271,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     textarea { width: 100%; min-height: 44px; max-height: 160px; border: 0; outline: 0; resize: vertical; padding: 10px 2px; color: var(--text); background: transparent; font: inherit; line-height: 1.45; }
     textarea::placeholder { color: var(--muted); }
     .send-button { width: 44px; height: 44px; border-radius: 999px; background: var(--text); color: var(--page-bg); font-size: 22px; }
-    .composer-status { padding-left: 16px; color: var(--muted); font-size: 12px; }
+    .composer-status { min-height: 18px; padding-left: 16px; color: var(--muted); font-size: 12px; }
+    .composer-status.thinking::after { content: ""; display: inline-block; width: 1.4em; text-align: left; animation: thinkingDots 1.2s steps(4, end) infinite; }
     .sidebar { position: sticky; top: 16px; align-self: start; max-height: calc(100dvh - 32px); overflow: auto; border: 1px solid var(--border); border-radius: 18px; background: var(--panel); }
     .sidebar > summary { display: flex; justify-content: space-between; align-items: center; gap: 10px; min-height: 58px; padding: 14px; list-style: none; }
     .sidebar > summary::-webkit-details-marker { display: none; }
@@ -8488,8 +8494,17 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         });
       }
 
-      function setStatus(text) {
+      function setStatus(text, options = {}) {
         status.textContent = text;
+        status.classList.toggle("thinking", options.thinking === true);
+        if (options.temporary === true) {
+          const expected = text;
+          window.setTimeout(() => {
+            if (status.textContent === expected) {
+              setStatus("Dashboard thread 接続済み。");
+            }
+          }, 2400);
+        }
       }
 
       function appendMessage(message) {
@@ -8661,6 +8676,16 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             const body = JSON.parse(event.data || "{}");
             if (body.type === "thread" && body.ok) {
               renderThread(body.messages || [], { replace: false });
+              const lastMessage = Array.isArray(body.messages) ? body.messages[body.messages.length - 1] : null;
+              if (lastMessage?.role === "butler" && lastMessage?.status === "replied") {
+                setStatus("返信を受信しました。", { temporary: true });
+              }
+            } else if (body.type === "transient_status" && body.ok) {
+              const isThinking = body.status === "thinking";
+              setStatus(body.text || (isThinking ? "codex app-server が応答を生成しています" : "codex app-server の応答が完了しました。"), {
+                thinking: isThinking,
+                temporary: !isThinking
+              });
             } else if (body.type === "error") {
               appendError(body.reason || "WebSocket message error");
             }
@@ -8696,7 +8721,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           return;
         }
         if (submitButton) submitButton.disabled = true;
-        setStatus("送信中です。Dashboard thread に保存します。");
+        setStatus("送信中です", { thinking: true });
         chatSocket.send(JSON.stringify({
           type: "owner_message",
           threadId,
@@ -8706,7 +8731,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           relatedIssue: issueNumber
         }));
         textarea.value = "";
-        setStatus("送信済み。app-server bridge の返信を待っています。");
+        setStatus("app-server bridge の返信を待っています", { thinking: true });
         if (submitButton) submitButton.disabled = false;
         textarea.focus({ preventScroll: true });
         updateComposerReserve();

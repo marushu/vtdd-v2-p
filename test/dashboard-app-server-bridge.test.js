@@ -216,6 +216,26 @@ test("dashboard app-server bridge writes JSON-RPC responses for app-server appro
   assert.equal(notifications[0].method, "turn/started");
 });
 
+test("dashboard app-server bridge resolves pending JSON-RPC response id zero", async () => {
+  const client = new JsonLineAppServerClient({ command: "unused" });
+  const writes = [];
+  client.nextId = 0;
+  client.child = {
+    stdin: {
+      write(chunk) {
+        writes.push(JSON.parse(String(chunk).trim()));
+      }
+    },
+    kill() {}
+  };
+
+  const pending = client.request({ method: "thread/start", params: {} });
+  assert.equal(writes[0].id, 0);
+  client.handleChunk(JSON.stringify({ id: 0, result: { thread: { id: "codex-thread-0" } } }) + "\n");
+
+  assert.deepEqual(await pending, { thread: { id: "codex-thread-0" } });
+});
+
 test("dashboard app-server bridge maps Codex app-server notifications to dashboard events", () => {
   const delta = mapAppServerNotificationToDashboardEvent(
     {
