@@ -61286,12 +61286,8 @@ function createD1DashboardPushSubscriptionStore(d1) {
         normalized.updatedAt,
         JSON.stringify({
           endpointHash: normalized.endpointHash,
-          endpoint: normalized.endpoint,
           expirationTime: normalized.expirationTime,
-          keys: {
-            p256dh: normalized.p256dh,
-            auth: normalized.auth
-          },
+          rawMaterial: "stored_in_columns_for_server_side_web_push_send_only",
           userAgent: normalized.userAgent,
           ownerIdentity: normalized.ownerIdentity,
           updatedAt: normalized.updatedAt
@@ -62937,7 +62933,8 @@ async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventS
         <section class="lane">
           <div class="lane-title"><h2>Authority boundary</h2><span class="pill">read/write</span></div>
           <p>push subscription \u306F dashboard owner session \u304B\u3089\u4FDD\u5B58\u3057\u307E\u3059\u3002HTML \u306B\u306F endpoint\u3001auth key\u3001p256dh key \u3092\u57CB\u3081\u8FBC\u307F\u307E\u305B\u3093\u3002</p>
-          <p class="muted">Web Push \u9001\u4FE1\u306B\u306F server-side VAPID secret \u304C\u5FC5\u8981\u3067\u3059\u3002\u3053\u306E\u753B\u9762\u306B\u306F public key \u3060\u3051\u3092\u6E21\u3057\u307E\u3059\u3002</p>
+          <p class="muted">\u540C\u4E00 origin \u306E dashboard owner session cookie / Cloudflare Access identity \u3092\u4F7F\u3046\u305F\u3081\u3001\u8CFC\u8AAD\u4FDD\u5B58 fetch \u306F credentials: same-origin \u3067\u9001\u308A\u307E\u3059\u3002</p>
+          <p class="muted">Web Push \u9001\u4FE1\u306B\u306F server-side VAPID secret \u3068 subscription raw material \u304C\u5FC5\u8981\u3067\u3059\u3002D1 \u306B\u306F\u9001\u4FE1\u7528\u306B\u4FDD\u6301\u3057\u3001response / HTML / payload_json \u306B\u306F raw key \u3092\u8FD4\u3057\u307E\u305B\u3093\u3002</p>
         </section>
       </div>
       <div class="grid single">
@@ -62982,7 +62979,7 @@ async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventS
 
           async function registration() {
             if (!("serviceWorker" in navigator)) return null;
-            return navigator.serviceWorker.register("/dashboard-sw.js", { scope: "/" });
+            return navigator.serviceWorker.register("/dashboard-sw.js", { scope: "/dashboard/" });
           }
 
           async function refreshState() {
@@ -63017,6 +63014,7 @@ async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventS
             });
             const response = await fetch("/v2/dashboard/push/subscription", {
               method: "POST",
+              credentials: "same-origin",
               headers: { "content-type": "application/json" },
               body: JSON.stringify({ subscription: subscription.toJSON(), userAgent: navigator.userAgent })
             });
@@ -63056,7 +63054,7 @@ function buildDashboardWebManifest(url) {
     name: "VTDD Butler",
     short_name: "VTDD",
     start_url: "/dashboard",
-    scope: "/",
+    scope: "/dashboard/",
     display: "standalone",
     background_color: "#050505",
     theme_color: "#050505",
@@ -63100,9 +63098,25 @@ self.addEventListener("push", (event) => {
   event.waitUntil(self.registration.showNotification(title, options));
 });
 
+function safeDashboardNotificationUrl(value) {
+  let parsed;
+  try {
+    parsed = new URL(value || "/dashboard/notifications", self.location.origin);
+  } catch {
+    parsed = new URL("/dashboard/notifications", self.location.origin);
+  }
+  if (parsed.origin !== self.location.origin) {
+    return new URL("/dashboard/notifications", self.location.origin).toString();
+  }
+  if (parsed.pathname !== "/dashboard" && !parsed.pathname.startsWith("/dashboard/")) {
+    return new URL("/dashboard/notifications", self.location.origin).toString();
+  }
+  return parsed.toString();
+}
+
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const targetUrl = new URL(event.notification.data && event.notification.data.url || "/dashboard/notifications", self.location.origin).toString();
+  const targetUrl = safeDashboardNotificationUrl(event.notification.data && event.notification.data.url);
   event.waitUntil((async () => {
     const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
     for (const client of clients) {

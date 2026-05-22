@@ -1642,9 +1642,12 @@ test("worker serves dashboard notification center for recent events across repos
   assert.equal(body.includes("id=\"push-subscribe-button\""), true);
   assert.equal(body.includes("id=\"badge-set-button\""), true);
   assert.equal(body.includes("/v2/dashboard/push/subscription"), true);
+  assert.equal(body.includes("credentials: \"same-origin\""), true);
+  assert.equal(body.includes("D1 には送信用に保持し、response / HTML / payload_json には raw key を返しません"), true);
   assert.equal(body.includes("navigator.setAppBadge"), true);
   assert.equal(body.includes("Notification.requestPermission"), true);
   assert.equal(body.includes("serviceWorker.register(\"/dashboard-sw.js\""), true);
+  assert.equal(body.includes("scope: \"/dashboard/\""), true);
   assert.equal(body.includes("secret-must-not-persist"), false);
   assert.equal(body.includes("他 repo / 並行開発 / queue / workflow"), true);
   assert.equal(body.includes("最新通知"), true);
@@ -1666,6 +1669,7 @@ test("worker serves dashboard PWA manifest and service worker notification handl
   const manifest = await manifestResponse.json();
   assert.equal(manifest.name, "VTDD Butler");
   assert.equal(manifest.start_url, "/dashboard");
+  assert.equal(manifest.scope, "/dashboard/");
   assert.equal(manifest.display, "standalone");
   assert.equal(manifest.icons[0].src, "https://example.com/dashboard-icon.svg");
 
@@ -1677,6 +1681,9 @@ test("worker serves dashboard PWA manifest and service worker notification handl
   assert.equal(serviceWorker.includes("showNotification"), true);
   assert.equal(serviceWorker.includes('self.addEventListener("notificationclick"'), true);
   assert.equal(serviceWorker.includes("/dashboard/notifications"), true);
+  assert.equal(serviceWorker.includes("safeDashboardNotificationUrl"), true);
+  assert.equal(serviceWorker.includes("parsed.origin !== self.location.origin"), true);
+  assert.equal(serviceWorker.includes('!parsed.pathname.startsWith("/dashboard/")'), true);
 
   const iconResponse = await worker.fetch(new Request("https://example.com/dashboard-icon.svg"));
   assert.equal(iconResponse.status, 200);
@@ -1741,6 +1748,61 @@ test("worker stores dashboard push subscription only for an authenticated owner 
   assert.equal(saved.p256dh, "p256dh-key");
   assert.equal(saved.auth, "auth-key");
   assert.equal(saved.ownerIdentity, "owner@example.com");
+});
+
+test("worker redacts dashboard push subscription raw material from D1 payload_json", async () => {
+  const prepared = [];
+  const d1 = {
+    async exec(statement) {
+      prepared.push({ type: "exec", statement });
+      return {};
+    },
+    prepare(statement) {
+      const call = { type: "prepare", statement, values: [] };
+      prepared.push(call);
+      return {
+        bind(...values) {
+          call.values = values;
+          return {
+            async run() {
+              return {};
+            }
+          };
+        }
+      };
+    }
+  };
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/push/subscription", {
+      method: "POST",
+      headers: {
+        ...dashboardAccessHeaders,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        subscription: {
+          endpoint: "https://push.example/subscription/raw-endpoint",
+          keys: { p256dh: "raw-p256dh-key", auth: "raw-auth-key" }
+        }
+      })
+    }),
+    {
+      ...dashboardAccessEnv,
+      VTDD_MEMORY_D1: d1
+    }
+  );
+
+  assert.equal(response.status, 202);
+  const insert = prepared.find((call) =>
+    String(call.statement || "").includes("INSERT OR REPLACE INTO vtdd_dashboard_push_subscriptions")
+  );
+  assert.ok(insert);
+  const payloadJson = insert.values[8];
+  assert.equal(payloadJson.includes("raw-endpoint"), false);
+  assert.equal(payloadJson.includes("raw-p256dh-key"), false);
+  assert.equal(payloadJson.includes("raw-auth-key"), false);
+  assert.equal(payloadJson.includes("stored_in_columns_for_server_side_web_push_send_only"), true);
 });
 
 test("worker ingests GitHub Actions deploy completion event and shows it on dashboard", async () => {
