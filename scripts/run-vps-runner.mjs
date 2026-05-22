@@ -585,7 +585,7 @@ async function executeVpsDashboardChatTriage({ githubFetch, payload, notificatio
     currentStep: "dashboard_chat_triage"
   });
   await assertVpsRunnerNotCanceled({ githubFetch, payload, checkpoint: "after_triage_codex", notification });
-  const reply = summarizeDiagnosticText(result.stdout || result.stderr || "VPS Codex CLI completed dashboard chat triage.", 4000);
+  const reply = summarizeDashboardReplyText(result.stdout || result.stderr || "VPS Codex CLI completed dashboard chat triage.", 4000);
   await postVpsRunnerEvent({
     githubFetch,
     payload,
@@ -722,7 +722,7 @@ async function executeVpsDashboardSocketJob({
       input: buildDashboardGeneralChatPrompt({ payload }),
       maxBuffer: 1024 * 1024 * 12
     });
-    const reply = summarizeDiagnosticText(result.stdout || result.stderr || "VPS Codex CLI completed dashboard chat.", 4000);
+    const reply = summarizeDashboardReplyText(result.stdout || result.stderr || "VPS Codex CLI completed dashboard chat.", 4000);
     sendDashboardSocketReply(socket, {
       threadId: payload.handoff.dashboardThreadId,
       status: "completed",
@@ -769,7 +769,7 @@ async function executeVpsDashboardSocketJob({
     input: buildDashboardChatTriagePrompt({ payload, issue, preflight }),
     maxBuffer: 1024 * 1024 * 12
   });
-  const reply = summarizeDiagnosticText(result.stdout || result.stderr || "VPS Codex CLI completed dashboard chat triage.", 4000);
+  const reply = summarizeDashboardReplyText(result.stdout || result.stderr || "VPS Codex CLI completed dashboard chat triage.", 4000);
   sendDashboardSocketReply(socket, {
     threadId: payload.handoff.dashboardThreadId,
     repository: payload.repository,
@@ -784,7 +784,8 @@ function buildVpsDashboardSocketExecutionPayload(job) {
   const issueNumber = normalizePositiveInteger(job?.relatedIssue || job?.issueNumber);
   const threadId = normalizeText(job?.threadId);
   const repositoryResolution = job?.repositoryResolution && typeof job.repositoryResolution === "object" ? job.repositoryResolution : {};
-  const conversationOnly = !repository && !issueNumber;
+  const conversationOnly = !repository;
+  const issueContextReadable = Boolean(repository && issueNumber);
   return {
     executionId: `dashboard-ws-${Date.now()}-${crypto.randomUUID()}`,
     repository,
@@ -793,6 +794,7 @@ function buildVpsDashboardSocketExecutionPayload(job) {
     baseRef: "main",
     codexGoal: "dashboard_chat_triage",
     conversationOnly,
+    issueContextReadable,
     repositoryResolution: {
       ok: repositoryResolution.ok === true,
       error: normalizeText(repositoryResolution.error),
@@ -810,6 +812,11 @@ function buildVpsDashboardSocketExecutionPayload(job) {
 function buildDashboardGeneralChatPrompt({ payload }) {
   const handoff = payload?.handoff && typeof payload.handoff === "object" ? payload.handoff : {};
   const ownerMessage = normalizeText(handoff.ownerMessage);
+  const repositoryInput = normalizeText(handoff.repositoryInput);
+  const issueNumber = normalizePositiveInteger(payload?.issueNumber);
+  const repositoryResolution = payload?.repositoryResolution && typeof payload.repositoryResolution === "object"
+    ? payload.repositoryResolution
+    : {};
   return [
     "You are VTDD Butler running on the user's VPS Codex CLI.",
     "",
@@ -819,12 +826,18 @@ function buildDashboardGeneralChatPrompt({ payload }) {
     "Dashboard routing:",
     "- This message did not resolve to a repository/Issue execution target.",
     "- Answer as a normal Butler conversation. Do not require GitHub Issue preflight for general chat.",
-    "- If the owner is asking for repository work, explain in Japanese that repo/nickname or owner/repo is needed, and give one short example.",
+    `- repositoryInput: ${repositoryInput || "missing"}`,
+    `- detectedIssueNumber: ${issueNumber ? `#${issueNumber}` : "missing"}`,
+    `- repositoryResolution: ${repositoryResolution.ok === true ? "resolved" : normalizeText(repositoryResolution.error) || "unresolved"}`,
+    "- If an Issue number is present but repository is unresolved, do not answer as if you read that Issue, PRs, checks, or runtime truth.",
+    "- For unresolved repository work, explain in Japanese that repo/nickname or owner/repo is needed before VTDD can read GitHub truth or continue development, and give one short example.",
+    "- If ordinary conversation reveals a new actionable development need, classify it as issue_split_proposal or execution_handoff_needed, then ask for the target repo/nickname and GO boundary before any issue creation or implementation.",
     "- If the owner is asking a general question, answer directly in Japanese.",
     "- Do not edit files, commit, push, create PRs, merge, deploy, mutate secrets, mutate permissions, or close Issues.",
     "Reply format:",
     "- Japanese first.",
     "- Be concise.",
+    "- Use readable Markdown with short paragraphs or bullets when the answer has multiple facts.",
     "- Do not mention internal JSON, WebSocket, preflight, or queue unless it is the actual answer."
   ].join("\n");
 }
@@ -895,6 +908,7 @@ function buildDashboardChatTriagePrompt({ payload, issue = {}, preflight = null 
     "Reply format:",
     "- Japanese first.",
     "- Be concise but operational.",
+    "- Use readable Markdown with line breaks. Do not compress bullets into one paragraph.",
     "- Include the classification: answer / issue_split_proposal / existing_issue_link / execution_handoff_needed / approval_needed / rag_candidate / blocker.",
     "- Include next action and any missing information.",
     "- If you mention a GitHub item, include a clickable URL if known."
@@ -2829,6 +2843,19 @@ function summarizeDiagnosticText(value, maxLength = 500) {
   return redacted.length <= maxLength ? redacted : `${redacted.slice(0, maxLength)} [truncated]`;
 }
 
+function summarizeDashboardReplyText(value, maxLength = 4000) {
+  const redacted = redactDiagnosticText(value)
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  if (!redacted) {
+    return null;
+  }
+  return redacted.length <= maxLength ? redacted : `${redacted.slice(0, maxLength)}\n[truncated]`;
+}
+
 function buildVpsRunnerNotificationContext(input = {}) {
   return {
     queueCommentAuthor: normalizeGitHubLogin(input.queueCommentAuthor),
@@ -3054,6 +3081,7 @@ export {
   buildCodexExecutionPrompt,
   buildDashboardChatTriagePrompt,
   buildDashboardGeneralChatPrompt,
+  buildVpsDashboardSocketExecutionPayload,
   buildVpsDashboardActionBridgeGuide,
   buildVpsDashboardActionReadBridgeGuide,
   buildDashboardRunnerWebSocketUrl,
@@ -3081,6 +3109,7 @@ export {
   runVpsRunnerOnce,
   startVpsDashboardWebSocketRunner,
   resolveRoleGitHubAppInstallationToken,
+  summarizeDashboardReplyText,
   summarizeDiagnosticText,
   selectPendingVpsReviewerFallbacks,
   selectPendingVpsRunnerExecutions

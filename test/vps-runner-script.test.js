@@ -8,6 +8,7 @@ import {
   buildCodexExecutionPrompt,
   buildDashboardChatTriagePrompt,
   buildDashboardGeneralChatPrompt,
+  buildVpsDashboardSocketExecutionPayload,
   buildVpsDashboardActionBridgeGuide,
   buildVpsDashboardActionReadBridgeGuide,
   buildDashboardRunnerWebSocketUrl,
@@ -35,6 +36,7 @@ import {
   postVpsRunnerEvent,
   runVpsRunnerOnce,
   resolveRoleGitHubAppInstallationToken,
+  summarizeDashboardReplyText,
   summarizeDiagnosticText,
   selectPendingVpsReviewerFallbacks,
   selectPendingVpsRunnerExecutions
@@ -694,6 +696,39 @@ test("VPS runner dashboard WebSocket client reconnects after disconnect", async 
   assert.equal(sockets[1].protocols[0], "vtdd-vps-runner");
 });
 
+test("VPS runner treats unresolved dashboard issue-only jobs as conversation without readable Issue context", () => {
+  const payload = buildVpsDashboardSocketExecutionPayload({
+    type: "dashboard_chat_job",
+    threadId: "dashboard-main-unresolved",
+    repository: "",
+    repositoryResolution: { ok: false, error: "repository_required" },
+    relatedIssue: 450,
+    text: "今の #450 の残りを短く返して"
+  });
+
+  assert.equal(payload.repository, "");
+  assert.equal(payload.issueNumber, 450);
+  assert.equal(payload.conversationOnly, true);
+  assert.equal(payload.issueContextReadable, false);
+});
+
+test("VPS runner preserves readable Issue context only after repository resolution", () => {
+  const payload = buildVpsDashboardSocketExecutionPayload({
+    type: "dashboard_chat_job",
+    threadId: "dashboard-main-marushu-vtdd-v2-p",
+    repository: "marushu/vtdd-v2-p",
+    repositoryInput: "ぶい",
+    repositoryResolution: { ok: true, via: "alias" },
+    relatedIssue: 450,
+    text: "#450 の残り Issue と PR を確認して"
+  });
+
+  assert.equal(payload.repository, "marushu/vtdd-v2-p");
+  assert.equal(payload.issueNumber, 450);
+  assert.equal(payload.conversationOnly, false);
+  assert.equal(payload.issueContextReadable, true);
+});
+
 test("VPS runner milestone event mentions queue comment author", () => {
   const body = buildVpsRunnerEventComment({
     executionId: "exec-mention",
@@ -1105,6 +1140,28 @@ test("VPS runner diagnostic summaries redact secrets and stay short", () => {
   assert.equal(summary.includes("[REDACTED_API_KEY]"), true);
   assert.equal(summary.endsWith("[truncated]"), true);
   assert.equal(summary.length <= 192, true);
+});
+
+test("VPS runner dashboard replies preserve readable line breaks", () => {
+  const summary = summarizeDashboardReplyText(
+    [
+      "分類: `answer / existing_issue_link`",
+      "",
+      "#450 の残りはこれだけです。",
+      "",
+      "- #450 はまだ OPEN",
+      "- open PR は 0 件",
+      "",
+      "残り作業:",
+      "1. dashboard live E2E",
+      "2. 証跡を残す"
+    ].join("\n"),
+    4000
+  );
+
+  assert.equal(summary.includes("\n\n- #450 はまだ OPEN\n- open PR は 0 件"), true);
+  assert.equal(summary.includes("OPEN - open PR"), false);
+  assert.equal(summary.includes("\n1. dashboard live E2E\n2. 証跡を残す"), true);
 });
 
 test("VPS runner dry run reports selected execution without side effects", async () => {
@@ -1750,8 +1807,11 @@ test("VPS runner general dashboard chat prompt allows normal conversation withou
   const prompt = buildDashboardGeneralChatPrompt({
     payload: {
       conversationOnly: true,
+      issueNumber: 450,
+      repositoryResolution: { ok: false, error: "repository_required" },
       handoff: {
         ownerMessage: "今日は何月何日？日本時間を答えて",
+        repositoryInput: "missing",
         dashboardThreadId: "dashboard-main"
       }
     }
@@ -1761,6 +1821,12 @@ test("VPS runner general dashboard chat prompt allows normal conversation withou
   assert.equal(prompt.includes("今日は何月何日？日本時間を答えて"), true);
   assert.equal(prompt.includes("Answer as a normal Butler conversation"), true);
   assert.equal(prompt.includes("Do not require GitHub Issue preflight for general chat"), true);
+  assert.equal(prompt.includes("detectedIssueNumber: #450"), true);
+  assert.equal(prompt.includes("repositoryResolution: repository_required"), true);
+  assert.equal(prompt.includes("do not answer as if you read that Issue"), true);
+  assert.equal(prompt.includes("before VTDD can read GitHub truth or continue development"), true);
+  assert.equal(prompt.includes("ordinary conversation reveals a new actionable development need"), true);
+  assert.equal(prompt.includes("issue_split_proposal or execution_handoff_needed"), true);
   assert.equal(prompt.includes("Runtime read-only bridge:"), false);
   assert.equal(prompt.includes("vtddRetrieveRepositoryNicknames: GET /v2/retrieve/repository-nicknames"), false);
   assert.equal(prompt.includes("vtddWriteOperationalMemory: POST /v2/action/memory-write"), false);
