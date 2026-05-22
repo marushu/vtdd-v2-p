@@ -56326,12 +56326,14 @@ var LEGACY_AUTONOMY_MODE_ENV = "MVP_AUTONOMY_MODE";
 var MEMORY_D1_BINDING = "VTDD_MEMORY_D1";
 var MEMORY_R2_BINDING = "VTDD_MEMORY_R2";
 var MEMORY_BLOB_THRESHOLD_ENV = "VTDD_MEMORY_BLOB_THRESHOLD";
+var WEB_PUSH_PUBLIC_KEY_ENV = "VTDD_WEB_PUSH_PUBLIC_KEY";
 var DEFAULT_MEMORY_LIMIT = 20;
 var MAX_MEMORY_LIMIT = 200;
 var memoryProviderCache = /* @__PURE__ */ new WeakMap();
 var d1AdapterCache = /* @__PURE__ */ new WeakMap();
 var dashboardEventStoreCache = /* @__PURE__ */ new WeakMap();
 var dashboardChatStoreCache = /* @__PURE__ */ new WeakMap();
+var dashboardPushSubscriptionStoreCache = /* @__PURE__ */ new WeakMap();
 var runtime_default = {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -56366,6 +56368,17 @@ var runtime_default = {
           mcpPath: MCP_PATH
         })
       );
+    }
+    if (request.method === "GET" && url.pathname === "/dashboard.webmanifest") {
+      return json(200, buildDashboardWebManifest(url), {
+        "content-type": "application/manifest+json; charset=utf-8"
+      });
+    }
+    if (request.method === "GET" && url.pathname === "/dashboard-sw.js") {
+      return javascript(200, renderDashboardServiceWorkerScript());
+    }
+    if (request.method === "GET" && url.pathname === "/dashboard-icon.svg") {
+      return svg(200, renderDashboardIconSvg());
     }
     if (request.method === "GET" && isDashboardPagePath(url.pathname)) {
       const auth = await authorizeDashboardRequest({ request, env, apiSuffix: url.pathname });
@@ -56406,12 +56419,16 @@ var runtime_default = {
         200,
         await renderDashboardNotificationsPage({
           runtimeOrigin: url.origin,
-          dashboardEventStore: resolveDashboardEventStore(env)
+          dashboardEventStore: resolveDashboardEventStore(env),
+          env
         })
       );
     }
     if (request.method === "POST" && isApiPath(url.pathname, "/dashboard/chat/messages")) {
       return handleDashboardChatMessageRequest(request, env);
+    }
+    if (request.method === "POST" && isApiPath(url.pathname, "/dashboard/push/subscription")) {
+      return handleDashboardPushSubscriptionRequest(request, env);
     }
     if (request.method === "GET" && isDashboardChatSocketApiPath(url.pathname)) {
       return handleDashboardChatSocketRequest(request, url, env);
@@ -59036,6 +59053,51 @@ async function handleDashboardChatMessageRequest(request, env) {
     execution: null
   });
 }
+async function handleDashboardPushSubscriptionRequest(request, env) {
+  const dashboardAuth = await authorizeDashboardRequest({
+    request,
+    env,
+    apiSuffix: "/dashboard/push/subscription"
+  });
+  if (!dashboardAuth.ok) {
+    return json(dashboardAuth.status, {
+      ok: false,
+      error: "dashboard_auth_required",
+      reason: dashboardAuth.reason
+    });
+  }
+  const store = resolveDashboardPushSubscriptionStore(env);
+  if (!store) {
+    return json(503, {
+      ok: false,
+      error: "dashboard_push_subscription_store_unavailable",
+      reason: "dashboard push subscription store is not configured"
+    });
+  }
+  const payload = await readJson(request);
+  const subscription = await normalizeDashboardPushSubscription(payload?.subscription || payload);
+  if (!subscription.ok) {
+    return json(422, {
+      ok: false,
+      error: "dashboard_push_subscription_invalid",
+      reason: subscription.reason
+    });
+  }
+  const saved = await store.put({
+    ...subscription.record,
+    userAgent: sanitizeDashboardChatText(payload?.userAgent || request.headers.get("user-agent") || ""),
+    ownerIdentity: normalizeDashboardEventText(dashboardAuth.subject) || normalizeDashboardEventText(dashboardAuth.authType) || "dashboard_owner",
+    updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+  });
+  return json(202, {
+    ok: true,
+    subscription: {
+      endpointHash: saved.endpointHash,
+      updatedAt: saved.updatedAt,
+      status: "saved"
+    }
+  });
+}
 async function handleDashboardChatSocketRequest(request, url, env) {
   const auth = await authorizeDashboardRequest({
     request,
@@ -60638,6 +60700,25 @@ function resolveDashboardChatStore(env) {
   dashboardChatStoreCache.set(d1Binding, store);
   return store;
 }
+function resolveDashboardPushSubscriptionStore(env) {
+  if (!env || typeof env !== "object") {
+    return null;
+  }
+  const injectedStore = env.DASHBOARD_PUSH_SUBSCRIPTION_STORE ?? null;
+  if (injectedStore && typeof injectedStore.put === "function") {
+    return injectedStore;
+  }
+  const d1Binding = env[MEMORY_D1_BINDING] ?? null;
+  if (!d1Binding || typeof d1Binding.prepare !== "function") {
+    return null;
+  }
+  if (dashboardPushSubscriptionStoreCache.has(d1Binding)) {
+    return dashboardPushSubscriptionStoreCache.get(d1Binding);
+  }
+  const store = createD1DashboardPushSubscriptionStore(d1Binding);
+  dashboardPushSubscriptionStoreCache.set(d1Binding, store);
+  return store;
+}
 function resolveDashboardChatRoomStub(env, threadId) {
   const namespace = env?.DASHBOARD_CHAT_ROOMS ?? null;
   const roomName = normalizeDashboardThreadId(threadId);
@@ -61174,6 +61255,61 @@ function createD1DashboardChatStore(d1) {
     return schemaPromise;
   }
 }
+function createD1DashboardPushSubscriptionStore(d1) {
+  let schemaPromise = null;
+  return {
+    async put(subscription) {
+      const normalized = {
+        endpointHash: normalizeDashboardEventText(subscription.endpointHash),
+        endpoint: normalizeDashboardEventText(subscription.endpoint),
+        expirationTime: subscription.expirationTime ?? null,
+        p256dh: normalizeDashboardEventText(subscription.p256dh),
+        auth: normalizeDashboardEventText(subscription.auth),
+        userAgent: sanitizeDashboardChatText(subscription.userAgent),
+        ownerIdentity: normalizeDashboardEventText(subscription.ownerIdentity) || "dashboard_owner",
+        updatedAt: normalizeIsoTimestamp(subscription.updatedAt) || (/* @__PURE__ */ new Date()).toISOString()
+      };
+      await ensureSchema();
+      await d1.prepare(
+        `INSERT OR REPLACE INTO vtdd_dashboard_push_subscriptions (
+             endpoint_hash, endpoint, expiration_time, p256dh, auth, user_agent,
+             owner_identity, updated_at, payload_json
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).bind(
+        normalized.endpointHash,
+        normalized.endpoint,
+        normalized.expirationTime,
+        normalized.p256dh,
+        normalized.auth,
+        normalized.userAgent,
+        normalized.ownerIdentity,
+        normalized.updatedAt,
+        JSON.stringify({
+          endpointHash: normalized.endpointHash,
+          expirationTime: normalized.expirationTime,
+          rawMaterial: "stored_in_columns_for_server_side_web_push_send_only",
+          userAgent: normalized.userAgent,
+          ownerIdentity: normalized.ownerIdentity,
+          updatedAt: normalized.updatedAt
+        })
+      ).run();
+      return normalized;
+    }
+  };
+  function ensureSchema() {
+    if (!schemaPromise) {
+      schemaPromise = (async () => {
+        await d1.exec(
+          "CREATE TABLE IF NOT EXISTS vtdd_dashboard_push_subscriptions (endpoint_hash TEXT PRIMARY KEY, endpoint TEXT NOT NULL, expiration_time INTEGER, p256dh TEXT NOT NULL, auth TEXT NOT NULL, user_agent TEXT, owner_identity TEXT NOT NULL, updated_at TEXT NOT NULL, payload_json TEXT NOT NULL);"
+        );
+        await d1.exec(
+          "CREATE INDEX IF NOT EXISTS idx_vtdd_dashboard_push_subscriptions_updated_at ON vtdd_dashboard_push_subscriptions (updated_at DESC);"
+        );
+      })();
+    }
+    return schemaPromise;
+  }
+}
 function buildDashboardChatTurn(payload, options = {}) {
   const input = normalizeObject11(payload);
   const repository = normalizeCanonicalRepositoryInput(input.repository);
@@ -61252,6 +61388,47 @@ function normalizeDashboardChatMessage(message, defaults = {}) {
     text: sanitizeDashboardChatText(input.text || input.message || input.body) || "\uFF08\u7A7A\u306E\u30E1\u30C3\u30BB\u30FC\u30B8\uFF09",
     createdAt
   };
+}
+async function normalizeDashboardPushSubscription(value) {
+  const input = normalizeObject11(value);
+  const endpoint = normalizeDashboardUrl(input.endpoint);
+  const keys = normalizeObject11(input.keys);
+  const p256dh = normalizeDashboardEventText(keys.p256dh);
+  const auth = normalizeDashboardEventText(keys.auth);
+  if (!endpoint) {
+    return {
+      ok: false,
+      reason: "push subscription endpoint is required"
+    };
+  }
+  if (!p256dh || !auth) {
+    return {
+      ok: false,
+      reason: "push subscription keys.p256dh and keys.auth are required"
+    };
+  }
+  const endpointHash = await sha256Hex(endpoint);
+  return {
+    ok: true,
+    record: {
+      endpointHash,
+      endpoint,
+      expirationTime: Number.isFinite(Number(input.expirationTime)) ? Number(input.expirationTime) : null,
+      p256dh,
+      auth
+    }
+  };
+}
+async function sha256Hex(value) {
+  const text = normalizeText30(value);
+  if (!text) {
+    return "";
+  }
+  if (globalThis.crypto?.subtle && typeof TextEncoder !== "undefined") {
+    const digest2 = await globalThis.crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+    return [...new Uint8Array(digest2)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  }
+  return btoa(text).replace(/[^A-Za-z0-9]/g, "").slice(0, 64);
 }
 function normalizeDashboardThreadSummary(summary, defaults = {}) {
   const input = normalizeObject11(summary);
@@ -62716,7 +62893,7 @@ async function renderDashboardSelfParityPage({ url, env } = {}) {
     `
   });
 }
-async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventStore } = {}) {
+async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventStore, env } = {}) {
   const origin = normalize7(runtimeOrigin);
   const recentSince = new Date(Date.now() - 5 * 60 * 1e3).toISOString();
   const recentEvents = await retrieveRecentDashboardEvents({
@@ -62724,24 +62901,237 @@ async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventS
     since: recentSince,
     limit: 20
   });
+  const publicKey = normalizeDashboardEventText(env?.[WEB_PUSH_PUBLIC_KEY_ENV]);
   return renderDashboardUtilityPage({
     title: "\u901A\u77E5\u30BB\u30F3\u30BF\u30FC",
     subtitle: "dashboard events",
     backHref: `${origin}/dashboard`,
     body: `
       <section class="hero">
-        <p>\u4ECA\u306F iOS Push / \u97F3 / PWA badge \u3067\u306F\u306A\u304F\u3001Worker \u306B\u5C4A\u3044\u305F dashboard event \u306E\u4EBA\u9593\u5411\u3051\u8868\u793A\u3067\u3059\u3002</p>
+        <p>Dashboard Butler \u306E\u901A\u77E5\u5165\u53E3\u3067\u3059\u3002iOS PWA Web Push\u3001OS \u306E\u901A\u77E5\u97F3\u3001\u672A\u8AAD badge \u306F\u3053\u306E\u753B\u9762\u304B\u3089\u8A31\u53EF\u30FB\u78BA\u8A8D\u3057\u307E\u3059\u3002</p>
         <p class="muted">VTDD \u3060\u3051\u3067\u306A\u304F\u3001\u4ED6 repo / \u4E26\u884C\u958B\u767A / queue / workflow \u304B\u3089\u5C4A\u3044\u305F\u30A4\u30D9\u30F3\u30C8\u3092\u76F4\u8FD15\u5206\u3060\u3051\u8868\u793A\u3057\u307E\u3059\u3002</p>
-        <p class="muted">\u6B21\u306E\u6BB5\u968E\u3067 Web Push \u8CFC\u8AAD\u3001\u901A\u77E5 permission\u3001\u901A\u77E5\u30BF\u30C3\u30D7\u9077\u79FB\u3092\u8FFD\u52A0\u3057\u307E\u3059\u3002</p>
       </section>
+      <div class="grid">
+        <section class="lane">
+          <div class="lane-title"><h2>iOS PWA \u901A\u77E5</h2><span class="pill" id="push-support-pill">\u78BA\u8A8D\u4E2D</span></div>
+          <p id="push-state" class="muted">\u901A\u77E5\u72B6\u614B\u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u3002</p>
+          <div class="actions">
+            <button class="dashboard-action" id="push-permission-button" type="button">\u901A\u77E5\u3092\u8A31\u53EF</button>
+            <button class="dashboard-action" id="push-subscribe-button" type="button">\u8CFC\u8AAD\u3092\u4FDD\u5B58</button>
+            <button class="dashboard-action" id="push-test-button" type="button">\u30C6\u30B9\u30C8\u901A\u77E5</button>
+          </div>
+          <p class="muted">\u901A\u77E5\u30BF\u30C3\u30D7\u306F\u901A\u77E5\u30BB\u30F3\u30BF\u30FC\u3078\u623B\u308A\u307E\u3059\u3002\u97F3\u306F iOS \u5074\u306E\u901A\u77E5\u8A2D\u5B9A\u306B\u5F93\u3044\u307E\u3059\u3002</p>
+        </section>
+        <section class="lane">
+          <div class="lane-title"><h2>Badge</h2><span class="pill" id="badge-support-pill">\u78BA\u8A8D\u4E2D</span></div>
+          <p id="badge-state" class="muted">Badging API \u306E\u5BFE\u5FDC\u72B6\u6CC1\u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u3002</p>
+          <div class="actions">
+            <button class="dashboard-action" id="badge-set-button" type="button">\u672A\u8AAD\u6570\u3092\u53CD\u6620</button>
+            <button class="dashboard-action" id="badge-clear-button" type="button">Badge \u3092\u6D88\u3059</button>
+          </div>
+        </section>
+        <section class="lane">
+          <div class="lane-title"><h2>Authority boundary</h2><span class="pill">read/write</span></div>
+          <p>push subscription \u306F dashboard owner session \u304B\u3089\u4FDD\u5B58\u3057\u307E\u3059\u3002HTML \u306B\u306F endpoint\u3001auth key\u3001p256dh key \u3092\u57CB\u3081\u8FBC\u307F\u307E\u305B\u3093\u3002</p>
+          <p class="muted">\u540C\u4E00 origin \u306E dashboard owner session cookie / Cloudflare Access identity \u3092\u4F7F\u3046\u305F\u3081\u3001\u8CFC\u8AAD\u4FDD\u5B58 fetch \u306F credentials: same-origin \u3067\u9001\u308A\u307E\u3059\u3002</p>
+          <p class="muted">Web Push \u9001\u4FE1\u306B\u306F server-side VAPID secret \u3068 subscription raw material \u304C\u5FC5\u8981\u3067\u3059\u3002D1 \u306B\u306F\u9001\u4FE1\u7528\u306B\u4FDD\u6301\u3057\u3001response / HTML / payload_json \u306B\u306F raw key \u3092\u8FD4\u3057\u307E\u305B\u3093\u3002</p>
+        </section>
+      </div>
       <div class="grid single">
         <section class="lane">
           <div class="lane-title"><h2>\u6700\u65B0\u901A\u77E5</h2><span class="pill">\u76F4\u8FD15\u5206</span></div>
           ${recentEvents.length > 0 ? recentEvents.map((event) => renderDashboardNotificationEvent(event)).join("") : `<p class="muted">\u76F4\u8FD15\u5206\u306E\u901A\u77E5\u306F\u3042\u308A\u307E\u305B\u3093\u3002</p>`}
         </section>
       </div>
+      <script>
+        (() => {
+          const vapidPublicKey = ${JSON.stringify(publicKey)};
+          const pushState = document.getElementById("push-state");
+          const pushSupportPill = document.getElementById("push-support-pill");
+          const badgeState = document.getElementById("badge-state");
+          const badgeSupportPill = document.getElementById("badge-support-pill");
+          const permissionButton = document.getElementById("push-permission-button");
+          const subscribeButton = document.getElementById("push-subscribe-button");
+          const testButton = document.getElementById("push-test-button");
+          const badgeSetButton = document.getElementById("badge-set-button");
+          const badgeClearButton = document.getElementById("badge-clear-button");
+          const unreadCount = ${recentEvents.length};
+
+          function setText(node, text) {
+            if (node) node.textContent = text;
+          }
+
+          function setPill(node, text, ok) {
+            if (!node) return;
+            node.textContent = text;
+            node.classList.toggle("success", ok === true);
+            node.classList.toggle("danger", ok === false);
+          }
+
+          function base64UrlToUint8Array(value) {
+            const padding = "=".repeat((4 - value.length % 4) % 4);
+            const base64 = (value + padding).replace(/-/g, "+").replace(/_/g, "/");
+            const raw = atob(base64);
+            const output = new Uint8Array(raw.length);
+            for (let index = 0; index < raw.length; index += 1) output[index] = raw.charCodeAt(index);
+            return output;
+          }
+
+          async function registration() {
+            if (!("serviceWorker" in navigator)) return null;
+            return navigator.serviceWorker.register("/dashboard-sw.js", { scope: "/dashboard/" });
+          }
+
+          async function refreshState() {
+            const pushSupported = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+            setPill(pushSupportPill, pushSupported ? "\u5BFE\u5FDC" : "\u672A\u5BFE\u5FDC", pushSupported);
+            setText(pushState, pushSupported
+              ? "\u901A\u77E5 permission: " + Notification.permission + (vapidPublicKey ? "" : " / VAPID public key \u672A\u8A2D\u5B9A")
+              : "\u3053\u306E\u74B0\u5883\u306F Web Push \u306B\u672A\u5BFE\u5FDC\u3067\u3059\u3002iOS \u306F\u30DB\u30FC\u30E0\u753B\u9762\u306B\u8FFD\u52A0\u3057\u305F PWA \u304C\u5FC5\u8981\u3067\u3059\u3002");
+            const badgeSupported = "setAppBadge" in navigator && "clearAppBadge" in navigator;
+            setPill(badgeSupportPill, badgeSupported ? "\u5BFE\u5FDC" : "\u672A\u5BFE\u5FDC", badgeSupported);
+            setText(badgeState, badgeSupported ? "\u672A\u8AAD\u901A\u77E5\u6570\u3092\u30DB\u30FC\u30E0\u753B\u9762 badge \u306B\u53CD\u6620\u3067\u304D\u307E\u3059\u3002" : "\u3053\u306E\u74B0\u5883\u3067\u306F Badging API \u304C\u672A\u5BFE\u5FDC\u3067\u3059\u3002");
+            if (subscribeButton) subscribeButton.disabled = !pushSupported || !vapidPublicKey || Notification.permission !== "granted";
+            if (permissionButton) permissionButton.disabled = !pushSupported || Notification.permission === "granted";
+            if (testButton) testButton.disabled = !pushSupported || Notification.permission !== "granted";
+            if (badgeSetButton) badgeSetButton.disabled = !badgeSupported;
+            if (badgeClearButton) badgeClearButton.disabled = !badgeSupported;
+          }
+
+          permissionButton?.addEventListener("click", async () => {
+            if (!("Notification" in window)) return refreshState();
+            await Notification.requestPermission();
+            await registration();
+            await refreshState();
+          });
+
+          subscribeButton?.addEventListener("click", async () => {
+            const reg = await registration();
+            if (!reg || !vapidPublicKey) return refreshState();
+            const subscription = await reg.pushManager.subscribe({
+              userVisibleOnly: true,
+              applicationServerKey: base64UrlToUint8Array(vapidPublicKey)
+            });
+            const response = await fetch("/v2/dashboard/push/subscription", {
+              method: "POST",
+              credentials: "same-origin",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ subscription: subscription.toJSON(), userAgent: navigator.userAgent })
+            });
+            setText(pushState, response.ok ? "push subscription \u3092\u4FDD\u5B58\u3057\u307E\u3057\u305F\u3002" : "push subscription \u306E\u4FDD\u5B58\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002");
+            await refreshState();
+          });
+
+          testButton?.addEventListener("click", async () => {
+            const reg = await registration();
+            if (!reg) return refreshState();
+            await reg.showNotification("VTDD Butler", {
+              body: "Dashboard Butler \u306E\u901A\u77E5\u30C6\u30B9\u30C8\u3067\u3059\u3002",
+              tag: "vtdd-dashboard-test",
+              renotify: true,
+              silent: false,
+              data: { url: "/dashboard/notifications" }
+            });
+          });
+
+          badgeSetButton?.addEventListener("click", async () => {
+            if ("setAppBadge" in navigator) await navigator.setAppBadge(Math.max(1, unreadCount));
+          });
+
+          badgeClearButton?.addEventListener("click", async () => {
+            if ("clearAppBadge" in navigator) await navigator.clearAppBadge();
+          });
+
+          refreshState();
+        })();
+      <\/script>
     `
   });
+}
+function buildDashboardWebManifest(url) {
+  const origin = normalize7(url?.origin);
+  return {
+    name: "VTDD Butler",
+    short_name: "VTDD",
+    start_url: "/dashboard",
+    scope: "/dashboard/",
+    display: "standalone",
+    background_color: "#050505",
+    theme_color: "#050505",
+    icons: [
+      {
+        src: `${origin}/dashboard-icon.svg`,
+        sizes: "any",
+        type: "image/svg+xml",
+        purpose: "any maskable"
+      }
+    ]
+  };
+}
+function renderDashboardServiceWorkerScript() {
+  return `
+self.addEventListener("install", () => {
+  self.skipWaiting();
+});
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil(self.clients.claim());
+});
+
+self.addEventListener("push", (event) => {
+  let payload = {};
+  try {
+    payload = event.data ? event.data.json() : {};
+  } catch {
+    payload = { body: event.data ? event.data.text() : "" };
+  }
+  const title = String(payload.title || "VTDD Butler");
+  const options = {
+    body: String(payload.body || payload.message || "Dashboard Butler \u306E\u901A\u77E5\u3067\u3059\u3002"),
+    tag: String(payload.tag || "vtdd-dashboard"),
+    renotify: payload.renotify !== false,
+    silent: payload.silent === true,
+    data: {
+      url: String(payload.url || "/dashboard/notifications")
+    }
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+function safeDashboardNotificationUrl(value) {
+  let parsed;
+  try {
+    parsed = new URL(value || "/dashboard/notifications", self.location.origin);
+  } catch {
+    parsed = new URL("/dashboard/notifications", self.location.origin);
+  }
+  if (parsed.origin !== self.location.origin) {
+    return new URL("/dashboard/notifications", self.location.origin).toString();
+  }
+  if (parsed.pathname !== "/dashboard" && !parsed.pathname.startsWith("/dashboard/")) {
+    return new URL("/dashboard/notifications", self.location.origin).toString();
+  }
+  return parsed.toString();
+}
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const targetUrl = safeDashboardNotificationUrl(event.notification.data && event.notification.data.url);
+  event.waitUntil((async () => {
+    const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    for (const client of clients) {
+      if ("focus" in client) {
+        await client.navigate(targetUrl);
+        return client.focus();
+      }
+    }
+    return self.clients.openWindow(targetUrl);
+  })());
+});
+`.trim();
+}
+function renderDashboardIconSvg() {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="112" fill="#050505"/><path d="M144 128h224v52H144zM144 230h224v52H144zM144 332h148v52H144z" fill="#f7f7f4"/></svg>`;
 }
 function renderGitHubTruthLane(title, result, renderCard) {
   if (!result.ok) {
@@ -62868,6 +63258,8 @@ function renderDashboardUtilityPage({ title, subtitle, backHref, body }) {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="manifest" href="/dashboard.webmanifest">
+  <meta name="theme-color" content="#050505">
   <title>${escapeDashboardHtml(title)} - VTDD Butler</title>
   <style>
     :root { color-scheme: light dark; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; --bg: #f7f7f4; --panel: #fff; --text: #151515; --muted: #62625d; --border: #deded6; --soft: #f0f0eb; }
@@ -62881,7 +63273,8 @@ function renderDashboardUtilityPage({ title, subtitle, backHref, body }) {
     h2 { font-size: 18px; margin: 0; }
     p { line-height: 1.6; margin: 0 0 10px; }
     a { color: inherit; text-underline-offset: 4px; }
-    .back, .actions a { display: inline-flex; min-height: 38px; align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: 999px; padding: 6px 12px; background: var(--soft); text-decoration: none; font-weight: 750; }
+    .back, .actions a, .dashboard-action { display: inline-flex; min-height: 38px; align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: 999px; padding: 6px 12px; background: var(--soft); color: var(--text); text-decoration: none; font: inherit; font-weight: 750; }
+    .dashboard-action:disabled { opacity: .45; }
     .hero, .lane, .notice { border: 1px solid var(--border); border-radius: 16px; background: var(--panel); padding: 14px; margin-bottom: 14px; }
     .actions { display: flex; flex-wrap: wrap; gap: 8px; }
     .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
@@ -63034,6 +63427,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="manifest" href="/dashboard.webmanifest">
+  <meta name="theme-color" content="#050505">
   <title>VTDD v2 Dashboard</title>
   <style>
     :root {
@@ -63830,6 +64225,25 @@ function html(status, body) {
       "content-type": "text/html; charset=utf-8",
       "cache-control": "no-store, no-cache, must-revalidate, max-age=0",
       pragma: "no-cache"
+    }
+  });
+}
+function javascript(status, body) {
+  return new Response(body, {
+    status,
+    headers: {
+      "content-type": "application/javascript; charset=utf-8",
+      "cache-control": "no-store, no-cache, must-revalidate, max-age=0",
+      pragma: "no-cache"
+    }
+  });
+}
+function svg(status, body) {
+  return new Response(body, {
+    status,
+    headers: {
+      "content-type": "image/svg+xml; charset=utf-8",
+      "cache-control": "public, max-age=3600"
     }
   });
 }
