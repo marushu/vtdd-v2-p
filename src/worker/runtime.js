@@ -8411,11 +8411,20 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       function appendMessage(message) {
         const article = document.createElement("article");
         article.className = message.role === "owner" ? "bubble owner" : "bubble";
-        if (message.role !== "owner") {
+        if (message.role === "owner") {
+          const copyButton = document.createElement("button");
+          copyButton.className = "copy-message";
+          copyButton.type = "button";
+          copyButton.textContent = "⧉";
+          copyButton.setAttribute("aria-label", "自分の発言をコピー");
+          copyButton.title = "自分の発言をコピー";
+          copyButton.addEventListener("click", () => copyMessageText(copyButton, message.text || ""));
+          article.appendChild(copyButton);
+        } else if (message.role === "butler") {
           const header = document.createElement("div");
           header.className = "bubble-header";
           const strong = document.createElement("strong");
-          strong.textContent = message.role === "system" ? "SYSTEM" : "Butler";
+          strong.textContent = "Butler";
           header.appendChild(strong);
           const copyButton = document.createElement("button");
           copyButton.className = "copy-message";
@@ -8426,15 +8435,13 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           copyButton.addEventListener("click", () => copyMessageText(copyButton, message.text || ""));
           header.appendChild(copyButton);
           article.appendChild(header);
-        } else {
-          const copyButton = document.createElement("button");
-          copyButton.className = "copy-message";
-          copyButton.type = "button";
-          copyButton.textContent = "⧉";
-          copyButton.setAttribute("aria-label", "自分の発言をコピー");
-          copyButton.title = "自分の発言をコピー";
-          copyButton.addEventListener("click", () => copyMessageText(copyButton, message.text || ""));
-          article.appendChild(copyButton);
+        } else if (message.role === "system") {
+          const header = document.createElement("div");
+          header.className = "bubble-header";
+          const strong = document.createElement("strong");
+          strong.textContent = "SYSTEM";
+          header.appendChild(strong);
+          article.appendChild(header);
         }
         const body = document.createElement("div");
         body.className = "message-body";

@@ -63109,11 +63109,20 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       function appendMessage(message) {
         const article = document.createElement("article");
         article.className = message.role === "owner" ? "bubble owner" : "bubble";
-        if (message.role !== "owner") {
+        if (message.role === "owner") {
+          const copyButton = document.createElement("button");
+          copyButton.className = "copy-message";
+          copyButton.type = "button";
+          copyButton.textContent = "\u29C9";
+          copyButton.setAttribute("aria-label", "\u81EA\u5206\u306E\u767A\u8A00\u3092\u30B3\u30D4\u30FC");
+          copyButton.title = "\u81EA\u5206\u306E\u767A\u8A00\u3092\u30B3\u30D4\u30FC";
+          copyButton.addEventListener("click", () => copyMessageText(copyButton, message.text || ""));
+          article.appendChild(copyButton);
+        } else if (message.role === "butler") {
           const header = document.createElement("div");
           header.className = "bubble-header";
           const strong = document.createElement("strong");
-          strong.textContent = message.role === "system" ? "SYSTEM" : "Butler";
+          strong.textContent = "Butler";
           header.appendChild(strong);
           const copyButton = document.createElement("button");
           copyButton.className = "copy-message";
@@ -63124,15 +63133,13 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           copyButton.addEventListener("click", () => copyMessageText(copyButton, message.text || ""));
           header.appendChild(copyButton);
           article.appendChild(header);
-        } else {
-          const copyButton = document.createElement("button");
-          copyButton.className = "copy-message";
-          copyButton.type = "button";
-          copyButton.textContent = "\u29C9";
-          copyButton.setAttribute("aria-label", "\u81EA\u5206\u306E\u767A\u8A00\u3092\u30B3\u30D4\u30FC");
-          copyButton.title = "\u81EA\u5206\u306E\u767A\u8A00\u3092\u30B3\u30D4\u30FC";
-          copyButton.addEventListener("click", () => copyMessageText(copyButton, message.text || ""));
-          article.appendChild(copyButton);
+        } else if (message.role === "system") {
+          const header = document.createElement("div");
+          header.className = "bubble-header";
+          const strong = document.createElement("strong");
+          strong.textContent = "SYSTEM";
+          header.appendChild(strong);
+          article.appendChild(header);
         }
         const body = document.createElement("div");
         body.className = "message-body";
