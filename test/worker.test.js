@@ -521,7 +521,9 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("function copyMessageText("), true);
   assert.equal(body.includes("navigator.clipboard.writeText"), true);
   assert.equal(body.includes("返信をコピー"), true);
+  assert.equal(body.includes("自分の発言をコピー"), true);
   assert.equal(body.includes('className = "copy-message"'), true);
+  assert.equal(body.includes('autocomplete="off" autocorrect="off" autocapitalize="sentences" spellcheck="false" enterkeyhint="send"'), true);
   assert.equal(body.includes("const messagesById = new Map()"), true);
   assert.equal(body.includes("messagesById.set(messageKey(message), message)"), true);
   assert.equal(body.includes("messagesById.clear()"), true);
