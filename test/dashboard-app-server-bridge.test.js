@@ -5,9 +5,12 @@ import {
   buildAppServerThreadResumeRequest,
   buildAppServerThreadStartRequest,
   buildAppServerTurnStartRequest,
+  extractAppServerNotificationTurnId,
   handleDashboardTurnRequest,
   mapAppServerNotificationToDashboardEvent,
-  parseBridgeArgs
+  matchesAppServerTurnNotification,
+  parseBridgeArgs,
+  runDashboardAppServerBridge
 } from "../scripts/run-dashboard-app-server-bridge.mjs";
 
 test("dashboard app-server bridge builds initialize and thread requests from Codex app-server protocol", () => {
@@ -74,6 +77,31 @@ test("dashboard app-server bridge maps Codex app-server notifications to dashboa
   assert.equal(completed.type, "app_server_status");
   assert.equal(completed.status, "replied");
   assert.equal(completed.text, "最終返答");
+});
+
+test("dashboard app-server bridge filters app-server notifications by Codex thread and turn", () => {
+  assert.equal(
+    matchesAppServerTurnNotification(
+      { method: "item/agentMessage/delta", params: { threadId: "codex-thread-1", turnId: "turn-1" } },
+      { codexThreadId: "codex-thread-1", turnId: "turn-1" }
+    ),
+    true
+  );
+  assert.equal(
+    matchesAppServerTurnNotification(
+      { method: "item/agentMessage/delta", params: { threadId: "codex-thread-2", turnId: "turn-1" } },
+      { codexThreadId: "codex-thread-1", turnId: "turn-1" }
+    ),
+    false
+  );
+  assert.equal(
+    matchesAppServerTurnNotification(
+      { method: "turn/completed", params: { threadId: "codex-thread-1", turn: { id: "turn-2" } } },
+      { codexThreadId: "codex-thread-1", turnId: "turn-1" }
+    ),
+    false
+  );
+  assert.equal(extractAppServerNotificationTurnId({ params: { turn: { id: "turn-2" } } }), "turn-2");
 });
 
 test("dashboard app-server bridge handles a fresh dashboard turn through thread/start and turn/start", async () => {
@@ -211,7 +239,97 @@ test("dashboard app-server bridge keeps listening for async turn notifications a
   assert.equal(handlers.size, 0);
 });
 
-test("dashboard app-server bridge args read runtime and token from environment", () => {
+test("dashboard app-server bridge ignores notifications for a different Codex turn", async () => {
+  const events = [];
+  const handlers = new Set();
+  let nextId = 1;
+  const appServer = {
+    nextRequestId() {
+      const id = nextId;
+      nextId += 1;
+      return id;
+    },
+    onNotification(handler) {
+      handlers.add(handler);
+      return () => handlers.delete(handler);
+    },
+    async request(message) {
+      if (message.method === "thread/start") {
+        return { thread: { id: "codex-thread-filtered" } };
+      }
+      if (message.method === "turn/start") {
+        setTimeout(() => {
+          for (const handler of handlers) {
+            handler({
+              method: "item/agentMessage/delta",
+              params: {
+                threadId: "codex-thread-filtered",
+                turnId: "other-turn",
+                delta: "混線"
+              }
+            });
+            handler({
+              method: "item/agentMessage/delta",
+              params: {
+                threadId: "codex-thread-filtered",
+                turnId: "turn-filtered",
+                delta: "正しい返信"
+              }
+            });
+            handler({
+              method: "turn/completed",
+              params: {
+                threadId: "codex-thread-filtered",
+                turn: { id: "turn-filtered", status: "completed" }
+              }
+            });
+          }
+        }, 0);
+        return { turn: { id: "turn-filtered" } };
+      }
+      throw new Error(`unexpected method ${message.method}`);
+    }
+  };
+
+  await handleDashboardTurnRequest({
+    request: {
+      threadId: "dashboard-main",
+      codexThreadId: null,
+      text: "混線しない？"
+    },
+    appServer,
+    sendDashboardEvent: async (event) => events.push(event),
+    cwd: "/repo",
+    turnTimeoutMs: 1000
+  });
+
+  assert.equal(events.some((event) => event.text === "混線"), false);
+  assert.equal(events.at(-1).type, "app_server_reply");
+  assert.equal(events.at(-1).text, "正しい返信");
+});
+
+test("dashboard app-server bridge args require a dashboard thread id for runtime connection", () => {
+  const parsed = parseBridgeArgs([], {
+    VTDD_RUNTIME_URL: "https://runtime.example",
+    VTDD_GATEWAY_BEARER_TOKEN: "secret-token",
+    VTDD_DASHBOARD_CODEX_CWD: "/repo"
+  });
+  assert.equal(parsed.threadId, "");
+});
+
+test("dashboard app-server bridge refuses to connect without a dashboard thread id", async () => {
+  await assert.rejects(
+    runDashboardAppServerBridge({
+      runtimeUrl: "https://runtime.example",
+      token: "secret-token",
+      threadId: "",
+      cwd: "/repo"
+    }),
+    /--thread-id is required/
+  );
+});
+
+test("dashboard app-server bridge args read runtime, token, and thread from environment", () => {
   const parsed = parseBridgeArgs(["--thread-id", "dashboard-main"], {
     VTDD_RUNTIME_URL: "https://runtime.example",
     VTDD_GATEWAY_BEARER_TOKEN: "secret-token",

@@ -122,6 +122,26 @@ export function mapAppServerNotificationToDashboardEvent(message, context = {}) 
   return null;
 }
 
+export function extractAppServerNotificationTurnId(message) {
+  const params = message?.params && typeof message.params === "object" ? message.params : {};
+  return String(params.turnId || params.turn?.id || "");
+}
+
+export function matchesAppServerTurnNotification(message, context = {}) {
+  const params = message?.params && typeof message.params === "object" ? message.params : {};
+  const expectedThreadId = String(context.codexThreadId || "");
+  const actualThreadId = String(params.threadId || "");
+  if (expectedThreadId && actualThreadId && actualThreadId !== expectedThreadId) {
+    return false;
+  }
+  const expectedTurnId = String(context.turnId || "");
+  const actualTurnId = extractAppServerNotificationTurnId(message);
+  if (expectedTurnId && actualTurnId && actualTurnId !== expectedTurnId) {
+    return false;
+  }
+  return true;
+}
+
 export class JsonLineAppServerClient {
   constructor({ command = "codex", args = ["app-server", "--listen", "stdio://"], cwd = process.cwd() } = {}) {
     this.command = command;
@@ -262,6 +282,7 @@ export async function handleDashboardTurnRequest({
   }
 
   let accumulatedText = "";
+  let activeTurnId = "";
   let turnSettled = false;
   let timeoutHandle = null;
   let resolveTurn = () => {};
@@ -280,6 +301,13 @@ export async function handleDashboardTurnRequest({
     callback();
   };
   const unsubscribe = appServer.onNotification((message) => {
+    if (!matchesAppServerTurnNotification(message, { codexThreadId, turnId: activeTurnId })) {
+      return;
+    }
+    const notificationTurnId = extractAppServerNotificationTurnId(message);
+    if (!activeTurnId && notificationTurnId) {
+      activeTurnId = notificationTurnId;
+    }
     const event = mapAppServerNotificationToDashboardEvent(message, {
       dashboardThreadId,
       codexThreadId,
@@ -306,7 +334,14 @@ export async function handleDashboardTurnRequest({
     void sendDashboardEvent(event);
   });
   try {
-    await appServer.request(buildAppServerTurnStartRequest({ id: appServer.nextRequestId(), codexThreadId, text, cwd }));
+    const startedTurn = await appServer.request(buildAppServerTurnStartRequest({ id: appServer.nextRequestId(), codexThreadId, text, cwd }));
+    const startedTurnId = String(startedTurn?.turn?.id || "");
+    if (activeTurnId && startedTurnId && activeTurnId !== startedTurnId) {
+      throw new Error("codex app-server returned a different turn id than the active notification stream");
+    }
+    if (!activeTurnId && startedTurnId) {
+      activeTurnId = startedTurnId;
+    }
     await turnCompletion;
   } finally {
     clearTimeout(timeoutHandle);
@@ -338,13 +373,14 @@ export async function runDashboardAppServerBridge(options = parseBridgeArgs()) {
   if (!options.token) {
     throw new Error("VTDD_GATEWAY_BEARER_TOKEN or --token is required");
   }
+  if (!options.threadId) {
+    throw new Error("VTDD_DASHBOARD_THREAD_ID or --thread-id is required so the bridge joins the same dashboard thread Durable Object");
+  }
   if (typeof WebSocket !== "function") {
     throw new Error("global WebSocket is required. Run with Node.js that provides WebSocket.");
   }
   const endpoint = new URL("/v2/dashboard/app-server/ws", options.runtimeUrl);
-  if (options.threadId) {
-    endpoint.searchParams.set("threadId", options.threadId);
-  }
+  endpoint.searchParams.set("threadId", options.threadId);
   endpoint.protocol = endpoint.protocol === "https:" ? "wss:" : "ws:";
 
   const appServer = new JsonLineAppServerClient({ cwd: options.cwd });
@@ -355,6 +391,7 @@ export async function runDashboardAppServerBridge(options = parseBridgeArgs()) {
   const sendDashboardEvent = async (event) => {
     socket.send(JSON.stringify(event));
   };
+  let turnQueue = Promise.resolve();
   socket.addEventListener("message", (event) => {
     let payload;
     try {
@@ -363,21 +400,26 @@ export async function runDashboardAppServerBridge(options = parseBridgeArgs()) {
       return;
     }
     if (payload?.type === "app_server_turn_requested") {
-      void handleDashboardTurnRequest({
-        request: payload,
-        appServer,
-        sendDashboardEvent,
-        cwd: options.cwd
-      }).catch((error) => {
-        socket.send(
-          JSON.stringify({
-            type: "app_server_turn_failed",
-            schema: DEFAULT_SCHEMA,
-            threadId: payload.threadId,
-            text: error?.message || "codex app-server bridge failed"
+      turnQueue = turnQueue
+        .catch(() => {})
+        .then(() =>
+          handleDashboardTurnRequest({
+            request: payload,
+            appServer,
+            sendDashboardEvent,
+            cwd: options.cwd
           })
-        );
-      });
+        )
+        .catch((error) => {
+          socket.send(
+            JSON.stringify({
+              type: "app_server_turn_failed",
+              schema: DEFAULT_SCHEMA,
+              threadId: payload.threadId,
+              text: error?.message || "codex app-server bridge failed"
+            })
+          );
+        });
     }
   });
 }
