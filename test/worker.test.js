@@ -169,6 +169,17 @@ function createInMemoryDashboardChatStore() {
   };
 }
 
+function createInMemoryDashboardPushSubscriptionStore() {
+  const subscriptions = new Map();
+  return {
+    subscriptions,
+    async put(subscription) {
+      subscriptions.set(subscription.endpointHash, subscription);
+      return subscription;
+    }
+  };
+}
+
 function createMockDashboardChatRoomNamespace() {
   const calls = [];
   return {
@@ -1625,7 +1636,16 @@ test("worker serves dashboard notification center for recent events across repos
   assert.match(response.headers.get("content-type"), /text\/html/);
   const body = await response.text();
   assert.equal(body.includes("通知センター"), true);
-  assert.equal(body.includes("iOS Push / 音 / PWA badge ではなく"), true);
+  assert.equal(body.includes("Dashboard Butler の通知入口です"), true);
+  assert.equal(body.includes("iOS PWA Web Push"), true);
+  assert.equal(body.includes("id=\"push-permission-button\""), true);
+  assert.equal(body.includes("id=\"push-subscribe-button\""), true);
+  assert.equal(body.includes("id=\"badge-set-button\""), true);
+  assert.equal(body.includes("/v2/dashboard/push/subscription"), true);
+  assert.equal(body.includes("navigator.setAppBadge"), true);
+  assert.equal(body.includes("Notification.requestPermission"), true);
+  assert.equal(body.includes("serviceWorker.register(\"/dashboard-sw.js\""), true);
+  assert.equal(body.includes("secret-must-not-persist"), false);
   assert.equal(body.includes("他 repo / 並行開発 / queue / workflow"), true);
   assert.equal(body.includes("最新通知"), true);
   assert.equal(body.includes("success"), true);
@@ -1637,6 +1657,90 @@ test("worker serves dashboard notification center for recent events across repos
   assert.equal(body.includes("dashboard-notification-center"), true);
   assert.equal(body.includes("2分前"), true);
   assert.equal(body.includes("old notification"), false);
+});
+
+test("worker serves dashboard PWA manifest and service worker notification handlers", async () => {
+  const manifestResponse = await worker.fetch(new Request("https://example.com/dashboard.webmanifest"));
+  assert.equal(manifestResponse.status, 200);
+  assert.match(manifestResponse.headers.get("content-type"), /application\/manifest\+json/);
+  const manifest = await manifestResponse.json();
+  assert.equal(manifest.name, "VTDD Butler");
+  assert.equal(manifest.start_url, "/dashboard");
+  assert.equal(manifest.display, "standalone");
+  assert.equal(manifest.icons[0].src, "https://example.com/dashboard-icon.svg");
+
+  const serviceWorkerResponse = await worker.fetch(new Request("https://example.com/dashboard-sw.js"));
+  assert.equal(serviceWorkerResponse.status, 200);
+  assert.match(serviceWorkerResponse.headers.get("content-type"), /application\/javascript/);
+  const serviceWorker = await serviceWorkerResponse.text();
+  assert.equal(serviceWorker.includes('self.addEventListener("push"'), true);
+  assert.equal(serviceWorker.includes("showNotification"), true);
+  assert.equal(serviceWorker.includes('self.addEventListener("notificationclick"'), true);
+  assert.equal(serviceWorker.includes("/dashboard/notifications"), true);
+
+  const iconResponse = await worker.fetch(new Request("https://example.com/dashboard-icon.svg"));
+  assert.equal(iconResponse.status, 200);
+  assert.match(iconResponse.headers.get("content-type"), /image\/svg\+xml/);
+});
+
+test("worker stores dashboard push subscription only for an authenticated owner session", async () => {
+  const store = createInMemoryDashboardPushSubscriptionStore();
+  const unauthenticated = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/push/subscription", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        subscription: {
+          endpoint: "https://push.example/subscription/secret-endpoint",
+          keys: { p256dh: "p256dh-key", auth: "auth-key" }
+        }
+      })
+    }),
+    {
+      ...dashboardAccessEnv,
+      DASHBOARD_PUSH_SUBSCRIPTION_STORE: store
+    }
+  );
+  assert.equal(unauthenticated.status, 401);
+  assert.equal(store.subscriptions.size, 0);
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/push/subscription", {
+      method: "POST",
+      headers: {
+        ...dashboardAccessHeaders,
+        "content-type": "application/json",
+        "user-agent": "iPhone PWA test"
+      },
+      body: JSON.stringify({
+        subscription: {
+          endpoint: "https://push.example/subscription/secret-endpoint",
+          expirationTime: null,
+          keys: { p256dh: "p256dh-key", auth: "auth-key" }
+        },
+        userAgent: "iPhone PWA test"
+      })
+    }),
+    {
+      ...dashboardAccessEnv,
+      DASHBOARD_PUSH_SUBSCRIPTION_STORE: store
+    }
+  );
+  assert.equal(response.status, 202);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.subscription.status, "saved");
+  assert.equal(typeof body.subscription.endpointHash, "string");
+  assert.equal(body.subscription.endpointHash.length > 12, true);
+  assert.equal(JSON.stringify(body).includes("secret-endpoint"), false);
+  assert.equal(JSON.stringify(body).includes("p256dh-key"), false);
+  assert.equal(JSON.stringify(body).includes("auth-key"), false);
+  assert.equal(store.subscriptions.size, 1);
+  const [saved] = [...store.subscriptions.values()];
+  assert.equal(saved.endpoint, "https://push.example/subscription/secret-endpoint");
+  assert.equal(saved.p256dh, "p256dh-key");
+  assert.equal(saved.auth, "auth-key");
+  assert.equal(saved.ownerIdentity, "owner@example.com");
 });
 
 test("worker ingests GitHub Actions deploy completion event and shows it on dashboard", async () => {

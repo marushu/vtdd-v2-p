@@ -476,12 +476,14 @@ const LEGACY_AUTONOMY_MODE_ENV = "MVP_AUTONOMY_MODE";
 const MEMORY_D1_BINDING = "VTDD_MEMORY_D1";
 const MEMORY_R2_BINDING = "VTDD_MEMORY_R2";
 const MEMORY_BLOB_THRESHOLD_ENV = "VTDD_MEMORY_BLOB_THRESHOLD";
+const WEB_PUSH_PUBLIC_KEY_ENV = "VTDD_WEB_PUSH_PUBLIC_KEY";
 const DEFAULT_MEMORY_LIMIT = 20;
 const MAX_MEMORY_LIMIT = 200;
 const memoryProviderCache = new WeakMap();
 const d1AdapterCache = new WeakMap();
 const dashboardEventStoreCache = new WeakMap();
 const dashboardChatStoreCache = new WeakMap();
+const dashboardPushSubscriptionStoreCache = new WeakMap();
 
 export default {
   async fetch(request, env) {
@@ -528,6 +530,20 @@ export default {
           mcpPath: MCP_PATH
         })
       );
+    }
+
+    if (request.method === "GET" && url.pathname === "/dashboard.webmanifest") {
+      return json(200, buildDashboardWebManifest(url), {
+        "content-type": "application/manifest+json; charset=utf-8"
+      });
+    }
+
+    if (request.method === "GET" && url.pathname === "/dashboard-sw.js") {
+      return javascript(200, renderDashboardServiceWorkerScript());
+    }
+
+    if (request.method === "GET" && url.pathname === "/dashboard-icon.svg") {
+      return svg(200, renderDashboardIconSvg());
     }
 
     if (request.method === "GET" && isDashboardPagePath(url.pathname)) {
@@ -577,13 +593,18 @@ export default {
         200,
         await renderDashboardNotificationsPage({
           runtimeOrigin: url.origin,
-          dashboardEventStore: resolveDashboardEventStore(env)
+          dashboardEventStore: resolveDashboardEventStore(env),
+          env
         })
       );
     }
 
     if (request.method === "POST" && isApiPath(url.pathname, "/dashboard/chat/messages")) {
       return handleDashboardChatMessageRequest(request, env);
+    }
+
+    if (request.method === "POST" && isApiPath(url.pathname, "/dashboard/push/subscription")) {
+      return handleDashboardPushSubscriptionRequest(request, env);
     }
 
     if (request.method === "GET" && isDashboardChatSocketApiPath(url.pathname)) {
@@ -3620,6 +3641,56 @@ async function handleDashboardChatMessageRequest(request, env) {
   });
 }
 
+async function handleDashboardPushSubscriptionRequest(request, env) {
+  const dashboardAuth = await authorizeDashboardRequest({
+    request,
+    env,
+    apiSuffix: "/dashboard/push/subscription"
+  });
+  if (!dashboardAuth.ok) {
+    return json(dashboardAuth.status, {
+      ok: false,
+      error: "dashboard_auth_required",
+      reason: dashboardAuth.reason
+    });
+  }
+
+  const store = resolveDashboardPushSubscriptionStore(env);
+  if (!store) {
+    return json(503, {
+      ok: false,
+      error: "dashboard_push_subscription_store_unavailable",
+      reason: "dashboard push subscription store is not configured"
+    });
+  }
+
+  const payload = await readJson(request);
+  const subscription = await normalizeDashboardPushSubscription(payload?.subscription || payload);
+  if (!subscription.ok) {
+    return json(422, {
+      ok: false,
+      error: "dashboard_push_subscription_invalid",
+      reason: subscription.reason
+    });
+  }
+
+  const saved = await store.put({
+    ...subscription.record,
+    userAgent: sanitizeDashboardChatText(payload?.userAgent || request.headers.get("user-agent") || ""),
+    ownerIdentity: normalizeDashboardEventText(dashboardAuth.subject) || normalizeDashboardEventText(dashboardAuth.authType) || "dashboard_owner",
+    updatedAt: new Date().toISOString()
+  });
+
+  return json(202, {
+    ok: true,
+    subscription: {
+      endpointHash: saved.endpointHash,
+      updatedAt: saved.updatedAt,
+      status: "saved"
+    }
+  });
+}
+
 async function handleDashboardChatSocketRequest(request, url, env) {
   const auth = await authorizeDashboardRequest({
     request,
@@ -5516,6 +5587,27 @@ function resolveDashboardChatStore(env) {
   return store;
 }
 
+function resolveDashboardPushSubscriptionStore(env) {
+  if (!env || typeof env !== "object") {
+    return null;
+  }
+  const injectedStore = env.DASHBOARD_PUSH_SUBSCRIPTION_STORE ?? null;
+  if (injectedStore && typeof injectedStore.put === "function") {
+    return injectedStore;
+  }
+
+  const d1Binding = env[MEMORY_D1_BINDING] ?? null;
+  if (!d1Binding || typeof d1Binding.prepare !== "function") {
+    return null;
+  }
+  if (dashboardPushSubscriptionStoreCache.has(d1Binding)) {
+    return dashboardPushSubscriptionStoreCache.get(d1Binding);
+  }
+  const store = createD1DashboardPushSubscriptionStore(d1Binding);
+  dashboardPushSubscriptionStoreCache.set(d1Binding, store);
+  return store;
+}
+
 function resolveDashboardChatRoomStub(env, threadId) {
   const namespace = env?.DASHBOARD_CHAT_ROOMS ?? null;
   const roomName = normalizeDashboardThreadId(threadId);
@@ -6132,6 +6224,70 @@ function createD1DashboardChatStore(d1) {
   }
 }
 
+function createD1DashboardPushSubscriptionStore(d1) {
+  let schemaPromise = null;
+  return {
+    async put(subscription) {
+      const normalized = {
+        endpointHash: normalizeDashboardEventText(subscription.endpointHash),
+        endpoint: normalizeDashboardEventText(subscription.endpoint),
+        expirationTime: subscription.expirationTime ?? null,
+        p256dh: normalizeDashboardEventText(subscription.p256dh),
+        auth: normalizeDashboardEventText(subscription.auth),
+        userAgent: sanitizeDashboardChatText(subscription.userAgent),
+        ownerIdentity: normalizeDashboardEventText(subscription.ownerIdentity) || "dashboard_owner",
+        updatedAt: normalizeIsoTimestamp(subscription.updatedAt) || new Date().toISOString()
+      };
+      await ensureSchema();
+      await d1
+        .prepare(
+          `INSERT OR REPLACE INTO vtdd_dashboard_push_subscriptions (
+             endpoint_hash, endpoint, expiration_time, p256dh, auth, user_agent,
+             owner_identity, updated_at, payload_json
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        )
+        .bind(
+          normalized.endpointHash,
+          normalized.endpoint,
+          normalized.expirationTime,
+          normalized.p256dh,
+          normalized.auth,
+          normalized.userAgent,
+          normalized.ownerIdentity,
+          normalized.updatedAt,
+          JSON.stringify({
+            endpointHash: normalized.endpointHash,
+            endpoint: normalized.endpoint,
+            expirationTime: normalized.expirationTime,
+            keys: {
+              p256dh: normalized.p256dh,
+              auth: normalized.auth
+            },
+            userAgent: normalized.userAgent,
+            ownerIdentity: normalized.ownerIdentity,
+            updatedAt: normalized.updatedAt
+          })
+        )
+        .run();
+      return normalized;
+    }
+  };
+
+  function ensureSchema() {
+    if (!schemaPromise) {
+      schemaPromise = (async () => {
+        await d1.exec(
+          "CREATE TABLE IF NOT EXISTS vtdd_dashboard_push_subscriptions (endpoint_hash TEXT PRIMARY KEY, endpoint TEXT NOT NULL, expiration_time INTEGER, p256dh TEXT NOT NULL, auth TEXT NOT NULL, user_agent TEXT, owner_identity TEXT NOT NULL, updated_at TEXT NOT NULL, payload_json TEXT NOT NULL);"
+        );
+        await d1.exec(
+          "CREATE INDEX IF NOT EXISTS idx_vtdd_dashboard_push_subscriptions_updated_at ON vtdd_dashboard_push_subscriptions (updated_at DESC);"
+        );
+      })();
+    }
+    return schemaPromise;
+  }
+}
+
 function buildDashboardChatTurn(payload, options = {}) {
   const input = normalizeObject(payload);
   const repository = normalizeCanonicalRepositoryInput(input.repository);
@@ -6216,6 +6372,49 @@ function normalizeDashboardChatMessage(message, defaults = {}) {
     text: sanitizeDashboardChatText(input.text || input.message || input.body) || "（空のメッセージ）",
     createdAt
   };
+}
+
+async function normalizeDashboardPushSubscription(value) {
+  const input = normalizeObject(value);
+  const endpoint = normalizeDashboardUrl(input.endpoint);
+  const keys = normalizeObject(input.keys);
+  const p256dh = normalizeDashboardEventText(keys.p256dh);
+  const auth = normalizeDashboardEventText(keys.auth);
+  if (!endpoint) {
+    return {
+      ok: false,
+      reason: "push subscription endpoint is required"
+    };
+  }
+  if (!p256dh || !auth) {
+    return {
+      ok: false,
+      reason: "push subscription keys.p256dh and keys.auth are required"
+    };
+  }
+  const endpointHash = await sha256Hex(endpoint);
+  return {
+    ok: true,
+    record: {
+      endpointHash,
+      endpoint,
+      expirationTime: Number.isFinite(Number(input.expirationTime)) ? Number(input.expirationTime) : null,
+      p256dh,
+      auth
+    }
+  };
+}
+
+async function sha256Hex(value) {
+  const text = normalizeText(value);
+  if (!text) {
+    return "";
+  }
+  if (globalThis.crypto?.subtle && typeof TextEncoder !== "undefined") {
+    const digest = await globalThis.crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+    return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  }
+  return btoa(text).replace(/[^A-Za-z0-9]/g, "").slice(0, 64);
 }
 
 function normalizeDashboardThreadSummary(summary, defaults = {}) {
@@ -7871,7 +8070,7 @@ async function renderDashboardSelfParityPage({ url, env } = {}) {
   });
 }
 
-async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventStore } = {}) {
+async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventStore, env } = {}) {
   const origin = normalize(runtimeOrigin);
   const recentSince = new Date(Date.now() - 5 * 60 * 1000).toISOString();
   const recentEvents = await retrieveRecentDashboardEvents({
@@ -7879,24 +8078,222 @@ async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventS
     since: recentSince,
     limit: 20
   });
+  const publicKey = normalizeDashboardEventText(env?.[WEB_PUSH_PUBLIC_KEY_ENV]);
   return renderDashboardUtilityPage({
     title: "通知センター",
     subtitle: "dashboard events",
     backHref: `${origin}/dashboard`,
     body: `
       <section class="hero">
-        <p>今は iOS Push / 音 / PWA badge ではなく、Worker に届いた dashboard event の人間向け表示です。</p>
+        <p>Dashboard Butler の通知入口です。iOS PWA Web Push、OS の通知音、未読 badge はこの画面から許可・確認します。</p>
         <p class="muted">VTDD だけでなく、他 repo / 並行開発 / queue / workflow から届いたイベントを直近5分だけ表示します。</p>
-        <p class="muted">次の段階で Web Push 購読、通知 permission、通知タップ遷移を追加します。</p>
       </section>
+      <div class="grid">
+        <section class="lane">
+          <div class="lane-title"><h2>iOS PWA 通知</h2><span class="pill" id="push-support-pill">確認中</span></div>
+          <p id="push-state" class="muted">通知状態を確認しています。</p>
+          <div class="actions">
+            <button class="dashboard-action" id="push-permission-button" type="button">通知を許可</button>
+            <button class="dashboard-action" id="push-subscribe-button" type="button">購読を保存</button>
+            <button class="dashboard-action" id="push-test-button" type="button">テスト通知</button>
+          </div>
+          <p class="muted">通知タップは通知センターへ戻ります。音は iOS 側の通知設定に従います。</p>
+        </section>
+        <section class="lane">
+          <div class="lane-title"><h2>Badge</h2><span class="pill" id="badge-support-pill">確認中</span></div>
+          <p id="badge-state" class="muted">Badging API の対応状況を確認しています。</p>
+          <div class="actions">
+            <button class="dashboard-action" id="badge-set-button" type="button">未読数を反映</button>
+            <button class="dashboard-action" id="badge-clear-button" type="button">Badge を消す</button>
+          </div>
+        </section>
+        <section class="lane">
+          <div class="lane-title"><h2>Authority boundary</h2><span class="pill">read/write</span></div>
+          <p>push subscription は dashboard owner session から保存します。HTML には endpoint、auth key、p256dh key を埋め込みません。</p>
+          <p class="muted">Web Push 送信には server-side VAPID secret が必要です。この画面には public key だけを渡します。</p>
+        </section>
+      </div>
       <div class="grid single">
         <section class="lane">
           <div class="lane-title"><h2>最新通知</h2><span class="pill">直近5分</span></div>
           ${recentEvents.length > 0 ? recentEvents.map((event) => renderDashboardNotificationEvent(event)).join("") : `<p class="muted">直近5分の通知はありません。</p>`}
         </section>
       </div>
+      <script>
+        (() => {
+          const vapidPublicKey = ${JSON.stringify(publicKey)};
+          const pushState = document.getElementById("push-state");
+          const pushSupportPill = document.getElementById("push-support-pill");
+          const badgeState = document.getElementById("badge-state");
+          const badgeSupportPill = document.getElementById("badge-support-pill");
+          const permissionButton = document.getElementById("push-permission-button");
+          const subscribeButton = document.getElementById("push-subscribe-button");
+          const testButton = document.getElementById("push-test-button");
+          const badgeSetButton = document.getElementById("badge-set-button");
+          const badgeClearButton = document.getElementById("badge-clear-button");
+          const unreadCount = ${recentEvents.length};
+
+          function setText(node, text) {
+            if (node) node.textContent = text;
+          }
+
+          function setPill(node, text, ok) {
+            if (!node) return;
+            node.textContent = text;
+            node.classList.toggle("success", ok === true);
+            node.classList.toggle("danger", ok === false);
+          }
+
+          function base64UrlToUint8Array(value) {
+            const padding = "=".repeat((4 - value.length % 4) % 4);
+            const base64 = (value + padding).replace(/-/g, "+").replace(/_/g, "/");
+            const raw = atob(base64);
+            const output = new Uint8Array(raw.length);
+            for (let index = 0; index < raw.length; index += 1) output[index] = raw.charCodeAt(index);
+            return output;
+          }
+
+          async function registration() {
+            if (!("serviceWorker" in navigator)) return null;
+            return navigator.serviceWorker.register("/dashboard-sw.js", { scope: "/" });
+          }
+
+          async function refreshState() {
+            const pushSupported = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+            setPill(pushSupportPill, pushSupported ? "対応" : "未対応", pushSupported);
+            setText(pushState, pushSupported
+              ? "通知 permission: " + Notification.permission + (vapidPublicKey ? "" : " / VAPID public key 未設定")
+              : "この環境は Web Push に未対応です。iOS はホーム画面に追加した PWA が必要です。");
+            const badgeSupported = "setAppBadge" in navigator && "clearAppBadge" in navigator;
+            setPill(badgeSupportPill, badgeSupported ? "対応" : "未対応", badgeSupported);
+            setText(badgeState, badgeSupported ? "未読通知数をホーム画面 badge に反映できます。" : "この環境では Badging API が未対応です。");
+            if (subscribeButton) subscribeButton.disabled = !pushSupported || !vapidPublicKey || Notification.permission !== "granted";
+            if (permissionButton) permissionButton.disabled = !pushSupported || Notification.permission === "granted";
+            if (testButton) testButton.disabled = !pushSupported || Notification.permission !== "granted";
+            if (badgeSetButton) badgeSetButton.disabled = !badgeSupported;
+            if (badgeClearButton) badgeClearButton.disabled = !badgeSupported;
+          }
+
+          permissionButton?.addEventListener("click", async () => {
+            if (!("Notification" in window)) return refreshState();
+            await Notification.requestPermission();
+            await registration();
+            await refreshState();
+          });
+
+          subscribeButton?.addEventListener("click", async () => {
+            const reg = await registration();
+            if (!reg || !vapidPublicKey) return refreshState();
+            const subscription = await reg.pushManager.subscribe({
+              userVisibleOnly: true,
+              applicationServerKey: base64UrlToUint8Array(vapidPublicKey)
+            });
+            const response = await fetch("/v2/dashboard/push/subscription", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ subscription: subscription.toJSON(), userAgent: navigator.userAgent })
+            });
+            setText(pushState, response.ok ? "push subscription を保存しました。" : "push subscription の保存に失敗しました。");
+            await refreshState();
+          });
+
+          testButton?.addEventListener("click", async () => {
+            const reg = await registration();
+            if (!reg) return refreshState();
+            await reg.showNotification("VTDD Butler", {
+              body: "Dashboard Butler の通知テストです。",
+              tag: "vtdd-dashboard-test",
+              renotify: true,
+              silent: false,
+              data: { url: "/dashboard/notifications" }
+            });
+          });
+
+          badgeSetButton?.addEventListener("click", async () => {
+            if ("setAppBadge" in navigator) await navigator.setAppBadge(Math.max(1, unreadCount));
+          });
+
+          badgeClearButton?.addEventListener("click", async () => {
+            if ("clearAppBadge" in navigator) await navigator.clearAppBadge();
+          });
+
+          refreshState();
+        })();
+      </script>
     `
   });
+}
+
+function buildDashboardWebManifest(url) {
+  const origin = normalize(url?.origin);
+  return {
+    name: "VTDD Butler",
+    short_name: "VTDD",
+    start_url: "/dashboard",
+    scope: "/",
+    display: "standalone",
+    background_color: "#050505",
+    theme_color: "#050505",
+    icons: [
+      {
+        src: `${origin}/dashboard-icon.svg`,
+        sizes: "any",
+        type: "image/svg+xml",
+        purpose: "any maskable"
+      }
+    ]
+  };
+}
+
+function renderDashboardServiceWorkerScript() {
+  return `
+self.addEventListener("install", () => {
+  self.skipWaiting();
+});
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil(self.clients.claim());
+});
+
+self.addEventListener("push", (event) => {
+  let payload = {};
+  try {
+    payload = event.data ? event.data.json() : {};
+  } catch {
+    payload = { body: event.data ? event.data.text() : "" };
+  }
+  const title = String(payload.title || "VTDD Butler");
+  const options = {
+    body: String(payload.body || payload.message || "Dashboard Butler の通知です。"),
+    tag: String(payload.tag || "vtdd-dashboard"),
+    renotify: payload.renotify !== false,
+    silent: payload.silent === true,
+    data: {
+      url: String(payload.url || "/dashboard/notifications")
+    }
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const targetUrl = new URL(event.notification.data && event.notification.data.url || "/dashboard/notifications", self.location.origin).toString();
+  event.waitUntil((async () => {
+    const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    for (const client of clients) {
+      if ("focus" in client) {
+        await client.navigate(targetUrl);
+        return client.focus();
+      }
+    }
+    return self.clients.openWindow(targetUrl);
+  })());
+});
+`.trim();
+}
+
+function renderDashboardIconSvg() {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="112" fill="#050505"/><path d="M144 128h224v52H144zM144 230h224v52H144zM144 332h148v52H144z" fill="#f7f7f4"/></svg>`;
 }
 
 function renderGitHubTruthLane(title, result, renderCard) {
@@ -8038,6 +8435,8 @@ function renderDashboardUtilityPage({ title, subtitle, backHref, body }) {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="manifest" href="/dashboard.webmanifest">
+  <meta name="theme-color" content="#050505">
   <title>${escapeDashboardHtml(title)} - VTDD Butler</title>
   <style>
     :root { color-scheme: light dark; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; --bg: #f7f7f4; --panel: #fff; --text: #151515; --muted: #62625d; --border: #deded6; --soft: #f0f0eb; }
@@ -8051,7 +8450,8 @@ function renderDashboardUtilityPage({ title, subtitle, backHref, body }) {
     h2 { font-size: 18px; margin: 0; }
     p { line-height: 1.6; margin: 0 0 10px; }
     a { color: inherit; text-underline-offset: 4px; }
-    .back, .actions a { display: inline-flex; min-height: 38px; align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: 999px; padding: 6px 12px; background: var(--soft); text-decoration: none; font-weight: 750; }
+    .back, .actions a, .dashboard-action { display: inline-flex; min-height: 38px; align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: 999px; padding: 6px 12px; background: var(--soft); color: var(--text); text-decoration: none; font: inherit; font-weight: 750; }
+    .dashboard-action:disabled { opacity: .45; }
     .hero, .lane, .notice { border: 1px solid var(--border); border-radius: 16px; background: var(--panel); padding: 14px; margin-bottom: 14px; }
     .actions { display: flex; flex-wrap: wrap; gap: 8px; }
     .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
@@ -8208,6 +8608,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="manifest" href="/dashboard.webmanifest">
+  <meta name="theme-color" content="#050505">
   <title>VTDD v2 Dashboard</title>
   <style>
     :root {
@@ -9015,6 +9417,27 @@ function html(status, body) {
       "content-type": "text/html; charset=utf-8",
       "cache-control": "no-store, no-cache, must-revalidate, max-age=0",
       pragma: "no-cache"
+    }
+  });
+}
+
+function javascript(status, body) {
+  return new Response(body, {
+    status,
+    headers: {
+      "content-type": "application/javascript; charset=utf-8",
+      "cache-control": "no-store, no-cache, must-revalidate, max-age=0",
+      pragma: "no-cache"
+    }
+  });
+}
+
+function svg(status, body) {
+  return new Response(body, {
+    status,
+    headers: {
+      "content-type": "image/svg+xml; charset=utf-8",
+      "cache-control": "public, max-age=3600"
     }
   });
 }
