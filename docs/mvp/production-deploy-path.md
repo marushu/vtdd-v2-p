@@ -98,8 +98,11 @@ Service-to-service dashboard event ingestion still uses machine auth.
 
 This encodes the MVP high-risk policy as:
 
-1. real WebAuthn/passkey approval grant validated against the worker runtime
-2. protected environment confirmation
+1. deploy credential presence checked without printing secret values
+2. Cloudflare Workers Scripts deploy API entitlement checked before approval
+   grant validation
+3. real WebAuthn/passkey approval grant validated against the worker runtime
+4. protected environment confirmation
 
 The workflow validates the grant through `/v2/retrieve/approval-grant` using
 `VTDD_GATEWAY_BEARER_TOKEN`, and the grant scope must match:
@@ -111,7 +114,12 @@ The workflow validates the grant through `/v2/retrieve/approval-grant` using
 ## Notes
 
 - Branch restriction: deploy job runs only when ref is `main`
-- Pre-deploy checks: approval grant validation and `npm test`
+- Pre-deploy checks: Cloudflare Workers deploy entitlement, approval grant
+  validation, and `npm test`
+- If Cloudflare returns `entitlements.not_available` from the Workers Scripts
+  API, the workflow fails before validating the passkey approval grant. Do not
+  consume another deploy approval until the Cloudflare account/token entitlement
+  issue is resolved.
 - Deploy completion notification: optional GitHub Issue comment controlled by
   `VTDD_DEPLOY_NOTIFICATION_ISSUE_NUMBER`
 - Future hardening (out-of-scope for MVP): external passkey attestation service, staged rollout, rollback automation
