@@ -8143,6 +8143,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .bubble .message-body ul { margin: 0; }
     .bubble .message-body li + li { margin-top: 4px; }
     .bubble .message-body code { font-size: .94em; }
+    .bubble .message-body pre { margin: 0; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--panel-strong); overflow-x: auto; white-space: pre; }
+    .bubble .message-body pre code { display: block; font-size: 14px; line-height: 1.55; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
     .bubble .message-body strong { display: inline; color: inherit; font-size: inherit; letter-spacing: 0; text-transform: none; margin: 0; font-weight: 800; }
     .copy-message { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border: 1px solid var(--border); border-radius: 999px; background: var(--button); color: var(--text); font-size: 15px; line-height: 1; cursor: pointer; }
     .copy-message:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
@@ -8445,10 +8447,32 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       function renderMessageText(container, text) {
         const source = String(text || "");
         const lines = source.replace(/\\r\\n/g, "\\n").split("\\n");
+        const fence = String.fromCharCode(96, 96, 96);
         let index = 0;
         while (index < lines.length) {
           if (!lines[index].trim()) {
             index += 1;
+            continue;
+          }
+          if (lines[index].trim().startsWith(fence)) {
+            const language = lines[index].trim().slice(fence.length).trim();
+            const codeLines = [];
+            index += 1;
+            while (index < lines.length && !lines[index].trim().startsWith(fence)) {
+              codeLines.push(lines[index]);
+              index += 1;
+            }
+            if (index < lines.length && lines[index].trim().startsWith(fence)) {
+              index += 1;
+            }
+            const pre = document.createElement("pre");
+            const code = document.createElement("code");
+            if (language) {
+              code.dataset.language = language;
+            }
+            code.textContent = codeLines.join("\\n");
+            pre.appendChild(code);
+            container.appendChild(pre);
             continue;
           }
           if (/^\\s*-\\s+/.test(lines[index])) {

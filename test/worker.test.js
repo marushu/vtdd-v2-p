@@ -515,8 +515,11 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes('body.className = "message-body"'), true);
   assert.equal(body.includes('document.createElement("ul")'), true);
   assert.equal(body.includes('document.createElement("li")'), true);
+  assert.equal(body.includes('document.createElement("pre")'), true);
   assert.equal(body.includes('document.createElement("strong")'), true);
   assert.equal(body.includes('document.createElement("code")'), true);
+  assert.equal(body.includes("String.fromCharCode(96, 96, 96)"), true);
+  assert.equal(body.includes("code.dataset.language = language"), true);
   assert.equal(body.includes("renderInlineMarkdown(strong"), true);
   assert.equal(body.includes("function copyMessageText("), true);
   assert.equal(body.includes("navigator.clipboard.writeText"), true);
