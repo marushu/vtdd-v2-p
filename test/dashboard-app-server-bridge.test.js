@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildAppServerInitializeRequest,
+  buildAppServerSandboxOverrides,
   buildAppServerThreadResumeRequest,
   buildAppServerThreadStartRequest,
   buildAppServerTurnStartRequest,
@@ -34,12 +35,14 @@ test("dashboard app-server bridge builds initialize and thread requests from Cod
   assert.equal(start.method, "thread/start");
   assert.equal(start.params.cwd, "/repo");
   assert.equal(start.params.approvalPolicy, "on-request");
+  assert.equal(start.params.sandbox, undefined);
   assert.equal(start.params.experimentalRawEvents, false);
   assert.equal(start.params.persistExtendedHistory, false);
 
   const resume = buildAppServerThreadResumeRequest({ id: 12, codexThreadId: "codex-thread-1", cwd: "/repo" });
   assert.equal(resume.method, "thread/resume");
   assert.equal(resume.params.threadId, "codex-thread-1");
+  assert.equal(resume.params.sandbox, undefined);
   assert.equal(resume.params.excludeTurns, true);
 
   const turn = buildAppServerTurnStartRequest({
@@ -51,6 +54,37 @@ test("dashboard app-server bridge builds initialize and thread requests from Cod
   assert.equal(turn.method, "turn/start");
   assert.equal(turn.params.threadId, "codex-thread-1");
   assert.deepEqual(turn.params.input, [{ type: "text", text: "今日は何日？", text_elements: [] }]);
+  assert.equal(turn.params.sandboxPolicy, undefined);
+});
+
+test("dashboard app-server bridge only enables danger-full-access by explicit trusted VPS opt-in", () => {
+  const start = buildAppServerThreadStartRequest({
+    id: 21,
+    cwd: "/repo",
+    sandboxMode: "danger-full-access"
+  });
+  const resume = buildAppServerThreadResumeRequest({
+    id: 22,
+    codexThreadId: "codex-thread-1",
+    cwd: "/repo",
+    sandboxMode: "danger-full-access"
+  });
+  const turn = buildAppServerTurnStartRequest({
+    id: 23,
+    codexThreadId: "codex-thread-1",
+    text: "今日は何日？",
+    cwd: "/repo",
+    sandboxMode: "danger-full-access"
+  });
+
+  assert.equal(start.params.sandbox, "danger-full-access");
+  assert.equal(resume.params.sandbox, "danger-full-access");
+  assert.deepEqual(turn.params.sandboxPolicy, { type: "dangerFullAccess" });
+  assert.deepEqual(buildAppServerSandboxOverrides("danger-full-access"), {
+    threadSandbox: "danger-full-access",
+    turnSandboxPolicy: { type: "dangerFullAccess" }
+  });
+  assert.throws(() => buildAppServerSandboxOverrides("workspace-write"), /unsupported dashboard app-server sandbox mode/);
 });
 
 test("dashboard app-server bridge maps Codex app-server notifications to dashboard events", () => {
@@ -312,9 +346,11 @@ test("dashboard app-server bridge args require a dashboard thread id for runtime
   const parsed = parseBridgeArgs([], {
     VTDD_RUNTIME_URL: "https://runtime.example",
     VTDD_GATEWAY_BEARER_TOKEN: "secret-token",
-    VTDD_DASHBOARD_CODEX_CWD: "/repo"
+    VTDD_DASHBOARD_CODEX_CWD: "/repo",
+    VTDD_DASHBOARD_APP_SERVER_SANDBOX: "danger-full-access"
   });
   assert.equal(parsed.threadId, "");
+  assert.equal(parsed.sandboxMode, "danger-full-access");
 });
 
 test("dashboard app-server bridge refuses to connect without a dashboard thread id", async () => {
@@ -339,4 +375,5 @@ test("dashboard app-server bridge args read runtime, token, and thread from envi
   assert.equal(parsed.token, "secret-token");
   assert.equal(parsed.threadId, "dashboard-main");
   assert.equal(parsed.cwd, "/repo");
+  assert.equal(parsed.sandboxMode, "");
 });

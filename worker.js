@@ -35486,17 +35486,18 @@ function buildReviewState(pullRequest) {
   const effectiveCodexFallback = geminiEvidenceMatchesCurrentHead && codexFallbackStaleForCurrentHead && !codexFallback.globalBlocker ? emptyCodexFallbackSignals() : codexFallback;
   const formalReviewTruth = collectFormalReviewTruth(pullRequest);
   const reviewTimeline = buildReviewTimeline(pullRequest);
-  const reviewCommentsCount = parsedGeminiSignals.totalCount > 0 ? parsedGeminiSignals.totalCount : effectiveCodexFallback.completed ? 1 : pullRequest.reviewCommentsCount;
-  const unresolvedReviewCommentsCount = parsedGeminiSignals.totalCount > 0 ? parsedGeminiSignals.blockingCount : effectiveCodexFallback.completed ? effectiveCodexFallback.blocking ? 1 : 0 : pullRequest.unresolvedReviewCommentsCount;
+  const reviewCommentsCount = effectiveCodexFallback.completed ? 1 : parsedGeminiSignals.totalCount > 0 ? parsedGeminiSignals.totalCount : pullRequest.reviewCommentsCount;
+  const unresolvedReviewCommentsCount = effectiveCodexFallback.completed ? effectiveCodexFallback.blocking ? 1 : 0 : parsedGeminiSignals.totalCount > 0 ? parsedGeminiSignals.blockingCount : pullRequest.unresolvedReviewCommentsCount;
   const reviewerStatus = effectiveCodexFallback.completed ? "codex_review_available" : effectiveCodexFallback.blocked ? "codex_review_blocked" : effectiveCodexFallback.requested ? "codex_review_requested" : reviewCommentsCount > 0 ? "gemini_review_available" : "review_unavailable";
   const reviewer = reviewerStatus.startsWith("codex_review") ? "codex" : pullRequest.reviewer;
   const reviewerEvidence = reviewerStatus.startsWith("codex_review") ? effectiveCodexFallback.latestEvidence : parsedGeminiSignals.latestEvidence;
-  const reviewResponseSummary = buildReviewResponseSummary({
+  const geminiReviewResponseSummary = buildReviewResponseSummary({
     pullRequest,
     files: pullRequest.files,
     issueComments: pullRequest.issueComments,
     reviewComments: pullRequest.reviewComments
   });
+  const reviewResponseSummary = effectiveCodexFallback.completed ? null : geminiReviewResponseSummary;
   const reviewerSignalTruth = buildReviewerSignalTruth({
     reviewer,
     reviewerStatus,
@@ -60542,7 +60543,8 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
   const relatedIssue = normalizePositiveInteger9(input.relatedIssue || input.issueNumber);
   const createdAt = normalizeIsoTimestamp(input.createdAt) || (/* @__PURE__ */ new Date()).toISOString();
   const messages = [];
-  if (eventType === "app_server_reply_delta" || eventType === "app_server_reply") {
+  if (eventType === "app_server_reply_delta") {
+  } else if (eventType === "app_server_reply") {
     if (text) {
       messages.push(
         normalizeDashboardChatMessage(
@@ -60551,7 +60553,7 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
             role: "butler",
             repository,
             relatedIssue,
-            status: eventType === "app_server_reply_delta" ? "thinking" : "replied",
+            status: "replied",
             text,
             createdAt
           },

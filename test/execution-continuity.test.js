@@ -525,6 +525,53 @@ test("execution continuity exposes Codex fallback review as available when VTDD 
   ]);
 });
 
+test("execution continuity lets completed Codex fallback approve supersede earlier Gemini request changes on the same head", () => {
+  const result = evaluateExecutionContinuity({
+    actorRole: ActorRole.BUTLER,
+    mode: TaskMode.EXECUTION,
+    runtimeTruth: {
+      runtimeState: {
+        activeBranch: "codex/issue-450",
+        pullRequest: {
+          number: 482,
+          url: "https://github.com/example/repo/pull/482",
+          state: "open",
+          title: "Dashboard app-server bridge",
+          headSha: "head-450",
+          issueComments: [
+            {
+              user: { login: "vtdd-gemini-reviewer" },
+              url: "https://github.com/example/repo/pull/482#issuecomment-gemini",
+              created_at: "2026-05-22T11:17:32Z",
+              body: "<!-- vtdd:reviewer=gemini -->\n## VTDD Gemini レビュー\n\n- Head SHA: `head-450`\n- Recommended action: `request_changes`\n\n### 重要指摘\n- post-deploy iPhone smoke is worded as unresolved"
+            },
+            {
+              user: { login: "marushu" },
+              url: "https://github.com/example/repo/pull/482#issuecomment-response",
+              created_at: "2026-05-22T11:20:54Z",
+              body: "<!-- vtdd:reviewer-objection-resolution -->\n## VTDD Reviewer Objection Resolution\n\nPR body separates pre-merge evidence from post-deploy gate."
+            },
+            {
+              user: { login: "vtdd-codex-fallback-reviewer" },
+              url: "https://github.com/example/repo/pull/482#issuecomment-codex",
+              created_at: "2026-05-22T11:22:29Z",
+              body: "<!-- vtdd:reviewer=codex-fallback -->\n## VTDD Codex fallback レビュー\n\n- Status: `completed`\n- Head SHA: `head-450`\n- Recommended action: `approve`"
+            }
+          ]
+        }
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.value.reviewLoop.reviewer, "codex");
+  assert.equal(result.value.reviewLoop.reviewerStatus, "codex_review_available");
+  assert.equal(result.value.reviewLoop.reviewerEvidence.recommendedAction, "approve");
+  assert.equal(result.value.reviewLoop.unresolvedReviewCommentsCount, 0);
+  assert.equal(result.value.reviewLoop.criticalReviewPending, false);
+  assert.equal(result.value.reviewLoop.reviewerSignalTruth.mergeReviewTruth.satisfied, true);
+});
+
 test("execution continuity exposes reviewer marker timeline in chronological order", () => {
   const result = evaluateExecutionContinuity({
     actorRole: ActorRole.BUTLER,
