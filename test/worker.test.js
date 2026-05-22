@@ -180,6 +180,10 @@ function createInMemoryDashboardPushSubscriptionStore() {
     async list(filter = {}) {
       const limit = Number(filter.limit) || 50;
       return [...subscriptions.values()].slice(0, limit);
+    },
+    async delete(endpointHash) {
+      const deleted = subscriptions.delete(endpointHash);
+      return { deleted };
     }
   };
 }
@@ -1864,6 +1868,43 @@ test("worker reports server-side dashboard Web Push configuration blockers", asy
   const body = await response.json();
   assert.equal(body.ok, false);
   assert.equal(body.webPush.error, "dashboard_web_push_vapid_unconfigured");
+});
+
+test("worker cleans up stale dashboard Web Push subscriptions rejected by push service", async () => {
+  const store = createInMemoryDashboardPushSubscriptionStore();
+  await store.put({
+    endpointHash: "stale-endpoint-hash",
+    endpoint: "https://push.example/send/stale-endpoint-hash",
+    p256dh: "p256dh-key",
+    auth: "auth-key",
+    ownerIdentity: "owner@example.com",
+    updatedAt: new Date().toISOString()
+  });
+  const vapidEnv = await createTestVapidEnv({
+    DASHBOARD_WEB_PUSH_FETCH: async () => new Response(null, { status: 410 })
+  });
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/push/test", {
+      method: "POST",
+      headers: { ...dashboardAccessHeaders, "content-type": "application/json" },
+      body: JSON.stringify({ title: "server push test" })
+    }),
+    {
+      ...dashboardAccessEnv,
+      ...vapidEnv,
+      DASHBOARD_PUSH_SUBSCRIPTION_STORE: store
+    }
+  );
+
+  assert.equal(response.status, 410);
+  const body = await response.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.webPush.delivered, 0);
+  assert.equal(body.webPush.cleaned, 1);
+  assert.equal(body.webPush.results[0].stale, true);
+  assert.equal(body.webPush.results[0].cleaned, true);
+  assert.equal(store.subscriptions.has("stale-endpoint-hash"), false);
 });
 
 test("worker redacts dashboard push subscription raw material from D1 payload_json", async () => {

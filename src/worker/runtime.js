@@ -6339,6 +6339,19 @@ function createD1DashboardPushSubscriptionStore(d1) {
           updatedAt: normalizeIsoTimestamp(row?.updated_at) || null
         }))
         .filter((record) => record.endpoint && record.p256dh && record.auth);
+    },
+
+    async delete(endpointHash) {
+      const normalizedEndpointHash = normalizeDashboardEventText(endpointHash);
+      if (!normalizedEndpointHash) {
+        return { deleted: false };
+      }
+      await ensureSchema();
+      const result = await d1
+        .prepare("DELETE FROM vtdd_dashboard_push_subscriptions WHERE endpoint_hash = ?")
+        .bind(normalizedEndpointHash)
+        .run();
+      return { deleted: Number(result?.meta?.changes || 0) > 0 };
     }
   };
 
@@ -6379,8 +6392,17 @@ async function dispatchDashboardWebPushForEvent(env, event) {
 
   const payload = buildDashboardWebPushPayload(event);
   const results = [];
+  let cleaned = 0;
   for (const subscription of subscriptions) {
-    results.push(await sendDashboardWebPush({ env, subscription, payload }));
+    const result = await sendDashboardWebPush({ env, subscription, payload });
+    if (result.stale && result.endpointHash && typeof store.delete === "function") {
+      const cleanup = await store.delete(result.endpointHash);
+      if (cleanup?.deleted) {
+        cleaned += 1;
+        result.cleaned = true;
+      }
+    }
+    results.push(result);
   }
   const delivered = results.filter((result) => result.ok).length;
   const firstFailure = results.find((result) => !result.ok);
@@ -6390,13 +6412,16 @@ async function dispatchDashboardWebPushForEvent(env, event) {
     error: delivered > 0 ? undefined : firstFailure?.error,
     reason: delivered > 0 ? undefined : firstFailure?.reason,
     delivered,
+    cleaned,
     attempted: results.length,
     results: results.map((result) => ({
       ok: result.ok,
       endpointHash: result.endpointHash,
       status: result.status,
       reason: result.reason,
-      error: result.error
+      error: result.error,
+      stale: result.stale || undefined,
+      cleaned: result.cleaned || undefined
     }))
   };
 }
@@ -6435,11 +6460,17 @@ async function sendDashboardWebPush({ env, subscription, payload }) {
       urgency: "normal"
     }
   });
+  const stale = response.status === 404 || response.status === 410;
   return {
     ok: response.status >= 200 && response.status < 300,
     endpointHash,
     status: response.status,
-    reason: response.status >= 200 && response.status < 300 ? "accepted" : "push service rejected the request"
+    reason: response.status >= 200 && response.status < 300
+      ? "accepted"
+      : stale
+        ? "push subscription is stale and should be deleted"
+        : "push service rejected the request",
+    stale
   };
 }
 
