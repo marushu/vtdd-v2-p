@@ -173,22 +173,31 @@ async function processPullRequest({ githubFetch, repository, pullNumber, eventNa
   }
 
   const mergeMethod = normalizeMergeMethod(env.VTDD_AUTO_MERGE_METHOD) || "squash";
-  const mergeResult = await githubFetch(`/repos/${repository}/pulls/${pullNumber}/merge`, {
-    method: "PUT",
-    body: {
-      merge_method: mergeMethod,
-      commit_title: `自動マージ: PR #${pullNumber} ${pullRequest.title || ""}`.trim(),
-      commit_message: [
-        "VTDD approve_auto_merge により自動マージしました。",
-        "",
-        `検索語: 自動マージ`,
-        `Repository: ${repository}`,
-        `PR: #${pullNumber}`,
-        `Head SHA: ${pullRequest.head?.sha || "unknown"}`,
-        `Triggered by: ${eventName || "unknown"}`
-      ].join("\n")
+  let mergeResult;
+  try {
+    mergeResult = await githubFetch(`/repos/${repository}/pulls/${pullNumber}/merge`, {
+      method: "PUT",
+      body: {
+        merge_method: mergeMethod,
+        commit_title: `自動マージ: PR #${pullNumber} ${pullRequest.title || ""}`.trim(),
+        commit_message: [
+          "VTDD approve_auto_merge により自動マージしました。",
+          "",
+          `検索語: 自動マージ`,
+          `Repository: ${repository}`,
+          `PR: #${pullNumber}`,
+          `Head SHA: ${pullRequest.head?.sha || "unknown"}`,
+          `Triggered by: ${eventName || "unknown"}`
+        ].join("\n")
+      }
+    });
+  } catch (error) {
+    if (!isMergeAlreadyInProgressError(error)) {
+      throw error;
     }
-  });
+    console.log(`Skipping PR #${pullNumber}: merge is already in progress by another approve-auto-merge run.`);
+    return;
+  }
 
   const memoryWrite = await persistApproveAutoMergeMemory({
     env,
@@ -381,6 +390,16 @@ function normalizeMergeMethod(value) {
   return ["merge", "squash", "rebase"].includes(normalized) ? normalized : null;
 }
 
+export function isMergeAlreadyInProgressError(error) {
+  const status = Number(error?.status || 0);
+  const message = [
+    error?.message,
+    error?.body?.message,
+    error?.responseText
+  ].filter(Boolean).join("\n");
+  return status === 405 && message.includes("Merge already in progress");
+}
+
 function normalizePositiveInteger(value) {
   const numeric = Number(value);
   return Number.isInteger(numeric) && numeric > 0 ? numeric : null;
@@ -434,7 +453,11 @@ function createGitHubFetch({ apiBaseUrl, token }) {
     const text = await response.text();
     const body = text ? JSON.parse(text) : null;
     if (!response.ok) {
-      throw new Error(`GitHub API ${response.status}: ${body?.message || text}`);
+      const error = new Error(`GitHub API ${response.status}: ${body?.message || text}`);
+      error.status = response.status;
+      error.body = body;
+      error.responseText = text;
+      throw error;
     }
     if (init.includeHeaders) {
       return { body, headers: response.headers };

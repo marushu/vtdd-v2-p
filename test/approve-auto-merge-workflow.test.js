@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import { isMergeAlreadyInProgressError } from "../scripts/run-approve-auto-merge.mjs";
 
 const workflow = fs.readFileSync(".github/workflows/approve-auto-merge.yml", "utf8");
 const script = fs.readFileSync("scripts/run-approve-auto-merge.mjs", "utf8");
@@ -28,4 +29,20 @@ test("approve auto merge script records searchable evidence before and after mer
   assert.equal(script.includes("persistApproveAutoMergeMemory"), true);
   assert.equal(script.includes("notifyDashboardEvent"), true);
   assert.equal(script.includes("evaluateApproveAutoMerge"), true);
+});
+
+test("approve auto merge treats concurrent GitHub merge race as idempotent", () => {
+  const raceError = new Error("GitHub API 405: Merge already in progress");
+  raceError.status = 405;
+
+  assert.equal(isMergeAlreadyInProgressError(raceError), true);
+  assert.equal(script.includes("merge is already in progress by another approve-auto-merge run"), true);
+
+  const unrelated405 = new Error("GitHub API 405: Method Not Allowed");
+  unrelated405.status = 405;
+  assert.equal(isMergeAlreadyInProgressError(unrelated405), false);
+
+  const unrelatedMergeError = new Error("GitHub API 500: Merge already in progress");
+  unrelatedMergeError.status = 500;
+  assert.equal(isMergeAlreadyInProgressError(unrelatedMergeError), false);
 });
