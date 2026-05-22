@@ -140,10 +140,9 @@ export function buildAppServerRequestApprovalResponse(message) {
   if (method === "item/permissions/requestApproval") {
     return {
       id: message.id,
-      result: {
-        permissions: {},
-        scope: "turn",
-        strictAutoReview: true
+      error: {
+        code: -32001,
+        message: "Dashboard bridge does not grant app-server permission escalation"
       }
     };
   }

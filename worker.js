@@ -56017,6 +56017,11 @@ var DashboardChatRoom = class {
     }
     const messages = store ? await store.appendMany(threadId, [ownerMessage]) : [ownerMessage].filter(Boolean);
     await this.broadcastThread({ threadId, messages });
+    await this.broadcastTransientStatus({
+      threadId,
+      status: "thinking",
+      text: "app-server bridge \u306E\u8FD4\u4FE1\u3092\u5F85\u3063\u3066\u3044\u307E\u3059"
+    });
     const mapping = await this.readAppServerThreadMapping(threadId);
     const turnRequest = {
       type: "app_server_turn_requested",

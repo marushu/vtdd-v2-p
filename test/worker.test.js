@@ -1131,11 +1131,15 @@ test("DashboardChatRoom sends ordinary owner turns to connected app-server bridg
   assert.equal(turnRequest.appServer.turnMethod, "turn/start");
   assert.equal(turnRequest.authority.ordinaryConversationAllowed, true);
 
-  assert.equal(dashboardSocket.sent.length, 1);
+  assert.equal(dashboardSocket.sent.length, 2);
   const broadcast = JSON.parse(dashboardSocket.sent[0]);
   assert.equal(broadcast.messages.length, 1);
   assert.equal(broadcast.messages[0].role, "owner");
   assert.equal(broadcast.messages[0].text, "今日は何月何日？日本時間を答えて");
+  const status = JSON.parse(dashboardSocket.sent[1]);
+  assert.equal(status.type, "transient_status");
+  assert.equal(status.status, "thinking");
+  assert.equal(status.text, "app-server bridge の返信を待っています");
 });
 
 test("DashboardChatRoom sends each owner turn to only one app-server bridge for a thread", async () => {

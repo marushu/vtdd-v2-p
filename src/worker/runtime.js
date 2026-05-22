@@ -284,6 +284,11 @@ export class DashboardChatRoom {
 
     const messages = store ? await store.appendMany(threadId, [ownerMessage]) : [ownerMessage].filter(Boolean);
     await this.broadcastThread({ threadId, messages });
+    await this.broadcastTransientStatus({
+      threadId,
+      status: "thinking",
+      text: "app-server bridge の返信を待っています"
+    });
     const mapping = await this.readAppServerThreadMapping(threadId);
     const turnRequest = {
       type: "app_server_turn_requested",

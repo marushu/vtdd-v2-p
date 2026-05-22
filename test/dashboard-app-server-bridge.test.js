@@ -143,10 +143,9 @@ test("dashboard app-server bridge declines write, patch, permission, and unsafe 
     }),
     {
       id: 44,
-      result: {
-        permissions: {},
-        scope: "turn",
-        strictAutoReview: true
+      error: {
+        code: -32001,
+        message: "Dashboard bridge does not grant app-server permission escalation"
       }
     }
   );
