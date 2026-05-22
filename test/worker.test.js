@@ -2730,6 +2730,121 @@ test("worker runs gateway route", async () => {
   assert.equal(body.repository, "sample-org/vtdd-v2");
 });
 
+test("worker gateway attaches operational memory for conversation-time recall", async () => {
+  const provider = createInMemoryMemoryProvider();
+  await provider.store({
+    id: "working-memory-drift-450",
+    type: MemoryRecordType.WORKING_MEMORY,
+    content: {
+      summary: "Dashboard Butler は app-server 本命で、codex exec fallback に戻すとドリフトする。",
+      failureReasoning: {
+        whatFailed: "Dashboard Butler を codex exec job runner wrapper として扱った。",
+        whyFailed: "live app-server session の要求を見落とした。",
+        inspectNextTime: "Issue #450 と app-server live path コメントを先に読む。"
+      },
+      relatedIssue: 450,
+      repository: "sample-org/vtdd-v2"
+    },
+    metadata: {
+      repository: "sample-org/vtdd-v2",
+      relatedIssue: 450
+    },
+    priority: 92,
+    tags: ["working_memory", "issue:450", "failure_map", "drift_guard"],
+    createdAt: "2026-05-22T14:00:00.000Z"
+  });
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/gateway", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        phase: "exploration",
+        actorRole: ActorRole.EXECUTOR,
+        conversation: {
+          userText: "前回の開発コンテキストドリフトと失敗記憶を思い出して"
+        },
+        policyInput: {
+          actionType: ActionType.READ,
+          mode: "read_only",
+          repositoryInput: "vtdd",
+          aliasRegistry,
+          targetConfirmed: true,
+          runtimeTruth: { runtimeAvailable: false, safeFallbackChosen: true },
+          consent: { grantedCategories: [ConsentCategory.READ] },
+          issueTraceable: false
+        }
+      })
+    }),
+    { ...gatewayAuthEnv, MEMORY_PROVIDER: provider }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.allowed, true);
+  assert.equal(body.conversationAssist.operationalMemoryRequest.enabled, true);
+  assert.equal(body.retrievalReferences.operationalMemory.compactContext[0].id, "working-memory-drift-450");
+  assert.equal(
+    body.retrievalReferences.operationalMemory.memoryUseRule,
+    "runtime_truth_current_state_overrides_memory_background_reference"
+  );
+});
+
+test("worker gateway returns bounded operational memory inventory for memory amount questions", async () => {
+  const provider = createInMemoryMemoryProvider();
+  await provider.store({
+    id: "working-memory-count-1",
+    type: MemoryRecordType.WORKING_MEMORY,
+    content: { summary: "RAG checkpoint count sample." },
+    metadata: { repository: "sample-org/vtdd-v2" },
+    priority: 60,
+    tags: ["working_memory"],
+    createdAt: "2026-05-22T14:10:00.000Z"
+  });
+  await provider.store({
+    id: "repair-case-count-1",
+    type: MemoryRecordType.REPAIR_CASE,
+    content: { summary: "Failure repair memory count sample." },
+    metadata: { repository: "sample-org/vtdd-v2" },
+    priority: 70,
+    tags: ["repair_case", "failure_map"],
+    createdAt: "2026-05-22T14:11:00.000Z"
+  });
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/gateway", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        phase: "exploration",
+        actorRole: ActorRole.EXECUTOR,
+        conversation: {
+          userText: "RAG の記憶は今どのくらいある？何件くらい？"
+        },
+        policyInput: {
+          actionType: ActionType.READ,
+          mode: "read_only",
+          repositoryInput: "vtdd",
+          aliasRegistry,
+          targetConfirmed: true,
+          runtimeTruth: { runtimeAvailable: false, safeFallbackChosen: true },
+          consent: { grantedCategories: [ConsentCategory.READ] },
+          issueTraceable: false
+        }
+      })
+    }),
+    { ...gatewayAuthEnv, MEMORY_PROVIDER: provider }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.allowed, true);
+  assert.equal(body.conversationAssist.detectedIntent, "memory_status");
+  assert.equal(body.retrievalReferences.operationalMemoryInventory.countsByType.working_memory, 1);
+  assert.equal(body.retrievalReferences.operationalMemoryInventory.countsByType.repair_case, 1);
+  assert.equal(body.retrievalReferences.operationalMemoryInventory.totalVisibleCount, 2);
+});
+
 test("worker gateway allows butler path when deterministic judgment order is satisfied", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/v2/gateway", {
