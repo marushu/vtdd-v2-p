@@ -206,7 +206,7 @@ export class DashboardChatRoom {
       await this.acceptOwnerMessage({ socket, threadId, payload });
       return;
     }
-    if (socketAttachment.role === "app_server_bridge" || String(payload?.type || "").startsWith("app_server_")) {
+    if (socketAttachment.role === "app_server_bridge") {
       await this.acceptAppServerBridgeMessage({ socket, attachment: socketAttachment, payload });
     }
   }

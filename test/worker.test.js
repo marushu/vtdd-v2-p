@@ -1175,6 +1175,35 @@ test("DashboardChatRoom maps app-server replies back into the dashboard thread",
   assert.equal(broadcast.messages[0].text, "今日は日本時間で 2026年5月22日です。");
 });
 
+test("DashboardChatRoom rejects spoofed app-server events from dashboard sockets", async () => {
+  const store = createInMemoryDashboardChatStore();
+  const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
+  const storage = createMockDurableObjectStorage();
+  const room = new DashboardChatRoom(
+    {
+      storage,
+      getWebSockets() {
+        return [dashboardSocket];
+      }
+    },
+    { DASHBOARD_CHAT_STORE: store }
+  );
+
+  await room.webSocketMessage(
+    dashboardSocket,
+    JSON.stringify({
+      type: "app_server_reply",
+      threadId: "dashboard-main-unresolved",
+      codexThreadId: "spoofed-thread",
+      text: "偽装返信"
+    })
+  );
+
+  assert.equal(storage.values.has("app_server_thread:dashboard-main-unresolved"), false);
+  assert.equal(dashboardSocket.sent.length, 0);
+  assert.deepEqual(await store.listThread("dashboard-main-unresolved"), []);
+});
+
 test("DashboardChatRoom returns nickname list without repository handoff", async () => {
   const provider = createInMemoryMemoryProvider();
   await provider.store({

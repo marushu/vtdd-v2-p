@@ -226,7 +226,13 @@ export class JsonLineAppServerClient {
   }
 }
 
-export async function handleDashboardTurnRequest({ request, appServer, sendDashboardEvent, cwd = process.cwd() }) {
+export async function handleDashboardTurnRequest({
+  request,
+  appServer,
+  sendDashboardEvent,
+  cwd = process.cwd(),
+  turnTimeoutMs = 10 * 60 * 1000
+}) {
   const dashboardThreadId = String(request.threadId || "");
   const text = String(request.text || "");
   if (!dashboardThreadId || !text) {
@@ -256,6 +262,23 @@ export async function handleDashboardTurnRequest({ request, appServer, sendDashb
   }
 
   let accumulatedText = "";
+  let turnSettled = false;
+  let timeoutHandle = null;
+  let resolveTurn = () => {};
+  let rejectTurn = () => {};
+  const turnCompletion = new Promise((resolve, reject) => {
+    resolveTurn = resolve;
+    rejectTurn = reject;
+    timeoutHandle = setTimeout(() => {
+      reject(new Error("codex app-server turn timed out before completion"));
+    }, turnTimeoutMs);
+  });
+  const finishTurn = (callback) => {
+    if (turnSettled) return;
+    turnSettled = true;
+    clearTimeout(timeoutHandle);
+    callback();
+  };
   const unsubscribe = appServer.onNotification((message) => {
     const event = mapAppServerNotificationToDashboardEvent(message, {
       dashboardThreadId,
@@ -271,12 +294,22 @@ export async function handleDashboardTurnRequest({ request, appServer, sendDashb
     if (event.type === "app_server_status" && event.status === "replied") {
       event.type = "app_server_reply";
       event.text = accumulatedText || event.text;
+      void sendDashboardEvent(event);
+      finishTurn(resolveTurn);
+      return;
+    }
+    if (event.type === "app_server_turn_failed") {
+      void sendDashboardEvent(event);
+      finishTurn(() => rejectTurn(new Error(event.text || "codex app-server turn failed")));
+      return;
     }
     void sendDashboardEvent(event);
   });
   try {
     await appServer.request(buildAppServerTurnStartRequest({ id: appServer.nextRequestId(), codexThreadId, text, cwd }));
+    await turnCompletion;
   } finally {
+    clearTimeout(timeoutHandle);
     unsubscribe();
   }
 }

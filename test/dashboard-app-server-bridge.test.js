@@ -143,6 +143,74 @@ test("dashboard app-server bridge handles a fresh dashboard turn through thread/
   assert.equal(events[2].text, "今日は2026年5月22日です。");
 });
 
+test("dashboard app-server bridge keeps listening for async turn notifications after turn/start response", async () => {
+  const requests = [];
+  const events = [];
+  const handlers = new Set();
+  let nextId = 1;
+  const appServer = {
+    nextRequestId() {
+      const id = nextId;
+      nextId += 1;
+      return id;
+    },
+    onNotification(handler) {
+      handlers.add(handler);
+      return () => handlers.delete(handler);
+    },
+    async request(message) {
+      requests.push(message);
+      if (message.method === "thread/start") {
+        return { thread: { id: "codex-thread-async" } };
+      }
+      if (message.method === "turn/start") {
+        setTimeout(() => {
+          for (const handler of handlers) {
+            handler({
+              method: "item/agentMessage/delta",
+              params: {
+                threadId: "codex-thread-async",
+                turnId: "turn-async",
+                delta: "非同期で返りました。"
+              }
+            });
+            handler({
+              method: "turn/completed",
+              params: {
+                threadId: "codex-thread-async",
+                turn: { id: "turn-async", status: "completed" }
+              }
+            });
+          }
+        }, 0);
+        return { turn: { id: "turn-async" } };
+      }
+      throw new Error(`unexpected method ${message.method}`);
+    }
+  };
+
+  await handleDashboardTurnRequest({
+    request: {
+      threadId: "dashboard-main",
+      codexThreadId: null,
+      text: "続きは？"
+    },
+    appServer,
+    sendDashboardEvent: async (event) => events.push(event),
+    cwd: "/repo",
+    turnTimeoutMs: 1000
+  });
+
+  assert.deepEqual(
+    requests.map((request) => request.method),
+    ["thread/start", "turn/start"]
+  );
+  assert.equal(events.at(-2).type, "app_server_reply_delta");
+  assert.equal(events.at(-1).type, "app_server_reply");
+  assert.equal(events.at(-1).text, "非同期で返りました。");
+  assert.equal(handlers.size, 0);
+});
+
 test("dashboard app-server bridge args read runtime and token from environment", () => {
   const parsed = parseBridgeArgs(["--thread-id", "dashboard-main"], {
     VTDD_RUNTIME_URL: "https://runtime.example",
