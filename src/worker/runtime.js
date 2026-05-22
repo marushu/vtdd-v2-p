@@ -477,6 +477,8 @@ const MEMORY_D1_BINDING = "VTDD_MEMORY_D1";
 const MEMORY_R2_BINDING = "VTDD_MEMORY_R2";
 const MEMORY_BLOB_THRESHOLD_ENV = "VTDD_MEMORY_BLOB_THRESHOLD";
 const WEB_PUSH_PUBLIC_KEY_ENV = "VTDD_WEB_PUSH_PUBLIC_KEY";
+const WEB_PUSH_PRIVATE_KEY_ENV = "VTDD_WEB_PUSH_PRIVATE_KEY";
+const WEB_PUSH_SUBJECT_ENV = "VTDD_WEB_PUSH_SUBJECT";
 const DEFAULT_MEMORY_LIMIT = 20;
 const MAX_MEMORY_LIMIT = 200;
 const memoryProviderCache = new WeakMap();
@@ -605,6 +607,10 @@ export default {
 
     if (request.method === "POST" && isApiPath(url.pathname, "/dashboard/push/subscription")) {
       return handleDashboardPushSubscriptionRequest(request, env);
+    }
+
+    if (request.method === "POST" && isApiPath(url.pathname, "/dashboard/push/test")) {
+      return handleDashboardPushTestRequest(request, env);
     }
 
     if (request.method === "GET" && isDashboardChatSocketApiPath(url.pathname)) {
@@ -3525,9 +3531,11 @@ async function handleGitHubActionsEventRequest(request, env) {
   }
 
   await store.put(event.event);
+  const webPush = await dispatchDashboardWebPushForEvent(env, event.event);
   return json(202, {
     ok: true,
-    event: event.event
+    event: event.event,
+    webPush
   });
 }
 
@@ -3561,6 +3569,7 @@ async function handleVpsRunnerEventRequest(request, env) {
   }
 
   await eventStore.put(event.event);
+  const webPush = await dispatchDashboardWebPushForEvent(env, event.event);
   let messages;
   try {
     messages = await chatStore.appendMany(event.threadId, [event.chatMessage]);
@@ -3582,7 +3591,8 @@ async function handleVpsRunnerEventRequest(request, env) {
     event: event.event,
     threadId: event.threadId,
     messages,
-    webSocketBroadcast
+    webSocketBroadcast,
+    webPush
   });
 }
 
@@ -3688,6 +3698,42 @@ async function handleDashboardPushSubscriptionRequest(request, env) {
       updatedAt: saved.updatedAt,
       status: "saved"
     }
+  });
+}
+
+async function handleDashboardPushTestRequest(request, env) {
+  const dashboardAuth = await authorizeDashboardRequest({
+    request,
+    env,
+    apiSuffix: "/dashboard/push/test"
+  });
+  if (!dashboardAuth.ok) {
+    return json(dashboardAuth.status, {
+      ok: false,
+      error: "dashboard_auth_required",
+      reason: dashboardAuth.reason
+    });
+  }
+
+  const payload = await readJson(request);
+  const event = normalizeDashboardEventRecord({
+    id: `dashboard-push-test:${crypto.randomUUID()}`,
+    kind: "dashboard_push_test",
+    repository: normalizeCanonicalRepositoryInput(payload?.repository) || "marushu/vtdd-v2-p",
+    workflowName: "dashboard-push-test",
+    runId: crypto.randomUUID(),
+    status: "completed",
+    conclusion: "success",
+    title: sanitizeDashboardChatText(payload?.title || "Dashboard Butler server push test"),
+    runUrl: "/dashboard/notifications",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  });
+  const webPush = await dispatchDashboardWebPushForEvent(env, event);
+  return json(webPush.ok ? 202 : webPush.status || 503, {
+    ok: webPush.ok,
+    event,
+    webPush
   });
 }
 
@@ -5592,7 +5638,7 @@ function resolveDashboardPushSubscriptionStore(env) {
     return null;
   }
   const injectedStore = env.DASHBOARD_PUSH_SUBSCRIPTION_STORE ?? null;
-  if (injectedStore && typeof injectedStore.put === "function") {
+  if (injectedStore && typeof injectedStore.put === "function" && typeof injectedStore.list === "function") {
     return injectedStore;
   }
 
@@ -6266,6 +6312,46 @@ function createD1DashboardPushSubscriptionStore(d1) {
         )
         .run();
       return normalized;
+    },
+
+    async list(filter = {}) {
+      await ensureSchema();
+      const limit = normalizeLimit(filter.limit, 50);
+      const result = await d1
+        .prepare(
+          `SELECT endpoint_hash, endpoint, expiration_time, p256dh, auth, user_agent,
+                  owner_identity, updated_at
+             FROM vtdd_dashboard_push_subscriptions
+             ORDER BY updated_at DESC
+             LIMIT ?`
+        )
+        .bind(limit)
+        .all();
+      return (Array.isArray(result?.results) ? result.results : [])
+        .map((row) => ({
+          endpointHash: normalizeDashboardEventText(row?.endpoint_hash),
+          endpoint: normalizeDashboardEventText(row?.endpoint),
+          expirationTime: row?.expiration_time ?? null,
+          p256dh: normalizeDashboardEventText(row?.p256dh),
+          auth: normalizeDashboardEventText(row?.auth),
+          userAgent: sanitizeDashboardChatText(row?.user_agent),
+          ownerIdentity: normalizeDashboardEventText(row?.owner_identity),
+          updatedAt: normalizeIsoTimestamp(row?.updated_at) || null
+        }))
+        .filter((record) => record.endpoint && record.p256dh && record.auth);
+    },
+
+    async delete(endpointHash) {
+      const normalizedEndpointHash = normalizeDashboardEventText(endpointHash);
+      if (!normalizedEndpointHash) {
+        return { deleted: false };
+      }
+      await ensureSchema();
+      const result = await d1
+        .prepare("DELETE FROM vtdd_dashboard_push_subscriptions WHERE endpoint_hash = ?")
+        .bind(normalizedEndpointHash)
+        .run();
+      return { deleted: Number(result?.meta?.changes || 0) > 0 };
     }
   };
 
@@ -6282,6 +6368,237 @@ function createD1DashboardPushSubscriptionStore(d1) {
     }
     return schemaPromise;
   }
+}
+
+async function dispatchDashboardWebPushForEvent(env, event) {
+  const store = resolveDashboardPushSubscriptionStore(env);
+  if (!store || typeof store.list !== "function") {
+    return {
+      ok: false,
+      status: 503,
+      error: "dashboard_push_subscription_store_unavailable",
+      reason: "dashboard push subscription store cannot list subscriptions"
+    };
+  }
+  const subscriptions = await store.list({ limit: 50 });
+  if (subscriptions.length === 0) {
+    return {
+      ok: false,
+      status: 404,
+      error: "dashboard_push_subscription_not_found",
+      reason: "no dashboard push subscriptions are stored"
+    };
+  }
+
+  const payload = buildDashboardWebPushPayload(event);
+  const results = [];
+  let cleaned = 0;
+  for (const subscription of subscriptions) {
+    const result = await sendDashboardWebPush({ env, subscription, payload });
+    if (result.stale && result.endpointHash && typeof store.delete === "function") {
+      const cleanup = await store.delete(result.endpointHash);
+      if (cleanup?.deleted) {
+        cleaned += 1;
+        result.cleaned = true;
+      }
+    }
+    results.push(result);
+  }
+  const delivered = results.filter((result) => result.ok).length;
+  const firstFailure = results.find((result) => !result.ok);
+  return {
+    ok: delivered > 0,
+    status: delivered > 0 ? 202 : firstFailure?.status || 502,
+    error: delivered > 0 ? undefined : firstFailure?.error,
+    reason: delivered > 0 ? undefined : firstFailure?.reason,
+    delivered,
+    cleaned,
+    attempted: results.length,
+    results: results.map((result) => ({
+      ok: result.ok,
+      endpointHash: result.endpointHash,
+      status: result.status,
+      reason: result.reason,
+      error: result.error,
+      stale: result.stale || undefined,
+      cleaned: result.cleaned || undefined
+    }))
+  };
+}
+
+function buildDashboardWebPushPayload(event) {
+  const record = normalizeDashboardEventRecord(event);
+  const title = record.kind === "dashboard_push_test" ? "VTDD Butler test" : "VTDD Butler";
+  const statusText = [record.status, record.conclusion].filter(Boolean).join("/");
+  const body = [record.title, record.repository, statusText].filter(Boolean).join(" - ");
+  return {
+    title,
+    body: body || "Dashboard Butler の通知です。",
+    tag: `vtdd-${record.kind || "dashboard"}-${record.runId || record.id || "event"}`.slice(0, 120),
+    url: record.runUrl || "/dashboard/notifications"
+  };
+}
+
+async function sendDashboardWebPush({ env, subscription, payload }) {
+  const endpoint = normalizeDashboardUrl(subscription?.endpoint);
+  const endpointHash = normalizeDashboardEventText(subscription?.endpointHash) || (endpoint ? await sha256Hex(endpoint) : "");
+  if (!endpoint) {
+    return { ok: false, endpointHash, status: 422, error: "push_endpoint_required", reason: "subscription endpoint is missing" };
+  }
+
+  const vapid = await buildDashboardVapidAuthorization({ env, endpoint });
+  if (!vapid.ok) {
+    return { ...vapid, endpointHash };
+  }
+
+  const fetcher = typeof env?.DASHBOARD_WEB_PUSH_FETCH === "function" ? env.DASHBOARD_WEB_PUSH_FETCH : fetch;
+  const response = await fetcher(endpoint, {
+    method: "POST",
+    headers: {
+      authorization: vapid.authorization,
+      ttl: "300",
+      urgency: "normal"
+    }
+  });
+  const stale = response.status === 404 || response.status === 410;
+  return {
+    ok: response.status >= 200 && response.status < 300,
+    endpointHash,
+    status: response.status,
+    reason: response.status >= 200 && response.status < 300
+      ? "accepted"
+      : stale
+        ? "push subscription is stale and should be deleted"
+        : "push service rejected the request",
+    stale
+  };
+}
+
+async function buildDashboardVapidAuthorization({ env, endpoint }) {
+  const publicKey = normalizeDashboardEventText(env?.[WEB_PUSH_PUBLIC_KEY_ENV]);
+  const privateKey = normalizeDashboardEventText(env?.[WEB_PUSH_PRIVATE_KEY_ENV]);
+  const subject = normalizeDashboardEventText(env?.[WEB_PUSH_SUBJECT_ENV]);
+  if (!publicKey || !privateKey || !subject) {
+    return {
+      ok: false,
+      status: 503,
+      error: "dashboard_web_push_vapid_unconfigured",
+      reason: "VTDD_WEB_PUSH_PUBLIC_KEY, VTDD_WEB_PUSH_PRIVATE_KEY, and VTDD_WEB_PUSH_SUBJECT are required"
+    };
+  }
+  const endpointUrl = new URL(endpoint);
+  const jwt = await signDashboardVapidJwt({
+    audience: endpointUrl.origin,
+    subject,
+    publicKey,
+    privateKey
+  });
+  if (!jwt.ok) {
+    return jwt;
+  }
+  return {
+    ok: true,
+    authorization: `vapid t=${jwt.token}, k=${publicKey}`
+  };
+}
+
+async function signDashboardVapidJwt({ audience, subject, publicKey, privateKey }) {
+  const publicBytes = base64UrlToBytes(publicKey);
+  if (publicBytes.length !== 65 || publicBytes[0] !== 4) {
+    return {
+      ok: false,
+      status: 503,
+      error: "dashboard_web_push_public_key_invalid",
+      reason: "VTDD_WEB_PUSH_PUBLIC_KEY must be an uncompressed P-256 public key encoded as base64url"
+    };
+  }
+  const privateJwk = buildDashboardVapidPrivateJwk({ publicBytes, privateKey });
+  if (!privateJwk.ok) {
+    return privateJwk;
+  }
+  const cryptoKey = await crypto.subtle.importKey(
+    "jwk",
+    privateJwk.jwk,
+    { name: "ECDSA", namedCurve: "P-256" },
+    false,
+    ["sign"]
+  );
+  const header = base64UrlEncodeJson({ typ: "JWT", alg: "ES256" });
+  const body = base64UrlEncodeJson({
+    aud: audience,
+    exp: Math.floor(Date.now() / 1000) + 12 * 60 * 60,
+    sub: subject
+  });
+  const signingInput = `${header}.${body}`;
+  const signature = await crypto.subtle.sign(
+    { name: "ECDSA", hash: "SHA-256" },
+    cryptoKey,
+    new TextEncoder().encode(signingInput)
+  );
+  return {
+    ok: true,
+    token: `${signingInput}.${base64UrlEncodeBytes(new Uint8Array(signature))}`
+  };
+}
+
+function buildDashboardVapidPrivateJwk({ publicBytes, privateKey }) {
+  if (privateKey.trim().startsWith("{")) {
+    try {
+      const jwk = JSON.parse(privateKey);
+      return { ok: true, jwk: { ...jwk, key_ops: ["sign"], ext: false } };
+    } catch {
+      return {
+        ok: false,
+        status: 503,
+        error: "dashboard_web_push_private_key_invalid",
+        reason: "VTDD_WEB_PUSH_PRIVATE_KEY JWK JSON is invalid"
+      };
+    }
+  }
+  const privateBytes = base64UrlToBytes(privateKey);
+  if (privateBytes.length !== 32) {
+    return {
+      ok: false,
+      status: 503,
+      error: "dashboard_web_push_private_key_invalid",
+      reason: "VTDD_WEB_PUSH_PRIVATE_KEY must be a P-256 private scalar encoded as base64url or a JWK JSON string"
+    };
+  }
+  return {
+    ok: true,
+    jwk: {
+      kty: "EC",
+      crv: "P-256",
+      x: base64UrlEncodeBytes(publicBytes.slice(1, 33)),
+      y: base64UrlEncodeBytes(publicBytes.slice(33, 65)),
+      d: base64UrlEncodeBytes(privateBytes),
+      key_ops: ["sign"],
+      ext: false
+    }
+  };
+}
+
+function base64UrlEncodeJson(value) {
+  return base64UrlEncodeBytes(new TextEncoder().encode(JSON.stringify(value)));
+}
+
+function base64UrlEncodeBytes(bytes) {
+  let binary = "";
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function base64UrlToBytes(value) {
+  const normalized = normalizeDashboardEventText(value).replace(/-/g, "+").replace(/_/g, "/");
+  const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
+  const raw = atob(padded);
+  const bytes = new Uint8Array(raw.length);
+  for (let index = 0; index < raw.length; index += 1) {
+    bytes[index] = raw.charCodeAt(index);
+  }
+  return bytes;
 }
 
 function buildDashboardChatTurn(payload, options = {}) {
@@ -8092,6 +8409,7 @@ async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventS
             <button class="dashboard-action" id="push-permission-button" type="button">通知を許可</button>
             <button class="dashboard-action" id="push-subscribe-button" type="button">購読を保存</button>
             <button class="dashboard-action" id="push-test-button" type="button">テスト通知</button>
+            <button class="dashboard-action" id="push-server-test-button" type="button">サーバ送信テスト</button>
           </div>
           <p class="muted">通知タップは通知センターへ戻ります。音は iOS 側の通知設定に従います。</p>
         </section>
@@ -8126,6 +8444,7 @@ async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventS
           const permissionButton = document.getElementById("push-permission-button");
           const subscribeButton = document.getElementById("push-subscribe-button");
           const testButton = document.getElementById("push-test-button");
+          const serverTestButton = document.getElementById("push-server-test-button");
           const badgeSetButton = document.getElementById("badge-set-button");
           const badgeClearButton = document.getElementById("badge-clear-button");
           const unreadCount = ${recentEvents.length};
@@ -8167,6 +8486,7 @@ async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventS
             if (subscribeButton) subscribeButton.disabled = !pushSupported || !vapidPublicKey || Notification.permission !== "granted";
             if (permissionButton) permissionButton.disabled = !pushSupported || Notification.permission === "granted";
             if (testButton) testButton.disabled = !pushSupported || Notification.permission !== "granted";
+            if (serverTestButton) serverTestButton.disabled = !pushSupported || !vapidPublicKey || Notification.permission !== "granted";
             if (badgeSetButton) badgeSetButton.disabled = !badgeSupported;
             if (badgeClearButton) badgeClearButton.disabled = !badgeSupported;
           }
@@ -8205,6 +8525,17 @@ async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventS
               silent: false,
               data: { url: "/dashboard/notifications" }
             });
+          });
+
+          serverTestButton?.addEventListener("click", async () => {
+            const response = await fetch("/v2/dashboard/push/test", {
+              method: "POST",
+              credentials: "same-origin",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ title: "Dashboard Butler server push test" })
+            });
+            setText(pushState, response.ok ? "server-side Web Push を送信しました。" : "server-side Web Push の送信に失敗しました。");
+            await refreshState();
           });
 
           badgeSetButton?.addEventListener("click", async () => {

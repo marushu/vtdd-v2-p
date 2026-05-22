@@ -176,7 +176,37 @@ function createInMemoryDashboardPushSubscriptionStore() {
     async put(subscription) {
       subscriptions.set(subscription.endpointHash, subscription);
       return subscription;
+    },
+    async list(filter = {}) {
+      const limit = Number(filter.limit) || 50;
+      return [...subscriptions.values()].slice(0, limit);
+    },
+    async delete(endpointHash) {
+      const deleted = subscriptions.delete(endpointHash);
+      return { deleted };
     }
+  };
+}
+
+function base64UrlEncodeTestBytes(bytes) {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+async function createTestVapidEnv(extra = {}) {
+  const keyPair = await crypto.subtle.generateKey(
+    { name: "ECDSA", namedCurve: "P-256" },
+    true,
+    ["sign", "verify"]
+  );
+  const publicKey = base64UrlEncodeTestBytes(new Uint8Array(await crypto.subtle.exportKey("raw", keyPair.publicKey)));
+  const privateJwk = await crypto.subtle.exportKey("jwk", keyPair.privateKey);
+  return {
+    VTDD_WEB_PUSH_PUBLIC_KEY: publicKey,
+    VTDD_WEB_PUSH_PRIVATE_KEY: JSON.stringify(privateJwk),
+    VTDD_WEB_PUSH_SUBJECT: "mailto:owner@example.com",
+    ...extra
   };
 }
 
@@ -1640,8 +1670,10 @@ test("worker serves dashboard notification center for recent events across repos
   assert.equal(body.includes("iOS PWA Web Push"), true);
   assert.equal(body.includes("id=\"push-permission-button\""), true);
   assert.equal(body.includes("id=\"push-subscribe-button\""), true);
+  assert.equal(body.includes("id=\"push-server-test-button\""), true);
   assert.equal(body.includes("id=\"badge-set-button\""), true);
   assert.equal(body.includes("/v2/dashboard/push/subscription"), true);
+  assert.equal(body.includes("/v2/dashboard/push/test"), true);
   assert.equal(body.includes("credentials: \"same-origin\""), true);
   assert.equal(body.includes("D1 には送信用に保持し、response / HTML / payload_json には raw key を返しません"), true);
   assert.equal(body.includes("navigator.setAppBadge"), true);
@@ -1750,6 +1782,131 @@ test("worker stores dashboard push subscription only for an authenticated owner 
   assert.equal(saved.ownerIdentity, "owner@example.com");
 });
 
+test("worker sends server-side dashboard Web Push test only for authenticated owner session", async () => {
+  const store = createInMemoryDashboardPushSubscriptionStore();
+  await store.put({
+    endpointHash: "endpoint-hash",
+    endpoint: "https://push.example/send/endpoint-hash",
+    p256dh: "p256dh-key",
+    auth: "auth-key",
+    ownerIdentity: "owner@example.com",
+    updatedAt: new Date().toISOString()
+  });
+  const calls = [];
+  const vapidEnv = await createTestVapidEnv({
+    DASHBOARD_WEB_PUSH_FETCH: async (input, init) => {
+      calls.push({ input, init });
+      return new Response(null, { status: 201 });
+    }
+  });
+
+  const unauthenticated = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/push/test", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title: "must not send" })
+    }),
+    {
+      ...dashboardAccessEnv,
+      ...vapidEnv,
+      DASHBOARD_PUSH_SUBSCRIPTION_STORE: store
+    }
+  );
+  assert.equal(unauthenticated.status, 401);
+  assert.equal(calls.length, 0);
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/push/test", {
+      method: "POST",
+      headers: { ...dashboardAccessHeaders, "content-type": "application/json" },
+      body: JSON.stringify({ title: "server push test" })
+    }),
+    {
+      ...dashboardAccessEnv,
+      ...vapidEnv,
+      DASHBOARD_PUSH_SUBSCRIPTION_STORE: store
+    }
+  );
+  assert.equal(response.status, 202);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.webPush.delivered, 1);
+  assert.equal(body.webPush.results[0].endpointHash, "endpoint-hash");
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].input, "https://push.example/send/endpoint-hash");
+  assert.equal(calls[0].init.method, "POST");
+  assert.match(calls[0].init.headers.authorization, /^vapid t=.+, k=.+/);
+  assert.equal(calls[0].init.headers.ttl, "300");
+  assert.equal(calls[0].init.headers.urgency, "normal");
+  assert.equal("body" in calls[0].init, false);
+  assert.equal(JSON.stringify(body).includes("p256dh-key"), false);
+  assert.equal(JSON.stringify(body).includes("auth-key"), false);
+});
+
+test("worker reports server-side dashboard Web Push configuration blockers", async () => {
+  const store = createInMemoryDashboardPushSubscriptionStore();
+  await store.put({
+    endpointHash: "endpoint-hash",
+    endpoint: "https://push.example/send/endpoint-hash",
+    p256dh: "p256dh-key",
+    auth: "auth-key",
+    ownerIdentity: "owner@example.com",
+    updatedAt: new Date().toISOString()
+  });
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/push/test", {
+      method: "POST",
+      headers: { ...dashboardAccessHeaders, "content-type": "application/json" },
+      body: JSON.stringify({ title: "server push test" })
+    }),
+    {
+      ...dashboardAccessEnv,
+      DASHBOARD_PUSH_SUBSCRIPTION_STORE: store
+    }
+  );
+  assert.equal(response.status, 503);
+  const body = await response.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.webPush.error, "dashboard_web_push_vapid_unconfigured");
+});
+
+test("worker cleans up stale dashboard Web Push subscriptions rejected by push service", async () => {
+  const store = createInMemoryDashboardPushSubscriptionStore();
+  await store.put({
+    endpointHash: "stale-endpoint-hash",
+    endpoint: "https://push.example/send/stale-endpoint-hash",
+    p256dh: "p256dh-key",
+    auth: "auth-key",
+    ownerIdentity: "owner@example.com",
+    updatedAt: new Date().toISOString()
+  });
+  const vapidEnv = await createTestVapidEnv({
+    DASHBOARD_WEB_PUSH_FETCH: async () => new Response(null, { status: 410 })
+  });
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/push/test", {
+      method: "POST",
+      headers: { ...dashboardAccessHeaders, "content-type": "application/json" },
+      body: JSON.stringify({ title: "server push test" })
+    }),
+    {
+      ...dashboardAccessEnv,
+      ...vapidEnv,
+      DASHBOARD_PUSH_SUBSCRIPTION_STORE: store
+    }
+  );
+
+  assert.equal(response.status, 410);
+  const body = await response.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.webPush.delivered, 0);
+  assert.equal(body.webPush.cleaned, 1);
+  assert.equal(body.webPush.results[0].stale, true);
+  assert.equal(body.webPush.results[0].cleaned, true);
+  assert.equal(store.subscriptions.has("stale-endpoint-hash"), false);
+});
+
 test("worker redacts dashboard push subscription raw material from D1 payload_json", async () => {
   const prepared = [];
   const d1 = {
@@ -1807,6 +1964,22 @@ test("worker redacts dashboard push subscription raw material from D1 payload_js
 
 test("worker ingests GitHub Actions deploy completion event and shows it on dashboard", async () => {
   const store = createInMemoryDashboardEventStore();
+  const pushStore = createInMemoryDashboardPushSubscriptionStore();
+  await pushStore.put({
+    endpointHash: "deploy-push-endpoint",
+    endpoint: "https://push.example/send/deploy",
+    p256dh: "p256dh-key",
+    auth: "auth-key",
+    ownerIdentity: "owner@example.com",
+    updatedAt: new Date().toISOString()
+  });
+  const pushCalls = [];
+  const vapidEnv = await createTestVapidEnv({
+    DASHBOARD_WEB_PUSH_FETCH: async (input, init) => {
+      pushCalls.push({ input, init });
+      return new Response(null, { status: 201 });
+    }
+  });
   const eventResponse = await worker.fetch(
     new Request("https://example.com/v2/events/github-actions", {
       method: "POST",
@@ -1828,7 +2001,9 @@ test("worker ingests GitHub Actions deploy completion event and shows it on dash
     }),
     {
       ...gatewayAuthEnv,
-      DASHBOARD_EVENT_STORE: store
+      ...vapidEnv,
+      DASHBOARD_EVENT_STORE: store,
+      DASHBOARD_PUSH_SUBSCRIPTION_STORE: pushStore
     }
   );
 
@@ -1836,6 +2011,10 @@ test("worker ingests GitHub Actions deploy completion event and shows it on dash
   const eventBody = await eventResponse.json();
   assert.equal(eventBody.ok, true);
   assert.equal(eventBody.event.runId, "26133044458");
+  assert.equal(eventBody.webPush.delivered, 1);
+  assert.equal(pushCalls.length, 1);
+  assert.equal(pushCalls[0].input, "https://push.example/send/deploy");
+  assert.match(pushCalls[0].init.headers.authorization, /^vapid t=.+, k=.+/);
   assert.equal("approvalGrantId" in eventBody.event, false);
   assert.equal("token" in eventBody.event, false);
 
