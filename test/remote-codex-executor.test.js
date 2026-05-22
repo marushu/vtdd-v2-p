@@ -271,48 +271,8 @@ test("remote Codex execution request rejects wait-only continuity goal before wo
 
   assert.equal(result.ok, false);
   assert.deepEqual(result.issues, [
-    "codexGoal must be dashboard_chat_triage, open_pr, revise_pr, respond_to_review, or post_merge_verify"
+    "codexGoal must be open_pr, revise_pr, respond_to_review, or post_merge_verify"
   ]);
-});
-
-test("remote Codex execution request accepts dashboard chat triage goal", () => {
-  const result = createRemoteCodexExecutionRequest({
-    payload: {
-      actorRole: ActorRole.BUTLER,
-      issueContext: { issueNumber: 450 },
-      continuationContext: {
-        requiresHandoff: true,
-        codexGoal: RemoteCodexDispatchGoal.DASHBOARD_CHAT_TRIAGE,
-        handoff: {
-          issueTraceable: true,
-          approvalScopeMatched: true,
-          relatedIssue: 450,
-          summary: "Dashboard chat triage",
-          ownerMessage: "ぶい の残り Issue と PR を確認して",
-          repositoryInput: "ぶい",
-          dashboardThreadId: "dashboard-main-vtdd"
-        }
-      },
-      executionTarget: {
-        codexGoal: RemoteCodexDispatchGoal.DASHBOARD_CHAT_TRIAGE,
-        branch: "codex/issue-450-dashboard-chat-triage"
-      },
-      policyInput: {
-        approvalPhrase: "GO",
-        targetConfirmed: true,
-        approvalScopeMatched: true
-      }
-    },
-    gatewayResult: {
-      repository: "sample-org/vtdd-v2"
-    }
-  });
-
-  assert.equal(result.ok, true);
-  assert.equal(result.request.codexGoal, RemoteCodexDispatchGoal.DASHBOARD_CHAT_TRIAGE);
-  assert.equal(result.request.handoff.dashboardThreadId, "dashboard-main-vtdd");
-  assert.equal(result.request.handoff.ownerMessage, "ぶい の残り Issue と PR を確認して");
-  assert.equal(result.request.handoff.repositoryInput, "ぶい");
 });
 
 test("remote Codex execution request rejects non-string handoff approval refs", () => {
@@ -761,73 +721,6 @@ test("remote Codex vps_runner dispatch posts a GitHub-backed queue comment", asy
   assert.equal(body.includes('"docs/butler/thread-independent-startup-contract.md"'), true);
   assert.equal(body.includes("## This PR satisfies Intent"), true);
   assert.equal(body.includes("## Surface Update Checklist"), true);
-});
-
-test("remote Codex vps_runner dashboard chat triage queue does not masquerade as PR work", async () => {
-  const calls = [];
-  const dispatched = await dispatchRemoteCodexExecution({
-    payload: {
-      actorRole: ActorRole.BUTLER,
-      executorTransport: RemoteCodexExecutorTransport.VPS_RUNNER,
-      issueContext: { issueNumber: 450 },
-      policyInput: {
-        approvalPhrase: "GO",
-        targetConfirmed: true,
-        approvalScopeMatched: true,
-        runtimeTruth: {
-          runtimeState: {
-            activeBranch: "codex/issue-450-dashboard-vps-chat"
-          }
-        },
-        approvalActor: "owner"
-      },
-      continuationContext: {
-        requiresHandoff: true,
-        handoff: {
-          issueTraceable: true,
-          approvalScopeMatched: true,
-          relatedIssue: 450,
-          summary: "Dashboard chat handoff",
-          ownerMessage: "ぶい の残り Issue と PR を確認して交通整理して",
-          repositoryInput: "ぶい",
-          dashboardThreadId: "dashboard-main-vtdd"
-        }
-      }
-    },
-    gatewayResult: {
-      repository: "marushu/vtdd-v2-p",
-      executionContinuity: {
-        codexGoal: RemoteCodexDispatchGoal.DASHBOARD_CHAT_TRIAGE
-      }
-    },
-    env: {
-      GITHUB_APP_INSTALLATION_TOKEN: "ghs_dispatch_token",
-      GITHUB_API_FETCH: async (url, init) => {
-        calls.push({ url, init });
-        return new Response(
-          JSON.stringify({
-            id: 45001,
-            html_url: "https://github.com/marushu/vtdd-v2-p/issues/450#issuecomment-45001"
-          }),
-          { status: 201, headers: { "content-type": "application/json" } }
-        );
-      }
-    }
-  });
-
-  assert.equal(dispatched.ok, true);
-  const body = JSON.parse(calls[0].init.body).body;
-  assert.equal(body.includes('"codexGoal": "dashboard_chat_triage"'), true);
-  assert.equal(body.includes('"ownerMessage": "ぶい の残り Issue と PR を確認して交通整理して"'), true);
-  assert.equal(body.includes('"repositoryInput": "ぶい"'), true);
-  assert.equal(body.includes("完了条件: dashboard chat triage の返信 event を同じ thread に返す"), true);
-  assert.equal(body.includes("dashboard chat triage は PR を作成・更新しません"), true);
-  assert.equal(body.includes("PR を作成・更新しない。"), true);
-  assert.equal(body.includes("完了条件: pull request を作成または更新する"), false);
-  assert.equal(body.includes("Required PR body markers"), false);
-  assert.equal(body.includes("docs/pr-template-model.md"), false);
-  assert.equal(body.includes("scripts/render-pr-body.mjs"), false);
-  assert.equal(body.includes('"requiredRepoFiles": [\n      "AGENTS.md",\n      "docs/butler/thread-independent-startup-contract.md"\n    ]'), true);
 });
 
 test("remote Codex vps_runner dispatch preserves bounded PR revision goal", async () => {

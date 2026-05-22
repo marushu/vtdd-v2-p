@@ -6,12 +6,6 @@ import path from "node:path";
 import {
   buildFreshExecutionBranchCandidates,
   buildCodexExecutionPrompt,
-  buildDashboardChatTriagePrompt,
-  buildDashboardGeneralChatPrompt,
-  buildVpsDashboardSocketExecutionPayload,
-  buildVpsDashboardActionBridgeGuide,
-  buildVpsDashboardActionReadBridgeGuide,
-  buildDashboardRunnerWebSocketUrl,
   buildCodexExecArgs,
   buildCodexExecutionEnv,
   buildGuardedPullRequestBody,
@@ -25,7 +19,6 @@ import {
   buildVpsRunnerPullRequestContext,
   checkoutVpsRunnerBranch,
   classifyVpsRunnerFailure,
-  connectVpsDashboardWebSocketClient,
   formatPullRequestContext,
   isNonFastForwardPushFailure,
   loadVpsRunnerRepositoryPolicies,
@@ -36,7 +29,6 @@ import {
   postVpsRunnerEvent,
   runVpsRunnerOnce,
   resolveRoleGitHubAppInstallationToken,
-  summarizeDashboardReplyText,
   summarizeDiagnosticText,
   selectPendingVpsReviewerFallbacks,
   selectPendingVpsRunnerExecutions
@@ -516,10 +508,10 @@ test("VPS runner event posts dashboard thread events to runtime", async () => {
     },
     event: {
       status: "completed",
-      lastEvent: "dashboard_chat_triage_completed",
-      finalEvent: "dashboard_chat_triage_completed",
-      currentStep: "dashboard_chat_triage",
-      message: "分類: answer\n次は Issue #450 の live E2E を確認します。"
+      lastEvent: "branch_pushed",
+      finalEvent: "branch_pushed",
+      currentStep: "branch_pushed",
+      message: "実装ブランチを push しました。"
     }
   });
 
@@ -530,8 +522,8 @@ test("VPS runner event posts dashboard thread events to runtime", async () => {
   const runtimeBody = JSON.parse(runtimeCalls[0].init.body);
   assert.equal(runtimeBody.threadId, "dashboard-main-marushu-vtdd-v2-p");
   assert.equal(runtimeBody.status, "completed");
-  assert.equal(runtimeBody.lastEvent, "dashboard_chat_triage_completed");
-  assert.equal(runtimeBody.message.includes("分類: answer"), true);
+  assert.equal(runtimeBody.lastEvent, "branch_pushed");
+  assert.equal(runtimeBody.message.includes("実装ブランチ"), true);
 
   const parsed = parseVpsRunnerEventComment(githubCalls[0].init.body.body);
   assert.equal(parsed.ok, true);
@@ -559,8 +551,8 @@ test("VPS runner event records missing runtime dashboard delivery configuration"
     },
     event: {
       status: "completed",
-      lastEvent: "dashboard_chat_triage_completed",
-      currentStep: "dashboard_chat_triage",
+      lastEvent: "branch_pushed",
+      currentStep: "branch_pushed",
       message: "完了"
     },
     env: {}
@@ -573,160 +565,6 @@ test("VPS runner event records missing runtime dashboard delivery configuration"
     parsed.event.dashboardDelivery.reason,
     "VTDD_RUNTIME_URL or VTDD_GATEWAY_BEARER_TOKEN is missing"
   );
-});
-
-test("VPS runner builds dashboard WebSocket endpoint with machine thread id", () => {
-  assert.equal(
-    buildDashboardRunnerWebSocketUrl({
-      runtimeUrl: "https://vtdd-v2-mvp.example.workers.dev",
-      threadId: "dashboard-main-marushu-vtdd-v2-p"
-    }),
-    "wss://vtdd-v2-mvp.example.workers.dev/v2/dashboard/vps-runner/ws?threadId=dashboard-main-marushu-vtdd-v2-p"
-  );
-});
-
-test("VPS runner dashboard WebSocket client authenticates and handles dashboard jobs", async () => {
-  const sockets = [];
-  class FakeWebSocket {
-    constructor(url, protocols, options) {
-      this.url = url;
-      this.protocols = protocols;
-      this.options = options;
-      this.listeners = new Map();
-      this.sent = [];
-      sockets.push(this);
-    }
-    addEventListener(eventName, handler) {
-      this.listeners.set(eventName, handler);
-    }
-    send(body) {
-      this.sent.push(body);
-    }
-    emit(eventName, event) {
-      return this.listeners.get(eventName)?.(event);
-    }
-  }
-
-  const jobs = [];
-  const socket = await connectVpsDashboardWebSocketClient({
-    runtimeUrl: "https://vtdd-v2-mvp.example.workers.dev",
-    bearerToken: "gateway-token-for-test",
-    threadId: "dashboard-main-marushu-vtdd-v2-p",
-    WebSocketImpl: FakeWebSocket,
-    logger: { log() {}, error() {} },
-    onJob: async (job, runnerSocket) => {
-      jobs.push(job);
-      runnerSocket.send(
-        JSON.stringify({
-          type: "vps_runner_reply",
-          threadId: job.threadId,
-          repository: job.repository,
-          issueNumber: job.relatedIssue,
-          status: "completed",
-          message: "VPS Codex CLI からの返信です。"
-        })
-      );
-    }
-  });
-
-  assert.equal(sockets.length, 1);
-  assert.equal(
-    sockets[0].url,
-    "wss://vtdd-v2-mvp.example.workers.dev/v2/dashboard/vps-runner/ws?threadId=dashboard-main-marushu-vtdd-v2-p"
-  );
-  assert.equal(sockets[0].options.headers.authorization, "Bearer gateway-token-for-test");
-  assert.equal(sockets[0].protocols[0], "vtdd-vps-runner");
-  assert.equal(sockets[0].protocols[1].startsWith("vtdd-gateway-bearer-"), true);
-
-  await socket.emit("message", {
-    data: JSON.stringify({
-      type: "dashboard_chat_job",
-      threadId: "dashboard-main-marushu-vtdd-v2-p",
-      repository: "marushu/vtdd-v2-p",
-      relatedIssue: 450,
-      text: "進捗は？"
-    })
-  });
-
-  assert.equal(jobs.length, 1);
-  assert.equal(jobs[0].text, "進捗は？");
-  assert.equal(JSON.parse(socket.sent[0]).type, "vps_runner_reply");
-  assert.equal(JSON.parse(socket.sent[0]).message, "VPS Codex CLI からの返信です。");
-});
-
-test("VPS runner dashboard WebSocket client reconnects after disconnect", async () => {
-  const sockets = [];
-  const timers = [];
-  class FakeWebSocket {
-    constructor(url, protocols, options) {
-      this.url = url;
-      this.protocols = protocols;
-      this.options = options;
-      this.listeners = new Map();
-      sockets.push(this);
-    }
-    addEventListener(eventName, handler) {
-      this.listeners.set(eventName, handler);
-    }
-    emit(eventName, event) {
-      return this.listeners.get(eventName)?.(event);
-    }
-  }
-
-  const socket = await connectVpsDashboardWebSocketClient({
-    runtimeUrl: "https://vtdd-v2-mvp.example.workers.dev",
-    bearerToken: "gateway-token-for-test",
-    threadId: "dashboard-main-marushu-vtdd-v2-p",
-    WebSocketImpl: FakeWebSocket,
-    logger: { log() {}, error() {} },
-    onJob: async () => {},
-    reconnectDelays: [250],
-    setTimeoutFn: (callback, delay) => {
-      timers.push({ callback, delay });
-    }
-  });
-
-  socket.emit("close");
-  assert.equal(timers.length, 1);
-  assert.equal(timers[0].delay, 250);
-
-  await timers[0].callback();
-  assert.equal(sockets.length, 2);
-  assert.equal(sockets[1].url, sockets[0].url);
-  assert.equal(sockets[1].protocols[0], "vtdd-vps-runner");
-});
-
-test("VPS runner treats unresolved dashboard issue-only jobs as conversation without readable Issue context", () => {
-  const payload = buildVpsDashboardSocketExecutionPayload({
-    type: "dashboard_chat_job",
-    threadId: "dashboard-main-unresolved",
-    repository: "",
-    repositoryResolution: { ok: false, error: "repository_required" },
-    relatedIssue: 450,
-    text: "今の #450 の残りを短く返して"
-  });
-
-  assert.equal(payload.repository, "");
-  assert.equal(payload.issueNumber, 450);
-  assert.equal(payload.conversationOnly, true);
-  assert.equal(payload.issueContextReadable, false);
-});
-
-test("VPS runner preserves readable Issue context only after repository resolution", () => {
-  const payload = buildVpsDashboardSocketExecutionPayload({
-    type: "dashboard_chat_job",
-    threadId: "dashboard-main-marushu-vtdd-v2-p",
-    repository: "marushu/vtdd-v2-p",
-    repositoryInput: "ぶい",
-    repositoryResolution: { ok: true, via: "alias" },
-    relatedIssue: 450,
-    text: "#450 の残り Issue と PR を確認して"
-  });
-
-  assert.equal(payload.repository, "marushu/vtdd-v2-p");
-  assert.equal(payload.issueNumber, 450);
-  assert.equal(payload.conversationOnly, false);
-  assert.equal(payload.issueContextReadable, true);
 });
 
 test("VPS runner milestone event mentions queue comment author", () => {
@@ -1140,28 +978,6 @@ test("VPS runner diagnostic summaries redact secrets and stay short", () => {
   assert.equal(summary.includes("[REDACTED_API_KEY]"), true);
   assert.equal(summary.endsWith("[truncated]"), true);
   assert.equal(summary.length <= 192, true);
-});
-
-test("VPS runner dashboard replies preserve readable line breaks", () => {
-  const summary = summarizeDashboardReplyText(
-    [
-      "分類: `answer / existing_issue_link`",
-      "",
-      "#450 の残りはこれだけです。",
-      "",
-      "- #450 はまだ OPEN",
-      "- open PR は 0 件",
-      "",
-      "残り作業:",
-      "1. dashboard live E2E",
-      "2. 証跡を残す"
-    ].join("\n"),
-    4000
-  );
-
-  assert.equal(summary.includes("\n\n- #450 はまだ OPEN\n- open PR は 0 件"), true);
-  assert.equal(summary.includes("OPEN - open PR"), false);
-  assert.equal(summary.includes("\n1. dashboard live E2E\n2. 証跡を残す"), true);
 });
 
 test("VPS runner dry run reports selected execution without side effects", async () => {
@@ -1744,122 +1560,6 @@ test("VPS runner Codex prompt preserves high-risk boundaries", () => {
   assert.equal(prompt.includes("## File / Line Hypotheses"), true);
   assert.equal(prompt.includes("## Hypothesis Retrospective"), true);
   assert.equal(prompt.includes("## Surface Update Checklist"), true);
-});
-
-test("VPS runner dashboard chat triage prompt preserves Custom GPT parity and blocks mutation", () => {
-  const prompt = buildDashboardChatTriagePrompt({
-    payload: {
-      repository: "marushu/vtdd-v2-p",
-      issueNumber: 450,
-      codexGoal: "dashboard_chat_triage",
-      handoff: {
-        ownerMessage: "ぶい の残り Issue と PR 確認して交通整理して",
-        repositoryInput: "ぶい",
-        dashboardThreadId: "dashboard-main-vtdd"
-      }
-    },
-    issue: {
-      title: "Dashboard Butler chat",
-      body: "Top chat must preserve Custom GPT Butler capabilities."
-    },
-    preflight: {
-      ok: true,
-      mode: "auto_receipt",
-      onMissingContract: "owner_decision_required",
-      issue: {
-        number: 450,
-        title: "Dashboard Butler chat",
-        bodyExcerpt: "Top chat must preserve Custom GPT Butler capabilities."
-      },
-      handoffNote: {
-        currentSurface: "VPS Codex CLI",
-        repository: "marushu/vtdd-v2-p",
-        issueNumber: 450,
-        codexGoal: "dashboard_chat_triage",
-        nextSafeAction: "resume from the canonical Issue, GitHub runtime truth, RAG checkpoints, and this preflight receipt",
-        blockedReturnRoute: "If the issue/runtime truth is insufficient, stop and return a Japanese blocker comment for Butler/owner instead of guessing."
-      },
-      artifacts: [{ path: "AGENTS.md", sha1: "abc123" }],
-      missing: []
-    }
-  });
-
-  assert.equal(prompt.includes("Custom GPT parity requirement:"), true);
-  assert.equal(prompt.includes("natural-language Butler entrypoint"), true);
-  assert.equal(prompt.includes("repository/nickname"), true);
-  assert.equal(prompt.includes("Issue split proposal"), true);
-  assert.equal(prompt.includes("existing Issue linkage"), true);
-  assert.equal(prompt.includes("GitHub runtime truth"), true);
-  assert.equal(prompt.includes("RAG"), true);
-  assert.equal(prompt.includes("approval URL needed"), true);
-  assert.equal(prompt.includes("Do not edit files, commit, push, create PRs, merge, deploy"), true);
-  assert.equal(prompt.includes("ぶい の残り Issue と PR 確認して交通整理して"), true);
-  assert.equal(prompt.includes("Context preflight receipt:"), true);
-  assert.equal(prompt.includes("AGENTS.md sha1=abc123"), true);
-  assert.equal(prompt.includes("Runtime read-only bridge:"), true);
-  assert.equal(prompt.includes("Runtime write/action bridge for Issue-backed bounded VTDD work:"), true);
-  assert.equal(prompt.includes("vtddExecute: POST /v2/action/execute"), true);
-  assert.equal(prompt.includes("vtddDeployProduction: POST /v2/action/deploy"), true);
-  assert.equal(prompt.includes("GO alone does not authorize deploy"), true);
-});
-
-test("VPS runner general dashboard chat prompt allows normal conversation without Issue preflight", () => {
-  const prompt = buildDashboardGeneralChatPrompt({
-    payload: {
-      conversationOnly: true,
-      issueNumber: 450,
-      repositoryResolution: { ok: false, error: "repository_required" },
-      handoff: {
-        ownerMessage: "今日は何月何日？日本時間を答えて",
-        repositoryInput: "missing",
-        dashboardThreadId: "dashboard-main"
-      }
-    }
-  });
-
-  assert.equal(prompt.includes("Owner dashboard message:"), true);
-  assert.equal(prompt.includes("今日は何月何日？日本時間を答えて"), true);
-  assert.equal(prompt.includes("Answer as a normal Butler conversation"), true);
-  assert.equal(prompt.includes("Do not require GitHub Issue preflight for general chat"), true);
-  assert.equal(prompt.includes("detectedIssueNumber: #450"), true);
-  assert.equal(prompt.includes("repositoryResolution: repository_required"), true);
-  assert.equal(prompt.includes("do not answer as if you read that Issue"), true);
-  assert.equal(prompt.includes("before VTDD can read GitHub truth or continue development"), true);
-  assert.equal(prompt.includes("ordinary conversation reveals a new actionable development need"), true);
-  assert.equal(prompt.includes("issue_split_proposal or execution_handoff_needed"), true);
-  assert.equal(prompt.includes("Runtime read-only bridge:"), false);
-  assert.equal(prompt.includes("vtddRetrieveRepositoryNicknames: GET /v2/retrieve/repository-nicknames"), false);
-  assert.equal(prompt.includes("vtddWriteOperationalMemory: POST /v2/action/memory-write"), false);
-  assert.equal(prompt.includes("vtddDeployProduction: POST /v2/action/deploy"), false);
-  assert.equal(prompt.includes("Do not edit files, commit, push, create PRs, merge, deploy"), true);
-});
-
-test("VPS runner dashboard action bridge exposes Action Schema operations without secret values", () => {
-  const guide = buildVpsDashboardActionBridgeGuide();
-
-  assert.equal(guide.includes("${VTDD_RUNTIME_URL}"), true);
-  assert.equal(guide.includes("${VTDD_GATEWAY_BEARER_TOKEN}"), true);
-  assert.equal(guide.includes("gateway-token-for-test"), false);
-  assert.equal(guide.includes("Runtime write/action bridge for Issue-backed bounded VTDD work:"), true);
-  assert.equal(guide.includes("vtddGateway: POST /v2/gateway"), true);
-  assert.equal(guide.includes("vtddGitHubAuthority: POST /v2/action/github-authority"), true);
-  assert.equal(guide.includes("vtddSyncGitHubActionsSecret: POST /v2/action/github-actions-secret"), true);
-  assert.equal(guide.includes("High-risk operation guidance:"), true);
-  assert.equal(guide.includes("Do not call high-risk routes from dashboard chat just because they are listed here."), true);
-  assert.equal(guide.includes("return approval_needed with the required scoped passkey boundary"), true);
-  assert.equal(guide.includes("GO alone does not authorize deploy"), true);
-});
-
-test("VPS runner action read bridge excludes sensitive and high-risk retrieval operations", () => {
-  const guide = buildVpsDashboardActionReadBridgeGuide();
-
-  assert.equal(guide.includes("Runtime read-only bridge:"), true);
-  assert.equal(guide.includes("vtddRetrieveGitHub: GET /v2/retrieve/github"), true);
-  assert.equal(guide.includes("vtddRetrieveApprovalGrant: GET /v2/retrieve/approval-grant"), false);
-  assert.equal(guide.includes("vtddRetrieveSetupDiagnostics: GET /v2/retrieve/setup-diagnostics"), false);
-  assert.equal(guide.includes("vtddRetrieveSetupArtifact: GET /v2/retrieve/setup-artifact"), false);
-  assert.equal(guide.includes("vtddWriteGitHub: POST /v2/action/github"), false);
-  assert.equal(guide.includes("vtddDeployProduction: POST /v2/action/deploy"), false);
 });
 
 test("VPS runner Codex execution env keeps runtime bridge credentials scoped opt-in", () => {

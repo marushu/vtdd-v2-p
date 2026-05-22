@@ -27,7 +27,8 @@ Dashboard Butler live chat completion.
 
 ## Why this is required
 
-The current Dashboard path was built from the older VPS runner pattern:
+The Dashboard path removed by PR #478 had been built from the older VPS runner
+pattern:
 
 ```text
 Dashboard WebSocket job
@@ -36,7 +37,7 @@ Dashboard WebSocket job
   -> final stdout/stderr reply
 ```
 
-That path is insufficient for Issue #450 because it starts a separate Codex
+That removed path is insufficient for Issue #450 because it starts a separate Codex
 process per turn. A WebSocket transport alone does not make a chat session. The
 owner-facing failures observed after PR #477 and deploy confirm this:
 
