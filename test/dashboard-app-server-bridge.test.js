@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  buildDashboardAppServerBridgeEndpoint,
   buildAppServerInitializeRequest,
   buildAppServerSandboxOverrides,
   buildAppServerThreadResumeRequest,
   buildAppServerThreadStartRequest,
   buildAppServerTurnStartRequest,
+  connectDashboardAppServerBridgeOnce,
   extractAppServerNotificationTurnId,
   handleDashboardTurnRequest,
   mapAppServerNotificationToDashboardEvent,
@@ -376,4 +378,143 @@ test("dashboard app-server bridge args read runtime, token, and thread from envi
   assert.equal(parsed.threadId, "dashboard-main");
   assert.equal(parsed.cwd, "/repo");
   assert.equal(parsed.sandboxMode, "");
+  assert.equal(parsed.reconnectDelayMs, 1000);
 });
+
+test("dashboard app-server bridge endpoint uses the dashboard app-server thread WebSocket", () => {
+  const endpoint = buildDashboardAppServerBridgeEndpoint({
+    runtimeUrl: "https://runtime.example",
+    threadId: "dashboard-main-unresolved"
+  });
+
+  assert.equal(
+    String(endpoint),
+    "wss://runtime.example/v2/dashboard/app-server/ws?threadId=dashboard-main-unresolved"
+  );
+});
+
+test("dashboard app-server bridge resolves one connection when the WebSocket closes", async () => {
+  const sockets = [];
+  class MockWebSocket {
+    constructor(endpoint, protocols) {
+      this.endpoint = endpoint;
+      this.protocols = protocols;
+      this.listeners = new Map();
+      this.sent = [];
+      sockets.push(this);
+    }
+
+    addEventListener(type, handler) {
+      if (!this.listeners.has(type)) {
+        this.listeners.set(type, new Set());
+      }
+      this.listeners.get(type).add(handler);
+    }
+
+    send(payload) {
+      this.sent.push(payload);
+    }
+
+    emit(type, event = {}) {
+      for (const handler of this.listeners.get(type) || []) {
+        handler(event);
+      }
+    }
+  }
+  const appServer = {
+    nextRequestId() {
+      return 1;
+    },
+    onNotification() {
+      return () => {};
+    },
+    async request() {
+      throw new Error("turn handling should not run in this close-only test");
+    }
+  };
+
+  const once = connectDashboardAppServerBridgeOnce({
+    endpoint: new URL("wss://runtime.example/v2/dashboard/app-server/ws?threadId=dashboard-main"),
+    token: "secret-token",
+    appServer,
+    WebSocketImpl: MockWebSocket
+  });
+  assert.equal(sockets.length, 1);
+  assert.equal(sockets[0].protocols[0], "vtdd-dashboard-bridge");
+  assert.match(sockets[0].protocols[1], /^vtdd-bearer\./);
+
+  sockets[0].emit("close");
+  await once;
+});
+
+test("dashboard app-server bridge reconnects the dashboard WebSocket without reinitializing app-server", async () => {
+  const sockets = [];
+  class MockWebSocket {
+    constructor(endpoint, protocols) {
+      this.endpoint = endpoint;
+      this.protocols = protocols;
+      this.listeners = new Map();
+      sockets.push(this);
+    }
+
+    addEventListener(type, handler) {
+      if (!this.listeners.has(type)) {
+        this.listeners.set(type, new Set());
+      }
+      this.listeners.get(type).add(handler);
+    }
+
+    send() {}
+
+    emit(type, event = {}) {
+      for (const handler of this.listeners.get(type) || []) {
+        handler(event);
+      }
+    }
+  }
+  let initializeCount = 0;
+  const appServer = {
+    async initialize() {
+      initializeCount += 1;
+    },
+    nextRequestId() {
+      return 1;
+    },
+    onNotification() {
+      return () => {};
+    },
+    async request() {
+      throw new Error("turn handling should not run in this reconnect test");
+    }
+  };
+
+  const running = runDashboardAppServerBridge({
+    runtimeUrl: "https://runtime.example",
+    token: "secret-token",
+    threadId: "dashboard-main",
+    cwd: "/repo",
+    appServer,
+    WebSocketImpl: MockWebSocket,
+    reconnectDelayMs: 0,
+    reconnectLimit: 1
+  });
+  await waitFor(() => sockets.length === 1);
+  sockets[0].emit("close");
+  await waitFor(() => sockets.length === 2);
+  sockets[1].emit("close");
+  await running;
+
+  assert.equal(initializeCount, 1);
+  assert.equal(String(sockets[0].endpoint), "wss://runtime.example/v2/dashboard/app-server/ws?threadId=dashboard-main");
+  assert.equal(String(sockets[1].endpoint), "wss://runtime.example/v2/dashboard/app-server/ws?threadId=dashboard-main");
+});
+
+async function waitFor(predicate, { timeoutMs = 1000 } = {}) {
+  const start = Date.now();
+  while (!predicate()) {
+    if (Date.now() - start > timeoutMs) {
+      throw new Error("timed out waiting for condition");
+    }
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+}
