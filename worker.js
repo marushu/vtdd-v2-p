@@ -62993,7 +62993,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 
       <form class="composer" id="butler-chat-form" aria-label="Butler composer" autocomplete="off" data-socket-endpoint="${escapeDashboardHtml(socketOrigin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}/ws" data-thread-endpoint="${escapeDashboardHtml(origin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}" data-thread-id="${escapeDashboardHtml(chatThreadId)}" data-repository-input="${escapeDashboardHtml(repositoryInput)}" data-issue-number="${dashboardIssueNumber || ""}">
         <div class="composer-box">
-          <textarea id="butler-message" name="text" placeholder="Butler V2 \u306B\u30E1\u30C3\u30BB\u30FC\u30B8..." aria-label="Butler V2 \u306B\u30E1\u30C3\u30BB\u30FC\u30B8" autocomplete="off" autocorrect="off" autocapitalize="sentences" spellcheck="false" enterkeyhint="send"></textarea>
+          <textarea id="butler-message" name="text" placeholder="Butler V2 \u306B\u30E1\u30C3\u30BB\u30FC\u30B8..." aria-label="Butler V2 \u306B\u30E1\u30C3\u30BB\u30FC\u30B8" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="send"></textarea>
           <button class="send-button" type="submit" aria-label="Butler \u306B\u9001\u4FE1">\u2191</button>
         </div>
         <div class="composer-status" id="butler-chat-status">\u63A5\u7D9A\u6E96\u5099\u4E2D\u3067\u3059\u3002WebSocket \u63A5\u7D9A\u5F8C\u306B\u9001\u4FE1\u3067\u304D\u307E\u3059\u3002</div>

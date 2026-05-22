@@ -529,7 +529,7 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes('} else if (message.role === "butler") {'), true);
   assert.equal(body.includes('} else if (message.role === "system") {'), true);
   assert.equal(body.includes('className = "copy-message"'), true);
-  assert.equal(body.includes('autocomplete="off" autocorrect="off" autocapitalize="sentences" spellcheck="false" enterkeyhint="send"'), true);
+  assert.equal(body.includes('autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="send"'), true);
   assert.equal(body.includes("const messagesById = new Map()"), true);
   assert.equal(body.includes("messagesById.set(messageKey(message), message)"), true);
   assert.equal(body.includes("messagesById.clear()"), true);
