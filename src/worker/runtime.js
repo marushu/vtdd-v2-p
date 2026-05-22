@@ -120,7 +120,13 @@ export class DashboardChatRoom {
       });
     }
 
-    const threadId = extractDashboardChatSocketThreadId(url.pathname);
+    const appServerBridgeSocket = isDashboardAppServerBridgeSocketPath(url.pathname);
+    const threadId = appServerBridgeSocket
+      ? normalizeDashboardThreadId(url.searchParams.get("threadId") || url.searchParams.get("thread_id"))
+      : extractDashboardChatSocketThreadId(url.pathname);
+    if (appServerBridgeSocket) {
+      return this.acceptSocket({ request, role: "app_server_bridge", threadId });
+    }
     if (!threadId) {
       return json(422, {
         ok: false,
@@ -129,9 +135,13 @@ export class DashboardChatRoom {
       });
     }
 
+    return this.acceptSocket({ request, role: "dashboard", threadId });
+  }
+
+  async acceptSocket({ request, role, threadId }) {
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
-    const attachment = { role: "dashboard", threadId };
+    const attachment = { role, threadId };
     if (typeof this.ctx?.acceptWebSocket === "function") {
       server.serializeAttachment(attachment);
       this.ctx.acceptWebSocket(server);
@@ -142,10 +152,24 @@ export class DashboardChatRoom {
       server.addEventListener("error", () => this.sessions.delete(server));
       server.addEventListener("message", (event) => this.handleSocketMessage(server, event?.data, attachment));
     }
-    await this.sendThread(server, threadId);
+    if (role === "app_server_bridge") {
+      this.sendSocket(server, {
+        type: "app_server_bridge_connected",
+        ok: true,
+        threadId: threadId || null,
+        schema: "vtdd.dashboard.app_server_bridge.v1"
+      });
+    } else {
+      await this.sendThread(server, threadId);
+    }
 
+    const headers =
+      role === "app_server_bridge" && normalizeDashboardEventText(request.headers.get("sec-websocket-protocol")).includes("vtdd-dashboard-bridge")
+        ? { "sec-websocket-protocol": "vtdd-dashboard-bridge" }
+        : {};
     return new Response(null, {
       status: 101,
+      headers,
       webSocket: client
     });
   }
@@ -180,6 +204,10 @@ export class DashboardChatRoom {
     }
     if (payload?.type === "owner_message") {
       await this.acceptOwnerMessage({ socket, threadId, payload });
+      return;
+    }
+    if (socketAttachment.role === "app_server_bridge") {
+      await this.acceptAppServerBridgeMessage({ socket, attachment: socketAttachment, payload });
     }
   }
 
@@ -235,20 +263,96 @@ export class DashboardChatRoom {
       },
       { threadId }
     );
-    const butlerMessage = normalizeDashboardChatMessage(
+    const bridgeSockets = this.connectedAppServerBridgeSockets(threadId);
+    if (bridgeSockets.length === 0) {
+      const butlerMessage = normalizeDashboardChatMessage(
+        {
+          threadId,
+          role: "butler",
+          repository,
+          relatedIssue,
+          status: "blocked",
+          text: buildDashboardAppServerNotConnectedReply({ repository, relatedIssue }),
+          createdAt: new Date(Date.parse(now) + 1).toISOString()
+        },
+        { threadId }
+      );
+      const messages = store ? await store.appendMany(threadId, [ownerMessage, butlerMessage]) : [ownerMessage, butlerMessage].filter(Boolean);
+      await this.broadcastThread({ threadId, messages });
+      return;
+    }
+
+    const pendingMessage = normalizeDashboardChatMessage(
       {
         threadId,
         role: "butler",
         repository,
         relatedIssue,
-        status: "blocked",
-        text: buildDashboardAppServerNotConnectedReply({ repository, relatedIssue }),
+        status: "thinking",
+        text: "codex app-server に送信しました。返信を待っています。",
         createdAt: new Date(Date.parse(now) + 1).toISOString()
       },
       { threadId }
     );
-    const messages = store ? await store.appendMany(threadId, [ownerMessage, butlerMessage]) : [ownerMessage, butlerMessage].filter(Boolean);
+    const messages = store ? await store.appendMany(threadId, [ownerMessage, pendingMessage]) : [ownerMessage, pendingMessage].filter(Boolean);
     await this.broadcastThread({ threadId, messages });
+    const mapping = await this.readAppServerThreadMapping(threadId);
+    const turnRequest = {
+      type: "app_server_turn_requested",
+      schema: "vtdd.dashboard.app_server_bridge.v1",
+      requestId: createDashboardRequestId("app-server-turn"),
+      threadId,
+      codexThreadId: mapping.codexThreadId || null,
+      repository: repository || null,
+      relatedIssue: relatedIssue || null,
+      text,
+      messageId: ownerMessage.messageId,
+      createdAt: now,
+      appServer: {
+        startThreadMethod: mapping.codexThreadId ? "thread/resume" : "thread/start",
+        turnMethod: "turn/start"
+      },
+      authority: buildDashboardAppServerAuthorityHint({ repository, relatedIssue, text })
+    };
+    this.sendSocket(bridgeSockets[0], turnRequest);
+  }
+
+  async acceptAppServerBridgeMessage({ socket, attachment, payload }) {
+    const normalized = normalizeDashboardAppServerBridgeEvent(payload, {
+      fallbackThreadId: attachment?.threadId
+    });
+    if (!normalized.ok) {
+      this.sendSocket(socket, {
+        type: "error",
+        ok: false,
+        reason: normalized.reason
+      });
+      return;
+    }
+    const attachmentThreadId = normalizeDashboardThreadId(attachment?.threadId);
+    if (attachmentThreadId && normalized.threadId !== attachmentThreadId) {
+      this.sendSocket(socket, {
+        type: "error",
+        ok: false,
+        reason: "bridge threadId does not match the connected dashboard thread"
+      });
+      return;
+    }
+    if (normalized.codexThreadId) {
+      await this.writeAppServerThreadMapping(normalized.threadId, {
+        codexThreadId: normalized.codexThreadId,
+        updatedAt: normalized.createdAt
+      });
+    }
+    if (normalized.messages.length === 0) {
+      await this.broadcastThread({ threadId: normalized.threadId });
+      return;
+    }
+    const store = resolveDashboardChatStore(this.env);
+    const messages = store
+      ? await store.appendMany(normalized.threadId, normalized.messages)
+      : normalized.messages;
+    await this.broadcastThread({ threadId: normalized.threadId, messages });
   }
 
   async broadcastThread({ threadId, messages = null }) {
@@ -261,7 +365,12 @@ export class DashboardChatRoom {
     });
     for (const socket of this.connectedSockets()) {
       const attachment = this.getSocketAttachment(socket);
-      if (attachment.role !== "vps_runner" && (!attachment.threadId || attachment.threadId === threadId) && isSocketOpen(socket)) {
+      if (
+        attachment.role !== "vps_runner" &&
+        attachment.role !== "app_server_bridge" &&
+        (!attachment.threadId || attachment.threadId === threadId) &&
+        isSocketOpen(socket)
+      ) {
         socket.send(payload);
       }
     }
@@ -311,6 +420,54 @@ export class DashboardChatRoom {
       return socket.deserializeAttachment() || {};
     }
     return this.sessions.get(socket) || {};
+  }
+
+  connectedAppServerBridgeSockets(threadId) {
+    return this.connectedSockets().filter((socket) => {
+      const attachment = this.getSocketAttachment(socket);
+      return (
+        attachment.role === "app_server_bridge" &&
+        (!attachment.threadId || attachment.threadId === threadId) &&
+        isSocketOpen(socket)
+      );
+    });
+  }
+
+  sendSocket(socket, payload) {
+    if (!isSocketOpen(socket)) {
+      return false;
+    }
+    socket.send(JSON.stringify(payload));
+    return true;
+  }
+
+  async readAppServerThreadMapping(threadId) {
+    const key = `app_server_thread:${normalizeDashboardThreadId(threadId)}`;
+    if (!key || typeof this.ctx?.storage?.get !== "function") {
+      return {};
+    }
+    try {
+      const record = await this.ctx.storage.get(key);
+      return normalizeObject(record);
+    } catch {
+      return {};
+    }
+  }
+
+  async writeAppServerThreadMapping(threadId, mapping) {
+    const normalizedThreadId = normalizeDashboardThreadId(threadId);
+    if (!normalizedThreadId || typeof this.ctx?.storage?.put !== "function") {
+      return false;
+    }
+    const codexThreadId = normalizeDashboardEventText(mapping?.codexThreadId || mapping?.codex_thread_id);
+    if (!codexThreadId) {
+      return false;
+    }
+    await this.ctx.storage.put(`app_server_thread:${normalizedThreadId}`, {
+      codexThreadId,
+      updatedAt: normalizeIsoTimestamp(mapping?.updatedAt) || new Date().toISOString()
+    });
+    return true;
   }
 }
 const CLOUDFLARE_ACCESS_JWKS_CACHE_TTL_MS = 5 * 60 * 1000;
@@ -434,6 +591,10 @@ export default {
 
     if (request.method === "GET" && isDashboardChatSocketApiPath(url.pathname)) {
       return handleDashboardChatSocketRequest(request, url, env);
+    }
+
+    if (request.method === "GET" && isDashboardAppServerBridgeSocketPath(url.pathname)) {
+      return handleDashboardAppServerBridgeSocketRequest(request, url, env);
     }
 
     if (request.method === "GET" && isApiPath(url.pathname, "/dashboard/chat/search")) {
@@ -3519,6 +3680,59 @@ async function handleDashboardChatSocketRequest(request, url, env) {
   return room.fetch(request);
 }
 
+async function handleDashboardAppServerBridgeSocketRequest(request, url, env) {
+  const auth = authorizeDashboardAppServerBridgeRequest({
+    request,
+    env,
+    apiSuffix: "/dashboard/app-server/ws"
+  });
+  if (!auth.ok) {
+    return json(auth.status, {
+      ok: false,
+      error: "unauthorized",
+      reason: auth.reason
+    });
+  }
+
+  const threadId = normalizeDashboardThreadId(url.searchParams.get("threadId") || url.searchParams.get("thread_id"));
+  const room = resolveDashboardChatRoomStub(env, threadId || "dashboard-app-server-bridge");
+  if (!room) {
+    return json(503, {
+      ok: false,
+      error: "dashboard_chat_room_unavailable",
+      reason: "DASHBOARD_CHAT_ROOMS Durable Object binding is not configured"
+    });
+  }
+
+  if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") {
+    return json(426, {
+      ok: false,
+      error: "websocket_upgrade_required",
+      reason: "dashboard app-server bridge requires a WebSocket upgrade"
+    });
+  }
+  return room.fetch(request);
+}
+
+function authorizeDashboardAppServerBridgeRequest({ request, env, apiSuffix }) {
+  const direct = authorizeGatewayRequest({ request, env, apiSuffix });
+  if (direct.ok || normalizeText(request.headers.get("authorization"))) {
+    return direct;
+  }
+  const bearerToken = normalizeText(env?.VTDD_GATEWAY_BEARER_TOKEN ?? env?.MVP_GATEWAY_BEARER_TOKEN);
+  const protocolToken = extractDashboardBridgeBearerProtocol(request.headers.get("sec-websocket-protocol"));
+  if (bearerToken && protocolToken) {
+    return protocolToken === bearerToken
+      ? { ok: true }
+      : {
+          ok: false,
+          status: 403,
+          reason: `provided websocket bearer protocol token is invalid for /${CANONICAL_API_PREFIX.replace(/^\//, "")}${apiSuffix}`
+        };
+  }
+  return direct;
+}
+
 async function handleDashboardChatThreadRequest(request, url, env) {
   const auth = await authorizeDashboardRequest({
     request,
@@ -5308,6 +5522,103 @@ function shouldUseDashboardThreadRepositoryContext(value) {
   );
 }
 
+function createDashboardRequestId(prefix) {
+  const normalizedPrefix = normalizeDashboardEventText(prefix) || "dashboard";
+  if (typeof globalThis.crypto?.randomUUID === "function") {
+    return `${normalizedPrefix}:${globalThis.crypto.randomUUID()}`;
+  }
+  return `${normalizedPrefix}:${Date.now().toString(36)}`;
+}
+
+function buildDashboardAppServerAuthorityHint({ repository, relatedIssue, text }) {
+  const needsRepositoryContext = Boolean(repository || relatedIssue || shouldUseDashboardThreadRepositoryContext(text));
+  return {
+    ordinaryConversationAllowed: true,
+    repositoryRequired: false,
+    repository: repository || null,
+    relatedIssue: relatedIssue || null,
+    escalation:
+      needsRepositoryContext
+        ? "Repository / Issue context may be used, but high-risk actions still require explicit GO or passkey approval."
+        : "Treat as ordinary conversation unless the owner asks for repository, Issue, PR, deploy, credential, or permission work.",
+    highRiskActionsRequire: ["GO", "passkey_approval"]
+  };
+}
+
+function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = "" } = {}) {
+  const input = normalizeObject(payload);
+  const threadId = normalizeDashboardThreadId(input.threadId || input.thread_id || fallbackThreadId);
+  if (!threadId) {
+    return {
+      ok: false,
+      reason: "threadId is required for app-server bridge events"
+    };
+  }
+  const eventType = normalizeDashboardEventText(input.type).toLowerCase();
+  const status = normalizeDashboardEventText(input.status).toLowerCase();
+  const codexThreadId = normalizeDashboardEventText(input.codexThreadId || input.codex_thread_id);
+  const text = sanitizeDashboardChatText(input.text || input.message || input.delta || input.finalText || input.final_text);
+  const repository = normalizeCanonicalRepositoryInput(input.repository);
+  const relatedIssue = normalizePositiveInteger(input.relatedIssue || input.issueNumber);
+  const createdAt = normalizeIsoTimestamp(input.createdAt) || new Date().toISOString();
+  const messages = [];
+  if (eventType === "app_server_reply_delta" || eventType === "app_server_reply") {
+    if (text) {
+      messages.push(
+        normalizeDashboardChatMessage(
+          {
+            threadId,
+            role: "butler",
+            repository,
+            relatedIssue,
+            status: eventType === "app_server_reply_delta" ? "thinking" : "replied",
+            text,
+            createdAt
+          },
+          { threadId }
+        )
+      );
+    }
+  } else if (eventType === "app_server_turn_failed" || status === "failed") {
+    messages.push(
+      normalizeDashboardChatMessage(
+        {
+          threadId,
+          role: "system",
+          repository,
+          relatedIssue,
+          status: "failed",
+          text: text || "codex app-server bridge failed before returning a reply.",
+          createdAt
+        },
+        { threadId }
+      )
+    );
+  } else if (eventType === "app_server_status") {
+    messages.push(
+      normalizeDashboardChatMessage(
+        {
+          threadId,
+          role: "system",
+          repository,
+          relatedIssue,
+          status: status === "replied" ? "replied" : "thinking",
+          text: text || "codex app-server is working.",
+          createdAt
+        },
+        { threadId }
+      )
+    );
+  }
+  return {
+    ok: true,
+    threadId,
+    codexThreadId,
+    createdAt,
+    messages: messages.filter(Boolean)
+  };
+}
+
 async function notifyDashboardChatRoom({ env, threadId, messages }) {
   const room = resolveDashboardChatRoomStub(env, threadId);
   if (!room || typeof room.fetch !== "function") {
@@ -5967,6 +6278,28 @@ function isDashboardChatSocketApiPath(pathname) {
     pathname.startsWith(`${CANONICAL_API_PREFIX}/dashboard/chat/`) ||
     pathname.startsWith(`${LEGACY_API_PREFIX}/dashboard/chat/`)
   ) && pathname.endsWith("/ws");
+}
+
+function isDashboardAppServerBridgeSocketPath(pathname) {
+  return pathname === `${CANONICAL_API_PREFIX}/dashboard/app-server/ws` || pathname === `${LEGACY_API_PREFIX}/dashboard/app-server/ws`;
+}
+
+function extractDashboardBridgeBearerProtocol(value) {
+  const protocols = normalizeText(value)
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const encoded = protocols.find((item) => item.startsWith("vtdd-bearer."))?.slice("vtdd-bearer.".length);
+  if (!encoded) {
+    return "";
+  }
+  try {
+    const base64 = encoded.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = `${base64}${"=".repeat((4 - (base64.length % 4)) % 4)}`;
+    return normalizeText(atob(padded));
+  } catch {
+    return "";
+  }
 }
 
 function isDashboardPagePath(pathname) {
@@ -8045,7 +8378,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           <p>この画面は会話を主役にするための chat-first runtime です。管理画面は右のサイドバーへ退避しました。</p>
           <ul>
             <li>関連 repo/nickname: <code>${escapeDashboardHtml(dashboardTargetLabel)}</code></li>
-            <li>会話: Dashboard Butler の app-server 接続は未実装です。旧 VPS runner 直送経路は使いません</li>
+            <li>会話: Dashboard Butler は app-server bridge 経路を使います。旧 VPS runner 直送経路は使いません</li>
           </ul>
         </article>
         <article class="bubble owner">
@@ -8054,8 +8387,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         <article class="bubble">
           <strong>Butler</strong>
           <p>その方針で進めます。中央はチャットだけ、状態確認・進捗・RAG・workflow・prototype cleanup の扱いはサイドバーのメニューから必要な時だけ開きます。</p>
-          <p>この dashboard から VPS Codex CLI を <code>codex exec</code> で毎回起動する旧経路は削除しました。Dashboard Butler は <code>codex app-server</code> ブリッジが入るまで未完成です。</p>
-          <span class="connection-note">Dashboard thread 接続準備中: 履歴保存と未接続状態の表示だけを行います</span>
+          <p>この dashboard から VPS Codex CLI を <code>codex exec</code> で毎回起動する旧経路は削除しました。Dashboard Butler は <code>codex app-server</code> bridge が常駐している時だけ live Codex thread に渡します。</p>
+          <span class="connection-note">Dashboard thread 接続準備中: bridge が未接続なら Custom GPT Butler が fallback です</span>
         </article>
 
       </div>
@@ -8318,7 +8651,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             window.clearTimeout(reconnectTimer);
             reconnectTimer = null;
           }
-          setStatus("Dashboard thread 接続済み。送信内容は保存されますが、app-server はまだ未接続です。");
+          setStatus("Dashboard thread 接続済み。app-server bridge が接続中なら live Codex thread に送ります。");
           refreshThread();
         });
         chatSocket.addEventListener("message", (event) => {
@@ -8371,7 +8704,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           relatedIssue: issueNumber
         }));
         textarea.value = "";
-        setStatus("送信済み。app-server 未接続のため実行は開始していません。");
+        setStatus("送信済み。app-server bridge の返信を待っています。");
         if (submitButton) submitButton.disabled = false;
         textarea.focus({ preventScroll: true });
         updateComposerReserve();

@@ -189,6 +189,19 @@ function createMockDashboardChatRoomNamespace() {
   };
 }
 
+function createMockDurableObjectStorage() {
+  const values = new Map();
+  return {
+    values,
+    async get(key) {
+      return values.get(key);
+    },
+    async put(key, value) {
+      values.set(key, value);
+    }
+  };
+}
+
 function createMockSocket(role, threadId) {
   const sent = [];
   return {
@@ -1017,6 +1030,38 @@ test("worker no longer exposes the dashboard VPS runner WebSocket push channel",
   assert.equal(rooms.calls.length, 0);
 });
 
+test("worker requires WebSocket upgrade for dashboard app-server bridge", async () => {
+  const rooms = createMockDashboardChatRoomNamespace();
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/app-server/ws?threadId=dashboard-main-marushu-vtdd-v2-p", {
+      headers: gatewayAuthHeaders
+    }),
+    { ...gatewayAuthEnv, DASHBOARD_CHAT_ROOMS: rooms.namespace }
+  );
+
+  assert.equal(response.status, 426);
+  const body = await response.json();
+  assert.equal(body.error, "websocket_upgrade_required");
+  assert.equal(rooms.calls.length, 0);
+});
+
+test("worker accepts dashboard app-server bridge bearer token through WebSocket subprotocol", async () => {
+  const rooms = createMockDashboardChatRoomNamespace();
+  const tokenProtocol = `vtdd-bearer.${Buffer.from("test-token", "utf8").toString("base64url")}`;
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/app-server/ws?threadId=dashboard-main-marushu-vtdd-v2-p", {
+      headers: {
+        "sec-websocket-protocol": `vtdd-dashboard-bridge, ${tokenProtocol}`
+      }
+    }),
+    { ...gatewayAuthEnv, DASHBOARD_CHAT_ROOMS: rooms.namespace }
+  );
+
+  assert.equal(response.status, 426);
+  const body = await response.json();
+  assert.equal(body.error, "websocket_upgrade_required");
+});
+
 test("DashboardChatRoom stores owner messages without pushing a VPS runner job", async () => {
   const provider = createInMemoryMemoryProvider();
   const store = createInMemoryDashboardChatStore();
@@ -1049,6 +1094,177 @@ test("DashboardChatRoom stores owner messages without pushing a VPS runner job",
   assert.equal(broadcast.messages[1].role, "butler");
   assert.equal(broadcast.messages[1].status, "blocked");
   assert.equal(broadcast.messages[1].text.includes("app-server"), true);
+});
+
+test("DashboardChatRoom sends ordinary owner turns to connected app-server bridge without repository resolution", async () => {
+  const provider = createInMemoryMemoryProvider();
+  const store = createInMemoryDashboardChatStore();
+  const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
+  const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-unresolved");
+  const storage = createMockDurableObjectStorage();
+  const room = new DashboardChatRoom(
+    {
+      storage,
+      getWebSockets() {
+        return [dashboardSocket, bridgeSocket];
+      }
+    },
+    { DASHBOARD_CHAT_STORE: store, MEMORY_PROVIDER: provider }
+  );
+
+  await room.webSocketMessage(
+    dashboardSocket,
+    JSON.stringify({
+      type: "owner_message",
+      threadId: "dashboard-main-unresolved",
+      text: "今日は何月何日？日本時間を答えて"
+    })
+  );
+
+  assert.equal(bridgeSocket.sent.length, 1);
+  const turnRequest = JSON.parse(bridgeSocket.sent[0]);
+  assert.equal(turnRequest.type, "app_server_turn_requested");
+  assert.equal(turnRequest.threadId, "dashboard-main-unresolved");
+  assert.equal(turnRequest.repository, null);
+  assert.equal(turnRequest.codexThreadId, null);
+  assert.equal(turnRequest.appServer.startThreadMethod, "thread/start");
+  assert.equal(turnRequest.appServer.turnMethod, "turn/start");
+  assert.equal(turnRequest.authority.ordinaryConversationAllowed, true);
+
+  assert.equal(dashboardSocket.sent.length, 1);
+  const broadcast = JSON.parse(dashboardSocket.sent[0]);
+  assert.equal(broadcast.messages.length, 2);
+  assert.equal(broadcast.messages[0].role, "owner");
+  assert.equal(broadcast.messages[1].role, "butler");
+  assert.equal(broadcast.messages[1].status, "thinking");
+  assert.match(broadcast.messages[1].text, /app-server/);
+});
+
+test("DashboardChatRoom sends each owner turn to only one app-server bridge for a thread", async () => {
+  const provider = createInMemoryMemoryProvider();
+  const store = createInMemoryDashboardChatStore();
+  const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
+  const primaryBridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-unresolved");
+  const duplicateBridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-unresolved");
+  const room = new DashboardChatRoom(
+    {
+      getWebSockets() {
+        return [dashboardSocket, primaryBridgeSocket, duplicateBridgeSocket];
+      }
+    },
+    { DASHBOARD_CHAT_STORE: store, MEMORY_PROVIDER: provider }
+  );
+
+  await room.webSocketMessage(
+    dashboardSocket,
+    JSON.stringify({
+      type: "owner_message",
+      threadId: "dashboard-main-unresolved",
+      text: "重複実行しない？"
+    })
+  );
+
+  assert.equal(primaryBridgeSocket.sent.length, 1);
+  assert.equal(duplicateBridgeSocket.sent.length, 0);
+  assert.equal(JSON.parse(primaryBridgeSocket.sent[0]).type, "app_server_turn_requested");
+});
+
+test("DashboardChatRoom maps app-server replies back into the dashboard thread", async () => {
+  const store = createInMemoryDashboardChatStore();
+  const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
+  const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-unresolved");
+  const storage = createMockDurableObjectStorage();
+  const room = new DashboardChatRoom(
+    {
+      storage,
+      getWebSockets() {
+        return [dashboardSocket, bridgeSocket];
+      }
+    },
+    { DASHBOARD_CHAT_STORE: store }
+  );
+
+  await room.webSocketMessage(
+    bridgeSocket,
+    JSON.stringify({
+      type: "app_server_reply",
+      threadId: "dashboard-main-unresolved",
+      codexThreadId: "codex-thread-450",
+      text: "今日は日本時間で 2026年5月22日です。"
+    })
+  );
+
+  assert.equal(storage.values.get("app_server_thread:dashboard-main-unresolved").codexThreadId, "codex-thread-450");
+  assert.equal(bridgeSocket.sent.length, 0);
+  assert.equal(dashboardSocket.sent.length, 1);
+  const broadcast = JSON.parse(dashboardSocket.sent[0]);
+  assert.equal(broadcast.messages.length, 1);
+  assert.equal(broadcast.messages[0].role, "butler");
+  assert.equal(broadcast.messages[0].status, "replied");
+  assert.equal(broadcast.messages[0].text, "今日は日本時間で 2026年5月22日です。");
+});
+
+test("DashboardChatRoom rejects app-server bridge events for a different dashboard thread", async () => {
+  const store = createInMemoryDashboardChatStore();
+  const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
+  const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-unresolved");
+  const storage = createMockDurableObjectStorage();
+  const room = new DashboardChatRoom(
+    {
+      storage,
+      getWebSockets() {
+        return [dashboardSocket, bridgeSocket];
+      }
+    },
+    { DASHBOARD_CHAT_STORE: store }
+  );
+
+  await room.webSocketMessage(
+    bridgeSocket,
+    JSON.stringify({
+      type: "app_server_reply",
+      threadId: "dashboard-other",
+      codexThreadId: "codex-thread-other",
+      text: "別 thread への返信"
+    })
+  );
+
+  assert.equal(storage.values.has("app_server_thread:dashboard-other"), false);
+  assert.equal(dashboardSocket.sent.length, 0);
+  assert.equal(bridgeSocket.sent.length, 1);
+  const error = JSON.parse(bridgeSocket.sent[0]);
+  assert.equal(error.type, "error");
+  assert.equal(error.ok, false);
+  assert.match(error.reason, /threadId/);
+});
+
+test("DashboardChatRoom rejects spoofed app-server events from dashboard sockets", async () => {
+  const store = createInMemoryDashboardChatStore();
+  const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
+  const storage = createMockDurableObjectStorage();
+  const room = new DashboardChatRoom(
+    {
+      storage,
+      getWebSockets() {
+        return [dashboardSocket];
+      }
+    },
+    { DASHBOARD_CHAT_STORE: store }
+  );
+
+  await room.webSocketMessage(
+    dashboardSocket,
+    JSON.stringify({
+      type: "app_server_reply",
+      threadId: "dashboard-main-unresolved",
+      codexThreadId: "spoofed-thread",
+      text: "偽装返信"
+    })
+  );
+
+  assert.equal(storage.values.has("app_server_thread:dashboard-main-unresolved"), false);
+  assert.equal(dashboardSocket.sent.length, 0);
+  assert.deepEqual(await store.listThread("dashboard-main-unresolved"), []);
 });
 
 test("DashboardChatRoom returns nickname list without repository handoff", async () => {
