@@ -223,29 +223,6 @@ export class DashboardChatRoom {
       normalizePositiveInteger(payload?.relatedIssue || payload?.issueNumber) || extractIssueNumberFromDashboardChatText(text);
     const now = new Date().toISOString();
     const store = resolveDashboardChatStore(this.env);
-    const nicknameListTurn = await buildDashboardRepositoryNicknameListTurn({
-      payload: { ...normalizeObject(payload), text, threadId },
-      env: this.env
-    });
-    if (nicknameListTurn) {
-      const ownerMessage = normalizeDashboardChatMessage(
-        {
-          threadId: nicknameListTurn.threadId,
-          role: "owner",
-          relatedIssue,
-          status: "sent",
-          text,
-          createdAt: now
-        },
-        { threadId: nicknameListTurn.threadId }
-      );
-      const replyMessages = nicknameListTurn.messages.filter((message) => message.role !== "owner");
-      const messages = store
-        ? await store.appendMany(nicknameListTurn.threadId, [ownerMessage, ...replyMessages])
-        : [ownerMessage, ...replyMessages].filter(Boolean);
-      await this.broadcastThread({ threadId: nicknameListTurn.threadId, messages });
-      return;
-    }
     const repositoryResolution = await resolveDashboardChatRepository({
       payload: { ...normalizeObject(payload), text, threadId },
       env: this.env
@@ -3603,25 +3580,9 @@ async function handleDashboardChatMessageRequest(request, env) {
   }
 
   const payload = await readJson(request);
-  const nicknameListTurn = await buildDashboardRepositoryNicknameListTurn({ payload, env });
-  if (nicknameListTurn) {
-    const store = resolveDashboardChatStore(env);
-    if (!store) {
-      return json(503, {
-        ok: false,
-        error: "dashboard_chat_store_unavailable",
-        reason: "dashboard Butler chat store is not configured"
-      });
-    }
-    const messages = await store.appendMany(nicknameListTurn.threadId, nicknameListTurn.messages);
-    return json(202, {
-      ok: true,
-      threadId: nicknameListTurn.threadId,
-      messages,
-      execution: null
-    });
-  }
   const repositoryResolution = await resolveDashboardChatRepository({ payload, env });
+  // HTTP chat writes are the non-live persistence fallback. Live Codex delivery
+  // happens through DashboardChatRoom WebSocket owner_message events.
   const repository = repositoryResolution.ok ? repositoryResolution.repository : "";
 
   const prepared = buildDashboardChatTurn(
@@ -5474,7 +5435,7 @@ async function resolveDashboardChatRepository({ payload, env }) {
       status: 422,
       error: "repository_required",
       reason:
-        "対象 repository が未指定です。VPS Codex CLI に渡す前に、repo/nickname を指定してください。例: `ぶい #450 の残り Issue と PR を確認して`。登録済み nickname を確認する場合は `登録済みのニックネーム出して` と送ってください。",
+        "repository 文脈が必要な依頼では、owner/repo 形式か登録済み nickname を本文に含めてください。例: `ぶい #450 の残り Issue と PR を確認して`。",
       issues: ["dashboard top chat requires a repository target before VPS Codex CLI handoff"]
     };
   }
@@ -5501,7 +5462,7 @@ async function resolveDashboardChatRepository({ payload, env }) {
     error: resolved.ambiguous ? "repository_nickname_ambiguous" : "repository_unresolved",
     reason: resolved.ambiguous
       ? "対象 repository nickname が曖昧です。候補から 1 つを owner/repo 形式で指定してください。"
-      : "対象 repository nickname を登録済み alias から解決できませんでした。`登録済みのニックネーム出して` で候補を確認するか、owner/repo 形式で指定してください。",
+      : "対象 repository nickname を登録済み alias から解決できませんでした。repository 文脈が必要な依頼では owner/repo 形式で指定してください。",
     issues: registryResult.ok
       ? ["repository nickname could not be resolved"]
       : [registryResult.reason || "repository nickname registry could not be read"],
@@ -6103,90 +6064,6 @@ function buildDashboardAppServerNotConnectedReply({ repository, relatedIssue } =
     `- ${issuePhrase}`,
     "",
     "現時点の実行 fallback は Custom GPT Butler です。Dashboard Butler は app-server 接続 PR が入るまで未完成として扱います。"
-  ].join("\n");
-}
-
-async function buildDashboardRepositoryNicknameListTurn({ payload, env }) {
-  const input = normalizeObject(payload);
-  const text = sanitizeDashboardChatText(input.text || input.message || input.body);
-  if (!isDashboardRepositoryNicknameListRequest(text)) {
-    return null;
-  }
-  const threadId =
-    normalizeDashboardThreadId(input.threadId || input.thread_id) ||
-    normalizeDashboardThreadId("dashboard-main-unresolved");
-  const now = new Date().toISOString();
-  const ownerMessage = normalizeDashboardChatMessage(
-    {
-      threadId,
-      role: "owner",
-      status: "sent",
-      text,
-      createdAt: now
-    },
-    { threadId }
-  );
-  const registryResult = await safeRetrieveStoredAliasRegistry(resolveMemoryProvider(env));
-  const butlerMessage = normalizeDashboardChatMessage(
-    {
-      threadId,
-      role: "butler",
-      status: registryResult.ok ? "replied" : "blocked",
-      text: formatDashboardRepositoryNicknameListReply(registryResult),
-      createdAt: new Date(Date.parse(now) + 1).toISOString()
-    },
-    { threadId }
-  );
-  return {
-    threadId,
-    messages: [ownerMessage, butlerMessage].filter(Boolean)
-  };
-}
-
-function isDashboardRepositoryNicknameListRequest(text) {
-  const normalized = normalizeDashboardEventText(text).toLowerCase();
-  if (!normalized) {
-    return false;
-  }
-  return (
-    normalized.includes("ニックネーム") &&
-    (normalized.includes("一覧") ||
-      normalized.includes("登録済") ||
-      normalized.includes("登録ずみ") ||
-      normalized.includes("出して") ||
-      normalized.includes("見せて") ||
-      normalized.includes("教えて"))
-  );
-}
-
-function formatDashboardRepositoryNicknameListReply(registryResult) {
-  if (!registryResult?.ok) {
-    return [
-      "登録済みニックネームを読めませんでした。",
-      "",
-      `理由: ${registryResult?.reason || "memory provider が利用できません。"}`,
-      "",
-      "この状態では repo/nickname 未指定のまま VPS Codex CLI に渡せないため、owner/repo 形式で対象 repository を指定してください。"
-    ].join("\n");
-  }
-  const entries = Array.isArray(registryResult.aliasRegistry) ? registryResult.aliasRegistry : [];
-  if (entries.length === 0) {
-    return [
-      "登録済みニックネームはありません。",
-      "",
-      "この状態では repo/nickname 未指定のまま VPS Codex CLI に渡せません。",
-      "まず `marushu/vtdd-v2-p` のように owner/repo 形式で対象 repository を指定してください。"
-    ].join("\n");
-  }
-  return [
-    "登録済みニックネームです。",
-    "",
-    ...entries.map((entry) => {
-      const aliases = Array.isArray(entry.aliases) && entry.aliases.length > 0 ? entry.aliases.join(", ") : "なし";
-      return `- ${entry.canonicalRepo}: ${aliases}`;
-    }),
-    "",
-    "送信例: `ぶい #450 の残り Issue と PR を確認して`"
   ].join("\n");
 }
 
