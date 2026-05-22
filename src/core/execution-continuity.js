@@ -164,16 +164,16 @@ function buildReviewState(pullRequest) {
   const formalReviewTruth = collectFormalReviewTruth(pullRequest);
   const reviewTimeline = buildReviewTimeline(pullRequest);
   const reviewCommentsCount =
-    parsedGeminiSignals.totalCount > 0
-      ? parsedGeminiSignals.totalCount
-      : effectiveCodexFallback.completed
+    effectiveCodexFallback.completed
         ? 1
+      : parsedGeminiSignals.totalCount > 0
+        ? parsedGeminiSignals.totalCount
         : pullRequest.reviewCommentsCount;
   const unresolvedReviewCommentsCount =
-    parsedGeminiSignals.totalCount > 0
-      ? parsedGeminiSignals.blockingCount
-      : effectiveCodexFallback.completed
+    effectiveCodexFallback.completed
         ? (effectiveCodexFallback.blocking ? 1 : 0)
+      : parsedGeminiSignals.totalCount > 0
+        ? parsedGeminiSignals.blockingCount
         : pullRequest.unresolvedReviewCommentsCount;
   const reviewerStatus = effectiveCodexFallback.completed
     ? "codex_review_available"
@@ -189,12 +189,15 @@ function buildReviewState(pullRequest) {
   const reviewerEvidence = reviewerStatus.startsWith("codex_review")
     ? effectiveCodexFallback.latestEvidence
     : parsedGeminiSignals.latestEvidence;
-  const reviewResponseSummary = buildReviewResponseSummary({
+  const geminiReviewResponseSummary = buildReviewResponseSummary({
     pullRequest,
     files: pullRequest.files,
     issueComments: pullRequest.issueComments,
     reviewComments: pullRequest.reviewComments
   });
+  const reviewResponseSummary = effectiveCodexFallback.completed
+    ? null
+    : geminiReviewResponseSummary;
   const reviewerSignalTruth = buildReviewerSignalTruth({
     reviewer,
     reviewerStatus,
