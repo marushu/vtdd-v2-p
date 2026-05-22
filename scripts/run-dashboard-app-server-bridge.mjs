@@ -38,6 +38,7 @@ export function buildAppServerThreadStartRequest({ id, cwd = process.cwd(), deve
           "Reply in Japanese by default."
         ].join("\n"),
       threadSource: "app_server",
+      sandbox: "danger-full-access",
       experimentalRawEvents: false,
       persistExtendedHistory: false
     }
@@ -52,6 +53,7 @@ export function buildAppServerThreadResumeRequest({ id, codexThreadId, cwd = pro
       threadId: codexThreadId,
       cwd,
       approvalPolicy: "on-request",
+      sandbox: "danger-full-access",
       excludeTurns: true,
       persistExtendedHistory: false
     }
@@ -72,7 +74,10 @@ export function buildAppServerTurnStartRequest({ id, codexThreadId, text, cwd = 
         }
       ],
       cwd,
-      approvalPolicy: "on-request"
+      approvalPolicy: "on-request",
+      sandboxPolicy: {
+        type: "dangerFullAccess"
+      }
     }
   };
 }

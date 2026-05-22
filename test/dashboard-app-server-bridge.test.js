@@ -34,12 +34,14 @@ test("dashboard app-server bridge builds initialize and thread requests from Cod
   assert.equal(start.method, "thread/start");
   assert.equal(start.params.cwd, "/repo");
   assert.equal(start.params.approvalPolicy, "on-request");
+  assert.equal(start.params.sandbox, "danger-full-access");
   assert.equal(start.params.experimentalRawEvents, false);
   assert.equal(start.params.persistExtendedHistory, false);
 
   const resume = buildAppServerThreadResumeRequest({ id: 12, codexThreadId: "codex-thread-1", cwd: "/repo" });
   assert.equal(resume.method, "thread/resume");
   assert.equal(resume.params.threadId, "codex-thread-1");
+  assert.equal(resume.params.sandbox, "danger-full-access");
   assert.equal(resume.params.excludeTurns, true);
 
   const turn = buildAppServerTurnStartRequest({
@@ -51,6 +53,7 @@ test("dashboard app-server bridge builds initialize and thread requests from Cod
   assert.equal(turn.method, "turn/start");
   assert.equal(turn.params.threadId, "codex-thread-1");
   assert.deepEqual(turn.params.input, [{ type: "text", text: "今日は何日？", text_elements: [] }]);
+  assert.deepEqual(turn.params.sandboxPolicy, { type: "dangerFullAccess" });
 });
 
 test("dashboard app-server bridge maps Codex app-server notifications to dashboard events", () => {
