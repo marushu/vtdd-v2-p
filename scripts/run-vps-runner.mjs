@@ -79,17 +79,6 @@ async function main() {
     apiBaseUrl: process.env.GITHUB_API_URL || DEFAULT_API_BASE_URL
   });
 
-  if (options.dashboardWs) {
-    await startVpsDashboardWebSocketRunner({
-      githubFetch,
-      token,
-      repositoryPolicies,
-      workRoot,
-      env: process.env
-    });
-    return;
-  }
-
   const result = await runVpsRunnerOnce({
     githubFetch,
     token,
@@ -105,41 +94,6 @@ async function main() {
   }
 
   console.log(result.message);
-}
-
-async function startVpsDashboardWebSocketRunner({
-  githubFetch,
-  token,
-  repositoryPolicies,
-  workRoot,
-  env = process.env,
-  WebSocketImpl = globalThis.WebSocket,
-  logger = console
-}) {
-  const threadId = normalizeText(env.VTDD_DASHBOARD_THREAD_ID);
-  if (!threadId) {
-    throw new Error("VTDD_DASHBOARD_THREAD_ID is required for dashboard WebSocket mode");
-  }
-  const runtimeUrl = mustGetEnv("VTDD_RUNTIME_URL", env.VTDD_RUNTIME_URL);
-  const bearerToken = mustGetEnv("VTDD_GATEWAY_BEARER_TOKEN", env.VTDD_GATEWAY_BEARER_TOKEN);
-  return connectVpsDashboardWebSocketClient({
-    runtimeUrl,
-    bearerToken,
-    threadId,
-    WebSocketImpl,
-    logger,
-    onJob: async (job, socket) => {
-      await executeVpsDashboardSocketJob({
-        githubFetch,
-        token,
-        workRoot,
-        job,
-        socket,
-        repositoryPolicies,
-        env
-      });
-    }
-  });
 }
 
 async function runVpsRunnerOnce({
@@ -228,17 +182,6 @@ async function executeVpsRunnerExecution({
   });
 
   try {
-    if (isDashboardChatTriageGoal(payload.codexGoal)) {
-      return executeVpsDashboardChatTriage({
-        githubFetch,
-        payload,
-        notification,
-        workRoot,
-        env,
-        issue
-      });
-    }
-
     if (isPostMergeVerificationGoal(payload.codexGoal)) {
       return executeVpsPostMergeVerification({
         githubFetch,
@@ -534,441 +477,6 @@ async function executeVpsPostMergeVerification({
       ? `Post-merge verification completed for ${payload.repository}#${result.pullRequest.number}.`
       : result.reason
   };
-}
-
-async function executeVpsDashboardChatTriage({ githubFetch, payload, notification, workRoot, env, issue }) {
-  await assertVpsRunnerNotCanceled({ githubFetch, payload, checkpoint: "before_triage_clone", notification });
-  const workspace = path.join(workRoot, safePathSegment(payload.repository), payload.executionId);
-  await fs.mkdir(path.dirname(workspace), { recursive: true });
-  await runCommand("rm", ["-rf", workspace], { env });
-  await runTrackedVpsCommand("gh", ["repo", "clone", payload.repository, workspace], {
-    env,
-    githubFetch,
-    payload,
-    notification,
-    currentStep: "dashboard_chat_repo_clone"
-  });
-  const preflight = await buildVpsRunnerPreflightReceipt({
-    workspace,
-    payload,
-    issue
-  });
-  await postVpsRunnerEvent({
-    githubFetch,
-    payload,
-    notification,
-    event: {
-      status: preflight.ok ? "running" : "blocked",
-      lastEvent: preflight.ok ? "context_preflight_completed" : "context_preflight_blocked",
-      currentStep: "context_preflight",
-      preflight
-    }
-  });
-  if (!preflight.ok) {
-    return {
-      ok: false,
-      reason:
-        preflight.reason ||
-        "VPS runner preflight receipt could not be created. Butler/owner decision is required before dashboard chat triage."
-    };
-  }
-  await assertVpsRunnerNotCanceled({ githubFetch, payload, checkpoint: "before_triage_codex", notification });
-  const prompt = buildDashboardChatTriagePrompt({ payload, issue, preflight });
-  const result = await runTrackedVpsCommand("codex", buildCodexExecArgs({ env: process.env }), {
-    cwd: workspace,
-    env: buildCodexExecutionEnv(process.env, { includeRuntimeBridge: true }),
-    input: prompt,
-    maxBuffer: 1024 * 1024 * 12,
-    githubFetch,
-    payload,
-    notification,
-    currentStep: "dashboard_chat_triage"
-  });
-  await assertVpsRunnerNotCanceled({ githubFetch, payload, checkpoint: "after_triage_codex", notification });
-  const reply = summarizeDashboardReplyText(result.stdout || result.stderr || "VPS Codex CLI completed dashboard chat triage.", 4000);
-  await postVpsRunnerEvent({
-    githubFetch,
-    payload,
-    notification,
-    event: {
-      status: "completed",
-      lastEvent: "dashboard_chat_triage_completed",
-      finalEvent: "dashboard_chat_triage_completed",
-      currentStep: "dashboard_chat_triage",
-      message: reply
-    }
-  });
-  return { ok: true, message: reply };
-}
-
-function buildDashboardRunnerWebSocketUrl({ runtimeUrl, threadId }) {
-  const resolvedThreadId = normalizeText(threadId);
-  if (!resolvedThreadId) {
-    throw new Error("dashboard threadId is required");
-  }
-  const endpoint = new URL("/v2/dashboard/vps-runner/ws", runtimeUrl);
-  endpoint.protocol = endpoint.protocol === "http:" ? "ws:" : "wss:";
-  endpoint.searchParams.set("threadId", resolvedThreadId);
-  return endpoint.toString();
-}
-
-async function connectVpsDashboardWebSocketClient({
-  runtimeUrl,
-  bearerToken,
-  threadId,
-  WebSocketImpl = globalThis.WebSocket,
-  onJob,
-  logger = console,
-  reconnect = true,
-  reconnectDelays = [1000, 5000, 15000, 30000],
-  reconnectAttempt = 0,
-  setTimeoutFn = globalThis.setTimeout
-}) {
-  if (typeof WebSocketImpl !== "function") {
-    throw new Error("WebSocket is not available in this Node runtime");
-  }
-  const protocols = ["vtdd-vps-runner", buildDashboardRunnerBearerProtocol(bearerToken)];
-  const socket = new WebSocketImpl(buildDashboardRunnerWebSocketUrl({ runtimeUrl, threadId }), protocols, {
-    headers: {
-      authorization: `Bearer ${bearerToken}`
-    }
-  });
-  addSocketListener(socket, "open", () => {
-    reconnectAttempt = 0;
-    logger?.log?.(`Connected dashboard WebSocket runner for ${threadId}.`);
-  });
-  addSocketListener(socket, "message", async (event) => {
-    const raw = typeof event?.data === "string" ? event.data : event;
-    let payload;
-    try {
-      payload = JSON.parse(String(raw || "{}"));
-    } catch (error) {
-      sendDashboardSocketReply(socket, {
-        threadId,
-        status: "failed",
-        message: "VPS Codex CLI が dashboard job JSON を読み取れませんでした。"
-      });
-      return;
-    }
-    if (payload?.type !== "dashboard_chat_job") {
-      return;
-    }
-    try {
-      await onJob?.(payload, socket);
-    } catch (error) {
-      sendDashboardSocketReply(socket, {
-        threadId: normalizeText(payload.threadId) || threadId,
-        repository: normalizeRepository(payload.repository),
-        issueNumber: normalizePositiveInteger(payload.relatedIssue || payload.issueNumber),
-        status: "failed",
-        message: `VPS Codex CLI dashboard job failed: ${summarizeDiagnosticText(error?.message || String(error), 1000)}`
-      });
-    }
-  });
-  addSocketListener(socket, "close", () => {
-    logger?.error?.(`Dashboard WebSocket runner disconnected for ${threadId}.`);
-    if (!reconnect) {
-      return;
-    }
-    const delays = Array.isArray(reconnectDelays) && reconnectDelays.length > 0 ? reconnectDelays : [1000];
-    const delay = Number(delays[Math.min(reconnectAttempt, delays.length - 1)]) || 1000;
-    logger?.log?.(`Reconnecting dashboard WebSocket runner for ${threadId} in ${delay}ms.`);
-    setTimeoutFn(() => {
-      connectVpsDashboardWebSocketClient({
-        runtimeUrl,
-        bearerToken,
-        threadId,
-        WebSocketImpl,
-        onJob,
-        logger,
-        reconnect,
-        reconnectDelays,
-        reconnectAttempt: reconnectAttempt + 1,
-        setTimeoutFn
-      }).catch((error) => {
-        logger?.error?.(`Dashboard WebSocket runner reconnect failed: ${error?.message || String(error)}`);
-      });
-    }, delay);
-  });
-  addSocketListener(socket, "error", (error) => {
-    logger?.error?.(`Dashboard WebSocket runner error: ${error?.message || String(error)}`);
-  });
-  return socket;
-}
-
-function addSocketListener(socket, eventName, handler) {
-  if (typeof socket?.addEventListener === "function") {
-    socket.addEventListener(eventName, handler);
-    return;
-  }
-  if (typeof socket?.on === "function") {
-    socket.on(eventName, handler);
-  }
-}
-
-async function executeVpsDashboardSocketJob({
-  githubFetch,
-  token,
-  workRoot,
-  job,
-  socket,
-  repositoryPolicies,
-  env = process.env
-}) {
-  const payload = buildVpsDashboardSocketExecutionPayload(job);
-  if (payload.conversationOnly) {
-    const result = await runCommand("codex", buildCodexExecArgs({ env }), {
-      env: buildCodexExecutionEnv(env),
-      input: buildDashboardGeneralChatPrompt({ payload }),
-      maxBuffer: 1024 * 1024 * 12
-    });
-    const reply = summarizeDashboardReplyText(result.stdout || result.stderr || "VPS Codex CLI completed dashboard chat.", 4000);
-    sendDashboardSocketReply(socket, {
-      threadId: payload.handoff.dashboardThreadId,
-      status: "completed",
-      message: reply
-    });
-    return;
-  }
-  const policies = normalizeRepositoryPolicies({ repositoryPolicies });
-  const policy = validateVpsRunnerPayloadPolicy(payload, policies);
-  if (!policy.ok) {
-    sendDashboardSocketReply(socket, {
-      threadId: payload.handoff.dashboardThreadId,
-      repository: payload.repository,
-      issueNumber: payload.issueNumber,
-      status: "blocked",
-      message: `VPS Codex CLI blocked dashboard job: ${policy.reason}`
-    });
-    return;
-  }
-  const commandEnv = buildRunnerCommandEnv({ token });
-  const issue = payload.issueNumber
-    ? await githubFetch(`/repos/${payload.repository}/issues/${payload.issueNumber}`)
-    : {};
-  const workspace = path.join(workRoot, safePathSegment(payload.repository), payload.executionId);
-  await fs.mkdir(path.dirname(workspace), { recursive: true });
-  await runCommand("rm", ["-rf", workspace], { env: commandEnv });
-  await runCommand("gh", ["repo", "clone", payload.repository, workspace], { env: commandEnv });
-  const preflight = await buildVpsRunnerPreflightReceipt({ workspace, payload, issue });
-  if (!preflight.ok) {
-    sendDashboardSocketReply(socket, {
-      threadId: payload.handoff.dashboardThreadId,
-      repository: payload.repository,
-      issueNumber: payload.issueNumber,
-      status: "blocked",
-      message:
-        preflight.reason ||
-        "VPS runner preflight receipt could not be created. Butler/owner decision is required before dashboard chat triage."
-    });
-    return;
-  }
-  const result = await runCommand("codex", buildCodexExecArgs({ env }), {
-    cwd: workspace,
-    env: buildCodexExecutionEnv(env, { includeRuntimeBridge: true }),
-    input: buildDashboardChatTriagePrompt({ payload, issue, preflight }),
-    maxBuffer: 1024 * 1024 * 12
-  });
-  const reply = summarizeDashboardReplyText(result.stdout || result.stderr || "VPS Codex CLI completed dashboard chat triage.", 4000);
-  sendDashboardSocketReply(socket, {
-    threadId: payload.handoff.dashboardThreadId,
-    repository: payload.repository,
-    issueNumber: payload.issueNumber,
-    status: "completed",
-    message: reply
-  });
-}
-
-function buildVpsDashboardSocketExecutionPayload(job) {
-  const repository = normalizeRepository(job?.repository);
-  const issueNumber = normalizePositiveInteger(job?.relatedIssue || job?.issueNumber);
-  const threadId = normalizeText(job?.threadId);
-  const repositoryResolution = job?.repositoryResolution && typeof job.repositoryResolution === "object" ? job.repositoryResolution : {};
-  const conversationOnly = !repository;
-  const issueContextReadable = Boolean(repository && issueNumber);
-  return {
-    executionId: `dashboard-ws-${Date.now()}-${crypto.randomUUID()}`,
-    repository,
-    issueNumber,
-    branch: `codex/dashboard-chat-${Date.now()}`,
-    baseRef: "main",
-    codexGoal: "dashboard_chat_triage",
-    conversationOnly,
-    issueContextReadable,
-    repositoryResolution: {
-      ok: repositoryResolution.ok === true,
-      error: normalizeText(repositoryResolution.error),
-      reason: normalizeText(repositoryResolution.reason),
-      via: normalizeText(repositoryResolution.via)
-    },
-    handoff: {
-      ownerMessage: normalizeText(job?.text),
-      repositoryInput: normalizeText(job?.repositoryInput) || repository,
-      dashboardThreadId: threadId
-    }
-  };
-}
-
-function buildDashboardGeneralChatPrompt({ payload }) {
-  const handoff = payload?.handoff && typeof payload.handoff === "object" ? payload.handoff : {};
-  const ownerMessage = normalizeText(handoff.ownerMessage);
-  const repositoryInput = normalizeText(handoff.repositoryInput);
-  const issueNumber = normalizePositiveInteger(payload?.issueNumber);
-  const repositoryResolution = payload?.repositoryResolution && typeof payload.repositoryResolution === "object"
-    ? payload.repositoryResolution
-    : {};
-  return [
-    "You are VTDD Butler running on the user's VPS Codex CLI.",
-    "",
-    "Owner dashboard message:",
-    ownerMessage || "(missing dashboard owner message)",
-    "",
-    "Dashboard routing:",
-    "- This message did not resolve to a repository/Issue execution target.",
-    "- Answer as a normal Butler conversation. Do not require GitHub Issue preflight for general chat.",
-    `- repositoryInput: ${repositoryInput || "missing"}`,
-    `- detectedIssueNumber: ${issueNumber ? `#${issueNumber}` : "missing"}`,
-    `- repositoryResolution: ${repositoryResolution.ok === true ? "resolved" : normalizeText(repositoryResolution.error) || "unresolved"}`,
-    "- If an Issue number is present but repository is unresolved, do not answer as if you read that Issue, PRs, checks, or runtime truth.",
-    "- For unresolved repository work, explain in Japanese that repo/nickname or owner/repo is needed before VTDD can read GitHub truth or continue development, and give one short example.",
-    "- If ordinary conversation reveals a new actionable development need, classify it as issue_split_proposal or execution_handoff_needed, then ask for the target repo/nickname and GO boundary before any issue creation or implementation.",
-    "- If the owner is asking a general question, answer directly in Japanese.",
-    "- Do not edit files, commit, push, create PRs, merge, deploy, mutate secrets, mutate permissions, or close Issues.",
-    "Reply format:",
-    "- Japanese first.",
-    "- Be concise.",
-    "- Use readable Markdown with short paragraphs or bullets when the answer has multiple facts.",
-    "- Do not mention internal JSON, WebSocket, preflight, or queue unless it is the actual answer."
-  ].join("\n");
-}
-
-function sendDashboardSocketReply(socket, reply) {
-  if (typeof socket?.send !== "function") {
-    return;
-  }
-  socket.send(
-    JSON.stringify({
-      type: "vps_runner_reply",
-      threadId: normalizeText(reply.threadId),
-      repository: normalizeRepository(reply.repository),
-      issueNumber: normalizePositiveInteger(reply.issueNumber),
-      status: normalizeText(reply.status) || "completed",
-      message: normalizeText(reply.message) || "VPS Codex CLI completed dashboard job."
-    })
-  );
-}
-
-function buildDashboardRunnerBearerProtocol(bearerToken) {
-  return `vtdd-gateway-bearer-${Buffer.from(String(bearerToken), "utf8").toString("base64url")}`;
-}
-
-function buildDashboardChatTriagePrompt({ payload, issue = {}, preflight = null }) {
-  const handoff = payload?.handoff && typeof payload.handoff === "object" ? payload.handoff : {};
-  const ownerMessage = normalizeText(handoff.ownerMessage);
-  const repositoryInput = normalizeText(handoff.repositoryInput) || normalizeText(payload.repository);
-  return [
-    `You are VTDD Butler traffic control running on the user's VPS Codex CLI for ${payload.repository}.`,
-    "",
-    "Owner dashboard message:",
-    ownerMessage || "(missing dashboard owner message)",
-    "",
-    "Resolved target:",
-    `- repositoryInput: ${repositoryInput || "missing"}`,
-    `- repository: ${payload.repository}`,
-    `- queue issue: #${payload.issueNumber}`,
-    `- dashboardThreadId: ${normalizeText(handoff.dashboardThreadId) || "missing"}`,
-    "",
-    "Custom GPT parity requirement:",
-    "- Preserve every owner-facing capability that the Custom GPT Butler had.",
-    "- Treat the top dashboard chat as the natural-language Butler entrypoint, not as an open_pr form.",
-    "- Resolve repository/nickname intent before acting. If the target is ambiguous, ask one short Japanese confirmation question.",
-    "- Read GitHub runtime truth when the owner asks about Issues, PRs, checks, Actions, deploys, reviews, or remaining work.",
-    "- Use repository nickname semantics: no default repository, unresolved target blocks execution, ambiguous nickname blocks execution.",
-    "- Triage broad owner input into: answer from runtime truth, Issue split proposal, existing Issue linkage, bounded VPS execution handoff, approval URL needed, RAG candidate, or blocker.",
-    "- If Issue creation/splitting is needed, propose concrete Japanese Issue titles/bodies and say what approval/GO is needed; do not silently create or close Issues.",
-    "- If implementation is needed, name the target Issue/scope and required GO/passkey boundary before any execution.",
-    "- If deploy, merge, credential, permission, repository settings, destructive cleanup, or Issue close is requested, return the needed governed approval boundary instead of doing it.",
-    "- Never invent VPS replies. Return only what you can justify from repo/runtime truth and this dashboard message.",
-    "",
-    buildVpsDashboardActionBridgeGuide(),
-    "",
-    "Available local context:",
-    "- You are inside a fresh clone of the target repository.",
-    "- You may inspect files and use GitHub CLI/API if available to read runtime truth.",
-    "- Do not edit files, commit, push, create PRs, merge, deploy, mutate secrets, mutate permissions, or close Issues in dashboard_chat_triage.",
-    "",
-    "Context preflight receipt:",
-    formatVpsRunnerPreflightReceipt(preflight),
-    "",
-    "Queue Issue context:",
-    `Title: ${normalizeText(issue.title) || "(missing issue title)"}`,
-    "",
-    normalizeText(issue.body) || "(missing issue body)",
-    "",
-    "Reply format:",
-    "- Japanese first.",
-    "- Be concise but operational.",
-    "- Use readable Markdown with line breaks. Do not compress bullets into one paragraph.",
-    "- Include the classification: answer / issue_split_proposal / existing_issue_link / execution_handoff_needed / approval_needed / rag_candidate / blocker.",
-    "- Include next action and any missing information.",
-    "- If you mention a GitHub item, include a clickable URL if known."
-  ].join("\n");
-}
-
-function buildVpsDashboardActionReadBridgeGuide() {
-  return [
-    "Runtime read-only bridge:",
-    "- You may call read-only VTDD runtime routes from this VPS Codex CLI when the owner asks for VTDD status, memory, repository, or setup facts.",
-    "- Use environment variables only; do not print or expose VTDD_GATEWAY_BEARER_TOKEN.",
-    "- Base URL: ${VTDD_RUNTIME_URL}",
-    "- Auth header: Authorization: Bearer ${VTDD_GATEWAY_BEARER_TOKEN}",
-    "- curl pattern for GET: curl -sS -H \"Authorization: Bearer ${VTDD_GATEWAY_BEARER_TOKEN}\" \"${VTDD_RUNTIME_URL}<path>?<query>\"",
-    "",
-    "Read/retrieve operations available to mirror Custom GPT Actions:",
-    "- vtddRetrieveGitHub: GET /v2/retrieve/github",
-    "- vtddRetrieveRepositoryNicknames: GET /v2/retrieve/repository-nicknames",
-    "- vtddRetrieveOperationalMemory: GET /v2/retrieve/operational-memory",
-    "- vtddRetrieveCrossMemory: GET /v2/retrieve/cross",
-    "- vtddStartupPreflight: GET /v2/retrieve/startup-preflight",
-    "- vtddRetrieveSelfParity: GET /v2/retrieve/self-parity",
-    "- vtddRetrieveConstitution: GET /v2/retrieve/constitution",
-    "- vtddRetrieveDecisionLogs: GET /v2/retrieve/decisions",
-    "- vtddRetrieveProposalLogs: GET /v2/retrieve/proposals",
-    "- vtddRetrieveCloudflarePages: GET /v2/retrieve/cloudflare-pages",
-    "",
-    "Do not call write/action/high-risk routes from general chat unless the owner has moved into an Issue-backed bounded action and the runtime approval boundary is satisfied."
-  ].join("\n");
-}
-
-function buildVpsDashboardActionBridgeGuide() {
-  return [
-    buildVpsDashboardActionReadBridgeGuide(),
-    "",
-    "Runtime write/action bridge for Issue-backed bounded VTDD work:",
-    "- Use these only after the owner request is tied to a repository/Issue or an explicit bounded runtime action.",
-    "- curl pattern for POST: curl -sS -X POST -H \"Authorization: Bearer ${VTDD_GATEWAY_BEARER_TOKEN}\" -H \"content-type: application/json\" --data '<json>' \"${VTDD_RUNTIME_URL}<path>\"",
-    "",
-    "Write/action operations available only under the same approval boundaries as Custom GPT Actions:",
-    "- vtddGateway: POST /v2/gateway",
-    "- vtddExecute: POST /v2/action/execute",
-    "- vtddWriteGitHub: POST /v2/action/github",
-    "- vtddWriteOperationalMemory: POST /v2/action/memory-write",
-    "- vtddUpsertRepositoryNickname: POST /v2/action/repository-nickname",
-    "- vtddDeleteRepositoryNickname: POST /v2/action/repository-nickname/delete",
-    "- vtddExecutionProgress: GET /v2/action/progress",
-    "- vtddVpsRunnerStatus: GET /v2/action/vps-runner-status",
-    "- vtddVpsRunnerCancel: POST /v2/action/vps-runner-cancel",
-    "",
-    "High-risk operation guidance:",
-    "- Do not call high-risk routes from dashboard chat just because they are listed here.",
-    "- When the owner asks for deploy, credential mutation, permission mutation, repository administration, merge, destructive cleanup, or Issue close, return approval_needed with the required scoped passkey boundary.",
-    "- If a scoped approval grant is missing or mismatched, runtime routes must reject the request. GO alone does not authorize deploy, credential mutation, permission mutation, repository administration, merge, destructive cleanup, or Issue close.",
-    "- vtddGitHubAuthority: POST /v2/action/github-authority",
-    "- vtddDeployProduction: POST /v2/action/deploy",
-    "- vtddSyncGitHubActionsSecret: POST /v2/action/github-actions-secret",
-    "",
-    "Use the Action bridge when it gives better runtime truth than local files. If a call fails, report the exact Japanese blocker without hiding it."
-  ].join("\n");
 }
 
 async function collectVpsPostMergeVerification({ githubFetch, payload, repositoryPolicies, env }) {
@@ -1706,10 +1214,6 @@ function formatVpsRunnerPreflightReceipt(preflight) {
 
 function isPrRevisionGoal(goal) {
   return ["revise_pr", "respond_to_review"].includes(normalizeText(goal));
-}
-
-function isDashboardChatTriageGoal(goal) {
-  return normalizeText(goal) === "dashboard_chat_triage";
 }
 
 function isPostMergeVerificationGoal(goal) {
@@ -2843,19 +2347,6 @@ function summarizeDiagnosticText(value, maxLength = 500) {
   return redacted.length <= maxLength ? redacted : `${redacted.slice(0, maxLength)} [truncated]`;
 }
 
-function summarizeDashboardReplyText(value, maxLength = 4000) {
-  const redacted = redactDiagnosticText(value)
-    .split("\n")
-    .map((line) => line.trimEnd())
-    .join("\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-  if (!redacted) {
-    return null;
-  }
-  return redacted.length <= maxLength ? redacted : `${redacted.slice(0, maxLength)}\n[truncated]`;
-}
-
 function buildVpsRunnerNotificationContext(input = {}) {
   return {
     queueCommentAuthor: normalizeGitHubLogin(input.queueCommentAuthor),
@@ -3063,8 +2554,7 @@ function mustGetEnv(name, value = process.env[name]) {
 
 function parseArgs(args) {
   return {
-    dryRun: args.includes("--dry-run"),
-    dashboardWs: args.includes("--dashboard-ws")
+    dryRun: args.includes("--dry-run")
   };
 }
 
@@ -3079,12 +2569,6 @@ export {
   buildFreshExecutionBranchCandidates,
   buildVpsRunnerCompletionFinalEvent,
   buildCodexExecutionPrompt,
-  buildDashboardChatTriagePrompt,
-  buildDashboardGeneralChatPrompt,
-  buildVpsDashboardSocketExecutionPayload,
-  buildVpsDashboardActionBridgeGuide,
-  buildVpsDashboardActionReadBridgeGuide,
-  buildDashboardRunnerWebSocketUrl,
   buildCodexExecArgs,
   buildCodexExecutionEnv,
   buildVpsRunnerPreflightReceipt,
@@ -3097,7 +2581,6 @@ export {
   buildVpsRunnerPullRequestContext,
   checkoutVpsRunnerBranch,
   classifyVpsRunnerFailure,
-  connectVpsDashboardWebSocketClient,
   formatPullRequestContext,
   isNonFastForwardPushFailure,
   loadVpsRunnerRepositoryPolicies,
@@ -3107,9 +2590,7 @@ export {
   parseVpsRunnerQueueComment,
   postVpsRunnerEvent,
   runVpsRunnerOnce,
-  startVpsDashboardWebSocketRunner,
   resolveRoleGitHubAppInstallationToken,
-  summarizeDashboardReplyText,
   summarizeDiagnosticText,
   selectPendingVpsReviewerFallbacks,
   selectPendingVpsRunnerExecutions

@@ -33131,7 +33131,6 @@ var VpsRunnerCancelMode = Object.freeze({
   DRAIN_PENDING: "drain_pending"
 });
 var RemoteCodexDispatchGoal = Object.freeze({
-  DASHBOARD_CHAT_TRIAGE: "dashboard_chat_triage",
   OPEN_PR: "open_pr",
   REVISE_PR: "revise_pr",
   RESPOND_TO_REVIEW: "respond_to_review",
@@ -33212,7 +33211,7 @@ function createRemoteCodexExecutionRequest(input = {}) {
   if (!request.codexGoal) {
     issues.push("codexGoal is required");
   } else if (!REMOTE_CODEX_DISPATCH_GOALS.has(request.codexGoal)) {
-    issues.push("codexGoal must be dashboard_chat_triage, open_pr, revise_pr, respond_to_review, or post_merge_verify");
+    issues.push("codexGoal must be open_pr, revise_pr, respond_to_review, or post_merge_verify");
   }
   if (!request.baseRef) {
     issues.push("baseRef is required");
@@ -34676,7 +34675,6 @@ function buildCodexCloudGitHubComment({ request }) {
   return lines.join("\n");
 }
 function buildVpsRunnerGitHubQueueComment({ request }) {
-  const isDashboardChatTriage = request.codexGoal === RemoteCodexDispatchGoal.DASHBOARD_CHAT_TRIAGE;
   const payload = {
     executionId: request.executionId,
     transport: RemoteCodexExecutorTransport.VPS_RUNNER,
@@ -34695,8 +34693,6 @@ function buildVpsRunnerGitHubQueueComment({ request }) {
   const lines = [
     `<!-- vtdd:vps-runner-execution:${request.executionId} -->`,
     "VTDD \u7BA1\u7406\u306E VPS runner \u5B9F\u884C\u30AD\u30E5\u30FC\u3067\u3059\u3002",
-    "",
-    "\u3053\u306E\u30B3\u30E1\u30F3\u30C8\u306F dashboard \u3078\u306E\u8FD4\u4FE1\u3067\u306F\u3042\u308A\u307E\u305B\u3093\u3002VPS Codex CLI \u304C\u62FE\u3044\u3001\u5B8C\u4E86 event \u3092 runtime \u306B\u8FD4\u3057\u305F\u3082\u306E\u3060\u3051\u3092 dashboard \u306E\u8FD4\u4FE1\u3068\u3057\u3066\u6271\u3044\u307E\u3059\u3002",
     "",
     "\u5B9F\u884C\u5883\u754C:",
     `- \u30EA\u30DD\u30B8\u30C8\u30EA: ${request.repository}`,
@@ -34719,20 +34715,14 @@ function buildVpsRunnerGitHubQueueComment({ request }) {
     ] : [],
     "- \u6B63\u672C: \u3053\u306E GitHub Issue",
     "- runtime truth: \u73FE\u5728\u306E GitHub branch / diff / PR / review comments",
-    isDashboardChatTriage ? "- \u5B8C\u4E86\u6761\u4EF6: dashboard chat triage \u306E\u8FD4\u4FE1 event \u3092\u540C\u3058 thread \u306B\u8FD4\u3059" : request.codexGoal === RemoteCodexDispatchGoal.POST_MERGE_VERIFY ? "- \u5B8C\u4E86\u6761\u4EF6: merge \u5F8C runtime truth \u3092\u691C\u8A3C\u3057\u3001GitHub-visible evidence \u3092\u6B8B\u3059" : "- \u5B8C\u4E86\u6761\u4EF6: pull request \u3092\u4F5C\u6210\u307E\u305F\u306F\u66F4\u65B0\u3059\u308B",
-    ...isDashboardChatTriage ? [
-      "- PR body requirement: \u4E0D\u8981\u3002dashboard chat triage \u306F PR \u3092\u4F5C\u6210\u30FB\u66F4\u65B0\u3057\u307E\u305B\u3093\u3002",
-      "- context preflight: VPS runner \u306F `AGENTS.md`\u3001`docs/butler/thread-independent-startup-contract.md`\u3001\u6B63\u672C Issue \u3092\u8AAD\u3093\u3067\u304B\u3089 triage \u3092\u958B\u59CB\u3057\u307E\u3059\u3002"
-    ] : [
-      "- PR body requirement: Codex \u306F `docs/pr-template-model.md`\u3001`scripts/render-pr-body.mjs`\u3001`scripts/validate-pr-body.mjs` \u3092\u78BA\u8A8D\u3057\u307E\u3059\u3002VPS runner \u3082 PR create/update \u524D\u306B\u691C\u8A3C\u30FB\u6B63\u898F\u5316\u3057\u307E\u3059\u3002",
-      "- context preflight: VPS runner \u306F `AGENTS.md`\u3001`docs/butler/thread-independent-startup-contract.md`\u3001\u6B63\u672C Issue\u3001PR body contract files \u3092\u8AAD\u3093\u3067\u304B\u3089\u7DE8\u96C6\u3092\u958B\u59CB\u3057\u307E\u3059\u3002",
-      "- \u5FC5\u9808 PR body markers: `## This PR satisfies Intent`, `## Satisfied Success Criteria`, `## Unsatisfied Success Criteria`, `## Verification Evidence`, `## Surface Update Checklist`."
-    ],
+    request.codexGoal === RemoteCodexDispatchGoal.POST_MERGE_VERIFY ? "- \u5B8C\u4E86\u6761\u4EF6: merge \u5F8C runtime truth \u3092\u691C\u8A3C\u3057\u3001GitHub-visible evidence \u3092\u6B8B\u3059" : "- \u5B8C\u4E86\u6761\u4EF6: pull request \u3092\u4F5C\u6210\u307E\u305F\u306F\u66F4\u65B0\u3059\u308B",
+    "- PR body requirement: Codex \u306F `docs/pr-template-model.md`\u3001`scripts/render-pr-body.mjs`\u3001`scripts/validate-pr-body.mjs` \u3092\u78BA\u8A8D\u3057\u307E\u3059\u3002VPS runner \u3082 PR create/update \u524D\u306B\u691C\u8A3C\u30FB\u6B63\u898F\u5316\u3057\u307E\u3059\u3002",
+    "- context preflight: VPS runner \u306F `AGENTS.md`\u3001`docs/butler/thread-independent-startup-contract.md`\u3001\u6B63\u672C Issue\u3001PR body contract files \u3092\u8AAD\u3093\u3067\u304B\u3089\u7DE8\u96C6\u3092\u958B\u59CB\u3057\u307E\u3059\u3002",
+    "- \u5FC5\u9808 PR body markers: `## This PR satisfies Intent`, `## Satisfied Success Criteria`, `## Unsatisfied Success Criteria`, `## Verification Evidence`, `## Surface Update Checklist`.",
     "- preflight \u5165\u529B\u304C\u4E0D\u8DB3\u3057\u3066\u3044\u308B\u5834\u5408\u3001\u63A8\u6E2C\u5B9F\u88C5\u306F\u7981\u6B62\u3067\u3059\u3002runner \u306F Butler/owner \u306B\u6B21\u306E\u5224\u65AD\u3092\u6C42\u3081\u3001bounded request \u306E\u518D\u767A\u884C\u3092\u5F85\u3061\u307E\u3059\u3002",
     "",
     "\u30EB\u30FC\u30EB:",
     "- Issue \u306E\u7BC4\u56F2\u3092\u52DD\u624B\u306B\u5E83\u3052\u306A\u3044\u3002",
-    ...isDashboardChatTriage ? ["- \u30D5\u30A1\u30A4\u30EB\u7DE8\u96C6\u3057\u306A\u3044\u3002", "- commit \u3057\u306A\u3044\u3002", "- push \u3057\u306A\u3044\u3002", "- PR \u3092\u4F5C\u6210\u30FB\u66F4\u65B0\u3057\u306A\u3044\u3002"] : [],
     "- merge \u3057\u306A\u3044\u3002",
     "- deploy \u3057\u306A\u3044\u3002",
     "- reviewer objection \u306F Butler/human judgment \u7528\u306B\u6B8B\u3059\u3002",
@@ -34746,15 +34736,11 @@ function buildVpsRunnerGitHubQueueComment({ request }) {
 function buildExecutionPreflightPolicy({ codexGoal } = {}) {
   const requiredRepoFiles = [
     "AGENTS.md",
-    "docs/butler/thread-independent-startup-contract.md"
+    "docs/butler/thread-independent-startup-contract.md",
+    "docs/pr-template-model.md",
+    "scripts/render-pr-body.mjs",
+    "scripts/validate-pr-body.mjs"
   ];
-  if (codexGoal !== RemoteCodexDispatchGoal.DASHBOARD_CHAT_TRIAGE) {
-    requiredRepoFiles.push(
-      "docs/pr-template-model.md",
-      "scripts/render-pr-body.mjs",
-      "scripts/validate-pr-body.mjs"
-    );
-  }
   return {
     mode: "auto_receipt",
     onMissingContract: "owner_decision_required",
@@ -55869,11 +55855,6 @@ var DashboardChatRoom = class {
       });
       return json(202, { ok: true, threadId: threadId2 });
     }
-    if (request.method === "POST" && url.pathname === "/dispatch") {
-      const payload = await readJson(request);
-      const result = await this.pushVpsRunnerJob(payload);
-      return json(result.ok ? 202 : 503, result);
-    }
     if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") {
       return json(426, {
         ok: false,
@@ -55888,8 +55869,7 @@ var DashboardChatRoom = class {
         reason: "WebSocketPair is not available in this runtime"
       });
     }
-    const isVpsRunnerSocket = url.pathname.endsWith("/dashboard/vps-runner/ws") || url.pathname === "/vps-runner/ws";
-    const threadId = isVpsRunnerSocket ? normalizeDashboardThreadId(url.searchParams.get("threadId") || url.searchParams.get("thread_id")) : extractDashboardChatSocketThreadId(url.pathname);
+    const threadId = extractDashboardChatSocketThreadId(url.pathname);
     if (!threadId) {
       return json(422, {
         ok: false,
@@ -55899,7 +55879,7 @@ var DashboardChatRoom = class {
     }
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
-    const attachment = isVpsRunnerSocket ? { role: "vps_runner", threadId } : { role: "dashboard", threadId };
+    const attachment = { role: "dashboard", threadId };
     if (typeof this.ctx?.acceptWebSocket === "function") {
       server.serializeAttachment(attachment);
       this.ctx.acceptWebSocket(server);
@@ -55910,19 +55890,9 @@ var DashboardChatRoom = class {
       server.addEventListener("error", () => this.sessions.delete(server));
       server.addEventListener("message", (event) => this.handleSocketMessage(server, event?.data, attachment));
     }
-    if (isVpsRunnerSocket && isSocketOpen(server)) {
-      server.send(JSON.stringify({ type: "vps_runner_connected", ok: true }));
-    } else {
-      await this.sendThread(server, threadId);
-    }
-    const responseHeaders = new Headers();
-    const responseProtocol = selectDashboardWebSocketResponseProtocol(request.headers.get("sec-websocket-protocol"));
-    if (responseProtocol) {
-      responseHeaders.set("sec-websocket-protocol", responseProtocol);
-    }
+    await this.sendThread(server, threadId);
     return new Response(null, {
       status: 101,
-      headers: responseHeaders,
       webSocket: client
     });
   }
@@ -55950,10 +55920,6 @@ var DashboardChatRoom = class {
       payload = text ? JSON.parse(text) : null;
     } catch {
       payload = null;
-    }
-    if (socketAttachment.role === "vps_runner") {
-      await this.acceptVpsRunnerReply(payload, socketAttachment);
-      return;
     }
     if (payload?.type === "owner_message") {
       await this.acceptOwnerMessage({ socket, threadId, payload });
@@ -56008,107 +55974,20 @@ var DashboardChatRoom = class {
       },
       { threadId }
     );
-    const thinkingMessage = normalizeDashboardChatMessage(
+    const butlerMessage = normalizeDashboardChatMessage(
       {
         threadId,
-        role: "system",
+        role: "butler",
         repository,
         relatedIssue,
-        status: "thinking",
-        text: "VPS Codex CLI \u306B\u9001\u4FE1\u3057\u307E\u3057\u305F\u3002\u8FD4\u4FE1\u3092\u5F85\u3063\u3066\u3044\u307E\u3059\u3002",
+        status: "blocked",
+        text: buildDashboardAppServerNotConnectedReply({ repository, relatedIssue }),
         createdAt: new Date(Date.parse(now) + 1).toISOString()
       },
       { threadId }
     );
-    const messages = store ? await store.appendMany(threadId, [ownerMessage, thinkingMessage]) : [ownerMessage, thinkingMessage].filter(Boolean);
+    const messages = store ? await store.appendMany(threadId, [ownerMessage, butlerMessage]) : [ownerMessage, butlerMessage].filter(Boolean);
     await this.broadcastThread({ threadId, messages });
-    const pushed = await this.pushVpsRunnerJob({
-      type: "dashboard_chat_job",
-      threadId,
-      repository,
-      repositoryInput: repositoryResolution.input || payload?.repositoryInput || payload?.repository,
-      repositoryResolution,
-      relatedIssue,
-      text,
-      codexGoal: normalizeDashboardEventText(payload?.codexGoal || "dashboard_chat_triage"),
-      createdAt: now
-    });
-    if (!pushed.ok) {
-      const failedMessage = normalizeDashboardChatMessage(
-        {
-          threadId,
-          role: "system",
-          repository,
-          relatedIssue,
-          status: "failed",
-          text: "VPS Codex CLI \u304C WebSocket \u63A5\u7D9A\u3055\u308C\u3066\u3044\u306A\u3044\u305F\u3081\u9001\u4FE1\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F\u3002runner \u63A5\u7D9A\u3092\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002",
-          createdAt: new Date(Date.parse(now) + 2).toISOString()
-        },
-        { threadId }
-      );
-      const failedMessages = store ? await store.appendMany(threadId, [failedMessage]) : [failedMessage].filter(Boolean);
-      await this.broadcastThread({ threadId, messages: failedMessages });
-    }
-  }
-  async acceptVpsRunnerReply(payload, socketAttachment = {}) {
-    const socketThreadId = normalizeDashboardThreadId(socketAttachment.threadId);
-    const threadId = normalizeDashboardThreadId(payload?.threadId || payload?.thread_id || socketThreadId);
-    if (!threadId) {
-      return;
-    }
-    if (socketThreadId && threadId !== socketThreadId) {
-      return;
-    }
-    const message = normalizeDashboardChatMessage(
-      {
-        threadId,
-        role: "runner",
-        repository: payload?.repository,
-        relatedIssue: payload?.relatedIssue || payload?.issueNumber,
-        status: payload?.status === "failed" ? "failed" : "replied",
-        text: payload?.text || payload?.message || payload?.body,
-        createdAt: payload?.createdAt || payload?.updatedAt
-      },
-      { threadId }
-    );
-    const store = resolveDashboardChatStore(this.env);
-    const messages = store ? await store.appendMany(threadId, [message]) : [message].filter(Boolean);
-    await this.broadcastThread({ threadId, messages });
-  }
-  async pushVpsRunnerJob(payload) {
-    const job = {
-      type: "dashboard_chat_job",
-      jobId: normalizeDashboardEventText(payload?.jobId) || crypto.randomUUID(),
-      threadId: normalizeDashboardThreadId(payload?.threadId || payload?.thread_id),
-      repository: normalizeCanonicalRepositoryInput(payload?.repository),
-      repositoryInput: normalizeDashboardEventText(payload?.repositoryInput || payload?.repository_input),
-      repositoryResolution: normalizeObject11(payload?.repositoryResolution || payload?.repository_resolution),
-      relatedIssue: normalizePositiveInteger9(payload?.relatedIssue || payload?.issueNumber),
-      text: sanitizeDashboardChatText(payload?.text || payload?.message || payload?.body),
-      codexGoal: normalizeDashboardEventText(payload?.codexGoal || "dashboard_chat_triage"),
-      createdAt: normalizeIsoTimestamp(payload?.createdAt) || (/* @__PURE__ */ new Date()).toISOString()
-    };
-    const runners = this.connectedSockets().filter((socket) => this.getSocketAttachment(socket).role === "vps_runner");
-    if (runners.length === 0) {
-      return {
-        ok: false,
-        error: "vps_runner_not_connected",
-        reason: "VPS Codex CLI WebSocket is not connected"
-      };
-    }
-    const frame = JSON.stringify(job);
-    let pushed = 0;
-    for (const runner of runners) {
-      if (isSocketOpen(runner)) {
-        runner.send(frame);
-        pushed += 1;
-      }
-    }
-    return {
-      ok: pushed > 0,
-      pushed,
-      jobId: job.jobId
-    };
   }
   async broadcastThread({ threadId, messages = null }) {
     const resolvedMessages = Array.isArray(messages) ? messages : await this.listThreadMessages(threadId);
@@ -56266,9 +56145,6 @@ var runtime_default = {
     }
     if (request.method === "GET" && isDashboardChatSocketApiPath(url.pathname)) {
       return handleDashboardChatSocketRequest(request, url, env);
-    }
-    if (request.method === "GET" && isApiPath(url.pathname, "/dashboard/vps-runner/ws")) {
-      return handleDashboardVpsRunnerSocketRequest(request, env);
     }
     if (request.method === "GET" && isApiPath(url.pathname, "/dashboard/chat/search")) {
       return handleDashboardChatSearchRequest(request, url, env);
@@ -58855,7 +58731,6 @@ async function handleDashboardChatMessageRequest(request, env) {
     });
   }
   const payload = await readJson(request);
-  const wantsVpsRunnerHandoff = shouldDispatchDashboardChatToVpsRunner(payload);
   const nicknameListTurn = await buildDashboardRepositoryNicknameListTurn({ payload, env });
   if (nicknameListTurn) {
     const store2 = resolveDashboardChatStore(env);
@@ -58875,22 +58750,13 @@ async function handleDashboardChatMessageRequest(request, env) {
     });
   }
   const repositoryResolution = await resolveDashboardChatRepository({ payload, env });
-  if (!repositoryResolution.ok) {
-    return json(repositoryResolution.status ?? 422, {
-      ok: false,
-      error: repositoryResolution.error,
-      reason: repositoryResolution.reason,
-      issues: repositoryResolution.issues ?? [],
-      candidates: repositoryResolution.candidates ?? []
-    });
-  }
+  const repository = repositoryResolution.ok ? repositoryResolution.repository : "";
   const prepared = buildDashboardChatTurn(
     {
       ...payload,
-      repository: repositoryResolution.repository,
+      repository,
       relatedIssue: normalizePositiveInteger9(payload?.relatedIssue || payload?.issueNumber) || extractIssueNumberFromDashboardChatText(payload?.text || payload?.message || payload?.body)
-    },
-    { wantsVpsRunnerHandoff }
+    }
   );
   if (!prepared.ok) {
     return json(422, {
@@ -58907,49 +58773,12 @@ async function handleDashboardChatMessageRequest(request, env) {
       reason: "dashboard Butler chat store is not configured"
     });
   }
-  let execution = null;
-  let messagesToStore = prepared.messages;
-  if (wantsVpsRunnerHandoff) {
-    const handoffPayload = buildDashboardVpsRunnerHandoffPayload({
-      payload,
-      prepared,
-      env,
-      runtimeUrl: new URL(request.url).origin
-    });
-    if (!handoffPayload.ok) {
-      return json(422, {
-        ok: false,
-        error: handoffPayload.error,
-        reason: handoffPayload.reason,
-        issues: handoffPayload.issues
-      });
-    }
-    const dispatched = await dispatchRemoteCodexExecution({
-      gatewayResult: { repository: prepared.repository },
-      payload: handoffPayload.payload,
-      executorTransport: "vps_runner",
-      env
-    });
-    if (!dispatched.ok) {
-      return json(dispatched.status ?? 502, {
-        ok: false,
-        error: dispatched.error ?? dispatched.blockedByRule ?? "dashboard_vps_runner_dispatch_failed",
-        reason: dispatched.reason,
-        issues: dispatched.issues ?? []
-      });
-    }
-    execution = dispatched.execution;
-    messagesToStore = [
-      ...prepared.messages,
-      buildDashboardVpsRunnerQueuedMessage({ prepared, execution })
-    ].filter(Boolean);
-  }
-  const messages = await store.appendMany(prepared.threadId, messagesToStore);
+  const messages = await store.appendMany(prepared.threadId, prepared.messages);
   return json(202, {
     ok: true,
     threadId: prepared.threadId,
     messages,
-    execution
+    execution: null
   });
 }
 async function handleDashboardChatSocketRequest(request, url, env) {
@@ -58989,82 +58818,6 @@ async function handleDashboardChatSocketRequest(request, url, env) {
     });
   }
   return room.fetch(request);
-}
-function selectDashboardWebSocketResponseProtocol(value) {
-  const protocols = normalizeText30(value).split(",").map((item) => item.trim()).filter(Boolean);
-  return protocols.includes("vtdd-vps-runner") ? "vtdd-vps-runner" : "";
-}
-async function handleDashboardVpsRunnerSocketRequest(request, env) {
-  const auth = authorizeGatewayRequest({
-    request: withDashboardRunnerProtocolAuthorization(request),
-    env,
-    apiSuffix: "/dashboard/vps-runner/ws"
-  });
-  if (!auth.ok) {
-    return json(auth.status, {
-      ok: false,
-      error: "unauthorized",
-      reason: auth.reason
-    });
-  }
-  const url = new URL(request.url);
-  const threadId = normalizeDashboardThreadId(url.searchParams.get("threadId") || url.searchParams.get("thread_id"));
-  if (!threadId) {
-    return json(422, {
-      ok: false,
-      error: "thread_id_required",
-      reason: "threadId is required for VPS Codex CLI dashboard WebSocket"
-    });
-  }
-  const room = resolveDashboardChatRoomStub(env, threadId);
-  if (!room) {
-    return json(503, {
-      ok: false,
-      error: "dashboard_vps_runner_room_unavailable",
-      reason: "DASHBOARD_CHAT_ROOMS Durable Object binding is not configured"
-    });
-  }
-  if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") {
-    return json(426, {
-      ok: false,
-      error: "websocket_upgrade_required",
-      reason: "VPS Codex CLI push channel requires a WebSocket upgrade"
-    });
-  }
-  return room.fetch(request);
-}
-function withDashboardRunnerProtocolAuthorization(request) {
-  if (request.headers.get("authorization")) {
-    return request;
-  }
-  const protocol = normalizeText30(request.headers.get("sec-websocket-protocol"));
-  const token = protocol.split(",").map((item) => item.trim()).find((item) => item.startsWith("vtdd-gateway-bearer-"));
-  if (!token) {
-    return request;
-  }
-  const encoded = token.slice("vtdd-gateway-bearer-".length);
-  const bearerToken = decodeBase64UrlText(encoded);
-  if (!bearerToken) {
-    return request;
-  }
-  const headers = new Headers(request.headers);
-  headers.set("authorization", `Bearer ${bearerToken}`);
-  return new Request(request, { headers });
-}
-function decodeBase64UrlText(value) {
-  const normalized = normalizeText30(value);
-  if (!/^[A-Za-z0-9_-]+$/.test(normalized)) {
-    return "";
-  }
-  try {
-    const base643 = normalized.replace(/-/g, "+").replace(/_/g, "/");
-    const padded = base643.padEnd(Math.ceil(base643.length / 4) * 4, "=");
-    const binary = atob(padded);
-    const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
-    return new TextDecoder().decode(bytes);
-  } catch {
-    return "";
-  }
 }
 async function handleDashboardChatThreadRequest(request, url, env) {
   const auth = await authorizeDashboardRequest({
@@ -60923,13 +60676,6 @@ function createD1DashboardChatStore(d1) {
 function buildDashboardChatTurn(payload, options = {}) {
   const input = normalizeObject11(payload);
   const repository = normalizeCanonicalRepositoryInput(input.repository);
-  if (!repository) {
-    return {
-      ok: false,
-      error: "repository_required",
-      reason: "repository is required for dashboard Butler chat"
-    };
-  }
   const text = sanitizeDashboardChatText(input.text || input.message || input.body);
   if (!text) {
     return {
@@ -60938,7 +60684,7 @@ function buildDashboardChatTurn(payload, options = {}) {
       reason: "message text is required"
     };
   }
-  const threadId = normalizeDashboardThreadId(input.threadId || input.thread_id) || `dashboard-main-${repository.replace("/", "-")}`;
+  const threadId = normalizeDashboardThreadId(input.threadId || input.thread_id) || (repository ? `dashboard-main-${repository.replace("/", "-")}` : "dashboard-main-unresolved");
   const relatedIssue = normalizePositiveInteger9(input.relatedIssue || input.issueNumber);
   const now = (/* @__PURE__ */ new Date()).toISOString();
   const ownerMessage = normalizeDashboardChatMessage(
@@ -60953,18 +60699,14 @@ function buildDashboardChatTurn(payload, options = {}) {
     },
     { threadId }
   );
-  const butlerMessage = options.wantsVpsRunnerHandoff === true ? null : normalizeDashboardChatMessage(
+  const butlerMessage = normalizeDashboardChatMessage(
     {
       threadId,
       role: "butler",
       repository,
       relatedIssue,
-      status: "replied",
-      text: buildDeterministicButlerChatReply({
-        text,
-        repository,
-        relatedIssue
-      }),
+      status: "blocked",
+      text: buildDashboardAppServerNotConnectedReply({ repository, relatedIssue }),
       createdAt: new Date(Date.parse(now) + 1).toISOString()
     },
     { threadId }
@@ -60977,19 +60719,19 @@ function buildDashboardChatTurn(payload, options = {}) {
     messages: [ownerMessage, butlerMessage].filter(Boolean)
   };
 }
-function buildDeterministicButlerChatReply({ text, repository, relatedIssue, wantsVpsRunnerHandoff = false }) {
-  const lowerText = normalizeText30(text).toLowerCase();
-  const issuePhrase = relatedIssue ? ` Issue #${relatedIssue} \u3068\u3057\u3066\u6271\u3048\u307E\u3059\u3002` : "";
-  if (wantsVpsRunnerHandoff) {
-    return `\u53D7\u3051\u53D6\u308A\u307E\u3057\u305F\u3002${repository} \u306E Issue #${relatedIssue || "\u672A\u6307\u5B9A"} \u306B\u7D10\u3065\u3051\u3066\u3001VPS Codex CLI \u3078\u306E bounded handoff \u3092\u4F5C\u6210\u3057\u307E\u3059\u3002runner \u304B\u3089\u306E\u9032\u6357\u306F\u540C\u3058 dashboard chat thread \u306B\u8FD4\u3057\u307E\u3059\u3002`.trim();
-  }
-  if (lowerText.includes("vps") || lowerText.includes("codex") || lowerText.includes("cli")) {
-    return `\u53D7\u3051\u53D6\u308A\u307E\u3057\u305F\u3002${repository} \u306E\u4F1A\u8A71\u3068\u3057\u3066\u3001\u3053\u306E turn \u3092 dashboard chat thread \u306B\u4FDD\u5B58\u3057\u307E\u3057\u305F\u3002VPS Codex CLI \u3078\u306E\u5B9F\u884C dispatch \u306F\u307E\u3060\u884C\u308F\u305A\u3001\u6B21\u30B9\u30E9\u30A4\u30B9\u3067 runner \u306E\u8FD4\u4FE1\u30A4\u30D9\u30F3\u30C8\u3092\u540C\u3058 chat thread \u306B\u8FD4\u3057\u307E\u3059\u3002${issuePhrase}`.trim();
-  }
-  if (lowerText.includes("issue") || lowerText.includes("\u4F5C\u3063\u3066") || lowerText.includes("\u5B9F\u88C5")) {
-    return `\u53D7\u3051\u53D6\u308A\u307E\u3057\u305F\u3002${repository} \u306E\u8A71\u3068\u3057\u3066\u4FDD\u5B58\u3057\u307E\u3057\u305F\u3002\u3053\u3053\u304B\u3089 Issue \u5019\u88DC\u3092\u6574\u7406\u3057\u3001\u5B9F\u884C\u304C\u5FC5\u8981\u306A\u5834\u5408\u306F GO / passkey \u5883\u754C\u3092\u660E\u793A\u3057\u3066\u958B\u767A queue \u3078\u9032\u3081\u307E\u3059\u3002${issuePhrase}`.trim();
-  }
-  return `\u53D7\u3051\u53D6\u308A\u307E\u3057\u305F\u3002${repository} \u306E Butler \u4F1A\u8A71\u3068\u3057\u3066\u540C\u3058 thread \u306B\u4FDD\u5B58\u3057\u307E\u3057\u305F\u3002\u4ECA\u306F dashboard chat runtime \u306E\u521D\u671F\u63A5\u7D9A\u306A\u306E\u3067\u3001\u307E\u305A\u306F\u4F1A\u8A71\u5C65\u6B74\u3068\u8FD4\u4FE1\u3092\u540C\u3058\u753B\u9762\u3067\u78BA\u8A8D\u3067\u304D\u307E\u3059\u3002${issuePhrase}`.trim();
+function buildDashboardAppServerNotConnectedReply({ repository, relatedIssue } = {}) {
+  const repoPhrase = repository ? `\u5BFE\u8C61 repo: ${repository}` : "\u5BFE\u8C61 repo: \u672A\u6307\u5B9A";
+  const issuePhrase = relatedIssue ? `\u95A2\u9023 Issue: #${relatedIssue}` : "\u95A2\u9023 Issue: \u672A\u6307\u5B9A";
+  return [
+    "Dashboard Butler \u306E\u65E7 `codex exec` \u7D4C\u8DEF\u306F\u524A\u9664\u6E08\u307F\u3067\u3059\u3002",
+    "",
+    "\u3053\u306E\u753B\u9762\u304B\u3089\u958B\u767A\u5B9F\u884C\u30FB\u901A\u5E38\u4F1A\u8A71\u3092\u7D9A\u3051\u308B\u306B\u306F\u3001\u5225\u7D4C\u8DEF\u306E `codex app-server` \u30D6\u30EA\u30C3\u30B8\u5B9F\u88C5\u304C\u5FC5\u8981\u3067\u3059\u3002\u672A\u63A5\u7D9A\u306E\u72B6\u614B\u3067 VPS Codex CLI \u306B\u9001\u3063\u305F\u3075\u308A\u306F\u3057\u307E\u305B\u3093\u3002",
+    "",
+    `- ${repoPhrase}`,
+    `- ${issuePhrase}`,
+    "",
+    "\u73FE\u6642\u70B9\u306E\u5B9F\u884C fallback \u306F Custom GPT Butler \u3067\u3059\u3002Dashboard Butler \u306F app-server \u63A5\u7D9A PR \u304C\u5165\u308B\u307E\u3067\u672A\u5B8C\u6210\u3068\u3057\u3066\u6271\u3044\u307E\u3059\u3002"
+  ].join("\n");
 }
 async function buildDashboardRepositoryNicknameListTurn({ payload, env }) {
   const input = normalizeObject11(payload);
@@ -61061,100 +60803,6 @@ function formatDashboardRepositoryNicknameListReply(registryResult) {
     "",
     "\u9001\u4FE1\u4F8B: `\u3076\u3044 #450 \u306E\u6B8B\u308A Issue \u3068 PR \u3092\u78BA\u8A8D\u3057\u3066`"
   ].join("\n");
-}
-function shouldDispatchDashboardChatToVpsRunner(payload) {
-  const input = normalizeObject11(payload);
-  return input.dispatchToVpsRunner === true || input.vpsRunnerHandoff === true || normalizeDashboardEventText(input.executorTransport).toLowerCase() === "vps_runner";
-}
-function buildDashboardVpsRunnerHandoffPayload({ payload, prepared, env, runtimeUrl }) {
-  const input = normalizeObject11(payload);
-  const issueNumber = normalizePositiveInteger9(input.issueNumber || input.relatedIssue) || prepared.relatedIssue || normalizePositiveInteger9(env?.VTDD_DASHBOARD_CHAT_TRIAGE_ISSUE_NUMBER);
-  if (!issueNumber) {
-    return {
-      ok: false,
-      error: "dashboard_vps_runner_issue_required",
-      reason: "issueNumber or VTDD_DASHBOARD_CHAT_TRIAGE_ISSUE_NUMBER is required before dashboard can hand off a message to VPS Codex CLI",
-      issues: ["dashboard VPS runner handoff requires a GitHub Issue queue target"]
-    };
-  }
-  const codexGoal = normalizeDashboardEventText(input.codexGoal || input.goal || "dashboard_chat_triage").toLowerCase();
-  const branch = normalizeDashboardEventText(input.branch || input.targetBranch) || `codex/issue-${issueNumber}-dashboard-vps-chat`;
-  const baseRef = normalizeDashboardEventText(input.baseRef || input.base_ref) || "main";
-  const summary = normalizeDashboardEventText(input.handoffSummary || input.summary) || `Dashboard chat VPS runner handoff for Issue #${issueNumber}`;
-  return {
-    ok: true,
-    payload: {
-      actorRole: ActorRole.BUTLER,
-      executorTransport: "vps_runner",
-      issueContext: { issueNumber },
-      continuationContext: {
-        requiresHandoff: true,
-        executorTransport: "vps_runner",
-        codexGoal,
-        handoff: {
-          issueTraceable: true,
-          approvalScopeMatched: true,
-          relatedIssue: issueNumber,
-          summary,
-          ownerMessage: sanitizeDashboardChatText(input.text || input.message || input.body),
-          repositoryInput: normalizeDashboardRepositoryInput(
-            input.repositoryInput || input.repository_input || input.repository || prepared.repository
-          ),
-          dashboardThreadId: prepared.threadId,
-          dashboardRuntimeUrl: normalizeDashboardEventText(input.dashboardRuntimeUrl || runtimeUrl)
-        }
-      },
-      executionTarget: {
-        codexGoal,
-        branch,
-        baseRef
-      },
-      policyInput: {
-        actionType: "build",
-        mode: "execution",
-        repositoryInput: prepared.repository,
-        targetConfirmed: true,
-        approvalScopeMatched: true,
-        runtimeTruth: {
-          runtimeAvailable: true,
-          runtimeState: {
-            activeBranch: branch,
-            baseRef
-          }
-        },
-        consent: { grantedCategories: ["read", "propose", "execute"] },
-        approvalPhrase: "GO",
-        issueTraceable: true,
-        issueTraceability: {
-          relatedIssue: issueNumber,
-          intentRefs: [`#${issueNumber} Intent`],
-          successCriteriaRefs: [`#${issueNumber} Success Criteria`],
-          nonGoalRefs: [`#${issueNumber} Non-goals`]
-        },
-        go: true,
-        passkey: false
-      }
-    }
-  };
-}
-function buildDashboardVpsRunnerQueuedMessage({ prepared, execution }) {
-  if (!execution) {
-    return null;
-  }
-  const issuePhrase = execution.issueNumber ? `Issue #${execution.issueNumber}` : "\u5BFE\u8C61Issue";
-  const queuePhrase = execution.queueCommentUrl ? ` queue: ${execution.queueCommentUrl}` : "";
-  return normalizeDashboardChatMessage(
-    {
-      threadId: prepared.threadId,
-      role: "system",
-      repository: prepared.repository,
-      relatedIssue: execution.issueNumber || prepared.relatedIssue,
-      status: "thinking",
-      text: `VPS Codex CLI queue \u306B ${issuePhrase} \u306E bounded handoff \u3092\u6E21\u3057\u307E\u3057\u305F\u3002\u3053\u308C\u306F\u8FD4\u4FE1\u3067\u306F\u3042\u308A\u307E\u305B\u3093\u3002runner \u304B\u3089\u306E event post \u3060\u3051\u3092\u8FD4\u4FE1\u3068\u3057\u3066\u3053\u306E thread \u306B\u8868\u793A\u3057\u307E\u3059\u3002${queuePhrase}`,
-      createdAt: new Date(Date.now() + 2).toISOString()
-    },
-    { threadId: prepared.threadId }
-  );
 }
 function normalizeDashboardChatMessage(message, defaults = {}) {
   const input = normalizeObject11(message);
@@ -63129,7 +62777,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           <p>\u3053\u306E\u753B\u9762\u306F\u4F1A\u8A71\u3092\u4E3B\u5F79\u306B\u3059\u308B\u305F\u3081\u306E chat-first runtime \u3067\u3059\u3002\u7BA1\u7406\u753B\u9762\u306F\u53F3\u306E\u30B5\u30A4\u30C9\u30D0\u30FC\u3078\u9000\u907F\u3057\u307E\u3057\u305F\u3002</p>
           <ul>
             <li>\u95A2\u9023 repo/nickname: <code>${escapeDashboardHtml(dashboardTargetLabel)}</code></li>
-            <li>\u4F1A\u8A71: \u3053\u306E\u753B\u9762\u304B\u3089\u9001\u4FE1\u3059\u308B\u3068\u3001VPS Codex CLI \u304C repo \u89E3\u6C7A\u30FBIssue/PR/RAG/\u9032\u6357/\u627F\u8A8D\u5883\u754C\u3092\u4EA4\u901A\u6574\u7406\u3057\u307E\u3059</li>
+            <li>\u4F1A\u8A71: Dashboard Butler \u306E app-server \u63A5\u7D9A\u306F\u672A\u5B9F\u88C5\u3067\u3059\u3002\u65E7 VPS runner \u76F4\u9001\u7D4C\u8DEF\u306F\u4F7F\u3044\u307E\u305B\u3093</li>
           </ul>
         </article>
         <article class="bubble owner">
@@ -63138,13 +62786,13 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         <article class="bubble">
           <strong>Butler</strong>
           <p>\u305D\u306E\u65B9\u91DD\u3067\u9032\u3081\u307E\u3059\u3002\u4E2D\u592E\u306F\u30C1\u30E3\u30C3\u30C8\u3060\u3051\u3001\u72B6\u614B\u78BA\u8A8D\u30FB\u9032\u6357\u30FBRAG\u30FBworkflow\u30FBprototype cleanup \u306E\u6271\u3044\u306F\u30B5\u30A4\u30C9\u30D0\u30FC\u306E\u30E1\u30CB\u30E5\u30FC\u304B\u3089\u5FC5\u8981\u306A\u6642\u3060\u3051\u958B\u304D\u307E\u3059\u3002</p>
-          <p>\u3053\u306E dashboard \u304B\u3089\u306E\u9001\u4FE1\u306F WebSocket \u3067 VPS Codex CLI \u306B\u76F4\u63A5 push \u3057\u307E\u3059\u3002GitHub Issue \u30B3\u30E1\u30F3\u30C8 queue \u306F\u901A\u5E38\u4F1A\u8A71\u3067\u306F\u4F7F\u3044\u307E\u305B\u3093\u3002</p>
-          <span class="connection-note">\u63A5\u7D9A\u6E96\u5099\u4E2D: WebSocket \u3067 Butler \u3068 VPS Codex CLI \u306B\u63A5\u7D9A\u3057\u307E\u3059</span>
+          <p>\u3053\u306E dashboard \u304B\u3089 VPS Codex CLI \u3092 <code>codex exec</code> \u3067\u6BCE\u56DE\u8D77\u52D5\u3059\u308B\u65E7\u7D4C\u8DEF\u306F\u524A\u9664\u3057\u307E\u3057\u305F\u3002Dashboard Butler \u306F <code>codex app-server</code> \u30D6\u30EA\u30C3\u30B8\u304C\u5165\u308B\u307E\u3067\u672A\u5B8C\u6210\u3067\u3059\u3002</p>
+          <span class="connection-note">Dashboard thread \u63A5\u7D9A\u6E96\u5099\u4E2D: \u5C65\u6B74\u4FDD\u5B58\u3068\u672A\u63A5\u7D9A\u72B6\u614B\u306E\u8868\u793A\u3060\u3051\u3092\u884C\u3044\u307E\u3059</span>
         </article>
 
       </div>
 
-      <form class="composer" id="butler-chat-form" aria-label="Butler composer" data-socket-endpoint="${escapeDashboardHtml(socketOrigin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}/ws" data-thread-endpoint="${escapeDashboardHtml(origin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}" data-thread-id="${escapeDashboardHtml(chatThreadId)}" data-repository-input="${escapeDashboardHtml(repositoryInput)}" data-issue-number="${dashboardIssueNumber || ""}" data-dispatch-to-vps-runner="true" data-codex-goal="dashboard_chat_triage">
+      <form class="composer" id="butler-chat-form" aria-label="Butler composer" data-socket-endpoint="${escapeDashboardHtml(socketOrigin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}/ws" data-thread-endpoint="${escapeDashboardHtml(origin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}" data-thread-id="${escapeDashboardHtml(chatThreadId)}" data-repository-input="${escapeDashboardHtml(repositoryInput)}" data-issue-number="${dashboardIssueNumber || ""}">
         <div class="composer-box">
           <textarea id="butler-message" name="text" placeholder="Butler V2 \u306B\u30E1\u30C3\u30BB\u30FC\u30B8..." aria-label="Butler V2 \u306B\u30E1\u30C3\u30BB\u30FC\u30B8"></textarea>
           <button class="send-button" type="submit" aria-label="Butler \u306B\u9001\u4FE1">\u2191</button>
@@ -63172,7 +62820,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 
         <div class="lane">
           <div class="lane-title"><h3>Issue \u5019\u88DC</h3><span class="pill">draft</span></div>
-          <p>\u30C8\u30C3\u30D7\u30C1\u30E3\u30C3\u30C8\u306F Custom GPT \u76F8\u5F53\u306E\u81EA\u7136\u6587\u5165\u53E3\u3067\u3059\u3002repo/nickname \u89E3\u6C7A\u3001Issue/PR/RAG/\u9032\u6357/\u627F\u8A8D\u5883\u754C\u3092 VPS Codex CLI \u306B\u4EA4\u901A\u6574\u7406\u3055\u305B\u307E\u3059\u3002</p>
+          <p>Dashboard Butler \u306E\u81EA\u7136\u6587\u5165\u53E3\u306F <code>codex app-server</code> \u7528\u306B\u4F5C\u308A\u76F4\u3057\u307E\u3059\u3002\u65E7 VPS runner \u76F4\u9001\u3067\u306F\u901A\u5E38\u4F1A\u8A71\u3092\u51E6\u7406\u3057\u307E\u305B\u3093\u3002</p>
         </div>
 
         <div class="lane">
@@ -63218,8 +62866,6 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       const threadId = form.dataset.threadId;
       const repositoryInput = form.dataset.repositoryInput;
       const issueNumber = Number.parseInt(form.dataset.issueNumber || "", 10);
-      const dispatchToVpsRunner = form.dataset.dispatchToVpsRunner === "true";
-      const codexGoal = form.dataset.codexGoal || "dashboard_chat_triage";
       const initialMarkup = log.innerHTML;
       let chatSocket = null;
       let reconnectTimer = null;
@@ -63250,7 +62896,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           const header = document.createElement("div");
           header.className = "bubble-header";
           const strong = document.createElement("strong");
-          strong.textContent = message.role === "runner" ? "VPS Codex CLI" : message.role === "system" ? "SYSTEM" : "Butler";
+          strong.textContent = message.role === "system" ? "SYSTEM" : "Butler";
           header.appendChild(strong);
           const copyButton = document.createElement("button");
           copyButton.className = "copy-message";
@@ -63404,7 +63050,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             window.clearTimeout(reconnectTimer);
             reconnectTimer = null;
           }
-          setStatus("WebSocket \u63A5\u7D9A\u6E08\u307F\u3002\u9001\u4FE1\u3059\u308B\u3068 VPS Codex CLI \u306B push \u3057\u307E\u3059\u3002");
+          setStatus("Dashboard thread \u63A5\u7D9A\u6E08\u307F\u3002\u9001\u4FE1\u5185\u5BB9\u306F\u4FDD\u5B58\u3055\u308C\u307E\u3059\u304C\u3001app-server \u306F\u307E\u3060\u672A\u63A5\u7D9A\u3067\u3059\u3002");
           refreshThread();
         });
         chatSocket.addEventListener("message", (event) => {
@@ -63447,20 +63093,17 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           return;
         }
         if (submitButton) submitButton.disabled = true;
-        setStatus("\u9001\u4FE1\u4E2D\u3067\u3059\u3002VPS Codex CLI \u306B push \u3057\u307E\u3059\u3002");
+        setStatus("\u9001\u4FE1\u4E2D\u3067\u3059\u3002Dashboard thread \u306B\u4FDD\u5B58\u3057\u307E\u3059\u3002");
         chatSocket.send(JSON.stringify({
           type: "owner_message",
           threadId,
           repositoryInput,
           text,
           issueNumber,
-          relatedIssue: issueNumber,
-          dispatchToVpsRunner,
-          executorTransport: dispatchToVpsRunner ? "vps_runner" : undefined,
-          codexGoal
+          relatedIssue: issueNumber
         }));
         textarea.value = "";
-        setStatus("\u9001\u4FE1\u6E08\u307F\u3002VPS Codex CLI \u306E\u8FD4\u4FE1\u3092\u5F85\u3063\u3066\u3044\u307E\u3059\u3002");
+        setStatus("\u9001\u4FE1\u6E08\u307F\u3002app-server \u672A\u63A5\u7D9A\u306E\u305F\u3081\u5B9F\u884C\u306F\u958B\u59CB\u3057\u3066\u3044\u307E\u305B\u3093\u3002");
         if (submitButton) submitButton.disabled = false;
         textarea.focus({ preventScroll: true });
         updateComposerReserve();
@@ -63650,6 +63293,5 @@ function isApiPath(pathname, suffix) {
 var worker_default = runtime_default;
 export {
   DashboardChatRoom,
-  worker_default as default,
-  selectDashboardWebSocketResponseProtocol
+  worker_default as default
 };

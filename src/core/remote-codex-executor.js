@@ -76,7 +76,6 @@ export const VpsRunnerCancelMode = Object.freeze({
 });
 
 export const RemoteCodexDispatchGoal = Object.freeze({
-  DASHBOARD_CHAT_TRIAGE: "dashboard_chat_triage",
   OPEN_PR: "open_pr",
   REVISE_PR: "revise_pr",
   RESPOND_TO_REVIEW: "respond_to_review",
@@ -185,7 +184,7 @@ export function createRemoteCodexExecutionRequest(input = {}) {
   if (!request.codexGoal) {
     issues.push("codexGoal is required");
   } else if (!REMOTE_CODEX_DISPATCH_GOALS.has(request.codexGoal)) {
-    issues.push("codexGoal must be dashboard_chat_triage, open_pr, revise_pr, respond_to_review, or post_merge_verify");
+    issues.push("codexGoal must be open_pr, revise_pr, respond_to_review, or post_merge_verify");
   }
   if (!request.baseRef) {
     issues.push("baseRef is required");
@@ -1969,7 +1968,6 @@ function buildCodexCloudGitHubComment({ request }) {
 }
 
 function buildVpsRunnerGitHubQueueComment({ request }) {
-  const isDashboardChatTriage = request.codexGoal === RemoteCodexDispatchGoal.DASHBOARD_CHAT_TRIAGE;
   const payload = {
     executionId: request.executionId,
     transport: RemoteCodexExecutorTransport.VPS_RUNNER,
@@ -1988,8 +1986,6 @@ function buildVpsRunnerGitHubQueueComment({ request }) {
   const lines = [
     `<!-- vtdd:vps-runner-execution:${request.executionId} -->`,
     "VTDD 管理の VPS runner 実行キューです。",
-    "",
-    "このコメントは dashboard への返信ではありません。VPS Codex CLI が拾い、完了 event を runtime に返したものだけを dashboard の返信として扱います。",
     "",
     "実行境界:",
     `- リポジトリ: ${request.repository}`,
@@ -2016,26 +2012,16 @@ function buildVpsRunnerGitHubQueueComment({ request }) {
       : []),
     "- 正本: この GitHub Issue",
     "- runtime truth: 現在の GitHub branch / diff / PR / review comments",
-    isDashboardChatTriage
-      ? "- 完了条件: dashboard chat triage の返信 event を同じ thread に返す"
-      : request.codexGoal === RemoteCodexDispatchGoal.POST_MERGE_VERIFY
-        ? "- 完了条件: merge 後 runtime truth を検証し、GitHub-visible evidence を残す"
-        : "- 完了条件: pull request を作成または更新する",
-    ...(isDashboardChatTriage
-      ? [
-          "- PR body requirement: 不要。dashboard chat triage は PR を作成・更新しません。",
-          "- context preflight: VPS runner は `AGENTS.md`、`docs/butler/thread-independent-startup-contract.md`、正本 Issue を読んでから triage を開始します。"
-        ]
-      : [
-          "- PR body requirement: Codex は `docs/pr-template-model.md`、`scripts/render-pr-body.mjs`、`scripts/validate-pr-body.mjs` を確認します。VPS runner も PR create/update 前に検証・正規化します。",
-          "- context preflight: VPS runner は `AGENTS.md`、`docs/butler/thread-independent-startup-contract.md`、正本 Issue、PR body contract files を読んでから編集を開始します。",
-          "- 必須 PR body markers: `## This PR satisfies Intent`, `## Satisfied Success Criteria`, `## Unsatisfied Success Criteria`, `## Verification Evidence`, `## Surface Update Checklist`."
-        ]),
+    request.codexGoal === RemoteCodexDispatchGoal.POST_MERGE_VERIFY
+      ? "- 完了条件: merge 後 runtime truth を検証し、GitHub-visible evidence を残す"
+      : "- 完了条件: pull request を作成または更新する",
+    "- PR body requirement: Codex は `docs/pr-template-model.md`、`scripts/render-pr-body.mjs`、`scripts/validate-pr-body.mjs` を確認します。VPS runner も PR create/update 前に検証・正規化します。",
+    "- context preflight: VPS runner は `AGENTS.md`、`docs/butler/thread-independent-startup-contract.md`、正本 Issue、PR body contract files を読んでから編集を開始します。",
+    "- 必須 PR body markers: `## This PR satisfies Intent`, `## Satisfied Success Criteria`, `## Unsatisfied Success Criteria`, `## Verification Evidence`, `## Surface Update Checklist`.",
     "- preflight 入力が不足している場合、推測実装は禁止です。runner は Butler/owner に次の判断を求め、bounded request の再発行を待ちます。",
     "",
     "ルール:",
     "- Issue の範囲を勝手に広げない。",
-    ...(isDashboardChatTriage ? ["- ファイル編集しない。", "- commit しない。", "- push しない。", "- PR を作成・更新しない。"] : []),
     "- merge しない。",
     "- deploy しない。",
     "- reviewer objection は Butler/human judgment 用に残す。",
@@ -2051,15 +2037,11 @@ function buildVpsRunnerGitHubQueueComment({ request }) {
 function buildExecutionPreflightPolicy({ codexGoal } = {}) {
   const requiredRepoFiles = [
     "AGENTS.md",
-    "docs/butler/thread-independent-startup-contract.md"
+    "docs/butler/thread-independent-startup-contract.md",
+    "docs/pr-template-model.md",
+    "scripts/render-pr-body.mjs",
+    "scripts/validate-pr-body.mjs"
   ];
-  if (codexGoal !== RemoteCodexDispatchGoal.DASHBOARD_CHAT_TRIAGE) {
-    requiredRepoFiles.push(
-      "docs/pr-template-model.md",
-      "scripts/render-pr-body.mjs",
-      "scripts/validate-pr-body.mjs"
-    );
-  }
   return {
     mode: "auto_receipt",
     onMissingContract: "owner_decision_required",
