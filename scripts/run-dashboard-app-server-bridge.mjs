@@ -100,6 +100,61 @@ export function buildAppServerSandboxOverrides(sandboxMode = "") {
   };
 }
 
+export function buildAppServerRequestApprovalResponse(message) {
+  const method = String(message?.method || "");
+  if ((message?.id === undefined || message?.id === null) || !method) {
+    return null;
+  }
+  if (method === "item/commandExecution/requestApproval") {
+    return {
+      id: message.id,
+      result: {
+        decision: "decline"
+      }
+    };
+  }
+  if (method === "execCommandApproval") {
+    return {
+      id: message.id,
+      result: {
+        decision: "denied"
+      }
+    };
+  }
+  if (method === "item/fileChange/requestApproval") {
+    return {
+      id: message.id,
+      result: {
+        decision: "decline"
+      }
+    };
+  }
+  if (method === "applyPatchApproval") {
+    return {
+      id: message.id,
+      result: {
+        decision: "denied"
+      }
+    };
+  }
+  if (method === "item/permissions/requestApproval") {
+    return {
+      id: message.id,
+      error: {
+        code: -32001,
+        message: "Dashboard bridge does not grant app-server permission escalation"
+      }
+    };
+  }
+  return {
+    id: message.id,
+    error: {
+      code: -32601,
+      message: `Dashboard bridge does not support app-server request method: ${method}`
+    }
+  };
+}
+
 export function mapAppServerNotificationToDashboardEvent(message, context = {}) {
   const method = String(message?.method || "");
   const params = message?.params && typeof message.params === "object" ? message.params : {};
@@ -245,7 +300,7 @@ export class JsonLineAppServerClient {
       } catch {
         continue;
       }
-      if (message.id && this.pending.has(message.id)) {
+      if (message.id !== undefined && message.id !== null && this.pending.has(message.id)) {
         const pending = this.pending.get(message.id);
         this.pending.delete(message.id);
         if (message.error) {
@@ -253,6 +308,11 @@ export class JsonLineAppServerClient {
         } else {
           pending.resolve(message.result);
         }
+        continue;
+      }
+      const approvalResponse = buildAppServerRequestApprovalResponse(message);
+      if (approvalResponse) {
+        this.write(approvalResponse);
         continue;
       }
       for (const handler of this.notificationHandlers) {
