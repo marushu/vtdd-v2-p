@@ -71,7 +71,25 @@ test("deploy-production workflow enforces the MVP production deploy boundary", (
   assert.equal(workflow.includes("Missing required Actions secret: CLOUDFLARE_API_TOKEN"), true);
   assert.equal(workflow.includes("Missing required Actions secret: CLOUDFLARE_ACCOUNT_ID"), true);
   assert.equal(workflow.includes("Missing required Actions secret: CLOUDFLARE_D1_DATABASE_ID"), true);
+  assert.equal(workflow.includes("Preflight Cloudflare Workers deploy entitlement"), true);
+  assert.equal(
+    workflow.includes(
+      "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts"
+    ),
+    true
+  );
+  assert.equal(
+    workflow.includes(
+      "Cloudflare Workers deploy entitlement preflight failed before passkey approval validation."
+    ),
+    true
+  );
   assert.equal(workflow.includes("Validate real passkey approval grant"), true);
+  assert.equal(
+    workflow.indexOf("Preflight Cloudflare Workers deploy entitlement") <
+      workflow.indexOf("Validate real passkey approval grant"),
+    true
+  );
   assert.equal(
     workflow.includes('VTDD_GATEWAY_BEARER_TOKEN: ${{ secrets.VTDD_GATEWAY_BEARER_TOKEN }}'),
     true
