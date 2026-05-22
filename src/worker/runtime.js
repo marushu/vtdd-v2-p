@@ -8156,7 +8156,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .chat-link { color: var(--text); text-decoration-thickness: 1px; text-underline-offset: 4px; font-weight: 750; }
     .composer { min-width: 0; display: grid; gap: 8px; z-index: 4; padding: 14px 0 max(16px, env(safe-area-inset-bottom)); background: var(--page-bg); }
     .composer-box { display: grid; grid-template-columns: minmax(0, 1fr) 44px; align-items: end; gap: 8px; min-height: 62px; padding: 8px; border: 1px solid var(--border); border-radius: 28px; background: var(--panel-strong); box-shadow: 0 16px 60px var(--shadow); }
-    textarea { width: 100%; min-height: 44px; max-height: 160px; border: 0; outline: 0; resize: vertical; padding: 10px 2px; color: var(--text); background: transparent; font: inherit; line-height: 1.45; }
+    textarea { width: 100%; min-height: 44px; max-height: max(88px, min(160px, 24dvh)); border: 0; outline: 0; resize: none; overflow-y: hidden; padding: 10px 2px; color: var(--text); background: transparent; font: inherit; line-height: 1.45; }
     textarea::placeholder { color: var(--muted); }
     .send-button { width: 44px; height: 44px; border-radius: 999px; background: var(--text); color: var(--page-bg); font-size: 22px; }
     .composer-status { min-height: 18px; padding-left: 16px; color: var(--muted); font-size: 12px; }
@@ -8372,6 +8372,15 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 
       function updateComposerReserve() {
         log.style.setProperty("--composer-reserve", Math.ceil(form.getBoundingClientRect().height) + "px");
+      }
+
+      function resizeComposerInput() {
+        const maxHeight = Math.max(88, Math.min(160, Math.floor(window.innerHeight * 0.24)));
+        textarea.style.height = "auto";
+        const nextHeight = Math.min(textarea.scrollHeight, maxHeight);
+        textarea.style.height = nextHeight + "px";
+        textarea.style.overflowY = textarea.scrollHeight > maxHeight ? "auto" : "hidden";
+        updateComposerReserve();
       }
 
       function scrollToLatest() {
@@ -8668,14 +8677,16 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           relatedIssue: issueNumber
         }));
         textarea.value = "";
+        resizeComposerInput();
         setStatus("app-server bridge の返信を待っています", { thinking: true });
         if (submitButton) submitButton.disabled = false;
         textarea.focus({ preventScroll: true });
         updateComposerReserve();
       });
 
-      updateComposerReserve();
-      window.addEventListener("resize", updateComposerReserve);
+      resizeComposerInput();
+      textarea.addEventListener("input", resizeComposerInput);
+      window.addEventListener("resize", resizeComposerInput);
       window.addEventListener("online", () => {
         setStatus("ネットワーク復帰を検知しました。履歴を再取得して再接続します。");
         refreshThread();

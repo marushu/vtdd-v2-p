@@ -501,6 +501,12 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("window.addEventListener(\"online\""), true);
   assert.equal(body.includes("VPS Codex CLI に push します"), false);
   assert.equal(body.includes("function updateComposerReserve()"), true);
+  assert.equal(body.includes("function resizeComposerInput()"), true);
+  assert.equal(body.includes("max-height: max(88px, min(160px, 24dvh))"), true);
+  assert.equal(body.includes("Math.min(160, Math.floor(window.innerHeight * 0.24))"), true);
+  assert.equal(body.includes('textarea.style.height = "auto"'), true);
+  assert.equal(body.includes('textarea.style.overflowY = textarea.scrollHeight > maxHeight ? "auto" : "hidden"'), true);
+  assert.equal(body.includes('textarea.addEventListener("input", resizeComposerInput)'), true);
   assert.equal(body.includes("function scrollToLatest()"), true);
   assert.equal(body.includes("function showThinking()"), false);
   assert.equal(body.includes("function removeThinking("), false);
