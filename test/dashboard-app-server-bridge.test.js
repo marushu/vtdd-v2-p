@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   buildDashboardAppServerBridgeEndpoint,
   buildAppServerInitializeRequest,
+  buildAppServerRequestApprovalResponse,
   buildAppServerSandboxOverrides,
   buildAppServerThreadResumeRequest,
   buildAppServerThreadStartRequest,
@@ -10,6 +11,7 @@ import {
   connectDashboardAppServerBridgeOnce,
   extractAppServerNotificationTurnId,
   handleDashboardTurnRequest,
+  JsonLineAppServerClient,
   mapAppServerNotificationToDashboardEvent,
   matchesAppServerTurnNotification,
   parseBridgeArgs,
@@ -87,6 +89,131 @@ test("dashboard app-server bridge only enables danger-full-access by explicit tr
     turnSandboxPolicy: { type: "dangerFullAccess" }
   });
   assert.throws(() => buildAppServerSandboxOverrides("workspace-write"), /unsupported dashboard app-server sandbox mode/);
+});
+
+test("dashboard app-server bridge answers command approvals without granting execution", () => {
+  assert.deepEqual(
+    buildAppServerRequestApprovalResponse({
+      id: 0,
+      method: "item/commandExecution/requestApproval",
+      params: { commandActions: [{ type: "read" }] }
+    }),
+    { id: 0, result: { decision: "decline" } }
+  );
+  assert.deepEqual(
+    buildAppServerRequestApprovalResponse({
+      id: 32,
+      method: "execCommandApproval",
+      params: { parsedCmd: [{ type: "search" }] }
+    }),
+    { id: 32, result: { decision: "denied" } }
+  );
+});
+
+test("dashboard app-server bridge declines write, patch, permission, and unsafe command approvals", () => {
+  assert.deepEqual(
+    buildAppServerRequestApprovalResponse({
+      id: 41,
+      method: "item/commandExecution/requestApproval",
+      params: { commandActions: [{ type: "write" }] }
+    }),
+    { id: 41, result: { decision: "decline" } }
+  );
+  assert.deepEqual(
+    buildAppServerRequestApprovalResponse({
+      id: 42,
+      method: "item/fileChange/requestApproval",
+      params: {}
+    }),
+    { id: 42, result: { decision: "decline" } }
+  );
+  assert.deepEqual(
+    buildAppServerRequestApprovalResponse({
+      id: 43,
+      method: "applyPatchApproval",
+      params: {}
+    }),
+    { id: 43, result: { decision: "denied" } }
+  );
+  assert.deepEqual(
+    buildAppServerRequestApprovalResponse({
+      id: 44,
+      method: "item/permissions/requestApproval",
+      params: {}
+    }),
+    {
+      id: 44,
+      result: {
+        permissions: {},
+        scope: "turn",
+        strictAutoReview: true
+      }
+    }
+  );
+  assert.deepEqual(
+    buildAppServerRequestApprovalResponse({
+      id: 45,
+      method: "future/requestApproval",
+      params: {}
+    }),
+    {
+      id: 45,
+      error: {
+        code: -32601,
+        message: "Dashboard bridge does not support app-server request method: future/requestApproval"
+      }
+    }
+  );
+});
+
+test("dashboard app-server bridge writes JSON-RPC responses for app-server approval requests", () => {
+  const client = new JsonLineAppServerClient({ command: "unused" });
+  const writes = [];
+  const notifications = [];
+  client.child = {
+    stdin: {
+      write(chunk) {
+        writes.push(JSON.parse(String(chunk).trim()));
+      }
+    },
+    kill() {}
+  };
+  client.onNotification((message) => notifications.push(message));
+
+  client.handleChunk(
+    [
+      JSON.stringify({
+        id: 0,
+        method: "item/commandExecution/requestApproval",
+        params: {
+          cwd: "/repo",
+          commandActions: [{ type: "read", path: "package.json" }]
+        }
+      }),
+      JSON.stringify({
+        id: 1,
+        method: "future/requestApproval",
+        params: {}
+      }),
+      JSON.stringify({
+        method: "turn/started",
+        params: { threadId: "codex-thread-1" }
+      })
+    ].join("\n") + "\n"
+  );
+
+  assert.deepEqual(writes, [
+    { id: 0, result: { decision: "decline" } },
+    {
+      id: 1,
+      error: {
+        code: -32601,
+        message: "Dashboard bridge does not support app-server request method: future/requestApproval"
+      }
+    }
+  ]);
+  assert.equal(notifications.length, 1);
+  assert.equal(notifications[0].method, "turn/started");
 });
 
 test("dashboard app-server bridge maps Codex app-server notifications to dashboard events", () => {
