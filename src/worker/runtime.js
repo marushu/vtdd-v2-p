@@ -8137,7 +8137,13 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .bubble-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
     .bubble strong { display: block; color: var(--muted); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 8px; }
     .bubble-header strong { margin-bottom: 0; }
-    .bubble p { color: var(--text); margin-bottom: 12px; white-space: pre-wrap; }
+    .bubble p { color: var(--text); margin-bottom: 12px; }
+    .bubble .message-body { display: grid; gap: 12px; }
+    .bubble .message-body p { margin: 0; white-space: pre-wrap; }
+    .bubble .message-body ul { margin: 0; }
+    .bubble .message-body li + li { margin-top: 4px; }
+    .bubble .message-body code { font-size: .94em; }
+    .bubble .message-body strong { display: inline; color: inherit; font-size: inherit; letter-spacing: 0; text-transform: none; margin: 0; font-weight: 800; }
     .copy-message { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border: 1px solid var(--border); border-radius: 999px; background: var(--button); color: var(--text); font-size: 15px; line-height: 1; cursor: pointer; }
     .copy-message:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
     .bubble ul { margin: 0; padding-left: 22px; color: var(--text); line-height: 1.85; }
@@ -8408,30 +8414,79 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           header.appendChild(copyButton);
           article.appendChild(header);
         }
-        const paragraph = document.createElement("p");
-        renderMessageText(paragraph, message.text || "（空のメッセージ）");
-        article.appendChild(paragraph);
+        const body = document.createElement("div");
+        body.className = "message-body";
+        renderMessageText(body, message.text || "（空のメッセージ）");
+        article.appendChild(body);
         log.appendChild(article);
         scrollToLatest();
       }
 
       function renderMessageText(container, text) {
         const source = String(text || "");
-        const urlPattern = /https?:\\/\\/[^\\s<>"']+/g;
+        const lines = source.replace(/\\r\\n/g, "\\n").split("\\n");
+        let index = 0;
+        while (index < lines.length) {
+          if (!lines[index].trim()) {
+            index += 1;
+            continue;
+          }
+          if (/^\\s*-\\s+/.test(lines[index])) {
+            const list = document.createElement("ul");
+            while (index < lines.length && /^\\s*-\\s+/.test(lines[index])) {
+              const item = document.createElement("li");
+              renderInlineMarkdown(item, lines[index].replace(/^\\s*-\\s+/, ""));
+              list.appendChild(item);
+              index += 1;
+            }
+            container.appendChild(list);
+            continue;
+          }
+          const paragraph = document.createElement("p");
+          const paragraphLines = [];
+          while (index < lines.length && lines[index].trim() && !/^\\s*-\\s+/.test(lines[index])) {
+            paragraphLines.push(lines[index]);
+            index += 1;
+          }
+          paragraphLines.forEach((line, lineIndex) => {
+            if (lineIndex > 0) paragraph.appendChild(document.createTextNode("\\n"));
+            renderInlineMarkdown(paragraph, line);
+          });
+          container.appendChild(paragraph);
+        }
+      }
+
+      function renderInlineMarkdown(container, text) {
+        const source = String(text || "");
+        const backtick = String.fromCharCode(96);
+        const tokenPattern = new RegExp(
+          "(https?:\\\\/\\\\/[^\\\\s<>\\\"']+)|\\\\*\\\\*([\\\\s\\\\S]+?)\\\\*\\\\*|" + backtick + "([^" + backtick + "]+)" + backtick,
+          "g"
+        );
         let cursor = 0;
-        for (const match of source.matchAll(urlPattern)) {
+        for (const match of source.matchAll(tokenPattern)) {
           if (match.index > cursor) {
             container.appendChild(document.createTextNode(source.slice(cursor, match.index)));
           }
-          const href = match[0];
-          const link = document.createElement("a");
-          link.className = "chat-link";
-          link.href = href;
-          link.textContent = href;
-          link.target = "_blank";
-          link.rel = "noreferrer";
-          container.appendChild(link);
-          cursor = match.index + href.length;
+          if (match[1]) {
+            const href = match[1];
+            const link = document.createElement("a");
+            link.className = "chat-link";
+            link.href = href;
+            link.textContent = href;
+            link.target = "_blank";
+            link.rel = "noreferrer";
+            container.appendChild(link);
+          } else if (match[2]) {
+            const strong = document.createElement("strong");
+            renderInlineMarkdown(strong, match[2]);
+            container.appendChild(strong);
+          } else if (match[3]) {
+            const code = document.createElement("code");
+            code.textContent = match[3];
+            container.appendChild(code);
+          }
+          cursor = match.index + match[0].length;
         }
         if (cursor < source.length) {
           container.appendChild(document.createTextNode(source.slice(cursor)));

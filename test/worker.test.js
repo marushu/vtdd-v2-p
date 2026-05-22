@@ -505,6 +505,13 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("function showThinking()"), false);
   assert.equal(body.includes("function removeThinking("), false);
   assert.equal(body.includes("function renderMessageText("), true);
+  assert.equal(body.includes("function renderInlineMarkdown("), true);
+  assert.equal(body.includes('body.className = "message-body"'), true);
+  assert.equal(body.includes('document.createElement("ul")'), true);
+  assert.equal(body.includes('document.createElement("li")'), true);
+  assert.equal(body.includes('document.createElement("strong")'), true);
+  assert.equal(body.includes('document.createElement("code")'), true);
+  assert.equal(body.includes("renderInlineMarkdown(strong"), true);
   assert.equal(body.includes("function copyMessageText("), true);
   assert.equal(body.includes("navigator.clipboard.writeText"), true);
   assert.equal(body.includes("返信をコピー"), true);
@@ -516,7 +523,7 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes('renderThread(body.messages || [], { replace: true })'), true);
   assert.equal(body.includes('renderThread(body.messages || [], { replace: false })'), true);
   assert.equal(body.includes("white-space: pre-wrap"), true);
-  assert.equal(body.includes("urlPattern"), true);
+  assert.equal(body.includes("tokenPattern"), true);
   assert.equal(body.includes('link.className = "chat-link"'), true);
   assert.equal(body.includes("考えています"), false);
   assert.equal(body.includes("thinking-dots"), true);
