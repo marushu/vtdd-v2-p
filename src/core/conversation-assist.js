@@ -2,7 +2,8 @@ const ConversationIntent = Object.freeze({
   UNKNOWN: "unknown",
   LIST_REPOSITORIES: "list_repositories",
   SELECT_REPOSITORY: "select_repository",
-  RECALL_CONTEXT: "recall_context"
+  RECALL_CONTEXT: "recall_context",
+  MEMORY_STATUS: "memory_status"
 });
 
 export function buildConversationAssist(input) {
@@ -72,6 +73,16 @@ export function buildConversationAssist(input) {
         mode: "assistive"
       }
     };
+    assist.operationalMemoryRequest = {
+      enabled: true,
+      mode: "recall",
+      limit: crossRetrievalDisplayMode === "expanded" ? 8 : 5,
+      displayMode: crossRetrievalDisplayMode,
+      relatedIssue: chosenIssue,
+      text: userText || null,
+      queryHint: buildOperationalMemoryQueryHint(userText),
+      reasonTags: detectOperationalMemoryReasonTags(userText)
+    };
 
     if (issueMentions.length > 1) {
       assist.requiresConfirmation = true;
@@ -82,6 +93,29 @@ export function buildConversationAssist(input) {
       assist.nextQuestion =
         "参照対象の Issue 番号があれば指定できます。未指定のまま横断参照して進めてもよいですか？";
     }
+  }
+
+  if (detectedIntent === ConversationIntent.MEMORY_STATUS) {
+    assist.responseGuide = {
+      style: "memory_status",
+      displayMode: "short",
+      sourceOrder: ["operational_memory_inventory"],
+      expandOnRequest: true,
+      caveat:
+        "件数は provider が返せる範囲の bounded visible count です。総件数、課金指標、保存価値の評価ではありません。"
+    };
+    assist.operationalMemoryRequest = {
+      enabled: true,
+      mode: "inventory",
+      limit: 1,
+      displayMode: "short",
+      relatedIssue: issueMentions.length === 1 ? issueMentions[0] : null,
+      text: null,
+      queryHint: "記憶量、RAG record count、memory inventory",
+      caveat:
+        "bounded visible count only; do not present as total storage, billing, or memory quality",
+      reasonTags: ["memory_inventory"]
+    };
   }
 
   if (blockedByRule === "consent_boundary" && requiredConsent) {
@@ -104,6 +138,10 @@ function detectConversationIntent(text) {
     return ConversationIntent.SELECT_REPOSITORY;
   }
 
+  if (isMemoryStatusIntent(text)) {
+    return ConversationIntent.MEMORY_STATUS;
+  }
+
   if (isRecallContextIntent(text)) {
     return ConversationIntent.RECALL_CONTEXT;
   }
@@ -120,7 +158,11 @@ function isRepositorySelectionIntent(text) {
 }
 
 function isRecallContextIntent(text) {
-  return hasKeyword(text, RECALL_CONTEXT_WORDS);
+  return hasKeyword(text, RECALL_CONTEXT_WORDS) || hasKeyword(text, OPERATIONAL_MEMORY_RECALL_WORDS);
+}
+
+function isMemoryStatusIntent(text) {
+  return hasKeyword(text, MEMORY_WORDS) && hasKeyword(text, MEMORY_STATUS_WORDS);
 }
 
 function matchRepositoryFromText(text, repositoryCandidates) {
@@ -231,6 +273,34 @@ function determineCrossRetrievalDisplayMode(text) {
   return "short";
 }
 
+function buildOperationalMemoryQueryHint(text) {
+  const tags = detectOperationalMemoryReasonTags(text);
+  if (tags.length === 0) {
+    return text || null;
+  }
+  return [text, ...tags].filter(Boolean).join(" ");
+}
+
+function detectOperationalMemoryReasonTags(text) {
+  const tags = [];
+  if (hasKeyword(text, FAILURE_WORDS)) {
+    tags.push("failure_map");
+  }
+  if (hasKeyword(text, DRIFT_WORDS)) {
+    tags.push("drift_guard");
+  }
+  if (hasKeyword(text, HALLUCINATION_WORDS)) {
+    tags.push("hallucination_guard");
+  }
+  if (hasKeyword(text, SUCCESS_WORDS)) {
+    tags.push("success_pattern");
+  }
+  if (hasKeyword(text, HANDOFF_WORDS)) {
+    tags.push("handoff_checkpoint");
+  }
+  return [...new Set(tags)];
+}
+
 const REPOSITORY_WORDS = Object.freeze([
   "repo",
   "repository",
@@ -285,6 +355,93 @@ const RECALL_CONTEXT_WORDS = Object.freeze([
   "history",
   "why",
   "rationale"
+]);
+
+const OPERATIONAL_MEMORY_RECALL_WORDS = Object.freeze([
+  "失敗",
+  "失敗記憶",
+  "同じ失敗",
+  "ドリフト",
+  "ハルシネーション",
+  "幻覚",
+  "成功パターン",
+  "うまくいった",
+  "やり方を変えた",
+  "再発",
+  "地雷",
+  "気をつけ",
+  "引き継ぎ",
+  "handoff",
+  "failure",
+  "failed",
+  "drift",
+  "hallucination",
+  "success pattern"
+]);
+
+const MEMORY_WORDS = Object.freeze([
+  "記憶",
+  "メモリ",
+  "memory",
+  "rag"
+]);
+
+const MEMORY_STATUS_WORDS = Object.freeze([
+  "量",
+  "数",
+  "何件",
+  "どれくらい",
+  "どのくらい",
+  "inventory",
+  "count",
+  "counts",
+  "status"
+]);
+
+const FAILURE_WORDS = Object.freeze([
+  "失敗",
+  "詰ま",
+  "落ち",
+  "返ってこない",
+  "壊れ",
+  "再発",
+  "failure",
+  "failed",
+  "bug"
+]);
+
+const DRIFT_WORDS = Object.freeze([
+  "ドリフト",
+  "逸れ",
+  "ずれ",
+  "ズレ",
+  "scope",
+  "drift"
+]);
+
+const HALLUCINATION_WORDS = Object.freeze([
+  "ハルシネーション",
+  "幻覚",
+  "嘘",
+  "勘違い",
+  "hallucination"
+]);
+
+const SUCCESS_WORDS = Object.freeze([
+  "成功",
+  "うまくい",
+  "上手くい",
+  "やり方を変え",
+  "worked",
+  "success"
+]);
+
+const HANDOFF_WORDS = Object.freeze([
+  "引き継",
+  "handoff",
+  "圧縮",
+  "スレ",
+  "コンテキスト"
 ]);
 
 const EXPANDED_VIEW_WORDS = Object.freeze([

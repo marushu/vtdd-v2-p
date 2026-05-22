@@ -289,6 +289,69 @@ test("gateway sets cross retrieval assist for natural recall conversation", () =
     "issue #19 って何だっけ？過去の判断と提案を思い出したい"
   );
   assert.equal(result.conversationAssist.crossRetrievalRequest.semanticRetrieval.enabled, true);
+  assert.equal(result.conversationAssist.operationalMemoryRequest.enabled, true);
+  assert.equal(result.conversationAssist.operationalMemoryRequest.mode, "recall");
+});
+
+test("gateway requests operational memory for failure drift and hallucination recall", () => {
+  const result = runMvpGateway({
+    phase: "exploration",
+    actorRole: ActorRole.EXECUTOR,
+    conversation: {
+      userText: "前回の開発コンテキストドリフトとハルシネーションの失敗記憶を思い出して"
+    },
+    policyInput: {
+      actionType: ActionType.READ,
+      mode: "read_only",
+      repositoryInput: "vtdd",
+      aliasRegistry: registry,
+      targetConfirmed: true,
+      runtimeTruth: { runtimeAvailable: false, safeFallbackChosen: true },
+      consent: {
+        grantedCategories: [ConsentCategory.READ]
+      },
+      issueTraceable: false
+    }
+  });
+
+  assert.equal(result.allowed, true);
+  assert.equal(result.conversationAssist.detectedIntent, "recall_context");
+  assert.equal(result.conversationAssist.operationalMemoryRequest.enabled, true);
+  assert.deepEqual(result.conversationAssist.operationalMemoryRequest.reasonTags, [
+    "failure_map",
+    "drift_guard",
+    "hallucination_guard",
+    "handoff_checkpoint"
+  ]);
+});
+
+test("gateway classifies memory amount questions as memory status", () => {
+  const result = runMvpGateway({
+    phase: "exploration",
+    actorRole: ActorRole.EXECUTOR,
+    conversation: {
+      userText: "RAG の記憶は今どのくらいある？何件くらい？"
+    },
+    policyInput: {
+      actionType: ActionType.READ,
+      mode: "read_only",
+      repositoryInput: "vtdd",
+      aliasRegistry: registry,
+      targetConfirmed: true,
+      runtimeTruth: { runtimeAvailable: false, safeFallbackChosen: true },
+      consent: {
+        grantedCategories: [ConsentCategory.READ]
+      },
+      issueTraceable: false
+    }
+  });
+
+  assert.equal(result.allowed, true);
+  assert.equal(result.conversationAssist.detectedIntent, "memory_status");
+  assert.equal(result.conversationAssist.responseGuide.style, "memory_status");
+  assert.match(result.conversationAssist.responseGuide.caveat, /bounded visible count/);
+  assert.equal(result.conversationAssist.operationalMemoryRequest.mode, "inventory");
+  assert.match(result.conversationAssist.operationalMemoryRequest.caveat, /not present as total storage/);
 });
 
 test("gateway asks clarification when recall conversation mentions multiple issues", () => {

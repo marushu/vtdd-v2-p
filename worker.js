@@ -35962,7 +35962,8 @@ var ConversationIntent = Object.freeze({
   UNKNOWN: "unknown",
   LIST_REPOSITORIES: "list_repositories",
   SELECT_REPOSITORY: "select_repository",
-  RECALL_CONTEXT: "recall_context"
+  RECALL_CONTEXT: "recall_context",
+  MEMORY_STATUS: "memory_status"
 });
 function buildConversationAssist(input) {
   const userText = normalizeText21(input?.conversation?.userText);
@@ -36024,12 +36025,42 @@ function buildConversationAssist(input) {
         mode: "assistive"
       }
     };
+    assist.operationalMemoryRequest = {
+      enabled: true,
+      mode: "recall",
+      limit: crossRetrievalDisplayMode === "expanded" ? 8 : 5,
+      displayMode: crossRetrievalDisplayMode,
+      relatedIssue: chosenIssue,
+      text: userText || null,
+      queryHint: buildOperationalMemoryQueryHint(userText),
+      reasonTags: detectOperationalMemoryReasonTags(userText)
+    };
     if (issueMentions.length > 1) {
       assist.requiresConfirmation = true;
       assist.confirmationPrompt = `\u8907\u6570\u306E Issue\uFF08${issueMentions.map((item) => `#${item}`).join(", ")}\uFF09\u304C\u898B\u3064\u304B\u308A\u307E\u3057\u305F\u3002\u3069\u308C\u3092\u512A\u5148\u3057\u3066\u53C2\u7167\u3057\u307E\u3059\u304B\uFF1F`;
     } else if (!chosenIssue) {
       assist.nextQuestion = "\u53C2\u7167\u5BFE\u8C61\u306E Issue \u756A\u53F7\u304C\u3042\u308C\u3070\u6307\u5B9A\u3067\u304D\u307E\u3059\u3002\u672A\u6307\u5B9A\u306E\u307E\u307E\u6A2A\u65AD\u53C2\u7167\u3057\u3066\u9032\u3081\u3066\u3082\u3088\u3044\u3067\u3059\u304B\uFF1F";
     }
+  }
+  if (detectedIntent === ConversationIntent.MEMORY_STATUS) {
+    assist.responseGuide = {
+      style: "memory_status",
+      displayMode: "short",
+      sourceOrder: ["operational_memory_inventory"],
+      expandOnRequest: true,
+      caveat: "\u4EF6\u6570\u306F provider \u304C\u8FD4\u305B\u308B\u7BC4\u56F2\u306E bounded visible count \u3067\u3059\u3002\u7DCF\u4EF6\u6570\u3001\u8AB2\u91D1\u6307\u6A19\u3001\u4FDD\u5B58\u4FA1\u5024\u306E\u8A55\u4FA1\u3067\u306F\u3042\u308A\u307E\u305B\u3093\u3002"
+    };
+    assist.operationalMemoryRequest = {
+      enabled: true,
+      mode: "inventory",
+      limit: 1,
+      displayMode: "short",
+      relatedIssue: issueMentions.length === 1 ? issueMentions[0] : null,
+      text: null,
+      queryHint: "\u8A18\u61B6\u91CF\u3001RAG record count\u3001memory inventory",
+      caveat: "bounded visible count only; do not present as total storage, billing, or memory quality",
+      reasonTags: ["memory_inventory"]
+    };
   }
   if (blockedByRule === "consent_boundary" && requiredConsent) {
     assist.nextQuestion = buildConsentPrompt(requiredConsent);
@@ -36046,6 +36077,9 @@ function detectConversationIntent(text) {
   if (isRepositorySelectionIntent(text)) {
     return ConversationIntent.SELECT_REPOSITORY;
   }
+  if (isMemoryStatusIntent(text)) {
+    return ConversationIntent.MEMORY_STATUS;
+  }
   if (isRecallContextIntent(text)) {
     return ConversationIntent.RECALL_CONTEXT;
   }
@@ -36058,7 +36092,10 @@ function isRepositorySelectionIntent(text) {
   return hasKeyword(text, REPOSITORY_SELECTION_WORDS);
 }
 function isRecallContextIntent(text) {
-  return hasKeyword(text, RECALL_CONTEXT_WORDS);
+  return hasKeyword(text, RECALL_CONTEXT_WORDS) || hasKeyword(text, OPERATIONAL_MEMORY_RECALL_WORDS);
+}
+function isMemoryStatusIntent(text) {
+  return hasKeyword(text, MEMORY_WORDS) && hasKeyword(text, MEMORY_STATUS_WORDS);
 }
 function matchRepositoryFromText(text, repositoryCandidates) {
   if (!text || repositoryCandidates.length === 0) {
@@ -36146,6 +36183,32 @@ function determineCrossRetrievalDisplayMode(text) {
   }
   return "short";
 }
+function buildOperationalMemoryQueryHint(text) {
+  const tags = detectOperationalMemoryReasonTags(text);
+  if (tags.length === 0) {
+    return text || null;
+  }
+  return [text, ...tags].filter(Boolean).join(" ");
+}
+function detectOperationalMemoryReasonTags(text) {
+  const tags = [];
+  if (hasKeyword(text, FAILURE_WORDS)) {
+    tags.push("failure_map");
+  }
+  if (hasKeyword(text, DRIFT_WORDS)) {
+    tags.push("drift_guard");
+  }
+  if (hasKeyword(text, HALLUCINATION_WORDS)) {
+    tags.push("hallucination_guard");
+  }
+  if (hasKeyword(text, SUCCESS_WORDS)) {
+    tags.push("success_pattern");
+  }
+  if (hasKeyword(text, HANDOFF_WORDS)) {
+    tags.push("handoff_checkpoint");
+  }
+  return [...new Set(tags)];
+}
 var REPOSITORY_WORDS = Object.freeze([
   "repo",
   "repository",
@@ -36197,6 +36260,85 @@ var RECALL_CONTEXT_WORDS = Object.freeze([
   "history",
   "why",
   "rationale"
+]);
+var OPERATIONAL_MEMORY_RECALL_WORDS = Object.freeze([
+  "\u5931\u6557",
+  "\u5931\u6557\u8A18\u61B6",
+  "\u540C\u3058\u5931\u6557",
+  "\u30C9\u30EA\u30D5\u30C8",
+  "\u30CF\u30EB\u30B7\u30CD\u30FC\u30B7\u30E7\u30F3",
+  "\u5E7B\u899A",
+  "\u6210\u529F\u30D1\u30BF\u30FC\u30F3",
+  "\u3046\u307E\u304F\u3044\u3063\u305F",
+  "\u3084\u308A\u65B9\u3092\u5909\u3048\u305F",
+  "\u518D\u767A",
+  "\u5730\u96F7",
+  "\u6C17\u3092\u3064\u3051",
+  "\u5F15\u304D\u7D99\u304E",
+  "handoff",
+  "failure",
+  "failed",
+  "drift",
+  "hallucination",
+  "success pattern"
+]);
+var MEMORY_WORDS = Object.freeze([
+  "\u8A18\u61B6",
+  "\u30E1\u30E2\u30EA",
+  "memory",
+  "rag"
+]);
+var MEMORY_STATUS_WORDS = Object.freeze([
+  "\u91CF",
+  "\u6570",
+  "\u4F55\u4EF6",
+  "\u3069\u308C\u304F\u3089\u3044",
+  "\u3069\u306E\u304F\u3089\u3044",
+  "inventory",
+  "count",
+  "counts",
+  "status"
+]);
+var FAILURE_WORDS = Object.freeze([
+  "\u5931\u6557",
+  "\u8A70\u307E",
+  "\u843D\u3061",
+  "\u8FD4\u3063\u3066\u3053\u306A\u3044",
+  "\u58CA\u308C",
+  "\u518D\u767A",
+  "failure",
+  "failed",
+  "bug"
+]);
+var DRIFT_WORDS = Object.freeze([
+  "\u30C9\u30EA\u30D5\u30C8",
+  "\u9038\u308C",
+  "\u305A\u308C",
+  "\u30BA\u30EC",
+  "scope",
+  "drift"
+]);
+var HALLUCINATION_WORDS = Object.freeze([
+  "\u30CF\u30EB\u30B7\u30CD\u30FC\u30B7\u30E7\u30F3",
+  "\u5E7B\u899A",
+  "\u5618",
+  "\u52D8\u9055\u3044",
+  "hallucination"
+]);
+var SUCCESS_WORDS = Object.freeze([
+  "\u6210\u529F",
+  "\u3046\u307E\u304F\u3044",
+  "\u4E0A\u624B\u304F\u3044",
+  "\u3084\u308A\u65B9\u3092\u5909\u3048",
+  "worked",
+  "success"
+]);
+var HANDOFF_WORDS = Object.freeze([
+  "\u5F15\u304D\u7D99",
+  "handoff",
+  "\u5727\u7E2E",
+  "\u30B9\u30EC",
+  "\u30B3\u30F3\u30C6\u30AD\u30B9\u30C8"
 ]);
 var EXPANDED_VIEW_WORDS = Object.freeze([
   "\u8A73\u3057\u304F",
@@ -60050,10 +60192,15 @@ async function completeGatewayRuntime({ payload, gatewayResult, env }) {
   const crossRetrievalRequest = normalizeCrossRetrievalRequest(
     gatewayResult?.conversationAssist?.crossRetrievalRequest
   );
+  const operationalMemoryRequest = normalizeOperationalMemoryRequest(
+    gatewayResult?.conversationAssist?.operationalMemoryRequest
+  );
   const shouldAttachCrossReferences = crossRetrievalRequest.enabled;
+  const shouldAttachOperationalMemory = operationalMemoryRequest.enabled && operationalMemoryRequest.mode === "recall";
+  const shouldAttachMemoryInventory = operationalMemoryRequest.enabled && operationalMemoryRequest.mode === "inventory";
   const shouldAttachDecisionReferences = Array.isArray(gatewayResult?.retrievalPlan?.sources) ? gatewayResult.retrievalPlan.sources.includes("decision_log") : false;
   const shouldAttachProposalReferences = Array.isArray(gatewayResult?.retrievalPlan?.sources) ? gatewayResult.retrievalPlan.sources.includes("proposal_log") : false;
-  if (!needsDecisionWrite && !needsProposalWrite && !shouldAttachCrossReferences && !shouldAttachDecisionReferences && !shouldAttachProposalReferences) {
+  if (!needsDecisionWrite && !needsProposalWrite && !shouldAttachCrossReferences && !shouldAttachOperationalMemory && !shouldAttachMemoryInventory && !shouldAttachDecisionReferences && !shouldAttachProposalReferences) {
     return { status: 200, body: gatewayResult };
   }
   if (!providerValidation.ok) {
@@ -60081,6 +60228,14 @@ async function completeGatewayRuntime({ payload, gatewayResult, env }) {
     if (shouldAttachCrossReferences) {
       retrievalReferences.cross = null;
       warnings.push("memory provider unavailable; cross references skipped");
+    }
+    if (shouldAttachOperationalMemory) {
+      retrievalReferences.operationalMemory = null;
+      warnings.push("memory provider unavailable; operational memory recall skipped");
+    }
+    if (shouldAttachMemoryInventory) {
+      retrievalReferences.operationalMemoryInventory = null;
+      warnings.push("memory provider unavailable; operational memory inventory skipped");
     }
     return {
       status: 200,
@@ -60232,9 +60387,99 @@ async function completeGatewayRuntime({ payload, gatewayResult, env }) {
       };
     }
   }
+  if (shouldAttachOperationalMemory) {
+    const memoryInput = buildOperationalMemoryRetrievalInput({
+      payload,
+      operationalMemoryRequest
+    });
+    const retrieved = await retrieveOperationalMemory(provider, memoryInput);
+    if (!retrieved.ok) {
+      responseBody = {
+        ...responseBody,
+        retrievalReferences: {
+          ...responseBody.retrievalReferences ?? {},
+          operationalMemory: null
+        },
+        warnings: [...responseBody.warnings ?? [], retrieved.reason || "operational memory recall skipped"]
+      };
+    } else {
+      responseBody = {
+        ...responseBody,
+        retrievalReferences: {
+          ...responseBody.retrievalReferences ?? {},
+          operationalMemory: formatOperationalMemoryOutput(retrieved, operationalMemoryRequest.displayMode)
+        }
+      };
+    }
+  }
+  if (shouldAttachMemoryInventory) {
+    const inventory = await retrieveOperationalMemoryInventory(provider);
+    responseBody = {
+      ...responseBody,
+      retrievalReferences: {
+        ...responseBody.retrievalReferences ?? {},
+        operationalMemoryInventory: inventory
+      }
+    };
+  }
   return {
     status: 200,
     body: responseBody
+  };
+}
+function buildOperationalMemoryRetrievalInput({ payload, operationalMemoryRequest }) {
+  const repository = normalizeText30(payload?.policyInput?.repository) || normalizeText30(payload?.policyInput?.repositoryInput) || normalizeText30(payload?.repository) || null;
+  return {
+    text: operationalMemoryRequest.text || operationalMemoryRequest.queryHint,
+    repository,
+    limit: operationalMemoryRequest.limit,
+    runtimeTruth: {
+      currentState: "conversation-time operational memory recall",
+      runtimeTruthSource: "conversation_assist",
+      checkedAt: (/* @__PURE__ */ new Date()).toISOString()
+    }
+  };
+}
+function formatOperationalMemoryOutput(retrieved, displayMode) {
+  const compactContext = Array.isArray(retrieved.compactContext) ? retrieved.compactContext : [];
+  return {
+    queryText: retrieved.queryText,
+    repository: retrieved.repository,
+    memoryUseRule: retrieved.memoryUseRule,
+    runtimeTruth: retrieved.runtimeTruth,
+    compactContext: displayMode === "expanded" ? compactContext.slice(0, 8) : compactContext.slice(0, 5),
+    layerCounts: Object.fromEntries(
+      Object.entries(retrieved.referencesByLayer ?? {}).map(([layer, records]) => [
+        layer,
+        Array.isArray(records) ? records.length : 0
+      ])
+    ),
+    retrievalSignals: retrieved.retrievalSignals
+  };
+}
+async function retrieveOperationalMemoryInventory(provider) {
+  const types = [
+    MemoryRecordType.CONSTITUTION,
+    MemoryRecordType.DECISION_LOG,
+    MemoryRecordType.WORKING_MEMORY,
+    MemoryRecordType.TEMPERATURE_NOTE,
+    MemoryRecordType.REPAIR_CASE,
+    MemoryRecordType.PROPOSAL_LOG,
+    MemoryRecordType.APPROVAL_LOG,
+    MemoryRecordType.EXECUTION_LOG,
+    MemoryRecordType.ALIAS_REGISTRY
+  ];
+  const countsByType = {};
+  const retrievedByType = await Promise.all(types.map((type) => provider.retrieve({ type, limit: 200 })));
+  for (const [index, records] of retrievedByType.entries()) {
+    const type = types[index];
+    countsByType[type] = Array.isArray(records) ? records.length : 0;
+  }
+  return {
+    mode: "bounded_inventory",
+    note: "provider retrieve limit is 200 per type; count is a bounded visible count, not total storage, billing, or memory quality",
+    countsByType,
+    totalVisibleCount: Object.values(countsByType).reduce((total, count) => total + count, 0)
   };
 }
 function buildCrossRetrievalInput({ payload, responseBody, crossRetrievalRequest }) {
@@ -60285,6 +60530,20 @@ function normalizeCrossRetrievalRequest(request) {
     relatedIssue: normalizeIssue6(value.relatedIssue),
     text: normalizeText30(value.text) || normalizeText30(value.queryHint) || null,
     semanticRetrieval: normalizeSemanticRetrievalRequest(value.semanticRetrieval)
+  };
+}
+function normalizeOperationalMemoryRequest(request) {
+  const value = request && typeof request === "object" ? request : {};
+  const mode = normalize7(value.mode) === "inventory" ? "inventory" : "recall";
+  return {
+    enabled: value.enabled === true,
+    mode,
+    limit: normalizeLimit7(value.limit, mode === "inventory" ? 1 : 5),
+    displayMode: normalize7(value.displayMode) === "expanded" ? "expanded" : "short",
+    relatedIssue: normalizeIssue6(value.relatedIssue),
+    text: normalizeText30(value.text) || null,
+    queryHint: normalizeText30(value.queryHint) || null,
+    reasonTags: Array.isArray(value.reasonTags) ? value.reasonTags.map((item) => normalizeText30(item)).filter(Boolean).slice(0, 8) : []
   };
 }
 function normalizeSemanticRetrievalRequest(value) {

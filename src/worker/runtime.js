@@ -4986,7 +4986,12 @@ async function completeGatewayRuntime({ payload, gatewayResult, env }) {
   const crossRetrievalRequest = normalizeCrossRetrievalRequest(
     gatewayResult?.conversationAssist?.crossRetrievalRequest
   );
+  const operationalMemoryRequest = normalizeOperationalMemoryRequest(
+    gatewayResult?.conversationAssist?.operationalMemoryRequest
+  );
   const shouldAttachCrossReferences = crossRetrievalRequest.enabled;
+  const shouldAttachOperationalMemory = operationalMemoryRequest.enabled && operationalMemoryRequest.mode === "recall";
+  const shouldAttachMemoryInventory = operationalMemoryRequest.enabled && operationalMemoryRequest.mode === "inventory";
   const shouldAttachDecisionReferences = Array.isArray(gatewayResult?.retrievalPlan?.sources)
     ? gatewayResult.retrievalPlan.sources.includes("decision_log")
     : false;
@@ -4998,6 +5003,8 @@ async function completeGatewayRuntime({ payload, gatewayResult, env }) {
     !needsDecisionWrite &&
     !needsProposalWrite &&
     !shouldAttachCrossReferences &&
+    !shouldAttachOperationalMemory &&
+    !shouldAttachMemoryInventory &&
     !shouldAttachDecisionReferences &&
     !shouldAttachProposalReferences
   ) {
@@ -5032,6 +5039,14 @@ async function completeGatewayRuntime({ payload, gatewayResult, env }) {
     if (shouldAttachCrossReferences) {
       retrievalReferences.cross = null;
       warnings.push("memory provider unavailable; cross references skipped");
+    }
+    if (shouldAttachOperationalMemory) {
+      retrievalReferences.operationalMemory = null;
+      warnings.push("memory provider unavailable; operational memory recall skipped");
+    }
+    if (shouldAttachMemoryInventory) {
+      retrievalReferences.operationalMemoryInventory = null;
+      warnings.push("memory provider unavailable; operational memory inventory skipped");
     }
 
     return {
@@ -5201,9 +5216,108 @@ async function completeGatewayRuntime({ payload, gatewayResult, env }) {
     }
   }
 
+  if (shouldAttachOperationalMemory) {
+    const memoryInput = buildOperationalMemoryRetrievalInput({
+      payload,
+      operationalMemoryRequest
+    });
+    const retrieved = await retrieveOperationalMemory(provider, memoryInput);
+    if (!retrieved.ok) {
+      responseBody = {
+        ...responseBody,
+        retrievalReferences: {
+          ...(responseBody.retrievalReferences ?? {}),
+          operationalMemory: null
+        },
+        warnings: [...(responseBody.warnings ?? []), retrieved.reason || "operational memory recall skipped"]
+      };
+    } else {
+      responseBody = {
+        ...responseBody,
+        retrievalReferences: {
+          ...(responseBody.retrievalReferences ?? {}),
+          operationalMemory: formatOperationalMemoryOutput(retrieved, operationalMemoryRequest.displayMode)
+        }
+      };
+    }
+  }
+
+  if (shouldAttachMemoryInventory) {
+    const inventory = await retrieveOperationalMemoryInventory(provider);
+    responseBody = {
+      ...responseBody,
+      retrievalReferences: {
+        ...(responseBody.retrievalReferences ?? {}),
+        operationalMemoryInventory: inventory
+      }
+    };
+  }
+
   return {
     status: 200,
     body: responseBody
+  };
+}
+
+function buildOperationalMemoryRetrievalInput({ payload, operationalMemoryRequest }) {
+  const repository =
+    normalizeText(payload?.policyInput?.repository) ||
+    normalizeText(payload?.policyInput?.repositoryInput) ||
+    normalizeText(payload?.repository) ||
+    null;
+  return {
+    text: operationalMemoryRequest.text || operationalMemoryRequest.queryHint,
+    repository,
+    limit: operationalMemoryRequest.limit,
+    runtimeTruth: {
+      currentState: "conversation-time operational memory recall",
+      runtimeTruthSource: "conversation_assist",
+      checkedAt: new Date().toISOString()
+    }
+  };
+}
+
+function formatOperationalMemoryOutput(retrieved, displayMode) {
+  const compactContext = Array.isArray(retrieved.compactContext) ? retrieved.compactContext : [];
+  return {
+    queryText: retrieved.queryText,
+    repository: retrieved.repository,
+    memoryUseRule: retrieved.memoryUseRule,
+    runtimeTruth: retrieved.runtimeTruth,
+    compactContext: displayMode === "expanded" ? compactContext.slice(0, 8) : compactContext.slice(0, 5),
+    layerCounts: Object.fromEntries(
+      Object.entries(retrieved.referencesByLayer ?? {}).map(([layer, records]) => [
+        layer,
+        Array.isArray(records) ? records.length : 0
+      ])
+    ),
+    retrievalSignals: retrieved.retrievalSignals
+  };
+}
+
+async function retrieveOperationalMemoryInventory(provider) {
+  const types = [
+    MemoryRecordType.CONSTITUTION,
+    MemoryRecordType.DECISION_LOG,
+    MemoryRecordType.WORKING_MEMORY,
+    MemoryRecordType.TEMPERATURE_NOTE,
+    MemoryRecordType.REPAIR_CASE,
+    MemoryRecordType.PROPOSAL_LOG,
+    MemoryRecordType.APPROVAL_LOG,
+    MemoryRecordType.EXECUTION_LOG,
+    MemoryRecordType.ALIAS_REGISTRY
+  ];
+  const countsByType = {};
+  const retrievedByType = await Promise.all(types.map((type) => provider.retrieve({ type, limit: 200 })));
+  for (const [index, records] of retrievedByType.entries()) {
+    const type = types[index];
+    countsByType[type] = Array.isArray(records) ? records.length : 0;
+  }
+  return {
+    mode: "bounded_inventory",
+    note: "provider retrieve limit is 200 per type; count is a bounded visible count, not total storage, billing, or memory quality",
+    countsByType,
+    totalVisibleCount: Object.values(countsByType).reduce((total, count) => total + count, 0)
   };
 }
 
@@ -5267,6 +5381,23 @@ function normalizeCrossRetrievalRequest(request) {
     relatedIssue: normalizeIssue(value.relatedIssue),
     text: normalizeText(value.text) || normalizeText(value.queryHint) || null,
     semanticRetrieval: normalizeSemanticRetrievalRequest(value.semanticRetrieval)
+  };
+}
+
+function normalizeOperationalMemoryRequest(request) {
+  const value = request && typeof request === "object" ? request : {};
+  const mode = normalize(value.mode) === "inventory" ? "inventory" : "recall";
+  return {
+    enabled: value.enabled === true,
+    mode,
+    limit: normalizeLimit(value.limit, mode === "inventory" ? 1 : 5),
+    displayMode: normalize(value.displayMode) === "expanded" ? "expanded" : "short",
+    relatedIssue: normalizeIssue(value.relatedIssue),
+    text: normalizeText(value.text) || null,
+    queryHint: normalizeText(value.queryHint) || null,
+    reasonTags: Array.isArray(value.reasonTags)
+      ? value.reasonTags.map((item) => normalizeText(item)).filter(Boolean).slice(0, 8)
+      : []
   };
 }
 
