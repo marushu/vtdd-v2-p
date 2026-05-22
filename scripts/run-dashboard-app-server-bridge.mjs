@@ -379,7 +379,8 @@ export function parseBridgeArgs(argv = process.argv.slice(2), env = process.env)
     token: env.VTDD_GATEWAY_BEARER_TOKEN || env.MVP_GATEWAY_BEARER_TOKEN || "",
     threadId: env.VTDD_DASHBOARD_THREAD_ID || "",
     cwd: env.VTDD_DASHBOARD_CODEX_CWD || process.cwd(),
-    sandboxMode: env.VTDD_DASHBOARD_APP_SERVER_SANDBOX || ""
+    sandboxMode: env.VTDD_DASHBOARD_APP_SERVER_SANDBOX || "",
+    reconnectDelayMs: Number(env.VTDD_DASHBOARD_BRIDGE_RECONNECT_DELAY_MS || 1000)
   };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -388,6 +389,7 @@ export function parseBridgeArgs(argv = process.argv.slice(2), env = process.env)
     if (arg === "--thread-id") options.threadId = argv[++index] || "";
     if (arg === "--cwd") options.cwd = argv[++index] || "";
     if (arg === "--sandbox") options.sandboxMode = argv[++index] || "";
+    if (arg === "--reconnect-delay-ms") options.reconnectDelayMs = Number(argv[++index] || 1000);
   }
   return options;
 }
@@ -405,19 +407,66 @@ export async function runDashboardAppServerBridge(options = parseBridgeArgs()) {
   if (typeof WebSocket !== "function") {
     throw new Error("global WebSocket is required. Run with Node.js that provides WebSocket.");
   }
+  const endpoint = buildDashboardAppServerBridgeEndpoint(options);
+  const appServer = options.appServer || new JsonLineAppServerClient({ cwd: options.cwd });
+  await appServer.initialize();
+  let reconnects = 0;
+  for (;;) {
+    await connectDashboardAppServerBridgeOnce({
+      ...options,
+      endpoint,
+      appServer,
+      WebSocketImpl: options.WebSocketImpl || WebSocket
+    });
+    if (options.reconnect === false) {
+      return;
+    }
+    if (Number.isFinite(options.reconnectLimit) && reconnects >= options.reconnectLimit) {
+      return;
+    }
+    reconnects += 1;
+    await delay(normalizeReconnectDelayMs(options.reconnectDelayMs));
+  }
+}
+
+export function buildDashboardAppServerBridgeEndpoint(options = {}) {
   const endpoint = new URL("/v2/dashboard/app-server/ws", options.runtimeUrl);
   endpoint.searchParams.set("threadId", options.threadId);
   endpoint.protocol = endpoint.protocol === "https:" ? "wss:" : "ws:";
+  return endpoint;
+}
 
-  const appServer = new JsonLineAppServerClient({ cwd: options.cwd });
-  await appServer.initialize();
-  const bearerProtocol = `vtdd-bearer.${Buffer.from(options.token, "utf8").toString("base64url")}`;
-  const socket = new WebSocket(endpoint, ["vtdd-dashboard-bridge", bearerProtocol]);
-
-  const sendDashboardEvent = async (event) => {
-    socket.send(JSON.stringify(event));
-  };
+export async function connectDashboardAppServerBridgeOnce({
+  endpoint,
+  token,
+  appServer,
+  cwd = process.cwd(),
+  sandboxMode = "",
+  WebSocketImpl = WebSocket
+} = {}) {
+  const bearerProtocol = `vtdd-bearer.${Buffer.from(token, "utf8").toString("base64url")}`;
+  const socket = new WebSocketImpl(endpoint, ["vtdd-dashboard-bridge", bearerProtocol]);
   let turnQueue = Promise.resolve();
+  let settled = false;
+
+  const safeSend = (payload) => {
+    try {
+      socket.send(JSON.stringify(payload));
+    } catch {
+      // The reconnect loop owns transport recovery; failed sends cannot be replayed safely.
+    }
+  };
+
+  const disconnected = new Promise((resolve) => {
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      resolve();
+    };
+    socket.addEventListener("close", finish);
+    socket.addEventListener("error", finish);
+  });
+
   socket.addEventListener("message", (event) => {
     let payload;
     try {
@@ -432,23 +481,32 @@ export async function runDashboardAppServerBridge(options = parseBridgeArgs()) {
           handleDashboardTurnRequest({
             request: payload,
             appServer,
-            sendDashboardEvent,
-            cwd: options.cwd,
-            sandboxMode: options.sandboxMode
+            sendDashboardEvent: async (dashboardEvent) => safeSend(dashboardEvent),
+            cwd,
+            sandboxMode
           })
         )
         .catch((error) => {
-          socket.send(
-            JSON.stringify({
-              type: "app_server_turn_failed",
-              schema: DEFAULT_SCHEMA,
-              threadId: payload.threadId,
-              text: error?.message || "codex app-server bridge failed"
-            })
-          );
+          safeSend({
+            type: "app_server_turn_failed",
+            schema: DEFAULT_SCHEMA,
+            threadId: payload.threadId,
+            text: error?.message || "codex app-server bridge failed"
+          });
         });
     }
   });
+
+  await disconnected;
+}
+
+function normalizeReconnectDelayMs(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric >= 0 ? numeric : 1000;
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
