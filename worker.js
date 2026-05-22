@@ -36047,7 +36047,8 @@ function buildConversationAssist(input) {
       style: "memory_status",
       displayMode: "short",
       sourceOrder: ["operational_memory_inventory"],
-      expandOnRequest: true
+      expandOnRequest: true,
+      caveat: "\u4EF6\u6570\u306F provider \u304C\u8FD4\u305B\u308B\u7BC4\u56F2\u306E bounded visible count \u3067\u3059\u3002\u7DCF\u4EF6\u6570\u3001\u8AB2\u91D1\u6307\u6A19\u3001\u4FDD\u5B58\u4FA1\u5024\u306E\u8A55\u4FA1\u3067\u306F\u3042\u308A\u307E\u305B\u3093\u3002"
     };
     assist.operationalMemoryRequest = {
       enabled: true,
@@ -36057,6 +36058,7 @@ function buildConversationAssist(input) {
       relatedIssue: issueMentions.length === 1 ? issueMentions[0] : null,
       text: null,
       queryHint: "\u8A18\u61B6\u91CF\u3001RAG record count\u3001memory inventory",
+      caveat: "bounded visible count only; do not present as total storage, billing, or memory quality",
       reasonTags: ["memory_inventory"]
     };
   }
@@ -60468,13 +60470,14 @@ async function retrieveOperationalMemoryInventory(provider) {
     MemoryRecordType.ALIAS_REGISTRY
   ];
   const countsByType = {};
-  for (const type of types) {
-    const records = await provider.retrieve({ type, limit: 200 });
+  const retrievedByType = await Promise.all(types.map((type) => provider.retrieve({ type, limit: 200 })));
+  for (const [index, records] of retrievedByType.entries()) {
+    const type = types[index];
     countsByType[type] = Array.isArray(records) ? records.length : 0;
   }
   return {
     mode: "bounded_inventory",
-    note: "provider retrieve limit is 200 per type; count is a bounded visible count, not a billing metric",
+    note: "provider retrieve limit is 200 per type; count is a bounded visible count, not total storage, billing, or memory quality",
     countsByType,
     totalVisibleCount: Object.values(countsByType).reduce((total, count) => total + count, 0)
   };

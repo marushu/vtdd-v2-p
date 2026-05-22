@@ -100,7 +100,9 @@ export function buildConversationAssist(input) {
       style: "memory_status",
       displayMode: "short",
       sourceOrder: ["operational_memory_inventory"],
-      expandOnRequest: true
+      expandOnRequest: true,
+      caveat:
+        "件数は provider が返せる範囲の bounded visible count です。総件数、課金指標、保存価値の評価ではありません。"
     };
     assist.operationalMemoryRequest = {
       enabled: true,
@@ -110,6 +112,8 @@ export function buildConversationAssist(input) {
       relatedIssue: issueMentions.length === 1 ? issueMentions[0] : null,
       text: null,
       queryHint: "記憶量、RAG record count、memory inventory",
+      caveat:
+        "bounded visible count only; do not present as total storage, billing, or memory quality",
       reasonTags: ["memory_inventory"]
     };
   }

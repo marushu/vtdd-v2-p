@@ -5308,13 +5308,14 @@ async function retrieveOperationalMemoryInventory(provider) {
     MemoryRecordType.ALIAS_REGISTRY
   ];
   const countsByType = {};
-  for (const type of types) {
-    const records = await provider.retrieve({ type, limit: 200 });
+  const retrievedByType = await Promise.all(types.map((type) => provider.retrieve({ type, limit: 200 })));
+  for (const [index, records] of retrievedByType.entries()) {
+    const type = types[index];
     countsByType[type] = Array.isArray(records) ? records.length : 0;
   }
   return {
     mode: "bounded_inventory",
-    note: "provider retrieve limit is 200 per type; count is a bounded visible count, not a billing metric",
+    note: "provider retrieve limit is 200 per type; count is a bounded visible count, not total storage, billing, or memory quality",
     countsByType,
     totalVisibleCount: Object.values(countsByType).reduce((total, count) => total + count, 0)
   };

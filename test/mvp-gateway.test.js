@@ -349,7 +349,9 @@ test("gateway classifies memory amount questions as memory status", () => {
   assert.equal(result.allowed, true);
   assert.equal(result.conversationAssist.detectedIntent, "memory_status");
   assert.equal(result.conversationAssist.responseGuide.style, "memory_status");
+  assert.match(result.conversationAssist.responseGuide.caveat, /bounded visible count/);
   assert.equal(result.conversationAssist.operationalMemoryRequest.mode, "inventory");
+  assert.match(result.conversationAssist.operationalMemoryRequest.caveat, /not present as total storage/);
 });
 
 test("gateway asks clarification when recall conversation mentions multiple issues", () => {

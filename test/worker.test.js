@@ -2840,9 +2840,11 @@ test("worker gateway returns bounded operational memory inventory for memory amo
   const body = await response.json();
   assert.equal(body.allowed, true);
   assert.equal(body.conversationAssist.detectedIntent, "memory_status");
+  assert.match(body.conversationAssist.responseGuide.caveat, /bounded visible count/);
   assert.equal(body.retrievalReferences.operationalMemoryInventory.countsByType.working_memory, 1);
   assert.equal(body.retrievalReferences.operationalMemoryInventory.countsByType.repair_case, 1);
   assert.equal(body.retrievalReferences.operationalMemoryInventory.totalVisibleCount, 2);
+  assert.match(body.retrievalReferences.operationalMemoryInventory.note, /not total storage/);
 });
 
 test("worker gateway allows butler path when deterministic judgment order is satisfied", async () => {
