@@ -785,6 +785,7 @@ function buildVpsDashboardSocketExecutionPayload(job) {
   const threadId = normalizeText(job?.threadId);
   const repositoryResolution = job?.repositoryResolution && typeof job.repositoryResolution === "object" ? job.repositoryResolution : {};
   const conversationOnly = !repository;
+  const issueContextReadable = Boolean(repository && issueNumber);
   return {
     executionId: `dashboard-ws-${Date.now()}-${crypto.randomUUID()}`,
     repository,
@@ -793,6 +794,7 @@ function buildVpsDashboardSocketExecutionPayload(job) {
     baseRef: "main",
     codexGoal: "dashboard_chat_triage",
     conversationOnly,
+    issueContextReadable,
     repositoryResolution: {
       ok: repositoryResolution.ok === true,
       error: normalizeText(repositoryResolution.error),
@@ -810,6 +812,11 @@ function buildVpsDashboardSocketExecutionPayload(job) {
 function buildDashboardGeneralChatPrompt({ payload }) {
   const handoff = payload?.handoff && typeof payload.handoff === "object" ? payload.handoff : {};
   const ownerMessage = normalizeText(handoff.ownerMessage);
+  const repositoryInput = normalizeText(handoff.repositoryInput);
+  const issueNumber = normalizePositiveInteger(payload?.issueNumber);
+  const repositoryResolution = payload?.repositoryResolution && typeof payload.repositoryResolution === "object"
+    ? payload.repositoryResolution
+    : {};
   return [
     "You are VTDD Butler running on the user's VPS Codex CLI.",
     "",
@@ -819,7 +826,12 @@ function buildDashboardGeneralChatPrompt({ payload }) {
     "Dashboard routing:",
     "- This message did not resolve to a repository/Issue execution target.",
     "- Answer as a normal Butler conversation. Do not require GitHub Issue preflight for general chat.",
-    "- If the owner is asking for repository work, explain in Japanese that repo/nickname or owner/repo is needed, and give one short example.",
+    `- repositoryInput: ${repositoryInput || "missing"}`,
+    `- detectedIssueNumber: ${issueNumber ? `#${issueNumber}` : "missing"}`,
+    `- repositoryResolution: ${repositoryResolution.ok === true ? "resolved" : normalizeText(repositoryResolution.error) || "unresolved"}`,
+    "- If an Issue number is present but repository is unresolved, do not answer as if you read that Issue, PRs, checks, or runtime truth.",
+    "- For unresolved repository work, explain in Japanese that repo/nickname or owner/repo is needed before VTDD can read GitHub truth or continue development, and give one short example.",
+    "- If ordinary conversation reveals a new actionable development need, classify it as issue_split_proposal or execution_handoff_needed, then ask for the target repo/nickname and GO boundary before any issue creation or implementation.",
     "- If the owner is asking a general question, answer directly in Japanese.",
     "- Do not edit files, commit, push, create PRs, merge, deploy, mutate secrets, mutate permissions, or close Issues.",
     "Reply format:",
