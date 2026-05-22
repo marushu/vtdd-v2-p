@@ -3581,6 +3581,8 @@ async function handleDashboardChatMessageRequest(request, env) {
 
   const payload = await readJson(request);
   const repositoryResolution = await resolveDashboardChatRepository({ payload, env });
+  // HTTP chat writes are the non-live persistence fallback. Live Codex delivery
+  // happens through DashboardChatRoom WebSocket owner_message events.
   const repository = repositoryResolution.ok ? repositoryResolution.repository : "";
 
   const prepared = buildDashboardChatTurn(

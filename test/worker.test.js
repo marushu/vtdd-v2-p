@@ -871,7 +871,7 @@ test("worker allows dashboard passkey session chat without VPS runner handoff", 
   assert.equal(calls.length, 0);
 });
 
-test("worker does not answer dashboard nickname requests from the alias registry shortcut", async () => {
+test("worker HTTP dashboard nickname requests use non-live fallback instead of alias registry shortcut", async () => {
   const provider = createInMemoryMemoryProvider();
   await provider.store({
     id: "alias_registry:marushu/vtdd-v2-p",
@@ -916,6 +916,7 @@ test("worker does not answer dashboard nickname requests from the alias registry
   assert.equal(body.messages[1].text.includes("登録済みニックネームです。"), false);
   assert.equal(body.messages[1].text.includes("- marushu/vtdd-v2-p: ぶい, vtdd"), false);
   assert.match(body.messages[1].text, /app-server/);
+  assert.match(body.messages[1].text, /未接続の状態で VPS Codex CLI に送ったふりはしません/);
 });
 
 test("worker stores dashboard chat without repository instead of dispatching handoff", async () => {
