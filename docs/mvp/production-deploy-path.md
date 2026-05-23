@@ -31,13 +31,9 @@ Set repository or environment secrets:
 
 The token should be scoped to minimum required Worker deploy permissions.
 
-Set repository or environment variables:
-
-- `CLOUDFLARE_D1_DATABASE_NAME`
-
-These secrets and variables are hard prerequisites. The workflow must check
-them before validating the passkey grant or running tests so a missing deploy
-credential or D1 name is reported before operator approval time is wasted.
+These secrets are hard prerequisites. The workflow must check them before
+validating the passkey grant or running tests so a missing deploy credential is
+reported before operator approval time is wasted.
 
 Use `docs/setup/cloudflare-deploy-secret-sync.md` as the canonical operator
 sync path. Do not treat Worker runtime secrets as equivalent to GitHub Actions
@@ -59,15 +55,8 @@ before deploying production.
 
 For local/operator deploys, store owner-specific bindings in an ignored file
 such as `wrangler.production.local.toml`. For GitHub Actions deploys, store the
-D1 database id in `CLOUDFLARE_D1_DATABASE_ID` and the actual Cloudflare D1
-database name in `CLOUDFLARE_D1_DATABASE_NAME`; the workflow generates an
+D1 database id in `CLOUDFLARE_D1_DATABASE_ID`; the workflow generates an
 uncommitted `wrangler.production.generated.toml` at deploy time.
-
-Do not rely on a generic fallback database name. The D1 database name must
-match the operator-owned Cloudflare database returned by `wrangler d1 list`,
-while the binding name remains the stable runtime contract
-`VTDD_MEMORY_D1`. A stale display name can make direct D1 repair commands fail
-even when the Worker binding still points at the correct database id.
 
 If `/setup/known-good` should expose a rollback bundle, the preferred source of
 truth is `docs/setup/known-good.json` with the last human-verified stable setup
