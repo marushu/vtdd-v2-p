@@ -63797,11 +63797,13 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .bubble .message-body ul { margin: 0; }
     .bubble .message-body li + li { margin-top: 4px; }
     .bubble .message-body code { font-size: .94em; }
-    .bubble .message-body pre { margin: 0; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--panel-strong); overflow-x: auto; white-space: pre; }
+    .bubble .message-body pre { position: relative; margin: 0; padding: 42px 14px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--panel-strong); overflow-x: auto; white-space: pre; }
     .bubble .message-body pre code { display: block; font-size: 14px; line-height: 1.55; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
     .bubble .message-body strong { display: inline; color: inherit; font-size: inherit; letter-spacing: 0; text-transform: none; margin: 0; font-weight: 800; }
-    .copy-message { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border: 1px solid var(--border); border-radius: 999px; background: var(--button); color: var(--text); font-size: 15px; line-height: 1; cursor: pointer; }
-    .copy-message:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+    .copy-message, .copy-code { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border: 1px solid var(--border); border-radius: 999px; background: var(--button); color: var(--text); font-size: 15px; line-height: 1; cursor: pointer; }
+    .copy-message:focus-visible, .copy-code:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+    .copy-code { position: absolute; top: 8px; right: 8px; z-index: 1; opacity: .88; }
+    .copy-code:hover, .copy-code:focus-visible { opacity: 1; }
     .bubble ul { margin: 0; padding-left: 22px; color: var(--text); line-height: 1.85; }
     .bubble.owner { position: relative; align-self: flex-end; background: var(--owner-bubble); color: var(--owner-text); border-radius: 24px; padding: 12px 16px; }
     .bubble.owner p { color: var(--owner-text); margin: 0; }
@@ -64127,11 +64129,20 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
               index += 1;
             }
             const pre = document.createElement("pre");
+            const codeText = codeLines.join("\\n");
+            const copyButton = document.createElement("button");
+            copyButton.className = "copy-code";
+            copyButton.type = "button";
+            copyButton.textContent = "\u29C9";
+            copyButton.setAttribute("aria-label", "\u30B3\u30FC\u30C9\u3092\u30B3\u30D4\u30FC");
+            copyButton.title = "\u30B3\u30FC\u30C9\u3092\u30B3\u30D4\u30FC";
+            copyButton.addEventListener("click", () => copyMessageText(copyButton, codeText));
             const code = document.createElement("code");
             if (language) {
               code.dataset.language = language;
             }
-            code.textContent = codeLines.join("\\n");
+            code.textContent = codeText;
+            pre.appendChild(copyButton);
             pre.appendChild(code);
             container.appendChild(pre);
             continue;
