@@ -65091,7 +65091,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         for (const reference of list) {
           const link = document.createElement("a");
           link.className = "media-chip";
-          const downloadHref = reference.downloadUrl || (reference.mediaId ? "/v2/media/" + reference.mediaId + "/download" : "#");
+          const mediaRouteHref = reference.mediaId ? "/v2/media/" + reference.mediaId + "/download" : "";
+          const referenceDownloadUrl = typeof reference.downloadUrl === "string" ? reference.downloadUrl : "";
+          const safeDownloadHref = referenceDownloadUrl.startsWith("/v2/media/") ? referenceDownloadUrl : "";
+          const downloadHref = mediaRouteHref || safeDownloadHref || "#";
           link.href = downloadHref;
           link.target = "_blank";
           link.rel = "noreferrer";
