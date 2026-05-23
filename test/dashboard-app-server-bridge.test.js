@@ -490,6 +490,90 @@ test("dashboard app-server bridge ignores notifications for a different Codex tu
   assert.equal(events.at(-1).text, "正しい返信");
 });
 
+test("dashboard app-server bridge sends one Japanese failure for app-server error notifications", async () => {
+  const sockets = [];
+  const handlers = new Set();
+  class MockWebSocket {
+    constructor(endpoint, protocols) {
+      this.endpoint = endpoint;
+      this.protocols = protocols;
+      this.listeners = new Map();
+      this.sent = [];
+      sockets.push(this);
+    }
+
+    addEventListener(type, handler) {
+      if (!this.listeners.has(type)) {
+        this.listeners.set(type, new Set());
+      }
+      this.listeners.get(type).add(handler);
+    }
+
+    send(payload) {
+      this.sent.push(payload);
+    }
+
+    emit(type, event = {}) {
+      for (const handler of this.listeners.get(type) || []) {
+        handler(event);
+      }
+    }
+  }
+  const appServer = {
+    nextRequestId() {
+      return 1;
+    },
+    onNotification(handler) {
+      handlers.add(handler);
+      return () => handlers.delete(handler);
+    },
+    async request(message) {
+      if (message.method === "thread/start") {
+        return { thread: { id: "codex-thread-error" } };
+      }
+      if (message.method === "turn/start") {
+        for (const handler of handlers) {
+          handler({
+            method: "error",
+            params: {
+              threadId: "codex-thread-error",
+              turnId: "turn-error"
+            }
+          });
+        }
+        return { turn: { id: "turn-error" } };
+      }
+      throw new Error(`unexpected method ${message.method}`);
+    }
+  };
+
+  const once = connectDashboardAppServerBridgeOnce({
+    endpoint: new URL("wss://runtime.example/v2/dashboard/app-server/ws?threadId=dashboard-main"),
+    token: "secret-token",
+    appServer,
+    WebSocketImpl: MockWebSocket
+  });
+  const socket = sockets[0];
+  socket.emit("message", {
+    data: JSON.stringify({
+      type: "app_server_turn_requested",
+      threadId: "dashboard-main",
+      text: "画像アップロードテスト"
+    })
+  });
+
+  await waitFor(() => socket.sent.map((payload) => JSON.parse(payload)).some((payload) => payload.type === "app_server_turn_failed"));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const failures = socket.sent.map((payload) => JSON.parse(payload)).filter((payload) => payload.type === "app_server_turn_failed");
+  assert.equal(failures.length, 1);
+  const failure = failures[0];
+  assert.equal(failure.type, "app_server_turn_failed");
+  assert.equal(failure.threadId, "dashboard-main");
+  assert.match(failure.text, /codex app-server が応答生成中に失敗しました/);
+  socket.emit("close");
+  await once;
+});
+
 test("dashboard app-server bridge args require a dashboard thread id for runtime connection", () => {
   const parsed = parseBridgeArgs([], {
     VTDD_RUNTIME_URL: "https://runtime.example",
