@@ -301,6 +301,9 @@ function createInMemoryDashboardPushSubscriptionStore() {
       subscriptions.set(subscription.endpointHash, subscription);
       return subscription;
     },
+    async get(endpointHash) {
+      return subscriptions.get(endpointHash) || null;
+    },
     async list(filter = {}) {
       const limit = Number(filter.limit) || 50;
       return [...subscriptions.values()].slice(0, limit);
@@ -316,6 +319,11 @@ function base64UrlEncodeTestBytes(bytes) {
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+async function sha256HexTest(value) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(value)));
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 async function createTestVapidEnv(extra = {}) {
@@ -2388,10 +2396,13 @@ test("worker serves dashboard notification center for recent events across repos
   assert.equal(body.includes("id=\"push-server-result\""), true);
   assert.equal(body.includes("id=\"badge-set-button\""), true);
   assert.equal(body.includes("/v2/dashboard/push/subscription"), true);
+  assert.equal(body.includes("/v2/dashboard/push/status"), true);
   assert.equal(body.includes("/v2/dashboard/push/test"), true);
   assert.equal(body.includes("credentials: \"same-origin\""), true);
   assert.equal(body.includes("サーバ送信: 有効。deploy 完了/失敗通知とサーバ送信テストは同じ Web Push 経路です。"), true);
   assert.equal(body.includes("購読保存: あり。この端末に deploy 完了/失敗通知が届きます。"), true);
+  assert.equal(body.includes("端末に購読はありますが、サーバ保存は未確認です"), true);
+  assert.equal(body.includes("safePushResultDetail"), true);
   assert.equal(body.includes("最後のサーバ送信結果: accepted"), true);
   assert.equal(body.includes("最後のサーバ送信結果: rejected"), true);
   assert.equal(body.includes("D1 には送信用に保持し、response / HTML / payload_json には raw key を返しません"), true);
@@ -2499,6 +2510,56 @@ test("worker stores dashboard push subscription only for an authenticated owner 
   assert.equal(saved.p256dh, "p256dh-key");
   assert.equal(saved.auth, "auth-key");
   assert.equal(saved.ownerIdentity, "owner@example.com");
+});
+
+test("worker reports dashboard push subscription server save status without raw material", async () => {
+  const store = createInMemoryDashboardPushSubscriptionStore();
+  const endpoint = "https://push.example/subscription/status-endpoint";
+  const endpointHash = await sha256HexTest(endpoint);
+  const missing = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/push/status", {
+      method: "POST",
+      headers: { ...dashboardAccessHeaders, "content-type": "application/json" },
+      body: JSON.stringify({ endpoint })
+    }),
+    {
+      ...dashboardAccessEnv,
+      DASHBOARD_PUSH_SUBSCRIPTION_STORE: store
+    }
+  );
+  assert.equal(missing.status, 200);
+  const missingBody = await missing.json();
+  assert.equal(missingBody.subscription.status, "not_saved");
+  assert.equal(missingBody.subscription.endpointHash, endpointHash);
+  assert.equal(JSON.stringify(missingBody).includes("status-endpoint"), false);
+
+  await store.put({
+    endpointHash,
+    endpoint,
+    p256dh: "p256dh-key",
+    auth: "auth-key",
+    ownerIdentity: "owner@example.com",
+    updatedAt: "2026-05-23T00:00:00.000Z"
+  });
+  const saved = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/push/status", {
+      method: "POST",
+      headers: { ...dashboardAccessHeaders, "content-type": "application/json" },
+      body: JSON.stringify({ endpoint })
+    }),
+    {
+      ...dashboardAccessEnv,
+      DASHBOARD_PUSH_SUBSCRIPTION_STORE: store
+    }
+  );
+  assert.equal(saved.status, 200);
+  const savedBody = await saved.json();
+  assert.equal(savedBody.subscription.status, "saved");
+  assert.equal(savedBody.subscription.endpointHash, endpointHash);
+  assert.equal(savedBody.subscription.updatedAt, "2026-05-23T00:00:00.000Z");
+  assert.equal(JSON.stringify(savedBody).includes("status-endpoint"), false);
+  assert.equal(JSON.stringify(savedBody).includes("p256dh-key"), false);
+  assert.equal(JSON.stringify(savedBody).includes("auth-key"), false);
 });
 
 test("worker sends server-side dashboard Web Push test only for authenticated owner session", async () => {
