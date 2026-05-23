@@ -6821,27 +6821,7 @@ function createD1MediaObjectStore(d1) {
   function ensureSchema() {
     if (!schemaPromise) {
       schemaPromise = (async () => {
-        await d1.exec(
-          `CREATE TABLE IF NOT EXISTS vtdd_media_objects (
-            id TEXT PRIMARY KEY,
-            repository TEXT,
-            related_issue INTEGER,
-            related_pr INTEGER,
-            source_surface TEXT NOT NULL,
-            source_event_id TEXT,
-            object_key TEXT NOT NULL,
-            filename TEXT NOT NULL,
-            content_type TEXT NOT NULL,
-            byte_size INTEGER NOT NULL,
-            sha256 TEXT NOT NULL,
-            visibility TEXT NOT NULL,
-            summary TEXT,
-            ocr_text TEXT,
-            created_by TEXT,
-            created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL
-          );`
-        );
+        await d1.exec("CREATE TABLE IF NOT EXISTS vtdd_media_objects (id TEXT PRIMARY KEY, repository TEXT, related_issue INTEGER, related_pr INTEGER, source_surface TEXT NOT NULL, source_event_id TEXT, object_key TEXT NOT NULL, filename TEXT NOT NULL, content_type TEXT NOT NULL, byte_size INTEGER NOT NULL, sha256 TEXT NOT NULL, visibility TEXT NOT NULL, summary TEXT, ocr_text TEXT, created_by TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);");
         await d1.exec("CREATE INDEX IF NOT EXISTS idx_vtdd_media_repo ON vtdd_media_objects(repository, created_at DESC);");
         await d1.exec("CREATE INDEX IF NOT EXISTS idx_vtdd_media_issue ON vtdd_media_objects(repository, related_issue, created_at DESC);");
         await d1.exec("CREATE INDEX IF NOT EXISTS idx_vtdd_media_pr ON vtdd_media_objects(repository, related_pr, created_at DESC);");

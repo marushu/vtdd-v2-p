@@ -217,6 +217,76 @@ function createInMemoryR2Binding() {
   };
 }
 
+function createStrictMediaD1Binding() {
+  const execStatements = [];
+  const rows = new Map();
+  return {
+    execStatements,
+    rows,
+    async exec(statement) {
+      execStatements.push(statement);
+      if (/CREATE TABLE IF NOT EXISTS vtdd_media_objects \(\s*\n/.test(String(statement))) {
+        throw new Error("D1_EXEC_ERROR: Error in line 1: CREATE TABLE IF NOT EXISTS vtdd_media_objects (: incomplete input: SQLITE_ERROR");
+      }
+      return { success: true };
+    },
+    prepare(sql) {
+      return {
+        bind(...params) {
+          return {
+            async run() {
+              if (String(sql).includes("INSERT OR REPLACE INTO vtdd_media_objects")) {
+                const [
+                  id,
+                  repository,
+                  relatedIssue,
+                  relatedPr,
+                  sourceSurface,
+                  sourceEventId,
+                  objectKey,
+                  filename,
+                  contentType,
+                  byteSize,
+                  sha256,
+                  visibility,
+                  summary,
+                  ocrText,
+                  createdBy,
+                  createdAt,
+                  updatedAt
+                ] = params;
+                rows.set(id, {
+                  id,
+                  repository,
+                  related_issue: relatedIssue,
+                  related_pr: relatedPr,
+                  source_surface: sourceSurface,
+                  source_event_id: sourceEventId,
+                  object_key: objectKey,
+                  filename,
+                  content_type: contentType,
+                  byte_size: byteSize,
+                  sha256,
+                  visibility,
+                  summary,
+                  ocr_text: ocrText,
+                  created_by: createdBy,
+                  created_at: createdAt,
+                  updated_at: updatedAt
+                });
+              }
+              return { success: true };
+            },
+            async all() {
+              return { results: [] };
+            }
+          };
+        }
+      };
+    }
+  };
+}
+
 function createPngBlob() {
   return new Blob([
     new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d])
@@ -863,6 +933,39 @@ test("worker uploads private dashboard media without repository for ordinary cha
   const [objectKey, stored] = [...r2.objects.entries()][0];
   assert.match(objectKey, /^media\/_dashboard\/unscoped\//);
   assert.equal(stored.options.customMetadata.repository, "unscoped");
+});
+
+test("worker creates media D1 schema without multiline exec truncation", async () => {
+  const d1 = createStrictMediaD1Binding();
+  const r2 = createInMemoryR2Binding();
+  const form = new FormData();
+  form.append("repositoryInput", "");
+  form.append("sourceSurface", "dashboard_butler");
+  form.append("file", createPngBlob(), "dashboard.png");
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/media/upload", {
+      method: "POST",
+      headers: dashboardAccessHeaders,
+      body: form
+    }),
+    {
+      ...dashboardAccessEnv,
+      VTDD_MEMORY_D1: d1,
+      VTDD_MEDIA_R2: r2
+    }
+  );
+
+  assert.equal(response.status, 201);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(d1.rows.size, 1);
+  assert.equal(r2.objects.size, 1);
+  const createTableStatement = d1.execStatements.find((statement) =>
+    String(statement).startsWith("CREATE TABLE IF NOT EXISTS vtdd_media_objects")
+  );
+  assert.ok(createTableStatement);
+  assert.equal(createTableStatement.includes("\n"), false);
 });
 
 test("worker rejects public or evidence media without resolved repository before R2 put", async () => {
