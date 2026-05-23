@@ -212,6 +212,7 @@ export class DashboardChatRoom {
   }
 
   async acceptOwnerMessage({ socket, threadId, payload }) {
+    const clientMessageId = sanitizeDashboardChatText(payload?.clientMessageId || payload?.client_message_id);
     const inputMediaReferences = payload?.mediaReferences || payload?.media_references || payload?.media;
     const mediaReferences = normalizeMediaReferences(inputMediaReferences);
     const text =
@@ -219,7 +220,12 @@ export class DashboardChatRoom {
       (mediaReferences.length > 0 ? "添付を追加しました。" : "");
     if (!threadId || !text) {
       if (isSocketOpen(socket)) {
-        socket.send(JSON.stringify({ type: "error", ok: false, reason: "message text is required" }));
+        socket.send(JSON.stringify({
+          type: "error",
+          ok: false,
+          reason: "message text is required",
+          clientMessageId
+        }));
       }
       return;
     }
@@ -240,7 +246,12 @@ export class DashboardChatRoom {
     });
     if (!mediaValidation.ok) {
       if (isSocketOpen(socket)) {
-        socket.send(JSON.stringify({ type: "error", ok: false, reason: mediaValidation.reason }));
+        socket.send(JSON.stringify({
+          type: "error",
+          ok: false,
+          reason: mediaValidation.reason,
+          clientMessageId
+        }));
       }
       return;
     }
@@ -273,11 +284,23 @@ export class DashboardChatRoom {
       );
       const messages = store ? await store.appendMany(threadId, [ownerMessage, butlerMessage]) : [ownerMessage, butlerMessage].filter(Boolean);
       await this.broadcastThread({ threadId, messages });
+      this.sendSocket(socket, {
+        type: "owner_message_accepted",
+        ok: true,
+        clientMessageId,
+        messageId: ownerMessage.messageId
+      });
       return;
     }
 
     const messages = store ? await store.appendMany(threadId, [ownerMessage]) : [ownerMessage].filter(Boolean);
     await this.broadcastThread({ threadId, messages });
+    this.sendSocket(socket, {
+      type: "owner_message_accepted",
+      ok: true,
+      clientMessageId,
+      messageId: ownerMessage.messageId
+    });
     await this.broadcastTransientStatus({
       threadId,
       status: "thinking",
@@ -3770,9 +3793,16 @@ async function handleMediaUploadRequest(request, env) {
   }
 
   const filename = sanitizeMediaFilename(file.name || "attachment");
-  const repository =
-    normalizeCanonicalRepositoryInput(form.get("repository") || form.get("repositoryInput") || form.get("repository_input")) ||
-    "unresolved";
+  const repository = normalizeCanonicalRepositoryInput(
+    form.get("repository") || form.get("repositoryInput") || form.get("repository_input")
+  );
+  if (!repository) {
+    return json(422, {
+      ok: false,
+      error: "repository_required",
+      reason: "media upload requires a resolved owner/repo repository before R2 storage"
+    });
+  }
   const relatedIssue = normalizePositiveInteger(form.get("relatedIssue") || form.get("issueNumber") || form.get("related_issue"));
   const relatedPr = normalizePositiveInteger(form.get("relatedPr") || form.get("pullRequestNumber") || form.get("related_pr"));
   const sourceSurface = normalizeMediaSourceSurface(form.get("sourceSurface") || form.get("source_surface")) || "dashboard_butler";
@@ -3811,7 +3841,7 @@ async function handleMediaUploadRequest(request, env) {
   try {
     record = await store.put({
       id: mediaId,
-      repository: repository === "unresolved" ? null : repository,
+      repository,
       relatedIssue,
       relatedPr,
       sourceSurface,
@@ -3939,8 +3969,16 @@ async function handleMediaSearchRequest(request, url, env) {
       reason: "D1 media metadata store is not configured"
     });
   }
+  const repository = normalizeCanonicalRepositoryInput(url.searchParams.get("repository"));
+  if (!repository) {
+    return json(422, {
+      ok: false,
+      error: "repository_required",
+      reason: "media search requires a resolved owner/repo repository filter"
+    });
+  }
   const records = await store.search({
-    repository: url.searchParams.get("repository"),
+    repository,
     relatedIssue: url.searchParams.get("relatedIssue") || url.searchParams.get("issueNumber"),
     relatedPr: url.searchParams.get("relatedPr") || url.searchParams.get("pullRequestNumber"),
     limit: url.searchParams.get("limit")
@@ -3965,11 +4003,74 @@ async function handleMediaDeleteRequest(request, env, mediaRoute) {
       reason: dashboardAuth.reason
     });
   }
+  const url = new URL(request.url);
+  const cleanup = normalizeDashboardEventText(url.searchParams.get("cleanup"));
+  if (cleanup === "abandoned_send") {
+    return handleAbandonedMediaSendRollback({ env, mediaRoute, url });
+  }
   return json(403, {
     ok: false,
     error: "scoped_approval_required",
     reason: "media delete requires scoped approval and is not part of Issue #498 first slice",
     mediaId: mediaRoute.id
+  });
+}
+
+async function handleAbandonedMediaSendRollback({ env, mediaRoute, url }) {
+  const store = resolveMediaObjectStore(env);
+  if (!store || typeof store.get !== "function" || typeof store.delete !== "function") {
+    return json(503, {
+      ok: false,
+      error: "media_metadata_store_unavailable",
+      reason: "D1 media metadata store is not configured for abandoned send rollback"
+    });
+  }
+  const r2 = env?.[MEDIA_R2_BINDING] ?? null;
+  if (!r2 || typeof r2.delete !== "function") {
+    return json(503, {
+      ok: false,
+      error: "media_r2_unavailable",
+      reason: "Cloudflare R2 binding VTDD_MEDIA_R2 is not configured for abandoned send rollback"
+    });
+  }
+  const record = await store.get(mediaRoute.id);
+  if (!record) {
+    return json(404, {
+      ok: false,
+      error: "media_not_found",
+      reason: "media object was not found"
+    });
+  }
+  const repository = normalizeCanonicalRepositoryInput(url.searchParams.get("repository"));
+  const relatedIssue = normalizePositiveInteger(url.searchParams.get("relatedIssue") || url.searchParams.get("issueNumber"));
+  const requestedSourceEventId = sanitizeDashboardChatText(url.searchParams.get("sourceEventId") || url.searchParams.get("source_event_id"));
+  const sourceEventId = normalizeDashboardEventText(record.sourceEventId);
+  const isRollbackScoped =
+    record.visibility === "private" &&
+    record.sourceSurface === "dashboard_butler" &&
+    sourceEventId.startsWith("dashboard_owner_message:") &&
+    requestedSourceEventId === sourceEventId &&
+    Boolean(repository) &&
+    record.repository === repository &&
+    (!relatedIssue || record.relatedIssue === relatedIssue);
+  if (!isRollbackScoped) {
+    return json(403, {
+      ok: false,
+      error: "scoped_approval_required",
+      reason: "media delete is only allowed here as rollback for private dashboard media from the abandoned owner message send",
+      mediaId: mediaRoute.id
+    });
+  }
+  await r2.delete(record.objectKey);
+  await store.delete(record.id);
+  return json(200, {
+    ok: true,
+    mediaId: record.id,
+    deleted: {
+      r2: true,
+      d1: true
+    },
+    authority: "same_send_abandoned_private_media_rollback"
   });
 }
 
@@ -6671,6 +6772,16 @@ function createD1MediaObjectStore(d1) {
       return row ? mediaObjectRecordFromRow(row) : null;
     },
 
+    async delete(id) {
+      const mediaId = normalizeMediaId(id);
+      if (!mediaId) {
+        return false;
+      }
+      await ensureSchema();
+      await d1.prepare("DELETE FROM vtdd_media_objects WHERE id = ?").bind(mediaId).run();
+      return true;
+    },
+
     async search(filter = {}) {
       await ensureSchema();
       const repository = normalizeCanonicalRepositoryInput(filter.repository);
@@ -7166,6 +7277,21 @@ function detectMediaContentType({ declaredType, filename, arrayBuffer }) {
       reason: `declared content type ${declared} does not match a supported audio signature`
     };
   }
+  const expectedByFilename = expectedMediaContentTypeFromFilename(filename);
+  if (!sniffed && (requiresStrictMediaSignature(declared) || expectedByFilename)) {
+    return {
+      ok: false,
+      error: "media_content_type_mismatch",
+      reason: `declared content type ${declared} or filename ${sanitizeMediaFilename(filename)} does not match a supported binary signature`
+    };
+  }
+  if (!sniffed && declared !== "text/plain") {
+    return {
+      ok: false,
+      error: "media_content_type_unsupported",
+      reason: `content type ${declared} is not supported in this first slice without a recognized safe signature`
+    };
+  }
   return {
     ok: true,
     contentType: sniffed || declared || "application/octet-stream"
@@ -7173,6 +7299,10 @@ function detectMediaContentType({ declaredType, filename, arrayBuffer }) {
 }
 
 function sniffContentType(bytes) {
+  const prefixText = asciiAt(bytes, 0, Math.min(bytes?.length || 0, 64)).trimStart().toLowerCase();
+  if (prefixText.startsWith("<!doctype html") || prefixText.startsWith("<html") || prefixText.startsWith("<script")) {
+    return "text/html";
+  }
   if (startsWithBytes(bytes, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) return "image/png";
   if (startsWithBytes(bytes, [0xff, 0xd8, 0xff])) return "image/jpeg";
   if (startsWithAscii(bytes, "GIF87a") || startsWithAscii(bytes, "GIF89a")) return "image/gif";
@@ -7214,6 +7344,16 @@ function isCompatibleDeclaredMediaType(declared, sniffed) {
   if (declared === "application/x-zip-compressed" && sniffed === "application/zip") {
     return true;
   }
+  if (
+    sniffed === "application/zip" &&
+    [
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    ].includes(declared)
+  ) {
+    return true;
+  }
   if ((declared === "audio/mp3" || declared === "audio/x-mpeg") && sniffed === "audio/mpeg") {
     return true;
   }
@@ -7221,6 +7361,32 @@ function isCompatibleDeclaredMediaType(declared, sniffed) {
     return true;
   }
   return false;
+}
+
+function requiresStrictMediaSignature(type) {
+  const normalized = normalizeMediaContentType(type);
+  return [
+    "application/pdf",
+    "application/zip",
+    "application/x-zip-compressed",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+  ].includes(normalized);
+}
+
+function expectedMediaContentTypeFromFilename(filename) {
+  const sanitized = sanitizeMediaFilename(filename).toLowerCase();
+  if (/\.(png)$/i.test(sanitized)) return "image/png";
+  if (/\.(jpe?g)$/i.test(sanitized)) return "image/jpeg";
+  if (/\.(gif)$/i.test(sanitized)) return "image/gif";
+  if (/\.(webp)$/i.test(sanitized)) return "image/webp";
+  if (/\.(pdf)$/i.test(sanitized)) return "application/pdf";
+  if (/\.(zip|docx|xlsx|pptx)$/i.test(sanitized)) return "application/zip";
+  if (/\.(mp4|m4v)$/i.test(sanitized)) return "video/mp4";
+  if (/\.(mp3)$/i.test(sanitized)) return "audio/mpeg";
+  if (/\.(wav)$/i.test(sanitized)) return "audio/wav";
+  return "";
 }
 
 function isForbiddenUploadContentType(type) {
@@ -7336,8 +7502,6 @@ function toMediaReference(record) {
     relatedIssue: normalized.relatedIssue,
     relatedPr: normalized.relatedPr,
     sourceSurface: normalized.sourceSurface,
-    sourceEventId: normalized.sourceEventId || null,
-    objectKey: normalized.objectKey,
     filename: normalized.filename,
     contentType: normalized.contentType,
     byteSize: normalized.byteSize,
@@ -10111,6 +10275,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       let reconnectAttempt = 0;
       let refreshingThread = false;
       let pendingMediaItems = [];
+      const pendingSendRollbacks = new Map();
       const messagesById = new Map();
 
       function updateComposerReserve() {
@@ -10398,6 +10563,13 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         }
       }
 
+      function createClientMessageId() {
+        if (window.crypto && typeof window.crypto.randomUUID === "function") {
+          return "dashboard_owner_message:" + window.crypto.randomUUID();
+        }
+        return "dashboard_owner_message:" + Date.now().toString(36);
+      }
+
       async function uploadSelectedMedia(file, options = {}) {
         const preparedFile = await prepareUploadFile(file);
         const formData = new FormData();
@@ -10405,6 +10577,9 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         formData.append("repositoryInput", repositoryInput || "");
         formData.append("threadId", threadId || "");
         formData.append("sourceSurface", "dashboard_butler");
+        if (options.sourceEventId) {
+          formData.append("sourceEventId", options.sourceEventId);
+        }
         formData.append("visibility", "private");
         if (Number.isFinite(issueNumber)) {
           formData.append("relatedIssue", String(issueNumber));
@@ -10421,7 +10596,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         const body = await response.json().catch(() => ({}));
         if (response.status === 413 && body.error === "media_large_confirmation_required") {
           if (window.confirm("5MB を超える添付です。private として保存しますか？")) {
-            return uploadSelectedMedia(preparedFile, { allowLarge: true });
+            return uploadSelectedMedia(preparedFile, { ...options, allowLarge: true });
           }
         }
         if (!response.ok || !body.ok || !body.media) {
@@ -10430,12 +10605,33 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         return body.media;
       }
 
-      async function uploadPendingMedia() {
+      async function uploadPendingMedia(sourceEventId) {
         const uploaded = [];
-        for (const item of pendingMediaItems) {
-          uploaded.push(await uploadSelectedMedia(item.file));
+        try {
+          for (const item of pendingMediaItems) {
+            uploaded.push(await uploadSelectedMedia(item.file, { sourceEventId }));
+          }
+        } catch (error) {
+          await rollbackAbandonedMedia(uploaded, sourceEventId);
+          throw error;
         }
         return uploaded;
+      }
+
+      async function rollbackAbandonedMedia(mediaReferences, sourceEventId) {
+        const references = Array.isArray(mediaReferences) ? mediaReferences : [];
+        await Promise.allSettled(references.map(async (media) => {
+          if (!media || !media.mediaId) return;
+          const params = new URLSearchParams({ cleanup: "abandoned_send" });
+          if (repositoryInput) params.set("repository", repositoryInput);
+          if (Number.isFinite(issueNumber)) params.set("relatedIssue", String(issueNumber));
+          if (sourceEventId) params.set("sourceEventId", sourceEventId);
+          await fetch("/v2/media/" + encodeURIComponent(media.mediaId) + "?" + params.toString(), {
+            method: "DELETE",
+            credentials: "same-origin",
+            headers: { "accept": "application/json" }
+          });
+        }));
       }
 
       function appendError(text) {
@@ -10542,7 +10738,18 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
                 thinking: isThinking,
                 temporary: !isThinking
               });
+            } else if (body.type === "owner_message_accepted" && body.ok) {
+              const clientMessageId = body.clientMessageId || body.client_message_id || "";
+              if (clientMessageId) {
+                pendingSendRollbacks.delete(clientMessageId);
+              }
             } else if (body.type === "error") {
+              const clientMessageId = body.clientMessageId || body.client_message_id || "";
+              if (clientMessageId && pendingSendRollbacks.has(clientMessageId)) {
+                const mediaReferences = pendingSendRollbacks.get(clientMessageId) || [];
+                pendingSendRollbacks.delete(clientMessageId);
+                rollbackAbandonedMedia(mediaReferences, clientMessageId).catch(() => {});
+              }
               appendError(body.reason || "WebSocket message error");
             }
           } catch {
@@ -10579,23 +10786,42 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         if (submitButton) submitButton.disabled = true;
         setStatus(pendingMediaItems.length > 0 ? "添付を保存してから送信しています" : "送信中です", { thinking: true });
         let mediaReferences = [];
+        const clientMessageId = createClientMessageId();
         try {
-          mediaReferences = await uploadPendingMedia();
+          mediaReferences = await uploadPendingMedia(clientMessageId);
         } catch (error) {
           setStatus((error && error.message) || "添付の保存に失敗しました。");
           if (submitButton) submitButton.disabled = false;
           textarea.focus({ preventScroll: true });
           return;
         }
-        chatSocket.send(JSON.stringify({
-          type: "owner_message",
-          threadId,
-          repositoryInput,
-          text,
-          issueNumber,
-          relatedIssue: issueNumber,
-          mediaReferences
-        }));
+        pendingSendRollbacks.set(clientMessageId, mediaReferences);
+        try {
+          chatSocket.send(JSON.stringify({
+            type: "owner_message",
+            threadId,
+            clientMessageId,
+            repositoryInput,
+            text,
+            issueNumber,
+            relatedIssue: issueNumber,
+            mediaReferences
+          }));
+          window.setTimeout(() => {
+            if (!pendingSendRollbacks.has(clientMessageId)) return;
+            const rollbackMediaReferences = pendingSendRollbacks.get(clientMessageId) || [];
+            pendingSendRollbacks.delete(clientMessageId);
+            rollbackAbandonedMedia(rollbackMediaReferences, clientMessageId).catch(() => {});
+            setStatus("送信確認が返らなかったため、保存済み添付を破棄しました。");
+          }, 30000);
+        } catch (error) {
+          pendingSendRollbacks.delete(clientMessageId);
+          await rollbackAbandonedMedia(mediaReferences, clientMessageId);
+          setStatus((error && error.message) || "送信に失敗したため、保存済み添付を破棄しました。");
+          if (submitButton) submitButton.disabled = false;
+          textarea.focus({ preventScroll: true });
+          return;
+        }
         pendingMediaItems = [];
         renderPendingMedia();
         textarea.value = "";
