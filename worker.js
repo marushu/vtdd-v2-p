@@ -56115,7 +56115,8 @@ var DashboardChatRoom = class {
     }
   }
   async acceptOwnerMessage({ socket, threadId, payload }) {
-    const text = sanitizeDashboardChatText(payload?.text || payload?.message || payload?.body);
+    const mediaReferences = normalizeMediaReferences(payload?.mediaReferences || payload?.media_references || payload?.media);
+    const text = sanitizeDashboardChatText(payload?.text || payload?.message || payload?.body) || (mediaReferences.length > 0 ? "\u6DFB\u4ED8\u3092\u8FFD\u52A0\u3057\u307E\u3057\u305F\u3002" : "");
     if (!threadId || !text) {
       if (isSocketOpen(socket)) {
         socket.send(JSON.stringify({ type: "error", ok: false, reason: "message text is required" }));
@@ -56138,6 +56139,7 @@ var DashboardChatRoom = class {
         relatedIssue,
         status: "sent",
         text,
+        mediaReferences,
         createdAt: now
       },
       { threadId }
@@ -56177,6 +56179,7 @@ var DashboardChatRoom = class {
       repository: repository || null,
       relatedIssue: relatedIssue || null,
       text,
+      mediaReferences,
       messageId: ownerMessage.messageId,
       createdAt: now,
       appServer: {
@@ -56349,6 +56352,7 @@ var AUTONOMY_MODE_ENV = "VTDD_AUTONOMY_MODE";
 var LEGACY_AUTONOMY_MODE_ENV = "MVP_AUTONOMY_MODE";
 var MEMORY_D1_BINDING = "VTDD_MEMORY_D1";
 var MEMORY_R2_BINDING = "VTDD_MEMORY_R2";
+var MEDIA_R2_BINDING = "VTDD_MEDIA_R2";
 var MEMORY_BLOB_THRESHOLD_ENV = "VTDD_MEMORY_BLOB_THRESHOLD";
 var WEB_PUSH_PUBLIC_KEY_ENV = "VTDD_WEB_PUSH_PUBLIC_KEY";
 var WEB_PUSH_PRIVATE_KEY_ENV = "VTDD_WEB_PUSH_PRIVATE_KEY";
@@ -56360,6 +56364,10 @@ var d1AdapterCache = /* @__PURE__ */ new WeakMap();
 var dashboardEventStoreCache = /* @__PURE__ */ new WeakMap();
 var dashboardChatStoreCache = /* @__PURE__ */ new WeakMap();
 var dashboardPushSubscriptionStoreCache = /* @__PURE__ */ new WeakMap();
+var mediaObjectStoreCache = /* @__PURE__ */ new WeakMap();
+var MEDIA_UPLOAD_SOFT_LIMIT_BYTES = 5 * 1024 * 1024;
+var MEDIA_UPLOAD_HARD_LIMIT_BYTES = 20 * 1024 * 1024;
+var MEDIA_REFERENCE_LIMIT = 12;
 var runtime_default = {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -56452,6 +56460,19 @@ var runtime_default = {
     }
     if (request.method === "POST" && isApiPath(url.pathname, "/dashboard/chat/messages")) {
       return handleDashboardChatMessageRequest(request, env);
+    }
+    if (request.method === "POST" && isApiPath(url.pathname, "/media/upload")) {
+      return handleMediaUploadRequest(request, env);
+    }
+    if (request.method === "GET" && isApiPath(url.pathname, "/media/search")) {
+      return handleMediaSearchRequest(request, url, env);
+    }
+    const mediaRoute = matchMediaObjectRoute(url.pathname);
+    if (mediaRoute && request.method === "GET") {
+      return handleMediaObjectRequest(request, env, mediaRoute);
+    }
+    if (mediaRoute && request.method === "DELETE") {
+      return handleMediaDeleteRequest(request, env, mediaRoute);
     }
     if (request.method === "POST" && isApiPath(url.pathname, "/dashboard/push/subscription")) {
       return handleDashboardPushSubscriptionRequest(request, env);
@@ -59086,6 +59107,243 @@ async function handleDashboardChatMessageRequest(request, env) {
     execution: null
   });
 }
+async function handleMediaUploadRequest(request, env) {
+  const dashboardAuth = await authorizeDashboardRequest({
+    request,
+    env,
+    apiSuffix: "/media/upload"
+  });
+  if (!dashboardAuth.ok) {
+    return json(dashboardAuth.status, {
+      ok: false,
+      error: "dashboard_auth_required",
+      reason: dashboardAuth.reason
+    });
+  }
+  const r2 = env?.[MEDIA_R2_BINDING] ?? null;
+  if (!r2 || typeof r2.put !== "function") {
+    return json(503, {
+      ok: false,
+      error: "media_r2_unavailable",
+      reason: "Cloudflare R2 binding VTDD_MEDIA_R2 is not configured"
+    });
+  }
+  const store = resolveMediaObjectStore(env);
+  if (!store) {
+    return json(503, {
+      ok: false,
+      error: "media_metadata_store_unavailable",
+      reason: "D1 media metadata store is not configured"
+    });
+  }
+  let form = null;
+  try {
+    form = await request.formData();
+  } catch {
+    return json(400, {
+      ok: false,
+      error: "multipart_form_required",
+      reason: "multipart/form-data with a file field is required"
+    });
+  }
+  const file = form.get("file");
+  if (!isUploadFileLike(file)) {
+    return json(422, {
+      ok: false,
+      error: "media_file_required",
+      reason: "file field is required"
+    });
+  }
+  const byteSize = Number(file.size) || 0;
+  if (byteSize <= 0) {
+    return json(422, {
+      ok: false,
+      error: "media_file_empty",
+      reason: "empty media files are not accepted"
+    });
+  }
+  if (byteSize > MEDIA_UPLOAD_HARD_LIMIT_BYTES) {
+    return json(413, {
+      ok: false,
+      error: "media_file_too_large",
+      reason: "20MB \u3092\u8D85\u3048\u308B\u6DFB\u4ED8\u306F first slice \u3067\u306F\u4FDD\u5B58\u3057\u307E\u305B\u3093\u3002\u7E2E\u5C0F\u3057\u3066\u304B\u3089\u9001\u3063\u3066\u304F\u3060\u3055\u3044\u3002",
+      limitBytes: MEDIA_UPLOAD_HARD_LIMIT_BYTES
+    });
+  }
+  const allowLarge = normalizeText30(form.get("allowLarge") || form.get("allow_large")).toLowerCase() === "true";
+  if (byteSize > MEDIA_UPLOAD_SOFT_LIMIT_BYTES && !allowLarge) {
+    return json(413, {
+      ok: false,
+      error: "media_large_confirmation_required",
+      reason: "5MB \u3092\u8D85\u3048\u308B\u6DFB\u4ED8\u3067\u3059\u3002\u4FDD\u5B58\u3059\u308B\u5834\u5408\u306F\u78BA\u8A8D\u3057\u3066\u304B\u3089\u518D\u9001\u3057\u3066\u304F\u3060\u3055\u3044\u3002",
+      limitBytes: MEDIA_UPLOAD_SOFT_LIMIT_BYTES
+    });
+  }
+  const contentType = normalizeMediaContentType(file.type);
+  const filename = sanitizeMediaFilename(file.name || "attachment");
+  const repository = normalizeCanonicalRepositoryInput(form.get("repository") || form.get("repositoryInput") || form.get("repository_input")) || "unresolved";
+  const relatedIssue = normalizePositiveInteger9(form.get("relatedIssue") || form.get("issueNumber") || form.get("related_issue"));
+  const relatedPr = normalizePositiveInteger9(form.get("relatedPr") || form.get("pullRequestNumber") || form.get("related_pr"));
+  const sourceSurface = normalizeMediaSourceSurface(form.get("sourceSurface") || form.get("source_surface")) || "dashboard_butler";
+  const sourceEventId = sanitizeDashboardChatText(form.get("sourceEventId") || form.get("source_event_id"));
+  const visibility = normalizeMediaVisibility(form.get("visibility")) || "private";
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  const mediaId = `med_${crypto.randomUUID()}`;
+  const objectKey = buildMediaObjectKey({ repository, createdAt: now, mediaId, filename });
+  const arrayBuffer = await file.arrayBuffer();
+  const sha2562 = await sha256ArrayBufferHex(arrayBuffer);
+  await r2.put(objectKey, arrayBuffer, {
+    httpMetadata: { contentType },
+    customMetadata: {
+      mediaId,
+      repository,
+      visibility,
+      sha256: sha2562
+    }
+  });
+  const record2 = await store.put({
+    id: mediaId,
+    repository: repository === "unresolved" ? null : repository,
+    relatedIssue,
+    relatedPr,
+    sourceSurface,
+    sourceEventId,
+    objectKey,
+    filename,
+    contentType,
+    byteSize,
+    sha256: sha2562,
+    visibility,
+    summary: "",
+    ocrText: "",
+    createdBy: dashboardAuth.email || dashboardAuth.login || dashboardAuth.authType || "dashboard",
+    createdAt: now,
+    updatedAt: now
+  });
+  return json(201, {
+    ok: true,
+    media: toMediaReference(record2),
+    stored: {
+      r2: true,
+      d1: true,
+      rawBinaryReturned: false
+    }
+  });
+}
+async function handleMediaObjectRequest(request, env, mediaRoute) {
+  const dashboardAuth = await authorizeDashboardRequest({
+    request,
+    env,
+    apiSuffix: mediaRoute.download ? "/media/:id/download" : "/media/:id"
+  });
+  if (!dashboardAuth.ok) {
+    return json(dashboardAuth.status, {
+      ok: false,
+      error: "dashboard_auth_required",
+      reason: dashboardAuth.reason
+    });
+  }
+  const store = resolveMediaObjectStore(env);
+  if (!store) {
+    return json(503, {
+      ok: false,
+      error: "media_metadata_store_unavailable",
+      reason: "D1 media metadata store is not configured"
+    });
+  }
+  const record2 = await store.get(mediaRoute.id);
+  if (!record2) {
+    return json(404, {
+      ok: false,
+      error: "media_not_found",
+      reason: "media object was not found"
+    });
+  }
+  if (!mediaRoute.download) {
+    return json(200, {
+      ok: true,
+      media: toMediaReference(record2),
+      rawBinaryReturned: false
+    });
+  }
+  const r2 = env?.[MEDIA_R2_BINDING] ?? null;
+  if (!r2 || typeof r2.get !== "function") {
+    return json(503, {
+      ok: false,
+      error: "media_r2_unavailable",
+      reason: "Cloudflare R2 binding VTDD_MEDIA_R2 is not configured"
+    });
+  }
+  const object3 = await r2.get(record2.objectKey);
+  if (!object3) {
+    return json(404, {
+      ok: false,
+      error: "media_binary_not_found",
+      reason: "R2 object was not found for this media record"
+    });
+  }
+  return new Response(object3.body ?? object3, {
+    status: 200,
+    headers: {
+      "content-type": record2.contentType || "application/octet-stream",
+      "content-disposition": `attachment; filename="${record2.filename.replace(/["\\]/g, "_")}"`,
+      "cache-control": "private, no-store"
+    }
+  });
+}
+async function handleMediaSearchRequest(request, url, env) {
+  const dashboardAuth = await authorizeDashboardRequest({
+    request,
+    env,
+    apiSuffix: "/media/search"
+  });
+  if (!dashboardAuth.ok) {
+    return json(dashboardAuth.status, {
+      ok: false,
+      error: "dashboard_auth_required",
+      reason: dashboardAuth.reason
+    });
+  }
+  const store = resolveMediaObjectStore(env);
+  if (!store || typeof store.search !== "function") {
+    return json(503, {
+      ok: false,
+      error: "media_metadata_store_unavailable",
+      reason: "D1 media metadata store is not configured"
+    });
+  }
+  const records = await store.search({
+    repository: url.searchParams.get("repository"),
+    relatedIssue: url.searchParams.get("relatedIssue") || url.searchParams.get("issueNumber"),
+    relatedPr: url.searchParams.get("relatedPr") || url.searchParams.get("pullRequestNumber"),
+    limit: url.searchParams.get("limit")
+  });
+  return json(200, {
+    ok: true,
+    media: records.map((record2) => toMediaReference(record2)).filter(Boolean),
+    rawBinaryReturned: false
+  });
+}
+async function handleMediaDeleteRequest(request, env, mediaRoute) {
+  const dashboardAuth = await authorizeDashboardRequest({
+    request,
+    env,
+    apiSuffix: "/media/:id"
+  });
+  if (!dashboardAuth.ok) {
+    return json(dashboardAuth.status, {
+      ok: false,
+      error: "dashboard_auth_required",
+      reason: dashboardAuth.reason
+    });
+  }
+  return json(403, {
+    ok: false,
+    error: "scoped_approval_required",
+    reason: "media delete requires scoped approval and is not part of Issue #498 first slice",
+    mediaId: mediaRoute.id
+  });
+}
 async function handleDashboardPushSubscriptionRequest(request, env) {
   const dashboardAuth = await authorizeDashboardRequest({
     request,
@@ -60767,6 +61025,25 @@ function resolveDashboardChatStore(env) {
   dashboardChatStoreCache.set(d1Binding, store);
   return store;
 }
+function resolveMediaObjectStore(env) {
+  if (!env || typeof env !== "object") {
+    return null;
+  }
+  const injectedStore = env.MEDIA_OBJECT_STORE ?? null;
+  if (injectedStore && typeof injectedStore.put === "function" && typeof injectedStore.get === "function") {
+    return injectedStore;
+  }
+  const d1Binding = env[MEMORY_D1_BINDING] ?? null;
+  if (!d1Binding || typeof d1Binding.prepare !== "function") {
+    return null;
+  }
+  if (mediaObjectStoreCache.has(d1Binding)) {
+    return mediaObjectStoreCache.get(d1Binding);
+  }
+  const store = createD1MediaObjectStore(d1Binding);
+  mediaObjectStoreCache.set(d1Binding, store);
+  return store;
+}
 function resolveDashboardPushSubscriptionStore(env) {
   if (!env || typeof env !== "object") {
     return null;
@@ -61322,6 +61599,115 @@ function createD1DashboardChatStore(d1) {
     return schemaPromise;
   }
 }
+function createD1MediaObjectStore(d1) {
+  let schemaPromise = null;
+  return {
+    async put(record2) {
+      const normalized = normalizeMediaObjectRecord(record2);
+      if (!normalized) {
+        return null;
+      }
+      await ensureSchema();
+      await d1.prepare(
+        `INSERT OR REPLACE INTO vtdd_media_objects (
+             id, repository, related_issue, related_pr, source_surface, source_event_id,
+             object_key, filename, content_type, byte_size, sha256, visibility,
+             summary, ocr_text, created_by, created_at, updated_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).bind(
+        normalized.id,
+        normalized.repository,
+        normalized.relatedIssue,
+        normalized.relatedPr,
+        normalized.sourceSurface,
+        normalized.sourceEventId,
+        normalized.objectKey,
+        normalized.filename,
+        normalized.contentType,
+        normalized.byteSize,
+        normalized.sha256,
+        normalized.visibility,
+        normalized.summary,
+        normalized.ocrText,
+        normalized.createdBy,
+        normalized.createdAt,
+        normalized.updatedAt
+      ).run();
+      return normalized;
+    },
+    async get(id) {
+      const mediaId = normalizeMediaId(id);
+      if (!mediaId) {
+        return null;
+      }
+      await ensureSchema();
+      const result = await d1.prepare("SELECT * FROM vtdd_media_objects WHERE id = ? LIMIT 1").bind(mediaId).all();
+      const row = Array.isArray(result?.results) ? result.results[0] : null;
+      return row ? mediaObjectRecordFromRow(row) : null;
+    },
+    async search(filter = {}) {
+      await ensureSchema();
+      const repository = normalizeCanonicalRepositoryInput(filter.repository);
+      const relatedIssue = normalizePositiveInteger9(filter.relatedIssue || filter.issueNumber);
+      const relatedPr = normalizePositiveInteger9(filter.relatedPr || filter.pullRequestNumber);
+      const limit = normalizeLimit7(filter.limit, 20);
+      const clauses = [];
+      const params = [];
+      if (repository) {
+        clauses.push("repository = ?");
+        params.push(repository);
+      }
+      if (relatedIssue) {
+        clauses.push("related_issue = ?");
+        params.push(relatedIssue);
+      }
+      if (relatedPr) {
+        clauses.push("related_pr = ?");
+        params.push(relatedPr);
+      }
+      const where = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
+      const result = await d1.prepare(
+        `SELECT * FROM vtdd_media_objects
+           ${where}
+           ORDER BY created_at DESC
+           LIMIT ?`
+      ).bind(...params, limit).all();
+      return (Array.isArray(result?.results) ? result.results : []).map(mediaObjectRecordFromRow).filter(Boolean);
+    }
+  };
+  function ensureSchema() {
+    if (!schemaPromise) {
+      schemaPromise = (async () => {
+        await d1.exec(
+          `CREATE TABLE IF NOT EXISTS vtdd_media_objects (
+            id TEXT PRIMARY KEY,
+            repository TEXT,
+            related_issue INTEGER,
+            related_pr INTEGER,
+            source_surface TEXT NOT NULL,
+            source_event_id TEXT,
+            object_key TEXT NOT NULL,
+            filename TEXT NOT NULL,
+            content_type TEXT NOT NULL,
+            byte_size INTEGER NOT NULL,
+            sha256 TEXT NOT NULL,
+            visibility TEXT NOT NULL,
+            summary TEXT,
+            ocr_text TEXT,
+            created_by TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+          );`
+        );
+        await d1.exec("CREATE INDEX IF NOT EXISTS idx_vtdd_media_repo ON vtdd_media_objects(repository, created_at DESC);");
+        await d1.exec("CREATE INDEX IF NOT EXISTS idx_vtdd_media_issue ON vtdd_media_objects(repository, related_issue, created_at DESC);");
+        await d1.exec("CREATE INDEX IF NOT EXISTS idx_vtdd_media_pr ON vtdd_media_objects(repository, related_pr, created_at DESC);");
+        await d1.exec("CREATE INDEX IF NOT EXISTS idx_vtdd_media_source ON vtdd_media_objects(source_surface, source_event_id);");
+      })();
+    }
+    return schemaPromise;
+  }
+}
 function createD1DashboardPushSubscriptionStore(d1) {
   let schemaPromise = null;
   return {
@@ -61622,10 +62008,178 @@ function base64UrlToBytes(value) {
   }
   return bytes;
 }
+function matchMediaObjectRoute(pathname) {
+  for (const prefix of [CANONICAL_API_PREFIX, LEGACY_API_PREFIX]) {
+    const base = `${prefix}/media/`;
+    if (!pathname.startsWith(base)) {
+      continue;
+    }
+    const tail = pathname.slice(base.length);
+    const parts = tail.split("/").filter(Boolean);
+    if (parts.length === 1) {
+      const id = normalizeMediaId(parts[0]);
+      return id ? { id, download: false } : null;
+    }
+    if (parts.length === 2 && parts[1] === "download") {
+      const id = normalizeMediaId(parts[0]);
+      return id ? { id, download: true } : null;
+    }
+  }
+  return null;
+}
+function isUploadFileLike(value) {
+  return value && typeof value === "object" && typeof value.arrayBuffer === "function" && Number(value.size) >= 0;
+}
+function normalizeMediaId(value) {
+  const text = normalizeDashboardEventText(value);
+  return /^med_[A-Za-z0-9_-]{8,80}$/.test(text) ? text : "";
+}
+function normalizeMediaContentType(value) {
+  const type = normalize7(String(value || "application/octet-stream").split(";")[0]);
+  return /^[a-z0-9.+-]+\/[a-z0-9.+-]+$/.test(type) ? type : "application/octet-stream";
+}
+function sanitizeMediaFilename(value) {
+  const text = normalizeDashboardEventText(value).split(/[\\/]/).pop() || "attachment";
+  const sanitized = text.replace(/[^A-Za-z0-9._ -]+/g, "_").replace(/\s+/g, " ").trim();
+  return (sanitized || "attachment").slice(0, 120);
+}
+function normalizeMediaSourceSurface(value) {
+  const text = normalizeDashboardEventText(value).toLowerCase().replace(/[^a-z0-9_-]+/g, "_");
+  return text.slice(0, 80);
+}
+function normalizeMediaVisibility(value) {
+  const visibility = normalize7(value);
+  return ["private", "repo_internal", "public_evidence"].includes(visibility) ? visibility : "";
+}
+function buildMediaObjectKey({ repository, createdAt, mediaId, filename }) {
+  const repo = normalizeCanonicalRepositoryInput(repository) || "unresolved/repository";
+  const [owner, name] = repo.split("/");
+  const date3 = new Date(createdAt);
+  const yyyy = String(date3.getUTCFullYear()).padStart(4, "0");
+  const mm = String(date3.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(date3.getUTCDate()).padStart(2, "0");
+  return `media/${owner}/${name}/${yyyy}/${mm}/${dd}/${mediaId}/${sanitizeMediaFilename(filename)}`;
+}
+async function sha256ArrayBufferHex(arrayBuffer) {
+  if (globalThis.crypto?.subtle) {
+    const digest2 = await globalThis.crypto.subtle.digest("SHA-256", arrayBuffer);
+    return [...new Uint8Array(digest2)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  }
+  const bytes = new Uint8Array(arrayBuffer);
+  let text = "";
+  for (const byte of bytes) {
+    text += String.fromCharCode(byte);
+  }
+  return btoa(text).replace(/[^A-Za-z0-9]/g, "").slice(0, 64);
+}
+function normalizeMediaObjectRecord(record2) {
+  const input = normalizeObject11(record2);
+  const id = normalizeMediaId(input.id || input.mediaId || input.media_id);
+  const objectKey = normalizeDashboardEventText(input.objectKey || input.object_key);
+  const filename = sanitizeMediaFilename(input.filename);
+  const contentType = normalizeMediaContentType(input.contentType || input.content_type);
+  const byteSize = Number(input.byteSize || input.byte_size);
+  const sha2562 = normalizeDashboardEventText(input.sha256).toLowerCase();
+  if (!id || !objectKey || !filename || !Number.isFinite(byteSize) || byteSize <= 0 || !sha2562) {
+    return null;
+  }
+  const createdAt = normalizeIsoTimestamp(input.createdAt || input.created_at) || (/* @__PURE__ */ new Date()).toISOString();
+  return {
+    id,
+    repository: normalizeCanonicalRepositoryInput(input.repository) || null,
+    relatedIssue: normalizePositiveInteger9(input.relatedIssue || input.related_issue || input.issueNumber),
+    relatedPr: normalizePositiveInteger9(input.relatedPr || input.related_pr || input.pullRequestNumber),
+    sourceSurface: normalizeMediaSourceSurface(input.sourceSurface || input.source_surface) || "dashboard_butler",
+    sourceEventId: sanitizeDashboardChatText(input.sourceEventId || input.source_event_id),
+    objectKey,
+    filename,
+    contentType,
+    byteSize: Math.floor(byteSize),
+    sha256: sha2562,
+    visibility: normalizeMediaVisibility(input.visibility) || "private",
+    summary: sanitizeDashboardChatText(input.summary),
+    ocrText: sanitizeDashboardChatText(input.ocrText || input.ocr_text),
+    createdBy: sanitizeDashboardChatText(input.createdBy || input.created_by),
+    createdAt,
+    updatedAt: normalizeIsoTimestamp(input.updatedAt || input.updated_at) || createdAt
+  };
+}
+function mediaObjectRecordFromRow(row) {
+  return normalizeMediaObjectRecord({
+    id: row?.id,
+    repository: row?.repository,
+    relatedIssue: row?.related_issue,
+    relatedPr: row?.related_pr,
+    sourceSurface: row?.source_surface,
+    sourceEventId: row?.source_event_id,
+    objectKey: row?.object_key,
+    filename: row?.filename,
+    contentType: row?.content_type,
+    byteSize: row?.byte_size,
+    sha256: row?.sha256,
+    visibility: row?.visibility,
+    summary: row?.summary,
+    ocrText: row?.ocr_text,
+    createdBy: row?.created_by,
+    createdAt: row?.created_at,
+    updatedAt: row?.updated_at
+  });
+}
+function toMediaReference(record2) {
+  const normalized = normalizeMediaObjectRecord(record2);
+  if (!normalized) {
+    return null;
+  }
+  return {
+    mediaId: normalized.id,
+    repository: normalized.repository,
+    relatedIssue: normalized.relatedIssue,
+    relatedPr: normalized.relatedPr,
+    sourceSurface: normalized.sourceSurface,
+    sourceEventId: normalized.sourceEventId || null,
+    objectKey: normalized.objectKey,
+    filename: normalized.filename,
+    contentType: normalized.contentType,
+    byteSize: normalized.byteSize,
+    sha256: normalized.sha256,
+    visibility: normalized.visibility,
+    summary: normalized.summary || "",
+    ocrText: normalized.ocrText || "",
+    createdAt: normalized.createdAt,
+    updatedAt: normalized.updatedAt,
+    metadataUrl: `/v2/media/${normalized.id}`,
+    downloadUrl: `/v2/media/${normalized.id}/download`
+  };
+}
+function normalizeMediaReferences(value) {
+  const list = Array.isArray(value) ? value : value ? [value] : [];
+  return list.map((item) => {
+    const input = normalizeObject11(item);
+    const mediaId = normalizeMediaId(input.mediaId || input.id || input.media_id);
+    if (!mediaId) {
+      return null;
+    }
+    return {
+      mediaId,
+      repository: normalizeCanonicalRepositoryInput(input.repository) || null,
+      relatedIssue: normalizePositiveInteger9(input.relatedIssue || input.related_issue || input.issueNumber),
+      relatedPr: normalizePositiveInteger9(input.relatedPr || input.related_pr || input.pullRequestNumber),
+      filename: sanitizeMediaFilename(input.filename || "attachment"),
+      contentType: normalizeMediaContentType(input.contentType || input.content_type),
+      byteSize: normalizePositiveInteger9(input.byteSize || input.byte_size),
+      sha256: normalizeDashboardEventText(input.sha256).toLowerCase().slice(0, 64),
+      visibility: normalizeMediaVisibility(input.visibility) || "private",
+      summary: sanitizeDashboardChatText(input.summary),
+      metadataUrl: `/v2/media/${mediaId}`,
+      downloadUrl: `/v2/media/${mediaId}/download`
+    };
+  }).filter(Boolean).slice(0, MEDIA_REFERENCE_LIMIT);
+}
 function buildDashboardChatTurn(payload, options = {}) {
   const input = normalizeObject11(payload);
   const repository = normalizeCanonicalRepositoryInput(input.repository);
-  const text = sanitizeDashboardChatText(input.text || input.message || input.body);
+  const mediaReferences = normalizeMediaReferences(input.mediaReferences || input.media_references || input.media);
+  const text = sanitizeDashboardChatText(input.text || input.message || input.body) || (mediaReferences.length > 0 ? "\u6DFB\u4ED8\u3092\u8FFD\u52A0\u3057\u307E\u3057\u305F\u3002" : "");
   if (!text) {
     return {
       ok: false,
@@ -61644,6 +62198,7 @@ function buildDashboardChatTurn(payload, options = {}) {
       relatedIssue,
       status: "sent",
       text,
+      mediaReferences,
       createdAt: now
     },
     { threadId }
@@ -61698,6 +62253,7 @@ function normalizeDashboardChatMessage(message, defaults = {}) {
     relatedIssue: normalizePositiveInteger9(input.relatedIssue || input.issueNumber || input.related_issue),
     status: normalizeDashboardChatStatus(input.status),
     text: sanitizeDashboardChatText(input.text || input.message || input.body) || "\uFF08\u7A7A\u306E\u30E1\u30C3\u30BB\u30FC\u30B8\uFF09",
+    mediaReferences: normalizeMediaReferences(input.mediaReferences || input.media_references || input.media),
     createdAt
   };
 }
@@ -63839,10 +64395,16 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .connection-note { display: inline-flex; align-items: center; width: fit-content; border: 1px solid var(--border); border-radius: 999px; padding: 5px 10px; color: var(--muted); font-size: 13px; }
     .chat-link { color: var(--text); text-decoration-thickness: 1px; text-underline-offset: 4px; font-weight: 750; }
     .composer { min-width: 0; display: grid; gap: 8px; z-index: 4; padding: 14px 0 max(16px, env(safe-area-inset-bottom)); background: var(--page-bg); }
-    .composer-box { display: grid; grid-template-columns: minmax(0, 1fr) 44px; align-items: end; gap: 8px; min-height: 62px; padding: 8px; border: 1px solid var(--border); border-radius: 28px; background: var(--panel-strong); box-shadow: 0 16px 60px var(--shadow); }
+    .composer-box { display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; align-items: end; gap: 8px; min-height: 62px; padding: 8px; border: 1px solid var(--border); border-radius: 28px; background: var(--panel-strong); box-shadow: 0 16px 60px var(--shadow); }
     textarea { width: 100%; min-height: 44px; max-height: max(88px, min(160px, 24dvh)); border: 0; outline: 0; resize: none; overflow-y: hidden; padding: 10px 2px; color: var(--text); background: transparent; font: inherit; line-height: 1.45; }
     textarea::placeholder { color: var(--muted); }
+    .media-button { width: 44px; height: 44px; border-radius: 999px; border: 1px solid var(--border); background: var(--button); color: var(--text); font: inherit; font-size: 24px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
     .send-button { width: 44px; height: 44px; border-radius: 999px; background: var(--text); color: var(--page-bg); font-size: 22px; }
+    .pending-media, .message-media { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 8px; }
+    .pending-media:empty, .message-media:empty { display: none; }
+    .media-chip { display: inline-flex; align-items: center; max-width: 100%; min-height: 34px; border: 1px solid var(--border); border-radius: 999px; padding: 5px 10px; gap: 6px; color: var(--text); background: var(--soft); font-size: 12px; text-decoration: none; }
+    .media-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: min(48vw, 320px); }
+    .media-remove { border: 0; background: transparent; color: var(--muted); font: inherit; font-weight: 900; padding: 0 2px; cursor: pointer; }
     .composer-status { min-height: 18px; padding-left: 16px; color: var(--muted); font-size: 12px; }
     .composer-status.thinking::after { content: ""; display: inline-block; width: 1.4em; text-align: left; animation: thinkingDots 1.2s steps(4, end) infinite; }
     .sidebar { position: sticky; top: 16px; align-self: start; max-height: calc(100dvh - 32px); overflow: auto; border: 1px solid var(--border); border-radius: 18px; background: var(--panel); }
@@ -63889,10 +64451,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     @media (max-width: 460px) {
       main { padding: 12px 10px 0; }
       .app-shell { height: calc(100dvh - 12px); }
-      .composer-box { grid-template-columns: minmax(0, 1fr) 40px; border-radius: 24px; }
+      .composer-box { grid-template-columns: 40px minmax(0, 1fr) 40px; border-radius: 24px; }
       .round-button { width: 40px; height: 40px; }
       .tool-button { min-height: 38px; padding: 0 12px; }
-      .send-button { width: 40px; height: 40px; }
+      .media-button, .send-button { width: 40px; height: 40px; }
     }
   </style>
 </head>
@@ -63974,7 +64536,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       </div>
 
       <form class="composer" id="butler-chat-form" aria-label="Butler composer" autocomplete="off" data-socket-endpoint="${escapeDashboardHtml(socketOrigin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}/ws" data-thread-endpoint="${escapeDashboardHtml(origin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}" data-thread-id="${escapeDashboardHtml(chatThreadId)}" data-repository-input="${escapeDashboardHtml(repositoryInput)}" data-issue-number="${dashboardIssueNumber || ""}">
+        <div class="pending-media" id="butler-pending-media" aria-live="polite"></div>
         <div class="composer-box">
+          <button class="media-button" id="butler-media-button" type="button" aria-label="\u753B\u50CF\u3084\u30D5\u30A1\u30A4\u30EB\u3092\u8FFD\u52A0" title="\u753B\u50CF\u3084\u30D5\u30A1\u30A4\u30EB\u3092\u8FFD\u52A0">+</button>
+          <input id="butler-media-input" type="file" accept="image/*" hidden>
           <textarea id="butler-message" name="text" placeholder="Butler V2 \u306B\u30E1\u30C3\u30BB\u30FC\u30B8..." aria-label="Butler V2 \u306B\u30E1\u30C3\u30BB\u30FC\u30B8" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="send"></textarea>
           <button class="send-button" type="submit" aria-label="Butler \u306B\u9001\u4FE1">\u2191</button>
         </div>
@@ -64040,10 +64605,14 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       const log = document.getElementById("butler-chat-log");
       const textarea = document.getElementById("butler-message");
       const status = document.getElementById("butler-chat-status");
+      const mediaButton = document.getElementById("butler-media-button");
+      const mediaInput = document.getElementById("butler-media-input");
+      const pendingMedia = document.getElementById("butler-pending-media");
       if (!form || !log || !textarea || !status) return;
 
       const socketEndpoint = form.dataset.socketEndpoint;
       const threadEndpoint = form.dataset.threadEndpoint;
+      const mediaUploadEndpoint = "/v2/media/upload";
       const threadId = form.dataset.threadId;
       const repositoryInput = form.dataset.repositoryInput;
       const issueNumber = Number.parseInt(form.dataset.issueNumber || "", 10);
@@ -64052,6 +64621,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       let reconnectTimer = null;
       let reconnectAttempt = 0;
       let refreshingThread = false;
+      let pendingMediaReferences = [];
       const messagesById = new Map();
 
       function updateComposerReserve() {
@@ -64127,8 +64697,60 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         body.className = "message-body";
         renderMessageText(body, message.text || "\uFF08\u7A7A\u306E\u30E1\u30C3\u30BB\u30FC\u30B8\uFF09");
         article.appendChild(body);
+        const media = renderMediaReferences(message.mediaReferences || message.media_references || []);
+        if (media) {
+          article.appendChild(media);
+        }
         log.appendChild(article);
         scrollToLatest();
+      }
+
+      function renderMediaReferences(references) {
+        const list = Array.isArray(references) ? references : [];
+        if (list.length === 0) return null;
+        const wrapper = document.createElement("div");
+        wrapper.className = "message-media";
+        for (const reference of list) {
+          const link = document.createElement("a");
+          link.className = "media-chip";
+          link.href = reference.downloadUrl || (reference.mediaId ? "/v2/media/" + reference.mediaId + "/download" : "#");
+          link.target = "_blank";
+          link.rel = "noreferrer";
+          link.textContent = "";
+          const icon = document.createElement("span");
+          icon.textContent = "\u6DFB\u4ED8";
+          const label = document.createElement("span");
+          label.textContent = reference.filename || reference.mediaId || "media";
+          link.appendChild(icon);
+          link.appendChild(label);
+          wrapper.appendChild(link);
+        }
+        return wrapper;
+      }
+
+      function renderPendingMedia() {
+        if (!pendingMedia) return;
+        pendingMedia.replaceChildren();
+        for (const reference of pendingMediaReferences) {
+          const chip = document.createElement("span");
+          chip.className = "media-chip";
+          const label = document.createElement("span");
+          label.textContent = reference.filename || reference.mediaId || "media";
+          const remove = document.createElement("button");
+          remove.className = "media-remove";
+          remove.type = "button";
+          remove.textContent = "\xD7";
+          remove.setAttribute("aria-label", "\u6DFB\u4ED8\u3092\u5916\u3059");
+          remove.addEventListener("click", () => {
+            pendingMediaReferences = pendingMediaReferences.filter((item) => item.mediaId !== reference.mediaId);
+            renderPendingMedia();
+            updateComposerReserve();
+          });
+          chip.appendChild(label);
+          chip.appendChild(remove);
+          pendingMedia.appendChild(chip);
+        }
+        updateComposerReserve();
       }
 
       function renderMessageText(container, text) {
@@ -64259,6 +64881,66 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         }
       }
 
+      async function prepareUploadFile(file) {
+        if (!file || !file.type || !file.type.startsWith("image/")) {
+          return file;
+        }
+        if (file.size <= 5 * 1024 * 1024 || typeof createImageBitmap !== "function") {
+          return file;
+        }
+        try {
+          const bitmap = await createImageBitmap(file);
+          const maxSide = 1600;
+          const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+          const width = Math.max(1, Math.round(bitmap.width * scale));
+          const height = Math.max(1, Math.round(bitmap.height * scale));
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const context = canvas.getContext("2d");
+          context.drawImage(bitmap, 0, 0, width, height);
+          const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.82));
+          if (!blob || blob.size >= file.size) {
+            return file;
+          }
+          return new File([blob], file.name.replace(/.[^.]+$/, "") + ".jpg", { type: "image/jpeg" });
+        } catch {
+          return file;
+        }
+      }
+
+      async function uploadSelectedMedia(file, options = {}) {
+        const preparedFile = await prepareUploadFile(file);
+        const formData = new FormData();
+        formData.append("file", preparedFile, preparedFile.name || file.name || "attachment");
+        formData.append("repositoryInput", repositoryInput || "");
+        formData.append("threadId", threadId || "");
+        formData.append("sourceSurface", "dashboard_butler");
+        formData.append("visibility", "private");
+        if (Number.isFinite(issueNumber)) {
+          formData.append("relatedIssue", String(issueNumber));
+        }
+        if (options.allowLarge === true) {
+          formData.append("allowLarge", "true");
+        }
+        const response = await fetch(mediaUploadEndpoint, {
+          method: "POST",
+          body: formData,
+          credentials: "same-origin",
+          headers: { "accept": "application/json" }
+        });
+        const body = await response.json().catch(() => ({}));
+        if (response.status === 413 && body.error === "media_large_confirmation_required") {
+          if (window.confirm("5MB \u3092\u8D85\u3048\u308B\u6DFB\u4ED8\u3067\u3059\u3002private \u3068\u3057\u3066\u4FDD\u5B58\u3057\u307E\u3059\u304B\uFF1F")) {
+            return uploadSelectedMedia(preparedFile, { allowLarge: true });
+          }
+        }
+        if (!response.ok || !body.ok || !body.media) {
+          throw new Error(body.reason || "media upload failed");
+        }
+        return body.media;
+      }
+
       function appendError(text) {
         appendMessage({ role: "butler", text });
       }
@@ -64384,7 +65066,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 
       form.addEventListener("submit", async (event) => {
         event.preventDefault();
-        const text = textarea.value.trim();
+        const text = textarea.value.trim() || (pendingMediaReferences.length > 0 ? "\u6DFB\u4ED8\u3092\u8FFD\u52A0\u3057\u307E\u3057\u305F\u3002" : "");
         if (!text) {
           textarea.focus();
           return;
@@ -64405,8 +65087,11 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           repositoryInput,
           text,
           issueNumber,
-          relatedIssue: issueNumber
+          relatedIssue: issueNumber,
+          mediaReferences: pendingMediaReferences
         }));
+        pendingMediaReferences = [];
+        renderPendingMedia();
         textarea.value = "";
         resizeComposerInput();
         setStatus("app-server bridge \u306E\u8FD4\u4FE1\u3092\u5F85\u3063\u3066\u3044\u307E\u3059", { thinking: true });
@@ -64414,6 +65099,29 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         textarea.focus({ preventScroll: true });
         updateComposerReserve();
       });
+
+      if (mediaButton && mediaInput) {
+        mediaButton.addEventListener("click", () => mediaInput.click());
+        mediaInput.addEventListener("change", async () => {
+          const file = mediaInput.files && mediaInput.files[0];
+          mediaInput.value = "";
+          if (!file) return;
+          try {
+            mediaButton.disabled = true;
+            setStatus("\u6DFB\u4ED8\u3092\u4FDD\u5B58\u3057\u3066\u3044\u307E\u3059", { thinking: true });
+            const media = await uploadSelectedMedia(file);
+            pendingMediaReferences = [...pendingMediaReferences, media].slice(0, 12);
+            renderPendingMedia();
+            setStatus("\u6DFB\u4ED8\u3092 private media reference \u3068\u3057\u3066\u4FDD\u5B58\u3057\u307E\u3057\u305F\u3002", { temporary: true });
+            textarea.focus({ preventScroll: true });
+          } catch (error) {
+            setStatus((error && error.message) || "\u6DFB\u4ED8\u306E\u4FDD\u5B58\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002");
+          } finally {
+            mediaButton.disabled = false;
+            updateComposerReserve();
+          }
+        });
+      }
 
       resizeComposerInput();
       textarea.addEventListener("input", resizeComposerInput);

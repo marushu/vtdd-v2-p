@@ -169,6 +169,48 @@ function createInMemoryDashboardChatStore() {
   };
 }
 
+function createInMemoryMediaObjectStore() {
+  const records = new Map();
+  return {
+    async put(record) {
+      records.set(record.id, record);
+      return record;
+    },
+    async get(id) {
+      return records.get(id) ?? null;
+    },
+    async search(filter = {}) {
+      const matches = [...records.values()].filter((record) => {
+        if (filter.repository && record.repository !== filter.repository) {
+          return false;
+        }
+        if (filter.relatedIssue && record.relatedIssue !== Number(filter.relatedIssue)) {
+          return false;
+        }
+        if (filter.relatedPr && record.relatedPr !== Number(filter.relatedPr)) {
+          return false;
+        }
+        return true;
+      });
+      return matches.slice(0, Number(filter.limit) || 20);
+    }
+  };
+}
+
+function createInMemoryR2Binding() {
+  const objects = new Map();
+  return {
+    objects,
+    async put(key, value, options = {}) {
+      objects.set(key, { value, options, body: value });
+      return null;
+    },
+    async get(key) {
+      return objects.get(key) ?? null;
+    }
+  };
+}
+
 function createInMemoryDashboardPushSubscriptionStore() {
   const subscriptions = new Map();
   return {
@@ -677,6 +719,135 @@ test("worker appends dashboard Butler chat turn and retrieves the same thread", 
   assert.equal(retrieveBody.messages.length, 2);
   assert.equal(retrieveBody.messages[0].text, "VPS Codex CLI とリアルタイムに会話したい");
   assert.equal(retrieveBody.summary, null);
+});
+
+test("worker serves dashboard media add controls for iPhone-first upload", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/dashboard", {
+      headers: dashboardAccessHeaders
+    }),
+    dashboardAccessEnv
+  );
+  assert.equal(response.status, 200);
+  const body = await response.text();
+  assert.equal(body.includes("id=\"butler-media-button\""), true);
+  assert.equal(body.includes("id=\"butler-media-input\""), true);
+  assert.equal(body.includes("/v2/media/upload"), true);
+  assert.equal(body.includes("createImageBitmap"), true);
+  assert.equal(body.includes("mediaReferences"), true);
+});
+
+test("worker uploads dashboard media to R2 and stores D1 metadata reference only", async () => {
+  const mediaStore = createInMemoryMediaObjectStore();
+  const r2 = createInMemoryR2Binding();
+  const form = new FormData();
+  form.append("repositoryInput", "marushu/vtdd-v2-p");
+  form.append("relatedIssue", "498");
+  form.append("sourceSurface", "dashboard_butler");
+  form.append("file", new Blob(["fake image bytes"], { type: "image/png" }), "dashboard.png");
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/media/upload", {
+      method: "POST",
+      headers: dashboardAccessHeaders,
+      body: form
+    }),
+    {
+      ...dashboardAccessEnv,
+      MEDIA_OBJECT_STORE: mediaStore,
+      VTDD_MEDIA_R2: r2
+    }
+  );
+
+  assert.equal(response.status, 201);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.match(body.media.mediaId, /^med_/);
+  assert.equal(body.media.repository, "marushu/vtdd-v2-p");
+  assert.equal(body.media.relatedIssue, 498);
+  assert.equal(body.media.filename, "dashboard.png");
+  assert.equal(body.media.contentType, "image/png");
+  assert.equal(body.media.visibility, "private");
+  assert.equal(body.stored.rawBinaryReturned, false);
+  assert.equal(JSON.stringify(body).includes("fake image bytes"), false);
+  assert.equal(r2.objects.size, 1);
+
+  const metadataResponse = await worker.fetch(
+    new Request(`https://example.com${body.media.metadataUrl}`, {
+      headers: dashboardAccessHeaders
+    }),
+    { ...dashboardAccessEnv, MEDIA_OBJECT_STORE: mediaStore, VTDD_MEDIA_R2: r2 }
+  );
+  assert.equal(metadataResponse.status, 200);
+  const metadataBody = await metadataResponse.json();
+  assert.equal(metadataBody.media.objectKey, body.media.objectKey);
+  assert.equal(JSON.stringify(metadataBody).includes("fake image bytes"), false);
+
+  const downloadResponse = await worker.fetch(
+    new Request(`https://example.com${body.media.downloadUrl}`, {
+      headers: dashboardAccessHeaders
+    }),
+    { ...dashboardAccessEnv, MEDIA_OBJECT_STORE: mediaStore, VTDD_MEDIA_R2: r2 }
+  );
+  assert.equal(downloadResponse.status, 200);
+  assert.equal(await downloadResponse.text(), "fake image bytes");
+});
+
+test("worker rejects media upload without R2 binding before metadata drift", async () => {
+  const form = new FormData();
+  form.append("file", new Blob(["fake image bytes"], { type: "image/png" }), "dashboard.png");
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/media/upload", {
+      method: "POST",
+      headers: dashboardAccessHeaders,
+      body: form
+    }),
+    {
+      ...dashboardAccessEnv,
+      MEDIA_OBJECT_STORE: createInMemoryMediaObjectStore()
+    }
+  );
+
+  assert.equal(response.status, 503);
+  const body = await response.json();
+  assert.equal(body.error, "media_r2_unavailable");
+});
+
+test("worker stores dashboard media references in chat without raw binary", async () => {
+  const store = createInMemoryDashboardChatStore();
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/chat/messages", {
+      method: "POST",
+      headers: { ...dashboardAccessHeaders, "content-type": "application/json" },
+      body: JSON.stringify({
+        threadId: "dashboard-main-marushu-vtdd-v2-p",
+        repository: "marushu/vtdd-v2-p",
+        text: "",
+        mediaReferences: [
+          {
+            mediaId: "med_testmedia1234",
+            repository: "marushu/vtdd-v2-p",
+            relatedIssue: 498,
+            filename: "dashboard.png",
+            contentType: "image/png",
+            byteSize: 16,
+            sha256: "0123456789abcdef",
+            visibility: "private",
+            rawBinary: "fake image bytes"
+          }
+        ]
+      })
+    }),
+    { ...dashboardAccessEnv, DASHBOARD_CHAT_STORE: store }
+  );
+
+  assert.equal(response.status, 202);
+  const body = await response.json();
+  assert.equal(body.messages[0].text, "添付を追加しました。");
+  assert.equal(body.messages[0].mediaReferences.length, 1);
+  assert.equal(body.messages[0].mediaReferences[0].mediaId, "med_testmedia1234");
+  assert.equal(JSON.stringify(body).includes("fake image bytes"), false);
 });
 
 test("worker stores dashboard Butler thread summaries and searches archived context", async () => {
