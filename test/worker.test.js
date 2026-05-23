@@ -817,6 +817,15 @@ test("worker serves dashboard media add controls for iPhone-first upload", async
   assert.equal(body.includes("accept=\"image/*\""), false);
   assert.equal(body.includes("/v2/media/upload"), true);
   assert.equal(body.includes("createImageBitmap"), true);
+  assert.equal(body.includes("className = \"media-thumb\""), true);
+  assert.equal(body.includes("const mediaRouteHref = reference.mediaId ? \"/v2/media/\" + reference.mediaId + \"/download\" : \"\""), true);
+  assert.equal(body.includes("const safeDownloadHref = referenceDownloadUrl.startsWith(\"/v2/media/\") ? referenceDownloadUrl : \"\""), true);
+  assert.equal(body.includes("const downloadHref = mediaRouteHref || safeDownloadHref || \"#\""), true);
+  assert.equal(body.includes("link.href = downloadHref"), true);
+  assert.equal(body.includes("isImage && downloadHref !== \"#\""), true);
+  assert.equal(body.includes("image.src = downloadHref"), true);
+  assert.equal(body.includes("URL.createObjectURL"), true);
+  assert.equal(body.includes("URL.revokeObjectURL"), true);
   assert.equal(body.includes("repo 未指定の通常会話では private media として保存します"), true);
   assert.equal(body.includes("mediaReferences"), true);
   assert.equal(body.includes("pendingSendRollbacks"), true);
@@ -1327,6 +1336,8 @@ test("worker stores dashboard media references in chat without raw binary", asyn
   assert.equal(body.messages[0].text, "添付を追加しました。");
   assert.equal(body.messages[0].mediaReferences.length, 1);
   assert.equal(body.messages[0].mediaReferences[0].mediaId, "med_testmedia1234");
+  assert.equal(body.messages[0].mediaReferences[0].contentType, "image/png");
+  assert.equal(body.messages[0].mediaReferences[0].downloadUrl, "/v2/media/med_testmedia1234/download");
   assert.equal(JSON.stringify(body).includes("fake image bytes"), false);
 });
 
