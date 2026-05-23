@@ -62075,15 +62075,85 @@ async function dispatchDashboardWebPushForEvent(env, event) {
 }
 function buildDashboardWebPushPayload(event) {
   const record2 = normalizeDashboardEventRecord(event);
-  const title = record2.kind === "dashboard_push_test" ? "VTDD Butler test" : "VTDD Butler";
-  const statusText = [record2.status, record2.conclusion].filter(Boolean).join("/");
-  const body = [record2.title, record2.repository, statusText].filter(Boolean).join(" - ");
+  const title = buildDashboardWebPushTitle(record2);
+  const body = buildDashboardWebPushBody(record2);
   return {
     title,
     body: body || "Dashboard Butler \u306E\u901A\u77E5\u3067\u3059\u3002",
     tag: `vtdd-${record2.kind || "dashboard"}-${record2.runId || record2.id || "event"}`.slice(0, 120),
     url: record2.runUrl || "/dashboard/notifications"
   };
+}
+function buildDashboardWebPushTitle(record2) {
+  const repository = shortRepositoryName(record2.repository);
+  if (record2.kind === "dashboard_push_test") {
+    return "VTDD Butler \u30C6\u30B9\u30C8\u901A\u77E5";
+  }
+  if (record2.kind === "vps_runner_execution") {
+    return `VPS ${dashboardPushStatusLabel(record2)}${repository ? `: ${repository}` : ""}`.slice(0, 80);
+  }
+  if (record2.kind === "github_actions_workflow_run") {
+    const isDeploy = normalize7(record2.workflowName).includes("deploy");
+    const label = dashboardPushStatusLabel(record2);
+    if (isDeploy) {
+      return `\u30C7\u30D7\u30ED\u30A4${label}${repository ? `: ${repository}` : ""}`.slice(0, 80);
+    }
+    const workflow = compactNotificationText(record2.workflowName || "workflow", 24);
+    return `Actions ${label}: ${workflow}${repository ? ` / ${repository}` : ""}`.slice(0, 80);
+  }
+  return `VTDD Butler ${dashboardPushStatusLabel(record2)}${repository ? `: ${repository}` : ""}`.slice(0, 80);
+}
+function buildDashboardWebPushBody(record2) {
+  if (record2.kind === "dashboard_push_test") {
+    return "\u901A\u77E5\u7D4C\u8DEF\u306F\u6B63\u5E38\u3067\u3059\u3002iPhone PWA \u306B\u30B5\u30FC\u30D0\u9001\u4FE1\u3067\u304D\u307E\u3057\u305F\u3002";
+  }
+  const details = [];
+  const title = compactNotificationText(record2.title, 58);
+  if (title && title !== record2.workflowName) {
+    details.push(title);
+  }
+  if (record2.workflowName) {
+    details.push(`workflow: ${compactNotificationText(record2.workflowName, 36)}`);
+  }
+  if (record2.headBranch) {
+    details.push(`branch: ${compactNotificationText(record2.headBranch, 34)}`);
+  }
+  if (record2.headSha) {
+    details.push(`sha: ${record2.headSha.slice(0, 7)}`);
+  }
+  if (record2.runId) {
+    details.push(`run: ${compactNotificationText(record2.runId, 26)}`);
+  }
+  return details.join(" / ").slice(0, 180);
+}
+function dashboardPushStatusLabel(record2) {
+  const status = normalize7(record2.status);
+  const conclusion = normalize7(record2.conclusion);
+  if (status === "completed") {
+    if (conclusion === "success") return "\u5B8C\u4E86";
+    if (conclusion === "failure" || conclusion === "timed_out") return "\u5931\u6557";
+    if (conclusion === "cancelled") return "\u30AD\u30E3\u30F3\u30BB\u30EB";
+    if (conclusion === "skipped") return "\u30B9\u30AD\u30C3\u30D7";
+    if (conclusion === "action_required") return "\u8981\u5BFE\u5FDC";
+    return "\u5B8C\u4E86";
+  }
+  if (status === "in_progress" || status === "running") return "\u5B9F\u884C\u4E2D";
+  if (status === "queued" || status === "requested" || status === "waiting") return "\u5F85\u6A5F\u4E2D";
+  if (status === "failed") return "\u5931\u6557";
+  if (status === "canceled" || status === "cancelled") return "\u30AD\u30E3\u30F3\u30BB\u30EB";
+  return "\u66F4\u65B0";
+}
+function shortRepositoryName(repository) {
+  const text = normalizeDashboardEventText(repository);
+  const parts = text.split("/");
+  return parts.length === 2 ? parts[1] : text;
+}
+function compactNotificationText(value, limit) {
+  const text = normalizeDashboardEventText(value).replace(/\s+/g, " ");
+  if (text.length <= limit) {
+    return text;
+  }
+  return `${text.slice(0, Math.max(0, limit - 1))}\u2026`;
 }
 async function sendDashboardWebPush({ env, subscription, payload }) {
   const endpoint = normalizeDashboardUrl(subscription?.endpoint);

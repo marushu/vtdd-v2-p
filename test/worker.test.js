@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import worker from "../src/worker.js";
 import { DashboardChatRoom } from "../src/worker.js";
+import { buildDashboardWebPushPayload } from "../src/worker/runtime.js";
 import {
   ActionType,
   ActorRole,
@@ -2623,6 +2624,65 @@ test("worker sends server-side dashboard Web Push test only for authenticated ow
   assert.equal("body" in calls[0].init, false);
   assert.equal(JSON.stringify(body).includes("p256dh-key"), false);
   assert.equal(JSON.stringify(body).includes("auth-key"), false);
+});
+
+test("worker builds distinct dashboard Web Push copy by event type", () => {
+  const deploySuccess = buildDashboardWebPushPayload({
+    kind: "github_actions_workflow_run",
+    repository: "marushu/vtdd-v2-p",
+    workflowName: "deploy-production",
+    runId: "26323724369",
+    status: "completed",
+    conclusion: "success",
+    headSha: "0a9e0b8587aa684de3dbd08b57909fe271192662",
+    headBranch: "main",
+    title: "deploy-production",
+    runUrl: "https://github.com/marushu/vtdd-v2-p/actions/runs/26323724369"
+  });
+  assert.equal(deploySuccess.title, "デプロイ完了: vtdd-v2-p");
+  assert.equal(deploySuccess.body.includes("workflow: deploy-production"), true);
+  assert.equal(deploySuccess.body.includes("branch: main"), true);
+  assert.equal(deploySuccess.body.includes("sha: 0a9e0b8"), true);
+  assert.equal(deploySuccess.body.includes("run: 26323724369"), true);
+
+  const deployFailure = buildDashboardWebPushPayload({
+    kind: "github_actions_workflow_run",
+    repository: "marushu/vtdd-v2-p",
+    workflowName: "deploy-production",
+    runId: "26323724370",
+    status: "completed",
+    conclusion: "failure",
+    headBranch: "main",
+    title: "deploy-production"
+  });
+  assert.equal(deployFailure.title, "デプロイ失敗: vtdd-v2-p");
+
+  const testPush = buildDashboardWebPushPayload({
+    kind: "dashboard_push_test",
+    repository: "marushu/vtdd-v2-p",
+    workflowName: "dashboard-push-test",
+    runId: "test-run",
+    status: "completed",
+    conclusion: "success",
+    title: "server push test"
+  });
+  assert.equal(testPush.title, "VTDD Butler テスト通知");
+  assert.equal(testPush.body, "通知経路は正常です。iPhone PWA にサーバ送信できました。");
+
+  const runner = buildDashboardWebPushPayload({
+    kind: "vps_runner_execution",
+    repository: "marushu/vtdd-v2-p",
+    workflowName: "vps-runner",
+    runId: "remote-codex-issue514",
+    status: "running",
+    conclusion: "",
+    headBranch: "codex/514-push-notification-copy",
+    title: "VPS Codex CLI が作業を開始しました"
+  });
+  assert.equal(runner.title, "VPS 実行中: vtdd-v2-p");
+  assert.equal(runner.body.includes("VPS Codex CLI が作業を開始しました"), true);
+  assert.equal(runner.body.includes("workflow: vps-runner"), true);
+  assert.equal(runner.body.includes("branch: codex/514-push-notification-copy"), true);
 });
 
 test("worker reports server-side dashboard Web Push configuration blockers", async () => {
