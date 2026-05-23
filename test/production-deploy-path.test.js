@@ -87,9 +87,22 @@ test("deploy-production workflow enforces the MVP production deploy boundary", (
     ),
     true
   );
+  assert.equal(workflow.includes("Preflight Cloudflare R2 media bucket"), true);
+  assert.equal(workflow.includes("/r2/buckets/${encoded_bucket}"), true);
+  assert.equal(workflow.includes("Cloudflare R2 media bucket preflight failed before passkey approval validation."), true);
+  assert.equal(workflow.includes("Please enable R2"), false);
+  assert.equal(
+    workflow.includes("Enable R2 in the Cloudflare Dashboard, create or select the bucket"),
+    true
+  );
   assert.equal(workflow.includes("Validate real passkey approval grant"), true);
   assert.equal(
     workflow.indexOf("Preflight Cloudflare Workers deploy entitlement") <
+      workflow.indexOf("Validate real passkey approval grant"),
+    true
+  );
+  assert.equal(
+    workflow.indexOf("Preflight Cloudflare R2 media bucket") <
       workflow.indexOf("Validate real passkey approval grant"),
     true
   );
