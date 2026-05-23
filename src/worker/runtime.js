@@ -10356,7 +10356,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           link.rel = "noreferrer";
           link.textContent = "";
           const isImage = String(reference.contentType || "").startsWith("image/");
-          if (isImage && reference.mediaId) {
+          if (isImage && link.href && link.href !== "#") {
             const image = document.createElement("img");
             image.className = "media-thumb";
             image.src = link.href;
