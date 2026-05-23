@@ -10037,8 +10037,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .send-button { width: 44px; height: 44px; border-radius: 999px; background: var(--text); color: var(--page-bg); font-size: 22px; }
     .pending-media, .message-media { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 8px; }
     .pending-media:empty, .message-media:empty { display: none; }
-    .media-chip { display: inline-flex; align-items: center; max-width: 100%; min-height: 34px; border: 1px solid var(--border); border-radius: 999px; padding: 5px 10px; gap: 6px; color: var(--text); background: var(--soft); font-size: 12px; text-decoration: none; }
+    .media-chip { display: inline-flex; align-items: center; max-width: 100%; min-height: 34px; border: 1px solid var(--border); border-radius: 14px; padding: 5px 10px; gap: 8px; color: var(--text); background: var(--soft); font-size: 12px; text-decoration: none; }
     .media-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: min(48vw, 320px); }
+    .media-thumb { width: 48px; height: 48px; flex: 0 0 auto; border-radius: 10px; object-fit: cover; background: var(--border); }
+    .media-chip.pending-preview { padding: 5px 8px 5px 5px; }
     .media-remove { border: 0; background: transparent; color: var(--muted); font: inherit; font-weight: 900; padding: 0 2px; cursor: pointer; }
     .composer-status { min-height: 18px; padding-left: 16px; color: var(--muted); font-size: 12px; }
     .composer-status.thinking::after { content: ""; display: inline-block; width: 1.4em; text-align: left; animation: thinkingDots 1.2s steps(4, end) infinite; }
@@ -10353,15 +10355,37 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           link.target = "_blank";
           link.rel = "noreferrer";
           link.textContent = "";
-          const icon = document.createElement("span");
-          icon.textContent = "添付";
+          const isImage = String(reference.contentType || "").startsWith("image/");
+          if (isImage && reference.mediaId) {
+            const image = document.createElement("img");
+            image.className = "media-thumb";
+            image.src = link.href;
+            image.alt = reference.filename || "添付画像";
+            image.loading = "lazy";
+            link.appendChild(image);
+          } else {
+            const icon = document.createElement("span");
+            icon.textContent = "添付";
+            link.appendChild(icon);
+          }
           const label = document.createElement("span");
           label.textContent = reference.filename || reference.mediaId || "media";
-          link.appendChild(icon);
           link.appendChild(label);
           wrapper.appendChild(link);
         }
         return wrapper;
+      }
+
+      function revokePendingMediaPreview(item) {
+        if (item && item.previewUrl && typeof URL !== "undefined" && typeof URL.revokeObjectURL === "function") {
+          URL.revokeObjectURL(item.previewUrl);
+        }
+      }
+
+      function revokePendingMediaPreviews(items = pendingMediaItems) {
+        for (const item of Array.isArray(items) ? items : []) {
+          revokePendingMediaPreview(item);
+        }
       }
 
       function renderPendingMedia() {
@@ -10370,6 +10394,14 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         for (const item of pendingMediaItems) {
           const chip = document.createElement("span");
           chip.className = "media-chip";
+          if (item.previewUrl) {
+            chip.classList.add("pending-preview");
+            const image = document.createElement("img");
+            image.className = "media-thumb";
+            image.src = item.previewUrl;
+            image.alt = item.filename || "送信待ち画像";
+            chip.appendChild(image);
+          }
           const label = document.createElement("span");
           label.textContent = item.filename || "attachment";
           const remove = document.createElement("button");
@@ -10378,6 +10410,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           remove.textContent = "×";
           remove.setAttribute("aria-label", "添付を外す");
           remove.addEventListener("click", () => {
+            revokePendingMediaPreview(item);
             pendingMediaItems = pendingMediaItems.filter((candidate) => candidate.clientId !== item.clientId);
             renderPendingMedia();
             updateComposerReserve();
@@ -10804,6 +10837,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           textarea.focus({ preventScroll: true });
           return;
         }
+        revokePendingMediaPreviews();
         pendingMediaItems = [];
         renderPendingMedia();
         textarea.value = "";
@@ -10823,14 +10857,24 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           try {
             mediaButton.disabled = true;
             const preparedFile = await prepareUploadFile(file);
-            pendingMediaItems = [
+            const previewUrl =
+              preparedFile && preparedFile.type && preparedFile.type.startsWith("image/") && typeof URL !== "undefined" && typeof URL.createObjectURL === "function"
+                ? URL.createObjectURL(preparedFile)
+                : "";
+            const nextPendingMediaItems = [
               ...pendingMediaItems,
               {
                 clientId: Date.now() + "_" + Math.random().toString(36).slice(2),
                 filename: preparedFile.name || file.name || "attachment",
+                previewUrl,
                 file: preparedFile
               }
-            ].slice(0, 12);
+            ];
+            const retainedPendingMediaItems = nextPendingMediaItems.slice(-12);
+            for (const dropped of nextPendingMediaItems.slice(0, Math.max(0, nextPendingMediaItems.length - 12))) {
+              revokePendingMediaPreview(dropped);
+            }
+            pendingMediaItems = retainedPendingMediaItems;
             renderPendingMedia();
             setStatus("添付を送信待ちに追加しました。repo 未指定の通常会話では private media として保存します。", { temporary: true });
             textarea.focus({ preventScroll: true });
