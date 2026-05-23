@@ -4,6 +4,9 @@ import process from "node:process";
 
 const DEFAULT_SCHEMA = "vtdd.dashboard.app_server_bridge.v1";
 const DANGER_FULL_ACCESS_SANDBOX = "danger-full-access";
+const APP_SERVER_FAILURE_ALREADY_SENT = Symbol("appServerFailureAlreadySent");
+const DEFAULT_APP_SERVER_ERROR_TEXT =
+  "codex app-server が応答生成中に失敗しました。画像を解析できなかった可能性があります。もう一度送るか、画像なしで内容を短く説明してください。";
 
 export function buildAppServerInitializeRequest(id = 1) {
   return {
@@ -194,10 +197,20 @@ export function mapAppServerNotificationToDashboardEvent(message, context = {}) 
       schema: DEFAULT_SCHEMA,
       threadId: context.dashboardThreadId,
       codexThreadId: context.codexThreadId || null,
-      text: params.message || params.reason || "codex app-server returned an error"
+      text: params.message || params.reason || DEFAULT_APP_SERVER_ERROR_TEXT
     };
   }
   return null;
+}
+
+function createAppServerFailureAlreadySentError(message) {
+  const error = new Error(message || DEFAULT_APP_SERVER_ERROR_TEXT);
+  error[APP_SERVER_FAILURE_ALREADY_SENT] = true;
+  return error;
+}
+
+function isAppServerFailureAlreadySent(error) {
+  return Boolean(error && error[APP_SERVER_FAILURE_ALREADY_SENT]);
 }
 
 export function extractAppServerNotificationTurnId(message) {
@@ -412,7 +425,7 @@ export async function handleDashboardTurnRequest({
     }
     if (event.type === "app_server_turn_failed") {
       void sendDashboardEvent(event);
-      finishTurn(() => rejectTurn(new Error(event.text || "codex app-server turn failed")));
+      finishTurn(() => rejectTurn(createAppServerFailureAlreadySentError(event.text)));
       return;
     }
     void sendDashboardEvent(event);
@@ -547,11 +560,14 @@ export async function connectDashboardAppServerBridgeOnce({
           })
         )
         .catch((error) => {
+          if (isAppServerFailureAlreadySent(error)) {
+            return;
+          }
           safeSend({
             type: "app_server_turn_failed",
             schema: DEFAULT_SCHEMA,
             threadId: payload.threadId,
-            text: error?.message || "codex app-server bridge failed"
+            text: error?.message || DEFAULT_APP_SERVER_ERROR_TEXT
           });
         });
     }
