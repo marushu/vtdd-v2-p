@@ -7075,17 +7075,93 @@ async function dispatchDashboardWebPushForEvent(env, event) {
   };
 }
 
-function buildDashboardWebPushPayload(event) {
+export function buildDashboardWebPushPayload(event) {
   const record = normalizeDashboardEventRecord(event);
-  const title = record.kind === "dashboard_push_test" ? "VTDD Butler test" : "VTDD Butler";
-  const statusText = [record.status, record.conclusion].filter(Boolean).join("/");
-  const body = [record.title, record.repository, statusText].filter(Boolean).join(" - ");
+  const title = buildDashboardWebPushTitle(record);
+  const body = buildDashboardWebPushBody(record);
   return {
     title,
     body: body || "Dashboard Butler の通知です。",
     tag: `vtdd-${record.kind || "dashboard"}-${record.runId || record.id || "event"}`.slice(0, 120),
     url: record.runUrl || "/dashboard/notifications"
   };
+}
+
+function buildDashboardWebPushTitle(record) {
+  const repository = shortRepositoryName(record.repository);
+  if (record.kind === "dashboard_push_test") {
+    return "VTDD Butler テスト通知";
+  }
+  if (record.kind === "vps_runner_execution") {
+    return `VPS ${dashboardPushStatusLabel(record)}${repository ? `: ${repository}` : ""}`.slice(0, 80);
+  }
+  if (record.kind === "github_actions_workflow_run") {
+    const isDeploy = normalize(record.workflowName).includes("deploy");
+    const label = dashboardPushStatusLabel(record);
+    if (isDeploy) {
+      return `デプロイ${label}${repository ? `: ${repository}` : ""}`.slice(0, 80);
+    }
+    const workflow = compactNotificationText(record.workflowName || "workflow", 24);
+    return `Actions ${label}: ${workflow}${repository ? ` / ${repository}` : ""}`.slice(0, 80);
+  }
+  return `VTDD Butler ${dashboardPushStatusLabel(record)}${repository ? `: ${repository}` : ""}`.slice(0, 80);
+}
+
+function buildDashboardWebPushBody(record) {
+  if (record.kind === "dashboard_push_test") {
+    return "通知経路は正常です。iPhone PWA にサーバ送信できました。";
+  }
+
+  const details = [];
+  const title = compactNotificationText(record.title, 58);
+  if (title && title !== record.workflowName) {
+    details.push(title);
+  }
+  if (record.workflowName) {
+    details.push(`workflow: ${compactNotificationText(record.workflowName, 36)}`);
+  }
+  if (record.headBranch) {
+    details.push(`branch: ${compactNotificationText(record.headBranch, 34)}`);
+  }
+  if (record.headSha) {
+    details.push(`sha: ${record.headSha.slice(0, 7)}`);
+  }
+  if (record.runId) {
+    details.push(`run: ${compactNotificationText(record.runId, 26)}`);
+  }
+  return details.join(" / ").slice(0, 180);
+}
+
+function dashboardPushStatusLabel(record) {
+  const status = normalize(record.status);
+  const conclusion = normalize(record.conclusion);
+  if (status === "completed") {
+    if (conclusion === "success") return "完了";
+    if (conclusion === "failure" || conclusion === "timed_out") return "失敗";
+    if (conclusion === "cancelled") return "キャンセル";
+    if (conclusion === "skipped") return "スキップ";
+    if (conclusion === "action_required") return "要対応";
+    return "完了";
+  }
+  if (status === "in_progress" || status === "running") return "実行中";
+  if (status === "queued" || status === "requested" || status === "waiting") return "待機中";
+  if (status === "failed") return "失敗";
+  if (status === "canceled" || status === "cancelled") return "キャンセル";
+  return "更新";
+}
+
+function shortRepositoryName(repository) {
+  const text = normalizeDashboardEventText(repository);
+  const parts = text.split("/");
+  return parts.length === 2 ? parts[1] : text;
+}
+
+function compactNotificationText(value, limit) {
+  const text = normalizeDashboardEventText(value).replace(/\s+/g, " ");
+  if (text.length <= limit) {
+    return text;
+  }
+  return `${text.slice(0, Math.max(0, limit - 1))}…`;
 }
 
 async function sendDashboardWebPush({ env, subscription, payload }) {
