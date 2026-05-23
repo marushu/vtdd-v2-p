@@ -33,6 +33,9 @@ test("production deploy doc defines the governed GitHub Actions deploy path", ()
   assert.equal(doc.includes("docs/setup/cloudflare-deploy-secret-sync.md"), true);
   assert.equal(doc.includes("Worker runtime secrets"), true);
   assert.equal(doc.includes("`VTDD_MEMORY_D1`"), true);
+  assert.equal(doc.includes("`VTDD_MEDIA_R2`"), true);
+  assert.equal(doc.includes("`CLOUDFLARE_MEDIA_R2_BUCKET_NAME`"), true);
+  assert.equal(doc.includes("`vtdd-media-prod`"), true);
   assert.equal(doc.includes("real passkey registration"), true);
   assert.equal(doc.includes("owner-specific Cloudflare"), true);
   assert.equal(doc.includes("must not be committed"), true);
@@ -102,6 +105,7 @@ test("deploy-production workflow enforces the MVP production deploy boundary", (
   );
   assert.equal(workflow.includes("Generate production Wrangler config"), true);
   assert.equal(workflow.includes("VTDD_GITHUB_ACTIONS_REPOSITORY: ${{ github.repository }}"), true);
+  assert.equal(workflow.includes("CLOUDFLARE_MEDIA_R2_BUCKET_NAME: ${{ vars.CLOUDFLARE_MEDIA_R2_BUCKET_NAME || 'vtdd-media-prod' }}"), true);
   assert.equal(workflow.includes("VTDD_KNOWN_GOOD_COMMIT_SHA: ${{ vars.VTDD_KNOWN_GOOD_COMMIT_SHA }}"), true);
   assert.equal(workflow.includes("VTDD_DASHBOARD_ALLOWED_EMAILS: ${{ vars.VTDD_DASHBOARD_ALLOWED_EMAILS }}"), true);
   assert.equal(
@@ -145,6 +149,9 @@ test("deploy-production workflow enforces the MVP production deploy boundary", (
   assert.equal(workflow.includes("[[env.production.d1_databases]]"), true);
   assert.equal(workflow.includes('binding = "VTDD_MEMORY_D1"'), true);
   assert.equal(workflow.includes('database_id = "$CLOUDFLARE_D1_DATABASE_ID"'), true);
+  assert.equal(workflow.includes("[[env.production.r2_buckets]]"), true);
+  assert.equal(workflow.includes('binding = "VTDD_MEDIA_R2"'), true);
+  assert.equal(workflow.includes('bucket_name = "$CLOUDFLARE_MEDIA_R2_BUCKET_NAME"'), true);
   assert.equal(
     workflow.includes("command: deploy --config wrangler.production.generated.toml --env production"),
     true
