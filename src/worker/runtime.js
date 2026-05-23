@@ -672,6 +672,10 @@ export default {
       return handleDashboardPushSubscriptionRequest(request, env);
     }
 
+    if (request.method === "POST" && isApiPath(url.pathname, "/dashboard/push/status")) {
+      return handleDashboardPushStatusRequest(request, env);
+    }
+
     if (request.method === "POST" && isApiPath(url.pathname, "/dashboard/push/test")) {
       return handleDashboardPushTestRequest(request, env);
     }
@@ -4126,6 +4130,58 @@ async function handleDashboardPushSubscriptionRequest(request, env) {
   });
 }
 
+async function handleDashboardPushStatusRequest(request, env) {
+  const dashboardAuth = await authorizeDashboardRequest({
+    request,
+    env,
+    apiSuffix: "/dashboard/push/status"
+  });
+  if (!dashboardAuth.ok) {
+    return json(dashboardAuth.status, {
+      ok: false,
+      error: "dashboard_auth_required",
+      reason: dashboardAuth.reason
+    });
+  }
+
+  const store = resolveDashboardPushSubscriptionStore(env);
+  if (!store) {
+    return json(503, {
+      ok: false,
+      error: "dashboard_push_subscription_store_unavailable",
+      reason: "dashboard push subscription store is not configured"
+    });
+  }
+
+  const payload = await readJson(request);
+  const endpoint = normalizeDashboardUrl(payload?.endpoint);
+  if (!endpoint) {
+    return json(422, {
+      ok: false,
+      error: "dashboard_push_subscription_invalid",
+      reason: "push subscription endpoint is required"
+    });
+  }
+
+  const endpointHash = await sha256Hex(endpoint);
+  if (typeof store.get !== "function") {
+    return json(503, {
+      ok: false,
+      error: "dashboard_push_subscription_status_unavailable",
+      reason: "dashboard push subscription store cannot verify a single subscription"
+    });
+  }
+
+  const subscription = await store.get(endpointHash);
+  return json(200, {
+    ok: true,
+    subscription: {
+      status: subscription ? "saved" : "not_saved",
+      updatedAt: subscription?.updatedAt || null
+    }
+  });
+}
+
 async function handleDashboardPushTestRequest(request, env) {
   const dashboardAuth = await authorizeDashboardRequest({
     request,
@@ -6903,6 +6959,37 @@ function createD1DashboardPushSubscriptionStore(d1) {
         .filter((record) => record.endpoint && record.p256dh && record.auth);
     },
 
+    async get(endpointHash) {
+      const normalizedEndpointHash = normalizeDashboardEventText(endpointHash);
+      if (!normalizedEndpointHash) {
+        return null;
+      }
+      await ensureSchema();
+      const result = await d1
+        .prepare(
+          `SELECT endpoint_hash, endpoint, expiration_time, p256dh, auth, user_agent,
+                  owner_identity, updated_at
+             FROM vtdd_dashboard_push_subscriptions
+             WHERE endpoint_hash = ?
+             LIMIT 1`
+        )
+        .bind(normalizedEndpointHash)
+        .first();
+      if (!result) {
+        return null;
+      }
+      return {
+        endpointHash: normalizeDashboardEventText(result.endpoint_hash),
+        endpoint: normalizeDashboardEventText(result.endpoint),
+        expirationTime: result.expiration_time ?? null,
+        p256dh: normalizeDashboardEventText(result.p256dh),
+        auth: normalizeDashboardEventText(result.auth),
+        userAgent: sanitizeDashboardChatText(result.user_agent),
+        ownerIdentity: normalizeDashboardEventText(result.owner_identity),
+        updatedAt: normalizeIsoTimestamp(result.updated_at) || null
+      };
+    },
+
     async delete(endpointHash) {
       const normalizedEndpointHash = normalizeDashboardEventText(endpointHash);
       if (!normalizedEndpointHash) {
@@ -9396,6 +9483,9 @@ async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventS
         <section class="lane">
           <div class="lane-title"><h2>iOS PWA 通知</h2><span class="pill" id="push-support-pill">確認中</span></div>
           <p id="push-state" class="muted">通知状態を確認しています。</p>
+          <p id="push-subscription-state" class="muted">購読保存状態を確認しています。</p>
+          <p id="push-delivery-state" class="muted">deploy 完了/失敗通知はサーバ送信 Web Push と同じ経路で届きます。</p>
+          <p id="push-server-result" class="muted">最後のサーバ送信結果: 未実行</p>
           <div class="actions">
             <button class="dashboard-action" id="push-permission-button" type="button">通知を許可</button>
             <button class="dashboard-action" id="push-subscribe-button" type="button">購読を保存</button>
@@ -9429,6 +9519,9 @@ async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventS
         (() => {
           const vapidPublicKey = ${JSON.stringify(publicKey)};
           const pushState = document.getElementById("push-state");
+          const pushSubscriptionState = document.getElementById("push-subscription-state");
+          const pushDeliveryState = document.getElementById("push-delivery-state");
+          const pushServerResult = document.getElementById("push-server-result");
           const pushSupportPill = document.getElementById("push-support-pill");
           const badgeState = document.getElementById("badge-state");
           const badgeSupportPill = document.getElementById("badge-support-pill");
@@ -9439,6 +9532,8 @@ async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventS
           const badgeSetButton = document.getElementById("badge-set-button");
           const badgeClearButton = document.getElementById("badge-clear-button");
           const unreadCount = ${recentEvents.length};
+          let lastServerPushResult = "最後のサーバ送信結果: 未実行";
+          let serverPushDelivered = false;
 
           function setText(node, text) {
             if (node) node.textContent = text;
@@ -9460,17 +9555,66 @@ async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventS
             return output;
           }
 
+          function safePushResultDetail(value) {
+            const normalized = String(value || "");
+            if (!normalized) return "";
+            if (normalized.includes("accepted")) return "accepted";
+            if (normalized.includes("stale")) return "stale subscription";
+            if (normalized.includes("not found")) return "subscription not found";
+            if (normalized.includes("unconfigured")) return "server push unconfigured";
+            if (normalized.includes("rejected")) return "push service rejected";
+            if (normalized.includes("required")) return "required setting missing";
+            return "details redacted";
+          }
+
           async function registration() {
             if (!("serviceWorker" in navigator)) return null;
             return navigator.serviceWorker.register("/dashboard-sw.js", { scope: "/dashboard/" });
+          }
+
+          async function readServerSubscriptionStatus(subscription) {
+            if (!subscription) return null;
+            const response = await fetch("/v2/dashboard/push/status", {
+              method: "POST",
+              credentials: "same-origin",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ endpoint: subscription.endpoint })
+            });
+            if (!response.ok) return { status: "unknown" };
+            const body = await response.json().catch(() => ({}));
+            return body && body.subscription ? body.subscription : { status: "unknown" };
           }
 
           async function refreshState() {
             const pushSupported = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
             setPill(pushSupportPill, pushSupported ? "対応" : "未対応", pushSupported);
             setText(pushState, pushSupported
-              ? "通知 permission: " + Notification.permission + (vapidPublicKey ? "" : " / VAPID public key 未設定")
+              ? "端末通知: " + Notification.permission + (vapidPublicKey ? " / サーバ送信設定: あり" : " / サーバ送信設定: 未設定")
               : "この環境は Web Push に未対応です。iOS はホーム画面に追加した PWA が必要です。");
+            let hasSubscription = false;
+            let serverSubscription = null;
+            if (pushSupported && vapidPublicKey && Notification.permission === "granted") {
+              const reg = await registration();
+              const subscription = await reg?.pushManager?.getSubscription?.();
+              hasSubscription = Boolean(subscription);
+              serverSubscription = await readServerSubscriptionStatus(subscription);
+            }
+            const serverSaved = serverSubscription && serverSubscription.status === "saved";
+            setText(pushSubscriptionState, hasSubscription && serverSaved
+              ? serverPushDelivered
+                ? "購読保存: あり。サーバ送信テストも成功済みです。deploy 完了/失敗通知は同じ経路で届きます。"
+                : "購読保存: あり。サーバ送信テストはまだ未確認です。"
+              : hasSubscription
+                ? "購読保存: 端末に購読はありますが、サーバ保存は未確認です。「購読を保存」を押してください。"
+              : pushSupported && vapidPublicKey
+                ? "購読保存: 未保存。サーバ通知を受けるには「購読を保存」を押してください。"
+                : "購読保存: サーバ送信設定が未完了のため保存できません。");
+            setText(pushDeliveryState, vapidPublicKey
+              ? serverPushDelivered
+                ? "サーバ送信: テスト成功。deploy 完了/失敗通知とサーバ送信テストは同じ Web Push 経路です。"
+                : "サーバ送信: 設定あり。deploy 通知到達性はサーバ送信テスト成功後に確認済みになります。"
+              : "サーバ送信: 未設定。VAPID public key がないため deploy 通知はこの端末へ届きません。");
+            setText(pushServerResult, lastServerPushResult);
             const badgeSupported = "setAppBadge" in navigator && "clearAppBadge" in navigator;
             setPill(badgeSupportPill, badgeSupported ? "対応" : "未対応", badgeSupported);
             setText(badgeState, badgeSupported ? "未読通知数をホーム画面 badge に反映できます。" : "この環境では Badging API が未対応です。");
@@ -9502,7 +9646,9 @@ async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventS
               headers: { "content-type": "application/json" },
               body: JSON.stringify({ subscription: subscription.toJSON(), userAgent: navigator.userAgent })
             });
-            setText(pushState, response.ok ? "push subscription を保存しました。" : "push subscription の保存に失敗しました。");
+            setText(pushSubscriptionState, response.ok
+              ? "購読保存: あり。サーバ送信テストはまだ未確認です。"
+              : "購読保存: 失敗。owner session と Cloudflare Access を確認してください。");
             await refreshState();
           });
 
@@ -9525,7 +9671,17 @@ async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventS
               headers: { "content-type": "application/json" },
               body: JSON.stringify({ title: "Dashboard Butler server push test" })
             });
-            setText(pushState, response.ok ? "server-side Web Push を送信しました。" : "server-side Web Push の送信に失敗しました。");
+            const body = await response.json().catch(() => ({}));
+            const webPush = body && body.webPush ? body.webPush : {};
+            const attempted = Number(webPush.attempted || 0);
+            const delivered = Number(webPush.delivered || 0);
+            const firstResult = Array.isArray(webPush.results) ? webPush.results[0] : null;
+            const detail = safePushResultDetail(firstResult?.reason || firstResult?.error || webPush.reason || webPush.error || "");
+            serverPushDelivered = delivered > 0 && delivered === attempted;
+            lastServerPushResult = serverPushDelivered
+              ? "最後のサーバ送信結果: accepted (" + delivered + "/" + attempted + ")"
+              : "最後のサーバ送信結果: rejected (" + delivered + "/" + attempted + ")" + (detail ? " / " + detail : "");
+            setText(pushServerResult, lastServerPushResult);
             await refreshState();
           });
 
