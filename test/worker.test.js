@@ -169,6 +169,60 @@ function createInMemoryDashboardChatStore() {
   };
 }
 
+function createInMemoryMediaObjectStore() {
+  const records = new Map();
+  return {
+    async put(record) {
+      records.set(record.id, record);
+      return record;
+    },
+    async get(id) {
+      return records.get(id) ?? null;
+    },
+    async delete(id) {
+      return records.delete(id);
+    },
+    async search(filter = {}) {
+      const matches = [...records.values()].filter((record) => {
+        if (filter.repository && record.repository !== filter.repository) {
+          return false;
+        }
+        if (filter.relatedIssue && record.relatedIssue !== Number(filter.relatedIssue)) {
+          return false;
+        }
+        if (filter.relatedPr && record.relatedPr !== Number(filter.relatedPr)) {
+          return false;
+        }
+        return true;
+      });
+      return matches.slice(0, Number(filter.limit) || 20);
+    }
+  };
+}
+
+function createInMemoryR2Binding() {
+  const objects = new Map();
+  return {
+    objects,
+    async put(key, value, options = {}) {
+      objects.set(key, { value, options, body: value });
+      return null;
+    },
+    async get(key) {
+      return objects.get(key) ?? null;
+    },
+    async delete(key) {
+      objects.delete(key);
+    }
+  };
+}
+
+function createPngBlob() {
+  return new Blob([
+    new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d])
+  ], { type: "image/png" });
+}
+
 function createInMemoryDashboardPushSubscriptionStore() {
   const subscriptions = new Map();
   return {
@@ -679,6 +733,460 @@ test("worker appends dashboard Butler chat turn and retrieves the same thread", 
   assert.equal(retrieveBody.summary, null);
 });
 
+test("worker serves dashboard media add controls for iPhone-first upload", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/dashboard", {
+      headers: dashboardAccessHeaders
+    }),
+    dashboardAccessEnv
+  );
+  assert.equal(response.status, 200);
+  const body = await response.text();
+  assert.equal(body.includes("id=\"butler-media-button\""), true);
+  assert.equal(body.includes("id=\"butler-media-input\""), true);
+  assert.equal(body.includes("accept=\"image/*\""), false);
+  assert.equal(body.includes("/v2/media/upload"), true);
+  assert.equal(body.includes("createImageBitmap"), true);
+  assert.equal(body.includes("送信時に private media として保存します"), true);
+  assert.equal(body.includes("mediaReferences"), true);
+  assert.equal(body.includes("pendingSendRollbacks"), true);
+  assert.equal(body.includes("owner_message_accepted"), true);
+});
+
+test("worker uploads dashboard media to R2 and stores D1 metadata reference only", async () => {
+  const mediaStore = createInMemoryMediaObjectStore();
+  const r2 = createInMemoryR2Binding();
+  const form = new FormData();
+  form.append("repositoryInput", "marushu/vtdd-v2-p");
+  form.append("relatedIssue", "498");
+  form.append("sourceSurface", "dashboard_butler");
+  form.append("file", createPngBlob(), "dashboard.png");
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/media/upload", {
+      method: "POST",
+      headers: dashboardAccessHeaders,
+      body: form
+    }),
+    {
+      ...dashboardAccessEnv,
+      MEDIA_OBJECT_STORE: mediaStore,
+      VTDD_MEDIA_R2: r2
+    }
+  );
+
+  assert.equal(response.status, 201);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.match(body.media.mediaId, /^med_/);
+  assert.equal(body.media.repository, "marushu/vtdd-v2-p");
+  assert.equal(body.media.relatedIssue, 498);
+  assert.equal(body.media.filename, "dashboard.png");
+  assert.equal(body.media.contentType, "image/png");
+  assert.equal(body.media.visibility, "private");
+  assert.equal(body.stored.rawBinaryReturned, false);
+  assert.equal(JSON.stringify(body).includes("fake image bytes"), false);
+  assert.equal(r2.objects.size, 1);
+
+  const metadataResponse = await worker.fetch(
+    new Request(`https://example.com${body.media.metadataUrl}`, {
+      headers: dashboardAccessHeaders
+    }),
+    { ...dashboardAccessEnv, MEDIA_OBJECT_STORE: mediaStore, VTDD_MEDIA_R2: r2 }
+  );
+  assert.equal(metadataResponse.status, 200);
+  const metadataBody = await metadataResponse.json();
+  assert.equal(metadataBody.media.mediaId, body.media.mediaId);
+  assert.equal(metadataBody.media.objectKey, undefined);
+  assert.equal(metadataBody.media.sourceEventId, undefined);
+  assert.equal(JSON.stringify(metadataBody).includes("fake image bytes"), false);
+
+  const downloadResponse = await worker.fetch(
+    new Request(`https://example.com${body.media.downloadUrl}`, {
+      headers: dashboardAccessHeaders
+    }),
+    { ...dashboardAccessEnv, MEDIA_OBJECT_STORE: mediaStore, VTDD_MEDIA_R2: r2 }
+  );
+  assert.equal(downloadResponse.status, 200);
+  assert.equal(new Uint8Array(await downloadResponse.arrayBuffer())[0], 0x89);
+});
+
+test("worker rejects media upload without R2 binding before metadata drift", async () => {
+  const form = new FormData();
+  form.append("file", createPngBlob(), "dashboard.png");
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/media/upload", {
+      method: "POST",
+      headers: dashboardAccessHeaders,
+      body: form
+    }),
+    {
+      ...dashboardAccessEnv,
+      MEDIA_OBJECT_STORE: createInMemoryMediaObjectStore()
+    }
+  );
+
+  assert.equal(response.status, 503);
+  const body = await response.json();
+  assert.equal(body.error, "media_r2_unavailable");
+});
+
+test("worker rejects media upload without resolved repository before R2 put", async () => {
+  const mediaStore = createInMemoryMediaObjectStore();
+  const r2 = createInMemoryR2Binding();
+  const form = new FormData();
+  form.append("repositoryInput", "未指定");
+  form.append("file", createPngBlob(), "dashboard.png");
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/media/upload", {
+      method: "POST",
+      headers: dashboardAccessHeaders,
+      body: form
+    }),
+    {
+      ...dashboardAccessEnv,
+      MEDIA_OBJECT_STORE: mediaStore,
+      VTDD_MEDIA_R2: r2
+    }
+  );
+
+  assert.equal(response.status, 422);
+  const body = await response.json();
+  assert.equal(body.error, "repository_required");
+  assert.equal(r2.objects.size, 0);
+});
+
+test("worker rejects spoofed dashboard media content type before R2 put", async () => {
+  const mediaStore = createInMemoryMediaObjectStore();
+  const r2 = createInMemoryR2Binding();
+  const form = new FormData();
+  form.append("repositoryInput", "marushu/vtdd-v2-p");
+  form.append("relatedIssue", "498");
+  form.append("file", new Blob(["not actually a png"], { type: "image/png" }), "dashboard.png");
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/media/upload", {
+      method: "POST",
+      headers: dashboardAccessHeaders,
+      body: form
+    }),
+    {
+      ...dashboardAccessEnv,
+      MEDIA_OBJECT_STORE: mediaStore,
+      VTDD_MEDIA_R2: r2
+    }
+  );
+
+  assert.equal(response.status, 415);
+  const body = await response.json();
+  assert.equal(body.error, "media_content_type_mismatch");
+  assert.equal(r2.objects.size, 0);
+});
+
+test("worker rejects HTML/script-looking media even when uploaded as octet stream", async () => {
+  const mediaStore = createInMemoryMediaObjectStore();
+  const r2 = createInMemoryR2Binding();
+  const form = new FormData();
+  form.append("repositoryInput", "marushu/vtdd-v2-p");
+  form.append("relatedIssue", "498");
+  form.append("file", new Blob(["<script>alert(1)</script>"], { type: "application/octet-stream" }), "evidence.bin");
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/media/upload", {
+      method: "POST",
+      headers: dashboardAccessHeaders,
+      body: form
+    }),
+    {
+      ...dashboardAccessEnv,
+      MEDIA_OBJECT_STORE: mediaStore,
+      VTDD_MEDIA_R2: r2
+    }
+  );
+
+  assert.equal(response.status, 415);
+  const body = await response.json();
+  assert.equal(body.error, "media_content_type_forbidden");
+  assert.equal(r2.objects.size, 0);
+});
+
+test("worker rejects unknown octet-stream binary in the first media slice", async () => {
+  const mediaStore = createInMemoryMediaObjectStore();
+  const r2 = createInMemoryR2Binding();
+  const form = new FormData();
+  form.append("repositoryInput", "marushu/vtdd-v2-p");
+  form.append("relatedIssue", "498");
+  form.append("file", new Blob([new Uint8Array([0, 1, 2, 3, 4, 5])], { type: "application/octet-stream" }), "evidence.bin");
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/media/upload", {
+      method: "POST",
+      headers: dashboardAccessHeaders,
+      body: form
+    }),
+    {
+      ...dashboardAccessEnv,
+      MEDIA_OBJECT_STORE: mediaStore,
+      VTDD_MEDIA_R2: r2
+    }
+  );
+
+  assert.equal(response.status, 415);
+  const body = await response.json();
+  assert.equal(body.error, "media_content_type_unsupported");
+  assert.equal(r2.objects.size, 0);
+});
+
+test("worker rejects strict document media when declared type and filename have no matching signature", async () => {
+  const mediaStore = createInMemoryMediaObjectStore();
+  const r2 = createInMemoryR2Binding();
+  const form = new FormData();
+  form.append("repositoryInput", "marushu/vtdd-v2-p");
+  form.append("relatedIssue", "498");
+  form.append("file", new Blob(["<script>alert(1)</script>"], { type: "application/pdf" }), "evidence.pdf");
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/media/upload", {
+      method: "POST",
+      headers: dashboardAccessHeaders,
+      body: form
+    }),
+    {
+      ...dashboardAccessEnv,
+      MEDIA_OBJECT_STORE: mediaStore,
+      VTDD_MEDIA_R2: r2
+    }
+  );
+
+  assert.equal(response.status, 415);
+  const body = await response.json();
+  assert.equal(body.error, "media_content_type_forbidden");
+  assert.equal(r2.objects.size, 0);
+});
+
+test("worker cleans up R2 object when media metadata insert fails", async () => {
+  const r2 = createInMemoryR2Binding();
+  const form = new FormData();
+  form.append("repositoryInput", "marushu/vtdd-v2-p");
+  form.append("relatedIssue", "498");
+  form.append("file", createPngBlob(), "dashboard.png");
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/media/upload", {
+      method: "POST",
+      headers: dashboardAccessHeaders,
+      body: form
+    }),
+    {
+      ...dashboardAccessEnv,
+      MEDIA_OBJECT_STORE: {
+        async put() {
+          throw new Error("d1 unavailable");
+        },
+        async get() {
+          return null;
+        }
+      },
+      VTDD_MEDIA_R2: r2
+    }
+  );
+
+  assert.equal(response.status, 500);
+  const body = await response.json();
+  assert.equal(body.error, "media_metadata_insert_failed");
+  assert.equal(r2.objects.size, 0);
+});
+
+test("worker allows rollback delete only for private dashboard media from an abandoned owner message send", async () => {
+  const mediaStore = createInMemoryMediaObjectStore();
+  const r2 = createInMemoryR2Binding();
+  const form = new FormData();
+  form.append("repositoryInput", "marushu/vtdd-v2-p");
+  form.append("relatedIssue", "498");
+  form.append("sourceSurface", "dashboard_butler");
+  form.append("sourceEventId", "dashboard_owner_message:test-rollback");
+  form.append("file", createPngBlob(), "dashboard.png");
+
+  const uploadResponse = await worker.fetch(
+    new Request("https://example.com/v2/media/upload", {
+      method: "POST",
+      headers: dashboardAccessHeaders,
+      body: form
+    }),
+    {
+      ...dashboardAccessEnv,
+      MEDIA_OBJECT_STORE: mediaStore,
+      VTDD_MEDIA_R2: r2
+    }
+  );
+  assert.equal(uploadResponse.status, 201);
+  const uploadBody = await uploadResponse.json();
+  assert.equal(r2.objects.size, 1);
+
+  const deleteResponse = await worker.fetch(
+    new Request(`https://example.com/v2/media/${uploadBody.media.mediaId}?cleanup=abandoned_send&repository=marushu/vtdd-v2-p&relatedIssue=498&sourceEventId=dashboard_owner_message%3Atest-rollback`, {
+      method: "DELETE",
+      headers: dashboardAccessHeaders
+    }),
+    {
+      ...dashboardAccessEnv,
+      MEDIA_OBJECT_STORE: mediaStore,
+      VTDD_MEDIA_R2: r2
+    }
+  );
+
+  assert.equal(deleteResponse.status, 200);
+  const deleteBody = await deleteResponse.json();
+  assert.equal(deleteBody.authority, "same_send_abandoned_private_media_rollback");
+  assert.equal(r2.objects.size, 0);
+  assert.equal(await mediaStore.get(uploadBody.media.mediaId), null);
+});
+
+test("worker rejects abandoned media rollback without exact source event scope", async () => {
+  const mediaStore = createInMemoryMediaObjectStore();
+  const r2 = createInMemoryR2Binding();
+  await mediaStore.put({
+    id: "med_rollbackscope",
+    repository: "marushu/vtdd-v2-p",
+    relatedIssue: 498,
+    sourceSurface: "dashboard_butler",
+    sourceEventId: "dashboard_owner_message:test-rollback",
+    objectKey: "media/marushu/vtdd-v2-p/2026/05/23/med_rollbackscope/dashboard.png",
+    filename: "dashboard.png",
+    contentType: "image/png",
+    byteSize: 16,
+    sha256: "0123456789abcdef",
+    visibility: "private",
+    createdAt: "2026-05-23T00:00:00.000Z",
+    updatedAt: "2026-05-23T00:00:00.000Z"
+  });
+  await r2.put("media/marushu/vtdd-v2-p/2026/05/23/med_rollbackscope/dashboard.png", new Uint8Array([1, 2, 3]));
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/media/med_rollbackscope?cleanup=abandoned_send&repository=marushu/vtdd-v2-p&relatedIssue=498", {
+      method: "DELETE",
+      headers: dashboardAccessHeaders
+    }),
+    {
+      ...dashboardAccessEnv,
+      MEDIA_OBJECT_STORE: mediaStore,
+      VTDD_MEDIA_R2: r2
+    }
+  );
+
+  assert.equal(response.status, 403);
+  const body = await response.json();
+  assert.equal(body.error, "scoped_approval_required");
+  assert.equal(r2.objects.size, 1);
+  assert.notEqual(await mediaStore.get("med_rollbackscope"), null);
+});
+
+test("worker requires repository filter before media metadata search", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/media/search", {
+      headers: dashboardAccessHeaders
+    }),
+    {
+      ...dashboardAccessEnv,
+      MEDIA_OBJECT_STORE: createInMemoryMediaObjectStore()
+    }
+  );
+
+  assert.equal(response.status, 422);
+  const body = await response.json();
+  assert.equal(body.error, "repository_required");
+});
+
+test("worker stores dashboard media references in chat without raw binary", async () => {
+  const store = createInMemoryDashboardChatStore();
+  const mediaStore = createInMemoryMediaObjectStore();
+  await mediaStore.put({
+    id: "med_testmedia1234",
+    repository: "marushu/vtdd-v2-p",
+    relatedIssue: 498,
+    sourceSurface: "dashboard_butler",
+    objectKey: "media/marushu/vtdd-v2-p/2026/05/23/med_testmedia1234/dashboard.png",
+    filename: "dashboard.png",
+    contentType: "image/png",
+    byteSize: 16,
+    sha256: "0123456789abcdef",
+    visibility: "private",
+    createdAt: "2026-05-23T00:00:00.000Z",
+    updatedAt: "2026-05-23T00:00:00.000Z"
+  });
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/chat/messages", {
+      method: "POST",
+      headers: { ...dashboardAccessHeaders, "content-type": "application/json" },
+      body: JSON.stringify({
+        threadId: "dashboard-main-marushu-vtdd-v2-p",
+        repository: "marushu/vtdd-v2-p",
+        text: "",
+        mediaReferences: [
+          {
+            mediaId: "med_testmedia1234",
+            repository: "marushu/vtdd-v2-p",
+            relatedIssue: 498,
+            filename: "dashboard.png",
+            contentType: "image/png",
+            byteSize: 16,
+            sha256: "0123456789abcdef",
+            visibility: "private",
+            rawBinary: "fake image bytes"
+          }
+        ]
+      })
+    }),
+    { ...dashboardAccessEnv, DASHBOARD_CHAT_STORE: store, MEDIA_OBJECT_STORE: mediaStore }
+  );
+
+  assert.equal(response.status, 202);
+  const body = await response.json();
+  assert.equal(body.messages[0].text, "添付を追加しました。");
+  assert.equal(body.messages[0].mediaReferences.length, 1);
+  assert.equal(body.messages[0].mediaReferences[0].mediaId, "med_testmedia1234");
+  assert.equal(JSON.stringify(body).includes("fake image bytes"), false);
+});
+
+test("worker rejects chat media references outside the repository or issue context", async () => {
+  const store = createInMemoryDashboardChatStore();
+  const mediaStore = createInMemoryMediaObjectStore();
+  await mediaStore.put({
+    id: "med_wrongissue123",
+    repository: "marushu/vtdd-v2-p",
+    relatedIssue: 999,
+    sourceSurface: "dashboard_butler",
+    objectKey: "media/marushu/vtdd-v2-p/2026/05/23/med_wrongissue123/dashboard.png",
+    filename: "dashboard.png",
+    contentType: "image/png",
+    byteSize: 16,
+    sha256: "0123456789abcdef",
+    visibility: "private",
+    createdAt: "2026-05-23T00:00:00.000Z",
+    updatedAt: "2026-05-23T00:00:00.000Z"
+  });
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/chat/messages", {
+      method: "POST",
+      headers: { ...dashboardAccessHeaders, "content-type": "application/json" },
+      body: JSON.stringify({
+        threadId: "dashboard-main-marushu-vtdd-v2-p",
+        repository: "marushu/vtdd-v2-p",
+        relatedIssue: 498,
+        mediaReferences: [{ mediaId: "med_wrongissue123" }]
+      })
+    }),
+    { ...dashboardAccessEnv, DASHBOARD_CHAT_STORE: store, MEDIA_OBJECT_STORE: mediaStore }
+  );
+
+  assert.equal(response.status, 422);
+  const body = await response.json();
+  assert.equal(body.error, "media_reference_issue_mismatch");
+});
+
 test("worker stores dashboard Butler thread summaries and searches archived context", async () => {
   const store = createInMemoryDashboardChatStore();
   await store.appendMany("dashboard-main-marushu-vtdd-v2-p", [
@@ -1157,7 +1665,7 @@ test("DashboardChatRoom stores owner messages without pushing a VPS runner job",
   );
 
   assert.equal(runnerSocket.sent.length, 0);
-  assert.equal(dashboardSocket.sent.length, 1);
+  assert.equal(dashboardSocket.sent.length, 2);
   const broadcast = JSON.parse(dashboardSocket.sent[0]);
   assert.equal(broadcast.messages.length, 2);
   assert.equal(broadcast.messages[0].role, "owner");
@@ -1165,6 +1673,9 @@ test("DashboardChatRoom stores owner messages without pushing a VPS runner job",
   assert.equal(broadcast.messages[1].role, "butler");
   assert.equal(broadcast.messages[1].status, "blocked");
   assert.equal(broadcast.messages[1].text.includes("app-server"), true);
+  const ack = JSON.parse(dashboardSocket.sent[1]);
+  assert.equal(ack.type, "owner_message_accepted");
+  assert.equal(ack.ok, true);
 });
 
 test("DashboardChatRoom sends ordinary owner turns to connected app-server bridge without repository resolution", async () => {
@@ -1202,12 +1713,15 @@ test("DashboardChatRoom sends ordinary owner turns to connected app-server bridg
   assert.equal(turnRequest.appServer.turnMethod, "turn/start");
   assert.equal(turnRequest.authority.ordinaryConversationAllowed, true);
 
-  assert.equal(dashboardSocket.sent.length, 2);
+  assert.equal(dashboardSocket.sent.length, 3);
   const broadcast = JSON.parse(dashboardSocket.sent[0]);
   assert.equal(broadcast.messages.length, 1);
   assert.equal(broadcast.messages[0].role, "owner");
   assert.equal(broadcast.messages[0].text, "今日は何月何日？日本時間を答えて");
-  const status = JSON.parse(dashboardSocket.sent[1]);
+  const ack = JSON.parse(dashboardSocket.sent[1]);
+  assert.equal(ack.type, "owner_message_accepted");
+  assert.equal(ack.ok, true);
+  const status = JSON.parse(dashboardSocket.sent[2]);
   assert.equal(status.type, "transient_status");
   assert.equal(status.status, "thinking");
   assert.equal(status.text, "app-server bridge の返信を待っています");
@@ -1467,7 +1981,10 @@ test("DashboardChatRoom sends nickname requests to connected app-server bridge",
   assert.equal(broadcast.messages.length, 1);
   assert.equal(broadcast.messages[0].role, "owner");
   assert.equal(broadcast.messages[0].text, "登録済みのニックネーム出して");
-  const status = JSON.parse(dashboardSocket.sent[1]);
+  const ack = JSON.parse(dashboardSocket.sent[1]);
+  assert.equal(ack.type, "owner_message_accepted");
+  assert.equal(ack.ok, true);
+  const status = JSON.parse(dashboardSocket.sent[2]);
   assert.equal(status.type, "transient_status");
   assert.equal(status.status, "thinking");
 });
