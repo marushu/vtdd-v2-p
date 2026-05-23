@@ -747,7 +747,7 @@ test("worker serves dashboard media add controls for iPhone-first upload", async
   assert.equal(body.includes("accept=\"image/*\""), false);
   assert.equal(body.includes("/v2/media/upload"), true);
   assert.equal(body.includes("createImageBitmap"), true);
-  assert.equal(body.includes("送信時に private media として保存します"), true);
+  assert.equal(body.includes("repo 未指定の通常会話では private media として保存します"), true);
   assert.equal(body.includes("mediaReferences"), true);
   assert.equal(body.includes("pendingSendRollbacks"), true);
   assert.equal(body.includes("owner_message_accepted"), true);
@@ -832,11 +832,46 @@ test("worker rejects media upload without R2 binding before metadata drift", asy
   assert.equal(body.error, "media_r2_unavailable");
 });
 
-test("worker rejects media upload without resolved repository before R2 put", async () => {
+test("worker uploads private dashboard media without repository for ordinary chat", async () => {
   const mediaStore = createInMemoryMediaObjectStore();
   const r2 = createInMemoryR2Binding();
   const form = new FormData();
   form.append("repositoryInput", "未指定");
+  form.append("sourceSurface", "dashboard_butler");
+  form.append("file", createPngBlob(), "dashboard.png");
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/media/upload", {
+      method: "POST",
+      headers: dashboardAccessHeaders,
+      body: form
+    }),
+    {
+      ...dashboardAccessEnv,
+      MEDIA_OBJECT_STORE: mediaStore,
+      VTDD_MEDIA_R2: r2
+    }
+  );
+
+  assert.equal(response.status, 201);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.media.repository, null);
+  assert.equal(body.media.visibility, "private");
+  assert.match(body.media.downloadUrl, /^\/v2\/media\/med_/);
+  assert.equal(r2.objects.size, 1);
+  const [objectKey, stored] = [...r2.objects.entries()][0];
+  assert.match(objectKey, /^media\/_dashboard\/unscoped\//);
+  assert.equal(stored.options.customMetadata.repository, "unscoped");
+});
+
+test("worker rejects public or evidence media without resolved repository before R2 put", async () => {
+  const mediaStore = createInMemoryMediaObjectStore();
+  const r2 = createInMemoryR2Binding();
+  const form = new FormData();
+  form.append("repositoryInput", "");
+  form.append("relatedIssue", "498");
+  form.append("visibility", "public_evidence");
   form.append("file", createPngBlob(), "dashboard.png");
 
   const response = await worker.fetch(
@@ -1081,6 +1116,48 @@ test("worker rejects abandoned media rollback without exact source event scope",
   assert.equal(body.error, "scoped_approval_required");
   assert.equal(r2.objects.size, 1);
   assert.notEqual(await mediaStore.get("med_rollbackscope"), null);
+});
+
+test("worker allows rollback delete for private unscoped dashboard media from an abandoned owner message send", async () => {
+  const mediaStore = createInMemoryMediaObjectStore();
+  const r2 = createInMemoryR2Binding();
+  await mediaStore.put({
+    id: "med_unscopedrollback",
+    repository: null,
+    relatedIssue: null,
+    sourceSurface: "dashboard_butler",
+    sourceEventId: "dashboard_owner_message:unscoped",
+    objectKey: "media/_dashboard/unscoped/2026/05/23/med_unscopedrollback/dashboard.png",
+    filename: "dashboard.png",
+    contentType: "image/png",
+    byteSize: 16,
+    sha256: "0123456789abcdef",
+    visibility: "private",
+    createdAt: "2026-05-23T00:00:00.000Z",
+    updatedAt: "2026-05-23T00:00:00.000Z"
+  });
+  await r2.put("media/_dashboard/unscoped/2026/05/23/med_unscopedrollback/dashboard.png", new Uint8Array([1, 2, 3]));
+
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/v2/media/med_unscopedrollback?cleanup=abandoned_send&sourceEventId=dashboard_owner_message%3Aunscoped",
+      {
+        method: "DELETE",
+        headers: dashboardAccessHeaders
+      }
+    ),
+    {
+      ...dashboardAccessEnv,
+      MEDIA_OBJECT_STORE: mediaStore,
+      VTDD_MEDIA_R2: r2
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.authority, "same_send_abandoned_private_media_rollback");
+  assert.equal(r2.objects.size, 0);
+  assert.equal(await mediaStore.get("med_unscopedrollback"), null);
 });
 
 test("worker requires repository filter before media metadata search", async () => {

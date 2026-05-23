@@ -59240,18 +59240,18 @@ async function handleMediaUploadRequest(request, env) {
   const repository = normalizeCanonicalRepositoryInput(
     form.get("repository") || form.get("repositoryInput") || form.get("repository_input")
   );
-  if (!repository) {
-    return json(422, {
-      ok: false,
-      error: "repository_required",
-      reason: "media upload requires a resolved owner/repo repository before R2 storage"
-    });
-  }
   const relatedIssue = normalizePositiveInteger9(form.get("relatedIssue") || form.get("issueNumber") || form.get("related_issue"));
   const relatedPr = normalizePositiveInteger9(form.get("relatedPr") || form.get("pullRequestNumber") || form.get("related_pr"));
   const sourceSurface = normalizeMediaSourceSurface(form.get("sourceSurface") || form.get("source_surface")) || "dashboard_butler";
   const sourceEventId = sanitizeDashboardChatText(form.get("sourceEventId") || form.get("source_event_id"));
   const visibility = normalizeMediaVisibility(form.get("visibility")) || "private";
+  if (!repository && (relatedIssue || relatedPr || visibility !== "private")) {
+    return json(422, {
+      ok: false,
+      error: "repository_required",
+      reason: "media upload without a resolved owner/repo is allowed only for private unscoped Dashboard conversation media"
+    });
+  }
   const now = (/* @__PURE__ */ new Date()).toISOString();
   const mediaId = `med_${crypto.randomUUID()}`;
   const objectKey = buildMediaObjectKey({ repository, createdAt: now, mediaId, filename });
@@ -59274,7 +59274,7 @@ async function handleMediaUploadRequest(request, env) {
     httpMetadata: { contentType },
     customMetadata: {
       mediaId,
-      repository,
+      repository: repository || "unscoped",
       visibility,
       sha256: sha2562
     }
@@ -59482,7 +59482,8 @@ async function handleAbandonedMediaSendRollback({ env, mediaRoute, url }) {
   const relatedIssue = normalizePositiveInteger9(url.searchParams.get("relatedIssue") || url.searchParams.get("issueNumber"));
   const requestedSourceEventId = sanitizeDashboardChatText(url.searchParams.get("sourceEventId") || url.searchParams.get("source_event_id"));
   const sourceEventId = normalizeDashboardEventText(record2.sourceEventId);
-  const isRollbackScoped = record2.visibility === "private" && record2.sourceSurface === "dashboard_butler" && sourceEventId.startsWith("dashboard_owner_message:") && requestedSourceEventId === sourceEventId && Boolean(repository) && record2.repository === repository && (!relatedIssue || record2.relatedIssue === relatedIssue);
+  const repositoryScopeMatches = record2.repository ? Boolean(repository) && record2.repository === repository : !repository;
+  const isRollbackScoped = record2.visibility === "private" && record2.sourceSurface === "dashboard_butler" && sourceEventId.startsWith("dashboard_owner_message:") && requestedSourceEventId === sourceEventId && repositoryScopeMatches && (!relatedIssue || record2.relatedIssue === relatedIssue);
   if (!isRollbackScoped) {
     return json(403, {
       ok: false,
@@ -62382,8 +62383,8 @@ function isForbiddenUploadFilename(filename) {
   return /\.(html?|svg|mjs|cjs|js|jsx|ts|tsx|sh|bash|zsh|exe|dll|dmg|pkg)$/i.test(sanitizeMediaFilename(filename));
 }
 function buildMediaObjectKey({ repository, createdAt, mediaId, filename }) {
-  const repo = normalizeCanonicalRepositoryInput(repository) || "unresolved/repository";
-  const [owner, name] = repo.split("/");
+  const repo = normalizeCanonicalRepositoryInput(repository);
+  const [owner, name] = repo ? repo.split("/") : ["_dashboard", "unscoped"];
   const date3 = new Date(createdAt);
   const yyyy = String(date3.getUTCFullYear()).padStart(4, "0");
   const mm = String(date3.getUTCMonth() + 1).padStart(2, "0");
@@ -65591,7 +65592,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
               }
             ].slice(0, 12);
             renderPendingMedia();
-            setStatus("\u6DFB\u4ED8\u3092\u9001\u4FE1\u5F85\u3061\u306B\u8FFD\u52A0\u3057\u307E\u3057\u305F\u3002\u9001\u4FE1\u6642\u306B private media \u3068\u3057\u3066\u4FDD\u5B58\u3057\u307E\u3059\u3002", { temporary: true });
+            setStatus("\u6DFB\u4ED8\u3092\u9001\u4FE1\u5F85\u3061\u306B\u8FFD\u52A0\u3057\u307E\u3057\u305F\u3002repo \u672A\u6307\u5B9A\u306E\u901A\u5E38\u4F1A\u8A71\u3067\u306F private media \u3068\u3057\u3066\u4FDD\u5B58\u3057\u307E\u3059\u3002", { temporary: true });
             textarea.focus({ preventScroll: true });
           } catch (error) {
             setStatus((error && error.message) || "\u6DFB\u4ED8\u306E\u4FDD\u5B58\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002");
