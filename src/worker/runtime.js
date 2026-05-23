@@ -4164,14 +4164,18 @@ async function handleDashboardPushStatusRequest(request, env) {
   }
 
   const endpointHash = await sha256Hex(endpoint);
-  const subscription =
-    typeof store.get === "function"
-      ? await store.get(endpointHash)
-      : (await store.list({ limit: 100 })).find((record) => record.endpointHash === endpointHash);
+  if (typeof store.get !== "function") {
+    return json(503, {
+      ok: false,
+      error: "dashboard_push_subscription_status_unavailable",
+      reason: "dashboard push subscription store cannot verify a single subscription"
+    });
+  }
+
+  const subscription = await store.get(endpointHash);
   return json(200, {
     ok: true,
     subscription: {
-      endpointHash,
       status: subscription ? "saved" : "not_saved",
       updatedAt: subscription?.updatedAt || null
     }
@@ -9529,6 +9533,7 @@ async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventS
           const badgeClearButton = document.getElementById("badge-clear-button");
           const unreadCount = ${recentEvents.length};
           let lastServerPushResult = "最後のサーバ送信結果: 未実行";
+          let serverPushDelivered = false;
 
           function setText(node, text) {
             if (node) node.textContent = text;
@@ -9584,7 +9589,7 @@ async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventS
             const pushSupported = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
             setPill(pushSupportPill, pushSupported ? "対応" : "未対応", pushSupported);
             setText(pushState, pushSupported
-              ? "端末通知: " + Notification.permission + (vapidPublicKey ? " / サーバ送信: 有効" : " / サーバ送信: 未設定")
+              ? "端末通知: " + Notification.permission + (vapidPublicKey ? " / サーバ送信設定: あり" : " / サーバ送信設定: 未設定")
               : "この環境は Web Push に未対応です。iOS はホーム画面に追加した PWA が必要です。");
             let hasSubscription = false;
             let serverSubscription = null;
@@ -9596,14 +9601,18 @@ async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventS
             }
             const serverSaved = serverSubscription && serverSubscription.status === "saved";
             setText(pushSubscriptionState, hasSubscription && serverSaved
-              ? "購読保存: あり。この端末に deploy 完了/失敗通知が届きます。"
+              ? serverPushDelivered
+                ? "購読保存: あり。サーバ送信テストも成功済みです。deploy 完了/失敗通知は同じ経路で届きます。"
+                : "購読保存: あり。サーバ送信テストはまだ未確認です。"
               : hasSubscription
                 ? "購読保存: 端末に購読はありますが、サーバ保存は未確認です。「購読を保存」を押してください。"
               : pushSupported && vapidPublicKey
                 ? "購読保存: 未保存。サーバ通知を受けるには「購読を保存」を押してください。"
                 : "購読保存: サーバ送信設定が未完了のため保存できません。");
             setText(pushDeliveryState, vapidPublicKey
-              ? "サーバ送信: 有効。deploy 完了/失敗通知とサーバ送信テストは同じ Web Push 経路です。"
+              ? serverPushDelivered
+                ? "サーバ送信: テスト成功。deploy 完了/失敗通知とサーバ送信テストは同じ Web Push 経路です。"
+                : "サーバ送信: 設定あり。deploy 通知到達性はサーバ送信テスト成功後に確認済みになります。"
               : "サーバ送信: 未設定。VAPID public key がないため deploy 通知はこの端末へ届きません。");
             setText(pushServerResult, lastServerPushResult);
             const badgeSupported = "setAppBadge" in navigator && "clearAppBadge" in navigator;
@@ -9638,7 +9647,7 @@ async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventS
               body: JSON.stringify({ subscription: subscription.toJSON(), userAgent: navigator.userAgent })
             });
             setText(pushSubscriptionState, response.ok
-              ? "購読保存: あり。この端末に deploy 完了/失敗通知が届きます。"
+              ? "購読保存: あり。サーバ送信テストはまだ未確認です。"
               : "購読保存: 失敗。owner session と Cloudflare Access を確認してください。");
             await refreshState();
           });
@@ -9668,7 +9677,8 @@ async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventS
             const delivered = Number(webPush.delivered || 0);
             const firstResult = Array.isArray(webPush.results) ? webPush.results[0] : null;
             const detail = safePushResultDetail(firstResult?.reason || firstResult?.error || webPush.reason || webPush.error || "");
-            lastServerPushResult = response.ok
+            serverPushDelivered = delivered > 0 && delivered === attempted;
+            lastServerPushResult = serverPushDelivered
               ? "最後のサーバ送信結果: accepted (" + delivered + "/" + attempted + ")"
               : "最後のサーバ送信結果: rejected (" + delivered + "/" + attempted + ")" + (detail ? " / " + detail : "");
             setText(pushServerResult, lastServerPushResult);

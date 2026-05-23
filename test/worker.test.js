@@ -2399,8 +2399,10 @@ test("worker serves dashboard notification center for recent events across repos
   assert.equal(body.includes("/v2/dashboard/push/status"), true);
   assert.equal(body.includes("/v2/dashboard/push/test"), true);
   assert.equal(body.includes("credentials: \"same-origin\""), true);
-  assert.equal(body.includes("サーバ送信: 有効。deploy 完了/失敗通知とサーバ送信テストは同じ Web Push 経路です。"), true);
-  assert.equal(body.includes("購読保存: あり。この端末に deploy 完了/失敗通知が届きます。"), true);
+  assert.equal(body.includes("サーバ送信設定: あり"), true);
+  assert.equal(body.includes("サーバ送信: 設定あり。deploy 通知到達性はサーバ送信テスト成功後に確認済みになります。"), true);
+  assert.equal(body.includes("購読保存: あり。サーバ送信テストはまだ未確認です。"), true);
+  assert.equal(body.includes("購読保存: あり。サーバ送信テストも成功済みです。deploy 完了/失敗通知は同じ経路で届きます。"), true);
   assert.equal(body.includes("端末に購読はありますが、サーバ保存は未確認です"), true);
   assert.equal(body.includes("safePushResultDetail"), true);
   assert.equal(body.includes("最後のサーバ送信結果: accepted"), true);
@@ -2530,7 +2532,7 @@ test("worker reports dashboard push subscription server save status without raw 
   assert.equal(missing.status, 200);
   const missingBody = await missing.json();
   assert.equal(missingBody.subscription.status, "not_saved");
-  assert.equal(missingBody.subscription.endpointHash, endpointHash);
+  assert.equal(JSON.stringify(missingBody).includes(endpointHash), false);
   assert.equal(JSON.stringify(missingBody).includes("status-endpoint"), false);
 
   await store.put({
@@ -2555,8 +2557,8 @@ test("worker reports dashboard push subscription server save status without raw 
   assert.equal(saved.status, 200);
   const savedBody = await saved.json();
   assert.equal(savedBody.subscription.status, "saved");
-  assert.equal(savedBody.subscription.endpointHash, endpointHash);
   assert.equal(savedBody.subscription.updatedAt, "2026-05-23T00:00:00.000Z");
+  assert.equal(JSON.stringify(savedBody).includes(endpointHash), false);
   assert.equal(JSON.stringify(savedBody).includes("status-endpoint"), false);
   assert.equal(JSON.stringify(savedBody).includes("p256dh-key"), false);
   assert.equal(JSON.stringify(savedBody).includes("auth-key"), false);
