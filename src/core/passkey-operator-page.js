@@ -232,13 +232,13 @@ export function renderPasskeyOperatorPage(input = {}) {
 
         <section data-operator-section="production-deploy"${hiddenAttribute(!sectionVisibility.productionDeploy)}>
           <h2>4. Production Deploy</h2>
-          <p class="muted">deploy stale を検知したあと、取得済みの <code>approvalGrantId</code> を使って same-origin の governed deploy path を dispatch します。</p>
+          <p class="muted">deploy stale を検知したあと、real passkey approval が成功したら同じ <code>approvalGrantId</code> で same-origin の governed deploy path を自動 dispatch します。</p>
           <div class="row">
             <button id="deploy-button">Dispatch production deploy</button>
             <a class="button-link" id="deploy-run-link" href="#" target="_blank" rel="noopener noreferrer" hidden>Open deploy run</a>
             <a class="button-link" id="return-to-butler-link" href="${returnUrl}" rel="noopener noreferrer"${returnUrl ? "" : " hidden"}>Return to Butler</a>
           </div>
-          <p class="muted">この Worker origin を <code>runtimeUrl</code> として使います。実行後は deploy run link で完了状態を確認できます。</p>
+          <p class="muted">この Worker origin を <code>runtimeUrl</code> として使います。手動ボタンは失敗時の再実行用です。完了または失敗は Dashboard 通知センターと保存済み Web Push 購読へ届きます。</p>
           <pre id="deploy-output"></pre>
         </section>
 
@@ -540,6 +540,40 @@ export function renderPasskeyOperatorPage(input = {}) {
         return readNumberInput("pull-number-input");
       }
 
+      function shouldAutoDispatchProductionDeploy() {
+        return operatorMode === "deploy" &&
+          document.getElementById("action-type-input").value === "deploy_production" &&
+          document.getElementById("risk-kind-input").value === "deploy_production";
+      }
+
+      async function dispatchProductionDeploy({ source = "manual" } = {}) {
+        if (!latestApprovalGrantId) {
+          throw new Error("approvalGrantId is required before production deploy");
+        }
+        const repositoryInput = readRequiredRepositoryInput();
+        clearDeployRunLink();
+        deployOutput.textContent = source === "approval"
+          ? "passkey approval accepted. production deploy request..."
+          : "production deploy request...";
+        const deployResponse = await fetch("${apiBase}/action/deploy", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            repository: repositoryInput,
+            issueNumber: Number(document.getElementById("issue-input").value || 0) || null,
+            policyInput: {
+              approvalGrantId: latestApprovalGrantId
+            }
+          })
+        });
+        const deployBody = await readResponseBody(deployResponse);
+        if (!deployResponse.ok) {
+          throw responseError(deployBody, "production deploy failed");
+        }
+        showDeployRunLink(deployBody);
+        deployOutput.textContent = JSON.stringify(deployBody, null, 2);
+      }
+
       copyApprovalGrantButton.addEventListener("click", async () => {
         try {
           await copyApprovalGrantIdToClipboard();
@@ -645,6 +679,13 @@ export function renderPasskeyOperatorPage(input = {}) {
               approveOutput.textContent = approveOutput.textContent + "\\n\\nAuto-copy failed: " + String(error);
             }
           }
+          if (shouldAutoDispatchProductionDeploy()) {
+            try {
+              await dispatchProductionDeploy({ source: "approval" });
+            } catch (error) {
+              deployOutput.textContent = String(error);
+            }
+          }
         } catch (error) {
           approveOutput.textContent = String(error);
         }
@@ -682,29 +723,7 @@ export function renderPasskeyOperatorPage(input = {}) {
 
       document.getElementById("deploy-button").addEventListener("click", async () => {
         try {
-          if (!latestApprovalGrantId) {
-            throw new Error("approvalGrantId is required before production deploy");
-          }
-          const repositoryInput = readRequiredRepositoryInput();
-          clearDeployRunLink();
-          deployOutput.textContent = "production deploy request...";
-          const deployResponse = await fetch("${apiBase}/action/deploy", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-              repository: repositoryInput,
-              issueNumber: Number(document.getElementById("issue-input").value || 0) || null,
-              policyInput: {
-                approvalGrantId: latestApprovalGrantId
-              }
-            })
-          });
-          const deployBody = await readResponseBody(deployResponse);
-          if (!deployResponse.ok) {
-            throw responseError(deployBody, "production deploy failed");
-          }
-          showDeployRunLink(deployBody);
-          deployOutput.textContent = JSON.stringify(deployBody, null, 2);
+          await dispatchProductionDeploy();
         } catch (error) {
           deployOutput.textContent = String(error);
         }
@@ -1014,8 +1033,9 @@ export function resolvePasskeyOperatorMode(input = {}) {
 function resolveSectionVisibility(operatorMode, options = {}) {
   const full = operatorMode === "full";
   const passkeyEnabled = options.passkeyEnabled !== false;
+  const registrationMode = full || operatorMode === "register";
   return {
-    registration: passkeyEnabled,
+    registration: passkeyEnabled && registrationMode,
     approval: passkeyEnabled,
     githubAppSecretSync: full || operatorMode === "github_app_secret_sync",
     productionDeploy: full || operatorMode === "deploy",
@@ -1038,7 +1058,7 @@ function renderGithubAppRoleOption(value, label, selectedValue) {
 
 function normalizeOperatorMode(value) {
   const token = normalizeOperatorToken(value);
-  if (["full", "deploy", "merge", "issue_close", "github_app_secret_sync", "github_actions_secret_sync", "gateway_bearer_vault", "vps", "dashboard"].includes(token)) {
+  if (["full", "register", "deploy", "merge", "issue_close", "github_app_secret_sync", "github_actions_secret_sync", "gateway_bearer_vault", "vps", "dashboard"].includes(token)) {
     return token;
   }
   if (token === "dashboard_access") {

@@ -27473,13 +27473,13 @@ function renderPasskeyOperatorPage(input = {}) {
 
         <section data-operator-section="production-deploy"${hiddenAttribute(!sectionVisibility.productionDeploy)}>
           <h2>4. Production Deploy</h2>
-          <p class="muted">deploy stale \u3092\u691C\u77E5\u3057\u305F\u3042\u3068\u3001\u53D6\u5F97\u6E08\u307F\u306E <code>approvalGrantId</code> \u3092\u4F7F\u3063\u3066 same-origin \u306E governed deploy path \u3092 dispatch \u3057\u307E\u3059\u3002</p>
+          <p class="muted">deploy stale \u3092\u691C\u77E5\u3057\u305F\u3042\u3068\u3001real passkey approval \u304C\u6210\u529F\u3057\u305F\u3089\u540C\u3058 <code>approvalGrantId</code> \u3067 same-origin \u306E governed deploy path \u3092\u81EA\u52D5 dispatch \u3057\u307E\u3059\u3002</p>
           <div class="row">
             <button id="deploy-button">Dispatch production deploy</button>
             <a class="button-link" id="deploy-run-link" href="#" target="_blank" rel="noopener noreferrer" hidden>Open deploy run</a>
             <a class="button-link" id="return-to-butler-link" href="${returnUrl}" rel="noopener noreferrer"${returnUrl ? "" : " hidden"}>Return to Butler</a>
           </div>
-          <p class="muted">\u3053\u306E Worker origin \u3092 <code>runtimeUrl</code> \u3068\u3057\u3066\u4F7F\u3044\u307E\u3059\u3002\u5B9F\u884C\u5F8C\u306F deploy run link \u3067\u5B8C\u4E86\u72B6\u614B\u3092\u78BA\u8A8D\u3067\u304D\u307E\u3059\u3002</p>
+          <p class="muted">\u3053\u306E Worker origin \u3092 <code>runtimeUrl</code> \u3068\u3057\u3066\u4F7F\u3044\u307E\u3059\u3002\u624B\u52D5\u30DC\u30BF\u30F3\u306F\u5931\u6557\u6642\u306E\u518D\u5B9F\u884C\u7528\u3067\u3059\u3002\u5B8C\u4E86\u307E\u305F\u306F\u5931\u6557\u306F Dashboard \u901A\u77E5\u30BB\u30F3\u30BF\u30FC\u3068\u4FDD\u5B58\u6E08\u307F Web Push \u8CFC\u8AAD\u3078\u5C4A\u304D\u307E\u3059\u3002</p>
           <pre id="deploy-output"></pre>
         </section>
 
@@ -27781,6 +27781,40 @@ function renderPasskeyOperatorPage(input = {}) {
         return readNumberInput("pull-number-input");
       }
 
+      function shouldAutoDispatchProductionDeploy() {
+        return operatorMode === "deploy" &&
+          document.getElementById("action-type-input").value === "deploy_production" &&
+          document.getElementById("risk-kind-input").value === "deploy_production";
+      }
+
+      async function dispatchProductionDeploy({ source = "manual" } = {}) {
+        if (!latestApprovalGrantId) {
+          throw new Error("approvalGrantId is required before production deploy");
+        }
+        const repositoryInput = readRequiredRepositoryInput();
+        clearDeployRunLink();
+        deployOutput.textContent = source === "approval"
+          ? "passkey approval accepted. production deploy request..."
+          : "production deploy request...";
+        const deployResponse = await fetch("${apiBase}/action/deploy", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            repository: repositoryInput,
+            issueNumber: Number(document.getElementById("issue-input").value || 0) || null,
+            policyInput: {
+              approvalGrantId: latestApprovalGrantId
+            }
+          })
+        });
+        const deployBody = await readResponseBody(deployResponse);
+        if (!deployResponse.ok) {
+          throw responseError(deployBody, "production deploy failed");
+        }
+        showDeployRunLink(deployBody);
+        deployOutput.textContent = JSON.stringify(deployBody, null, 2);
+      }
+
       copyApprovalGrantButton.addEventListener("click", async () => {
         try {
           await copyApprovalGrantIdToClipboard();
@@ -27886,6 +27920,13 @@ function renderPasskeyOperatorPage(input = {}) {
               approveOutput.textContent = approveOutput.textContent + "\\n\\nAuto-copy failed: " + String(error);
             }
           }
+          if (shouldAutoDispatchProductionDeploy()) {
+            try {
+              await dispatchProductionDeploy({ source: "approval" });
+            } catch (error) {
+              deployOutput.textContent = String(error);
+            }
+          }
         } catch (error) {
           approveOutput.textContent = String(error);
         }
@@ -27923,29 +27964,7 @@ function renderPasskeyOperatorPage(input = {}) {
 
       document.getElementById("deploy-button").addEventListener("click", async () => {
         try {
-          if (!latestApprovalGrantId) {
-            throw new Error("approvalGrantId is required before production deploy");
-          }
-          const repositoryInput = readRequiredRepositoryInput();
-          clearDeployRunLink();
-          deployOutput.textContent = "production deploy request...";
-          const deployResponse = await fetch("${apiBase}/action/deploy", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-              repository: repositoryInput,
-              issueNumber: Number(document.getElementById("issue-input").value || 0) || null,
-              policyInput: {
-                approvalGrantId: latestApprovalGrantId
-              }
-            })
-          });
-          const deployBody = await readResponseBody(deployResponse);
-          if (!deployResponse.ok) {
-            throw responseError(deployBody, "production deploy failed");
-          }
-          showDeployRunLink(deployBody);
-          deployOutput.textContent = JSON.stringify(deployBody, null, 2);
+          await dispatchProductionDeploy();
         } catch (error) {
           deployOutput.textContent = String(error);
         }
@@ -28250,8 +28269,9 @@ function resolvePasskeyOperatorMode(input = {}) {
 function resolveSectionVisibility(operatorMode, options = {}) {
   const full = operatorMode === "full";
   const passkeyEnabled = options.passkeyEnabled !== false;
+  const registrationMode = full || operatorMode === "register";
   return {
-    registration: passkeyEnabled,
+    registration: passkeyEnabled && registrationMode,
     approval: passkeyEnabled,
     githubAppSecretSync: full || operatorMode === "github_app_secret_sync",
     productionDeploy: full || operatorMode === "deploy",
@@ -28271,7 +28291,7 @@ function renderGithubAppRoleOption(value, label, selectedValue) {
 }
 function normalizeOperatorMode(value) {
   const token = normalizeOperatorToken(value);
-  if (["full", "deploy", "merge", "issue_close", "github_app_secret_sync", "github_actions_secret_sync", "gateway_bearer_vault", "vps", "dashboard"].includes(token)) {
+  if (["full", "register", "deploy", "merge", "issue_close", "github_app_secret_sync", "github_actions_secret_sync", "gateway_bearer_vault", "vps", "dashboard"].includes(token)) {
     return token;
   }
   if (token === "dashboard_access") {
