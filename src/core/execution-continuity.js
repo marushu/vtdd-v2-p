@@ -157,8 +157,16 @@ function buildReviewState(pullRequest) {
     codexFallback.latestSignal ?? codexFallback.latestEvidence,
     currentHeadSha
   );
+  const newerGeminiApproveSupersedesRequestedFallback =
+    shouldPreferNewerGeminiApproveOverRequestedFallback({
+      geminiEvidence: parsedGeminiSignals.latestEvidence,
+      codexFallbackSignal: codexFallback.latestSignal,
+      currentHeadSha
+    });
   const effectiveCodexFallback =
-    geminiEvidenceMatchesCurrentHead && codexFallbackStaleForCurrentHead && !codexFallback.globalBlocker
+    geminiEvidenceMatchesCurrentHead &&
+    !codexFallback.globalBlocker &&
+    (codexFallbackStaleForCurrentHead || newerGeminiApproveSupersedesRequestedFallback)
       ? emptyCodexFallbackSignals()
       : codexFallback;
   const formalReviewTruth = collectFormalReviewTruth(pullRequest);
@@ -319,6 +327,26 @@ function evidenceTargetsDifferentHead(evidence, headSha) {
   const normalizedHead = normalizeText(headSha);
   const evidenceHead = normalizeText(evidence?.headSha);
   return Boolean(normalizedHead && evidenceHead && evidenceHead !== normalizedHead);
+}
+
+function shouldPreferNewerGeminiApproveOverRequestedFallback({
+  geminiEvidence,
+  codexFallbackSignal,
+  currentHeadSha
+}) {
+  if (normalizeText(geminiEvidence?.recommendedAction).toLowerCase() !== "approve") {
+    return false;
+  }
+  if (normalizeText(codexFallbackSignal?.status) !== "requested") {
+    return false;
+  }
+  if (!evidenceMatchesHead(geminiEvidence, currentHeadSha)) {
+    return false;
+  }
+  if (!evidenceMatchesHead(codexFallbackSignal, currentHeadSha)) {
+    return false;
+  }
+  return timelineTimestamp(geminiEvidence) > timelineTimestamp(codexFallbackSignal);
 }
 
 function buildReviewTimeline(pullRequest) {

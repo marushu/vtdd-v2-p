@@ -35483,7 +35483,12 @@ function buildReviewState(pullRequest) {
     codexFallback.latestSignal ?? codexFallback.latestEvidence,
     currentHeadSha
   );
-  const effectiveCodexFallback = geminiEvidenceMatchesCurrentHead && codexFallbackStaleForCurrentHead && !codexFallback.globalBlocker ? emptyCodexFallbackSignals() : codexFallback;
+  const newerGeminiApproveSupersedesRequestedFallback = shouldPreferNewerGeminiApproveOverRequestedFallback({
+    geminiEvidence: parsedGeminiSignals.latestEvidence,
+    codexFallbackSignal: codexFallback.latestSignal,
+    currentHeadSha
+  });
+  const effectiveCodexFallback = geminiEvidenceMatchesCurrentHead && !codexFallback.globalBlocker && (codexFallbackStaleForCurrentHead || newerGeminiApproveSupersedesRequestedFallback) ? emptyCodexFallbackSignals() : codexFallback;
   const formalReviewTruth = collectFormalReviewTruth(pullRequest);
   const reviewTimeline = buildReviewTimeline(pullRequest);
   const reviewCommentsCount = effectiveCodexFallback.completed ? 1 : parsedGeminiSignals.totalCount > 0 ? parsedGeminiSignals.totalCount : pullRequest.reviewCommentsCount;
@@ -35588,6 +35593,25 @@ function evidenceTargetsDifferentHead(evidence, headSha) {
   const normalizedHead = normalizeText5(headSha);
   const evidenceHead = normalizeText5(evidence?.headSha);
   return Boolean(normalizedHead && evidenceHead && evidenceHead !== normalizedHead);
+}
+function shouldPreferNewerGeminiApproveOverRequestedFallback({
+  geminiEvidence,
+  codexFallbackSignal,
+  currentHeadSha
+}) {
+  if (normalizeText5(geminiEvidence?.recommendedAction).toLowerCase() !== "approve") {
+    return false;
+  }
+  if (normalizeText5(codexFallbackSignal?.status) !== "requested") {
+    return false;
+  }
+  if (!evidenceMatchesHead(geminiEvidence, currentHeadSha)) {
+    return false;
+  }
+  if (!evidenceMatchesHead(codexFallbackSignal, currentHeadSha)) {
+    return false;
+  }
+  return timelineTimestamp(geminiEvidence) > timelineTimestamp(codexFallbackSignal);
 }
 function buildReviewTimeline(pullRequest) {
   const comments = [

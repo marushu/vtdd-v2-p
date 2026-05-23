@@ -179,6 +179,89 @@ test("execution continuity prefers current-head Gemini approve over stale Codex 
   assert.equal(result.value.nextSuggestedActions.includes("apply_pr_feedback"), false);
 });
 
+test("execution continuity prefers newer current-head Gemini approve over same-head Codex fallback request", () => {
+  const result = evaluateExecutionContinuity({
+    actorRole: ActorRole.BUTLER,
+    mode: TaskMode.EXECUTION,
+    runtimeTruth: {
+      runtimeState: {
+        activeBranch: "codex/issue-501",
+        pullRequest: {
+          number: 500,
+          url: "https://github.com/example/repo/pull/500",
+          state: "open",
+          title: "R2 media storage spec",
+          reviewer: "gemini",
+          headSha: "same-head-500",
+          mergeable: true,
+          mergeableState: "clean",
+          issueComments: [
+            {
+              user: { login: "vtdd-gemini-reviewer" },
+              createdAt: "2026-05-23T00:42:28.000Z",
+              body: "<!-- vtdd:reviewer=codex-fallback -->\n## VTDD Codex fallback レビュー\n\n- Status: `requested`\n- Head SHA: `same-head-500`\n\nGemini reviewer は一時的に利用できません。"
+            },
+            {
+              user: { login: "vtdd-gemini-reviewer" },
+              createdAt: "2026-05-23T00:43:14.000Z",
+              body: "<!-- vtdd:reviewer=gemini -->\n## VTDD Gemini レビュー\n\n- Head SHA: `same-head-500`\n- Recommended action: `approve`\n\n### 重要指摘\n- 報告なし。"
+            }
+          ]
+        }
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.value.reviewLoop.reviewer, "gemini");
+  assert.equal(result.value.reviewLoop.reviewerStatus, "gemini_review_available");
+  assert.equal(result.value.reviewLoop.reviewerEvidence.recommendedAction, "approve");
+  assert.equal(result.value.reviewLoop.reviewerEvidence.headSha, "same-head-500");
+  assert.equal(result.value.reviewLoop.criticalReviewPending, false);
+  assert.equal(result.value.reviewLoop.reviewerSignalTruth.mergeReviewTruth.satisfied, true);
+});
+
+test("execution continuity keeps same-head completed Codex fallback changes requested despite newer Gemini approve", () => {
+  const result = evaluateExecutionContinuity({
+    actorRole: ActorRole.BUTLER,
+    mode: TaskMode.EXECUTION,
+    runtimeTruth: {
+      runtimeState: {
+        activeBranch: "codex/issue-501",
+        pullRequest: {
+          number: 500,
+          url: "https://github.com/example/repo/pull/500",
+          state: "open",
+          title: "R2 media storage spec",
+          reviewer: "gemini",
+          headSha: "same-head-500",
+          mergeable: true,
+          mergeableState: "clean",
+          issueComments: [
+            {
+              user: { login: "vtdd-codex[bot]" },
+              createdAt: "2026-05-23T00:42:28.000Z",
+              body: "<!-- vtdd:reviewer=codex-fallback -->\n## VTDD Codex fallback レビュー\n\n- Status: `completed`\n- Head SHA: `same-head-500`\n- Recommended action: `request_changes`\n\n### 重要指摘\n- same head still needs changes"
+            },
+            {
+              user: { login: "vtdd-gemini-reviewer" },
+              createdAt: "2026-05-23T00:43:14.000Z",
+              body: "<!-- vtdd:reviewer=gemini -->\n## VTDD Gemini レビュー\n\n- Head SHA: `same-head-500`\n- Recommended action: `approve`\n\n### 重要指摘\n- 報告なし。"
+            }
+          ]
+        }
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.value.reviewLoop.reviewer, "codex");
+  assert.equal(result.value.reviewLoop.reviewerStatus, "codex_review_available");
+  assert.equal(result.value.reviewLoop.reviewerEvidence.recommendedAction, "request_changes");
+  assert.equal(result.value.reviewLoop.criticalReviewPending, true);
+  assert.equal(result.value.reviewLoop.reviewerSignalTruth.mergeReviewTruth.satisfied, false);
+});
+
 test("execution continuity does not satisfy review truth from stale Gemini approve when current head is unreviewed", () => {
   const result = evaluateExecutionContinuity({
     actorRole: ActorRole.BUTLER,
