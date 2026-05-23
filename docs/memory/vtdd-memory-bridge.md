@@ -38,6 +38,13 @@ Do not commit runtime URLs, database IDs, bearer tokens, account IDs, or owner
 specific bootstrap values into this repository.
 Do not pass bearer tokens as command-line flags; use the environment variable
 so the token is less likely to land in shell history or process logs.
+
+For direct Wrangler/D1 operations, set `VTDD_MEMORY_D1_DATABASE_NAME` to the
+actual database name shown by `wrangler d1 list`, not to the Worker binding name
+and not to an old display name. The Worker binding name is always
+`VTDD_MEMORY_D1`, but direct D1 repair commands resolve the database argument
+through Wrangler and can fail if the configured database name is stale.
+
 If neither the environment variable nor the bootstrap vault token path is
 available, the runtime memory commands must fail with `desktop maintenance
 required` instead of falling back to D1 direct writes or asking the operator to
