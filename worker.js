@@ -65091,15 +65091,16 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         for (const reference of list) {
           const link = document.createElement("a");
           link.className = "media-chip";
-          link.href = reference.downloadUrl || (reference.mediaId ? "/v2/media/" + reference.mediaId + "/download" : "#");
+          const downloadHref = reference.downloadUrl || (reference.mediaId ? "/v2/media/" + reference.mediaId + "/download" : "#");
+          link.href = downloadHref;
           link.target = "_blank";
           link.rel = "noreferrer";
           link.textContent = "";
           const isImage = String(reference.contentType || "").startsWith("image/");
-          if (isImage && link.href && link.href !== "#") {
+          if (isImage && downloadHref !== "#") {
             const image = document.createElement("img");
             image.className = "media-thumb";
-            image.src = link.href;
+            image.src = downloadHref;
             image.alt = reference.filename || "\u6DFB\u4ED8\u753B\u50CF";
             image.loading = "lazy";
             link.appendChild(image);

@@ -818,8 +818,10 @@ test("worker serves dashboard media add controls for iPhone-first upload", async
   assert.equal(body.includes("/v2/media/upload"), true);
   assert.equal(body.includes("createImageBitmap"), true);
   assert.equal(body.includes("className = \"media-thumb\""), true);
-  assert.equal(body.includes("isImage && link.href && link.href !== \"#\""), true);
-  assert.equal(body.includes("link.href = reference.downloadUrl || (reference.mediaId ? \"/v2/media/\" + reference.mediaId + \"/download\" : \"#\")"), true);
+  assert.equal(body.includes("const downloadHref = reference.downloadUrl || (reference.mediaId ? \"/v2/media/\" + reference.mediaId + \"/download\" : \"#\")"), true);
+  assert.equal(body.includes("link.href = downloadHref"), true);
+  assert.equal(body.includes("isImage && downloadHref !== \"#\""), true);
+  assert.equal(body.includes("image.src = downloadHref"), true);
   assert.equal(body.includes("URL.createObjectURL"), true);
   assert.equal(body.includes("URL.revokeObjectURL"), true);
   assert.equal(body.includes("repo 未指定の通常会話では private media として保存します"), true);
