@@ -41,6 +41,14 @@ Example:
 media/sample-owner/sample-repo/2026/05/23/01J.../dashboard-screenshot.png
 ```
 
+Dashboard Butler の通常会話で repository がまだ決まっていない private media は、default repository を作らず、unscoped namespace に保存する:
+
+```text
+media/_dashboard/unscoped/{yyyy}/{mm}/{dd}/{uuid}/{filename}
+```
+
+Unscoped media は private conversation attachment としてだけ扱う。Issue / PR / E2E 証跡、`repo_internal`、`public_evidence`、repository search に使う場合は、昇格前に canonical `owner/repo` を明示的に解決する。
+
 The object key must not contain tokens, approval grant IDs, private URLs, or user-entered secret material.
 
 ## D1 Metadata
@@ -118,11 +126,15 @@ DELETE /v2/media/:id
 
 `DELETE /v2/media/:id` requires scoped approval. It must delete or tombstone metadata consistently with R2 object deletion semantics defined by the implementation.
 
+Exception: the Dashboard composer may rollback a private `dashboard_butler` media object from the same abandoned owner send without separate scoped approval. The rollback scope is the exact `source_event_id`; repository-scoped media must also match repository, while unscoped media must remain repository-null.
+
 ## Authority Boundary
 
 - upload: authenticated owner / trusted runner
+- unscoped upload: authenticated owner, `private` visibility only, no related Issue/PR
 - read private media: authenticated owner / trusted Butler
 - delete: scoped approval required
+- same-send abandoned upload rollback: exact `source_event_id` scope required
 - public evidence promotion: explicit `GO` required
 - secret-looking media: public promotion forbidden
 - deploy, credential mutation, permission mutation, Cloudflare bucket creation, and binding mutation: scoped passkey approval required

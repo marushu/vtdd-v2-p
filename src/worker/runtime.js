@@ -3796,18 +3796,18 @@ async function handleMediaUploadRequest(request, env) {
   const repository = normalizeCanonicalRepositoryInput(
     form.get("repository") || form.get("repositoryInput") || form.get("repository_input")
   );
-  if (!repository) {
-    return json(422, {
-      ok: false,
-      error: "repository_required",
-      reason: "media upload requires a resolved owner/repo repository before R2 storage"
-    });
-  }
   const relatedIssue = normalizePositiveInteger(form.get("relatedIssue") || form.get("issueNumber") || form.get("related_issue"));
   const relatedPr = normalizePositiveInteger(form.get("relatedPr") || form.get("pullRequestNumber") || form.get("related_pr"));
   const sourceSurface = normalizeMediaSourceSurface(form.get("sourceSurface") || form.get("source_surface")) || "dashboard_butler";
   const sourceEventId = sanitizeDashboardChatText(form.get("sourceEventId") || form.get("source_event_id"));
   const visibility = normalizeMediaVisibility(form.get("visibility")) || "private";
+  if (!repository && (relatedIssue || relatedPr || visibility !== "private")) {
+    return json(422, {
+      ok: false,
+      error: "repository_required",
+      reason: "media upload without a resolved owner/repo is allowed only for private unscoped Dashboard conversation media"
+    });
+  }
   const now = new Date().toISOString();
   const mediaId = `med_${crypto.randomUUID()}`;
   const objectKey = buildMediaObjectKey({ repository, createdAt: now, mediaId, filename });
@@ -3831,7 +3831,7 @@ async function handleMediaUploadRequest(request, env) {
     httpMetadata: { contentType },
     customMetadata: {
       mediaId,
-      repository,
+      repository: repository || "unscoped",
       visibility,
       sha256
     }
@@ -4045,13 +4045,15 @@ async function handleAbandonedMediaSendRollback({ env, mediaRoute, url }) {
   const relatedIssue = normalizePositiveInteger(url.searchParams.get("relatedIssue") || url.searchParams.get("issueNumber"));
   const requestedSourceEventId = sanitizeDashboardChatText(url.searchParams.get("sourceEventId") || url.searchParams.get("source_event_id"));
   const sourceEventId = normalizeDashboardEventText(record.sourceEventId);
+  const repositoryScopeMatches = record.repository
+    ? Boolean(repository) && record.repository === repository
+    : !repository;
   const isRollbackScoped =
     record.visibility === "private" &&
     record.sourceSurface === "dashboard_butler" &&
     sourceEventId.startsWith("dashboard_owner_message:") &&
     requestedSourceEventId === sourceEventId &&
-    Boolean(repository) &&
-    record.repository === repository &&
+    repositoryScopeMatches &&
     (!relatedIssue || record.relatedIssue === relatedIssue);
   if (!isRollbackScoped) {
     return json(403, {
@@ -7407,8 +7409,8 @@ function isForbiddenUploadFilename(filename) {
 }
 
 function buildMediaObjectKey({ repository, createdAt, mediaId, filename }) {
-  const repo = normalizeCanonicalRepositoryInput(repository) || "unresolved/repository";
-  const [owner, name] = repo.split("/");
+  const repo = normalizeCanonicalRepositoryInput(repository);
+  const [owner, name] = repo ? repo.split("/") : ["_dashboard", "unscoped"];
   const date = new Date(createdAt);
   const yyyy = String(date.getUTCFullYear()).padStart(4, "0");
   const mm = String(date.getUTCMonth() + 1).padStart(2, "0");
@@ -10850,7 +10852,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
               }
             ].slice(0, 12);
             renderPendingMedia();
-            setStatus("添付を送信待ちに追加しました。送信時に private media として保存します。", { temporary: true });
+            setStatus("添付を送信待ちに追加しました。repo 未指定の通常会話では private media として保存します。", { temporary: true });
             textarea.focus({ preventScroll: true });
           } catch (error) {
             setStatus((error && error.message) || "添付の保存に失敗しました。");
