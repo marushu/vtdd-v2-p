@@ -150,6 +150,7 @@ jobs:
         env:
           CLOUDFLARE_D1_DATABASE_ID: ${{ secrets.CLOUDFLARE_D1_DATABASE_ID }}
           CLOUDFLARE_D1_DATABASE_NAME: ${{ vars.CLOUDFLARE_D1_DATABASE_NAME || 'vtdd-memory' }}
+          CLOUDFLARE_MEDIA_R2_BUCKET_NAME: ${{ vars.CLOUDFLARE_MEDIA_R2_BUCKET_NAME || 'vtdd-media-prod' }}
           VTDD_GITHUB_ACTIONS_REPOSITORY: ${{ github.repository }}
           VTDD_KNOWN_GOOD_COMMIT_SHA: ${{ vars.VTDD_KNOWN_GOOD_COMMIT_SHA }}
           VTDD_DASHBOARD_ALLOWED_EMAILS: ${{ vars.VTDD_DASHBOARD_ALLOWED_EMAILS }}
@@ -198,6 +199,10 @@ jobs:
           binding = "VTDD_MEMORY_D1"
           database_name = "$CLOUDFLARE_D1_DATABASE_NAME"
           database_id = "$CLOUDFLARE_D1_DATABASE_ID"
+
+          [[env.production.r2_buckets]]
+          binding = "VTDD_MEDIA_R2"
+          bucket_name = "$CLOUDFLARE_MEDIA_R2_BUCKET_NAME"
           EOF
 
       - name: Deploy to Cloudflare Workers

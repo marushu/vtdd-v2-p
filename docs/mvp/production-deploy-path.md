@@ -41,12 +41,20 @@ secrets.
 
 ### 3. Worker Bindings
 
-Production must bind the VTDD memory D1 database as `VTDD_MEMORY_D1`.
+Production must bind:
+
+- the VTDD memory D1 database as `VTDD_MEMORY_D1`
+- the media R2 bucket as `VTDD_MEDIA_R2`
 
 This binding is required for real passkey registration, approval challenge
 persistence, and approval grant retrieval. A production deploy that drops this
 binding breaks scoped passkey approval issuance and therefore blocks high-risk
 runtime operations.
+
+The media R2 binding is required for Dashboard Butler attachments. A production
+deploy that drops `VTDD_MEDIA_R2` must fail closed instead of storing raw media
+in chat history, RAG, GitHub Issue comments, PR bodies, or local filesystem
+persistence.
 
 Because this repository is public and reusable, owner-specific Cloudflare
 resource identifiers must not be committed to the shared `wrangler.toml`.
@@ -55,8 +63,10 @@ before deploying production.
 
 For local/operator deploys, store owner-specific bindings in an ignored file
 such as `wrangler.production.local.toml`. For GitHub Actions deploys, store the
-D1 database id in `CLOUDFLARE_D1_DATABASE_ID`; the workflow generates an
-uncommitted `wrangler.production.generated.toml` at deploy time.
+D1 database id in `CLOUDFLARE_D1_DATABASE_ID`. The media bucket name defaults
+to `vtdd-media-prod` and can be overridden with repository variable
+`CLOUDFLARE_MEDIA_R2_BUCKET_NAME`. The workflow generates an uncommitted
+`wrangler.production.generated.toml` at deploy time.
 
 If `/setup/known-good` should expose a rollback bundle, the preferred source of
 truth is `docs/setup/known-good.json` with the last human-verified stable setup
