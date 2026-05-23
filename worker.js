@@ -56115,7 +56115,8 @@ var DashboardChatRoom = class {
     }
   }
   async acceptOwnerMessage({ socket, threadId, payload }) {
-    const mediaReferences = normalizeMediaReferences(payload?.mediaReferences || payload?.media_references || payload?.media);
+    const inputMediaReferences = payload?.mediaReferences || payload?.media_references || payload?.media;
+    const mediaReferences = normalizeMediaReferences(inputMediaReferences);
     const text = sanitizeDashboardChatText(payload?.text || payload?.message || payload?.body) || (mediaReferences.length > 0 ? "\u6DFB\u4ED8\u3092\u8FFD\u52A0\u3057\u307E\u3057\u305F\u3002" : "");
     if (!threadId || !text) {
       if (isSocketOpen(socket)) {
@@ -56131,6 +56132,18 @@ var DashboardChatRoom = class {
       env: this.env
     });
     const repository = repositoryResolution.ok ? repositoryResolution.repository : "";
+    const mediaValidation = await resolveDashboardChatMediaReferences({
+      env: this.env,
+      mediaReferences: inputMediaReferences,
+      repository,
+      relatedIssue
+    });
+    if (!mediaValidation.ok) {
+      if (isSocketOpen(socket)) {
+        socket.send(JSON.stringify({ type: "error", ok: false, reason: mediaValidation.reason }));
+      }
+      return;
+    }
     const ownerMessage = normalizeDashboardChatMessage(
       {
         threadId,
@@ -56139,7 +56152,7 @@ var DashboardChatRoom = class {
         relatedIssue,
         status: "sent",
         text,
-        mediaReferences,
+        mediaReferences: mediaValidation.mediaReferences,
         createdAt: now
       },
       { threadId }
@@ -56179,7 +56192,7 @@ var DashboardChatRoom = class {
       repository: repository || null,
       relatedIssue: relatedIssue || null,
       text,
-      mediaReferences,
+      mediaReferences: mediaValidation.mediaReferences,
       messageId: ownerMessage.messageId,
       createdAt: now,
       appServer: {
@@ -59077,12 +59090,13 @@ async function handleDashboardChatMessageRequest(request, env) {
   const payload = await readJson(request);
   const repositoryResolution = await resolveDashboardChatRepository({ payload, env });
   const repository = repositoryResolution.ok ? repositoryResolution.repository : "";
-  const prepared = buildDashboardChatTurn(
+  const prepared = await buildDashboardChatTurn(
     {
       ...payload,
       repository,
       relatedIssue: normalizePositiveInteger9(payload?.relatedIssue || payload?.issueNumber) || extractIssueNumberFromDashboardChatText(payload?.text || payload?.message || payload?.body)
-    }
+    },
+    { env }
   );
   if (!prepared.ok) {
     return json(422, {
@@ -59179,7 +59193,6 @@ async function handleMediaUploadRequest(request, env) {
       limitBytes: MEDIA_UPLOAD_SOFT_LIMIT_BYTES
     });
   }
-  const contentType = normalizeMediaContentType(file.type);
   const filename = sanitizeMediaFilename(file.name || "attachment");
   const repository = normalizeCanonicalRepositoryInput(form.get("repository") || form.get("repositoryInput") || form.get("repository_input")) || "unresolved";
   const relatedIssue = normalizePositiveInteger9(form.get("relatedIssue") || form.get("issueNumber") || form.get("related_issue"));
@@ -59191,6 +59204,19 @@ async function handleMediaUploadRequest(request, env) {
   const mediaId = `med_${crypto.randomUUID()}`;
   const objectKey = buildMediaObjectKey({ repository, createdAt: now, mediaId, filename });
   const arrayBuffer = await file.arrayBuffer();
+  const contentTypeValidation = detectMediaContentType({
+    declaredType: file.type,
+    filename,
+    arrayBuffer
+  });
+  if (!contentTypeValidation.ok) {
+    return json(415, {
+      ok: false,
+      error: contentTypeValidation.error,
+      reason: contentTypeValidation.reason
+    });
+  }
+  const contentType = contentTypeValidation.contentType;
   const sha2562 = await sha256ArrayBufferHex(arrayBuffer);
   await r2.put(objectKey, arrayBuffer, {
     httpMetadata: { contentType },
@@ -59201,25 +59227,43 @@ async function handleMediaUploadRequest(request, env) {
       sha256: sha2562
     }
   });
-  const record2 = await store.put({
-    id: mediaId,
-    repository: repository === "unresolved" ? null : repository,
-    relatedIssue,
-    relatedPr,
-    sourceSurface,
-    sourceEventId,
-    objectKey,
-    filename,
-    contentType,
-    byteSize,
-    sha256: sha2562,
-    visibility,
-    summary: "",
-    ocrText: "",
-    createdBy: dashboardAuth.email || dashboardAuth.login || dashboardAuth.authType || "dashboard",
-    createdAt: now,
-    updatedAt: now
-  });
+  let record2 = null;
+  try {
+    record2 = await store.put({
+      id: mediaId,
+      repository: repository === "unresolved" ? null : repository,
+      relatedIssue,
+      relatedPr,
+      sourceSurface,
+      sourceEventId,
+      objectKey,
+      filename,
+      contentType,
+      byteSize,
+      sha256: sha2562,
+      visibility,
+      summary: "",
+      ocrText: "",
+      createdBy: dashboardAuth.email || dashboardAuth.login || dashboardAuth.authType || "dashboard",
+      createdAt: now,
+      updatedAt: now
+    });
+  } catch (error2) {
+    await cleanupOrphanMediaObject(r2, objectKey);
+    return json(500, {
+      ok: false,
+      error: "media_metadata_insert_failed",
+      reason: `D1 media metadata insert failed after R2 put; orphan cleanup was attempted: ${sanitizeErrorMessage(error2)}`
+    });
+  }
+  if (!record2) {
+    await cleanupOrphanMediaObject(r2, objectKey);
+    return json(500, {
+      ok: false,
+      error: "media_metadata_insert_failed",
+      reason: "D1 media metadata insert returned no record after R2 put; orphan cleanup was attempted"
+    });
+  }
   return json(201, {
     ok: true,
     media: toMediaReference(record2),
@@ -62051,6 +62095,118 @@ function normalizeMediaVisibility(value) {
   const visibility = normalize7(value);
   return ["private", "repo_internal", "public_evidence"].includes(visibility) ? visibility : "";
 }
+function detectMediaContentType({ declaredType, filename, arrayBuffer }) {
+  const declared = normalizeMediaContentType(declaredType);
+  if (isForbiddenUploadContentType(declared) || isForbiddenUploadFilename(filename)) {
+    return {
+      ok: false,
+      error: "media_content_type_forbidden",
+      reason: "HTML, SVG, script, and executable-looking attachments are not accepted in this first slice"
+    };
+  }
+  const bytes = new Uint8Array(arrayBuffer || new ArrayBuffer(0));
+  const sniffed = sniffContentType(bytes);
+  if (sniffed && isForbiddenUploadContentType(sniffed)) {
+    return {
+      ok: false,
+      error: "media_content_type_forbidden",
+      reason: "\u3053\u306E\u6DFB\u4ED8\u306E\u5B9F\u4F53\u306F\u5B89\u5168\u306B\u6271\u3048\u306A\u3044 content type \u3067\u3059"
+    };
+  }
+  if (sniffed && declared !== "application/octet-stream" && declared !== sniffed && !isCompatibleDeclaredMediaType(declared, sniffed)) {
+    return {
+      ok: false,
+      error: "media_content_type_mismatch",
+      reason: `declared content type ${declared} does not match detected content type ${sniffed}`
+    };
+  }
+  if (!sniffed && declared.startsWith("image/")) {
+    return {
+      ok: false,
+      error: "media_content_type_mismatch",
+      reason: `declared content type ${declared} does not match a supported image signature`
+    };
+  }
+  if (!sniffed && declared.startsWith("video/")) {
+    return {
+      ok: false,
+      error: "media_content_type_mismatch",
+      reason: `declared content type ${declared} does not match a supported video signature`
+    };
+  }
+  if (!sniffed && declared.startsWith("audio/")) {
+    return {
+      ok: false,
+      error: "media_content_type_mismatch",
+      reason: `declared content type ${declared} does not match a supported audio signature`
+    };
+  }
+  return {
+    ok: true,
+    contentType: sniffed || declared || "application/octet-stream"
+  };
+}
+function sniffContentType(bytes) {
+  if (startsWithBytes(bytes, [137, 80, 78, 71, 13, 10, 26, 10])) return "image/png";
+  if (startsWithBytes(bytes, [255, 216, 255])) return "image/jpeg";
+  if (startsWithAscii(bytes, "GIF87a") || startsWithAscii(bytes, "GIF89a")) return "image/gif";
+  if (startsWithAscii(bytes, "RIFF") && asciiAt(bytes, 8, 4) === "WEBP") return "image/webp";
+  if (startsWithAscii(bytes, "%PDF-")) return "application/pdf";
+  if (startsWithBytes(bytes, [80, 75, 3, 4]) || startsWithBytes(bytes, [80, 75, 5, 6])) return "application/zip";
+  if (startsWithAscii(bytes, "RIFF") && asciiAt(bytes, 8, 4) === "WAVE") return "audio/wav";
+  if (startsWithAscii(bytes, "ID3") || startsWithBytes(bytes, [255, 251]) || startsWithBytes(bytes, [255, 243])) return "audio/mpeg";
+  if (bytes.length >= 12 && asciiAt(bytes, 4, 4) === "ftyp") return "video/mp4";
+  return "";
+}
+function startsWithBytes(bytes, prefix) {
+  if (!bytes || bytes.length < prefix.length) {
+    return false;
+  }
+  return prefix.every((byte, index) => bytes[index] === byte);
+}
+function startsWithAscii(bytes, prefix) {
+  return asciiAt(bytes, 0, prefix.length) === prefix;
+}
+function asciiAt(bytes, offset, length) {
+  if (!bytes || bytes.length < offset + length) {
+    return "";
+  }
+  let text = "";
+  for (let index = offset; index < offset + length; index += 1) {
+    text += String.fromCharCode(bytes[index]);
+  }
+  return text;
+}
+function isCompatibleDeclaredMediaType(declared, sniffed) {
+  if (declared === sniffed) {
+    return true;
+  }
+  if (declared === "application/x-zip-compressed" && sniffed === "application/zip") {
+    return true;
+  }
+  if ((declared === "audio/mp3" || declared === "audio/x-mpeg") && sniffed === "audio/mpeg") {
+    return true;
+  }
+  if (declared === "audio/x-wav" && sniffed === "audio/wav") {
+    return true;
+  }
+  return false;
+}
+function isForbiddenUploadContentType(type) {
+  const normalized = normalizeMediaContentType(type);
+  return [
+    "image/svg+xml",
+    "text/html",
+    "application/xhtml+xml",
+    "application/javascript",
+    "text/javascript",
+    "application/x-msdownload",
+    "application/x-sh"
+  ].includes(normalized);
+}
+function isForbiddenUploadFilename(filename) {
+  return /\.(html?|svg|mjs|cjs|js|jsx|ts|tsx|sh|bash|zsh|exe|dll|dmg|pkg)$/i.test(sanitizeMediaFilename(filename));
+}
 function buildMediaObjectKey({ repository, createdAt, mediaId, filename }) {
   const repo = normalizeCanonicalRepositoryInput(repository) || "unresolved/repository";
   const [owner, name] = repo.split("/");
@@ -62065,12 +62221,18 @@ async function sha256ArrayBufferHex(arrayBuffer) {
     const digest2 = await globalThis.crypto.subtle.digest("SHA-256", arrayBuffer);
     return [...new Uint8Array(digest2)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
   }
-  const bytes = new Uint8Array(arrayBuffer);
-  let text = "";
-  for (const byte of bytes) {
-    text += String.fromCharCode(byte);
+  throw new Error("SHA-256 digest is not available in this runtime");
+}
+async function cleanupOrphanMediaObject(r2, objectKey) {
+  if (!r2 || typeof r2.delete !== "function" || !objectKey) {
+    return false;
   }
-  return btoa(text).replace(/[^A-Za-z0-9]/g, "").slice(0, 64);
+  try {
+    await r2.delete(objectKey);
+    return true;
+  } catch {
+    return false;
+  }
 }
 function normalizeMediaObjectRecord(record2) {
   const input = normalizeObject11(record2);
@@ -62175,7 +62337,58 @@ function normalizeMediaReferences(value) {
     };
   }).filter(Boolean).slice(0, MEDIA_REFERENCE_LIMIT);
 }
-function buildDashboardChatTurn(payload, options = {}) {
+async function resolveDashboardChatMediaReferences({ env, mediaReferences, repository, relatedIssue }) {
+  const requested = normalizeMediaReferences(mediaReferences);
+  if (requested.length === 0) {
+    return { ok: true, mediaReferences: [] };
+  }
+  const store = resolveMediaObjectStore(env);
+  if (!store || typeof store.get !== "function") {
+    return {
+      ok: false,
+      error: "media_metadata_store_unavailable",
+      reason: "media reference validation requires D1 media metadata store"
+    };
+  }
+  const resolvedRepository = normalizeCanonicalRepositoryInput(repository);
+  const resolvedIssue = normalizePositiveInteger9(relatedIssue);
+  const resolved = [];
+  for (const reference of requested) {
+    const record2 = await store.get(reference.mediaId);
+    if (!record2) {
+      return {
+        ok: false,
+        error: "media_reference_not_found",
+        reason: `media reference ${reference.mediaId} was not found`
+      };
+    }
+    const media = toMediaReference(record2);
+    if (!media) {
+      return {
+        ok: false,
+        error: "media_reference_invalid",
+        reason: `media reference ${reference.mediaId} is malformed`
+      };
+    }
+    if (resolvedRepository && media.repository !== resolvedRepository) {
+      return {
+        ok: false,
+        error: "media_reference_repository_mismatch",
+        reason: `media reference ${reference.mediaId} does not belong to ${resolvedRepository}`
+      };
+    }
+    if (resolvedIssue && media.relatedIssue !== resolvedIssue) {
+      return {
+        ok: false,
+        error: "media_reference_issue_mismatch",
+        reason: `media reference ${reference.mediaId} does not belong to Issue #${resolvedIssue}`
+      };
+    }
+    resolved.push(media);
+  }
+  return { ok: true, mediaReferences: resolved };
+}
+async function buildDashboardChatTurn(payload, options = {}) {
   const input = normalizeObject11(payload);
   const repository = normalizeCanonicalRepositoryInput(input.repository);
   const mediaReferences = normalizeMediaReferences(input.mediaReferences || input.media_references || input.media);
@@ -62189,6 +62402,15 @@ function buildDashboardChatTurn(payload, options = {}) {
   }
   const threadId = normalizeDashboardThreadId(input.threadId || input.thread_id) || (repository ? `dashboard-main-${repository.replace("/", "-")}` : "dashboard-main-unresolved");
   const relatedIssue = normalizePositiveInteger9(input.relatedIssue || input.issueNumber);
+  const mediaValidation = await resolveDashboardChatMediaReferences({
+    env: options.env,
+    mediaReferences: input.mediaReferences || input.media_references || input.media,
+    repository,
+    relatedIssue
+  });
+  if (!mediaValidation.ok) {
+    return mediaValidation;
+  }
   const now = (/* @__PURE__ */ new Date()).toISOString();
   const ownerMessage = normalizeDashboardChatMessage(
     {
@@ -62198,7 +62420,7 @@ function buildDashboardChatTurn(payload, options = {}) {
       relatedIssue,
       status: "sent",
       text,
-      mediaReferences,
+      mediaReferences: mediaValidation.mediaReferences,
       createdAt: now
     },
     { threadId }
@@ -64539,7 +64761,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         <div class="pending-media" id="butler-pending-media" aria-live="polite"></div>
         <div class="composer-box">
           <button class="media-button" id="butler-media-button" type="button" aria-label="\u753B\u50CF\u3084\u30D5\u30A1\u30A4\u30EB\u3092\u8FFD\u52A0" title="\u753B\u50CF\u3084\u30D5\u30A1\u30A4\u30EB\u3092\u8FFD\u52A0">+</button>
-          <input id="butler-media-input" type="file" accept="image/*" hidden>
+          <input id="butler-media-input" type="file" hidden>
           <textarea id="butler-message" name="text" placeholder="Butler V2 \u306B\u30E1\u30C3\u30BB\u30FC\u30B8..." aria-label="Butler V2 \u306B\u30E1\u30C3\u30BB\u30FC\u30B8" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="send"></textarea>
           <button class="send-button" type="submit" aria-label="Butler \u306B\u9001\u4FE1">\u2191</button>
         </div>
@@ -64621,7 +64843,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       let reconnectTimer = null;
       let reconnectAttempt = 0;
       let refreshingThread = false;
-      let pendingMediaReferences = [];
+      let pendingMediaItems = [];
       const messagesById = new Map();
 
       function updateComposerReserve() {
@@ -64731,18 +64953,18 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       function renderPendingMedia() {
         if (!pendingMedia) return;
         pendingMedia.replaceChildren();
-        for (const reference of pendingMediaReferences) {
+        for (const item of pendingMediaItems) {
           const chip = document.createElement("span");
           chip.className = "media-chip";
           const label = document.createElement("span");
-          label.textContent = reference.filename || reference.mediaId || "media";
+          label.textContent = item.filename || "attachment";
           const remove = document.createElement("button");
           remove.className = "media-remove";
           remove.type = "button";
           remove.textContent = "\xD7";
           remove.setAttribute("aria-label", "\u6DFB\u4ED8\u3092\u5916\u3059");
           remove.addEventListener("click", () => {
-            pendingMediaReferences = pendingMediaReferences.filter((item) => item.mediaId !== reference.mediaId);
+            pendingMediaItems = pendingMediaItems.filter((candidate) => candidate.clientId !== item.clientId);
             renderPendingMedia();
             updateComposerReserve();
           });
@@ -64941,6 +65163,14 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         return body.media;
       }
 
+      async function uploadPendingMedia() {
+        const uploaded = [];
+        for (const item of pendingMediaItems) {
+          uploaded.push(await uploadSelectedMedia(item.file));
+        }
+        return uploaded;
+      }
+
       function appendError(text) {
         appendMessage({ role: "butler", text });
       }
@@ -65066,7 +65296,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 
       form.addEventListener("submit", async (event) => {
         event.preventDefault();
-        const text = textarea.value.trim() || (pendingMediaReferences.length > 0 ? "\u6DFB\u4ED8\u3092\u8FFD\u52A0\u3057\u307E\u3057\u305F\u3002" : "");
+        const text = textarea.value.trim() || (pendingMediaItems.length > 0 ? "\u6DFB\u4ED8\u3092\u8FFD\u52A0\u3057\u307E\u3057\u305F\u3002" : "");
         if (!text) {
           textarea.focus();
           return;
@@ -65080,7 +65310,16 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           return;
         }
         if (submitButton) submitButton.disabled = true;
-        setStatus("\u9001\u4FE1\u4E2D\u3067\u3059", { thinking: true });
+        setStatus(pendingMediaItems.length > 0 ? "\u6DFB\u4ED8\u3092\u4FDD\u5B58\u3057\u3066\u304B\u3089\u9001\u4FE1\u3057\u3066\u3044\u307E\u3059" : "\u9001\u4FE1\u4E2D\u3067\u3059", { thinking: true });
+        let mediaReferences = [];
+        try {
+          mediaReferences = await uploadPendingMedia();
+        } catch (error) {
+          setStatus((error && error.message) || "\u6DFB\u4ED8\u306E\u4FDD\u5B58\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002");
+          if (submitButton) submitButton.disabled = false;
+          textarea.focus({ preventScroll: true });
+          return;
+        }
         chatSocket.send(JSON.stringify({
           type: "owner_message",
           threadId,
@@ -65088,9 +65327,9 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           text,
           issueNumber,
           relatedIssue: issueNumber,
-          mediaReferences: pendingMediaReferences
+          mediaReferences
         }));
-        pendingMediaReferences = [];
+        pendingMediaItems = [];
         renderPendingMedia();
         textarea.value = "";
         resizeComposerInput();
@@ -65108,11 +65347,17 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           if (!file) return;
           try {
             mediaButton.disabled = true;
-            setStatus("\u6DFB\u4ED8\u3092\u4FDD\u5B58\u3057\u3066\u3044\u307E\u3059", { thinking: true });
-            const media = await uploadSelectedMedia(file);
-            pendingMediaReferences = [...pendingMediaReferences, media].slice(0, 12);
+            const preparedFile = await prepareUploadFile(file);
+            pendingMediaItems = [
+              ...pendingMediaItems,
+              {
+                clientId: Date.now() + "_" + Math.random().toString(36).slice(2),
+                filename: preparedFile.name || file.name || "attachment",
+                file: preparedFile
+              }
+            ].slice(0, 12);
             renderPendingMedia();
-            setStatus("\u6DFB\u4ED8\u3092 private media reference \u3068\u3057\u3066\u4FDD\u5B58\u3057\u307E\u3057\u305F\u3002", { temporary: true });
+            setStatus("\u6DFB\u4ED8\u3092\u9001\u4FE1\u5F85\u3061\u306B\u8FFD\u52A0\u3057\u307E\u3057\u305F\u3002\u9001\u4FE1\u6642\u306B private media \u3068\u3057\u3066\u4FDD\u5B58\u3057\u307E\u3059\u3002", { temporary: true });
             textarea.focus({ preventScroll: true });
           } catch (error) {
             setStatus((error && error.message) || "\u6DFB\u4ED8\u306E\u4FDD\u5B58\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002");
