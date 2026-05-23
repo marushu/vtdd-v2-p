@@ -64158,6 +64158,9 @@ async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventS
         <section class="lane">
           <div class="lane-title"><h2>iOS PWA \u901A\u77E5</h2><span class="pill" id="push-support-pill">\u78BA\u8A8D\u4E2D</span></div>
           <p id="push-state" class="muted">\u901A\u77E5\u72B6\u614B\u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u3002</p>
+          <p id="push-subscription-state" class="muted">\u8CFC\u8AAD\u4FDD\u5B58\u72B6\u614B\u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u3002</p>
+          <p id="push-delivery-state" class="muted">deploy \u5B8C\u4E86/\u5931\u6557\u901A\u77E5\u306F\u30B5\u30FC\u30D0\u9001\u4FE1 Web Push \u3068\u540C\u3058\u7D4C\u8DEF\u3067\u5C4A\u304D\u307E\u3059\u3002</p>
+          <p id="push-server-result" class="muted">\u6700\u5F8C\u306E\u30B5\u30FC\u30D0\u9001\u4FE1\u7D50\u679C: \u672A\u5B9F\u884C</p>
           <div class="actions">
             <button class="dashboard-action" id="push-permission-button" type="button">\u901A\u77E5\u3092\u8A31\u53EF</button>
             <button class="dashboard-action" id="push-subscribe-button" type="button">\u8CFC\u8AAD\u3092\u4FDD\u5B58</button>
@@ -64191,6 +64194,9 @@ async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventS
         (() => {
           const vapidPublicKey = ${JSON.stringify(publicKey)};
           const pushState = document.getElementById("push-state");
+          const pushSubscriptionState = document.getElementById("push-subscription-state");
+          const pushDeliveryState = document.getElementById("push-delivery-state");
+          const pushServerResult = document.getElementById("push-server-result");
           const pushSupportPill = document.getElementById("push-support-pill");
           const badgeState = document.getElementById("badge-state");
           const badgeSupportPill = document.getElementById("badge-support-pill");
@@ -64201,6 +64207,7 @@ async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventS
           const badgeSetButton = document.getElementById("badge-set-button");
           const badgeClearButton = document.getElementById("badge-clear-button");
           const unreadCount = ${recentEvents.length};
+          let lastServerPushResult = "\u6700\u5F8C\u306E\u30B5\u30FC\u30D0\u9001\u4FE1\u7D50\u679C: \u672A\u5B9F\u884C";
 
           function setText(node, text) {
             if (node) node.textContent = text;
@@ -64231,8 +64238,22 @@ async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventS
             const pushSupported = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
             setPill(pushSupportPill, pushSupported ? "\u5BFE\u5FDC" : "\u672A\u5BFE\u5FDC", pushSupported);
             setText(pushState, pushSupported
-              ? "\u901A\u77E5 permission: " + Notification.permission + (vapidPublicKey ? "" : " / VAPID public key \u672A\u8A2D\u5B9A")
+              ? "\u7AEF\u672B\u901A\u77E5: " + Notification.permission + (vapidPublicKey ? " / \u30B5\u30FC\u30D0\u9001\u4FE1: \u6709\u52B9" : " / \u30B5\u30FC\u30D0\u9001\u4FE1: \u672A\u8A2D\u5B9A")
               : "\u3053\u306E\u74B0\u5883\u306F Web Push \u306B\u672A\u5BFE\u5FDC\u3067\u3059\u3002iOS \u306F\u30DB\u30FC\u30E0\u753B\u9762\u306B\u8FFD\u52A0\u3057\u305F PWA \u304C\u5FC5\u8981\u3067\u3059\u3002");
+            let hasSubscription = false;
+            if (pushSupported && vapidPublicKey && Notification.permission === "granted") {
+              const reg = await registration();
+              hasSubscription = Boolean(await reg?.pushManager?.getSubscription?.());
+            }
+            setText(pushSubscriptionState, hasSubscription
+              ? "\u8CFC\u8AAD\u4FDD\u5B58: \u3042\u308A\u3002\u3053\u306E\u7AEF\u672B\u306B deploy \u5B8C\u4E86/\u5931\u6557\u901A\u77E5\u304C\u5C4A\u304D\u307E\u3059\u3002"
+              : pushSupported && vapidPublicKey
+                ? "\u8CFC\u8AAD\u4FDD\u5B58: \u672A\u4FDD\u5B58\u3002\u30B5\u30FC\u30D0\u901A\u77E5\u3092\u53D7\u3051\u308B\u306B\u306F\u300C\u8CFC\u8AAD\u3092\u4FDD\u5B58\u300D\u3092\u62BC\u3057\u3066\u304F\u3060\u3055\u3044\u3002"
+                : "\u8CFC\u8AAD\u4FDD\u5B58: \u30B5\u30FC\u30D0\u9001\u4FE1\u8A2D\u5B9A\u304C\u672A\u5B8C\u4E86\u306E\u305F\u3081\u4FDD\u5B58\u3067\u304D\u307E\u305B\u3093\u3002");
+            setText(pushDeliveryState, vapidPublicKey
+              ? "\u30B5\u30FC\u30D0\u9001\u4FE1: \u6709\u52B9\u3002deploy \u5B8C\u4E86/\u5931\u6557\u901A\u77E5\u3068\u30B5\u30FC\u30D0\u9001\u4FE1\u30C6\u30B9\u30C8\u306F\u540C\u3058 Web Push \u7D4C\u8DEF\u3067\u3059\u3002"
+              : "\u30B5\u30FC\u30D0\u9001\u4FE1: \u672A\u8A2D\u5B9A\u3002VAPID public key \u304C\u306A\u3044\u305F\u3081 deploy \u901A\u77E5\u306F\u3053\u306E\u7AEF\u672B\u3078\u5C4A\u304D\u307E\u305B\u3093\u3002");
+            setText(pushServerResult, lastServerPushResult);
             const badgeSupported = "setAppBadge" in navigator && "clearAppBadge" in navigator;
             setPill(badgeSupportPill, badgeSupported ? "\u5BFE\u5FDC" : "\u672A\u5BFE\u5FDC", badgeSupported);
             setText(badgeState, badgeSupported ? "\u672A\u8AAD\u901A\u77E5\u6570\u3092\u30DB\u30FC\u30E0\u753B\u9762 badge \u306B\u53CD\u6620\u3067\u304D\u307E\u3059\u3002" : "\u3053\u306E\u74B0\u5883\u3067\u306F Badging API \u304C\u672A\u5BFE\u5FDC\u3067\u3059\u3002");
@@ -64264,7 +64285,9 @@ async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventS
               headers: { "content-type": "application/json" },
               body: JSON.stringify({ subscription: subscription.toJSON(), userAgent: navigator.userAgent })
             });
-            setText(pushState, response.ok ? "push subscription \u3092\u4FDD\u5B58\u3057\u307E\u3057\u305F\u3002" : "push subscription \u306E\u4FDD\u5B58\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002");
+            setText(pushSubscriptionState, response.ok
+              ? "\u8CFC\u8AAD\u4FDD\u5B58: \u3042\u308A\u3002\u3053\u306E\u7AEF\u672B\u306B deploy \u5B8C\u4E86/\u5931\u6557\u901A\u77E5\u304C\u5C4A\u304D\u307E\u3059\u3002"
+              : "\u8CFC\u8AAD\u4FDD\u5B58: \u5931\u6557\u3002owner session \u3068 Cloudflare Access \u3092\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002");
             await refreshState();
           });
 
@@ -64287,7 +64310,16 @@ async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventS
               headers: { "content-type": "application/json" },
               body: JSON.stringify({ title: "Dashboard Butler server push test" })
             });
-            setText(pushState, response.ok ? "server-side Web Push \u3092\u9001\u4FE1\u3057\u307E\u3057\u305F\u3002" : "server-side Web Push \u306E\u9001\u4FE1\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002");
+            const body = await response.json().catch(() => ({}));
+            const webPush = body && body.webPush ? body.webPush : {};
+            const attempted = Number(webPush.attempted || 0);
+            const delivered = Number(webPush.delivered || 0);
+            const firstResult = Array.isArray(webPush.results) ? webPush.results[0] : null;
+            const detail = firstResult?.reason || firstResult?.error || webPush.reason || webPush.error || "";
+            lastServerPushResult = response.ok
+              ? "\u6700\u5F8C\u306E\u30B5\u30FC\u30D0\u9001\u4FE1\u7D50\u679C: accepted (" + delivered + "/" + attempted + ")"
+              : "\u6700\u5F8C\u306E\u30B5\u30FC\u30D0\u9001\u4FE1\u7D50\u679C: rejected (" + delivered + "/" + attempted + ")" + (detail ? " / " + detail : "");
+            setText(pushServerResult, lastServerPushResult);
             await refreshState();
           });
 

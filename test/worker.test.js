@@ -2383,10 +2383,17 @@ test("worker serves dashboard notification center for recent events across repos
   assert.equal(body.includes("id=\"push-permission-button\""), true);
   assert.equal(body.includes("id=\"push-subscribe-button\""), true);
   assert.equal(body.includes("id=\"push-server-test-button\""), true);
+  assert.equal(body.includes("id=\"push-subscription-state\""), true);
+  assert.equal(body.includes("id=\"push-delivery-state\""), true);
+  assert.equal(body.includes("id=\"push-server-result\""), true);
   assert.equal(body.includes("id=\"badge-set-button\""), true);
   assert.equal(body.includes("/v2/dashboard/push/subscription"), true);
   assert.equal(body.includes("/v2/dashboard/push/test"), true);
   assert.equal(body.includes("credentials: \"same-origin\""), true);
+  assert.equal(body.includes("サーバ送信: 有効。deploy 完了/失敗通知とサーバ送信テストは同じ Web Push 経路です。"), true);
+  assert.equal(body.includes("購読保存: あり。この端末に deploy 完了/失敗通知が届きます。"), true);
+  assert.equal(body.includes("最後のサーバ送信結果: accepted"), true);
+  assert.equal(body.includes("最後のサーバ送信結果: rejected"), true);
   assert.equal(body.includes("D1 には送信用に保持し、response / HTML / payload_json には raw key を返しません"), true);
   assert.equal(body.includes("navigator.setAppBadge"), true);
   assert.equal(body.includes("Notification.requestPermission"), true);

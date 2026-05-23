@@ -9396,6 +9396,9 @@ async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventS
         <section class="lane">
           <div class="lane-title"><h2>iOS PWA 通知</h2><span class="pill" id="push-support-pill">確認中</span></div>
           <p id="push-state" class="muted">通知状態を確認しています。</p>
+          <p id="push-subscription-state" class="muted">購読保存状態を確認しています。</p>
+          <p id="push-delivery-state" class="muted">deploy 完了/失敗通知はサーバ送信 Web Push と同じ経路で届きます。</p>
+          <p id="push-server-result" class="muted">最後のサーバ送信結果: 未実行</p>
           <div class="actions">
             <button class="dashboard-action" id="push-permission-button" type="button">通知を許可</button>
             <button class="dashboard-action" id="push-subscribe-button" type="button">購読を保存</button>
@@ -9429,6 +9432,9 @@ async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventS
         (() => {
           const vapidPublicKey = ${JSON.stringify(publicKey)};
           const pushState = document.getElementById("push-state");
+          const pushSubscriptionState = document.getElementById("push-subscription-state");
+          const pushDeliveryState = document.getElementById("push-delivery-state");
+          const pushServerResult = document.getElementById("push-server-result");
           const pushSupportPill = document.getElementById("push-support-pill");
           const badgeState = document.getElementById("badge-state");
           const badgeSupportPill = document.getElementById("badge-support-pill");
@@ -9439,6 +9445,7 @@ async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventS
           const badgeSetButton = document.getElementById("badge-set-button");
           const badgeClearButton = document.getElementById("badge-clear-button");
           const unreadCount = ${recentEvents.length};
+          let lastServerPushResult = "最後のサーバ送信結果: 未実行";
 
           function setText(node, text) {
             if (node) node.textContent = text;
@@ -9469,8 +9476,22 @@ async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventS
             const pushSupported = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
             setPill(pushSupportPill, pushSupported ? "対応" : "未対応", pushSupported);
             setText(pushState, pushSupported
-              ? "通知 permission: " + Notification.permission + (vapidPublicKey ? "" : " / VAPID public key 未設定")
+              ? "端末通知: " + Notification.permission + (vapidPublicKey ? " / サーバ送信: 有効" : " / サーバ送信: 未設定")
               : "この環境は Web Push に未対応です。iOS はホーム画面に追加した PWA が必要です。");
+            let hasSubscription = false;
+            if (pushSupported && vapidPublicKey && Notification.permission === "granted") {
+              const reg = await registration();
+              hasSubscription = Boolean(await reg?.pushManager?.getSubscription?.());
+            }
+            setText(pushSubscriptionState, hasSubscription
+              ? "購読保存: あり。この端末に deploy 完了/失敗通知が届きます。"
+              : pushSupported && vapidPublicKey
+                ? "購読保存: 未保存。サーバ通知を受けるには「購読を保存」を押してください。"
+                : "購読保存: サーバ送信設定が未完了のため保存できません。");
+            setText(pushDeliveryState, vapidPublicKey
+              ? "サーバ送信: 有効。deploy 完了/失敗通知とサーバ送信テストは同じ Web Push 経路です。"
+              : "サーバ送信: 未設定。VAPID public key がないため deploy 通知はこの端末へ届きません。");
+            setText(pushServerResult, lastServerPushResult);
             const badgeSupported = "setAppBadge" in navigator && "clearAppBadge" in navigator;
             setPill(badgeSupportPill, badgeSupported ? "対応" : "未対応", badgeSupported);
             setText(badgeState, badgeSupported ? "未読通知数をホーム画面 badge に反映できます。" : "この環境では Badging API が未対応です。");
@@ -9502,7 +9523,9 @@ async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventS
               headers: { "content-type": "application/json" },
               body: JSON.stringify({ subscription: subscription.toJSON(), userAgent: navigator.userAgent })
             });
-            setText(pushState, response.ok ? "push subscription を保存しました。" : "push subscription の保存に失敗しました。");
+            setText(pushSubscriptionState, response.ok
+              ? "購読保存: あり。この端末に deploy 完了/失敗通知が届きます。"
+              : "購読保存: 失敗。owner session と Cloudflare Access を確認してください。");
             await refreshState();
           });
 
@@ -9525,7 +9548,16 @@ async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventS
               headers: { "content-type": "application/json" },
               body: JSON.stringify({ title: "Dashboard Butler server push test" })
             });
-            setText(pushState, response.ok ? "server-side Web Push を送信しました。" : "server-side Web Push の送信に失敗しました。");
+            const body = await response.json().catch(() => ({}));
+            const webPush = body && body.webPush ? body.webPush : {};
+            const attempted = Number(webPush.attempted || 0);
+            const delivered = Number(webPush.delivered || 0);
+            const firstResult = Array.isArray(webPush.results) ? webPush.results[0] : null;
+            const detail = firstResult?.reason || firstResult?.error || webPush.reason || webPush.error || "";
+            lastServerPushResult = response.ok
+              ? "最後のサーバ送信結果: accepted (" + delivered + "/" + attempted + ")"
+              : "最後のサーバ送信結果: rejected (" + delivered + "/" + attempted + ")" + (detail ? " / " + detail : "");
+            setText(pushServerResult, lastServerPushResult);
             await refreshState();
           });
 
