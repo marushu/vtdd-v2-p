@@ -121,7 +121,7 @@ test("passkey operator page focuses deploy mode on deploy approval and dispatch 
     returnUrl: "https://chatgpt.com/g/example-butler"
   });
 
-  assert.equal(html.includes('<section data-operator-section="registration">'), true);
+  assert.equal(html.includes('<section data-operator-section="registration" hidden>'), true);
   assert.equal(html.includes('<section data-operator-section="approval">'), true);
   assert.equal(html.includes('<section data-operator-section="production-deploy">'), true);
   assert.equal(html.includes('<section data-operator-section="pr-merge" hidden>'), true);
@@ -129,10 +129,19 @@ test("passkey operator page focuses deploy mode on deploy approval and dispatch 
   assert.equal(html.includes('<section data-operator-section="github-app-secret-sync" hidden>'), true);
   assert.equal(html.includes('<section data-operator-section="github-actions-secret-sync" hidden>'), true);
   assert.equal(html.includes("Dispatch production deploy"), true);
+  assert.equal(html.includes("自動 dispatch"), true);
+  assert.equal(html.includes("手動ボタンは失敗時の再実行用です"), true);
+  assert.equal(html.includes("Dashboard 通知センターと保存済み Web Push 購読へ届きます"), true);
   assert.equal(html.includes("Return to Butler"), true);
   assert.equal(html.includes('id="issue-input" value=""'), true);
   assert.equal(html.includes('id="pull-number-input" value=""'), true);
   assert.equal(html.includes('repository: repositoryInput'), true);
+  assert.equal(html.includes("function shouldAutoDispatchProductionDeploy()"), true);
+  assert.equal(html.includes('operatorMode === "deploy"'), true);
+  assert.equal(html.includes('document.getElementById("action-type-input").value === "deploy_production"'), true);
+  assert.equal(html.includes('document.getElementById("risk-kind-input").value === "deploy_production"'), true);
+  assert.equal(html.includes('await dispatchProductionDeploy({ source: "approval" });'), true);
+  assert.equal(html.includes('passkey approval accepted. production deploy request...'), true);
 });
 
 test("passkey operator page blocks approval and deploy before repositoryInput is present", () => {
@@ -147,6 +156,7 @@ test("passkey operator page blocks approval and deploy before repositoryInput is
   assert.equal(html.includes("repositoryInput is required before approval/deploy"), true);
   assert.equal(html.includes("Deploy does not require issueNumber or pullNumber"), true);
   assert.equal(html.includes("repository: repositoryInput"), true);
+  assert.equal(html.includes("async function dispatchProductionDeploy"), true);
 });
 
 test("passkey operator page fills safe approval defaults from explicit mode", () => {
@@ -155,6 +165,7 @@ test("passkey operator page fills safe approval defaults from explicit mode", ()
     repositoryInput: "marushu/vtdd-v2-p"
   });
 
+  assert.equal(deployHtml.includes('<section data-operator-section="registration" hidden>'), true);
   assert.equal(deployHtml.includes('id="action-type-input" value="deploy_production"'), true);
   assert.equal(deployHtml.includes('id="risk-kind-input" value="deploy_production"'), true);
   assert.equal(deployHtml.includes('<section data-operator-section="production-deploy">'), true);
@@ -167,6 +178,7 @@ test("passkey operator page fills safe approval defaults from explicit mode", ()
 
   assert.equal(mergeHtml.includes('id="action-type-input" value="merge"'), true);
   assert.equal(mergeHtml.includes('id="risk-kind-input" value="pull_merge"'), true);
+  assert.equal(mergeHtml.includes('<section data-operator-section="registration" hidden>'), true);
   assert.equal(mergeHtml.includes('<section data-operator-section="pr-merge">'), true);
   assert.equal(mergeHtml.includes('<section data-operator-section="issue-close" hidden>'), true);
 
@@ -198,6 +210,28 @@ test("passkey operator page fills safe approval defaults from explicit mode", ()
   );
 });
 
+test("passkey operator page shows registration only for full or explicit registration mode", () => {
+  const fullHtml = renderPasskeyOperatorPage({
+    operatorMode: "full",
+    repositoryInput: "marushu/vtdd-v2-p"
+  });
+  assert.equal(fullHtml.includes('<section data-operator-section="registration">'), true);
+
+  const registerHtml = renderPasskeyOperatorPage({
+    operatorMode: "register",
+    repositoryInput: "marushu/vtdd-v2-p"
+  });
+  assert.equal(registerHtml.includes('<section data-operator-section="registration">'), true);
+  assert.equal(registerHtml.includes('<section data-operator-section="production-deploy" hidden>'), true);
+
+  const dashboardHtml = renderPasskeyOperatorPage({
+    operatorMode: "dashboard",
+    repositoryInput: "marushu/vtdd-v2-p"
+  });
+  assert.equal(dashboardHtml.includes('<section data-operator-section="registration" hidden>'), true);
+  assert.equal(dashboardHtml.includes('<section data-operator-section="approval">'), true);
+});
+
 test("passkey operator page focuses merge mode on approval and PR merge sections", () => {
   const html = renderPasskeyOperatorPage({
     repositoryInput: "marushu/vtdd-v2-p",
@@ -206,7 +240,7 @@ test("passkey operator page focuses merge mode on approval and PR merge sections
     highRiskKind: "pull_merge"
   });
 
-  assert.equal(html.includes('<section data-operator-section="registration">'), true);
+  assert.equal(html.includes('<section data-operator-section="registration" hidden>'), true);
   assert.equal(html.includes('<section data-operator-section="approval">'), true);
   assert.equal(html.includes('<section data-operator-section="pr-merge">'), true);
   assert.equal(html.includes('<section data-operator-section="issue-close" hidden>'), true);
