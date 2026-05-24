@@ -10458,7 +10458,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 
       </div>
 
-      <form class="composer" id="butler-chat-form" aria-label="Butler composer" autocomplete="off" data-socket-endpoint="${escapeDashboardHtml(socketOrigin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}/ws" data-thread-endpoint="${escapeDashboardHtml(origin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}" data-thread-id="${escapeDashboardHtml(chatThreadId)}" data-repository-input="${escapeDashboardHtml(repositoryInput)}" data-issue-number="${dashboardIssueNumber || ""}">
+      <form class="composer" id="butler-chat-form" aria-label="Butler composer" autocomplete="off" data-socket-endpoint="${escapeDashboardHtml(socketOrigin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}/ws" data-thread-endpoint="${escapeDashboardHtml(origin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}" data-message-endpoint="${escapeDashboardHtml(origin)}/v2/dashboard/chat/messages" data-thread-id="${escapeDashboardHtml(chatThreadId)}" data-repository-input="${escapeDashboardHtml(repositoryInput)}" data-issue-number="${dashboardIssueNumber || ""}">
         <div class="pending-media" id="butler-pending-media" aria-live="polite"></div>
         <div class="composer-box">
           <button class="media-button" id="butler-media-button" type="button" aria-label="画像やファイルを追加" title="画像やファイルを追加">+</button>
@@ -10535,6 +10535,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 
       const socketEndpoint = form.dataset.socketEndpoint;
       const threadEndpoint = form.dataset.threadEndpoint;
+      const messageEndpoint = form.dataset.messageEndpoint;
       const mediaUploadEndpoint = "/v2/media/upload";
       const threadId = form.dataset.threadId;
       const repositoryInput = form.dataset.repositoryInput;
@@ -10587,6 +10588,22 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       function setComposerLocked(locked) {
         textarea.readOnly = locked === true;
         if (mediaButton) mediaButton.disabled = locked === true;
+      }
+
+      function isChatSocketOpen() {
+        return Boolean(chatSocket && chatSocket.readyState === WebSocket.OPEN);
+      }
+
+      function isAuthExpiredResponse(response, body = {}) {
+        return (
+          response &&
+          (response.status === 401 || response.status === 403) &&
+          (body.error === "dashboard_auth_required" || String(body.reason || "").includes("passkey session"))
+        );
+      }
+
+      function setDashboardSessionExpiredStatus() {
+        setStatus("Dashboard のログインが切れています。入力は残したまま、右上の Passkey から再ログインしてください。");
       }
 
       function releasePendingOwnerSend(clientMessageId, options = {}) {
@@ -11012,26 +11029,33 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       }
 
       async function refreshThread() {
-        if (!threadEndpoint || refreshingThread) return;
+        if (!threadEndpoint || refreshingThread) return { ok: false, skipped: true };
         refreshingThread = true;
         try {
           const response = await fetch(threadEndpoint, {
             headers: { "accept": "application/json" },
             credentials: "same-origin"
           });
+          const body = await response.json().catch(() => ({}));
           if (!response.ok) {
-            setStatus("履歴の再取得に失敗しました。WebSocket を再接続しています。");
-            return;
+            if (isAuthExpiredResponse(response, body)) {
+              setDashboardSessionExpiredStatus();
+              return { ok: false, authExpired: true };
+            }
+            setStatus("履歴の再取得に失敗しました。入力は保持しています。WebSocket を再接続しています。");
+            return { ok: false, status: response.status };
           }
-          const body = await response.json();
           if (body && body.ok) {
             renderThread(body.messages || [], { replace: true });
+            return { ok: true };
           }
         } catch {
-          setStatus("履歴の再取得に失敗しました。WebSocket を再接続しています。");
+          setStatus("履歴の再取得に失敗しました。入力は保持しています。WebSocket を再接続しています。");
+          return { ok: false, network: true };
         } finally {
           refreshingThread = false;
         }
+        return { ok: false };
       }
 
       function scheduleReconnect() {
@@ -11120,6 +11144,35 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         });
       }
 
+      async function sendOwnerMessageByHttp(payload, clientMessageId) {
+        if (!messageEndpoint) {
+          throw new Error("HTTP fallback endpoint is not configured");
+        }
+        const response = await fetch(messageEndpoint, {
+          method: "POST",
+          headers: {
+            "accept": "application/json",
+            "content-type": "application/json"
+          },
+          credentials: "same-origin",
+          body: JSON.stringify(payload)
+        });
+        const body = await response.json().catch(() => ({}));
+        if (isAuthExpiredResponse(response, body)) {
+          const error = new Error("dashboard session expired");
+          error.authExpired = true;
+          throw error;
+        }
+        if (!response.ok || !body.ok) {
+          throw new Error(body.reason || "dashboard chat fallback failed");
+        }
+        pendingSendRollbacks.delete(clientMessageId);
+        releasePendingOwnerSend(clientMessageId, { clearComposer: true });
+        renderThread(body.messages || [], { replace: false });
+        setStatus("WebSocket 未接続のため HTTP fallback で保存しました。再接続を続けています。", { temporary: true });
+        scheduleReconnect();
+      }
+
       form.addEventListener("submit", async (event) => {
         event.preventDefault();
         const text = textarea.value.trim() || (pendingMediaItems.length > 0 ? "添付を追加しました。" : "");
@@ -11128,16 +11181,15 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           return;
         }
         const submitButton = form.querySelector("button[type='submit']");
-        if (!chatSocket || chatSocket.readyState !== WebSocket.OPEN) {
-          setStatus("WebSocket 再接続中です。履歴を再取得しています。接続後にもう一度送信してください。");
-          await refreshThread();
-          scheduleReconnect();
-          textarea.focus({ preventScroll: true });
-          return;
-        }
         if (submitButton) submitButton.disabled = true;
         setComposerLocked(true);
-        setStatus(pendingMediaItems.length > 0 ? "添付を保存してから送信しています" : "送信中です", { thinking: true });
+        const willUseHttpFallback = !isChatSocketOpen();
+        if (willUseHttpFallback) {
+          setStatus("WebSocket 再接続中です。入力は保持したまま HTTP fallback で保存します。", { thinking: true });
+          scheduleReconnect();
+        } else {
+          setStatus(pendingMediaItems.length > 0 ? "添付を保存してから送信しています" : "送信中です", { thinking: true });
+        }
         let mediaReferences = [];
         const clientMessageId = retryClientMessageId || createClientMessageId();
         try {
@@ -11164,17 +11216,34 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             setStatus("送信確認が返りませんでした。入力は残しています。再接続後にもう一度送信してください。");
           }, 30000)
         };
+        const ownerPayload = {
+          type: "owner_message",
+          threadId,
+          clientMessageId,
+          repositoryInput,
+          text,
+          issueNumber,
+          relatedIssue: issueNumber,
+          mediaReferences
+        };
+        if (!isChatSocketOpen()) {
+          try {
+            await sendOwnerMessageByHttp(ownerPayload, clientMessageId);
+          } catch (error) {
+            pendingSendRollbacks.delete(clientMessageId);
+            releasePendingOwnerSend(clientMessageId, { clearComposer: false });
+            if (error && error.authExpired) {
+              setDashboardSessionExpiredStatus();
+            } else {
+              setStatus((error && error.message) || "WebSocket と HTTP fallback の両方で送信できませんでした。入力は残しています。");
+            }
+            textarea.focus({ preventScroll: true });
+          }
+          updateComposerReserve();
+          return;
+        }
         try {
-          chatSocket.send(JSON.stringify({
-            type: "owner_message",
-            threadId,
-            clientMessageId,
-            repositoryInput,
-            text,
-            issueNumber,
-            relatedIssue: issueNumber,
-            mediaReferences
-          }));
+          chatSocket.send(JSON.stringify(ownerPayload));
         } catch (error) {
           pendingSendRollbacks.delete(clientMessageId);
           releasePendingOwnerSend(clientMessageId, { clearComposer: false });

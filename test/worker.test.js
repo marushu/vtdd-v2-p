@@ -660,7 +660,7 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes('class="icon-button"'), false);
   assert.equal(body.includes('aria-hidden="true">＋</span>'), false);
   assert.equal(body.includes('aria-hidden="true">♪</span>'), false);
-  assert.equal(body.includes("/v2/dashboard/chat/messages"), false);
+  assert.equal(body.includes('data-message-endpoint="https://example.com/v2/dashboard/chat/messages"'), true);
   assert.equal(body.includes('data-thread-endpoint="https://example.com/v2/dashboard/chat/dashboard-main-unresolved"'), true);
   assert.equal(body.includes('data-socket-endpoint="wss://example.com/v2/dashboard/chat/dashboard-main-unresolved/ws"'), true);
   assert.equal(body.includes('data-dispatch-to-vps-runner="true"'), false);
@@ -670,7 +670,15 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("new WebSocket(socketEndpoint)"), true);
   assert.equal(body.includes("function refreshThread()"), true);
   assert.equal(body.includes("function scheduleReconnect()"), true);
+  assert.equal(body.includes("function sendOwnerMessageByHttp("), true);
+  assert.equal(body.includes("function isChatSocketOpen()"), true);
+  assert.equal(body.includes("function isAuthExpiredResponse("), true);
+  assert.equal(body.includes("HTTP fallback"), true);
+  assert.equal(body.includes("Dashboard のログインが切れています。入力は残したまま、右上の Passkey から再ログインしてください。"), true);
+  assert.equal(body.includes("WebSocket 再接続中です。入力は保持したまま HTTP fallback で保存します。"), true);
+  assert.equal(body.includes("WebSocket 未接続のため HTTP fallback で保存しました。再接続を続けています。"), true);
   assert.equal(body.includes("履歴を再取得して再接続します"), true);
+  assert.equal(body.includes("履歴の再取得に失敗しました。入力は保持しています。WebSocket を再接続しています。"), true);
   assert.equal(body.includes("document.addEventListener(\"visibilitychange\""), true);
   assert.equal(body.includes("window.addEventListener(\"online\""), true);
   assert.equal(body.includes("VPS Codex CLI に push します"), false);
