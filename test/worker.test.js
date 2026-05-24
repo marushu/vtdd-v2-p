@@ -710,6 +710,7 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes('autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="send"'), true);
   assert.equal(body.includes("const messagesById = new Map()"), true);
   assert.equal(body.includes("let pendingOwnerSend = null"), true);
+  assert.equal(body.includes("let retryClientMessageId = \"\""), true);
   assert.equal(body.includes("function releasePendingOwnerSend("), true);
   assert.equal(body.includes("送信確認を待っています。入力は保存確認まで残します。"), true);
   assert.equal(body.includes("送信確認前に WebSocket が切れました。入力は残しています。履歴再取得後にもう一度送信できます。"), true);
@@ -844,6 +845,8 @@ test("worker serves dashboard media add controls for iPhone-first upload", async
   assert.equal(body.includes("mediaReferences"), true);
   assert.equal(body.includes("pendingSendRollbacks"), true);
   assert.equal(body.includes("pendingOwnerSend"), true);
+  assert.equal(body.includes("const clientMessageId = retryClientMessageId || createClientMessageId()"), true);
+  assert.equal(body.includes("retryClientMessageId = pending.clientMessageId"), true);
   assert.equal(body.includes("setComposerLocked(true)"), true);
   assert.equal(body.includes("releasePendingOwnerSend(clientMessageId, { clearComposer: true })"), true);
   assert.equal(body.includes("owner_message_accepted"), true);
@@ -1962,6 +1965,42 @@ test("DashboardChatRoom sends each owner turn to only one app-server bridge for 
   assert.equal(primaryBridgeSocket.sent.length, 1);
   assert.equal(duplicateBridgeSocket.sent.length, 0);
   assert.equal(JSON.parse(primaryBridgeSocket.sent[0]).type, "app_server_turn_requested");
+});
+
+test("DashboardChatRoom dedupes retried owner sends by client message id", async () => {
+  const provider = createInMemoryMemoryProvider();
+  const store = createInMemoryDashboardChatStore();
+  const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
+  const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-unresolved");
+  const storage = createMockDurableObjectStorage();
+  const room = new DashboardChatRoom(
+    {
+      storage,
+      getWebSockets() {
+        return [dashboardSocket, bridgeSocket];
+      }
+    },
+    { DASHBOARD_CHAT_STORE: store, MEMORY_PROVIDER: provider }
+  );
+  const payload = JSON.stringify({
+    type: "owner_message",
+    threadId: "dashboard-main-unresolved",
+    clientMessageId: "dashboard_owner_message:retry-1",
+    text: "再送しても二重実行しない？"
+  });
+
+  await room.webSocketMessage(dashboardSocket, payload);
+  await room.webSocketMessage(dashboardSocket, payload);
+
+  assert.equal(bridgeSocket.sent.length, 1);
+  const stored = await store.listThread("dashboard-main-unresolved");
+  assert.equal(stored.filter((message) => message.role === "owner").length, 1);
+  assert.equal(stored[0].messageId, "dashboard_owner_message:retry-1");
+  const acknowledgements = dashboardSocket.sent
+    .map((message) => JSON.parse(message))
+    .filter((message) => message.type === "owner_message_accepted");
+  assert.equal(acknowledgements.length, 2);
+  assert.equal(acknowledgements[1].duplicate, true);
 });
 
 test("DashboardChatRoom maps app-server replies back into the dashboard thread", async () => {

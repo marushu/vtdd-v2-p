@@ -233,6 +233,17 @@ export class DashboardChatRoom {
       normalizePositiveInteger(payload?.relatedIssue || payload?.issueNumber) || extractIssueNumberFromDashboardChatText(text);
     const now = new Date().toISOString();
     const store = resolveDashboardChatStore(this.env);
+    if (clientMessageId && await this.hasAcceptedOwnerMessage({ threadId, clientMessageId, store })) {
+      this.sendSocket(socket, {
+        type: "owner_message_accepted",
+        ok: true,
+        clientMessageId,
+        messageId: clientMessageId,
+        duplicate: true
+      });
+      await this.broadcastThread({ threadId });
+      return;
+    }
     const repositoryResolution = await resolveDashboardChatRepository({
       payload: { ...normalizeObject(payload), text, threadId },
       env: this.env
@@ -263,6 +274,7 @@ export class DashboardChatRoom {
         relatedIssue,
         status: "sent",
         text,
+        messageId: clientMessageId || undefined,
         mediaReferences: mediaValidation.mediaReferences,
         createdAt: now
       },
@@ -283,6 +295,7 @@ export class DashboardChatRoom {
         { threadId }
       );
       const messages = store ? await store.appendMany(threadId, [ownerMessage, butlerMessage]) : [ownerMessage, butlerMessage].filter(Boolean);
+      await this.writeAcceptedOwnerMessage({ threadId, clientMessageId, messageId: ownerMessage.messageId, acceptedAt: now });
       await this.broadcastThread({ threadId, messages });
       this.sendSocket(socket, {
         type: "owner_message_accepted",
@@ -294,6 +307,7 @@ export class DashboardChatRoom {
     }
 
     const messages = store ? await store.appendMany(threadId, [ownerMessage]) : [ownerMessage].filter(Boolean);
+    await this.writeAcceptedOwnerMessage({ threadId, clientMessageId, messageId: ownerMessage.messageId, acceptedAt: now });
     await this.broadcastThread({ threadId, messages });
     this.sendSocket(socket, {
       type: "owner_message_accepted",
@@ -504,6 +518,46 @@ export class DashboardChatRoom {
     await this.ctx.storage.put(`app_server_thread:${normalizedThreadId}`, {
       codexThreadId,
       updatedAt: normalizeIsoTimestamp(mapping?.updatedAt) || new Date().toISOString()
+    });
+    return true;
+  }
+
+  async hasAcceptedOwnerMessage({ threadId, clientMessageId, store }) {
+    const normalizedThreadId = normalizeDashboardThreadId(threadId);
+    const normalizedClientMessageId = normalizeDashboardEventText(clientMessageId);
+    if (!normalizedThreadId || !normalizedClientMessageId) {
+      return false;
+    }
+    if (typeof this.ctx?.storage?.get === "function") {
+      try {
+        const record = await this.ctx.storage.get(`owner_message:${normalizedThreadId}:${normalizedClientMessageId}`);
+        if (record) {
+          return true;
+        }
+      } catch {
+        // Fall back to thread history below.
+      }
+    }
+    if (store && typeof store.listThread === "function") {
+      try {
+        const messages = await store.listThread(normalizedThreadId, { limit: 80 });
+        return messages.some((message) => message?.role === "owner" && message?.messageId === normalizedClientMessageId);
+      } catch {
+        return false;
+      }
+    }
+    return false;
+  }
+
+  async writeAcceptedOwnerMessage({ threadId, clientMessageId, messageId, acceptedAt }) {
+    const normalizedThreadId = normalizeDashboardThreadId(threadId);
+    const normalizedClientMessageId = normalizeDashboardEventText(clientMessageId);
+    if (!normalizedThreadId || !normalizedClientMessageId || typeof this.ctx?.storage?.put !== "function") {
+      return false;
+    }
+    await this.ctx.storage.put(`owner_message:${normalizedThreadId}:${normalizedClientMessageId}`, {
+      messageId: normalizeDashboardEventText(messageId) || normalizedClientMessageId,
+      acceptedAt: normalizeIsoTimestamp(acceptedAt) || new Date().toISOString()
     });
     return true;
   }
@@ -10494,6 +10548,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       const pendingSendRollbacks = new Map();
       const messagesById = new Map();
       let pendingOwnerSend = null;
+      let retryClientMessageId = "";
 
       function updateComposerReserve() {
         log.style.setProperty("--composer-reserve", Math.ceil(form.getBoundingClientRect().height) + "px");
@@ -10546,6 +10601,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           pending.submitButton.disabled = false;
         }
         if (options.clearComposer === true) {
+          retryClientMessageId = "";
           if (textarea.value.trim() === pending.text) {
             textarea.value = "";
           }
@@ -10553,6 +10609,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           pendingMediaItems = [];
           renderPendingMedia();
           resizeComposerInput();
+        } else {
+          retryClientMessageId = pending.clientMessageId;
         }
         updateComposerReserve();
         return true;
@@ -11081,7 +11139,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         setComposerLocked(true);
         setStatus(pendingMediaItems.length > 0 ? "添付を保存してから送信しています" : "送信中です", { thinking: true });
         let mediaReferences = [];
-        const clientMessageId = createClientMessageId();
+        const clientMessageId = retryClientMessageId || createClientMessageId();
         try {
           mediaReferences = await uploadPendingMedia(clientMessageId);
         } catch (error) {
