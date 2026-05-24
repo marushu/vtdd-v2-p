@@ -65217,6 +65217,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       let pendingMediaItems = [];
       const pendingSendRollbacks = new Map();
       const messagesById = new Map();
+      let pendingOwnerSend = null;
 
       function updateComposerReserve() {
         log.style.setProperty("--composer-reserve", Math.ceil(form.getBoundingClientRect().height) + "px");
@@ -65250,6 +65251,35 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             }
           }, 2400);
         }
+      }
+
+      function setComposerLocked(locked) {
+        textarea.readOnly = locked === true;
+        if (mediaButton) mediaButton.disabled = locked === true;
+      }
+
+      function releasePendingOwnerSend(clientMessageId, options = {}) {
+        if (!pendingOwnerSend || pendingOwnerSend.clientMessageId !== clientMessageId) return false;
+        const pending = pendingOwnerSend;
+        pendingOwnerSend = null;
+        if (pending.timeoutId && options.keepRollbackTimer !== true) {
+          window.clearTimeout(pending.timeoutId);
+        }
+        setComposerLocked(false);
+        if (pending.submitButton) {
+          pending.submitButton.disabled = false;
+        }
+        if (options.clearComposer === true) {
+          if (textarea.value.trim() === pending.text) {
+            textarea.value = "";
+          }
+          revokePendingMediaPreviews();
+          pendingMediaItems = [];
+          renderPendingMedia();
+          resizeComposerInput();
+        }
+        updateComposerReserve();
+        return true;
       }
 
       function appendMessage(message) {
@@ -65717,12 +65747,15 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
               const clientMessageId = body.clientMessageId || body.client_message_id || "";
               if (clientMessageId) {
                 pendingSendRollbacks.delete(clientMessageId);
+                releasePendingOwnerSend(clientMessageId, { clearComposer: true });
+                setStatus("\u9001\u4FE1\u3092\u4FDD\u5B58\u3057\u307E\u3057\u305F\u3002app-server bridge \u306E\u8FD4\u4FE1\u3092\u5F85\u3063\u3066\u3044\u307E\u3059", { thinking: true });
               }
             } else if (body.type === "error") {
               const clientMessageId = body.clientMessageId || body.client_message_id || "";
               if (clientMessageId && pendingSendRollbacks.has(clientMessageId)) {
                 const mediaReferences = pendingSendRollbacks.get(clientMessageId) || [];
                 pendingSendRollbacks.delete(clientMessageId);
+                releasePendingOwnerSend(clientMessageId, { clearComposer: false });
                 rollbackAbandonedMedia(mediaReferences, clientMessageId).catch(() => {});
               }
               appendError(body.reason || "WebSocket message error");
@@ -65732,12 +65765,22 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           }
         });
         chatSocket.addEventListener("close", () => {
-          setStatus("WebSocket \u304C\u5207\u308C\u307E\u3057\u305F\u3002\u5C65\u6B74\u3092\u518D\u53D6\u5F97\u3057\u3066\u518D\u63A5\u7D9A\u3057\u307E\u3059\u3002");
+          if (pendingOwnerSend) {
+            releasePendingOwnerSend(pendingOwnerSend.clientMessageId, { clearComposer: false, keepRollbackTimer: true });
+            setStatus("\u9001\u4FE1\u78BA\u8A8D\u524D\u306B WebSocket \u304C\u5207\u308C\u307E\u3057\u305F\u3002\u5165\u529B\u306F\u6B8B\u3057\u3066\u3044\u307E\u3059\u3002\u5C65\u6B74\u518D\u53D6\u5F97\u5F8C\u306B\u3082\u3046\u4E00\u5EA6\u9001\u4FE1\u3067\u304D\u307E\u3059\u3002");
+          } else {
+            setStatus("WebSocket \u304C\u5207\u308C\u307E\u3057\u305F\u3002\u5C65\u6B74\u3092\u518D\u53D6\u5F97\u3057\u3066\u518D\u63A5\u7D9A\u3057\u307E\u3059\u3002");
+          }
           refreshThread();
           scheduleReconnect();
         });
         chatSocket.addEventListener("error", () => {
-          setStatus("WebSocket \u63A5\u7D9A\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u5C65\u6B74\u3092\u518D\u53D6\u5F97\u3057\u3066\u518D\u63A5\u7D9A\u3057\u307E\u3059\u3002");
+          if (pendingOwnerSend) {
+            releasePendingOwnerSend(pendingOwnerSend.clientMessageId, { clearComposer: false, keepRollbackTimer: true });
+            setStatus("\u9001\u4FE1\u78BA\u8A8D\u524D\u306B WebSocket \u63A5\u7D9A\u304C\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u5165\u529B\u306F\u6B8B\u3057\u3066\u3044\u307E\u3059\u3002\u518D\u63A5\u7D9A\u5F8C\u306B\u3082\u3046\u4E00\u5EA6\u9001\u4FE1\u3067\u304D\u307E\u3059\u3002");
+          } else {
+            setStatus("WebSocket \u63A5\u7D9A\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u5C65\u6B74\u3092\u518D\u53D6\u5F97\u3057\u3066\u518D\u63A5\u7D9A\u3057\u307E\u3059\u3002");
+          }
           refreshThread();
           scheduleReconnect();
         });
@@ -65759,6 +65802,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           return;
         }
         if (submitButton) submitButton.disabled = true;
+        setComposerLocked(true);
         setStatus(pendingMediaItems.length > 0 ? "\u6DFB\u4ED8\u3092\u4FDD\u5B58\u3057\u3066\u304B\u3089\u9001\u4FE1\u3057\u3066\u3044\u307E\u3059" : "\u9001\u4FE1\u4E2D\u3067\u3059", { thinking: true });
         let mediaReferences = [];
         const clientMessageId = createClientMessageId();
@@ -65766,11 +65810,26 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           mediaReferences = await uploadPendingMedia(clientMessageId);
         } catch (error) {
           setStatus((error && error.message) || "\u6DFB\u4ED8\u306E\u4FDD\u5B58\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002");
+          setComposerLocked(false);
           if (submitButton) submitButton.disabled = false;
           textarea.focus({ preventScroll: true });
           return;
         }
         pendingSendRollbacks.set(clientMessageId, mediaReferences);
+        pendingOwnerSend = {
+          clientMessageId,
+          text,
+          mediaReferences,
+          submitButton,
+          timeoutId: window.setTimeout(() => {
+            if (!pendingSendRollbacks.has(clientMessageId)) return;
+            const rollbackMediaReferences = pendingSendRollbacks.get(clientMessageId) || [];
+            pendingSendRollbacks.delete(clientMessageId);
+            releasePendingOwnerSend(clientMessageId, { clearComposer: false });
+            rollbackAbandonedMedia(rollbackMediaReferences, clientMessageId).catch(() => {});
+            setStatus("\u9001\u4FE1\u78BA\u8A8D\u304C\u8FD4\u308A\u307E\u305B\u3093\u3067\u3057\u305F\u3002\u5165\u529B\u306F\u6B8B\u3057\u3066\u3044\u307E\u3059\u3002\u518D\u63A5\u7D9A\u5F8C\u306B\u3082\u3046\u4E00\u5EA6\u9001\u4FE1\u3057\u3066\u304F\u3060\u3055\u3044\u3002");
+          }, 30000)
+        };
         try {
           chatSocket.send(JSON.stringify({
             type: "owner_message",
@@ -65782,28 +65841,15 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             relatedIssue: issueNumber,
             mediaReferences
           }));
-          window.setTimeout(() => {
-            if (!pendingSendRollbacks.has(clientMessageId)) return;
-            const rollbackMediaReferences = pendingSendRollbacks.get(clientMessageId) || [];
-            pendingSendRollbacks.delete(clientMessageId);
-            rollbackAbandonedMedia(rollbackMediaReferences, clientMessageId).catch(() => {});
-            setStatus("\u9001\u4FE1\u78BA\u8A8D\u304C\u8FD4\u3089\u306A\u304B\u3063\u305F\u305F\u3081\u3001\u4FDD\u5B58\u6E08\u307F\u6DFB\u4ED8\u3092\u7834\u68C4\u3057\u307E\u3057\u305F\u3002");
-          }, 30000);
         } catch (error) {
           pendingSendRollbacks.delete(clientMessageId);
+          releasePendingOwnerSend(clientMessageId, { clearComposer: false });
           await rollbackAbandonedMedia(mediaReferences, clientMessageId);
           setStatus((error && error.message) || "\u9001\u4FE1\u306B\u5931\u6557\u3057\u305F\u305F\u3081\u3001\u4FDD\u5B58\u6E08\u307F\u6DFB\u4ED8\u3092\u7834\u68C4\u3057\u307E\u3057\u305F\u3002");
-          if (submitButton) submitButton.disabled = false;
           textarea.focus({ preventScroll: true });
           return;
         }
-        revokePendingMediaPreviews();
-        pendingMediaItems = [];
-        renderPendingMedia();
-        textarea.value = "";
-        resizeComposerInput();
-        setStatus("app-server bridge \u306E\u8FD4\u4FE1\u3092\u5F85\u3063\u3066\u3044\u307E\u3059", { thinking: true });
-        if (submitButton) submitButton.disabled = false;
+        setStatus("\u9001\u4FE1\u78BA\u8A8D\u3092\u5F85\u3063\u3066\u3044\u307E\u3059\u3002\u5165\u529B\u306F\u4FDD\u5B58\u78BA\u8A8D\u307E\u3067\u6B8B\u3057\u307E\u3059\u3002", { thinking: true });
         textarea.focus({ preventScroll: true });
         updateComposerReserve();
       });

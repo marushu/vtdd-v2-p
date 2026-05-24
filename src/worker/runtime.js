@@ -10493,6 +10493,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       let pendingMediaItems = [];
       const pendingSendRollbacks = new Map();
       const messagesById = new Map();
+      let pendingOwnerSend = null;
 
       function updateComposerReserve() {
         log.style.setProperty("--composer-reserve", Math.ceil(form.getBoundingClientRect().height) + "px");
@@ -10526,6 +10527,35 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             }
           }, 2400);
         }
+      }
+
+      function setComposerLocked(locked) {
+        textarea.readOnly = locked === true;
+        if (mediaButton) mediaButton.disabled = locked === true;
+      }
+
+      function releasePendingOwnerSend(clientMessageId, options = {}) {
+        if (!pendingOwnerSend || pendingOwnerSend.clientMessageId !== clientMessageId) return false;
+        const pending = pendingOwnerSend;
+        pendingOwnerSend = null;
+        if (pending.timeoutId && options.keepRollbackTimer !== true) {
+          window.clearTimeout(pending.timeoutId);
+        }
+        setComposerLocked(false);
+        if (pending.submitButton) {
+          pending.submitButton.disabled = false;
+        }
+        if (options.clearComposer === true) {
+          if (textarea.value.trim() === pending.text) {
+            textarea.value = "";
+          }
+          revokePendingMediaPreviews();
+          pendingMediaItems = [];
+          renderPendingMedia();
+          resizeComposerInput();
+        }
+        updateComposerReserve();
+        return true;
       }
 
       function appendMessage(message) {
@@ -10993,12 +11023,15 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
               const clientMessageId = body.clientMessageId || body.client_message_id || "";
               if (clientMessageId) {
                 pendingSendRollbacks.delete(clientMessageId);
+                releasePendingOwnerSend(clientMessageId, { clearComposer: true });
+                setStatus("送信を保存しました。app-server bridge の返信を待っています", { thinking: true });
               }
             } else if (body.type === "error") {
               const clientMessageId = body.clientMessageId || body.client_message_id || "";
               if (clientMessageId && pendingSendRollbacks.has(clientMessageId)) {
                 const mediaReferences = pendingSendRollbacks.get(clientMessageId) || [];
                 pendingSendRollbacks.delete(clientMessageId);
+                releasePendingOwnerSend(clientMessageId, { clearComposer: false });
                 rollbackAbandonedMedia(mediaReferences, clientMessageId).catch(() => {});
               }
               appendError(body.reason || "WebSocket message error");
@@ -11008,12 +11041,22 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           }
         });
         chatSocket.addEventListener("close", () => {
-          setStatus("WebSocket が切れました。履歴を再取得して再接続します。");
+          if (pendingOwnerSend) {
+            releasePendingOwnerSend(pendingOwnerSend.clientMessageId, { clearComposer: false, keepRollbackTimer: true });
+            setStatus("送信確認前に WebSocket が切れました。入力は残しています。履歴再取得後にもう一度送信できます。");
+          } else {
+            setStatus("WebSocket が切れました。履歴を再取得して再接続します。");
+          }
           refreshThread();
           scheduleReconnect();
         });
         chatSocket.addEventListener("error", () => {
-          setStatus("WebSocket 接続に失敗しました。履歴を再取得して再接続します。");
+          if (pendingOwnerSend) {
+            releasePendingOwnerSend(pendingOwnerSend.clientMessageId, { clearComposer: false, keepRollbackTimer: true });
+            setStatus("送信確認前に WebSocket 接続が失敗しました。入力は残しています。再接続後にもう一度送信できます。");
+          } else {
+            setStatus("WebSocket 接続に失敗しました。履歴を再取得して再接続します。");
+          }
           refreshThread();
           scheduleReconnect();
         });
@@ -11035,6 +11078,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           return;
         }
         if (submitButton) submitButton.disabled = true;
+        setComposerLocked(true);
         setStatus(pendingMediaItems.length > 0 ? "添付を保存してから送信しています" : "送信中です", { thinking: true });
         let mediaReferences = [];
         const clientMessageId = createClientMessageId();
@@ -11042,11 +11086,26 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           mediaReferences = await uploadPendingMedia(clientMessageId);
         } catch (error) {
           setStatus((error && error.message) || "添付の保存に失敗しました。");
+          setComposerLocked(false);
           if (submitButton) submitButton.disabled = false;
           textarea.focus({ preventScroll: true });
           return;
         }
         pendingSendRollbacks.set(clientMessageId, mediaReferences);
+        pendingOwnerSend = {
+          clientMessageId,
+          text,
+          mediaReferences,
+          submitButton,
+          timeoutId: window.setTimeout(() => {
+            if (!pendingSendRollbacks.has(clientMessageId)) return;
+            const rollbackMediaReferences = pendingSendRollbacks.get(clientMessageId) || [];
+            pendingSendRollbacks.delete(clientMessageId);
+            releasePendingOwnerSend(clientMessageId, { clearComposer: false });
+            rollbackAbandonedMedia(rollbackMediaReferences, clientMessageId).catch(() => {});
+            setStatus("送信確認が返りませんでした。入力は残しています。再接続後にもう一度送信してください。");
+          }, 30000)
+        };
         try {
           chatSocket.send(JSON.stringify({
             type: "owner_message",
@@ -11058,28 +11117,15 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             relatedIssue: issueNumber,
             mediaReferences
           }));
-          window.setTimeout(() => {
-            if (!pendingSendRollbacks.has(clientMessageId)) return;
-            const rollbackMediaReferences = pendingSendRollbacks.get(clientMessageId) || [];
-            pendingSendRollbacks.delete(clientMessageId);
-            rollbackAbandonedMedia(rollbackMediaReferences, clientMessageId).catch(() => {});
-            setStatus("送信確認が返らなかったため、保存済み添付を破棄しました。");
-          }, 30000);
         } catch (error) {
           pendingSendRollbacks.delete(clientMessageId);
+          releasePendingOwnerSend(clientMessageId, { clearComposer: false });
           await rollbackAbandonedMedia(mediaReferences, clientMessageId);
           setStatus((error && error.message) || "送信に失敗したため、保存済み添付を破棄しました。");
-          if (submitButton) submitButton.disabled = false;
           textarea.focus({ preventScroll: true });
           return;
         }
-        revokePendingMediaPreviews();
-        pendingMediaItems = [];
-        renderPendingMedia();
-        textarea.value = "";
-        resizeComposerInput();
-        setStatus("app-server bridge の返信を待っています", { thinking: true });
-        if (submitButton) submitButton.disabled = false;
+        setStatus("送信確認を待っています。入力は保存確認まで残します。", { thinking: true });
         textarea.focus({ preventScroll: true });
         updateComposerReserve();
       });

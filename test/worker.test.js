@@ -709,6 +709,11 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes('className = "copy-message"'), true);
   assert.equal(body.includes('autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="send"'), true);
   assert.equal(body.includes("const messagesById = new Map()"), true);
+  assert.equal(body.includes("let pendingOwnerSend = null"), true);
+  assert.equal(body.includes("function releasePendingOwnerSend("), true);
+  assert.equal(body.includes("送信確認を待っています。入力は保存確認まで残します。"), true);
+  assert.equal(body.includes("送信確認前に WebSocket が切れました。入力は残しています。履歴再取得後にもう一度送信できます。"), true);
+  assert.equal(body.includes("送信確認が返りませんでした。入力は残しています。再接続後にもう一度送信してください。"), true);
   assert.equal(body.includes("messagesById.set(messageKey(message), message)"), true);
   assert.equal(body.includes("messagesById.clear()"), true);
   assert.equal(body.includes("message?.createdAt"), true);
@@ -838,6 +843,9 @@ test("worker serves dashboard media add controls for iPhone-first upload", async
   assert.equal(body.includes("repo 未指定の通常会話では private media として保存します"), true);
   assert.equal(body.includes("mediaReferences"), true);
   assert.equal(body.includes("pendingSendRollbacks"), true);
+  assert.equal(body.includes("pendingOwnerSend"), true);
+  assert.equal(body.includes("setComposerLocked(true)"), true);
+  assert.equal(body.includes("releasePendingOwnerSend(clientMessageId, { clearComposer: true })"), true);
   assert.equal(body.includes("owner_message_accepted"), true);
 });
 
