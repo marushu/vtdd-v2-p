@@ -692,8 +692,10 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("hour: \"2-digit\""), true);
   assert.equal(body.includes("minute: \"2-digit\""), true);
   assert.equal(body.includes("sameDay"), true);
-  assert.equal(body.includes(".message-meta { margin-top: 6px; color: var(--muted); font-size: 11px; line-height: 1.2; opacity: .72; }"), true);
-  assert.equal(body.includes(".bubble.owner .message-meta { color: var(--owner-text); opacity: .62; text-align: right; }"), true);
+  assert.equal(body.includes("const locale = navigator.language || \"ja-JP\""), true);
+  assert.equal(body.includes("new Intl.DateTimeFormat(locale"), true);
+  assert.equal(body.includes(".message-meta { margin-top: 6px; color: var(--muted); font-size: 11px; line-height: 1.2; opacity: .86; }"), true);
+  assert.equal(body.includes(".bubble.owner .message-meta { color: var(--owner-text); opacity: .76; text-align: right; }"), true);
   assert.equal(body.includes('document.createElement("ul")'), true);
   assert.equal(body.includes('document.createElement("li")'), true);
   assert.equal(body.includes('document.createElement("pre")'), true);

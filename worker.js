@@ -65022,8 +65022,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .bubble .message-body pre { position: relative; margin: 0; padding: 42px 14px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--panel-strong); overflow-x: auto; white-space: pre; }
     .bubble .message-body pre code { display: block; font-size: 14px; line-height: 1.55; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
     .bubble .message-body strong { display: inline; color: inherit; font-size: inherit; letter-spacing: 0; text-transform: none; margin: 0; font-weight: 800; }
-    .message-meta { margin-top: 6px; color: var(--muted); font-size: 11px; line-height: 1.2; opacity: .72; }
-    .bubble.owner .message-meta { color: var(--owner-text); opacity: .62; text-align: right; }
+    .message-meta { margin-top: 6px; color: var(--muted); font-size: 11px; line-height: 1.2; opacity: .86; }
+    .bubble.owner .message-meta { color: var(--owner-text); opacity: .76; text-align: right; }
     .copy-message, .copy-code { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border: 1px solid var(--border); border-radius: 999px; background: var(--button); color: var(--text); font-size: 15px; line-height: 1; cursor: pointer; }
     .copy-message:focus-visible, .copy-code:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
     .copy-code { position: absolute; top: 8px; right: 8px; z-index: 1; opacity: .88; }
@@ -65402,13 +65402,14 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           date.getFullYear() === now.getFullYear() &&
           date.getMonth() === now.getMonth() &&
           date.getDate() === now.getDate();
-        const time = new Intl.DateTimeFormat("ja-JP", {
+        const locale = navigator.language || "ja-JP";
+        const time = new Intl.DateTimeFormat(locale, {
           hour: "2-digit",
           minute: "2-digit",
           hour12: false
         }).format(date);
         if (sameDay) return time;
-        const day = new Intl.DateTimeFormat("ja-JP", {
+        const day = new Intl.DateTimeFormat(locale, {
           month: "numeric",
           day: "numeric"
         }).format(date);
