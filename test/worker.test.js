@@ -687,6 +687,13 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("function renderMessageText("), true);
   assert.equal(body.includes("function renderInlineMarkdown("), true);
   assert.equal(body.includes('body.className = "message-body"'), true);
+  assert.equal(body.includes('meta.className = "message-meta"'), true);
+  assert.equal(body.includes("function formatMessageTimestamp("), true);
+  assert.equal(body.includes("hour: \"2-digit\""), true);
+  assert.equal(body.includes("minute: \"2-digit\""), true);
+  assert.equal(body.includes("sameDay"), true);
+  assert.equal(body.includes(".message-meta { margin-top: 6px; color: var(--muted); font-size: 11px; line-height: 1.2; opacity: .72; }"), true);
+  assert.equal(body.includes(".bubble.owner .message-meta { color: var(--owner-text); opacity: .62; text-align: right; }"), true);
   assert.equal(body.includes('document.createElement("ul")'), true);
   assert.equal(body.includes('document.createElement("li")'), true);
   assert.equal(body.includes('document.createElement("pre")'), true);
@@ -720,6 +727,8 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("message?.createdAt"), true);
   assert.equal(body.includes('renderThread(body.messages || [], { replace: true })'), true);
   assert.equal(body.includes('renderThread(body.messages || [], { replace: false })'), true);
+  assert.equal(body.includes('body.type === "transient_status"'), true);
+  assert.equal(body.includes("appendMessage(body"), false);
   assert.equal(body.includes("white-space: pre-wrap"), true);
   assert.equal(body.includes("tokenPattern"), true);
   assert.equal(body.includes('link.className = "chat-link"'), true);
