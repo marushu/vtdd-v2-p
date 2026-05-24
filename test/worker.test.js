@@ -677,6 +677,8 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("Dashboard のログインが切れています。入力は残したまま、右上の Passkey から再ログインしてください。"), true);
   assert.equal(body.includes("WebSocket 再接続中です。入力は保持したまま HTTP fallback で保存します。"), true);
   assert.equal(body.includes("WebSocket 未接続のため HTTP fallback で保存しました。再接続を続けています。"), true);
+  assert.equal(body.includes("sendOwnerMessageByHttp(ownerPayload, clientMessageId)"), true);
+  assert.equal(body.includes("refreshThread().then"), false);
   assert.equal(body.includes("履歴を再取得して再接続します"), true);
   assert.equal(body.includes("履歴の再取得に失敗しました。入力は保持しています。WebSocket を再接続しています。"), true);
   assert.equal(body.includes("document.addEventListener(\"visibilitychange\""), true);
