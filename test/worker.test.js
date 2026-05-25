@@ -322,6 +322,103 @@ function base64UrlEncodeTestBytes(bytes) {
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
+function base64UrlToTestBytes(value) {
+  const normalized = String(value || "").replace(/-/g, "+").replace(/_/g, "/");
+  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+  const binary = atob(padded);
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+}
+
+function concatTestBytes(...chunks) {
+  const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+  const result = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    result.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return result;
+}
+
+async function hmacSha256Test(keyBytes, dataBytes) {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    keyBytes,
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  return new Uint8Array(await crypto.subtle.sign("HMAC", key, dataBytes));
+}
+
+async function createTestPushSubscription(fields = {}) {
+  const keyPair = await crypto.subtle.generateKey(
+    { name: "ECDH", namedCurve: "P-256" },
+    true,
+    ["deriveBits"]
+  );
+  const publicBytes = new Uint8Array(await crypto.subtle.exportKey("raw", keyPair.publicKey));
+  const authBytes = crypto.getRandomValues(new Uint8Array(16));
+  return {
+    subscription: {
+      endpointHash: fields.endpointHash || "endpoint-hash",
+      endpoint: fields.endpoint || "https://push.example/send/endpoint-hash",
+      p256dh: base64UrlEncodeTestBytes(publicBytes),
+      auth: base64UrlEncodeTestBytes(authBytes),
+      ownerIdentity: "owner@example.com",
+      updatedAt: new Date().toISOString()
+    },
+    privateKey: keyPair.privateKey,
+    publicBytes,
+    authBytes
+  };
+}
+
+async function decryptTestWebPushPayload(body, pushKeys) {
+  const encrypted = new Uint8Array(await new Response(body).arrayBuffer());
+  const salt = encrypted.slice(0, 16);
+  const recordSize = new DataView(encrypted.buffer, encrypted.byteOffset + 16, 4).getUint32(0);
+  const keyIdLength = encrypted[20];
+  const serverPublicBytes = encrypted.slice(21, 21 + keyIdLength);
+  const ciphertext = encrypted.slice(21 + keyIdLength);
+
+  assert.equal(recordSize, 4096);
+  assert.equal(keyIdLength, 65);
+  assert.equal(serverPublicBytes[0], 4);
+
+  const serverPublicKey = await crypto.subtle.importKey(
+    "raw",
+    serverPublicBytes,
+    { name: "ECDH", namedCurve: "P-256" },
+    false,
+    []
+  );
+  const sharedSecret = new Uint8Array(await crypto.subtle.deriveBits(
+    { name: "ECDH", public: serverPublicKey },
+    pushKeys.privateKey,
+    256
+  ));
+  const prkKey = await hmacSha256Test(pushKeys.authBytes, sharedSecret);
+  const keyInfo = concatTestBytes(
+    new TextEncoder().encode("WebPush: info"),
+    new Uint8Array([0]),
+    pushKeys.publicBytes,
+    serverPublicBytes
+  );
+  const ikm = (await hmacSha256Test(prkKey, concatTestBytes(keyInfo, new Uint8Array([1])))).slice(0, 32);
+  const prk = await hmacSha256Test(salt, ikm);
+  const cek = (await hmacSha256Test(prk, concatTestBytes(new TextEncoder().encode("Content-Encoding: aes128gcm"), new Uint8Array([0, 1])))).slice(0, 16);
+  const nonce = (await hmacSha256Test(prk, concatTestBytes(new TextEncoder().encode("Content-Encoding: nonce"), new Uint8Array([0, 1])))).slice(0, 12);
+  const key = await crypto.subtle.importKey("raw", cek, { name: "AES-GCM" }, false, ["decrypt"]);
+  const plaintext = new Uint8Array(await crypto.subtle.decrypt(
+    { name: "AES-GCM", iv: nonce, tagLength: 128 },
+    key,
+    ciphertext
+  ));
+  assert.equal(plaintext[plaintext.length - 1], 2);
+  return new TextDecoder().decode(plaintext.slice(0, -1));
+}
+
 async function sha256HexTest(value) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(value)));
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -2640,14 +2737,8 @@ test("worker reports dashboard push subscription server save status without raw 
 
 test("worker sends server-side dashboard Web Push test only for authenticated owner session", async () => {
   const store = createInMemoryDashboardPushSubscriptionStore();
-  await store.put({
-    endpointHash: "endpoint-hash",
-    endpoint: "https://push.example/send/endpoint-hash",
-    p256dh: "p256dh-key",
-    auth: "auth-key",
-    ownerIdentity: "owner@example.com",
-    updatedAt: new Date().toISOString()
-  });
+  const pushKeys = await createTestPushSubscription();
+  await store.put(pushKeys.subscription);
   const calls = [];
   const vapidEnv = await createTestVapidEnv({
     DASHBOARD_WEB_PUSH_FETCH: async (input, init) => {
@@ -2694,7 +2785,13 @@ test("worker sends server-side dashboard Web Push test only for authenticated ow
   assert.match(calls[0].init.headers.authorization, /^vapid t=.+, k=.+/);
   assert.equal(calls[0].init.headers.ttl, "300");
   assert.equal(calls[0].init.headers.urgency, "normal");
-  assert.equal("body" in calls[0].init, false);
+  assert.equal(calls[0].init.headers["content-encoding"], "aes128gcm");
+  assert.equal(calls[0].init.headers["content-type"], "application/octet-stream");
+  assert.equal("body" in calls[0].init, true);
+  const decrypted = JSON.parse(await decryptTestWebPushPayload(calls[0].init.body, pushKeys));
+  assert.equal(decrypted.title, "VTDD Butler テスト通知");
+  assert.equal(decrypted.body, "通知経路は正常です。iPhone PWA にサーバ送信できました。");
+  assert.equal(decrypted.url, "/dashboard/notifications");
   assert.equal(JSON.stringify(body).includes("p256dh-key"), false);
   assert.equal(JSON.stringify(body).includes("auth-key"), false);
 });
@@ -2787,14 +2884,11 @@ test("worker reports server-side dashboard Web Push configuration blockers", asy
 
 test("worker cleans up stale dashboard Web Push subscriptions rejected by push service", async () => {
   const store = createInMemoryDashboardPushSubscriptionStore();
-  await store.put({
+  const pushKeys = await createTestPushSubscription({
     endpointHash: "stale-endpoint-hash",
-    endpoint: "https://push.example/send/stale-endpoint-hash",
-    p256dh: "p256dh-key",
-    auth: "auth-key",
-    ownerIdentity: "owner@example.com",
-    updatedAt: new Date().toISOString()
+    endpoint: "https://push.example/send/stale-endpoint-hash"
   });
+  await store.put(pushKeys.subscription);
   const vapidEnv = await createTestVapidEnv({
     DASHBOARD_WEB_PUSH_FETCH: async () => new Response(null, { status: 410 })
   });
@@ -2880,14 +2974,11 @@ test("worker redacts dashboard push subscription raw material from D1 payload_js
 test("worker ingests GitHub Actions deploy completion event and shows it on dashboard", async () => {
   const store = createInMemoryDashboardEventStore();
   const pushStore = createInMemoryDashboardPushSubscriptionStore();
-  await pushStore.put({
+  const pushKeys = await createTestPushSubscription({
     endpointHash: "deploy-push-endpoint",
-    endpoint: "https://push.example/send/deploy",
-    p256dh: "p256dh-key",
-    auth: "auth-key",
-    ownerIdentity: "owner@example.com",
-    updatedAt: new Date().toISOString()
+    endpoint: "https://push.example/send/deploy"
   });
+  await pushStore.put(pushKeys.subscription);
   const pushCalls = [];
   const vapidEnv = await createTestVapidEnv({
     DASHBOARD_WEB_PUSH_FETCH: async (input, init) => {
@@ -2930,6 +3021,10 @@ test("worker ingests GitHub Actions deploy completion event and shows it on dash
   assert.equal(pushCalls.length, 1);
   assert.equal(pushCalls[0].input, "https://push.example/send/deploy");
   assert.match(pushCalls[0].init.headers.authorization, /^vapid t=.+, k=.+/);
+  assert.equal(pushCalls[0].init.headers["content-encoding"], "aes128gcm");
+  const decryptedPush = JSON.parse(await decryptTestWebPushPayload(pushCalls[0].init.body, pushKeys));
+  assert.equal(decryptedPush.title, "デプロイ完了: vtdd-v2-p");
+  assert.equal(decryptedPush.body.includes("workflow: deploy-production"), true);
   assert.equal("approvalGrantId" in eventBody.event, false);
   assert.equal("token" in eventBody.event, false);
 

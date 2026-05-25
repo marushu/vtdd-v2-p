@@ -62223,6 +62223,100 @@ function compactNotificationText(value, limit) {
   }
   return `${text.slice(0, Math.max(0, limit - 1))}\u2026`;
 }
+async function encryptDashboardWebPushPayload({ subscription, payload }) {
+  const userPublicBytes = base64UrlToBytes(subscription?.p256dh);
+  const authSecretBytes = base64UrlToBytes(subscription?.auth);
+  if (userPublicBytes.length !== 65 || userPublicBytes[0] !== 4 || authSecretBytes.length < 16) {
+    return {
+      ok: false,
+      status: 422,
+      error: "dashboard_web_push_subscription_keys_invalid",
+      reason: "push subscription p256dh/auth keys are required for encrypted Web Push payloads"
+    };
+  }
+  const serverKeyPair = await crypto.subtle.generateKey(
+    { name: "ECDH", namedCurve: "P-256" },
+    true,
+    ["deriveBits"]
+  );
+  const userPublicKey = await crypto.subtle.importKey(
+    "raw",
+    userPublicBytes,
+    { name: "ECDH", namedCurve: "P-256" },
+    false,
+    []
+  );
+  const sharedSecret = new Uint8Array(await crypto.subtle.deriveBits(
+    { name: "ECDH", public: userPublicKey },
+    serverKeyPair.privateKey,
+    256
+  ));
+  const serverPublicBytes = new Uint8Array(await crypto.subtle.exportKey("raw", serverKeyPair.publicKey));
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const keyInfo = concatBytes2(
+    new TextEncoder().encode("WebPush: info"),
+    new Uint8Array([0]),
+    userPublicBytes,
+    serverPublicBytes
+  );
+  const prkKey = await hmacSha256(authSecretBytes, sharedSecret);
+  const ikm = (await hmacSha256(prkKey, concatBytes2(keyInfo, new Uint8Array([1])))).slice(0, 32);
+  const prk = await hmacSha256(salt, ikm);
+  const contentEncryptionKey = (await hmacSha256(
+    prk,
+    concatBytes2(new TextEncoder().encode("Content-Encoding: aes128gcm"), new Uint8Array([0, 1]))
+  )).slice(0, 16);
+  const nonce2 = (await hmacSha256(
+    prk,
+    concatBytes2(new TextEncoder().encode("Content-Encoding: nonce"), new Uint8Array([0, 1]))
+  )).slice(0, 12);
+  const plaintext = concatBytes2(
+    new TextEncoder().encode(JSON.stringify(payload)),
+    new Uint8Array([2])
+  );
+  const aesKey = await crypto.subtle.importKey(
+    "raw",
+    contentEncryptionKey,
+    { name: "AES-GCM" },
+    false,
+    ["encrypt"]
+  );
+  const ciphertext = new Uint8Array(await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv: nonce2, tagLength: 128 },
+    aesKey,
+    plaintext
+  ));
+  const recordSize = 4096;
+  const header = new Uint8Array(21 + serverPublicBytes.length);
+  header.set(salt, 0);
+  new DataView(header.buffer).setUint32(16, recordSize);
+  header[20] = serverPublicBytes.length;
+  header.set(serverPublicBytes, 21);
+  return {
+    ok: true,
+    body: concatBytes2(header, ciphertext)
+  };
+}
+async function hmacSha256(keyBytes, dataBytes) {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    keyBytes,
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  return new Uint8Array(await crypto.subtle.sign("HMAC", key, dataBytes));
+}
+function concatBytes2(...chunks) {
+  const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+  const result = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    result.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return result;
+}
 async function sendDashboardWebPush({ env, subscription, payload }) {
   const endpoint = normalizeDashboardUrl(subscription?.endpoint);
   const endpointHash = normalizeDashboardEventText(subscription?.endpointHash) || (endpoint ? await sha256Hex(endpoint) : "");
@@ -62233,14 +62327,21 @@ async function sendDashboardWebPush({ env, subscription, payload }) {
   if (!vapid.ok) {
     return { ...vapid, endpointHash };
   }
+  const encryptedPayload = await encryptDashboardWebPushPayload({ subscription, payload });
+  if (!encryptedPayload.ok) {
+    return { ...encryptedPayload, endpointHash };
+  }
   const fetcher = typeof env?.DASHBOARD_WEB_PUSH_FETCH === "function" ? env.DASHBOARD_WEB_PUSH_FETCH : fetch;
   const response = await fetcher(endpoint, {
     method: "POST",
     headers: {
       authorization: vapid.authorization,
+      "content-encoding": "aes128gcm",
+      "content-type": "application/octet-stream",
       ttl: "300",
       urgency: "normal"
-    }
+    },
+    body: encryptedPayload.body
   });
   const stale = response.status === 404 || response.status === 410;
   return {
