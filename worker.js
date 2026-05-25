@@ -64519,6 +64519,12 @@ async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventS
         <p>Dashboard Butler \u306E\u901A\u77E5\u5165\u53E3\u3067\u3059\u3002iOS PWA Web Push\u3001OS \u306E\u901A\u77E5\u97F3\u3001\u672A\u8AAD badge \u306F\u3053\u306E\u753B\u9762\u304B\u3089\u8A31\u53EF\u30FB\u78BA\u8A8D\u3057\u307E\u3059\u3002</p>
         <p class="muted">VTDD \u3060\u3051\u3067\u306A\u304F\u3001\u4ED6 repo / \u4E26\u884C\u958B\u767A / queue / workflow \u304B\u3089\u5C4A\u3044\u305F\u30A4\u30D9\u30F3\u30C8\u3092\u76F4\u8FD15\u5206\u3060\u3051\u8868\u793A\u3057\u307E\u3059\u3002</p>
       </section>
+      <div class="grid single">
+        <section class="lane">
+          <div class="lane-title"><h2>\u6700\u65B0\u901A\u77E5</h2><span class="pill">\u76F4\u8FD15\u5206</span></div>
+          ${recentEvents.length > 0 ? recentEvents.map((event) => renderDashboardNotificationEvent(event)).join("") : `<p class="muted">\u76F4\u8FD15\u5206\u306E\u901A\u77E5\u306F\u3042\u308A\u307E\u305B\u3093\u3002</p>`}
+        </section>
+      </div>
       <div class="grid">
         <section class="lane">
           <div class="lane-title"><h2>iOS PWA \u901A\u77E5</h2><span class="pill" id="push-support-pill">\u78BA\u8A8D\u4E2D</span></div>
@@ -64542,18 +64548,15 @@ async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventS
             <button class="dashboard-action" id="badge-clear-button" type="button">Badge \u3092\u6D88\u3059</button>
           </div>
         </section>
-        <section class="lane">
+      </div>
+      <div class="grid single">
+        <details class="lane" data-debug-section="notification-authority-boundary">
+          <summary>\u901A\u77E5\u306E\u8A73\u7D30\u8A2D\u5B9A\u3068\u5B89\u5168\u5883\u754C</summary>
           <div class="lane-title"><h2>Authority boundary</h2><span class="pill">read/write</span></div>
           <p>push subscription \u306F dashboard owner session \u304B\u3089\u4FDD\u5B58\u3057\u307E\u3059\u3002HTML \u306B\u306F endpoint\u3001auth key\u3001p256dh key \u3092\u57CB\u3081\u8FBC\u307F\u307E\u305B\u3093\u3002</p>
           <p class="muted">\u540C\u4E00 origin \u306E dashboard owner session cookie / Cloudflare Access identity \u3092\u4F7F\u3046\u305F\u3081\u3001\u8CFC\u8AAD\u4FDD\u5B58 fetch \u306F credentials: same-origin \u3067\u9001\u308A\u307E\u3059\u3002</p>
           <p class="muted">Web Push \u9001\u4FE1\u306B\u306F server-side VAPID secret \u3068 subscription raw material \u304C\u5FC5\u8981\u3067\u3059\u3002D1 \u306B\u306F\u9001\u4FE1\u7528\u306B\u4FDD\u6301\u3057\u3001response / HTML / payload_json \u306B\u306F raw key \u3092\u8FD4\u3057\u307E\u305B\u3093\u3002</p>
-        </section>
-      </div>
-      <div class="grid single">
-        <section class="lane">
-          <div class="lane-title"><h2>\u6700\u65B0\u901A\u77E5</h2><span class="pill">\u76F4\u8FD15\u5206</span></div>
-          ${recentEvents.length > 0 ? recentEvents.map((event) => renderDashboardNotificationEvent(event)).join("") : `<p class="muted">\u76F4\u8FD15\u5206\u306E\u901A\u77E5\u306F\u3042\u308A\u307E\u305B\u3093\u3002</p>`}
-        </section>
+        </details>
       </div>
       <script>
         (() => {
@@ -65289,8 +65292,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           </div>
         </div>
         <div class="top-right">
-          <a class="tool-button top-action" href="${escapeDashboardHtml(origin)}/v2/approval/passkey/operator?repositoryInput=${encodedRepository}" aria-label="Passkey operator">Passkey</a>
-          <a class="tool-button top-action" href="${escapeDashboardHtml(origin)}/v2/approval/passkey/operator?repositoryInput=${encodedRepository}&phase=execution&actionType=deploy_production&highRiskKind=deploy_production" aria-label="Deploy operator">Deploy</a>
+          <a class="tool-button top-action" href="${escapeDashboardHtml(origin)}/dashboard/notifications" aria-label="\u901A\u77E5\u30BB\u30F3\u30BF\u30FC">\u901A\u77E5</a>
+          <a class="tool-button top-action" href="${escapeDashboardHtml(origin)}/dashboard/progress?repository=${encodedRepository}" aria-label="\u9032\u6357\u3092\u898B\u308B">\u9032\u6357</a>
         </div>
       </header>
 
