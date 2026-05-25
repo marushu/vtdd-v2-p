@@ -255,12 +255,80 @@ function collectGeminiReviewerSignals(pullRequest) {
   const activeSignals = currentHeadSha
     ? currentHeadSignals
     : parsed;
+  const latestEvidence = activeSignals.at(-1) ?? null;
+  const latestBlockingSignal = [...activeSignals].reverse().find((signal) => signal.blocking === true);
 
   return {
     totalCount: activeSignals.length,
-    blockingCount: activeSignals.filter((signal) => signal.blocking).length,
-    latestEvidence: activeSignals.at(-1) ?? null
+    blockingCount: latestGeminiEvidenceLeavesBlockingReview({
+      comments,
+      latestEvidence,
+      latestBlockingSignal
+    }) ? 1 : 0,
+    latestEvidence
   };
+}
+
+function latestGeminiEvidenceLeavesBlockingReview({ comments, latestEvidence, latestBlockingSignal }) {
+  if (!latestBlockingSignal) {
+    return false;
+  }
+  if (latestEvidence?.blocking === true) {
+    return true;
+  }
+  if (normalizeText(latestEvidence?.recommendedAction).toLowerCase() !== "approve") {
+    return true;
+  }
+  return !hasReviewerObjectionResolutionBetween({
+    comments,
+    blockingSignal: latestBlockingSignal,
+    approvingSignal: latestEvidence
+  });
+}
+
+function hasReviewerObjectionResolutionBetween({ comments, blockingSignal, approvingSignal }) {
+  const blockingTime = timelineTimestamp(blockingSignal);
+  const approvingTime = timelineTimestamp(approvingSignal);
+  if (
+    !Number.isFinite(blockingTime) ||
+    !Number.isFinite(approvingTime) ||
+    blockingTime === Number.MAX_SAFE_INTEGER ||
+    approvingTime === Number.MAX_SAFE_INTEGER ||
+    blockingTime >= approvingTime
+  ) {
+    return false;
+  }
+  return comments.some((comment) => {
+    if (!normalizeText(comment?.body).includes(REVIEWER_OBJECTION_RESOLUTION_MARKER)) {
+      return false;
+    }
+    if (!isTrustedObjectionResolutionAuthor(comment)) {
+      return false;
+    }
+    const responseBody = normalizeText(comment?.body);
+    const blockingHeadSha = normalizeText(blockingSignal?.headSha);
+    if (blockingHeadSha && !responseBody.includes(blockingHeadSha)) {
+      return false;
+    }
+    const responseTime = timelineTimestamp({
+      createdAt: normalizeCommentCreatedAt(comment),
+      updatedAt: normalizeCommentUpdatedAt(comment),
+      url: normalizeCommentUrl(comment)
+    });
+    return responseTime > blockingTime && responseTime < approvingTime;
+  });
+}
+
+function isTrustedObjectionResolutionAuthor(comment) {
+  const author = normalizeCommentAuthor(comment).toLowerCase();
+  const association = normalizeText(comment?.authorAssociation ?? comment?.author_association).toUpperCase();
+  return (
+    author === "vtdd-codex" ||
+    author === "vtdd-codex[bot]" ||
+    association === "OWNER" ||
+    association === "MEMBER" ||
+    association === "COLLABORATOR"
+  );
 }
 
 function collectCodexFallbackSignals(pullRequest) {
@@ -500,6 +568,10 @@ function timelineTimestamp(item) {
 
 function normalizeCommentUrl(comment) {
   return normalizeText(comment?.url ?? comment?.htmlUrl ?? comment?.html_url) || null;
+}
+
+function normalizeCommentAuthor(comment) {
+  return normalizeText(comment?.user?.login ?? comment?.author?.login ?? comment?.author);
 }
 
 function normalizeCommentCreatedAt(comment) {
