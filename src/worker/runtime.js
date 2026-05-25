@@ -10237,6 +10237,38 @@ function uniqueTextList(value) {
   return [...new Set(normalizeTextList(value))];
 }
 
+export function normalizeDashboardChatMessageText(text) {
+  return decodeSafeDashboardChatCommandText(String(text || ""));
+}
+
+export function shouldWrapDashboardChatCodeBlock(text) {
+  const source = String(text || "").trim();
+  if (!source) return false;
+  if (/^https?:\/\//i.test(source)) return true;
+  if (/^go:%[0-9a-f]{2}/i.test(source)) return true;
+  return source.length > 80 && !/\s/.test(source);
+}
+
+function decodeSafeDashboardChatCommandText(text) {
+  const source = String(text || "");
+  return source
+    .split("\n")
+    .map((line) => {
+      if (!/^go:%[0-9a-f]{2}/i.test(line)) {
+        return line;
+      }
+      if (/^https?:/i.test(line)) {
+        return line;
+      }
+      try {
+        return decodeURIComponent(line);
+      } catch {
+        return line;
+      }
+    })
+    .join("\n");
+}
+
 async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore } = {}) {
   const origin = normalize(runtimeOrigin);
   const repositoryInput = normalizeDashboardRepositoryInput(
@@ -10409,10 +10441,11 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .bubble strong { display: block; color: var(--muted); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 8px; }
     .bubble-header strong { margin-bottom: 0; }
     .bubble p { color: var(--text); margin-bottom: 12px; }
-    .bubble .message-body { display: grid; gap: 12px; }
-    .bubble .message-body p { margin: 0; white-space: pre-wrap; }
+    .bubble .message-body { display: grid; gap: 12px; min-width: 0; }
+    .bubble .message-body p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
     .bubble .message-body ul { margin: 0; }
     .bubble .message-body li + li { margin-top: 4px; }
+    .bubble .message-body a, .bubble .message-body code { overflow-wrap: anywhere; word-break: break-word; }
     .bubble .message-body code { font-size: .94em; }
     .bubble .message-body pre { position: relative; margin: 0; padding: 42px 14px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--panel-strong); overflow-x: auto; white-space: pre; max-width: 100%; }
     .bubble .message-body pre.wrap-code { overflow-x: visible; white-space: pre-wrap; }
@@ -10937,7 +10970,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         return source
           .split("\\n")
           .map((line) => {
-            if (!/^[a-z][a-z0-9+.-]*:%[0-9a-f]{2}/i.test(line)) {
+            if (!/^go:%[0-9a-f]{2}/i.test(line)) {
               return line;
             }
             if (/^https?:/i.test(line)) {
@@ -10956,7 +10989,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         const source = String(text || "").trim();
         if (!source) return false;
         if (/^https?:\\/\\//i.test(source)) return true;
-        if (/^[a-z][a-z0-9+.-]*:%[0-9a-f]{2}/i.test(source)) return true;
+        if (/^go:%[0-9a-f]{2}/i.test(source)) return true;
         return source.length > 80 && !/\\s/.test(source);
       }
 

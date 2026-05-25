@@ -2,7 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import worker from "../src/worker.js";
 import { DashboardChatRoom } from "../src/worker.js";
-import { buildDashboardWebPushPayload } from "../src/worker/runtime.js";
+import {
+  buildDashboardWebPushPayload,
+  normalizeDashboardChatMessageText,
+  shouldWrapDashboardChatCodeBlock
+} from "../src/worker/runtime.js";
 import {
   ActionType,
   ActorRole,
@@ -52,6 +56,179 @@ const dashboardAccessEnv = {
     payload: token === "test-access-jwt" ? { email: "owner@example.com", exp: 4102444800 } : null
   })
 };
+
+function extractDashboardInlineFunction(html, name) {
+  const script = String(html || "").match(/<script>([\s\S]*?)<\/script>/)?.[1] || "";
+  const asyncStart = script.indexOf(`async function ${name}(`);
+  const start = asyncStart === -1 ? script.indexOf(`function ${name}(`) : asyncStart;
+  assert.notEqual(start, -1, `dashboard inline function ${name} is missing`);
+  const braceStart = script.indexOf("{", start);
+  assert.notEqual(braceStart, -1, `dashboard inline function ${name} has no body`);
+  let depth = 0;
+  for (let index = braceStart; index < script.length; index += 1) {
+    const char = script[index];
+    if (char === "{") depth += 1;
+    if (char === "}") depth -= 1;
+    if (depth === 0) {
+      return script.slice(start, index + 1);
+    }
+  }
+  assert.fail(`dashboard inline function ${name} body is incomplete`);
+}
+
+function createMinimalDashboardDocument() {
+  class TextNode {
+    constructor(text) {
+      this.nodeType = 3;
+      this.textContent = String(text || "");
+      this.parentNode = null;
+    }
+  }
+
+  class ElementNode {
+    constructor(tagName) {
+      this.nodeType = 1;
+      this.tagName = String(tagName || "").toUpperCase();
+      this.children = [];
+      this.parentNode = null;
+      this.attributes = new Map();
+      this.dataset = {};
+      this.style = {};
+      this._textContent = "";
+      this.className = "";
+      this.type = "";
+      this.href = "";
+      this.target = "";
+      this.rel = "";
+      this.title = "";
+      this.value = "";
+      this.listeners = new Map();
+    }
+
+    appendChild(child) {
+      child.parentNode = this;
+      this.children.push(child);
+      return child;
+    }
+
+    replaceChildren(...children) {
+      this.children = [];
+      for (const child of children) {
+        this.appendChild(child);
+      }
+    }
+
+    remove() {
+      if (!this.parentNode) return;
+      this.parentNode.children = this.parentNode.children.filter((child) => child !== this);
+      this.parentNode = null;
+    }
+
+    select() {
+      this.selected = true;
+    }
+
+    setAttribute(name, value) {
+      this.attributes.set(name, String(value));
+    }
+
+    getAttribute(name) {
+      return this.attributes.get(name) || null;
+    }
+
+    addEventListener(type, listener) {
+      this.listeners.set(type, listener);
+    }
+
+    async click() {
+      const listener = this.listeners.get("click");
+      if (listener) {
+        await listener({ target: this });
+      }
+    }
+
+    get textContent() {
+      if (this.children.length === 0) return this._textContent;
+      return this.children.map((child) => child.textContent).join("");
+    }
+
+    set textContent(value) {
+      this.children = [];
+      this._textContent = String(value || "");
+    }
+
+    querySelectorAll(tagName) {
+      const matches = [];
+      const expected = String(tagName || "").toUpperCase();
+      const visit = (node) => {
+        if (node.nodeType === 1 && node.tagName === expected) {
+          matches.push(node);
+        }
+        for (const child of node.children || []) {
+          visit(child);
+        }
+      };
+      visit(this);
+      return matches;
+    }
+  }
+
+  const document = {
+    body: new ElementNode("body"),
+    createElement: (tagName) => new ElementNode(tagName),
+    createTextNode: (text) => new TextNode(text),
+    execCommand(command) {
+      document.lastExecCommand = command;
+      return true;
+    }
+  };
+  return document;
+}
+
+function loadDashboardInlineChatHelpers(html) {
+  const names = [
+    "normalizeMessageDisplayText",
+    "normalizeMessageCopyText",
+    "decodeSafeChatCommandText",
+    "shouldWrapCodeBlock",
+    "renderMessageText",
+    "renderInlineMarkdown",
+    "copyMessageText"
+  ];
+  const sources = names.map((name) => extractDashboardInlineFunction(html, name)).join("\n");
+  return Function(
+    "document",
+    "navigator",
+    "window",
+    "setStatus",
+    `${sources}\nreturn { ${names.join(", ")} };`
+  );
+}
+
+test("dashboard chat message text safely decodes command-like percent encoded lines", () => {
+  assert.equal(
+    normalizeDashboardChatMessageText("go:%0Adeploy%20production%0Aissue%20%23524"),
+    "go:\ndeploy production\nissue #524"
+  );
+  assert.equal(
+    normalizeDashboardChatMessageText("https://example.com/path%20with%20encoded?x=1"),
+    "https://example.com/path%20with%20encoded?x=1"
+  );
+  assert.equal(normalizeDashboardChatMessageText("go:%E0%A4%A"), "go:%E0%A4%A");
+  assert.equal(normalizeDashboardChatMessageText("slack:%20do-not-decode"), "slack:%20do-not-decode");
+  assert.equal(
+    normalizeDashboardChatMessageText("before\ngo:%0Aone%20two\nafter"),
+    "before\ngo:\none two\nafter"
+  );
+});
+
+test("dashboard chat code block wrap policy keeps URL and command text readable", () => {
+  assert.equal(shouldWrapDashboardChatCodeBlock("https://example.com/" + "a".repeat(96)), true);
+  assert.equal(shouldWrapDashboardChatCodeBlock("go:%0A" + "deploy%20".repeat(20)), true);
+  assert.equal(shouldWrapDashboardChatCodeBlock("slack:%20" + "x".repeat(96)), true);
+  assert.equal(shouldWrapDashboardChatCodeBlock("x".repeat(96)), true);
+  assert.equal(shouldWrapDashboardChatCodeBlock("const value = 1;\nconsole.log(value);"), false);
+});
 
 function createInMemoryDashboardEventStore() {
   const events = new Map();
@@ -843,7 +1020,13 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("function normalizeMessageCopyText("), true);
   assert.equal(body.includes("function decodeSafeChatCommandText("), true);
   assert.equal(body.includes("decodeURIComponent(line)"), true);
+  assert.equal(body.includes('if (/^https?:/i.test(line))'), true);
   assert.equal(body.includes("function shouldWrapCodeBlock("), true);
+  assert.equal(body.includes('if (/^https?:\\/\\//i.test(source)) return true;'), true);
+  assert.equal(body.includes('if (/^go:%[0-9a-f]{2}/i.test(source)) return true;'), true);
+  assert.equal(body.includes("return source.length > 80 && !/\\s/.test(source);"), true);
+  assert.equal(body.includes('renderMessageText(body, normalizeMessageDisplayText(message.text || "（空のメッセージ）"))'), true);
+  assert.equal(body.includes('copyMessageText(copyButton, normalizeMessageCopyText(message.text || ""))'), true);
   assert.equal(body.includes('pre.className = "wrap-code"'), true);
   assert.equal(body.includes("function copyMessageText("), true);
   assert.equal(body.includes("navigator.clipboard.writeText"), true);
@@ -873,6 +1056,8 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("white-space: pre-wrap"), true);
   assert.equal(body.includes(".bubble .message-body pre.wrap-code"), true);
   assert.equal(body.includes("overflow-wrap: anywhere; word-break: break-word;"), true);
+  assert.equal(body.includes(".bubble .message-body { display: grid; gap: 12px; min-width: 0; }"), true);
+  assert.equal(body.includes(".bubble .message-body p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }"), true);
   assert.equal(body.includes("tokenPattern"), true);
   assert.equal(body.includes('link.className = "chat-link"'), true);
   assert.equal(body.includes("考えています"), false);
@@ -931,6 +1116,78 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(aliasBody.includes("dashboard main chat"), true);
   assert.equal(aliasBody.includes("管理メニュー"), true);
   assert.equal(aliasBody.includes("WebSocket"), true);
+});
+
+test("served dashboard inline chat renderer executes decode, link, wrap, and copy behavior", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/dashboard", {
+      headers: dashboardAccessHeaders
+    }),
+    dashboardAccessEnv
+  );
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  const document = createMinimalDashboardDocument();
+  const copied = [];
+  const helpers = loadDashboardInlineChatHelpers(html)(
+    document,
+    {
+      clipboard: {
+        async writeText(text) {
+          copied.push(String(text));
+        }
+      }
+    },
+    {
+      isSecureContext: true,
+      setTimeout(callback) {
+        callback();
+      }
+    },
+    (text) => {
+      document.lastStatus = text;
+    }
+  );
+
+  assert.equal(
+    helpers.normalizeMessageDisplayText("go:%0Adeploy%20production%0Aissue%20%23524"),
+    "go:\ndeploy production\nissue #524"
+  );
+  assert.equal(
+    helpers.normalizeMessageCopyText("https://example.com/path%20with%20encoded?x=1"),
+    "https://example.com/path%20with%20encoded?x=1"
+  );
+  assert.equal(helpers.normalizeMessageCopyText("go:%E0%A4%A"), "go:%E0%A4%A");
+  assert.equal(helpers.normalizeMessageCopyText("slack:%20do-not-decode"), "slack:%20do-not-decode");
+
+  const textContainer = document.createElement("div");
+  helpers.renderMessageText(
+    textContainer,
+    helpers.normalizeMessageDisplayText("go:%0Adeploy%20production%0Ahttps://example.com/" + "a".repeat(96))
+  );
+  assert.equal(textContainer.textContent.includes("go:\ndeploy production"), true);
+  const links = textContainer.querySelectorAll("a");
+  assert.equal(links.length, 1);
+  assert.equal(links[0].className, "chat-link");
+  assert.equal(links[0].href.startsWith("https://example.com/"), true);
+
+  const codeContainer = document.createElement("div");
+  helpers.renderMessageText(codeContainer, "```\nhttps://example.com/" + "b".repeat(96) + "\n```");
+  const codeBlocks = codeContainer.querySelectorAll("pre");
+  assert.equal(codeBlocks.length, 1);
+  assert.equal(codeBlocks[0].className, "wrap-code");
+  const codeCopyButtons = codeContainer.querySelectorAll("button");
+  assert.equal(codeCopyButtons.length, 1);
+  await codeCopyButtons[0].click();
+  assert.equal(copied.at(-1), "https://example.com/" + "b".repeat(96));
+
+  const messageCopyButton = document.createElement("button");
+  await helpers.copyMessageText(
+    messageCopyButton,
+    helpers.normalizeMessageCopyText("go:%0Adeploy%20production%0Aissue%20%23524")
+  );
+  assert.equal(copied.at(-1), "go:\ndeploy production\nissue #524");
+  assert.equal(document.lastStatus, undefined);
 });
 
 test("worker appends dashboard Butler chat turn and retrieves the same thread", async () => {
