@@ -65089,6 +65089,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
   const encodedRepository = encodeURIComponent(repositoryInput);
   const chatThreadId = `dashboard-main-${(repositoryInput || "unresolved").replace(/[^a-z0-9_.-]+/gi, "-")}`;
   const socketOrigin = origin.replace(/^http/i, "ws");
+  const dashboardSignInUrl = `${origin}/v2/approval/passkey/operator?mode=dashboard&repositoryInput=${encodedRepository}&phase=execution&actionType=read&highRiskKind=dashboard_access`;
   const latestDeployEvent = await retrieveLatestDashboardEvent({
     store: dashboardEventStore,
     kind: "github_actions_workflow_run",
@@ -65282,6 +65283,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .media-chip.pending-preview { padding: 5px 8px 5px 5px; }
     .media-remove { border: 0; background: transparent; color: var(--muted); font: inherit; font-weight: 900; padding: 0 2px; cursor: pointer; }
     .composer-status { min-height: 18px; padding-left: 16px; color: var(--muted); font-size: 12px; }
+    .composer-status a { color: var(--text); font-weight: 800; text-underline-offset: 3px; }
     .composer-status.thinking::after { content: ""; display: inline-block; width: 1.4em; text-align: left; animation: thinkingDots 1.2s steps(4, end) infinite; }
     .sidebar { position: sticky; top: 16px; align-self: start; max-height: calc(100dvh - 32px); overflow: auto; border: 1px solid var(--border); border-radius: 18px; background: var(--panel); }
     .sidebar > summary { display: flex; justify-content: space-between; align-items: center; gap: 10px; min-height: 58px; padding: 14px; list-style: none; }
@@ -65494,6 +65496,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       const threadEndpoint = form.dataset.threadEndpoint;
       const messageEndpoint = form.dataset.messageEndpoint;
       const mediaUploadEndpoint = "/v2/media/upload";
+      const dashboardSignInUrl = ${JSON.stringify(dashboardSignInUrl)};
       const threadId = form.dataset.threadId;
       const repositoryInput = form.dataset.repositoryInput;
       const issueNumber = Number.parseInt(form.dataset.issueNumber || "", 10);
@@ -65502,6 +65505,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       let reconnectTimer = null;
       let reconnectAttempt = 0;
       let refreshingThread = false;
+      let lastRefreshFailure = "";
       let pendingMediaItems = [];
       const pendingSendRollbacks = new Map();
       const messagesById = new Map();
@@ -65530,12 +65534,20 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       }
 
       function setStatus(text, options = {}) {
-        status.textContent = text;
+        status.replaceChildren(document.createTextNode(text));
+        if (options.actionHref && options.actionLabel) {
+          status.appendChild(document.createTextNode(" "));
+          const action = document.createElement("a");
+          action.href = options.actionHref;
+          action.textContent = options.actionLabel;
+          action.rel = "noreferrer";
+          status.appendChild(action);
+        }
         status.classList.toggle("thinking", options.thinking === true);
         if (options.temporary === true) {
           const expected = text;
           window.setTimeout(() => {
-            if (status.textContent === expected) {
+            if (status.textContent.trim() === expected) {
               setStatus("Dashboard thread \u63A5\u7D9A\u6E08\u307F\u3002");
             }
           }, 2400);
@@ -65551,6 +65563,31 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         return Boolean(chatSocket && chatSocket.readyState === WebSocket.OPEN);
       }
 
+      function describeChatSocketState() {
+        if (!chatSocket) return "\u672A\u63A5\u7D9A";
+        if (chatSocket.readyState === WebSocket.CONNECTING) return "\u63A5\u7D9A\u4E2D";
+        if (chatSocket.readyState === WebSocket.OPEN) return "\u63A5\u7D9A\u6E08\u307F";
+        if (chatSocket.readyState === WebSocket.CLOSING) return "\u5207\u65AD\u51E6\u7406\u4E2D";
+        if (chatSocket.readyState === WebSocket.CLOSED) return "\u5207\u65AD\u6E08\u307F";
+        return "\u4E0D\u660E";
+      }
+
+      function buildReconnectStatus(prefix) {
+        const attempt = Math.max(1, reconnectAttempt + 1);
+        const refreshPart = lastRefreshFailure ? " \u6700\u5F8C\u306E\u5C65\u6B74\u53D6\u5F97: " + lastRefreshFailure + "\u3002" : "";
+        return prefix + " \u518D\u63A5\u7D9A " + attempt + "\u56DE\u76EE / WebSocket: " + describeChatSocketState() + "\u3002" + refreshPart;
+      }
+
+      function dropStaleSocketIfNeeded() {
+        if (!chatSocket) return;
+        if (chatSocket.readyState === WebSocket.CLOSING || chatSocket.readyState === WebSocket.CLOSED) {
+          try {
+            chatSocket.close();
+          } catch {}
+          chatSocket = null;
+        }
+      }
+
       function isAuthExpiredResponse(response, body = {}) {
         return (
           response &&
@@ -65560,7 +65597,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       }
 
       function setDashboardSessionExpiredStatus() {
-        setStatus("Dashboard \u306E\u30ED\u30B0\u30A4\u30F3\u304C\u5207\u308C\u3066\u3044\u307E\u3059\u3002\u5165\u529B\u306F\u6B8B\u3057\u305F\u307E\u307E\u3001\u53F3\u4E0A\u306E Passkey \u304B\u3089\u518D\u30ED\u30B0\u30A4\u30F3\u3057\u3066\u304F\u3060\u3055\u3044\u3002");
+        setStatus("Dashboard \u306E\u30ED\u30B0\u30A4\u30F3\u304C\u5207\u308C\u3066\u3044\u307E\u3059\u3002\u5165\u529B\u306F\u6B8B\u3057\u305F\u307E\u307E\u518D\u30ED\u30B0\u30A4\u30F3\u3057\u3066\u304F\u3060\u3055\u3044\u3002", {
+          actionHref: dashboardSignInUrl,
+          actionLabel: "Passkey \u3067\u518D\u30ED\u30B0\u30A4\u30F3"
+        });
       }
 
       function releasePendingOwnerSend(clientMessageId, options = {}) {
@@ -66035,18 +66075,22 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           const body = await response.json().catch(() => ({}));
           if (!response.ok) {
             if (isAuthExpiredResponse(response, body)) {
+              lastRefreshFailure = "\u518D\u30ED\u30B0\u30A4\u30F3\u304C\u5FC5\u8981";
               setDashboardSessionExpiredStatus();
               return { ok: false, authExpired: true };
             }
-            setStatus("\u5C65\u6B74\u306E\u518D\u53D6\u5F97\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002WebSocket \u3092\u518D\u63A5\u7D9A\u3057\u3066\u3044\u307E\u3059\u3002");
+            lastRefreshFailure = "HTTP " + response.status;
+            setStatus(buildReconnectStatus("\u5C65\u6B74\u306E\u518D\u53D6\u5F97\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002"));
             return { ok: false, status: response.status };
           }
           if (body && body.ok) {
+            lastRefreshFailure = "";
             renderThread(body.messages || [], { replace: true });
             return { ok: true };
           }
         } catch {
-          setStatus("\u5C65\u6B74\u306E\u518D\u53D6\u5F97\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002WebSocket \u3092\u518D\u63A5\u7D9A\u3057\u3066\u3044\u307E\u3059\u3002");
+          lastRefreshFailure = "\u30CD\u30C3\u30C8\u30EF\u30FC\u30AF";
+          setStatus(buildReconnectStatus("\u5C65\u6B74\u306E\u518D\u53D6\u5F97\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002"));
           return { ok: false, network: true };
         } finally {
           refreshingThread = false;
@@ -66057,6 +66101,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       function scheduleReconnect() {
         if (reconnectTimer || !socketEndpoint || typeof WebSocket !== "function") return;
         const delay = Math.min(10000, 1000 * Math.pow(2, reconnectAttempt));
+        setStatus(buildReconnectStatus("WebSocket \u3092\u518D\u63A5\u7D9A\u3057\u307E\u3059\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002"));
         reconnectAttempt += 1;
         reconnectTimer = window.setTimeout(() => {
           reconnectTimer = null;
@@ -66069,12 +66114,14 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           setStatus("WebSocket \u3092\u958B\u59CB\u3067\u304D\u307E\u305B\u3093\u3002dashboard Butler \u306F\u9001\u4FE1\u3067\u304D\u307E\u305B\u3093\u3002");
           return;
         }
+        dropStaleSocketIfNeeded();
         if (chatSocket && (chatSocket.readyState === WebSocket.OPEN || chatSocket.readyState === WebSocket.CONNECTING)) {
           return;
         }
         chatSocket = new WebSocket(socketEndpoint);
         chatSocket.addEventListener("open", () => {
           reconnectAttempt = 0;
+          lastRefreshFailure = "";
           if (reconnectTimer) {
             window.clearTimeout(reconnectTimer);
             reconnectTimer = null;
@@ -66123,8 +66170,9 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             releasePendingOwnerSend(pendingOwnerSend.clientMessageId, { clearComposer: false, keepRollbackTimer: true });
             setStatus("\u9001\u4FE1\u78BA\u8A8D\u524D\u306B WebSocket \u304C\u5207\u308C\u307E\u3057\u305F\u3002\u5165\u529B\u306F\u6B8B\u3057\u3066\u3044\u307E\u3059\u3002\u5C65\u6B74\u518D\u53D6\u5F97\u5F8C\u306B\u3082\u3046\u4E00\u5EA6\u9001\u4FE1\u3067\u304D\u307E\u3059\u3002");
           } else {
-            setStatus("WebSocket \u304C\u5207\u308C\u307E\u3057\u305F\u3002\u5C65\u6B74\u3092\u518D\u53D6\u5F97\u3057\u3066\u518D\u63A5\u7D9A\u3057\u307E\u3059\u3002");
+            setStatus(buildReconnectStatus("WebSocket \u304C\u5207\u308C\u307E\u3057\u305F\u3002\u5C65\u6B74\u3092\u518D\u53D6\u5F97\u3057\u3066\u518D\u63A5\u7D9A\u3057\u307E\u3059\u3002"));
           }
+          dropStaleSocketIfNeeded();
           refreshThread();
           scheduleReconnect();
         });
@@ -66133,8 +66181,9 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             releasePendingOwnerSend(pendingOwnerSend.clientMessageId, { clearComposer: false, keepRollbackTimer: true });
             setStatus("\u9001\u4FE1\u78BA\u8A8D\u524D\u306B WebSocket \u63A5\u7D9A\u304C\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u5165\u529B\u306F\u6B8B\u3057\u3066\u3044\u307E\u3059\u3002\u518D\u63A5\u7D9A\u5F8C\u306B\u3082\u3046\u4E00\u5EA6\u9001\u4FE1\u3067\u304D\u307E\u3059\u3002");
           } else {
-            setStatus("WebSocket \u63A5\u7D9A\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u5C65\u6B74\u3092\u518D\u53D6\u5F97\u3057\u3066\u518D\u63A5\u7D9A\u3057\u307E\u3059\u3002");
+            setStatus(buildReconnectStatus("WebSocket \u63A5\u7D9A\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u5C65\u6B74\u3092\u518D\u53D6\u5F97\u3057\u3066\u518D\u63A5\u7D9A\u3057\u307E\u3059\u3002"));
           }
+          dropStaleSocketIfNeeded();
           refreshThread();
           scheduleReconnect();
         });
@@ -66165,6 +66214,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         pendingSendRollbacks.delete(clientMessageId);
         releasePendingOwnerSend(clientMessageId, { clearComposer: true });
         renderThread(body.messages || [], { replace: false });
+        lastRefreshFailure = "";
         setStatus("WebSocket \u672A\u63A5\u7D9A\u306E\u305F\u3081 HTTP fallback \u3067\u4FDD\u5B58\u3057\u307E\u3057\u305F\u3002\u518D\u63A5\u7D9A\u3092\u7D9A\u3051\u3066\u3044\u307E\u3059\u3002", { temporary: true });
         scheduleReconnect();
       }
@@ -66296,13 +66346,15 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       textarea.addEventListener("input", resizeComposerInput);
       window.addEventListener("resize", resizeComposerInput);
       window.addEventListener("online", () => {
-        setStatus("\u30CD\u30C3\u30C8\u30EF\u30FC\u30AF\u5FA9\u5E30\u3092\u691C\u77E5\u3057\u307E\u3057\u305F\u3002\u5C65\u6B74\u3092\u518D\u53D6\u5F97\u3057\u3066\u518D\u63A5\u7D9A\u3057\u307E\u3059\u3002");
+        setStatus(buildReconnectStatus("\u30CD\u30C3\u30C8\u30EF\u30FC\u30AF\u5FA9\u5E30\u3092\u691C\u77E5\u3057\u307E\u3057\u305F\u3002\u5C65\u6B74\u3092\u518D\u53D6\u5F97\u3057\u3066\u518D\u63A5\u7D9A\u3057\u307E\u3059\u3002"));
+        dropStaleSocketIfNeeded();
         refreshThread();
         scheduleReconnect();
       });
       document.addEventListener("visibilitychange", () => {
         if (document.visibilityState === "visible" && (!chatSocket || chatSocket.readyState !== WebSocket.OPEN)) {
-          setStatus("\u753B\u9762\u5FA9\u5E30\u3092\u691C\u77E5\u3057\u307E\u3057\u305F\u3002\u5C65\u6B74\u3092\u518D\u53D6\u5F97\u3057\u3066\u518D\u63A5\u7D9A\u3057\u307E\u3059\u3002");
+          setStatus(buildReconnectStatus("\u753B\u9762\u5FA9\u5E30\u3092\u691C\u77E5\u3057\u307E\u3057\u305F\u3002\u5C65\u6B74\u3092\u518D\u53D6\u5F97\u3057\u3066\u518D\u63A5\u7D9A\u3057\u307E\u3059\u3002"));
+          dropStaleSocketIfNeeded();
           refreshThread();
           scheduleReconnect();
         }
