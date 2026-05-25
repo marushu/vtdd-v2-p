@@ -1,5 +1,6 @@
 export function renderPasskeyOperatorPage(input = {}) {
   const operatorMode = resolvePasskeyOperatorMode(input);
+  const deployOneTapMode = operatorMode === "deploy";
   const passkeyEnabled = input.passkeyEnabled !== false;
   const sectionVisibility = resolveSectionVisibility(operatorMode, { passkeyEnabled });
   const origin = escapeHtml(input.origin || "");
@@ -23,6 +24,16 @@ export function renderPasskeyOperatorPage(input = {}) {
         ? "approvalGrantId が取得済みなら実行できます。desktop helper bridge に接続します。"
         : "desktop maintenance required: local secret sync bridge が未接続です。")
   );
+  const approvalSectionAttributes = deployOneTapMode
+    ? ' data-owner-flow="one-tap-deploy"'
+    : "";
+  const approveButtonLabel = deployOneTapMode ? "パスキー" : "Approve high-risk action";
+  const deployScopeSummary = renderDeployScopeSummary({
+    repositoryInput: repoDefault,
+    issueNumber: issueDefault,
+    actionType: actionTypeDefault,
+    highRiskKind: highRiskKindDefault
+  });
 
   return `<!doctype html>
 <html lang="ja">
@@ -186,9 +197,25 @@ export function renderPasskeyOperatorPage(input = {}) {
           <pre id="register-output"></pre>
         </section>
 
-        <section data-operator-section="approval"${hiddenAttribute(!sectionVisibility.approval)}>
-          <h2>2. High-risk Approval</h2>
-          <label for="repo-input">Repository</label>
+        <section data-operator-section="approval"${approvalSectionAttributes}${hiddenAttribute(!sectionVisibility.approval)}>
+          <h2>${deployOneTapMode ? "本番反映の承認" : "2. High-risk Approval"}</h2>
+          ${
+            deployOneTapMode
+              ? `<p>production deploy を承認して、そのまま反映を開始します。</p>
+          <p class="muted">${deployScopeSummary}</p>
+          <div class="approval-internal" hidden>
+            <label for="repo-input">Repository</label>
+            <input id="repo-input" value="${repoDefault}" placeholder="marushu/vtdd-v2-p" />
+            <label for="issue-input">Issue Number</label>
+            <input id="issue-input" value="${issueDefault}" placeholder="15" />
+            <label for="phase-input">Phase</label>
+            <input id="phase-input" value="${phaseDefault}" />
+            <label for="action-type-input">Action Type</label>
+            <input id="action-type-input" value="${actionTypeDefault}" />
+            <label for="risk-kind-input">High-risk Kind</label>
+            <input id="risk-kind-input" value="${highRiskKindDefault}" />
+          </div>`
+              : `<label for="repo-input">Repository</label>
           <input id="repo-input" value="${repoDefault}" placeholder="marushu/vtdd-v2-p" />
           <label for="issue-input">Issue Number</label>
           <input id="issue-input" value="${issueDefault}" placeholder="15" />
@@ -197,17 +224,22 @@ export function renderPasskeyOperatorPage(input = {}) {
           <label for="action-type-input">Action Type</label>
           <input id="action-type-input" value="${actionTypeDefault}" />
           <label for="risk-kind-input">High-risk Kind</label>
-          <input id="risk-kind-input" value="${highRiskKindDefault}" />
+          <input id="risk-kind-input" value="${highRiskKindDefault}" />`
+          }
           <div class="row">
-            <button class="secondary" id="approve-button">Approve high-risk action</button>
-            <button class="ghost" id="copy-approval-grant-button" type="button">Copy approvalGrantId</button>
+            <button class="secondary" id="approve-button">${approveButtonLabel}</button>
+            ${deployOneTapMode ? "" : '<button class="ghost" id="copy-approval-grant-button" type="button">Copy approvalGrantId</button>'}
           </div>
-          <label class="inline-check" for="auto-copy-approval-grant-input">
+          ${
+            deployOneTapMode
+              ? '<input id="auto-copy-approval-grant-input" type="checkbox" hidden />'
+              : `<label class="inline-check" for="auto-copy-approval-grant-input">
             <input id="auto-copy-approval-grant-input" type="checkbox" />
             Auto-copy approvalGrantId after approval
-          </label>
-          <p class="muted">GitHub App secret sync なら <code>actionType=destructive</code> / <code>highRiskKind=github_app_secret_sync</code>、production deploy なら <code>actionType=deploy_production</code> / <code>highRiskKind=deploy_production</code>、PR merge なら <code>actionType=merge</code> / <code>highRiskKind=pull_merge</code> を使います。</p>
-          <pre id="approve-output"></pre>
+          </label>`
+          }
+          ${deployOneTapMode ? "" : '<p class="muted">GitHub App secret sync なら <code>actionType=destructive</code> / <code>highRiskKind=github_app_secret_sync</code>、production deploy なら <code>actionType=deploy_production</code> / <code>highRiskKind=deploy_production</code>、PR merge なら <code>actionType=merge</code> / <code>highRiskKind=pull_merge</code> を使います。</p>'}
+          <pre id="approve-output"${deployOneTapMode ? " hidden" : ""}></pre>
         </section>
 
         <section data-operator-section="github-app-secret-sync"${hiddenAttribute(!sectionVisibility.githubAppSecretSync)}>
@@ -232,14 +264,19 @@ export function renderPasskeyOperatorPage(input = {}) {
 
         <section data-operator-section="production-deploy"${hiddenAttribute(!sectionVisibility.productionDeploy)}>
           <h2>4. Production Deploy</h2>
-          <p class="muted">deploy stale を検知したあと、real passkey approval が成功したら同じ <code>approvalGrantId</code> で same-origin の governed deploy path を自動 dispatch します。</p>
+          <p class="muted">deploy stale を検知したあと、real passkey approval が成功したら same-origin の governed deploy path を自動 dispatch します。</p>
           <div class="row">
-            <button id="deploy-button">Dispatch production deploy</button>
-            <a class="button-link" id="deploy-run-link" href="#" target="_blank" rel="noopener noreferrer" hidden>Open deploy run</a>
+            <button id="deploy-button"${deployOneTapMode ? " hidden" : ""}>Dispatch production deploy</button>
+            ${deployOneTapMode ? "" : '<a class="button-link" id="deploy-run-link" href="#" target="_blank" rel="noopener noreferrer" hidden>Open deploy run</a>'}
             <a class="button-link" id="return-to-butler-link" href="${returnUrl}" rel="noopener noreferrer"${returnUrl ? "" : " hidden"}>Return to Butler</a>
           </div>
-          <p class="muted">この Worker origin を <code>runtimeUrl</code> として使います。手動ボタンは失敗時の再実行用です。完了または失敗は Dashboard 通知センターと保存済み Web Push 購読へ届きます。</p>
+          <p class="muted">完了または失敗は Dashboard 通知センターと保存済み Web Push 購読へ届きます。</p>
           <pre id="deploy-output"></pre>
+          <details>
+            <summary>詳細</summary>
+            ${deployOneTapMode ? '<a class="button-link" id="deploy-run-link" href="#" target="_blank" rel="noopener noreferrer" hidden>Open deploy run</a>' : ""}
+            <pre id="deploy-debug-output"></pre>
+          </details>
         </section>
 
         <section data-operator-section="pr-merge"${hiddenAttribute(!sectionVisibility.prMerge)}>
@@ -321,6 +358,7 @@ export function renderPasskeyOperatorPage(input = {}) {
       const copyApprovalGrantButton = document.getElementById("copy-approval-grant-button");
       const autoCopyApprovalGrantInput = document.getElementById("auto-copy-approval-grant-input");
       const deployRunLink = document.getElementById("deploy-run-link");
+      const deployDebugOutput = document.getElementById("deploy-debug-output");
       const mergePrLink = document.getElementById("merge-pr-link");
       const issueCloseLink = document.getElementById("issue-close-link");
       const operatorMode = "${escapeHtml(operatorMode)}";
@@ -445,6 +483,17 @@ export function renderPasskeyOperatorPage(input = {}) {
         }
         deployRunLink.href = runUrl;
         deployRunLink.hidden = false;
+      }
+
+      function buildDeployResultText(body) {
+        const deploy = body?.deploy || {};
+        if (deploy.status === "dispatched") {
+          return "deploy を開始しました。完了通知を待ってください。";
+        }
+        if (deploy.status === "dispatch_accepted_unverified") {
+          return "deploy request は受理されました。GitHub Actions の run 確認は未確定です。";
+        }
+        return "deploy request を受け付けました。";
       }
 
       function extractMergePullRequestUrl(body) {
@@ -585,16 +634,21 @@ export function renderPasskeyOperatorPage(input = {}) {
           throw responseError(deployBody, "production deploy failed");
         }
         showDeployRunLink(deployBody);
-        deployOutput.textContent = JSON.stringify(deployBody, null, 2);
+        deployOutput.textContent = buildDeployResultText(deployBody);
+        if (deployDebugOutput) {
+          deployDebugOutput.textContent = JSON.stringify(deployBody, null, 2);
+        }
       }
 
-      copyApprovalGrantButton.addEventListener("click", async () => {
-        try {
-          await copyApprovalGrantIdToClipboard();
-        } catch (error) {
-          approveOutput.textContent = approveOutput.textContent + "\\n\\n" + String(error);
-        }
-      });
+      if (copyApprovalGrantButton) {
+        copyApprovalGrantButton.addEventListener("click", async () => {
+          try {
+            await copyApprovalGrantIdToClipboard();
+          } catch (error) {
+            approveOutput.textContent = approveOutput.textContent + "\\n\\n" + String(error);
+          }
+        });
+      }
 
       document.getElementById("register-button").addEventListener("click", async () => {
         try {
@@ -686,7 +740,7 @@ export function renderPasskeyOperatorPage(input = {}) {
             window.location.assign("/dashboard");
             return;
           }
-          if (latestApprovalGrantId && autoCopyApprovalGrantInput.checked) {
+          if (latestApprovalGrantId && autoCopyApprovalGrantInput?.checked) {
             try {
               await copyApprovalGrantIdToClipboard({ quiet: true });
               approveOutput.textContent = approveOutput.textContent + "\\n\\nCopied approvalGrantId to clipboard.";
@@ -1071,6 +1125,12 @@ function hiddenAttribute(hidden) {
 function renderGithubAppRoleOption(value, label, selectedValue) {
   const selected = value === selectedValue ? " selected" : "";
   return `<option value="${escapeHtml(value)}"${selected}>${escapeHtml(label)}</option>`;
+}
+
+function renderDeployScopeSummary({ repositoryInput, issueNumber, actionType, highRiskKind }) {
+  const repository = repositoryInput || "未指定";
+  const issue = issueNumber ? ` / Issue: ${issueNumber}` : "";
+  return `承認対象: Repository: ${repository}${issue} / Action: ${actionType} / ${highRiskKind}`;
 }
 
 function normalizeOperatorMode(value) {
