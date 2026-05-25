@@ -9715,6 +9715,12 @@ async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventS
         <p>Dashboard Butler の通知入口です。iOS PWA Web Push、OS の通知音、未読 badge はこの画面から許可・確認します。</p>
         <p class="muted">VTDD だけでなく、他 repo / 並行開発 / queue / workflow から届いたイベントを直近5分だけ表示します。</p>
       </section>
+      <div class="grid single">
+        <section class="lane">
+          <div class="lane-title"><h2>最新通知</h2><span class="pill">直近5分</span></div>
+          ${recentEvents.length > 0 ? recentEvents.map((event) => renderDashboardNotificationEvent(event)).join("") : `<p class="muted">直近5分の通知はありません。</p>`}
+        </section>
+      </div>
       <div class="grid">
         <section class="lane">
           <div class="lane-title"><h2>iOS PWA 通知</h2><span class="pill" id="push-support-pill">確認中</span></div>
@@ -9738,18 +9744,15 @@ async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventS
             <button class="dashboard-action" id="badge-clear-button" type="button">Badge を消す</button>
           </div>
         </section>
-        <section class="lane">
+      </div>
+      <div class="grid single">
+        <details class="lane" data-debug-section="notification-authority-boundary">
+          <summary>通知の詳細設定と安全境界</summary>
           <div class="lane-title"><h2>Authority boundary</h2><span class="pill">read/write</span></div>
           <p>push subscription は dashboard owner session から保存します。HTML には endpoint、auth key、p256dh key を埋め込みません。</p>
           <p class="muted">同一 origin の dashboard owner session cookie / Cloudflare Access identity を使うため、購読保存 fetch は credentials: same-origin で送ります。</p>
           <p class="muted">Web Push 送信には server-side VAPID secret と subscription raw material が必要です。D1 には送信用に保持し、response / HTML / payload_json には raw key を返しません。</p>
-        </section>
-      </div>
-      <div class="grid single">
-        <section class="lane">
-          <div class="lane-title"><h2>最新通知</h2><span class="pill">直近5分</span></div>
-          ${recentEvents.length > 0 ? recentEvents.map((event) => renderDashboardNotificationEvent(event)).join("") : `<p class="muted">直近5分の通知はありません。</p>`}
-        </section>
+        </details>
       </div>
       <script>
         (() => {
@@ -10509,8 +10512,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           </div>
         </div>
         <div class="top-right">
-          <a class="tool-button top-action" href="${escapeDashboardHtml(origin)}/v2/approval/passkey/operator?repositoryInput=${encodedRepository}" aria-label="Passkey operator">Passkey</a>
-          <a class="tool-button top-action" href="${escapeDashboardHtml(origin)}/v2/approval/passkey/operator?repositoryInput=${encodedRepository}&phase=execution&actionType=deploy_production&highRiskKind=deploy_production" aria-label="Deploy operator">Deploy</a>
+          <a class="tool-button top-action" href="${escapeDashboardHtml(origin)}/dashboard/notifications" aria-label="通知センター">通知</a>
+          <a class="tool-button top-action" href="${escapeDashboardHtml(origin)}/dashboard/progress?repository=${encodedRepository}" aria-label="進捗を見る">進捗</a>
         </div>
       </header>
 

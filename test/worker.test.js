@@ -754,8 +754,10 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("vtdd-v3-orchestrator.polished-tree-da7c.workers.dev"), false);
   assert.equal(body.includes('id="mobile-menu-toggle"'), true);
   assert.equal(body.includes('for="mobile-menu-toggle"'), true);
-  assert.equal(body.includes('aria-label="Passkey operator">Passkey</a>'), true);
-  assert.equal(body.includes('aria-label="Deploy operator">Deploy</a>'), true);
+  assert.equal(body.includes('aria-label="Passkey operator">Passkey</a>'), false);
+  assert.equal(body.includes('aria-label="Deploy operator">Deploy</a>'), false);
+  assert.equal(body.includes('aria-label="通知センター">通知</a>'), true);
+  assert.equal(body.includes('aria-label="進捗を見る">進捗</a>'), true);
   assert.equal(body.includes('aria-label="Passkey">◇</a>'), false);
   assert.equal(body.includes('<label class="tool-button menu-open" for="mobile-menu-toggle">管理</label>'), false);
   assert.equal(body.includes('class="tool-button top-action"'), true);
@@ -2559,6 +2561,11 @@ test("worker serves dashboard notification center for recent events across repos
   assert.equal(body.includes("通知センター"), true);
   assert.equal(body.includes("Dashboard Butler の通知入口です"), true);
   assert.equal(body.includes("iOS PWA Web Push"), true);
+  assert.equal(body.indexOf("最新通知") < body.indexOf("iOS PWA 通知"), true);
+  assert.equal(body.indexOf("最新通知") < body.indexOf("Badge"), true);
+  assert.equal(body.indexOf("最新通知") < body.indexOf("Authority boundary"), true);
+  assert.equal(body.includes('data-debug-section="notification-authority-boundary"'), true);
+  assert.equal(body.includes("<summary>通知の詳細設定と安全境界</summary>"), true);
   assert.equal(body.includes("id=\"push-permission-button\""), true);
   assert.equal(body.includes("id=\"push-subscribe-button\""), true);
   assert.equal(body.includes("id=\"push-server-test-button\""), true);
