@@ -10298,8 +10298,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .bubble .message-body ul { margin: 0; }
     .bubble .message-body li + li { margin-top: 4px; }
     .bubble .message-body code { font-size: .94em; }
-    .bubble .message-body pre { position: relative; margin: 0; padding: 42px 14px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--panel-strong); overflow-x: auto; white-space: pre; }
+    .bubble .message-body pre { position: relative; margin: 0; padding: 42px 14px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--panel-strong); overflow-x: auto; white-space: pre; max-width: 100%; }
+    .bubble .message-body pre.wrap-code { overflow-x: visible; white-space: pre-wrap; }
     .bubble .message-body pre code { display: block; font-size: 14px; line-height: 1.55; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+    .bubble .message-body pre.wrap-code code { white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
     .bubble .message-body strong { display: inline; color: inherit; font-size: inherit; letter-spacing: 0; text-transform: none; margin: 0; font-weight: 800; }
     .copy-message, .copy-code { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border: 1px solid var(--border); border-radius: 999px; background: var(--button); color: var(--text); font-size: 15px; line-height: 1; cursor: pointer; }
     .copy-message:focus-visible, .copy-code:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
@@ -10314,7 +10316,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .thinking-dots::after { content: ""; display: inline-block; width: 1.4em; text-align: left; animation: thinkingDots 1.2s steps(4, end) infinite; }
     @keyframes thinkingDots { 0% { content: ""; } 25% { content: "."; } 50% { content: ".."; } 75%, 100% { content: "..."; } }
     .connection-note { display: inline-flex; align-items: center; width: fit-content; border: 1px solid var(--border); border-radius: 999px; padding: 5px 10px; color: var(--muted); font-size: 13px; }
-    .chat-link { color: var(--text); text-decoration-thickness: 1px; text-underline-offset: 4px; font-weight: 750; }
+    .chat-link { color: var(--text); text-decoration-thickness: 1px; text-underline-offset: 4px; font-weight: 750; overflow-wrap: anywhere; word-break: break-word; }
     .composer { min-width: 0; display: grid; gap: 8px; z-index: 4; padding: 14px 0 max(16px, env(safe-area-inset-bottom)); background: var(--page-bg); }
     .composer-box { display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; align-items: end; gap: 8px; min-height: 62px; padding: 8px; border: 1px solid var(--border); border-radius: 28px; background: var(--panel-strong); box-shadow: 0 16px 60px var(--shadow); }
     textarea { width: 100%; min-height: 44px; max-height: max(88px, min(160px, 24dvh)); border: 0; outline: 0; resize: none; overflow-y: hidden; padding: 10px 2px; color: var(--text); background: transparent; font: inherit; line-height: 1.45; }
@@ -10643,7 +10645,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           copyButton.textContent = "⧉";
           copyButton.setAttribute("aria-label", "自分の発言をコピー");
           copyButton.title = "自分の発言をコピー";
-          copyButton.addEventListener("click", () => copyMessageText(copyButton, message.text || ""));
+          copyButton.addEventListener("click", () => copyMessageText(copyButton, normalizeMessageCopyText(message.text || "")));
           article.appendChild(copyButton);
         } else if (message.role === "butler") {
           const header = document.createElement("div");
@@ -10657,7 +10659,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           copyButton.textContent = "⧉";
           copyButton.setAttribute("aria-label", "返信をコピー");
           copyButton.title = "返信をコピー";
-          copyButton.addEventListener("click", () => copyMessageText(copyButton, message.text || ""));
+          copyButton.addEventListener("click", () => copyMessageText(copyButton, normalizeMessageCopyText(message.text || "")));
           header.appendChild(copyButton);
           article.appendChild(header);
         } else if (message.role === "system") {
@@ -10670,7 +10672,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         }
         const body = document.createElement("div");
         body.className = "message-body";
-        renderMessageText(body, message.text || "（空のメッセージ）");
+        renderMessageText(body, normalizeMessageDisplayText(message.text || "（空のメッセージ）"));
         article.appendChild(body);
         const media = renderMediaReferences(message.mediaReferences || message.media_references || []);
         if (media) {
@@ -10763,6 +10765,42 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         updateComposerReserve();
       }
 
+      function normalizeMessageDisplayText(text) {
+        return decodeSafeChatCommandText(String(text || ""));
+      }
+
+      function normalizeMessageCopyText(text) {
+        return decodeSafeChatCommandText(String(text || ""));
+      }
+
+      function decodeSafeChatCommandText(text) {
+        const source = String(text || "");
+        return source
+          .split("\\n")
+          .map((line) => {
+            if (!/^[a-z][a-z0-9+.-]*:%[0-9a-f]{2}/i.test(line)) {
+              return line;
+            }
+            if (/^https?:/i.test(line)) {
+              return line;
+            }
+            try {
+              return decodeURIComponent(line);
+            } catch {
+              return line;
+            }
+          })
+          .join("\\n");
+      }
+
+      function shouldWrapCodeBlock(text) {
+        const source = String(text || "").trim();
+        if (!source) return false;
+        if (/^https?:\\/\\//i.test(source)) return true;
+        if (/^[a-z][a-z0-9+.-]*:%[0-9a-f]{2}/i.test(source)) return true;
+        return source.length > 80 && !/\\s/.test(source);
+      }
+
       function renderMessageText(container, text) {
         const source = String(text || "");
         const lines = source.replace(/\\r\\n/g, "\\n").split("\\n");
@@ -10786,6 +10824,9 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             }
             const pre = document.createElement("pre");
             const codeText = codeLines.join("\\n");
+            if (shouldWrapCodeBlock(codeText)) {
+              pre.className = "wrap-code";
+            }
             const copyButton = document.createElement("button");
             copyButton.className = "copy-code";
             copyButton.type = "button";
