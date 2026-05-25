@@ -137,6 +137,13 @@ test("passkey operator page focuses deploy mode on deploy approval and dispatch 
   assert.equal(html.includes('id="pull-number-input" value=""'), true);
   assert.equal(html.includes('repository: repositoryInput'), true);
   assert.equal(html.includes("function shouldAutoDispatchProductionDeploy()"), true);
+  assert.equal(html.includes("function applyOperatorModeDefaults()"), true);
+  assert.equal(html.includes('document.getElementById("action-type-input").value = "deploy_production"'), true);
+  assert.equal(html.includes('document.getElementById("risk-kind-input").value = "deploy_production"'), true);
+  assert.equal(html.includes("applyOperatorModeDefaults();"), true);
+  assert.equal(html.includes("const repositoryInput = readRequiredRepositoryInput();"), true);
+  assert.equal(html.includes("if (!latestApprovalGrantId)"), true);
+  assert.equal(html.includes("return operatorMode === \"deploy\""), true);
   assert.equal(html.includes('operatorMode === "deploy"'), true);
   assert.equal(html.includes('document.getElementById("action-type-input").value === "deploy_production"'), true);
   assert.equal(html.includes('document.getElementById("risk-kind-input").value === "deploy_production"'), true);
