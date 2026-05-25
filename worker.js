@@ -65179,7 +65179,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 
       </div>
 
-      <form class="composer" id="butler-chat-form" aria-label="Butler composer" autocomplete="off" data-socket-endpoint="${escapeDashboardHtml(socketOrigin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}/ws" data-thread-endpoint="${escapeDashboardHtml(origin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}" data-thread-id="${escapeDashboardHtml(chatThreadId)}" data-repository-input="${escapeDashboardHtml(repositoryInput)}" data-issue-number="${dashboardIssueNumber || ""}">
+      <form class="composer" id="butler-chat-form" aria-label="Butler composer" autocomplete="off" data-socket-endpoint="${escapeDashboardHtml(socketOrigin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}/ws" data-thread-endpoint="${escapeDashboardHtml(origin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}" data-message-endpoint="${escapeDashboardHtml(origin)}/v2/dashboard/chat/messages" data-thread-id="${escapeDashboardHtml(chatThreadId)}" data-repository-input="${escapeDashboardHtml(repositoryInput)}" data-issue-number="${dashboardIssueNumber || ""}">
         <div class="pending-media" id="butler-pending-media" aria-live="polite"></div>
         <div class="composer-box">
           <button class="media-button" id="butler-media-button" type="button" aria-label="\u753B\u50CF\u3084\u30D5\u30A1\u30A4\u30EB\u3092\u8FFD\u52A0" title="\u753B\u50CF\u3084\u30D5\u30A1\u30A4\u30EB\u3092\u8FFD\u52A0">+</button>
@@ -65256,6 +65256,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 
       const socketEndpoint = form.dataset.socketEndpoint;
       const threadEndpoint = form.dataset.threadEndpoint;
+      const messageEndpoint = form.dataset.messageEndpoint;
       const mediaUploadEndpoint = "/v2/media/upload";
       const threadId = form.dataset.threadId;
       const repositoryInput = form.dataset.repositoryInput;
@@ -65308,6 +65309,22 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       function setComposerLocked(locked) {
         textarea.readOnly = locked === true;
         if (mediaButton) mediaButton.disabled = locked === true;
+      }
+
+      function isChatSocketOpen() {
+        return Boolean(chatSocket && chatSocket.readyState === WebSocket.OPEN);
+      }
+
+      function isAuthExpiredResponse(response, body = {}) {
+        return (
+          response &&
+          (response.status === 401 || response.status === 403) &&
+          (body.error === "dashboard_auth_required" || String(body.reason || "").includes("passkey session"))
+        );
+      }
+
+      function setDashboardSessionExpiredStatus() {
+        setStatus("Dashboard \u306E\u30ED\u30B0\u30A4\u30F3\u304C\u5207\u308C\u3066\u3044\u307E\u3059\u3002\u5165\u529B\u306F\u6B8B\u3057\u305F\u307E\u307E\u3001\u53F3\u4E0A\u306E Passkey \u304B\u3089\u518D\u30ED\u30B0\u30A4\u30F3\u3057\u3066\u304F\u3060\u3055\u3044\u3002");
       }
 
       function releasePendingOwnerSend(clientMessageId, options = {}) {
@@ -65733,26 +65750,33 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       }
 
       async function refreshThread() {
-        if (!threadEndpoint || refreshingThread) return;
+        if (!threadEndpoint || refreshingThread) return { ok: false, skipped: true };
         refreshingThread = true;
         try {
           const response = await fetch(threadEndpoint, {
             headers: { "accept": "application/json" },
             credentials: "same-origin"
           });
+          const body = await response.json().catch(() => ({}));
           if (!response.ok) {
-            setStatus("\u5C65\u6B74\u306E\u518D\u53D6\u5F97\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002WebSocket \u3092\u518D\u63A5\u7D9A\u3057\u3066\u3044\u307E\u3059\u3002");
-            return;
+            if (isAuthExpiredResponse(response, body)) {
+              setDashboardSessionExpiredStatus();
+              return { ok: false, authExpired: true };
+            }
+            setStatus("\u5C65\u6B74\u306E\u518D\u53D6\u5F97\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002WebSocket \u3092\u518D\u63A5\u7D9A\u3057\u3066\u3044\u307E\u3059\u3002");
+            return { ok: false, status: response.status };
           }
-          const body = await response.json();
           if (body && body.ok) {
             renderThread(body.messages || [], { replace: true });
+            return { ok: true };
           }
         } catch {
-          setStatus("\u5C65\u6B74\u306E\u518D\u53D6\u5F97\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002WebSocket \u3092\u518D\u63A5\u7D9A\u3057\u3066\u3044\u307E\u3059\u3002");
+          setStatus("\u5C65\u6B74\u306E\u518D\u53D6\u5F97\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002WebSocket \u3092\u518D\u63A5\u7D9A\u3057\u3066\u3044\u307E\u3059\u3002");
+          return { ok: false, network: true };
         } finally {
           refreshingThread = false;
         }
+        return { ok: false };
       }
 
       function scheduleReconnect() {
@@ -65841,6 +65865,35 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         });
       }
 
+      async function sendOwnerMessageByHttp(payload, clientMessageId) {
+        if (!messageEndpoint) {
+          throw new Error("HTTP fallback endpoint is not configured");
+        }
+        const response = await fetch(messageEndpoint, {
+          method: "POST",
+          headers: {
+            "accept": "application/json",
+            "content-type": "application/json"
+          },
+          credentials: "same-origin",
+          body: JSON.stringify(payload)
+        });
+        const body = await response.json().catch(() => ({}));
+        if (isAuthExpiredResponse(response, body)) {
+          const error = new Error("dashboard session expired");
+          error.authExpired = true;
+          throw error;
+        }
+        if (!response.ok || !body.ok) {
+          throw new Error(body.reason || "dashboard chat fallback failed");
+        }
+        pendingSendRollbacks.delete(clientMessageId);
+        releasePendingOwnerSend(clientMessageId, { clearComposer: true });
+        renderThread(body.messages || [], { replace: false });
+        setStatus("WebSocket \u672A\u63A5\u7D9A\u306E\u305F\u3081 HTTP fallback \u3067\u4FDD\u5B58\u3057\u307E\u3057\u305F\u3002\u518D\u63A5\u7D9A\u3092\u7D9A\u3051\u3066\u3044\u307E\u3059\u3002", { temporary: true });
+        scheduleReconnect();
+      }
+
       form.addEventListener("submit", async (event) => {
         event.preventDefault();
         const text = textarea.value.trim() || (pendingMediaItems.length > 0 ? "\u6DFB\u4ED8\u3092\u8FFD\u52A0\u3057\u307E\u3057\u305F\u3002" : "");
@@ -65849,16 +65902,15 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           return;
         }
         const submitButton = form.querySelector("button[type='submit']");
-        if (!chatSocket || chatSocket.readyState !== WebSocket.OPEN) {
-          setStatus("WebSocket \u518D\u63A5\u7D9A\u4E2D\u3067\u3059\u3002\u5C65\u6B74\u3092\u518D\u53D6\u5F97\u3057\u3066\u3044\u307E\u3059\u3002\u63A5\u7D9A\u5F8C\u306B\u3082\u3046\u4E00\u5EA6\u9001\u4FE1\u3057\u3066\u304F\u3060\u3055\u3044\u3002");
-          await refreshThread();
-          scheduleReconnect();
-          textarea.focus({ preventScroll: true });
-          return;
-        }
         if (submitButton) submitButton.disabled = true;
         setComposerLocked(true);
-        setStatus(pendingMediaItems.length > 0 ? "\u6DFB\u4ED8\u3092\u4FDD\u5B58\u3057\u3066\u304B\u3089\u9001\u4FE1\u3057\u3066\u3044\u307E\u3059" : "\u9001\u4FE1\u4E2D\u3067\u3059", { thinking: true });
+        const willUseHttpFallback = !isChatSocketOpen();
+        if (willUseHttpFallback) {
+          setStatus("WebSocket \u518D\u63A5\u7D9A\u4E2D\u3067\u3059\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u305F\u307E\u307E HTTP fallback \u3067\u4FDD\u5B58\u3057\u307E\u3059\u3002", { thinking: true });
+          scheduleReconnect();
+        } else {
+          setStatus(pendingMediaItems.length > 0 ? "\u6DFB\u4ED8\u3092\u4FDD\u5B58\u3057\u3066\u304B\u3089\u9001\u4FE1\u3057\u3066\u3044\u307E\u3059" : "\u9001\u4FE1\u4E2D\u3067\u3059", { thinking: true });
+        }
         let mediaReferences = [];
         const clientMessageId = retryClientMessageId || createClientMessageId();
         try {
@@ -65885,17 +65937,34 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             setStatus("\u9001\u4FE1\u78BA\u8A8D\u304C\u8FD4\u308A\u307E\u305B\u3093\u3067\u3057\u305F\u3002\u5165\u529B\u306F\u6B8B\u3057\u3066\u3044\u307E\u3059\u3002\u518D\u63A5\u7D9A\u5F8C\u306B\u3082\u3046\u4E00\u5EA6\u9001\u4FE1\u3057\u3066\u304F\u3060\u3055\u3044\u3002");
           }, 30000)
         };
+        const ownerPayload = {
+          type: "owner_message",
+          threadId,
+          clientMessageId,
+          repositoryInput,
+          text,
+          issueNumber,
+          relatedIssue: issueNumber,
+          mediaReferences
+        };
+        if (!isChatSocketOpen()) {
+          try {
+            await sendOwnerMessageByHttp(ownerPayload, clientMessageId);
+          } catch (error) {
+            pendingSendRollbacks.delete(clientMessageId);
+            releasePendingOwnerSend(clientMessageId, { clearComposer: false });
+            if (error && error.authExpired) {
+              setDashboardSessionExpiredStatus();
+            } else {
+              setStatus((error && error.message) || "WebSocket \u3068 HTTP fallback \u306E\u4E21\u65B9\u3067\u9001\u4FE1\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F\u3002\u5165\u529B\u306F\u6B8B\u3057\u3066\u3044\u307E\u3059\u3002");
+            }
+            textarea.focus({ preventScroll: true });
+          }
+          updateComposerReserve();
+          return;
+        }
         try {
-          chatSocket.send(JSON.stringify({
-            type: "owner_message",
-            threadId,
-            clientMessageId,
-            repositoryInput,
-            text,
-            issueNumber,
-            relatedIssue: issueNumber,
-            mediaReferences
-          }));
+          chatSocket.send(JSON.stringify(ownerPayload));
         } catch (error) {
           pendingSendRollbacks.delete(clientMessageId);
           releasePendingOwnerSend(clientMessageId, { clearComposer: false });
