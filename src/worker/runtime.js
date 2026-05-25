@@ -10134,7 +10134,12 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     url?.searchParams?.get("repositoryInput") || url?.searchParams?.get("repository")
   );
   const dashboardIssueNumber = normalizePositiveInteger(url?.searchParams?.get("issueNumber"));
-  const dashboardTargetLabel = repositoryInput || "repo/nickname 未指定";
+  const dashboardTargetLabel = repositoryInput || "対象 repo 未指定";
+  const targetStatusMarkup = repositoryInput
+    ? `<p><strong>${escapeDashboardHtml(repositoryInput)}</strong></p>
+          <p class="muted">この repo を対象に runtime truth、progress、RAG、operator を開きます。</p>`
+    : `<p><strong>対象 repo 未指定</strong></p>
+          <p class="muted">通常会話は続けられます。repo 作業に入る時は URL に <code>?repository=owner/repo</code> または <code>?repositoryInput=owner/repo</code> を付けて開いてください。</p>`;
   const encodedRepository = encodeURIComponent(repositoryInput);
   const chatThreadId = `dashboard-main-${(repositoryInput || "unresolved").replace(/[^a-z0-9_.-]+/gi, "-")}`;
   const socketOrigin = origin.replace(/^http/i, "ws");
@@ -10191,7 +10196,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       href: `${origin}/setup/diagnostics?repository=${encodedRepository}`
     },
     {
-      title: "Deploy passkey operator",
+      title: "Deploy operator",
       body: "production deploy は scope 明示済み passkey approval の後ろ。approval grant や secret は dashboard に保存しない。",
       href: `${origin}/v2/approval/passkey/operator?repositoryInput=${encodedRepository}&phase=execution&actionType=deploy_production&highRiskKind=deploy_production`
     }
@@ -10282,7 +10287,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .round-button, .tool-button, .send-button { display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border); background: var(--button); color: var(--text); text-decoration: none; font: inherit; font-weight: 750; }
     .menu-open { cursor: pointer; }
     .round-button { width: 44px; height: 44px; border-radius: 999px; font-size: 24px; flex: 0 0 auto; }
-    .tool-button { min-height: 40px; border-radius: 999px; padding: 0 14px; }
+    .tool-button { min-height: 40px; border-radius: 999px; padding: 0 14px; white-space: nowrap; }
+    .top-action { min-width: 74px; }
     .thread-title { min-width: 0; }
     .thread-title h1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .thread-title span { display: block; color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -10378,7 +10384,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       .app-shell { height: calc(100dvh - 12px); }
       .composer-box { grid-template-columns: 40px minmax(0, 1fr) 40px; border-radius: 24px; }
       .round-button { width: 40px; height: 40px; }
-      .tool-button { min-height: 38px; padding: 0 12px; }
+      .tool-button { min-height: 38px; padding: 0 10px; font-size: 13px; }
+      .top-action { min-width: 64px; }
       .media-button, .send-button { width: 40px; height: 40px; }
     }
   </style>
@@ -10396,8 +10403,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           </div>
         </div>
         <div class="top-right">
-          <label class="tool-button menu-open" for="mobile-menu-toggle">管理</label>
-          <a class="round-button" href="${escapeDashboardHtml(origin)}/v2/approval/passkey/operator?repositoryInput=${encodedRepository}" aria-label="Passkey">◇</a>
+          <a class="tool-button top-action" href="${escapeDashboardHtml(origin)}/v2/approval/passkey/operator?repositoryInput=${encodedRepository}" aria-label="Passkey operator">Passkey</a>
+          <a class="tool-button top-action" href="${escapeDashboardHtml(origin)}/v2/approval/passkey/operator?repositoryInput=${encodedRepository}&phase=execution&actionType=deploy_production&highRiskKind=deploy_production" aria-label="Deploy operator">Deploy</a>
         </div>
       </header>
 
@@ -10412,6 +10419,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         </div>
         <div class="mobile-drawer-content">
           <p class="menu-callout">状態確認、進捗、RAG、workflow はここから開きます。通知ではなく、現在は dashboard 内の状態表示です。</p>
+          <div class="lane">
+            <div class="lane-title"><h3>対象 repo</h3><span class="pill">${repositoryInput ? "resolved" : "未指定"}</span></div>
+            ${targetStatusMarkup}
+          </div>
           <div class="lane">
             <div class="lane-title"><h3>進行中 execution</h3><span class="pill">runtime truth</span></div>
             <p>GitHub Actions / VPS runner status / execution progress route から読みます。</p>
@@ -10485,8 +10496,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 
         <div class="lane">
           <div class="lane-title"><h3>関連 repo</h3><span class="pill">resolved</span></div>
-          <p><strong>${escapeDashboardHtml(dashboardTargetLabel)}</strong></p>
-          <p class="muted">nickname / startup preflight / GitHub runtime truth は既存 v2 route で確認します。</p>
+          ${targetStatusMarkup}
         </div>
 
         <div class="lane">

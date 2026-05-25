@@ -64873,7 +64873,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     url?.searchParams?.get("repositoryInput") || url?.searchParams?.get("repository")
   );
   const dashboardIssueNumber = normalizePositiveInteger9(url?.searchParams?.get("issueNumber"));
-  const dashboardTargetLabel = repositoryInput || "repo/nickname \u672A\u6307\u5B9A";
+  const dashboardTargetLabel = repositoryInput || "\u5BFE\u8C61 repo \u672A\u6307\u5B9A";
+  const targetStatusMarkup = repositoryInput ? `<p><strong>${escapeDashboardHtml(repositoryInput)}</strong></p>
+          <p class="muted">\u3053\u306E repo \u3092\u5BFE\u8C61\u306B runtime truth\u3001progress\u3001RAG\u3001operator \u3092\u958B\u304D\u307E\u3059\u3002</p>` : `<p><strong>\u5BFE\u8C61 repo \u672A\u6307\u5B9A</strong></p>
+          <p class="muted">\u901A\u5E38\u4F1A\u8A71\u306F\u7D9A\u3051\u3089\u308C\u307E\u3059\u3002repo \u4F5C\u696D\u306B\u5165\u308B\u6642\u306F URL \u306B <code>?repository=owner/repo</code> \u307E\u305F\u306F <code>?repositoryInput=owner/repo</code> \u3092\u4ED8\u3051\u3066\u958B\u3044\u3066\u304F\u3060\u3055\u3044\u3002</p>`;
   const encodedRepository = encodeURIComponent(repositoryInput);
   const chatThreadId = `dashboard-main-${(repositoryInput || "unresolved").replace(/[^a-z0-9_.-]+/gi, "-")}`;
   const socketOrigin = origin.replace(/^http/i, "ws");
@@ -64930,7 +64933,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       href: `${origin}/setup/diagnostics?repository=${encodedRepository}`
     },
     {
-      title: "Deploy passkey operator",
+      title: "Deploy operator",
       body: "production deploy \u306F scope \u660E\u793A\u6E08\u307F passkey approval \u306E\u5F8C\u308D\u3002approval grant \u3084 secret \u306F dashboard \u306B\u4FDD\u5B58\u3057\u306A\u3044\u3002",
       href: `${origin}/v2/approval/passkey/operator?repositoryInput=${encodedRepository}&phase=execution&actionType=deploy_production&highRiskKind=deploy_production`
     }
@@ -65020,7 +65023,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .round-button, .tool-button, .send-button { display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border); background: var(--button); color: var(--text); text-decoration: none; font: inherit; font-weight: 750; }
     .menu-open { cursor: pointer; }
     .round-button { width: 44px; height: 44px; border-radius: 999px; font-size: 24px; flex: 0 0 auto; }
-    .tool-button { min-height: 40px; border-radius: 999px; padding: 0 14px; }
+    .tool-button { min-height: 40px; border-radius: 999px; padding: 0 14px; white-space: nowrap; }
+    .top-action { min-width: 74px; }
     .thread-title { min-width: 0; }
     .thread-title h1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .thread-title span { display: block; color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -65116,7 +65120,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       .app-shell { height: calc(100dvh - 12px); }
       .composer-box { grid-template-columns: 40px minmax(0, 1fr) 40px; border-radius: 24px; }
       .round-button { width: 40px; height: 40px; }
-      .tool-button { min-height: 38px; padding: 0 12px; }
+      .tool-button { min-height: 38px; padding: 0 10px; font-size: 13px; }
+      .top-action { min-width: 64px; }
       .media-button, .send-button { width: 40px; height: 40px; }
     }
   </style>
@@ -65134,8 +65139,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           </div>
         </div>
         <div class="top-right">
-          <label class="tool-button menu-open" for="mobile-menu-toggle">\u7BA1\u7406</label>
-          <a class="round-button" href="${escapeDashboardHtml(origin)}/v2/approval/passkey/operator?repositoryInput=${encodedRepository}" aria-label="Passkey">\u25C7</a>
+          <a class="tool-button top-action" href="${escapeDashboardHtml(origin)}/v2/approval/passkey/operator?repositoryInput=${encodedRepository}" aria-label="Passkey operator">Passkey</a>
+          <a class="tool-button top-action" href="${escapeDashboardHtml(origin)}/v2/approval/passkey/operator?repositoryInput=${encodedRepository}&phase=execution&actionType=deploy_production&highRiskKind=deploy_production" aria-label="Deploy operator">Deploy</a>
         </div>
       </header>
 
@@ -65150,6 +65155,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         </div>
         <div class="mobile-drawer-content">
           <p class="menu-callout">\u72B6\u614B\u78BA\u8A8D\u3001\u9032\u6357\u3001RAG\u3001workflow \u306F\u3053\u3053\u304B\u3089\u958B\u304D\u307E\u3059\u3002\u901A\u77E5\u3067\u306F\u306A\u304F\u3001\u73FE\u5728\u306F dashboard \u5185\u306E\u72B6\u614B\u8868\u793A\u3067\u3059\u3002</p>
+          <div class="lane">
+            <div class="lane-title"><h3>\u5BFE\u8C61 repo</h3><span class="pill">${repositoryInput ? "resolved" : "\u672A\u6307\u5B9A"}</span></div>
+            ${targetStatusMarkup}
+          </div>
           <div class="lane">
             <div class="lane-title"><h3>\u9032\u884C\u4E2D execution</h3><span class="pill">runtime truth</span></div>
             <p>GitHub Actions / VPS runner status / execution progress route \u304B\u3089\u8AAD\u307F\u307E\u3059\u3002</p>
@@ -65223,8 +65232,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 
         <div class="lane">
           <div class="lane-title"><h3>\u95A2\u9023 repo</h3><span class="pill">resolved</span></div>
-          <p><strong>${escapeDashboardHtml(dashboardTargetLabel)}</strong></p>
-          <p class="muted">nickname / startup preflight / GitHub runtime truth \u306F\u65E2\u5B58 v2 route \u3067\u78BA\u8A8D\u3057\u307E\u3059\u3002</p>
+          ${targetStatusMarkup}
         </div>
 
         <div class="lane">
