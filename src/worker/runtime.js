@@ -10252,6 +10252,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
   const encodedRepository = encodeURIComponent(repositoryInput);
   const chatThreadId = `dashboard-main-${(repositoryInput || "unresolved").replace(/[^a-z0-9_.-]+/gi, "-")}`;
   const socketOrigin = origin.replace(/^http/i, "ws");
+  const dashboardSignInUrl = `${origin}/v2/approval/passkey/operator?mode=dashboard&repositoryInput=${encodedRepository}&phase=execution&actionType=read&highRiskKind=dashboard_access`;
   const latestDeployEvent = await retrieveLatestDashboardEvent({
     store: dashboardEventStore,
     kind: "github_actions_workflow_run",
@@ -10446,6 +10447,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .media-chip.pending-preview { padding: 5px 8px 5px 5px; }
     .media-remove { border: 0; background: transparent; color: var(--muted); font: inherit; font-weight: 900; padding: 0 2px; cursor: pointer; }
     .composer-status { min-height: 18px; padding-left: 16px; color: var(--muted); font-size: 12px; }
+    .composer-status a { color: var(--text); font-weight: 800; text-underline-offset: 3px; }
     .composer-status.thinking::after { content: ""; display: inline-block; width: 1.4em; text-align: left; animation: thinkingDots 1.2s steps(4, end) infinite; }
     .sidebar { position: sticky; top: 16px; align-self: start; max-height: calc(100dvh - 32px); overflow: auto; border: 1px solid var(--border); border-radius: 18px; background: var(--panel); }
     .sidebar > summary { display: flex; justify-content: space-between; align-items: center; gap: 10px; min-height: 58px; padding: 14px; list-style: none; }
@@ -10658,6 +10660,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       const threadEndpoint = form.dataset.threadEndpoint;
       const messageEndpoint = form.dataset.messageEndpoint;
       const mediaUploadEndpoint = "/v2/media/upload";
+      const dashboardSignInUrl = ${JSON.stringify(dashboardSignInUrl)};
       const threadId = form.dataset.threadId;
       const repositoryInput = form.dataset.repositoryInput;
       const issueNumber = Number.parseInt(form.dataset.issueNumber || "", 10);
@@ -10666,6 +10669,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       let reconnectTimer = null;
       let reconnectAttempt = 0;
       let refreshingThread = false;
+      let lastRefreshFailure = "";
       let pendingMediaItems = [];
       const pendingSendRollbacks = new Map();
       const messagesById = new Map();
@@ -10694,12 +10698,20 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       }
 
       function setStatus(text, options = {}) {
-        status.textContent = text;
+        status.replaceChildren(document.createTextNode(text));
+        if (options.actionHref && options.actionLabel) {
+          status.appendChild(document.createTextNode(" "));
+          const action = document.createElement("a");
+          action.href = options.actionHref;
+          action.textContent = options.actionLabel;
+          action.rel = "noreferrer";
+          status.appendChild(action);
+        }
         status.classList.toggle("thinking", options.thinking === true);
         if (options.temporary === true) {
           const expected = text;
           window.setTimeout(() => {
-            if (status.textContent === expected) {
+            if (status.textContent.trim() === expected) {
               setStatus("Dashboard thread 接続済み。");
             }
           }, 2400);
@@ -10715,6 +10727,31 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         return Boolean(chatSocket && chatSocket.readyState === WebSocket.OPEN);
       }
 
+      function describeChatSocketState() {
+        if (!chatSocket) return "未接続";
+        if (chatSocket.readyState === WebSocket.CONNECTING) return "接続中";
+        if (chatSocket.readyState === WebSocket.OPEN) return "接続済み";
+        if (chatSocket.readyState === WebSocket.CLOSING) return "切断処理中";
+        if (chatSocket.readyState === WebSocket.CLOSED) return "切断済み";
+        return "不明";
+      }
+
+      function buildReconnectStatus(prefix) {
+        const attempt = Math.max(1, reconnectAttempt + 1);
+        const refreshPart = lastRefreshFailure ? " 最後の履歴取得: " + lastRefreshFailure + "。" : "";
+        return prefix + " 再接続 " + attempt + "回目 / WebSocket: " + describeChatSocketState() + "。" + refreshPart;
+      }
+
+      function dropStaleSocketIfNeeded() {
+        if (!chatSocket) return;
+        if (chatSocket.readyState === WebSocket.CLOSING || chatSocket.readyState === WebSocket.CLOSED) {
+          try {
+            chatSocket.close();
+          } catch {}
+          chatSocket = null;
+        }
+      }
+
       function isAuthExpiredResponse(response, body = {}) {
         return (
           response &&
@@ -10724,7 +10761,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       }
 
       function setDashboardSessionExpiredStatus() {
-        setStatus("Dashboard のログインが切れています。入力は残したまま、右上の Passkey から再ログインしてください。");
+        setStatus("Dashboard のログインが切れています。入力は残したまま再ログインしてください。", {
+          actionHref: dashboardSignInUrl,
+          actionLabel: "Passkey で再ログイン"
+        });
       }
 
       function releasePendingOwnerSend(clientMessageId, options = {}) {
@@ -11199,18 +11239,22 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           const body = await response.json().catch(() => ({}));
           if (!response.ok) {
             if (isAuthExpiredResponse(response, body)) {
+              lastRefreshFailure = "再ログインが必要";
               setDashboardSessionExpiredStatus();
               return { ok: false, authExpired: true };
             }
-            setStatus("履歴の再取得に失敗しました。入力は保持しています。WebSocket を再接続しています。");
+            lastRefreshFailure = "HTTP " + response.status;
+            setStatus(buildReconnectStatus("履歴の再取得に失敗しました。入力は保持しています。"));
             return { ok: false, status: response.status };
           }
           if (body && body.ok) {
+            lastRefreshFailure = "";
             renderThread(body.messages || [], { replace: true });
             return { ok: true };
           }
         } catch {
-          setStatus("履歴の再取得に失敗しました。入力は保持しています。WebSocket を再接続しています。");
+          lastRefreshFailure = "ネットワーク";
+          setStatus(buildReconnectStatus("履歴の再取得に失敗しました。入力は保持しています。"));
           return { ok: false, network: true };
         } finally {
           refreshingThread = false;
@@ -11221,6 +11265,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       function scheduleReconnect() {
         if (reconnectTimer || !socketEndpoint || typeof WebSocket !== "function") return;
         const delay = Math.min(10000, 1000 * Math.pow(2, reconnectAttempt));
+        setStatus(buildReconnectStatus("WebSocket を再接続します。入力は保持しています。"));
         reconnectAttempt += 1;
         reconnectTimer = window.setTimeout(() => {
           reconnectTimer = null;
@@ -11233,12 +11278,14 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           setStatus("WebSocket を開始できません。dashboard Butler は送信できません。");
           return;
         }
+        dropStaleSocketIfNeeded();
         if (chatSocket && (chatSocket.readyState === WebSocket.OPEN || chatSocket.readyState === WebSocket.CONNECTING)) {
           return;
         }
         chatSocket = new WebSocket(socketEndpoint);
         chatSocket.addEventListener("open", () => {
           reconnectAttempt = 0;
+          lastRefreshFailure = "";
           if (reconnectTimer) {
             window.clearTimeout(reconnectTimer);
             reconnectTimer = null;
@@ -11287,8 +11334,9 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             releasePendingOwnerSend(pendingOwnerSend.clientMessageId, { clearComposer: false, keepRollbackTimer: true });
             setStatus("送信確認前に WebSocket が切れました。入力は残しています。履歴再取得後にもう一度送信できます。");
           } else {
-            setStatus("WebSocket が切れました。履歴を再取得して再接続します。");
+            setStatus(buildReconnectStatus("WebSocket が切れました。履歴を再取得して再接続します。"));
           }
+          dropStaleSocketIfNeeded();
           refreshThread();
           scheduleReconnect();
         });
@@ -11297,8 +11345,9 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             releasePendingOwnerSend(pendingOwnerSend.clientMessageId, { clearComposer: false, keepRollbackTimer: true });
             setStatus("送信確認前に WebSocket 接続が失敗しました。入力は残しています。再接続後にもう一度送信できます。");
           } else {
-            setStatus("WebSocket 接続に失敗しました。履歴を再取得して再接続します。");
+            setStatus(buildReconnectStatus("WebSocket 接続に失敗しました。履歴を再取得して再接続します。"));
           }
+          dropStaleSocketIfNeeded();
           refreshThread();
           scheduleReconnect();
         });
@@ -11329,6 +11378,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         pendingSendRollbacks.delete(clientMessageId);
         releasePendingOwnerSend(clientMessageId, { clearComposer: true });
         renderThread(body.messages || [], { replace: false });
+        lastRefreshFailure = "";
         setStatus("WebSocket 未接続のため HTTP fallback で保存しました。再接続を続けています。", { temporary: true });
         scheduleReconnect();
       }
@@ -11460,13 +11510,15 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       textarea.addEventListener("input", resizeComposerInput);
       window.addEventListener("resize", resizeComposerInput);
       window.addEventListener("online", () => {
-        setStatus("ネットワーク復帰を検知しました。履歴を再取得して再接続します。");
+        setStatus(buildReconnectStatus("ネットワーク復帰を検知しました。履歴を再取得して再接続します。"));
+        dropStaleSocketIfNeeded();
         refreshThread();
         scheduleReconnect();
       });
       document.addEventListener("visibilitychange", () => {
         if (document.visibilityState === "visible" && (!chatSocket || chatSocket.readyState !== WebSocket.OPEN)) {
-          setStatus("画面復帰を検知しました。履歴を再取得して再接続します。");
+          setStatus(buildReconnectStatus("画面復帰を検知しました。履歴を再取得して再接続します。"));
+          dropStaleSocketIfNeeded();
           refreshThread();
           scheduleReconnect();
         }
