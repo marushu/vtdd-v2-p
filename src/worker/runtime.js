@@ -8555,9 +8555,6 @@ async function authorizeDashboardRequest({ request, env, apiSuffix = "/dashboard
   if (passkeyAuth.ok) {
     return passkeyAuth;
   }
-  if (passkeyAuth.blocking) {
-    return passkeyAuth;
-  }
 
   const routeLabel = `dashboard surface ${apiSuffix}`;
   const allowedEmails = parseAuthList(
@@ -8575,6 +8572,9 @@ async function authorizeDashboardRequest({ request, env, apiSuffix = "/dashboard
   const accessJwt = normalizeText(request.headers.get("cf-access-jwt-assertion"));
 
   if (!accessEmail && !accessLogin) {
+    if (passkeyAuth.blocking) {
+      return passkeyAuth;
+    }
     return {
       ok: false,
       status: 401,

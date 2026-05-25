@@ -682,6 +682,26 @@ test("worker rejects stale dashboard passkey session cookies", async () => {
   assert.equal(body.includes("dashboard passkey session was not found"), true);
 });
 
+test("worker ignores stale dashboard passkey cookie when Cloudflare Access owner identity is valid", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/dashboard", {
+      headers: {
+        cookie: "vtdd_dashboard_session=approval%3Amissing",
+        ...dashboardAccessHeaders
+      }
+    }),
+    {
+      ...dashboardAccessEnv,
+      MEMORY_PROVIDER: createInMemoryMemoryProvider()
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.text();
+  assert.equal(body.includes("VTDD v2 Dashboard"), true);
+  assert.equal(body.includes("dashboard passkey session was not found"), false);
+});
+
 test("worker rejects dashboard access when Access email header has no matching JWT email claim", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/dashboard", {
