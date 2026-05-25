@@ -35620,11 +35620,64 @@ function collectGeminiReviewerSignals(pullRequest) {
   const currentHeadSha = normalizeText5(pullRequest.headSha);
   const currentHeadSignals = currentHeadSha ? parsed.filter((signal) => evidenceMatchesHead(signal, currentHeadSha)) : [];
   const activeSignals = currentHeadSha ? currentHeadSignals : parsed;
+  const latestEvidence = activeSignals.at(-1) ?? null;
+  const latestBlockingSignal = [...activeSignals].reverse().find((signal) => signal.blocking === true);
   return {
     totalCount: activeSignals.length,
-    blockingCount: activeSignals.filter((signal) => signal.blocking).length,
-    latestEvidence: activeSignals.at(-1) ?? null
+    blockingCount: latestGeminiEvidenceLeavesBlockingReview({
+      comments,
+      latestEvidence,
+      latestBlockingSignal
+    }) ? 1 : 0,
+    latestEvidence
   };
+}
+function latestGeminiEvidenceLeavesBlockingReview({ comments, latestEvidence, latestBlockingSignal }) {
+  if (!latestBlockingSignal) {
+    return false;
+  }
+  if (latestEvidence?.blocking === true) {
+    return true;
+  }
+  if (normalizeText5(latestEvidence?.recommendedAction).toLowerCase() !== "approve") {
+    return true;
+  }
+  return !hasReviewerObjectionResolutionBetween({
+    comments,
+    blockingSignal: latestBlockingSignal,
+    approvingSignal: latestEvidence
+  });
+}
+function hasReviewerObjectionResolutionBetween({ comments, blockingSignal, approvingSignal }) {
+  const blockingTime = timelineTimestamp(blockingSignal);
+  const approvingTime = timelineTimestamp(approvingSignal);
+  if (!Number.isFinite(blockingTime) || !Number.isFinite(approvingTime) || blockingTime === Number.MAX_SAFE_INTEGER || approvingTime === Number.MAX_SAFE_INTEGER || blockingTime >= approvingTime) {
+    return false;
+  }
+  return comments.some((comment) => {
+    if (!normalizeText5(comment?.body).includes(REVIEWER_OBJECTION_RESOLUTION_MARKER)) {
+      return false;
+    }
+    if (!isTrustedObjectionResolutionAuthor(comment)) {
+      return false;
+    }
+    const responseBody = normalizeText5(comment?.body);
+    const blockingHeadSha = normalizeText5(blockingSignal?.headSha);
+    if (blockingHeadSha && !responseBody.includes(blockingHeadSha)) {
+      return false;
+    }
+    const responseTime = timelineTimestamp({
+      createdAt: normalizeCommentCreatedAt(comment),
+      updatedAt: normalizeCommentUpdatedAt(comment),
+      url: normalizeCommentUrl(comment)
+    });
+    return responseTime > blockingTime && responseTime < approvingTime;
+  });
+}
+function isTrustedObjectionResolutionAuthor(comment) {
+  const author = normalizeCommentAuthor2(comment).toLowerCase();
+  const association = normalizeText5(comment?.authorAssociation ?? comment?.author_association).toUpperCase();
+  return author === "vtdd-codex" || author === "vtdd-codex[bot]" || association === "OWNER" || association === "MEMBER" || association === "COLLABORATOR";
 }
 function collectCodexFallbackSignals(pullRequest) {
   const comments = [...Array.isArray(pullRequest.issueComments) ? pullRequest.issueComments : []];
@@ -35835,6 +35888,9 @@ function timelineTimestamp(item) {
 }
 function normalizeCommentUrl(comment) {
   return normalizeText5(comment?.url ?? comment?.htmlUrl ?? comment?.html_url) || null;
+}
+function normalizeCommentAuthor2(comment) {
+  return normalizeText5(comment?.user?.login ?? comment?.author?.login ?? comment?.author);
 }
 function normalizeCommentCreatedAt(comment) {
   return normalizeText5(comment?.createdAt ?? comment?.created_at) || null;

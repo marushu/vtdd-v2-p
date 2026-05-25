@@ -24,7 +24,12 @@ async function main() {
   const eventName = process.env.GITHUB_EVENT_NAME || "";
   const eventPath = process.env.GITHUB_EVENT_PATH || "";
   const payload = eventPath ? JSON.parse(await fs.readFile(eventPath, "utf8")) : {};
-  const pullNumbers = resolvePullNumbers({ payload, env: process.env });
+  const pullNumbers = await resolvePullNumbers({
+    payload,
+    env: process.env,
+    repository,
+    githubFetch
+  });
 
   if (pullNumbers.length === 0) {
     console.log("No pull request candidate for approve auto merge.");
@@ -330,7 +335,7 @@ async function readResponseJson(response) {
   }
 }
 
-function resolvePullNumbers({ payload, env }) {
+export async function resolvePullNumbers({ payload, env, repository, githubFetch }) {
   const explicit = normalizePositiveInteger(env.TARGET_PR_NUMBER);
   if (explicit) {
     return [explicit];
@@ -345,6 +350,40 @@ function resolvePullNumbers({ payload, env }) {
   for (const pull of payload?.workflow_run?.pull_requests || []) {
     if (normalizePositiveInteger(pull?.number)) {
       pullNumbers.add(Number(pull.number));
+    }
+  }
+  if (pullNumbers.size === 0 && payload?.workflow_run && githubFetch && repository) {
+    for (const number of await resolveWorkflowRunPullNumbers({ payload, repository, githubFetch })) {
+      pullNumbers.add(number);
+    }
+  }
+  return [...pullNumbers];
+}
+
+async function resolveWorkflowRunPullNumbers({ payload, repository, githubFetch }) {
+  const pullNumbers = new Set();
+  const headSha = String(payload?.workflow_run?.head_sha || "").trim();
+  if (headSha) {
+    const pulls = await githubFetch(
+      `/repos/${repository}/commits/${encodeURIComponent(headSha)}/pulls`
+    );
+    const openMatches = (Array.isArray(pulls) ? pulls : []).filter(
+      (pull) => String(pull?.state || "").toLowerCase() === "open" && normalizePositiveInteger(pull?.number)
+    );
+    if (openMatches.length === 1) {
+      pullNumbers.add(Number(openMatches[0].number));
+    }
+  }
+  if (pullNumbers.size === 0) {
+    const title = String(payload?.workflow_run?.display_title || "").trim();
+    if (title) {
+      const pulls = await githubFetch(`/repos/${repository}/pulls?state=open&per_page=100`);
+      const exactMatches = (Array.isArray(pulls) ? pulls : []).filter(
+        (pull) => String(pull?.title || "").trim() === title && normalizePositiveInteger(pull?.number)
+      );
+      if (exactMatches.length === 1) {
+        pullNumbers.add(Number(exactMatches[0].number));
+      }
     }
   }
   return [...pullNumbers];

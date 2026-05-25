@@ -544,6 +544,201 @@ test("execution continuity blocks readiness when request_changes finding is not 
   );
 });
 
+test("execution continuity treats latest same-head Gemini approve as resolving older request_changes after objection response", () => {
+  const result = evaluateExecutionContinuity({
+    actorRole: ActorRole.BUTLER,
+    mode: TaskMode.EXECUTION,
+    runtimeTruth: {
+      runtimeState: {
+        activeBranch: "codex/issue-536",
+        pullRequest: {
+          number: 537,
+          url: "https://github.com/example/repo/pull/537",
+          state: "open",
+          title: "Dashboard auth fallback",
+          headSha: "head-536",
+          mergeable: true,
+          mergeableState: "clean",
+          issueComments: [
+            {
+              user: { login: "vtdd-gemini-reviewer" },
+              url: "https://github.com/example/repo/pull/537#issuecomment-request",
+              created_at: "2026-05-25T10:37:04Z",
+              updated_at: "2026-05-25T10:37:04Z",
+              body: "<!-- vtdd:reviewer=gemini -->\n## VTDD Gemini レビュー\n\n- Head SHA: `head-536`\n- Recommended action: `request_changes`\n\n### 重要指摘\n- PR本文が未記入\n\n### 残リスク\n- generated worker evidence missing"
+            },
+            {
+              user: { login: "marushu" },
+              author_association: "OWNER",
+              url: "https://github.com/example/repo/pull/537#issuecomment-response",
+              created_at: "2026-05-25T10:40:14Z",
+              body: "<!-- vtdd:reviewer-objection-resolution -->\n## VTDD Reviewer Objection Resolution\n\nHead SHA: `head-536`\n\nAddresses:\n- PR本文が未記入\n\nEvidence:\n- node --test"
+            },
+            {
+              user: { login: "vtdd-gemini-reviewer" },
+              url: "https://github.com/example/repo/pull/537#issuecomment-approve",
+              created_at: "2026-05-25T10:40:31Z",
+              updated_at: "2026-05-25T10:40:31Z",
+              body: "<!-- vtdd:reviewer=gemini -->\n## VTDD Gemini レビュー\n\n- Head SHA: `head-536`\n- Recommended action: `approve`\n\n### 重要指摘\n- 報告なし。\n\n### 残リスク\n- live E2E は未実施"
+            }
+          ]
+        }
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.value.reviewLoop.reviewerEvidence.recommendedAction, "approve");
+  assert.equal(result.value.reviewLoop.unresolvedReviewCommentsCount, 0);
+  assert.equal(result.value.reviewLoop.criticalReviewPending, false);
+  assert.equal(result.value.reviewLoop.reviewerSignalTruth.mergeReviewTruth.satisfied, true);
+  assert.deepEqual(result.value.nextSuggestedActions, ["summarize_for_human", "wait_for_human_go"]);
+});
+
+test("execution continuity keeps older request_changes blocking when objection response is untrusted", () => {
+  const result = evaluateExecutionContinuity({
+    actorRole: ActorRole.BUTLER,
+    mode: TaskMode.EXECUTION,
+    runtimeTruth: {
+      runtimeState: {
+        activeBranch: "codex/issue-538",
+        pullRequest: {
+          number: 539,
+          url: "https://github.com/example/repo/pull/539",
+          state: "open",
+          title: "Auto merge review gate",
+          headSha: "head-538",
+          mergeable: true,
+          mergeableState: "clean",
+          issueComments: [
+            {
+              user: { login: "vtdd-gemini-reviewer" },
+              url: "https://github.com/example/repo/pull/539#issuecomment-request",
+              created_at: "2026-05-25T13:10:00Z",
+              updated_at: "2026-05-25T13:10:00Z",
+              body: "<!-- vtdd:reviewer=gemini -->\n## VTDD Gemini レビュー\n\n- Head SHA: `head-538`\n- Recommended action: `request_changes`\n\n### 重要指摘\n- explicit objection response is missing"
+            },
+            {
+              user: { login: "drive-by-user" },
+              author_association: "NONE",
+              url: "https://github.com/example/repo/pull/539#issuecomment-response",
+              created_at: "2026-05-25T13:12:00Z",
+              body: "<!-- vtdd:reviewer-objection-resolution -->\nHead SHA: `head-538`\n\nLooks fixed."
+            },
+            {
+              user: { login: "vtdd-gemini-reviewer" },
+              url: "https://github.com/example/repo/pull/539#issuecomment-approve",
+              created_at: "2026-05-25T13:15:00Z",
+              updated_at: "2026-05-25T13:15:00Z",
+              body: "<!-- vtdd:reviewer=gemini -->\n## VTDD Gemini レビュー\n\n- Head SHA: `head-538`\n- Recommended action: `approve`\n\n### 重要指摘\n- 報告なし。"
+            }
+          ]
+        }
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.value.reviewLoop.unresolvedReviewCommentsCount, 1);
+  assert.equal(result.value.reviewLoop.criticalReviewPending, true);
+});
+
+test("execution continuity keeps older request_changes blocking when objection response omits head SHA", () => {
+  const result = evaluateExecutionContinuity({
+    actorRole: ActorRole.BUTLER,
+    mode: TaskMode.EXECUTION,
+    runtimeTruth: {
+      runtimeState: {
+        activeBranch: "codex/issue-538",
+        pullRequest: {
+          number: 539,
+          url: "https://github.com/example/repo/pull/539",
+          state: "open",
+          title: "Auto merge review gate",
+          headSha: "head-538",
+          mergeable: true,
+          mergeableState: "clean",
+          issueComments: [
+            {
+              user: { login: "vtdd-gemini-reviewer" },
+              url: "https://github.com/example/repo/pull/539#issuecomment-request",
+              created_at: "2026-05-25T13:10:00Z",
+              updated_at: "2026-05-25T13:10:00Z",
+              body: "<!-- vtdd:reviewer=gemini -->\n## VTDD Gemini レビュー\n\n- Head SHA: `head-538`\n- Recommended action: `request_changes`\n\n### 重要指摘\n- explicit objection response is missing"
+            },
+            {
+              user: { login: "marushu" },
+              author_association: "OWNER",
+              url: "https://github.com/example/repo/pull/539#issuecomment-response",
+              created_at: "2026-05-25T13:12:00Z",
+              body: "<!-- vtdd:reviewer-objection-resolution -->\nAddresses:\n- explicit objection response is missing"
+            },
+            {
+              user: { login: "vtdd-gemini-reviewer" },
+              url: "https://github.com/example/repo/pull/539#issuecomment-approve",
+              created_at: "2026-05-25T13:15:00Z",
+              updated_at: "2026-05-25T13:15:00Z",
+              body: "<!-- vtdd:reviewer=gemini -->\n## VTDD Gemini レビュー\n\n- Head SHA: `head-538`\n- Recommended action: `approve`\n\n### 重要指摘\n- 報告なし。"
+            }
+          ]
+        }
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.value.reviewLoop.unresolvedReviewCommentsCount, 1);
+  assert.equal(result.value.reviewLoop.criticalReviewPending, true);
+});
+
+test("execution continuity keeps older request_changes blocking when latest approve lacks objection response", () => {
+  const result = evaluateExecutionContinuity({
+    actorRole: ActorRole.BUTLER,
+    mode: TaskMode.EXECUTION,
+    runtimeTruth: {
+      runtimeState: {
+        activeBranch: "codex/issue-538",
+        pullRequest: {
+          number: 539,
+          url: "https://github.com/example/repo/pull/539",
+          state: "open",
+          title: "Auto merge review gate",
+          headSha: "head-538",
+          mergeable: true,
+          mergeableState: "clean",
+          issueComments: [
+            {
+              user: { login: "vtdd-gemini-reviewer" },
+              url: "https://github.com/example/repo/pull/539#issuecomment-approve",
+              created_at: "2026-05-25T13:15:00Z",
+              updated_at: "2026-05-25T13:15:00Z",
+              body: "<!-- vtdd:reviewer=gemini -->\n## VTDD Gemini レビュー\n\n- Head SHA: `head-538`\n- Recommended action: `approve`\n\n### 重要指摘\n- 報告なし。"
+            },
+            {
+              user: { login: "vtdd-gemini-reviewer" },
+              url: "https://github.com/example/repo/pull/539#issuecomment-request",
+              created_at: "2026-05-25T13:10:00Z",
+              updated_at: "2026-05-25T13:10:00Z",
+              body: "<!-- vtdd:reviewer=gemini -->\n## VTDD Gemini レビュー\n\n- Head SHA: `head-538`\n- Recommended action: `request_changes`\n\n### 重要指摘\n- explicit objection response is missing"
+            }
+          ]
+        }
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.value.reviewLoop.reviewerEvidence.recommendedAction, "approve");
+  assert.equal(result.value.reviewLoop.unresolvedReviewCommentsCount, 1);
+  assert.equal(result.value.reviewLoop.criticalReviewPending, true);
+  assert.equal(result.value.reviewLoop.reviewerSignalTruth.mergeReviewTruth.satisfied, true);
+  assert.deepEqual(result.value.nextSuggestedActions, [
+    "apply_pr_feedback",
+    "reply_on_pull_request",
+    "rerun_gemini_review"
+  ]);
+});
+
 test("execution continuity exposes Codex fallback requested when Gemini is temporarily unavailable", () => {
   const result = evaluateExecutionContinuity({
     actorRole: ActorRole.BUTLER,

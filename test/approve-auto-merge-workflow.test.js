@@ -1,7 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { isMergeAlreadyInProgressError } from "../scripts/run-approve-auto-merge.mjs";
+import {
+  isMergeAlreadyInProgressError,
+  resolvePullNumbers
+} from "../scripts/run-approve-auto-merge.mjs";
 
 const workflow = fs.readFileSync(".github/workflows/approve-auto-merge.yml", "utf8");
 const script = fs.readFileSync("scripts/run-approve-auto-merge.mjs", "utf8");
@@ -45,4 +48,115 @@ test("approve auto merge treats concurrent GitHub merge race as idempotent", () 
   const unrelatedMergeError = new Error("GitHub API 500: Merge already in progress");
   unrelatedMergeError.status = 500;
   assert.equal(isMergeAlreadyInProgressError(unrelatedMergeError), false);
+});
+
+test("approve auto merge resolves workflow_run PR candidate from head SHA when payload omits pull_requests", async () => {
+  const calls = [];
+  const pullNumbers = await resolvePullNumbers({
+    payload: {
+      workflow_run: {
+        head_sha: "head-536",
+        pull_requests: []
+      }
+    },
+    env: {},
+    repository: "sample-org/vtdd-v2-p",
+    githubFetch: async (path) => {
+      calls.push(path);
+      assert.equal(path, "/repos/sample-org/vtdd-v2-p/commits/head-536/pulls");
+      return [
+        { number: 537, state: "open" },
+        { number: 530, state: "closed" }
+      ];
+    }
+  });
+
+  assert.deepEqual(pullNumbers, [537]);
+  assert.deepEqual(calls, ["/repos/sample-org/vtdd-v2-p/commits/head-536/pulls"]);
+});
+
+test("approve auto merge does not resolve ambiguous workflow_run head SHA PR candidates", async () => {
+  const pullNumbers = await resolvePullNumbers({
+    payload: {
+      workflow_run: {
+        head_sha: "shared-head",
+        pull_requests: []
+      }
+    },
+    env: {},
+    repository: "sample-org/vtdd-v2-p",
+    githubFetch: async (path) => {
+      assert.equal(path, "/repos/sample-org/vtdd-v2-p/commits/shared-head/pulls");
+      return [
+        { number: 537, state: "open" },
+        { number: 538, state: "open" }
+      ];
+    }
+  });
+
+  assert.deepEqual(pullNumbers, []);
+});
+
+test("approve auto merge resolves workflow_run PR candidate from display title when head SHA is trusted main", async () => {
+  const calls = [];
+  const pullNumbers = await resolvePullNumbers({
+    payload: {
+      workflow_run: {
+        head_sha: "main-sha",
+        display_title: "Issue #536 Dashboard通常閲覧でstale passkey cookieをAccess認証へfallbackする",
+        pull_requests: []
+      }
+    },
+    env: {},
+    repository: "sample-org/vtdd-v2-p",
+    githubFetch: async (path) => {
+      calls.push(path);
+      if (path === "/repos/sample-org/vtdd-v2-p/commits/main-sha/pulls") {
+        return [];
+      }
+      assert.equal(path, "/repos/sample-org/vtdd-v2-p/pulls?state=open&per_page=100");
+      return [
+        {
+          number: 537,
+          title: "Issue #536 Dashboard通常閲覧でstale passkey cookieをAccess認証へfallbackする"
+        },
+        {
+          number: 536,
+          title: "unrelated"
+        }
+      ];
+    }
+  });
+
+  assert.deepEqual(pullNumbers, [537]);
+  assert.deepEqual(calls, [
+    "/repos/sample-org/vtdd-v2-p/commits/main-sha/pulls",
+    "/repos/sample-org/vtdd-v2-p/pulls?state=open&per_page=100"
+  ]);
+});
+
+test("approve auto merge does not resolve ambiguous workflow_run display title matches", async () => {
+  const pullNumbers = await resolvePullNumbers({
+    payload: {
+      workflow_run: {
+        head_sha: "main-sha",
+        display_title: "Shared title",
+        pull_requests: []
+      }
+    },
+    env: {},
+    repository: "sample-org/vtdd-v2-p",
+    githubFetch: async (path) => {
+      if (path === "/repos/sample-org/vtdd-v2-p/commits/main-sha/pulls") {
+        return [];
+      }
+      assert.equal(path, "/repos/sample-org/vtdd-v2-p/pulls?state=open&per_page=100");
+      return [
+        { number: 539, title: "Shared title" },
+        { number: 540, title: "Shared title" }
+      ];
+    }
+  });
+
+  assert.deepEqual(pullNumbers, []);
 });
