@@ -27781,13 +27781,27 @@ function renderPasskeyOperatorPage(input = {}) {
         return readNumberInput("pull-number-input");
       }
 
+      function applyOperatorModeDefaults() {
+        if (operatorMode === "deploy") {
+          document.getElementById("action-type-input").value = "deploy_production";
+          document.getElementById("risk-kind-input").value = "deploy_production";
+          return;
+        }
+        if (operatorMode === "dashboard") {
+          document.getElementById("action-type-input").value = "read";
+          document.getElementById("risk-kind-input").value = "dashboard_access";
+        }
+      }
+
       function shouldAutoDispatchProductionDeploy() {
+        applyOperatorModeDefaults();
         return operatorMode === "deploy" &&
           document.getElementById("action-type-input").value === "deploy_production" &&
           document.getElementById("risk-kind-input").value === "deploy_production";
       }
 
       async function dispatchProductionDeploy({ source = "manual" } = {}) {
+        applyOperatorModeDefaults();
         if (!latestApprovalGrantId) {
           throw new Error("approvalGrantId is required before production deploy");
         }
@@ -27866,6 +27880,7 @@ function renderPasskeyOperatorPage(input = {}) {
 
       document.getElementById("approve-button").addEventListener("click", async () => {
         try {
+          applyOperatorModeDefaults();
           const repositoryInput = readRequiredRepositoryInput();
           approveOutput.textContent = "approval challenge request...";
           const challengeResponse = await fetch("${apiBase}/approval/passkey/challenge", {
@@ -27931,6 +27946,8 @@ function renderPasskeyOperatorPage(input = {}) {
           approveOutput.textContent = String(error);
         }
       });
+
+      applyOperatorModeDefaults();
 
       document.getElementById("sync-button").addEventListener("click", async () => {
         try {
