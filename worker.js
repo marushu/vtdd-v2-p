@@ -27245,6 +27245,7 @@ function normalize(value) {
 // src/core/passkey-operator-page.js
 function renderPasskeyOperatorPage(input = {}) {
   const operatorMode = resolvePasskeyOperatorMode(input);
+  const deployOneTapMode = operatorMode === "deploy";
   const passkeyEnabled = input.passkeyEnabled !== false;
   const sectionVisibility = resolveSectionVisibility(operatorMode, { passkeyEnabled });
   const origin = escapeHtml(input.origin || "");
@@ -27265,6 +27266,14 @@ function renderPasskeyOperatorPage(input = {}) {
   const syncMessage = escapeHtml(
     input.syncMessage || (syncEnabled ? "approvalGrantId \u304C\u53D6\u5F97\u6E08\u307F\u306A\u3089\u5B9F\u884C\u3067\u304D\u307E\u3059\u3002desktop helper bridge \u306B\u63A5\u7D9A\u3057\u307E\u3059\u3002" : "desktop maintenance required: local secret sync bridge \u304C\u672A\u63A5\u7D9A\u3067\u3059\u3002")
   );
+  const approvalSectionAttributes = deployOneTapMode ? ' data-owner-flow="one-tap-deploy"' : "";
+  const approveButtonLabel = deployOneTapMode ? "\u30D1\u30B9\u30AD\u30FC" : "Approve high-risk action";
+  const deployScopeSummary = renderDeployScopeSummary({
+    repositoryInput: repoDefault,
+    issueNumber: issueDefault,
+    actionType: actionTypeDefault,
+    highRiskKind: highRiskKindDefault
+  });
   return `<!doctype html>
 <html lang="ja">
   <head>
@@ -27427,9 +27436,22 @@ function renderPasskeyOperatorPage(input = {}) {
           <pre id="register-output"></pre>
         </section>
 
-        <section data-operator-section="approval"${hiddenAttribute(!sectionVisibility.approval)}>
-          <h2>2. High-risk Approval</h2>
-          <label for="repo-input">Repository</label>
+        <section data-operator-section="approval"${approvalSectionAttributes}${hiddenAttribute(!sectionVisibility.approval)}>
+          <h2>${deployOneTapMode ? "\u672C\u756A\u53CD\u6620\u306E\u627F\u8A8D" : "2. High-risk Approval"}</h2>
+          ${deployOneTapMode ? `<p>production deploy \u3092\u627F\u8A8D\u3057\u3066\u3001\u305D\u306E\u307E\u307E\u53CD\u6620\u3092\u958B\u59CB\u3057\u307E\u3059\u3002</p>
+          <p class="muted">${deployScopeSummary}</p>
+          <div class="approval-internal" hidden>
+            <label for="repo-input">Repository</label>
+            <input id="repo-input" value="${repoDefault}" placeholder="marushu/vtdd-v2-p" />
+            <label for="issue-input">Issue Number</label>
+            <input id="issue-input" value="${issueDefault}" placeholder="15" />
+            <label for="phase-input">Phase</label>
+            <input id="phase-input" value="${phaseDefault}" />
+            <label for="action-type-input">Action Type</label>
+            <input id="action-type-input" value="${actionTypeDefault}" />
+            <label for="risk-kind-input">High-risk Kind</label>
+            <input id="risk-kind-input" value="${highRiskKindDefault}" />
+          </div>` : `<label for="repo-input">Repository</label>
           <input id="repo-input" value="${repoDefault}" placeholder="marushu/vtdd-v2-p" />
           <label for="issue-input">Issue Number</label>
           <input id="issue-input" value="${issueDefault}" placeholder="15" />
@@ -27438,17 +27460,17 @@ function renderPasskeyOperatorPage(input = {}) {
           <label for="action-type-input">Action Type</label>
           <input id="action-type-input" value="${actionTypeDefault}" />
           <label for="risk-kind-input">High-risk Kind</label>
-          <input id="risk-kind-input" value="${highRiskKindDefault}" />
+          <input id="risk-kind-input" value="${highRiskKindDefault}" />`}
           <div class="row">
-            <button class="secondary" id="approve-button">Approve high-risk action</button>
-            <button class="ghost" id="copy-approval-grant-button" type="button">Copy approvalGrantId</button>
+            <button class="secondary" id="approve-button">${approveButtonLabel}</button>
+            ${deployOneTapMode ? "" : '<button class="ghost" id="copy-approval-grant-button" type="button">Copy approvalGrantId</button>'}
           </div>
-          <label class="inline-check" for="auto-copy-approval-grant-input">
+          ${deployOneTapMode ? '<input id="auto-copy-approval-grant-input" type="checkbox" hidden />' : `<label class="inline-check" for="auto-copy-approval-grant-input">
             <input id="auto-copy-approval-grant-input" type="checkbox" />
             Auto-copy approvalGrantId after approval
-          </label>
-          <p class="muted">GitHub App secret sync \u306A\u3089 <code>actionType=destructive</code> / <code>highRiskKind=github_app_secret_sync</code>\u3001production deploy \u306A\u3089 <code>actionType=deploy_production</code> / <code>highRiskKind=deploy_production</code>\u3001PR merge \u306A\u3089 <code>actionType=merge</code> / <code>highRiskKind=pull_merge</code> \u3092\u4F7F\u3044\u307E\u3059\u3002</p>
-          <pre id="approve-output"></pre>
+          </label>`}
+          ${deployOneTapMode ? "" : '<p class="muted">GitHub App secret sync \u306A\u3089 <code>actionType=destructive</code> / <code>highRiskKind=github_app_secret_sync</code>\u3001production deploy \u306A\u3089 <code>actionType=deploy_production</code> / <code>highRiskKind=deploy_production</code>\u3001PR merge \u306A\u3089 <code>actionType=merge</code> / <code>highRiskKind=pull_merge</code> \u3092\u4F7F\u3044\u307E\u3059\u3002</p>'}
+          <pre id="approve-output"${deployOneTapMode ? " hidden" : ""}></pre>
         </section>
 
         <section data-operator-section="github-app-secret-sync"${hiddenAttribute(!sectionVisibility.githubAppSecretSync)}>
@@ -27473,14 +27495,19 @@ function renderPasskeyOperatorPage(input = {}) {
 
         <section data-operator-section="production-deploy"${hiddenAttribute(!sectionVisibility.productionDeploy)}>
           <h2>4. Production Deploy</h2>
-          <p class="muted">deploy stale \u3092\u691C\u77E5\u3057\u305F\u3042\u3068\u3001real passkey approval \u304C\u6210\u529F\u3057\u305F\u3089\u540C\u3058 <code>approvalGrantId</code> \u3067 same-origin \u306E governed deploy path \u3092\u81EA\u52D5 dispatch \u3057\u307E\u3059\u3002</p>
+          <p class="muted">deploy stale \u3092\u691C\u77E5\u3057\u305F\u3042\u3068\u3001real passkey approval \u304C\u6210\u529F\u3057\u305F\u3089 same-origin \u306E governed deploy path \u3092\u81EA\u52D5 dispatch \u3057\u307E\u3059\u3002</p>
           <div class="row">
-            <button id="deploy-button">Dispatch production deploy</button>
-            <a class="button-link" id="deploy-run-link" href="#" target="_blank" rel="noopener noreferrer" hidden>Open deploy run</a>
+            <button id="deploy-button"${deployOneTapMode ? " hidden" : ""}>Dispatch production deploy</button>
+            ${deployOneTapMode ? "" : '<a class="button-link" id="deploy-run-link" href="#" target="_blank" rel="noopener noreferrer" hidden>Open deploy run</a>'}
             <a class="button-link" id="return-to-butler-link" href="${returnUrl}" rel="noopener noreferrer"${returnUrl ? "" : " hidden"}>Return to Butler</a>
           </div>
-          <p class="muted">\u3053\u306E Worker origin \u3092 <code>runtimeUrl</code> \u3068\u3057\u3066\u4F7F\u3044\u307E\u3059\u3002\u624B\u52D5\u30DC\u30BF\u30F3\u306F\u5931\u6557\u6642\u306E\u518D\u5B9F\u884C\u7528\u3067\u3059\u3002\u5B8C\u4E86\u307E\u305F\u306F\u5931\u6557\u306F Dashboard \u901A\u77E5\u30BB\u30F3\u30BF\u30FC\u3068\u4FDD\u5B58\u6E08\u307F Web Push \u8CFC\u8AAD\u3078\u5C4A\u304D\u307E\u3059\u3002</p>
+          <p class="muted">\u5B8C\u4E86\u307E\u305F\u306F\u5931\u6557\u306F Dashboard \u901A\u77E5\u30BB\u30F3\u30BF\u30FC\u3068\u4FDD\u5B58\u6E08\u307F Web Push \u8CFC\u8AAD\u3078\u5C4A\u304D\u307E\u3059\u3002</p>
           <pre id="deploy-output"></pre>
+          <details>
+            <summary>\u8A73\u7D30</summary>
+            ${deployOneTapMode ? '<a class="button-link" id="deploy-run-link" href="#" target="_blank" rel="noopener noreferrer" hidden>Open deploy run</a>' : ""}
+            <pre id="deploy-debug-output"></pre>
+          </details>
         </section>
 
         <section data-operator-section="pr-merge"${hiddenAttribute(!sectionVisibility.prMerge)}>
@@ -27562,6 +27589,7 @@ function renderPasskeyOperatorPage(input = {}) {
       const copyApprovalGrantButton = document.getElementById("copy-approval-grant-button");
       const autoCopyApprovalGrantInput = document.getElementById("auto-copy-approval-grant-input");
       const deployRunLink = document.getElementById("deploy-run-link");
+      const deployDebugOutput = document.getElementById("deploy-debug-output");
       const mergePrLink = document.getElementById("merge-pr-link");
       const issueCloseLink = document.getElementById("issue-close-link");
       const operatorMode = "${escapeHtml(operatorMode)}";
@@ -27686,6 +27714,17 @@ function renderPasskeyOperatorPage(input = {}) {
         }
         deployRunLink.href = runUrl;
         deployRunLink.hidden = false;
+      }
+
+      function buildDeployResultText(body) {
+        const deploy = body?.deploy || {};
+        if (deploy.status === "dispatched") {
+          return "deploy \u3092\u958B\u59CB\u3057\u307E\u3057\u305F\u3002\u5B8C\u4E86\u901A\u77E5\u3092\u5F85\u3063\u3066\u304F\u3060\u3055\u3044\u3002";
+        }
+        if (deploy.status === "dispatch_accepted_unverified") {
+          return "deploy request \u306F\u53D7\u7406\u3055\u308C\u307E\u3057\u305F\u3002GitHub Actions \u306E run \u78BA\u8A8D\u306F\u672A\u78BA\u5B9A\u3067\u3059\u3002";
+        }
+        return "deploy request \u3092\u53D7\u3051\u4ED8\u3051\u307E\u3057\u305F\u3002";
       }
 
       function extractMergePullRequestUrl(body) {
@@ -27826,16 +27865,21 @@ function renderPasskeyOperatorPage(input = {}) {
           throw responseError(deployBody, "production deploy failed");
         }
         showDeployRunLink(deployBody);
-        deployOutput.textContent = JSON.stringify(deployBody, null, 2);
+        deployOutput.textContent = buildDeployResultText(deployBody);
+        if (deployDebugOutput) {
+          deployDebugOutput.textContent = JSON.stringify(deployBody, null, 2);
+        }
       }
 
-      copyApprovalGrantButton.addEventListener("click", async () => {
-        try {
-          await copyApprovalGrantIdToClipboard();
-        } catch (error) {
-          approveOutput.textContent = approveOutput.textContent + "\\n\\n" + String(error);
-        }
-      });
+      if (copyApprovalGrantButton) {
+        copyApprovalGrantButton.addEventListener("click", async () => {
+          try {
+            await copyApprovalGrantIdToClipboard();
+          } catch (error) {
+            approveOutput.textContent = approveOutput.textContent + "\\n\\n" + String(error);
+          }
+        });
+      }
 
       document.getElementById("register-button").addEventListener("click", async () => {
         try {
@@ -27927,7 +27971,7 @@ function renderPasskeyOperatorPage(input = {}) {
             window.location.assign("/dashboard");
             return;
           }
-          if (latestApprovalGrantId && autoCopyApprovalGrantInput.checked) {
+          if (latestApprovalGrantId && autoCopyApprovalGrantInput?.checked) {
             try {
               await copyApprovalGrantIdToClipboard({ quiet: true });
               approveOutput.textContent = approveOutput.textContent + "\\n\\nCopied approvalGrantId to clipboard.";
@@ -28305,6 +28349,11 @@ function hiddenAttribute(hidden) {
 function renderGithubAppRoleOption(value, label, selectedValue) {
   const selected = value === selectedValue ? " selected" : "";
   return `<option value="${escapeHtml(value)}"${selected}>${escapeHtml(label)}</option>`;
+}
+function renderDeployScopeSummary({ repositoryInput, issueNumber, actionType, highRiskKind }) {
+  const repository = repositoryInput || "\u672A\u6307\u5B9A";
+  const issue2 = issueNumber ? ` / Issue: ${issueNumber}` : "";
+  return `\u627F\u8A8D\u5BFE\u8C61: Repository: ${repository}${issue2} / Action: ${actionType} / ${highRiskKind}`;
 }
 function normalizeOperatorMode(value) {
   const token = normalizeOperatorToken(value);

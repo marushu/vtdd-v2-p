@@ -5,6 +5,7 @@ import { renderPasskeyOperatorPage } from "../src/core/index.js";
 
 test("passkey operator page can target explicit api base and sync endpoint", () => {
   const html = renderPasskeyOperatorPage({
+    operatorMode: "full",
     apiBase: "/api",
     syncApiBase: "http://127.0.0.1:8789/api",
     actionType: "deploy_production",
@@ -122,16 +123,28 @@ test("passkey operator page focuses deploy mode on deploy approval and dispatch 
   });
 
   assert.equal(html.includes('<section data-operator-section="registration" hidden>'), true);
-  assert.equal(html.includes('<section data-operator-section="approval">'), true);
+  assert.equal(
+    html.includes('<section data-operator-section="approval" data-owner-flow="one-tap-deploy">'),
+    true
+  );
   assert.equal(html.includes('<section data-operator-section="production-deploy">'), true);
   assert.equal(html.includes('<section data-operator-section="pr-merge" hidden>'), true);
   assert.equal(html.includes('<section data-operator-section="issue-close" hidden>'), true);
   assert.equal(html.includes('<section data-operator-section="github-app-secret-sync" hidden>'), true);
   assert.equal(html.includes('<section data-operator-section="github-actions-secret-sync" hidden>'), true);
-  assert.equal(html.includes("Dispatch production deploy"), true);
-  assert.equal(html.includes("自動 dispatch"), true);
-  assert.equal(html.includes("手動ボタンは失敗時の再実行用です"), true);
+  assert.equal(html.includes('id="approve-button">パスキー</button>'), true);
+  assert.equal(html.includes("production deploy を承認して、そのまま反映を開始します。"), true);
+  assert.equal(html.includes("承認対象"), true);
+  assert.equal(html.includes("Repository: marushu/vtdd-v2-p"), true);
+  assert.equal(html.includes("Action: deploy_production / deploy_production"), true);
+  assert.equal(html.includes("Approve high-risk action"), false);
+  assert.equal(html.includes("Copy approvalGrantId"), false);
+  assert.equal(html.includes("Auto-copy approvalGrantId after approval"), false);
+  assert.equal(html.includes('id="deploy-button" hidden>Dispatch production deploy</button>'), true);
   assert.equal(html.includes("Dashboard 通知センターと保存済み Web Push 購読へ届きます"), true);
+  assert.equal(html.includes("deploy を開始しました。完了通知を待ってください。"), true);
+  assert.equal(html.includes("deploy-debug-output"), true);
+  assert.equal(html.includes("<summary>詳細</summary>"), true);
   assert.equal(html.includes("Return to Butler"), true);
   assert.equal(html.includes('id="issue-input" value=""'), true);
   assert.equal(html.includes('id="pull-number-input" value=""'), true);
