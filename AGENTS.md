@@ -92,6 +92,13 @@ Required behavior:
 - When Dashboard Butler is involved, evaluate the normal chat surface against
   the baseline of ChatGPT iOS app usability plus VTDD-only capabilities such as
   PWA recovery, notifications, attachments, runtime truth, and scoped approval.
+- Dashboard Butler is also the owner-facing recovery surface for VPS-side
+  trouble. If a VPS Codex CLI, runner, queue, app-server bridge, deployment,
+  credential boundary, or host/runtime failure occurs, the expected product
+  path is not "open mac Codex and debug manually"; it is for Dashboard Butler to
+  understand the natural-language problem, read the relevant VPS/runtime truth,
+  hand off executable recovery to VPS Codex CLI or a declared runner, and report
+  progress, blocker, before/after state, and next owner action.
 - Debug, ops, setup, runtime, RAG, self-parity, workflow, passkey, and deploy
   surfaces must not dominate the normal chat experience. If they are needed,
   isolate them behind an explicitly named debug/development/operations area.
