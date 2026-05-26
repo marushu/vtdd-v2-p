@@ -28510,7 +28510,22 @@ function sanitizePasskeyDashboardReturnPath(value) {
   if (parsed.pathname !== "/dashboard" && !parsed.pathname.startsWith("/dashboard/")) {
     return "/dashboard";
   }
-  return parsed.pathname;
+  const allowedSearchParams = new URLSearchParams();
+  for (const key of ["repository", "repositoryInput", "issueNumber"]) {
+    const rawValue = normalizeDashboardReturnQueryValue(parsed.searchParams.get(key));
+    if (rawValue) {
+      allowedSearchParams.set(key, rawValue);
+    }
+  }
+  const query = allowedSearchParams.toString();
+  return query ? `${parsed.pathname}?${query}` : parsed.pathname;
+}
+function normalizeDashboardReturnQueryValue(value) {
+  const normalized = String(value ?? "").trim();
+  if (!normalized || normalized.length > 256) {
+    return "";
+  }
+  return normalized;
 }
 function escapeHtml(value) {
   return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
@@ -65366,7 +65381,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
   const encodedRepository = encodeURIComponent(repositoryInput);
   const chatThreadId = `dashboard-main-${(repositoryInput || "unresolved").replace(/[^a-z0-9_.-]+/gi, "-")}`;
   const socketOrigin = origin.replace(/^http/i, "ws");
-  const dashboardSignInUrl = `${origin}/v2/approval/passkey/operator?mode=dashboard&phase=execution&actionType=read&highRiskKind=dashboard_access`;
+  const currentDashboardReturnPath = sanitizeDashboardPreAuthReturnPath(
+    `${url?.pathname || "/dashboard"}${url?.search || ""}`
+  );
+  const dashboardSignInUrl = `${origin}/v2/approval/passkey/operator?mode=dashboard&phase=execution&actionType=read&highRiskKind=dashboard_access&dashboardReturnPath=${encodeURIComponent(currentDashboardReturnPath)}`;
   const latestDeployEvent = await retrieveLatestDashboardEvent({
     store: dashboardEventStore,
     kind: "github_actions_workflow_run",
@@ -66764,7 +66782,7 @@ function buildCloudflareAccessLoginHref({ origin, returnPath = "/dashboard" } = 
   return `${normalizedOrigin || ""}/cdn-cgi/access/login?redirect_url=${encodeURIComponent(redirectUrl)}`;
 }
 function sanitizeDashboardPreAuthReturnPath(value) {
-  const normalized = normalizeText30(value) || "/dashboard";
+  const normalized = String(value ?? "").trim() || "/dashboard";
   let parsed;
   try {
     parsed = new URL(normalized, "https://dashboard.local");
@@ -66777,7 +66795,22 @@ function sanitizeDashboardPreAuthReturnPath(value) {
   if (parsed.pathname !== "/dashboard" && !parsed.pathname.startsWith("/dashboard/")) {
     return "/dashboard";
   }
-  return parsed.pathname;
+  const allowedSearchParams = new URLSearchParams();
+  for (const key of ["repository", "repositoryInput", "issueNumber"]) {
+    const rawValue = normalizeDashboardReturnQueryValue2(parsed.searchParams.get(key));
+    if (rawValue) {
+      allowedSearchParams.set(key, rawValue);
+    }
+  }
+  const query = allowedSearchParams.toString();
+  return query ? `${parsed.pathname}?${query}` : parsed.pathname;
+}
+function normalizeDashboardReturnQueryValue2(value) {
+  const normalized = String(value ?? "").trim();
+  if (!normalized || normalized.length > 256) {
+    return "";
+  }
+  return normalized;
 }
 function renderV2StatusPage({ runtimeOrigin, autonomyMode }) {
   const origin = normalize7(runtimeOrigin);

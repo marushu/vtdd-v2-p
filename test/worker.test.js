@@ -799,6 +799,32 @@ test("worker rejects dashboard access without owner identity", async () => {
   assert.equal(body.includes("未認証の相手に通知詳細や Dashboard 内容は返しません"), true);
 });
 
+test("worker preserves dashboard repository context across auth fallback links", async () => {
+  const tooLongRepository = `${"a".repeat(257)}/repo`;
+  const response = await worker.fetch(
+    new Request(
+      `https://example.com/dashboard?repository=marushu%2Fvtdd-v2-p&repositoryInput=${tooLongRepository}&runId=private-run&title=private`
+    )
+  );
+  assert.equal(response.status, 401);
+  const body = await response.text();
+  assert.equal(
+    body.includes(
+      'href="https://example.com/cdn-cgi/access/login?redirect_url=https%3A%2F%2Fexample.com%2Fdashboard%3Frepository%3Dmarushu%252Fvtdd-v2-p"'
+    ),
+    true
+  );
+  assert.equal(
+    body.includes(
+      'href="https://example.com/v2/approval/passkey/operator?mode=dashboard&amp;phase=execution&amp;actionType=read&amp;highRiskKind=dashboard_access&amp;dashboardReturnPath=%2Fdashboard%3Frepository%3Dmarushu%252Fvtdd-v2-p"'
+    ),
+    true
+  );
+  assert.equal(body.includes("runId=private-run"), false);
+  assert.equal(body.includes("title=private"), false);
+  assert.equal(body.includes("repositoryInput="), false);
+});
+
 test("worker rejects unlisted dashboard subpaths before they can become public pages", async () => {
   const response = await worker.fetch(new Request("https://example.com/dashboard/future-page"));
   assert.equal(response.status, 401);
@@ -1042,7 +1068,7 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes('aria-label="Passkey で dashboard session を更新">Passkey</a>'), true);
   assert.equal(
     body.includes(
-      '/v2/approval/passkey/operator?mode=dashboard&amp;phase=execution&amp;actionType=read&amp;highRiskKind=dashboard_access"'
+      '/v2/approval/passkey/operator?mode=dashboard&amp;phase=execution&amp;actionType=read&amp;highRiskKind=dashboard_access&amp;dashboardReturnPath=%2Fdashboard"'
     ),
     true
   );
@@ -2966,6 +2992,12 @@ test("worker serves dashboard chat-first shell with debug and ops surfaces isola
   assert.equal(body.includes("通知と進捗はこの画面から戻って確認できます"), true);
   assert.equal(body.includes("対象 repo"), true);
   assert.equal(body.includes("Issue / PR 操作が必要になった時だけ"), true);
+  assert.equal(
+    body.includes(
+      '/v2/approval/passkey/operator?mode=dashboard&amp;phase=execution&amp;actionType=read&amp;highRiskKind=dashboard_access&amp;dashboardReturnPath=%2Fdashboard%3Frepository%3Dsample-org%252Fvtdd-v2-p'
+    ),
+    true
+  );
   const initialChat = body.slice(
     body.indexOf('<div class="chat-scroll"'),
     body.indexOf('<form class="composer"')
@@ -6519,6 +6551,36 @@ test("worker serves dashboard passkey operator mode", async () => {
   assert.equal(html.includes('value="marushu/vtdd-v2-p"'), false);
   assert.equal(html.includes("repositoryInput is required before approval/deploy"), true);
   assert.equal(html.includes("const repositoryInput = readApprovalRepositoryInput();"), true);
+});
+
+test("worker serves dashboard passkey operator mode with safe query return path", async () => {
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/v2/approval/passkey/operator?mode=dashboard&dashboardReturnPath=%2Fdashboard%3Frepository%3Dmarushu%252Fvtdd-v2-p%26runId%3Dprivate-run"
+    ),
+    gatewayAuthEnv
+  );
+
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.equal(html.includes('window.location.assign("/dashboard?repository=marushu%2Fvtdd-v2-p")'), true);
+  assert.equal(html.includes("runId=private-run"), false);
+  assert.equal(html.includes("repo / Issue / PR scope は使いません"), true);
+});
+
+test("worker strips overlong dashboard passkey return query values", async () => {
+  const tooLongRepository = encodeURIComponent(`${"a".repeat(257)}/repo`);
+  const response = await worker.fetch(
+    new Request(
+      `https://example.com/v2/approval/passkey/operator?mode=dashboard&dashboardReturnPath=%2Fdashboard%3Frepository%3D${tooLongRepository}`
+    ),
+    gatewayAuthEnv
+  );
+
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.equal(html.includes('window.location.assign("/dashboard")'), true);
+  assert.equal(html.includes("repository="), false);
 });
 
 test("worker keeps explicit non-dashboard operator modes repo-scoped even with dashboard_access conflict", async () => {
