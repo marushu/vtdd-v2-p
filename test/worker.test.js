@@ -1395,17 +1395,17 @@ test("served dashboard inline chat renderer executes decode, link, wrap, and cop
   const markdownLinkContainer = document.createElement("div");
   helpers.renderMessageText(
     markdownLinkContainer,
-    "[Deploy approval を開く](https://vtdd-v2-mvp.polished-tree-da7c.workers.dev/v2/approval/passkey/operator?mode=deploy&repositoryInput=marushu%2Fvtdd-v2-p&phase=execution&issueNumber=575&actionType=deploy_production&highRiskKind=deploy_production)"
+    "[GitHub Actions を開く](https://github.com/example/repo/actions/runs/1234567890)"
   );
   const markdownLinks = markdownLinkContainer.querySelectorAll("a");
   assert.equal(markdownLinks.length, 1);
   assert.equal(markdownLinks[0].className, "chat-link");
-  assert.equal(markdownLinks[0].textContent, "Deploy approval を開く");
+  assert.equal(markdownLinks[0].textContent, "GitHub Actions を開く");
   assert.equal(
     markdownLinks[0].href,
-    "https://vtdd-v2-mvp.polished-tree-da7c.workers.dev/v2/approval/passkey/operator?mode=deploy&repositoryInput=marushu%2Fvtdd-v2-p&phase=execution&issueNumber=575&actionType=deploy_production&highRiskKind=deploy_production"
+    "https://github.com/example/repo/actions/runs/1234567890"
   );
-  assert.equal(markdownLinkContainer.textContent, "Deploy approval を開く");
+  assert.equal(markdownLinkContainer.textContent, "GitHub Actions を開く");
 
   const parenthesizedLinkContainer = document.createElement("div");
   helpers.renderMessageText(parenthesizedLinkContainer, "開いて（https://example.com/path?x=1）");
