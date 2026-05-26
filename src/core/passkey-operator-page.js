@@ -42,7 +42,9 @@ export function renderPasskeyOperatorPage(input = {}) {
   const heroTitle = dashboardMode ? "Dashboard Passkey" : "VTDD Passkey Operator";
   const heroDescription = dashboardMode
     ? "このページは Dashboard Butler を開くための読み取り専用パスキー確認です。Cloudflare Access が使えない時だけ、同一 origin の passkey で dashboard session を更新します。"
-    : "このページは real WebAuthn/passkey approval 用の operator helper です。登録と high-risk approval の両方を same-origin で実行し、最終的に <code>approvalGrantId</code> を取得できます。";
+    : deployOneTapMode
+      ? "このページは production deploy を承認して、そのまま反映を開始するためのパスキー確認です。内部の承認IDや workflow 入力は通常操作では扱いません。"
+      : "このページは real WebAuthn/passkey approval 用の operator helper です。登録と high-risk approval の両方を same-origin で実行し、最終的に <code>approvalGrantId</code> を取得できます。";
   const approvalHeading = deployOneTapMode
     ? "本番反映の承認"
     : dashboardMode
