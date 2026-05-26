@@ -22,6 +22,40 @@ test("surface independence doc defines role/contract/runtime/surface separation"
   );
 });
 
+test("surface independence doc preserves Custom GPT fallback while defining Dashboard Butler path", () => {
+  const doc = fs.readFileSync(DOC_PATH, "utf8");
+  const compact = doc.replace(/\s+/g, " ");
+  assert.equal(doc.includes("Custom GPT Butler remains a supported Butler surface and fallback."), true);
+  assert.equal(compact.includes("Dashboard Butler does not replace it as a fallback"), true);
+  assert.equal(compact.includes("Dashboard Butler should eventually exceed Custom GPT for the VTDD owner workflow."), true);
+  assert.equal(doc.includes("The target is not a weaker homegrown chat UI."), true);
+  assert.equal(compact.includes("more useful than Custom GPT for operating VTDD from iPhone or iPad"), true);
+  assert.equal(doc.includes("Custom GPT Butler\n  -> Action Schema operationId"), true);
+  assert.equal(doc.includes("Dashboard Butler PWA\n  -> Worker / Durable Object dashboard chat room"), true);
+  assert.equal(compact.includes("The two surfaces may share VTDD core actions when the operation is the same"), true);
+  assert.equal(doc.includes("Dashboard-only capabilities are the reason Dashboard Butler exists."), true);
+  assert.equal(doc.includes("iOS/PWA notifications, badges, and notification recovery"), true);
+  assert.equal(doc.includes("Action Schema and Instructions update guidance with owner-facing next steps"), true);
+  assert.equal(doc.includes("owner-facing setup recovery for Custom GPT Action Schema and Instructions"), true);
+  assert.equal(doc.includes("Action Schema operationId exposure"), true);
+  assert.equal(doc.includes("Custom GPT Action Authentication guidance"), true);
+});
+
+test("surface independence doc requires separate surface update reporting", () => {
+  const doc = fs.readFileSync(DOC_PATH, "utf8");
+  const compact = doc.replace(/\s+/g, " ");
+  assert.equal(doc.includes("Custom GPT Action Schema update"), true);
+  assert.equal(doc.includes("Custom GPT Instructions update"), true);
+  assert.equal(doc.includes("Cloudflare deploy update"), true);
+  assert.equal(doc.includes("Dashboard Butler UI/runtime update"), true);
+  assert.equal(doc.includes("iPhone/PWA live E2E evidence"), true);
+  assert.equal(doc.includes("runtimeParity=in_sync"), true);
+  assert.equal(
+    compact.includes("the runtime cannot read the editor's pasted state"),
+    true
+  );
+});
+
 test("surface independence allows supported surfaces when judgment model is unchanged", () => {
   for (const surface of [
     ButlerSurface.CUSTOM_GPT,
