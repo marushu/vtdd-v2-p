@@ -651,7 +651,15 @@ export default {
     if (request.method === "GET" && isDashboardPagePath(url.pathname)) {
       const auth = await authorizeDashboardRequest({ request, env, apiSuffix: url.pathname });
       if (!auth.ok) {
-        return html(auth.status, renderDashboardAuthRequiredPage({ runtimeOrigin: url.origin, reason: auth.reason }));
+        return html(
+          auth.status,
+          renderDashboardAuthRequiredPage({
+            runtimeOrigin: url.origin,
+            returnPath: `${url.pathname}${url.search}`,
+            reason: auth.reason,
+            passkeyFallbackReason: auth.passkeyFallbackReason
+          })
+        );
       }
     }
 
@@ -7218,6 +7226,104 @@ function compactNotificationText(value, limit) {
   return `${text.slice(0, Math.max(0, limit - 1))}…`;
 }
 
+async function encryptDashboardWebPushPayload({ subscription, payload }) {
+  const userPublicBytes = base64UrlToBytes(subscription?.p256dh);
+  const authSecretBytes = base64UrlToBytes(subscription?.auth);
+  if (userPublicBytes.length !== 65 || userPublicBytes[0] !== 4 || authSecretBytes.length < 16) {
+    return {
+      ok: false,
+      status: 422,
+      error: "dashboard_web_push_subscription_keys_invalid",
+      reason: "push subscription p256dh/auth keys are required for encrypted Web Push payloads"
+    };
+  }
+
+  const serverKeyPair = await crypto.subtle.generateKey(
+    { name: "ECDH", namedCurve: "P-256" },
+    true,
+    ["deriveBits"]
+  );
+  const userPublicKey = await crypto.subtle.importKey(
+    "raw",
+    userPublicBytes,
+    { name: "ECDH", namedCurve: "P-256" },
+    false,
+    []
+  );
+  const sharedSecret = new Uint8Array(await crypto.subtle.deriveBits(
+    { name: "ECDH", public: userPublicKey },
+    serverKeyPair.privateKey,
+    256
+  ));
+  const serverPublicBytes = new Uint8Array(await crypto.subtle.exportKey("raw", serverKeyPair.publicKey));
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const keyInfo = concatBytes(
+    new TextEncoder().encode("WebPush: info"),
+    new Uint8Array([0]),
+    userPublicBytes,
+    serverPublicBytes
+  );
+  const prkKey = await hmacSha256(authSecretBytes, sharedSecret);
+  const ikm = (await hmacSha256(prkKey, concatBytes(keyInfo, new Uint8Array([1])))).slice(0, 32);
+  const prk = await hmacSha256(salt, ikm);
+  const contentEncryptionKey = (await hmacSha256(
+    prk,
+    concatBytes(new TextEncoder().encode("Content-Encoding: aes128gcm"), new Uint8Array([0, 1]))
+  )).slice(0, 16);
+  const nonce = (await hmacSha256(
+    prk,
+    concatBytes(new TextEncoder().encode("Content-Encoding: nonce"), new Uint8Array([0, 1]))
+  )).slice(0, 12);
+  const plaintext = concatBytes(
+    new TextEncoder().encode(JSON.stringify(payload)),
+    new Uint8Array([2])
+  );
+  const aesKey = await crypto.subtle.importKey(
+    "raw",
+    contentEncryptionKey,
+    { name: "AES-GCM" },
+    false,
+    ["encrypt"]
+  );
+  const ciphertext = new Uint8Array(await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv: nonce, tagLength: 128 },
+    aesKey,
+    plaintext
+  ));
+  const recordSize = 4096;
+  const header = new Uint8Array(21 + serverPublicBytes.length);
+  header.set(salt, 0);
+  new DataView(header.buffer).setUint32(16, recordSize);
+  header[20] = serverPublicBytes.length;
+  header.set(serverPublicBytes, 21);
+  return {
+    ok: true,
+    body: concatBytes(header, ciphertext)
+  };
+}
+
+async function hmacSha256(keyBytes, dataBytes) {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    keyBytes,
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  return new Uint8Array(await crypto.subtle.sign("HMAC", key, dataBytes));
+}
+
+function concatBytes(...chunks) {
+  const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+  const result = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    result.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return result;
+}
+
 async function sendDashboardWebPush({ env, subscription, payload }) {
   const endpoint = normalizeDashboardUrl(subscription?.endpoint);
   const endpointHash = normalizeDashboardEventText(subscription?.endpointHash) || (endpoint ? await sha256Hex(endpoint) : "");
@@ -7230,14 +7336,22 @@ async function sendDashboardWebPush({ env, subscription, payload }) {
     return { ...vapid, endpointHash };
   }
 
+  const encryptedPayload = await encryptDashboardWebPushPayload({ subscription, payload });
+  if (!encryptedPayload.ok) {
+    return { ...encryptedPayload, endpointHash };
+  }
+
   const fetcher = typeof env?.DASHBOARD_WEB_PUSH_FETCH === "function" ? env.DASHBOARD_WEB_PUSH_FETCH : fetch;
   const response = await fetcher(endpoint, {
     method: "POST",
     headers: {
       authorization: vapid.authorization,
+      "content-encoding": "aes128gcm",
+      "content-type": "application/octet-stream",
       ttl: "300",
       urgency: "normal"
-    }
+    },
+    body: encryptedPayload.body
   });
   const stale = response.status === 404 || response.status === 410;
   return {
@@ -8449,9 +8563,6 @@ async function authorizeDashboardRequest({ request, env, apiSuffix = "/dashboard
   if (passkeyAuth.ok) {
     return passkeyAuth;
   }
-  if (passkeyAuth.blocking) {
-    return passkeyAuth;
-  }
 
   const routeLabel = `dashboard surface ${apiSuffix}`;
   const allowedEmails = parseAuthList(
@@ -8469,6 +8580,14 @@ async function authorizeDashboardRequest({ request, env, apiSuffix = "/dashboard
   const accessJwt = normalizeText(request.headers.get("cf-access-jwt-assertion"));
 
   if (!accessEmail && !accessLogin) {
+    if (passkeyAuth.blocking) {
+      return {
+        ok: false,
+        status: 401,
+        reason: `Cloudflare Access authenticated owner identity is required for ${routeLabel}`,
+        passkeyFallbackReason: passkeyAuth.reason
+      };
+    }
     return {
       ok: false,
       status: 401,
@@ -9605,10 +9724,19 @@ async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventS
     subtitle: "dashboard events",
     backHref: `${origin}/dashboard`,
     body: `
-      <section class="hero">
-        <p>Dashboard Butler の通知入口です。iOS PWA Web Push、OS の通知音、未読 badge はこの画面から許可・確認します。</p>
-        <p class="muted">VTDD だけでなく、他 repo / 並行開発 / queue / workflow から届いたイベントを直近5分だけ表示します。</p>
-      </section>
+      <div class="grid single">
+        <section class="lane">
+          <div class="lane-title"><h2>最新通知</h2><span class="pill">直近5分</span></div>
+          ${recentEvents.length > 0 ? recentEvents.map((event) => renderDashboardNotificationEvent(event)).join("") : `<p class="muted">直近5分の通知はありません。</p>`}
+        </section>
+      </div>
+      <div class="grid single">
+        <details class="lane" data-debug-section="notification-center-context">
+          <summary>通知センターについて</summary>
+          <p>Dashboard Butler の通知入口です。iOS PWA Web Push、OS の通知音、未読 badge はこの画面から許可・確認します。</p>
+          <p class="muted">VTDD だけでなく、他 repo / 並行開発 / queue / workflow から届いたイベントを直近5分だけ表示します。</p>
+        </details>
+      </div>
       <div class="grid">
         <section class="lane">
           <div class="lane-title"><h2>iOS PWA 通知</h2><span class="pill" id="push-support-pill">確認中</span></div>
@@ -9632,18 +9760,15 @@ async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventS
             <button class="dashboard-action" id="badge-clear-button" type="button">Badge を消す</button>
           </div>
         </section>
-        <section class="lane">
+      </div>
+      <div class="grid single">
+        <details class="lane" data-debug-section="notification-authority-boundary">
+          <summary>通知の詳細設定と安全境界</summary>
           <div class="lane-title"><h2>Authority boundary</h2><span class="pill">read/write</span></div>
           <p>push subscription は dashboard owner session から保存します。HTML には endpoint、auth key、p256dh key を埋め込みません。</p>
           <p class="muted">同一 origin の dashboard owner session cookie / Cloudflare Access identity を使うため、購読保存 fetch は credentials: same-origin で送ります。</p>
           <p class="muted">Web Push 送信には server-side VAPID secret と subscription raw material が必要です。D1 には送信用に保持し、response / HTML / payload_json には raw key を返しません。</p>
-        </section>
-      </div>
-      <div class="grid single">
-        <section class="lane">
-          <div class="lane-title"><h2>最新通知</h2><span class="pill">直近5分</span></div>
-          ${recentEvents.length > 0 ? recentEvents.map((event) => renderDashboardNotificationEvent(event)).join("") : `<p class="muted">直近5分の通知はありません。</p>`}
-        </section>
+        </details>
       </div>
       <script>
         (() => {
@@ -10128,16 +10253,54 @@ function uniqueTextList(value) {
   return [...new Set(normalizeTextList(value))];
 }
 
+export function normalizeDashboardChatMessageText(text) {
+  return decodeSafeDashboardChatCommandText(String(text || ""));
+}
+
+export function shouldWrapDashboardChatCodeBlock(text) {
+  const source = String(text || "").trim();
+  if (!source) return false;
+  if (/^https?:\/\//i.test(source)) return true;
+  if (/^go:%[0-9a-f]{2}/i.test(source)) return true;
+  return source.length > 80 && !/\s/.test(source);
+}
+
+function decodeSafeDashboardChatCommandText(text) {
+  const source = String(text || "");
+  return source
+    .split("\n")
+    .map((line) => {
+      if (!/^go:%[0-9a-f]{2}/i.test(line)) {
+        return line;
+      }
+      if (/^https?:/i.test(line)) {
+        return line;
+      }
+      try {
+        return decodeURIComponent(line);
+      } catch {
+        return line;
+      }
+    })
+    .join("\n");
+}
+
 async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore } = {}) {
   const origin = normalize(runtimeOrigin);
   const repositoryInput = normalizeDashboardRepositoryInput(
     url?.searchParams?.get("repositoryInput") || url?.searchParams?.get("repository")
   );
   const dashboardIssueNumber = normalizePositiveInteger(url?.searchParams?.get("issueNumber"));
-  const dashboardTargetLabel = repositoryInput || "repo/nickname 未指定";
+  const dashboardTargetLabel = repositoryInput || "対象 repo 未指定";
+  const targetStatusMarkup = repositoryInput
+    ? `<p><strong>${escapeDashboardHtml(repositoryInput)}</strong></p>
+          <p class="muted">この repo で Issue / PR 操作が必要な時だけ対象にします。通常会話はこのまま続けられます。</p>`
+    : `<p><strong>対象 repo 未指定</strong></p>
+          <p class="muted">通常会話は続けられます。Issue / PR 操作が必要になった時に対象 repo を選びます。</p>`;
   const encodedRepository = encodeURIComponent(repositoryInput);
   const chatThreadId = `dashboard-main-${(repositoryInput || "unresolved").replace(/[^a-z0-9_.-]+/gi, "-")}`;
   const socketOrigin = origin.replace(/^http/i, "ws");
+  const dashboardSignInUrl = `${origin}/v2/approval/passkey/operator?mode=dashboard&repositoryInput=${encodedRepository}&phase=execution&actionType=read&highRiskKind=dashboard_access`;
   const latestDeployEvent = await retrieveLatestDashboardEvent({
     store: dashboardEventStore,
     kind: "github_actions_workflow_run",
@@ -10191,7 +10354,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       href: `${origin}/setup/diagnostics?repository=${encodedRepository}`
     },
     {
-      title: "Deploy passkey operator",
+      title: "Deploy operator",
       body: "production deploy は scope 明示済み passkey approval の後ろ。approval grant や secret は dashboard に保存しない。",
       href: `${origin}/v2/approval/passkey/operator?repositoryInput=${encodedRepository}&phase=execution&actionType=deploy_production&highRiskKind=deploy_production`
     }
@@ -10204,24 +10367,16 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
   ];
   const cockpitActions = [
     {
-      label: "状態確認",
-      href: `${origin}/dashboard/github?repository=${encodedRepository}`
+      label: "通知",
+      href: `${origin}/dashboard/notifications`
     },
     {
       label: "進捗を見る",
       href: `${origin}/dashboard/progress?repository=${encodedRepository}`
     },
     {
-      label: "RAG を読む",
-      href: `${origin}/dashboard/memory?repository=${encodedRepository}`
-    },
-    {
-      label: "通知",
-      href: `${origin}/dashboard/notifications`
-    },
-    {
-      label: "Passkey",
-      href: `${origin}/v2/approval/passkey/operator?repositoryInput=${encodedRepository}`
+      label: "GitHub状況",
+      href: `${origin}/dashboard/github?repository=${encodedRepository}`
     }
   ];
 
@@ -10282,7 +10437,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .round-button, .tool-button, .send-button { display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border); background: var(--button); color: var(--text); text-decoration: none; font: inherit; font-weight: 750; }
     .menu-open { cursor: pointer; }
     .round-button { width: 44px; height: 44px; border-radius: 999px; font-size: 24px; flex: 0 0 auto; }
-    .tool-button { min-height: 40px; border-radius: 999px; padding: 0 14px; }
+    .tool-button { min-height: 40px; border-radius: 999px; padding: 0 14px; white-space: nowrap; }
+    .top-action { min-width: 74px; }
     .thread-title { min-width: 0; }
     .thread-title h1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .thread-title span { display: block; color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -10293,13 +10449,16 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .bubble strong { display: block; color: var(--muted); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 8px; }
     .bubble-header strong { margin-bottom: 0; }
     .bubble p { color: var(--text); margin-bottom: 12px; }
-    .bubble .message-body { display: grid; gap: 12px; }
-    .bubble .message-body p { margin: 0; white-space: pre-wrap; }
+    .bubble .message-body { display: grid; gap: 12px; min-width: 0; }
+    .bubble .message-body p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
     .bubble .message-body ul { margin: 0; }
     .bubble .message-body li + li { margin-top: 4px; }
+    .bubble .message-body a, .bubble .message-body code { overflow-wrap: anywhere; word-break: break-word; }
     .bubble .message-body code { font-size: .94em; }
-    .bubble .message-body pre { position: relative; margin: 0; padding: 42px 14px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--panel-strong); overflow-x: auto; white-space: pre; }
+    .bubble .message-body pre { position: relative; margin: 0; padding: 42px 14px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--panel-strong); overflow-x: auto; white-space: pre; max-width: 100%; }
+    .bubble .message-body pre.wrap-code { overflow-x: visible; white-space: pre-wrap; }
     .bubble .message-body pre code { display: block; font-size: 14px; line-height: 1.55; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+    .bubble .message-body pre.wrap-code code { white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
     .bubble .message-body strong { display: inline; color: inherit; font-size: inherit; letter-spacing: 0; text-transform: none; margin: 0; font-weight: 800; }
     .message-meta { margin-top: 6px; color: var(--muted); font-size: 11px; line-height: 1.2; opacity: .86; }
     .bubble.owner .message-meta { color: var(--owner-text); opacity: .76; text-align: right; }
@@ -10316,7 +10475,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .thinking-dots::after { content: ""; display: inline-block; width: 1.4em; text-align: left; animation: thinkingDots 1.2s steps(4, end) infinite; }
     @keyframes thinkingDots { 0% { content: ""; } 25% { content: "."; } 50% { content: ".."; } 75%, 100% { content: "..."; } }
     .connection-note { display: inline-flex; align-items: center; width: fit-content; border: 1px solid var(--border); border-radius: 999px; padding: 5px 10px; color: var(--muted); font-size: 13px; }
-    .chat-link { color: var(--text); text-decoration-thickness: 1px; text-underline-offset: 4px; font-weight: 750; }
+    .chat-link { color: var(--text); text-decoration-thickness: 1px; text-underline-offset: 4px; font-weight: 750; overflow-wrap: anywhere; word-break: break-word; }
     .composer { min-width: 0; display: grid; gap: 8px; z-index: 4; padding: 14px 0 max(16px, env(safe-area-inset-bottom)); background: var(--page-bg); }
     .composer-box { display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; align-items: end; gap: 8px; min-height: 62px; padding: 8px; border: 1px solid var(--border); border-radius: 28px; background: var(--panel-strong); box-shadow: 0 16px 60px var(--shadow); }
     textarea { width: 100%; min-height: 44px; max-height: max(88px, min(160px, 24dvh)); border: 0; outline: 0; resize: none; overflow-y: hidden; padding: 10px 2px; color: var(--text); background: transparent; font: inherit; line-height: 1.45; }
@@ -10331,6 +10490,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .media-chip.pending-preview { padding: 5px 8px 5px 5px; }
     .media-remove { border: 0; background: transparent; color: var(--muted); font: inherit; font-weight: 900; padding: 0 2px; cursor: pointer; }
     .composer-status { min-height: 18px; padding-left: 16px; color: var(--muted); font-size: 12px; }
+    .composer-status a { color: var(--text); font-weight: 800; text-underline-offset: 3px; }
     .composer-status.thinking::after { content: ""; display: inline-block; width: 1.4em; text-align: left; animation: thinkingDots 1.2s steps(4, end) infinite; }
     .sidebar { position: sticky; top: 16px; align-self: start; max-height: calc(100dvh - 32px); overflow: auto; border: 1px solid var(--border); border-radius: 18px; background: var(--panel); }
     .sidebar > summary { display: flex; justify-content: space-between; align-items: center; gap: 10px; min-height: 58px; padding: 14px; list-style: none; }
@@ -10378,7 +10538,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       .app-shell { height: calc(100dvh - 12px); }
       .composer-box { grid-template-columns: 40px minmax(0, 1fr) 40px; border-radius: 24px; }
       .round-button { width: 40px; height: 40px; }
-      .tool-button { min-height: 38px; padding: 0 12px; }
+      .tool-button { min-height: 38px; padding: 0 10px; font-size: 13px; }
+      .top-action { min-width: 64px; }
       .media-button, .send-button { width: 40px; height: 40px; }
     }
   </style>
@@ -10396,8 +10557,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           </div>
         </div>
         <div class="top-right">
-          <label class="tool-button menu-open" for="mobile-menu-toggle">管理</label>
-          <a class="round-button" href="${escapeDashboardHtml(origin)}/v2/approval/passkey/operator?repositoryInput=${encodedRepository}" aria-label="Passkey">◇</a>
+          <a class="tool-button top-action" href="${escapeDashboardHtml(origin)}/dashboard/notifications" aria-label="通知センター">通知</a>
+          <a class="tool-button top-action" href="${escapeDashboardHtml(origin)}/dashboard/progress?repository=${encodedRepository}" aria-label="進捗を見る">進捗</a>
         </div>
       </header>
 
@@ -10411,17 +10572,21 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           <label class="round-button menu-open" for="mobile-menu-toggle" aria-label="管理メニューを閉じる">×</label>
         </div>
         <div class="mobile-drawer-content">
-          <p class="menu-callout">状態確認、進捗、RAG、workflow はここから開きます。通知ではなく、現在は dashboard 内の状態表示です。</p>
+          <p class="menu-callout">通知、進捗、対象 repo の確認はここから開きます。開発/運用の詳細は下に隔離しています。</p>
           <div class="lane">
-            <div class="lane-title"><h3>進行中 execution</h3><span class="pill">runtime truth</span></div>
-            <p>GitHub Actions / VPS runner status / execution progress route から読みます。</p>
+            <div class="lane-title"><h3>対象 repo</h3><span class="pill">${repositoryInput ? "resolved" : "未指定"}</span></div>
+            ${targetStatusMarkup}
+          </div>
+          <div class="lane">
+            <div class="lane-title"><h3>進行中</h3><span class="pill">状態</span></div>
+            <p>直近の反映、失敗、進行中の作業があればここに出します。</p>
             ${renderDashboardDeployEvent(latestDeployEvent)}
           </div>
           <div class="quick-actions">
             ${cockpitActions.map((action) => `<a href="${escapeDashboardHtml(action.href)}">${escapeDashboardHtml(action.label)}</a>`).join("")}
           </div>
-          <details open>
-            <summary>Runtime surfaces</summary>
+          <details data-debug-section="dashboard-development-operations">
+            <summary>開発/運用</summary>
             <div class="surface-list">
               ${surfaces.map((surface) => `<a href="${escapeDashboardHtml(surface.href)}">${escapeDashboardHtml(surface.title)}</a>`).join("")}
             </div>
@@ -10441,11 +10606,11 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         </article>
         <article class="bubble">
           <strong>Butler</strong>
-          <p>はい。私は v2 の Butler として、Issue 駆動・GitHub runtime truth・VPS runner・Gemini reviewer・RAG・passkey 境界を扱います。</p>
-          <p>この画面は会話を主役にするための chat-first runtime です。管理画面は右のサイドバーへ退避しました。</p>
+          <p>はい。ここではまず普通に会話できます。通知、進捗、対象 repo の確認は必要な時だけ開けます。</p>
+          <p>作業を進める時は、対象 repo や Issue を会話の中で確認してから進めます。</p>
           <ul>
-            <li>関連 repo/nickname: <code>${escapeDashboardHtml(dashboardTargetLabel)}</code></li>
-            <li>会話: Dashboard Butler は app-server bridge 経路を使います。旧 VPS runner 直送経路は使いません</li>
+            <li>対象: <code>${escapeDashboardHtml(dashboardTargetLabel)}</code></li>
+            <li>通知と進捗はこの画面から戻って確認できます。</li>
           </ul>
         </article>
         <article class="bubble owner">
@@ -10453,14 +10618,14 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         </article>
         <article class="bubble">
           <strong>Butler</strong>
-          <p>その方針で進めます。中央はチャットだけ、状態確認・進捗・RAG・workflow・prototype cleanup の扱いはサイドバーのメニューから必要な時だけ開きます。</p>
-          <p>この dashboard から VPS Codex CLI を <code>codex exec</code> で毎回起動する旧経路は削除しました。Dashboard Butler は <code>codex app-server</code> bridge が常駐している時だけ live Codex thread に渡します。</p>
-          <span class="connection-note">Dashboard thread 接続準備中: bridge が未接続なら Custom GPT Butler が fallback です</span>
+          <p>その方針で進めます。中央はチャットを主役にして、細かい設定や開発/運用の確認はメニューの中に分けます。</p>
+          <p>接続できない時も、入力内容を失わないように状態を短く表示します。</p>
+          <span class="connection-note">接続準備中: 送信できる状態になったらここで知らせます</span>
         </article>
 
       </div>
 
-      <form class="composer" id="butler-chat-form" aria-label="Butler composer" autocomplete="off" data-socket-endpoint="${escapeDashboardHtml(socketOrigin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}/ws" data-thread-endpoint="${escapeDashboardHtml(origin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}" data-thread-id="${escapeDashboardHtml(chatThreadId)}" data-repository-input="${escapeDashboardHtml(repositoryInput)}" data-issue-number="${dashboardIssueNumber || ""}">
+      <form class="composer" id="butler-chat-form" aria-label="Butler composer" autocomplete="off" data-socket-endpoint="${escapeDashboardHtml(socketOrigin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}/ws" data-thread-endpoint="${escapeDashboardHtml(origin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}" data-message-endpoint="${escapeDashboardHtml(origin)}/v2/dashboard/chat/messages" data-thread-id="${escapeDashboardHtml(chatThreadId)}" data-repository-input="${escapeDashboardHtml(repositoryInput)}" data-issue-number="${dashboardIssueNumber || ""}">
         <div class="pending-media" id="butler-pending-media" aria-live="polite"></div>
         <div class="composer-box">
           <button class="media-button" id="butler-media-button" type="button" aria-label="画像やファイルを追加" title="画像やファイルを追加">+</button>
@@ -10475,49 +10640,48 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     <details id="tools" class="sidebar" aria-label="管理サイドバーメニュー">
       <summary>
         <span>
-          <span class="eyebrow">管理メニュー</span>
+          <span class="eyebrow">メニュー</span>
           <strong>必要な時だけ開く</strong>
         </span>
         <span class="pill">WebSocket</span>
       </summary>
       <div class="sidebar-content">
-        <p class="menu-callout">状態確認、進捗、RAG、workflow はここから遷移します。普段の画面はチャットを主役にします。</p>
+        <p class="menu-callout">通知、進捗、対象 repo の確認を優先します。開発/運用の詳細は下に隔離しています。</p>
 
         <div class="lane">
-          <div class="lane-title"><h3>関連 repo</h3><span class="pill">resolved</span></div>
-          <p><strong>${escapeDashboardHtml(dashboardTargetLabel)}</strong></p>
-          <p class="muted">nickname / startup preflight / GitHub runtime truth は既存 v2 route で確認します。</p>
+          <div class="lane-title"><h3>対象 repo</h3><span class="pill">${repositoryInput ? "resolved" : "未指定"}</span></div>
+          ${targetStatusMarkup}
         </div>
 
         <div class="lane">
           <div class="lane-title"><h3>Issue 候補</h3><span class="pill">draft</span></div>
-          <p>Dashboard Butler の自然文入口は <code>codex app-server</code> 用に作り直します。旧 VPS runner 直送では通常会話を処理しません。</p>
+          <p>Issue / PR 操作が必要になった時だけ、会話の中で対象と範囲を確認します。</p>
         </div>
 
         <div class="lane">
-          <div class="lane-title"><h3>進行中 execution</h3><span class="pill">runtime truth</span></div>
-          <p>進捗は GitHub Actions / VPS runner status / execution progress route から読みます。</p>
+          <div class="lane-title"><h3>進行中</h3><span class="pill">状態</span></div>
+          <p>直近の反映、失敗、進行中の作業があればここに出します。</p>
           ${renderDashboardDeployEvent(latestDeployEvent)}
           <div class="quick-actions">
             ${cockpitActions.map((action) => `<a href="${escapeDashboardHtml(action.href)}">${escapeDashboardHtml(action.label)}</a>`).join("")}
           </div>
         </div>
 
-        <details>
-          <summary>Runtime surfaces</summary>
+        <details data-debug-section="dashboard-development-operations">
+          <summary>開発/運用</summary>
           <div class="surface-list">
             ${surfaces.map((surface) => `<a href="${escapeDashboardHtml(surface.href)}">${escapeDashboardHtml(surface.title)}</a>`).join("")}
           </div>
         </details>
 
-        <details>
+        <details data-debug-section="dashboard-workflows">
           <summary>GitHub workflows</summary>
           <div class="surface-list">
             ${workflows.map(([title, href]) => `<a href="${escapeDashboardHtml(href)}">${escapeDashboardHtml(title)}</a>`).join("")}
           </div>
         </details>
 
-        <details>
+        <details data-debug-section="dashboard-prototype-cleanup">
           <summary>Prototype cleanup</summary>
           <p>v3 Worker prototype の削除や移行は destructive operation 扱いです。必要になった時だけ、対象 runtime と scope を明示した passkey approval で扱います。</p>
         </details>
@@ -10537,7 +10701,9 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 
       const socketEndpoint = form.dataset.socketEndpoint;
       const threadEndpoint = form.dataset.threadEndpoint;
+      const messageEndpoint = form.dataset.messageEndpoint;
       const mediaUploadEndpoint = "/v2/media/upload";
+      const dashboardSignInUrl = ${JSON.stringify(dashboardSignInUrl)};
       const threadId = form.dataset.threadId;
       const repositoryInput = form.dataset.repositoryInput;
       const issueNumber = Number.parseInt(form.dataset.issueNumber || "", 10);
@@ -10546,6 +10712,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       let reconnectTimer = null;
       let reconnectAttempt = 0;
       let refreshingThread = false;
+      let lastRefreshFailure = "";
       let pendingMediaItems = [];
       const pendingSendRollbacks = new Map();
       const messagesById = new Map();
@@ -10574,12 +10741,20 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       }
 
       function setStatus(text, options = {}) {
-        status.textContent = text;
+        status.replaceChildren(document.createTextNode(text));
+        if (options.actionHref && options.actionLabel) {
+          status.appendChild(document.createTextNode(" "));
+          const action = document.createElement("a");
+          action.href = options.actionHref;
+          action.textContent = options.actionLabel;
+          action.rel = "noreferrer";
+          status.appendChild(action);
+        }
         status.classList.toggle("thinking", options.thinking === true);
         if (options.temporary === true) {
           const expected = text;
           window.setTimeout(() => {
-            if (status.textContent === expected) {
+            if (status.textContent.trim() === expected) {
               setStatus("Dashboard thread 接続済み。");
             }
           }, 2400);
@@ -10589,6 +10764,50 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       function setComposerLocked(locked) {
         textarea.readOnly = locked === true;
         if (mediaButton) mediaButton.disabled = locked === true;
+      }
+
+      function isChatSocketOpen() {
+        return Boolean(chatSocket && chatSocket.readyState === WebSocket.OPEN);
+      }
+
+      function describeChatSocketState() {
+        if (!chatSocket) return "未接続";
+        if (chatSocket.readyState === WebSocket.CONNECTING) return "接続中";
+        if (chatSocket.readyState === WebSocket.OPEN) return "接続済み";
+        if (chatSocket.readyState === WebSocket.CLOSING) return "切断処理中";
+        if (chatSocket.readyState === WebSocket.CLOSED) return "切断済み";
+        return "不明";
+      }
+
+      function buildReconnectStatus(prefix) {
+        const attempt = Math.max(1, reconnectAttempt + 1);
+        const refreshPart = lastRefreshFailure ? " 最後の履歴取得: " + lastRefreshFailure + "。" : "";
+        return prefix + " 再接続 " + attempt + "回目 / WebSocket: " + describeChatSocketState() + "。" + refreshPart;
+      }
+
+      function dropStaleSocketIfNeeded() {
+        if (!chatSocket) return;
+        if (chatSocket.readyState === WebSocket.CLOSING || chatSocket.readyState === WebSocket.CLOSED) {
+          try {
+            chatSocket.close();
+          } catch {}
+          chatSocket = null;
+        }
+      }
+
+      function isAuthExpiredResponse(response, body = {}) {
+        return (
+          response &&
+          (response.status === 401 || response.status === 403) &&
+          (body.error === "dashboard_auth_required" || String(body.reason || "").includes("passkey session"))
+        );
+      }
+
+      function setDashboardSessionExpiredStatus() {
+        setStatus("Dashboard のログインが切れています。入力は残したまま再ログインしてください。", {
+          actionHref: dashboardSignInUrl,
+          actionLabel: "Passkey で再ログイン"
+        });
       }
 
       function releasePendingOwnerSend(clientMessageId, options = {}) {
@@ -10628,7 +10847,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           copyButton.textContent = "⧉";
           copyButton.setAttribute("aria-label", "自分の発言をコピー");
           copyButton.title = "自分の発言をコピー";
-          copyButton.addEventListener("click", () => copyMessageText(copyButton, message.text || ""));
+          copyButton.addEventListener("click", () => copyMessageText(copyButton, normalizeMessageCopyText(message.text || "")));
           article.appendChild(copyButton);
         } else if (message.role === "butler") {
           const header = document.createElement("div");
@@ -10642,7 +10861,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           copyButton.textContent = "⧉";
           copyButton.setAttribute("aria-label", "返信をコピー");
           copyButton.title = "返信をコピー";
-          copyButton.addEventListener("click", () => copyMessageText(copyButton, message.text || ""));
+          copyButton.addEventListener("click", () => copyMessageText(copyButton, normalizeMessageCopyText(message.text || "")));
           header.appendChild(copyButton);
           article.appendChild(header);
         } else if (message.role === "system") {
@@ -10655,7 +10874,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         }
         const body = document.createElement("div");
         body.className = "message-body";
-        renderMessageText(body, message.text || "（空のメッセージ）");
+        renderMessageText(body, normalizeMessageDisplayText(message.text || "（空のメッセージ）"));
         article.appendChild(body);
         const media = renderMediaReferences(message.mediaReferences || message.media_references || []);
         if (media) {
@@ -10783,6 +11002,42 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         updateComposerReserve();
       }
 
+      function normalizeMessageDisplayText(text) {
+        return decodeSafeChatCommandText(String(text || ""));
+      }
+
+      function normalizeMessageCopyText(text) {
+        return decodeSafeChatCommandText(String(text || ""));
+      }
+
+      function decodeSafeChatCommandText(text) {
+        const source = String(text || "");
+        return source
+          .split("\\n")
+          .map((line) => {
+            if (!/^go:%[0-9a-f]{2}/i.test(line)) {
+              return line;
+            }
+            if (/^https?:/i.test(line)) {
+              return line;
+            }
+            try {
+              return decodeURIComponent(line);
+            } catch {
+              return line;
+            }
+          })
+          .join("\\n");
+      }
+
+      function shouldWrapCodeBlock(text) {
+        const source = String(text || "").trim();
+        if (!source) return false;
+        if (/^https?:\\/\\//i.test(source)) return true;
+        if (/^go:%[0-9a-f]{2}/i.test(source)) return true;
+        return source.length > 80 && !/\\s/.test(source);
+      }
+
       function renderMessageText(container, text) {
         const source = String(text || "");
         const lines = source.replace(/\\r\\n/g, "\\n").split("\\n");
@@ -10806,6 +11061,9 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             }
             const pre = document.createElement("pre");
             const codeText = codeLines.join("\\n");
+            if (shouldWrapCodeBlock(codeText)) {
+              pre.className = "wrap-code";
+            }
             const copyButton = document.createElement("button");
             copyButton.className = "copy-code";
             copyButton.type = "button";
@@ -11049,31 +11307,43 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       }
 
       async function refreshThread() {
-        if (!threadEndpoint || refreshingThread) return;
+        if (!threadEndpoint || refreshingThread) return { ok: false, skipped: true };
         refreshingThread = true;
         try {
           const response = await fetch(threadEndpoint, {
             headers: { "accept": "application/json" },
             credentials: "same-origin"
           });
+          const body = await response.json().catch(() => ({}));
           if (!response.ok) {
-            setStatus("履歴の再取得に失敗しました。WebSocket を再接続しています。");
-            return;
+            if (isAuthExpiredResponse(response, body)) {
+              lastRefreshFailure = "再ログインが必要";
+              setDashboardSessionExpiredStatus();
+              return { ok: false, authExpired: true };
+            }
+            lastRefreshFailure = "HTTP " + response.status;
+            setStatus(buildReconnectStatus("履歴の再取得に失敗しました。入力は保持しています。"));
+            return { ok: false, status: response.status };
           }
-          const body = await response.json();
           if (body && body.ok) {
+            lastRefreshFailure = "";
             renderThread(body.messages || [], { replace: true });
+            return { ok: true };
           }
         } catch {
-          setStatus("履歴の再取得に失敗しました。WebSocket を再接続しています。");
+          lastRefreshFailure = "ネットワーク";
+          setStatus(buildReconnectStatus("履歴の再取得に失敗しました。入力は保持しています。"));
+          return { ok: false, network: true };
         } finally {
           refreshingThread = false;
         }
+        return { ok: false };
       }
 
       function scheduleReconnect() {
         if (reconnectTimer || !socketEndpoint || typeof WebSocket !== "function") return;
         const delay = Math.min(10000, 1000 * Math.pow(2, reconnectAttempt));
+        setStatus(buildReconnectStatus("WebSocket を再接続します。入力は保持しています。"));
         reconnectAttempt += 1;
         reconnectTimer = window.setTimeout(() => {
           reconnectTimer = null;
@@ -11086,12 +11356,14 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           setStatus("WebSocket を開始できません。dashboard Butler は送信できません。");
           return;
         }
+        dropStaleSocketIfNeeded();
         if (chatSocket && (chatSocket.readyState === WebSocket.OPEN || chatSocket.readyState === WebSocket.CONNECTING)) {
           return;
         }
         chatSocket = new WebSocket(socketEndpoint);
         chatSocket.addEventListener("open", () => {
           reconnectAttempt = 0;
+          lastRefreshFailure = "";
           if (reconnectTimer) {
             window.clearTimeout(reconnectTimer);
             reconnectTimer = null;
@@ -11140,8 +11412,9 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             releasePendingOwnerSend(pendingOwnerSend.clientMessageId, { clearComposer: false, keepRollbackTimer: true });
             setStatus("送信確認前に WebSocket が切れました。入力は残しています。履歴再取得後にもう一度送信できます。");
           } else {
-            setStatus("WebSocket が切れました。履歴を再取得して再接続します。");
+            setStatus(buildReconnectStatus("WebSocket が切れました。履歴を再取得して再接続します。"));
           }
+          dropStaleSocketIfNeeded();
           refreshThread();
           scheduleReconnect();
         });
@@ -11150,11 +11423,42 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             releasePendingOwnerSend(pendingOwnerSend.clientMessageId, { clearComposer: false, keepRollbackTimer: true });
             setStatus("送信確認前に WebSocket 接続が失敗しました。入力は残しています。再接続後にもう一度送信できます。");
           } else {
-            setStatus("WebSocket 接続に失敗しました。履歴を再取得して再接続します。");
+            setStatus(buildReconnectStatus("WebSocket 接続に失敗しました。履歴を再取得して再接続します。"));
           }
+          dropStaleSocketIfNeeded();
           refreshThread();
           scheduleReconnect();
         });
+      }
+
+      async function sendOwnerMessageByHttp(payload, clientMessageId) {
+        if (!messageEndpoint) {
+          throw new Error("HTTP fallback endpoint is not configured");
+        }
+        const response = await fetch(messageEndpoint, {
+          method: "POST",
+          headers: {
+            "accept": "application/json",
+            "content-type": "application/json"
+          },
+          credentials: "same-origin",
+          body: JSON.stringify(payload)
+        });
+        const body = await response.json().catch(() => ({}));
+        if (isAuthExpiredResponse(response, body)) {
+          const error = new Error("dashboard session expired");
+          error.authExpired = true;
+          throw error;
+        }
+        if (!response.ok || !body.ok) {
+          throw new Error(body.reason || "dashboard chat fallback failed");
+        }
+        pendingSendRollbacks.delete(clientMessageId);
+        releasePendingOwnerSend(clientMessageId, { clearComposer: true });
+        renderThread(body.messages || [], { replace: false });
+        lastRefreshFailure = "";
+        setStatus("WebSocket 未接続のため HTTP fallback で保存しました。再接続を続けています。", { temporary: true });
+        scheduleReconnect();
       }
 
       form.addEventListener("submit", async (event) => {
@@ -11165,16 +11469,15 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           return;
         }
         const submitButton = form.querySelector("button[type='submit']");
-        if (!chatSocket || chatSocket.readyState !== WebSocket.OPEN) {
-          setStatus("WebSocket 再接続中です。履歴を再取得しています。接続後にもう一度送信してください。");
-          await refreshThread();
-          scheduleReconnect();
-          textarea.focus({ preventScroll: true });
-          return;
-        }
         if (submitButton) submitButton.disabled = true;
         setComposerLocked(true);
-        setStatus(pendingMediaItems.length > 0 ? "添付を保存してから送信しています" : "送信中です", { thinking: true });
+        const willUseHttpFallback = !isChatSocketOpen();
+        if (willUseHttpFallback) {
+          setStatus("WebSocket 再接続中です。入力は保持したまま HTTP fallback で保存します。", { thinking: true });
+          scheduleReconnect();
+        } else {
+          setStatus(pendingMediaItems.length > 0 ? "添付を保存してから送信しています" : "送信中です", { thinking: true });
+        }
         let mediaReferences = [];
         const clientMessageId = retryClientMessageId || createClientMessageId();
         try {
@@ -11201,17 +11504,34 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             setStatus("送信確認が返りませんでした。入力は残しています。再接続後にもう一度送信してください。");
           }, 30000)
         };
+        const ownerPayload = {
+          type: "owner_message",
+          threadId,
+          clientMessageId,
+          repositoryInput,
+          text,
+          issueNumber,
+          relatedIssue: issueNumber,
+          mediaReferences
+        };
+        if (!isChatSocketOpen()) {
+          try {
+            await sendOwnerMessageByHttp(ownerPayload, clientMessageId);
+          } catch (error) {
+            pendingSendRollbacks.delete(clientMessageId);
+            releasePendingOwnerSend(clientMessageId, { clearComposer: false });
+            if (error && error.authExpired) {
+              setDashboardSessionExpiredStatus();
+            } else {
+              setStatus((error && error.message) || "WebSocket と HTTP fallback の両方で送信できませんでした。入力は残しています。");
+            }
+            textarea.focus({ preventScroll: true });
+          }
+          updateComposerReserve();
+          return;
+        }
         try {
-          chatSocket.send(JSON.stringify({
-            type: "owner_message",
-            threadId,
-            clientMessageId,
-            repositoryInput,
-            text,
-            issueNumber,
-            relatedIssue: issueNumber,
-            mediaReferences
-          }));
+          chatSocket.send(JSON.stringify(ownerPayload));
         } catch (error) {
           pendingSendRollbacks.delete(clientMessageId);
           releasePendingOwnerSend(clientMessageId, { clearComposer: false });
@@ -11268,13 +11588,15 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       textarea.addEventListener("input", resizeComposerInput);
       window.addEventListener("resize", resizeComposerInput);
       window.addEventListener("online", () => {
-        setStatus("ネットワーク復帰を検知しました。履歴を再取得して再接続します。");
+        setStatus(buildReconnectStatus("ネットワーク復帰を検知しました。履歴を再取得して再接続します。"));
+        dropStaleSocketIfNeeded();
         refreshThread();
         scheduleReconnect();
       });
       document.addEventListener("visibilitychange", () => {
         if (document.visibilityState === "visible" && (!chatSocket || chatSocket.readyState !== WebSocket.OPEN)) {
-          setStatus("画面復帰を検知しました。履歴を再取得して再接続します。");
+          setStatus(buildReconnectStatus("画面復帰を検知しました。履歴を再取得して再接続します。"));
+          dropStaleSocketIfNeeded();
           refreshThread();
           scheduleReconnect();
         }
@@ -11286,8 +11608,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 </html>`;
 }
 
-function renderDashboardAuthRequiredPage({ runtimeOrigin, reason } = {}) {
+function renderDashboardAuthRequiredPage({ runtimeOrigin, returnPath = "/dashboard", reason, passkeyFallbackReason } = {}) {
   const origin = normalizeText(runtimeOrigin);
+  const dashboardAccessReturnPath = sanitizeDashboardPreAuthReturnPath(returnPath);
+  const dashboardAccessHref = buildCloudflareAccessLoginHref({ origin, returnPath: dashboardAccessReturnPath });
   const dashboardSignInUrl = `${origin || ""}/v2/approval/passkey/operator?mode=dashboard&repositoryInput=marushu%2Fvtdd-v2-p&phase=execution&actionType=read&highRiskKind=dashboard_access`;
   return `<!doctype html>
 <html lang="ja">
@@ -11303,6 +11627,11 @@ function renderDashboardAuthRequiredPage({ runtimeOrigin, reason } = {}) {
     h1 { margin: 0 0 12px; font-size: 30px; }
     p { line-height: 1.7; color: #4d5c56; }
     a { color: #176b4d; font-weight: 750; }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0; }
+    .button { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; border: 1px solid #b9cabe; border-radius: 7px; padding: 9px 12px; color: #0f513b; text-decoration: none; background: #f8fbf8; }
+    .primary { background: #247a5b; color: #fff; border-color: #247a5b; }
+    details { margin-top: 16px; border-top: 1px solid #e2e9e4; padding-top: 14px; }
+    summary { cursor: pointer; font-weight: 800; color: #24342e; }
     code { color: #5f6c66; }
   </style>
 </head>
@@ -11310,14 +11639,46 @@ function renderDashboardAuthRequiredPage({ runtimeOrigin, reason } = {}) {
   <main>
     <section class="panel">
       <h1>Dashboard auth required</h1>
-      <p>この dashboard は owner-facing surface です。対象の GitHub / Cloudflare Access identity で認証されたユーザー、または machine-authenticated service だけが利用できます。</p>
+      <p>この dashboard は owner-facing surface です。通常閲覧、通知確認、通常チャットは Cloudflare Access の owner identity で開きます。通知をタップしただけでは、未認証の相手に通知詳細や Dashboard 内容は返しません。</p>
       <p><code>${escapeDashboardHtml(reason || "dashboard authentication required")}</code></p>
-      <p><a href="${escapeDashboardHtml(dashboardSignInUrl)}">Passkey で dashboard に入る</a></p>
-      <p><a href="${escapeDashboardHtml(origin || "/status")}/status">Status</a></p>
+      <div class="actions">
+        <a class="button primary" href="${escapeDashboardHtml(dashboardAccessHref)}">Cloudflare Access で開く</a>
+        <a class="button" href="${escapeDashboardHtml(`${origin || ""}/status`)}">Status</a>
+      </div>
+      <details>
+        <summary>Passkey fallback</summary>
+        <p>passkey dashboard session は Cloudflare Access が使えない時の補助導線です。deploy、merge、secret sync などの高リスク操作は引き続き scope 明示済み real passkey approval が必要です。</p>
+        ${passkeyFallbackReason ? `<p><code>${escapeDashboardHtml(passkeyFallbackReason)}</code></p>` : ""}
+        <p><a href="${escapeDashboardHtml(dashboardSignInUrl)}">Passkey fallback を開く</a></p>
+      </details>
     </section>
   </main>
 </body>
 </html>`;
+}
+
+function buildCloudflareAccessLoginHref({ origin, returnPath = "/dashboard" } = {}) {
+  const normalizedOrigin = normalizeText(origin);
+  const sanitizedReturnPath = sanitizeDashboardPreAuthReturnPath(returnPath);
+  const redirectUrl = normalizedOrigin ? `${normalizedOrigin}${sanitizedReturnPath}` : sanitizedReturnPath;
+  return `${normalizedOrigin || ""}/cdn-cgi/access/login?redirect_url=${encodeURIComponent(redirectUrl)}`;
+}
+
+function sanitizeDashboardPreAuthReturnPath(value) {
+  const normalized = normalizeText(value) || "/dashboard";
+  let parsed;
+  try {
+    parsed = new URL(normalized, "https://dashboard.local");
+  } catch {
+    return "/dashboard";
+  }
+  if (parsed.origin !== "https://dashboard.local") {
+    return "/dashboard";
+  }
+  if (parsed.pathname !== "/dashboard" && !parsed.pathname.startsWith("/dashboard/")) {
+    return "/dashboard";
+  }
+  return parsed.pathname;
 }
 
 function renderV2StatusPage({ runtimeOrigin, autonomyMode }) {

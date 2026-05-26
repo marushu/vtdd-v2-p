@@ -27245,6 +27245,7 @@ function normalize(value) {
 // src/core/passkey-operator-page.js
 function renderPasskeyOperatorPage(input = {}) {
   const operatorMode = resolvePasskeyOperatorMode(input);
+  const deployOneTapMode = operatorMode === "deploy";
   const passkeyEnabled = input.passkeyEnabled !== false;
   const sectionVisibility = resolveSectionVisibility(operatorMode, { passkeyEnabled });
   const origin = escapeHtml(input.origin || "");
@@ -27265,6 +27266,14 @@ function renderPasskeyOperatorPage(input = {}) {
   const syncMessage = escapeHtml(
     input.syncMessage || (syncEnabled ? "approvalGrantId \u304C\u53D6\u5F97\u6E08\u307F\u306A\u3089\u5B9F\u884C\u3067\u304D\u307E\u3059\u3002desktop helper bridge \u306B\u63A5\u7D9A\u3057\u307E\u3059\u3002" : "desktop maintenance required: local secret sync bridge \u304C\u672A\u63A5\u7D9A\u3067\u3059\u3002")
   );
+  const approvalSectionAttributes = deployOneTapMode ? ' data-owner-flow="one-tap-deploy"' : "";
+  const approveButtonLabel = deployOneTapMode ? "\u30D1\u30B9\u30AD\u30FC" : "Approve high-risk action";
+  const deployScopeSummary = renderDeployScopeSummary({
+    repositoryInput: repoDefault,
+    issueNumber: issueDefault,
+    actionType: actionTypeDefault,
+    highRiskKind: highRiskKindDefault
+  });
   return `<!doctype html>
 <html lang="ja">
   <head>
@@ -27427,9 +27436,22 @@ function renderPasskeyOperatorPage(input = {}) {
           <pre id="register-output"></pre>
         </section>
 
-        <section data-operator-section="approval"${hiddenAttribute(!sectionVisibility.approval)}>
-          <h2>2. High-risk Approval</h2>
-          <label for="repo-input">Repository</label>
+        <section data-operator-section="approval"${approvalSectionAttributes}${hiddenAttribute(!sectionVisibility.approval)}>
+          <h2>${deployOneTapMode ? "\u672C\u756A\u53CD\u6620\u306E\u627F\u8A8D" : "2. High-risk Approval"}</h2>
+          ${deployOneTapMode ? `<p>production deploy \u3092\u627F\u8A8D\u3057\u3066\u3001\u305D\u306E\u307E\u307E\u53CD\u6620\u3092\u958B\u59CB\u3057\u307E\u3059\u3002</p>
+          <p class="muted">${deployScopeSummary}</p>
+          <div class="approval-internal" hidden>
+            <label for="repo-input">Repository</label>
+            <input id="repo-input" value="${repoDefault}" placeholder="marushu/vtdd-v2-p" />
+            <label for="issue-input">Issue Number</label>
+            <input id="issue-input" value="${issueDefault}" placeholder="15" />
+            <label for="phase-input">Phase</label>
+            <input id="phase-input" value="${phaseDefault}" />
+            <label for="action-type-input">Action Type</label>
+            <input id="action-type-input" value="${actionTypeDefault}" />
+            <label for="risk-kind-input">High-risk Kind</label>
+            <input id="risk-kind-input" value="${highRiskKindDefault}" />
+          </div>` : `<label for="repo-input">Repository</label>
           <input id="repo-input" value="${repoDefault}" placeholder="marushu/vtdd-v2-p" />
           <label for="issue-input">Issue Number</label>
           <input id="issue-input" value="${issueDefault}" placeholder="15" />
@@ -27438,17 +27460,17 @@ function renderPasskeyOperatorPage(input = {}) {
           <label for="action-type-input">Action Type</label>
           <input id="action-type-input" value="${actionTypeDefault}" />
           <label for="risk-kind-input">High-risk Kind</label>
-          <input id="risk-kind-input" value="${highRiskKindDefault}" />
+          <input id="risk-kind-input" value="${highRiskKindDefault}" />`}
           <div class="row">
-            <button class="secondary" id="approve-button">Approve high-risk action</button>
-            <button class="ghost" id="copy-approval-grant-button" type="button">Copy approvalGrantId</button>
+            <button class="secondary" id="approve-button">${approveButtonLabel}</button>
+            ${deployOneTapMode ? "" : '<button class="ghost" id="copy-approval-grant-button" type="button">Copy approvalGrantId</button>'}
           </div>
-          <label class="inline-check" for="auto-copy-approval-grant-input">
+          ${deployOneTapMode ? '<input id="auto-copy-approval-grant-input" type="checkbox" hidden />' : `<label class="inline-check" for="auto-copy-approval-grant-input">
             <input id="auto-copy-approval-grant-input" type="checkbox" />
             Auto-copy approvalGrantId after approval
-          </label>
-          <p class="muted">GitHub App secret sync \u306A\u3089 <code>actionType=destructive</code> / <code>highRiskKind=github_app_secret_sync</code>\u3001production deploy \u306A\u3089 <code>actionType=deploy_production</code> / <code>highRiskKind=deploy_production</code>\u3001PR merge \u306A\u3089 <code>actionType=merge</code> / <code>highRiskKind=pull_merge</code> \u3092\u4F7F\u3044\u307E\u3059\u3002</p>
-          <pre id="approve-output"></pre>
+          </label>`}
+          ${deployOneTapMode ? "" : '<p class="muted">GitHub App secret sync \u306A\u3089 <code>actionType=destructive</code> / <code>highRiskKind=github_app_secret_sync</code>\u3001production deploy \u306A\u3089 <code>actionType=deploy_production</code> / <code>highRiskKind=deploy_production</code>\u3001PR merge \u306A\u3089 <code>actionType=merge</code> / <code>highRiskKind=pull_merge</code> \u3092\u4F7F\u3044\u307E\u3059\u3002</p>'}
+          <pre id="approve-output"${deployOneTapMode ? " hidden" : ""}></pre>
         </section>
 
         <section data-operator-section="github-app-secret-sync"${hiddenAttribute(!sectionVisibility.githubAppSecretSync)}>
@@ -27473,14 +27495,19 @@ function renderPasskeyOperatorPage(input = {}) {
 
         <section data-operator-section="production-deploy"${hiddenAttribute(!sectionVisibility.productionDeploy)}>
           <h2>4. Production Deploy</h2>
-          <p class="muted">deploy stale \u3092\u691C\u77E5\u3057\u305F\u3042\u3068\u3001real passkey approval \u304C\u6210\u529F\u3057\u305F\u3089\u540C\u3058 <code>approvalGrantId</code> \u3067 same-origin \u306E governed deploy path \u3092\u81EA\u52D5 dispatch \u3057\u307E\u3059\u3002</p>
+          <p class="muted">deploy stale \u3092\u691C\u77E5\u3057\u305F\u3042\u3068\u3001real passkey approval \u304C\u6210\u529F\u3057\u305F\u3089 same-origin \u306E governed deploy path \u3092\u81EA\u52D5 dispatch \u3057\u307E\u3059\u3002</p>
           <div class="row">
-            <button id="deploy-button">Dispatch production deploy</button>
-            <a class="button-link" id="deploy-run-link" href="#" target="_blank" rel="noopener noreferrer" hidden>Open deploy run</a>
+            <button id="deploy-button"${deployOneTapMode ? " hidden" : ""}>Dispatch production deploy</button>
+            ${deployOneTapMode ? "" : '<a class="button-link" id="deploy-run-link" href="#" target="_blank" rel="noopener noreferrer" hidden>Open deploy run</a>'}
             <a class="button-link" id="return-to-butler-link" href="${returnUrl}" rel="noopener noreferrer"${returnUrl ? "" : " hidden"}>Return to Butler</a>
           </div>
-          <p class="muted">\u3053\u306E Worker origin \u3092 <code>runtimeUrl</code> \u3068\u3057\u3066\u4F7F\u3044\u307E\u3059\u3002\u624B\u52D5\u30DC\u30BF\u30F3\u306F\u5931\u6557\u6642\u306E\u518D\u5B9F\u884C\u7528\u3067\u3059\u3002\u5B8C\u4E86\u307E\u305F\u306F\u5931\u6557\u306F Dashboard \u901A\u77E5\u30BB\u30F3\u30BF\u30FC\u3068\u4FDD\u5B58\u6E08\u307F Web Push \u8CFC\u8AAD\u3078\u5C4A\u304D\u307E\u3059\u3002</p>
+          <p class="muted">\u5B8C\u4E86\u307E\u305F\u306F\u5931\u6557\u306F Dashboard \u901A\u77E5\u30BB\u30F3\u30BF\u30FC\u3068\u4FDD\u5B58\u6E08\u307F Web Push \u8CFC\u8AAD\u3078\u5C4A\u304D\u307E\u3059\u3002</p>
           <pre id="deploy-output"></pre>
+          <details>
+            <summary>\u8A73\u7D30</summary>
+            ${deployOneTapMode ? '<a class="button-link" id="deploy-run-link" href="#" target="_blank" rel="noopener noreferrer" hidden>Open deploy run</a>' : ""}
+            <pre id="deploy-debug-output"></pre>
+          </details>
         </section>
 
         <section data-operator-section="pr-merge"${hiddenAttribute(!sectionVisibility.prMerge)}>
@@ -27562,6 +27589,7 @@ function renderPasskeyOperatorPage(input = {}) {
       const copyApprovalGrantButton = document.getElementById("copy-approval-grant-button");
       const autoCopyApprovalGrantInput = document.getElementById("auto-copy-approval-grant-input");
       const deployRunLink = document.getElementById("deploy-run-link");
+      const deployDebugOutput = document.getElementById("deploy-debug-output");
       const mergePrLink = document.getElementById("merge-pr-link");
       const issueCloseLink = document.getElementById("issue-close-link");
       const operatorMode = "${escapeHtml(operatorMode)}";
@@ -27688,6 +27716,17 @@ function renderPasskeyOperatorPage(input = {}) {
         deployRunLink.hidden = false;
       }
 
+      function buildDeployResultText(body) {
+        const deploy = body?.deploy || {};
+        if (deploy.status === "dispatched") {
+          return "deploy \u3092\u958B\u59CB\u3057\u307E\u3057\u305F\u3002\u5B8C\u4E86\u901A\u77E5\u3092\u5F85\u3063\u3066\u304F\u3060\u3055\u3044\u3002";
+        }
+        if (deploy.status === "dispatch_accepted_unverified") {
+          return "deploy request \u306F\u53D7\u7406\u3055\u308C\u307E\u3057\u305F\u3002GitHub Actions \u306E run \u78BA\u8A8D\u306F\u672A\u78BA\u5B9A\u3067\u3059\u3002";
+        }
+        return "deploy request \u3092\u53D7\u3051\u4ED8\u3051\u307E\u3057\u305F\u3002";
+      }
+
       function extractMergePullRequestUrl(body) {
         return body?.authorityAction?.htmlUrl || body?.authorityAction?.pullRequestUrl || "";
       }
@@ -27781,13 +27820,27 @@ function renderPasskeyOperatorPage(input = {}) {
         return readNumberInput("pull-number-input");
       }
 
+      function applyOperatorModeDefaults() {
+        if (operatorMode === "deploy") {
+          document.getElementById("action-type-input").value = "deploy_production";
+          document.getElementById("risk-kind-input").value = "deploy_production";
+          return;
+        }
+        if (operatorMode === "dashboard") {
+          document.getElementById("action-type-input").value = "read";
+          document.getElementById("risk-kind-input").value = "dashboard_access";
+        }
+      }
+
       function shouldAutoDispatchProductionDeploy() {
+        applyOperatorModeDefaults();
         return operatorMode === "deploy" &&
           document.getElementById("action-type-input").value === "deploy_production" &&
           document.getElementById("risk-kind-input").value === "deploy_production";
       }
 
       async function dispatchProductionDeploy({ source = "manual" } = {}) {
+        applyOperatorModeDefaults();
         if (!latestApprovalGrantId) {
           throw new Error("approvalGrantId is required before production deploy");
         }
@@ -27812,16 +27865,21 @@ function renderPasskeyOperatorPage(input = {}) {
           throw responseError(deployBody, "production deploy failed");
         }
         showDeployRunLink(deployBody);
-        deployOutput.textContent = JSON.stringify(deployBody, null, 2);
+        deployOutput.textContent = buildDeployResultText(deployBody);
+        if (deployDebugOutput) {
+          deployDebugOutput.textContent = JSON.stringify(deployBody, null, 2);
+        }
       }
 
-      copyApprovalGrantButton.addEventListener("click", async () => {
-        try {
-          await copyApprovalGrantIdToClipboard();
-        } catch (error) {
-          approveOutput.textContent = approveOutput.textContent + "\\n\\n" + String(error);
-        }
-      });
+      if (copyApprovalGrantButton) {
+        copyApprovalGrantButton.addEventListener("click", async () => {
+          try {
+            await copyApprovalGrantIdToClipboard();
+          } catch (error) {
+            approveOutput.textContent = approveOutput.textContent + "\\n\\n" + String(error);
+          }
+        });
+      }
 
       document.getElementById("register-button").addEventListener("click", async () => {
         try {
@@ -27866,6 +27924,7 @@ function renderPasskeyOperatorPage(input = {}) {
 
       document.getElementById("approve-button").addEventListener("click", async () => {
         try {
+          applyOperatorModeDefaults();
           const repositoryInput = readRequiredRepositoryInput();
           approveOutput.textContent = "approval challenge request...";
           const challengeResponse = await fetch("${apiBase}/approval/passkey/challenge", {
@@ -27912,7 +27971,7 @@ function renderPasskeyOperatorPage(input = {}) {
             window.location.assign("/dashboard");
             return;
           }
-          if (latestApprovalGrantId && autoCopyApprovalGrantInput.checked) {
+          if (latestApprovalGrantId && autoCopyApprovalGrantInput?.checked) {
             try {
               await copyApprovalGrantIdToClipboard({ quiet: true });
               approveOutput.textContent = approveOutput.textContent + "\\n\\nCopied approvalGrantId to clipboard.";
@@ -27931,6 +27990,8 @@ function renderPasskeyOperatorPage(input = {}) {
           approveOutput.textContent = String(error);
         }
       });
+
+      applyOperatorModeDefaults();
 
       document.getElementById("sync-button").addEventListener("click", async () => {
         try {
@@ -28288,6 +28349,11 @@ function hiddenAttribute(hidden) {
 function renderGithubAppRoleOption(value, label, selectedValue) {
   const selected = value === selectedValue ? " selected" : "";
   return `<option value="${escapeHtml(value)}"${selected}>${escapeHtml(label)}</option>`;
+}
+function renderDeployScopeSummary({ repositoryInput, issueNumber, actionType, highRiskKind }) {
+  const repository = repositoryInput || "\u672A\u6307\u5B9A";
+  const issue2 = issueNumber ? ` / Issue: ${issueNumber}` : "";
+  return `\u627F\u8A8D\u5BFE\u8C61: Repository: ${repository}${issue2} / Action: ${actionType} / ${highRiskKind}`;
 }
 function normalizeOperatorMode(value) {
   const token = normalizeOperatorToken(value);
@@ -35554,11 +35620,64 @@ function collectGeminiReviewerSignals(pullRequest) {
   const currentHeadSha = normalizeText5(pullRequest.headSha);
   const currentHeadSignals = currentHeadSha ? parsed.filter((signal) => evidenceMatchesHead(signal, currentHeadSha)) : [];
   const activeSignals = currentHeadSha ? currentHeadSignals : parsed;
+  const latestEvidence = activeSignals.at(-1) ?? null;
+  const latestBlockingSignal = [...activeSignals].reverse().find((signal) => signal.blocking === true);
   return {
     totalCount: activeSignals.length,
-    blockingCount: activeSignals.filter((signal) => signal.blocking).length,
-    latestEvidence: activeSignals.at(-1) ?? null
+    blockingCount: latestGeminiEvidenceLeavesBlockingReview({
+      comments,
+      latestEvidence,
+      latestBlockingSignal
+    }) ? 1 : 0,
+    latestEvidence
   };
+}
+function latestGeminiEvidenceLeavesBlockingReview({ comments, latestEvidence, latestBlockingSignal }) {
+  if (!latestBlockingSignal) {
+    return false;
+  }
+  if (latestEvidence?.blocking === true) {
+    return true;
+  }
+  if (normalizeText5(latestEvidence?.recommendedAction).toLowerCase() !== "approve") {
+    return true;
+  }
+  return !hasReviewerObjectionResolutionBetween({
+    comments,
+    blockingSignal: latestBlockingSignal,
+    approvingSignal: latestEvidence
+  });
+}
+function hasReviewerObjectionResolutionBetween({ comments, blockingSignal, approvingSignal }) {
+  const blockingTime = timelineTimestamp(blockingSignal);
+  const approvingTime = timelineTimestamp(approvingSignal);
+  if (!Number.isFinite(blockingTime) || !Number.isFinite(approvingTime) || blockingTime === Number.MAX_SAFE_INTEGER || approvingTime === Number.MAX_SAFE_INTEGER || blockingTime >= approvingTime) {
+    return false;
+  }
+  return comments.some((comment) => {
+    if (!normalizeText5(comment?.body).includes(REVIEWER_OBJECTION_RESOLUTION_MARKER)) {
+      return false;
+    }
+    if (!isTrustedObjectionResolutionAuthor(comment)) {
+      return false;
+    }
+    const responseBody = normalizeText5(comment?.body);
+    const blockingHeadSha = normalizeText5(blockingSignal?.headSha);
+    if (blockingHeadSha && !responseBody.includes(blockingHeadSha)) {
+      return false;
+    }
+    const responseTime = timelineTimestamp({
+      createdAt: normalizeCommentCreatedAt(comment),
+      updatedAt: normalizeCommentUpdatedAt(comment),
+      url: normalizeCommentUrl(comment)
+    });
+    return responseTime > blockingTime && responseTime < approvingTime;
+  });
+}
+function isTrustedObjectionResolutionAuthor(comment) {
+  const author = normalizeCommentAuthor2(comment).toLowerCase();
+  const association = normalizeText5(comment?.authorAssociation ?? comment?.author_association).toUpperCase();
+  return author === "vtdd-codex" || author === "vtdd-codex[bot]" || association === "OWNER" || association === "MEMBER" || association === "COLLABORATOR";
 }
 function collectCodexFallbackSignals(pullRequest) {
   const comments = [...Array.isArray(pullRequest.issueComments) ? pullRequest.issueComments : []];
@@ -35769,6 +35888,9 @@ function timelineTimestamp(item) {
 }
 function normalizeCommentUrl(comment) {
   return normalizeText5(comment?.url ?? comment?.htmlUrl ?? comment?.html_url) || null;
+}
+function normalizeCommentAuthor2(comment) {
+  return normalizeText5(comment?.user?.login ?? comment?.author?.login ?? comment?.author);
 }
 function normalizeCommentCreatedAt(comment) {
   return normalizeText5(comment?.createdAt ?? comment?.created_at) || null;
@@ -56524,7 +56646,15 @@ var runtime_default = {
     if (request.method === "GET" && isDashboardPagePath(url.pathname)) {
       const auth = await authorizeDashboardRequest({ request, env, apiSuffix: url.pathname });
       if (!auth.ok) {
-        return html(auth.status, renderDashboardAuthRequiredPage({ runtimeOrigin: url.origin, reason: auth.reason }));
+        return html(
+          auth.status,
+          renderDashboardAuthRequiredPage({
+            runtimeOrigin: url.origin,
+            returnPath: `${url.pathname}${url.search}`,
+            reason: auth.reason,
+            passkeyFallbackReason: auth.passkeyFallbackReason
+          })
+        );
       }
     }
     if (request.method === "GET" && (url.pathname === "/dashboard" || url.pathname === "/orchestrator")) {
@@ -62206,6 +62336,100 @@ function compactNotificationText(value, limit) {
   }
   return `${text.slice(0, Math.max(0, limit - 1))}\u2026`;
 }
+async function encryptDashboardWebPushPayload({ subscription, payload }) {
+  const userPublicBytes = base64UrlToBytes(subscription?.p256dh);
+  const authSecretBytes = base64UrlToBytes(subscription?.auth);
+  if (userPublicBytes.length !== 65 || userPublicBytes[0] !== 4 || authSecretBytes.length < 16) {
+    return {
+      ok: false,
+      status: 422,
+      error: "dashboard_web_push_subscription_keys_invalid",
+      reason: "push subscription p256dh/auth keys are required for encrypted Web Push payloads"
+    };
+  }
+  const serverKeyPair = await crypto.subtle.generateKey(
+    { name: "ECDH", namedCurve: "P-256" },
+    true,
+    ["deriveBits"]
+  );
+  const userPublicKey = await crypto.subtle.importKey(
+    "raw",
+    userPublicBytes,
+    { name: "ECDH", namedCurve: "P-256" },
+    false,
+    []
+  );
+  const sharedSecret = new Uint8Array(await crypto.subtle.deriveBits(
+    { name: "ECDH", public: userPublicKey },
+    serverKeyPair.privateKey,
+    256
+  ));
+  const serverPublicBytes = new Uint8Array(await crypto.subtle.exportKey("raw", serverKeyPair.publicKey));
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const keyInfo = concatBytes2(
+    new TextEncoder().encode("WebPush: info"),
+    new Uint8Array([0]),
+    userPublicBytes,
+    serverPublicBytes
+  );
+  const prkKey = await hmacSha256(authSecretBytes, sharedSecret);
+  const ikm = (await hmacSha256(prkKey, concatBytes2(keyInfo, new Uint8Array([1])))).slice(0, 32);
+  const prk = await hmacSha256(salt, ikm);
+  const contentEncryptionKey = (await hmacSha256(
+    prk,
+    concatBytes2(new TextEncoder().encode("Content-Encoding: aes128gcm"), new Uint8Array([0, 1]))
+  )).slice(0, 16);
+  const nonce2 = (await hmacSha256(
+    prk,
+    concatBytes2(new TextEncoder().encode("Content-Encoding: nonce"), new Uint8Array([0, 1]))
+  )).slice(0, 12);
+  const plaintext = concatBytes2(
+    new TextEncoder().encode(JSON.stringify(payload)),
+    new Uint8Array([2])
+  );
+  const aesKey = await crypto.subtle.importKey(
+    "raw",
+    contentEncryptionKey,
+    { name: "AES-GCM" },
+    false,
+    ["encrypt"]
+  );
+  const ciphertext = new Uint8Array(await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv: nonce2, tagLength: 128 },
+    aesKey,
+    plaintext
+  ));
+  const recordSize = 4096;
+  const header = new Uint8Array(21 + serverPublicBytes.length);
+  header.set(salt, 0);
+  new DataView(header.buffer).setUint32(16, recordSize);
+  header[20] = serverPublicBytes.length;
+  header.set(serverPublicBytes, 21);
+  return {
+    ok: true,
+    body: concatBytes2(header, ciphertext)
+  };
+}
+async function hmacSha256(keyBytes, dataBytes) {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    keyBytes,
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  return new Uint8Array(await crypto.subtle.sign("HMAC", key, dataBytes));
+}
+function concatBytes2(...chunks) {
+  const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+  const result = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    result.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return result;
+}
 async function sendDashboardWebPush({ env, subscription, payload }) {
   const endpoint = normalizeDashboardUrl(subscription?.endpoint);
   const endpointHash = normalizeDashboardEventText(subscription?.endpointHash) || (endpoint ? await sha256Hex(endpoint) : "");
@@ -62216,14 +62440,21 @@ async function sendDashboardWebPush({ env, subscription, payload }) {
   if (!vapid.ok) {
     return { ...vapid, endpointHash };
   }
+  const encryptedPayload = await encryptDashboardWebPushPayload({ subscription, payload });
+  if (!encryptedPayload.ok) {
+    return { ...encryptedPayload, endpointHash };
+  }
   const fetcher = typeof env?.DASHBOARD_WEB_PUSH_FETCH === "function" ? env.DASHBOARD_WEB_PUSH_FETCH : fetch;
   const response = await fetcher(endpoint, {
     method: "POST",
     headers: {
       authorization: vapid.authorization,
+      "content-encoding": "aes128gcm",
+      "content-type": "application/octet-stream",
       ttl: "300",
       urgency: "normal"
-    }
+    },
+    body: encryptedPayload.body
   });
   const stale = response.status === 404 || response.status === 410;
   return {
@@ -63279,9 +63510,6 @@ async function authorizeDashboardRequest({ request, env, apiSuffix = "/dashboard
   if (passkeyAuth.ok) {
     return passkeyAuth;
   }
-  if (passkeyAuth.blocking) {
-    return passkeyAuth;
-  }
   const routeLabel = `dashboard surface ${apiSuffix}`;
   const allowedEmails = parseAuthList(
     runtimeEnv.VTDD_DASHBOARD_ALLOWED_EMAILS ?? runtimeEnv.CF_ACCESS_ALLOWED_EMAILS
@@ -63295,6 +63523,14 @@ async function authorizeDashboardRequest({ request, env, apiSuffix = "/dashboard
   );
   const accessJwt = normalizeText30(request.headers.get("cf-access-jwt-assertion"));
   if (!accessEmail && !accessLogin) {
+    if (passkeyAuth.blocking) {
+      return {
+        ok: false,
+        status: 401,
+        reason: `Cloudflare Access authenticated owner identity is required for ${routeLabel}`,
+        passkeyFallbackReason: passkeyAuth.reason
+      };
+    }
     return {
       ok: false,
       status: 401,
@@ -64348,10 +64584,19 @@ async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventS
     subtitle: "dashboard events",
     backHref: `${origin}/dashboard`,
     body: `
-      <section class="hero">
-        <p>Dashboard Butler \u306E\u901A\u77E5\u5165\u53E3\u3067\u3059\u3002iOS PWA Web Push\u3001OS \u306E\u901A\u77E5\u97F3\u3001\u672A\u8AAD badge \u306F\u3053\u306E\u753B\u9762\u304B\u3089\u8A31\u53EF\u30FB\u78BA\u8A8D\u3057\u307E\u3059\u3002</p>
-        <p class="muted">VTDD \u3060\u3051\u3067\u306A\u304F\u3001\u4ED6 repo / \u4E26\u884C\u958B\u767A / queue / workflow \u304B\u3089\u5C4A\u3044\u305F\u30A4\u30D9\u30F3\u30C8\u3092\u76F4\u8FD15\u5206\u3060\u3051\u8868\u793A\u3057\u307E\u3059\u3002</p>
-      </section>
+      <div class="grid single">
+        <section class="lane">
+          <div class="lane-title"><h2>\u6700\u65B0\u901A\u77E5</h2><span class="pill">\u76F4\u8FD15\u5206</span></div>
+          ${recentEvents.length > 0 ? recentEvents.map((event) => renderDashboardNotificationEvent(event)).join("") : `<p class="muted">\u76F4\u8FD15\u5206\u306E\u901A\u77E5\u306F\u3042\u308A\u307E\u305B\u3093\u3002</p>`}
+        </section>
+      </div>
+      <div class="grid single">
+        <details class="lane" data-debug-section="notification-center-context">
+          <summary>\u901A\u77E5\u30BB\u30F3\u30BF\u30FC\u306B\u3064\u3044\u3066</summary>
+          <p>Dashboard Butler \u306E\u901A\u77E5\u5165\u53E3\u3067\u3059\u3002iOS PWA Web Push\u3001OS \u306E\u901A\u77E5\u97F3\u3001\u672A\u8AAD badge \u306F\u3053\u306E\u753B\u9762\u304B\u3089\u8A31\u53EF\u30FB\u78BA\u8A8D\u3057\u307E\u3059\u3002</p>
+          <p class="muted">VTDD \u3060\u3051\u3067\u306A\u304F\u3001\u4ED6 repo / \u4E26\u884C\u958B\u767A / queue / workflow \u304B\u3089\u5C4A\u3044\u305F\u30A4\u30D9\u30F3\u30C8\u3092\u76F4\u8FD15\u5206\u3060\u3051\u8868\u793A\u3057\u307E\u3059\u3002</p>
+        </details>
+      </div>
       <div class="grid">
         <section class="lane">
           <div class="lane-title"><h2>iOS PWA \u901A\u77E5</h2><span class="pill" id="push-support-pill">\u78BA\u8A8D\u4E2D</span></div>
@@ -64375,18 +64620,15 @@ async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventS
             <button class="dashboard-action" id="badge-clear-button" type="button">Badge \u3092\u6D88\u3059</button>
           </div>
         </section>
-        <section class="lane">
+      </div>
+      <div class="grid single">
+        <details class="lane" data-debug-section="notification-authority-boundary">
+          <summary>\u901A\u77E5\u306E\u8A73\u7D30\u8A2D\u5B9A\u3068\u5B89\u5168\u5883\u754C</summary>
           <div class="lane-title"><h2>Authority boundary</h2><span class="pill">read/write</span></div>
           <p>push subscription \u306F dashboard owner session \u304B\u3089\u4FDD\u5B58\u3057\u307E\u3059\u3002HTML \u306B\u306F endpoint\u3001auth key\u3001p256dh key \u3092\u57CB\u3081\u8FBC\u307F\u307E\u305B\u3093\u3002</p>
           <p class="muted">\u540C\u4E00 origin \u306E dashboard owner session cookie / Cloudflare Access identity \u3092\u4F7F\u3046\u305F\u3081\u3001\u8CFC\u8AAD\u4FDD\u5B58 fetch \u306F credentials: same-origin \u3067\u9001\u308A\u307E\u3059\u3002</p>
           <p class="muted">Web Push \u9001\u4FE1\u306B\u306F server-side VAPID secret \u3068 subscription raw material \u304C\u5FC5\u8981\u3067\u3059\u3002D1 \u306B\u306F\u9001\u4FE1\u7528\u306B\u4FDD\u6301\u3057\u3001response / HTML / payload_json \u306B\u306F raw key \u3092\u8FD4\u3057\u307E\u305B\u3093\u3002</p>
-        </section>
-      </div>
-      <div class="grid single">
-        <section class="lane">
-          <div class="lane-title"><h2>\u6700\u65B0\u901A\u77E5</h2><span class="pill">\u76F4\u8FD15\u5206</span></div>
-          ${recentEvents.length > 0 ? recentEvents.map((event) => renderDashboardNotificationEvent(event)).join("") : `<p class="muted">\u76F4\u8FD15\u5206\u306E\u901A\u77E5\u306F\u3042\u308A\u307E\u305B\u3093\u3002</p>`}
-        </section>
+        </details>
       </div>
       <script>
         (() => {
@@ -64856,10 +65098,14 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     url?.searchParams?.get("repositoryInput") || url?.searchParams?.get("repository")
   );
   const dashboardIssueNumber = normalizePositiveInteger9(url?.searchParams?.get("issueNumber"));
-  const dashboardTargetLabel = repositoryInput || "repo/nickname \u672A\u6307\u5B9A";
+  const dashboardTargetLabel = repositoryInput || "\u5BFE\u8C61 repo \u672A\u6307\u5B9A";
+  const targetStatusMarkup = repositoryInput ? `<p><strong>${escapeDashboardHtml(repositoryInput)}</strong></p>
+          <p class="muted">\u3053\u306E repo \u3067 Issue / PR \u64CD\u4F5C\u304C\u5FC5\u8981\u306A\u6642\u3060\u3051\u5BFE\u8C61\u306B\u3057\u307E\u3059\u3002\u901A\u5E38\u4F1A\u8A71\u306F\u3053\u306E\u307E\u307E\u7D9A\u3051\u3089\u308C\u307E\u3059\u3002</p>` : `<p><strong>\u5BFE\u8C61 repo \u672A\u6307\u5B9A</strong></p>
+          <p class="muted">\u901A\u5E38\u4F1A\u8A71\u306F\u7D9A\u3051\u3089\u308C\u307E\u3059\u3002Issue / PR \u64CD\u4F5C\u304C\u5FC5\u8981\u306B\u306A\u3063\u305F\u6642\u306B\u5BFE\u8C61 repo \u3092\u9078\u3073\u307E\u3059\u3002</p>`;
   const encodedRepository = encodeURIComponent(repositoryInput);
   const chatThreadId = `dashboard-main-${(repositoryInput || "unresolved").replace(/[^a-z0-9_.-]+/gi, "-")}`;
   const socketOrigin = origin.replace(/^http/i, "ws");
+  const dashboardSignInUrl = `${origin}/v2/approval/passkey/operator?mode=dashboard&repositoryInput=${encodedRepository}&phase=execution&actionType=read&highRiskKind=dashboard_access`;
   const latestDeployEvent = await retrieveLatestDashboardEvent({
     store: dashboardEventStore,
     kind: "github_actions_workflow_run",
@@ -64913,7 +65159,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       href: `${origin}/setup/diagnostics?repository=${encodedRepository}`
     },
     {
-      title: "Deploy passkey operator",
+      title: "Deploy operator",
       body: "production deploy \u306F scope \u660E\u793A\u6E08\u307F passkey approval \u306E\u5F8C\u308D\u3002approval grant \u3084 secret \u306F dashboard \u306B\u4FDD\u5B58\u3057\u306A\u3044\u3002",
       href: `${origin}/v2/approval/passkey/operator?repositoryInput=${encodedRepository}&phase=execution&actionType=deploy_production&highRiskKind=deploy_production`
     }
@@ -64926,24 +65172,16 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
   ];
   const cockpitActions = [
     {
-      label: "\u72B6\u614B\u78BA\u8A8D",
-      href: `${origin}/dashboard/github?repository=${encodedRepository}`
+      label: "\u901A\u77E5",
+      href: `${origin}/dashboard/notifications`
     },
     {
       label: "\u9032\u6357\u3092\u898B\u308B",
       href: `${origin}/dashboard/progress?repository=${encodedRepository}`
     },
     {
-      label: "RAG \u3092\u8AAD\u3080",
-      href: `${origin}/dashboard/memory?repository=${encodedRepository}`
-    },
-    {
-      label: "\u901A\u77E5",
-      href: `${origin}/dashboard/notifications`
-    },
-    {
-      label: "Passkey",
-      href: `${origin}/v2/approval/passkey/operator?repositoryInput=${encodedRepository}`
+      label: "GitHub\u72B6\u6CC1",
+      href: `${origin}/dashboard/github?repository=${encodedRepository}`
     }
   ];
   return `<!doctype html>
@@ -65003,7 +65241,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .round-button, .tool-button, .send-button { display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border); background: var(--button); color: var(--text); text-decoration: none; font: inherit; font-weight: 750; }
     .menu-open { cursor: pointer; }
     .round-button { width: 44px; height: 44px; border-radius: 999px; font-size: 24px; flex: 0 0 auto; }
-    .tool-button { min-height: 40px; border-radius: 999px; padding: 0 14px; }
+    .tool-button { min-height: 40px; border-radius: 999px; padding: 0 14px; white-space: nowrap; }
+    .top-action { min-width: 74px; }
     .thread-title { min-width: 0; }
     .thread-title h1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .thread-title span { display: block; color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -65014,13 +65253,16 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .bubble strong { display: block; color: var(--muted); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 8px; }
     .bubble-header strong { margin-bottom: 0; }
     .bubble p { color: var(--text); margin-bottom: 12px; }
-    .bubble .message-body { display: grid; gap: 12px; }
-    .bubble .message-body p { margin: 0; white-space: pre-wrap; }
+    .bubble .message-body { display: grid; gap: 12px; min-width: 0; }
+    .bubble .message-body p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
     .bubble .message-body ul { margin: 0; }
     .bubble .message-body li + li { margin-top: 4px; }
+    .bubble .message-body a, .bubble .message-body code { overflow-wrap: anywhere; word-break: break-word; }
     .bubble .message-body code { font-size: .94em; }
-    .bubble .message-body pre { position: relative; margin: 0; padding: 42px 14px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--panel-strong); overflow-x: auto; white-space: pre; }
+    .bubble .message-body pre { position: relative; margin: 0; padding: 42px 14px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--panel-strong); overflow-x: auto; white-space: pre; max-width: 100%; }
+    .bubble .message-body pre.wrap-code { overflow-x: visible; white-space: pre-wrap; }
     .bubble .message-body pre code { display: block; font-size: 14px; line-height: 1.55; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+    .bubble .message-body pre.wrap-code code { white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
     .bubble .message-body strong { display: inline; color: inherit; font-size: inherit; letter-spacing: 0; text-transform: none; margin: 0; font-weight: 800; }
     .message-meta { margin-top: 6px; color: var(--muted); font-size: 11px; line-height: 1.2; opacity: .86; }
     .bubble.owner .message-meta { color: var(--owner-text); opacity: .76; text-align: right; }
@@ -65037,7 +65279,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .thinking-dots::after { content: ""; display: inline-block; width: 1.4em; text-align: left; animation: thinkingDots 1.2s steps(4, end) infinite; }
     @keyframes thinkingDots { 0% { content: ""; } 25% { content: "."; } 50% { content: ".."; } 75%, 100% { content: "..."; } }
     .connection-note { display: inline-flex; align-items: center; width: fit-content; border: 1px solid var(--border); border-radius: 999px; padding: 5px 10px; color: var(--muted); font-size: 13px; }
-    .chat-link { color: var(--text); text-decoration-thickness: 1px; text-underline-offset: 4px; font-weight: 750; }
+    .chat-link { color: var(--text); text-decoration-thickness: 1px; text-underline-offset: 4px; font-weight: 750; overflow-wrap: anywhere; word-break: break-word; }
     .composer { min-width: 0; display: grid; gap: 8px; z-index: 4; padding: 14px 0 max(16px, env(safe-area-inset-bottom)); background: var(--page-bg); }
     .composer-box { display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; align-items: end; gap: 8px; min-height: 62px; padding: 8px; border: 1px solid var(--border); border-radius: 28px; background: var(--panel-strong); box-shadow: 0 16px 60px var(--shadow); }
     textarea { width: 100%; min-height: 44px; max-height: max(88px, min(160px, 24dvh)); border: 0; outline: 0; resize: none; overflow-y: hidden; padding: 10px 2px; color: var(--text); background: transparent; font: inherit; line-height: 1.45; }
@@ -65052,6 +65294,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .media-chip.pending-preview { padding: 5px 8px 5px 5px; }
     .media-remove { border: 0; background: transparent; color: var(--muted); font: inherit; font-weight: 900; padding: 0 2px; cursor: pointer; }
     .composer-status { min-height: 18px; padding-left: 16px; color: var(--muted); font-size: 12px; }
+    .composer-status a { color: var(--text); font-weight: 800; text-underline-offset: 3px; }
     .composer-status.thinking::after { content: ""; display: inline-block; width: 1.4em; text-align: left; animation: thinkingDots 1.2s steps(4, end) infinite; }
     .sidebar { position: sticky; top: 16px; align-self: start; max-height: calc(100dvh - 32px); overflow: auto; border: 1px solid var(--border); border-radius: 18px; background: var(--panel); }
     .sidebar > summary { display: flex; justify-content: space-between; align-items: center; gap: 10px; min-height: 58px; padding: 14px; list-style: none; }
@@ -65099,7 +65342,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       .app-shell { height: calc(100dvh - 12px); }
       .composer-box { grid-template-columns: 40px minmax(0, 1fr) 40px; border-radius: 24px; }
       .round-button { width: 40px; height: 40px; }
-      .tool-button { min-height: 38px; padding: 0 12px; }
+      .tool-button { min-height: 38px; padding: 0 10px; font-size: 13px; }
+      .top-action { min-width: 64px; }
       .media-button, .send-button { width: 40px; height: 40px; }
     }
   </style>
@@ -65117,8 +65361,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           </div>
         </div>
         <div class="top-right">
-          <label class="tool-button menu-open" for="mobile-menu-toggle">\u7BA1\u7406</label>
-          <a class="round-button" href="${escapeDashboardHtml(origin)}/v2/approval/passkey/operator?repositoryInput=${encodedRepository}" aria-label="Passkey">\u25C7</a>
+          <a class="tool-button top-action" href="${escapeDashboardHtml(origin)}/dashboard/notifications" aria-label="\u901A\u77E5\u30BB\u30F3\u30BF\u30FC">\u901A\u77E5</a>
+          <a class="tool-button top-action" href="${escapeDashboardHtml(origin)}/dashboard/progress?repository=${encodedRepository}" aria-label="\u9032\u6357\u3092\u898B\u308B">\u9032\u6357</a>
         </div>
       </header>
 
@@ -65132,17 +65376,21 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           <label class="round-button menu-open" for="mobile-menu-toggle" aria-label="\u7BA1\u7406\u30E1\u30CB\u30E5\u30FC\u3092\u9589\u3058\u308B">\xD7</label>
         </div>
         <div class="mobile-drawer-content">
-          <p class="menu-callout">\u72B6\u614B\u78BA\u8A8D\u3001\u9032\u6357\u3001RAG\u3001workflow \u306F\u3053\u3053\u304B\u3089\u958B\u304D\u307E\u3059\u3002\u901A\u77E5\u3067\u306F\u306A\u304F\u3001\u73FE\u5728\u306F dashboard \u5185\u306E\u72B6\u614B\u8868\u793A\u3067\u3059\u3002</p>
+          <p class="menu-callout">\u901A\u77E5\u3001\u9032\u6357\u3001\u5BFE\u8C61 repo \u306E\u78BA\u8A8D\u306F\u3053\u3053\u304B\u3089\u958B\u304D\u307E\u3059\u3002\u958B\u767A/\u904B\u7528\u306E\u8A73\u7D30\u306F\u4E0B\u306B\u9694\u96E2\u3057\u3066\u3044\u307E\u3059\u3002</p>
           <div class="lane">
-            <div class="lane-title"><h3>\u9032\u884C\u4E2D execution</h3><span class="pill">runtime truth</span></div>
-            <p>GitHub Actions / VPS runner status / execution progress route \u304B\u3089\u8AAD\u307F\u307E\u3059\u3002</p>
+            <div class="lane-title"><h3>\u5BFE\u8C61 repo</h3><span class="pill">${repositoryInput ? "resolved" : "\u672A\u6307\u5B9A"}</span></div>
+            ${targetStatusMarkup}
+          </div>
+          <div class="lane">
+            <div class="lane-title"><h3>\u9032\u884C\u4E2D</h3><span class="pill">\u72B6\u614B</span></div>
+            <p>\u76F4\u8FD1\u306E\u53CD\u6620\u3001\u5931\u6557\u3001\u9032\u884C\u4E2D\u306E\u4F5C\u696D\u304C\u3042\u308C\u3070\u3053\u3053\u306B\u51FA\u3057\u307E\u3059\u3002</p>
             ${renderDashboardDeployEvent(latestDeployEvent)}
           </div>
           <div class="quick-actions">
             ${cockpitActions.map((action) => `<a href="${escapeDashboardHtml(action.href)}">${escapeDashboardHtml(action.label)}</a>`).join("")}
           </div>
-          <details open>
-            <summary>Runtime surfaces</summary>
+          <details data-debug-section="dashboard-development-operations">
+            <summary>\u958B\u767A/\u904B\u7528</summary>
             <div class="surface-list">
               ${surfaces.map((surface) => `<a href="${escapeDashboardHtml(surface.href)}">${escapeDashboardHtml(surface.title)}</a>`).join("")}
             </div>
@@ -65162,11 +65410,11 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         </article>
         <article class="bubble">
           <strong>Butler</strong>
-          <p>\u306F\u3044\u3002\u79C1\u306F v2 \u306E Butler \u3068\u3057\u3066\u3001Issue \u99C6\u52D5\u30FBGitHub runtime truth\u30FBVPS runner\u30FBGemini reviewer\u30FBRAG\u30FBpasskey \u5883\u754C\u3092\u6271\u3044\u307E\u3059\u3002</p>
-          <p>\u3053\u306E\u753B\u9762\u306F\u4F1A\u8A71\u3092\u4E3B\u5F79\u306B\u3059\u308B\u305F\u3081\u306E chat-first runtime \u3067\u3059\u3002\u7BA1\u7406\u753B\u9762\u306F\u53F3\u306E\u30B5\u30A4\u30C9\u30D0\u30FC\u3078\u9000\u907F\u3057\u307E\u3057\u305F\u3002</p>
+          <p>\u306F\u3044\u3002\u3053\u3053\u3067\u306F\u307E\u305A\u666E\u901A\u306B\u4F1A\u8A71\u3067\u304D\u307E\u3059\u3002\u901A\u77E5\u3001\u9032\u6357\u3001\u5BFE\u8C61 repo \u306E\u78BA\u8A8D\u306F\u5FC5\u8981\u306A\u6642\u3060\u3051\u958B\u3051\u307E\u3059\u3002</p>
+          <p>\u4F5C\u696D\u3092\u9032\u3081\u308B\u6642\u306F\u3001\u5BFE\u8C61 repo \u3084 Issue \u3092\u4F1A\u8A71\u306E\u4E2D\u3067\u78BA\u8A8D\u3057\u3066\u304B\u3089\u9032\u3081\u307E\u3059\u3002</p>
           <ul>
-            <li>\u95A2\u9023 repo/nickname: <code>${escapeDashboardHtml(dashboardTargetLabel)}</code></li>
-            <li>\u4F1A\u8A71: Dashboard Butler \u306F app-server bridge \u7D4C\u8DEF\u3092\u4F7F\u3044\u307E\u3059\u3002\u65E7 VPS runner \u76F4\u9001\u7D4C\u8DEF\u306F\u4F7F\u3044\u307E\u305B\u3093</li>
+            <li>\u5BFE\u8C61: <code>${escapeDashboardHtml(dashboardTargetLabel)}</code></li>
+            <li>\u901A\u77E5\u3068\u9032\u6357\u306F\u3053\u306E\u753B\u9762\u304B\u3089\u623B\u3063\u3066\u78BA\u8A8D\u3067\u304D\u307E\u3059\u3002</li>
           </ul>
         </article>
         <article class="bubble owner">
@@ -65174,14 +65422,14 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         </article>
         <article class="bubble">
           <strong>Butler</strong>
-          <p>\u305D\u306E\u65B9\u91DD\u3067\u9032\u3081\u307E\u3059\u3002\u4E2D\u592E\u306F\u30C1\u30E3\u30C3\u30C8\u3060\u3051\u3001\u72B6\u614B\u78BA\u8A8D\u30FB\u9032\u6357\u30FBRAG\u30FBworkflow\u30FBprototype cleanup \u306E\u6271\u3044\u306F\u30B5\u30A4\u30C9\u30D0\u30FC\u306E\u30E1\u30CB\u30E5\u30FC\u304B\u3089\u5FC5\u8981\u306A\u6642\u3060\u3051\u958B\u304D\u307E\u3059\u3002</p>
-          <p>\u3053\u306E dashboard \u304B\u3089 VPS Codex CLI \u3092 <code>codex exec</code> \u3067\u6BCE\u56DE\u8D77\u52D5\u3059\u308B\u65E7\u7D4C\u8DEF\u306F\u524A\u9664\u3057\u307E\u3057\u305F\u3002Dashboard Butler \u306F <code>codex app-server</code> bridge \u304C\u5E38\u99D0\u3057\u3066\u3044\u308B\u6642\u3060\u3051 live Codex thread \u306B\u6E21\u3057\u307E\u3059\u3002</p>
-          <span class="connection-note">Dashboard thread \u63A5\u7D9A\u6E96\u5099\u4E2D: bridge \u304C\u672A\u63A5\u7D9A\u306A\u3089 Custom GPT Butler \u304C fallback \u3067\u3059</span>
+          <p>\u305D\u306E\u65B9\u91DD\u3067\u9032\u3081\u307E\u3059\u3002\u4E2D\u592E\u306F\u30C1\u30E3\u30C3\u30C8\u3092\u4E3B\u5F79\u306B\u3057\u3066\u3001\u7D30\u304B\u3044\u8A2D\u5B9A\u3084\u958B\u767A/\u904B\u7528\u306E\u78BA\u8A8D\u306F\u30E1\u30CB\u30E5\u30FC\u306E\u4E2D\u306B\u5206\u3051\u307E\u3059\u3002</p>
+          <p>\u63A5\u7D9A\u3067\u304D\u306A\u3044\u6642\u3082\u3001\u5165\u529B\u5185\u5BB9\u3092\u5931\u308F\u306A\u3044\u3088\u3046\u306B\u72B6\u614B\u3092\u77ED\u304F\u8868\u793A\u3057\u307E\u3059\u3002</p>
+          <span class="connection-note">\u63A5\u7D9A\u6E96\u5099\u4E2D: \u9001\u4FE1\u3067\u304D\u308B\u72B6\u614B\u306B\u306A\u3063\u305F\u3089\u3053\u3053\u3067\u77E5\u3089\u305B\u307E\u3059</span>
         </article>
 
       </div>
 
-      <form class="composer" id="butler-chat-form" aria-label="Butler composer" autocomplete="off" data-socket-endpoint="${escapeDashboardHtml(socketOrigin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}/ws" data-thread-endpoint="${escapeDashboardHtml(origin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}" data-thread-id="${escapeDashboardHtml(chatThreadId)}" data-repository-input="${escapeDashboardHtml(repositoryInput)}" data-issue-number="${dashboardIssueNumber || ""}">
+      <form class="composer" id="butler-chat-form" aria-label="Butler composer" autocomplete="off" data-socket-endpoint="${escapeDashboardHtml(socketOrigin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}/ws" data-thread-endpoint="${escapeDashboardHtml(origin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}" data-message-endpoint="${escapeDashboardHtml(origin)}/v2/dashboard/chat/messages" data-thread-id="${escapeDashboardHtml(chatThreadId)}" data-repository-input="${escapeDashboardHtml(repositoryInput)}" data-issue-number="${dashboardIssueNumber || ""}">
         <div class="pending-media" id="butler-pending-media" aria-live="polite"></div>
         <div class="composer-box">
           <button class="media-button" id="butler-media-button" type="button" aria-label="\u753B\u50CF\u3084\u30D5\u30A1\u30A4\u30EB\u3092\u8FFD\u52A0" title="\u753B\u50CF\u3084\u30D5\u30A1\u30A4\u30EB\u3092\u8FFD\u52A0">+</button>
@@ -65196,49 +65444,48 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     <details id="tools" class="sidebar" aria-label="\u7BA1\u7406\u30B5\u30A4\u30C9\u30D0\u30FC\u30E1\u30CB\u30E5\u30FC">
       <summary>
         <span>
-          <span class="eyebrow">\u7BA1\u7406\u30E1\u30CB\u30E5\u30FC</span>
+          <span class="eyebrow">\u30E1\u30CB\u30E5\u30FC</span>
           <strong>\u5FC5\u8981\u306A\u6642\u3060\u3051\u958B\u304F</strong>
         </span>
         <span class="pill">WebSocket</span>
       </summary>
       <div class="sidebar-content">
-        <p class="menu-callout">\u72B6\u614B\u78BA\u8A8D\u3001\u9032\u6357\u3001RAG\u3001workflow \u306F\u3053\u3053\u304B\u3089\u9077\u79FB\u3057\u307E\u3059\u3002\u666E\u6BB5\u306E\u753B\u9762\u306F\u30C1\u30E3\u30C3\u30C8\u3092\u4E3B\u5F79\u306B\u3057\u307E\u3059\u3002</p>
+        <p class="menu-callout">\u901A\u77E5\u3001\u9032\u6357\u3001\u5BFE\u8C61 repo \u306E\u78BA\u8A8D\u3092\u512A\u5148\u3057\u307E\u3059\u3002\u958B\u767A/\u904B\u7528\u306E\u8A73\u7D30\u306F\u4E0B\u306B\u9694\u96E2\u3057\u3066\u3044\u307E\u3059\u3002</p>
 
         <div class="lane">
-          <div class="lane-title"><h3>\u95A2\u9023 repo</h3><span class="pill">resolved</span></div>
-          <p><strong>${escapeDashboardHtml(dashboardTargetLabel)}</strong></p>
-          <p class="muted">nickname / startup preflight / GitHub runtime truth \u306F\u65E2\u5B58 v2 route \u3067\u78BA\u8A8D\u3057\u307E\u3059\u3002</p>
+          <div class="lane-title"><h3>\u5BFE\u8C61 repo</h3><span class="pill">${repositoryInput ? "resolved" : "\u672A\u6307\u5B9A"}</span></div>
+          ${targetStatusMarkup}
         </div>
 
         <div class="lane">
           <div class="lane-title"><h3>Issue \u5019\u88DC</h3><span class="pill">draft</span></div>
-          <p>Dashboard Butler \u306E\u81EA\u7136\u6587\u5165\u53E3\u306F <code>codex app-server</code> \u7528\u306B\u4F5C\u308A\u76F4\u3057\u307E\u3059\u3002\u65E7 VPS runner \u76F4\u9001\u3067\u306F\u901A\u5E38\u4F1A\u8A71\u3092\u51E6\u7406\u3057\u307E\u305B\u3093\u3002</p>
+          <p>Issue / PR \u64CD\u4F5C\u304C\u5FC5\u8981\u306B\u306A\u3063\u305F\u6642\u3060\u3051\u3001\u4F1A\u8A71\u306E\u4E2D\u3067\u5BFE\u8C61\u3068\u7BC4\u56F2\u3092\u78BA\u8A8D\u3057\u307E\u3059\u3002</p>
         </div>
 
         <div class="lane">
-          <div class="lane-title"><h3>\u9032\u884C\u4E2D execution</h3><span class="pill">runtime truth</span></div>
-          <p>\u9032\u6357\u306F GitHub Actions / VPS runner status / execution progress route \u304B\u3089\u8AAD\u307F\u307E\u3059\u3002</p>
+          <div class="lane-title"><h3>\u9032\u884C\u4E2D</h3><span class="pill">\u72B6\u614B</span></div>
+          <p>\u76F4\u8FD1\u306E\u53CD\u6620\u3001\u5931\u6557\u3001\u9032\u884C\u4E2D\u306E\u4F5C\u696D\u304C\u3042\u308C\u3070\u3053\u3053\u306B\u51FA\u3057\u307E\u3059\u3002</p>
           ${renderDashboardDeployEvent(latestDeployEvent)}
           <div class="quick-actions">
             ${cockpitActions.map((action) => `<a href="${escapeDashboardHtml(action.href)}">${escapeDashboardHtml(action.label)}</a>`).join("")}
           </div>
         </div>
 
-        <details>
-          <summary>Runtime surfaces</summary>
+        <details data-debug-section="dashboard-development-operations">
+          <summary>\u958B\u767A/\u904B\u7528</summary>
           <div class="surface-list">
             ${surfaces.map((surface) => `<a href="${escapeDashboardHtml(surface.href)}">${escapeDashboardHtml(surface.title)}</a>`).join("")}
           </div>
         </details>
 
-        <details>
+        <details data-debug-section="dashboard-workflows">
           <summary>GitHub workflows</summary>
           <div class="surface-list">
             ${workflows.map(([title, href]) => `<a href="${escapeDashboardHtml(href)}">${escapeDashboardHtml(title)}</a>`).join("")}
           </div>
         </details>
 
-        <details>
+        <details data-debug-section="dashboard-prototype-cleanup">
           <summary>Prototype cleanup</summary>
           <p>v3 Worker prototype \u306E\u524A\u9664\u3084\u79FB\u884C\u306F destructive operation \u6271\u3044\u3067\u3059\u3002\u5FC5\u8981\u306B\u306A\u3063\u305F\u6642\u3060\u3051\u3001\u5BFE\u8C61 runtime \u3068 scope \u3092\u660E\u793A\u3057\u305F passkey approval \u3067\u6271\u3044\u307E\u3059\u3002</p>
         </details>
@@ -65258,7 +65505,9 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 
       const socketEndpoint = form.dataset.socketEndpoint;
       const threadEndpoint = form.dataset.threadEndpoint;
+      const messageEndpoint = form.dataset.messageEndpoint;
       const mediaUploadEndpoint = "/v2/media/upload";
+      const dashboardSignInUrl = ${JSON.stringify(dashboardSignInUrl)};
       const threadId = form.dataset.threadId;
       const repositoryInput = form.dataset.repositoryInput;
       const issueNumber = Number.parseInt(form.dataset.issueNumber || "", 10);
@@ -65267,6 +65516,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       let reconnectTimer = null;
       let reconnectAttempt = 0;
       let refreshingThread = false;
+      let lastRefreshFailure = "";
       let pendingMediaItems = [];
       const pendingSendRollbacks = new Map();
       const messagesById = new Map();
@@ -65295,12 +65545,20 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       }
 
       function setStatus(text, options = {}) {
-        status.textContent = text;
+        status.replaceChildren(document.createTextNode(text));
+        if (options.actionHref && options.actionLabel) {
+          status.appendChild(document.createTextNode(" "));
+          const action = document.createElement("a");
+          action.href = options.actionHref;
+          action.textContent = options.actionLabel;
+          action.rel = "noreferrer";
+          status.appendChild(action);
+        }
         status.classList.toggle("thinking", options.thinking === true);
         if (options.temporary === true) {
           const expected = text;
           window.setTimeout(() => {
-            if (status.textContent === expected) {
+            if (status.textContent.trim() === expected) {
               setStatus("Dashboard thread \u63A5\u7D9A\u6E08\u307F\u3002");
             }
           }, 2400);
@@ -65310,6 +65568,50 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       function setComposerLocked(locked) {
         textarea.readOnly = locked === true;
         if (mediaButton) mediaButton.disabled = locked === true;
+      }
+
+      function isChatSocketOpen() {
+        return Boolean(chatSocket && chatSocket.readyState === WebSocket.OPEN);
+      }
+
+      function describeChatSocketState() {
+        if (!chatSocket) return "\u672A\u63A5\u7D9A";
+        if (chatSocket.readyState === WebSocket.CONNECTING) return "\u63A5\u7D9A\u4E2D";
+        if (chatSocket.readyState === WebSocket.OPEN) return "\u63A5\u7D9A\u6E08\u307F";
+        if (chatSocket.readyState === WebSocket.CLOSING) return "\u5207\u65AD\u51E6\u7406\u4E2D";
+        if (chatSocket.readyState === WebSocket.CLOSED) return "\u5207\u65AD\u6E08\u307F";
+        return "\u4E0D\u660E";
+      }
+
+      function buildReconnectStatus(prefix) {
+        const attempt = Math.max(1, reconnectAttempt + 1);
+        const refreshPart = lastRefreshFailure ? " \u6700\u5F8C\u306E\u5C65\u6B74\u53D6\u5F97: " + lastRefreshFailure + "\u3002" : "";
+        return prefix + " \u518D\u63A5\u7D9A " + attempt + "\u56DE\u76EE / WebSocket: " + describeChatSocketState() + "\u3002" + refreshPart;
+      }
+
+      function dropStaleSocketIfNeeded() {
+        if (!chatSocket) return;
+        if (chatSocket.readyState === WebSocket.CLOSING || chatSocket.readyState === WebSocket.CLOSED) {
+          try {
+            chatSocket.close();
+          } catch {}
+          chatSocket = null;
+        }
+      }
+
+      function isAuthExpiredResponse(response, body = {}) {
+        return (
+          response &&
+          (response.status === 401 || response.status === 403) &&
+          (body.error === "dashboard_auth_required" || String(body.reason || "").includes("passkey session"))
+        );
+      }
+
+      function setDashboardSessionExpiredStatus() {
+        setStatus("Dashboard \u306E\u30ED\u30B0\u30A4\u30F3\u304C\u5207\u308C\u3066\u3044\u307E\u3059\u3002\u5165\u529B\u306F\u6B8B\u3057\u305F\u307E\u307E\u518D\u30ED\u30B0\u30A4\u30F3\u3057\u3066\u304F\u3060\u3055\u3044\u3002", {
+          actionHref: dashboardSignInUrl,
+          actionLabel: "Passkey \u3067\u518D\u30ED\u30B0\u30A4\u30F3"
+        });
       }
 
       function releasePendingOwnerSend(clientMessageId, options = {}) {
@@ -65349,7 +65651,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           copyButton.textContent = "\u29C9";
           copyButton.setAttribute("aria-label", "\u81EA\u5206\u306E\u767A\u8A00\u3092\u30B3\u30D4\u30FC");
           copyButton.title = "\u81EA\u5206\u306E\u767A\u8A00\u3092\u30B3\u30D4\u30FC";
-          copyButton.addEventListener("click", () => copyMessageText(copyButton, message.text || ""));
+          copyButton.addEventListener("click", () => copyMessageText(copyButton, normalizeMessageCopyText(message.text || "")));
           article.appendChild(copyButton);
         } else if (message.role === "butler") {
           const header = document.createElement("div");
@@ -65363,7 +65665,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           copyButton.textContent = "\u29C9";
           copyButton.setAttribute("aria-label", "\u8FD4\u4FE1\u3092\u30B3\u30D4\u30FC");
           copyButton.title = "\u8FD4\u4FE1\u3092\u30B3\u30D4\u30FC";
-          copyButton.addEventListener("click", () => copyMessageText(copyButton, message.text || ""));
+          copyButton.addEventListener("click", () => copyMessageText(copyButton, normalizeMessageCopyText(message.text || "")));
           header.appendChild(copyButton);
           article.appendChild(header);
         } else if (message.role === "system") {
@@ -65376,7 +65678,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         }
         const body = document.createElement("div");
         body.className = "message-body";
-        renderMessageText(body, message.text || "\uFF08\u7A7A\u306E\u30E1\u30C3\u30BB\u30FC\u30B8\uFF09");
+        renderMessageText(body, normalizeMessageDisplayText(message.text || "\uFF08\u7A7A\u306E\u30E1\u30C3\u30BB\u30FC\u30B8\uFF09"));
         article.appendChild(body);
         const media = renderMediaReferences(message.mediaReferences || message.media_references || []);
         if (media) {
@@ -65504,6 +65806,42 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         updateComposerReserve();
       }
 
+      function normalizeMessageDisplayText(text) {
+        return decodeSafeChatCommandText(String(text || ""));
+      }
+
+      function normalizeMessageCopyText(text) {
+        return decodeSafeChatCommandText(String(text || ""));
+      }
+
+      function decodeSafeChatCommandText(text) {
+        const source = String(text || "");
+        return source
+          .split("\\n")
+          .map((line) => {
+            if (!/^go:%[0-9a-f]{2}/i.test(line)) {
+              return line;
+            }
+            if (/^https?:/i.test(line)) {
+              return line;
+            }
+            try {
+              return decodeURIComponent(line);
+            } catch {
+              return line;
+            }
+          })
+          .join("\\n");
+      }
+
+      function shouldWrapCodeBlock(text) {
+        const source = String(text || "").trim();
+        if (!source) return false;
+        if (/^https?:\\/\\//i.test(source)) return true;
+        if (/^go:%[0-9a-f]{2}/i.test(source)) return true;
+        return source.length > 80 && !/\\s/.test(source);
+      }
+
       function renderMessageText(container, text) {
         const source = String(text || "");
         const lines = source.replace(/\\r\\n/g, "\\n").split("\\n");
@@ -65527,6 +65865,9 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             }
             const pre = document.createElement("pre");
             const codeText = codeLines.join("\\n");
+            if (shouldWrapCodeBlock(codeText)) {
+              pre.className = "wrap-code";
+            }
             const copyButton = document.createElement("button");
             copyButton.className = "copy-code";
             copyButton.type = "button";
@@ -65770,31 +66111,43 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       }
 
       async function refreshThread() {
-        if (!threadEndpoint || refreshingThread) return;
+        if (!threadEndpoint || refreshingThread) return { ok: false, skipped: true };
         refreshingThread = true;
         try {
           const response = await fetch(threadEndpoint, {
             headers: { "accept": "application/json" },
             credentials: "same-origin"
           });
+          const body = await response.json().catch(() => ({}));
           if (!response.ok) {
-            setStatus("\u5C65\u6B74\u306E\u518D\u53D6\u5F97\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002WebSocket \u3092\u518D\u63A5\u7D9A\u3057\u3066\u3044\u307E\u3059\u3002");
-            return;
+            if (isAuthExpiredResponse(response, body)) {
+              lastRefreshFailure = "\u518D\u30ED\u30B0\u30A4\u30F3\u304C\u5FC5\u8981";
+              setDashboardSessionExpiredStatus();
+              return { ok: false, authExpired: true };
+            }
+            lastRefreshFailure = "HTTP " + response.status;
+            setStatus(buildReconnectStatus("\u5C65\u6B74\u306E\u518D\u53D6\u5F97\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002"));
+            return { ok: false, status: response.status };
           }
-          const body = await response.json();
           if (body && body.ok) {
+            lastRefreshFailure = "";
             renderThread(body.messages || [], { replace: true });
+            return { ok: true };
           }
         } catch {
-          setStatus("\u5C65\u6B74\u306E\u518D\u53D6\u5F97\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002WebSocket \u3092\u518D\u63A5\u7D9A\u3057\u3066\u3044\u307E\u3059\u3002");
+          lastRefreshFailure = "\u30CD\u30C3\u30C8\u30EF\u30FC\u30AF";
+          setStatus(buildReconnectStatus("\u5C65\u6B74\u306E\u518D\u53D6\u5F97\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002"));
+          return { ok: false, network: true };
         } finally {
           refreshingThread = false;
         }
+        return { ok: false };
       }
 
       function scheduleReconnect() {
         if (reconnectTimer || !socketEndpoint || typeof WebSocket !== "function") return;
         const delay = Math.min(10000, 1000 * Math.pow(2, reconnectAttempt));
+        setStatus(buildReconnectStatus("WebSocket \u3092\u518D\u63A5\u7D9A\u3057\u307E\u3059\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002"));
         reconnectAttempt += 1;
         reconnectTimer = window.setTimeout(() => {
           reconnectTimer = null;
@@ -65807,12 +66160,14 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           setStatus("WebSocket \u3092\u958B\u59CB\u3067\u304D\u307E\u305B\u3093\u3002dashboard Butler \u306F\u9001\u4FE1\u3067\u304D\u307E\u305B\u3093\u3002");
           return;
         }
+        dropStaleSocketIfNeeded();
         if (chatSocket && (chatSocket.readyState === WebSocket.OPEN || chatSocket.readyState === WebSocket.CONNECTING)) {
           return;
         }
         chatSocket = new WebSocket(socketEndpoint);
         chatSocket.addEventListener("open", () => {
           reconnectAttempt = 0;
+          lastRefreshFailure = "";
           if (reconnectTimer) {
             window.clearTimeout(reconnectTimer);
             reconnectTimer = null;
@@ -65861,8 +66216,9 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             releasePendingOwnerSend(pendingOwnerSend.clientMessageId, { clearComposer: false, keepRollbackTimer: true });
             setStatus("\u9001\u4FE1\u78BA\u8A8D\u524D\u306B WebSocket \u304C\u5207\u308C\u307E\u3057\u305F\u3002\u5165\u529B\u306F\u6B8B\u3057\u3066\u3044\u307E\u3059\u3002\u5C65\u6B74\u518D\u53D6\u5F97\u5F8C\u306B\u3082\u3046\u4E00\u5EA6\u9001\u4FE1\u3067\u304D\u307E\u3059\u3002");
           } else {
-            setStatus("WebSocket \u304C\u5207\u308C\u307E\u3057\u305F\u3002\u5C65\u6B74\u3092\u518D\u53D6\u5F97\u3057\u3066\u518D\u63A5\u7D9A\u3057\u307E\u3059\u3002");
+            setStatus(buildReconnectStatus("WebSocket \u304C\u5207\u308C\u307E\u3057\u305F\u3002\u5C65\u6B74\u3092\u518D\u53D6\u5F97\u3057\u3066\u518D\u63A5\u7D9A\u3057\u307E\u3059\u3002"));
           }
+          dropStaleSocketIfNeeded();
           refreshThread();
           scheduleReconnect();
         });
@@ -65871,11 +66227,42 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             releasePendingOwnerSend(pendingOwnerSend.clientMessageId, { clearComposer: false, keepRollbackTimer: true });
             setStatus("\u9001\u4FE1\u78BA\u8A8D\u524D\u306B WebSocket \u63A5\u7D9A\u304C\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u5165\u529B\u306F\u6B8B\u3057\u3066\u3044\u307E\u3059\u3002\u518D\u63A5\u7D9A\u5F8C\u306B\u3082\u3046\u4E00\u5EA6\u9001\u4FE1\u3067\u304D\u307E\u3059\u3002");
           } else {
-            setStatus("WebSocket \u63A5\u7D9A\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u5C65\u6B74\u3092\u518D\u53D6\u5F97\u3057\u3066\u518D\u63A5\u7D9A\u3057\u307E\u3059\u3002");
+            setStatus(buildReconnectStatus("WebSocket \u63A5\u7D9A\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u5C65\u6B74\u3092\u518D\u53D6\u5F97\u3057\u3066\u518D\u63A5\u7D9A\u3057\u307E\u3059\u3002"));
           }
+          dropStaleSocketIfNeeded();
           refreshThread();
           scheduleReconnect();
         });
+      }
+
+      async function sendOwnerMessageByHttp(payload, clientMessageId) {
+        if (!messageEndpoint) {
+          throw new Error("HTTP fallback endpoint is not configured");
+        }
+        const response = await fetch(messageEndpoint, {
+          method: "POST",
+          headers: {
+            "accept": "application/json",
+            "content-type": "application/json"
+          },
+          credentials: "same-origin",
+          body: JSON.stringify(payload)
+        });
+        const body = await response.json().catch(() => ({}));
+        if (isAuthExpiredResponse(response, body)) {
+          const error = new Error("dashboard session expired");
+          error.authExpired = true;
+          throw error;
+        }
+        if (!response.ok || !body.ok) {
+          throw new Error(body.reason || "dashboard chat fallback failed");
+        }
+        pendingSendRollbacks.delete(clientMessageId);
+        releasePendingOwnerSend(clientMessageId, { clearComposer: true });
+        renderThread(body.messages || [], { replace: false });
+        lastRefreshFailure = "";
+        setStatus("WebSocket \u672A\u63A5\u7D9A\u306E\u305F\u3081 HTTP fallback \u3067\u4FDD\u5B58\u3057\u307E\u3057\u305F\u3002\u518D\u63A5\u7D9A\u3092\u7D9A\u3051\u3066\u3044\u307E\u3059\u3002", { temporary: true });
+        scheduleReconnect();
       }
 
       form.addEventListener("submit", async (event) => {
@@ -65886,16 +66273,15 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           return;
         }
         const submitButton = form.querySelector("button[type='submit']");
-        if (!chatSocket || chatSocket.readyState !== WebSocket.OPEN) {
-          setStatus("WebSocket \u518D\u63A5\u7D9A\u4E2D\u3067\u3059\u3002\u5C65\u6B74\u3092\u518D\u53D6\u5F97\u3057\u3066\u3044\u307E\u3059\u3002\u63A5\u7D9A\u5F8C\u306B\u3082\u3046\u4E00\u5EA6\u9001\u4FE1\u3057\u3066\u304F\u3060\u3055\u3044\u3002");
-          await refreshThread();
-          scheduleReconnect();
-          textarea.focus({ preventScroll: true });
-          return;
-        }
         if (submitButton) submitButton.disabled = true;
         setComposerLocked(true);
-        setStatus(pendingMediaItems.length > 0 ? "\u6DFB\u4ED8\u3092\u4FDD\u5B58\u3057\u3066\u304B\u3089\u9001\u4FE1\u3057\u3066\u3044\u307E\u3059" : "\u9001\u4FE1\u4E2D\u3067\u3059", { thinking: true });
+        const willUseHttpFallback = !isChatSocketOpen();
+        if (willUseHttpFallback) {
+          setStatus("WebSocket \u518D\u63A5\u7D9A\u4E2D\u3067\u3059\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u305F\u307E\u307E HTTP fallback \u3067\u4FDD\u5B58\u3057\u307E\u3059\u3002", { thinking: true });
+          scheduleReconnect();
+        } else {
+          setStatus(pendingMediaItems.length > 0 ? "\u6DFB\u4ED8\u3092\u4FDD\u5B58\u3057\u3066\u304B\u3089\u9001\u4FE1\u3057\u3066\u3044\u307E\u3059" : "\u9001\u4FE1\u4E2D\u3067\u3059", { thinking: true });
+        }
         let mediaReferences = [];
         const clientMessageId = retryClientMessageId || createClientMessageId();
         try {
@@ -65922,17 +66308,34 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             setStatus("\u9001\u4FE1\u78BA\u8A8D\u304C\u8FD4\u308A\u307E\u305B\u3093\u3067\u3057\u305F\u3002\u5165\u529B\u306F\u6B8B\u3057\u3066\u3044\u307E\u3059\u3002\u518D\u63A5\u7D9A\u5F8C\u306B\u3082\u3046\u4E00\u5EA6\u9001\u4FE1\u3057\u3066\u304F\u3060\u3055\u3044\u3002");
           }, 30000)
         };
+        const ownerPayload = {
+          type: "owner_message",
+          threadId,
+          clientMessageId,
+          repositoryInput,
+          text,
+          issueNumber,
+          relatedIssue: issueNumber,
+          mediaReferences
+        };
+        if (!isChatSocketOpen()) {
+          try {
+            await sendOwnerMessageByHttp(ownerPayload, clientMessageId);
+          } catch (error) {
+            pendingSendRollbacks.delete(clientMessageId);
+            releasePendingOwnerSend(clientMessageId, { clearComposer: false });
+            if (error && error.authExpired) {
+              setDashboardSessionExpiredStatus();
+            } else {
+              setStatus((error && error.message) || "WebSocket \u3068 HTTP fallback \u306E\u4E21\u65B9\u3067\u9001\u4FE1\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F\u3002\u5165\u529B\u306F\u6B8B\u3057\u3066\u3044\u307E\u3059\u3002");
+            }
+            textarea.focus({ preventScroll: true });
+          }
+          updateComposerReserve();
+          return;
+        }
         try {
-          chatSocket.send(JSON.stringify({
-            type: "owner_message",
-            threadId,
-            clientMessageId,
-            repositoryInput,
-            text,
-            issueNumber,
-            relatedIssue: issueNumber,
-            mediaReferences
-          }));
+          chatSocket.send(JSON.stringify(ownerPayload));
         } catch (error) {
           pendingSendRollbacks.delete(clientMessageId);
           releasePendingOwnerSend(clientMessageId, { clearComposer: false });
@@ -65989,13 +66392,15 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       textarea.addEventListener("input", resizeComposerInput);
       window.addEventListener("resize", resizeComposerInput);
       window.addEventListener("online", () => {
-        setStatus("\u30CD\u30C3\u30C8\u30EF\u30FC\u30AF\u5FA9\u5E30\u3092\u691C\u77E5\u3057\u307E\u3057\u305F\u3002\u5C65\u6B74\u3092\u518D\u53D6\u5F97\u3057\u3066\u518D\u63A5\u7D9A\u3057\u307E\u3059\u3002");
+        setStatus(buildReconnectStatus("\u30CD\u30C3\u30C8\u30EF\u30FC\u30AF\u5FA9\u5E30\u3092\u691C\u77E5\u3057\u307E\u3057\u305F\u3002\u5C65\u6B74\u3092\u518D\u53D6\u5F97\u3057\u3066\u518D\u63A5\u7D9A\u3057\u307E\u3059\u3002"));
+        dropStaleSocketIfNeeded();
         refreshThread();
         scheduleReconnect();
       });
       document.addEventListener("visibilitychange", () => {
         if (document.visibilityState === "visible" && (!chatSocket || chatSocket.readyState !== WebSocket.OPEN)) {
-          setStatus("\u753B\u9762\u5FA9\u5E30\u3092\u691C\u77E5\u3057\u307E\u3057\u305F\u3002\u5C65\u6B74\u3092\u518D\u53D6\u5F97\u3057\u3066\u518D\u63A5\u7D9A\u3057\u307E\u3059\u3002");
+          setStatus(buildReconnectStatus("\u753B\u9762\u5FA9\u5E30\u3092\u691C\u77E5\u3057\u307E\u3057\u305F\u3002\u5C65\u6B74\u3092\u518D\u53D6\u5F97\u3057\u3066\u518D\u63A5\u7D9A\u3057\u307E\u3059\u3002"));
+          dropStaleSocketIfNeeded();
           refreshThread();
           scheduleReconnect();
         }
@@ -66006,8 +66411,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 </body>
 </html>`;
 }
-function renderDashboardAuthRequiredPage({ runtimeOrigin, reason } = {}) {
+function renderDashboardAuthRequiredPage({ runtimeOrigin, returnPath = "/dashboard", reason, passkeyFallbackReason } = {}) {
   const origin = normalizeText30(runtimeOrigin);
+  const dashboardAccessReturnPath = sanitizeDashboardPreAuthReturnPath(returnPath);
+  const dashboardAccessHref = buildCloudflareAccessLoginHref({ origin, returnPath: dashboardAccessReturnPath });
   const dashboardSignInUrl = `${origin || ""}/v2/approval/passkey/operator?mode=dashboard&repositoryInput=marushu%2Fvtdd-v2-p&phase=execution&actionType=read&highRiskKind=dashboard_access`;
   return `<!doctype html>
 <html lang="ja">
@@ -66023,6 +66430,11 @@ function renderDashboardAuthRequiredPage({ runtimeOrigin, reason } = {}) {
     h1 { margin: 0 0 12px; font-size: 30px; }
     p { line-height: 1.7; color: #4d5c56; }
     a { color: #176b4d; font-weight: 750; }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0; }
+    .button { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; border: 1px solid #b9cabe; border-radius: 7px; padding: 9px 12px; color: #0f513b; text-decoration: none; background: #f8fbf8; }
+    .primary { background: #247a5b; color: #fff; border-color: #247a5b; }
+    details { margin-top: 16px; border-top: 1px solid #e2e9e4; padding-top: 14px; }
+    summary { cursor: pointer; font-weight: 800; color: #24342e; }
     code { color: #5f6c66; }
   </style>
 </head>
@@ -66030,14 +66442,44 @@ function renderDashboardAuthRequiredPage({ runtimeOrigin, reason } = {}) {
   <main>
     <section class="panel">
       <h1>Dashboard auth required</h1>
-      <p>\u3053\u306E dashboard \u306F owner-facing surface \u3067\u3059\u3002\u5BFE\u8C61\u306E GitHub / Cloudflare Access identity \u3067\u8A8D\u8A3C\u3055\u308C\u305F\u30E6\u30FC\u30B6\u30FC\u3001\u307E\u305F\u306F machine-authenticated service \u3060\u3051\u304C\u5229\u7528\u3067\u304D\u307E\u3059\u3002</p>
+      <p>\u3053\u306E dashboard \u306F owner-facing surface \u3067\u3059\u3002\u901A\u5E38\u95B2\u89A7\u3001\u901A\u77E5\u78BA\u8A8D\u3001\u901A\u5E38\u30C1\u30E3\u30C3\u30C8\u306F Cloudflare Access \u306E owner identity \u3067\u958B\u304D\u307E\u3059\u3002\u901A\u77E5\u3092\u30BF\u30C3\u30D7\u3057\u305F\u3060\u3051\u3067\u306F\u3001\u672A\u8A8D\u8A3C\u306E\u76F8\u624B\u306B\u901A\u77E5\u8A73\u7D30\u3084 Dashboard \u5185\u5BB9\u306F\u8FD4\u3057\u307E\u305B\u3093\u3002</p>
       <p><code>${escapeDashboardHtml(reason || "dashboard authentication required")}</code></p>
-      <p><a href="${escapeDashboardHtml(dashboardSignInUrl)}">Passkey \u3067 dashboard \u306B\u5165\u308B</a></p>
-      <p><a href="${escapeDashboardHtml(origin || "/status")}/status">Status</a></p>
+      <div class="actions">
+        <a class="button primary" href="${escapeDashboardHtml(dashboardAccessHref)}">Cloudflare Access \u3067\u958B\u304F</a>
+        <a class="button" href="${escapeDashboardHtml(`${origin || ""}/status`)}">Status</a>
+      </div>
+      <details>
+        <summary>Passkey fallback</summary>
+        <p>passkey dashboard session \u306F Cloudflare Access \u304C\u4F7F\u3048\u306A\u3044\u6642\u306E\u88DC\u52A9\u5C0E\u7DDA\u3067\u3059\u3002deploy\u3001merge\u3001secret sync \u306A\u3069\u306E\u9AD8\u30EA\u30B9\u30AF\u64CD\u4F5C\u306F\u5F15\u304D\u7D9A\u304D scope \u660E\u793A\u6E08\u307F real passkey approval \u304C\u5FC5\u8981\u3067\u3059\u3002</p>
+        ${passkeyFallbackReason ? `<p><code>${escapeDashboardHtml(passkeyFallbackReason)}</code></p>` : ""}
+        <p><a href="${escapeDashboardHtml(dashboardSignInUrl)}">Passkey fallback \u3092\u958B\u304F</a></p>
+      </details>
     </section>
   </main>
 </body>
 </html>`;
+}
+function buildCloudflareAccessLoginHref({ origin, returnPath = "/dashboard" } = {}) {
+  const normalizedOrigin = normalizeText30(origin);
+  const sanitizedReturnPath = sanitizeDashboardPreAuthReturnPath(returnPath);
+  const redirectUrl = normalizedOrigin ? `${normalizedOrigin}${sanitizedReturnPath}` : sanitizedReturnPath;
+  return `${normalizedOrigin || ""}/cdn-cgi/access/login?redirect_url=${encodeURIComponent(redirectUrl)}`;
+}
+function sanitizeDashboardPreAuthReturnPath(value) {
+  const normalized = normalizeText30(value) || "/dashboard";
+  let parsed;
+  try {
+    parsed = new URL(normalized, "https://dashboard.local");
+  } catch {
+    return "/dashboard";
+  }
+  if (parsed.origin !== "https://dashboard.local") {
+    return "/dashboard";
+  }
+  if (parsed.pathname !== "/dashboard" && !parsed.pathname.startsWith("/dashboard/")) {
+    return "/dashboard";
+  }
+  return parsed.pathname;
 }
 function renderV2StatusPage({ runtimeOrigin, autonomyMode }) {
   const origin = normalize7(runtimeOrigin);

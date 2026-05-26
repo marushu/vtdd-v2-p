@@ -2,7 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import worker from "../src/worker.js";
 import { DashboardChatRoom } from "../src/worker.js";
-import { buildDashboardWebPushPayload } from "../src/worker/runtime.js";
+import {
+  buildDashboardWebPushPayload,
+  normalizeDashboardChatMessageText,
+  shouldWrapDashboardChatCodeBlock
+} from "../src/worker/runtime.js";
 import {
   ActionType,
   ActorRole,
@@ -52,6 +56,179 @@ const dashboardAccessEnv = {
     payload: token === "test-access-jwt" ? { email: "owner@example.com", exp: 4102444800 } : null
   })
 };
+
+function extractDashboardInlineFunction(html, name) {
+  const script = String(html || "").match(/<script>([\s\S]*?)<\/script>/)?.[1] || "";
+  const asyncStart = script.indexOf(`async function ${name}(`);
+  const start = asyncStart === -1 ? script.indexOf(`function ${name}(`) : asyncStart;
+  assert.notEqual(start, -1, `dashboard inline function ${name} is missing`);
+  const braceStart = script.indexOf("{", start);
+  assert.notEqual(braceStart, -1, `dashboard inline function ${name} has no body`);
+  let depth = 0;
+  for (let index = braceStart; index < script.length; index += 1) {
+    const char = script[index];
+    if (char === "{") depth += 1;
+    if (char === "}") depth -= 1;
+    if (depth === 0) {
+      return script.slice(start, index + 1);
+    }
+  }
+  assert.fail(`dashboard inline function ${name} body is incomplete`);
+}
+
+function createMinimalDashboardDocument() {
+  class TextNode {
+    constructor(text) {
+      this.nodeType = 3;
+      this.textContent = String(text || "");
+      this.parentNode = null;
+    }
+  }
+
+  class ElementNode {
+    constructor(tagName) {
+      this.nodeType = 1;
+      this.tagName = String(tagName || "").toUpperCase();
+      this.children = [];
+      this.parentNode = null;
+      this.attributes = new Map();
+      this.dataset = {};
+      this.style = {};
+      this._textContent = "";
+      this.className = "";
+      this.type = "";
+      this.href = "";
+      this.target = "";
+      this.rel = "";
+      this.title = "";
+      this.value = "";
+      this.listeners = new Map();
+    }
+
+    appendChild(child) {
+      child.parentNode = this;
+      this.children.push(child);
+      return child;
+    }
+
+    replaceChildren(...children) {
+      this.children = [];
+      for (const child of children) {
+        this.appendChild(child);
+      }
+    }
+
+    remove() {
+      if (!this.parentNode) return;
+      this.parentNode.children = this.parentNode.children.filter((child) => child !== this);
+      this.parentNode = null;
+    }
+
+    select() {
+      this.selected = true;
+    }
+
+    setAttribute(name, value) {
+      this.attributes.set(name, String(value));
+    }
+
+    getAttribute(name) {
+      return this.attributes.get(name) || null;
+    }
+
+    addEventListener(type, listener) {
+      this.listeners.set(type, listener);
+    }
+
+    async click() {
+      const listener = this.listeners.get("click");
+      if (listener) {
+        await listener({ target: this });
+      }
+    }
+
+    get textContent() {
+      if (this.children.length === 0) return this._textContent;
+      return this.children.map((child) => child.textContent).join("");
+    }
+
+    set textContent(value) {
+      this.children = [];
+      this._textContent = String(value || "");
+    }
+
+    querySelectorAll(tagName) {
+      const matches = [];
+      const expected = String(tagName || "").toUpperCase();
+      const visit = (node) => {
+        if (node.nodeType === 1 && node.tagName === expected) {
+          matches.push(node);
+        }
+        for (const child of node.children || []) {
+          visit(child);
+        }
+      };
+      visit(this);
+      return matches;
+    }
+  }
+
+  const document = {
+    body: new ElementNode("body"),
+    createElement: (tagName) => new ElementNode(tagName),
+    createTextNode: (text) => new TextNode(text),
+    execCommand(command) {
+      document.lastExecCommand = command;
+      return true;
+    }
+  };
+  return document;
+}
+
+function loadDashboardInlineChatHelpers(html) {
+  const names = [
+    "normalizeMessageDisplayText",
+    "normalizeMessageCopyText",
+    "decodeSafeChatCommandText",
+    "shouldWrapCodeBlock",
+    "renderMessageText",
+    "renderInlineMarkdown",
+    "copyMessageText"
+  ];
+  const sources = names.map((name) => extractDashboardInlineFunction(html, name)).join("\n");
+  return Function(
+    "document",
+    "navigator",
+    "window",
+    "setStatus",
+    `${sources}\nreturn { ${names.join(", ")} };`
+  );
+}
+
+test("dashboard chat message text safely decodes command-like percent encoded lines", () => {
+  assert.equal(
+    normalizeDashboardChatMessageText("go:%0Adeploy%20production%0Aissue%20%23524"),
+    "go:\ndeploy production\nissue #524"
+  );
+  assert.equal(
+    normalizeDashboardChatMessageText("https://example.com/path%20with%20encoded?x=1"),
+    "https://example.com/path%20with%20encoded?x=1"
+  );
+  assert.equal(normalizeDashboardChatMessageText("go:%E0%A4%A"), "go:%E0%A4%A");
+  assert.equal(normalizeDashboardChatMessageText("slack:%20do-not-decode"), "slack:%20do-not-decode");
+  assert.equal(
+    normalizeDashboardChatMessageText("before\ngo:%0Aone%20two\nafter"),
+    "before\ngo:\none two\nafter"
+  );
+});
+
+test("dashboard chat code block wrap policy keeps URL and command text readable", () => {
+  assert.equal(shouldWrapDashboardChatCodeBlock("https://example.com/" + "a".repeat(96)), true);
+  assert.equal(shouldWrapDashboardChatCodeBlock("go:%0A" + "deploy%20".repeat(20)), true);
+  assert.equal(shouldWrapDashboardChatCodeBlock("slack:%20" + "x".repeat(96)), true);
+  assert.equal(shouldWrapDashboardChatCodeBlock("x".repeat(96)), true);
+  assert.equal(shouldWrapDashboardChatCodeBlock("const value = 1;\nconsole.log(value);"), false);
+});
 
 function createInMemoryDashboardEventStore() {
   const events = new Map();
@@ -322,6 +499,103 @@ function base64UrlEncodeTestBytes(bytes) {
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
+function base64UrlToTestBytes(value) {
+  const normalized = String(value || "").replace(/-/g, "+").replace(/_/g, "/");
+  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+  const binary = atob(padded);
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+}
+
+function concatTestBytes(...chunks) {
+  const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+  const result = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    result.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return result;
+}
+
+async function hmacSha256Test(keyBytes, dataBytes) {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    keyBytes,
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  return new Uint8Array(await crypto.subtle.sign("HMAC", key, dataBytes));
+}
+
+async function createTestPushSubscription(fields = {}) {
+  const keyPair = await crypto.subtle.generateKey(
+    { name: "ECDH", namedCurve: "P-256" },
+    true,
+    ["deriveBits"]
+  );
+  const publicBytes = new Uint8Array(await crypto.subtle.exportKey("raw", keyPair.publicKey));
+  const authBytes = crypto.getRandomValues(new Uint8Array(16));
+  return {
+    subscription: {
+      endpointHash: fields.endpointHash || "endpoint-hash",
+      endpoint: fields.endpoint || "https://push.example/send/endpoint-hash",
+      p256dh: base64UrlEncodeTestBytes(publicBytes),
+      auth: base64UrlEncodeTestBytes(authBytes),
+      ownerIdentity: "owner@example.com",
+      updatedAt: new Date().toISOString()
+    },
+    privateKey: keyPair.privateKey,
+    publicBytes,
+    authBytes
+  };
+}
+
+async function decryptTestWebPushPayload(body, pushKeys) {
+  const encrypted = new Uint8Array(await new Response(body).arrayBuffer());
+  const salt = encrypted.slice(0, 16);
+  const recordSize = new DataView(encrypted.buffer, encrypted.byteOffset + 16, 4).getUint32(0);
+  const keyIdLength = encrypted[20];
+  const serverPublicBytes = encrypted.slice(21, 21 + keyIdLength);
+  const ciphertext = encrypted.slice(21 + keyIdLength);
+
+  assert.equal(recordSize, 4096);
+  assert.equal(keyIdLength, 65);
+  assert.equal(serverPublicBytes[0], 4);
+
+  const serverPublicKey = await crypto.subtle.importKey(
+    "raw",
+    serverPublicBytes,
+    { name: "ECDH", namedCurve: "P-256" },
+    false,
+    []
+  );
+  const sharedSecret = new Uint8Array(await crypto.subtle.deriveBits(
+    { name: "ECDH", public: serverPublicKey },
+    pushKeys.privateKey,
+    256
+  ));
+  const prkKey = await hmacSha256Test(pushKeys.authBytes, sharedSecret);
+  const keyInfo = concatTestBytes(
+    new TextEncoder().encode("WebPush: info"),
+    new Uint8Array([0]),
+    pushKeys.publicBytes,
+    serverPublicBytes
+  );
+  const ikm = (await hmacSha256Test(prkKey, concatTestBytes(keyInfo, new Uint8Array([1])))).slice(0, 32);
+  const prk = await hmacSha256Test(salt, ikm);
+  const cek = (await hmacSha256Test(prk, concatTestBytes(new TextEncoder().encode("Content-Encoding: aes128gcm"), new Uint8Array([0, 1])))).slice(0, 16);
+  const nonce = (await hmacSha256Test(prk, concatTestBytes(new TextEncoder().encode("Content-Encoding: nonce"), new Uint8Array([0, 1])))).slice(0, 12);
+  const key = await crypto.subtle.importKey("raw", cek, { name: "AES-GCM" }, false, ["decrypt"]);
+  const plaintext = new Uint8Array(await crypto.subtle.decrypt(
+    { name: "AES-GCM", iv: nonce, tagLength: 128 },
+    key,
+    ciphertext
+  ));
+  assert.equal(plaintext[plaintext.length - 1], 2);
+  return new TextDecoder().decode(plaintext.slice(0, -1));
+}
+
 async function sha256HexTest(value) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(value)));
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -504,6 +778,16 @@ test("worker rejects dashboard access without owner identity", async () => {
   const body = await response.text();
   assert.equal(body.includes("Dashboard auth required"), true);
   assert.equal(body.includes("owner-facing surface"), true);
+  assert.equal(body.includes("Cloudflare Access で開く"), true);
+  assert.equal(
+    body.includes(
+      'href="https://example.com/cdn-cgi/access/login?redirect_url=https%3A%2F%2Fexample.com%2Fdashboard"'
+    ),
+    true
+  );
+  assert.equal(body.includes("Passkey fallback"), true);
+  assert.equal(body.includes("Passkey で dashboard に入る"), false);
+  assert.equal(body.includes("未認証の相手に通知詳細や Dashboard 内容は返しません"), true);
 });
 
 test("worker rejects unlisted dashboard subpaths before they can become public pages", async () => {
@@ -582,7 +866,80 @@ test("worker rejects stale dashboard passkey session cookies", async () => {
 
   assert.equal(response.status, 401);
   const body = await response.text();
+  assert.equal(body.includes("Cloudflare Access authenticated owner identity is required"), true);
+  assert.equal(body.includes("Cloudflare Access で開く"), true);
+  assert.equal(
+    body.includes(
+      'href="https://example.com/cdn-cgi/access/login?redirect_url=https%3A%2F%2Fexample.com%2Fdashboard"'
+    ),
+    true
+  );
+  assert.equal(body.includes("Passkey fallback"), true);
   assert.equal(body.includes("dashboard passkey session was not found"), true);
+  assert.equal(body.includes("Passkey で dashboard に入る"), false);
+});
+
+test("worker does not expose dashboard notification details before Access auth", async () => {
+  const store = createInMemoryDashboardEventStore();
+  await store.put({
+    id: "github_actions_workflow_run:marushu/vtdd-v2-p:deploy-production:private-run",
+    kind: "github_actions_workflow_run",
+    repository: "marushu/vtdd-v2-p",
+    workflowName: "deploy-production",
+    runId: "private-run",
+    runUrl: "https://github.com/marushu/vtdd-v2-p/actions/runs/private-run",
+    status: "completed",
+    conclusion: "success",
+    headSha: "privateabcdef1234567890",
+    headBranch: "main",
+    title: "private deploy notification",
+    updatedAt: new Date().toISOString()
+  });
+
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/dashboard/notifications?runId=private-run&title=private%20deploy%20notification&sha=privateabcdef1234567890"
+    ),
+    { DASHBOARD_EVENT_STORE: store }
+  );
+
+  assert.equal(response.status, 401);
+  const body = await response.text();
+  assert.equal(body.includes("Dashboard auth required"), true);
+  assert.equal(body.includes("Cloudflare Access で開く"), true);
+  assert.equal(
+    body.includes(
+      'href="https://example.com/cdn-cgi/access/login?redirect_url=https%3A%2F%2Fexample.com%2Fdashboard%2Fnotifications"'
+    ),
+    true
+  );
+  assert.equal(body.includes('href="https://example.com/dashboard/notifications"'), false);
+  assert.equal(body.includes("?runId="), false);
+  assert.equal(body.includes("title="), false);
+  assert.equal(body.includes("sha="), false);
+  assert.equal(body.includes("private deploy notification"), false);
+  assert.equal(body.includes("private-run"), false);
+  assert.equal(body.includes("privateabcdef"), false);
+});
+
+test("worker ignores stale dashboard passkey cookie when Cloudflare Access owner identity is valid", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/dashboard", {
+      headers: {
+        cookie: "vtdd_dashboard_session=approval%3Amissing",
+        ...dashboardAccessHeaders
+      }
+    }),
+    {
+      ...dashboardAccessEnv,
+      MEMORY_PROVIDER: createInMemoryMemoryProvider()
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.text();
+  assert.equal(body.includes("VTDD v2 Dashboard"), true);
+  assert.equal(body.includes("dashboard passkey session was not found"), false);
 });
 
 test("worker rejects dashboard access when Access email header has no matching JWT email claim", async () => {
@@ -647,20 +1004,29 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("overflow: hidden"), true);
   assert.equal(body.includes("grid-template-columns: minmax(0, 1fr) auto"), true);
   assert.equal(body.includes("WebSocket"), true);
-  assert.equal(body.includes("Dashboard thread 接続準備中"), true);
-  assert.equal(body.includes("repo/nickname 未指定"), true);
-  assert.equal(body.includes("旧 VPS runner 直送経路は使いません"), true);
+  assert.equal(body.includes("接続準備中: 送信できる状態になったらここで知らせます"), true);
+  assert.equal(body.includes("repo/nickname 未指定"), false);
+  assert.equal(body.includes("対象 repo 未指定"), true);
+  assert.equal(body.includes("?repository=owner/repo"), false);
+  assert.equal(body.includes("旧 VPS runner 直送経路は使いません"), false);
   assert.equal(body.includes("codex app-server"), true);
   assert.equal(body.includes("deploy 用 passkey URL"), false);
   assert.equal(body.includes("vtdd-v3-orchestrator.polished-tree-da7c.workers.dev"), false);
   assert.equal(body.includes('id="mobile-menu-toggle"'), true);
   assert.equal(body.includes('for="mobile-menu-toggle"'), true);
+  assert.equal(body.includes('aria-label="Passkey operator">Passkey</a>'), false);
+  assert.equal(body.includes('aria-label="Deploy operator">Deploy</a>'), false);
+  assert.equal(body.includes('aria-label="通知センター">通知</a>'), true);
+  assert.equal(body.includes('aria-label="進捗を見る">進捗</a>'), true);
+  assert.equal(body.includes('aria-label="Passkey">◇</a>'), false);
+  assert.equal(body.includes('<label class="tool-button menu-open" for="mobile-menu-toggle">管理</label>'), false);
+  assert.equal(body.includes('class="tool-button top-action"'), true);
   assert.equal(body.includes('id="butler-chat-form"'), true);
   assert.equal(body.includes('id="butler-chat-log"'), true);
   assert.equal(body.includes('class="icon-button"'), false);
   assert.equal(body.includes('aria-hidden="true">＋</span>'), false);
   assert.equal(body.includes('aria-hidden="true">♪</span>'), false);
-  assert.equal(body.includes("/v2/dashboard/chat/messages"), false);
+  assert.equal(body.includes('data-message-endpoint="https://example.com/v2/dashboard/chat/messages"'), true);
   assert.equal(body.includes('data-thread-endpoint="https://example.com/v2/dashboard/chat/dashboard-main-unresolved"'), true);
   assert.equal(body.includes('data-socket-endpoint="wss://example.com/v2/dashboard/chat/dashboard-main-unresolved/ws"'), true);
   assert.equal(body.includes('data-dispatch-to-vps-runner="true"'), false);
@@ -670,7 +1036,25 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("new WebSocket(socketEndpoint)"), true);
   assert.equal(body.includes("function refreshThread()"), true);
   assert.equal(body.includes("function scheduleReconnect()"), true);
+  assert.equal(body.includes("function sendOwnerMessageByHttp("), true);
+  assert.equal(body.includes("function isChatSocketOpen()"), true);
+  assert.equal(body.includes("function describeChatSocketState()"), true);
+  assert.equal(body.includes("function buildReconnectStatus("), true);
+  assert.equal(body.includes("function dropStaleSocketIfNeeded()"), true);
+  assert.equal(body.includes('let lastRefreshFailure = ""'), true);
+  assert.equal(body.includes("function isAuthExpiredResponse("), true);
+  assert.equal(body.includes("HTTP fallback"), true);
+  assert.equal(body.includes("Dashboard のログインが切れています。入力は残したまま再ログインしてください。"), true);
+  assert.equal(body.includes("Passkey で再ログイン"), true);
+  assert.equal(body.includes("dashboard_access"), true);
+  assert.equal(body.includes("WebSocket 再接続中です。入力は保持したまま HTTP fallback で保存します。"), true);
+  assert.equal(body.includes("WebSocket 未接続のため HTTP fallback で保存しました。再接続を続けています。"), true);
+  assert.equal(body.includes("sendOwnerMessageByHttp(ownerPayload, clientMessageId)"), true);
+  assert.equal(body.includes("refreshThread().then"), false);
   assert.equal(body.includes("履歴を再取得して再接続します"), true);
+  assert.equal(body.includes("履歴の再取得に失敗しました。入力は保持しています。"), true);
+  assert.equal(body.includes("最後の履歴取得"), true);
+  assert.equal(body.includes("WebSocket: "), true);
   assert.equal(body.includes("document.addEventListener(\"visibilitychange\""), true);
   assert.equal(body.includes("window.addEventListener(\"online\""), true);
   assert.equal(body.includes("VPS Codex CLI に push します"), false);
@@ -704,6 +1088,18 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("String.fromCharCode(96, 96, 96)"), true);
   assert.equal(body.includes("code.dataset.language = language"), true);
   assert.equal(body.includes("renderInlineMarkdown(strong"), true);
+  assert.equal(body.includes("function normalizeMessageDisplayText("), true);
+  assert.equal(body.includes("function normalizeMessageCopyText("), true);
+  assert.equal(body.includes("function decodeSafeChatCommandText("), true);
+  assert.equal(body.includes("decodeURIComponent(line)"), true);
+  assert.equal(body.includes('if (/^https?:/i.test(line))'), true);
+  assert.equal(body.includes("function shouldWrapCodeBlock("), true);
+  assert.equal(body.includes('if (/^https?:\\/\\//i.test(source)) return true;'), true);
+  assert.equal(body.includes('if (/^go:%[0-9a-f]{2}/i.test(source)) return true;'), true);
+  assert.equal(body.includes("return source.length > 80 && !/\\s/.test(source);"), true);
+  assert.equal(body.includes('renderMessageText(body, normalizeMessageDisplayText(message.text || "（空のメッセージ）"))'), true);
+  assert.equal(body.includes('copyMessageText(copyButton, normalizeMessageCopyText(message.text || ""))'), true);
+  assert.equal(body.includes('pre.className = "wrap-code"'), true);
   assert.equal(body.includes("function copyMessageText("), true);
   assert.equal(body.includes("navigator.clipboard.writeText"), true);
   assert.equal(body.includes("返信をコピー"), true);
@@ -732,6 +1128,10 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes('body.type === "transient_status"'), true);
   assert.equal(body.includes("appendMessage(body"), false);
   assert.equal(body.includes("white-space: pre-wrap"), true);
+  assert.equal(body.includes(".bubble .message-body pre.wrap-code"), true);
+  assert.equal(body.includes("overflow-wrap: anywhere; word-break: break-word;"), true);
+  assert.equal(body.includes(".bubble .message-body { display: grid; gap: 12px; min-width: 0; }"), true);
+  assert.equal(body.includes(".bubble .message-body p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }"), true);
   assert.equal(body.includes("tokenPattern"), true);
   assert.equal(body.includes('link.className = "chat-link"'), true);
   assert.equal(body.includes("考えています"), false);
@@ -748,11 +1148,12 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("モバイル管理メニュー"), true);
   assert.equal(body.includes("直近 deploy event"), true);
   assert.equal(body.includes("Butler V2 にメッセージ"), true);
-  assert.equal(body.includes("状態確認"), true);
+  assert.equal(body.includes("GitHub状況"), true);
   assert.equal(body.includes(">通知</a>"), true);
   assert.equal(body.includes("/dashboard/github?repository=marushu%2Fvtdd-v2-p"), false);
   assert.equal(body.includes("/dashboard/notifications"), true);
   assert.equal(body.includes(">通知センター</a>"), true);
+  assert.equal(body.includes(">Deploy operator</a>"), true);
   assert.equal(body.includes("include=open_prs"), false);
   assert.equal(body.includes('name="text"'), true);
   assert.equal(/<meta[^>]+http-equiv=["']?refresh/i.test(body), false);
@@ -789,6 +1190,78 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(aliasBody.includes("dashboard main chat"), true);
   assert.equal(aliasBody.includes("管理メニュー"), true);
   assert.equal(aliasBody.includes("WebSocket"), true);
+});
+
+test("served dashboard inline chat renderer executes decode, link, wrap, and copy behavior", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/dashboard", {
+      headers: dashboardAccessHeaders
+    }),
+    dashboardAccessEnv
+  );
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  const document = createMinimalDashboardDocument();
+  const copied = [];
+  const helpers = loadDashboardInlineChatHelpers(html)(
+    document,
+    {
+      clipboard: {
+        async writeText(text) {
+          copied.push(String(text));
+        }
+      }
+    },
+    {
+      isSecureContext: true,
+      setTimeout(callback) {
+        callback();
+      }
+    },
+    (text) => {
+      document.lastStatus = text;
+    }
+  );
+
+  assert.equal(
+    helpers.normalizeMessageDisplayText("go:%0Adeploy%20production%0Aissue%20%23524"),
+    "go:\ndeploy production\nissue #524"
+  );
+  assert.equal(
+    helpers.normalizeMessageCopyText("https://example.com/path%20with%20encoded?x=1"),
+    "https://example.com/path%20with%20encoded?x=1"
+  );
+  assert.equal(helpers.normalizeMessageCopyText("go:%E0%A4%A"), "go:%E0%A4%A");
+  assert.equal(helpers.normalizeMessageCopyText("slack:%20do-not-decode"), "slack:%20do-not-decode");
+
+  const textContainer = document.createElement("div");
+  helpers.renderMessageText(
+    textContainer,
+    helpers.normalizeMessageDisplayText("go:%0Adeploy%20production%0Ahttps://example.com/" + "a".repeat(96))
+  );
+  assert.equal(textContainer.textContent.includes("go:\ndeploy production"), true);
+  const links = textContainer.querySelectorAll("a");
+  assert.equal(links.length, 1);
+  assert.equal(links[0].className, "chat-link");
+  assert.equal(links[0].href.startsWith("https://example.com/"), true);
+
+  const codeContainer = document.createElement("div");
+  helpers.renderMessageText(codeContainer, "```\nhttps://example.com/" + "b".repeat(96) + "\n```");
+  const codeBlocks = codeContainer.querySelectorAll("pre");
+  assert.equal(codeBlocks.length, 1);
+  assert.equal(codeBlocks[0].className, "wrap-code");
+  const codeCopyButtons = codeContainer.querySelectorAll("button");
+  assert.equal(codeCopyButtons.length, 1);
+  await codeCopyButtons[0].click();
+  assert.equal(copied.at(-1), "https://example.com/" + "b".repeat(96));
+
+  const messageCopyButton = document.createElement("button");
+  await helpers.copyMessageText(
+    messageCopyButton,
+    helpers.normalizeMessageCopyText("go:%0Adeploy%20production%0Aissue%20%23524")
+  );
+  assert.equal(copied.at(-1), "go:\ndeploy production\nissue #524");
+  assert.equal(document.lastStatus, undefined);
 });
 
 test("worker appends dashboard Butler chat turn and retrieves the same thread", async () => {
@@ -2384,6 +2857,41 @@ test("worker serves human-facing dashboard pages for every management menu", asy
   }
 });
 
+test("worker serves dashboard chat-first shell with debug and ops surfaces isolated", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/dashboard?repository=sample-org/vtdd-v2-p", {
+      headers: dashboardAccessHeaders
+    }),
+    dashboardAccessEnv
+  );
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get("content-type"), /text\/html/);
+  const body = await response.text();
+
+  assert.equal(body.includes("VTDD Butler"), true);
+  assert.equal(body.includes("ここではまず普通に会話できます"), true);
+  assert.equal(body.includes("通知と進捗はこの画面から戻って確認できます"), true);
+  assert.equal(body.includes("対象 repo"), true);
+  assert.equal(body.includes("Issue / PR 操作が必要になった時だけ"), true);
+  const initialChat = body.slice(
+    body.indexOf('<div class="chat-scroll"'),
+    body.indexOf('<form class="composer"')
+  );
+  assert.equal(initialChat.includes("Issue 駆動・GitHub runtime truth・VPS runner・Gemini reviewer・RAG・passkey 境界"), false);
+  assert.equal(initialChat.includes("旧 VPS runner 直送経路"), false);
+  assert.equal(initialChat.includes("codex app-server"), false);
+  assert.equal(initialChat.includes("Dashboard thread 接続準備中"), false);
+
+  const debugSectionIndex = body.indexOf('data-debug-section="dashboard-development-operations"');
+  assert.notEqual(debugSectionIndex, -1);
+  assert.equal(body.indexOf("Operational RAG") > debugSectionIndex, true);
+  assert.equal(body.indexOf("Deploy operator") > debugSectionIndex, true);
+  assert.equal(body.indexOf("GitHub workflows") > debugSectionIndex, true);
+  assert.equal(body.includes("<summary>開発/運用</summary>"), true);
+  assert.equal(body.includes("<summary>Runtime surfaces</summary>"), false);
+  assert.equal(body.includes("RAG を読む"), false);
+});
+
 test("worker serves dashboard notification center for recent events across repositories", async () => {
   const store = createInMemoryDashboardEventStore();
   const fourMinutesAgo = new Date(Date.now() - 4 * 60 * 1000).toISOString();
@@ -2447,6 +2955,14 @@ test("worker serves dashboard notification center for recent events across repos
   assert.equal(body.includes("通知センター"), true);
   assert.equal(body.includes("Dashboard Butler の通知入口です"), true);
   assert.equal(body.includes("iOS PWA Web Push"), true);
+  assert.equal(body.includes('data-debug-section="notification-center-context"'), true);
+  assert.equal(body.includes("<summary>通知センターについて</summary>"), true);
+  assert.equal(body.indexOf("最新通知") < body.indexOf("iOS PWA 通知"), true);
+  assert.equal(body.indexOf("最新通知") < body.indexOf("通知センターについて"), true);
+  assert.equal(body.indexOf("最新通知") < body.indexOf("Badge"), true);
+  assert.equal(body.indexOf("最新通知") < body.indexOf("Authority boundary"), true);
+  assert.equal(body.includes('data-debug-section="notification-authority-boundary"'), true);
+  assert.equal(body.includes("<summary>通知の詳細設定と安全境界</summary>"), true);
   assert.equal(body.includes("id=\"push-permission-button\""), true);
   assert.equal(body.includes("id=\"push-subscribe-button\""), true);
   assert.equal(body.includes("id=\"push-server-test-button\""), true);
@@ -2625,14 +3141,8 @@ test("worker reports dashboard push subscription server save status without raw 
 
 test("worker sends server-side dashboard Web Push test only for authenticated owner session", async () => {
   const store = createInMemoryDashboardPushSubscriptionStore();
-  await store.put({
-    endpointHash: "endpoint-hash",
-    endpoint: "https://push.example/send/endpoint-hash",
-    p256dh: "p256dh-key",
-    auth: "auth-key",
-    ownerIdentity: "owner@example.com",
-    updatedAt: new Date().toISOString()
-  });
+  const pushKeys = await createTestPushSubscription();
+  await store.put(pushKeys.subscription);
   const calls = [];
   const vapidEnv = await createTestVapidEnv({
     DASHBOARD_WEB_PUSH_FETCH: async (input, init) => {
@@ -2679,7 +3189,13 @@ test("worker sends server-side dashboard Web Push test only for authenticated ow
   assert.match(calls[0].init.headers.authorization, /^vapid t=.+, k=.+/);
   assert.equal(calls[0].init.headers.ttl, "300");
   assert.equal(calls[0].init.headers.urgency, "normal");
-  assert.equal("body" in calls[0].init, false);
+  assert.equal(calls[0].init.headers["content-encoding"], "aes128gcm");
+  assert.equal(calls[0].init.headers["content-type"], "application/octet-stream");
+  assert.equal("body" in calls[0].init, true);
+  const decrypted = JSON.parse(await decryptTestWebPushPayload(calls[0].init.body, pushKeys));
+  assert.equal(decrypted.title, "VTDD Butler テスト通知");
+  assert.equal(decrypted.body, "通知経路は正常です。iPhone PWA にサーバ送信できました。");
+  assert.equal(decrypted.url, "/dashboard/notifications");
   assert.equal(JSON.stringify(body).includes("p256dh-key"), false);
   assert.equal(JSON.stringify(body).includes("auth-key"), false);
 });
@@ -2772,14 +3288,11 @@ test("worker reports server-side dashboard Web Push configuration blockers", asy
 
 test("worker cleans up stale dashboard Web Push subscriptions rejected by push service", async () => {
   const store = createInMemoryDashboardPushSubscriptionStore();
-  await store.put({
+  const pushKeys = await createTestPushSubscription({
     endpointHash: "stale-endpoint-hash",
-    endpoint: "https://push.example/send/stale-endpoint-hash",
-    p256dh: "p256dh-key",
-    auth: "auth-key",
-    ownerIdentity: "owner@example.com",
-    updatedAt: new Date().toISOString()
+    endpoint: "https://push.example/send/stale-endpoint-hash"
   });
+  await store.put(pushKeys.subscription);
   const vapidEnv = await createTestVapidEnv({
     DASHBOARD_WEB_PUSH_FETCH: async () => new Response(null, { status: 410 })
   });
@@ -2865,14 +3378,11 @@ test("worker redacts dashboard push subscription raw material from D1 payload_js
 test("worker ingests GitHub Actions deploy completion event and shows it on dashboard", async () => {
   const store = createInMemoryDashboardEventStore();
   const pushStore = createInMemoryDashboardPushSubscriptionStore();
-  await pushStore.put({
+  const pushKeys = await createTestPushSubscription({
     endpointHash: "deploy-push-endpoint",
-    endpoint: "https://push.example/send/deploy",
-    p256dh: "p256dh-key",
-    auth: "auth-key",
-    ownerIdentity: "owner@example.com",
-    updatedAt: new Date().toISOString()
+    endpoint: "https://push.example/send/deploy"
   });
+  await pushStore.put(pushKeys.subscription);
   const pushCalls = [];
   const vapidEnv = await createTestVapidEnv({
     DASHBOARD_WEB_PUSH_FETCH: async (input, init) => {
@@ -2915,6 +3425,10 @@ test("worker ingests GitHub Actions deploy completion event and shows it on dash
   assert.equal(pushCalls.length, 1);
   assert.equal(pushCalls[0].input, "https://push.example/send/deploy");
   assert.match(pushCalls[0].init.headers.authorization, /^vapid t=.+, k=.+/);
+  assert.equal(pushCalls[0].init.headers["content-encoding"], "aes128gcm");
+  const decryptedPush = JSON.parse(await decryptTestWebPushPayload(pushCalls[0].init.body, pushKeys));
+  assert.equal(decryptedPush.title, "デプロイ完了: vtdd-v2-p");
+  assert.equal(decryptedPush.body.includes("workflow: deploy-production"), true);
   assert.equal("approvalGrantId" in eventBody.event, false);
   assert.equal("token" in eventBody.event, false);
 
