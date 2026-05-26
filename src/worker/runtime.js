@@ -10696,7 +10696,6 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .bubble.thinking { color: var(--muted); }
     .thinking-dots::after { content: ""; display: inline-block; width: 1.4em; text-align: left; animation: thinkingDots 1.2s steps(4, end) infinite; }
     @keyframes thinkingDots { 0% { content: ""; } 25% { content: "."; } 50% { content: ".."; } 75%, 100% { content: "..."; } }
-    .connection-note { display: inline-flex; align-items: center; width: fit-content; border: 1px solid var(--border); border-radius: 999px; padding: 5px 10px; color: var(--muted); font-size: 13px; }
     .chat-link { color: var(--link); text-decoration-thickness: 1px; text-underline-offset: 4px; font-weight: 750; overflow-wrap: anywhere; word-break: break-word; }
     .bubble.owner .chat-link { color: var(--owner-link); }
     .composer { min-width: 0; display: grid; gap: 8px; z-index: 4; padding: 14px 0 max(16px, env(safe-area-inset-bottom)); background: var(--page-bg); }
@@ -10713,6 +10712,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .media-chip.pending-preview { padding: 5px 8px 5px 5px; }
     .media-remove { border: 0; background: transparent; color: var(--muted); font: inherit; font-weight: 900; padding: 0 2px; cursor: pointer; }
     .composer-status { min-height: 18px; padding-left: 16px; color: var(--muted); font-size: 12px; }
+    .composer-status:empty { min-height: 0; padding-left: 0; }
     .composer-status a { color: var(--text); font-weight: 800; text-underline-offset: 3px; }
     .composer-status.thinking::after { content: ""; display: inline-block; width: 1.4em; text-align: left; animation: thinkingDots 1.2s steps(4, end) infinite; }
     .sidebar { position: sticky; top: 16px; align-self: start; max-height: calc(100dvh - 32px); overflow: auto; border: 1px solid var(--border); border-radius: 18px; background: var(--panel); }
@@ -10850,8 +10850,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         <article class="bubble">
           <strong>Butler</strong>
           <p>その方針で進めます。中央はチャットを主役にして、細かい設定や開発/運用の確認はメニューの中に分けます。</p>
-          <p>接続できない時も、入力内容を失わないように状態を短く表示します。</p>
-          <span class="connection-note">接続準備中: 送信できる状態になったらここで知らせます</span>
+          <p>接続できない時も、入力内容を失わないように必要な状態だけ短く表示します。</p>
         </article>
 
       </div>
@@ -10864,7 +10863,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           <textarea id="butler-message" name="text" placeholder="Butler V2 にメッセージ..." aria-label="Butler V2 にメッセージ" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="send"></textarea>
           <button class="send-button" type="submit" aria-label="Butler に送信">↑</button>
         </div>
-        <div class="composer-status" id="butler-chat-status">接続準備中です。WebSocket 接続後に送信できます。</div>
+        <div class="composer-status" id="butler-chat-status">接続準備中です。送信できる状態になったら知らせます。</div>
       </form>
     </section>
 
@@ -10986,7 +10985,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           const expected = text;
           window.setTimeout(() => {
             if (status.textContent.trim() === expected) {
-              setStatus("Dashboard thread 接続済み。");
+              setStatus("");
             }
           }, 2400);
         }
@@ -11010,12 +11009,12 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         return "不明";
       }
 
-      function setConnectionRecoveryStatus(message) {
+      function setConnectionRecoveryStatus(message, options = {}) {
         const attempt = Math.max(1, reconnectAttempt + 1);
         status.dataset.reconnectAttempt = String(attempt);
         status.dataset.websocketState = describeChatSocketState();
         status.dataset.lastRefreshFailure = lastRefreshFailure || "";
-        setStatus(message);
+        setStatus(message, { temporary: options.temporary !== false });
       }
 
       function buildReconnectStatus(prefix) {
@@ -11600,7 +11599,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 
       function connectThreadSocket() {
         if (!socketEndpoint || typeof WebSocket !== "function") {
-          setStatus("WebSocket を開始できません。dashboard Butler は送信できません。");
+          setStatus("接続を開始できません。dashboard Butler は送信できません。");
           return;
         }
         dropStaleSocketIfNeeded();
@@ -11615,7 +11614,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             window.clearTimeout(reconnectTimer);
             reconnectTimer = null;
           }
-          setStatus("Dashboard thread 接続済み。app-server bridge が接続中なら live Codex thread に送ります。");
+          setStatus("Dashboard thread 接続済み。", { temporary: true });
           refreshThread();
         });
         chatSocket.addEventListener("message", (event) => {
@@ -11704,7 +11703,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         releasePendingOwnerSend(clientMessageId, { clearComposer: true });
         renderThread(body.messages || [], { replace: false });
         lastRefreshFailure = "";
-        setStatus("WebSocket 未接続のため HTTP fallback で保存しました。再接続を続けています。", { temporary: true });
+        setStatus("接続が不安定なため保存しました。再接続を続けています。", { temporary: true });
         scheduleReconnect();
       }
 
@@ -11720,7 +11719,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         setComposerLocked(true);
         const willUseHttpFallback = !isChatSocketOpen();
         if (willUseHttpFallback) {
-          setStatus("WebSocket 再接続中です。入力は保持したまま HTTP fallback で保存します。", { thinking: true });
+          setStatus("接続が不安定です。入力は保持したまま保存します。", { thinking: true });
           scheduleReconnect();
         } else {
           setStatus(pendingMediaItems.length > 0 ? "添付を保存してから送信しています" : "送信中です", { thinking: true });
