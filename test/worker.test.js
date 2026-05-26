@@ -3186,6 +3186,7 @@ test("worker serves dashboard notification center for recent events across repos
   assert.equal(body.includes("scope: \"/dashboard/\""), true);
   assert.equal(body.includes("secret-must-not-persist"), false);
   assert.equal(body.includes("他 repo / 並行開発 / queue / workflow"), true);
+  assert.equal(body.includes("deploy-production / run 26134526815 / sha daad4fb"), true);
   assert.equal(body.includes("最新通知"), true);
   assert.equal(body.includes("success"), true);
   assert.equal(body.includes("デプロイ完了: PR #552 dashboard: 通知設定を折り畳む (#534)"), true);
@@ -3408,14 +3409,18 @@ test("worker builds distinct dashboard Web Push copy by event type", () => {
     conclusion: "success",
     headSha: "0a9e0b8587aa684de3dbd08b57909fe271192662",
     headBranch: "main",
-    title: "deploy-production",
+    title: "Issue #514 owner-facing deploy notification title",
+    changeSummary: "Issue #514 owner-facing deploy notification title",
+    pullNumber: 571,
     runUrl: "https://github.com/marushu/vtdd-v2-p/actions/runs/26323724369"
   });
-  assert.equal(deploySuccess.title, "デプロイ完了: vtdd-v2-p");
+  assert.equal(deploySuccess.title, "デプロイ完了: PR #571 Issue #514 owner-facing deploy notification title");
   assert.equal(deploySuccess.body.includes("workflow: deploy-production"), true);
   assert.equal(deploySuccess.body.includes("branch: main"), true);
   assert.equal(deploySuccess.body.includes("sha: 0a9e0b8"), true);
   assert.equal(deploySuccess.body.includes("run: 26323724369"), true);
+  assert.equal(deploySuccess.body.includes("PR #571"), true);
+  assert.equal(deploySuccess.body.includes("Issue #514"), true);
 
   const deployFailure = buildDashboardWebPushPayload({
     kind: "github_actions_workflow_run",
@@ -3629,7 +3634,7 @@ test("worker ingests GitHub Actions deploy completion event and shows it on dash
   assert.match(pushCalls[0].init.headers.authorization, /^vapid t=.+, k=.+/);
   assert.equal(pushCalls[0].init.headers["content-encoding"], "aes128gcm");
   const decryptedPush = JSON.parse(await decryptTestWebPushPayload(pushCalls[0].init.body, pushKeys));
-  assert.equal(decryptedPush.title, "デプロイ完了: vtdd-v2-p");
+  assert.equal(decryptedPush.title, "デプロイ完了: PR #552 dashboard: 通知カードにPR概要を出す (#534)");
   assert.equal(decryptedPush.body.includes("dashboard: 通知カードにPR概要を出す"), true);
   assert.equal(decryptedPush.body.includes("PR #552"), true);
   assert.equal(decryptedPush.body.includes("workflow: deploy-production"), true);
@@ -3650,6 +3655,7 @@ test("worker ingests GitHub Actions deploy completion event and shows it on dash
   assert.equal(dashboardBody.includes("最新 deploy"), true);
   assert.equal(dashboardBody.includes("success"), true);
   assert.equal(dashboardBody.includes("ef55709"), true);
+  assert.equal(dashboardBody.includes("デプロイ完了: PR #552 dashboard: 通知カードにPR概要を出す (#534)"), true);
   assert.equal(dashboardBody.includes("dashboard: 通知カードにPR概要を出す"), true);
   assert.equal(dashboardBody.includes("PR #552"), true);
   assert.equal(

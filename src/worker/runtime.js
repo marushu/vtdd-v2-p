@@ -7258,7 +7258,8 @@ function buildDashboardWebPushTitle(record) {
     const isDeploy = normalize(record.workflowName).includes("deploy");
     const label = dashboardPushStatusLabel(record);
     if (isDeploy) {
-      return `デプロイ${label}${repository ? `: ${repository}` : ""}`.slice(0, 80);
+      const subject = buildDashboardEventSubject(record, { limit: 58 });
+      return `デプロイ${label}: ${subject || repository || "repository"}`.slice(0, 80);
     }
     const workflow = compactNotificationText(record.workflowName || "workflow", 24);
     return `Actions ${label}: ${workflow}${repository ? ` / ${repository}` : ""}`.slice(0, 80);
@@ -8335,6 +8336,15 @@ function inferPullNumberFromText(value) {
     return null;
   }
   const explicit = text.match(/\b(?:PR|pull request)\s*#?(\d+)\b/i);
+  return explicit ? normalizeIssue(explicit[1]) : null;
+}
+
+function inferIssueNumberFromText(value) {
+  const text = normalizeDashboardEventText(value);
+  if (!text) {
+    return null;
+  }
+  const explicit = text.match(/\bIssue\s*#?(\d+)\b/i);
   return explicit ? normalizeIssue(explicit[1]) : null;
 }
 
@@ -9648,21 +9658,41 @@ function renderDashboardNotificationEvent(event) {
 function buildDashboardEventDisplayTitle(event, { workflowName, conclusion } = {}) {
   const record = normalizeDashboardEventRecord(event);
   const statusLabel = dashboardPushStatusLabel(record);
-  const summary = normalizeDashboardEventText(record.changeSummary || record.title);
   const isDeploy = record.kind === "github_actions_workflow_run" && normalize(workflowName || record.workflowName).includes("deploy");
-  const baseSummary = summary && summary !== record.workflowName ? summary : "";
+  const baseSummary = buildDashboardEventSubject(record, { limit: 96 });
   const pullPrefix = record.pullNumber ? `PR #${record.pullNumber}` : "";
   if (isDeploy) {
-    const subject = [pullPrefix, baseSummary].filter(Boolean).join(" ");
-    return subject ? `デプロイ${statusLabel}: ${subject}` : `デプロイ${statusLabel}: ${record.repository || "repository"} ${record.headSha ? record.headSha.slice(0, 7) : ""}`.trim();
+    return baseSummary ? `デプロイ${statusLabel}: ${baseSummary}` : `デプロイ${statusLabel}: ${record.repository || "repository"} ${record.headSha ? record.headSha.slice(0, 7) : ""}`.trim();
   }
   if (pullPrefix && baseSummary) {
-    return `${pullPrefix}: ${baseSummary}`;
+    return baseSummary.startsWith(pullPrefix) ? baseSummary : `${pullPrefix}: ${baseSummary}`;
   }
   if (pullPrefix) {
     return `${workflowName || record.workflowName || "Actions"} ${dashboardPushStatusLabel(record)}: ${pullPrefix}`;
   }
   return baseSummary || workflowName || record.kind || conclusion || "dashboard event";
+}
+
+function buildDashboardEventSubject(event, { limit = 80 } = {}) {
+  const record = normalizeDashboardEventRecord(event);
+  const rawSummary = normalizeDashboardEventText(record.changeSummary || record.title);
+  const summary = rawSummary && rawSummary !== record.workflowName ? rawSummary : "";
+  const pullPrefix = record.pullNumber ? `PR #${record.pullNumber}` : "";
+  const issueNumber = record.issueNumber || inferIssueNumberFromText(summary);
+  const issuePrefix = issueNumber ? `Issue #${issueNumber}` : "";
+  const withoutDuplicatedPull = pullPrefix
+    ? summary.replace(new RegExp(`\\bPR\\s*#?${record.pullNumber}\\b\\s*[:：-]?\\s*`, "i"), "").trim()
+    : summary;
+  const withoutDuplicatedIssue = issueNumber
+    ? withoutDuplicatedPull
+        .replace(new RegExp(`\\bIssue\\s*#?${issueNumber}\\b\\s*[:：-]?\\s*`, "i"), "")
+        .replace(new RegExp(`#${issueNumber}\\b\\s*[:：-]?\\s*`, "i"), "")
+        .trim()
+    : withoutDuplicatedPull;
+  return compactNotificationText(
+    [pullPrefix, issuePrefix, withoutDuplicatedIssue].filter(Boolean).join(" "),
+    limit
+  );
 }
 
 function formatDashboardRelativeTime(value, now = new Date()) {
