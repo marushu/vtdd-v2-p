@@ -51,11 +51,12 @@ Observed result on 2026-05-26:
 Command:
 
 ```sh
-/opt/homebrew/bin/firefox --headless --window-size=390,844 --screenshot=/Users/shuhei/hibou_works/vtdd-v2-p/docs/mvp/e2e/assets/issue-518/dashboard-chat-timestamps-mobile-390x844.png 'http://127.0.0.1:8800/dashboard?repository=sample-org/vtdd-v2-p'
+firefox --headless --window-size=390,844 --screenshot=docs/mvp/e2e/assets/issue-518/dashboard-chat-timestamps-mobile-390x844.png 'http://127.0.0.1:8800/dashboard?repository=sample-org/vtdd-v2-p'
 ```
 
 Observed result on 2026-05-26:
 - mobile screenshot generated at 390 x 844
+- run was a local mobile-width browser visual probe; it is not a production Cloudflare deploy or production iPhone/PWA live claim
 - screenshot fixture uses the Dashboard HTML/CSS surface with owner, Butler, and system message bubbles
 - today's messages show short time labels such as `10:18` and `10:19`
 - previous-day message shows a date plus time label: `5/25 23:21`

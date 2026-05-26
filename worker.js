@@ -61631,7 +61631,7 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
       )
     );
   } else if (eventType === "app_server_status") {
-    transientStatus = isDashboardAppServerCompleteStatus(status) ? "replied" : "thinking";
+    transientStatus = status === "replied" ? "replied" : "thinking";
     transientText = buildDashboardOwnerFacingTransientStatusText(input, {
       status,
       text,
@@ -61649,16 +61649,41 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
     messages: messages.filter(Boolean)
   };
 }
-function isDashboardAppServerCompleteStatus(status) {
-  return status === "replied" || status === "complete" || status === "completed" || status === "done";
-}
+var DASHBOARD_APP_SERVER_STAGE_TEXT = {
+  read_context: "\u65E2\u5B58 Issue / PR / docs \u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u3002",
+  inspect_context: "\u65E2\u5B58 Issue / PR / docs \u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u3002",
+  issue_body: "\u65B0\u3057\u3044 Issue \u672C\u6587\u3092\u4F5C\u6210\u3057\u3066\u3044\u307E\u3059\u3002",
+  draft_issue: "\u65B0\u3057\u3044 Issue \u672C\u6587\u3092\u4F5C\u6210\u3057\u3066\u3044\u307E\u3059\u3002",
+  github_issue_create: "GitHub \u306B Issue \u3092\u4F5C\u6210\u3057\u3066\u3044\u307E\u3059\u3002",
+  issue_create: "GitHub \u306B Issue \u3092\u4F5C\u6210\u3057\u3066\u3044\u307E\u3059\u3002",
+  bounded_change_contract: "bounded change contract \u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u3002",
+  change_contract: "bounded change contract \u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u3002",
+  topic_branch: "topic branch \u3092\u4F5C\u6210\u3057\u3066\u3044\u307E\u3059\u3002",
+  branch_create: "topic branch \u3092\u4F5C\u6210\u3057\u3066\u3044\u307E\u3059\u3002",
+  implementation: "\u5B9F\u88C5\u306B\u5165\u3063\u3066\u3044\u307E\u3059\u3002",
+  implement: "\u5B9F\u88C5\u306B\u5165\u3063\u3066\u3044\u307E\u3059\u3002",
+  test: "\u30C6\u30B9\u30C8\u3092\u5B9F\u884C\u3057\u3066\u3044\u307E\u3059\u3002",
+  tests: "\u30C6\u30B9\u30C8\u3092\u5B9F\u884C\u3057\u3066\u3044\u307E\u3059\u3002",
+  pr_body: "PR\u672C\u6587\u3092\u4F5C\u6210\u3057\u3066\u3044\u307E\u3059\u3002",
+  pull_request_body: "PR\u672C\u6587\u3092\u4F5C\u6210\u3057\u3066\u3044\u307E\u3059\u3002",
+  pr_create: "PR\u3092\u4F5C\u6210\u3057\u3066\u3044\u307E\u3059\u3002",
+  pull_request_create: "PR\u3092\u4F5C\u6210\u3057\u3066\u3044\u307E\u3059\u3002",
+  reviewer_wait: "CI / reviewer \u3092\u5F85\u3063\u3066\u3044\u307E\u3059\u3002",
+  ci_wait: "CI / reviewer \u3092\u5F85\u3063\u3066\u3044\u307E\u3059\u3002",
+  reviewer_revision: "reviewer \u6307\u6458\u3092\u53CD\u6620\u3057\u3066\u3044\u307E\u3059\u3002",
+  review_fix: "reviewer \u6307\u6458\u3092\u53CD\u6620\u3057\u3066\u3044\u307E\u3059\u3002"
+};
 function buildDashboardOwnerFacingTransientStatusText(input, { status = "", text = "", transientStatus = "" } = {}) {
-  if (transientStatus === "replied" || isDashboardAppServerCompleteStatus(status)) {
+  if (transientStatus === "replied" || status === "replied") {
     return "Dashboard thread \u63A5\u7D9A\u6E08\u307F\u3002";
   }
   const stage = normalizeDashboardEventText(
     input.stage || input.phase || input.step || input.activity || input.progressStage || input.progress_stage
   ).toLowerCase();
+  const normalizedStage = stage.replaceAll("-", "_");
+  if (DASHBOARD_APP_SERVER_STAGE_TEXT[normalizedStage]) {
+    return DASHBOARD_APP_SERVER_STAGE_TEXT[normalizedStage];
+  }
   const eventType = normalizeDashboardEventText(input.type || input.eventType || input.event_type).toLowerCase();
   const source = [stage, status, eventType, text].filter(Boolean).join(" ").toLowerCase();
   const matches = (patterns) => patterns.some((pattern) => source.includes(pattern));

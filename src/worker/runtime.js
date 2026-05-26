@@ -6419,7 +6419,7 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
       )
     );
   } else if (eventType === "app_server_status") {
-    transientStatus = isDashboardAppServerCompleteStatus(status) ? "replied" : "thinking";
+    transientStatus = status === "replied" ? "replied" : "thinking";
     transientText = buildDashboardOwnerFacingTransientStatusText(input, {
       status,
       text,
@@ -6438,12 +6438,33 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
   };
 }
 
-function isDashboardAppServerCompleteStatus(status) {
-  return status === "replied" || status === "complete" || status === "completed" || status === "done";
-}
+const DASHBOARD_APP_SERVER_STAGE_TEXT = {
+  read_context: "既存 Issue / PR / docs を確認しています。",
+  inspect_context: "既存 Issue / PR / docs を確認しています。",
+  issue_body: "新しい Issue 本文を作成しています。",
+  draft_issue: "新しい Issue 本文を作成しています。",
+  github_issue_create: "GitHub に Issue を作成しています。",
+  issue_create: "GitHub に Issue を作成しています。",
+  bounded_change_contract: "bounded change contract を確認しています。",
+  change_contract: "bounded change contract を確認しています。",
+  topic_branch: "topic branch を作成しています。",
+  branch_create: "topic branch を作成しています。",
+  implementation: "実装に入っています。",
+  implement: "実装に入っています。",
+  test: "テストを実行しています。",
+  tests: "テストを実行しています。",
+  pr_body: "PR本文を作成しています。",
+  pull_request_body: "PR本文を作成しています。",
+  pr_create: "PRを作成しています。",
+  pull_request_create: "PRを作成しています。",
+  reviewer_wait: "CI / reviewer を待っています。",
+  ci_wait: "CI / reviewer を待っています。",
+  reviewer_revision: "reviewer 指摘を反映しています。",
+  review_fix: "reviewer 指摘を反映しています。"
+};
 
 function buildDashboardOwnerFacingTransientStatusText(input, { status = "", text = "", transientStatus = "" } = {}) {
-  if (transientStatus === "replied" || isDashboardAppServerCompleteStatus(status)) {
+  if (transientStatus === "replied" || status === "replied") {
     return "Dashboard thread 接続済み。";
   }
   const stage = normalizeDashboardEventText(
@@ -6454,6 +6475,10 @@ function buildDashboardOwnerFacingTransientStatusText(input, { status = "", text
       input.progressStage ||
       input.progress_stage
   ).toLowerCase();
+  const normalizedStage = stage.replaceAll("-", "_");
+  if (DASHBOARD_APP_SERVER_STAGE_TEXT[normalizedStage]) {
+    return DASHBOARD_APP_SERVER_STAGE_TEXT[normalizedStage];
+  }
   const eventType = normalizeDashboardEventText(input.type || input.eventType || input.event_type).toLowerCase();
   const source = [stage, status, eventType, text].filter(Boolean).join(" ").toLowerCase();
   const matches = (patterns) => patterns.some((pattern) => source.includes(pattern));
