@@ -12,8 +12,12 @@ export function renderPasskeyOperatorPage(input = {}) {
   const issueDefault = escapeHtml(input.issueNumber || "");
   const pullNumberDefault = escapeHtml(input.pullNumber || "");
   const phaseDefault = escapeHtml(input.phase || "execution");
-  const actionTypeDefault = escapeHtml(input.actionType || defaultActionTypeForMode(operatorMode));
-  const highRiskKindDefault = escapeHtml(input.highRiskKind || defaultHighRiskKindForMode(operatorMode));
+  const actionTypeDefault = escapeHtml(
+    deployOneTapMode ? "deploy_production" : input.actionType || defaultActionTypeForMode(operatorMode)
+  );
+  const highRiskKindDefault = escapeHtml(
+    deployOneTapMode ? "deploy_production" : input.highRiskKind || defaultHighRiskKindForMode(operatorMode)
+  );
   const mergeMethodDefault = escapeHtml(input.mergeMethod || "squash");
   const returnUrl = escapeHtml(input.returnUrl || "");
   const githubAppRoleDefault = escapeHtml(input.githubAppRole || "legacy");
@@ -211,9 +215,9 @@ export function renderPasskeyOperatorPage(input = {}) {
             <label for="phase-input">Phase</label>
             <input id="phase-input" value="${phaseDefault}" />
             <label for="action-type-input">Action Type</label>
-            <input id="action-type-input" value="${actionTypeDefault}" />
+            <input id="action-type-input" value="${actionTypeDefault}" autocomplete="off"${deployOneTapMode ? ' readonly data-deploy-scope-locked="true"' : ""} />
             <label for="risk-kind-input">High-risk Kind</label>
-            <input id="risk-kind-input" value="${highRiskKindDefault}" />
+            <input id="risk-kind-input" value="${highRiskKindDefault}" autocomplete="off"${deployOneTapMode ? ' readonly data-deploy-scope-locked="true"' : ""} />
           </div>`
               : `<label for="repo-input">Repository</label>
           <input id="repo-input" value="${repoDefault}" placeholder="marushu/vtdd-v2-p" />
@@ -363,6 +367,7 @@ export function renderPasskeyOperatorPage(input = {}) {
       const issueCloseLink = document.getElementById("issue-close-link");
       const operatorMode = "${escapeHtml(operatorMode)}";
       let latestApprovalGrantId = "";
+      let latestApprovalGrant = null;
 
       async function readResponseBody(response) {
         const contentType = response.headers.get("content-type") || "";
@@ -589,10 +594,17 @@ export function renderPasskeyOperatorPage(input = {}) {
         return readNumberInput("pull-number-input");
       }
 
-      function applyOperatorModeDefaults() {
+      function forceDeployApprovalScope() {
         if (operatorMode === "deploy") {
           document.getElementById("action-type-input").value = "deploy_production";
           document.getElementById("risk-kind-input").value = "deploy_production";
+          return true;
+        }
+        return false;
+      }
+
+      function applyOperatorModeDefaults() {
+        if (forceDeployApprovalScope()) {
           return;
         }
         if (operatorMode === "dashboard") {
@@ -602,10 +614,27 @@ export function renderPasskeyOperatorPage(input = {}) {
       }
 
       function shouldAutoDispatchProductionDeploy() {
-        applyOperatorModeDefaults();
+        forceDeployApprovalScope();
         return operatorMode === "deploy" &&
           document.getElementById("action-type-input").value === "deploy_production" &&
           document.getElementById("risk-kind-input").value === "deploy_production";
+      }
+
+      function approvalGrantHasDeployScope(approvalGrant) {
+        const scope = approvalGrant?.scope || {};
+        return scope.actionType === "deploy_production" &&
+          scope.highRiskKind === "deploy_production";
+      }
+
+      function requireDeployApprovalGrantScope() {
+        if (operatorMode !== "deploy") {
+          return;
+        }
+        forceDeployApprovalScope();
+        if (!approvalGrantHasDeployScope(latestApprovalGrant)) {
+          latestApprovalGrantId = "";
+          throw new Error("deploy 用の承認ではありません。パスキーで production deploy を再承認してください。");
+        }
       }
 
       async function dispatchProductionDeploy({ source = "manual" } = {}) {
@@ -613,6 +642,7 @@ export function renderPasskeyOperatorPage(input = {}) {
         if (!latestApprovalGrantId) {
           throw new Error("approvalGrantId is required before production deploy");
         }
+        requireDeployApprovalGrantScope();
         const repositoryInput = readRequiredRepositoryInput();
         clearDeployRunLink();
         deployOutput.textContent = source === "approval"
@@ -734,7 +764,8 @@ export function renderPasskeyOperatorPage(input = {}) {
           if (!verifyResponse.ok) {
             throw responseError(verifyBody, "approval verify failed");
           }
-          latestApprovalGrantId = verifyBody?.approvalGrant?.approvalId || verifyBody?.approvalGrantId || "";
+          latestApprovalGrant = verifyBody?.approvalGrant || null;
+          latestApprovalGrantId = latestApprovalGrant?.approvalId || verifyBody?.approvalGrantId || "";
           approveOutput.textContent = JSON.stringify(verifyBody, null, 2);
           if (operatorMode === "dashboard") {
             window.location.assign("/dashboard");

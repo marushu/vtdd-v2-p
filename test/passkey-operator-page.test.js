@@ -151,11 +151,17 @@ test("passkey operator page focuses deploy mode on deploy approval and dispatch 
   assert.equal(html.includes('repository: repositoryInput'), true);
   assert.equal(html.includes("function shouldAutoDispatchProductionDeploy()"), true);
   assert.equal(html.includes("function applyOperatorModeDefaults()"), true);
+  assert.equal(html.includes("function forceDeployApprovalScope()"), true);
+  assert.equal(html.includes("function requireDeployApprovalGrantScope()"), true);
+  assert.equal(html.includes("function approvalGrantHasDeployScope(approvalGrant)"), true);
   assert.equal(html.includes('document.getElementById("action-type-input").value = "deploy_production"'), true);
   assert.equal(html.includes('document.getElementById("risk-kind-input").value = "deploy_production"'), true);
+  assert.equal(html.includes('data-deploy-scope-locked="true"'), true);
   assert.equal(html.includes("applyOperatorModeDefaults();"), true);
   assert.equal(html.includes("const repositoryInput = readRequiredRepositoryInput();"), true);
   assert.equal(html.includes("if (!latestApprovalGrantId)"), true);
+  assert.equal(html.includes("requireDeployApprovalGrantScope();"), true);
+  assert.equal(html.includes("deploy 用の承認ではありません。パスキーで production deploy を再承認してください。"), true);
   assert.equal(html.includes("return operatorMode === \"deploy\""), true);
   assert.equal(html.includes('operatorMode === "deploy"'), true);
   assert.equal(html.includes('document.getElementById("action-type-input").value === "deploy_production"'), true);
@@ -177,6 +183,24 @@ test("passkey operator page blocks approval and deploy before repositoryInput is
   assert.equal(html.includes("Deploy does not require issueNumber or pullNumber"), true);
   assert.equal(html.includes("repository: repositoryInput"), true);
   assert.equal(html.includes("async function dispatchProductionDeploy"), true);
+});
+
+test("passkey operator deploy mode ignores stale action scope from restored input", () => {
+  const html = renderPasskeyOperatorPage({
+    operatorMode: "deploy",
+    repositoryInput: "marushu/vtdd-v2-p",
+    actionType: "merge",
+    highRiskKind: "pull_merge"
+  });
+
+  assert.equal(html.includes('id="action-type-input" value="deploy_production"'), true);
+  assert.equal(html.includes('id="risk-kind-input" value="deploy_production"'), true);
+  assert.equal(html.includes('id="action-type-input" value="merge"'), false);
+  assert.equal(html.includes('id="risk-kind-input" value="pull_merge"'), false);
+  assert.equal(html.includes('autocomplete="off" readonly data-deploy-scope-locked="true"'), true);
+  assert.equal(html.includes('highRiskKind: document.getElementById("risk-kind-input").value'), true);
+  assert.equal(html.includes('actionType: document.getElementById("action-type-input").value'), true);
+  assert.equal(html.includes("forceDeployApprovalScope();"), true);
 });
 
 test("passkey operator page fills safe approval defaults from explicit mode", () => {
