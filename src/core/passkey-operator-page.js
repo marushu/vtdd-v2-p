@@ -614,9 +614,17 @@ export function renderPasskeyOperatorPage(input = {}) {
           return;
         }
         approveOutput.textContent = String(text || "");
-        if (show) {
-          approveOutput.hidden = false;
+        approveOutput.hidden = !show;
+      }
+
+      function shouldShowApproveOutput(kind = "status") {
+        if (operatorMode === "deploy") {
+          return false;
         }
+        if (operatorMode === "dashboard") {
+          return kind === "error";
+        }
+        return true;
       }
 
       function showIssueCloseLink(body) {
@@ -778,7 +786,7 @@ export function renderPasskeyOperatorPage(input = {}) {
         try {
           applyOperatorModeDefaults();
           const repositoryInput = readApprovalRepositoryInput();
-          setApproveOutput("approval challenge request...", { show: operatorMode !== "dashboard" });
+          setApproveOutput("approval challenge request...", { show: shouldShowApproveOutput("status") });
           const challengeResponse = await fetch("${apiBase}/approval/passkey/challenge", {
             method: "POST",
             headers: { "content-type": "application/json" },
@@ -819,7 +827,7 @@ export function renderPasskeyOperatorPage(input = {}) {
           }
           latestApprovalGrant = verifyBody?.approvalGrant || null;
           latestApprovalGrantId = latestApprovalGrant?.approvalId || verifyBody?.approvalGrantId || "";
-          setApproveOutput(JSON.stringify(verifyBody, null, 2), { show: operatorMode !== "dashboard" });
+          setApproveOutput(JSON.stringify(verifyBody, null, 2), { show: shouldShowApproveOutput("status") });
           if (operatorMode === "dashboard") {
             window.location.assign("${dashboardReturnPath}");
             return;
@@ -840,7 +848,7 @@ export function renderPasskeyOperatorPage(input = {}) {
             }
           }
         } catch (error) {
-          setApproveOutput(String(error));
+          setApproveOutput(String(error), { show: shouldShowApproveOutput("error") });
         }
       });
 
