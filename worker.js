@@ -65242,7 +65242,15 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
   const dashboardTargetLabel = repositoryInput || "\u5BFE\u8C61 repo \u672A\u6307\u5B9A";
   const targetStatusMarkup = repositoryInput ? `<p><strong>${escapeDashboardHtml(repositoryInput)}</strong></p>
           <p class="muted">\u3053\u306E repo \u3067 Issue / PR \u64CD\u4F5C\u304C\u5FC5\u8981\u306A\u6642\u3060\u3051\u5BFE\u8C61\u306B\u3057\u307E\u3059\u3002\u901A\u5E38\u4F1A\u8A71\u306F\u3053\u306E\u307E\u307E\u7D9A\u3051\u3089\u308C\u307E\u3059\u3002</p>` : `<p><strong>\u5BFE\u8C61 repo \u672A\u6307\u5B9A</strong></p>
-          <p class="muted">\u901A\u5E38\u4F1A\u8A71\u306F\u7D9A\u3051\u3089\u308C\u307E\u3059\u3002Issue / PR \u64CD\u4F5C\u304C\u5FC5\u8981\u306B\u306A\u3063\u305F\u6642\u306B\u5BFE\u8C61 repo \u3092\u9078\u3073\u307E\u3059\u3002</p>`;
+          <p class="muted">\u901A\u5E38\u4F1A\u8A71\u306F\u7D9A\u3051\u3089\u308C\u307E\u3059\u3002Issue / PR / deploy \u306A\u3069 repo \u304C\u5FC5\u8981\u306A\u64CD\u4F5C\u3092\u59CB\u3081\u308B\u6642\u3060\u3051\u3001\u3053\u3053\u3067\u5BFE\u8C61 repo \u3092\u8A2D\u5B9A\u3057\u307E\u3059\u3002</p>
+          <form class="target-form" method="get" action="${escapeDashboardHtml(origin)}/dashboard">
+            <label for="dashboard-repository-input">\u5BFE\u8C61 repo</label>
+            <div class="target-form-row">
+              <input id="dashboard-repository-input" name="repository" placeholder="owner/repo" autocomplete="off" autocapitalize="off" spellcheck="false">
+              ${dashboardIssueNumber ? `<input type="hidden" name="issueNumber" value="${dashboardIssueNumber}">` : ""}
+              <button type="submit">\u8A2D\u5B9A</button>
+            </div>
+          </form>`;
   const encodedRepository = encodeURIComponent(repositoryInput);
   const chatThreadId = `dashboard-main-${(repositoryInput || "unresolved").replace(/[^a-z0-9_.-]+/gi, "-")}`;
   const socketOrigin = origin.replace(/^http/i, "ws");
@@ -65263,22 +65271,26 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     {
       title: "Startup preflight",
       body: "AGENTS.md\u3001thread-independent startup\u3001runtime truth\u3001RAG\u3001self parity \u3092\u6700\u521D\u306B\u8AAD\u3080\u5165\u53E3\u3002",
-      href: `${origin}/dashboard/preflight?repository=${encodedRepository}`
+      href: repositoryInput ? `${origin}/dashboard/preflight?repository=${encodedRepository}` : "",
+      disabledReason: "repo \u8A2D\u5B9A\u5F8C\u306B\u958B\u3051\u307E\u3059"
     },
     {
       title: "Execution progress",
       body: "VPS Codex CLI / remote Codex execution \u306E\u9032\u6357\u78BA\u8A8D\u3002",
-      href: `${origin}/dashboard/progress?repository=${encodedRepository}`
+      href: repositoryInput ? `${origin}/dashboard/progress?repository=${encodedRepository}` : "",
+      disabledReason: "repo \u8A2D\u5B9A\u5F8C\u306B\u958B\u3051\u307E\u3059"
     },
     {
       title: "VPS runner status",
       body: "runner health\u3001queue\u3001\u5BFE\u8C61 execution \u306E\u72B6\u614B\u78BA\u8A8D\u3002",
-      href: `${origin}/dashboard/vps-runner?repository=${encodedRepository}`
+      href: repositoryInput ? `${origin}/dashboard/vps-runner?repository=${encodedRepository}` : "",
+      disabledReason: "repo \u8A2D\u5B9A\u5F8C\u306B\u958B\u3051\u307E\u3059"
     },
     {
       title: "GitHub runtime truth",
       body: "Issues\u3001PRs\u3001checks\u3001workflow runs\u3001reviewer comments \u3092\u8AAD\u3080\u5165\u53E3\u3002",
-      href: `${origin}/dashboard/github?repository=${encodedRepository}`
+      href: repositoryInput ? `${origin}/dashboard/github?repository=${encodedRepository}` : "",
+      disabledReason: "repo \u8A2D\u5B9A\u5F8C\u306B\u958B\u3051\u307E\u3059"
     },
     {
       title: "\u901A\u77E5\u30BB\u30F3\u30BF\u30FC",
@@ -65288,22 +65300,26 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     {
       title: "Operational RAG",
       body: "decision / proposal / working memory \u306E compact retrieval\u3002runtime truth \u306E\u4EE3\u66FF\u3067\u306F\u306A\u3044\u3002",
-      href: `${origin}/dashboard/memory?repository=${encodedRepository}`
+      href: repositoryInput ? `${origin}/dashboard/memory?repository=${encodedRepository}` : "",
+      disabledReason: "repo \u8A2D\u5B9A\u5F8C\u306B\u958B\u3051\u307E\u3059"
     },
     {
       title: "Self parity",
       body: "Action Schema\u3001Instructions\u3001Cloudflare deploy freshness\u3001operator URL \u3092\u78BA\u8A8D\u3002",
-      href: `${origin}/dashboard/self-parity?repository=${encodedRepository}`
+      href: repositoryInput ? `${origin}/dashboard/self-parity?repository=${encodedRepository}` : "",
+      disabledReason: "repo \u8A2D\u5B9A\u5F8C\u306B\u958B\u3051\u307E\u3059"
     },
     {
       title: "Setup diagnostics",
       body: "Butler / Custom GPT / deploy drift \u306E\u8A3A\u65AD\u30DA\u30FC\u30B8\u3002",
-      href: `${origin}/setup/diagnostics?repository=${encodedRepository}`
+      href: repositoryInput ? `${origin}/setup/diagnostics?repository=${encodedRepository}` : "",
+      disabledReason: "repo \u8A2D\u5B9A\u5F8C\u306B\u958B\u3051\u307E\u3059"
     },
     {
-      title: "Deploy operator",
-      body: "production deploy \u306F scope \u660E\u793A\u6E08\u307F passkey approval \u306E\u5F8C\u308D\u3002approval grant \u3084 secret \u306F dashboard \u306B\u4FDD\u5B58\u3057\u306A\u3044\u3002",
-      href: `${origin}/v2/approval/passkey/operator?repositoryInput=${encodedRepository}&phase=execution&actionType=deploy_production&highRiskKind=deploy_production`
+      title: "\u672C\u756A\u53CD\u6620 / Passkey \u627F\u8A8D",
+      body: "production deploy \u306F\u5BFE\u8C61 repo \u8A2D\u5B9A\u5F8C\u3001scope \u660E\u793A\u6E08\u307F passkey approval \u306E\u5F8C\u308D\u3067\u958B\u304D\u307E\u3059\u3002",
+      href: repositoryInput ? `${origin}/v2/approval/passkey/operator?repositoryInput=${encodedRepository}&phase=execution&actionType=deploy_production&highRiskKind=deploy_production` : "",
+      disabledReason: "repo \u8A2D\u5B9A\u5F8C\u306B\u958B\u3051\u307E\u3059"
     }
   ];
   const workflows = [
@@ -65318,14 +65334,26 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       href: `${origin}/dashboard/notifications`
     },
     {
+      label: "Passkey",
+      href: dashboardSignInUrl
+    },
+    {
       label: "\u9032\u6357\u3092\u898B\u308B",
-      href: `${origin}/dashboard/progress?repository=${encodedRepository}`
+      href: repositoryInput ? `${origin}/dashboard/progress?repository=${encodedRepository}` : "",
+      disabledReason: "repo \u8A2D\u5B9A\u5F8C"
     },
     {
       label: "GitHub\u72B6\u6CC1",
-      href: `${origin}/dashboard/github?repository=${encodedRepository}`
+      href: repositoryInput ? `${origin}/dashboard/github?repository=${encodedRepository}` : "",
+      disabledReason: "repo \u8A2D\u5B9A\u5F8C"
     }
   ];
+  const renderDashboardActionList = (actions) => actions.map(
+    (action) => action.href ? `<a href="${escapeDashboardHtml(action.href)}">${escapeDashboardHtml(action.label || action.title)}</a>` : `<span class="disabled-action" aria-disabled="true"><strong>${escapeDashboardHtml(action.label || action.title)}</strong><small>${escapeDashboardHtml(action.disabledReason || "\u5229\u7528\u3067\u304D\u307E\u305B\u3093")}</small></span>`
+  ).join("");
+  const renderDashboardSurfaceList = (items) => items.map(
+    (surface) => surface.href ? `<a href="${escapeDashboardHtml(surface.href)}">${escapeDashboardHtml(surface.title)}</a>` : `<span class="disabled-action" aria-disabled="true"><strong>${escapeDashboardHtml(surface.title)}</strong><small>${escapeDashboardHtml(surface.disabledReason || "\u5229\u7528\u3067\u304D\u307E\u305B\u3093")}</small></span>`
+  ).join("");
   return `<!doctype html>
 <html lang="ja">
 <head>
@@ -65453,7 +65481,15 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .deploy-event p { margin-bottom: 6px; font-size: 13px; line-height: 1.45; }
     .quick-actions, .surface-list { display: grid; gap: 8px; }
     .quick-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .quick-actions a, .surface-list a { display: inline-flex; align-items: center; justify-content: center; min-height: 36px; border: 1px solid var(--border); border-radius: 10px; padding: 7px 9px; color: var(--text); text-decoration: none; background: var(--soft); font-weight: 750; font-size: 13px; text-align: center; }
+    .quick-actions a, .surface-list a, .disabled-action { display: inline-flex; align-items: center; justify-content: center; min-height: 36px; border: 1px solid var(--border); border-radius: 10px; padding: 7px 9px; color: var(--text); text-decoration: none; background: var(--soft); font-weight: 750; font-size: 13px; text-align: center; }
+    .disabled-action { flex-direction: column; gap: 2px; color: var(--muted); background: transparent; cursor: not-allowed; }
+    .disabled-action strong { font-size: 13px; }
+    .disabled-action small { font-size: 11px; font-weight: 650; line-height: 1.2; }
+    .target-form { display: grid; gap: 6px; margin-top: 10px; }
+    .target-form label { color: var(--muted); font-size: 12px; font-weight: 800; }
+    .target-form-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; }
+    .target-form input { min-width: 0; min-height: 38px; border: 1px solid var(--border); border-radius: 10px; padding: 7px 9px; color: var(--text); background: var(--panel); font: inherit; }
+    .target-form button { min-height: 38px; border: 1px solid var(--border); border-radius: 10px; padding: 7px 10px; color: var(--text); background: var(--button); font: inherit; font-weight: 800; }
     summary { cursor: pointer; color: var(--text); font-weight: 800; }
     .muted { color: var(--muted); }
     code { color: var(--text); overflow-wrap: anywhere; }
@@ -65504,7 +65540,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         </div>
         <div class="top-right">
           <a class="tool-button top-action" href="${escapeDashboardHtml(origin)}/dashboard/notifications" aria-label="\u901A\u77E5\u30BB\u30F3\u30BF\u30FC">\u901A\u77E5</a>
-          <a class="tool-button top-action" href="${escapeDashboardHtml(origin)}/dashboard/progress?repository=${encodedRepository}" aria-label="\u9032\u6357\u3092\u898B\u308B">\u9032\u6357</a>
+          <a class="tool-button top-action" href="${escapeDashboardHtml(dashboardSignInUrl)}" aria-label="Passkey \u3067 dashboard session \u3092\u66F4\u65B0">Passkey</a>
         </div>
       </header>
 
@@ -65529,12 +65565,12 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             ${renderDashboardDeployEvent(latestDeployEvent)}
           </div>
           <div class="quick-actions">
-            ${cockpitActions.map((action) => `<a href="${escapeDashboardHtml(action.href)}">${escapeDashboardHtml(action.label)}</a>`).join("")}
+            ${renderDashboardActionList(cockpitActions)}
           </div>
           <details data-debug-section="dashboard-development-operations">
             <summary>\u958B\u767A/\u904B\u7528</summary>
             <div class="surface-list">
-              ${surfaces.map((surface) => `<a href="${escapeDashboardHtml(surface.href)}">${escapeDashboardHtml(surface.title)}</a>`).join("")}
+              ${renderDashboardSurfaceList(surfaces)}
             </div>
           </details>
           <details>
@@ -65609,14 +65645,14 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           <p>\u76F4\u8FD1\u306E\u53CD\u6620\u3001\u5931\u6557\u3001\u9032\u884C\u4E2D\u306E\u4F5C\u696D\u304C\u3042\u308C\u3070\u3053\u3053\u306B\u51FA\u3057\u307E\u3059\u3002</p>
           ${renderDashboardDeployEvent(latestDeployEvent)}
           <div class="quick-actions">
-            ${cockpitActions.map((action) => `<a href="${escapeDashboardHtml(action.href)}">${escapeDashboardHtml(action.label)}</a>`).join("")}
+            ${renderDashboardActionList(cockpitActions)}
           </div>
         </div>
 
         <details data-debug-section="dashboard-development-operations">
           <summary>\u958B\u767A/\u904B\u7528</summary>
           <div class="surface-list">
-            ${surfaces.map((surface) => `<a href="${escapeDashboardHtml(surface.href)}">${escapeDashboardHtml(surface.title)}</a>`).join("")}
+            ${renderDashboardSurfaceList(surfaces)}
           </div>
         </details>
 
@@ -65725,10 +65761,16 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         return "\u4E0D\u660E";
       }
 
-      function buildReconnectStatus(prefix) {
+      function setConnectionRecoveryStatus(message) {
         const attempt = Math.max(1, reconnectAttempt + 1);
-        const refreshPart = lastRefreshFailure ? " \u6700\u5F8C\u306E\u5C65\u6B74\u53D6\u5F97: " + lastRefreshFailure + "\u3002" : "";
-        return prefix + " \u518D\u63A5\u7D9A " + attempt + "\u56DE\u76EE / WebSocket: " + describeChatSocketState() + "\u3002" + refreshPart;
+        status.dataset.reconnectAttempt = String(attempt);
+        status.dataset.websocketState = describeChatSocketState();
+        status.dataset.lastRefreshFailure = lastRefreshFailure || "";
+        setStatus(message);
+      }
+
+      function buildReconnectStatus(prefix) {
+        return prefix + " \u5165\u529B\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002";
       }
 
       function dropStaleSocketIfNeeded() {
@@ -66268,7 +66310,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
               return { ok: false, authExpired: true };
             }
             lastRefreshFailure = "HTTP " + response.status;
-            setStatus(buildReconnectStatus("\u5C65\u6B74\u306E\u518D\u53D6\u5F97\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002"));
+            setConnectionRecoveryStatus("\u5C65\u6B74\u306E\u518D\u53D6\u5F97\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002");
             return { ok: false, status: response.status };
           }
           if (body && body.ok) {
@@ -66278,7 +66320,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           }
         } catch {
           lastRefreshFailure = "\u30CD\u30C3\u30C8\u30EF\u30FC\u30AF";
-          setStatus(buildReconnectStatus("\u5C65\u6B74\u306E\u518D\u53D6\u5F97\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002"));
+          setConnectionRecoveryStatus("\u5C65\u6B74\u306E\u518D\u53D6\u5F97\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002");
           return { ok: false, network: true };
         } finally {
           refreshingThread = false;
@@ -66289,7 +66331,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       function scheduleReconnect() {
         if (reconnectTimer || !socketEndpoint || typeof WebSocket !== "function") return;
         const delay = Math.min(10000, 1000 * Math.pow(2, reconnectAttempt));
-        setStatus(buildReconnectStatus("WebSocket \u3092\u518D\u63A5\u7D9A\u3057\u307E\u3059\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002"));
+        setConnectionRecoveryStatus("\u63A5\u7D9A\u3092\u5FA9\u5E30\u3057\u3066\u3044\u307E\u3059\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002");
         reconnectAttempt += 1;
         reconnectTimer = window.setTimeout(() => {
           reconnectTimer = null;
@@ -66358,7 +66400,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             releasePendingOwnerSend(pendingOwnerSend.clientMessageId, { clearComposer: false, keepRollbackTimer: true });
             setStatus("\u9001\u4FE1\u78BA\u8A8D\u524D\u306B WebSocket \u304C\u5207\u308C\u307E\u3057\u305F\u3002\u5165\u529B\u306F\u6B8B\u3057\u3066\u3044\u307E\u3059\u3002\u5C65\u6B74\u518D\u53D6\u5F97\u5F8C\u306B\u3082\u3046\u4E00\u5EA6\u9001\u4FE1\u3067\u304D\u307E\u3059\u3002");
           } else {
-            setStatus(buildReconnectStatus("WebSocket \u304C\u5207\u308C\u307E\u3057\u305F\u3002\u5C65\u6B74\u3092\u518D\u53D6\u5F97\u3057\u3066\u518D\u63A5\u7D9A\u3057\u307E\u3059\u3002"));
+            setConnectionRecoveryStatus("\u63A5\u7D9A\u304C\u5207\u308C\u307E\u3057\u305F\u3002\u5C65\u6B74\u3092\u78BA\u8A8D\u3057\u306A\u304C\u3089\u5FA9\u5E30\u3057\u3066\u3044\u307E\u3059\u3002");
           }
           dropStaleSocketIfNeeded();
           refreshThread();
@@ -66369,7 +66411,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             releasePendingOwnerSend(pendingOwnerSend.clientMessageId, { clearComposer: false, keepRollbackTimer: true });
             setStatus("\u9001\u4FE1\u78BA\u8A8D\u524D\u306B WebSocket \u63A5\u7D9A\u304C\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u5165\u529B\u306F\u6B8B\u3057\u3066\u3044\u307E\u3059\u3002\u518D\u63A5\u7D9A\u5F8C\u306B\u3082\u3046\u4E00\u5EA6\u9001\u4FE1\u3067\u304D\u307E\u3059\u3002");
           } else {
-            setStatus(buildReconnectStatus("WebSocket \u63A5\u7D9A\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u5C65\u6B74\u3092\u518D\u53D6\u5F97\u3057\u3066\u518D\u63A5\u7D9A\u3057\u307E\u3059\u3002"));
+            setConnectionRecoveryStatus("\u63A5\u7D9A\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F\u3002\u5C65\u6B74\u3092\u78BA\u8A8D\u3057\u306A\u304C\u3089\u5FA9\u5E30\u3057\u3066\u3044\u307E\u3059\u3002");
           }
           dropStaleSocketIfNeeded();
           refreshThread();
@@ -66534,14 +66576,14 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       textarea.addEventListener("input", resizeComposerInput);
       window.addEventListener("resize", resizeComposerInput);
       window.addEventListener("online", () => {
-        setStatus(buildReconnectStatus("\u30CD\u30C3\u30C8\u30EF\u30FC\u30AF\u5FA9\u5E30\u3092\u691C\u77E5\u3057\u307E\u3057\u305F\u3002\u5C65\u6B74\u3092\u518D\u53D6\u5F97\u3057\u3066\u518D\u63A5\u7D9A\u3057\u307E\u3059\u3002"));
+        setConnectionRecoveryStatus("\u30CD\u30C3\u30C8\u30EF\u30FC\u30AF\u5FA9\u5E30\u3092\u691C\u77E5\u3057\u307E\u3057\u305F\u3002\u63A5\u7D9A\u3092\u5FA9\u5E30\u3057\u3066\u3044\u307E\u3059\u3002");
         dropStaleSocketIfNeeded();
         refreshThread();
         scheduleReconnect();
       });
       document.addEventListener("visibilitychange", () => {
         if (document.visibilityState === "visible" && (!chatSocket || chatSocket.readyState !== WebSocket.OPEN)) {
-          setStatus(buildReconnectStatus("\u753B\u9762\u5FA9\u5E30\u3092\u691C\u77E5\u3057\u307E\u3057\u305F\u3002\u5C65\u6B74\u3092\u518D\u53D6\u5F97\u3057\u3066\u518D\u63A5\u7D9A\u3057\u307E\u3059\u3002"));
+          setConnectionRecoveryStatus("\u753B\u9762\u5FA9\u5E30\u3092\u691C\u77E5\u3057\u307E\u3057\u305F\u3002\u63A5\u7D9A\u3092\u5FA9\u5E30\u3057\u3066\u3044\u307E\u3059\u3002");
           dropStaleSocketIfNeeded();
           refreshThread();
           scheduleReconnect();

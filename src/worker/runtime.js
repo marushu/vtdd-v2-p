@@ -10389,7 +10389,15 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     ? `<p><strong>${escapeDashboardHtml(repositoryInput)}</strong></p>
           <p class="muted">この repo で Issue / PR 操作が必要な時だけ対象にします。通常会話はこのまま続けられます。</p>`
     : `<p><strong>対象 repo 未指定</strong></p>
-          <p class="muted">通常会話は続けられます。Issue / PR 操作が必要になった時に対象 repo を選びます。</p>`;
+          <p class="muted">通常会話は続けられます。Issue / PR / deploy など repo が必要な操作を始める時だけ、ここで対象 repo を設定します。</p>
+          <form class="target-form" method="get" action="${escapeDashboardHtml(origin)}/dashboard">
+            <label for="dashboard-repository-input">対象 repo</label>
+            <div class="target-form-row">
+              <input id="dashboard-repository-input" name="repository" placeholder="owner/repo" autocomplete="off" autocapitalize="off" spellcheck="false">
+              ${dashboardIssueNumber ? `<input type="hidden" name="issueNumber" value="${dashboardIssueNumber}">` : ""}
+              <button type="submit">設定</button>
+            </div>
+          </form>`;
   const encodedRepository = encodeURIComponent(repositoryInput);
   const chatThreadId = `dashboard-main-${(repositoryInput || "unresolved").replace(/[^a-z0-9_.-]+/gi, "-")}`;
   const socketOrigin = origin.replace(/^http/i, "ws");
@@ -10410,22 +10418,26 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     {
       title: "Startup preflight",
       body: "AGENTS.md、thread-independent startup、runtime truth、RAG、self parity を最初に読む入口。",
-      href: `${origin}/dashboard/preflight?repository=${encodedRepository}`
+      href: repositoryInput ? `${origin}/dashboard/preflight?repository=${encodedRepository}` : "",
+      disabledReason: "repo 設定後に開けます"
     },
     {
       title: "Execution progress",
       body: "VPS Codex CLI / remote Codex execution の進捗確認。",
-      href: `${origin}/dashboard/progress?repository=${encodedRepository}`
+      href: repositoryInput ? `${origin}/dashboard/progress?repository=${encodedRepository}` : "",
+      disabledReason: "repo 設定後に開けます"
     },
     {
       title: "VPS runner status",
       body: "runner health、queue、対象 execution の状態確認。",
-      href: `${origin}/dashboard/vps-runner?repository=${encodedRepository}`
+      href: repositoryInput ? `${origin}/dashboard/vps-runner?repository=${encodedRepository}` : "",
+      disabledReason: "repo 設定後に開けます"
     },
     {
       title: "GitHub runtime truth",
       body: "Issues、PRs、checks、workflow runs、reviewer comments を読む入口。",
-      href: `${origin}/dashboard/github?repository=${encodedRepository}`
+      href: repositoryInput ? `${origin}/dashboard/github?repository=${encodedRepository}` : "",
+      disabledReason: "repo 設定後に開けます"
     },
     {
       title: "通知センター",
@@ -10435,22 +10447,28 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     {
       title: "Operational RAG",
       body: "decision / proposal / working memory の compact retrieval。runtime truth の代替ではない。",
-      href: `${origin}/dashboard/memory?repository=${encodedRepository}`
+      href: repositoryInput ? `${origin}/dashboard/memory?repository=${encodedRepository}` : "",
+      disabledReason: "repo 設定後に開けます"
     },
     {
       title: "Self parity",
       body: "Action Schema、Instructions、Cloudflare deploy freshness、operator URL を確認。",
-      href: `${origin}/dashboard/self-parity?repository=${encodedRepository}`
+      href: repositoryInput ? `${origin}/dashboard/self-parity?repository=${encodedRepository}` : "",
+      disabledReason: "repo 設定後に開けます"
     },
     {
       title: "Setup diagnostics",
       body: "Butler / Custom GPT / deploy drift の診断ページ。",
-      href: `${origin}/setup/diagnostics?repository=${encodedRepository}`
+      href: repositoryInput ? `${origin}/setup/diagnostics?repository=${encodedRepository}` : "",
+      disabledReason: "repo 設定後に開けます"
     },
     {
-      title: "Deploy operator",
-      body: "production deploy は scope 明示済み passkey approval の後ろ。approval grant や secret は dashboard に保存しない。",
-      href: `${origin}/v2/approval/passkey/operator?repositoryInput=${encodedRepository}&phase=execution&actionType=deploy_production&highRiskKind=deploy_production`
+      title: "本番反映 / Passkey 承認",
+      body: "production deploy は対象 repo 設定後、scope 明示済み passkey approval の後ろで開きます。",
+      href: repositoryInput
+        ? `${origin}/v2/approval/passkey/operator?repositoryInput=${encodedRepository}&phase=execution&actionType=deploy_production&highRiskKind=deploy_production`
+        : "",
+      disabledReason: "repo 設定後に開けます"
     }
   ];
   const workflows = [
@@ -10465,14 +10483,36 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       href: `${origin}/dashboard/notifications`
     },
     {
+      label: "Passkey",
+      href: dashboardSignInUrl
+    },
+    {
       label: "進捗を見る",
-      href: `${origin}/dashboard/progress?repository=${encodedRepository}`
+      href: repositoryInput ? `${origin}/dashboard/progress?repository=${encodedRepository}` : "",
+      disabledReason: "repo 設定後"
     },
     {
       label: "GitHub状況",
-      href: `${origin}/dashboard/github?repository=${encodedRepository}`
+      href: repositoryInput ? `${origin}/dashboard/github?repository=${encodedRepository}` : "",
+      disabledReason: "repo 設定後"
     }
   ];
+  const renderDashboardActionList = (actions) =>
+    actions
+      .map((action) =>
+        action.href
+          ? `<a href="${escapeDashboardHtml(action.href)}">${escapeDashboardHtml(action.label || action.title)}</a>`
+          : `<span class="disabled-action" aria-disabled="true"><strong>${escapeDashboardHtml(action.label || action.title)}</strong><small>${escapeDashboardHtml(action.disabledReason || "利用できません")}</small></span>`
+      )
+      .join("");
+  const renderDashboardSurfaceList = (items) =>
+    items
+      .map((surface) =>
+        surface.href
+          ? `<a href="${escapeDashboardHtml(surface.href)}">${escapeDashboardHtml(surface.title)}</a>`
+          : `<span class="disabled-action" aria-disabled="true"><strong>${escapeDashboardHtml(surface.title)}</strong><small>${escapeDashboardHtml(surface.disabledReason || "利用できません")}</small></span>`
+      )
+      .join("");
 
   return `<!doctype html>
 <html lang="ja">
@@ -10601,7 +10641,15 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .deploy-event p { margin-bottom: 6px; font-size: 13px; line-height: 1.45; }
     .quick-actions, .surface-list { display: grid; gap: 8px; }
     .quick-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .quick-actions a, .surface-list a { display: inline-flex; align-items: center; justify-content: center; min-height: 36px; border: 1px solid var(--border); border-radius: 10px; padding: 7px 9px; color: var(--text); text-decoration: none; background: var(--soft); font-weight: 750; font-size: 13px; text-align: center; }
+    .quick-actions a, .surface-list a, .disabled-action { display: inline-flex; align-items: center; justify-content: center; min-height: 36px; border: 1px solid var(--border); border-radius: 10px; padding: 7px 9px; color: var(--text); text-decoration: none; background: var(--soft); font-weight: 750; font-size: 13px; text-align: center; }
+    .disabled-action { flex-direction: column; gap: 2px; color: var(--muted); background: transparent; cursor: not-allowed; }
+    .disabled-action strong { font-size: 13px; }
+    .disabled-action small { font-size: 11px; font-weight: 650; line-height: 1.2; }
+    .target-form { display: grid; gap: 6px; margin-top: 10px; }
+    .target-form label { color: var(--muted); font-size: 12px; font-weight: 800; }
+    .target-form-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; }
+    .target-form input { min-width: 0; min-height: 38px; border: 1px solid var(--border); border-radius: 10px; padding: 7px 9px; color: var(--text); background: var(--panel); font: inherit; }
+    .target-form button { min-height: 38px; border: 1px solid var(--border); border-radius: 10px; padding: 7px 10px; color: var(--text); background: var(--button); font: inherit; font-weight: 800; }
     summary { cursor: pointer; color: var(--text); font-weight: 800; }
     .muted { color: var(--muted); }
     code { color: var(--text); overflow-wrap: anywhere; }
@@ -10652,7 +10700,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         </div>
         <div class="top-right">
           <a class="tool-button top-action" href="${escapeDashboardHtml(origin)}/dashboard/notifications" aria-label="通知センター">通知</a>
-          <a class="tool-button top-action" href="${escapeDashboardHtml(origin)}/dashboard/progress?repository=${encodedRepository}" aria-label="進捗を見る">進捗</a>
+          <a class="tool-button top-action" href="${escapeDashboardHtml(dashboardSignInUrl)}" aria-label="Passkey で dashboard session を更新">Passkey</a>
         </div>
       </header>
 
@@ -10677,12 +10725,12 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             ${renderDashboardDeployEvent(latestDeployEvent)}
           </div>
           <div class="quick-actions">
-            ${cockpitActions.map((action) => `<a href="${escapeDashboardHtml(action.href)}">${escapeDashboardHtml(action.label)}</a>`).join("")}
+            ${renderDashboardActionList(cockpitActions)}
           </div>
           <details data-debug-section="dashboard-development-operations">
             <summary>開発/運用</summary>
             <div class="surface-list">
-              ${surfaces.map((surface) => `<a href="${escapeDashboardHtml(surface.href)}">${escapeDashboardHtml(surface.title)}</a>`).join("")}
+              ${renderDashboardSurfaceList(surfaces)}
             </div>
           </details>
           <details>
@@ -10757,14 +10805,14 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           <p>直近の反映、失敗、進行中の作業があればここに出します。</p>
           ${renderDashboardDeployEvent(latestDeployEvent)}
           <div class="quick-actions">
-            ${cockpitActions.map((action) => `<a href="${escapeDashboardHtml(action.href)}">${escapeDashboardHtml(action.label)}</a>`).join("")}
+            ${renderDashboardActionList(cockpitActions)}
           </div>
         </div>
 
         <details data-debug-section="dashboard-development-operations">
           <summary>開発/運用</summary>
           <div class="surface-list">
-            ${surfaces.map((surface) => `<a href="${escapeDashboardHtml(surface.href)}">${escapeDashboardHtml(surface.title)}</a>`).join("")}
+            ${renderDashboardSurfaceList(surfaces)}
           </div>
         </details>
 
@@ -10873,10 +10921,16 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         return "不明";
       }
 
-      function buildReconnectStatus(prefix) {
+      function setConnectionRecoveryStatus(message) {
         const attempt = Math.max(1, reconnectAttempt + 1);
-        const refreshPart = lastRefreshFailure ? " 最後の履歴取得: " + lastRefreshFailure + "。" : "";
-        return prefix + " 再接続 " + attempt + "回目 / WebSocket: " + describeChatSocketState() + "。" + refreshPart;
+        status.dataset.reconnectAttempt = String(attempt);
+        status.dataset.websocketState = describeChatSocketState();
+        status.dataset.lastRefreshFailure = lastRefreshFailure || "";
+        setStatus(message);
+      }
+
+      function buildReconnectStatus(prefix) {
+        return prefix + " 入力は保持しています。";
       }
 
       function dropStaleSocketIfNeeded() {
@@ -11416,7 +11470,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
               return { ok: false, authExpired: true };
             }
             lastRefreshFailure = "HTTP " + response.status;
-            setStatus(buildReconnectStatus("履歴の再取得に失敗しました。入力は保持しています。"));
+            setConnectionRecoveryStatus("履歴の再取得に失敗しました。入力は保持しています。");
             return { ok: false, status: response.status };
           }
           if (body && body.ok) {
@@ -11426,7 +11480,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           }
         } catch {
           lastRefreshFailure = "ネットワーク";
-          setStatus(buildReconnectStatus("履歴の再取得に失敗しました。入力は保持しています。"));
+          setConnectionRecoveryStatus("履歴の再取得に失敗しました。入力は保持しています。");
           return { ok: false, network: true };
         } finally {
           refreshingThread = false;
@@ -11437,7 +11491,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       function scheduleReconnect() {
         if (reconnectTimer || !socketEndpoint || typeof WebSocket !== "function") return;
         const delay = Math.min(10000, 1000 * Math.pow(2, reconnectAttempt));
-        setStatus(buildReconnectStatus("WebSocket を再接続します。入力は保持しています。"));
+        setConnectionRecoveryStatus("接続を復帰しています。入力は保持しています。");
         reconnectAttempt += 1;
         reconnectTimer = window.setTimeout(() => {
           reconnectTimer = null;
@@ -11506,7 +11560,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             releasePendingOwnerSend(pendingOwnerSend.clientMessageId, { clearComposer: false, keepRollbackTimer: true });
             setStatus("送信確認前に WebSocket が切れました。入力は残しています。履歴再取得後にもう一度送信できます。");
           } else {
-            setStatus(buildReconnectStatus("WebSocket が切れました。履歴を再取得して再接続します。"));
+            setConnectionRecoveryStatus("接続が切れました。履歴を確認しながら復帰しています。");
           }
           dropStaleSocketIfNeeded();
           refreshThread();
@@ -11517,7 +11571,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             releasePendingOwnerSend(pendingOwnerSend.clientMessageId, { clearComposer: false, keepRollbackTimer: true });
             setStatus("送信確認前に WebSocket 接続が失敗しました。入力は残しています。再接続後にもう一度送信できます。");
           } else {
-            setStatus(buildReconnectStatus("WebSocket 接続に失敗しました。履歴を再取得して再接続します。"));
+            setConnectionRecoveryStatus("接続できませんでした。履歴を確認しながら復帰しています。");
           }
           dropStaleSocketIfNeeded();
           refreshThread();
@@ -11682,14 +11736,14 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       textarea.addEventListener("input", resizeComposerInput);
       window.addEventListener("resize", resizeComposerInput);
       window.addEventListener("online", () => {
-        setStatus(buildReconnectStatus("ネットワーク復帰を検知しました。履歴を再取得して再接続します。"));
+        setConnectionRecoveryStatus("ネットワーク復帰を検知しました。接続を復帰しています。");
         dropStaleSocketIfNeeded();
         refreshThread();
         scheduleReconnect();
       });
       document.addEventListener("visibilitychange", () => {
         if (document.visibilityState === "visible" && (!chatSocket || chatSocket.readyState !== WebSocket.OPEN)) {
-          setStatus(buildReconnectStatus("画面復帰を検知しました。履歴を再取得して再接続します。"));
+          setConnectionRecoveryStatus("画面復帰を検知しました。接続を復帰しています。");
           dropStaleSocketIfNeeded();
           refreshThread();
           scheduleReconnect();
