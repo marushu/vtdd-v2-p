@@ -66088,8 +66088,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       function getMediaContentKind(item) {
         const contentType = String(item && item.contentType || item && item.type || "");
         const filename = String(item && item.filename || item && item.name || "").toLowerCase();
-        if (contentType.startsWith("video/") || /.(mp4|mov|m4v|webm)$/.test(filename)) return "video";
-        if (contentType.startsWith("image/") || /.(png|jpe?g|gif|webp|heic|heif)$/.test(filename)) return "image";
+        if (contentType.startsWith("video/") || /\\.(mp4|mov|m4v|webm)$/.test(filename)) return "video";
+        if (contentType.startsWith("image/") || /\\.(png|jpe?g|gif|webp|heic|heif)$/.test(filename)) return "image";
         return "";
       }
 
@@ -66099,50 +66099,55 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         const wrapper = document.createElement("div");
         wrapper.className = "message-media";
         for (const reference of list) {
-          const link = document.createElement("a");
-          link.className = "media-chip";
           const mediaRouteHref = reference.mediaId ? "/v2/media/" + reference.mediaId + "/download" : "";
           const referenceDownloadUrl = typeof reference.downloadUrl === "string" ? reference.downloadUrl : "";
           const safeDownloadHref = referenceDownloadUrl.startsWith("/v2/media/") ? referenceDownloadUrl : "";
           const downloadHref = mediaRouteHref || safeDownloadHref || "#";
-          link.href = downloadHref;
-          link.target = "_blank";
-          link.rel = "noreferrer";
-          link.textContent = "";
           const mediaKind = getMediaContentKind(reference);
           const isImage = mediaKind === "image";
+          const isVideo = mediaKind === "video";
+          const chip = document.createElement(isVideo && downloadHref !== "#" ? "span" : "a");
+          chip.className = "media-chip";
+          if (chip.tagName === "A") {
+            chip.href = downloadHref;
+            chip.target = "_blank";
+            chip.rel = "noreferrer";
+          }
+          chip.textContent = "";
           if (isImage && downloadHref !== "#") {
             const image = document.createElement("img");
             image.className = "media-thumb";
             image.src = downloadHref;
             image.alt = reference.filename || "\u6DFB\u4ED8\u753B\u50CF";
             image.loading = "lazy";
-            link.appendChild(image);
+            chip.appendChild(image);
+          } else if (isVideo && downloadHref !== "#") {
+            const video = document.createElement("video");
+            video.className = "media-thumb";
+            video.src = downloadHref;
+            video.muted = true;
+            video.controls = true;
+            video.playsInline = true;
+            video.preload = "metadata";
+            video.setAttribute("aria-label", reference.filename || "\u6DFB\u4ED8\u52D5\u753B");
+            chip.appendChild(video);
+            const icon = document.createElement("span");
+            icon.textContent = "\u52D5\u753B";
+            chip.appendChild(icon);
           } else {
-            const isVideo = mediaKind === "video";
-            if (isVideo && downloadHref !== "#") {
-              const video = document.createElement("video");
-              video.className = "media-thumb";
-              video.src = downloadHref;
-              video.muted = true;
-              video.controls = true;
-              video.playsInline = true;
-              video.preload = "metadata";
-              video.setAttribute("aria-label", reference.filename || "\u6DFB\u4ED8\u52D5\u753B");
-              link.appendChild(video);
-              const icon = document.createElement("span");
-              icon.textContent = "\u52D5\u753B";
-              link.appendChild(icon);
-            } else {
-              const icon = document.createElement("span");
-              icon.textContent = "\u6DFB\u4ED8";
-              link.appendChild(icon);
-            }
+            const icon = document.createElement("span");
+            icon.textContent = "\u6DFB\u4ED8";
+            chip.appendChild(icon);
           }
-          const label = document.createElement("span");
+          const label = document.createElement(isVideo && downloadHref !== "#" ? "a" : "span");
           label.textContent = reference.filename || reference.mediaId || "media";
-          link.appendChild(label);
-          wrapper.appendChild(link);
+          if (label.tagName === "A") {
+            label.href = downloadHref;
+            label.target = "_blank";
+            label.rel = "noreferrer";
+          }
+          chip.appendChild(label);
+          wrapper.appendChild(chip);
         }
         return wrapper;
       }

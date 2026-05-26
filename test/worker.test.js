@@ -1530,11 +1530,14 @@ test("worker serves dashboard media add controls for iPhone-first upload", async
   assert.equal(body.includes("video.playsInline = true"), true);
   assert.equal(body.includes("video.controls = true"), true);
   assert.equal(body.includes("mp4|mov|m4v|webm"), true);
+  assert.equal(body.includes("/\\.(mp4|mov|m4v|webm)$/.test(filename)"), true);
   assert.equal(body.includes("icon.textContent = \"動画\""), true);
   assert.equal(body.includes("const mediaRouteHref = reference.mediaId ? \"/v2/media/\" + reference.mediaId + \"/download\" : \"\""), true);
   assert.equal(body.includes("const safeDownloadHref = referenceDownloadUrl.startsWith(\"/v2/media/\") ? referenceDownloadUrl : \"\""), true);
   assert.equal(body.includes("const downloadHref = mediaRouteHref || safeDownloadHref || \"#\""), true);
-  assert.equal(body.includes("link.href = downloadHref"), true);
+  assert.equal(body.includes("chip.href = downloadHref"), true);
+  assert.equal(body.includes("label.href = downloadHref"), true);
+  assert.equal(body.includes("const chip = document.createElement(isVideo && downloadHref !== \"#\" ? \"span\" : \"a\")"), true);
   assert.equal(body.includes("isImage && downloadHref !== \"#\""), true);
   assert.equal(body.includes("image.src = downloadHref"), true);
   assert.equal(body.includes("URL.createObjectURL"), true);
