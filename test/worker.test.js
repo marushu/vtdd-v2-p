@@ -885,7 +885,9 @@ test("worker does not expose dashboard notification details before Access auth",
   });
 
   const response = await worker.fetch(
-    new Request("https://example.com/dashboard/notifications"),
+    new Request(
+      "https://example.com/dashboard/notifications?runId=private-run&title=private%20deploy%20notification&sha=privateabcdef1234567890"
+    ),
     { DASHBOARD_EVENT_STORE: store }
   );
 
@@ -893,6 +895,10 @@ test("worker does not expose dashboard notification details before Access auth",
   const body = await response.text();
   assert.equal(body.includes("Dashboard auth required"), true);
   assert.equal(body.includes("Cloudflare Access で開く"), true);
+  assert.equal(body.includes('href="https://example.com/dashboard/notifications"'), true);
+  assert.equal(body.includes("?runId="), false);
+  assert.equal(body.includes("title="), false);
+  assert.equal(body.includes("sha="), false);
   assert.equal(body.includes("private deploy notification"), false);
   assert.equal(body.includes("private-run"), false);
   assert.equal(body.includes("privateabcdef"), false);
