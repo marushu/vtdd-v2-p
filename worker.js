@@ -27265,6 +27265,7 @@ function renderPasskeyOperatorPage(input = {}) {
   );
   const mergeMethodDefault = escapeHtml(input.mergeMethod || "squash");
   const returnUrl = escapeHtml(input.returnUrl || "");
+  const dashboardReturnPath = escapeHtml(sanitizePasskeyDashboardReturnPath(input.dashboardReturnPath));
   const githubAppRoleDefault = escapeHtml(input.githubAppRole || "legacy");
   const syncEnabled = input.syncEnabled === true;
   const syncMessage = escapeHtml(
@@ -27999,7 +28000,7 @@ function renderPasskeyOperatorPage(input = {}) {
           latestApprovalGrantId = latestApprovalGrant?.approvalId || verifyBody?.approvalGrantId || "";
           approveOutput.textContent = JSON.stringify(verifyBody, null, 2);
           if (operatorMode === "dashboard") {
-            window.location.assign("/dashboard");
+            window.location.assign("${dashboardReturnPath}");
             return;
           }
           if (latestApprovalGrantId && autoCopyApprovalGrantInput?.checked) {
@@ -28446,6 +28447,22 @@ function defaultHighRiskKindForMode(operatorMode) {
 }
 function normalizeOperatorToken(value) {
   return String(value || "").trim().toLowerCase();
+}
+function sanitizePasskeyDashboardReturnPath(value) {
+  const normalized = String(value || "").trim() || "/dashboard";
+  let parsed;
+  try {
+    parsed = new URL(normalized, "https://dashboard.local");
+  } catch {
+    return "/dashboard";
+  }
+  if (parsed.origin !== "https://dashboard.local") {
+    return "/dashboard";
+  }
+  if (parsed.pathname !== "/dashboard" && !parsed.pathname.startsWith("/dashboard/")) {
+    return "/dashboard";
+  }
+  return parsed.pathname;
 }
 function escapeHtml(value) {
   return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
@@ -60155,6 +60172,7 @@ function handlePasskeyOperatorPageRequest(request) {
     highRiskKind: requestedHighRiskKind,
     mergeMethod: url.searchParams.get("mergeMethod") || "squash",
     returnUrl: normalizeOperatorReturnUrl(url.searchParams.get("returnUrl")),
+    dashboardReturnPath: sanitizeDashboardPreAuthReturnPath(url.searchParams.get("dashboardReturnPath")),
     operatorId: url.searchParams.get("operatorId") || "vtdd-operator",
     operatorLabel: url.searchParams.get("operatorLabel") || "VTDD Operator",
     githubAppRole: url.searchParams.get("githubAppRole") || "legacy",
@@ -66531,7 +66549,8 @@ function renderDashboardAuthRequiredPage({ runtimeOrigin, returnPath = "/dashboa
   const origin = normalizeText30(runtimeOrigin);
   const dashboardAccessReturnPath = sanitizeDashboardPreAuthReturnPath(returnPath);
   const dashboardAccessHref = buildCloudflareAccessLoginHref({ origin, returnPath: dashboardAccessReturnPath });
-  const dashboardSignInUrl = `${origin || ""}/v2/approval/passkey/operator?mode=dashboard&repositoryInput=marushu%2Fvtdd-v2-p&phase=execution&actionType=read&highRiskKind=dashboard_access`;
+  const dashboardSignInUrl = `${origin || ""}/v2/approval/passkey/operator?mode=dashboard&repositoryInput=marushu%2Fvtdd-v2-p&phase=execution&actionType=read&highRiskKind=dashboard_access&dashboardReturnPath=${encodeURIComponent(dashboardAccessReturnPath)}`;
+  const passkeyButtonLabel = dashboardAccessReturnPath === "/dashboard/notifications" ? "Passkey \u3067\u901A\u77E5\u3092\u898B\u308B" : "Passkey \u3067 dashboard \u306B\u5165\u308B";
   return `<!doctype html>
 <html lang="ja">
 <head>
@@ -66562,6 +66581,7 @@ function renderDashboardAuthRequiredPage({ runtimeOrigin, returnPath = "/dashboa
       <p><code>${escapeDashboardHtml(reason || "dashboard authentication required")}</code></p>
       <div class="actions">
         <a class="button primary" href="${escapeDashboardHtml(dashboardAccessHref)}">Cloudflare Access \u3067\u958B\u304F</a>
+        <a class="button" href="${escapeDashboardHtml(dashboardSignInUrl)}">${escapeDashboardHtml(passkeyButtonLabel)}</a>
         <a class="button" href="${escapeDashboardHtml(`${origin || ""}/status`)}">Status</a>
       </div>
       <details>

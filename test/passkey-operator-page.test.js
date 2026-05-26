@@ -276,6 +276,24 @@ test("passkey operator page shows registration only for full or explicit registr
   assert.equal(dashboardHtml.includes('<section data-operator-section="approval">'), true);
 });
 
+test("passkey operator dashboard mode returns to sanitized dashboard path after approval", () => {
+  const notificationsHtml = renderPasskeyOperatorPage({
+    operatorMode: "dashboard",
+    repositoryInput: "marushu/vtdd-v2-p",
+    dashboardReturnPath: "/dashboard/notifications?runId=private"
+  });
+  assert.equal(notificationsHtml.includes('window.location.assign("/dashboard/notifications")'), true);
+  assert.equal(notificationsHtml.includes("runId=private"), false);
+
+  const unsafeHtml = renderPasskeyOperatorPage({
+    operatorMode: "dashboard",
+    repositoryInput: "marushu/vtdd-v2-p",
+    dashboardReturnPath: "https://evil.example/dashboard/notifications"
+  });
+  assert.equal(unsafeHtml.includes('window.location.assign("/dashboard")'), true);
+  assert.equal(unsafeHtml.includes("evil.example"), false);
+});
+
 test("passkey operator page focuses merge mode on approval and PR merge sections", () => {
   const html = renderPasskeyOperatorPage({
     repositoryInput: "marushu/vtdd-v2-p",
