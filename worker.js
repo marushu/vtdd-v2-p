@@ -27267,13 +27267,17 @@ function renderPasskeyOperatorPage(input = {}) {
   const mergeMethodDefault = escapeHtml(input.mergeMethod || "squash");
   const returnUrl = escapeHtml(input.returnUrl || "");
   const dashboardReturnPath = escapeHtml(sanitizePasskeyDashboardReturnPath(input.dashboardReturnPath));
+  const dashboardNotificationMode = dashboardMode && dashboardReturnPath === "/dashboard/notifications";
   const githubAppRoleDefault = escapeHtml(input.githubAppRole || "legacy");
   const syncEnabled = input.syncEnabled === true;
   const syncMessage = escapeHtml(
     input.syncMessage || (syncEnabled ? "approvalGrantId \u304C\u53D6\u5F97\u6E08\u307F\u306A\u3089\u5B9F\u884C\u3067\u304D\u307E\u3059\u3002desktop helper bridge \u306B\u63A5\u7D9A\u3057\u307E\u3059\u3002" : "desktop maintenance required: local secret sync bridge \u304C\u672A\u63A5\u7D9A\u3067\u3059\u3002")
   );
   const approvalSectionAttributes = deployOneTapMode ? ' data-owner-flow="one-tap-deploy"' : "";
-  const approveButtonLabel = deployOneTapMode ? "\u30D1\u30B9\u30AD\u30FC" : "Approve high-risk action";
+  const approveButtonLabel = deployOneTapMode ? "\u30D1\u30B9\u30AD\u30FC" : dashboardNotificationMode ? "\u30D1\u30B9\u30AD\u30FC\u3067\u901A\u77E5\u3092\u898B\u308B" : dashboardMode ? "\u30D1\u30B9\u30AD\u30FC\u3067\u958B\u304F" : "Approve high-risk action";
+  const heroTitle = dashboardMode ? "Dashboard Passkey" : "VTDD Passkey Operator";
+  const heroDescription = dashboardMode ? "\u3053\u306E\u30DA\u30FC\u30B8\u306F Dashboard Butler \u3092\u958B\u304F\u305F\u3081\u306E\u8AAD\u307F\u53D6\u308A\u5C02\u7528\u30D1\u30B9\u30AD\u30FC\u78BA\u8A8D\u3067\u3059\u3002Cloudflare Access \u304C\u4F7F\u3048\u306A\u3044\u6642\u3060\u3051\u3001\u540C\u4E00 origin \u306E passkey \u3067 dashboard session \u3092\u66F4\u65B0\u3057\u307E\u3059\u3002" : "\u3053\u306E\u30DA\u30FC\u30B8\u306F real WebAuthn/passkey approval \u7528\u306E operator helper \u3067\u3059\u3002\u767B\u9332\u3068 high-risk approval \u306E\u4E21\u65B9\u3092 same-origin \u3067\u5B9F\u884C\u3057\u3001\u6700\u7D42\u7684\u306B <code>approvalGrantId</code> \u3092\u53D6\u5F97\u3067\u304D\u307E\u3059\u3002";
+  const approvalHeading = deployOneTapMode ? "\u672C\u756A\u53CD\u6620\u306E\u627F\u8A8D" : dashboardNotificationMode ? "\u901A\u77E5\u3092\u898B\u308B" : dashboardMode ? "Dashboard \u3092\u958B\u304F" : "2. High-risk Approval";
   const deployScopeSummary = renderDeployScopeSummary({
     repositoryInput: repoDefault,
     issueNumber: issueDefault,
@@ -27421,8 +27425,8 @@ function renderPasskeyOperatorPage(input = {}) {
   <body>
     <main>
       <div class="hero">
-        <h1>VTDD Passkey Operator</h1>
-        <p>\u3053\u306E\u30DA\u30FC\u30B8\u306F real WebAuthn/passkey approval \u7528\u306E operator helper \u3067\u3059\u3002\u767B\u9332\u3068 high-risk approval \u306E\u4E21\u65B9\u3092 same-origin \u3067\u5B9F\u884C\u3057\u3001\u6700\u7D42\u7684\u306B <code>approvalGrantId</code> \u3092\u53D6\u5F97\u3067\u304D\u307E\u3059\u3002</p>
+        <h1>${heroTitle}</h1>
+        <p>${heroDescription}</p>
         <p class="muted">origin: ${origin || "[same-origin]"}</p>
       </div>
 
@@ -27443,7 +27447,7 @@ function renderPasskeyOperatorPage(input = {}) {
         </section>
 
         <section data-operator-section="approval"${approvalSectionAttributes}${hiddenAttribute(!sectionVisibility.approval)}>
-          <h2>${deployOneTapMode ? "\u672C\u756A\u53CD\u6620\u306E\u627F\u8A8D" : "2. High-risk Approval"}</h2>
+          <h2>${approvalHeading}</h2>
           ${deployOneTapMode ? `<p>production deploy \u3092\u627F\u8A8D\u3057\u3066\u3001\u305D\u306E\u307E\u307E\u53CD\u6620\u3092\u958B\u59CB\u3057\u307E\u3059\u3002</p>
           <p class="muted">${deployScopeSummary}</p>
           <div class="approval-internal" hidden>
@@ -27457,7 +27461,7 @@ function renderPasskeyOperatorPage(input = {}) {
             <input id="action-type-input" value="${actionTypeDefault}" autocomplete="off"${deployOneTapMode ? ' readonly data-deploy-scope-locked="true"' : ""} />
             <label for="risk-kind-input">High-risk Kind</label>
             <input id="risk-kind-input" value="${highRiskKindDefault}" autocomplete="off"${deployOneTapMode ? ' readonly data-deploy-scope-locked="true"' : ""} />
-          </div>` : dashboardMode ? `<p>dashboard session \u3092\u66F4\u65B0\u3057\u307E\u3059\u3002\u901A\u77E5\u3084\u901A\u5E38 dashboard \u3092\u958B\u304F\u305F\u3081\u306E read-only \u88DC\u52A9\u8A8D\u8A3C\u3067\u3001repo / Issue / PR scope \u306F\u4F7F\u3044\u307E\u305B\u3093\u3002</p>
+          </div>` : dashboardMode ? `<p>${dashboardNotificationMode ? "\u901A\u77E5\u30BB\u30F3\u30BF\u30FC" : "Dashboard"}\u3092\u958B\u304F\u305F\u3081\u306E read-only session \u3092\u66F4\u65B0\u3057\u307E\u3059\u3002\u3053\u306E\u78BA\u8A8D\u3067\u306F repo / Issue / PR scope \u306F\u4F7F\u3044\u307E\u305B\u3093\u3002</p>
           <div class="approval-internal" hidden>
             <label for="repo-input">Repository</label>
             <input id="repo-input" value="" placeholder="marushu/vtdd-v2-p" />
@@ -27481,9 +27485,9 @@ function renderPasskeyOperatorPage(input = {}) {
           <input id="risk-kind-input" value="${highRiskKindDefault}" />`}
           <div class="row">
             <button class="secondary" id="approve-button">${approveButtonLabel}</button>
-            ${deployOneTapMode ? "" : '<button class="ghost" id="copy-approval-grant-button" type="button">Copy approvalGrantId</button>'}
+            ${deployOneTapMode || dashboardMode ? "" : '<button class="ghost" id="copy-approval-grant-button" type="button">Copy approvalGrantId</button>'}
           </div>
-          ${deployOneTapMode ? '<input id="auto-copy-approval-grant-input" type="checkbox" hidden />' : `<label class="inline-check" for="auto-copy-approval-grant-input">
+          ${deployOneTapMode || dashboardMode ? '<input id="auto-copy-approval-grant-input" type="checkbox" hidden />' : `<label class="inline-check" for="auto-copy-approval-grant-input">
             <input id="auto-copy-approval-grant-input" type="checkbox" />
             Auto-copy approvalGrantId after approval
           </label>`}

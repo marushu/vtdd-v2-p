@@ -22,6 +22,7 @@ export function renderPasskeyOperatorPage(input = {}) {
   const mergeMethodDefault = escapeHtml(input.mergeMethod || "squash");
   const returnUrl = escapeHtml(input.returnUrl || "");
   const dashboardReturnPath = escapeHtml(sanitizePasskeyDashboardReturnPath(input.dashboardReturnPath));
+  const dashboardNotificationMode = dashboardMode && dashboardReturnPath === "/dashboard/notifications";
   const githubAppRoleDefault = escapeHtml(input.githubAppRole || "legacy");
   const syncEnabled = input.syncEnabled === true;
   const syncMessage = escapeHtml(
@@ -33,7 +34,24 @@ export function renderPasskeyOperatorPage(input = {}) {
   const approvalSectionAttributes = deployOneTapMode
     ? ' data-owner-flow="one-tap-deploy"'
     : "";
-  const approveButtonLabel = deployOneTapMode ? "パスキー" : "Approve high-risk action";
+  const approveButtonLabel = deployOneTapMode
+    ? "パスキー"
+    : dashboardNotificationMode
+      ? "パスキーで通知を見る"
+      : dashboardMode
+        ? "パスキーで開く"
+        : "Approve high-risk action";
+  const heroTitle = dashboardMode ? "Dashboard Passkey" : "VTDD Passkey Operator";
+  const heroDescription = dashboardMode
+    ? "このページは Dashboard Butler を開くための読み取り専用パスキー確認です。Cloudflare Access が使えない時だけ、同一 origin の passkey で dashboard session を更新します。"
+    : "このページは real WebAuthn/passkey approval 用の operator helper です。登録と high-risk approval の両方を same-origin で実行し、最終的に <code>approvalGrantId</code> を取得できます。";
+  const approvalHeading = deployOneTapMode
+    ? "本番反映の承認"
+    : dashboardNotificationMode
+      ? "通知を見る"
+      : dashboardMode
+        ? "Dashboard を開く"
+        : "2. High-risk Approval";
   const deployScopeSummary = renderDeployScopeSummary({
     repositoryInput: repoDefault,
     issueNumber: issueDefault,
@@ -182,8 +200,8 @@ export function renderPasskeyOperatorPage(input = {}) {
   <body>
     <main>
       <div class="hero">
-        <h1>VTDD Passkey Operator</h1>
-        <p>このページは real WebAuthn/passkey approval 用の operator helper です。登録と high-risk approval の両方を same-origin で実行し、最終的に <code>approvalGrantId</code> を取得できます。</p>
+        <h1>${heroTitle}</h1>
+        <p>${heroDescription}</p>
         <p class="muted">origin: ${origin || "[same-origin]"}</p>
       </div>
 
@@ -204,7 +222,7 @@ export function renderPasskeyOperatorPage(input = {}) {
         </section>
 
         <section data-operator-section="approval"${approvalSectionAttributes}${hiddenAttribute(!sectionVisibility.approval)}>
-          <h2>${deployOneTapMode ? "本番反映の承認" : "2. High-risk Approval"}</h2>
+          <h2>${approvalHeading}</h2>
           ${
             deployOneTapMode
               ? `<p>production deploy を承認して、そのまま反映を開始します。</p>
@@ -222,7 +240,7 @@ export function renderPasskeyOperatorPage(input = {}) {
             <input id="risk-kind-input" value="${highRiskKindDefault}" autocomplete="off"${deployOneTapMode ? ' readonly data-deploy-scope-locked="true"' : ""} />
           </div>`
               : dashboardMode
-                ? `<p>dashboard session を更新します。通知や通常 dashboard を開くための read-only 補助認証で、repo / Issue / PR scope は使いません。</p>
+                ? `<p>${dashboardNotificationMode ? "通知センター" : "Dashboard"}を開くための read-only session を更新します。この確認では repo / Issue / PR scope は使いません。</p>
           <div class="approval-internal" hidden>
             <label for="repo-input">Repository</label>
             <input id="repo-input" value="" placeholder="marushu/vtdd-v2-p" />
@@ -248,10 +266,10 @@ export function renderPasskeyOperatorPage(input = {}) {
           }
           <div class="row">
             <button class="secondary" id="approve-button">${approveButtonLabel}</button>
-            ${deployOneTapMode ? "" : '<button class="ghost" id="copy-approval-grant-button" type="button">Copy approvalGrantId</button>'}
+            ${deployOneTapMode || dashboardMode ? "" : '<button class="ghost" id="copy-approval-grant-button" type="button">Copy approvalGrantId</button>'}
           </div>
           ${
-            deployOneTapMode
+            deployOneTapMode || dashboardMode
               ? '<input id="auto-copy-approval-grant-input" type="checkbox" hidden />'
               : `<label class="inline-check" for="auto-copy-approval-grant-input">
             <input id="auto-copy-approval-grant-input" type="checkbox" />
