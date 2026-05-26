@@ -132,6 +132,14 @@ test("passkey operator page focuses deploy mode on deploy approval and dispatch 
   assert.equal(html.includes('<section data-operator-section="issue-close" hidden>'), true);
   assert.equal(html.includes('<section data-operator-section="github-app-secret-sync" hidden>'), true);
   assert.equal(html.includes('<section data-operator-section="github-actions-secret-sync" hidden>'), true);
+  assert.equal(
+    html.includes(
+      "このページは production deploy を承認して、そのまま反映を開始するためのパスキー確認です。"
+    ),
+    true
+  );
+  assert.equal(html.includes("内部の承認IDや workflow 入力は通常操作では扱いません。"), true);
+  assert.equal(html.includes("最終的に <code>approvalGrantId</code> を取得できます。"), false);
   assert.equal(html.includes('id="approve-button">パスキー</button>'), true);
   assert.equal(html.includes("production deploy を承認して、そのまま反映を開始します。"), true);
   assert.equal(html.includes("承認対象"), true);
