@@ -56646,7 +56646,15 @@ var runtime_default = {
     if (request.method === "GET" && isDashboardPagePath(url.pathname)) {
       const auth = await authorizeDashboardRequest({ request, env, apiSuffix: url.pathname });
       if (!auth.ok) {
-        return html(auth.status, renderDashboardAuthRequiredPage({ runtimeOrigin: url.origin, reason: auth.reason }));
+        return html(
+          auth.status,
+          renderDashboardAuthRequiredPage({
+            runtimeOrigin: url.origin,
+            returnPath: `${url.pathname}${url.search}`,
+            reason: auth.reason,
+            passkeyFallbackReason: auth.passkeyFallbackReason
+          })
+        );
       }
     }
     if (request.method === "GET" && (url.pathname === "/dashboard" || url.pathname === "/orchestrator")) {
@@ -63516,7 +63524,12 @@ async function authorizeDashboardRequest({ request, env, apiSuffix = "/dashboard
   const accessJwt = normalizeText30(request.headers.get("cf-access-jwt-assertion"));
   if (!accessEmail && !accessLogin) {
     if (passkeyAuth.blocking) {
-      return passkeyAuth;
+      return {
+        ok: false,
+        status: 401,
+        reason: `Cloudflare Access authenticated owner identity is required for ${routeLabel}`,
+        passkeyFallbackReason: passkeyAuth.reason
+      };
     }
     return {
       ok: false,
@@ -66366,8 +66379,9 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 </body>
 </html>`;
 }
-function renderDashboardAuthRequiredPage({ runtimeOrigin, reason } = {}) {
+function renderDashboardAuthRequiredPage({ runtimeOrigin, returnPath = "/dashboard", reason, passkeyFallbackReason } = {}) {
   const origin = normalizeText30(runtimeOrigin);
+  const dashboardAccessHref = `${origin || ""}${sanitizeDashboardReturnPath(returnPath)}`;
   const dashboardSignInUrl = `${origin || ""}/v2/approval/passkey/operator?mode=dashboard&repositoryInput=marushu%2Fvtdd-v2-p&phase=execution&actionType=read&highRiskKind=dashboard_access`;
   return `<!doctype html>
 <html lang="ja">
@@ -66383,6 +66397,11 @@ function renderDashboardAuthRequiredPage({ runtimeOrigin, reason } = {}) {
     h1 { margin: 0 0 12px; font-size: 30px; }
     p { line-height: 1.7; color: #4d5c56; }
     a { color: #176b4d; font-weight: 750; }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0; }
+    .button { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; border: 1px solid #b9cabe; border-radius: 7px; padding: 9px 12px; color: #0f513b; text-decoration: none; background: #f8fbf8; }
+    .primary { background: #247a5b; color: #fff; border-color: #247a5b; }
+    details { margin-top: 16px; border-top: 1px solid #e2e9e4; padding-top: 14px; }
+    summary { cursor: pointer; font-weight: 800; color: #24342e; }
     code { color: #5f6c66; }
   </style>
 </head>
@@ -66390,14 +66409,38 @@ function renderDashboardAuthRequiredPage({ runtimeOrigin, reason } = {}) {
   <main>
     <section class="panel">
       <h1>Dashboard auth required</h1>
-      <p>\u3053\u306E dashboard \u306F owner-facing surface \u3067\u3059\u3002\u5BFE\u8C61\u306E GitHub / Cloudflare Access identity \u3067\u8A8D\u8A3C\u3055\u308C\u305F\u30E6\u30FC\u30B6\u30FC\u3001\u307E\u305F\u306F machine-authenticated service \u3060\u3051\u304C\u5229\u7528\u3067\u304D\u307E\u3059\u3002</p>
+      <p>\u3053\u306E dashboard \u306F owner-facing surface \u3067\u3059\u3002\u901A\u5E38\u95B2\u89A7\u3001\u901A\u77E5\u78BA\u8A8D\u3001\u901A\u5E38\u30C1\u30E3\u30C3\u30C8\u306F Cloudflare Access \u306E owner identity \u3067\u958B\u304D\u307E\u3059\u3002\u901A\u77E5\u3092\u30BF\u30C3\u30D7\u3057\u305F\u3060\u3051\u3067\u306F\u3001\u672A\u8A8D\u8A3C\u306E\u76F8\u624B\u306B\u901A\u77E5\u8A73\u7D30\u3084 Dashboard \u5185\u5BB9\u306F\u8FD4\u3057\u307E\u305B\u3093\u3002</p>
       <p><code>${escapeDashboardHtml(reason || "dashboard authentication required")}</code></p>
-      <p><a href="${escapeDashboardHtml(dashboardSignInUrl)}">Passkey \u3067 dashboard \u306B\u5165\u308B</a></p>
-      <p><a href="${escapeDashboardHtml(origin || "/status")}/status">Status</a></p>
+      <div class="actions">
+        <a class="button primary" href="${escapeDashboardHtml(dashboardAccessHref)}">Cloudflare Access \u3067\u958B\u304F</a>
+        <a class="button" href="${escapeDashboardHtml(`${origin || ""}/status`)}">Status</a>
+      </div>
+      <details>
+        <summary>Passkey fallback</summary>
+        <p>passkey dashboard session \u306F Cloudflare Access \u304C\u4F7F\u3048\u306A\u3044\u6642\u306E\u88DC\u52A9\u5C0E\u7DDA\u3067\u3059\u3002deploy\u3001merge\u3001secret sync \u306A\u3069\u306E\u9AD8\u30EA\u30B9\u30AF\u64CD\u4F5C\u306F\u5F15\u304D\u7D9A\u304D scope \u660E\u793A\u6E08\u307F real passkey approval \u304C\u5FC5\u8981\u3067\u3059\u3002</p>
+        ${passkeyFallbackReason ? `<p><code>${escapeDashboardHtml(passkeyFallbackReason)}</code></p>` : ""}
+        <p><a href="${escapeDashboardHtml(dashboardSignInUrl)}">Passkey fallback \u3092\u958B\u304F</a></p>
+      </details>
     </section>
   </main>
 </body>
 </html>`;
+}
+function sanitizeDashboardReturnPath(value) {
+  const normalized = normalizeText30(value) || "/dashboard";
+  let parsed;
+  try {
+    parsed = new URL(normalized, "https://dashboard.local");
+  } catch {
+    return "/dashboard";
+  }
+  if (parsed.origin !== "https://dashboard.local") {
+    return "/dashboard";
+  }
+  if (parsed.pathname !== "/dashboard" && !parsed.pathname.startsWith("/dashboard/")) {
+    return "/dashboard";
+  }
+  return `${parsed.pathname}${parsed.search}`;
 }
 function renderV2StatusPage({ runtimeOrigin, autonomyMode }) {
   const origin = normalize7(runtimeOrigin);

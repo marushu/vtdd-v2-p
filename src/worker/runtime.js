@@ -651,7 +651,15 @@ export default {
     if (request.method === "GET" && isDashboardPagePath(url.pathname)) {
       const auth = await authorizeDashboardRequest({ request, env, apiSuffix: url.pathname });
       if (!auth.ok) {
-        return html(auth.status, renderDashboardAuthRequiredPage({ runtimeOrigin: url.origin, reason: auth.reason }));
+        return html(
+          auth.status,
+          renderDashboardAuthRequiredPage({
+            runtimeOrigin: url.origin,
+            returnPath: `${url.pathname}${url.search}`,
+            reason: auth.reason,
+            passkeyFallbackReason: auth.passkeyFallbackReason
+          })
+        );
       }
     }
 
@@ -8573,7 +8581,12 @@ async function authorizeDashboardRequest({ request, env, apiSuffix = "/dashboard
 
   if (!accessEmail && !accessLogin) {
     if (passkeyAuth.blocking) {
-      return passkeyAuth;
+      return {
+        ok: false,
+        status: 401,
+        reason: `Cloudflare Access authenticated owner identity is required for ${routeLabel}`,
+        passkeyFallbackReason: passkeyAuth.reason
+      };
     }
     return {
       ok: false,
@@ -11563,8 +11576,9 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 </html>`;
 }
 
-function renderDashboardAuthRequiredPage({ runtimeOrigin, reason } = {}) {
+function renderDashboardAuthRequiredPage({ runtimeOrigin, returnPath = "/dashboard", reason, passkeyFallbackReason } = {}) {
   const origin = normalizeText(runtimeOrigin);
+  const dashboardAccessHref = `${origin || ""}${sanitizeDashboardReturnPath(returnPath)}`;
   const dashboardSignInUrl = `${origin || ""}/v2/approval/passkey/operator?mode=dashboard&repositoryInput=marushu%2Fvtdd-v2-p&phase=execution&actionType=read&highRiskKind=dashboard_access`;
   return `<!doctype html>
 <html lang="ja">
@@ -11580,6 +11594,11 @@ function renderDashboardAuthRequiredPage({ runtimeOrigin, reason } = {}) {
     h1 { margin: 0 0 12px; font-size: 30px; }
     p { line-height: 1.7; color: #4d5c56; }
     a { color: #176b4d; font-weight: 750; }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0; }
+    .button { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; border: 1px solid #b9cabe; border-radius: 7px; padding: 9px 12px; color: #0f513b; text-decoration: none; background: #f8fbf8; }
+    .primary { background: #247a5b; color: #fff; border-color: #247a5b; }
+    details { margin-top: 16px; border-top: 1px solid #e2e9e4; padding-top: 14px; }
+    summary { cursor: pointer; font-weight: 800; color: #24342e; }
     code { color: #5f6c66; }
   </style>
 </head>
@@ -11587,14 +11606,39 @@ function renderDashboardAuthRequiredPage({ runtimeOrigin, reason } = {}) {
   <main>
     <section class="panel">
       <h1>Dashboard auth required</h1>
-      <p>この dashboard は owner-facing surface です。対象の GitHub / Cloudflare Access identity で認証されたユーザー、または machine-authenticated service だけが利用できます。</p>
+      <p>この dashboard は owner-facing surface です。通常閲覧、通知確認、通常チャットは Cloudflare Access の owner identity で開きます。通知をタップしただけでは、未認証の相手に通知詳細や Dashboard 内容は返しません。</p>
       <p><code>${escapeDashboardHtml(reason || "dashboard authentication required")}</code></p>
-      <p><a href="${escapeDashboardHtml(dashboardSignInUrl)}">Passkey で dashboard に入る</a></p>
-      <p><a href="${escapeDashboardHtml(origin || "/status")}/status">Status</a></p>
+      <div class="actions">
+        <a class="button primary" href="${escapeDashboardHtml(dashboardAccessHref)}">Cloudflare Access で開く</a>
+        <a class="button" href="${escapeDashboardHtml(`${origin || ""}/status`)}">Status</a>
+      </div>
+      <details>
+        <summary>Passkey fallback</summary>
+        <p>passkey dashboard session は Cloudflare Access が使えない時の補助導線です。deploy、merge、secret sync などの高リスク操作は引き続き scope 明示済み real passkey approval が必要です。</p>
+        ${passkeyFallbackReason ? `<p><code>${escapeDashboardHtml(passkeyFallbackReason)}</code></p>` : ""}
+        <p><a href="${escapeDashboardHtml(dashboardSignInUrl)}">Passkey fallback を開く</a></p>
+      </details>
     </section>
   </main>
 </body>
 </html>`;
+}
+
+function sanitizeDashboardReturnPath(value) {
+  const normalized = normalizeText(value) || "/dashboard";
+  let parsed;
+  try {
+    parsed = new URL(normalized, "https://dashboard.local");
+  } catch {
+    return "/dashboard";
+  }
+  if (parsed.origin !== "https://dashboard.local") {
+    return "/dashboard";
+  }
+  if (parsed.pathname !== "/dashboard" && !parsed.pathname.startsWith("/dashboard/")) {
+    return "/dashboard";
+  }
+  return `${parsed.pathname}${parsed.search}`;
 }
 
 function renderV2StatusPage({ runtimeOrigin, autonomyMode }) {

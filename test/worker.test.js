@@ -778,6 +778,10 @@ test("worker rejects dashboard access without owner identity", async () => {
   const body = await response.text();
   assert.equal(body.includes("Dashboard auth required"), true);
   assert.equal(body.includes("owner-facing surface"), true);
+  assert.equal(body.includes("Cloudflare Access で開く"), true);
+  assert.equal(body.includes("Passkey fallback"), true);
+  assert.equal(body.includes("Passkey で dashboard に入る"), false);
+  assert.equal(body.includes("未認証の相手に通知詳細や Dashboard 内容は返しません"), true);
 });
 
 test("worker rejects unlisted dashboard subpaths before they can become public pages", async () => {
@@ -856,7 +860,42 @@ test("worker rejects stale dashboard passkey session cookies", async () => {
 
   assert.equal(response.status, 401);
   const body = await response.text();
+  assert.equal(body.includes("Cloudflare Access authenticated owner identity is required"), true);
+  assert.equal(body.includes("Cloudflare Access で開く"), true);
+  assert.equal(body.includes("Passkey fallback"), true);
   assert.equal(body.includes("dashboard passkey session was not found"), true);
+  assert.equal(body.includes("Passkey で dashboard に入る"), false);
+});
+
+test("worker does not expose dashboard notification details before Access auth", async () => {
+  const store = createInMemoryDashboardEventStore();
+  await store.put({
+    id: "github_actions_workflow_run:marushu/vtdd-v2-p:deploy-production:private-run",
+    kind: "github_actions_workflow_run",
+    repository: "marushu/vtdd-v2-p",
+    workflowName: "deploy-production",
+    runId: "private-run",
+    runUrl: "https://github.com/marushu/vtdd-v2-p/actions/runs/private-run",
+    status: "completed",
+    conclusion: "success",
+    headSha: "privateabcdef1234567890",
+    headBranch: "main",
+    title: "private deploy notification",
+    updatedAt: new Date().toISOString()
+  });
+
+  const response = await worker.fetch(
+    new Request("https://example.com/dashboard/notifications"),
+    { DASHBOARD_EVENT_STORE: store }
+  );
+
+  assert.equal(response.status, 401);
+  const body = await response.text();
+  assert.equal(body.includes("Dashboard auth required"), true);
+  assert.equal(body.includes("Cloudflare Access で開く"), true);
+  assert.equal(body.includes("private deploy notification"), false);
+  assert.equal(body.includes("private-run"), false);
+  assert.equal(body.includes("privateabcdef"), false);
 });
 
 test("worker ignores stale dashboard passkey cookie when Cloudflare Access owner identity is valid", async () => {
