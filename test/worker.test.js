@@ -1157,6 +1157,23 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("function dropStaleSocketIfNeeded()"), true);
   assert.equal(body.includes('let lastRefreshFailure = ""'), true);
   assert.equal(body.includes("function isAuthExpiredResponse("), true);
+  assert.equal(body.includes("let dashboardSessionExpired = false"), true);
+  assert.equal(body.includes("async function resumeDashboardSessionAfterAuthReturn("), true);
+  assert.equal(body.includes('const dashboardDraftKey = "vtdd.dashboard.draft:"'), true);
+  assert.equal(body.includes("function getDashboardDraftStorage()"), true);
+  assert.equal(body.includes("return window.sessionStorage"), true);
+  assert.equal(body.includes("window.localStorage"), false);
+  assert.equal(body.includes("function persistDashboardDraft()"), true);
+  assert.equal(body.includes("function restoreDashboardDraft()"), true);
+  assert.equal(body.includes("function clearDashboardDraft()"), true);
+  assert.equal(body.includes("if (dashboardSessionExpired || reconnectTimer"), true);
+  assert.equal(body.includes("if (!threadEndpoint || refreshingThread || dashboardSessionExpired)"), true);
+  assert.equal(body.includes("if (dashboardSessionExpired) return;"), true);
+  assert.equal(body.includes("dashboardSessionExpired = false;"), true);
+  assert.equal(body.includes("const refreshResult = await refreshThread();"), true);
+  assert.equal(body.includes("if (refreshResult && refreshResult.authExpired)"), true);
+  assert.equal(body.includes("connectThreadSocket();"), true);
+  assert.equal(body.includes("window.clearTimeout(reconnectTimer)"), true);
   assert.equal(body.includes("HTTP fallback"), true);
   assert.equal(body.includes("Dashboard のログインが切れています。入力は残したまま再ログインしてください。"), true);
   assert.equal(body.includes("Passkey で再ログイン"), true);
@@ -1178,8 +1195,14 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("setStatus(message, { temporary: options.temporary !== false })"), true);
   assert.equal(body.includes('setStatus("Dashboard thread 接続済み。", { temporary: true })'), true);
   assert.equal(body.includes('setStatus("");'), true);
-  assert.equal(body.includes("document.addEventListener(\"visibilitychange\""), true);
-  assert.equal(body.includes("window.addEventListener(\"online\""), true);
+  assert.equal(body.includes('document.addEventListener("visibilitychange", async () => {'), true);
+  assert.equal(body.includes('window.addEventListener("online", async () => {'), true);
+  assert.equal(body.includes("window.addEventListener(\"offline\""), true);
+  assert.equal(body.includes("window.addEventListener(\"pagehide\", persistDashboardDraft)"), true);
+  assert.equal(body.includes('window.addEventListener("pageshow", async () => {'), true);
+  assert.equal(body.includes('await resumeDashboardSessionAfterAuthReturn("画面復帰後、再ログイン状態を確認しています。入力は保持しています。")'), true);
+  assert.equal(body.includes('await resumeDashboardSessionAfterAuthReturn("ネットワーク復帰後、再ログイン状態を確認しています。入力は保持しています。")'), true);
+  assert.equal(body.includes("オフラインです。入力は保持しています。"), true);
   assert.equal(body.includes("VPS Codex CLI に push します"), false);
   assert.equal(body.includes("function updateComposerReserve()"), true);
   assert.equal(body.includes("function resizeComposerInput()"), true);
@@ -1189,7 +1212,9 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes('textarea.style.overflowY = textarea.scrollHeight > maxHeight ? "auto" : "hidden"'), true);
   assert.equal(body.includes("function normalizeComposerInputText("), true);
   assert.equal(body.includes("function normalizeComposerInput()"), true);
-  assert.equal(body.includes('textarea.addEventListener("input", normalizeComposerInput)'), true);
+  assert.equal(body.includes("restoreDashboardDraft();"), true);
+  assert.equal(body.includes('textarea.addEventListener("input", () => {'), true);
+  assert.equal(body.includes("persistDashboardDraft();"), true);
   assert.equal(body.includes('textarea.addEventListener("paste"'), true);
   assert.equal(body.includes("function scrollToLatest()"), true);
   assert.equal(body.includes("function showThinking()"), false);
@@ -1257,6 +1282,12 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("let pendingOwnerSend = null"), true);
   assert.equal(body.includes("let retryClientMessageId = \"\""), true);
   assert.equal(body.includes("function releasePendingOwnerSend("), true);
+  assert.equal(body.includes("function releasePendingOwnerSendFromThread("), true);
+  assert.equal(body.includes("releasePendingOwnerSendFromThread(body.messages || [])"), true);
+  assert.equal(body.includes("let authReturnResumePromise = null"), true);
+  assert.equal(body.includes("if (authReturnResumePromise)"), true);
+  assert.equal(body.includes("await authReturnResumePromise;"), true);
+  assert.equal(body.includes("authReturnResumePromise = null;"), true);
   assert.equal(body.includes("送信確認を待っています。入力は保存確認まで残します。"), true);
   assert.equal(body.includes("送信確認前に WebSocket が切れました。入力は残しています。履歴再取得後にもう一度送信できます。"), true);
   assert.equal(body.includes("送信確認が返りませんでした。入力は残しています。再接続後にもう一度送信してください。"), true);
@@ -1475,6 +1506,7 @@ test("worker appends dashboard Butler chat turn and retrieves the same thread", 
       headers: { ...dashboardAccessHeaders, "content-type": "application/json" },
       body: JSON.stringify({
         threadId: "dashboard-main-marushu-vtdd-v2-p",
+        clientMessageId: "dashboard_owner_message:http-fallback-1",
         repository: "marushu/vtdd-v2-p",
         text: "VPS Codex CLI とリアルタイムに会話したい"
       })
@@ -1488,6 +1520,7 @@ test("worker appends dashboard Butler chat turn and retrieves the same thread", 
   assert.equal(body.threadId, "dashboard-main-marushu-vtdd-v2-p");
   assert.equal(body.messages.length, 2);
   assert.equal(body.messages[0].role, "owner");
+  assert.equal(body.messages[0].messageId, "dashboard_owner_message:http-fallback-1");
   assert.equal(body.messages[1].role, "butler");
   assert.match(body.messages[1].text, /VPS Codex CLI/);
 
@@ -1501,6 +1534,7 @@ test("worker appends dashboard Butler chat turn and retrieves the same thread", 
   const retrieveBody = await retrieveResponse.json();
   assert.equal(retrieveBody.ok, true);
   assert.equal(retrieveBody.messages.length, 2);
+  assert.equal(retrieveBody.messages[0].messageId, "dashboard_owner_message:http-fallback-1");
   assert.equal(retrieveBody.messages[0].text, "VPS Codex CLI とリアルタイムに会話したい");
   assert.equal(retrieveBody.summary, null);
 });
@@ -2690,6 +2724,91 @@ test("DashboardChatRoom sends ordinary owner turns to connected app-server bridg
   assert.equal(status.type, "transient_status");
   assert.equal(status.status, "thinking");
   assert.equal(status.text, "app-server bridge の返信を待っています");
+});
+
+test("DashboardChatRoom broadcasts thread truth before owner ack for ack-drop recovery", async () => {
+  const provider = createInMemoryMemoryProvider();
+  const store = createInMemoryDashboardChatStore();
+  const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
+  const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-unresolved");
+  const room = new DashboardChatRoom(
+    {
+      storage: createMockDurableObjectStorage(),
+      getWebSockets() {
+        return [dashboardSocket, bridgeSocket];
+      }
+    },
+    { DASHBOARD_CHAT_STORE: store, MEMORY_PROVIDER: provider }
+  );
+
+  await room.webSocketMessage(
+    dashboardSocket,
+    JSON.stringify({
+      type: "owner_message",
+      threadId: "dashboard-main-unresolved",
+      clientMessageId: "dashboard_owner_message:ack-drop-1",
+      text: "ACK が落ちても thread truth で解除できる"
+    })
+  );
+
+  const sentTypes = dashboardSocket.sent.map((message) => JSON.parse(message).type);
+  assert.deepEqual(sentTypes, ["thread", "owner_message_accepted", "transient_status"]);
+  const threadBroadcast = JSON.parse(dashboardSocket.sent[0]);
+  assert.equal(threadBroadcast.ok, true);
+  assert.equal(threadBroadcast.messages.length, 1);
+  assert.equal(threadBroadcast.messages[0].role, "owner");
+  assert.equal(threadBroadcast.messages[0].messageId, "dashboard_owner_message:ack-drop-1");
+  assert.equal(threadBroadcast.messages[0].text, "ACK が落ちても thread truth で解除できる");
+  const ack = JSON.parse(dashboardSocket.sent[1]);
+  assert.equal(ack.type, "owner_message_accepted");
+  assert.equal(ack.clientMessageId, "dashboard_owner_message:ack-drop-1");
+});
+
+test("DashboardChatRoom accepts ten consecutive owner turns without dropping ack or bridge dispatch", async () => {
+  const provider = createInMemoryMemoryProvider();
+  const store = createInMemoryDashboardChatStore();
+  const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
+  const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-unresolved");
+  const storage = createMockDurableObjectStorage();
+  const room = new DashboardChatRoom(
+    {
+      storage,
+      getWebSockets() {
+        return [dashboardSocket, bridgeSocket];
+      }
+    },
+    { DASHBOARD_CHAT_STORE: store, MEMORY_PROVIDER: provider }
+  );
+
+  for (let index = 1; index <= 10; index += 1) {
+    await room.webSocketMessage(
+      dashboardSocket,
+      JSON.stringify({
+        type: "owner_message",
+        threadId: "dashboard-main-unresolved",
+        clientMessageId: `dashboard_owner_message:ten-${index}`,
+        text: `連続投稿 ${index}`
+      })
+    );
+  }
+
+  const stored = await store.listThread("dashboard-main-unresolved");
+  assert.equal(stored.filter((message) => message.role === "owner").length, 10);
+  assert.deepEqual(
+    stored.filter((message) => message.role === "owner").map((message) => message.text),
+    Array.from({ length: 10 }, (_, index) => `連続投稿 ${index + 1}`)
+  );
+  assert.equal(bridgeSocket.sent.length, 10);
+  assert.deepEqual(
+    bridgeSocket.sent.map((message) => JSON.parse(message).messageId),
+    Array.from({ length: 10 }, (_, index) => `dashboard_owner_message:ten-${index + 1}`)
+  );
+  const acknowledgements = dashboardSocket.sent
+    .map((message) => JSON.parse(message))
+    .filter((message) => message.type === "owner_message_accepted");
+  assert.equal(acknowledgements.length, 10);
+  assert.equal(acknowledgements.every((message) => message.ok === true), true);
+  assert.equal(dashboardSocket.sent.some((message) => JSON.parse(message).type === "error"), false);
 });
 
 test("DashboardChatRoom sends each owner turn to only one app-server bridge for a thread", async () => {

@@ -63182,6 +63182,7 @@ async function buildDashboardChatTurn(payload, options = {}) {
   const input = normalizeObject11(payload);
   const repository = normalizeCanonicalRepositoryInput(input.repository);
   const mediaReferences = normalizeMediaReferences(input.mediaReferences || input.media_references || input.media);
+  const clientMessageId = sanitizeDashboardChatText(input.clientMessageId || input.client_message_id);
   const text = sanitizeDashboardChatText(input.text || input.message || input.body) || (mediaReferences.length > 0 ? "\u6DFB\u4ED8\u3092\u8FFD\u52A0\u3057\u307E\u3057\u305F\u3002" : "");
   if (!text) {
     return {
@@ -63210,6 +63211,7 @@ async function buildDashboardChatTurn(payload, options = {}) {
       relatedIssue,
       status: "sent",
       text,
+      messageId: clientMessageId || void 0,
       mediaReferences: mediaValidation.mediaReferences,
       createdAt: now
     },
@@ -65856,6 +65858,55 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       const messagesById = new Map();
       let pendingOwnerSend = null;
       let retryClientMessageId = "";
+      let dashboardSessionExpired = false;
+      let authReturnResumePromise = null;
+      const dashboardDraftKey = "vtdd.dashboard.draft:" + (threadId || "unknown");
+      const dashboardDraftMetaKey = dashboardDraftKey + ":meta";
+
+      function getDashboardDraftStorage() {
+        return window.sessionStorage;
+      }
+
+      function persistDashboardDraft() {
+        try {
+          const draftStorage = getDashboardDraftStorage();
+          draftStorage.setItem(dashboardDraftKey, textarea.value || "");
+          draftStorage.setItem(
+            dashboardDraftMetaKey,
+            JSON.stringify({
+              pendingMediaCount: pendingMediaItems.length,
+              updatedAt: new Date().toISOString()
+            })
+          );
+        } catch {}
+      }
+
+      function clearDashboardDraft() {
+        try {
+          const draftStorage = getDashboardDraftStorage();
+          draftStorage.removeItem(dashboardDraftKey);
+          draftStorage.removeItem(dashboardDraftMetaKey);
+        } catch {}
+      }
+
+      function restoreDashboardDraft() {
+        try {
+          const draftStorage = getDashboardDraftStorage();
+          const draft = draftStorage.getItem(dashboardDraftKey) || "";
+          const rawMeta = draftStorage.getItem(dashboardDraftMetaKey) || "";
+          const meta = rawMeta ? JSON.parse(rawMeta) : {};
+          if (draft && !textarea.value) {
+            textarea.value = draft;
+            normalizeComposerInput();
+            setStatus(
+              Number(meta.pendingMediaCount || 0) > 0
+                ? "\u524D\u56DE\u306E\u5165\u529B\u3092\u5FA9\u5143\u3057\u307E\u3057\u305F\u3002\u6DFB\u4ED8\u306F\u518D\u9078\u629E\u3057\u3066\u304F\u3060\u3055\u3044\u3002"
+                : "\u524D\u56DE\u306E\u5165\u529B\u3092\u5FA9\u5143\u3057\u307E\u3057\u305F\u3002",
+              { temporary: true }
+            );
+          }
+        } catch {}
+      }
 
       function updateComposerReserve() {
         log.style.setProperty("--composer-reserve", Math.ceil(form.getBoundingClientRect().height) + "px");
@@ -65930,6 +65981,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       }
 
       function setConnectionRecoveryStatus(message, options = {}) {
+        if (dashboardSessionExpired) return;
         const attempt = Math.max(1, reconnectAttempt + 1);
         status.dataset.reconnectAttempt = String(attempt);
         status.dataset.websocketState = describeChatSocketState();
@@ -65960,10 +66012,46 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       }
 
       function setDashboardSessionExpiredStatus() {
+        dashboardSessionExpired = true;
+        persistDashboardDraft();
+        setComposerLocked(false);
+        const submitButton = form.querySelector("button[type='submit']");
+        if (submitButton) submitButton.disabled = false;
+        if (reconnectTimer) {
+          window.clearTimeout(reconnectTimer);
+          reconnectTimer = null;
+        }
         setStatus("Dashboard \u306E\u30ED\u30B0\u30A4\u30F3\u304C\u5207\u308C\u3066\u3044\u307E\u3059\u3002\u5165\u529B\u306F\u6B8B\u3057\u305F\u307E\u307E\u518D\u30ED\u30B0\u30A4\u30F3\u3057\u3066\u304F\u3060\u3055\u3044\u3002", {
           actionHref: dashboardSignInUrl,
           actionLabel: "Passkey \u3067\u518D\u30ED\u30B0\u30A4\u30F3"
         });
+      }
+
+      async function resumeDashboardSessionAfterAuthReturn(reason) {
+        if (!dashboardSessionExpired) return false;
+        if (authReturnResumePromise) {
+          await authReturnResumePromise;
+          return true;
+        }
+        authReturnResumePromise = (async () => {
+          dashboardSessionExpired = false;
+          setConnectionRecoveryStatus(reason || "\u518D\u30ED\u30B0\u30A4\u30F3\u5F8C\u306E\u63A5\u7D9A\u3092\u5FA9\u5E30\u3057\u3066\u3044\u307E\u3059\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002", { temporary: false });
+          dropStaleSocketIfNeeded();
+          const refreshResult = await refreshThread();
+          if (refreshResult && refreshResult.authExpired) {
+            return true;
+          }
+          if (!dashboardSessionExpired) {
+            connectThreadSocket();
+            scheduleReconnect();
+          }
+        })();
+        try {
+          await authReturnResumePromise;
+        } finally {
+          authReturnResumePromise = null;
+        }
+        return true;
       }
 
       function releasePendingOwnerSend(clientMessageId, options = {}) {
@@ -65986,11 +66074,26 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           pendingMediaItems = [];
           renderPendingMedia();
           resizeComposerInput();
+          clearDashboardDraft();
         } else {
           retryClientMessageId = pending.clientMessageId;
+          persistDashboardDraft();
         }
         updateComposerReserve();
         return true;
+      }
+
+      function releasePendingOwnerSendFromThread(messages) {
+        if (!pendingOwnerSend || !Array.isArray(messages)) return false;
+        const pendingClientMessageId = pendingOwnerSend.clientMessageId;
+        const acceptedMessage = messages.find((message) =>
+          message &&
+          message.role === "owner" &&
+          (message.messageId === pendingClientMessageId || message.message_id === pendingClientMessageId)
+        );
+        if (!acceptedMessage) return false;
+        pendingSendRollbacks.delete(pendingClientMessageId);
+        return releasePendingOwnerSend(pendingClientMessageId, { clearComposer: true });
       }
 
       function appendMessage(message) {
@@ -66609,7 +66712,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       }
 
       async function refreshThread() {
-        if (!threadEndpoint || refreshingThread) return { ok: false, skipped: true };
+        if (!threadEndpoint || refreshingThread || dashboardSessionExpired) return { ok: false, skipped: true };
         refreshingThread = true;
         try {
           const response = await fetch(threadEndpoint, {
@@ -66628,8 +66731,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             return { ok: false, status: response.status };
           }
           if (body && body.ok) {
+            dashboardSessionExpired = false;
             lastRefreshFailure = "";
             renderThread(body.messages || [], { replace: true });
+            releasePendingOwnerSendFromThread(body.messages || []);
             return { ok: true };
           }
         } catch {
@@ -66643,7 +66748,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       }
 
       function scheduleReconnect() {
-        if (reconnectTimer || !socketEndpoint || typeof WebSocket !== "function") return;
+        if (dashboardSessionExpired || reconnectTimer || !socketEndpoint || typeof WebSocket !== "function") return;
         const delay = Math.min(10000, 1000 * Math.pow(2, reconnectAttempt));
         setConnectionRecoveryStatus("\u63A5\u7D9A\u3092\u5FA9\u5E30\u3057\u3066\u3044\u307E\u3059\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002");
         reconnectAttempt += 1;
@@ -66654,6 +66759,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       }
 
       function connectThreadSocket() {
+        if (dashboardSessionExpired) return;
         if (!socketEndpoint || typeof WebSocket !== "function") {
           setStatus("\u63A5\u7D9A\u3092\u958B\u59CB\u3067\u304D\u307E\u305B\u3093\u3002dashboard Butler \u306F\u9001\u4FE1\u3067\u304D\u307E\u305B\u3093\u3002");
           return;
@@ -66664,6 +66770,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         }
         chatSocket = new WebSocket(socketEndpoint);
         chatSocket.addEventListener("open", () => {
+          dashboardSessionExpired = false;
           reconnectAttempt = 0;
           lastRefreshFailure = "";
           if (reconnectTimer) {
@@ -66678,9 +66785,12 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             const body = JSON.parse(event.data || "{}");
             if (body.type === "thread" && body.ok) {
               renderThread(body.messages || [], { replace: false });
+              const releasedFromThread = releasePendingOwnerSendFromThread(body.messages || []);
               const lastMessage = Array.isArray(body.messages) ? body.messages[body.messages.length - 1] : null;
               if (lastMessage?.role === "butler" && lastMessage?.status === "replied") {
                 setStatus("\u8FD4\u4FE1\u3092\u53D7\u4FE1\u3057\u307E\u3057\u305F\u3002", { temporary: true });
+              } else if (releasedFromThread) {
+                setStatus("\u9001\u4FE1\u3092\u4FDD\u5B58\u3057\u307E\u3057\u305F\u3002app-server bridge \u306E\u8FD4\u4FE1\u3092\u5F85\u3063\u3066\u3044\u307E\u3059", { thinking: true });
               }
             } else if (body.type === "transient_status" && body.ok) {
               const isThinking = body.status === "thinking";
@@ -66713,23 +66823,27 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           if (pendingOwnerSend) {
             releasePendingOwnerSend(pendingOwnerSend.clientMessageId, { clearComposer: false, keepRollbackTimer: true });
             setStatus("\u9001\u4FE1\u78BA\u8A8D\u524D\u306B WebSocket \u304C\u5207\u308C\u307E\u3057\u305F\u3002\u5165\u529B\u306F\u6B8B\u3057\u3066\u3044\u307E\u3059\u3002\u5C65\u6B74\u518D\u53D6\u5F97\u5F8C\u306B\u3082\u3046\u4E00\u5EA6\u9001\u4FE1\u3067\u304D\u307E\u3059\u3002");
-          } else {
+          } else if (!dashboardSessionExpired) {
             setConnectionRecoveryStatus("\u63A5\u7D9A\u304C\u5207\u308C\u307E\u3057\u305F\u3002\u5C65\u6B74\u3092\u78BA\u8A8D\u3057\u306A\u304C\u3089\u5FA9\u5E30\u3057\u3066\u3044\u307E\u3059\u3002");
           }
           dropStaleSocketIfNeeded();
-          refreshThread();
-          scheduleReconnect();
+          if (!dashboardSessionExpired) {
+            refreshThread();
+            scheduleReconnect();
+          }
         });
         chatSocket.addEventListener("error", () => {
           if (pendingOwnerSend) {
             releasePendingOwnerSend(pendingOwnerSend.clientMessageId, { clearComposer: false, keepRollbackTimer: true });
             setStatus("\u9001\u4FE1\u78BA\u8A8D\u524D\u306B WebSocket \u63A5\u7D9A\u304C\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u5165\u529B\u306F\u6B8B\u3057\u3066\u3044\u307E\u3059\u3002\u518D\u63A5\u7D9A\u5F8C\u306B\u3082\u3046\u4E00\u5EA6\u9001\u4FE1\u3067\u304D\u307E\u3059\u3002");
-          } else {
+          } else if (!dashboardSessionExpired) {
             setConnectionRecoveryStatus("\u63A5\u7D9A\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F\u3002\u5C65\u6B74\u3092\u78BA\u8A8D\u3057\u306A\u304C\u3089\u5FA9\u5E30\u3057\u3066\u3044\u307E\u3059\u3002");
           }
           dropStaleSocketIfNeeded();
-          refreshThread();
-          scheduleReconnect();
+          if (!dashboardSessionExpired) {
+            refreshThread();
+            scheduleReconnect();
+          }
         });
       }
 
@@ -66770,7 +66884,14 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           textarea.focus();
           return;
         }
+        if (dashboardSessionExpired) {
+          persistDashboardDraft();
+          setDashboardSessionExpiredStatus();
+          textarea.focus({ preventScroll: true });
+          return;
+        }
         const submitButton = form.querySelector("button[type='submit']");
+        persistDashboardDraft();
         if (submitButton) submitButton.disabled = true;
         setComposerLocked(true);
         const willUseHttpFallback = !isChatSocketOpen();
@@ -66878,6 +66999,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             pendingMediaItems = retainedPendingMediaItems;
             renderPendingMedia();
             const addedCount = Math.min(selectedItems.length, 12);
+            persistDashboardDraft();
             setStatus(String(addedCount) + "\u4EF6\u306E\u6DFB\u4ED8\u3092\u9001\u4FE1\u5F85\u3061\u306B\u8FFD\u52A0\u3057\u307E\u3057\u305F\u3002repo \u672A\u6307\u5B9A\u306E\u901A\u5E38\u4F1A\u8A71\u3067\u306F private media \u3068\u3057\u3066\u4FDD\u5B58\u3057\u307E\u3059\u3002", { temporary: true });
             textarea.focus({ preventScroll: true });
           } catch (error) {
@@ -66891,19 +67013,46 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       }
 
       resizeComposerInput();
-      textarea.addEventListener("input", normalizeComposerInput);
+      restoreDashboardDraft();
+      textarea.addEventListener("input", () => {
+        normalizeComposerInput();
+        persistDashboardDraft();
+      });
       textarea.addEventListener("paste", () => {
-        window.setTimeout(normalizeComposerInput, 0);
+        window.setTimeout(() => {
+          normalizeComposerInput();
+          persistDashboardDraft();
+        }, 0);
       });
       window.addEventListener("resize", resizeComposerInput);
-      window.addEventListener("online", () => {
+      window.addEventListener("online", async () => {
+        if (await resumeDashboardSessionAfterAuthReturn("\u30CD\u30C3\u30C8\u30EF\u30FC\u30AF\u5FA9\u5E30\u5F8C\u3001\u518D\u30ED\u30B0\u30A4\u30F3\u72B6\u614B\u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002")) return;
         setConnectionRecoveryStatus("\u30CD\u30C3\u30C8\u30EF\u30FC\u30AF\u5FA9\u5E30\u3092\u691C\u77E5\u3057\u307E\u3057\u305F\u3002\u63A5\u7D9A\u3092\u5FA9\u5E30\u3057\u3066\u3044\u307E\u3059\u3002");
         dropStaleSocketIfNeeded();
         refreshThread();
         scheduleReconnect();
       });
-      document.addEventListener("visibilitychange", () => {
-        if (document.visibilityState === "visible" && (!chatSocket || chatSocket.readyState !== WebSocket.OPEN)) {
+      window.addEventListener("offline", () => {
+        persistDashboardDraft();
+        setComposerLocked(false);
+        const submitButton = form.querySelector("button[type='submit']");
+        if (submitButton) submitButton.disabled = false;
+        setStatus("\u30AA\u30D5\u30E9\u30A4\u30F3\u3067\u3059\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002");
+      });
+      window.addEventListener("pagehide", persistDashboardDraft);
+      window.addEventListener("pageshow", async () => {
+        if (await resumeDashboardSessionAfterAuthReturn("\u753B\u9762\u5FA9\u5E30\u5F8C\u3001\u518D\u30ED\u30B0\u30A4\u30F3\u72B6\u614B\u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002")) return;
+        dropStaleSocketIfNeeded();
+        refreshThread();
+        scheduleReconnect();
+      });
+      document.addEventListener("visibilitychange", async () => {
+        if (document.visibilityState !== "visible") {
+          persistDashboardDraft();
+          return;
+        }
+        if (await resumeDashboardSessionAfterAuthReturn("\u753B\u9762\u5FA9\u5E30\u5F8C\u3001\u518D\u30ED\u30B0\u30A4\u30F3\u72B6\u614B\u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002")) return;
+        if (!chatSocket || chatSocket.readyState !== WebSocket.OPEN) {
           setConnectionRecoveryStatus("\u753B\u9762\u5FA9\u5E30\u3092\u691C\u77E5\u3057\u307E\u3057\u305F\u3002\u63A5\u7D9A\u3092\u5FA9\u5E30\u3057\u3066\u3044\u307E\u3059\u3002");
           dropStaleSocketIfNeeded();
           refreshThread();
