@@ -6473,6 +6473,8 @@ test("worker serves passkey operator page", async () => {
 
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("content-type"), "text/html; charset=utf-8");
+  assert.match(response.headers.get("cache-control"), /no-store/);
+  assert.equal(response.headers.get("pragma"), "no-cache");
   const html = await response.text();
   assert.equal(html.includes("VTDD Passkey Operator"), true);
   assert.equal(html.includes("/v2/approval/passkey/challenge"), true);
@@ -6499,6 +6501,8 @@ test("worker serves dashboard passkey operator mode", async () => {
   );
 
   assert.equal(response.status, 200);
+  assert.match(response.headers.get("cache-control"), /no-store/);
+  assert.equal(response.headers.get("pragma"), "no-cache");
   const html = await response.text();
   assert.equal(html.includes('id="repo-input" value=""'), true);
   assert.equal(html.includes('id="issue-input" value=""'), true);

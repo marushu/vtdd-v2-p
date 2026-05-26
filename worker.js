@@ -60214,7 +60214,9 @@ function handlePasskeyOperatorPageRequest(request) {
   return new Response(html2, {
     status: 200,
     headers: {
-      "content-type": "text/html; charset=utf-8"
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": "no-store, no-cache, must-revalidate, max-age=0",
+      pragma: "no-cache"
     }
   });
 }
