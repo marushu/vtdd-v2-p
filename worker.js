@@ -64584,15 +64584,18 @@ async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventS
     subtitle: "dashboard events",
     backHref: `${origin}/dashboard`,
     body: `
-      <section class="hero">
-        <p>Dashboard Butler \u306E\u901A\u77E5\u5165\u53E3\u3067\u3059\u3002iOS PWA Web Push\u3001OS \u306E\u901A\u77E5\u97F3\u3001\u672A\u8AAD badge \u306F\u3053\u306E\u753B\u9762\u304B\u3089\u8A31\u53EF\u30FB\u78BA\u8A8D\u3057\u307E\u3059\u3002</p>
-        <p class="muted">VTDD \u3060\u3051\u3067\u306A\u304F\u3001\u4ED6 repo / \u4E26\u884C\u958B\u767A / queue / workflow \u304B\u3089\u5C4A\u3044\u305F\u30A4\u30D9\u30F3\u30C8\u3092\u76F4\u8FD15\u5206\u3060\u3051\u8868\u793A\u3057\u307E\u3059\u3002</p>
-      </section>
       <div class="grid single">
         <section class="lane">
           <div class="lane-title"><h2>\u6700\u65B0\u901A\u77E5</h2><span class="pill">\u76F4\u8FD15\u5206</span></div>
           ${recentEvents.length > 0 ? recentEvents.map((event) => renderDashboardNotificationEvent(event)).join("") : `<p class="muted">\u76F4\u8FD15\u5206\u306E\u901A\u77E5\u306F\u3042\u308A\u307E\u305B\u3093\u3002</p>`}
         </section>
+      </div>
+      <div class="grid single">
+        <details class="lane" data-debug-section="notification-center-context">
+          <summary>\u901A\u77E5\u30BB\u30F3\u30BF\u30FC\u306B\u3064\u3044\u3066</summary>
+          <p>Dashboard Butler \u306E\u901A\u77E5\u5165\u53E3\u3067\u3059\u3002iOS PWA Web Push\u3001OS \u306E\u901A\u77E5\u97F3\u3001\u672A\u8AAD badge \u306F\u3053\u306E\u753B\u9762\u304B\u3089\u8A31\u53EF\u30FB\u78BA\u8A8D\u3057\u307E\u3059\u3002</p>
+          <p class="muted">VTDD \u3060\u3051\u3067\u306A\u304F\u3001\u4ED6 repo / \u4E26\u884C\u958B\u767A / queue / workflow \u304B\u3089\u5C4A\u3044\u305F\u30A4\u30D9\u30F3\u30C8\u3092\u76F4\u8FD15\u5206\u3060\u3051\u8868\u793A\u3057\u307E\u3059\u3002</p>
+        </details>
       </div>
       <div class="grid">
         <section class="lane">
@@ -65097,8 +65100,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
   const dashboardIssueNumber = normalizePositiveInteger9(url?.searchParams?.get("issueNumber"));
   const dashboardTargetLabel = repositoryInput || "\u5BFE\u8C61 repo \u672A\u6307\u5B9A";
   const targetStatusMarkup = repositoryInput ? `<p><strong>${escapeDashboardHtml(repositoryInput)}</strong></p>
-          <p class="muted">\u3053\u306E repo \u3092\u5BFE\u8C61\u306B runtime truth\u3001progress\u3001RAG\u3001operator \u3092\u958B\u304D\u307E\u3059\u3002</p>` : `<p><strong>\u5BFE\u8C61 repo \u672A\u6307\u5B9A</strong></p>
-          <p class="muted">\u901A\u5E38\u4F1A\u8A71\u306F\u7D9A\u3051\u3089\u308C\u307E\u3059\u3002repo \u4F5C\u696D\u306B\u5165\u308B\u6642\u306F URL \u306B <code>?repository=owner/repo</code> \u307E\u305F\u306F <code>?repositoryInput=owner/repo</code> \u3092\u4ED8\u3051\u3066\u958B\u3044\u3066\u304F\u3060\u3055\u3044\u3002</p>`;
+          <p class="muted">\u3053\u306E repo \u3067 Issue / PR \u64CD\u4F5C\u304C\u5FC5\u8981\u306A\u6642\u3060\u3051\u5BFE\u8C61\u306B\u3057\u307E\u3059\u3002\u901A\u5E38\u4F1A\u8A71\u306F\u3053\u306E\u307E\u307E\u7D9A\u3051\u3089\u308C\u307E\u3059\u3002</p>` : `<p><strong>\u5BFE\u8C61 repo \u672A\u6307\u5B9A</strong></p>
+          <p class="muted">\u901A\u5E38\u4F1A\u8A71\u306F\u7D9A\u3051\u3089\u308C\u307E\u3059\u3002Issue / PR \u64CD\u4F5C\u304C\u5FC5\u8981\u306B\u306A\u3063\u305F\u6642\u306B\u5BFE\u8C61 repo \u3092\u9078\u3073\u307E\u3059\u3002</p>`;
   const encodedRepository = encodeURIComponent(repositoryInput);
   const chatThreadId = `dashboard-main-${(repositoryInput || "unresolved").replace(/[^a-z0-9_.-]+/gi, "-")}`;
   const socketOrigin = origin.replace(/^http/i, "ws");
@@ -65169,24 +65172,16 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
   ];
   const cockpitActions = [
     {
-      label: "\u72B6\u614B\u78BA\u8A8D",
-      href: `${origin}/dashboard/github?repository=${encodedRepository}`
+      label: "\u901A\u77E5",
+      href: `${origin}/dashboard/notifications`
     },
     {
       label: "\u9032\u6357\u3092\u898B\u308B",
       href: `${origin}/dashboard/progress?repository=${encodedRepository}`
     },
     {
-      label: "RAG \u3092\u8AAD\u3080",
-      href: `${origin}/dashboard/memory?repository=${encodedRepository}`
-    },
-    {
-      label: "\u901A\u77E5",
-      href: `${origin}/dashboard/notifications`
-    },
-    {
-      label: "Passkey",
-      href: `${origin}/v2/approval/passkey/operator?repositoryInput=${encodedRepository}`
+      label: "GitHub\u72B6\u6CC1",
+      href: `${origin}/dashboard/github?repository=${encodedRepository}`
     }
   ];
   return `<!doctype html>
@@ -65379,21 +65374,21 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           <label class="round-button menu-open" for="mobile-menu-toggle" aria-label="\u7BA1\u7406\u30E1\u30CB\u30E5\u30FC\u3092\u9589\u3058\u308B">\xD7</label>
         </div>
         <div class="mobile-drawer-content">
-          <p class="menu-callout">\u72B6\u614B\u78BA\u8A8D\u3001\u9032\u6357\u3001RAG\u3001workflow \u306F\u3053\u3053\u304B\u3089\u958B\u304D\u307E\u3059\u3002\u901A\u77E5\u3067\u306F\u306A\u304F\u3001\u73FE\u5728\u306F dashboard \u5185\u306E\u72B6\u614B\u8868\u793A\u3067\u3059\u3002</p>
+          <p class="menu-callout">\u901A\u77E5\u3001\u9032\u6357\u3001\u5BFE\u8C61 repo \u306E\u78BA\u8A8D\u306F\u3053\u3053\u304B\u3089\u958B\u304D\u307E\u3059\u3002\u958B\u767A/\u904B\u7528\u306E\u8A73\u7D30\u306F\u4E0B\u306B\u9694\u96E2\u3057\u3066\u3044\u307E\u3059\u3002</p>
           <div class="lane">
             <div class="lane-title"><h3>\u5BFE\u8C61 repo</h3><span class="pill">${repositoryInput ? "resolved" : "\u672A\u6307\u5B9A"}</span></div>
             ${targetStatusMarkup}
           </div>
           <div class="lane">
-            <div class="lane-title"><h3>\u9032\u884C\u4E2D execution</h3><span class="pill">runtime truth</span></div>
-            <p>GitHub Actions / VPS runner status / execution progress route \u304B\u3089\u8AAD\u307F\u307E\u3059\u3002</p>
+            <div class="lane-title"><h3>\u9032\u884C\u4E2D</h3><span class="pill">\u72B6\u614B</span></div>
+            <p>\u76F4\u8FD1\u306E\u53CD\u6620\u3001\u5931\u6557\u3001\u9032\u884C\u4E2D\u306E\u4F5C\u696D\u304C\u3042\u308C\u3070\u3053\u3053\u306B\u51FA\u3057\u307E\u3059\u3002</p>
             ${renderDashboardDeployEvent(latestDeployEvent)}
           </div>
           <div class="quick-actions">
             ${cockpitActions.map((action) => `<a href="${escapeDashboardHtml(action.href)}">${escapeDashboardHtml(action.label)}</a>`).join("")}
           </div>
-          <details open>
-            <summary>Runtime surfaces</summary>
+          <details data-debug-section="dashboard-development-operations">
+            <summary>\u958B\u767A/\u904B\u7528</summary>
             <div class="surface-list">
               ${surfaces.map((surface) => `<a href="${escapeDashboardHtml(surface.href)}">${escapeDashboardHtml(surface.title)}</a>`).join("")}
             </div>
@@ -65413,11 +65408,11 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         </article>
         <article class="bubble">
           <strong>Butler</strong>
-          <p>\u306F\u3044\u3002\u79C1\u306F v2 \u306E Butler \u3068\u3057\u3066\u3001Issue \u99C6\u52D5\u30FBGitHub runtime truth\u30FBVPS runner\u30FBGemini reviewer\u30FBRAG\u30FBpasskey \u5883\u754C\u3092\u6271\u3044\u307E\u3059\u3002</p>
-          <p>\u3053\u306E\u753B\u9762\u306F\u4F1A\u8A71\u3092\u4E3B\u5F79\u306B\u3059\u308B\u305F\u3081\u306E chat-first runtime \u3067\u3059\u3002\u7BA1\u7406\u753B\u9762\u306F\u53F3\u306E\u30B5\u30A4\u30C9\u30D0\u30FC\u3078\u9000\u907F\u3057\u307E\u3057\u305F\u3002</p>
+          <p>\u306F\u3044\u3002\u3053\u3053\u3067\u306F\u307E\u305A\u666E\u901A\u306B\u4F1A\u8A71\u3067\u304D\u307E\u3059\u3002\u901A\u77E5\u3001\u9032\u6357\u3001\u5BFE\u8C61 repo \u306E\u78BA\u8A8D\u306F\u5FC5\u8981\u306A\u6642\u3060\u3051\u958B\u3051\u307E\u3059\u3002</p>
+          <p>\u4F5C\u696D\u3092\u9032\u3081\u308B\u6642\u306F\u3001\u5BFE\u8C61 repo \u3084 Issue \u3092\u4F1A\u8A71\u306E\u4E2D\u3067\u78BA\u8A8D\u3057\u3066\u304B\u3089\u9032\u3081\u307E\u3059\u3002</p>
           <ul>
-            <li>\u95A2\u9023 repo/nickname: <code>${escapeDashboardHtml(dashboardTargetLabel)}</code></li>
-            <li>\u4F1A\u8A71: Dashboard Butler \u306F app-server bridge \u7D4C\u8DEF\u3092\u4F7F\u3044\u307E\u3059\u3002\u65E7 VPS runner \u76F4\u9001\u7D4C\u8DEF\u306F\u4F7F\u3044\u307E\u305B\u3093</li>
+            <li>\u5BFE\u8C61: <code>${escapeDashboardHtml(dashboardTargetLabel)}</code></li>
+            <li>\u901A\u77E5\u3068\u9032\u6357\u306F\u3053\u306E\u753B\u9762\u304B\u3089\u623B\u3063\u3066\u78BA\u8A8D\u3067\u304D\u307E\u3059\u3002</li>
           </ul>
         </article>
         <article class="bubble owner">
@@ -65425,9 +65420,9 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         </article>
         <article class="bubble">
           <strong>Butler</strong>
-          <p>\u305D\u306E\u65B9\u91DD\u3067\u9032\u3081\u307E\u3059\u3002\u4E2D\u592E\u306F\u30C1\u30E3\u30C3\u30C8\u3060\u3051\u3001\u72B6\u614B\u78BA\u8A8D\u30FB\u9032\u6357\u30FBRAG\u30FBworkflow\u30FBprototype cleanup \u306E\u6271\u3044\u306F\u30B5\u30A4\u30C9\u30D0\u30FC\u306E\u30E1\u30CB\u30E5\u30FC\u304B\u3089\u5FC5\u8981\u306A\u6642\u3060\u3051\u958B\u304D\u307E\u3059\u3002</p>
-          <p>\u3053\u306E dashboard \u304B\u3089 VPS Codex CLI \u3092 <code>codex exec</code> \u3067\u6BCE\u56DE\u8D77\u52D5\u3059\u308B\u65E7\u7D4C\u8DEF\u306F\u524A\u9664\u3057\u307E\u3057\u305F\u3002Dashboard Butler \u306F <code>codex app-server</code> bridge \u304C\u5E38\u99D0\u3057\u3066\u3044\u308B\u6642\u3060\u3051 live Codex thread \u306B\u6E21\u3057\u307E\u3059\u3002</p>
-          <span class="connection-note">Dashboard thread \u63A5\u7D9A\u6E96\u5099\u4E2D: bridge \u304C\u672A\u63A5\u7D9A\u306A\u3089 Custom GPT Butler \u304C fallback \u3067\u3059</span>
+          <p>\u305D\u306E\u65B9\u91DD\u3067\u9032\u3081\u307E\u3059\u3002\u4E2D\u592E\u306F\u30C1\u30E3\u30C3\u30C8\u3092\u4E3B\u5F79\u306B\u3057\u3066\u3001\u7D30\u304B\u3044\u8A2D\u5B9A\u3084\u958B\u767A/\u904B\u7528\u306E\u78BA\u8A8D\u306F\u30E1\u30CB\u30E5\u30FC\u306E\u4E2D\u306B\u5206\u3051\u307E\u3059\u3002</p>
+          <p>\u63A5\u7D9A\u3067\u304D\u306A\u3044\u6642\u3082\u3001\u5165\u529B\u5185\u5BB9\u3092\u5931\u308F\u306A\u3044\u3088\u3046\u306B\u72B6\u614B\u3092\u77ED\u304F\u8868\u793A\u3057\u307E\u3059\u3002</p>
+          <span class="connection-note">\u63A5\u7D9A\u6E96\u5099\u4E2D: \u9001\u4FE1\u3067\u304D\u308B\u72B6\u614B\u306B\u306A\u3063\u305F\u3089\u3053\u3053\u3067\u77E5\u3089\u305B\u307E\u3059</span>
         </article>
 
       </div>
@@ -65447,48 +65442,48 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     <details id="tools" class="sidebar" aria-label="\u7BA1\u7406\u30B5\u30A4\u30C9\u30D0\u30FC\u30E1\u30CB\u30E5\u30FC">
       <summary>
         <span>
-          <span class="eyebrow">\u7BA1\u7406\u30E1\u30CB\u30E5\u30FC</span>
+          <span class="eyebrow">\u30E1\u30CB\u30E5\u30FC</span>
           <strong>\u5FC5\u8981\u306A\u6642\u3060\u3051\u958B\u304F</strong>
         </span>
         <span class="pill">WebSocket</span>
       </summary>
       <div class="sidebar-content">
-        <p class="menu-callout">\u72B6\u614B\u78BA\u8A8D\u3001\u9032\u6357\u3001RAG\u3001workflow \u306F\u3053\u3053\u304B\u3089\u9077\u79FB\u3057\u307E\u3059\u3002\u666E\u6BB5\u306E\u753B\u9762\u306F\u30C1\u30E3\u30C3\u30C8\u3092\u4E3B\u5F79\u306B\u3057\u307E\u3059\u3002</p>
+        <p class="menu-callout">\u901A\u77E5\u3001\u9032\u6357\u3001\u5BFE\u8C61 repo \u306E\u78BA\u8A8D\u3092\u512A\u5148\u3057\u307E\u3059\u3002\u958B\u767A/\u904B\u7528\u306E\u8A73\u7D30\u306F\u4E0B\u306B\u9694\u96E2\u3057\u3066\u3044\u307E\u3059\u3002</p>
 
         <div class="lane">
-          <div class="lane-title"><h3>\u95A2\u9023 repo</h3><span class="pill">resolved</span></div>
+          <div class="lane-title"><h3>\u5BFE\u8C61 repo</h3><span class="pill">${repositoryInput ? "resolved" : "\u672A\u6307\u5B9A"}</span></div>
           ${targetStatusMarkup}
         </div>
 
         <div class="lane">
           <div class="lane-title"><h3>Issue \u5019\u88DC</h3><span class="pill">draft</span></div>
-          <p>Dashboard Butler \u306E\u81EA\u7136\u6587\u5165\u53E3\u306F <code>codex app-server</code> \u7528\u306B\u4F5C\u308A\u76F4\u3057\u307E\u3059\u3002\u65E7 VPS runner \u76F4\u9001\u3067\u306F\u901A\u5E38\u4F1A\u8A71\u3092\u51E6\u7406\u3057\u307E\u305B\u3093\u3002</p>
+          <p>Issue / PR \u64CD\u4F5C\u304C\u5FC5\u8981\u306B\u306A\u3063\u305F\u6642\u3060\u3051\u3001\u4F1A\u8A71\u306E\u4E2D\u3067\u5BFE\u8C61\u3068\u7BC4\u56F2\u3092\u78BA\u8A8D\u3057\u307E\u3059\u3002</p>
         </div>
 
         <div class="lane">
-          <div class="lane-title"><h3>\u9032\u884C\u4E2D execution</h3><span class="pill">runtime truth</span></div>
-          <p>\u9032\u6357\u306F GitHub Actions / VPS runner status / execution progress route \u304B\u3089\u8AAD\u307F\u307E\u3059\u3002</p>
+          <div class="lane-title"><h3>\u9032\u884C\u4E2D</h3><span class="pill">\u72B6\u614B</span></div>
+          <p>\u76F4\u8FD1\u306E\u53CD\u6620\u3001\u5931\u6557\u3001\u9032\u884C\u4E2D\u306E\u4F5C\u696D\u304C\u3042\u308C\u3070\u3053\u3053\u306B\u51FA\u3057\u307E\u3059\u3002</p>
           ${renderDashboardDeployEvent(latestDeployEvent)}
           <div class="quick-actions">
             ${cockpitActions.map((action) => `<a href="${escapeDashboardHtml(action.href)}">${escapeDashboardHtml(action.label)}</a>`).join("")}
           </div>
         </div>
 
-        <details>
-          <summary>Runtime surfaces</summary>
+        <details data-debug-section="dashboard-development-operations">
+          <summary>\u958B\u767A/\u904B\u7528</summary>
           <div class="surface-list">
             ${surfaces.map((surface) => `<a href="${escapeDashboardHtml(surface.href)}">${escapeDashboardHtml(surface.title)}</a>`).join("")}
           </div>
         </details>
 
-        <details>
+        <details data-debug-section="dashboard-workflows">
           <summary>GitHub workflows</summary>
           <div class="surface-list">
             ${workflows.map(([title, href]) => `<a href="${escapeDashboardHtml(href)}">${escapeDashboardHtml(title)}</a>`).join("")}
           </div>
         </details>
 
-        <details>
+        <details data-debug-section="dashboard-prototype-cleanup">
           <summary>Prototype cleanup</summary>
           <p>v3 Worker prototype \u306E\u524A\u9664\u3084\u79FB\u884C\u306F destructive operation \u6271\u3044\u3067\u3059\u3002\u5FC5\u8981\u306B\u306A\u3063\u305F\u6642\u3060\u3051\u3001\u5BFE\u8C61 runtime \u3068 scope \u3092\u660E\u793A\u3057\u305F passkey approval \u3067\u6271\u3044\u307E\u3059\u3002</p>
         </details>
