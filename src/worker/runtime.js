@@ -10889,7 +10889,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         <div class="pending-media" id="butler-pending-media" aria-live="polite"></div>
         <div class="composer-box">
           <button class="media-button" id="butler-media-button" type="button" aria-label="画像やファイルを追加" title="画像やファイルを追加">+</button>
-          <input id="butler-media-input" type="file" hidden>
+          <input id="butler-media-input" type="file" multiple hidden>
           <textarea id="butler-message" name="text" placeholder="Butler V2 にメッセージ..." aria-label="Butler V2 にメッセージ" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="send"></textarea>
           <button class="send-button" type="submit" aria-label="Butler に送信">↑</button>
         </div>
@@ -11922,34 +11922,37 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       if (mediaButton && mediaInput) {
         mediaButton.addEventListener("click", () => mediaInput.click());
         mediaInput.addEventListener("change", async () => {
-          const file = mediaInput.files && mediaInput.files[0];
+          const files = Array.from(mediaInput.files || []);
           mediaInput.value = "";
-          if (!file) return;
+          if (files.length === 0) return;
+          const selectedItems = [];
           try {
             mediaButton.disabled = true;
-            const preparedFile = await prepareUploadFile(file);
-            const previewUrl =
-              preparedFile && preparedFile.type && preparedFile.type.startsWith("image/") && typeof URL !== "undefined" && typeof URL.createObjectURL === "function"
-                ? URL.createObjectURL(preparedFile)
-                : "";
-            const nextPendingMediaItems = [
-              ...pendingMediaItems,
-              {
+            for (const file of files) {
+              const preparedFile = await prepareUploadFile(file);
+              const previewUrl =
+                preparedFile && preparedFile.type && preparedFile.type.startsWith("image/") && typeof URL !== "undefined" && typeof URL.createObjectURL === "function"
+                  ? URL.createObjectURL(preparedFile)
+                  : "";
+              selectedItems.push({
                 clientId: Date.now() + "_" + Math.random().toString(36).slice(2),
                 filename: preparedFile.name || file.name || "attachment",
                 previewUrl,
                 file: preparedFile
-              }
-            ];
+              });
+            }
+            const nextPendingMediaItems = [...pendingMediaItems, ...selectedItems];
             const retainedPendingMediaItems = nextPendingMediaItems.slice(-12);
             for (const dropped of nextPendingMediaItems.slice(0, Math.max(0, nextPendingMediaItems.length - 12))) {
               revokePendingMediaPreview(dropped);
             }
             pendingMediaItems = retainedPendingMediaItems;
             renderPendingMedia();
-            setStatus("添付を送信待ちに追加しました。repo 未指定の通常会話では private media として保存します。", { temporary: true });
+            const addedCount = Math.min(selectedItems.length, 12);
+            setStatus(String(addedCount) + "件の添付を送信待ちに追加しました。repo 未指定の通常会話では private media として保存します。", { temporary: true });
             textarea.focus({ preventScroll: true });
           } catch (error) {
+            revokePendingMediaPreviews(selectedItems);
             setStatus((error && error.message) || "添付の保存に失敗しました。");
           } finally {
             mediaButton.disabled = false;
