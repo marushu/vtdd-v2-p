@@ -10888,7 +10888,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       <form class="composer" id="butler-chat-form" aria-label="Butler composer" autocomplete="off" data-socket-endpoint="${escapeDashboardHtml(socketOrigin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}/ws" data-thread-endpoint="${escapeDashboardHtml(origin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}" data-message-endpoint="${escapeDashboardHtml(origin)}/v2/dashboard/chat/messages" data-thread-id="${escapeDashboardHtml(chatThreadId)}" data-repository-input="${escapeDashboardHtml(repositoryInput)}" data-issue-number="${dashboardIssueNumber || ""}">
         <div class="pending-media" id="butler-pending-media" aria-live="polite"></div>
         <div class="composer-box">
-          <button class="media-button" id="butler-media-button" type="button" aria-label="画像やファイルを追加" title="画像やファイルを追加">+</button>
+          <button class="media-button" id="butler-media-button" type="button" aria-label="画像・動画・ファイルを追加" title="画像・動画・ファイルを追加">+</button>
           <input id="butler-media-input" type="file" multiple hidden>
           <textarea id="butler-message" name="text" placeholder="Butler V2 にメッセージ..." aria-label="Butler V2 にメッセージ" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="send"></textarea>
           <button class="send-button" type="submit" aria-label="Butler に送信">↑</button>
@@ -11207,39 +11207,69 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         return Number.isNaN(date.getTime()) ? "" : date.toISOString();
       }
 
+      function getMediaContentKind(item) {
+        const contentType = String(item && item.contentType || item && item.type || "");
+        const filename = String(item && item.filename || item && item.name || "").toLowerCase();
+        if (contentType.startsWith("video/") || /\\.(mp4|mov|m4v|webm)$/.test(filename)) return "video";
+        if (contentType.startsWith("image/") || /\\.(png|jpe?g|gif|webp|heic|heif)$/.test(filename)) return "image";
+        return "";
+      }
+
       function renderMediaReferences(references) {
         const list = Array.isArray(references) ? references : [];
         if (list.length === 0) return null;
         const wrapper = document.createElement("div");
         wrapper.className = "message-media";
         for (const reference of list) {
-          const link = document.createElement("a");
-          link.className = "media-chip";
           const mediaRouteHref = reference.mediaId ? "/v2/media/" + reference.mediaId + "/download" : "";
           const referenceDownloadUrl = typeof reference.downloadUrl === "string" ? reference.downloadUrl : "";
           const safeDownloadHref = referenceDownloadUrl.startsWith("/v2/media/") ? referenceDownloadUrl : "";
           const downloadHref = mediaRouteHref || safeDownloadHref || "#";
-          link.href = downloadHref;
-          link.target = "_blank";
-          link.rel = "noreferrer";
-          link.textContent = "";
-          const isImage = String(reference.contentType || "").startsWith("image/");
+          const mediaKind = getMediaContentKind(reference);
+          const isImage = mediaKind === "image";
+          const isVideo = mediaKind === "video";
+          const chip = document.createElement(isVideo && downloadHref !== "#" ? "span" : "a");
+          chip.className = "media-chip";
+          if (chip.tagName === "A") {
+            chip.href = downloadHref;
+            chip.target = "_blank";
+            chip.rel = "noreferrer";
+          }
+          chip.textContent = "";
           if (isImage && downloadHref !== "#") {
             const image = document.createElement("img");
             image.className = "media-thumb";
             image.src = downloadHref;
             image.alt = reference.filename || "添付画像";
             image.loading = "lazy";
-            link.appendChild(image);
+            chip.appendChild(image);
+          } else if (isVideo && downloadHref !== "#") {
+            const video = document.createElement("video");
+            video.className = "media-thumb";
+            video.src = downloadHref;
+            video.muted = true;
+            video.controls = true;
+            video.playsInline = true;
+            video.preload = "metadata";
+            video.setAttribute("aria-label", reference.filename || "添付動画");
+            chip.appendChild(video);
+            const icon = document.createElement("span");
+            icon.textContent = "動画";
+            chip.appendChild(icon);
           } else {
             const icon = document.createElement("span");
             icon.textContent = "添付";
-            link.appendChild(icon);
+            chip.appendChild(icon);
           }
-          const label = document.createElement("span");
+          const label = document.createElement(isVideo && downloadHref !== "#" ? "a" : "span");
           label.textContent = reference.filename || reference.mediaId || "media";
-          link.appendChild(label);
-          wrapper.appendChild(link);
+          if (label.tagName === "A") {
+            label.href = downloadHref;
+            label.target = "_blank";
+            label.rel = "noreferrer";
+          }
+          chip.appendChild(label);
+          wrapper.appendChild(chip);
         }
         return wrapper;
       }
@@ -11256,6 +11286,13 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         }
       }
 
+      function isPreviewableMediaFile(file) {
+        return getMediaContentKind({
+          contentType: file && file.type,
+          filename: file && file.name
+        }) !== "";
+      }
+
       function renderPendingMedia() {
         if (!pendingMedia) return;
         pendingMedia.replaceChildren();
@@ -11264,11 +11301,24 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           chip.className = "media-chip";
           if (item.previewUrl) {
             chip.classList.add("pending-preview");
-            const image = document.createElement("img");
-            image.className = "media-thumb";
-            image.src = item.previewUrl;
-            image.alt = item.filename || "送信待ち画像";
-            chip.appendChild(image);
+            const isVideo = getMediaContentKind(item) === "video";
+            if (isVideo) {
+              const video = document.createElement("video");
+              video.className = "media-thumb";
+              video.src = item.previewUrl;
+              video.muted = true;
+              video.controls = true;
+              video.playsInline = true;
+              video.preload = "metadata";
+              video.setAttribute("aria-label", item.filename || "送信待ち動画");
+              chip.appendChild(video);
+            } else {
+              const image = document.createElement("img");
+              image.className = "media-thumb";
+              image.src = item.previewUrl;
+              image.alt = item.filename || "送信待ち画像";
+              chip.appendChild(image);
+            }
           }
           const label = document.createElement("span");
           label.textContent = item.filename || "attachment";
@@ -11931,12 +11981,13 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             for (const file of files) {
               const preparedFile = await prepareUploadFile(file);
               const previewUrl =
-                preparedFile && preparedFile.type && preparedFile.type.startsWith("image/") && typeof URL !== "undefined" && typeof URL.createObjectURL === "function"
+                preparedFile && isPreviewableMediaFile(preparedFile) && typeof URL !== "undefined" && typeof URL.createObjectURL === "function"
                   ? URL.createObjectURL(preparedFile)
                   : "";
               selectedItems.push({
                 clientId: Date.now() + "_" + Math.random().toString(36).slice(2),
                 filename: preparedFile.name || file.name || "attachment",
+                contentType: preparedFile.type || file.type || "",
                 previewUrl,
                 file: preparedFile
               });

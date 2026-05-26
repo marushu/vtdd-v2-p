@@ -477,6 +477,12 @@ function createPngBlob() {
   ], { type: "image/png" });
 }
 
+function createMp4Blob() {
+  return new Blob([
+    new Uint8Array([0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d])
+  ], { type: "video/mp4" });
+}
+
 function createInMemoryDashboardPushSubscriptionStore() {
   const subscriptions = new Map();
   return {
@@ -1511,14 +1517,27 @@ test("worker serves dashboard media add controls for iPhone-first upload", async
   assert.equal(body.includes("id=\"butler-media-button\""), true);
   assert.equal(body.includes("id=\"butler-media-input\""), true);
   assert.equal(body.includes('id="butler-media-input" type="file" multiple hidden'), true);
+  assert.equal(body.includes("画像・動画・ファイルを追加"), true);
   assert.equal(body.includes("accept=\"image/*\""), false);
   assert.equal(body.includes("/v2/media/upload"), true);
   assert.equal(body.includes("createImageBitmap"), true);
   assert.equal(body.includes("className = \"media-thumb\""), true);
+  assert.equal(body.includes("function getMediaContentKind("), true);
+  assert.equal(body.includes("function isPreviewableMediaFile("), true);
+  assert.equal(body.includes("const mediaKind = getMediaContentKind(reference)"), true);
+  assert.equal(body.includes("getMediaContentKind(item) === \"video\""), true);
+  assert.equal(body.includes("document.createElement(\"video\")"), true);
+  assert.equal(body.includes("video.playsInline = true"), true);
+  assert.equal(body.includes("video.controls = true"), true);
+  assert.equal(body.includes("mp4|mov|m4v|webm"), true);
+  assert.equal(body.includes("/\\.(mp4|mov|m4v|webm)$/.test(filename)"), true);
+  assert.equal(body.includes("icon.textContent = \"動画\""), true);
   assert.equal(body.includes("const mediaRouteHref = reference.mediaId ? \"/v2/media/\" + reference.mediaId + \"/download\" : \"\""), true);
   assert.equal(body.includes("const safeDownloadHref = referenceDownloadUrl.startsWith(\"/v2/media/\") ? referenceDownloadUrl : \"\""), true);
   assert.equal(body.includes("const downloadHref = mediaRouteHref || safeDownloadHref || \"#\""), true);
-  assert.equal(body.includes("link.href = downloadHref"), true);
+  assert.equal(body.includes("chip.href = downloadHref"), true);
+  assert.equal(body.includes("label.href = downloadHref"), true);
+  assert.equal(body.includes("const chip = document.createElement(isVideo && downloadHref !== \"#\" ? \"span\" : \"a\")"), true);
   assert.equal(body.includes("isImage && downloadHref !== \"#\""), true);
   assert.equal(body.includes("image.src = downloadHref"), true);
   assert.equal(body.includes("URL.createObjectURL"), true);
@@ -1596,6 +1615,53 @@ test("worker uploads dashboard media to R2 and stores D1 metadata reference only
   );
   assert.equal(downloadResponse.status, 200);
   assert.equal(new Uint8Array(await downloadResponse.arrayBuffer())[0], 0x89);
+});
+
+test("worker uploads dashboard mp4 media to R2 and stores metadata reference only", async () => {
+  const mediaStore = createInMemoryMediaObjectStore();
+  const r2 = createInMemoryR2Binding();
+  const form = new FormData();
+  form.append("repositoryInput", "marushu/vtdd-v2-p");
+  form.append("relatedIssue", "587");
+  form.append("sourceSurface", "dashboard_butler");
+  form.append("file", createMp4Blob(), "broken-scroll.mp4");
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/media/upload", {
+      method: "POST",
+      headers: dashboardAccessHeaders,
+      body: form
+    }),
+    {
+      ...dashboardAccessEnv,
+      MEDIA_OBJECT_STORE: mediaStore,
+      VTDD_MEDIA_R2: r2
+    }
+  );
+
+  assert.equal(response.status, 201);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.match(body.media.mediaId, /^med_/);
+  assert.equal(body.media.repository, "marushu/vtdd-v2-p");
+  assert.equal(body.media.relatedIssue, 587);
+  assert.equal(body.media.filename, "broken-scroll.mp4");
+  assert.equal(body.media.contentType, "video/mp4");
+  assert.equal(body.media.visibility, "private");
+  assert.equal(body.stored.rawBinaryReturned, false);
+  assert.equal(JSON.stringify(body).includes("ftypisom"), false);
+  assert.equal(r2.objects.size, 1);
+  const storedObject = [...r2.objects.values()][0];
+  assert.equal(storedObject.options.httpMetadata.contentType, "video/mp4");
+
+  const downloadResponse = await worker.fetch(
+    new Request(`https://example.com${body.media.downloadUrl}`, {
+      headers: dashboardAccessHeaders
+    }),
+    { ...dashboardAccessEnv, MEDIA_OBJECT_STORE: mediaStore, VTDD_MEDIA_R2: r2 }
+  );
+  assert.equal(downloadResponse.status, 200);
+  assert.equal(downloadResponse.headers.get("content-type"), "video/mp4");
 });
 
 test("worker rejects media upload without R2 binding before metadata drift", async () => {
