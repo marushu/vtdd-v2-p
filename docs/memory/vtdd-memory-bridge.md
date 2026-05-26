@@ -25,7 +25,9 @@ The target operating model is:
 Use environment variables or equivalent command flags:
 
 - `VTDD_MEMORY_D1_DATABASE_NAME`: Cloudflare D1 database name for direct
-  Wrangler operations.
+  Wrangler operations. If this is absent, the CLI also accepts
+  `CLOUDFLARE_D1_DATABASE_NAME` so local repair commands can use the same
+  operator-owned name as GitHub Actions.
 - `VTDD_RUNTIME_URL`: Worker runtime base URL for retrieve operations.
 - `VTDD_GATEWAY_BEARER_TOKEN`: machine-auth token for runtime retrieve/write
   operations.
@@ -36,6 +38,18 @@ Use environment variables or equivalent command flags:
 
 Do not commit runtime URLs, database IDs, bearer tokens, account IDs, or owner
 specific bootstrap values into this repository.
+Direct `wrangler d1 execute` uses a database name or binding, not the
+Cloudflare `database_id` secret. Keep the relationship explicit:
+
+- runtime Worker binding name: `VTDD_MEMORY_D1`
+- GitHub Actions D1 database name variable: `CLOUDFLARE_D1_DATABASE_NAME`
+- GitHub Actions D1 database id secret: `CLOUDFLARE_D1_DATABASE_ID`
+- local direct-D1 name: `VTDD_MEMORY_D1_DATABASE_NAME` or
+  `CLOUDFLARE_D1_DATABASE_NAME`
+
+The database name and id must point at the same operator-owned Cloudflare D1
+database. This repository must not pin the owner's production database name as
+the public default.
 Do not pass bearer tokens as command-line flags; use the environment variable
 so the token is less likely to land in shell history or process logs.
 If neither the environment variable nor the bootstrap vault token path is

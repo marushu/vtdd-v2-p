@@ -511,11 +511,23 @@ function runWranglerD1({ database, command }) {
   };
 }
 
-function resolveDatabase(options) {
-  return normalizeRequiredText(
-    options.database ?? process.env.VTDD_MEMORY_D1_DATABASE_NAME,
-    "database"
-  );
+export function resolveDatabase(options = {}, env = process.env) {
+  const database =
+    normalizeOptionalText(options.database) ||
+    normalizeOptionalText(env.VTDD_MEMORY_D1_DATABASE_NAME) ||
+    normalizeOptionalText(env.CLOUDFLARE_D1_DATABASE_NAME);
+  if (database) {
+    return database;
+  }
+  const databaseId =
+    normalizeOptionalText(env.VTDD_MEMORY_D1_DATABASE_ID) ||
+    normalizeOptionalText(env.CLOUDFLARE_D1_DATABASE_ID);
+  if (databaseId) {
+    throw new Error(
+      "database is required; wrangler d1 execute requires a database name or binding, not database_id. Set VTDD_MEMORY_D1_DATABASE_NAME or CLOUDFLARE_D1_DATABASE_NAME."
+    );
+  }
+  throw new Error("database is required");
 }
 
 function inferTransport(options) {
