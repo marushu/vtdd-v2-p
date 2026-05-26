@@ -65484,10 +65484,6 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       href: `${origin}/dashboard/notifications`
     },
     {
-      label: "Passkey",
-      href: dashboardSignInUrl
-    },
-    {
       label: "\u9032\u6357\u3092\u898B\u308B",
       href: repositoryInput ? `${origin}/dashboard/progress?repository=${encodedRepository}` : "",
       disabledReason: "repo \u8A2D\u5B9A\u5F8C"
@@ -65697,7 +65693,6 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         </div>
         <div class="top-right">
           <a class="tool-button top-action" href="${escapeDashboardHtml(origin)}/dashboard/notifications" aria-label="\u901A\u77E5\u30BB\u30F3\u30BF\u30FC">\u901A\u77E5</a>
-          <a class="tool-button top-action" href="${escapeDashboardHtml(dashboardSignInUrl)}" aria-label="Passkey \u3067 dashboard session \u3092\u66F4\u65B0">Passkey</a>
         </div>
       </header>
 

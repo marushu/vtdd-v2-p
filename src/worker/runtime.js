@@ -10595,10 +10595,6 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       href: `${origin}/dashboard/notifications`
     },
     {
-      label: "Passkey",
-      href: dashboardSignInUrl
-    },
-    {
       label: "進捗を見る",
       href: repositoryInput ? `${origin}/dashboard/progress?repository=${encodedRepository}` : "",
       disabledReason: "repo 設定後"
@@ -10819,7 +10815,6 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         </div>
         <div class="top-right">
           <a class="tool-button top-action" href="${escapeDashboardHtml(origin)}/dashboard/notifications" aria-label="通知センター">通知</a>
-          <a class="tool-button top-action" href="${escapeDashboardHtml(dashboardSignInUrl)}" aria-label="Passkey で dashboard session を更新">Passkey</a>
         </div>
       </header>
 
