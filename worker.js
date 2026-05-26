@@ -56413,7 +56413,7 @@ var DashboardChatRoom = class {
       await this.broadcastTransientStatus({
         threadId: normalized.threadId,
         status: normalized.transientStatus,
-        text: normalized.text
+        text: normalized.transientText || normalized.text
       });
     }
     if (normalized.messages.length === 0) {
@@ -61589,6 +61589,7 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
   const status = normalizeDashboardEventText(input.status).toLowerCase();
   const codexThreadId = normalizeDashboardEventText(input.codexThreadId || input.codex_thread_id);
   const text = sanitizeDashboardChatText(input.text || input.message || input.delta || input.finalText || input.final_text);
+  let transientText = "";
   const repository = normalizeCanonicalRepositoryInput(input.repository);
   const relatedIssue = normalizePositiveInteger9(input.relatedIssue || input.issueNumber);
   const createdAt = normalizeIsoTimestamp(input.createdAt) || (/* @__PURE__ */ new Date()).toISOString();
@@ -61612,6 +61613,8 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
         )
       );
     }
+    transientStatus = "replied";
+    transientText = "Dashboard thread \u63A5\u7D9A\u6E08\u307F\u3002";
   } else if (eventType === "app_server_turn_failed" || status === "failed") {
     messages.push(
       normalizeDashboardChatMessage(
@@ -61629,6 +61632,11 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
     );
   } else if (eventType === "app_server_status") {
     transientStatus = status === "replied" ? "replied" : "thinking";
+    transientText = buildDashboardOwnerFacingTransientStatusText(input, {
+      status,
+      text,
+      transientStatus
+    });
   }
   return {
     ok: true,
@@ -61636,9 +61644,86 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
     codexThreadId,
     createdAt,
     text,
+    transientText,
     transientStatus,
     messages: messages.filter(Boolean)
   };
+}
+var DASHBOARD_APP_SERVER_STAGE_TEXT = {
+  read_context: "\u65E2\u5B58 Issue / PR / docs \u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u3002",
+  inspect_context: "\u65E2\u5B58 Issue / PR / docs \u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u3002",
+  issue_body: "\u65B0\u3057\u3044 Issue \u672C\u6587\u3092\u4F5C\u6210\u3057\u3066\u3044\u307E\u3059\u3002",
+  draft_issue: "\u65B0\u3057\u3044 Issue \u672C\u6587\u3092\u4F5C\u6210\u3057\u3066\u3044\u307E\u3059\u3002",
+  github_issue_create: "GitHub \u306B Issue \u3092\u4F5C\u6210\u3057\u3066\u3044\u307E\u3059\u3002",
+  issue_create: "GitHub \u306B Issue \u3092\u4F5C\u6210\u3057\u3066\u3044\u307E\u3059\u3002",
+  bounded_change_contract: "bounded change contract \u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u3002",
+  change_contract: "bounded change contract \u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u3002",
+  topic_branch: "topic branch \u3092\u4F5C\u6210\u3057\u3066\u3044\u307E\u3059\u3002",
+  branch_create: "topic branch \u3092\u4F5C\u6210\u3057\u3066\u3044\u307E\u3059\u3002",
+  implementation: "\u5B9F\u88C5\u306B\u5165\u3063\u3066\u3044\u307E\u3059\u3002",
+  implement: "\u5B9F\u88C5\u306B\u5165\u3063\u3066\u3044\u307E\u3059\u3002",
+  test: "\u30C6\u30B9\u30C8\u3092\u5B9F\u884C\u3057\u3066\u3044\u307E\u3059\u3002",
+  tests: "\u30C6\u30B9\u30C8\u3092\u5B9F\u884C\u3057\u3066\u3044\u307E\u3059\u3002",
+  pr_body: "PR\u672C\u6587\u3092\u4F5C\u6210\u3057\u3066\u3044\u307E\u3059\u3002",
+  pull_request_body: "PR\u672C\u6587\u3092\u4F5C\u6210\u3057\u3066\u3044\u307E\u3059\u3002",
+  pr_create: "PR\u3092\u4F5C\u6210\u3057\u3066\u3044\u307E\u3059\u3002",
+  pull_request_create: "PR\u3092\u4F5C\u6210\u3057\u3066\u3044\u307E\u3059\u3002",
+  reviewer_wait: "CI / reviewer \u3092\u5F85\u3063\u3066\u3044\u307E\u3059\u3002",
+  ci_wait: "CI / reviewer \u3092\u5F85\u3063\u3066\u3044\u307E\u3059\u3002",
+  reviewer_revision: "reviewer \u6307\u6458\u3092\u53CD\u6620\u3057\u3066\u3044\u307E\u3059\u3002",
+  review_fix: "reviewer \u6307\u6458\u3092\u53CD\u6620\u3057\u3066\u3044\u307E\u3059\u3002"
+};
+function buildDashboardOwnerFacingTransientStatusText(input, { status = "", text = "", transientStatus = "" } = {}) {
+  if (transientStatus === "replied" || status === "replied") {
+    return "Dashboard thread \u63A5\u7D9A\u6E08\u307F\u3002";
+  }
+  const stage = normalizeDashboardEventText(
+    input.stage || input.phase || input.step || input.activity || input.progressStage || input.progress_stage
+  ).toLowerCase();
+  const normalizedStage = stage.replaceAll("-", "_");
+  if (DASHBOARD_APP_SERVER_STAGE_TEXT[normalizedStage]) {
+    return DASHBOARD_APP_SERVER_STAGE_TEXT[normalizedStage];
+  }
+  const eventType = normalizeDashboardEventText(input.type || input.eventType || input.event_type).toLowerCase();
+  const source = [stage, status, eventType, text].filter(Boolean).join(" ").toLowerCase();
+  const matches = (patterns) => patterns.some((pattern) => source.includes(pattern));
+  if (matches(["reviewer_revision", "reviewer-revision", "review_fix", "review-fix", "address_review", "\u6307\u6458", "\u53CD\u6620"])) {
+    return "reviewer \u6307\u6458\u3092\u53CD\u6620\u3057\u3066\u3044\u307E\u3059\u3002";
+  }
+  if (matches(["ci", "checks", "check_run", "workflow", "actions", "reviewer_wait", "reviewer-wait", "review_wait"])) {
+    return "CI / reviewer \u3092\u5F85\u3063\u3066\u3044\u307E\u3059\u3002";
+  }
+  if (matches(["reviewer", "review", "gemini"])) {
+    return "reviewer \u3092\u5F85\u3063\u3066\u3044\u307E\u3059\u3002";
+  }
+  if (matches(["pr_body", "pr-body", "pull_request_body", "pull-request-body", "body_file", "body-file", "pr\u672C\u6587"])) {
+    return "PR\u672C\u6587\u3092\u4F5C\u6210\u3057\u3066\u3044\u307E\u3059\u3002";
+  }
+  if (matches(["pr_create", "pr-create", "pull_request_create", "pull-request-create", "open_pr", "open-pr", "pr\u3092\u4F5C\u6210"])) {
+    return "PR\u3092\u4F5C\u6210\u3057\u3066\u3044\u307E\u3059\u3002";
+  }
+  if (matches(["test", "tests", "unit", "integration", "e2e", "\u30C6\u30B9\u30C8"])) {
+    return "\u30C6\u30B9\u30C8\u3092\u5B9F\u884C\u3057\u3066\u3044\u307E\u3059\u3002";
+  }
+  if (matches(["implementation", "implement", "coding", "patch", "edit", "apply_patch", "\u5B9F\u88C5"])) {
+    return "\u5B9F\u88C5\u306B\u5165\u3063\u3066\u3044\u307E\u3059\u3002";
+  }
+  if (matches(["topic_branch", "topic-branch", "branch_create", "branch-create", "checkout_branch", "checkout-branch"])) {
+    return "topic branch \u3092\u4F5C\u6210\u3057\u3066\u3044\u307E\u3059\u3002";
+  }
+  if (matches(["bounded_change_contract", "bounded-change-contract", "change_contract", "change-contract", "contract"])) {
+    return "bounded change contract \u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u3002";
+  }
+  if (matches(["github_issue_create", "github-issue-create", "issue_create", "issue-create", "create_issue", "create-issue"])) {
+    return "GitHub \u306B Issue \u3092\u4F5C\u6210\u3057\u3066\u3044\u307E\u3059\u3002";
+  }
+  if (matches(["issue_body", "issue-body", "draft_issue", "draft-issue", "issue_draft", "issue-draft"])) {
+    return "\u65B0\u3057\u3044 Issue \u672C\u6587\u3092\u4F5C\u6210\u3057\u3066\u3044\u307E\u3059\u3002";
+  }
+  if (matches(["read_context", "read-context", "inspect", "investigate", "context", "docs", "document", "issue", "issues", "pr", "pull_request", "pull-request"])) {
+    return "\u65E2\u5B58 Issue / PR / docs \u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u3002";
+  }
+  return text || "app-server bridge \u306E\u8FD4\u4FE1\u3092\u5F85\u3063\u3066\u3044\u307E\u3059";
 }
 async function notifyDashboardChatRoom({ env, threadId, messages }) {
   const room = resolveDashboardChatRoomStub(env, threadId);
@@ -65264,6 +65349,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .bubble .message-body pre code { display: block; font-size: 14px; line-height: 1.55; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
     .bubble .message-body pre.wrap-code code { white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
     .bubble .message-body strong { display: inline; color: inherit; font-size: inherit; letter-spacing: 0; text-transform: none; margin: 0; font-weight: 800; }
+    .message-meta { margin-top: 6px; color: var(--muted); font-size: 11px; line-height: 1.2; opacity: .86; }
+    .bubble.owner .message-meta { color: var(--owner-text); opacity: .76; text-align: right; }
     .copy-message, .copy-code { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border: 1px solid var(--border); border-radius: 999px; background: var(--button); color: var(--text); font-size: 15px; line-height: 1; cursor: pointer; }
     .copy-message:focus-visible, .copy-code:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
     .copy-code { position: absolute; top: 8px; right: 8px; z-index: 1; opacity: .88; }
@@ -65682,8 +65769,43 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         if (media) {
           article.appendChild(media);
         }
+        const timestamp = formatMessageTimestamp(message.createdAt || message.created_at);
+        if (timestamp) {
+          const meta = document.createElement("time");
+          meta.className = "message-meta";
+          meta.dateTime = normalizeDateTimeAttribute(message.createdAt || message.created_at);
+          meta.textContent = timestamp;
+          article.appendChild(meta);
+        }
         log.appendChild(article);
         scrollToLatest();
+      }
+
+      function formatMessageTimestamp(value) {
+        const date = new Date(value || "");
+        if (Number.isNaN(date.getTime())) return "";
+        const now = new Date();
+        const sameDay =
+          date.getFullYear() === now.getFullYear() &&
+          date.getMonth() === now.getMonth() &&
+          date.getDate() === now.getDate();
+        const locale = navigator.language || "ja-JP";
+        const time = new Intl.DateTimeFormat(locale, {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false
+        }).format(date);
+        if (sameDay) return time;
+        const day = new Intl.DateTimeFormat(locale, {
+          month: "numeric",
+          day: "numeric"
+        }).format(date);
+        return day + " " + time;
+      }
+
+      function normalizeDateTimeAttribute(value) {
+        const date = new Date(value || "");
+        return Number.isNaN(date.getTime()) ? "" : date.toISOString();
       }
 
       function renderMediaReferences(references) {
