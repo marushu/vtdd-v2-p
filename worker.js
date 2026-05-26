@@ -27491,7 +27491,7 @@ function renderPasskeyOperatorPage(input = {}) {
             <input id="auto-copy-approval-grant-input" type="checkbox" />
             Auto-copy approvalGrantId after approval
           </label>`}
-          ${deployOneTapMode ? "" : '<p class="muted">GitHub App secret sync \u306A\u3089 <code>actionType=destructive</code> / <code>highRiskKind=github_app_secret_sync</code>\u3001production deploy \u306A\u3089 <code>actionType=deploy_production</code> / <code>highRiskKind=deploy_production</code>\u3001PR merge \u306A\u3089 <code>actionType=merge</code> / <code>highRiskKind=pull_merge</code> \u3092\u4F7F\u3044\u307E\u3059\u3002</p>'}
+          ${deployOneTapMode || dashboardMode ? "" : '<p class="muted">GitHub App secret sync \u306A\u3089 <code>actionType=destructive</code> / <code>highRiskKind=github_app_secret_sync</code>\u3001production deploy \u306A\u3089 <code>actionType=deploy_production</code> / <code>highRiskKind=deploy_production</code>\u3001PR merge \u306A\u3089 <code>actionType=merge</code> / <code>highRiskKind=pull_merge</code> \u3092\u4F7F\u3044\u307E\u3059\u3002</p>'}
           <pre id="approve-output"${deployOneTapMode ? " hidden" : ""}></pre>
         </section>
 
