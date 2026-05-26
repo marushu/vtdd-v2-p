@@ -62,6 +62,7 @@ test("deploy-production workflow enforces the MVP production deploy boundary", (
   assert.equal(workflow.includes("name: deploy-production"), true);
   assert.equal(workflow.includes("workflow_dispatch:"), true);
   assert.equal(workflow.includes("issues: write"), true);
+  assert.equal(workflow.includes("pull-requests: read"), true);
   assert.equal(workflow.includes("if: github.ref == 'refs/heads/main'"), true);
   assert.equal(workflow.includes("environment: production"), true);
   assert.equal(workflow.includes("approval_phrase:"), true);
@@ -173,6 +174,14 @@ test("deploy-production workflow enforces the MVP production deploy boundary", (
   assert.equal(workflow.includes("Notify dashboard deploy event"), true);
   assert.equal(workflow.includes("/v2/events/github-actions"), true);
   assert.equal(workflow.includes('readGit(["log", "-1", "--pretty=%s"])'), true);
+  assert.equal(workflow.includes('readGit(["log", "-1", "--pretty=%b"])'), true);
+  assert.equal(workflow.includes("function inferCommitSummary(subject, body)"), true);
+  assert.equal(workflow.includes("async function readPullRequestTitle(pullNumber)"), true);
+  assert.equal(workflow.includes("async function main()"), true);
+  assert.equal(workflow.includes("main().catch((error) =>"), true);
+  assert.equal(workflow.includes("vtdd-dashboard-deploy-event"), true);
+  assert.equal(workflow.includes("const pullTitle = await readPullRequestTitle(pullNumber);"), true);
+  assert.equal(workflow.includes("const changeSummary = pullTitle || inferCommitSummary(commitSubject, commitBody);"), true);
   assert.equal(workflow.includes("changeSummary:"), true);
   assert.equal(workflow.includes("pullNumber:"), true);
   assert.equal(workflow.includes("for attempt in 1 2 3 4 5 6"), true);
