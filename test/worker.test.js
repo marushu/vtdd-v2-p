@@ -1157,6 +1157,15 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("function dropStaleSocketIfNeeded()"), true);
   assert.equal(body.includes('let lastRefreshFailure = ""'), true);
   assert.equal(body.includes("function isAuthExpiredResponse("), true);
+  assert.equal(body.includes("let dashboardSessionExpired = false"), true);
+  assert.equal(body.includes('const dashboardDraftKey = "vtdd.dashboard.draft:"'), true);
+  assert.equal(body.includes("function persistDashboardDraft()"), true);
+  assert.equal(body.includes("function restoreDashboardDraft()"), true);
+  assert.equal(body.includes("function clearDashboardDraft()"), true);
+  assert.equal(body.includes("if (dashboardSessionExpired || reconnectTimer"), true);
+  assert.equal(body.includes("if (!threadEndpoint || refreshingThread || dashboardSessionExpired)"), true);
+  assert.equal(body.includes("if (dashboardSessionExpired) return;"), true);
+  assert.equal(body.includes("window.clearTimeout(reconnectTimer)"), true);
   assert.equal(body.includes("HTTP fallback"), true);
   assert.equal(body.includes("Dashboard のログインが切れています。入力は残したまま再ログインしてください。"), true);
   assert.equal(body.includes("Passkey で再ログイン"), true);
@@ -1180,6 +1189,10 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes('setStatus("");'), true);
   assert.equal(body.includes("document.addEventListener(\"visibilitychange\""), true);
   assert.equal(body.includes("window.addEventListener(\"online\""), true);
+  assert.equal(body.includes("window.addEventListener(\"offline\""), true);
+  assert.equal(body.includes("window.addEventListener(\"pagehide\", persistDashboardDraft)"), true);
+  assert.equal(body.includes("window.addEventListener(\"pageshow\""), true);
+  assert.equal(body.includes("オフラインです。入力は保持しています。"), true);
   assert.equal(body.includes("VPS Codex CLI に push します"), false);
   assert.equal(body.includes("function updateComposerReserve()"), true);
   assert.equal(body.includes("function resizeComposerInput()"), true);
@@ -1189,7 +1202,9 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes('textarea.style.overflowY = textarea.scrollHeight > maxHeight ? "auto" : "hidden"'), true);
   assert.equal(body.includes("function normalizeComposerInputText("), true);
   assert.equal(body.includes("function normalizeComposerInput()"), true);
-  assert.equal(body.includes('textarea.addEventListener("input", normalizeComposerInput)'), true);
+  assert.equal(body.includes("restoreDashboardDraft();"), true);
+  assert.equal(body.includes('textarea.addEventListener("input", () => {'), true);
+  assert.equal(body.includes("persistDashboardDraft();"), true);
   assert.equal(body.includes('textarea.addEventListener("paste"'), true);
   assert.equal(body.includes("function scrollToLatest()"), true);
   assert.equal(body.includes("function showThinking()"), false);

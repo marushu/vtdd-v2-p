@@ -10978,6 +10978,47 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       const messagesById = new Map();
       let pendingOwnerSend = null;
       let retryClientMessageId = "";
+      let dashboardSessionExpired = false;
+      const dashboardDraftKey = "vtdd.dashboard.draft:" + (threadId || "unknown");
+      const dashboardDraftMetaKey = dashboardDraftKey + ":meta";
+
+      function persistDashboardDraft() {
+        try {
+          window.localStorage.setItem(dashboardDraftKey, textarea.value || "");
+          window.localStorage.setItem(
+            dashboardDraftMetaKey,
+            JSON.stringify({
+              pendingMediaCount: pendingMediaItems.length,
+              updatedAt: new Date().toISOString()
+            })
+          );
+        } catch {}
+      }
+
+      function clearDashboardDraft() {
+        try {
+          window.localStorage.removeItem(dashboardDraftKey);
+          window.localStorage.removeItem(dashboardDraftMetaKey);
+        } catch {}
+      }
+
+      function restoreDashboardDraft() {
+        try {
+          const draft = window.localStorage.getItem(dashboardDraftKey) || "";
+          const rawMeta = window.localStorage.getItem(dashboardDraftMetaKey) || "";
+          const meta = rawMeta ? JSON.parse(rawMeta) : {};
+          if (draft && !textarea.value) {
+            textarea.value = draft;
+            normalizeComposerInput();
+            setStatus(
+              Number(meta.pendingMediaCount || 0) > 0
+                ? "前回の入力を復元しました。添付は再選択してください。"
+                : "前回の入力を復元しました。",
+              { temporary: true }
+            );
+          }
+        } catch {}
+      }
 
       function updateComposerReserve() {
         log.style.setProperty("--composer-reserve", Math.ceil(form.getBoundingClientRect().height) + "px");
@@ -11052,6 +11093,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       }
 
       function setConnectionRecoveryStatus(message, options = {}) {
+        if (dashboardSessionExpired) return;
         const attempt = Math.max(1, reconnectAttempt + 1);
         status.dataset.reconnectAttempt = String(attempt);
         status.dataset.websocketState = describeChatSocketState();
@@ -11082,6 +11124,15 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       }
 
       function setDashboardSessionExpiredStatus() {
+        dashboardSessionExpired = true;
+        persistDashboardDraft();
+        setComposerLocked(false);
+        const submitButton = form.querySelector("button[type='submit']");
+        if (submitButton) submitButton.disabled = false;
+        if (reconnectTimer) {
+          window.clearTimeout(reconnectTimer);
+          reconnectTimer = null;
+        }
         setStatus("Dashboard のログインが切れています。入力は残したまま再ログインしてください。", {
           actionHref: dashboardSignInUrl,
           actionLabel: "Passkey で再ログイン"
@@ -11108,8 +11159,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           pendingMediaItems = [];
           renderPendingMedia();
           resizeComposerInput();
+          clearDashboardDraft();
         } else {
           retryClientMessageId = pending.clientMessageId;
+          persistDashboardDraft();
         }
         updateComposerReserve();
         return true;
@@ -11744,7 +11797,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       }
 
       async function refreshThread() {
-        if (!threadEndpoint || refreshingThread) return { ok: false, skipped: true };
+        if (!threadEndpoint || refreshingThread || dashboardSessionExpired) return { ok: false, skipped: true };
         refreshingThread = true;
         try {
           const response = await fetch(threadEndpoint, {
@@ -11763,6 +11816,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             return { ok: false, status: response.status };
           }
           if (body && body.ok) {
+            dashboardSessionExpired = false;
             lastRefreshFailure = "";
             renderThread(body.messages || [], { replace: true });
             releasePendingOwnerSendFromThread(body.messages || []);
@@ -11779,7 +11833,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       }
 
       function scheduleReconnect() {
-        if (reconnectTimer || !socketEndpoint || typeof WebSocket !== "function") return;
+        if (dashboardSessionExpired || reconnectTimer || !socketEndpoint || typeof WebSocket !== "function") return;
         const delay = Math.min(10000, 1000 * Math.pow(2, reconnectAttempt));
         setConnectionRecoveryStatus("接続を復帰しています。入力は保持しています。");
         reconnectAttempt += 1;
@@ -11790,6 +11844,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       }
 
       function connectThreadSocket() {
+        if (dashboardSessionExpired) return;
         if (!socketEndpoint || typeof WebSocket !== "function") {
           setStatus("接続を開始できません。dashboard Butler は送信できません。");
           return;
@@ -11800,6 +11855,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         }
         chatSocket = new WebSocket(socketEndpoint);
         chatSocket.addEventListener("open", () => {
+          dashboardSessionExpired = false;
           reconnectAttempt = 0;
           lastRefreshFailure = "";
           if (reconnectTimer) {
@@ -11852,23 +11908,27 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           if (pendingOwnerSend) {
             releasePendingOwnerSend(pendingOwnerSend.clientMessageId, { clearComposer: false, keepRollbackTimer: true });
             setStatus("送信確認前に WebSocket が切れました。入力は残しています。履歴再取得後にもう一度送信できます。");
-          } else {
+          } else if (!dashboardSessionExpired) {
             setConnectionRecoveryStatus("接続が切れました。履歴を確認しながら復帰しています。");
           }
           dropStaleSocketIfNeeded();
-          refreshThread();
-          scheduleReconnect();
+          if (!dashboardSessionExpired) {
+            refreshThread();
+            scheduleReconnect();
+          }
         });
         chatSocket.addEventListener("error", () => {
           if (pendingOwnerSend) {
             releasePendingOwnerSend(pendingOwnerSend.clientMessageId, { clearComposer: false, keepRollbackTimer: true });
             setStatus("送信確認前に WebSocket 接続が失敗しました。入力は残しています。再接続後にもう一度送信できます。");
-          } else {
+          } else if (!dashboardSessionExpired) {
             setConnectionRecoveryStatus("接続できませんでした。履歴を確認しながら復帰しています。");
           }
           dropStaleSocketIfNeeded();
-          refreshThread();
-          scheduleReconnect();
+          if (!dashboardSessionExpired) {
+            refreshThread();
+            scheduleReconnect();
+          }
         });
       }
 
@@ -11909,7 +11969,14 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           textarea.focus();
           return;
         }
+        if (dashboardSessionExpired) {
+          persistDashboardDraft();
+          setDashboardSessionExpiredStatus();
+          textarea.focus({ preventScroll: true });
+          return;
+        }
         const submitButton = form.querySelector("button[type='submit']");
+        persistDashboardDraft();
         if (submitButton) submitButton.disabled = true;
         setComposerLocked(true);
         const willUseHttpFallback = !isChatSocketOpen();
@@ -12017,6 +12084,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             pendingMediaItems = retainedPendingMediaItems;
             renderPendingMedia();
             const addedCount = Math.min(selectedItems.length, 12);
+            persistDashboardDraft();
             setStatus(String(addedCount) + "件の添付を送信待ちに追加しました。repo 未指定の通常会話では private media として保存します。", { temporary: true });
             textarea.focus({ preventScroll: true });
           } catch (error) {
@@ -12030,9 +12098,16 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       }
 
       resizeComposerInput();
-      textarea.addEventListener("input", normalizeComposerInput);
+      restoreDashboardDraft();
+      textarea.addEventListener("input", () => {
+        normalizeComposerInput();
+        persistDashboardDraft();
+      });
       textarea.addEventListener("paste", () => {
-        window.setTimeout(normalizeComposerInput, 0);
+        window.setTimeout(() => {
+          normalizeComposerInput();
+          persistDashboardDraft();
+        }, 0);
       });
       window.addEventListener("resize", resizeComposerInput);
       window.addEventListener("online", () => {
@@ -12041,8 +12116,27 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         refreshThread();
         scheduleReconnect();
       });
+      window.addEventListener("offline", () => {
+        persistDashboardDraft();
+        setComposerLocked(false);
+        const submitButton = form.querySelector("button[type='submit']");
+        if (submitButton) submitButton.disabled = false;
+        setStatus("オフラインです。入力は保持しています。");
+      });
+      window.addEventListener("pagehide", persistDashboardDraft);
+      window.addEventListener("pageshow", () => {
+        if (dashboardSessionExpired) return;
+        dropStaleSocketIfNeeded();
+        refreshThread();
+        scheduleReconnect();
+      });
       document.addEventListener("visibilitychange", () => {
-        if (document.visibilityState === "visible" && (!chatSocket || chatSocket.readyState !== WebSocket.OPEN)) {
+        if (document.visibilityState !== "visible") {
+          persistDashboardDraft();
+          return;
+        }
+        if (dashboardSessionExpired) return;
+        if (!chatSocket || chatSocket.readyState !== WebSocket.OPEN) {
           setConnectionRecoveryStatus("画面復帰を検知しました。接続を復帰しています。");
           dropStaleSocketIfNeeded();
           refreshThread();
