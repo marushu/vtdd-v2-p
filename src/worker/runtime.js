@@ -11148,6 +11148,22 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         });
       }
 
+      async function resumeDashboardSessionAfterAuthReturn(reason) {
+        if (!dashboardSessionExpired) return false;
+        dashboardSessionExpired = false;
+        setConnectionRecoveryStatus(reason || "再ログイン後の接続を復帰しています。入力は保持しています。", { temporary: false });
+        dropStaleSocketIfNeeded();
+        const refreshResult = await refreshThread();
+        if (refreshResult && refreshResult.authExpired) {
+          return true;
+        }
+        if (!dashboardSessionExpired) {
+          connectThreadSocket();
+          scheduleReconnect();
+        }
+        return true;
+      }
+
       function releasePendingOwnerSend(clientMessageId, options = {}) {
         if (!pendingOwnerSend || pendingOwnerSend.clientMessageId !== clientMessageId) return false;
         const pending = pendingOwnerSend;
@@ -12119,7 +12135,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         }, 0);
       });
       window.addEventListener("resize", resizeComposerInput);
-      window.addEventListener("online", () => {
+      window.addEventListener("online", async () => {
+        if (await resumeDashboardSessionAfterAuthReturn("ネットワーク復帰後、再ログイン状態を確認しています。入力は保持しています。")) return;
         setConnectionRecoveryStatus("ネットワーク復帰を検知しました。接続を復帰しています。");
         dropStaleSocketIfNeeded();
         refreshThread();
@@ -12133,18 +12150,18 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         setStatus("オフラインです。入力は保持しています。");
       });
       window.addEventListener("pagehide", persistDashboardDraft);
-      window.addEventListener("pageshow", () => {
-        if (dashboardSessionExpired) return;
+      window.addEventListener("pageshow", async () => {
+        if (await resumeDashboardSessionAfterAuthReturn("画面復帰後、再ログイン状態を確認しています。入力は保持しています。")) return;
         dropStaleSocketIfNeeded();
         refreshThread();
         scheduleReconnect();
       });
-      document.addEventListener("visibilitychange", () => {
+      document.addEventListener("visibilitychange", async () => {
         if (document.visibilityState !== "visible") {
           persistDashboardDraft();
           return;
         }
-        if (dashboardSessionExpired) return;
+        if (await resumeDashboardSessionAfterAuthReturn("画面復帰後、再ログイン状態を確認しています。入力は保持しています。")) return;
         if (!chatSocket || chatSocket.readyState !== WebSocket.OPEN) {
           setConnectionRecoveryStatus("画面復帰を検知しました。接続を復帰しています。");
           dropStaleSocketIfNeeded();

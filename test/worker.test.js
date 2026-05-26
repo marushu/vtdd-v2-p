@@ -1158,6 +1158,7 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes('let lastRefreshFailure = ""'), true);
   assert.equal(body.includes("function isAuthExpiredResponse("), true);
   assert.equal(body.includes("let dashboardSessionExpired = false"), true);
+  assert.equal(body.includes("async function resumeDashboardSessionAfterAuthReturn("), true);
   assert.equal(body.includes('const dashboardDraftKey = "vtdd.dashboard.draft:"'), true);
   assert.equal(body.includes("function getDashboardDraftStorage()"), true);
   assert.equal(body.includes("return window.sessionStorage"), true);
@@ -1168,6 +1169,10 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("if (dashboardSessionExpired || reconnectTimer"), true);
   assert.equal(body.includes("if (!threadEndpoint || refreshingThread || dashboardSessionExpired)"), true);
   assert.equal(body.includes("if (dashboardSessionExpired) return;"), true);
+  assert.equal(body.includes("dashboardSessionExpired = false;"), true);
+  assert.equal(body.includes("const refreshResult = await refreshThread();"), true);
+  assert.equal(body.includes("if (refreshResult && refreshResult.authExpired)"), true);
+  assert.equal(body.includes("connectThreadSocket();"), true);
   assert.equal(body.includes("window.clearTimeout(reconnectTimer)"), true);
   assert.equal(body.includes("HTTP fallback"), true);
   assert.equal(body.includes("Dashboard のログインが切れています。入力は残したまま再ログインしてください。"), true);
@@ -1190,11 +1195,13 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("setStatus(message, { temporary: options.temporary !== false })"), true);
   assert.equal(body.includes('setStatus("Dashboard thread 接続済み。", { temporary: true })'), true);
   assert.equal(body.includes('setStatus("");'), true);
-  assert.equal(body.includes("document.addEventListener(\"visibilitychange\""), true);
-  assert.equal(body.includes("window.addEventListener(\"online\""), true);
+  assert.equal(body.includes('document.addEventListener("visibilitychange", async () => {'), true);
+  assert.equal(body.includes('window.addEventListener("online", async () => {'), true);
   assert.equal(body.includes("window.addEventListener(\"offline\""), true);
   assert.equal(body.includes("window.addEventListener(\"pagehide\", persistDashboardDraft)"), true);
-  assert.equal(body.includes("window.addEventListener(\"pageshow\""), true);
+  assert.equal(body.includes('window.addEventListener("pageshow", async () => {'), true);
+  assert.equal(body.includes('await resumeDashboardSessionAfterAuthReturn("画面復帰後、再ログイン状態を確認しています。入力は保持しています。")'), true);
+  assert.equal(body.includes('await resumeDashboardSessionAfterAuthReturn("ネットワーク復帰後、再ログイン状態を確認しています。入力は保持しています。")'), true);
   assert.equal(body.includes("オフラインです。入力は保持しています。"), true);
   assert.equal(body.includes("VPS Codex CLI に push します"), false);
   assert.equal(body.includes("function updateComposerReserve()"), true);

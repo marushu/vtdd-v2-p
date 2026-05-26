@@ -66026,6 +66026,22 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         });
       }
 
+      async function resumeDashboardSessionAfterAuthReturn(reason) {
+        if (!dashboardSessionExpired) return false;
+        dashboardSessionExpired = false;
+        setConnectionRecoveryStatus(reason || "\u518D\u30ED\u30B0\u30A4\u30F3\u5F8C\u306E\u63A5\u7D9A\u3092\u5FA9\u5E30\u3057\u3066\u3044\u307E\u3059\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002", { temporary: false });
+        dropStaleSocketIfNeeded();
+        const refreshResult = await refreshThread();
+        if (refreshResult && refreshResult.authExpired) {
+          return true;
+        }
+        if (!dashboardSessionExpired) {
+          connectThreadSocket();
+          scheduleReconnect();
+        }
+        return true;
+      }
+
       function releasePendingOwnerSend(clientMessageId, options = {}) {
         if (!pendingOwnerSend || pendingOwnerSend.clientMessageId !== clientMessageId) return false;
         const pending = pendingOwnerSend;
@@ -66997,7 +67013,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         }, 0);
       });
       window.addEventListener("resize", resizeComposerInput);
-      window.addEventListener("online", () => {
+      window.addEventListener("online", async () => {
+        if (await resumeDashboardSessionAfterAuthReturn("\u30CD\u30C3\u30C8\u30EF\u30FC\u30AF\u5FA9\u5E30\u5F8C\u3001\u518D\u30ED\u30B0\u30A4\u30F3\u72B6\u614B\u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002")) return;
         setConnectionRecoveryStatus("\u30CD\u30C3\u30C8\u30EF\u30FC\u30AF\u5FA9\u5E30\u3092\u691C\u77E5\u3057\u307E\u3057\u305F\u3002\u63A5\u7D9A\u3092\u5FA9\u5E30\u3057\u3066\u3044\u307E\u3059\u3002");
         dropStaleSocketIfNeeded();
         refreshThread();
@@ -67011,18 +67028,18 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         setStatus("\u30AA\u30D5\u30E9\u30A4\u30F3\u3067\u3059\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002");
       });
       window.addEventListener("pagehide", persistDashboardDraft);
-      window.addEventListener("pageshow", () => {
-        if (dashboardSessionExpired) return;
+      window.addEventListener("pageshow", async () => {
+        if (await resumeDashboardSessionAfterAuthReturn("\u753B\u9762\u5FA9\u5E30\u5F8C\u3001\u518D\u30ED\u30B0\u30A4\u30F3\u72B6\u614B\u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002")) return;
         dropStaleSocketIfNeeded();
         refreshThread();
         scheduleReconnect();
       });
-      document.addEventListener("visibilitychange", () => {
+      document.addEventListener("visibilitychange", async () => {
         if (document.visibilityState !== "visible") {
           persistDashboardDraft();
           return;
         }
-        if (dashboardSessionExpired) return;
+        if (await resumeDashboardSessionAfterAuthReturn("\u753B\u9762\u5FA9\u5E30\u5F8C\u3001\u518D\u30ED\u30B0\u30A4\u30F3\u72B6\u614B\u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002")) return;
         if (!chatSocket || chatSocket.readyState !== WebSocket.OPEN) {
           setConnectionRecoveryStatus("\u753B\u9762\u5FA9\u5E30\u3092\u691C\u77E5\u3057\u307E\u3057\u305F\u3002\u63A5\u7D9A\u3092\u5FA9\u5E30\u3057\u3066\u3044\u307E\u3059\u3002");
           dropStaleSocketIfNeeded();
