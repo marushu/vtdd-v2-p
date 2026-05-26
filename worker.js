@@ -65870,6 +65870,18 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         updateComposerReserve();
       }
 
+      function normalizeComposerInputText(text) {
+        return decodeSafeChatCommandText(String(text || ""));
+      }
+
+      function normalizeComposerInput() {
+        const normalized = normalizeComposerInputText(textarea.value);
+        if (normalized !== textarea.value) {
+          textarea.value = normalized;
+        }
+        resizeComposerInput();
+      }
+
       function scrollToLatest() {
         updateComposerReserve();
         log.scrollTop = log.scrollHeight;
@@ -66759,7 +66771,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       }
 
       resizeComposerInput();
-      textarea.addEventListener("input", resizeComposerInput);
+      textarea.addEventListener("input", normalizeComposerInput);
+      textarea.addEventListener("paste", () => {
+        window.setTimeout(normalizeComposerInput, 0);
+      });
       window.addEventListener("resize", resizeComposerInput);
       window.addEventListener("online", () => {
         setConnectionRecoveryStatus("\u30CD\u30C3\u30C8\u30EF\u30FC\u30AF\u5FA9\u5E30\u3092\u691C\u77E5\u3057\u307E\u3057\u305F\u3002\u63A5\u7D9A\u3092\u5FA9\u5E30\u3057\u3066\u3044\u307E\u3059\u3002");

@@ -10992,6 +10992,18 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         updateComposerReserve();
       }
 
+      function normalizeComposerInputText(text) {
+        return decodeSafeChatCommandText(String(text || ""));
+      }
+
+      function normalizeComposerInput() {
+        const normalized = normalizeComposerInputText(textarea.value);
+        if (normalized !== textarea.value) {
+          textarea.value = normalized;
+        }
+        resizeComposerInput();
+      }
+
       function scrollToLatest() {
         updateComposerReserve();
         log.scrollTop = log.scrollHeight;
@@ -11881,7 +11893,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       }
 
       resizeComposerInput();
-      textarea.addEventListener("input", resizeComposerInput);
+      textarea.addEventListener("input", normalizeComposerInput);
+      textarea.addEventListener("paste", () => {
+        window.setTimeout(normalizeComposerInput, 0);
+      });
       window.addEventListener("resize", resizeComposerInput);
       window.addEventListener("online", () => {
         setConnectionRecoveryStatus("ネットワーク復帰を検知しました。接続を復帰しています。");

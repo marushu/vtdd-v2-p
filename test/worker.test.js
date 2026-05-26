@@ -189,6 +189,7 @@ function loadDashboardInlineChatHelpers(html) {
   const names = [
     "normalizeMessageDisplayText",
     "normalizeMessageCopyText",
+    "normalizeComposerInputText",
     "decodeSafeChatCommandText",
     "shouldWrapCodeBlock",
     "renderMessageText",
@@ -1176,7 +1177,10 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("Math.min(160, Math.floor(window.innerHeight * 0.24))"), true);
   assert.equal(body.includes('textarea.style.height = "auto"'), true);
   assert.equal(body.includes('textarea.style.overflowY = textarea.scrollHeight > maxHeight ? "auto" : "hidden"'), true);
-  assert.equal(body.includes('textarea.addEventListener("input", resizeComposerInput)'), true);
+  assert.equal(body.includes("function normalizeComposerInputText("), true);
+  assert.equal(body.includes("function normalizeComposerInput()"), true);
+  assert.equal(body.includes('textarea.addEventListener("input", normalizeComposerInput)'), true);
+  assert.equal(body.includes('textarea.addEventListener("paste"'), true);
   assert.equal(body.includes("function scrollToLatest()"), true);
   assert.equal(body.includes("function showThinking()"), false);
   assert.equal(body.includes("function removeThinking("), false);
@@ -1356,6 +1360,18 @@ test("served dashboard inline chat renderer executes decode, link, wrap, and cop
   );
   assert.equal(
     helpers.normalizeMessageCopyText("https://example.com/path%20with%20encoded?x=1"),
+    "https://example.com/path%20with%20encoded?x=1"
+  );
+  assert.equal(
+    helpers.normalizeComposerInputText("go:%20Issue%20%23575%20close%20and%20delete"),
+    "go: Issue #575 close and delete"
+  );
+  assert.equal(
+    helpers.normalizeComposerInputText("go:%0AIssue%20%23575%20close"),
+    "go:\nIssue #575 close"
+  );
+  assert.equal(
+    helpers.normalizeComposerInputText("https://example.com/path%20with%20encoded?x=1"),
     "https://example.com/path%20with%20encoded?x=1"
   );
   assert.equal(helpers.normalizeMessageCopyText("go:%E0%A4%A"), "go:%E0%A4%A");
