@@ -787,7 +787,8 @@ test("worker rejects dashboard access without owner identity", async () => {
     true
   );
   assert.equal(body.includes("Passkey fallback"), true);
-  assert.equal(body.includes("Passkey で dashboard に入る"), true);
+  assert.equal(body.includes("Passkey で開く"), true);
+  assert.equal(body.includes("Passkey で dashboard に入る"), false);
   assert.equal(
     body.includes(
       'href="https://example.com/v2/approval/passkey/operator?mode=dashboard&amp;phase=execution&amp;actionType=read&amp;highRiskKind=dashboard_access&amp;dashboardReturnPath=%2Fdashboard"'
@@ -884,7 +885,8 @@ test("worker rejects stale dashboard passkey session cookies", async () => {
   );
   assert.equal(body.includes("Passkey fallback"), true);
   assert.equal(body.includes("dashboard passkey session was not found"), true);
-  assert.equal(body.includes("Passkey で dashboard に入る"), true);
+  assert.equal(body.includes("Passkey で開く"), true);
+  assert.equal(body.includes("Passkey で dashboard に入る"), false);
   assert.equal(body.includes("repositoryInput=marushu%2Fvtdd-v2-p"), false);
 });
 
@@ -916,7 +918,9 @@ test("worker does not expose dashboard notification details before Access auth",
   const body = await response.text();
   assert.equal(body.includes("Dashboard auth required"), true);
   assert.equal(body.includes("Cloudflare Access で開く"), true);
-  assert.equal(body.includes("Passkey で通知を見る"), true);
+  assert.equal(body.includes("Passkey で開く"), true);
+  assert.equal(body.includes("Passkey で通知を見る"), false);
+  assert.equal(body.includes("認証後は通知センターへ戻ります。"), true);
   assert.equal(
     body.includes(
       'href="https://example.com/cdn-cgi/access/login?redirect_url=https%3A%2F%2Fexample.com%2Fdashboard%2Fnotifications"'

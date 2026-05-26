@@ -27274,10 +27274,10 @@ function renderPasskeyOperatorPage(input = {}) {
     input.syncMessage || (syncEnabled ? "approvalGrantId \u304C\u53D6\u5F97\u6E08\u307F\u306A\u3089\u5B9F\u884C\u3067\u304D\u307E\u3059\u3002desktop helper bridge \u306B\u63A5\u7D9A\u3057\u307E\u3059\u3002" : "desktop maintenance required: local secret sync bridge \u304C\u672A\u63A5\u7D9A\u3067\u3059\u3002")
   );
   const approvalSectionAttributes = deployOneTapMode ? ' data-owner-flow="one-tap-deploy"' : "";
-  const approveButtonLabel = deployOneTapMode ? "\u30D1\u30B9\u30AD\u30FC" : dashboardNotificationMode ? "\u30D1\u30B9\u30AD\u30FC\u3067\u901A\u77E5\u3092\u898B\u308B" : dashboardMode ? "\u30D1\u30B9\u30AD\u30FC\u3067\u958B\u304F" : "Approve high-risk action";
+  const approveButtonLabel = deployOneTapMode ? "\u30D1\u30B9\u30AD\u30FC" : dashboardMode ? "\u30D1\u30B9\u30AD\u30FC\u3067\u958B\u304F" : "Approve high-risk action";
   const heroTitle = dashboardMode ? "Dashboard Passkey" : "VTDD Passkey Operator";
   const heroDescription = dashboardMode ? "\u3053\u306E\u30DA\u30FC\u30B8\u306F Dashboard Butler \u3092\u958B\u304F\u305F\u3081\u306E\u8AAD\u307F\u53D6\u308A\u5C02\u7528\u30D1\u30B9\u30AD\u30FC\u78BA\u8A8D\u3067\u3059\u3002Cloudflare Access \u304C\u4F7F\u3048\u306A\u3044\u6642\u3060\u3051\u3001\u540C\u4E00 origin \u306E passkey \u3067 dashboard session \u3092\u66F4\u65B0\u3057\u307E\u3059\u3002" : "\u3053\u306E\u30DA\u30FC\u30B8\u306F real WebAuthn/passkey approval \u7528\u306E operator helper \u3067\u3059\u3002\u767B\u9332\u3068 high-risk approval \u306E\u4E21\u65B9\u3092 same-origin \u3067\u5B9F\u884C\u3057\u3001\u6700\u7D42\u7684\u306B <code>approvalGrantId</code> \u3092\u53D6\u5F97\u3067\u304D\u307E\u3059\u3002";
-  const approvalHeading = deployOneTapMode ? "\u672C\u756A\u53CD\u6620\u306E\u627F\u8A8D" : dashboardNotificationMode ? "\u901A\u77E5\u3092\u898B\u308B" : dashboardMode ? "Dashboard \u3092\u958B\u304F" : "2. High-risk Approval";
+  const approvalHeading = deployOneTapMode ? "\u672C\u756A\u53CD\u6620\u306E\u627F\u8A8D" : dashboardMode ? "Dashboard \u3092\u958B\u304F" : "2. High-risk Approval";
   const deployScopeSummary = renderDeployScopeSummary({
     repositoryInput: repoDefault,
     issueNumber: issueDefault,
@@ -27461,7 +27461,7 @@ function renderPasskeyOperatorPage(input = {}) {
             <input id="action-type-input" value="${actionTypeDefault}" autocomplete="off"${deployOneTapMode ? ' readonly data-deploy-scope-locked="true"' : ""} />
             <label for="risk-kind-input">High-risk Kind</label>
             <input id="risk-kind-input" value="${highRiskKindDefault}" autocomplete="off"${deployOneTapMode ? ' readonly data-deploy-scope-locked="true"' : ""} />
-          </div>` : dashboardMode ? `<p>${dashboardNotificationMode ? "\u901A\u77E5\u30BB\u30F3\u30BF\u30FC" : "Dashboard"}\u3092\u958B\u304F\u305F\u3081\u306E read-only session \u3092\u66F4\u65B0\u3057\u307E\u3059\u3002\u3053\u306E\u78BA\u8A8D\u3067\u306F repo / Issue / PR scope \u306F\u4F7F\u3044\u307E\u305B\u3093\u3002</p>
+          </div>` : dashboardMode ? `<p>Dashboard \u3092\u958B\u304F\u305F\u3081\u306E read-only session \u3092\u66F4\u65B0\u3057\u307E\u3059\u3002\u3053\u306E\u78BA\u8A8D\u3067\u306F repo / Issue / PR scope \u306F\u4F7F\u3044\u307E\u305B\u3093\u3002${dashboardNotificationMode ? "\u8A8D\u8A3C\u5F8C\u306F\u901A\u77E5\u30BB\u30F3\u30BF\u30FC\u3078\u623B\u308A\u307E\u3059\u3002" : ""}</p>
           <div class="approval-internal" hidden>
             <label for="repo-input">Repository</label>
             <input id="repo-input" value="" placeholder="marushu/vtdd-v2-p" />
@@ -66693,7 +66693,8 @@ function renderDashboardAuthRequiredPage({ runtimeOrigin, returnPath = "/dashboa
   const dashboardAccessReturnPath = sanitizeDashboardPreAuthReturnPath(returnPath);
   const dashboardAccessHref = buildCloudflareAccessLoginHref({ origin, returnPath: dashboardAccessReturnPath });
   const dashboardSignInUrl = `${origin || ""}/v2/approval/passkey/operator?mode=dashboard&phase=execution&actionType=read&highRiskKind=dashboard_access&dashboardReturnPath=${encodeURIComponent(dashboardAccessReturnPath)}`;
-  const passkeyButtonLabel = dashboardAccessReturnPath === "/dashboard/notifications" ? "Passkey \u3067\u901A\u77E5\u3092\u898B\u308B" : "Passkey \u3067 dashboard \u306B\u5165\u308B";
+  const passkeyButtonLabel = "Passkey \u3067\u958B\u304F";
+  const passkeyReturnNote = dashboardAccessReturnPath === "/dashboard/notifications" ? "\u8A8D\u8A3C\u5F8C\u306F\u901A\u77E5\u30BB\u30F3\u30BF\u30FC\u3078\u623B\u308A\u307E\u3059\u3002" : "";
   return `<!doctype html>
 <html lang="ja">
 <head>
@@ -66729,7 +66730,7 @@ function renderDashboardAuthRequiredPage({ runtimeOrigin, returnPath = "/dashboa
       </div>
       <details>
         <summary>Passkey fallback</summary>
-        <p>passkey dashboard session \u306F Cloudflare Access \u304C\u4F7F\u3048\u306A\u3044\u6642\u306E\u88DC\u52A9\u5C0E\u7DDA\u3067\u3059\u3002deploy\u3001merge\u3001secret sync \u306A\u3069\u306E\u9AD8\u30EA\u30B9\u30AF\u64CD\u4F5C\u306F\u5F15\u304D\u7D9A\u304D scope \u660E\u793A\u6E08\u307F real passkey approval \u304C\u5FC5\u8981\u3067\u3059\u3002</p>
+        <p>passkey dashboard session \u306F Cloudflare Access \u304C\u4F7F\u3048\u306A\u3044\u6642\u306E\u88DC\u52A9\u5C0E\u7DDA\u3067\u3059\u3002${escapeDashboardHtml(passkeyReturnNote)} deploy\u3001merge\u3001secret sync \u306A\u3069\u306E\u9AD8\u30EA\u30B9\u30AF\u64CD\u4F5C\u306F\u5F15\u304D\u7D9A\u304D scope \u660E\u793A\u6E08\u307F real passkey approval \u304C\u5FC5\u8981\u3067\u3059\u3002</p>
         ${passkeyFallbackReason ? `<p><code>${escapeDashboardHtml(passkeyFallbackReason)}</code></p>` : ""}
         <p><a href="${escapeDashboardHtml(dashboardSignInUrl)}">Passkey fallback \u3092\u958B\u304F</a></p>
       </details>

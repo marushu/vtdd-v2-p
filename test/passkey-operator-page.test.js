@@ -303,9 +303,11 @@ test("passkey operator dashboard mode returns to sanitized dashboard path after 
     operatorMode: "dashboard",
     dashboardReturnPath: "/dashboard/notifications?runId=private"
   });
-  assert.equal(notificationsHtml.includes("<h2>通知を見る</h2>"), true);
-  assert.equal(notificationsHtml.includes('id="approve-button">パスキーで通知を見る</button>'), true);
-  assert.equal(notificationsHtml.includes("通知センターを開くための read-only session"), true);
+  assert.equal(notificationsHtml.includes("<h2>Dashboard を開く</h2>"), true);
+  assert.equal(notificationsHtml.includes('id="approve-button">パスキーで開く</button>'), true);
+  assert.equal(notificationsHtml.includes("Dashboard を開くための read-only session"), true);
+  assert.equal(notificationsHtml.includes("認証後は通知センターへ戻ります。"), true);
+  assert.equal(notificationsHtml.includes("パスキーで通知を見る"), false);
   assert.equal(notificationsHtml.includes("Approve high-risk action"), false);
   assert.equal(notificationsHtml.includes("GitHub App secret sync なら"), false);
   assert.equal(notificationsHtml.includes("highRiskKind=github_app_secret_sync"), false);
