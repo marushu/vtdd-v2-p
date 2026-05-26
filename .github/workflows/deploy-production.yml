@@ -280,6 +280,7 @@ jobs:
           DEPLOY_SHA: ${{ github.sha }}
           DEPLOY_BRANCH: ${{ github.ref_name }}
           RUNTIME_URL: ${{ github.event.inputs.runtime_url }}
+          GITHUB_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           if [ -z "$RUNTIME_URL" ]; then
@@ -292,19 +293,87 @@ jobs:
           fi
 
           event_body=$(node - <<'NODE'
-          const payload = {
-            repository: process.env.REPOSITORY,
-            workflowName: "deploy-production",
-            runId: process.env.RUN_ID,
-            runUrl: process.env.RUN_URL,
-            status: "completed",
-            conclusion: process.env.DEPLOY_JOB_STATUS,
-            headSha: process.env.DEPLOY_SHA,
-            headBranch: process.env.DEPLOY_BRANCH,
-            displayTitle: "deploy-production",
-            updatedAt: new Date().toISOString()
-          };
-          process.stdout.write(JSON.stringify(payload));
+          const { execFileSync } = require("node:child_process");
+          function readGit(args) {
+            try {
+              return execFileSync("git", args, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+            } catch {
+              return "";
+            }
+          }
+          function inferPullNumber(text) {
+            const match = String(text || "").match(/\b(?:PR|pull request)\s*#?(\d+)\b/i);
+            return match ? Number(match[1]) : null;
+          }
+          function inferSquashMergePullNumber(subject) {
+            const matches = [...String(subject || "").matchAll(/\(#(\d+)\)/g)];
+            const last = matches.at(-1);
+            return last ? Number(last[1]) : null;
+          }
+          function inferCommitSummary(subject, body) {
+            const normalizedSubject = String(subject || "").trim();
+            const bodyLine = String(body || "")
+              .split(/\r?\n/)
+              .map((line) => line.trim())
+              .find(Boolean);
+            if (/^Merge pull request #\d+\b/i.test(normalizedSubject) && bodyLine) {
+              return bodyLine;
+            }
+            return normalizedSubject || bodyLine || "";
+          }
+          async function readAssociatedPullRequest() {
+            if (!process.env.GITHUB_TOKEN || !process.env.REPOSITORY || !process.env.DEPLOY_SHA) {
+              return null;
+            }
+            try {
+              const response = await fetch(`https://api.github.com/repos/${process.env.REPOSITORY}/commits/${process.env.DEPLOY_SHA}/pulls`, {
+                signal: AbortSignal.timeout(3000),
+                headers: {
+                  authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+                  accept: "application/vnd.github+json",
+                  "x-github-api-version": "2022-11-28",
+                  "user-agent": "vtdd-dashboard-deploy-associated-pr"
+                }
+              });
+              if (!response.ok) {
+                return null;
+              }
+              const pulls = await response.json();
+              return Array.isArray(pulls) ? pulls[0] || null : null;
+            } catch {
+              return null;
+            }
+          }
+          async function main() {
+            const commitSubject = readGit(["log", "-1", "--pretty=%s"]);
+            const commitBody = readGit(["log", "-1", "--pretty=%b"]);
+            const associatedPull = await readAssociatedPullRequest();
+            const pullNumber =
+              Number(associatedPull?.number) ||
+              inferPullNumber(`${commitSubject}\n${commitBody}`) ||
+              inferSquashMergePullNumber(commitSubject);
+            const associatedPullTitle = typeof associatedPull?.title === "string" ? associatedPull.title.trim() : "";
+            const changeSummary = associatedPullTitle || inferCommitSummary(commitSubject, commitBody);
+            const payload = {
+              repository: process.env.REPOSITORY,
+              workflowName: "deploy-production",
+              runId: process.env.RUN_ID,
+              runUrl: process.env.RUN_URL,
+              status: "completed",
+              conclusion: process.env.DEPLOY_JOB_STATUS,
+              headSha: process.env.DEPLOY_SHA,
+              headBranch: process.env.DEPLOY_BRANCH,
+              displayTitle: changeSummary || "deploy-production",
+              changeSummary: changeSummary || null,
+              pullNumber: pullNumber || null,
+              updatedAt: new Date().toISOString()
+            };
+            process.stdout.write(JSON.stringify(payload));
+          }
+          main().catch((error) => {
+            console.error(error instanceof Error ? error.message : String(error));
+            process.exit(1);
+          });
           NODE
           )
 

@@ -62451,9 +62451,15 @@ function buildDashboardWebPushBody(record2) {
     return "\u901A\u77E5\u7D4C\u8DEF\u306F\u6B63\u5E38\u3067\u3059\u3002iPhone PWA \u306B\u30B5\u30FC\u30D0\u9001\u4FE1\u3067\u304D\u307E\u3057\u305F\u3002";
   }
   const details = [];
-  const title = compactNotificationText(record2.title, 58);
+  const title = compactNotificationText(record2.changeSummary || record2.title, 58);
   if (title && title !== record2.workflowName) {
     details.push(title);
+  }
+  if (record2.pullNumber) {
+    details.push(`PR #${record2.pullNumber}`);
+  }
+  if (record2.issueNumber) {
+    details.push(`Issue #${record2.issueNumber}`);
   }
   if (record2.workflowName) {
     details.push(`workflow: ${compactNotificationText(record2.workflowName, 36)}`);
@@ -63361,6 +63367,8 @@ function normalizeDashboardEventRecord(event) {
   const input = normalizeObject11(event);
   const updatedAt = normalizeIsoTimestamp(input.updatedAt) || (/* @__PURE__ */ new Date()).toISOString();
   const createdAt = normalizeIsoTimestamp(input.createdAt) || updatedAt;
+  const title = normalizeDashboardEventText(input.title) || normalizeDashboardEventText(input.workflowName);
+  const changeSummary = normalizeDashboardEventText(input.changeSummary);
   return {
     id: normalizeDashboardEventText(input.id),
     kind: normalizeDashboardEventText(input.kind),
@@ -63372,13 +63380,24 @@ function normalizeDashboardEventRecord(event) {
     headSha: normalizeDashboardEventText(input.headSha) || null,
     headBranch: normalizeDashboardEventText(input.headBranch) || null,
     runUrl: normalizeDashboardEventText(input.runUrl) || null,
-    title: normalizeDashboardEventText(input.title) || normalizeDashboardEventText(input.workflowName),
+    title,
+    changeSummary: changeSummary || null,
+    pullNumber: normalizeIssue6(input.pullNumber) || inferPullNumberFromText(`${title} ${changeSummary}`),
+    issueNumber: normalizeIssue6(input.issueNumber),
     createdAt,
     updatedAt
   };
 }
 function normalizeDashboardEventText(value) {
   return String(value ?? "").trim();
+}
+function inferPullNumberFromText(value) {
+  const text = normalizeDashboardEventText(value);
+  if (!text) {
+    return null;
+  }
+  const explicit = text.match(/\b(?:PR|pull request)\s*#?(\d+)\b/i);
+  return explicit ? normalizeIssue6(explicit[1]) : null;
 }
 function createD1MemoryIndexAdapter(d1) {
   if (!d1 || typeof d1.prepare !== "function") {
@@ -64172,6 +64191,11 @@ function normalizeGitHubActionsEvent(payload) {
   const headSha = normalizeDashboardEventText(input.headSha || input.head_sha || input.sha);
   const headBranch = normalizeDashboardEventText(input.headBranch || input.head_branch || input.branch);
   const title = normalizeDashboardEventText(input.displayTitle || input.display_title || input.title);
+  const changeSummary = normalizeDashboardEventText(
+    input.changeSummary || input.change_summary || input.mergeSummary || input.merge_summary || input.pullRequestTitle || input.pull_request_title
+  );
+  const pullNumber = normalizeIssue6(input.pullNumber || input.pull_number || input.prNumber || input.pr_number) || inferPullNumberFromText(`${title} ${changeSummary}`);
+  const issueNumber = normalizeIssue6(input.issueNumber || input.issue_number);
   if (!repository) {
     return {
       ok: false,
@@ -64219,6 +64243,9 @@ function normalizeGitHubActionsEvent(payload) {
     headBranch: headBranch || null,
     runUrl: runUrl || null,
     title: title || workflowName,
+    changeSummary: changeSummary || null,
+    pullNumber,
+    issueNumber,
     createdAt,
     updatedAt
   };
@@ -64495,9 +64522,20 @@ function renderDashboardDeployEvent(event) {
   const shortSha = sha ? sha.slice(0, 7) : "unknown";
   const runUrl = normalizeDashboardEventText(event.runUrl);
   const runLabel = runUrl ? `<a class="chat-link" href="${escapeDashboardHtml(runUrl)}">Actions run</a>` : "Actions run \u672A\u8A2D\u5B9A";
+  const title = buildDashboardEventDisplayTitle(event, {
+    workflowName: normalizeDashboardEventText(event.workflowName) || "deploy-production",
+    conclusion
+  });
+  const meta2 = [
+    event.workflowName || "deploy-production",
+    event.pullNumber ? `PR #${event.pullNumber}` : "",
+    event.issueNumber ? `Issue #${event.issueNumber}` : "",
+    shortSha ? `sha ${shortSha}` : ""
+  ].filter(Boolean).join(" / ");
   return `<div class="deploy-event">
             <div class="lane-title"><strong>\u6700\u65B0 deploy</strong><span class="pill ${badgeClass}">${escapeDashboardHtml(conclusion)}</span></div>
-            <p>${escapeDashboardHtml(event.workflowName || "deploy-production")} / <code>${escapeDashboardHtml(shortSha)}</code></p>
+            <p><strong>${escapeDashboardHtml(title)}</strong></p>
+            <p>${escapeDashboardHtml(meta2)}</p>
             <p class="muted">${escapeDashboardHtml(relativeUpdatedAt || "\u6642\u523B\u672A\u53D7\u4FE1")} \u30FB ${escapeDashboardHtml(updatedAt || "updatedAt \u672A\u53D7\u4FE1")} \u30FB ${runLabel}</p>
           </div>`;
 }
@@ -64511,7 +64549,7 @@ function renderDashboardNotificationEvent(event) {
   const relativeUpdatedAt = formatDashboardRelativeTime(updatedAt);
   const repository = normalizeCanonicalRepositoryInput(event.repository) || "repository \u672A\u53D7\u4FE1";
   const workflowName = normalizeDashboardEventText(event.workflowName) || normalizeDashboardEventText(event.kind) || "event";
-  const title = normalizeDashboardEventText(event.title) || workflowName;
+  const title = buildDashboardEventDisplayTitle(event, { workflowName, conclusion, shortStatus: conclusion });
   const runId = normalizeDashboardEventText(event.runId);
   const sha = normalizeDashboardEventText(event.headSha);
   const shortSha = sha ? sha.slice(0, 7) : "";
@@ -64519,6 +64557,8 @@ function renderDashboardNotificationEvent(event) {
   const runLabel = runUrl ? `<a class="chat-link" href="${escapeDashboardHtml(runUrl)}">\u8A73\u7D30\u3092\u958B\u304F</a>` : "\u8A73\u7D30\u30EA\u30F3\u30AF\u672A\u53D7\u4FE1";
   const meta2 = [
     repository,
+    event.pullNumber ? `PR #${event.pullNumber}` : "",
+    event.issueNumber ? `Issue #${event.issueNumber}` : "",
     workflowName,
     runId ? `run ${runId}` : "",
     shortSha ? `sha ${shortSha}` : ""
@@ -64528,6 +64568,25 @@ function renderDashboardNotificationEvent(event) {
             <p>${escapeDashboardHtml(meta2)}</p>
             <p class="muted">${escapeDashboardHtml(relativeUpdatedAt || "\u6642\u523B\u672A\u53D7\u4FE1")} \u30FB ${escapeDashboardHtml(updatedAt || "updatedAt \u672A\u53D7\u4FE1")} \u30FB ${runLabel}</p>
           </div>`;
+}
+function buildDashboardEventDisplayTitle(event, { workflowName, conclusion } = {}) {
+  const record2 = normalizeDashboardEventRecord(event);
+  const statusLabel = dashboardPushStatusLabel(record2);
+  const summary = normalizeDashboardEventText(record2.changeSummary || record2.title);
+  const isDeploy = record2.kind === "github_actions_workflow_run" && normalize7(workflowName || record2.workflowName).includes("deploy");
+  const baseSummary = summary && summary !== record2.workflowName ? summary : "";
+  const pullPrefix = record2.pullNumber ? `PR #${record2.pullNumber}` : "";
+  if (isDeploy) {
+    const subject = [pullPrefix, baseSummary].filter(Boolean).join(" ");
+    return subject ? `\u30C7\u30D7\u30ED\u30A4${statusLabel}: ${subject}` : `\u30C7\u30D7\u30ED\u30A4${statusLabel}: ${record2.repository || "repository"} ${record2.headSha ? record2.headSha.slice(0, 7) : ""}`.trim();
+  }
+  if (pullPrefix && baseSummary) {
+    return `${pullPrefix}: ${baseSummary}`;
+  }
+  if (pullPrefix) {
+    return `${workflowName || record2.workflowName || "Actions"} ${dashboardPushStatusLabel(record2)}: ${pullPrefix}`;
+  }
+  return baseSummary || workflowName || record2.kind || conclusion || "dashboard event";
 }
 function formatDashboardRelativeTime(value, now = /* @__PURE__ */ new Date()) {
   const timestamp = new Date(normalizeText30(value));
@@ -64759,29 +64818,34 @@ async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventS
           <p class="muted">VTDD \u3060\u3051\u3067\u306A\u304F\u3001\u4ED6 repo / \u4E26\u884C\u958B\u767A / queue / workflow \u304B\u3089\u5C4A\u3044\u305F\u30A4\u30D9\u30F3\u30C8\u3092\u76F4\u8FD15\u5206\u3060\u3051\u8868\u793A\u3057\u307E\u3059\u3002</p>
         </details>
       </div>
-      <div class="grid">
-        <section class="lane">
-          <div class="lane-title"><h2>iOS PWA \u901A\u77E5</h2><span class="pill" id="push-support-pill">\u78BA\u8A8D\u4E2D</span></div>
-          <p id="push-state" class="muted">\u901A\u77E5\u72B6\u614B\u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u3002</p>
-          <p id="push-subscription-state" class="muted">\u8CFC\u8AAD\u4FDD\u5B58\u72B6\u614B\u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u3002</p>
-          <p id="push-delivery-state" class="muted">deploy \u5B8C\u4E86/\u5931\u6557\u901A\u77E5\u306F\u30B5\u30FC\u30D0\u9001\u4FE1 Web Push \u3068\u540C\u3058\u7D4C\u8DEF\u3067\u5C4A\u304D\u307E\u3059\u3002</p>
-          <p id="push-server-result" class="muted">\u6700\u5F8C\u306E\u30B5\u30FC\u30D0\u9001\u4FE1\u7D50\u679C: \u672A\u5B9F\u884C</p>
-          <div class="actions">
-            <button class="dashboard-action" id="push-permission-button" type="button">\u901A\u77E5\u3092\u8A31\u53EF</button>
-            <button class="dashboard-action" id="push-subscribe-button" type="button">\u8CFC\u8AAD\u3092\u4FDD\u5B58</button>
-            <button class="dashboard-action" id="push-test-button" type="button">\u30C6\u30B9\u30C8\u901A\u77E5</button>
-            <button class="dashboard-action" id="push-server-test-button" type="button">\u30B5\u30FC\u30D0\u9001\u4FE1\u30C6\u30B9\u30C8</button>
+      <div class="grid single">
+        <details class="lane" data-settings-section="notification-pwa-settings">
+          <summary>\u901A\u77E5\u8A2D\u5B9A</summary>
+          <div class="settings-stack">
+            <section class="setting-block">
+              <div class="lane-title"><h2>iOS PWA \u901A\u77E5</h2><span class="pill" id="push-support-pill">\u78BA\u8A8D\u4E2D</span></div>
+              <p id="push-state" class="muted">\u901A\u77E5\u72B6\u614B\u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u3002</p>
+              <p id="push-subscription-state" class="muted">\u8CFC\u8AAD\u4FDD\u5B58\u72B6\u614B\u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u3002</p>
+              <p id="push-delivery-state" class="muted">deploy \u5B8C\u4E86/\u5931\u6557\u901A\u77E5\u306F\u30B5\u30FC\u30D0\u9001\u4FE1 Web Push \u3068\u540C\u3058\u7D4C\u8DEF\u3067\u5C4A\u304D\u307E\u3059\u3002</p>
+              <p id="push-server-result" class="muted">\u6700\u5F8C\u306E\u30B5\u30FC\u30D0\u9001\u4FE1\u7D50\u679C: \u672A\u5B9F\u884C</p>
+              <div class="actions">
+                <button class="dashboard-action" id="push-permission-button" type="button">\u901A\u77E5\u3092\u8A31\u53EF</button>
+                <button class="dashboard-action" id="push-subscribe-button" type="button">\u8CFC\u8AAD\u3092\u4FDD\u5B58</button>
+                <button class="dashboard-action" id="push-test-button" type="button">\u30C6\u30B9\u30C8\u901A\u77E5</button>
+                <button class="dashboard-action" id="push-server-test-button" type="button">\u30B5\u30FC\u30D0\u9001\u4FE1\u30C6\u30B9\u30C8</button>
+              </div>
+              <p class="muted">\u901A\u77E5\u30BF\u30C3\u30D7\u306F\u901A\u77E5\u30BB\u30F3\u30BF\u30FC\u3078\u623B\u308A\u307E\u3059\u3002\u97F3\u306F iOS \u5074\u306E\u901A\u77E5\u8A2D\u5B9A\u306B\u5F93\u3044\u307E\u3059\u3002</p>
+            </section>
+            <section class="setting-block">
+              <div class="lane-title"><h2>Badge</h2><span class="pill" id="badge-support-pill">\u78BA\u8A8D\u4E2D</span></div>
+              <p id="badge-state" class="muted">Badging API \u306E\u5BFE\u5FDC\u72B6\u6CC1\u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u3002</p>
+              <div class="actions">
+                <button class="dashboard-action" id="badge-set-button" type="button">\u672A\u8AAD\u6570\u3092\u53CD\u6620</button>
+                <button class="dashboard-action" id="badge-clear-button" type="button">Badge \u3092\u6D88\u3059</button>
+              </div>
+            </section>
           </div>
-          <p class="muted">\u901A\u77E5\u30BF\u30C3\u30D7\u306F\u901A\u77E5\u30BB\u30F3\u30BF\u30FC\u3078\u623B\u308A\u307E\u3059\u3002\u97F3\u306F iOS \u5074\u306E\u901A\u77E5\u8A2D\u5B9A\u306B\u5F93\u3044\u307E\u3059\u3002</p>
-        </section>
-        <section class="lane">
-          <div class="lane-title"><h2>Badge</h2><span class="pill" id="badge-support-pill">\u78BA\u8A8D\u4E2D</span></div>
-          <p id="badge-state" class="muted">Badging API \u306E\u5BFE\u5FDC\u72B6\u6CC1\u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u3002</p>
-          <div class="actions">
-            <button class="dashboard-action" id="badge-set-button" type="button">\u672A\u8AAD\u6570\u3092\u53CD\u6620</button>
-            <button class="dashboard-action" id="badge-clear-button" type="button">Badge \u3092\u6D88\u3059</button>
-          </div>
-        </section>
+        </details>
       </div>
       <div class="grid single">
         <details class="lane" data-debug-section="notification-authority-boundary">
@@ -65216,6 +65280,9 @@ function renderDashboardUtilityPage({ title, subtitle, backHref, body }) {
     .summary-list div:first-child { border-top: 0; }
     .summary-list dt { color: var(--muted); font-size: 13px; }
     .summary-list dd { margin: 0; overflow-wrap: anywhere; }
+    .settings-stack { display: grid; gap: 14px; margin-top: 12px; }
+    .setting-block { border-top: 1px solid var(--border); padding-top: 12px; }
+    .setting-block:first-child { border-top: 0; padding-top: 0; }
     .pill { display: inline-flex; border: 1px solid var(--border); border-radius: 999px; padding: 3px 8px; background: var(--soft); font-size: 12px; white-space: nowrap; }
     .pill.success { border-color: #7fb797; background: #e7f5ec; color: #145c34; }
     .pill.danger { border-color: #d69b9b; background: #fff0f0; color: #8a1f1f; }

@@ -314,6 +314,8 @@ async function notifyDashboardEvent({ env, repository, pullRequest, title, statu
       headSha: pullRequest.head?.sha,
       headBranch: pullRequest.head?.ref,
       displayTitle: title,
+      changeSummary: pullRequest.title,
+      pullNumber: pullRequest.number,
       updatedAt: new Date().toISOString()
     })
   });
