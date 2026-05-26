@@ -1186,6 +1186,8 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes('article.classList.add("has-copy-action")'), true);
   assert.equal(body.includes('article.classList.toggle("actions-visible")'), true);
   assert.equal(body.includes('event.target.closest("a, button, input, textarea, select, summary")'), true);
+  assert.equal(body.includes("article.tabIndex = 0"), false);
+  assert.equal(body.includes('article.addEventListener("keydown"'), false);
   assert.equal(body.includes('if (message.role === "owner")'), true);
   assert.equal(body.includes('} else if (message.role === "butler") {'), true);
   assert.equal(body.includes('} else if (message.role === "system") {'), true);

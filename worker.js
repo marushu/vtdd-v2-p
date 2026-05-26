@@ -66020,14 +66020,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 
       function attachMessageActionReveal(article) {
         article.classList.add("has-copy-action");
-        article.tabIndex = 0;
         article.addEventListener("click", (event) => {
           if (event.target.closest("a, button, input, textarea, select, summary")) return;
-          article.classList.toggle("actions-visible");
-        });
-        article.addEventListener("keydown", (event) => {
-          if (event.key !== "Enter" && event.key !== " ") return;
-          event.preventDefault();
           article.classList.toggle("actions-visible");
         });
       }
