@@ -15,6 +15,7 @@ import {
   buildRuntimeMemoryWriteRequest,
   buildRuntimeOperationalMemoryRequest,
   parseArgs,
+  resolveDatabase,
   withRuntimeMachineAuth
 } from "../scripts/vtdd-memory.mjs";
 
@@ -46,6 +47,22 @@ test("parseArgs maps record-id CLI option to runtime recordId", () => {
   assert.equal(parsed.command, "retrieve-operational");
   assert.equal(parsed.options.recordId, "working_memory_405_repo_null_example");
   assert.equal(parsed.options.runtimeUrl, "https://example.invalid");
+});
+
+test("resolveDatabase aligns direct D1 name with deploy variable and rejects id-only config", () => {
+  assert.equal(resolveDatabase({ database: "explicit-db" }, {}), "explicit-db");
+  assert.equal(
+    resolveDatabase({}, { VTDD_MEMORY_D1_DATABASE_NAME: "memory-from-operator-env" }),
+    "memory-from-operator-env"
+  );
+  assert.equal(
+    resolveDatabase({}, { CLOUDFLARE_D1_DATABASE_NAME: "memory-from-actions-var" }),
+    "memory-from-actions-var"
+  );
+  assert.throws(
+    () => resolveDatabase({}, { CLOUDFLARE_D1_DATABASE_ID: "00000000-0000-0000-0000-000000000000" }),
+    /wrangler d1 execute requires a database name or binding, not database_id/
+  );
 });
 
 test("buildDecisionRecord creates canonical decision_log memory", () => {

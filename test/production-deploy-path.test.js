@@ -28,6 +28,7 @@ test("production deploy doc defines the governed GitHub Actions deploy path", ()
   assert.equal(doc.includes("`CLOUDFLARE_API_TOKEN`"), true);
   assert.equal(doc.includes("`CLOUDFLARE_ACCOUNT_ID`"), true);
   assert.equal(doc.includes("`CLOUDFLARE_D1_DATABASE_ID`"), true);
+  assert.equal(doc.includes("`CLOUDFLARE_D1_DATABASE_NAME`"), true);
   assert.equal(doc.includes("`VTDD_GATEWAY_BEARER_TOKEN`"), true);
   assert.equal(doc.includes("hard prerequisites"), true);
   assert.equal(doc.includes("docs/setup/cloudflare-deploy-secret-sync.md"), true);
@@ -39,6 +40,8 @@ test("production deploy doc defines the governed GitHub Actions deploy path", ()
   assert.equal(doc.includes("real passkey registration"), true);
   assert.equal(doc.includes("owner-specific Cloudflare"), true);
   assert.equal(doc.includes("must not be committed"), true);
+  assert.equal(doc.includes("the database name/id are operator-owned deployment settings, not public repo defaults"), true);
+  assert.equal(doc.includes("`VTDD_MEMORY_D1_DATABASE_NAME`"), true);
   assert.equal(doc.includes("`wrangler.production.local.toml`"), true);
   assert.equal(doc.includes("`wrangler.production.generated.toml`"), true);
   assert.equal(doc.includes("`VTDD_KNOWN_GOOD_COMMIT_SHA`"), true);
@@ -74,6 +77,7 @@ test("deploy-production workflow enforces the MVP production deploy boundary", (
   assert.equal(workflow.includes("Missing required Actions secret: VTDD_GATEWAY_BEARER_TOKEN"), true);
   assert.equal(workflow.includes("Missing required Actions secret: CLOUDFLARE_API_TOKEN"), true);
   assert.equal(workflow.includes("Missing required Actions secret: CLOUDFLARE_ACCOUNT_ID"), true);
+  assert.equal(workflow.includes("Missing required Actions variable: CLOUDFLARE_D1_DATABASE_NAME"), true);
   assert.equal(workflow.includes("Missing required Actions secret: CLOUDFLARE_D1_DATABASE_ID"), true);
   assert.equal(workflow.includes("Preflight Cloudflare Workers deploy entitlement"), true);
   assert.equal(
@@ -118,6 +122,11 @@ test("deploy-production workflow enforces the MVP production deploy boundary", (
     true
   );
   assert.equal(workflow.includes("Generate production Wrangler config"), true);
+  assert.equal(
+    workflow.includes("CLOUDFLARE_D1_DATABASE_NAME: ${{ vars.CLOUDFLARE_D1_DATABASE_NAME }}"),
+    true
+  );
+  assert.equal(workflow.includes("CLOUDFLARE_D1_DATABASE_NAME || 'vtdd-memory'"), false);
   assert.equal(workflow.includes("VTDD_GITHUB_ACTIONS_REPOSITORY: ${{ github.repository }}"), true);
   assert.equal(workflow.includes("CLOUDFLARE_MEDIA_R2_BUCKET_NAME: ${{ vars.CLOUDFLARE_MEDIA_R2_BUCKET_NAME || 'vtdd-media-prod' }}"), true);
   assert.equal(workflow.includes("VTDD_KNOWN_GOOD_COMMIT_SHA: ${{ vars.VTDD_KNOWN_GOOD_COMMIT_SHA }}"), true);
@@ -162,6 +171,7 @@ test("deploy-production workflow enforces the MVP production deploy boundary", (
   );
   assert.equal(workflow.includes("[[env.production.d1_databases]]"), true);
   assert.equal(workflow.includes('binding = "VTDD_MEMORY_D1"'), true);
+  assert.equal(workflow.includes('database_name = "$CLOUDFLARE_D1_DATABASE_NAME"'), true);
   assert.equal(workflow.includes('database_id = "$CLOUDFLARE_D1_DATABASE_ID"'), true);
   assert.equal(workflow.includes("[[env.production.r2_buckets]]"), true);
   assert.equal(workflow.includes('binding = "VTDD_MEDIA_R2"'), true);
