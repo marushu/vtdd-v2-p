@@ -63397,11 +63397,7 @@ function inferPullNumberFromText(value) {
     return null;
   }
   const explicit = text.match(/\b(?:PR|pull request)\s*#?(\d+)\b/i);
-  if (explicit) {
-    return normalizeIssue6(explicit[1]);
-  }
-  const squashMerge = text.match(/\(#(\d+)\)\s*$/);
-  return squashMerge ? normalizeIssue6(squashMerge[1]) : null;
+  return explicit ? normalizeIssue6(explicit[1]) : null;
 }
 function createD1MemoryIndexAdapter(d1) {
   if (!d1 || typeof d1.prepare !== "function") {

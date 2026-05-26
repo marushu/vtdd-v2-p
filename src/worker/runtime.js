@@ -8333,11 +8333,7 @@ function inferPullNumberFromText(value) {
     return null;
   }
   const explicit = text.match(/\b(?:PR|pull request)\s*#?(\d+)\b/i);
-  if (explicit) {
-    return normalizeIssue(explicit[1]);
-  }
-  const squashMerge = text.match(/\(#(\d+)\)\s*$/);
-  return squashMerge ? normalizeIssue(squashMerge[1]) : null;
+  return explicit ? normalizeIssue(explicit[1]) : null;
 }
 
 function createD1MemoryIndexAdapter(d1) {

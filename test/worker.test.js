@@ -3586,6 +3586,34 @@ test("worker rejects GitHub Actions deploy completion event without machine auth
   assert.equal(response.status, 401);
 });
 
+test("worker does not infer PR number from issue-style parenthetical summary", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/events/github-actions", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        repository: "marushu/vtdd-v2-p",
+        workflowName: "deploy-production",
+        runId: "26133049999",
+        status: "completed",
+        conclusion: "success",
+        displayTitle: "dashboard: 通知カードにPR概要を出す (#534)",
+        changeSummary: "dashboard: 通知カードにPR概要を出す (#534)",
+        updatedAt: "2026-05-20T00:11:01Z"
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      DASHBOARD_EVENT_STORE: createInMemoryDashboardEventStore()
+    }
+  );
+
+  assert.equal(response.status, 202);
+  const body = await response.json();
+  assert.equal(body.event.pullNumber, null);
+  assert.equal(body.event.issueNumber, null);
+});
+
 test("worker ingests VPS runner event into notifications and Butler chat thread", async () => {
   const eventStore = createInMemoryDashboardEventStore();
   const chatStore = createInMemoryDashboardChatStore();

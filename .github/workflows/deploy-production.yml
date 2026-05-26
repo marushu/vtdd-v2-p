@@ -19,7 +19,6 @@ on:
 permissions:
   contents: read
   issues: write
-  pull-requests: read
 
 concurrency:
   group: deploy-production
@@ -281,7 +280,6 @@ jobs:
           DEPLOY_SHA: ${{ github.sha }}
           DEPLOY_BRANCH: ${{ github.ref_name }}
           RUNTIME_URL: ${{ github.event.inputs.runtime_url }}
-          GITHUB_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           if [ -z "$RUNTIME_URL" ]; then
@@ -319,50 +317,25 @@ jobs:
             }
             return normalizedSubject || bodyLine || "";
           }
-          async function readPullRequestTitle(pullNumber) {
-            if (!pullNumber || !process.env.GITHUB_TOKEN || !process.env.REPOSITORY) {
-              return "";
-            }
-            const response = await fetch(`https://api.github.com/repos/${process.env.REPOSITORY}/pulls/${pullNumber}`, {
-              headers: {
-                authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
-                accept: "application/vnd.github+json",
-                "x-github-api-version": "2022-11-28",
-                "user-agent": "vtdd-dashboard-deploy-event"
-              }
-            });
-            if (!response.ok) {
-              return "";
-            }
-            const pull = await response.json();
-            return typeof pull?.title === "string" ? pull.title.trim() : "";
-          }
-          async function main() {
-            const commitSubject = readGit(["log", "-1", "--pretty=%s"]);
-            const commitBody = readGit(["log", "-1", "--pretty=%b"]);
-            const pullNumber = inferPullNumber(`${commitSubject}\n${commitBody}`);
-            const pullTitle = await readPullRequestTitle(pullNumber);
-            const changeSummary = pullTitle || inferCommitSummary(commitSubject, commitBody);
-            const payload = {
-              repository: process.env.REPOSITORY,
-              workflowName: "deploy-production",
-              runId: process.env.RUN_ID,
-              runUrl: process.env.RUN_URL,
-              status: "completed",
-              conclusion: process.env.DEPLOY_JOB_STATUS,
-              headSha: process.env.DEPLOY_SHA,
-              headBranch: process.env.DEPLOY_BRANCH,
-              displayTitle: changeSummary || "deploy-production",
-              changeSummary: changeSummary || null,
-              pullNumber: pullNumber,
-              updatedAt: new Date().toISOString()
-            };
-            process.stdout.write(JSON.stringify(payload));
-          }
-          main().catch((error) => {
-            console.error(error instanceof Error ? error.message : String(error));
-            process.exit(1);
-          });
+          const commitSubject = readGit(["log", "-1", "--pretty=%s"]);
+          const commitBody = readGit(["log", "-1", "--pretty=%b"]);
+          const pullNumber = inferPullNumber(`${commitSubject}\n${commitBody}`);
+          const changeSummary = inferCommitSummary(commitSubject, commitBody);
+          const payload = {
+            repository: process.env.REPOSITORY,
+            workflowName: "deploy-production",
+            runId: process.env.RUN_ID,
+            runUrl: process.env.RUN_URL,
+            status: "completed",
+            conclusion: process.env.DEPLOY_JOB_STATUS,
+            headSha: process.env.DEPLOY_SHA,
+            headBranch: process.env.DEPLOY_BRANCH,
+            displayTitle: changeSummary || "deploy-production",
+            changeSummary: changeSummary || null,
+            pullNumber: pullNumber,
+            updatedAt: new Date().toISOString()
+          };
+          process.stdout.write(JSON.stringify(payload));
           NODE
           )
 
