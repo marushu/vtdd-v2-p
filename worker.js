@@ -62478,7 +62478,8 @@ function buildDashboardWebPushTitle(record2) {
     const isDeploy = normalize7(record2.workflowName).includes("deploy");
     const label = dashboardPushStatusLabel(record2);
     if (isDeploy) {
-      return `\u30C7\u30D7\u30ED\u30A4${label}${repository ? `: ${repository}` : ""}`.slice(0, 80);
+      const subject = buildDashboardEventSubject(record2, { limit: 58 });
+      return `\u30C7\u30D7\u30ED\u30A4${label}: ${subject || repository || "repository"}`.slice(0, 80);
     }
     const workflow = compactNotificationText(record2.workflowName || "workflow", 24);
     return `Actions ${label}: ${workflow}${repository ? ` / ${repository}` : ""}`.slice(0, 80);
@@ -63436,6 +63437,14 @@ function inferPullNumberFromText(value) {
     return null;
   }
   const explicit = text.match(/\b(?:PR|pull request)\s*#?(\d+)\b/i);
+  return explicit ? normalizeIssue6(explicit[1]) : null;
+}
+function inferIssueNumberFromText(value) {
+  const text = normalizeDashboardEventText(value);
+  if (!text) {
+    return null;
+  }
+  const explicit = text.match(/\bIssue\s*#?(\d+)\b/i);
   return explicit ? normalizeIssue6(explicit[1]) : null;
 }
 function createD1MemoryIndexAdapter(d1) {
@@ -64611,21 +64620,33 @@ function renderDashboardNotificationEvent(event) {
 function buildDashboardEventDisplayTitle(event, { workflowName, conclusion } = {}) {
   const record2 = normalizeDashboardEventRecord(event);
   const statusLabel = dashboardPushStatusLabel(record2);
-  const summary = normalizeDashboardEventText(record2.changeSummary || record2.title);
   const isDeploy = record2.kind === "github_actions_workflow_run" && normalize7(workflowName || record2.workflowName).includes("deploy");
-  const baseSummary = summary && summary !== record2.workflowName ? summary : "";
+  const baseSummary = buildDashboardEventSubject(record2, { limit: 96 });
   const pullPrefix = record2.pullNumber ? `PR #${record2.pullNumber}` : "";
   if (isDeploy) {
-    const subject = [pullPrefix, baseSummary].filter(Boolean).join(" ");
-    return subject ? `\u30C7\u30D7\u30ED\u30A4${statusLabel}: ${subject}` : `\u30C7\u30D7\u30ED\u30A4${statusLabel}: ${record2.repository || "repository"} ${record2.headSha ? record2.headSha.slice(0, 7) : ""}`.trim();
+    return baseSummary ? `\u30C7\u30D7\u30ED\u30A4${statusLabel}: ${baseSummary}` : `\u30C7\u30D7\u30ED\u30A4${statusLabel}: ${record2.repository || "repository"} ${record2.headSha ? record2.headSha.slice(0, 7) : ""}`.trim();
   }
   if (pullPrefix && baseSummary) {
-    return `${pullPrefix}: ${baseSummary}`;
+    return baseSummary.startsWith(pullPrefix) ? baseSummary : `${pullPrefix}: ${baseSummary}`;
   }
   if (pullPrefix) {
     return `${workflowName || record2.workflowName || "Actions"} ${dashboardPushStatusLabel(record2)}: ${pullPrefix}`;
   }
   return baseSummary || workflowName || record2.kind || conclusion || "dashboard event";
+}
+function buildDashboardEventSubject(event, { limit = 80 } = {}) {
+  const record2 = normalizeDashboardEventRecord(event);
+  const rawSummary = normalizeDashboardEventText(record2.changeSummary || record2.title);
+  const summary = rawSummary && rawSummary !== record2.workflowName ? rawSummary : "";
+  const pullPrefix = record2.pullNumber ? `PR #${record2.pullNumber}` : "";
+  const issueNumber = record2.issueNumber || inferIssueNumberFromText(summary);
+  const issuePrefix = issueNumber ? `Issue #${issueNumber}` : "";
+  const withoutDuplicatedPull = pullPrefix ? summary.replace(new RegExp(`\\bPR\\s*#?${record2.pullNumber}\\b\\s*[:\uFF1A-]?\\s*`, "i"), "").trim() : summary;
+  const withoutDuplicatedIssue = issueNumber ? withoutDuplicatedPull.replace(new RegExp(`\\bIssue\\s*#?${issueNumber}\\b\\s*[:\uFF1A-]?\\s*`, "i"), "").replace(new RegExp(`#${issueNumber}\\b\\s*[:\uFF1A-]?\\s*`, "i"), "").trim() : withoutDuplicatedPull;
+  return compactNotificationText(
+    [pullPrefix, issuePrefix, withoutDuplicatedIssue].filter(Boolean).join(" "),
+    limit
+  );
 }
 function formatDashboardRelativeTime(value, now = /* @__PURE__ */ new Date()) {
   const timestamp = new Date(normalizeText30(value));
