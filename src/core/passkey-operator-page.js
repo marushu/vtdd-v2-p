@@ -36,9 +36,7 @@ export function renderPasskeyOperatorPage(input = {}) {
     : "";
   const approveButtonLabel = deployOneTapMode
     ? "パスキー"
-    : dashboardNotificationMode
-      ? "パスキーで通知を見る"
-      : dashboardMode
+    : dashboardMode
         ? "パスキーで開く"
         : "Approve high-risk action";
   const heroTitle = dashboardMode ? "Dashboard Passkey" : "VTDD Passkey Operator";
@@ -47,9 +45,7 @@ export function renderPasskeyOperatorPage(input = {}) {
     : "このページは real WebAuthn/passkey approval 用の operator helper です。登録と high-risk approval の両方を same-origin で実行し、最終的に <code>approvalGrantId</code> を取得できます。";
   const approvalHeading = deployOneTapMode
     ? "本番反映の承認"
-    : dashboardNotificationMode
-      ? "通知を見る"
-      : dashboardMode
+    : dashboardMode
         ? "Dashboard を開く"
         : "2. High-risk Approval";
   const deployScopeSummary = renderDeployScopeSummary({
@@ -240,7 +236,7 @@ export function renderPasskeyOperatorPage(input = {}) {
             <input id="risk-kind-input" value="${highRiskKindDefault}" autocomplete="off"${deployOneTapMode ? ' readonly data-deploy-scope-locked="true"' : ""} />
           </div>`
               : dashboardMode
-                ? `<p>${dashboardNotificationMode ? "通知センター" : "Dashboard"}を開くための read-only session を更新します。この確認では repo / Issue / PR scope は使いません。</p>
+                ? `<p>Dashboard を開くための read-only session を更新します。この確認では repo / Issue / PR scope は使いません。${dashboardNotificationMode ? "認証後は通知センターへ戻ります。" : ""}</p>
           <div class="approval-internal" hidden>
             <label for="repo-input">Repository</label>
             <input id="repo-input" value="" placeholder="marushu/vtdd-v2-p" />

@@ -11840,8 +11840,9 @@ function renderDashboardAuthRequiredPage({ runtimeOrigin, returnPath = "/dashboa
   const dashboardAccessReturnPath = sanitizeDashboardPreAuthReturnPath(returnPath);
   const dashboardAccessHref = buildCloudflareAccessLoginHref({ origin, returnPath: dashboardAccessReturnPath });
   const dashboardSignInUrl = `${origin || ""}/v2/approval/passkey/operator?mode=dashboard&phase=execution&actionType=read&highRiskKind=dashboard_access&dashboardReturnPath=${encodeURIComponent(dashboardAccessReturnPath)}`;
-  const passkeyButtonLabel =
-    dashboardAccessReturnPath === "/dashboard/notifications" ? "Passkey で通知を見る" : "Passkey で dashboard に入る";
+  const passkeyButtonLabel = "Passkey で開く";
+  const passkeyReturnNote =
+    dashboardAccessReturnPath === "/dashboard/notifications" ? "認証後は通知センターへ戻ります。" : "";
   return `<!doctype html>
 <html lang="ja">
 <head>
@@ -11877,7 +11878,7 @@ function renderDashboardAuthRequiredPage({ runtimeOrigin, returnPath = "/dashboa
       </div>
       <details>
         <summary>Passkey fallback</summary>
-        <p>passkey dashboard session は Cloudflare Access が使えない時の補助導線です。deploy、merge、secret sync などの高リスク操作は引き続き scope 明示済み real passkey approval が必要です。</p>
+        <p>passkey dashboard session は Cloudflare Access が使えない時の補助導線です。${escapeDashboardHtml(passkeyReturnNote)} deploy、merge、secret sync などの高リスク操作は引き続き scope 明示済み real passkey approval が必要です。</p>
         ${passkeyFallbackReason ? `<p><code>${escapeDashboardHtml(passkeyFallbackReason)}</code></p>` : ""}
         <p><a href="${escapeDashboardHtml(dashboardSignInUrl)}">Passkey fallback を開く</a></p>
       </details>
