@@ -11578,7 +11578,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 
 function renderDashboardAuthRequiredPage({ runtimeOrigin, returnPath = "/dashboard", reason, passkeyFallbackReason } = {}) {
   const origin = normalizeText(runtimeOrigin);
-  const dashboardAccessHref = `${origin || ""}${sanitizeDashboardReturnPath(returnPath)}`;
+  const dashboardAccessHref = `${origin || ""}${sanitizeDashboardPreAuthReturnPath(returnPath)}`;
   const dashboardSignInUrl = `${origin || ""}/v2/approval/passkey/operator?mode=dashboard&repositoryInput=marushu%2Fvtdd-v2-p&phase=execution&actionType=read&highRiskKind=dashboard_access`;
   return `<!doctype html>
 <html lang="ja">
@@ -11624,7 +11624,7 @@ function renderDashboardAuthRequiredPage({ runtimeOrigin, returnPath = "/dashboa
 </html>`;
 }
 
-function sanitizeDashboardReturnPath(value) {
+function sanitizeDashboardPreAuthReturnPath(value) {
   const normalized = normalizeText(value) || "/dashboard";
   let parsed;
   try {
@@ -11638,7 +11638,7 @@ function sanitizeDashboardReturnPath(value) {
   if (parsed.pathname !== "/dashboard" && !parsed.pathname.startsWith("/dashboard/")) {
     return "/dashboard";
   }
-  return `${parsed.pathname}${parsed.search}`;
+  return parsed.pathname;
 }
 
 function renderV2StatusPage({ runtimeOrigin, autonomyMode }) {
