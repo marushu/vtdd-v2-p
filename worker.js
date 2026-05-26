@@ -65766,7 +65766,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       <form class="composer" id="butler-chat-form" aria-label="Butler composer" autocomplete="off" data-socket-endpoint="${escapeDashboardHtml(socketOrigin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}/ws" data-thread-endpoint="${escapeDashboardHtml(origin)}/v2/dashboard/chat/${escapeDashboardHtml(chatThreadId)}" data-message-endpoint="${escapeDashboardHtml(origin)}/v2/dashboard/chat/messages" data-thread-id="${escapeDashboardHtml(chatThreadId)}" data-repository-input="${escapeDashboardHtml(repositoryInput)}" data-issue-number="${dashboardIssueNumber || ""}">
         <div class="pending-media" id="butler-pending-media" aria-live="polite"></div>
         <div class="composer-box">
-          <button class="media-button" id="butler-media-button" type="button" aria-label="\u753B\u50CF\u3084\u30D5\u30A1\u30A4\u30EB\u3092\u8FFD\u52A0" title="\u753B\u50CF\u3084\u30D5\u30A1\u30A4\u30EB\u3092\u8FFD\u52A0">+</button>
+          <button class="media-button" id="butler-media-button" type="button" aria-label="\u753B\u50CF\u30FB\u52D5\u753B\u30FB\u30D5\u30A1\u30A4\u30EB\u3092\u8FFD\u52A0" title="\u753B\u50CF\u30FB\u52D5\u753B\u30FB\u30D5\u30A1\u30A4\u30EB\u3092\u8FFD\u52A0">+</button>
           <input id="butler-media-input" type="file" multiple hidden>
           <textarea id="butler-message" name="text" placeholder="Butler V2 \u306B\u30E1\u30C3\u30BB\u30FC\u30B8..." aria-label="Butler V2 \u306B\u30E1\u30C3\u30BB\u30FC\u30B8" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="send"></textarea>
           <button class="send-button" type="submit" aria-label="Butler \u306B\u9001\u4FE1">\u2191</button>
@@ -66085,6 +66085,14 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         return Number.isNaN(date.getTime()) ? "" : date.toISOString();
       }
 
+      function getMediaContentKind(item) {
+        const contentType = String(item && item.contentType || item && item.type || "");
+        const filename = String(item && item.filename || item && item.name || "").toLowerCase();
+        if (contentType.startsWith("video/") || /.(mp4|mov|m4v|webm)$/.test(filename)) return "video";
+        if (contentType.startsWith("image/") || /.(png|jpe?g|gif|webp|heic|heif)$/.test(filename)) return "image";
+        return "";
+      }
+
       function renderMediaReferences(references) {
         const list = Array.isArray(references) ? references : [];
         if (list.length === 0) return null;
@@ -66101,7 +66109,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           link.target = "_blank";
           link.rel = "noreferrer";
           link.textContent = "";
-          const isImage = String(reference.contentType || "").startsWith("image/");
+          const mediaKind = getMediaContentKind(reference);
+          const isImage = mediaKind === "image";
           if (isImage && downloadHref !== "#") {
             const image = document.createElement("img");
             image.className = "media-thumb";
@@ -66110,9 +66119,25 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             image.loading = "lazy";
             link.appendChild(image);
           } else {
-            const icon = document.createElement("span");
-            icon.textContent = "\u6DFB\u4ED8";
-            link.appendChild(icon);
+            const isVideo = mediaKind === "video";
+            if (isVideo && downloadHref !== "#") {
+              const video = document.createElement("video");
+              video.className = "media-thumb";
+              video.src = downloadHref;
+              video.muted = true;
+              video.controls = true;
+              video.playsInline = true;
+              video.preload = "metadata";
+              video.setAttribute("aria-label", reference.filename || "\u6DFB\u4ED8\u52D5\u753B");
+              link.appendChild(video);
+              const icon = document.createElement("span");
+              icon.textContent = "\u52D5\u753B";
+              link.appendChild(icon);
+            } else {
+              const icon = document.createElement("span");
+              icon.textContent = "\u6DFB\u4ED8";
+              link.appendChild(icon);
+            }
           }
           const label = document.createElement("span");
           label.textContent = reference.filename || reference.mediaId || "media";
@@ -66134,6 +66159,13 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         }
       }
 
+      function isPreviewableMediaFile(file) {
+        return getMediaContentKind({
+          contentType: file && file.type,
+          filename: file && file.name
+        }) !== "";
+      }
+
       function renderPendingMedia() {
         if (!pendingMedia) return;
         pendingMedia.replaceChildren();
@@ -66142,11 +66174,24 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           chip.className = "media-chip";
           if (item.previewUrl) {
             chip.classList.add("pending-preview");
-            const image = document.createElement("img");
-            image.className = "media-thumb";
-            image.src = item.previewUrl;
-            image.alt = item.filename || "\u9001\u4FE1\u5F85\u3061\u753B\u50CF";
-            chip.appendChild(image);
+            const isVideo = getMediaContentKind(item) === "video";
+            if (isVideo) {
+              const video = document.createElement("video");
+              video.className = "media-thumb";
+              video.src = item.previewUrl;
+              video.muted = true;
+              video.controls = true;
+              video.playsInline = true;
+              video.preload = "metadata";
+              video.setAttribute("aria-label", item.filename || "\u9001\u4FE1\u5F85\u3061\u52D5\u753B");
+              chip.appendChild(video);
+            } else {
+              const image = document.createElement("img");
+              image.className = "media-thumb";
+              image.src = item.previewUrl;
+              image.alt = item.filename || "\u9001\u4FE1\u5F85\u3061\u753B\u50CF";
+              chip.appendChild(image);
+            }
           }
           const label = document.createElement("span");
           label.textContent = item.filename || "attachment";
@@ -66809,12 +66854,13 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             for (const file of files) {
               const preparedFile = await prepareUploadFile(file);
               const previewUrl =
-                preparedFile && preparedFile.type && preparedFile.type.startsWith("image/") && typeof URL !== "undefined" && typeof URL.createObjectURL === "function"
+                preparedFile && isPreviewableMediaFile(preparedFile) && typeof URL !== "undefined" && typeof URL.createObjectURL === "function"
                   ? URL.createObjectURL(preparedFile)
                   : "";
               selectedItems.push({
                 clientId: Date.now() + "_" + Math.random().toString(36).slice(2),
                 filename: preparedFile.name || file.name || "attachment",
+                contentType: preparedFile.type || file.type || "",
                 previewUrl,
                 file: preparedFile
               });
