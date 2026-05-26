@@ -786,7 +786,13 @@ test("worker rejects dashboard access without owner identity", async () => {
     true
   );
   assert.equal(body.includes("Passkey fallback"), true);
-  assert.equal(body.includes("Passkey で dashboard に入る"), false);
+  assert.equal(body.includes("Passkey で dashboard に入る"), true);
+  assert.equal(
+    body.includes(
+      'href="https://example.com/v2/approval/passkey/operator?mode=dashboard&amp;repositoryInput=marushu%2Fvtdd-v2-p&amp;phase=execution&amp;actionType=read&amp;highRiskKind=dashboard_access&amp;dashboardReturnPath=%2Fdashboard"'
+    ),
+    true
+  );
   assert.equal(body.includes("未認証の相手に通知詳細や Dashboard 内容は返しません"), true);
 });
 
@@ -876,7 +882,7 @@ test("worker rejects stale dashboard passkey session cookies", async () => {
   );
   assert.equal(body.includes("Passkey fallback"), true);
   assert.equal(body.includes("dashboard passkey session was not found"), true);
-  assert.equal(body.includes("Passkey で dashboard に入る"), false);
+  assert.equal(body.includes("Passkey で dashboard に入る"), true);
 });
 
 test("worker does not expose dashboard notification details before Access auth", async () => {
@@ -907,9 +913,16 @@ test("worker does not expose dashboard notification details before Access auth",
   const body = await response.text();
   assert.equal(body.includes("Dashboard auth required"), true);
   assert.equal(body.includes("Cloudflare Access で開く"), true);
+  assert.equal(body.includes("Passkey で通知を見る"), true);
   assert.equal(
     body.includes(
       'href="https://example.com/cdn-cgi/access/login?redirect_url=https%3A%2F%2Fexample.com%2Fdashboard%2Fnotifications"'
+    ),
+    true
+  );
+  assert.equal(
+    body.includes(
+      'href="https://example.com/v2/approval/passkey/operator?mode=dashboard&amp;repositoryInput=marushu%2Fvtdd-v2-p&amp;phase=execution&amp;actionType=read&amp;highRiskKind=dashboard_access&amp;dashboardReturnPath=%2Fdashboard%2Fnotifications"'
     ),
     true
   );
@@ -6411,7 +6424,9 @@ test("worker serves passkey operator page", async () => {
 
 test("worker serves dashboard passkey operator mode", async () => {
   const response = await worker.fetch(
-    new Request("https://example.com/v2/approval/passkey/operator?mode=dashboard&repositoryInput=marushu%2Fvtdd-v2-p"),
+    new Request(
+      "https://example.com/v2/approval/passkey/operator?mode=dashboard&repositoryInput=marushu%2Fvtdd-v2-p&dashboardReturnPath=%2Fdashboard%2Fnotifications"
+    ),
     gatewayAuthEnv
   );
 
@@ -6420,6 +6435,7 @@ test("worker serves dashboard passkey operator mode", async () => {
   assert.equal(html.includes('id="action-type-input" value="read"'), true);
   assert.equal(html.includes('id="risk-kind-input" value="dashboard_access"'), true);
   assert.equal(html.includes('const operatorMode = "dashboard"'), true);
+  assert.equal(html.includes('window.location.assign("/dashboard/notifications")'), true);
 });
 
 test("worker serves issue close operator mode without falling back to PR merge UI", async () => {

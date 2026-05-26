@@ -4622,6 +4622,7 @@ function handlePasskeyOperatorPageRequest(request) {
     highRiskKind: requestedHighRiskKind,
     mergeMethod: url.searchParams.get("mergeMethod") || "squash",
     returnUrl: normalizeOperatorReturnUrl(url.searchParams.get("returnUrl")),
+    dashboardReturnPath: sanitizeDashboardPreAuthReturnPath(url.searchParams.get("dashboardReturnPath")),
     operatorId: url.searchParams.get("operatorId") || "vtdd-operator",
     operatorLabel: url.searchParams.get("operatorLabel") || "VTDD Operator",
     githubAppRole: url.searchParams.get("githubAppRole") || "legacy",
@@ -11704,7 +11705,9 @@ function renderDashboardAuthRequiredPage({ runtimeOrigin, returnPath = "/dashboa
   const origin = normalizeText(runtimeOrigin);
   const dashboardAccessReturnPath = sanitizeDashboardPreAuthReturnPath(returnPath);
   const dashboardAccessHref = buildCloudflareAccessLoginHref({ origin, returnPath: dashboardAccessReturnPath });
-  const dashboardSignInUrl = `${origin || ""}/v2/approval/passkey/operator?mode=dashboard&repositoryInput=marushu%2Fvtdd-v2-p&phase=execution&actionType=read&highRiskKind=dashboard_access`;
+  const dashboardSignInUrl = `${origin || ""}/v2/approval/passkey/operator?mode=dashboard&repositoryInput=marushu%2Fvtdd-v2-p&phase=execution&actionType=read&highRiskKind=dashboard_access&dashboardReturnPath=${encodeURIComponent(dashboardAccessReturnPath)}`;
+  const passkeyButtonLabel =
+    dashboardAccessReturnPath === "/dashboard/notifications" ? "Passkey で通知を見る" : "Passkey で dashboard に入る";
   return `<!doctype html>
 <html lang="ja">
 <head>
@@ -11735,6 +11738,7 @@ function renderDashboardAuthRequiredPage({ runtimeOrigin, returnPath = "/dashboa
       <p><code>${escapeDashboardHtml(reason || "dashboard authentication required")}</code></p>
       <div class="actions">
         <a class="button primary" href="${escapeDashboardHtml(dashboardAccessHref)}">Cloudflare Access で開く</a>
+        <a class="button" href="${escapeDashboardHtml(dashboardSignInUrl)}">${escapeDashboardHtml(passkeyButtonLabel)}</a>
         <a class="button" href="${escapeDashboardHtml(`${origin || ""}/status`)}">Status</a>
       </div>
       <details>

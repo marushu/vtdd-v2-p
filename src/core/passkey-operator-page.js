@@ -20,6 +20,7 @@ export function renderPasskeyOperatorPage(input = {}) {
   );
   const mergeMethodDefault = escapeHtml(input.mergeMethod || "squash");
   const returnUrl = escapeHtml(input.returnUrl || "");
+  const dashboardReturnPath = escapeHtml(sanitizePasskeyDashboardReturnPath(input.dashboardReturnPath));
   const githubAppRoleDefault = escapeHtml(input.githubAppRole || "legacy");
   const syncEnabled = input.syncEnabled === true;
   const syncMessage = escapeHtml(
@@ -768,7 +769,7 @@ export function renderPasskeyOperatorPage(input = {}) {
           latestApprovalGrantId = latestApprovalGrant?.approvalId || verifyBody?.approvalGrantId || "";
           approveOutput.textContent = JSON.stringify(verifyBody, null, 2);
           if (operatorMode === "dashboard") {
-            window.location.assign("/dashboard");
+            window.location.assign("${dashboardReturnPath}");
             return;
           }
           if (latestApprovalGrantId && autoCopyApprovalGrantInput?.checked) {
@@ -1229,6 +1230,23 @@ function normalizeOperatorToken(value) {
   return String(value || "")
     .trim()
     .toLowerCase();
+}
+
+function sanitizePasskeyDashboardReturnPath(value) {
+  const normalized = String(value || "").trim() || "/dashboard";
+  let parsed;
+  try {
+    parsed = new URL(normalized, "https://dashboard.local");
+  } catch {
+    return "/dashboard";
+  }
+  if (parsed.origin !== "https://dashboard.local") {
+    return "/dashboard";
+  }
+  if (parsed.pathname !== "/dashboard" && !parsed.pathname.startsWith("/dashboard/")) {
+    return "/dashboard";
+  }
+  return parsed.pathname;
 }
 
 function escapeHtml(value) {
