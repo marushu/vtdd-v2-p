@@ -292,6 +292,18 @@ jobs:
           fi
 
           event_body=$(node - <<'NODE'
+          const { execFileSync } = require("node:child_process");
+          function readGit(args) {
+            try {
+              return execFileSync("git", args, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+            } catch {
+              return "";
+            }
+          }
+          const changeSummary = readGit(["log", "-1", "--pretty=%s"]);
+          const pullMatch =
+            changeSummary.match(/\b(?:PR|pull request)\s*#?(\d+)\b/i) ||
+            changeSummary.match(/\(#(\d+)\)\s*$/);
           const payload = {
             repository: process.env.REPOSITORY,
             workflowName: "deploy-production",
@@ -301,7 +313,9 @@ jobs:
             conclusion: process.env.DEPLOY_JOB_STATUS,
             headSha: process.env.DEPLOY_SHA,
             headBranch: process.env.DEPLOY_BRANCH,
-            displayTitle: "deploy-production",
+            displayTitle: changeSummary || "deploy-production",
+            changeSummary: changeSummary || null,
+            pullNumber: pullMatch ? Number(pullMatch[1]) : null,
             updatedAt: new Date().toISOString()
           };
           process.stdout.write(JSON.stringify(payload));

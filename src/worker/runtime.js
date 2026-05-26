@@ -7175,9 +7175,15 @@ function buildDashboardWebPushBody(record) {
   }
 
   const details = [];
-  const title = compactNotificationText(record.title, 58);
+  const title = compactNotificationText(record.changeSummary || record.title, 58);
   if (title && title !== record.workflowName) {
     details.push(title);
+  }
+  if (record.pullNumber) {
+    details.push(`PR #${record.pullNumber}`);
+  }
+  if (record.issueNumber) {
+    details.push(`Issue #${record.issueNumber}`);
   }
   if (record.workflowName) {
     details.push(`workflow: ${compactNotificationText(record.workflowName, 36)}`);
@@ -8200,6 +8206,8 @@ function normalizeDashboardEventRecord(event) {
   const input = normalizeObject(event);
   const updatedAt = normalizeIsoTimestamp(input.updatedAt) || new Date().toISOString();
   const createdAt = normalizeIsoTimestamp(input.createdAt) || updatedAt;
+  const title = normalizeDashboardEventText(input.title) || normalizeDashboardEventText(input.workflowName);
+  const changeSummary = normalizeDashboardEventText(input.changeSummary);
   return {
     id: normalizeDashboardEventText(input.id),
     kind: normalizeDashboardEventText(input.kind),
@@ -8211,7 +8219,10 @@ function normalizeDashboardEventRecord(event) {
     headSha: normalizeDashboardEventText(input.headSha) || null,
     headBranch: normalizeDashboardEventText(input.headBranch) || null,
     runUrl: normalizeDashboardEventText(input.runUrl) || null,
-    title: normalizeDashboardEventText(input.title) || normalizeDashboardEventText(input.workflowName),
+    title,
+    changeSummary: changeSummary || null,
+    pullNumber: normalizeIssue(input.pullNumber) || inferPullNumberFromText(`${title} ${changeSummary}`),
+    issueNumber: normalizeIssue(input.issueNumber),
     createdAt,
     updatedAt
   };
@@ -8219,6 +8230,19 @@ function normalizeDashboardEventRecord(event) {
 
 function normalizeDashboardEventText(value) {
   return String(value ?? "").trim();
+}
+
+function inferPullNumberFromText(value) {
+  const text = normalizeDashboardEventText(value);
+  if (!text) {
+    return null;
+  }
+  const explicit = text.match(/\b(?:PR|pull request)\s*#?(\d+)\b/i);
+  if (explicit) {
+    return normalizeIssue(explicit[1]);
+  }
+  const squashMerge = text.match(/\(#(\d+)\)\s*$/);
+  return squashMerge ? normalizeIssue(squashMerge[1]) : null;
 }
 
 function createD1MemoryIndexAdapter(d1) {
@@ -9121,6 +9145,18 @@ function normalizeGitHubActionsEvent(payload) {
   const headSha = normalizeDashboardEventText(input.headSha || input.head_sha || input.sha);
   const headBranch = normalizeDashboardEventText(input.headBranch || input.head_branch || input.branch);
   const title = normalizeDashboardEventText(input.displayTitle || input.display_title || input.title);
+  const changeSummary = normalizeDashboardEventText(
+    input.changeSummary ||
+      input.change_summary ||
+      input.mergeSummary ||
+      input.merge_summary ||
+      input.pullRequestTitle ||
+      input.pull_request_title
+  );
+  const pullNumber =
+    normalizeIssue(input.pullNumber || input.pull_number || input.prNumber || input.pr_number) ||
+    inferPullNumberFromText(`${title} ${changeSummary}`);
+  const issueNumber = normalizeIssue(input.issueNumber || input.issue_number);
 
   if (!repository) {
     return {
@@ -9170,6 +9206,9 @@ function normalizeGitHubActionsEvent(payload) {
     headBranch: headBranch || null,
     runUrl: runUrl || null,
     title: title || workflowName,
+    changeSummary: changeSummary || null,
+    pullNumber,
+    issueNumber,
     createdAt,
     updatedAt
   };
@@ -9464,9 +9503,20 @@ function renderDashboardDeployEvent(event) {
   const shortSha = sha ? sha.slice(0, 7) : "unknown";
   const runUrl = normalizeDashboardEventText(event.runUrl);
   const runLabel = runUrl ? `<a class="chat-link" href="${escapeDashboardHtml(runUrl)}">Actions run</a>` : "Actions run 未設定";
+  const title = buildDashboardEventDisplayTitle(event, {
+    workflowName: normalizeDashboardEventText(event.workflowName) || "deploy-production",
+    conclusion
+  });
+  const meta = [
+    event.workflowName || "deploy-production",
+    event.pullNumber ? `PR #${event.pullNumber}` : "",
+    event.issueNumber ? `Issue #${event.issueNumber}` : "",
+    shortSha ? `sha ${shortSha}` : ""
+  ].filter(Boolean).join(" / ");
   return `<div class="deploy-event">
             <div class="lane-title"><strong>最新 deploy</strong><span class="pill ${badgeClass}">${escapeDashboardHtml(conclusion)}</span></div>
-            <p>${escapeDashboardHtml(event.workflowName || "deploy-production")} / <code>${escapeDashboardHtml(shortSha)}</code></p>
+            <p><strong>${escapeDashboardHtml(title)}</strong></p>
+            <p>${escapeDashboardHtml(meta)}</p>
             <p class="muted">${escapeDashboardHtml(relativeUpdatedAt || "時刻未受信")} ・ ${escapeDashboardHtml(updatedAt || "updatedAt 未受信")} ・ ${runLabel}</p>
           </div>`;
 }
@@ -9481,7 +9531,7 @@ function renderDashboardNotificationEvent(event) {
   const relativeUpdatedAt = formatDashboardRelativeTime(updatedAt);
   const repository = normalizeCanonicalRepositoryInput(event.repository) || "repository 未受信";
   const workflowName = normalizeDashboardEventText(event.workflowName) || normalizeDashboardEventText(event.kind) || "event";
-  const title = normalizeDashboardEventText(event.title) || workflowName;
+  const title = buildDashboardEventDisplayTitle(event, { workflowName, conclusion, shortStatus: conclusion });
   const runId = normalizeDashboardEventText(event.runId);
   const sha = normalizeDashboardEventText(event.headSha);
   const shortSha = sha ? sha.slice(0, 7) : "";
@@ -9489,6 +9539,8 @@ function renderDashboardNotificationEvent(event) {
   const runLabel = runUrl ? `<a class="chat-link" href="${escapeDashboardHtml(runUrl)}">詳細を開く</a>` : "詳細リンク未受信";
   const meta = [
     repository,
+    event.pullNumber ? `PR #${event.pullNumber}` : "",
+    event.issueNumber ? `Issue #${event.issueNumber}` : "",
     workflowName,
     runId ? `run ${runId}` : "",
     shortSha ? `sha ${shortSha}` : ""
@@ -9498,6 +9550,26 @@ function renderDashboardNotificationEvent(event) {
             <p>${escapeDashboardHtml(meta)}</p>
             <p class="muted">${escapeDashboardHtml(relativeUpdatedAt || "時刻未受信")} ・ ${escapeDashboardHtml(updatedAt || "updatedAt 未受信")} ・ ${runLabel}</p>
           </div>`;
+}
+
+function buildDashboardEventDisplayTitle(event, { workflowName, conclusion } = {}) {
+  const record = normalizeDashboardEventRecord(event);
+  const statusLabel = dashboardPushStatusLabel(record);
+  const summary = normalizeDashboardEventText(record.changeSummary || record.title);
+  const isDeploy = record.kind === "github_actions_workflow_run" && normalize(workflowName || record.workflowName).includes("deploy");
+  const baseSummary = summary && summary !== record.workflowName ? summary : "";
+  const pullPrefix = record.pullNumber ? `PR #${record.pullNumber}` : "";
+  if (isDeploy) {
+    const subject = [pullPrefix, baseSummary].filter(Boolean).join(" ");
+    return subject ? `デプロイ${statusLabel}: ${subject}` : `デプロイ${statusLabel}: ${record.repository || "repository"} ${record.headSha ? record.headSha.slice(0, 7) : ""}`.trim();
+  }
+  if (pullPrefix && baseSummary) {
+    return `${pullPrefix}: ${baseSummary}`;
+  }
+  if (pullPrefix) {
+    return `${workflowName || record.workflowName || "Actions"} ${dashboardPushStatusLabel(record)}: ${pullPrefix}`;
+  }
+  return baseSummary || workflowName || record.kind || conclusion || "dashboard event";
 }
 
 function formatDashboardRelativeTime(value, now = new Date()) {
@@ -9737,29 +9809,34 @@ async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventS
           <p class="muted">VTDD だけでなく、他 repo / 並行開発 / queue / workflow から届いたイベントを直近5分だけ表示します。</p>
         </details>
       </div>
-      <div class="grid">
-        <section class="lane">
-          <div class="lane-title"><h2>iOS PWA 通知</h2><span class="pill" id="push-support-pill">確認中</span></div>
-          <p id="push-state" class="muted">通知状態を確認しています。</p>
-          <p id="push-subscription-state" class="muted">購読保存状態を確認しています。</p>
-          <p id="push-delivery-state" class="muted">deploy 完了/失敗通知はサーバ送信 Web Push と同じ経路で届きます。</p>
-          <p id="push-server-result" class="muted">最後のサーバ送信結果: 未実行</p>
-          <div class="actions">
-            <button class="dashboard-action" id="push-permission-button" type="button">通知を許可</button>
-            <button class="dashboard-action" id="push-subscribe-button" type="button">購読を保存</button>
-            <button class="dashboard-action" id="push-test-button" type="button">テスト通知</button>
-            <button class="dashboard-action" id="push-server-test-button" type="button">サーバ送信テスト</button>
+      <div class="grid single">
+        <details class="lane" data-settings-section="notification-pwa-settings">
+          <summary>通知設定</summary>
+          <div class="settings-stack">
+            <section class="setting-block">
+              <div class="lane-title"><h2>iOS PWA 通知</h2><span class="pill" id="push-support-pill">確認中</span></div>
+              <p id="push-state" class="muted">通知状態を確認しています。</p>
+              <p id="push-subscription-state" class="muted">購読保存状態を確認しています。</p>
+              <p id="push-delivery-state" class="muted">deploy 完了/失敗通知はサーバ送信 Web Push と同じ経路で届きます。</p>
+              <p id="push-server-result" class="muted">最後のサーバ送信結果: 未実行</p>
+              <div class="actions">
+                <button class="dashboard-action" id="push-permission-button" type="button">通知を許可</button>
+                <button class="dashboard-action" id="push-subscribe-button" type="button">購読を保存</button>
+                <button class="dashboard-action" id="push-test-button" type="button">テスト通知</button>
+                <button class="dashboard-action" id="push-server-test-button" type="button">サーバ送信テスト</button>
+              </div>
+              <p class="muted">通知タップは通知センターへ戻ります。音は iOS 側の通知設定に従います。</p>
+            </section>
+            <section class="setting-block">
+              <div class="lane-title"><h2>Badge</h2><span class="pill" id="badge-support-pill">確認中</span></div>
+              <p id="badge-state" class="muted">Badging API の対応状況を確認しています。</p>
+              <div class="actions">
+                <button class="dashboard-action" id="badge-set-button" type="button">未読数を反映</button>
+                <button class="dashboard-action" id="badge-clear-button" type="button">Badge を消す</button>
+              </div>
+            </section>
           </div>
-          <p class="muted">通知タップは通知センターへ戻ります。音は iOS 側の通知設定に従います。</p>
-        </section>
-        <section class="lane">
-          <div class="lane-title"><h2>Badge</h2><span class="pill" id="badge-support-pill">確認中</span></div>
-          <p id="badge-state" class="muted">Badging API の対応状況を確認しています。</p>
-          <div class="actions">
-            <button class="dashboard-action" id="badge-set-button" type="button">未読数を反映</button>
-            <button class="dashboard-action" id="badge-clear-button" type="button">Badge を消す</button>
-          </div>
-        </section>
+        </details>
       </div>
       <div class="grid single">
         <details class="lane" data-debug-section="notification-authority-boundary">
@@ -10212,6 +10289,9 @@ function renderDashboardUtilityPage({ title, subtitle, backHref, body }) {
     .summary-list div:first-child { border-top: 0; }
     .summary-list dt { color: var(--muted); font-size: 13px; }
     .summary-list dd { margin: 0; overflow-wrap: anywhere; }
+    .settings-stack { display: grid; gap: 14px; margin-top: 12px; }
+    .setting-block { border-top: 1px solid var(--border); padding-top: 12px; }
+    .setting-block:first-child { border-top: 0; padding-top: 0; }
     .pill { display: inline-flex; border: 1px solid var(--border); border-radius: 999px; padding: 3px 8px; background: var(--soft); font-size: 12px; white-space: nowrap; }
     .pill.success { border-color: #7fb797; background: #e7f5ec; color: #145c34; }
     .pill.danger { border-color: #d69b9b; background: #fff0f0; color: #8a1f1f; }

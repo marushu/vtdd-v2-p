@@ -2879,7 +2879,9 @@ test("worker serves dashboard notification center for recent events across repos
     conclusion: "success",
     headSha: "daad4fb023cf699b3ad531e0394e064fde2b5515",
     headBranch: "main",
-    title: "deploy-production",
+    title: "dashboard: 通知設定を折り畳む (#534)",
+    changeSummary: "dashboard: 通知設定を折り畳む (#534)",
+    pullNumber: 552,
     updatedAt: fourMinutesAgo
   });
   await store.put({
@@ -2928,12 +2930,19 @@ test("worker serves dashboard notification center for recent events across repos
   assert.equal(body.includes("iOS PWA Web Push"), true);
   assert.equal(body.includes('data-debug-section="notification-center-context"'), true);
   assert.equal(body.includes("<summary>通知センターについて</summary>"), true);
+  assert.equal(body.includes('data-settings-section="notification-pwa-settings"'), true);
+  assert.equal(body.includes("<summary>通知設定</summary>"), true);
   assert.equal(body.indexOf("最新通知") < body.indexOf("iOS PWA 通知"), true);
   assert.equal(body.indexOf("最新通知") < body.indexOf("通知センターについて"), true);
+  assert.equal(body.indexOf("最新通知") < body.indexOf("通知設定"), true);
+  assert.equal(body.indexOf("通知設定") < body.indexOf("iOS PWA 通知"), true);
+  assert.equal(body.indexOf("通知設定") < body.indexOf("Badge"), true);
   assert.equal(body.indexOf("最新通知") < body.indexOf("Badge"), true);
   assert.equal(body.indexOf("最新通知") < body.indexOf("Authority boundary"), true);
   assert.equal(body.includes('data-debug-section="notification-authority-boundary"'), true);
   assert.equal(body.includes("<summary>通知の詳細設定と安全境界</summary>"), true);
+  assert.equal(body.indexOf("通知設定") < body.indexOf("通知の詳細設定と安全境界"), true);
+  assert.equal(body.indexOf("通知の詳細設定と安全境界") < body.indexOf("Authority boundary"), true);
   assert.equal(body.includes("id=\"push-permission-button\""), true);
   assert.equal(body.includes("id=\"push-subscribe-button\""), true);
   assert.equal(body.includes("id=\"push-server-test-button\""), true);
@@ -2962,6 +2971,7 @@ test("worker serves dashboard notification center for recent events across repos
   assert.equal(body.includes("他 repo / 並行開発 / queue / workflow"), true);
   assert.equal(body.includes("最新通知"), true);
   assert.equal(body.includes("success"), true);
+  assert.equal(body.includes("デプロイ完了: PR #552 dashboard: 通知設定を折り畳む (#534)"), true);
   assert.equal(body.includes("26134526815"), true);
   assert.equal(body.includes("4分前"), true);
   assert.equal(body.includes(fourMinutesAgo), true);
@@ -3374,7 +3384,9 @@ test("worker ingests GitHub Actions deploy completion event and shows it on dash
         conclusion: "success",
         headSha: "ef55709c4f52b54f436417acc239ec03a0c999fd",
         headBranch: "main",
-        displayTitle: "deploy-production",
+        displayTitle: "dashboard: 通知カードにPR概要を出す (#534)",
+        changeSummary: "dashboard: 通知カードにPR概要を出す (#534)",
+        pullNumber: 552,
         updatedAt: "2026-05-20T00:10:01Z",
         approvalGrantId: "approval:must-not-persist",
         token: "secret-must-not-persist"
@@ -3392,6 +3404,8 @@ test("worker ingests GitHub Actions deploy completion event and shows it on dash
   const eventBody = await eventResponse.json();
   assert.equal(eventBody.ok, true);
   assert.equal(eventBody.event.runId, "26133044458");
+  assert.equal(eventBody.event.pullNumber, 552);
+  assert.equal(eventBody.event.changeSummary, "dashboard: 通知カードにPR概要を出す (#534)");
   assert.equal(eventBody.webPush.delivered, 1);
   assert.equal(pushCalls.length, 1);
   assert.equal(pushCalls[0].input, "https://push.example/send/deploy");
@@ -3399,6 +3413,8 @@ test("worker ingests GitHub Actions deploy completion event and shows it on dash
   assert.equal(pushCalls[0].init.headers["content-encoding"], "aes128gcm");
   const decryptedPush = JSON.parse(await decryptTestWebPushPayload(pushCalls[0].init.body, pushKeys));
   assert.equal(decryptedPush.title, "デプロイ完了: vtdd-v2-p");
+  assert.equal(decryptedPush.body.includes("dashboard: 通知カードにPR概要を出す"), true);
+  assert.equal(decryptedPush.body.includes("PR #552"), true);
   assert.equal(decryptedPush.body.includes("workflow: deploy-production"), true);
   assert.equal("approvalGrantId" in eventBody.event, false);
   assert.equal("token" in eventBody.event, false);
@@ -3417,6 +3433,8 @@ test("worker ingests GitHub Actions deploy completion event and shows it on dash
   assert.equal(dashboardBody.includes("最新 deploy"), true);
   assert.equal(dashboardBody.includes("success"), true);
   assert.equal(dashboardBody.includes("ef55709"), true);
+  assert.equal(dashboardBody.includes("dashboard: 通知カードにPR概要を出す"), true);
+  assert.equal(dashboardBody.includes("PR #552"), true);
   assert.equal(
     dashboardBody.includes("https://github.com/marushu/vtdd-v2-p/actions/runs/26133044458"),
     true

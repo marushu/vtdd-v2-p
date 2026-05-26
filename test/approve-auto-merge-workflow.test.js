@@ -28,6 +28,8 @@ test("approve auto merge script records searchable evidence before and after mer
   assert.equal(script.includes("自動マージ"), true);
   assert.equal(script.includes("/merge"), true);
   assert.equal(script.includes("/v2/events/github-actions"), true);
+  assert.equal(script.includes("changeSummary: pullRequest.title"), true);
+  assert.equal(script.includes("pullNumber: pullRequest.number"), true);
   assert.equal(script.includes("/v2/action/memory-write"), true);
   assert.equal(script.includes("persistApproveAutoMergeMemory"), true);
   assert.equal(script.includes("notifyDashboardEvent"), true);

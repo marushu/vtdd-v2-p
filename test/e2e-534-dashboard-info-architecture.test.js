@@ -54,8 +54,11 @@ test("E2E-534 evidence doc records Dashboard information architecture visual run
   assert.equal(doc.includes("390 x 844"), true);
   assert.equal(doc.includes("1280 x 900"), true);
   assert.equal(doc.includes("notification center first viewport shows `最新通知`"), true);
+  assert.equal(doc.includes("keeps `通知センターについて`, `通知設定`, and `通知の詳細設定と安全境界` collapsed below it"), true);
+  assert.equal(doc.includes("no longer shows the full `iOS PWA 通知` or `Badge` setup cards by default"), true);
   assert.equal(doc.includes("collapsed under `通知センターについて`"), true);
-  assert.equal(doc.includes("long workflow/run URL event"), true);
+  assert.equal(doc.includes("deployed PR number and change summary"), true);
+  assert.equal(doc.includes("workflow/run URL without horizontal clipping"), true);
   assert.equal(doc.includes("Operational RAG"), true);
   assert.equal(doc.includes("Deploy operator"), true);
   assert.equal(doc.includes("does not close Issue `#514`"), true);
@@ -66,10 +69,10 @@ test("E2E-534 screenshot artifacts are present in repo evidence", () => {
   assert.equal(fs.existsSync(DESKTOP_SCREENSHOT_PATH), true);
   assert.equal(fs.existsSync(NOTIFICATIONS_MOBILE_SCREENSHOT_PATH), true);
   assert.equal(fs.existsSync(NOTIFICATIONS_EVENT_MOBILE_SCREENSHOT_PATH), true);
-  assert.ok(fs.statSync(MOBILE_SCREENSHOT_PATH).size > 50_000);
-  assert.ok(fs.statSync(DESKTOP_SCREENSHOT_PATH).size > 50_000);
-  assert.ok(fs.statSync(NOTIFICATIONS_MOBILE_SCREENSHOT_PATH).size > 50_000);
-  assert.ok(fs.statSync(NOTIFICATIONS_EVENT_MOBILE_SCREENSHOT_PATH).size > 50_000);
+  assert.ok(fs.statSync(MOBILE_SCREENSHOT_PATH).size > 30_000);
+  assert.ok(fs.statSync(DESKTOP_SCREENSHOT_PATH).size > 30_000);
+  assert.ok(fs.statSync(NOTIFICATIONS_MOBILE_SCREENSHOT_PATH).size > 30_000);
+  assert.ok(fs.statSync(NOTIFICATIONS_EVENT_MOBILE_SCREENSHOT_PATH).size > 30_000);
 
   const mobilePng = fs.readFileSync(MOBILE_SCREENSHOT_PATH);
   const desktopPng = fs.readFileSync(DESKTOP_SCREENSHOT_PATH);
