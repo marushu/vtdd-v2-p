@@ -60187,7 +60187,7 @@ function handlePasskeyOperatorPageRequest(request) {
   const requestedActionType = url.searchParams.get("actionType");
   const requestedHighRiskKind = url.searchParams.get("highRiskKind");
   const requestedOperatorMode = url.searchParams.get("mode") || (requestedActionType || requestedHighRiskKind ? "" : "full");
-  const dashboardSessionMode = normalizeText30(requestedOperatorMode) === "dashboard" || normalizeText30(requestedHighRiskKind) === "dashboard_access";
+  const dashboardSessionMode = normalizeText30(requestedOperatorMode) === "dashboard";
   const html2 = renderPasskeyOperatorPage({
     origin: url.origin,
     syncApiBase,
