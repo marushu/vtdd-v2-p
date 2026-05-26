@@ -1159,6 +1159,9 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("function isAuthExpiredResponse("), true);
   assert.equal(body.includes("let dashboardSessionExpired = false"), true);
   assert.equal(body.includes('const dashboardDraftKey = "vtdd.dashboard.draft:"'), true);
+  assert.equal(body.includes("function getDashboardDraftStorage()"), true);
+  assert.equal(body.includes("return window.sessionStorage"), true);
+  assert.equal(body.includes("window.localStorage"), false);
   assert.equal(body.includes("function persistDashboardDraft()"), true);
   assert.equal(body.includes("function restoreDashboardDraft()"), true);
   assert.equal(body.includes("function clearDashboardDraft()"), true);
@@ -2707,6 +2710,53 @@ test("DashboardChatRoom sends ordinary owner turns to connected app-server bridg
   assert.equal(status.type, "transient_status");
   assert.equal(status.status, "thinking");
   assert.equal(status.text, "app-server bridge の返信を待っています");
+});
+
+test("DashboardChatRoom accepts ten consecutive owner turns without dropping ack or bridge dispatch", async () => {
+  const provider = createInMemoryMemoryProvider();
+  const store = createInMemoryDashboardChatStore();
+  const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
+  const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-unresolved");
+  const storage = createMockDurableObjectStorage();
+  const room = new DashboardChatRoom(
+    {
+      storage,
+      getWebSockets() {
+        return [dashboardSocket, bridgeSocket];
+      }
+    },
+    { DASHBOARD_CHAT_STORE: store, MEMORY_PROVIDER: provider }
+  );
+
+  for (let index = 1; index <= 10; index += 1) {
+    await room.webSocketMessage(
+      dashboardSocket,
+      JSON.stringify({
+        type: "owner_message",
+        threadId: "dashboard-main-unresolved",
+        clientMessageId: `dashboard_owner_message:ten-${index}`,
+        text: `連続投稿 ${index}`
+      })
+    );
+  }
+
+  const stored = await store.listThread("dashboard-main-unresolved");
+  assert.equal(stored.filter((message) => message.role === "owner").length, 10);
+  assert.deepEqual(
+    stored.filter((message) => message.role === "owner").map((message) => message.text),
+    Array.from({ length: 10 }, (_, index) => `連続投稿 ${index + 1}`)
+  );
+  assert.equal(bridgeSocket.sent.length, 10);
+  assert.deepEqual(
+    bridgeSocket.sent.map((message) => JSON.parse(message).messageId),
+    Array.from({ length: 10 }, (_, index) => `dashboard_owner_message:ten-${index + 1}`)
+  );
+  const acknowledgements = dashboardSocket.sent
+    .map((message) => JSON.parse(message))
+    .filter((message) => message.type === "owner_message_accepted");
+  assert.equal(acknowledgements.length, 10);
+  assert.equal(acknowledgements.every((message) => message.ok === true), true);
+  assert.equal(dashboardSocket.sent.some((message) => JSON.parse(message).type === "error"), false);
 });
 
 test("DashboardChatRoom sends each owner turn to only one app-server bridge for a thread", async () => {

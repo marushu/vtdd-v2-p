@@ -65860,10 +65860,15 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       const dashboardDraftKey = "vtdd.dashboard.draft:" + (threadId || "unknown");
       const dashboardDraftMetaKey = dashboardDraftKey + ":meta";
 
+      function getDashboardDraftStorage() {
+        return window.sessionStorage;
+      }
+
       function persistDashboardDraft() {
         try {
-          window.localStorage.setItem(dashboardDraftKey, textarea.value || "");
-          window.localStorage.setItem(
+          const draftStorage = getDashboardDraftStorage();
+          draftStorage.setItem(dashboardDraftKey, textarea.value || "");
+          draftStorage.setItem(
             dashboardDraftMetaKey,
             JSON.stringify({
               pendingMediaCount: pendingMediaItems.length,
@@ -65875,15 +65880,17 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 
       function clearDashboardDraft() {
         try {
-          window.localStorage.removeItem(dashboardDraftKey);
-          window.localStorage.removeItem(dashboardDraftMetaKey);
+          const draftStorage = getDashboardDraftStorage();
+          draftStorage.removeItem(dashboardDraftKey);
+          draftStorage.removeItem(dashboardDraftMetaKey);
         } catch {}
       }
 
       function restoreDashboardDraft() {
         try {
-          const draft = window.localStorage.getItem(dashboardDraftKey) || "";
-          const rawMeta = window.localStorage.getItem(dashboardDraftMetaKey) || "";
+          const draftStorage = getDashboardDraftStorage();
+          const draft = draftStorage.getItem(dashboardDraftKey) || "";
+          const rawMeta = draftStorage.getItem(dashboardDraftMetaKey) || "";
           const meta = rawMeta ? JSON.parse(rawMeta) : {};
           if (draft && !textarea.value) {
             textarea.value = draft;
