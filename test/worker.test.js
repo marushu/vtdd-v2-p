@@ -1034,10 +1034,15 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes('aria-label="Passkey operator">Passkey</a>'), false);
   assert.equal(body.includes('aria-label="Deploy operator">Deploy</a>'), false);
   assert.equal(body.includes('aria-label="通知センター">通知</a>'), true);
-  assert.equal(body.includes('aria-label="進捗を見る">進捗</a>'), true);
+  assert.equal(body.includes('aria-label="進捗を見る">進捗</a>'), false);
+  assert.equal(body.includes('aria-label="Passkey で dashboard session を更新">Passkey</a>'), true);
   assert.equal(body.includes('aria-label="Passkey">◇</a>'), false);
   assert.equal(body.includes('<label class="tool-button menu-open" for="mobile-menu-toggle">管理</label>'), false);
   assert.equal(body.includes('class="tool-button top-action"'), true);
+  assert.equal(body.includes('id="dashboard-repository-input"'), true);
+  assert.equal(body.includes('placeholder="owner/repo"'), true);
+  assert.equal(body.includes('aria-disabled="true"'), true);
+  assert.equal(body.includes("repo 設定後に開けます"), true);
   assert.equal(body.includes('id="butler-chat-form"'), true);
   assert.equal(body.includes('id="butler-chat-log"'), true);
   assert.equal(body.includes('class="icon-button"'), false);
@@ -1170,7 +1175,8 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("/dashboard/github?repository=marushu%2Fvtdd-v2-p"), false);
   assert.equal(body.includes("/dashboard/notifications"), true);
   assert.equal(body.includes(">通知センター</a>"), true);
-  assert.equal(body.includes(">Deploy operator</a>"), true);
+  assert.equal(body.includes(">本番反映 / Passkey 承認</a>"), false);
+  assert.equal(body.includes("<strong>本番反映 / Passkey 承認</strong>"), true);
   assert.equal(body.includes("include=open_prs"), false);
   assert.equal(body.includes('name="text"'), true);
   assert.equal(/<meta[^>]+http-equiv=["']?refresh/i.test(body), false);
@@ -2957,7 +2963,8 @@ test("worker serves dashboard chat-first shell with debug and ops surfaces isola
   const debugSectionIndex = body.indexOf('data-debug-section="dashboard-development-operations"');
   assert.notEqual(debugSectionIndex, -1);
   assert.equal(body.indexOf("Operational RAG") > debugSectionIndex, true);
-  assert.equal(body.indexOf("Deploy operator") > debugSectionIndex, true);
+  assert.equal(body.indexOf("本番反映 / Passkey 承認") > debugSectionIndex, true);
+  assert.equal(body.includes(">本番反映 / Passkey 承認</a>"), true);
   assert.equal(body.indexOf("GitHub workflows") > debugSectionIndex, true);
   assert.equal(body.includes("<summary>開発/運用</summary>"), true);
   assert.equal(body.includes("<summary>Runtime surfaces</summary>"), false);
