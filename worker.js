@@ -66276,7 +66276,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         const source = String(text || "");
         const backtick = String.fromCharCode(96);
         const tokenPattern = new RegExp(
-          "(https?:\\\\/\\\\/[^\\\\s<>\\"'\\\\)\\\\]\uFF09\u3011\u300F\u300D\u3009\u300B\u3001\u3002\uFF0C\uFF0E,\uFF01\uFF1F]+)|\\\\*\\\\*([\\\\s\\\\S]+?)\\\\*\\\\*|" + backtick + "([^" + backtick + "]+)" + backtick,
+          "\\\\[([^\\\\]\\\\n]+)\\\\]\\\\((https?:\\\\/\\\\/[^\\\\s<>\\"']+)\\\\)|(https?:\\\\/\\\\/[^\\\\s<>\\"'\\\\)\\\\]\uFF09\u3011\u300F\u300D\u3009\u300B\u3001\u3002\uFF0C\uFF0E,\uFF01\uFF1F]+)|\\\\*\\\\*([\\\\s\\\\S]+?)\\\\*\\\\*|" + backtick + "([^" + backtick + "]+)" + backtick,
           "g"
         );
         let cursor = 0;
@@ -66284,8 +66284,21 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           if (match.index > cursor) {
             container.appendChild(document.createTextNode(source.slice(cursor, match.index)));
           }
-          if (match[1]) {
-            const linkToken = splitTrailingLinkPunctuation(match[1]);
+          if (match[1] && match[2]) {
+            const linkToken = splitTrailingLinkPunctuation(match[2]);
+            const href = linkToken.href;
+            const link = document.createElement("a");
+            link.className = "chat-link";
+            link.href = href;
+            link.textContent = match[1];
+            link.target = "_blank";
+            link.rel = "noreferrer";
+            container.appendChild(link);
+            if (linkToken.trailing) {
+              container.appendChild(document.createTextNode(linkToken.trailing));
+            }
+          } else if (match[3]) {
+            const linkToken = splitTrailingLinkPunctuation(match[3]);
             const href = linkToken.href;
             const link = document.createElement("a");
             link.className = "chat-link";
@@ -66297,13 +66310,13 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             if (linkToken.trailing) {
               container.appendChild(document.createTextNode(linkToken.trailing));
             }
-          } else if (match[2]) {
+          } else if (match[4]) {
             const strong = document.createElement("strong");
-            renderInlineMarkdown(strong, match[2]);
+            renderInlineMarkdown(strong, match[4]);
             container.appendChild(strong);
-          } else if (match[3]) {
+          } else if (match[5]) {
             const code = document.createElement("code");
-            code.textContent = match[3];
+            code.textContent = match[5];
             container.appendChild(code);
           }
           cursor = match.index + match[0].length;

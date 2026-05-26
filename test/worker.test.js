@@ -1392,6 +1392,21 @@ test("served dashboard inline chat renderer executes decode, link, wrap, and cop
   assert.equal(links[0].className, "chat-link");
   assert.equal(links[0].href.startsWith("https://example.com/"), true);
 
+  const markdownLinkContainer = document.createElement("div");
+  helpers.renderMessageText(
+    markdownLinkContainer,
+    "[Deploy approval を開く](https://vtdd-v2-mvp.polished-tree-da7c.workers.dev/v2/approval/passkey/operator?mode=deploy&repositoryInput=marushu%2Fvtdd-v2-p&phase=execution&issueNumber=575&actionType=deploy_production&highRiskKind=deploy_production)"
+  );
+  const markdownLinks = markdownLinkContainer.querySelectorAll("a");
+  assert.equal(markdownLinks.length, 1);
+  assert.equal(markdownLinks[0].className, "chat-link");
+  assert.equal(markdownLinks[0].textContent, "Deploy approval を開く");
+  assert.equal(
+    markdownLinks[0].href,
+    "https://vtdd-v2-mvp.polished-tree-da7c.workers.dev/v2/approval/passkey/operator?mode=deploy&repositoryInput=marushu%2Fvtdd-v2-p&phase=execution&issueNumber=575&actionType=deploy_production&highRiskKind=deploy_production"
+  );
+  assert.equal(markdownLinkContainer.textContent, "Deploy approval を開く");
+
   const parenthesizedLinkContainer = document.createElement("div");
   helpers.renderMessageText(parenthesizedLinkContainer, "開いて（https://example.com/path?x=1）");
   const parenthesizedLinks = parenthesizedLinkContainer.querySelectorAll("a");
