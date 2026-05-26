@@ -1308,7 +1308,23 @@ function sanitizePasskeyDashboardReturnPath(value) {
   if (parsed.pathname !== "/dashboard" && !parsed.pathname.startsWith("/dashboard/")) {
     return "/dashboard";
   }
-  return parsed.pathname;
+  const allowedSearchParams = new URLSearchParams();
+  for (const key of ["repository", "repositoryInput", "issueNumber"]) {
+    const rawValue = normalizeDashboardReturnQueryValue(parsed.searchParams.get(key));
+    if (rawValue) {
+      allowedSearchParams.set(key, rawValue);
+    }
+  }
+  const query = allowedSearchParams.toString();
+  return query ? `${parsed.pathname}?${query}` : parsed.pathname;
+}
+
+function normalizeDashboardReturnQueryValue(value) {
+  const normalized = String(value ?? "").trim();
+  if (!normalized || normalized.length > 256) {
+    return "";
+  }
+  return normalized;
 }
 
 function escapeHtml(value) {
