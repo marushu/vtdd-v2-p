@@ -10291,9 +10291,9 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
   const dashboardTargetLabel = repositoryInput || "対象 repo 未指定";
   const targetStatusMarkup = repositoryInput
     ? `<p><strong>${escapeDashboardHtml(repositoryInput)}</strong></p>
-          <p class="muted">この repo を対象に runtime truth、progress、RAG、operator を開きます。</p>`
+          <p class="muted">この repo で Issue / PR 操作が必要な時だけ対象にします。通常会話はこのまま続けられます。</p>`
     : `<p><strong>対象 repo 未指定</strong></p>
-          <p class="muted">通常会話は続けられます。repo 作業に入る時は URL に <code>?repository=owner/repo</code> または <code>?repositoryInput=owner/repo</code> を付けて開いてください。</p>`;
+          <p class="muted">通常会話は続けられます。Issue / PR 操作が必要になった時に対象 repo を選びます。</p>`;
   const encodedRepository = encodeURIComponent(repositoryInput);
   const chatThreadId = `dashboard-main-${(repositoryInput || "unresolved").replace(/[^a-z0-9_.-]+/gi, "-")}`;
   const socketOrigin = origin.replace(/^http/i, "ws");
@@ -10364,24 +10364,16 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
   ];
   const cockpitActions = [
     {
-      label: "状態確認",
-      href: `${origin}/dashboard/github?repository=${encodedRepository}`
+      label: "通知",
+      href: `${origin}/dashboard/notifications`
     },
     {
       label: "進捗を見る",
       href: `${origin}/dashboard/progress?repository=${encodedRepository}`
     },
     {
-      label: "RAG を読む",
-      href: `${origin}/dashboard/memory?repository=${encodedRepository}`
-    },
-    {
-      label: "通知",
-      href: `${origin}/dashboard/notifications`
-    },
-    {
-      label: "Passkey",
-      href: `${origin}/v2/approval/passkey/operator?repositoryInput=${encodedRepository}`
+      label: "GitHub状況",
+      href: `${origin}/dashboard/github?repository=${encodedRepository}`
     }
   ];
 
@@ -10575,21 +10567,21 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           <label class="round-button menu-open" for="mobile-menu-toggle" aria-label="管理メニューを閉じる">×</label>
         </div>
         <div class="mobile-drawer-content">
-          <p class="menu-callout">状態確認、進捗、RAG、workflow はここから開きます。通知ではなく、現在は dashboard 内の状態表示です。</p>
+          <p class="menu-callout">通知、進捗、対象 repo の確認はここから開きます。開発/運用の詳細は下に隔離しています。</p>
           <div class="lane">
             <div class="lane-title"><h3>対象 repo</h3><span class="pill">${repositoryInput ? "resolved" : "未指定"}</span></div>
             ${targetStatusMarkup}
           </div>
           <div class="lane">
-            <div class="lane-title"><h3>進行中 execution</h3><span class="pill">runtime truth</span></div>
-            <p>GitHub Actions / VPS runner status / execution progress route から読みます。</p>
+            <div class="lane-title"><h3>進行中</h3><span class="pill">状態</span></div>
+            <p>直近の反映、失敗、進行中の作業があればここに出します。</p>
             ${renderDashboardDeployEvent(latestDeployEvent)}
           </div>
           <div class="quick-actions">
             ${cockpitActions.map((action) => `<a href="${escapeDashboardHtml(action.href)}">${escapeDashboardHtml(action.label)}</a>`).join("")}
           </div>
-          <details open>
-            <summary>Runtime surfaces</summary>
+          <details data-debug-section="dashboard-development-operations">
+            <summary>開発/運用</summary>
             <div class="surface-list">
               ${surfaces.map((surface) => `<a href="${escapeDashboardHtml(surface.href)}">${escapeDashboardHtml(surface.title)}</a>`).join("")}
             </div>
@@ -10609,11 +10601,11 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         </article>
         <article class="bubble">
           <strong>Butler</strong>
-          <p>はい。私は v2 の Butler として、Issue 駆動・GitHub runtime truth・VPS runner・Gemini reviewer・RAG・passkey 境界を扱います。</p>
-          <p>この画面は会話を主役にするための chat-first runtime です。管理画面は右のサイドバーへ退避しました。</p>
+          <p>はい。ここではまず普通に会話できます。通知、進捗、対象 repo の確認は必要な時だけ開けます。</p>
+          <p>作業を進める時は、対象 repo や Issue を会話の中で確認してから進めます。</p>
           <ul>
-            <li>関連 repo/nickname: <code>${escapeDashboardHtml(dashboardTargetLabel)}</code></li>
-            <li>会話: Dashboard Butler は app-server bridge 経路を使います。旧 VPS runner 直送経路は使いません</li>
+            <li>対象: <code>${escapeDashboardHtml(dashboardTargetLabel)}</code></li>
+            <li>通知と進捗はこの画面から戻って確認できます。</li>
           </ul>
         </article>
         <article class="bubble owner">
@@ -10621,9 +10613,9 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         </article>
         <article class="bubble">
           <strong>Butler</strong>
-          <p>その方針で進めます。中央はチャットだけ、状態確認・進捗・RAG・workflow・prototype cleanup の扱いはサイドバーのメニューから必要な時だけ開きます。</p>
-          <p>この dashboard から VPS Codex CLI を <code>codex exec</code> で毎回起動する旧経路は削除しました。Dashboard Butler は <code>codex app-server</code> bridge が常駐している時だけ live Codex thread に渡します。</p>
-          <span class="connection-note">Dashboard thread 接続準備中: bridge が未接続なら Custom GPT Butler が fallback です</span>
+          <p>その方針で進めます。中央はチャットを主役にして、細かい設定や開発/運用の確認はメニューの中に分けます。</p>
+          <p>接続できない時も、入力内容を失わないように状態を短く表示します。</p>
+          <span class="connection-note">接続準備中: 送信できる状態になったらここで知らせます</span>
         </article>
 
       </div>
@@ -10643,48 +10635,48 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     <details id="tools" class="sidebar" aria-label="管理サイドバーメニュー">
       <summary>
         <span>
-          <span class="eyebrow">管理メニュー</span>
+          <span class="eyebrow">メニュー</span>
           <strong>必要な時だけ開く</strong>
         </span>
         <span class="pill">WebSocket</span>
       </summary>
       <div class="sidebar-content">
-        <p class="menu-callout">状態確認、進捗、RAG、workflow はここから遷移します。普段の画面はチャットを主役にします。</p>
+        <p class="menu-callout">通知、進捗、対象 repo の確認を優先します。開発/運用の詳細は下に隔離しています。</p>
 
         <div class="lane">
-          <div class="lane-title"><h3>関連 repo</h3><span class="pill">resolved</span></div>
+          <div class="lane-title"><h3>対象 repo</h3><span class="pill">${repositoryInput ? "resolved" : "未指定"}</span></div>
           ${targetStatusMarkup}
         </div>
 
         <div class="lane">
           <div class="lane-title"><h3>Issue 候補</h3><span class="pill">draft</span></div>
-          <p>Dashboard Butler の自然文入口は <code>codex app-server</code> 用に作り直します。旧 VPS runner 直送では通常会話を処理しません。</p>
+          <p>Issue / PR 操作が必要になった時だけ、会話の中で対象と範囲を確認します。</p>
         </div>
 
         <div class="lane">
-          <div class="lane-title"><h3>進行中 execution</h3><span class="pill">runtime truth</span></div>
-          <p>進捗は GitHub Actions / VPS runner status / execution progress route から読みます。</p>
+          <div class="lane-title"><h3>進行中</h3><span class="pill">状態</span></div>
+          <p>直近の反映、失敗、進行中の作業があればここに出します。</p>
           ${renderDashboardDeployEvent(latestDeployEvent)}
           <div class="quick-actions">
             ${cockpitActions.map((action) => `<a href="${escapeDashboardHtml(action.href)}">${escapeDashboardHtml(action.label)}</a>`).join("")}
           </div>
         </div>
 
-        <details>
-          <summary>Runtime surfaces</summary>
+        <details data-debug-section="dashboard-development-operations">
+          <summary>開発/運用</summary>
           <div class="surface-list">
             ${surfaces.map((surface) => `<a href="${escapeDashboardHtml(surface.href)}">${escapeDashboardHtml(surface.title)}</a>`).join("")}
           </div>
         </details>
 
-        <details>
+        <details data-debug-section="dashboard-workflows">
           <summary>GitHub workflows</summary>
           <div class="surface-list">
             ${workflows.map(([title, href]) => `<a href="${escapeDashboardHtml(href)}">${escapeDashboardHtml(title)}</a>`).join("")}
           </div>
         </details>
 
-        <details>
+        <details data-debug-section="dashboard-prototype-cleanup">
           <summary>Prototype cleanup</summary>
           <p>v3 Worker prototype の削除や移行は destructive operation 扱いです。必要になった時だけ、対象 runtime と scope を明示した passkey approval で扱います。</p>
         </details>

@@ -986,11 +986,11 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("overflow: hidden"), true);
   assert.equal(body.includes("grid-template-columns: minmax(0, 1fr) auto"), true);
   assert.equal(body.includes("WebSocket"), true);
-  assert.equal(body.includes("Dashboard thread 接続準備中"), true);
+  assert.equal(body.includes("接続準備中: 送信できる状態になったらここで知らせます"), true);
   assert.equal(body.includes("repo/nickname 未指定"), false);
   assert.equal(body.includes("対象 repo 未指定"), true);
-  assert.equal(body.includes("?repository=owner/repo"), true);
-  assert.equal(body.includes("旧 VPS runner 直送経路は使いません"), true);
+  assert.equal(body.includes("?repository=owner/repo"), false);
+  assert.equal(body.includes("旧 VPS runner 直送経路は使いません"), false);
   assert.equal(body.includes("codex app-server"), true);
   assert.equal(body.includes("deploy 用 passkey URL"), false);
   assert.equal(body.includes("vtdd-v3-orchestrator.polished-tree-da7c.workers.dev"), false);
@@ -1119,7 +1119,7 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("モバイル管理メニュー"), true);
   assert.equal(body.includes("直近 deploy event"), true);
   assert.equal(body.includes("Butler V2 にメッセージ"), true);
-  assert.equal(body.includes("状態確認"), true);
+  assert.equal(body.includes("GitHub状況"), true);
   assert.equal(body.includes(">通知</a>"), true);
   assert.equal(body.includes("/dashboard/github?repository=marushu%2Fvtdd-v2-p"), false);
   assert.equal(body.includes("/dashboard/notifications"), true);
@@ -2826,6 +2826,41 @@ test("worker serves human-facing dashboard pages for every management menu", asy
     assert.equal(body.includes(rawLabel), false);
     assert.equal(body.includes("{\"ok\""), false);
   }
+});
+
+test("worker serves dashboard chat-first shell with debug and ops surfaces isolated", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/dashboard?repository=sample-org/vtdd-v2-p", {
+      headers: dashboardAccessHeaders
+    }),
+    dashboardAccessEnv
+  );
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get("content-type"), /text\/html/);
+  const body = await response.text();
+
+  assert.equal(body.includes("VTDD Butler"), true);
+  assert.equal(body.includes("ここではまず普通に会話できます"), true);
+  assert.equal(body.includes("通知と進捗はこの画面から戻って確認できます"), true);
+  assert.equal(body.includes("対象 repo"), true);
+  assert.equal(body.includes("Issue / PR 操作が必要になった時だけ"), true);
+  const initialChat = body.slice(
+    body.indexOf('<div class="chat-scroll"'),
+    body.indexOf('<form class="composer"')
+  );
+  assert.equal(initialChat.includes("Issue 駆動・GitHub runtime truth・VPS runner・Gemini reviewer・RAG・passkey 境界"), false);
+  assert.equal(initialChat.includes("旧 VPS runner 直送経路"), false);
+  assert.equal(initialChat.includes("codex app-server"), false);
+  assert.equal(initialChat.includes("Dashboard thread 接続準備中"), false);
+
+  const debugSectionIndex = body.indexOf('data-debug-section="dashboard-development-operations"');
+  assert.notEqual(debugSectionIndex, -1);
+  assert.equal(body.indexOf("Operational RAG") > debugSectionIndex, true);
+  assert.equal(body.indexOf("Deploy operator") > debugSectionIndex, true);
+  assert.equal(body.indexOf("GitHub workflows") > debugSectionIndex, true);
+  assert.equal(body.includes("<summary>開発/運用</summary>"), true);
+  assert.equal(body.includes("<summary>Runtime surfaces</summary>"), false);
+  assert.equal(body.includes("RAG を読む"), false);
 });
 
 test("worker serves dashboard notification center for recent events across repositories", async () => {
