@@ -766,7 +766,8 @@ test("worker serves human-facing status page without raw JSON links", async () =
   assert.equal(body.includes("Runtime Status"), true);
   assert.equal(body.includes("raw /health JSON"), false);
   assert.equal(body.includes("/dashboard"), true);
-  assert.equal(body.includes("/v2/approval/passkey/operator?repositoryInput=marushu%2Fvtdd-v2-p"), true);
+  assert.equal(body.includes("/v2/approval/passkey/operator"), true);
+  assert.equal(body.includes("repositoryInput=marushu%2Fvtdd-v2-p"), false);
   assert.equal(body.includes("approvalGrantId"), false);
   assert.equal(body.includes("CLOUDFLARE_API_TOKEN"), false);
 });
@@ -779,8 +780,21 @@ test("worker rejects dashboard access without owner identity", async () => {
   assert.equal(body.includes("Dashboard auth required"), true);
   assert.equal(body.includes("owner-facing surface"), true);
   assert.equal(body.includes("Cloudflare Access で開く"), true);
+  assert.equal(
+    body.includes(
+      'href="https://example.com/cdn-cgi/access/login?redirect_url=https%3A%2F%2Fexample.com%2Fdashboard"'
+    ),
+    true
+  );
   assert.equal(body.includes("Passkey fallback"), true);
-  assert.equal(body.includes("Passkey で dashboard に入る"), false);
+  assert.equal(body.includes("Passkey で dashboard に入る"), true);
+  assert.equal(
+    body.includes(
+      'href="https://example.com/v2/approval/passkey/operator?mode=dashboard&amp;phase=execution&amp;actionType=read&amp;highRiskKind=dashboard_access&amp;dashboardReturnPath=%2Fdashboard"'
+    ),
+    true
+  );
+  assert.equal(body.includes("repositoryInput=marushu%2Fvtdd-v2-p"), false);
   assert.equal(body.includes("未認証の相手に通知詳細や Dashboard 内容は返しません"), true);
 });
 
@@ -862,9 +876,16 @@ test("worker rejects stale dashboard passkey session cookies", async () => {
   const body = await response.text();
   assert.equal(body.includes("Cloudflare Access authenticated owner identity is required"), true);
   assert.equal(body.includes("Cloudflare Access で開く"), true);
+  assert.equal(
+    body.includes(
+      'href="https://example.com/cdn-cgi/access/login?redirect_url=https%3A%2F%2Fexample.com%2Fdashboard"'
+    ),
+    true
+  );
   assert.equal(body.includes("Passkey fallback"), true);
   assert.equal(body.includes("dashboard passkey session was not found"), true);
-  assert.equal(body.includes("Passkey で dashboard に入る"), false);
+  assert.equal(body.includes("Passkey で dashboard に入る"), true);
+  assert.equal(body.includes("repositoryInput=marushu%2Fvtdd-v2-p"), false);
 });
 
 test("worker does not expose dashboard notification details before Access auth", async () => {
@@ -895,7 +916,21 @@ test("worker does not expose dashboard notification details before Access auth",
   const body = await response.text();
   assert.equal(body.includes("Dashboard auth required"), true);
   assert.equal(body.includes("Cloudflare Access で開く"), true);
-  assert.equal(body.includes('href="https://example.com/dashboard/notifications"'), true);
+  assert.equal(body.includes("Passkey で通知を見る"), true);
+  assert.equal(
+    body.includes(
+      'href="https://example.com/cdn-cgi/access/login?redirect_url=https%3A%2F%2Fexample.com%2Fdashboard%2Fnotifications"'
+    ),
+    true
+  );
+  assert.equal(
+    body.includes(
+      'href="https://example.com/v2/approval/passkey/operator?mode=dashboard&amp;phase=execution&amp;actionType=read&amp;highRiskKind=dashboard_access&amp;dashboardReturnPath=%2Fdashboard%2Fnotifications"'
+    ),
+    true
+  );
+  assert.equal(body.includes("repositoryInput=marushu%2Fvtdd-v2-p"), false);
+  assert.equal(body.includes('href="https://example.com/dashboard/notifications"'), false);
   assert.equal(body.includes("?runId="), false);
   assert.equal(body.includes("title="), false);
   assert.equal(body.includes("sha="), false);
@@ -999,10 +1034,22 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes('aria-label="Passkey operator">Passkey</a>'), false);
   assert.equal(body.includes('aria-label="Deploy operator">Deploy</a>'), false);
   assert.equal(body.includes('aria-label="通知センター">通知</a>'), true);
-  assert.equal(body.includes('aria-label="進捗を見る">進捗</a>'), true);
+  assert.equal(body.includes('aria-label="進捗を見る">進捗</a>'), false);
+  assert.equal(body.includes('aria-label="Passkey で dashboard session を更新">Passkey</a>'), true);
+  assert.equal(
+    body.includes(
+      '/v2/approval/passkey/operator?mode=dashboard&amp;phase=execution&amp;actionType=read&amp;highRiskKind=dashboard_access"'
+    ),
+    true
+  );
+  assert.equal(body.includes("mode=dashboard&amp;repositoryInput="), false);
   assert.equal(body.includes('aria-label="Passkey">◇</a>'), false);
   assert.equal(body.includes('<label class="tool-button menu-open" for="mobile-menu-toggle">管理</label>'), false);
   assert.equal(body.includes('class="tool-button top-action"'), true);
+  assert.equal(body.includes('id="dashboard-repository-input"'), true);
+  assert.equal(body.includes('placeholder="owner/repo"'), true);
+  assert.equal(body.includes('aria-disabled="true"'), true);
+  assert.equal(body.includes("repo 設定後に開けます"), true);
   assert.equal(body.includes('id="butler-chat-form"'), true);
   assert.equal(body.includes('id="butler-chat-log"'), true);
   assert.equal(body.includes('class="icon-button"'), false);
@@ -1021,6 +1068,7 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("function sendOwnerMessageByHttp("), true);
   assert.equal(body.includes("function isChatSocketOpen()"), true);
   assert.equal(body.includes("function describeChatSocketState()"), true);
+  assert.equal(body.includes("function setConnectionRecoveryStatus("), true);
   assert.equal(body.includes("function buildReconnectStatus("), true);
   assert.equal(body.includes("function dropStaleSocketIfNeeded()"), true);
   assert.equal(body.includes('let lastRefreshFailure = ""'), true);
@@ -1033,10 +1081,13 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("WebSocket 未接続のため HTTP fallback で保存しました。再接続を続けています。"), true);
   assert.equal(body.includes("sendOwnerMessageByHttp(ownerPayload, clientMessageId)"), true);
   assert.equal(body.includes("refreshThread().then"), false);
-  assert.equal(body.includes("履歴を再取得して再接続します"), true);
   assert.equal(body.includes("履歴の再取得に失敗しました。入力は保持しています。"), true);
-  assert.equal(body.includes("最後の履歴取得"), true);
-  assert.equal(body.includes("WebSocket: "), true);
+  assert.equal(body.includes("再接続 \" + attempt + \"回目"), false);
+  assert.equal(body.includes("最後の履歴取得"), false);
+  assert.equal(body.includes("WebSocket: "), false);
+  assert.equal(body.includes("status.dataset.reconnectAttempt"), true);
+  assert.equal(body.includes("status.dataset.websocketState"), true);
+  assert.equal(body.includes("接続を復帰しています。入力は保持しています。"), true);
   assert.equal(body.includes("document.addEventListener(\"visibilitychange\""), true);
   assert.equal(body.includes("window.addEventListener(\"online\""), true);
   assert.equal(body.includes("VPS Codex CLI に push します"), false);
@@ -1053,6 +1104,15 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("function renderMessageText("), true);
   assert.equal(body.includes("function renderInlineMarkdown("), true);
   assert.equal(body.includes('body.className = "message-body"'), true);
+  assert.equal(body.includes('meta.className = "message-meta"'), true);
+  assert.equal(body.includes("function formatMessageTimestamp("), true);
+  assert.equal(body.includes("hour: \"2-digit\""), true);
+  assert.equal(body.includes("minute: \"2-digit\""), true);
+  assert.equal(body.includes("sameDay"), true);
+  assert.equal(body.includes("const locale = navigator.language || \"ja-JP\""), true);
+  assert.equal(body.includes("new Intl.DateTimeFormat(locale"), true);
+  assert.equal(body.includes(".message-meta { margin-top: 6px; color: var(--muted); font-size: 11px; line-height: 1.2; opacity: .86; }"), true);
+  assert.equal(body.includes(".bubble.owner .message-meta { color: var(--owner-text); opacity: .76; text-align: right; }"), true);
   assert.equal(body.includes('document.createElement("ul")'), true);
   assert.equal(body.includes('document.createElement("li")'), true);
   assert.equal(body.includes('document.createElement("pre")'), true);
@@ -1098,6 +1158,8 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("message?.createdAt"), true);
   assert.equal(body.includes('renderThread(body.messages || [], { replace: true })'), true);
   assert.equal(body.includes('renderThread(body.messages || [], { replace: false })'), true);
+  assert.equal(body.includes('body.type === "transient_status"'), true);
+  assert.equal(body.includes("appendMessage(body"), false);
   assert.equal(body.includes("white-space: pre-wrap"), true);
   assert.equal(body.includes(".bubble .message-body pre.wrap-code"), true);
   assert.equal(body.includes("overflow-wrap: anywhere; word-break: break-word;"), true);
@@ -1124,7 +1186,8 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("/dashboard/github?repository=marushu%2Fvtdd-v2-p"), false);
   assert.equal(body.includes("/dashboard/notifications"), true);
   assert.equal(body.includes(">通知センター</a>"), true);
-  assert.equal(body.includes(">Deploy operator</a>"), true);
+  assert.equal(body.includes(">本番反映 / Passkey 承認</a>"), false);
+  assert.equal(body.includes("<strong>本番反映 / Passkey 承認</strong>"), true);
   assert.equal(body.includes("include=open_prs"), false);
   assert.equal(body.includes('name="text"'), true);
   assert.equal(/<meta[^>]+http-equiv=["']?refresh/i.test(body), false);
@@ -2485,8 +2548,13 @@ test("DashboardChatRoom maps app-server replies back into the dashboard thread",
 
   assert.equal(storage.values.get("app_server_thread:dashboard-main-unresolved").codexThreadId, "codex-thread-450");
   assert.equal(bridgeSocket.sent.length, 0);
-  assert.equal(dashboardSocket.sent.length, 1);
-  const broadcast = JSON.parse(dashboardSocket.sent[0]);
+  assert.equal(dashboardSocket.sent.length, 2);
+  const status = JSON.parse(dashboardSocket.sent[0]);
+  assert.equal(status.type, "transient_status");
+  assert.equal(status.status, "replied");
+  assert.equal(status.text, "Dashboard thread 接続済み。");
+  const broadcast = JSON.parse(dashboardSocket.sent[1]);
+  assert.equal(broadcast.type, "thread");
   assert.equal(broadcast.messages.length, 1);
   assert.equal(broadcast.messages[0].role, "butler");
   assert.equal(broadcast.messages[0].status, "replied");
@@ -2572,6 +2640,56 @@ test("DashboardChatRoom sends app-server thinking status as transient UI state",
   assert.equal(status.type, "transient_status");
   assert.equal(status.status, "thinking");
   assert.equal(status.text, "codex app-server が応答を生成しています。");
+});
+
+test("DashboardChatRoom maps app-server progress stages to owner-facing transient status", async () => {
+  const stageCases = [
+    ["read_context", "既存 Issue / PR / docs を確認しています。"],
+    ["issue_body", "新しい Issue 本文を作成しています。"],
+    ["github_issue_create", "GitHub に Issue を作成しています。"],
+    ["bounded_change_contract", "bounded change contract を確認しています。"],
+    ["topic_branch", "topic branch を作成しています。"],
+    ["implementation", "実装に入っています。"],
+    ["test", "テストを実行しています。"],
+    ["pr_body", "PR本文を作成しています。"],
+    ["pr_create", "PRを作成しています。"],
+    ["reviewer_wait", "CI / reviewer を待っています。"],
+    ["reviewer_revision", "reviewer 指摘を反映しています。"]
+  ];
+  for (const [stage, expectedText] of stageCases) {
+    const store = createInMemoryDashboardChatStore();
+    const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
+    const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-unresolved");
+    const storage = createMockDurableObjectStorage();
+    const room = new DashboardChatRoom(
+      {
+        storage,
+        getWebSockets() {
+          return [dashboardSocket, bridgeSocket];
+        }
+      },
+      { DASHBOARD_CHAT_STORE: store }
+    );
+
+    await room.webSocketMessage(
+      bridgeSocket,
+      JSON.stringify({
+        type: "app_server_status",
+        status: "thinking",
+        stage,
+        threadId: "dashboard-main-unresolved",
+        codexThreadId: "codex-thread-450",
+        text: "raw runner event text"
+      })
+    );
+
+    assert.equal((await store.listThread("dashboard-main-unresolved")).length, 0);
+    assert.equal(dashboardSocket.sent.length, 1);
+    const status = JSON.parse(dashboardSocket.sent[0]);
+    assert.equal(status.type, "transient_status");
+    assert.equal(status.status, "thinking");
+    assert.equal(status.text, expectedText);
+  }
 });
 
 test("DashboardChatRoom rejects app-server bridge events for a different dashboard thread", async () => {
@@ -2856,7 +2974,8 @@ test("worker serves dashboard chat-first shell with debug and ops surfaces isola
   const debugSectionIndex = body.indexOf('data-debug-section="dashboard-development-operations"');
   assert.notEqual(debugSectionIndex, -1);
   assert.equal(body.indexOf("Operational RAG") > debugSectionIndex, true);
-  assert.equal(body.indexOf("Deploy operator") > debugSectionIndex, true);
+  assert.equal(body.indexOf("本番反映 / Passkey 承認") > debugSectionIndex, true);
+  assert.equal(body.includes(">本番反映 / Passkey 承認</a>"), true);
   assert.equal(body.indexOf("GitHub workflows") > debugSectionIndex, true);
   assert.equal(body.includes("<summary>開発/運用</summary>"), true);
   assert.equal(body.includes("<summary>Runtime surfaces</summary>"), false);
@@ -6345,15 +6464,43 @@ test("worker serves passkey operator page", async () => {
 
 test("worker serves dashboard passkey operator mode", async () => {
   const response = await worker.fetch(
-    new Request("https://example.com/v2/approval/passkey/operator?mode=dashboard&repositoryInput=marushu%2Fvtdd-v2-p"),
+    new Request(
+      "https://example.com/v2/approval/passkey/operator?mode=dashboard&repositoryInput=marushu%2Fvtdd-v2-p&issueNumber=15&pullNumber=148&dashboardReturnPath=%2Fdashboard%2Fnotifications"
+    ),
     gatewayAuthEnv
   );
 
   assert.equal(response.status, 200);
   const html = await response.text();
+  assert.equal(html.includes('id="repo-input" value=""'), true);
+  assert.equal(html.includes('id="issue-input" value=""'), true);
+  assert.equal(html.includes('id="pull-number-input" value="148"'), false);
   assert.equal(html.includes('id="action-type-input" value="read"'), true);
   assert.equal(html.includes('id="risk-kind-input" value="dashboard_access"'), true);
   assert.equal(html.includes('const operatorMode = "dashboard"'), true);
+  assert.equal(html.includes('window.location.assign("/dashboard/notifications")'), true);
+  assert.equal(html.includes("repo / Issue / PR scope は使いません"), true);
+  assert.equal(html.includes('value="marushu/vtdd-v2-p"'), false);
+  assert.equal(html.includes("repositoryInput is required before approval/deploy"), true);
+  assert.equal(html.includes("const repositoryInput = readApprovalRepositoryInput();"), true);
+});
+
+test("worker keeps explicit non-dashboard operator modes repo-scoped even with dashboard_access conflict", async () => {
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/v2/approval/passkey/operator?mode=deploy&repositoryInput=marushu%2Fvtdd-v2-p&issueNumber=15&phase=execution&highRiskKind=dashboard_access"
+    ),
+    gatewayAuthEnv
+  );
+
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.equal(html.includes('const operatorMode = "deploy"'), true);
+  assert.equal(html.includes('id="repo-input" value="marushu/vtdd-v2-p"'), true);
+  assert.equal(html.includes('id="issue-input" value="15"'), true);
+  assert.equal(html.includes('id="action-type-input" value="deploy_production"'), true);
+  assert.equal(html.includes('id="risk-kind-input" value="deploy_production"'), true);
+  assert.equal(html.includes("repo / Issue / PR scope は使いません"), false);
 });
 
 test("worker serves issue close operator mode without falling back to PR merge UI", async () => {
@@ -6720,10 +6867,8 @@ test("worker sets dashboard session cookie after dashboard passkey approval", as
       body: JSON.stringify({
         phase: "execution",
         highRiskKind: "dashboard_access",
-        repositoryInput: "marushu/vtdd-v2-p",
         policyInput: {
           actionType: ActionType.READ,
-          repositoryInput: "marushu/vtdd-v2-p",
           highRiskKind: "dashboard_access"
         }
       })
@@ -6764,6 +6909,8 @@ test("worker sets dashboard session cookie after dashboard passkey approval", as
   assert.match(verify.headers.get("set-cookie"), /SameSite=Lax/);
   const verifyBody = await verify.json();
   assert.equal(verifyBody.approvalGrant.scope.highRiskKind, "dashboard_access");
+  assert.equal(verifyBody.approvalGrant.scope.repositoryInput || "", "");
+  assert.notEqual(verifyBody.approvalGrant.scope.repositoryInput, "marushu/vtdd-v2-p");
 });
 
 test("worker gateway accepts high-risk approval grant resolved from memory", async () => {

@@ -373,7 +373,7 @@ export class DashboardChatRoom {
       await this.broadcastTransientStatus({
         threadId: normalized.threadId,
         status: normalized.transientStatus,
-        text: normalized.text
+        text: normalized.transientText || normalized.text
       });
     }
     if (normalized.messages.length === 0) {
@@ -4610,18 +4610,21 @@ function handlePasskeyOperatorPageRequest(request) {
   const syncEnabled = Boolean(syncApiBase);
   const requestedActionType = url.searchParams.get("actionType");
   const requestedHighRiskKind = url.searchParams.get("highRiskKind");
+  const requestedOperatorMode = url.searchParams.get("mode") || (requestedActionType || requestedHighRiskKind ? "" : "full");
+  const dashboardSessionMode = normalizeText(requestedOperatorMode) === "dashboard";
   const html = renderPasskeyOperatorPage({
     origin: url.origin,
     syncApiBase,
-    operatorMode: url.searchParams.get("mode") || (requestedActionType || requestedHighRiskKind ? "" : "full"),
-    repositoryInput: url.searchParams.get("repositoryInput"),
-    issueNumber: url.searchParams.get("issueNumber"),
-    pullNumber: url.searchParams.get("pullNumber"),
+    operatorMode: requestedOperatorMode,
+    repositoryInput: dashboardSessionMode ? "" : url.searchParams.get("repositoryInput"),
+    issueNumber: dashboardSessionMode ? "" : url.searchParams.get("issueNumber"),
+    pullNumber: dashboardSessionMode ? "" : url.searchParams.get("pullNumber"),
     phase: url.searchParams.get("phase") || "execution",
     actionType: requestedActionType,
     highRiskKind: requestedHighRiskKind,
     mergeMethod: url.searchParams.get("mergeMethod") || "squash",
     returnUrl: normalizeOperatorReturnUrl(url.searchParams.get("returnUrl")),
+    dashboardReturnPath: sanitizeDashboardPreAuthReturnPath(url.searchParams.get("dashboardReturnPath")),
     operatorId: url.searchParams.get("operatorId") || "vtdd-operator",
     operatorLabel: url.searchParams.get("operatorLabel") || "VTDD Operator",
     githubAppRole: url.searchParams.get("githubAppRole") || "legacy",
@@ -6376,6 +6379,7 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
   const status = normalizeDashboardEventText(input.status).toLowerCase();
   const codexThreadId = normalizeDashboardEventText(input.codexThreadId || input.codex_thread_id);
   const text = sanitizeDashboardChatText(input.text || input.message || input.delta || input.finalText || input.final_text);
+  let transientText = "";
   const repository = normalizeCanonicalRepositoryInput(input.repository);
   const relatedIssue = normalizePositiveInteger(input.relatedIssue || input.issueNumber);
   const createdAt = normalizeIsoTimestamp(input.createdAt) || new Date().toISOString();
@@ -6400,6 +6404,8 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
         )
       );
     }
+    transientStatus = "replied";
+    transientText = "Dashboard thread 接続済み。";
   } else if (eventType === "app_server_turn_failed" || status === "failed") {
     messages.push(
       normalizeDashboardChatMessage(
@@ -6417,6 +6423,11 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
     );
   } else if (eventType === "app_server_status") {
     transientStatus = status === "replied" ? "replied" : "thinking";
+    transientText = buildDashboardOwnerFacingTransientStatusText(input, {
+      status,
+      text,
+      transientStatus
+    });
   }
   return {
     ok: true,
@@ -6424,9 +6435,93 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
     codexThreadId,
     createdAt,
     text,
+    transientText,
     transientStatus,
     messages: messages.filter(Boolean)
   };
+}
+
+const DASHBOARD_APP_SERVER_STAGE_TEXT = {
+  read_context: "既存 Issue / PR / docs を確認しています。",
+  inspect_context: "既存 Issue / PR / docs を確認しています。",
+  issue_body: "新しい Issue 本文を作成しています。",
+  draft_issue: "新しい Issue 本文を作成しています。",
+  github_issue_create: "GitHub に Issue を作成しています。",
+  issue_create: "GitHub に Issue を作成しています。",
+  bounded_change_contract: "bounded change contract を確認しています。",
+  change_contract: "bounded change contract を確認しています。",
+  topic_branch: "topic branch を作成しています。",
+  branch_create: "topic branch を作成しています。",
+  implementation: "実装に入っています。",
+  implement: "実装に入っています。",
+  test: "テストを実行しています。",
+  tests: "テストを実行しています。",
+  pr_body: "PR本文を作成しています。",
+  pull_request_body: "PR本文を作成しています。",
+  pr_create: "PRを作成しています。",
+  pull_request_create: "PRを作成しています。",
+  reviewer_wait: "CI / reviewer を待っています。",
+  ci_wait: "CI / reviewer を待っています。",
+  reviewer_revision: "reviewer 指摘を反映しています。",
+  review_fix: "reviewer 指摘を反映しています。"
+};
+
+function buildDashboardOwnerFacingTransientStatusText(input, { status = "", text = "", transientStatus = "" } = {}) {
+  if (transientStatus === "replied" || status === "replied") {
+    return "Dashboard thread 接続済み。";
+  }
+  const stage = normalizeDashboardEventText(
+    input.stage ||
+      input.phase ||
+      input.step ||
+      input.activity ||
+      input.progressStage ||
+      input.progress_stage
+  ).toLowerCase();
+  const normalizedStage = stage.replaceAll("-", "_");
+  if (DASHBOARD_APP_SERVER_STAGE_TEXT[normalizedStage]) {
+    return DASHBOARD_APP_SERVER_STAGE_TEXT[normalizedStage];
+  }
+  const eventType = normalizeDashboardEventText(input.type || input.eventType || input.event_type).toLowerCase();
+  const source = [stage, status, eventType, text].filter(Boolean).join(" ").toLowerCase();
+  const matches = (patterns) => patterns.some((pattern) => source.includes(pattern));
+  if (matches(["reviewer_revision", "reviewer-revision", "review_fix", "review-fix", "address_review", "指摘", "反映"])) {
+    return "reviewer 指摘を反映しています。";
+  }
+  if (matches(["ci", "checks", "check_run", "workflow", "actions", "reviewer_wait", "reviewer-wait", "review_wait"])) {
+    return "CI / reviewer を待っています。";
+  }
+  if (matches(["reviewer", "review", "gemini"])) {
+    return "reviewer を待っています。";
+  }
+  if (matches(["pr_body", "pr-body", "pull_request_body", "pull-request-body", "body_file", "body-file", "pr本文"])) {
+    return "PR本文を作成しています。";
+  }
+  if (matches(["pr_create", "pr-create", "pull_request_create", "pull-request-create", "open_pr", "open-pr", "prを作成"])) {
+    return "PRを作成しています。";
+  }
+  if (matches(["test", "tests", "unit", "integration", "e2e", "テスト"])) {
+    return "テストを実行しています。";
+  }
+  if (matches(["implementation", "implement", "coding", "patch", "edit", "apply_patch", "実装"])) {
+    return "実装に入っています。";
+  }
+  if (matches(["topic_branch", "topic-branch", "branch_create", "branch-create", "checkout_branch", "checkout-branch"])) {
+    return "topic branch を作成しています。";
+  }
+  if (matches(["bounded_change_contract", "bounded-change-contract", "change_contract", "change-contract", "contract"])) {
+    return "bounded change contract を確認しています。";
+  }
+  if (matches(["github_issue_create", "github-issue-create", "issue_create", "issue-create", "create_issue", "create-issue"])) {
+    return "GitHub に Issue を作成しています。";
+  }
+  if (matches(["issue_body", "issue-body", "draft_issue", "draft-issue", "issue_draft", "issue-draft"])) {
+    return "新しい Issue 本文を作成しています。";
+  }
+  if (matches(["read_context", "read-context", "inspect", "investigate", "context", "docs", "document", "issue", "issues", "pr", "pull_request", "pull-request"])) {
+    return "既存 Issue / PR / docs を確認しています。";
+  }
+  return text || "app-server bridge の返信を待っています";
 }
 
 async function notifyDashboardChatRoom({ env, threadId, messages }) {
@@ -10376,11 +10471,19 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     ? `<p><strong>${escapeDashboardHtml(repositoryInput)}</strong></p>
           <p class="muted">この repo で Issue / PR 操作が必要な時だけ対象にします。通常会話はこのまま続けられます。</p>`
     : `<p><strong>対象 repo 未指定</strong></p>
-          <p class="muted">通常会話は続けられます。Issue / PR 操作が必要になった時に対象 repo を選びます。</p>`;
+          <p class="muted">通常会話は続けられます。Issue / PR / deploy など repo が必要な操作を始める時だけ、ここで対象 repo を設定します。</p>
+          <form class="target-form" method="get" action="${escapeDashboardHtml(origin)}/dashboard">
+            <label for="dashboard-repository-input">対象 repo</label>
+            <div class="target-form-row">
+              <input id="dashboard-repository-input" name="repository" placeholder="owner/repo" autocomplete="off" autocapitalize="off" spellcheck="false">
+              ${dashboardIssueNumber ? `<input type="hidden" name="issueNumber" value="${dashboardIssueNumber}">` : ""}
+              <button type="submit">設定</button>
+            </div>
+          </form>`;
   const encodedRepository = encodeURIComponent(repositoryInput);
   const chatThreadId = `dashboard-main-${(repositoryInput || "unresolved").replace(/[^a-z0-9_.-]+/gi, "-")}`;
   const socketOrigin = origin.replace(/^http/i, "ws");
-  const dashboardSignInUrl = `${origin}/v2/approval/passkey/operator?mode=dashboard&repositoryInput=${encodedRepository}&phase=execution&actionType=read&highRiskKind=dashboard_access`;
+  const dashboardSignInUrl = `${origin}/v2/approval/passkey/operator?mode=dashboard&phase=execution&actionType=read&highRiskKind=dashboard_access`;
   const latestDeployEvent = await retrieveLatestDashboardEvent({
     store: dashboardEventStore,
     kind: "github_actions_workflow_run",
@@ -10396,22 +10499,26 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     {
       title: "Startup preflight",
       body: "AGENTS.md、thread-independent startup、runtime truth、RAG、self parity を最初に読む入口。",
-      href: `${origin}/dashboard/preflight?repository=${encodedRepository}`
+      href: repositoryInput ? `${origin}/dashboard/preflight?repository=${encodedRepository}` : "",
+      disabledReason: "repo 設定後に開けます"
     },
     {
       title: "Execution progress",
       body: "VPS Codex CLI / remote Codex execution の進捗確認。",
-      href: `${origin}/dashboard/progress?repository=${encodedRepository}`
+      href: repositoryInput ? `${origin}/dashboard/progress?repository=${encodedRepository}` : "",
+      disabledReason: "repo 設定後に開けます"
     },
     {
       title: "VPS runner status",
       body: "runner health、queue、対象 execution の状態確認。",
-      href: `${origin}/dashboard/vps-runner?repository=${encodedRepository}`
+      href: repositoryInput ? `${origin}/dashboard/vps-runner?repository=${encodedRepository}` : "",
+      disabledReason: "repo 設定後に開けます"
     },
     {
       title: "GitHub runtime truth",
       body: "Issues、PRs、checks、workflow runs、reviewer comments を読む入口。",
-      href: `${origin}/dashboard/github?repository=${encodedRepository}`
+      href: repositoryInput ? `${origin}/dashboard/github?repository=${encodedRepository}` : "",
+      disabledReason: "repo 設定後に開けます"
     },
     {
       title: "通知センター",
@@ -10421,22 +10528,28 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     {
       title: "Operational RAG",
       body: "decision / proposal / working memory の compact retrieval。runtime truth の代替ではない。",
-      href: `${origin}/dashboard/memory?repository=${encodedRepository}`
+      href: repositoryInput ? `${origin}/dashboard/memory?repository=${encodedRepository}` : "",
+      disabledReason: "repo 設定後に開けます"
     },
     {
       title: "Self parity",
       body: "Action Schema、Instructions、Cloudflare deploy freshness、operator URL を確認。",
-      href: `${origin}/dashboard/self-parity?repository=${encodedRepository}`
+      href: repositoryInput ? `${origin}/dashboard/self-parity?repository=${encodedRepository}` : "",
+      disabledReason: "repo 設定後に開けます"
     },
     {
       title: "Setup diagnostics",
       body: "Butler / Custom GPT / deploy drift の診断ページ。",
-      href: `${origin}/setup/diagnostics?repository=${encodedRepository}`
+      href: repositoryInput ? `${origin}/setup/diagnostics?repository=${encodedRepository}` : "",
+      disabledReason: "repo 設定後に開けます"
     },
     {
-      title: "Deploy operator",
-      body: "production deploy は scope 明示済み passkey approval の後ろ。approval grant や secret は dashboard に保存しない。",
-      href: `${origin}/v2/approval/passkey/operator?repositoryInput=${encodedRepository}&phase=execution&actionType=deploy_production&highRiskKind=deploy_production`
+      title: "本番反映 / Passkey 承認",
+      body: "production deploy は対象 repo 設定後、scope 明示済み passkey approval の後ろで開きます。",
+      href: repositoryInput
+        ? `${origin}/v2/approval/passkey/operator?repositoryInput=${encodedRepository}&phase=execution&actionType=deploy_production&highRiskKind=deploy_production`
+        : "",
+      disabledReason: "repo 設定後に開けます"
     }
   ];
   const workflows = [
@@ -10451,14 +10564,36 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       href: `${origin}/dashboard/notifications`
     },
     {
+      label: "Passkey",
+      href: dashboardSignInUrl
+    },
+    {
       label: "進捗を見る",
-      href: `${origin}/dashboard/progress?repository=${encodedRepository}`
+      href: repositoryInput ? `${origin}/dashboard/progress?repository=${encodedRepository}` : "",
+      disabledReason: "repo 設定後"
     },
     {
       label: "GitHub状況",
-      href: `${origin}/dashboard/github?repository=${encodedRepository}`
+      href: repositoryInput ? `${origin}/dashboard/github?repository=${encodedRepository}` : "",
+      disabledReason: "repo 設定後"
     }
   ];
+  const renderDashboardActionList = (actions) =>
+    actions
+      .map((action) =>
+        action.href
+          ? `<a href="${escapeDashboardHtml(action.href)}">${escapeDashboardHtml(action.label || action.title)}</a>`
+          : `<span class="disabled-action" aria-disabled="true"><strong>${escapeDashboardHtml(action.label || action.title)}</strong><small>${escapeDashboardHtml(action.disabledReason || "利用できません")}</small></span>`
+      )
+      .join("");
+  const renderDashboardSurfaceList = (items) =>
+    items
+      .map((surface) =>
+        surface.href
+          ? `<a href="${escapeDashboardHtml(surface.href)}">${escapeDashboardHtml(surface.title)}</a>`
+          : `<span class="disabled-action" aria-disabled="true"><strong>${escapeDashboardHtml(surface.title)}</strong><small>${escapeDashboardHtml(surface.disabledReason || "利用できません")}</small></span>`
+      )
+      .join("");
 
   return `<!doctype html>
 <html lang="ja">
@@ -10540,6 +10675,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .bubble .message-body pre code { display: block; font-size: 14px; line-height: 1.55; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
     .bubble .message-body pre.wrap-code code { white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
     .bubble .message-body strong { display: inline; color: inherit; font-size: inherit; letter-spacing: 0; text-transform: none; margin: 0; font-weight: 800; }
+    .message-meta { margin-top: 6px; color: var(--muted); font-size: 11px; line-height: 1.2; opacity: .86; }
+    .bubble.owner .message-meta { color: var(--owner-text); opacity: .76; text-align: right; }
     .copy-message, .copy-code { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border: 1px solid var(--border); border-radius: 999px; background: var(--button); color: var(--text); font-size: 15px; line-height: 1; cursor: pointer; }
     .copy-message:focus-visible, .copy-code:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
     .copy-code { position: absolute; top: 8px; right: 8px; z-index: 1; opacity: .88; }
@@ -10585,7 +10722,15 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .deploy-event p { margin-bottom: 6px; font-size: 13px; line-height: 1.45; }
     .quick-actions, .surface-list { display: grid; gap: 8px; }
     .quick-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .quick-actions a, .surface-list a { display: inline-flex; align-items: center; justify-content: center; min-height: 36px; border: 1px solid var(--border); border-radius: 10px; padding: 7px 9px; color: var(--text); text-decoration: none; background: var(--soft); font-weight: 750; font-size: 13px; text-align: center; }
+    .quick-actions a, .surface-list a, .disabled-action { display: inline-flex; align-items: center; justify-content: center; min-height: 36px; border: 1px solid var(--border); border-radius: 10px; padding: 7px 9px; color: var(--text); text-decoration: none; background: var(--soft); font-weight: 750; font-size: 13px; text-align: center; }
+    .disabled-action { flex-direction: column; gap: 2px; color: var(--muted); background: transparent; cursor: not-allowed; }
+    .disabled-action strong { font-size: 13px; }
+    .disabled-action small { font-size: 11px; font-weight: 650; line-height: 1.2; }
+    .target-form { display: grid; gap: 6px; margin-top: 10px; }
+    .target-form label { color: var(--muted); font-size: 12px; font-weight: 800; }
+    .target-form-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; }
+    .target-form input { min-width: 0; min-height: 38px; border: 1px solid var(--border); border-radius: 10px; padding: 7px 9px; color: var(--text); background: var(--panel); font: inherit; }
+    .target-form button { min-height: 38px; border: 1px solid var(--border); border-radius: 10px; padding: 7px 10px; color: var(--text); background: var(--button); font: inherit; font-weight: 800; }
     summary { cursor: pointer; color: var(--text); font-weight: 800; }
     .muted { color: var(--muted); }
     code { color: var(--text); overflow-wrap: anywhere; }
@@ -10636,7 +10781,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         </div>
         <div class="top-right">
           <a class="tool-button top-action" href="${escapeDashboardHtml(origin)}/dashboard/notifications" aria-label="通知センター">通知</a>
-          <a class="tool-button top-action" href="${escapeDashboardHtml(origin)}/dashboard/progress?repository=${encodedRepository}" aria-label="進捗を見る">進捗</a>
+          <a class="tool-button top-action" href="${escapeDashboardHtml(dashboardSignInUrl)}" aria-label="Passkey で dashboard session を更新">Passkey</a>
         </div>
       </header>
 
@@ -10661,12 +10806,12 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             ${renderDashboardDeployEvent(latestDeployEvent)}
           </div>
           <div class="quick-actions">
-            ${cockpitActions.map((action) => `<a href="${escapeDashboardHtml(action.href)}">${escapeDashboardHtml(action.label)}</a>`).join("")}
+            ${renderDashboardActionList(cockpitActions)}
           </div>
           <details data-debug-section="dashboard-development-operations">
             <summary>開発/運用</summary>
             <div class="surface-list">
-              ${surfaces.map((surface) => `<a href="${escapeDashboardHtml(surface.href)}">${escapeDashboardHtml(surface.title)}</a>`).join("")}
+              ${renderDashboardSurfaceList(surfaces)}
             </div>
           </details>
           <details>
@@ -10741,14 +10886,14 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           <p>直近の反映、失敗、進行中の作業があればここに出します。</p>
           ${renderDashboardDeployEvent(latestDeployEvent)}
           <div class="quick-actions">
-            ${cockpitActions.map((action) => `<a href="${escapeDashboardHtml(action.href)}">${escapeDashboardHtml(action.label)}</a>`).join("")}
+            ${renderDashboardActionList(cockpitActions)}
           </div>
         </div>
 
         <details data-debug-section="dashboard-development-operations">
           <summary>開発/運用</summary>
           <div class="surface-list">
-            ${surfaces.map((surface) => `<a href="${escapeDashboardHtml(surface.href)}">${escapeDashboardHtml(surface.title)}</a>`).join("")}
+            ${renderDashboardSurfaceList(surfaces)}
           </div>
         </details>
 
@@ -10857,10 +11002,16 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         return "不明";
       }
 
-      function buildReconnectStatus(prefix) {
+      function setConnectionRecoveryStatus(message) {
         const attempt = Math.max(1, reconnectAttempt + 1);
-        const refreshPart = lastRefreshFailure ? " 最後の履歴取得: " + lastRefreshFailure + "。" : "";
-        return prefix + " 再接続 " + attempt + "回目 / WebSocket: " + describeChatSocketState() + "。" + refreshPart;
+        status.dataset.reconnectAttempt = String(attempt);
+        status.dataset.websocketState = describeChatSocketState();
+        status.dataset.lastRefreshFailure = lastRefreshFailure || "";
+        setStatus(message);
+      }
+
+      function buildReconnectStatus(prefix) {
+        return prefix + " 入力は保持しています。";
       }
 
       function dropStaleSocketIfNeeded() {
@@ -10958,8 +11109,43 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         if (media) {
           article.appendChild(media);
         }
+        const timestamp = formatMessageTimestamp(message.createdAt || message.created_at);
+        if (timestamp) {
+          const meta = document.createElement("time");
+          meta.className = "message-meta";
+          meta.dateTime = normalizeDateTimeAttribute(message.createdAt || message.created_at);
+          meta.textContent = timestamp;
+          article.appendChild(meta);
+        }
         log.appendChild(article);
         scrollToLatest();
+      }
+
+      function formatMessageTimestamp(value) {
+        const date = new Date(value || "");
+        if (Number.isNaN(date.getTime())) return "";
+        const now = new Date();
+        const sameDay =
+          date.getFullYear() === now.getFullYear() &&
+          date.getMonth() === now.getMonth() &&
+          date.getDate() === now.getDate();
+        const locale = navigator.language || "ja-JP";
+        const time = new Intl.DateTimeFormat(locale, {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false
+        }).format(date);
+        if (sameDay) return time;
+        const day = new Intl.DateTimeFormat(locale, {
+          month: "numeric",
+          day: "numeric"
+        }).format(date);
+        return day + " " + time;
+      }
+
+      function normalizeDateTimeAttribute(value) {
+        const date = new Date(value || "");
+        return Number.isNaN(date.getTime()) ? "" : date.toISOString();
       }
 
       function renderMediaReferences(references) {
@@ -11365,7 +11551,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
               return { ok: false, authExpired: true };
             }
             lastRefreshFailure = "HTTP " + response.status;
-            setStatus(buildReconnectStatus("履歴の再取得に失敗しました。入力は保持しています。"));
+            setConnectionRecoveryStatus("履歴の再取得に失敗しました。入力は保持しています。");
             return { ok: false, status: response.status };
           }
           if (body && body.ok) {
@@ -11375,7 +11561,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           }
         } catch {
           lastRefreshFailure = "ネットワーク";
-          setStatus(buildReconnectStatus("履歴の再取得に失敗しました。入力は保持しています。"));
+          setConnectionRecoveryStatus("履歴の再取得に失敗しました。入力は保持しています。");
           return { ok: false, network: true };
         } finally {
           refreshingThread = false;
@@ -11386,7 +11572,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       function scheduleReconnect() {
         if (reconnectTimer || !socketEndpoint || typeof WebSocket !== "function") return;
         const delay = Math.min(10000, 1000 * Math.pow(2, reconnectAttempt));
-        setStatus(buildReconnectStatus("WebSocket を再接続します。入力は保持しています。"));
+        setConnectionRecoveryStatus("接続を復帰しています。入力は保持しています。");
         reconnectAttempt += 1;
         reconnectTimer = window.setTimeout(() => {
           reconnectTimer = null;
@@ -11455,7 +11641,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             releasePendingOwnerSend(pendingOwnerSend.clientMessageId, { clearComposer: false, keepRollbackTimer: true });
             setStatus("送信確認前に WebSocket が切れました。入力は残しています。履歴再取得後にもう一度送信できます。");
           } else {
-            setStatus(buildReconnectStatus("WebSocket が切れました。履歴を再取得して再接続します。"));
+            setConnectionRecoveryStatus("接続が切れました。履歴を確認しながら復帰しています。");
           }
           dropStaleSocketIfNeeded();
           refreshThread();
@@ -11466,7 +11652,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             releasePendingOwnerSend(pendingOwnerSend.clientMessageId, { clearComposer: false, keepRollbackTimer: true });
             setStatus("送信確認前に WebSocket 接続が失敗しました。入力は残しています。再接続後にもう一度送信できます。");
           } else {
-            setStatus(buildReconnectStatus("WebSocket 接続に失敗しました。履歴を再取得して再接続します。"));
+            setConnectionRecoveryStatus("接続できませんでした。履歴を確認しながら復帰しています。");
           }
           dropStaleSocketIfNeeded();
           refreshThread();
@@ -11631,14 +11817,14 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       textarea.addEventListener("input", resizeComposerInput);
       window.addEventListener("resize", resizeComposerInput);
       window.addEventListener("online", () => {
-        setStatus(buildReconnectStatus("ネットワーク復帰を検知しました。履歴を再取得して再接続します。"));
+        setConnectionRecoveryStatus("ネットワーク復帰を検知しました。接続を復帰しています。");
         dropStaleSocketIfNeeded();
         refreshThread();
         scheduleReconnect();
       });
       document.addEventListener("visibilitychange", () => {
         if (document.visibilityState === "visible" && (!chatSocket || chatSocket.readyState !== WebSocket.OPEN)) {
-          setStatus(buildReconnectStatus("画面復帰を検知しました。履歴を再取得して再接続します。"));
+          setConnectionRecoveryStatus("画面復帰を検知しました。接続を復帰しています。");
           dropStaleSocketIfNeeded();
           refreshThread();
           scheduleReconnect();
@@ -11653,8 +11839,11 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 
 function renderDashboardAuthRequiredPage({ runtimeOrigin, returnPath = "/dashboard", reason, passkeyFallbackReason } = {}) {
   const origin = normalizeText(runtimeOrigin);
-  const dashboardAccessHref = `${origin || ""}${sanitizeDashboardPreAuthReturnPath(returnPath)}`;
-  const dashboardSignInUrl = `${origin || ""}/v2/approval/passkey/operator?mode=dashboard&repositoryInput=marushu%2Fvtdd-v2-p&phase=execution&actionType=read&highRiskKind=dashboard_access`;
+  const dashboardAccessReturnPath = sanitizeDashboardPreAuthReturnPath(returnPath);
+  const dashboardAccessHref = buildCloudflareAccessLoginHref({ origin, returnPath: dashboardAccessReturnPath });
+  const dashboardSignInUrl = `${origin || ""}/v2/approval/passkey/operator?mode=dashboard&phase=execution&actionType=read&highRiskKind=dashboard_access&dashboardReturnPath=${encodeURIComponent(dashboardAccessReturnPath)}`;
+  const passkeyButtonLabel =
+    dashboardAccessReturnPath === "/dashboard/notifications" ? "Passkey で通知を見る" : "Passkey で dashboard に入る";
   return `<!doctype html>
 <html lang="ja">
 <head>
@@ -11685,6 +11874,7 @@ function renderDashboardAuthRequiredPage({ runtimeOrigin, returnPath = "/dashboa
       <p><code>${escapeDashboardHtml(reason || "dashboard authentication required")}</code></p>
       <div class="actions">
         <a class="button primary" href="${escapeDashboardHtml(dashboardAccessHref)}">Cloudflare Access で開く</a>
+        <a class="button" href="${escapeDashboardHtml(dashboardSignInUrl)}">${escapeDashboardHtml(passkeyButtonLabel)}</a>
         <a class="button" href="${escapeDashboardHtml(`${origin || ""}/status`)}">Status</a>
       </div>
       <details>
@@ -11697,6 +11887,13 @@ function renderDashboardAuthRequiredPage({ runtimeOrigin, returnPath = "/dashboa
   </main>
 </body>
 </html>`;
+}
+
+function buildCloudflareAccessLoginHref({ origin, returnPath = "/dashboard" } = {}) {
+  const normalizedOrigin = normalizeText(origin);
+  const sanitizedReturnPath = sanitizeDashboardPreAuthReturnPath(returnPath);
+  const redirectUrl = normalizedOrigin ? `${normalizedOrigin}${sanitizedReturnPath}` : sanitizedReturnPath;
+  return `${normalizedOrigin || ""}/cdn-cgi/access/login?redirect_url=${encodeURIComponent(redirectUrl)}`;
 }
 
 function sanitizeDashboardPreAuthReturnPath(value) {
@@ -11773,7 +11970,7 @@ function renderV2StatusPage({ runtimeOrigin, autonomyMode }) {
       <p>Worker は応答しています。ここでは secret、token、approval grant は表示しません。</p>
       <div class="actions">
         <a class="primary" href="${escapeDashboardHtml(origin)}/dashboard">Butler dashboard</a>
-        <a href="${escapeDashboardHtml(origin)}/v2/approval/passkey/operator?repositoryInput=marushu%2Fvtdd-v2-p">Passkey operator</a>
+        <a href="${escapeDashboardHtml(origin)}/v2/approval/passkey/operator">Passkey operator</a>
       </div>
     </section>
 

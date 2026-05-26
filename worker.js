@@ -27246,6 +27246,7 @@ function normalize(value) {
 function renderPasskeyOperatorPage(input = {}) {
   const operatorMode = resolvePasskeyOperatorMode(input);
   const deployOneTapMode = operatorMode === "deploy";
+  const dashboardMode = operatorMode === "dashboard";
   const passkeyEnabled = input.passkeyEnabled !== false;
   const sectionVisibility = resolveSectionVisibility(operatorMode, { passkeyEnabled });
   const origin = escapeHtml(input.origin || "");
@@ -27253,14 +27254,19 @@ function renderPasskeyOperatorPage(input = {}) {
   const syncApiBase = escapeHtml(input.syncApiBase || "");
   const registrationDefaultOperatorId = escapeHtml(input.operatorId || "vtdd-operator");
   const registrationDefaultOperatorLabel = escapeHtml(input.operatorLabel || "VTDD Operator");
-  const repoDefault = escapeHtml(input.repositoryInput || "");
-  const issueDefault = escapeHtml(input.issueNumber || "");
-  const pullNumberDefault = escapeHtml(input.pullNumber || "");
+  const repoDefault = escapeHtml(dashboardMode ? "" : input.repositoryInput || "");
+  const issueDefault = escapeHtml(dashboardMode ? "" : input.issueNumber || "");
+  const pullNumberDefault = escapeHtml(dashboardMode ? "" : input.pullNumber || "");
   const phaseDefault = escapeHtml(input.phase || "execution");
-  const actionTypeDefault = escapeHtml(input.actionType || defaultActionTypeForMode(operatorMode));
-  const highRiskKindDefault = escapeHtml(input.highRiskKind || defaultHighRiskKindForMode(operatorMode));
+  const actionTypeDefault = escapeHtml(
+    deployOneTapMode ? "deploy_production" : input.actionType || defaultActionTypeForMode(operatorMode)
+  );
+  const highRiskKindDefault = escapeHtml(
+    deployOneTapMode ? "deploy_production" : input.highRiskKind || defaultHighRiskKindForMode(operatorMode)
+  );
   const mergeMethodDefault = escapeHtml(input.mergeMethod || "squash");
   const returnUrl = escapeHtml(input.returnUrl || "");
+  const dashboardReturnPath = escapeHtml(sanitizePasskeyDashboardReturnPath(input.dashboardReturnPath));
   const githubAppRoleDefault = escapeHtml(input.githubAppRole || "legacy");
   const syncEnabled = input.syncEnabled === true;
   const syncMessage = escapeHtml(
@@ -27448,9 +27454,21 @@ function renderPasskeyOperatorPage(input = {}) {
             <label for="phase-input">Phase</label>
             <input id="phase-input" value="${phaseDefault}" />
             <label for="action-type-input">Action Type</label>
-            <input id="action-type-input" value="${actionTypeDefault}" />
+            <input id="action-type-input" value="${actionTypeDefault}" autocomplete="off"${deployOneTapMode ? ' readonly data-deploy-scope-locked="true"' : ""} />
             <label for="risk-kind-input">High-risk Kind</label>
-            <input id="risk-kind-input" value="${highRiskKindDefault}" />
+            <input id="risk-kind-input" value="${highRiskKindDefault}" autocomplete="off"${deployOneTapMode ? ' readonly data-deploy-scope-locked="true"' : ""} />
+          </div>` : dashboardMode ? `<p>dashboard session \u3092\u66F4\u65B0\u3057\u307E\u3059\u3002\u901A\u77E5\u3084\u901A\u5E38 dashboard \u3092\u958B\u304F\u305F\u3081\u306E read-only \u88DC\u52A9\u8A8D\u8A3C\u3067\u3001repo / Issue / PR scope \u306F\u4F7F\u3044\u307E\u305B\u3093\u3002</p>
+          <div class="approval-internal" hidden>
+            <label for="repo-input">Repository</label>
+            <input id="repo-input" value="" placeholder="marushu/vtdd-v2-p" />
+            <label for="issue-input">Issue Number</label>
+            <input id="issue-input" value="" placeholder="15" />
+            <label for="phase-input">Phase</label>
+            <input id="phase-input" value="${phaseDefault}" />
+            <label for="action-type-input">Action Type</label>
+            <input id="action-type-input" value="read" autocomplete="off" readonly />
+            <label for="risk-kind-input">High-risk Kind</label>
+            <input id="risk-kind-input" value="dashboard_access" autocomplete="off" readonly />
           </div>` : `<label for="repo-input">Repository</label>
           <input id="repo-input" value="${repoDefault}" placeholder="marushu/vtdd-v2-p" />
           <label for="issue-input">Issue Number</label>
@@ -27594,6 +27612,7 @@ function renderPasskeyOperatorPage(input = {}) {
       const issueCloseLink = document.getElementById("issue-close-link");
       const operatorMode = "${escapeHtml(operatorMode)}";
       let latestApprovalGrantId = "";
+      let latestApprovalGrant = null;
 
       async function readResponseBody(response) {
         const contentType = response.headers.get("content-type") || "";
@@ -27644,6 +27663,13 @@ function renderPasskeyOperatorPage(input = {}) {
           throw new Error("repositoryInput is required before approval/deploy. Deploy does not require issueNumber or pullNumber, but it does require owner/repo.");
         }
         return repositoryInput;
+      }
+
+      function readApprovalRepositoryInput() {
+        if (operatorMode === "dashboard") {
+          return document.getElementById("repo-input").value.trim();
+        }
+        return readRequiredRepositoryInput();
       }
 
       async function copyText(text) {
@@ -27820,23 +27846,53 @@ function renderPasskeyOperatorPage(input = {}) {
         return readNumberInput("pull-number-input");
       }
 
-      function applyOperatorModeDefaults() {
+      function forceDeployApprovalScope() {
         if (operatorMode === "deploy") {
           document.getElementById("action-type-input").value = "deploy_production";
           document.getElementById("risk-kind-input").value = "deploy_production";
+          return true;
+        }
+        return false;
+      }
+
+      function applyOperatorModeDefaults() {
+        if (forceDeployApprovalScope()) {
           return;
         }
         if (operatorMode === "dashboard") {
+          document.getElementById("repo-input").value = "";
+          document.getElementById("issue-input").value = "";
+          const pullNumberInput = document.getElementById("pull-number-input");
+          if (pullNumberInput) {
+            pullNumberInput.value = "";
+          }
           document.getElementById("action-type-input").value = "read";
           document.getElementById("risk-kind-input").value = "dashboard_access";
         }
       }
 
       function shouldAutoDispatchProductionDeploy() {
-        applyOperatorModeDefaults();
+        forceDeployApprovalScope();
         return operatorMode === "deploy" &&
           document.getElementById("action-type-input").value === "deploy_production" &&
           document.getElementById("risk-kind-input").value === "deploy_production";
+      }
+
+      function approvalGrantHasDeployScope(approvalGrant) {
+        const scope = approvalGrant?.scope || {};
+        return scope.actionType === "deploy_production" &&
+          scope.highRiskKind === "deploy_production";
+      }
+
+      function requireDeployApprovalGrantScope() {
+        if (operatorMode !== "deploy") {
+          return;
+        }
+        forceDeployApprovalScope();
+        if (!approvalGrantHasDeployScope(latestApprovalGrant)) {
+          latestApprovalGrantId = "";
+          throw new Error("deploy \u7528\u306E\u627F\u8A8D\u3067\u306F\u3042\u308A\u307E\u305B\u3093\u3002\u30D1\u30B9\u30AD\u30FC\u3067 production deploy \u3092\u518D\u627F\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002");
+        }
       }
 
       async function dispatchProductionDeploy({ source = "manual" } = {}) {
@@ -27844,6 +27900,7 @@ function renderPasskeyOperatorPage(input = {}) {
         if (!latestApprovalGrantId) {
           throw new Error("approvalGrantId is required before production deploy");
         }
+        requireDeployApprovalGrantScope();
         const repositoryInput = readRequiredRepositoryInput();
         clearDeployRunLink();
         deployOutput.textContent = source === "approval"
@@ -27925,7 +27982,7 @@ function renderPasskeyOperatorPage(input = {}) {
       document.getElementById("approve-button").addEventListener("click", async () => {
         try {
           applyOperatorModeDefaults();
-          const repositoryInput = readRequiredRepositoryInput();
+          const repositoryInput = readApprovalRepositoryInput();
           approveOutput.textContent = "approval challenge request...";
           const challengeResponse = await fetch("${apiBase}/approval/passkey/challenge", {
             method: "POST",
@@ -27965,10 +28022,11 @@ function renderPasskeyOperatorPage(input = {}) {
           if (!verifyResponse.ok) {
             throw responseError(verifyBody, "approval verify failed");
           }
-          latestApprovalGrantId = verifyBody?.approvalGrant?.approvalId || verifyBody?.approvalGrantId || "";
+          latestApprovalGrant = verifyBody?.approvalGrant || null;
+          latestApprovalGrantId = latestApprovalGrant?.approvalId || verifyBody?.approvalGrantId || "";
           approveOutput.textContent = JSON.stringify(verifyBody, null, 2);
           if (operatorMode === "dashboard") {
-            window.location.assign("/dashboard");
+            window.location.assign("${dashboardReturnPath}");
             return;
           }
           if (latestApprovalGrantId && autoCopyApprovalGrantInput?.checked) {
@@ -28415,6 +28473,22 @@ function defaultHighRiskKindForMode(operatorMode) {
 }
 function normalizeOperatorToken(value) {
   return String(value || "").trim().toLowerCase();
+}
+function sanitizePasskeyDashboardReturnPath(value) {
+  const normalized = String(value || "").trim() || "/dashboard";
+  let parsed;
+  try {
+    parsed = new URL(normalized, "https://dashboard.local");
+  } catch {
+    return "/dashboard";
+  }
+  if (parsed.origin !== "https://dashboard.local") {
+    return "/dashboard";
+  }
+  if (parsed.pathname !== "/dashboard" && !parsed.pathname.startsWith("/dashboard/")) {
+    return "/dashboard";
+  }
+  return parsed.pathname;
 }
 function escapeHtml(value) {
   return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
@@ -56413,7 +56487,7 @@ var DashboardChatRoom = class {
       await this.broadcastTransientStatus({
         threadId: normalized.threadId,
         status: normalized.transientStatus,
-        text: normalized.text
+        text: normalized.transientText || normalized.text
       });
     }
     if (normalized.messages.length === 0) {
@@ -60112,18 +60186,21 @@ function handlePasskeyOperatorPageRequest(request) {
   const syncEnabled = Boolean(syncApiBase);
   const requestedActionType = url.searchParams.get("actionType");
   const requestedHighRiskKind = url.searchParams.get("highRiskKind");
+  const requestedOperatorMode = url.searchParams.get("mode") || (requestedActionType || requestedHighRiskKind ? "" : "full");
+  const dashboardSessionMode = normalizeText30(requestedOperatorMode) === "dashboard";
   const html2 = renderPasskeyOperatorPage({
     origin: url.origin,
     syncApiBase,
-    operatorMode: url.searchParams.get("mode") || (requestedActionType || requestedHighRiskKind ? "" : "full"),
-    repositoryInput: url.searchParams.get("repositoryInput"),
-    issueNumber: url.searchParams.get("issueNumber"),
-    pullNumber: url.searchParams.get("pullNumber"),
+    operatorMode: requestedOperatorMode,
+    repositoryInput: dashboardSessionMode ? "" : url.searchParams.get("repositoryInput"),
+    issueNumber: dashboardSessionMode ? "" : url.searchParams.get("issueNumber"),
+    pullNumber: dashboardSessionMode ? "" : url.searchParams.get("pullNumber"),
     phase: url.searchParams.get("phase") || "execution",
     actionType: requestedActionType,
     highRiskKind: requestedHighRiskKind,
     mergeMethod: url.searchParams.get("mergeMethod") || "squash",
     returnUrl: normalizeOperatorReturnUrl(url.searchParams.get("returnUrl")),
+    dashboardReturnPath: sanitizeDashboardPreAuthReturnPath(url.searchParams.get("dashboardReturnPath")),
     operatorId: url.searchParams.get("operatorId") || "vtdd-operator",
     operatorLabel: url.searchParams.get("operatorLabel") || "VTDD Operator",
     githubAppRole: url.searchParams.get("githubAppRole") || "legacy",
@@ -61589,6 +61666,7 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
   const status = normalizeDashboardEventText(input.status).toLowerCase();
   const codexThreadId = normalizeDashboardEventText(input.codexThreadId || input.codex_thread_id);
   const text = sanitizeDashboardChatText(input.text || input.message || input.delta || input.finalText || input.final_text);
+  let transientText = "";
   const repository = normalizeCanonicalRepositoryInput(input.repository);
   const relatedIssue = normalizePositiveInteger9(input.relatedIssue || input.issueNumber);
   const createdAt = normalizeIsoTimestamp(input.createdAt) || (/* @__PURE__ */ new Date()).toISOString();
@@ -61612,6 +61690,8 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
         )
       );
     }
+    transientStatus = "replied";
+    transientText = "Dashboard thread \u63A5\u7D9A\u6E08\u307F\u3002";
   } else if (eventType === "app_server_turn_failed" || status === "failed") {
     messages.push(
       normalizeDashboardChatMessage(
@@ -61629,6 +61709,11 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
     );
   } else if (eventType === "app_server_status") {
     transientStatus = status === "replied" ? "replied" : "thinking";
+    transientText = buildDashboardOwnerFacingTransientStatusText(input, {
+      status,
+      text,
+      transientStatus
+    });
   }
   return {
     ok: true,
@@ -61636,9 +61721,86 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
     codexThreadId,
     createdAt,
     text,
+    transientText,
     transientStatus,
     messages: messages.filter(Boolean)
   };
+}
+var DASHBOARD_APP_SERVER_STAGE_TEXT = {
+  read_context: "\u65E2\u5B58 Issue / PR / docs \u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u3002",
+  inspect_context: "\u65E2\u5B58 Issue / PR / docs \u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u3002",
+  issue_body: "\u65B0\u3057\u3044 Issue \u672C\u6587\u3092\u4F5C\u6210\u3057\u3066\u3044\u307E\u3059\u3002",
+  draft_issue: "\u65B0\u3057\u3044 Issue \u672C\u6587\u3092\u4F5C\u6210\u3057\u3066\u3044\u307E\u3059\u3002",
+  github_issue_create: "GitHub \u306B Issue \u3092\u4F5C\u6210\u3057\u3066\u3044\u307E\u3059\u3002",
+  issue_create: "GitHub \u306B Issue \u3092\u4F5C\u6210\u3057\u3066\u3044\u307E\u3059\u3002",
+  bounded_change_contract: "bounded change contract \u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u3002",
+  change_contract: "bounded change contract \u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u3002",
+  topic_branch: "topic branch \u3092\u4F5C\u6210\u3057\u3066\u3044\u307E\u3059\u3002",
+  branch_create: "topic branch \u3092\u4F5C\u6210\u3057\u3066\u3044\u307E\u3059\u3002",
+  implementation: "\u5B9F\u88C5\u306B\u5165\u3063\u3066\u3044\u307E\u3059\u3002",
+  implement: "\u5B9F\u88C5\u306B\u5165\u3063\u3066\u3044\u307E\u3059\u3002",
+  test: "\u30C6\u30B9\u30C8\u3092\u5B9F\u884C\u3057\u3066\u3044\u307E\u3059\u3002",
+  tests: "\u30C6\u30B9\u30C8\u3092\u5B9F\u884C\u3057\u3066\u3044\u307E\u3059\u3002",
+  pr_body: "PR\u672C\u6587\u3092\u4F5C\u6210\u3057\u3066\u3044\u307E\u3059\u3002",
+  pull_request_body: "PR\u672C\u6587\u3092\u4F5C\u6210\u3057\u3066\u3044\u307E\u3059\u3002",
+  pr_create: "PR\u3092\u4F5C\u6210\u3057\u3066\u3044\u307E\u3059\u3002",
+  pull_request_create: "PR\u3092\u4F5C\u6210\u3057\u3066\u3044\u307E\u3059\u3002",
+  reviewer_wait: "CI / reviewer \u3092\u5F85\u3063\u3066\u3044\u307E\u3059\u3002",
+  ci_wait: "CI / reviewer \u3092\u5F85\u3063\u3066\u3044\u307E\u3059\u3002",
+  reviewer_revision: "reviewer \u6307\u6458\u3092\u53CD\u6620\u3057\u3066\u3044\u307E\u3059\u3002",
+  review_fix: "reviewer \u6307\u6458\u3092\u53CD\u6620\u3057\u3066\u3044\u307E\u3059\u3002"
+};
+function buildDashboardOwnerFacingTransientStatusText(input, { status = "", text = "", transientStatus = "" } = {}) {
+  if (transientStatus === "replied" || status === "replied") {
+    return "Dashboard thread \u63A5\u7D9A\u6E08\u307F\u3002";
+  }
+  const stage = normalizeDashboardEventText(
+    input.stage || input.phase || input.step || input.activity || input.progressStage || input.progress_stage
+  ).toLowerCase();
+  const normalizedStage = stage.replaceAll("-", "_");
+  if (DASHBOARD_APP_SERVER_STAGE_TEXT[normalizedStage]) {
+    return DASHBOARD_APP_SERVER_STAGE_TEXT[normalizedStage];
+  }
+  const eventType = normalizeDashboardEventText(input.type || input.eventType || input.event_type).toLowerCase();
+  const source = [stage, status, eventType, text].filter(Boolean).join(" ").toLowerCase();
+  const matches = (patterns) => patterns.some((pattern) => source.includes(pattern));
+  if (matches(["reviewer_revision", "reviewer-revision", "review_fix", "review-fix", "address_review", "\u6307\u6458", "\u53CD\u6620"])) {
+    return "reviewer \u6307\u6458\u3092\u53CD\u6620\u3057\u3066\u3044\u307E\u3059\u3002";
+  }
+  if (matches(["ci", "checks", "check_run", "workflow", "actions", "reviewer_wait", "reviewer-wait", "review_wait"])) {
+    return "CI / reviewer \u3092\u5F85\u3063\u3066\u3044\u307E\u3059\u3002";
+  }
+  if (matches(["reviewer", "review", "gemini"])) {
+    return "reviewer \u3092\u5F85\u3063\u3066\u3044\u307E\u3059\u3002";
+  }
+  if (matches(["pr_body", "pr-body", "pull_request_body", "pull-request-body", "body_file", "body-file", "pr\u672C\u6587"])) {
+    return "PR\u672C\u6587\u3092\u4F5C\u6210\u3057\u3066\u3044\u307E\u3059\u3002";
+  }
+  if (matches(["pr_create", "pr-create", "pull_request_create", "pull-request-create", "open_pr", "open-pr", "pr\u3092\u4F5C\u6210"])) {
+    return "PR\u3092\u4F5C\u6210\u3057\u3066\u3044\u307E\u3059\u3002";
+  }
+  if (matches(["test", "tests", "unit", "integration", "e2e", "\u30C6\u30B9\u30C8"])) {
+    return "\u30C6\u30B9\u30C8\u3092\u5B9F\u884C\u3057\u3066\u3044\u307E\u3059\u3002";
+  }
+  if (matches(["implementation", "implement", "coding", "patch", "edit", "apply_patch", "\u5B9F\u88C5"])) {
+    return "\u5B9F\u88C5\u306B\u5165\u3063\u3066\u3044\u307E\u3059\u3002";
+  }
+  if (matches(["topic_branch", "topic-branch", "branch_create", "branch-create", "checkout_branch", "checkout-branch"])) {
+    return "topic branch \u3092\u4F5C\u6210\u3057\u3066\u3044\u307E\u3059\u3002";
+  }
+  if (matches(["bounded_change_contract", "bounded-change-contract", "change_contract", "change-contract", "contract"])) {
+    return "bounded change contract \u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u3002";
+  }
+  if (matches(["github_issue_create", "github-issue-create", "issue_create", "issue-create", "create_issue", "create-issue"])) {
+    return "GitHub \u306B Issue \u3092\u4F5C\u6210\u3057\u3066\u3044\u307E\u3059\u3002";
+  }
+  if (matches(["issue_body", "issue-body", "draft_issue", "draft-issue", "issue_draft", "issue-draft"])) {
+    return "\u65B0\u3057\u3044 Issue \u672C\u6587\u3092\u4F5C\u6210\u3057\u3066\u3044\u307E\u3059\u3002";
+  }
+  if (matches(["read_context", "read-context", "inspect", "investigate", "context", "docs", "document", "issue", "issues", "pr", "pull_request", "pull-request"])) {
+    return "\u65E2\u5B58 Issue / PR / docs \u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u3002";
+  }
+  return text || "app-server bridge \u306E\u8FD4\u4FE1\u3092\u5F85\u3063\u3066\u3044\u307E\u3059";
 }
 async function notifyDashboardChatRoom({ env, threadId, messages }) {
   const room = resolveDashboardChatRoomStub(env, threadId);
@@ -65172,11 +65334,19 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
   const dashboardTargetLabel = repositoryInput || "\u5BFE\u8C61 repo \u672A\u6307\u5B9A";
   const targetStatusMarkup = repositoryInput ? `<p><strong>${escapeDashboardHtml(repositoryInput)}</strong></p>
           <p class="muted">\u3053\u306E repo \u3067 Issue / PR \u64CD\u4F5C\u304C\u5FC5\u8981\u306A\u6642\u3060\u3051\u5BFE\u8C61\u306B\u3057\u307E\u3059\u3002\u901A\u5E38\u4F1A\u8A71\u306F\u3053\u306E\u307E\u307E\u7D9A\u3051\u3089\u308C\u307E\u3059\u3002</p>` : `<p><strong>\u5BFE\u8C61 repo \u672A\u6307\u5B9A</strong></p>
-          <p class="muted">\u901A\u5E38\u4F1A\u8A71\u306F\u7D9A\u3051\u3089\u308C\u307E\u3059\u3002Issue / PR \u64CD\u4F5C\u304C\u5FC5\u8981\u306B\u306A\u3063\u305F\u6642\u306B\u5BFE\u8C61 repo \u3092\u9078\u3073\u307E\u3059\u3002</p>`;
+          <p class="muted">\u901A\u5E38\u4F1A\u8A71\u306F\u7D9A\u3051\u3089\u308C\u307E\u3059\u3002Issue / PR / deploy \u306A\u3069 repo \u304C\u5FC5\u8981\u306A\u64CD\u4F5C\u3092\u59CB\u3081\u308B\u6642\u3060\u3051\u3001\u3053\u3053\u3067\u5BFE\u8C61 repo \u3092\u8A2D\u5B9A\u3057\u307E\u3059\u3002</p>
+          <form class="target-form" method="get" action="${escapeDashboardHtml(origin)}/dashboard">
+            <label for="dashboard-repository-input">\u5BFE\u8C61 repo</label>
+            <div class="target-form-row">
+              <input id="dashboard-repository-input" name="repository" placeholder="owner/repo" autocomplete="off" autocapitalize="off" spellcheck="false">
+              ${dashboardIssueNumber ? `<input type="hidden" name="issueNumber" value="${dashboardIssueNumber}">` : ""}
+              <button type="submit">\u8A2D\u5B9A</button>
+            </div>
+          </form>`;
   const encodedRepository = encodeURIComponent(repositoryInput);
   const chatThreadId = `dashboard-main-${(repositoryInput || "unresolved").replace(/[^a-z0-9_.-]+/gi, "-")}`;
   const socketOrigin = origin.replace(/^http/i, "ws");
-  const dashboardSignInUrl = `${origin}/v2/approval/passkey/operator?mode=dashboard&repositoryInput=${encodedRepository}&phase=execution&actionType=read&highRiskKind=dashboard_access`;
+  const dashboardSignInUrl = `${origin}/v2/approval/passkey/operator?mode=dashboard&phase=execution&actionType=read&highRiskKind=dashboard_access`;
   const latestDeployEvent = await retrieveLatestDashboardEvent({
     store: dashboardEventStore,
     kind: "github_actions_workflow_run",
@@ -65192,22 +65362,26 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     {
       title: "Startup preflight",
       body: "AGENTS.md\u3001thread-independent startup\u3001runtime truth\u3001RAG\u3001self parity \u3092\u6700\u521D\u306B\u8AAD\u3080\u5165\u53E3\u3002",
-      href: `${origin}/dashboard/preflight?repository=${encodedRepository}`
+      href: repositoryInput ? `${origin}/dashboard/preflight?repository=${encodedRepository}` : "",
+      disabledReason: "repo \u8A2D\u5B9A\u5F8C\u306B\u958B\u3051\u307E\u3059"
     },
     {
       title: "Execution progress",
       body: "VPS Codex CLI / remote Codex execution \u306E\u9032\u6357\u78BA\u8A8D\u3002",
-      href: `${origin}/dashboard/progress?repository=${encodedRepository}`
+      href: repositoryInput ? `${origin}/dashboard/progress?repository=${encodedRepository}` : "",
+      disabledReason: "repo \u8A2D\u5B9A\u5F8C\u306B\u958B\u3051\u307E\u3059"
     },
     {
       title: "VPS runner status",
       body: "runner health\u3001queue\u3001\u5BFE\u8C61 execution \u306E\u72B6\u614B\u78BA\u8A8D\u3002",
-      href: `${origin}/dashboard/vps-runner?repository=${encodedRepository}`
+      href: repositoryInput ? `${origin}/dashboard/vps-runner?repository=${encodedRepository}` : "",
+      disabledReason: "repo \u8A2D\u5B9A\u5F8C\u306B\u958B\u3051\u307E\u3059"
     },
     {
       title: "GitHub runtime truth",
       body: "Issues\u3001PRs\u3001checks\u3001workflow runs\u3001reviewer comments \u3092\u8AAD\u3080\u5165\u53E3\u3002",
-      href: `${origin}/dashboard/github?repository=${encodedRepository}`
+      href: repositoryInput ? `${origin}/dashboard/github?repository=${encodedRepository}` : "",
+      disabledReason: "repo \u8A2D\u5B9A\u5F8C\u306B\u958B\u3051\u307E\u3059"
     },
     {
       title: "\u901A\u77E5\u30BB\u30F3\u30BF\u30FC",
@@ -65217,22 +65391,26 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     {
       title: "Operational RAG",
       body: "decision / proposal / working memory \u306E compact retrieval\u3002runtime truth \u306E\u4EE3\u66FF\u3067\u306F\u306A\u3044\u3002",
-      href: `${origin}/dashboard/memory?repository=${encodedRepository}`
+      href: repositoryInput ? `${origin}/dashboard/memory?repository=${encodedRepository}` : "",
+      disabledReason: "repo \u8A2D\u5B9A\u5F8C\u306B\u958B\u3051\u307E\u3059"
     },
     {
       title: "Self parity",
       body: "Action Schema\u3001Instructions\u3001Cloudflare deploy freshness\u3001operator URL \u3092\u78BA\u8A8D\u3002",
-      href: `${origin}/dashboard/self-parity?repository=${encodedRepository}`
+      href: repositoryInput ? `${origin}/dashboard/self-parity?repository=${encodedRepository}` : "",
+      disabledReason: "repo \u8A2D\u5B9A\u5F8C\u306B\u958B\u3051\u307E\u3059"
     },
     {
       title: "Setup diagnostics",
       body: "Butler / Custom GPT / deploy drift \u306E\u8A3A\u65AD\u30DA\u30FC\u30B8\u3002",
-      href: `${origin}/setup/diagnostics?repository=${encodedRepository}`
+      href: repositoryInput ? `${origin}/setup/diagnostics?repository=${encodedRepository}` : "",
+      disabledReason: "repo \u8A2D\u5B9A\u5F8C\u306B\u958B\u3051\u307E\u3059"
     },
     {
-      title: "Deploy operator",
-      body: "production deploy \u306F scope \u660E\u793A\u6E08\u307F passkey approval \u306E\u5F8C\u308D\u3002approval grant \u3084 secret \u306F dashboard \u306B\u4FDD\u5B58\u3057\u306A\u3044\u3002",
-      href: `${origin}/v2/approval/passkey/operator?repositoryInput=${encodedRepository}&phase=execution&actionType=deploy_production&highRiskKind=deploy_production`
+      title: "\u672C\u756A\u53CD\u6620 / Passkey \u627F\u8A8D",
+      body: "production deploy \u306F\u5BFE\u8C61 repo \u8A2D\u5B9A\u5F8C\u3001scope \u660E\u793A\u6E08\u307F passkey approval \u306E\u5F8C\u308D\u3067\u958B\u304D\u307E\u3059\u3002",
+      href: repositoryInput ? `${origin}/v2/approval/passkey/operator?repositoryInput=${encodedRepository}&phase=execution&actionType=deploy_production&highRiskKind=deploy_production` : "",
+      disabledReason: "repo \u8A2D\u5B9A\u5F8C\u306B\u958B\u3051\u307E\u3059"
     }
   ];
   const workflows = [
@@ -65247,14 +65425,26 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       href: `${origin}/dashboard/notifications`
     },
     {
+      label: "Passkey",
+      href: dashboardSignInUrl
+    },
+    {
       label: "\u9032\u6357\u3092\u898B\u308B",
-      href: `${origin}/dashboard/progress?repository=${encodedRepository}`
+      href: repositoryInput ? `${origin}/dashboard/progress?repository=${encodedRepository}` : "",
+      disabledReason: "repo \u8A2D\u5B9A\u5F8C"
     },
     {
       label: "GitHub\u72B6\u6CC1",
-      href: `${origin}/dashboard/github?repository=${encodedRepository}`
+      href: repositoryInput ? `${origin}/dashboard/github?repository=${encodedRepository}` : "",
+      disabledReason: "repo \u8A2D\u5B9A\u5F8C"
     }
   ];
+  const renderDashboardActionList = (actions) => actions.map(
+    (action) => action.href ? `<a href="${escapeDashboardHtml(action.href)}">${escapeDashboardHtml(action.label || action.title)}</a>` : `<span class="disabled-action" aria-disabled="true"><strong>${escapeDashboardHtml(action.label || action.title)}</strong><small>${escapeDashboardHtml(action.disabledReason || "\u5229\u7528\u3067\u304D\u307E\u305B\u3093")}</small></span>`
+  ).join("");
+  const renderDashboardSurfaceList = (items) => items.map(
+    (surface) => surface.href ? `<a href="${escapeDashboardHtml(surface.href)}">${escapeDashboardHtml(surface.title)}</a>` : `<span class="disabled-action" aria-disabled="true"><strong>${escapeDashboardHtml(surface.title)}</strong><small>${escapeDashboardHtml(surface.disabledReason || "\u5229\u7528\u3067\u304D\u307E\u305B\u3093")}</small></span>`
+  ).join("");
   return `<!doctype html>
 <html lang="ja">
 <head>
@@ -65335,6 +65525,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .bubble .message-body pre code { display: block; font-size: 14px; line-height: 1.55; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
     .bubble .message-body pre.wrap-code code { white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
     .bubble .message-body strong { display: inline; color: inherit; font-size: inherit; letter-spacing: 0; text-transform: none; margin: 0; font-weight: 800; }
+    .message-meta { margin-top: 6px; color: var(--muted); font-size: 11px; line-height: 1.2; opacity: .86; }
+    .bubble.owner .message-meta { color: var(--owner-text); opacity: .76; text-align: right; }
     .copy-message, .copy-code { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border: 1px solid var(--border); border-radius: 999px; background: var(--button); color: var(--text); font-size: 15px; line-height: 1; cursor: pointer; }
     .copy-message:focus-visible, .copy-code:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
     .copy-code { position: absolute; top: 8px; right: 8px; z-index: 1; opacity: .88; }
@@ -65380,7 +65572,15 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .deploy-event p { margin-bottom: 6px; font-size: 13px; line-height: 1.45; }
     .quick-actions, .surface-list { display: grid; gap: 8px; }
     .quick-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .quick-actions a, .surface-list a { display: inline-flex; align-items: center; justify-content: center; min-height: 36px; border: 1px solid var(--border); border-radius: 10px; padding: 7px 9px; color: var(--text); text-decoration: none; background: var(--soft); font-weight: 750; font-size: 13px; text-align: center; }
+    .quick-actions a, .surface-list a, .disabled-action { display: inline-flex; align-items: center; justify-content: center; min-height: 36px; border: 1px solid var(--border); border-radius: 10px; padding: 7px 9px; color: var(--text); text-decoration: none; background: var(--soft); font-weight: 750; font-size: 13px; text-align: center; }
+    .disabled-action { flex-direction: column; gap: 2px; color: var(--muted); background: transparent; cursor: not-allowed; }
+    .disabled-action strong { font-size: 13px; }
+    .disabled-action small { font-size: 11px; font-weight: 650; line-height: 1.2; }
+    .target-form { display: grid; gap: 6px; margin-top: 10px; }
+    .target-form label { color: var(--muted); font-size: 12px; font-weight: 800; }
+    .target-form-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; }
+    .target-form input { min-width: 0; min-height: 38px; border: 1px solid var(--border); border-radius: 10px; padding: 7px 9px; color: var(--text); background: var(--panel); font: inherit; }
+    .target-form button { min-height: 38px; border: 1px solid var(--border); border-radius: 10px; padding: 7px 10px; color: var(--text); background: var(--button); font: inherit; font-weight: 800; }
     summary { cursor: pointer; color: var(--text); font-weight: 800; }
     .muted { color: var(--muted); }
     code { color: var(--text); overflow-wrap: anywhere; }
@@ -65431,7 +65631,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         </div>
         <div class="top-right">
           <a class="tool-button top-action" href="${escapeDashboardHtml(origin)}/dashboard/notifications" aria-label="\u901A\u77E5\u30BB\u30F3\u30BF\u30FC">\u901A\u77E5</a>
-          <a class="tool-button top-action" href="${escapeDashboardHtml(origin)}/dashboard/progress?repository=${encodedRepository}" aria-label="\u9032\u6357\u3092\u898B\u308B">\u9032\u6357</a>
+          <a class="tool-button top-action" href="${escapeDashboardHtml(dashboardSignInUrl)}" aria-label="Passkey \u3067 dashboard session \u3092\u66F4\u65B0">Passkey</a>
         </div>
       </header>
 
@@ -65456,12 +65656,12 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             ${renderDashboardDeployEvent(latestDeployEvent)}
           </div>
           <div class="quick-actions">
-            ${cockpitActions.map((action) => `<a href="${escapeDashboardHtml(action.href)}">${escapeDashboardHtml(action.label)}</a>`).join("")}
+            ${renderDashboardActionList(cockpitActions)}
           </div>
           <details data-debug-section="dashboard-development-operations">
             <summary>\u958B\u767A/\u904B\u7528</summary>
             <div class="surface-list">
-              ${surfaces.map((surface) => `<a href="${escapeDashboardHtml(surface.href)}">${escapeDashboardHtml(surface.title)}</a>`).join("")}
+              ${renderDashboardSurfaceList(surfaces)}
             </div>
           </details>
           <details>
@@ -65536,14 +65736,14 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           <p>\u76F4\u8FD1\u306E\u53CD\u6620\u3001\u5931\u6557\u3001\u9032\u884C\u4E2D\u306E\u4F5C\u696D\u304C\u3042\u308C\u3070\u3053\u3053\u306B\u51FA\u3057\u307E\u3059\u3002</p>
           ${renderDashboardDeployEvent(latestDeployEvent)}
           <div class="quick-actions">
-            ${cockpitActions.map((action) => `<a href="${escapeDashboardHtml(action.href)}">${escapeDashboardHtml(action.label)}</a>`).join("")}
+            ${renderDashboardActionList(cockpitActions)}
           </div>
         </div>
 
         <details data-debug-section="dashboard-development-operations">
           <summary>\u958B\u767A/\u904B\u7528</summary>
           <div class="surface-list">
-            ${surfaces.map((surface) => `<a href="${escapeDashboardHtml(surface.href)}">${escapeDashboardHtml(surface.title)}</a>`).join("")}
+            ${renderDashboardSurfaceList(surfaces)}
           </div>
         </details>
 
@@ -65652,10 +65852,16 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         return "\u4E0D\u660E";
       }
 
-      function buildReconnectStatus(prefix) {
+      function setConnectionRecoveryStatus(message) {
         const attempt = Math.max(1, reconnectAttempt + 1);
-        const refreshPart = lastRefreshFailure ? " \u6700\u5F8C\u306E\u5C65\u6B74\u53D6\u5F97: " + lastRefreshFailure + "\u3002" : "";
-        return prefix + " \u518D\u63A5\u7D9A " + attempt + "\u56DE\u76EE / WebSocket: " + describeChatSocketState() + "\u3002" + refreshPart;
+        status.dataset.reconnectAttempt = String(attempt);
+        status.dataset.websocketState = describeChatSocketState();
+        status.dataset.lastRefreshFailure = lastRefreshFailure || "";
+        setStatus(message);
+      }
+
+      function buildReconnectStatus(prefix) {
+        return prefix + " \u5165\u529B\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002";
       }
 
       function dropStaleSocketIfNeeded() {
@@ -65753,8 +65959,43 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         if (media) {
           article.appendChild(media);
         }
+        const timestamp = formatMessageTimestamp(message.createdAt || message.created_at);
+        if (timestamp) {
+          const meta = document.createElement("time");
+          meta.className = "message-meta";
+          meta.dateTime = normalizeDateTimeAttribute(message.createdAt || message.created_at);
+          meta.textContent = timestamp;
+          article.appendChild(meta);
+        }
         log.appendChild(article);
         scrollToLatest();
+      }
+
+      function formatMessageTimestamp(value) {
+        const date = new Date(value || "");
+        if (Number.isNaN(date.getTime())) return "";
+        const now = new Date();
+        const sameDay =
+          date.getFullYear() === now.getFullYear() &&
+          date.getMonth() === now.getMonth() &&
+          date.getDate() === now.getDate();
+        const locale = navigator.language || "ja-JP";
+        const time = new Intl.DateTimeFormat(locale, {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false
+        }).format(date);
+        if (sameDay) return time;
+        const day = new Intl.DateTimeFormat(locale, {
+          month: "numeric",
+          day: "numeric"
+        }).format(date);
+        return day + " " + time;
+      }
+
+      function normalizeDateTimeAttribute(value) {
+        const date = new Date(value || "");
+        return Number.isNaN(date.getTime()) ? "" : date.toISOString();
       }
 
       function renderMediaReferences(references) {
@@ -66160,7 +66401,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
               return { ok: false, authExpired: true };
             }
             lastRefreshFailure = "HTTP " + response.status;
-            setStatus(buildReconnectStatus("\u5C65\u6B74\u306E\u518D\u53D6\u5F97\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002"));
+            setConnectionRecoveryStatus("\u5C65\u6B74\u306E\u518D\u53D6\u5F97\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002");
             return { ok: false, status: response.status };
           }
           if (body && body.ok) {
@@ -66170,7 +66411,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           }
         } catch {
           lastRefreshFailure = "\u30CD\u30C3\u30C8\u30EF\u30FC\u30AF";
-          setStatus(buildReconnectStatus("\u5C65\u6B74\u306E\u518D\u53D6\u5F97\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002"));
+          setConnectionRecoveryStatus("\u5C65\u6B74\u306E\u518D\u53D6\u5F97\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002");
           return { ok: false, network: true };
         } finally {
           refreshingThread = false;
@@ -66181,7 +66422,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       function scheduleReconnect() {
         if (reconnectTimer || !socketEndpoint || typeof WebSocket !== "function") return;
         const delay = Math.min(10000, 1000 * Math.pow(2, reconnectAttempt));
-        setStatus(buildReconnectStatus("WebSocket \u3092\u518D\u63A5\u7D9A\u3057\u307E\u3059\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002"));
+        setConnectionRecoveryStatus("\u63A5\u7D9A\u3092\u5FA9\u5E30\u3057\u3066\u3044\u307E\u3059\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002");
         reconnectAttempt += 1;
         reconnectTimer = window.setTimeout(() => {
           reconnectTimer = null;
@@ -66250,7 +66491,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             releasePendingOwnerSend(pendingOwnerSend.clientMessageId, { clearComposer: false, keepRollbackTimer: true });
             setStatus("\u9001\u4FE1\u78BA\u8A8D\u524D\u306B WebSocket \u304C\u5207\u308C\u307E\u3057\u305F\u3002\u5165\u529B\u306F\u6B8B\u3057\u3066\u3044\u307E\u3059\u3002\u5C65\u6B74\u518D\u53D6\u5F97\u5F8C\u306B\u3082\u3046\u4E00\u5EA6\u9001\u4FE1\u3067\u304D\u307E\u3059\u3002");
           } else {
-            setStatus(buildReconnectStatus("WebSocket \u304C\u5207\u308C\u307E\u3057\u305F\u3002\u5C65\u6B74\u3092\u518D\u53D6\u5F97\u3057\u3066\u518D\u63A5\u7D9A\u3057\u307E\u3059\u3002"));
+            setConnectionRecoveryStatus("\u63A5\u7D9A\u304C\u5207\u308C\u307E\u3057\u305F\u3002\u5C65\u6B74\u3092\u78BA\u8A8D\u3057\u306A\u304C\u3089\u5FA9\u5E30\u3057\u3066\u3044\u307E\u3059\u3002");
           }
           dropStaleSocketIfNeeded();
           refreshThread();
@@ -66261,7 +66502,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             releasePendingOwnerSend(pendingOwnerSend.clientMessageId, { clearComposer: false, keepRollbackTimer: true });
             setStatus("\u9001\u4FE1\u78BA\u8A8D\u524D\u306B WebSocket \u63A5\u7D9A\u304C\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u5165\u529B\u306F\u6B8B\u3057\u3066\u3044\u307E\u3059\u3002\u518D\u63A5\u7D9A\u5F8C\u306B\u3082\u3046\u4E00\u5EA6\u9001\u4FE1\u3067\u304D\u307E\u3059\u3002");
           } else {
-            setStatus(buildReconnectStatus("WebSocket \u63A5\u7D9A\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u5C65\u6B74\u3092\u518D\u53D6\u5F97\u3057\u3066\u518D\u63A5\u7D9A\u3057\u307E\u3059\u3002"));
+            setConnectionRecoveryStatus("\u63A5\u7D9A\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F\u3002\u5C65\u6B74\u3092\u78BA\u8A8D\u3057\u306A\u304C\u3089\u5FA9\u5E30\u3057\u3066\u3044\u307E\u3059\u3002");
           }
           dropStaleSocketIfNeeded();
           refreshThread();
@@ -66426,14 +66667,14 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       textarea.addEventListener("input", resizeComposerInput);
       window.addEventListener("resize", resizeComposerInput);
       window.addEventListener("online", () => {
-        setStatus(buildReconnectStatus("\u30CD\u30C3\u30C8\u30EF\u30FC\u30AF\u5FA9\u5E30\u3092\u691C\u77E5\u3057\u307E\u3057\u305F\u3002\u5C65\u6B74\u3092\u518D\u53D6\u5F97\u3057\u3066\u518D\u63A5\u7D9A\u3057\u307E\u3059\u3002"));
+        setConnectionRecoveryStatus("\u30CD\u30C3\u30C8\u30EF\u30FC\u30AF\u5FA9\u5E30\u3092\u691C\u77E5\u3057\u307E\u3057\u305F\u3002\u63A5\u7D9A\u3092\u5FA9\u5E30\u3057\u3066\u3044\u307E\u3059\u3002");
         dropStaleSocketIfNeeded();
         refreshThread();
         scheduleReconnect();
       });
       document.addEventListener("visibilitychange", () => {
         if (document.visibilityState === "visible" && (!chatSocket || chatSocket.readyState !== WebSocket.OPEN)) {
-          setStatus(buildReconnectStatus("\u753B\u9762\u5FA9\u5E30\u3092\u691C\u77E5\u3057\u307E\u3057\u305F\u3002\u5C65\u6B74\u3092\u518D\u53D6\u5F97\u3057\u3066\u518D\u63A5\u7D9A\u3057\u307E\u3059\u3002"));
+          setConnectionRecoveryStatus("\u753B\u9762\u5FA9\u5E30\u3092\u691C\u77E5\u3057\u307E\u3057\u305F\u3002\u63A5\u7D9A\u3092\u5FA9\u5E30\u3057\u3066\u3044\u307E\u3059\u3002");
           dropStaleSocketIfNeeded();
           refreshThread();
           scheduleReconnect();
@@ -66447,8 +66688,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 }
 function renderDashboardAuthRequiredPage({ runtimeOrigin, returnPath = "/dashboard", reason, passkeyFallbackReason } = {}) {
   const origin = normalizeText30(runtimeOrigin);
-  const dashboardAccessHref = `${origin || ""}${sanitizeDashboardPreAuthReturnPath(returnPath)}`;
-  const dashboardSignInUrl = `${origin || ""}/v2/approval/passkey/operator?mode=dashboard&repositoryInput=marushu%2Fvtdd-v2-p&phase=execution&actionType=read&highRiskKind=dashboard_access`;
+  const dashboardAccessReturnPath = sanitizeDashboardPreAuthReturnPath(returnPath);
+  const dashboardAccessHref = buildCloudflareAccessLoginHref({ origin, returnPath: dashboardAccessReturnPath });
+  const dashboardSignInUrl = `${origin || ""}/v2/approval/passkey/operator?mode=dashboard&phase=execution&actionType=read&highRiskKind=dashboard_access&dashboardReturnPath=${encodeURIComponent(dashboardAccessReturnPath)}`;
+  const passkeyButtonLabel = dashboardAccessReturnPath === "/dashboard/notifications" ? "Passkey \u3067\u901A\u77E5\u3092\u898B\u308B" : "Passkey \u3067 dashboard \u306B\u5165\u308B";
   return `<!doctype html>
 <html lang="ja">
 <head>
@@ -66479,6 +66722,7 @@ function renderDashboardAuthRequiredPage({ runtimeOrigin, returnPath = "/dashboa
       <p><code>${escapeDashboardHtml(reason || "dashboard authentication required")}</code></p>
       <div class="actions">
         <a class="button primary" href="${escapeDashboardHtml(dashboardAccessHref)}">Cloudflare Access \u3067\u958B\u304F</a>
+        <a class="button" href="${escapeDashboardHtml(dashboardSignInUrl)}">${escapeDashboardHtml(passkeyButtonLabel)}</a>
         <a class="button" href="${escapeDashboardHtml(`${origin || ""}/status`)}">Status</a>
       </div>
       <details>
@@ -66491,6 +66735,12 @@ function renderDashboardAuthRequiredPage({ runtimeOrigin, returnPath = "/dashboa
   </main>
 </body>
 </html>`;
+}
+function buildCloudflareAccessLoginHref({ origin, returnPath = "/dashboard" } = {}) {
+  const normalizedOrigin = normalizeText30(origin);
+  const sanitizedReturnPath = sanitizeDashboardPreAuthReturnPath(returnPath);
+  const redirectUrl = normalizedOrigin ? `${normalizedOrigin}${sanitizedReturnPath}` : sanitizedReturnPath;
+  return `${normalizedOrigin || ""}/cdn-cgi/access/login?redirect_url=${encodeURIComponent(redirectUrl)}`;
 }
 function sanitizeDashboardPreAuthReturnPath(value) {
   const normalized = normalizeText30(value) || "/dashboard";
@@ -66564,7 +66814,7 @@ function renderV2StatusPage({ runtimeOrigin, autonomyMode }) {
       <p>Worker \u306F\u5FDC\u7B54\u3057\u3066\u3044\u307E\u3059\u3002\u3053\u3053\u3067\u306F secret\u3001token\u3001approval grant \u306F\u8868\u793A\u3057\u307E\u305B\u3093\u3002</p>
       <div class="actions">
         <a class="primary" href="${escapeDashboardHtml(origin)}/dashboard">Butler dashboard</a>
-        <a href="${escapeDashboardHtml(origin)}/v2/approval/passkey/operator?repositoryInput=marushu%2Fvtdd-v2-p">Passkey operator</a>
+        <a href="${escapeDashboardHtml(origin)}/v2/approval/passkey/operator">Passkey operator</a>
       </div>
     </section>
 
