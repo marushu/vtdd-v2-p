@@ -1392,6 +1392,21 @@ test("served dashboard inline chat renderer executes decode, link, wrap, and cop
   assert.equal(links[0].className, "chat-link");
   assert.equal(links[0].href.startsWith("https://example.com/"), true);
 
+  const markdownLinkContainer = document.createElement("div");
+  helpers.renderMessageText(
+    markdownLinkContainer,
+    "[GitHub Actions を開く](https://github.com/example/repo/actions/runs/1234567890)"
+  );
+  const markdownLinks = markdownLinkContainer.querySelectorAll("a");
+  assert.equal(markdownLinks.length, 1);
+  assert.equal(markdownLinks[0].className, "chat-link");
+  assert.equal(markdownLinks[0].textContent, "GitHub Actions を開く");
+  assert.equal(
+    markdownLinks[0].href,
+    "https://github.com/example/repo/actions/runs/1234567890"
+  );
+  assert.equal(markdownLinkContainer.textContent, "GitHub Actions を開く");
+
   const parenthesizedLinkContainer = document.createElement("div");
   helpers.renderMessageText(parenthesizedLinkContainer, "開いて（https://example.com/path?x=1）");
   const parenthesizedLinks = parenthesizedLinkContainer.querySelectorAll("a");
