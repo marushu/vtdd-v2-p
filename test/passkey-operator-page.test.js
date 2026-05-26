@@ -309,6 +309,13 @@ test("passkey operator dashboard mode returns to sanitized dashboard path after 
   assert.equal(notificationsHtml.includes("認証後は通知センターへ戻ります。"), true);
   assert.equal(notificationsHtml.includes("パスキーで通知を見る"), false);
   assert.equal(notificationsHtml.includes("Approve high-risk action"), false);
+  assert.equal(notificationsHtml.includes('<pre id="approve-output" hidden></pre>'), true);
+  assert.equal(notificationsHtml.includes("function setApproveOutput("), true);
+  assert.equal(
+    notificationsHtml.includes('setApproveOutput("approval challenge request...", { show: shouldShowApproveOutput("status") });'),
+    true
+  );
+  assert.equal(notificationsHtml.includes("setApproveOutput(String(error), { show: shouldShowApproveOutput(\"error\") });"), true);
   assert.equal(notificationsHtml.includes("GitHub App secret sync なら"), false);
   assert.equal(notificationsHtml.includes("highRiskKind=github_app_secret_sync"), false);
   assert.equal(notificationsHtml.includes('window.location.assign("/dashboard/notifications")'), true);
@@ -320,6 +327,40 @@ test("passkey operator dashboard mode returns to sanitized dashboard path after 
   });
   assert.equal(unsafeHtml.includes('window.location.assign("/dashboard")'), true);
   assert.equal(unsafeHtml.includes("evil.example"), false);
+});
+
+test("passkey operator approve output visibility preserves deploy and dashboard policy", () => {
+  const html = renderPasskeyOperatorPage({
+    operatorMode: "dashboard",
+    dashboardReturnPath: "/dashboard/notifications"
+  });
+
+  const deployPolicy = evaluateApproveOutputPolicy(html, "deploy");
+  deployPolicy.setApproveOutput("deploy status", {
+    show: deployPolicy.shouldShowApproveOutput("status")
+  });
+  assert.equal(deployPolicy.approveOutput.hidden, true);
+  deployPolicy.setApproveOutput("deploy error", {
+    show: deployPolicy.shouldShowApproveOutput("error")
+  });
+  assert.equal(deployPolicy.approveOutput.hidden, true);
+
+  const dashboardPolicy = evaluateApproveOutputPolicy(html, "dashboard");
+  dashboardPolicy.setApproveOutput("dashboard status", {
+    show: dashboardPolicy.shouldShowApproveOutput("status")
+  });
+  assert.equal(dashboardPolicy.approveOutput.hidden, true);
+  dashboardPolicy.setApproveOutput("dashboard error", {
+    show: dashboardPolicy.shouldShowApproveOutput("error")
+  });
+  assert.equal(dashboardPolicy.approveOutput.hidden, false);
+  assert.equal(dashboardPolicy.approveOutput.textContent, "dashboard error");
+
+  const mergePolicy = evaluateApproveOutputPolicy(html, "merge");
+  mergePolicy.setApproveOutput("merge status", {
+    show: mergePolicy.shouldShowApproveOutput("status")
+  });
+  assert.equal(mergePolicy.approveOutput.hidden, false);
 });
 
 test("passkey operator page focuses merge mode on approval and PR merge sections", () => {
@@ -747,4 +788,63 @@ function loadOperatorPageHelpers(overrides = {}) {
   vm.runInNewContext(script, context);
   assert.equal(typeof context.readResponseBody, "function");
   return context;
+}
+
+function evaluateApproveOutputPolicy(html, operatorMode) {
+  const script = html.match(/<script>([\s\S]*)<\/script>/)?.[1];
+  assert.ok(script);
+  const approveOutput = {
+    hidden: true,
+    textContent: ""
+  };
+  const context = {
+    approveOutput
+  };
+  const source = [
+    `const operatorMode = ${JSON.stringify(operatorMode)};`,
+    "const approveOutput = globalThis.approveOutput;",
+    extractScriptFunction(script, "setApproveOutput"),
+    extractScriptFunction(script, "shouldShowApproveOutput"),
+    "globalThis.setApproveOutput = setApproveOutput;",
+    "globalThis.shouldShowApproveOutput = shouldShowApproveOutput;"
+  ].join("\n");
+  vm.runInNewContext(source, context);
+  return context;
+}
+
+function extractScriptFunction(script, name) {
+  const start = script.indexOf(`function ${name}`);
+  assert.notEqual(start, -1, `${name} function should exist`);
+  const parametersStart = script.indexOf("(", start);
+  assert.notEqual(parametersStart, -1, `${name} function parameters should exist`);
+  let parameterDepth = 0;
+  let parametersEnd = -1;
+  for (let index = parametersStart; index < script.length; index += 1) {
+    const character = script[index];
+    if (character === "(") {
+      parameterDepth += 1;
+    } else if (character === ")") {
+      parameterDepth -= 1;
+      if (parameterDepth === 0) {
+        parametersEnd = index;
+        break;
+      }
+    }
+  }
+  assert.notEqual(parametersEnd, -1, `${name} function parameters should close`);
+  const bodyStart = script.indexOf("{", parametersEnd);
+  assert.notEqual(bodyStart, -1, `${name} function body should exist`);
+  let depth = 0;
+  for (let index = bodyStart; index < script.length; index += 1) {
+    const character = script[index];
+    if (character === "{") {
+      depth += 1;
+    } else if (character === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        return script.slice(start, index + 1);
+      }
+    }
+  }
+  assert.fail(`${name} function body should close`);
 }

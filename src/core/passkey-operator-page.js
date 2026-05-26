@@ -273,7 +273,7 @@ export function renderPasskeyOperatorPage(input = {}) {
           </label>`
           }
           ${deployOneTapMode || dashboardMode ? "" : '<p class="muted">GitHub App secret sync なら <code>actionType=destructive</code> / <code>highRiskKind=github_app_secret_sync</code>、production deploy なら <code>actionType=deploy_production</code> / <code>highRiskKind=deploy_production</code>、PR merge なら <code>actionType=merge</code> / <code>highRiskKind=pull_merge</code> を使います。</p>'}
-          <pre id="approve-output"${deployOneTapMode ? " hidden" : ""}></pre>
+          <pre id="approve-output"${deployOneTapMode || dashboardMode ? " hidden" : ""}></pre>
         </section>
 
         <section data-operator-section="github-app-secret-sync"${hiddenAttribute(!sectionVisibility.githubAppSecretSync)}>
@@ -609,6 +609,24 @@ export function renderPasskeyOperatorPage(input = {}) {
         issueCloseLink.hidden = true;
       }
 
+      function setApproveOutput(text, { show = true } = {}) {
+        if (!approveOutput) {
+          return;
+        }
+        approveOutput.textContent = String(text || "");
+        approveOutput.hidden = !show;
+      }
+
+      function shouldShowApproveOutput(kind = "status") {
+        if (operatorMode === "deploy") {
+          return false;
+        }
+        if (operatorMode === "dashboard") {
+          return kind === "error";
+        }
+        return true;
+      }
+
       function showIssueCloseLink(body) {
         const issueUrl = normalizeGitHubIssueUrl(extractIssueCloseUrl(body));
         if (!issueUrl || !issueCloseLink) {
@@ -768,7 +786,7 @@ export function renderPasskeyOperatorPage(input = {}) {
         try {
           applyOperatorModeDefaults();
           const repositoryInput = readApprovalRepositoryInput();
-          approveOutput.textContent = "approval challenge request...";
+          setApproveOutput("approval challenge request...", { show: shouldShowApproveOutput("status") });
           const challengeResponse = await fetch("${apiBase}/approval/passkey/challenge", {
             method: "POST",
             headers: { "content-type": "application/json" },
@@ -809,7 +827,7 @@ export function renderPasskeyOperatorPage(input = {}) {
           }
           latestApprovalGrant = verifyBody?.approvalGrant || null;
           latestApprovalGrantId = latestApprovalGrant?.approvalId || verifyBody?.approvalGrantId || "";
-          approveOutput.textContent = JSON.stringify(verifyBody, null, 2);
+          setApproveOutput(JSON.stringify(verifyBody, null, 2), { show: shouldShowApproveOutput("status") });
           if (operatorMode === "dashboard") {
             window.location.assign("${dashboardReturnPath}");
             return;
@@ -830,7 +848,7 @@ export function renderPasskeyOperatorPage(input = {}) {
             }
           }
         } catch (error) {
-          approveOutput.textContent = String(error);
+          setApproveOutput(String(error), { show: shouldShowApproveOutput("error") });
         }
       });
 
