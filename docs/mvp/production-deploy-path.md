@@ -29,10 +29,6 @@ Set repository or environment secrets:
 - `CLOUDFLARE_D1_DATABASE_ID`
 - `VTDD_GATEWAY_BEARER_TOKEN`
 
-Set repository or environment variables:
-
-- `CLOUDFLARE_D1_DATABASE_NAME`
-
 The token should be scoped to minimum required Worker deploy permissions.
 
 These secrets are hard prerequisites. The workflow must check them before
@@ -67,10 +63,9 @@ before deploying production.
 
 For local/operator deploys, store owner-specific bindings in an ignored file
 such as `wrangler.production.local.toml`. For GitHub Actions deploys, store the
-D1 database id in `CLOUDFLARE_D1_DATABASE_ID` and the matching Cloudflare D1
-database name in repository variable `CLOUDFLARE_D1_DATABASE_NAME`. The runtime
-binding remains `VTDD_MEMORY_D1`; the database name/id are operator-owned deployment settings, not public repo defaults. Direct operator D1 repair
-commands should use the same database name through
+D1 database id in `CLOUDFLARE_D1_DATABASE_ID`. The runtime binding remains
+`VTDD_MEMORY_D1`; the database id is the production deploy source of truth, and
+the owner-specific database name is not required as a GitHub variable. Direct operator D1 repair commands should use the database name through
 `VTDD_MEMORY_D1_DATABASE_NAME` or `CLOUDFLARE_D1_DATABASE_NAME`.
 The media bucket name defaults to `vtdd-media-prod` and can be overridden with repository variable
 `CLOUDFLARE_MEDIA_R2_BUCKET_NAME`. The workflow generates an uncommitted
