@@ -27652,6 +27652,13 @@ function renderPasskeyOperatorPage(input = {}) {
         return repositoryInput;
       }
 
+      function readApprovalRepositoryInput() {
+        if (operatorMode === "dashboard") {
+          return document.getElementById("repo-input").value.trim();
+        }
+        return readRequiredRepositoryInput();
+      }
+
       async function copyText(text) {
         const value = String(text || "");
         if (!value) {
@@ -27956,7 +27963,7 @@ function renderPasskeyOperatorPage(input = {}) {
       document.getElementById("approve-button").addEventListener("click", async () => {
         try {
           applyOperatorModeDefaults();
-          const repositoryInput = readRequiredRepositoryInput();
+          const repositoryInput = readApprovalRepositoryInput();
           approveOutput.textContent = "approval challenge request...";
           const challengeResponse = await fetch("${apiBase}/approval/passkey/challenge", {
             method: "POST",
@@ -65239,7 +65246,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
   const encodedRepository = encodeURIComponent(repositoryInput);
   const chatThreadId = `dashboard-main-${(repositoryInput || "unresolved").replace(/[^a-z0-9_.-]+/gi, "-")}`;
   const socketOrigin = origin.replace(/^http/i, "ws");
-  const dashboardSignInUrl = `${origin}/v2/approval/passkey/operator?mode=dashboard&repositoryInput=${encodedRepository}&phase=execution&actionType=read&highRiskKind=dashboard_access`;
+  const dashboardSignInRepositoryParam = repositoryInput ? `&repositoryInput=${encodedRepository}` : "";
+  const dashboardSignInUrl = `${origin}/v2/approval/passkey/operator?mode=dashboard${dashboardSignInRepositoryParam}&phase=execution&actionType=read&highRiskKind=dashboard_access`;
   const latestDeployEvent = await retrieveLatestDashboardEvent({
     store: dashboardEventStore,
     kind: "github_actions_workflow_run",
@@ -66549,7 +66557,7 @@ function renderDashboardAuthRequiredPage({ runtimeOrigin, returnPath = "/dashboa
   const origin = normalizeText30(runtimeOrigin);
   const dashboardAccessReturnPath = sanitizeDashboardPreAuthReturnPath(returnPath);
   const dashboardAccessHref = buildCloudflareAccessLoginHref({ origin, returnPath: dashboardAccessReturnPath });
-  const dashboardSignInUrl = `${origin || ""}/v2/approval/passkey/operator?mode=dashboard&repositoryInput=marushu%2Fvtdd-v2-p&phase=execution&actionType=read&highRiskKind=dashboard_access&dashboardReturnPath=${encodeURIComponent(dashboardAccessReturnPath)}`;
+  const dashboardSignInUrl = `${origin || ""}/v2/approval/passkey/operator?mode=dashboard&phase=execution&actionType=read&highRiskKind=dashboard_access&dashboardReturnPath=${encodeURIComponent(dashboardAccessReturnPath)}`;
   const passkeyButtonLabel = dashboardAccessReturnPath === "/dashboard/notifications" ? "Passkey \u3067\u901A\u77E5\u3092\u898B\u308B" : "Passkey \u3067 dashboard \u306B\u5165\u308B";
   return `<!doctype html>
 <html lang="ja">
@@ -66673,7 +66681,7 @@ function renderV2StatusPage({ runtimeOrigin, autonomyMode }) {
       <p>Worker \u306F\u5FDC\u7B54\u3057\u3066\u3044\u307E\u3059\u3002\u3053\u3053\u3067\u306F secret\u3001token\u3001approval grant \u306F\u8868\u793A\u3057\u307E\u305B\u3093\u3002</p>
       <div class="actions">
         <a class="primary" href="${escapeDashboardHtml(origin)}/dashboard">Butler dashboard</a>
-        <a href="${escapeDashboardHtml(origin)}/v2/approval/passkey/operator?repositoryInput=marushu%2Fvtdd-v2-p">Passkey operator</a>
+        <a href="${escapeDashboardHtml(origin)}/v2/approval/passkey/operator">Passkey operator</a>
       </div>
     </section>
 

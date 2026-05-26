@@ -269,17 +269,18 @@ test("passkey operator page shows registration only for full or explicit registr
   assert.equal(registerHtml.includes('<section data-operator-section="production-deploy" hidden>'), true);
 
   const dashboardHtml = renderPasskeyOperatorPage({
-    operatorMode: "dashboard",
-    repositoryInput: "marushu/vtdd-v2-p"
+    operatorMode: "dashboard"
   });
   assert.equal(dashboardHtml.includes('<section data-operator-section="registration" hidden>'), true);
   assert.equal(dashboardHtml.includes('<section data-operator-section="approval">'), true);
+  assert.equal(dashboardHtml.includes('id="repo-input" value=""'), true);
+  assert.equal(dashboardHtml.includes("function readApprovalRepositoryInput()"), true);
+  assert.equal(dashboardHtml.includes("const repositoryInput = readApprovalRepositoryInput();"), true);
 });
 
 test("passkey operator dashboard mode returns to sanitized dashboard path after approval", () => {
   const notificationsHtml = renderPasskeyOperatorPage({
     operatorMode: "dashboard",
-    repositoryInput: "marushu/vtdd-v2-p",
     dashboardReturnPath: "/dashboard/notifications?runId=private"
   });
   assert.equal(notificationsHtml.includes('window.location.assign("/dashboard/notifications")'), true);
@@ -287,7 +288,6 @@ test("passkey operator dashboard mode returns to sanitized dashboard path after 
 
   const unsafeHtml = renderPasskeyOperatorPage({
     operatorMode: "dashboard",
-    repositoryInput: "marushu/vtdd-v2-p",
     dashboardReturnPath: "https://evil.example/dashboard/notifications"
   });
   assert.equal(unsafeHtml.includes('window.location.assign("/dashboard")'), true);

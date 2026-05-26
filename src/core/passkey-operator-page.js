@@ -421,6 +421,13 @@ export function renderPasskeyOperatorPage(input = {}) {
         return repositoryInput;
       }
 
+      function readApprovalRepositoryInput() {
+        if (operatorMode === "dashboard") {
+          return document.getElementById("repo-input").value.trim();
+        }
+        return readRequiredRepositoryInput();
+      }
+
       async function copyText(text) {
         const value = String(text || "");
         if (!value) {
@@ -725,7 +732,7 @@ export function renderPasskeyOperatorPage(input = {}) {
       document.getElementById("approve-button").addEventListener("click", async () => {
         try {
           applyOperatorModeDefaults();
-          const repositoryInput = readRequiredRepositoryInput();
+          const repositoryInput = readApprovalRepositoryInput();
           approveOutput.textContent = "approval challenge request...";
           const challengeResponse = await fetch("${apiBase}/approval/passkey/challenge", {
             method: "POST",

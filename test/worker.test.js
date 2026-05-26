@@ -766,7 +766,8 @@ test("worker serves human-facing status page without raw JSON links", async () =
   assert.equal(body.includes("Runtime Status"), true);
   assert.equal(body.includes("raw /health JSON"), false);
   assert.equal(body.includes("/dashboard"), true);
-  assert.equal(body.includes("/v2/approval/passkey/operator?repositoryInput=marushu%2Fvtdd-v2-p"), true);
+  assert.equal(body.includes("/v2/approval/passkey/operator"), true);
+  assert.equal(body.includes("repositoryInput=marushu%2Fvtdd-v2-p"), false);
   assert.equal(body.includes("approvalGrantId"), false);
   assert.equal(body.includes("CLOUDFLARE_API_TOKEN"), false);
 });
@@ -789,10 +790,11 @@ test("worker rejects dashboard access without owner identity", async () => {
   assert.equal(body.includes("Passkey で dashboard に入る"), true);
   assert.equal(
     body.includes(
-      'href="https://example.com/v2/approval/passkey/operator?mode=dashboard&amp;repositoryInput=marushu%2Fvtdd-v2-p&amp;phase=execution&amp;actionType=read&amp;highRiskKind=dashboard_access&amp;dashboardReturnPath=%2Fdashboard"'
+      'href="https://example.com/v2/approval/passkey/operator?mode=dashboard&amp;phase=execution&amp;actionType=read&amp;highRiskKind=dashboard_access&amp;dashboardReturnPath=%2Fdashboard"'
     ),
     true
   );
+  assert.equal(body.includes("repositoryInput=marushu%2Fvtdd-v2-p"), false);
   assert.equal(body.includes("未認証の相手に通知詳細や Dashboard 内容は返しません"), true);
 });
 
@@ -883,6 +885,7 @@ test("worker rejects stale dashboard passkey session cookies", async () => {
   assert.equal(body.includes("Passkey fallback"), true);
   assert.equal(body.includes("dashboard passkey session was not found"), true);
   assert.equal(body.includes("Passkey で dashboard に入る"), true);
+  assert.equal(body.includes("repositoryInput=marushu%2Fvtdd-v2-p"), false);
 });
 
 test("worker does not expose dashboard notification details before Access auth", async () => {
@@ -922,10 +925,11 @@ test("worker does not expose dashboard notification details before Access auth",
   );
   assert.equal(
     body.includes(
-      'href="https://example.com/v2/approval/passkey/operator?mode=dashboard&amp;repositoryInput=marushu%2Fvtdd-v2-p&amp;phase=execution&amp;actionType=read&amp;highRiskKind=dashboard_access&amp;dashboardReturnPath=%2Fdashboard%2Fnotifications"'
+      'href="https://example.com/v2/approval/passkey/operator?mode=dashboard&amp;phase=execution&amp;actionType=read&amp;highRiskKind=dashboard_access&amp;dashboardReturnPath=%2Fdashboard%2Fnotifications"'
     ),
     true
   );
+  assert.equal(body.includes("repositoryInput=marushu%2Fvtdd-v2-p"), false);
   assert.equal(body.includes('href="https://example.com/dashboard/notifications"'), false);
   assert.equal(body.includes("?runId="), false);
   assert.equal(body.includes("title="), false);
@@ -6425,17 +6429,20 @@ test("worker serves passkey operator page", async () => {
 test("worker serves dashboard passkey operator mode", async () => {
   const response = await worker.fetch(
     new Request(
-      "https://example.com/v2/approval/passkey/operator?mode=dashboard&repositoryInput=marushu%2Fvtdd-v2-p&dashboardReturnPath=%2Fdashboard%2Fnotifications"
+      "https://example.com/v2/approval/passkey/operator?mode=dashboard&dashboardReturnPath=%2Fdashboard%2Fnotifications"
     ),
     gatewayAuthEnv
   );
 
   assert.equal(response.status, 200);
   const html = await response.text();
+  assert.equal(html.includes('id="repo-input" value=""'), true);
   assert.equal(html.includes('id="action-type-input" value="read"'), true);
   assert.equal(html.includes('id="risk-kind-input" value="dashboard_access"'), true);
   assert.equal(html.includes('const operatorMode = "dashboard"'), true);
   assert.equal(html.includes('window.location.assign("/dashboard/notifications")'), true);
+  assert.equal(html.includes("repositoryInput is required before approval/deploy"), true);
+  assert.equal(html.includes("const repositoryInput = readApprovalRepositoryInput();"), true);
 });
 
 test("worker serves issue close operator mode without falling back to PR merge UI", async () => {

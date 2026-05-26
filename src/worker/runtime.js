@@ -10393,7 +10393,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
   const encodedRepository = encodeURIComponent(repositoryInput);
   const chatThreadId = `dashboard-main-${(repositoryInput || "unresolved").replace(/[^a-z0-9_.-]+/gi, "-")}`;
   const socketOrigin = origin.replace(/^http/i, "ws");
-  const dashboardSignInUrl = `${origin}/v2/approval/passkey/operator?mode=dashboard&repositoryInput=${encodedRepository}&phase=execution&actionType=read&highRiskKind=dashboard_access`;
+  const dashboardSignInRepositoryParam = repositoryInput ? `&repositoryInput=${encodedRepository}` : "";
+  const dashboardSignInUrl = `${origin}/v2/approval/passkey/operator?mode=dashboard${dashboardSignInRepositoryParam}&phase=execution&actionType=read&highRiskKind=dashboard_access`;
   const latestDeployEvent = await retrieveLatestDashboardEvent({
     store: dashboardEventStore,
     kind: "github_actions_workflow_run",
@@ -11705,7 +11706,7 @@ function renderDashboardAuthRequiredPage({ runtimeOrigin, returnPath = "/dashboa
   const origin = normalizeText(runtimeOrigin);
   const dashboardAccessReturnPath = sanitizeDashboardPreAuthReturnPath(returnPath);
   const dashboardAccessHref = buildCloudflareAccessLoginHref({ origin, returnPath: dashboardAccessReturnPath });
-  const dashboardSignInUrl = `${origin || ""}/v2/approval/passkey/operator?mode=dashboard&repositoryInput=marushu%2Fvtdd-v2-p&phase=execution&actionType=read&highRiskKind=dashboard_access&dashboardReturnPath=${encodeURIComponent(dashboardAccessReturnPath)}`;
+  const dashboardSignInUrl = `${origin || ""}/v2/approval/passkey/operator?mode=dashboard&phase=execution&actionType=read&highRiskKind=dashboard_access&dashboardReturnPath=${encodeURIComponent(dashboardAccessReturnPath)}`;
   const passkeyButtonLabel =
     dashboardAccessReturnPath === "/dashboard/notifications" ? "Passkey で通知を見る" : "Passkey で dashboard に入る";
   return `<!doctype html>
@@ -11834,7 +11835,7 @@ function renderV2StatusPage({ runtimeOrigin, autonomyMode }) {
       <p>Worker は応答しています。ここでは secret、token、approval grant は表示しません。</p>
       <div class="actions">
         <a class="primary" href="${escapeDashboardHtml(origin)}/dashboard">Butler dashboard</a>
-        <a href="${escapeDashboardHtml(origin)}/v2/approval/passkey/operator?repositoryInput=marushu%2Fvtdd-v2-p">Passkey operator</a>
+        <a href="${escapeDashboardHtml(origin)}/v2/approval/passkey/operator">Passkey operator</a>
       </div>
     </section>
 
