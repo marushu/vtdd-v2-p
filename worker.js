@@ -65583,7 +65583,6 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .bubble.thinking { color: var(--muted); }
     .thinking-dots::after { content: ""; display: inline-block; width: 1.4em; text-align: left; animation: thinkingDots 1.2s steps(4, end) infinite; }
     @keyframes thinkingDots { 0% { content: ""; } 25% { content: "."; } 50% { content: ".."; } 75%, 100% { content: "..."; } }
-    .connection-note { display: inline-flex; align-items: center; width: fit-content; border: 1px solid var(--border); border-radius: 999px; padding: 5px 10px; color: var(--muted); font-size: 13px; }
     .chat-link { color: var(--link); text-decoration-thickness: 1px; text-underline-offset: 4px; font-weight: 750; overflow-wrap: anywhere; word-break: break-word; }
     .bubble.owner .chat-link { color: var(--owner-link); }
     .composer { min-width: 0; display: grid; gap: 8px; z-index: 4; padding: 14px 0 max(16px, env(safe-area-inset-bottom)); background: var(--page-bg); }
@@ -65600,6 +65599,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .media-chip.pending-preview { padding: 5px 8px 5px 5px; }
     .media-remove { border: 0; background: transparent; color: var(--muted); font: inherit; font-weight: 900; padding: 0 2px; cursor: pointer; }
     .composer-status { min-height: 18px; padding-left: 16px; color: var(--muted); font-size: 12px; }
+    .composer-status:empty { min-height: 0; padding-left: 0; }
     .composer-status a { color: var(--text); font-weight: 800; text-underline-offset: 3px; }
     .composer-status.thinking::after { content: ""; display: inline-block; width: 1.4em; text-align: left; animation: thinkingDots 1.2s steps(4, end) infinite; }
     .sidebar { position: sticky; top: 16px; align-self: start; max-height: calc(100dvh - 32px); overflow: auto; border: 1px solid var(--border); border-radius: 18px; background: var(--panel); }
@@ -65737,8 +65737,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         <article class="bubble">
           <strong>Butler</strong>
           <p>\u305D\u306E\u65B9\u91DD\u3067\u9032\u3081\u307E\u3059\u3002\u4E2D\u592E\u306F\u30C1\u30E3\u30C3\u30C8\u3092\u4E3B\u5F79\u306B\u3057\u3066\u3001\u7D30\u304B\u3044\u8A2D\u5B9A\u3084\u958B\u767A/\u904B\u7528\u306E\u78BA\u8A8D\u306F\u30E1\u30CB\u30E5\u30FC\u306E\u4E2D\u306B\u5206\u3051\u307E\u3059\u3002</p>
-          <p>\u63A5\u7D9A\u3067\u304D\u306A\u3044\u6642\u3082\u3001\u5165\u529B\u5185\u5BB9\u3092\u5931\u308F\u306A\u3044\u3088\u3046\u306B\u72B6\u614B\u3092\u77ED\u304F\u8868\u793A\u3057\u307E\u3059\u3002</p>
-          <span class="connection-note">\u63A5\u7D9A\u6E96\u5099\u4E2D: \u9001\u4FE1\u3067\u304D\u308B\u72B6\u614B\u306B\u306A\u3063\u305F\u3089\u3053\u3053\u3067\u77E5\u3089\u305B\u307E\u3059</span>
+          <p>\u63A5\u7D9A\u3067\u304D\u306A\u3044\u6642\u3082\u3001\u5165\u529B\u5185\u5BB9\u3092\u5931\u308F\u306A\u3044\u3088\u3046\u306B\u5FC5\u8981\u306A\u72B6\u614B\u3060\u3051\u77ED\u304F\u8868\u793A\u3057\u307E\u3059\u3002</p>
         </article>
 
       </div>
@@ -65751,7 +65750,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           <textarea id="butler-message" name="text" placeholder="Butler V2 \u306B\u30E1\u30C3\u30BB\u30FC\u30B8..." aria-label="Butler V2 \u306B\u30E1\u30C3\u30BB\u30FC\u30B8" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="send"></textarea>
           <button class="send-button" type="submit" aria-label="Butler \u306B\u9001\u4FE1">\u2191</button>
         </div>
-        <div class="composer-status" id="butler-chat-status">\u63A5\u7D9A\u6E96\u5099\u4E2D\u3067\u3059\u3002WebSocket \u63A5\u7D9A\u5F8C\u306B\u9001\u4FE1\u3067\u304D\u307E\u3059\u3002</div>
+        <div class="composer-status" id="butler-chat-status">\u63A5\u7D9A\u6E96\u5099\u4E2D\u3067\u3059\u3002\u9001\u4FE1\u3067\u304D\u308B\u72B6\u614B\u306B\u306A\u3063\u305F\u3089\u77E5\u3089\u305B\u307E\u3059\u3002</div>
       </form>
     </section>
 
@@ -65873,7 +65872,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           const expected = text;
           window.setTimeout(() => {
             if (status.textContent.trim() === expected) {
-              setStatus("Dashboard thread \u63A5\u7D9A\u6E08\u307F\u3002");
+              setStatus("");
             }
           }, 2400);
         }
@@ -65897,12 +65896,12 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         return "\u4E0D\u660E";
       }
 
-      function setConnectionRecoveryStatus(message) {
+      function setConnectionRecoveryStatus(message, options = {}) {
         const attempt = Math.max(1, reconnectAttempt + 1);
         status.dataset.reconnectAttempt = String(attempt);
         status.dataset.websocketState = describeChatSocketState();
         status.dataset.lastRefreshFailure = lastRefreshFailure || "";
-        setStatus(message);
+        setStatus(message, { temporary: options.temporary !== false });
       }
 
       function buildReconnectStatus(prefix) {
@@ -66487,7 +66486,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 
       function connectThreadSocket() {
         if (!socketEndpoint || typeof WebSocket !== "function") {
-          setStatus("WebSocket \u3092\u958B\u59CB\u3067\u304D\u307E\u305B\u3093\u3002dashboard Butler \u306F\u9001\u4FE1\u3067\u304D\u307E\u305B\u3093\u3002");
+          setStatus("\u63A5\u7D9A\u3092\u958B\u59CB\u3067\u304D\u307E\u305B\u3093\u3002dashboard Butler \u306F\u9001\u4FE1\u3067\u304D\u307E\u305B\u3093\u3002");
           return;
         }
         dropStaleSocketIfNeeded();
@@ -66502,7 +66501,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             window.clearTimeout(reconnectTimer);
             reconnectTimer = null;
           }
-          setStatus("Dashboard thread \u63A5\u7D9A\u6E08\u307F\u3002app-server bridge \u304C\u63A5\u7D9A\u4E2D\u306A\u3089 live Codex thread \u306B\u9001\u308A\u307E\u3059\u3002");
+          setStatus("Dashboard thread \u63A5\u7D9A\u6E08\u307F\u3002", { temporary: true });
           refreshThread();
         });
         chatSocket.addEventListener("message", (event) => {
@@ -66591,7 +66590,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         releasePendingOwnerSend(clientMessageId, { clearComposer: true });
         renderThread(body.messages || [], { replace: false });
         lastRefreshFailure = "";
-        setStatus("WebSocket \u672A\u63A5\u7D9A\u306E\u305F\u3081 HTTP fallback \u3067\u4FDD\u5B58\u3057\u307E\u3057\u305F\u3002\u518D\u63A5\u7D9A\u3092\u7D9A\u3051\u3066\u3044\u307E\u3059\u3002", { temporary: true });
+        setStatus("\u63A5\u7D9A\u304C\u4E0D\u5B89\u5B9A\u306A\u305F\u3081\u4FDD\u5B58\u3057\u307E\u3057\u305F\u3002\u518D\u63A5\u7D9A\u3092\u7D9A\u3051\u3066\u3044\u307E\u3059\u3002", { temporary: true });
         scheduleReconnect();
       }
 
@@ -66607,7 +66606,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         setComposerLocked(true);
         const willUseHttpFallback = !isChatSocketOpen();
         if (willUseHttpFallback) {
-          setStatus("WebSocket \u518D\u63A5\u7D9A\u4E2D\u3067\u3059\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u305F\u307E\u307E HTTP fallback \u3067\u4FDD\u5B58\u3057\u307E\u3059\u3002", { thinking: true });
+          setStatus("\u63A5\u7D9A\u304C\u4E0D\u5B89\u5B9A\u3067\u3059\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u305F\u307E\u307E\u4FDD\u5B58\u3057\u307E\u3059\u3002", { thinking: true });
           scheduleReconnect();
         } else {
           setStatus(pendingMediaItems.length > 0 ? "\u6DFB\u4ED8\u3092\u4FDD\u5B58\u3057\u3066\u304B\u3089\u9001\u4FE1\u3057\u3066\u3044\u307E\u3059" : "\u9001\u4FE1\u4E2D\u3067\u3059", { thinking: true });

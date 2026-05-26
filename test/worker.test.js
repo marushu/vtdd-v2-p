@@ -1087,8 +1087,13 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("--owner-link: #075985;"), true);
   assert.equal(body.includes("overflow: hidden"), true);
   assert.equal(body.includes("grid-template-columns: minmax(0, 1fr) auto"), true);
+  assert.equal(body.includes(".composer-status:empty"), true);
   assert.equal(body.includes("WebSocket"), true);
-  assert.equal(body.includes("接続準備中: 送信できる状態になったらここで知らせます"), true);
+  assert.equal(body.includes("接続準備中: 送信できる状態になったらここで知らせます"), false);
+  assert.equal(body.includes("class=\"connection-note\""), false);
+  assert.equal(body.includes("必要な状態だけ短く表示します"), true);
+  assert.equal(body.includes("接続準備中です。送信できる状態になったら知らせます。"), true);
+  assert.equal(body.includes("接続準備中です。WebSocket 接続後に送信できます。"), false);
   assert.equal(body.includes("repo/nickname 未指定"), false);
   assert.equal(body.includes("対象 repo 未指定"), true);
   assert.equal(body.includes("?repository=owner/repo"), false);
@@ -1144,8 +1149,10 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("Dashboard のログインが切れています。入力は残したまま再ログインしてください。"), true);
   assert.equal(body.includes("Passkey で再ログイン"), true);
   assert.equal(body.includes("dashboard_access"), true);
-  assert.equal(body.includes("WebSocket 再接続中です。入力は保持したまま HTTP fallback で保存します。"), true);
-  assert.equal(body.includes("WebSocket 未接続のため HTTP fallback で保存しました。再接続を続けています。"), true);
+  assert.equal(body.includes("WebSocket 再接続中です。入力は保持したまま HTTP fallback で保存します。"), false);
+  assert.equal(body.includes("WebSocket 未接続のため HTTP fallback で保存しました。再接続を続けています。"), false);
+  assert.equal(body.includes("接続が不安定です。入力は保持したまま保存します。"), true);
+  assert.equal(body.includes("接続が不安定なため保存しました。再接続を続けています。"), true);
   assert.equal(body.includes("sendOwnerMessageByHttp(ownerPayload, clientMessageId)"), true);
   assert.equal(body.includes("refreshThread().then"), false);
   assert.equal(body.includes("履歴の再取得に失敗しました。入力は保持しています。"), true);
@@ -1155,6 +1162,10 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("status.dataset.reconnectAttempt"), true);
   assert.equal(body.includes("status.dataset.websocketState"), true);
   assert.equal(body.includes("接続を復帰しています。入力は保持しています。"), true);
+  assert.equal(body.includes("setConnectionRecoveryStatus(message, options = {})"), true);
+  assert.equal(body.includes("setStatus(message, { temporary: options.temporary !== false })"), true);
+  assert.equal(body.includes('setStatus("Dashboard thread 接続済み。", { temporary: true })'), true);
+  assert.equal(body.includes('setStatus("");'), true);
   assert.equal(body.includes("document.addEventListener(\"visibilitychange\""), true);
   assert.equal(body.includes("window.addEventListener(\"online\""), true);
   assert.equal(body.includes("VPS Codex CLI に push します"), false);
