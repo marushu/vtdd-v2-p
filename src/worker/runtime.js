@@ -11386,7 +11386,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         const source = String(text || "");
         const backtick = String.fromCharCode(96);
         const tokenPattern = new RegExp(
-          "(https?:\\\\/\\\\/[^\\\\s<>\\\"']+)|\\\\*\\\\*([\\\\s\\\\S]+?)\\\\*\\\\*|" + backtick + "([^" + backtick + "]+)" + backtick,
+          "(https?:\\\\/\\\\/[^\\\\s<>\\\"'\\\\)\\\\]）】』」〉》、。，．,！？]+)|\\\\*\\\\*([\\\\s\\\\S]+?)\\\\*\\\\*|" + backtick + "([^" + backtick + "]+)" + backtick,
           "g"
         );
         let cursor = 0;
@@ -11395,7 +11395,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             container.appendChild(document.createTextNode(source.slice(cursor, match.index)));
           }
           if (match[1]) {
-            const href = match[1];
+            const linkToken = splitTrailingLinkPunctuation(match[1]);
+            const href = linkToken.href;
             const link = document.createElement("a");
             link.className = "chat-link";
             link.href = href;
@@ -11403,6 +11404,9 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             link.target = "_blank";
             link.rel = "noreferrer";
             container.appendChild(link);
+            if (linkToken.trailing) {
+              container.appendChild(document.createTextNode(linkToken.trailing));
+            }
           } else if (match[2]) {
             const strong = document.createElement("strong");
             renderInlineMarkdown(strong, match[2]);
@@ -11417,6 +11421,22 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         if (cursor < source.length) {
           container.appendChild(document.createTextNode(source.slice(cursor)));
         }
+      }
+
+      function splitTrailingLinkPunctuation(value) {
+        const source = String(value || "");
+        const trailingPunctuation = ")]）】』」〉》、。，．,.;:!?！？";
+        let hrefEnd = source.length;
+        while (hrefEnd > 0 && trailingPunctuation.includes(source[hrefEnd - 1])) {
+          hrefEnd -= 1;
+        }
+        if (hrefEnd === source.length || hrefEnd === 0) {
+          return { href: source, trailing: "" };
+        }
+        return {
+          href: source.slice(0, hrefEnd),
+          trailing: source.slice(hrefEnd)
+        };
       }
 
       async function copyMessageText(button, text) {
