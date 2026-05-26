@@ -285,6 +285,8 @@ test("passkey operator page shows registration only for full or explicit registr
   assert.equal(dashboardHtml.includes("Copy approvalGrantId"), false);
   assert.equal(dashboardHtml.includes("Auto-copy approvalGrantId after approval"), false);
   assert.equal(dashboardHtml.includes("Approve high-risk action"), false);
+  assert.equal(dashboardHtml.includes("GitHub App secret sync なら"), false);
+  assert.equal(dashboardHtml.includes("highRiskKind=github_app_secret_sync"), false);
   assert.equal(dashboardHtml.includes('id="repo-input" value=""'), true);
   assert.equal(dashboardHtml.includes('id="issue-input" value=""'), true);
   assert.equal(dashboardHtml.includes('id="pull-number-input" value="148"'), false);
@@ -305,6 +307,8 @@ test("passkey operator dashboard mode returns to sanitized dashboard path after 
   assert.equal(notificationsHtml.includes('id="approve-button">パスキーで通知を見る</button>'), true);
   assert.equal(notificationsHtml.includes("通知センターを開くための read-only session"), true);
   assert.equal(notificationsHtml.includes("Approve high-risk action"), false);
+  assert.equal(notificationsHtml.includes("GitHub App secret sync なら"), false);
+  assert.equal(notificationsHtml.includes("highRiskKind=github_app_secret_sync"), false);
   assert.equal(notificationsHtml.includes('window.location.assign("/dashboard/notifications")'), true);
   assert.equal(notificationsHtml.includes("runId=private"), false);
 

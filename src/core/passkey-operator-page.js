@@ -276,7 +276,7 @@ export function renderPasskeyOperatorPage(input = {}) {
             Auto-copy approvalGrantId after approval
           </label>`
           }
-          ${deployOneTapMode ? "" : '<p class="muted">GitHub App secret sync なら <code>actionType=destructive</code> / <code>highRiskKind=github_app_secret_sync</code>、production deploy なら <code>actionType=deploy_production</code> / <code>highRiskKind=deploy_production</code>、PR merge なら <code>actionType=merge</code> / <code>highRiskKind=pull_merge</code> を使います。</p>'}
+          ${deployOneTapMode || dashboardMode ? "" : '<p class="muted">GitHub App secret sync なら <code>actionType=destructive</code> / <code>highRiskKind=github_app_secret_sync</code>、production deploy なら <code>actionType=deploy_production</code> / <code>highRiskKind=deploy_production</code>、PR merge なら <code>actionType=merge</code> / <code>highRiskKind=pull_merge</code> を使います。</p>'}
           <pre id="approve-output"${deployOneTapMode ? " hidden" : ""}></pre>
         </section>
 
