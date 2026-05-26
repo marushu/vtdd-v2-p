@@ -193,6 +193,7 @@ function loadDashboardInlineChatHelpers(html) {
     "shouldWrapCodeBlock",
     "renderMessageText",
     "renderInlineMarkdown",
+    "splitTrailingLinkPunctuation",
     "copyMessageText"
   ];
   const sources = names.map((name) => extractDashboardInlineFunction(html, name)).join("\n");
@@ -1370,6 +1371,21 @@ test("served dashboard inline chat renderer executes decode, link, wrap, and cop
   assert.equal(links.length, 1);
   assert.equal(links[0].className, "chat-link");
   assert.equal(links[0].href.startsWith("https://example.com/"), true);
+
+  const parenthesizedLinkContainer = document.createElement("div");
+  helpers.renderMessageText(parenthesizedLinkContainer, "開いて（https://example.com/path?x=1）");
+  const parenthesizedLinks = parenthesizedLinkContainer.querySelectorAll("a");
+  assert.equal(parenthesizedLinks.length, 1);
+  assert.equal(parenthesizedLinks[0].href, "https://example.com/path?x=1");
+  assert.equal(parenthesizedLinks[0].textContent, "https://example.com/path?x=1");
+  assert.equal(parenthesizedLinkContainer.textContent, "開いて（https://example.com/path?x=1）");
+
+  const commaLinkContainer = document.createElement("div");
+  helpers.renderMessageText(commaLinkContainer, "次: https://example.com/path、確認");
+  const commaLinks = commaLinkContainer.querySelectorAll("a");
+  assert.equal(commaLinks.length, 1);
+  assert.equal(commaLinks[0].href, "https://example.com/path");
+  assert.equal(commaLinkContainer.textContent, "次: https://example.com/path、確認");
 
   const codeContainer = document.createElement("div");
   helpers.renderMessageText(codeContainer, "```\nhttps://example.com/" + "b".repeat(96) + "\n```");
