@@ -301,9 +301,7 @@ jobs:
             }
           }
           function inferPullNumber(text) {
-            const match =
-              String(text || "").match(/\b(?:PR|pull request)\s*#?(\d+)\b/i) ||
-              String(text || "").match(/\(#(\d+)\)\s*$/);
+            const match = String(text || "").match(/\b(?:PR|pull request)\s*#?(\d+)\b/i);
             return match ? Number(match[1]) : null;
           }
           function inferCommitSummary(subject, body) {
