@@ -64584,15 +64584,18 @@ async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventS
     subtitle: "dashboard events",
     backHref: `${origin}/dashboard`,
     body: `
-      <section class="hero">
-        <p>Dashboard Butler \u306E\u901A\u77E5\u5165\u53E3\u3067\u3059\u3002iOS PWA Web Push\u3001OS \u306E\u901A\u77E5\u97F3\u3001\u672A\u8AAD badge \u306F\u3053\u306E\u753B\u9762\u304B\u3089\u8A31\u53EF\u30FB\u78BA\u8A8D\u3057\u307E\u3059\u3002</p>
-        <p class="muted">VTDD \u3060\u3051\u3067\u306A\u304F\u3001\u4ED6 repo / \u4E26\u884C\u958B\u767A / queue / workflow \u304B\u3089\u5C4A\u3044\u305F\u30A4\u30D9\u30F3\u30C8\u3092\u76F4\u8FD15\u5206\u3060\u3051\u8868\u793A\u3057\u307E\u3059\u3002</p>
-      </section>
       <div class="grid single">
         <section class="lane">
           <div class="lane-title"><h2>\u6700\u65B0\u901A\u77E5</h2><span class="pill">\u76F4\u8FD15\u5206</span></div>
           ${recentEvents.length > 0 ? recentEvents.map((event) => renderDashboardNotificationEvent(event)).join("") : `<p class="muted">\u76F4\u8FD15\u5206\u306E\u901A\u77E5\u306F\u3042\u308A\u307E\u305B\u3093\u3002</p>`}
         </section>
+      </div>
+      <div class="grid single">
+        <details class="lane" data-debug-section="notification-center-context">
+          <summary>\u901A\u77E5\u30BB\u30F3\u30BF\u30FC\u306B\u3064\u3044\u3066</summary>
+          <p>Dashboard Butler \u306E\u901A\u77E5\u5165\u53E3\u3067\u3059\u3002iOS PWA Web Push\u3001OS \u306E\u901A\u77E5\u97F3\u3001\u672A\u8AAD badge \u306F\u3053\u306E\u753B\u9762\u304B\u3089\u8A31\u53EF\u30FB\u78BA\u8A8D\u3057\u307E\u3059\u3002</p>
+          <p class="muted">VTDD \u3060\u3051\u3067\u306A\u304F\u3001\u4ED6 repo / \u4E26\u884C\u958B\u767A / queue / workflow \u304B\u3089\u5C4A\u3044\u305F\u30A4\u30D9\u30F3\u30C8\u3092\u76F4\u8FD15\u5206\u3060\u3051\u8868\u793A\u3057\u307E\u3059\u3002</p>
+        </details>
       </div>
       <div class="grid">
         <section class="lane">

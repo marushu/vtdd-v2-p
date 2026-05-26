@@ -2926,7 +2926,10 @@ test("worker serves dashboard notification center for recent events across repos
   assert.equal(body.includes("通知センター"), true);
   assert.equal(body.includes("Dashboard Butler の通知入口です"), true);
   assert.equal(body.includes("iOS PWA Web Push"), true);
+  assert.equal(body.includes('data-debug-section="notification-center-context"'), true);
+  assert.equal(body.includes("<summary>通知センターについて</summary>"), true);
   assert.equal(body.indexOf("最新通知") < body.indexOf("iOS PWA 通知"), true);
+  assert.equal(body.indexOf("最新通知") < body.indexOf("通知センターについて"), true);
   assert.equal(body.indexOf("最新通知") < body.indexOf("Badge"), true);
   assert.equal(body.indexOf("最新通知") < body.indexOf("Authority boundary"), true);
   assert.equal(body.includes('data-debug-section="notification-authority-boundary"'), true);

@@ -9724,15 +9724,18 @@ async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventS
     subtitle: "dashboard events",
     backHref: `${origin}/dashboard`,
     body: `
-      <section class="hero">
-        <p>Dashboard Butler の通知入口です。iOS PWA Web Push、OS の通知音、未読 badge はこの画面から許可・確認します。</p>
-        <p class="muted">VTDD だけでなく、他 repo / 並行開発 / queue / workflow から届いたイベントを直近5分だけ表示します。</p>
-      </section>
       <div class="grid single">
         <section class="lane">
           <div class="lane-title"><h2>最新通知</h2><span class="pill">直近5分</span></div>
           ${recentEvents.length > 0 ? recentEvents.map((event) => renderDashboardNotificationEvent(event)).join("") : `<p class="muted">直近5分の通知はありません。</p>`}
         </section>
+      </div>
+      <div class="grid single">
+        <details class="lane" data-debug-section="notification-center-context">
+          <summary>通知センターについて</summary>
+          <p>Dashboard Butler の通知入口です。iOS PWA Web Push、OS の通知音、未読 badge はこの画面から許可・確認します。</p>
+          <p class="muted">VTDD だけでなく、他 repo / 並行開発 / queue / workflow から届いたイベントを直近5分だけ表示します。</p>
+        </details>
       </div>
       <div class="grid">
         <section class="lane">
