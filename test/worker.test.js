@@ -779,6 +779,12 @@ test("worker rejects dashboard access without owner identity", async () => {
   assert.equal(body.includes("Dashboard auth required"), true);
   assert.equal(body.includes("owner-facing surface"), true);
   assert.equal(body.includes("Cloudflare Access で開く"), true);
+  assert.equal(
+    body.includes(
+      'href="https://example.com/cdn-cgi/access/login?redirect_url=https%3A%2F%2Fexample.com%2Fdashboard"'
+    ),
+    true
+  );
   assert.equal(body.includes("Passkey fallback"), true);
   assert.equal(body.includes("Passkey で dashboard に入る"), false);
   assert.equal(body.includes("未認証の相手に通知詳細や Dashboard 内容は返しません"), true);
@@ -862,6 +868,12 @@ test("worker rejects stale dashboard passkey session cookies", async () => {
   const body = await response.text();
   assert.equal(body.includes("Cloudflare Access authenticated owner identity is required"), true);
   assert.equal(body.includes("Cloudflare Access で開く"), true);
+  assert.equal(
+    body.includes(
+      'href="https://example.com/cdn-cgi/access/login?redirect_url=https%3A%2F%2Fexample.com%2Fdashboard"'
+    ),
+    true
+  );
   assert.equal(body.includes("Passkey fallback"), true);
   assert.equal(body.includes("dashboard passkey session was not found"), true);
   assert.equal(body.includes("Passkey で dashboard に入る"), false);
@@ -895,7 +907,13 @@ test("worker does not expose dashboard notification details before Access auth",
   const body = await response.text();
   assert.equal(body.includes("Dashboard auth required"), true);
   assert.equal(body.includes("Cloudflare Access で開く"), true);
-  assert.equal(body.includes('href="https://example.com/dashboard/notifications"'), true);
+  assert.equal(
+    body.includes(
+      'href="https://example.com/cdn-cgi/access/login?redirect_url=https%3A%2F%2Fexample.com%2Fdashboard%2Fnotifications"'
+    ),
+    true
+  );
+  assert.equal(body.includes('href="https://example.com/dashboard/notifications"'), false);
   assert.equal(body.includes("?runId="), false);
   assert.equal(body.includes("title="), false);
   assert.equal(body.includes("sha="), false);

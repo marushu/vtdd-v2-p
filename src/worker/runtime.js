@@ -11573,7 +11573,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 
 function renderDashboardAuthRequiredPage({ runtimeOrigin, returnPath = "/dashboard", reason, passkeyFallbackReason } = {}) {
   const origin = normalizeText(runtimeOrigin);
-  const dashboardAccessHref = `${origin || ""}${sanitizeDashboardPreAuthReturnPath(returnPath)}`;
+  const dashboardAccessReturnPath = sanitizeDashboardPreAuthReturnPath(returnPath);
+  const dashboardAccessHref = buildCloudflareAccessLoginHref({ origin, returnPath: dashboardAccessReturnPath });
   const dashboardSignInUrl = `${origin || ""}/v2/approval/passkey/operator?mode=dashboard&repositoryInput=marushu%2Fvtdd-v2-p&phase=execution&actionType=read&highRiskKind=dashboard_access`;
   return `<!doctype html>
 <html lang="ja">
@@ -11617,6 +11618,13 @@ function renderDashboardAuthRequiredPage({ runtimeOrigin, returnPath = "/dashboa
   </main>
 </body>
 </html>`;
+}
+
+function buildCloudflareAccessLoginHref({ origin, returnPath = "/dashboard" } = {}) {
+  const normalizedOrigin = normalizeText(origin);
+  const sanitizedReturnPath = sanitizeDashboardPreAuthReturnPath(returnPath);
+  const redirectUrl = normalizedOrigin ? `${normalizedOrigin}${sanitizedReturnPath}` : sanitizedReturnPath;
+  return `${normalizedOrigin || ""}/cdn-cgi/access/login?redirect_url=${encodeURIComponent(redirectUrl)}`;
 }
 
 function sanitizeDashboardPreAuthReturnPath(value) {
