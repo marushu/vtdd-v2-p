@@ -6809,10 +6809,8 @@ test("worker sets dashboard session cookie after dashboard passkey approval", as
       body: JSON.stringify({
         phase: "execution",
         highRiskKind: "dashboard_access",
-        repositoryInput: "marushu/vtdd-v2-p",
         policyInput: {
           actionType: ActionType.READ,
-          repositoryInput: "marushu/vtdd-v2-p",
           highRiskKind: "dashboard_access"
         }
       })
@@ -6853,6 +6851,8 @@ test("worker sets dashboard session cookie after dashboard passkey approval", as
   assert.match(verify.headers.get("set-cookie"), /SameSite=Lax/);
   const verifyBody = await verify.json();
   assert.equal(verifyBody.approvalGrant.scope.highRiskKind, "dashboard_access");
+  assert.equal(verifyBody.approvalGrant.scope.repositoryInput || "", "");
+  assert.notEqual(verifyBody.approvalGrant.scope.repositoryInput, "marushu/vtdd-v2-p");
 });
 
 test("worker gateway accepts high-risk approval grant resolved from memory", async () => {
