@@ -65859,6 +65859,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       let pendingOwnerSend = null;
       let retryClientMessageId = "";
       let dashboardSessionExpired = false;
+      let authReturnResumePromise = null;
       const dashboardDraftKey = "vtdd.dashboard.draft:" + (threadId || "unknown");
       const dashboardDraftMetaKey = dashboardDraftKey + ":meta";
 
@@ -66028,16 +66029,27 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 
       async function resumeDashboardSessionAfterAuthReturn(reason) {
         if (!dashboardSessionExpired) return false;
-        dashboardSessionExpired = false;
-        setConnectionRecoveryStatus(reason || "\u518D\u30ED\u30B0\u30A4\u30F3\u5F8C\u306E\u63A5\u7D9A\u3092\u5FA9\u5E30\u3057\u3066\u3044\u307E\u3059\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002", { temporary: false });
-        dropStaleSocketIfNeeded();
-        const refreshResult = await refreshThread();
-        if (refreshResult && refreshResult.authExpired) {
+        if (authReturnResumePromise) {
+          await authReturnResumePromise;
           return true;
         }
-        if (!dashboardSessionExpired) {
-          connectThreadSocket();
-          scheduleReconnect();
+        authReturnResumePromise = (async () => {
+          dashboardSessionExpired = false;
+          setConnectionRecoveryStatus(reason || "\u518D\u30ED\u30B0\u30A4\u30F3\u5F8C\u306E\u63A5\u7D9A\u3092\u5FA9\u5E30\u3057\u3066\u3044\u307E\u3059\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002", { temporary: false });
+          dropStaleSocketIfNeeded();
+          const refreshResult = await refreshThread();
+          if (refreshResult && refreshResult.authExpired) {
+            return true;
+          }
+          if (!dashboardSessionExpired) {
+            connectThreadSocket();
+            scheduleReconnect();
+          }
+        })();
+        try {
+          await authReturnResumePromise;
+        } finally {
+          authReturnResumePromise = null;
         }
         return true;
       }

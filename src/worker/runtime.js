@@ -10981,6 +10981,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       let pendingOwnerSend = null;
       let retryClientMessageId = "";
       let dashboardSessionExpired = false;
+      let authReturnResumePromise = null;
       const dashboardDraftKey = "vtdd.dashboard.draft:" + (threadId || "unknown");
       const dashboardDraftMetaKey = dashboardDraftKey + ":meta";
 
@@ -11150,16 +11151,27 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 
       async function resumeDashboardSessionAfterAuthReturn(reason) {
         if (!dashboardSessionExpired) return false;
-        dashboardSessionExpired = false;
-        setConnectionRecoveryStatus(reason || "再ログイン後の接続を復帰しています。入力は保持しています。", { temporary: false });
-        dropStaleSocketIfNeeded();
-        const refreshResult = await refreshThread();
-        if (refreshResult && refreshResult.authExpired) {
+        if (authReturnResumePromise) {
+          await authReturnResumePromise;
           return true;
         }
-        if (!dashboardSessionExpired) {
-          connectThreadSocket();
-          scheduleReconnect();
+        authReturnResumePromise = (async () => {
+          dashboardSessionExpired = false;
+          setConnectionRecoveryStatus(reason || "再ログイン後の接続を復帰しています。入力は保持しています。", { temporary: false });
+          dropStaleSocketIfNeeded();
+          const refreshResult = await refreshThread();
+          if (refreshResult && refreshResult.authExpired) {
+            return true;
+          }
+          if (!dashboardSessionExpired) {
+            connectThreadSocket();
+            scheduleReconnect();
+          }
+        })();
+        try {
+          await authReturnResumePromise;
+        } finally {
+          authReturnResumePromise = null;
         }
         return true;
       }

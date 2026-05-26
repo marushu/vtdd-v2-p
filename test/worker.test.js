@@ -1284,6 +1284,10 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("function releasePendingOwnerSend("), true);
   assert.equal(body.includes("function releasePendingOwnerSendFromThread("), true);
   assert.equal(body.includes("releasePendingOwnerSendFromThread(body.messages || [])"), true);
+  assert.equal(body.includes("let authReturnResumePromise = null"), true);
+  assert.equal(body.includes("if (authReturnResumePromise)"), true);
+  assert.equal(body.includes("await authReturnResumePromise;"), true);
+  assert.equal(body.includes("authReturnResumePromise = null;"), true);
   assert.equal(body.includes("送信確認を待っています。入力は保存確認まで残します。"), true);
   assert.equal(body.includes("送信確認前に WebSocket が切れました。入力は残しています。履歴再取得後にもう一度送信できます。"), true);
   assert.equal(body.includes("送信確認が返りませんでした。入力は残しています。再接続後にもう一度送信してください。"), true);
@@ -2720,6 +2724,44 @@ test("DashboardChatRoom sends ordinary owner turns to connected app-server bridg
   assert.equal(status.type, "transient_status");
   assert.equal(status.status, "thinking");
   assert.equal(status.text, "app-server bridge の返信を待っています");
+});
+
+test("DashboardChatRoom broadcasts thread truth before owner ack for ack-drop recovery", async () => {
+  const provider = createInMemoryMemoryProvider();
+  const store = createInMemoryDashboardChatStore();
+  const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
+  const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-unresolved");
+  const room = new DashboardChatRoom(
+    {
+      storage: createMockDurableObjectStorage(),
+      getWebSockets() {
+        return [dashboardSocket, bridgeSocket];
+      }
+    },
+    { DASHBOARD_CHAT_STORE: store, MEMORY_PROVIDER: provider }
+  );
+
+  await room.webSocketMessage(
+    dashboardSocket,
+    JSON.stringify({
+      type: "owner_message",
+      threadId: "dashboard-main-unresolved",
+      clientMessageId: "dashboard_owner_message:ack-drop-1",
+      text: "ACK が落ちても thread truth で解除できる"
+    })
+  );
+
+  const sentTypes = dashboardSocket.sent.map((message) => JSON.parse(message).type);
+  assert.deepEqual(sentTypes, ["thread", "owner_message_accepted", "transient_status"]);
+  const threadBroadcast = JSON.parse(dashboardSocket.sent[0]);
+  assert.equal(threadBroadcast.ok, true);
+  assert.equal(threadBroadcast.messages.length, 1);
+  assert.equal(threadBroadcast.messages[0].role, "owner");
+  assert.equal(threadBroadcast.messages[0].messageId, "dashboard_owner_message:ack-drop-1");
+  assert.equal(threadBroadcast.messages[0].text, "ACK が落ちても thread truth で解除できる");
+  const ack = JSON.parse(dashboardSocket.sent[1]);
+  assert.equal(ack.type, "owner_message_accepted");
+  assert.equal(ack.clientMessageId, "dashboard_owner_message:ack-drop-1");
 });
 
 test("DashboardChatRoom accepts ten consecutive owner turns without dropping ack or bridge dispatch", async () => {
