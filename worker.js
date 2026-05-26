@@ -66790,9 +66790,9 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           const files = Array.from(mediaInput.files || []);
           mediaInput.value = "";
           if (files.length === 0) return;
+          const selectedItems = [];
           try {
             mediaButton.disabled = true;
-            const selectedItems = [];
             for (const file of files) {
               const preparedFile = await prepareUploadFile(file);
               const previewUrl =
@@ -66817,6 +66817,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             setStatus(String(addedCount) + "\u4EF6\u306E\u6DFB\u4ED8\u3092\u9001\u4FE1\u5F85\u3061\u306B\u8FFD\u52A0\u3057\u307E\u3057\u305F\u3002repo \u672A\u6307\u5B9A\u306E\u901A\u5E38\u4F1A\u8A71\u3067\u306F private media \u3068\u3057\u3066\u4FDD\u5B58\u3057\u307E\u3059\u3002", { temporary: true });
             textarea.focus({ preventScroll: true });
           } catch (error) {
+            revokePendingMediaPreviews(selectedItems);
             setStatus((error && error.message) || "\u6DFB\u4ED8\u306E\u4FDD\u5B58\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002");
           } finally {
             mediaButton.disabled = false;

@@ -1510,6 +1510,8 @@ test("worker serves dashboard media add controls for iPhone-first upload", async
   assert.equal(body.includes("URL.revokeObjectURL"), true);
   assert.equal(body.includes("const files = Array.from(mediaInput.files || [])"), true);
   assert.equal(body.includes("for (const file of files)"), true);
+  assert.equal(body.includes("const selectedItems = []"), true);
+  assert.equal(body.includes("revokePendingMediaPreviews(selectedItems)"), true);
   assert.equal(body.includes("const nextPendingMediaItems = [...pendingMediaItems, ...selectedItems]"), true);
   assert.equal(body.includes("Math.min(selectedItems.length, 12)"), true);
   assert.equal(body.includes("repo 未指定の通常会話では private media として保存します"), true);

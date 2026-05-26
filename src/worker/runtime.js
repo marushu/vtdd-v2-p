@@ -11912,9 +11912,9 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           const files = Array.from(mediaInput.files || []);
           mediaInput.value = "";
           if (files.length === 0) return;
+          const selectedItems = [];
           try {
             mediaButton.disabled = true;
-            const selectedItems = [];
             for (const file of files) {
               const preparedFile = await prepareUploadFile(file);
               const previewUrl =
@@ -11939,6 +11939,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             setStatus(String(addedCount) + "件の添付を送信待ちに追加しました。repo 未指定の通常会話では private media として保存します。", { temporary: true });
             textarea.focus({ preventScroll: true });
           } catch (error) {
+            revokePendingMediaPreviews(selectedItems);
             setStatus((error && error.message) || "添付の保存に失敗しました。");
           } finally {
             mediaButton.disabled = false;
