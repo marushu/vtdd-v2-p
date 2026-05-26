@@ -2514,8 +2514,13 @@ test("DashboardChatRoom maps app-server replies back into the dashboard thread",
 
   assert.equal(storage.values.get("app_server_thread:dashboard-main-unresolved").codexThreadId, "codex-thread-450");
   assert.equal(bridgeSocket.sent.length, 0);
-  assert.equal(dashboardSocket.sent.length, 1);
-  const broadcast = JSON.parse(dashboardSocket.sent[0]);
+  assert.equal(dashboardSocket.sent.length, 2);
+  const status = JSON.parse(dashboardSocket.sent[0]);
+  assert.equal(status.type, "transient_status");
+  assert.equal(status.status, "replied");
+  assert.equal(status.text, "Dashboard thread 接続済み。");
+  const broadcast = JSON.parse(dashboardSocket.sent[1]);
+  assert.equal(broadcast.type, "thread");
   assert.equal(broadcast.messages.length, 1);
   assert.equal(broadcast.messages[0].role, "butler");
   assert.equal(broadcast.messages[0].status, "replied");
@@ -2601,6 +2606,56 @@ test("DashboardChatRoom sends app-server thinking status as transient UI state",
   assert.equal(status.type, "transient_status");
   assert.equal(status.status, "thinking");
   assert.equal(status.text, "codex app-server が応答を生成しています。");
+});
+
+test("DashboardChatRoom maps app-server progress stages to owner-facing transient status", async () => {
+  const stageCases = [
+    ["read_context", "既存 Issue / PR / docs を確認しています。"],
+    ["issue_body", "新しい Issue 本文を作成しています。"],
+    ["github_issue_create", "GitHub に Issue を作成しています。"],
+    ["bounded_change_contract", "bounded change contract を確認しています。"],
+    ["topic_branch", "topic branch を作成しています。"],
+    ["implementation", "実装に入っています。"],
+    ["test", "テストを実行しています。"],
+    ["pr_body", "PR本文を作成しています。"],
+    ["pr_create", "PRを作成しています。"],
+    ["reviewer_wait", "CI / reviewer を待っています。"],
+    ["reviewer_revision", "reviewer 指摘を反映しています。"]
+  ];
+  for (const [stage, expectedText] of stageCases) {
+    const store = createInMemoryDashboardChatStore();
+    const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
+    const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-unresolved");
+    const storage = createMockDurableObjectStorage();
+    const room = new DashboardChatRoom(
+      {
+        storage,
+        getWebSockets() {
+          return [dashboardSocket, bridgeSocket];
+        }
+      },
+      { DASHBOARD_CHAT_STORE: store }
+    );
+
+    await room.webSocketMessage(
+      bridgeSocket,
+      JSON.stringify({
+        type: "app_server_status",
+        status: "thinking",
+        stage,
+        threadId: "dashboard-main-unresolved",
+        codexThreadId: "codex-thread-450",
+        text: "raw runner event text"
+      })
+    );
+
+    assert.equal((await store.listThread("dashboard-main-unresolved")).length, 0);
+    assert.equal(dashboardSocket.sent.length, 1);
+    const status = JSON.parse(dashboardSocket.sent[0]);
+    assert.equal(status.type, "transient_status");
+    assert.equal(status.status, "thinking");
+    assert.equal(status.text, expectedText);
+  }
 });
 
 test("DashboardChatRoom rejects app-server bridge events for a different dashboard thread", async () => {

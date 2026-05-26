@@ -373,7 +373,7 @@ export class DashboardChatRoom {
       await this.broadcastTransientStatus({
         threadId: normalized.threadId,
         status: normalized.transientStatus,
-        text: normalized.text
+        text: normalized.transientText || normalized.text
       });
     }
     if (normalized.messages.length === 0) {
@@ -6376,6 +6376,7 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
   const status = normalizeDashboardEventText(input.status).toLowerCase();
   const codexThreadId = normalizeDashboardEventText(input.codexThreadId || input.codex_thread_id);
   const text = sanitizeDashboardChatText(input.text || input.message || input.delta || input.finalText || input.final_text);
+  let transientText = "";
   const repository = normalizeCanonicalRepositoryInput(input.repository);
   const relatedIssue = normalizePositiveInteger(input.relatedIssue || input.issueNumber);
   const createdAt = normalizeIsoTimestamp(input.createdAt) || new Date().toISOString();
@@ -6400,6 +6401,8 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
         )
       );
     }
+    transientStatus = "replied";
+    transientText = "Dashboard thread 接続済み。";
   } else if (eventType === "app_server_turn_failed" || status === "failed") {
     messages.push(
       normalizeDashboardChatMessage(
@@ -6416,7 +6419,12 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
       )
     );
   } else if (eventType === "app_server_status") {
-    transientStatus = status === "replied" ? "replied" : "thinking";
+    transientStatus = isDashboardAppServerCompleteStatus(status) ? "replied" : "thinking";
+    transientText = buildDashboardOwnerFacingTransientStatusText(input, {
+      status,
+      text,
+      transientStatus
+    });
   }
   return {
     ok: true,
@@ -6424,9 +6432,68 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
     codexThreadId,
     createdAt,
     text,
+    transientText,
     transientStatus,
     messages: messages.filter(Boolean)
   };
+}
+
+function isDashboardAppServerCompleteStatus(status) {
+  return status === "replied" || status === "complete" || status === "completed" || status === "done";
+}
+
+function buildDashboardOwnerFacingTransientStatusText(input, { status = "", text = "", transientStatus = "" } = {}) {
+  if (transientStatus === "replied" || isDashboardAppServerCompleteStatus(status)) {
+    return "Dashboard thread 接続済み。";
+  }
+  const stage = normalizeDashboardEventText(
+    input.stage ||
+      input.phase ||
+      input.step ||
+      input.activity ||
+      input.progressStage ||
+      input.progress_stage
+  ).toLowerCase();
+  const eventType = normalizeDashboardEventText(input.type || input.eventType || input.event_type).toLowerCase();
+  const source = [stage, status, eventType, text].filter(Boolean).join(" ").toLowerCase();
+  const matches = (patterns) => patterns.some((pattern) => source.includes(pattern));
+  if (matches(["reviewer_revision", "reviewer-revision", "review_fix", "review-fix", "address_review", "指摘", "反映"])) {
+    return "reviewer 指摘を反映しています。";
+  }
+  if (matches(["ci", "checks", "check_run", "workflow", "actions", "reviewer_wait", "reviewer-wait", "review_wait"])) {
+    return "CI / reviewer を待っています。";
+  }
+  if (matches(["reviewer", "review", "gemini"])) {
+    return "reviewer を待っています。";
+  }
+  if (matches(["pr_body", "pr-body", "pull_request_body", "pull-request-body", "body_file", "body-file", "pr本文"])) {
+    return "PR本文を作成しています。";
+  }
+  if (matches(["pr_create", "pr-create", "pull_request_create", "pull-request-create", "open_pr", "open-pr", "prを作成"])) {
+    return "PRを作成しています。";
+  }
+  if (matches(["test", "tests", "unit", "integration", "e2e", "テスト"])) {
+    return "テストを実行しています。";
+  }
+  if (matches(["implementation", "implement", "coding", "patch", "edit", "apply_patch", "実装"])) {
+    return "実装に入っています。";
+  }
+  if (matches(["topic_branch", "topic-branch", "branch_create", "branch-create", "checkout_branch", "checkout-branch"])) {
+    return "topic branch を作成しています。";
+  }
+  if (matches(["bounded_change_contract", "bounded-change-contract", "change_contract", "change-contract", "contract"])) {
+    return "bounded change contract を確認しています。";
+  }
+  if (matches(["github_issue_create", "github-issue-create", "issue_create", "issue-create", "create_issue", "create-issue"])) {
+    return "GitHub に Issue を作成しています。";
+  }
+  if (matches(["issue_body", "issue-body", "draft_issue", "draft-issue", "issue_draft", "issue-draft"])) {
+    return "新しい Issue 本文を作成しています。";
+  }
+  if (matches(["read_context", "read-context", "inspect", "investigate", "context", "docs", "document", "issue", "issues", "pr", "pull_request", "pull-request"])) {
+    return "既存 Issue / PR / docs を確認しています。";
+  }
+  return text || "app-server bridge の返信を待っています";
 }
 
 async function notifyDashboardChatRoom({ env, threadId, messages }) {
