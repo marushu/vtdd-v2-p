@@ -27246,6 +27246,7 @@ function normalize(value) {
 function renderPasskeyOperatorPage(input = {}) {
   const operatorMode = resolvePasskeyOperatorMode(input);
   const deployOneTapMode = operatorMode === "deploy";
+  const dashboardMode = operatorMode === "dashboard";
   const passkeyEnabled = input.passkeyEnabled !== false;
   const sectionVisibility = resolveSectionVisibility(operatorMode, { passkeyEnabled });
   const origin = escapeHtml(input.origin || "");
@@ -27253,9 +27254,9 @@ function renderPasskeyOperatorPage(input = {}) {
   const syncApiBase = escapeHtml(input.syncApiBase || "");
   const registrationDefaultOperatorId = escapeHtml(input.operatorId || "vtdd-operator");
   const registrationDefaultOperatorLabel = escapeHtml(input.operatorLabel || "VTDD Operator");
-  const repoDefault = escapeHtml(input.repositoryInput || "");
-  const issueDefault = escapeHtml(input.issueNumber || "");
-  const pullNumberDefault = escapeHtml(input.pullNumber || "");
+  const repoDefault = escapeHtml(dashboardMode ? "" : input.repositoryInput || "");
+  const issueDefault = escapeHtml(dashboardMode ? "" : input.issueNumber || "");
+  const pullNumberDefault = escapeHtml(dashboardMode ? "" : input.pullNumber || "");
   const phaseDefault = escapeHtml(input.phase || "execution");
   const actionTypeDefault = escapeHtml(
     deployOneTapMode ? "deploy_production" : input.actionType || defaultActionTypeForMode(operatorMode)
@@ -27456,6 +27457,18 @@ function renderPasskeyOperatorPage(input = {}) {
             <input id="action-type-input" value="${actionTypeDefault}" autocomplete="off"${deployOneTapMode ? ' readonly data-deploy-scope-locked="true"' : ""} />
             <label for="risk-kind-input">High-risk Kind</label>
             <input id="risk-kind-input" value="${highRiskKindDefault}" autocomplete="off"${deployOneTapMode ? ' readonly data-deploy-scope-locked="true"' : ""} />
+          </div>` : dashboardMode ? `<p>dashboard session \u3092\u66F4\u65B0\u3057\u307E\u3059\u3002\u901A\u77E5\u3084\u901A\u5E38 dashboard \u3092\u958B\u304F\u305F\u3081\u306E read-only \u88DC\u52A9\u8A8D\u8A3C\u3067\u3001repo / Issue / PR scope \u306F\u4F7F\u3044\u307E\u305B\u3093\u3002</p>
+          <div class="approval-internal" hidden>
+            <label for="repo-input">Repository</label>
+            <input id="repo-input" value="" placeholder="marushu/vtdd-v2-p" />
+            <label for="issue-input">Issue Number</label>
+            <input id="issue-input" value="" placeholder="15" />
+            <label for="phase-input">Phase</label>
+            <input id="phase-input" value="${phaseDefault}" />
+            <label for="action-type-input">Action Type</label>
+            <input id="action-type-input" value="read" autocomplete="off" readonly />
+            <label for="risk-kind-input">High-risk Kind</label>
+            <input id="risk-kind-input" value="dashboard_access" autocomplete="off" readonly />
           </div>` : `<label for="repo-input">Repository</label>
           <input id="repo-input" value="${repoDefault}" placeholder="marushu/vtdd-v2-p" />
           <label for="issue-input">Issue Number</label>
@@ -27847,6 +27860,12 @@ function renderPasskeyOperatorPage(input = {}) {
           return;
         }
         if (operatorMode === "dashboard") {
+          document.getElementById("repo-input").value = "";
+          document.getElementById("issue-input").value = "";
+          const pullNumberInput = document.getElementById("pull-number-input");
+          if (pullNumberInput) {
+            pullNumberInput.value = "";
+          }
           document.getElementById("action-type-input").value = "read";
           document.getElementById("risk-kind-input").value = "dashboard_access";
         }
@@ -60167,13 +60186,15 @@ function handlePasskeyOperatorPageRequest(request) {
   const syncEnabled = Boolean(syncApiBase);
   const requestedActionType = url.searchParams.get("actionType");
   const requestedHighRiskKind = url.searchParams.get("highRiskKind");
+  const requestedOperatorMode = url.searchParams.get("mode") || (requestedActionType || requestedHighRiskKind ? "" : "full");
+  const dashboardSessionMode = normalizeText30(requestedOperatorMode) === "dashboard" || normalizeText30(requestedHighRiskKind) === "dashboard_access";
   const html2 = renderPasskeyOperatorPage({
     origin: url.origin,
     syncApiBase,
-    operatorMode: url.searchParams.get("mode") || (requestedActionType || requestedHighRiskKind ? "" : "full"),
-    repositoryInput: url.searchParams.get("repositoryInput"),
-    issueNumber: url.searchParams.get("issueNumber"),
-    pullNumber: url.searchParams.get("pullNumber"),
+    operatorMode: requestedOperatorMode,
+    repositoryInput: dashboardSessionMode ? "" : url.searchParams.get("repositoryInput"),
+    issueNumber: dashboardSessionMode ? "" : url.searchParams.get("issueNumber"),
+    pullNumber: dashboardSessionMode ? "" : url.searchParams.get("pullNumber"),
     phase: url.searchParams.get("phase") || "execution",
     actionType: requestedActionType,
     highRiskKind: requestedHighRiskKind,
@@ -65254,8 +65275,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
   const encodedRepository = encodeURIComponent(repositoryInput);
   const chatThreadId = `dashboard-main-${(repositoryInput || "unresolved").replace(/[^a-z0-9_.-]+/gi, "-")}`;
   const socketOrigin = origin.replace(/^http/i, "ws");
-  const dashboardSignInRepositoryParam = repositoryInput ? `&repositoryInput=${encodedRepository}` : "";
-  const dashboardSignInUrl = `${origin}/v2/approval/passkey/operator?mode=dashboard${dashboardSignInRepositoryParam}&phase=execution&actionType=read&highRiskKind=dashboard_access`;
+  const dashboardSignInUrl = `${origin}/v2/approval/passkey/operator?mode=dashboard&phase=execution&actionType=read&highRiskKind=dashboard_access`;
   const latestDeployEvent = await retrieveLatestDashboardEvent({
     store: dashboardEventStore,
     kind: "github_actions_workflow_run",

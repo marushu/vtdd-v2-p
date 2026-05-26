@@ -1,6 +1,7 @@
 export function renderPasskeyOperatorPage(input = {}) {
   const operatorMode = resolvePasskeyOperatorMode(input);
   const deployOneTapMode = operatorMode === "deploy";
+  const dashboardMode = operatorMode === "dashboard";
   const passkeyEnabled = input.passkeyEnabled !== false;
   const sectionVisibility = resolveSectionVisibility(operatorMode, { passkeyEnabled });
   const origin = escapeHtml(input.origin || "");
@@ -8,9 +9,9 @@ export function renderPasskeyOperatorPage(input = {}) {
   const syncApiBase = escapeHtml(input.syncApiBase || "");
   const registrationDefaultOperatorId = escapeHtml(input.operatorId || "vtdd-operator");
   const registrationDefaultOperatorLabel = escapeHtml(input.operatorLabel || "VTDD Operator");
-  const repoDefault = escapeHtml(input.repositoryInput || "");
-  const issueDefault = escapeHtml(input.issueNumber || "");
-  const pullNumberDefault = escapeHtml(input.pullNumber || "");
+  const repoDefault = escapeHtml(dashboardMode ? "" : input.repositoryInput || "");
+  const issueDefault = escapeHtml(dashboardMode ? "" : input.issueNumber || "");
+  const pullNumberDefault = escapeHtml(dashboardMode ? "" : input.pullNumber || "");
   const phaseDefault = escapeHtml(input.phase || "execution");
   const actionTypeDefault = escapeHtml(
     deployOneTapMode ? "deploy_production" : input.actionType || defaultActionTypeForMode(operatorMode)
@@ -219,6 +220,20 @@ export function renderPasskeyOperatorPage(input = {}) {
             <input id="action-type-input" value="${actionTypeDefault}" autocomplete="off"${deployOneTapMode ? ' readonly data-deploy-scope-locked="true"' : ""} />
             <label for="risk-kind-input">High-risk Kind</label>
             <input id="risk-kind-input" value="${highRiskKindDefault}" autocomplete="off"${deployOneTapMode ? ' readonly data-deploy-scope-locked="true"' : ""} />
+          </div>`
+              : dashboardMode
+                ? `<p>dashboard session を更新します。通知や通常 dashboard を開くための read-only 補助認証で、repo / Issue / PR scope は使いません。</p>
+          <div class="approval-internal" hidden>
+            <label for="repo-input">Repository</label>
+            <input id="repo-input" value="" placeholder="marushu/vtdd-v2-p" />
+            <label for="issue-input">Issue Number</label>
+            <input id="issue-input" value="" placeholder="15" />
+            <label for="phase-input">Phase</label>
+            <input id="phase-input" value="${phaseDefault}" />
+            <label for="action-type-input">Action Type</label>
+            <input id="action-type-input" value="read" autocomplete="off" readonly />
+            <label for="risk-kind-input">High-risk Kind</label>
+            <input id="risk-kind-input" value="dashboard_access" autocomplete="off" readonly />
           </div>`
               : `<label for="repo-input">Repository</label>
           <input id="repo-input" value="${repoDefault}" placeholder="marushu/vtdd-v2-p" />
@@ -616,6 +631,12 @@ export function renderPasskeyOperatorPage(input = {}) {
           return;
         }
         if (operatorMode === "dashboard") {
+          document.getElementById("repo-input").value = "";
+          document.getElementById("issue-input").value = "";
+          const pullNumberInput = document.getElementById("pull-number-input");
+          if (pullNumberInput) {
+            pullNumberInput.value = "";
+          }
           document.getElementById("action-type-input").value = "read";
           document.getElementById("risk-kind-input").value = "dashboard_access";
         }

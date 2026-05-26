@@ -4610,13 +4610,16 @@ function handlePasskeyOperatorPageRequest(request) {
   const syncEnabled = Boolean(syncApiBase);
   const requestedActionType = url.searchParams.get("actionType");
   const requestedHighRiskKind = url.searchParams.get("highRiskKind");
+  const requestedOperatorMode = url.searchParams.get("mode") || (requestedActionType || requestedHighRiskKind ? "" : "full");
+  const dashboardSessionMode =
+    normalizeText(requestedOperatorMode) === "dashboard" || normalizeText(requestedHighRiskKind) === "dashboard_access";
   const html = renderPasskeyOperatorPage({
     origin: url.origin,
     syncApiBase,
-    operatorMode: url.searchParams.get("mode") || (requestedActionType || requestedHighRiskKind ? "" : "full"),
-    repositoryInput: url.searchParams.get("repositoryInput"),
-    issueNumber: url.searchParams.get("issueNumber"),
-    pullNumber: url.searchParams.get("pullNumber"),
+    operatorMode: requestedOperatorMode,
+    repositoryInput: dashboardSessionMode ? "" : url.searchParams.get("repositoryInput"),
+    issueNumber: dashboardSessionMode ? "" : url.searchParams.get("issueNumber"),
+    pullNumber: dashboardSessionMode ? "" : url.searchParams.get("pullNumber"),
     phase: url.searchParams.get("phase") || "execution",
     actionType: requestedActionType,
     highRiskKind: requestedHighRiskKind,
@@ -10401,8 +10404,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
   const encodedRepository = encodeURIComponent(repositoryInput);
   const chatThreadId = `dashboard-main-${(repositoryInput || "unresolved").replace(/[^a-z0-9_.-]+/gi, "-")}`;
   const socketOrigin = origin.replace(/^http/i, "ws");
-  const dashboardSignInRepositoryParam = repositoryInput ? `&repositoryInput=${encodedRepository}` : "";
-  const dashboardSignInUrl = `${origin}/v2/approval/passkey/operator?mode=dashboard${dashboardSignInRepositoryParam}&phase=execution&actionType=read&highRiskKind=dashboard_access`;
+  const dashboardSignInUrl = `${origin}/v2/approval/passkey/operator?mode=dashboard&phase=execution&actionType=read&highRiskKind=dashboard_access`;
   const latestDeployEvent = await retrieveLatestDashboardEvent({
     store: dashboardEventStore,
     kind: "github_actions_workflow_run",

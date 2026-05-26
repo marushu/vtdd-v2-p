@@ -269,11 +269,22 @@ test("passkey operator page shows registration only for full or explicit registr
   assert.equal(registerHtml.includes('<section data-operator-section="production-deploy" hidden>'), true);
 
   const dashboardHtml = renderPasskeyOperatorPage({
-    operatorMode: "dashboard"
+    operatorMode: "dashboard",
+    repositoryInput: "marushu/vtdd-v2-p",
+    issueNumber: 15,
+    pullNumber: 148,
+    actionType: "merge",
+    highRiskKind: "pull_merge"
   });
   assert.equal(dashboardHtml.includes('<section data-operator-section="registration" hidden>'), true);
   assert.equal(dashboardHtml.includes('<section data-operator-section="approval">'), true);
   assert.equal(dashboardHtml.includes('id="repo-input" value=""'), true);
+  assert.equal(dashboardHtml.includes('id="issue-input" value=""'), true);
+  assert.equal(dashboardHtml.includes('id="pull-number-input" value="148"'), false);
+  assert.equal(dashboardHtml.includes("repo / Issue / PR scope は使いません"), true);
+  assert.equal(dashboardHtml.includes('value="marushu/vtdd-v2-p"'), false);
+  assert.equal(dashboardHtml.includes('value="merge"'), false);
+  assert.equal(dashboardHtml.includes('value="pull_merge"'), false);
   assert.equal(dashboardHtml.includes("function readApprovalRepositoryInput()"), true);
   assert.equal(dashboardHtml.includes("const repositoryInput = readApprovalRepositoryInput();"), true);
 });

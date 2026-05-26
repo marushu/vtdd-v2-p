@@ -1036,6 +1036,13 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes('aria-label="通知センター">通知</a>'), true);
   assert.equal(body.includes('aria-label="進捗を見る">進捗</a>'), false);
   assert.equal(body.includes('aria-label="Passkey で dashboard session を更新">Passkey</a>'), true);
+  assert.equal(
+    body.includes(
+      '/v2/approval/passkey/operator?mode=dashboard&amp;phase=execution&amp;actionType=read&amp;highRiskKind=dashboard_access"'
+    ),
+    true
+  );
+  assert.equal(body.includes("mode=dashboard&amp;repositoryInput="), false);
   assert.equal(body.includes('aria-label="Passkey">◇</a>'), false);
   assert.equal(body.includes('<label class="tool-button menu-open" for="mobile-menu-toggle">管理</label>'), false);
   assert.equal(body.includes('class="tool-button top-action"'), true);
@@ -6440,7 +6447,7 @@ test("worker serves passkey operator page", async () => {
 test("worker serves dashboard passkey operator mode", async () => {
   const response = await worker.fetch(
     new Request(
-      "https://example.com/v2/approval/passkey/operator?mode=dashboard&dashboardReturnPath=%2Fdashboard%2Fnotifications"
+      "https://example.com/v2/approval/passkey/operator?mode=dashboard&repositoryInput=marushu%2Fvtdd-v2-p&issueNumber=15&pullNumber=148&dashboardReturnPath=%2Fdashboard%2Fnotifications"
     ),
     gatewayAuthEnv
   );
@@ -6448,10 +6455,14 @@ test("worker serves dashboard passkey operator mode", async () => {
   assert.equal(response.status, 200);
   const html = await response.text();
   assert.equal(html.includes('id="repo-input" value=""'), true);
+  assert.equal(html.includes('id="issue-input" value=""'), true);
+  assert.equal(html.includes('id="pull-number-input" value="148"'), false);
   assert.equal(html.includes('id="action-type-input" value="read"'), true);
   assert.equal(html.includes('id="risk-kind-input" value="dashboard_access"'), true);
   assert.equal(html.includes('const operatorMode = "dashboard"'), true);
   assert.equal(html.includes('window.location.assign("/dashboard/notifications")'), true);
+  assert.equal(html.includes("repo / Issue / PR scope は使いません"), true);
+  assert.equal(html.includes('value="marushu/vtdd-v2-p"'), false);
   assert.equal(html.includes("repositoryInput is required before approval/deploy"), true);
   assert.equal(html.includes("const repositoryInput = readApprovalRepositoryInput();"), true);
 });
