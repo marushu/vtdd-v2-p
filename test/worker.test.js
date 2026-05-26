@@ -1048,6 +1048,10 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("必要な時だけ開く"), true);
   assert.equal(body.includes("color-scheme: light dark"), true);
   assert.equal(body.includes("prefers-color-scheme: dark"), true);
+  assert.equal(body.includes("--link: #0b6b65;"), true);
+  assert.equal(body.includes("--owner-link: #9ee7ff;"), true);
+  assert.equal(body.includes("--link: #90cdf4;"), true);
+  assert.equal(body.includes("--owner-link: #075985;"), true);
   assert.equal(body.includes("overflow: hidden"), true);
   assert.equal(body.includes("grid-template-columns: minmax(0, 1fr) auto"), true);
   assert.equal(body.includes("WebSocket"), true);
@@ -1143,6 +1147,11 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("new Intl.DateTimeFormat(locale"), true);
   assert.equal(body.includes(".message-meta { margin-top: 6px; color: var(--muted); font-size: 11px; line-height: 1.2; opacity: .86; }"), true);
   assert.equal(body.includes(".bubble.owner .message-meta { color: var(--owner-text); opacity: .76; text-align: right; }"), true);
+  assert.equal(body.includes(".bubble.has-copy-action { position: relative; }"), true);
+  assert.equal(body.includes(".copy-message { position: absolute; top: -8px; right: -8px;"), true);
+  assert.equal(body.includes("opacity: 0; pointer-events: none;"), true);
+  assert.equal(body.includes(".bubble.has-copy-action:hover .copy-message"), true);
+  assert.equal(body.includes(".bubble.actions-visible .copy-message"), true);
   assert.equal(body.includes('document.createElement("ul")'), true);
   assert.equal(body.includes('document.createElement("li")'), true);
   assert.equal(body.includes('document.createElement("pre")'), true);
@@ -1160,6 +1169,8 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes('if (/^https?:\\/\\//i.test(source)) return true;'), true);
   assert.equal(body.includes('if (/^go:%[0-9a-f]{2}/i.test(source)) return true;'), true);
   assert.equal(body.includes("return source.length > 80 && !/\\s/.test(source);"), true);
+  assert.equal(body.includes(".chat-link { color: var(--link);"), true);
+  assert.equal(body.includes(".bubble.owner .chat-link { color: var(--owner-link); }"), true);
   assert.equal(body.includes('renderMessageText(body, normalizeMessageDisplayText(message.text || "（空のメッセージ）"))'), true);
   assert.equal(body.includes('copyMessageText(copyButton, normalizeMessageCopyText(message.text || ""))'), true);
   assert.equal(body.includes('pre.className = "wrap-code"'), true);
@@ -1171,6 +1182,10 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("コードをコピー"), true);
   assert.equal(body.includes("copyButton.addEventListener(\"click\", () => copyMessageText(copyButton, codeText))"), true);
   assert.equal(body.includes(".copy-code { position: absolute; top: 8px; right: 8px;"), true);
+  assert.equal(body.includes("function attachMessageActionReveal("), true);
+  assert.equal(body.includes('article.classList.add("has-copy-action")'), true);
+  assert.equal(body.includes('article.classList.toggle("actions-visible")'), true);
+  assert.equal(body.includes('event.target.closest("a, button, input, textarea, select, summary")'), true);
   assert.equal(body.includes('if (message.role === "owner")'), true);
   assert.equal(body.includes('} else if (message.role === "butler") {'), true);
   assert.equal(body.includes('} else if (message.role === "system") {'), true);

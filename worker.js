@@ -65505,6 +65505,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       --button: #f4f4ef;
       --owner-bubble: #171717;
       --owner-text: #f7f7f4;
+      --link: #0b6b65;
+      --owner-link: #9ee7ff;
       --shadow: rgba(20, 20, 20, .12);
       color: var(--text);
       background: var(--page-bg);
@@ -65521,6 +65523,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         --button: #171717;
         --owner-bubble: #f2f2ee;
         --owner-text: #111;
+        --link: #90cdf4;
+        --owner-link: #075985;
         --shadow: rgba(0, 0, 0, .42);
       }
     }
@@ -65565,20 +65569,23 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .bubble .message-body strong { display: inline; color: inherit; font-size: inherit; letter-spacing: 0; text-transform: none; margin: 0; font-weight: 800; }
     .message-meta { margin-top: 6px; color: var(--muted); font-size: 11px; line-height: 1.2; opacity: .86; }
     .bubble.owner .message-meta { color: var(--owner-text); opacity: .76; text-align: right; }
+    .bubble.has-copy-action { position: relative; }
     .copy-message, .copy-code { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border: 1px solid var(--border); border-radius: 999px; background: var(--button); color: var(--text); font-size: 15px; line-height: 1; cursor: pointer; }
+    .copy-message { position: absolute; top: -8px; right: -8px; z-index: 2; opacity: 0; pointer-events: none; transform: translateY(-2px) scale(.96); transition: opacity .16s ease, transform .16s ease; }
+    .bubble.has-copy-action:hover .copy-message, .bubble.has-copy-action:focus-within .copy-message, .bubble.actions-visible .copy-message { opacity: .92; pointer-events: auto; transform: translateY(0) scale(1); }
     .copy-message:focus-visible, .copy-code:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
     .copy-code { position: absolute; top: 8px; right: 8px; z-index: 1; opacity: .88; }
     .copy-code:hover, .copy-code:focus-visible { opacity: 1; }
     .bubble ul { margin: 0; padding-left: 22px; color: var(--text); line-height: 1.85; }
     .bubble.owner { position: relative; align-self: flex-end; background: var(--owner-bubble); color: var(--owner-text); border-radius: 24px; padding: 12px 16px; }
     .bubble.owner p { color: var(--owner-text); margin: 0; }
-    .bubble.owner .copy-message { position: absolute; top: -12px; left: -12px; width: 28px; height: 28px; background: var(--panel-strong); color: var(--text); opacity: .86; }
-    .bubble.owner .copy-message:hover, .bubble.owner .copy-message:focus-visible { opacity: 1; }
+    .bubble.owner .copy-message { top: -10px; left: -10px; right: auto; width: 28px; height: 28px; background: var(--panel-strong); color: var(--text); }
     .bubble.thinking { color: var(--muted); }
     .thinking-dots::after { content: ""; display: inline-block; width: 1.4em; text-align: left; animation: thinkingDots 1.2s steps(4, end) infinite; }
     @keyframes thinkingDots { 0% { content: ""; } 25% { content: "."; } 50% { content: ".."; } 75%, 100% { content: "..."; } }
     .connection-note { display: inline-flex; align-items: center; width: fit-content; border: 1px solid var(--border); border-radius: 999px; padding: 5px 10px; color: var(--muted); font-size: 13px; }
-    .chat-link { color: var(--text); text-decoration-thickness: 1px; text-underline-offset: 4px; font-weight: 750; overflow-wrap: anywhere; word-break: break-word; }
+    .chat-link { color: var(--link); text-decoration-thickness: 1px; text-underline-offset: 4px; font-weight: 750; overflow-wrap: anywhere; word-break: break-word; }
+    .bubble.owner .chat-link { color: var(--owner-link); }
     .composer { min-width: 0; display: grid; gap: 8px; z-index: 4; padding: 14px 0 max(16px, env(safe-area-inset-bottom)); background: var(--page-bg); }
     .composer-box { display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; align-items: end; gap: 8px; min-height: 62px; padding: 8px; border: 1px solid var(--border); border-radius: 28px; background: var(--panel-strong); box-shadow: 0 16px 60px var(--shadow); }
     textarea { width: 100%; min-height: 44px; max-height: max(88px, min(160px, 24dvh)); border: 0; outline: 0; resize: none; overflow-y: hidden; padding: 10px 2px; color: var(--text); background: transparent; font: inherit; line-height: 1.45; }
@@ -65958,6 +65965,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         const article = document.createElement("article");
         article.className = message.role === "owner" ? "bubble owner" : "bubble";
         if (message.role === "owner") {
+          attachMessageActionReveal(article);
           const copyButton = document.createElement("button");
           copyButton.className = "copy-message";
           copyButton.type = "button";
@@ -65981,6 +65989,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           copyButton.addEventListener("click", () => copyMessageText(copyButton, normalizeMessageCopyText(message.text || "")));
           header.appendChild(copyButton);
           article.appendChild(header);
+          attachMessageActionReveal(article);
         } else if (message.role === "system") {
           const header = document.createElement("div");
           header.className = "bubble-header";
@@ -66007,6 +66016,20 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         }
         log.appendChild(article);
         scrollToLatest();
+      }
+
+      function attachMessageActionReveal(article) {
+        article.classList.add("has-copy-action");
+        article.tabIndex = 0;
+        article.addEventListener("click", (event) => {
+          if (event.target.closest("a, button, input, textarea, select, summary")) return;
+          article.classList.toggle("actions-visible");
+        });
+        article.addEventListener("keydown", (event) => {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          event.preventDefault();
+          article.classList.toggle("actions-visible");
+        });
       }
 
       function formatMessageTimestamp(value) {
