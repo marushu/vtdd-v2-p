@@ -1152,6 +1152,7 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("opacity: 0; pointer-events: none;"), true);
   assert.equal(body.includes(".bubble.has-copy-action:hover .copy-message"), true);
   assert.equal(body.includes(".bubble.actions-visible .copy-message"), true);
+  assert.equal(body.includes(".copy-message:focus-visible { opacity: .92; pointer-events: auto;"), true);
   assert.equal(body.includes('document.createElement("ul")'), true);
   assert.equal(body.includes('document.createElement("li")'), true);
   assert.equal(body.includes('document.createElement("pre")'), true);
@@ -1186,6 +1187,8 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes('article.classList.add("has-copy-action")'), true);
   assert.equal(body.includes('article.classList.toggle("actions-visible")'), true);
   assert.equal(body.includes('event.target.closest("a, button, input, textarea, select, summary")'), true);
+  assert.equal(body.includes("article.tabIndex = 0"), false);
+  assert.equal(body.includes('article.addEventListener("keydown"'), false);
   assert.equal(body.includes('if (message.role === "owner")'), true);
   assert.equal(body.includes('} else if (message.role === "butler") {'), true);
   assert.equal(body.includes('} else if (message.role === "system") {'), true);

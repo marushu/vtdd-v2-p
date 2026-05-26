@@ -10685,7 +10685,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .bubble.has-copy-action { position: relative; }
     .copy-message, .copy-code { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border: 1px solid var(--border); border-radius: 999px; background: var(--button); color: var(--text); font-size: 15px; line-height: 1; cursor: pointer; }
     .copy-message { position: absolute; top: -8px; right: -8px; z-index: 2; opacity: 0; pointer-events: none; transform: translateY(-2px) scale(.96); transition: opacity .16s ease, transform .16s ease; }
-    .bubble.has-copy-action:hover .copy-message, .bubble.has-copy-action:focus-within .copy-message, .bubble.actions-visible .copy-message { opacity: .92; pointer-events: auto; transform: translateY(0) scale(1); }
+    .bubble.has-copy-action:hover .copy-message, .bubble.has-copy-action:focus-within .copy-message, .bubble.actions-visible .copy-message, .copy-message:focus-visible { opacity: .92; pointer-events: auto; transform: translateY(0) scale(1); }
     .copy-message:focus-visible, .copy-code:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
     .copy-code { position: absolute; top: 8px; right: 8px; z-index: 1; opacity: .88; }
     .copy-code:hover, .copy-code:focus-visible { opacity: 1; }
@@ -11133,14 +11133,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 
       function attachMessageActionReveal(article) {
         article.classList.add("has-copy-action");
-        article.tabIndex = 0;
         article.addEventListener("click", (event) => {
           if (event.target.closest("a, button, input, textarea, select, summary")) return;
-          article.classList.toggle("actions-visible");
-        });
-        article.addEventListener("keydown", (event) => {
-          if (event.key !== "Enter" && event.key !== " ") return;
-          event.preventDefault();
           article.classList.toggle("actions-visible");
         });
       }
