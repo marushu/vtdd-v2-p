@@ -1495,6 +1495,7 @@ test("worker appends dashboard Butler chat turn and retrieves the same thread", 
       headers: { ...dashboardAccessHeaders, "content-type": "application/json" },
       body: JSON.stringify({
         threadId: "dashboard-main-marushu-vtdd-v2-p",
+        clientMessageId: "dashboard_owner_message:http-fallback-1",
         repository: "marushu/vtdd-v2-p",
         text: "VPS Codex CLI とリアルタイムに会話したい"
       })
@@ -1508,6 +1509,7 @@ test("worker appends dashboard Butler chat turn and retrieves the same thread", 
   assert.equal(body.threadId, "dashboard-main-marushu-vtdd-v2-p");
   assert.equal(body.messages.length, 2);
   assert.equal(body.messages[0].role, "owner");
+  assert.equal(body.messages[0].messageId, "dashboard_owner_message:http-fallback-1");
   assert.equal(body.messages[1].role, "butler");
   assert.match(body.messages[1].text, /VPS Codex CLI/);
 
@@ -1521,6 +1523,7 @@ test("worker appends dashboard Butler chat turn and retrieves the same thread", 
   const retrieveBody = await retrieveResponse.json();
   assert.equal(retrieveBody.ok, true);
   assert.equal(retrieveBody.messages.length, 2);
+  assert.equal(retrieveBody.messages[0].messageId, "dashboard_owner_message:http-fallback-1");
   assert.equal(retrieveBody.messages[0].text, "VPS Codex CLI とリアルタイムに会話したい");
   assert.equal(retrieveBody.summary, null);
 });

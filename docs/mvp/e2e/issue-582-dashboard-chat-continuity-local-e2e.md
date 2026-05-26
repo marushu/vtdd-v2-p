@@ -19,6 +19,7 @@
 ## Result
 
 - Owner messages stored: 10
+- Stored owner message IDs keep the dashboard client-message-id prefix (`dashboard_owner_message:`), so thread truth can unlock a pending owner send when an ACK is missing.
 - The composer was not left locked after the 10th message.
 - The screenshot shows the 10th owner message and the composer still available.
 - The local WebSocket intentionally had no upgrade server, so the UI shows the recovery status. This verifies the HTTP fallback path, not a live app-server WebSocket path.

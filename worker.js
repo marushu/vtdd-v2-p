@@ -63182,6 +63182,7 @@ async function buildDashboardChatTurn(payload, options = {}) {
   const input = normalizeObject11(payload);
   const repository = normalizeCanonicalRepositoryInput(input.repository);
   const mediaReferences = normalizeMediaReferences(input.mediaReferences || input.media_references || input.media);
+  const clientMessageId = sanitizeDashboardChatText(input.clientMessageId || input.client_message_id);
   const text = sanitizeDashboardChatText(input.text || input.message || input.body) || (mediaReferences.length > 0 ? "\u6DFB\u4ED8\u3092\u8FFD\u52A0\u3057\u307E\u3057\u305F\u3002" : "");
   if (!text) {
     return {
@@ -63210,6 +63211,7 @@ async function buildDashboardChatTurn(payload, options = {}) {
       relatedIssue,
       status: "sent",
       text,
+      messageId: clientMessageId || void 0,
       mediaReferences: mediaValidation.mediaReferences,
       createdAt: now
     },
