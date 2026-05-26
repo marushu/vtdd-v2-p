@@ -27492,7 +27492,7 @@ function renderPasskeyOperatorPage(input = {}) {
             Auto-copy approvalGrantId after approval
           </label>`}
           ${deployOneTapMode || dashboardMode ? "" : '<p class="muted">GitHub App secret sync \u306A\u3089 <code>actionType=destructive</code> / <code>highRiskKind=github_app_secret_sync</code>\u3001production deploy \u306A\u3089 <code>actionType=deploy_production</code> / <code>highRiskKind=deploy_production</code>\u3001PR merge \u306A\u3089 <code>actionType=merge</code> / <code>highRiskKind=pull_merge</code> \u3092\u4F7F\u3044\u307E\u3059\u3002</p>'}
-          <pre id="approve-output"${deployOneTapMode ? " hidden" : ""}></pre>
+          <pre id="approve-output"${deployOneTapMode || dashboardMode ? " hidden" : ""}></pre>
         </section>
 
         <section data-operator-section="github-app-secret-sync"${hiddenAttribute(!sectionVisibility.githubAppSecretSync)}>
@@ -27828,6 +27828,16 @@ function renderPasskeyOperatorPage(input = {}) {
         issueCloseLink.hidden = true;
       }
 
+      function setApproveOutput(text, { show = true } = {}) {
+        if (!approveOutput) {
+          return;
+        }
+        approveOutput.textContent = String(text || "");
+        if (show) {
+          approveOutput.hidden = false;
+        }
+      }
+
       function showIssueCloseLink(body) {
         const issueUrl = normalizeGitHubIssueUrl(extractIssueCloseUrl(body));
         if (!issueUrl || !issueCloseLink) {
@@ -27987,7 +27997,7 @@ function renderPasskeyOperatorPage(input = {}) {
         try {
           applyOperatorModeDefaults();
           const repositoryInput = readApprovalRepositoryInput();
-          approveOutput.textContent = "approval challenge request...";
+          setApproveOutput("approval challenge request...", { show: operatorMode !== "dashboard" });
           const challengeResponse = await fetch("${apiBase}/approval/passkey/challenge", {
             method: "POST",
             headers: { "content-type": "application/json" },
@@ -28028,7 +28038,7 @@ function renderPasskeyOperatorPage(input = {}) {
           }
           latestApprovalGrant = verifyBody?.approvalGrant || null;
           latestApprovalGrantId = latestApprovalGrant?.approvalId || verifyBody?.approvalGrantId || "";
-          approveOutput.textContent = JSON.stringify(verifyBody, null, 2);
+          setApproveOutput(JSON.stringify(verifyBody, null, 2), { show: operatorMode !== "dashboard" });
           if (operatorMode === "dashboard") {
             window.location.assign("${dashboardReturnPath}");
             return;
@@ -28049,7 +28059,7 @@ function renderPasskeyOperatorPage(input = {}) {
             }
           }
         } catch (error) {
-          approveOutput.textContent = String(error);
+          setApproveOutput(String(error));
         }
       });
 

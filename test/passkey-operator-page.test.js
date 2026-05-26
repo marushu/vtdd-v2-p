@@ -309,6 +309,13 @@ test("passkey operator dashboard mode returns to sanitized dashboard path after 
   assert.equal(notificationsHtml.includes("認証後は通知センターへ戻ります。"), true);
   assert.equal(notificationsHtml.includes("パスキーで通知を見る"), false);
   assert.equal(notificationsHtml.includes("Approve high-risk action"), false);
+  assert.equal(notificationsHtml.includes('<pre id="approve-output" hidden></pre>'), true);
+  assert.equal(notificationsHtml.includes("function setApproveOutput("), true);
+  assert.equal(
+    notificationsHtml.includes('setApproveOutput("approval challenge request...", { show: operatorMode !== "dashboard" });'),
+    true
+  );
+  assert.equal(notificationsHtml.includes("setApproveOutput(String(error));"), true);
   assert.equal(notificationsHtml.includes("GitHub App secret sync なら"), false);
   assert.equal(notificationsHtml.includes("highRiskKind=github_app_secret_sync"), false);
   assert.equal(notificationsHtml.includes('window.location.assign("/dashboard/notifications")'), true);
