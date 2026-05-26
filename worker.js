@@ -66316,6 +66316,18 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       function splitTrailingLinkPunctuation(value) {
         const source = String(value || "");
         const trailingPunctuation = ")]\uFF09\u3011\u300F\u300D\u3009\u300B\u3001\u3002\uFF0C\uFF0E,.;:!?\uFF01\uFF1F";
+        const rawSplit = splitRawTrailingLinkPunctuation(source, trailingPunctuation);
+        const encodedSplit = splitEncodedTrailingLinkPunctuation(rawSplit.href, trailingPunctuation);
+        if (!rawSplit.trailing && !encodedSplit.trailing) {
+          return { href: source, trailing: "" };
+        }
+        return {
+          href: encodedSplit.href,
+          trailing: encodedSplit.trailing + rawSplit.trailing
+        };
+      }
+
+      function splitRawTrailingLinkPunctuation(source, trailingPunctuation) {
         let hrefEnd = source.length;
         while (hrefEnd > 0 && trailingPunctuation.includes(source[hrefEnd - 1])) {
           hrefEnd -= 1;
@@ -66327,6 +66339,47 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           href: source.slice(0, hrefEnd),
           trailing: source.slice(hrefEnd)
         };
+      }
+
+      function splitEncodedTrailingLinkPunctuation(source, trailingPunctuation) {
+        let hrefEnd = source.length;
+        let trailing = "";
+        while (hrefEnd >= 3) {
+          let encodedStart = hrefEnd;
+          while (encodedStart >= 3 && source[encodedStart - 3] === "%" && isHexPair(source[encodedStart - 2], source[encodedStart - 1])) {
+            encodedStart -= 3;
+          }
+          if (encodedStart === hrefEnd) {
+            break;
+          }
+          const encodedTrailing = source.slice(encodedStart, hrefEnd);
+          let decodedTrailing = "";
+          try {
+            decodedTrailing = decodeURIComponent(encodedTrailing);
+          } catch {
+            break;
+          }
+          if (!decodedTrailing || !Array.from(decodedTrailing).every((char) => trailingPunctuation.includes(char))) {
+            break;
+          }
+          trailing = decodedTrailing + trailing;
+          hrefEnd = encodedStart;
+        }
+        if (!trailing) {
+          return { href: source, trailing: "" };
+        }
+        return {
+          href: source.slice(0, hrefEnd),
+          trailing
+        };
+      }
+
+      function isHexPair(first, second) {
+        return isHexDigit(first) && isHexDigit(second);
+      }
+
+      function isHexDigit(value) {
+        return "0123456789abcdefABCDEF".includes(String(value || ""));
       }
 
       async function copyMessageText(button, text) {

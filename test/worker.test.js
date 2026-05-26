@@ -195,6 +195,10 @@ function loadDashboardInlineChatHelpers(html) {
     "renderMessageText",
     "renderInlineMarkdown",
     "splitTrailingLinkPunctuation",
+    "splitRawTrailingLinkPunctuation",
+    "splitEncodedTrailingLinkPunctuation",
+    "isHexPair",
+    "isHexDigit",
     "copyMessageText"
   ];
   const sources = names.map((name) => extractDashboardInlineFunction(html, name)).join("\n");
@@ -1402,6 +1406,26 @@ test("served dashboard inline chat renderer executes decode, link, wrap, and cop
   assert.equal(commaLinks.length, 1);
   assert.equal(commaLinks[0].href, "https://example.com/path");
   assert.equal(commaLinkContainer.textContent, "次: https://example.com/path、確認");
+
+  const encodedFullWidthParenContainer = document.createElement("div");
+  helpers.renderMessageText(encodedFullWidthParenContainer, "開いて https://example.com/path%EF%BC%89");
+  const encodedFullWidthParenLinks = encodedFullWidthParenContainer.querySelectorAll("a");
+  assert.equal(encodedFullWidthParenLinks.length, 1);
+  assert.equal(encodedFullWidthParenLinks[0].href, "https://example.com/path");
+  assert.equal(encodedFullWidthParenContainer.textContent, "開いて https://example.com/path）");
+
+  const encodedAsciiParenContainer = document.createElement("div");
+  helpers.renderMessageText(encodedAsciiParenContainer, "open https://example.com/path%29");
+  const encodedAsciiParenLinks = encodedAsciiParenContainer.querySelectorAll("a");
+  assert.equal(encodedAsciiParenLinks.length, 1);
+  assert.equal(encodedAsciiParenLinks[0].href, "https://example.com/path");
+  assert.equal(encodedAsciiParenContainer.textContent, "open https://example.com/path)");
+
+  const encodedSpaceContainer = document.createElement("div");
+  helpers.renderMessageText(encodedSpaceContainer, "open https://example.com/path%20with%20encoded?x=1");
+  const encodedSpaceLinks = encodedSpaceContainer.querySelectorAll("a");
+  assert.equal(encodedSpaceLinks.length, 1);
+  assert.equal(encodedSpaceLinks[0].href, "https://example.com/path%20with%20encoded?x=1");
 
   const codeContainer = document.createElement("div");
   helpers.renderMessageText(codeContainer, "```\nhttps://example.com/" + "b".repeat(96) + "\n```");
