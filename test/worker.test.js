@@ -786,13 +786,24 @@ test("worker rejects dashboard access without owner identity", async () => {
     ),
     true
   );
-  assert.equal(body.includes("Passkey fallback"), true);
+  assert.equal(
+    body.includes(
+      'class="button primary" href="https://example.com/v2/approval/passkey/operator?mode=dashboard&amp;phase=execution&amp;actionType=read&amp;highRiskKind=dashboard_access&amp;dashboardReturnPath=%2Fdashboard"'
+    ),
+    true
+  );
+  assert.equal(body.includes("iPhone / PWA では Passkey が安定した dashboard 入口です"), true);
+  assert.equal(body.includes("Cloudflare Access / fallback"), true);
   assert.equal(body.includes("Passkey で開く"), true);
   assert.equal(body.includes("Passkey で dashboard に入る"), false);
   assert.equal(
     body.includes(
       'href="https://example.com/v2/approval/passkey/operator?mode=dashboard&amp;phase=execution&amp;actionType=read&amp;highRiskKind=dashboard_access&amp;dashboardReturnPath=%2Fdashboard"'
     ),
+    true
+  );
+  assert.equal(
+    body.indexOf("Passkey で開く") < body.indexOf("Cloudflare Access で開く"),
     true
   );
   assert.equal(body.includes("repositoryInput=marushu%2Fvtdd-v2-p"), false);
@@ -817,6 +828,12 @@ test("worker preserves dashboard repository context across auth fallback links",
   assert.equal(
     body.includes(
       'href="https://example.com/v2/approval/passkey/operator?mode=dashboard&amp;phase=execution&amp;actionType=read&amp;highRiskKind=dashboard_access&amp;dashboardReturnPath=%2Fdashboard%3Frepository%3Dmarushu%252Fvtdd-v2-p"'
+    ),
+    true
+  );
+  assert.equal(
+    body.includes(
+      'class="button primary" href="https://example.com/v2/approval/passkey/operator?mode=dashboard&amp;phase=execution&amp;actionType=read&amp;highRiskKind=dashboard_access&amp;dashboardReturnPath=%2Fdashboard%3Frepository%3Dmarushu%252Fvtdd-v2-p"'
     ),
     true
   );
@@ -909,10 +926,16 @@ test("worker rejects stale dashboard passkey session cookies", async () => {
     ),
     true
   );
-  assert.equal(body.includes("Passkey fallback"), true);
+  assert.equal(body.includes("Cloudflare Access / fallback"), true);
   assert.equal(body.includes("dashboard passkey session was not found"), true);
   assert.equal(body.includes("Passkey で開く"), true);
   assert.equal(body.includes("Passkey で dashboard に入る"), false);
+  assert.equal(
+    body.includes(
+      'class="button primary" href="https://example.com/v2/approval/passkey/operator?mode=dashboard&amp;phase=execution&amp;actionType=read&amp;highRiskKind=dashboard_access&amp;dashboardReturnPath=%2Fdashboard"'
+    ),
+    true
+  );
   assert.equal(body.includes("repositoryInput=marushu%2Fvtdd-v2-p"), false);
 });
 
@@ -957,6 +980,16 @@ test("worker does not expose dashboard notification details before Access auth",
     body.includes(
       'href="https://example.com/v2/approval/passkey/operator?mode=dashboard&amp;phase=execution&amp;actionType=read&amp;highRiskKind=dashboard_access&amp;dashboardReturnPath=%2Fdashboard%2Fnotifications"'
     ),
+    true
+  );
+  assert.equal(
+    body.includes(
+      'class="button primary" href="https://example.com/v2/approval/passkey/operator?mode=dashboard&amp;phase=execution&amp;actionType=read&amp;highRiskKind=dashboard_access&amp;dashboardReturnPath=%2Fdashboard%2Fnotifications"'
+    ),
+    true
+  );
+  assert.equal(
+    body.indexOf("Passkey で開く") < body.indexOf("Cloudflare Access で開く"),
     true
   );
   assert.equal(body.includes("repositoryInput=marushu%2Fvtdd-v2-p"), false);

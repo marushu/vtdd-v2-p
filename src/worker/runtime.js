@@ -11877,9 +11877,10 @@ function renderDashboardAuthRequiredPage({ runtimeOrigin, returnPath = "/dashboa
     h1 { margin: 0 0 12px; font-size: 30px; }
     p { line-height: 1.7; color: #4d5c56; }
     a { color: #176b4d; font-weight: 750; }
-    .actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0; }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 10px; }
     .button { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; border: 1px solid #b9cabe; border-radius: 7px; padding: 9px 12px; color: #0f513b; text-decoration: none; background: #f8fbf8; }
     .primary { background: #247a5b; color: #fff; border-color: #247a5b; }
+    .entry-note { margin: 0 0 14px; font-size: 15px; color: #5f6c66; }
     details { margin-top: 16px; border-top: 1px solid #e2e9e4; padding-top: 14px; }
     summary { cursor: pointer; font-weight: 800; color: #24342e; }
     code { color: #5f6c66; }
@@ -11889,18 +11890,18 @@ function renderDashboardAuthRequiredPage({ runtimeOrigin, returnPath = "/dashboa
   <main>
     <section class="panel">
       <h1>Dashboard auth required</h1>
-      <p>この dashboard は owner-facing surface です。通常閲覧、通知確認、通常チャットは Cloudflare Access の owner identity で開きます。通知をタップしただけでは、未認証の相手に通知詳細や Dashboard 内容は返しません。</p>
+      <p>この dashboard は owner-facing surface です。通常閲覧、通知確認、通常チャットは owner identity で開きます。通知をタップしただけでは、未認証の相手に通知詳細や Dashboard 内容は返しません。</p>
       <p><code>${escapeDashboardHtml(reason || "dashboard authentication required")}</code></p>
       <div class="actions">
-        <a class="button primary" href="${escapeDashboardHtml(dashboardAccessHref)}">Cloudflare Access で開く</a>
-        <a class="button" href="${escapeDashboardHtml(dashboardSignInUrl)}">${escapeDashboardHtml(passkeyButtonLabel)}</a>
+        <a class="button primary" href="${escapeDashboardHtml(dashboardSignInUrl)}">${escapeDashboardHtml(passkeyButtonLabel)}</a>
         <a class="button" href="${escapeDashboardHtml(`${origin || ""}/status`)}">Status</a>
       </div>
+      <p class="entry-note">iPhone / PWA では Passkey が安定した dashboard 入口です。Cloudflare Access は通常ブラウザ向けの補助導線です。</p>
       <details>
-        <summary>Passkey fallback</summary>
-        <p>passkey dashboard session は Cloudflare Access が使えない時の補助導線です。${escapeDashboardHtml(passkeyReturnNote)} deploy、merge、secret sync などの高リスク操作は引き続き scope 明示済み real passkey approval が必要です。</p>
+        <summary>Cloudflare Access / fallback</summary>
+        <p>Cloudflare Access は owner identity の通常認証です。ただし iPhone / PWA / in-app browser では白画面や認証ループになることがあります。${escapeDashboardHtml(passkeyReturnNote)} deploy、merge、secret sync などの高リスク操作は引き続き scope 明示済み real passkey approval が必要です。</p>
         ${passkeyFallbackReason ? `<p><code>${escapeDashboardHtml(passkeyFallbackReason)}</code></p>` : ""}
-        <p><a href="${escapeDashboardHtml(dashboardSignInUrl)}">Passkey fallback を開く</a></p>
+        <p><a class="button" href="${escapeDashboardHtml(dashboardAccessHref)}">Cloudflare Access で開く</a></p>
       </details>
     </section>
   </main>

@@ -66762,9 +66762,10 @@ function renderDashboardAuthRequiredPage({ runtimeOrigin, returnPath = "/dashboa
     h1 { margin: 0 0 12px; font-size: 30px; }
     p { line-height: 1.7; color: #4d5c56; }
     a { color: #176b4d; font-weight: 750; }
-    .actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0; }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 10px; }
     .button { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; border: 1px solid #b9cabe; border-radius: 7px; padding: 9px 12px; color: #0f513b; text-decoration: none; background: #f8fbf8; }
     .primary { background: #247a5b; color: #fff; border-color: #247a5b; }
+    .entry-note { margin: 0 0 14px; font-size: 15px; color: #5f6c66; }
     details { margin-top: 16px; border-top: 1px solid #e2e9e4; padding-top: 14px; }
     summary { cursor: pointer; font-weight: 800; color: #24342e; }
     code { color: #5f6c66; }
@@ -66774,18 +66775,18 @@ function renderDashboardAuthRequiredPage({ runtimeOrigin, returnPath = "/dashboa
   <main>
     <section class="panel">
       <h1>Dashboard auth required</h1>
-      <p>\u3053\u306E dashboard \u306F owner-facing surface \u3067\u3059\u3002\u901A\u5E38\u95B2\u89A7\u3001\u901A\u77E5\u78BA\u8A8D\u3001\u901A\u5E38\u30C1\u30E3\u30C3\u30C8\u306F Cloudflare Access \u306E owner identity \u3067\u958B\u304D\u307E\u3059\u3002\u901A\u77E5\u3092\u30BF\u30C3\u30D7\u3057\u305F\u3060\u3051\u3067\u306F\u3001\u672A\u8A8D\u8A3C\u306E\u76F8\u624B\u306B\u901A\u77E5\u8A73\u7D30\u3084 Dashboard \u5185\u5BB9\u306F\u8FD4\u3057\u307E\u305B\u3093\u3002</p>
+      <p>\u3053\u306E dashboard \u306F owner-facing surface \u3067\u3059\u3002\u901A\u5E38\u95B2\u89A7\u3001\u901A\u77E5\u78BA\u8A8D\u3001\u901A\u5E38\u30C1\u30E3\u30C3\u30C8\u306F owner identity \u3067\u958B\u304D\u307E\u3059\u3002\u901A\u77E5\u3092\u30BF\u30C3\u30D7\u3057\u305F\u3060\u3051\u3067\u306F\u3001\u672A\u8A8D\u8A3C\u306E\u76F8\u624B\u306B\u901A\u77E5\u8A73\u7D30\u3084 Dashboard \u5185\u5BB9\u306F\u8FD4\u3057\u307E\u305B\u3093\u3002</p>
       <p><code>${escapeDashboardHtml(reason || "dashboard authentication required")}</code></p>
       <div class="actions">
-        <a class="button primary" href="${escapeDashboardHtml(dashboardAccessHref)}">Cloudflare Access \u3067\u958B\u304F</a>
-        <a class="button" href="${escapeDashboardHtml(dashboardSignInUrl)}">${escapeDashboardHtml(passkeyButtonLabel)}</a>
+        <a class="button primary" href="${escapeDashboardHtml(dashboardSignInUrl)}">${escapeDashboardHtml(passkeyButtonLabel)}</a>
         <a class="button" href="${escapeDashboardHtml(`${origin || ""}/status`)}">Status</a>
       </div>
+      <p class="entry-note">iPhone / PWA \u3067\u306F Passkey \u304C\u5B89\u5B9A\u3057\u305F dashboard \u5165\u53E3\u3067\u3059\u3002Cloudflare Access \u306F\u901A\u5E38\u30D6\u30E9\u30A6\u30B6\u5411\u3051\u306E\u88DC\u52A9\u5C0E\u7DDA\u3067\u3059\u3002</p>
       <details>
-        <summary>Passkey fallback</summary>
-        <p>passkey dashboard session \u306F Cloudflare Access \u304C\u4F7F\u3048\u306A\u3044\u6642\u306E\u88DC\u52A9\u5C0E\u7DDA\u3067\u3059\u3002${escapeDashboardHtml(passkeyReturnNote)} deploy\u3001merge\u3001secret sync \u306A\u3069\u306E\u9AD8\u30EA\u30B9\u30AF\u64CD\u4F5C\u306F\u5F15\u304D\u7D9A\u304D scope \u660E\u793A\u6E08\u307F real passkey approval \u304C\u5FC5\u8981\u3067\u3059\u3002</p>
+        <summary>Cloudflare Access / fallback</summary>
+        <p>Cloudflare Access \u306F owner identity \u306E\u901A\u5E38\u8A8D\u8A3C\u3067\u3059\u3002\u305F\u3060\u3057 iPhone / PWA / in-app browser \u3067\u306F\u767D\u753B\u9762\u3084\u8A8D\u8A3C\u30EB\u30FC\u30D7\u306B\u306A\u308B\u3053\u3068\u304C\u3042\u308A\u307E\u3059\u3002${escapeDashboardHtml(passkeyReturnNote)} deploy\u3001merge\u3001secret sync \u306A\u3069\u306E\u9AD8\u30EA\u30B9\u30AF\u64CD\u4F5C\u306F\u5F15\u304D\u7D9A\u304D scope \u660E\u793A\u6E08\u307F real passkey approval \u304C\u5FC5\u8981\u3067\u3059\u3002</p>
         ${passkeyFallbackReason ? `<p><code>${escapeDashboardHtml(passkeyFallbackReason)}</code></p>` : ""}
-        <p><a href="${escapeDashboardHtml(dashboardSignInUrl)}">Passkey fallback \u3092\u958B\u304F</a></p>
+        <p><a class="button" href="${escapeDashboardHtml(dashboardAccessHref)}">Cloudflare Access \u3067\u958B\u304F</a></p>
       </details>
     </section>
   </main>
