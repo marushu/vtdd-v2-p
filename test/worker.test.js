@@ -6467,6 +6467,24 @@ test("worker serves dashboard passkey operator mode", async () => {
   assert.equal(html.includes("const repositoryInput = readApprovalRepositoryInput();"), true);
 });
 
+test("worker keeps explicit non-dashboard operator modes repo-scoped even with dashboard_access conflict", async () => {
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/v2/approval/passkey/operator?mode=deploy&repositoryInput=marushu%2Fvtdd-v2-p&issueNumber=15&phase=execution&highRiskKind=dashboard_access"
+    ),
+    gatewayAuthEnv
+  );
+
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.equal(html.includes('const operatorMode = "deploy"'), true);
+  assert.equal(html.includes('id="repo-input" value="marushu/vtdd-v2-p"'), true);
+  assert.equal(html.includes('id="issue-input" value="15"'), true);
+  assert.equal(html.includes('id="action-type-input" value="deploy_production"'), true);
+  assert.equal(html.includes('id="risk-kind-input" value="deploy_production"'), true);
+  assert.equal(html.includes("repo / Issue / PR scope は使いません"), false);
+});
+
 test("worker serves issue close operator mode without falling back to PR merge UI", async () => {
   const response = await worker.fetch(
     new Request(
