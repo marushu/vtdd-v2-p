@@ -11115,6 +11115,19 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         return true;
       }
 
+      function releasePendingOwnerSendFromThread(messages) {
+        if (!pendingOwnerSend || !Array.isArray(messages)) return false;
+        const pendingClientMessageId = pendingOwnerSend.clientMessageId;
+        const acceptedMessage = messages.find((message) =>
+          message &&
+          message.role === "owner" &&
+          (message.messageId === pendingClientMessageId || message.message_id === pendingClientMessageId)
+        );
+        if (!acceptedMessage) return false;
+        pendingSendRollbacks.delete(pendingClientMessageId);
+        return releasePendingOwnerSend(pendingClientMessageId, { clearComposer: true });
+      }
+
       function appendMessage(message) {
         const article = document.createElement("article");
         article.className = message.role === "owner" ? "bubble owner" : "bubble";
@@ -11752,6 +11765,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           if (body && body.ok) {
             lastRefreshFailure = "";
             renderThread(body.messages || [], { replace: true });
+            releasePendingOwnerSendFromThread(body.messages || []);
             return { ok: true };
           }
         } catch {
@@ -11800,9 +11814,12 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             const body = JSON.parse(event.data || "{}");
             if (body.type === "thread" && body.ok) {
               renderThread(body.messages || [], { replace: false });
+              const releasedFromThread = releasePendingOwnerSendFromThread(body.messages || []);
               const lastMessage = Array.isArray(body.messages) ? body.messages[body.messages.length - 1] : null;
               if (lastMessage?.role === "butler" && lastMessage?.status === "replied") {
                 setStatus("返信を受信しました。", { temporary: true });
+              } else if (releasedFromThread) {
+                setStatus("送信を保存しました。app-server bridge の返信を待っています", { thinking: true });
               }
             } else if (body.type === "transient_status" && body.ok) {
               const isThinking = body.status === "thinking";

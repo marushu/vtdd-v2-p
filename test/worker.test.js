@@ -1257,6 +1257,8 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("let pendingOwnerSend = null"), true);
   assert.equal(body.includes("let retryClientMessageId = \"\""), true);
   assert.equal(body.includes("function releasePendingOwnerSend("), true);
+  assert.equal(body.includes("function releasePendingOwnerSendFromThread("), true);
+  assert.equal(body.includes("releasePendingOwnerSendFromThread(body.messages || [])"), true);
   assert.equal(body.includes("送信確認を待っています。入力は保存確認まで残します。"), true);
   assert.equal(body.includes("送信確認前に WebSocket が切れました。入力は残しています。履歴再取得後にもう一度送信できます。"), true);
   assert.equal(body.includes("送信確認が返りませんでした。入力は残しています。再接続後にもう一度送信してください。"), true);
