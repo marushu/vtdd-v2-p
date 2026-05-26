@@ -1495,6 +1495,7 @@ test("worker serves dashboard media add controls for iPhone-first upload", async
   const body = await response.text();
   assert.equal(body.includes("id=\"butler-media-button\""), true);
   assert.equal(body.includes("id=\"butler-media-input\""), true);
+  assert.equal(body.includes('id="butler-media-input" type="file" multiple hidden'), true);
   assert.equal(body.includes("accept=\"image/*\""), false);
   assert.equal(body.includes("/v2/media/upload"), true);
   assert.equal(body.includes("createImageBitmap"), true);
@@ -1507,6 +1508,10 @@ test("worker serves dashboard media add controls for iPhone-first upload", async
   assert.equal(body.includes("image.src = downloadHref"), true);
   assert.equal(body.includes("URL.createObjectURL"), true);
   assert.equal(body.includes("URL.revokeObjectURL"), true);
+  assert.equal(body.includes("const files = Array.from(mediaInput.files || [])"), true);
+  assert.equal(body.includes("for (const file of files)"), true);
+  assert.equal(body.includes("const nextPendingMediaItems = [...pendingMediaItems, ...selectedItems]"), true);
+  assert.equal(body.includes("Math.min(selectedItems.length, 12)"), true);
   assert.equal(body.includes("repo 未指定の通常会話では private media として保存します"), true);
   assert.equal(body.includes("mediaReferences"), true);
   assert.equal(body.includes("pendingSendRollbacks"), true);

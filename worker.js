@@ -65767,7 +65767,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         <div class="pending-media" id="butler-pending-media" aria-live="polite"></div>
         <div class="composer-box">
           <button class="media-button" id="butler-media-button" type="button" aria-label="\u753B\u50CF\u3084\u30D5\u30A1\u30A4\u30EB\u3092\u8FFD\u52A0" title="\u753B\u50CF\u3084\u30D5\u30A1\u30A4\u30EB\u3092\u8FFD\u52A0">+</button>
-          <input id="butler-media-input" type="file" hidden>
+          <input id="butler-media-input" type="file" multiple hidden>
           <textarea id="butler-message" name="text" placeholder="Butler V2 \u306B\u30E1\u30C3\u30BB\u30FC\u30B8..." aria-label="Butler V2 \u306B\u30E1\u30C3\u30BB\u30FC\u30B8" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="send"></textarea>
           <button class="send-button" type="submit" aria-label="Butler \u306B\u9001\u4FE1">\u2191</button>
         </div>
@@ -66787,32 +66787,34 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       if (mediaButton && mediaInput) {
         mediaButton.addEventListener("click", () => mediaInput.click());
         mediaInput.addEventListener("change", async () => {
-          const file = mediaInput.files && mediaInput.files[0];
+          const files = Array.from(mediaInput.files || []);
           mediaInput.value = "";
-          if (!file) return;
+          if (files.length === 0) return;
           try {
             mediaButton.disabled = true;
-            const preparedFile = await prepareUploadFile(file);
-            const previewUrl =
-              preparedFile && preparedFile.type && preparedFile.type.startsWith("image/") && typeof URL !== "undefined" && typeof URL.createObjectURL === "function"
-                ? URL.createObjectURL(preparedFile)
-                : "";
-            const nextPendingMediaItems = [
-              ...pendingMediaItems,
-              {
+            const selectedItems = [];
+            for (const file of files) {
+              const preparedFile = await prepareUploadFile(file);
+              const previewUrl =
+                preparedFile && preparedFile.type && preparedFile.type.startsWith("image/") && typeof URL !== "undefined" && typeof URL.createObjectURL === "function"
+                  ? URL.createObjectURL(preparedFile)
+                  : "";
+              selectedItems.push({
                 clientId: Date.now() + "_" + Math.random().toString(36).slice(2),
                 filename: preparedFile.name || file.name || "attachment",
                 previewUrl,
                 file: preparedFile
-              }
-            ];
+              });
+            }
+            const nextPendingMediaItems = [...pendingMediaItems, ...selectedItems];
             const retainedPendingMediaItems = nextPendingMediaItems.slice(-12);
             for (const dropped of nextPendingMediaItems.slice(0, Math.max(0, nextPendingMediaItems.length - 12))) {
               revokePendingMediaPreview(dropped);
             }
             pendingMediaItems = retainedPendingMediaItems;
             renderPendingMedia();
-            setStatus("\u6DFB\u4ED8\u3092\u9001\u4FE1\u5F85\u3061\u306B\u8FFD\u52A0\u3057\u307E\u3057\u305F\u3002repo \u672A\u6307\u5B9A\u306E\u901A\u5E38\u4F1A\u8A71\u3067\u306F private media \u3068\u3057\u3066\u4FDD\u5B58\u3057\u307E\u3059\u3002", { temporary: true });
+            const addedCount = Math.min(selectedItems.length, 12);
+            setStatus(String(addedCount) + "\u4EF6\u306E\u6DFB\u4ED8\u3092\u9001\u4FE1\u5F85\u3061\u306B\u8FFD\u52A0\u3057\u307E\u3057\u305F\u3002repo \u672A\u6307\u5B9A\u306E\u901A\u5E38\u4F1A\u8A71\u3067\u306F private media \u3068\u3057\u3066\u4FDD\u5B58\u3057\u307E\u3059\u3002", { temporary: true });
             textarea.focus({ preventScroll: true });
           } catch (error) {
             setStatus((error && error.message) || "\u6DFB\u4ED8\u306E\u4FDD\u5B58\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002");
