@@ -1061,6 +1061,7 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("function sendOwnerMessageByHttp("), true);
   assert.equal(body.includes("function isChatSocketOpen()"), true);
   assert.equal(body.includes("function describeChatSocketState()"), true);
+  assert.equal(body.includes("function setConnectionRecoveryStatus("), true);
   assert.equal(body.includes("function buildReconnectStatus("), true);
   assert.equal(body.includes("function dropStaleSocketIfNeeded()"), true);
   assert.equal(body.includes('let lastRefreshFailure = ""'), true);
@@ -1073,10 +1074,13 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("WebSocket 未接続のため HTTP fallback で保存しました。再接続を続けています。"), true);
   assert.equal(body.includes("sendOwnerMessageByHttp(ownerPayload, clientMessageId)"), true);
   assert.equal(body.includes("refreshThread().then"), false);
-  assert.equal(body.includes("履歴を再取得して再接続します"), true);
   assert.equal(body.includes("履歴の再取得に失敗しました。入力は保持しています。"), true);
-  assert.equal(body.includes("最後の履歴取得"), true);
-  assert.equal(body.includes("WebSocket: "), true);
+  assert.equal(body.includes("再接続 \" + attempt + \"回目"), false);
+  assert.equal(body.includes("最後の履歴取得"), false);
+  assert.equal(body.includes("WebSocket: "), false);
+  assert.equal(body.includes("status.dataset.reconnectAttempt"), true);
+  assert.equal(body.includes("status.dataset.websocketState"), true);
+  assert.equal(body.includes("接続を復帰しています。入力は保持しています。"), true);
   assert.equal(body.includes("document.addEventListener(\"visibilitychange\""), true);
   assert.equal(body.includes("window.addEventListener(\"online\""), true);
   assert.equal(body.includes("VPS Codex CLI に push します"), false);

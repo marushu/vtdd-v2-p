@@ -65761,10 +65761,16 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         return "\u4E0D\u660E";
       }
 
-      function buildReconnectStatus(prefix) {
+      function setConnectionRecoveryStatus(message) {
         const attempt = Math.max(1, reconnectAttempt + 1);
-        const refreshPart = lastRefreshFailure ? " \u6700\u5F8C\u306E\u5C65\u6B74\u53D6\u5F97: " + lastRefreshFailure + "\u3002" : "";
-        return prefix + " \u518D\u63A5\u7D9A " + attempt + "\u56DE\u76EE / WebSocket: " + describeChatSocketState() + "\u3002" + refreshPart;
+        status.dataset.reconnectAttempt = String(attempt);
+        status.dataset.websocketState = describeChatSocketState();
+        status.dataset.lastRefreshFailure = lastRefreshFailure || "";
+        setStatus(message);
+      }
+
+      function buildReconnectStatus(prefix) {
+        return prefix + " \u5165\u529B\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002";
       }
 
       function dropStaleSocketIfNeeded() {
@@ -66304,7 +66310,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
               return { ok: false, authExpired: true };
             }
             lastRefreshFailure = "HTTP " + response.status;
-            setStatus(buildReconnectStatus("\u5C65\u6B74\u306E\u518D\u53D6\u5F97\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002"));
+            setConnectionRecoveryStatus("\u5C65\u6B74\u306E\u518D\u53D6\u5F97\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002");
             return { ok: false, status: response.status };
           }
           if (body && body.ok) {
@@ -66314,7 +66320,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           }
         } catch {
           lastRefreshFailure = "\u30CD\u30C3\u30C8\u30EF\u30FC\u30AF";
-          setStatus(buildReconnectStatus("\u5C65\u6B74\u306E\u518D\u53D6\u5F97\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002"));
+          setConnectionRecoveryStatus("\u5C65\u6B74\u306E\u518D\u53D6\u5F97\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002");
           return { ok: false, network: true };
         } finally {
           refreshingThread = false;
@@ -66325,7 +66331,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       function scheduleReconnect() {
         if (reconnectTimer || !socketEndpoint || typeof WebSocket !== "function") return;
         const delay = Math.min(10000, 1000 * Math.pow(2, reconnectAttempt));
-        setStatus(buildReconnectStatus("WebSocket \u3092\u518D\u63A5\u7D9A\u3057\u307E\u3059\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002"));
+        setConnectionRecoveryStatus("\u63A5\u7D9A\u3092\u5FA9\u5E30\u3057\u3066\u3044\u307E\u3059\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002");
         reconnectAttempt += 1;
         reconnectTimer = window.setTimeout(() => {
           reconnectTimer = null;
@@ -66394,7 +66400,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             releasePendingOwnerSend(pendingOwnerSend.clientMessageId, { clearComposer: false, keepRollbackTimer: true });
             setStatus("\u9001\u4FE1\u78BA\u8A8D\u524D\u306B WebSocket \u304C\u5207\u308C\u307E\u3057\u305F\u3002\u5165\u529B\u306F\u6B8B\u3057\u3066\u3044\u307E\u3059\u3002\u5C65\u6B74\u518D\u53D6\u5F97\u5F8C\u306B\u3082\u3046\u4E00\u5EA6\u9001\u4FE1\u3067\u304D\u307E\u3059\u3002");
           } else {
-            setStatus(buildReconnectStatus("WebSocket \u304C\u5207\u308C\u307E\u3057\u305F\u3002\u5C65\u6B74\u3092\u518D\u53D6\u5F97\u3057\u3066\u518D\u63A5\u7D9A\u3057\u307E\u3059\u3002"));
+            setConnectionRecoveryStatus("\u63A5\u7D9A\u304C\u5207\u308C\u307E\u3057\u305F\u3002\u5C65\u6B74\u3092\u78BA\u8A8D\u3057\u306A\u304C\u3089\u5FA9\u5E30\u3057\u3066\u3044\u307E\u3059\u3002");
           }
           dropStaleSocketIfNeeded();
           refreshThread();
@@ -66405,7 +66411,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             releasePendingOwnerSend(pendingOwnerSend.clientMessageId, { clearComposer: false, keepRollbackTimer: true });
             setStatus("\u9001\u4FE1\u78BA\u8A8D\u524D\u306B WebSocket \u63A5\u7D9A\u304C\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u5165\u529B\u306F\u6B8B\u3057\u3066\u3044\u307E\u3059\u3002\u518D\u63A5\u7D9A\u5F8C\u306B\u3082\u3046\u4E00\u5EA6\u9001\u4FE1\u3067\u304D\u307E\u3059\u3002");
           } else {
-            setStatus(buildReconnectStatus("WebSocket \u63A5\u7D9A\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u5C65\u6B74\u3092\u518D\u53D6\u5F97\u3057\u3066\u518D\u63A5\u7D9A\u3057\u307E\u3059\u3002"));
+            setConnectionRecoveryStatus("\u63A5\u7D9A\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F\u3002\u5C65\u6B74\u3092\u78BA\u8A8D\u3057\u306A\u304C\u3089\u5FA9\u5E30\u3057\u3066\u3044\u307E\u3059\u3002");
           }
           dropStaleSocketIfNeeded();
           refreshThread();
@@ -66570,14 +66576,14 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       textarea.addEventListener("input", resizeComposerInput);
       window.addEventListener("resize", resizeComposerInput);
       window.addEventListener("online", () => {
-        setStatus(buildReconnectStatus("\u30CD\u30C3\u30C8\u30EF\u30FC\u30AF\u5FA9\u5E30\u3092\u691C\u77E5\u3057\u307E\u3057\u305F\u3002\u5C65\u6B74\u3092\u518D\u53D6\u5F97\u3057\u3066\u518D\u63A5\u7D9A\u3057\u307E\u3059\u3002"));
+        setConnectionRecoveryStatus("\u30CD\u30C3\u30C8\u30EF\u30FC\u30AF\u5FA9\u5E30\u3092\u691C\u77E5\u3057\u307E\u3057\u305F\u3002\u63A5\u7D9A\u3092\u5FA9\u5E30\u3057\u3066\u3044\u307E\u3059\u3002");
         dropStaleSocketIfNeeded();
         refreshThread();
         scheduleReconnect();
       });
       document.addEventListener("visibilitychange", () => {
         if (document.visibilityState === "visible" && (!chatSocket || chatSocket.readyState !== WebSocket.OPEN)) {
-          setStatus(buildReconnectStatus("\u753B\u9762\u5FA9\u5E30\u3092\u691C\u77E5\u3057\u307E\u3057\u305F\u3002\u5C65\u6B74\u3092\u518D\u53D6\u5F97\u3057\u3066\u518D\u63A5\u7D9A\u3057\u307E\u3059\u3002"));
+          setConnectionRecoveryStatus("\u753B\u9762\u5FA9\u5E30\u3092\u691C\u77E5\u3057\u307E\u3057\u305F\u3002\u63A5\u7D9A\u3092\u5FA9\u5E30\u3057\u3066\u3044\u307E\u3059\u3002");
           dropStaleSocketIfNeeded();
           refreshThread();
           scheduleReconnect();

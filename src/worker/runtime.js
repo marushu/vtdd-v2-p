@@ -10921,10 +10921,16 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         return "不明";
       }
 
-      function buildReconnectStatus(prefix) {
+      function setConnectionRecoveryStatus(message) {
         const attempt = Math.max(1, reconnectAttempt + 1);
-        const refreshPart = lastRefreshFailure ? " 最後の履歴取得: " + lastRefreshFailure + "。" : "";
-        return prefix + " 再接続 " + attempt + "回目 / WebSocket: " + describeChatSocketState() + "。" + refreshPart;
+        status.dataset.reconnectAttempt = String(attempt);
+        status.dataset.websocketState = describeChatSocketState();
+        status.dataset.lastRefreshFailure = lastRefreshFailure || "";
+        setStatus(message);
+      }
+
+      function buildReconnectStatus(prefix) {
+        return prefix + " 入力は保持しています。";
       }
 
       function dropStaleSocketIfNeeded() {
@@ -11464,7 +11470,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
               return { ok: false, authExpired: true };
             }
             lastRefreshFailure = "HTTP " + response.status;
-            setStatus(buildReconnectStatus("履歴の再取得に失敗しました。入力は保持しています。"));
+            setConnectionRecoveryStatus("履歴の再取得に失敗しました。入力は保持しています。");
             return { ok: false, status: response.status };
           }
           if (body && body.ok) {
@@ -11474,7 +11480,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           }
         } catch {
           lastRefreshFailure = "ネットワーク";
-          setStatus(buildReconnectStatus("履歴の再取得に失敗しました。入力は保持しています。"));
+          setConnectionRecoveryStatus("履歴の再取得に失敗しました。入力は保持しています。");
           return { ok: false, network: true };
         } finally {
           refreshingThread = false;
@@ -11485,7 +11491,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       function scheduleReconnect() {
         if (reconnectTimer || !socketEndpoint || typeof WebSocket !== "function") return;
         const delay = Math.min(10000, 1000 * Math.pow(2, reconnectAttempt));
-        setStatus(buildReconnectStatus("WebSocket を再接続します。入力は保持しています。"));
+        setConnectionRecoveryStatus("接続を復帰しています。入力は保持しています。");
         reconnectAttempt += 1;
         reconnectTimer = window.setTimeout(() => {
           reconnectTimer = null;
@@ -11554,7 +11560,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             releasePendingOwnerSend(pendingOwnerSend.clientMessageId, { clearComposer: false, keepRollbackTimer: true });
             setStatus("送信確認前に WebSocket が切れました。入力は残しています。履歴再取得後にもう一度送信できます。");
           } else {
-            setStatus(buildReconnectStatus("WebSocket が切れました。履歴を再取得して再接続します。"));
+            setConnectionRecoveryStatus("接続が切れました。履歴を確認しながら復帰しています。");
           }
           dropStaleSocketIfNeeded();
           refreshThread();
@@ -11565,7 +11571,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             releasePendingOwnerSend(pendingOwnerSend.clientMessageId, { clearComposer: false, keepRollbackTimer: true });
             setStatus("送信確認前に WebSocket 接続が失敗しました。入力は残しています。再接続後にもう一度送信できます。");
           } else {
-            setStatus(buildReconnectStatus("WebSocket 接続に失敗しました。履歴を再取得して再接続します。"));
+            setConnectionRecoveryStatus("接続できませんでした。履歴を確認しながら復帰しています。");
           }
           dropStaleSocketIfNeeded();
           refreshThread();
@@ -11730,14 +11736,14 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       textarea.addEventListener("input", resizeComposerInput);
       window.addEventListener("resize", resizeComposerInput);
       window.addEventListener("online", () => {
-        setStatus(buildReconnectStatus("ネットワーク復帰を検知しました。履歴を再取得して再接続します。"));
+        setConnectionRecoveryStatus("ネットワーク復帰を検知しました。接続を復帰しています。");
         dropStaleSocketIfNeeded();
         refreshThread();
         scheduleReconnect();
       });
       document.addEventListener("visibilitychange", () => {
         if (document.visibilityState === "visible" && (!chatSocket || chatSocket.readyState !== WebSocket.OPEN)) {
-          setStatus(buildReconnectStatus("画面復帰を検知しました。履歴を再取得して再接続します。"));
+          setConnectionRecoveryStatus("画面復帰を検知しました。接続を復帰しています。");
           dropStaleSocketIfNeeded();
           refreshThread();
           scheduleReconnect();
