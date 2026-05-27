@@ -10597,10 +10597,6 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       href: `${origin}/dashboard/notifications`
     },
     {
-      label: "Passkey",
-      href: dashboardSignInUrl
-    },
-    {
       label: "進捗を見る",
       href: repositoryInput ? `${origin}/dashboard/progress?repository=${encodedRepository}` : "",
       disabledReason: "repo 設定後"
@@ -10676,7 +10672,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     * { box-sizing: border-box; }
     html, body { max-width: 100%; height: 100%; overflow: hidden; }
     body { margin: 0; background: var(--page-bg); }
-    main { width: 100%; height: 100dvh; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 320px); gap: 18px; padding: 16px; overflow: hidden; }
+    main { width: 100%; height: 100dvh; min-height: 0; display: block; padding: 16px; overflow: hidden; }
     h1, h2, h3, p { margin-top: 0; }
     h1 { font-size: 22px; line-height: 1.1; margin-bottom: 4px; }
     h2 { font-size: 19px; margin-bottom: 12px; }
@@ -10747,11 +10743,6 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .composer-status:empty { min-height: 0; padding-left: 0; }
     .composer-status a { color: var(--text); font-weight: 800; text-underline-offset: 3px; }
     .composer-status.thinking::after { content: ""; display: inline-block; width: 1.4em; text-align: left; animation: thinkingDots 1.2s steps(4, end) infinite; }
-    .sidebar { position: sticky; top: 16px; align-self: start; max-height: calc(100dvh - 32px); overflow: auto; border: 1px solid var(--border); border-radius: 18px; background: var(--panel); }
-    .sidebar > summary { display: flex; justify-content: space-between; align-items: center; gap: 10px; min-height: 58px; padding: 14px; list-style: none; }
-    .sidebar > summary::-webkit-details-marker { display: none; }
-    .sidebar-content { display: grid; gap: 12px; padding: 0 14px 14px; }
-    .sidebar-header { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
     .eyebrow { color: var(--muted); font-size: 11px; font-weight: 850; letter-spacing: .1em; text-transform: uppercase; }
     .lane, details { border: 1px solid var(--border); border-radius: 14px; padding: 12px; background: var(--panel-strong); }
     .lane-title { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
@@ -10776,21 +10767,20 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     code { color: var(--text); overflow-wrap: anywhere; }
     .menu-toggle { position: fixed; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
     .mobile-backdrop, .mobile-drawer { display: none; }
+    .mobile-backdrop { position: fixed; inset: 0; z-index: 10; background: rgba(0, 0, 0, .38); backdrop-filter: blur(2px); }
+    .mobile-drawer { position: fixed; top: 0; bottom: 0; left: 0; z-index: 11; width: min(86vw, 380px); overflow: auto; padding: max(16px, env(safe-area-inset-top)) 14px max(18px, env(safe-area-inset-bottom)); border-right: 1px solid var(--border); background: var(--panel); box-shadow: 18px 0 60px var(--shadow); }
+    .menu-toggle:checked ~ .mobile-backdrop, .menu-toggle:checked ~ .mobile-drawer { display: block; }
+    .mobile-drawer-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px; }
+    .mobile-drawer-content { display: grid; gap: 12px; }
     .menu-callout { color: var(--muted); font-size: 12px; line-height: 1.55; }
     @media (min-width: 1180px) {
       .chat-scroll { align-items: center; }
       .bubble.owner { margin-right: calc((100% - 760px) / 2); }
     }
     @media (max-width: 900px) {
-      main { display: block; padding: 14px 14px 0; }
+      main { padding: 14px 14px 0; }
       .app-shell { height: calc(100dvh - 14px); }
       .topbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
-      .sidebar { display: none; }
-      .mobile-backdrop { position: fixed; inset: 0; z-index: 10; background: rgba(0, 0, 0, .38); backdrop-filter: blur(2px); }
-      .mobile-drawer { position: fixed; top: 0; bottom: 0; left: 0; z-index: 11; width: min(86vw, 360px); overflow: auto; padding: max(16px, env(safe-area-inset-top)) 14px max(18px, env(safe-area-inset-bottom)); border-right: 1px solid var(--border); background: var(--panel); box-shadow: 18px 0 60px var(--shadow); }
-      .menu-toggle:checked ~ .mobile-backdrop, .menu-toggle:checked ~ .mobile-drawer { display: block; }
-      .mobile-drawer-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px; }
-      .mobile-drawer-content { display: grid; gap: 12px; }
       .chat-scroll { padding-bottom: 28px; }
       .bubble { max-width: 100%; font-size: 16px; }
       .bubble.owner { max-width: 82%; }
@@ -10821,7 +10811,6 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         </div>
         <div class="top-right">
           <a class="tool-button top-action" href="${escapeDashboardHtml(origin)}/dashboard/notifications" aria-label="通知センター">通知</a>
-          <a class="tool-button top-action" href="${escapeDashboardHtml(dashboardSignInUrl)}" aria-label="Passkey で dashboard session を更新">Passkey</a>
         </div>
       </header>
 
@@ -10841,12 +10830,16 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             ${targetStatusMarkup}
           </div>
           <div class="lane">
+            <div class="lane-title"><h3>Issue 候補</h3><span class="pill">draft</span></div>
+            <p>Issue / PR 操作が必要になった時だけ、会話の中で対象と範囲を確認します。</p>
+          </div>
+          <div class="lane">
             <div class="lane-title"><h3>進行中</h3><span class="pill">状態</span></div>
             <p>直近の反映、失敗、進行中の作業があればここに出します。</p>
             ${renderDashboardDeployEvent(latestDeployEvent)}
-          </div>
-          <div class="quick-actions">
-            ${renderDashboardActionList(cockpitActions)}
+            <div class="quick-actions">
+              ${renderDashboardActionList(cockpitActions)}
+            </div>
           </div>
           <details data-debug-section="dashboard-development-operations">
             <summary>開発/運用</summary>
@@ -10854,11 +10847,15 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
               ${renderDashboardSurfaceList(surfaces)}
             </div>
           </details>
-          <details>
+          <details data-debug-section="dashboard-workflows">
             <summary>GitHub workflows</summary>
             <div class="surface-list">
               ${workflows.map(([title, href]) => `<a href="${escapeDashboardHtml(href)}">${escapeDashboardHtml(title)}</a>`).join("")}
             </div>
+          </details>
+          <details data-debug-section="dashboard-prototype-cleanup">
+            <summary>Prototype cleanup</summary>
+            <p>v3 Worker prototype の削除や移行は destructive operation 扱いです。必要になった時だけ、対象 runtime と scope を明示した passkey approval で扱います。</p>
           </details>
         </div>
       </aside>
@@ -10898,57 +10895,6 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         <div class="composer-status" id="butler-chat-status">接続準備中です。送信できる状態になったら知らせます。</div>
       </form>
     </section>
-
-    <details id="tools" class="sidebar" aria-label="管理サイドバーメニュー">
-      <summary>
-        <span>
-          <span class="eyebrow">メニュー</span>
-          <strong>必要な時だけ開く</strong>
-        </span>
-        <span class="pill">WebSocket</span>
-      </summary>
-      <div class="sidebar-content">
-        <p class="menu-callout">通知、進捗、対象 repo の確認を優先します。開発/運用の詳細は下に隔離しています。</p>
-
-        <div class="lane">
-          <div class="lane-title"><h3>対象 repo</h3><span class="pill">${repositoryInput ? "resolved" : "未指定"}</span></div>
-          ${targetStatusMarkup}
-        </div>
-
-        <div class="lane">
-          <div class="lane-title"><h3>Issue 候補</h3><span class="pill">draft</span></div>
-          <p>Issue / PR 操作が必要になった時だけ、会話の中で対象と範囲を確認します。</p>
-        </div>
-
-        <div class="lane">
-          <div class="lane-title"><h3>進行中</h3><span class="pill">状態</span></div>
-          <p>直近の反映、失敗、進行中の作業があればここに出します。</p>
-          ${renderDashboardDeployEvent(latestDeployEvent)}
-          <div class="quick-actions">
-            ${renderDashboardActionList(cockpitActions)}
-          </div>
-        </div>
-
-        <details data-debug-section="dashboard-development-operations">
-          <summary>開発/運用</summary>
-          <div class="surface-list">
-            ${renderDashboardSurfaceList(surfaces)}
-          </div>
-        </details>
-
-        <details data-debug-section="dashboard-workflows">
-          <summary>GitHub workflows</summary>
-          <div class="surface-list">
-            ${workflows.map(([title, href]) => `<a href="${escapeDashboardHtml(href)}">${escapeDashboardHtml(title)}</a>`).join("")}
-          </div>
-        </details>
-
-        <details data-debug-section="dashboard-prototype-cleanup">
-          <summary>Prototype cleanup</summary>
-          <p>v3 Worker prototype の削除や移行は destructive operation 扱いです。必要になった時だけ、対象 runtime と scope を明示した passkey approval で扱います。</p>
-        </details>
-      </div>
-    </details>
   </main>
   <script>
     (() => {

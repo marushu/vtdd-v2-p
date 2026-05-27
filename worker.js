@@ -65486,10 +65486,6 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       href: `${origin}/dashboard/notifications`
     },
     {
-      label: "Passkey",
-      href: dashboardSignInUrl
-    },
-    {
       label: "\u9032\u6357\u3092\u898B\u308B",
       href: repositoryInput ? `${origin}/dashboard/progress?repository=${encodedRepository}` : "",
       disabledReason: "repo \u8A2D\u5B9A\u5F8C"
@@ -65554,7 +65550,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     * { box-sizing: border-box; }
     html, body { max-width: 100%; height: 100%; overflow: hidden; }
     body { margin: 0; background: var(--page-bg); }
-    main { width: 100%; height: 100dvh; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 320px); gap: 18px; padding: 16px; overflow: hidden; }
+    main { width: 100%; height: 100dvh; min-height: 0; display: block; padding: 16px; overflow: hidden; }
     h1, h2, h3, p { margin-top: 0; }
     h1 { font-size: 22px; line-height: 1.1; margin-bottom: 4px; }
     h2 { font-size: 19px; margin-bottom: 12px; }
@@ -65625,11 +65621,6 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .composer-status:empty { min-height: 0; padding-left: 0; }
     .composer-status a { color: var(--text); font-weight: 800; text-underline-offset: 3px; }
     .composer-status.thinking::after { content: ""; display: inline-block; width: 1.4em; text-align: left; animation: thinkingDots 1.2s steps(4, end) infinite; }
-    .sidebar { position: sticky; top: 16px; align-self: start; max-height: calc(100dvh - 32px); overflow: auto; border: 1px solid var(--border); border-radius: 18px; background: var(--panel); }
-    .sidebar > summary { display: flex; justify-content: space-between; align-items: center; gap: 10px; min-height: 58px; padding: 14px; list-style: none; }
-    .sidebar > summary::-webkit-details-marker { display: none; }
-    .sidebar-content { display: grid; gap: 12px; padding: 0 14px 14px; }
-    .sidebar-header { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
     .eyebrow { color: var(--muted); font-size: 11px; font-weight: 850; letter-spacing: .1em; text-transform: uppercase; }
     .lane, details { border: 1px solid var(--border); border-radius: 14px; padding: 12px; background: var(--panel-strong); }
     .lane-title { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
@@ -65654,21 +65645,20 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     code { color: var(--text); overflow-wrap: anywhere; }
     .menu-toggle { position: fixed; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
     .mobile-backdrop, .mobile-drawer { display: none; }
+    .mobile-backdrop { position: fixed; inset: 0; z-index: 10; background: rgba(0, 0, 0, .38); backdrop-filter: blur(2px); }
+    .mobile-drawer { position: fixed; top: 0; bottom: 0; left: 0; z-index: 11; width: min(86vw, 380px); overflow: auto; padding: max(16px, env(safe-area-inset-top)) 14px max(18px, env(safe-area-inset-bottom)); border-right: 1px solid var(--border); background: var(--panel); box-shadow: 18px 0 60px var(--shadow); }
+    .menu-toggle:checked ~ .mobile-backdrop, .menu-toggle:checked ~ .mobile-drawer { display: block; }
+    .mobile-drawer-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px; }
+    .mobile-drawer-content { display: grid; gap: 12px; }
     .menu-callout { color: var(--muted); font-size: 12px; line-height: 1.55; }
     @media (min-width: 1180px) {
       .chat-scroll { align-items: center; }
       .bubble.owner { margin-right: calc((100% - 760px) / 2); }
     }
     @media (max-width: 900px) {
-      main { display: block; padding: 14px 14px 0; }
+      main { padding: 14px 14px 0; }
       .app-shell { height: calc(100dvh - 14px); }
       .topbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
-      .sidebar { display: none; }
-      .mobile-backdrop { position: fixed; inset: 0; z-index: 10; background: rgba(0, 0, 0, .38); backdrop-filter: blur(2px); }
-      .mobile-drawer { position: fixed; top: 0; bottom: 0; left: 0; z-index: 11; width: min(86vw, 360px); overflow: auto; padding: max(16px, env(safe-area-inset-top)) 14px max(18px, env(safe-area-inset-bottom)); border-right: 1px solid var(--border); background: var(--panel); box-shadow: 18px 0 60px var(--shadow); }
-      .menu-toggle:checked ~ .mobile-backdrop, .menu-toggle:checked ~ .mobile-drawer { display: block; }
-      .mobile-drawer-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px; }
-      .mobile-drawer-content { display: grid; gap: 12px; }
       .chat-scroll { padding-bottom: 28px; }
       .bubble { max-width: 100%; font-size: 16px; }
       .bubble.owner { max-width: 82%; }
@@ -65699,7 +65689,6 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         </div>
         <div class="top-right">
           <a class="tool-button top-action" href="${escapeDashboardHtml(origin)}/dashboard/notifications" aria-label="\u901A\u77E5\u30BB\u30F3\u30BF\u30FC">\u901A\u77E5</a>
-          <a class="tool-button top-action" href="${escapeDashboardHtml(dashboardSignInUrl)}" aria-label="Passkey \u3067 dashboard session \u3092\u66F4\u65B0">Passkey</a>
         </div>
       </header>
 
@@ -65719,12 +65708,16 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             ${targetStatusMarkup}
           </div>
           <div class="lane">
+            <div class="lane-title"><h3>Issue \u5019\u88DC</h3><span class="pill">draft</span></div>
+            <p>Issue / PR \u64CD\u4F5C\u304C\u5FC5\u8981\u306B\u306A\u3063\u305F\u6642\u3060\u3051\u3001\u4F1A\u8A71\u306E\u4E2D\u3067\u5BFE\u8C61\u3068\u7BC4\u56F2\u3092\u78BA\u8A8D\u3057\u307E\u3059\u3002</p>
+          </div>
+          <div class="lane">
             <div class="lane-title"><h3>\u9032\u884C\u4E2D</h3><span class="pill">\u72B6\u614B</span></div>
             <p>\u76F4\u8FD1\u306E\u53CD\u6620\u3001\u5931\u6557\u3001\u9032\u884C\u4E2D\u306E\u4F5C\u696D\u304C\u3042\u308C\u3070\u3053\u3053\u306B\u51FA\u3057\u307E\u3059\u3002</p>
             ${renderDashboardDeployEvent(latestDeployEvent)}
-          </div>
-          <div class="quick-actions">
-            ${renderDashboardActionList(cockpitActions)}
+            <div class="quick-actions">
+              ${renderDashboardActionList(cockpitActions)}
+            </div>
           </div>
           <details data-debug-section="dashboard-development-operations">
             <summary>\u958B\u767A/\u904B\u7528</summary>
@@ -65732,11 +65725,15 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
               ${renderDashboardSurfaceList(surfaces)}
             </div>
           </details>
-          <details>
+          <details data-debug-section="dashboard-workflows">
             <summary>GitHub workflows</summary>
             <div class="surface-list">
               ${workflows.map(([title, href]) => `<a href="${escapeDashboardHtml(href)}">${escapeDashboardHtml(title)}</a>`).join("")}
             </div>
+          </details>
+          <details data-debug-section="dashboard-prototype-cleanup">
+            <summary>Prototype cleanup</summary>
+            <p>v3 Worker prototype \u306E\u524A\u9664\u3084\u79FB\u884C\u306F destructive operation \u6271\u3044\u3067\u3059\u3002\u5FC5\u8981\u306B\u306A\u3063\u305F\u6642\u3060\u3051\u3001\u5BFE\u8C61 runtime \u3068 scope \u3092\u660E\u793A\u3057\u305F passkey approval \u3067\u6271\u3044\u307E\u3059\u3002</p>
           </details>
         </div>
       </aside>
@@ -65776,57 +65773,6 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         <div class="composer-status" id="butler-chat-status">\u63A5\u7D9A\u6E96\u5099\u4E2D\u3067\u3059\u3002\u9001\u4FE1\u3067\u304D\u308B\u72B6\u614B\u306B\u306A\u3063\u305F\u3089\u77E5\u3089\u305B\u307E\u3059\u3002</div>
       </form>
     </section>
-
-    <details id="tools" class="sidebar" aria-label="\u7BA1\u7406\u30B5\u30A4\u30C9\u30D0\u30FC\u30E1\u30CB\u30E5\u30FC">
-      <summary>
-        <span>
-          <span class="eyebrow">\u30E1\u30CB\u30E5\u30FC</span>
-          <strong>\u5FC5\u8981\u306A\u6642\u3060\u3051\u958B\u304F</strong>
-        </span>
-        <span class="pill">WebSocket</span>
-      </summary>
-      <div class="sidebar-content">
-        <p class="menu-callout">\u901A\u77E5\u3001\u9032\u6357\u3001\u5BFE\u8C61 repo \u306E\u78BA\u8A8D\u3092\u512A\u5148\u3057\u307E\u3059\u3002\u958B\u767A/\u904B\u7528\u306E\u8A73\u7D30\u306F\u4E0B\u306B\u9694\u96E2\u3057\u3066\u3044\u307E\u3059\u3002</p>
-
-        <div class="lane">
-          <div class="lane-title"><h3>\u5BFE\u8C61 repo</h3><span class="pill">${repositoryInput ? "resolved" : "\u672A\u6307\u5B9A"}</span></div>
-          ${targetStatusMarkup}
-        </div>
-
-        <div class="lane">
-          <div class="lane-title"><h3>Issue \u5019\u88DC</h3><span class="pill">draft</span></div>
-          <p>Issue / PR \u64CD\u4F5C\u304C\u5FC5\u8981\u306B\u306A\u3063\u305F\u6642\u3060\u3051\u3001\u4F1A\u8A71\u306E\u4E2D\u3067\u5BFE\u8C61\u3068\u7BC4\u56F2\u3092\u78BA\u8A8D\u3057\u307E\u3059\u3002</p>
-        </div>
-
-        <div class="lane">
-          <div class="lane-title"><h3>\u9032\u884C\u4E2D</h3><span class="pill">\u72B6\u614B</span></div>
-          <p>\u76F4\u8FD1\u306E\u53CD\u6620\u3001\u5931\u6557\u3001\u9032\u884C\u4E2D\u306E\u4F5C\u696D\u304C\u3042\u308C\u3070\u3053\u3053\u306B\u51FA\u3057\u307E\u3059\u3002</p>
-          ${renderDashboardDeployEvent(latestDeployEvent)}
-          <div class="quick-actions">
-            ${renderDashboardActionList(cockpitActions)}
-          </div>
-        </div>
-
-        <details data-debug-section="dashboard-development-operations">
-          <summary>\u958B\u767A/\u904B\u7528</summary>
-          <div class="surface-list">
-            ${renderDashboardSurfaceList(surfaces)}
-          </div>
-        </details>
-
-        <details data-debug-section="dashboard-workflows">
-          <summary>GitHub workflows</summary>
-          <div class="surface-list">
-            ${workflows.map(([title, href]) => `<a href="${escapeDashboardHtml(href)}">${escapeDashboardHtml(title)}</a>`).join("")}
-          </div>
-        </details>
-
-        <details data-debug-section="dashboard-prototype-cleanup">
-          <summary>Prototype cleanup</summary>
-          <p>v3 Worker prototype \u306E\u524A\u9664\u3084\u79FB\u884C\u306F destructive operation \u6271\u3044\u3067\u3059\u3002\u5FC5\u8981\u306B\u306A\u3063\u305F\u6642\u3060\u3051\u3001\u5BFE\u8C61 runtime \u3068 scope \u3092\u660E\u793A\u3057\u305F passkey approval \u3067\u6271\u3044\u307E\u3059\u3002</p>
-        </details>
-      </div>
-    </details>
   </main>
   <script>
     (() => {
