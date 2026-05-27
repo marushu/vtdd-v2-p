@@ -1087,6 +1087,10 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("--owner-link: #075985;"), true);
   assert.equal(body.includes("overflow: hidden"), true);
   assert.equal(body.includes("grid-template-columns: minmax(0, 1fr) auto"), true);
+  assert.equal(body.includes("minmax(220px, 320px)"), false);
+  assert.equal(body.includes('id="tools" class="sidebar"'), false);
+  assert.equal(body.includes(".mobile-drawer { position: fixed;"), true);
+  assert.equal(body.includes(".menu-toggle:checked ~ .mobile-backdrop, .menu-toggle:checked ~ .mobile-drawer { display: block; }"), true);
   assert.equal(body.includes(".composer-status:empty"), true);
   assert.equal(body.includes("WebSocket"), true);
   assert.equal(body.includes("接続準備中: 送信できる状態になったらここで知らせます"), false);
