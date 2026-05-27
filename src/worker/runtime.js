@@ -10665,6 +10665,10 @@ export function shouldWrapDashboardChatCodeBlock(text) {
   return source.length > 80 && !/\s/.test(source);
 }
 
+export function shouldSubmitDashboardComposerShortcut(event) {
+  return event && event.key === "Enter" && (event.metaKey === true || event.ctrlKey === true);
+}
+
 function decodeSafeDashboardChatCommandText(text) {
   const source = String(text || "");
   return source
@@ -12289,6 +12293,18 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           normalizeComposerInput();
           persistDashboardDraft();
         }, 0);
+      });
+      function shouldSubmitDashboardComposerShortcut(event) {
+        return event && event.key === "Enter" && (event.metaKey === true || event.ctrlKey === true);
+      }
+      textarea.addEventListener("keydown", (event) => {
+        if (!shouldSubmitDashboardComposerShortcut(event)) return;
+        event.preventDefault();
+        if (typeof form.requestSubmit === "function") {
+          form.requestSubmit();
+          return;
+        }
+        form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
       });
       window.addEventListener("resize", resizeComposerInput);
       window.addEventListener("online", async () => {

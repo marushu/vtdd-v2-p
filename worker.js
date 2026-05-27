@@ -67161,6 +67161,18 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           persistDashboardDraft();
         }, 0);
       });
+      function shouldSubmitDashboardComposerShortcut(event) {
+        return event && event.key === "Enter" && (event.metaKey === true || event.ctrlKey === true);
+      }
+      textarea.addEventListener("keydown", (event) => {
+        if (!shouldSubmitDashboardComposerShortcut(event)) return;
+        event.preventDefault();
+        if (typeof form.requestSubmit === "function") {
+          form.requestSubmit();
+          return;
+        }
+        form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      });
       window.addEventListener("resize", resizeComposerInput);
       window.addEventListener("online", async () => {
         if (await resumeDashboardSessionAfterAuthReturn("\u30CD\u30C3\u30C8\u30EF\u30FC\u30AF\u5FA9\u5E30\u5F8C\u3001\u518D\u30ED\u30B0\u30A4\u30F3\u72B6\u614B\u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002")) return;
