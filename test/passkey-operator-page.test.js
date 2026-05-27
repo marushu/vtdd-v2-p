@@ -178,6 +178,32 @@ test("passkey operator page focuses deploy mode on deploy approval and dispatch 
   assert.equal(html.includes('passkey approval accepted. production deploy request...'), true);
 });
 
+test("passkey operator page treats legacy deploy tokens as deploy-only scope", () => {
+  const html = renderPasskeyOperatorPage({
+    repositoryInput: "marushu/vtdd-v2-p",
+    issueNumber: 528,
+    phase: "execution",
+    actionType: "deploy",
+    highRiskKind: "production_deploy"
+  });
+
+  assert.equal(
+    html.includes('<section data-operator-section="approval" data-owner-flow="one-tap-deploy">'),
+    true
+  );
+  assert.equal(html.includes('<section data-operator-section="production-deploy">'), true);
+  assert.equal(html.includes('<section data-operator-section="registration" hidden>'), true);
+  assert.equal(html.includes('<section data-operator-section="pr-merge" hidden>'), true);
+  assert.equal(html.includes('<section data-operator-section="issue-close" hidden>'), true);
+  assert.equal(html.includes('<section data-operator-section="github-app-secret-sync" hidden>'), true);
+  assert.equal(html.includes('<section data-operator-section="github-actions-secret-sync" hidden>'), true);
+  assert.equal(html.includes('<section data-operator-section="gateway-bearer-vault" hidden>'), true);
+  assert.equal(html.includes('<section data-operator-section="vps-runner-admin" hidden>'), true);
+  assert.equal(html.includes('id="action-type-input" value="deploy_production"'), true);
+  assert.equal(html.includes('id="risk-kind-input" value="deploy_production"'), true);
+  assert.equal(html.includes("Action: deploy_production / deploy_production"), true);
+});
+
 test("passkey operator page blocks approval and deploy before repositoryInput is present", () => {
   const html = renderPasskeyOperatorPage({
     operatorMode: "deploy",

@@ -6937,6 +6937,30 @@ test("worker keeps explicit non-dashboard operator modes repo-scoped even with d
   assert.equal(html.includes("repo / Issue / PR scope は使いません"), false);
 });
 
+test("worker serves legacy deploy operator links as deploy-only scope", async () => {
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/v2/approval/passkey/operator?repositoryInput=marushu%2Fvtdd-v2-p&issueNumber=528&phase=execution&actionType=deploy&highRiskKind=production_deploy"
+    ),
+    gatewayAuthEnv
+  );
+
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.equal(html.includes('const operatorMode = "deploy"'), true);
+  assert.equal(html.includes('id="action-type-input" value="deploy_production"'), true);
+  assert.equal(html.includes('id="risk-kind-input" value="deploy_production"'), true);
+  assert.equal(
+    html.includes('<section data-operator-section="approval" data-owner-flow="one-tap-deploy">'),
+    true
+  );
+  assert.equal(html.includes('<section data-operator-section="production-deploy">'), true);
+  assert.equal(html.includes('<section data-operator-section="registration" hidden>'), true);
+  assert.equal(html.includes('<section data-operator-section="github-app-secret-sync" hidden>'), true);
+  assert.equal(html.includes('<section data-operator-section="pr-merge" hidden>'), true);
+  assert.equal(html.includes('<section data-operator-section="issue-close" hidden>'), true);
+});
+
 test("worker serves issue close operator mode without falling back to PR merge UI", async () => {
   const response = await worker.fetch(
     new Request(
