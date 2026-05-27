@@ -1167,7 +1167,7 @@ export function resolvePasskeyOperatorMode(input = {}) {
   if (!actionType && !highRiskKind) {
     return "full";
   }
-  if (actionType === "deploy_production" || highRiskKind === "deploy_production") {
+  if (isDeployProductionToken(actionType) || isDeployProductionToken(highRiskKind)) {
     return "deploy";
   }
   if (actionType === "merge" || highRiskKind === "pull_merge") {
@@ -1292,6 +1292,10 @@ function normalizeOperatorToken(value) {
   return String(value || "")
     .trim()
     .toLowerCase();
+}
+
+function isDeployProductionToken(value) {
+  return value === "deploy_production" || value === "production_deploy" || value === "deploy";
 }
 
 function sanitizePasskeyDashboardReturnPath(value) {
