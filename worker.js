@@ -62466,7 +62466,7 @@ function buildDashboardWebPushPayload(event) {
     title,
     body: body || "Dashboard Butler \u306E\u901A\u77E5\u3067\u3059\u3002",
     tag: `vtdd-${record2.kind || "dashboard"}-${record2.runId || record2.id || "event"}`.slice(0, 120),
-    url: record2.runUrl || "/dashboard/notifications"
+    url: "/dashboard/notifications"
   };
 }
 function buildDashboardWebPushTitle(record2) {
@@ -64622,6 +64622,39 @@ function renderDashboardNotificationEvent(event) {
             <p class="muted">${escapeDashboardHtml(relativeUpdatedAt || "\u6642\u523B\u672A\u53D7\u4FE1")} \u30FB ${escapeDashboardHtml(updatedAt || "updatedAt \u672A\u53D7\u4FE1")} \u30FB ${runLabel}</p>
           </div>`;
 }
+function collapseDashboardNotificationEvents(events = []) {
+  const latestByKey = /* @__PURE__ */ new Map();
+  for (const event of Array.isArray(events) ? events : []) {
+    const record2 = normalizeDashboardEventRecord(event);
+    const key = dashboardNotificationCollapseKey(record2);
+    const existing = latestByKey.get(key);
+    if (!existing || compareDashboardEventRecency(record2, existing) > 0) {
+      latestByKey.set(key, record2);
+    }
+  }
+  return [...latestByKey.values()].sort((a, b) => compareDashboardEventRecency(b, a));
+}
+function dashboardNotificationCollapseKey(event) {
+  const record2 = normalizeDashboardEventRecord(event);
+  const repository = normalizeCanonicalRepositoryInput(record2.repository) || "repo-unknown";
+  const workflowName = normalizeDashboardEventText(record2.workflowName || record2.kind) || "workflow-unknown";
+  if (record2.pullNumber) {
+    return `${repository}:pr:${record2.pullNumber}:${workflowName}`;
+  }
+  const branch = normalizeDashboardEventText(record2.headBranch);
+  const sha = normalizeDashboardEventText(record2.headSha).slice(0, 12);
+  return `${repository}:workflow:${workflowName}:${branch || sha || record2.runId || "unknown"}`;
+}
+function compareDashboardEventRecency(left, right) {
+  const leftTime = new Date(normalizeDashboardEventText(left?.updatedAt || left?.createdAt)).getTime();
+  const rightTime = new Date(normalizeDashboardEventText(right?.updatedAt || right?.createdAt)).getTime();
+  const normalizedLeft = Number.isNaN(leftTime) ? 0 : leftTime;
+  const normalizedRight = Number.isNaN(rightTime) ? 0 : rightTime;
+  if (normalizedLeft !== normalizedRight) {
+    return normalizedLeft - normalizedRight;
+  }
+  return String(left?.runId || left?.id || "").localeCompare(String(right?.runId || right?.id || ""));
+}
 function buildDashboardEventDisplayTitle(event, { workflowName, conclusion } = {}) {
   const record2 = normalizeDashboardEventRecord(event);
   const statusLabel = dashboardPushStatusLabel(record2);
@@ -64864,6 +64897,7 @@ async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventS
     since: recentSince,
     limit: 20
   });
+  const visibleRecentEvents = collapseDashboardNotificationEvents(recentEvents);
   const publicKey = normalizeDashboardEventText(env?.[WEB_PUSH_PUBLIC_KEY_ENV]);
   return renderDashboardUtilityPage({
     title: "\u901A\u77E5\u30BB\u30F3\u30BF\u30FC",
@@ -64873,7 +64907,7 @@ async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventS
       <div class="grid single">
         <section class="lane">
           <div class="lane-title"><h2>\u6700\u65B0\u901A\u77E5</h2><span class="pill">\u76F4\u8FD15\u5206</span></div>
-          ${recentEvents.length > 0 ? recentEvents.map((event) => renderDashboardNotificationEvent(event)).join("") : `<p class="muted">\u76F4\u8FD15\u5206\u306E\u901A\u77E5\u306F\u3042\u308A\u307E\u305B\u3093\u3002</p>`}
+          ${visibleRecentEvents.length > 0 ? visibleRecentEvents.map((event) => renderDashboardNotificationEvent(event)).join("") : `<p class="muted">\u76F4\u8FD15\u5206\u306E\u901A\u77E5\u306F\u3042\u308A\u307E\u305B\u3093\u3002</p>`}
         </section>
       </div>
       <div class="grid single">
@@ -65309,7 +65343,21 @@ function summarizeObjectValue(value) {
   }
   return String(value);
 }
+function renderDashboardUtilityNavLinks() {
+  const items = [
+    ["Dashboard", "/dashboard"],
+    ["\u901A\u77E5\u30BB\u30F3\u30BF\u30FC", "/dashboard/notifications"],
+    ["GitHub truth", "/dashboard/github-truth"],
+    ["Startup preflight", "/dashboard/preflight"],
+    ["Execution progress", "/dashboard/progress"],
+    ["VPS runner", "/dashboard/vps-runner"],
+    ["Operational RAG", "/dashboard/memory"],
+    ["Self parity", "/dashboard/self-parity"]
+  ];
+  return items.map(([label, href]) => `<a class="dashboard-nav-link" href="${escapeDashboardHtml(href)}">${escapeDashboardHtml(label)}</a>`).join("");
+}
 function renderDashboardUtilityPage({ title, subtitle, backHref, body }) {
+  const navLinks = renderDashboardUtilityNavLinks();
   return `<!doctype html>
 <html lang="ja">
 <head>
@@ -65324,13 +65372,29 @@ function renderDashboardUtilityPage({ title, subtitle, backHref, body }) {
     * { box-sizing: border-box; }
     html, body { max-width: 100%; overflow-x: hidden; }
     body { margin: 0; background: var(--bg); color: var(--text); }
-    main { width: min(1120px, 100%); margin: 0 auto; padding: 16px; }
+    main { width: min(1280px, 100%); margin: 0 auto; padding: 16px; }
     header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 18px; }
     h1 { font-size: 24px; margin: 0 0 4px; }
     h2 { font-size: 18px; margin: 0; }
     p { line-height: 1.6; margin: 0 0 10px; }
     a { color: inherit; text-underline-offset: 4px; }
-    .back, .actions a, .dashboard-action { display: inline-flex; min-height: 38px; align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: 999px; padding: 6px 12px; background: var(--soft); color: var(--text); text-decoration: none; font: inherit; font-weight: 750; }
+    .back, .actions a, .dashboard-action, .menu-button { display: inline-flex; min-height: 38px; align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: 999px; padding: 6px 12px; background: var(--soft); color: var(--text); text-decoration: none; font: inherit; font-weight: 750; }
+    .menu-button { width: 42px; height: 42px; padding: 0; font-size: 22px; cursor: pointer; flex: 0 0 auto; }
+    .utility-shell { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 24px; align-items: start; }
+    .utility-content { min-width: 0; }
+    .utility-title-row { display: flex; align-items: center; gap: 12px; min-width: 0; }
+    .desktop-nav { position: sticky; top: 16px; display: grid; gap: 8px; border: 1px solid var(--border); border-radius: 18px; background: var(--panel); padding: 12px; }
+    .desktop-nav-title { color: var(--muted); font-size: 12px; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; padding: 4px 8px 8px; }
+    .dashboard-nav-link { display: flex; align-items: center; min-height: 38px; border-radius: 10px; padding: 8px 10px; color: var(--text); text-decoration: none; font-weight: 750; }
+    .dashboard-nav-link:hover, .dashboard-nav-link:focus-visible { background: var(--soft); outline: none; }
+    .dashboard-nav-toggle { position: fixed; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+    .dashboard-nav-backdrop, .dashboard-nav-drawer { display: none; }
+    .dashboard-nav-backdrop { position: fixed; inset: 0; z-index: 20; background: rgba(0, 0, 0, .36); backdrop-filter: blur(2px); }
+    .dashboard-nav-drawer { position: fixed; inset: 0 auto 0 0; z-index: 21; width: min(86vw, 360px); overflow: auto; padding: max(16px, env(safe-area-inset-top)) 14px max(18px, env(safe-area-inset-bottom)); border-right: 1px solid var(--border); background: var(--panel); box-shadow: 18px 0 60px rgba(0, 0, 0, .22); }
+    .dashboard-nav-toggle:checked ~ .dashboard-nav-backdrop, .dashboard-nav-toggle:checked ~ .dashboard-nav-drawer { display: block; }
+    .drawer-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; }
+    .drawer-header strong { display: block; }
+    .drawer-nav { display: grid; gap: 8px; }
     .dashboard-action:disabled { opacity: .45; }
     .hero, .lane, .notice { border: 1px solid var(--border); border-radius: 16px; background: var(--panel); padding: 14px; margin-bottom: 14px; }
     .actions { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -65357,21 +65421,50 @@ function renderDashboardUtilityPage({ title, subtitle, backHref, body }) {
     @media (max-width: 760px) {
       main { padding: 12px; }
       header { align-items: flex-start; }
+      .utility-shell { display: block; }
+      .desktop-nav { display: none; }
+      .back { display: none; }
       .grid { grid-template-columns: minmax(0, 1fr); }
       .summary-list div { grid-template-columns: minmax(0, 1fr); }
+    }
+    @media (min-width: 761px) {
+      .utility-title-row .menu-button { display: none; }
     }
   </style>
 </head>
 <body>
   <main>
-    <header>
-      <div>
-        <h1>${escapeDashboardHtml(title)}</h1>
-        <p class="muted">${escapeDashboardHtml(subtitle || "")}</p>
+    <input class="dashboard-nav-toggle" type="checkbox" id="dashboard-nav-toggle" aria-hidden="true">
+    <label class="dashboard-nav-backdrop" for="dashboard-nav-toggle" aria-label="\u30E1\u30CB\u30E5\u30FC\u3092\u9589\u3058\u308B"></label>
+    <aside class="dashboard-nav-drawer" aria-label="Dashboard \u30E1\u30CB\u30E5\u30FC">
+      <div class="drawer-header">
+        <span>
+          <span class="desktop-nav-title">Dashboard</span>
+          <strong>\u30E1\u30CB\u30E5\u30FC</strong>
+        </span>
+        <label class="menu-button" for="dashboard-nav-toggle" aria-label="\u30E1\u30CB\u30E5\u30FC\u3092\u9589\u3058\u308B">\xD7</label>
       </div>
-      <a class="back" href="${escapeDashboardHtml(backHref || "/dashboard")}">Dashboard</a>
-    </header>
-    ${body}
+      <nav class="drawer-nav" aria-label="Dashboard \u30E1\u30CB\u30E5\u30FC\u9805\u76EE">${navLinks}</nav>
+    </aside>
+    <div class="utility-shell">
+      <nav class="desktop-nav" aria-label="Dashboard \u30E1\u30CB\u30E5\u30FC">
+        <span class="desktop-nav-title">Dashboard</span>
+        ${navLinks}
+      </nav>
+      <section class="utility-content" aria-label="${escapeDashboardHtml(title)}">
+        <header>
+          <div class="utility-title-row">
+            <label class="menu-button" for="dashboard-nav-toggle" aria-label="\u30E1\u30CB\u30E5\u30FC\u3092\u958B\u304F">\u2261</label>
+            <div>
+              <h1>${escapeDashboardHtml(title)}</h1>
+              <p class="muted">${escapeDashboardHtml(subtitle || "")}</p>
+            </div>
+          </div>
+          <a class="back" href="${escapeDashboardHtml(backHref || "/dashboard")}">Dashboard</a>
+        </header>
+        ${body}
+      </section>
+    </div>
   </main>
 </body>
 </html>`;

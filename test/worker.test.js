@@ -3303,6 +3303,11 @@ test("worker serves human-facing dashboard pages for every management menu", asy
     assert.equal(body.includes(title), true);
     assert.equal(body.includes(rawLabel), false);
     assert.equal(body.includes("{\"ok\""), false);
+    assert.equal(body.includes('class="desktop-nav" aria-label="Dashboard メニュー"'), true);
+    assert.equal(body.includes('class="dashboard-nav-drawer" aria-label="Dashboard メニュー"'), true);
+    assert.equal(body.includes('for="dashboard-nav-toggle" aria-label="メニューを開く"'), true);
+    assert.equal(body.includes('href="/dashboard/notifications"'), true);
+    assert.equal(body.includes('href="/dashboard"'), true);
   }
 });
 
@@ -3370,6 +3375,38 @@ test("worker serves dashboard notification center for recent events across repos
     updatedAt: fourMinutesAgo
   });
   await store.put({
+    id: "github_actions_workflow_run:marushu/vtdd-v2-p:deploy-production:26134526816",
+    kind: "github_actions_workflow_run",
+    repository: "marushu/vtdd-v2-p",
+    workflowName: "deploy-production",
+    runId: "26134526816",
+    runUrl: "https://github.com/marushu/vtdd-v2-p/actions/runs/26134526816",
+    status: "in_progress",
+    conclusion: "",
+    headSha: "daad4fb023cf699b3ad531e0394e064fde2b5515",
+    headBranch: "main",
+    title: "dashboard: 通知設定を折り畳む (#534)",
+    changeSummary: "dashboard: 通知設定を折り畳む (#534)",
+    pullNumber: 552,
+    updatedAt: twoMinutesAgo
+  });
+  await store.put({
+    id: "github_actions_workflow_run:marushu/vtdd-v2-p:deploy-production:26134526817",
+    kind: "github_actions_workflow_run",
+    repository: "marushu/vtdd-v2-p",
+    workflowName: "deploy-production",
+    runId: "26134526817",
+    runUrl: "https://github.com/marushu/vtdd-v2-p/actions/runs/26134526817",
+    status: "completed",
+    conclusion: "success",
+    headSha: "daad4fb023cf699b3ad531e0394e064fde2b5515",
+    headBranch: "main",
+    title: "dashboard: 通知設定を折り畳む (#534)",
+    changeSummary: "dashboard: 通知設定を折り畳む (#534)",
+    pullNumber: 552,
+    updatedAt: new Date(Date.now() - 60 * 1000).toISOString()
+  });
+  await store.put({
     id: "vps_runner_execution:marushu/sunabaeye:remote-codex-issue9",
     kind: "vps_runner_execution",
     repository: "marushu/sunabaeye",
@@ -3411,6 +3448,15 @@ test("worker serves dashboard notification center for recent events across repos
   assert.match(response.headers.get("content-type"), /text\/html/);
   const body = await response.text();
   assert.equal(body.includes("通知センター"), true);
+  assert.equal(body.includes('class="desktop-nav" aria-label="Dashboard メニュー"'), true);
+  assert.equal(body.includes('class="dashboard-nav-drawer" aria-label="Dashboard メニュー"'), true);
+  assert.equal(body.includes('for="dashboard-nav-toggle" aria-label="メニューを開く"'), true);
+  assert.equal(body.includes('href="/dashboard"'), true);
+  assert.equal(body.includes('href="/dashboard/preflight"'), true);
+  assert.equal(body.includes('href="/dashboard/self-parity"'), true);
+  assert.equal(body.includes("run 26134526817"), true);
+  assert.equal(body.includes("run 26134526816"), false);
+  assert.equal(body.includes("run 26134526815"), false);
   assert.equal(body.includes("Dashboard Butler の通知入口です"), true);
   assert.equal(body.includes("iOS PWA Web Push"), true);
   assert.equal(body.includes('data-debug-section="notification-center-context"'), true);
@@ -3454,13 +3500,14 @@ test("worker serves dashboard notification center for recent events across repos
   assert.equal(body.includes("scope: \"/dashboard/\""), true);
   assert.equal(body.includes("secret-must-not-persist"), false);
   assert.equal(body.includes("他 repo / 並行開発 / queue / workflow"), true);
-  assert.equal(body.includes("deploy-production / run 26134526815 / sha daad4fb"), true);
+  assert.equal(body.includes("deploy-production / run 26134526817 / sha daad4fb"), true);
   assert.equal(body.includes("最新通知"), true);
   assert.equal(body.includes("success"), true);
   assert.equal(body.includes("デプロイ完了: PR #552 dashboard: 通知設定を折り畳む (#534)"), true);
-  assert.equal(body.includes("26134526815"), true);
-  assert.equal(body.includes("4分前"), true);
-  assert.equal(body.includes(fourMinutesAgo), true);
+  assert.equal(body.includes("26134526817"), true);
+  assert.equal(body.includes("26134526816"), false);
+  assert.equal(body.includes("26134526815"), false);
+  assert.equal(body.includes(fourMinutesAgo), false);
   assert.equal(body.includes("SunabaEye queue pickup with long notification title"), true);
   assert.equal(body.includes("marushu/sunabaeye"), true);
   assert.equal(body.includes("dashboard-notification-center"), true);
@@ -3689,6 +3736,7 @@ test("worker builds distinct dashboard Web Push copy by event type", () => {
   assert.equal(deploySuccess.body.includes("run: 26323724369"), true);
   assert.equal(deploySuccess.body.includes("PR #571"), true);
   assert.equal(deploySuccess.body.includes("Issue #514"), true);
+  assert.equal(deploySuccess.url, "/dashboard/notifications");
 
   const deployFailure = buildDashboardWebPushPayload({
     kind: "github_actions_workflow_run",
@@ -3701,6 +3749,7 @@ test("worker builds distinct dashboard Web Push copy by event type", () => {
     title: "deploy-production"
   });
   assert.equal(deployFailure.title, "デプロイ失敗: vtdd-v2-p");
+  assert.equal(deployFailure.url, "/dashboard/notifications");
 
   const testPush = buildDashboardWebPushPayload({
     kind: "dashboard_push_test",
