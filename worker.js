@@ -56475,6 +56475,12 @@ var DashboardChatRoom = class {
       status: "thinking",
       text: "app-server bridge \u306E\u8FD4\u4FE1\u3092\u5F85\u3063\u3066\u3044\u307E\u3059"
     });
+    const trafficControl = await buildDashboardChatTrafficControlContext({
+      env: this.env,
+      repository,
+      relatedIssue,
+      text
+    });
     const mapping = await this.readAppServerThreadMapping(threadId);
     const turnRequest = {
       type: "app_server_turn_requested",
@@ -56492,7 +56498,8 @@ var DashboardChatRoom = class {
         startThreadMethod: mapping.codexThreadId ? "thread/resume" : "thread/start",
         turnMethod: "turn/start"
       },
-      authority: buildDashboardAppServerAuthorityHint({ repository, relatedIssue, text })
+      authority: buildDashboardAppServerAuthorityHint({ repository, relatedIssue, text }),
+      trafficControl
     };
     this.sendSocket(bridgeSockets[0], turnRequest);
   }
@@ -61797,6 +61804,56 @@ function buildDashboardAppServerAuthorityHint({ repository, relatedIssue, text }
     escalation: needsRepositoryContext ? "Repository / Issue context may be used, but high-risk actions still require explicit GO or passkey approval." : "Treat as ordinary conversation unless the owner asks for repository, Issue, PR, deploy, credential, or permission work.",
     highRiskActionsRequire: ["GO", "passkey_approval"]
   };
+}
+async function buildDashboardChatTrafficControlContext({ env, repository, relatedIssue, text }) {
+  const normalizedRepository = normalizeCanonicalRepositoryInput(repository);
+  if (!normalizedRepository) {
+    return {
+      status: "\u672A\u78BA\u8A8D",
+      reason: "repository is required before Dashboard Butler can read execution queue truth",
+      currentSurface: "dashboard_butler",
+      authorityBoundary: "read_only_preflight",
+      nextSafeAction: "\u5BFE\u8C61 repository \u3092\u89E3\u6C7A\u3057\u3066\u304B\u3089 execution queue preflight \u3092\u8AAD\u3080\u3002"
+    };
+  }
+  try {
+    const startupPreflight = await buildStartupPreflight({
+      repository: normalizedRepository,
+      ref: "main",
+      issueNumber: normalizePositiveInteger9(relatedIssue),
+      phase: "execution",
+      currentSurface: "dashboard_butler",
+      queryText: normalizeText30(text) || `Dashboard Butler traffic control ${relatedIssue ? `Issue #${relatedIssue}` : ""}`,
+      runtimeOrigin: normalizeText30(env?.VTDD_RUNTIME_URL) || "https://dashboard-butler.local",
+      env
+    });
+    return {
+      status: startupPreflight.executionQueue?.status || "\u672A\u78BA\u8A8D",
+      repository: normalizedRepository,
+      relatedIssue: normalizePositiveInteger9(relatedIssue) || null,
+      currentSurface: startupPreflight.currentSurface,
+      threadLocalAssumptionsPromoted: startupPreflight.threadLocalAssumptionsPromoted,
+      currentNow: startupPreflight.executionQueue?.currentNow || null,
+      next: startupPreflight.executionQueue?.next || [],
+      sectionSummaries: startupPreflight.executionQueue?.sectionSummaries || {},
+      missingSources: startupPreflight.missingSources || [],
+      missingSections: startupPreflight.executionQueue?.missingSections || [],
+      ownerFacingSummary: startupPreflight.executionQueue?.ownerFacingSummary || "\u73FE\u5728\u306E Now \u306F\u672A\u78BA\u8A8D\u3067\u3059\u3002",
+      trafficControlRule: startupPreflight.executionQueue?.trafficControlRule || null,
+      authorityBoundary: "read_only_preflight",
+      nextSafeAction: startupPreflight.nextSafeAction
+    };
+  } catch (error2) {
+    return {
+      status: "\u672A\u78BA\u8A8D",
+      repository: normalizedRepository,
+      relatedIssue: normalizePositiveInteger9(relatedIssue) || null,
+      reason: normalizeText30(error2?.message) || "startup preflight failed",
+      currentSurface: "dashboard_butler",
+      authorityBoundary: "read_only_preflight",
+      nextSafeAction: "preflight failure \u3092 owner-facing blocker \u3068\u3057\u3066\u5831\u544A\u3059\u308B\u3002"
+    };
+  }
 }
 function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = "" } = {}) {
   const input = normalizeObject11(payload);
