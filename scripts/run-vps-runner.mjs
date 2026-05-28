@@ -362,21 +362,13 @@ async function executeVpsRunnerExecution({
         payload,
         candidateBody: extractCodexPrBodyDraft(payload)
       });
+      const prCreateArgs = buildVpsRunnerPrCreateArgs({
+        payload,
+        bodyFile
+      });
       const pr = await runTrackedVpsCommand(
         "gh",
-        [
-          "pr",
-          "create",
-          "--draft",
-          "--base",
-          payload.baseRef || "main",
-          "--head",
-          payload.branch,
-          "--title",
-          `Issue #${payload.issueNumber}: VTDD VPS runner handoff`,
-          "--body-file",
-          bodyFile
-        ],
+        prCreateArgs,
         {
           cwd: workspace,
           env,
@@ -2173,10 +2165,10 @@ function buildPullRequestBody(payload) {
     issue: payload.issueNumber,
     executionId: payload.executionId,
     codexGoal: payload.codexGoal || "open_pr",
-    intent: `Issue #${payload.issueNumber} の bounded handoff を VPS runner で実行し、後でownerが再開できるようにGitHub-visibleなdraft PRとして残す。`,
+    intent: `Issue #${payload.issueNumber} の bounded handoff を VPS runner で実行し、後でownerとreviewerが再開できるようにGitHub-visibleなready PRとして残す。`,
     satisfied: [
       "VPS runner が target branch を作成した。",
-      "VPS runner が GitHub-visible runtime truth として draft PR を作成した。"
+      "VPS runner が GitHub-visible runtime truth として ready PR を作成した。"
     ].join("\n"),
     unsatisfied: "human review と merge は未完了。Issue固有のE2E evidence も別途記録が必要。",
     nonGoals: "None.",
@@ -2188,9 +2180,9 @@ function buildPullRequestBody(payload) {
     ownerGoal: "Butler/VPS runner 経由で bounded Codex implementation PR を作る。ただし merge-ready completion とは主張しない。",
     butlerEntrypoint: "Butler が bounded request を dispatch し、vtddExecutionProgress / GitHub runtime truth で進捗を読む。",
     actionSchemaExposure: "既存の Butler execution/progress surface。今回のPR body は Action Schema operation を追加しない。",
-    runtimePath: "VPS runner queue comment -> scripts/run-vps-runner.mjs -> Git branch/commit/push -> draft PR。",
+    runtimePath: "VPS runner queue comment -> scripts/run-vps-runner.mjs -> Git branch/commit/push -> ready PR。",
     runtimeTruth: `GitHub issue/PR comments、branch ${payload.branch || "not provided"}、execution ${payload.executionId || "not provided"}。`,
-    authorityBoundary: "VPS runner は draft PR 作成のみ。merge、Issue close、deploy、credential、permission、cleanup は明示的な governed approval なしでは blocked。",
+    authorityBoundary: "VPS runner は ready PR 作成のみ。merge、Issue close、deploy、credential、permission、cleanup は明示的な governed approval なしでは blocked。",
     butlerE2E: "handoff PR creation のみ。Issue固有の Butler-facing E2E は scoped implementation PR で記録されるまで未完了。",
     completionStatus: "incomplete",
     cloudflareDeploy: "実行しない。",
@@ -2208,6 +2200,21 @@ function buildPullRequestBody(payload) {
       "secret、permission、repository settings mutation。"
     ].join("\n")
   });
+}
+
+function buildVpsRunnerPrCreateArgs({ payload = {}, bodyFile = "" } = {}) {
+  return [
+    "pr",
+    "create",
+    "--base",
+    payload.baseRef || "main",
+    "--head",
+    payload.branch,
+    "--title",
+    `Issue #${payload.issueNumber}: VTDD VPS runner handoff`,
+    "--body-file",
+    bodyFile
+  ];
 }
 
 function buildGuardedPullRequestBody({ payload, candidateBody } = {}) {
@@ -2572,6 +2579,7 @@ export {
   buildCodexExecArgs,
   buildCodexExecutionEnv,
   buildVpsRunnerPreflightReceipt,
+  buildVpsRunnerPrCreateArgs,
   buildGuardedPullRequestBody,
   buildPostMergePullTruth,
   buildPullRequestBody,

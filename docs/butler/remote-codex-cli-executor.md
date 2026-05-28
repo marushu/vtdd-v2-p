@@ -183,7 +183,7 @@ those minutes remain visible GitHub Actions usage.
 The public/core repository includes a minimal user-owned runner entrypoint at
 `scripts/run-vps-runner.mjs`. It can poll the GitHub queue contract, report
 runner events, create the target branch, run Codex CLI in a cloned workspace,
-push changes, and open a draft PR. It is intentionally an operator-owned script,
+push changes, and open a ready PR for reviewer/automation. It is intentionally an operator-owned script,
 not a hosted VTDD service.
 
 Required runner environment:
