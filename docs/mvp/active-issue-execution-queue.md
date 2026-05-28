@@ -29,13 +29,15 @@ Last rebuilt from GitHub runtime truth: 2026-05-28
 - Open Issues read: Issue #354, Issue #355, Issue #356, Issue #358, Issue #412,
   Issue #413, Issue #415, Issue #417, Issue #421, Issue #444, Issue #448,
   Issue #450, Issue #455, Issue #491, Issue #492, Issue #495, Issue #497,
-  Issue #498, Issue #501, Issue #514, Issue #528, Issue #565, Issue #573,
+  Issue #498, Issue #501, Issue #514, Issue #528, Issue #565,
   Issue #574, Issue #577, Issue #579, Issue #580, Issue #582, Issue #585,
   Issue #587, Issue #589, Issue #590, Issue #594, Issue #595, Issue #599,
-  Issue #601, Issue #604, Issue #605, Issue #606, Issue #609.
-- Open PRs read before the Issue #609 implementation PR was opened: none.
+  Issue #604, Issue #605, Issue #606, Issue #613.
+- Recently closed as completed with evidence and owner approval: Issue #573,
+  Issue #601, Issue #609.
+- Open PRs read before this queue refresh PR was opened: none.
 - Recent queue-changing merged PRs read: PR #591, PR #597, PR #598, PR #600,
-  PR #602, PR #603, PR #607, PR #608.
+  PR #602, PR #603, PR #607, PR #608, PR #610, PR #611, PR #612.
 - Current queue rebuild scope: classify all open Issues without closing,
   downscoping, or treating any unverified Issue as done.
 
@@ -62,9 +64,14 @@ Root blockers hold multiple active Issues open. They should shape `Now` and
   owner-facing execution route blocker. It gates useful completion for Issue
   #528, Issue #579, Issue #590, Issue #594, and parts of Issue #498.
 - Issue #528: Dashboard Butler must remain ChatGPT iOS-equivalent while debug /
-  ops surfaces are isolated. It gates user-facing acceptance for Issue #573,
-  Issue #574, Issue #577, Issue #580, Issue #582, Issue #585, Issue #587,
-  Issue #589, and Issue #590.
+  ops surfaces are isolated. It gates user-facing acceptance for Issue #574,
+  Issue #577, Issue #580, Issue #582, Issue #585, Issue #587, Issue #589, and
+  Issue #590.
+- Issue #613: Dashboard Butler must become a Text-first / Voice-ready
+  single-thread cross-repo work-control surface, not a repo-selected admin
+  panel. It gates the product direction for Issue #528, Issue #450, Issue #413,
+  Issue #415, Issue #498, Issue #514, Issue #590, Issue #594, Issue #604,
+  Issue #605, and Issue #606.
 - Issue #413: VPS runner / Codex execution progress must be visible as
   owner-facing runtime truth. It gates completion claims for Issue #450,
   Issue #594, Issue #495, and recovery/ops workflows.
@@ -83,7 +90,7 @@ Root blockers hold multiple active Issues open. They should shape `Now` and
 
 ## Open PR Hygiene
 
-- No open PRs were present before this refresh PR was opened. The current
+- No open PRs were present before this refresh PR was opened. The current queue
   refresh PR is excluded from this hygiene snapshot.
 - PR #591 / Issue #582 merged after adding queue-delta-compatible PR body
   evidence, reproducible local E2E, and reviewer-approved residual-risk
@@ -97,8 +104,7 @@ Root blockers hold multiple active Issues open. They should shape `Now` and
   active until live iPhone/PWA notification, sound, badge, and recovery evidence
   are complete.
 - PR #602 / Issue #601 merged worker.js generation discipline before validation.
-  Issue #601 remains open until closure approval and any Issue-scoped evidence
-  are complete.
+  Issue #601 was later closed as completed with owner approval.
 - PR #603 / Issue #450 merged Dashboard traffic-control context preservation for
   the app-server bridge. It is partial path evidence, not full #450 completion.
 - PR #607 / Issue #413 merged ready-by-default PR creation for the VPS runner.
@@ -107,6 +113,11 @@ Root blockers hold multiple active Issues open. They should shape `Now` and
 - PR #608 / Issue #595 merged the durable queue refresh that left Issue #590 as
   post-merge `Now`. Issue #595 remains open for runtime auto-classification
   parity.
+- PR #610 and PR #611 / Issue #609 connected execution queue truth to startup
+  preflight and Dashboard chat app-server bridge context. Issue #609 was later
+  closed as completed with owner approval.
+- PR #612 / Issue #573 fixed mobile horizontal scroll / side-to-side jitter.
+  Issue #573 was later closed after production deploy and iPhone owner evidence.
 
 ## Evidence Gaps
 
@@ -137,12 +148,9 @@ Evidence gaps are active. They are not deferred out of scope.
   iPhone/PWA link behavior still needs mapped acceptance evidence.
 - Issue #587: local Simulator evidence exists for video attachment UI; full
   Butler Completion Gate evidence is still missing.
-- Issue #601: PR #602 fixed worker.js generation discipline before validation,
-  but Issue closure still requires human approval and any mapped evidence named
-  in the Issue.
-- Issue #609: this runtime preflight slice connects durable execution queue docs
-  to Butler-readable startup truth, but live deploy/editor refresh and human
-  closure approval remain outside this PR.
+- Issue #613: owner provided ChatGPT iOS app screenshots and live iPhone /
+  QuickTime observations that define the Text-first / Voice-ready baseline, but
+  Dashboard Butler implementation still needs mapped iPhone/PWA E2E.
 - Issue #444: PR #600 points PR-numbered notifications at the PR instead of the
   Actions run, but live iPhone/PWA notification tap, sound, badge, and recovery
   evidence remain incomplete.
@@ -186,10 +194,8 @@ These Issues remain active and required, but they do not preempt the current
   notifications and conversation.
 - Issue #606: ordinary dashboard read sessions should be separated from
   high-risk passkey approval.
-- Issue #573: mobile horizontal scroll / side-to-side jitter.
 - Issue #574: subtle lower-right chat timestamps.
 - Issue #589: deploy notification non-delivery root-cause visibility.
-- Issue #590: app-server turn timeout as recoverable chat state.
 - Issue #594: fast status intent / preflight index. This is important, but it is
   not a substitute for the assistant managing the queue manually now.
 

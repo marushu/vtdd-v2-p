@@ -6,8 +6,8 @@ const doc = fs.readFileSync("docs/mvp/active-issue-execution-queue.md", "utf8");
 
 const OPEN_ISSUES_ON_2026_05_28 = [
   354, 355, 356, 358, 412, 413, 415, 417, 421, 444, 448, 450, 455, 491, 492,
-  495, 497, 498, 501, 514, 528, 565, 573, 574, 577, 579, 580, 582, 585, 587,
-  589, 590, 594, 595, 599, 601, 604, 605, 606, 609
+  495, 497, 498, 501, 514, 528, 565, 574, 577, 579, 580, 582, 585, 587, 589,
+  590, 594, 595, 599, 604, 605, 606, 613
 ];
 
 const CLASSIFICATION_SECTIONS = [
@@ -73,6 +73,8 @@ test("active issue execution queue names current open PR hygiene", () => {
   assert.equal(doc.includes("PR #603 / Issue #450 merged"), true);
   assert.equal(doc.includes("PR #607 / Issue #413 merged"), true);
   assert.equal(doc.includes("PR #608 / Issue #595 merged"), true);
+  assert.equal(doc.includes("PR #610 and PR #611 / Issue #609"), true);
+  assert.equal(doc.includes("PR #612 / Issue #573"), true);
   assert.equal(doc.includes("No open grandfathered PRs remain."), true);
 });
 
