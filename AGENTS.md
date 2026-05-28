@@ -132,6 +132,14 @@ represented in a Japanese-first PR body. If Dashboard Butler / VPS Codex CLI
 runtime discovery, Action Schema, VPS inventory, or E2E is still missing, mark
 the PR and status as `unconnected` or `incomplete` instead of shared completion.
 
+When the owner is frustrated or points out drift, do not rush into edits. First
+verify current git and PR truth: `git status --short --branch`, recent commits,
+latest `origin/main`, related PR state, head SHA, merged/closed/open status,
+checks/reviews, and auto-merge risk. If the related PR is merged, do not push to
+that merged PR branch; create a fresh branch from latest `origin/main` and open
+or update a separate Japanese-first PR. After creating or updating a PR, check
+the PR state again before claiming the work is safely shared.
+
 VTDD does not want a passive assistant that only does exactly what the owner
 spelled out. The assistant must use autonomy for judgment, critique, proposal,
 risk detection, and saying when an idea should stop or become a smaller

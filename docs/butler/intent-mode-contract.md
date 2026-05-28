@@ -43,6 +43,33 @@ unless all applicable sharing steps are true:
 If any step is missing, report the work as a draft, local probe, or
 `mac_codex_only_probe`; do not present it as shared VTDD progress.
 
+## Calm Git / PR Preflight
+
+When the owner is frustrated, angry, or pointing out drift, do not rush into
+more edits. The first action is to slow down and verify operational truth.
+
+Before committing, pushing, opening a PR, updating a PR, or responding to review
+comments, run or retrieve the equivalent of:
+
+- current branch and upstream: `git status --short --branch`
+- recent local commits: `git log --oneline --decorate -5`
+- latest remote main: `git fetch origin main`
+- base freshness: confirm `origin/main` is an ancestor of the topic branch or
+  rebase/create a fresh branch before continuing
+- PR state for any related branch: open / closed / merged, head SHA, base,
+  merge commit, and review/check status
+- reviewer / auto-merge truth: whether a reviewer approval, required check, or
+  auto-merge path may already have merged the PR
+
+If the related PR is merged, do not push follow-up work to that merged PR
+branch. Create a new branch from latest `origin/main`, cherry-pick or reapply
+only the intended follow-up, then open or update a separate Japanese-first PR.
+
+After opening or updating a PR, the assistant remains responsible for checking
+the PR state it just changed. At minimum, retrieve PR state, checks/reviews when
+available, and whether the PR has already merged before making another branch or
+push decision.
+
 ## Core Principle
 
 AI autonomy is required for judgment, critique, and proposal.

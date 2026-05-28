@@ -21,6 +21,12 @@ test("intent mode contract preserves autonomy without allowing drift", () => {
   assert.equal(doc.includes("the branch is pushed to the remote repository"), true);
   assert.equal(doc.includes("a Japanese-first PR is opened or updated with the change"), true);
   assert.equal(doc.includes("marks the work `unconnected` or `incomplete`"), true);
+  assert.equal(doc.includes("## Calm Git / PR Preflight"), true);
+  assert.equal(doc.includes("When the owner is frustrated, angry, or pointing out drift"), true);
+  assert.equal(doc.includes("git status --short --branch"), true);
+  assert.equal(doc.includes("reviewer / auto-merge truth"), true);
+  assert.equal(doc.includes("If the related PR is merged, do not push follow-up work to that merged PR\nbranch."), true);
+  assert.equal(doc.includes("After opening or updating a PR, the assistant remains responsible for checking\nthe PR state it just changed."), true);
   assert.equal(doc.includes("判断・批評・提案は、AIが主体的にやる。"), true);
   assert.equal(doc.includes("実行・外部効果・完了宣言は、Issue / GO / approval / evidence なしに進めない。"), true);
   assert.equal(doc.includes("Issue / PR titles, bodies, comments, review responses, and RAG"), true);
@@ -35,6 +41,9 @@ test("intent mode contract preserves autonomy without allowing drift", () => {
   assert.equal(agents.includes("A local mac Codex Skill is not a VTDD product capability by\nitself."), true);
   assert.equal(agents.includes("committed on a topic branch, pushed, and\nrepresented in a Japanese-first PR body"), true);
   assert.equal(agents.includes("mark\nthe PR and status as `unconnected` or `incomplete`"), true);
+  assert.equal(agents.includes("When the owner is frustrated or points out drift, do not rush into edits."), true);
+  assert.equal(agents.includes("checks/reviews, and auto-merge risk"), true);
+  assert.equal(agents.includes("After creating or updating a PR, check\nthe PR state again"), true);
   assert.equal(agents.includes(".agents/skills/vtdd-status-advisor/SKILL.md"), true);
   assert.equal(agents.includes("readonly does not mean\npassive"), true);
 });
@@ -50,6 +59,9 @@ test("vtdd status advisor skill is readonly but still gives judgment", () => {
   assert.equal(skill.includes("`mac_codex_only_probe`"), true);
   assert.equal(skill.includes("committed,\npushed, and represented in a Japanese-first PR body"), true);
   assert.equal(skill.includes("say `unconnected` or\n`incomplete`"), true);
+  assert.equal(skill.includes("If the owner is frustrated, angry, or says the assistant is drifting, slow down."), true);
+  assert.equal(skill.includes("checks/reviews, and auto-merge\nrisk"), true);
+  assert.equal(skill.includes("the current git branch or related PR state has not been checked in this turn"), true);
   assert.equal(skill.includes("Use Japanese-first owner-facing language"), true);
   assert.equal(skill.includes("Issue / PR titles, bodies, comments, review responses, and RAG"), true);
   assert.equal(skill.includes("launch VPS runner, reviewer, deploy"), true);
