@@ -60034,12 +60034,71 @@ async function handleDashboardPushTestRequest(request, env) {
     createdAt: (/* @__PURE__ */ new Date()).toISOString(),
     updatedAt: (/* @__PURE__ */ new Date()).toISOString()
   });
-  const webPush = await dispatchDashboardWebPushForEvent(env, event);
+  const targetEndpointHash = await resolveDashboardPushTargetEndpointHash(payload, env);
+  if (!targetEndpointHash.ok) {
+    return json(targetEndpointHash.status, {
+      ok: false,
+      event,
+      webPush: {
+        ok: false,
+        status: targetEndpointHash.status,
+        error: targetEndpointHash.error,
+        reason: targetEndpointHash.reason,
+        attempted: 0,
+        delivered: 0,
+        cleaned: 0,
+        currentDevice: {
+          status: targetEndpointHash.currentDeviceStatus || "not_saved"
+        }
+      }
+    });
+  }
+  const webPush = await dispatchDashboardWebPushForEvent(env, event, {
+    endpointHash: targetEndpointHash.endpointHash
+  });
   return json(webPush.ok ? 202 : webPush.status || 503, {
     ok: webPush.ok,
     event,
     webPush
   });
+}
+async function resolveDashboardPushTargetEndpointHash(payload, env) {
+  const endpoint = normalizeDashboardUrl(payload?.endpoint);
+  if (!endpoint) {
+    return {
+      ok: false,
+      status: 422,
+      error: "dashboard_push_current_endpoint_required",
+      reason: "server push test requires the current device subscription endpoint",
+      currentDeviceStatus: "unknown"
+    };
+  }
+  const endpointHash = await sha256Hex(endpoint);
+  const store = resolveDashboardPushSubscriptionStore(env);
+  if (!store || typeof store.get !== "function") {
+    return {
+      ok: false,
+      status: 503,
+      error: "dashboard_push_subscription_status_unavailable",
+      reason: "dashboard push subscription store cannot verify the current device subscription",
+      currentDeviceStatus: "unknown"
+    };
+  }
+  const subscription = await store.get(endpointHash);
+  if (!subscription) {
+    return {
+      ok: false,
+      status: 404,
+      error: "dashboard_push_current_subscription_not_saved",
+      reason: "current device push subscription is not saved on the server",
+      currentDeviceStatus: "not_saved"
+    };
+  }
+  return {
+    ok: true,
+    endpointHash,
+    currentDeviceStatus: "saved"
+  };
 }
 async function handleDashboardPushAckRequest(request, env) {
   if (normalizeText30(request.headers.get("content-type")).split(";")[0].toLowerCase() !== "application/json") {
@@ -62653,7 +62712,7 @@ function createD1DashboardPushSubscriptionStore(d1) {
     return schemaPromise;
   }
 }
-async function dispatchDashboardWebPushForEvent(env, event) {
+async function dispatchDashboardWebPushForEvent(env, event, options = {}) {
   const store = resolveDashboardPushSubscriptionStore(env);
   if (!store || typeof store.list !== "function") {
     return {
@@ -62663,13 +62722,14 @@ async function dispatchDashboardWebPushForEvent(env, event) {
       reason: "dashboard push subscription store cannot list subscriptions"
     };
   }
-  const subscriptions = await store.list({ limit: 50 });
+  const targetEndpointHash = normalizeDashboardEventText(options.endpointHash);
+  const subscriptions = targetEndpointHash && typeof store.get === "function" ? [await store.get(targetEndpointHash)].filter(Boolean) : await store.list({ limit: 50 });
   if (subscriptions.length === 0) {
     return {
       ok: false,
       status: 404,
-      error: "dashboard_push_subscription_not_found",
-      reason: "no dashboard push subscriptions are stored"
+      error: targetEndpointHash ? "dashboard_push_target_subscription_not_found" : "dashboard_push_subscription_not_found",
+      reason: targetEndpointHash ? "target dashboard push subscription is not stored" : "no dashboard push subscriptions are stored"
     };
   }
   const payload = buildDashboardWebPushPayload(event);
@@ -65384,11 +65444,20 @@ async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventS
           });
 
           serverTestButton?.addEventListener("click", async () => {
+            const reg = await registration();
+            const subscription = await reg?.pushManager?.getSubscription?.();
+            if (!subscription) {
+              serverPushDelivered = false;
+              lastServerPushResult = "\u6700\u5F8C\u306E\u30B5\u30FC\u30D0\u9001\u4FE1\u7D50\u679C: rejected (0/0) / current device subscription missing";
+              setText(pushServerResult, lastServerPushResult);
+              await refreshState();
+              return;
+            }
             const response = await fetch("/v2/dashboard/push/test", {
               method: "POST",
               credentials: "same-origin",
               headers: { "content-type": "application/json" },
-              body: JSON.stringify({ title: "Dashboard Butler server push test" })
+              body: JSON.stringify({ title: "Dashboard Butler server push test", endpoint: subscription.endpoint })
             });
             const body = await response.json().catch(() => ({}));
             const webPush = body && body.webPush ? body.webPush : {};
@@ -65465,6 +65534,7 @@ self.addEventListener("push", (event) => {
       url: String(payload.url || "/dashboard/notifications")
     }
   };
+  const shown = self.registration.showNotification(title, options);
   const ack = fetch("/v2/dashboard/push/ack", {
     method: "POST",
     credentials: "same-origin",
@@ -65487,7 +65557,8 @@ self.addEventListener("push", (event) => {
       body: options.body
     })
   }).catch(() => null);
-  event.waitUntil(Promise.allSettled([ack, self.registration.showNotification(title, options)]));
+  event.waitUntil(shown);
+  event.waitUntil(ack);
 });
 
 function safeDashboardNotificationUrl(value) {

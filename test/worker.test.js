@@ -3695,6 +3695,8 @@ test("worker serves dashboard notification center for recent events across repos
   assert.equal(body.includes("/v2/dashboard/push/status"), true);
   assert.equal(body.includes("/v2/dashboard/push/test"), true);
   assert.equal(body.includes("credentials: \"same-origin\""), true);
+  assert.equal(body.includes("endpoint: subscription.endpoint"), true);
+  assert.equal(body.includes("current device subscription missing"), true);
   assert.equal(body.includes("サーバ送信設定: あり"), true);
   assert.equal(body.includes("サーバ送信: 設定あり。deploy 通知到達性はサーバ送信テスト成功後に確認済みになります。"), true);
   assert.equal(body.includes("購読保存: あり。サーバ送信テストはまだ未確認です。"), true);
@@ -3746,7 +3748,9 @@ test("worker serves dashboard PWA manifest and service worker notification handl
   assert.equal(serviceWorker.includes('self.addEventListener("push"'), true);
   assert.equal(serviceWorker.includes("showNotification"), true);
   assert.equal(serviceWorker.includes("/v2/dashboard/push/ack"), true);
-  assert.equal(serviceWorker.includes("Promise.allSettled([ack, self.registration.showNotification"), true);
+  assert.equal(serviceWorker.includes("event.waitUntil(shown);"), true);
+  assert.equal(serviceWorker.includes("event.waitUntil(ack);"), true);
+  assert.equal(serviceWorker.includes("Promise.allSettled([ack, self.registration.showNotification"), false);
   assert.equal(serviceWorker.includes('credentials: "same-origin"'), true);
   assert.equal(serviceWorker.includes('"x-vtdd-dashboard-push-ack": "service-worker"'), true);
   assert.equal(serviceWorker.includes('self.addEventListener("notificationclick"'), true);
@@ -3875,7 +3879,11 @@ test("worker reports dashboard push subscription server save status without raw 
 test("worker sends server-side dashboard Web Push test only for authenticated owner session", async () => {
   const store = createInMemoryDashboardPushSubscriptionStore();
   const pushKeys = await createTestPushSubscription();
-  await store.put(pushKeys.subscription);
+  const currentEndpointHash = await sha256HexTest(pushKeys.subscription.endpoint);
+  await store.put({
+    ...pushKeys.subscription,
+    endpointHash: currentEndpointHash
+  });
   const calls = [];
   const vapidEnv = await createTestVapidEnv({
     DASHBOARD_WEB_PUSH_FETCH: async (input, init) => {
@@ -3903,7 +3911,7 @@ test("worker sends server-side dashboard Web Push test only for authenticated ow
     new Request("https://example.com/v2/dashboard/push/test", {
       method: "POST",
       headers: { ...dashboardAccessHeaders, "content-type": "application/json" },
-      body: JSON.stringify({ title: "server push test" })
+      body: JSON.stringify({ title: "server push test", endpoint: pushKeys.subscription.endpoint })
     }),
     {
       ...dashboardAccessEnv,
@@ -3915,9 +3923,9 @@ test("worker sends server-side dashboard Web Push test only for authenticated ow
   const body = await response.json();
   assert.equal(body.ok, true);
   assert.equal(body.webPush.delivered, 1);
-  assert.equal(body.webPush.results[0].endpointHash, "endpoint-hash");
+  assert.equal(body.webPush.results[0].endpointHash, currentEndpointHash);
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].input, "https://push.example/send/endpoint-hash");
+  assert.equal(calls[0].input, pushKeys.subscription.endpoint);
   assert.equal(calls[0].init.method, "POST");
   assert.match(calls[0].init.headers.authorization, /^vapid t=.+, k=.+/);
   assert.equal(calls[0].init.headers.ttl, "300");
@@ -3931,6 +3939,31 @@ test("worker sends server-side dashboard Web Push test only for authenticated ow
   assert.equal(decrypted.url, "/dashboard/notifications");
   assert.equal(JSON.stringify(body).includes("p256dh-key"), false);
   assert.equal(JSON.stringify(body).includes("auth-key"), false);
+});
+
+test("worker refuses server-side dashboard Web Push test when current device subscription is not saved", async () => {
+  const store = createInMemoryDashboardPushSubscriptionStore();
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/push/test", {
+      method: "POST",
+      headers: { ...dashboardAccessHeaders, "content-type": "application/json" },
+      body: JSON.stringify({
+        title: "server push test",
+        endpoint: "https://push.example/send/current-device"
+      })
+    }),
+    {
+      ...dashboardAccessEnv,
+      DASHBOARD_PUSH_SUBSCRIPTION_STORE: store
+    }
+  );
+  assert.equal(response.status, 404);
+  const body = await response.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.webPush.error, "dashboard_push_current_subscription_not_saved");
+  assert.equal(body.webPush.currentDevice.status, "not_saved");
+  assert.equal(body.webPush.attempted, 0);
+  assert.equal(JSON.stringify(body).includes("current-device"), false);
 });
 
 test("worker builds distinct dashboard Web Push copy by event type", () => {
@@ -4000,9 +4033,10 @@ test("worker builds distinct dashboard Web Push copy by event type", () => {
 
 test("worker reports server-side dashboard Web Push configuration blockers", async () => {
   const store = createInMemoryDashboardPushSubscriptionStore();
+  const endpoint = "https://push.example/send/endpoint-hash";
   await store.put({
-    endpointHash: "endpoint-hash",
-    endpoint: "https://push.example/send/endpoint-hash",
+    endpointHash: await sha256HexTest(endpoint),
+    endpoint,
     p256dh: "p256dh-key",
     auth: "auth-key",
     ownerIdentity: "owner@example.com",
@@ -4012,7 +4046,7 @@ test("worker reports server-side dashboard Web Push configuration blockers", asy
     new Request("https://example.com/v2/dashboard/push/test", {
       method: "POST",
       headers: { ...dashboardAccessHeaders, "content-type": "application/json" },
-      body: JSON.stringify({ title: "server push test" })
+      body: JSON.stringify({ title: "server push test", endpoint })
     }),
     {
       ...dashboardAccessEnv,
@@ -4027,9 +4061,10 @@ test("worker reports server-side dashboard Web Push configuration blockers", asy
 
 test("worker cleans up stale dashboard Web Push subscriptions rejected by push service", async () => {
   const store = createInMemoryDashboardPushSubscriptionStore();
+  const endpoint = "https://push.example/send/stale-endpoint-hash";
   const pushKeys = await createTestPushSubscription({
-    endpointHash: "stale-endpoint-hash",
-    endpoint: "https://push.example/send/stale-endpoint-hash"
+    endpointHash: await sha256HexTest(endpoint),
+    endpoint
   });
   await store.put(pushKeys.subscription);
   const vapidEnv = await createTestVapidEnv({
@@ -4040,7 +4075,7 @@ test("worker cleans up stale dashboard Web Push subscriptions rejected by push s
     new Request("https://example.com/v2/dashboard/push/test", {
       method: "POST",
       headers: { ...dashboardAccessHeaders, "content-type": "application/json" },
-      body: JSON.stringify({ title: "server push test" })
+      body: JSON.stringify({ title: "server push test", endpoint })
     }),
     {
       ...dashboardAccessEnv,
@@ -4056,7 +4091,7 @@ test("worker cleans up stale dashboard Web Push subscriptions rejected by push s
   assert.equal(body.webPush.cleaned, 1);
   assert.equal(body.webPush.results[0].stale, true);
   assert.equal(body.webPush.results[0].cleaned, true);
-  assert.equal(store.subscriptions.has("stale-endpoint-hash"), false);
+  assert.equal(store.subscriptions.has(pushKeys.subscription.endpointHash), false);
 });
 
 test("worker redacts dashboard push subscription raw material from D1 payload_json", async () => {
