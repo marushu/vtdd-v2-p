@@ -79,6 +79,8 @@ test("dashboard app-server bridge wraps repository traffic-control context into 
   assert.match(text, /trafficControlRule/);
   assert.match(text, /Butler Completion Gate/);
   assert.match(text, /GO.*passkey approval/);
+  assert.match(text, /mechanicalBoundary/);
+  assert.match(text, /does not grant app-server command, file-change, patch, or permission escalation approvals/);
   assert.match(text, /Owner message:\nDashboard Butler が交通整理できるようにして/);
 });
 
@@ -442,6 +444,7 @@ test("dashboard app-server bridge passes traffic-control context to codex app-se
   assert.match(inputText, /repository: marushu\/vtdd-v2-p/);
   assert.match(inputText, /relatedIssue: #450/);
   assert.match(inputText, /trafficControlRule/);
+  assert.match(inputText, /mechanicalBoundary/);
   assert.match(inputText, /Owner message:\nDashboard Butler が交通整理できるか確認して/);
   assert.equal(events.at(-1).type, "app_server_reply");
 });

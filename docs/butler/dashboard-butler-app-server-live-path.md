@@ -109,6 +109,8 @@ Dashboard turn requests must preserve traffic-control context when present:
 - media reference count without raw binary material
 - instructions to read durable Issue / PR / runtime truth before separating
   blockers, next actions, authority boundaries, and evidence gaps
+- the mechanical bridge boundary that app-server command, file-change, patch,
+  and permission escalation approvals are not granted by the Dashboard bridge
 
 The old Dashboard `codex exec` runner WebSocket remains deleted. If no
 Dashboard app-server bridge is connected, Dashboard Butler records the owner

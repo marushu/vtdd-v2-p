@@ -107,7 +107,8 @@ export function buildDashboardTurnInputText(request = {}) {
     "- surface: Dashboard Butler PWA via VPS Dashboard Bridge / codex app-server",
     "- trafficControlRule: Issue/PR/docs/runtime truth を先に読み、blocker / next action / authority boundary / evidence gap を分けて報告する。",
     "- completionRule: Butler Completion Gate と E2E evidence が揃うまで Dashboard Butler 完了とは言わない。",
-    "- authorityRule: merge / deploy / credential / permission / destructive work は GO または passkey approval が必要。権限が無い場合は実行せず不足を報告する。"
+    "- authorityRule: merge / deploy / credential / permission / destructive work は GO または passkey approval が必要。権限が無い場合は実行せず不足を報告する。",
+    "- mechanicalBoundary: Dashboard bridge does not grant app-server command, file-change, patch, or permission escalation approvals."
   ];
 
   if (authority) {
