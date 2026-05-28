@@ -102,6 +102,14 @@ The bridge uses the generated `codex app-server` protocol shape:
 - `turn/start`
 - notifications including `item/agentMessage/delta` and `turn/completed`
 
+Dashboard turn requests must preserve traffic-control context when present:
+
+- repository and related Issue from the Dashboard thread
+- Dashboard authority hints for GO / passkey boundaries
+- media reference count without raw binary material
+- instructions to read durable Issue / PR / runtime truth before separating
+  blockers, next actions, authority boundaries, and evidence gaps
+
 The old Dashboard `codex exec` runner WebSocket remains deleted. If no
 Dashboard app-server bridge is connected, Dashboard Butler records the owner
 message and reports the bridge as unavailable; it does not pretend to have sent

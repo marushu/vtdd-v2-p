@@ -39,6 +39,7 @@ export function buildAppServerThreadStartRequest({ id, cwd = process.cwd(), deve
         [
           "You are backing VTDD Dashboard Butler.",
           "Treat ordinary messages as conversation unless the owner asks for repository, Issue, PR, deploy, credential, or permission work.",
+          "For traffic-control requests, read durable Issue/PR/runtime truth first, separate blockers from next actions, and do not claim VTDD completion without Butler-facing evidence.",
           "High-risk work requires explicit GO or passkey approval through VTDD runtime boundaries.",
           "Reply in Japanese by default."
         ].join("\n"),
@@ -85,6 +86,36 @@ export function buildAppServerTurnStartRequest({ id, codexThreadId, text, cwd = 
       ...(sandbox.turnSandboxPolicy ? { sandboxPolicy: sandbox.turnSandboxPolicy } : {})
     }
   };
+}
+
+export function buildDashboardTurnInputText(request = {}) {
+  const ownerText = String(request.text || "").trim();
+  const repository = String(request.repository || "").trim();
+  const relatedIssue = request.relatedIssue || request.issueNumber || "";
+  const authority = request.authority && typeof request.authority === "object" ? request.authority : null;
+  const mediaReferences = Array.isArray(request.mediaReferences) ? request.mediaReferences : [];
+  const hasDashboardContext = Boolean(repository || relatedIssue || authority || mediaReferences.length > 0);
+  if (!hasDashboardContext) {
+    return ownerText;
+  }
+
+  const lines = [
+    "Dashboard Butler turn context:",
+    `- repository: ${repository || "未指定"}`,
+    `- relatedIssue: ${relatedIssue ? `#${relatedIssue}` : "未指定"}`,
+    `- mediaReferences: ${mediaReferences.length}`,
+    "- surface: Dashboard Butler PWA via VPS Dashboard Bridge / codex app-server",
+    "- trafficControlRule: Issue/PR/docs/runtime truth を先に読み、blocker / next action / authority boundary / evidence gap を分けて報告する。",
+    "- completionRule: Butler Completion Gate と E2E evidence が揃うまで Dashboard Butler 完了とは言わない。",
+    "- authorityRule: merge / deploy / credential / permission / destructive work は GO または passkey approval が必要。権限が無い場合は実行せず不足を報告する。"
+  ];
+
+  if (authority) {
+    lines.push(`- authority: ${JSON.stringify(authority)}`);
+  }
+
+  lines.push("", "Owner message:", ownerText);
+  return lines.join("\n");
 }
 
 export function buildAppServerSandboxOverrides(sandboxMode = "") {
@@ -431,7 +462,22 @@ export async function handleDashboardTurnRequest({
     void sendDashboardEvent(event);
   });
   try {
-    const startedTurn = await appServer.request(buildAppServerTurnStartRequest({ id: appServer.nextRequestId(), codexThreadId, text, cwd, sandboxMode }));
+    const turnInputText = buildDashboardTurnInputText({
+      text,
+      repository: request.repository,
+      relatedIssue: request.relatedIssue || request.issueNumber,
+      authority: request.authority,
+      mediaReferences: request.mediaReferences
+    });
+    const startedTurn = await appServer.request(
+      buildAppServerTurnStartRequest({
+        id: appServer.nextRequestId(),
+        codexThreadId,
+        text: turnInputText,
+        cwd,
+        sandboxMode
+      })
+    );
     const startedTurnId = String(startedTurn?.turn?.id || "");
     if (activeTurnId && startedTurnId && activeTurnId !== startedTurnId) {
       throw new Error("codex app-server returned a different turn id than the active notification stream");
