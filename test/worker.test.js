@@ -3535,7 +3535,9 @@ test("worker serves dashboard chat-first shell with debug and ops surfaces isola
   assert.equal(body.includes("通知と進捗はこの画面から戻って確認できます"), true);
   assert.equal(body.includes("AI news"), true);
   assert.equal(body.includes('rel="apple-touch-icon"'), true);
-  assert.equal(body.includes("/dashboard-icon-20260529-butler.png"), true);
+  assert.equal(body.includes('rel="icon" type="image/png"'), true);
+  assert.equal(body.includes('rel="shortcut icon"'), true);
+  assert.equal(body.includes("/dashboard-icon-20260529-butler-v2.png"), true);
   assert.equal(body.includes("この作業の対象 repo"), true);
   assert.equal(body.includes("固定ではありません"), true);
   assert.equal(body.includes("deploy 先と承認境界は repo ごとに確認します"), true);
@@ -3744,7 +3746,7 @@ test("worker serves dashboard PWA manifest and service worker notification handl
   assert.equal(manifest.start_url, "/dashboard");
   assert.equal(manifest.scope, "/dashboard/");
   assert.equal(manifest.display, "standalone");
-  assert.equal(manifest.icons[0].src, "https://example.com/dashboard-icon-20260529-butler.png");
+  assert.equal(manifest.icons[0].src, "https://example.com/dashboard-icon-20260529-butler-v2.png");
   assert.equal(manifest.icons[0].sizes, "512x512");
   assert.equal(manifest.icons[0].type, "image/png");
   assert.equal(manifest.icons[1].src, "https://example.com/dashboard-icon.svg");
@@ -3773,7 +3775,7 @@ test("worker serves dashboard PWA manifest and service worker notification handl
   assert.equal(iconResponse.status, 200);
   assert.match(iconResponse.headers.get("content-type"), /image\/svg\+xml/);
 
-  const pngIconResponse = await worker.fetch(new Request("https://example.com/dashboard-icon-20260529-butler.png"));
+  const pngIconResponse = await worker.fetch(new Request("https://example.com/dashboard-icon-20260529-butler-v2.png"));
   assert.equal(pngIconResponse.status, 200);
   assert.match(pngIconResponse.headers.get("content-type"), /image\/png/);
   const pngIcon = new Uint8Array(await pngIconResponse.arrayBuffer());
