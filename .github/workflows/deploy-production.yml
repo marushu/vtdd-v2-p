@@ -390,6 +390,30 @@ jobs:
             )"
             if [ "$http_code" -ge 200 ] && [ "$http_code" -lt 300 ]; then
               event_sent=1
+              echo "dashboard deploy event reached Worker with HTTP ${http_code}. Owner-facing notification truth:"
+              node - "$response_file" <<'NODE'
+const fs = require("node:fs");
+const file = process.argv[2];
+let body = {};
+try {
+  body = JSON.parse(fs.readFileSync(file, "utf8"));
+} catch {
+  console.log("- response: unreadable");
+  process.exit(0);
+}
+const webPush = body.webPush || {};
+const event = body.event || {};
+console.log(`- eventRunId: ${event.runId || "unknown"}`);
+console.log(`- eventConclusion: ${event.conclusion || "unknown"}`);
+console.log(`- webPushOk: ${webPush.ok === true}`);
+console.log(`- webPushAttempted: ${Number.isFinite(webPush.attempted) ? webPush.attempted : "unknown"}`);
+console.log(`- webPushDelivered: ${Number.isFinite(webPush.delivered) ? webPush.delivered : "unknown"}`);
+console.log(`- webPushCleaned: ${Number.isFinite(webPush.cleaned) ? webPush.cleaned : "unknown"}`);
+if (webPush.error || webPush.reason) {
+  console.log(`- webPushError: ${webPush.error || "unknown"}`);
+  console.log(`- webPushReason: ${webPush.reason || "unknown"}`);
+}
+NODE
               rm -f "$response_file"
               break
             fi

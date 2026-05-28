@@ -197,6 +197,11 @@ test("deploy-production workflow enforces the MVP production deploy boundary", (
   assert.equal(workflow.includes("pullNumber:"), true);
   assert.equal(workflow.includes("for attempt in 1 2 3 4 5 6"), true);
   assert.equal(workflow.includes("retrying after Worker propagation delay"), true);
+  assert.equal(workflow.includes("dashboard deploy event reached Worker with HTTP ${http_code}. Owner-facing notification truth:"), true);
+  assert.equal(workflow.includes("webPushOk:"), true);
+  assert.equal(workflow.includes("webPushAttempted:"), true);
+  assert.equal(workflow.includes("webPushDelivered:"), true);
+  assert.equal(workflow.includes("webPushError:"), true);
   assert.equal(workflow.includes("deploy remains successful, but dashboard may be stale until the next event"), true);
   assert.equal(workflow.includes("authorization: Bearer ${VTDD_GATEWAY_BEARER_TOKEN}"), true);
   assert.equal(workflow.includes('approvalGrantId'), false);
