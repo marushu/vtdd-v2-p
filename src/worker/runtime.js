@@ -10431,6 +10431,62 @@ function renderDashboardUtilityNavLinks() {
     .join("");
 }
 
+function renderDashboardDrawerResizeScript({ drawerSelector, handleSelector, storageKey, cssVariable }) {
+  return `<script>
+    (() => {
+      const drawer = document.querySelector(${JSON.stringify(drawerSelector)});
+      const handle = document.querySelector(${JSON.stringify(handleSelector)});
+      const storageKey = ${JSON.stringify(storageKey)};
+      const cssVariable = ${JSON.stringify(cssVariable)};
+      const desktopQuery = window.matchMedia("(min-width: 761px)");
+      if (!drawer || !handle || !desktopQuery.matches) return;
+
+      const clampWidth = (value) => {
+        const viewportMax = Math.max(300, Math.floor(window.innerWidth * 0.92));
+        return Math.max(300, Math.min(viewportMax, Math.min(720, value)));
+      };
+      const applyWidth = (value) => {
+        const width = clampWidth(value);
+        document.documentElement.style.setProperty(cssVariable, width + "px");
+        return width;
+      };
+
+      try {
+        const storedWidth = Number.parseInt(globalThis.localStorage.getItem(storageKey) || "", 10);
+        if (Number.isFinite(storedWidth) && storedWidth > 0) applyWidth(storedWidth);
+      } catch (_) {
+        // localStorage can be unavailable in restricted webviews.
+      }
+
+      let dragPointerId = null;
+      handle.addEventListener("pointerdown", (event) => {
+        if (!desktopQuery.matches) return;
+        dragPointerId = event.pointerId;
+        handle.setPointerCapture?.(event.pointerId);
+        document.documentElement.classList.add("dashboard-drawer-resizing");
+        event.preventDefault();
+      });
+      handle.addEventListener("pointermove", (event) => {
+        if (dragPointerId !== event.pointerId) return;
+        const nextWidth = applyWidth(event.clientX - drawer.getBoundingClientRect().left);
+        try {
+          globalThis.localStorage.setItem(storageKey, String(nextWidth));
+        } catch (_) {
+          // Persisting the width is best-effort only.
+        }
+      });
+      const stopResize = (event) => {
+        if (dragPointerId !== event.pointerId) return;
+        dragPointerId = null;
+        document.documentElement.classList.remove("dashboard-drawer-resizing");
+        handle.releasePointerCapture?.(event.pointerId);
+      };
+      handle.addEventListener("pointerup", stopResize);
+      handle.addEventListener("pointercancel", stopResize);
+    })();
+  </script>`;
+}
+
 function renderDashboardUtilityPage({ title, subtitle, backHref, body }) {
   const navLinks = renderDashboardUtilityNavLinks();
   return `<!doctype html>
@@ -10442,12 +10498,13 @@ function renderDashboardUtilityPage({ title, subtitle, backHref, body }) {
   <meta name="theme-color" content="#050505">
   <title>${escapeDashboardHtml(title)} - VTDD Butler</title>
   <style>
-    :root { color-scheme: light dark; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; --bg: #f7f7f4; --panel: #fff; --text: #151515; --muted: #62625d; --border: #deded6; --soft: #f0f0eb; }
+    :root { color-scheme: light dark; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; --bg: #f7f7f4; --panel: #fff; --text: #151515; --muted: #62625d; --border: #deded6; --soft: #f0f0eb; --dashboard-utility-drawer-width: min(86vw, 360px); }
     @media (prefers-color-scheme: dark) { :root { --bg: #050505; --panel: #101010; --text: #f7f7f4; --muted: #a0a09a; --border: #2b2b2b; --soft: #1b1b1b; } }
     * { box-sizing: border-box; }
     html, body { max-width: 100%; overflow-x: hidden; }
     body { margin: 0; background: var(--bg); color: var(--text); }
-    main { width: min(1280px, 100%); margin: 0 auto; padding: 16px; }
+    body:has(.dashboard-nav-toggle:checked) { overflow: hidden; }
+    main { width: min(1280px, 100vw); margin: 0 auto; padding: 16px; overflow-x: hidden; }
     header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 18px; }
     h1 { font-size: 24px; margin: 0 0 4px; }
     h2 { font-size: 18px; margin: 0; }
@@ -10464,9 +10521,10 @@ function renderDashboardUtilityPage({ title, subtitle, backHref, body }) {
     .dashboard-nav-link:hover, .dashboard-nav-link:focus-visible { background: var(--soft); outline: none; }
     .dashboard-nav-toggle { position: fixed; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
     .dashboard-nav-backdrop, .dashboard-nav-drawer { display: none; }
-    .dashboard-nav-backdrop { position: fixed; inset: 0; z-index: 20; background: rgba(0, 0, 0, .36); backdrop-filter: blur(2px); }
-    .dashboard-nav-drawer { position: fixed; inset: 0 auto 0 0; z-index: 21; width: min(86vw, 360px); overflow: auto; padding: max(16px, env(safe-area-inset-top)) 14px max(18px, env(safe-area-inset-bottom)); border-right: 1px solid var(--border); background: var(--panel); box-shadow: 18px 0 60px rgba(0, 0, 0, .22); }
+    .dashboard-nav-backdrop { position: fixed; inset: 0; z-index: 20; max-width: 100vw; overflow: hidden; background: rgba(0, 0, 0, .36); backdrop-filter: blur(2px); }
+    .dashboard-nav-drawer { position: fixed; inset: 0 auto 0 0; z-index: 21; width: min(var(--dashboard-utility-drawer-width), 92vw); max-width: 92vw; overflow: auto; overflow-x: hidden; padding: max(16px, env(safe-area-inset-top)) 14px max(18px, env(safe-area-inset-bottom)); border-right: 1px solid var(--border); background: var(--panel); box-shadow: 18px 0 60px rgba(0, 0, 0, .22); }
     .dashboard-nav-toggle:checked ~ .dashboard-nav-backdrop, .dashboard-nav-toggle:checked ~ .dashboard-nav-drawer { display: block; }
+    .drawer-resize-handle { display: none; }
     .drawer-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; }
     .drawer-header strong { display: block; }
     .drawer-nav { display: grid; gap: 8px; }
@@ -10504,6 +10562,10 @@ function renderDashboardUtilityPage({ title, subtitle, backHref, body }) {
     }
     @media (min-width: 761px) {
       .utility-title-row .menu-button { display: none; }
+      .drawer-resize-handle { display: block; position: absolute; top: 0; right: -6px; bottom: 0; width: 12px; cursor: ew-resize; touch-action: none; }
+      .drawer-resize-handle::after { content: ""; position: absolute; top: 18px; bottom: 18px; left: 5px; width: 2px; border-radius: 999px; background: transparent; }
+      .drawer-resize-handle:hover::after, .drawer-resize-handle:focus-visible::after, .dashboard-drawer-resizing .drawer-resize-handle::after { background: var(--border); }
+      .dashboard-drawer-resizing, .dashboard-drawer-resizing * { cursor: ew-resize !important; user-select: none; }
     }
   </style>
 </head>
@@ -10520,6 +10582,7 @@ function renderDashboardUtilityPage({ title, subtitle, backHref, body }) {
         <label class="menu-button" for="dashboard-nav-toggle" aria-label="メニューを閉じる">×</label>
       </div>
       <nav class="drawer-nav" aria-label="Dashboard メニュー項目">${navLinks}</nav>
+      <div class="drawer-resize-handle" data-drawer-resize-handle="dashboard-utility" role="separator" aria-orientation="vertical" aria-label="メニュー幅を変更"></div>
     </aside>
     <div class="utility-shell">
       <nav class="desktop-nav" aria-label="Dashboard メニュー">
@@ -10541,6 +10604,12 @@ function renderDashboardUtilityPage({ title, subtitle, backHref, body }) {
       </section>
     </div>
   </main>
+  ${renderDashboardDrawerResizeScript({
+    drawerSelector: ".dashboard-nav-drawer",
+    handleSelector: '[data-drawer-resize-handle="dashboard-utility"]',
+    storageKey: "vtdd.dashboard.utilityDrawer.width",
+    cssVariable: "--dashboard-utility-drawer-width"
+  })}
 </body>
 </html>`;
 }
@@ -10595,14 +10664,14 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     url?.searchParams?.get("repositoryInput") || url?.searchParams?.get("repository")
   );
   const dashboardIssueNumber = normalizePositiveInteger(url?.searchParams?.get("issueNumber"));
-  const dashboardTargetLabel = repositoryInput || "対象 repo 未指定";
+  const dashboardTargetLabel = repositoryInput ? `この作業: ${repositoryInput}` : "作業対象 repo 未指定";
   const targetStatusMarkup = repositoryInput
     ? `<p><strong>${escapeDashboardHtml(repositoryInput)}</strong></p>
-          <p class="muted">この repo で Issue / PR 操作が必要な時だけ対象にします。通常会話はこのまま続けられます。</p>`
-    : `<p><strong>対象 repo 未指定</strong></p>
-          <p class="muted">通常会話は続けられます。Issue / PR / deploy など repo が必要な操作を始める時だけ、ここで対象 repo を設定します。</p>
+          <p class="muted">固定ではありません。この会話で Issue / PR / deploy など repo が必要な作業をする間だけ対象にします。deploy 先と承認境界は repo ごとに確認します。</p>`
+    : `<p><strong>作業対象 repo 未指定</strong></p>
+          <p class="muted">通常会話は続けられます。Issue / PR / deploy など repo が必要な作業を始める時だけ、この作業の対象 repo を指定します。VTDD と TOMIO では deploy 先も承認境界も別物として扱います。</p>
           <form class="target-form" method="get" action="${escapeDashboardHtml(origin)}/dashboard">
-            <label for="dashboard-repository-input">対象 repo</label>
+            <label for="dashboard-repository-input">この作業の対象 repo</label>
             <div class="target-form-row">
               <input id="dashboard-repository-input" name="repository" placeholder="owner/repo" autocomplete="off" autocapitalize="off" spellcheck="false">
               ${dashboardIssueNumber ? `<input type="hidden" name="issueNumber" value="${dashboardIssueNumber}">` : ""}
@@ -10677,7 +10746,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     },
     {
       title: "本番反映 / Passkey 承認",
-      body: "production deploy は対象 repo 設定後、scope 明示済み passkey approval の後ろで開きます。",
+      body: "production deploy はこの作業の対象 repo と deploy 先を確認してから、scope 明示済み passkey approval の後ろで開きます。",
       href: repositoryInput
         ? `${origin}/v2/approval/passkey/operator?repositoryInput=${encodedRepository}&phase=execution&actionType=deploy_production&highRiskKind=deploy_production`
         : "",
@@ -10748,6 +10817,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       --link: #0b6b65;
       --owner-link: #9ee7ff;
       --shadow: rgba(20, 20, 20, .12);
+      --dashboard-drawer-width: min(86vw, 380px);
       color: var(--text);
       background: var(--page-bg);
     }
@@ -10780,12 +10850,11 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     a { color: inherit; }
     .app-shell { height: calc(100dvh - 32px); min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; overflow: hidden; }
     .topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 4px 2px 20px; }
-    .top-left, .top-right { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .top-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
     .round-button, .tool-button, .send-button { display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border); background: var(--button); color: var(--text); text-decoration: none; font: inherit; font-weight: 750; }
     .menu-open { cursor: pointer; }
     .round-button { width: 44px; height: 44px; border-radius: 999px; font-size: 24px; flex: 0 0 auto; }
     .tool-button { min-height: 40px; border-radius: 999px; padding: 0 14px; white-space: nowrap; }
-    .top-action { min-width: 74px; }
     .thread-title { min-width: 0; }
     .thread-title h1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .thread-title span { display: block; color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -10866,9 +10935,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     code { color: var(--text); overflow-wrap: anywhere; }
     .menu-toggle { position: fixed; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
     .mobile-backdrop, .mobile-drawer { display: none; }
-    .mobile-backdrop { position: fixed; inset: 0; z-index: 10; background: rgba(0, 0, 0, .38); backdrop-filter: blur(2px); }
-    .mobile-drawer { position: fixed; top: 0; bottom: 0; left: 0; z-index: 11; width: min(86vw, 380px); overflow: auto; padding: max(16px, env(safe-area-inset-top)) 14px max(18px, env(safe-area-inset-bottom)); border-right: 1px solid var(--border); background: var(--panel); box-shadow: 18px 0 60px var(--shadow); }
+    .mobile-backdrop { position: fixed; inset: 0; z-index: 10; max-width: 100vw; overflow: hidden; background: rgba(0, 0, 0, .38); backdrop-filter: blur(2px); }
+    .mobile-drawer { position: fixed; top: 0; bottom: 0; left: 0; z-index: 11; width: min(var(--dashboard-drawer-width), 92vw); max-width: 92vw; overflow: auto; overflow-x: hidden; padding: max(16px, env(safe-area-inset-top)) 14px max(18px, env(safe-area-inset-bottom)); border-right: 1px solid var(--border); background: var(--panel); box-shadow: 18px 0 60px var(--shadow); }
     .menu-toggle:checked ~ .mobile-backdrop, .menu-toggle:checked ~ .mobile-drawer { display: block; }
+    .drawer-resize-handle { display: none; }
     .mobile-drawer-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px; }
     .mobile-drawer-content { display: grid; gap: 12px; }
     .menu-callout { color: var(--muted); font-size: 12px; line-height: 1.55; }
@@ -10879,7 +10949,6 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     @media (max-width: 900px) {
       main { padding: 14px 14px 0; }
       .app-shell { height: calc(100dvh - 14px); }
-      .topbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
       .chat-scroll { padding-bottom: 28px; }
       .bubble { max-width: 100%; font-size: 16px; }
       .bubble.owner { max-width: 82%; }
@@ -10891,8 +10960,13 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       .composer-box { grid-template-columns: 40px minmax(0, 1fr) 40px; border-radius: 24px; }
       .round-button { width: 40px; height: 40px; }
       .tool-button { min-height: 38px; padding: 0 10px; font-size: 13px; }
-      .top-action { min-width: 64px; }
       .media-button, .send-button { width: 40px; height: 40px; }
+    }
+    @media (min-width: 761px) {
+      .drawer-resize-handle { display: block; position: absolute; top: 0; right: -6px; bottom: 0; width: 12px; cursor: ew-resize; touch-action: none; }
+      .drawer-resize-handle::after { content: ""; position: absolute; top: 18px; bottom: 18px; left: 5px; width: 2px; border-radius: 999px; background: transparent; }
+      .drawer-resize-handle:hover::after, .drawer-resize-handle:focus-visible::after, .dashboard-drawer-resizing .drawer-resize-handle::after { background: var(--border); }
+      .dashboard-drawer-resizing, .dashboard-drawer-resizing * { cursor: ew-resize !important; user-select: none; }
     }
   </style>
 </head>
@@ -10908,9 +10982,6 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             <span>${escapeDashboardHtml(dashboardTargetLabel)} ・ dashboard main chat</span>
           </div>
         </div>
-        <div class="top-right">
-          <a class="tool-button top-action" href="${escapeDashboardHtml(origin)}/dashboard/notifications" aria-label="通知センター">通知</a>
-        </div>
       </header>
 
       <label class="mobile-backdrop" for="mobile-menu-toggle" aria-label="管理メニューを閉じる"></label>
@@ -10923,9 +10994,9 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           <label class="round-button menu-open" for="mobile-menu-toggle" aria-label="管理メニューを閉じる">×</label>
         </div>
         <div class="mobile-drawer-content">
-          <p class="menu-callout">通知、進捗、対象 repo の確認はここから開きます。開発/運用の詳細は下に隔離しています。</p>
+          <p class="menu-callout">通知、進捗、この作業の対象 repo の確認はここから開きます。開発/運用の詳細は下に隔離しています。</p>
           <div class="lane">
-            <div class="lane-title"><h3>対象 repo</h3><span class="pill">${repositoryInput ? "resolved" : "未指定"}</span></div>
+            <div class="lane-title"><h3>この作業の対象 repo</h3><span class="pill">${repositoryInput ? "active" : "未指定"}</span></div>
             ${targetStatusMarkup}
           </div>
           <div class="lane">
@@ -10957,6 +11028,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             <p>v3 Worker prototype の削除や移行は destructive operation 扱いです。必要になった時だけ、対象 runtime と scope を明示した passkey approval で扱います。</p>
           </details>
         </div>
+        <div class="drawer-resize-handle" data-drawer-resize-handle="dashboard-main" role="separator" aria-orientation="vertical" aria-label="管理メニュー幅を変更"></div>
       </aside>
 
       <div class="chat-scroll" id="butler-chat-log" data-thread-id="${escapeDashboardHtml(chatThreadId)}">
@@ -10965,8 +11037,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         </article>
         <article class="bubble">
           <strong>Butler</strong>
-          <p>はい。ここではまず普通に会話できます。通知、進捗、対象 repo の確認は必要な時だけ開けます。</p>
-          <p>作業を進める時は、対象 repo や Issue を会話の中で確認してから進めます。</p>
+          <p>はい。ここではまず普通に会話できます。通知、進捗、この作業の対象 repo の確認は必要な時だけ開けます。</p>
+          <p>作業を進める時は、対象 repo、Issue、deploy 先を会話の中で確認してから進めます。</p>
           <ul>
             <li>対象: <code>${escapeDashboardHtml(dashboardTargetLabel)}</code></li>
             <li>通知と進捗はこの画面から戻って確認できます。</li>
@@ -12229,6 +12301,12 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       connectThreadSocket();
     })();
   </script>
+  ${renderDashboardDrawerResizeScript({
+    drawerSelector: ".mobile-drawer",
+    handleSelector: '[data-drawer-resize-handle="dashboard-main"]',
+    storageKey: "vtdd.dashboard.drawer.width",
+    cssVariable: "--dashboard-drawer-width"
+  })}
 </body>
 </html>`;
 }
