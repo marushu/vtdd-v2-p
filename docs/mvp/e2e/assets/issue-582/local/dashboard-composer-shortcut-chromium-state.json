@@ -1,0 +1,13 @@
+{
+  "ok": true,
+  "browserName": "chromium",
+  "platform": "darwin",
+  "state": {
+    "value": "",
+    "ownerBubbleTexts": [
+      "⧉command enter send15:51",
+      "⧉control enter send15:51"
+    ],
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.0.0 Safari/537.36"
+  }
+}
