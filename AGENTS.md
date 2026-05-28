@@ -111,6 +111,41 @@ conflict and ask whether to proceed narrowly or first create/update the
 necessary Issue. Do not silently choose the narrower path when it would preserve
 a broken owner-facing workflow.
 
+## Intent Mode / Skill Autonomy Boundary
+
+When Skills, subagents, status/readiness checks, or execution handoff behavior
+are relevant, read `docs/butler/intent-mode-contract.md`.
+
+Dashboard Butler is the intended primary operator surface. VPS Codex CLI is the
+always-on execution surface behind it. mac Codex is a temporary development,
+debug, and emergency support surface while Dashboard Butler is incomplete; after
+Dashboard Butler can complete the owner-facing workflow, mac Codex should move
+to a secondary role.
+
+Skills must be repository-backed or otherwise readable by Dashboard Butler and
+VPS Codex CLI. A local mac Codex Skill is not a VTDD product capability by
+itself.
+
+VTDD does not want a passive assistant that only does exactly what the owner
+spelled out. The assistant must use autonomy for judgment, critique, proposal,
+risk detection, and saying when an idea should stop or become a smaller
+Issue-backed path.
+
+That autonomy must not be used for unapproved scope expansion, external side
+effects, heavy runner/reviewer/deploy launches, or completion claims.
+
+Default mode boundaries:
+
+- `Read`: fast readonly status/readiness truth, blocker judgment, next action,
+  and explicit cost boundary.
+- `Think`: free critique and proposal without execution.
+- `Execute`: Issue-backed implementation with GO/passkey/approval boundaries,
+  validation, and evidence.
+
+For status/progress/readiness requests, prefer the repo-backed
+`.agents/skills/vtdd-status-advisor/SKILL.md` behavior: readonly does not mean
+passive; it means advise, warn, and stop before execution.
+
 ## Non-Negotiable Rules
 
 1. Do not reinterpret scope words (including "MVP") on your own.
