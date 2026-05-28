@@ -9,11 +9,20 @@ const REQUIRED_MARKERS = [
   "## Satisfied Success Criteria",
   "## Unsatisfied Success Criteria",
   "## Dry-run Impact Report",
+  "## Execution Queue Delta",
   "## File / Line Hypotheses",
   "## Hypothesis Retrospective",
   "## Verification Evidence",
   "## Butler Completion Contract",
   "## Surface Update Checklist",
+];
+
+const REQUIRED_QUEUE_FIELDS = [
+  "Queue position before",
+  "Preemption decision",
+  "Queue delta",
+  "Why this PR is next",
+  "Active Issues not downscoped",
 ];
 
 const REQUIRED_BUTLER_FIELDS = [
@@ -86,6 +95,20 @@ function validatePrBody(body, options = {}) {
     }
   }
 
+  const queueFields = extractSectionFields(body, "## Execution Queue Delta");
+  for (const field of REQUIRED_QUEUE_FIELDS) {
+    if (!Object.hasOwn(queueFields, field)) {
+      errors.push(`Missing Execution Queue Delta field: ${field}`);
+      continue;
+    }
+    if (!templateMode && isPlaceholder(queueFields[field])) {
+      errors.push(`Execution Queue Delta field is not filled: ${field}`);
+    }
+  }
+  if (!templateMode) {
+    validateQueueFieldSemantics(queueFields, errors);
+  }
+
   if (!templateMode && sectionLooksEmpty(body, "## File / Line Hypotheses")) {
     errors.push("File / Line Hypotheses section is empty.");
   }
@@ -145,6 +168,31 @@ function validatePrBody(body, options = {}) {
 
 function extractButlerFields(body) {
   return extractSectionFields(body, "## Butler Completion Contract");
+}
+
+function validateQueueFieldSemantics(fields, errors) {
+  const preemptionDecision = fields["Preemption decision"] || "";
+  if (
+    preemptionDecision &&
+    !/\b(EMERGENCY|ROOT|NEXT|QUEUE|EVIDENCE|QUESTION)\b/.test(preemptionDecision)
+  ) {
+    errors.push(
+      "Execution Queue Delta Preemption decision must name one queue classification: EMERGENCY, ROOT, NEXT, QUEUE, EVIDENCE, or QUESTION.",
+    );
+  }
+
+  const queueDelta = fields["Queue delta"] || "";
+  if (queueDelta && !/(Issue #\d+|PR #\d+|`Now`|`Next`|Root Blockers|Evidence Gaps|Blocked|Queue)/.test(queueDelta)) {
+    errors.push("Execution Queue Delta Queue delta must name the Issue/PR or queue bucket being moved.");
+  }
+
+  const activeIssues = fields["Active Issues not downscoped"] || "";
+  if (
+    activeIssues &&
+    !/(縮小しない|縮小しません|not downscop|not shrink|remain active|active issues are not)/i.test(activeIssues)
+  ) {
+    errors.push("Execution Queue Delta must explicitly state that active Issues are not downscoped.");
+  }
 }
 
 function extractSectionFields(body, heading) {
@@ -208,4 +256,4 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   console.log("PR body template validation passed.");
 }
 
-export { REQUIRED_BUTLER_FIELDS, REQUIRED_MARKERS, validatePrBody };
+export { REQUIRED_BUTLER_FIELDS, REQUIRED_MARKERS, REQUIRED_QUEUE_FIELDS, validatePrBody };

@@ -31,6 +31,14 @@ None.
 - Validation needed:
 - Stop condition:
 
+## Execution Queue Delta
+
+- Queue position before:
+- Preemption decision:
+- Queue delta:
+- Why this PR is next:
+- Active Issues not downscoped:
+
 ## File / Line Hypotheses
 
 - file: `path/to/file.js:line`

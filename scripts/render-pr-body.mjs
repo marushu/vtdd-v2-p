@@ -97,6 +97,17 @@ function defaultDryRunReport(options = {}) {
   };
 }
 
+function defaultQueueDelta(options = {}) {
+  const issue = options.issue ? `Issue #${options.issue}` : "対象 Issue";
+  return {
+    positionBefore: `${issue} は active issue execution queue 上の bounded slice として扱います。`,
+    preemptionDecision: "EMERGENCY ではありません。現在の root blocker / active queue に対する scoped progress として扱います。",
+    queueDelta: `${issue} の queue item をこのPRで進めます。残る blocker / evidence gap を明記してください。`,
+    whyNext: "このPRが今の queue で次に必要な理由を明記してください。",
+    activeIssuesNotDownscoped: "Active Issues は縮小しません。このPRで扱わない active Issue は未完了として残します。"
+  };
+}
+
 function defaultFileLineHypotheses() {
   return {
     hypotheses:
@@ -122,6 +133,11 @@ function renderPrBody(options = {}) {
   const dryRun = {
     ...dryRunDefaults,
     ...(options.dryRun || {})
+  };
+  const queueDefaults = defaultQueueDelta(options);
+  const queue = {
+    ...queueDefaults,
+    ...(options.queue || {})
   };
   const fileLineDefaults = defaultFileLineHypotheses();
   const fileLine = {
@@ -164,6 +180,14 @@ ${options.nonGoals || "None."}
 - Unknowns to investigate before coding: ${options.dryRunUnknowns || dryRun.unknowns}
 - Validation needed: ${options.dryRunValidationNeeded || dryRun.validationNeeded}
 - Stop condition: ${options.dryRunStopCondition || dryRun.stopCondition}
+
+## Execution Queue Delta
+
+- Queue position before: ${options.queuePositionBefore || queue.positionBefore}
+- Preemption decision: ${options.preemptionDecision || queue.preemptionDecision}
+- Queue delta: ${options.queueDelta || queue.queueDelta}
+- Why this PR is next: ${options.whyThisPrIsNext || queue.whyNext}
+- Active Issues not downscoped: ${options.activeIssuesNotDownscoped || queue.activeIssuesNotDownscoped}
 
 ## File / Line Hypotheses
 

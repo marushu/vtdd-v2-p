@@ -20,6 +20,7 @@ test("renderPrBody includes all guarded-policy headings", () => {
   assert.match(body, /## Satisfied Success Criteria/);
   assert.match(body, /## Unsatisfied Success Criteria/);
   assert.match(body, /## Dry-run Impact Report/);
+  assert.match(body, /## Execution Queue Delta/);
   assert.match(body, /## File \/ Line Hypotheses/);
   assert.match(body, /## Hypothesis Retrospective/);
   assert.match(body, /## Verification Evidence/);
@@ -39,6 +40,8 @@ test("renderPrBody default guidance is Japanese-first while headings remain stab
   assert.match(body, /Butler-facing E2E は未実施です。/);
   assert.match(body, /Target Issue: Issue #316/);
   assert.match(body, /この Issue だけを見て直すと壊れ得るもの/);
+  assert.match(body, /Queue position before: Issue #316 は active issue execution queue/);
+  assert.match(body, /Active Issues は縮小しません。/);
   assert.match(body, /should become RAG candidate: 未判断。/);
   assert.match(body, /Cloudflare deploy: 不要。/);
 });
@@ -94,6 +97,77 @@ test("renderPrBody normalizes partial completion status into incomplete", () => 
   assert.match(body, /- Completion status: incomplete/);
   const result = validatePrBody(body);
   assert.equal(result.ok, true);
+});
+
+test("validatePrBody fails when execution queue delta is missing", () => {
+  const body = renderPrBody({
+    issue: "595",
+    intent: "Issue #595 の queue delta guardrail を固定する。",
+    satisfied: "Canonical helper generates queue delta.",
+    unsatisfied: "Human review remains pending.",
+    evidencePath: "docs/butler/execution-queue-contract.md",
+    ownerGoal: "Owner input を即実装せず queue で扱う。",
+    butlerEntrypoint: "PR body review gate.",
+    actionSchemaExposure: "No schema change.",
+    runtimePath: "scripts/validate-pr-body.mjs.",
+    runtimeTruth: "Validator pass/fail output.",
+    authorityBoundary: "No high-risk operation.",
+    butlerE2E: "Not required because this PR does not close a runtime Issue.",
+    completionStatus: "incomplete",
+  }).replace(/\n## Execution Queue Delta[\s\S]*?\n## File \/ Line Hypotheses/, "\n## File / Line Hypotheses");
+
+  const result = validatePrBody(body);
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /Missing PR template marker: ## Execution Queue Delta/);
+});
+
+test("validatePrBody rejects empty execution queue delta fields", () => {
+  const body = renderPrBody({
+    issue: "595",
+    intent: "Issue #595 の queue delta guardrail を固定する。",
+    satisfied: "Canonical helper generates queue delta.",
+    unsatisfied: "Human review remains pending.",
+    evidencePath: "docs/butler/execution-queue-contract.md",
+    ownerGoal: "Owner input を即実装せず queue で扱う。",
+    butlerEntrypoint: "PR body review gate.",
+    actionSchemaExposure: "No schema change.",
+    runtimePath: "scripts/validate-pr-body.mjs.",
+    runtimeTruth: "Validator pass/fail output.",
+    authorityBoundary: "No high-risk operation.",
+    butlerE2E: "Not required because this PR does not close a runtime Issue.",
+    completionStatus: "incomplete",
+  }).replace(/- Why this PR is next: .+/, "- Why this PR is next: None.");
+
+  const result = validatePrBody(body);
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /Execution Queue Delta field is not filled: Why this PR is next/);
+});
+
+test("validatePrBody rejects semantically vague execution queue delta fields", () => {
+  const body = renderPrBody({
+    issue: "595",
+    intent: "Issue #595 の queue delta guardrail を固定する。",
+    satisfied: "Canonical helper generates queue delta.",
+    unsatisfied: "Human review remains pending.",
+    preemptionDecision: "No interruption needed.",
+    queueDelta: "Some work moved.",
+    activeIssuesNotDownscoped: "N/A.",
+    evidencePath: "docs/butler/execution-queue-contract.md",
+    ownerGoal: "Owner input を即実装せず queue で扱う。",
+    butlerEntrypoint: "PR body review gate.",
+    actionSchemaExposure: "No schema change.",
+    runtimePath: "scripts/validate-pr-body.mjs.",
+    runtimeTruth: "Validator pass/fail output.",
+    authorityBoundary: "No high-risk operation.",
+    butlerE2E: "Not required because this PR does not close a runtime Issue.",
+    completionStatus: "incomplete",
+  });
+
+  const result = validatePrBody(body);
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /Preemption decision must name one queue classification/);
+  assert.match(result.errors.join("\n"), /Queue delta must name the Issue\/PR or queue bucket/);
+  assert.match(result.errors.join("\n"), /active Issues are not downscoped/);
 });
 
 test("validatePrBody fails when Butler Completion Contract is missing", () => {
@@ -269,6 +343,15 @@ test("validate-pr-body CLI template mode accepts the canonical template structur
     },
   );
   assert.match(output, /PR body template validation passed/);
+});
+
+test("guarded workflow grandfathers pre-queue open PRs while enforcing new queue fields", () => {
+  const workflow = fs.readFileSync(".github/workflows/guarded-autonomy-required-checks.yml", "utf8");
+
+  assert.match(workflow, /queue_delta_enforced_from_pr=596/);
+  assert.match(workflow, /Skipping Execution Queue Delta enforcement for grandfathered PR/);
+  assert.match(workflow, /Preemption decision must name one queue classification/);
+  assert.match(workflow, /Queue delta must name the Issue\/PR or queue bucket being moved/);
 });
 
 test("prepare-pr-body-file preserves a valid candidate body", async () => {
