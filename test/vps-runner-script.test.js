@@ -12,6 +12,7 @@ import {
   buildPostMergePullTruth,
   buildPullRequestBody,
   buildVpsRunnerPreflightReceipt,
+  buildVpsRunnerPrCreateArgs,
   buildVpsRunnerCompletionFinalEvent,
   buildVpsRunnerEventComment,
   buildVpsReviewerFallbackActorIdentityIncident,
@@ -978,6 +979,39 @@ test("VPS runner diagnostic summaries redact secrets and stay short", () => {
   assert.equal(summary.includes("[REDACTED_API_KEY]"), true);
   assert.equal(summary.endsWith("[truncated]"), true);
   assert.equal(summary.length <= 192, true);
+});
+
+test("VPS runner creates ready PRs by default instead of blocking review as draft", () => {
+  const args = buildVpsRunnerPrCreateArgs({
+    payload: {
+      issueNumber: 413,
+      branch: "codex/issue-413-ready-pr-default",
+      baseRef: "main"
+    },
+    bodyFile: "/tmp/vtdd-vps-runner-pr-body.md"
+  });
+
+  assert.deepEqual(args.slice(0, 2), ["pr", "create"]);
+  assert.equal(args.includes("--draft"), false);
+  assert.equal(args.includes("--base"), true);
+  assert.equal(args.includes("--head"), true);
+  assert.equal(args.includes("--body-file"), true);
+});
+
+test("VPS runner PR body describes ready PR handoff without draft blocking semantics", () => {
+  const body = buildPullRequestBody({
+    repository: "sample-org/vtdd-v2",
+    issueNumber: 413,
+    executionId: "remote-codex-issue413-ready-test",
+    branch: "codex/issue-413",
+    codexGoal: "open_pr"
+  });
+
+  assert.equal(body.includes("ready PR"), true);
+  assert.equal(body.includes("draft PR"), false);
+  assert.equal(body.includes("VPS runner は ready PR 作成のみ。"), true);
+  assert.equal(body.includes("ready PR は Issue完了やmerge許可ではない"), true);
+  assert.equal(body.includes("reviewer approve、required checks、head SHA一致、mergeability、approve_auto_merge policy"), true);
 });
 
 test("VPS runner dry run reports selected execution without side effects", async () => {
@@ -1963,8 +1997,10 @@ test("VPS runner normalizes malformed PR body candidates with canonical template
 test("VPS runner create path uses prepared body-file helper instead of freehand --body", async () => {
   const source = await fs.readFile(path.join(process.cwd(), "scripts", "run-vps-runner.mjs"), "utf8");
   assert.equal(source.includes('import { prepareGuardedPullRequestBody, prepareGuardedPullRequestBodyFile } from "./prepare-pr-body-file.mjs";'), true);
-  assert.equal(source.includes('"--body-file",\n          bodyFile'), true);
+  assert.equal(source.includes('const prCreateArgs = buildVpsRunnerPrCreateArgs'), true);
+  assert.equal(source.includes('"--body-file",\n    bodyFile'), true);
   assert.equal(source.includes('"--body",\n          normalized.body'), false);
+  assert.equal(source.includes('"--draft"'), false);
 });
 
 test("VPS runner classifies unauthenticated Codex CLI as raw auth failure", () => {
