@@ -31,27 +31,27 @@ Last rebuilt from GitHub runtime truth: 2026-05-28
   Issue #450, Issue #455, Issue #491, Issue #492, Issue #495, Issue #497,
   Issue #498, Issue #501, Issue #514, Issue #528, Issue #565, Issue #573,
   Issue #574, Issue #577, Issue #579, Issue #580, Issue #582, Issue #585,
-  Issue #587, Issue #589, Issue #590, Issue #594, Issue #595.
-- Open PRs read: PR #591, PR #597.
+  Issue #587, Issue #589, Issue #590, Issue #594, Issue #595, Issue #599,
+  Issue #601, Issue #604, Issue #605, Issue #606.
+- Open PRs read before this refresh PR was opened: none.
+- Recent queue-changing merged PRs read: PR #591, PR #597, PR #598, PR #600,
+  PR #602, PR #603, PR #607.
 - Current queue rebuild scope: classify all open Issues without closing,
   downscoping, or treating any unverified Issue as done.
 
 ## Now
 
-- Issue #595 / PR to be created: rebuild this active Issue completion graph from
-  current GitHub runtime truth.
+- Issue #590: app-server turn timeout must become a recoverable Dashboard chat
+  state. This is the next implementation slice after this Issue #595 queue
+  refresh merges.
 
 ## Next
 
-- PR #597 / Issue #528: repair the PR body by adding `Execution Queue Delta` and
-  re-run checks. This is next because it is already open, mergeable in code
-  shape, and currently blocked by the newly merged #595 guardrail rather than by
-  implementation tests.
-- PR #591 / Issue #582: after PR #597 is unblocked or explicitly paused, refresh
-  mergeability and decide whether it remains an `EVIDENCE` gap or needs a queue
-  delta update despite grandfathering.
-- Issue #450 + Issue #413: resume the Dashboard Butler live runtime /
-  app-server / VPS progress root after open PR hygiene is under control.
+- Issue #579: after timeout recovery, handle PWA background/foreground,
+  WebSocket reconnect, auth/session expiry, and input/media retention.
+- Issue #450 + Issue #413: continue the Dashboard Butler live runtime /
+  app-server / VPS progress root after #590/#579 no longer leave ordinary chat
+  stuck or opaque.
 
 ## Root Blockers
 
@@ -71,22 +71,39 @@ Root blockers hold multiple active Issues open. They should shape `Now` and
 - Issue #498: media attachments must reach the Butler / VPS analysis path, not
   merely local upload storage. It gates Issue #587 and the owner-facing
   screenshot/video feedback loop.
-- Issue #355 and Issue #412: high-risk passkey / helper / GitHub App secret sync
-  authority boundaries must not be mixed. They gate reliable recovery for
-  reviewer/deploy/secret maintenance and must stay ahead of new high-risk
-  workflow expansion.
-- Issue #417 and Issue #448: post-action orchestration and reviewer-approved
-  auto-merge policy must preserve approval boundaries before broader automatic
-  next-step execution can be trusted.
+- Issue #355: high-risk passkey / helper / GitHub App secret sync authority
+  boundaries must not be mixed. It gates reliable recovery for reviewer,
+  deploy, and secret maintenance.
+- Issue #412: helper / GitHub App secret sync must preserve explicit authority
+  boundaries before new high-risk workflow expansion.
+- Issue #417: post-action orchestration must preserve approval boundaries before
+  broader automatic next-step execution can be trusted.
+- Issue #448: reviewer-approved auto-merge policy must preserve approval
+  boundaries before broader automatic next-step execution can be trusted.
 
 ## Open PR Hygiene
 
-- PR #597 / Issue #528 is blocked by `guarded-policy` because it was opened after
-  PR #596 and lacks `Execution Queue Delta`. It must be updated before it can be
-  treated as merge-ready.
-- PR #591 / Issue #582 is grandfathered by PR number. Grandfathering only avoids
-  breaking already-open work; it does not make Issue #582 complete and should not
-  be copied into future PR bodies.
+- No open PRs were present before this refresh PR was opened. The current
+  refresh PR is excluded from this hygiene snapshot.
+- PR #591 / Issue #582 merged after adding queue-delta-compatible PR body
+  evidence, reproducible local E2E, and reviewer-approved residual-risk
+  handling. It still does not close Issue #582.
+- PR #597 / Issue #528 merged Dashboard drawer/navigation usability work. Issue
+  #528 remains a root blocker because production PWA evidence and the wider
+  ordinary-chat-vs-ops separation are still incomplete.
+- PR #598 / Issue #595 merged the first active Issue queue rebuild. This PR is a
+  follow-up refresh after more queue-changing PRs merged.
+- PR #600 / Issue #444 merged PR-first notification targets. Issue #444 remains
+  active until live iPhone/PWA notification, sound, badge, and recovery evidence
+  are complete.
+- PR #602 / Issue #601 merged worker.js generation discipline before validation.
+  Issue #601 remains open until closure approval and any Issue-scoped evidence
+  are complete.
+- PR #603 / Issue #450 merged Dashboard traffic-control context preservation for
+  the app-server bridge. It is partial path evidence, not full #450 completion.
+- PR #607 / Issue #413 merged ready-by-default PR creation for the VPS runner.
+  It removes Draft as an owner blocker, but it does not complete owner-facing
+  execution progress visibility.
 
 ## Evidence Gaps
 
@@ -94,6 +111,15 @@ Evidence gaps are active. They are not deferred out of scope.
 
 - Issue #514: notification center / Web Push state has implementation slices, but
   live delivery and owner-facing send-result truth still need mapped evidence.
+- Issue #528: PR #597 improved drawer width, notification navigation, viewport
+  containment, and repo-context wording. Issue #528 still gates ordinary chat
+  usability because connection recovery, notification delivery/recovery,
+  attachment/video polish, operator/debug isolation, and production PWA evidence
+  remain incomplete.
+- Issue #450: PR #603 preserves traffic-control context through the Dashboard
+  app-server bridge; ordinary conversation, follow-up continuity, timeout
+  recovery, PWA recovery, readable final replies, and live owner-facing runtime
+  truth remain incomplete.
 - Issue #565: connection recovery status has local evidence, but completion still
   depends on the normal chat surface not being dominated by status noise.
 - Issue #577: composer paste normalization has merged implementation slices, but
@@ -101,12 +127,19 @@ Evidence gaps are active. They are not deferred out of scope.
 - Issue #580: encoded trailing punctuation behavior has merged implementation
   slices, but remains part of link/URL acceptance until mapped evidence is
   complete.
-- Issue #582: PR #591 exists and local E2E exists; production iPhone/PWA evidence
-  and closure approval remain missing.
+- Issue #582: PR #583 and PR #591 are merged with local E2E evidence; production
+  iPhone/PWA evidence, 10-turn completion matrix confirmation, and closure
+  approval remain missing.
 - Issue #585: markdown/link rendering has implementation slices; one-tap
   iPhone/PWA link behavior still needs mapped acceptance evidence.
 - Issue #587: local Simulator evidence exists for video attachment UI; full
   Butler Completion Gate evidence is still missing.
+- Issue #601: PR #602 fixed worker.js generation discipline before validation,
+  but Issue closure still requires human approval and any mapped evidence named
+  in the Issue.
+- Issue #444: PR #600 points PR-numbered notifications at the PR instead of the
+  Actions run, but live iPhone/PWA notification tap, sound, badge, and recovery
+  evidence remain incomplete.
 
 ## Blocked
 
@@ -140,6 +173,13 @@ These Issues remain active and required, but they do not preempt the current
 - Issue #497: periodic public-repo secret / dependency / owner-specific artifact
   scan.
 - Issue #501: same-head fallback requested after Gemini approve.
+- Issue #599: PR and Issue titles should be Japanese-first.
+- Issue #604: notification taps should open the relevant PR / Issue / deploy
+  context directly.
+- Issue #605: PR / deploy context drawer should be recoverable from
+  notifications and conversation.
+- Issue #606: ordinary dashboard read sessions should be separated from
+  high-risk passkey approval.
 - Issue #573: mobile horizontal scroll / side-to-side jitter.
 - Issue #574: subtle lower-right chat timestamps.
 - Issue #589: deploy notification non-delivery root-cause visibility.
@@ -149,8 +189,10 @@ These Issues remain active and required, but they do not preempt the current
 
 ## Questions
 
-- Issue #595 remains open because the runtime auto-classification path for
-  Butler / VPS Codex CLI is not connected yet.
+- Issue #595: remains open because the runtime auto-classification path for
+  Butler / VPS Codex CLI is not connected yet. This PR only refreshes the
+  durable queue snapshot and intentionally leaves Issue #590 as post-merge
+  `Now`.
 - Decide in a future bounded slice whether `docs/mvp/active-issue-execution-queue.md`
   should be generated from GitHub runtime truth or remain hand-curated with tests.
 
@@ -174,9 +216,7 @@ check whether the content is honest.
 
 ## Grandfathered PRs
 
-- PR #591 was opened before Issue #595 added `Execution Queue Delta`. The GitHub
-  required check skips queue-delta enforcement for PR numbers lower than #596 so
-  this process correction does not break already-open review work.
-- If PR #591 is materially updated after this guardrail lands, its body should be
-  updated to include the queue delta even though the workflow grandfathering keeps
-  it mergeable.
+- No open grandfathered PRs remain.
+- Historical note: PR #591 was opened before Issue #595 added `Execution Queue
+  Delta`, but its body was later updated to the current queue contract before it
+  merged.
