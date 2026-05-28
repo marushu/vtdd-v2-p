@@ -186,6 +186,11 @@ runner events, create the target branch, run Codex CLI in a cloned workspace,
 push changes, and open a ready PR for reviewer/automation. It is intentionally an operator-owned script,
 not a hosted VTDD service.
 
+Ready PR means reviewer and automation can inspect the handoff result. It is
+not an Issue-completion claim and it is not merge authority. Merge remains
+behind reviewer approval, required checks, head-SHA consistency, mergeability,
+the configured auto-merge policy, or a governed approval path.
+
 Required runner environment:
 
 - `GITHUB_TOKEN` or `GH_TOKEN`: token available to `gh`, GitHub API reads,

@@ -1010,6 +1010,8 @@ test("VPS runner PR body describes ready PR handoff without draft blocking seman
   assert.equal(body.includes("ready PR"), true);
   assert.equal(body.includes("draft PR"), false);
   assert.equal(body.includes("VPS runner は ready PR 作成のみ。"), true);
+  assert.equal(body.includes("ready PR は Issue完了やmerge許可ではない"), true);
+  assert.equal(body.includes("reviewer approve、required checks、head SHA一致、mergeability、approve_auto_merge policy"), true);
 });
 
 test("VPS runner dry run reports selected execution without side effects", async () => {
