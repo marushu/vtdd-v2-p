@@ -56841,6 +56841,9 @@ var runtime_default = {
     if (request.method === "POST" && isApiPath(url.pathname, "/dashboard/push/test")) {
       return handleDashboardPushTestRequest(request, env);
     }
+    if (request.method === "POST" && isApiPath(url.pathname, "/dashboard/push/ack")) {
+      return handleDashboardPushAckRequest(request, env);
+    }
     if (request.method === "GET" && isDashboardChatSocketApiPath(url.pathname)) {
       return handleDashboardChatSocketRequest(request, url, env);
     }
@@ -60038,6 +60041,83 @@ async function handleDashboardPushTestRequest(request, env) {
     webPush
   });
 }
+async function handleDashboardPushAckRequest(request, env) {
+  if (normalizeText30(request.headers.get("content-type")).split(";")[0].toLowerCase() !== "application/json") {
+    return json(415, {
+      ok: false,
+      error: "dashboard_push_ack_content_type_required",
+      reason: "dashboard push ack requires application/json"
+    });
+  }
+  if (request.headers.get("x-vtdd-dashboard-push-ack") !== "service-worker") {
+    return json(403, {
+      ok: false,
+      error: "dashboard_push_ack_boundary_required",
+      reason: "dashboard push ack requires the service worker boundary header"
+    });
+  }
+  const dashboardAuth = await authorizeDashboardRequest({
+    request,
+    env,
+    apiSuffix: "/dashboard/push/ack"
+  });
+  if (!dashboardAuth.ok) {
+    return json(dashboardAuth.status, {
+      ok: false,
+      error: "dashboard_auth_required",
+      reason: dashboardAuth.reason
+    });
+  }
+  const eventStore = resolveDashboardEventStore(env);
+  if (!eventStore) {
+    return json(503, {
+      ok: false,
+      error: "dashboard_event_store_unavailable",
+      reason: "dashboard event store is not configured"
+    });
+  }
+  const payload = await readJson(request);
+  const tag = sanitizeDashboardChatText(payload?.tag || "vtdd-dashboard");
+  const sourceEventId = sanitizeDashboardChatText(payload?.sourceEventId || payload?.source_event_id || "");
+  if (!isSupportedDashboardPushAckSourceEventId(sourceEventId)) {
+    return json(422, {
+      ok: false,
+      error: "dashboard_push_ack_source_invalid",
+      reason: "dashboard push ack requires a supported sourceEventId"
+    });
+  }
+  const sourceRunId = sanitizeDashboardChatText(payload?.runId || payload?.run_id || "");
+  const title = sanitizeDashboardChatText(payload?.title || "Dashboard PWA push received");
+  const ackEvent = normalizeDashboardEventRecord({
+    id: `dashboard-push-ack:${tag || sourceEventId || crypto.randomUUID()}`,
+    kind: "dashboard_push_received",
+    repository: normalizeCanonicalRepositoryInput(payload?.repository) || null,
+    workflowName: sanitizeDashboardChatText(payload?.workflowName || payload?.workflow_name || "dashboard-push-ack"),
+    runId: sourceRunId || sourceEventId || tag || crypto.randomUUID(),
+    status: "completed",
+    conclusion: "success",
+    title,
+    changeSummary: sanitizeDashboardChatText(payload?.body || payload?.message || "PWA Service Worker \u304C push event \u3092\u53D7\u4FE1\u3057\u307E\u3057\u305F\u3002"),
+    pullNumber: normalizeIssue6(payload?.pullNumber || payload?.pull_number),
+    issueNumber: normalizeIssue6(payload?.issueNumber || payload?.issue_number),
+    runUrl: "/dashboard/notifications",
+    createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+    updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+  });
+  await eventStore.put(ackEvent);
+  return json(202, {
+    ok: true,
+    ack: {
+      id: ackEvent.id,
+      status: "received",
+      receivedAt: ackEvent.updatedAt
+    }
+  });
+}
+function isSupportedDashboardPushAckSourceEventId(value) {
+  const text = normalizeText30(value);
+  return text.startsWith("github-actions:") || text.startsWith("vps-runner:") || text.startsWith("dashboard-push-test:");
+}
 async function handleDashboardChatSocketRequest(request, url, env) {
   const auth = await authorizeDashboardRequest({
     request,
@@ -62635,7 +62715,16 @@ function buildDashboardWebPushPayload(event) {
     title,
     body: body || "Dashboard Butler \u306E\u901A\u77E5\u3067\u3059\u3002",
     tag: `vtdd-${record2.kind || "dashboard"}-${record2.runId || record2.id || "event"}`.slice(0, 120),
-    url: buildDashboardEventOwnerTargetUrl(record2)
+    url: buildDashboardEventOwnerTargetUrl(record2),
+    sourceEventId: record2.id || null,
+    kind: record2.kind || null,
+    repository: record2.repository || null,
+    workflowName: record2.workflowName || null,
+    runId: record2.runId || null,
+    status: record2.status || null,
+    conclusion: record2.conclusion || null,
+    pullNumber: record2.pullNumber || null,
+    issueNumber: record2.issueNumber || null
   };
 }
 function buildDashboardWebPushTitle(record2) {
@@ -65376,7 +65465,29 @@ self.addEventListener("push", (event) => {
       url: String(payload.url || "/dashboard/notifications")
     }
   };
-  event.waitUntil(self.registration.showNotification(title, options));
+  const ack = fetch("/v2/dashboard/push/ack", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: {
+      "content-type": "application/json",
+      "x-vtdd-dashboard-push-ack": "service-worker"
+    },
+    body: JSON.stringify({
+      sourceEventId: payload.sourceEventId || "",
+      kind: payload.kind || "",
+      repository: payload.repository || "",
+      workflowName: payload.workflowName || "",
+      runId: payload.runId || "",
+      status: payload.status || "",
+      conclusion: payload.conclusion || "",
+      pullNumber: payload.pullNumber || null,
+      issueNumber: payload.issueNumber || null,
+      tag: options.tag,
+      title,
+      body: options.body
+    })
+  }).catch(() => null);
+  event.waitUntil(Promise.allSettled([ack, self.registration.showNotification(title, options)]));
 });
 
 function safeDashboardNotificationUrl(value) {
