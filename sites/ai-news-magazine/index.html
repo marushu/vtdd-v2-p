@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VTDD AI News Radar</title>
+  <meta name="description" content="VTDD Butler が読む AI 開発運用ニュースの朝刊・昼刊・夕刊。">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <header class="masthead">
+    <p class="kicker">VTDD Butler</p>
+    <h1>AI News Radar</h1>
+    <p>OpenAI、Codex、Skills、Claude Code、Cloudflare の更新を、VTDD の作業管制に関係するものだけ日本語で読む場所です。</p>
+  </header>
+
+  <main>
+    <section class="edition-grid" aria-label="刊行区分">
+      <article>
+        <span>朝刊</span>
+        <h2>今日の監視対象</h2>
+        <p>夜間から朝までに出た agent runtime / skills / SDK の変更を拾います。</p>
+      </article>
+      <article>
+        <span>昼刊</span>
+        <h2>実装影響</h2>
+        <p>今日の Dashboard Butler、PWA、VPS Codex CLI に効く差分だけを短くまとめます。</p>
+      </article>
+      <article>
+        <span>夕刊</span>
+        <h2>VTDD判断</h2>
+        <p>Issue 化、RAG 保存、様子見、捨てる情報を分けて翌日の作業へ渡します。</p>
+      </article>
+    </section>
+
+    <section class="issue-list" aria-label="ニュース一覧">
+      <h2>初期号</h2>
+      <article id="openai-skills">
+        <div class="meta">朝刊 / OpenAI / Skills</div>
+        <h3>openai/skills は VTDD のドリフト対策に直結する</h3>
+        <p>Skill は agent を強くするだけでなく、やってよいこと、やってはいけないこと、検証順序を固定して脱線を減らすために使えます。</p>
+        <dl>
+          <dt>VTDD への影響</dt>
+          <dd>mac Codex、VPS Codex CLI、Dashboard Butler が同じ前提を読むため、repo-backed skill と startup preflight の整備が重要です。</dd>
+          <dt>用語</dt>
+          <dd>Skill: 特定責務のための手順書。Subagent: 役割を分けた実行担当。Runtime truth: 現在の実行基盤が返す事実。</dd>
+          <dt>出典</dt>
+          <dd><a href="https://github.com/openai/skills">openai/skills</a></dd>
+        </dl>
+      </article>
+
+      <article id="dashboard-pwa-news">
+        <div class="meta">昼刊 / Dashboard / PWA</div>
+        <h3>PWA通知はニュースにも使えるが、クリック先は Dashboard に戻す</h3>
+        <p>iOS PWA の Web Push は外部サイト直行よりも、同一originの Dashboard news に戻す方が復帰と既読管理を安定させやすいです。</p>
+        <dl>
+          <dt>VTDD への影響</dt>
+          <dd>朝刊・昼刊・夕刊の通知は Dashboard Butler の通知センターに集約し、記事本体は Pages 側に置けます。</dd>
+          <dt>用語</dt>
+          <dd>Same-origin: 同じ scheme / host / port の範囲。PWA通知クリック時の復帰先を安全に制限しやすい。</dd>
+          <dt>出典</dt>
+          <dd><a href="https://developers.cloudflare.com/pages/">Cloudflare Pages docs</a></dd>
+        </dl>
+      </article>
+    </section>
+  </main>
+</body>
+</html>
