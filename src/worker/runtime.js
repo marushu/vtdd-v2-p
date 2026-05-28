@@ -79,6 +79,8 @@ const MCP_SERVER_INFO = Object.freeze({
 });
 const MCP_INSTRUCTIONS =
   "VTDD MCP は Butler と同じ runtime truth / review truth / operational memory を読むための read-first surface です。現在の truth は runtime truth を優先し、memory は補助として扱ってください。";
+const DASHBOARD_ICON_VERSION = "20260529-butler";
+const DASHBOARD_ICON_PNG_PATH = `/dashboard-icon-${DASHBOARD_ICON_VERSION}.png`;
 
 export class DashboardChatRoom {
   constructor(state, env) {
@@ -656,7 +658,13 @@ export default {
       return svg(200, renderDashboardIconSvg());
     }
 
-    if (request.method === "GET" && url.pathname === "/dashboard-icon.png") {
+    if (
+      request.method === "GET" &&
+      (url.pathname === "/dashboard-icon.png" ||
+        url.pathname === DASHBOARD_ICON_PNG_PATH ||
+        url.pathname === "/apple-touch-icon.png" ||
+        url.pathname === "/apple-touch-icon-precomposed.png")
+    ) {
       return png(200, dashboardButlerIconPngDataUrl);
     }
 
@@ -10624,7 +10632,7 @@ function buildDashboardWebManifest(url) {
     theme_color: "#050505",
     icons: [
       {
-        src: `${origin}/dashboard-icon.png`,
+        src: `${origin}${DASHBOARD_ICON_PNG_PATH}`,
         sizes: "512x512",
         type: "image/png",
         purpose: "any maskable"
@@ -10947,6 +10955,7 @@ function renderDashboardUtilityPage({ title, subtitle, backHref, body }) {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="manifest" href="/dashboard.webmanifest">
+  <link rel="apple-touch-icon" sizes="512x512" href="${DASHBOARD_ICON_PNG_PATH}">
   <meta name="theme-color" content="#050505">
   <title>${escapeDashboardHtml(title)} - VTDD Butler</title>
   <style>
@@ -11344,6 +11353,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="manifest" href="/dashboard.webmanifest">
+  <link rel="apple-touch-icon" sizes="512x512" href="${DASHBOARD_ICON_PNG_PATH}">
   <meta name="theme-color" content="#050505">
   <title>VTDD v2 Dashboard</title>
   <style>
@@ -12880,6 +12890,7 @@ function renderDashboardAuthRequiredPage({ runtimeOrigin, returnPath = "/dashboa
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="apple-touch-icon" sizes="512x512" href="${DASHBOARD_ICON_PNG_PATH}">
   <title>Dashboard auth required</title>
   <style>
     :root { color-scheme: light; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #17211d; background: #f8faf8; }
