@@ -420,6 +420,12 @@ It must not be interpreted as a blanket prohibition for non-RAG operational logs
 - No "while we are here" edits.
 - No unrelated refactors in implementation PRs.
 - Keep docs-only PRs and runtime PRs separable when possible.
+- When a change touches `src/worker/**/*.js`, `src/worker.js`, or another
+  source file bundled into `worker.js`, run `npm run build:worker` before
+  validation and include the generated `worker.js` in the same commit. For
+  worker runtime slices, use `npm run verify:worker` as the local verification
+  entrypoint instead of discovering the generated-worker failure after `npm
+  test`.
 - For PR body create/update, never use freehand `gh pr create --body` or `gh pr edit --body`.
 - Use the repository canonical path: `scripts/prepare-pr-body-file.mjs` and then `gh pr create/edit --body-file`.
 - For Issue create/update, never use freehand `gh issue create --body` or `gh issue edit --body`.
