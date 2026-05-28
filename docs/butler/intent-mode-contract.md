@@ -24,6 +24,52 @@ Therefore VTDD Skills must be repository-backed and usable by Dashboard Butler
 and VPS Codex CLI. A Skill that only lives in a local mac Codex install is not a
 product capability.
 
+## Repository Sharing Gate
+
+Do not say a Skill, contract, guardrail, or operating rule has been
+`repo-backed`, `repository-backed`, `durable`, `共有済み`, or `リポジトリに入れた`
+unless all applicable sharing steps are true:
+
+- the change is in repository files, not only local mac Codex memory or
+  `~/.codex`
+- the changed files are committed on a topic branch
+- the branch is pushed to the remote repository
+- a Japanese-first PR is opened or updated with the change
+- the PR body states whether Dashboard Butler / VPS Codex CLI can actually read
+  or execute the behavior today
+- if runtime discovery, Action Schema, VPS inventory, or E2E is missing, the PR
+  marks the work `unconnected` or `incomplete`
+
+If any step is missing, report the work as a draft, local probe, or
+`mac_codex_only_probe`; do not present it as shared VTDD progress.
+
+## Calm Git / PR Preflight
+
+When the owner is frustrated, angry, or pointing out drift, do not rush into
+more edits. The first action is to slow down and verify operational truth.
+
+Before committing, pushing, opening a PR, updating a PR, or responding to review
+comments, run or retrieve the equivalent of:
+
+- current branch and upstream: `git status --short --branch`
+- recent local commits: `git log --oneline --decorate -5`
+- latest remote main: `git fetch origin main`
+- base freshness: confirm `origin/main` is an ancestor of the topic branch or
+  rebase/create a fresh branch before continuing
+- PR state for any related branch: open / closed / merged, head SHA, base,
+  merge commit, and review/check status
+- reviewer / auto-merge truth: whether a reviewer approval, required check, or
+  auto-merge path may already have merged the PR
+
+If the related PR is merged, do not push follow-up work to that merged PR
+branch. Create a new branch from latest `origin/main`, cherry-pick or reapply
+only the intended follow-up, then open or update a separate Japanese-first PR.
+
+After opening or updating a PR, the assistant remains responsible for checking
+the PR state it just changed. At minimum, retrieve PR state, checks/reviews when
+available, and whether the PR has already merged before making another branch or
+push decision.
+
 ## Core Principle
 
 AI autonomy is required for judgment, critique, and proposal.
@@ -140,7 +186,8 @@ Skills belong in the repository or another declared shared source that Butler
 and VPS Codex CLI can read. Do not treat a local mac Codex Skill as the canonical
 implementation. If mac Codex drafts a Skill first, the next step is to promote
 the behavior into repository docs / `.agents/skills` / runtime truth so
-Dashboard Butler can own the workflow.
+Dashboard Butler can own the workflow, then commit, push, and open or update the
+PR before claiming the behavior is repository-backed.
 
 The first Skill is `vtdd-status-advisor`:
 

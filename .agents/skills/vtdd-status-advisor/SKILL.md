@@ -24,6 +24,18 @@ If this Skill is found only in local mac Codex state, report
 `mac_codex_only_probe` and promote the behavior into the repository before
 claiming VTDD progress.
 
+Do not call a Skill update repository-backed until the files are committed,
+pushed, and represented in a Japanese-first PR body. If Dashboard Butler or VPS
+Codex CLI cannot yet discover or execute the Skill, say `unconnected` or
+`incomplete` and name the missing runtime connection.
+
+If the owner is frustrated, angry, or says the assistant is drifting, slow down.
+Before any commit, push, PR create/update, or review response, verify current
+git and PR truth: branch/upstream, recent commits, latest `origin/main`, related
+PR state, head SHA, merged/closed/open status, checks/reviews, and auto-merge
+risk. If the related PR is merged, do not push follow-up work to that branch;
+use a fresh branch from latest `origin/main`.
+
 Use Japanese-first owner-facing language for Issue, PR, review, and status
 prose. Issue / PR titles, bodies, comments, review responses, and RAG
 candidates must be Japanese by default unless the owner explicitly requests
@@ -98,6 +110,7 @@ Stop and report instead of proceeding when:
 - the request changes from Read to Execute
 - the Issue/PR target is unresolved
 - runtime truth conflicts with memory or assumptions
+- the current git branch or related PR state has not been checked in this turn
 - the next action requires GO, passkey approval, deploy authority, merge, close,
   credential mutation, or permission mutation
 - the answer would depend on mac Codex-only state
