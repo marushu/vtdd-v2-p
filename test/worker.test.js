@@ -3129,6 +3129,47 @@ test("DashboardChatRoom does not persist app-server reply deltas as chat message
   assert.equal(stored[0].text, "日本時間では、今日は 05月22日 20時09分です。");
 });
 
+test("DashboardChatRoom persists app-server timeout as recoverable Japanese thread message", async () => {
+  const store = createInMemoryDashboardChatStore();
+  const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
+  const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-unresolved");
+  const room = new DashboardChatRoom(
+    {
+      storage: createMockDurableObjectStorage(),
+      getWebSockets() {
+        return [dashboardSocket, bridgeSocket];
+      }
+    },
+    { DASHBOARD_CHAT_STORE: store }
+  );
+
+  await room.webSocketMessage(
+    bridgeSocket,
+    JSON.stringify({
+      type: "app_server_turn_failed",
+      status: "timeout",
+      threadId: "dashboard-main-unresolved",
+      repository: "marushu/vtdd-v2-p",
+      relatedIssue: 590,
+      text: "codex app-server turn timed out before completion"
+    })
+  );
+
+  const stored = await store.listThread("dashboard-main-unresolved");
+  assert.equal(stored.length, 1);
+  assert.equal(stored[0].role, "system");
+  assert.equal(stored[0].status, "failed");
+  assert.equal(stored[0].repository, "marushu/vtdd-v2-p");
+  assert.equal(stored[0].relatedIssue, 590);
+  assert.match(stored[0].text, /応答生成が時間切れ/);
+  assert.match(stored[0].text, /同じ thread で続ける/);
+  assert.doesNotMatch(stored[0].text, /timed out before completion/);
+
+  const broadcast = dashboardSocket.sent.map((message) => JSON.parse(message)).find((message) => message.type === "thread");
+  assert.ok(broadcast);
+  assert.equal(broadcast.messages[0].text, stored[0].text);
+});
+
 test("DashboardChatRoom sends app-server thinking status as transient UI state", async () => {
   const store = createInMemoryDashboardChatStore();
   const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");

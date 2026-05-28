@@ -7,6 +7,8 @@ const DANGER_FULL_ACCESS_SANDBOX = "danger-full-access";
 const APP_SERVER_FAILURE_ALREADY_SENT = Symbol("appServerFailureAlreadySent");
 const DEFAULT_APP_SERVER_ERROR_TEXT =
   "codex app-server が応答生成中に失敗しました。画像を解析できなかった可能性があります。もう一度送るか、画像なしで内容を短く説明してください。";
+const APP_SERVER_TURN_TIMEOUT_TEXT =
+  "codex app-server の応答生成が時間切れになりました。入力は Dashboard thread に保存済みです。同じ thread で続けるか、内容を短くしてもう一度送れます。";
 
 export function buildAppServerInitializeRequest(id = 1) {
   return {
@@ -255,6 +257,24 @@ function createAppServerFailureAlreadySentError(message) {
   return error;
 }
 
+function buildAppServerTurnTimeoutEvent({
+  dashboardThreadId,
+  codexThreadId,
+  repository,
+  relatedIssue
+} = {}) {
+  return {
+    type: "app_server_turn_failed",
+    schema: DEFAULT_SCHEMA,
+    threadId: dashboardThreadId,
+    codexThreadId: codexThreadId || null,
+    repository: repository || null,
+    relatedIssue: relatedIssue || null,
+    status: "timeout",
+    text: APP_SERVER_TURN_TIMEOUT_TEXT
+  };
+}
+
 function isAppServerFailureAlreadySent(error) {
   return Boolean(error && error[APP_SERVER_FAILURE_ALREADY_SENT]);
 }
@@ -434,7 +454,14 @@ export async function handleDashboardTurnRequest({
     resolveTurn = resolve;
     rejectTurn = reject;
     timeoutHandle = setTimeout(() => {
-      reject(new Error("codex app-server turn timed out before completion"));
+      const timeoutEvent = buildAppServerTurnTimeoutEvent({
+        dashboardThreadId,
+        codexThreadId,
+        repository: request.repository,
+        relatedIssue: request.relatedIssue || request.issueNumber
+      });
+      void sendDashboardEvent(timeoutEvent);
+      reject(createAppServerFailureAlreadySentError(timeoutEvent.text));
     }, turnTimeoutMs);
   });
   const finishTurn = (callback) => {
