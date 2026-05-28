@@ -537,6 +537,58 @@ test("dashboard app-server bridge keeps listening for async turn notifications a
   assert.equal(handlers.size, 0);
 });
 
+test("dashboard app-server bridge sends Japanese recoverable timeout failure", async () => {
+  const events = [];
+  const handlers = new Set();
+  let nextId = 1;
+  const appServer = {
+    nextRequestId() {
+      const id = nextId;
+      nextId += 1;
+      return id;
+    },
+    onNotification(handler) {
+      handlers.add(handler);
+      return () => handlers.delete(handler);
+    },
+    async request(message) {
+      if (message.method === "thread/start") {
+        return { thread: { id: "codex-thread-timeout" } };
+      }
+      if (message.method === "turn/start") {
+        return { turn: { id: "turn-timeout" } };
+      }
+      throw new Error(`unexpected method ${message.method}`);
+    }
+  };
+
+  await assert.rejects(
+    handleDashboardTurnRequest({
+      request: {
+        threadId: "dashboard-main",
+        repository: "marushu/vtdd-v2-p",
+        relatedIssue: 590,
+        text: "timeout を再現して"
+      },
+      appServer,
+      sendDashboardEvent: async (event) => events.push(event),
+      cwd: "/repo",
+      turnTimeoutMs: 1
+    }),
+    /応答生成が時間切れ/
+  );
+
+  const timeoutEvent = events.find((event) => event.type === "app_server_turn_failed");
+  assert.ok(timeoutEvent);
+  assert.equal(timeoutEvent.status, "timeout");
+  assert.equal(timeoutEvent.threadId, "dashboard-main");
+  assert.equal(timeoutEvent.repository, "marushu/vtdd-v2-p");
+  assert.equal(timeoutEvent.relatedIssue, 590);
+  assert.match(timeoutEvent.text, /入力は Dashboard thread に保存済み/);
+  assert.doesNotMatch(timeoutEvent.text, /timed out before completion/);
+  assert.equal(handlers.size, 0);
+});
+
 test("dashboard app-server bridge ignores notifications for a different Codex turn", async () => {
   const events = [];
   const handlers = new Set();

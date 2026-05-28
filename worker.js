@@ -61895,6 +61895,7 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
     transientStatus = "replied";
     transientText = "Dashboard thread \u63A5\u7D9A\u6E08\u307F\u3002";
   } else if (eventType === "app_server_turn_failed" || status === "failed") {
+    const failureText = buildDashboardAppServerFailureThreadText({ text, status });
     messages.push(
       normalizeDashboardChatMessage(
         {
@@ -61903,7 +61904,7 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
           repository,
           relatedIssue,
           status: "failed",
-          text: text || "codex app-server bridge failed before returning a reply.",
+          text: failureText,
           createdAt
         },
         { threadId }
@@ -61927,6 +61928,14 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
     transientStatus,
     messages: messages.filter(Boolean)
   };
+}
+function buildDashboardAppServerFailureThreadText({ text = "", status = "" } = {}) {
+  const normalizedText = sanitizeDashboardChatText(text);
+  const normalizedStatus = normalizeDashboardEventText(status).toLowerCase();
+  if (normalizedStatus === "timeout" || /timed out before completion/i.test(normalizedText)) {
+    return "codex app-server \u306E\u5FDC\u7B54\u751F\u6210\u304C\u6642\u9593\u5207\u308C\u306B\u306A\u308A\u307E\u3057\u305F\u3002\u5165\u529B\u306F Dashboard thread \u306B\u4FDD\u5B58\u6E08\u307F\u3067\u3059\u3002\u540C\u3058 thread \u3067\u7D9A\u3051\u308B\u304B\u3001\u5185\u5BB9\u3092\u77ED\u304F\u3057\u3066\u3082\u3046\u4E00\u5EA6\u9001\u308C\u307E\u3059\u3002";
+  }
+  return normalizedText || "codex app-server \u304C\u8FD4\u4FE1\u524D\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u540C\u3058 thread \u3067\u7D9A\u3051\u308B\u304B\u3001\u5185\u5BB9\u3092\u77ED\u304F\u3057\u3066\u3082\u3046\u4E00\u5EA6\u9001\u308C\u307E\u3059\u3002";
 }
 var DASHBOARD_APP_SERVER_STAGE_TEXT = {
   read_context: "\u65E2\u5B58 Issue / PR / docs \u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u3002",

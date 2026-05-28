@@ -6589,6 +6589,7 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
     transientStatus = "replied";
     transientText = "Dashboard thread 接続済み。";
   } else if (eventType === "app_server_turn_failed" || status === "failed") {
+    const failureText = buildDashboardAppServerFailureThreadText({ text, status });
     messages.push(
       normalizeDashboardChatMessage(
         {
@@ -6597,7 +6598,7 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
           repository,
           relatedIssue,
           status: "failed",
-          text: text || "codex app-server bridge failed before returning a reply.",
+          text: failureText,
           createdAt
         },
         { threadId }
@@ -6621,6 +6622,18 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
     transientStatus,
     messages: messages.filter(Boolean)
   };
+}
+
+function buildDashboardAppServerFailureThreadText({ text = "", status = "" } = {}) {
+  const normalizedText = sanitizeDashboardChatText(text);
+  const normalizedStatus = normalizeDashboardEventText(status).toLowerCase();
+  if (
+    normalizedStatus === "timeout" ||
+    /timed out before completion/i.test(normalizedText)
+  ) {
+    return "codex app-server の応答生成が時間切れになりました。入力は Dashboard thread に保存済みです。同じ thread で続けるか、内容を短くしてもう一度送れます。";
+  }
+  return normalizedText || "codex app-server が返信前に失敗しました。同じ thread で続けるか、内容を短くしてもう一度送れます。";
 }
 
 const DASHBOARD_APP_SERVER_STAGE_TEXT = {
