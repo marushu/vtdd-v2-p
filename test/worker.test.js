@@ -8512,6 +8512,28 @@ test("worker returns Butler startup preflight from shared repo truth and memory"
       "threadLocalAssumptionsPromoted=false",
       "Butler -> VPS Codex CLI"
     ].join("\n"),
+    "docs/butler/execution-queue-contract.md": [
+      "# VTDD Execution Queue Contract",
+      "Owner input is a queue update event before it is an implementation instruction.",
+      "`EMERGENCY` `ROOT` `NEXT` `QUEUE` `EVIDENCE` `QUESTION`"
+    ].join("\n"),
+    "docs/mvp/active-issue-execution-queue.md": [
+      "# Active Issue Execution Queue",
+      "## Now",
+      "- Issue #590: app-server turn timeout must become a recoverable Dashboard chat state.",
+      "## Next",
+      "- Issue #579: after timeout recovery, handle PWA reconnect/auth recovery.",
+      "## Root Blockers",
+      "- Issue #450: Dashboard Butler live runtime remains the central route blocker.",
+      "## Evidence Gaps",
+      "- Issue #528: Dashboard normal chat usability still needs production PWA evidence.",
+      "## Blocked",
+      "- Issue #355: high-risk authority requires scoped approval.",
+      "## Queue",
+      "- Issue #599: PR and Issue titles should be Japanese-first.",
+      "## Questions",
+      "- Issue #595: runtime auto-classification remains incomplete."
+    ].join("\n"),
     "docs/butler/capability-matrix.md": [
       "# Butler capability matrix",
       "Startup Surface Dependency Reading",
@@ -8633,6 +8655,18 @@ test("worker returns Butler startup preflight from shared repo truth and memory"
   assert.equal(body.startupPreflight.issueNumber, 344);
   assert.equal(body.startupPreflight.threadLocalAssumptionsPromoted, true);
   assert.equal(body.startupPreflight.butlerFirstPrinciple.status, "promoted");
+  assert.equal(body.startupPreflight.executionQueue.status, "read");
+  assert.equal(
+    body.startupPreflight.executionQueue.currentNow,
+    "Issue #590: app-server turn timeout must become a recoverable Dashboard chat state."
+  );
+  assert.equal(body.startupPreflight.executionQueue.contract.classificationContractPresent, true);
+  assert.deepEqual(body.startupPreflight.executionQueue.missingSections, []);
+  assert.equal(
+    body.startupPreflight.executionQueue.sectionSummaries["Root Blockers"].firstBullet,
+    "Issue #450: Dashboard Butler live runtime remains the central route blocker."
+  );
+  assert.match(body.startupPreflight.executionQueue.ownerFacingSummary, /Issue #590/);
   assert.equal(body.startupPreflight.activeIssue.number, 344);
   assert.equal(body.startupPreflight.memory.status, "read");
   assert.equal(body.startupPreflight.memory.compactContext[0].id, "startup-preflight-memory-344");
@@ -8640,6 +8674,100 @@ test("worker returns Butler startup preflight from shared repo truth and memory"
   assert.equal(body.startupPreflight.surfaceCapability.macRequired, false);
   assert.equal(body.startupPreflight.gapClassification.includes("mac_codex_only_probe"), false);
   assert.match(body.startupPreflight.nextSafeAction, /Issue #344/);
+});
+
+test("worker marks startup execution queue unverified when active queue source is missing", async () => {
+  const provider = createInMemoryMemoryProvider();
+  const sourceContent = {
+    "AGENTS.md": "## Butler-First Operating Principle\nVTDD is iPhone/iPad-first.",
+    "docs/butler/thread-independent-startup-contract.md":
+      "threadLocalAssumptionsPromoted=false",
+    "docs/butler/execution-queue-contract.md":
+      "`EMERGENCY` `ROOT` `NEXT` `QUEUE` `EVIDENCE` `QUESTION`",
+    "docs/butler/capability-matrix.md": "Startup Surface Dependency Reading",
+    "docs/setup/custom-gpt-instructions.md": "vtddStartupPreflight",
+    "docs/setup/custom-gpt-actions-openapi.yaml":
+      "paths:\n  /v2/retrieve/startup-preflight:\n    get:\n      operationId: vtddStartupPreflight"
+  };
+
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/v2/retrieve/startup-preflight?repository=sample-org/vtdd-v2-p&issueNumber=609&currentSurface=dashboard_butler&phase=execution",
+      {
+        headers: gatewayAuthHeaders
+      }
+    ),
+    {
+      ...gatewayAuthEnv,
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_startup_read",
+      MEMORY_PROVIDER: provider,
+      GITHUB_API_FETCH: async (url) => {
+        const parsed = new URL(url);
+        if (parsed.pathname.endsWith("/docs/setup/known-good.json")) {
+          return new Response(JSON.stringify({ message: "Not Found" }), {
+            status: 404,
+            headers: { "content-type": "application/json" }
+          });
+        }
+        if (parsed.pathname.endsWith("/issues/609")) {
+          return new Response(
+            JSON.stringify({
+              number: 609,
+              title: "Dashboard Butler traffic-control preflight",
+              body: "Intent: expose execution queue truth to Dashboard Butler.",
+              state: "open",
+              html_url: "https://github.com/sample-org/vtdd-v2-p/issues/609",
+              user: { login: "marushu" }
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        if (parsed.pathname.endsWith("/issues")) {
+          return new Response(JSON.stringify([]), {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          });
+        }
+        if (parsed.pathname.includes("/contents/")) {
+          const decodedPath = decodeURIComponent(
+            parsed.pathname.split("/contents/")[1] || ""
+          );
+          const content = sourceContent[decodedPath];
+          if (!content) {
+            return new Response(JSON.stringify({ message: "Not Found" }), {
+              status: 404,
+              headers: { "content-type": "application/json" }
+            });
+          }
+          return new Response(
+            JSON.stringify({
+              path: decodedPath,
+              type: "file",
+              sha: `${decodedPath.replace(/[^a-z0-9]/gi, "-")}-sha`,
+              html_url: `https://github.com/sample-org/vtdd-v2-p/blob/main/${decodedPath}`,
+              encoding: "base64",
+              content: Buffer.from(content, "utf8").toString("base64")
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        throw new Error(`unexpected GitHub API url: ${parsed.pathname}`);
+      }
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.startupPreflight.executionQueue.status, "未確認");
+  assert.equal(body.startupPreflight.executionQueue.activeQueue.status, "未確認");
+  assert.equal(
+    body.startupPreflight.missingSources.some(
+      (source) => source.path === "docs/mvp/active-issue-execution-queue.md"
+    ),
+    true
+  );
+  assert.match(body.startupPreflight.executionQueue.ownerFacingSummary, /未確認/);
 });
 
 test("worker returns deploy recovery operator url in self-parity when runtime is stale", async () => {

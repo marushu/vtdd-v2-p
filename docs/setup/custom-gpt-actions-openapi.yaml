@@ -1730,7 +1730,7 @@ paths:
   /v2/retrieve/startup-preflight:
     get:
       operationId: vtddStartupPreflight
-      summary: Retrieve a compact VTDD startup preflight for Butler, mac Codex, and VPS Codex CLI.
+      summary: Retrieve a compact VTDD startup preflight and execution queue traffic-control truth for Butler, mac Codex, and VPS Codex CLI.
       parameters:
         - name: repository
           in: query
@@ -1762,6 +1762,7 @@ paths:
             type: string
             enum:
               - butler
+              - dashboard_butler
               - mac_codex
               - vps_codex_cli
               - vps_runner

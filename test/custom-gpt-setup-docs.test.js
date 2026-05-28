@@ -69,6 +69,8 @@ test("custom gpt instructions preserve current butler and approval boundaries", 
   assert.equal(doc.includes("vtddRetrieveCrossMemory"), true);
   assert.equal(doc.includes("vtddStartupPreflight"), true);
   assert.equal(doc.includes("At true conversation/work startup, prefer `vtddStartupPreflight`"), true);
+  assert.equal(doc.includes("execution queue traffic control"), true);
+  assert.equal(doc.includes("active Issue execution queue"), true);
   assert.equal(doc.includes("Do not treat status intents as automatic startup."), true);
   assert.equal(
     doc.includes("For Issue / PR / close readiness / status / remaining-task questions, first send a short Japanese receipt"),
@@ -388,6 +390,8 @@ test("custom gpt openapi doc exposes current gateway, execute, and progress rout
   assert.equal(doc.includes("/v2/retrieve/proposals:"), true);
   assert.equal(doc.includes("/v2/retrieve/cross:"), true);
   assert.equal(doc.includes("/v2/retrieve/startup-preflight:"), true);
+  assert.equal(doc.includes("execution queue traffic-control truth"), true);
+  assert.equal(doc.includes("- dashboard_butler"), true);
   assert.equal(doc.includes("operationId: vtddRetrieveConstitution"), true);
   assert.equal(doc.includes("operationId: vtddRetrieveDecisionLogs"), true);
   assert.equal(doc.includes("operationId: vtddRetrieveProposalLogs"), true);
@@ -557,6 +561,18 @@ test("custom gpt openapi json parses and exposes paths as an object", () => {
   assert.equal(
     doc.paths["/v2/retrieve/startup-preflight"].get.operationId,
     "vtddStartupPreflight"
+  );
+  assert.equal(
+    doc.paths["/v2/retrieve/startup-preflight"].get.summary.includes(
+      "execution queue traffic-control truth"
+    ),
+    true
+  );
+  assert.equal(
+    doc.paths["/v2/retrieve/startup-preflight"].get.parameters
+      .find((parameter) => parameter.name === "currentSurface")
+      .schema.enum.includes("dashboard_butler"),
+    true
   );
   assert.equal(
     doc.paths["/v2/retrieve/cloudflare-pages"].get.operationId,
