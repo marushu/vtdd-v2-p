@@ -79,8 +79,11 @@ const MCP_SERVER_INFO = Object.freeze({
 });
 const MCP_INSTRUCTIONS =
   "VTDD MCP は Butler と同じ runtime truth / review truth / operational memory を読むための read-first surface です。現在の truth は runtime truth を優先し、memory は補助として扱ってください。";
-const DASHBOARD_ICON_VERSION = "20260529-butler";
+const DASHBOARD_ICON_VERSION = "20260529-butler-v2";
 const DASHBOARD_ICON_PNG_PATH = `/dashboard-icon-${DASHBOARD_ICON_VERSION}.png`;
+const DASHBOARD_ICON_LINKS = `<link rel="icon" type="image/png" sizes="512x512" href="${DASHBOARD_ICON_PNG_PATH}">
+  <link rel="shortcut icon" href="${DASHBOARD_ICON_PNG_PATH}">
+  <link rel="apple-touch-icon" sizes="512x512" href="${DASHBOARD_ICON_PNG_PATH}">`;
 
 export class DashboardChatRoom {
   constructor(state, env) {
@@ -10955,7 +10958,7 @@ function renderDashboardUtilityPage({ title, subtitle, backHref, body }) {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="manifest" href="/dashboard.webmanifest">
-  <link rel="apple-touch-icon" sizes="512x512" href="${DASHBOARD_ICON_PNG_PATH}">
+  ${DASHBOARD_ICON_LINKS}
   <meta name="theme-color" content="#050505">
   <title>${escapeDashboardHtml(title)} - VTDD Butler</title>
   <style>
@@ -11353,7 +11356,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="manifest" href="/dashboard.webmanifest">
-  <link rel="apple-touch-icon" sizes="512x512" href="${DASHBOARD_ICON_PNG_PATH}">
+  ${DASHBOARD_ICON_LINKS}
   <meta name="theme-color" content="#050505">
   <title>VTDD v2 Dashboard</title>
   <style>
@@ -12890,7 +12893,7 @@ function renderDashboardAuthRequiredPage({ runtimeOrigin, returnPath = "/dashboa
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="apple-touch-icon" sizes="512x512" href="${DASHBOARD_ICON_PNG_PATH}">
+  ${DASHBOARD_ICON_LINKS}
   <title>Dashboard auth required</title>
   <style>
     :root { color-scheme: light; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #17211d; background: #f8faf8; }
