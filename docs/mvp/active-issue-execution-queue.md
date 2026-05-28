@@ -32,10 +32,10 @@ Last rebuilt from GitHub runtime truth: 2026-05-28
   Issue #498, Issue #501, Issue #514, Issue #528, Issue #565, Issue #573,
   Issue #574, Issue #577, Issue #579, Issue #580, Issue #582, Issue #585,
   Issue #587, Issue #589, Issue #590, Issue #594, Issue #595, Issue #599,
-  Issue #601, Issue #604, Issue #605, Issue #606.
-- Open PRs read before this refresh PR was opened: none.
+  Issue #601, Issue #604, Issue #605, Issue #606, Issue #609.
+- Open PRs read before the Issue #609 implementation PR was opened: none.
 - Recent queue-changing merged PRs read: PR #591, PR #597, PR #598, PR #600,
-  PR #602, PR #603, PR #607.
+  PR #602, PR #603, PR #607, PR #608.
 - Current queue rebuild scope: classify all open Issues without closing,
   downscoping, or treating any unverified Issue as done.
 
@@ -104,6 +104,9 @@ Root blockers hold multiple active Issues open. They should shape `Now` and
 - PR #607 / Issue #413 merged ready-by-default PR creation for the VPS runner.
   It removes Draft as an owner blocker, but it does not complete owner-facing
   execution progress visibility.
+- PR #608 / Issue #595 merged the durable queue refresh that left Issue #590 as
+  post-merge `Now`. Issue #595 remains open for runtime auto-classification
+  parity.
 
 ## Evidence Gaps
 
@@ -137,6 +140,9 @@ Evidence gaps are active. They are not deferred out of scope.
 - Issue #601: PR #602 fixed worker.js generation discipline before validation,
   but Issue closure still requires human approval and any mapped evidence named
   in the Issue.
+- Issue #609: this runtime preflight slice connects durable execution queue docs
+  to Butler-readable startup truth, but live deploy/editor refresh and human
+  closure approval remain outside this PR.
 - Issue #444: PR #600 points PR-numbered notifications at the PR instead of the
   Actions run, but live iPhone/PWA notification tap, sound, badge, and recovery
   evidence remain incomplete.

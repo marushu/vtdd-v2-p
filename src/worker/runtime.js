@@ -1621,6 +1621,8 @@ async function buildStartupPreflight({
   const requiredSourcePaths = [
     "AGENTS.md",
     "docs/butler/thread-independent-startup-contract.md",
+    "docs/butler/execution-queue-contract.md",
+    "docs/mvp/active-issue-execution-queue.md",
     "docs/butler/capability-matrix.md"
   ];
   const [sourceResults, issueResult, openIssuesResult, memoryResult, parityResult] =
@@ -1688,6 +1690,7 @@ async function buildStartupPreflight({
       text: "threadLocalAssumptionsPromoted"
     });
   const butlerFirstPrincipleStatus = threadLocalAssumptionsPromoted ? "promoted" : "未確認";
+  const executionQueue = buildStartupExecutionQueue({ sourceResults });
 
   return {
     schemaVersion: "startup_preflight_v1",
@@ -1702,6 +1705,8 @@ async function buildStartupPreflight({
       "active_github_issue",
       "AGENTS.md",
       "thread_independent_startup_contract",
+      "execution_queue_contract",
+      "active_issue_execution_queue",
       "github_runtime_truth",
       "operational_memory",
       "surface_capability"
@@ -1716,6 +1721,7 @@ async function buildStartupPreflight({
     threadLocalAssumptionsPromoted,
     sources,
     missingSources,
+    executionQueue,
     activeIssue: activeIssue
       ? {
           number: activeIssue.number,
@@ -1744,6 +1750,120 @@ async function buildStartupPreflight({
     stopCondition:
       "If repository/Issue/runtime/RAG/source truth is 未確認, do not claim Butler-complete execution. Ask for owner direction or create a bounded remediation Issue."
   };
+}
+
+function buildStartupExecutionQueue({ sourceResults }) {
+  const contractResult = sourceResults.find(
+    (result) => result.path === "docs/butler/execution-queue-contract.md"
+  );
+  const queueResult = sourceResults.find(
+    (result) => result.path === "docs/mvp/active-issue-execution-queue.md"
+  );
+  const contractContent = contractResult?.ok ? String(contractResult.record?.content || "") : "";
+  const queueContent = queueResult?.ok ? String(queueResult.record?.content || "") : "";
+  const queueSections = parseMarkdownH2Sections(queueContent);
+  const requiredSections = [
+    "Now",
+    "Next",
+    "Root Blockers",
+    "Evidence Gaps",
+    "Blocked",
+    "Queue",
+    "Questions"
+  ];
+  const sectionSummaries = {};
+  for (const sectionName of requiredSections) {
+    sectionSummaries[sectionName] = summarizeQueueSection(queueSections[sectionName]);
+  }
+
+  const missingSections = requiredSections.filter(
+    (sectionName) => !normalizeText(queueSections[sectionName])
+  );
+  const classificationNames = ["EMERGENCY", "ROOT", "NEXT", "QUEUE", "EVIDENCE", "QUESTION"];
+  const contractHasClassifications = classificationNames.every((classification) =>
+    contractContent.includes(`\`${classification}\``)
+  );
+
+  return {
+    status:
+      contractResult?.ok && queueResult?.ok && missingSections.length === 0
+        ? "read"
+        : "未確認",
+    sourcePaths: {
+      contract: "docs/butler/execution-queue-contract.md",
+      activeQueue: "docs/mvp/active-issue-execution-queue.md"
+    },
+    contract: {
+      status: contractResult?.ok ? "read" : "未確認",
+      sha: contractResult?.record?.sha || null,
+      htmlUrl: contractResult?.record?.htmlUrl || null,
+      classifications: classificationNames,
+      classificationContractPresent: contractHasClassifications,
+      reason: contractResult?.ok ? null : contractResult?.reason || "unverified"
+    },
+    activeQueue: {
+      status: queueResult?.ok ? "read" : "未確認",
+      sha: queueResult?.record?.sha || null,
+      htmlUrl: queueResult?.record?.htmlUrl || null,
+      reason: queueResult?.ok ? null : queueResult?.reason || "unverified"
+    },
+    currentNow: firstMarkdownBullet(queueSections.Now),
+    next: markdownBullets(queueSections.Next).slice(0, 5),
+    sectionSummaries,
+    missingSections,
+    trafficControlRule:
+      "Owner input is a queue update event before it is an implementation instruction.",
+    ownerFacingSummary: buildExecutionQueueOwnerFacingSummary({
+      currentNow: firstMarkdownBullet(queueSections.Now),
+      missingSections
+    })
+  };
+}
+
+function parseMarkdownH2Sections(markdown) {
+  const sections = {};
+  const value = String(markdown || "");
+  const matches = [...value.matchAll(/^##\s+(.+?)\s*$/gm)];
+  for (let index = 0; index < matches.length; index += 1) {
+    const match = matches[index];
+    const next = matches[index + 1];
+    const sectionName = normalizeText(match[1]);
+    sections[sectionName] = value.slice(match.index + match[0].length, next?.index).trim();
+  }
+  return sections;
+}
+
+function markdownBullets(sectionText) {
+  return String(sectionText || "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith("- "))
+    .map((line) => line.slice(2).trim())
+    .filter(Boolean);
+}
+
+function firstMarkdownBullet(sectionText) {
+  return markdownBullets(sectionText)[0] || null;
+}
+
+function summarizeQueueSection(sectionText) {
+  const bullets = markdownBullets(sectionText);
+  return {
+    status: normalizeText(sectionText) ? "present" : "missing",
+    bulletCount: bullets.length,
+    firstBullet: bullets[0] || null,
+    excerpt: compactExcerpt(sectionText, 360)
+  };
+}
+
+function buildExecutionQueueOwnerFacingSummary({ currentNow, missingSections }) {
+  if (missingSections.length > 0) {
+    return `交通整理 source が未確認です: ${missingSections.join(", ")}`;
+  }
+  if (currentNow) {
+    return `現在の Now は ${currentNow}`;
+  }
+  return "現在の Now は未確認です。";
 }
 
 async function readStartupPreflightSource({ repository, ref, path, env }) {
