@@ -8,6 +8,7 @@ import {
   buildAppServerThreadResumeRequest,
   buildAppServerThreadStartRequest,
   buildAppServerTurnStartRequest,
+  buildDashboardTurnInputText,
   connectDashboardAppServerBridgeOnce,
   extractAppServerNotificationTurnId,
   handleDashboardTurnRequest,
@@ -59,6 +60,28 @@ test("dashboard app-server bridge builds initialize and thread requests from Cod
   assert.equal(turn.params.threadId, "codex-thread-1");
   assert.deepEqual(turn.params.input, [{ type: "text", text: "今日は何日？", text_elements: [] }]);
   assert.equal(turn.params.sandboxPolicy, undefined);
+});
+
+test("dashboard app-server bridge wraps repository traffic-control context into turn input", () => {
+  const text = buildDashboardTurnInputText({
+    repository: "marushu/vtdd-v2-p",
+    relatedIssue: 450,
+    text: "Dashboard Butler が交通整理できるようにして",
+    authority: {
+      ordinaryConversationAllowed: true,
+      highRiskActionsRequire: ["GO", "passkey_approval"]
+    }
+  });
+
+  assert.match(text, /Dashboard Butler turn context/);
+  assert.match(text, /repository: marushu\/vtdd-v2-p/);
+  assert.match(text, /relatedIssue: #450/);
+  assert.match(text, /trafficControlRule/);
+  assert.match(text, /Butler Completion Gate/);
+  assert.match(text, /GO.*passkey approval/);
+  assert.match(text, /mechanicalBoundary/);
+  assert.match(text, /does not grant app-server command, file-change, patch, or permission escalation approvals/);
+  assert.match(text, /Owner message:\nDashboard Butler が交通整理できるようにして/);
 });
 
 test("dashboard app-server bridge only enables danger-full-access by explicit trusted VPS opt-in", () => {
@@ -351,6 +374,79 @@ test("dashboard app-server bridge handles a fresh dashboard turn through thread/
   assert.equal(events[1].type, "app_server_reply_delta");
   assert.equal(events[2].type, "app_server_reply");
   assert.equal(events[2].text, "今日は2026年5月22日です。");
+});
+
+test("dashboard app-server bridge passes traffic-control context to codex app-server turns", async () => {
+  const requests = [];
+  const events = [];
+  const handlers = new Set();
+  let nextId = 1;
+  const appServer = {
+    nextRequestId() {
+      const id = nextId;
+      nextId += 1;
+      return id;
+    },
+    onNotification(handler) {
+      handlers.add(handler);
+      return () => handlers.delete(handler);
+    },
+    async request(message) {
+      requests.push(message);
+      if (message.method === "thread/start") {
+        return { thread: { id: "codex-thread-traffic" } };
+      }
+      if (message.method === "turn/start") {
+        for (const handler of handlers) {
+          handler({
+            method: "item/agentMessage/delta",
+            params: {
+              threadId: "codex-thread-traffic",
+              turnId: "turn-traffic",
+              delta: "交通整理します。"
+            }
+          });
+          handler({
+            method: "turn/completed",
+            params: {
+              threadId: "codex-thread-traffic",
+              turn: { id: "turn-traffic", status: "completed" }
+            }
+          });
+        }
+        return { turn: { id: "turn-traffic" } };
+      }
+      throw new Error(`unexpected method ${message.method}`);
+    }
+  };
+
+  await handleDashboardTurnRequest({
+    request: {
+      threadId: "dashboard-main",
+      codexThreadId: null,
+      repository: "marushu/vtdd-v2-p",
+      relatedIssue: 450,
+      text: "Dashboard Butler が交通整理できるか確認して",
+      authority: {
+        ordinaryConversationAllowed: true,
+        repositoryRequired: false,
+        highRiskActionsRequire: ["GO", "passkey_approval"]
+      }
+    },
+    appServer,
+    sendDashboardEvent: async (event) => events.push(event),
+    cwd: "/repo"
+  });
+
+  const turnStart = requests.find((request) => request.method === "turn/start");
+  assert.ok(turnStart);
+  const inputText = turnStart.params.input[0].text;
+  assert.match(inputText, /repository: marushu\/vtdd-v2-p/);
+  assert.match(inputText, /relatedIssue: #450/);
+  assert.match(inputText, /trafficControlRule/);
+  assert.match(inputText, /mechanicalBoundary/);
+  assert.match(inputText, /Owner message:\nDashboard Butler が交通整理できるか確認して/);
+  assert.equal(events.at(-1).type, "app_server_reply");
 });
 
 test("dashboard app-server bridge keeps listening for async turn notifications after turn/start response", async () => {
