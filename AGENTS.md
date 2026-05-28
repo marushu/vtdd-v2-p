@@ -168,6 +168,13 @@ Before starting or resuming Issue-backed work, read
 `docs/butler/thread-independent-startup-contract.md` when startup behavior,
 handoff behavior, RAG recall, or cross-surface consistency is relevant.
 
+Before treating new owner input as implementation work, read
+`docs/butler/execution-queue-contract.md` and
+`docs/mvp/active-issue-execution-queue.md`. Classify the input as
+`EMERGENCY`, `ROOT`, `NEXT`, `QUEUE`, `EVIDENCE`, or `QUESTION`; update or
+preserve the queue; and continue the current `Now` item unless the contract's
+preemption rules require a stop.
+
 Startup/preflight must report whether thread-local assumptions have been
 promoted into durable repo/RAG state. If not, say
 `threadLocalAssumptionsPromoted=false` or `未確認`; do not proceed as if the
@@ -204,6 +211,8 @@ Prohibited:
 Required:
 
 - maintain an explicit active-Issue checklist
+- maintain the active Issue execution queue and do not let new owner input
+  silently replace the current `Now` item
 - map each active Issue to implementation evidence and E2E evidence
 - report status as "partial/in-progress" until all required Issues are complete
 
@@ -418,6 +427,9 @@ It must not be interpreted as a blanket prohibition for non-RAG operational logs
 - Owner-facing Issue, PR, review, Codex追加修正コメント, and RAG memory candidate prose must be Japanese-first unless the user explicitly requests another language.
 - If a new guardrail or process correction is needed, land it in its own PR
   rather than mixing it into an implementation slice.
+- PR bodies must include an `Execution Queue Delta` that states queue position,
+  preemption decision, queue movement, why the PR is next, and that active
+  Issues were not downscoped.
 
 ## Current Reality Guard
 

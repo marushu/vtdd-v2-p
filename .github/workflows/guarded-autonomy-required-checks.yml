@@ -34,8 +34,10 @@ jobs:
         shell: bash
         env:
           PR_BODY_FILE: ${{ steps.pr-body.outputs.path }}
+          PULL_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           body="$(cat "$PR_BODY_FILE")"
+          queue_delta_enforced_from_pr=596
           required_markers=(
             "## This PR satisfies Intent"
             "## Satisfied Success Criteria"
@@ -43,14 +45,78 @@ jobs:
             "## Verification Evidence"
             "## Butler Completion Contract"
             "## Surface Update Checklist"
+            "## Execution Queue Delta"
           )
 
           for marker in "${required_markers[@]}"; do
+            if [ "$marker" = "## Execution Queue Delta" ] && [ "$PULL_NUMBER" -lt "$queue_delta_enforced_from_pr" ]; then
+              echo "Skipping Execution Queue Delta marker for grandfathered PR #$PULL_NUMBER."
+              continue
+            fi
             if ! printf '%s' "$body" | grep -F "$marker" >/dev/null; then
               echo "Missing PR template marker: $marker"
               exit 1
             fi
           done
+
+      - name: Validate execution queue delta
+        shell: bash
+        env:
+          PR_BODY_FILE: ${{ steps.pr-body.outputs.path }}
+          PULL_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          queue_delta_enforced_from_pr=596
+          if [ "$PULL_NUMBER" -lt "$queue_delta_enforced_from_pr" ]; then
+            echo "Skipping Execution Queue Delta enforcement for grandfathered PR #$PULL_NUMBER."
+            exit 0
+          fi
+
+          body="$(cat "$PR_BODY_FILE")"
+          queue_delta="$(printf '%s' "$body" | awk '/^## Execution Queue Delta/{flag=1; next} /^## /{flag=0} flag')"
+          required_fields=(
+            "Queue position before"
+            "Preemption decision"
+            "Queue delta"
+            "Why this PR is next"
+            "Active Issues not downscoped"
+          )
+
+          for field in "${required_fields[@]}"; do
+            line="$(printf '%s\n' "$queue_delta" | grep -E "^- ${field}: .+" || true)"
+            if [ -z "$line" ]; then
+              echo "Missing or empty Execution Queue Delta field: $field"
+              exit 1
+            fi
+            value="${line#- ${field}: }"
+            value="$(printf '%s' "$value" | tr '[:upper:]' '[:lower:]' | sed -E 's/[[:space:]]+$//')"
+            case "$value" in
+              ""|"none"|"none."|"not required"|"not required."|"not provided"|"not provided."|"todo"|"tbd")
+                echo "Execution Queue Delta field is not filled: $field"
+                exit 1
+                ;;
+            esac
+          done
+
+          preemption_line="$(printf '%s\n' "$queue_delta" | grep -E "^- Preemption decision: .+")"
+          preemption_value="${preemption_line#- Preemption decision: }"
+          if ! printf '%s' "$preemption_value" | grep -Eq '\b(EMERGENCY|ROOT|NEXT|QUEUE|EVIDENCE|QUESTION)\b'; then
+            echo "Execution Queue Delta Preemption decision must name one queue classification: EMERGENCY, ROOT, NEXT, QUEUE, EVIDENCE, or QUESTION."
+            exit 1
+          fi
+
+          queue_delta_line="$(printf '%s\n' "$queue_delta" | grep -E "^- Queue delta: .+")"
+          queue_delta_value="${queue_delta_line#- Queue delta: }"
+          if ! printf '%s' "$queue_delta_value" | grep -Eq '(Issue #[0-9]+|PR #[0-9]+|`Now`|`Next`|Root Blockers|Evidence Gaps|Blocked|Queue)'; then
+            echo "Execution Queue Delta Queue delta must name the Issue/PR or queue bucket being moved."
+            exit 1
+          fi
+
+          active_line="$(printf '%s\n' "$queue_delta" | grep -E "^- Active Issues not downscoped: .+")"
+          active_value="${active_line#- Active Issues not downscoped: }"
+          if ! printf '%s' "$active_value" | grep -Eiq '(縮小しない|縮小しません|not downscop|not shrink|remain active|active issues are not)'; then
+            echo "Execution Queue Delta must explicitly state that active Issues are not downscoped."
+            exit 1
+          fi
 
       - name: Validate Butler completion contract
         shell: bash

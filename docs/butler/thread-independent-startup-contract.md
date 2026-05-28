@@ -22,11 +22,14 @@ Read or explicitly mark missing:
 2. The active GitHub Issue text and latest relevant comments.
 3. This contract, `AGENTS.md`, and the Butler setup instructions when surface
    behavior or doctrine matters.
-4. GitHub runtime truth: branch, PR, review, check, workflow, deploy, and setup
+4. `docs/butler/execution-queue-contract.md` and
+   `docs/mvp/active-issue-execution-queue.md` before treating owner input as
+   implementation work.
+5. GitHub runtime truth: branch, PR, review, check, workflow, deploy, and setup
    state relevant to the requested action.
-5. Shared RAG / operational memory for prior decisions, failures, repair
+6. Shared RAG / operational memory for prior decisions, failures, repair
    patterns, checkpoints, and tension notes.
-6. Current surface capability: Butler, mac Codex, VPS Codex CLI, reviewer, or
+7. Current surface capability: Butler, mac Codex, VPS Codex CLI, reviewer, or
    fallback reviewer.
 
 If a source cannot be read, say `未確認` or the exact error. Do not replace it
@@ -43,6 +46,8 @@ Before handoff or implementation, summarize in Japanese:
 - thread-local assumptions that have been promoted into repo/RAG, or
   `threadLocalAssumptionsPromoted=false`
 - expected files/routes/workflows and file/line hypotheses when known
+- queue classification, current `Now`, preemption decision, and next automatic
+  queue action
 - cross-Issue or cross-surface risk
 - next safe action and stop condition
 
