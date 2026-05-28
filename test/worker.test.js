@@ -1098,7 +1098,7 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("--link: #90cdf4;"), true);
   assert.equal(body.includes("--owner-link: #075985;"), true);
   assert.equal(body.includes("overflow: hidden"), true);
-  assert.equal(body.includes("grid-template-columns: minmax(0, 1fr) auto"), true);
+  assert.equal(body.includes("max-width: 100vw"), true);
   assert.equal(body.includes("minmax(220px, 320px)"), false);
   assert.equal(body.includes('id="tools" class="sidebar"'), false);
   assert.equal(body.includes(".mobile-drawer { position: fixed;"), true);
@@ -1111,7 +1111,10 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("接続準備中です。送信できる状態になったら知らせます。"), true);
   assert.equal(body.includes("接続準備中です。WebSocket 接続後に送信できます。"), false);
   assert.equal(body.includes("repo/nickname 未指定"), false);
-  assert.equal(body.includes("対象 repo 未指定"), true);
+  assert.equal(body.includes("作業対象 repo 未指定"), true);
+  assert.equal(body.includes("この作業の対象 repo"), true);
+  assert.equal(body.includes("固定ではありません"), false);
+  assert.equal(body.includes("VTDD と TOMIO では deploy 先も承認境界も別物"), true);
   assert.equal(body.includes("?repository=owner/repo"), false);
   assert.equal(body.includes("旧 VPS runner 直送経路は使いません"), false);
   assert.equal(body.includes("codex app-server"), true);
@@ -1119,9 +1122,13 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("vtdd-v3-orchestrator.polished-tree-da7c.workers.dev"), false);
   assert.equal(body.includes('id="mobile-menu-toggle"'), true);
   assert.equal(body.includes('for="mobile-menu-toggle"'), true);
+  assert.equal(body.includes('data-drawer-resize-handle="dashboard-main"'), true);
+  assert.equal(body.includes("vtdd.dashboard.drawer.width"), true);
+  assert.equal(body.includes("--dashboard-drawer-width"), true);
+  assert.equal(body.includes('aria-label="管理メニュー幅を変更"'), true);
   assert.equal(body.includes('aria-label="Passkey operator">Passkey</a>'), false);
   assert.equal(body.includes('aria-label="Deploy operator">Deploy</a>'), false);
-  assert.equal(body.includes('aria-label="通知センター">通知</a>'), true);
+  assert.equal(body.includes('aria-label="通知センター">通知</a>'), false);
   assert.equal(body.includes('aria-label="進捗を見る">進捗</a>'), false);
   assert.equal(body.includes('aria-label="Passkey で dashboard session を更新">Passkey</a>'), false);
   assert.equal(
@@ -1133,7 +1140,7 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("mode=dashboard&amp;repositoryInput="), false);
   assert.equal(body.includes('aria-label="Passkey">◇</a>'), false);
   assert.equal(body.includes('<label class="tool-button menu-open" for="mobile-menu-toggle">管理</label>'), false);
-  assert.equal(body.includes('class="tool-button top-action"'), true);
+  assert.equal(body.includes('class="tool-button top-action"'), false);
   assert.equal(body.includes('id="dashboard-repository-input"'), true);
   assert.equal(body.includes('placeholder="owner/repo"'), true);
   assert.equal(body.includes('aria-disabled="true"'), true);
@@ -3306,6 +3313,9 @@ test("worker serves human-facing dashboard pages for every management menu", asy
     assert.equal(body.includes('class="desktop-nav" aria-label="Dashboard メニュー"'), true);
     assert.equal(body.includes('class="dashboard-nav-drawer" aria-label="Dashboard メニュー"'), true);
     assert.equal(body.includes('for="dashboard-nav-toggle" aria-label="メニューを開く"'), true);
+    assert.equal(body.includes('data-drawer-resize-handle="dashboard-utility"'), true);
+    assert.equal(body.includes("vtdd.dashboard.utilityDrawer.width"), true);
+    assert.equal(body.includes("--dashboard-utility-drawer-width"), true);
     assert.equal(body.includes('href="/dashboard/notifications"'), true);
     assert.equal(body.includes('href="/dashboard"'), true);
   }
@@ -3325,7 +3335,9 @@ test("worker serves dashboard chat-first shell with debug and ops surfaces isola
   assert.equal(body.includes("VTDD Butler"), true);
   assert.equal(body.includes("ここではまず普通に会話できます"), true);
   assert.equal(body.includes("通知と進捗はこの画面から戻って確認できます"), true);
-  assert.equal(body.includes("対象 repo"), true);
+  assert.equal(body.includes("この作業の対象 repo"), true);
+  assert.equal(body.includes("固定ではありません"), true);
+  assert.equal(body.includes("deploy 先と承認境界は repo ごとに確認します"), true);
   assert.equal(body.includes("Issue / PR 操作が必要になった時だけ"), true);
   assert.equal(
     body.includes(
@@ -3451,6 +3463,8 @@ test("worker serves dashboard notification center for recent events across repos
   assert.equal(body.includes('class="desktop-nav" aria-label="Dashboard メニュー"'), true);
   assert.equal(body.includes('class="dashboard-nav-drawer" aria-label="Dashboard メニュー"'), true);
   assert.equal(body.includes('for="dashboard-nav-toggle" aria-label="メニューを開く"'), true);
+  assert.equal(body.includes('data-drawer-resize-handle="dashboard-utility"'), true);
+  assert.equal(body.includes("vtdd.dashboard.utilityDrawer.width"), true);
   assert.equal(body.includes('href="/dashboard"'), true);
   assert.equal(body.includes('href="/dashboard/preflight"'), true);
   assert.equal(body.includes('href="/dashboard/self-parity"'), true);
