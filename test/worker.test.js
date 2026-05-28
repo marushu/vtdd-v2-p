@@ -1332,8 +1332,12 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("white-space: pre-wrap"), true);
   assert.equal(body.includes(".bubble .message-body pre.wrap-code"), true);
   assert.equal(body.includes("overflow-wrap: anywhere; word-break: break-word;"), true);
-  assert.equal(body.includes(".bubble .message-body { display: grid; gap: 12px; min-width: 0; }"), true);
+  assert.equal(body.includes(".bubble .message-body { display: grid; gap: 12px; min-width: 0; max-width: 100%; overflow: hidden; }"), true);
   assert.equal(body.includes(".bubble .message-body p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }"), true);
+  assert.equal(body.includes(".chat-scroll { width: 100%; max-width: 100%; min-height: 0; overflow-y: auto; overflow-x: hidden;"), true);
+  assert.equal(body.includes("overscroll-behavior-x: none"), true);
+  assert.equal(body.includes("touch-action: pan-y"), true);
+  assert.equal(body.includes(".bubble .message-body pre { position: relative; margin: 0; padding: 42px 14px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--panel-strong); overflow-x: hidden; white-space: pre-wrap; max-width: 100%; }"), true);
   assert.equal(body.includes("tokenPattern"), true);
   assert.equal(body.includes('link.className = "chat-link"'), true);
   assert.equal(body.includes("考えています"), false);

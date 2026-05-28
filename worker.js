@@ -65899,42 +65899,42 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         --shadow: rgba(0, 0, 0, .42);
       }
     }
-    * { box-sizing: border-box; }
-    html, body { max-width: 100%; height: 100%; overflow: hidden; }
-    body { margin: 0; background: var(--page-bg); }
-    main { width: 100%; height: 100dvh; min-height: 0; display: block; padding: 16px; overflow: hidden; }
+    * { box-sizing: border-box; min-width: 0; }
+    html, body { width: 100%; max-width: 100%; height: 100%; overflow: hidden; overscroll-behavior-x: none; }
+    body { margin: 0; background: var(--page-bg); position: fixed; inset: 0; touch-action: pan-y; }
+    main { width: 100%; max-width: 100vw; height: 100dvh; min-height: 0; display: block; padding: 16px; overflow: hidden; overscroll-behavior-x: none; }
     h1, h2, h3, p { margin-top: 0; }
     h1 { font-size: 22px; line-height: 1.1; margin-bottom: 4px; }
     h2 { font-size: 19px; margin-bottom: 12px; }
     h3 { font-size: 15px; margin-bottom: 8px; }
     p { line-height: 1.65; color: var(--text); }
     a { color: inherit; }
-    .app-shell { height: calc(100dvh - 32px); min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; overflow: hidden; }
-    .topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 4px 2px 20px; }
+    .app-shell { width: 100%; max-width: 100%; height: calc(100dvh - 32px); min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; overflow: hidden; overscroll-behavior-x: none; }
+    .topbar { width: 100%; max-width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 4px 2px 20px; overflow: hidden; overscroll-behavior-x: none; touch-action: pan-y; }
     .top-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
     .round-button, .tool-button, .send-button { display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border); background: var(--button); color: var(--text); text-decoration: none; font: inherit; font-weight: 750; }
     .menu-open { cursor: pointer; }
     .round-button { width: 44px; height: 44px; border-radius: 999px; font-size: 24px; flex: 0 0 auto; }
     .tool-button { min-height: 40px; border-radius: 999px; padding: 0 14px; white-space: nowrap; }
-    .thread-title { min-width: 0; }
+    .thread-title { min-width: 0; max-width: 100%; }
     .thread-title h1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .thread-title span { display: block; color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .chat-scroll { min-height: 0; overflow: auto; padding: 8px 4px 28px; scroll-padding-bottom: 28px; display: flex; flex-direction: column; gap: 22px; scrollbar-width: thin; }
-    .bubble { max-width: min(760px, 88%); color: var(--text); font-size: 17px; line-height: 1.72; }
+    .chat-scroll { width: 100%; max-width: 100%; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior-x: none; overscroll-behavior-y: contain; touch-action: pan-y; padding: 8px 18px 28px 4px; scroll-padding-bottom: 28px; scrollbar-gutter: stable; display: flex; flex-direction: column; gap: 22px; scrollbar-width: thin; }
+    .bubble { max-width: min(760px, 88%); min-width: 0; color: var(--text); font-size: 17px; line-height: 1.72; }
     .bubble, .bubble p, .bubble li { overflow-wrap: anywhere; }
     .bubble-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
     .bubble strong { display: block; color: var(--muted); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 8px; }
     .bubble-header strong { margin-bottom: 0; }
     .bubble p { color: var(--text); margin-bottom: 12px; }
-    .bubble .message-body { display: grid; gap: 12px; min-width: 0; }
+    .bubble .message-body { display: grid; gap: 12px; min-width: 0; max-width: 100%; overflow: hidden; }
     .bubble .message-body p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
     .bubble .message-body ul { margin: 0; }
     .bubble .message-body li + li { margin-top: 4px; }
     .bubble .message-body a, .bubble .message-body code { overflow-wrap: anywhere; word-break: break-word; }
     .bubble .message-body code { font-size: .94em; }
-    .bubble .message-body pre { position: relative; margin: 0; padding: 42px 14px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--panel-strong); overflow-x: auto; white-space: pre; max-width: 100%; }
-    .bubble .message-body pre.wrap-code { overflow-x: visible; white-space: pre-wrap; }
-    .bubble .message-body pre code { display: block; font-size: 14px; line-height: 1.55; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+    .bubble .message-body pre { position: relative; margin: 0; padding: 42px 14px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--panel-strong); overflow-x: hidden; white-space: pre-wrap; max-width: 100%; }
+    .bubble .message-body pre.wrap-code { overflow-x: hidden; white-space: pre-wrap; }
+    .bubble .message-body pre code { display: block; max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; font-size: 14px; line-height: 1.55; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
     .bubble .message-body pre.wrap-code code { white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
     .bubble .message-body strong { display: inline; color: inherit; font-size: inherit; letter-spacing: 0; text-transform: none; margin: 0; font-weight: 800; }
     .message-meta { margin-top: 6px; color: var(--muted); font-size: 11px; line-height: 1.2; opacity: .86; }
@@ -65955,20 +65955,20 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     @keyframes thinkingDots { 0% { content: ""; } 25% { content: "."; } 50% { content: ".."; } 75%, 100% { content: "..."; } }
     .chat-link { color: var(--link); text-decoration-thickness: 1px; text-underline-offset: 4px; font-weight: 750; overflow-wrap: anywhere; word-break: break-word; }
     .bubble.owner .chat-link { color: var(--owner-link); }
-    .composer { min-width: 0; display: grid; gap: 8px; z-index: 4; padding: 14px 0 max(16px, env(safe-area-inset-bottom)); background: var(--page-bg); }
-    .composer-box { display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; align-items: end; gap: 8px; min-height: 62px; padding: 8px; border: 1px solid var(--border); border-radius: 28px; background: var(--panel-strong); box-shadow: 0 16px 60px var(--shadow); }
-    textarea { width: 100%; min-height: 44px; max-height: max(88px, min(160px, 24dvh)); border: 0; outline: 0; resize: none; overflow-y: hidden; padding: 10px 2px; color: var(--text); background: transparent; font: inherit; line-height: 1.45; }
+    .composer { width: 100%; max-width: 100%; min-width: 0; display: grid; gap: 8px; z-index: 4; padding: 14px 0 max(16px, env(safe-area-inset-bottom)); background: var(--page-bg); overflow: hidden; overscroll-behavior-x: none; }
+    .composer-box { width: 100%; max-width: 100%; display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; align-items: end; gap: 8px; min-height: 62px; padding: 8px; border: 1px solid var(--border); border-radius: 28px; background: var(--panel-strong); box-shadow: 0 16px 60px var(--shadow); overflow: hidden; overscroll-behavior-x: none; }
+    textarea { width: 100%; max-width: 100%; min-height: 44px; max-height: max(88px, min(160px, 24dvh)); border: 0; outline: 0; resize: none; overflow-y: hidden; overflow-x: hidden; padding: 10px 2px; color: var(--text); background: transparent; font: inherit; line-height: 1.45; }
     textarea::placeholder { color: var(--muted); }
     .media-button { width: 44px; height: 44px; border-radius: 999px; border: 1px solid var(--border); background: var(--button); color: var(--text); font: inherit; font-size: 24px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
     .send-button { width: 44px; height: 44px; border-radius: 999px; background: var(--text); color: var(--page-bg); font-size: 22px; }
-    .pending-media, .message-media { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 8px; }
+    .pending-media, .message-media { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 8px; max-width: 100%; overflow: hidden; }
     .pending-media:empty, .message-media:empty { display: none; }
-    .media-chip { display: inline-flex; align-items: center; max-width: 100%; min-height: 34px; border: 1px solid var(--border); border-radius: 14px; padding: 5px 10px; gap: 8px; color: var(--text); background: var(--soft); font-size: 12px; text-decoration: none; }
+    .media-chip { display: inline-flex; align-items: center; max-width: 100%; min-width: 0; min-height: 34px; border: 1px solid var(--border); border-radius: 14px; padding: 5px 10px; gap: 8px; color: var(--text); background: var(--soft); font-size: 12px; text-decoration: none; overflow: hidden; }
     .media-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: min(48vw, 320px); }
     .media-thumb { width: 48px; height: 48px; flex: 0 0 auto; border-radius: 10px; object-fit: cover; background: var(--border); }
     .media-chip.pending-preview { padding: 5px 8px 5px 5px; }
     .media-remove { border: 0; background: transparent; color: var(--muted); font: inherit; font-weight: 900; padding: 0 2px; cursor: pointer; }
-    .composer-status { min-height: 18px; padding-left: 16px; color: var(--muted); font-size: 12px; }
+    .composer-status { min-height: 18px; padding-left: 16px; color: var(--muted); font-size: 12px; max-width: 100%; overflow-wrap: anywhere; }
     .composer-status:empty { min-height: 0; padding-left: 0; }
     .composer-status a { color: var(--text); font-weight: 800; text-underline-offset: 3px; }
     .composer-status.thinking::after { content: ""; display: inline-block; width: 1.4em; text-align: left; animation: thinkingDots 1.2s steps(4, end) infinite; }
@@ -65996,8 +65996,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     code { color: var(--text); overflow-wrap: anywhere; }
     .menu-toggle { position: fixed; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
     .mobile-backdrop, .mobile-drawer { display: none; }
-    .mobile-backdrop { position: fixed; inset: 0; z-index: 10; max-width: 100vw; overflow: hidden; background: rgba(0, 0, 0, .38); backdrop-filter: blur(2px); }
-    .mobile-drawer { position: fixed; top: 0; bottom: 0; left: 0; z-index: 11; width: min(var(--dashboard-drawer-width), 92vw); max-width: 92vw; overflow: auto; overflow-x: hidden; padding: max(16px, env(safe-area-inset-top)) 14px max(18px, env(safe-area-inset-bottom)); border-right: 1px solid var(--border); background: var(--panel); box-shadow: 18px 0 60px var(--shadow); }
+    .mobile-backdrop { position: fixed; inset: 0; z-index: 10; width: 100vw; max-width: 100vw; overflow: hidden; overscroll-behavior-x: none; touch-action: none; background: rgba(0, 0, 0, .38); backdrop-filter: blur(2px); }
+    .mobile-drawer { position: fixed; top: 0; bottom: 0; left: 0; z-index: 11; width: min(var(--dashboard-drawer-width), 92vw); max-width: 92vw; overflow-y: auto; overflow-x: hidden; overscroll-behavior-x: none; touch-action: pan-y; padding: max(16px, env(safe-area-inset-top)) 14px max(18px, env(safe-area-inset-bottom)); border-right: 1px solid var(--border); background: var(--panel); box-shadow: 18px 0 60px var(--shadow); }
     .menu-toggle:checked ~ .mobile-backdrop, .menu-toggle:checked ~ .mobile-drawer { display: block; }
     .drawer-resize-handle { display: none; }
     .mobile-drawer-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px; }
@@ -66012,7 +66012,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       .app-shell { height: calc(100dvh - 14px); }
       .chat-scroll { padding-bottom: 28px; }
       .bubble { max-width: 100%; font-size: 16px; }
-      .bubble.owner { max-width: 82%; }
+      .bubble.owner { max-width: min(82%, calc(100vw - 56px)); }
       .topbar { padding-bottom: 18px; }
     }
     @media (max-width: 460px) {
