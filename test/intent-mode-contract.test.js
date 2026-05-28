@@ -16,6 +16,11 @@ test("intent mode contract preserves autonomy without allowing drift", () => {
   assert.equal(doc.includes("Dashboard Butler is the intended primary operator surface."), true);
   assert.equal(doc.includes("VPS Codex CLI is the\nalways-on execution surface behind it."), true);
   assert.equal(doc.includes("A Skill that only lives in a local mac Codex install is not a\nproduct capability."), true);
+  assert.equal(doc.includes("## Repository Sharing Gate"), true);
+  assert.equal(doc.includes("the changed files are committed on a topic branch"), true);
+  assert.equal(doc.includes("the branch is pushed to the remote repository"), true);
+  assert.equal(doc.includes("a Japanese-first PR is opened or updated with the change"), true);
+  assert.equal(doc.includes("marks the work `unconnected` or `incomplete`"), true);
   assert.equal(doc.includes("判断・批評・提案は、AIが主体的にやる。"), true);
   assert.equal(doc.includes("実行・外部効果・完了宣言は、Issue / GO / approval / evidence なしに進めない。"), true);
   assert.equal(doc.includes("Issue / PR titles, bodies, comments, review responses, and RAG"), true);
@@ -28,6 +33,8 @@ test("intent mode contract preserves autonomy without allowing drift", () => {
   assert.equal(agents.includes(CONTRACT_PATH), true);
   assert.equal(agents.includes("Dashboard Butler is the intended primary operator surface."), true);
   assert.equal(agents.includes("A local mac Codex Skill is not a VTDD product capability by\nitself."), true);
+  assert.equal(agents.includes("committed on a topic branch, pushed, and\nrepresented in a Japanese-first PR body"), true);
+  assert.equal(agents.includes("mark\nthe PR and status as `unconnected` or `incomplete`"), true);
   assert.equal(agents.includes(".agents/skills/vtdd-status-advisor/SKILL.md"), true);
   assert.equal(agents.includes("readonly does not mean\npassive"), true);
 });
@@ -41,6 +48,8 @@ test("vtdd status advisor skill is readonly but still gives judgment", () => {
   assert.equal(skill.includes("Dashboard Butler is the intended primary surface for this Skill."), true);
   assert.equal(skill.includes("VPS Codex CLI\nmust be able to read and follow the same repo-backed behavior."), true);
   assert.equal(skill.includes("`mac_codex_only_probe`"), true);
+  assert.equal(skill.includes("committed,\npushed, and represented in a Japanese-first PR body"), true);
+  assert.equal(skill.includes("say `unconnected` or\n`incomplete`"), true);
   assert.equal(skill.includes("Use Japanese-first owner-facing language"), true);
   assert.equal(skill.includes("Issue / PR titles, bodies, comments, review responses, and RAG"), true);
   assert.equal(skill.includes("launch VPS runner, reviewer, deploy"), true);

@@ -126,6 +126,12 @@ Skills must be repository-backed or otherwise readable by Dashboard Butler and
 VPS Codex CLI. A local mac Codex Skill is not a VTDD product capability by
 itself.
 
+Do not claim a Skill, contract, guardrail, or operating rule is repo-backed or
+durable until the repository files are committed on a topic branch, pushed, and
+represented in a Japanese-first PR body. If Dashboard Butler / VPS Codex CLI
+runtime discovery, Action Schema, VPS inventory, or E2E is still missing, mark
+the PR and status as `unconnected` or `incomplete` instead of shared completion.
+
 VTDD does not want a passive assistant that only does exactly what the owner
 spelled out. The assistant must use autonomy for judgment, critique, proposal,
 risk detection, and saying when an idea should stop or become a smaller

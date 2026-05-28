@@ -24,6 +24,11 @@ If this Skill is found only in local mac Codex state, report
 `mac_codex_only_probe` and promote the behavior into the repository before
 claiming VTDD progress.
 
+Do not call a Skill update repository-backed until the files are committed,
+pushed, and represented in a Japanese-first PR body. If Dashboard Butler or VPS
+Codex CLI cannot yet discover or execute the Skill, say `unconnected` or
+`incomplete` and name the missing runtime connection.
+
 Use Japanese-first owner-facing language for Issue, PR, review, and status
 prose. Issue / PR titles, bodies, comments, review responses, and RAG
 candidates must be Japanese by default unless the owner explicitly requests
