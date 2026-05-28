@@ -4,6 +4,7 @@ import worker from "../src/worker.js";
 import { DashboardChatRoom } from "../src/worker.js";
 import {
   buildDashboardWebPushPayload,
+  isDashboardComposerShortcutSupportedPlatform,
   normalizeDashboardChatMessageText,
   shouldSubmitDashboardComposerShortcut,
   shouldWrapDashboardChatCodeBlock
@@ -241,8 +242,19 @@ test("dashboard composer shortcut submits only modified Enter", () => {
   assert.equal(shouldSubmitDashboardComposerShortcut({ key: "Enter", metaKey: true, ctrlKey: false }), true);
   assert.equal(shouldSubmitDashboardComposerShortcut({ key: "Enter", metaKey: false, ctrlKey: true }), true);
   assert.equal(shouldSubmitDashboardComposerShortcut({ key: "Enter", metaKey: false, ctrlKey: false, shiftKey: true }), false);
+  assert.equal(shouldSubmitDashboardComposerShortcut({ key: "Enter", metaKey: true, ctrlKey: false, shiftKey: true }), false);
+  assert.equal(shouldSubmitDashboardComposerShortcut({ key: "Enter", metaKey: true, ctrlKey: false, isComposing: true }), false);
   assert.equal(shouldSubmitDashboardComposerShortcut({ key: "Enter", metaKey: false, ctrlKey: false }), false);
   assert.equal(shouldSubmitDashboardComposerShortcut({ key: "a", metaKey: true, ctrlKey: false }), false);
+  assert.equal(
+    shouldSubmitDashboardComposerShortcut(
+      { key: "Enter", metaKey: true, ctrlKey: false },
+      { userAgent: "Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X)", platform: "iPad", maxTouchPoints: 5 }
+    ),
+    false
+  );
+  assert.equal(isDashboardComposerShortcutSupportedPlatform({ platform: "MacIntel", maxTouchPoints: 0 }), true);
+  assert.equal(isDashboardComposerShortcutSupportedPlatform({ platform: "MacIntel", maxTouchPoints: 5 }), false);
 });
 
 function createInMemoryDashboardEventStore() {
@@ -1236,9 +1248,10 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes('textarea.addEventListener("input", () => {'), true);
   assert.equal(body.includes("persistDashboardDraft();"), true);
   assert.equal(body.includes('textarea.addEventListener("paste"'), true);
+  assert.equal(body.includes(isDashboardComposerShortcutSupportedPlatform.toString()), true);
   assert.equal(body.includes(shouldSubmitDashboardComposerShortcut.toString()), true);
   assert.equal(body.includes('textarea.addEventListener("keydown", (event) => {'), true);
-  assert.equal(body.includes("if (!shouldSubmitDashboardComposerShortcut(event)) return;"), true);
+  assert.equal(body.includes("if (!shouldSubmitDashboardComposerShortcut(event, navigator)) return;"), true);
   assert.equal(body.includes("form.requestSubmit();"), true);
   assert.equal(body.includes('form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }))'), true);
   assert.equal(body.includes("function scrollToLatest()"), true);

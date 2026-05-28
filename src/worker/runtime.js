@@ -10665,8 +10665,25 @@ export function shouldWrapDashboardChatCodeBlock(text) {
   return source.length > 80 && !/\s/.test(source);
 }
 
-export function shouldSubmitDashboardComposerShortcut(event) {
-  return event && event.key === "Enter" && (event.metaKey === true || event.ctrlKey === true);
+export function isDashboardComposerShortcutSupportedPlatform(platformInfo = {}) {
+  const userAgent = String(platformInfo.userAgent || "");
+  const platform = String(platformInfo.platform || "");
+  const maxTouchPoints = Number(platformInfo.maxTouchPoints || 0);
+  const isIOSLike =
+    /\b(iPad|iPhone|iPod)\b/i.test(userAgent) ||
+    (platform === "MacIntel" && maxTouchPoints > 1);
+  return !isIOSLike;
+}
+
+export function shouldSubmitDashboardComposerShortcut(event, platformInfo = {}) {
+  return (
+    isDashboardComposerShortcutSupportedPlatform(platformInfo) &&
+    event &&
+    event.key === "Enter" &&
+    event.shiftKey !== true &&
+    event.isComposing !== true &&
+    (event.metaKey === true || event.ctrlKey === true)
+  );
 }
 
 function decodeSafeDashboardChatCommandText(text) {
@@ -12294,9 +12311,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           persistDashboardDraft();
         }, 0);
       });
+      ${isDashboardComposerShortcutSupportedPlatform.toString()}
       ${shouldSubmitDashboardComposerShortcut.toString()}
       textarea.addEventListener("keydown", (event) => {
-        if (!shouldSubmitDashboardComposerShortcut(event)) return;
+        if (!shouldSubmitDashboardComposerShortcut(event, navigator)) return;
         event.preventDefault();
         if (typeof form.requestSubmit === "function") {
           form.requestSubmit();

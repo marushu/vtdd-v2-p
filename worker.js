@@ -65571,8 +65571,15 @@ function normalizeTextList2(value) {
 function uniqueTextList2(value) {
   return [...new Set(normalizeTextList2(value))];
 }
-function shouldSubmitDashboardComposerShortcut(event) {
-  return event && event.key === "Enter" && (event.metaKey === true || event.ctrlKey === true);
+function isDashboardComposerShortcutSupportedPlatform(platformInfo = {}) {
+  const userAgent = String(platformInfo.userAgent || "");
+  const platform = String(platformInfo.platform || "");
+  const maxTouchPoints = Number(platformInfo.maxTouchPoints || 0);
+  const isIOSLike = /\b(iPad|iPhone|iPod)\b/i.test(userAgent) || platform === "MacIntel" && maxTouchPoints > 1;
+  return !isIOSLike;
+}
+function shouldSubmitDashboardComposerShortcut(event, platformInfo = {}) {
+  return isDashboardComposerShortcutSupportedPlatform(platformInfo) && event && event.key === "Enter" && event.shiftKey !== true && event.isComposing !== true && (event.metaKey === true || event.ctrlKey === true);
 }
 async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore } = {}) {
   const origin = normalize7(runtimeOrigin);
@@ -67164,9 +67171,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           persistDashboardDraft();
         }, 0);
       });
+      ${isDashboardComposerShortcutSupportedPlatform.toString()}
       ${shouldSubmitDashboardComposerShortcut.toString()}
       textarea.addEventListener("keydown", (event) => {
-        if (!shouldSubmitDashboardComposerShortcut(event)) return;
+        if (!shouldSubmitDashboardComposerShortcut(event, navigator)) return;
         event.preventDefault();
         if (typeof form.requestSubmit === "function") {
           form.requestSubmit();

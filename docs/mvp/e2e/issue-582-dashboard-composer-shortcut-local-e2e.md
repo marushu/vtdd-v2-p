@@ -6,7 +6,7 @@
 - PR: #591
 - Surface: Dashboard Butler chat composer
 - Runtime: local worker-backed dashboard page served from `src/worker.js`
-- Scenario: external-keyboard style composer shortcuts
+- Scenario: external-keyboard style composer shortcuts on local-verified desktop / non-iOS browser
 - Reproducible harness: `scripts/e2e-dashboard-composer-shortcut.spec.mjs`
 
 ## Scenario
@@ -26,6 +26,7 @@
 - `Command+Enter` submitted `command enter send` and rendered an owner bubble.
 - `Control+Enter` submitted `control enter send` and rendered an owner bubble.
 - The composer value was empty after each submitted owner message.
+- Unit coverage keeps iOS/iPadOS-like platform shortcut disabled until production PWA live E2E exists.
 
 ## Evidence
 
@@ -43,4 +44,5 @@
 
 - macOS Safari WebDriver could not create a session because Safari remote automation is disabled in local Safari settings.
 - This run is local browser E2E, not production iPhone/iPad PWA live E2E.
+- Because production iPhone/iPad PWA live E2E is missing, this PR does not enable the shortcut on iOS/iPadOS-like platforms.
 - It reduces the Safari/WebKit compatibility risk for #591, but does not claim full Issue #582 Butler Completion Gate completion.
