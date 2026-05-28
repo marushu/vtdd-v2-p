@@ -3745,6 +3745,10 @@ test("worker serves dashboard PWA manifest and service worker notification handl
   const serviceWorker = await serviceWorkerResponse.text();
   assert.equal(serviceWorker.includes('self.addEventListener("push"'), true);
   assert.equal(serviceWorker.includes("showNotification"), true);
+  assert.equal(serviceWorker.includes("/v2/dashboard/push/ack"), true);
+  assert.equal(serviceWorker.includes("Promise.allSettled([ack, self.registration.showNotification"), true);
+  assert.equal(serviceWorker.includes('credentials: "same-origin"'), true);
+  assert.equal(serviceWorker.includes('"x-vtdd-dashboard-push-ack": "service-worker"'), true);
   assert.equal(serviceWorker.includes('self.addEventListener("notificationclick"'), true);
   assert.equal(serviceWorker.includes("/dashboard/notifications"), true);
   assert.equal(serviceWorker.includes("safeDashboardNotificationUrl"), true);
@@ -4171,6 +4175,14 @@ test("worker ingests GitHub Actions deploy completion event and shows it on dash
   assert.equal(decryptedPush.body.includes("PR #552"), true);
   assert.equal(decryptedPush.body.includes("workflow: deploy-production"), true);
   assert.equal(decryptedPush.url, "https://github.com/marushu/vtdd-v2-p/pull/552");
+  assert.equal(decryptedPush.sourceEventId, "github-actions:marushu/vtdd-v2-p:deploy-production:26133044458");
+  assert.equal(decryptedPush.kind, "github_actions_workflow_run");
+  assert.equal(decryptedPush.repository, "marushu/vtdd-v2-p");
+  assert.equal(decryptedPush.workflowName, "deploy-production");
+  assert.equal(decryptedPush.runId, "26133044458");
+  assert.equal(decryptedPush.status, "completed");
+  assert.equal(decryptedPush.conclusion, "success");
+  assert.equal(decryptedPush.pullNumber, 552);
   assert.equal("approvalGrantId" in eventBody.event, false);
   assert.equal("token" in eventBody.event, false);
 
@@ -4197,6 +4209,123 @@ test("worker ingests GitHub Actions deploy completion event and shows it on dash
   assert.equal(dashboardBody.includes("secret-must-not-persist"), false);
   assert.equal(dashboardBody.includes("setInterval("), false);
   assert.equal(dashboardBody.includes("fetch(threadEndpoint"), true);
+});
+
+test("worker records dashboard PWA push receive ack only for authenticated owner session", async () => {
+  const store = createInMemoryDashboardEventStore();
+  const unauthenticated = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/push/ack", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-vtdd-dashboard-push-ack": "service-worker"
+      },
+      body: JSON.stringify({
+        sourceEventId: "github-actions:marushu/vtdd-v2-p:deploy-production:26133044458",
+        repository: "marushu/vtdd-v2-p",
+        workflowName: "deploy-production",
+        runId: "26133044458",
+        title: "must not store"
+      })
+    }),
+    {
+      ...dashboardAccessEnv,
+      DASHBOARD_EVENT_STORE: store
+    }
+  );
+  assert.equal(unauthenticated.status, 401);
+  assert.equal((await store.listRecent()).length, 0);
+
+  const missingBoundary = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/push/ack", {
+      method: "POST",
+      headers: { ...dashboardAccessHeaders, "content-type": "application/json" },
+      body: JSON.stringify({
+        sourceEventId: "github-actions:marushu/vtdd-v2-p:deploy-production:26133044458"
+      })
+    }),
+    {
+      ...dashboardAccessEnv,
+      DASHBOARD_EVENT_STORE: store
+    }
+  );
+  assert.equal(missingBoundary.status, 403);
+
+  const invalidSource = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/push/ack", {
+      method: "POST",
+      headers: {
+        ...dashboardAccessHeaders,
+        "content-type": "application/json",
+        "x-vtdd-dashboard-push-ack": "service-worker"
+      },
+      body: JSON.stringify({
+        sourceEventId: "unknown-source",
+        repository: "marushu/vtdd-v2-p"
+      })
+    }),
+    {
+      ...dashboardAccessEnv,
+      DASHBOARD_EVENT_STORE: store
+    }
+  );
+  assert.equal(invalidSource.status, 422);
+  assert.equal((await store.listRecent()).length, 0);
+
+  const pushCalls = [];
+  const pushStore = createInMemoryDashboardPushSubscriptionStore();
+  const pushKeys = await createTestPushSubscription({
+    endpointHash: "ack-loop-endpoint",
+    endpoint: "https://push.example/send/ack-loop"
+  });
+  await pushStore.put(pushKeys.subscription);
+  const vapidEnv = await createTestVapidEnv({
+    DASHBOARD_WEB_PUSH_FETCH: async (input, init) => {
+      pushCalls.push({ input, init });
+      return new Response(null, { status: 201 });
+    }
+  });
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/push/ack", {
+      method: "POST",
+      headers: {
+        ...dashboardAccessHeaders,
+        "content-type": "application/json",
+        "x-vtdd-dashboard-push-ack": "service-worker"
+      },
+      body: JSON.stringify({
+        sourceEventId: "github-actions:marushu/vtdd-v2-p:deploy-production:26133044458",
+        repository: "marushu/vtdd-v2-p",
+        workflowName: "deploy-production",
+        runId: "26133044458",
+        status: "completed",
+        conclusion: "success",
+        pullNumber: 552,
+        tag: "vtdd-github-actions-workflow-run-26133044458",
+        title: "デプロイ完了: PR #552 dashboard: 通知カードにPR概要を出す (#534)",
+        body: "PWA Service Worker ack"
+      })
+    }),
+    {
+      ...dashboardAccessEnv,
+      ...vapidEnv,
+      DASHBOARD_EVENT_STORE: store,
+      DASHBOARD_PUSH_SUBSCRIPTION_STORE: pushStore
+    }
+  );
+  assert.equal(response.status, 202);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.ack.status, "received");
+  const events = await store.listRecent();
+  assert.equal(events.length, 1);
+  assert.equal(events[0].kind, "dashboard_push_received");
+  assert.equal(events[0].repository, "marushu/vtdd-v2-p");
+  assert.equal(events[0].workflowName, "deploy-production");
+  assert.equal(events[0].runId, "26133044458");
+  assert.equal(events[0].pullNumber, 552);
+  assert.equal(JSON.stringify(events[0]).includes("secret"), false);
+  assert.equal(pushCalls.length, 0);
 });
 
 test("worker rejects GitHub Actions deploy completion event without machine auth", async () => {
