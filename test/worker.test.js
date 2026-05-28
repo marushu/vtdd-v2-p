@@ -3710,6 +3710,10 @@ test("worker serves dashboard notification center for recent events across repos
   assert.equal(body.includes("購読保存: あり。サーバ送信テストも成功済みです。deploy 完了/失敗通知は同じ経路で届きます。"), true);
   assert.equal(body.includes("端末に購読はありますが、サーバ保存は未確認です"), true);
   assert.equal(body.includes("safePushResultDetail"), true);
+  assert.equal(body.includes("setButtonBusy(serverTestButton, true)"), true);
+  assert.equal(body.includes("最後のサーバ送信結果: 送信中..."), true);
+  assert.equal(body.includes("browser exception"), true);
+  assert.equal(body.includes("session/auth required"), true);
   assert.equal(body.includes("最後のサーバ送信結果: accepted"), true);
   assert.equal(body.includes("最後のサーバ送信結果: rejected"), true);
   assert.equal(body.includes("D1 には送信用に保持し、response / HTML / payload_json には raw key を返しません"), true);

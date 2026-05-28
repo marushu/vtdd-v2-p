@@ -65372,13 +65372,21 @@ async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventS
           function safePushResultDetail(value) {
             const normalized = String(value || "");
             if (!normalized) return "";
+            if (normalized.includes("exception")) return "browser exception";
             if (normalized.includes("accepted")) return "accepted";
             if (normalized.includes("stale")) return "stale subscription";
             if (normalized.includes("not found")) return "subscription not found";
             if (normalized.includes("unconfigured")) return "server push unconfigured";
             if (normalized.includes("rejected")) return "push service rejected";
             if (normalized.includes("required")) return "required setting missing";
+            if (normalized.includes("unauthorized") || normalized.includes("forbidden")) return "session/auth required";
             return "details redacted";
+          }
+
+          function setButtonBusy(button, busy) {
+            if (!button) return;
+            button.disabled = Boolean(busy);
+            button.setAttribute("aria-busy", busy ? "true" : "false");
           }
 
           async function registration() {
@@ -65479,33 +65487,52 @@ async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventS
           });
 
           serverTestButton?.addEventListener("click", async () => {
-            const reg = await registration();
-            const subscription = await reg?.pushManager?.getSubscription?.();
-            if (!subscription) {
-              serverPushDelivered = false;
-              lastServerPushResult = "\u6700\u5F8C\u306E\u30B5\u30FC\u30D0\u9001\u4FE1\u7D50\u679C: rejected (0/0) / current device subscription missing";
+            setButtonBusy(serverTestButton, true);
+            serverPushDelivered = false;
+            lastServerPushResult = "\u6700\u5F8C\u306E\u30B5\u30FC\u30D0\u9001\u4FE1\u7D50\u679C: \u9001\u4FE1\u4E2D...";
+            setText(pushServerResult, lastServerPushResult);
+            try {
+              const reg = await registration();
+              const subscription = await reg?.pushManager?.getSubscription?.();
+              if (!subscription) {
+                lastServerPushResult = "\u6700\u5F8C\u306E\u30B5\u30FC\u30D0\u9001\u4FE1\u7D50\u679C: rejected (0/0) / current device subscription missing";
+                setText(pushServerResult, lastServerPushResult);
+                await refreshState();
+                return;
+              }
+              const response = await fetch("/v2/dashboard/push/test", {
+                method: "POST",
+                credentials: "same-origin",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ title: "Dashboard Butler server push test", endpoint: subscription.endpoint })
+              });
+              const body = await response.json().catch(() => ({}));
+              const webPush = body && body.webPush ? body.webPush : {};
+              const attempted = Number(webPush.attempted || 0);
+              const delivered = Number(webPush.delivered || 0);
+              const firstResult = Array.isArray(webPush.results) ? webPush.results[0] : null;
+              const detail = safePushResultDetail(
+                firstResult?.reason ||
+                  firstResult?.error ||
+                  webPush.reason ||
+                  webPush.error ||
+                  (response.ok ? "" : response.status === 401 ? "unauthorized" : response.status === 403 ? "forbidden" : "rejected")
+              );
+              serverPushDelivered = response.ok && delivered > 0 && delivered === attempted;
+              lastServerPushResult = serverPushDelivered
+                ? "\u6700\u5F8C\u306E\u30B5\u30FC\u30D0\u9001\u4FE1\u7D50\u679C: accepted (" + delivered + "/" + attempted + ")"
+                : "\u6700\u5F8C\u306E\u30B5\u30FC\u30D0\u9001\u4FE1\u7D50\u679C: rejected (" + delivered + "/" + attempted + ")" + (detail ? " / " + detail : "");
               setText(pushServerResult, lastServerPushResult);
               await refreshState();
-              return;
+            } catch (error) {
+              serverPushDelivered = false;
+              const detail = safePushResultDetail("exception " + (error && error.name ? error.name : ""));
+              lastServerPushResult = "\u6700\u5F8C\u306E\u30B5\u30FC\u30D0\u9001\u4FE1\u7D50\u679C: rejected (0/0)" + (detail ? " / " + detail : "");
+              setText(pushServerResult, lastServerPushResult);
+              await refreshState();
+            } finally {
+              setButtonBusy(serverTestButton, false);
             }
-            const response = await fetch("/v2/dashboard/push/test", {
-              method: "POST",
-              credentials: "same-origin",
-              headers: { "content-type": "application/json" },
-              body: JSON.stringify({ title: "Dashboard Butler server push test", endpoint: subscription.endpoint })
-            });
-            const body = await response.json().catch(() => ({}));
-            const webPush = body && body.webPush ? body.webPush : {};
-            const attempted = Number(webPush.attempted || 0);
-            const delivered = Number(webPush.delivered || 0);
-            const firstResult = Array.isArray(webPush.results) ? webPush.results[0] : null;
-            const detail = safePushResultDetail(firstResult?.reason || firstResult?.error || webPush.reason || webPush.error || "");
-            serverPushDelivered = delivered > 0 && delivered === attempted;
-            lastServerPushResult = serverPushDelivered
-              ? "\u6700\u5F8C\u306E\u30B5\u30FC\u30D0\u9001\u4FE1\u7D50\u679C: accepted (" + delivered + "/" + attempted + ")"
-              : "\u6700\u5F8C\u306E\u30B5\u30FC\u30D0\u9001\u4FE1\u7D50\u679C: rejected (" + delivered + "/" + attempted + ")" + (detail ? " / " + detail : "");
-            setText(pushServerResult, lastServerPushResult);
-            await refreshState();
           });
 
           badgeSetButton?.addEventListener("click", async () => {
