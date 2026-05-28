@@ -61,6 +61,7 @@ import {
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import * as z from "zod";
+import dashboardButlerIconPngDataUrl from "./assets/dashboard-butler-icon-512.js";
 
 const JSON_HEADERS = {
   "content-type": "application/json; charset=utf-8"
@@ -655,6 +656,10 @@ export default {
       return svg(200, renderDashboardIconSvg());
     }
 
+    if (request.method === "GET" && url.pathname === "/dashboard-icon.png") {
+      return png(200, dashboardButlerIconPngDataUrl);
+    }
+
     if (request.method === "GET" && isDashboardPagePath(url.pathname)) {
       const auth = await authorizeDashboardRequest({ request, env, apiSuffix: url.pathname });
       if (!auth.ok) {
@@ -703,6 +708,10 @@ export default {
 
     if (request.method === "GET" && url.pathname === "/dashboard/self-parity") {
       return html(200, await renderDashboardSelfParityPage({ url, env }));
+    }
+
+    if (request.method === "GET" && url.pathname === "/dashboard/news") {
+      return html(200, renderDashboardNewsPage({ runtimeOrigin: url.origin, env }));
     }
 
     if (request.method === "GET" && url.pathname === "/dashboard/notifications") {
@@ -4553,6 +4562,7 @@ function isSupportedDashboardPushAckSourceEventId(value) {
   return (
     text.startsWith("github-actions:") ||
     text.startsWith("vps-runner:") ||
+    text.startsWith("ai-news:") ||
     text.startsWith("dashboard-push-test:")
   );
 }
@@ -7606,6 +7616,11 @@ function buildDashboardWebPushTitle(record) {
   if (record.kind === "dashboard_push_test") {
     return "VTDD Butler テスト通知";
   }
+  if (record.kind === "ai_news_radar") {
+    const edition = dashboardAiNewsEditionLabel(record);
+    const subject = compactNotificationText(record.changeSummary || record.title || "AI 開発運用ニュース", 44);
+    return `AI news ${edition}: ${subject}`.slice(0, 80);
+  }
   if (record.kind === "vps_runner_execution") {
     return `VPS ${dashboardPushStatusLabel(record)}${repository ? `: ${repository}` : ""}`.slice(0, 80);
   }
@@ -7625,6 +7640,11 @@ function buildDashboardWebPushTitle(record) {
 function buildDashboardWebPushBody(record) {
   if (record.kind === "dashboard_push_test") {
     return "通知経路は正常です。iPhone PWA にサーバ送信できました。";
+  }
+  if (record.kind === "ai_news_radar") {
+    const title = compactNotificationText(record.changeSummary || record.title || "VTDD に関係する更新があります", 96);
+    const source = compactNotificationText(record.workflowName || "朝刊・昼刊・夕刊", 40);
+    return `${title} / ${source} / 詳細は AI news`.slice(0, 180);
   }
   const details = [];
   const title = compactNotificationText(record.changeSummary || record.title, 58);
@@ -7670,6 +7690,14 @@ function dashboardPushStatusLabel(record) {
   return "更新";
 }
 
+function dashboardAiNewsEditionLabel(record) {
+  const text = normalize(`${record.workflowName || ""} ${record.title || ""} ${record.changeSummary || ""}`);
+  if (text.includes("morning") || text.includes("朝刊")) return "朝刊";
+  if (text.includes("noon") || text.includes("昼刊")) return "昼刊";
+  if (text.includes("evening") || text.includes("夕刊")) return "夕刊";
+  return "更新";
+}
+
 function shortRepositoryName(repository) {
   const text = normalizeDashboardEventText(repository);
   const parts = text.split("/");
@@ -7677,6 +7705,9 @@ function shortRepositoryName(repository) {
 }
 
 function buildDashboardEventOwnerTargetUrl(event) {
+  if (normalizeDashboardEventRecord(event).kind === "ai_news_radar") {
+    return "/dashboard/news";
+  }
   return buildDashboardPullRequestUrl(event) || "/dashboard/notifications";
 }
 
@@ -10593,6 +10624,12 @@ function buildDashboardWebManifest(url) {
     theme_color: "#050505",
     icons: [
       {
+        src: `${origin}/dashboard-icon.png`,
+        sizes: "512x512",
+        type: "image/png",
+        purpose: "any maskable"
+      },
+      {
         src: `${origin}/dashboard-icon.svg`,
         sizes: "any",
         type: "image/svg+xml",
@@ -10833,6 +10870,7 @@ function renderDashboardUtilityNavLinks() {
   const items = [
     ["Dashboard", "/dashboard"],
     ["通知センター", "/dashboard/notifications"],
+    ["AI news", "/dashboard/news"],
     ["GitHub truth", "/dashboard/github-truth"],
     ["Startup preflight", "/dashboard/preflight"],
     ["Execution progress", "/dashboard/progress"],
@@ -11028,6 +11066,81 @@ function renderDashboardUtilityPage({ title, subtitle, backHref, body }) {
 </html>`;
 }
 
+function renderDashboardNewsPage({ runtimeOrigin, env } = {}) {
+  const origin = normalize(runtimeOrigin);
+  const pagesUrl = normalizeDashboardExternalUrl(env?.AI_NEWS_MAGAZINE_URL);
+  const magazineHref = pagesUrl || "#pages-url-unset";
+  const magazineStatus = pagesUrl
+    ? "Cloudflare Pages の公開 URL が runtime 設定済みです。"
+    : "Cloudflare Pages の公開 URL は未設定です。deploy 後に AI_NEWS_MAGAZINE_URL を設定します。";
+  const cards = [
+    {
+      edition: "朝刊",
+      title: "Agent runtime / Skills / Codex の新情報",
+      summary: "前日から朝までの更新を短く拾い、VTDD の運用統制・handoff・RAG に関係するものだけを上に出します。",
+      terminology: "Skill: agent に特定責務と手順を渡し、脱線を減らすための小さな運用単位。"
+    },
+    {
+      edition: "昼刊",
+      title: "実装に影響する差分",
+      summary: "API、SDK、Cloudflare、GitHub Actions、PWA 通知など、今日の実装判断に影響しそうな差分を拾います。",
+      terminology: "Runtime truth: 画面や記憶ではなく、現在の実行基盤が返す状態そのもの。"
+    },
+    {
+      edition: "夕刊",
+      title: "VTDD に残すべき判断",
+      summary: "ニュースから Issue 化すべきもの、RAG に残すべき決定、今は捨てるべき流行を分けます。",
+      terminology: "Operator visibility: owner が iPhone PWA だけで進捗、失敗、次の操作を見られること。"
+    }
+  ];
+  const cardMarkup = cards
+    .map((card) => `<article class="truth-card">
+      <div class="lane-title"><h2>${escapeDashboardHtml(card.edition)}</h2><span class="pill">AI news</span></div>
+      <p><strong>${escapeDashboardHtml(card.title)}</strong></p>
+      <p>${escapeDashboardHtml(card.summary)}</p>
+      <p class="muted">${escapeDashboardHtml(card.terminology)}</p>
+    </article>`)
+    .join("");
+  return renderDashboardUtilityPage({
+    title: "AI news",
+    subtitle: "OpenAI / Codex / Skills / Claude Code / Cloudflare などを VTDD 目線で読む入口",
+    backHref: `${origin}/dashboard`,
+    body: `<section class="hero">
+      <div class="lane-title"><h2>朝刊・昼刊・夕刊</h2><span class="pill">Issue #620</span></div>
+      <p>Dashboard Butler の通常チャットとは分けて、AI 開発運用ニュースを読む面です。専門用語、VTDD への影響、出典リンクを一緒に出します。</p>
+      <p class="muted">${escapeDashboardHtml(magazineStatus)}</p>
+      <div class="actions">
+        <a href="${escapeDashboardHtml(magazineHref)}">Cloudflare Pages magazine を開く</a>
+        <a href="${escapeDashboardHtml(origin)}/dashboard/notifications">通知センター</a>
+      </div>
+    </section>
+    <section class="lane">
+      <div class="lane-title"><h2>最新号の構成</h2><span class="pill">日本語-first</span></div>
+      ${cardMarkup}
+    </section>
+    <section class="lane">
+      <div class="lane-title"><h2>初期ソース</h2><span class="pill">sources</span></div>
+      <p><a href="https://github.com/openai/skills">openai/skills</a></p>
+      <p><a href="https://developers.openai.com/">OpenAI Developers</a></p>
+      <p><a href="https://developers.cloudflare.com/pages/">Cloudflare Pages docs</a></p>
+      <p class="muted">ここはニュース本文の保存先ではなく入口です。記事一覧と詳細は Cloudflare Pages 側に置き、Dashboard PWA 通知はこのページへ戻します。</p>
+    </section>`
+  });
+}
+
+function normalizeDashboardExternalUrl(value) {
+  const text = normalizeText(value);
+  if (!text) {
+    return "";
+  }
+  try {
+    const url = new URL(text);
+    return url.protocol === "https:" ? url.toString() : "";
+  } catch {
+    return "";
+  }
+}
+
 function normalizeTextList(value) {
   if (Array.isArray(value)) {
     return value.map(normalizeText).filter(Boolean);
@@ -11151,6 +11264,11 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       href: `${origin}/dashboard/notifications`
     },
     {
+      title: "AI news",
+      body: "OpenAI / Codex / Skills / Claude Code など、VTDD に影響する更新を朝刊・昼刊・夕刊として読む入口。",
+      href: `${origin}/dashboard/news`
+    },
+    {
       title: "Operational RAG",
       body: "decision / proposal / working memory の compact retrieval。runtime truth の代替ではない。",
       href: repositoryInput ? `${origin}/dashboard/memory?repository=${encodedRepository}` : "",
@@ -11187,6 +11305,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     {
       label: "通知",
       href: `${origin}/dashboard/notifications`
+    },
+    {
+      label: "AI news",
+      href: `${origin}/dashboard/news`
     },
     {
       label: "進捗を見る",
@@ -12961,6 +13083,18 @@ function svg(status, body) {
     status,
     headers: {
       "content-type": "image/svg+xml; charset=utf-8",
+      "cache-control": "public, max-age=3600"
+    }
+  });
+}
+
+function png(status, dataUrl) {
+  const match = String(dataUrl || "").match(/^data:image\/png;base64,([A-Za-z0-9+/=]+)$/);
+  const body = match ? Uint8Array.from(atob(match[1]), (char) => char.charCodeAt(0)) : new Uint8Array();
+  return new Response(body, {
+    status: match ? status : 500,
+    headers: {
+      "content-type": "image/png",
       "cache-control": "public, max-age=3600"
     }
   });

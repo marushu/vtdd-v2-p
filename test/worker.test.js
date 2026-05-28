@@ -3489,6 +3489,7 @@ test("worker serves human-facing dashboard pages for every management menu", asy
     ["/dashboard/preflight?repository=sample-org/vtdd-v2-p", "Startup preflight", "raw preflight JSON"],
     ["/dashboard/progress?repository=sample-org/vtdd-v2-p", "Execution progress", "raw progress JSON"],
     ["/dashboard/vps-runner?repository=sample-org/vtdd-v2-p", "VPS runner status", "raw runner JSON"],
+    ["/dashboard/news", "AI news", "raw news JSON"],
     ["/dashboard/memory?repository=sample-org/vtdd-v2-p", "Operational RAG", "raw memory JSON"],
     ["/dashboard/self-parity?repository=sample-org/vtdd-v2-p", "Self parity", "raw self parity JSON"]
   ];
@@ -3513,6 +3514,7 @@ test("worker serves human-facing dashboard pages for every management menu", asy
     assert.equal(body.includes("vtdd.dashboard.utilityDrawer.width"), true);
     assert.equal(body.includes("--dashboard-utility-drawer-width"), true);
     assert.equal(body.includes('href="/dashboard/notifications"'), true);
+    assert.equal(body.includes('href="/dashboard/news"'), true);
     assert.equal(body.includes('href="/dashboard"'), true);
   }
 });
@@ -3531,6 +3533,7 @@ test("worker serves dashboard chat-first shell with debug and ops surfaces isola
   assert.equal(body.includes("VTDD Butler"), true);
   assert.equal(body.includes("ここではまず普通に会話できます"), true);
   assert.equal(body.includes("通知と進捗はこの画面から戻って確認できます"), true);
+  assert.equal(body.includes("AI news"), true);
   assert.equal(body.includes("この作業の対象 repo"), true);
   assert.equal(body.includes("固定ではありません"), true);
   assert.equal(body.includes("deploy 先と承認境界は repo ごとに確認します"), true);
@@ -3739,7 +3742,10 @@ test("worker serves dashboard PWA manifest and service worker notification handl
   assert.equal(manifest.start_url, "/dashboard");
   assert.equal(manifest.scope, "/dashboard/");
   assert.equal(manifest.display, "standalone");
-  assert.equal(manifest.icons[0].src, "https://example.com/dashboard-icon.svg");
+  assert.equal(manifest.icons[0].src, "https://example.com/dashboard-icon.png");
+  assert.equal(manifest.icons[0].sizes, "512x512");
+  assert.equal(manifest.icons[0].type, "image/png");
+  assert.equal(manifest.icons[1].src, "https://example.com/dashboard-icon.svg");
 
   const serviceWorkerResponse = await worker.fetch(new Request("https://example.com/dashboard-sw.js"));
   assert.equal(serviceWorkerResponse.status, 200);
@@ -3764,6 +3770,15 @@ test("worker serves dashboard PWA manifest and service worker notification handl
   const iconResponse = await worker.fetch(new Request("https://example.com/dashboard-icon.svg"));
   assert.equal(iconResponse.status, 200);
   assert.match(iconResponse.headers.get("content-type"), /image\/svg\+xml/);
+
+  const pngIconResponse = await worker.fetch(new Request("https://example.com/dashboard-icon.png"));
+  assert.equal(pngIconResponse.status, 200);
+  assert.match(pngIconResponse.headers.get("content-type"), /image\/png/);
+  const pngIcon = new Uint8Array(await pngIconResponse.arrayBuffer());
+  assert.equal(pngIcon[0], 0x89);
+  assert.equal(pngIcon[1], 0x50);
+  assert.equal(pngIcon[2], 0x4e);
+  assert.equal(pngIcon[3], 0x47);
 });
 
 test("worker stores dashboard push subscription only for an authenticated owner session", async () => {
@@ -4014,6 +4029,21 @@ test("worker builds distinct dashboard Web Push copy by event type", () => {
   });
   assert.equal(testPush.title, "VTDD Butler テスト通知");
   assert.equal(testPush.body, "通知経路は正常です。iPhone PWA にサーバ送信できました。");
+
+  const aiNews = buildDashboardWebPushPayload({
+    id: "ai-news:morning:2026-05-28",
+    kind: "ai_news_radar",
+    repository: "marushu/vtdd-v2-p",
+    workflowName: "ai-news-morning",
+    status: "completed",
+    conclusion: "success",
+    title: "OpenAI Skills が Codex 運用に入った",
+    changeSummary: "Skills を VTDD のドリフト防止に使う"
+  });
+  assert.equal(aiNews.title, "AI news 朝刊: Skills を VTDD のドリフト防止に使う");
+  assert.equal(aiNews.body.includes("詳細は AI news"), true);
+  assert.equal(aiNews.url, "/dashboard/news");
+  assert.equal(aiNews.sourceEventId, "ai-news:morning:2026-05-28");
 
   const runner = buildDashboardWebPushPayload({
     kind: "vps_runner_execution",
