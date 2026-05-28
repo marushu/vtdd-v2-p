@@ -65571,6 +65571,9 @@ function normalizeTextList2(value) {
 function uniqueTextList2(value) {
   return [...new Set(normalizeTextList2(value))];
 }
+function shouldSubmitDashboardComposerShortcut(event) {
+  return event && event.key === "Enter" && event.shiftKey !== true && event.isComposing !== true && (event.metaKey === true || event.ctrlKey === true);
+}
 async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore } = {}) {
   const origin = normalize7(runtimeOrigin);
   const repositoryInput = normalizeDashboardRepositoryInput(
@@ -67160,6 +67163,16 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           normalizeComposerInput();
           persistDashboardDraft();
         }, 0);
+      });
+      ${shouldSubmitDashboardComposerShortcut.toString()}
+      textarea.addEventListener("keydown", (event) => {
+        if (!shouldSubmitDashboardComposerShortcut(event)) return;
+        event.preventDefault();
+        if (typeof form.requestSubmit === "function") {
+          form.requestSubmit();
+          return;
+        }
+        form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
       });
       window.addEventListener("resize", resizeComposerInput);
       window.addEventListener("online", async () => {

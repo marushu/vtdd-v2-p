@@ -10,6 +10,8 @@
     "issue-body:validate": "node scripts/validate-issue-body.mjs --template .github/ISSUE_TEMPLATE/spec-issue.md",
     "memory": "node scripts/vtdd-memory.mjs",
     "verify:worker": "npm run build:worker && npm test",
+    "e2e:dashboard-composer-shortcut:chrome": "PW_CHANNEL=chrome playwright test scripts/e2e-dashboard-composer-shortcut.spec.mjs --browser=chromium --reporter=line",
+    "e2e:dashboard-composer-shortcut:webkit": "playwright test scripts/e2e-dashboard-composer-shortcut.spec.mjs --browser=webkit --reporter=line",
     "test": "node --test && npm run check:self-parity && npm run check:generated-worker",
     "pr-body:validate": "node scripts/validate-pr-body.mjs --template .github/pull_request_template.md"
   },
@@ -23,6 +25,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "esbuild": "^0.25.12"
   }
 }
