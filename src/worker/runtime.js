@@ -7242,7 +7242,7 @@ export function buildDashboardWebPushPayload(event) {
     title,
     body: body || "Dashboard Butler の通知です。",
     tag: `vtdd-${record.kind || "dashboard"}-${record.runId || record.id || "event"}`.slice(0, 120),
-    url: "/dashboard/notifications"
+    url: buildDashboardEventOwnerTargetUrl(record)
   };
 }
 
@@ -7320,6 +7320,32 @@ function shortRepositoryName(repository) {
   const text = normalizeDashboardEventText(repository);
   const parts = text.split("/");
   return parts.length === 2 ? parts[1] : text;
+}
+
+function buildDashboardEventOwnerTargetUrl(event) {
+  return buildDashboardPullRequestUrl(event) || "/dashboard/notifications";
+}
+
+function buildDashboardPullRequestUrl(event) {
+  const record = normalizeDashboardEventRecord(event);
+  const repository = normalizeCanonicalRepositoryInput(record.repository);
+  const pullNumber = normalizeIssue(record.pullNumber);
+  if (!repository || !pullNumber) {
+    return "";
+  }
+  return `https://github.com/${repository}/pull/${pullNumber}`;
+}
+
+function buildDashboardEventLinkHtml(event, fallbackText = "詳細を開く") {
+  const pullRequestUrl = buildDashboardPullRequestUrl(event);
+  if (pullRequestUrl) {
+    return `<a class="chat-link" href="${escapeDashboardHtml(pullRequestUrl)}">PRを開く</a>`;
+  }
+  const runUrl = normalizeDashboardEventText(event?.runUrl);
+  if (runUrl && !/github\.com\/[^/]+\/[^/]+\/actions\/runs\//i.test(runUrl)) {
+    return `<a class="chat-link" href="${escapeDashboardHtml(runUrl)}">${escapeDashboardHtml(fallbackText)}</a>`;
+  }
+  return "詳細リンク未受信";
 }
 
 function compactNotificationText(value, limit) {
@@ -9606,8 +9632,7 @@ function renderDashboardDeployEvent(event) {
   const relativeUpdatedAt = formatDashboardRelativeTime(updatedAt);
   const sha = normalizeDashboardEventText(event.headSha);
   const shortSha = sha ? sha.slice(0, 7) : "unknown";
-  const runUrl = normalizeDashboardEventText(event.runUrl);
-  const runLabel = runUrl ? `<a class="chat-link" href="${escapeDashboardHtml(runUrl)}">Actions run</a>` : "Actions run 未設定";
+  const runLabel = buildDashboardEventLinkHtml(event);
   const title = buildDashboardEventDisplayTitle(event, {
     workflowName: normalizeDashboardEventText(event.workflowName) || "deploy-production",
     conclusion
@@ -9640,8 +9665,7 @@ function renderDashboardNotificationEvent(event) {
   const runId = normalizeDashboardEventText(event.runId);
   const sha = normalizeDashboardEventText(event.headSha);
   const shortSha = sha ? sha.slice(0, 7) : "";
-  const runUrl = normalizeDashboardEventText(event.runUrl);
-  const runLabel = runUrl ? `<a class="chat-link" href="${escapeDashboardHtml(runUrl)}">詳細を開く</a>` : "詳細リンク未受信";
+  const runLabel = buildDashboardEventLinkHtml(event);
   const meta = [
     repository,
     event.pullNumber ? `PR #${event.pullNumber}` : "",
@@ -10251,6 +10275,9 @@ function safeDashboardNotificationUrl(value) {
     parsed = new URL(value || "/dashboard/notifications", self.location.origin);
   } catch {
     parsed = new URL("/dashboard/notifications", self.location.origin);
+  }
+  if (parsed.origin === "https://github.com" && /^\\/[^/]+\\/[^/]+\\/pull\\/\\d+\\/?$/.test(parsed.pathname)) {
+    return parsed.toString();
   }
   if (parsed.origin !== self.location.origin) {
     return new URL("/dashboard/notifications", self.location.origin).toString();

@@ -3515,6 +3515,9 @@ test("worker serves dashboard notification center for recent events across repos
   assert.equal(body.includes("secret-must-not-persist"), false);
   assert.equal(body.includes("他 repo / 並行開発 / queue / workflow"), true);
   assert.equal(body.includes("deploy-production / run 26134526817 / sha daad4fb"), true);
+  assert.equal(body.includes('href="https://github.com/marushu/vtdd-v2-p/pull/552"'), true);
+  assert.equal(body.includes('href="https://github.com/marushu/vtdd-v2-p/actions/runs/26134526817"'), false);
+  assert.equal(body.includes("PRを開く"), true);
   assert.equal(body.includes("最新通知"), true);
   assert.equal(body.includes("success"), true);
   assert.equal(body.includes("デプロイ完了: PR #552 dashboard: 通知設定を折り畳む (#534)"), true);
@@ -3549,6 +3552,8 @@ test("worker serves dashboard PWA manifest and service worker notification handl
   assert.equal(serviceWorker.includes('self.addEventListener("notificationclick"'), true);
   assert.equal(serviceWorker.includes("/dashboard/notifications"), true);
   assert.equal(serviceWorker.includes("safeDashboardNotificationUrl"), true);
+  assert.equal(serviceWorker.includes('parsed.origin === "https://github.com"'), true);
+  assert.equal(serviceWorker.includes('pull\\/\\d+'), true);
   assert.equal(serviceWorker.includes("parsed.origin !== self.location.origin"), true);
   assert.equal(serviceWorker.includes('!parsed.pathname.startsWith("/dashboard/")'), true);
 
@@ -3750,7 +3755,7 @@ test("worker builds distinct dashboard Web Push copy by event type", () => {
   assert.equal(deploySuccess.body.includes("run: 26323724369"), true);
   assert.equal(deploySuccess.body.includes("PR #571"), true);
   assert.equal(deploySuccess.body.includes("Issue #514"), true);
-  assert.equal(deploySuccess.url, "/dashboard/notifications");
+  assert.equal(deploySuccess.url, "https://github.com/marushu/vtdd-v2-p/pull/571");
 
   const deployFailure = buildDashboardWebPushPayload({
     kind: "github_actions_workflow_run",
@@ -3969,6 +3974,7 @@ test("worker ingests GitHub Actions deploy completion event and shows it on dash
   assert.equal(decryptedPush.body.includes("dashboard: 通知カードにPR概要を出す"), true);
   assert.equal(decryptedPush.body.includes("PR #552"), true);
   assert.equal(decryptedPush.body.includes("workflow: deploy-production"), true);
+  assert.equal(decryptedPush.url, "https://github.com/marushu/vtdd-v2-p/pull/552");
   assert.equal("approvalGrantId" in eventBody.event, false);
   assert.equal("token" in eventBody.event, false);
 
@@ -3989,10 +3995,8 @@ test("worker ingests GitHub Actions deploy completion event and shows it on dash
   assert.equal(dashboardBody.includes("デプロイ完了: PR #552 dashboard: 通知カードにPR概要を出す (#534)"), true);
   assert.equal(dashboardBody.includes("dashboard: 通知カードにPR概要を出す"), true);
   assert.equal(dashboardBody.includes("PR #552"), true);
-  assert.equal(
-    dashboardBody.includes("https://github.com/marushu/vtdd-v2-p/actions/runs/26133044458"),
-    true
-  );
+  assert.equal(dashboardBody.includes("https://github.com/marushu/vtdd-v2-p/pull/552"), true);
+  assert.equal(dashboardBody.includes("https://github.com/marushu/vtdd-v2-p/actions/runs/26133044458"), false);
   assert.equal(dashboardBody.includes("approval:must-not-persist"), false);
   assert.equal(dashboardBody.includes("secret-must-not-persist"), false);
   assert.equal(dashboardBody.includes("setInterval("), false);
