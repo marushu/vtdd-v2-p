@@ -7,6 +7,7 @@
 - Surface: Dashboard Butler chat composer
 - Runtime: local worker-backed dashboard page served from `src/worker.js`
 - Scenario: external-keyboard style composer shortcuts
+- Reproducible harness: `scripts/e2e-dashboard-composer-shortcut.spec.mjs`
 
 ## Scenario
 
@@ -35,8 +36,8 @@
 
 ## Commands
 
-- `PW_CHANNEL=chrome npx playwright test e2e-dashboard-composer-shortcut-cross-browser.spec.mjs --browser=chromium --reporter=line`
-- `npx playwright test e2e-dashboard-composer-shortcut-cross-browser.spec.mjs --browser=webkit --reporter=line`
+- `npm run e2e:dashboard-composer-shortcut:chrome`
+- `npm run e2e:dashboard-composer-shortcut:webkit`
 
 ## Remaining Gap
 
