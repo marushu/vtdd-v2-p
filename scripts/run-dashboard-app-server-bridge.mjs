@@ -93,8 +93,18 @@ export function buildDashboardTurnInputText(request = {}) {
   const repository = String(request.repository || "").trim();
   const relatedIssue = request.relatedIssue || request.issueNumber || "";
   const authority = request.authority && typeof request.authority === "object" ? request.authority : null;
+  const trafficControl =
+    request.trafficControl && typeof request.trafficControl === "object"
+      ? request.trafficControl
+      : null;
   const mediaReferences = Array.isArray(request.mediaReferences) ? request.mediaReferences : [];
-  const hasDashboardContext = Boolean(repository || relatedIssue || authority || mediaReferences.length > 0);
+  const hasDashboardContext = Boolean(
+    repository ||
+      relatedIssue ||
+      authority ||
+      trafficControl ||
+      mediaReferences.length > 0
+  );
   if (!hasDashboardContext) {
     return ownerText;
   }
@@ -110,6 +120,10 @@ export function buildDashboardTurnInputText(request = {}) {
     "- authorityRule: merge / deploy / credential / permission / destructive work は GO または passkey approval が必要。権限が無い場合は実行せず不足を報告する。",
     "- mechanicalBoundary: Dashboard bridge does not grant app-server command, file-change, patch, or permission escalation approvals."
   ];
+
+  if (trafficControl) {
+    lines.push(`- trafficControl: ${JSON.stringify(trafficControl)}`);
+  }
 
   if (authority) {
     lines.push(`- authority: ${JSON.stringify(authority)}`);
@@ -468,6 +482,7 @@ export async function handleDashboardTurnRequest({
       repository: request.repository,
       relatedIssue: request.relatedIssue || request.issueNumber,
       authority: request.authority,
+      trafficControl: request.trafficControl,
       mediaReferences: request.mediaReferences
     });
     const startedTurn = await appServer.request(

@@ -2743,6 +2743,9 @@ test("DashboardChatRoom sends ordinary owner turns to connected app-server bridg
   assert.equal(turnRequest.appServer.startThreadMethod, "thread/start");
   assert.equal(turnRequest.appServer.turnMethod, "turn/start");
   assert.equal(turnRequest.authority.ordinaryConversationAllowed, true);
+  assert.equal(turnRequest.trafficControl.status, "未確認");
+  assert.equal(turnRequest.trafficControl.currentSurface, "dashboard_butler");
+  assert.match(turnRequest.trafficControl.reason, /repository is required/);
 
   assert.equal(dashboardSocket.sent.length, 3);
   const broadcast = JSON.parse(dashboardSocket.sent[0]);
@@ -2756,6 +2759,134 @@ test("DashboardChatRoom sends ordinary owner turns to connected app-server bridg
   assert.equal(status.type, "transient_status");
   assert.equal(status.status, "thinking");
   assert.equal(status.text, "app-server bridge の返信を待っています");
+});
+
+test("DashboardChatRoom attaches execution queue preflight to repository app-server turns", async () => {
+  const provider = createInMemoryMemoryProvider();
+  const store = createInMemoryDashboardChatStore();
+  const dashboardSocket = createMockSocket("dashboard", "dashboard-main-marushu-vtdd-v2-p");
+  const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-marushu-vtdd-v2-p");
+  const room = new DashboardChatRoom(
+    {
+      storage: createMockDurableObjectStorage(),
+      getWebSockets() {
+        return [dashboardSocket, bridgeSocket];
+      }
+    },
+    {
+      DASHBOARD_CHAT_STORE: store,
+      MEMORY_PROVIDER: provider,
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_dashboard_preflight",
+      GITHUB_API_FETCH: async (url) => {
+        const parsed = new URL(url);
+        if (parsed.pathname.endsWith("/docs/setup/known-good.json")) {
+          return new Response(JSON.stringify({ message: "Not Found" }), {
+            status: 404,
+            headers: { "content-type": "application/json" }
+          });
+        }
+        if (parsed.pathname.endsWith("/issues/609")) {
+          return new Response(
+            JSON.stringify({
+              number: 609,
+              title: "Dashboard Butler traffic-control preflight",
+              body: "Intent: expose execution queue truth to Dashboard Butler.",
+              state: "open",
+              html_url: "https://github.com/marushu/vtdd-v2-p/issues/609",
+              user: { login: "marushu" }
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        if (parsed.pathname.endsWith("/issues")) {
+          return new Response(JSON.stringify([]), {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          });
+        }
+        if (parsed.pathname.includes("/contents/")) {
+          const decodedPath = decodeURIComponent(
+            parsed.pathname.split("/contents/")[1] || ""
+          );
+          const sourceContent = {
+            "AGENTS.md": "## Butler-First Operating Principle\nVTDD is iPhone/iPad-first.",
+            "docs/butler/thread-independent-startup-contract.md":
+              "threadLocalAssumptionsPromoted=false",
+            "docs/butler/execution-queue-contract.md":
+              "Owner input is a queue update event before implementation.\n`EMERGENCY` `ROOT` `NEXT` `QUEUE` `EVIDENCE` `QUESTION`",
+            "docs/mvp/active-issue-execution-queue.md": [
+              "# Active Issue Execution Queue",
+              "## Now",
+              "- Issue #590: app-server turn timeout must become recoverable.",
+              "## Next",
+              "- Issue #579: reconnect/auth recovery follows timeout recovery.",
+              "## Root Blockers",
+              "- Issue #450: Dashboard Butler live runtime remains central.",
+              "## Evidence Gaps",
+              "- Issue #609: live Dashboard Butler chat preflight evidence is pending.",
+              "## Blocked",
+              "- Issue #355: deploy requires passkey approval.",
+              "## Queue",
+              "- Issue #599: Japanese-first titles remain active.",
+              "## Questions",
+              "- Issue #595: runtime auto-classification remains incomplete."
+            ].join("\n"),
+            "docs/butler/capability-matrix.md": "Startup Surface Dependency Reading",
+            "docs/setup/custom-gpt-instructions.md": "vtddStartupPreflight",
+            "docs/setup/custom-gpt-actions-openapi.yaml":
+              "paths:\n  /v2/retrieve/startup-preflight:\n    get:\n      operationId: vtddStartupPreflight"
+          };
+          const content = sourceContent[decodedPath];
+          if (!content) {
+            return new Response(JSON.stringify({ message: "Not Found" }), {
+              status: 404,
+              headers: { "content-type": "application/json" }
+            });
+          }
+          return new Response(
+            JSON.stringify({
+              path: decodedPath,
+              type: "file",
+              sha: `${decodedPath.replace(/[^a-z0-9]/gi, "-")}-sha`,
+              html_url: `https://github.com/marushu/vtdd-v2-p/blob/main/${decodedPath}`,
+              encoding: "base64",
+              content: Buffer.from(content, "utf8").toString("base64")
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        throw new Error(`unexpected GitHub API url: ${parsed.pathname}`);
+      }
+    }
+  );
+
+  await room.webSocketMessage(
+    dashboardSocket,
+    JSON.stringify({
+      type: "owner_message",
+      threadId: "dashboard-main-marushu-vtdd-v2-p",
+      repository: "marushu/vtdd-v2-p",
+      issueNumber: 609,
+      text: "Dashboard Butler の交通整理をして"
+    })
+  );
+
+  const turnRequest = JSON.parse(bridgeSocket.sent[0]);
+  assert.equal(turnRequest.type, "app_server_turn_requested");
+  assert.equal(turnRequest.repository, "marushu/vtdd-v2-p");
+  assert.equal(turnRequest.relatedIssue, 609);
+  assert.equal(turnRequest.trafficControl.status, "read");
+  assert.equal(turnRequest.trafficControl.currentSurface, "dashboard_butler");
+  assert.equal(
+    turnRequest.trafficControl.currentNow,
+    "Issue #590: app-server turn timeout must become recoverable."
+  );
+  assert.equal(
+    turnRequest.trafficControl.sectionSummaries["Root Blockers"].firstBullet,
+    "Issue #450: Dashboard Butler live runtime remains central."
+  );
+  assert.match(turnRequest.trafficControl.ownerFacingSummary, /Issue #590/);
+  assert.equal(turnRequest.trafficControl.authorityBoundary, "read_only_preflight");
 });
 
 test("DashboardChatRoom broadcasts thread truth before owner ack for ack-drop recovery", async () => {

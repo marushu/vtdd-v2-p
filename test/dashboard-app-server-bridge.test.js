@@ -70,6 +70,12 @@ test("dashboard app-server bridge wraps repository traffic-control context into 
     authority: {
       ordinaryConversationAllowed: true,
       highRiskActionsRequire: ["GO", "passkey_approval"]
+    },
+    trafficControl: {
+      status: "read",
+      currentSurface: "dashboard_butler",
+      currentNow: "Issue #590: app-server turn timeout must become recoverable.",
+      ownerFacingSummary: "現在の Now は Issue #590"
     }
   });
 
@@ -77,6 +83,8 @@ test("dashboard app-server bridge wraps repository traffic-control context into 
   assert.match(text, /repository: marushu\/vtdd-v2-p/);
   assert.match(text, /relatedIssue: #450/);
   assert.match(text, /trafficControlRule/);
+  assert.match(text, /"currentSurface":"dashboard_butler"/);
+  assert.match(text, /"currentNow":"Issue #590: app-server turn timeout must become recoverable\."/);
   assert.match(text, /Butler Completion Gate/);
   assert.match(text, /GO.*passkey approval/);
   assert.match(text, /mechanicalBoundary/);
@@ -431,6 +439,16 @@ test("dashboard app-server bridge passes traffic-control context to codex app-se
         ordinaryConversationAllowed: true,
         repositoryRequired: false,
         highRiskActionsRequire: ["GO", "passkey_approval"]
+      },
+      trafficControl: {
+        status: "read",
+        currentSurface: "dashboard_butler",
+        currentNow: "Issue #590: app-server turn timeout must become recoverable.",
+        sectionSummaries: {
+          "Root Blockers": {
+            firstBullet: "Issue #450: Dashboard Butler live runtime remains central."
+          }
+        }
       }
     },
     appServer,
@@ -444,6 +462,8 @@ test("dashboard app-server bridge passes traffic-control context to codex app-se
   assert.match(inputText, /repository: marushu\/vtdd-v2-p/);
   assert.match(inputText, /relatedIssue: #450/);
   assert.match(inputText, /trafficControlRule/);
+  assert.match(inputText, /"currentSurface":"dashboard_butler"/);
+  assert.match(inputText, /"currentNow":"Issue #590: app-server turn timeout must become recoverable\."/);
   assert.match(inputText, /mechanicalBoundary/);
   assert.match(inputText, /Owner message:\nDashboard Butler が交通整理できるか確認して/);
   assert.equal(events.at(-1).type, "app_server_reply");

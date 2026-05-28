@@ -320,6 +320,12 @@ export class DashboardChatRoom {
       status: "thinking",
       text: "app-server bridge の返信を待っています"
     });
+    const trafficControl = await buildDashboardChatTrafficControlContext({
+      env: this.env,
+      repository,
+      relatedIssue,
+      text
+    });
     const mapping = await this.readAppServerThreadMapping(threadId);
     const turnRequest = {
       type: "app_server_turn_requested",
@@ -337,7 +343,8 @@ export class DashboardChatRoom {
         startThreadMethod: mapping.codexThreadId ? "thread/resume" : "thread/start",
         turnMethod: "turn/start"
       },
-      authority: buildDashboardAppServerAuthorityHint({ repository, relatedIssue, text })
+      authority: buildDashboardAppServerAuthorityHint({ repository, relatedIssue, text }),
+      trafficControl
     };
     this.sendSocket(bridgeSockets[0], turnRequest);
   }
@@ -6486,6 +6493,59 @@ function buildDashboardAppServerAuthorityHint({ repository, relatedIssue, text }
         : "Treat as ordinary conversation unless the owner asks for repository, Issue, PR, deploy, credential, or permission work.",
     highRiskActionsRequire: ["GO", "passkey_approval"]
   };
+}
+
+async function buildDashboardChatTrafficControlContext({ env, repository, relatedIssue, text }) {
+  const normalizedRepository = normalizeCanonicalRepositoryInput(repository);
+  if (!normalizedRepository) {
+    return {
+      status: "未確認",
+      reason: "repository is required before Dashboard Butler can read execution queue truth",
+      currentSurface: "dashboard_butler",
+      authorityBoundary: "read_only_preflight",
+      nextSafeAction: "対象 repository を解決してから execution queue preflight を読む。"
+    };
+  }
+  try {
+    const startupPreflight = await buildStartupPreflight({
+      repository: normalizedRepository,
+      ref: "main",
+      issueNumber: normalizePositiveInteger(relatedIssue),
+      phase: "execution",
+      currentSurface: "dashboard_butler",
+      queryText:
+        normalizeText(text) ||
+        `Dashboard Butler traffic control ${relatedIssue ? `Issue #${relatedIssue}` : ""}`,
+      runtimeOrigin: normalizeText(env?.VTDD_RUNTIME_URL) || "https://dashboard-butler.local",
+      env
+    });
+    return {
+      status: startupPreflight.executionQueue?.status || "未確認",
+      repository: normalizedRepository,
+      relatedIssue: normalizePositiveInteger(relatedIssue) || null,
+      currentSurface: startupPreflight.currentSurface,
+      threadLocalAssumptionsPromoted: startupPreflight.threadLocalAssumptionsPromoted,
+      currentNow: startupPreflight.executionQueue?.currentNow || null,
+      next: startupPreflight.executionQueue?.next || [],
+      sectionSummaries: startupPreflight.executionQueue?.sectionSummaries || {},
+      missingSources: startupPreflight.missingSources || [],
+      missingSections: startupPreflight.executionQueue?.missingSections || [],
+      ownerFacingSummary: startupPreflight.executionQueue?.ownerFacingSummary || "現在の Now は未確認です。",
+      trafficControlRule: startupPreflight.executionQueue?.trafficControlRule || null,
+      authorityBoundary: "read_only_preflight",
+      nextSafeAction: startupPreflight.nextSafeAction
+    };
+  } catch (error) {
+    return {
+      status: "未確認",
+      repository: normalizedRepository,
+      relatedIssue: normalizePositiveInteger(relatedIssue) || null,
+      reason: normalizeText(error?.message) || "startup preflight failed",
+      currentSurface: "dashboard_butler",
+      authorityBoundary: "read_only_preflight",
+      nextSafeAction: "preflight failure を owner-facing blocker として報告する。"
+    };
+  }
 }
 
 function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = "" } = {}) {
