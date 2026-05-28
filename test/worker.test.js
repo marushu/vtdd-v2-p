@@ -1236,7 +1236,7 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes('textarea.addEventListener("input", () => {'), true);
   assert.equal(body.includes("persistDashboardDraft();"), true);
   assert.equal(body.includes('textarea.addEventListener("paste"'), true);
-  assert.equal(body.includes("function shouldSubmitDashboardComposerShortcut(event)"), true);
+  assert.equal(body.includes(shouldSubmitDashboardComposerShortcut.toString()), true);
   assert.equal(body.includes('textarea.addEventListener("keydown", (event) => {'), true);
   assert.equal(body.includes("if (!shouldSubmitDashboardComposerShortcut(event)) return;"), true);
   assert.equal(body.includes("form.requestSubmit();"), true);

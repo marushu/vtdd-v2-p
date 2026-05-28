@@ -12294,9 +12294,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           persistDashboardDraft();
         }, 0);
       });
-      function shouldSubmitDashboardComposerShortcut(event) {
-        return event && event.key === "Enter" && (event.metaKey === true || event.ctrlKey === true);
-      }
+      ${shouldSubmitDashboardComposerShortcut.toString()}
       textarea.addEventListener("keydown", (event) => {
         if (!shouldSubmitDashboardComposerShortcut(event)) return;
         event.preventDefault();
