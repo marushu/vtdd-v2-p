@@ -244,6 +244,7 @@ export { executeDeployProductionPlane } from "./deploy-production-plane.js";
 export {
   buildVpsCapabilityProposal,
   buildVpsCapabilityReview,
+  buildVpsPrivilegedMaintenanceInstallInventory,
   buildVpsHelperCommandExecutionBoundary,
   buildVpsMaintenanceApprovalScope,
   applyVpsCapabilityLifecycleOperation,

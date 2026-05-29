@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   applyVpsCapabilityLifecycleOperation,
   buildVpsHelperCommandExecutionBoundary,
+  buildVpsPrivilegedMaintenanceInstallInventory,
   buildVpsCapabilityProposal,
   buildVpsMaintenanceApprovalScope,
   listVpsPrivilegedMaintenanceCommandRegistry,
@@ -41,6 +42,40 @@ test("VPS privileged maintenance manifest normalizes reviewable capabilities", (
   assert.equal(result.manifest.capabilities[0].id, "playwright.chromium.deps");
   assert.equal(result.manifest.capabilities[0].status, "disabled");
   assert.equal(result.manifest.capabilities[0].riskLevel, "high");
+});
+
+test("VPS privileged maintenance install inventory reports root-owned helper readiness without execution", () => {
+  const ready = buildVpsPrivilegedMaintenanceInstallInventory({
+    host: "x85-131-245-163",
+    repository: "marushu/vtdd-v2-p",
+    helperInstalled: true,
+    manifestInstalled: true,
+    sudoersInstalled: true,
+    helperOwner: "root",
+    manifestOwner: "root",
+    sudoersOwner: "root",
+    sudoersAllowsAll: false
+  });
+
+  assert.equal(ready.ok, true);
+  assert.equal(ready.status, "ready");
+  assert.equal(ready.helperPath, "/usr/local/sbin/vtdd-vps-maintenance-helper");
+  assert.equal(ready.manifestPath, "/etc/vtdd/privileged-maintenance-capabilities.json");
+  assert.equal(ready.sudoersPath, "/etc/sudoers.d/vtdd-vps-maintenance-helper");
+  assert.equal(ready.requiredSudoersShape.user, "vtdd-runner");
+  assert.equal(ready.requiredSudoersShape.allowedCommand, ready.helperPath);
+  assert.equal(ready.runtimeTruth.rootExecutionStarted, false);
+  assert.equal(ready.runtimeTruth.helperExecutionStarted, false);
+  assert.equal(ready.checks.every((check) => check.status === "pass"), true);
+
+  const unsafe = buildVpsPrivilegedMaintenanceInstallInventory({
+    host: "x85-131-245-163",
+    repository: "marushu/vtdd-v2-p",
+    sudoersAllowsAll: true
+  });
+  assert.equal(unsafe.ok, false);
+  assert.equal(unsafe.status, "blocked");
+  assert.equal(unsafe.issues.includes("sudoers must not allow NOPASSWD:ALL"), true);
 });
 
 test("VPS privileged maintenance helper command registry exposes initial presets", () => {

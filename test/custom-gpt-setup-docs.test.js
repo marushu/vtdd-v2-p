@@ -397,6 +397,7 @@ test("custom gpt openapi doc exposes current gateway, execute, and progress rout
   assert.equal(doc.includes("/v2/retrieve/proposals:"), true);
   assert.equal(doc.includes("/v2/retrieve/cross:"), true);
   assert.equal(doc.includes("/v2/retrieve/startup-preflight:"), true);
+  assert.equal(doc.includes("/v2/retrieve/vps-maintenance-install-inventory:"), true);
   assert.equal(doc.includes("execution queue traffic-control truth"), true);
   assert.equal(doc.includes("- dashboard_butler"), true);
   assert.equal(doc.includes("operationId: vtddRetrieveConstitution"), true);
@@ -405,6 +406,7 @@ test("custom gpt openapi doc exposes current gateway, execute, and progress rout
   assert.equal(doc.includes("operationId: vtddRetrieveCrossMemory"), true);
   assert.equal(doc.includes("operationId: vtddRetrieveOperationalMemory"), true);
   assert.equal(doc.includes("operationId: vtddStartupPreflight"), true);
+  assert.equal(doc.includes("operationId: vtddRetrieveVpsMaintenanceInstallInventory"), true);
   assert.equal(doc.includes("operationId: vtddRetrieveCloudflarePages"), true);
   assert.equal(doc.includes("operationId: vtddRetrieveSetupDiagnostics"), true);
   assert.equal(doc.includes("OperationalMemoryResponse:"), true);
@@ -561,6 +563,7 @@ test("custom gpt openapi json parses and exposes paths as an object", () => {
   assert.equal(typeof doc.paths["/v2/retrieve/cross"], "object");
   assert.equal(typeof doc.paths["/v2/retrieve/operational-memory"], "object");
   assert.equal(typeof doc.paths["/v2/retrieve/startup-preflight"], "object");
+  assert.equal(typeof doc.paths["/v2/retrieve/vps-maintenance-install-inventory"], "object");
   assert.equal(doc.paths["/v2/retrieve/constitution"].get.operationId, "vtddRetrieveConstitution");
   assert.equal(doc.paths["/v2/retrieve/decisions"].get.operationId, "vtddRetrieveDecisionLogs");
   assert.equal(doc.paths["/v2/retrieve/proposals"].get.operationId, "vtddRetrieveProposalLogs");
@@ -568,6 +571,10 @@ test("custom gpt openapi json parses and exposes paths as an object", () => {
   assert.equal(
     doc.paths["/v2/retrieve/startup-preflight"].get.operationId,
     "vtddStartupPreflight"
+  );
+  assert.equal(
+    doc.paths["/v2/retrieve/vps-maintenance-install-inventory"].get.operationId,
+    "vtddRetrieveVpsMaintenanceInstallInventory"
   );
   assert.equal(
     doc.paths["/v2/retrieve/startup-preflight"].get.summary.includes(
@@ -655,6 +662,7 @@ test("custom gpt openapi json exposes JSON bodies for Butler action auth failure
     ["/v2/retrieve/cross", "get"],
     ["/v2/retrieve/operational-memory", "get"],
     ["/v2/retrieve/startup-preflight", "get"],
+    ["/v2/retrieve/vps-maintenance-install-inventory", "get"],
     ["/v2/retrieve/github", "get"],
     ["/v2/retrieve/cloudflare-pages", "get"],
     ["/v2/retrieve/repository-nicknames", "get"],
@@ -682,6 +690,7 @@ test("custom gpt retrieve actions expose action-visible response mode for test-s
     "/v2/retrieve/cross",
     "/v2/retrieve/operational-memory",
     "/v2/retrieve/startup-preflight",
+    "/v2/retrieve/vps-maintenance-install-inventory",
     "/v2/retrieve/github",
     "/v2/retrieve/cloudflare-pages",
     "/v2/retrieve/repository-nicknames",

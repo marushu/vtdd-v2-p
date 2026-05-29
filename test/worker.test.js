@@ -8231,6 +8231,47 @@ test("worker dry-runs VPS maintenance helper request without root execution", as
   assert.equal(body.runtimeTruth.exitCode, null);
 });
 
+test("worker retrieves VPS maintenance install inventory without root execution", async () => {
+  const response = await worker.fetch(
+    new Request(
+      "https://example.com/v2/retrieve/vps-maintenance-install-inventory?repository=marushu%2Fvtdd-v2-p&host=x85-131-245-163&helperInstalled=true&manifestInstalled=true&sudoersInstalled=true&helperOwner=root&manifestOwner=root&sudoersOwner=root&sudoersAllowsAll=false",
+      {
+        headers: gatewayAuthHeaders
+      }
+    ),
+    gatewayAuthEnv
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.installInventory.status, "ready");
+  assert.equal(body.installInventory.kind, "vps_privileged_maintenance_install_inventory");
+  assert.equal(body.installInventory.requiredSudoersShape.user, "vtdd-runner");
+  assert.equal(
+    body.installInventory.requiredSudoersShape.allowedCommand,
+    "/usr/local/sbin/vtdd-vps-maintenance-helper"
+  );
+  assert.equal(body.runtimeTruth.rootExecutionStarted, false);
+  assert.equal(body.runtimeTruth.helperExecutionStarted, false);
+
+  const unsafe = await worker.fetch(
+    new Request(
+      "https://example.com/v2/retrieve/vps-maintenance-install-inventory?repository=marushu%2Fvtdd-v2-p&host=x85-131-245-163&sudoersAllowsAll=true&responseMode=action_visible",
+      {
+        headers: gatewayAuthHeaders
+      }
+    ),
+    gatewayAuthEnv
+  );
+  assert.equal(unsafe.status, 200);
+  const unsafeBody = await unsafe.json();
+  assert.equal(unsafeBody.ok, false);
+  assert.equal(unsafeBody.httpStatus, 422);
+  assert.equal(unsafeBody.error, "vps_maintenance_install_inventory_invalid");
+  assert.equal(unsafeBody.issues.includes("sudoers must not allow NOPASSWD:ALL"), true);
+});
+
 test("worker rejects VPS helper request when approval grant scope does not match proposal", async () => {
   const provider = createInMemoryMemoryProvider();
   const proposalResponse = await worker.fetch(

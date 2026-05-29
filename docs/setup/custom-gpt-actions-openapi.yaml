@@ -1618,6 +1618,110 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/VtddGenericResponse"
+  /v2/retrieve/vps-maintenance-install-inventory:
+    get:
+      operationId: vtddRetrieveVpsMaintenanceInstallInventory
+      summary: Retrieve read-only VPS privileged maintenance helper install inventory without executing root work.
+      parameters:
+        - name: repository
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: host
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: helperPath
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: manifestPath
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: sudoersPath
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: runnerUser
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: helperInstalled
+          in: query
+          required: false
+          schema:
+            type: boolean
+        - name: manifestInstalled
+          in: query
+          required: false
+          schema:
+            type: boolean
+        - name: sudoersInstalled
+          in: query
+          required: false
+          schema:
+            type: boolean
+        - name: helperOwner
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: manifestOwner
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: sudoersOwner
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: sudoersAllowsAll
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: Must be false. NOPASSWD:ALL is explicitly rejected.
+        - name: responseMode
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - action_visible
+          description: Use action_visible in the Custom GPT Action test screen so non-2xx retrieve failures return ok:false JSON with httpStatus/error/reason/issues instead of a ClientResponseError transport label.
+      responses:
+        "200":
+          description: VPS maintenance install inventory and runtime truth
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "401":
+          description: Missing machine auth
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "403":
+          description: Invalid machine auth
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "422":
+          description: VPS maintenance install inventory invalid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
   /v2/retrieve/constitution:
     get:
       operationId: vtddRetrieveConstitution

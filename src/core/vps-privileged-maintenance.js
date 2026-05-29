@@ -3,6 +3,10 @@ const CAPABILITY_OPERATIONS = new Set(["add", "enable", "disable", "remove", "ro
 const RISK_LEVELS = new Set(["low", "medium", "high"]);
 const DEFAULT_MANIFEST_VERSION = 1;
 const HELPER_EXECUTION_MODES = new Set(["dry_run"]);
+const DEFAULT_HELPER_INSTALL_PATH = "/usr/local/sbin/vtdd-vps-maintenance-helper";
+const DEFAULT_MANIFEST_PATH = "/etc/vtdd/privileged-maintenance-capabilities.json";
+const DEFAULT_SUDOERS_PATH = "/etc/sudoers.d/vtdd-vps-maintenance-helper";
+const DEFAULT_RUNNER_USER = "vtdd-runner";
 const HELPER_COMMAND_REGISTRY = defineHelperCommandRegistry([
   {
     commandClass: "playwright_install_deps_chromium",
@@ -227,6 +231,97 @@ function buildVpsCapabilityProposal(input = {}) {
   return {
     ok: issues.length === 0,
     proposal,
+    issues
+  };
+}
+
+function buildVpsPrivilegedMaintenanceInstallInventory(input = {}) {
+  const host = normalizeText(input.host);
+  const repository = normalizeRepository(input.repository);
+  const helperPath = normalizeText(input.helperPath || input.helper_path) || DEFAULT_HELPER_INSTALL_PATH;
+  const manifestPath = normalizeText(input.manifestPath || input.manifest_path) || DEFAULT_MANIFEST_PATH;
+  const sudoersPath = normalizeText(input.sudoersPath || input.sudoers_path) || DEFAULT_SUDOERS_PATH;
+  const runnerUser = normalizeText(input.runnerUser || input.runner_user) || DEFAULT_RUNNER_USER;
+  const observed = normalizeObject(input.observed);
+  const helperInstalled = normalizeBoolean(observed.helperInstalled ?? input.helperInstalled);
+  const manifestInstalled = normalizeBoolean(observed.manifestInstalled ?? input.manifestInstalled);
+  const sudoersInstalled = normalizeBoolean(observed.sudoersInstalled ?? input.sudoersInstalled);
+  const helperOwner = normalizeText(observed.helperOwner || input.helperOwner);
+  const manifestOwner = normalizeText(observed.manifestOwner || input.manifestOwner);
+  const sudoersOwner = normalizeText(observed.sudoersOwner || input.sudoersOwner);
+  const sudoersAllowsAll = normalizeBoolean(observed.sudoersAllowsAll ?? input.sudoersAllowsAll);
+  const issues = [];
+  if (!host) issues.push("host is required");
+  if (!repository) issues.push("repository is required");
+  if (!helperPath.startsWith("/")) issues.push("helperPath must be absolute");
+  if (!manifestPath.startsWith("/")) issues.push("manifestPath must be absolute");
+  if (!sudoersPath.startsWith("/")) issues.push("sudoersPath must be absolute");
+  if (sudoersAllowsAll === true) issues.push("sudoers must not allow NOPASSWD:ALL");
+
+  const checks = [
+    {
+      id: "root_owned_helper",
+      status: helperInstalled === true && helperOwner === "root" ? "pass" : helperInstalled === false ? "missing" : "unverified",
+      required: true,
+      path: helperPath,
+      expectedOwner: "root",
+      observedOwner: helperOwner || null
+    },
+    {
+      id: "root_owned_manifest",
+      status: manifestInstalled === true && manifestOwner === "root" ? "pass" : manifestInstalled === false ? "missing" : "unverified",
+      required: true,
+      path: manifestPath,
+      expectedOwner: "root",
+      observedOwner: manifestOwner || null
+    },
+    {
+      id: "scoped_sudoers_entry",
+      status: sudoersInstalled === true && sudoersOwner === "root" && sudoersAllowsAll !== true ? "pass" : sudoersInstalled === false ? "missing" : "unverified",
+      required: true,
+      path: sudoersPath,
+      expectedOwner: "root",
+      observedOwner: sudoersOwner || null
+    }
+  ];
+  const status =
+    issues.length > 0
+      ? "blocked"
+      : checks.every((check) => check.status === "pass")
+        ? "ready"
+        : checks.some((check) => check.status === "missing")
+          ? "missing"
+          : "unverified";
+
+  return {
+    ok: issues.length === 0,
+    kind: "vps_privileged_maintenance_install_inventory",
+    status,
+    host,
+    repository,
+    runnerUser,
+    helperPath,
+    manifestPath,
+    sudoersPath,
+    checks,
+    requiredSudoersShape: {
+      user: runnerUser,
+      allowedCommand: helperPath,
+      forbidden: ["NOPASSWD:ALL", "sudo su", "root shell"]
+    },
+    runtimeTruth: {
+      kind: "vps_privileged_maintenance_install_inventory",
+      status,
+      host,
+      repository,
+      rootExecutionStarted: false,
+      helperExecutionStarted: false,
+      redacted: true,
+      nextAction:
+        status === "ready"
+          ? "helper install inventory is ready for scoped helper requests"
+          : "verify or install root-owned helper, manifest, and scoped sudoers before claiming iPhone-complete privileged maintenance"
+    },
     issues
   };
 }
@@ -698,6 +793,16 @@ function normalizeStringList(value) {
     .filter(Boolean);
 }
 
+function normalizeObject(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function normalizeBoolean(value) {
+  if (value === true || value === "true") return true;
+  if (value === false || value === "false") return false;
+  return null;
+}
+
 function normalizePositiveInteger(value, fallback) {
   const number = Number.parseInt(String(value ?? ""), 10);
   return Number.isFinite(number) && number > 0 ? number : fallback;
@@ -715,6 +820,7 @@ function normalizeText(value) {
 export {
   buildVpsCapabilityProposal,
   buildVpsCapabilityReview,
+  buildVpsPrivilegedMaintenanceInstallInventory,
   buildVpsMaintenanceApprovalScope,
   buildVpsHelperCommandExecutionBoundary,
   applyVpsCapabilityLifecycleOperation,
