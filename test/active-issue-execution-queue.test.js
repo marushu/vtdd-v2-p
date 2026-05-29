@@ -4,10 +4,10 @@ import fs from "node:fs";
 
 const doc = fs.readFileSync("docs/mvp/active-issue-execution-queue.md", "utf8");
 
-const OPEN_ISSUES_ON_2026_05_28 = [
+const OPEN_ISSUES_ON_2026_05_29 = [
   354, 355, 356, 358, 412, 413, 415, 417, 421, 444, 448, 450, 455, 491, 492,
   495, 497, 498, 501, 514, 528, 565, 574, 577, 579, 580, 582, 585, 587, 589,
-  590, 594, 595, 599, 604, 605, 606, 613
+  590, 594, 595, 599, 604, 605, 606, 613, 620
 ];
 
 const CLASSIFICATION_SECTIONS = [
@@ -35,7 +35,7 @@ function sectionBody(sectionName) {
 const classifiedIssueText = CLASSIFICATION_SECTIONS.map(sectionBody).join("\n");
 
 test("active issue execution queue records every open issue from the rebuild snapshot", () => {
-  for (const issueNumber of OPEN_ISSUES_ON_2026_05_28) {
+  for (const issueNumber of OPEN_ISSUES_ON_2026_05_29) {
     assert.equal(
       doc.includes(`Issue #${issueNumber}`),
       true,
@@ -45,7 +45,7 @@ test("active issue execution queue records every open issue from the rebuild sna
 });
 
 test("active issue execution queue classifies every open issue outside the runtime snapshot", () => {
-  for (const issueNumber of OPEN_ISSUES_ON_2026_05_28) {
+  for (const issueNumber of OPEN_ISSUES_ON_2026_05_29) {
     assert.equal(
       new RegExp(`^- Issue #${issueNumber}:`, "m").test(classifiedIssueText),
       true,
@@ -79,6 +79,7 @@ test("active issue execution queue names current open PR hygiene", () => {
 });
 
 test("active issue execution queue names the next automatic implementation lane", () => {
-  assert.equal(sectionBody("Now").includes("Issue #590: app-server turn timeout"), true);
+  assert.equal(sectionBody("Now").includes("Issue #606: ordinary Dashboard read sessions"), true);
+  assert.equal(sectionBody("Next").includes("Issue #590: app-server turn timeout"), true);
   assert.equal(doc.includes("Issue #579: after timeout recovery"), true);
 });
