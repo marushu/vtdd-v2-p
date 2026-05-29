@@ -9,7 +9,7 @@ This file is not a scope reducer. Active Issues remain in scope unless the owner
 explicitly narrows the implementation window. This file records execution order,
 preemption decisions, blockers, and evidence gaps.
 
-Last rebuilt from GitHub runtime truth: 2026-05-28
+Last rebuilt from GitHub runtime truth: 2026-05-29
 
 ## Queue Policy
 
@@ -32,7 +32,7 @@ Last rebuilt from GitHub runtime truth: 2026-05-28
   Issue #498, Issue #501, Issue #514, Issue #528, Issue #565,
   Issue #574, Issue #577, Issue #579, Issue #580, Issue #582, Issue #585,
   Issue #587, Issue #589, Issue #590, Issue #594, Issue #595, Issue #599,
-  Issue #604, Issue #605, Issue #606, Issue #613.
+  Issue #604, Issue #605, Issue #606, Issue #613, Issue #620.
 - Recently closed as completed with evidence and owner approval: Issue #573,
   Issue #601, Issue #609.
 - Open PRs read before this queue refresh PR was opened: none.
@@ -40,15 +40,22 @@ Last rebuilt from GitHub runtime truth: 2026-05-28
   PR #602, PR #603, PR #607, PR #608, PR #610, PR #611, PR #612.
 - Current queue rebuild scope: classify all open Issues without closing,
   downscoping, or treating any unverified Issue as done.
+- 2026-05-29 owner input classified Issue #606 as `ROOT`: the 2-minute
+  passkey grant coupling blocks the ordinary iPhone/PWA chat recovery path for
+  Issue #579, Issue #590, Issue #604, and Issue #605. Issue #606 moves to
+  `Now`; Issue #590 remains active and resumes after the read-session blocker
+  no longer causes short-cycle reauthentication.
 
 ## Now
 
-- Issue #590: app-server turn timeout must become a recoverable Dashboard chat
-  state. This is the next implementation slice after this Issue #595 queue
-  refresh merges.
+- Issue #606: ordinary Dashboard read sessions must be separated from
+  high-risk passkey approval so the iPhone/PWA Dashboard no longer falls back
+  into 2-minute reauthentication during normal Butler use.
 
 ## Next
 
+- Issue #590: app-server turn timeout must become a recoverable Dashboard chat
+  state after the short-cycle authentication blocker is removed.
 - Issue #579: after timeout recovery, handle PWA background/foreground,
   WebSocket reconnect, auth/session expiry, and input/media retention.
 - Issue #450 + Issue #413: continue the Dashboard Butler live runtime /
@@ -72,6 +79,10 @@ Root blockers hold multiple active Issues open. They should shape `Now` and
   panel. It gates the product direction for Issue #528, Issue #450, Issue #413,
   Issue #415, Issue #498, Issue #514, Issue #590, Issue #594, Issue #604,
   Issue #605, and Issue #606.
+- Issue #606: ordinary Dashboard read sessions must not reuse the same
+  short-lived approval grant used for high-risk operations. It gates practical
+  iPhone/PWA recovery for Issue #579, timeout recovery acceptance for Issue
+  #590, and notification/context return for Issue #604 and Issue #605.
 - Issue #413: VPS runner / Codex execution progress must be visible as
   owner-facing runtime truth. It gates completion claims for Issue #450,
   Issue #594, Issue #495, and recovery/ops workflows.
@@ -192,8 +203,7 @@ These Issues remain active and required, but they do not preempt the current
   context directly.
 - Issue #605: PR / deploy context drawer should be recoverable from
   notifications and conversation.
-- Issue #606: ordinary dashboard read sessions should be separated from
-  high-risk passkey approval.
+- Issue #620: dashboard AI news radar with PWA notifications.
 - Issue #574: subtle lower-right chat timestamps.
 - Issue #589: deploy notification non-delivery root-cause visibility.
 - Issue #594: fast status intent / preflight index. This is important, but it is
