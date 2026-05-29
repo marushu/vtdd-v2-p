@@ -86,6 +86,10 @@ test.beforeAll(async () => {
       role: "owner",
       text: [
         "黒潰れ確認。",
+        "- repository: marushu/vtdd-v2-p",
+        "- issueNumber: 495",
+        "- currentSurface: dashboard_butler",
+        "- phase: execution",
         "```",
         "https://vtdd-v2-mvp.polished-tree-da7c.workers.dev/v2/approval/passkey/operator?mode=deploy&repositoryInput=marushu%2Fvtdd-v2-p&phase=execution&issueNumber=631&actionType=deploy_production&highRiskKind=deploy_production",
         "```"
@@ -142,22 +146,28 @@ for (const colorScheme of ["light", "dark"]) {
     await expect(page.locator(".bubble").filter({ hasText: "Deploy approval を開く" })).toBeVisible();
 
     const contrastState = await page.evaluate(() => {
-      function pick(selector) {
+      function pick(selector, pseudoElement) {
         const element = document.querySelector(selector);
         if (!element) return null;
-        const style = getComputedStyle(element);
+        const style = getComputedStyle(element, pseudoElement);
         const parentStyle = getComputedStyle(element.parentElement || element);
+        const bubbleStyle = getComputedStyle(element.closest(".bubble") || element);
         return {
           selector,
+          pseudoElement: pseudoElement || null,
           color: style.color,
           backgroundColor: style.backgroundColor,
           parentBackgroundColor: parentStyle.backgroundColor,
+          bubbleBackgroundColor: bubbleStyle.backgroundColor,
           text: element.textContent?.slice(0, 160) || ""
         };
       }
       return {
         ownerPre: pick(".bubble.owner pre"),
         ownerPreCode: pick(".bubble.owner pre code"),
+        ownerList: pick(".bubble.owner ul"),
+        ownerListItem: pick(".bubble.owner li"),
+        ownerListMarker: pick(".bubble.owner li", "::marker"),
         butlerLink: pick(".bubble:not(.owner) .chat-link"),
         butlerCode: pick(".bubble:not(.owner) .message-body code")
       };
@@ -174,13 +184,19 @@ for (const colorScheme of ["light", "dark"]) {
 }
 
 function assertReadableContrastState(state) {
-  for (const key of ["ownerPre", "ownerPreCode", "butlerLink", "butlerCode"]) {
+  for (const key of ["ownerPre", "ownerPreCode", "ownerList", "ownerListItem", "ownerListMarker", "butlerLink", "butlerCode"]) {
     if (!state[key]) {
       throw new Error(`missing contrast target: ${key}`);
     }
   }
   if (state.ownerPre.backgroundColor === state.ownerPreCode.color) {
     throw new Error("owner code text color matches owner code background");
+  }
+  if (state.ownerListItem.bubbleBackgroundColor === state.ownerListItem.color) {
+    throw new Error("owner list item text color matches owner bubble background");
+  }
+  if (state.ownerListMarker.bubbleBackgroundColor === state.ownerListMarker.color) {
+    throw new Error("owner list marker color matches owner bubble background");
   }
   if (state.butlerLink.color === state.butlerLink.parentBackgroundColor) {
     throw new Error("butler link color matches parent background");

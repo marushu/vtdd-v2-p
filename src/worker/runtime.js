@@ -12394,6 +12394,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .bubble ul { margin: 0; padding-left: 22px; color: var(--text); line-height: 1.85; }
     .bubble.owner { position: relative; align-self: flex-end; background: var(--owner-bubble); color: var(--owner-text); border-radius: 24px; padding: 12px 16px; }
     .bubble.owner p { color: var(--owner-text); margin: 0; }
+    .bubble.owner ul, .bubble.owner li, .bubble.owner li::marker { color: var(--owner-text); }
     .bubble.owner .message-body code { color: var(--owner-code-text); }
     .bubble.owner .message-body pre { background: var(--owner-code-bg); border-color: var(--owner-code-border); color: var(--owner-code-text); }
     .bubble.owner .message-body pre code { color: var(--owner-code-text); }
