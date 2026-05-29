@@ -124,6 +124,15 @@ const HELPER_COMMAND_REGISTRY = defineHelperCommandRegistry([
     requiredRiskLevel: "low",
     requiresRoot: false,
     initialPreset: true
+  },
+  {
+    commandClass: "vps_maintenance_install_inventory_collect",
+    title: "Collect VPS privileged maintenance install inventory without root execution",
+    allowedArgs: ["node scripts/collect-vps-maintenance-install-inventory.mjs --host <host> --repository <owner/repo>"],
+    argv: ["node", "scripts/collect-vps-maintenance-install-inventory.mjs"],
+    requiredRiskLevel: "low",
+    requiresRoot: false,
+    initialPreset: true
   }
 ]);
 

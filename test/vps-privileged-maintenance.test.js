@@ -93,6 +93,7 @@ test("VPS privileged maintenance helper command registry exposes initial presets
   assert.equal(commandClasses.includes("systemd_user_app_server_bridge_restart"), true);
   assert.equal(commandClasses.includes("systemd_user_app_server_bridge_logs"), true);
   assert.equal(commandClasses.includes("vps_runner_status_dry_run"), true);
+  assert.equal(commandClasses.includes("vps_maintenance_install_inventory_collect"), true);
   assert.equal(
     registry.every((entry) => Array.isArray(entry.allowedArgs) && entry.allowedArgs.length > 0),
     true
