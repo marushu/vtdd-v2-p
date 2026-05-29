@@ -285,6 +285,23 @@ function normalizeBridgeText(value) {
   return String(value ?? "").replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, 500);
 }
 
+function normalizeBridgeRepository(value) {
+  const text = normalizeBridgeText(value).toLowerCase();
+  return /^[a-z0-9_.-]+\/[a-z0-9_.-]+$/.test(text) ? text : "";
+}
+
+function normalizePositiveInteger(value) {
+  const number = Number(value);
+  return Number.isInteger(number) && number > 0 ? number : null;
+}
+
+function sanitizeBridgeActionId(value) {
+  return normalizeBridgeText(value)
+    .replace(/[^a-zA-Z0-9._:-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+}
+
 function sanitizeBridgeFilename(value) {
   return (
     normalizeBridgeText(value)
@@ -366,6 +383,73 @@ export function buildAppServerRequestApprovalResponse(message) {
       code: -32601,
       message: `Dashboard bridge does not support app-server request method: ${method}`
     }
+  };
+}
+
+export function buildOwnerActionRequiredPayloadForAppServerApproval({
+  message,
+  request = {},
+  codexThreadId = "",
+  dashboardThreadId = "",
+  approvalResponse = null
+} = {}) {
+  const method = String(message?.method || "");
+  const repository = normalizeBridgeRepository(request.repository);
+  const relatedIssue = normalizePositiveInteger(request.relatedIssue || request.issueNumber);
+  const messageId = String(message?.id ?? "");
+  const actionId = [
+    "app-server-approval",
+    dashboardThreadId || request.threadId || "dashboard-thread",
+    codexThreadId || request.codexThreadId || "codex-thread",
+    messageId || method || "request"
+  ]
+    .map((part) => sanitizeBridgeActionId(part))
+    .filter(Boolean)
+    .join(":");
+  if (!repository || !actionId) {
+    return null;
+  }
+  const decision = approvalResponse?.result?.decision || approvalResponse?.error?.message || "declined";
+  return {
+    repository,
+    actionId,
+    title: "Codex app-server approval request",
+    summary: `Dashboard bridge declined ${method || "approval request"}; owner attention may be required.`,
+    issueNumber: relatedIssue || undefined,
+    workflowName: "dashboard-app-server-bridge",
+    url: "/dashboard/notifications?focus=owner-action",
+    source: {
+      method,
+      decision: String(decision)
+    }
+  };
+}
+
+export async function postOwnerActionRequiredEvent({
+  runtimeUrl = "",
+  token = "",
+  payload = null,
+  fetchImpl = globalThis.fetch
+} = {}) {
+  if (!runtimeUrl || !token || !payload || typeof fetchImpl !== "function") {
+    return {
+      ok: false,
+      skipped: true,
+      reason: "runtimeUrl, token, payload, and fetch are required"
+    };
+  }
+  const url = new URL("/v2/events/owner-action-required", runtimeUrl);
+  const response = await fetchImpl(url, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+  return {
+    ok: response.ok,
+    status: response.status
   };
 }
 
@@ -463,7 +547,7 @@ export function matchesAppServerTurnNotification(message, context = {}) {
 }
 
 export class JsonLineAppServerClient {
-  constructor({ command = "codex", args = ["app-server", "--listen", "stdio://"], cwd = process.cwd() } = {}) {
+  constructor({ command = "codex", args = ["app-server", "--listen", "stdio://"], cwd = process.cwd(), onApprovalRequest = null } = {}) {
     this.command = command;
     this.args = args;
     this.cwd = cwd;
@@ -472,6 +556,7 @@ export class JsonLineAppServerClient {
     this.notificationHandlers = new Set();
     this.buffer = "";
     this.child = null;
+    this.onApprovalRequest = typeof onApprovalRequest === "function" ? onApprovalRequest : null;
   }
 
   start() {
@@ -528,6 +613,14 @@ export class JsonLineAppServerClient {
     return () => this.notificationHandlers.delete(handler);
   }
 
+  setApprovalRequestHandler(handler) {
+    const previous = this.onApprovalRequest;
+    this.onApprovalRequest = typeof handler === "function" ? handler : null;
+    return () => {
+      this.onApprovalRequest = previous;
+    };
+  }
+
   handleChunk(chunk) {
     this.buffer += chunk;
     for (;;) {
@@ -554,6 +647,9 @@ export class JsonLineAppServerClient {
       }
       const approvalResponse = buildAppServerRequestApprovalResponse(message);
       if (approvalResponse) {
+        if (this.onApprovalRequest) {
+          void this.onApprovalRequest({ message, approvalResponse });
+        }
         this.write(approvalResponse);
         continue;
       }
@@ -689,9 +785,31 @@ export async function handleDashboardTurnRequest({
     }
     void sendDashboardEvent(event);
   });
+  const restoreApprovalRequestHandler =
+    typeof appServer.setApprovalRequestHandler === "function"
+      ? appServer.setApprovalRequestHandler(async ({ message, approvalResponse }) => {
+          const payload = buildOwnerActionRequiredPayloadForAppServerApproval({
+            message,
+            request,
+            codexThreadId,
+            dashboardThreadId,
+            approvalResponse
+          });
+          if (!payload) {
+            return;
+          }
+          await postOwnerActionRequiredEvent({
+            runtimeUrl,
+            token,
+            payload,
+            fetchImpl
+          });
+        })
+      : () => {};
   cleanupNotifications = () => {
     clearTimeout(lateCompletionCleanupHandle);
     unsubscribe();
+    restoreApprovalRequestHandler();
   };
   try {
     const materializedMediaReferences = await materializeDashboardMediaReferences({

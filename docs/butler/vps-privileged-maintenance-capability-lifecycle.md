@@ -111,6 +111,11 @@ The recovery link for this route must be a same-origin `/dashboard` URL. The
 route must reject external URLs, protocol-relative URLs, and underspecified
 requests that lack a stable action id or owner-facing title/summary.
 
+The Dashboard app-server bridge must call this route when Codex app-server asks
+for command, file-change, patch, or permission approval. The bridge still
+declines the app-server request mechanically; the PWA notification is an owner
+attention signal, not an execution grant.
+
 When owner action is required, the runtime must attempt PWA notification and
 report send result truth. If push delivery is unavailable, Butler must mark
 `pwa_notification_unavailable` and still preserve the recovery link in
