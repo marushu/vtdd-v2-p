@@ -37255,6 +37255,10 @@ var CAPABILITY_OPERATIONS = /* @__PURE__ */ new Set(["add", "enable", "disable",
 var RISK_LEVELS = /* @__PURE__ */ new Set(["low", "medium", "high"]);
 var DEFAULT_MANIFEST_VERSION = 1;
 var HELPER_EXECUTION_MODES = /* @__PURE__ */ new Set(["dry_run"]);
+var DEFAULT_HELPER_INSTALL_PATH = "/usr/local/sbin/vtdd-vps-maintenance-helper";
+var DEFAULT_MANIFEST_PATH = "/etc/vtdd/privileged-maintenance-capabilities.json";
+var DEFAULT_SUDOERS_PATH = "/etc/sudoers.d/vtdd-vps-maintenance-helper";
+var DEFAULT_RUNNER_USER = "vtdd-runner";
 var HELPER_COMMAND_REGISTRY = defineHelperCommandRegistry([
   {
     commandClass: "playwright_install_deps_chromium",
@@ -37469,6 +37473,84 @@ function buildVpsCapabilityProposal(input = {}) {
   return {
     ok: issues.length === 0,
     proposal,
+    issues
+  };
+}
+function buildVpsPrivilegedMaintenanceInstallInventory(input = {}) {
+  const host = normalizeText24(input.host);
+  const repository = normalizeRepository(input.repository);
+  const helperPath = normalizeText24(input.helperPath || input.helper_path) || DEFAULT_HELPER_INSTALL_PATH;
+  const manifestPath = normalizeText24(input.manifestPath || input.manifest_path) || DEFAULT_MANIFEST_PATH;
+  const sudoersPath = normalizeText24(input.sudoersPath || input.sudoers_path) || DEFAULT_SUDOERS_PATH;
+  const runnerUser = normalizeText24(input.runnerUser || input.runner_user) || DEFAULT_RUNNER_USER;
+  const observed = normalizeObject10(input.observed);
+  const helperInstalled = normalizeBoolean(observed.helperInstalled ?? input.helperInstalled);
+  const manifestInstalled = normalizeBoolean(observed.manifestInstalled ?? input.manifestInstalled);
+  const sudoersInstalled = normalizeBoolean(observed.sudoersInstalled ?? input.sudoersInstalled);
+  const helperOwner = normalizeText24(observed.helperOwner || input.helperOwner);
+  const manifestOwner = normalizeText24(observed.manifestOwner || input.manifestOwner);
+  const sudoersOwner = normalizeText24(observed.sudoersOwner || input.sudoersOwner);
+  const sudoersAllowsAll = normalizeBoolean(observed.sudoersAllowsAll ?? input.sudoersAllowsAll);
+  const issues = [];
+  if (!host) issues.push("host is required");
+  if (!repository) issues.push("repository is required");
+  if (!helperPath.startsWith("/")) issues.push("helperPath must be absolute");
+  if (!manifestPath.startsWith("/")) issues.push("manifestPath must be absolute");
+  if (!sudoersPath.startsWith("/")) issues.push("sudoersPath must be absolute");
+  if (sudoersAllowsAll === true) issues.push("sudoers must not allow NOPASSWD:ALL");
+  const checks = [
+    {
+      id: "root_owned_helper",
+      status: helperInstalled === true && helperOwner === "root" ? "pass" : helperInstalled === false ? "missing" : "unverified",
+      required: true,
+      path: helperPath,
+      expectedOwner: "root",
+      observedOwner: helperOwner || null
+    },
+    {
+      id: "root_owned_manifest",
+      status: manifestInstalled === true && manifestOwner === "root" ? "pass" : manifestInstalled === false ? "missing" : "unverified",
+      required: true,
+      path: manifestPath,
+      expectedOwner: "root",
+      observedOwner: manifestOwner || null
+    },
+    {
+      id: "scoped_sudoers_entry",
+      status: sudoersInstalled === true && sudoersOwner === "root" && sudoersAllowsAll !== true ? "pass" : sudoersInstalled === false ? "missing" : "unverified",
+      required: true,
+      path: sudoersPath,
+      expectedOwner: "root",
+      observedOwner: sudoersOwner || null
+    }
+  ];
+  const status = issues.length > 0 ? "blocked" : checks.every((check) => check.status === "pass") ? "ready" : checks.some((check) => check.status === "missing") ? "missing" : "unverified";
+  return {
+    ok: issues.length === 0,
+    kind: "vps_privileged_maintenance_install_inventory",
+    status,
+    host,
+    repository,
+    runnerUser,
+    helperPath,
+    manifestPath,
+    sudoersPath,
+    checks,
+    requiredSudoersShape: {
+      user: runnerUser,
+      allowedCommand: helperPath,
+      forbidden: ["NOPASSWD:ALL", "sudo su", "root shell"]
+    },
+    runtimeTruth: {
+      kind: "vps_privileged_maintenance_install_inventory",
+      status,
+      host,
+      repository,
+      rootExecutionStarted: false,
+      helperExecutionStarted: false,
+      redacted: true,
+      nextAction: status === "ready" ? "helper install inventory is ready for scoped helper requests" : "verify or install root-owned helper, manifest, and scoped sudoers before claiming iPhone-complete privileged maintenance"
+    },
     issues
   };
 }
@@ -37802,6 +37884,14 @@ function normalizeRiskLevel(value) {
 function normalizeStringList(value) {
   return (Array.isArray(value) ? value : [value]).map(normalizeText24).filter(Boolean);
 }
+function normalizeObject10(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+function normalizeBoolean(value) {
+  if (value === true || value === "true") return true;
+  if (value === false || value === "false") return false;
+  return null;
+}
 function normalizePositiveInteger5(value, fallback) {
   const number3 = Number.parseInt(String(value ?? ""), 10);
   return Number.isFinite(number3) && number3 > 0 ? number3 : fallback;
@@ -37863,6 +37953,7 @@ var RUNTIME_SETUP_MANIFEST = Object.freeze({
     "/v2/vps/privileged-maintenance/proposals",
     "/v2/vps/privileged-maintenance/helper-requests",
     "/v2/vps/privileged-maintenance/helper-dry-runs",
+    "/v2/retrieve/vps-maintenance-install-inventory",
     "/v2/retrieve/constitution",
     "/v2/retrieve/decisions",
     "/v2/retrieve/proposals",
@@ -37894,6 +37985,7 @@ var RUNTIME_SETUP_MANIFEST = Object.freeze({
     "vtddCreateVpsMaintenanceProposal",
     "vtddCreateVpsMaintenanceHelperRequest",
     "vtddDryRunVpsMaintenanceHelper",
+    "vtddRetrieveVpsMaintenanceInstallInventory",
     "vtddRetrieveConstitution",
     "vtddRetrieveDecisionLogs",
     "vtddRetrieveProposalLogs",
@@ -37924,6 +38016,7 @@ var RUNTIME_SETUP_MANIFEST = Object.freeze({
     "vtddCreateVpsMaintenanceProposal",
     "vtddCreateVpsMaintenanceHelperRequest",
     "vtddDryRunVpsMaintenanceHelper",
+    "vtddRetrieveVpsMaintenanceInstallInventory",
     "vtddRetrieveConstitution",
     "vtddRetrieveDecisionLogs",
     "vtddRetrieveProposalLogs",
@@ -40521,14 +40614,14 @@ function canBindNaturalGitHubWriteApproval(payload) {
   if (!operationConfig || operationConfig.tier !== GitHubAppOperationTier.NORMAL_GO || operationConfig.naturalGoEnabled === false || !NATURAL_GO_ENABLED_OPERATIONS.has(operation)) {
     return false;
   }
-  const naturalApproval = normalizeObject10(payload?.naturalApproval);
+  const naturalApproval = normalizeObject11(payload?.naturalApproval);
   if (naturalApproval.exactPayloadPresented !== true || naturalApproval.repositoryResolved !== true) {
     return false;
   }
   if (!containsGoToken(naturalApproval.userText)) {
     return false;
   }
-  const presentedPayload = normalizeObject10(naturalApproval.presentedPayload);
+  const presentedPayload = normalizeObject11(naturalApproval.presentedPayload);
   if (normalizeText29(presentedPayload.operation) !== operation) {
     return false;
   }
@@ -40561,7 +40654,7 @@ function readPayloadIdentityField(payload, field) {
 function containsGoToken(value) {
   return /(^|[^A-Za-z0-9_])GO([^A-Za-z0-9_]|$)/i.test(normalizeText29(value));
 }
-function normalizeObject10(value) {
+function normalizeObject11(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 function normalizeText29(value) {
@@ -57027,7 +57120,7 @@ var DashboardChatRoom = class {
       return;
     }
     const repositoryResolution = await resolveDashboardChatRepository({
-      payload: { ...normalizeObject11(payload), text, threadId },
+      payload: { ...normalizeObject12(payload), text, threadId },
       env: this.env
     });
     const repository = repositoryResolution.ok ? repositoryResolution.repository : "";
@@ -57262,7 +57355,7 @@ var DashboardChatRoom = class {
     }
     try {
       const record2 = await this.ctx.storage.get(key);
-      return normalizeObject11(record2);
+      return normalizeObject12(record2);
     } catch {
       return {};
     }
@@ -57735,6 +57828,20 @@ var runtime_default = {
         });
       }
       return handleVpsPrivilegedMaintenanceHelperDryRunRequest(request, env);
+    }
+    if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/vps-maintenance-install-inventory")) {
+      const auth = authorizeGatewayRequest({
+        request,
+        env,
+        apiSuffix: "/retrieve/vps-maintenance-install-inventory"
+      });
+      if (!auth.ok) {
+        return retrieveErrorJson(url, auth.status, {
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+      return handleRetrieveVpsMaintenanceInstallInventoryRequest(url);
     }
     if (request.method === "POST" && isApiPath(url.pathname, "/action/github-actions-secret")) {
       const auth = authorizePasskeyBrowserOrMachineRequest({
@@ -59051,7 +59158,7 @@ function buildMemoryWriteRecord(payload = {}) {
   const repository = normalizeText31(payload.repository) || null;
   const timestamp = normalizeText31(payload.timestamp) || (/* @__PURE__ */ new Date()).toISOString();
   const metadata = {
-    ...normalizeObject11(payload.metadata),
+    ...normalizeObject12(payload.metadata),
     relatedIssue,
     repository,
     source: "butler_memory_write_action",
@@ -59189,7 +59296,7 @@ function normalizeBoundedMemoryStringArray(value, { maxItems, maxLength }) {
   return values.map((item) => normalizeMemoryRecallText(item, maxLength)).filter(Boolean).slice(0, maxItems);
 }
 function normalizeMemoryOrigin(value) {
-  const input = normalizeObject11(value);
+  const input = normalizeObject12(value);
   const origin = {
     surface: normalizeMemoryRecallText(input.surface, 80),
     moment: normalizeMemoryRecallText(input.moment, 160),
@@ -59198,7 +59305,7 @@ function normalizeMemoryOrigin(value) {
   return Object.values(origin).some(Boolean) ? origin : null;
 }
 function normalizeTensionNote(value) {
-  const input = normalizeObject11(value);
+  const input = normalizeObject12(value);
   const note = {
     summary: normalizeMemoryRecallText(input.summary, 240),
     intensity: normalizeMemoryRecallText(input.intensity, 40),
@@ -59208,7 +59315,7 @@ function normalizeTensionNote(value) {
   return Object.values(note).some(Boolean) ? note : null;
 }
 function normalizeExplorationHypothesis(value) {
-  const input = normalizeObject11(value);
+  const input = normalizeObject12(value);
   const hypothesis = {
     summary: normalizeMemoryRecallText(input.summary ?? input.hypothesis, 500),
     whySuspected: normalizeMemoryRecallText(input.whySuspected, 500),
@@ -59222,7 +59329,7 @@ function normalizeExplorationHypothesis(value) {
 function normalizeSuspectedLines2(value) {
   const values = Array.isArray(value) ? value : [];
   return values.map((item) => {
-    const input = normalizeObject11(item);
+    const input = normalizeObject12(item);
     return {
       file: normalizeMemoryRecallText(input.file, 240),
       line: normalizePositiveLine(input.line),
@@ -59235,7 +59342,7 @@ function normalizeSuspectedLines2(value) {
 function normalizeRejectedHypotheses2(value) {
   const values = Array.isArray(value) ? value : [];
   return values.map((item) => {
-    const input = normalizeObject11(item);
+    const input = normalizeObject12(item);
     return {
       summary: normalizeMemoryRecallText(input.summary ?? input.hypothesis, 500),
       whyRejected: normalizeMemoryRecallText(input.whyRejected ?? input.reason, 500),
@@ -59244,7 +59351,7 @@ function normalizeRejectedHypotheses2(value) {
   }).filter((item) => item.summary && item.whyRejected);
 }
 function normalizeMemorySummaryObject(value) {
-  const input = normalizeObject11(value);
+  const input = normalizeObject12(value);
   const output = {};
   for (const [key, item] of Object.entries(input)) {
     if (Array.isArray(item)) {
@@ -59823,7 +59930,7 @@ async function executeMcpImplementationRecall(argumentsInput, env) {
   const pullRecord = pull.records?.[0] ?? null;
   const runtimeStatus = pullRecord ? pullRecord.merged ? "merged" : pullRecord.state === "open" ? "open_pr" : "unknown" : "unknown";
   const memoryReferences = cross.body?.orderedReferences ?? [];
-  const prContextReferences = memoryReferences.filter((item) => normalizeText31(item?.source) === "pr_context").map((item) => normalizeObject11(item?.reference));
+  const prContextReferences = memoryReferences.filter((item) => normalizeText31(item?.source) === "pr_context").map((item) => normalizeObject12(item?.reference));
   const memoryCommits = prContextReferences.flatMap((item) => normalizeTextList2(item.commits));
   const files = uniqueTextList2(prContextReferences.flatMap((item) => normalizeTextList2(item.files)));
   const tests = uniqueTextList2(prContextReferences.flatMap((item) => normalizeTextList2(item.tests)));
@@ -60749,6 +60856,35 @@ async function handleVpsPrivilegedMaintenanceHelperDryRunRequest(request, env) {
     ok: true,
     helperPlan: result.helperPlan,
     runtimeTruth: result.runtimeTruth
+  });
+}
+async function handleRetrieveVpsMaintenanceInstallInventoryRequest(url) {
+  const inventory = buildVpsPrivilegedMaintenanceInstallInventory({
+    host: url.searchParams.get("host"),
+    repository: url.searchParams.get("repository"),
+    helperPath: url.searchParams.get("helperPath"),
+    manifestPath: url.searchParams.get("manifestPath"),
+    sudoersPath: url.searchParams.get("sudoersPath"),
+    runnerUser: url.searchParams.get("runnerUser"),
+    helperInstalled: url.searchParams.get("helperInstalled"),
+    manifestInstalled: url.searchParams.get("manifestInstalled"),
+    sudoersInstalled: url.searchParams.get("sudoersInstalled"),
+    helperOwner: url.searchParams.get("helperOwner"),
+    manifestOwner: url.searchParams.get("manifestOwner"),
+    sudoersOwner: url.searchParams.get("sudoersOwner"),
+    sudoersAllowsAll: url.searchParams.get("sudoersAllowsAll")
+  });
+  if (!inventory.ok) {
+    return retrieveErrorJson(url, 422, {
+      error: "vps_maintenance_install_inventory_invalid",
+      reason: "VPS maintenance install inventory query is invalid",
+      issues: inventory.issues
+    });
+  }
+  return json(200, {
+    ok: true,
+    installInventory: inventory,
+    runtimeTruth: inventory.runtimeTruth
   });
 }
 async function handleDashboardChatMessageRequest(request, env) {
@@ -62437,8 +62573,8 @@ async function resolveApprovalGrant({ payload, policyInput, env }) {
   };
 }
 function buildApprovalScopeSnapshot({ payload, policyInput }) {
-  const issueContext = normalizeObject11(payload?.issueContext);
-  const traceability = normalizeObject11(policyInput?.issueTraceability);
+  const issueContext = normalizeObject12(payload?.issueContext);
+  const traceability = normalizeObject12(policyInput?.issueTraceability);
   const operationConfig = getGitHubAppOperation(payload?.highRiskKind ?? policyInput?.highRiskKind);
   const identityFields = new Set(operationConfig?.authorityScopeIdentityFields ?? [
     "repository",
@@ -62558,7 +62694,7 @@ async function findApprovalRecordById(provider, recordId) {
   return fallbackRecords.find((record2) => normalizeText31(record2?.id) === recordId) ?? fallbackRecords.find((record2) => normalizeText31(record2?.content?.approvalId) === recordId) ?? fallbackRecords.find((record2) => normalizeText31(record2?.content?.sessionId) === recordId) ?? null;
 }
 async function appendGuardedAbsenceExecutionLog({ payload, gatewayOutcome, env }) {
-  const policyInput = normalizeObject11(payload?.policyInput);
+  const policyInput = normalizeObject12(payload?.policyInput);
   const autonomyMode = normalizeAutonomyMode(policyInput.autonomyMode);
   if (autonomyMode !== AutonomyMode.GUARDED_ABSENCE) {
     return gatewayOutcome;
@@ -62572,7 +62708,7 @@ async function appendGuardedAbsenceExecutionLog({ payload, gatewayOutcome, env }
     );
   }
   const nowIso = (/* @__PURE__ */ new Date()).toISOString();
-  const body = normalizeObject11(gatewayOutcome?.body);
+  const body = normalizeObject12(gatewayOutcome?.body);
   const blockedByRule = normalizeText31(body.blockedByRule) || null;
   const recordInput = {
     id: buildGuardedAbsenceExecutionLogId({
@@ -63148,7 +63284,7 @@ function resolveDashboardChatRoomStub(env, threadId) {
   return null;
 }
 async function resolveDashboardChatRepository({ payload, env }) {
-  const input = normalizeObject11(payload);
+  const input = normalizeObject12(payload);
   const text = input.text || input.message || input.body;
   const rawRepositoryInput = normalizeDashboardEventText(input.repository || input.repositoryInput || input.repository_input) || extractRepositoryTokenFromDashboardChatText(text);
   const canonicalRepository = normalizeCanonicalRepositoryInput(rawRepositoryInput);
@@ -63306,7 +63442,7 @@ async function buildDashboardChatTrafficControlContext({ env, repository, relate
   }
 }
 function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = "" } = {}) {
-  const input = normalizeObject11(payload);
+  const input = normalizeObject12(payload);
   const threadId = normalizeDashboardThreadId(input.threadId || input.thread_id || fallbackThreadId);
   if (!threadId) {
     return {
@@ -64721,7 +64857,7 @@ async function cleanupOrphanMediaObject(r2, objectKey) {
   }
 }
 function normalizeMediaObjectRecord(record2) {
-  const input = normalizeObject11(record2);
+  const input = normalizeObject12(record2);
   const id = normalizeMediaId(input.id || input.mediaId || input.media_id);
   const objectKey = normalizeDashboardEventText(input.objectKey || input.object_key);
   const filename = sanitizeMediaFilename(input.filename);
@@ -64800,7 +64936,7 @@ function toMediaReference(record2) {
 function normalizeMediaReferences(value) {
   const list = Array.isArray(value) ? value : value ? [value] : [];
   return list.map((item) => {
-    const input = normalizeObject11(item);
+    const input = normalizeObject12(item);
     const mediaId = normalizeMediaId(input.mediaId || input.id || input.media_id);
     if (!mediaId) {
       return null;
@@ -64873,7 +65009,7 @@ async function resolveDashboardChatMediaReferences({ env, mediaReferences, repos
   return { ok: true, mediaReferences: resolved };
 }
 async function buildDashboardChatTurn(payload, options = {}) {
-  const input = normalizeObject11(payload);
+  const input = normalizeObject12(payload);
   const repository = normalizeCanonicalRepositoryInput(input.repository);
   const mediaReferences = normalizeMediaReferences(input.mediaReferences || input.media_references || input.media);
   const clientMessageId = sanitizeDashboardChatText(input.clientMessageId || input.client_message_id);
@@ -64946,7 +65082,7 @@ function buildDashboardAppServerNotConnectedReply({ repository, relatedIssue } =
   ].join("\n");
 }
 function normalizeDashboardChatMessage(message, defaults = {}) {
-  const input = normalizeObject11(message);
+  const input = normalizeObject12(message);
   const threadId = normalizeDashboardThreadId(input.threadId || input.thread_id || defaults.threadId);
   if (!threadId) {
     return null;
@@ -64966,9 +65102,9 @@ function normalizeDashboardChatMessage(message, defaults = {}) {
   };
 }
 async function normalizeDashboardPushSubscription(value) {
-  const input = normalizeObject11(value);
+  const input = normalizeObject12(value);
   const endpoint = normalizeDashboardUrl(input.endpoint);
-  const keys = normalizeObject11(input.keys);
+  const keys = normalizeObject12(input.keys);
   const p256dh = normalizeDashboardEventText(keys.p256dh);
   const auth = normalizeDashboardEventText(keys.auth);
   if (!endpoint) {
@@ -65007,7 +65143,7 @@ async function sha256Hex(value) {
   return btoa(text).replace(/[^A-Za-z0-9]/g, "").slice(0, 64);
 }
 function normalizeDashboardThreadSummary(summary, defaults = {}) {
-  const input = normalizeObject11(summary);
+  const input = normalizeObject12(summary);
   const threadId = normalizeDashboardThreadId(input.threadId || input.thread_id || defaults.threadId);
   if (!threadId) {
     return null;
@@ -65100,7 +65236,7 @@ function extractDashboardChatSummaryThreadId(pathname) {
   return extractDashboardChatThreadId(pathname.replace(/\/summary$/, ""));
 }
 function normalizeDashboardEventRecord(event) {
-  const input = normalizeObject11(event);
+  const input = normalizeObject12(event);
   const updatedAt = normalizeIsoTimestamp(input.updatedAt) || (/* @__PURE__ */ new Date()).toISOString();
   const createdAt = normalizeIsoTimestamp(input.createdAt) || updatedAt;
   const title = normalizeDashboardEventText(input.title) || normalizeDashboardEventText(input.workflowName);
@@ -65320,7 +65456,7 @@ function safeParseJson(value, fallback = null) {
   }
 }
 function attachGatewayWarning(gatewayOutcome, warning) {
-  const body = normalizeObject11(gatewayOutcome?.body);
+  const body = normalizeObject12(gatewayOutcome?.body);
   const warnings = Array.isArray(body.warnings) ? body.warnings : [];
   const merged = [...new Set([...warnings, normalizeText31(warning)].filter(Boolean))];
   return {
@@ -65999,14 +66135,14 @@ function readObservedSetupFailureFromUrl(url) {
     missingBodyFields: normalizeText31(url.searchParams.get("missingBodyFields"))
   };
 }
-function normalizeObject11(value) {
+function normalizeObject12(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return {};
   }
   return value;
 }
 function normalizeGitHubActionsEvent(payload) {
-  const input = normalizeObject11(payload);
+  const input = normalizeObject12(payload);
   const repository = normalizeCanonicalRepositoryInput(input.repository || input.githubRepository);
   const workflowName = normalizeDashboardEventText(input.workflowName || input.workflow || input.workflow_name);
   const runId = normalizeDashboardEventText(input.runId || input.run_id || input.databaseId || input.database_id);
@@ -66082,7 +66218,7 @@ function normalizeGitHubActionsEvent(payload) {
   };
 }
 function normalizeVpsRunnerDashboardEvent(payload) {
-  const input = normalizeObject11(payload);
+  const input = normalizeObject12(payload);
   const repository = normalizeCanonicalRepositoryInput(input.repository || input.githubRepository);
   const executionId = normalizeDashboardEventText(
     input.executionId || input.execution_id || input.runId || input.run_id
@@ -66166,7 +66302,7 @@ function normalizeVpsRunnerDashboardEvent(payload) {
   };
 }
 function normalizeOwnerActionRequiredDashboardEvent(payload) {
-  const input = normalizeObject11(payload);
+  const input = normalizeObject12(payload);
   const repository = normalizeCanonicalRepositoryInput(input.repository || input.repositoryInput);
   const actionId = normalizeDashboardEventText(input.actionId || input.action_id || input.runId || input.run_id);
   const title = sanitizeDashboardChatText(input.title);

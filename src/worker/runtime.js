@@ -7,6 +7,7 @@ import {
   appendDecisionLogFromGateway,
   appendProposalLogFromGateway,
   buildVpsCapabilityProposal,
+  buildVpsPrivilegedMaintenanceInstallInventory,
   buildVpsMaintenanceApprovalScope,
   planVpsPrivilegedMaintenanceHelperExecution,
   createCloudflareMemoryProvider,
@@ -1081,6 +1082,22 @@ export default {
       }
 
       return handleVpsPrivilegedMaintenanceHelperDryRunRequest(request, env);
+    }
+
+    if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/vps-maintenance-install-inventory")) {
+      const auth = authorizeGatewayRequest({
+        request,
+        env,
+        apiSuffix: "/retrieve/vps-maintenance-install-inventory"
+      });
+      if (!auth.ok) {
+        return retrieveErrorJson(url, auth.status, {
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+
+      return handleRetrieveVpsMaintenanceInstallInventoryRequest(url);
     }
 
     if (request.method === "POST" && isApiPath(url.pathname, "/action/github-actions-secret")) {
@@ -4508,6 +4525,36 @@ async function handleVpsPrivilegedMaintenanceHelperDryRunRequest(request, env) {
     ok: true,
     helperPlan: result.helperPlan,
     runtimeTruth: result.runtimeTruth
+  });
+}
+
+async function handleRetrieveVpsMaintenanceInstallInventoryRequest(url) {
+  const inventory = buildVpsPrivilegedMaintenanceInstallInventory({
+    host: url.searchParams.get("host"),
+    repository: url.searchParams.get("repository"),
+    helperPath: url.searchParams.get("helperPath"),
+    manifestPath: url.searchParams.get("manifestPath"),
+    sudoersPath: url.searchParams.get("sudoersPath"),
+    runnerUser: url.searchParams.get("runnerUser"),
+    helperInstalled: url.searchParams.get("helperInstalled"),
+    manifestInstalled: url.searchParams.get("manifestInstalled"),
+    sudoersInstalled: url.searchParams.get("sudoersInstalled"),
+    helperOwner: url.searchParams.get("helperOwner"),
+    manifestOwner: url.searchParams.get("manifestOwner"),
+    sudoersOwner: url.searchParams.get("sudoersOwner"),
+    sudoersAllowsAll: url.searchParams.get("sudoersAllowsAll")
+  });
+  if (!inventory.ok) {
+    return retrieveErrorJson(url, 422, {
+      error: "vps_maintenance_install_inventory_invalid",
+      reason: "VPS maintenance install inventory query is invalid",
+      issues: inventory.issues
+    });
+  }
+  return json(200, {
+    ok: true,
+    installInventory: inventory,
+    runtimeTruth: inventory.runtimeTruth
   });
 }
 

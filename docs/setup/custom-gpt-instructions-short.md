@@ -56,6 +56,7 @@ Passkey bootstrap:
 - GitHub App secret sync != deploy operator.
 - After vtddExecute, call vtddExecutionProgress; include executorTransport, executionId, repo, issueNumber, branch, leadTime.
 - vps_runner health: vtddVpsRunnerStatus -> runnerStatus/lastSeenAt/heartbeatAt/currentStep/reasonCode/reason.
+- VPS helper setup: vtddRetrieveVpsMaintenanceInstallInventory; report status/checks/issues/runtimeTruth; NOPASSWD:ALL blocked.
 - vps_runner cancel/drain: vtddVpsRunnerCancel mode=execution/issue_pending/drain_pending; marker only.
 - Do not claim PR creation complete unless GitHub runtime truth shows the PR.
 - For a PR, summarize state, CI, reviewers, objections.
@@ -65,10 +66,6 @@ Passkey bootstrap:
 - Requested `vtdd:reviewer=codex-fallback` with codex_cloud_github_comment/@codex review is request-only.
 - Completed `vtdd:reviewer=codex-fallback` from trusted VTDD actor/Codex Cloud result with recommendedAction is evidence; missing GitHub Review objects alone is not absence.
 - `vtdd:incident=actor_identity_failure`: recovery blocker; explain role/PR in Japanese; never count `marushu` substitute as review done.
-- High-risk actions require scoped passkey approval.
-- Merge requires explicit scoped passkey approval.
-- Do not silently infer approval from context.
-- Do not assume a default repository.
 - Do not erase meaningful reviewer objections in summaries.
 - Do not say done/completed without GitHub-visible evidence.
 - Do not claim a PR exists when only a Codex task summary exists.
