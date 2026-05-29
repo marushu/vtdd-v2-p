@@ -58377,6 +58377,7 @@ async function buildStartupPreflight({
   const butlerFirstPrincipleStatus = threadLocalAssumptionsPromoted ? "promoted" : "\u672A\u78BA\u8A8D";
   const executionQueue = buildStartupExecutionQueue({ sourceResults });
   const repoBackedSkills = buildStartupRepoBackedSkills({ sourceResults });
+  const toolParityInventory = buildStartupToolParityInventory();
   return {
     schemaVersion: "startup_preflight_v1",
     issueNumber: issueNumber || null,
@@ -58390,6 +58391,7 @@ async function buildStartupPreflight({
       "active_github_issue",
       "AGENTS.md",
       "repo_backed_skills",
+      "tool_parity_inventory",
       "thread_independent_startup_contract",
       "execution_queue_contract",
       "active_issue_execution_queue",
@@ -58406,6 +58408,7 @@ async function buildStartupPreflight({
     sources,
     missingSources,
     repoBackedSkills,
+    toolParityInventory,
     executionQueue,
     activeIssue: activeIssue ? {
       number: activeIssue.number,
@@ -58427,7 +58430,8 @@ async function buildStartupPreflight({
       currentSurface,
       missingSources,
       memoryResult,
-      repoBackedSkills
+      repoBackedSkills,
+      toolParityInventory
     }),
     nextSafeAction: buildStartupNextSafeAction({
       issueNumber,
@@ -58436,6 +58440,105 @@ async function buildStartupPreflight({
       memoryResult
     }),
     stopCondition: "If repository/Issue/runtime/RAG/source truth is \u672A\u78BA\u8A8D, do not claim Butler-complete execution. Ask for owner direction or create a bounded remediation Issue."
+  };
+}
+function buildStartupToolParityInventory() {
+  const tools = [
+    {
+      id: "git",
+      label: "git branch/diff/main truth",
+      category: "cli",
+      macCodexUsage: "branch, commit, diff, log, main sync",
+      repoBacked: false,
+      butlerReachable: "runtime_truth_indirect",
+      vpsExecutable: "expected",
+      runtimeTruth: "unverified",
+      gap: null
+    },
+    {
+      id: "gh",
+      label: "GitHub Issue/PR/Actions truth",
+      category: "cli",
+      macCodexUsage: "issue/pr/actions/review/comment operations",
+      repoBacked: false,
+      butlerReachable: "partially_via_github_actions",
+      vpsExecutable: "expected_with_github_app_or_token",
+      runtimeTruth: "partial",
+      gap: "vps_auth_inventory_unverified"
+    },
+    {
+      id: "node-npm",
+      label: "Node/npm validation",
+      category: "cli",
+      macCodexUsage: "npm test, build:worker, validation scripts",
+      repoBacked: false,
+      butlerReachable: "via_vps_runner_when_handoff_connected",
+      vpsExecutable: "expected",
+      runtimeTruth: "unverified",
+      gap: "vps_version_inventory_unverified"
+    },
+    {
+      id: "repo-validation-scripts",
+      label: "repo validation scripts",
+      category: "repo_script",
+      macCodexUsage: "prepare/validate Issue and PR bodies, self-parity, generated-worker",
+      repoBacked: true,
+      butlerReachable: "via_vps_runner_when_handoff_connected",
+      vpsExecutable: "expected",
+      runtimeTruth: "partial",
+      gap: "runner_execution_truth_required"
+    },
+    {
+      id: "repo-backed-skills",
+      label: "VTDD repo-backed Skills",
+      category: "skill",
+      macCodexUsage: "traffic control and status advice",
+      repoBacked: true,
+      butlerReachable: "via_startup_preflight",
+      vpsExecutable: "readable_from_repo",
+      runtimeTruth: "read",
+      gap: null
+    },
+    {
+      id: "openai-developers-skills",
+      label: "OpenAI Developers Skills",
+      category: "skill_plugin",
+      macCodexUsage: "OpenAI docs, API troubleshooting, Agents SDK, ChatGPT app work",
+      repoBacked: false,
+      butlerReachable: "not_yet_connected",
+      vpsExecutable: "unknown",
+      runtimeTruth: "missing",
+      gap: "plugin_skill_parity_unimplemented"
+    },
+    {
+      id: "browser-playwright",
+      label: "browser / Playwright verification",
+      category: "browser_e2e",
+      macCodexUsage: "local browser checks and screenshot E2E",
+      repoBacked: "tests_and_scripts_only",
+      butlerReachable: "not_yet_connected",
+      vpsExecutable: "blocked_until_host_inventory_verified",
+      runtimeTruth: "partial",
+      gap: "vps_browser_e2e_inventory_unverified"
+    }
+  ];
+  const macOnlyGaps = tools.filter((tool) => tool.gap).map((tool) => ({
+    id: tool.id,
+    gap: tool.gap,
+    next: "make this Butler-readable and VPS-verifiable before treating it as VTDD completion"
+  }));
+  return {
+    status: macOnlyGaps.length === 0 ? "ready" : "partial",
+    purpose: "Inventory mac Codex tools used for VTDD and classify whether Butler/VPS can reach the same capability.",
+    tools,
+    buckets: {
+      butlerReachable: tools.filter((tool) => tool.butlerReachable !== "not_yet_connected").map((tool) => tool.id),
+      vpsExecutableCandidates: tools.filter((tool) => ["expected", "expected_with_github_app_or_token", "readable_from_repo"].includes(tool.vpsExecutable)).map((tool) => tool.id),
+      repoBacked: tools.filter((tool) => tool.repoBacked === true || tool.repoBacked === "tests_and_scripts_only").map((tool) => tool.id),
+      macOnlyGaps: macOnlyGaps.map((gap) => gap.id)
+    },
+    macOnlyGaps,
+    ownerFacingSummary: macOnlyGaps.length === 0 ? "No mac-only VTDD tool gap is currently reported by startup preflight." : "Some mac Codex tools are not yet Butler/VPS equivalent; treat them as #495 parity gaps, not VTDD completion."
   };
 }
 function buildStartupRepoBackedSkills({ sourceResults }) {
@@ -58705,7 +58808,8 @@ function buildStartupGapClassification({
   currentSurface,
   missingSources,
   memoryResult,
-  repoBackedSkills
+  repoBackedSkills,
+  toolParityInventory
 }) {
   const gaps = [];
   if (normalizeText31(currentSurface) === "mac_codex") {
@@ -58717,10 +58821,14 @@ function buildStartupGapClassification({
   if (repoBackedSkills?.status !== "read") {
     gaps.push("vps_handoff_gap_found");
   }
+  if ((toolParityInventory?.macOnlyGaps ?? []).length > 0) {
+    gaps.push("vps_handoff_gap_found");
+  }
   if (memoryResult.status !== "read") {
     gaps.push("recovery_gap_found");
   }
-  return gaps.length > 0 ? gaps : ["none"];
+  const uniqueGaps = [...new Set(gaps)];
+  return uniqueGaps.length > 0 ? uniqueGaps : ["none"];
 }
 function buildStartupNextSafeAction({ issueNumber, currentSurface, missingSources, memoryResult }) {
   if (missingSources.length > 0) {

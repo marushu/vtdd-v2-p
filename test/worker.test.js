@@ -9906,6 +9906,19 @@ test("worker returns Butler startup preflight from shared repo truth and memory"
     )?.role,
     "central_traffic_control"
   );
+  assert.equal(body.startupPreflight.toolParityInventory.status, "partial");
+  assert.equal(
+    body.startupPreflight.toolParityInventory.buckets.repoBacked.includes("repo-validation-scripts"),
+    true
+  );
+  assert.equal(
+    body.startupPreflight.toolParityInventory.buckets.macOnlyGaps.includes("openai-developers-skills"),
+    true
+  );
+  assert.match(
+    body.startupPreflight.toolParityInventory.ownerFacingSummary,
+    /#495 parity gaps/
+  );
   assert.equal(body.startupPreflight.executionQueue.status, "read");
   assert.equal(
     body.startupPreflight.executionQueue.currentNow,
