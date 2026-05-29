@@ -210,6 +210,11 @@ async function processPullRequest({ githubFetch, repository, pullNumber, eventNa
     pullRequest: contextPull,
     mergeResult
   });
+  const latestIssueComments = await githubFetchAll(githubFetch, `/repos/${repository}/issues/${pullNumber}/comments?per_page=100`);
+  if (hasExecutedAutoMergeComment({ issueComments: latestIssueComments, headSha: pullRequest.head?.sha })) {
+    console.log(`Skipping PR #${pullNumber}: auto merge executed comment already exists after merge.`);
+    return;
+  }
 
   await githubFetch(`/repos/${repository}/issues/${pullNumber}/comments`, {
     method: "POST",
