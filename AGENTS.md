@@ -469,6 +469,12 @@ It must not be interpreted as a blanket prohibition for non-RAG operational logs
 - No "while we are here" edits.
 - No unrelated refactors in implementation PRs.
 - Keep docs-only PRs and runtime PRs separable when possible.
+- Do not create implementation PRs as Draft, and do not convert implementation
+  PRs back to Draft as a holding pattern. Draft blocks reviewer / automation and
+  hides the real state. If a PR must not merge, keep it ready and make the
+  blocker explicit through PR body evidence, failing/blocked checks, reviewer
+  objection, an owner-facing blocked comment, or an auto-merge blocking label
+  such as `vtdd:hold` / `do-not-merge`.
 - When a change touches `src/worker/**/*.js`, `src/worker.js`, or another
   source file bundled into `worker.js`, run `npm run build:worker` before
   validation and include the generated `worker.js` in the same commit. For

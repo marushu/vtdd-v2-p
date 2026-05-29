@@ -9,6 +9,8 @@ on:
       - synchronize
       - reopened
       - edited
+      - ready_for_review
+      - converted_to_draft
 
 permissions:
   contents: read
@@ -29,6 +31,19 @@ jobs:
           pr_body_file="$RUNNER_TEMP/current-pr-body.md"
           gh api "repos/${REPOSITORY}/pulls/${PULL_NUMBER}" --jq '.body // ""' > "$pr_body_file"
           printf 'path=%s\n' "$pr_body_file" >> "$GITHUB_OUTPUT"
+
+      - name: Reject draft pull requests
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          PULL_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          draft="$(gh api "repos/${REPOSITORY}/pulls/${PULL_NUMBER}" --jq '.draft')"
+          if [ "$draft" = "true" ]; then
+            echo "Draft PRs are disabled for VTDD implementation flow. Use a ready PR plus explicit blocked/incomplete evidence instead."
+            exit 1
+          fi
 
       - name: Validate PR evidence sections
         shell: bash

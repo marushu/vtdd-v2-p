@@ -82,6 +82,20 @@ test("approve auto merge blocks approve when required checks fail", () => {
   assert.equal(result.reasons.includes("required check test conclusion is failure, not success."), true);
 });
 
+test("approve auto merge blocks ready PRs with explicit hold labels", () => {
+  const result = evaluateApproveAutoMerge({
+    policyMode: ApproveAutoMergePolicyMode.APPROVE_AUTO_MERGE,
+    labels: [{ name: "vtdd:hold" }],
+    pullRequest: mergeablePullRequest,
+    reviewLoop: approvedReviewLoop,
+    checkRuns: successChecks
+  });
+
+  assert.equal(result.allowed, false);
+  assert.equal(result.reasons.includes("auto merge hold label is present: vtdd:hold."), true);
+  assert.equal(result.evidence.includes("blockingLabels=vtdd:hold"), true);
+});
+
 test("approve auto merge blocks stale reviewer head SHA", () => {
   const result = evaluateApproveAutoMerge({
     policyMode: ApproveAutoMergePolicyMode.APPROVE_AUTO_MERGE,
