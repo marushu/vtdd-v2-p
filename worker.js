@@ -27024,6 +27024,7 @@ function normalizeScopeSnapshot(scope = {}) {
     pullNumber: normalizeText3(scope.pullNumber),
     relatedIssue: normalizeText3(scope.relatedIssue),
     phase: normalizeText3(scope.phase),
+    vpsProposalId: normalizeText3(scope.vpsProposalId),
     vpsHost: normalizeText3(scope.vpsHost),
     vpsOperation: normalizeText3(scope.vpsOperation),
     vpsCapabilityId: normalizeText3(scope.vpsCapabilityId),
@@ -27275,6 +27276,7 @@ function renderPasskeyOperatorPage(input = {}) {
   const dashboardNotificationMode = dashboardMode && dashboardReturnPath === "/dashboard/notifications";
   const githubAppRoleDefault = escapeHtml(input.githubAppRole || "legacy");
   const vpsScope = {
+    vpsProposalId: String(input.vpsProposalId || "").trim(),
     vpsHost: String(input.vpsHost || "").trim(),
     vpsOperation: String(input.vpsOperation || "").trim(),
     vpsCapabilityId: String(input.vpsCapabilityId || "").trim(),
@@ -28041,11 +28043,7 @@ function renderPasskeyOperatorPage(input = {}) {
               repositoryInput,
               issueNumber: Number(document.getElementById("issue-input").value || 0) || null,
               pullNumber: readApprovalPullNumber(),
-              vpsHost: vpsApprovalScope.vpsHost,
-              vpsOperation: vpsApprovalScope.vpsOperation,
-              vpsCapabilityId: vpsApprovalScope.vpsCapabilityId,
-              vpsImpactScope: vpsApprovalScope.vpsImpactScope,
-              vpsExpiresAt: vpsApprovalScope.vpsExpiresAt,
+              vpsProposalId: vpsApprovalScope.vpsProposalId,
               issueContext: {
                 issueNumber: Number(document.getElementById("issue-input").value || 0) || null
               },
@@ -28053,11 +28051,7 @@ function renderPasskeyOperatorPage(input = {}) {
                 actionType: document.getElementById("action-type-input").value,
                 repositoryInput,
                 highRiskKind: document.getElementById("risk-kind-input").value,
-                vpsHost: vpsApprovalScope.vpsHost,
-                vpsOperation: vpsApprovalScope.vpsOperation,
-                vpsCapabilityId: vpsApprovalScope.vpsCapabilityId,
-                vpsImpactScope: vpsApprovalScope.vpsImpactScope,
-                vpsExpiresAt: vpsApprovalScope.vpsExpiresAt
+                vpsProposalId: vpsApprovalScope.vpsProposalId
               }
             })
           });
@@ -57070,7 +57064,7 @@ var runtime_default = {
     }
     if (request.method === "GET" && isApiPath(url.pathname, "/approval/passkey/operator")) {
       await purgeExpiredPasskeyArtifacts(resolveMemoryProvider(env));
-      return handlePasskeyOperatorPageRequest(request);
+      return handlePasskeyOperatorPageRequest(request, env);
     }
     if (request.method === "POST" && isApiPath(url.pathname, "/gateway")) {
       const auth = authorizeGatewayRequest({ request, env, apiSuffix: "/gateway" });
@@ -59788,6 +59782,15 @@ async function handleOwnerActionRequiredEventRequest(request, env) {
   });
 }
 async function handleVpsPrivilegedMaintenanceProposalRequest(request, env) {
+  const provider = resolveMemoryProvider(env);
+  const memoryValidation = validateMemoryProvider(provider);
+  if (!memoryValidation.ok) {
+    return json(503, {
+      ok: false,
+      error: "memory_provider_unavailable",
+      reason: "valid memory provider is required for VPS maintenance approval proposals"
+    });
+  }
   const url = new URL(request.url);
   const payload = await readJson(request);
   const proposalResult = buildVpsCapabilityProposal(payload);
@@ -59803,6 +59806,9 @@ async function handleVpsPrivilegedMaintenanceProposalRequest(request, env) {
   const relatedIssue = normalizePositiveInteger10(payload?.relatedIssue || payload?.related_issue || payload?.issueNumber);
   const expiresAtResult = normalizeVpsMaintenanceProposalExpiresAt(payload?.expiresAt || payload?.expires_at);
   const proposalIssues = [];
+  if (!["add", "enable", "disable", "remove", "rollback", "review"].includes(operation)) {
+    proposalIssues.push("operation must be add, enable, disable, remove, rollback, or review");
+  }
   if (!relatedIssue) {
     proposalIssues.push("relatedIssue or issueNumber is required");
   }
@@ -59818,7 +59824,7 @@ async function handleVpsPrivilegedMaintenanceProposalRequest(request, env) {
   }
   const expiresAt = expiresAtResult.expiresAt;
   const impactScope = normalizeText31(payload?.impactScope || payload?.impact_scope) || proposal.capability.affectedPaths.join(", ") || proposal.capability.commandClass;
-  const approvalScope = buildVpsMaintenanceApprovalScope({
+  let approvalScope = buildVpsMaintenanceApprovalScope({
     repository: proposal.repository,
     host: proposal.host,
     operation,
@@ -59827,9 +59833,37 @@ async function handleVpsPrivilegedMaintenanceProposalRequest(request, env) {
     expiresAt,
     relatedIssue
   });
+  const vpsProposalId = createDashboardRequestId("vps-maintenance-proposal");
+  approvalScope = {
+    ...approvalScope,
+    vpsProposalId
+  };
+  const approvalProposalRecord = createVpsMaintenanceApprovalProposalRecord({
+    vpsProposalId,
+    proposal,
+    approvalScope,
+    expiresAt,
+    relatedIssue
+  });
+  if (!approvalProposalRecord.ok) {
+    return json(422, {
+      ok: false,
+      error: "vps_privileged_maintenance_proposal_invalid",
+      issues: approvalProposalRecord.issues ?? []
+    });
+  }
+  const stored = await provider.store(approvalProposalRecord.record);
+  if (!stored?.ok) {
+    return json(503, {
+      ok: false,
+      error: "memory_write_failed",
+      reason: "failed to persist VPS maintenance approval proposal"
+    });
+  }
   const approvalOperatorUrl = buildVpsMaintenanceApprovalOperatorUrl({
     origin: url.origin,
-    approvalScope
+    approvalScope,
+    vpsProposalId
   });
   const ownerAction = {
     repository: proposal.repository,
@@ -59842,6 +59876,7 @@ async function handleVpsPrivilegedMaintenanceProposalRequest(request, env) {
     source: {
       kind: proposal.kind,
       approvalOperatorUrl,
+      vpsProposalId,
       capabilityId: proposal.capability.id,
       operation,
       host: proposal.host
@@ -59850,6 +59885,7 @@ async function handleVpsPrivilegedMaintenanceProposalRequest(request, env) {
   return json(200, {
     ok: true,
     proposal,
+    vpsProposalId,
     approvalScope,
     approvalOperatorUrl,
     ownerAction,
@@ -59859,6 +59895,7 @@ async function handleVpsPrivilegedMaintenanceProposalRequest(request, env) {
       host: proposal.host,
       repository: proposal.repository,
       capabilityId: proposal.capability.id,
+      vpsProposalId,
       operation,
       impactScope,
       expiresAt,
@@ -59868,19 +59905,36 @@ async function handleVpsPrivilegedMaintenanceProposalRequest(request, env) {
     }
   });
 }
-function buildVpsMaintenanceApprovalOperatorUrl({ origin, approvalScope }) {
+function createVpsMaintenanceApprovalProposalRecord({ vpsProposalId, proposal, approvalScope, expiresAt, relatedIssue }) {
+  return createMemoryRecord({
+    id: vpsProposalId,
+    type: MemoryRecordType.APPROVAL_LOG,
+    content: {
+      kind: "vps_privileged_maintenance_approval_proposal",
+      status: "pending_approval",
+      proposal,
+      approvalScope,
+      relatedIssue,
+      expiresAt
+    },
+    metadata: {
+      source: "vps_privileged_maintenance_proposal",
+      scopeKey: JSON.stringify(approvalScope)
+    },
+    priority: 94,
+    tags: ["vps_privileged_maintenance", "passkey_approval", "pending"],
+    createdAt: (/* @__PURE__ */ new Date()).toISOString()
+  });
+}
+function buildVpsMaintenanceApprovalOperatorUrl({ origin, approvalScope, vpsProposalId }) {
   const url = new URL("/v2/approval/passkey/operator", `${origin}/`);
   url.searchParams.set("mode", "vps");
+  url.searchParams.set("vpsProposalId", vpsProposalId);
   url.searchParams.set("repositoryInput", approvalScope.repositoryInput);
   url.searchParams.set("issueNumber", approvalScope.relatedIssue);
   url.searchParams.set("phase", approvalScope.phase || "execution");
   url.searchParams.set("actionType", approvalScope.actionType);
   url.searchParams.set("highRiskKind", approvalScope.highRiskKind);
-  url.searchParams.set("vpsHost", approvalScope.display?.host || "");
-  url.searchParams.set("vpsOperation", approvalScope.display?.operation || "");
-  url.searchParams.set("vpsCapabilityId", approvalScope.display?.capabilityId || "");
-  url.searchParams.set("vpsImpactScope", approvalScope.display?.impactScope || "");
-  url.searchParams.set("vpsExpiresAt", approvalScope.display?.expiresAt || "");
   return url.href;
 }
 function normalizeVpsMaintenanceProposalExpiresAt(value, now = /* @__PURE__ */ new Date()) {
@@ -60856,7 +60910,7 @@ async function handleCustomGptRecoveryPageRequest(url, env) {
     })
   );
 }
-function handlePasskeyOperatorPageRequest(request) {
+async function handlePasskeyOperatorPageRequest(request, env) {
   const url = new URL(request.url);
   const syncApiBase = normalizeOptionalHttpUrl(url.searchParams.get("syncApiBase"));
   const syncEnabled = Boolean(syncApiBase);
@@ -60864,6 +60918,11 @@ function handlePasskeyOperatorPageRequest(request) {
   const requestedHighRiskKind = url.searchParams.get("highRiskKind");
   const requestedOperatorMode = url.searchParams.get("mode") || (requestedActionType || requestedHighRiskKind ? "" : "full");
   const dashboardSessionMode = normalizeText31(requestedOperatorMode) === "dashboard";
+  const vpsProposal = await retrieveVpsMaintenanceApprovalProposalForOperator({
+    provider: resolveMemoryProvider(env),
+    proposalId: url.searchParams.get("vpsProposalId")
+  });
+  const vpsScope = vpsProposal?.content?.approvalScope ?? {};
   const html2 = renderPasskeyOperatorPage({
     origin: url.origin,
     syncApiBase,
@@ -60875,11 +60934,12 @@ function handlePasskeyOperatorPageRequest(request) {
     actionType: requestedActionType,
     highRiskKind: requestedHighRiskKind,
     mergeMethod: url.searchParams.get("mergeMethod") || "squash",
-    vpsHost: url.searchParams.get("vpsHost"),
-    vpsOperation: url.searchParams.get("vpsOperation"),
-    vpsCapabilityId: url.searchParams.get("vpsCapabilityId"),
-    vpsImpactScope: url.searchParams.get("vpsImpactScope"),
-    vpsExpiresAt: url.searchParams.get("vpsExpiresAt"),
+    vpsProposalId: url.searchParams.get("vpsProposalId"),
+    vpsHost: vpsScope.vpsHost || vpsScope.display?.host || "",
+    vpsOperation: vpsScope.vpsOperation || vpsScope.display?.operation || "",
+    vpsCapabilityId: vpsScope.vpsCapabilityId || vpsScope.display?.capabilityId || "",
+    vpsImpactScope: vpsScope.vpsImpactScope || vpsScope.display?.impactScope || "",
+    vpsExpiresAt: vpsScope.vpsExpiresAt || vpsScope.display?.expiresAt || "",
     returnUrl: normalizeOperatorReturnUrl(url.searchParams.get("returnUrl")),
     dashboardReturnPath: sanitizeDashboardPreAuthReturnPath(url.searchParams.get("dashboardReturnPath")),
     operatorId: url.searchParams.get("operatorId") || "vtdd-operator",
@@ -60896,6 +60956,13 @@ function handlePasskeyOperatorPageRequest(request) {
       pragma: "no-cache"
     }
   });
+}
+async function retrieveVpsMaintenanceApprovalProposalForOperator({ provider, proposalId }) {
+  if (!proposalId || !provider || typeof provider.query !== "function") {
+    return null;
+  }
+  const record2 = await findApprovalRecordById(provider, normalizeText31(proposalId));
+  return normalizeText31(record2?.content?.kind) === "vps_privileged_maintenance_approval_proposal" ? record2 : null;
 }
 function normalizeOptionalHttpUrl(value) {
   const text = normalizeText31(value);
@@ -61447,16 +61514,21 @@ async function handlePasskeyApprovalOptionsRequest(request, env) {
     });
   }
   const body = await readJson(request);
+  const scopeResult = await buildPasskeyApprovalScopeForRequest({ provider, payload: body });
+  if (!scopeResult.ok) {
+    return json(422, {
+      ok: false,
+      error: "passkey_approval_scope_invalid",
+      issues: scopeResult.issues ?? []
+    });
+  }
   const passkeys = await retrieveRegisteredPasskeys(provider);
   const created = await createPasskeyApprovalOptions({
     adapter: env?.PASSKEY_ADAPTER,
     rpID: env?.VTDD_PASSKEY_RP_ID || new URL(request.url).hostname,
     origin: env?.VTDD_PASSKEY_ORIGIN || new URL(request.url).origin,
     passkeys,
-    scope: buildApprovalScopeSnapshot({
-      payload: body,
-      policyInput: body?.policyInput
-    })
+    scope: scopeResult.scope
   });
   if (!created.ok) {
     return json(422, {
@@ -61607,6 +61679,46 @@ function buildApprovalScopeSnapshot({ payload, policyInput }) {
     vpsImpactScope: policyInput?.vpsImpactScope ?? payload?.vpsImpactScope,
     vpsExpiresAt: policyInput?.vpsExpiresAt ?? payload?.vpsExpiresAt
   });
+}
+async function buildPasskeyApprovalScopeForRequest({ provider, payload }) {
+  const highRiskKind = normalizeText31(payload?.highRiskKind || payload?.policyInput?.highRiskKind);
+  if (highRiskKind === "vps_runner_admin" || highRiskKind === "vps_admin") {
+    return resolveVpsMaintenanceApprovalScopeForChallenge({ provider, payload });
+  }
+  return {
+    ok: true,
+    scope: buildApprovalScopeSnapshot({
+      payload,
+      policyInput: payload?.policyInput
+    })
+  };
+}
+async function resolveVpsMaintenanceApprovalScopeForChallenge({ provider, payload }) {
+  const proposalId = normalizeText31(payload?.vpsProposalId || payload?.policyInput?.vpsProposalId);
+  if (!proposalId) {
+    return {
+      ok: false,
+      issues: ["vpsProposalId is required for vps_runner_admin approval"]
+    };
+  }
+  const record2 = await findApprovalRecordById(provider, proposalId);
+  if (!record2 || normalizeText31(record2?.content?.kind) !== "vps_privileged_maintenance_approval_proposal") {
+    return {
+      ok: false,
+      issues: ["matching VPS maintenance approval proposal was not found"]
+    };
+  }
+  const expiresAt = normalizeText31(record2?.content?.expiresAt || record2?.content?.approvalScope?.vpsExpiresAt);
+  if (!expiresAt || Date.parse(expiresAt) <= Date.now()) {
+    return {
+      ok: false,
+      issues: ["VPS maintenance approval proposal is expired"]
+    };
+  }
+  return {
+    ok: true,
+    scope: normalizeScopeSnapshot(record2.content.approvalScope)
+  };
 }
 function mapGitHubHighRiskOperationToActionType(operation) {
   if (operation === GitHubHighRiskOperation.PULL_READY_FOR_REVIEW) {

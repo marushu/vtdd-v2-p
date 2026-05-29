@@ -25,6 +25,7 @@ export function renderPasskeyOperatorPage(input = {}) {
   const dashboardNotificationMode = dashboardMode && dashboardReturnPath === "/dashboard/notifications";
   const githubAppRoleDefault = escapeHtml(input.githubAppRole || "legacy");
   const vpsScope = {
+    vpsProposalId: String(input.vpsProposalId || "").trim(),
     vpsHost: String(input.vpsHost || "").trim(),
     vpsOperation: String(input.vpsOperation || "").trim(),
     vpsCapabilityId: String(input.vpsCapabilityId || "").trim(),
@@ -819,11 +820,7 @@ export function renderPasskeyOperatorPage(input = {}) {
               repositoryInput,
               issueNumber: Number(document.getElementById("issue-input").value || 0) || null,
               pullNumber: readApprovalPullNumber(),
-              vpsHost: vpsApprovalScope.vpsHost,
-              vpsOperation: vpsApprovalScope.vpsOperation,
-              vpsCapabilityId: vpsApprovalScope.vpsCapabilityId,
-              vpsImpactScope: vpsApprovalScope.vpsImpactScope,
-              vpsExpiresAt: vpsApprovalScope.vpsExpiresAt,
+              vpsProposalId: vpsApprovalScope.vpsProposalId,
               issueContext: {
                 issueNumber: Number(document.getElementById("issue-input").value || 0) || null
               },
@@ -831,11 +828,7 @@ export function renderPasskeyOperatorPage(input = {}) {
                 actionType: document.getElementById("action-type-input").value,
                 repositoryInput,
                 highRiskKind: document.getElementById("risk-kind-input").value,
-                vpsHost: vpsApprovalScope.vpsHost,
-                vpsOperation: vpsApprovalScope.vpsOperation,
-                vpsCapabilityId: vpsApprovalScope.vpsCapabilityId,
-                vpsImpactScope: vpsApprovalScope.vpsImpactScope,
-                vpsExpiresAt: vpsApprovalScope.vpsExpiresAt
+                vpsProposalId: vpsApprovalScope.vpsProposalId
               }
             })
           });
