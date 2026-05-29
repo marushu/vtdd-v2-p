@@ -79,7 +79,7 @@ test("active issue execution queue names current open PR hygiene", () => {
 });
 
 test("active issue execution queue names the next automatic implementation lane", () => {
-  assert.equal(sectionBody("Now").includes("Issue #606: ordinary Dashboard read sessions"), true);
-  assert.equal(sectionBody("Next").includes("Issue #590: app-server turn timeout"), true);
+  assert.equal(sectionBody("Now").includes("Issue #590: app-server turn timeout"), true);
+  assert.equal(sectionBody("Evidence Gaps").includes("Issue #606: PR #627 merged and production deployed"), true);
   assert.equal(doc.includes("Issue #579: after timeout recovery"), true);
 });

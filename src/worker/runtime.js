@@ -6796,6 +6796,8 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
         { threadId }
       )
     );
+    transientStatus = "failed";
+    transientText = failureText;
   } else if (eventType === "app_server_status") {
     transientStatus = status === "replied" ? "replied" : "thinking";
     transientText = buildDashboardOwnerFacingTransientStatusText(input, {
@@ -12719,6 +12721,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
               const lastMessage = Array.isArray(body.messages) ? body.messages[body.messages.length - 1] : null;
               if (lastMessage?.role === "butler" && lastMessage?.status === "replied") {
                 setStatus("返信を受信しました。", { temporary: true });
+              } else if (lastMessage?.status === "failed") {
+                setStatus(lastMessage.text || "応答生成が時間切れになりました。同じ thread で続けられます。");
               } else if (releasedFromThread) {
                 setStatus("送信を保存しました。app-server bridge の返信を待っています", { thinking: true });
               }

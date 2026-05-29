@@ -62085,6 +62085,8 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
         { threadId }
       )
     );
+    transientStatus = "failed";
+    transientText = failureText;
   } else if (eventType === "app_server_status") {
     transientStatus = status === "replied" ? "replied" : "thinking";
     transientText = buildDashboardOwnerFacingTransientStatusText(input, {
@@ -67528,6 +67530,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
               const lastMessage = Array.isArray(body.messages) ? body.messages[body.messages.length - 1] : null;
               if (lastMessage?.role === "butler" && lastMessage?.status === "replied") {
                 setStatus("\u8FD4\u4FE1\u3092\u53D7\u4FE1\u3057\u307E\u3057\u305F\u3002", { temporary: true });
+              } else if (lastMessage?.status === "failed") {
+                setStatus(lastMessage.text || "\u5FDC\u7B54\u751F\u6210\u304C\u6642\u9593\u5207\u308C\u306B\u306A\u308A\u307E\u3057\u305F\u3002\u540C\u3058 thread \u3067\u7D9A\u3051\u3089\u308C\u307E\u3059\u3002");
               } else if (releasedFromThread) {
                 setStatus("\u9001\u4FE1\u3092\u4FDD\u5B58\u3057\u307E\u3057\u305F\u3002app-server bridge \u306E\u8FD4\u4FE1\u3092\u5F85\u3063\u3066\u3044\u307E\u3059", { thinking: true });
               }

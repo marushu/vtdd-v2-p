@@ -1391,6 +1391,8 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes('renderThread(body.messages || [], { replace: true })'), true);
   assert.equal(body.includes('renderThread(body.messages || [], { replace: false })'), true);
   assert.equal(body.includes('body.type === "transient_status"'), true);
+  assert.equal(body.includes('lastMessage?.status === "failed"'), true);
+  assert.equal(body.includes("応答生成が時間切れになりました。同じ thread で続けられます。"), true);
   assert.equal(body.includes("appendMessage(body"), false);
   assert.equal(body.includes("white-space: pre-wrap"), true);
   assert.equal(body.includes(".bubble .message-body pre.wrap-code"), true);
@@ -3231,6 +3233,11 @@ test("DashboardChatRoom persists app-server timeout as recoverable Japanese thre
   const broadcast = dashboardSocket.sent.map((message) => JSON.parse(message)).find((message) => message.type === "thread");
   assert.ok(broadcast);
   assert.equal(broadcast.messages[0].text, stored[0].text);
+
+  const failedStatus = dashboardSocket.sent.map((message) => JSON.parse(message)).find((message) => message.type === "transient_status");
+  assert.ok(failedStatus);
+  assert.equal(failedStatus.status, "failed");
+  assert.equal(failedStatus.text, stored[0].text);
 });
 
 test("DashboardChatRoom sends app-server thinking status as transient UI state", async () => {
