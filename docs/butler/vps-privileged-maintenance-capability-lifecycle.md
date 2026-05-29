@@ -92,7 +92,8 @@ The dry-run runtime truth must expose the normalized execution boundary as
 `executable + args + shell:false`. The root-owned helper is responsible for
 resolving `executable` through a controlled PATH allowlist; the repository
 contract must not bake an operator-specific Node/NVM path into public runtime
-truth.
+truth. `allowedArgs` is display-only review text and must not be used as the
+helper execution input.
 
 ## Initial Presets
 

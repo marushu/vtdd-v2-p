@@ -331,6 +331,7 @@ function planVpsPrivilegedMaintenanceHelperExecution(input = {}) {
         commandClass: capability.commandClass,
         workingDirectories: capability.workingDirectories,
         allowedArgs: capability.allowedArgs,
+        allowedArgsPurpose: "display_only_not_execution_input",
         argv: registryBinding.binding.argv,
         executionBoundary: executionBoundary.boundary,
         registryBinding: registryBinding.binding
@@ -356,6 +357,7 @@ function planVpsPrivilegedMaintenanceHelperExecution(input = {}) {
       capabilityId: capability.id,
       commandClass: capability.commandClass,
       commandArgv: registryBinding.binding.argv,
+      allowedArgsPurpose: "display_only_not_execution_input",
       commandExecutionBoundary: executionBoundary.boundary,
       registryBinding: registryBinding.binding,
       before: {
@@ -465,8 +467,11 @@ function buildVpsHelperCommandExecutionBoundary(registryEntry = {}) {
   if (executable && executable.includes("/")) {
     issues.push("registered helper command executable must be a command name resolved by the root helper path allowlist");
   }
-  if (isShellInterpreter(executable)) {
-    issues.push("registered helper command executable must not be a shell interpreter");
+  if (isShellInterpreter(executable) || args.some(isShellInterpreter)) {
+    issues.push("registered helper command argv must not include a shell interpreter");
+  }
+  if (executable === "env" && args.some((part) => part === "-S" || part === "-c")) {
+    issues.push("registered helper command argv must not use env to invoke command parsing");
   }
   if (argv.some((part) => containsShellSyntax(part))) {
     issues.push("registered helper command argv must not contain shell syntax");
