@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   applyVpsCapabilityLifecycleOperation,
+  buildVpsHelperCommandExecutionBoundary,
   buildVpsCapabilityProposal,
   buildVpsMaintenanceApprovalScope,
   listVpsPrivilegedMaintenanceCommandRegistry,
@@ -235,11 +236,53 @@ test("VPS helper dry-run contract validates enabled manifest capability without 
   assert.equal(result.helperPlan.helperExecutionStarted, false);
   assert.deepEqual(result.helperPlan.commandPreview.allowedArgs, ["npx playwright install-deps chromium"]);
   assert.deepEqual(result.helperPlan.commandPreview.argv, ["npx", "playwright", "install-deps", "chromium"]);
+  assert.deepEqual(result.helperPlan.commandPreview.executionBoundary, {
+    executable: "npx",
+    args: ["playwright", "install-deps", "chromium"],
+    shell: false,
+    pathResolution: "root_helper_controlled_path_allowlist",
+    stdin: "none",
+    commandClass: "playwright_install_deps_chromium",
+    requiresRoot: true,
+    riskLevel: "high"
+  });
   assert.equal(result.runtimeTruth.status, "dry_run_ready");
   assert.equal(result.runtimeTruth.registryBinding.commandClass, "playwright_install_deps_chromium");
   assert.deepEqual(result.runtimeTruth.commandArgv, ["npx", "playwright", "install-deps", "chromium"]);
+  assert.equal(result.runtimeTruth.commandExecutionBoundary.shell, false);
+  assert.deepEqual(result.runtimeTruth.commandExecutionBoundary.args, ["playwright", "install-deps", "chromium"]);
   assert.equal(result.runtimeTruth.exitCode, null);
   assert.equal(result.runtimeTruth.redactedLogSummary, "dry-run only; privileged command was not executed");
+});
+
+test("VPS helper command execution boundary rejects shell syntax before any execution path exists", () => {
+  const boundary = buildVpsHelperCommandExecutionBoundary({
+    commandClass: "unsafe",
+    argv: ["sh", "-c", "npx playwright install-deps chromium"],
+    requiredRiskLevel: "high",
+    requiresRoot: true
+  });
+
+  assert.equal(boundary.ok, false);
+  assert.equal(boundary.error, "vps_helper_command_execution_boundary_invalid");
+  assert.equal(boundary.issues.includes("registered helper command executable must not be a shell interpreter"), true);
+});
+
+test("VPS helper command execution boundary requires helper-controlled path resolution", () => {
+  const boundary = buildVpsHelperCommandExecutionBoundary({
+    commandClass: "absolute",
+    argv: ["/usr/bin/npx", "playwright", "install-deps", "chromium"],
+    requiredRiskLevel: "high",
+    requiresRoot: true
+  });
+
+  assert.equal(boundary.ok, false);
+  assert.equal(
+    boundary.issues.includes(
+      "registered helper command executable must be a command name resolved by the root helper path allowlist"
+    ),
+    true
+  );
 });
 
 test("VPS helper dry-run rejects disabled, mismatched, or unregistered capabilities", () => {
