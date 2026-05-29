@@ -88,7 +88,7 @@ test("VPS maintenance install inventory collector can verify scoped sudo helper 
   });
   await fs.writeFile(
     path.join(fakeBin, "sudo"),
-    "#!/bin/sh\nif [ \"$1\" = \"-n\" ] && [ \"$3\" = \"--version\" ]; then echo vtdd-vps-maintenance-helper; exit 0; fi\nexit 1\n",
+    "#!/bin/sh\nif [ \"$1\" = \"-n\" ] && [ \"$3\" = \"--version\" ]; then echo helper-version-output-may-change; exit 0; fi\nexit 1\n",
     { mode: 0o755 }
   );
 
@@ -106,7 +106,11 @@ test("VPS maintenance install inventory collector can verify scoped sudo helper 
       manifestPath,
       "--sudoers-path",
       sudoersPath,
-      "--verify-scoped-sudo"
+      "--verify-scoped-sudo",
+      "--sudo-probe-timeout-ms",
+      "1000",
+      "--sudo-probe-max-buffer",
+      "4096"
     ],
     {
       encoding: "utf8",
@@ -122,9 +126,11 @@ test("VPS maintenance install inventory collector can verify scoped sudo helper 
   assert.equal(body.installInventory.status, "unverified");
   assert.equal(body.installInventory.checks.find((check) => check.id === "scoped_sudoers_entry").status, "pass");
   assert.equal(body.runtimeTruth.sudoersHelperProbeStarted, true);
+  assert.equal(body.runtimeTruth.sudoersHelperProbeTimeoutMs, 1000);
   assert.equal(body.runtimeTruth.rootExecutionStarted, false);
   assert.equal(body.runtimeTruth.helperExecutionStarted, false);
   assert.equal(body.observation.sudoersHelperProbe.ok, true);
+  assert.equal(body.observation.sudoersHelperProbe.timeoutMs, 1000);
 });
 
 test("VPS maintenance install inventory collector detects broad sudoers grants", () => {
