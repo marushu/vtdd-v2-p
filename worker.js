@@ -59577,11 +59577,20 @@ async function handleOwnerActionRequiredEventRequest(request, env) {
       reason: "dashboard event store is not configured"
     });
   }
-  await eventStore.put(event.event);
   const webPush = await dispatchDashboardWebPushForEvent(env, event.event);
+  const eventWithNotificationTruth = normalizeDashboardEventRecord({
+    ...event.event,
+    pwaNotificationStatus: webPush.ok ? "sent" : "pwa_notification_unavailable",
+    pwaNotificationError: webPush.ok ? null : webPush.error || "dashboard_web_push_unavailable",
+    pwaNotificationReason: webPush.ok ? null : webPush.reason || null,
+    pwaNotificationAttempted: webPush.attempted ?? 0,
+    pwaNotificationDelivered: webPush.delivered ?? 0,
+    updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+  });
+  await eventStore.put(eventWithNotificationTruth);
   return json(webPush.ok ? 202 : webPush.status || 503, {
     ok: webPush.ok,
-    event: event.event,
+    event: eventWithNotificationTruth,
     webPush
   });
 }
@@ -63886,6 +63895,11 @@ function normalizeDashboardEventRecord(event) {
     changeSummary: changeSummary || null,
     pullNumber: normalizeIssue6(input.pullNumber) || inferPullNumberFromText(`${title} ${changeSummary}`),
     issueNumber: normalizeIssue6(input.issueNumber),
+    pwaNotificationStatus: normalizeDashboardEventText(input.pwaNotificationStatus) || null,
+    pwaNotificationError: normalizeDashboardEventText(input.pwaNotificationError) || null,
+    pwaNotificationReason: normalizeDashboardEventText(input.pwaNotificationReason) || null,
+    pwaNotificationAttempted: normalizeNonNegativeInteger2(input.pwaNotificationAttempted),
+    pwaNotificationDelivered: normalizeNonNegativeInteger2(input.pwaNotificationDelivered),
     createdAt,
     updatedAt
   };
@@ -64929,13 +64943,13 @@ function normalizeVpsRunnerDashboardEvent(payload) {
 function normalizeOwnerActionRequiredDashboardEvent(payload) {
   const input = normalizeObject11(payload);
   const repository = normalizeCanonicalRepositoryInput(input.repository || input.repositoryInput);
-  const actionId = normalizeDashboardEventText(input.actionId || input.action_id || input.runId || input.run_id || crypto.randomUUID());
-  const title = sanitizeDashboardChatText(input.title || "Owner action required");
+  const actionId = normalizeDashboardEventText(input.actionId || input.action_id || input.runId || input.run_id);
+  const title = sanitizeDashboardChatText(input.title);
   const changeSummary = sanitizeDashboardChatText(input.summary || input.message || input.reason || input.changeSummary);
   const issueNumber = normalizeIssue6(input.issueNumber || input.issue_number || input.relatedIssue);
   const pullNumber = normalizeIssue6(input.pullNumber || input.pull_number);
   const rawRunUrl = normalizeDashboardEventText(input.url || input.runUrl || input.run_url);
-  const runUrl = rawRunUrl.startsWith("/") && !rawRunUrl.startsWith("//") ? rawRunUrl : normalizeDashboardUrl(rawRunUrl) || "/dashboard/notifications";
+  const runUrl = normalizeOwnerActionRequiredRunUrl(rawRunUrl);
   const workflowName = sanitizeDashboardChatText(input.workflowName || input.workflow_name || "owner-action-required");
   const updatedAt = normalizeIsoTimestamp(input.updatedAt || input.updated_at) || (/* @__PURE__ */ new Date()).toISOString();
   const createdAt = normalizeIsoTimestamp(input.createdAt || input.created_at) || updatedAt;
@@ -64946,11 +64960,25 @@ function normalizeOwnerActionRequiredDashboardEvent(payload) {
       reason: "owner action notification repository is required"
     };
   }
+  if (!actionId) {
+    return {
+      ok: false,
+      error: "owner_action_required_action_id_required",
+      reason: "owner action notification requires a stable actionId or runId"
+    };
+  }
   if (!title && !changeSummary) {
     return {
       ok: false,
       error: "owner_action_required_title_required",
       reason: "owner action notification requires a title or summary"
+    };
+  }
+  if (!runUrl) {
+    return {
+      ok: false,
+      error: "owner_action_required_recovery_url_required",
+      reason: "owner action notification requires a same-origin /dashboard recovery url"
     };
   }
   return {
@@ -64972,6 +65000,16 @@ function normalizeOwnerActionRequiredDashboardEvent(payload) {
       updatedAt
     })
   };
+}
+function normalizeOwnerActionRequiredRunUrl(value) {
+  const text = normalizeDashboardEventText(value);
+  if (!text || text.startsWith("//")) {
+    return "";
+  }
+  if (text === "/dashboard" || text.startsWith("/dashboard/") || text.startsWith("/dashboard?")) {
+    return text;
+  }
+  return "";
 }
 function normalizeVpsRunnerDashboardStatus(value) {
   const status = normalizeDashboardEventText(value).toLowerCase();
@@ -68172,6 +68210,10 @@ function normalizeText30(value) {
 function normalizePositiveInteger9(value) {
   const number3 = Number(value);
   return Number.isInteger(number3) && number3 > 0 ? number3 : null;
+}
+function normalizeNonNegativeInteger2(value) {
+  const number3 = Number(value);
+  return Number.isInteger(number3) && number3 >= 0 ? number3 : 0;
 }
 function isSocketOpen(socket) {
   return socket?.readyState === 1 || typeof WebSocket !== "undefined" && socket?.readyState === WebSocket.OPEN;

@@ -107,6 +107,10 @@ Push delivery to saved PWA subscriptions. It is the runtime entry point for
 notifying the owner when Butler, VPS Codex CLI, a helper proposal, or another
 machine process needs owner attention.
 
+The recovery link for this route must be a same-origin `/dashboard` URL. The
+route must reject external URLs, protocol-relative URLs, and underspecified
+requests that lack a stable action id or owner-facing title/summary.
+
 When owner action is required, the runtime must attempt PWA notification and
 report send result truth. If push delivery is unavailable, Butler must mark
 `pwa_notification_unavailable` and still preserve the recovery link in

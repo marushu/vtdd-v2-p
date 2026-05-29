@@ -4156,6 +4156,116 @@ test("worker sends owner-action-required PWA notification through machine event 
   assert.equal(decrypted.url, "/dashboard/notifications?focus=owner-action");
   const stored = await eventStore.latest({ kind: "owner_action_required", repository: "marushu/vtdd-v2-p" });
   assert.equal(stored.id, "owner-action-required:marushu/vtdd-v2-p:issue-637-passkey-needed");
+  assert.equal(stored.pwaNotificationStatus, "sent");
+  assert.equal(stored.pwaNotificationDelivered, 1);
+  assert.equal(stored.pwaNotificationAttempted, 1);
+});
+
+test("worker rejects unsafe or underspecified owner-action-required notifications", async () => {
+  const eventStore = createInMemoryDashboardEventStore();
+
+  const missingAction = await worker.fetch(
+    new Request("https://example.com/v2/events/owner-action-required", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        repository: "marushu/vtdd-v2-p",
+        title: "Passkey approval needed",
+        url: "/dashboard/notifications?focus=owner-action"
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      DASHBOARD_EVENT_STORE: eventStore
+    }
+  );
+  assert.equal(missingAction.status, 422);
+  assert.equal((await missingAction.json()).error, "owner_action_required_action_id_required");
+
+  const unsafeExternalUrl = await worker.fetch(
+    new Request("https://example.com/v2/events/owner-action-required", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        repository: "marushu/vtdd-v2-p",
+        actionId: "unsafe-url",
+        title: "Passkey approval needed",
+        url: "https://evil.example/phish"
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      DASHBOARD_EVENT_STORE: eventStore
+    }
+  );
+  assert.equal(unsafeExternalUrl.status, 422);
+  assert.equal((await unsafeExternalUrl.json()).error, "owner_action_required_recovery_url_required");
+
+  const protocolRelativeUrl = await worker.fetch(
+    new Request("https://example.com/v2/events/owner-action-required", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        repository: "marushu/vtdd-v2-p",
+        actionId: "protocol-relative-url",
+        title: "Passkey approval needed",
+        url: "//evil.example/phish"
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      DASHBOARD_EVENT_STORE: eventStore
+    }
+  );
+  assert.equal(protocolRelativeUrl.status, 422);
+  assert.equal((await protocolRelativeUrl.json()).error, "owner_action_required_recovery_url_required");
+});
+
+test("worker records owner-action-required PWA unavailable truth when push delivery fails", async () => {
+  const store = createInMemoryDashboardPushSubscriptionStore();
+  const pushKeys = await createTestPushSubscription();
+  const currentEndpointHash = await sha256HexTest(pushKeys.subscription.endpoint);
+  await store.put({
+    ...pushKeys.subscription,
+    endpointHash: currentEndpointHash
+  });
+  const eventStore = createInMemoryDashboardEventStore();
+  const vapidEnv = await createTestVapidEnv({
+    DASHBOARD_WEB_PUSH_FETCH: async () => new Response(null, { status: 500 })
+  });
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/events/owner-action-required", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        repository: "marushu/vtdd-v2-p",
+        actionId: "push-unavailable",
+        title: "Passkey approval needed",
+        summary: "VPS helper proposal still needs owner approval",
+        issueNumber: 637,
+        url: "/dashboard/notifications?focus=push-unavailable"
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      ...vapidEnv,
+      DASHBOARD_EVENT_STORE: eventStore,
+      DASHBOARD_PUSH_SUBSCRIPTION_STORE: store
+    }
+  );
+  assert.equal(response.status, 500);
+  const body = await response.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.event.pwaNotificationStatus, "pwa_notification_unavailable");
+  assert.equal(body.event.pwaNotificationReason, "push service rejected the request");
+  assert.equal(body.event.pwaNotificationAttempted, 1);
+  assert.equal(body.event.pwaNotificationDelivered, 0);
+  assert.equal(body.event.runUrl, "/dashboard/notifications?focus=push-unavailable");
+  const stored = await eventStore.latest({ kind: "owner_action_required", repository: "marushu/vtdd-v2-p" });
+  assert.equal(stored.id, "owner-action-required:marushu/vtdd-v2-p:push-unavailable");
+  assert.equal(stored.pwaNotificationStatus, "pwa_notification_unavailable");
+  assert.equal(stored.runUrl, "/dashboard/notifications?focus=push-unavailable");
 });
 
 test("worker builds distinct dashboard Web Push copy by event type", () => {
