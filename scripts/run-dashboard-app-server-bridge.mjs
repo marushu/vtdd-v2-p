@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { spawn } from "node:child_process";
 import process from "node:process";
 
@@ -9,6 +12,7 @@ const DEFAULT_APP_SERVER_ERROR_TEXT =
   "codex app-server が応答生成中に失敗しました。画像を解析できなかった可能性があります。もう一度送るか、画像なしで内容を短く説明してください。";
 const APP_SERVER_TURN_TIMEOUT_TEXT =
   "codex app-server の応答生成が時間切れになりました。入力は Dashboard thread に保存済みです。同じ thread で続けるか、内容を短くしてもう一度送れます。";
+const DASHBOARD_MEDIA_TMP_DIR = "vtdd-dashboard-media";
 
 export function buildAppServerInitializeRequest(id = 1) {
   return {
@@ -123,6 +127,14 @@ export function buildDashboardTurnInputText(request = {}) {
     "- mechanicalBoundary: Dashboard bridge does not grant app-server command, file-change, patch, or permission escalation approvals."
   ];
 
+  const mediaLines = formatDashboardMediaReferenceLines(mediaReferences);
+  if (mediaLines.length > 0) {
+    lines.push(
+      "- mediaDelivery: Dashboard bridge materialized attachment metadata for this turn. Use localPath when present; do not claim image analysis if localPath is missing or fetchStatus is not fetched."
+    );
+    lines.push(...mediaLines);
+  }
+
   if (trafficControl) {
     lines.push(`- trafficControl: ${JSON.stringify(trafficControl)}`);
   }
@@ -133,6 +145,157 @@ export function buildDashboardTurnInputText(request = {}) {
 
   lines.push("", "Owner message:", ownerText);
   return lines.join("\n");
+}
+
+export function formatDashboardMediaReferenceLines(mediaReferences = []) {
+  const references = Array.isArray(mediaReferences) ? mediaReferences : [];
+  return references.slice(0, 12).map((reference, index) => {
+    const mediaId = normalizeBridgeText(reference?.mediaId || reference?.id) || "unknown";
+    const filename = normalizeBridgeText(reference?.filename || reference?.name) || "attachment";
+    const contentType = normalizeBridgeText(reference?.contentType || reference?.type) || "application/octet-stream";
+    const byteSize = Number(reference?.byteSize || reference?.size || 0);
+    const downloadUrl = normalizeBridgeText(reference?.downloadUrl || reference?.download_url);
+    const localPath = normalizeBridgeText(reference?.localPath || reference?.local_path);
+    const fetchStatus =
+      normalizeBridgeText(reference?.fetchStatus || reference?.fetch_status) || (localPath ? "fetched" : "metadata_only");
+    const parts = [
+      `  - media[${index + 1}].mediaId: ${mediaId}`,
+      `filename: ${filename}`,
+      `contentType: ${contentType}`,
+      `byteSize: ${Number.isFinite(byteSize) && byteSize > 0 ? byteSize : "unknown"}`,
+      `downloadUrl: ${downloadUrl || "unavailable"}`,
+      `fetchStatus: ${fetchStatus}`
+    ];
+    if (localPath) {
+      parts.push(`localPath: ${localPath}`);
+    }
+    const fetchError = normalizeBridgeText(reference?.fetchError || reference?.fetch_error);
+    if (fetchError) {
+      parts.push(`fetchError: ${fetchError}`);
+    }
+    return parts.join("; ");
+  });
+}
+
+export async function materializeDashboardMediaReferences({
+  mediaReferences = [],
+  runtimeUrl = "",
+  token = "",
+  fetchImpl = globalThis.fetch,
+  tmpRoot = os.tmpdir()
+} = {}) {
+  const references = Array.isArray(mediaReferences) ? mediaReferences : [];
+  if (references.length === 0) {
+    return [];
+  }
+  return Promise.all(
+    references
+      .slice(0, 12)
+      .map((reference) => materializeDashboardMediaReference({ reference, runtimeUrl, token, fetchImpl, tmpRoot }))
+  );
+}
+
+async function materializeDashboardMediaReference({ reference, runtimeUrl, token, fetchImpl, tmpRoot }) {
+  const normalized = normalizeDashboardMediaReferenceForBridge(reference);
+  if (!normalized.mediaId) {
+    return {
+      ...normalized,
+      fetchStatus: "metadata_invalid",
+      fetchError: "mediaId is missing"
+    };
+  }
+  if (!runtimeUrl || !token || !normalized.downloadUrl || typeof fetchImpl !== "function") {
+    return {
+      ...normalized,
+      fetchStatus: "metadata_only",
+      fetchError: "runtimeUrl, token, downloadUrl, or fetch is unavailable"
+    };
+  }
+  let url;
+  try {
+    url = new URL(normalized.downloadUrl, runtimeUrl);
+  } catch {
+    return {
+      ...normalized,
+      fetchStatus: "fetch_failed",
+      fetchError: "downloadUrl is invalid"
+    };
+  }
+  try {
+    const response = await fetchImpl(url, {
+      headers: {
+        accept: normalized.contentType || "application/octet-stream",
+        authorization: `Bearer ${token}`
+      }
+    });
+    if (!response.ok) {
+      return {
+        ...normalized,
+        fetchStatus: "fetch_failed",
+        fetchError: `media download failed with HTTP ${response.status}`
+      };
+    }
+    const arrayBuffer = await response.arrayBuffer();
+    const byteSize = Number(arrayBuffer.byteLength || 0);
+    if (byteSize <= 0) {
+      return {
+        ...normalized,
+        fetchStatus: "fetch_failed",
+        fetchError: "media download returned an empty body"
+      };
+    }
+    const directory = path.join(tmpRoot, DASHBOARD_MEDIA_TMP_DIR);
+    await fs.mkdir(directory, { recursive: true });
+    const localPath = path.join(
+      directory,
+      `${sanitizeBridgeFilename(normalized.mediaId)}-${sanitizeBridgeFilename(normalized.filename || "attachment")}`
+    );
+    await fs.writeFile(localPath, Buffer.from(arrayBuffer));
+    return {
+      ...normalized,
+      byteSize: normalized.byteSize || byteSize,
+      localPath,
+      fetchStatus: "fetched"
+    };
+  } catch (error) {
+    return {
+      ...normalized,
+      fetchStatus: "fetch_failed",
+      fetchError: sanitizeBridgeError(error)
+    };
+  }
+}
+
+function normalizeDashboardMediaReferenceForBridge(reference) {
+  const input = reference && typeof reference === "object" ? reference : {};
+  const mediaId = normalizeBridgeText(input.mediaId || input.id);
+  return {
+    mediaId,
+    filename: normalizeBridgeText(input.filename || input.name) || "attachment",
+    contentType: normalizeBridgeText(input.contentType || input.type) || "application/octet-stream",
+    byteSize: Number(input.byteSize || input.size || 0) || 0,
+    downloadUrl: normalizeBridgeText(input.downloadUrl || input.download_url || (mediaId ? `/v2/media/${mediaId}/download` : "")),
+    metadataUrl: normalizeBridgeText(input.metadataUrl || input.metadata_url || (mediaId ? `/v2/media/${mediaId}` : "")),
+    repository: normalizeBridgeText(input.repository),
+    relatedIssue: Number(input.relatedIssue || input.issueNumber || input.related_issue) || null
+  };
+}
+
+function normalizeBridgeText(value) {
+  return String(value ?? "").replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, 500);
+}
+
+function sanitizeBridgeFilename(value) {
+  return (
+    normalizeBridgeText(value)
+      .replace(/[^a-zA-Z0-9._-]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 120) || "attachment"
+  );
+}
+
+function sanitizeBridgeError(error) {
+  return normalizeBridgeText(error?.message || error || "media fetch failed").slice(0, 240);
 }
 
 export function buildAppServerSandboxOverrides(sandboxMode = "") {
@@ -414,7 +577,11 @@ export async function handleDashboardTurnRequest({
   sendDashboardEvent,
   cwd = process.cwd(),
   sandboxMode = "",
-  turnTimeoutMs = 10 * 60 * 1000
+  turnTimeoutMs = 10 * 60 * 1000,
+  runtimeUrl = "",
+  token = "",
+  fetchImpl = globalThis.fetch,
+  mediaTmpRoot = os.tmpdir()
 }) {
   const dashboardThreadId = String(request.threadId || "");
   const text = String(request.text || "");
@@ -504,13 +671,20 @@ export async function handleDashboardTurnRequest({
     void sendDashboardEvent(event);
   });
   try {
+    const materializedMediaReferences = await materializeDashboardMediaReferences({
+      mediaReferences: request.mediaReferences,
+      runtimeUrl,
+      token,
+      fetchImpl,
+      tmpRoot: mediaTmpRoot
+    });
     const turnInputText = buildDashboardTurnInputText({
       text,
       repository: request.repository,
       relatedIssue: request.relatedIssue || request.issueNumber,
       authority: request.authority,
       trafficControl: request.trafficControl,
-      mediaReferences: request.mediaReferences
+      mediaReferences: materializedMediaReferences
     });
     const startedTurn = await appServer.request(
       buildAppServerTurnStartRequest({
@@ -604,6 +778,9 @@ export async function connectDashboardAppServerBridgeOnce({
   appServer,
   cwd = process.cwd(),
   sandboxMode = "",
+  runtimeUrl = "",
+  fetchImpl = globalThis.fetch,
+  mediaTmpRoot = os.tmpdir(),
   WebSocketImpl = WebSocket
 } = {}) {
   const bearerProtocol = `vtdd-bearer.${Buffer.from(token, "utf8").toString("base64url")}`;
@@ -645,7 +822,11 @@ export async function connectDashboardAppServerBridgeOnce({
             appServer,
             sendDashboardEvent: async (dashboardEvent) => safeSend(dashboardEvent),
             cwd,
-            sandboxMode
+            sandboxMode,
+            runtimeUrl,
+            token,
+            fetchImpl,
+            mediaTmpRoot
           })
         )
         .catch((error) => {
