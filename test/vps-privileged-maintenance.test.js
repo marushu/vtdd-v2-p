@@ -93,6 +93,29 @@ test("VPS privileged maintenance install inventory reports root-owned helper rea
   assert.equal(sudoProbeReady.checks.find((check) => check.id === "scoped_sudoers_entry").status, "unverified");
   assert.equal(sudoProbeReady.checks.find((check) => check.id === "helper_sudo_functional_probe").status, "pass");
   assert.equal(sudoProbeReady.runtimeTruth.sudoersHelperProbeStarted, true);
+
+  const sudoProbeFailed = buildVpsPrivilegedMaintenanceInstallInventory({
+    host: "x85-131-245-163",
+    repository: "marushu/vtdd-v2-p",
+    helperInstalled: true,
+    manifestInstalled: true,
+    sudoersInstalled: true,
+    helperOwner: "root",
+    manifestOwner: "root",
+    sudoersOwner: "root",
+    sudoersAllowsAll: false,
+    sudoersHelperProbe: false,
+    sudoersHelperProbeStarted: true
+  });
+  assert.equal(sudoProbeFailed.ok, false);
+  assert.equal(sudoProbeFailed.status, "blocked");
+  assert.equal(sudoProbeFailed.checks.find((check) => check.id === "helper_sudo_functional_probe").status, "blocked");
+  assert.equal(sudoProbeFailed.issues.includes("helper sudo functional probe failed"), true);
+  assert.equal(sudoProbeFailed.runtimeTruth.sudoersHelperProbeStarted, true);
+  assert.equal(
+    sudoProbeFailed.runtimeTruth.nextAction,
+    "fix scoped helper sudo before claiming VPS privileged maintenance is ready"
+  );
 });
 
 test("VPS privileged maintenance helper command registry exposes initial presets", () => {

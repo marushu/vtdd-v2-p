@@ -80,7 +80,8 @@ async function probeScopedSudoHelper({ helperPath, enabled, timeoutMs, maxBuffer
   if (!enabled) {
     return {
       started: false,
-      ok: null
+      ok: null,
+      skippedReason: "preconditions_not_met"
     };
   }
   try {
@@ -101,6 +102,19 @@ async function probeScopedSudoHelper({ helperPath, enabled, timeoutMs, maxBuffer
       error: summarizeError(error)
     };
   }
+}
+
+function shouldProbeScopedSudoHelper({ verifyScopedSudo, helper, manifest, sudoers, sudoersPolicy }) {
+  return (
+    verifyScopedSudo === true &&
+    helper.installed === true &&
+    helper.owner === "root" &&
+    manifest.installed === true &&
+    manifest.owner === "root" &&
+    sudoers.installed === true &&
+    sudoers.owner === "root" &&
+    sudoersPolicy.allowsAll !== true
+  );
 }
 
 function containsBroadSudoersGrant(content) {
@@ -140,9 +154,16 @@ async function collectVpsMaintenanceInstallInventory(input = {}) {
     observePath(sudoersPath),
     observeSudoersPolicy(sudoersPath)
   ]);
+  const shouldProbe = shouldProbeScopedSudoHelper({
+    verifyScopedSudo,
+    helper,
+    manifest,
+    sudoers,
+    sudoersPolicy
+  });
   const sudoersHelperProbe = await probeScopedSudoHelper({
     helperPath,
-    enabled: verifyScopedSudo && helper.installed === true,
+    enabled: shouldProbe,
     timeoutMs: sudoProbeTimeoutMs,
     maxBuffer: sudoProbeMaxBuffer
   });
@@ -161,7 +182,8 @@ async function collectVpsMaintenanceInstallInventory(input = {}) {
     manifestOwner: manifest.owner,
     sudoersOwner: sudoers.owner,
     sudoersAllowsAll: sudoersPolicy.allowsAll,
-    sudoersHelperProbe: sudoersHelperProbe.ok
+    sudoersHelperProbe: sudoersHelperProbe.ok,
+    sudoersHelperProbeStarted: sudoersHelperProbe.started
   });
 
   return {
@@ -188,6 +210,7 @@ async function collectVpsMaintenanceInstallInventory(input = {}) {
         started: sudoersHelperProbe.started,
         ok: sudoersHelperProbe.ok,
         error: sudoersHelperProbe.error || null,
+        skippedReason: sudoersHelperProbe.skippedReason || null,
         command: sudoersHelperProbe.started ? "sudo -n <helper> --version" : null,
         timeoutMs: sudoersHelperProbe.started ? sudoProbeTimeoutMs : null
       }

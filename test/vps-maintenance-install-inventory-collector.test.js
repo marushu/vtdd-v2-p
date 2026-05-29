@@ -74,7 +74,7 @@ test("VPS maintenance install inventory collector blocks broad sudoers grants wi
   assert.equal(JSON.stringify(body).includes("vtdd-runner ALL=(ALL) NOPASSWD:ALL"), false);
 });
 
-test("VPS maintenance install inventory collector can verify scoped sudo helper without reading sudoers content", async () => {
+test("VPS maintenance install inventory collector skips sudo probe until root-owned install preconditions are met", async () => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "vtdd-vps-install-inventory-"));
   const helperPath = path.join(tempRoot, "helper");
   const manifestPath = path.join(tempRoot, "manifest.json");
@@ -125,13 +125,14 @@ test("VPS maintenance install inventory collector can verify scoped sudo helper 
   const body = JSON.parse(result.stdout);
   assert.equal(body.installInventory.status, "unverified");
   assert.equal(body.installInventory.checks.find((check) => check.id === "scoped_sudoers_entry").status, "unverified");
-  assert.equal(body.installInventory.checks.find((check) => check.id === "helper_sudo_functional_probe").status, "pass");
-  assert.equal(body.runtimeTruth.sudoersHelperProbeStarted, true);
-  assert.equal(body.runtimeTruth.sudoersHelperProbeTimeoutMs, 1000);
+  assert.equal(body.installInventory.checks.find((check) => check.id === "helper_sudo_functional_probe").status, "unverified");
+  assert.equal(body.runtimeTruth.sudoersHelperProbeStarted, false);
+  assert.equal(body.runtimeTruth.sudoersHelperProbeTimeoutMs, null);
   assert.equal(body.runtimeTruth.rootExecutionStarted, false);
   assert.equal(body.runtimeTruth.helperExecutionStarted, false);
-  assert.equal(body.observation.sudoersHelperProbe.ok, true);
-  assert.equal(body.observation.sudoersHelperProbe.timeoutMs, 1000);
+  assert.equal(body.observation.sudoersHelperProbe.ok, null);
+  assert.equal(body.observation.sudoersHelperProbe.skippedReason, "preconditions_not_met");
+  assert.equal(body.observation.sudoersHelperProbe.timeoutMs, null);
 });
 
 test("VPS maintenance install inventory collector detects broad sudoers grants", () => {

@@ -37501,6 +37501,8 @@ function buildVpsPrivilegedMaintenanceInstallInventory(input = {}) {
   const sudoersOwner = normalizeText24(observed.sudoersOwner || input.sudoersOwner);
   const sudoersAllowsAll = normalizeBoolean(observed.sudoersAllowsAll ?? input.sudoersAllowsAll);
   const sudoersHelperProbe = normalizeBoolean(observed.sudoersHelperProbe ?? input.sudoersHelperProbe);
+  const sudoersHelperProbeStarted = normalizeBoolean(observed.sudoersHelperProbeStarted ?? input.sudoersHelperProbeStarted);
+  const functionalProbeStarted = sudoersHelperProbeStarted ?? sudoersHelperProbe !== null;
   const issues = [];
   if (!host) issues.push("host is required");
   if (!repository) issues.push("repository is required");
@@ -37508,6 +37510,7 @@ function buildVpsPrivilegedMaintenanceInstallInventory(input = {}) {
   if (!manifestPath.startsWith("/")) issues.push("manifestPath must be absolute");
   if (!sudoersPath.startsWith("/")) issues.push("sudoersPath must be absolute");
   if (sudoersAllowsAll === true) issues.push("sudoers must not allow NOPASSWD:ALL");
+  if (sudoersHelperProbe === false) issues.push("helper sudo functional probe failed");
   const checks = [
     {
       id: "root_owned_helper",
@@ -37567,9 +37570,9 @@ function buildVpsPrivilegedMaintenanceInstallInventory(input = {}) {
       repository,
       rootExecutionStarted: false,
       helperExecutionStarted: false,
-      sudoersHelperProbeStarted: sudoersHelperProbe === true,
+      sudoersHelperProbeStarted: functionalProbeStarted,
       redacted: true,
-      nextAction: status === "ready" ? "helper install inventory is ready for scoped helper requests" : "verify or install root-owned helper, manifest, and scoped sudoers before claiming iPhone-complete privileged maintenance"
+      nextAction: sudoersHelperProbe === false ? "fix scoped helper sudo before claiming VPS privileged maintenance is ready" : status === "ready" ? "helper install inventory is ready for scoped helper requests" : "verify or install root-owned helper, manifest, and scoped sudoers before claiming iPhone-complete privileged maintenance"
     },
     issues
   };
