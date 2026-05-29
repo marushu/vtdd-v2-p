@@ -32,7 +32,7 @@ test("VPS maintenance install inventory collector reports missing paths without 
   assert.equal(body.ok, true);
   assert.equal(body.source, "vps_local_filesystem_observer");
   assert.equal(body.installInventory.status, "missing");
-  assert.equal(body.installInventory.checks.every((check) => check.status === "missing"), true);
+  assert.equal(body.installInventory.checks.filter((check) => check.required).every((check) => check.status === "missing"), true);
   assert.equal(body.runtimeTruth.rootExecutionStarted, false);
   assert.equal(body.runtimeTruth.helperExecutionStarted, false);
   assert.equal(JSON.stringify(body).includes("vtdd-runner ALL=(ALL) NOPASSWD:ALL"), false);
@@ -124,7 +124,8 @@ test("VPS maintenance install inventory collector can verify scoped sudo helper 
   assert.equal(result.status, 0);
   const body = JSON.parse(result.stdout);
   assert.equal(body.installInventory.status, "unverified");
-  assert.equal(body.installInventory.checks.find((check) => check.id === "scoped_sudoers_entry").status, "pass");
+  assert.equal(body.installInventory.checks.find((check) => check.id === "scoped_sudoers_entry").status, "unverified");
+  assert.equal(body.installInventory.checks.find((check) => check.id === "helper_sudo_functional_probe").status, "pass");
   assert.equal(body.runtimeTruth.sudoersHelperProbeStarted, true);
   assert.equal(body.runtimeTruth.sudoersHelperProbeTimeoutMs, 1000);
   assert.equal(body.runtimeTruth.rootExecutionStarted, false);

@@ -66,7 +66,7 @@ test("VPS privileged maintenance install inventory reports root-owned helper rea
   assert.equal(ready.requiredSudoersShape.allowedCommand, ready.helperPath);
   assert.equal(ready.runtimeTruth.rootExecutionStarted, false);
   assert.equal(ready.runtimeTruth.helperExecutionStarted, false);
-  assert.equal(ready.checks.every((check) => check.status === "pass"), true);
+  assert.equal(ready.checks.filter((check) => check.required).every((check) => check.status === "pass"), true);
 
   const unsafe = buildVpsPrivilegedMaintenanceInstallInventory({
     host: "x85-131-245-163",
@@ -89,7 +89,9 @@ test("VPS privileged maintenance install inventory reports root-owned helper rea
     sudoersAllowsAll: null,
     sudoersHelperProbe: true
   });
-  assert.equal(sudoProbeReady.status, "ready");
+  assert.equal(sudoProbeReady.status, "unverified");
+  assert.equal(sudoProbeReady.checks.find((check) => check.id === "scoped_sudoers_entry").status, "unverified");
+  assert.equal(sudoProbeReady.checks.find((check) => check.id === "helper_sudo_functional_probe").status, "pass");
   assert.equal(sudoProbeReady.runtimeTruth.sudoersHelperProbeStarted, true);
 });
 

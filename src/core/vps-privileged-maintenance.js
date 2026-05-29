@@ -290,24 +290,30 @@ function buildVpsPrivilegedMaintenanceInstallInventory(input = {}) {
       status:
         sudoersInstalled === true && sudoersOwner === "root" && sudoersAllowsAll !== true
           ? "pass"
-          : sudoersHelperProbe === true && sudoersAllowsAll !== true
-            ? "pass"
-            : sudoersInstalled === false
-              ? "missing"
-              : "unverified",
+          : sudoersInstalled === false
+            ? "missing"
+            : "unverified",
       required: true,
       path: sudoersPath,
       expectedOwner: "root",
-      observedOwner: sudoersOwner || null,
+      observedOwner: sudoersOwner || null
+    },
+    {
+      id: "helper_sudo_functional_probe",
+      status: sudoersHelperProbe === true ? "pass" : sudoersHelperProbe === false ? "blocked" : "unverified",
+      required: false,
+      path: helperPath,
+      expectedOwner: "root",
+      observedOwner: null,
       functionalProbe: sudoersHelperProbe === true ? "sudo_helper_version" : null
     }
   ];
   const status =
     issues.length > 0
       ? "blocked"
-      : checks.every((check) => check.status === "pass")
+      : checks.filter((check) => check.required).every((check) => check.status === "pass")
         ? "ready"
-        : checks.some((check) => check.status === "missing")
+        : checks.filter((check) => check.required).some((check) => check.status === "missing")
           ? "missing"
           : "unverified";
 
