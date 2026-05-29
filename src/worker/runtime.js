@@ -6,6 +6,8 @@ import {
   MemoryRecordType,
   appendDecisionLogFromGateway,
   appendProposalLogFromGateway,
+  buildVpsCapabilityProposal,
+  buildVpsMaintenanceApprovalScope,
   createCloudflareMemoryProvider,
   createPasskeyApprovalOptions,
   createPasskeyRegistrationOptions,
@@ -1026,6 +1028,23 @@ export default {
       }
 
       return handleOwnerActionRequiredEventRequest(request, env);
+    }
+
+    if (request.method === "POST" && isApiPath(url.pathname, "/vps/privileged-maintenance/proposals")) {
+      const auth = authorizeGatewayRequest({
+        request,
+        env,
+        apiSuffix: "/vps/privileged-maintenance/proposals"
+      });
+      if (!auth.ok) {
+        return json(auth.status, {
+          ok: false,
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+
+      return handleVpsPrivilegedMaintenanceProposalRequest(request, env);
     }
 
     if (request.method === "POST" && isApiPath(url.pathname, "/action/github-actions-secret")) {
@@ -3932,6 +3951,94 @@ async function handleOwnerActionRequiredEventRequest(request, env) {
   });
 }
 
+async function handleVpsPrivilegedMaintenanceProposalRequest(request, env) {
+  const url = new URL(request.url);
+  const payload = await readJson(request);
+  const proposalResult = buildVpsCapabilityProposal(payload);
+  if (!proposalResult.ok) {
+    return json(422, {
+      ok: false,
+      error: "vps_privileged_maintenance_proposal_invalid",
+      issues: proposalResult.issues ?? []
+    });
+  }
+
+  const proposal = proposalResult.proposal;
+  const operation = normalizeText(payload?.operation) || "add";
+  const expiresAt =
+    normalizeText(payload?.expiresAt || payload?.expires_at) ||
+    new Date(Date.now() + 5 * 60 * 1000).toISOString();
+  const impactScope =
+    normalizeText(payload?.impactScope || payload?.impact_scope) ||
+    proposal.capability.affectedPaths.join(", ") ||
+    proposal.capability.commandClass;
+  const approvalScope = buildVpsMaintenanceApprovalScope({
+    repository: proposal.repository,
+    host: proposal.host,
+    operation,
+    capabilityId: proposal.capability.id,
+    impactScope,
+    expiresAt
+  });
+  const approvalOperatorUrl = buildVpsMaintenanceApprovalOperatorUrl({
+    origin: url.origin,
+    approvalScope
+  });
+  const ownerAction = {
+    repository: proposal.repository,
+    actionId: `vps-maintenance-proposal:${proposal.capability.id}:${operation}`,
+    title: `VPS maintenance approval: ${proposal.capability.title}`,
+    summary: `${proposal.host} / ${operation} / ${proposal.capability.id} / ${impactScope}`,
+    issueNumber: 637,
+    workflowName: "vps-privileged-maintenance",
+    url: `/dashboard/notifications?focus=owner-action`,
+    source: {
+      kind: proposal.kind,
+      approvalOperatorUrl,
+      capabilityId: proposal.capability.id,
+      operation,
+      host: proposal.host
+    }
+  };
+
+  return json(200, {
+    ok: true,
+    proposal,
+    approvalScope,
+    approvalOperatorUrl,
+    ownerAction,
+    runtimeTruth: {
+      kind: "vps_privileged_maintenance_proposal",
+      status: "approval_required",
+      host: proposal.host,
+      repository: proposal.repository,
+      capabilityId: proposal.capability.id,
+      operation,
+      impactScope,
+      expiresAt,
+      pwaNotificationRequired: true,
+      rootExecutionStarted: false,
+      redacted: true
+    }
+  });
+}
+
+function buildVpsMaintenanceApprovalOperatorUrl({ origin, approvalScope }) {
+  const url = new URL("/v2/approval/passkey/operator", `${origin}/`);
+  url.searchParams.set("mode", "vps");
+  url.searchParams.set("repositoryInput", approvalScope.repositoryInput);
+  url.searchParams.set("issueNumber", approvalScope.relatedIssue || "637");
+  url.searchParams.set("phase", approvalScope.phase || "execution");
+  url.searchParams.set("actionType", approvalScope.actionType);
+  url.searchParams.set("highRiskKind", approvalScope.highRiskKind);
+  url.searchParams.set("vpsHost", approvalScope.display?.host || "");
+  url.searchParams.set("vpsOperation", approvalScope.display?.operation || "");
+  url.searchParams.set("vpsCapabilityId", approvalScope.display?.capabilityId || "");
+  url.searchParams.set("vpsImpactScope", approvalScope.display?.impactScope || "");
+  url.searchParams.set("vpsExpiresAt", approvalScope.display?.expiresAt || "");
+  return url.href;
+}
+
 async function handleDashboardChatMessageRequest(request, env) {
   const dashboardAuth = await authorizeDashboardRequest({
     request,
@@ -4978,6 +5085,11 @@ function handlePasskeyOperatorPageRequest(request) {
     actionType: requestedActionType,
     highRiskKind: requestedHighRiskKind,
     mergeMethod: url.searchParams.get("mergeMethod") || "squash",
+    vpsHost: url.searchParams.get("vpsHost"),
+    vpsOperation: url.searchParams.get("vpsOperation"),
+    vpsCapabilityId: url.searchParams.get("vpsCapabilityId"),
+    vpsImpactScope: url.searchParams.get("vpsImpactScope"),
+    vpsExpiresAt: url.searchParams.get("vpsExpiresAt"),
     returnUrl: normalizeOperatorReturnUrl(url.searchParams.get("returnUrl")),
     dashboardReturnPath: sanitizeDashboardPreAuthReturnPath(url.searchParams.get("dashboardReturnPath")),
     operatorId: url.searchParams.get("operatorId") || "vtdd-operator",

@@ -24,6 +24,18 @@ export function renderPasskeyOperatorPage(input = {}) {
   const dashboardReturnPath = escapeHtml(sanitizePasskeyDashboardReturnPath(input.dashboardReturnPath));
   const dashboardNotificationMode = dashboardMode && dashboardReturnPath === "/dashboard/notifications";
   const githubAppRoleDefault = escapeHtml(input.githubAppRole || "legacy");
+  const vpsHost = escapeHtml(input.vpsHost || "");
+  const vpsOperation = escapeHtml(input.vpsOperation || "");
+  const vpsCapabilityId = escapeHtml(input.vpsCapabilityId || "");
+  const vpsImpactScope = escapeHtml(input.vpsImpactScope || "");
+  const vpsExpiresAt = escapeHtml(input.vpsExpiresAt || "");
+  const vpsScopeSummary = renderVpsScopeSummary({
+    host: vpsHost,
+    operation: vpsOperation,
+    capabilityId: vpsCapabilityId,
+    impactScope: vpsImpactScope,
+    expiresAt: vpsExpiresAt
+  });
   const syncEnabled = input.syncEnabled === true;
   const syncMessage = escapeHtml(
     input.syncMessage ||
@@ -377,6 +389,7 @@ export function renderPasskeyOperatorPage(input = {}) {
         <section data-operator-section="vps-runner-admin"${hiddenAttribute(!sectionVisibility.vpsRunnerAdmin)}>
           <h2>9. VPS Runner Admin</h2>
           <p class="muted">VPS runner の repo allowlist 追加、runner restart、smoke などの管理操作用 approval です。ここでは real passkey で短命の <code>approvalGrantId</code> だけを発行します。VPS 操作そのものは GitHub queue と runner event に残る bounded command として別途実行されます。</p>
+          ${vpsScopeSummary ? `<p class="muted">${vpsScopeSummary}</p>` : ""}
           <p class="muted"><code>actionType=destructive</code> / <code>highRiskKind=vps_runner_admin</code> の approvalGrantId が必要です。文字列としての passkey は承認ではありません。</p>
         </section>
       </div>
@@ -1225,6 +1238,17 @@ function renderDeployScopeSummary({ repositoryInput, issueNumber, actionType, hi
   const repository = repositoryInput || "未指定";
   const issue = issueNumber ? ` / Issue: ${issueNumber}` : "";
   return `承認対象: Repository: ${repository}${issue} / Action: ${actionType} / ${highRiskKind}`;
+}
+
+function renderVpsScopeSummary({ host, operation, capabilityId, impactScope, expiresAt }) {
+  const parts = [
+    host ? `Host: ${host}` : "",
+    operation ? `Operation: ${operation}` : "",
+    capabilityId ? `Capability: ${capabilityId}` : "",
+    impactScope ? `Impact: ${impactScope}` : "",
+    expiresAt ? `Expires: ${expiresAt}` : ""
+  ].filter(Boolean);
+  return parts.length > 0 ? `承認対象: ${parts.join(" / ")}` : "";
 }
 
 function normalizeOperatorMode(value) {

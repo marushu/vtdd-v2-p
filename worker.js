@@ -27269,6 +27269,18 @@ function renderPasskeyOperatorPage(input = {}) {
   const dashboardReturnPath = escapeHtml(sanitizePasskeyDashboardReturnPath(input.dashboardReturnPath));
   const dashboardNotificationMode = dashboardMode && dashboardReturnPath === "/dashboard/notifications";
   const githubAppRoleDefault = escapeHtml(input.githubAppRole || "legacy");
+  const vpsHost = escapeHtml(input.vpsHost || "");
+  const vpsOperation = escapeHtml(input.vpsOperation || "");
+  const vpsCapabilityId = escapeHtml(input.vpsCapabilityId || "");
+  const vpsImpactScope = escapeHtml(input.vpsImpactScope || "");
+  const vpsExpiresAt = escapeHtml(input.vpsExpiresAt || "");
+  const vpsScopeSummary = renderVpsScopeSummary({
+    host: vpsHost,
+    operation: vpsOperation,
+    capabilityId: vpsCapabilityId,
+    impactScope: vpsImpactScope,
+    expiresAt: vpsExpiresAt
+  });
   const syncEnabled = input.syncEnabled === true;
   const syncMessage = escapeHtml(
     input.syncMessage || (syncEnabled ? "approvalGrantId \u304C\u53D6\u5F97\u6E08\u307F\u306A\u3089\u5B9F\u884C\u3067\u304D\u307E\u3059\u3002desktop helper bridge \u306B\u63A5\u7D9A\u3057\u307E\u3059\u3002" : "desktop maintenance required: local secret sync bridge \u304C\u672A\u63A5\u7D9A\u3067\u3059\u3002")
@@ -27594,6 +27606,7 @@ function renderPasskeyOperatorPage(input = {}) {
         <section data-operator-section="vps-runner-admin"${hiddenAttribute(!sectionVisibility.vpsRunnerAdmin)}>
           <h2>9. VPS Runner Admin</h2>
           <p class="muted">VPS runner \u306E repo allowlist \u8FFD\u52A0\u3001runner restart\u3001smoke \u306A\u3069\u306E\u7BA1\u7406\u64CD\u4F5C\u7528 approval \u3067\u3059\u3002\u3053\u3053\u3067\u306F real passkey \u3067\u77ED\u547D\u306E <code>approvalGrantId</code> \u3060\u3051\u3092\u767A\u884C\u3057\u307E\u3059\u3002VPS \u64CD\u4F5C\u305D\u306E\u3082\u306E\u306F GitHub queue \u3068 runner event \u306B\u6B8B\u308B bounded command \u3068\u3057\u3066\u5225\u9014\u5B9F\u884C\u3055\u308C\u307E\u3059\u3002</p>
+          ${vpsScopeSummary ? `<p class="muted">${vpsScopeSummary}</p>` : ""}
           <p class="muted"><code>actionType=destructive</code> / <code>highRiskKind=vps_runner_admin</code> \u306E approvalGrantId \u304C\u5FC5\u8981\u3067\u3059\u3002\u6587\u5B57\u5217\u3068\u3057\u3066\u306E passkey \u306F\u627F\u8A8D\u3067\u306F\u3042\u308A\u307E\u305B\u3093\u3002</p>
         </section>
       </div>
@@ -28434,6 +28447,16 @@ function renderDeployScopeSummary({ repositoryInput, issueNumber, actionType, hi
   const repository = repositoryInput || "\u672A\u6307\u5B9A";
   const issue2 = issueNumber ? ` / Issue: ${issueNumber}` : "";
   return `\u627F\u8A8D\u5BFE\u8C61: Repository: ${repository}${issue2} / Action: ${actionType} / ${highRiskKind}`;
+}
+function renderVpsScopeSummary({ host, operation, capabilityId, impactScope, expiresAt }) {
+  const parts = [
+    host ? `Host: ${host}` : "",
+    operation ? `Operation: ${operation}` : "",
+    capabilityId ? `Capability: ${capabilityId}` : "",
+    impactScope ? `Impact: ${impactScope}` : "",
+    expiresAt ? `Expires: ${expiresAt}` : ""
+  ].filter(Boolean);
+  return parts.length > 0 ? `\u627F\u8A8D\u5BFE\u8C61: ${parts.join(" / ")}` : "";
 }
 function normalizeOperatorMode(value) {
   const token = normalizeOperatorToken(value);
@@ -37206,6 +37229,121 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// src/core/vps-privileged-maintenance.js
+var CAPABILITY_STATUSES = /* @__PURE__ */ new Set(["enabled", "disabled"]);
+var RISK_LEVELS = /* @__PURE__ */ new Set(["low", "medium", "high"]);
+function normalizeVpsCapability(input = {}) {
+  const issues = [];
+  const capability = {
+    id: normalizeCapabilityId(input.id || input.capabilityId),
+    title: normalizeText24(input.title),
+    status: normalizeCapabilityStatus(input.status),
+    commandClass: normalizeText24(input.commandClass),
+    riskLevel: normalizeRiskLevel(input.riskLevel),
+    workingDirectories: normalizeStringList(input.workingDirectories || input.working_dirs),
+    allowedArgs: normalizeStringList(input.allowedArgs || input.allowed_args),
+    affectedPaths: normalizeStringList(input.affectedPaths || input.affected_paths),
+    redactionRules: normalizeStringList(input.redactionRules || input.redaction_rules),
+    rollbackPlan: normalizeText24(input.rollbackPlan || input.rollback_plan),
+    expectedRuntimeTruth: normalizeStringList(input.expectedRuntimeTruth || input.expected_runtime_truth),
+    createdAt: normalizeText24(input.createdAt),
+    updatedAt: normalizeText24(input.updatedAt)
+  };
+  if (!capability.id) issues.push("capability id is required");
+  if (!capability.title) issues.push(`capability ${capability.id || "(unknown)"} title is required`);
+  if (!capability.commandClass) issues.push(`capability ${capability.id || "(unknown)"} commandClass is required`);
+  if (capability.workingDirectories.length === 0) {
+    issues.push(`capability ${capability.id || "(unknown)"} requires at least one working directory`);
+  }
+  if (capability.allowedArgs.length === 0) {
+    issues.push(`capability ${capability.id || "(unknown)"} requires allowedArgs`);
+  }
+  if (!capability.rollbackPlan) {
+    issues.push(`capability ${capability.id || "(unknown)"} rollbackPlan is required`);
+  }
+  if (containsForbiddenPrivilegedPattern(capability)) {
+    issues.push(`capability ${capability.id || "(unknown)"} contains forbidden broad privileged pattern`);
+  }
+  return {
+    ok: issues.length === 0,
+    capability,
+    issues
+  };
+}
+function buildVpsCapabilityProposal(input = {}) {
+  const capability = normalizeVpsCapability({
+    ...input,
+    status: input.status || "disabled"
+  });
+  const issues = [...capability.issues];
+  const proposal = {
+    kind: "vps_privileged_maintenance_capability_proposal",
+    capability: capability.capability,
+    reason: normalizeText24(input.reason),
+    host: normalizeText24(input.host),
+    repository: normalizeRepository(input.repository),
+    requestedBy: normalizeText24(input.requestedBy || input.requested_by),
+    approvalRequired: true,
+    pwaNotificationRequired: true
+  };
+  if (!proposal.reason) issues.push("proposal reason is required");
+  if (!proposal.host) issues.push("proposal host is required");
+  if (!proposal.repository) issues.push("proposal repository is required");
+  return {
+    ok: issues.length === 0,
+    proposal,
+    issues
+  };
+}
+function buildVpsMaintenanceApprovalScope(input = {}) {
+  const capabilityId = normalizeCapabilityId(input.capabilityId || input.capability_id);
+  const operation = normalizeText24(input.operation);
+  return {
+    actionType: "destructive",
+    highRiskKind: "vps_runner_admin",
+    repositoryInput: normalizeRepository(input.repository),
+    relatedIssue: "637",
+    phase: "execution",
+    display: {
+      host: normalizeText24(input.host),
+      operation,
+      capabilityId,
+      impactScope: normalizeText24(input.impactScope || input.impact_scope),
+      expiresAt: normalizeText24(input.expiresAt || input.expires_at)
+    }
+  };
+}
+function containsForbiddenPrivilegedPattern(capability) {
+  const joined = [
+    capability.commandClass,
+    ...capability.allowedArgs,
+    ...capability.workingDirectories,
+    capability.rollbackPlan
+  ].join(" ");
+  return /\bNOPASSWD\s*:\s*ALL\b/i.test(joined) || /\bsudo\s+su\b/i.test(joined) || /\b(root\s+shell|\/bin\/bash|\/bin\/sh)\b/i.test(joined);
+}
+function normalizeCapabilityId(value) {
+  return normalizeText24(value).toLowerCase().replace(/[^a-z0-9_.:-]+/g, "-").replace(/^-+|-+$/g, "");
+}
+function normalizeCapabilityStatus(value) {
+  const normalized = normalizeText24(value).toLowerCase();
+  return CAPABILITY_STATUSES.has(normalized) ? normalized : "disabled";
+}
+function normalizeRiskLevel(value) {
+  const normalized = normalizeText24(value).toLowerCase();
+  return RISK_LEVELS.has(normalized) ? normalized : "medium";
+}
+function normalizeStringList(value) {
+  return (Array.isArray(value) ? value : [value]).map(normalizeText24).filter(Boolean);
+}
+function normalizeRepository(value) {
+  const normalized = normalizeText24(value);
+  return /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(normalized) ? normalized : "";
+}
+function normalizeText24(value) {
+  return String(value ?? "").trim();
+}
+
 // src/core/custom-gpt-setup-artifacts.js
 var GITHUB_API_BASE_URL3 = "https://api.github.com";
 var GITHUB_API_VERSION4 = "2022-11-28";
@@ -37252,6 +37390,7 @@ var RUNTIME_SETUP_MANIFEST = Object.freeze({
     "/v2/action/progress",
     "/v2/action/vps-runner-status",
     "/v2/action/vps-runner-cancel",
+    "/v2/vps/privileged-maintenance/proposals",
     "/v2/retrieve/constitution",
     "/v2/retrieve/decisions",
     "/v2/retrieve/proposals",
@@ -37280,6 +37419,7 @@ var RUNTIME_SETUP_MANIFEST = Object.freeze({
     "vtddExecutionProgress",
     "vtddVpsRunnerStatus",
     "vtddVpsRunnerCancel",
+    "vtddCreateVpsMaintenanceProposal",
     "vtddRetrieveConstitution",
     "vtddRetrieveDecisionLogs",
     "vtddRetrieveProposalLogs",
@@ -37307,6 +37447,7 @@ var RUNTIME_SETUP_MANIFEST = Object.freeze({
     "vtddExecutionProgress",
     "vtddVpsRunnerStatus",
     "vtddVpsRunnerCancel",
+    "vtddCreateVpsMaintenanceProposal",
     "vtddRetrieveConstitution",
     "vtddRetrieveDecisionLogs",
     "vtddRetrieveProposalLogs",
@@ -37333,9 +37474,9 @@ var CustomGptSetupChannel = Object.freeze({
   KNOWN_GOOD: "known_good"
 });
 async function retrieveCustomGptSetupArtifact(input = {}) {
-  const artifact = normalizeText24(input.artifact);
-  const repository = normalizeText24(input.repository);
-  const ref = normalizeText24(input.ref) || "main";
+  const artifact = normalizeText25(input.artifact);
+  const repository = normalizeText25(input.repository);
+  const ref = normalizeText25(input.ref) || "main";
   const env = input.env ?? {};
   const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
   const apiBaseUrl = normalizeApiBaseUrl4(env?.GITHUB_API_BASE_URL);
@@ -37385,7 +37526,7 @@ async function retrieveCustomGptSetupArtifact(input = {}) {
       ok: false,
       status: response.status,
       error: "custom_gpt_setup_artifact_unavailable",
-      reason: normalizeText24(body?.message) || `GitHub read failed for setup artifact: ${artifact}`
+      reason: normalizeText25(body?.message) || `GitHub read failed for setup artifact: ${artifact}`
     };
   }
   const content = decodeGitHubFileContent(body?.content, body?.encoding);
@@ -37404,15 +37545,15 @@ async function retrieveCustomGptSetupArtifact(input = {}) {
       repository,
       ref,
       path: spec.path,
-      sha: normalizeText24(body?.sha) || null,
+      sha: normalizeText25(body?.sha) || null,
       contentType: spec.contentType,
       content
     }
   };
 }
 async function evaluateButlerSelfParity(input = {}) {
-  const repository = normalizeText24(input.repository);
-  const ref = normalizeText24(input.ref) || "main";
+  const repository = normalizeText25(input.repository);
+  const ref = normalizeText25(input.ref) || "main";
   const runtimeOrigin = normalizeOrigin2(input.runtimeOrigin);
   const issueNumber = normalizeIssueNumber(input.issueNumber);
   const pullNumber = normalizeIssueNumber(input.pullNumber);
@@ -37599,8 +37740,8 @@ async function evaluateButlerSelfParity(input = {}) {
   };
 }
 async function evaluateCustomGptSetupDiagnostics(input = {}) {
-  const repository = normalizeText24(input.repository);
-  const ref = normalizeText24(input.ref) || "main";
+  const repository = normalizeText25(input.repository);
+  const ref = normalizeText25(input.ref) || "main";
   const runtimeOrigin = normalizeOrigin2(input.runtimeOrigin);
   const issueNumber = normalizeIssueNumber(input.issueNumber);
   const env = input.env ?? {};
@@ -37697,8 +37838,8 @@ async function evaluateCustomGptSetupDiagnostics(input = {}) {
 function renderCustomGptSetupDiagnosticsPage(input = {}) {
   const diagnostics = input.diagnostics ?? null;
   const error2 = input.error ?? null;
-  const repository = normalizeText24(input.repository) || VTDD_SETUP_REPOSITORY;
-  const ref = normalizeText24(input.ref) || "main";
+  const repository = normalizeText25(input.repository) || VTDD_SETUP_REPOSITORY;
+  const ref = normalizeText25(input.ref) || "main";
   const issueNumber = normalizeIssueNumber(input.issueNumber);
   const latestHref = buildSetupPageHref({ path: "/setup/latest", ref, issueNumber });
   const knownGoodHref = buildSetupPageHref({ path: "/setup/known-good", issueNumber });
@@ -37768,9 +37909,9 @@ function evaluateRuntimeSetupManifestParity(input = {}) {
   };
 }
 async function buildCustomGptRecoveryBundle(input = {}) {
-  const repository = normalizeText24(input.repository) || VTDD_SETUP_REPOSITORY;
+  const repository = normalizeText25(input.repository) || VTDD_SETUP_REPOSITORY;
   const channel = normalizeSetupChannel(input.channel);
-  const requestedRef = normalizeText24(input.ref) || "main";
+  const requestedRef = normalizeText25(input.ref) || "main";
   const runtimeOrigin = normalizeOrigin2(input.runtimeOrigin);
   const issueNumber = normalizeIssueNumber(input.issueNumber);
   const env = input.env ?? {};
@@ -37894,8 +38035,8 @@ async function buildCustomGptRecoveryBundle(input = {}) {
 }
 function renderCustomGptRecoveryPage(input = {}) {
   const runtimeOrigin = normalizeOrigin2(input.runtimeOrigin);
-  const repository = normalizeText24(input.repository) || VTDD_SETUP_REPOSITORY;
-  const ref = normalizeText24(input.ref) || "main";
+  const repository = normalizeText25(input.repository) || VTDD_SETUP_REPOSITORY;
+  const ref = normalizeText25(input.ref) || "main";
   const issueNumber = normalizeIssueNumber(input.issueNumber);
   const channel = normalizeSetupChannel(input.channel);
   const recovery = input.recovery ?? null;
@@ -38019,7 +38160,7 @@ function validateCustomGptSetupArtifactRequest({ artifact, repository }) {
   return issues.length > 0 ? { ok: false, issues } : { ok: true };
 }
 function resolveConfiguredKnownGoodCommitSha({ ref, env }) {
-  const configured = normalizeText24(env?.[KNOWN_GOOD_COMMIT_ENV]);
+  const configured = normalizeText25(env?.[KNOWN_GOOD_COMMIT_ENV]);
   if (/^[a-f0-9]{40}$/i.test(configured)) {
     return { sha: configured, source: KNOWN_GOOD_COMMIT_ENV };
   }
@@ -38092,7 +38233,7 @@ async function retrieveKnownGoodManifest({ repository, ref, env }) {
     return {
       ok: false,
       source: response.status === 404 ? "unconfigured" : "unverified",
-      reason: normalizeText24(body?.message) || `${KNOWN_GOOD_MANIFEST_PATH} is unavailable at ${ref || "main"}`
+      reason: normalizeText25(body?.message) || `${KNOWN_GOOD_MANIFEST_PATH} is unavailable at ${ref || "main"}`
     };
   }
   const content = decodeGitHubFileContent(body?.content, body?.encoding);
@@ -38113,7 +38254,7 @@ async function retrieveKnownGoodManifest({ repository, ref, env }) {
       reason: `${KNOWN_GOOD_MANIFEST_PATH} is not valid JSON`
     };
   }
-  const commitSha = normalizeText24(manifest?.commitSha);
+  const commitSha = normalizeText25(manifest?.commitSha);
   if (!/^[a-f0-9]{40}$/i.test(commitSha)) {
     return {
       ok: false,
@@ -38124,12 +38265,12 @@ async function retrieveKnownGoodManifest({ repository, ref, env }) {
   return {
     ok: true,
     commitSha,
-    manifestSha: normalizeText24(body?.sha) || null,
-    verifiedAt: normalizeText24(manifest?.verifiedAt) || null
+    manifestSha: normalizeText25(body?.sha) || null,
+    verifiedAt: normalizeText25(manifest?.verifiedAt) || null
   };
 }
 async function resolveKnownGoodCommitSha({ repository, ref, env }) {
-  const configured = normalizeText24(env?.[KNOWN_GOOD_COMMIT_ENV]);
+  const configured = normalizeText25(env?.[KNOWN_GOOD_COMMIT_ENV]);
   if (configured) {
     return { sha: configured, source: KNOWN_GOOD_COMMIT_ENV };
   }
@@ -38160,7 +38301,7 @@ async function resolveKnownGoodCommitSha({ repository, ref, env }) {
       return { sha: null, source: "unverified" };
     }
     return {
-      sha: normalizeText24(body?.sha) || null,
+      sha: normalizeText25(body?.sha) || null,
       source: "github_commit_ref"
     };
   } catch {
@@ -38395,7 +38536,7 @@ function evaluateActionAuthenticationDiagnostics({ observedFailure }) {
     observedFailure.error,
     observedFailure.reason,
     observedFailure.actionName
-  ].map(normalizeText24).join(" ").toLowerCase();
+  ].map(normalizeText25).join(" ").toLowerCase();
   const authSuspected = status === 401 || status === 403 || text.includes("unauthorized") || text.includes("authentication") || text.includes("bearer");
   return {
     status: authSuspected ? "action_auth_bearer_missing_or_unverified" : "unverified",
@@ -38441,7 +38582,7 @@ function classifySetupDiagnoses({
       reason: auth.reason
     });
   }
-  const observedText = [observedFailure.error, observedFailure.reason].map(normalizeText24).join(" ");
+  const observedText = [observedFailure.error, observedFailure.reason].map(normalizeText25).join(" ");
   if (/ClientResponseError/i.test(observedText)) {
     diagnoses.push({
       code: "custom_gpt_action_transport_unverified",
@@ -38483,12 +38624,12 @@ function buildSetupDiagnosticsNextActions(diagnoses) {
 }
 function normalizeObservedSetupFailure(input = {}) {
   return {
-    actionName: normalizeText24(input.actionName || input.observedAction || input.action),
+    actionName: normalizeText25(input.actionName || input.observedAction || input.action),
     httpStatus: normalizeIssueNumber(input.httpStatus || input.status || input.observedHttpStatus) || null,
-    error: normalizeText24(input.error || input.observedError),
-    reason: normalizeText24(input.reason || input.observedReason),
-    visibleBodyFields: normalizeText24(input.visibleBodyFields),
-    missingBodyFields: normalizeText24(input.missingBodyFields)
+    error: normalizeText25(input.error || input.observedError),
+    reason: normalizeText25(input.reason || input.observedReason),
+    visibleBodyFields: normalizeText25(input.visibleBodyFields),
+    missingBodyFields: normalizeText25(input.missingBodyFields)
   };
 }
 function extractYamlSchemaBlock(content, schemaName) {
@@ -38503,7 +38644,7 @@ function extractYamlSchemaBlock(content, schemaName) {
 }
 function extractOpenApiServerUrl(content) {
   const match = String(content ?? "").match(/^\s*-\s*url:\s*([^\n]+)$/m);
-  return normalizeText24(match?.[1]);
+  return normalizeText25(match?.[1]);
 }
 function renderSetupDiagnosticsSections(diagnostics) {
   if (!diagnostics) {
@@ -38661,7 +38802,7 @@ function renderKnownGoodComparison(comparison) {
     </section>`;
 }
 function normalizeSetupChannel(value) {
-  const normalized = normalizeText24(value).replace(/-/g, "_");
+  const normalized = normalizeText25(value).replace(/-/g, "_");
   return normalized === CustomGptSetupChannel.KNOWN_GOOD ? CustomGptSetupChannel.KNOWN_GOOD : CustomGptSetupChannel.LATEST;
 }
 function countCodePoints(value) {
@@ -38692,11 +38833,11 @@ function extractInstructionTokens(content, operationIds) {
   return requiredTokens.filter((token) => content.includes(token));
 }
 function decodeGitHubFileContent(content, encoding) {
-  const normalizedEncoding = normalizeText24(encoding) || "base64";
+  const normalizedEncoding = normalizeText25(encoding) || "base64";
   if (normalizedEncoding !== "base64") {
     return null;
   }
-  const normalizedContent = normalizeText24(content)?.replace(/\n/g, "");
+  const normalizedContent = normalizeText25(content)?.replace(/\n/g, "");
   if (!normalizedContent) {
     return null;
   }
@@ -38711,7 +38852,7 @@ function decodeGitHubFileContent(content, encoding) {
   return Buffer.from(normalizedContent, "base64").toString("utf8");
 }
 function normalizeApiBaseUrl4(value) {
-  const normalized = normalizeText24(value);
+  const normalized = normalizeText25(value);
   return normalized ? normalized.replace(/\/+$/, "") : GITHUB_API_BASE_URL3;
 }
 function buildPasskeyOperatorUrl({ origin, repository, phase, actionType, highRiskKind, issueNumber, pullNumber }) {
@@ -38760,7 +38901,7 @@ function classifyIssueCloseOperatorStatus({
   };
 }
 function normalizeOrigin2(value) {
-  const normalized = normalizeText24(value);
+  const normalized = normalizeText25(value);
   if (!normalized) {
     return "";
   }
@@ -38780,7 +38921,7 @@ function normalizeIssueNumber(value) {
 function encodeRepository(repository) {
   return repository.split("/").map((segment) => encodeURIComponent(segment)).join("/");
 }
-function normalizeText24(value) {
+function normalizeText25(value) {
   if (typeof value !== "string") {
     return "";
   }
@@ -38799,9 +38940,9 @@ var CONFLICT_FILES_SOURCE = "not_provided_by_github_pull_request_endpoint";
 var FRESH_BRANCH_SUGGESTION = "Recreate a fresh branch from the current base branch, replay the scoped changes, and open/update the PR before retrying merge.";
 function normalizePullRequestMergeability(item) {
   const mergeable = typeof item?.mergeable === "boolean" ? item.mergeable : null;
-  const state = normalizeText25(item?.mergeable_state);
+  const state = normalizeText26(item?.mergeable_state);
   const draft = item?.draft === true;
-  const merged = item?.merged === true || Boolean(normalizeText25(item?.merged_at));
+  const merged = item?.merged === true || Boolean(normalizeText26(item?.merged_at));
   const hasConflict2 = mergeable === false || state === "dirty";
   const isUnknown = mergeable === null || state === "unknown";
   const blockedReason = normalizeMergeBlockedReason({ draft, hasConflict: hasConflict2, isUnknown, merged, state });
@@ -38855,7 +38996,7 @@ function normalizeMergeWarning({ hasConflict: hasConflict2, isUnknown, state, bl
   }
   return `Warning: PR merge is blocked (${blockedReason}). Resolve the blocking condition before attempting merge.`;
 }
-function normalizeText25(value) {
+function normalizeText26(value) {
   return typeof value === "string" && value.trim() ? value.trim() : "";
 }
 
@@ -38879,16 +39020,16 @@ var GitHubReadResource = Object.freeze({
   TREE: "tree"
 });
 async function retrieveGitHubReadPlane(input = {}) {
-  const resource = normalizeText26(input.resource);
-  const repository = normalizeText26(input.repository);
+  const resource = normalizeText27(input.resource);
+  const repository = normalizeText27(input.repository);
   const issueNumber = normalizePositiveInteger5(input.issueNumber);
   const pullNumber = normalizePositiveInteger5(input.pullNumber);
-  const branch = normalizeText26(input.branch);
-  const head = normalizeText26(input.head);
-  const ref = normalizeText26(input.ref) || branch;
+  const branch = normalizeText27(input.branch);
+  const head = normalizeText27(input.head);
+  const ref = normalizeText27(input.ref) || branch;
   const path = normalizeRepositoryPath(input.path);
   const runId = normalizePositiveInteger5(input.runId);
-  const state = normalizeText26(input.state) || "open";
+  const state = normalizeText27(input.state) || "open";
   const limit = normalizeLimit6(input.limit, 20);
   const env = input.env ?? {};
   const fetchImpl = typeof env?.GITHUB_API_FETCH === "function" ? env.GITHUB_API_FETCH.bind(env) : fetch;
@@ -39017,7 +39158,7 @@ async function fetchGitHubReadResource(input) {
       ok: false,
       status: response.status,
       error: "github_read_failed",
-      reason: normalizeText26(body?.message) || `GitHub read failed for ${resource}`
+      reason: normalizeText27(body?.message) || `GitHub read failed for ${resource}`
     };
   }
   return {
@@ -39176,51 +39317,51 @@ function normalizeGitHubReadRecords(resource, body) {
 }
 function normalizeRepositories(items) {
   return items.map((item) => ({
-    fullName: normalizeText26(item?.full_name),
-    name: normalizeText26(item?.name),
+    fullName: normalizeText27(item?.full_name),
+    name: normalizeText27(item?.name),
     visibility: item?.private === true ? "private" : "public",
-    defaultBranch: normalizeText26(item?.default_branch),
-    htmlUrl: normalizeText26(item?.html_url)
+    defaultBranch: normalizeText27(item?.default_branch),
+    htmlUrl: normalizeText27(item?.html_url)
   }));
 }
 function normalizeIssue5(item) {
   return {
     number: normalizePositiveInteger5(item?.number),
-    title: normalizeText26(item?.title),
-    body: normalizeText26(item?.body),
-    state: normalizeText26(item?.state),
-    htmlUrl: normalizeText26(item?.html_url),
-    author: normalizeText26(item?.user?.login)
+    title: normalizeText27(item?.title),
+    body: normalizeText27(item?.body),
+    state: normalizeText27(item?.state),
+    htmlUrl: normalizeText27(item?.html_url),
+    author: normalizeText27(item?.user?.login)
   };
 }
 function normalizeIssueComment(item) {
-  const createdAt = normalizeText26(item?.created_at);
-  const updatedAt = normalizeText26(item?.updated_at);
+  const createdAt = normalizeText27(item?.created_at);
+  const updatedAt = normalizeText27(item?.updated_at);
   return {
     id: normalizePositiveInteger5(item?.id),
-    body: normalizeText26(item?.body),
-    author: normalizeText26(item?.user?.login),
+    body: normalizeText27(item?.body),
+    author: normalizeText27(item?.user?.login),
     createdAt,
     updatedAt,
     includesCreatedEdit: Boolean(createdAt) && Boolean(updatedAt) && createdAt !== updatedAt,
-    htmlUrl: normalizeText26(item?.html_url)
+    htmlUrl: normalizeText27(item?.html_url)
   };
 }
 function normalizePullRequest2(item) {
   const mergeability = normalizePullRequestMergeability(item);
   return {
     number: normalizePositiveInteger5(item?.number),
-    title: normalizeText26(item?.title),
-    state: normalizeText26(item?.state),
+    title: normalizeText27(item?.title),
+    state: normalizeText27(item?.state),
     draft: item?.draft === true,
-    headRef: normalizeText26(item?.head?.ref),
-    headSha: normalizeText26(item?.head?.sha),
-    headOwner: normalizeText26(item?.head?.repo?.owner?.login) || normalizeText26(item?.head?.user?.login) || normalizeText26(item?.head?.repo?.full_name).split("/")[0] || null,
-    baseRef: normalizeText26(item?.base?.ref),
-    baseSha: normalizeText26(item?.base?.sha),
-    merged: item?.merged === true || Boolean(normalizeText26(item?.merged_at)),
-    mergedAt: normalizeText26(item?.merged_at),
-    mergeCommitSha: normalizeText26(item?.merge_commit_sha),
+    headRef: normalizeText27(item?.head?.ref),
+    headSha: normalizeText27(item?.head?.sha),
+    headOwner: normalizeText27(item?.head?.repo?.owner?.login) || normalizeText27(item?.head?.user?.login) || normalizeText27(item?.head?.repo?.full_name).split("/")[0] || null,
+    baseRef: normalizeText27(item?.base?.ref),
+    baseSha: normalizeText27(item?.base?.sha),
+    merged: item?.merged === true || Boolean(normalizeText27(item?.merged_at)),
+    mergedAt: normalizeText27(item?.merged_at),
+    mergeCommitSha: normalizeText27(item?.merge_commit_sha),
     mergeable: mergeability.mergeable,
     mergeableState: mergeability.state,
     mergeConflict: mergeability.hasConflict,
@@ -39231,110 +39372,110 @@ function normalizePullRequest2(item) {
     conflictFiles: mergeability.conflictFiles,
     conflictFilesSource: mergeability.conflictFilesSource,
     mergeability,
-    htmlUrl: normalizeText26(item?.html_url)
+    htmlUrl: normalizeText27(item?.html_url)
   };
 }
 function normalizePullReview(item) {
   return {
     id: normalizePositiveInteger5(item?.id),
-    state: normalizeText26(item?.state),
-    body: normalizeText26(item?.body),
-    author: normalizeText26(item?.user?.login),
-    submittedAt: normalizeText26(item?.submitted_at),
-    htmlUrl: normalizeText26(item?.html_url)
+    state: normalizeText27(item?.state),
+    body: normalizeText27(item?.body),
+    author: normalizeText27(item?.user?.login),
+    submittedAt: normalizeText27(item?.submitted_at),
+    htmlUrl: normalizeText27(item?.html_url)
   };
 }
 function normalizePullReviewComment(item) {
-  const createdAt = normalizeText26(item?.created_at);
-  const updatedAt = normalizeText26(item?.updated_at);
+  const createdAt = normalizeText27(item?.created_at);
+  const updatedAt = normalizeText27(item?.updated_at);
   return {
     id: normalizePositiveInteger5(item?.id),
-    path: normalizeText26(item?.path),
-    body: normalizeText26(item?.body),
-    author: normalizeText26(item?.user?.login),
+    path: normalizeText27(item?.path),
+    body: normalizeText27(item?.body),
+    author: normalizeText27(item?.user?.login),
     createdAt,
     updatedAt,
     includesCreatedEdit: Boolean(createdAt) && Boolean(updatedAt) && createdAt !== updatedAt,
-    htmlUrl: normalizeText26(item?.html_url)
+    htmlUrl: normalizeText27(item?.html_url)
   };
 }
 function normalizeCheckRun(item) {
   return {
     id: normalizePositiveInteger5(item?.id),
-    name: normalizeText26(item?.name),
-    status: normalizeText26(item?.status),
-    conclusion: normalizeText26(item?.conclusion),
-    htmlUrl: normalizeText26(item?.html_url)
+    name: normalizeText27(item?.name),
+    status: normalizeText27(item?.status),
+    conclusion: normalizeText27(item?.conclusion),
+    htmlUrl: normalizeText27(item?.html_url)
   };
 }
 function normalizeWorkflowRun2(item) {
   return {
     id: normalizePositiveInteger5(item?.id),
-    name: normalizeText26(item?.name),
-    status: normalizeText26(item?.status),
-    conclusion: normalizeText26(item?.conclusion),
-    headBranch: normalizeText26(item?.head_branch),
-    htmlUrl: normalizeText26(item?.html_url)
+    name: normalizeText27(item?.name),
+    status: normalizeText27(item?.status),
+    conclusion: normalizeText27(item?.conclusion),
+    headBranch: normalizeText27(item?.head_branch),
+    htmlUrl: normalizeText27(item?.html_url)
   };
 }
 function normalizeWorkflowJob(item) {
   return {
     id: normalizePositiveInteger5(item?.id),
     runId: normalizePositiveInteger5(item?.run_id),
-    name: normalizeText26(item?.name),
-    status: normalizeText26(item?.status),
-    conclusion: normalizeText26(item?.conclusion),
-    startedAt: normalizeText26(item?.started_at),
-    completedAt: normalizeText26(item?.completed_at),
-    htmlUrl: normalizeText26(item?.html_url),
+    name: normalizeText27(item?.name),
+    status: normalizeText27(item?.status),
+    conclusion: normalizeText27(item?.conclusion),
+    startedAt: normalizeText27(item?.started_at),
+    completedAt: normalizeText27(item?.completed_at),
+    htmlUrl: normalizeText27(item?.html_url),
     steps: Array.isArray(item?.steps) ? item.steps.map((step) => ({
-      name: normalizeText26(step?.name),
-      status: normalizeText26(step?.status),
-      conclusion: normalizeText26(step?.conclusion),
+      name: normalizeText27(step?.name),
+      status: normalizeText27(step?.status),
+      conclusion: normalizeText27(step?.conclusion),
       number: normalizePositiveInteger5(step?.number),
-      startedAt: normalizeText26(step?.started_at),
-      completedAt: normalizeText26(step?.completed_at)
+      startedAt: normalizeText27(step?.started_at),
+      completedAt: normalizeText27(step?.completed_at)
     })) : []
   };
 }
 function normalizeBranch(item) {
   return {
-    name: normalizeText26(item?.name),
+    name: normalizeText27(item?.name),
     protected: item?.protected === true,
-    sha: normalizeText26(item?.commit?.sha),
-    htmlUrl: normalizeText26(item?.commit?.url)
+    sha: normalizeText27(item?.commit?.sha),
+    htmlUrl: normalizeText27(item?.commit?.url)
   };
 }
 function normalizeContentEntry(item) {
-  const type = normalizeText26(item?.type);
+  const type = normalizeText27(item?.type);
   const content = type === "file" ? decodeGitHubTextContent(item?.content, item?.encoding) : null;
   return {
-    name: normalizeText26(item?.name),
-    path: normalizeText26(item?.path),
+    name: normalizeText27(item?.name),
+    path: normalizeText27(item?.path),
     type,
     size: normalizePositiveInteger5(item?.size),
-    sha: normalizeText26(item?.sha),
-    htmlUrl: normalizeText26(item?.html_url),
-    downloadUrl: normalizeText26(item?.download_url) || null,
+    sha: normalizeText27(item?.sha),
+    htmlUrl: normalizeText27(item?.html_url),
+    downloadUrl: normalizeText27(item?.download_url) || null,
     content,
-    encoding: content === null ? normalizeText26(item?.encoding) || null : "utf-8"
+    encoding: content === null ? normalizeText27(item?.encoding) || null : "utf-8"
   };
 }
 function normalizeTreeEntry(item) {
   return {
-    path: normalizeText26(item?.path),
-    type: normalizeText26(item?.type),
-    mode: normalizeText26(item?.mode),
-    sha: normalizeText26(item?.sha),
+    path: normalizeText27(item?.path),
+    type: normalizeText27(item?.type),
+    mode: normalizeText27(item?.mode),
+    sha: normalizeText27(item?.sha),
     size: normalizePositiveInteger5(item?.size),
-    url: normalizeText26(item?.url)
+    url: normalizeText27(item?.url)
   };
 }
 function decodeGitHubTextContent(content, encoding) {
-  if (normalizeText26(encoding) !== "base64") {
+  if (normalizeText27(encoding) !== "base64") {
     return null;
   }
-  const compact = normalizeText26(content).replace(/\s+/g, "");
+  const compact = normalizeText27(content).replace(/\s+/g, "");
   if (!compact) {
     return "";
   }
@@ -39347,13 +39488,13 @@ function decodeGitHubTextContent(content, encoding) {
   }
 }
 function readJsonSafe6(response) {
-  return response.json().catch(async () => ({ message: normalizeText26(await response.text().catch(() => "")) }));
+  return response.json().catch(async () => ({ message: normalizeText27(await response.text().catch(() => "")) }));
 }
 function encodeURIComponentRepository4(repository) {
   return String(repository ?? "").trim().split("/").map((segment) => encodeURIComponent(segment)).join("/");
 }
 function normalizeApiBaseUrl5(value) {
-  const text = normalizeText26(value);
+  const text = normalizeText27(value);
   return text ? text.replace(/\/+$/, "") : GITHUB_API_BASE_URL4;
 }
 function normalizeLimit6(value, fallback) {
@@ -39367,11 +39508,11 @@ function normalizePositiveInteger5(value) {
   const parsed = Number.parseInt(String(value ?? ""), 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
-function normalizeText26(value) {
+function normalizeText27(value) {
   return String(value ?? "").trim();
 }
 function normalizeRepositoryPath(value) {
-  return normalizeText26(value).replace(/^\/+/, "").replace(/\/{2,}/g, "/");
+  return normalizeText27(value).replace(/^\/+/, "").replace(/\/{2,}/g, "/");
 }
 
 // src/core/github-write-plane.js
@@ -39388,16 +39529,16 @@ var GitHubWriteOperation = Object.freeze({
   PULL_COMMENT_CREATE: "pull_comment_create"
 });
 async function executeGitHubWritePlane(input = {}) {
-  const operation = normalizeText27(input.operation);
-  const repository = normalizeText27(input.repository);
+  const operation = normalizeText28(input.operation);
+  const repository = normalizeText28(input.repository);
   const issueNumber = normalizePositiveInteger6(input.issueNumber);
   const pullNumber = normalizePositiveInteger6(input.pullNumber);
   const commentId = normalizePositiveInteger6(input.commentId);
-  const branch = normalizeText27(input.branch);
-  const baseRef = normalizeText27(input.baseRef) || "main";
-  const title = normalizeText27(input.title);
+  const branch = normalizeText28(input.branch);
+  const baseRef = normalizeText28(input.baseRef) || "main";
+  const title = normalizeText28(input.title);
   const body = normalizeBody(input.body);
-  const head = normalizeText27(input.head) || branch;
+  const head = normalizeText28(input.head) || branch;
   const env = input.env ?? {};
   const fetchImpl = resolveGitHubWriteFetch(env);
   const apiBaseUrl = normalizeApiBaseUrl6(env?.GITHUB_API_BASE_URL);
@@ -39411,7 +39552,7 @@ async function executeGitHubWritePlane(input = {}) {
     head,
     title,
     body,
-    approvalPhrase: normalizeText27(input.approvalPhrase),
+    approvalPhrase: normalizeText28(input.approvalPhrase),
     targetConfirmed: input.targetConfirmed === true,
     approvalScopeMatched: input.approvalScopeMatched === true
   });
@@ -39463,7 +39604,7 @@ function validateGitHubWriteRequest(input) {
   if (!input.approvalScopeMatched) {
     issues.push("approvalScopeMatched must be true");
   }
-  if (normalizeText27(input.approvalPhrase).toUpperCase() !== "GO") {
+  if (normalizeText28(input.approvalPhrase).toUpperCase() !== "GO") {
     issues.push("approvalPhrase must be GO");
   }
   if ((input.operation === GitHubWriteOperation.ISSUE_COMMENT_CREATE || input.operation === GitHubWriteOperation.ISSUE_COMMENT_UPDATE) && !input.issueNumber) {
@@ -39535,7 +39676,7 @@ async function dispatchGitHubWrite(input) {
       ok: false,
       status: response.status,
       error: "github_write_failed",
-      reason: normalizeText27(responseBody?.message) || `GitHub write failed for ${input.operation}`
+      reason: normalizeText28(responseBody?.message) || `GitHub write failed for ${input.operation}`
     };
   }
   return {
@@ -39665,10 +39806,10 @@ async function resolveRefSha({ repository, ref, token, fetchImpl, apiBaseUrl }) 
       ok: false,
       status: response.status,
       error: "github_write_failed",
-      reason: normalizeText27(body?.message) || `failed to resolve base ref sha for ${ref}`
+      reason: normalizeText28(body?.message) || `failed to resolve base ref sha for ${ref}`
     };
   }
-  const sha = normalizeText27(body?.object?.sha);
+  const sha = normalizeText28(body?.object?.sha);
   if (!sha) {
     return {
       ok: false,
@@ -39689,11 +39830,11 @@ function normalizeGitHubWriteResult(input) {
     branch: input.branch || null,
     baseRef: input.baseRef || null,
     commentId: normalizePositiveInteger6(responseBody?.id),
-    nodeId: normalizeText27(responseBody?.node_id) || null,
-    url: normalizeText27(responseBody?.html_url) || null,
-    state: normalizeText27(responseBody?.state) || null,
-    title: normalizeText27(responseBody?.title) || null,
-    ref: normalizeText27(responseBody?.ref) || null
+    nodeId: normalizeText28(responseBody?.node_id) || null,
+    url: normalizeText28(responseBody?.html_url) || null,
+    state: normalizeText28(responseBody?.state) || null,
+    title: normalizeText28(responseBody?.title) || null,
+    ref: normalizeText28(responseBody?.ref) || null
   };
 }
 function githubJsonHeaders2({ token }) {
@@ -39712,7 +39853,7 @@ async function readJsonSafe7(response) {
     return null;
   }
 }
-function normalizeText27(value) {
+function normalizeText28(value) {
   return String(value ?? "").trim();
 }
 function normalizeBody(value) {
@@ -39724,7 +39865,7 @@ function normalizePositiveInteger6(value) {
   return Number.isInteger(number3) && number3 > 0 ? number3 : null;
 }
 function normalizeApiBaseUrl6(value) {
-  const normalized = normalizeText27(value);
+  const normalized = normalizeText28(value);
   return normalized || GITHUB_API_BASE_URL5;
 }
 function encodeURIComponentRepository5(repository) {
@@ -39746,7 +39887,7 @@ function buildGitHubWriteFetchExceptionDiagnostics({ operation, method, url, err
   };
 }
 function sanitizeGitHubWriteDiagnosticText(value) {
-  return normalizeText27(value).replace(/sk-[A-Za-z0-9_-]+/g, "[REDACTED_OPENAI_KEY]").replace(/gh[psuro]_[A-Za-z0-9_]+/g, "[REDACTED_GITHUB_TOKEN]").replace(/Bearer\s+[A-Za-z0-9_.=-]+/gi, "Bearer [REDACTED]").replace(/(authorization|api[_-]?key|token|secret)(["'\s:=]+)([^"'\s<>&]+)/gi, "$1$2[REDACTED]").replace(/\/Users\/[^\s"'<>]+/g, "/Users/[REDACTED_PATH]").slice(0, 500);
+  return normalizeText28(value).replace(/sk-[A-Za-z0-9_-]+/g, "[REDACTED_OPENAI_KEY]").replace(/gh[psuro]_[A-Za-z0-9_]+/g, "[REDACTED_GITHUB_TOKEN]").replace(/Bearer\s+[A-Za-z0-9_.=-]+/gi, "Bearer [REDACTED]").replace(/(authorization|api[_-]?key|token|secret)(["'\s:=]+)([^"'\s<>&]+)/gi, "$1$2[REDACTED]").replace(/\/Users\/[^\s"'<>]+/g, "/Users/[REDACTED_PATH]").slice(0, 500);
 }
 
 // src/core/github-app-operation-registry.js
@@ -39882,10 +40023,10 @@ var NATURAL_GO_ENABLED_OPERATIONS = /* @__PURE__ */ new Set([
   GitHubWriteOperation.PULL_COMMENT_CREATE
 ]);
 function getGitHubAppOperation(operation) {
-  return GitHubAppOperationRegistry[normalizeText28(operation)] ?? null;
+  return GitHubAppOperationRegistry[normalizeText29(operation)] ?? null;
 }
 function bindNaturalGitHubWriteApproval({ payload, policyInput }) {
-  if (policyInput?.targetConfirmed === true && policyInput?.approvalScopeMatched === true && normalizeText28(policyInput?.approvalPhrase)) {
+  if (policyInput?.targetConfirmed === true && policyInput?.approvalScopeMatched === true && normalizeText29(policyInput?.approvalPhrase)) {
     return policyInput;
   }
   if (!canBindNaturalGitHubWriteApproval(payload)) {
@@ -39899,7 +40040,7 @@ function bindNaturalGitHubWriteApproval({ payload, policyInput }) {
   };
 }
 function canBindNaturalGitHubWriteApproval(payload) {
-  const operation = normalizeText28(payload?.operation);
+  const operation = normalizeText29(payload?.operation);
   const operationConfig = getGitHubAppOperation(operation);
   if (!operationConfig || operationConfig.tier !== GitHubAppOperationTier.NORMAL_GO || operationConfig.naturalGoEnabled === false || !NATURAL_GO_ENABLED_OPERATIONS.has(operation)) {
     return false;
@@ -39912,7 +40053,7 @@ function canBindNaturalGitHubWriteApproval(payload) {
     return false;
   }
   const presentedPayload = normalizeObject10(naturalApproval.presentedPayload);
-  if (normalizeText28(presentedPayload.operation) !== operation) {
+  if (normalizeText29(presentedPayload.operation) !== operation) {
     return false;
   }
   return operationConfig.naturalGoIdentityFields.every(
@@ -39933,7 +40074,7 @@ function fieldMatchesPresentedPayload({ field, payload, presentedPayload }) {
     const actualNumber = normalizePositiveInteger7(actual);
     return Boolean(actualNumber) && actualNumber === normalizePositiveInteger7(presented);
   }
-  return Boolean(normalizeText28(actual)) && normalizeText28(actual) === normalizeText28(presented);
+  return Boolean(normalizeText29(actual)) && normalizeText29(actual) === normalizeText29(presented);
 }
 function readPayloadIdentityField(payload, field) {
   if (field === "issueNumber") {
@@ -39942,12 +40083,12 @@ function readPayloadIdentityField(payload, field) {
   return payload?.[field];
 }
 function containsGoToken(value) {
-  return /(^|[^A-Za-z0-9_])GO([^A-Za-z0-9_]|$)/i.test(normalizeText28(value));
+  return /(^|[^A-Za-z0-9_])GO([^A-Za-z0-9_]|$)/i.test(normalizeText29(value));
 }
 function normalizeObject10(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
-function normalizeText28(value) {
+function normalizeText29(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 function normalizeBody2(value) {
@@ -40189,12 +40330,12 @@ var GitHubHighRiskOperation = Object.freeze({
   ISSUE_CLOSE: "issue_close"
 });
 async function executeGitHubHighRiskPlane(input = {}) {
-  const operation = normalizeText29(input.operation);
-  const repository = normalizeText29(input.repository);
+  const operation = normalizeText30(input.operation);
+  const repository = normalizeText30(input.repository);
   const issueNumber = normalizePositiveInteger8(input.issueNumber);
   const pullNumber = normalizePositiveInteger8(input.pullNumber);
   const mergeMethod = normalizeMergeMethod(input.mergeMethod);
-  const commitTitle = normalizeText29(input.commitTitle);
+  const commitTitle = normalizeText30(input.commitTitle);
   const commitMessage = normalizeBody3(input.commitMessage);
   const targetConfirmed = input.targetConfirmed === true;
   const approvalScope = input.approvalScope ?? null;
@@ -40349,7 +40490,7 @@ async function executePullReadyForReview(input) {
       ok: false,
       status: prResponse.status,
       error: "github_high_risk_failed",
-      reason: normalizeText29(prBody?.message) || "failed to read pull request before ready-for-review"
+      reason: normalizeText30(prBody?.message) || "failed to read pull request before ready-for-review"
     };
   }
   if (prBody?.draft !== true) {
@@ -40361,11 +40502,11 @@ async function executePullReadyForReview(input) {
         pullNumber: input.pullNumber,
         readyForReview: true,
         changed: false,
-        htmlUrl: normalizeText29(prBody?.html_url) || `https://github.com/${input.repository}/pull/${input.pullNumber}`
+        htmlUrl: normalizeText30(prBody?.html_url) || `https://github.com/${input.repository}/pull/${input.pullNumber}`
       }
     };
   }
-  const nodeId = normalizeText29(prBody?.node_id);
+  const nodeId = normalizeText30(prBody?.node_id);
   if (!nodeId) {
     return {
       ok: false,
@@ -40402,7 +40543,7 @@ async function executePullReadyForReview(input) {
       ok: false,
       status: mutationResponse.status,
       error: "github_high_risk_failed",
-      reason: normalizeText29(graphqlErrors[0]?.message) || normalizeText29(mutationBody?.message) || "GitHub ready-for-review mutation failed"
+      reason: normalizeText30(graphqlErrors[0]?.message) || normalizeText30(mutationBody?.message) || "GitHub ready-for-review mutation failed"
     };
   }
   const pull = mutationBody?.data?.markPullRequestReadyForReview?.pullRequest;
@@ -40422,7 +40563,7 @@ async function executePullReadyForReview(input) {
       pullNumber: Number(pull?.number ?? input.pullNumber),
       readyForReview: true,
       changed: true,
-      htmlUrl: normalizeText29(pull?.url) || `https://github.com/${input.repository}/pull/${input.pullNumber}`
+      htmlUrl: normalizeText30(pull?.url) || `https://github.com/${input.repository}/pull/${input.pullNumber}`
     }
   };
 }
@@ -40471,14 +40612,14 @@ async function executePullMerge(input) {
       ok: false,
       status: response.status,
       error: "github_high_risk_failed",
-      reason: normalizeText29(responseBody?.message) || "GitHub merge failed",
+      reason: normalizeText30(responseBody?.message) || "GitHub merge failed",
       diagnostics: {
         operation: input.operation,
         requestMethod: "PUT",
         requestUrl,
         githubStatus: response.status,
-        githubMessage: normalizeText29(responseBody?.message) || null,
-        githubDocumentationUrl: normalizeText29(responseBody?.documentation_url) || null
+        githubMessage: normalizeText30(responseBody?.message) || null,
+        githubDocumentationUrl: normalizeText30(responseBody?.documentation_url) || null
       }
     };
   }
@@ -40493,9 +40634,9 @@ async function executePullMerge(input) {
       repository: input.repository,
       pullNumber: input.pullNumber,
       merged: responseBody?.merged === true,
-      sha: normalizeText29(responseBody?.sha) || null,
-      message: normalizeText29(responseBody?.message) || null,
-      htmlUrl: normalizeText29(runtimeTruth.pull?.htmlUrl) || `https://github.com/${input.repository}/pull/${input.pullNumber}`,
+      sha: normalizeText30(responseBody?.sha) || null,
+      message: normalizeText30(responseBody?.message) || null,
+      htmlUrl: normalizeText30(runtimeTruth.pull?.htmlUrl) || `https://github.com/${input.repository}/pull/${input.pullNumber}`,
       runtimeTruth: runtimeTruth.pull
     }
   };
@@ -40530,14 +40671,14 @@ async function readPullRuntimeTruthBeforeMerge(input) {
       ok: false,
       status: response.status,
       error: "github_high_risk_failed",
-      reason: normalizeText29(responseBody?.message) || "failed to read GitHub pull request runtime truth before merge",
+      reason: normalizeText30(responseBody?.message) || "failed to read GitHub pull request runtime truth before merge",
       diagnostics: {
         operation: input.operation,
         requestMethod: "GET",
         requestUrl,
         githubStatus: response.status,
-        githubMessage: normalizeText29(responseBody?.message) || null,
-        githubDocumentationUrl: normalizeText29(responseBody?.documentation_url) || null
+        githubMessage: normalizeText30(responseBody?.message) || null,
+        githubDocumentationUrl: normalizeText30(responseBody?.documentation_url) || null
       }
     };
   }
@@ -40562,7 +40703,7 @@ async function readPullRuntimeTruthBeforeMerge(input) {
       freshBranchSuggestion: mergeability.freshBranchSuggestion,
       conflictFiles: mergeability.conflictFiles,
       conflictFilesSource: mergeability.conflictFilesSource,
-      htmlUrl: normalizeText29(responseBody?.html_url) || null
+      htmlUrl: normalizeText30(responseBody?.html_url) || null
     }
   };
 }
@@ -40596,24 +40737,24 @@ async function readPullRuntimeTruthAfterMerge(input) {
       ok: false,
       status: response.status,
       error: "github_high_risk_failed",
-      reason: normalizeText29(responseBody?.message) || "failed to read GitHub pull request runtime truth after merge",
+      reason: normalizeText30(responseBody?.message) || "failed to read GitHub pull request runtime truth after merge",
       diagnostics: {
         operation: input.operation,
         requestMethod: "GET",
         requestUrl,
         githubStatus: response.status,
-        githubMessage: normalizeText29(responseBody?.message) || null,
-        githubDocumentationUrl: normalizeText29(responseBody?.documentation_url) || null
+        githubMessage: normalizeText30(responseBody?.message) || null,
+        githubDocumentationUrl: normalizeText30(responseBody?.documentation_url) || null
       }
     };
   }
   return {
     ok: true,
     pull: {
-      merged: responseBody?.merged === true || Boolean(normalizeText29(responseBody?.merged_at)),
-      mergedAt: normalizeText29(responseBody?.merged_at) || null,
-      mergeCommitSha: normalizeText29(responseBody?.merge_commit_sha) || null,
-      htmlUrl: normalizeText29(responseBody?.html_url) || null
+      merged: responseBody?.merged === true || Boolean(normalizeText30(responseBody?.merged_at)),
+      mergedAt: normalizeText30(responseBody?.merged_at) || null,
+      mergeCommitSha: normalizeText30(responseBody?.merge_commit_sha) || null,
+      htmlUrl: normalizeText30(responseBody?.html_url) || null
     }
   };
 }
@@ -40642,10 +40783,10 @@ async function executeBoundedIssueClose(input) {
       ok: false,
       status: prResponse.status,
       error: "github_high_risk_failed",
-      reason: normalizeText29(prBody?.message) || "failed to read pull request before issue close"
+      reason: normalizeText30(prBody?.message) || "failed to read pull request before issue close"
     };
   }
-  if (!normalizeText29(prBody?.merged_at)) {
+  if (!normalizeText30(prBody?.merged_at)) {
     return {
       ok: false,
       status: 422,
@@ -40677,7 +40818,7 @@ async function executeBoundedIssueClose(input) {
       ok: false,
       status: closeResponse.status,
       error: "github_high_risk_failed",
-      reason: normalizeText29(closeBody?.message) || "GitHub issue close failed"
+      reason: normalizeText30(closeBody?.message) || "GitHub issue close failed"
     };
   }
   return {
@@ -40687,9 +40828,9 @@ async function executeBoundedIssueClose(input) {
       repository: input.repository,
       issueNumber: input.issueNumber,
       pullNumber: input.pullNumber,
-      issueState: normalizeText29(closeBody?.state) || "closed",
-      mergedAt: normalizeText29(prBody?.merged_at) || null,
-      htmlUrl: normalizeText29(closeBody?.html_url) || `https://github.com/${input.repository}/issues/${input.issueNumber}`
+      issueState: normalizeText30(closeBody?.state) || "closed",
+      mergedAt: normalizeText30(prBody?.merged_at) || null,
+      htmlUrl: normalizeText30(closeBody?.html_url) || `https://github.com/${input.repository}/issues/${input.issueNumber}`
     }
   };
 }
@@ -40710,7 +40851,7 @@ function normalizePositiveInteger8(value) {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 function normalizeMergeMethod(value) {
-  const text = normalizeText29(value).toLowerCase();
+  const text = normalizeText30(value).toLowerCase();
   return text || null;
 }
 function normalizeBody3(value) {
@@ -40718,7 +40859,7 @@ function normalizeBody3(value) {
   return text.trim() ? text : "";
 }
 function normalizeApiBaseUrl7(value) {
-  const normalized = normalizeText29(value);
+  const normalized = normalizeText30(value);
   return normalized ? normalized.replace(/\/+$/, "") : GITHUB_API_BASE_URL6;
 }
 function encodeURIComponentRepository6(repository) {
@@ -40741,7 +40882,7 @@ async function readJsonSafe8(response) {
     return null;
   }
 }
-function normalizeText29(value) {
+function normalizeText30(value) {
   return String(value ?? "").trim();
 }
 function errorName(error2) {
@@ -40749,9 +40890,9 @@ function errorName(error2) {
 }
 function errorMessage(error2) {
   if (error2 instanceof Error) {
-    return normalizeText29(error2.message) || error2.name || "unknown error";
+    return normalizeText30(error2.message) || error2.name || "unknown error";
   }
-  return normalizeText29(error2) || "unknown error";
+  return normalizeText30(error2) || "unknown error";
 }
 
 // node_modules/zod/v3/helpers/util.js
@@ -57074,6 +57215,21 @@ var runtime_default = {
       }
       return handleOwnerActionRequiredEventRequest(request, env);
     }
+    if (request.method === "POST" && isApiPath(url.pathname, "/vps/privileged-maintenance/proposals")) {
+      const auth = authorizeGatewayRequest({
+        request,
+        env,
+        apiSuffix: "/vps/privileged-maintenance/proposals"
+      });
+      if (!auth.ok) {
+        return json(auth.status, {
+          ok: false,
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+      return handleVpsPrivilegedMaintenanceProposalRequest(request, env);
+    }
     if (request.method === "POST" && isApiPath(url.pathname, "/action/github-actions-secret")) {
       const auth = authorizePasskeyBrowserOrMachineRequest({
         request,
@@ -57531,9 +57687,9 @@ async function handleRetrieveCrossIssueRequest(url, env) {
   const limit = normalizeLimit7(url.searchParams.get("limit"), 5);
   const relatedIssue = normalizeIssue6(url.searchParams.get("relatedIssue"));
   const issueNumber = normalizeIssue6(url.searchParams.get("issueNumber"));
-  const issueTitle = normalizeText30(url.searchParams.get("issueTitle"));
-  const issueUrl = normalizeText30(url.searchParams.get("issueUrl"));
-  const queryText = normalizeText30(url.searchParams.get("text")) || normalizeText30(url.searchParams.get("q"));
+  const issueTitle = normalizeText31(url.searchParams.get("issueTitle"));
+  const issueUrl = normalizeText31(url.searchParams.get("issueUrl"));
+  const queryText = normalizeText31(url.searchParams.get("text")) || normalizeText31(url.searchParams.get("q"));
   const semanticEnabled = parseBooleanQueryParam(url.searchParams.get("semantic"));
   const retrieved = await retrieveCrossIssueMemoryIndex(provider, {
     phase,
@@ -57571,9 +57727,9 @@ async function handleRetrieveCrossIssueRequest(url, env) {
 async function handleRetrieveOperationalMemoryRequest(url, env) {
   const provider = resolveMemoryProvider(env);
   const limit = normalizeLimit7(url.searchParams.get("limit"), 8);
-  const queryText = normalizeText30(url.searchParams.get("text")) || normalizeText30(url.searchParams.get("q"));
-  const recordId = normalizeText30(url.searchParams.get("recordId"));
-  const repository = normalizeText30(url.searchParams.get("repository"));
+  const queryText = normalizeText31(url.searchParams.get("text")) || normalizeText31(url.searchParams.get("q"));
+  const recordId = normalizeText31(url.searchParams.get("recordId"));
+  const repository = normalizeText31(url.searchParams.get("repository"));
   const runtimeTruth = buildRetrieveRuntimeTruth(url);
   const retrieved = await retrieveOperationalMemory(provider, {
     text: queryText,
@@ -57603,7 +57759,7 @@ async function handleRetrieveOperationalMemoryRequest(url, env) {
   });
 }
 async function handleRetrieveStartupPreflightRequest(url, env) {
-  const repository = normalizeText30(url.searchParams.get("repository"));
+  const repository = normalizeText31(url.searchParams.get("repository"));
   if (!repository) {
     return retrieveErrorJson(url, 422, {
       ok: false,
@@ -57612,11 +57768,11 @@ async function handleRetrieveStartupPreflightRequest(url, env) {
       issues: ["repository is required"]
     });
   }
-  const ref = normalizeText30(url.searchParams.get("ref")) || "main";
+  const ref = normalizeText31(url.searchParams.get("ref")) || "main";
   const issueNumber = normalizeIssue6(url.searchParams.get("issueNumber"));
-  const phase = normalizeText30(url.searchParams.get("phase")) || "execution";
-  const currentSurface = normalizeText30(url.searchParams.get("currentSurface")) || "butler";
-  const queryText = normalizeText30(url.searchParams.get("text")) || [
+  const phase = normalizeText31(url.searchParams.get("phase")) || "execution";
+  const currentSurface = normalizeText31(url.searchParams.get("currentSurface")) || "butler";
+  const queryText = normalizeText31(url.searchParams.get("text")) || [
     "VTDD startup preflight",
     "Butler-first",
     "iPhone iPad first",
@@ -57790,7 +57946,7 @@ function buildStartupExecutionQueue({ sourceResults }) {
     sectionSummaries[sectionName] = summarizeQueueSection(queueSections[sectionName]);
   }
   const missingSections = requiredSections.filter(
-    (sectionName) => !normalizeText30(queueSections[sectionName])
+    (sectionName) => !normalizeText31(queueSections[sectionName])
   );
   const classificationNames = ["EMERGENCY", "ROOT", "NEXT", "QUEUE", "EVIDENCE", "QUESTION"];
   const contractHasClassifications = classificationNames.every(
@@ -57834,7 +57990,7 @@ function parseMarkdownH2Sections(markdown) {
   for (let index = 0; index < matches.length; index += 1) {
     const match = matches[index];
     const next = matches[index + 1];
-    const sectionName = normalizeText30(match[1]);
+    const sectionName = normalizeText31(match[1]);
     sections[sectionName] = value.slice(match.index + match[0].length, next?.index).trim();
   }
   return sections;
@@ -57848,7 +58004,7 @@ function firstMarkdownBullet(sectionText) {
 function summarizeQueueSection(sectionText) {
   const bullets = markdownBullets(sectionText);
   return {
-    status: normalizeText30(sectionText) ? "present" : "missing",
+    status: normalizeText31(sectionText) ? "present" : "missing",
     bulletCount: bullets.length,
     firstBullet: bullets[0] || null,
     excerpt: compactExcerpt(sectionText, 360)
@@ -57893,7 +58049,7 @@ async function readStartupPreflightGitHub(input) {
     return {
       ok: false,
       status: "\u672A\u78BA\u8A8D",
-      reason: normalizeText30(error2?.message) || "github read threw"
+      reason: normalizeText31(error2?.message) || "github read threw"
     };
   }
 }
@@ -57963,7 +58119,7 @@ async function evaluateStartupPreflightSelfParity({
   };
 }
 function buildStartupSurfaceCapability(currentSurface) {
-  const surface = normalizeText30(currentSurface) || "butler";
+  const surface = normalizeText31(currentSurface) || "butler";
   if (surface === "mac_codex") {
     return {
       surface,
@@ -57989,7 +58145,7 @@ function buildStartupSurfaceCapability(currentSurface) {
 }
 function buildStartupGapClassification({ currentSurface, missingSources, memoryResult }) {
   const gaps = [];
-  if (normalizeText30(currentSurface) === "mac_codex") {
+  if (normalizeText31(currentSurface) === "mac_codex") {
     gaps.push("mac_codex_only_probe");
   }
   if (missingSources.length > 0) {
@@ -58007,7 +58163,7 @@ function buildStartupNextSafeAction({ issueNumber, currentSurface, missingSource
   if (memoryResult.status !== "read") {
     return "RAG/operational memory \u306F\u672A\u78BA\u8A8D\u3068\u3057\u3066\u6271\u3044\u3001GitHub runtime truth \u3092\u512A\u5148\u3057\u3066\u77ED\u3044\u78BA\u8A8D\u3092 owner \u306B\u8FD4\u3059\u3002";
   }
-  if (normalizeText30(currentSurface) === "mac_codex") {
+  if (normalizeText31(currentSurface) === "mac_codex") {
     return "mac Codex \u3067\u9032\u3081\u308B\u524D\u306B\u3001\u540C\u3058\u4F5C\u696D\u3092 Butler/VPS Codex CLI \u306B\u6E21\u305B\u308B\u304B\u3092\u660E\u793A\u3059\u308B\u3002";
   }
   return issueNumber ? `Issue #${issueNumber} \u306E Intent / Success Criteria / Non-goals \u306B\u6CBF\u3063\u3066 dry-run impact gate \u3078\u9032\u3080\u3002` : "\u5BFE\u8C61 Issue \u3092\u78BA\u8A8D\u3057\u3066\u304B\u3089 dry-run impact gate \u3078\u9032\u3080\u3002";
@@ -58018,7 +58174,7 @@ function startupSourceContentIncludes({ sourceResults, path, text }) {
   );
 }
 function compactExcerpt(value, maxLength = 400) {
-  const text = normalizeText30(value).replace(/\s+/g, " ");
+  const text = normalizeText31(value).replace(/\s+/g, " ");
   if (text.length <= maxLength) {
     return text;
   }
@@ -58034,7 +58190,7 @@ async function handleRetrieveApprovalGrantRequest(url, env) {
       reason: "valid memory provider is required for approval grant retrieval"
     });
   }
-  const approvalId = normalizeText30(url.searchParams.get("approvalId"));
+  const approvalId = normalizeText31(url.searchParams.get("approvalId"));
   if (!approvalId) {
     return retrieveErrorJson(url, 422, {
       ok: false,
@@ -58043,7 +58199,7 @@ async function handleRetrieveApprovalGrantRequest(url, env) {
     });
   }
   const record2 = await findApprovalRecordById(provider, approvalId);
-  if (!record2 || normalizeText30(record2?.content?.kind) !== "passkey_grant") {
+  if (!record2 || normalizeText31(record2?.content?.kind) !== "passkey_grant") {
     return retrieveErrorJson(url, 404, {
       ok: false,
       error: "approval_grant_not_found",
@@ -58060,10 +58216,10 @@ async function handleRetrieveApprovalGrantRequest(url, env) {
   return json(200, {
     ok: true,
     approvalGrant: {
-      approvalId: normalizeText30(record2.content.approvalId) || record2.id,
+      approvalId: normalizeText31(record2.content.approvalId) || record2.id,
       verified: record2.content.status === "verified",
-      verifiedAt: normalizeText30(record2.content.verifiedAt) || null,
-      expiresAt: normalizeText30(record2.content.expiresAt) || null,
+      verifiedAt: normalizeText31(record2.content.verifiedAt) || null,
+      expiresAt: normalizeText31(record2.content.expiresAt) || null,
       scope: normalizeScopeSnapshot(record2.content.scope)
     }
   });
@@ -58114,8 +58270,8 @@ async function handleMemoryWriteRequest(request, env) {
     });
   }
   const gatewayInput = {
-    phase: normalizeText30(payload.phase) || "execution",
-    actorRole: normalizeText30(payload.actorRole) || "butler",
+    phase: normalizeText31(payload.phase) || "execution",
+    actorRole: normalizeText31(payload.actorRole) || "butler",
     memoryRecord: {
       recordType: memoryRecord.record.recordType,
       content: memoryRecord.record.content,
@@ -58123,7 +58279,7 @@ async function handleMemoryWriteRequest(request, env) {
     }
   };
   const gatewayResult = {
-    repository: normalizeText30(payload.repository) || null
+    repository: normalizeText31(payload.repository) || null
   };
   if (memoryRecord.record.recordType === MemoryRecordType.DECISION_LOG) {
     const persisted = await appendDecisionLogFromGateway(provider, gatewayInput, gatewayResult);
@@ -58218,8 +58374,8 @@ function buildMemoryWriteRecord(payload = {}) {
     };
   }
   const relatedIssue = normalizeIssue6(payload.relatedIssue);
-  const repository = normalizeText30(payload.repository) || null;
-  const timestamp = normalizeText30(payload.timestamp) || (/* @__PURE__ */ new Date()).toISOString();
+  const repository = normalizeText31(payload.repository) || null;
+  const timestamp = normalizeText31(payload.timestamp) || (/* @__PURE__ */ new Date()).toISOString();
   const metadata = {
     ...normalizeObject11(payload.metadata),
     relatedIssue,
@@ -58234,12 +58390,12 @@ function buildMemoryWriteRecord(payload = {}) {
       record: {
         recordType: recordType2,
         content: {
-          decision: normalizeText30(payload.decision ?? payload.summary),
-          rationale: normalizeText30(payload.rationale),
+          decision: normalizeText31(payload.decision ?? payload.summary),
+          rationale: normalizeText31(payload.rationale),
           relatedIssue,
-          decidedBy: normalizeText30(payload.decidedBy) || "butler_with_owner_go",
+          decidedBy: normalizeText31(payload.decidedBy) || "butler_with_owner_go",
           timestamp,
-          supersededBy: normalizeText30(payload.supersededBy) || null
+          supersededBy: normalizeText31(payload.supersededBy) || null
         },
         metadata,
         timestamp,
@@ -58255,13 +58411,13 @@ function buildMemoryWriteRecord(payload = {}) {
       record: {
         recordType: recordType2,
         content: {
-          hypothesis: normalizeText30(payload.hypothesis ?? payload.summary),
+          hypothesis: normalizeText31(payload.hypothesis ?? payload.summary),
           options: normalizeStringArray4(payload.options),
           rejectedReasons: normalizeRejectedReasons2(payload.rejectedReasons),
           concerns: normalizeStringArray4(payload.concerns),
           unresolvedQuestions: normalizeStringArray4(payload.unresolvedQuestions),
           relatedIssue,
-          proposedBy: normalizeText30(payload.proposedBy) || "butler_with_owner_go",
+          proposedBy: normalizeText31(payload.proposedBy) || "butler_with_owner_go",
           timestamp
         },
         metadata,
@@ -58271,7 +58427,7 @@ function buildMemoryWriteRecord(payload = {}) {
       }
     };
   }
-  const summary = normalizeText30(payload.summary);
+  const summary = normalizeText31(payload.summary);
   if (!summary) {
     return {
       ok: false,
@@ -58286,18 +58442,18 @@ function buildMemoryWriteRecord(payload = {}) {
       recordType: recordType2,
       content: {
         summary,
-        details: normalizeText30(payload.details) || null,
-        checkpointReason: normalizeText30(payload.checkpointReason) || null,
-        thoughtLocation: normalizeText30(payload.thoughtLocation) || null,
-        userTension: normalizeText30(payload.userTension) || null,
+        details: normalizeText31(payload.details) || null,
+        checkpointReason: normalizeText31(payload.checkpointReason) || null,
+        thoughtLocation: normalizeText31(payload.thoughtLocation) || null,
+        userTension: normalizeText31(payload.userTension) || null,
         origin: normalizeMemoryOrigin(payload.origin),
         user_words: normalizeBoundedMemoryStringArray(
           payload.user_words ?? payload.userWords ?? payload.userWord,
           { maxItems: 3, maxLength: 160 }
         ),
         tension_note: normalizeTensionNote(payload.tension_note ?? payload.tensionNote),
-        contextSourceQuality: normalizeText30(payload.contextSourceQuality) || null,
-        hypothesis: normalizeText30(payload.hypothesis) || null,
+        contextSourceQuality: normalizeText31(payload.contextSourceQuality) || null,
+        hypothesis: normalizeText31(payload.hypothesis) || null,
         explorationHypothesis: normalizeExplorationHypothesis(payload.explorationHypothesis),
         suspectedFiles: normalizeStringArray4(payload.suspectedFiles),
         suspectedLines: normalizeSuspectedLines2(payload.suspectedLines),
@@ -58310,7 +58466,7 @@ function buildMemoryWriteRecord(payload = {}) {
         expectedFiles: normalizeStringArray4(payload.expectedFiles),
         evidenceLinks: normalizeStringArray4(payload.evidenceLinks),
         previousRecordIds: normalizeStringArray4(payload.previousRecordIds),
-        captureBoundary: normalizeText30(payload.captureBoundary) || (normalizeText30(payload.checkpointReason) ? "judgment_log_not_chain_of_thought" : null),
+        captureBoundary: normalizeText31(payload.captureBoundary) || (normalizeText31(payload.checkpointReason) ? "judgment_log_not_chain_of_thought" : null),
         relatedIssue,
         repository,
         timestamp
@@ -58352,7 +58508,7 @@ function buildMemoryWriteTags({ recordType: recordType2, relatedIssue, repositor
 }
 function normalizeStringArray4(value) {
   const values = Array.isArray(value) ? value : value === void 0 ? [] : [value];
-  return values.map(normalizeText30).filter(Boolean);
+  return values.map(normalizeText31).filter(Boolean);
 }
 function normalizeBoundedMemoryStringArray(value, { maxItems, maxLength }) {
   const values = Array.isArray(value) ? value : value === void 0 ? [] : [value];
@@ -58442,8 +58598,8 @@ function normalizeMemoryRecallText(value, maxLength) {
 function normalizeRejectedReasons2(value) {
   const values = Array.isArray(value) ? value : [];
   return values.map((item) => ({
-    option: normalizeText30(item?.option),
-    reason: normalizeText30(item?.reason)
+    option: normalizeText31(item?.option),
+    reason: normalizeText31(item?.reason)
   })).filter((item) => item.option && item.reason);
 }
 function makeOperationalMemoryRecordId(record2) {
@@ -58478,9 +58634,9 @@ async function handleRetrieveGitHubReadPlaneRequest(url, env) {
 }
 async function handleRetrieveCustomGptSetupArtifactRequest(url, env) {
   const retrieved = await retrieveCustomGptSetupArtifact({
-    artifact: normalizeText30(url.searchParams.get("artifact")),
-    repository: normalizeText30(url.searchParams.get("repository")),
-    ref: normalizeText30(url.searchParams.get("ref")),
+    artifact: normalizeText31(url.searchParams.get("artifact")),
+    repository: normalizeText31(url.searchParams.get("repository")),
+    ref: normalizeText31(url.searchParams.get("ref")),
     env
   });
   if (!retrieved.ok) {
@@ -58501,8 +58657,8 @@ function handleRetrieveCloudflarePagesRequest(url) {
 }
 async function handleRetrieveButlerSelfParityRequest(url, env) {
   const parity = await evaluateButlerSelfParity({
-    repository: normalizeText30(url.searchParams.get("repository")),
-    ref: normalizeText30(url.searchParams.get("ref")),
+    repository: normalizeText31(url.searchParams.get("repository")),
+    ref: normalizeText31(url.searchParams.get("ref")),
     issueNumber: normalizeIssue6(url.searchParams.get("issueNumber")),
     pullNumber: normalizeIssue6(url.searchParams.get("pullNumber")),
     runtimeOrigin: url.origin,
@@ -58522,8 +58678,8 @@ async function handleRetrieveButlerSelfParityRequest(url, env) {
 }
 async function handleRetrieveCustomGptSetupDiagnosticsRequest(url, env) {
   const result = await evaluateCustomGptSetupDiagnostics({
-    repository: normalizeText30(url.searchParams.get("repository")),
-    ref: normalizeText30(url.searchParams.get("ref")),
+    repository: normalizeText31(url.searchParams.get("repository")),
+    ref: normalizeText31(url.searchParams.get("ref")),
     issueNumber: normalizeIssue6(url.searchParams.get("issueNumber")),
     runtimeOrigin: url.origin,
     observedFailure: readObservedSetupFailureFromUrl(url),
@@ -58542,8 +58698,8 @@ async function handleRetrieveCustomGptSetupDiagnosticsRequest(url, env) {
   });
 }
 async function handleCustomGptSetupDiagnosticsPageRequest(url, env) {
-  const repository = normalizeText30(url.searchParams.get("repository")) || "marushu/vtdd-v2-p";
-  const ref = normalizeText30(url.searchParams.get("ref")) || "main";
+  const repository = normalizeText31(url.searchParams.get("repository")) || "marushu/vtdd-v2-p";
+  const ref = normalizeText31(url.searchParams.get("ref")) || "main";
   const issueNumber = normalizeIssue6(url.searchParams.get("issueNumber"));
   const result = await evaluateCustomGptSetupDiagnostics({
     repository,
@@ -58619,10 +58775,10 @@ async function handleMcpRequest({ request, env, url }) {
 }
 function normalizeMcpTransportRequest(request) {
   const headers = new Headers(request.headers);
-  if (!normalizeText30(headers.get("accept"))) {
+  if (!normalizeText31(headers.get("accept"))) {
     headers.set("accept", "application/json, text/event-stream");
   }
-  if (!normalizeText30(headers.get("mcp-protocol-version"))) {
+  if (!normalizeText31(headers.get("mcp-protocol-version"))) {
     headers.set("mcp-protocol-version", MCP_PROTOCOL_VERSION);
   }
   return new Request(request, { headers });
@@ -58745,7 +58901,7 @@ function buildMcpToolResult(result) {
   };
 }
 function withMcpProtocolVersionHeader(response) {
-  if (normalizeText30(response.headers.get("mcp-protocol-version"))) {
+  if (normalizeText31(response.headers.get("mcp-protocol-version"))) {
     return response;
   }
   const headers = new Headers(response.headers);
@@ -58757,7 +58913,7 @@ function withMcpProtocolVersionHeader(response) {
   });
 }
 async function executeMcpRuntimeTruth(argumentsInput, env) {
-  const repository = normalizeText30(argumentsInput.repository);
+  const repository = normalizeText31(argumentsInput.repository);
   if (!repository) {
     return {
       ok: false,
@@ -58767,7 +58923,7 @@ async function executeMcpRuntimeTruth(argumentsInput, env) {
   }
   const issueNumber = normalizeIssue6(argumentsInput.issueNumber);
   const pullNumber = normalizeIssue6(argumentsInput.pullNumber);
-  const branch = normalizeText30(argumentsInput.branch);
+  const branch = normalizeText31(argumentsInput.branch);
   const limit = normalizeLimit7(argumentsInput.limit, 10);
   const includeChecks = argumentsInput.includeChecks !== false;
   const includeWorkflowRuns = argumentsInput.includeWorkflowRuns === true;
@@ -58835,7 +58991,7 @@ async function executeMcpRuntimeTruth(argumentsInput, env) {
   };
 }
 async function executeMcpReviewTruth(argumentsInput, env) {
-  const repository = normalizeText30(argumentsInput.repository);
+  const repository = normalizeText31(argumentsInput.repository);
   const pullNumber = normalizeIssue6(argumentsInput.pullNumber);
   if (!repository || !pullNumber) {
     return {
@@ -58920,7 +59076,7 @@ async function executeMcpReviewTruth(argumentsInput, env) {
   };
 }
 async function executeMcpOperationalMemorySearch(argumentsInput, env) {
-  const text = normalizeText30(argumentsInput.text);
+  const text = normalizeText31(argumentsInput.text);
   if (!text) {
     return {
       ok: false,
@@ -58930,17 +59086,17 @@ async function executeMcpOperationalMemorySearch(argumentsInput, env) {
   }
   const query = new URLSearchParams();
   query.set("text", text);
-  if (normalizeText30(argumentsInput.repository)) {
-    query.set("repository", normalizeText30(argumentsInput.repository));
+  if (normalizeText31(argumentsInput.repository)) {
+    query.set("repository", normalizeText31(argumentsInput.repository));
   }
-  if (normalizeText30(argumentsInput.currentState)) {
-    query.set("currentState", normalizeText30(argumentsInput.currentState));
+  if (normalizeText31(argumentsInput.currentState)) {
+    query.set("currentState", normalizeText31(argumentsInput.currentState));
   }
-  if (normalizeText30(argumentsInput.runtimeTruthSource)) {
-    query.set("runtimeTruthSource", normalizeText30(argumentsInput.runtimeTruthSource));
+  if (normalizeText31(argumentsInput.runtimeTruthSource)) {
+    query.set("runtimeTruthSource", normalizeText31(argumentsInput.runtimeTruthSource));
   }
-  if (normalizeText30(argumentsInput.checkedAt)) {
-    query.set("checkedAt", normalizeText30(argumentsInput.checkedAt));
+  if (normalizeText31(argumentsInput.checkedAt)) {
+    query.set("checkedAt", normalizeText31(argumentsInput.checkedAt));
   }
   if (normalizePositiveInteger9(argumentsInput.limit)) {
     query.set("limit", String(normalizePositiveInteger9(argumentsInput.limit)));
@@ -58952,7 +59108,7 @@ async function executeMcpOperationalMemorySearch(argumentsInput, env) {
   return responseToMcpToolResult(response);
 }
 async function executeMcpImplementationRecall(argumentsInput, env) {
-  const repository = normalizeText30(argumentsInput.repository);
+  const repository = normalizeText31(argumentsInput.repository);
   if (!repository) {
     return {
       ok: false,
@@ -58962,7 +59118,7 @@ async function executeMcpImplementationRecall(argumentsInput, env) {
   }
   const issueNumber = normalizeIssue6(argumentsInput.issueNumber);
   const pullNumber = normalizeIssue6(argumentsInput.pullNumber);
-  const text = normalizeText30(argumentsInput.text);
+  const text = normalizeText31(argumentsInput.text);
   const limit = normalizeLimit7(argumentsInput.limit, 8);
   const decisionLogs = issueNumber ? await readDecisionLogReferences({ env, relatedIssue: issueNumber, limit: 5 }) : { ok: true, references: [] };
   if (!decisionLogs.ok) {
@@ -58993,7 +59149,7 @@ async function executeMcpImplementationRecall(argumentsInput, env) {
   const pullRecord = pull.records?.[0] ?? null;
   const runtimeStatus = pullRecord ? pullRecord.merged ? "merged" : pullRecord.state === "open" ? "open_pr" : "unknown" : "unknown";
   const memoryReferences = cross.body?.orderedReferences ?? [];
-  const prContextReferences = memoryReferences.filter((item) => normalizeText30(item?.source) === "pr_context").map((item) => normalizeObject11(item?.reference));
+  const prContextReferences = memoryReferences.filter((item) => normalizeText31(item?.source) === "pr_context").map((item) => normalizeObject11(item?.reference));
   const memoryCommits = prContextReferences.flatMap((item) => normalizeTextList2(item.commits));
   const files = uniqueTextList2(prContextReferences.flatMap((item) => normalizeTextList2(item.files)));
   const tests = uniqueTextList2(prContextReferences.flatMap((item) => normalizeTextList2(item.tests)));
@@ -59022,7 +59178,7 @@ async function executeMcpImplementationRecall(argumentsInput, env) {
   };
 }
 async function executeMcpPrStatus(argumentsInput, env) {
-  const repository = normalizeText30(argumentsInput.repository);
+  const repository = normalizeText31(argumentsInput.repository);
   const pullNumber = normalizeIssue6(argumentsInput.pullNumber);
   if (!repository || !pullNumber) {
     return {
@@ -59061,7 +59217,7 @@ async function executeMcpPrStatus(argumentsInput, env) {
   };
 }
 async function executeMcpIssueStatus(argumentsInput, env, runtimeOrigin) {
-  const repository = normalizeText30(argumentsInput.repository);
+  const repository = normalizeText31(argumentsInput.repository);
   const issueNumber = normalizeIssue6(argumentsInput.issueNumber);
   if (!repository || !issueNumber) {
     return {
@@ -59166,10 +59322,10 @@ async function readCrossIssueMemory({ env, relatedIssue, issueNumber, text, limi
     phase: "execution",
     relatedIssue,
     limit,
-    text: normalizeText30(text) || null,
+    text: normalizeText31(text) || null,
     semanticRetrieval: {
-      enabled: Boolean(normalizeText30(text)),
-      mode: normalizeText30(text) ? "assistive" : "disabled"
+      enabled: Boolean(normalizeText31(text)),
+      mode: normalizeText31(text) ? "assistive" : "disabled"
     },
     issueContext: issueNumber ? {
       issueNumber,
@@ -59304,7 +59460,7 @@ async function handleGitHubWritePlaneRequest(request, env) {
   });
 }
 function wantsActionVisibleGitHubWriteErrors(payload) {
-  const responseMode = normalizeText30(payload?.responseMode);
+  const responseMode = normalizeText31(payload?.responseMode);
   return responseMode === "action_visible";
 }
 function retrieveErrorJson(url, status, body = {}) {
@@ -59314,18 +59470,18 @@ function retrieveErrorJson(url, status, body = {}) {
   return json(200, {
     ok: false,
     httpStatus: status,
-    error: normalizeText30(body.error) || "retrieve_failed",
-    reason: normalizeText30(body.reason) || null,
+    error: normalizeText31(body.error) || "retrieve_failed",
+    reason: normalizeText31(body.reason) || null,
     issues: Array.isArray(body.issues) ? body.issues : [],
     diagnostics: {
-      route: normalizeText30(url?.pathname) || null,
+      route: normalizeText31(url?.pathname) || null,
       responseMode: "action_visible",
       rootCause: "Custom GPT Action test screen can surface non-2xx retrieve responses as ClientResponseError; this envelope preserves error/reason/issues for debugging."
     }
   });
 }
 function wantsActionVisibleRetrieveErrors(url) {
-  const responseMode = normalizeText30(url?.searchParams?.get("responseMode"));
+  const responseMode = normalizeText31(url?.searchParams?.get("responseMode"));
   return responseMode === "action_visible";
 }
 function validateConsistentIssueScope({ payload, issueContext }) {
@@ -59359,10 +59515,10 @@ async function handleGitHubHighRiskPlaneRequest(request, env) {
       issues: issueScopeValidation.issues
     });
   }
-  const operation = normalizeText30(payload.operation);
-  const repository = normalizeText30(payload.repository);
+  const operation = normalizeText31(payload.operation);
+  const repository = normalizeText31(payload.repository);
   const scopedIssueNumber = issueContext.issueNumber ?? payload.issueNumber ?? null;
-  const phase = normalizeText30(payload.phase) || "execution";
+  const phase = normalizeText31(payload.phase) || "execution";
   const highRiskKind = operation;
   const actionType = mapGitHubHighRiskOperationToActionType(operation);
   const approvalScope = buildApprovalScopeSnapshot({
@@ -59444,7 +59600,7 @@ async function handleDeployProductionRequest(request, env) {
   const policyInput = payload.policyInput && typeof payload.policyInput === "object" ? payload.policyInput : {};
   const resolvedApprovalGrant = await resolveApprovalGrant({
     payload: {
-      phase: normalizeText30(payload.phase) || "execution",
+      phase: normalizeText31(payload.phase) || "execution",
       highRiskKind: "deploy_production",
       repositoryInput: payload.repository
     },
@@ -59594,6 +59750,85 @@ async function handleOwnerActionRequiredEventRequest(request, env) {
     webPush
   });
 }
+async function handleVpsPrivilegedMaintenanceProposalRequest(request, env) {
+  const url = new URL(request.url);
+  const payload = await readJson(request);
+  const proposalResult = buildVpsCapabilityProposal(payload);
+  if (!proposalResult.ok) {
+    return json(422, {
+      ok: false,
+      error: "vps_privileged_maintenance_proposal_invalid",
+      issues: proposalResult.issues ?? []
+    });
+  }
+  const proposal = proposalResult.proposal;
+  const operation = normalizeText31(payload?.operation) || "add";
+  const expiresAt = normalizeText31(payload?.expiresAt || payload?.expires_at) || new Date(Date.now() + 5 * 60 * 1e3).toISOString();
+  const impactScope = normalizeText31(payload?.impactScope || payload?.impact_scope) || proposal.capability.affectedPaths.join(", ") || proposal.capability.commandClass;
+  const approvalScope = buildVpsMaintenanceApprovalScope({
+    repository: proposal.repository,
+    host: proposal.host,
+    operation,
+    capabilityId: proposal.capability.id,
+    impactScope,
+    expiresAt
+  });
+  const approvalOperatorUrl = buildVpsMaintenanceApprovalOperatorUrl({
+    origin: url.origin,
+    approvalScope
+  });
+  const ownerAction = {
+    repository: proposal.repository,
+    actionId: `vps-maintenance-proposal:${proposal.capability.id}:${operation}`,
+    title: `VPS maintenance approval: ${proposal.capability.title}`,
+    summary: `${proposal.host} / ${operation} / ${proposal.capability.id} / ${impactScope}`,
+    issueNumber: 637,
+    workflowName: "vps-privileged-maintenance",
+    url: `/dashboard/notifications?focus=owner-action`,
+    source: {
+      kind: proposal.kind,
+      approvalOperatorUrl,
+      capabilityId: proposal.capability.id,
+      operation,
+      host: proposal.host
+    }
+  };
+  return json(200, {
+    ok: true,
+    proposal,
+    approvalScope,
+    approvalOperatorUrl,
+    ownerAction,
+    runtimeTruth: {
+      kind: "vps_privileged_maintenance_proposal",
+      status: "approval_required",
+      host: proposal.host,
+      repository: proposal.repository,
+      capabilityId: proposal.capability.id,
+      operation,
+      impactScope,
+      expiresAt,
+      pwaNotificationRequired: true,
+      rootExecutionStarted: false,
+      redacted: true
+    }
+  });
+}
+function buildVpsMaintenanceApprovalOperatorUrl({ origin, approvalScope }) {
+  const url = new URL("/v2/approval/passkey/operator", `${origin}/`);
+  url.searchParams.set("mode", "vps");
+  url.searchParams.set("repositoryInput", approvalScope.repositoryInput);
+  url.searchParams.set("issueNumber", approvalScope.relatedIssue || "637");
+  url.searchParams.set("phase", approvalScope.phase || "execution");
+  url.searchParams.set("actionType", approvalScope.actionType);
+  url.searchParams.set("highRiskKind", approvalScope.highRiskKind);
+  url.searchParams.set("vpsHost", approvalScope.display?.host || "");
+  url.searchParams.set("vpsOperation", approvalScope.display?.operation || "");
+  url.searchParams.set("vpsCapabilityId", approvalScope.display?.capabilityId || "");
+  url.searchParams.set("vpsImpactScope", approvalScope.display?.impactScope || "");
+  url.searchParams.set("vpsExpiresAt", approvalScope.display?.expiresAt || "");
+  return url.href;
+}
 async function handleDashboardChatMessageRequest(request, env) {
   const dashboardAuth = await authorizeDashboardRequest({
     request,
@@ -59704,7 +59939,7 @@ async function handleMediaUploadRequest(request, env) {
       limitBytes: MEDIA_UPLOAD_HARD_LIMIT_BYTES
     });
   }
-  const allowLarge = normalizeText30(form.get("allowLarge") || form.get("allow_large")).toLowerCase() === "true";
+  const allowLarge = normalizeText31(form.get("allowLarge") || form.get("allow_large")).toLowerCase() === "true";
   if (byteSize > MEDIA_UPLOAD_SOFT_LIMIT_BYTES && !allowLarge) {
     return json(413, {
       ok: false,
@@ -60167,7 +60402,7 @@ async function resolveDashboardPushTargetEndpointHash(payload, env) {
   };
 }
 async function handleDashboardPushAckRequest(request, env) {
-  if (normalizeText30(request.headers.get("content-type")).split(";")[0].toLowerCase() !== "application/json") {
+  if (normalizeText31(request.headers.get("content-type")).split(";")[0].toLowerCase() !== "application/json") {
     return json(415, {
       ok: false,
       error: "dashboard_push_ack_content_type_required",
@@ -60240,7 +60475,7 @@ async function handleDashboardPushAckRequest(request, env) {
   });
 }
 function isSupportedDashboardPushAckSourceEventId(value) {
-  const text = normalizeText30(value);
+  const text = normalizeText31(value);
   return text.startsWith("github-actions:") || text.startsWith("vps-runner:") || text.startsWith("ai-news:") || text.startsWith("owner-action-required:") || text.startsWith("dashboard-push-test:");
 }
 async function handleDashboardChatSocketRequest(request, url, env) {
@@ -60314,10 +60549,10 @@ async function handleDashboardAppServerBridgeSocketRequest(request, url, env) {
 }
 function authorizeDashboardAppServerBridgeRequest({ request, env, apiSuffix }) {
   const direct = authorizeGatewayRequest({ request, env, apiSuffix });
-  if (direct.ok || normalizeText30(request.headers.get("authorization"))) {
+  if (direct.ok || normalizeText31(request.headers.get("authorization"))) {
     return direct;
   }
-  const bearerToken = normalizeText30(env?.VTDD_GATEWAY_BEARER_TOKEN ?? env?.MVP_GATEWAY_BEARER_TOKEN);
+  const bearerToken = normalizeText31(env?.VTDD_GATEWAY_BEARER_TOKEN ?? env?.MVP_GATEWAY_BEARER_TOKEN);
   const protocolToken = extractDashboardBridgeBearerProtocol(request.headers.get("sec-websocket-protocol"));
   if (bearerToken && protocolToken) {
     return protocolToken === bearerToken ? { ok: true } : {
@@ -60471,7 +60706,7 @@ async function handleGitHubActionsSecretSyncRequest(request, env) {
   const policyInput = payload.policyInput && typeof payload.policyInput === "object" ? payload.policyInput : {};
   const resolvedApprovalGrant = await resolveApprovalGrant({
     payload: {
-      phase: normalizeText30(payload.phase) || "execution",
+      phase: normalizeText31(payload.phase) || "execution",
       highRiskKind: "github_actions_secret_sync",
       repositoryInput: payload.repository
     },
@@ -60510,7 +60745,7 @@ async function handleGitHubActionsSecretSyncRequest(request, env) {
 }
 async function handleCustomGptRecoveryPageRequest(url, env) {
   const channel = url.pathname === "/setup/known-good" ? CustomGptSetupChannel.KNOWN_GOOD : CustomGptSetupChannel.LATEST;
-  const ref = normalizeText30(url.searchParams.get("ref")) || "main";
+  const ref = normalizeText31(url.searchParams.get("ref")) || "main";
   const issueNumber = normalizeIssue6(url.searchParams.get("issueNumber"));
   const bundle = await buildCustomGptRecoveryBundle({
     channel,
@@ -60542,7 +60777,7 @@ function handlePasskeyOperatorPageRequest(request) {
   const requestedActionType = url.searchParams.get("actionType");
   const requestedHighRiskKind = url.searchParams.get("highRiskKind");
   const requestedOperatorMode = url.searchParams.get("mode") || (requestedActionType || requestedHighRiskKind ? "" : "full");
-  const dashboardSessionMode = normalizeText30(requestedOperatorMode) === "dashboard";
+  const dashboardSessionMode = normalizeText31(requestedOperatorMode) === "dashboard";
   const html2 = renderPasskeyOperatorPage({
     origin: url.origin,
     syncApiBase,
@@ -60554,6 +60789,11 @@ function handlePasskeyOperatorPageRequest(request) {
     actionType: requestedActionType,
     highRiskKind: requestedHighRiskKind,
     mergeMethod: url.searchParams.get("mergeMethod") || "squash",
+    vpsHost: url.searchParams.get("vpsHost"),
+    vpsOperation: url.searchParams.get("vpsOperation"),
+    vpsCapabilityId: url.searchParams.get("vpsCapabilityId"),
+    vpsImpactScope: url.searchParams.get("vpsImpactScope"),
+    vpsExpiresAt: url.searchParams.get("vpsExpiresAt"),
     returnUrl: normalizeOperatorReturnUrl(url.searchParams.get("returnUrl")),
     dashboardReturnPath: sanitizeDashboardPreAuthReturnPath(url.searchParams.get("dashboardReturnPath")),
     operatorId: url.searchParams.get("operatorId") || "vtdd-operator",
@@ -60572,7 +60812,7 @@ function handlePasskeyOperatorPageRequest(request) {
   });
 }
 function normalizeOptionalHttpUrl(value) {
-  const text = normalizeText30(value);
+  const text = normalizeText31(value);
   if (!text) {
     return "";
   }
@@ -60587,7 +60827,7 @@ function normalizeOptionalHttpUrl(value) {
   }
 }
 function normalizeOperatorReturnUrl(value) {
-  const text = normalizeText30(value);
+  const text = normalizeText31(value);
   if (!text) {
     return "";
   }
@@ -60695,7 +60935,7 @@ async function resolveRemoteCodexHandoffRuntimeTruth({
   const continuationContext = payload?.continuationContext && typeof payload.continuationContext === "object" ? payload.continuationContext : {};
   const handoff = continuationContext.handoff && typeof continuationContext.handoff === "object" ? continuationContext.handoff : {};
   const handoffTarget = handoff.targetPullRequest && typeof handoff.targetPullRequest === "object" ? handoff.targetPullRequest : {};
-  const activeBranch = normalizeText30(runtimeState.activeBranch) || normalizeText30(handoff.headRef) || normalizeText30(handoffTarget.headRef) || normalizeText30(handoffTarget.head?.ref) || normalizeText30(payload?.executionTarget?.branch) || (issueNumber ? `codex/issue-${issueNumber}` : "");
+  const activeBranch = normalizeText31(runtimeState.activeBranch) || normalizeText31(handoff.headRef) || normalizeText31(handoffTarget.headRef) || normalizeText31(handoffTarget.head?.ref) || normalizeText31(payload?.executionTarget?.branch) || (issueNumber ? `codex/issue-${issueNumber}` : "");
   const [repositoryOwner] = repositoryResolution.repository.split("/");
   const [pulls, branches, workflowRuns] = await Promise.all([
     retrieveGitHubReadPlane({
@@ -60753,13 +60993,13 @@ async function resolveRemoteCodexHandoffRuntimeTruth({
 }
 function selectPullRequestForBranch(records, target) {
   const items = Array.isArray(records) ? records : [];
-  const branch = normalizeText30(target?.branch);
-  const owner = normalizeText30(target?.owner);
+  const branch = normalizeText31(target?.branch);
+  const owner = normalizeText31(target?.owner);
   const selected = items.find(
-    (item) => normalizeText30(item?.state) === "open" && normalizeText30(item?.headRef) === branch && normalizeText30(item?.headOwner) === owner
+    (item) => normalizeText31(item?.state) === "open" && normalizeText31(item?.headRef) === branch && normalizeText31(item?.headOwner) === owner
   );
   const staleItems = items.filter(
-    (item) => normalizeText30(item?.headRef) === branch && normalizeText30(item?.headOwner) === owner
+    (item) => normalizeText31(item?.headRef) === branch && normalizeText31(item?.headOwner) === owner
   );
   if (!selected) {
     return {
@@ -60819,8 +61059,8 @@ function normalizeButlerReadConsentPayload(payload) {
 }
 function normalizeRemoteCodexHandoffPayload(payload) {
   const policyInput = payload?.policyInput && typeof payload.policyInput === "object" ? payload.policyInput : {};
-  const actionType = normalizeText30(policyInput.actionType);
-  const actorRole = normalizeText30(payload?.actorRole);
+  const actionType = normalizeText31(policyInput.actionType);
+  const actorRole = normalizeText31(payload?.actorRole);
   const issueNumber = normalizeIssue6(payload?.issueContext?.issueNumber);
   if (actorRole !== "butler" || actionType !== "build" || !issueNumber) {
     return payload;
@@ -60832,7 +61072,7 @@ function normalizeRemoteCodexHandoffPayload(payload) {
   const grantedCategories = Array.isArray(consent.grantedCategories) ? consent.grantedCategories : [];
   const goGranted = policyInput.go === true;
   const normalizedGrantedCategories = goGranted ? mergeGrantedConsentCategories(grantedCategories, ["read", "propose", "execute"]) : grantedCategories;
-  const requestedExecutorTransport = normalizeText30(
+  const requestedExecutorTransport = normalizeText31(
     payload?.executorTransport ?? continuationContext.executorTransport
   );
   const apiKeyRunnerAcknowledged = payload?.apiKeyRunnerAcknowledged === true || continuationContext.apiKeyRunnerAcknowledged === true || goGranted && requestedExecutorTransport === "api_key_runner";
@@ -60848,7 +61088,7 @@ function normalizeRemoteCodexHandoffPayload(payload) {
         issueTraceable: handoff.issueTraceable === false ? false : true,
         approvalScopeMatched: handoff.approvalScopeMatched === false ? false : true,
         relatedIssue: normalizeIssue6(handoff.relatedIssue) ?? issueNumber,
-        summary: normalizeText30(handoff.summary) || `Issue #${issueNumber} bounded remote Codex handoff`
+        summary: normalizeText31(handoff.summary) || `Issue #${issueNumber} bounded remote Codex handoff`
       }
     },
     policyInput: {
@@ -60858,7 +61098,7 @@ function normalizeRemoteCodexHandoffPayload(payload) {
         ...consent,
         grantedCategories: normalizedGrantedCategories
       },
-      approvalPhrase: normalizeText30(policyInput.approvalPhrase) || (goGranted ? "GO" : ""),
+      approvalPhrase: normalizeText31(policyInput.approvalPhrase) || (goGranted ? "GO" : ""),
       issueTraceability: {
         ...issueTraceability,
         relatedIssue: normalizeIssue6(issueTraceability.relatedIssue) ?? issueNumber,
@@ -60876,7 +61116,7 @@ function mergeGrantedConsentCategories(current, required2) {
   const seen = /* @__PURE__ */ new Set();
   const merged = [];
   for (const category of [...current, ...required2]) {
-    const text = normalizeText30(category);
+    const text = normalizeText31(category);
     const key = normalize7(text);
     if (!text || seen.has(key)) {
       continue;
@@ -60887,7 +61127,7 @@ function mergeGrantedConsentCategories(current, required2) {
   return merged;
 }
 function normalizeTraceRefs(value, fallback) {
-  if (Array.isArray(value) && value.some((item) => Boolean(normalizeText30(item)))) {
+  if (Array.isArray(value) && value.some((item) => Boolean(normalizeText31(item)))) {
     return value;
   }
   return [fallback];
@@ -60906,7 +61146,7 @@ async function resolveRuntimeAliasRegistry({ baseAliasRegistry, env }) {
         "repository nickname registry read unverified",
         stored.error,
         stored.reason
-      ].map(normalizeText30).filter(Boolean).join(": ")
+      ].map(normalizeText31).filter(Boolean).join(": ")
     ]
   };
 }
@@ -61023,7 +61263,7 @@ async function handleRepositoryNicknameDeleteRequest(request, env) {
   });
 }
 function normalizeCanonicalRepositoryInput(value) {
-  const text = normalizeText30(value).toLowerCase();
+  const text = normalizeText31(value).toLowerCase();
   if (!/^[a-z0-9_.-]+\/[a-z0-9_.-]+$/.test(text)) {
     return "";
   }
@@ -61045,8 +61285,8 @@ async function handlePasskeyRegistrationOptionsRequest(request, env) {
     rpID: env?.VTDD_PASSKEY_RP_ID || new URL(request.url).hostname,
     rpName: env?.VTDD_PASSKEY_RP_NAME || "VTDD",
     origin: env?.VTDD_PASSKEY_ORIGIN || new URL(request.url).origin,
-    operatorId: normalizeText30(body?.operatorId) || "vtdd-operator",
-    operatorLabel: normalizeText30(body?.operatorLabel) || "VTDD Operator"
+    operatorId: normalizeText31(body?.operatorId) || "vtdd-operator",
+    operatorLabel: normalizeText31(body?.operatorLabel) || "VTDD Operator"
   });
   if (!created.ok) {
     return json(422, {
@@ -61080,7 +61320,7 @@ async function handlePasskeyRegistrationVerifyRequest(request, env) {
     });
   }
   const body = await readJson(request);
-  const sessionId = normalizeText30(body?.sessionId);
+  const sessionId = normalizeText31(body?.sessionId);
   const sessionRecord = await findApprovalRecordById(provider, sessionId);
   if (!sessionRecord) {
     return json(404, {
@@ -61164,7 +61404,7 @@ async function handlePasskeyApprovalVerifyRequest(request, env) {
     });
   }
   const body = await readJson(request);
-  const sessionId = normalizeText30(body?.sessionId);
+  const sessionId = normalizeText31(body?.sessionId);
   const sessionRecord = await findApprovalRecordById(provider, sessionId);
   if (!sessionRecord) {
     return json(404, {
@@ -61224,7 +61464,7 @@ function appendWarnings(result, warnings) {
     return result;
   }
   const currentWarnings = Array.isArray(result?.warnings) ? result.warnings : [];
-  const merged = new Set([...currentWarnings, ...warnings].map(normalizeText30).filter(Boolean));
+  const merged = new Set([...currentWarnings, ...warnings].map(normalizeText31).filter(Boolean));
   return {
     ...result,
     warnings: [...merged]
@@ -61236,7 +61476,7 @@ async function resolveApprovalGrant({ payload, policyInput, env }) {
   if (!validation.ok) {
     return { approvalGrant: null };
   }
-  const approvalId = normalizeText30(policyInput?.approvalGrantId);
+  const approvalId = normalizeText31(policyInput?.approvalGrantId);
   if (!approvalId) {
     return { approvalGrant: null };
   }
@@ -61287,7 +61527,7 @@ function mapGitHubHighRiskOperationToActionType(operation) {
   if (operation === GitHubHighRiskOperation.ISSUE_CLOSE) {
     return "issue_close";
   }
-  return normalizeText30(operation);
+  return normalizeText31(operation);
 }
 async function retrieveRegisteredPasskeys(provider) {
   const records = await provider.retrieve({
@@ -61304,7 +61544,7 @@ async function purgeExpiredPasskeyArtifacts(provider) {
     type: MemoryRecordType.APPROVAL_LOG,
     limit: MAX_MEMORY_LIMIT
   });
-  const expiredIds = records.filter((record2) => isExpiredPasskeyEphemeralRecord(record2)).map((record2) => normalizeText30(record2?.id)).filter(Boolean);
+  const expiredIds = records.filter((record2) => isExpiredPasskeyEphemeralRecord(record2)).map((record2) => normalizeText31(record2?.id)).filter(Boolean);
   if (expiredIds.length === 0) {
     return { ok: true, deletedCount: 0 };
   }
@@ -61319,7 +61559,7 @@ async function findApprovalRecordById(provider, recordId) {
     text: recordId,
     limit: 50
   });
-  const matched = records.find((record2) => normalizeText30(record2?.id) === recordId) ?? records.find((record2) => normalizeText30(record2?.content?.approvalId) === recordId) ?? records.find((record2) => normalizeText30(record2?.content?.sessionId) === recordId) ?? null;
+  const matched = records.find((record2) => normalizeText31(record2?.id) === recordId) ?? records.find((record2) => normalizeText31(record2?.content?.approvalId) === recordId) ?? records.find((record2) => normalizeText31(record2?.content?.sessionId) === recordId) ?? null;
   if (matched) {
     return matched;
   }
@@ -61330,7 +61570,7 @@ async function findApprovalRecordById(provider, recordId) {
     type: MemoryRecordType.APPROVAL_LOG,
     limit: MAX_MEMORY_LIMIT
   });
-  return fallbackRecords.find((record2) => normalizeText30(record2?.id) === recordId) ?? fallbackRecords.find((record2) => normalizeText30(record2?.content?.approvalId) === recordId) ?? fallbackRecords.find((record2) => normalizeText30(record2?.content?.sessionId) === recordId) ?? null;
+  return fallbackRecords.find((record2) => normalizeText31(record2?.id) === recordId) ?? fallbackRecords.find((record2) => normalizeText31(record2?.content?.approvalId) === recordId) ?? fallbackRecords.find((record2) => normalizeText31(record2?.content?.sessionId) === recordId) ?? null;
 }
 async function appendGuardedAbsenceExecutionLog({ payload, gatewayOutcome, env }) {
   const policyInput = normalizeObject11(payload?.policyInput);
@@ -61348,7 +61588,7 @@ async function appendGuardedAbsenceExecutionLog({ payload, gatewayOutcome, env }
   }
   const nowIso = (/* @__PURE__ */ new Date()).toISOString();
   const body = normalizeObject11(gatewayOutcome?.body);
-  const blockedByRule = normalizeText30(body.blockedByRule) || null;
+  const blockedByRule = normalizeText31(body.blockedByRule) || null;
   const recordInput = {
     id: buildGuardedAbsenceExecutionLogId({
       actionType: policyInput.actionType,
@@ -61357,15 +61597,15 @@ async function appendGuardedAbsenceExecutionLog({ payload, gatewayOutcome, env }
     type: MemoryRecordType.EXECUTION_LOG,
     content: {
       mode: autonomyMode,
-      phase: normalizeText30(payload?.phase) || "execution",
-      actorRole: normalizeText30(payload?.actorRole) || null,
-      actionType: normalizeText30(policyInput.actionType) || null,
+      phase: normalizeText31(payload?.phase) || "execution",
+      actorRole: normalizeText31(payload?.actorRole) || null,
+      actionType: normalizeText31(policyInput.actionType) || null,
       allowed: body.allowed === true,
       blockedByRule,
-      reason: normalizeText30(body.reason) || null,
-      repositoryInput: normalizeText30(policyInput.repositoryInput) || null,
-      repository: normalizeText30(body.repository) || null,
-      requiredApproval: normalizeText30(body.requiredApproval) || null,
+      reason: normalizeText31(body.reason) || null,
+      repositoryInput: normalizeText31(policyInput.repositoryInput) || null,
+      repository: normalizeText31(body.repository) || null,
+      requiredApproval: normalizeText31(body.requiredApproval) || null,
       stopCategory: classifyGuardedStopCategory(blockedByRule)
     },
     metadata: {
@@ -61660,7 +61900,7 @@ async function completeGatewayRuntime({ payload, gatewayResult, env }) {
   };
 }
 function buildOperationalMemoryRetrievalInput({ payload, operationalMemoryRequest }) {
-  const repository = normalizeText30(payload?.policyInput?.repository) || normalizeText30(payload?.policyInput?.repositoryInput) || normalizeText30(payload?.repository) || null;
+  const repository = normalizeText31(payload?.policyInput?.repository) || normalizeText31(payload?.policyInput?.repositoryInput) || normalizeText31(payload?.repository) || null;
   return {
     text: operationalMemoryRequest.text || operationalMemoryRequest.queryHint,
     repository,
@@ -61718,8 +61958,8 @@ function buildCrossRetrievalInput({ payload, responseBody, crossRetrievalRequest
   const relatedIssue = crossRetrievalRequest.relatedIssue ?? responseBody?.memoryWritePersisted?.relatedIssue ?? inferRelatedIssueFromGatewayInput(payload) ?? inferRelatedIssueFromProposalGatewayInput(payload);
   const issueContextInput = payload?.issueContext ?? {};
   const issueNumber = normalizeIssue6(issueContextInput.issueNumber) ?? relatedIssue;
-  const issueTitle = normalizeText30(issueContextInput.issueTitle);
-  const issueUrl = normalizeText30(issueContextInput.issueUrl);
+  const issueTitle = normalizeText31(issueContextInput.issueTitle);
+  const issueUrl = normalizeText31(issueContextInput.issueUrl);
   return {
     phase: crossRetrievalRequest.phase,
     limit: crossRetrievalRequest.limit,
@@ -61760,7 +62000,7 @@ function normalizeCrossRetrievalRequest(request) {
     limit: normalizeLimit7(value.limit, 5),
     displayMode: normalize7(value.displayMode) === "expanded" ? "expanded" : "short",
     relatedIssue: normalizeIssue6(value.relatedIssue),
-    text: normalizeText30(value.text) || normalizeText30(value.queryHint) || null,
+    text: normalizeText31(value.text) || normalizeText31(value.queryHint) || null,
     semanticRetrieval: normalizeSemanticRetrievalRequest(value.semanticRetrieval)
   };
 }
@@ -61773,9 +62013,9 @@ function normalizeOperationalMemoryRequest(request) {
     limit: normalizeLimit7(value.limit, mode === "inventory" ? 1 : 5),
     displayMode: normalize7(value.displayMode) === "expanded" ? "expanded" : "short",
     relatedIssue: normalizeIssue6(value.relatedIssue),
-    text: normalizeText30(value.text) || null,
-    queryHint: normalizeText30(value.queryHint) || null,
-    reasonTags: Array.isArray(value.reasonTags) ? value.reasonTags.map((item) => normalizeText30(item)).filter(Boolean).slice(0, 8) : []
+    text: normalizeText31(value.text) || null,
+    queryHint: normalizeText31(value.queryHint) || null,
+    reasonTags: Array.isArray(value.reasonTags) ? value.reasonTags.map((item) => normalizeText31(item)).filter(Boolean).slice(0, 8) : []
   };
 }
 function normalizeSemanticRetrievalRequest(value) {
@@ -61791,9 +62031,9 @@ function parseBooleanQueryParam(value) {
   return normalized === "true" || normalized === "1" || normalized === "yes";
 }
 function buildRetrieveRuntimeTruth(url) {
-  const currentState = normalizeText30(url.searchParams.get("currentState"));
-  const source = normalizeText30(url.searchParams.get("runtimeTruthSource"));
-  const checkedAt = normalizeText30(url.searchParams.get("checkedAt"));
+  const currentState = normalizeText31(url.searchParams.get("currentState"));
+  const source = normalizeText31(url.searchParams.get("runtimeTruthSource"));
+  const checkedAt = normalizeText31(url.searchParams.get("checkedAt"));
   if (!currentState && !source && !checkedAt) {
     return null;
   }
@@ -62048,8 +62288,8 @@ async function buildDashboardChatTrafficControlContext({ env, repository, relate
       issueNumber: normalizePositiveInteger9(relatedIssue),
       phase: "execution",
       currentSurface: "dashboard_butler",
-      queryText: normalizeText30(text) || `Dashboard Butler traffic control ${relatedIssue ? `Issue #${relatedIssue}` : ""}`,
-      runtimeOrigin: normalizeText30(env?.VTDD_RUNTIME_URL) || "https://dashboard-butler.local",
+      queryText: normalizeText31(text) || `Dashboard Butler traffic control ${relatedIssue ? `Issue #${relatedIssue}` : ""}`,
+      runtimeOrigin: normalizeText31(env?.VTDD_RUNTIME_URL) || "https://dashboard-butler.local",
       env
     });
     return {
@@ -62073,7 +62313,7 @@ async function buildDashboardChatTrafficControlContext({ env, repository, relate
       status: "\u672A\u78BA\u8A8D",
       repository: normalizedRepository,
       relatedIssue: normalizePositiveInteger9(relatedIssue) || null,
-      reason: normalizeText30(error2?.message) || "startup preflight failed",
+      reason: normalizeText31(error2?.message) || "startup preflight failed",
       currentSurface: "dashboard_butler",
       authorityBoundary: "read_only_preflight",
       nextSafeAction: "preflight failure \u3092 owner-facing blocker \u3068\u3057\u3066\u5831\u544A\u3059\u308B\u3002"
@@ -63771,7 +64011,7 @@ async function normalizeDashboardPushSubscription(value) {
   };
 }
 async function sha256Hex(value) {
-  const text = normalizeText30(value);
+  const text = normalizeText31(value);
   if (!text) {
     return "";
   }
@@ -63791,8 +64031,8 @@ function normalizeDashboardThreadSummary(summary, defaults = {}) {
   if (!summaryText) {
     return null;
   }
-  const decisions = normalizeStringList(input.decisions || input.decisionLog || input.decision_log);
-  const openItems = normalizeStringList(input.openItems || input.open_items || input.todo || input.todos);
+  const decisions = normalizeStringList2(input.decisions || input.decisionLog || input.decision_log);
+  const openItems = normalizeStringList2(input.openItems || input.open_items || input.todo || input.todos);
   return {
     threadId,
     repository: normalizeCanonicalRepositoryInput(input.repository || defaults.repository) || null,
@@ -63808,7 +64048,7 @@ function normalizeDashboardThreadSummary(summary, defaults = {}) {
     updatedAt: normalizeIsoTimestamp(input.updatedAt || input.updated_at || defaults.updatedAt) || (/* @__PURE__ */ new Date()).toISOString()
   };
 }
-function normalizeStringList(value) {
+function normalizeStringList2(value) {
   const list = Array.isArray(value) ? value : value ? [value] : [];
   return list.map((item) => sanitizeDashboardChatText(item)).filter(Boolean).slice(0, 40);
 }
@@ -63825,7 +64065,7 @@ function normalizeDashboardThreadId(value) {
   return text.slice(0, 160);
 }
 function sanitizeDashboardChatText(value) {
-  const text = normalizeText30(value).replace(/approval:[0-9a-f-]{20,}/gi, "[redacted-approval]").replace(/\bgh[psuor]_[A-Za-z0-9_]{20,}\b/g, "[redacted-token]").replace(/\bsk-proj-[A-Za-z0-9_-]{20,}\b/g, "[redacted-openai-key]").replace(/\bBearer\s+[A-Za-z0-9._~+/=-]{12,}/gi, "Bearer [redacted]").replace(/\b(CLOUDFLARE_API_TOKEN|OPENAI_API_KEY|GITHUB_TOKEN)=\S+/gi, "$1=[redacted]").replace(/([?&](?:token|approvalGrantId|approval_grant_id|key|secret)=)[^&\s]+/gi, "$1[redacted]");
+  const text = normalizeText31(value).replace(/approval:[0-9a-f-]{20,}/gi, "[redacted-approval]").replace(/\bgh[psuor]_[A-Za-z0-9_]{20,}\b/g, "[redacted-token]").replace(/\bsk-proj-[A-Za-z0-9_-]{20,}\b/g, "[redacted-openai-key]").replace(/\bBearer\s+[A-Za-z0-9._~+/=-]{12,}/gi, "Bearer [redacted]").replace(/\b(CLOUDFLARE_API_TOKEN|OPENAI_API_KEY|GITHUB_TOKEN)=\S+/gi, "$1=[redacted]").replace(/([?&](?:token|approvalGrantId|approval_grant_id|key|secret)=)[^&\s]+/gi, "$1[redacted]");
   return text.slice(0, 4e3);
 }
 function isDashboardChatThreadApiPath(pathname) {
@@ -63838,7 +64078,7 @@ function isDashboardAppServerBridgeSocketPath(pathname) {
   return pathname === `${CANONICAL_API_PREFIX}/dashboard/app-server/ws` || pathname === `${LEGACY_API_PREFIX}/dashboard/app-server/ws`;
 }
 function extractDashboardBridgeBearerProtocol(value) {
-  const protocols = normalizeText30(value).split(",").map((item) => item.trim()).filter(Boolean);
+  const protocols = normalizeText31(value).split(",").map((item) => item.trim()).filter(Boolean);
   const encoded = protocols.find((item) => item.startsWith("vtdd-bearer."))?.slice("vtdd-bearer.".length);
   if (!encoded) {
     return "";
@@ -63846,7 +64086,7 @@ function extractDashboardBridgeBearerProtocol(value) {
   try {
     const base643 = encoded.replace(/-/g, "+").replace(/_/g, "/");
     const padded = `${base643}${"=".repeat((4 - base643.length % 4) % 4)}`;
-    return normalizeText30(atob(padded));
+    return normalizeText31(atob(padded));
   } catch {
     return "";
   }
@@ -63942,7 +64182,7 @@ function createD1MemoryIndexAdapter(d1) {
         record2.id,
         record2.type,
         record2.content === null || record2.content === void 0 ? null : JSON.stringify(record2.content),
-        normalizeText30(record2.contentRef) || null,
+        normalizeText31(record2.contentRef) || null,
         JSON.stringify(record2.metadata ?? {}),
         Number(record2.priority ?? 50),
         JSON.stringify(record2.tags ?? []),
@@ -63951,22 +64191,22 @@ function createD1MemoryIndexAdapter(d1) {
     },
     async queryRecords(filter = {}) {
       await ensureSchema();
-      const ids = Array.isArray(filter.ids) ? filter.ids.map((item) => normalizeText30(item)).filter(Boolean) : [];
-      const type = normalizeText30(filter.type);
+      const ids = Array.isArray(filter.ids) ? filter.ids.map((item) => normalizeText31(item)).filter(Boolean) : [];
+      const type = normalizeText31(filter.type);
       const limit = normalizeMemoryLimit(filter.limit);
       const statement = buildMemorySelectStatement({ ids, type });
       const result = await d1.prepare(statement.sql).bind(...statement.params).all();
       const rows = Array.isArray(result?.results) ? result.results : [];
       let records = rows.map(mapStoredMemoryRecord).filter(Boolean);
       if (Array.isArray(filter.tags) && filter.tags.length > 0) {
-        const requiredTags = filter.tags.map((tag) => normalizeText30(tag).toLowerCase()).filter(Boolean);
+        const requiredTags = filter.tags.map((tag) => normalizeText31(tag).toLowerCase()).filter(Boolean);
         records = records.filter(
           (record2) => requiredTags.every(
-            (tag) => Array.isArray(record2.tags) && record2.tags.some((recordTag) => normalizeText30(recordTag).toLowerCase() === tag)
+            (tag) => Array.isArray(record2.tags) && record2.tags.some((recordTag) => normalizeText31(recordTag).toLowerCase() === tag)
           )
         );
       }
-      const queryText = normalizeText30(filter.text).toLowerCase();
+      const queryText = normalizeText31(filter.text).toLowerCase();
       if (queryText) {
         records = records.filter((record2) => JSON.stringify(record2).toLowerCase().includes(queryText));
       }
@@ -63985,7 +64225,7 @@ function createD1MemoryIndexAdapter(d1) {
     },
     async deleteRecords(input = {}) {
       await ensureSchema();
-      const ids = Array.isArray(input?.ids) ? input.ids.map((item) => normalizeText30(item)).filter(Boolean) : [];
+      const ids = Array.isArray(input?.ids) ? input.ids.map((item) => normalizeText31(item)).filter(Boolean) : [];
       if (ids.length === 0) {
         return { ok: true, deletedCount: 0 };
       }
@@ -64063,14 +64303,14 @@ function mapStoredMemoryRecord(row) {
     return null;
   }
   return {
-    id: normalizeText30(row.id),
-    type: normalizeText30(row.type),
+    id: normalizeText31(row.id),
+    type: normalizeText31(row.type),
     content: row.content_json ? safeParseJson(row.content_json) : null,
-    contentRef: normalizeText30(row.content_ref) || void 0,
+    contentRef: normalizeText31(row.content_ref) || void 0,
     metadata: safeParseJson(row.metadata_json, {}),
     priority: Number(row.priority ?? 50),
     tags: safeParseJson(row.tags_json, []),
-    createdAt: normalizeText30(row.created_at)
+    createdAt: normalizeText31(row.created_at)
   };
 }
 function resolveMemoryBlobThreshold(env) {
@@ -64097,7 +64337,7 @@ function safeParseJson(value, fallback = null) {
 function attachGatewayWarning(gatewayOutcome, warning) {
   const body = normalizeObject11(gatewayOutcome?.body);
   const warnings = Array.isArray(body.warnings) ? body.warnings : [];
-  const merged = [...new Set([...warnings, normalizeText30(warning)].filter(Boolean))];
+  const merged = [...new Set([...warnings, normalizeText31(warning)].filter(Boolean))];
   return {
     status: gatewayOutcome.status,
     body: {
@@ -64142,11 +64382,11 @@ function classifyGuardedStopCategory(blockedByRule) {
 function authorizeGatewayRequest({ request, env, apiSuffix = "/gateway" }) {
   const runtimeEnv = env ?? {};
   const routeLabel = `/${CANONICAL_API_PREFIX.replace(/^\//, "")}${apiSuffix} (legacy ${LEGACY_API_PREFIX}${apiSuffix} is also accepted)`;
-  const bearerToken = normalizeText30(
+  const bearerToken = normalizeText31(
     runtimeEnv.VTDD_GATEWAY_BEARER_TOKEN ?? runtimeEnv.MVP_GATEWAY_BEARER_TOKEN
   );
   if (bearerToken) {
-    const authorizationHeader = normalizeText30(request.headers.get("authorization"));
+    const authorizationHeader = normalizeText31(request.headers.get("authorization"));
     const provided = parseBearerToken(request.headers.get("authorization"));
     if (!authorizationHeader) {
       return {
@@ -64171,11 +64411,11 @@ function authorizeGatewayRequest({ request, env, apiSuffix = "/gateway" }) {
       reason: `provided bearer token is invalid for ${routeLabel}`
     };
   }
-  const accessClientId = normalizeText30(runtimeEnv.CF_ACCESS_CLIENT_ID);
-  const accessClientSecret = normalizeText30(runtimeEnv.CF_ACCESS_CLIENT_SECRET);
+  const accessClientId = normalizeText31(runtimeEnv.CF_ACCESS_CLIENT_ID);
+  const accessClientSecret = normalizeText31(runtimeEnv.CF_ACCESS_CLIENT_SECRET);
   if (accessClientId || accessClientSecret) {
-    const providedId = normalizeText30(request.headers.get("cf-access-client-id"));
-    const providedSecret = normalizeText30(request.headers.get("cf-access-client-secret"));
+    const providedId = normalizeText31(request.headers.get("cf-access-client-id"));
+    const providedSecret = normalizeText31(request.headers.get("cf-access-client-secret"));
     if (!providedId && !providedSecret) {
       return {
         ok: false,
@@ -64226,7 +64466,7 @@ async function authorizeDashboardRequest({ request, env, apiSuffix = "/dashboard
   const accessLogin = normalize7(
     request.headers.get("cf-access-authenticated-user-login") || request.headers.get("x-github-login") || request.headers.get("x-github-username")
   );
-  const accessJwt = normalizeText30(request.headers.get("cf-access-jwt-assertion"));
+  const accessJwt = normalizeText31(request.headers.get("cf-access-jwt-assertion"));
   if (!accessEmail && !accessLogin) {
     if (passkeyAuth.blocking) {
       return {
@@ -64330,7 +64570,7 @@ async function authorizeDashboardPasskeySession({ request, env }) {
       reason: "dashboard session was not found; open the dashboard passkey sign-in link again"
     };
   }
-  if (normalizeText30(record2?.content?.kind) === DASHBOARD_READ_SESSION_KIND) {
+  if (normalizeText31(record2?.content?.kind) === DASHBOARD_READ_SESSION_KIND) {
     if (isExpiredDashboardReadSessionRecord(record2)) {
       return {
         ok: false,
@@ -64342,10 +64582,10 @@ async function authorizeDashboardPasskeySession({ request, env }) {
     return {
       ok: true,
       authType: "dashboard_read_session",
-      subject: normalizeText30(record2?.content?.deviceLabel) || "dashboard session"
+      subject: normalizeText31(record2?.content?.deviceLabel) || "dashboard session"
     };
   }
-  if (normalizeText30(record2?.content?.kind) !== "passkey_grant") {
+  if (normalizeText31(record2?.content?.kind) !== "passkey_grant") {
     return {
       ok: false,
       blocking: true,
@@ -64372,11 +64612,11 @@ async function authorizeDashboardPasskeySession({ request, env }) {
   return {
     ok: true,
     authType: "passkey_dashboard_session",
-    subject: normalizeText30(record2?.content?.credentialId) || "passkey"
+    subject: normalizeText31(record2?.content?.credentialId) || "passkey"
   };
 }
 function isDashboardPasskeyScope(scope = {}) {
-  return normalizeText30(scope?.actionType) === "read" && normalizeText30(scope?.highRiskKind) === "dashboard_access";
+  return normalizeText31(scope?.actionType) === "read" && normalizeText31(scope?.highRiskKind) === "dashboard_access";
 }
 function createDashboardReadSessionRecord({ approvalGrant = {}, credentialId, userAgent } = {}) {
   const sessionId = createDashboardRequestId("dashboard-session");
@@ -64389,8 +64629,8 @@ function createDashboardReadSessionRecord({ approvalGrant = {}, credentialId, us
       kind: DASHBOARD_READ_SESSION_KIND,
       status: "active",
       sessionId,
-      sourceApprovalId: normalizeText30(approvalGrant.approvalId),
-      credentialId: normalizeText30(credentialId),
+      sourceApprovalId: normalizeText31(approvalGrant.approvalId),
+      credentialId: normalizeText31(credentialId),
       deviceLabel: normalizeDashboardDeviceLabel(userAgent),
       createdAt,
       lastSeenAt: createdAt,
@@ -64402,7 +64642,7 @@ function createDashboardReadSessionRecord({ approvalGrant = {}, credentialId, us
     },
     metadata: {
       source: "dashboard_passkey_session_verify",
-      sourceApprovalId: normalizeText30(approvalGrant.approvalId)
+      sourceApprovalId: normalizeText31(approvalGrant.approvalId)
     },
     priority: 95,
     tags: [DASHBOARD_READ_SESSION_KIND, "dashboard_session"],
@@ -64411,11 +64651,11 @@ function createDashboardReadSessionRecord({ approvalGrant = {}, credentialId, us
   return record2;
 }
 function isExpiredDashboardReadSessionRecord(record2) {
-  const expiresAt = normalizeText30(record2?.content?.expiresAt);
+  const expiresAt = normalizeText31(record2?.content?.expiresAt);
   return !expiresAt || Date.parse(expiresAt) <= Date.now();
 }
 function normalizeDashboardDeviceLabel(userAgent) {
-  const value = normalizeText30(userAgent);
+  const value = normalizeText31(userAgent);
   if (!value) {
     return "dashboard device";
   }
@@ -64434,7 +64674,7 @@ function normalizeDashboardDeviceLabel(userAgent) {
   return "dashboard device";
 }
 function buildDashboardPasskeySessionCookie(sessionRecord = {}) {
-  const sessionId = normalizeText30(sessionRecord.id || sessionRecord.sessionId || sessionRecord.approvalId);
+  const sessionId = normalizeText31(sessionRecord.id || sessionRecord.sessionId || sessionRecord.approvalId);
   return [
     `${DASHBOARD_PASSKEY_SESSION_COOKIE}=${encodeURIComponent(sessionId)}`,
     "Path=/",
@@ -64446,9 +64686,9 @@ function buildDashboardPasskeySessionCookie(sessionRecord = {}) {
 }
 function parseCookieHeader(value) {
   const cookies = {};
-  for (const part of normalizeText30(value).split(";")) {
+  for (const part of normalizeText31(value).split(";")) {
     const [rawName, ...rawValueParts] = part.split("=");
-    const name = normalizeText30(rawName);
+    const name = normalizeText31(rawName);
     if (!name) {
       continue;
     }
@@ -64466,14 +64706,14 @@ function extractCloudflareAccessJwtIdentity(payload) {
   };
 }
 function parseAuthList(value) {
-  return normalizeText30(value).split(/[\s,]+/).map((item) => normalize7(item)).filter(Boolean);
+  return normalizeText31(value).split(/[\s,]+/).map((item) => normalize7(item)).filter(Boolean);
 }
 async function verifyCloudflareAccessJwt({ token, env }) {
   if (typeof env?.CF_ACCESS_JWT_VERIFIER === "function") {
     return env.CF_ACCESS_JWT_VERIFIER(token);
   }
   const teamDomain = normalizeCloudflareAccessTeamDomain(env?.CF_ACCESS_TEAM_DOMAIN);
-  const expectedAudience = normalizeText30(env?.CF_ACCESS_AUD);
+  const expectedAudience = normalizeText31(env?.CF_ACCESS_AUD);
   if (!teamDomain || !expectedAudience) {
     return {
       ok: false,
@@ -64485,14 +64725,14 @@ async function verifyCloudflareAccessJwt({ token, env }) {
   if (!parsed.ok) {
     return parsed;
   }
-  if (normalizeText30(parsed.header.alg) !== "RS256") {
+  if (normalizeText31(parsed.header.alg) !== "RS256") {
     return {
       ok: false,
       status: 403,
       reason: "Cloudflare Access JWT must use RS256"
     };
   }
-  if (normalizeText30(parsed.payload.iss).replace(/\/$/, "") !== `https://${teamDomain}`) {
+  if (normalizeText31(parsed.payload.iss).replace(/\/$/, "") !== `https://${teamDomain}`) {
     return {
       ok: false,
       status: 403,
@@ -64500,7 +64740,7 @@ async function verifyCloudflareAccessJwt({ token, env }) {
     };
   }
   const aud = Array.isArray(parsed.payload.aud) ? parsed.payload.aud : [parsed.payload.aud];
-  if (!aud.map((item) => normalizeText30(item)).includes(expectedAudience)) {
+  if (!aud.map((item) => normalizeText31(item)).includes(expectedAudience)) {
     return {
       ok: false,
       status: 403,
@@ -64540,7 +64780,7 @@ async function verifyCloudflareAccessJwt({ token, env }) {
   if (!jwks.ok) {
     return jwks;
   }
-  const jwk = (jwks.keys || []).find((candidate) => normalizeText30(candidate.kid) === normalizeText30(parsed.header.kid));
+  const jwk = (jwks.keys || []).find((candidate) => normalizeText31(candidate.kid) === normalizeText31(parsed.header.kid));
   if (!jwk) {
     return {
       ok: false,
@@ -64571,12 +64811,12 @@ async function verifyCloudflareAccessJwt({ token, env }) {
   return { ok: true, payload: parsed.payload };
 }
 function normalizeCloudflareAccessTeamDomain(value) {
-  const text = normalizeText30(value).replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+  const text = normalizeText31(value).replace(/^https?:\/\//, "").replace(/\/.*$/, "");
   return text || "";
 }
 async function fetchCloudflareAccessJwks({ teamDomain, env }) {
   const fetcher = env?.CF_ACCESS_JWKS_FETCH ?? fetch;
-  const jwksUrl = normalizeText30(env?.CF_ACCESS_JWKS_URL) || `https://${teamDomain}/cdn-cgi/access/certs`;
+  const jwksUrl = normalizeText31(env?.CF_ACCESS_JWKS_URL) || `https://${teamDomain}/cdn-cgi/access/certs`;
   const now = Date.now();
   const cached2 = cloudflareAccessJwksCache.get(jwksUrl);
   if (cached2 && cached2.expiresAt > now) {
@@ -64613,7 +64853,7 @@ async function fetchCloudflareAccessJwks({ teamDomain, env }) {
   }
 }
 function parseJwt(token) {
-  const parts = normalizeText30(token).split(".");
+  const parts = normalizeText31(token).split(".");
   if (parts.length !== 3) {
     return {
       ok: false,
@@ -64641,7 +64881,7 @@ function base64UrlDecodeText(value) {
   return new TextDecoder().decode(base64UrlDecodeBytes(value));
 }
 function base64UrlDecodeBytes(value) {
-  const normalized = normalizeText30(value).replace(/-/g, "+").replace(/_/g, "/");
+  const normalized = normalizeText31(value).replace(/-/g, "+").replace(/_/g, "/");
   const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
   if (typeof atob === "function") {
     return Uint8Array.from(atob(padded), (char) => char.charCodeAt(0));
@@ -64649,7 +64889,7 @@ function base64UrlDecodeBytes(value) {
   return Uint8Array.from(Buffer.from(padded, "base64"));
 }
 function sanitizeErrorMessage(error2) {
-  return normalizeText30(error2?.message || error2).replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/g, "Bearer [redacted]");
+  return normalizeText31(error2?.message || error2).replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/g, "Bearer [redacted]");
 }
 async function authorizePasskeyRegistrationRequest({ request, env, apiSuffix }) {
   const machineAuth = authorizeGatewayRequest({ request, env, apiSuffix });
@@ -64698,7 +64938,7 @@ function authorizePasskeyBrowserOrMachineRequest({ request, env, apiSuffix }) {
   return machineAuth;
 }
 function authorizePasskeyBootstrapTokenRequest({ request, env }) {
-  const expectedToken = normalizeText30(env?.VTDD_PASSKEY_BOOTSTRAP_TOKEN);
+  const expectedToken = normalizeText31(env?.VTDD_PASSKEY_BOOTSTRAP_TOKEN);
   if (!expectedToken) {
     return {
       ok: false,
@@ -64706,7 +64946,7 @@ function authorizePasskeyBootstrapTokenRequest({ request, env }) {
       reason: "browser passkey bootstrap token is not configured; use machine auth or configure VTDD_PASSKEY_BOOTSTRAP_TOKEN before first registration"
     };
   }
-  const providedToken = normalizeText30(request.headers.get("x-vtdd-passkey-bootstrap-token")) || normalizeText30(request.headers.get("x-passkey-bootstrap-token"));
+  const providedToken = normalizeText31(request.headers.get("x-vtdd-passkey-bootstrap-token")) || normalizeText31(request.headers.get("x-passkey-bootstrap-token"));
   if (!providedToken) {
     return {
       ok: false,
@@ -64724,7 +64964,7 @@ function authorizePasskeyBootstrapTokenRequest({ request, env }) {
   return { ok: true };
 }
 function isSameOriginBrowserRequest(request) {
-  const originHeader = normalizeText30(request.headers.get("origin"));
+  const originHeader = normalizeText31(request.headers.get("origin"));
   const fetchSite = normalize7(request.headers.get("sec-fetch-site"));
   const contentType = normalize7(request.headers.get("content-type"));
   if (!originHeader) {
@@ -64766,12 +65006,12 @@ function normalizeIssue6(value) {
 }
 function readObservedSetupFailureFromUrl(url) {
   return {
-    actionName: normalizeText30(url.searchParams.get("actionName")),
+    actionName: normalizeText31(url.searchParams.get("actionName")),
     httpStatus: normalizeIssue6(url.searchParams.get("httpStatus")),
-    error: normalizeText30(url.searchParams.get("error")),
-    reason: normalizeText30(url.searchParams.get("reason")),
-    visibleBodyFields: normalizeText30(url.searchParams.get("visibleBodyFields")),
-    missingBodyFields: normalizeText30(url.searchParams.get("missingBodyFields"))
+    error: normalizeText31(url.searchParams.get("error")),
+    reason: normalizeText31(url.searchParams.get("reason")),
+    visibleBodyFields: normalizeText31(url.searchParams.get("visibleBodyFields")),
+    missingBodyFields: normalizeText31(url.searchParams.get("missingBodyFields"))
   };
 }
 function normalizeObject11(value) {
@@ -65134,7 +65374,7 @@ function normalizeDashboardUrl(value) {
   }
 }
 function normalizeIsoTimestamp(value) {
-  const text = normalizeText30(value);
+  const text = normalizeText31(value);
   if (!text) {
     return "";
   }
@@ -65174,7 +65414,7 @@ async function retrieveRecentDashboardEvents({ store, kind, repository, workflow
     if (!sinceTimestamp) {
       return [latest];
     }
-    const latestTime = new Date(normalizeText30(latest.updatedAt)).getTime();
+    const latestTime = new Date(normalizeText31(latest.updatedAt)).getTime();
     const sinceTime = new Date(sinceTimestamp).getTime();
     if (Number.isNaN(latestTime) || Number.isNaN(sinceTime) || latestTime < sinceTime) {
       return [];
@@ -65305,7 +65545,7 @@ function buildDashboardEventSubject(event, { limit = 80 } = {}) {
   );
 }
 function formatDashboardRelativeTime(value, now = /* @__PURE__ */ new Date()) {
-  const timestamp = new Date(normalizeText30(value));
+  const timestamp = new Date(normalizeText31(value));
   const nowTime = now instanceof Date ? now.getTime() : new Date(now).getTime();
   if (Number.isNaN(timestamp.getTime()) || Number.isNaN(nowTime)) {
     return "";
@@ -65380,11 +65620,11 @@ async function renderDashboardPreflightPage({ url, env } = {}) {
   const origin = normalize7(url?.origin);
   const repository = normalizeCanonicalRepositoryInput(url?.searchParams?.get("repository")) || "marushu/vtdd-v2-p";
   const issueNumber = normalizeIssue6(url?.searchParams?.get("issueNumber"));
-  const phase = normalizeText30(url?.searchParams?.get("phase")) || "execution";
-  const currentSurface = normalizeText30(url?.searchParams?.get("currentSurface")) || "dashboard";
+  const phase = normalizeText31(url?.searchParams?.get("phase")) || "execution";
+  const currentSurface = normalizeText31(url?.searchParams?.get("currentSurface")) || "dashboard";
   const startupPreflight = await buildStartupPreflight({
     repository,
-    ref: normalizeText30(url?.searchParams?.get("ref")) || "main",
+    ref: normalizeText31(url?.searchParams?.get("ref")) || "main",
     issueNumber,
     phase,
     currentSurface,
@@ -65466,8 +65706,8 @@ async function renderDashboardMemoryPage({ url, env } = {}) {
   const origin = normalize7(url?.origin);
   const repository = normalizeCanonicalRepositoryInput(url?.searchParams?.get("repository")) || "marushu/vtdd-v2-p";
   const retrieved = await retrieveOperationalMemory(resolveMemoryProvider(env), {
-    text: normalizeText30(url.searchParams.get("text")) || normalizeText30(url.searchParams.get("q")),
-    recordId: normalizeText30(url.searchParams.get("recordId")),
+    text: normalizeText31(url.searchParams.get("text")) || normalizeText31(url.searchParams.get("q")),
+    recordId: normalizeText31(url.searchParams.get("recordId")),
     repository,
     limit: normalizeLimit7(url.searchParams.get("limit"), 8),
     runtimeTruth: buildRetrieveRuntimeTruth(url)
@@ -65489,7 +65729,7 @@ async function renderDashboardSelfParityPage({ url, env } = {}) {
   const repository = normalizeCanonicalRepositoryInput(url?.searchParams?.get("repository")) || "marushu/vtdd-v2-p";
   const parity = await evaluateButlerSelfParity({
     repository,
-    ref: normalizeText30(url.searchParams.get("ref")),
+    ref: normalizeText31(url.searchParams.get("ref")),
     issueNumber: normalizeIssue6(url.searchParams.get("issueNumber")),
     pullNumber: normalizeIssue6(url.searchParams.get("pullNumber")),
     runtimeOrigin: origin,
@@ -66284,7 +66524,7 @@ function renderDashboardNewsPage({ runtimeOrigin, env } = {}) {
   });
 }
 function normalizeDashboardExternalUrl(value) {
-  const text = normalizeText30(value);
+  const text = normalizeText31(value);
   if (!text) {
     return "";
   }
@@ -66297,9 +66537,9 @@ function normalizeDashboardExternalUrl(value) {
 }
 function normalizeTextList2(value) {
   if (Array.isArray(value)) {
-    return value.map(normalizeText30).filter(Boolean);
+    return value.map(normalizeText31).filter(Boolean);
   }
-  const text = normalizeText30(value);
+  const text = normalizeText31(value);
   return text ? [text] : [];
 }
 function uniqueTextList2(value) {
@@ -67986,7 +68226,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 </html>`;
 }
 function renderDashboardAuthRequiredPage({ runtimeOrigin, returnPath = "/dashboard", reason, passkeyFallbackReason } = {}) {
-  const origin = normalizeText30(runtimeOrigin);
+  const origin = normalizeText31(runtimeOrigin);
   const dashboardAccessReturnPath = sanitizeDashboardPreAuthReturnPath(returnPath);
   const dashboardAccessHref = buildCloudflareAccessLoginHref({ origin, returnPath: dashboardAccessReturnPath });
   const dashboardSignInUrl = `${origin || ""}/v2/approval/passkey/operator?mode=dashboard&phase=execution&actionType=read&highRiskKind=dashboard_access&dashboardReturnPath=${encodeURIComponent(dashboardAccessReturnPath)}`;
@@ -68039,7 +68279,7 @@ function renderDashboardAuthRequiredPage({ runtimeOrigin, returnPath = "/dashboa
 </html>`;
 }
 function buildCloudflareAccessLoginHref({ origin, returnPath = "/dashboard" } = {}) {
-  const normalizedOrigin = normalizeText30(origin);
+  const normalizedOrigin = normalizeText31(origin);
   const sanitizedReturnPath = sanitizeDashboardPreAuthReturnPath(returnPath);
   const redirectUrl = normalizedOrigin ? `${normalizedOrigin}${sanitizedReturnPath}` : sanitizedReturnPath;
   return `${normalizedOrigin || ""}/cdn-cgi/access/login?redirect_url=${encodeURIComponent(redirectUrl)}`;
@@ -68078,7 +68318,7 @@ function normalizeDashboardReturnQueryValue2(value) {
 function renderV2StatusPage({ runtimeOrigin, autonomyMode }) {
   const origin = normalize7(runtimeOrigin);
   const mode = "v2";
-  const resolvedAutonomyMode = normalizeText30(autonomyMode) || "normal";
+  const resolvedAutonomyMode = normalizeText31(autonomyMode) || "normal";
   const cards = [
     ["Worker", "\u6B63\u5E38", "Cloudflare Worker \u306F\u5FDC\u7B54\u3057\u3066\u3044\u307E\u3059\u3002"],
     ["Mode", mode, "\u73FE\u5728\u306E runtime mode \u3067\u3059\u3002"],
@@ -68204,7 +68444,7 @@ function png(status, dataUrl) {
 function normalize7(value) {
   return String(value ?? "").trim().toLowerCase();
 }
-function normalizeText30(value) {
+function normalizeText31(value) {
   return String(value ?? "").trim();
 }
 function normalizePositiveInteger9(value) {
@@ -68219,10 +68459,10 @@ function isSocketOpen(socket) {
   return socket?.readyState === 1 || typeof WebSocket !== "undefined" && socket?.readyState === WebSocket.OPEN;
 }
 function normalizeTag3(value) {
-  return normalizeText30(value).toLowerCase().replace(/[^a-z0-9:_-]+/g, "_");
+  return normalizeText31(value).toLowerCase().replace(/[^a-z0-9:_-]+/g, "_");
 }
 function parseBearerToken(value) {
-  const text = normalizeText30(value);
+  const text = normalizeText31(value);
   if (!text) {
     return "";
   }
@@ -68230,7 +68470,7 @@ function parseBearerToken(value) {
   if (normalize7(scheme) !== "bearer") {
     return "";
   }
-  return normalizeText30(token);
+  return normalizeText31(token);
 }
 function isApiPath(pathname, suffix) {
   return pathname === `${CANONICAL_API_PREFIX}${suffix}` || pathname === `${LEGACY_API_PREFIX}${suffix}`;
