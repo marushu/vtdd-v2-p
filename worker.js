@@ -37530,7 +37530,7 @@ function buildVpsPrivilegedMaintenanceInstallInventory(input = {}) {
     },
     {
       id: "scoped_sudoers_entry",
-      status: sudoersInstalled === true && sudoersOwner === "root" && sudoersAllowsAll !== true ? "pass" : sudoersInstalled === false ? "missing" : "unverified",
+      status: sudoersInstalled === true && sudoersOwner === "root" && sudoersAllowsAll === false ? "pass" : sudoersInstalled === false ? "missing" : "unverified",
       required: true,
       path: sudoersPath,
       expectedOwner: "root",

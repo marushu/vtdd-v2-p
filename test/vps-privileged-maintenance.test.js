@@ -94,6 +94,20 @@ test("VPS privileged maintenance install inventory reports root-owned helper rea
   assert.equal(sudoProbeReady.checks.find((check) => check.id === "helper_sudo_functional_probe").status, "pass");
   assert.equal(sudoProbeReady.runtimeTruth.sudoersHelperProbeStarted, true);
 
+  const unreadableSudoers = buildVpsPrivilegedMaintenanceInstallInventory({
+    host: "x85-131-245-163",
+    repository: "marushu/vtdd-v2-p",
+    helperInstalled: true,
+    manifestInstalled: true,
+    sudoersInstalled: true,
+    helperOwner: "root",
+    manifestOwner: "root",
+    sudoersOwner: "root",
+    sudoersAllowsAll: null
+  });
+  assert.equal(unreadableSudoers.status, "unverified");
+  assert.equal(unreadableSudoers.checks.find((check) => check.id === "scoped_sudoers_entry").status, "unverified");
+
   const sudoProbeFailed = buildVpsPrivilegedMaintenanceInstallInventory({
     host: "x85-131-245-163",
     repository: "marushu/vtdd-v2-p",
