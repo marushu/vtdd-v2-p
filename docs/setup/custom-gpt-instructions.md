@@ -314,6 +314,12 @@ GitHub normal write plane:
   - pull request comment create
 - Before calling vtddWriteGitHub, present the exact bounded payload to the human and wait for GO bound to that payload. For Issues and PRs, show the exact title/body. For comments or updates, show the concrete body or fields that will be written. This applies even when the next safe action is only to create the next validation Issue or PR from an iPhone Butler conversation.
 - For PR create/update, never freehand the PR body. Use the repository canonical PR body contract (`docs/pr-template-model.md`, `scripts/prepare-pr-body-file.mjs`) and the validated `--body-file` path.
+- Do not create implementation PRs as Draft and do not convert implementation
+  PRs back to Draft to pause auto-merge. A Draft PR blocks reviewer/automation
+  and adds owner toil. If a PR must not merge, keep it ready and expose the
+  blocker through PR body evidence, checks, reviewer objection, a blocked
+  comment, or an auto-merge blocking label such as `vtdd:hold` /
+  `do-not-merge`.
 - If an implementation request does not already name an existing Issue, the next safe write is usually `issue_create`, not Codex handoff. Present the Issue candidate first, wait for GO, create the Issue, then continue from that Issue-backed scope.
 - For normal GO writes, first confirm or fix the exact payload, bind the user's
   `GO` to that payload scope, then call vtddWriteGitHub. Current natural GO

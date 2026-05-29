@@ -354,6 +354,24 @@ test("guarded workflow grandfathers pre-queue open PRs while enforcing new queue
   assert.match(workflow, /Queue delta must name the Issue\/PR or queue bucket being moved/);
 });
 
+test("guarded workflow rejects draft implementation PRs instead of using draft as a hold", () => {
+  const workflow = fs.readFileSync(".github/workflows/guarded-autonomy-required-checks.yml", "utf8");
+  const agents = fs.readFileSync("AGENTS.md", "utf8");
+  const customGptInstructions = fs.readFileSync("docs/setup/custom-gpt-instructions.md", "utf8");
+
+  assert.match(workflow, /converted_to_draft/);
+  assert.match(workflow, /ready_for_review/);
+  assert.match(workflow, /name: Reject draft pull requests/);
+  assert.match(workflow, /Draft PRs are disabled for VTDD implementation flow/);
+  assert.match(workflow, /gh api "repos\/\$\{REPOSITORY\}\/pulls\/\$\{PULL_NUMBER\}" --jq '\.draft'/);
+  assert.match(agents, /Do not create implementation PRs as Draft/);
+  assert.match(agents, /do not convert implementation\s+PRs back to Draft as a holding pattern/);
+  assert.match(agents, /`vtdd:hold` \/ `do-not-merge`/);
+  assert.match(customGptInstructions, /Do not create implementation PRs as Draft/);
+  assert.match(customGptInstructions, /do not convert implementation\s+PRs back to Draft to pause auto-merge/);
+  assert.match(customGptInstructions, /`vtdd:hold` \//);
+});
+
 test("prepare-pr-body-file preserves a valid candidate body", async () => {
   const candidate = renderPrBody({
     issue: "57",

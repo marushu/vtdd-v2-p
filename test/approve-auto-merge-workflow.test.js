@@ -36,6 +36,13 @@ test("approve auto merge script records searchable evidence before and after mer
   assert.equal(script.includes("evaluateApproveAutoMerge"), true);
 });
 
+test("approve auto merge passes GitHub issue labels into policy and hold evaluation", () => {
+  assert.equal(script.includes("githubFetch(`/repos/${repository}/issues/${pullNumber}`)"), true);
+  assert.equal(script.includes("const labels = normalizeLabels(issue.labels);"), true);
+  assert.equal(script.includes("resolveApproveAutoMergePolicy({\n    policyMode: env.VTDD_AUTO_MERGE_POLICY,\n    labels\n  })"), true);
+  assert.equal(script.includes("evaluateApproveAutoMerge({\n    policyMode,\n    labels,"), true);
+});
+
 test("approve auto merge treats concurrent GitHub merge race as idempotent", () => {
   const raceError = new Error("GitHub API 405: Merge already in progress");
   raceError.status = 405;

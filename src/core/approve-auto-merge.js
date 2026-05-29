@@ -11,6 +11,7 @@ export const APPROVE_AUTO_MERGE_EXECUTED_MARKER = "<!-- vtdd:auto-merge=executed
 
 const DEFAULT_REQUIRED_CHECKS = ["guarded-policy", "test", "review"];
 const AUTO_MERGE_LABELS = new Set(["approve_auto_merge", "vtdd:auto-merge", "auto-merge"]);
+const AUTO_MERGE_BLOCK_LABELS = new Set(["blocked", "do-not-merge", "do_not_merge", "hold", "vtdd:hold", "vtdd:blocked"]);
 
 export function resolveApproveAutoMergePolicy(input = {}) {
   const explicit = normalizePolicyMode(input.policyMode || input.mode || input.envPolicy);
@@ -34,11 +35,16 @@ export function evaluateApproveAutoMerge(input = {}) {
   const requiredChecks = normalizeRequiredChecks(input.requiredChecks);
   const checkRuns = normalizeCheckRuns(input.checkRuns);
   const checkTruth = evaluateRequiredChecks({ checkRuns, requiredChecks });
+  const labels = normalizeLabels(input.labels);
   const reasons = [];
   const evidence = [];
+  const blockingLabels = labels.filter((label) => AUTO_MERGE_BLOCK_LABELS.has(label));
 
   if (policyMode !== ApproveAutoMergePolicyMode.APPROVE_AUTO_MERGE) {
     reasons.push("approve_auto_merge policy is not enabled for this repository, Issue, or PR.");
+  }
+  if (blockingLabels.length > 0) {
+    reasons.push(`auto merge hold label is present: ${blockingLabels.join(", ")}.`);
   }
   if (!pullRequest.exists) {
     reasons.push("pull request runtime truth is missing.");
@@ -123,6 +129,7 @@ export function evaluateApproveAutoMerge(input = {}) {
   evidence.push(`mergeable=${String(pullRequest.mergeability.mergeable)}`);
   evidence.push(`mergeableState=${pullRequest.mergeability.mergeableState || "unknown"}`);
   evidence.push(`checks=${checkTruth.summary}`);
+  evidence.push(`blockingLabels=${blockingLabels.join(",") || "none"}`);
 
   return {
     allowed: reasons.length === 0,
