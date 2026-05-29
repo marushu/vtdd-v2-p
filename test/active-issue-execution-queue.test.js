@@ -79,9 +79,7 @@ test("active issue execution queue names current open PR hygiene", () => {
 });
 
 test("active issue execution queue names the next automatic implementation lane", () => {
-  assert.equal(sectionBody("Now").includes("Issue #413: Dashboard Butler execution progress"), true);
-  assert.equal(sectionBody("Next").includes("Issue #444: after the visible running-state slice"), true);
-  assert.equal(sectionBody("Evidence Gaps").includes("Issue #590: PR #628 merged and production deployed"), true);
+  assert.equal(sectionBody("Now").includes("Issue #590: app-server turn timeout"), true);
   assert.equal(sectionBody("Evidence Gaps").includes("Issue #606: PR #627 merged and production deployed"), true);
-  assert.equal(doc.includes("Issue #579: after timeout recovery and visible progress"), true);
+  assert.equal(doc.includes("Issue #579: after timeout recovery"), true);
 });
