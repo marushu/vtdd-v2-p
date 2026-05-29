@@ -28,7 +28,7 @@
       "backgroundColor": "rgba(0, 0, 0, 0)",
       "parentBackgroundColor": "rgba(0, 0, 0, 0)",
       "bubbleBackgroundColor": "rgb(23, 23, 23)",
-      "text": "repository: marushu/vtdd-v2-pissueNumber: 495currentSurface: dashboard_butlerphase: execution"
+      "text": "repository: marushu/vtdd-v2-pissueNumber: 631currentSurface: dashboard_butlerphase: execution"
     },
     "ownerListItem": {
       "selector": ".bubble.owner li",
