@@ -113,7 +113,7 @@ function shouldProbeScopedSudoHelper({ verifyScopedSudo, helper, manifest, sudoe
     manifest.owner === "root" &&
     sudoers.installed === true &&
     sudoers.owner === "root" &&
-    sudoersPolicy.allowsAll !== true
+    sudoersPolicy.allowsAll === false
   );
 }
 
