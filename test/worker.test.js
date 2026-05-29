@@ -1173,8 +1173,16 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("prefers-color-scheme: dark"), true);
   assert.equal(body.includes("--link: #0b6b65;"), true);
   assert.equal(body.includes("--owner-link: #9ee7ff;"), true);
+  assert.equal(body.includes("--code-bg: #fbfbf7;"), true);
+  assert.equal(body.includes("--code-text: #151515;"), true);
+  assert.equal(body.includes("--owner-code-bg: #2a2a2a;"), true);
+  assert.equal(body.includes("--owner-code-text: #f7f7f4;"), true);
   assert.equal(body.includes("--link: #90cdf4;"), true);
   assert.equal(body.includes("--owner-link: #075985;"), true);
+  assert.equal(body.includes("--code-bg: #171717;"), true);
+  assert.equal(body.includes("--code-text: #f7f7f4;"), true);
+  assert.equal(body.includes("--owner-code-bg: #ffffff;"), true);
+  assert.equal(body.includes("--owner-code-text: #111111;"), true);
   assert.equal(body.includes("overflow: hidden"), true);
   assert.equal(body.includes("max-width: 100vw"), true);
   assert.equal(body.includes("minmax(220px, 320px)"), false);
@@ -1411,7 +1419,9 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes(".chat-scroll { width: 100%; max-width: 100%; min-height: 0; overflow-y: auto; overflow-x: hidden;"), true);
   assert.equal(body.includes("overscroll-behavior-x: none"), true);
   assert.equal(body.includes("touch-action: pan-y"), true);
-  assert.equal(body.includes(".bubble .message-body pre { position: relative; margin: 0; padding: 42px 14px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--panel-strong); overflow-x: hidden; white-space: pre-wrap; max-width: 100%; }"), true);
+  assert.equal(body.includes(".bubble .message-body pre { position: relative; margin: 0; padding: 42px 14px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--code-bg); color: var(--code-text); overflow-x: hidden; white-space: pre-wrap; max-width: 100%; }"), true);
+  assert.equal(body.includes(".bubble.owner .message-body pre { background: var(--owner-code-bg); border-color: var(--owner-code-border); color: var(--owner-code-text); }"), true);
+  assert.equal(body.includes(".bubble.owner .message-body pre code { color: var(--owner-code-text); }"), true);
   assert.equal(body.includes("tokenPattern"), true);
   assert.equal(body.includes('link.className = "chat-link"'), true);
   assert.equal(body.includes("考えています"), false);
@@ -1598,6 +1608,15 @@ test("served dashboard inline chat renderer executes decode, link, wrap, and cop
   assert.equal(codeCopyButtons.length, 1);
   await codeCopyButtons[0].click();
   assert.equal(copied.at(-1), "https://example.com/" + "b".repeat(96));
+
+  const mixedCodeContainer = document.createElement("div");
+  helpers.renderMessageText(mixedCodeContainer, "黒潰れ確認。\n```\nhttps://example.com/" + "c".repeat(96) + "\n```");
+  const mixedParagraphs = mixedCodeContainer.querySelectorAll("p");
+  const mixedCodeBlocks = mixedCodeContainer.querySelectorAll("pre");
+  assert.equal(mixedParagraphs.length, 1);
+  assert.equal(mixedParagraphs[0].textContent, "黒潰れ確認。");
+  assert.equal(mixedCodeBlocks.length, 1);
+  assert.equal(mixedCodeBlocks[0].className, "wrap-code");
 
   const messageCopyButton = document.createElement("button");
   await helpers.copyMessageText(
