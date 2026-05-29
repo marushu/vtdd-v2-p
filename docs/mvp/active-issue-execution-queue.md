@@ -45,17 +45,20 @@ Last rebuilt from GitHub runtime truth: 2026-05-29
   Issue #579, Issue #590, Issue #604, and Issue #605. Issue #606 moves to
   `Now`; Issue #590 remains active and resumes after the read-session blocker
   no longer causes short-cycle reauthentication.
+- 2026-05-29 Issue #606 was merged and production deployed. Owner live iPhone
+  evidence reported Dashboard Butler still connected after 11 minutes, so the
+  short-cycle passkey blocker no longer preempts Issue #590. Issue #590 moves
+  back to `Now`; Issue #606 remains open until mapped completion evidence and
+  human closure approval are complete.
 
 ## Now
 
-- Issue #606: ordinary Dashboard read sessions must be separated from
-  high-risk passkey approval so the iPhone/PWA Dashboard no longer falls back
-  into 2-minute reauthentication during normal Butler use.
+- Issue #590: app-server turn timeout must become a recoverable Dashboard chat
+  state after the short-cycle authentication blocker was removed by Issue #606
+  implementation and production evidence.
 
 ## Next
 
-- Issue #590: app-server turn timeout must become a recoverable Dashboard chat
-  state after the short-cycle authentication blocker is removed.
 - Issue #579: after timeout recovery, handle PWA background/foreground,
   WebSocket reconnect, auth/session expiry, and input/media retention.
 - Issue #450 + Issue #413: continue the Dashboard Butler live runtime /
@@ -162,6 +165,9 @@ Evidence gaps are active. They are not deferred out of scope.
 - Issue #613: owner provided ChatGPT iOS app screenshots and live iPhone /
   QuickTime observations that define the Text-first / Voice-ready baseline, but
   Dashboard Butler implementation still needs mapped iPhone/PWA E2E.
+- Issue #606: PR #627 merged and production deployed; owner live iPhone evidence
+  reported Dashboard Butler still connected after 11 minutes. Issue closure still
+  needs mapped completion evidence and explicit human closure approval.
 - Issue #444: PR #600 points PR-numbered notifications at the PR instead of the
   Actions run, but live iPhone/PWA notification tap, sound, badge, and recovery
   evidence remain incomplete.
