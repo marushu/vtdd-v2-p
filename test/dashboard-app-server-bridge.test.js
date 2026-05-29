@@ -6,6 +6,7 @@ import test from "node:test";
 import {
   buildDashboardAppServerBridgeEndpoint,
   buildAppServerInitializeRequest,
+  buildOwnerActionRequiredPayloadForAppServerApproval,
   buildAppServerRequestApprovalResponse,
   buildAppServerSandboxOverrides,
   buildAppServerThreadResumeRequest,
@@ -21,6 +22,7 @@ import {
   matchesAppServerTurnNotification,
   materializeDashboardMediaReferences,
   parseBridgeArgs,
+  postOwnerActionRequiredEvent,
   runDashboardAppServerBridge
 } from "../scripts/run-dashboard-app-server-bridge.mjs";
 
@@ -281,10 +283,11 @@ test("dashboard app-server bridge declines write, patch, permission, and unsafe 
   );
 });
 
-test("dashboard app-server bridge writes JSON-RPC responses for app-server approval requests", () => {
+test("dashboard app-server bridge writes JSON-RPC responses for app-server approval requests", async () => {
   const client = new JsonLineAppServerClient({ command: "unused" });
   const writes = [];
   const notifications = [];
+  const approvals = [];
   client.child = {
     stdin: {
       write(chunk) {
@@ -294,6 +297,9 @@ test("dashboard app-server bridge writes JSON-RPC responses for app-server appro
     kill() {}
   };
   client.onNotification((message) => notifications.push(message));
+  client.setApprovalRequestHandler(({ message, approvalResponse }) => {
+    approvals.push({ message, approvalResponse });
+  });
 
   client.handleChunk(
     [
@@ -316,6 +322,7 @@ test("dashboard app-server bridge writes JSON-RPC responses for app-server appro
       })
     ].join("\n") + "\n"
   );
+  await client.drainApprovalRequests();
 
   assert.deepEqual(writes, [
     { id: 0, result: { decision: "decline" } },
@@ -327,8 +334,120 @@ test("dashboard app-server bridge writes JSON-RPC responses for app-server appro
       }
     }
   ]);
+  assert.equal(approvals.length, 2);
+  assert.equal(approvals[0].message.method, "item/commandExecution/requestApproval");
+  assert.deepEqual(approvals[0].approvalResponse, { id: 0, result: { decision: "decline" } });
   assert.equal(notifications.length, 1);
   assert.equal(notifications[0].method, "turn/started");
+});
+
+test("dashboard app-server bridge captures approval notification handler failures", async () => {
+  const client = new JsonLineAppServerClient({
+    command: "unused",
+    onApprovalRequest: async () => {
+      throw new Error("runtime unavailable");
+    }
+  });
+  const writes = [];
+  client.child = {
+    stdin: {
+      write(chunk) {
+        writes.push(JSON.parse(String(chunk).trim()));
+      }
+    },
+    kill() {}
+  };
+
+  client.handleChunk(
+    JSON.stringify({
+      id: 7,
+      method: "item/commandExecution/requestApproval",
+      params: {}
+    }) + "\n"
+  );
+  await client.drainApprovalRequests();
+  assert.deepEqual(writes, [{ id: 7, result: { decision: "decline" } }]);
+  assert.equal(client.lastApprovalRequestError, "runtime unavailable");
+});
+
+test("dashboard app-server bridge builds owner-action-required payloads for approval requests", () => {
+  const payload = buildOwnerActionRequiredPayloadForAppServerApproval({
+    message: {
+      id: 44,
+      method: "item/permissions/requestApproval",
+      params: { reason: "needs permission escalation" }
+    },
+    request: {
+      threadId: "dashboard-main",
+      codexThreadId: "codex-thread-1",
+      repository: "marushu/vtdd-v2-p",
+      relatedIssue: 637
+    },
+    dashboardThreadId: "dashboard-main",
+    codexThreadId: "codex-thread-1",
+    approvalResponse: {
+      id: 44,
+      error: {
+        code: -32001,
+        message: "Dashboard bridge does not grant app-server permission escalation"
+      }
+    }
+  });
+  assert.equal(payload.repository, "marushu/vtdd-v2-p");
+  assert.equal(payload.actionId, "app-server-approval:dashboard-main:codex-thread-1:item-permissions-requestApproval:44");
+  assert.equal(payload.issueNumber, 637);
+  assert.equal(payload.workflowName, "dashboard-app-server-bridge");
+  assert.equal(payload.url, "/dashboard/notifications?focus=owner-action");
+  assert.match(payload.summary, /item\/permissions\/requestApproval/);
+  assert.equal(
+    buildOwnerActionRequiredPayloadForAppServerApproval({
+      message: { id: 1, method: "item/commandExecution/requestApproval" },
+      request: { repository: "", threadId: "dashboard-main" }
+    }),
+    null
+  );
+});
+
+test("dashboard app-server bridge posts owner-action-required event with bearer auth", async () => {
+  const calls = [];
+  const result = await postOwnerActionRequiredEvent({
+    runtimeUrl: "https://runtime.example",
+    token: "runtime-token",
+    payload: {
+      repository: "marushu/vtdd-v2-p",
+      actionId: "app-server-approval:dashboard-main:codex-thread-1:item-permissions-requestApproval:44",
+      title: "Codex app-server approval request",
+      summary: "Dashboard bridge declined item/permissions/requestApproval; owner attention may be required.",
+      issueNumber: 637,
+      workflowName: "dashboard-app-server-bridge",
+      url: "/dashboard/notifications?focus=owner-action"
+    },
+    fetchImpl: async (url, init) => {
+      calls.push({ url: String(url), init });
+      return new Response(null, { status: 202 });
+    }
+  });
+  assert.equal(result.ok, true);
+  assert.equal(calls[0].url, "https://runtime.example/v2/events/owner-action-required");
+  assert.equal(calls[0].init.headers.authorization, "Bearer runtime-token");
+  assert.equal(JSON.parse(calls[0].init.body).issueNumber, 637);
+});
+
+test("dashboard app-server bridge returns structured owner-action-required post failures", async () => {
+  const failed = await postOwnerActionRequiredEvent({
+    runtimeUrl: "not a url",
+    token: "runtime-token",
+    payload: {
+      repository: "marushu/vtdd-v2-p",
+      actionId: "app-server-approval",
+      title: "Codex app-server approval request",
+      summary: "approval needed",
+      url: "/dashboard/notifications?focus=owner-action"
+    },
+    fetchImpl: async () => new Response(null, { status: 202 })
+  });
+  assert.equal(failed.ok, false);
+  assert.equal(failed.error, "owner_action_required_post_failed");
 });
 
 test("dashboard app-server bridge resolves pending JSON-RPC response id zero", async () => {
@@ -467,6 +586,154 @@ test("dashboard app-server bridge handles a fresh dashboard turn through thread/
   assert.equal(events[1].type, "app_server_reply_delta");
   assert.equal(events[2].type, "app_server_reply");
   assert.equal(events[2].text, "今日は2026年5月22日です。");
+});
+
+test("dashboard app-server bridge posts owner-action-required when app-server requests approval during a turn", async () => {
+  const events = [];
+  const runtimeCalls = [];
+  const handlers = new Set();
+  let nextId = 1;
+  let approvalHandler = null;
+  const appServer = {
+    nextRequestId() {
+      const id = nextId;
+      nextId += 1;
+      return id;
+    },
+    onNotification(handler) {
+      handlers.add(handler);
+      return () => handlers.delete(handler);
+    },
+    setApprovalRequestHandler(handler) {
+      approvalHandler = handler;
+      return () => {
+        approvalHandler = null;
+      };
+    },
+    async request(message) {
+      if (message.method === "thread/start") {
+        return { thread: { id: "codex-thread-approval" } };
+      }
+      if (message.method === "turn/start") {
+        await approvalHandler({
+          message: {
+            id: 7,
+            method: "item/commandExecution/requestApproval",
+            params: { commandActions: [{ type: "read", path: "package.json" }] }
+          },
+          approvalResponse: { id: 7, result: { decision: "decline" } }
+        });
+        for (const handler of handlers) {
+          handler({
+            method: "turn/completed",
+            params: {
+              threadId: "codex-thread-approval",
+              turn: { id: "turn-approval", status: "completed" }
+            }
+          });
+        }
+        return { turn: { id: "turn-approval" } };
+      }
+      throw new Error(`unexpected method ${message.method}`);
+    }
+  };
+
+  await handleDashboardTurnRequest({
+    request: {
+      threadId: "dashboard-main",
+      codexThreadId: null,
+      repository: "marushu/vtdd-v2-p",
+      relatedIssue: 637,
+      text: "VPS の状態を見て"
+    },
+    appServer,
+    sendDashboardEvent: async (event) => events.push(event),
+    cwd: "/repo",
+    runtimeUrl: "https://runtime.example",
+    token: "runtime-token",
+    fetchImpl: async (url, init) => {
+      runtimeCalls.push({ url: String(url), init });
+      return new Response(JSON.stringify({ ok: true }), { status: 202 });
+    }
+  });
+
+  assert.equal(runtimeCalls.length, 1);
+  assert.equal(runtimeCalls[0].url, "https://runtime.example/v2/events/owner-action-required");
+  const body = JSON.parse(runtimeCalls[0].init.body);
+  assert.equal(body.repository, "marushu/vtdd-v2-p");
+  assert.equal(body.actionId, "app-server-approval:dashboard-main:codex-thread-approval:item-commandExecution-requestApproval:7");
+  assert.equal(body.issueNumber, 637);
+  assert.equal(body.url, "/dashboard/notifications?focus=owner-action");
+  assert.equal(events.at(-1).type, "app_server_reply");
+});
+
+test("dashboard app-server bridge records owner-action notification failure in dashboard thread", async () => {
+  const events = [];
+  let approvalHandler = null;
+  const handlers = new Set();
+  let nextId = 1;
+  const appServer = {
+    nextRequestId() {
+      const id = nextId;
+      nextId += 1;
+      return id;
+    },
+    onNotification(handler) {
+      handlers.add(handler);
+      return () => handlers.delete(handler);
+    },
+    setApprovalRequestHandler(handler) {
+      approvalHandler = handler;
+      return () => {
+        approvalHandler = null;
+      };
+    },
+    async request(message) {
+      if (message.method === "thread/start") {
+        return { thread: { id: "codex-thread-failed-notify" } };
+      }
+      if (message.method === "turn/start") {
+        await approvalHandler({
+          message: {
+            id: 8,
+            method: "item/permissions/requestApproval",
+            params: {}
+          },
+          approvalResponse: { id: 8, error: { code: -32001, message: "denied" } }
+        });
+        for (const handler of handlers) {
+          handler({
+            method: "turn/completed",
+            params: {
+              threadId: "codex-thread-failed-notify",
+              turn: { id: "turn-failed-notify", status: "completed" }
+            }
+          });
+        }
+        return { turn: { id: "turn-failed-notify" } };
+      }
+      throw new Error(`unexpected method ${message.method}`);
+    }
+  };
+
+  await handleDashboardTurnRequest({
+    request: {
+      threadId: "dashboard-main",
+      repository: "marushu/vtdd-v2-p",
+      relatedIssue: 637,
+      text: "権限が必要な確認をして"
+    },
+    appServer,
+    sendDashboardEvent: async (event) => events.push(event),
+    runtimeUrl: "https://runtime.example",
+    token: "runtime-token",
+    fetchImpl: async () => new Response(null, { status: 503 })
+  });
+
+  const failure = events.find((event) => event.status === "owner_action_notification_failed");
+  assert.ok(failure);
+  assert.equal(failure.type, "app_server_turn_failed");
+  assert.match(failure.text, /owner action PWA通知を送信できませんでした/);
 });
 
 test("dashboard app-server bridge passes traffic-control context to codex app-server turns", async () => {
