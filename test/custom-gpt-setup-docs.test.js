@@ -73,6 +73,9 @@ test("custom gpt instructions preserve current butler and approval boundaries", 
   assert.equal(doc.includes("`.agents/skills/vtdd-chief-butler/SKILL.md`"), true);
   assert.equal(doc.includes("startupPreflight.repoBackedSkills.status"), true);
   assert.equal(doc.includes("Do not claim mac-only Skills are acceptable runtime capability."), true);
+  assert.equal(doc.includes("startupPreflight.toolParityInventory.status"), true);
+  assert.equal(doc.includes("macOnlyGaps"), true);
+  assert.equal(doc.includes("Issue #495 parity gaps"), true);
   assert.equal(doc.includes("execution queue traffic control"), true);
   assert.equal(doc.includes("active Issue execution queue"), true);
   assert.equal(doc.includes("Do not treat status intents as automatic startup."), true);
