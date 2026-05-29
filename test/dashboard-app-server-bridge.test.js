@@ -679,8 +679,7 @@ test("dashboard app-server bridge keeps listening for async turn notifications a
     },
     appServer,
     sendDashboardEvent: async (event) => events.push(event),
-    cwd: "/repo",
-    turnTimeoutMs: 1000
+    cwd: "/repo"
   });
 
   assert.deepEqual(
@@ -690,6 +689,7 @@ test("dashboard app-server bridge keeps listening for async turn notifications a
   assert.equal(events.at(-2).type, "app_server_reply_delta");
   assert.equal(events.at(-1).type, "app_server_reply");
   assert.equal(events.at(-1).text, "非同期で返りました。");
+  assert.equal(events.some((event) => event.type === "app_server_turn_failed"), false);
   assert.equal(handlers.size, 0);
 });
 
@@ -974,6 +974,7 @@ test("dashboard app-server bridge args require a dashboard thread id for runtime
   });
   assert.equal(parsed.threadId, "");
   assert.equal(parsed.sandboxMode, "danger-full-access");
+  assert.equal(parsed.turnTimeoutMs, 0);
 });
 
 test("dashboard app-server bridge refuses to connect without a dashboard thread id", async () => {
@@ -989,16 +990,18 @@ test("dashboard app-server bridge refuses to connect without a dashboard thread 
 });
 
 test("dashboard app-server bridge args read runtime, token, and thread from environment", () => {
-  const parsed = parseBridgeArgs(["--thread-id", "dashboard-main"], {
+  const parsed = parseBridgeArgs(["--thread-id", "dashboard-main", "--turn-timeout-ms", "1500"], {
     VTDD_RUNTIME_URL: "https://runtime.example",
     VTDD_GATEWAY_BEARER_TOKEN: "secret-token",
-    VTDD_DASHBOARD_CODEX_CWD: "/repo"
+    VTDD_DASHBOARD_CODEX_CWD: "/repo",
+    VTDD_DASHBOARD_APP_SERVER_TURN_TIMEOUT_MS: "0"
   });
   assert.equal(parsed.runtimeUrl, "https://runtime.example");
   assert.equal(parsed.token, "secret-token");
   assert.equal(parsed.threadId, "dashboard-main");
   assert.equal(parsed.cwd, "/repo");
   assert.equal(parsed.sandboxMode, "");
+  assert.equal(parsed.turnTimeoutMs, 1500);
   assert.equal(parsed.reconnectDelayMs, 1000);
 });
 

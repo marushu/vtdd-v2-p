@@ -577,7 +577,7 @@ export async function handleDashboardTurnRequest({
   sendDashboardEvent,
   cwd = process.cwd(),
   sandboxMode = "",
-  turnTimeoutMs = 10 * 60 * 1000,
+  turnTimeoutMs = 0,
   lateCompletionTimeoutMs = 30 * 60 * 1000,
   runtimeUrl = "",
   token = "",
@@ -624,6 +624,9 @@ export async function handleDashboardTurnRequest({
   const turnCompletion = new Promise((resolve, reject) => {
     resolveTurn = resolve;
     rejectTurn = reject;
+    if (!Number.isFinite(turnTimeoutMs) || turnTimeoutMs <= 0) {
+      return;
+    }
     timeoutHandle = setTimeout(() => {
       timedOut = true;
       const timeoutEvent = buildAppServerTurnTimeoutEvent({
@@ -738,6 +741,7 @@ export function parseBridgeArgs(argv = process.argv.slice(2), env = process.env)
     threadId: env.VTDD_DASHBOARD_THREAD_ID || "",
     cwd: env.VTDD_DASHBOARD_CODEX_CWD || process.cwd(),
     sandboxMode: env.VTDD_DASHBOARD_APP_SERVER_SANDBOX || "",
+    turnTimeoutMs: Number(env.VTDD_DASHBOARD_APP_SERVER_TURN_TIMEOUT_MS || 0),
     reconnectDelayMs: Number(env.VTDD_DASHBOARD_BRIDGE_RECONNECT_DELAY_MS || 1000)
   };
   for (let index = 0; index < argv.length; index += 1) {
@@ -747,6 +751,7 @@ export function parseBridgeArgs(argv = process.argv.slice(2), env = process.env)
     if (arg === "--thread-id") options.threadId = argv[++index] || "";
     if (arg === "--cwd") options.cwd = argv[++index] || "";
     if (arg === "--sandbox") options.sandboxMode = argv[++index] || "";
+    if (arg === "--turn-timeout-ms") options.turnTimeoutMs = Number(argv[++index] || 0);
     if (arg === "--reconnect-delay-ms") options.reconnectDelayMs = Number(argv[++index] || 1000);
   }
   return options;
@@ -800,6 +805,7 @@ export async function connectDashboardAppServerBridgeOnce({
   appServer,
   cwd = process.cwd(),
   sandboxMode = "",
+  turnTimeoutMs = 0,
   runtimeUrl = "",
   fetchImpl = globalThis.fetch,
   mediaTmpRoot = os.tmpdir(),
@@ -845,6 +851,7 @@ export async function connectDashboardAppServerBridgeOnce({
             sendDashboardEvent: async (dashboardEvent) => safeSend(dashboardEvent),
             cwd,
             sandboxMode,
+            turnTimeoutMs,
             runtimeUrl,
             token,
             fetchImpl,
