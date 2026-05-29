@@ -1534,6 +1534,44 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/VtddGenericResponse"
+  /v2/vps/privileged-maintenance/helper-requests:
+    post:
+      operationId: vtddCreateVpsMaintenanceHelperRequest
+      summary: Create a bounded VPS privileged maintenance helper request from a stored proposal and scoped passkey approval grant without executing root work.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - vpsProposalId
+                - approvalGrantId
+              properties:
+                vpsProposalId:
+                  type: string
+                approvalGrantId:
+                  type: string
+              additionalProperties: false
+      responses:
+        "200":
+          description: Bounded VPS helper request and runtime truth
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "401":
+          description: Missing machine auth
+        "403":
+          description: Approval grant does not match stored proposal scope
+        "404":
+          description: Stored proposal or approval grant not found
+        "422":
+          description: VPS helper request invalid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
   /v2/retrieve/constitution:
     get:
       operationId: vtddRetrieveConstitution
