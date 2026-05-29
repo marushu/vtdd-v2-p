@@ -247,6 +247,7 @@ export {
   buildVpsMaintenanceApprovalScope,
   applyVpsCapabilityLifecycleOperation,
   planVpsPrivilegedMaintenanceHelperExecution,
+  listVpsPrivilegedMaintenanceCommandRegistry,
   normalizeVpsCapability,
   normalizeVpsCapabilityManifest
 } from "./vps-privileged-maintenance.js";

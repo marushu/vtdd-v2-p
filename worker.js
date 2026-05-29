@@ -37255,6 +37255,32 @@ var CAPABILITY_OPERATIONS = /* @__PURE__ */ new Set(["add", "enable", "disable",
 var RISK_LEVELS = /* @__PURE__ */ new Set(["low", "medium", "high"]);
 var DEFAULT_MANIFEST_VERSION = 1;
 var HELPER_EXECUTION_MODES = /* @__PURE__ */ new Set(["dry_run"]);
+var HELPER_COMMAND_REGISTRY = defineHelperCommandRegistry([
+  {
+    commandClass: "playwright_install_deps_chromium",
+    title: "Playwright Chromium dependency install",
+    allowedArgs: ["npx playwright install-deps chromium"],
+    requiredRiskLevel: "high",
+    requiresRoot: true,
+    initialPreset: true
+  },
+  {
+    commandClass: "codex_sandbox_sysctl_apply",
+    title: "Codex sandbox sysctl apply",
+    allowedArgs: ["sysctl --system"],
+    requiredRiskLevel: "high",
+    requiresRoot: true,
+    initialPreset: true
+  },
+  {
+    commandClass: "systemd_user_runner_restart",
+    title: "Restart VTDD runner user service",
+    allowedArgs: ["systemctl --user restart vtdd-vps-runner.timer"],
+    requiredRiskLevel: "medium",
+    requiresRoot: false,
+    initialPreset: true
+  }
+]);
 function normalizeVpsCapabilityManifest(input = {}) {
   const issues = [];
   const manifest = {
@@ -37419,6 +37445,14 @@ function planVpsPrivilegedMaintenanceHelperExecution(input = {}) {
       issues: mismatch
     };
   }
+  const registryBinding = bindHelperCommandRegistry(capability);
+  if (!registryBinding.ok) {
+    return {
+      ok: false,
+      error: registryBinding.error,
+      issues: registryBinding.issues
+    };
+  }
   return {
     ok: true,
     helperPlan: {
@@ -37434,7 +37468,8 @@ function planVpsPrivilegedMaintenanceHelperExecution(input = {}) {
       commandPreview: {
         commandClass: capability.commandClass,
         workingDirectories: capability.workingDirectories,
-        allowedArgs: capability.allowedArgs
+        allowedArgs: capability.allowedArgs,
+        registryBinding: registryBinding.binding
       },
       audit: {
         redactionRules: capability.redactionRules,
@@ -37456,6 +37491,7 @@ function planVpsPrivilegedMaintenanceHelperExecution(input = {}) {
       operation: request.operation,
       capabilityId: capability.id,
       commandClass: capability.commandClass,
+      registryBinding: registryBinding.binding,
       before: {
         manifestVersion: manifest.version,
         capabilityStatus: capability.status
@@ -37478,6 +37514,55 @@ function containsForbiddenPrivilegedPattern(capability) {
     capability.rollbackPlan
   ].join(" ");
   return /\bNOPASSWD\s*:\s*ALL\b/i.test(joined) || /\bsudo\s+su\b/i.test(joined) || /\b(root\s+shell|\/bin\/bash|\/bin\/sh)\b/i.test(joined);
+}
+function bindHelperCommandRegistry(capability) {
+  const entry = HELPER_COMMAND_REGISTRY[capability.commandClass];
+  if (!entry) {
+    return {
+      ok: false,
+      error: "vps_helper_command_class_not_registered",
+      issues: [`commandClass is not registered for VPS helper execution: ${capability.commandClass}`]
+    };
+  }
+  const issues = [];
+  if (!sameStringList(capability.allowedArgs, entry.allowedArgs)) {
+    issues.push("capability allowedArgs must match registered helper command");
+  }
+  if (capability.riskLevel !== entry.requiredRiskLevel) {
+    issues.push("capability riskLevel must match registered helper command");
+  }
+  if (issues.length > 0) {
+    return {
+      ok: false,
+      error: "vps_helper_command_registry_mismatch",
+      issues
+    };
+  }
+  return {
+    ok: true,
+    binding: cloneHelperCommandRegistryEntry(entry)
+  };
+}
+function defineHelperCommandRegistry(entries) {
+  const registry2 = {};
+  for (const entry of entries) {
+    const normalized = {
+      ...entry,
+      allowedArgs: Object.freeze(normalizeStringList(entry.allowedArgs))
+    };
+    registry2[normalized.commandClass] = Object.freeze(normalized);
+  }
+  return Object.freeze(registry2);
+}
+function cloneHelperCommandRegistryEntry(entry) {
+  return {
+    commandClass: entry.commandClass,
+    title: entry.title,
+    allowedArgs: [...entry.allowedArgs],
+    requiredRiskLevel: entry.requiredRiskLevel,
+    requiresRoot: entry.requiresRoot,
+    initialPreset: entry.initialPreset
+  };
 }
 function normalizeHelperRequest(input = {}) {
   const capability = normalizeVpsCapability(input.capability || {});
