@@ -116,6 +116,10 @@ test("dashboard composer keeps newline and submits on modified Enter", async ({ 
   await page.goto(dashboardUrl);
   const textarea = page.locator("#butler-message");
   await expect(textarea).toBeVisible();
+  await expect(textarea).toBeEditable();
+  await expect(page.locator("#butler-interrupt-panel")).toHaveCount(0);
+  await expect(page.locator(".send-button.stop-state")).toHaveCount(0);
+  await expect(page.locator(".send-button")).not.toHaveText("■");
 
   await textarea.fill("line one");
   await textarea.press("Shift+Enter");
@@ -134,6 +138,10 @@ test("dashboard composer keeps newline and submits on modified Enter", async ({ 
 
   const state = await page.evaluate(() => ({
     value: document.querySelector("#butler-message")?.value,
+    composerReadOnly: Boolean(document.querySelector("#butler-message")?.readOnly),
+    interruptPanelCount: document.querySelectorAll("#butler-interrupt-panel").length,
+    stopStateButtonCount: document.querySelectorAll(".send-button.stop-state").length,
+    sendButtonText: document.querySelector(".send-button")?.textContent || "",
     ownerBubbleTexts: Array.from(document.querySelectorAll(".bubble.owner")).map((node) => node.textContent?.trim() || ""),
     userAgent: navigator.userAgent
   }));
@@ -145,7 +153,14 @@ test("dashboard composer keeps newline and submits on modified Enter", async ({ 
     ok: true,
     browserName,
     platform: process.platform,
-    verified: ["Shift+Enter newline", "modified Enter submit", "owner bubble rendered"],
+    verified: [
+      "Shift+Enter newline",
+      "modified Enter submit",
+      "owner bubble rendered",
+      "composer remains editable",
+      "interrupt panel absent",
+      "stop-state send button absent"
+    ],
     evidence: { statePath, screenshotPath }
   }));
 });

@@ -1313,6 +1313,15 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("function scrollToLatest()"), true);
   assert.equal(body.includes("function showThinking()"), false);
   assert.equal(body.includes("function removeThinking("), false);
+  assert.equal(body.includes('id="butler-interrupt-panel"'), false);
+  assert.equal(body.includes("butler-interrupt-panel"), false);
+  assert.equal(body.includes("実行中の割り込み指示"), false);
+  assert.equal(body.includes("sendInterruptMessage"), false);
+  assert.equal(body.includes("interrupt: true"), false);
+  assert.equal(body.includes("割り込み指示: "), false);
+  assert.equal(body.includes("executionRunning"), false);
+  assert.equal(body.includes("stop-state"), false);
+  assert.equal(body.includes('sendButton.textContent = "■"'), false);
   assert.equal(body.includes("function renderMessageText("), true);
   assert.equal(body.includes("function renderInlineMarkdown("), true);
   assert.equal(body.includes('body.className = "message-body"'), true);

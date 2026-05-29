@@ -148,6 +148,10 @@ Evidence gaps are active. They are not deferred out of scope.
   app-server bridge; ordinary conversation, follow-up continuity, timeout
   recovery, PWA recovery, readable final replies, and live owner-facing runtime
   truth remain incomplete.
+- Issue #590: PR #628/PR #633 provide partial timeout-recovery evidence, but
+  closure still needs mapped owner-facing production evidence that Dashboard
+  Butler reports timeout/late completion before/after state without leaving the
+  ordinary chat thread stuck.
 - Issue #565: connection recovery status has local evidence, but completion still
   depends on the normal chat surface not being dominated by status noise.
 - Issue #577: composer paste normalization has merged implementation slices, but
