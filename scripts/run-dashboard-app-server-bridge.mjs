@@ -401,6 +401,7 @@ export function buildOwnerActionRequiredPayloadForAppServerApproval({
     "app-server-approval",
     dashboardThreadId || request.threadId || "dashboard-thread",
     codexThreadId || request.codexThreadId || "codex-thread",
+    method || "approval-request",
     messageId || method || "request"
   ]
     .map((part) => sanitizeBridgeActionId(part))
@@ -438,19 +439,29 @@ export async function postOwnerActionRequiredEvent({
       reason: "runtimeUrl, token, payload, and fetch are required"
     };
   }
-  const url = new URL("/v2/events/owner-action-required", runtimeUrl);
-  const response = await fetchImpl(url, {
-    method: "POST",
-    headers: {
-      authorization: `Bearer ${token}`,
-      "content-type": "application/json"
-    },
-    body: JSON.stringify(payload)
-  });
-  return {
-    ok: response.ok,
-    status: response.status
-  };
+  try {
+    const url = new URL("/v2/events/owner-action-required", runtimeUrl);
+    const response = await fetchImpl(url, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${token}`,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+    return {
+      ok: response.ok,
+      status: response.status,
+      reason: response.ok ? "accepted" : `runtime returned HTTP ${response.status}`
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      status: 0,
+      error: "owner_action_required_post_failed",
+      reason: sanitizeBridgeError(error)
+    };
+  }
 }
 
 export function mapAppServerNotificationToDashboardEvent(message, context = {}) {
@@ -557,6 +568,7 @@ export class JsonLineAppServerClient {
     this.buffer = "";
     this.child = null;
     this.onApprovalRequest = typeof onApprovalRequest === "function" ? onApprovalRequest : null;
+    this.approvalRequestTasks = new Set();
   }
 
   start() {
@@ -621,6 +633,29 @@ export class JsonLineAppServerClient {
     };
   }
 
+  notifyApprovalRequest(input) {
+    if (!this.onApprovalRequest) {
+      return null;
+    }
+    const task = Promise.resolve()
+      .then(() => this.onApprovalRequest(input))
+      .catch((error) => {
+        this.lastApprovalRequestError = sanitizeBridgeError(error);
+        return {
+          ok: false,
+          error: "approval_request_handler_failed",
+          reason: this.lastApprovalRequestError
+        };
+      });
+    this.approvalRequestTasks.add(task);
+    task.finally(() => this.approvalRequestTasks.delete(task));
+    return task;
+  }
+
+  async drainApprovalRequests() {
+    await Promise.allSettled([...this.approvalRequestTasks]);
+  }
+
   handleChunk(chunk) {
     this.buffer += chunk;
     for (;;) {
@@ -647,9 +682,7 @@ export class JsonLineAppServerClient {
       }
       const approvalResponse = buildAppServerRequestApprovalResponse(message);
       if (approvalResponse) {
-        if (this.onApprovalRequest) {
-          void this.onApprovalRequest({ message, approvalResponse });
-        }
+        this.notifyApprovalRequest({ message, approvalResponse });
         this.write(approvalResponse);
         continue;
       }
@@ -798,12 +831,24 @@ export async function handleDashboardTurnRequest({
           if (!payload) {
             return;
           }
-          await postOwnerActionRequiredEvent({
+          const result = await postOwnerActionRequiredEvent({
             runtimeUrl,
             token,
             payload,
             fetchImpl
           });
+          if (!result.ok) {
+            await sendDashboardEvent({
+              type: "app_server_turn_failed",
+              schema: DEFAULT_SCHEMA,
+              threadId: dashboardThreadId,
+              codexThreadId: codexThreadId || null,
+              repository: request.repository || null,
+              relatedIssue: request.relatedIssue || request.issueNumber || null,
+              status: "owner_action_notification_failed",
+              text: `owner action PWA通知を送信できませんでした。${result.reason || result.error || "runtime event route failed"}`
+            });
+          }
         })
       : () => {};
   cleanupNotifications = () => {
