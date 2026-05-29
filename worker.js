@@ -37255,8 +37255,8 @@ var CAPABILITY_OPERATIONS = /* @__PURE__ */ new Set(["add", "enable", "disable",
 var RISK_LEVELS = /* @__PURE__ */ new Set(["low", "medium", "high"]);
 var DEFAULT_MANIFEST_VERSION = 1;
 var HELPER_EXECUTION_MODES = /* @__PURE__ */ new Set(["dry_run"]);
-var HELPER_COMMAND_REGISTRY = Object.freeze({
-  playwright_install_deps_chromium: {
+var HELPER_COMMAND_REGISTRY = defineHelperCommandRegistry([
+  {
     commandClass: "playwright_install_deps_chromium",
     title: "Playwright Chromium dependency install",
     allowedArgs: ["npx playwright install-deps chromium"],
@@ -37264,7 +37264,7 @@ var HELPER_COMMAND_REGISTRY = Object.freeze({
     requiresRoot: true,
     initialPreset: true
   },
-  codex_sandbox_sysctl_apply: {
+  {
     commandClass: "codex_sandbox_sysctl_apply",
     title: "Codex sandbox sysctl apply",
     allowedArgs: ["sysctl --system"],
@@ -37272,7 +37272,7 @@ var HELPER_COMMAND_REGISTRY = Object.freeze({
     requiresRoot: true,
     initialPreset: true
   },
-  systemd_user_runner_restart: {
+  {
     commandClass: "systemd_user_runner_restart",
     title: "Restart VTDD runner user service",
     allowedArgs: ["systemctl --user restart vtdd-vps-runner.timer"],
@@ -37280,7 +37280,7 @@ var HELPER_COMMAND_REGISTRY = Object.freeze({
     requiresRoot: false,
     initialPreset: true
   }
-});
+]);
 function normalizeVpsCapabilityManifest(input = {}) {
   const issues = [];
   const manifest = {
@@ -37540,14 +37540,28 @@ function bindHelperCommandRegistry(capability) {
   }
   return {
     ok: true,
-    binding: {
-      commandClass: entry.commandClass,
-      title: entry.title,
-      allowedArgs: entry.allowedArgs,
-      requiredRiskLevel: entry.requiredRiskLevel,
-      requiresRoot: entry.requiresRoot,
-      initialPreset: entry.initialPreset
-    }
+    binding: cloneHelperCommandRegistryEntry(entry)
+  };
+}
+function defineHelperCommandRegistry(entries) {
+  const registry2 = {};
+  for (const entry of entries) {
+    const normalized = {
+      ...entry,
+      allowedArgs: Object.freeze(normalizeStringList(entry.allowedArgs))
+    };
+    registry2[normalized.commandClass] = Object.freeze(normalized);
+  }
+  return Object.freeze(registry2);
+}
+function cloneHelperCommandRegistryEntry(entry) {
+  return {
+    commandClass: entry.commandClass,
+    title: entry.title,
+    allowedArgs: [...entry.allowedArgs],
+    requiredRiskLevel: entry.requiredRiskLevel,
+    requiresRoot: entry.requiresRoot,
+    initialPreset: entry.initialPreset
   };
 }
 function normalizeHelperRequest(input = {}) {

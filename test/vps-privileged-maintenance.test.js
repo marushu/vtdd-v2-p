@@ -54,6 +54,16 @@ test("VPS privileged maintenance helper command registry exposes initial presets
   );
 });
 
+test("VPS privileged maintenance helper command registry does not expose mutable internal arrays", () => {
+  const registry = listVpsPrivilegedMaintenanceCommandRegistry();
+  const playwright = registry.find((entry) => entry.commandClass === "playwright_install_deps_chromium");
+  playwright.allowedArgs.push("npx playwright install-deps firefox");
+
+  const freshRegistry = listVpsPrivilegedMaintenanceCommandRegistry();
+  const freshPlaywright = freshRegistry.find((entry) => entry.commandClass === "playwright_install_deps_chromium");
+  assert.deepEqual(freshPlaywright.allowedArgs, ["npx playwright install-deps chromium"]);
+});
+
 test("VPS privileged maintenance proposal requires PWA notification and rollback plan", () => {
   const result = buildVpsCapabilityProposal({
     host: "x85-131-245-163",
@@ -282,4 +292,43 @@ test("VPS helper dry-run rejects disabled, mismatched, or unregistered capabilit
   });
   assert.equal(unregistered.ok, false);
   assert.equal(unregistered.error, "vps_helper_command_class_not_registered");
+
+  const registeredArgsMismatchCapability = {
+    ...baseManifest.capabilities[0],
+    status: "enabled",
+    riskLevel: "high",
+    allowedArgs: ["npx playwright install-deps firefox"]
+  };
+  const registeredArgsMismatch = planVpsPrivilegedMaintenanceHelperExecution({
+    manifest: {
+      ...baseManifest,
+      capabilities: [registeredArgsMismatchCapability]
+    },
+    helperRequest: {
+      ...helperRequest,
+      capability: registeredArgsMismatchCapability
+    }
+  });
+  assert.equal(registeredArgsMismatch.ok, false);
+  assert.equal(registeredArgsMismatch.error, "vps_helper_command_registry_mismatch");
+  assert.equal(registeredArgsMismatch.issues.includes("capability allowedArgs must match registered helper command"), true);
+
+  const registeredRiskMismatchCapability = {
+    ...baseManifest.capabilities[0],
+    status: "enabled",
+    riskLevel: "medium"
+  };
+  const registeredRiskMismatch = planVpsPrivilegedMaintenanceHelperExecution({
+    manifest: {
+      ...baseManifest,
+      capabilities: [registeredRiskMismatchCapability]
+    },
+    helperRequest: {
+      ...helperRequest,
+      capability: registeredRiskMismatchCapability
+    }
+  });
+  assert.equal(registeredRiskMismatch.ok, false);
+  assert.equal(registeredRiskMismatch.error, "vps_helper_command_registry_mismatch");
+  assert.equal(registeredRiskMismatch.issues.includes("capability riskLevel must match registered helper command"), true);
 });

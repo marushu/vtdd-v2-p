@@ -3,8 +3,8 @@ const CAPABILITY_OPERATIONS = new Set(["add", "enable", "disable", "remove", "ro
 const RISK_LEVELS = new Set(["low", "medium", "high"]);
 const DEFAULT_MANIFEST_VERSION = 1;
 const HELPER_EXECUTION_MODES = new Set(["dry_run"]);
-const HELPER_COMMAND_REGISTRY = Object.freeze({
-  playwright_install_deps_chromium: {
+const HELPER_COMMAND_REGISTRY = defineHelperCommandRegistry([
+  {
     commandClass: "playwright_install_deps_chromium",
     title: "Playwright Chromium dependency install",
     allowedArgs: ["npx playwright install-deps chromium"],
@@ -12,7 +12,7 @@ const HELPER_COMMAND_REGISTRY = Object.freeze({
     requiresRoot: true,
     initialPreset: true
   },
-  codex_sandbox_sysctl_apply: {
+  {
     commandClass: "codex_sandbox_sysctl_apply",
     title: "Codex sandbox sysctl apply",
     allowedArgs: ["sysctl --system"],
@@ -20,7 +20,7 @@ const HELPER_COMMAND_REGISTRY = Object.freeze({
     requiresRoot: true,
     initialPreset: true
   },
-  systemd_user_runner_restart: {
+  {
     commandClass: "systemd_user_runner_restart",
     title: "Restart VTDD runner user service",
     allowedArgs: ["systemctl --user restart vtdd-vps-runner.timer"],
@@ -28,7 +28,7 @@ const HELPER_COMMAND_REGISTRY = Object.freeze({
     requiresRoot: false,
     initialPreset: true
   }
-});
+]);
 
 function normalizeVpsCapabilityManifest(input = {}) {
   const issues = [];
@@ -383,7 +383,7 @@ function containsForbiddenPrivilegedPattern(capability) {
 }
 
 function listVpsPrivilegedMaintenanceCommandRegistry() {
-  return Object.values(HELPER_COMMAND_REGISTRY).map((entry) => ({ ...entry }));
+  return Object.values(HELPER_COMMAND_REGISTRY).map(cloneHelperCommandRegistryEntry);
 }
 
 function bindHelperCommandRegistry(capability) {
@@ -411,14 +411,30 @@ function bindHelperCommandRegistry(capability) {
   }
   return {
     ok: true,
-    binding: {
-      commandClass: entry.commandClass,
-      title: entry.title,
-      allowedArgs: entry.allowedArgs,
-      requiredRiskLevel: entry.requiredRiskLevel,
-      requiresRoot: entry.requiresRoot,
-      initialPreset: entry.initialPreset
-    }
+    binding: cloneHelperCommandRegistryEntry(entry)
+  };
+}
+
+function defineHelperCommandRegistry(entries) {
+  const registry = {};
+  for (const entry of entries) {
+    const normalized = {
+      ...entry,
+      allowedArgs: Object.freeze(normalizeStringList(entry.allowedArgs))
+    };
+    registry[normalized.commandClass] = Object.freeze(normalized);
+  }
+  return Object.freeze(registry);
+}
+
+function cloneHelperCommandRegistryEntry(entry) {
+  return {
+    commandClass: entry.commandClass,
+    title: entry.title,
+    allowedArgs: [...entry.allowedArgs],
+    requiredRiskLevel: entry.requiredRiskLevel,
+    requiresRoot: entry.requiresRoot,
+    initialPreset: entry.initialPreset
   };
 }
 
