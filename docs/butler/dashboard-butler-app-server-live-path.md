@@ -106,7 +106,11 @@ Dashboard turn requests must preserve traffic-control context when present:
 
 - repository and related Issue from the Dashboard thread
 - Dashboard authority hints for GO / passkey boundaries
-- media reference count without raw binary material
+- media reference count plus attachment delivery truth without raw binary material
+- for Dashboard media references, the VPS bridge may fetch the short-lived
+  media through the runtime bearer boundary and pass a local temporary file path
+  to the Codex turn; if fetch fails, the turn context must say so instead of
+  letting Butler claim it saw the image
 - instructions to read durable Issue / PR / runtime truth before separating
   blockers, next actions, authority boundaries, and evidence gaps
 - the mechanical bridge boundary that app-server command, file-change, patch,

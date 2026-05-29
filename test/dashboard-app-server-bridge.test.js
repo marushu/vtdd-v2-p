@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 import {
   buildDashboardAppServerBridgeEndpoint,
@@ -11,10 +14,12 @@ import {
   buildDashboardTurnInputText,
   connectDashboardAppServerBridgeOnce,
   extractAppServerNotificationTurnId,
+  formatDashboardMediaReferenceLines,
   handleDashboardTurnRequest,
   JsonLineAppServerClient,
   mapAppServerNotificationToDashboardEvent,
   matchesAppServerTurnNotification,
+  materializeDashboardMediaReferences,
   parseBridgeArgs,
   runDashboardAppServerBridge
 } from "../scripts/run-dashboard-app-server-bridge.mjs";
@@ -90,6 +95,86 @@ test("dashboard app-server bridge wraps repository traffic-control context into 
   assert.match(text, /mechanicalBoundary/);
   assert.match(text, /does not grant app-server command, file-change, patch, or permission escalation approvals/);
   assert.match(text, /Owner message:\nDashboard Butler が交通整理できるようにして/);
+});
+
+test("dashboard app-server bridge includes attachment delivery truth in turn input", () => {
+  const text = buildDashboardTurnInputText({
+    repository: "marushu/vtdd-v2-p",
+    relatedIssue: 498,
+    text: "添付画像を確認して",
+    mediaReferences: [
+      {
+        mediaId: "med_dashboard_image",
+        filename: "dashboard.png",
+        contentType: "image/png",
+        byteSize: 1234,
+        downloadUrl: "/v2/media/med_dashboard_image/download",
+        localPath: "/tmp/vtdd-dashboard-media/med_dashboard_image-dashboard.png",
+        fetchStatus: "fetched"
+      }
+    ]
+  });
+
+  assert.match(text, /mediaReferences: 1/);
+  assert.match(text, /mediaDelivery/);
+  assert.match(text, /media\[1\]\.mediaId: med_dashboard_image/);
+  assert.match(text, /filename: dashboard\.png/);
+  assert.match(text, /contentType: image\/png/);
+  assert.match(text, /downloadUrl: \/v2\/media\/med_dashboard_image\/download/);
+  assert.match(text, /fetchStatus: fetched/);
+  assert.match(text, /localPath: \/tmp\/vtdd-dashboard-media\/med_dashboard_image-dashboard\.png/);
+  assert.match(text, /do not claim image analysis if localPath is missing/);
+});
+
+test("dashboard app-server bridge formats failed media delivery without raw binary", () => {
+  const lines = formatDashboardMediaReferenceLines([
+    {
+      mediaId: "med_missing",
+      filename: "screen.png",
+      contentType: "image/png",
+      fetchStatus: "fetch_failed",
+      fetchError: "media download failed with HTTP 404",
+      rawBinary: "fake image bytes"
+    }
+  ]);
+
+  assert.equal(lines.length, 1);
+  assert.match(lines[0], /media\[1\]\.mediaId: med_missing/);
+  assert.match(lines[0], /fetchStatus: fetch_failed/);
+  assert.match(lines[0], /fetchError: media download failed with HTTP 404/);
+  assert.equal(lines[0].includes("fake image bytes"), false);
+});
+
+test("dashboard app-server bridge materializes dashboard media with bearer auth", async () => {
+  const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), "vtdd-bridge-media-test-"));
+  const requested = [];
+  const references = await materializeDashboardMediaReferences({
+    runtimeUrl: "https://runtime.example",
+    token: "runtime-token",
+    tmpRoot,
+    mediaReferences: [
+      {
+        mediaId: "med_fetchable",
+        filename: "screen shot.png",
+        contentType: "image/png",
+        downloadUrl: "/v2/media/med_fetchable/download"
+      }
+    ],
+    fetchImpl: async (url, options) => {
+      requested.push({ url: String(url), authorization: options.headers.authorization });
+      return new Response(new Uint8Array([0x89, 0x50, 0x4e, 0x47]), {
+        status: 200,
+        headers: { "content-type": "image/png" }
+      });
+    }
+  });
+
+  assert.equal(requested[0].url, "https://runtime.example/v2/media/med_fetchable/download");
+  assert.equal(requested[0].authorization, "Bearer runtime-token");
+  assert.equal(references[0].fetchStatus, "fetched");
+  assert.match(references[0].localPath, /vtdd-dashboard-media/);
+  assert.match(references[0].localPath, /med_fetchable-screen_shot\.png$/);
+  assert.deepEqual([...await fs.readFile(references[0].localPath)], [0x89, 0x50, 0x4e, 0x47]);
 });
 
 test("dashboard app-server bridge only enables danger-full-access by explicit trusted VPS opt-in", () => {
@@ -466,6 +551,77 @@ test("dashboard app-server bridge passes traffic-control context to codex app-se
   assert.match(inputText, /"currentNow":"Issue #590: app-server turn timeout must become recoverable\."/);
   assert.match(inputText, /mechanicalBoundary/);
   assert.match(inputText, /Owner message:\nDashboard Butler が交通整理できるか確認して/);
+  assert.equal(events.at(-1).type, "app_server_reply");
+});
+
+test("dashboard app-server bridge passes materialized media paths to codex app-server turns", async () => {
+  const requests = [];
+  const events = [];
+  const handlers = new Set();
+  const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), "vtdd-bridge-turn-media-test-"));
+  let nextId = 1;
+  const appServer = {
+    nextRequestId() {
+      const id = nextId;
+      nextId += 1;
+      return id;
+    },
+    onNotification(handler) {
+      handlers.add(handler);
+      return () => handlers.delete(handler);
+    },
+    async request(message) {
+      requests.push(message);
+      if (message.method === "thread/start") {
+        return { thread: { id: "codex-thread-media" } };
+      }
+      if (message.method === "turn/start") {
+        for (const handler of handlers) {
+          handler({
+            method: "turn/completed",
+            params: {
+              threadId: "codex-thread-media",
+              turn: { id: "turn-media", status: "completed" }
+            }
+          });
+        }
+        return { turn: { id: "turn-media" } };
+      }
+      throw new Error(`unexpected method ${message.method}`);
+    }
+  };
+
+  await handleDashboardTurnRequest({
+    request: {
+      threadId: "dashboard-main",
+      codexThreadId: null,
+      repository: "marushu/vtdd-v2-p",
+      relatedIssue: 498,
+      text: "添付画像を確認して",
+      mediaReferences: [
+        {
+          mediaId: "med_turn_image",
+          filename: "dashboard.png",
+          contentType: "image/png",
+          downloadUrl: "/v2/media/med_turn_image/download"
+        }
+      ]
+    },
+    appServer,
+    sendDashboardEvent: async (event) => events.push(event),
+    cwd: "/repo",
+    runtimeUrl: "https://runtime.example",
+    token: "runtime-token",
+    mediaTmpRoot: tmpRoot,
+    fetchImpl: async () => new Response(new Uint8Array([1, 2, 3]), { status: 200 })
+  });
+
+  const turnStart = requests.find((request) => request.method === "turn/start");
+  assert.ok(turnStart);
+  const inputText = turnStart.params.input[0].text;
+  assert.match(inputText, /mediaReferences: 1/);
+  assert.match(inputText, /fetchStatus: fetched/);
+  assert.match(inputText, /localPath: .*med_turn_image-dashboard\.png/);
   assert.equal(events.at(-1).type, "app_server_reply");
 });
 
