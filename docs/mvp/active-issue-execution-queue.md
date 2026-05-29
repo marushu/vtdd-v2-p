@@ -50,20 +50,33 @@ Last rebuilt from GitHub runtime truth: 2026-05-29
   short-cycle passkey blocker no longer preempts Issue #590. Issue #590 moves
   back to `Now`; Issue #606 remains open until mapped completion evidence and
   human closure approval are complete.
+- 2026-05-29 owner input classified Issue #637 as `ROOT`: PR #632 exposed that
+  VPS root/sudo maintenance still requires Mac SSH when Playwright Chromium
+  dependencies, Codex sandbox sysctls, or runner service recovery are missing.
+  This blocks iPhone/PWA-only recovery for Issue #413, Issue #450, Issue #514,
+  Issue #590, Issue #631, and future VPS Codex CLI work. Issue #637 moves to
+  `Now`; Issue #590 and PR #632 remain active but should not run in parallel
+  while the privileged-maintenance authority path is being organized.
 
 ## Now
 
-- Issue #590: app-server turn timeout must become a recoverable Dashboard chat
-  state after the short-cycle authentication blocker was removed by Issue #606
-  implementation and production evidence.
+- Issue #637: iPhone/PWA-complete VPS privileged maintenance capability
+  lifecycle. This is the current root because the owner must be able to approve,
+  expand, reduce, execute, and observe root/sudo maintenance from Dashboard
+  Butler with PWA notification when owner action is required, without returning
+  to mac Codex as the normal recovery path.
 
 ## Next
 
+- PR #632 / Issue #631: resume contrast E2E after the one-at-a-time Issue #637
+  traffic-control slice is merged. The VPS host dependency blocker is resolved,
+  but Playwright still fails because the contrast spec cannot find
+  `.bubble.owner pre`; that is a PR/spec/fixture blocker, not the previous VPS
+  Chromium dependency blocker.
+- Issue #590: app-server turn timeout remains active after Issue #637 no longer
+  blocks iPhone/PWA-only privileged recovery.
 - Issue #579: after timeout recovery, handle PWA background/foreground,
   WebSocket reconnect, auth/session expiry, and input/media retention.
-- Issue #450 + Issue #413: continue the Dashboard Butler live runtime /
-  app-server / VPS progress root after #590/#579 no longer leave ordinary chat
-  stuck or opaque.
 
 ## Root Blockers
 
@@ -73,6 +86,11 @@ Root blockers hold multiple active Issues open. They should shape `Now` and
 - Issue #450: Dashboard Butler live runtime / app-server path remains the central
   owner-facing execution route blocker. It gates useful completion for Issue
   #528, Issue #579, Issue #590, Issue #594, and parts of Issue #498.
+- Issue #637: VPS privileged maintenance must be reachable from iPhone/PWA with
+  scoped passkey approval, PWA owner-action notification, root-owned helper
+  execution, capability add/disable/remove/rollback/review, and redacted runtime
+  truth. It gates Issue #413, Issue #450, Issue #514, Issue #590, Issue #631,
+  and future VPS Codex CLI work whenever root/sudo host capability is missing.
 - Issue #528: Dashboard Butler must remain ChatGPT iOS-equivalent while debug /
   ops surfaces are isolated. It gates user-facing acceptance for Issue #574,
   Issue #577, Issue #580, Issue #582, Issue #585, Issue #587, Issue #589, and
@@ -152,6 +170,11 @@ Evidence gaps are active. They are not deferred out of scope.
   closure still needs mapped owner-facing production evidence that Dashboard
   Butler reports timeout/late completion before/after state without leaving the
   ordinary chat thread stuck.
+- Issue #631 / PR #632: VPS Chromium dependency blocker was resolved manually on
+  2026-05-29 by owner-root Mac SSH bootstrap, but the iPhone/PWA recovery path is
+  still missing and Playwright now fails on missing `ownerPre` contrast target.
+  The manual host repair is evidence for Issue #637, not completion of Issue
+  #631.
 - Issue #565: connection recovery status has local evidence, but completion still
   depends on the normal chat surface not being dominated by status noise.
 - Issue #577: composer paste normalization has merged implementation slices, but
@@ -181,6 +204,11 @@ Evidence gaps are active. They are not deferred out of scope.
 - Any deploy, credential mutation, permission mutation, repository administration,
   destructive cleanup, merge, post-merge Issue close, or merged-branch deletion
   remains blocked on the authority boundary in AGENTS.md.
+- Any owner action required by the assistant must be sent through PWA
+  notification when the runtime has a connected notification path. If that path
+  is unavailable, report `pwa_notification_unavailable` and preserve the
+  recovery/action link in Dashboard notifications and GitHub-visible runtime
+  truth; do not rely on chat alone as the intended VTDD product path.
 - Production iPhone/PWA live evidence remains blocked unless the relevant PR
   scope explicitly authorizes live verification.
 - Issue #354: VPS maintenance apply/reboot paths are blocked on explicit GO and

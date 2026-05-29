@@ -1,0 +1,91 @@
+# VPS privileged maintenance capability lifecycle
+
+Issue: #637
+
+This document records the product boundary discovered during the PR #632
+Playwright E2E blocker on 2026-05-29.
+
+## Why This Exists
+
+VTDD cannot require the owner to sit at a Mac, SSH into the VPS, and become
+root whenever a missing host capability appears. That path is useful as
+break-glass bootstrap, but it is not Butler-complete.
+
+The target recovery path is:
+
+`Owner on iPhone PWA -> Dashboard Butler -> scoped passkey approval -> VPS root-owned helper -> runtime truth`
+
+The owner must be notified through PWA when an owner action is required. A chat
+message alone is not enough for work that is blocked on owner attention.
+
+## Required Shape
+
+- Dashboard Butler understands the maintenance intent in natural language.
+- The runtime explains the host, repository, capability, risk, impact scope,
+  expiry, and expected before/after state before asking for approval.
+- The owner approves the one scoped operation through same-origin passkey.
+- The VPS executes only through a root-owned helper and root-owned capability
+  manifest.
+- `vtdd-runner` must not receive broad `NOPASSWD:ALL`.
+- The helper returns redacted runtime truth: before state, command class, exit
+  code, after state, log summary, next action, and blocker if any.
+- Butler writes or links GitHub-visible evidence when the operation is part of
+  Issue / PR recovery.
+- PWA notification is sent for `approval_needed`, `execution_completed`, and
+  `blocked_owner_action_required`.
+
+## Capability Lifecycle
+
+Capabilities must be manageable from iPhone after approval:
+
+- propose: Butler creates a capability proposal with command class, allowed
+  arguments, working directory, package/file impact, risk level, rollback or
+  disable plan, and redaction rules.
+- enable: scoped passkey approval enables a known capability.
+- add: scoped passkey approval adds a new capability to the manifest.
+- disable: scoped passkey approval turns off a capability without deleting its
+  audit history.
+- remove: scoped passkey approval removes an obsolete capability from the active
+  manifest.
+- rollback: scoped passkey approval restores the last known-good manifest when
+  a new capability is unsafe.
+- review: Butler reports active capabilities, disabled capabilities, last used
+  time, owner approvals, and known risk.
+
+The design must support reducing authority as easily as adding it.
+
+## Initial Presets
+
+The first preset set should cover the failure classes already observed:
+
+- systemd user service status, enable, restart, daemon-reload, timer state, and
+  redacted journal summary for the VPS runner and Dashboard app-server bridge.
+- Playwright Chromium dependency installation for a repository workspace.
+- Codex sandbox sysctl application and verification.
+- runner drain, cancel, heartbeat, and pending queue status.
+- repository worktree sync for scoped E2E verification.
+
+Cloudflare deploy, GitHub secret mutation, repository administration, and
+destructive cleanup are not initial presets. They remain separate high-risk
+planes with their own scoped passkey contracts.
+
+## Notification Boundary
+
+Existing Dashboard Web Push support can send a server-side test notification to
+the current saved device subscription, but it is not yet a general "owner action
+required" dispatch path for Butler/VPS recovery. Issue #637 treats that as a
+required connection, not as existing completion.
+
+When owner action is required, the runtime must attempt PWA notification and
+report send result truth. If push delivery is unavailable, Butler must mark
+`pwa_notification_unavailable` and still preserve the recovery link in
+Dashboard notifications and GitHub-visible runtime truth.
+
+## Completion Boundary
+
+Mac SSH/root work performed on 2026-05-29 resolved the immediate PR #632 host
+dependency blocker. It is classified as `mac_codex_only_probe` plus
+`recovery_gap_found`, not as VTDD completion.
+
+Issue #637 is complete only when the iPhone/PWA path can recover the same class
+of blocker without requiring mac Codex or manual SSH as the normal path.
