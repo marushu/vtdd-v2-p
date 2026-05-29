@@ -54,7 +54,8 @@ test("VPS privileged maintenance install inventory reports root-owned helper rea
     helperOwner: "root",
     manifestOwner: "root",
     sudoersOwner: "root",
-    sudoersAllowsAll: false
+    sudoersAllowsAll: false,
+    sudoersScopedHelperEntry: true
   });
 
   assert.equal(ready.ok, true);
@@ -118,6 +119,7 @@ test("VPS privileged maintenance install inventory reports root-owned helper rea
     manifestOwner: "root",
     sudoersOwner: "root",
     sudoersAllowsAll: false,
+    sudoersScopedHelperEntry: true,
     sudoersHelperProbe: false,
     sudoersHelperProbeStarted: true
   });

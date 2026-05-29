@@ -8234,7 +8234,7 @@ test("worker dry-runs VPS maintenance helper request without root execution", as
 test("worker retrieves VPS maintenance install inventory without root execution", async () => {
   const response = await worker.fetch(
     new Request(
-      "https://example.com/v2/retrieve/vps-maintenance-install-inventory?repository=marushu%2Fvtdd-v2-p&host=x85-131-245-163&helperInstalled=true&manifestInstalled=true&sudoersInstalled=true&helperOwner=root&manifestOwner=root&sudoersOwner=root&sudoersAllowsAll=false",
+      "https://example.com/v2/retrieve/vps-maintenance-install-inventory?repository=marushu%2Fvtdd-v2-p&host=x85-131-245-163&helperInstalled=true&manifestInstalled=true&sudoersInstalled=true&helperOwner=root&manifestOwner=root&sudoersOwner=root&sudoersAllowsAll=false&sudoersScopedHelperEntry=true",
       {
         headers: gatewayAuthHeaders
       }

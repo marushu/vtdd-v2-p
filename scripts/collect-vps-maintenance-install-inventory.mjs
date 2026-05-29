@@ -54,23 +54,26 @@ async function observePath(filePath) {
   }
 }
 
-async function observeSudoersPolicy(filePath) {
+async function observeSudoersPolicy({ filePath, helperPath, runnerUser }) {
   try {
     const content = await fs.readFile(filePath, "utf8");
     return {
       readable: true,
-      allowsAll: containsBroadSudoersGrant(content)
+      allowsAll: containsBroadSudoersGrant(content),
+      scopedHelperEntry: containsScopedHelperEntry({ content, helperPath, runnerUser })
     };
   } catch (error) {
     if (error?.code === "ENOENT") {
       return {
         readable: false,
-        allowsAll: false
+        allowsAll: false,
+        scopedHelperEntry: false
       };
     }
     return {
       readable: false,
       allowsAll: null,
+      scopedHelperEntry: null,
       error: summarizeError(error)
     };
   }
@@ -104,6 +107,42 @@ async function probeScopedSudoHelper({ helperPath, enabled, timeoutMs, maxBuffer
   }
 }
 
+async function runScopedSudoInstallAudit({ helperPath, enabled, timeoutMs, maxBuffer }) {
+  if (!enabled) {
+    return {
+      started: false,
+      ok: null,
+      observed: null,
+      skippedReason: "preconditions_not_met"
+    };
+  }
+  try {
+    const { stdout } = await execFileAsync(
+      "sudo",
+      ["-n", helperPath, "--install-audit"],
+      {
+        timeout: timeoutMs,
+        encoding: "utf8",
+        maxBuffer
+      }
+    );
+    const parsed = JSON.parse(stdout);
+    return {
+      started: true,
+      ok: parsed.ok === true,
+      observed: normalizeAuditObserved(parsed.observed),
+      error: parsed.ok === true ? null : "INSTALL_AUDIT_NOT_OK"
+    };
+  } catch (error) {
+    return {
+      started: true,
+      ok: false,
+      observed: parseAuditObservedFromError(error),
+      error: summarizeError(error)
+    };
+  }
+}
+
 function shouldProbeScopedSudoHelper({ verifyScopedSudo, helper, manifest, sudoers, sudoersPolicy }) {
   return (
     verifyScopedSudo === true &&
@@ -117,8 +156,31 @@ function shouldProbeScopedSudoHelper({ verifyScopedSudo, helper, manifest, sudoe
   );
 }
 
+function shouldAuditInstallThroughScopedSudo({ verifyScopedSudo, helper, manifest, sudoers, helperPath, manifestPath, sudoersPath, runnerUser }) {
+  return (
+    verifyScopedSudo === true &&
+    helperPath === DEFAULT_HELPER_INSTALL_PATH &&
+    manifestPath === DEFAULT_MANIFEST_PATH &&
+    sudoersPath === DEFAULT_SUDOERS_PATH &&
+    runnerUser === "vtdd-runner" &&
+    helper.installed === true &&
+    helper.owner === "root" &&
+    manifest.installed === true &&
+    manifest.owner === "root" &&
+    sudoers.installed === true &&
+    sudoers.owner === "root"
+  );
+}
+
 function containsBroadSudoersGrant(content) {
   return /\bNOPASSWD\s*:\s*ALL\b/i.test(String(content || ""));
+}
+
+function containsScopedHelperEntry({ content, helperPath, runnerUser }) {
+  const expected = `${runnerUser} ALL=(root) NOPASSWD: ${helperPath}`;
+  return String(content || "")
+    .split(/\r?\n/)
+    .some((line) => line.trim() === expected);
 }
 
 function ownerLabel(stat) {
@@ -152,8 +214,23 @@ async function collectVpsMaintenanceInstallInventory(input = {}) {
     observePath(helperPath),
     observePath(manifestPath),
     observePath(sudoersPath),
-    observeSudoersPolicy(sudoersPath)
+    observeSudoersPolicy({ filePath: sudoersPath, helperPath, runnerUser })
   ]);
+  const sudoersInstallAudit = await runScopedSudoInstallAudit({
+    helperPath,
+    enabled: shouldAuditInstallThroughScopedSudo({
+      verifyScopedSudo,
+      helper,
+      manifest,
+      sudoers,
+      helperPath,
+      manifestPath,
+      sudoersPath,
+      runnerUser
+    }),
+    timeoutMs: sudoProbeTimeoutMs,
+    maxBuffer: sudoProbeMaxBuffer
+  });
   const shouldProbe = shouldProbeScopedSudoHelper({
     verifyScopedSudo,
     helper,
@@ -175,15 +252,17 @@ async function collectVpsMaintenanceInstallInventory(input = {}) {
     manifestPath,
     sudoersPath,
     runnerUser,
-    helperInstalled: helper.installed,
-    manifestInstalled: manifest.installed,
-    sudoersInstalled: sudoers.installed,
-    helperOwner: helper.owner,
-    manifestOwner: manifest.owner,
-    sudoersOwner: sudoers.owner,
-    sudoersAllowsAll: sudoersPolicy.allowsAll,
+    helperInstalled: sudoersInstallAudit.observed?.helperInstalled ?? helper.installed,
+    manifestInstalled: sudoersInstallAudit.observed?.manifestInstalled ?? manifest.installed,
+    sudoersInstalled: sudoersInstallAudit.observed?.sudoersInstalled ?? sudoers.installed,
+    helperOwner: sudoersInstallAudit.observed?.helperOwner ?? helper.owner,
+    manifestOwner: sudoersInstallAudit.observed?.manifestOwner ?? manifest.owner,
+    sudoersOwner: sudoersInstallAudit.observed?.sudoersOwner ?? sudoers.owner,
+    sudoersAllowsAll: sudoersInstallAudit.observed?.sudoersAllowsAll ?? sudoersPolicy.allowsAll,
+    sudoersScopedHelperEntry: sudoersInstallAudit.observed?.sudoersScopedHelperEntry ?? sudoersPolicy.scopedHelperEntry,
     sudoersHelperProbe: sudoersHelperProbe.ok,
-    sudoersHelperProbeStarted: sudoersHelperProbe.started
+    sudoersHelperProbeStarted: sudoersHelperProbe.started,
+    sudoersInstallAuditStarted: sudoersInstallAudit.started
   });
 
   return {
@@ -194,6 +273,7 @@ async function collectVpsMaintenanceInstallInventory(input = {}) {
       ...installInventory.runtimeTruth,
       observer: "scripts/collect-vps-maintenance-install-inventory.mjs",
       sudoersContentReadable: sudoersPolicy.readable,
+      sudoersInstallAuditStarted: sudoersInstallAudit.started,
       sudoersHelperProbeStarted: sudoersHelperProbe.started,
       sudoersHelperProbeTimeoutMs: sudoersHelperProbe.started ? sudoProbeTimeoutMs : null,
       rootExecutionStarted: false,
@@ -206,6 +286,15 @@ async function collectVpsMaintenanceInstallInventory(input = {}) {
       sudoers: redactObservation(sudoers),
       sudoersContentReadable: sudoersPolicy.readable,
       sudoersPolicyError: sudoersPolicy.error || null,
+      sudoersScopedHelperEntry: sudoersPolicy.scopedHelperEntry,
+      sudoersInstallAudit: {
+        started: sudoersInstallAudit.started,
+        ok: sudoersInstallAudit.ok,
+        error: sudoersInstallAudit.error || null,
+        skippedReason: sudoersInstallAudit.skippedReason || null,
+        command: sudoersInstallAudit.started ? "sudo -n <helper> --install-audit" : null,
+        timeoutMs: sudoersInstallAudit.started ? sudoProbeTimeoutMs : null
+      },
       sudoersHelperProbe: {
         started: sudoersHelperProbe.started,
         ok: sudoersHelperProbe.ok,
@@ -243,6 +332,35 @@ async function main() {
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   await main();
+}
+
+function normalizeAuditObserved(value) {
+  if (!value || typeof value !== "object") return null;
+  return {
+    helperInstalled: normalizeNullableBoolean(value.helperInstalled),
+    manifestInstalled: normalizeNullableBoolean(value.manifestInstalled),
+    sudoersInstalled: normalizeNullableBoolean(value.sudoersInstalled),
+    helperOwner: typeof value.helperOwner === "string" ? value.helperOwner : null,
+    manifestOwner: typeof value.manifestOwner === "string" ? value.manifestOwner : null,
+    sudoersOwner: typeof value.sudoersOwner === "string" ? value.sudoersOwner : null,
+    sudoersAllowsAll: normalizeNullableBoolean(value.sudoersAllowsAll),
+    sudoersScopedHelperEntry: normalizeNullableBoolean(value.sudoersScopedHelperEntry)
+  };
+}
+
+function parseAuditObservedFromError(error) {
+  try {
+    const parsed = JSON.parse(error?.stdout || "");
+    return normalizeAuditObserved(parsed.observed);
+  } catch {
+    return null;
+  }
+}
+
+function normalizeNullableBoolean(value) {
+  if (value === true) return true;
+  if (value === false) return false;
+  return null;
 }
 
 export { collectVpsMaintenanceInstallInventory, containsBroadSudoersGrant };

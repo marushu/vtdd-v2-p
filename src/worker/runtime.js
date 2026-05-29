@@ -4542,7 +4542,8 @@ async function handleRetrieveVpsMaintenanceInstallInventoryRequest(url) {
     helperOwner: url.searchParams.get("helperOwner"),
     manifestOwner: url.searchParams.get("manifestOwner"),
     sudoersOwner: url.searchParams.get("sudoersOwner"),
-    sudoersAllowsAll: url.searchParams.get("sudoersAllowsAll")
+    sudoersAllowsAll: url.searchParams.get("sudoersAllowsAll"),
+    sudoersScopedHelperEntry: url.searchParams.get("sudoersScopedHelperEntry")
   });
   if (!inventory.ok) {
     return retrieveErrorJson(url, 422, {

@@ -135,13 +135,22 @@ test("VPS maintenance install inventory collector skips sudo probe until root-ow
   assert.equal(body.observation.sudoersHelperProbe.timeoutMs, null);
 });
 
-test("VPS maintenance install inventory collector starts sudo probe for bare flag when preconditions pass", async () => {
+test("VPS maintenance install inventory collector does not root-audit override paths", async () => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "vtdd-vps-install-inventory-"));
   const fakeBin = path.join(tempRoot, "bin");
   await fs.mkdir(fakeBin, { recursive: true });
   await fs.writeFile(
     path.join(fakeBin, "sudo"),
-    "#!/bin/sh\nif [ \"$1\" = \"-n\" ] && [ \"$3\" = \"--version\" ]; then echo helper-version-output-may-change; exit 0; fi\nexit 1\n",
+    `#!/bin/sh
+if [ "$1" = "-n" ] && [ "$3" = "--install-audit" ] && [ "$#" -eq 3 ]; then
+  cat <<'JSON'
+{"ok":true,"observed":{"helperInstalled":true,"manifestInstalled":true,"sudoersInstalled":true,"helperOwner":"root","manifestOwner":"root","sudoersOwner":"root","sudoersAllowsAll":false,"sudoersScopedHelperEntry":true}}
+JSON
+  exit 0
+fi
+if [ "$1" = "-n" ] && [ "$3" = "--version" ]; then echo helper-version-output-may-change; exit 0; fi
+exit 1
+`,
     { mode: 0o755 }
   );
 
@@ -174,11 +183,16 @@ test("VPS maintenance install inventory collector starts sudo probe for bare fla
     }
   );
 
-  assert.equal(result.status, 0);
+  assert.equal(result.status, 1);
   const body = JSON.parse(result.stdout);
-  assert.equal(body.installInventory.status, "ready");
+  assert.equal(body.installInventory.status, "blocked");
+  assert.equal(body.installInventory.issues.includes("sudoers scoped helper entry is missing"), true);
+  assert.equal(body.installInventory.checks.find((check) => check.id === "scoped_sudoers_entry").status, "unverified");
   assert.equal(body.installInventory.checks.find((check) => check.id === "helper_sudo_functional_probe").status, "pass");
+  assert.equal(body.runtimeTruth.sudoersInstallAuditStarted, false);
   assert.equal(body.runtimeTruth.sudoersHelperProbeStarted, true);
+  assert.equal(body.observation.sudoersInstallAudit.ok, null);
+  assert.equal(body.observation.sudoersInstallAudit.command, null);
   assert.equal(body.observation.sudoersHelperProbe.ok, true);
   assert.equal(body.observation.sudoersHelperProbe.command, "sudo -n <helper> --version");
 });
@@ -218,12 +232,27 @@ test("VPS maintenance install inventory collector blocks when started sudo probe
   const body = JSON.parse(result.stdout);
   assert.equal(body.ok, false);
   assert.equal(body.installInventory.status, "blocked");
-  assert.equal(body.installInventory.checks.find((check) => check.id === "helper_sudo_functional_probe").status, "blocked");
+  assert.equal(body.installInventory.issues.includes("sudoers scoped helper entry is missing"), true);
+  assert.equal(body.runtimeTruth.sudoersInstallAuditStarted, false);
   assert.equal(body.runtimeTruth.sudoersHelperProbeStarted, true);
+  assert.equal(body.observation.sudoersInstallAudit.ok, null);
   assert.equal(body.observation.sudoersHelperProbe.ok, false);
 });
 
 test("VPS maintenance install inventory collector detects broad sudoers grants", () => {
   assert.equal(containsBroadSudoersGrant("vtdd-runner ALL=(ALL) NOPASSWD:ALL"), true);
   assert.equal(containsBroadSudoersGrant("vtdd-runner ALL=(root) NOPASSWD:/usr/local/sbin/vtdd-helper"), false);
+});
+
+test("VPS maintenance helper install audit requires root", () => {
+  const result = spawnSync(process.execPath, ["scripts/run-vps-privileged-maintenance-helper.mjs", "--install-audit"], {
+    encoding: "utf8"
+  });
+
+  assert.equal(result.status, 1);
+  const body = JSON.parse(result.stdout);
+  assert.equal(body.ok, false);
+  assert.equal(body.error, "root_required");
+  assert.equal(body.rootAuditStarted, false);
+  assert.equal(body.issues.includes("root is required for install audit"), true);
 });

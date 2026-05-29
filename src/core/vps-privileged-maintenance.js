@@ -259,8 +259,12 @@ function buildVpsPrivilegedMaintenanceInstallInventory(input = {}) {
   const manifestOwner = normalizeText(observed.manifestOwner || input.manifestOwner);
   const sudoersOwner = normalizeText(observed.sudoersOwner || input.sudoersOwner);
   const sudoersAllowsAll = normalizeBoolean(observed.sudoersAllowsAll ?? input.sudoersAllowsAll);
+  const sudoersScopedHelperEntry = normalizeBoolean(
+    observed.sudoersScopedHelperEntry ?? input.sudoersScopedHelperEntry
+  );
   const sudoersHelperProbe = normalizeBoolean(observed.sudoersHelperProbe ?? input.sudoersHelperProbe);
   const sudoersHelperProbeStarted = normalizeBoolean(observed.sudoersHelperProbeStarted ?? input.sudoersHelperProbeStarted);
+  const sudoersInstallAuditStarted = normalizeBoolean(observed.sudoersInstallAuditStarted ?? input.sudoersInstallAuditStarted);
   const functionalProbeStarted = sudoersHelperProbeStarted ?? sudoersHelperProbe !== null;
   const issues = [];
   if (!host) issues.push("host is required");
@@ -269,6 +273,9 @@ function buildVpsPrivilegedMaintenanceInstallInventory(input = {}) {
   if (!manifestPath.startsWith("/")) issues.push("manifestPath must be absolute");
   if (!sudoersPath.startsWith("/")) issues.push("sudoersPath must be absolute");
   if (sudoersAllowsAll === true) issues.push("sudoers must not allow NOPASSWD:ALL");
+  if (sudoersScopedHelperEntry === false && sudoersInstalled !== false) {
+    issues.push("sudoers scoped helper entry is missing");
+  }
   if (sudoersHelperProbe === false) issues.push("helper sudo functional probe failed");
 
   const checks = [
@@ -291,7 +298,10 @@ function buildVpsPrivilegedMaintenanceInstallInventory(input = {}) {
     {
       id: "scoped_sudoers_entry",
       status:
-        sudoersInstalled === true && sudoersOwner === "root" && sudoersAllowsAll === false
+        sudoersInstalled === true &&
+        sudoersOwner === "root" &&
+        sudoersAllowsAll === false &&
+        sudoersScopedHelperEntry === true
           ? "pass"
           : sudoersInstalled === false
             ? "missing"
@@ -344,6 +354,7 @@ function buildVpsPrivilegedMaintenanceInstallInventory(input = {}) {
       rootExecutionStarted: false,
       helperExecutionStarted: false,
       sudoersHelperProbeStarted: functionalProbeStarted,
+      sudoersInstallAuditStarted,
       redacted: true,
       nextAction:
         sudoersHelperProbe === false
