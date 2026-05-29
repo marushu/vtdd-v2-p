@@ -1011,6 +1011,23 @@ export default {
       return handleVpsRunnerEventRequest(request, env);
     }
 
+    if (request.method === "POST" && isApiPath(url.pathname, "/events/owner-action-required")) {
+      const auth = authorizeGatewayRequest({
+        request,
+        env,
+        apiSuffix: "/events/owner-action-required"
+      });
+      if (!auth.ok) {
+        return json(auth.status, {
+          ok: false,
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+
+      return handleOwnerActionRequiredEventRequest(request, env);
+    }
+
     if (request.method === "POST" && isApiPath(url.pathname, "/action/github-actions-secret")) {
       const auth = authorizePasskeyBrowserOrMachineRequest({
         request,
@@ -3877,6 +3894,44 @@ async function handleVpsRunnerEventRequest(request, env) {
   });
 }
 
+async function handleOwnerActionRequiredEventRequest(request, env) {
+  const payload = await readJson(request);
+  const event = normalizeOwnerActionRequiredDashboardEvent(payload);
+  if (!event.ok) {
+    return json(422, {
+      ok: false,
+      error: event.error,
+      reason: event.reason
+    });
+  }
+
+  const eventStore = resolveDashboardEventStore(env);
+  if (!eventStore) {
+    return json(503, {
+      ok: false,
+      error: "dashboard_event_store_unavailable",
+      reason: "dashboard event store is not configured"
+    });
+  }
+
+  const webPush = await dispatchDashboardWebPushForEvent(env, event.event);
+  const eventWithNotificationTruth = normalizeDashboardEventRecord({
+    ...event.event,
+    pwaNotificationStatus: webPush.ok ? "sent" : "pwa_notification_unavailable",
+    pwaNotificationError: webPush.ok ? null : webPush.error || "dashboard_web_push_unavailable",
+    pwaNotificationReason: webPush.ok ? null : webPush.reason || null,
+    pwaNotificationAttempted: webPush.attempted ?? 0,
+    pwaNotificationDelivered: webPush.delivered ?? 0,
+    updatedAt: new Date().toISOString()
+  });
+  await eventStore.put(eventWithNotificationTruth);
+  return json(webPush.ok ? 202 : webPush.status || 503, {
+    ok: webPush.ok,
+    event: eventWithNotificationTruth,
+    webPush
+  });
+}
+
 async function handleDashboardChatMessageRequest(request, env) {
   const dashboardAuth = await authorizeDashboardRequest({
     request,
@@ -4575,6 +4630,7 @@ function isSupportedDashboardPushAckSourceEventId(value) {
     text.startsWith("github-actions:") ||
     text.startsWith("vps-runner:") ||
     text.startsWith("ai-news:") ||
+    text.startsWith("owner-action-required:") ||
     text.startsWith("dashboard-push-test:")
   );
 }
@@ -7650,6 +7706,10 @@ function buildDashboardWebPushTitle(record) {
   if (record.kind === "dashboard_push_test") {
     return "VTDD Butler テスト通知";
   }
+  if (record.kind === "owner_action_required") {
+    const subject = compactNotificationText(record.changeSummary || record.title || "確認が必要です", 52);
+    return `要対応: ${subject}`.slice(0, 80);
+  }
   if (record.kind === "ai_news_radar") {
     const edition = dashboardAiNewsEditionLabel(record);
     const subject = compactNotificationText(record.changeSummary || record.title || "AI 開発運用ニュース", 44);
@@ -7674,6 +7734,15 @@ function buildDashboardWebPushTitle(record) {
 function buildDashboardWebPushBody(record) {
   if (record.kind === "dashboard_push_test") {
     return "通知経路は正常です。iPhone PWA にサーバ送信できました。";
+  }
+  if (record.kind === "owner_action_required") {
+    const details = [];
+    const title = compactNotificationText(record.title || record.changeSummary || "VTDD Butler が確認を待っています", 74);
+    if (title) details.push(title);
+    if (record.issueNumber) details.push(`Issue #${record.issueNumber}`);
+    if (record.pullNumber) details.push(`PR #${record.pullNumber}`);
+    if (record.workflowName) details.push(`source: ${compactNotificationText(record.workflowName, 32)}`);
+    return details.join(" / ").slice(0, 180);
   }
   if (record.kind === "ai_news_radar") {
     const title = compactNotificationText(record.changeSummary || record.title || "VTDD に関係する更新があります", 96);
@@ -7739,8 +7808,12 @@ function shortRepositoryName(repository) {
 }
 
 function buildDashboardEventOwnerTargetUrl(event) {
-  if (normalizeDashboardEventRecord(event).kind === "ai_news_radar") {
+  const record = normalizeDashboardEventRecord(event);
+  if (record.kind === "ai_news_radar") {
     return "/dashboard/news";
+  }
+  if (record.kind === "owner_action_required" && record.runUrl) {
+    return record.runUrl;
   }
   return buildDashboardPullRequestUrl(event) || "/dashboard/notifications";
 }
@@ -8768,6 +8841,11 @@ function normalizeDashboardEventRecord(event) {
     changeSummary: changeSummary || null,
     pullNumber: normalizeIssue(input.pullNumber) || inferPullNumberFromText(`${title} ${changeSummary}`),
     issueNumber: normalizeIssue(input.issueNumber),
+    pwaNotificationStatus: normalizeDashboardEventText(input.pwaNotificationStatus) || null,
+    pwaNotificationError: normalizeDashboardEventText(input.pwaNotificationError) || null,
+    pwaNotificationReason: normalizeDashboardEventText(input.pwaNotificationReason) || null,
+    pwaNotificationAttempted: normalizeNonNegativeInteger(input.pwaNotificationAttempted),
+    pwaNotificationDelivered: normalizeNonNegativeInteger(input.pwaNotificationDelivered),
     createdAt,
     updatedAt
   };
@@ -9941,6 +10019,81 @@ function normalizeVpsRunnerDashboardEvent(payload) {
     threadId,
     chatMessage
   };
+}
+
+function normalizeOwnerActionRequiredDashboardEvent(payload) {
+  const input = normalizeObject(payload);
+  const repository = normalizeCanonicalRepositoryInput(input.repository || input.repositoryInput);
+  const actionId = normalizeDashboardEventText(input.actionId || input.action_id || input.runId || input.run_id);
+  const title = sanitizeDashboardChatText(input.title);
+  const changeSummary = sanitizeDashboardChatText(input.summary || input.message || input.reason || input.changeSummary);
+  const issueNumber = normalizeIssue(input.issueNumber || input.issue_number || input.relatedIssue);
+  const pullNumber = normalizeIssue(input.pullNumber || input.pull_number);
+  const rawRunUrl = normalizeDashboardEventText(input.url || input.runUrl || input.run_url);
+  const runUrl = normalizeOwnerActionRequiredRunUrl(rawRunUrl);
+  const workflowName = sanitizeDashboardChatText(input.workflowName || input.workflow_name || "owner-action-required");
+  const updatedAt = normalizeIsoTimestamp(input.updatedAt || input.updated_at) || new Date().toISOString();
+  const createdAt = normalizeIsoTimestamp(input.createdAt || input.created_at) || updatedAt;
+
+  if (!repository) {
+    return {
+      ok: false,
+      error: "repository_required",
+      reason: "owner action notification repository is required"
+    };
+  }
+  if (!actionId) {
+    return {
+      ok: false,
+      error: "owner_action_required_action_id_required",
+      reason: "owner action notification requires a stable actionId or runId"
+    };
+  }
+  if (!title && !changeSummary) {
+    return {
+      ok: false,
+      error: "owner_action_required_title_required",
+      reason: "owner action notification requires a title or summary"
+    };
+  }
+  if (!runUrl) {
+    return {
+      ok: false,
+      error: "owner_action_required_recovery_url_required",
+      reason: "owner action notification requires a same-origin /dashboard recovery url"
+    };
+  }
+
+  return {
+    ok: true,
+    event: normalizeDashboardEventRecord({
+      id: `owner-action-required:${repository}:${actionId}`,
+      kind: "owner_action_required",
+      repository,
+      workflowName,
+      runId: actionId,
+      status: "waiting",
+      conclusion: "action_required",
+      title,
+      changeSummary,
+      pullNumber,
+      issueNumber,
+      runUrl,
+      createdAt,
+      updatedAt
+    })
+  };
+}
+
+function normalizeOwnerActionRequiredRunUrl(value) {
+  const text = normalizeDashboardEventText(value);
+  if (!text || text.startsWith("//")) {
+    return "";
+  }
+  if (text === "/dashboard" || text.startsWith("/dashboard/") || text.startsWith("/dashboard?")) {
+    return text;
+  }
+  return "";
 }
 
 function normalizeVpsRunnerDashboardStatus(value) {
@@ -13281,6 +13434,11 @@ function normalizeText(value) {
 function normalizePositiveInteger(value) {
   const number = Number(value);
   return Number.isInteger(number) && number > 0 ? number : null;
+}
+
+function normalizeNonNegativeInteger(value) {
+  const number = Number(value);
+  return Number.isInteger(number) && number >= 0 ? number : 0;
 }
 
 function isSocketOpen(socket) {

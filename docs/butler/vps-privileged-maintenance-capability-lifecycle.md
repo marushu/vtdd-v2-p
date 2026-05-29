@@ -97,14 +97,28 @@ planes with their own scoped passkey contracts.
 ## Notification Boundary
 
 Existing Dashboard Web Push support can send a server-side test notification to
-the current saved device subscription, but it is not yet a general "owner action
-required" dispatch path for Butler/VPS recovery. Issue #637 treats that as a
-required connection, not as existing completion.
+the current saved device subscription. The Worker also exposes a
+machine-authenticated owner action event route:
+
+`POST /v2/events/owner-action-required`
+
+That route stores an `owner_action_required` Dashboard event and attempts Web
+Push delivery to saved PWA subscriptions. It is the runtime entry point for
+notifying the owner when Butler, VPS Codex CLI, a helper proposal, or another
+machine process needs owner attention.
+
+The recovery link for this route must be a same-origin `/dashboard` URL. The
+route must reject external URLs, protocol-relative URLs, and underspecified
+requests that lack a stable action id or owner-facing title/summary.
 
 When owner action is required, the runtime must attempt PWA notification and
 report send result truth. If push delivery is unavailable, Butler must mark
 `pwa_notification_unavailable` and still preserve the recovery link in
 Dashboard notifications and GitHub-visible runtime truth.
+
+This route is not permission to execute privileged work. It carries the
+attention request and recovery link only. The privileged operation still needs
+the scoped passkey approval and root-owned helper lifecycle described above.
 
 ## Completion Boundary
 

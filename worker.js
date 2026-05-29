@@ -57059,6 +57059,21 @@ var runtime_default = {
       }
       return handleVpsRunnerEventRequest(request, env);
     }
+    if (request.method === "POST" && isApiPath(url.pathname, "/events/owner-action-required")) {
+      const auth = authorizeGatewayRequest({
+        request,
+        env,
+        apiSuffix: "/events/owner-action-required"
+      });
+      if (!auth.ok) {
+        return json(auth.status, {
+          ok: false,
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+      return handleOwnerActionRequiredEventRequest(request, env);
+    }
     if (request.method === "POST" && isApiPath(url.pathname, "/action/github-actions-secret")) {
       const auth = authorizePasskeyBrowserOrMachineRequest({
         request,
@@ -59544,6 +59559,41 @@ async function handleVpsRunnerEventRequest(request, env) {
     webPush
   });
 }
+async function handleOwnerActionRequiredEventRequest(request, env) {
+  const payload = await readJson(request);
+  const event = normalizeOwnerActionRequiredDashboardEvent(payload);
+  if (!event.ok) {
+    return json(422, {
+      ok: false,
+      error: event.error,
+      reason: event.reason
+    });
+  }
+  const eventStore = resolveDashboardEventStore(env);
+  if (!eventStore) {
+    return json(503, {
+      ok: false,
+      error: "dashboard_event_store_unavailable",
+      reason: "dashboard event store is not configured"
+    });
+  }
+  const webPush = await dispatchDashboardWebPushForEvent(env, event.event);
+  const eventWithNotificationTruth = normalizeDashboardEventRecord({
+    ...event.event,
+    pwaNotificationStatus: webPush.ok ? "sent" : "pwa_notification_unavailable",
+    pwaNotificationError: webPush.ok ? null : webPush.error || "dashboard_web_push_unavailable",
+    pwaNotificationReason: webPush.ok ? null : webPush.reason || null,
+    pwaNotificationAttempted: webPush.attempted ?? 0,
+    pwaNotificationDelivered: webPush.delivered ?? 0,
+    updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+  });
+  await eventStore.put(eventWithNotificationTruth);
+  return json(webPush.ok ? 202 : webPush.status || 503, {
+    ok: webPush.ok,
+    event: eventWithNotificationTruth,
+    webPush
+  });
+}
 async function handleDashboardChatMessageRequest(request, env) {
   const dashboardAuth = await authorizeDashboardRequest({
     request,
@@ -60191,7 +60241,7 @@ async function handleDashboardPushAckRequest(request, env) {
 }
 function isSupportedDashboardPushAckSourceEventId(value) {
   const text = normalizeText30(value);
-  return text.startsWith("github-actions:") || text.startsWith("vps-runner:") || text.startsWith("ai-news:") || text.startsWith("dashboard-push-test:");
+  return text.startsWith("github-actions:") || text.startsWith("vps-runner:") || text.startsWith("ai-news:") || text.startsWith("owner-action-required:") || text.startsWith("dashboard-push-test:");
 }
 async function handleDashboardChatSocketRequest(request, url, env) {
   const auth = await authorizeDashboardRequest({
@@ -62830,6 +62880,10 @@ function buildDashboardWebPushTitle(record2) {
   if (record2.kind === "dashboard_push_test") {
     return "VTDD Butler \u30C6\u30B9\u30C8\u901A\u77E5";
   }
+  if (record2.kind === "owner_action_required") {
+    const subject = compactNotificationText(record2.changeSummary || record2.title || "\u78BA\u8A8D\u304C\u5FC5\u8981\u3067\u3059", 52);
+    return `\u8981\u5BFE\u5FDC: ${subject}`.slice(0, 80);
+  }
   if (record2.kind === "ai_news_radar") {
     const edition = dashboardAiNewsEditionLabel(record2);
     const subject = compactNotificationText(record2.changeSummary || record2.title || "AI \u958B\u767A\u904B\u7528\u30CB\u30E5\u30FC\u30B9", 44);
@@ -62853,6 +62907,15 @@ function buildDashboardWebPushTitle(record2) {
 function buildDashboardWebPushBody(record2) {
   if (record2.kind === "dashboard_push_test") {
     return "\u901A\u77E5\u7D4C\u8DEF\u306F\u6B63\u5E38\u3067\u3059\u3002iPhone PWA \u306B\u30B5\u30FC\u30D0\u9001\u4FE1\u3067\u304D\u307E\u3057\u305F\u3002";
+  }
+  if (record2.kind === "owner_action_required") {
+    const details2 = [];
+    const title2 = compactNotificationText(record2.title || record2.changeSummary || "VTDD Butler \u304C\u78BA\u8A8D\u3092\u5F85\u3063\u3066\u3044\u307E\u3059", 74);
+    if (title2) details2.push(title2);
+    if (record2.issueNumber) details2.push(`Issue #${record2.issueNumber}`);
+    if (record2.pullNumber) details2.push(`PR #${record2.pullNumber}`);
+    if (record2.workflowName) details2.push(`source: ${compactNotificationText(record2.workflowName, 32)}`);
+    return details2.join(" / ").slice(0, 180);
   }
   if (record2.kind === "ai_news_radar") {
     const title2 = compactNotificationText(record2.changeSummary || record2.title || "VTDD \u306B\u95A2\u4FC2\u3059\u308B\u66F4\u65B0\u304C\u3042\u308A\u307E\u3059", 96);
@@ -62914,8 +62977,12 @@ function shortRepositoryName(repository) {
   return parts.length === 2 ? parts[1] : text;
 }
 function buildDashboardEventOwnerTargetUrl(event) {
-  if (normalizeDashboardEventRecord(event).kind === "ai_news_radar") {
+  const record2 = normalizeDashboardEventRecord(event);
+  if (record2.kind === "ai_news_radar") {
     return "/dashboard/news";
+  }
+  if (record2.kind === "owner_action_required" && record2.runUrl) {
+    return record2.runUrl;
   }
   return buildDashboardPullRequestUrl(event) || "/dashboard/notifications";
 }
@@ -63828,6 +63895,11 @@ function normalizeDashboardEventRecord(event) {
     changeSummary: changeSummary || null,
     pullNumber: normalizeIssue6(input.pullNumber) || inferPullNumberFromText(`${title} ${changeSummary}`),
     issueNumber: normalizeIssue6(input.issueNumber),
+    pwaNotificationStatus: normalizeDashboardEventText(input.pwaNotificationStatus) || null,
+    pwaNotificationError: normalizeDashboardEventText(input.pwaNotificationError) || null,
+    pwaNotificationReason: normalizeDashboardEventText(input.pwaNotificationReason) || null,
+    pwaNotificationAttempted: normalizeNonNegativeInteger2(input.pwaNotificationAttempted),
+    pwaNotificationDelivered: normalizeNonNegativeInteger2(input.pwaNotificationDelivered),
     createdAt,
     updatedAt
   };
@@ -64867,6 +64939,77 @@ function normalizeVpsRunnerDashboardEvent(payload) {
     threadId,
     chatMessage
   };
+}
+function normalizeOwnerActionRequiredDashboardEvent(payload) {
+  const input = normalizeObject11(payload);
+  const repository = normalizeCanonicalRepositoryInput(input.repository || input.repositoryInput);
+  const actionId = normalizeDashboardEventText(input.actionId || input.action_id || input.runId || input.run_id);
+  const title = sanitizeDashboardChatText(input.title);
+  const changeSummary = sanitizeDashboardChatText(input.summary || input.message || input.reason || input.changeSummary);
+  const issueNumber = normalizeIssue6(input.issueNumber || input.issue_number || input.relatedIssue);
+  const pullNumber = normalizeIssue6(input.pullNumber || input.pull_number);
+  const rawRunUrl = normalizeDashboardEventText(input.url || input.runUrl || input.run_url);
+  const runUrl = normalizeOwnerActionRequiredRunUrl(rawRunUrl);
+  const workflowName = sanitizeDashboardChatText(input.workflowName || input.workflow_name || "owner-action-required");
+  const updatedAt = normalizeIsoTimestamp(input.updatedAt || input.updated_at) || (/* @__PURE__ */ new Date()).toISOString();
+  const createdAt = normalizeIsoTimestamp(input.createdAt || input.created_at) || updatedAt;
+  if (!repository) {
+    return {
+      ok: false,
+      error: "repository_required",
+      reason: "owner action notification repository is required"
+    };
+  }
+  if (!actionId) {
+    return {
+      ok: false,
+      error: "owner_action_required_action_id_required",
+      reason: "owner action notification requires a stable actionId or runId"
+    };
+  }
+  if (!title && !changeSummary) {
+    return {
+      ok: false,
+      error: "owner_action_required_title_required",
+      reason: "owner action notification requires a title or summary"
+    };
+  }
+  if (!runUrl) {
+    return {
+      ok: false,
+      error: "owner_action_required_recovery_url_required",
+      reason: "owner action notification requires a same-origin /dashboard recovery url"
+    };
+  }
+  return {
+    ok: true,
+    event: normalizeDashboardEventRecord({
+      id: `owner-action-required:${repository}:${actionId}`,
+      kind: "owner_action_required",
+      repository,
+      workflowName,
+      runId: actionId,
+      status: "waiting",
+      conclusion: "action_required",
+      title,
+      changeSummary,
+      pullNumber,
+      issueNumber,
+      runUrl,
+      createdAt,
+      updatedAt
+    })
+  };
+}
+function normalizeOwnerActionRequiredRunUrl(value) {
+  const text = normalizeDashboardEventText(value);
+  if (!text || text.startsWith("//")) {
+    return "";
+  }
+  if (text === "/dashboard" || text.startsWith("/dashboard/") || text.startsWith("/dashboard?")) {
+    return text;
+  }
+  return "";
 }
 function normalizeVpsRunnerDashboardStatus(value) {
   const status = normalizeDashboardEventText(value).toLowerCase();
@@ -68067,6 +68210,10 @@ function normalizeText30(value) {
 function normalizePositiveInteger9(value) {
   const number3 = Number(value);
   return Number.isInteger(number3) && number3 > 0 ? number3 : null;
+}
+function normalizeNonNegativeInteger2(value) {
+  const number3 = Number(value);
+  return Number.isInteger(number3) && number3 >= 0 ? number3 : 0;
 }
 function isSocketOpen(socket) {
   return socket?.readyState === 1 || typeof WebSocket !== "undefined" && socket?.readyState === WebSocket.OPEN;
