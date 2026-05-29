@@ -189,13 +189,27 @@ the behavior into repository docs / `.agents/skills` / runtime truth so
 Dashboard Butler can own the workflow, then commit, push, and open or update the
 PR before claiming the behavior is repository-backed.
 
-The first Skill is `vtdd-status-advisor`:
+The first read-only Skill is `vtdd-status-advisor`:
 
 - mode: Read
 - role: read truth, classify state, surface blockers, advise next action, stop
   before execution
 - authority: readonly
 - completion: never enough by itself for Butler Completion Gate
+
+The central traffic-control Skill is `vtdd-chief-butler`:
+
+- mode: Read / Think / Execute boundary keeper
+- role: preserve Issue traceability, execution queue state, authority boundary,
+  repository sharing, RAG candidate discipline, and Butler-first completion
+- authority: no authority by itself; execution still requires Issue scope, GO,
+  passkey approval, or an explicit forbidden result
+- completion: never enough by itself for Butler Completion Gate
+
+`vtdd-chief-butler` is a core VTDD operating surface, not a personal mac Codex
+convenience. If it exists only under `~/.codex/skills`, that is a defect and a
+ROOT-class `butler_gap_found` / `vps_handoff_gap_found` until the behavior is
+repository-backed and connected to Dashboard Butler / VPS Codex CLI discovery.
 
 Local skills under `~/.codex/skills` are useful bootstrap aids, but they are not
 VTDD completion unless Butler and VPS Codex CLI can read equivalent repo-backed

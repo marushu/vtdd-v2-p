@@ -32,7 +32,8 @@ Last rebuilt from GitHub runtime truth: 2026-05-29
   Issue #498, Issue #501, Issue #514, Issue #528, Issue #565,
   Issue #574, Issue #577, Issue #579, Issue #580, Issue #582, Issue #585,
   Issue #587, Issue #589, Issue #590, Issue #594, Issue #595, Issue #599,
-  Issue #604, Issue #605, Issue #606, Issue #613, Issue #620.
+  Issue #604, Issue #605, Issue #606, Issue #613, Issue #620, Issue #637,
+  Issue #651.
 - Recently closed as completed with evidence and owner approval: Issue #573,
   Issue #601, Issue #609.
 - Open PRs read before this queue refresh PR was opened: none.
@@ -57,6 +58,15 @@ Last rebuilt from GitHub runtime truth: 2026-05-29
   Issue #590, Issue #631, and future VPS Codex CLI work. Issue #637 moves to
   `Now`; Issue #590 and PR #632 remain active but should not run in parallel
   while the privileged-maintenance authority path is being organized.
+- 2026-05-29 PR #652 merged Issue #651 same-head conflicting reviewer evidence
+  gate. Issue #651 remains open because mapped live/E2E close-readiness is not
+  complete.
+- 2026-05-29 owner input classified the missing repo-backed
+  `vtdd-chief-butler` traffic-control Skill as `ROOT`: mac Codex had a local
+  chief-butler Skill that Dashboard Butler and VPS Codex CLI could not
+  necessarily read. This is Issue #495 / Issue #595 partial scope and must be
+  treated as `butler_gap_found` plus `vps_handoff_gap_found` until repo-backed
+  Skill, runtime discovery, VPS inventory, and E2E evidence are connected.
 
 ## Now
 
@@ -91,6 +101,11 @@ Root blockers hold multiple active Issues open. They should shape `Now` and
   execution, capability add/disable/remove/rollback/review, and redacted runtime
   truth. It gates Issue #413, Issue #450, Issue #514, Issue #590, Issue #631,
   and future VPS Codex CLI work whenever root/sudo host capability is missing.
+- Issue #495: VPS Codex CLI skill/plugin/MCP parity is a root blocker whenever
+  mac Codex uses local Skills, plugins, or connectors that Dashboard Butler and
+  VPS Codex CLI cannot inventory or reproduce. The `vtdd-chief-butler` gap is
+  evidence that traffic-control behavior must be repo-backed and then connected
+  to runtime discovery before VTDD can claim cross-surface consistency.
 - Issue #528: Dashboard Butler must remain ChatGPT iOS-equivalent while debug /
   ops surfaces are isolated. It gates user-facing acceptance for Issue #574,
   Issue #577, Issue #580, Issue #582, Issue #585, Issue #587, Issue #589, and
@@ -175,6 +190,14 @@ Evidence gaps are active. They are not deferred out of scope.
   still missing and Playwright now fails on missing `ownerPre` contrast target.
   The manual host repair is evidence for Issue #637, not completion of Issue
   #631.
+- Issue #651: PR #652 merged a same-head conflicting reviewer evidence gate, but
+  live/mapped E2E close-readiness evidence is still missing, so the Issue remains
+  open.
+- Issue #495 / Issue #595: repo-backed `vtdd-chief-butler` Skill can remove the
+  immediate mac-local-only traffic-control document gap, but Dashboard Butler
+  runtime discovery, Custom GPT exposure, VPS Codex CLI inventory, and mapped
+  E2E remain incomplete until follow-up implementation proves those surfaces can
+  read and apply the same Skill.
 - Issue #565: connection recovery status has local evidence, but completion still
   depends on the normal chat surface not being dominated by status noise.
 - Issue #577: composer paste normalization has merged implementation slices, but
