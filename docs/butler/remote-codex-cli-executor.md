@@ -186,6 +186,16 @@ runner events, create the target branch, run Codex CLI in a cloned workspace,
 push changes, and open a ready PR for reviewer/automation. It is intentionally an operator-owned script,
 not a hosted VTDD service.
 
+Privileged host maintenance for this runner is a separate authority plane.
+When root/sudo work is required, such as systemd service recovery, Playwright
+Chromium dependency installation, or Codex sandbox sysctl repair, the normal
+VTDD path must be the Issue #637 capability lifecycle documented in
+[vps-privileged-maintenance-capability-lifecycle.md](./vps-privileged-maintenance-capability-lifecycle.md):
+Dashboard Butler asks for scoped passkey approval, a root-owned helper executes
+an allowlisted capability, PWA notification is used when owner action is
+required, and redacted runtime truth is returned. Mac SSH/root work remains
+break-glass bootstrap evidence, not Butler-complete recovery.
+
 Ready PR means reviewer and automation can inspect the handoff result. It is
 not an Issue-completion claim and it is not merge authority. Merge remains
 behind reviewer approval, required checks, head-SHA consistency, mergeability,
