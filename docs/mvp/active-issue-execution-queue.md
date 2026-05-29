@@ -50,20 +50,27 @@ Last rebuilt from GitHub runtime truth: 2026-05-29
   short-cycle passkey blocker no longer preempts Issue #590. Issue #590 moves
   back to `Now`; Issue #606 remains open until mapped completion evidence and
   human closure approval are complete.
+- 2026-05-29 owner explicitly moved the waiting-experience work forward after
+  #590 timeout recovery reached a merged production slice. Issue #413 becomes
+  `Now` because opaque execution state makes every Dashboard Butler development
+  turn feel stalled even when work is progressing. Issue #590 remains active as
+  evidence/follow-up recovery work, not closed.
 
 ## Now
 
-- Issue #590: app-server turn timeout must become a recoverable Dashboard chat
-  state after the short-cycle authentication blocker was removed by Issue #606
-  implementation and production evidence.
+- Issue #413: Dashboard Butler execution progress must become visible in the
+  normal chat surface, including a running-state composer, stop affordance, and
+  interrupt input path. This is the current owner-facing root for "do not make
+  the owner wait in silence."
 
 ## Next
 
-- Issue #579: after timeout recovery, handle PWA background/foreground,
-  WebSocket reconnect, auth/session expiry, and input/media retention.
-- Issue #450 + Issue #413: continue the Dashboard Butler live runtime /
-  app-server / VPS progress root after #590/#579 no longer leave ordinary chat
-  stuck or opaque.
+- Issue #444: after the visible running-state slice, connect the notification
+  experience so owner can leave Dashboard and return from reply/progress
+  notifications.
+- Issue #579: after timeout recovery and visible progress, continue PWA
+  background/foreground, WebSocket reconnect, auth/session expiry, and
+  input/media retention.
 
 ## Root Blockers
 
@@ -168,6 +175,9 @@ Evidence gaps are active. They are not deferred out of scope.
 - Issue #606: PR #627 merged and production deployed; owner live iPhone evidence
   reported Dashboard Butler still connected after 11 minutes. Issue closure still
   needs mapped completion evidence and explicit human closure approval.
+- Issue #590: PR #628 merged and production deployed a recoverable timeout
+  status for app-server turn failure. Issue closure still needs mapped
+  completion evidence and explicit human closure approval.
 - Issue #444: PR #600 points PR-numbered notifications at the PR instead of the
   Actions run, but live iPhone/PWA notification tap, sound, badge, and recovery
   evidence remain incomplete.
