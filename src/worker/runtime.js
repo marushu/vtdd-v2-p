@@ -8,6 +8,7 @@ import {
   appendProposalLogFromGateway,
   buildVpsCapabilityProposal,
   buildVpsMaintenanceApprovalScope,
+  planVpsPrivilegedMaintenanceHelperExecution,
   createCloudflareMemoryProvider,
   createPasskeyApprovalOptions,
   createPasskeyRegistrationOptions,
@@ -1063,6 +1064,23 @@ export default {
       }
 
       return handleVpsPrivilegedMaintenanceHelperRequest(request, env);
+    }
+
+    if (request.method === "POST" && isApiPath(url.pathname, "/vps/privileged-maintenance/helper-dry-runs")) {
+      const auth = authorizeGatewayRequest({
+        request,
+        env,
+        apiSuffix: "/vps/privileged-maintenance/helper-dry-runs"
+      });
+      if (!auth.ok) {
+        return json(auth.status, {
+          ok: false,
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+
+      return handleVpsPrivilegedMaintenanceHelperDryRunRequest(request, env);
     }
 
     if (request.method === "POST" && isApiPath(url.pathname, "/action/github-actions-secret")) {
@@ -4281,6 +4299,36 @@ async function handleVpsPrivilegedMaintenanceHelperRequest(request, env) {
       redacted: true,
       nextAction: "send this bounded helperRequest to the VPS root-owned helper in the next approved slice"
     }
+  });
+}
+
+async function handleVpsPrivilegedMaintenanceHelperDryRunRequest(request, env) {
+  const payload = await readJson(request);
+  const result = planVpsPrivilegedMaintenanceHelperExecution({
+    manifest: payload?.manifest,
+    helperRequest: payload?.helperRequest || payload?.helper_request,
+    mode: payload?.mode || payload?.executionMode || payload?.execution_mode || "dry_run",
+    now: payload?.now
+  });
+  if (!result.ok) {
+    return json(422, {
+      ok: false,
+      error: result.error,
+      issues: result.issues ?? [],
+      runtimeTruth: {
+        kind: "vps_privileged_maintenance_helper_dry_run",
+        status: "blocked",
+        rootExecutionStarted: false,
+        helperExecutionStarted: false,
+        redacted: true
+      }
+    });
+  }
+
+  return json(200, {
+    ok: true,
+    helperPlan: result.helperPlan,
+    runtimeTruth: result.runtimeTruth
   });
 }
 

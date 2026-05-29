@@ -3639,6 +3639,76 @@
           }
         }
       }
+    },
+    "/v2/vps/privileged-maintenance/helper-dry-runs": {
+      "post": {
+        "operationId": "vtddDryRunVpsMaintenanceHelper",
+        "summary": "Dry-run a bounded VPS privileged maintenance helper request against a capability manifest without executing root work.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "manifest",
+                  "helperRequest"
+                ],
+                "properties": {
+                  "manifest": {
+                    "type": "object",
+                    "description": "Current VPS capability manifest. The selected capability must already be enabled.",
+                    "additionalProperties": true
+                  },
+                  "helperRequest": {
+                    "type": "object",
+                    "description": "Helper request returned by vtddCreateVpsMaintenanceHelperRequest.",
+                    "additionalProperties": true
+                  },
+                  "mode": {
+                    "type": "string",
+                    "enum": [
+                      "dry_run"
+                    ]
+                  },
+                  "now": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Dry-run helper plan and runtime truth with no root execution",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing machine auth"
+          },
+          "403": {
+            "description": "Invalid machine auth"
+          },
+          "422": {
+            "description": "Dry-run helper request or manifest invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   }
 }
