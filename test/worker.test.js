@@ -1609,6 +1609,15 @@ test("served dashboard inline chat renderer executes decode, link, wrap, and cop
   await codeCopyButtons[0].click();
   assert.equal(copied.at(-1), "https://example.com/" + "b".repeat(96));
 
+  const mixedCodeContainer = document.createElement("div");
+  helpers.renderMessageText(mixedCodeContainer, "黒潰れ確認。\n```\nhttps://example.com/" + "c".repeat(96) + "\n```");
+  const mixedParagraphs = mixedCodeContainer.querySelectorAll("p");
+  const mixedCodeBlocks = mixedCodeContainer.querySelectorAll("pre");
+  assert.equal(mixedParagraphs.length, 1);
+  assert.equal(mixedParagraphs[0].textContent, "黒潰れ確認。");
+  assert.equal(mixedCodeBlocks.length, 1);
+  assert.equal(mixedCodeBlocks[0].className, "wrap-code");
+
   const messageCopyButton = document.createElement("button");
   await helpers.copyMessageText(
     messageCopyButton,

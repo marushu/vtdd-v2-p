@@ -12358,7 +12358,12 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           }
           const paragraph = document.createElement("p");
           const paragraphLines = [];
-          while (index < lines.length && lines[index].trim() && !/^\\s*-\\s+/.test(lines[index])) {
+          while (
+            index < lines.length &&
+            lines[index].trim() &&
+            !lines[index].trim().startsWith(fence) &&
+            !/^\\s*-\\s+/.test(lines[index])
+          ) {
             paragraphLines.push(lines[index]);
             index += 1;
           }

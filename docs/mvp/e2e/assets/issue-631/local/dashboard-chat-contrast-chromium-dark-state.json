@@ -1,0 +1,35 @@
+{
+  "ok": true,
+  "browserName": "chromium",
+  "colorScheme": "dark",
+  "contrastState": {
+    "ownerPre": {
+      "selector": ".bubble.owner pre",
+      "color": "rgb(17, 17, 17)",
+      "backgroundColor": "rgb(255, 255, 255)",
+      "parentBackgroundColor": "rgba(0, 0, 0, 0)",
+      "text": "⧉https://vtdd-v2-mvp.polished-tree-da7c.workers.dev/v2/approval/passkey/operator?mode=deploy&repositoryInput=marushu%2Fvtdd-v2-p&phase=execution&issueNumber=631"
+    },
+    "ownerPreCode": {
+      "selector": ".bubble.owner pre code",
+      "color": "rgb(17, 17, 17)",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "parentBackgroundColor": "rgb(255, 255, 255)",
+      "text": "https://vtdd-v2-mvp.polished-tree-da7c.workers.dev/v2/approval/passkey/operator?mode=deploy&repositoryInput=marushu%2Fvtdd-v2-p&phase=execution&issueNumber=631&"
+    },
+    "butlerLink": {
+      "selector": ".bubble:not(.owner) .chat-link",
+      "color": "rgb(144, 205, 244)",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "parentBackgroundColor": "rgba(0, 0, 0, 0)",
+      "text": "Deploy approval を開く"
+    },
+    "butlerCode": {
+      "selector": ".bubble:not(.owner) .message-body code",
+      "color": "rgb(247, 247, 244)",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "parentBackgroundColor": "rgba(0, 0, 0, 0)",
+      "text": "go:%0AIssue%20%23631%20contrast%20check"
+    }
+  }
+}
