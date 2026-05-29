@@ -1438,6 +1438,102 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/VtddGenericResponse"
+  /v2/vps/privileged-maintenance/proposals:
+    post:
+      operationId: vtddCreateVpsMaintenanceProposal
+      summary: Create a VPS privileged maintenance capability proposal and scoped passkey operator URL without executing root work.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - host
+                - repository
+                - id
+                - title
+                - commandClass
+                - workingDirectories
+                - allowedArgs
+                - rollbackPlan
+                - reason
+                - relatedIssue
+              properties:
+                host:
+                  type: string
+                repository:
+                  type: string
+                relatedIssue:
+                  type: integer
+                  description: GitHub Issue number that owns this bounded VPS maintenance request.
+                operation:
+                  type: string
+                  enum:
+                    - add
+                    - enable
+                    - disable
+                    - remove
+                    - rollback
+                    - review
+                id:
+                  type: string
+                title:
+                  type: string
+                commandClass:
+                  type: string
+                riskLevel:
+                  type: string
+                  enum:
+                    - low
+                    - medium
+                    - high
+                workingDirectories:
+                  type: array
+                  items:
+                    type: string
+                allowedArgs:
+                  type: array
+                  items:
+                    type: string
+                affectedPaths:
+                  type: array
+                  items:
+                    type: string
+                redactionRules:
+                  type: array
+                  items:
+                    type: string
+                rollbackPlan:
+                  type: string
+                expectedRuntimeTruth:
+                  type: array
+                  items:
+                    type: string
+                reason:
+                  type: string
+                impactScope:
+                  type: string
+                expiresAt:
+                  type: string
+              additionalProperties: true
+      responses:
+        "200":
+          description: VPS maintenance proposal and passkey operator URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "401":
+          description: Missing machine auth
+        "403":
+          description: Invalid machine auth
+        "422":
+          description: VPS maintenance proposal invalid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
   /v2/retrieve/constitution:
     get:
       operationId: vtddRetrieveConstitution

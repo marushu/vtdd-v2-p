@@ -421,7 +421,13 @@ export function normalizeScopeSnapshot(scope = {}) {
     issueNumber: normalizeText(scope.issueNumber),
     pullNumber: normalizeText(scope.pullNumber),
     relatedIssue: normalizeText(scope.relatedIssue),
-    phase: normalizeText(scope.phase)
+    phase: normalizeText(scope.phase),
+    vpsProposalId: normalizeText(scope.vpsProposalId),
+    vpsHost: normalizeText(scope.vpsHost),
+    vpsOperation: normalizeText(scope.vpsOperation),
+    vpsCapabilityId: normalizeText(scope.vpsCapabilityId),
+    vpsImpactScope: normalizeText(scope.vpsImpactScope),
+    vpsExpiresAt: normalizeText(scope.vpsExpiresAt)
   };
 }
 

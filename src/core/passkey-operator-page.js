@@ -24,6 +24,26 @@ export function renderPasskeyOperatorPage(input = {}) {
   const dashboardReturnPath = escapeHtml(sanitizePasskeyDashboardReturnPath(input.dashboardReturnPath));
   const dashboardNotificationMode = dashboardMode && dashboardReturnPath === "/dashboard/notifications";
   const githubAppRoleDefault = escapeHtml(input.githubAppRole || "legacy");
+  const vpsScope = {
+    vpsProposalId: String(input.vpsProposalId || "").trim(),
+    vpsHost: String(input.vpsHost || "").trim(),
+    vpsOperation: String(input.vpsOperation || "").trim(),
+    vpsCapabilityId: String(input.vpsCapabilityId || "").trim(),
+    vpsImpactScope: String(input.vpsImpactScope || "").trim(),
+    vpsExpiresAt: String(input.vpsExpiresAt || "").trim()
+  };
+  const vpsHost = escapeHtml(vpsScope.vpsHost);
+  const vpsOperation = escapeHtml(vpsScope.vpsOperation);
+  const vpsCapabilityId = escapeHtml(vpsScope.vpsCapabilityId);
+  const vpsImpactScope = escapeHtml(vpsScope.vpsImpactScope);
+  const vpsExpiresAt = escapeHtml(vpsScope.vpsExpiresAt);
+  const vpsScopeSummary = renderVpsScopeSummary({
+    host: vpsHost,
+    operation: vpsOperation,
+    capabilityId: vpsCapabilityId,
+    impactScope: vpsImpactScope,
+    expiresAt: vpsExpiresAt
+  });
   const syncEnabled = input.syncEnabled === true;
   const syncMessage = escapeHtml(
     input.syncMessage ||
@@ -377,6 +397,7 @@ export function renderPasskeyOperatorPage(input = {}) {
         <section data-operator-section="vps-runner-admin"${hiddenAttribute(!sectionVisibility.vpsRunnerAdmin)}>
           <h2>9. VPS Runner Admin</h2>
           <p class="muted">VPS runner の repo allowlist 追加、runner restart、smoke などの管理操作用 approval です。ここでは real passkey で短命の <code>approvalGrantId</code> だけを発行します。VPS 操作そのものは GitHub queue と runner event に残る bounded command として別途実行されます。</p>
+          ${vpsScopeSummary ? `<p class="muted">${vpsScopeSummary}</p>` : ""}
           <p class="muted"><code>actionType=destructive</code> / <code>highRiskKind=vps_runner_admin</code> の approvalGrantId が必要です。文字列としての passkey は承認ではありません。</p>
         </section>
       </div>
@@ -398,6 +419,7 @@ export function renderPasskeyOperatorPage(input = {}) {
       const mergePrLink = document.getElementById("merge-pr-link");
       const issueCloseLink = document.getElementById("issue-close-link");
       const operatorMode = "${escapeHtml(operatorMode)}";
+      const vpsApprovalScope = ${safeScriptJson(vpsScope)};
       let latestApprovalGrantId = "";
       let latestApprovalGrant = null;
 
@@ -798,13 +820,15 @@ export function renderPasskeyOperatorPage(input = {}) {
               repositoryInput,
               issueNumber: Number(document.getElementById("issue-input").value || 0) || null,
               pullNumber: readApprovalPullNumber(),
+              vpsProposalId: vpsApprovalScope.vpsProposalId,
               issueContext: {
                 issueNumber: Number(document.getElementById("issue-input").value || 0) || null
               },
               policyInput: {
                 actionType: document.getElementById("action-type-input").value,
                 repositoryInput,
-                highRiskKind: document.getElementById("risk-kind-input").value
+                highRiskKind: document.getElementById("risk-kind-input").value,
+                vpsProposalId: vpsApprovalScope.vpsProposalId
               }
             })
           });
@@ -1225,6 +1249,26 @@ function renderDeployScopeSummary({ repositoryInput, issueNumber, actionType, hi
   const repository = repositoryInput || "未指定";
   const issue = issueNumber ? ` / Issue: ${issueNumber}` : "";
   return `承認対象: Repository: ${repository}${issue} / Action: ${actionType} / ${highRiskKind}`;
+}
+
+function renderVpsScopeSummary({ host, operation, capabilityId, impactScope, expiresAt }) {
+  const parts = [
+    host ? `Host: ${host}` : "",
+    operation ? `Operation: ${operation}` : "",
+    capabilityId ? `Capability: ${capabilityId}` : "",
+    impactScope ? `Impact: ${impactScope}` : "",
+    expiresAt ? `Expires: ${expiresAt}` : ""
+  ].filter(Boolean);
+  return parts.length > 0 ? `承認対象: ${parts.join(" / ")}` : "";
+}
+
+function safeScriptJson(value) {
+  return JSON.stringify(value)
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/&/g, "\\u0026")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
 }
 
 function normalizeOperatorMode(value) {
