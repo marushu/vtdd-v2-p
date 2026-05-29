@@ -79,6 +79,14 @@ The core contract rejects broad privileged patterns such as `NOPASSWD:ALL`,
 needed, it must be designed as a separate high-risk Issue with stronger
 approval, TTL, audit, and cleanup semantics.
 
+The helper execution path must not treat manifest `allowedArgs` as arbitrary
+root commands. Before a helper request can become executable, the capability
+must bind to the repo-backed helper command registry in
+`src/core/vps-privileged-maintenance.js`. The registry is the bridge between a
+reviewed capability and the root-owned helper implementation: dry-run rejects
+unknown `commandClass` values and rejects registered commands whose risk level
+or allowed arguments do not match the registry.
+
 ## Initial Presets
 
 The first preset set should cover the failure classes already observed:

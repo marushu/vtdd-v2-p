@@ -4,6 +4,7 @@ import {
   applyVpsCapabilityLifecycleOperation,
   buildVpsCapabilityProposal,
   buildVpsMaintenanceApprovalScope,
+  listVpsPrivilegedMaintenanceCommandRegistry,
   normalizeVpsCapabilityManifest,
   planVpsPrivilegedMaintenanceHelperExecution
 } from "../src/core/index.js";
@@ -39,6 +40,18 @@ test("VPS privileged maintenance manifest normalizes reviewable capabilities", (
   assert.equal(result.manifest.capabilities[0].id, "playwright.chromium.deps");
   assert.equal(result.manifest.capabilities[0].status, "disabled");
   assert.equal(result.manifest.capabilities[0].riskLevel, "high");
+});
+
+test("VPS privileged maintenance helper command registry exposes initial presets", () => {
+  const registry = listVpsPrivilegedMaintenanceCommandRegistry();
+
+  assert.equal(registry.some((entry) => entry.commandClass === "playwright_install_deps_chromium"), true);
+  assert.equal(registry.some((entry) => entry.commandClass === "codex_sandbox_sysctl_apply"), true);
+  assert.equal(registry.some((entry) => entry.commandClass === "systemd_user_runner_restart"), true);
+  assert.equal(
+    registry.every((entry) => Array.isArray(entry.allowedArgs) && entry.allowedArgs.length > 0),
+    true
+  );
 });
 
 test("VPS privileged maintenance proposal requires PWA notification and rollback plan", () => {
@@ -206,11 +219,12 @@ test("VPS helper dry-run contract validates enabled manifest capability without 
   assert.equal(result.helperPlan.helperExecutionStarted, false);
   assert.deepEqual(result.helperPlan.commandPreview.allowedArgs, ["npx playwright install-deps chromium"]);
   assert.equal(result.runtimeTruth.status, "dry_run_ready");
+  assert.equal(result.runtimeTruth.registryBinding.commandClass, "playwright_install_deps_chromium");
   assert.equal(result.runtimeTruth.exitCode, null);
   assert.equal(result.runtimeTruth.redactedLogSummary, "dry-run only; privileged command was not executed");
 });
 
-test("VPS helper dry-run rejects disabled or mismatched capabilities", () => {
+test("VPS helper dry-run rejects disabled, mismatched, or unregistered capabilities", () => {
   const helperRequest = {
     kind: "vps_privileged_maintenance_helper_request",
     status: "ready_for_vps_helper",
@@ -247,4 +261,25 @@ test("VPS helper dry-run rejects disabled or mismatched capabilities", () => {
   assert.equal(mismatched.ok, false);
   assert.equal(mismatched.error, "vps_helper_request_manifest_mismatch");
   assert.equal(mismatched.issues.includes("helperRequest capability.allowedArgs must match manifest capability"), true);
+
+  const unregisteredCapability = {
+    ...baseManifest.capabilities[0],
+    id: "custom.unregistered.command",
+    title: "Unregistered command",
+    status: "enabled",
+    commandClass: "custom_unregistered_command",
+    allowedArgs: ["apt-get install -y example-package"]
+  };
+  const unregistered = planVpsPrivilegedMaintenanceHelperExecution({
+    manifest: {
+      ...baseManifest,
+      capabilities: [unregisteredCapability]
+    },
+    helperRequest: {
+      ...helperRequest,
+      capability: unregisteredCapability
+    }
+  });
+  assert.equal(unregistered.ok, false);
+  assert.equal(unregistered.error, "vps_helper_command_class_not_registered");
 });

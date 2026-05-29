@@ -3,6 +3,32 @@ const CAPABILITY_OPERATIONS = new Set(["add", "enable", "disable", "remove", "ro
 const RISK_LEVELS = new Set(["low", "medium", "high"]);
 const DEFAULT_MANIFEST_VERSION = 1;
 const HELPER_EXECUTION_MODES = new Set(["dry_run"]);
+const HELPER_COMMAND_REGISTRY = Object.freeze({
+  playwright_install_deps_chromium: {
+    commandClass: "playwright_install_deps_chromium",
+    title: "Playwright Chromium dependency install",
+    allowedArgs: ["npx playwright install-deps chromium"],
+    requiredRiskLevel: "high",
+    requiresRoot: true,
+    initialPreset: true
+  },
+  codex_sandbox_sysctl_apply: {
+    commandClass: "codex_sandbox_sysctl_apply",
+    title: "Codex sandbox sysctl apply",
+    allowedArgs: ["sysctl --system"],
+    requiredRiskLevel: "high",
+    requiresRoot: true,
+    initialPreset: true
+  },
+  systemd_user_runner_restart: {
+    commandClass: "systemd_user_runner_restart",
+    title: "Restart VTDD runner user service",
+    allowedArgs: ["systemctl --user restart vtdd-vps-runner.timer"],
+    requiredRiskLevel: "medium",
+    requiresRoot: false,
+    initialPreset: true
+  }
+});
 
 function normalizeVpsCapabilityManifest(input = {}) {
   const issues = [];
@@ -269,6 +295,14 @@ function planVpsPrivilegedMaintenanceHelperExecution(input = {}) {
       issues: mismatch
     };
   }
+  const registryBinding = bindHelperCommandRegistry(capability);
+  if (!registryBinding.ok) {
+    return {
+      ok: false,
+      error: registryBinding.error,
+      issues: registryBinding.issues
+    };
+  }
 
   return {
     ok: true,
@@ -285,7 +319,8 @@ function planVpsPrivilegedMaintenanceHelperExecution(input = {}) {
       commandPreview: {
         commandClass: capability.commandClass,
         workingDirectories: capability.workingDirectories,
-        allowedArgs: capability.allowedArgs
+        allowedArgs: capability.allowedArgs,
+        registryBinding: registryBinding.binding
       },
       audit: {
         redactionRules: capability.redactionRules,
@@ -307,6 +342,7 @@ function planVpsPrivilegedMaintenanceHelperExecution(input = {}) {
       operation: request.operation,
       capabilityId: capability.id,
       commandClass: capability.commandClass,
+      registryBinding: registryBinding.binding,
       before: {
         manifestVersion: manifest.version,
         capabilityStatus: capability.status
@@ -344,6 +380,46 @@ function containsForbiddenPrivilegedPattern(capability) {
     capability.rollbackPlan
   ].join(" ");
   return /\bNOPASSWD\s*:\s*ALL\b/i.test(joined) || /\bsudo\s+su\b/i.test(joined) || /\b(root\s+shell|\/bin\/bash|\/bin\/sh)\b/i.test(joined);
+}
+
+function listVpsPrivilegedMaintenanceCommandRegistry() {
+  return Object.values(HELPER_COMMAND_REGISTRY).map((entry) => ({ ...entry }));
+}
+
+function bindHelperCommandRegistry(capability) {
+  const entry = HELPER_COMMAND_REGISTRY[capability.commandClass];
+  if (!entry) {
+    return {
+      ok: false,
+      error: "vps_helper_command_class_not_registered",
+      issues: [`commandClass is not registered for VPS helper execution: ${capability.commandClass}`]
+    };
+  }
+  const issues = [];
+  if (!sameStringList(capability.allowedArgs, entry.allowedArgs)) {
+    issues.push("capability allowedArgs must match registered helper command");
+  }
+  if (capability.riskLevel !== entry.requiredRiskLevel) {
+    issues.push("capability riskLevel must match registered helper command");
+  }
+  if (issues.length > 0) {
+    return {
+      ok: false,
+      error: "vps_helper_command_registry_mismatch",
+      issues
+    };
+  }
+  return {
+    ok: true,
+    binding: {
+      commandClass: entry.commandClass,
+      title: entry.title,
+      allowedArgs: entry.allowedArgs,
+      requiredRiskLevel: entry.requiredRiskLevel,
+      requiresRoot: entry.requiresRoot,
+      initialPreset: entry.initialPreset
+    }
+  };
 }
 
 function normalizeHelperRequest(input = {}) {
@@ -468,6 +544,7 @@ export {
   buildVpsMaintenanceApprovalScope,
   applyVpsCapabilityLifecycleOperation,
   planVpsPrivilegedMaintenanceHelperExecution,
+  listVpsPrivilegedMaintenanceCommandRegistry,
   normalizeVpsCapability,
   normalizeVpsCapabilityManifest
 };
