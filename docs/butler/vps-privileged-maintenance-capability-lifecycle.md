@@ -54,6 +54,31 @@ Capabilities must be manageable from iPhone after approval:
 
 The design must support reducing authority as easily as adding it.
 
+The repository-backed core contract lives in
+`src/core/vps-privileged-maintenance.js`. It is intentionally pure and does not
+install a helper, mutate sudoers, or run root commands. It defines the manifest,
+proposal, review, approval-scope, and add/enable/disable/remove/rollback
+lifecycle semantics that the Worker route and root-owned VPS helper must use in
+later implementation slices.
+
+Each proposal must include:
+
+- capability id and owner-facing title.
+- command class, not an arbitrary root shell.
+- allowed arguments or package/action set.
+- allowed working directory or host path scope.
+- affected paths or package classes.
+- risk level.
+- rollback or disable plan.
+- log redaction rules.
+- expected runtime truth.
+- reason that explains why the owner is being asked to approve it.
+
+The core contract rejects broad privileged patterns such as `NOPASSWD:ALL`,
+`sudo su`, and root shell capabilities. If a break-glass capability is ever
+needed, it must be designed as a separate high-risk Issue with stronger
+approval, TTL, audit, and cleanup semantics.
+
 ## Initial Presets
 
 The first preset set should cover the failure classes already observed:
