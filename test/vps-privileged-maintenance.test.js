@@ -52,16 +52,22 @@ test("VPS privileged maintenance helper command registry exposes initial presets
     registry.every((entry) => Array.isArray(entry.allowedArgs) && entry.allowedArgs.length > 0),
     true
   );
+  assert.equal(
+    registry.every((entry) => Array.isArray(entry.argv) && entry.argv.length > 0),
+    true
+  );
 });
 
 test("VPS privileged maintenance helper command registry does not expose mutable internal arrays", () => {
   const registry = listVpsPrivilegedMaintenanceCommandRegistry();
   const playwright = registry.find((entry) => entry.commandClass === "playwright_install_deps_chromium");
   playwright.allowedArgs.push("npx playwright install-deps firefox");
+  playwright.argv.push("firefox");
 
   const freshRegistry = listVpsPrivilegedMaintenanceCommandRegistry();
   const freshPlaywright = freshRegistry.find((entry) => entry.commandClass === "playwright_install_deps_chromium");
   assert.deepEqual(freshPlaywright.allowedArgs, ["npx playwright install-deps chromium"]);
+  assert.deepEqual(freshPlaywright.argv, ["npx", "playwright", "install-deps", "chromium"]);
 });
 
 test("VPS privileged maintenance proposal requires PWA notification and rollback plan", () => {
@@ -228,8 +234,10 @@ test("VPS helper dry-run contract validates enabled manifest capability without 
   assert.equal(result.helperPlan.rootExecutionStarted, false);
   assert.equal(result.helperPlan.helperExecutionStarted, false);
   assert.deepEqual(result.helperPlan.commandPreview.allowedArgs, ["npx playwright install-deps chromium"]);
+  assert.deepEqual(result.helperPlan.commandPreview.argv, ["npx", "playwright", "install-deps", "chromium"]);
   assert.equal(result.runtimeTruth.status, "dry_run_ready");
   assert.equal(result.runtimeTruth.registryBinding.commandClass, "playwright_install_deps_chromium");
+  assert.deepEqual(result.runtimeTruth.commandArgv, ["npx", "playwright", "install-deps", "chromium"]);
   assert.equal(result.runtimeTruth.exitCode, null);
   assert.equal(result.runtimeTruth.redactedLogSummary, "dry-run only; privileged command was not executed");
 });

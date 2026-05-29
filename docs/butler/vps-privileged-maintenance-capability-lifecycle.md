@@ -85,7 +85,9 @@ must bind to the repo-backed helper command registry in
 `src/core/vps-privileged-maintenance.js`. The registry is the bridge between a
 reviewed capability and the root-owned helper implementation: dry-run rejects
 unknown `commandClass` values and rejects registered commands whose risk level
-or allowed arguments do not match the registry.
+or allowed arguments do not match the registry. The registry must also carry an
+argv-form command preview for the root-owned helper. Future execution must use
+that argv boundary rather than passing manifest strings through a shell.
 
 ## Initial Presets
 
