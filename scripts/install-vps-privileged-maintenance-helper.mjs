@@ -90,7 +90,7 @@ function buildInitialManifest(config, now = new Date().toISOString()) {
     riskLevel: entry.requiredRiskLevel,
     workingDirectories: [config.repoDir],
     allowedArgs: entry.allowedArgs,
-    affectedPaths: entry.requiresRoot ? ["/usr", "/etc", "/var"] : [config.repoDir],
+    affectedPaths: affectedPathsForCommand(entry, config),
     redactionRules: ["no secrets", "summarize stdout/stderr", "redact tokens and credentials"],
     rollbackPlan: "disable capability in the root-owned manifest and keep audit history",
     expectedRuntimeTruth: ["before state", "exit code", "redacted log summary", "after state", "next action"],
@@ -104,6 +104,22 @@ function buildInitialManifest(config, now = new Date().toISOString()) {
     updatedAt: now,
     capabilities
   };
+}
+
+function affectedPathsForCommand(entry, config) {
+  if (entry.commandClass === "playwright_install_deps_chromium") {
+    return ["/etc/apt", "/etc/fonts", "/usr", "/var/lib/apt", "/var/lib/dpkg", "/var/cache/apt", "/var/log/apt"];
+  }
+  if (entry.commandClass === "codex_sandbox_sysctl_apply") {
+    return ["/etc/sysctl.conf", "/etc/sysctl.d", "/proc/sys"];
+  }
+  if (entry.commandClass.startsWith("systemd_user_")) {
+    return [`/home/${config.runnerUser}/.config/systemd/user`, "/run/user"];
+  }
+  if (entry.requiresRoot) {
+    return ["/usr", "/etc", "/var", "/proc"];
+  }
+  return [config.repoDir];
 }
 
 function buildHelperScript(config) {
