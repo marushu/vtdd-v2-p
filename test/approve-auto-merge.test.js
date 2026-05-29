@@ -185,6 +185,83 @@ test("approve auto merge allows same-head approve after trusted objection resolu
   assert.equal(result.evidence.includes("reviewerConflict=none"), true);
 });
 
+test("approve auto merge blocks reviewer pending marker after same-head approve", () => {
+  const result = evaluateApproveAutoMerge({
+    policyMode: ApproveAutoMergePolicyMode.APPROVE_AUTO_MERGE,
+    pullRequest: mergeablePullRequest,
+    reviewLoop: {
+      ...approvedReviewLoop,
+      reviewTimeline: [
+        {
+          type: "gemini_review",
+          reviewer: "gemini",
+          recommendedAction: "approve",
+          headSha: "abc123",
+          url: "https://github.com/sample-org/vtdd-v2-p/pull/10#issuecomment-approve",
+          createdAt: "2026-05-29T10:23:45Z"
+        },
+        {
+          type: "codex_fallback",
+          reviewer: "codex",
+          status: "requested",
+          headSha: "abc123",
+          url: "https://github.com/sample-org/vtdd-v2-p/pull/10#issuecomment-requested",
+          createdAt: "2026-05-29T10:23:50Z"
+        }
+      ]
+    },
+    checkRuns: successChecks
+  });
+
+  assert.equal(result.allowed, false);
+  assert.equal(
+    result.reasons.some((reason) =>
+      reason.includes("reviewer review is pending after latest approve for current head")
+    ),
+    true
+  );
+  assert.equal(result.evidence.includes("reviewerConflict=post_approve_review_pending"), true);
+});
+
+test("approve auto merge blocks request changes marker after same-head approve", () => {
+  const result = evaluateApproveAutoMerge({
+    policyMode: ApproveAutoMergePolicyMode.APPROVE_AUTO_MERGE,
+    pullRequest: mergeablePullRequest,
+    reviewLoop: {
+      ...approvedReviewLoop,
+      reviewTimeline: [
+        {
+          type: "gemini_review",
+          reviewer: "gemini",
+          recommendedAction: "approve",
+          headSha: "abc123",
+          url: "https://github.com/sample-org/vtdd-v2-p/pull/10#issuecomment-approve",
+          createdAt: "2026-05-29T10:23:45Z"
+        },
+        {
+          type: "codex_fallback",
+          reviewer: "codex",
+          status: "completed",
+          recommendedAction: "request_changes",
+          headSha: "abc123",
+          url: "https://github.com/sample-org/vtdd-v2-p/pull/10#issuecomment-request",
+          createdAt: "2026-05-29T10:23:55Z"
+        }
+      ]
+    },
+    checkRuns: successChecks
+  });
+
+  assert.equal(result.allowed, false);
+  assert.equal(
+    result.reasons.some((reason) =>
+      reason.includes("unresolved reviewer request_changes remains for current head")
+    ),
+    true
+  );
+  assert.equal(result.evidence.includes("reviewerConflict=post_approve_request_changes"), true);
+});
+
 test("approve auto merge remains opt-in by policy or labels", () => {
   assert.equal(resolveApproveAutoMergePolicy({}), ApproveAutoMergePolicyMode.MANUAL);
   assert.equal(

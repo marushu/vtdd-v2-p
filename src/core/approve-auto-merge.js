@@ -98,9 +98,15 @@ export function evaluateApproveAutoMerge(input = {}) {
     reasons.push("unresolved reviewer objections remain.");
   }
   if (unresolvedReviewerEvidence) {
-    reasons.push(
-      `unresolved reviewer request_changes remains for current head: ${unresolvedReviewerEvidence.reviewer || "unknown"} ${unresolvedReviewerEvidence.url || "unknown url"}.`
-    );
+    if (unresolvedReviewerEvidence.conflictKind === "post_approve_review_pending") {
+      reasons.push(
+        `reviewer review is pending after latest approve for current head: ${unresolvedReviewerEvidence.reviewer || "unknown"} ${unresolvedReviewerEvidence.url || "unknown url"}.`
+      );
+    } else {
+      reasons.push(
+        `unresolved reviewer request_changes remains for current head: ${unresolvedReviewerEvidence.reviewer || "unknown"} ${unresolvedReviewerEvidence.url || "unknown url"}.`
+      );
+    }
   }
   if (reviewLoop.criticalReviewPending) {
     reasons.push("critical review is still pending.");
@@ -136,7 +142,7 @@ export function evaluateApproveAutoMerge(input = {}) {
   evidence.push(`reviewer=${reviewLoop.reviewer || "unknown"}`);
   evidence.push(`reviewerAction=${reviewLoop.reviewerEvidence?.recommendedAction || "none"}`);
   evidence.push(`reviewerHeadSha=${reviewLoop.reviewerEvidence?.headSha || "unknown"}`);
-  evidence.push(`reviewerConflict=${unresolvedReviewerEvidence ? "unresolved_request_changes" : "none"}`);
+  evidence.push(`reviewerConflict=${unresolvedReviewerEvidence?.conflictKind || (unresolvedReviewerEvidence ? "unresolved_request_changes" : "none")}`);
   evidence.push(`mergeable=${String(pullRequest.mergeability.mergeable)}`);
   evidence.push(`mergeableState=${pullRequest.mergeability.mergeableState || "unknown"}`);
   evidence.push(`checks=${checkTruth.summary}`);
@@ -415,6 +421,22 @@ function findUnresolvedReviewerEvidenceConflict({ timeline, headSha, reviewerEvi
     return null;
   }
 
+  const postApproveBlocker = sorted.find((item) => {
+    if (item.time <= latestApprove.time) {
+      return false;
+    }
+    const action = normalizeText(item.recommendedAction).toLowerCase();
+    const status = normalizeText(item.status).toLowerCase();
+    return action === "request_changes" || action === "manual_review" || status === "requested" || status === "pending";
+  });
+  if (postApproveBlocker) {
+    const action = normalizeText(postApproveBlocker.recommendedAction).toLowerCase();
+    return {
+      ...postApproveBlocker,
+      conflictKind: action === "request_changes" || action === "manual_review" ? "post_approve_request_changes" : "post_approve_review_pending"
+    };
+  }
+
   const blocking = [...sorted]
     .reverse()
     .find((item) => {
@@ -434,7 +456,7 @@ function findUnresolvedReviewerEvidenceConflict({ timeline, headSha, reviewerEvi
     }
     return item.time > blocking.time && item.time < latestApprove.time;
   });
-  return resolved ? null : blocking;
+  return resolved ? null : { ...blocking, conflictKind: "unresolved_request_changes" };
 }
 
 function normalizeReviewTimelineItem(item) {
@@ -446,6 +468,7 @@ function normalizeReviewTimelineItem(item) {
   return {
     type: normalizeText(item.type),
     reviewer: normalizeText(item.reviewer),
+    status: normalizeText(item.status).toLowerCase(),
     recommendedAction: normalizeText(item.recommendedAction).toLowerCase(),
     blocking: item.blocking === true,
     headSha: normalizeText(item.headSha),
