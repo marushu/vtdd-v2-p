@@ -4091,6 +4091,73 @@ test("worker refuses server-side dashboard Web Push test when current device sub
   assert.equal(JSON.stringify(body).includes("current-device"), false);
 });
 
+test("worker sends owner-action-required PWA notification through machine event route", async () => {
+  const store = createInMemoryDashboardPushSubscriptionStore();
+  const pushKeys = await createTestPushSubscription();
+  const currentEndpointHash = await sha256HexTest(pushKeys.subscription.endpoint);
+  await store.put({
+    ...pushKeys.subscription,
+    endpointHash: currentEndpointHash
+  });
+  const eventStore = createInMemoryDashboardEventStore();
+  const calls = [];
+  const vapidEnv = await createTestVapidEnv({
+    DASHBOARD_WEB_PUSH_FETCH: async (input, init) => {
+      calls.push({ input, init });
+      return new Response(null, { status: 201 });
+    }
+  });
+
+  const unauthenticated = await worker.fetch(
+    new Request("https://example.com/v2/events/owner-action-required", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ repository: "marushu/vtdd-v2-p", title: "must not send" })
+    }),
+    {
+      ...gatewayAuthEnv,
+      ...vapidEnv,
+      DASHBOARD_EVENT_STORE: eventStore,
+      DASHBOARD_PUSH_SUBSCRIPTION_STORE: store
+    }
+  );
+  assert.equal(unauthenticated.status, 401);
+  assert.equal(calls.length, 0);
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/events/owner-action-required", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        repository: "marushu/vtdd-v2-p",
+        actionId: "issue-637-passkey-needed",
+        title: "Passkey approval needed",
+        summary: "VPS capability proposal requires owner approval",
+        issueNumber: 637,
+        url: "/dashboard/notifications?focus=owner-action"
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      ...vapidEnv,
+      DASHBOARD_EVENT_STORE: eventStore,
+      DASHBOARD_PUSH_SUBSCRIPTION_STORE: store
+    }
+  );
+  assert.equal(response.status, 202);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.event.kind, "owner_action_required");
+  assert.equal(body.webPush.delivered, 1);
+  assert.equal(calls.length, 1);
+  const decrypted = JSON.parse(await decryptTestWebPushPayload(calls[0].init.body, pushKeys));
+  assert.equal(decrypted.title, "要対応: VPS capability proposal requires owner approval");
+  assert.equal(decrypted.body.includes("Issue #637"), true);
+  assert.equal(decrypted.url, "/dashboard/notifications?focus=owner-action");
+  const stored = await eventStore.latest({ kind: "owner_action_required", repository: "marushu/vtdd-v2-p" });
+  assert.equal(stored.id, "owner-action-required:marushu/vtdd-v2-p:issue-637-passkey-needed");
+});
+
 test("worker builds distinct dashboard Web Push copy by event type", () => {
   const deploySuccess = buildDashboardWebPushPayload({
     kind: "github_actions_workflow_run",
@@ -4139,6 +4206,24 @@ test("worker builds distinct dashboard Web Push copy by event type", () => {
   });
   assert.equal(testPush.title, "VTDD Butler テスト通知");
   assert.equal(testPush.body, "通知経路は正常です。iPhone PWA にサーバ送信できました。");
+
+  const ownerAction = buildDashboardWebPushPayload({
+    id: "owner-action-required:marushu/vtdd-v2-p:issue-637-passkey-needed",
+    kind: "owner_action_required",
+    repository: "marushu/vtdd-v2-p",
+    workflowName: "vps-maintenance",
+    runId: "issue-637-passkey-needed",
+    status: "waiting",
+    conclusion: "action_required",
+    title: "Passkey approval needed",
+    changeSummary: "VPS capability proposal requires owner approval",
+    issueNumber: 637,
+    runUrl: "/dashboard/notifications?focus=owner-action"
+  });
+  assert.equal(ownerAction.title, "要対応: VPS capability proposal requires owner approval");
+  assert.equal(ownerAction.body.includes("Issue #637"), true);
+  assert.equal(ownerAction.url, "/dashboard/notifications?focus=owner-action");
+  assert.equal(ownerAction.sourceEventId, "owner-action-required:marushu/vtdd-v2-p:issue-637-passkey-needed");
 
   const aiNews = buildDashboardWebPushPayload({
     id: "ai-news:morning:2026-05-28",
