@@ -76,6 +76,21 @@ test("VPS privileged maintenance install inventory reports root-owned helper rea
   assert.equal(unsafe.ok, false);
   assert.equal(unsafe.status, "blocked");
   assert.equal(unsafe.issues.includes("sudoers must not allow NOPASSWD:ALL"), true);
+
+  const sudoProbeReady = buildVpsPrivilegedMaintenanceInstallInventory({
+    host: "x85-131-245-163",
+    repository: "marushu/vtdd-v2-p",
+    helperInstalled: true,
+    manifestInstalled: true,
+    sudoersInstalled: null,
+    helperOwner: "root",
+    manifestOwner: "root",
+    sudoersOwner: null,
+    sudoersAllowsAll: null,
+    sudoersHelperProbe: true
+  });
+  assert.equal(sudoProbeReady.status, "ready");
+  assert.equal(sudoProbeReady.runtimeTruth.sudoersHelperProbeStarted, true);
 });
 
 test("VPS privileged maintenance helper command registry exposes initial presets", () => {

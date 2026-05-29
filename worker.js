@@ -37500,6 +37500,7 @@ function buildVpsPrivilegedMaintenanceInstallInventory(input = {}) {
   const manifestOwner = normalizeText24(observed.manifestOwner || input.manifestOwner);
   const sudoersOwner = normalizeText24(observed.sudoersOwner || input.sudoersOwner);
   const sudoersAllowsAll = normalizeBoolean(observed.sudoersAllowsAll ?? input.sudoersAllowsAll);
+  const sudoersHelperProbe = normalizeBoolean(observed.sudoersHelperProbe ?? input.sudoersHelperProbe);
   const issues = [];
   if (!host) issues.push("host is required");
   if (!repository) issues.push("repository is required");
@@ -37526,11 +37527,12 @@ function buildVpsPrivilegedMaintenanceInstallInventory(input = {}) {
     },
     {
       id: "scoped_sudoers_entry",
-      status: sudoersInstalled === true && sudoersOwner === "root" && sudoersAllowsAll !== true ? "pass" : sudoersInstalled === false ? "missing" : "unverified",
+      status: sudoersInstalled === true && sudoersOwner === "root" && sudoersAllowsAll !== true ? "pass" : sudoersHelperProbe === true && sudoersAllowsAll !== true ? "pass" : sudoersInstalled === false ? "missing" : "unverified",
       required: true,
       path: sudoersPath,
       expectedOwner: "root",
-      observedOwner: sudoersOwner || null
+      observedOwner: sudoersOwner || null,
+      functionalProbe: sudoersHelperProbe === true ? "sudo_helper_version" : null
     }
   ];
   const status = issues.length > 0 ? "blocked" : checks.every((check) => check.status === "pass") ? "ready" : checks.some((check) => check.status === "missing") ? "missing" : "unverified";
@@ -37557,6 +37559,7 @@ function buildVpsPrivilegedMaintenanceInstallInventory(input = {}) {
       repository,
       rootExecutionStarted: false,
       helperExecutionStarted: false,
+      sudoersHelperProbeStarted: sudoersHelperProbe === true,
       redacted: true,
       nextAction: status === "ready" ? "helper install inventory is ready for scoped helper requests" : "verify or install root-owned helper, manifest, and scoped sudoers before claiming iPhone-complete privileged maintenance"
     },

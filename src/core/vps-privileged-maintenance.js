@@ -259,6 +259,7 @@ function buildVpsPrivilegedMaintenanceInstallInventory(input = {}) {
   const manifestOwner = normalizeText(observed.manifestOwner || input.manifestOwner);
   const sudoersOwner = normalizeText(observed.sudoersOwner || input.sudoersOwner);
   const sudoersAllowsAll = normalizeBoolean(observed.sudoersAllowsAll ?? input.sudoersAllowsAll);
+  const sudoersHelperProbe = normalizeBoolean(observed.sudoersHelperProbe ?? input.sudoersHelperProbe);
   const issues = [];
   if (!host) issues.push("host is required");
   if (!repository) issues.push("repository is required");
@@ -286,11 +287,19 @@ function buildVpsPrivilegedMaintenanceInstallInventory(input = {}) {
     },
     {
       id: "scoped_sudoers_entry",
-      status: sudoersInstalled === true && sudoersOwner === "root" && sudoersAllowsAll !== true ? "pass" : sudoersInstalled === false ? "missing" : "unverified",
+      status:
+        sudoersInstalled === true && sudoersOwner === "root" && sudoersAllowsAll !== true
+          ? "pass"
+          : sudoersHelperProbe === true && sudoersAllowsAll !== true
+            ? "pass"
+            : sudoersInstalled === false
+              ? "missing"
+              : "unverified",
       required: true,
       path: sudoersPath,
       expectedOwner: "root",
-      observedOwner: sudoersOwner || null
+      observedOwner: sudoersOwner || null,
+      functionalProbe: sudoersHelperProbe === true ? "sudo_helper_version" : null
     }
   ];
   const status =
@@ -325,6 +334,7 @@ function buildVpsPrivilegedMaintenanceInstallInventory(input = {}) {
       repository,
       rootExecutionStarted: false,
       helperExecutionStarted: false,
+      sudoersHelperProbeStarted: sudoersHelperProbe === true,
       redacted: true,
       nextAction:
         status === "ready"

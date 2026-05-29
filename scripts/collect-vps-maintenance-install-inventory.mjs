@@ -1,12 +1,15 @@
 #!/usr/bin/env node
 
 import fs from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 
 import { buildVpsPrivilegedMaintenanceInstallInventory } from "../src/core/index.js";
 
 const DEFAULT_HELPER_INSTALL_PATH = "/usr/local/sbin/vtdd-vps-maintenance-helper";
 const DEFAULT_MANIFEST_PATH = "/etc/vtdd/privileged-maintenance-capabilities.json";
 const DEFAULT_SUDOERS_PATH = "/etc/sudoers.d/vtdd-vps-maintenance-helper";
+const execFileAsync = promisify(execFile);
 
 function parseArgs(argv) {
   const result = {};
@@ -71,6 +74,33 @@ async function observeSudoersPolicy(filePath) {
   }
 }
 
+async function probeScopedSudoHelper({ helperPath, enabled }) {
+  if (!enabled) {
+    return {
+      started: false,
+      ok: null
+    };
+  }
+  try {
+    const result = await execFileAsync("sudo", ["-n", helperPath, "--version"], {
+      timeout: 5000,
+      encoding: "utf8",
+      maxBuffer: 64 * 1024
+    });
+    return {
+      started: true,
+      ok: result.stdout.includes("vtdd-vps-maintenance-helper"),
+      error: null
+    };
+  } catch (error) {
+    return {
+      started: true,
+      ok: false,
+      error: summarizeError(error)
+    };
+  }
+}
+
 function containsBroadSudoersGrant(content) {
   return /\bNOPASSWD\s*:\s*ALL\b/i.test(String(content || ""));
 }
@@ -92,6 +122,7 @@ async function collectVpsMaintenanceInstallInventory(input = {}) {
   const manifestPath = String(input.manifestPath || input["manifest-path"] || DEFAULT_MANIFEST_PATH).trim();
   const sudoersPath = String(input.sudoersPath || input["sudoers-path"] || DEFAULT_SUDOERS_PATH).trim();
   const runnerUser = String(input.runnerUser || input["runner-user"] || "vtdd-runner").trim();
+  const verifyScopedSudo = input.verifyScopedSudo === "true" || input["verify-scoped-sudo"] === "true";
 
   const [helper, manifest, sudoers, sudoersPolicy] = await Promise.all([
     observePath(helperPath),
@@ -99,6 +130,10 @@ async function collectVpsMaintenanceInstallInventory(input = {}) {
     observePath(sudoersPath),
     observeSudoersPolicy(sudoersPath)
   ]);
+  const sudoersHelperProbe = await probeScopedSudoHelper({
+    helperPath,
+    enabled: verifyScopedSudo && helper.installed === true
+  });
 
   const installInventory = buildVpsPrivilegedMaintenanceInstallInventory({
     host,
@@ -113,7 +148,8 @@ async function collectVpsMaintenanceInstallInventory(input = {}) {
     helperOwner: helper.owner,
     manifestOwner: manifest.owner,
     sudoersOwner: sudoers.owner,
-    sudoersAllowsAll: sudoersPolicy.allowsAll
+    sudoersAllowsAll: sudoersPolicy.allowsAll,
+    sudoersHelperProbe: sudoersHelperProbe.ok
   });
 
   return {
@@ -124,6 +160,7 @@ async function collectVpsMaintenanceInstallInventory(input = {}) {
       ...installInventory.runtimeTruth,
       observer: "scripts/collect-vps-maintenance-install-inventory.mjs",
       sudoersContentReadable: sudoersPolicy.readable,
+      sudoersHelperProbeStarted: sudoersHelperProbe.started,
       rootExecutionStarted: false,
       helperExecutionStarted: false,
       redacted: true
@@ -133,7 +170,12 @@ async function collectVpsMaintenanceInstallInventory(input = {}) {
       manifest: redactObservation(manifest),
       sudoers: redactObservation(sudoers),
       sudoersContentReadable: sudoersPolicy.readable,
-      sudoersPolicyError: sudoersPolicy.error || null
+      sudoersPolicyError: sudoersPolicy.error || null,
+      sudoersHelperProbe: {
+        started: sudoersHelperProbe.started,
+        ok: sudoersHelperProbe.ok,
+        error: sudoersHelperProbe.error || null
+      }
     }
   };
 }
