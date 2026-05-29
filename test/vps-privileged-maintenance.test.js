@@ -1,0 +1,163 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {
+  applyVpsCapabilityLifecycleOperation,
+  buildVpsCapabilityProposal,
+  buildVpsMaintenanceApprovalScope,
+  normalizeVpsCapabilityManifest
+} from "../src/core/index.js";
+
+const baseManifest = {
+  version: 1,
+  host: "x85-131-245-163",
+  repository: "marushu/vtdd-v2-p",
+  updatedAt: "2026-05-29T00:00:00.000Z",
+  capabilities: [
+    {
+      id: "playwright.chromium.deps",
+      title: "Playwright Chromium dependency install",
+      status: "disabled",
+      commandClass: "playwright_install_deps_chromium",
+      riskLevel: "high",
+      workingDirectories: ["/home/vtdd-runner/vtdd-runner/repos/vtdd-v2-p"],
+      allowedArgs: ["npx playwright install-deps chromium"],
+      affectedPaths: ["/usr/lib", "/usr/share/fonts"],
+      redactionRules: ["no secrets", "summarize package list"],
+      rollbackPlan: "disable capability and keep audit history",
+      expectedRuntimeTruth: ["before package check", "exit code", "after Chromium launch check"],
+      createdAt: "2026-05-29T00:00:00.000Z",
+      updatedAt: "2026-05-29T00:00:00.000Z"
+    }
+  ]
+};
+
+test("VPS privileged maintenance manifest normalizes reviewable capabilities", () => {
+  const result = normalizeVpsCapabilityManifest(baseManifest);
+
+  assert.equal(result.ok, true);
+  assert.equal(result.manifest.capabilities[0].id, "playwright.chromium.deps");
+  assert.equal(result.manifest.capabilities[0].status, "disabled");
+  assert.equal(result.manifest.capabilities[0].riskLevel, "high");
+});
+
+test("VPS privileged maintenance proposal requires PWA notification and rollback plan", () => {
+  const result = buildVpsCapabilityProposal({
+    host: "x85-131-245-163",
+    repository: "marushu/vtdd-v2-p",
+    id: "codex.sandbox.sysctl",
+    title: "Codex sandbox sysctl repair",
+    commandClass: "codex_sandbox_sysctl_apply",
+    riskLevel: "high",
+    workingDirectories: ["/"],
+    allowedArgs: ["sysctl --system"],
+    affectedPaths: ["/etc/sysctl.d/99-vtdd-codex-userns.conf"],
+    redactionRules: ["no secret material"],
+    rollbackPlan: "restore previous sysctl file and apply sysctl --system",
+    expectedRuntimeTruth: ["before sysctl", "after sysctl"],
+    reason: "VPS Codex CLI cannot launch Chromium sandbox after reboot"
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.proposal.approvalRequired, true);
+  assert.equal(result.proposal.pwaNotificationRequired, true);
+  assert.equal(result.proposal.capability.status, "disabled");
+});
+
+test("VPS privileged maintenance rejects broad sudo/root shell patterns", () => {
+  const result = buildVpsCapabilityProposal({
+    host: "x85-131-245-163",
+    repository: "marushu/vtdd-v2-p",
+    id: "unsafe.root.shell",
+    title: "Unsafe root shell",
+    commandClass: "root shell",
+    riskLevel: "high",
+    workingDirectories: ["/"],
+    allowedArgs: ["vtdd-runner ALL=(ALL) NOPASSWD:ALL"],
+    rollbackPlan: "disable",
+    reason: "unsafe"
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.issues.some((issue) => issue.includes("forbidden broad privileged pattern")), true);
+});
+
+test("VPS privileged maintenance lifecycle can add enable disable remove and review capabilities", () => {
+  const proposal = buildVpsCapabilityProposal({
+    host: "x85-131-245-163",
+    repository: "marushu/vtdd-v2-p",
+    id: "systemd.runner.restart",
+    title: "Restart VPS runner services",
+    commandClass: "systemd_user_runner_restart",
+    riskLevel: "medium",
+    workingDirectories: ["/home/vtdd-runner"],
+    allowedArgs: ["systemctl --user restart vtdd-vps-runner.timer"],
+    affectedPaths: ["systemd user manager"],
+    redactionRules: ["journal summary only"],
+    rollbackPlan: "disable capability and leave services unchanged",
+    expectedRuntimeTruth: ["before status", "after status", "exit code"],
+    reason: "WebSocket/app-server bridge recovery must be iPhone-complete"
+  });
+  assert.equal(proposal.ok, true);
+
+  const added = applyVpsCapabilityLifecycleOperation({
+    operation: "add",
+    manifest: { ...baseManifest, capabilities: [] },
+    proposal: proposal.proposal,
+    now: "2026-05-29T01:00:00.000Z"
+  });
+  assert.equal(added.ok, true);
+  assert.equal(added.manifest.capabilities[0].status, "enabled");
+  assert.equal(added.runtimeTruth.pwaNotificationRequired, true);
+
+  const disabled = applyVpsCapabilityLifecycleOperation({
+    operation: "disable",
+    manifest: added.manifest,
+    capabilityId: "systemd.runner.restart",
+    now: "2026-05-29T01:05:00.000Z"
+  });
+  assert.equal(disabled.ok, true);
+  assert.equal(disabled.manifest.capabilities[0].status, "disabled");
+
+  const enabled = applyVpsCapabilityLifecycleOperation({
+    operation: "enable",
+    manifest: disabled.manifest,
+    capabilityId: "systemd.runner.restart",
+    now: "2026-05-29T01:10:00.000Z"
+  });
+  assert.equal(enabled.ok, true);
+  assert.equal(enabled.manifest.capabilities[0].status, "enabled");
+
+  const review = applyVpsCapabilityLifecycleOperation({
+    operation: "review",
+    manifest: enabled.manifest
+  });
+  assert.equal(review.ok, true);
+  assert.deepEqual(review.review.activeCapabilities, ["systemd.runner.restart"]);
+
+  const removed = applyVpsCapabilityLifecycleOperation({
+    operation: "remove",
+    manifest: enabled.manifest,
+    capabilityId: "systemd.runner.restart",
+    now: "2026-05-29T01:15:00.000Z"
+  });
+  assert.equal(removed.ok, true);
+  assert.equal(removed.manifest.capabilities.length, 0);
+});
+
+test("VPS privileged maintenance approval scope preserves existing passkey operator boundary", () => {
+  const scope = buildVpsMaintenanceApprovalScope({
+    repository: "marushu/vtdd-v2-p",
+    host: "x85-131-245-163",
+    operation: "add",
+    capabilityId: "playwright.chromium.deps",
+    impactScope: "apt packages for Chromium runtime",
+    expiresAt: "2026-05-29T01:10:00.000Z"
+  });
+
+  assert.equal(scope.actionType, "destructive");
+  assert.equal(scope.highRiskKind, "vps_runner_admin");
+  assert.equal(scope.repositoryInput, "marushu/vtdd-v2-p");
+  assert.equal(scope.relatedIssue, "637");
+  assert.equal(scope.display.capabilityId, "playwright.chromium.deps");
+  assert.equal(scope.display.host, "x85-131-245-163");
+});

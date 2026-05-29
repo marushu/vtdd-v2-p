@@ -242,6 +242,14 @@ export {
 export { runMvpGateway } from "./mvp-gateway.js";
 export { executeDeployProductionPlane } from "./deploy-production-plane.js";
 export {
+  buildVpsCapabilityProposal,
+  buildVpsCapabilityReview,
+  buildVpsMaintenanceApprovalScope,
+  applyVpsCapabilityLifecycleOperation,
+  normalizeVpsCapability,
+  normalizeVpsCapabilityManifest
+} from "./vps-privileged-maintenance.js";
+export {
   resolveGatewayAliasRegistryFromGitHubApp,
   resolveGitHubAppInstallationToken
 } from "./github-app-repository-index.js";
