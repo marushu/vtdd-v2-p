@@ -8058,6 +8058,142 @@ test("worker rejects hand-authored VPS passkey scope without stored proposal", a
   assert.equal(body.issues.includes("vpsProposalId is required for vps_runner_admin approval"), true);
 });
 
+test("worker creates VPS maintenance helper request only with matching approval grant", async () => {
+  const provider = createInMemoryMemoryProvider();
+  const proposalResponse = await worker.fetch(
+    new Request("https://example.com/v2/vps/privileged-maintenance/proposals", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        host: "x85-131-245-163",
+        repository: "marushu/vtdd-v2-p",
+        relatedIssue: 637,
+        operation: "add",
+        id: "playwright.chromium.deps",
+        title: "Playwright Chromium dependency install",
+        commandClass: "playwright_install_deps_chromium",
+        workingDirectories: ["/home/vtdd-runner/vtdd-runner/repos/vtdd-v2-p"],
+        allowedArgs: ["npx playwright install-deps chromium"],
+        affectedPaths: ["/usr/lib", "/usr/share/fonts"],
+        redactionRules: ["no secrets", "summarize package list"],
+        rollbackPlan: "disable capability and keep audit history",
+        expectedRuntimeTruth: ["before package check", "exit code", "after Chromium launch check"],
+        reason: "PR #632 Playwright E2E blocker requires Chromium host dependencies",
+        impactScope: "apt packages for Chromium runtime"
+      })
+    }),
+    { ...gatewayAuthEnv, MEMORY_PROVIDER: provider }
+  );
+  assert.equal(proposalResponse.status, 200);
+  const proposalBody = await proposalResponse.json();
+  await provider.store({
+    id: "approval:vps-maintenance",
+    type: MemoryRecordType.APPROVAL_LOG,
+    content: {
+      kind: "passkey_grant",
+      status: "verified",
+      approvalId: "approval:vps-maintenance",
+      credentialId: "AQIDBA",
+      verifiedAt: "2026-05-29T00:00:00.000Z",
+      expiresAt: "2999-01-01T00:00:00.000Z",
+      scope: proposalBody.approvalScope
+    },
+    metadata: { source: "test" },
+    priority: 96,
+    tags: ["passkey_grant", "passkey_approval", "verified"],
+    createdAt: "2026-05-29T00:00:00.000Z"
+  });
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/vps/privileged-maintenance/helper-requests", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        vpsProposalId: proposalBody.vpsProposalId,
+        approvalGrantId: "approval:vps-maintenance"
+      })
+    }),
+    { ...gatewayAuthEnv, MEMORY_PROVIDER: provider }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.helperRequest.status, "ready_for_vps_helper");
+  assert.equal(body.helperRequest.rootExecutionStarted, false);
+  assert.equal(body.helperRequest.helperExecutionStarted, false);
+  assert.equal(body.helperRequest.host, "x85-131-245-163");
+  assert.equal(body.helperRequest.repository, "marushu/vtdd-v2-p");
+  assert.equal(body.helperRequest.relatedIssue, 637);
+  assert.equal(body.helperRequest.operation, "add");
+  assert.equal(body.helperRequest.capability.id, "playwright.chromium.deps");
+  assert.equal(body.runtimeTruth.status, "ready_for_vps_helper");
+  assert.equal(body.runtimeTruth.rootExecutionStarted, false);
+  assert.equal(body.runtimeTruth.helperExecutionStarted, false);
+});
+
+test("worker rejects VPS helper request when approval grant scope does not match proposal", async () => {
+  const provider = createInMemoryMemoryProvider();
+  const proposalResponse = await worker.fetch(
+    new Request("https://example.com/v2/vps/privileged-maintenance/proposals", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        host: "x85-131-245-163",
+        repository: "marushu/vtdd-v2-p",
+        relatedIssue: 637,
+        operation: "add",
+        id: "playwright.chromium.deps",
+        title: "Playwright Chromium dependency install",
+        commandClass: "playwright_install_deps_chromium",
+        workingDirectories: ["/home/vtdd-runner/vtdd-runner/repos/vtdd-v2-p"],
+        allowedArgs: ["npx playwright install-deps chromium"],
+        rollbackPlan: "disable capability and keep audit history",
+        reason: "PR #632 Playwright E2E blocker requires Chromium host dependencies"
+      })
+    }),
+    { ...gatewayAuthEnv, MEMORY_PROVIDER: provider }
+  );
+  assert.equal(proposalResponse.status, 200);
+  const proposalBody = await proposalResponse.json();
+  await provider.store({
+    id: "approval:vps-maintenance-wrong",
+    type: MemoryRecordType.APPROVAL_LOG,
+    content: {
+      kind: "passkey_grant",
+      status: "verified",
+      approvalId: "approval:vps-maintenance-wrong",
+      credentialId: "AQIDBA",
+      verifiedAt: "2026-05-29T00:00:00.000Z",
+      expiresAt: "2999-01-01T00:00:00.000Z",
+      scope: {
+        ...proposalBody.approvalScope,
+        vpsCapabilityId: "other.capability"
+      }
+    },
+    metadata: { source: "test" },
+    priority: 96,
+    tags: ["passkey_grant", "passkey_approval", "verified"],
+    createdAt: "2026-05-29T00:00:00.000Z"
+  });
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/vps/privileged-maintenance/helper-requests", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        vpsProposalId: proposalBody.vpsProposalId,
+        approvalGrantId: "approval:vps-maintenance-wrong"
+      })
+    }),
+    { ...gatewayAuthEnv, MEMORY_PROVIDER: provider }
+  );
+
+  assert.equal(response.status, 403);
+  const body = await response.json();
+  assert.equal(body.error, "approval_grant_scope_mismatch");
+});
+
 test("worker blocks same-origin browser bootstrap registration without bootstrap token", async () => {
   const provider = createInMemoryMemoryProvider();
 

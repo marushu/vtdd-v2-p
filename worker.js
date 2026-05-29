@@ -37422,6 +37422,7 @@ var RUNTIME_SETUP_MANIFEST = Object.freeze({
     "/v2/action/vps-runner-status",
     "/v2/action/vps-runner-cancel",
     "/v2/vps/privileged-maintenance/proposals",
+    "/v2/vps/privileged-maintenance/helper-requests",
     "/v2/retrieve/constitution",
     "/v2/retrieve/decisions",
     "/v2/retrieve/proposals",
@@ -37451,6 +37452,7 @@ var RUNTIME_SETUP_MANIFEST = Object.freeze({
     "vtddVpsRunnerStatus",
     "vtddVpsRunnerCancel",
     "vtddCreateVpsMaintenanceProposal",
+    "vtddCreateVpsMaintenanceHelperRequest",
     "vtddRetrieveConstitution",
     "vtddRetrieveDecisionLogs",
     "vtddRetrieveProposalLogs",
@@ -37479,6 +37481,7 @@ var RUNTIME_SETUP_MANIFEST = Object.freeze({
     "vtddVpsRunnerStatus",
     "vtddVpsRunnerCancel",
     "vtddCreateVpsMaintenanceProposal",
+    "vtddCreateVpsMaintenanceHelperRequest",
     "vtddRetrieveConstitution",
     "vtddRetrieveDecisionLogs",
     "vtddRetrieveProposalLogs",
@@ -57261,6 +57264,21 @@ var runtime_default = {
       }
       return handleVpsPrivilegedMaintenanceProposalRequest(request, env);
     }
+    if (request.method === "POST" && isApiPath(url.pathname, "/vps/privileged-maintenance/helper-requests")) {
+      const auth = authorizeGatewayRequest({
+        request,
+        env,
+        apiSuffix: "/vps/privileged-maintenance/helper-requests"
+      });
+      if (!auth.ok) {
+        return json(auth.status, {
+          ok: false,
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+      return handleVpsPrivilegedMaintenanceHelperRequest(request, env);
+    }
     if (request.method === "POST" && isApiPath(url.pathname, "/action/github-actions-secret")) {
       const auth = authorizePasskeyBrowserOrMachineRequest({
         request,
@@ -59968,6 +59986,117 @@ function normalizeVpsMaintenanceProposalExpiresAt(value, now = /* @__PURE__ */ n
     ok: true,
     expiresAt: new Date(parsed).toISOString()
   };
+}
+async function handleVpsPrivilegedMaintenanceHelperRequest(request, env) {
+  const provider = resolveMemoryProvider(env);
+  const memoryValidation = validateMemoryProvider(provider);
+  if (!memoryValidation.ok) {
+    return json(503, {
+      ok: false,
+      error: "memory_provider_unavailable",
+      reason: "valid memory provider is required for VPS maintenance helper requests"
+    });
+  }
+  const payload = await readJson(request);
+  const vpsProposalId = normalizeText31(payload?.vpsProposalId || payload?.vps_proposal_id);
+  const approvalGrantId = normalizeText31(payload?.approvalGrantId || payload?.approval_grant_id);
+  const issues = [];
+  if (!vpsProposalId) issues.push("vpsProposalId is required");
+  if (!approvalGrantId) issues.push("approvalGrantId is required");
+  if (issues.length > 0) {
+    return json(422, {
+      ok: false,
+      error: "vps_privileged_maintenance_helper_request_invalid",
+      issues
+    });
+  }
+  const proposalRecord = await findApprovalRecordById(provider, vpsProposalId);
+  if (!proposalRecord || normalizeText31(proposalRecord?.content?.kind) !== "vps_privileged_maintenance_approval_proposal") {
+    return json(404, {
+      ok: false,
+      error: "vps_privileged_maintenance_proposal_not_found",
+      reason: "matching VPS maintenance approval proposal was not found"
+    });
+  }
+  if (Date.parse(normalizeText31(proposalRecord.content.expiresAt)) <= Date.now()) {
+    return json(422, {
+      ok: false,
+      error: "vps_privileged_maintenance_proposal_expired",
+      issues: ["VPS maintenance approval proposal is expired"]
+    });
+  }
+  const grantRecord = await findApprovalRecordById(provider, approvalGrantId);
+  if (!grantRecord || normalizeText31(grantRecord?.content?.kind) !== "passkey_grant") {
+    return json(404, {
+      ok: false,
+      error: "approval_grant_not_found",
+      reason: "matching passkey approval grant was not found"
+    });
+  }
+  const approvalGrant = {
+    approvalId: normalizeText31(grantRecord.content.approvalId || grantRecord.id),
+    verified: normalizeText31(grantRecord.content.status) === "verified",
+    expiresAt: normalizeText31(grantRecord.content.expiresAt),
+    scope: grantRecord.content.scope
+  };
+  const expectedScope = normalizeScopeSnapshot(proposalRecord.content.approvalScope);
+  const grantResult = evaluateApprovalGrant({
+    approvalGrant,
+    scope: expectedScope
+  });
+  if (!grantResult.ok) {
+    return json(403, {
+      ok: false,
+      error: "approval_grant_scope_mismatch",
+      reason: grantResult.reason
+    });
+  }
+  const proposal = proposalRecord.content.proposal;
+  const capability = proposal.capability ?? {};
+  const helperRequest = {
+    kind: "vps_privileged_maintenance_helper_request",
+    status: "ready_for_vps_helper",
+    requestId: createDashboardRequestId("vps-maintenance-helper-request"),
+    vpsProposalId,
+    approvalGrantId,
+    host: proposal.host,
+    repository: proposal.repository,
+    relatedIssue: normalizePositiveInteger10(proposalRecord.content.relatedIssue),
+    operation: expectedScope.vpsOperation,
+    capability: {
+      id: capability.id,
+      title: capability.title,
+      commandClass: capability.commandClass,
+      riskLevel: capability.riskLevel,
+      workingDirectories: capability.workingDirectories ?? [],
+      allowedArgs: capability.allowedArgs ?? [],
+      affectedPaths: capability.affectedPaths ?? [],
+      redactionRules: capability.redactionRules ?? [],
+      rollbackPlan: capability.rollbackPlan,
+      expectedRuntimeTruth: capability.expectedRuntimeTruth ?? []
+    },
+    approvalScope: expectedScope,
+    rootExecutionStarted: false,
+    helperExecutionStarted: false,
+    redacted: true
+  };
+  return json(200, {
+    ok: true,
+    helperRequest,
+    runtimeTruth: {
+      kind: "vps_privileged_maintenance_helper_request",
+      status: "ready_for_vps_helper",
+      host: helperRequest.host,
+      repository: helperRequest.repository,
+      relatedIssue: helperRequest.relatedIssue,
+      operation: helperRequest.operation,
+      capabilityId: helperRequest.capability.id,
+      rootExecutionStarted: false,
+      helperExecutionStarted: false,
+      redacted: true,
+      nextAction: "send this bounded helperRequest to the VPS root-owned helper in the next approved slice"
+    }
+  });
 }
 async function handleDashboardChatMessageRequest(request, env) {
   const dashboardAuth = await authorizeDashboardRequest({
