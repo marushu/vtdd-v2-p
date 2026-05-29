@@ -75,13 +75,18 @@ test("VPS maintenance helper installer staging writes helper manifest and scoped
   const sysctlCapability = manifest.capabilities.find((capability) => capability.commandClass === "codex_sandbox_sysctl_apply");
   assert.deepEqual(playwrightCapability.affectedPaths, [
     "/etc/apt",
+    "/etc/fonts",
+    "/usr",
     "/var/lib/apt",
+    "/var/lib/dpkg",
     "/var/cache/apt",
-    "/usr/lib",
-    "/usr/share/fonts"
+    "/var/log/apt"
   ]);
   assert.deepEqual(sysctlCapability.affectedPaths, ["/etc/sysctl.conf", "/etc/sysctl.d", "/proc/sys"]);
-  assert.equal(manifest.capabilities.some((capability) => capability.affectedPaths.includes("/var")), false);
+  assert.equal(
+    manifest.capabilities.some((capability) => capability.riskLevel === "high" && capability.affectedPaths.length === 1 && capability.affectedPaths[0] === "/home/vtdd-runner/vtdd-runner/repos/vtdd-v2-p"),
+    false
+  );
   assert.equal(/\bNOPASSWD\s*:\s*ALL\b/i.test(sudoers), false);
   assert.equal(sudoers, "vtdd-runner ALL=(root) NOPASSWD: /usr/local/sbin/vtdd-vps-maintenance-helper\n");
 });

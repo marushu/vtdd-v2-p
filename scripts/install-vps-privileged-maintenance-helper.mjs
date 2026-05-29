@@ -108,13 +108,16 @@ function buildInitialManifest(config, now = new Date().toISOString()) {
 
 function affectedPathsForCommand(entry, config) {
   if (entry.commandClass === "playwright_install_deps_chromium") {
-    return ["/etc/apt", "/var/lib/apt", "/var/cache/apt", "/usr/lib", "/usr/share/fonts"];
+    return ["/etc/apt", "/etc/fonts", "/usr", "/var/lib/apt", "/var/lib/dpkg", "/var/cache/apt", "/var/log/apt"];
   }
   if (entry.commandClass === "codex_sandbox_sysctl_apply") {
     return ["/etc/sysctl.conf", "/etc/sysctl.d", "/proc/sys"];
   }
   if (entry.commandClass.startsWith("systemd_user_")) {
     return [`/home/${config.runnerUser}/.config/systemd/user`, "/run/user"];
+  }
+  if (entry.requiresRoot) {
+    return ["/usr", "/etc", "/var", "/proc"];
   }
   return [config.repoDir];
 }
