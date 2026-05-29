@@ -69,6 +69,19 @@ test("VPS maintenance helper installer staging writes helper manifest and scoped
   assert.equal(helper.includes("exec \"$NODE_BIN\" \"$HELPER_SCRIPT\" \"$@\""), true);
   assert.equal(manifest.repository, "marushu/vtdd-v2-p");
   assert.equal(manifest.capabilities.some((capability) => capability.commandClass === "playwright_install_deps_chromium"), true);
+  const playwrightCapability = manifest.capabilities.find(
+    (capability) => capability.commandClass === "playwright_install_deps_chromium"
+  );
+  const sysctlCapability = manifest.capabilities.find((capability) => capability.commandClass === "codex_sandbox_sysctl_apply");
+  assert.deepEqual(playwrightCapability.affectedPaths, [
+    "/etc/apt",
+    "/var/lib/apt",
+    "/var/cache/apt",
+    "/usr/lib",
+    "/usr/share/fonts"
+  ]);
+  assert.deepEqual(sysctlCapability.affectedPaths, ["/etc/sysctl.conf", "/etc/sysctl.d", "/proc/sys"]);
+  assert.equal(manifest.capabilities.some((capability) => capability.affectedPaths.includes("/var")), false);
   assert.equal(/\bNOPASSWD\s*:\s*ALL\b/i.test(sudoers), false);
   assert.equal(sudoers, "vtdd-runner ALL=(root) NOPASSWD: /usr/local/sbin/vtdd-vps-maintenance-helper\n");
 });
