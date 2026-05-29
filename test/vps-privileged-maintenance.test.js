@@ -45,10 +45,19 @@ test("VPS privileged maintenance manifest normalizes reviewable capabilities", (
 
 test("VPS privileged maintenance helper command registry exposes initial presets", () => {
   const registry = listVpsPrivilegedMaintenanceCommandRegistry();
+  const commandClasses = registry.map((entry) => entry.commandClass);
 
-  assert.equal(registry.some((entry) => entry.commandClass === "playwright_install_deps_chromium"), true);
-  assert.equal(registry.some((entry) => entry.commandClass === "codex_sandbox_sysctl_apply"), true);
-  assert.equal(registry.some((entry) => entry.commandClass === "systemd_user_runner_restart"), true);
+  assert.equal(commandClasses.includes("playwright_install_deps_chromium"), true);
+  assert.equal(commandClasses.includes("codex_sandbox_sysctl_apply"), true);
+  assert.equal(commandClasses.includes("systemd_user_daemon_reload"), true);
+  assert.equal(commandClasses.includes("systemd_user_runner_status"), true);
+  assert.equal(commandClasses.includes("systemd_user_runner_enable"), true);
+  assert.equal(commandClasses.includes("systemd_user_runner_restart"), true);
+  assert.equal(commandClasses.includes("systemd_user_runner_logs"), true);
+  assert.equal(commandClasses.includes("systemd_user_app_server_bridge_status"), true);
+  assert.equal(commandClasses.includes("systemd_user_app_server_bridge_restart"), true);
+  assert.equal(commandClasses.includes("systemd_user_app_server_bridge_logs"), true);
+  assert.equal(commandClasses.includes("vps_runner_status_dry_run"), true);
   assert.equal(
     registry.every((entry) => Array.isArray(entry.allowedArgs) && entry.allowedArgs.length > 0),
     true
@@ -57,6 +66,7 @@ test("VPS privileged maintenance helper command registry exposes initial presets
     registry.every((entry) => Array.isArray(entry.argv) && entry.argv.length > 0),
     true
   );
+  assert.equal(registry.every((entry) => entry.initialPreset === true), true);
 });
 
 test("VPS privileged maintenance helper command registry does not expose mutable internal arrays", () => {

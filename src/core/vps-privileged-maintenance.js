@@ -23,11 +23,101 @@ const HELPER_COMMAND_REGISTRY = defineHelperCommandRegistry([
     initialPreset: true
   },
   {
+    commandClass: "systemd_user_daemon_reload",
+    title: "Reload user systemd units",
+    allowedArgs: ["systemctl --user daemon-reload"],
+    argv: ["systemctl", "--user", "daemon-reload"],
+    requiredRiskLevel: "medium",
+    requiresRoot: false,
+    initialPreset: true
+  },
+  {
+    commandClass: "systemd_user_runner_status",
+    title: "Check VTDD runner user service status",
+    allowedArgs: ["systemctl --user is-active vtdd-vps-runner.timer vtdd-vps-runner.service"],
+    argv: ["systemctl", "--user", "is-active", "vtdd-vps-runner.timer", "vtdd-vps-runner.service"],
+    requiredRiskLevel: "low",
+    requiresRoot: false,
+    initialPreset: true
+  },
+  {
+    commandClass: "systemd_user_runner_enable",
+    title: "Enable VTDD runner user timer",
+    allowedArgs: ["systemctl --user enable --now vtdd-vps-runner.timer"],
+    argv: ["systemctl", "--user", "enable", "--now", "vtdd-vps-runner.timer"],
+    requiredRiskLevel: "medium",
+    requiresRoot: false,
+    initialPreset: true
+  },
+  {
     commandClass: "systemd_user_runner_restart",
     title: "Restart VTDD runner user service",
     allowedArgs: ["systemctl --user restart vtdd-vps-runner.timer"],
     argv: ["systemctl", "--user", "restart", "vtdd-vps-runner.timer"],
     requiredRiskLevel: "medium",
+    requiresRoot: false,
+    initialPreset: true
+  },
+  {
+    commandClass: "systemd_user_runner_logs",
+    title: "Read redacted VTDD runner journal summary",
+    allowedArgs: ["journalctl --user -u vtdd-vps-runner.service -u vtdd-vps-runner.timer --no-pager -n 200"],
+    argv: [
+      "journalctl",
+      "--user",
+      "-u",
+      "vtdd-vps-runner.service",
+      "-u",
+      "vtdd-vps-runner.timer",
+      "--no-pager",
+      "-n",
+      "200"
+    ],
+    requiredRiskLevel: "low",
+    requiresRoot: false,
+    initialPreset: true
+  },
+  {
+    commandClass: "systemd_user_app_server_bridge_status",
+    title: "Check Dashboard app-server bridge status",
+    allowedArgs: ["systemctl --user is-active vtdd-dashboard-app-server-bridge.service"],
+    argv: ["systemctl", "--user", "is-active", "vtdd-dashboard-app-server-bridge.service"],
+    requiredRiskLevel: "low",
+    requiresRoot: false,
+    initialPreset: true
+  },
+  {
+    commandClass: "systemd_user_app_server_bridge_restart",
+    title: "Restart Dashboard app-server bridge",
+    allowedArgs: ["systemctl --user restart vtdd-dashboard-app-server-bridge.service"],
+    argv: ["systemctl", "--user", "restart", "vtdd-dashboard-app-server-bridge.service"],
+    requiredRiskLevel: "medium",
+    requiresRoot: false,
+    initialPreset: true
+  },
+  {
+    commandClass: "systemd_user_app_server_bridge_logs",
+    title: "Read redacted Dashboard app-server bridge journal summary",
+    allowedArgs: ["journalctl --user -u vtdd-dashboard-app-server-bridge.service --no-pager -n 200"],
+    argv: [
+      "journalctl",
+      "--user",
+      "-u",
+      "vtdd-dashboard-app-server-bridge.service",
+      "--no-pager",
+      "-n",
+      "200"
+    ],
+    requiredRiskLevel: "low",
+    requiresRoot: false,
+    initialPreset: true
+  },
+  {
+    commandClass: "vps_runner_status_dry_run",
+    title: "Check VPS runner queue status without executing work",
+    allowedArgs: ["node scripts/run-vps-runner.mjs --dry-run"],
+    argv: ["node", "scripts/run-vps-runner.mjs", "--dry-run"],
+    requiredRiskLevel: "low",
     requiresRoot: false,
     initialPreset: true
   }
