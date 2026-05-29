@@ -235,6 +235,7 @@ test("VPS helper dry-run contract validates enabled manifest capability without 
   assert.equal(result.helperPlan.rootExecutionStarted, false);
   assert.equal(result.helperPlan.helperExecutionStarted, false);
   assert.deepEqual(result.helperPlan.commandPreview.allowedArgs, ["npx playwright install-deps chromium"]);
+  assert.equal(result.helperPlan.commandPreview.allowedArgsPurpose, "display_only_not_execution_input");
   assert.deepEqual(result.helperPlan.commandPreview.argv, ["npx", "playwright", "install-deps", "chromium"]);
   assert.deepEqual(result.helperPlan.commandPreview.executionBoundary, {
     executable: "npx",
@@ -249,6 +250,7 @@ test("VPS helper dry-run contract validates enabled manifest capability without 
   assert.equal(result.runtimeTruth.status, "dry_run_ready");
   assert.equal(result.runtimeTruth.registryBinding.commandClass, "playwright_install_deps_chromium");
   assert.deepEqual(result.runtimeTruth.commandArgv, ["npx", "playwright", "install-deps", "chromium"]);
+  assert.equal(result.runtimeTruth.allowedArgsPurpose, "display_only_not_execution_input");
   assert.equal(result.runtimeTruth.commandExecutionBoundary.shell, false);
   assert.deepEqual(result.runtimeTruth.commandExecutionBoundary.args, ["playwright", "install-deps", "chromium"]);
   assert.equal(result.runtimeTruth.exitCode, null);
@@ -265,7 +267,7 @@ test("VPS helper command execution boundary rejects shell syntax before any exec
 
   assert.equal(boundary.ok, false);
   assert.equal(boundary.error, "vps_helper_command_execution_boundary_invalid");
-  assert.equal(boundary.issues.includes("registered helper command executable must not be a shell interpreter"), true);
+  assert.equal(boundary.issues.includes("registered helper command argv must not include a shell interpreter"), true);
 });
 
 test("VPS helper command execution boundary requires helper-controlled path resolution", () => {
@@ -283,6 +285,19 @@ test("VPS helper command execution boundary requires helper-controlled path reso
     ),
     true
   );
+});
+
+test("VPS helper command execution boundary rejects env shell trampoline argv", () => {
+  const boundary = buildVpsHelperCommandExecutionBoundary({
+    commandClass: "unsafe-env",
+    argv: ["env", "bash", "-c", "npx playwright install-deps chromium"],
+    requiredRiskLevel: "high",
+    requiresRoot: true
+  });
+
+  assert.equal(boundary.ok, false);
+  assert.equal(boundary.error, "vps_helper_command_execution_boundary_invalid");
+  assert.equal(boundary.issues.includes("registered helper command argv must not include a shell interpreter"), true);
 });
 
 test("VPS helper dry-run rejects disabled, mismatched, or unregistered capabilities", () => {
