@@ -408,6 +408,31 @@ test("dashboard app-server bridge builds owner-action-required payloads for appr
   );
 });
 
+test("dashboard app-server bridge removes colon ambiguity from owner-action action id components", () => {
+  const payload = buildOwnerActionRequiredPayloadForAppServerApproval({
+    message: {
+      id: "request:44",
+      method: "item/permissions/requestApproval"
+    },
+    request: {
+      threadId: "dashboard:main",
+      repository: "marushu/vtdd-v2-p",
+      relatedIssue: 637
+    },
+    dashboardThreadId: "dashboard:main",
+    codexThreadId: "codex:thread:1",
+    approvalResponse: {
+      id: "request:44",
+      error: {
+        code: -32001,
+        message: "Dashboard bridge does not grant app-server permission escalation"
+      }
+    }
+  });
+
+  assert.equal(payload.actionId, "app-server-approval:dashboard-main:codex-thread-1:item-permissions-requestApproval:request-44");
+});
+
 test("dashboard app-server bridge posts owner-action-required event with bearer auth", async () => {
   const calls = [];
   const result = await postOwnerActionRequiredEvent({
@@ -734,6 +759,85 @@ test("dashboard app-server bridge records owner-action notification failure in d
   assert.ok(failure);
   assert.equal(failure.type, "app_server_turn_failed");
   assert.match(failure.text, /owner action PWA通知を送信できませんでした/);
+});
+
+test("dashboard app-server bridge drains real client approval notification tasks before normal turn cleanup", async () => {
+  const events = [];
+  const runtimeCalls = [];
+  let postFinished = false;
+  const client = new JsonLineAppServerClient({ command: "unused" });
+  client.child = {
+    stdin: {
+      write(chunk) {
+        const message = JSON.parse(String(chunk).trim());
+        if (message.method === "thread/start") {
+          setTimeout(() => {
+            client.handleChunk(
+              JSON.stringify({
+                id: message.id,
+                result: { thread: { id: "codex-thread-drain" } }
+              }) + "\n"
+            );
+          }, 0);
+          return;
+        }
+        if (message.method === "turn/start") {
+          setTimeout(() => {
+            client.handleChunk(
+              JSON.stringify({
+                id: 99,
+                method: "item/commandExecution/requestApproval",
+                params: {}
+              }) + "\n"
+            );
+            client.handleChunk(
+              JSON.stringify({
+                id: message.id,
+                result: { turn: { id: "turn-drain" } }
+              }) + "\n"
+            );
+            client.handleChunk(
+              JSON.stringify({
+                method: "turn/completed",
+                params: {
+                  threadId: "codex-thread-drain",
+                  turn: { id: "turn-drain", status: "completed" }
+                }
+              }) + "\n"
+            );
+          }, 0);
+        }
+      }
+    },
+    kill() {}
+  };
+
+  await handleDashboardTurnRequest({
+    request: {
+      threadId: "dashboard-main",
+      repository: "marushu/vtdd-v2-p",
+      relatedIssue: 637,
+      text: "権限が必要な確認をして"
+    },
+    appServer: client,
+    sendDashboardEvent: async (event) => events.push(event),
+    runtimeUrl: "https://runtime.example",
+    token: "runtime-token",
+    fetchImpl: async (url, init) => {
+      runtimeCalls.push({ url: String(url), init });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      postFinished = true;
+      return new Response(null, { status: 202 });
+    }
+  });
+
+  assert.equal(postFinished, true);
+  assert.equal(runtimeCalls.length, 1);
+  assert.equal(
+    JSON.parse(runtimeCalls[0].init.body).actionId,
+    "app-server-approval:dashboard-main:codex-thread-drain:item-commandExecution-requestApproval:99"
+  );
+  assert.equal(events.at(-1).type, "app_server_reply");
 });
 
 test("dashboard app-server bridge passes traffic-control context to codex app-server turns", async () => {

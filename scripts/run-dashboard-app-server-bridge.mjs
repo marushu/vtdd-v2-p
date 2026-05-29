@@ -297,7 +297,7 @@ function normalizePositiveInteger(value) {
 
 function sanitizeBridgeActionId(value) {
   return normalizeBridgeText(value)
-    .replace(/[^a-zA-Z0-9._:-]+/g, "-")
+    .replace(/[^a-zA-Z0-9._-]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 80);
 }
@@ -891,6 +891,9 @@ export async function handleDashboardTurnRequest({
     await turnCompletion;
   } finally {
     clearTimeout(timeoutHandle);
+    if (!timedOut && typeof appServer.drainApprovalRequests === "function") {
+      await appServer.drainApprovalRequests();
+    }
     if (!timedOut) {
       cleanupNotifications();
     }
