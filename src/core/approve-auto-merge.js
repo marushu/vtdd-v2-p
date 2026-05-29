@@ -39,6 +39,11 @@ export function evaluateApproveAutoMerge(input = {}) {
   const reasons = [];
   const evidence = [];
   const blockingLabels = labels.filter((label) => AUTO_MERGE_BLOCK_LABELS.has(label));
+  const unresolvedReviewerEvidence = findUnresolvedReviewerEvidenceConflict({
+    timeline: reviewLoop.reviewTimeline,
+    headSha: pullRequest.headSha,
+    reviewerEvidence: reviewLoop.reviewerEvidence
+  });
 
   if (policyMode !== ApproveAutoMergePolicyMode.APPROVE_AUTO_MERGE) {
     reasons.push("approve_auto_merge policy is not enabled for this repository, Issue, or PR.");
@@ -92,6 +97,11 @@ export function evaluateApproveAutoMerge(input = {}) {
   if (reviewLoop.unresolvedReviewCommentsCount > 0) {
     reasons.push("unresolved reviewer objections remain.");
   }
+  if (unresolvedReviewerEvidence) {
+    reasons.push(
+      `unresolved reviewer request_changes remains for current head: ${unresolvedReviewerEvidence.reviewer || "unknown"} ${unresolvedReviewerEvidence.url || "unknown url"}.`
+    );
+  }
   if (reviewLoop.criticalReviewPending) {
     reasons.push("critical review is still pending.");
   }
@@ -126,6 +136,7 @@ export function evaluateApproveAutoMerge(input = {}) {
   evidence.push(`reviewer=${reviewLoop.reviewer || "unknown"}`);
   evidence.push(`reviewerAction=${reviewLoop.reviewerEvidence?.recommendedAction || "none"}`);
   evidence.push(`reviewerHeadSha=${reviewLoop.reviewerEvidence?.headSha || "unknown"}`);
+  evidence.push(`reviewerConflict=${unresolvedReviewerEvidence ? "unresolved_request_changes" : "none"}`);
   evidence.push(`mergeable=${String(pullRequest.mergeability.mergeable)}`);
   evidence.push(`mergeableState=${pullRequest.mergeability.mergeableState || "unknown"}`);
   evidence.push(`checks=${checkTruth.summary}`);
@@ -376,8 +387,70 @@ function normalizeReviewLoop(value) {
       : null,
     unresolvedReviewCommentsCount: normalizeCount(input.unresolvedReviewCommentsCount),
     criticalReviewPending: input.criticalReviewPending === true,
+    reviewTimeline: timeline,
     hasRunawayIncident: timeline.some((item) => normalizeText(item?.type) === "reviewer_runaway"),
     hasActorIdentityIncident: timeline.some((item) => normalizeText(item?.type) === "vtdd_incident")
+  };
+}
+
+function findUnresolvedReviewerEvidenceConflict({ timeline, headSha, reviewerEvidence } = {}) {
+  const normalizedHeadSha = normalizeText(headSha);
+  if (normalizeText(reviewerEvidence?.recommendedAction).toLowerCase() !== "approve") {
+    return null;
+  }
+  const reviewerHeadSha = normalizeText(reviewerEvidence?.headSha);
+  if (normalizedHeadSha && reviewerHeadSha && reviewerHeadSha !== normalizedHeadSha) {
+    return null;
+  }
+
+  const sorted = (Array.isArray(timeline) ? timeline : [])
+    .map(normalizeReviewTimelineItem)
+    .filter(Boolean)
+    .filter((item) => !normalizedHeadSha || !item.headSha || item.headSha === normalizedHeadSha)
+    .sort((left, right) => left.time - right.time);
+  const latestApprove = [...sorted]
+    .reverse()
+    .find((item) => normalizeText(item.recommendedAction).toLowerCase() === "approve");
+  if (!latestApprove) {
+    return null;
+  }
+
+  const blocking = [...sorted]
+    .reverse()
+    .find((item) => {
+      if (item.time >= latestApprove.time) {
+        return false;
+      }
+      const action = normalizeText(item.recommendedAction).toLowerCase();
+      return action === "request_changes" || action === "manual_review";
+    });
+  if (!blocking) {
+    return null;
+  }
+
+  const resolved = sorted.some((item) => {
+    if (item.type !== "reviewer_objection_resolution") {
+      return false;
+    }
+    return item.time > blocking.time && item.time < latestApprove.time;
+  });
+  return resolved ? null : blocking;
+}
+
+function normalizeReviewTimelineItem(item) {
+  if (!item || typeof item !== "object") {
+    return null;
+  }
+  const createdAt = normalizeText(item.createdAt || item.created_at);
+  const updatedAt = normalizeText(item.updatedAt || item.updated_at);
+  return {
+    type: normalizeText(item.type),
+    reviewer: normalizeText(item.reviewer),
+    recommendedAction: normalizeText(item.recommendedAction).toLowerCase(),
+    blocking: item.blocking === true,
+    headSha: normalizeText(item.headSha),
+    url: normalizeText(item.url),
+    time: Date.parse(createdAt || updatedAt) || 0
   };
 }
 

@@ -49,6 +49,8 @@ test("approve auto merge treats concurrent GitHub merge race as idempotent", () 
 
   assert.equal(isMergeAlreadyInProgressError(raceError), true);
   assert.equal(script.includes("merge is already in progress by another approve-auto-merge run"), true);
+  assert.equal(script.includes("auto merge executed comment already exists after merge"), true);
+  assert.equal(script.includes("const latestIssueComments = await githubFetchAll"), true);
 
   const unrelated405 = new Error("GitHub API 405: Method Not Allowed");
   unrelated405.status = 405;
