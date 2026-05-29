@@ -135,6 +135,94 @@ test("VPS maintenance install inventory collector skips sudo probe until root-ow
   assert.equal(body.observation.sudoersHelperProbe.timeoutMs, null);
 });
 
+test("VPS maintenance install inventory collector starts sudo probe for bare flag when preconditions pass", async () => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "vtdd-vps-install-inventory-"));
+  const fakeBin = path.join(tempRoot, "bin");
+  await fs.mkdir(fakeBin, { recursive: true });
+  await fs.writeFile(
+    path.join(fakeBin, "sudo"),
+    "#!/bin/sh\nif [ \"$1\" = \"-n\" ] && [ \"$3\" = \"--version\" ]; then echo helper-version-output-may-change; exit 0; fi\nexit 1\n",
+    { mode: 0o755 }
+  );
+
+  const result = spawnSync(
+    process.execPath,
+    [
+      "scripts/collect-vps-maintenance-install-inventory.mjs",
+      "--host",
+      "x85-131-245-163",
+      "--repository",
+      "marushu/vtdd-v2-p",
+      "--helper-path",
+      "/bin/sh",
+      "--manifest-path",
+      "/etc/hosts",
+      "--sudoers-path",
+      "/etc/hosts",
+      "--verify-scoped-sudo",
+      "--sudo-probe-timeout-ms",
+      "1000",
+      "--sudo-probe-max-buffer",
+      "4096"
+    ],
+    {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        PATH: `${fakeBin}:${process.env.PATH}`
+      }
+    }
+  );
+
+  assert.equal(result.status, 0);
+  const body = JSON.parse(result.stdout);
+  assert.equal(body.installInventory.status, "ready");
+  assert.equal(body.installInventory.checks.find((check) => check.id === "helper_sudo_functional_probe").status, "pass");
+  assert.equal(body.runtimeTruth.sudoersHelperProbeStarted, true);
+  assert.equal(body.observation.sudoersHelperProbe.ok, true);
+  assert.equal(body.observation.sudoersHelperProbe.command, "sudo -n <helper> --version");
+});
+
+test("VPS maintenance install inventory collector blocks when started sudo probe fails", async () => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "vtdd-vps-install-inventory-"));
+  const fakeBin = path.join(tempRoot, "bin");
+  await fs.mkdir(fakeBin, { recursive: true });
+  await fs.writeFile(path.join(fakeBin, "sudo"), "#!/bin/sh\nexit 42\n", { mode: 0o755 });
+
+  const result = spawnSync(
+    process.execPath,
+    [
+      "scripts/collect-vps-maintenance-install-inventory.mjs",
+      "--host",
+      "x85-131-245-163",
+      "--repository",
+      "marushu/vtdd-v2-p",
+      "--helper-path",
+      "/bin/sh",
+      "--manifest-path",
+      "/etc/hosts",
+      "--sudoers-path",
+      "/etc/hosts",
+      "--verify-scoped-sudo"
+    ],
+    {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        PATH: `${fakeBin}:${process.env.PATH}`
+      }
+    }
+  );
+
+  assert.equal(result.status, 1);
+  const body = JSON.parse(result.stdout);
+  assert.equal(body.ok, false);
+  assert.equal(body.installInventory.status, "blocked");
+  assert.equal(body.installInventory.checks.find((check) => check.id === "helper_sudo_functional_probe").status, "blocked");
+  assert.equal(body.runtimeTruth.sudoersHelperProbeStarted, true);
+  assert.equal(body.observation.sudoersHelperProbe.ok, false);
+});
+
 test("VPS maintenance install inventory collector detects broad sudoers grants", () => {
   assert.equal(containsBroadSudoersGrant("vtdd-runner ALL=(ALL) NOPASSWD:ALL"), true);
   assert.equal(containsBroadSudoersGrant("vtdd-runner ALL=(root) NOPASSWD:/usr/local/sbin/vtdd-helper"), false);
