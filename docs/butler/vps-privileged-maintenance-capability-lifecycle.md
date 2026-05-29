@@ -88,6 +88,11 @@ unknown `commandClass` values and rejects registered commands whose risk level
 or allowed arguments do not match the registry. The registry must also carry an
 argv-form command preview for the root-owned helper. Future execution must use
 that argv boundary rather than passing manifest strings through a shell.
+The dry-run runtime truth must expose the normalized execution boundary as
+`executable + args + shell:false`. The root-owned helper is responsible for
+resolving `executable` through a controlled PATH allowlist; the repository
+contract must not bake an operator-specific Node/NVM path into public runtime
+truth.
 
 ## Initial Presets
 

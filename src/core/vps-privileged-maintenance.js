@@ -306,6 +306,14 @@ function planVpsPrivilegedMaintenanceHelperExecution(input = {}) {
       issues: registryBinding.issues
     };
   }
+  const executionBoundary = buildVpsHelperCommandExecutionBoundary(registryBinding.binding);
+  if (!executionBoundary.ok) {
+    return {
+      ok: false,
+      error: executionBoundary.error,
+      issues: executionBoundary.issues
+    };
+  }
 
   return {
     ok: true,
@@ -324,6 +332,7 @@ function planVpsPrivilegedMaintenanceHelperExecution(input = {}) {
         workingDirectories: capability.workingDirectories,
         allowedArgs: capability.allowedArgs,
         argv: registryBinding.binding.argv,
+        executionBoundary: executionBoundary.boundary,
         registryBinding: registryBinding.binding
       },
       audit: {
@@ -347,6 +356,7 @@ function planVpsPrivilegedMaintenanceHelperExecution(input = {}) {
       capabilityId: capability.id,
       commandClass: capability.commandClass,
       commandArgv: registryBinding.binding.argv,
+      commandExecutionBoundary: executionBoundary.boundary,
       registryBinding: registryBinding.binding,
       before: {
         manifestVersion: manifest.version,
@@ -445,6 +455,44 @@ function cloneHelperCommandRegistryEntry(entry) {
   };
 }
 
+function buildVpsHelperCommandExecutionBoundary(registryEntry = {}) {
+  const argv = normalizeStringList(registryEntry.argv);
+  const issues = [];
+  if (argv.length === 0) {
+    issues.push("registered helper command argv is required");
+  }
+  const [executable, ...args] = argv;
+  if (executable && executable.includes("/")) {
+    issues.push("registered helper command executable must be a command name resolved by the root helper path allowlist");
+  }
+  if (isShellInterpreter(executable)) {
+    issues.push("registered helper command executable must not be a shell interpreter");
+  }
+  if (argv.some((part) => containsShellSyntax(part))) {
+    issues.push("registered helper command argv must not contain shell syntax");
+  }
+  if (issues.length > 0) {
+    return {
+      ok: false,
+      error: "vps_helper_command_execution_boundary_invalid",
+      issues
+    };
+  }
+  return {
+    ok: true,
+    boundary: {
+      executable,
+      args,
+      shell: false,
+      pathResolution: "root_helper_controlled_path_allowlist",
+      stdin: "none",
+      commandClass: registryEntry.commandClass,
+      requiresRoot: registryEntry.requiresRoot,
+      riskLevel: registryEntry.requiredRiskLevel
+    }
+  };
+}
+
 function normalizeHelperRequest(input = {}) {
   const capability = normalizeVpsCapability(input.capability || {});
   const issues = [...capability.issues];
@@ -520,6 +568,14 @@ function sameStringList(left, right) {
   return JSON.stringify(normalizeStringList(left)) === JSON.stringify(normalizeStringList(right));
 }
 
+function containsShellSyntax(value) {
+  return /[;&|`$<>*?()[\]{}!\\\n\r]/.test(String(value ?? ""));
+}
+
+function isShellInterpreter(value) {
+  return /^(?:sh|bash|zsh|dash|fish|ksh|csh|tcsh)$/.test(normalizeText(value));
+}
+
 function cloneManifest(manifest) {
   return {
     ...manifest,
@@ -565,6 +621,7 @@ export {
   buildVpsCapabilityProposal,
   buildVpsCapabilityReview,
   buildVpsMaintenanceApprovalScope,
+  buildVpsHelperCommandExecutionBoundary,
   applyVpsCapabilityLifecycleOperation,
   planVpsPrivilegedMaintenanceHelperExecution,
   listVpsPrivilegedMaintenanceCommandRegistry,
