@@ -931,6 +931,69 @@ test("worker serves v2 dashboard for valid dashboard passkey session", async () 
   assert.equal(body.includes("VTDD v2 Dashboard"), true);
 });
 
+test("worker serves v2 dashboard from dashboard read session after source passkey grant expires", async () => {
+  const provider = createInMemoryMemoryProvider();
+  await provider.store({
+    id: "approval:expired-dashboard-grant",
+    type: MemoryRecordType.APPROVAL_LOG,
+    content: {
+      kind: "passkey_grant",
+      status: "verified",
+      approvalId: "approval:expired-dashboard-grant",
+      credentialId: "AQIDBA",
+      verifiedAt: "2026-05-20T00:00:00.000Z",
+      expiresAt: "2026-05-20T00:02:00.000Z",
+      scope: {
+        actionType: "read",
+        highRiskKind: "dashboard_access",
+        phase: "execution"
+      }
+    },
+    metadata: { source: "test" },
+    priority: 96,
+    tags: ["passkey_grant", "passkey_approval", "verified"],
+    createdAt: "2026-05-20T00:00:00.000Z"
+  });
+  await provider.store({
+    id: "dashboard-session:still-valid",
+    type: MemoryRecordType.APPROVAL_LOG,
+    content: {
+      kind: "dashboard_read_session",
+      status: "active",
+      sessionId: "dashboard-session:still-valid",
+      sourceApprovalId: "approval:expired-dashboard-grant",
+      credentialId: "AQIDBA",
+      deviceLabel: "iPhone",
+      createdAt: "2026-05-20T00:00:00.000Z",
+      lastSeenAt: "2026-05-20T00:00:00.000Z",
+      expiresAt: "2999-01-01T00:00:00.000Z",
+      scope: {
+        actionType: "read",
+        highRiskKind: "dashboard_access"
+      }
+    },
+    metadata: { source: "test", sourceApprovalId: "approval:expired-dashboard-grant" },
+    priority: 95,
+    tags: ["dashboard_read_session", "dashboard_session"],
+    createdAt: "2026-05-20T00:00:00.000Z"
+  });
+
+  const response = await worker.fetch(
+    new Request("https://example.com/dashboard", {
+      headers: {
+        cookie: "vtdd_dashboard_session=dashboard-session%3Astill-valid"
+      }
+    }),
+    {
+      MEMORY_PROVIDER: provider
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.text();
+  assert.equal(body.includes("VTDD v2 Dashboard"), true);
+});
+
 test("worker rejects stale dashboard passkey session cookies", async () => {
   const response = await worker.fetch(
     new Request("https://example.com/dashboard", {
@@ -954,7 +1017,7 @@ test("worker rejects stale dashboard passkey session cookies", async () => {
     true
   );
   assert.equal(body.includes("Cloudflare Access / fallback"), true);
-  assert.equal(body.includes("dashboard passkey session was not found"), true);
+  assert.equal(body.includes("dashboard session was not found"), true);
   assert.equal(body.includes("Passkey で開く"), true);
   assert.equal(body.includes("Passkey で dashboard に入る"), false);
   assert.equal(
@@ -1046,7 +1109,7 @@ test("worker ignores stale dashboard passkey cookie when Cloudflare Access owner
   assert.equal(response.status, 200);
   const body = await response.text();
   assert.equal(body.includes("VTDD v2 Dashboard"), true);
-  assert.equal(body.includes("dashboard passkey session was not found"), false);
+  assert.equal(body.includes("dashboard session was not found"), false);
 });
 
 test("worker rejects dashboard access when Access email header has no matching JWT email claim", async () => {
@@ -7831,7 +7894,7 @@ test("worker sets dashboard session cookie after dashboard passkey approval", as
   );
 
   assert.equal(verify.status, 200);
-  assert.match(verify.headers.get("set-cookie"), /vtdd_dashboard_session=approval%3A/);
+  assert.match(verify.headers.get("set-cookie"), /vtdd_dashboard_session=dashboard-session%3A/);
   assert.match(verify.headers.get("set-cookie"), /HttpOnly/);
   assert.match(verify.headers.get("set-cookie"), /SameSite=Lax/);
   const verifyBody = await verify.json();
@@ -7910,6 +7973,80 @@ test("worker gateway accepts high-risk approval grant resolved from memory", asy
   assert.equal(response.status, 200);
   const body = await response.json();
   assert.equal(body.allowed, true);
+});
+
+test("worker gateway does not accept dashboard read session as high-risk approval grant", async () => {
+  const provider = createInMemoryMemoryProvider();
+  await provider.store({
+    id: "dashboard-session:read-only",
+    type: MemoryRecordType.APPROVAL_LOG,
+    content: {
+      kind: "dashboard_read_session",
+      status: "active",
+      sessionId: "dashboard-session:read-only",
+      sourceApprovalId: "approval:dashboard-read",
+      credentialId: "AQIDBA",
+      deviceLabel: "iPhone",
+      createdAt: "2026-05-20T00:00:00.000Z",
+      lastSeenAt: "2026-05-20T00:00:00.000Z",
+      expiresAt: "2999-01-01T00:00:00.000Z",
+      scope: {
+        actionType: "read",
+        highRiskKind: "dashboard_access"
+      }
+    },
+    metadata: { source: "test" },
+    priority: 95,
+    tags: ["dashboard_read_session", "dashboard_session"],
+    createdAt: "2026-05-20T00:00:00.000Z"
+  });
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/gateway", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        phase: "execution",
+        actorRole: ActorRole.EXECUTOR,
+        surfaceContext: {
+          surface: "custom_gpt",
+          judgmentModelId: "vtdd-butler-core-v1"
+        },
+        judgmentTrace: validButlerJudgmentTrace,
+        issueContext: { issueNumber: 14 },
+        policyInput: {
+          actionType: ActionType.DEPLOY_PRODUCTION,
+          mode: TaskMode.EXECUTION,
+          repositoryInput: "vtdd",
+          aliasRegistry,
+          targetConfirmed: true,
+          constitutionConsulted: true,
+          runtimeTruth: { runtimeAvailable: true },
+          credential: {
+            model: "github_app",
+            tier: CredentialTier.HIGH_RISK,
+            shortLived: true,
+            boundApprovalId: "dashboard-session:read-only"
+          },
+          consent: { grantedCategories: [ConsentCategory.EXECUTE] },
+          approvalPhrase: "GO deploy request",
+          approvalScopeMatched: true,
+          approvalGrantId: "dashboard-session:read-only",
+          issueTraceable: true,
+          go: true,
+          passkey: false
+        }
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      MEMORY_PROVIDER: provider
+    }
+  );
+
+  assert.equal(response.status, 422);
+  const body = await response.json();
+  assert.equal(body.allowed, false);
 });
 
 test("worker returns approval grant through retrieve route", async () => {

@@ -577,6 +577,7 @@ export class DashboardChatRoom {
 }
 const CLOUDFLARE_ACCESS_JWKS_CACHE_TTL_MS = 5 * 60 * 1000;
 const DASHBOARD_PASSKEY_SESSION_COOKIE = "vtdd_dashboard_session";
+const DASHBOARD_READ_SESSION_KIND = "dashboard_read_session";
 const DASHBOARD_PASSKEY_SESSION_MAX_AGE_SECONDS = 60 * 60 * 8;
 const cloudflareAccessJwksCache = new Map();
 const AUTONOMY_MODE_ENV = "VTDD_AUTONOMY_MODE";
@@ -5696,7 +5697,27 @@ async function handlePasskeyApprovalVerifyRequest(request, env) {
 
   const extraHeaders = {};
   if (isDashboardPasskeyScope(verified.approvalGrant?.scope)) {
-    extraHeaders["set-cookie"] = buildDashboardPasskeySessionCookie(verified.approvalGrant);
+    const dashboardSession = createDashboardReadSessionRecord({
+      approvalGrant: verified.approvalGrant,
+      credentialId: verified.grantRecord?.content?.credentialId,
+      userAgent: request.headers.get("user-agent")
+    });
+    if (!dashboardSession.ok) {
+      return json(422, {
+        ok: false,
+        error: "dashboard_session_invalid",
+        issues: dashboardSession.issues ?? []
+      });
+    }
+    const storedDashboardSession = await provider.store(dashboardSession.record);
+    if (!storedDashboardSession?.ok) {
+      return json(503, {
+        ok: false,
+        error: "dashboard_session_write_failed",
+        reason: "failed to persist dashboard read session"
+      });
+    }
+    extraHeaders["set-cookie"] = buildDashboardPasskeySessionCookie(dashboardSession.record);
   }
 
   return json(200, {
@@ -9215,8 +9236,8 @@ async function authorizeDashboardRequest({ request, env, apiSuffix = "/dashboard
 }
 
 async function authorizeDashboardPasskeySession({ request, env }) {
-  const approvalId = parseCookieHeader(request.headers.get("cookie"))[DASHBOARD_PASSKEY_SESSION_COOKIE];
-  if (!approvalId) {
+  const sessionId = parseCookieHeader(request.headers.get("cookie"))[DASHBOARD_PASSKEY_SESSION_COOKIE];
+  if (!sessionId) {
     return { ok: false, blocking: false };
   }
 
@@ -9231,13 +9252,38 @@ async function authorizeDashboardPasskeySession({ request, env }) {
     };
   }
 
-  const record = await findApprovalRecordById(provider, approvalId);
-  if (!record || normalizeText(record?.content?.kind) !== "passkey_grant") {
+  const record = await findApprovalRecordById(provider, sessionId);
+  if (!record) {
     return {
       ok: false,
       blocking: true,
       status: 401,
-      reason: "dashboard passkey session was not found; open the dashboard passkey sign-in link again"
+      reason: "dashboard session was not found; open the dashboard passkey sign-in link again"
+    };
+  }
+
+  if (normalizeText(record?.content?.kind) === DASHBOARD_READ_SESSION_KIND) {
+    if (isExpiredDashboardReadSessionRecord(record)) {
+      return {
+        ok: false,
+        blocking: true,
+        status: 401,
+        reason: "dashboard session expired; open the dashboard passkey sign-in link again"
+      };
+    }
+    return {
+      ok: true,
+      authType: "dashboard_read_session",
+      subject: normalizeText(record?.content?.deviceLabel) || "dashboard session"
+    };
+  }
+
+  if (normalizeText(record?.content?.kind) !== "passkey_grant") {
+    return {
+      ok: false,
+      blocking: true,
+      status: 401,
+      reason: "dashboard session record is not valid; open the dashboard passkey sign-in link again"
     };
   }
   if (isExpiredPasskeyEphemeralRecord(record)) {
@@ -9245,7 +9291,8 @@ async function authorizeDashboardPasskeySession({ request, env }) {
       ok: false,
       blocking: true,
       status: 401,
-      reason: "dashboard passkey session expired; open the dashboard passkey sign-in link again"
+      reason:
+        "legacy dashboard passkey grant expired; open the dashboard passkey sign-in link again"
     };
   }
   if (!isDashboardPasskeyScope(record?.content?.scope)) {
@@ -9267,10 +9314,68 @@ function isDashboardPasskeyScope(scope = {}) {
   return normalizeText(scope?.actionType) === "read" && normalizeText(scope?.highRiskKind) === "dashboard_access";
 }
 
-function buildDashboardPasskeySessionCookie(approvalGrant = {}) {
-  const approvalId = normalizeText(approvalGrant.approvalId);
+function createDashboardReadSessionRecord({ approvalGrant = {}, credentialId, userAgent } = {}) {
+  const sessionId = createDashboardRequestId("dashboard-session");
+  const createdAt = new Date().toISOString();
+  const expiresAt = new Date(Date.now() + DASHBOARD_PASSKEY_SESSION_MAX_AGE_SECONDS * 1000).toISOString();
+  const record = createMemoryRecord({
+    id: sessionId,
+    type: MemoryRecordType.APPROVAL_LOG,
+    content: {
+      kind: DASHBOARD_READ_SESSION_KIND,
+      status: "active",
+      sessionId,
+      sourceApprovalId: normalizeText(approvalGrant.approvalId),
+      credentialId: normalizeText(credentialId),
+      deviceLabel: normalizeDashboardDeviceLabel(userAgent),
+      createdAt,
+      lastSeenAt: createdAt,
+      expiresAt,
+      scope: {
+        actionType: "read",
+        highRiskKind: "dashboard_access"
+      }
+    },
+    metadata: {
+      source: "dashboard_passkey_session_verify",
+      sourceApprovalId: normalizeText(approvalGrant.approvalId)
+    },
+    priority: 95,
+    tags: [DASHBOARD_READ_SESSION_KIND, "dashboard_session"],
+    createdAt
+  });
+  return record;
+}
+
+function isExpiredDashboardReadSessionRecord(record) {
+  const expiresAt = normalizeText(record?.content?.expiresAt);
+  return !expiresAt || Date.parse(expiresAt) <= Date.now();
+}
+
+function normalizeDashboardDeviceLabel(userAgent) {
+  const value = normalizeText(userAgent);
+  if (!value) {
+    return "dashboard device";
+  }
+  if (/iPhone/i.test(value)) {
+    return "iPhone";
+  }
+  if (/iPad/i.test(value)) {
+    return "iPad";
+  }
+  if (/Macintosh|Mac OS X/i.test(value)) {
+    return "Mac";
+  }
+  if (/Android/i.test(value)) {
+    return "Android";
+  }
+  return "dashboard device";
+}
+
+function buildDashboardPasskeySessionCookie(sessionRecord = {}) {
+  const sessionId = normalizeText(sessionRecord.id || sessionRecord.sessionId || sessionRecord.approvalId);
   return [
-    `${DASHBOARD_PASSKEY_SESSION_COOKIE}=${encodeURIComponent(approvalId)}`,
+    `${DASHBOARD_PASSKEY_SESSION_COOKIE}=${encodeURIComponent(sessionId)}`,
     "Path=/",
     `Max-Age=${DASHBOARD_PASSKEY_SESSION_MAX_AGE_SECONDS}`,
     "HttpOnly",
