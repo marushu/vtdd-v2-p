@@ -259,6 +259,9 @@ function buildVpsPrivilegedMaintenanceInstallInventory(input = {}) {
   const manifestOwner = normalizeText(observed.manifestOwner || input.manifestOwner);
   const sudoersOwner = normalizeText(observed.sudoersOwner || input.sudoersOwner);
   const sudoersAllowsAll = normalizeBoolean(observed.sudoersAllowsAll ?? input.sudoersAllowsAll);
+  const sudoersHelperProbe = normalizeBoolean(observed.sudoersHelperProbe ?? input.sudoersHelperProbe);
+  const sudoersHelperProbeStarted = normalizeBoolean(observed.sudoersHelperProbeStarted ?? input.sudoersHelperProbeStarted);
+  const functionalProbeStarted = sudoersHelperProbeStarted ?? sudoersHelperProbe !== null;
   const issues = [];
   if (!host) issues.push("host is required");
   if (!repository) issues.push("repository is required");
@@ -266,6 +269,7 @@ function buildVpsPrivilegedMaintenanceInstallInventory(input = {}) {
   if (!manifestPath.startsWith("/")) issues.push("manifestPath must be absolute");
   if (!sudoersPath.startsWith("/")) issues.push("sudoersPath must be absolute");
   if (sudoersAllowsAll === true) issues.push("sudoers must not allow NOPASSWD:ALL");
+  if (sudoersHelperProbe === false) issues.push("helper sudo functional probe failed");
 
   const checks = [
     {
@@ -286,19 +290,33 @@ function buildVpsPrivilegedMaintenanceInstallInventory(input = {}) {
     },
     {
       id: "scoped_sudoers_entry",
-      status: sudoersInstalled === true && sudoersOwner === "root" && sudoersAllowsAll !== true ? "pass" : sudoersInstalled === false ? "missing" : "unverified",
+      status:
+        sudoersInstalled === true && sudoersOwner === "root" && sudoersAllowsAll !== true
+          ? "pass"
+          : sudoersInstalled === false
+            ? "missing"
+            : "unverified",
       required: true,
       path: sudoersPath,
       expectedOwner: "root",
       observedOwner: sudoersOwner || null
+    },
+    {
+      id: "helper_sudo_functional_probe",
+      status: sudoersHelperProbe === true ? "pass" : sudoersHelperProbe === false ? "blocked" : "unverified",
+      required: false,
+      path: helperPath,
+      expectedOwner: "root",
+      observedOwner: null,
+      functionalProbe: sudoersHelperProbe === true ? "sudo_helper_version" : null
     }
   ];
   const status =
     issues.length > 0
       ? "blocked"
-      : checks.every((check) => check.status === "pass")
+      : checks.filter((check) => check.required).every((check) => check.status === "pass")
         ? "ready"
-        : checks.some((check) => check.status === "missing")
+        : checks.filter((check) => check.required).some((check) => check.status === "missing")
           ? "missing"
           : "unverified";
 
@@ -325,9 +343,12 @@ function buildVpsPrivilegedMaintenanceInstallInventory(input = {}) {
       repository,
       rootExecutionStarted: false,
       helperExecutionStarted: false,
+      sudoersHelperProbeStarted: functionalProbeStarted,
       redacted: true,
       nextAction:
-        status === "ready"
+        sudoersHelperProbe === false
+          ? "fix scoped helper sudo before claiming VPS privileged maintenance is ready"
+          : status === "ready"
           ? "helper install inventory is ready for scoped helper requests"
           : "verify or install root-owned helper, manifest, and scoped sudoers before claiming iPhone-complete privileged maintenance"
     },
