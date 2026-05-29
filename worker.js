@@ -66402,7 +66402,6 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     textarea::placeholder { color: var(--muted); }
     .media-button { width: 44px; height: 44px; border-radius: 999px; border: 1px solid var(--border); background: var(--button); color: var(--text); font: inherit; font-size: 24px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
     .send-button { width: 44px; height: 44px; border-radius: 999px; background: var(--text); color: var(--page-bg); font-size: 22px; }
-    .send-button.stop-state { font-size: 18px; background: var(--panel-strong); color: var(--text); border-color: var(--text); }
     .pending-media, .message-media { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 8px; max-width: 100%; overflow: hidden; }
     .pending-media:empty, .message-media:empty { display: none; }
     .media-chip { display: inline-flex; align-items: center; max-width: 100%; min-width: 0; min-height: 34px; border: 1px solid var(--border); border-radius: 14px; padding: 5px 10px; gap: 8px; color: var(--text); background: var(--soft); font-size: 12px; text-decoration: none; overflow: hidden; }
@@ -66414,14 +66413,6 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .composer-status:empty { min-height: 0; padding-left: 0; }
     .composer-status a { color: var(--text); font-weight: 800; text-underline-offset: 3px; }
     .composer-status.thinking::after { content: ""; display: inline-block; width: 1.4em; text-align: left; animation: thinkingDots 1.2s steps(4, end) infinite; }
-    .composer.is-running .composer-box { border-color: var(--text); }
-    .composer.is-running textarea { color: var(--muted); }
-    .interrupt-panel { display: grid; gap: 6px; padding: 8px 12px 10px; border: 1px solid var(--border); border-radius: 16px; background: var(--soft); }
-    .interrupt-panel[hidden] { display: none; }
-    .interrupt-panel label { color: var(--muted); font-size: 12px; font-weight: 800; }
-    .interrupt-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: end; }
-    .interrupt-row textarea { min-height: 38px; max-height: 96px; padding: 8px 2px; font-size: 14px; }
-    .interrupt-button { min-height: 38px; border: 1px solid var(--border); border-radius: 999px; padding: 0 12px; background: var(--panel); color: var(--text); font: inherit; font-weight: 800; }
     .eyebrow { color: var(--muted); font-size: 11px; font-weight: 850; letter-spacing: .1em; text-transform: uppercase; }
     .lane, details { border: 1px solid var(--border); border-radius: 14px; padding: 12px; background: var(--panel-strong); }
     .lane-title { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
@@ -66572,14 +66563,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           <button class="media-button" id="butler-media-button" type="button" aria-label="\u753B\u50CF\u30FB\u52D5\u753B\u30FB\u30D5\u30A1\u30A4\u30EB\u3092\u8FFD\u52A0" title="\u753B\u50CF\u30FB\u52D5\u753B\u30FB\u30D5\u30A1\u30A4\u30EB\u3092\u8FFD\u52A0">+</button>
           <input id="butler-media-input" type="file" multiple hidden>
           <textarea id="butler-message" name="text" placeholder="Butler V2 \u306B\u30E1\u30C3\u30BB\u30FC\u30B8..." aria-label="Butler V2 \u306B\u30E1\u30C3\u30BB\u30FC\u30B8" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="send"></textarea>
-          <button class="send-button" id="butler-send-button" type="submit" aria-label="Butler \u306B\u9001\u4FE1" title="Butler \u306B\u9001\u4FE1">\u2191</button>
-        </div>
-        <div class="interrupt-panel" id="butler-interrupt-panel" hidden>
-          <label for="butler-interrupt-message">\u5B9F\u884C\u4E2D\u306E\u5272\u308A\u8FBC\u307F\u6307\u793A</label>
-          <div class="interrupt-row">
-            <textarea id="butler-interrupt-message" aria-label="\u5B9F\u884C\u4E2D\u306E\u5272\u308A\u8FBC\u307F\u6307\u793A" placeholder="\u9014\u4E2D\u3067\u4F1D\u3048\u305F\u3044\u3053\u3068\u3092\u66F8\u304F..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="send"></textarea>
-            <button class="interrupt-button" id="butler-interrupt-button" type="button">\u9001\u308B</button>
-          </div>
+          <button class="send-button" type="submit" aria-label="Butler \u306B\u9001\u4FE1">\u2191</button>
         </div>
         <div class="composer-status" id="butler-chat-status">\u63A5\u7D9A\u6E96\u5099\u4E2D\u3067\u3059\u3002\u9001\u4FE1\u3067\u304D\u308B\u72B6\u614B\u306B\u306A\u3063\u305F\u3089\u77E5\u3089\u305B\u307E\u3059\u3002</div>
       </form>
@@ -66594,10 +66578,6 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       const mediaButton = document.getElementById("butler-media-button");
       const mediaInput = document.getElementById("butler-media-input");
       const pendingMedia = document.getElementById("butler-pending-media");
-      const submitButton = document.getElementById("butler-send-button");
-      const interruptPanel = document.getElementById("butler-interrupt-panel");
-      const interruptTextarea = document.getElementById("butler-interrupt-message");
-      const interruptButton = document.getElementById("butler-interrupt-button");
       if (!form || !log || !textarea || !status) return;
 
       const socketEndpoint = form.dataset.socketEndpoint;
@@ -66621,8 +66601,6 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       let retryClientMessageId = "";
       let dashboardSessionExpired = false;
       let authReturnResumePromise = null;
-      let composerTransportLocked = false;
-      let executionRunning = false;
       const dashboardDraftKey = "vtdd.dashboard.draft:" + (threadId || "unknown");
       const dashboardDraftMetaKey = dashboardDraftKey + ":meta";
 
@@ -66715,11 +66693,6 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           status.appendChild(action);
         }
         status.classList.toggle("thinking", options.thinking === true);
-        if (options.thinking === true) {
-          setExecutionRunning(true);
-        } else if (options.executionDone === true || options.executionFailed === true) {
-          setExecutionRunning(false);
-        }
         if (options.temporary === true) {
           const expected = text;
           window.setTimeout(() => {
@@ -66731,30 +66704,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       }
 
       function setComposerLocked(locked) {
-        composerTransportLocked = locked === true;
-        updateComposerControls();
-      }
-
-      function setExecutionRunning(running) {
-        executionRunning = running === true;
-        updateComposerControls();
-      }
-
-      function updateComposerControls() {
-        const ordinaryInputLocked = composerTransportLocked || executionRunning || dashboardSessionExpired;
-        textarea.readOnly = ordinaryInputLocked;
-        if (mediaButton) mediaButton.disabled = ordinaryInputLocked;
-        form.classList.toggle("is-running", executionRunning);
-        if (submitButton) {
-          submitButton.disabled = composerTransportLocked || dashboardSessionExpired;
-          submitButton.textContent = executionRunning ? "\u25A0" : "\u2191";
-          submitButton.classList.toggle("stop-state", executionRunning);
-          submitButton.setAttribute("aria-label", executionRunning ? "\u5B9F\u884C\u3092\u505C\u6B62" : "Butler \u306B\u9001\u4FE1");
-          submitButton.title = executionRunning ? "\u5B9F\u884C\u3092\u505C\u6B62" : "Butler \u306B\u9001\u4FE1";
-        }
-        if (interruptPanel) {
-          interruptPanel.hidden = !executionRunning;
-        }
+        textarea.readOnly = locked === true;
+        if (mediaButton) mediaButton.disabled = locked === true;
       }
 
       function isChatSocketOpen() {
@@ -66805,7 +66756,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         dashboardSessionExpired = true;
         persistDashboardDraft();
         setComposerLocked(false);
-        setExecutionRunning(false);
+        const submitButton = form.querySelector("button[type='submit']");
+        if (submitButton) submitButton.disabled = false;
         if (reconnectTimer) {
           window.clearTimeout(reconnectTimer);
           reconnectTimer = null;
@@ -67577,9 +67529,9 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
               const releasedFromThread = releasePendingOwnerSendFromThread(body.messages || []);
               const lastMessage = Array.isArray(body.messages) ? body.messages[body.messages.length - 1] : null;
               if (lastMessage?.role === "butler" && lastMessage?.status === "replied") {
-                setStatus("\u8FD4\u4FE1\u3092\u53D7\u4FE1\u3057\u307E\u3057\u305F\u3002", { temporary: true, executionDone: true });
+                setStatus("\u8FD4\u4FE1\u3092\u53D7\u4FE1\u3057\u307E\u3057\u305F\u3002", { temporary: true });
               } else if (lastMessage?.status === "failed") {
-                setStatus(lastMessage.text || "\u5FDC\u7B54\u751F\u6210\u304C\u6642\u9593\u5207\u308C\u306B\u306A\u308A\u307E\u3057\u305F\u3002\u540C\u3058 thread \u3067\u7D9A\u3051\u3089\u308C\u307E\u3059\u3002", { executionFailed: true });
+                setStatus(lastMessage.text || "\u5FDC\u7B54\u751F\u6210\u304C\u6642\u9593\u5207\u308C\u306B\u306A\u308A\u307E\u3057\u305F\u3002\u540C\u3058 thread \u3067\u7D9A\u3051\u3089\u308C\u307E\u3059\u3002");
               } else if (releasedFromThread) {
                 setStatus("\u9001\u4FE1\u3092\u4FDD\u5B58\u3057\u307E\u3057\u305F\u3002app-server bridge \u306E\u8FD4\u4FE1\u3092\u5F85\u3063\u3066\u3044\u307E\u3059", { thinking: true });
               }
@@ -67587,9 +67539,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
               const isThinking = body.status === "thinking";
               setStatus(body.text || (isThinking ? "codex app-server \u304C\u5FDC\u7B54\u3092\u751F\u6210\u3057\u3066\u3044\u307E\u3059" : "codex app-server \u306E\u5FDC\u7B54\u304C\u5B8C\u4E86\u3057\u307E\u3057\u305F\u3002"), {
                 thinking: isThinking,
-                temporary: !isThinking,
-                executionDone: body.status === "replied" || body.status === "completed",
-                executionFailed: body.status === "failed"
+                temporary: !isThinking
               });
             } else if (body.type === "owner_message_accepted" && body.ok) {
               const clientMessageId = body.clientMessageId || body.client_message_id || "";
@@ -67599,7 +67549,6 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
                 setStatus("\u9001\u4FE1\u3092\u4FDD\u5B58\u3057\u307E\u3057\u305F\u3002app-server bridge \u306E\u8FD4\u4FE1\u3092\u5F85\u3063\u3066\u3044\u307E\u3059", { thinking: true });
               }
             } else if (body.type === "error") {
-              setExecutionRunning(false);
               const clientMessageId = body.clientMessageId || body.client_message_id || "";
               if (clientMessageId && pendingSendRollbacks.has(clientMessageId)) {
                 const mediaReferences = pendingSendRollbacks.get(clientMessageId) || [];
@@ -67671,60 +67620,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         scheduleReconnect();
       }
 
-      async function sendInterruptMessage() {
-        if (!interruptTextarea || !interruptButton) return;
-        const text = interruptTextarea.value.trim();
-        if (!text) {
-          interruptTextarea.focus({ preventScroll: true });
-          return;
-        }
-        if (dashboardSessionExpired) {
-          persistDashboardDraft();
-          setDashboardSessionExpiredStatus();
-          interruptTextarea.focus({ preventScroll: true });
-          return;
-        }
-        const clientMessageId = createClientMessageId();
-        const payload = {
-          type: "owner_message",
-          threadId,
-          clientMessageId,
-          repositoryInput,
-          text: "\u5272\u308A\u8FBC\u307F\u6307\u793A: " + text,
-          issueNumber,
-          relatedIssue: issueNumber,
-          interrupt: true,
-          mediaReferences: []
-        };
-        interruptButton.disabled = true;
-        try {
-          if (isChatSocketOpen()) {
-            chatSocket.send(JSON.stringify(payload));
-          } else {
-            await sendOwnerMessageByHttp(payload, clientMessageId);
-          }
-          interruptTextarea.value = "";
-          setStatus("\u5272\u308A\u8FBC\u307F\u6307\u793A\u3092\u7F6E\u304D\u307E\u3057\u305F\u3002\u73FE\u5728\u306E\u5B9F\u884C\u72B6\u6CC1\u3092\u66F4\u65B0\u3057\u307E\u3059", { thinking: true });
-        } catch (error) {
-          setStatus((error && error.message) || "\u5272\u308A\u8FBC\u307F\u6307\u793A\u3092\u9001\u308C\u307E\u305B\u3093\u3067\u3057\u305F\u3002\u5165\u529B\u306F\u6B8B\u3057\u3066\u3044\u307E\u3059\u3002");
-          interruptTextarea.focus({ preventScroll: true });
-        } finally {
-          interruptButton.disabled = false;
-          updateComposerReserve();
-        }
-      }
-
       form.addEventListener("submit", async (event) => {
         event.preventDefault();
-        if (executionRunning && !composerTransportLocked) {
-          setStatus("\u505C\u6B62\u8981\u6C42\u3092\u53D7\u3051\u4ED8\u3051\u307E\u3057\u305F\u3002\u5B9F\u884C\u505C\u6B62\u306E\u78BA\u5B9A\u306F\u307E\u3060\u672A\u63A5\u7D9A\u3067\u3059\u3002\u5272\u308A\u8FBC\u307F\u306F\u4E0B\u306E\u5165\u529B\u6B04\u304B\u3089\u9001\u308C\u307E\u3059\u3002", {
-            thinking: true
-          });
-          if (interruptTextarea) {
-            interruptTextarea.focus({ preventScroll: true });
-          }
-          return;
-        }
         const text = textarea.value.trim() || (pendingMediaItems.length > 0 ? "\u6DFB\u4ED8\u3092\u8FFD\u52A0\u3057\u307E\u3057\u305F\u3002" : "");
         if (!text) {
           textarea.focus();
@@ -67855,15 +67752,6 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             mediaButton.disabled = false;
             updateComposerReserve();
           }
-        });
-      }
-
-      if (interruptButton && interruptTextarea) {
-        interruptButton.addEventListener("click", sendInterruptMessage);
-        interruptTextarea.addEventListener("keydown", (event) => {
-          if (!shouldSubmitDashboardComposerShortcut(event)) return;
-          event.preventDefault();
-          sendInterruptMessage();
         });
       }
 

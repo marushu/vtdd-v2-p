@@ -11593,7 +11593,6 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     textarea::placeholder { color: var(--muted); }
     .media-button { width: 44px; height: 44px; border-radius: 999px; border: 1px solid var(--border); background: var(--button); color: var(--text); font: inherit; font-size: 24px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
     .send-button { width: 44px; height: 44px; border-radius: 999px; background: var(--text); color: var(--page-bg); font-size: 22px; }
-    .send-button.stop-state { font-size: 18px; background: var(--panel-strong); color: var(--text); border-color: var(--text); }
     .pending-media, .message-media { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 8px; max-width: 100%; overflow: hidden; }
     .pending-media:empty, .message-media:empty { display: none; }
     .media-chip { display: inline-flex; align-items: center; max-width: 100%; min-width: 0; min-height: 34px; border: 1px solid var(--border); border-radius: 14px; padding: 5px 10px; gap: 8px; color: var(--text); background: var(--soft); font-size: 12px; text-decoration: none; overflow: hidden; }
@@ -11605,14 +11604,6 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .composer-status:empty { min-height: 0; padding-left: 0; }
     .composer-status a { color: var(--text); font-weight: 800; text-underline-offset: 3px; }
     .composer-status.thinking::after { content: ""; display: inline-block; width: 1.4em; text-align: left; animation: thinkingDots 1.2s steps(4, end) infinite; }
-    .composer.is-running .composer-box { border-color: var(--text); }
-    .composer.is-running textarea { color: var(--muted); }
-    .interrupt-panel { display: grid; gap: 6px; padding: 8px 12px 10px; border: 1px solid var(--border); border-radius: 16px; background: var(--soft); }
-    .interrupt-panel[hidden] { display: none; }
-    .interrupt-panel label { color: var(--muted); font-size: 12px; font-weight: 800; }
-    .interrupt-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: end; }
-    .interrupt-row textarea { min-height: 38px; max-height: 96px; padding: 8px 2px; font-size: 14px; }
-    .interrupt-button { min-height: 38px; border: 1px solid var(--border); border-radius: 999px; padding: 0 12px; background: var(--panel); color: var(--text); font: inherit; font-weight: 800; }
     .eyebrow { color: var(--muted); font-size: 11px; font-weight: 850; letter-spacing: .1em; text-transform: uppercase; }
     .lane, details { border: 1px solid var(--border); border-radius: 14px; padding: 12px; background: var(--panel-strong); }
     .lane-title { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
@@ -11763,14 +11754,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           <button class="media-button" id="butler-media-button" type="button" aria-label="画像・動画・ファイルを追加" title="画像・動画・ファイルを追加">+</button>
           <input id="butler-media-input" type="file" multiple hidden>
           <textarea id="butler-message" name="text" placeholder="Butler V2 にメッセージ..." aria-label="Butler V2 にメッセージ" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="send"></textarea>
-          <button class="send-button" id="butler-send-button" type="submit" aria-label="Butler に送信" title="Butler に送信">↑</button>
-        </div>
-        <div class="interrupt-panel" id="butler-interrupt-panel" hidden>
-          <label for="butler-interrupt-message">実行中の割り込み指示</label>
-          <div class="interrupt-row">
-            <textarea id="butler-interrupt-message" aria-label="実行中の割り込み指示" placeholder="途中で伝えたいことを書く..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="send"></textarea>
-            <button class="interrupt-button" id="butler-interrupt-button" type="button">送る</button>
-          </div>
+          <button class="send-button" type="submit" aria-label="Butler に送信">↑</button>
         </div>
         <div class="composer-status" id="butler-chat-status">接続準備中です。送信できる状態になったら知らせます。</div>
       </form>
@@ -11785,10 +11769,6 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       const mediaButton = document.getElementById("butler-media-button");
       const mediaInput = document.getElementById("butler-media-input");
       const pendingMedia = document.getElementById("butler-pending-media");
-      const submitButton = document.getElementById("butler-send-button");
-      const interruptPanel = document.getElementById("butler-interrupt-panel");
-      const interruptTextarea = document.getElementById("butler-interrupt-message");
-      const interruptButton = document.getElementById("butler-interrupt-button");
       if (!form || !log || !textarea || !status) return;
 
       const socketEndpoint = form.dataset.socketEndpoint;
@@ -11812,8 +11792,6 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       let retryClientMessageId = "";
       let dashboardSessionExpired = false;
       let authReturnResumePromise = null;
-      let composerTransportLocked = false;
-      let executionRunning = false;
       const dashboardDraftKey = "vtdd.dashboard.draft:" + (threadId || "unknown");
       const dashboardDraftMetaKey = dashboardDraftKey + ":meta";
 
@@ -11906,11 +11884,6 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           status.appendChild(action);
         }
         status.classList.toggle("thinking", options.thinking === true);
-        if (options.thinking === true) {
-          setExecutionRunning(true);
-        } else if (options.executionDone === true || options.executionFailed === true) {
-          setExecutionRunning(false);
-        }
         if (options.temporary === true) {
           const expected = text;
           window.setTimeout(() => {
@@ -11922,30 +11895,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       }
 
       function setComposerLocked(locked) {
-        composerTransportLocked = locked === true;
-        updateComposerControls();
-      }
-
-      function setExecutionRunning(running) {
-        executionRunning = running === true;
-        updateComposerControls();
-      }
-
-      function updateComposerControls() {
-        const ordinaryInputLocked = composerTransportLocked || executionRunning || dashboardSessionExpired;
-        textarea.readOnly = ordinaryInputLocked;
-        if (mediaButton) mediaButton.disabled = ordinaryInputLocked;
-        form.classList.toggle("is-running", executionRunning);
-        if (submitButton) {
-          submitButton.disabled = composerTransportLocked || dashboardSessionExpired;
-          submitButton.textContent = executionRunning ? "■" : "↑";
-          submitButton.classList.toggle("stop-state", executionRunning);
-          submitButton.setAttribute("aria-label", executionRunning ? "実行を停止" : "Butler に送信");
-          submitButton.title = executionRunning ? "実行を停止" : "Butler に送信";
-        }
-        if (interruptPanel) {
-          interruptPanel.hidden = !executionRunning;
-        }
+        textarea.readOnly = locked === true;
+        if (mediaButton) mediaButton.disabled = locked === true;
       }
 
       function isChatSocketOpen() {
@@ -11996,7 +11947,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         dashboardSessionExpired = true;
         persistDashboardDraft();
         setComposerLocked(false);
-        setExecutionRunning(false);
+        const submitButton = form.querySelector("button[type='submit']");
+        if (submitButton) submitButton.disabled = false;
         if (reconnectTimer) {
           window.clearTimeout(reconnectTimer);
           reconnectTimer = null;
@@ -12768,9 +12720,9 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
               const releasedFromThread = releasePendingOwnerSendFromThread(body.messages || []);
               const lastMessage = Array.isArray(body.messages) ? body.messages[body.messages.length - 1] : null;
               if (lastMessage?.role === "butler" && lastMessage?.status === "replied") {
-                setStatus("返信を受信しました。", { temporary: true, executionDone: true });
+                setStatus("返信を受信しました。", { temporary: true });
               } else if (lastMessage?.status === "failed") {
-                setStatus(lastMessage.text || "応答生成が時間切れになりました。同じ thread で続けられます。", { executionFailed: true });
+                setStatus(lastMessage.text || "応答生成が時間切れになりました。同じ thread で続けられます。");
               } else if (releasedFromThread) {
                 setStatus("送信を保存しました。app-server bridge の返信を待っています", { thinking: true });
               }
@@ -12778,9 +12730,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
               const isThinking = body.status === "thinking";
               setStatus(body.text || (isThinking ? "codex app-server が応答を生成しています" : "codex app-server の応答が完了しました。"), {
                 thinking: isThinking,
-                temporary: !isThinking,
-                executionDone: body.status === "replied" || body.status === "completed",
-                executionFailed: body.status === "failed"
+                temporary: !isThinking
               });
             } else if (body.type === "owner_message_accepted" && body.ok) {
               const clientMessageId = body.clientMessageId || body.client_message_id || "";
@@ -12790,7 +12740,6 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
                 setStatus("送信を保存しました。app-server bridge の返信を待っています", { thinking: true });
               }
             } else if (body.type === "error") {
-              setExecutionRunning(false);
               const clientMessageId = body.clientMessageId || body.client_message_id || "";
               if (clientMessageId && pendingSendRollbacks.has(clientMessageId)) {
                 const mediaReferences = pendingSendRollbacks.get(clientMessageId) || [];
@@ -12862,60 +12811,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         scheduleReconnect();
       }
 
-      async function sendInterruptMessage() {
-        if (!interruptTextarea || !interruptButton) return;
-        const text = interruptTextarea.value.trim();
-        if (!text) {
-          interruptTextarea.focus({ preventScroll: true });
-          return;
-        }
-        if (dashboardSessionExpired) {
-          persistDashboardDraft();
-          setDashboardSessionExpiredStatus();
-          interruptTextarea.focus({ preventScroll: true });
-          return;
-        }
-        const clientMessageId = createClientMessageId();
-        const payload = {
-          type: "owner_message",
-          threadId,
-          clientMessageId,
-          repositoryInput,
-          text: "割り込み指示: " + text,
-          issueNumber,
-          relatedIssue: issueNumber,
-          interrupt: true,
-          mediaReferences: []
-        };
-        interruptButton.disabled = true;
-        try {
-          if (isChatSocketOpen()) {
-            chatSocket.send(JSON.stringify(payload));
-          } else {
-            await sendOwnerMessageByHttp(payload, clientMessageId);
-          }
-          interruptTextarea.value = "";
-          setStatus("割り込み指示を置きました。現在の実行状況を更新します", { thinking: true });
-        } catch (error) {
-          setStatus((error && error.message) || "割り込み指示を送れませんでした。入力は残しています。");
-          interruptTextarea.focus({ preventScroll: true });
-        } finally {
-          interruptButton.disabled = false;
-          updateComposerReserve();
-        }
-      }
-
       form.addEventListener("submit", async (event) => {
         event.preventDefault();
-        if (executionRunning && !composerTransportLocked) {
-          setStatus("停止要求を受け付けました。実行停止の確定はまだ未接続です。割り込みは下の入力欄から送れます。", {
-            thinking: true
-          });
-          if (interruptTextarea) {
-            interruptTextarea.focus({ preventScroll: true });
-          }
-          return;
-        }
         const text = textarea.value.trim() || (pendingMediaItems.length > 0 ? "添付を追加しました。" : "");
         if (!text) {
           textarea.focus();
@@ -13046,15 +12943,6 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             mediaButton.disabled = false;
             updateComposerReserve();
           }
-        });
-      }
-
-      if (interruptButton && interruptTextarea) {
-        interruptButton.addEventListener("click", sendInterruptMessage);
-        interruptTextarea.addEventListener("keydown", (event) => {
-          if (!shouldSubmitDashboardComposerShortcut(event)) return;
-          event.preventDefault();
-          sendInterruptMessage();
         });
       }
 

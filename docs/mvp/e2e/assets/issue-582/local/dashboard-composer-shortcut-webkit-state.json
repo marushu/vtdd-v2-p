@@ -4,9 +4,13 @@
   "platform": "darwin",
   "state": {
     "value": "",
+    "composerReadOnly": false,
+    "interruptPanelCount": 0,
+    "stopStateButtonCount": 0,
+    "sendButtonText": "↑",
     "ownerBubbleTexts": [
-      "⧉command enter send16:18",
-      "⧉control enter send16:18"
+      "⧉command enter send13:23",
+      "⧉control enter send13:23"
     ],
     "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.4 Safari/605.1.15"
   }
