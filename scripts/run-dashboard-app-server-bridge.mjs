@@ -578,6 +578,7 @@ export async function handleDashboardTurnRequest({
   cwd = process.cwd(),
   sandboxMode = "",
   turnTimeoutMs = 10 * 60 * 1000,
+  lateCompletionTimeoutMs = 30 * 60 * 1000,
   runtimeUrl = "",
   token = "",
   fetchImpl = globalThis.fetch,
@@ -614,13 +615,17 @@ export async function handleDashboardTurnRequest({
   let accumulatedText = "";
   let activeTurnId = "";
   let turnSettled = false;
+  let timedOut = false;
   let timeoutHandle = null;
+  let lateCompletionCleanupHandle = null;
+  let cleanupNotifications = () => {};
   let resolveTurn = () => {};
   let rejectTurn = () => {};
   const turnCompletion = new Promise((resolve, reject) => {
     resolveTurn = resolve;
     rejectTurn = reject;
     timeoutHandle = setTimeout(() => {
+      timedOut = true;
       const timeoutEvent = buildAppServerTurnTimeoutEvent({
         dashboardThreadId,
         codexThreadId,
@@ -628,7 +633,10 @@ export async function handleDashboardTurnRequest({
         relatedIssue: request.relatedIssue || request.issueNumber
       });
       void sendDashboardEvent(timeoutEvent);
-      reject(createAppServerFailureAlreadySentError(timeoutEvent.text));
+      lateCompletionCleanupHandle = setTimeout(() => {
+        cleanupNotifications();
+      }, lateCompletionTimeoutMs);
+      finishTurn(resolveTurn);
     }, turnTimeoutMs);
   });
   const finishTurn = (callback) => {
@@ -660,16 +668,28 @@ export async function handleDashboardTurnRequest({
       event.type = "app_server_reply";
       event.text = accumulatedText || event.text;
       void sendDashboardEvent(event);
+      if (timedOut) {
+        cleanupNotifications();
+        return;
+      }
       finishTurn(resolveTurn);
       return;
     }
     if (event.type === "app_server_turn_failed") {
       void sendDashboardEvent(event);
+      if (timedOut) {
+        cleanupNotifications();
+        return;
+      }
       finishTurn(() => rejectTurn(createAppServerFailureAlreadySentError(event.text)));
       return;
     }
     void sendDashboardEvent(event);
   });
+  cleanupNotifications = () => {
+    clearTimeout(lateCompletionCleanupHandle);
+    unsubscribe();
+  };
   try {
     const materializedMediaReferences = await materializeDashboardMediaReferences({
       mediaReferences: request.mediaReferences,
@@ -705,7 +725,9 @@ export async function handleDashboardTurnRequest({
     await turnCompletion;
   } finally {
     clearTimeout(timeoutHandle);
-    unsubscribe();
+    if (!timedOut) {
+      cleanupNotifications();
+    }
   }
 }
 

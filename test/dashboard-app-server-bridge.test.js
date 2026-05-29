@@ -718,8 +718,7 @@ test("dashboard app-server bridge sends Japanese recoverable timeout failure", a
     }
   };
 
-  await assert.rejects(
-    handleDashboardTurnRequest({
+  await handleDashboardTurnRequest({
       request: {
         threadId: "dashboard-main",
         repository: "marushu/vtdd-v2-p",
@@ -729,10 +728,9 @@ test("dashboard app-server bridge sends Japanese recoverable timeout failure", a
       appServer,
       sendDashboardEvent: async (event) => events.push(event),
       cwd: "/repo",
-      turnTimeoutMs: 1
-    }),
-    /応答生成が時間切れ/
-  );
+      turnTimeoutMs: 1,
+      lateCompletionTimeoutMs: 1
+    });
 
   const timeoutEvent = events.find((event) => event.type === "app_server_turn_failed");
   assert.ok(timeoutEvent);
@@ -742,6 +740,75 @@ test("dashboard app-server bridge sends Japanese recoverable timeout failure", a
   assert.equal(timeoutEvent.relatedIssue, 590);
   assert.match(timeoutEvent.text, /入力は Dashboard thread に保存済み/);
   assert.doesNotMatch(timeoutEvent.text, /timed out before completion/);
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(handlers.size, 0);
+});
+
+test("dashboard app-server bridge persists late completion after timeout instead of losing the final reply", async () => {
+  const events = [];
+  const handlers = new Set();
+  let nextId = 1;
+  const appServer = {
+    nextRequestId() {
+      const id = nextId;
+      nextId += 1;
+      return id;
+    },
+    onNotification(handler) {
+      handlers.add(handler);
+      return () => handlers.delete(handler);
+    },
+    async request(message) {
+      if (message.method === "thread/start") {
+        return { thread: { id: "codex-thread-late" } };
+      }
+      if (message.method === "turn/start") {
+        return { turn: { id: "turn-late" } };
+      }
+      throw new Error(`unexpected method ${message.method}`);
+    }
+  };
+
+  await handleDashboardTurnRequest({
+    request: {
+      threadId: "dashboard-main",
+      repository: "marushu/vtdd-v2-p",
+      relatedIssue: 590,
+      text: "PR 作成まで進めて"
+    },
+    appServer,
+    sendDashboardEvent: async (event) => events.push(event),
+    cwd: "/repo",
+    turnTimeoutMs: 1,
+    lateCompletionTimeoutMs: 1000
+  });
+
+  assert.equal(events.filter((event) => event.type === "app_server_turn_failed").length, 1);
+  assert.equal(handlers.size, 1);
+
+  for (const handler of handlers) {
+    handler({
+      method: "item/agentMessage/delta",
+      params: {
+        threadId: "codex-thread-late",
+        turnId: "turn-late",
+        delta: "PR #632 を Draft で作成済みです。"
+      }
+    });
+    handler({
+      method: "turn/completed",
+      params: {
+        threadId: "codex-thread-late",
+        turn: { id: "turn-late", status: "completed" }
+      }
+    });
+  }
+
+  const finalReply = events.find((event) => event.type === "app_server_reply");
+  assert.ok(finalReply);
+  assert.equal(finalReply.threadId, "dashboard-main");
+  assert.equal(finalReply.codexThreadId, "codex-thread-late");
+  assert.equal(finalReply.text, "PR #632 を Draft で作成済みです。");
   assert.equal(handlers.size, 0);
 });
 
