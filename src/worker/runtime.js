@@ -11509,6 +11509,11 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       --owner-text: #f7f7f4;
       --link: #0b6b65;
       --owner-link: #9ee7ff;
+      --code-bg: #fbfbf7;
+      --code-text: #151515;
+      --owner-code-bg: #2a2a2a;
+      --owner-code-text: #f7f7f4;
+      --owner-code-border: #4a4a4a;
       --shadow: rgba(20, 20, 20, .12);
       --dashboard-drawer-width: min(86vw, 380px);
       color: var(--text);
@@ -11528,6 +11533,11 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         --owner-text: #111;
         --link: #90cdf4;
         --owner-link: #075985;
+        --code-bg: #171717;
+        --code-text: #f7f7f4;
+        --owner-code-bg: #ffffff;
+        --owner-code-text: #111111;
+        --owner-code-border: #cfcfc8;
         --shadow: rgba(0, 0, 0, .42);
       }
     }
@@ -11563,8 +11573,8 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .bubble .message-body ul { margin: 0; }
     .bubble .message-body li + li { margin-top: 4px; }
     .bubble .message-body a, .bubble .message-body code { overflow-wrap: anywhere; word-break: break-word; }
-    .bubble .message-body code { font-size: .94em; }
-    .bubble .message-body pre { position: relative; margin: 0; padding: 42px 14px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--panel-strong); overflow-x: hidden; white-space: pre-wrap; max-width: 100%; }
+    .bubble .message-body code { color: var(--code-text); font-size: .94em; }
+    .bubble .message-body pre { position: relative; margin: 0; padding: 42px 14px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--code-bg); color: var(--code-text); overflow-x: hidden; white-space: pre-wrap; max-width: 100%; }
     .bubble .message-body pre.wrap-code { overflow-x: hidden; white-space: pre-wrap; }
     .bubble .message-body pre code { display: block; max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; font-size: 14px; line-height: 1.55; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
     .bubble .message-body pre.wrap-code code { white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
@@ -11581,6 +11591,9 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .bubble ul { margin: 0; padding-left: 22px; color: var(--text); line-height: 1.85; }
     .bubble.owner { position: relative; align-self: flex-end; background: var(--owner-bubble); color: var(--owner-text); border-radius: 24px; padding: 12px 16px; }
     .bubble.owner p { color: var(--owner-text); margin: 0; }
+    .bubble.owner .message-body code { color: var(--owner-code-text); }
+    .bubble.owner .message-body pre { background: var(--owner-code-bg); border-color: var(--owner-code-border); color: var(--owner-code-text); }
+    .bubble.owner .message-body pre code { color: var(--owner-code-text); }
     .bubble.owner .copy-message { top: -10px; left: -10px; right: auto; width: 28px; height: 28px; background: var(--panel-strong); color: var(--text); }
     .bubble.thinking { color: var(--muted); }
     .thinking-dots::after { content: ""; display: inline-block; width: 1.4em; text-align: left; animation: thinkingDots 1.2s steps(4, end) infinite; }
