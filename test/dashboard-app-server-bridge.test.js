@@ -90,6 +90,9 @@ test("dashboard app-server bridge wraps repository traffic-control context into 
   assert.match(text, /repository: marushu\/vtdd-v2-p/);
   assert.match(text, /relatedIssue: #450/);
   assert.match(text, /trafficControlRule/);
+  assert.match(text, /repo-backed vtdd-chief-butler/);
+  assert.match(text, /operatorUrlRule/);
+  assert.match(text, /same-origin absolute URL/);
   assert.match(text, /"currentSurface":"dashboard_butler"/);
   assert.match(text, /"currentNow":"Issue #590: app-server turn timeout must become recoverable\."/);
   assert.match(text, /Butler Completion Gate/);
@@ -918,6 +921,9 @@ test("dashboard app-server bridge passes traffic-control context to codex app-se
   assert.match(inputText, /repository: marushu\/vtdd-v2-p/);
   assert.match(inputText, /relatedIssue: #450/);
   assert.match(inputText, /trafficControlRule/);
+  assert.match(inputText, /repo-backed vtdd-chief-butler/);
+  assert.match(inputText, /operatorUrlRule/);
+  assert.match(inputText, /same-origin absolute URL/);
   assert.match(inputText, /"currentSurface":"dashboard_butler"/);
   assert.match(inputText, /"currentNow":"Issue #590: app-server turn timeout must become recoverable\."/);
   assert.match(inputText, /mechanicalBoundary/);

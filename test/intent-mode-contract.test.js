@@ -4,6 +4,7 @@ import fs from "node:fs";
 
 const CONTRACT_PATH = "docs/butler/intent-mode-contract.md";
 const SKILL_PATH = ".agents/skills/vtdd-status-advisor/SKILL.md";
+const CHIEF_BUTLER_SKILL_PATH = ".agents/skills/vtdd-chief-butler/SKILL.md";
 
 test("intent mode contract preserves autonomy without allowing drift", () => {
   const doc = fs.readFileSync(CONTRACT_PATH, "utf8");
@@ -36,6 +37,9 @@ test("intent mode contract preserves autonomy without allowing drift", () => {
   assert.equal(doc.includes("cost_boundary"), true);
   assert.equal(doc.includes("Dashboard Butler must not become a worse normal chat surface than Custom GPT."), true);
   assert.equal(doc.includes("The historical setup-wizard line is not reactivated by this contract."), true);
+  assert.equal(doc.includes("The central traffic-control Skill is `vtdd-chief-butler`:"), true);
+  assert.equal(doc.includes("`vtdd-chief-butler` is a core VTDD operating surface"), true);
+  assert.equal(doc.includes("ROOT-class `butler_gap_found` / `vps_handoff_gap_found`"), true);
   assert.equal(agents.includes(CONTRACT_PATH), true);
   assert.equal(agents.includes("Dashboard Butler is the intended primary operator surface."), true);
   assert.equal(agents.includes("A local mac Codex Skill is not a VTDD product capability by\nitself."), true);
@@ -46,6 +50,27 @@ test("intent mode contract preserves autonomy without allowing drift", () => {
   assert.equal(agents.includes("After creating or updating a PR, check\nthe PR state again"), true);
   assert.equal(agents.includes(".agents/skills/vtdd-status-advisor/SKILL.md"), true);
   assert.equal(agents.includes("readonly does not mean\npassive"), true);
+});
+
+test("vtdd chief butler skill is repository-backed traffic control", () => {
+  const skill = fs.readFileSync(CHIEF_BUTLER_SKILL_PATH, "utf8");
+
+  assert.equal(skill.includes("name: vtdd-chief-butler"), true);
+  assert.equal(skill.includes("repository-backed traffic-control contract"), true);
+  assert.equal(skill.includes("must not exist\nonly in a local mac Codex install"), true);
+  assert.equal(skill.includes("Owner on iPhone/iPad -> Dashboard Butler -> VTDD runtime -> VPS Codex CLI"), true);
+  assert.equal(skill.includes("defect, not as an acceptable operating mode"), true);
+  assert.equal(skill.includes("`mac_codex_only_probe`"), true);
+  assert.equal(skill.includes("`butler_gap_found`"), true);
+  assert.equal(skill.includes("`vps_handoff_gap_found`"), true);
+  assert.equal(skill.includes("`recovery_gap_found`"), true);
+  assert.equal(skill.includes("Before runtime code edits"), true);
+  assert.equal(skill.includes("Repository Sharing Gate"), true);
+  assert.equal(skill.includes("Dashboard Butler / VPS Codex CLI readability is stated honestly"), true);
+  assert.equal(skill.includes("Operator URL Rule"), true);
+  assert.equal(skill.includes("short clickable Markdown link"), true);
+  assert.equal(skill.includes("complete same-origin absolute URL"), true);
+  assert.equal(skill.includes("Using this Skill is not completion evidence."), true);
 });
 
 test("vtdd status advisor skill is readonly but still gives judgment", () => {
