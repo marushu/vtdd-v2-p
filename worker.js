@@ -37251,7 +37251,45 @@ function sleep(ms) {
 
 // src/core/vps-privileged-maintenance.js
 var CAPABILITY_STATUSES = /* @__PURE__ */ new Set(["enabled", "disabled"]);
+var CAPABILITY_OPERATIONS = /* @__PURE__ */ new Set(["add", "enable", "disable", "remove", "rollback", "review"]);
 var RISK_LEVELS = /* @__PURE__ */ new Set(["low", "medium", "high"]);
+var DEFAULT_MANIFEST_VERSION = 1;
+var HELPER_EXECUTION_MODES = /* @__PURE__ */ new Set(["dry_run"]);
+function normalizeVpsCapabilityManifest(input = {}) {
+  const issues = [];
+  const manifest = {
+    version: normalizePositiveInteger5(input.version, DEFAULT_MANIFEST_VERSION),
+    host: normalizeText24(input.host),
+    repository: normalizeRepository(input.repository),
+    updatedAt: normalizeText24(input.updatedAt),
+    capabilities: []
+  };
+  const seen = /* @__PURE__ */ new Set();
+  for (const rawCapability of Array.isArray(input.capabilities) ? input.capabilities : []) {
+    const normalized = normalizeVpsCapability(rawCapability);
+    if (!normalized.ok) {
+      issues.push(...normalized.issues);
+      continue;
+    }
+    if (seen.has(normalized.capability.id)) {
+      issues.push(`duplicate capability id: ${normalized.capability.id}`);
+      continue;
+    }
+    seen.add(normalized.capability.id);
+    manifest.capabilities.push(normalized.capability);
+  }
+  if (!manifest.host) {
+    issues.push("manifest host is required");
+  }
+  if (!manifest.repository) {
+    issues.push("manifest repository is required");
+  }
+  return {
+    ok: issues.length === 0,
+    manifest,
+    issues
+  };
+}
 function normalizeVpsCapability(input = {}) {
   const issues = [];
   const capability = {
@@ -37340,6 +37378,98 @@ function buildVpsMaintenanceApprovalScope(input = {}) {
     }
   };
 }
+function planVpsPrivilegedMaintenanceHelperExecution(input = {}) {
+  const mode = normalizeText24(input.mode || input.executionMode || input.execution_mode) || "dry_run";
+  const manifestResult = normalizeVpsCapabilityManifest(input.manifest);
+  const helperRequest = normalizeHelperRequest(input.helperRequest || input.helper_request);
+  const now = normalizeText24(input.now) || (/* @__PURE__ */ new Date()).toISOString();
+  const issues = [...manifestResult.issues, ...helperRequest.issues];
+  if (!HELPER_EXECUTION_MODES.has(mode)) {
+    issues.push("helper execution mode must be dry_run");
+  }
+  if (issues.length > 0) {
+    return {
+      ok: false,
+      error: "vps_helper_request_invalid",
+      issues
+    };
+  }
+  const manifest = manifestResult.manifest;
+  const request = helperRequest.request;
+  const capability = manifest.capabilities.find((item) => item.id === request.capability.id);
+  if (!capability) {
+    return {
+      ok: false,
+      error: "vps_helper_capability_not_found",
+      issues: [`capability not found: ${request.capability.id}`]
+    };
+  }
+  if (capability.status !== "enabled") {
+    return {
+      ok: false,
+      error: "vps_helper_capability_disabled",
+      issues: [`capability is not enabled: ${request.capability.id}`]
+    };
+  }
+  const mismatch = compareHelperRequestToCapability({ request, capability, manifest });
+  if (mismatch.length > 0) {
+    return {
+      ok: false,
+      error: "vps_helper_request_manifest_mismatch",
+      issues: mismatch
+    };
+  }
+  return {
+    ok: true,
+    helperPlan: {
+      kind: "vps_privileged_maintenance_helper_plan",
+      mode,
+      status: "dry_run_ready",
+      requestId: request.requestId,
+      host: request.host,
+      repository: request.repository,
+      relatedIssue: request.relatedIssue,
+      operation: request.operation,
+      capability: sanitizeHelperCapability(capability),
+      commandPreview: {
+        commandClass: capability.commandClass,
+        workingDirectories: capability.workingDirectories,
+        allowedArgs: capability.allowedArgs
+      },
+      audit: {
+        redactionRules: capability.redactionRules,
+        expectedRuntimeTruth: capability.expectedRuntimeTruth,
+        rollbackPlan: capability.rollbackPlan
+      },
+      rootExecutionStarted: false,
+      helperExecutionStarted: false,
+      redacted: true,
+      plannedAt: now
+    },
+    runtimeTruth: {
+      ok: true,
+      kind: "vps_privileged_maintenance_helper_dry_run",
+      status: "dry_run_ready",
+      host: request.host,
+      repository: request.repository,
+      relatedIssue: request.relatedIssue,
+      operation: request.operation,
+      capabilityId: capability.id,
+      commandClass: capability.commandClass,
+      before: {
+        manifestVersion: manifest.version,
+        capabilityStatus: capability.status
+      },
+      after: null,
+      exitCode: null,
+      redactedLogSummary: "dry-run only; privileged command was not executed",
+      rootExecutionStarted: false,
+      helperExecutionStarted: false,
+      redacted: true,
+      updatedAt: now
+    }
+  };
+}
 function containsForbiddenPrivilegedPattern(capability) {
   const joined = [
     capability.commandClass,
@@ -37348,6 +37478,75 @@ function containsForbiddenPrivilegedPattern(capability) {
     capability.rollbackPlan
   ].join(" ");
   return /\bNOPASSWD\s*:\s*ALL\b/i.test(joined) || /\bsudo\s+su\b/i.test(joined) || /\b(root\s+shell|\/bin\/bash|\/bin\/sh)\b/i.test(joined);
+}
+function normalizeHelperRequest(input = {}) {
+  const capability = normalizeVpsCapability(input.capability || {});
+  const issues = [...capability.issues];
+  const request = {
+    kind: normalizeText24(input.kind),
+    status: normalizeText24(input.status),
+    requestId: normalizeText24(input.requestId || input.request_id),
+    vpsProposalId: normalizeText24(input.vpsProposalId || input.vps_proposal_id),
+    approvalGrantId: normalizeText24(input.approvalGrantId || input.approval_grant_id),
+    host: normalizeText24(input.host),
+    repository: normalizeRepository(input.repository),
+    relatedIssue: normalizePositiveInteger5(input.relatedIssue || input.related_issue || input.issueNumber),
+    operation: normalizeText24(input.operation),
+    capability: capability.capability
+  };
+  if (request.kind !== "vps_privileged_maintenance_helper_request") {
+    issues.push("helperRequest kind must be vps_privileged_maintenance_helper_request");
+  }
+  if (request.status !== "ready_for_vps_helper") {
+    issues.push("helperRequest status must be ready_for_vps_helper");
+  }
+  if (!request.requestId) issues.push("helperRequest requestId is required");
+  if (!request.vpsProposalId) issues.push("helperRequest vpsProposalId is required");
+  if (!request.approvalGrantId) issues.push("helperRequest approvalGrantId is required");
+  if (!request.host) issues.push("helperRequest host is required");
+  if (!request.repository) issues.push("helperRequest repository is required");
+  if (!request.relatedIssue) issues.push("helperRequest relatedIssue is required");
+  if (!CAPABILITY_OPERATIONS.has(request.operation)) {
+    issues.push("helperRequest operation must be add, enable, disable, remove, rollback, or review");
+  }
+  return {
+    ok: issues.length === 0,
+    request,
+    issues
+  };
+}
+function compareHelperRequestToCapability({ request, capability, manifest }) {
+  const issues = [];
+  if (request.host !== manifest.host) issues.push("helperRequest host must match manifest host");
+  if (request.repository !== manifest.repository) issues.push("helperRequest repository must match manifest repository");
+  if (request.capability.commandClass !== capability.commandClass) {
+    issues.push("helperRequest capability.commandClass must match manifest capability");
+  }
+  if (!sameStringList(request.capability.workingDirectories, capability.workingDirectories)) {
+    issues.push("helperRequest capability.workingDirectories must match manifest capability");
+  }
+  if (!sameStringList(request.capability.allowedArgs, capability.allowedArgs)) {
+    issues.push("helperRequest capability.allowedArgs must match manifest capability");
+  }
+  return issues;
+}
+function sanitizeHelperCapability(capability) {
+  return {
+    id: capability.id,
+    title: capability.title,
+    status: capability.status,
+    commandClass: capability.commandClass,
+    riskLevel: capability.riskLevel,
+    workingDirectories: capability.workingDirectories,
+    allowedArgs: capability.allowedArgs,
+    affectedPaths: capability.affectedPaths,
+    redactionRules: capability.redactionRules,
+    rollbackPlan: capability.rollbackPlan,
+    expectedRuntimeTruth: capability.expectedRuntimeTruth
+  };
+}
+function sameStringList(left, right) {
+  return JSON.stringify(normalizeStringList(left)) === JSON.stringify(normalizeStringList(right));
 }
 function normalizeCapabilityId(value) {
   return normalizeText24(value).toLowerCase().replace(/[^a-z0-9_.:-]+/g, "-").replace(/^-+|-+$/g, "");
@@ -37423,6 +37622,7 @@ var RUNTIME_SETUP_MANIFEST = Object.freeze({
     "/v2/action/vps-runner-cancel",
     "/v2/vps/privileged-maintenance/proposals",
     "/v2/vps/privileged-maintenance/helper-requests",
+    "/v2/vps/privileged-maintenance/helper-dry-runs",
     "/v2/retrieve/constitution",
     "/v2/retrieve/decisions",
     "/v2/retrieve/proposals",
@@ -37453,6 +37653,7 @@ var RUNTIME_SETUP_MANIFEST = Object.freeze({
     "vtddVpsRunnerCancel",
     "vtddCreateVpsMaintenanceProposal",
     "vtddCreateVpsMaintenanceHelperRequest",
+    "vtddDryRunVpsMaintenanceHelper",
     "vtddRetrieveConstitution",
     "vtddRetrieveDecisionLogs",
     "vtddRetrieveProposalLogs",
@@ -37482,6 +37683,7 @@ var RUNTIME_SETUP_MANIFEST = Object.freeze({
     "vtddVpsRunnerCancel",
     "vtddCreateVpsMaintenanceProposal",
     "vtddCreateVpsMaintenanceHelperRequest",
+    "vtddDryRunVpsMaintenanceHelper",
     "vtddRetrieveConstitution",
     "vtddRetrieveDecisionLogs",
     "vtddRetrieveProposalLogs",
@@ -57279,6 +57481,21 @@ var runtime_default = {
       }
       return handleVpsPrivilegedMaintenanceHelperRequest(request, env);
     }
+    if (request.method === "POST" && isApiPath(url.pathname, "/vps/privileged-maintenance/helper-dry-runs")) {
+      const auth = authorizeGatewayRequest({
+        request,
+        env,
+        apiSuffix: "/vps/privileged-maintenance/helper-dry-runs"
+      });
+      if (!auth.ok) {
+        return json(auth.status, {
+          ok: false,
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+      return handleVpsPrivilegedMaintenanceHelperDryRunRequest(request, env);
+    }
     if (request.method === "POST" && isApiPath(url.pathname, "/action/github-actions-secret")) {
       const auth = authorizePasskeyBrowserOrMachineRequest({
         request,
@@ -60096,6 +60313,34 @@ async function handleVpsPrivilegedMaintenanceHelperRequest(request, env) {
       redacted: true,
       nextAction: "send this bounded helperRequest to the VPS root-owned helper in the next approved slice"
     }
+  });
+}
+async function handleVpsPrivilegedMaintenanceHelperDryRunRequest(request, env) {
+  const payload = await readJson(request);
+  const result = planVpsPrivilegedMaintenanceHelperExecution({
+    manifest: payload?.manifest,
+    helperRequest: payload?.helperRequest || payload?.helper_request,
+    mode: payload?.mode || payload?.executionMode || payload?.execution_mode || "dry_run",
+    now: payload?.now
+  });
+  if (!result.ok) {
+    return json(422, {
+      ok: false,
+      error: result.error,
+      issues: result.issues ?? [],
+      runtimeTruth: {
+        kind: "vps_privileged_maintenance_helper_dry_run",
+        status: "blocked",
+        rootExecutionStarted: false,
+        helperExecutionStarted: false,
+        redacted: true
+      }
+    });
+  }
+  return json(200, {
+    ok: true,
+    helperPlan: result.helperPlan,
+    runtimeTruth: result.runtimeTruth
   });
 }
 async function handleDashboardChatMessageRequest(request, env) {

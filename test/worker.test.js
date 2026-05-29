@@ -8132,6 +8132,101 @@ test("worker creates VPS maintenance helper request only with matching approval 
   assert.equal(body.runtimeTruth.helperExecutionStarted, false);
 });
 
+test("worker dry-runs VPS maintenance helper request without root execution", async () => {
+  const provider = createInMemoryMemoryProvider();
+  const proposalResponse = await worker.fetch(
+    new Request("https://example.com/v2/vps/privileged-maintenance/proposals", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        host: "x85-131-245-163",
+        repository: "marushu/vtdd-v2-p",
+        relatedIssue: 637,
+        operation: "add",
+        id: "playwright.chromium.deps",
+        title: "Playwright Chromium dependency install",
+        commandClass: "playwright_install_deps_chromium",
+        workingDirectories: ["/home/vtdd-runner/vtdd-runner/repos/vtdd-v2-p"],
+        allowedArgs: ["npx playwright install-deps chromium"],
+        affectedPaths: ["/usr/lib", "/usr/share/fonts"],
+        redactionRules: ["no secrets", "summarize package list"],
+        rollbackPlan: "disable capability and keep audit history",
+        expectedRuntimeTruth: ["before package check", "exit code", "after Chromium launch check"],
+        reason: "PR #632 Playwright E2E blocker requires Chromium host dependencies"
+      })
+    }),
+    { ...gatewayAuthEnv, MEMORY_PROVIDER: provider }
+  );
+  assert.equal(proposalResponse.status, 200);
+  const proposalBody = await proposalResponse.json();
+  await provider.store({
+    id: "approval:vps-maintenance-dry-run",
+    type: MemoryRecordType.APPROVAL_LOG,
+    content: {
+      kind: "passkey_grant",
+      status: "verified",
+      approvalId: "approval:vps-maintenance-dry-run",
+      credentialId: "AQIDBA",
+      verifiedAt: "2026-05-29T00:00:00.000Z",
+      expiresAt: "2999-01-01T00:00:00.000Z",
+      scope: proposalBody.approvalScope
+    },
+    metadata: { source: "test" },
+    priority: 96,
+    tags: ["passkey_grant", "passkey_approval", "verified"],
+    createdAt: "2026-05-29T00:00:00.000Z"
+  });
+  const helperResponse = await worker.fetch(
+    new Request("https://example.com/v2/vps/privileged-maintenance/helper-requests", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        vpsProposalId: proposalBody.vpsProposalId,
+        approvalGrantId: "approval:vps-maintenance-dry-run"
+      })
+    }),
+    { ...gatewayAuthEnv, MEMORY_PROVIDER: provider }
+  );
+  assert.equal(helperResponse.status, 200);
+  const helperBody = await helperResponse.json();
+
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/vps/privileged-maintenance/helper-dry-runs", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        manifest: {
+          version: 1,
+          host: "x85-131-245-163",
+          repository: "marushu/vtdd-v2-p",
+          updatedAt: "2026-05-29T00:00:00.000Z",
+          capabilities: [
+            {
+              ...helperBody.helperRequest.capability,
+              status: "enabled",
+              createdAt: "2026-05-29T00:00:00.000Z",
+              updatedAt: "2026-05-29T00:00:00.000Z"
+            }
+          ]
+        },
+        helperRequest: helperBody.helperRequest,
+        now: "2026-05-29T02:00:00.000Z"
+      })
+    }),
+    gatewayAuthEnv
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.helperPlan.status, "dry_run_ready");
+  assert.equal(body.runtimeTruth.kind, "vps_privileged_maintenance_helper_dry_run");
+  assert.equal(body.runtimeTruth.status, "dry_run_ready");
+  assert.equal(body.runtimeTruth.rootExecutionStarted, false);
+  assert.equal(body.runtimeTruth.helperExecutionStarted, false);
+  assert.equal(body.runtimeTruth.exitCode, null);
+});
+
 test("worker rejects VPS helper request when approval grant scope does not match proposal", async () => {
   const provider = createInMemoryMemoryProvider();
   const proposalResponse = await worker.fetch(
