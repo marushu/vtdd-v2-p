@@ -58222,6 +58222,8 @@ async function buildStartupPreflight({
 }) {
   const requiredSourcePaths = [
     "AGENTS.md",
+    ".agents/skills/vtdd-chief-butler/SKILL.md",
+    ".agents/skills/vtdd-status-advisor/SKILL.md",
     "docs/butler/thread-independent-startup-contract.md",
     "docs/butler/execution-queue-contract.md",
     "docs/mvp/active-issue-execution-queue.md",
@@ -58284,6 +58286,7 @@ async function buildStartupPreflight({
   });
   const butlerFirstPrincipleStatus = threadLocalAssumptionsPromoted ? "promoted" : "\u672A\u78BA\u8A8D";
   const executionQueue = buildStartupExecutionQueue({ sourceResults });
+  const repoBackedSkills = buildStartupRepoBackedSkills({ sourceResults });
   return {
     schemaVersion: "startup_preflight_v1",
     issueNumber: issueNumber || null,
@@ -58296,6 +58299,7 @@ async function buildStartupPreflight({
       "explicit_user_instruction",
       "active_github_issue",
       "AGENTS.md",
+      "repo_backed_skills",
       "thread_independent_startup_contract",
       "execution_queue_contract",
       "active_issue_execution_queue",
@@ -58311,6 +58315,7 @@ async function buildStartupPreflight({
     threadLocalAssumptionsPromoted,
     sources,
     missingSources,
+    repoBackedSkills,
     executionQueue,
     activeIssue: activeIssue ? {
       number: activeIssue.number,
@@ -58328,7 +58333,12 @@ async function buildStartupPreflight({
     memory: memoryResult,
     setup: parityResult,
     surfaceCapability: buildStartupSurfaceCapability(currentSurface),
-    gapClassification: buildStartupGapClassification({ currentSurface, missingSources, memoryResult }),
+    gapClassification: buildStartupGapClassification({
+      currentSurface,
+      missingSources,
+      memoryResult,
+      repoBackedSkills
+    }),
     nextSafeAction: buildStartupNextSafeAction({
       issueNumber,
       currentSurface,
@@ -58336,6 +58346,48 @@ async function buildStartupPreflight({
       memoryResult
     }),
     stopCondition: "If repository/Issue/runtime/RAG/source truth is \u672A\u78BA\u8A8D, do not claim Butler-complete execution. Ask for owner direction or create a bounded remediation Issue."
+  };
+}
+function buildStartupRepoBackedSkills({ sourceResults }) {
+  const requiredSkills = [
+    {
+      name: "vtdd-chief-butler",
+      path: ".agents/skills/vtdd-chief-butler/SKILL.md",
+      role: "central_traffic_control",
+      requiredFor: ["Dashboard Butler traffic control", "VPS Codex CLI handoff"]
+    },
+    {
+      name: "vtdd-status-advisor",
+      path: ".agents/skills/vtdd-status-advisor/SKILL.md",
+      role: "readonly_status_advice",
+      requiredFor: ["status readiness", "close/merge readiness"]
+    }
+  ];
+  const skills = requiredSkills.map((skill) => {
+    const result = sourceResults.find((sourceResult) => sourceResult.path === skill.path);
+    const content = result?.ok ? String(result.record?.content || "") : "";
+    const frontMatterName = content.match(/^name:\s*(.+?)\s*$/m)?.[1]?.trim() || null;
+    return {
+      ...skill,
+      status: result?.ok ? "read" : "missing",
+      sha: result?.record?.sha || null,
+      htmlUrl: result?.record?.htmlUrl || null,
+      frontMatterName,
+      frontMatterNameMatches: frontMatterName === skill.name,
+      repositoryBacked: result?.ok === true,
+      reason: result?.ok ? null : result?.reason || "skill source is unavailable"
+    };
+  });
+  const missing = skills.filter((skill) => skill.status !== "read");
+  const mismatched = skills.filter(
+    (skill) => skill.status === "read" && skill.frontMatterNameMatches !== true
+  );
+  return {
+    status: missing.length === 0 && mismatched.length === 0 ? "read" : "\u672A\u78BA\u8A8D",
+    requiredSkills: skills,
+    missingSkills: missing.map((skill) => skill.name),
+    mismatchedSkills: mismatched.map((skill) => skill.name),
+    ownerFacingSummary: missing.length === 0 && mismatched.length === 0 ? "repo-backed VTDD Skills are readable from repository truth." : "repo-backed VTDD Skill inventory is incomplete; do not claim cross-surface traffic-control parity."
   };
 }
 function buildStartupExecutionQueue({ sourceResults }) {
@@ -58559,13 +58611,21 @@ function buildStartupSurfaceCapability(currentSurface) {
     ownerFacingWarning: null
   };
 }
-function buildStartupGapClassification({ currentSurface, missingSources, memoryResult }) {
+function buildStartupGapClassification({
+  currentSurface,
+  missingSources,
+  memoryResult,
+  repoBackedSkills
+}) {
   const gaps = [];
   if (normalizeText31(currentSurface) === "mac_codex") {
     gaps.push("mac_codex_only_probe");
   }
   if (missingSources.length > 0) {
     gaps.push("butler_gap_found");
+  }
+  if (repoBackedSkills?.status !== "read") {
+    gaps.push("vps_handoff_gap_found");
   }
   if (memoryResult.status !== "read") {
     gaps.push("recovery_gap_found");

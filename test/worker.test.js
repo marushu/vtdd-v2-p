@@ -9735,6 +9735,20 @@ test("worker returns Butler startup preflight from shared repo truth and memory"
       "## Butler-First Operating Principle",
       "VTDD is iPhone/iPad-first and handoff-first."
     ].join("\n"),
+    ".agents/skills/vtdd-chief-butler/SKILL.md": [
+      "---",
+      "name: vtdd-chief-butler",
+      "---",
+      "# VTDD Chief Butler",
+      "repository-backed traffic-control contract"
+    ].join("\n"),
+    ".agents/skills/vtdd-status-advisor/SKILL.md": [
+      "---",
+      "name: vtdd-status-advisor",
+      "---",
+      "# VTDD Status Advisor",
+      "readonly answer, blocker judgment, and next-action advice"
+    ].join("\n"),
     "docs/butler/thread-independent-startup-contract.md": [
       "# Thread-independent startup contract",
       "Startup source order: ".padEnd(520, "y"),
@@ -9884,6 +9898,14 @@ test("worker returns Butler startup preflight from shared repo truth and memory"
   assert.equal(body.startupPreflight.issueNumber, 344);
   assert.equal(body.startupPreflight.threadLocalAssumptionsPromoted, true);
   assert.equal(body.startupPreflight.butlerFirstPrinciple.status, "promoted");
+  assert.equal(body.startupPreflight.repoBackedSkills.status, "read");
+  assert.deepEqual(body.startupPreflight.repoBackedSkills.missingSkills, []);
+  assert.equal(
+    body.startupPreflight.repoBackedSkills.requiredSkills.find(
+      (skill) => skill.name === "vtdd-chief-butler"
+    )?.role,
+    "central_traffic_control"
+  );
   assert.equal(body.startupPreflight.executionQueue.status, "read");
   assert.equal(
     body.startupPreflight.executionQueue.currentNow,
@@ -9909,6 +9931,8 @@ test("worker marks startup execution queue unverified when active queue source i
   const provider = createInMemoryMemoryProvider();
   const sourceContent = {
     "AGENTS.md": "## Butler-First Operating Principle\nVTDD is iPhone/iPad-first.",
+    ".agents/skills/vtdd-chief-butler/SKILL.md": "---\nname: vtdd-chief-butler\n---\n",
+    ".agents/skills/vtdd-status-advisor/SKILL.md": "---\nname: vtdd-status-advisor\n---\n",
     "docs/butler/thread-independent-startup-contract.md":
       "threadLocalAssumptionsPromoted=false",
     "docs/butler/execution-queue-contract.md":
