@@ -3460,7 +3460,8 @@
                   "workingDirectories",
                   "allowedArgs",
                   "rollbackPlan",
-                  "reason"
+                  "reason",
+                  "relatedIssue"
                 ],
                 "properties": {
                   "host": {
@@ -3538,6 +3539,10 @@
                   },
                   "expiresAt": {
                     "type": "string"
+                  },
+                  "relatedIssue": {
+                    "type": "integer",
+                    "description": "GitHub Issue number that owns this bounded VPS maintenance request."
                   }
                 },
                 "additionalProperties": true

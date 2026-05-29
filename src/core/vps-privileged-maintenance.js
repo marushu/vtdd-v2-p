@@ -192,12 +192,19 @@ function applyVpsCapabilityLifecycleOperation(input = {}) {
 function buildVpsMaintenanceApprovalScope(input = {}) {
   const capabilityId = normalizeCapabilityId(input.capabilityId || input.capability_id);
   const operation = normalizeText(input.operation);
+  const relatedIssue = normalizePositiveInteger(input.relatedIssue || input.related_issue || input.issueNumber);
   return {
     actionType: "destructive",
     highRiskKind: "vps_runner_admin",
     repositoryInput: normalizeRepository(input.repository),
-    relatedIssue: "637",
+    issueNumber: relatedIssue ? String(relatedIssue) : "",
+    relatedIssue: relatedIssue ? String(relatedIssue) : "",
     phase: "execution",
+    vpsHost: normalizeText(input.host),
+    vpsOperation: operation,
+    vpsCapabilityId: capabilityId,
+    vpsImpactScope: normalizeText(input.impactScope || input.impact_scope),
+    vpsExpiresAt: normalizeText(input.expiresAt || input.expires_at),
     display: {
       host: normalizeText(input.host),
       operation,

@@ -151,13 +151,20 @@ test("VPS privileged maintenance approval scope preserves existing passkey opera
     operation: "add",
     capabilityId: "playwright.chromium.deps",
     impactScope: "apt packages for Chromium runtime",
-    expiresAt: "2026-05-29T01:10:00.000Z"
+    expiresAt: "2026-05-29T01:10:00.000Z",
+    relatedIssue: 637
   });
 
   assert.equal(scope.actionType, "destructive");
   assert.equal(scope.highRiskKind, "vps_runner_admin");
   assert.equal(scope.repositoryInput, "marushu/vtdd-v2-p");
   assert.equal(scope.relatedIssue, "637");
+  assert.equal(scope.issueNumber, "637");
+  assert.equal(scope.vpsHost, "x85-131-245-163");
+  assert.equal(scope.vpsOperation, "add");
+  assert.equal(scope.vpsCapabilityId, "playwright.chromium.deps");
+  assert.equal(scope.vpsImpactScope, "apt packages for Chromium runtime");
+  assert.equal(scope.vpsExpiresAt, "2026-05-29T01:10:00.000Z");
   assert.equal(scope.display.capabilityId, "playwright.chromium.deps");
   assert.equal(scope.display.host, "x85-131-245-163");
 });

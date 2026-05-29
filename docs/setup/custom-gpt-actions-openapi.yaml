@@ -1458,11 +1458,15 @@ paths:
                 - allowedArgs
                 - rollbackPlan
                 - reason
+                - relatedIssue
               properties:
                 host:
                   type: string
                 repository:
                   type: string
+                relatedIssue:
+                  type: integer
+                  description: GitHub Issue number that owns this bounded VPS maintenance request.
                 operation:
                   type: string
                   enum:

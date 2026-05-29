@@ -3965,9 +3965,23 @@ async function handleVpsPrivilegedMaintenanceProposalRequest(request, env) {
 
   const proposal = proposalResult.proposal;
   const operation = normalizeText(payload?.operation) || "add";
-  const expiresAt =
-    normalizeText(payload?.expiresAt || payload?.expires_at) ||
-    new Date(Date.now() + 5 * 60 * 1000).toISOString();
+  const relatedIssue = normalizePositiveInteger(payload?.relatedIssue || payload?.related_issue || payload?.issueNumber);
+  const expiresAtResult = normalizeVpsMaintenanceProposalExpiresAt(payload?.expiresAt || payload?.expires_at);
+  const proposalIssues = [];
+  if (!relatedIssue) {
+    proposalIssues.push("relatedIssue or issueNumber is required");
+  }
+  if (!expiresAtResult.ok) {
+    proposalIssues.push(...expiresAtResult.issues);
+  }
+  if (proposalIssues.length > 0) {
+    return json(422, {
+      ok: false,
+      error: "vps_privileged_maintenance_proposal_invalid",
+      issues: proposalIssues
+    });
+  }
+  const expiresAt = expiresAtResult.expiresAt;
   const impactScope =
     normalizeText(payload?.impactScope || payload?.impact_scope) ||
     proposal.capability.affectedPaths.join(", ") ||
@@ -3978,7 +3992,8 @@ async function handleVpsPrivilegedMaintenanceProposalRequest(request, env) {
     operation,
     capabilityId: proposal.capability.id,
     impactScope,
-    expiresAt
+    expiresAt,
+    relatedIssue
   });
   const approvalOperatorUrl = buildVpsMaintenanceApprovalOperatorUrl({
     origin: url.origin,
@@ -3989,7 +4004,7 @@ async function handleVpsPrivilegedMaintenanceProposalRequest(request, env) {
     actionId: `vps-maintenance-proposal:${proposal.capability.id}:${operation}`,
     title: `VPS maintenance approval: ${proposal.capability.title}`,
     summary: `${proposal.host} / ${operation} / ${proposal.capability.id} / ${impactScope}`,
-    issueNumber: 637,
+    issueNumber: relatedIssue,
     workflowName: "vps-privileged-maintenance",
     url: `/dashboard/notifications?focus=owner-action`,
     source: {
@@ -4027,7 +4042,7 @@ function buildVpsMaintenanceApprovalOperatorUrl({ origin, approvalScope }) {
   const url = new URL("/v2/approval/passkey/operator", `${origin}/`);
   url.searchParams.set("mode", "vps");
   url.searchParams.set("repositoryInput", approvalScope.repositoryInput);
-  url.searchParams.set("issueNumber", approvalScope.relatedIssue || "637");
+  url.searchParams.set("issueNumber", approvalScope.relatedIssue);
   url.searchParams.set("phase", approvalScope.phase || "execution");
   url.searchParams.set("actionType", approvalScope.actionType);
   url.searchParams.set("highRiskKind", approvalScope.highRiskKind);
@@ -4037,6 +4052,39 @@ function buildVpsMaintenanceApprovalOperatorUrl({ origin, approvalScope }) {
   url.searchParams.set("vpsImpactScope", approvalScope.display?.impactScope || "");
   url.searchParams.set("vpsExpiresAt", approvalScope.display?.expiresAt || "");
   return url.href;
+}
+
+function normalizeVpsMaintenanceProposalExpiresAt(value, now = new Date()) {
+  const normalized = normalizeText(value);
+  if (!normalized) {
+    return {
+      ok: true,
+      expiresAt: new Date(now.valueOf() + 5 * 60 * 1000).toISOString()
+    };
+  }
+  const parsed = Date.parse(normalized);
+  if (!Number.isFinite(parsed)) {
+    return {
+      ok: false,
+      issues: ["expiresAt must be an ISO date-time"]
+    };
+  }
+  if (parsed <= now.valueOf()) {
+    return {
+      ok: false,
+      issues: ["expiresAt must be in the future"]
+    };
+  }
+  if (parsed > now.valueOf() + 15 * 60 * 1000) {
+    return {
+      ok: false,
+      issues: ["expiresAt must be within 15 minutes"]
+    };
+  }
+  return {
+    ok: true,
+    expiresAt: new Date(parsed).toISOString()
+  };
 }
 
 async function handleDashboardChatMessageRequest(request, env) {
@@ -5962,7 +6010,12 @@ function buildApprovalScopeSnapshot({ payload, policyInput }) {
     relatedIssue: identityFields.has("relatedIssue")
       ? traceability.relatedIssue ?? issueContext.issueNumber ?? payload?.relatedIssue
       : undefined,
-    phase: identityFields.has("phase") ? payload?.phase : undefined
+    phase: identityFields.has("phase") ? payload?.phase : undefined,
+    vpsHost: policyInput?.vpsHost ?? payload?.vpsHost,
+    vpsOperation: policyInput?.vpsOperation ?? payload?.vpsOperation,
+    vpsCapabilityId: policyInput?.vpsCapabilityId ?? payload?.vpsCapabilityId,
+    vpsImpactScope: policyInput?.vpsImpactScope ?? payload?.vpsImpactScope,
+    vpsExpiresAt: policyInput?.vpsExpiresAt ?? payload?.vpsExpiresAt
   });
 }
 

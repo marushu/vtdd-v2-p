@@ -27023,7 +27023,12 @@ function normalizeScopeSnapshot(scope = {}) {
     issueNumber: normalizeText3(scope.issueNumber),
     pullNumber: normalizeText3(scope.pullNumber),
     relatedIssue: normalizeText3(scope.relatedIssue),
-    phase: normalizeText3(scope.phase)
+    phase: normalizeText3(scope.phase),
+    vpsHost: normalizeText3(scope.vpsHost),
+    vpsOperation: normalizeText3(scope.vpsOperation),
+    vpsCapabilityId: normalizeText3(scope.vpsCapabilityId),
+    vpsImpactScope: normalizeText3(scope.vpsImpactScope),
+    vpsExpiresAt: normalizeText3(scope.vpsExpiresAt)
   };
 }
 function dedupePasskeys(records = []) {
@@ -27269,11 +27274,18 @@ function renderPasskeyOperatorPage(input = {}) {
   const dashboardReturnPath = escapeHtml(sanitizePasskeyDashboardReturnPath(input.dashboardReturnPath));
   const dashboardNotificationMode = dashboardMode && dashboardReturnPath === "/dashboard/notifications";
   const githubAppRoleDefault = escapeHtml(input.githubAppRole || "legacy");
-  const vpsHost = escapeHtml(input.vpsHost || "");
-  const vpsOperation = escapeHtml(input.vpsOperation || "");
-  const vpsCapabilityId = escapeHtml(input.vpsCapabilityId || "");
-  const vpsImpactScope = escapeHtml(input.vpsImpactScope || "");
-  const vpsExpiresAt = escapeHtml(input.vpsExpiresAt || "");
+  const vpsScope = {
+    vpsHost: String(input.vpsHost || "").trim(),
+    vpsOperation: String(input.vpsOperation || "").trim(),
+    vpsCapabilityId: String(input.vpsCapabilityId || "").trim(),
+    vpsImpactScope: String(input.vpsImpactScope || "").trim(),
+    vpsExpiresAt: String(input.vpsExpiresAt || "").trim()
+  };
+  const vpsHost = escapeHtml(vpsScope.vpsHost);
+  const vpsOperation = escapeHtml(vpsScope.vpsOperation);
+  const vpsCapabilityId = escapeHtml(vpsScope.vpsCapabilityId);
+  const vpsImpactScope = escapeHtml(vpsScope.vpsImpactScope);
+  const vpsExpiresAt = escapeHtml(vpsScope.vpsExpiresAt);
   const vpsScopeSummary = renderVpsScopeSummary({
     host: vpsHost,
     operation: vpsOperation,
@@ -27628,6 +27640,7 @@ function renderPasskeyOperatorPage(input = {}) {
       const mergePrLink = document.getElementById("merge-pr-link");
       const issueCloseLink = document.getElementById("issue-close-link");
       const operatorMode = "${escapeHtml(operatorMode)}";
+      const vpsApprovalScope = ${safeScriptJson(vpsScope)};
       let latestApprovalGrantId = "";
       let latestApprovalGrant = null;
 
@@ -28028,13 +28041,23 @@ function renderPasskeyOperatorPage(input = {}) {
               repositoryInput,
               issueNumber: Number(document.getElementById("issue-input").value || 0) || null,
               pullNumber: readApprovalPullNumber(),
+              vpsHost: vpsApprovalScope.vpsHost,
+              vpsOperation: vpsApprovalScope.vpsOperation,
+              vpsCapabilityId: vpsApprovalScope.vpsCapabilityId,
+              vpsImpactScope: vpsApprovalScope.vpsImpactScope,
+              vpsExpiresAt: vpsApprovalScope.vpsExpiresAt,
               issueContext: {
                 issueNumber: Number(document.getElementById("issue-input").value || 0) || null
               },
               policyInput: {
                 actionType: document.getElementById("action-type-input").value,
                 repositoryInput,
-                highRiskKind: document.getElementById("risk-kind-input").value
+                highRiskKind: document.getElementById("risk-kind-input").value,
+                vpsHost: vpsApprovalScope.vpsHost,
+                vpsOperation: vpsApprovalScope.vpsOperation,
+                vpsCapabilityId: vpsApprovalScope.vpsCapabilityId,
+                vpsImpactScope: vpsApprovalScope.vpsImpactScope,
+                vpsExpiresAt: vpsApprovalScope.vpsExpiresAt
               }
             })
           });
@@ -28457,6 +28480,9 @@ function renderVpsScopeSummary({ host, operation, capabilityId, impactScope, exp
     expiresAt ? `Expires: ${expiresAt}` : ""
   ].filter(Boolean);
   return parts.length > 0 ? `\u627F\u8A8D\u5BFE\u8C61: ${parts.join(" / ")}` : "";
+}
+function safeScriptJson(value) {
+  return JSON.stringify(value).replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/&/g, "\\u0026").replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029");
 }
 function normalizeOperatorMode(value) {
   const token = normalizeOperatorToken(value);
@@ -37298,12 +37324,19 @@ function buildVpsCapabilityProposal(input = {}) {
 function buildVpsMaintenanceApprovalScope(input = {}) {
   const capabilityId = normalizeCapabilityId(input.capabilityId || input.capability_id);
   const operation = normalizeText24(input.operation);
+  const relatedIssue = normalizePositiveInteger5(input.relatedIssue || input.related_issue || input.issueNumber);
   return {
     actionType: "destructive",
     highRiskKind: "vps_runner_admin",
     repositoryInput: normalizeRepository(input.repository),
-    relatedIssue: "637",
+    issueNumber: relatedIssue ? String(relatedIssue) : "",
+    relatedIssue: relatedIssue ? String(relatedIssue) : "",
     phase: "execution",
+    vpsHost: normalizeText24(input.host),
+    vpsOperation: operation,
+    vpsCapabilityId: capabilityId,
+    vpsImpactScope: normalizeText24(input.impactScope || input.impact_scope),
+    vpsExpiresAt: normalizeText24(input.expiresAt || input.expires_at),
     display: {
       host: normalizeText24(input.host),
       operation,
@@ -37335,6 +37368,10 @@ function normalizeRiskLevel(value) {
 }
 function normalizeStringList(value) {
   return (Array.isArray(value) ? value : [value]).map(normalizeText24).filter(Boolean);
+}
+function normalizePositiveInteger5(value, fallback) {
+  const number3 = Number.parseInt(String(value ?? ""), 10);
+  return Number.isFinite(number3) && number3 > 0 ? number3 : fallback;
 }
 function normalizeRepository(value) {
   const normalized = normalizeText24(value);
@@ -39022,13 +39059,13 @@ var GitHubReadResource = Object.freeze({
 async function retrieveGitHubReadPlane(input = {}) {
   const resource = normalizeText27(input.resource);
   const repository = normalizeText27(input.repository);
-  const issueNumber = normalizePositiveInteger5(input.issueNumber);
-  const pullNumber = normalizePositiveInteger5(input.pullNumber);
+  const issueNumber = normalizePositiveInteger6(input.issueNumber);
+  const pullNumber = normalizePositiveInteger6(input.pullNumber);
   const branch = normalizeText27(input.branch);
   const head = normalizeText27(input.head);
   const ref = normalizeText27(input.ref) || branch;
   const path = normalizeRepositoryPath(input.path);
-  const runId = normalizePositiveInteger5(input.runId);
+  const runId = normalizePositiveInteger6(input.runId);
   const state = normalizeText27(input.state) || "open";
   const limit = normalizeLimit6(input.limit, 20);
   const env = input.env ?? {};
@@ -39326,7 +39363,7 @@ function normalizeRepositories(items) {
 }
 function normalizeIssue5(item) {
   return {
-    number: normalizePositiveInteger5(item?.number),
+    number: normalizePositiveInteger6(item?.number),
     title: normalizeText27(item?.title),
     body: normalizeText27(item?.body),
     state: normalizeText27(item?.state),
@@ -39338,7 +39375,7 @@ function normalizeIssueComment(item) {
   const createdAt = normalizeText27(item?.created_at);
   const updatedAt = normalizeText27(item?.updated_at);
   return {
-    id: normalizePositiveInteger5(item?.id),
+    id: normalizePositiveInteger6(item?.id),
     body: normalizeText27(item?.body),
     author: normalizeText27(item?.user?.login),
     createdAt,
@@ -39350,7 +39387,7 @@ function normalizeIssueComment(item) {
 function normalizePullRequest2(item) {
   const mergeability = normalizePullRequestMergeability(item);
   return {
-    number: normalizePositiveInteger5(item?.number),
+    number: normalizePositiveInteger6(item?.number),
     title: normalizeText27(item?.title),
     state: normalizeText27(item?.state),
     draft: item?.draft === true,
@@ -39377,7 +39414,7 @@ function normalizePullRequest2(item) {
 }
 function normalizePullReview(item) {
   return {
-    id: normalizePositiveInteger5(item?.id),
+    id: normalizePositiveInteger6(item?.id),
     state: normalizeText27(item?.state),
     body: normalizeText27(item?.body),
     author: normalizeText27(item?.user?.login),
@@ -39389,7 +39426,7 @@ function normalizePullReviewComment(item) {
   const createdAt = normalizeText27(item?.created_at);
   const updatedAt = normalizeText27(item?.updated_at);
   return {
-    id: normalizePositiveInteger5(item?.id),
+    id: normalizePositiveInteger6(item?.id),
     path: normalizeText27(item?.path),
     body: normalizeText27(item?.body),
     author: normalizeText27(item?.user?.login),
@@ -39401,7 +39438,7 @@ function normalizePullReviewComment(item) {
 }
 function normalizeCheckRun(item) {
   return {
-    id: normalizePositiveInteger5(item?.id),
+    id: normalizePositiveInteger6(item?.id),
     name: normalizeText27(item?.name),
     status: normalizeText27(item?.status),
     conclusion: normalizeText27(item?.conclusion),
@@ -39410,7 +39447,7 @@ function normalizeCheckRun(item) {
 }
 function normalizeWorkflowRun2(item) {
   return {
-    id: normalizePositiveInteger5(item?.id),
+    id: normalizePositiveInteger6(item?.id),
     name: normalizeText27(item?.name),
     status: normalizeText27(item?.status),
     conclusion: normalizeText27(item?.conclusion),
@@ -39420,8 +39457,8 @@ function normalizeWorkflowRun2(item) {
 }
 function normalizeWorkflowJob(item) {
   return {
-    id: normalizePositiveInteger5(item?.id),
-    runId: normalizePositiveInteger5(item?.run_id),
+    id: normalizePositiveInteger6(item?.id),
+    runId: normalizePositiveInteger6(item?.run_id),
     name: normalizeText27(item?.name),
     status: normalizeText27(item?.status),
     conclusion: normalizeText27(item?.conclusion),
@@ -39432,7 +39469,7 @@ function normalizeWorkflowJob(item) {
       name: normalizeText27(step?.name),
       status: normalizeText27(step?.status),
       conclusion: normalizeText27(step?.conclusion),
-      number: normalizePositiveInteger5(step?.number),
+      number: normalizePositiveInteger6(step?.number),
       startedAt: normalizeText27(step?.started_at),
       completedAt: normalizeText27(step?.completed_at)
     })) : []
@@ -39453,7 +39490,7 @@ function normalizeContentEntry(item) {
     name: normalizeText27(item?.name),
     path: normalizeText27(item?.path),
     type,
-    size: normalizePositiveInteger5(item?.size),
+    size: normalizePositiveInteger6(item?.size),
     sha: normalizeText27(item?.sha),
     htmlUrl: normalizeText27(item?.html_url),
     downloadUrl: normalizeText27(item?.download_url) || null,
@@ -39467,7 +39504,7 @@ function normalizeTreeEntry(item) {
     type: normalizeText27(item?.type),
     mode: normalizeText27(item?.mode),
     sha: normalizeText27(item?.sha),
-    size: normalizePositiveInteger5(item?.size),
+    size: normalizePositiveInteger6(item?.size),
     url: normalizeText27(item?.url)
   };
 }
@@ -39504,7 +39541,7 @@ function normalizeLimit6(value, fallback) {
   }
   return Math.min(parsed, 100);
 }
-function normalizePositiveInteger5(value) {
+function normalizePositiveInteger6(value) {
   const parsed = Number.parseInt(String(value ?? ""), 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
@@ -39531,9 +39568,9 @@ var GitHubWriteOperation = Object.freeze({
 async function executeGitHubWritePlane(input = {}) {
   const operation = normalizeText28(input.operation);
   const repository = normalizeText28(input.repository);
-  const issueNumber = normalizePositiveInteger6(input.issueNumber);
-  const pullNumber = normalizePositiveInteger6(input.pullNumber);
-  const commentId = normalizePositiveInteger6(input.commentId);
+  const issueNumber = normalizePositiveInteger7(input.issueNumber);
+  const pullNumber = normalizePositiveInteger7(input.pullNumber);
+  const commentId = normalizePositiveInteger7(input.commentId);
   const branch = normalizeText28(input.branch);
   const baseRef = normalizeText28(input.baseRef) || "main";
   const title = normalizeText28(input.title);
@@ -39825,11 +39862,11 @@ function normalizeGitHubWriteResult(input) {
   return {
     operation: input.operation,
     repository: input.repository,
-    issueNumber: input.issueNumber ?? normalizePositiveInteger6(responseBody?.number) ?? null,
-    pullNumber: normalizePositiveInteger6(responseBody?.number) ?? input.pullNumber ?? null,
+    issueNumber: input.issueNumber ?? normalizePositiveInteger7(responseBody?.number) ?? null,
+    pullNumber: normalizePositiveInteger7(responseBody?.number) ?? input.pullNumber ?? null,
     branch: input.branch || null,
     baseRef: input.baseRef || null,
-    commentId: normalizePositiveInteger6(responseBody?.id),
+    commentId: normalizePositiveInteger7(responseBody?.id),
     nodeId: normalizeText28(responseBody?.node_id) || null,
     url: normalizeText28(responseBody?.html_url) || null,
     state: normalizeText28(responseBody?.state) || null,
@@ -39860,7 +39897,7 @@ function normalizeBody(value) {
   const text = typeof value === "string" ? value : String(value ?? "");
   return text.trim();
 }
-function normalizePositiveInteger6(value) {
+function normalizePositiveInteger7(value) {
   const number3 = Number.parseInt(String(value ?? ""), 10);
   return Number.isInteger(number3) && number3 > 0 ? number3 : null;
 }
@@ -40071,8 +40108,8 @@ function fieldMatchesPresentedPayload({ field, payload, presentedPayload }) {
     return Boolean(normalizeBody2(actual)) && normalizeBody2(actual) === normalizeBody2(presented);
   }
   if (["issueNumber", "pullNumber", "commentId"].includes(field)) {
-    const actualNumber = normalizePositiveInteger7(actual);
-    return Boolean(actualNumber) && actualNumber === normalizePositiveInteger7(presented);
+    const actualNumber = normalizePositiveInteger8(actual);
+    return Boolean(actualNumber) && actualNumber === normalizePositiveInteger8(presented);
   }
   return Boolean(normalizeText29(actual)) && normalizeText29(actual) === normalizeText29(presented);
 }
@@ -40094,7 +40131,7 @@ function normalizeText29(value) {
 function normalizeBody2(value) {
   return typeof value === "string" ? value : "";
 }
-function normalizePositiveInteger7(value) {
+function normalizePositiveInteger8(value) {
   const number3 = Number(value);
   return Number.isInteger(number3) && number3 > 0 ? number3 : null;
 }
@@ -40332,8 +40369,8 @@ var GitHubHighRiskOperation = Object.freeze({
 async function executeGitHubHighRiskPlane(input = {}) {
   const operation = normalizeText30(input.operation);
   const repository = normalizeText30(input.repository);
-  const issueNumber = normalizePositiveInteger8(input.issueNumber);
-  const pullNumber = normalizePositiveInteger8(input.pullNumber);
+  const issueNumber = normalizePositiveInteger9(input.issueNumber);
+  const pullNumber = normalizePositiveInteger9(input.pullNumber);
   const mergeMethod = normalizeMergeMethod(input.mergeMethod);
   const commitTitle = normalizeText30(input.commitTitle);
   const commitMessage = normalizeBody3(input.commitMessage);
@@ -40846,7 +40883,7 @@ function githubJsonHeaders3({ token }) {
 function compactObject(input = {}) {
   return Object.fromEntries(Object.entries(input).filter(([, value]) => value !== void 0));
 }
-function normalizePositiveInteger8(value) {
+function normalizePositiveInteger9(value) {
   const parsed = Number.parseInt(String(value ?? ""), 10);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
@@ -56536,7 +56573,7 @@ var DashboardChatRoom = class {
       }
       return;
     }
-    const relatedIssue = normalizePositiveInteger9(payload?.relatedIssue || payload?.issueNumber) || extractIssueNumberFromDashboardChatText(text);
+    const relatedIssue = normalizePositiveInteger10(payload?.relatedIssue || payload?.issueNumber) || extractIssueNumberFromDashboardChatText(text);
     const now = (/* @__PURE__ */ new Date()).toISOString();
     const store = resolveDashboardChatStore(this.env);
     if (clientMessageId && await this.hasAcceptedOwnerMessage({ threadId, clientMessageId, store })) {
@@ -59098,8 +59135,8 @@ async function executeMcpOperationalMemorySearch(argumentsInput, env) {
   if (normalizeText31(argumentsInput.checkedAt)) {
     query.set("checkedAt", normalizeText31(argumentsInput.checkedAt));
   }
-  if (normalizePositiveInteger9(argumentsInput.limit)) {
-    query.set("limit", String(normalizePositiveInteger9(argumentsInput.limit)));
+  if (normalizePositiveInteger10(argumentsInput.limit)) {
+    query.set("limit", String(normalizePositiveInteger10(argumentsInput.limit)));
   }
   const response = await handleRetrieveOperationalMemoryRequest(
     new URL(`https://mcp.local${CANONICAL_API_PREFIX}/retrieve/operational-memory?${query.toString()}`),
@@ -59485,8 +59522,8 @@ function wantsActionVisibleRetrieveErrors(url) {
   return responseMode === "action_visible";
 }
 function validateConsistentIssueScope({ payload, issueContext }) {
-  const payloadIssueNumber = normalizePositiveInteger9(payload?.issueNumber);
-  const contextIssueNumber = normalizePositiveInteger9(issueContext?.issueNumber);
+  const payloadIssueNumber = normalizePositiveInteger10(payload?.issueNumber);
+  const contextIssueNumber = normalizePositiveInteger10(issueContext?.issueNumber);
   if (payloadIssueNumber && contextIssueNumber && payloadIssueNumber !== contextIssueNumber) {
     return {
       ok: false,
@@ -59763,7 +59800,23 @@ async function handleVpsPrivilegedMaintenanceProposalRequest(request, env) {
   }
   const proposal = proposalResult.proposal;
   const operation = normalizeText31(payload?.operation) || "add";
-  const expiresAt = normalizeText31(payload?.expiresAt || payload?.expires_at) || new Date(Date.now() + 5 * 60 * 1e3).toISOString();
+  const relatedIssue = normalizePositiveInteger10(payload?.relatedIssue || payload?.related_issue || payload?.issueNumber);
+  const expiresAtResult = normalizeVpsMaintenanceProposalExpiresAt(payload?.expiresAt || payload?.expires_at);
+  const proposalIssues = [];
+  if (!relatedIssue) {
+    proposalIssues.push("relatedIssue or issueNumber is required");
+  }
+  if (!expiresAtResult.ok) {
+    proposalIssues.push(...expiresAtResult.issues);
+  }
+  if (proposalIssues.length > 0) {
+    return json(422, {
+      ok: false,
+      error: "vps_privileged_maintenance_proposal_invalid",
+      issues: proposalIssues
+    });
+  }
+  const expiresAt = expiresAtResult.expiresAt;
   const impactScope = normalizeText31(payload?.impactScope || payload?.impact_scope) || proposal.capability.affectedPaths.join(", ") || proposal.capability.commandClass;
   const approvalScope = buildVpsMaintenanceApprovalScope({
     repository: proposal.repository,
@@ -59771,7 +59824,8 @@ async function handleVpsPrivilegedMaintenanceProposalRequest(request, env) {
     operation,
     capabilityId: proposal.capability.id,
     impactScope,
-    expiresAt
+    expiresAt,
+    relatedIssue
   });
   const approvalOperatorUrl = buildVpsMaintenanceApprovalOperatorUrl({
     origin: url.origin,
@@ -59782,7 +59836,7 @@ async function handleVpsPrivilegedMaintenanceProposalRequest(request, env) {
     actionId: `vps-maintenance-proposal:${proposal.capability.id}:${operation}`,
     title: `VPS maintenance approval: ${proposal.capability.title}`,
     summary: `${proposal.host} / ${operation} / ${proposal.capability.id} / ${impactScope}`,
-    issueNumber: 637,
+    issueNumber: relatedIssue,
     workflowName: "vps-privileged-maintenance",
     url: `/dashboard/notifications?focus=owner-action`,
     source: {
@@ -59818,7 +59872,7 @@ function buildVpsMaintenanceApprovalOperatorUrl({ origin, approvalScope }) {
   const url = new URL("/v2/approval/passkey/operator", `${origin}/`);
   url.searchParams.set("mode", "vps");
   url.searchParams.set("repositoryInput", approvalScope.repositoryInput);
-  url.searchParams.set("issueNumber", approvalScope.relatedIssue || "637");
+  url.searchParams.set("issueNumber", approvalScope.relatedIssue);
   url.searchParams.set("phase", approvalScope.phase || "execution");
   url.searchParams.set("actionType", approvalScope.actionType);
   url.searchParams.set("highRiskKind", approvalScope.highRiskKind);
@@ -59828,6 +59882,38 @@ function buildVpsMaintenanceApprovalOperatorUrl({ origin, approvalScope }) {
   url.searchParams.set("vpsImpactScope", approvalScope.display?.impactScope || "");
   url.searchParams.set("vpsExpiresAt", approvalScope.display?.expiresAt || "");
   return url.href;
+}
+function normalizeVpsMaintenanceProposalExpiresAt(value, now = /* @__PURE__ */ new Date()) {
+  const normalized = normalizeText31(value);
+  if (!normalized) {
+    return {
+      ok: true,
+      expiresAt: new Date(now.valueOf() + 5 * 60 * 1e3).toISOString()
+    };
+  }
+  const parsed = Date.parse(normalized);
+  if (!Number.isFinite(parsed)) {
+    return {
+      ok: false,
+      issues: ["expiresAt must be an ISO date-time"]
+    };
+  }
+  if (parsed <= now.valueOf()) {
+    return {
+      ok: false,
+      issues: ["expiresAt must be in the future"]
+    };
+  }
+  if (parsed > now.valueOf() + 15 * 60 * 1e3) {
+    return {
+      ok: false,
+      issues: ["expiresAt must be within 15 minutes"]
+    };
+  }
+  return {
+    ok: true,
+    expiresAt: new Date(parsed).toISOString()
+  };
 }
 async function handleDashboardChatMessageRequest(request, env) {
   const dashboardAuth = await authorizeDashboardRequest({
@@ -59849,7 +59935,7 @@ async function handleDashboardChatMessageRequest(request, env) {
     {
       ...payload,
       repository,
-      relatedIssue: normalizePositiveInteger9(payload?.relatedIssue || payload?.issueNumber) || extractIssueNumberFromDashboardChatText(payload?.text || payload?.message || payload?.body)
+      relatedIssue: normalizePositiveInteger10(payload?.relatedIssue || payload?.issueNumber) || extractIssueNumberFromDashboardChatText(payload?.text || payload?.message || payload?.body)
     },
     { env }
   );
@@ -59952,8 +60038,8 @@ async function handleMediaUploadRequest(request, env) {
   const repository = normalizeCanonicalRepositoryInput(
     form.get("repository") || form.get("repositoryInput") || form.get("repository_input")
   );
-  const relatedIssue = normalizePositiveInteger9(form.get("relatedIssue") || form.get("issueNumber") || form.get("related_issue"));
-  const relatedPr = normalizePositiveInteger9(form.get("relatedPr") || form.get("pullRequestNumber") || form.get("related_pr"));
+  const relatedIssue = normalizePositiveInteger10(form.get("relatedIssue") || form.get("issueNumber") || form.get("related_issue"));
+  const relatedPr = normalizePositiveInteger10(form.get("relatedPr") || form.get("pullRequestNumber") || form.get("related_pr"));
   const sourceSurface = normalizeMediaSourceSurface(form.get("sourceSurface") || form.get("source_surface")) || "dashboard_butler";
   const sourceEventId = sanitizeDashboardChatText(form.get("sourceEventId") || form.get("source_event_id"));
   const visibility = normalizeMediaVisibility(form.get("visibility")) || "private";
@@ -60191,7 +60277,7 @@ async function handleAbandonedMediaSendRollback({ env, mediaRoute, url }) {
     });
   }
   const repository = normalizeCanonicalRepositoryInput(url.searchParams.get("repository"));
-  const relatedIssue = normalizePositiveInteger9(url.searchParams.get("relatedIssue") || url.searchParams.get("issueNumber"));
+  const relatedIssue = normalizePositiveInteger10(url.searchParams.get("relatedIssue") || url.searchParams.get("issueNumber"));
   const requestedSourceEventId = sanitizeDashboardChatText(url.searchParams.get("sourceEventId") || url.searchParams.get("source_event_id"));
   const sourceEventId = normalizeDashboardEventText(record2.sourceEventId);
   const repositoryScopeMatches = record2.repository ? Boolean(repository) && record2.repository === repository : !repository;
@@ -61514,7 +61600,12 @@ function buildApprovalScopeSnapshot({ payload, policyInput }) {
     issueNumber: identityFields.has("issueNumber") ? issueContext.issueNumber ?? payload?.issueNumber : void 0,
     pullNumber: identityFields.has("pullNumber") ? payload?.pullNumber : void 0,
     relatedIssue: identityFields.has("relatedIssue") ? traceability.relatedIssue ?? issueContext.issueNumber ?? payload?.relatedIssue : void 0,
-    phase: identityFields.has("phase") ? payload?.phase : void 0
+    phase: identityFields.has("phase") ? payload?.phase : void 0,
+    vpsHost: policyInput?.vpsHost ?? payload?.vpsHost,
+    vpsOperation: policyInput?.vpsOperation ?? payload?.vpsOperation,
+    vpsCapabilityId: policyInput?.vpsCapabilityId ?? payload?.vpsCapabilityId,
+    vpsImpactScope: policyInput?.vpsImpactScope ?? payload?.vpsImpactScope,
+    vpsExpiresAt: policyInput?.vpsExpiresAt ?? payload?.vpsExpiresAt
   });
 }
 function mapGitHubHighRiskOperationToActionType(operation) {
@@ -62285,7 +62376,7 @@ async function buildDashboardChatTrafficControlContext({ env, repository, relate
     const startupPreflight = await buildStartupPreflight({
       repository: normalizedRepository,
       ref: "main",
-      issueNumber: normalizePositiveInteger9(relatedIssue),
+      issueNumber: normalizePositiveInteger10(relatedIssue),
       phase: "execution",
       currentSurface: "dashboard_butler",
       queryText: normalizeText31(text) || `Dashboard Butler traffic control ${relatedIssue ? `Issue #${relatedIssue}` : ""}`,
@@ -62295,7 +62386,7 @@ async function buildDashboardChatTrafficControlContext({ env, repository, relate
     return {
       status: startupPreflight.executionQueue?.status || "\u672A\u78BA\u8A8D",
       repository: normalizedRepository,
-      relatedIssue: normalizePositiveInteger9(relatedIssue) || null,
+      relatedIssue: normalizePositiveInteger10(relatedIssue) || null,
       currentSurface: startupPreflight.currentSurface,
       threadLocalAssumptionsPromoted: startupPreflight.threadLocalAssumptionsPromoted,
       currentNow: startupPreflight.executionQueue?.currentNow || null,
@@ -62312,7 +62403,7 @@ async function buildDashboardChatTrafficControlContext({ env, repository, relate
     return {
       status: "\u672A\u78BA\u8A8D",
       repository: normalizedRepository,
-      relatedIssue: normalizePositiveInteger9(relatedIssue) || null,
+      relatedIssue: normalizePositiveInteger10(relatedIssue) || null,
       reason: normalizeText31(error2?.message) || "startup preflight failed",
       currentSurface: "dashboard_butler",
       authorityBoundary: "read_only_preflight",
@@ -62335,7 +62426,7 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
   const text = sanitizeDashboardChatText(input.text || input.message || input.delta || input.finalText || input.final_text);
   let transientText = "";
   const repository = normalizeCanonicalRepositoryInput(input.repository);
-  const relatedIssue = normalizePositiveInteger9(input.relatedIssue || input.issueNumber);
+  const relatedIssue = normalizePositiveInteger10(input.relatedIssue || input.issueNumber);
   const createdAt = normalizeIsoTimestamp(input.createdAt) || (/* @__PURE__ */ new Date()).toISOString();
   const messages = [];
   let transientStatus = "";
@@ -62514,7 +62605,7 @@ function extractRepositoryTokenFromDashboardChatText(value) {
 function extractIssueNumberFromDashboardChatText(value) {
   const text = sanitizeDashboardChatText(value);
   const match = text.match(/#([1-9][0-9]*)/);
-  return normalizePositiveInteger9(match?.[1]);
+  return normalizePositiveInteger10(match?.[1]);
 }
 function normalizeDashboardRepositoryInput(value) {
   return normalizeDashboardEventText(value).toLowerCase();
@@ -62741,7 +62832,7 @@ function createD1DashboardChatStore(d1) {
       await ensureSchema();
       const text = sanitizeDashboardChatText(filter.text || filter.q);
       const repository = normalizeCanonicalRepositoryInput(filter.repository);
-      const relatedIssue = normalizePositiveInteger9(filter.relatedIssue || filter.issueNumber);
+      const relatedIssue = normalizePositiveInteger10(filter.relatedIssue || filter.issueNumber);
       const limit = normalizeLimit7(filter.limit, 20);
       const results = [];
       const messageClauses = [];
@@ -62888,8 +62979,8 @@ function createD1MediaObjectStore(d1) {
     async search(filter = {}) {
       await ensureSchema();
       const repository = normalizeCanonicalRepositoryInput(filter.repository);
-      const relatedIssue = normalizePositiveInteger9(filter.relatedIssue || filter.issueNumber);
-      const relatedPr = normalizePositiveInteger9(filter.relatedPr || filter.pullRequestNumber);
+      const relatedIssue = normalizePositiveInteger10(filter.relatedIssue || filter.issueNumber);
+      const relatedPr = normalizePositiveInteger10(filter.relatedPr || filter.pullRequestNumber);
       const limit = normalizeLimit7(filter.limit, 20);
       const clauses = [];
       const params = [];
@@ -63750,8 +63841,8 @@ function normalizeMediaObjectRecord(record2) {
   return {
     id,
     repository: normalizeCanonicalRepositoryInput(input.repository) || null,
-    relatedIssue: normalizePositiveInteger9(input.relatedIssue || input.related_issue || input.issueNumber),
-    relatedPr: normalizePositiveInteger9(input.relatedPr || input.related_pr || input.pullRequestNumber),
+    relatedIssue: normalizePositiveInteger10(input.relatedIssue || input.related_issue || input.issueNumber),
+    relatedPr: normalizePositiveInteger10(input.relatedPr || input.related_pr || input.pullRequestNumber),
     sourceSurface: normalizeMediaSourceSurface(input.sourceSurface || input.source_surface) || "dashboard_butler",
     sourceEventId: sanitizeDashboardChatText(input.sourceEventId || input.source_event_id),
     objectKey,
@@ -63823,11 +63914,11 @@ function normalizeMediaReferences(value) {
     return {
       mediaId,
       repository: normalizeCanonicalRepositoryInput(input.repository) || null,
-      relatedIssue: normalizePositiveInteger9(input.relatedIssue || input.related_issue || input.issueNumber),
-      relatedPr: normalizePositiveInteger9(input.relatedPr || input.related_pr || input.pullRequestNumber),
+      relatedIssue: normalizePositiveInteger10(input.relatedIssue || input.related_issue || input.issueNumber),
+      relatedPr: normalizePositiveInteger10(input.relatedPr || input.related_pr || input.pullRequestNumber),
       filename: sanitizeMediaFilename(input.filename || "attachment"),
       contentType: normalizeMediaContentType(input.contentType || input.content_type),
-      byteSize: normalizePositiveInteger9(input.byteSize || input.byte_size),
+      byteSize: normalizePositiveInteger10(input.byteSize || input.byte_size),
       sha256: normalizeDashboardEventText(input.sha256).toLowerCase().slice(0, 64),
       visibility: normalizeMediaVisibility(input.visibility) || "private",
       summary: sanitizeDashboardChatText(input.summary),
@@ -63850,7 +63941,7 @@ async function resolveDashboardChatMediaReferences({ env, mediaReferences, repos
     };
   }
   const resolvedRepository = normalizeCanonicalRepositoryInput(repository);
-  const resolvedIssue = normalizePositiveInteger9(relatedIssue);
+  const resolvedIssue = normalizePositiveInteger10(relatedIssue);
   const resolved = [];
   for (const reference of requested) {
     const record2 = await store.get(reference.mediaId);
@@ -63901,7 +63992,7 @@ async function buildDashboardChatTurn(payload, options = {}) {
     };
   }
   const threadId = normalizeDashboardThreadId(input.threadId || input.thread_id) || (repository ? `dashboard-main-${repository.replace("/", "-")}` : "dashboard-main-unresolved");
-  const relatedIssue = normalizePositiveInteger9(input.relatedIssue || input.issueNumber);
+  const relatedIssue = normalizePositiveInteger10(input.relatedIssue || input.issueNumber);
   const mediaValidation = await resolveDashboardChatMediaReferences({
     env: options.env,
     mediaReferences: input.mediaReferences || input.media_references || input.media,
@@ -63973,7 +64064,7 @@ function normalizeDashboardChatMessage(message, defaults = {}) {
     messageId: normalizeDashboardEventText(input.messageId || input.message_id) || crypto.randomUUID(),
     role,
     repository: normalizeCanonicalRepositoryInput(input.repository) || null,
-    relatedIssue: normalizePositiveInteger9(input.relatedIssue || input.issueNumber || input.related_issue),
+    relatedIssue: normalizePositiveInteger10(input.relatedIssue || input.issueNumber || input.related_issue),
     status: normalizeDashboardChatStatus(input.status),
     text: sanitizeDashboardChatText(input.text || input.message || input.body) || "\uFF08\u7A7A\u306E\u30E1\u30C3\u30BB\u30FC\u30B8\uFF09",
     mediaReferences: normalizeMediaReferences(input.mediaReferences || input.media_references || input.media),
@@ -64036,7 +64127,7 @@ function normalizeDashboardThreadSummary(summary, defaults = {}) {
   return {
     threadId,
     repository: normalizeCanonicalRepositoryInput(input.repository || defaults.repository) || null,
-    relatedIssue: normalizePositiveInteger9(
+    relatedIssue: normalizePositiveInteger10(
       input.relatedIssue || input.issueNumber || input.related_issue || defaults.relatedIssue
     ),
     summary: summaryText,
@@ -65110,7 +65201,7 @@ function normalizeVpsRunnerDashboardEvent(payload) {
   const message = sanitizeDashboardChatText(input.message || input.summary || input.text || input.reason);
   const updatedAt = normalizeIsoTimestamp(input.updatedAt || input.updated_at || input.heartbeatAt) || (/* @__PURE__ */ new Date()).toISOString();
   const createdAt = normalizeIsoTimestamp(input.createdAt || input.created_at) || updatedAt;
-  const issueNumber = normalizePositiveInteger9(input.issueNumber || input.issue_number || input.relatedIssue);
+  const issueNumber = normalizePositiveInteger10(input.issueNumber || input.issue_number || input.relatedIssue);
   const branch = sanitizeDashboardChatText(input.branch || input.headBranch || input.head_branch);
   const progressUrl = normalizeDashboardUrl(input.progressUrl || input.progress_url || input.runUrl || input.run_url || input.url);
   const threadId = normalizeDashboardThreadId(input.threadId || input.thread_id) || normalizeDashboardThreadId(`execution-${executionId}`);
@@ -66553,7 +66644,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
   const repositoryInput = normalizeDashboardRepositoryInput(
     url?.searchParams?.get("repositoryInput") || url?.searchParams?.get("repository")
   );
-  const dashboardIssueNumber = normalizePositiveInteger9(url?.searchParams?.get("issueNumber"));
+  const dashboardIssueNumber = normalizePositiveInteger10(url?.searchParams?.get("issueNumber"));
   const dashboardTargetLabel = repositoryInput ? `\u3053\u306E\u4F5C\u696D: ${repositoryInput}` : "\u4F5C\u696D\u5BFE\u8C61 repo \u672A\u6307\u5B9A";
   const targetStatusMarkup = repositoryInput ? `<p><strong>${escapeDashboardHtml(repositoryInput)}</strong></p>
           <p class="muted">\u56FA\u5B9A\u3067\u306F\u3042\u308A\u307E\u305B\u3093\u3002\u3053\u306E\u4F1A\u8A71\u3067 Issue / PR / deploy \u306A\u3069 repo \u304C\u5FC5\u8981\u306A\u4F5C\u696D\u3092\u3059\u308B\u9593\u3060\u3051\u5BFE\u8C61\u306B\u3057\u307E\u3059\u3002deploy \u5148\u3068\u627F\u8A8D\u5883\u754C\u306F repo \u3054\u3068\u306B\u78BA\u8A8D\u3057\u307E\u3059\u3002</p>` : `<p><strong>\u4F5C\u696D\u5BFE\u8C61 repo \u672A\u6307\u5B9A</strong></p>
@@ -68447,7 +68538,7 @@ function normalize7(value) {
 function normalizeText31(value) {
   return String(value ?? "").trim();
 }
-function normalizePositiveInteger9(value) {
+function normalizePositiveInteger10(value) {
   const number3 = Number(value);
   return Number.isInteger(number3) && number3 > 0 ? number3 : null;
 }

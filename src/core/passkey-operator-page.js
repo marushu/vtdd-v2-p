@@ -24,11 +24,18 @@ export function renderPasskeyOperatorPage(input = {}) {
   const dashboardReturnPath = escapeHtml(sanitizePasskeyDashboardReturnPath(input.dashboardReturnPath));
   const dashboardNotificationMode = dashboardMode && dashboardReturnPath === "/dashboard/notifications";
   const githubAppRoleDefault = escapeHtml(input.githubAppRole || "legacy");
-  const vpsHost = escapeHtml(input.vpsHost || "");
-  const vpsOperation = escapeHtml(input.vpsOperation || "");
-  const vpsCapabilityId = escapeHtml(input.vpsCapabilityId || "");
-  const vpsImpactScope = escapeHtml(input.vpsImpactScope || "");
-  const vpsExpiresAt = escapeHtml(input.vpsExpiresAt || "");
+  const vpsScope = {
+    vpsHost: String(input.vpsHost || "").trim(),
+    vpsOperation: String(input.vpsOperation || "").trim(),
+    vpsCapabilityId: String(input.vpsCapabilityId || "").trim(),
+    vpsImpactScope: String(input.vpsImpactScope || "").trim(),
+    vpsExpiresAt: String(input.vpsExpiresAt || "").trim()
+  };
+  const vpsHost = escapeHtml(vpsScope.vpsHost);
+  const vpsOperation = escapeHtml(vpsScope.vpsOperation);
+  const vpsCapabilityId = escapeHtml(vpsScope.vpsCapabilityId);
+  const vpsImpactScope = escapeHtml(vpsScope.vpsImpactScope);
+  const vpsExpiresAt = escapeHtml(vpsScope.vpsExpiresAt);
   const vpsScopeSummary = renderVpsScopeSummary({
     host: vpsHost,
     operation: vpsOperation,
@@ -411,6 +418,7 @@ export function renderPasskeyOperatorPage(input = {}) {
       const mergePrLink = document.getElementById("merge-pr-link");
       const issueCloseLink = document.getElementById("issue-close-link");
       const operatorMode = "${escapeHtml(operatorMode)}";
+      const vpsApprovalScope = ${safeScriptJson(vpsScope)};
       let latestApprovalGrantId = "";
       let latestApprovalGrant = null;
 
@@ -811,13 +819,23 @@ export function renderPasskeyOperatorPage(input = {}) {
               repositoryInput,
               issueNumber: Number(document.getElementById("issue-input").value || 0) || null,
               pullNumber: readApprovalPullNumber(),
+              vpsHost: vpsApprovalScope.vpsHost,
+              vpsOperation: vpsApprovalScope.vpsOperation,
+              vpsCapabilityId: vpsApprovalScope.vpsCapabilityId,
+              vpsImpactScope: vpsApprovalScope.vpsImpactScope,
+              vpsExpiresAt: vpsApprovalScope.vpsExpiresAt,
               issueContext: {
                 issueNumber: Number(document.getElementById("issue-input").value || 0) || null
               },
               policyInput: {
                 actionType: document.getElementById("action-type-input").value,
                 repositoryInput,
-                highRiskKind: document.getElementById("risk-kind-input").value
+                highRiskKind: document.getElementById("risk-kind-input").value,
+                vpsHost: vpsApprovalScope.vpsHost,
+                vpsOperation: vpsApprovalScope.vpsOperation,
+                vpsCapabilityId: vpsApprovalScope.vpsCapabilityId,
+                vpsImpactScope: vpsApprovalScope.vpsImpactScope,
+                vpsExpiresAt: vpsApprovalScope.vpsExpiresAt
               }
             })
           });
@@ -1249,6 +1267,15 @@ function renderVpsScopeSummary({ host, operation, capabilityId, impactScope, exp
     expiresAt ? `Expires: ${expiresAt}` : ""
   ].filter(Boolean);
   return parts.length > 0 ? `承認対象: ${parts.join(" / ")}` : "";
+}
+
+function safeScriptJson(value) {
+  return JSON.stringify(value)
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/&/g, "\\u0026")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
 }
 
 function normalizeOperatorMode(value) {

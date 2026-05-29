@@ -7820,6 +7820,7 @@ test("worker serves VPS privileged maintenance proposal with scoped passkey oper
       body: JSON.stringify({
         host: "x85-131-245-163",
         repository: "marushu/vtdd-v2-p",
+        relatedIssue: 637,
         operation: "add",
         id: "playwright.chromium.deps",
         title: "Playwright Chromium dependency install",
@@ -7832,8 +7833,7 @@ test("worker serves VPS privileged maintenance proposal with scoped passkey oper
         rollbackPlan: "disable capability and keep audit history",
         expectedRuntimeTruth: ["before package check", "exit code", "after Chromium launch check"],
         reason: "PR #632 Playwright E2E blocker requires Chromium host dependencies",
-        impactScope: "apt packages for Chromium runtime",
-        expiresAt: "2026-05-29T08:00:00.000Z"
+        impactScope: "apt packages for Chromium runtime"
       })
     }),
     gatewayAuthEnv
@@ -7846,6 +7846,12 @@ test("worker serves VPS privileged maintenance proposal with scoped passkey oper
   assert.equal(body.proposal.pwaNotificationRequired, true);
   assert.equal(body.approvalScope.actionType, "destructive");
   assert.equal(body.approvalScope.highRiskKind, "vps_runner_admin");
+  assert.equal(body.approvalScope.relatedIssue, "637");
+  assert.equal(body.approvalScope.issueNumber, "637");
+  assert.equal(body.approvalScope.vpsHost, "x85-131-245-163");
+  assert.equal(body.approvalScope.vpsCapabilityId, "playwright.chromium.deps");
+  assert.equal(body.approvalScope.vpsImpactScope, "apt packages for Chromium runtime");
+  assert.match(body.approvalScope.vpsExpiresAt, /^\d{4}-\d{2}-\d{2}T/);
   assert.equal(body.approvalScope.display.host, "x85-131-245-163");
   assert.equal(body.approvalScope.display.capabilityId, "playwright.chromium.deps");
   assert.equal(body.runtimeTruth.rootExecutionStarted, false);
@@ -7879,6 +7885,7 @@ test("worker rejects invalid VPS privileged maintenance proposals before passkey
       body: JSON.stringify({
         host: "x85-131-245-163",
         repository: "marushu/vtdd-v2-p",
+        relatedIssue: 637,
         id: "unsafe.root.shell",
         title: "Unsafe root shell",
         commandClass: "root shell",
@@ -7896,6 +7903,52 @@ test("worker rejects invalid VPS privileged maintenance proposals before passkey
   assert.equal(body.ok, false);
   assert.equal(body.error, "vps_privileged_maintenance_proposal_invalid");
   assert.equal(body.issues.some((issue) => issue.includes("forbidden broad privileged pattern")), true);
+
+  const unscoped = await worker.fetch(
+    new Request("https://example.com/v2/vps/privileged-maintenance/proposals", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        host: "x85-131-245-163",
+        repository: "marushu/vtdd-v2-p",
+        id: "playwright.chromium.deps",
+        title: "Playwright Chromium dependency install",
+        commandClass: "playwright_install_deps_chromium",
+        workingDirectories: ["/home/vtdd-runner/vtdd-runner/repos/vtdd-v2-p"],
+        allowedArgs: ["npx playwright install-deps chromium"],
+        rollbackPlan: "disable capability and keep audit history",
+        reason: "missing related Issue should be rejected"
+      })
+    }),
+    gatewayAuthEnv
+  );
+  assert.equal(unscoped.status, 422);
+  const unscopedBody = await unscoped.json();
+  assert.equal(unscopedBody.issues.includes("relatedIssue or issueNumber is required"), true);
+
+  const expired = await worker.fetch(
+    new Request("https://example.com/v2/vps/privileged-maintenance/proposals", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        host: "x85-131-245-163",
+        repository: "marushu/vtdd-v2-p",
+        relatedIssue: 637,
+        id: "playwright.chromium.deps",
+        title: "Playwright Chromium dependency install",
+        commandClass: "playwright_install_deps_chromium",
+        workingDirectories: ["/home/vtdd-runner/vtdd-runner/repos/vtdd-v2-p"],
+        allowedArgs: ["npx playwright install-deps chromium"],
+        rollbackPlan: "disable capability and keep audit history",
+        reason: "expired approval scope should be rejected",
+        expiresAt: "2000-01-01T00:00:00.000Z"
+      })
+    }),
+    gatewayAuthEnv
+  );
+  assert.equal(expired.status, 422);
+  const expiredBody = await expired.json();
+  assert.equal(expiredBody.issues.includes("expiresAt must be in the future"), true);
 });
 
 test("worker passkey operator displays VPS maintenance approval scope details", async () => {
@@ -7913,6 +7966,8 @@ test("worker passkey operator displays VPS maintenance approval scope details", 
   assert.equal(html.includes("Capability: playwright.chromium.deps"), true);
   assert.equal(html.includes("Impact: apt packages"), true);
   assert.equal(html.includes("Expires: 2026-05-29T08:00:00.000Z"), true);
+  assert.equal(html.includes('"vpsHost":"x85-131-245-163"'), true);
+  assert.equal(html.includes('"vpsCapabilityId":"playwright.chromium.deps"'), true);
 });
 
 test("worker blocks same-origin browser bootstrap registration without bootstrap token", async () => {
