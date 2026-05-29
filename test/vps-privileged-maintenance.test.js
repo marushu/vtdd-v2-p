@@ -4,7 +4,8 @@ import {
   applyVpsCapabilityLifecycleOperation,
   buildVpsCapabilityProposal,
   buildVpsMaintenanceApprovalScope,
-  normalizeVpsCapabilityManifest
+  normalizeVpsCapabilityManifest,
+  planVpsPrivilegedMaintenanceHelperExecution
 } from "../src/core/index.js";
 
 const baseManifest = {
@@ -167,4 +168,83 @@ test("VPS privileged maintenance approval scope preserves existing passkey opera
   assert.equal(scope.vpsExpiresAt, "2026-05-29T01:10:00.000Z");
   assert.equal(scope.display.capabilityId, "playwright.chromium.deps");
   assert.equal(scope.display.host, "x85-131-245-163");
+});
+
+test("VPS helper dry-run contract validates enabled manifest capability without executing root", () => {
+  const manifest = {
+    ...baseManifest,
+    capabilities: [
+      {
+        ...baseManifest.capabilities[0],
+        status: "enabled"
+      }
+    ]
+  };
+  const helperRequest = {
+    kind: "vps_privileged_maintenance_helper_request",
+    status: "ready_for_vps_helper",
+    requestId: "vps-maintenance-helper-request:test",
+    vpsProposalId: "vps-maintenance-proposal:test",
+    approvalGrantId: "approval:test",
+    host: "x85-131-245-163",
+    repository: "marushu/vtdd-v2-p",
+    relatedIssue: 637,
+    operation: "add",
+    capability: manifest.capabilities[0]
+  };
+
+  const result = planVpsPrivilegedMaintenanceHelperExecution({
+    manifest,
+    helperRequest,
+    mode: "dry_run",
+    now: "2026-05-29T02:00:00.000Z"
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.helperPlan.status, "dry_run_ready");
+  assert.equal(result.helperPlan.rootExecutionStarted, false);
+  assert.equal(result.helperPlan.helperExecutionStarted, false);
+  assert.deepEqual(result.helperPlan.commandPreview.allowedArgs, ["npx playwright install-deps chromium"]);
+  assert.equal(result.runtimeTruth.status, "dry_run_ready");
+  assert.equal(result.runtimeTruth.exitCode, null);
+  assert.equal(result.runtimeTruth.redactedLogSummary, "dry-run only; privileged command was not executed");
+});
+
+test("VPS helper dry-run rejects disabled or mismatched capabilities", () => {
+  const helperRequest = {
+    kind: "vps_privileged_maintenance_helper_request",
+    status: "ready_for_vps_helper",
+    requestId: "vps-maintenance-helper-request:test",
+    vpsProposalId: "vps-maintenance-proposal:test",
+    approvalGrantId: "approval:test",
+    host: "x85-131-245-163",
+    repository: "marushu/vtdd-v2-p",
+    relatedIssue: 637,
+    operation: "add",
+    capability: baseManifest.capabilities[0]
+  };
+
+  const disabled = planVpsPrivilegedMaintenanceHelperExecution({
+    manifest: baseManifest,
+    helperRequest
+  });
+  assert.equal(disabled.ok, false);
+  assert.equal(disabled.error, "vps_helper_capability_disabled");
+
+  const mismatched = planVpsPrivilegedMaintenanceHelperExecution({
+    manifest: {
+      ...baseManifest,
+      capabilities: [
+        {
+          ...baseManifest.capabilities[0],
+          status: "enabled",
+          allowedArgs: ["npx playwright install-deps firefox"]
+        }
+      ]
+    },
+    helperRequest
+  });
+  assert.equal(mismatched.ok, false);
+  assert.equal(mismatched.error, "vps_helper_request_manifest_mismatch");
+  assert.equal(mismatched.issues.includes("helperRequest capability.allowedArgs must match manifest capability"), true);
 });
