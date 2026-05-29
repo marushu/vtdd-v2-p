@@ -87,7 +87,7 @@ test.beforeAll(async () => {
       text: [
         "黒潰れ確認。",
         "- repository: marushu/vtdd-v2-p",
-        "- issueNumber: 495",
+        "- issueNumber: 631",
         "- currentSurface: dashboard_butler",
         "- phase: execution",
         "```",
