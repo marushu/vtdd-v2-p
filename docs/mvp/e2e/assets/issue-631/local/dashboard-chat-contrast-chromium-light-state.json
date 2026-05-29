@@ -5,30 +5,65 @@
   "contrastState": {
     "ownerPre": {
       "selector": ".bubble.owner pre",
+      "pseudoElement": null,
       "color": "rgb(247, 247, 244)",
       "backgroundColor": "rgb(42, 42, 42)",
       "parentBackgroundColor": "rgba(0, 0, 0, 0)",
+      "bubbleBackgroundColor": "rgb(23, 23, 23)",
       "text": "⧉https://vtdd-v2-mvp.polished-tree-da7c.workers.dev/v2/approval/passkey/operator?mode=deploy&repositoryInput=marushu%2Fvtdd-v2-p&phase=execution&issueNumber=631"
     },
     "ownerPreCode": {
       "selector": ".bubble.owner pre code",
+      "pseudoElement": null,
       "color": "rgb(247, 247, 244)",
       "backgroundColor": "rgba(0, 0, 0, 0)",
       "parentBackgroundColor": "rgb(42, 42, 42)",
+      "bubbleBackgroundColor": "rgb(23, 23, 23)",
       "text": "https://vtdd-v2-mvp.polished-tree-da7c.workers.dev/v2/approval/passkey/operator?mode=deploy&repositoryInput=marushu%2Fvtdd-v2-p&phase=execution&issueNumber=631&"
+    },
+    "ownerList": {
+      "selector": ".bubble.owner ul",
+      "pseudoElement": null,
+      "color": "rgb(247, 247, 244)",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "parentBackgroundColor": "rgba(0, 0, 0, 0)",
+      "bubbleBackgroundColor": "rgb(23, 23, 23)",
+      "text": "repository: marushu/vtdd-v2-pissueNumber: 495currentSurface: dashboard_butlerphase: execution"
+    },
+    "ownerListItem": {
+      "selector": ".bubble.owner li",
+      "pseudoElement": null,
+      "color": "rgb(247, 247, 244)",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "parentBackgroundColor": "rgba(0, 0, 0, 0)",
+      "bubbleBackgroundColor": "rgb(23, 23, 23)",
+      "text": "repository: marushu/vtdd-v2-p"
+    },
+    "ownerListMarker": {
+      "selector": ".bubble.owner li",
+      "pseudoElement": "::marker",
+      "color": "rgb(247, 247, 244)",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "parentBackgroundColor": "rgba(0, 0, 0, 0)",
+      "bubbleBackgroundColor": "rgb(23, 23, 23)",
+      "text": "repository: marushu/vtdd-v2-p"
     },
     "butlerLink": {
       "selector": ".bubble:not(.owner) .chat-link",
+      "pseudoElement": null,
       "color": "rgb(11, 107, 101)",
       "backgroundColor": "rgba(0, 0, 0, 0)",
       "parentBackgroundColor": "rgba(0, 0, 0, 0)",
+      "bubbleBackgroundColor": "rgba(0, 0, 0, 0)",
       "text": "Deploy approval を開く"
     },
     "butlerCode": {
       "selector": ".bubble:not(.owner) .message-body code",
+      "pseudoElement": null,
       "color": "rgb(21, 21, 21)",
       "backgroundColor": "rgba(0, 0, 0, 0)",
       "parentBackgroundColor": "rgba(0, 0, 0, 0)",
+      "bubbleBackgroundColor": "rgba(0, 0, 0, 0)",
       "text": "go:%0AIssue%20%23631%20contrast%20check"
     }
   }

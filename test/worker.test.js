@@ -1367,6 +1367,7 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("return source.length > 80 && !/\\s/.test(source);"), true);
   assert.equal(body.includes(".chat-link { color: var(--link);"), true);
   assert.equal(body.includes(".bubble.owner .chat-link { color: var(--owner-link); }"), true);
+  assert.equal(body.includes(".bubble.owner ul, .bubble.owner li, .bubble.owner li::marker { color: var(--owner-text); }"), true);
   assert.equal(body.includes('renderMessageText(body, normalizeMessageDisplayText(message.text || "（空のメッセージ）"))'), true);
   assert.equal(body.includes('copyMessageText(copyButton, normalizeMessageCopyText(message.text || ""))'), true);
   assert.equal(body.includes('pre.className = "wrap-code"'), true);
