@@ -158,6 +158,8 @@ export function executeHelperPlan({
   getuid = process.getuid,
   spawnSyncFn = spawnSync,
   runuserPath = DEFAULT_RUNUSER_PATH,
+  envPath = "/usr/bin/env",
+  resolveRunAsUid = defaultResolveRunAsUid,
   nowFn = () => new Date()
 }) {
   const boundary = helperPlan?.commandPreview?.executionBoundary ?? {};
@@ -226,8 +228,24 @@ export function executeHelperPlan({
 
   const executable = String(boundary.executable || "").trim();
   const args = Array.isArray(boundary.args) ? boundary.args.map((part) => String(part)) : [];
+  const runAsUid = boundary.requiresRoot === true ? "" : resolveRunAsUid(runAsUser);
+  if (boundary.requiresRoot !== true && !runAsUid) {
+    return {
+      ok: false,
+      error: "run_as_uid_unresolved",
+      issues: [`unable to resolve uid for ${runAsUser}`],
+      runtimeTruth: {
+        ...baseTruth,
+        redactedLogSummary: "blocked before execution; run-as user uid could not be resolved"
+      }
+    };
+  }
   const spawnExecutable = boundary.requiresRoot === true ? executable : runuserPath;
-  const spawnArgs = boundary.requiresRoot === true ? args : ["-u", runAsUser, "--", executable, ...args];
+  const runAsEnvArgs = boundary.requiresRoot === true ? [] : buildRunAsEnvArgs({ runAsUser, runAsUid });
+  const spawnArgs =
+    boundary.requiresRoot === true
+      ? args
+      : ["-u", runAsUser, "--", envPath, ...runAsEnvArgs, executable, ...args];
   const timeout = normalizeTimeoutMs(timeoutMs);
   const spawned = spawnSyncFn(spawnExecutable, spawnArgs, {
     cwd: workingDirectory,
@@ -256,9 +274,33 @@ export function executeHelperPlan({
       exitCode,
       redactedLogSummary: summarizeProcessOutput(spawned),
       rootExecutionStarted: boundary.requiresRoot === true,
+      runAsUserUid: runAsUid || null,
       updatedAt: completedAt
     }
   };
+}
+
+function defaultResolveRunAsUid(runAsUser) {
+  const result = spawnSync("id", ["-u", runAsUser], {
+    encoding: "utf8",
+    shell: false,
+    timeout: 3000,
+    env: {
+      PATH: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+    }
+  });
+  if (result.status !== 0) return "";
+  const uid = String(result.stdout || "").trim();
+  return /^\d+$/.test(uid) ? uid : "";
+}
+
+function buildRunAsEnvArgs({ runAsUser, runAsUid }) {
+  return [
+    `HOME=/home/${runAsUser}`,
+    `XDG_RUNTIME_DIR=/run/user/${runAsUid}`,
+    `DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/${runAsUid}/bus`,
+    "CI=1"
+  ];
 }
 
 function ownerLabel(stat) {

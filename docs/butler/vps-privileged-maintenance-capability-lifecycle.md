@@ -108,11 +108,15 @@ must distinguish root-owned helper startup from root-required command execution:
 transition, while `rootExecutionStarted=true` is reserved for capabilities whose
 registered command itself must run as root. The non-root run-as contract is
 intentionally narrow: the root-owned helper must start as root, must invoke
-`/usr/sbin/runuser -u vtdd-runner -- <registered argv>`, and must keep default
-helper registry argv validation as the source of executable truth. Adding such
-a script path is still not Butler Completion Gate success until Dashboard
-Butler / Custom GPT Action Schema and VPS runtime observation can reach it with
-E2E evidence.
+`/usr/sbin/runuser -u vtdd-runner -- /usr/bin/env <fixed run-as env>
+<registered argv>`, and must keep default helper registry argv validation as
+the source of executable truth. The fixed run-as environment must include
+`HOME=/home/vtdd-runner`, `XDG_RUNTIME_DIR=/run/user/<vtdd-runner uid>`,
+`DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/<vtdd-runner uid>/bus`, and
+`CI=1` so user systemd and journal presets can observe the owner-owned runner
+services without becoming root command execution. Adding such a script path is
+still not Butler Completion Gate success until Dashboard Butler / Custom GPT
+Action Schema and VPS runtime observation can reach it with E2E evidence.
 
 The declared VPS runner pickup contract is a GitHub Issue comment with marker
 `<!-- vtdd:vps-privileged-maintenance-execution:<executionId> -->`. The payload
