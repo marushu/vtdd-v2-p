@@ -95,6 +95,17 @@ contract must not bake an operator-specific Node/NVM path into public runtime
 truth. `allowedArgs` is display-only review text and must not be used as the
 helper execution input.
 
+The helper script may expose a guarded `--execute` mode only after the same
+registry binding succeeds. Execution must remain separate from the pure Worker
+planning contract: the Worker may report `execute_ready`, but root command
+execution belongs to the VPS root-owned helper path. The helper must block
+before spawning when it is not running as root for a root-required capability,
+must keep non-root run-as commands blocked until a run-as contract exists, must
+use `shell:false`, and must return redacted runtime truth with before/after,
+exit code, and next-action evidence. Adding such a script path is still not
+Butler Completion Gate success until Dashboard Butler / Custom GPT Action Schema
+and VPS runtime observation can reach it with E2E evidence.
+
 ## Initial Presets
 
 The first preset set should cover the failure classes already observed:

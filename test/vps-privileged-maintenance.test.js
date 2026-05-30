@@ -359,6 +359,50 @@ test("VPS helper dry-run contract validates enabled manifest capability without 
   assert.equal(result.runtimeTruth.redactedLogSummary, "dry-run only; privileged command was not executed");
 });
 
+test("VPS helper execute plan is explicit and still does not execute in core contract", () => {
+  const manifest = {
+    ...baseManifest,
+    capabilities: [
+      {
+        ...baseManifest.capabilities[0],
+        status: "enabled"
+      }
+    ]
+  };
+  const helperRequest = {
+    kind: "vps_privileged_maintenance_helper_request",
+    status: "ready_for_vps_helper",
+    requestId: "vps-maintenance-helper-request:test",
+    vpsProposalId: "vps-maintenance-proposal:test",
+    approvalGrantId: "approval:test",
+    host: "x85-131-245-163",
+    repository: "marushu/vtdd-v2-p",
+    relatedIssue: 637,
+    operation: "add",
+    capability: manifest.capabilities[0]
+  };
+
+  const result = planVpsPrivilegedMaintenanceHelperExecution({
+    manifest,
+    helperRequest,
+    mode: "execute",
+    now: "2026-05-29T02:00:00.000Z"
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.helperPlan.status, "execute_ready");
+  assert.equal(result.helperPlan.rootExecutionStarted, false);
+  assert.equal(result.helperPlan.helperExecutionStarted, false);
+  assert.equal(result.runtimeTruth.kind, "vps_privileged_maintenance_helper_execution_plan");
+  assert.equal(result.runtimeTruth.status, "execute_ready");
+  assert.equal(result.runtimeTruth.rootExecutionStarted, false);
+  assert.equal(result.runtimeTruth.helperExecutionStarted, false);
+  assert.equal(
+    result.runtimeTruth.redactedLogSummary,
+    "execution plan only; root-owned helper has not executed the command yet"
+  );
+});
+
 test("VPS helper command execution boundary rejects shell syntax before any execution path exists", () => {
   const boundary = buildVpsHelperCommandExecutionBoundary({
     commandClass: "unsafe",
