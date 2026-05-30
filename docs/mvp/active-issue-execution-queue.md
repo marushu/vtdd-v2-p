@@ -33,12 +33,13 @@ Last rebuilt from GitHub runtime truth: 2026-05-31
   Issue #582, Issue #585, Issue #587, Issue #589, Issue #590, Issue #594,
   Issue #595, Issue #599, Issue #604, Issue #605, Issue #606, Issue #613,
   Issue #620, Issue #634, Issue #637, Issue #651, Issue #654, Issue #657,
-  Issue #667, Issue #670.
+  Issue #667, Issue #670, Issue #689.
 - Recently closed as completed with evidence and owner approval: Issue #573,
   Issue #565, Issue #577, Issue #580, Issue #601, Issue #609.
 - Open PRs read before this queue refresh PR was opened: none.
 - Recent queue-changing merged PRs read: PR #591, PR #597, PR #598, PR #600,
-  PR #602, PR #603, PR #607, PR #608, PR #610, PR #611, PR #612.
+  PR #602, PR #603, PR #607, PR #608, PR #610, PR #611, PR #612, PR #685,
+  PR #686, PR #688, PR #690.
 - Current queue rebuild scope: classify all open Issues without closing,
   downscoping, or treating any unverified Issue as done.
 - 2026-05-29 owner input classified Issue #606 as `ROOT`: the 2-minute
@@ -77,6 +78,21 @@ Last rebuilt from GitHub runtime truth: 2026-05-31
   main/runtime truth was re-read and close evidence was posted. These are narrow
   Dashboard polish slices and do not close Issue #528, Issue #579, Issue #590,
   or Issue #654.
+- 2026-05-31 PR #690 merged Issue #654 reconnect/resume continuation. Production
+  Dashboard Butler live evidence confirmed normal send, same-thread response, and
+  no stale blocked message. Issue #654 is now a close-ready candidate, but
+  closure still requires human GO.
+- 2026-05-31 Issue #579 received production Dashboard Butler draft-retention and
+  same-thread response evidence. Owner live evidence from 2026-05-30 16:00-19:00
+  JST is accepted as practical Mac Chrome / Cloudflare Access stability evidence,
+  not as a substitute for iPhone/PWA lock/suspend evidence. Attachment candidate
+  retention is split to Issue #498 / Issue #587 rather than keeping Issue #579
+  open for media scope alone. Issue #579 remains an evidence gap until final
+  iPhone/PWA lock/suspend recovery evidence or human scope judgment says that
+  column is satisfied.
+- 2026-05-31 Issue #689 was created from owner input about LINE-like reply
+  target previews. It is classified as `QUEUE` and must not preempt the current
+  Now item.
 
 ## Now
 
@@ -90,8 +106,9 @@ Last rebuilt from GitHub runtime truth: 2026-05-31
 
 - Issue #590: app-server turn timeout remains active after Issue #637 no longer
   blocks iPhone/PWA-only privileged recovery.
-- Issue #579: after timeout recovery, handle PWA background/foreground,
-  WebSocket reconnect, auth/session expiry, and input/media retention.
+- Issue #654 closure pass: after the current root slice no longer needs
+  execution focus, close only if human GO is present and the mapped evidence
+  comments remain sufficient.
 
 ## Root Blockers
 
@@ -232,8 +249,17 @@ Evidence gaps are active. They are not deferred out of scope.
 - Issue #444: PR #600 points PR-numbered notifications at the PR instead of the
   Actions run, but live iPhone/PWA notification tap, sound, badge, and recovery
   evidence remain incomplete.
+- Issue #579: PR #686, production draft-retention evidence, production
+  same-thread response evidence, and owner live evidence satisfy substantial
+  text input / recovery evidence. It remains an evidence gap for final
+  iPhone/PWA lock/suspend recovery unless the owner explicitly narrows or accepts
+  that column. Attachment candidate/reselect UX belongs to Issue #498 / Issue
+  #587 and should not keep #579 open by itself.
 - Issue #654: PR #685 removed the old blocked reply from normal Dashboard chat,
-  but reconnect/resume and app-server bridge continuation are still incomplete.
+  and PR #690 added reconnect/resume continuation for fallback-saved owner
+  messages. Production evidence confirmed normal send, no stale blocked message,
+  and same-thread app-server response. It is a close-ready candidate pending
+  human GO, not a fallback-redesign Now item.
 - Issue #657: chief-butler interpretation confirmation is a process / traffic
   control gap and remains open until the protocol is repo/runtime-backed with
   mapped evidence.
@@ -289,13 +315,16 @@ These Issues remain active and required, but they do not preempt the current
   Dashboard chat surface.
 - Issue #670: Cloudflare / fixed-cost monitoring should become Butler-readable
   ops truth without dominating normal chat.
+- Issue #689: LINE-like reply target preview / tap-to-scroll context for
+  fast multi-message Dashboard Butler chat. This is required owner-facing UX, but
+  it remains `QUEUE` and must not preempt the current Now item.
 
 ## Questions
 
 - Issue #595: remains open because the runtime auto-classification path for
   Butler / VPS Codex CLI is not connected yet. This PR only refreshes the
-  durable queue snapshot and intentionally leaves Issue #590 as post-merge
-  `Now`.
+  durable queue snapshot and intentionally preserves the active Now/Next order
+  instead of letting #689 or evidence-only close-readiness work replace it.
 - Decide in a future bounded slice whether `docs/mvp/active-issue-execution-queue.md`
   should be generated from GitHub runtime truth or remain hand-curated with tests.
 
