@@ -196,6 +196,27 @@ an allowlisted capability, PWA notification is used when owner action is
 required, and redacted runtime truth is returned. Mac SSH/root work remains
 break-glass bootstrap evidence, not Butler-complete recovery.
 
+For privileged maintenance pickup, the same user-owned runner entrypoint also
+recognizes a distinct GitHub Issue comment marker:
+
+- `<!-- vtdd:vps-privileged-maintenance-execution:<executionId> -->`
+- JSON payload `transport` must be `vps_privileged_maintenance_helper`
+- payload must include the canonical repository, Issue number,
+  `approvalScopeMatched=true`, `issueTraceability.issueTraceable=true`, and
+  the `executionEnvelope` returned by
+  `vtddCreateVpsMaintenanceHelperExecution`
+- the runner accepts only the bounded helper invocation
+  `sudo -n /usr/local/sbin/vtdd-vps-maintenance-helper --execute --input <helper-execution-input-json>`
+  with `shell:false`
+- the runner writes `helperExecutionInput` to a temporary local file with
+  restricted permissions, invokes the root-owned helper, removes the file, and
+  reports redacted runtime truth through normal
+  `<!-- vtdd:vps-runner-event:<executionId> -->` comments
+
+This marker is not a Codex implementation queue and must not be used for
+branch/PR creation. It is only for scoped, passkey-approved Issue #637 helper
+execution handoff.
+
 Ready PR means reviewer and automation can inspect the handoff result. It is
 not an Issue-completion claim and it is not merge authority. Merge remains
 behind reviewer approval, required checks, head-SHA consistency, mergeability,
