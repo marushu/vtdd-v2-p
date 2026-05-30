@@ -2,7 +2,7 @@ const CAPABILITY_STATUSES = new Set(["enabled", "disabled"]);
 const CAPABILITY_OPERATIONS = new Set(["add", "enable", "disable", "remove", "rollback", "review"]);
 const RISK_LEVELS = new Set(["low", "medium", "high"]);
 const DEFAULT_MANIFEST_VERSION = 1;
-const HELPER_EXECUTION_MODES = new Set(["dry_run"]);
+const HELPER_EXECUTION_MODES = new Set(["dry_run", "execute"]);
 const DEFAULT_HELPER_INSTALL_PATH = "/usr/local/sbin/vtdd-vps-maintenance-helper";
 const DEFAULT_MANIFEST_PATH = "/etc/vtdd/privileged-maintenance-capabilities.json";
 const DEFAULT_SUDOERS_PATH = "/etc/sudoers.d/vtdd-vps-maintenance-helper";
@@ -489,7 +489,7 @@ function planVpsPrivilegedMaintenanceHelperExecution(input = {}) {
   const now = normalizeText(input.now) || new Date().toISOString();
   const issues = [...manifestResult.issues, ...helperRequest.issues];
   if (!HELPER_EXECUTION_MODES.has(mode)) {
-    issues.push("helper execution mode must be dry_run");
+    issues.push("helper execution mode must be dry_run or execute");
   }
   if (issues.length > 0) {
     return {
@@ -541,12 +541,22 @@ function planVpsPrivilegedMaintenanceHelperExecution(input = {}) {
     };
   }
 
+  const executionStatus = mode === "execute" ? "execute_ready" : "dry_run_ready";
+  const runtimeKind =
+    mode === "execute"
+      ? "vps_privileged_maintenance_helper_execution_plan"
+      : "vps_privileged_maintenance_helper_dry_run";
+  const redactedLogSummary =
+    mode === "execute"
+      ? "execution plan only; root-owned helper has not executed the command yet"
+      : "dry-run only; privileged command was not executed";
+
   return {
     ok: true,
     helperPlan: {
       kind: "vps_privileged_maintenance_helper_plan",
       mode,
-      status: "dry_run_ready",
+      status: executionStatus,
       requestId: request.requestId,
       host: request.host,
       repository: request.repository,
@@ -574,8 +584,8 @@ function planVpsPrivilegedMaintenanceHelperExecution(input = {}) {
     },
     runtimeTruth: {
       ok: true,
-      kind: "vps_privileged_maintenance_helper_dry_run",
-      status: "dry_run_ready",
+      kind: runtimeKind,
+      status: executionStatus,
       host: request.host,
       repository: request.repository,
       relatedIssue: request.relatedIssue,
@@ -592,7 +602,7 @@ function planVpsPrivilegedMaintenanceHelperExecution(input = {}) {
       },
       after: null,
       exitCode: null,
-      redactedLogSummary: "dry-run only; privileged command was not executed",
+      redactedLogSummary,
       rootExecutionStarted: false,
       helperExecutionStarted: false,
       redacted: true,

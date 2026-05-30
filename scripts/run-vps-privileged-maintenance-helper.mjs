@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import fs from "node:fs/promises";
+import { spawnSync } from "node:child_process";
 
 import { planVpsPrivilegedMaintenanceHelperExecution } from "../src/core/index.js";
 
@@ -18,6 +19,8 @@ function parseArgs(argv) {
     const arg = argv[index];
     if (arg === "--dry-run") {
       result.mode = "dry_run";
+    } else if (arg === "--execute") {
+      result.mode = "execute";
     } else if (arg === "--install-audit") {
       result.auditInstall = true;
     } else if (arg === "--input") {
@@ -147,6 +150,102 @@ async function auditInstall(args) {
   };
 }
 
+function executeHelperPlan({ helperPlan, timeoutMs }) {
+  const boundary = helperPlan?.commandPreview?.executionBoundary ?? {};
+  const workingDirectory = String(helperPlan?.capability?.workingDirectories?.[0] ?? "").trim();
+  const now = new Date().toISOString();
+  const baseTruth = {
+    ok: false,
+    kind: "vps_privileged_maintenance_helper_execution",
+    status: "blocked",
+    host: helperPlan?.host || "",
+    repository: helperPlan?.repository || "",
+    relatedIssue: helperPlan?.relatedIssue || null,
+    operation: helperPlan?.operation || "",
+    capabilityId: helperPlan?.capability?.id || "",
+    commandClass: boundary.commandClass || "",
+    commandExecutionBoundary: boundary,
+    before: {
+      workingDirectory,
+      startedAt: now
+    },
+    after: null,
+    exitCode: null,
+    redactedLogSummary: "",
+    rootExecutionStarted: false,
+    helperExecutionStarted: true,
+    redacted: true,
+    updatedAt: now
+  };
+
+  if (boundary.requiresRoot !== true) {
+    return {
+      ok: false,
+      error: "vps_helper_non_root_execution_unconnected",
+      issues: ["non-root helper execution requires a run-as user contract before it can be executed safely"],
+      runtimeTruth: {
+        ...baseTruth,
+        redactedLogSummary: "blocked before execution; non-root run-as contract is not connected"
+      }
+    };
+  }
+  if (process.getuid?.() !== 0) {
+    return {
+      ok: false,
+      error: "root_required",
+      issues: ["root is required for VPS privileged maintenance helper execution"],
+      runtimeTruth: {
+        ...baseTruth,
+        redactedLogSummary: "blocked before execution; root-owned helper was not running as root"
+      }
+    };
+  }
+  if (!workingDirectory.startsWith("/")) {
+    return {
+      ok: false,
+      error: "vps_helper_working_directory_invalid",
+      issues: ["helper execution working directory must be absolute"],
+      runtimeTruth: {
+        ...baseTruth,
+        redactedLogSummary: "blocked before execution; working directory was not absolute"
+      }
+    };
+  }
+
+  const executable = String(boundary.executable || "").trim();
+  const args = Array.isArray(boundary.args) ? boundary.args.map((part) => String(part)) : [];
+  const timeout = normalizeTimeoutMs(timeoutMs);
+  const spawned = spawnSync(executable, args, {
+    cwd: workingDirectory,
+    encoding: "utf8",
+    shell: false,
+    timeout,
+    env: {
+      PATH: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+      HOME: process.env.HOME || "/root",
+      CI: process.env.CI || "1"
+    }
+  });
+  const completedAt = new Date().toISOString();
+  const exitCode = typeof spawned.status === "number" ? spawned.status : spawned.error ? 124 : 1;
+  return {
+    ok: exitCode === 0,
+    runtimeTruth: {
+      ...baseTruth,
+      ok: exitCode === 0,
+      status: exitCode === 0 ? "completed" : "failed",
+      after: {
+        completedAt,
+        timedOut: spawned.error?.code === "ETIMEDOUT"
+      },
+      exitCode,
+      redactedLogSummary: summarizeProcessOutput(spawned),
+      rootExecutionStarted: true,
+      updatedAt: completedAt
+    }
+  };
+}
+
 function ownerLabel(stat) {
   if (stat?.uid === 0) return "root";
   return Number.isInteger(stat?.uid) ? String(stat.uid) : null;
@@ -155,6 +254,30 @@ function ownerLabel(stat) {
 function summarizeError(error) {
   const code = typeof error?.code === "string" ? error.code : "UNKNOWN";
   return code.replace(/[^A-Z0-9_]/gi, "").slice(0, 80) || "UNKNOWN";
+}
+
+function normalizeTimeoutMs(value) {
+  const parsed = Number.parseInt(String(value ?? ""), 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return 10 * 60 * 1000;
+  return Math.min(parsed, 15 * 60 * 1000);
+}
+
+function summarizeProcessOutput(result) {
+  const lines = [
+    result.error ? `error=${summarizeError(result.error)}` : "",
+    result.stdout ? `stdout=${result.stdout}` : "",
+    result.stderr ? `stderr=${result.stderr}` : ""
+  ]
+    .filter(Boolean)
+    .join("\n");
+  return redactSensitiveText(lines).slice(0, 2000) || "command produced no output";
+}
+
+function redactSensitiveText(value) {
+  return String(value ?? "")
+    .replace(/(approval[_-]?grant[_-]?id|token|secret|password|authorization)\s*[:=]\s*\S+/gi, "$1=<redacted>")
+    .replace(/gh[opsu]_[A-Za-z0-9_]+/g, "<redacted-token>")
+    .replace(/[A-Za-z0-9+/]{32,}={0,2}/g, "<redacted-long-value>");
 }
 
 async function main() {
@@ -175,6 +298,17 @@ async function main() {
     mode: args.mode,
     now: input.now
   });
+  if (args.mode === "execute" && result.ok) {
+    const executed = executeHelperPlan({
+      helperPlan: result.helperPlan,
+      timeoutMs: input.timeoutMs
+    });
+    process.stdout.write(`${JSON.stringify(executed, null, 2)}\n`);
+    if (!executed.ok) {
+      process.exitCode = 1;
+    }
+    return;
+  }
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
   if (!result.ok) {
     process.exitCode = 1;

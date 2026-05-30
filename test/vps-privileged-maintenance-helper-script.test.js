@@ -93,3 +93,39 @@ test("VPS privileged maintenance helper script exits nonzero for disabled capabi
   const body = JSON.parse(result.stdout);
   assert.equal(body.error, "vps_helper_capability_disabled");
 });
+
+test("VPS privileged maintenance helper script blocks execute mode when not root", () => {
+  const helperRequest = {
+    kind: "vps_privileged_maintenance_helper_request",
+    status: "ready_for_vps_helper",
+    requestId: "vps-maintenance-helper-request:test",
+    vpsProposalId: "vps-maintenance-proposal:test",
+    approvalGrantId: "approval:test",
+    host: "x85-131-245-163",
+    repository: "marushu/vtdd-v2-p",
+    relatedIssue: 637,
+    operation: "add",
+    capability: manifest.capabilities[0]
+  };
+
+  const result = spawnSync(
+    process.execPath,
+    ["scripts/run-vps-privileged-maintenance-helper.mjs", "--execute"],
+    {
+      input: JSON.stringify({
+        manifest,
+        helperRequest,
+        now: "2026-05-29T02:00:00.000Z"
+      }),
+      encoding: "utf8"
+    }
+  );
+
+  assert.equal(result.status, 1);
+  const body = JSON.parse(result.stdout);
+  assert.equal(body.ok, false);
+  assert.equal(body.error, "root_required");
+  assert.equal(body.runtimeTruth.rootExecutionStarted, false);
+  assert.equal(body.runtimeTruth.helperExecutionStarted, true);
+  assert.equal(body.runtimeTruth.status, "blocked");
+});
