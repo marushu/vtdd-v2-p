@@ -215,6 +215,7 @@ test("VPS privileged maintenance helper executes non-root capabilities through f
     helperPlan,
     timeoutMs: 1000,
     getuid: () => 0,
+    resolveRunAsUid: () => "1001",
     nowFn: () => new Date("2026-05-30T00:00:00.000Z"),
     spawnSyncFn: (executable, args, options) => {
       spawnCalls.push({ executable, args, options });
@@ -233,6 +234,11 @@ test("VPS privileged maintenance helper executes non-root capabilities through f
     "-u",
     "vtdd-runner",
     "--",
+    "/usr/bin/env",
+    "HOME=/home/vtdd-runner",
+    "XDG_RUNTIME_DIR=/run/user/1001",
+    "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1001/bus",
+    "CI=1",
     "node",
     "scripts/run-vps-runner.mjs",
     "--dry-run"
@@ -242,5 +248,41 @@ test("VPS privileged maintenance helper executes non-root capabilities through f
   assert.equal(result.runtimeTruth.runAsUser, "vtdd-runner");
   assert.equal(result.runtimeTruth.rootExecutionStarted, false);
   assert.equal(result.runtimeTruth.helperStartedAsRoot, true);
+  assert.equal(result.runtimeTruth.runAsUserUid, "1001");
   assert.equal(result.runtimeTruth.exitCode, 0);
+});
+
+test("VPS privileged maintenance helper blocks non-root run-as execution when runner uid is unresolved", () => {
+  const helperPlan = {
+    host: "x85-131-245-163",
+    repository: "marushu/vtdd-v2-p",
+    relatedIssue: 637,
+    operation: "review",
+    capability: nonRootManifest.capabilities[0],
+    commandPreview: {
+      executionBoundary: {
+        commandClass: "vps_runner_status_dry_run",
+        riskLevel: "low",
+        requiresRoot: false,
+        executable: "node",
+        args: ["scripts/run-vps-runner.mjs", "--dry-run"],
+        shell: false
+      }
+    }
+  };
+
+  const result = executeHelperPlan({
+    helperPlan,
+    timeoutMs: 1000,
+    getuid: () => 0,
+    resolveRunAsUid: () => "",
+    spawnSyncFn: () => {
+      throw new Error("spawn must not start without a run-as uid");
+    }
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.error, "run_as_uid_unresolved");
+  assert.equal(result.runtimeTruth.helperStartedAsRoot, true);
+  assert.equal(result.runtimeTruth.rootExecutionStarted, false);
 });
