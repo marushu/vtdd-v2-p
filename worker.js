@@ -65356,6 +65356,7 @@ async function buildDashboardChatTurn(payload, options = {}) {
     },
     { threadId }
   );
+  const hasVpsPrivilegedMaintenanceIntent = detectDashboardVpsPrivilegedMaintenanceIntent({ text });
   const butlerMessage = normalizeDashboardChatMessage(
     {
       threadId,
@@ -65363,7 +65364,7 @@ async function buildDashboardChatTurn(payload, options = {}) {
       repository,
       relatedIssue,
       status: "blocked",
-      text: buildDashboardAppServerNotConnectedReply({ repository, relatedIssue }),
+      text: hasVpsPrivilegedMaintenanceIntent ? buildDashboardVpsPrivilegedMaintenanceReply({ repository, relatedIssue }) : buildDashboardAppServerNotConnectedReply({ repository, relatedIssue }),
       createdAt: new Date(Date.parse(now) + 1).toISOString()
     },
     { threadId }
@@ -65375,6 +65376,31 @@ async function buildDashboardChatTurn(payload, options = {}) {
     threadId,
     messages: [ownerMessage, butlerMessage].filter(Boolean)
   };
+}
+function detectDashboardVpsPrivilegedMaintenanceIntent({ text } = {}) {
+  const normalized = normalizeText31(text);
+  if (!normalized) return false;
+  const lower = normalized.toLowerCase();
+  const hasVpsMaintenance = lower.includes("vps") && (lower.includes("privileged") || lower.includes("maintenance") || lower.includes("root") || lower.includes("sudo") || lower.includes("helper") || lower.includes("passkey"));
+  const hasJapaneseMaintenance = (lower.includes("root") || lower.includes("sudo") || lower.includes("helper")) && (normalized.includes("\u4FDD\u5B88") || normalized.includes("\u5FA9\u65E7") || normalized.includes("\u627F\u8A8D"));
+  return hasVpsMaintenance || hasJapaneseMaintenance;
+}
+function buildDashboardVpsPrivilegedMaintenanceReply({ repository, relatedIssue } = {}) {
+  const repoPhrase = repository ? `\u5BFE\u8C61 repo: ${repository}` : "\u5BFE\u8C61 repo: \u672A\u6307\u5B9A";
+  const issuePhrase = relatedIssue ? `\u95A2\u9023 Issue: #${relatedIssue}` : "\u95A2\u9023 Issue: \u672A\u6307\u5B9A";
+  return [
+    "VPS privileged maintenance intent \u3068\u3057\u3066\u53D7\u3051\u53D6\u308A\u307E\u3057\u305F\u3002",
+    "",
+    "Dashboard Butler \u5074\u3067 owner-facing \u306B\u6271\u3046\u5883\u754C\u306F\u3001proposal \u2192 scoped passkey approval \u2192 helper request \u2192 dry-run / execution handoff \u2192 VPS runner queue \u3067\u3059\u3002",
+    "",
+    `- ${repoPhrase}`,
+    `- ${issuePhrase}`,
+    "- authority: root / sudo \u5B9F\u884C\u306F passkey approval \u306A\u3057\u3067\u306F\u958B\u59CB\u3057\u307E\u305B\u3093\u3002",
+    "- runtime truth: helper handoff / queue \u306F rootExecutionStarted=false, helperExecutionStarted=false \u3092\u8FD4\u3059\u5FC5\u8981\u304C\u3042\u308A\u307E\u3059\u3002",
+    "- next action: passkey scope \u306B host / repository / capability / impact / expiry \u3092\u8868\u793A\u3057\u3066\u304B\u3089\u3001VPS runner \u304C root-owned helper \u3078\u6E21\u3057\u307E\u3059\u3002",
+    "",
+    "\u73FE\u72B6: Dashboard Butler \u306F\u3053\u306E intent \u3092 VPS privileged maintenance flow \u3068\u3057\u3066\u8AAC\u660E\u3067\u304D\u307E\u3059\u3002\u305F\u3060\u3057 live root \u5B9F\u884C\u306E\u5B8C\u4E86 claim \u306F\u3001passkey approval \u3068 VPS runner pickup \u306E E2E evidence \u304C\u63C3\u3046\u307E\u3067\u7981\u6B62\u3067\u3059\u3002"
+  ].join("\n");
 }
 function buildDashboardAppServerNotConnectedReply({ repository, relatedIssue } = {}) {
   const repoPhrase = repository ? `\u5BFE\u8C61 repo: ${repository}` : "\u5BFE\u8C61 repo: \u672A\u6307\u5B9A";

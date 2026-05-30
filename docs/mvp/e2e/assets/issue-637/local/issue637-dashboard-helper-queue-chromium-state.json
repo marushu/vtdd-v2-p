@@ -1,0 +1,128 @@
+{
+  "ok": true,
+  "state": {
+    "browserName": "chromium",
+    "dashboardUrl": "http://127.0.0.1:8817/dashboard?repository=marushu%2Fvtdd-v2-p",
+    "ownerIntent": "Issue #637: Dashboard Butler から VPS helper queue まで到達できるか確認。root 実行は passkey 境界で止める。",
+    "proposal": {
+      "status": 200,
+      "vpsProposalId": "vps-maintenance-proposal:77642c82-c8b7-4153-93f0-7f3ea66b39ed",
+      "approvalBoundary": {
+        "actionType": "destructive",
+        "highRiskKind": "vps_runner_admin",
+        "repositoryInput": "marushu/vtdd-v2-p",
+        "issueNumber": "637",
+        "relatedIssue": "637",
+        "phase": "execution",
+        "vpsHost": "x85-131-245-163",
+        "vpsOperation": "add",
+        "vpsCapabilityId": "playwright.chromium.deps",
+        "vpsImpactScope": "/usr/lib, /usr/share/fonts",
+        "vpsExpiresAt": "2026-05-30T11:41:51.140Z",
+        "display": {
+          "host": "x85-131-245-163",
+          "operation": "add",
+          "capabilityId": "playwright.chromium.deps",
+          "impactScope": "/usr/lib, /usr/share/fonts",
+          "expiresAt": "2026-05-30T11:41:51.140Z"
+        },
+        "vpsProposalId": "vps-maintenance-proposal:77642c82-c8b7-4153-93f0-7f3ea66b39ed"
+      }
+    },
+    "helperRuntimeTruth": {
+      "kind": "vps_privileged_maintenance_helper_request",
+      "status": "ready_for_vps_helper",
+      "host": "x85-131-245-163",
+      "repository": "marushu/vtdd-v2-p",
+      "relatedIssue": 637,
+      "operation": "add",
+      "capabilityId": "playwright.chromium.deps",
+      "rootExecutionStarted": false,
+      "helperExecutionStarted": false,
+      "redacted": true,
+      "nextAction": "send this bounded helperRequest to the VPS root-owned helper in the next approved slice"
+    },
+    "executionRuntimeTruth": {
+      "ok": true,
+      "kind": "vps_privileged_maintenance_helper_execution_handoff",
+      "status": "ready_for_vps_helper_execution",
+      "host": "x85-131-245-163",
+      "repository": "marushu/vtdd-v2-p",
+      "relatedIssue": 637,
+      "operation": "add",
+      "capabilityId": "playwright.chromium.deps",
+      "commandClass": "playwright_install_deps_chromium",
+      "commandArgv": [
+        "npx",
+        "playwright",
+        "install-deps",
+        "chromium"
+      ],
+      "allowedArgsPurpose": "display_only_not_execution_input",
+      "commandExecutionBoundary": {
+        "executable": "npx",
+        "args": [
+          "playwright",
+          "install-deps",
+          "chromium"
+        ],
+        "shell": false,
+        "pathResolution": "root_helper_controlled_path_allowlist",
+        "stdin": "none",
+        "commandClass": "playwright_install_deps_chromium",
+        "requiresRoot": true,
+        "riskLevel": "high"
+      },
+      "registryBinding": {
+        "commandClass": "playwright_install_deps_chromium",
+        "title": "Playwright Chromium dependency install",
+        "allowedArgs": [
+          "npx playwright install-deps chromium"
+        ],
+        "argv": [
+          "npx",
+          "playwright",
+          "install-deps",
+          "chromium"
+        ],
+        "requiredRiskLevel": "high",
+        "requiresRoot": true,
+        "initialPreset": true
+      },
+      "before": {
+        "manifestVersion": 1,
+        "capabilityStatus": "enabled"
+      },
+      "after": null,
+      "exitCode": null,
+      "redactedLogSummary": "execution plan only; root-owned helper has not executed the command yet",
+      "rootExecutionStarted": false,
+      "helperExecutionStarted": false,
+      "redacted": true,
+      "updatedAt": "2026-05-30T00:00:00.000Z",
+      "nextAction": "send executionEnvelope.helperExecutionInput to the VPS root-owned helper through a declared VPS runner pickup path"
+    },
+    "queueRuntimeTruth": {
+      "kind": "vps_privileged_maintenance_helper_execution_queue",
+      "status": "queued_for_vps_helper_execution",
+      "rootExecutionStarted": false,
+      "helperExecutionStarted": false,
+      "queueCommentPosted": true,
+      "nextAction": "VPS runner must pick up the vtdd:vps-privileged-maintenance-execution queue comment and invoke the root-owned helper"
+    },
+    "queueExecution": {
+      "executionId": "issue637-dashboard-e2e",
+      "transport": "vps_privileged_maintenance_helper",
+      "repository": "marushu/vtdd-v2-p",
+      "issueNumber": 637,
+      "queueCommentId": 63701,
+      "queueCommentUrl": "https://github.com/marushu/vtdd-v2-p/issues/637#issuecomment-63701",
+      "status": "queued"
+    },
+    "queueCommentPosted": true,
+    "queueCommentBody": "<!-- vtdd:vps-privileged-maintenance-execution:issue637-dashboard-e2e -->\nVTDD VPS privileged maintenance helper 実行キューです。\n\nこのコメントは通常の Codex branch/PR queue ではありません。scoped passkey approval 済み helper execution envelope を user-owned VPS runner が root-owned helper へ渡すための bounded handoff です。\n\n```json\n{\n  \"executionId\": \"issue637-dashboard-e2e\",\n  \"transport\": \"vps_privileged_maintenance_helper\",\n  \"repository\": \"marushu/vtdd-v2-p\",\n  \"issueNumber\": 637,\n  \"approvalScopeMatched\": true,\n  \"approvalActor\": null,\n  \"issueTraceability\": {\n    \"canonicalSpec\": \"github_issue\",\n    \"issueNumber\": 637,\n    \"relatedIssue\": 637,\n    \"issueTraceable\": true\n  },\n  \"executionEnvelope\": {\n    \"kind\": \"vps_privileged_maintenance_helper_execution_envelope\",\n    \"status\": \"ready_for_vps_helper_execution\",\n    \"host\": \"x85-131-245-163\",\n    \"repository\": \"marushu/vtdd-v2-p\",\n    \"requestId\": \"vps-maintenance-helper-request:02d31e7b-d3df-480f-9d54-934c9ed8fa5e\",\n    \"capabilityId\": \"playwright.chromium.deps\",\n    \"mode\": \"execute\",\n    \"helperInvocation\": {\n      \"executable\": \"sudo\",\n      \"args\": [\n        \"-n\",\n        \"/usr/local/sbin/vtdd-vps-maintenance-helper\",\n        \"--execute\",\n        \"--input\",\n        \"<helper-execution-input-json>\"\n      ],\n      \"shell\": false,\n      \"stdin\": \"none\",\n      \"inputFile\": \"helperExecutionInput\",\n      \"note\": \"VPS runner must materialize helperExecutionInput as a local file and invoke the root-owned helper; Worker does not execute root work.\"\n    },\n    \"helperExecutionInput\": {\n      \"manifest\": {\n        \"version\": 1,\n        \"host\": \"x85-131-245-163\",\n        \"repository\": \"marushu/vtdd-v2-p\",\n        \"updatedAt\": \"2026-05-30T00:00:00.000Z\",\n        \"capabilities\": [\n          {\n            \"id\": \"playwright.chromium.deps\",\n            \"title\": \"Playwright Chromium dependency install\",\n            \"commandClass\": \"playwright_install_deps_chromium\",\n            \"riskLevel\": \"high\",\n            \"workingDirectories\": [\n              \"/home/vtdd-runner/vtdd-runner/repos/vtdd-v2-p\"\n            ],\n            \"allowedArgs\": [\n              \"npx playwright install-deps chromium\"\n            ],\n            \"affectedPaths\": [\n              \"/usr/lib\",\n              \"/usr/share/fonts\"\n            ],\n            \"redactionRules\": [\n              \"no secrets\",\n              \"summarize package list\"\n            ],\n            \"rollbackPlan\": \"disable capability and keep audit history\",\n            \"expectedRuntimeTruth\": [\n              \"before package check\",\n              \"exit code\",\n              \"after Chromium launch check\"\n            ],\n            \"status\": \"enabled\",\n            \"createdAt\": \"2026-05-30T00:00:00.000Z\",\n            \"updatedAt\": \"2026-05-30T00:00:00.000Z\"\n          }\n        ]\n      },\n      \"helperRequest\": {\n        \"kind\": \"vps_privileged_maintenance_helper_request\",\n        \"status\": \"ready_for_vps_helper\",\n        \"requestId\": \"vps-maintenance-helper-request:02d31e7b-d3df-480f-9d54-934c9ed8fa5e\",\n        \"vpsProposalId\": \"vps-maintenance-proposal:77642c82-c8b7-4153-93f0-7f3ea66b39ed\",\n        \"approvalGrantId\": \"approval:issue637-dashboard-e2e\",\n        \"host\": \"x85-131-245-163\",\n        \"repository\": \"marushu/vtdd-v2-p\",\n        \"relatedIssue\": 637,\n        \"operation\": \"add\",\n        \"capability\": {\n          \"id\": \"playwright.chromium.deps\",\n          \"title\": \"Playwright Chromium dependency install\",\n          \"commandClass\": \"playwright_install_deps_chromium\",\n          \"riskLevel\": \"high\",\n          \"workingDirectories\": [\n            \"/home/vtdd-runner/vtdd-runner/repos/vtdd-v2-p\"\n          ],\n          \"allowedArgs\": [\n            \"npx playwright install-deps chromium\"\n          ],\n          \"affectedPaths\": [\n            \"/usr/lib\",\n            \"/usr/share/fonts\"\n          ],\n          \"redactionRules\": [\n            \"no secrets\",\n            \"summarize package list\"\n          ],\n          \"rollbackPlan\": \"disable capability and keep audit history\",\n          \"expectedRuntimeTruth\": [\n            \"before package check\",\n            \"exit code\",\n            \"after Chromium launch check\"\n          ]\n        },\n        \"approvalScope\": {\n          \"actionType\": \"destructive\",\n          \"highRiskKind\": \"vps_runner_admin\",\n          \"repositoryInput\": \"marushu/vtdd-v2-p\",\n          \"issueNumber\": \"637\",\n          \"pullNumber\": \"\",\n          \"relatedIssue\": \"637\",\n          \"phase\": \"execution\",\n          \"vpsProposalId\": \"vps-maintenance-proposal:77642c82-c8b7-4153-93f0-7f3ea66b39ed\",\n          \"vpsHost\": \"x85-131-245-163\",\n          \"vpsOperation\": \"add\",\n          \"vpsCapabilityId\": \"playwright.chromium.deps\",\n          \"vpsImpactScope\": \"/usr/lib, /usr/share/fonts\",\n          \"vpsExpiresAt\": \"2026-05-30T11:41:51.140Z\"\n        },\n        \"rootExecutionStarted\": false,\n        \"helperExecutionStarted\": false,\n        \"redacted\": true\n      },\n      \"mode\": \"execute\",\n      \"now\": \"2026-05-30T00:00:00.000Z\"\n    },\n    \"rootExecutionStarted\": false,\n    \"helperExecutionStarted\": false,\n    \"redacted\": true\n  }\n}\n```",
+    "rootExecutionStarted": false,
+    "helperExecutionStarted": false,
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.0.0 Safari/537.36"
+  }
+}
