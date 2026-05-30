@@ -5,7 +5,11 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 
-import { containsBroadSudoersGrant } from "../scripts/collect-vps-maintenance-install-inventory.mjs";
+import {
+  containsBroadSudoersGrant,
+  shouldAuditInstallThroughScopedSudo,
+  shouldProbeScopedSudoHelper
+} from "../scripts/collect-vps-maintenance-install-inventory.mjs";
 
 test("VPS maintenance install inventory collector reports missing paths without root execution", async () => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "vtdd-vps-install-inventory-"));
@@ -133,6 +137,38 @@ test("VPS maintenance install inventory collector skips sudo probe until root-ow
   assert.equal(body.observation.sudoersHelperProbe.ok, null);
   assert.equal(body.observation.sudoersHelperProbe.skippedReason, "preconditions_not_met");
   assert.equal(body.observation.sudoersHelperProbe.timeoutMs, null);
+});
+
+test("VPS maintenance install inventory collector allows scoped helper audit when sudoers file is unreadable", () => {
+  const helper = { installed: true, owner: "root" };
+  const manifest = { installed: true, owner: "root" };
+  const sudoers = { installed: null, owner: null, error: "EACCES" };
+
+  assert.equal(
+    shouldAuditInstallThroughScopedSudo({
+      verifyScopedSudo: true,
+      helper,
+      manifest,
+      sudoers,
+      helperPath: "/usr/local/sbin/vtdd-vps-maintenance-helper",
+      manifestPath: "/etc/vtdd/privileged-maintenance-capabilities.json",
+      sudoersPath: "/etc/sudoers.d/vtdd-vps-maintenance-helper",
+      runnerUser: "vtdd-runner"
+    }),
+    true
+  );
+
+  assert.equal(
+    shouldProbeScopedSudoHelper({
+      verifyScopedSudo: true,
+      helper,
+      manifest,
+      sudoers,
+      sudoersPolicy: { allowsAll: null },
+      sudoersInstallAudit: { ok: true }
+    }),
+    true
+  );
 });
 
 test("VPS maintenance install inventory collector does not root-audit override paths", async () => {

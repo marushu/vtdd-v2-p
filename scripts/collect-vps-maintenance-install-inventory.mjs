@@ -143,16 +143,15 @@ async function runScopedSudoInstallAudit({ helperPath, enabled, timeoutMs, maxBu
   }
 }
 
-function shouldProbeScopedSudoHelper({ verifyScopedSudo, helper, manifest, sudoers, sudoersPolicy }) {
+function shouldProbeScopedSudoHelper({ verifyScopedSudo, helper, manifest, sudoers, sudoersPolicy, sudoersInstallAudit }) {
   return (
     verifyScopedSudo === true &&
     helper.installed === true &&
     helper.owner === "root" &&
     manifest.installed === true &&
     manifest.owner === "root" &&
-    sudoers.installed === true &&
-    sudoers.owner === "root" &&
-    sudoersPolicy.allowsAll === false
+    ((sudoers.installed === true && sudoers.owner === "root" && sudoersPolicy.allowsAll === false) ||
+      sudoersInstallAudit?.ok === true)
   );
 }
 
@@ -167,8 +166,7 @@ function shouldAuditInstallThroughScopedSudo({ verifyScopedSudo, helper, manifes
     helper.owner === "root" &&
     manifest.installed === true &&
     manifest.owner === "root" &&
-    sudoers.installed === true &&
-    sudoers.owner === "root"
+    sudoers.installed !== false
   );
 }
 
@@ -236,7 +234,8 @@ async function collectVpsMaintenanceInstallInventory(input = {}) {
     helper,
     manifest,
     sudoers,
-    sudoersPolicy
+    sudoersPolicy,
+    sudoersInstallAudit
   });
   const sudoersHelperProbe = await probeScopedSudoHelper({
     helperPath,
@@ -260,8 +259,8 @@ async function collectVpsMaintenanceInstallInventory(input = {}) {
     sudoersOwner: sudoersInstallAudit.observed?.sudoersOwner ?? sudoers.owner,
     sudoersAllowsAll: sudoersInstallAudit.observed?.sudoersAllowsAll ?? sudoersPolicy.allowsAll,
     sudoersScopedHelperEntry: sudoersInstallAudit.observed?.sudoersScopedHelperEntry ?? sudoersPolicy.scopedHelperEntry,
-    sudoersHelperProbe: sudoersHelperProbe.ok,
-    sudoersHelperProbeStarted: sudoersHelperProbe.started,
+    sudoersHelperProbe: sudoersHelperProbe.ok ?? sudoersInstallAudit.ok,
+    sudoersHelperProbeStarted: sudoersHelperProbe.started || sudoersInstallAudit.started,
     sudoersInstallAuditStarted: sudoersInstallAudit.started
   });
 
@@ -363,4 +362,9 @@ function normalizeNullableBoolean(value) {
   return null;
 }
 
-export { collectVpsMaintenanceInstallInventory, containsBroadSudoersGrant };
+export {
+  collectVpsMaintenanceInstallInventory,
+  containsBroadSudoersGrant,
+  shouldAuditInstallThroughScopedSudo,
+  shouldProbeScopedSudoHelper
+};
