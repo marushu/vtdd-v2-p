@@ -57086,6 +57086,7 @@ var DashboardChatRoom = class {
         threadId: threadId || null,
         schema: "vtdd.dashboard.app_server_bridge.v1"
       });
+      await this.drainPendingAppServerOwnerMessages({ threadId, bridgeSocket: server });
     } else {
       await this.sendThread(server, threadId);
     }
@@ -57199,6 +57200,11 @@ var DashboardChatRoom = class {
     if (bridgeSockets.length === 0) {
       const messages2 = store ? await store.appendMany(threadId, [ownerMessage]) : [ownerMessage].filter(Boolean);
       await this.writeAcceptedOwnerMessage({ threadId, clientMessageId, messageId: ownerMessage.messageId, acceptedAt: now });
+      await this.writePendingAppServerOwnerMessage({
+        threadId,
+        ownerMessage,
+        queuedAt: now
+      });
       await this.broadcastThread({ threadId, messages: messages2 });
       this.sendSocket(socket, {
         type: "owner_message_accepted",
@@ -57227,6 +57233,21 @@ var DashboardChatRoom = class {
       status: "thinking",
       text: "app-server bridge \u306E\u8FD4\u4FE1\u3092\u5F85\u3063\u3066\u3044\u307E\u3059"
     });
+    await this.dispatchOwnerMessageToAppServerBridge({
+      threadId,
+      bridgeSocket: bridgeSockets[0],
+      ownerMessage
+    });
+  }
+  async dispatchOwnerMessageToAppServerBridge({ threadId, bridgeSocket, ownerMessage }) {
+    const message = normalizeDashboardChatMessage(ownerMessage, { threadId });
+    const text = sanitizeDashboardChatText(message.text || "");
+    if (!threadId || !text || !bridgeSocket) {
+      return false;
+    }
+    const repository = normalizeCanonicalRepositoryInput(message.repository);
+    const relatedIssue = normalizePositiveInteger10(message.relatedIssue || message.issueNumber);
+    const mediaReferences = normalizeMediaReferences(message.mediaReferences || message.media_references || []);
     const trafficControl = await buildDashboardChatTrafficControlContext({
       env: this.env,
       repository,
@@ -57243,9 +57264,9 @@ var DashboardChatRoom = class {
       repository: repository || null,
       relatedIssue: relatedIssue || null,
       text,
-      mediaReferences: mediaValidation.mediaReferences,
-      messageId: ownerMessage.messageId,
-      createdAt: now,
+      mediaReferences,
+      messageId: message.messageId,
+      createdAt: normalizeIsoTimestamp(message.createdAt || message.created_at) || (/* @__PURE__ */ new Date()).toISOString(),
       appServer: {
         startThreadMethod: mapping.codexThreadId ? "thread/resume" : "thread/start",
         turnMethod: "turn/start"
@@ -57253,7 +57274,7 @@ var DashboardChatRoom = class {
       authority: buildDashboardAppServerAuthorityHint({ repository, relatedIssue, text }),
       trafficControl
     };
-    this.sendSocket(bridgeSockets[0], turnRequest);
+    return this.sendSocket(bridgeSocket, turnRequest);
   }
   async acceptAppServerBridgeMessage({ socket, attachment, payload }) {
     const normalized = normalizeDashboardAppServerBridgeEvent(payload, {
@@ -57444,6 +57465,82 @@ var DashboardChatRoom = class {
       acceptedAt: normalizeIsoTimestamp(acceptedAt) || (/* @__PURE__ */ new Date()).toISOString()
     });
     return true;
+  }
+  pendingAppServerOwnerMessagesKey(threadId) {
+    const normalizedThreadId = normalizeDashboardThreadId(threadId);
+    return normalizedThreadId ? `pending_app_server_owner_messages:${normalizedThreadId}` : "";
+  }
+  async readPendingAppServerOwnerMessages(threadId) {
+    const key = this.pendingAppServerOwnerMessagesKey(threadId);
+    if (!key || typeof this.ctx?.storage?.get !== "function") {
+      return [];
+    }
+    try {
+      const records = await this.ctx.storage.get(key);
+      return Array.isArray(records) ? records.map((record2) => normalizeObject12(record2)).filter((record2) => record2.messageId || record2.ownerMessage) : [];
+    } catch {
+      return [];
+    }
+  }
+  async writePendingAppServerOwnerMessages(threadId, records) {
+    const key = this.pendingAppServerOwnerMessagesKey(threadId);
+    if (!key || typeof this.ctx?.storage?.put !== "function") {
+      return false;
+    }
+    await this.ctx.storage.put(key, Array.isArray(records) ? records : []);
+    return true;
+  }
+  async writePendingAppServerOwnerMessage({ threadId, ownerMessage, queuedAt }) {
+    const normalizedThreadId = normalizeDashboardThreadId(threadId);
+    const message = normalizeDashboardChatMessage(ownerMessage, { threadId: normalizedThreadId });
+    if (!normalizedThreadId || !message.messageId) {
+      return false;
+    }
+    const records = await this.readPendingAppServerOwnerMessages(normalizedThreadId);
+    const nextRecord = {
+      messageId: message.messageId,
+      ownerMessage: message,
+      queuedAt: normalizeIsoTimestamp(queuedAt) || (/* @__PURE__ */ new Date()).toISOString()
+    };
+    const nextRecords = [
+      ...records.filter((record2) => normalizeDashboardEventText(record2.messageId || record2.ownerMessage?.messageId) !== message.messageId),
+      nextRecord
+    ].slice(-20);
+    return this.writePendingAppServerOwnerMessages(normalizedThreadId, nextRecords);
+  }
+  async drainPendingAppServerOwnerMessages({ threadId, bridgeSocket }) {
+    const normalizedThreadId = normalizeDashboardThreadId(threadId);
+    if (!normalizedThreadId || !bridgeSocket) {
+      return { ok: false, drained: 0 };
+    }
+    const records = await this.readPendingAppServerOwnerMessages(normalizedThreadId);
+    if (records.length === 0) {
+      return { ok: true, drained: 0 };
+    }
+    const remaining = [];
+    let drained = 0;
+    for (const record2 of records) {
+      const ownerMessage = normalizeDashboardChatMessage(record2.ownerMessage || record2, { threadId: normalizedThreadId });
+      const sent = await this.dispatchOwnerMessageToAppServerBridge({
+        threadId: normalizedThreadId,
+        bridgeSocket,
+        ownerMessage
+      });
+      if (sent) {
+        drained += 1;
+      } else {
+        remaining.push(record2);
+      }
+    }
+    await this.writePendingAppServerOwnerMessages(normalizedThreadId, remaining);
+    if (drained > 0) {
+      await this.broadcastTransientStatus({
+        threadId: normalizedThreadId,
+        status: "thinking",
+        text: "\u63A5\u7D9A\u3057\u307E\u3057\u305F\u3002\u4FDD\u5B58\u6E08\u307F\u306E\u9001\u4FE1\u3092 app-server bridge \u306B\u6E21\u3057\u307E\u3057\u305F\u3002"
+      });
+    }
+    return { ok: true, drained, remaining: remaining.length };
   }
 };
 var CLOUDFLARE_ACCESS_JWKS_CACHE_TTL_MS = 5 * 60 * 1e3;
