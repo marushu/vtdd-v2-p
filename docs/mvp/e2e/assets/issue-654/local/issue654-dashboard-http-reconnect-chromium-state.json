@@ -1,0 +1,15 @@
+{
+  "ok": true,
+  "browserName": "chromium",
+  "state": {
+    "composerValue": "",
+    "composerReadOnly": false,
+    "statusText": "接続が不安定なため保存しました。再接続を続けています。",
+    "messages": [
+      "⧉WebSocket が切れても、通常チャットに古い未接続説明を出さないで。23:00",
+      "⧉WebSocket が閉じてもこの thread に保存して、再接続後に続ける。23:19"
+    ],
+    "forbiddenTextPresent": false,
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.7778.96 Safari/537.36"
+  }
+}
