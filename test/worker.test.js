@@ -8229,6 +8229,44 @@ test("worker dry-runs VPS maintenance helper request without root execution", as
   assert.equal(body.runtimeTruth.rootExecutionStarted, false);
   assert.equal(body.runtimeTruth.helperExecutionStarted, false);
   assert.equal(body.runtimeTruth.exitCode, null);
+
+  const executionResponse = await worker.fetch(
+    new Request("https://example.com/v2/vps/privileged-maintenance/helper-executions", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        manifest: {
+          version: 1,
+          host: "x85-131-245-163",
+          repository: "marushu/vtdd-v2-p",
+          updatedAt: "2026-05-29T00:00:00.000Z",
+          capabilities: [
+            {
+              ...helperBody.helperRequest.capability,
+              status: "enabled",
+              createdAt: "2026-05-29T00:00:00.000Z",
+              updatedAt: "2026-05-29T00:00:00.000Z"
+            }
+          ]
+        },
+        helperRequest: helperBody.helperRequest,
+        now: "2026-05-29T02:00:00.000Z"
+      })
+    }),
+    gatewayAuthEnv
+  );
+
+  assert.equal(executionResponse.status, 200);
+  const executionBody = await executionResponse.json();
+  assert.equal(executionBody.ok, true);
+  assert.equal(executionBody.helperPlan.status, "execute_ready");
+  assert.equal(executionBody.executionEnvelope.status, "ready_for_vps_helper_execution");
+  assert.equal(executionBody.executionEnvelope.helperInvocation.executable, "sudo");
+  assert.equal(executionBody.executionEnvelope.helperInvocation.shell, false);
+  assert.equal(executionBody.runtimeTruth.kind, "vps_privileged_maintenance_helper_execution_handoff");
+  assert.equal(executionBody.runtimeTruth.status, "ready_for_vps_helper_execution");
+  assert.equal(executionBody.runtimeTruth.rootExecutionStarted, false);
+  assert.equal(executionBody.runtimeTruth.helperExecutionStarted, false);
 });
 
 test("worker retrieves VPS maintenance install inventory without root execution", async () => {

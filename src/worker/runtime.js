@@ -1084,6 +1084,23 @@ export default {
       return handleVpsPrivilegedMaintenanceHelperDryRunRequest(request, env);
     }
 
+    if (request.method === "POST" && isApiPath(url.pathname, "/vps/privileged-maintenance/helper-executions")) {
+      const auth = authorizeGatewayRequest({
+        request,
+        env,
+        apiSuffix: "/vps/privileged-maintenance/helper-executions"
+      });
+      if (!auth.ok) {
+        return json(auth.status, {
+          ok: false,
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+
+      return handleVpsPrivilegedMaintenanceHelperExecutionRequest(request, env);
+    }
+
     if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/vps-maintenance-install-inventory")) {
       const auth = authorizeGatewayRequest({
         request,
@@ -4525,6 +4542,69 @@ async function handleVpsPrivilegedMaintenanceHelperDryRunRequest(request, env) {
     ok: true,
     helperPlan: result.helperPlan,
     runtimeTruth: result.runtimeTruth
+  });
+}
+
+async function handleVpsPrivilegedMaintenanceHelperExecutionRequest(request, env) {
+  const payload = await readJson(request);
+  const result = planVpsPrivilegedMaintenanceHelperExecution({
+    manifest: payload?.manifest,
+    helperRequest: payload?.helperRequest || payload?.helper_request,
+    mode: "execute",
+    now: payload?.now
+  });
+  if (!result.ok) {
+    return json(422, {
+      ok: false,
+      error: result.error,
+      issues: result.issues ?? [],
+      runtimeTruth: {
+        kind: "vps_privileged_maintenance_helper_execution_handoff",
+        status: "blocked",
+        rootExecutionStarted: false,
+        helperExecutionStarted: false,
+        redacted: true
+      }
+    });
+  }
+
+  return json(200, {
+    ok: true,
+    helperPlan: result.helperPlan,
+    executionEnvelope: {
+      kind: "vps_privileged_maintenance_helper_execution_envelope",
+      status: "ready_for_vps_helper_execution",
+      host: result.helperPlan.host,
+      repository: result.helperPlan.repository,
+      requestId: result.helperPlan.requestId,
+      capabilityId: result.helperPlan.capability.id,
+      mode: "execute",
+      helperInvocation: {
+        executable: "sudo",
+        args: ["-n", "/usr/local/sbin/vtdd-vps-maintenance-helper", "--execute", "--input", "<helper-execution-input-json>"],
+        shell: false,
+        stdin: "none",
+        inputFile: "helperExecutionInput",
+        note: "VPS runner must materialize helperExecutionInput as a local file and invoke the root-owned helper; Worker does not execute root work."
+      },
+      helperExecutionInput: {
+        manifest: payload?.manifest,
+        helperRequest: payload?.helperRequest || payload?.helper_request,
+        mode: "execute",
+        now: payload?.now || result.runtimeTruth.updatedAt
+      },
+      rootExecutionStarted: false,
+      helperExecutionStarted: false,
+      redacted: true
+    },
+    runtimeTruth: {
+      ...result.runtimeTruth,
+      kind: "vps_privileged_maintenance_helper_execution_handoff",
+      status: "ready_for_vps_helper_execution",
+      rootExecutionStarted: false,
+      helperExecutionStarted: false,
+      nextAction: "send executionEnvelope.helperExecutionInput to the VPS root-owned helper through a declared VPS runner pickup path"
+    }
   });
 }
 
