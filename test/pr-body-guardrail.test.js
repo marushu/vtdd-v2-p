@@ -195,10 +195,76 @@ test("validatePrBody rejects PR bodies that make Custom GPT or Action Schema the
 
   const result = validatePrBody(body);
   assert.equal(result.ok, false);
-  assert.match(result.errors.join("\n"), /Primary owner surface must name Dashboard Butler/);
+  assert.match(result.errors.join("\n"), /Primary owner surface must be Dashboard Butler only/);
   assert.match(result.errors.join("\n"), /Fallback surface may name Custom GPT only as fallback/);
   assert.match(result.errors.join("\n"), /natural-language\/chat entrypoint/);
   assert.match(result.errors.join("\n"), /Action Schema exposure must not be described as the primary owner path/);
+});
+
+test("validatePrBody rejects contradictory primary surface text that merely mentions Dashboard Butler", () => {
+  const body = renderPrBody({
+    issue: "595",
+    intent: "Issue #595 の Dashboard Butler First guardrail を固定する。",
+    satisfied: "Validator catches contradictory surface text.",
+    unsatisfied: "Human review remains pending.",
+    primaryOwnerSurface: "Custom GPT, not Dashboard Butler.",
+    evidencePath: "docs/pr-template-model.md",
+    ownerGoal: "Dashboard Butler First からのドリフトを止める。",
+    butlerEntrypoint: "PR body review gate.",
+    dashboardNaturalLanguagePath: "Dashboard Butler natural-language chat entrypoint is required in the PR body.",
+    actionSchemaExposure: "Action Schema is not the primary owner path.",
+    runtimePath: "scripts/validate-pr-body.mjs.",
+    runtimeTruth: "Validator pass/fail output.",
+    authorityBoundary: "No high-risk operation.",
+    butlerE2E: "Not required because this PR does not close a runtime Issue.",
+    completionStatus: "incomplete",
+  });
+
+  const result = validatePrBody(body);
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /Primary owner surface must be Dashboard Butler only/);
+  assert.doesNotMatch(result.errors.join("\n"), /Action Schema exposure must not/);
+});
+
+test("validatePrBody accepts explicit Action Schema negation and rejects vague natural-language path", () => {
+  const valid = renderPrBody({
+    issue: "595",
+    intent: "Issue #595 の Dashboard Butler First guardrail を固定する。",
+    satisfied: "Validator accepts a negated Action Schema primary-path statement.",
+    unsatisfied: "Human review remains pending.",
+    evidencePath: "docs/pr-template-model.md",
+    ownerGoal: "Dashboard Butler First からのドリフトを止める。",
+    butlerEntrypoint: "PR body review gate.",
+    dashboardNaturalLanguagePath: "Dashboard Butler natural-language chat entrypoint must be explained in this PR body.",
+    actionSchemaExposure: "Action Schema is not the primary owner path; it is Custom GPT fallback compatibility only.",
+    runtimePath: "scripts/validate-pr-body.mjs.",
+    runtimeTruth: "Validator pass/fail output.",
+    authorityBoundary: "No high-risk operation.",
+    butlerE2E: "Not required because this PR does not close a runtime Issue.",
+    completionStatus: "incomplete",
+  });
+  assert.equal(validatePrBody(valid).ok, true);
+
+  const vague = renderPrBody({
+    issue: "595",
+    intent: "Issue #595 の Dashboard Butler First guardrail を固定する。",
+    satisfied: "Validator rejects vague path text.",
+    unsatisfied: "Human review remains pending.",
+    dashboardNaturalLanguagePath: "Dashboard Butler natural-language placeholder.",
+    evidencePath: "docs/pr-template-model.md",
+    ownerGoal: "Dashboard Butler First からのドリフトを止める。",
+    butlerEntrypoint: "PR body review gate.",
+    actionSchemaExposure: "Action Schema is not the primary owner path.",
+    runtimePath: "scripts/validate-pr-body.mjs.",
+    runtimeTruth: "Validator pass/fail output.",
+    authorityBoundary: "No high-risk operation.",
+    butlerE2E: "Not required because this PR does not close a runtime Issue.",
+    completionStatus: "incomplete",
+  });
+
+  const result = validatePrBody(vague);
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /natural-language\/chat entrypoint/);
 });
 
 test("validatePrBody fails when Butler Completion Contract is missing", () => {
@@ -388,11 +454,9 @@ test("guarded workflow grandfathers pre-queue open PRs while enforcing new queue
 test("guarded workflow enforces Dashboard Butler as the primary owner surface", () => {
   const workflow = fs.readFileSync(".github/workflows/guarded-autonomy-required-checks.yml", "utf8");
 
-  assert.match(workflow, /Primary owner surface/);
-  assert.match(workflow, /Dashboard Butler natural-language path/);
-  assert.match(workflow, /Primary owner surface must name Dashboard Butler/);
-  assert.match(workflow, /Fallback surface may name Custom GPT only as fallback/);
-  assert.match(workflow, /Action Schema exposure must not be described as the primary owner path/);
+  assert.match(workflow, /node scripts\/validate-pr-body\.mjs "\$PR_BODY_FILE"/);
+  assert.doesNotMatch(workflow, /grep -Eiq 'Dashboard Butler'/);
+  assert.doesNotMatch(workflow, /grep -Eiq 'primary\|主経路\|main path\|main route'/);
 });
 
 test("guarded workflow rejects draft implementation PRs instead of using draft as a hold", () => {

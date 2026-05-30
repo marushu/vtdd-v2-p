@@ -57,6 +57,13 @@ Observed result on 2026-04-27:
   is `complete` and includes Butler-facing E2E evidence
 - confirms validation fails when a PR body makes Custom GPT / Action Schema the
   primary owner-facing path instead of Dashboard Butler
+- confirms contradictory text such as naming Custom GPT while merely mentioning
+  Dashboard Butler is rejected
+- confirms explicit negation such as "Action Schema is not the primary owner
+  path" is accepted, avoiding false positives for correct fallback wording
+- confirms the guarded workflow calls `scripts/validate-pr-body.mjs` for the
+  Butler Completion Contract instead of duplicating that semantic check in
+  shell
 - confirms the guardrail trips locally before the repository spends Actions time on the same missing-marker failure
 - confirms the workflow path still preserves the required PR evidence structure after helper integration
 - confirms existing PR body normalization is required because PR `#212`

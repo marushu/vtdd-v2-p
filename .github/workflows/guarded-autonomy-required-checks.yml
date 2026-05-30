@@ -20,6 +20,9 @@ jobs:
   guarded-policy:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
       - name: Fetch current PR body
         id: pr-body
         shell: bash
@@ -138,93 +141,7 @@ jobs:
         env:
           PR_BODY_FILE: ${{ steps.pr-body.outputs.path }}
         run: |
-          body="$(cat "$PR_BODY_FILE")"
-          contract="$(printf '%s' "$body" | awk '/^## Butler Completion Contract/{flag=1; next} /^## /{flag=0} flag')"
-          required_fields=(
-            "Primary owner surface"
-            "Fallback surface"
-            "Owner goal"
-            "Butler entrypoint"
-            "Dashboard Butler natural-language path"
-            "Action Schema exposure"
-            "Runtime path"
-            "Runner/runtime truth"
-            "Authority boundary"
-            "E2E evidence"
-            "Completion status"
-          )
-
-          for field in "${required_fields[@]}"; do
-            line="$(printf '%s\n' "$contract" | grep -E "^- ${field}: .+" || true)"
-            if [ -z "$line" ]; then
-              echo "Missing or empty Butler Completion Contract field: $field"
-              exit 1
-            fi
-            value="${line#- ${field}: }"
-            value="$(printf '%s' "$value" | tr '[:upper:]' '[:lower:]' | sed -E 's/[[:space:]]+$//')"
-            case "$value" in
-              ""|"none"|"none."|"not required"|"not required."|"not provided"|"not provided."|"todo"|"tbd")
-                echo "Butler Completion Contract field is not filled: $field"
-                exit 1
-                ;;
-            esac
-          done
-
-          primary_line="$(printf '%s\n' "$contract" | grep -E "^- Primary owner surface: .+")"
-          primary_value="${primary_line#- Primary owner surface: }"
-          if ! printf '%s' "$primary_value" | grep -Eiq 'Dashboard Butler'; then
-            echo "Butler Completion Contract Primary owner surface must name Dashboard Butler."
-            exit 1
-          fi
-
-          fallback_line="$(printf '%s\n' "$contract" | grep -E "^- Fallback surface: .+")"
-          fallback_value="${fallback_line#- Fallback surface: }"
-          if printf '%s' "$fallback_value" | grep -Eiq 'Custom GPT' && ! printf '%s' "$fallback_value" | grep -Eiq 'fallback|フォールバック'; then
-            echo "Butler Completion Contract Fallback surface may name Custom GPT only as fallback."
-            exit 1
-          fi
-
-          nl_line="$(printf '%s\n' "$contract" | grep -E "^- Dashboard Butler natural-language path: .+")"
-          nl_value="${nl_line#- Dashboard Butler natural-language path: }"
-          if ! printf '%s' "$nl_value" | grep -Eiq 'Dashboard Butler|自然文|natural-language|natural language|通常チャット|chat'; then
-            echo "Butler Completion Contract Dashboard Butler natural-language path must describe the Dashboard Butler natural-language/chat entrypoint."
-            exit 1
-          fi
-
-          action_schema_line="$(printf '%s\n' "$contract" | grep -E "^- Action Schema exposure: .+")"
-          action_schema_value="${action_schema_line#- Action Schema exposure: }"
-          if printf '%s' "$action_schema_value" | grep -Eiq 'primary|主経路|main path|main route'; then
-            echo "Butler Completion Contract Action Schema exposure must not be described as the primary owner path."
-            exit 1
-          fi
-
-          status_line="$(printf '%s\n' "$contract" | grep -E "^- Completion status: .+")"
-          status="${status_line#- Completion status: }"
-          status="$(printf '%s' "$status" | tr '[:upper:]' '[:lower:]' | sed -E 's/[[:space:]]+$//')"
-          case "$status" in
-            complete|incomplete|unconnected) ;;
-            *)
-              echo "Butler Completion Contract status must be complete, incomplete, or unconnected."
-              exit 1
-              ;;
-          esac
-
-          if printf '%s' "$body" | awk '/^## Unsatisfied Success Criteria/{flag=1; next} /^## /{flag=0} flag' | grep -Eiq '^[[:space:]]*(- )?none\.?[[:space:]]*$' && [ "$status" != "complete" ]; then
-            echo "PR claims no unsatisfied Success Criteria but Butler Completion Contract is not complete."
-            exit 1
-          fi
-
-          if [ "$status" = "complete" ]; then
-            e2e_line="$(printf '%s\n' "$contract" | grep -E "^- E2E evidence: .+")"
-            e2e_value="${e2e_line#- E2E evidence: }"
-            e2e_value="$(printf '%s' "$e2e_value" | tr '[:upper:]' '[:lower:]' | sed -E 's/[[:space:]]+$//')"
-            case "$e2e_value" in
-              ""|"none"|"none."|"not required"|"not required."|"not provided"|"not provided."|"todo"|"tbd")
-                echo "Butler Completion Contract status is complete but Butler-facing E2E evidence is missing."
-                exit 1
-                ;;
-            esac
-          fi
+          node scripts/validate-pr-body.mjs "$PR_BODY_FILE"
 
       - name: Guard Closes usage with E2E evidence pointers
         shell: bash

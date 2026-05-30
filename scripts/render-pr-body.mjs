@@ -68,7 +68,7 @@ function defaultButlerContract(status) {
       : "このPRスライスでは未接続。Butler-facing E2E は未実施です。";
 
   return {
-    primaryOwnerSurface: "Dashboard Butler。owner-facing の主経路は Dashboard Butler であり、Custom GPT ではありません。",
+    primaryOwnerSurface: "Dashboard Butler。",
     fallbackSurface: "Custom GPT は明示された fallback surface として扱います。主経路ではありません。",
     ownerGoal: "このPRが扱う owner-facing goal は Intent / Success Criteria に記載しています。",
     entrypoint: "このPRスライスでは未変更、またはまだ未接続です。",
