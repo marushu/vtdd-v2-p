@@ -12,14 +12,15 @@ Every PR should contain these sections in this order:
 3. `Unsatisfied Success Criteria`
 4. `Non-goal violations`
 5. `Dry-run Impact Report`
-6. `File / Line Hypotheses`
-7. `Hypothesis Retrospective`
-8. `Verification Evidence`
-9. `Butler Completion Contract`
-10. `Surface Update Checklist`
-11. `Related Constitution Rules`
-12. `Out-of-scope but NOT implemented`
-13. `Extra changes (if any)`
+6. `Execution Queue Delta`
+7. `File / Line Hypotheses`
+8. `Hypothesis Retrospective`
+9. `Verification Evidence`
+10. `Butler Completion Contract`
+11. `Surface Update Checklist`
+12. `Related Constitution Rules`
+13. `Out-of-scope but NOT implemented`
+14. `Extra changes (if any)`
 
 ## Section Purpose
 
@@ -73,14 +74,23 @@ the evidence is visible.
 ### `Butler Completion Contract`
 
 Record whether the change is actually reachable and governable from Butler as
-the owner-facing control plane. This section must identify the owner goal,
-Butler entrypoint, Action Schema exposure, runtime path, runner/runtime truth,
-authority boundary, Butler-facing E2E evidence, and completion status.
+the owner-facing control plane. Dashboard Butler is the primary owner surface.
+Custom GPT may be recorded only as a fallback surface unless the owner
+explicitly scopes a Custom GPT fallback PR. This section must identify the
+primary owner surface, fallback surface, owner goal, Butler entrypoint,
+Dashboard Butler natural-language path, Action Schema exposure, runtime path,
+runner/runtime truth, authority boundary, Butler-facing E2E evidence, and
+completion status.
 
 Use `complete` only when Butler can complete the owner-facing workflow and the
 PR provides Butler-facing E2E evidence. Use `incomplete` or `unconnected` when
 any required connection is missing. PRs that use `Closes #...` must be
 `complete`.
+
+`Action Schema exposure` records Custom GPT fallback compatibility or a
+non-primary setup requirement. It must not be written as the primary owner path
+for Dashboard Butler work. A PR that cannot explain the Dashboard Butler
+natural-language path must report the work as `unconnected` or `incomplete`.
 
 Canonical renderer defaults should already emit passable non-placeholder text
 for this section. Authors should edit those lines to become more specific, not

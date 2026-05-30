@@ -26,8 +26,11 @@ const REQUIRED_QUEUE_FIELDS = [
 ];
 
 const REQUIRED_BUTLER_FIELDS = [
+  "Primary owner surface",
+  "Fallback surface",
   "Owner goal",
   "Butler entrypoint",
+  "Dashboard Butler natural-language path",
   "Action Schema exposure",
   "Runtime path",
   "Runner/runtime truth",
@@ -118,6 +121,9 @@ function validatePrBody(body, options = {}) {
   }
 
   const completionStatus = normalizeValue(butlerFields["Completion status"]);
+  if (!templateMode) {
+    validateButlerSurfaceSemantics(butlerFields, errors);
+  }
   if (
     !templateMode &&
     completionStatus &&
@@ -168,6 +174,59 @@ function validatePrBody(body, options = {}) {
 
 function extractButlerFields(body) {
   return extractSectionFields(body, "## Butler Completion Contract");
+}
+
+function validateButlerSurfaceSemantics(fields, errors) {
+  const primarySurface = fields["Primary owner surface"] || "";
+  if (primarySurface && !isDashboardButlerPrimarySurface(primarySurface)) {
+    errors.push("Butler Completion Contract Primary owner surface must be Dashboard Butler only.");
+  }
+
+  const fallbackSurface = fields["Fallback surface"] || "";
+  if (fallbackSurface && /Custom GPT/i.test(fallbackSurface) && !/fallback|フォールバック/i.test(fallbackSurface)) {
+    errors.push("Butler Completion Contract Fallback surface may name Custom GPT only as fallback.");
+  }
+
+  const naturalLanguagePath = fields["Dashboard Butler natural-language path"] || "";
+  if (naturalLanguagePath && !describesDashboardNaturalLanguagePath(naturalLanguagePath)) {
+    errors.push("Butler Completion Contract Dashboard Butler natural-language path must describe the Dashboard Butler natural-language/chat entrypoint.");
+  }
+
+  const actionSchemaExposure = fields["Action Schema exposure"] || "";
+  if (actionSchemaExposure && claimsActionSchemaPrimaryPath(actionSchemaExposure)) {
+    errors.push("Butler Completion Contract Action Schema exposure must not be described as the primary owner path.");
+  }
+}
+
+function isDashboardButlerPrimarySurface(value) {
+  const normalized = normalizeValue(value);
+  if (!/^dashboard butler\b/.test(normalized)) {
+    return false;
+  }
+  return !/(custom gpt|action schema|mac codex|fallback|フォールバック)/i.test(value);
+}
+
+function describesDashboardNaturalLanguagePath(value) {
+  if (!/Dashboard Butler/i.test(value)) {
+    return false;
+  }
+  if (!/(自然文|通常チャット|natural-language|natural language|chat)/i.test(value)) {
+    return false;
+  }
+  if (/(internal route only|route only|api only|schema only|placeholder|todo|tbd|未定)/i.test(value)) {
+    return false;
+  }
+  return /(入口|entry|entrypoint|path|経路|到達|接続|説明|必須|受け|interprets?|reaches?|connects?)/i.test(value);
+}
+
+function claimsActionSchemaPrimaryPath(value) {
+  if (!/(Action Schema|operationId|Custom GPT)/i.test(value)) {
+    return false;
+  }
+  if (/(not\s+(the\s+)?primary|not\s+(a\s+)?main|isn'?t\s+(the\s+)?primary|isn'?t\s+(a\s+)?main|ではない|扱わない|主経路とは扱わない|primary.*ではありません|fallback|フォールバック)/i.test(value)) {
+    return false;
+  }
+  return /(primary|main path|main route|主経路|入口|entrypoint)/i.test(value);
 }
 
 function validateQueueFieldSemantics(fields, errors) {
