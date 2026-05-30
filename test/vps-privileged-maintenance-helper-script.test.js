@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { executeHelperPlan } from "../scripts/run-vps-privileged-maintenance-helper.mjs";
 
 const manifest = {
   version: 1,
@@ -22,6 +23,30 @@ const manifest = {
       expectedRuntimeTruth: ["before package check", "exit code", "after Chromium launch check"],
       createdAt: "2026-05-29T00:00:00.000Z",
       updatedAt: "2026-05-29T00:00:00.000Z"
+    }
+  ]
+};
+
+const nonRootManifest = {
+  version: 1,
+  host: "x85-131-245-163",
+  repository: "marushu/vtdd-v2-p",
+  updatedAt: "2026-05-30T00:00:00.000Z",
+  capabilities: [
+    {
+      id: "vps.runner.status.dry.run",
+      title: "Check VPS runner queue status without executing work",
+      status: "enabled",
+      commandClass: "vps_runner_status_dry_run",
+      riskLevel: "low",
+      workingDirectories: ["/home/vtdd-runner/vtdd-runner/repos/vtdd-v2-p"],
+      allowedArgs: ["node scripts/run-vps-runner.mjs --dry-run"],
+      affectedPaths: [],
+      redactionRules: ["no secrets"],
+      rollbackPlan: "no state change",
+      expectedRuntimeTruth: ["dry-run queue selection status"],
+      createdAt: "2026-05-30T00:00:00.000Z",
+      updatedAt: "2026-05-30T00:00:00.000Z"
     }
   ]
 };
@@ -128,4 +153,94 @@ test("VPS privileged maintenance helper script blocks execute mode when not root
   assert.equal(body.runtimeTruth.rootExecutionStarted, false);
   assert.equal(body.runtimeTruth.helperExecutionStarted, true);
   assert.equal(body.runtimeTruth.status, "blocked");
+});
+
+test("VPS privileged maintenance helper script blocks non-root run-as execution when helper is not root", () => {
+  const helperRequest = {
+    kind: "vps_privileged_maintenance_helper_request",
+    status: "ready_for_vps_helper",
+    requestId: "vps-maintenance-helper-request:non-root",
+    vpsProposalId: "vps-maintenance-proposal:non-root",
+    approvalGrantId: "approval:non-root",
+    host: "x85-131-245-163",
+    repository: "marushu/vtdd-v2-p",
+    relatedIssue: 637,
+    operation: "review",
+    capability: nonRootManifest.capabilities[0]
+  };
+
+  const result = spawnSync(
+    process.execPath,
+    ["scripts/run-vps-privileged-maintenance-helper.mjs", "--execute"],
+    {
+      input: JSON.stringify({
+        manifest: nonRootManifest,
+        helperRequest,
+        now: "2026-05-30T00:00:00.000Z"
+      }),
+      encoding: "utf8"
+    }
+  );
+
+  assert.equal(result.status, 1);
+  const body = JSON.parse(result.stdout);
+  assert.equal(body.ok, false);
+  assert.equal(body.error, "root_required_for_run_as");
+  assert.equal(body.runtimeTruth.rootExecutionStarted, false);
+  assert.equal(body.runtimeTruth.helperExecutionStarted, true);
+  assert.equal(body.runtimeTruth.commandExecutionBoundary.requiresRoot, false);
+});
+
+test("VPS privileged maintenance helper executes non-root capabilities through fixed vtdd-runner run-as argv", () => {
+  const helperPlan = {
+    host: "x85-131-245-163",
+    repository: "marushu/vtdd-v2-p",
+    relatedIssue: 637,
+    operation: "review",
+    capability: nonRootManifest.capabilities[0],
+    commandPreview: {
+      executionBoundary: {
+        commandClass: "vps_runner_status_dry_run",
+        riskLevel: "low",
+        requiresRoot: false,
+        executable: "node",
+        args: ["scripts/run-vps-runner.mjs", "--dry-run"],
+        shell: false
+      }
+    }
+  };
+  const spawnCalls = [];
+
+  const result = executeHelperPlan({
+    helperPlan,
+    timeoutMs: 1000,
+    getuid: () => 0,
+    nowFn: () => new Date("2026-05-30T00:00:00.000Z"),
+    spawnSyncFn: (executable, args, options) => {
+      spawnCalls.push({ executable, args, options });
+      return {
+        status: 0,
+        stdout: "dry-run queue empty",
+        stderr: ""
+      };
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(spawnCalls.length, 1);
+  assert.equal(spawnCalls[0].executable, "/usr/sbin/runuser");
+  assert.deepEqual(spawnCalls[0].args, [
+    "-u",
+    "vtdd-runner",
+    "--",
+    "node",
+    "scripts/run-vps-runner.mjs",
+    "--dry-run"
+  ]);
+  assert.equal(spawnCalls[0].options.shell, false);
+  assert.equal(result.runtimeTruth.status, "completed");
+  assert.equal(result.runtimeTruth.runAsUser, "vtdd-runner");
+  assert.equal(result.runtimeTruth.rootExecutionStarted, false);
+  assert.equal(result.runtimeTruth.helperStartedAsRoot, true);
+  assert.equal(result.runtimeTruth.exitCode, 0);
 });

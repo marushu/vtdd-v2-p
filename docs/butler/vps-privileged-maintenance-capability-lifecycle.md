@@ -100,11 +100,19 @@ registry binding succeeds. Execution must remain separate from the pure Worker
 planning contract: the Worker may report `execute_ready`, but root command
 execution belongs to the VPS root-owned helper path. The helper must block
 before spawning when it is not running as root for a root-required capability,
-must keep non-root run-as commands blocked until a run-as contract exists, must
-use `shell:false`, and must return redacted runtime truth with before/after,
-exit code, and next-action evidence. Adding such a script path is still not
-Butler Completion Gate success until Dashboard Butler / Custom GPT Action Schema
-and VPS runtime observation can reach it with E2E evidence.
+must execute non-root capabilities only through the fixed `vtdd-runner` run-as
+contract, must use `shell:false`, and must return redacted runtime truth with
+before/after, exit code, run-as user, and next-action evidence. Runtime truth
+must distinguish root-owned helper startup from root-required command execution:
+`helperStartedAsRoot=true` means the helper was allowed to perform the run-as
+transition, while `rootExecutionStarted=true` is reserved for capabilities whose
+registered command itself must run as root. The non-root run-as contract is
+intentionally narrow: the root-owned helper must start as root, must invoke
+`/usr/sbin/runuser -u vtdd-runner -- <registered argv>`, and must keep default
+helper registry argv validation as the source of executable truth. Adding such
+a script path is still not Butler Completion Gate success until Dashboard
+Butler / Custom GPT Action Schema and VPS runtime observation can reach it with
+E2E evidence.
 
 The declared VPS runner pickup contract is a GitHub Issue comment with marker
 `<!-- vtdd:vps-privileged-maintenance-execution:<executionId> -->`. The payload

@@ -2,6 +2,7 @@
 
 import fs from "node:fs/promises";
 import { spawnSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
 
 import { planVpsPrivilegedMaintenanceHelperExecution } from "../src/core/index.js";
 
@@ -9,6 +10,7 @@ const DEFAULT_HELPER_INSTALL_PATH = "/usr/local/sbin/vtdd-vps-maintenance-helper
 const DEFAULT_MANIFEST_PATH = "/etc/vtdd/privileged-maintenance-capabilities.json";
 const DEFAULT_SUDOERS_PATH = "/etc/sudoers.d/vtdd-vps-maintenance-helper";
 const DEFAULT_RUNNER_USER = "vtdd-runner";
+const DEFAULT_RUNUSER_PATH = "/usr/sbin/runuser";
 
 function parseArgs(argv) {
   const result = {
@@ -150,10 +152,18 @@ async function auditInstall(args) {
   };
 }
 
-function executeHelperPlan({ helperPlan, timeoutMs }) {
+export function executeHelperPlan({
+  helperPlan,
+  timeoutMs,
+  getuid = process.getuid,
+  spawnSyncFn = spawnSync,
+  runuserPath = DEFAULT_RUNUSER_PATH,
+  nowFn = () => new Date()
+}) {
   const boundary = helperPlan?.commandPreview?.executionBoundary ?? {};
   const workingDirectory = String(helperPlan?.capability?.workingDirectories?.[0] ?? "").trim();
-  const now = new Date().toISOString();
+  const helperStartedAsRoot = getuid?.() === 0;
+  const now = nowFn().toISOString();
   const baseTruth = {
     ok: false,
     kind: "vps_privileged_maintenance_helper_execution",
@@ -174,22 +184,24 @@ function executeHelperPlan({ helperPlan, timeoutMs }) {
     redactedLogSummary: "",
     rootExecutionStarted: false,
     helperExecutionStarted: true,
+    helperStartedAsRoot,
     redacted: true,
     updatedAt: now
   };
 
-  if (boundary.requiresRoot !== true) {
+  const runAsUser = boundary.requiresRoot === true ? "root" : DEFAULT_RUNNER_USER;
+  if (boundary.requiresRoot !== true && !helperStartedAsRoot) {
     return {
       ok: false,
-      error: "vps_helper_non_root_execution_unconnected",
-      issues: ["non-root helper execution requires a run-as user contract before it can be executed safely"],
+      error: "root_required_for_run_as",
+      issues: ["root-owned helper must start as root before dropping privileges for non-root helper execution"],
       runtimeTruth: {
         ...baseTruth,
-        redactedLogSummary: "blocked before execution; non-root run-as contract is not connected"
+        redactedLogSummary: "blocked before execution; root-owned helper was not running as root for run-as transition"
       }
     };
   }
-  if (process.getuid?.() !== 0) {
+  if (!helperStartedAsRoot) {
     return {
       ok: false,
       error: "root_required",
@@ -214,8 +226,10 @@ function executeHelperPlan({ helperPlan, timeoutMs }) {
 
   const executable = String(boundary.executable || "").trim();
   const args = Array.isArray(boundary.args) ? boundary.args.map((part) => String(part)) : [];
+  const spawnExecutable = boundary.requiresRoot === true ? executable : runuserPath;
+  const spawnArgs = boundary.requiresRoot === true ? args : ["-u", runAsUser, "--", executable, ...args];
   const timeout = normalizeTimeoutMs(timeoutMs);
-  const spawned = spawnSync(executable, args, {
+  const spawned = spawnSyncFn(spawnExecutable, spawnArgs, {
     cwd: workingDirectory,
     encoding: "utf8",
     shell: false,
@@ -226,7 +240,7 @@ function executeHelperPlan({ helperPlan, timeoutMs }) {
       CI: process.env.CI || "1"
     }
   });
-  const completedAt = new Date().toISOString();
+  const completedAt = nowFn().toISOString();
   const exitCode = typeof spawned.status === "number" ? spawned.status : spawned.error ? 124 : 1;
   return {
     ok: exitCode === 0,
@@ -234,13 +248,14 @@ function executeHelperPlan({ helperPlan, timeoutMs }) {
       ...baseTruth,
       ok: exitCode === 0,
       status: exitCode === 0 ? "completed" : "failed",
+      runAsUser,
       after: {
         completedAt,
         timedOut: spawned.error?.code === "ETIMEDOUT"
       },
       exitCode,
       redactedLogSummary: summarizeProcessOutput(spawned),
-      rootExecutionStarted: true,
+      rootExecutionStarted: boundary.requiresRoot === true,
       updatedAt: completedAt
     }
   };
@@ -315,4 +330,6 @@ async function main() {
   }
 }
 
-await main();
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+  await main();
+}
