@@ -242,10 +242,11 @@ export function executeHelperPlan({
   }
   const spawnExecutable = boundary.requiresRoot === true ? executable : runuserPath;
   const runAsEnvArgs = boundary.requiresRoot === true ? [] : buildRunAsEnvArgs({ runAsUser, runAsUid });
+  const registeredExecutable = resolveRegisteredExecutableForSpawn(executable);
   const spawnArgs =
     boundary.requiresRoot === true
       ? args
-      : ["-u", runAsUser, "--", envPath, ...runAsEnvArgs, executable, ...args];
+      : ["-u", runAsUser, "--", envPath, ...runAsEnvArgs, registeredExecutable, ...args];
   const timeout = normalizeTimeoutMs(timeoutMs);
   const spawned = spawnSyncFn(spawnExecutable, spawnArgs, {
     cwd: workingDirectory,
@@ -275,6 +276,7 @@ export function executeHelperPlan({
       redactedLogSummary: summarizeProcessOutput(spawned),
       rootExecutionStarted: boundary.requiresRoot === true,
       runAsUserUid: runAsUid || null,
+      resolvedExecutable: registeredExecutable,
       updatedAt: completedAt
     }
   };
@@ -297,10 +299,18 @@ function defaultResolveRunAsUid(runAsUser) {
 function buildRunAsEnvArgs({ runAsUser, runAsUid }) {
   return [
     `HOME=/home/${runAsUser}`,
+    "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
     `XDG_RUNTIME_DIR=/run/user/${runAsUid}`,
     `DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/${runAsUid}/bus`,
     "CI=1"
   ];
+}
+
+function resolveRegisteredExecutableForSpawn(executable) {
+  if (executable === "node") {
+    return process.execPath;
+  }
+  return executable;
 }
 
 function ownerLabel(stat) {
