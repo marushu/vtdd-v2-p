@@ -12964,6 +12964,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     url?.searchParams?.get("repositoryInput") || url?.searchParams?.get("repository")
   );
   const dashboardIssueNumber = normalizePositiveInteger(url?.searchParams?.get("issueNumber"));
+  const requestedChatThreadId = normalizeDashboardThreadId(url?.searchParams?.get("threadId") || url?.searchParams?.get("thread_id"));
   const dashboardTargetLabel = repositoryInput ? `この作業: ${repositoryInput}` : "作業対象 repo 未指定";
   const targetStatusMarkup = repositoryInput
     ? `<p><strong>${escapeDashboardHtml(repositoryInput)}</strong></p>
@@ -12979,10 +12980,11 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             </div>
           </form>`;
   const encodedRepository = encodeURIComponent(repositoryInput);
-  const chatThreadId = `dashboard-main-${(repositoryInput || "unresolved").replace(/[^a-z0-9_.-]+/gi, "-")}`;
+  const chatThreadId = requestedChatThreadId || `dashboard-main-${(repositoryInput || "unresolved").replace(/[^a-z0-9_.-]+/gi, "-")}`;
   const socketOrigin = origin.replace(/^http/i, "ws");
-  const currentDashboardReturnPath = sanitizeDashboardPreAuthReturnPath(
-    `${url?.pathname || "/dashboard"}${url?.search || ""}`
+  const currentDashboardReturnPath = withDashboardReturnThreadId(
+    sanitizeDashboardPreAuthReturnPath(`${url?.pathname || "/dashboard"}${url?.search || ""}`),
+    chatThreadId
   );
   const dashboardSignInUrl = `${origin}/v2/approval/passkey/operator?mode=dashboard&phase=execution&actionType=read&highRiskKind=dashboard_access&dashboardReturnPath=${encodeURIComponent(currentDashboardReturnPath)}`;
   const latestDeployEvent = await retrieveLatestDashboardEvent({
@@ -14729,14 +14731,34 @@ function sanitizeDashboardPreAuthReturnPath(value) {
     return "/dashboard";
   }
   const allowedSearchParams = new URLSearchParams();
-  for (const key of ["repository", "repositoryInput", "issueNumber"]) {
-    const rawValue = normalizeDashboardReturnQueryValue(parsed.searchParams.get(key));
+  for (const key of ["repository", "repositoryInput", "issueNumber", "threadId"]) {
+    const rawValue = key === "threadId"
+      ? normalizeDashboardThreadId(parsed.searchParams.get(key))
+      : normalizeDashboardReturnQueryValue(parsed.searchParams.get(key));
     if (rawValue) {
       allowedSearchParams.set(key, rawValue);
     }
   }
   const query = allowedSearchParams.toString();
   return query ? `${parsed.pathname}?${query}` : parsed.pathname;
+}
+
+function withDashboardReturnThreadId(returnPath, threadId) {
+  const sanitizedReturnPath = sanitizeDashboardPreAuthReturnPath(returnPath);
+  const normalizedThreadId = normalizeDashboardThreadId(threadId);
+  if (!normalizedThreadId) {
+    return sanitizedReturnPath;
+  }
+  let parsed;
+  try {
+    parsed = new URL(sanitizedReturnPath, "https://dashboard.local");
+  } catch {
+    return sanitizedReturnPath;
+  }
+  if (!parsed.searchParams.get("threadId")) {
+    parsed.searchParams.set("threadId", normalizedThreadId);
+  }
+  return `${parsed.pathname}${parsed.search}`;
 }
 
 function normalizeDashboardReturnQueryValue(value) {

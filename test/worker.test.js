@@ -869,6 +869,27 @@ test("worker preserves dashboard repository context across auth fallback links",
   assert.equal(body.includes("repositoryInput="), false);
 });
 
+test("worker preserves dashboard thread context across auth fallback links", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/dashboard?threadId=dashboard-main-unresolved&runId=private-run")
+  );
+  assert.equal(response.status, 401);
+  const body = await response.text();
+  assert.equal(
+    body.includes(
+      'href="https://example.com/cdn-cgi/access/login?redirect_url=https%3A%2F%2Fexample.com%2Fdashboard%3FthreadId%3Ddashboard-main-unresolved"'
+    ),
+    true
+  );
+  assert.equal(
+    body.includes(
+      'class="button primary" href="https://example.com/v2/approval/passkey/operator?mode=dashboard&amp;phase=execution&amp;actionType=read&amp;highRiskKind=dashboard_access&amp;dashboardReturnPath=%2Fdashboard%3FthreadId%3Ddashboard-main-unresolved"'
+    ),
+    true
+  );
+  assert.equal(body.includes("runId=private-run"), false);
+});
+
 test("worker rejects unlisted dashboard subpaths before they can become public pages", async () => {
   const response = await worker.fetch(new Request("https://example.com/dashboard/future-page"));
   assert.equal(response.status, 401);
@@ -3778,6 +3799,27 @@ test("worker serves dashboard chat-first shell with debug and ops surfaces isola
   assert.equal(body.includes("<summary>開発/運用</summary>"), true);
   assert.equal(body.includes("<summary>Runtime surfaces</summary>"), false);
   assert.equal(body.includes("RAG を読む"), false);
+});
+
+test("worker uses explicit dashboard thread id for chat shell and passkey return", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.com/dashboard?repository=marushu%2Fvtdd-v2-p&threadId=dashboard-main-unresolved", {
+      headers: dashboardAccessHeaders
+    }),
+    dashboardAccessEnv
+  );
+  assert.equal(response.status, 200);
+  const body = await response.text();
+  assert.equal(body.includes('data-thread-id="dashboard-main-unresolved"'), true);
+  assert.equal(body.includes('data-thread-endpoint="https://example.com/v2/dashboard/chat/dashboard-main-unresolved"'), true);
+  assert.equal(body.includes('data-socket-endpoint="wss://example.com/v2/dashboard/chat/dashboard-main-unresolved/ws"'), true);
+  assert.equal(body.includes('data-thread-id="dashboard-main-marushu-vtdd-v2-p"'), false);
+  assert.equal(
+    body.includes(
+      'dashboardReturnPath=%2Fdashboard%3Frepository%3Dmarushu%252Fvtdd-v2-p%26threadId%3Ddashboard-main-unresolved'
+    ),
+    true
+  );
 });
 
 test("worker serves dashboard notification center for recent events across repositories", async () => {
