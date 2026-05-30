@@ -26,6 +26,30 @@ const manifest = {
   ]
 };
 
+const nonRootManifest = {
+  version: 1,
+  host: "x85-131-245-163",
+  repository: "marushu/vtdd-v2-p",
+  updatedAt: "2026-05-30T00:00:00.000Z",
+  capabilities: [
+    {
+      id: "vps.runner.status.dry.run",
+      title: "Check VPS runner queue status without executing work",
+      status: "enabled",
+      commandClass: "vps_runner_status_dry_run",
+      riskLevel: "low",
+      workingDirectories: ["/home/vtdd-runner/vtdd-runner/repos/vtdd-v2-p"],
+      allowedArgs: ["node scripts/run-vps-runner.mjs --dry-run"],
+      affectedPaths: [],
+      redactionRules: ["no secrets"],
+      rollbackPlan: "no state change",
+      expectedRuntimeTruth: ["dry-run queue selection status"],
+      createdAt: "2026-05-30T00:00:00.000Z",
+      updatedAt: "2026-05-30T00:00:00.000Z"
+    }
+  ]
+};
+
 test("VPS privileged maintenance helper script dry-runs a bounded helper request", () => {
   const helperRequest = {
     kind: "vps_privileged_maintenance_helper_request",
@@ -128,4 +152,40 @@ test("VPS privileged maintenance helper script blocks execute mode when not root
   assert.equal(body.runtimeTruth.rootExecutionStarted, false);
   assert.equal(body.runtimeTruth.helperExecutionStarted, true);
   assert.equal(body.runtimeTruth.status, "blocked");
+});
+
+test("VPS privileged maintenance helper script blocks non-root run-as execution when helper is not root", () => {
+  const helperRequest = {
+    kind: "vps_privileged_maintenance_helper_request",
+    status: "ready_for_vps_helper",
+    requestId: "vps-maintenance-helper-request:non-root",
+    vpsProposalId: "vps-maintenance-proposal:non-root",
+    approvalGrantId: "approval:non-root",
+    host: "x85-131-245-163",
+    repository: "marushu/vtdd-v2-p",
+    relatedIssue: 637,
+    operation: "review",
+    capability: nonRootManifest.capabilities[0]
+  };
+
+  const result = spawnSync(
+    process.execPath,
+    ["scripts/run-vps-privileged-maintenance-helper.mjs", "--execute"],
+    {
+      input: JSON.stringify({
+        manifest: nonRootManifest,
+        helperRequest,
+        now: "2026-05-30T00:00:00.000Z"
+      }),
+      encoding: "utf8"
+    }
+  );
+
+  assert.equal(result.status, 1);
+  const body = JSON.parse(result.stdout);
+  assert.equal(body.ok, false);
+  assert.equal(body.error, "root_required_for_run_as");
+  assert.equal(body.runtimeTruth.rootExecutionStarted, false);
+  assert.equal(body.runtimeTruth.helperExecutionStarted, true);
+  assert.equal(body.runtimeTruth.commandExecutionBoundary.requiresRoot, false);
 });

@@ -9,6 +9,7 @@ const DEFAULT_HELPER_INSTALL_PATH = "/usr/local/sbin/vtdd-vps-maintenance-helper
 const DEFAULT_MANIFEST_PATH = "/etc/vtdd/privileged-maintenance-capabilities.json";
 const DEFAULT_SUDOERS_PATH = "/etc/sudoers.d/vtdd-vps-maintenance-helper";
 const DEFAULT_RUNNER_USER = "vtdd-runner";
+const DEFAULT_RUNUSER_PATH = "/usr/sbin/runuser";
 
 function parseArgs(argv) {
   const result = {
@@ -178,14 +179,15 @@ function executeHelperPlan({ helperPlan, timeoutMs }) {
     updatedAt: now
   };
 
-  if (boundary.requiresRoot !== true) {
+  const runAsUser = boundary.requiresRoot === true ? "root" : DEFAULT_RUNNER_USER;
+  if (boundary.requiresRoot !== true && process.getuid?.() !== 0) {
     return {
       ok: false,
-      error: "vps_helper_non_root_execution_unconnected",
-      issues: ["non-root helper execution requires a run-as user contract before it can be executed safely"],
+      error: "root_required_for_run_as",
+      issues: ["root-owned helper must start as root before dropping privileges for non-root helper execution"],
       runtimeTruth: {
         ...baseTruth,
-        redactedLogSummary: "blocked before execution; non-root run-as contract is not connected"
+        redactedLogSummary: "blocked before execution; root-owned helper was not running as root for run-as transition"
       }
     };
   }
@@ -214,8 +216,10 @@ function executeHelperPlan({ helperPlan, timeoutMs }) {
 
   const executable = String(boundary.executable || "").trim();
   const args = Array.isArray(boundary.args) ? boundary.args.map((part) => String(part)) : [];
+  const spawnExecutable = boundary.requiresRoot === true ? executable : DEFAULT_RUNUSER_PATH;
+  const spawnArgs = boundary.requiresRoot === true ? args : ["-u", runAsUser, "--", executable, ...args];
   const timeout = normalizeTimeoutMs(timeoutMs);
-  const spawned = spawnSync(executable, args, {
+  const spawned = spawnSync(spawnExecutable, spawnArgs, {
     cwd: workingDirectory,
     encoding: "utf8",
     shell: false,
@@ -234,13 +238,14 @@ function executeHelperPlan({ helperPlan, timeoutMs }) {
       ...baseTruth,
       ok: exitCode === 0,
       status: exitCode === 0 ? "completed" : "failed",
+      runAsUser,
       after: {
         completedAt,
         timedOut: spawned.error?.code === "ETIMEDOUT"
       },
       exitCode,
       redactedLogSummary: summarizeProcessOutput(spawned),
-      rootExecutionStarted: true,
+      rootExecutionStarted: boundary.requiresRoot === true,
       updatedAt: completedAt
     }
   };
