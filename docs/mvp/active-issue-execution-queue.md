@@ -84,11 +84,12 @@ Last rebuilt from GitHub runtime truth: 2026-05-31
   closure still requires human GO.
 - 2026-05-31 Issue #579 received production Dashboard Butler draft-retention and
   same-thread response evidence. Owner live evidence from 2026-05-30 16:00-19:00
-  JST is accepted as practical Mac Chrome / Cloudflare Access stability evidence.
-  Attachment candidate retention is split to Issue #498 / Issue #587 rather than
-  keeping Issue #579 open for media scope alone. Issue #579 is now a close-ready
-  candidate unless the owner requires one final iPhone/PWA lock/suspend evidence
-  item before closure.
+  JST is accepted as practical Mac Chrome / Cloudflare Access stability evidence,
+  not as a substitute for iPhone/PWA lock/suspend evidence. Attachment candidate
+  retention is split to Issue #498 / Issue #587 rather than keeping Issue #579
+  open for media scope alone. Issue #579 remains an evidence gap until final
+  iPhone/PWA lock/suspend recovery evidence or human scope judgment says that
+  column is satisfied.
 - 2026-05-31 Issue #689 was created from owner input about LINE-like reply
   target previews. It is classified as `QUEUE` and must not preempt the current
   Now item.
@@ -105,9 +106,9 @@ Last rebuilt from GitHub runtime truth: 2026-05-31
 
 - Issue #590: app-server turn timeout remains active after Issue #637 no longer
   blocks iPhone/PWA-only privileged recovery.
-- Issue #579 / Issue #654 closure pass: after the current root slice no longer
-  needs execution focus, close only if human GO is present and the mapped
-  evidence comments remain sufficient.
+- Issue #654 closure pass: after the current root slice no longer needs
+  execution focus, close only if human GO is present and the mapped evidence
+  comments remain sufficient.
 
 ## Root Blockers
 
@@ -249,10 +250,11 @@ Evidence gaps are active. They are not deferred out of scope.
   Actions run, but live iPhone/PWA notification tap, sound, badge, and recovery
   evidence remain incomplete.
 - Issue #579: PR #686, production draft-retention evidence, production
-  same-thread response evidence, and owner live evidence make it a close-ready
-  candidate for text input / recovery. If kept open, the remaining blocker should
-  be stated as final iPhone/PWA lock/suspend evidence only; attachment
-  candidate/reselect UX belongs to Issue #498 / Issue #587.
+  same-thread response evidence, and owner live evidence satisfy substantial
+  text input / recovery evidence. It remains an evidence gap for final
+  iPhone/PWA lock/suspend recovery unless the owner explicitly narrows or accepts
+  that column. Attachment candidate/reselect UX belongs to Issue #498 / Issue
+  #587 and should not keep #579 open by itself.
 - Issue #654: PR #685 removed the old blocked reply from normal Dashboard chat,
   and PR #690 added reconnect/resume continuation for fallback-saved owner
   messages. Production evidence confirmed normal send, no stale blocked message,
@@ -322,7 +324,7 @@ These Issues remain active and required, but they do not preempt the current
 - Issue #595: remains open because the runtime auto-classification path for
   Butler / VPS Codex CLI is not connected yet. This PR only refreshes the
   durable queue snapshot and intentionally preserves the active Now/Next order
-  instead of letting #689 or close-ready evidence work replace it.
+  instead of letting #689 or evidence-only close-readiness work replace it.
 - Decide in a future bounded slice whether `docs/mvp/active-issue-execution-queue.md`
   should be generated from GitHub runtime truth or remain hand-curated with tests.
 
