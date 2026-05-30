@@ -4901,11 +4901,23 @@ test("worker ingests VPS runner event into notifications and Butler chat thread"
   assert.equal(eventBody.event.repository, "marushu/vtdd-v2-p");
   assert.equal(eventBody.event.runId, "remote-codex-issue452-chat");
   assert.equal(eventBody.event.status, "running");
+  assert.equal(eventBody.event.pwaNotificationStatus, "pwa_notification_unavailable");
+  assert.equal(eventBody.event.pwaNotificationError, "dashboard_push_subscription_store_unavailable");
+  assert.equal(eventBody.event.pwaNotificationAttempted, 0);
+  assert.equal(eventBody.event.pwaNotificationDelivered, 0);
   assert.equal(eventBody.event.runUrl.includes("secret-must-not-persist"), false);
   assert.equal(JSON.stringify(eventBody).includes("approval:15b6f20d"), false);
   assert.equal(JSON.stringify(eventBody).includes("secret-must-not-persist"), false);
   assert.equal(eventBody.threadId, "dashboard-main-marushu-vtdd-v2-p");
   assert.equal(eventBody.webSocketBroadcast, true);
+  assert.equal(eventBody.webPush.ok, false);
+  assert.equal(eventBody.webPush.error, "dashboard_push_subscription_store_unavailable");
+  const storedRunnerEvent = await eventStore.latest({
+    kind: "vps_runner_execution",
+    repository: "marushu/vtdd-v2-p"
+  });
+  assert.equal(storedRunnerEvent.pwaNotificationStatus, "pwa_notification_unavailable");
+  assert.equal(storedRunnerEvent.pwaNotificationError, "dashboard_push_subscription_store_unavailable");
   assert.equal(eventBody.messages[0].role, "runner");
   assert.equal(eventBody.messages[0].status, "thinking");
   assert.equal(eventBody.messages[0].relatedIssue, 452);

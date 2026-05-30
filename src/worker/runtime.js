@@ -4151,13 +4151,22 @@ async function handleVpsRunnerEventRequest(request, env) {
     });
   }
 
-  await eventStore.put(event.event);
   const webPush = await dispatchDashboardWebPushForEvent(env, event.event);
+  const eventWithNotificationTruth = normalizeDashboardEventRecord({
+    ...event.event,
+    pwaNotificationStatus: webPush.ok ? "sent" : "pwa_notification_unavailable",
+    pwaNotificationError: webPush.ok ? null : webPush.error || "dashboard_web_push_unavailable",
+    pwaNotificationReason: webPush.ok ? null : webPush.reason || null,
+    pwaNotificationAttempted: webPush.attempted ?? 0,
+    pwaNotificationDelivered: webPush.delivered ?? 0,
+    updatedAt: new Date().toISOString()
+  });
+  await eventStore.put(eventWithNotificationTruth);
   let messages;
   try {
     messages = await chatStore.appendMany(event.threadId, [event.chatMessage]);
   } catch (error) {
-    await eventStore.delete(event.event.id);
+    await eventStore.delete(eventWithNotificationTruth.id);
     return json(502, {
       ok: false,
       error: "dashboard_event_chat_append_failed",
@@ -4171,7 +4180,7 @@ async function handleVpsRunnerEventRequest(request, env) {
   const webSocketBroadcast = await notifyDashboardChatRoom({ env, threadId: event.threadId, messages });
   return json(202, {
     ok: true,
-    event: event.event,
+    event: eventWithNotificationTruth,
     threadId: event.threadId,
     messages,
     webSocketBroadcast,
