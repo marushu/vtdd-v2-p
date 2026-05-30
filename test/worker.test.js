@@ -8267,6 +8267,52 @@ test("worker dry-runs VPS maintenance helper request without root execution", as
   assert.equal(executionBody.runtimeTruth.status, "ready_for_vps_helper_execution");
   assert.equal(executionBody.runtimeTruth.rootExecutionStarted, false);
   assert.equal(executionBody.runtimeTruth.helperExecutionStarted, false);
+
+  const githubCalls = [];
+  const queueResponse = await worker.fetch(
+    new Request("https://example.com/v2/vps/privileged-maintenance/helper-execution-queues", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        repository: "marushu/vtdd-v2-p",
+        issueNumber: 637,
+        executionId: "vps-maint-test-637",
+        approvalActor: "requester",
+        executionEnvelope: executionBody.executionEnvelope
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_test",
+      GITHUB_API_FETCH: async (url, init) => {
+        githubCalls.push({ url, init });
+        return new Response(
+          JSON.stringify({
+            id: 63701,
+            html_url: "https://github.com/marushu/vtdd-v2-p/issues/637#issuecomment-63701"
+          }),
+          { status: 201, headers: { "content-type": "application/json" } }
+        );
+      }
+    }
+  );
+
+  assert.equal(queueResponse.status, 200);
+  const queueBody = await queueResponse.json();
+  assert.equal(queueBody.ok, true);
+  assert.equal(queueBody.execution.executionId, "vps-maint-test-637");
+  assert.equal(queueBody.execution.transport, "vps_privileged_maintenance_helper");
+  assert.equal(queueBody.execution.queueCommentId, 63701);
+  assert.equal(queueBody.runtimeTruth.kind, "vps_privileged_maintenance_helper_execution_queue");
+  assert.equal(queueBody.runtimeTruth.status, "queued_for_vps_helper_execution");
+  assert.equal(queueBody.runtimeTruth.rootExecutionStarted, false);
+  assert.equal(queueBody.runtimeTruth.helperExecutionStarted, false);
+  assert.equal(githubCalls.length, 1);
+  assert.equal(githubCalls[0].url.includes("/repos/marushu/vtdd-v2-p/issues/637/comments"), true);
+  const queueCommentBody = JSON.parse(githubCalls[0].init.body).body;
+  assert.equal(queueCommentBody.includes("vtdd:vps-privileged-maintenance-execution:vps-maint-test-637"), true);
+  assert.equal(queueCommentBody.includes('"transport": "vps_privileged_maintenance_helper"'), true);
+  assert.equal(queueCommentBody.includes('"helperExecutionInput"'), true);
 });
 
 test("worker retrieves VPS maintenance install inventory without root execution", async () => {
