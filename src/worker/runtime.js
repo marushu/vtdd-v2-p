@@ -9563,6 +9563,7 @@ async function buildDashboardChatTurn(payload, options = {}) {
     },
     { threadId }
   );
+  const hasVpsPrivilegedMaintenanceIntent = detectDashboardVpsPrivilegedMaintenanceIntent({ text });
   const butlerMessage = normalizeDashboardChatMessage(
     {
       threadId,
@@ -9570,7 +9571,9 @@ async function buildDashboardChatTurn(payload, options = {}) {
       repository,
       relatedIssue,
       status: "blocked",
-      text: buildDashboardAppServerNotConnectedReply({ repository, relatedIssue }),
+      text: hasVpsPrivilegedMaintenanceIntent
+        ? buildDashboardVpsPrivilegedMaintenanceReply({ repository, relatedIssue })
+        : buildDashboardAppServerNotConnectedReply({ repository, relatedIssue }),
       createdAt: new Date(Date.parse(now) + 1).toISOString()
     },
     { threadId }
@@ -9583,6 +9586,42 @@ async function buildDashboardChatTurn(payload, options = {}) {
     threadId,
     messages: [ownerMessage, butlerMessage].filter(Boolean)
   };
+}
+
+function detectDashboardVpsPrivilegedMaintenanceIntent({ text } = {}) {
+  const normalized = normalizeText(text);
+  if (!normalized) return false;
+  const lower = normalized.toLowerCase();
+  const hasVpsMaintenance =
+    lower.includes("vps") &&
+    (lower.includes("privileged") ||
+      lower.includes("maintenance") ||
+      lower.includes("root") ||
+      lower.includes("sudo") ||
+      lower.includes("helper") ||
+      lower.includes("passkey"));
+  const hasJapaneseMaintenance =
+    (lower.includes("root") || lower.includes("sudo") || lower.includes("helper")) &&
+    (normalized.includes("保守") || normalized.includes("復旧") || normalized.includes("承認"));
+  return hasVpsMaintenance || hasJapaneseMaintenance;
+}
+
+function buildDashboardVpsPrivilegedMaintenanceReply({ repository, relatedIssue } = {}) {
+  const repoPhrase = repository ? `対象 repo: ${repository}` : "対象 repo: 未指定";
+  const issuePhrase = relatedIssue ? `関連 Issue: #${relatedIssue}` : "関連 Issue: 未指定";
+  return [
+    "VPS privileged maintenance intent として受け取りました。",
+    "",
+    "Dashboard Butler 側で owner-facing に扱う境界は、proposal → scoped passkey approval → helper request → dry-run / execution handoff → VPS runner queue です。",
+    "",
+    `- ${repoPhrase}`,
+    `- ${issuePhrase}`,
+    "- authority: root / sudo 実行は passkey approval なしでは開始しません。",
+    "- runtime truth: helper handoff / queue は rootExecutionStarted=false, helperExecutionStarted=false を返す必要があります。",
+    "- next action: passkey scope に host / repository / capability / impact / expiry を表示してから、VPS runner が root-owned helper へ渡します。",
+    "",
+    "現状: Dashboard Butler はこの intent を VPS privileged maintenance flow として説明できます。ただし live root 実行の完了 claim は、passkey approval と VPS runner pickup の E2E evidence が揃うまで禁止です。"
+  ].join("\n");
 }
 
 function buildDashboardAppServerNotConnectedReply({ repository, relatedIssue } = {}) {

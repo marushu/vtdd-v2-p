@@ -2493,6 +2493,38 @@ test("worker does not dispatch dashboard chat to the VPS runner queue", async ()
   assert.equal(retrieveBody.messages[1].status, "blocked");
 });
 
+test("worker explains VPS privileged maintenance intent from Dashboard Butler chat", async () => {
+  const store = createInMemoryDashboardChatStore();
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/chat/messages", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        threadId: "dashboard-main-marushu-vtdd-v2-p",
+        repository: "marushu/vtdd-v2-p",
+        issueNumber: 637,
+        text: "Dashboard Butler から VPS helper queue まで到達できるか確認。root 実行は passkey 境界で止める。"
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      DASHBOARD_CHAT_STORE: store
+    }
+  );
+
+  assert.equal(response.status, 202);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.execution, null);
+  assert.equal(body.messages[1].role, "butler");
+  assert.equal(body.messages[1].status, "blocked");
+  assert.match(body.messages[1].text, /VPS privileged maintenance intent/);
+  assert.match(body.messages[1].text, /scoped passkey approval/);
+  assert.match(body.messages[1].text, /rootExecutionStarted=false/);
+  assert.match(body.messages[1].text, /live root 実行の完了 claim/);
+  assert.doesNotMatch(body.messages[1].text, /app-server 接続 PR/);
+});
+
 test("worker allows dashboard passkey session chat without VPS runner handoff", async () => {
   const provider = createInMemoryMemoryProvider();
   await provider.store({
