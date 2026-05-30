@@ -65,9 +65,12 @@ None.
 
 ## Butler Completion Contract
 
+- Primary owner surface: Dashboard Butler。owner-facing の主経路は Dashboard Butler であり、Custom GPT ではありません。
+- Fallback surface: Custom GPT は明示された fallback surface として扱います。主経路ではありません。
 - Owner goal: このPRが扱う owner-facing goal は Intent / Success Criteria に記載しています。
 - Butler entrypoint: このPRスライスでは未変更、またはまだ未接続です。
-- Action Schema exposure: このPRスライスでは未変更です。変更がある場合は下に明記します。
+- Dashboard Butler natural-language path: Dashboard Butler の自然文 / 通常チャット入口は、このPRスライスでは未変更または未接続です。
+- Action Schema exposure: Custom GPT fallback 用の露出状態として扱います。このPRスライスでは未変更です。
 - Runtime path: このPRの実装内容と evidence に記載した runtime path を参照してください。
 - Runner/runtime truth: このPRの verification evidence と runtime path notes を参照してください。
 - Authority boundary: 未変更。このPRスライスでは新しい high-risk authority を追加していません。

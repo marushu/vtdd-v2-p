@@ -57,7 +57,12 @@ test("pr template docs require Japanese-first owner-facing body guidance", () =>
 
   assert.match(doc, /Owner-facing prose in generated PR bodies should be Japanese-first by default\./);
   assert.match(doc, /canonical section headings remain stable English guarded-policy markers/);
+  assert.match(doc, /Dashboard Butler is the primary owner surface\./);
+  assert.match(doc, /Custom GPT may be recorded only as a fallback surface/);
+  assert.match(template, /Primary owner surface: Dashboard Butler/);
+  assert.match(template, /Fallback surface: Custom GPT は明示された fallback surface/);
   assert.match(template, /Owner goal: このPRが扱う owner-facing goal/);
+  assert.match(template, /Dashboard Butler natural-language path: Dashboard Butler の自然文/);
   assert.match(template, /Butler-facing E2E は未実施です。/);
 });
 

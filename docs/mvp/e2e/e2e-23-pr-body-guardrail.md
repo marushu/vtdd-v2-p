@@ -31,8 +31,11 @@ Observed result on 2026-04-27:
 - confirms the helper renders all required guarded-policy headings
 - confirms the validator accepts a helper-rendered PR body
 - confirms the helper renders the Butler Completion Contract with explicit
-  owner goal, Butler entrypoint, Action Schema exposure, runtime path,
+  primary owner surface, fallback surface, owner goal, Butler entrypoint,
+  Dashboard Butler natural-language path, Action Schema exposure, runtime path,
   runner/runtime truth, authority boundary, E2E evidence, and completion status
+- confirms Dashboard Butler is the primary owner surface and Custom GPT can be
+  named only as fallback compatibility in the Butler Completion Contract
 - confirms the remote Codex workflow uses the helper-generated `--body-file` path instead of handwritten body text
 - confirms the VPS runner open_pr path normalizes a malformed candidate PR
   body with `renderPrBody()` before PR creation
@@ -52,6 +55,8 @@ Observed result on 2026-04-27:
 - confirms validation fails when the Butler Completion Contract is missing
 - confirms `Closes #...` PR bodies fail unless the Butler Completion Contract
   is `complete` and includes Butler-facing E2E evidence
+- confirms validation fails when a PR body makes Custom GPT / Action Schema the
+  primary owner-facing path instead of Dashboard Butler
 - confirms the guardrail trips locally before the repository spends Actions time on the same missing-marker failure
 - confirms the workflow path still preserves the required PR evidence structure after helper integration
 - confirms existing PR body normalization is required because PR `#212`

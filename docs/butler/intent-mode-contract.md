@@ -224,6 +224,10 @@ surface that knows the rule.
 ## Custom GPT Baseline
 
 Dashboard Butler must not become a worse normal chat surface than Custom GPT.
+For current VTDD implementation work, Dashboard Butler is the primary owner
+surface. Custom GPT remains a fallback surface and setup-compatibility concern;
+it is not the default implementation target unless the owner explicitly scopes a
+Custom GPT fallback change.
 
 VTDD should exceed Custom GPT by keeping natural conversation while adding:
 

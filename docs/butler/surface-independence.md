@@ -44,6 +44,10 @@ Memory retrieval, runtime truth retrieval, proposal handling, approval orchestra
 Custom GPT Butler remains a supported Butler surface and fallback. Dashboard
 Butler does not replace it as a fallback, and Dashboard work must not let Custom
 GPT Instructions, Action Schema, setup artifacts, or operationId coverage drift.
+For current VTDD implementation work, Dashboard Butler is the primary owner
+surface. Custom GPT fallback work must be named explicitly; otherwise PRs must
+start from the Dashboard Butler natural-language path and record Custom GPT /
+Action Schema only as fallback compatibility.
 
 Dashboard Butler should eventually exceed Custom GPT for the VTDD owner
 workflow. The target is not a weaker homegrown chat UI. The target is a

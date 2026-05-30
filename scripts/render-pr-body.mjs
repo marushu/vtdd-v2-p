@@ -68,9 +68,12 @@ function defaultButlerContract(status) {
       : "このPRスライスでは未接続。Butler-facing E2E は未実施です。";
 
   return {
+    primaryOwnerSurface: "Dashboard Butler。owner-facing の主経路は Dashboard Butler であり、Custom GPT ではありません。",
+    fallbackSurface: "Custom GPT は明示された fallback surface として扱います。主経路ではありません。",
     ownerGoal: "このPRが扱う owner-facing goal は Intent / Success Criteria に記載しています。",
     entrypoint: "このPRスライスでは未変更、またはまだ未接続です。",
-    actionSchemaExposure: "このPRスライスでは未変更です。変更がある場合は下に明記します。",
+    dashboardNaturalLanguagePath: "Dashboard Butler の自然文 / 通常チャット入口は、このPRスライスでは未変更または未接続です。",
+    actionSchemaExposure: "Custom GPT fallback 用の露出状態として扱います。このPRスライスでは未変更です。",
     runtimePath: "このPRの実装内容と evidence に記載した runtime path を参照してください。",
     runtimeTruth: "このPRの verification evidence と runtime path notes を参照してください。",
     authorityBoundary: "未変更。このPRスライスでは新しい high-risk authority を追加していません。",
@@ -207,8 +210,11 @@ ${options.hypothesisRetrospective || fileLine.retrospective}
 
 ## Butler Completion Contract
 
+- Primary owner surface: ${options.primaryOwnerSurface || butler.primaryOwnerSurface}
+- Fallback surface: ${options.fallbackSurface || butler.fallbackSurface}
 - Owner goal: ${options.ownerGoal || butler.ownerGoal}
 - Butler entrypoint: ${options.butlerEntrypoint || butler.entrypoint}
+- Dashboard Butler natural-language path: ${options.dashboardNaturalLanguagePath || butler.dashboardNaturalLanguagePath}
 - Action Schema exposure: ${options.actionSchemaExposure || butler.actionSchemaExposure}
 - Runtime path: ${options.runtimePath || butler.runtimePath}
 - Runner/runtime truth: ${options.runtimeTruth || butler.runtimeTruth}

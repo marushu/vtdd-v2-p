@@ -26,8 +26,11 @@ const REQUIRED_QUEUE_FIELDS = [
 ];
 
 const REQUIRED_BUTLER_FIELDS = [
+  "Primary owner surface",
+  "Fallback surface",
   "Owner goal",
   "Butler entrypoint",
+  "Dashboard Butler natural-language path",
   "Action Schema exposure",
   "Runtime path",
   "Runner/runtime truth",
@@ -118,6 +121,9 @@ function validatePrBody(body, options = {}) {
   }
 
   const completionStatus = normalizeValue(butlerFields["Completion status"]);
+  if (!templateMode) {
+    validateButlerSurfaceSemantics(butlerFields, errors);
+  }
   if (
     !templateMode &&
     completionStatus &&
@@ -168,6 +174,31 @@ function validatePrBody(body, options = {}) {
 
 function extractButlerFields(body) {
   return extractSectionFields(body, "## Butler Completion Contract");
+}
+
+function validateButlerSurfaceSemantics(fields, errors) {
+  const primarySurface = fields["Primary owner surface"] || "";
+  if (primarySurface && !/Dashboard Butler/i.test(primarySurface)) {
+    errors.push("Butler Completion Contract Primary owner surface must name Dashboard Butler.");
+  }
+
+  const fallbackSurface = fields["Fallback surface"] || "";
+  if (fallbackSurface && /Custom GPT/i.test(fallbackSurface) && !/fallback|フォールバック/i.test(fallbackSurface)) {
+    errors.push("Butler Completion Contract Fallback surface may name Custom GPT only as fallback.");
+  }
+
+  const naturalLanguagePath = fields["Dashboard Butler natural-language path"] || "";
+  if (
+    naturalLanguagePath &&
+    !/(Dashboard Butler|自然文|natural-language|natural language|通常チャット|chat)/i.test(naturalLanguagePath)
+  ) {
+    errors.push("Butler Completion Contract Dashboard Butler natural-language path must describe the Dashboard Butler natural-language/chat entrypoint.");
+  }
+
+  const actionSchemaExposure = fields["Action Schema exposure"] || "";
+  if (actionSchemaExposure && /(primary|主経路|main path|main route)/i.test(actionSchemaExposure)) {
+    errors.push("Butler Completion Contract Action Schema exposure must not be described as the primary owner path.");
+  }
 }
 
 function validateQueueFieldSemantics(fields, errors) {
