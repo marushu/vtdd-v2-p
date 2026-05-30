@@ -2588,7 +2588,9 @@ test("worker connects VPS privileged maintenance intent from Dashboard Butler ch
   const approvedBody = await approvedResponse.json();
   assert.equal(approvedBody.ok, true);
   assert.equal(approvedBody.execution.status, "queued_for_vps_helper_execution");
+  assert.equal(approvedBody.execution.queue.dashboardThreadId, "dashboard-main-marushu-vtdd-v2-p");
   assert.equal(approvedBody.execution.runtimeTruth.helperQueueReached, true);
+  assert.equal(approvedBody.execution.runtimeTruth.dashboardThreadIdIncluded, true);
   assert.equal(approvedBody.execution.runtimeTruth.rootExecutionStarted, false);
   assert.equal(approvedBody.execution.runtimeTruth.helperExecutionStarted, false);
   assert.equal(approvedBody.messages[1].role, "butler");
@@ -2600,6 +2602,8 @@ test("worker connects VPS privileged maintenance intent from Dashboard Butler ch
   const queueCommentBody = JSON.parse(githubCalls[0].init.body).body;
   assert.equal(queueCommentBody.includes("vtdd:vps-privileged-maintenance-execution:issue637-dashboard-natural-chat"), true);
   assert.equal(queueCommentBody.includes('"transport": "vps_privileged_maintenance_helper"'), true);
+  assert.equal(queueCommentBody.includes('"dashboardThreadId": "dashboard-main-marushu-vtdd-v2-p"'), true);
+  assert.equal(queueCommentBody.includes('"handoff"'), true);
 });
 
 test("worker allows dashboard passkey session chat without VPS runner handoff", async () => {
@@ -8386,6 +8390,7 @@ test("worker dry-runs VPS maintenance helper request without root execution", as
         repository: "marushu/vtdd-v2-p",
         issueNumber: 637,
         executionId: "vps-maint-test-637",
+        dashboardThreadId: "dashboard-main-marushu-vtdd-v2-p",
         approvalActor: "requester",
         executionEnvelope: executionBody.executionEnvelope
       })
@@ -8411,9 +8416,11 @@ test("worker dry-runs VPS maintenance helper request without root execution", as
   assert.equal(queueBody.ok, true);
   assert.equal(queueBody.execution.executionId, "vps-maint-test-637");
   assert.equal(queueBody.execution.transport, "vps_privileged_maintenance_helper");
+  assert.equal(queueBody.execution.dashboardThreadId, "dashboard-main-marushu-vtdd-v2-p");
   assert.equal(queueBody.execution.queueCommentId, 63701);
   assert.equal(queueBody.runtimeTruth.kind, "vps_privileged_maintenance_helper_execution_queue");
   assert.equal(queueBody.runtimeTruth.status, "queued_for_vps_helper_execution");
+  assert.equal(queueBody.runtimeTruth.dashboardThreadIdIncluded, true);
   assert.equal(queueBody.runtimeTruth.rootExecutionStarted, false);
   assert.equal(queueBody.runtimeTruth.helperExecutionStarted, false);
   assert.equal(githubCalls.length, 1);
@@ -8421,6 +8428,7 @@ test("worker dry-runs VPS maintenance helper request without root execution", as
   const queueCommentBody = JSON.parse(githubCalls[0].init.body).body;
   assert.equal(queueCommentBody.includes("vtdd:vps-privileged-maintenance-execution:vps-maint-test-637"), true);
   assert.equal(queueCommentBody.includes('"transport": "vps_privileged_maintenance_helper"'), true);
+  assert.equal(queueCommentBody.includes('"dashboardThreadId": "dashboard-main-marushu-vtdd-v2-p"'), true);
   assert.equal(queueCommentBody.includes('"helperExecutionInput"'), true);
 });
 

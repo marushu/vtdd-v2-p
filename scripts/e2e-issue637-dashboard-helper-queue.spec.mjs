@@ -200,7 +200,9 @@ test("Dashboard Butler mobile flow reaches VPS helper execution queue without ro
 
   expect(approvedTurn.status).toBe(202);
   expect(approvedTurn.body.execution.status).toBe("queued_for_vps_helper_execution");
+  expect(approvedTurn.body.execution.queue.dashboardThreadId).toBe("dashboard-main-marushu-vtdd-v2-p");
   expect(approvedTurn.body.execution.runtimeTruth.status).toBe("queued_for_vps_helper_execution");
+  expect(approvedTurn.body.execution.runtimeTruth.dashboardThreadIdIncluded).toBe(true);
   expect(approvedTurn.body.execution.runtimeTruth.rootExecutionStarted).toBe(false);
   expect(approvedTurn.body.execution.runtimeTruth.helperExecutionStarted).toBe(false);
   expect(approvedTurn.body.execution.runtimeTruth.dashboardNaturalLanguagePathReached).toBe(true);
@@ -209,6 +211,8 @@ test("Dashboard Butler mobile flow reaches VPS helper execution queue without ro
   const queueCommentBody = JSON.parse(githubCalls[0].init.body).body;
   expect(queueCommentBody).toContain("vtdd:vps-privileged-maintenance-execution:issue637-dashboard-e2e");
   expect(queueCommentBody).toContain('"transport": "vps_privileged_maintenance_helper"');
+  expect(queueCommentBody).toContain('"dashboardThreadId": "dashboard-main-marushu-vtdd-v2-p"');
+  expect(queueCommentBody).toContain('"handoff"');
   expect(queueCommentBody).toContain('"helperExecutionInput"');
 
   const state = {

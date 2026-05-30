@@ -4786,10 +4786,18 @@ async function createVpsPrivilegedMaintenanceHelperExecutionQueue({ payload, env
   const executionId =
     normalizeText(payload?.executionId) ||
     `vps-maint-${issueNumber}-${safeIdentifier(result.helperPlan.requestId || Date.now())}`;
+  const dashboardThreadId = normalizeText(
+    payload?.handoff?.dashboardThreadId ||
+      payload?.dashboardThreadId ||
+      payload?.dashboard_thread_id ||
+      payload?.threadId ||
+      payload?.thread_id
+  );
   const queueCommentBody = buildVpsPrivilegedMaintenanceQueueComment({
     executionId,
     repository,
     issueNumber,
+    dashboardThreadId,
     approvalActor: payload?.approvalActor,
     executionEnvelope: envelope
   });
@@ -4835,6 +4843,7 @@ async function createVpsPrivilegedMaintenanceHelperExecutionQueue({ payload, env
       transport: "vps_privileged_maintenance_helper",
       repository,
       issueNumber,
+      dashboardThreadId: dashboardThreadId || null,
       queueCommentId: writeResult.write?.commentId || null,
       queueCommentUrl: writeResult.write?.url || null,
       status: "queued"
@@ -4845,6 +4854,7 @@ async function createVpsPrivilegedMaintenanceHelperExecutionQueue({ payload, env
       rootExecutionStarted: false,
       helperExecutionStarted: false,
       queueCommentPosted: true,
+      dashboardThreadIdIncluded: Boolean(dashboardThreadId),
       nextAction: "VPS runner must pick up the vtdd:vps-privileged-maintenance-execution queue comment and invoke the root-owned helper"
     }
   };
@@ -4859,6 +4869,7 @@ function buildVpsPrivilegedMaintenanceQueueComment({
   executionId,
   repository,
   issueNumber,
+  dashboardThreadId,
   approvalActor,
   executionEnvelope
 } = {}) {
@@ -4867,6 +4878,10 @@ function buildVpsPrivilegedMaintenanceQueueComment({
     transport: "vps_privileged_maintenance_helper",
     repository,
     issueNumber,
+    dashboardThreadId: dashboardThreadId || null,
+    handoff: {
+      dashboardThreadId: dashboardThreadId || null
+    },
     approvalScopeMatched: true,
     approvalActor: normalizeGitHubLogin(approvalActor) || null,
     issueTraceability: {
@@ -9887,6 +9902,7 @@ async function buildDashboardVpsPrivilegedMaintenanceNaturalLanguageFlow({
       executionId:
         normalizeText(payload?.executionId || payload?.execution_id) ||
         `dashboard-butler-issue${relatedIssue || "unknown"}-${safeIdentifier(helper.body.helperRequest.requestId)}`,
+      dashboardThreadId: normalizeText(payload?.threadId || payload?.thread_id),
       approvalActor: "Dashboard Butler",
       executionEnvelope: execution.body.executionEnvelope
     },
