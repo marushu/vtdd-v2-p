@@ -2,6 +2,7 @@
 
 import fs from "node:fs/promises";
 import { spawnSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
 
 import { planVpsPrivilegedMaintenanceHelperExecution } from "../src/core/index.js";
 
@@ -151,10 +152,18 @@ async function auditInstall(args) {
   };
 }
 
-function executeHelperPlan({ helperPlan, timeoutMs }) {
+export function executeHelperPlan({
+  helperPlan,
+  timeoutMs,
+  getuid = process.getuid,
+  spawnSyncFn = spawnSync,
+  runuserPath = DEFAULT_RUNUSER_PATH,
+  nowFn = () => new Date()
+}) {
   const boundary = helperPlan?.commandPreview?.executionBoundary ?? {};
   const workingDirectory = String(helperPlan?.capability?.workingDirectories?.[0] ?? "").trim();
-  const now = new Date().toISOString();
+  const helperStartedAsRoot = getuid?.() === 0;
+  const now = nowFn().toISOString();
   const baseTruth = {
     ok: false,
     kind: "vps_privileged_maintenance_helper_execution",
@@ -175,12 +184,13 @@ function executeHelperPlan({ helperPlan, timeoutMs }) {
     redactedLogSummary: "",
     rootExecutionStarted: false,
     helperExecutionStarted: true,
+    helperStartedAsRoot,
     redacted: true,
     updatedAt: now
   };
 
   const runAsUser = boundary.requiresRoot === true ? "root" : DEFAULT_RUNNER_USER;
-  if (boundary.requiresRoot !== true && process.getuid?.() !== 0) {
+  if (boundary.requiresRoot !== true && !helperStartedAsRoot) {
     return {
       ok: false,
       error: "root_required_for_run_as",
@@ -191,7 +201,7 @@ function executeHelperPlan({ helperPlan, timeoutMs }) {
       }
     };
   }
-  if (process.getuid?.() !== 0) {
+  if (!helperStartedAsRoot) {
     return {
       ok: false,
       error: "root_required",
@@ -216,10 +226,10 @@ function executeHelperPlan({ helperPlan, timeoutMs }) {
 
   const executable = String(boundary.executable || "").trim();
   const args = Array.isArray(boundary.args) ? boundary.args.map((part) => String(part)) : [];
-  const spawnExecutable = boundary.requiresRoot === true ? executable : DEFAULT_RUNUSER_PATH;
+  const spawnExecutable = boundary.requiresRoot === true ? executable : runuserPath;
   const spawnArgs = boundary.requiresRoot === true ? args : ["-u", runAsUser, "--", executable, ...args];
   const timeout = normalizeTimeoutMs(timeoutMs);
-  const spawned = spawnSync(spawnExecutable, spawnArgs, {
+  const spawned = spawnSyncFn(spawnExecutable, spawnArgs, {
     cwd: workingDirectory,
     encoding: "utf8",
     shell: false,
@@ -230,7 +240,7 @@ function executeHelperPlan({ helperPlan, timeoutMs }) {
       CI: process.env.CI || "1"
     }
   });
-  const completedAt = new Date().toISOString();
+  const completedAt = nowFn().toISOString();
   const exitCode = typeof spawned.status === "number" ? spawned.status : spawned.error ? 124 : 1;
   return {
     ok: exitCode === 0,
@@ -320,4 +330,6 @@ async function main() {
   }
 }
 
-await main();
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+  await main();
+}

@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { executeHelperPlan } from "../scripts/run-vps-privileged-maintenance-helper.mjs";
 
 const manifest = {
   version: 1,
@@ -188,4 +189,58 @@ test("VPS privileged maintenance helper script blocks non-root run-as execution 
   assert.equal(body.runtimeTruth.rootExecutionStarted, false);
   assert.equal(body.runtimeTruth.helperExecutionStarted, true);
   assert.equal(body.runtimeTruth.commandExecutionBoundary.requiresRoot, false);
+});
+
+test("VPS privileged maintenance helper executes non-root capabilities through fixed vtdd-runner run-as argv", () => {
+  const helperPlan = {
+    host: "x85-131-245-163",
+    repository: "marushu/vtdd-v2-p",
+    relatedIssue: 637,
+    operation: "review",
+    capability: nonRootManifest.capabilities[0],
+    commandPreview: {
+      executionBoundary: {
+        commandClass: "vps_runner_status_dry_run",
+        riskLevel: "low",
+        requiresRoot: false,
+        executable: "node",
+        args: ["scripts/run-vps-runner.mjs", "--dry-run"],
+        shell: false
+      }
+    }
+  };
+  const spawnCalls = [];
+
+  const result = executeHelperPlan({
+    helperPlan,
+    timeoutMs: 1000,
+    getuid: () => 0,
+    nowFn: () => new Date("2026-05-30T00:00:00.000Z"),
+    spawnSyncFn: (executable, args, options) => {
+      spawnCalls.push({ executable, args, options });
+      return {
+        status: 0,
+        stdout: "dry-run queue empty",
+        stderr: ""
+      };
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(spawnCalls.length, 1);
+  assert.equal(spawnCalls[0].executable, "/usr/sbin/runuser");
+  assert.deepEqual(spawnCalls[0].args, [
+    "-u",
+    "vtdd-runner",
+    "--",
+    "node",
+    "scripts/run-vps-runner.mjs",
+    "--dry-run"
+  ]);
+  assert.equal(spawnCalls[0].options.shell, false);
+  assert.equal(result.runtimeTruth.status, "completed");
+  assert.equal(result.runtimeTruth.runAsUser, "vtdd-runner");
+  assert.equal(result.runtimeTruth.rootExecutionStarted, false);
+  assert.equal(result.runtimeTruth.helperStartedAsRoot, true);
+  assert.equal(result.runtimeTruth.exitCode, 0);
 });
