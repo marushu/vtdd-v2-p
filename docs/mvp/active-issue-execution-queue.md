@@ -9,7 +9,7 @@ This file is not a scope reducer. Active Issues remain in scope unless the owner
 explicitly narrows the implementation window. This file records execution order,
 preemption decisions, blockers, and evidence gaps.
 
-Last rebuilt from GitHub runtime truth: 2026-05-29
+Last rebuilt from GitHub runtime truth: 2026-05-31
 
 ## Queue Policy
 
@@ -29,13 +29,13 @@ Last rebuilt from GitHub runtime truth: 2026-05-29
 - Open Issues read: Issue #354, Issue #355, Issue #356, Issue #358, Issue #412,
   Issue #413, Issue #415, Issue #417, Issue #421, Issue #444, Issue #448,
   Issue #450, Issue #455, Issue #491, Issue #492, Issue #495, Issue #497,
-  Issue #498, Issue #501, Issue #514, Issue #528, Issue #565,
-  Issue #574, Issue #577, Issue #579, Issue #580, Issue #582, Issue #585,
-  Issue #587, Issue #589, Issue #590, Issue #594, Issue #595, Issue #599,
-  Issue #604, Issue #605, Issue #606, Issue #613, Issue #620, Issue #637,
-  Issue #651.
+  Issue #498, Issue #501, Issue #514, Issue #528, Issue #574, Issue #579,
+  Issue #582, Issue #585, Issue #587, Issue #589, Issue #590, Issue #594,
+  Issue #595, Issue #599, Issue #604, Issue #605, Issue #606, Issue #613,
+  Issue #620, Issue #634, Issue #637, Issue #651, Issue #654, Issue #657,
+  Issue #667, Issue #670.
 - Recently closed as completed with evidence and owner approval: Issue #573,
-  Issue #601, Issue #609.
+  Issue #565, Issue #577, Issue #580, Issue #601, Issue #609.
 - Open PRs read before this queue refresh PR was opened: none.
 - Recent queue-changing merged PRs read: PR #591, PR #597, PR #598, PR #600,
   PR #602, PR #603, PR #607, PR #608, PR #610, PR #611, PR #612.
@@ -67,6 +67,16 @@ Last rebuilt from GitHub runtime truth: 2026-05-29
   necessarily read. This is Issue #495 / Issue #595 partial scope and must be
   treated as `butler_gap_found` plus `vps_handoff_gap_found` until repo-backed
   Skill, runtime discovery, VPS inventory, and E2E evidence are connected.
+- 2026-05-30 PR #685 merged Issue #654's stale Dashboard HTTP fallback reply
+  fix. Issue #654 remains open because reconnect/resume and app-server bridge
+  continuation are still not complete.
+- 2026-05-30 PR #686 merged Issue #579 local mobile reconnect/auth evidence.
+  Issue #579 remains open because production iPhone/PWA live evidence and
+  attachment candidate recovery are still missing.
+- 2026-05-31 Issue #565, Issue #577, and Issue #580 were closed after
+  main/runtime truth was re-read and close evidence was posted. These are narrow
+  Dashboard polish slices and do not close Issue #528, Issue #579, Issue #590,
+  or Issue #654.
 
 ## Now
 
@@ -78,11 +88,6 @@ Last rebuilt from GitHub runtime truth: 2026-05-29
 
 ## Next
 
-- PR #632 / Issue #631: resume contrast E2E after the one-at-a-time Issue #637
-  traffic-control slice is merged. The VPS host dependency blocker is resolved,
-  but Playwright still fails because the contrast spec cannot find
-  `.bubble.owner pre`; that is a PR/spec/fixture blocker, not the previous VPS
-  Chromium dependency blocker.
 - Issue #590: app-server turn timeout remains active after Issue #637 no longer
   blocks iPhone/PWA-only privileged recovery.
 - Issue #579: after timeout recovery, handle PWA background/foreground,
@@ -108,8 +113,7 @@ Root blockers hold multiple active Issues open. They should shape `Now` and
   to runtime discovery before VTDD can claim cross-surface consistency.
 - Issue #528: Dashboard Butler must remain ChatGPT iOS-equivalent while debug /
   ops surfaces are isolated. It gates user-facing acceptance for Issue #574,
-  Issue #577, Issue #580, Issue #582, Issue #585, Issue #587, Issue #589, and
-  Issue #590.
+  Issue #582, Issue #585, Issue #587, Issue #589, Issue #590, and Issue #634.
 - Issue #613: Dashboard Butler must become a Text-first / Voice-ready
   single-thread cross-repo work-control surface, not a repo-selected admin
   panel. It gates the product direction for Issue #528, Issue #450, Issue #413,
@@ -165,6 +169,22 @@ Root blockers hold multiple active Issues open. They should shape `Now` and
   closed as completed with owner approval.
 - PR #612 / Issue #573 fixed mobile horizontal scroll / side-to-side jitter.
   Issue #573 was later closed after production deploy and iPhone owner evidence.
+- PR #627 / Issue #606 separated Dashboard read sessions from high-risk
+  approval grants. Issue #606 remains open for mapped live evidence and closure
+  approval.
+- PR #652 / Issue #651 and PR #668 / Issue #667 tightened auto-merge reviewer
+  evidence gates. Both Issues remain open until mapped close-readiness evidence
+  is complete.
+- PR #684 / Issue #590 added local Dashboard timeout recovery E2E. Issue #590
+  remains open for production Dashboard Butler evidence.
+- PR #685 / Issue #654 removed stale fallback replies from normal Dashboard chat.
+  Issue #654 remains open for reconnect/resume and bridge continuation.
+- PR #686 / Issue #579 added local Dashboard PWA reconnect/auth evidence. Issue
+  #579 remains open for production iPhone/PWA live evidence and attachment
+  candidate recovery.
+- Issue #565, Issue #577, and Issue #580 were closed on 2026-05-31 with
+  evidence comments after merged PRs and current production setup truth were
+  re-read.
 
 ## Evidence Gaps
 
@@ -185,12 +205,10 @@ Evidence gaps are active. They are not deferred out of scope.
   closure still needs mapped owner-facing production evidence that Dashboard
   Butler reports timeout/late completion before/after state without leaving the
   ordinary chat thread stuck.
-- Issue #631 / PR #632: VPS Chromium dependency blocker was resolved manually on
-  2026-05-29 by owner-root Mac SSH bootstrap, but the iPhone/PWA recovery path is
-  still missing and Playwright now fails on missing `ownerPre` contrast target.
-  The manual host repair is evidence for Issue #637, not completion of Issue
-  #631.
 - Issue #651: PR #652 merged a same-head conflicting reviewer evidence gate, but
+  live/mapped E2E close-readiness evidence is still missing, so the Issue remains
+  open.
+- Issue #667: PR #668 merged the post-approve reviewer marker wait gate, but
   live/mapped E2E close-readiness evidence is still missing, so the Issue remains
   open.
 - Issue #495 / Issue #595: repo-backed `vtdd-chief-butler` Skill can remove the
@@ -198,13 +216,6 @@ Evidence gaps are active. They are not deferred out of scope.
   runtime discovery, Custom GPT exposure, VPS Codex CLI inventory, and mapped
   E2E remain incomplete until follow-up implementation proves those surfaces can
   read and apply the same Skill.
-- Issue #565: connection recovery status has local evidence, but completion still
-  depends on the normal chat surface not being dominated by status noise.
-- Issue #577: composer paste normalization has merged implementation slices, but
-  still belongs to the Dashboard UX completion bundle.
-- Issue #580: encoded trailing punctuation behavior has merged implementation
-  slices, but remains part of link/URL acceptance until mapped evidence is
-  complete.
 - Issue #582: PR #583 and PR #591 are merged with local E2E evidence; production
   iPhone/PWA evidence, 10-turn completion matrix confirmation, and closure
   approval remain missing.
@@ -221,6 +232,11 @@ Evidence gaps are active. They are not deferred out of scope.
 - Issue #444: PR #600 points PR-numbered notifications at the PR instead of the
   Actions run, but live iPhone/PWA notification tap, sound, badge, and recovery
   evidence remain incomplete.
+- Issue #654: PR #685 removed the old blocked reply from normal Dashboard chat,
+  but reconnect/resume and app-server bridge continuation are still incomplete.
+- Issue #657: chief-butler interpretation confirmation is a process / traffic
+  control gap and remains open until the protocol is repo/runtime-backed with
+  mapped evidence.
 
 ## Blocked
 
@@ -269,6 +285,10 @@ These Issues remain active and required, but they do not preempt the current
 - Issue #589: deploy notification non-delivery root-cause visibility.
 - Issue #594: fast status intent / preflight index. This is important, but it is
   not a substitute for the assistant managing the queue manually now.
+- Issue #634: iPhone input auto-zoom must be fixed without disturbing the normal
+  Dashboard chat surface.
+- Issue #670: Cloudflare / fixed-cost monitoring should become Butler-readable
+  ops truth without dominating normal chat.
 
 ## Questions
 
