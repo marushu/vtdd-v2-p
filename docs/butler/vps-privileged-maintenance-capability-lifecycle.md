@@ -111,12 +111,17 @@ intentionally narrow: the root-owned helper must start as root, must invoke
 `/usr/sbin/runuser -u vtdd-runner -- /usr/bin/env <fixed run-as env>
 <registered argv>`, and must keep default helper registry argv validation as
 the source of executable truth. The fixed run-as environment must include
-`HOME=/home/vtdd-runner`, `XDG_RUNTIME_DIR=/run/user/<vtdd-runner uid>`,
+`HOME=/home/vtdd-runner`,
+`PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`,
+`XDG_RUNTIME_DIR=/run/user/<vtdd-runner uid>`,
 `DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/<vtdd-runner uid>/bus`, and
 `CI=1` so user systemd and journal presets can observe the owner-owned runner
-services without becoming root command execution. Adding such a script path is
-still not Butler Completion Gate success until Dashboard Butler / Custom GPT
-Action Schema and VPS runtime observation can reach it with E2E evidence.
+services without becoming root command execution. Registry command `node` is
+resolved by the helper to the helper process `execPath` before `runuser` so the
+installed helper does not depend on an interactive shell or NVM profile. Adding
+such a script path is still not Butler Completion Gate success until Dashboard
+Butler / Custom GPT Action Schema and VPS runtime observation can reach it with
+E2E evidence.
 
 The declared VPS runner pickup contract is a GitHub Issue comment with marker
 `<!-- vtdd:vps-privileged-maintenance-execution:<executionId> -->`. The payload

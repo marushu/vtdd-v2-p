@@ -236,10 +236,11 @@ test("VPS privileged maintenance helper executes non-root capabilities through f
     "--",
     "/usr/bin/env",
     "HOME=/home/vtdd-runner",
+    "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
     "XDG_RUNTIME_DIR=/run/user/1001",
     "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1001/bus",
     "CI=1",
-    "node",
+    process.execPath,
     "scripts/run-vps-runner.mjs",
     "--dry-run"
   ]);
@@ -249,6 +250,7 @@ test("VPS privileged maintenance helper executes non-root capabilities through f
   assert.equal(result.runtimeTruth.rootExecutionStarted, false);
   assert.equal(result.runtimeTruth.helperStartedAsRoot, true);
   assert.equal(result.runtimeTruth.runAsUserUid, "1001");
+  assert.equal(result.runtimeTruth.resolvedExecutable, process.execPath);
   assert.equal(result.runtimeTruth.exitCode, 0);
 });
 
