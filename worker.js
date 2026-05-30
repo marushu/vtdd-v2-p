@@ -68411,6 +68411,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     url?.searchParams?.get("repositoryInput") || url?.searchParams?.get("repository")
   );
   const dashboardIssueNumber = normalizePositiveInteger10(url?.searchParams?.get("issueNumber"));
+  const requestedChatThreadId = normalizeDashboardThreadId(url?.searchParams?.get("threadId") || url?.searchParams?.get("thread_id"));
   const dashboardTargetLabel = repositoryInput ? `\u3053\u306E\u4F5C\u696D: ${repositoryInput}` : "\u4F5C\u696D\u5BFE\u8C61 repo \u672A\u6307\u5B9A";
   const targetStatusMarkup = repositoryInput ? `<p><strong>${escapeDashboardHtml(repositoryInput)}</strong></p>
           <p class="muted">\u56FA\u5B9A\u3067\u306F\u3042\u308A\u307E\u305B\u3093\u3002\u3053\u306E\u4F1A\u8A71\u3067 Issue / PR / deploy \u306A\u3069 repo \u304C\u5FC5\u8981\u306A\u4F5C\u696D\u3092\u3059\u308B\u9593\u3060\u3051\u5BFE\u8C61\u306B\u3057\u307E\u3059\u3002deploy \u5148\u3068\u627F\u8A8D\u5883\u754C\u306F repo \u3054\u3068\u306B\u78BA\u8A8D\u3057\u307E\u3059\u3002</p>` : `<p><strong>\u4F5C\u696D\u5BFE\u8C61 repo \u672A\u6307\u5B9A</strong></p>
@@ -68424,10 +68425,11 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             </div>
           </form>`;
   const encodedRepository = encodeURIComponent(repositoryInput);
-  const chatThreadId = `dashboard-main-${(repositoryInput || "unresolved").replace(/[^a-z0-9_.-]+/gi, "-")}`;
+  const chatThreadId = requestedChatThreadId || `dashboard-main-${(repositoryInput || "unresolved").replace(/[^a-z0-9_.-]+/gi, "-")}`;
   const socketOrigin = origin.replace(/^http/i, "ws");
-  const currentDashboardReturnPath = sanitizeDashboardPreAuthReturnPath(
-    `${url?.pathname || "/dashboard"}${url?.search || ""}`
+  const currentDashboardReturnPath = withDashboardReturnThreadId(
+    sanitizeDashboardPreAuthReturnPath(`${url?.pathname || "/dashboard"}${url?.search || ""}`),
+    chatThreadId
   );
   const dashboardSignInUrl = `${origin}/v2/approval/passkey/operator?mode=dashboard&phase=execution&actionType=read&highRiskKind=dashboard_access&dashboardReturnPath=${encodeURIComponent(currentDashboardReturnPath)}`;
   const latestDeployEvent = await retrieveLatestDashboardEvent({
@@ -70157,14 +70159,31 @@ function sanitizeDashboardPreAuthReturnPath(value) {
     return "/dashboard";
   }
   const allowedSearchParams = new URLSearchParams();
-  for (const key of ["repository", "repositoryInput", "issueNumber"]) {
-    const rawValue = normalizeDashboardReturnQueryValue2(parsed.searchParams.get(key));
+  for (const key of ["repository", "repositoryInput", "issueNumber", "threadId"]) {
+    const rawValue = key === "threadId" ? normalizeDashboardThreadId(parsed.searchParams.get(key)) : normalizeDashboardReturnQueryValue2(parsed.searchParams.get(key));
     if (rawValue) {
       allowedSearchParams.set(key, rawValue);
     }
   }
   const query = allowedSearchParams.toString();
   return query ? `${parsed.pathname}?${query}` : parsed.pathname;
+}
+function withDashboardReturnThreadId(returnPath, threadId) {
+  const sanitizedReturnPath = sanitizeDashboardPreAuthReturnPath(returnPath);
+  const normalizedThreadId = normalizeDashboardThreadId(threadId);
+  if (!normalizedThreadId) {
+    return sanitizedReturnPath;
+  }
+  let parsed;
+  try {
+    parsed = new URL(sanitizedReturnPath, "https://dashboard.local");
+  } catch {
+    return sanitizedReturnPath;
+  }
+  if (!parsed.searchParams.get("threadId")) {
+    parsed.searchParams.set("threadId", normalizedThreadId);
+  }
+  return `${parsed.pathname}${parsed.search}`;
 }
 function normalizeDashboardReturnQueryValue2(value) {
   const normalized = String(value ?? "").trim();
