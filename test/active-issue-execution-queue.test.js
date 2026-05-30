@@ -7,7 +7,7 @@ const doc = fs.readFileSync("docs/mvp/active-issue-execution-queue.md", "utf8");
 const OPEN_ISSUES_ON_2026_05_31 = [
   354, 355, 356, 358, 412, 413, 415, 417, 421, 444, 448, 450, 455, 491, 492,
   495, 497, 498, 501, 514, 528, 574, 579, 582, 585, 587, 589, 590, 594, 595,
-  599, 604, 605, 606, 613, 620, 634, 637, 651, 654, 657, 667, 670
+  599, 604, 605, 606, 613, 620, 634, 637, 651, 654, 657, 667, 670, 689
 ];
 
 const CLASSIFICATION_SECTIONS = [
@@ -78,6 +78,7 @@ test("active issue execution queue names current open PR hygiene", () => {
   assert.equal(doc.includes("PR #684 / Issue #590"), true);
   assert.equal(doc.includes("PR #685 / Issue #654"), true);
   assert.equal(doc.includes("PR #686 / Issue #579"), true);
+  assert.equal(doc.includes("PR #690 merged Issue #654 reconnect/resume continuation"), true);
   assert.equal(doc.includes("Issue #565, Issue #577, and Issue #580 were closed"), true);
   assert.equal(doc.includes("No open grandfathered PRs remain."), true);
 });
@@ -86,6 +87,13 @@ test("active issue execution queue names the next automatic implementation lane"
   assert.equal(sectionBody("Now").includes("Issue #637: iPhone/PWA-complete VPS privileged maintenance"), true);
   assert.equal(sectionBody("Next").includes("Issue #590: app-server turn timeout remains active"), true);
   assert.equal(sectionBody("Evidence Gaps").includes("Issue #606: PR #627 merged and production deployed"), true);
-  assert.equal(doc.includes("Issue #579: after timeout recovery"), true);
-  assert.equal(sectionBody("Evidence Gaps").includes("Issue #654: PR #685 removed the old blocked reply"), true);
+  assert.equal(
+    sectionBody("Evidence Gaps").includes("Issue #579: PR #686, production draft-retention evidence"),
+    true
+  );
+  assert.equal(
+    sectionBody("Evidence Gaps").includes("Issue #654: PR #685 removed the old blocked reply"),
+    true
+  );
+  assert.equal(sectionBody("Queue").includes("Issue #689: LINE-like reply target preview"), true);
 });
