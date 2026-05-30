@@ -6,10 +6,10 @@
     "composerReadOnly": false,
     "statusText": "Dashboard のログインが切れています。入力は残したまま再ログインしてください。 Passkey で再ログイン",
     "messages": [
-      "⧉画面オフ復帰後も、Dashboard Butler で普通に続けたい。23:00",
-      "⧉WebSocket が閉じた復帰状態でも HTTP fallback で保存して続ける。23:25"
+      "⧉画面オフ復帰後も、Dashboard Butler で普通に続けたい。5/30 23:00",
+      "⧉WebSocket が閉じた復帰状態でも HTTP fallback で保存して続ける。01:22"
     ],
-    "passkeyLink": "http://127.0.0.1:8822/v2/approval/passkey/operator?mode=dashboard&phase=execution&actionType=read&highRiskKind=dashboard_access&dashboardReturnPath=%2Fdashboard%3Frepository%3Dmarushu%252Fvtdd-v2-p",
+    "passkeyLink": "http://127.0.0.1:8822/v2/approval/passkey/operator?mode=dashboard&phase=execution&actionType=read&highRiskKind=dashboard_access&dashboardReturnPath=%2Fdashboard%3Frepository%3Dmarushu%252Fvtdd-v2-p%26threadId%3Ddashboard-main-marushu-vtdd-v2-p",
     "staleBlockingTextPresent": false,
     "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.7778.96 Safari/537.36"
   }

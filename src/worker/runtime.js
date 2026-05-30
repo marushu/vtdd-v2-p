@@ -170,6 +170,7 @@ export class DashboardChatRoom {
         threadId: threadId || null,
         schema: "vtdd.dashboard.app_server_bridge.v1"
       });
+      await this.drainPendingAppServerOwnerMessages({ threadId, bridgeSocket: server });
     } else {
       await this.sendThread(server, threadId);
     }
@@ -295,6 +296,11 @@ export class DashboardChatRoom {
     if (bridgeSockets.length === 0) {
       const messages = store ? await store.appendMany(threadId, [ownerMessage]) : [ownerMessage].filter(Boolean);
       await this.writeAcceptedOwnerMessage({ threadId, clientMessageId, messageId: ownerMessage.messageId, acceptedAt: now });
+      await this.writePendingAppServerOwnerMessage({
+        threadId,
+        ownerMessage,
+        queuedAt: now
+      });
       await this.broadcastThread({ threadId, messages });
       this.sendSocket(socket, {
         type: "owner_message_accepted",
@@ -324,6 +330,22 @@ export class DashboardChatRoom {
       status: "thinking",
       text: "app-server bridge の返信を待っています"
     });
+    await this.dispatchOwnerMessageToAppServerBridge({
+      threadId,
+      bridgeSocket: bridgeSockets[0],
+      ownerMessage
+    });
+  }
+
+  async dispatchOwnerMessageToAppServerBridge({ threadId, bridgeSocket, ownerMessage }) {
+    const message = normalizeDashboardChatMessage(ownerMessage, { threadId });
+    const text = sanitizeDashboardChatText(message.text || "");
+    if (!threadId || !text || !bridgeSocket) {
+      return false;
+    }
+    const repository = normalizeCanonicalRepositoryInput(message.repository);
+    const relatedIssue = normalizePositiveInteger(message.relatedIssue || message.issueNumber);
+    const mediaReferences = normalizeMediaReferences(message.mediaReferences || message.media_references || []);
     const trafficControl = await buildDashboardChatTrafficControlContext({
       env: this.env,
       repository,
@@ -340,9 +362,9 @@ export class DashboardChatRoom {
       repository: repository || null,
       relatedIssue: relatedIssue || null,
       text,
-      mediaReferences: mediaValidation.mediaReferences,
-      messageId: ownerMessage.messageId,
-      createdAt: now,
+      mediaReferences,
+      messageId: message.messageId,
+      createdAt: normalizeIsoTimestamp(message.createdAt || message.created_at) || new Date().toISOString(),
       appServer: {
         startThreadMethod: mapping.codexThreadId ? "thread/resume" : "thread/start",
         turnMethod: "turn/start"
@@ -350,7 +372,7 @@ export class DashboardChatRoom {
       authority: buildDashboardAppServerAuthorityHint({ repository, relatedIssue, text }),
       trafficControl
     };
-    this.sendSocket(bridgeSockets[0], turnRequest);
+    return this.sendSocket(bridgeSocket, turnRequest);
   }
 
   async acceptAppServerBridgeMessage({ socket, attachment, payload }) {
@@ -571,6 +593,87 @@ export class DashboardChatRoom {
       acceptedAt: normalizeIsoTimestamp(acceptedAt) || new Date().toISOString()
     });
     return true;
+  }
+
+  pendingAppServerOwnerMessagesKey(threadId) {
+    const normalizedThreadId = normalizeDashboardThreadId(threadId);
+    return normalizedThreadId ? `pending_app_server_owner_messages:${normalizedThreadId}` : "";
+  }
+
+  async readPendingAppServerOwnerMessages(threadId) {
+    const key = this.pendingAppServerOwnerMessagesKey(threadId);
+    if (!key || typeof this.ctx?.storage?.get !== "function") {
+      return [];
+    }
+    try {
+      const records = await this.ctx.storage.get(key);
+      return Array.isArray(records) ? records.map((record) => normalizeObject(record)).filter((record) => record.messageId || record.ownerMessage) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  async writePendingAppServerOwnerMessages(threadId, records) {
+    const key = this.pendingAppServerOwnerMessagesKey(threadId);
+    if (!key || typeof this.ctx?.storage?.put !== "function") {
+      return false;
+    }
+    await this.ctx.storage.put(key, Array.isArray(records) ? records : []);
+    return true;
+  }
+
+  async writePendingAppServerOwnerMessage({ threadId, ownerMessage, queuedAt }) {
+    const normalizedThreadId = normalizeDashboardThreadId(threadId);
+    const message = normalizeDashboardChatMessage(ownerMessage, { threadId: normalizedThreadId });
+    if (!normalizedThreadId || !message.messageId) {
+      return false;
+    }
+    const records = await this.readPendingAppServerOwnerMessages(normalizedThreadId);
+    const nextRecord = {
+      messageId: message.messageId,
+      ownerMessage: message,
+      queuedAt: normalizeIsoTimestamp(queuedAt) || new Date().toISOString()
+    };
+    const nextRecords = [
+      ...records.filter((record) => normalizeDashboardEventText(record.messageId || record.ownerMessage?.messageId) !== message.messageId),
+      nextRecord
+    ].slice(-20);
+    return this.writePendingAppServerOwnerMessages(normalizedThreadId, nextRecords);
+  }
+
+  async drainPendingAppServerOwnerMessages({ threadId, bridgeSocket }) {
+    const normalizedThreadId = normalizeDashboardThreadId(threadId);
+    if (!normalizedThreadId || !bridgeSocket) {
+      return { ok: false, drained: 0 };
+    }
+    const records = await this.readPendingAppServerOwnerMessages(normalizedThreadId);
+    if (records.length === 0) {
+      return { ok: true, drained: 0 };
+    }
+    const remaining = [];
+    let drained = 0;
+    for (const record of records) {
+      const ownerMessage = normalizeDashboardChatMessage(record.ownerMessage || record, { threadId: normalizedThreadId });
+      const sent = await this.dispatchOwnerMessageToAppServerBridge({
+        threadId: normalizedThreadId,
+        bridgeSocket,
+        ownerMessage
+      });
+      if (sent) {
+        drained += 1;
+      } else {
+        remaining.push(record);
+      }
+    }
+    await this.writePendingAppServerOwnerMessages(normalizedThreadId, remaining);
+    if (drained > 0) {
+      await this.broadcastTransientStatus({
+        threadId: normalizedThreadId,
+        status: "thinking",
+        text: "接続しました。保存済みの送信を app-server bridge に渡しました。"
+      });
+    }
+    return { ok: true, drained, remaining: remaining.length };
   }
 }
 const CLOUDFLARE_ACCESS_JWKS_CACHE_TTL_MS = 5 * 60 * 1000;

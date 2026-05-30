@@ -2941,6 +2941,57 @@ test("DashboardChatRoom stores owner messages without pushing a VPS runner job",
   assert.match(reconnectStatus.text, /送信は保存済みです/);
 });
 
+test("DashboardChatRoom replays HTTP fallback owner messages when app-server bridge reconnects", async () => {
+  const provider = createInMemoryMemoryProvider();
+  const store = createInMemoryDashboardChatStore();
+  const storage = createMockDurableObjectStorage();
+  const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
+  const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-unresolved");
+  const room = new DashboardChatRoom(
+    {
+      storage,
+      getWebSockets() {
+        return [dashboardSocket];
+      }
+    },
+    { DASHBOARD_CHAT_STORE: store, MEMORY_PROVIDER: provider }
+  );
+
+  await room.webSocketMessage(
+    dashboardSocket,
+    JSON.stringify({
+      type: "owner_message",
+      threadId: "dashboard-main-unresolved",
+      clientMessageId: "dashboard_owner_message:http-resume-1",
+      text: "HTTP fallback で保存した後、bridge 復帰で同じ thread に流す"
+    })
+  );
+
+  const pendingKey = "pending_app_server_owner_messages:dashboard-main-unresolved";
+  assert.equal(storage.values.get(pendingKey).length, 1);
+  assert.equal(bridgeSocket.sent.length, 0);
+
+  const drainResult = await room.drainPendingAppServerOwnerMessages({
+    threadId: "dashboard-main-unresolved",
+    bridgeSocket
+  });
+
+  assert.equal(drainResult.ok, true);
+  assert.equal(drainResult.drained, 1);
+  assert.deepEqual(storage.values.get(pendingKey), []);
+  assert.equal(bridgeSocket.sent.length, 1);
+  const turnRequest = JSON.parse(bridgeSocket.sent[0]);
+  assert.equal(turnRequest.type, "app_server_turn_requested");
+  assert.equal(turnRequest.threadId, "dashboard-main-unresolved");
+  assert.equal(turnRequest.messageId, "dashboard_owner_message:http-resume-1");
+  assert.equal(turnRequest.text, "HTTP fallback で保存した後、bridge 復帰で同じ thread に流す");
+  assert.equal(turnRequest.appServer.startThreadMethod, "thread/start");
+  const reconnectStatus = dashboardSocket.sent.map((message) => JSON.parse(message)).at(-1);
+  assert.equal(reconnectStatus.type, "transient_status");
+  assert.equal(reconnectStatus.status, "thinking");
+  assert.match(reconnectStatus.text, /接続しました/);
+});
+
 test("DashboardChatRoom sends ordinary owner turns to connected app-server bridge without repository resolution", async () => {
   const provider = createInMemoryMemoryProvider();
   const store = createInMemoryDashboardChatStore();
