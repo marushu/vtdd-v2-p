@@ -3876,6 +3876,70 @@
           }
         }
       }
+    },
+    "/v2/vps/privileged-maintenance/helper-executions": {
+      "post": {
+        "operationId": "vtddCreateVpsMaintenanceHelperExecution",
+        "summary": "Create a VPS helper execution envelope from a bounded helper request and enabled manifest without executing root work in the Worker.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "manifest",
+                  "helperRequest"
+                ],
+                "properties": {
+                  "manifest": {
+                    "type": "object",
+                    "description": "Current VPS capability manifest. The selected capability must already be enabled.",
+                    "additionalProperties": true
+                  },
+                  "helperRequest": {
+                    "type": "object",
+                    "description": "Helper request returned by vtddCreateVpsMaintenanceHelperRequest.",
+                    "additionalProperties": true
+                  },
+                  "now": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "VPS helper execution envelope and runtime truth; root execution has not started in the Worker.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing machine auth"
+          },
+          "403": {
+            "description": "Invalid machine auth"
+          },
+          "422": {
+            "description": "Helper execution request or manifest invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   }
 }
