@@ -37988,6 +37988,7 @@ var RUNTIME_SETUP_MANIFEST = Object.freeze({
     "/v2/vps/privileged-maintenance/helper-requests",
     "/v2/vps/privileged-maintenance/helper-dry-runs",
     "/v2/vps/privileged-maintenance/helper-executions",
+    "/v2/vps/privileged-maintenance/helper-execution-queues",
     "/v2/retrieve/vps-maintenance-install-inventory",
     "/v2/retrieve/constitution",
     "/v2/retrieve/decisions",
@@ -38021,6 +38022,7 @@ var RUNTIME_SETUP_MANIFEST = Object.freeze({
     "vtddCreateVpsMaintenanceHelperRequest",
     "vtddDryRunVpsMaintenanceHelper",
     "vtddCreateVpsMaintenanceHelperExecution",
+    "vtddQueueVpsMaintenanceHelperExecution",
     "vtddRetrieveVpsMaintenanceInstallInventory",
     "vtddRetrieveConstitution",
     "vtddRetrieveDecisionLogs",
@@ -38053,6 +38055,7 @@ var RUNTIME_SETUP_MANIFEST = Object.freeze({
     "vtddCreateVpsMaintenanceHelperRequest",
     "vtddDryRunVpsMaintenanceHelper",
     "vtddCreateVpsMaintenanceHelperExecution",
+    "vtddQueueVpsMaintenanceHelperExecution",
     "vtddRetrieveVpsMaintenanceInstallInventory",
     "vtddRetrieveConstitution",
     "vtddRetrieveDecisionLogs",
@@ -57881,6 +57884,21 @@ var runtime_default = {
       }
       return handleVpsPrivilegedMaintenanceHelperExecutionRequest(request, env);
     }
+    if (request.method === "POST" && isApiPath(url.pathname, "/vps/privileged-maintenance/helper-execution-queues")) {
+      const auth = authorizeGatewayRequest({
+        request,
+        env,
+        apiSuffix: "/vps/privileged-maintenance/helper-execution-queues"
+      });
+      if (!auth.ok) {
+        return json(auth.status, {
+          ok: false,
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+      return handleVpsPrivilegedMaintenanceHelperExecutionQueueRequest(request, env);
+    }
     if (request.method === "GET" && isApiPath(url.pathname, "/retrieve/vps-maintenance-install-inventory")) {
       const auth = authorizeGatewayRequest({
         request,
@@ -60970,6 +60988,183 @@ async function handleVpsPrivilegedMaintenanceHelperExecutionRequest(request, env
       nextAction: "send executionEnvelope.helperExecutionInput to the VPS root-owned helper through a declared VPS runner pickup path"
     }
   });
+}
+async function handleVpsPrivilegedMaintenanceHelperExecutionQueueRequest(request, env) {
+  const payload = await readJson(request);
+  const envelope = payload?.executionEnvelope || payload?.execution_envelope;
+  const helperExecutionInput = envelope?.helperExecutionInput;
+  const result = planVpsPrivilegedMaintenanceHelperExecution({
+    manifest: helperExecutionInput?.manifest,
+    helperRequest: helperExecutionInput?.helperRequest || helperExecutionInput?.helper_request,
+    mode: "execute",
+    now: helperExecutionInput?.now || payload?.now
+  });
+  const envelopeIssues = validateVpsPrivilegedMaintenanceExecutionEnvelopeForQueue(envelope);
+  if (!result.ok || envelopeIssues.length > 0) {
+    return json(422, {
+      ok: false,
+      error: result.error || "vps_privileged_maintenance_execution_envelope_invalid",
+      issues: [...result.issues ?? [], ...envelopeIssues],
+      runtimeTruth: {
+        kind: "vps_privileged_maintenance_helper_execution_queue",
+        status: "blocked",
+        rootExecutionStarted: false,
+        helperExecutionStarted: false,
+        queueCommentPosted: false,
+        redacted: true
+      }
+    });
+  }
+  const repository = normalizeCanonicalRepositoryInput(payload?.repository) || result.helperPlan.repository;
+  const issueNumber = normalizeIssue6(payload?.issueNumber ?? result.helperPlan.relatedIssue);
+  if (!repository || !issueNumber) {
+    return json(422, {
+      ok: false,
+      error: "vps_privileged_maintenance_queue_target_required",
+      issues: ["repository and issueNumber are required"],
+      runtimeTruth: {
+        kind: "vps_privileged_maintenance_helper_execution_queue",
+        status: "blocked",
+        rootExecutionStarted: false,
+        helperExecutionStarted: false,
+        queueCommentPosted: false,
+        redacted: true
+      }
+    });
+  }
+  const executionId = normalizeText31(payload?.executionId) || `vps-maint-${issueNumber}-${safeIdentifier(result.helperPlan.requestId || Date.now())}`;
+  const body = buildVpsPrivilegedMaintenanceQueueComment({
+    executionId,
+    repository,
+    issueNumber,
+    approvalActor: payload?.approvalActor,
+    executionEnvelope: envelope
+  });
+  const writeResult = await executeGitHubWritePlane({
+    operation: "issue_comment_create",
+    repository,
+    issueNumber,
+    body,
+    approvalPhrase: "GO",
+    targetConfirmed: true,
+    approvalScopeMatched: true,
+    env
+  });
+  if (!writeResult.ok) {
+    return json(writeResult.status ?? 503, {
+      ok: false,
+      error: writeResult.error || "vps_privileged_maintenance_queue_post_failed",
+      reason: writeResult.reason,
+      issues: writeResult.issues ?? [],
+      runtimeTruth: {
+        kind: "vps_privileged_maintenance_helper_execution_queue",
+        status: "failed",
+        rootExecutionStarted: false,
+        helperExecutionStarted: false,
+        queueCommentPosted: false,
+        redacted: true
+      }
+    });
+  }
+  return json(200, {
+    ok: true,
+    execution: {
+      executionId,
+      transport: "vps_privileged_maintenance_helper",
+      repository,
+      issueNumber,
+      queueCommentId: writeResult.write?.commentId || null,
+      queueCommentUrl: writeResult.write?.url || null,
+      status: "queued"
+    },
+    runtimeTruth: {
+      kind: "vps_privileged_maintenance_helper_execution_queue",
+      status: "queued_for_vps_helper_execution",
+      rootExecutionStarted: false,
+      helperExecutionStarted: false,
+      queueCommentPosted: true,
+      nextAction: "VPS runner must pick up the vtdd:vps-privileged-maintenance-execution queue comment and invoke the root-owned helper"
+    }
+  });
+}
+function buildVpsPrivilegedMaintenanceQueueComment({
+  executionId,
+  repository,
+  issueNumber,
+  approvalActor,
+  executionEnvelope
+} = {}) {
+  const payload = {
+    executionId,
+    transport: "vps_privileged_maintenance_helper",
+    repository,
+    issueNumber,
+    approvalScopeMatched: true,
+    approvalActor: normalizeGitHubLogin(approvalActor) || null,
+    issueTraceability: {
+      canonicalSpec: "github_issue",
+      issueNumber,
+      relatedIssue: issueNumber,
+      issueTraceable: true
+    },
+    executionEnvelope
+  };
+  return [
+    `<!-- vtdd:vps-privileged-maintenance-execution:${executionId} -->`,
+    "VTDD VPS privileged maintenance helper \u5B9F\u884C\u30AD\u30E5\u30FC\u3067\u3059\u3002",
+    "",
+    "\u3053\u306E\u30B3\u30E1\u30F3\u30C8\u306F\u901A\u5E38\u306E Codex branch/PR queue \u3067\u306F\u3042\u308A\u307E\u305B\u3093\u3002scoped passkey approval \u6E08\u307F helper execution envelope \u3092 user-owned VPS runner \u304C root-owned helper \u3078\u6E21\u3059\u305F\u3081\u306E bounded handoff \u3067\u3059\u3002",
+    "",
+    fencedJson2(payload)
+  ].join("\n");
+}
+function validateVpsPrivilegedMaintenanceExecutionEnvelopeForQueue(envelope) {
+  const issues = [];
+  if (!envelope || typeof envelope !== "object") {
+    return ["executionEnvelope is required"];
+  }
+  if (normalizeText31(envelope.kind) !== "vps_privileged_maintenance_helper_execution_envelope") {
+    issues.push("executionEnvelope.kind must be vps_privileged_maintenance_helper_execution_envelope");
+  }
+  if (normalizeText31(envelope.status) !== "ready_for_vps_helper_execution") {
+    issues.push("executionEnvelope.status must be ready_for_vps_helper_execution");
+  }
+  if (normalizeText31(envelope.mode) !== "execute") {
+    issues.push("executionEnvelope.mode must be execute");
+  }
+  const invocation = envelope.helperInvocation && typeof envelope.helperInvocation === "object" ? envelope.helperInvocation : {};
+  const args = Array.isArray(invocation.args) ? invocation.args.map(normalizeText31) : [];
+  if (normalizeText31(invocation.executable) !== "sudo") {
+    issues.push("executionEnvelope.helperInvocation.executable must be sudo");
+  }
+  if (args.length !== 5 || args[0] !== "-n" || args[1] !== "/usr/local/sbin/vtdd-vps-maintenance-helper" || args[2] !== "--execute" || args[3] !== "--input" || args[4] !== "<helper-execution-input-json>") {
+    issues.push("executionEnvelope.helperInvocation.args must match the bounded root helper invocation");
+  }
+  if (invocation.shell !== false) {
+    issues.push("executionEnvelope.helperInvocation.shell must be false");
+  }
+  if (normalizeText31(invocation.inputFile) !== "helperExecutionInput") {
+    issues.push("executionEnvelope.helperInvocation.inputFile must be helperExecutionInput");
+  }
+  if (!envelope.helperExecutionInput || typeof envelope.helperExecutionInput !== "object") {
+    issues.push("executionEnvelope.helperExecutionInput is required");
+  }
+  if (envelope.rootExecutionStarted === true || envelope.helperExecutionStarted === true) {
+    issues.push("executionEnvelope must not claim root/helper execution has already started");
+  }
+  return issues;
+}
+function fencedJson2(value) {
+  return `\`\`\`json
+${JSON.stringify(value, null, 2)}
+\`\`\``;
+}
+function safeIdentifier(value) {
+  return String(value || "").replace(/[^A-Za-z0-9_.-]+/g, "_").slice(0, 80) || "execution";
+}
+function normalizeGitHubLogin(value) {
+  const login = normalizeText31(value);
+  return /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/.test(login) ? login : "";
 }
 async function handleRetrieveVpsMaintenanceInstallInventoryRequest(url) {
   const inventory = buildVpsPrivilegedMaintenanceInstallInventory({

@@ -3940,6 +3940,75 @@
           }
         }
       }
+    },
+    "/v2/vps/privileged-maintenance/helper-execution-queues": {
+      "post": {
+        "operationId": "vtddQueueVpsMaintenanceHelperExecution",
+        "summary": "Post a bounded VPS privileged maintenance helper execution envelope to the GitHub Issue queue for the user-owned VPS runner.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "repository",
+                  "issueNumber",
+                  "executionEnvelope"
+                ],
+                "properties": {
+                  "repository": {
+                    "type": "string"
+                  },
+                  "issueNumber": {
+                    "type": "integer"
+                  },
+                  "executionId": {
+                    "type": "string"
+                  },
+                  "approvalActor": {
+                    "type": "string"
+                  },
+                  "executionEnvelope": {
+                    "type": "object",
+                    "description": "Execution envelope returned by vtddCreateVpsMaintenanceHelperExecution.",
+                    "additionalProperties": true
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "GitHub Issue queue comment was posted for VPS runner pickup; root execution has not started in the Worker.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing machine auth"
+          },
+          "403": {
+            "description": "Invalid machine auth"
+          },
+          "422": {
+            "description": "Execution envelope or queue target invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VtddGenericResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   }
 }
