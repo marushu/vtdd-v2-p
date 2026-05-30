@@ -2493,8 +2493,10 @@ test("worker does not dispatch dashboard chat to the VPS runner queue", async ()
   assert.equal(retrieveBody.messages[1].status, "blocked");
 });
 
-test("worker explains VPS privileged maintenance intent from Dashboard Butler chat", async () => {
+test("worker connects VPS privileged maintenance intent from Dashboard Butler chat to helper queue", async () => {
   const store = createInMemoryDashboardChatStore();
+  const provider = createInMemoryMemoryProvider();
+  const githubCalls = [];
   const response = await worker.fetch(
     new Request("https://example.com/v2/dashboard/chat/messages", {
       method: "POST",
@@ -2508,21 +2510,96 @@ test("worker explains VPS privileged maintenance intent from Dashboard Butler ch
     }),
     {
       ...gatewayAuthEnv,
-      DASHBOARD_CHAT_STORE: store
+      DASHBOARD_CHAT_STORE: store,
+      MEMORY_PROVIDER: provider,
+      VTDD_DASHBOARD_VPS_MAINTENANCE_HOST: "x85-131-245-163",
+      VTDD_DASHBOARD_VPS_MAINTENANCE_WORKDIR: "/home/vtdd-runner/vtdd-runner/repos/vtdd-v2-p"
     }
   );
 
   assert.equal(response.status, 202);
   const body = await response.json();
   assert.equal(body.ok, true);
-  assert.equal(body.execution, null);
+  assert.equal(body.execution.status, "approval_required");
+  assert.equal(body.execution.runtimeTruth.status, "approval_required");
+  assert.equal(body.execution.runtimeTruth.rootExecutionStarted, false);
+  assert.equal(body.execution.runtimeTruth.helperQueueReached, false);
   assert.equal(body.messages[1].role, "butler");
   assert.equal(body.messages[1].status, "blocked");
-  assert.match(body.messages[1].text, /VPS privileged maintenance intent/);
-  assert.match(body.messages[1].text, /scoped passkey approval/);
+  assert.match(body.messages[1].text, /自然文 intent/);
+  assert.match(body.messages[1].text, /approval_required/);
   assert.match(body.messages[1].text, /rootExecutionStarted=false/);
-  assert.match(body.messages[1].text, /live root 実行の完了 claim/);
+  assert.match(body.messages[1].text, /approval URL/);
   assert.doesNotMatch(body.messages[1].text, /app-server 接続 PR/);
+
+  await provider.store({
+    id: "approval:dashboard-vps-maintenance-natural",
+    type: MemoryRecordType.APPROVAL_LOG,
+    content: {
+      kind: "passkey_grant",
+      status: "verified",
+      approvalId: "approval:dashboard-vps-maintenance-natural",
+      credentialId: "AQIDBA",
+      verifiedAt: "2026-05-30T00:00:00.000Z",
+      expiresAt: "2999-01-01T00:00:00.000Z",
+      scope: body.execution.approvalScope
+    },
+    metadata: { source: "dashboard-vps-maintenance-natural-test" },
+    priority: 96,
+    tags: ["passkey_grant", "passkey_approval", "verified"],
+    createdAt: "2026-05-30T00:00:00.000Z"
+  });
+
+  const approvedResponse = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/chat/messages", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        threadId: "dashboard-main-marushu-vtdd-v2-p",
+        repository: "marushu/vtdd-v2-p",
+        issueNumber: 637,
+        text: "承認済みなので Dashboard Butler から VPS helper queue へ進めて。",
+        vpsProposalId: body.execution.vpsProposalId,
+        approvalGrantId: "approval:dashboard-vps-maintenance-natural",
+        executionId: "issue637-dashboard-natural-chat"
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      DASHBOARD_CHAT_STORE: store,
+      MEMORY_PROVIDER: provider,
+      VTDD_DASHBOARD_VPS_MAINTENANCE_HOST: "x85-131-245-163",
+      VTDD_DASHBOARD_VPS_MAINTENANCE_WORKDIR: "/home/vtdd-runner/vtdd-runner/repos/vtdd-v2-p",
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_dashboard_vps",
+      GITHUB_API_FETCH: async (url, init) => {
+        githubCalls.push({ url, init });
+        return new Response(
+          JSON.stringify({
+            id: 63702,
+            html_url: "https://github.com/marushu/vtdd-v2-p/issues/637#issuecomment-63702"
+          }),
+          { status: 201, headers: { "content-type": "application/json" } }
+        );
+      }
+    }
+  );
+
+  assert.equal(approvedResponse.status, 202);
+  const approvedBody = await approvedResponse.json();
+  assert.equal(approvedBody.ok, true);
+  assert.equal(approvedBody.execution.status, "queued_for_vps_helper_execution");
+  assert.equal(approvedBody.execution.runtimeTruth.helperQueueReached, true);
+  assert.equal(approvedBody.execution.runtimeTruth.rootExecutionStarted, false);
+  assert.equal(approvedBody.execution.runtimeTruth.helperExecutionStarted, false);
+  assert.equal(approvedBody.messages[1].role, "butler");
+  assert.equal(approvedBody.messages[1].status, "sent");
+  assert.match(approvedBody.messages[1].text, /自然文 intent/);
+  assert.match(approvedBody.messages[1].text, /helper execution queue/);
+  assert.match(approvedBody.messages[1].text, /rootExecutionStarted=false/);
+  assert.equal(githubCalls.length, 1);
+  const queueCommentBody = JSON.parse(githubCalls[0].init.body).body;
+  assert.equal(queueCommentBody.includes("vtdd:vps-privileged-maintenance-execution:issue637-dashboard-natural-chat"), true);
+  assert.equal(queueCommentBody.includes('"transport": "vps_privileged_maintenance_helper"'), true);
 });
 
 test("worker allows dashboard passkey session chat without VPS runner handoff", async () => {
