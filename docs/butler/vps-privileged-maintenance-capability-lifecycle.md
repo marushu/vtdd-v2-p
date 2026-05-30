@@ -106,6 +106,17 @@ exit code, and next-action evidence. Adding such a script path is still not
 Butler Completion Gate success until Dashboard Butler / Custom GPT Action Schema
 and VPS runtime observation can reach it with E2E evidence.
 
+The declared VPS runner pickup contract is a GitHub Issue comment with marker
+`<!-- vtdd:vps-privileged-maintenance-execution:<executionId> -->`. The payload
+must use `transport=vps_privileged_maintenance_helper`, must be issue-traceable,
+must carry `approvalScopeMatched=true`, and must include the execution envelope
+returned by `vtddCreateVpsMaintenanceHelperExecution`. The runner rejects
+payloads that change the helper argv, request `shell:true`, omit
+`helperExecutionInput`, or claim root/helper execution has already started.
+Runner pickup reports normal `vtdd:vps-runner-event` comments so Butler can
+observe picked-up, completed, failed, or blocked runtime truth without Mac
+Codex.
+
 ## Initial Presets
 
 The first preset set should cover the failure classes already observed:

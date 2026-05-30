@@ -26,12 +26,14 @@ import {
   normalizeRepositoryPolicies,
   parseVpsRunnerCancellationMarker,
   parseVpsRunnerEventComment,
+  parseVpsPrivilegedMaintenanceQueueComment,
   parseVpsRunnerQueueComment,
   postVpsRunnerEvent,
   runVpsRunnerOnce,
   resolveRoleGitHubAppInstallationToken,
   summarizeDiagnosticText,
   selectPendingVpsReviewerFallbacks,
+  selectPendingVpsPrivilegedMaintenanceExecutions,
   selectPendingVpsRunnerExecutions
 } from "../scripts/run-vps-runner.mjs";
 
@@ -63,6 +65,67 @@ VTDD 管理の VPS runner 実行キューです。
   assert.equal(parsed.payload.repository, "sample-org/vtdd-v2");
   assert.equal(parsed.payload.issueNumber, 157);
   assert.equal(parsed.payload.branch, "codex/issue-157");
+});
+
+test("VPS runner parses privileged maintenance helper queue payload", () => {
+  const parsed = parseVpsPrivilegedMaintenanceQueueComment(privilegedMaintenanceQueueComment({
+    executionId: "vps-maint-637-a"
+  }));
+
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.executionId, "vps-maint-637-a");
+  assert.equal(parsed.payload.transport, "vps_privileged_maintenance_helper");
+  assert.equal(parsed.payload.repository, "sample-org/vtdd-v2");
+  assert.equal(parsed.payload.issueNumber, 637);
+  assert.equal(parsed.payload.approvalScopeMatched, true);
+  assert.equal(parsed.payload.executionEnvelope.status, "ready_for_vps_helper_execution");
+  assert.equal(parsed.payload.executionEnvelope.helperInvocation.shell, false);
+  assert.equal(parsed.payload.executionEnvelope.helperExecutionInput.mode, "execute");
+});
+
+test("VPS runner rejects privileged maintenance queue payload that changes helper argv", () => {
+  const parsed = parseVpsPrivilegedMaintenanceQueueComment(privilegedMaintenanceQueueComment({
+    executionId: "vps-maint-637-b",
+    helperArgs: ["-n", "/bin/sh", "-c", "echo unsafe", "<helper-execution-input-json>"]
+  }));
+
+  assert.equal(parsed.ok, false);
+  assert.equal(parsed.reason, "vps_privileged_maintenance_payload_invalid");
+  assert.equal(
+    parsed.issues.includes("executionEnvelope.helperInvocation.args must match the bounded root helper invocation"),
+    true
+  );
+});
+
+test("VPS runner selects pending privileged maintenance queue only once", () => {
+  const comments = [
+    {
+      id: 1,
+      html_url: "https://github.example/comment/1",
+      created_at: "2026-05-30T00:00:00Z",
+      user: { login: "owner" },
+      body: privilegedMaintenanceQueueComment({ executionId: "vps-maint-637-c" })
+    },
+    {
+      id: 2,
+      created_at: "2026-05-30T00:01:00Z",
+      body: "<!-- vtdd:vps-runner-event:vps-maint-637-d -->\n```json\n{\"status\":\"completed\"}\n```"
+    },
+    {
+      id: 3,
+      created_at: "2026-05-30T00:02:00Z",
+      body: privilegedMaintenanceQueueComment({ executionId: "vps-maint-637-d" })
+    }
+  ];
+
+  const selected = selectPendingVpsPrivilegedMaintenanceExecutions({
+    comments,
+    repositoryPolicies: normalizeRepositoryPolicies({ allowedRepositories: ["sample-org/vtdd-v2"] })
+  });
+
+  assert.equal(selected.length, 1);
+  assert.equal(selected[0].payload.executionId, "vps-maint-637-c");
+  assert.equal(selected[0].actors.queueCommentAuthor, "owner");
 });
 
 test("VPS runner rejects queue comments without scoped approval", () => {
@@ -2059,6 +2122,61 @@ function queueComment({
     "issueNumber": ${issueNumber},
     "relatedIssue": ${issueNumber},
     "issueTraceable": true
+  }
+}
+\`\`\``;
+}
+
+function privilegedMaintenanceQueueComment({
+  executionId,
+  helperArgs = ["-n", "/usr/local/sbin/vtdd-vps-maintenance-helper", "--execute", "--input", "<helper-execution-input-json>"]
+}) {
+  return `<!-- vtdd:vps-privileged-maintenance-execution:${executionId} -->
+\`\`\`json
+{
+  "executionId": "${executionId}",
+  "transport": "vps_privileged_maintenance_helper",
+  "repository": "sample-org/vtdd-v2",
+  "issueNumber": 637,
+  "approvalScopeMatched": true,
+  "approvalActor": "requester",
+  "issueTraceability": {
+    "canonicalSpec": "github_issue",
+    "issueNumber": 637,
+    "relatedIssue": 637,
+    "issueTraceable": true
+  },
+  "executionEnvelope": {
+    "kind": "vps_privileged_maintenance_helper_execution_envelope",
+    "status": "ready_for_vps_helper_execution",
+    "repository": "sample-org/vtdd-v2",
+    "requestId": "vps-maint-req-637",
+    "capabilityId": "vtdd-vps-runner-status",
+    "mode": "execute",
+    "helperInvocation": {
+      "executable": "sudo",
+      "args": ${JSON.stringify(helperArgs)},
+      "shell": false,
+      "inputFile": "helperExecutionInput"
+    },
+    "helperExecutionInput": {
+      "manifest": {
+        "version": 1,
+        "host": "vps",
+        "repository": "sample-org/vtdd-v2",
+        "capabilities": []
+      },
+      "helperRequest": {
+        "requestId": "vps-maint-req-637",
+        "relatedIssue": 637,
+        "capabilityId": "vtdd-vps-runner-status",
+        "approvalGrantId": "grant_637"
+      },
+      "mode": "execute",
+      "now": "2026-05-30T00:00:00.000Z"
+    },
+    "rootExecutionStarted": false,
+    "helperExecutionStarted": false
   }
 }
 \`\`\``;
