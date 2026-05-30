@@ -1648,11 +1648,11 @@ test("worker appends dashboard Butler chat turn and retrieves the same thread", 
   const body = await response.json();
   assert.equal(body.ok, true);
   assert.equal(body.threadId, "dashboard-main-marushu-vtdd-v2-p");
-  assert.equal(body.messages.length, 2);
+  assert.equal(body.messages.length, 1);
   assert.equal(body.messages[0].role, "owner");
   assert.equal(body.messages[0].messageId, "dashboard_owner_message:http-fallback-1");
-  assert.equal(body.messages[1].role, "butler");
-  assert.match(body.messages[1].text, /VPS Codex CLI/);
+  assert.equal(JSON.stringify(body.messages).includes("旧 `codex exec` 経路は削除済み"), false);
+  assert.equal(JSON.stringify(body.messages).includes("Custom GPT Butler"), false);
 
   const retrieveResponse = await worker.fetch(
     new Request("https://example.com/v2/dashboard/chat/dashboard-main-marushu-vtdd-v2-p", {
@@ -1663,7 +1663,7 @@ test("worker appends dashboard Butler chat turn and retrieves the same thread", 
   assert.equal(retrieveResponse.status, 200);
   const retrieveBody = await retrieveResponse.json();
   assert.equal(retrieveBody.ok, true);
-  assert.equal(retrieveBody.messages.length, 2);
+  assert.equal(retrieveBody.messages.length, 1);
   assert.equal(retrieveBody.messages[0].messageId, "dashboard_owner_message:http-fallback-1");
   assert.equal(retrieveBody.messages[0].text, "VPS Codex CLI とリアルタイムに会話したい");
   assert.equal(retrieveBody.summary, null);
@@ -2430,9 +2430,10 @@ test("worker appends dashboard Butler chat turn with dashboard passkey session c
   assert.equal(response.status, 202);
   const body = await response.json();
   assert.equal(body.ok, true);
-  assert.equal(body.messages.length, 2);
+  assert.equal(body.messages.length, 1);
   assert.equal(body.messages[0].role, "owner");
-  assert.equal(body.messages[1].role, "butler");
+  assert.equal(JSON.stringify(body.messages).includes("旧 `codex exec` 経路は削除済み"), false);
+  assert.equal(JSON.stringify(body.messages).includes("Custom GPT Butler"), false);
 });
 
 test("worker does not dispatch dashboard chat to the VPS runner queue", async () => {
@@ -2475,11 +2476,10 @@ test("worker does not dispatch dashboard chat to the VPS runner queue", async ()
   const body = await response.json();
   assert.equal(body.ok, true);
   assert.equal(body.execution, null);
-  assert.equal(body.messages.length, 2);
-  assert.equal(body.messages[1].role, "butler");
-  assert.equal(body.messages[1].status, "blocked");
-  assert.match(body.messages[1].text, /codex app-server/);
-  assert.match(body.messages[1].text, /旧 `codex exec` 経路は削除済み/);
+  assert.equal(body.messages.length, 1);
+  assert.equal(body.messages[0].role, "owner");
+  assert.equal(JSON.stringify(body.messages).includes("旧 `codex exec` 経路は削除済み"), false);
+  assert.equal(JSON.stringify(body.messages).includes("Custom GPT Butler"), false);
   assert.equal(calls.length, 0);
 
   const retrieveResponse = await worker.fetch(
@@ -2489,8 +2489,8 @@ test("worker does not dispatch dashboard chat to the VPS runner queue", async ()
     { ...dashboardAccessEnv, DASHBOARD_CHAT_STORE: store }
   );
   const retrieveBody = await retrieveResponse.json();
-  assert.equal(retrieveBody.messages.length, 2);
-  assert.equal(retrieveBody.messages[1].status, "blocked");
+  assert.equal(retrieveBody.messages.length, 1);
+  assert.equal(JSON.stringify(retrieveBody.messages).includes("旧 `codex exec` 経路は削除済み"), false);
 });
 
 test("worker connects VPS privileged maintenance intent from Dashboard Butler chat to helper queue", async () => {
@@ -2681,9 +2681,10 @@ test("worker allows dashboard passkey session chat without VPS runner handoff", 
   const body = await response.json();
   assert.equal(body.ok, true);
   assert.equal(body.execution, null);
-  assert.equal(body.messages[1].role, "butler");
-  assert.equal(body.messages[1].status, "blocked");
-  assert.match(body.messages[1].text, /app-server 接続 PR/);
+  assert.equal(body.messages.length, 1);
+  assert.equal(body.messages[0].role, "owner");
+  assert.equal(JSON.stringify(body.messages).includes("app-server 接続 PR"), false);
+  assert.equal(JSON.stringify(body.messages).includes("Custom GPT Butler"), false);
   assert.equal(calls.length, 0);
 });
 
@@ -2724,15 +2725,12 @@ test("worker HTTP dashboard nickname requests use non-live fallback instead of a
   const body = await response.json();
   assert.equal(body.ok, true);
   assert.equal(body.execution, null);
-  assert.equal(body.messages.length, 2);
+  assert.equal(body.messages.length, 1);
   assert.equal(body.messages[0].role, "owner");
   assert.equal(body.messages[0].text, "登録済みのニックネーム出して");
-  assert.equal(body.messages[1].role, "butler");
-  assert.equal(body.messages[1].status, "blocked");
-  assert.equal(body.messages[1].text.includes("登録済みニックネームです。"), false);
-  assert.equal(body.messages[1].text.includes("- marushu/vtdd-v2-p: ぶい, vtdd"), false);
-  assert.match(body.messages[1].text, /app-server/);
-  assert.match(body.messages[1].text, /未接続の状態で VPS Codex CLI に送ったふりはしません/);
+  assert.equal(JSON.stringify(body.messages).includes("登録済みニックネームです。"), false);
+  assert.equal(JSON.stringify(body.messages).includes("- marushu/vtdd-v2-p: ぶい, vtdd"), false);
+  assert.equal(JSON.stringify(body.messages).includes("未接続の状態で VPS Codex CLI に送ったふりはしません"), false);
 });
 
 test("worker stores dashboard chat without repository instead of dispatching handoff", async () => {
@@ -2756,10 +2754,10 @@ test("worker stores dashboard chat without repository instead of dispatching han
   const body = await response.json();
   assert.equal(body.ok, true);
   assert.equal(body.execution, null);
-  assert.equal(body.messages[1].role, "butler");
-  assert.equal(body.messages[1].status, "blocked");
-  assert.equal(body.messages[1].text.includes("対象 repo: 未指定"), true);
-  assert.equal(body.messages[1].text.includes("app-server"), true);
+  assert.equal(body.messages.length, 1);
+  assert.equal(body.messages[0].role, "owner");
+  assert.equal(JSON.stringify(body.messages).includes("対象 repo: 未指定"), false);
+  assert.equal(JSON.stringify(body.messages).includes("Custom GPT Butler"), false);
 });
 
 test("worker rejects unauthenticated dashboard chat VPS runner dispatch", async () => {
@@ -2907,17 +2905,19 @@ test("DashboardChatRoom stores owner messages without pushing a VPS runner job",
   );
 
   assert.equal(runnerSocket.sent.length, 0);
-  assert.equal(dashboardSocket.sent.length, 2);
+  assert.equal(dashboardSocket.sent.length, 3);
   const broadcast = JSON.parse(dashboardSocket.sent[0]);
-  assert.equal(broadcast.messages.length, 2);
+  assert.equal(broadcast.messages.length, 1);
   assert.equal(broadcast.messages[0].role, "owner");
   assert.equal(broadcast.messages[0].text, "今日は何月何日？日本時間を答えて");
-  assert.equal(broadcast.messages[1].role, "butler");
-  assert.equal(broadcast.messages[1].status, "blocked");
-  assert.equal(broadcast.messages[1].text.includes("app-server"), true);
+  assert.equal(JSON.stringify(broadcast.messages).includes("旧 `codex exec` 経路は削除済み"), false);
   const ack = JSON.parse(dashboardSocket.sent[1]);
   assert.equal(ack.type, "owner_message_accepted");
   assert.equal(ack.ok, true);
+  const reconnectStatus = JSON.parse(dashboardSocket.sent[2]);
+  assert.equal(reconnectStatus.type, "transient_status");
+  assert.equal(reconnectStatus.status, "pending_app_server_bridge");
+  assert.match(reconnectStatus.text, /送信は保存済みです/);
 });
 
 test("DashboardChatRoom sends ordinary owner turns to connected app-server bridge without repository resolution", async () => {

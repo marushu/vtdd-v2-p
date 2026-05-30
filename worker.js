@@ -57197,19 +57197,7 @@ var DashboardChatRoom = class {
     );
     const bridgeSockets = this.connectedAppServerBridgeSockets(threadId);
     if (bridgeSockets.length === 0) {
-      const butlerMessage = normalizeDashboardChatMessage(
-        {
-          threadId,
-          role: "butler",
-          repository,
-          relatedIssue,
-          status: "blocked",
-          text: buildDashboardAppServerNotConnectedReply({ repository, relatedIssue }),
-          createdAt: new Date(Date.parse(now) + 1).toISOString()
-        },
-        { threadId }
-      );
-      const messages2 = store ? await store.appendMany(threadId, [ownerMessage, butlerMessage]) : [ownerMessage, butlerMessage].filter(Boolean);
+      const messages2 = store ? await store.appendMany(threadId, [ownerMessage]) : [ownerMessage].filter(Boolean);
       await this.writeAcceptedOwnerMessage({ threadId, clientMessageId, messageId: ownerMessage.messageId, acceptedAt: now });
       await this.broadcastThread({ threadId, messages: messages2 });
       this.sendSocket(socket, {
@@ -57217,6 +57205,11 @@ var DashboardChatRoom = class {
         ok: true,
         clientMessageId,
         messageId: ownerMessage.messageId
+      });
+      await this.broadcastTransientStatus({
+        threadId,
+        text: "\u9001\u4FE1\u306F\u4FDD\u5B58\u6E08\u307F\u3067\u3059\u3002app-server bridge \u306E\u518D\u63A5\u7D9A\u5F8C\u306B\u540C\u3058 thread \u3067\u7D9A\u3051\u3089\u308C\u307E\u3059\u3002",
+        status: "pending_app_server_bridge"
       });
       return;
     }
@@ -65506,18 +65499,18 @@ async function buildDashboardChatTurn(payload, options = {}) {
     origin: options.origin,
     env: options.env
   }) : null;
-  const butlerMessage = normalizeDashboardChatMessage(
+  const butlerMessage = hasVpsPrivilegedMaintenanceIntent ? normalizeDashboardChatMessage(
     {
       threadId,
       role: "butler",
       repository,
       relatedIssue,
-      status: hasVpsPrivilegedMaintenanceIntent ? normalizeDashboardChatStatus(vpsMaintenanceFlow?.messageStatus || "blocked") : "blocked",
-      text: hasVpsPrivilegedMaintenanceIntent ? vpsMaintenanceFlow?.reply || buildDashboardVpsPrivilegedMaintenanceReply({ repository, relatedIssue }) : buildDashboardAppServerNotConnectedReply({ repository, relatedIssue }),
+      status: normalizeDashboardChatStatus(vpsMaintenanceFlow?.messageStatus || "blocked"),
+      text: vpsMaintenanceFlow?.reply || buildDashboardVpsPrivilegedMaintenanceReply({ repository, relatedIssue }),
       createdAt: new Date(Date.parse(now) + 1).toISOString()
     },
     { threadId }
-  );
+  ) : null;
   return {
     ok: true,
     repository,
@@ -65822,20 +65815,6 @@ function buildDashboardVpsPrivilegedMaintenanceReply({ repository, relatedIssue 
     "- next action: passkey scope \u306B host / repository / capability / impact / expiry \u3092\u8868\u793A\u3057\u3066\u304B\u3089\u3001VPS runner \u304C root-owned helper \u3078\u6E21\u3057\u307E\u3059\u3002",
     "",
     "\u73FE\u72B6: Dashboard Butler \u306F\u3053\u306E intent \u3092 VPS privileged maintenance flow \u3068\u3057\u3066\u8AAC\u660E\u3067\u304D\u307E\u3059\u3002\u305F\u3060\u3057 live root \u5B9F\u884C\u306E\u5B8C\u4E86 claim \u306F\u3001passkey approval \u3068 VPS runner pickup \u306E E2E evidence \u304C\u63C3\u3046\u307E\u3067\u7981\u6B62\u3067\u3059\u3002"
-  ].join("\n");
-}
-function buildDashboardAppServerNotConnectedReply({ repository, relatedIssue } = {}) {
-  const repoPhrase = repository ? `\u5BFE\u8C61 repo: ${repository}` : "\u5BFE\u8C61 repo: \u672A\u6307\u5B9A";
-  const issuePhrase = relatedIssue ? `\u95A2\u9023 Issue: #${relatedIssue}` : "\u95A2\u9023 Issue: \u672A\u6307\u5B9A";
-  return [
-    "Dashboard Butler \u306E\u65E7 `codex exec` \u7D4C\u8DEF\u306F\u524A\u9664\u6E08\u307F\u3067\u3059\u3002",
-    "",
-    "\u3053\u306E\u753B\u9762\u304B\u3089\u958B\u767A\u5B9F\u884C\u30FB\u901A\u5E38\u4F1A\u8A71\u3092\u7D9A\u3051\u308B\u306B\u306F\u3001\u5225\u7D4C\u8DEF\u306E `codex app-server` \u30D6\u30EA\u30C3\u30B8\u5B9F\u88C5\u304C\u5FC5\u8981\u3067\u3059\u3002\u672A\u63A5\u7D9A\u306E\u72B6\u614B\u3067 VPS Codex CLI \u306B\u9001\u3063\u305F\u3075\u308A\u306F\u3057\u307E\u305B\u3093\u3002",
-    "",
-    `- ${repoPhrase}`,
-    `- ${issuePhrase}`,
-    "",
-    "\u73FE\u6642\u70B9\u306E\u5B9F\u884C fallback \u306F Custom GPT Butler \u3067\u3059\u3002Dashboard Butler \u306F app-server \u63A5\u7D9A PR \u304C\u5165\u308B\u307E\u3067\u672A\u5B8C\u6210\u3068\u3057\u3066\u6271\u3044\u307E\u3059\u3002"
   ].join("\n");
 }
 function normalizeDashboardChatMessage(message, defaults = {}) {

@@ -293,19 +293,7 @@ export class DashboardChatRoom {
     );
     const bridgeSockets = this.connectedAppServerBridgeSockets(threadId);
     if (bridgeSockets.length === 0) {
-      const butlerMessage = normalizeDashboardChatMessage(
-        {
-          threadId,
-          role: "butler",
-          repository,
-          relatedIssue,
-          status: "blocked",
-          text: buildDashboardAppServerNotConnectedReply({ repository, relatedIssue }),
-          createdAt: new Date(Date.parse(now) + 1).toISOString()
-        },
-        { threadId }
-      );
-      const messages = store ? await store.appendMany(threadId, [ownerMessage, butlerMessage]) : [ownerMessage, butlerMessage].filter(Boolean);
+      const messages = store ? await store.appendMany(threadId, [ownerMessage]) : [ownerMessage].filter(Boolean);
       await this.writeAcceptedOwnerMessage({ threadId, clientMessageId, messageId: ownerMessage.messageId, acceptedAt: now });
       await this.broadcastThread({ threadId, messages });
       this.sendSocket(socket, {
@@ -313,6 +301,11 @@ export class DashboardChatRoom {
         ok: true,
         clientMessageId,
         messageId: ownerMessage.messageId
+      });
+      await this.broadcastTransientStatus({
+        threadId,
+        text: "送信は保存済みです。app-server bridge の再接続後に同じ thread で続けられます。",
+        status: "pending_app_server_bridge"
       });
       return;
     }
@@ -9723,22 +9716,20 @@ async function buildDashboardChatTurn(payload, options = {}) {
         env: options.env
       })
     : null;
-  const butlerMessage = normalizeDashboardChatMessage(
-    {
-      threadId,
-      role: "butler",
-      repository,
-      relatedIssue,
-      status: hasVpsPrivilegedMaintenanceIntent
-        ? normalizeDashboardChatStatus(vpsMaintenanceFlow?.messageStatus || "blocked")
-        : "blocked",
-      text: hasVpsPrivilegedMaintenanceIntent
-        ? vpsMaintenanceFlow?.reply || buildDashboardVpsPrivilegedMaintenanceReply({ repository, relatedIssue })
-        : buildDashboardAppServerNotConnectedReply({ repository, relatedIssue }),
-      createdAt: new Date(Date.parse(now) + 1).toISOString()
-    },
-    { threadId }
-  );
+  const butlerMessage = hasVpsPrivilegedMaintenanceIntent
+    ? normalizeDashboardChatMessage(
+        {
+          threadId,
+          role: "butler",
+          repository,
+          relatedIssue,
+          status: normalizeDashboardChatStatus(vpsMaintenanceFlow?.messageStatus || "blocked"),
+          text: vpsMaintenanceFlow?.reply || buildDashboardVpsPrivilegedMaintenanceReply({ repository, relatedIssue }),
+          createdAt: new Date(Date.parse(now) + 1).toISOString()
+        },
+        { threadId }
+      )
+    : null;
 
   return {
     ok: true,
@@ -10082,21 +10073,6 @@ function buildDashboardVpsPrivilegedMaintenanceReply({ repository, relatedIssue 
     "- next action: passkey scope に host / repository / capability / impact / expiry を表示してから、VPS runner が root-owned helper へ渡します。",
     "",
     "現状: Dashboard Butler はこの intent を VPS privileged maintenance flow として説明できます。ただし live root 実行の完了 claim は、passkey approval と VPS runner pickup の E2E evidence が揃うまで禁止です。"
-  ].join("\n");
-}
-
-function buildDashboardAppServerNotConnectedReply({ repository, relatedIssue } = {}) {
-  const repoPhrase = repository ? `対象 repo: ${repository}` : "対象 repo: 未指定";
-  const issuePhrase = relatedIssue ? `関連 Issue: #${relatedIssue}` : "関連 Issue: 未指定";
-  return [
-    "Dashboard Butler の旧 `codex exec` 経路は削除済みです。",
-    "",
-    "この画面から開発実行・通常会話を続けるには、別経路の `codex app-server` ブリッジ実装が必要です。未接続の状態で VPS Codex CLI に送ったふりはしません。",
-    "",
-    `- ${repoPhrase}`,
-    `- ${issuePhrase}`,
-    "",
-    "現時点の実行 fallback は Custom GPT Butler です。Dashboard Butler は app-server 接続 PR が入るまで未完成として扱います。"
   ].join("\n");
 }
 
