@@ -2551,6 +2551,9 @@ test("worker connects VPS privileged maintenance intent from Dashboard Butler ch
   assert.match(body.messages[1].text, /approval_required/);
   assert.match(body.messages[1].text, /rootExecutionStarted=false/);
   assert.match(body.messages[1].text, /approval URL/);
+  const approvalUrl = new URL(body.execution.approvalOperatorUrl);
+  assert.equal(approvalUrl.searchParams.get("dashboardThreadId"), "dashboard-main-marushu-vtdd-v2-p");
+  assert.equal(approvalUrl.searchParams.get("vpsProposalId"), body.execution.vpsProposalId);
   assert.doesNotMatch(body.messages[1].text, /app-server 接続 PR/);
 
   await provider.store({
@@ -8372,7 +8375,9 @@ test("worker serves VPS privileged maintenance proposal with scoped passkey oper
         rollbackPlan: "disable capability and keep audit history",
         expectedRuntimeTruth: ["before package check", "exit code", "after Chromium launch check"],
         reason: "PR #632 Playwright E2E blocker requires Chromium host dependencies",
-        impactScope: "apt packages for Chromium runtime"
+        impactScope: "apt packages for Chromium runtime",
+        dashboardThreadId: "dashboard-main-marushu-vtdd-v2-p",
+        executionId: "issue637-vps-auto-continue"
       })
     }),
     { ...gatewayAuthEnv, MEMORY_PROVIDER: provider }
@@ -8402,6 +8407,8 @@ test("worker serves VPS privileged maintenance proposal with scoped passkey oper
   assert.equal(operatorUrl.searchParams.get("actionType"), "destructive");
   assert.equal(operatorUrl.searchParams.get("highRiskKind"), "vps_runner_admin");
   assert.equal(operatorUrl.searchParams.get("vpsProposalId"), body.vpsProposalId);
+  assert.equal(operatorUrl.searchParams.get("dashboardThreadId"), "dashboard-main-marushu-vtdd-v2-p");
+  assert.equal(operatorUrl.searchParams.get("executionId"), "issue637-vps-auto-continue");
   assert.equal(operatorUrl.searchParams.get("vpsHost"), null);
   assert.equal(operatorUrl.searchParams.get("vpsCapabilityId"), null);
   assert.equal(body.ownerAction.source.approvalOperatorUrl, body.approvalOperatorUrl);
@@ -8546,7 +8553,9 @@ test("worker passkey operator displays VPS maintenance approval scope details fr
         allowedArgs: ["npx playwright install-deps chromium"],
         rollbackPlan: "disable capability and keep audit history",
         reason: "PR #632 Playwright E2E blocker requires Chromium host dependencies",
-        impactScope: "apt packages"
+        impactScope: "apt packages",
+        dashboardThreadId: "dashboard-main-marushu-vtdd-v2-p",
+        executionId: "issue637-vps-auto-continue"
       })
     }),
     { ...gatewayAuthEnv, MEMORY_PROVIDER: provider }
@@ -8568,6 +8577,12 @@ test("worker passkey operator displays VPS maintenance approval scope details fr
   assert.equal(html.includes(`"vpsProposalId":"${proposalBody.vpsProposalId}"`), true);
   assert.equal(html.includes('"vpsHost":"x85-131-245-163"'), true);
   assert.equal(html.includes('"vpsCapabilityId":"playwright.chromium.deps"'), true);
+  assert.equal(html.includes('"dashboardThreadId":"dashboard-main-marushu-vtdd-v2-p"'), true);
+  assert.equal(html.includes('"executionId":"issue637-vps-auto-continue"'), true);
+  assert.equal(html.includes("continueVpsMaintenanceFromApproval"), true);
+  assert.equal(html.includes("/v2/dashboard/chat/messages"), true);
+  assert.equal(html.includes("Copy approvalGrantId"), false);
+  assert.equal(html.includes("同じ chat thread に戻して helper queue へ自動継続します"), true);
 });
 
 test("worker rejects hand-authored VPS passkey scope without stored proposal", async () => {

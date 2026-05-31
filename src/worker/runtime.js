@@ -4591,7 +4591,9 @@ async function createVpsPrivilegedMaintenanceProposal({ payload, provider, origi
   const approvalOperatorUrl = buildVpsMaintenanceApprovalOperatorUrl({
     origin,
     approvalScope,
-    vpsProposalId
+    vpsProposalId,
+    dashboardThreadId: payload?.dashboardThreadId || payload?.dashboard_thread_id || payload?.threadId || payload?.thread_id,
+    executionId: payload?.executionId || payload?.execution_id
   });
   const ownerAction = {
     repository: proposal.repository,
@@ -4662,7 +4664,7 @@ function createVpsMaintenanceApprovalProposalRecord({ vpsProposalId, proposal, a
   });
 }
 
-function buildVpsMaintenanceApprovalOperatorUrl({ origin, approvalScope, vpsProposalId }) {
+function buildVpsMaintenanceApprovalOperatorUrl({ origin, approvalScope, vpsProposalId, dashboardThreadId, executionId }) {
   const url = new URL("/v2/approval/passkey/operator", `${origin}/`);
   url.searchParams.set("mode", "vps");
   url.searchParams.set("vpsProposalId", vpsProposalId);
@@ -4671,6 +4673,14 @@ function buildVpsMaintenanceApprovalOperatorUrl({ origin, approvalScope, vpsProp
   url.searchParams.set("phase", approvalScope.phase || "execution");
   url.searchParams.set("actionType", approvalScope.actionType);
   url.searchParams.set("highRiskKind", approvalScope.highRiskKind);
+  const normalizedThreadId = normalizeDashboardThreadId(dashboardThreadId);
+  if (normalizedThreadId) {
+    url.searchParams.set("dashboardThreadId", normalizedThreadId);
+  }
+  const normalizedExecutionId = normalizeText(executionId);
+  if (normalizedExecutionId) {
+    url.searchParams.set("executionId", normalizedExecutionId);
+  }
   return url.href;
 }
 
@@ -6643,6 +6653,8 @@ async function handlePasskeyOperatorPageRequest(request, env) {
     vpsCapabilityId: vpsScope.vpsCapabilityId || vpsScope.display?.capabilityId || "",
     vpsImpactScope: vpsScope.vpsImpactScope || vpsScope.display?.impactScope || "",
     vpsExpiresAt: vpsScope.vpsExpiresAt || vpsScope.display?.expiresAt || "",
+    vpsDashboardThreadId: url.searchParams.get("dashboardThreadId") || url.searchParams.get("threadId"),
+    vpsExecutionId: url.searchParams.get("executionId"),
     githubActionsVariableProposalId: url.searchParams.get("variableProposalId"),
     githubActionsVariableProposalName:
       githubActionsVariableScope.variableName || githubActionsVariableProposal?.content?.variableName || "",
@@ -10544,7 +10556,11 @@ async function buildDashboardVpsPrivilegedMaintenanceNaturalLanguageFlow({
       };
     }
     const proposal = await createVpsPrivilegedMaintenanceProposal({
-      payload: proposalPayload,
+      payload: {
+        ...proposalPayload,
+        dashboardThreadId: normalizeDashboardThreadId(payload?.threadId || payload?.thread_id),
+        executionId: normalizeText(payload?.executionId || payload?.execution_id)
+      },
       provider,
       origin: origin || "https://example.com"
     });
