@@ -1314,6 +1314,23 @@ export default {
       return handleGitHubActionsVariableSyncRequest(request, env);
     }
 
+    if (request.method === "POST" && isApiPath(url.pathname, "/action/github-actions-variable/proposals")) {
+      const auth = authorizeGatewayRequest({
+        request,
+        env,
+        apiSuffix: "/action/github-actions-variable/proposals"
+      });
+      if (!auth.ok) {
+        return json(auth.status, {
+          ok: false,
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+
+      return handleGitHubActionsVariableSyncProposalRequest(request, url, env);
+    }
+
     if (request.method === "POST" && isApiPath(url.pathname, "/action/repository-nickname")) {
       const auth = authorizeGatewayRequest({
         request,
@@ -6164,29 +6181,46 @@ async function handleGitHubActionsVariableSyncRequest(request, env) {
     });
   }
 
+  const provider = resolveMemoryProvider(env);
   const policyInput =
     payload.policyInput && typeof payload.policyInput === "object" ? payload.policyInput : {};
+  const proposalResolution = await resolveGitHubActionsVariableSyncProposal({
+    provider,
+    proposalId: payload.variableProposalId || payload.variable_proposal_id || policyInput.variableProposalId
+  });
+  if (!proposalResolution.ok) {
+    return json(proposalResolution.status, {
+      ok: false,
+      error: proposalResolution.error,
+      reason: proposalResolution.reason,
+      issues: proposalResolution.issues ?? []
+    });
+  }
+  const variableProposal = proposalResolution.proposal;
+  const repository = variableProposal?.repository || payload.repository;
+  const variableName = variableProposal?.variableName || payload.variableName;
+  const variableValue = variableProposal?.variableValue || payload.variableValue;
   const resolvedApprovalGrant = await resolveApprovalGrant({
     payload: {
       phase: normalizeText(payload.phase) || "execution",
       highRiskKind: "github_actions_variable_sync",
-      repositoryInput: payload.repository,
-      variableName: payload.variableName
+      repositoryInput: repository,
+      variableName
     },
     policyInput: {
       ...policyInput,
       actionType: "destructive",
-      repositoryInput: payload.repository,
+      repositoryInput: repository,
       highRiskKind: "github_actions_variable_sync",
-      variableName: payload.variableName
+      variableName
     },
     env
   });
 
   const executed = await executeGitHubActionsVariableSync({
-    repository: payload.repository,
-    variableName: payload.variableName,
-    variableValue: payload.variableValue,
+    repository,
+    variableName,
+    variableValue,
     approvalGrant:
       payload.approvalGrant ?? policyInput.approvalGrant ?? resolvedApprovalGrant.approvalGrant,
     env
@@ -6206,10 +6240,275 @@ async function handleGitHubActionsVariableSyncRequest(request, env) {
     });
   }
 
+  const ownerAction = buildGitHubActionsVariableSyncOwnerAction({
+    repository,
+    variableName,
+    proposalId: variableProposal?.proposalId,
+    issueNumber: variableProposal?.issueNumber
+  });
+  const notification = await recordGitHubActionsVariableSyncNotification({
+    ownerAction,
+    env
+  });
+
   return json(200, {
     ok: true,
-    variableSync: executed.variableSync
+    variableSync: executed.variableSync,
+    ownerAction,
+    notification,
+    runtimeTruth: {
+      kind: "github_actions_variable_sync",
+      status: executed.variableSync?.status || "synced",
+      repository,
+      variableName,
+      variableProposalId: variableProposal?.proposalId || null,
+      valueRedacted: true,
+      nextAction: "production_deploy_required",
+      pwaNotificationRequired: true,
+      pwaNotificationStatus: notification.pwaNotificationStatus
+    }
   });
+}
+
+async function handleGitHubActionsVariableSyncProposalRequest(request, url, env) {
+  const provider = resolveMemoryProvider(env);
+  const validation = validateMemoryProvider(provider);
+  if (!validation.ok) {
+    return json(503, {
+      ok: false,
+      error: "memory_provider_unavailable",
+      reason: "valid memory provider is required for GitHub Actions variable sync proposals"
+    });
+  }
+
+  const payload = await readJson(request);
+  const proposal = buildGitHubActionsVariableSyncProposal({
+    payload,
+    origin: url.origin
+  });
+  if (!proposal.ok) {
+    return json(422, {
+      ok: false,
+      error: "github_actions_variable_sync_proposal_invalid",
+      issues: proposal.issues
+    });
+  }
+
+  const record = createGitHubActionsVariableSyncProposalRecord(proposal.body);
+  const stored = await provider.store(record);
+  if (!stored?.ok) {
+    return json(503, {
+      ok: false,
+      error: "github_actions_variable_sync_proposal_write_failed",
+      reason: "failed to persist GitHub Actions variable sync proposal"
+    });
+  }
+
+  return json(200, {
+    ok: true,
+    variableProposalId: proposal.body.proposalId,
+    approvalScope: proposal.body.approvalScope,
+    approvalOperatorUrl: proposal.body.approvalOperatorUrl,
+    ownerAction: buildGitHubActionsVariableSyncOwnerAction(proposal.body),
+    runtimeTruth: {
+      kind: "github_actions_variable_sync_proposal",
+      status: "approval_required",
+      repository: proposal.body.repository,
+      variableName: proposal.body.variableName,
+      variableProposalId: proposal.body.proposalId,
+      valueRedacted: true,
+      pwaNotificationRequired: true
+    }
+  });
+}
+
+function buildGitHubActionsVariableSyncProposal({ payload, origin }) {
+  const input = normalizeObject(payload);
+  const repository = normalizeCanonicalRepositoryInput(input.repository || input.repositoryInput);
+  const variableName = normalizeText(input.variableName || input.variable_name);
+  const variableValue = normalizeText(input.variableValue || input.variable_value);
+  const issueNumber = normalizeIssue(input.issueNumber || input.issue_number || input.relatedIssue);
+  const issues = [];
+  if (!repository) issues.push("repository is required");
+  if (
+    variableName !== "VTDD_DASHBOARD_VPS_MAINTENANCE_HOST" &&
+    variableName !== "VTDD_DASHBOARD_VPS_MAINTENANCE_WORKDIR"
+  ) {
+    issues.push("variableName must be VTDD_DASHBOARD_VPS_MAINTENANCE_HOST or VTDD_DASHBOARD_VPS_MAINTENANCE_WORKDIR");
+  }
+  if (!variableValue) issues.push("variableValue is required");
+  if (issues.length > 0) {
+    return { ok: false, issues };
+  }
+
+  const proposalId =
+    normalizeText(input.variableProposalId || input.proposalId) ||
+    `github-actions-variable-sync-${safeIdentifier(repository)}-${safeIdentifier(variableName)}-${Date.now()}`;
+  const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+  const approvalScope = normalizeScopeSnapshot({
+    actionType: "destructive",
+    highRiskKind: "github_actions_variable_sync",
+    repositoryInput: repository,
+    relatedIssue: issueNumber || undefined,
+    phase: "execution",
+    variableName
+  });
+  const approvalOperatorUrl = buildGitHubActionsVariableSyncApprovalOperatorUrl({
+    origin,
+    approvalScope,
+    variableProposalId: proposalId
+  });
+
+  return {
+    ok: true,
+    body: {
+      proposalId,
+      repository,
+      issueNumber,
+      variableName,
+      variableValue,
+      approvalScope,
+      approvalOperatorUrl,
+      expiresAt
+    }
+  };
+}
+
+function createGitHubActionsVariableSyncProposalRecord(proposal) {
+  return createMemoryRecord({
+    id: proposal.proposalId,
+    type: MemoryRecordType.APPROVAL_LOG,
+    content: {
+      kind: "github_actions_variable_sync_approval_proposal",
+      status: "pending_approval",
+      proposalId: proposal.proposalId,
+      repository: proposal.repository,
+      issueNumber: proposal.issueNumber || null,
+      variableName: proposal.variableName,
+      variableValue: proposal.variableValue,
+      approvalScope: proposal.approvalScope,
+      expiresAt: proposal.expiresAt
+    },
+    metadata: {
+      source: "github_actions_variable_sync_proposal",
+      repository: proposal.repository,
+      variableName: proposal.variableName,
+      valueRedacted: true
+    },
+    priority: 94,
+    tags: ["github_actions_variable_sync", "passkey_approval", "pending"],
+    createdAt: new Date().toISOString()
+  }).record;
+}
+
+function buildGitHubActionsVariableSyncApprovalOperatorUrl({ origin, approvalScope, variableProposalId }) {
+  const url = new URL("/v2/approval/passkey/operator", `${origin || "https://example.com"}/`);
+  url.searchParams.set("mode", "github_actions_variable_sync");
+  url.searchParams.set("variableProposalId", variableProposalId);
+  url.searchParams.set("repositoryInput", approvalScope.repositoryInput);
+  if (approvalScope.relatedIssue) {
+    url.searchParams.set("issueNumber", approvalScope.relatedIssue);
+  }
+  url.searchParams.set("phase", approvalScope.phase || "execution");
+  url.searchParams.set("actionType", approvalScope.actionType);
+  url.searchParams.set("highRiskKind", approvalScope.highRiskKind);
+  return url.href;
+}
+
+async function resolveGitHubActionsVariableSyncProposal({ provider, proposalId }) {
+  const id = normalizeText(proposalId);
+  if (!id) {
+    return { ok: true, proposal: null };
+  }
+  if (!provider || typeof provider.query !== "function") {
+    return {
+      ok: false,
+      status: 503,
+      error: "memory_provider_unavailable",
+      reason: "valid memory provider is required for GitHub Actions variable sync proposal"
+    };
+  }
+  const record = await findApprovalRecordById(provider, id);
+  if (!record || normalizeText(record?.content?.kind) !== "github_actions_variable_sync_approval_proposal") {
+    return {
+      ok: false,
+      status: 404,
+      error: "github_actions_variable_sync_proposal_not_found",
+      reason: "matching GitHub Actions variable sync proposal was not found"
+    };
+  }
+  if (Date.parse(normalizeText(record.content.expiresAt)) <= Date.now()) {
+    return {
+      ok: false,
+      status: 422,
+      error: "github_actions_variable_sync_proposal_expired",
+      issues: ["GitHub Actions variable sync proposal is expired"]
+    };
+  }
+  return {
+    ok: true,
+    proposal: {
+      proposalId: normalizeText(record.content.proposalId || record.id),
+      repository: normalizeCanonicalRepositoryInput(record.content.repository),
+      issueNumber: normalizeIssue(record.content.issueNumber),
+      variableName: normalizeText(record.content.variableName),
+      variableValue: normalizeText(record.content.variableValue),
+      approvalScope: normalizeScopeSnapshot(record.content.approvalScope),
+      expiresAt: normalizeText(record.content.expiresAt)
+    }
+  };
+}
+
+function buildGitHubActionsVariableSyncOwnerAction({ repository, variableName, proposalId, issueNumber } = {}) {
+  return {
+    actionId: proposalId || `github-actions-variable-sync-${safeIdentifier(repository)}-${safeIdentifier(variableName)}`,
+    repository,
+    issueNumber: issueNumber || null,
+    title: "GitHub Actions variable sync",
+    summary: `${variableName} を同期しました。値は表示していません。次に production deploy が必要です。`,
+    workflowName: "github-actions-variable-sync",
+    url: "/dashboard/notifications?focus=owner-action"
+  };
+}
+
+async function recordGitHubActionsVariableSyncNotification({ ownerAction, env } = {}) {
+  const event = normalizeOwnerActionRequiredDashboardEvent(ownerAction);
+  if (!event.ok) {
+    return {
+      ok: false,
+      pwaNotificationStatus: "event_invalid",
+      error: event.error,
+      reason: event.reason
+    };
+  }
+  const eventStore = resolveDashboardEventStore(env);
+  if (!eventStore) {
+    return {
+      ok: false,
+      pwaNotificationStatus: "dashboard_event_store_unavailable",
+      reason: "dashboard event store is not configured"
+    };
+  }
+  const webPush = await dispatchDashboardWebPushForEvent(env, event.event);
+  const eventWithNotificationTruth = normalizeDashboardEventRecord({
+    ...event.event,
+    status: "completed",
+    conclusion: "success",
+    pwaNotificationStatus: webPush.ok ? "sent" : "pwa_notification_unavailable",
+    pwaNotificationError: webPush.ok ? null : webPush.error || "dashboard_web_push_unavailable",
+    pwaNotificationReason: webPush.ok ? null : webPush.reason || null,
+    pwaNotificationAttempted: webPush.attempted ?? 0,
+    pwaNotificationDelivered: webPush.delivered ?? 0,
+    updatedAt: new Date().toISOString()
+  });
+  await eventStore.put(eventWithNotificationTruth);
+  return {
+    ok: true,
+    event: eventWithNotificationTruth,
+    pwaNotificationStatus: eventWithNotificationTruth.pwaNotificationStatus,
+    pwaNotificationAttempted: eventWithNotificationTruth.pwaNotificationAttempted,
+    pwaNotificationDelivered: eventWithNotificationTruth.pwaNotificationDelivered
+  };
 }
 
 async function handleCustomGptRecoveryPageRequest(url, env) {
@@ -6259,7 +6558,12 @@ async function handlePasskeyOperatorPageRequest(request, env) {
     provider: resolveMemoryProvider(env),
     proposalId: url.searchParams.get("vpsProposalId")
   });
+  const githubActionsVariableProposal = await retrieveGitHubActionsVariableSyncProposalForOperator({
+    provider: resolveMemoryProvider(env),
+    proposalId: url.searchParams.get("variableProposalId")
+  });
   const vpsScope = vpsProposal?.content?.approvalScope ?? {};
+  const githubActionsVariableScope = githubActionsVariableProposal?.content?.approvalScope ?? {};
   const html = renderPasskeyOperatorPage({
     origin: url.origin,
     syncApiBase,
@@ -6277,6 +6581,9 @@ async function handlePasskeyOperatorPageRequest(request, env) {
     vpsCapabilityId: vpsScope.vpsCapabilityId || vpsScope.display?.capabilityId || "",
     vpsImpactScope: vpsScope.vpsImpactScope || vpsScope.display?.impactScope || "",
     vpsExpiresAt: vpsScope.vpsExpiresAt || vpsScope.display?.expiresAt || "",
+    githubActionsVariableProposalId: url.searchParams.get("variableProposalId"),
+    githubActionsVariableProposalName:
+      githubActionsVariableScope.variableName || githubActionsVariableProposal?.content?.variableName || "",
     returnUrl: normalizeOperatorReturnUrl(url.searchParams.get("returnUrl")),
     dashboardReturnPath: sanitizeDashboardPreAuthReturnPath(url.searchParams.get("dashboardReturnPath")),
     operatorId: url.searchParams.get("operatorId") || "vtdd-operator",
@@ -6304,6 +6611,14 @@ async function retrieveVpsMaintenanceApprovalProposalForOperator({ provider, pro
   }
   const record = await findApprovalRecordById(provider, normalizeText(proposalId));
   return normalizeText(record?.content?.kind) === "vps_privileged_maintenance_approval_proposal" ? record : null;
+}
+
+async function retrieveGitHubActionsVariableSyncProposalForOperator({ provider, proposalId }) {
+  if (!proposalId || !provider || typeof provider.query !== "function") {
+    return null;
+  }
+  const record = await findApprovalRecordById(provider, normalizeText(proposalId));
+  return normalizeText(record?.content?.kind) === "github_actions_variable_sync_approval_proposal" ? record : null;
 }
 
 function normalizeOptionalHttpUrl(value) {
@@ -7178,12 +7493,32 @@ async function buildPasskeyApprovalScopeForRequest({ provider, payload }) {
   if (highRiskKind === "vps_runner_admin" || highRiskKind === "vps_admin") {
     return resolveVpsMaintenanceApprovalScopeForChallenge({ provider, payload });
   }
+  if (highRiskKind === "github_actions_variable_sync") {
+    const proposalId = normalizeText(payload?.variableProposalId || payload?.policyInput?.variableProposalId);
+    if (proposalId) {
+      return resolveGitHubActionsVariableSyncApprovalScopeForChallenge({ provider, proposalId });
+    }
+  }
   return {
     ok: true,
     scope: buildApprovalScopeSnapshot({
       payload,
       policyInput: payload?.policyInput
     })
+  };
+}
+
+async function resolveGitHubActionsVariableSyncApprovalScopeForChallenge({ provider, proposalId }) {
+  const resolution = await resolveGitHubActionsVariableSyncProposal({ provider, proposalId });
+  if (!resolution.ok) {
+    return {
+      ok: false,
+      issues: [resolution.reason || resolution.error || "GitHub Actions variable sync approval proposal was not found"]
+    };
+  }
+  return {
+    ok: true,
+    scope: normalizeScopeSnapshot(resolution.proposal.approvalScope)
   };
 }
 
