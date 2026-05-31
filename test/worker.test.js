@@ -12074,6 +12074,74 @@ test("worker syncs OPENAI_API_KEY through approval-bound GitHub Actions secret r
   assert.equal(calls[1].url.endsWith("/actions/secrets/OPENAI_API_KEY"), true);
 });
 
+test("worker syncs Dashboard VPS maintenance variable through approval-bound GitHub Actions variable route", async () => {
+  const provider = createInMemoryMemoryProvider();
+  const calls = [];
+  await provider.store({
+    id: "approval-actions-variable-123",
+    type: MemoryRecordType.APPROVAL_LOG,
+    content: {
+      kind: "passkey_grant",
+      status: "verified",
+      approvalId: "approval-actions-variable-123",
+      expiresAt: "2099-01-01T00:00:00.000Z",
+      scope: {
+        actionType: "destructive",
+        highRiskKind: "github_actions_variable_sync",
+        repositoryInput: "sample-org/vtdd-v2-p",
+        variableName: "VTDD_DASHBOARD_VPS_MAINTENANCE_HOST",
+        phase: "execution"
+      }
+    },
+    metadata: { source: "test" },
+    priority: 90,
+    tags: ["passkey_grant"],
+    createdAt: "2026-04-28T00:00:00.000Z"
+  });
+
+  const response = await worker.fetch(
+    new Request("https://sample-user-vtdd.example.workers.dev/v2/action/github-actions-variable", {
+      method: "POST",
+      headers: {
+        ...gatewayAuthHeaders,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        repository: "sample-org/vtdd-v2-p",
+        variableName: "VTDD_DASHBOARD_VPS_MAINTENANCE_HOST",
+        variableValue: "x85-131-245-163",
+        policyInput: {
+          approvalGrantId: "approval-actions-variable-123"
+        }
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      MEMORY_PROVIDER: provider,
+      GITHUB_APP_INSTALLATION_TOKEN: "ghs_secret",
+      GITHUB_API_FETCH: async (url, init) => {
+        calls.push({ url: String(url), init });
+        if (init?.method === "GET") {
+          return new Response(JSON.stringify({ message: "Not Found" }), {
+            status: 404,
+            headers: { "content-type": "application/json" }
+          });
+        }
+        return new Response(null, { status: 201 });
+      }
+    }
+  );
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.variableSync.variableName, "VTDD_DASHBOARD_VPS_MAINTENANCE_HOST");
+  assert.equal(body.variableSync.status, "created");
+  assert.equal(JSON.stringify(body).includes("x85-131-245-163"), false);
+  assert.equal(calls[1].url.endsWith("/actions/variables"), true);
+  assert.equal(JSON.parse(calls[1].init.body).name, "VTDD_DASHBOARD_VPS_MAINTENANCE_HOST");
+});
+
 test("worker syncs VTDD_GATEWAY_BEARER_TOKEN through approval-bound GitHub Actions secret route", async () => {
   const provider = createInMemoryMemoryProvider();
   const calls = [];

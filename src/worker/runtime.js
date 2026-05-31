@@ -20,6 +20,7 @@ import {
   dedupePasskeys,
   dispatchRemoteCodexExecution,
   executeDeployProductionPlane,
+  executeGitHubActionsVariableSync,
   executeGitHubActionsSecretSync,
   evaluateApprovalGrant,
   evaluateButlerSelfParity,
@@ -45,6 +46,7 @@ import {
   renderCustomGptRecoveryPage,
   buildVtddCloudflarePageDirectory,
   renderVtddHelpGuidePage,
+  sanitizeGitHubActionsVariableSyncErrorMessage,
   sanitizeGitHubActionsSecretSyncErrorMessage,
   RepositoryNicknameMode,
   resolveGatewayAliasRegistryFromGitHubApp,
@@ -1293,6 +1295,23 @@ export default {
       }
 
       return handleGitHubActionsSecretSyncRequest(request, env);
+    }
+
+    if (request.method === "POST" && isApiPath(url.pathname, "/action/github-actions-variable")) {
+      const auth = authorizePasskeyBrowserOrMachineRequest({
+        request,
+        env,
+        apiSuffix: "/action/github-actions-variable"
+      });
+      if (!auth.ok) {
+        return json(auth.status, {
+          ok: false,
+          error: "unauthorized",
+          reason: auth.reason
+        });
+      }
+
+      return handleGitHubActionsVariableSyncRequest(request, env);
     }
 
     if (request.method === "POST" && isApiPath(url.pathname, "/action/repository-nickname")) {
@@ -6135,6 +6154,64 @@ async function handleGitHubActionsSecretSyncRequest(request, env) {
   });
 }
 
+async function handleGitHubActionsVariableSyncRequest(request, env) {
+  const payload = await readJson(request);
+  if (!payload || typeof payload !== "object") {
+    return json(422, {
+      ok: false,
+      error: "request_body_required",
+      reason: "valid JSON request body is required"
+    });
+  }
+
+  const policyInput =
+    payload.policyInput && typeof payload.policyInput === "object" ? payload.policyInput : {};
+  const resolvedApprovalGrant = await resolveApprovalGrant({
+    payload: {
+      phase: normalizeText(payload.phase) || "execution",
+      highRiskKind: "github_actions_variable_sync",
+      repositoryInput: payload.repository,
+      variableName: payload.variableName
+    },
+    policyInput: {
+      ...policyInput,
+      actionType: "destructive",
+      repositoryInput: payload.repository,
+      highRiskKind: "github_actions_variable_sync",
+      variableName: payload.variableName
+    },
+    env
+  });
+
+  const executed = await executeGitHubActionsVariableSync({
+    repository: payload.repository,
+    variableName: payload.variableName,
+    variableValue: payload.variableValue,
+    approvalGrant:
+      payload.approvalGrant ?? policyInput.approvalGrant ?? resolvedApprovalGrant.approvalGrant,
+    env
+  }).catch((error) => ({
+    ok: false,
+    status: 503,
+    error: "github_actions_variable_sync_exception",
+    reason: sanitizeGitHubActionsVariableSyncErrorMessage(error)
+  }));
+
+  if (!executed.ok) {
+    return json(executed.status ?? 503, {
+      ok: false,
+      error: executed.error ?? "github_actions_variable_sync_failed",
+      reason: executed.reason,
+      issues: executed.issues ?? []
+    });
+  }
+
+  return json(200, {
+    ok: true,
+    variableSync: executed.variableSync
+  });
+}
+
 async function handleCustomGptRecoveryPageRequest(url, env) {
   const channel =
     url.pathname === "/setup/known-good"
@@ -7086,6 +7163,8 @@ function buildApprovalScopeSnapshot({ payload, policyInput }) {
       ? traceability.relatedIssue ?? issueContext.issueNumber ?? payload?.relatedIssue
       : undefined,
     phase: identityFields.has("phase") ? payload?.phase : undefined,
+    secretName: identityFields.has("secretName") ? policyInput?.secretName ?? payload?.secretName : undefined,
+    variableName: identityFields.has("variableName") ? policyInput?.variableName ?? payload?.variableName : undefined,
     vpsHost: policyInput?.vpsHost ?? payload?.vpsHost,
     vpsOperation: policyInput?.vpsOperation ?? payload?.vpsOperation,
     vpsCapabilityId: policyInput?.vpsCapabilityId ?? payload?.vpsCapabilityId,

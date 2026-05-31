@@ -53,6 +53,7 @@ Passkey bootstrap:
 - After deploy, recheck self-parity.
 - If vtddDeployProduction fails, say the exact deploy error/reason/issues and blocker.
 - If api_key_runner hits openai_api_key_not_configured, use vtddSyncGitHubActionsSecret; never ask in chat.
+- For Dashboard VPS maintenance config, use vtddSyncGitHubActionsVariable only after `github_actions_variable_sync` passkey grant; never echo variable values.
 - GitHub App secret sync != deploy operator.
 - After vtddExecute, call vtddExecutionProgress; include executorTransport, executionId, repo, issueNumber, branch, leadTime.
 - vps_runner health: vtddVpsRunnerStatus -> runnerStatus/lastSeenAt/heartbeatAt/currentStep/reasonCode/reason.

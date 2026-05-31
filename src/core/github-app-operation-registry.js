@@ -125,6 +125,20 @@ export const GitHubAppOperationRegistry = Object.freeze({
       highRiskKind: "github_actions_secret_sync",
       operatorUrlRequirements: ["repositoryInput", "phase", "actionType", "highRiskKind"]
     }
+  },
+  github_actions_variable_sync: {
+    operation: "github_actions_variable_sync",
+    tier: GitHubAppOperationTier.PASSKEY_AUTHORITY,
+    requiredPayloadFields: ["repository", "variableName"],
+    authorityScopeIdentityFields: ["repository", "issueNumber", "phase", "variableName"],
+    requiredRuntimeTruthChecks: ["github_actions_variable_update_result"],
+    executorFunction: "executeGitHubActionsVariableSync",
+    responseSummaryShape: ["operation", "repository", "variableName", "updated"],
+    passkey: {
+      actionType: "destructive",
+      highRiskKind: "github_actions_variable_sync",
+      operatorUrlRequirements: ["repositoryInput", "phase", "actionType", "highRiskKind"]
+    }
   }
 });
 
