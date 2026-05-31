@@ -7818,7 +7818,13 @@ test("worker accepts natural Butler build GO without internal consent or approva
   assert.equal(dispatchInputs.target_issue_number, "135");
   assert.equal(dispatchInputs.codex_goal, "open_pr");
   assert.equal(dispatchInputs.approval_phrase, "GO");
-  assert.equal(JSON.parse(dispatchInputs.handoff_json).relatedIssue, 135);
+  const handoff = JSON.parse(dispatchInputs.handoff_json);
+  assert.equal(handoff.relatedIssue, 135);
+  assert.equal(
+    handoff.developmentStrategy.evidencePath,
+    "docs/development-strategy/issue-135-butler-handoff.md"
+  );
+  assert.match(handoff.developmentStrategy.hypothesis, /Butler build handoff/);
   assert.equal(calls.length, 3);
 });
 

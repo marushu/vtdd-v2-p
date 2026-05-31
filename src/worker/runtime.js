@@ -7034,9 +7034,16 @@ function normalizeRemoteCodexHandoffPayload(payload) {
     payload?.apiKeyRunnerAcknowledged === true ||
     continuationContext.apiKeyRunnerAcknowledged === true ||
     (goGranted && requestedExecutorTransport === "api_key_runner");
+  const developmentStrategy = resolveButlerHandoffDevelopmentStrategy({
+    payload,
+    handoff,
+    policyInput,
+    issueNumber
+  });
 
   return {
     ...payload,
+    developmentStrategy,
     apiKeyRunnerAcknowledged,
     continuationContext: {
       ...continuationContext,
@@ -7047,6 +7054,7 @@ function normalizeRemoteCodexHandoffPayload(payload) {
         issueTraceable: handoff.issueTraceable === false ? false : true,
         approvalScopeMatched: handoff.approvalScopeMatched === false ? false : true,
         relatedIssue: normalizeIssue(handoff.relatedIssue) ?? issueNumber,
+        developmentStrategy,
         summary:
           normalizeText(handoff.summary) ||
           `Issue #${issueNumber} bounded remote Codex handoff`
@@ -7072,6 +7080,96 @@ function normalizeRemoteCodexHandoffPayload(payload) {
       }
     }
   };
+}
+
+function resolveButlerHandoffDevelopmentStrategy({ payload, handoff, policyInput, issueNumber }) {
+  const existing =
+    normalizeDevelopmentStrategyObject(handoff.developmentStrategy) ||
+    normalizeDevelopmentStrategyObject(payload?.developmentStrategy);
+  if (existing) {
+    return existing;
+  }
+
+  return buildButlerHandoffDevelopmentStrategyDraft({
+    payload,
+    handoff,
+    policyInput,
+    issueNumber
+  });
+}
+
+function normalizeDevelopmentStrategyObject(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  const strategy = {
+    evidencePath: normalizeText(value.evidencePath),
+    completionExperience: normalizeText(value.completionExperience),
+    vtddArea: normalizeText(value.vtddArea),
+    design: normalizeText(value.design),
+    hypothesis: normalizeText(value.hypothesis),
+    verificationPlan: normalizeText(value.verificationPlan),
+    changeEstimate: normalizeText(value.changeEstimate),
+    knownPath: normalizeText(value.knownPath),
+    unknownBoundary: normalizeText(value.unknownBoundary),
+    likelyGaps: normalizeText(value.likelyGaps),
+    prePrChecks: normalizeText(value.prePrChecks),
+    optionsRejected: normalizeText(value.optionsRejected),
+    postMergeE2E: normalizeText(value.postMergeE2E),
+    noNextPrReason: normalizeText(value.noNextPrReason),
+    stopCondition: normalizeText(value.stopCondition)
+  };
+  return Object.values(strategy).some(Boolean) ? strategy : null;
+}
+
+function buildButlerHandoffDevelopmentStrategyDraft({ payload, handoff, policyInput, issueNumber }) {
+  const repositoryInput =
+    normalizeText(policyInput?.repositoryInput) ||
+    normalizeText(handoff.repositoryInput) ||
+    normalizeText(payload?.repositoryInput) ||
+    "対象 repository";
+  const branch =
+    normalizeText(payload?.executionTarget?.branch) ||
+    normalizeText(policyInput?.runtimeTruth?.runtimeState?.activeBranch) ||
+    (issueNumber ? `codex/issue-${issueNumber}` : "codex/issue");
+  const ownerIntent =
+    normalizeText(handoff.ownerMessage) ||
+    normalizeText(payload?.ownerMessage) ||
+    normalizeText(payload?.message) ||
+    `Issue #${issueNumber} の実装を進める`;
+  const traceability =
+    policyInput?.issueTraceability && typeof policyInput.issueTraceability === "object"
+      ? policyInput.issueTraceability
+      : {};
+  const intentRefs = formatTraceRefs(traceability.intentRefs, `#${issueNumber} Intent`);
+  const successRefs = formatTraceRefs(
+    traceability.successCriteriaRefs,
+    `#${issueNumber} Success Criteria`
+  );
+  const nonGoalRefs = formatTraceRefs(traceability.nonGoalRefs, `#${issueNumber} Non-goals`);
+
+  return {
+    evidencePath: `docs/development-strategy/issue-${issueNumber}-butler-handoff.md`,
+    completionExperience: `Dashboard Butler から自然文 GO した owner が、${repositoryInput} の Issue #${issueNumber} 実装前に作戦図付き handoff で進められる。`,
+    vtddArea: "Dashboard Butler の自然文 build handoff と VPS runner PR 作成前 guardrail を接続する。",
+    design: `Butler が ${ownerIntent} をすぐ実装へ渡さず、Issue #${issueNumber} の traceability と branch ${branch} をもとに作戦図を handoff.developmentStrategy へ固定する。`,
+    hypothesis: "浅い PR 連鎖の原因は、Butler build handoff が実装前の仮説と検証計画を持たずに runner へ渡ることにある。",
+    verificationPlan: "worker / orchestrator / remote Codex executor / VPS runner の tests で、作戦図なし handoff が止まり、作戦図付き handoff が PR body に届くことを確認する。",
+    changeEstimate: "src/worker/runtime.js の normalizeRemoteCodexHandoffPayload、src/core/remote-codex-handoff-scope.js、src/core/remote-codex-executor.js、関連 worker/orchestrator/runner tests を確認・改修する。",
+    knownPath: `既存の Butler execute route、issue refs (${intentRefs}, ${successRefs}, ${nonGoalRefs})、VPS runner PR body renderer は存在する。`,
+    unknownBoundary: "Dashboard 上の専用編集 UI や LLM による深い設計生成はこの handoff draft だけでは未完成として扱う。",
+    likelyGaps: "handoff 途中で developmentStrategy を落とすと、VPS runner が PR body を作れないか、作戦図なしの浅い PR に戻る。",
+    prePrChecks: "対象 Issue、AGENTS.md、pre-development strategy contract、handoff normalization、runner PR body validation、関連 tests を PR 前に確認する。",
+    optionsRejected: "VPS runner 側だけで拒否する案は捨て、Butler 入口で作戦図 draft を持たせる。",
+    postMergeE2E: "production deploy 後に Dashboard Butler から自然文 build handoff を通し、queue comment と PR body に developmentStrategy が残ることを確認する。",
+    noNextPrReason: "Butler 入口、bounded 判定、executor request 保持、runner PR body 反映を同じ実装範囲で塞ぐ。",
+    stopCondition: "作戦図なしで bounded build handoff が allowed になる場合、または deploy/root/credential mutation が必要になった場合は停止する。"
+  };
+}
+
+function formatTraceRefs(value, fallback) {
+  const refs = Array.isArray(value) ? value.map(normalizeText).filter(Boolean) : [];
+  return refs.length > 0 ? refs.join(", ") : fallback;
 }
 
 function mergeGrantedConsentCategories(current, required) {

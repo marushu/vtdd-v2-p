@@ -13,6 +13,26 @@ import {
   retrieveVpsRunnerHealthStatus
 } from "../src/core/index.js";
 
+function developmentStrategy(issueNumber = 6) {
+  return {
+    evidencePath: `docs/development-strategy/issue-${issueNumber}-butler-handoff.md`,
+    completionExperience: "Dashboard Butler から自然文 GO した owner が、実装前作戦図付き handoff で進められる。",
+    vtddArea: "Dashboard Butler の自然文 build handoff と VPS runner PR 作成前 guardrail を接続する。",
+    design: "Butler が owner intent をすぐ実装へ渡さず、Issue traceability と branch をもとに作戦図を handoff に固定する。",
+    hypothesis: "浅い PR 連鎖の原因は、Butler build handoff が実装前の仮説と検証計画を持たずに runner へ渡ることにある。",
+    verificationPlan: "worker / orchestrator / remote Codex executor / VPS runner tests で作戦図が保持されることを確認する。",
+    changeEstimate: "src/worker/runtime.js、src/core/remote-codex-handoff-scope.js、src/core/remote-codex-executor.js と関連 tests を改修する。",
+    knownPath: "既存の Butler execute route、issue refs、VPS runner PR body renderer は存在する。",
+    unknownBoundary: "Dashboard 上の専用編集 UI や LLM による深い設計生成はこの handoff draft だけでは未完成として扱う。",
+    likelyGaps: "handoff 途中で developmentStrategy を落とすと、VPS runner が PR body を作れなくなる。",
+    prePrChecks: "対象 Issue、AGENTS.md、strategy contract、handoff normalization、runner validation を確認する。",
+    optionsRejected: "VPS runner 側だけで拒否する案は捨て、Butler 入口で作戦図 draft を持たせる。",
+    postMergeE2E: "production deploy 後に Dashboard Butler から自然文 build handoff を通し、queue comment と PR body を確認する。",
+    noNextPrReason: "Butler 入口、bounded 判定、executor request 保持、runner PR body 反映を同じ範囲で塞ぐ。",
+    stopCondition: "作戦図なしで bounded build handoff が allowed になる場合は停止する。"
+  };
+}
+
 test("remote Codex transport registry exposes pluggable user-owned backend choices", () => {
   const registry = getRemoteCodexExecutorTransportRegistry();
 
@@ -66,6 +86,54 @@ test("remote Codex execution request is built from gateway result and payload", 
   assert.equal(result.request.branch, "codex/issue-6");
   assert.equal(result.request.baseRef, "main");
   assert.equal(result.request.codexGoal, "open_pr");
+});
+
+test("remote Codex execution request preserves handoff development strategy", () => {
+  const result = createRemoteCodexExecutionRequest({
+    payload: {
+      actorRole: ActorRole.BUTLER,
+      issueContext: { issueNumber: 6 },
+      continuationContext: {
+        requiresHandoff: true,
+        handoff: {
+          issueTraceable: true,
+          approvalScopeMatched: true,
+          relatedIssue: 6,
+          summary: "Issue #6 bounded remote Codex handoff",
+          developmentStrategy: developmentStrategy(6)
+        }
+      },
+      policyInput: {
+        approvalPhrase: "GO",
+        targetConfirmed: true,
+        approvalScopeMatched: true,
+        issueTraceability: {
+          relatedIssue: 6,
+          intentRefs: ["#6 Intent"],
+          successCriteriaRefs: ["#6 Success Criteria"],
+          nonGoalRefs: ["#6 Non-goals"]
+        },
+        runtimeTruth: {
+          runtimeState: {
+            activeBranch: "codex/issue-6"
+          }
+        }
+      }
+    },
+    gatewayResult: {
+      repository: "sample-org/vtdd-v2",
+      executionContinuity: {
+        codexGoal: "open_pr"
+      }
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(
+    result.request.handoff.developmentStrategy.evidencePath,
+    "docs/development-strategy/issue-6-butler-handoff.md"
+  );
+  assert.match(result.request.handoff.developmentStrategy.hypothesis, /浅い PR 連鎖/);
 });
 
 test("remote Codex execution request accepts explicit bounded PR revision goal override", () => {
