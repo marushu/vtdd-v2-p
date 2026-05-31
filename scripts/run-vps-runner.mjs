@@ -2506,6 +2506,11 @@ function isNonFastForwardPushFailure(error) {
 }
 
 function buildPullRequestBody(payload) {
+  const handoff = payload.handoff && typeof payload.handoff === "object" ? payload.handoff : {};
+  const developmentStrategy =
+    (handoff.developmentStrategy && typeof handoff.developmentStrategy === "object" ? handoff.developmentStrategy : null)
+    || (payload.developmentStrategy && typeof payload.developmentStrategy === "object" ? payload.developmentStrategy : {})
+    || {};
   return renderPrBody({
     issue: payload.issueNumber,
     executionId: payload.executionId,
@@ -2518,6 +2523,21 @@ function buildPullRequestBody(payload) {
     unsatisfied:
       "Issue固有のE2E evidence は別途記録が必要。ready PR は reviewer/automation が読める状態を意味し、Issue完了やmerge許可を意味しない。",
     nonGoals: "None.",
+    strategyEvidence: developmentStrategy.evidencePath,
+    strategyCompletionExperience: developmentStrategy.completionExperience,
+    strategyVtddArea: developmentStrategy.vtddArea,
+    strategyDesign: developmentStrategy.design,
+    strategyHypothesis: developmentStrategy.hypothesis,
+    strategyVerificationPlan: developmentStrategy.verificationPlan,
+    strategyChangeEstimate: developmentStrategy.changeEstimate,
+    strategyKnownPath: developmentStrategy.knownPath,
+    strategyUnknownBoundary: developmentStrategy.unknownBoundary,
+    strategyLikelyGaps: developmentStrategy.likelyGaps,
+    strategyPrePrChecks: developmentStrategy.prePrChecks,
+    strategyOptionsRejected: developmentStrategy.optionsRejected,
+    strategyPostMergeE2E: developmentStrategy.postMergeE2E,
+    strategyNoNextPrReason: developmentStrategy.noNextPrReason,
+    strategyStopCondition: developmentStrategy.stopCondition,
     unit: "VPS runner では未実行。",
     integration: "VPS runner では未実行。",
     e2e: "GitHub branch / PR creation は handoff の証拠のみ。Issue固有の live E2E は別途記録する必要がある。",

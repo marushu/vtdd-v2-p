@@ -11,16 +11,17 @@ Every PR should contain these sections in this order:
 2. `Satisfied Success Criteria`
 3. `Unsatisfied Success Criteria`
 4. `Non-goal violations`
-5. `Dry-run Impact Report`
-6. `Execution Queue Delta`
-7. `File / Line Hypotheses`
-8. `Hypothesis Retrospective`
-9. `Verification Evidence`
-10. `Butler Completion Contract`
-11. `Surface Update Checklist`
-12. `Related Constitution Rules`
-13. `Out-of-scope but NOT implemented`
-14. `Extra changes (if any)`
+5. `開発前作戦図`
+6. `Dry-run Impact Report`
+7. `Execution Queue Delta`
+8. `File / Line Hypotheses`
+9. `Hypothesis Retrospective`
+10. `Verification Evidence`
+11. `Butler Completion Contract`
+12. `Surface Update Checklist`
+13. `Related Constitution Rules`
+14. `Out-of-scope but NOT implemented`
+15. `Extra changes (if any)`
 
 ## Section Purpose
 
@@ -41,6 +42,26 @@ remaining item instead of leaving this section empty.
 ### `Non-goal violations`
 
 Call out any violation of declared non-goals, or state `None.` when there are none.
+
+### `開発前作戦図`
+
+Record the design, hypothesis, and verification plan before implementation.
+This section must point to a repository-backed strategy file under
+`docs/development-strategy/issue-<number>-<slug>.md`.
+
+This section exists to make prediction and first-principles planning happen
+before Issue-backed implementation PR code edits, not after review or CI
+failures. It does not apply to ordinary conversation, brainstorming, Read/Think,
+or lightweight triage that does not start implementation. It must cover the
+completion experience, VTDD area advanced, design, hypothesis, verification
+plan, concrete change estimate by file/line/function/feature boundary,
+already-working paths, unknown boundaries, likely gaps, pre-PR checks,
+implementation options and rejected options, post-merge E2E, why the PR should
+not spawn predictable follow-up PRs, and stop condition.
+
+Generated placeholder text is intentionally not valid for real PRs. Authors
+must replace it with concrete Issue-specific planning before implementation.
+Template mode may contain blanks; real PR validation must not.
 
 ### `Dry-run Impact Report`
 
@@ -132,12 +153,13 @@ stable.
 
 ## Guardrail Usage
 
-Use `scripts/render-pr-body.mjs` to generate a valid starting body instead of
-hand-writing the headings. The renderer must emit a validator-passable
-partial/unconnected template by default so that AI-authored PRs do not fail on
-empty dry-run or Butler contract placeholders. Validate the result locally with
-`node scripts/validate-pr-body.mjs <path>` before `gh pr create` or
-`gh pr edit --body-file`.
+Use `scripts/render-pr-body.mjs` to generate the guarded headings instead of
+hand-writing them. The renderer intentionally emits non-passable strategy
+guidance until the author supplies a concrete development strategy evidence
+path, design, hypothesis, and verification plan. This prevents AI-authored PRs
+from passing with only after-the-fact template text. Validate the result
+locally with `node scripts/validate-pr-body.mjs <path>` before `gh pr create`
+or `gh pr edit --body-file`.
 
 When the renderer fills default text, it should prefer Japanese owner-facing
 guidance. Authors may keep technical identifiers in English where they are

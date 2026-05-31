@@ -111,6 +111,27 @@ function defaultQueueDelta(options = {}) {
   };
 }
 
+function defaultPreDevelopmentStrategy(options = {}) {
+  const issue = options.issue ? `Issue #${options.issue}` : "対象 Issue";
+  return {
+    evidence: "docs/development-strategy/issue-<number>-<slug>.md を作ってから具体化してください。",
+    completionExperience: `${issue} の owner-facing 完了体験を、実装前に具体化してください。`,
+    vtddArea: "VTDD 全体のどの部分を進めるかを、実装前に具体化してください。",
+    design: "完了体験、scope、authority boundary、触る surface を、実装前に設計してください。",
+    hypothesis: "疑っている failure mode、root blocker、なぜそこを直すのかを、実装前に仮説化してください。",
+    verificationPlan: "仮説を証明または否定する unit / integration / E2E / runtime truth を、実装前に決めてください。",
+    changeEstimate: "どのファイル、行、関数、route、workflow、機能境界を改修する見込みか、実装前に具体化してください。",
+    knownPath: "既に通っている経路を、実装前に具体化してください。",
+    unknownBoundary: "未確認の境界を、実装前に具体化してください。",
+    likelyGaps: "穴が出そうな箇所を、実装前に具体化してください。",
+    prePrChecks: "PR 前に確認する docs / source / tests / runtime truth を具体化してください。",
+    optionsRejected: "実装候補と捨てた案を、実装前に具体化してください。",
+    postMergeE2E: "merge 後に通す E2E / test を、実装前に具体化してください。",
+    noNextPrReason: "このPRで次のPRを増やさない理由を、実装前に具体化してください。",
+    stopCondition: "続行すると drift になる停止条件を、実装前に具体化してください。",
+  };
+}
+
 function defaultFileLineHypotheses() {
   return {
     hypotheses:
@@ -142,6 +163,11 @@ function renderPrBody(options = {}) {
     ...queueDefaults,
     ...(options.queue || {})
   };
+  const strategyDefaults = defaultPreDevelopmentStrategy(options);
+  const strategy = {
+    ...strategyDefaults,
+    ...(options.strategy || {})
+  };
   const fileLineDefaults = defaultFileLineHypotheses();
   const fileLine = {
     ...fileLineDefaults,
@@ -168,6 +194,24 @@ ${bulletize(options.unsatisfied, defaultUnsatisfiedCriteria(status))}
 ## Non-goal violations
 
 ${options.nonGoals || "None."}
+
+## 開発前作戦図
+
+- 作戦図 evidence: ${options.strategyEvidence || strategy.evidence}
+- 完了体験: ${options.strategyCompletionExperience || strategy.completionExperience}
+- VTDD 全体で進める部分: ${options.strategyVtddArea || strategy.vtddArea}
+- 設計: ${options.strategyDesign || strategy.design}
+- 仮説: ${options.strategyHypothesis || strategy.hypothesis}
+- 検証計画: ${options.strategyVerificationPlan || strategy.verificationPlan}
+- 改修見積もり: ${options.strategyChangeEstimate || strategy.changeEstimate}
+- 既に通っている経路: ${options.strategyKnownPath || strategy.knownPath}
+- 未確認の境界: ${options.strategyUnknownBoundary || strategy.unknownBoundary}
+- 穴が出そうな箇所: ${options.strategyLikelyGaps || strategy.likelyGaps}
+- PR 前に確認すること: ${options.strategyPrePrChecks || strategy.prePrChecks}
+- 実装候補と捨てた案: ${options.strategyOptionsRejected || strategy.optionsRejected}
+- merge 後に通す E2E: ${options.strategyPostMergeE2E || strategy.postMergeE2E}
+- 次の PR を増やさない理由: ${options.strategyNoNextPrReason || strategy.noNextPrReason}
+- 停止条件: ${options.strategyStopCondition || strategy.stopCondition}
 
 ## Dry-run Impact Report
 

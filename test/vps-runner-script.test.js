@@ -37,6 +37,26 @@ import {
   selectPendingVpsRunnerExecutions
 } from "../scripts/run-vps-runner.mjs";
 
+function developmentStrategyFixture() {
+  return {
+    evidencePath: "docs/development-strategy/issue-703-predev-strategy-guard.md",
+    completionExperience: "Dashboard Butler とオーナーが実装前作戦図を確認できる。",
+    vtddArea: "VPS runner の PR body handoff guardrail を進める。",
+    design: "owner-facing completion design と scope boundary を先に固定し、VPS runner は作戦図を PR body に渡す。",
+    hypothesis: "root blocker は作戦図なしの PR 正規化であり、そこを許すと予見不足の PR が通るという仮説。",
+    verificationPlan: "test/vps-runner-script.test.js と PR body validator で検証する。",
+    changeEstimate: "scripts/run-vps-runner.mjs の buildPullRequestBody 関数と test/vps-runner-script.test.js を改修する。",
+    knownPath: "VPS runner は buildGuardedPullRequestBody で canonical PR body を作る。",
+    unknownBoundary: "Dashboard Butler から作戦図を生成する UI は未接続。",
+    likelyGaps: "handoff payload に developmentStrategy がない場合に canonical fallback が通ると穴になる。",
+    prePrChecks: "scripts/run-vps-runner.mjs、validate-pr-body、vps runner tests を確認する。",
+    optionsRejected: "作戦図なし fallback を許す案は捨てる。",
+    postMergeE2E: "node --test test/vps-runner-script.test.js test/pr-body-guardrail.test.js",
+    noNextPrReason: "VPS runner generator と tests を同じ PR で更新する。",
+    stopCondition: "作戦図なしで valid PR body を作れる場合は停止する。"
+  };
+}
+
 test("VPS runner parses bounded queue comment payload", () => {
   const parsed = parseVpsRunnerQueueComment(`<!-- vtdd:vps-runner-execution:remote-codex-issue157-vps -->
 VTDD 管理の VPS runner 実行キューです。
@@ -2076,18 +2096,20 @@ test("VPS runner PR body satisfies guarded PR template markers", () => {
 test("VPS runner preserves a guarded-policy-compliant PR body candidate", () => {
   const candidate = buildPullRequestBody({
     repository: "sample-org/vtdd-v2",
-    issueNumber: 213,
-    executionId: "remote-codex-issue213-test",
-    branch: "codex/issue-213",
-    codexGoal: "open_pr"
+    issueNumber: 703,
+    executionId: "remote-codex-issue703-test",
+    branch: "codex/issue-703",
+    codexGoal: "open_pr",
+    developmentStrategy: developmentStrategyFixture()
   });
   const normalized = buildGuardedPullRequestBody({
     payload: {
       repository: "sample-org/vtdd-v2",
-      issueNumber: 213,
-      executionId: "remote-codex-issue213-test",
-      branch: "codex/issue-213",
-      codexGoal: "open_pr"
+      issueNumber: 703,
+      executionId: "remote-codex-issue703-test",
+      branch: "codex/issue-703",
+      codexGoal: "open_pr",
+      developmentStrategy: developmentStrategyFixture()
     },
     candidateBody: candidate
   });
@@ -2101,10 +2123,11 @@ test("VPS runner normalizes malformed PR body candidates with canonical template
   const normalized = buildGuardedPullRequestBody({
     payload: {
       repository: "sample-org/vtdd-v2",
-      issueNumber: 213,
-      executionId: "remote-codex-issue213-test",
-      branch: "codex/issue-213",
-      codexGoal: "open_pr"
+      issueNumber: 703,
+      executionId: "remote-codex-issue703-test",
+      branch: "codex/issue-703",
+      codexGoal: "open_pr",
+      developmentStrategy: developmentStrategyFixture()
     },
     candidateBody: "Partial notes without guarded-policy markers."
   });
@@ -2118,8 +2141,24 @@ test("VPS runner normalizes malformed PR body candidates with canonical template
   assert.equal(normalized.body.includes("## Verification Evidence"), true);
   assert.equal(normalized.body.includes("## Butler Completion Contract"), true);
   assert.equal(normalized.body.includes("## Surface Update Checklist"), true);
-  assert.equal(normalized.body.includes("Issue #213"), true);
+  assert.equal(normalized.body.includes("Issue #703"), true);
   assert.equal(normalized.body.includes("Completion status: incomplete"), true);
+});
+
+test("VPS runner refuses to normalize PR bodies without concrete development strategy", () => {
+  const normalized = buildGuardedPullRequestBody({
+    payload: {
+      repository: "sample-org/vtdd-v2",
+      issueNumber: 213,
+      executionId: "remote-codex-issue213-test",
+      branch: "codex/issue-213",
+      codexGoal: "open_pr"
+    },
+    candidateBody: "Partial notes without guarded-policy markers."
+  });
+
+  assert.equal(normalized.ok, false);
+  assert.match(normalized.canonicalErrors.join("\n"), /開発前作戦図 field is not filled/);
 });
 
 test("VPS runner create path uses prepared body-file helper instead of freehand --body", async () => {
