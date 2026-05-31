@@ -2074,10 +2074,13 @@ async function postVpsRunnerDashboardEvent({ eventPayload, env = process.env, fe
 }
 
 async function resolveVpsRunnerDashboardDeliveryConfig({ env = process.env } = {}) {
+  const vaultManifestPath =
+    normalizeText(env?.VTDD_VPS_RUNNER_CREDENTIALS_MANIFEST || env?.VTDD_CREDENTIALS_MANIFEST) ||
+    resolveDefaultVtddVaultManifestPath({ env });
   const runtimeUrl =
     normalizeText(env?.VTDD_RUNTIME_URL) ||
     (await loadVpsRunnerRuntimeUrlFromVaultManifest({
-      manifestPath: env?.VTDD_VPS_RUNNER_CREDENTIALS_MANIFEST || env?.VTDD_CREDENTIALS_MANIFEST
+      manifestPath: vaultManifestPath
     }));
   const envBearerToken = normalizeText(env?.VTDD_GATEWAY_BEARER_TOKEN);
   if (envBearerToken) {
@@ -2089,7 +2092,7 @@ async function resolveVpsRunnerDashboardDeliveryConfig({ env = process.env } = {
   }
 
   const vaultResult = await loadGatewayBearerTokenFromVault({
-    manifestPath: env?.VTDD_VPS_RUNNER_CREDENTIALS_MANIFEST || env?.VTDD_CREDENTIALS_MANIFEST
+    manifestPath: vaultManifestPath
   });
   return {
     runtimeUrl,
@@ -2098,8 +2101,14 @@ async function resolveVpsRunnerDashboardDeliveryConfig({ env = process.env } = {
   };
 }
 
+function resolveDefaultVtddVaultManifestPath({ env = process.env } = {}) {
+  const homeDir = normalizeText(env?.HOME) || normalizeText(process.env.HOME) || os.homedir();
+  return homeDir ? path.join(homeDir, ".vtdd", "credentials", "manifest.json") : "";
+}
+
 async function loadVpsRunnerRuntimeUrlFromVaultManifest({ manifestPath } = {}) {
-  const normalizedManifestPath = normalizeText(manifestPath);
+  const normalizedManifestPath =
+    normalizeText(manifestPath) || resolveDefaultVtddVaultManifestPath();
   if (!normalizedManifestPath) {
     return "";
   }

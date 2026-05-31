@@ -683,6 +683,71 @@ test("VPS runner event can read dashboard delivery token from vault manifest", a
   assert.equal(parsed.event.dashboardDelivery.status, "delivered");
 });
 
+test("VPS runner event reads dashboard runtime URL from default vault manifest when service env is empty", async () => {
+  const originalHome = process.env.HOME;
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "vtdd-vps-default-vault-"));
+  process.env.HOME = tempDir;
+  try {
+    const credentialsDir = path.join(tempDir, ".vtdd", "credentials");
+    await fs.mkdir(path.join(credentialsDir, "gateway"), { recursive: true });
+    await fs.writeFile(path.join(credentialsDir, "gateway", "bearer-token.txt"), "default-vault-token-for-test\n");
+    await fs.writeFile(
+      path.join(credentialsDir, "manifest.json"),
+      JSON.stringify(
+        {
+          version: 1,
+          gateway: {
+            bearerTokenPath: "gateway/bearer-token.txt",
+            runtimeUrl: "https://default-vault-runtime.example.workers.dev"
+          }
+        },
+        null,
+        2
+      )
+    );
+
+    const githubCalls = [];
+    const runtimeCalls = [];
+    await postVpsRunnerEvent({
+      githubFetch: async (url, init = {}) => {
+        githubCalls.push({ url, init });
+        return { id: 45006 };
+      },
+      fetchImpl: async (url, init = {}) => {
+        runtimeCalls.push({ url: String(url), init });
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 202,
+          headers: { "content-type": "application/json" }
+        });
+      },
+      env: {},
+      payload: {
+        executionId: "exec-dashboard-default-vault-runtime",
+        repository: "marushu/vtdd-v2-p",
+        issueNumber: 637,
+        handoff: {
+          dashboardThreadId: "dashboard-main-marushu-vtdd-v2-p"
+        }
+      },
+      event: {
+        status: "completed",
+        lastEvent: "privileged_maintenance_completed",
+        currentStep: "vps_privileged_maintenance_helper",
+        message: "完了"
+      }
+    });
+
+    assert.equal(runtimeCalls.length, 1);
+    assert.equal(runtimeCalls[0].url, "https://default-vault-runtime.example.workers.dev/v2/events/vps-runner");
+    assert.equal(runtimeCalls[0].init.headers.authorization, "Bearer default-vault-token-for-test");
+    const parsed = parseVpsRunnerEventComment(githubCalls[0].init.body.body);
+    assert.equal(parsed.ok, true);
+    assert.equal(parsed.event.dashboardDelivery.status, "delivered");
+  } finally {
+    process.env.HOME = originalHome;
+  }
+});
+
 test("VPS runner event records missing runtime dashboard delivery configuration", async () => {
   const calls = [];
   await postVpsRunnerEvent({
