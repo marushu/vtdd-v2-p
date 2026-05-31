@@ -57572,10 +57572,29 @@ var DashboardChatRoom = class {
       },
       { threadId }
     );
+    const vpsMaintenanceMessages = await this.buildVpsMaintenanceIntentMessages({
+      payload,
+      threadId,
+      repository,
+      relatedIssue,
+      text,
+      now
+    });
     const bridgeSockets = this.connectedAppServerBridgeSockets(threadId);
     if (bridgeSockets.length === 0) {
       const messages2 = store ? await store.appendMany(threadId, [ownerMessage]) : [ownerMessage].filter(Boolean);
       await this.writeAcceptedOwnerMessage({ threadId, clientMessageId, messageId: ownerMessage.messageId, acceptedAt: now });
+      if (vpsMaintenanceMessages) {
+        const butlerMessages = store ? await store.appendMany(threadId, vpsMaintenanceMessages) : vpsMaintenanceMessages;
+        await this.broadcastThread({ threadId, messages: [...messages2, ...butlerMessages] });
+        this.sendSocket(socket, {
+          type: "owner_message_accepted",
+          ok: true,
+          clientMessageId,
+          messageId: ownerMessage.messageId
+        });
+        return;
+      }
       await this.writePendingAppServerOwnerMessage({
         threadId,
         ownerMessage,
@@ -57603,14 +57622,6 @@ var DashboardChatRoom = class {
       ok: true,
       clientMessageId,
       messageId: ownerMessage.messageId
-    });
-    const vpsMaintenanceMessages = await this.buildVpsMaintenanceIntentMessages({
-      payload,
-      threadId,
-      repository,
-      relatedIssue,
-      text,
-      now
     });
     if (vpsMaintenanceMessages) {
       const butlerMessages = store ? await store.appendMany(threadId, vpsMaintenanceMessages) : vpsMaintenanceMessages;
