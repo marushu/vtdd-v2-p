@@ -909,7 +909,8 @@ export function parseBridgeArgs(argv = process.argv.slice(2), env = process.env)
     cwd: env.VTDD_DASHBOARD_CODEX_CWD || process.cwd(),
     sandboxMode: env.VTDD_DASHBOARD_APP_SERVER_SANDBOX || "",
     turnTimeoutMs: Number(env.VTDD_DASHBOARD_APP_SERVER_TURN_TIMEOUT_MS || 0),
-    reconnectDelayMs: Number(env.VTDD_DASHBOARD_BRIDGE_RECONNECT_DELAY_MS || 1000)
+    reconnectDelayMs: Number(env.VTDD_DASHBOARD_BRIDGE_RECONNECT_DELAY_MS || 1000),
+    heartbeatMs: Number(env.VTDD_DASHBOARD_BRIDGE_HEARTBEAT_MS || 25000)
   };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -920,6 +921,7 @@ export function parseBridgeArgs(argv = process.argv.slice(2), env = process.env)
     if (arg === "--sandbox") options.sandboxMode = argv[++index] || "";
     if (arg === "--turn-timeout-ms") options.turnTimeoutMs = Number(argv[++index] || 0);
     if (arg === "--reconnect-delay-ms") options.reconnectDelayMs = Number(argv[++index] || 1000);
+    if (arg === "--heartbeat-ms") options.heartbeatMs = Number(argv[++index] || 25000);
   }
   return options;
 }
@@ -973,6 +975,7 @@ export async function connectDashboardAppServerBridgeOnce({
   cwd = process.cwd(),
   sandboxMode = "",
   turnTimeoutMs = 0,
+  heartbeatMs = 25000,
   runtimeUrl = "",
   fetchImpl = globalThis.fetch,
   mediaTmpRoot = os.tmpdir(),
@@ -982,6 +985,7 @@ export async function connectDashboardAppServerBridgeOnce({
   const socket = new WebSocketImpl(endpoint, ["vtdd-dashboard-bridge", bearerProtocol]);
   let turnQueue = Promise.resolve();
   let settled = false;
+  let heartbeatTimer = null;
 
   const safeSend = (payload) => {
     try {
@@ -991,15 +995,37 @@ export async function connectDashboardAppServerBridgeOnce({
     }
   };
 
+  const stopHeartbeat = () => {
+    if (!heartbeatTimer) return;
+    clearTimeout(heartbeatTimer);
+    heartbeatTimer = null;
+  };
+
+  const scheduleHeartbeat = () => {
+    stopHeartbeat();
+    const delayMs = Number(heartbeatMs);
+    if (!Number.isFinite(delayMs) || delayMs <= 0) return;
+    heartbeatTimer = setTimeout(() => {
+      heartbeatTimer = null;
+      try {
+        socket.send("ping");
+      } catch {}
+      scheduleHeartbeat();
+    }, delayMs);
+  };
+
   const disconnected = new Promise((resolve) => {
     const finish = () => {
       if (settled) return;
       settled = true;
+      stopHeartbeat();
       resolve();
     };
     socket.addEventListener("close", finish);
     socket.addEventListener("error", finish);
   });
+
+  socket.addEventListener("open", scheduleHeartbeat);
 
   socket.addEventListener("message", (event) => {
     let payload;
