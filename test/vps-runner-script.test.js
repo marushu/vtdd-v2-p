@@ -69,7 +69,8 @@ VTDD 管理の VPS runner 実行キューです。
 
 test("VPS runner parses privileged maintenance helper queue payload", () => {
   const parsed = parseVpsPrivilegedMaintenanceQueueComment(privilegedMaintenanceQueueComment({
-    executionId: "vps-maint-637-a"
+    executionId: "vps-maint-637-a",
+    dashboardThreadId: "dashboard-main-sample-org-vtdd-v2"
   }));
 
   assert.equal(parsed.ok, true);
@@ -77,6 +78,8 @@ test("VPS runner parses privileged maintenance helper queue payload", () => {
   assert.equal(parsed.payload.transport, "vps_privileged_maintenance_helper");
   assert.equal(parsed.payload.repository, "sample-org/vtdd-v2");
   assert.equal(parsed.payload.issueNumber, 637);
+  assert.equal(parsed.payload.dashboardThreadId, "dashboard-main-sample-org-vtdd-v2");
+  assert.equal(parsed.payload.handoff.dashboardThreadId, "dashboard-main-sample-org-vtdd-v2");
   assert.equal(parsed.payload.approvalScopeMatched, true);
   assert.equal(parsed.payload.executionEnvelope.status, "ready_for_vps_helper_execution");
   assert.equal(parsed.payload.executionEnvelope.helperInvocation.shell, false);
@@ -2129,15 +2132,19 @@ function queueComment({
 
 function privilegedMaintenanceQueueComment({
   executionId,
+  dashboardThreadId = "",
   helperArgs = ["-n", "/usr/local/sbin/vtdd-vps-maintenance-helper", "--execute", "--input", "<helper-execution-input-json>"]
 }) {
+  const dashboardThreadJson = dashboardThreadId
+    ? `\n  "dashboardThreadId": "${dashboardThreadId}",\n  "handoff": {\n    "dashboardThreadId": "${dashboardThreadId}"\n  },`
+    : "";
   return `<!-- vtdd:vps-privileged-maintenance-execution:${executionId} -->
 \`\`\`json
 {
   "executionId": "${executionId}",
   "transport": "vps_privileged_maintenance_helper",
   "repository": "sample-org/vtdd-v2",
-  "issueNumber": 637,
+  "issueNumber": 637,${dashboardThreadJson}
   "approvalScopeMatched": true,
   "approvalActor": "requester",
   "issueTraceability": {
