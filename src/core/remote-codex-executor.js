@@ -163,6 +163,7 @@ export function createRemoteCodexExecutionRequest(input = {}) {
             ownerMessage: normalizeText(handoff.ownerMessage),
             repositoryInput: normalizeText(handoff.repositoryInput),
             dashboardThreadId: normalizeText(handoff.dashboardThreadId),
+            developmentStrategy: normalizeDevelopmentStrategy(handoff.developmentStrategy),
             targetPullRequest: revisionTarget
           }
         : null
@@ -210,6 +211,31 @@ export function createRemoteCodexExecutionRequest(input = {}) {
   }
 
   return issues.length > 0 ? { ok: false, issues } : { ok: true, request };
+}
+
+function normalizeDevelopmentStrategy(value) {
+  const strategy = normalizeObject(value);
+  if (!strategy || Object.keys(strategy).length === 0) {
+    return undefined;
+  }
+
+  return {
+    evidencePath: normalizeText(strategy.evidencePath),
+    completionExperience: normalizeText(strategy.completionExperience),
+    vtddArea: normalizeText(strategy.vtddArea),
+    design: normalizeText(strategy.design),
+    hypothesis: normalizeText(strategy.hypothesis),
+    verificationPlan: normalizeText(strategy.verificationPlan),
+    changeEstimate: normalizeText(strategy.changeEstimate),
+    knownPath: normalizeText(strategy.knownPath),
+    unknownBoundary: normalizeText(strategy.unknownBoundary),
+    likelyGaps: normalizeText(strategy.likelyGaps),
+    prePrChecks: normalizeText(strategy.prePrChecks),
+    optionsRejected: normalizeText(strategy.optionsRejected),
+    postMergeE2E: normalizeText(strategy.postMergeE2E),
+    noNextPrReason: normalizeText(strategy.noNextPrReason),
+    stopCondition: normalizeText(strategy.stopCondition)
+  };
 }
 
 function validateRevisionTarget(request) {

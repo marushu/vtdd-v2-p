@@ -10,10 +10,44 @@ export function isBoundRemoteCodexHandoff(input = {}) {
     handoff.issueTraceable === true &&
     handoff.approvalScopeMatched === true &&
     Boolean(normalizeText(handoff.summary)) &&
+    hasConcreteDevelopmentStrategy(handoff.developmentStrategy, issueNumber) &&
     issueNumber !== null &&
     relatedIssue === issueNumber &&
     hasBoundIssueTraceability(input?.policyInput, issueNumber)
   );
+}
+
+function hasConcreteDevelopmentStrategy(value, issueNumber) {
+  const strategy = normalizeObject(value);
+  if (!strategy || Object.keys(strategy).length === 0) {
+    return false;
+  }
+
+  const evidencePath = normalizeText(strategy.evidencePath);
+  if (
+    !new RegExp(`docs/development-strategy/issue-${issueNumber}-[^\\s)]+\\.md`).test(
+      evidencePath
+    )
+  ) {
+    return false;
+  }
+
+  return [
+    "completionExperience",
+    "vtddArea",
+    "design",
+    "hypothesis",
+    "verificationPlan",
+    "changeEstimate",
+    "knownPath",
+    "unknownBoundary",
+    "likelyGaps",
+    "prePrChecks",
+    "optionsRejected",
+    "postMergeE2E",
+    "noNextPrReason",
+    "stopCondition"
+  ].every((field) => normalizeText(strategy[field]).length >= 12);
 }
 
 function hasBoundIssueTraceability(policyInput, issueNumber) {

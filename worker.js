@@ -33523,7 +33523,35 @@ function isBoundRemoteCodexHandoff(input = {}) {
   const issueContext = normalizeObject7(input?.issueContext);
   const issueNumber = normalizePositiveInteger2(issueContext.issueNumber);
   const relatedIssue = normalizePositiveInteger2(handoff.relatedIssue);
-  return context.requiresHandoff === true && handoff.issueTraceable === true && handoff.approvalScopeMatched === true && Boolean(normalizeText17(handoff.summary)) && issueNumber !== null && relatedIssue === issueNumber && hasBoundIssueTraceability(input?.policyInput, issueNumber);
+  return context.requiresHandoff === true && handoff.issueTraceable === true && handoff.approvalScopeMatched === true && Boolean(normalizeText17(handoff.summary)) && hasConcreteDevelopmentStrategy(handoff.developmentStrategy, issueNumber) && issueNumber !== null && relatedIssue === issueNumber && hasBoundIssueTraceability(input?.policyInput, issueNumber);
+}
+function hasConcreteDevelopmentStrategy(value, issueNumber) {
+  const strategy = normalizeObject7(value);
+  if (!strategy || Object.keys(strategy).length === 0) {
+    return false;
+  }
+  const evidencePath = normalizeText17(strategy.evidencePath);
+  if (!new RegExp(`docs/development-strategy/issue-${issueNumber}-[^\\s)]+\\.md`).test(
+    evidencePath
+  )) {
+    return false;
+  }
+  return [
+    "completionExperience",
+    "vtddArea",
+    "design",
+    "hypothesis",
+    "verificationPlan",
+    "changeEstimate",
+    "knownPath",
+    "unknownBoundary",
+    "likelyGaps",
+    "prePrChecks",
+    "optionsRejected",
+    "postMergeE2E",
+    "noNextPrReason",
+    "stopCondition"
+  ].every((field) => normalizeText17(strategy[field]).length >= 12);
 }
 function hasBoundIssueTraceability(policyInput, issueNumber) {
   const traceability = normalizeObject7(policyInput?.issueTraceability);
@@ -33791,6 +33819,7 @@ function createRemoteCodexExecutionRequest(input = {}) {
       ownerMessage: normalizeText19(handoff.ownerMessage),
       repositoryInput: normalizeText19(handoff.repositoryInput),
       dashboardThreadId: normalizeText19(handoff.dashboardThreadId),
+      developmentStrategy: normalizeDevelopmentStrategy(handoff.developmentStrategy),
       targetPullRequest: revisionTarget
     } : null
   };
@@ -33835,6 +33864,29 @@ function createRemoteCodexExecutionRequest(input = {}) {
     issues.push(...validatePostMergeVerificationTarget(request));
   }
   return issues.length > 0 ? { ok: false, issues } : { ok: true, request };
+}
+function normalizeDevelopmentStrategy(value) {
+  const strategy = normalizeObject8(value);
+  if (!strategy || Object.keys(strategy).length === 0) {
+    return void 0;
+  }
+  return {
+    evidencePath: normalizeText19(strategy.evidencePath),
+    completionExperience: normalizeText19(strategy.completionExperience),
+    vtddArea: normalizeText19(strategy.vtddArea),
+    design: normalizeText19(strategy.design),
+    hypothesis: normalizeText19(strategy.hypothesis),
+    verificationPlan: normalizeText19(strategy.verificationPlan),
+    changeEstimate: normalizeText19(strategy.changeEstimate),
+    knownPath: normalizeText19(strategy.knownPath),
+    unknownBoundary: normalizeText19(strategy.unknownBoundary),
+    likelyGaps: normalizeText19(strategy.likelyGaps),
+    prePrChecks: normalizeText19(strategy.prePrChecks),
+    optionsRejected: normalizeText19(strategy.optionsRejected),
+    postMergeE2E: normalizeText19(strategy.postMergeE2E),
+    noNextPrReason: normalizeText19(strategy.noNextPrReason),
+    stopCondition: normalizeText19(strategy.stopCondition)
+  };
 }
 function validateRevisionTarget(request) {
   const issues = [];
@@ -63530,8 +63582,15 @@ function normalizeRemoteCodexHandoffPayload(payload) {
     payload?.executorTransport ?? continuationContext.executorTransport
   );
   const apiKeyRunnerAcknowledged = payload?.apiKeyRunnerAcknowledged === true || continuationContext.apiKeyRunnerAcknowledged === true || goGranted && requestedExecutorTransport === "api_key_runner";
+  const developmentStrategy = resolveButlerHandoffDevelopmentStrategy({
+    payload,
+    handoff,
+    policyInput,
+    issueNumber
+  });
   return {
     ...payload,
+    developmentStrategy,
     apiKeyRunnerAcknowledged,
     continuationContext: {
       ...continuationContext,
@@ -63542,6 +63601,7 @@ function normalizeRemoteCodexHandoffPayload(payload) {
         issueTraceable: handoff.issueTraceable === false ? false : true,
         approvalScopeMatched: handoff.approvalScopeMatched === false ? false : true,
         relatedIssue: normalizeIssue6(handoff.relatedIssue) ?? issueNumber,
+        developmentStrategy,
         summary: normalizeText32(handoff.summary) || `Issue #${issueNumber} bounded remote Codex handoff`
       }
     },
@@ -63565,6 +63625,74 @@ function normalizeRemoteCodexHandoffPayload(payload) {
       }
     }
   };
+}
+function resolveButlerHandoffDevelopmentStrategy({ payload, handoff, policyInput, issueNumber }) {
+  const existing = normalizeDevelopmentStrategyObject(handoff.developmentStrategy) || normalizeDevelopmentStrategyObject(payload?.developmentStrategy);
+  if (existing) {
+    return existing;
+  }
+  return buildButlerHandoffDevelopmentStrategyDraft({
+    payload,
+    handoff,
+    policyInput,
+    issueNumber
+  });
+}
+function normalizeDevelopmentStrategyObject(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  const strategy = {
+    evidencePath: normalizeText32(value.evidencePath),
+    completionExperience: normalizeText32(value.completionExperience),
+    vtddArea: normalizeText32(value.vtddArea),
+    design: normalizeText32(value.design),
+    hypothesis: normalizeText32(value.hypothesis),
+    verificationPlan: normalizeText32(value.verificationPlan),
+    changeEstimate: normalizeText32(value.changeEstimate),
+    knownPath: normalizeText32(value.knownPath),
+    unknownBoundary: normalizeText32(value.unknownBoundary),
+    likelyGaps: normalizeText32(value.likelyGaps),
+    prePrChecks: normalizeText32(value.prePrChecks),
+    optionsRejected: normalizeText32(value.optionsRejected),
+    postMergeE2E: normalizeText32(value.postMergeE2E),
+    noNextPrReason: normalizeText32(value.noNextPrReason),
+    stopCondition: normalizeText32(value.stopCondition)
+  };
+  return Object.values(strategy).some(Boolean) ? strategy : null;
+}
+function buildButlerHandoffDevelopmentStrategyDraft({ payload, handoff, policyInput, issueNumber }) {
+  const repositoryInput = normalizeText32(policyInput?.repositoryInput) || normalizeText32(handoff.repositoryInput) || normalizeText32(payload?.repositoryInput) || "\u5BFE\u8C61 repository";
+  const branch = normalizeText32(payload?.executionTarget?.branch) || normalizeText32(policyInput?.runtimeTruth?.runtimeState?.activeBranch) || (issueNumber ? `codex/issue-${issueNumber}` : "codex/issue");
+  const ownerIntent = normalizeText32(handoff.ownerMessage) || normalizeText32(payload?.ownerMessage) || normalizeText32(payload?.message) || `Issue #${issueNumber} \u306E\u5B9F\u88C5\u3092\u9032\u3081\u308B`;
+  const traceability = policyInput?.issueTraceability && typeof policyInput.issueTraceability === "object" ? policyInput.issueTraceability : {};
+  const intentRefs = formatTraceRefs(traceability.intentRefs, `#${issueNumber} Intent`);
+  const successRefs = formatTraceRefs(
+    traceability.successCriteriaRefs,
+    `#${issueNumber} Success Criteria`
+  );
+  const nonGoalRefs = formatTraceRefs(traceability.nonGoalRefs, `#${issueNumber} Non-goals`);
+  return {
+    evidencePath: `docs/development-strategy/issue-${issueNumber}-butler-handoff.md`,
+    completionExperience: `Dashboard Butler \u304B\u3089\u81EA\u7136\u6587 GO \u3057\u305F owner \u304C\u3001${repositoryInput} \u306E Issue #${issueNumber} \u5B9F\u88C5\u524D\u306B\u4F5C\u6226\u56F3\u4ED8\u304D handoff \u3067\u9032\u3081\u3089\u308C\u308B\u3002`,
+    vtddArea: "Dashboard Butler \u306E\u81EA\u7136\u6587 build handoff \u3068 VPS runner PR \u4F5C\u6210\u524D guardrail \u3092\u63A5\u7D9A\u3059\u308B\u3002",
+    design: `Butler \u304C ${ownerIntent} \u3092\u3059\u3050\u5B9F\u88C5\u3078\u6E21\u3055\u305A\u3001Issue #${issueNumber} \u306E traceability \u3068 branch ${branch} \u3092\u3082\u3068\u306B\u4F5C\u6226\u56F3\u3092 handoff.developmentStrategy \u3078\u56FA\u5B9A\u3059\u308B\u3002`,
+    hypothesis: "\u6D45\u3044 PR \u9023\u9396\u306E\u539F\u56E0\u306F\u3001Butler build handoff \u304C\u5B9F\u88C5\u524D\u306E\u4EEE\u8AAC\u3068\u691C\u8A3C\u8A08\u753B\u3092\u6301\u305F\u305A\u306B runner \u3078\u6E21\u308B\u3053\u3068\u306B\u3042\u308B\u3002",
+    verificationPlan: "worker / orchestrator / remote Codex executor / VPS runner \u306E tests \u3067\u3001\u4F5C\u6226\u56F3\u306A\u3057 handoff \u304C\u6B62\u307E\u308A\u3001\u4F5C\u6226\u56F3\u4ED8\u304D handoff \u304C PR body \u306B\u5C4A\u304F\u3053\u3068\u3092\u78BA\u8A8D\u3059\u308B\u3002",
+    changeEstimate: "src/worker/runtime.js \u306E normalizeRemoteCodexHandoffPayload\u3001src/core/remote-codex-handoff-scope.js\u3001src/core/remote-codex-executor.js\u3001\u95A2\u9023 worker/orchestrator/runner tests \u3092\u78BA\u8A8D\u30FB\u6539\u4FEE\u3059\u308B\u3002",
+    knownPath: `\u65E2\u5B58\u306E Butler execute route\u3001issue refs (${intentRefs}, ${successRefs}, ${nonGoalRefs})\u3001VPS runner PR body renderer \u306F\u5B58\u5728\u3059\u308B\u3002`,
+    unknownBoundary: "Dashboard \u4E0A\u306E\u5C02\u7528\u7DE8\u96C6 UI \u3084 LLM \u306B\u3088\u308B\u6DF1\u3044\u8A2D\u8A08\u751F\u6210\u306F\u3053\u306E handoff draft \u3060\u3051\u3067\u306F\u672A\u5B8C\u6210\u3068\u3057\u3066\u6271\u3046\u3002",
+    likelyGaps: "handoff \u9014\u4E2D\u3067 developmentStrategy \u3092\u843D\u3068\u3059\u3068\u3001VPS runner \u304C PR body \u3092\u4F5C\u308C\u306A\u3044\u304B\u3001\u4F5C\u6226\u56F3\u306A\u3057\u306E\u6D45\u3044 PR \u306B\u623B\u308B\u3002",
+    prePrChecks: "\u5BFE\u8C61 Issue\u3001AGENTS.md\u3001pre-development strategy contract\u3001handoff normalization\u3001runner PR body validation\u3001\u95A2\u9023 tests \u3092 PR \u524D\u306B\u78BA\u8A8D\u3059\u308B\u3002",
+    optionsRejected: "VPS runner \u5074\u3060\u3051\u3067\u62D2\u5426\u3059\u308B\u6848\u306F\u6368\u3066\u3001Butler \u5165\u53E3\u3067\u4F5C\u6226\u56F3 draft \u3092\u6301\u305F\u305B\u308B\u3002",
+    postMergeE2E: "production deploy \u5F8C\u306B Dashboard Butler \u304B\u3089\u81EA\u7136\u6587 build handoff \u3092\u901A\u3057\u3001queue comment \u3068 PR body \u306B developmentStrategy \u304C\u6B8B\u308B\u3053\u3068\u3092\u78BA\u8A8D\u3059\u308B\u3002",
+    noNextPrReason: "Butler \u5165\u53E3\u3001bounded \u5224\u5B9A\u3001executor request \u4FDD\u6301\u3001runner PR body \u53CD\u6620\u3092\u540C\u3058\u5B9F\u88C5\u7BC4\u56F2\u3067\u585E\u3050\u3002",
+    stopCondition: "\u4F5C\u6226\u56F3\u306A\u3057\u3067 bounded build handoff \u304C allowed \u306B\u306A\u308B\u5834\u5408\u3001\u307E\u305F\u306F deploy/root/credential mutation \u304C\u5FC5\u8981\u306B\u306A\u3063\u305F\u5834\u5408\u306F\u505C\u6B62\u3059\u308B\u3002"
+  };
+}
+function formatTraceRefs(value, fallback) {
+  const refs = Array.isArray(value) ? value.map(normalizeText32).filter(Boolean) : [];
+  return refs.length > 0 ? refs.join(", ") : fallback;
 }
 function mergeGrantedConsentCategories(current, required2) {
   const seen = /* @__PURE__ */ new Set();
