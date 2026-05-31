@@ -298,6 +298,61 @@ For this public/core branch, the bounded change contract must also state when re
 - whether the change is safe for a repo intended to be usable by people other
   than the owner
 
+## 開発前作戦図 Gate (Required Before Implementation PRs)
+
+Before implementation work, create or update a repository-backed development
+strategy file under `docs/development-strategy/issue-<number>-<slug>.md`.
+
+This is the required place for 設計, 仮説, 検証計画, prediction, risk scan,
+and first-principles traffic control. Chat-only reflection does not satisfy
+this gate.
+
+This gate applies to implementation work that edits code, runtime behavior,
+tests, workflows, or durable product docs for an Issue-backed PR.
+
+This gate does not apply to ordinary conversation, brainstorming, status
+questions, Read/Think mode, lightweight Issue triage, or owner-facing chat that
+does not start implementation. Butler must remain able to talk naturally.
+
+The required order is:
+
+1. 設計: define the owner-facing completion experience, root blocker, scope,
+   non-goals, authority boundary, and expected touched surfaces.
+2. 仮説: name the likely files/routes/workflows, the suspected failure mode,
+   why that suspicion fits the Issue, and what would break if patched narrowly.
+3. 検証計画: define the unit/integration/E2E/runtime-truth checks that will
+   prove or disprove the hypothesis before the PR claims progress.
+4. 実装: edit code only after the first three are written in the strategy file.
+
+The strategy file must be written before code edits for the Issue slice and
+must cover:
+
+- 完了体験
+- VTDD 全体で進める部分
+- 設計
+- 仮説
+- 検証計画
+- 改修見積もり: file path, line/function/feature boundary, expected change,
+  and risk for each touched area
+- 既に通っている経路
+- 未確認の境界
+- 穴が出そうな箇所
+- PR 前に確認すること
+- 実装候補と捨てた案
+- merge 後に通す E2E
+- 次の PR を増やさない理由
+- 停止条件
+
+If the strategy file cannot be written from current Issue/docs/source truth,
+stop and read more before coding. If the hypothesis is weak, do not compensate
+by writing code first. If implementation invalidates the strategy, update the
+strategy before widening the patch. Do not hide unknowns behind `未確認`,
+`未定`, `なし`, `TODO`, or equivalent placeholder text.
+
+Every implementation PR must reference the strategy file in its PR body. A PR
+that changes code or durable product behavior without a concrete strategy
+evidence path is incomplete.
+
 ## Docs-First Gate
 
 If canonical docs referenced by parent planning Issues are missing, restore docs first.

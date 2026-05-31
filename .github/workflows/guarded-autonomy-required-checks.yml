@@ -60,6 +60,7 @@ jobs:
             "## This PR satisfies Intent"
             "## Satisfied Success Criteria"
             "## Unsatisfied Success Criteria"
+            "## 開発前作戦図"
             "## Verification Evidence"
             "## Butler Completion Contract"
             "## Surface Update Checklist"

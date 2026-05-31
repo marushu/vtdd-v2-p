@@ -8,6 +8,7 @@ const REQUIRED_MARKERS = [
   "## This PR satisfies Intent",
   "## Satisfied Success Criteria",
   "## Unsatisfied Success Criteria",
+  "## 開発前作戦図",
   "## Dry-run Impact Report",
   "## Execution Queue Delta",
   "## File / Line Hypotheses",
@@ -54,6 +55,26 @@ const REQUIRED_DRY_RUN_FIELDS = [
   "Stop condition",
 ];
 
+const PRE_DEVELOPMENT_STRATEGY_HEADING = "## 開発前作戦図";
+
+const REQUIRED_PRE_DEVELOPMENT_STRATEGY_FIELDS = [
+  "作戦図 evidence",
+  "完了体験",
+  "VTDD 全体で進める部分",
+  "設計",
+  "仮説",
+  "検証計画",
+  "改修見積もり",
+  "既に通っている経路",
+  "未確認の境界",
+  "穴が出そうな箇所",
+  "PR 前に確認すること",
+  "実装候補と捨てた案",
+  "merge 後に通す E2E",
+  "次の PR を増やさない理由",
+  "停止条件",
+];
+
 const PLACEHOLDER_VALUES = new Set([
   "",
   "none",
@@ -96,6 +117,20 @@ function validatePrBody(body, options = {}) {
     if (!templateMode && isPlaceholder(dryRunFields[field])) {
       errors.push(`Dry-run Impact Report field is not filled: ${field}`);
     }
+  }
+
+  const strategyFields = extractSectionFields(body, PRE_DEVELOPMENT_STRATEGY_HEADING);
+  for (const field of REQUIRED_PRE_DEVELOPMENT_STRATEGY_FIELDS) {
+    if (!Object.hasOwn(strategyFields, field)) {
+      errors.push(`Missing 開発前作戦図 field: ${field}`);
+      continue;
+    }
+    if (!templateMode && isPreDevelopmentPlaceholder(strategyFields[field])) {
+      errors.push(`開発前作戦図 field is not filled: ${field}`);
+    }
+  }
+  if (!templateMode) {
+    validatePreDevelopmentStrategySemantics(strategyFields, body, errors);
   }
 
   const queueFields = extractSectionFields(body, "## Execution Queue Delta");
@@ -254,6 +289,91 @@ function validateQueueFieldSemantics(fields, errors) {
   }
 }
 
+function validatePreDevelopmentStrategySemantics(fields, body, errors) {
+  const evidence = fields["作戦図 evidence"] || "";
+  if (evidence && !/docs\/development-strategy\/issue-[0-9]+-[^)\s]+\.md/.test(evidence)) {
+    errors.push("開発前作戦図 作戦図 evidence must point to docs/development-strategy/issue-<number>-<slug>.md.");
+  }
+  if (evidence) {
+    const evidencePath = extractStrategyEvidencePath(evidence);
+    if (!evidencePath || !fs.existsSync(evidencePath)) {
+      errors.push("開発前作戦図 作戦図 evidence path must exist in this repository checkout.");
+    }
+    const evidenceIssue = extractStrategyEvidenceIssueNumber(evidencePath);
+    const targetIssue = extractTargetIssueNumber(fields, body);
+    if (evidenceIssue && targetIssue && evidenceIssue !== targetIssue) {
+      errors.push(
+        `開発前作戦図 作戦図 evidence Issue #${evidenceIssue} must match Target Issue #${targetIssue}.`,
+      );
+    }
+  }
+
+  const completionExperience = fields["完了体験"] || "";
+  if (completionExperience && !/(Butler|オーナー|owner|ユーザー|Dashboard)/i.test(completionExperience)) {
+    errors.push("開発前作戦図 完了体験 must name the owner/Butler-facing experience.");
+  }
+
+  const prePrChecks = fields["PR 前に確認すること"] || "";
+  if (prePrChecks && !/(確認|読む|read|test|検証|source|docs|Issue|PR|workflow|CI)/i.test(prePrChecks)) {
+    errors.push("開発前作戦図 PR 前に確認すること must describe concrete pre-PR checks.");
+  }
+
+  const postMergeE2E = fields["merge 後に通す E2E"] || "";
+  if (postMergeE2E && !/(E2E|e2e|test|テスト|検証|live|node --test)/i.test(postMergeE2E)) {
+    errors.push("開発前作戦図 merge 後に通す E2E must name mapped E2E or test evidence.");
+  }
+
+  const noNextPrReason = fields["次の PR を増やさない理由"] || "";
+  if (noNextPrReason && !/(次|PR|増や|残|閉じ|穴|不足|後続|scope|範囲)/i.test(noNextPrReason)) {
+    errors.push("開発前作戦図 次の PR を増やさない理由 must explain why this slice should not spawn predictable follow-up PRs.");
+  }
+
+  const design = fields["設計"] || "";
+  if (design && !/(owner|オーナー|Butler|境界|scope|範囲|surface|経路|完了|設計)/i.test(design)) {
+    errors.push("開発前作戦図 設計 must describe the completion design, scope, boundary, or owner-facing surface.");
+  }
+
+  const hypothesis = fields["仮説"] || "";
+  if (hypothesis && !/(仮説|疑|root|原因|failure|壊|穴|予測|予見|あたり|suspect|because|なぜ)/i.test(hypothesis)) {
+    errors.push("開発前作戦図 仮説 must state the suspected cause or prediction before implementation.");
+  }
+
+  const verificationPlan = fields["検証計画"] || "";
+  if (verificationPlan && !/(検証|test|テスト|E2E|unit|integration|runtime truth|確認|prove|disprove)/i.test(verificationPlan)) {
+    errors.push("開発前作戦図 検証計画 must name the checks that prove or disprove the hypothesis.");
+  }
+
+  const estimate = fields["改修見積もり"] || "";
+  if (estimate && !/(file|\.js|\.mjs|\.md|\.yml|\.yaml|\.ts|\.tsx|関数|function|route|workflow|line|行|機能|feature|scripts\/|src\/|docs\/|test\/|\.github\/)/i.test(estimate)) {
+    errors.push("開発前作戦図 改修見積もり must name concrete files, lines, functions, routes, workflows, or feature boundaries.");
+  }
+}
+
+function extractStrategyEvidencePath(value) {
+  const match = String(value || "").match(/docs\/development-strategy\/issue-[0-9]+-[^\s)]+\.md/);
+  return match ? match[0] : "";
+}
+
+function extractStrategyEvidenceIssueNumber(value) {
+  const match = String(value || "").match(/docs\/development-strategy\/issue-([0-9]+)-[^\s)]+\.md/);
+  return match ? match[1] : "";
+}
+
+function extractTargetIssueNumber(strategyFields, body) {
+  const dryRunFields = extractSectionFields(body, "## Dry-run Impact Report");
+  const dryRunTarget = dryRunFields["Target Issue"] || "";
+  const dryRunMatch = dryRunTarget.match(/Issue #([0-9]+)/i);
+  if (dryRunMatch) {
+    return dryRunMatch[1];
+  }
+  const metadataMatch = String(body || "").match(/^- Issue:\s*Issue #([0-9]+)/im);
+  if (metadataMatch) {
+    return metadataMatch[1];
+  }
+  const strategyEvidence = strategyFields["作戦図 evidence"] || "";
+  return extractStrategyEvidenceIssueNumber(strategyEvidence);
+}
+
 function extractSectionFields(body, heading) {
   const fields = {};
   const section = body.split(heading)[1]?.split(/\n## /)[0] || "";
@@ -286,6 +406,15 @@ function isPlaceholder(value) {
   return PLACEHOLDER_VALUES.has(normalizeValue(value));
 }
 
+function isPreDevelopmentPlaceholder(value) {
+  const normalized = normalizeValue(value);
+  if (PLACEHOLDER_VALUES.has(normalized)) {
+    return true;
+  }
+  return /^(未確認|未定|なし|不要|該当なし|n\/a|na)$/i.test(String(value || "").trim())
+    || /具体化してください|明記してください|設計してください|仮説化してください|決めてください|してください|未記入|TODO|TBD/i.test(String(value || ""));
+}
+
 function unsatisfiedCriteriaIsNone(body) {
   const section = body.split("## Unsatisfied Success Criteria")[1]?.split(/\n## /)[0] || "";
   return normalizeValue(section.replace(/^- /gm, "").trim()) === "none.";
@@ -315,4 +444,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   console.log("PR body template validation passed.");
 }
 
-export { REQUIRED_BUTLER_FIELDS, REQUIRED_MARKERS, REQUIRED_QUEUE_FIELDS, validatePrBody };
+export {
+  REQUIRED_BUTLER_FIELDS,
+  REQUIRED_MARKERS,
+  REQUIRED_PRE_DEVELOPMENT_STRATEGY_FIELDS,
+  REQUIRED_QUEUE_FIELDS,
+  validatePrBody
+};

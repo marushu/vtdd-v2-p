@@ -9,9 +9,32 @@ import { prepareGuardedPullRequestBody, prepareGuardedPullRequestBodyFile } from
 import { renderPrBody } from "../scripts/render-pr-body.mjs";
 import { validatePrBody } from "../scripts/validate-pr-body.mjs";
 
+function withStrategy(options = {}) {
+  const issue = options.issue || "703";
+  return {
+    ...options,
+    issue,
+    strategyEvidence: `docs/development-strategy/issue-${issue}-predev-strategy-guard.md`,
+    strategyCompletionExperience: "Dashboard Butler とオーナーが、実装前に完了体験を確認できる。",
+    strategyVtddArea: "VTDD の開発前交通整理を進める。",
+    strategyDesign: "オーナー-facing 完了体験、scope、authority boundary、PR evidence path を先に設計する。",
+    strategyHypothesis: "root blocker はコード前の仮説不足であり、作戦図なしでは穴が残るという予測に基づく。",
+    strategyVerificationPlan: "validator test と template validation で仮説を検証する。",
+    strategyChangeEstimate: "scripts/validate-pr-body.mjs の validator 関数、scripts/render-pr-body.mjs の renderer、.github workflow、PR template、test を改修する。",
+    strategyKnownPath: "AGENTS.md、PR template、validator、guarded workflow が既に存在する。",
+    strategyUnknownBoundary: "Dashboard Butler から作戦図を自然文生成する UI は未接続として扱う。",
+    strategyLikelyGaps: "renderer の既定文だけで通ると、また予見なしの PR が通る。",
+    strategyPrePrChecks: "Issue、AGENTS.md、PR template、validator、tests を PR 前に確認する。",
+    strategyOptionsRejected: "PR body だけの後付け案を捨て、repo-backed 作戦図を採用する。",
+    strategyPostMergeE2E: "node --test test/pr-body-guardrail.test.js と template validation を通す。",
+    strategyNoNextPrReason: "template、renderer、validator、workflow、test を同じ範囲に入れて後続 PR を増やさない。",
+    strategyStopCondition: "runtime / Worker / VPS / deploy 変更が必要になったら停止する。"
+  };
+}
+
 test("renderPrBody includes all guarded-policy headings", () => {
   const body = renderPrBody({
-    issue: "57",
+    issue: "703",
     intent: "Prevent repeated PR body guard failures.",
     satisfied: "Helper generates all required sections.",
   });
@@ -19,6 +42,7 @@ test("renderPrBody includes all guarded-policy headings", () => {
   assert.match(body, /## This PR satisfies Intent/);
   assert.match(body, /## Satisfied Success Criteria/);
   assert.match(body, /## Unsatisfied Success Criteria/);
+  assert.match(body, /## 開発前作戦図/);
   assert.match(body, /## Dry-run Impact Report/);
   assert.match(body, /## Execution Queue Delta/);
   assert.match(body, /## File \/ Line Hypotheses/);
@@ -37,6 +61,11 @@ test("renderPrBody default guidance is Japanese-first while headings remain stab
   assert.match(body, /#316 の部分進捗です。/);
   assert.match(body, /このPRスライス外に、未接続または未完了の owner-facing 作業が残っています。/);
   assert.match(body, /Primary owner surface: Dashboard Butler/);
+  assert.match(body, /作戦図 evidence: docs\/development-strategy\/issue-<number>-<slug>\.md を作ってから具体化してください。/);
+  assert.match(body, /設計: 完了体験、scope、authority boundary、触る surface/);
+  assert.match(body, /仮説: 疑っている failure mode/);
+  assert.match(body, /検証計画: 仮説を証明または否定する unit/);
+  assert.match(body, /改修見積もり: どのファイル、行、関数、route、workflow/);
   assert.match(body, /Fallback surface: Custom GPT は明示された fallback surface/);
   assert.match(body, /Owner goal: このPRが扱う owner-facing goal/);
   assert.match(body, /Dashboard Butler natural-language path: Dashboard Butler の自然文/);
@@ -49,15 +78,20 @@ test("renderPrBody default guidance is Japanese-first while headings remain stab
   assert.match(body, /Cloudflare deploy: 不要。/);
 });
 
-test("renderPrBody default partial template passes validator without Butler placeholders", () => {
+test("renderPrBody default partial template fails until development strategy is concrete", () => {
   const body = renderPrBody({
-    issue: "57",
+    issue: "703",
     intent: "Prevent repeated PR body guard failures.",
     satisfied: "Helper generates all required sections."
   });
 
   const result = validatePrBody(body);
-  assert.equal(result.ok, true);
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /開発前作戦図 field is not filled: 作戦図 evidence/);
+  assert.match(result.errors.join("\n"), /開発前作戦図 field is not filled: 設計/);
+  assert.match(result.errors.join("\n"), /開発前作戦図 field is not filled: 仮説/);
+  assert.match(result.errors.join("\n"), /開発前作戦図 field is not filled: 検証計画/);
+  assert.match(result.errors.join("\n"), /開発前作戦図 field is not filled: 改修見積もり/);
 });
 
 test("validatePrBody fails when required markers are missing", () => {
@@ -67,8 +101,8 @@ test("validatePrBody fails when required markers are missing", () => {
 });
 
 test("validatePrBody accepts rendered body", () => {
-  const body = renderPrBody({
-    issue: "57",
+  const body = renderPrBody(withStrategy({
+    issue: "703",
     intent: "Prevent repeated PR body guard failures.",
     satisfied: "Helper generates all required sections.",
     unit: "`node --test test/pr-body-guardrail.test.js`",
@@ -84,18 +118,18 @@ test("validatePrBody accepts rendered body", () => {
     authorityBoundary: "No high-risk operation.",
     butlerE2E: "Not required because this PR does not close a runtime Issue.",
     completionStatus: "incomplete",
-  });
+  }));
   const result = validatePrBody(body);
   assert.equal(result.ok, true);
 });
 
 test("renderPrBody normalizes partial completion status into incomplete", () => {
-  const body = renderPrBody({
-    issue: "57",
+  const body = renderPrBody(withStrategy({
+    issue: "703",
     intent: "Prevent repeated PR body guard failures.",
     satisfied: "Helper generates all required sections.",
     completionStatus: "partial"
-  });
+  }));
 
   assert.match(body, /- Completion status: incomplete/);
   const result = validatePrBody(body);
@@ -103,8 +137,8 @@ test("renderPrBody normalizes partial completion status into incomplete", () => 
 });
 
 test("validatePrBody fails when execution queue delta is missing", () => {
-  const body = renderPrBody({
-    issue: "595",
+  const body = renderPrBody(withStrategy({
+    issue: "703",
     intent: "Issue #595 の queue delta guardrail を固定する。",
     satisfied: "Canonical helper generates queue delta.",
     unsatisfied: "Human review remains pending.",
@@ -117,7 +151,7 @@ test("validatePrBody fails when execution queue delta is missing", () => {
     authorityBoundary: "No high-risk operation.",
     butlerE2E: "Not required because this PR does not close a runtime Issue.",
     completionStatus: "incomplete",
-  }).replace(/\n## Execution Queue Delta[\s\S]*?\n## File \/ Line Hypotheses/, "\n## File / Line Hypotheses");
+  })).replace(/\n## Execution Queue Delta[\s\S]*?\n## File \/ Line Hypotheses/, "\n## File / Line Hypotheses");
 
   const result = validatePrBody(body);
   assert.equal(result.ok, false);
@@ -125,8 +159,8 @@ test("validatePrBody fails when execution queue delta is missing", () => {
 });
 
 test("validatePrBody rejects empty execution queue delta fields", () => {
-  const body = renderPrBody({
-    issue: "595",
+  const body = renderPrBody(withStrategy({
+    issue: "703",
     intent: "Issue #595 の queue delta guardrail を固定する。",
     satisfied: "Canonical helper generates queue delta.",
     unsatisfied: "Human review remains pending.",
@@ -139,7 +173,7 @@ test("validatePrBody rejects empty execution queue delta fields", () => {
     authorityBoundary: "No high-risk operation.",
     butlerE2E: "Not required because this PR does not close a runtime Issue.",
     completionStatus: "incomplete",
-  }).replace(/- Why this PR is next: .+/, "- Why this PR is next: None.");
+  })).replace(/- Why this PR is next: .+/, "- Why this PR is next: None.");
 
   const result = validatePrBody(body);
   assert.equal(result.ok, false);
@@ -147,8 +181,8 @@ test("validatePrBody rejects empty execution queue delta fields", () => {
 });
 
 test("validatePrBody rejects semantically vague execution queue delta fields", () => {
-  const body = renderPrBody({
-    issue: "595",
+  const body = renderPrBody(withStrategy({
+    issue: "703",
     intent: "Issue #595 の queue delta guardrail を固定する。",
     satisfied: "Canonical helper generates queue delta.",
     unsatisfied: "Human review remains pending.",
@@ -164,7 +198,7 @@ test("validatePrBody rejects semantically vague execution queue delta fields", (
     authorityBoundary: "No high-risk operation.",
     butlerE2E: "Not required because this PR does not close a runtime Issue.",
     completionStatus: "incomplete",
-  });
+  }));
 
   const result = validatePrBody(body);
   assert.equal(result.ok, false);
@@ -174,8 +208,8 @@ test("validatePrBody rejects semantically vague execution queue delta fields", (
 });
 
 test("validatePrBody rejects PR bodies that make Custom GPT or Action Schema the primary path", () => {
-  const body = renderPrBody({
-    issue: "595",
+  const body = renderPrBody(withStrategy({
+    issue: "703",
     intent: "Issue #595 の Dashboard Butler First guardrail を固定する。",
     satisfied: "Validator catches surface drift.",
     unsatisfied: "Human review remains pending.",
@@ -191,7 +225,7 @@ test("validatePrBody rejects PR bodies that make Custom GPT or Action Schema the
     authorityBoundary: "No high-risk operation.",
     butlerE2E: "Not required because this PR does not close a runtime Issue.",
     completionStatus: "incomplete",
-  });
+  }));
 
   const result = validatePrBody(body);
   assert.equal(result.ok, false);
@@ -202,8 +236,8 @@ test("validatePrBody rejects PR bodies that make Custom GPT or Action Schema the
 });
 
 test("validatePrBody rejects contradictory primary surface text that merely mentions Dashboard Butler", () => {
-  const body = renderPrBody({
-    issue: "595",
+  const body = renderPrBody(withStrategy({
+    issue: "703",
     intent: "Issue #595 の Dashboard Butler First guardrail を固定する。",
     satisfied: "Validator catches contradictory surface text.",
     unsatisfied: "Human review remains pending.",
@@ -218,7 +252,7 @@ test("validatePrBody rejects contradictory primary surface text that merely ment
     authorityBoundary: "No high-risk operation.",
     butlerE2E: "Not required because this PR does not close a runtime Issue.",
     completionStatus: "incomplete",
-  });
+  }));
 
   const result = validatePrBody(body);
   assert.equal(result.ok, false);
@@ -227,8 +261,8 @@ test("validatePrBody rejects contradictory primary surface text that merely ment
 });
 
 test("validatePrBody accepts explicit Action Schema negation and rejects vague natural-language path", () => {
-  const valid = renderPrBody({
-    issue: "595",
+  const valid = renderPrBody(withStrategy({
+    issue: "703",
     intent: "Issue #595 の Dashboard Butler First guardrail を固定する。",
     satisfied: "Validator accepts a negated Action Schema primary-path statement.",
     unsatisfied: "Human review remains pending.",
@@ -242,11 +276,11 @@ test("validatePrBody accepts explicit Action Schema negation and rejects vague n
     authorityBoundary: "No high-risk operation.",
     butlerE2E: "Not required because this PR does not close a runtime Issue.",
     completionStatus: "incomplete",
-  });
+  }));
   assert.equal(validatePrBody(valid).ok, true);
 
-  const vague = renderPrBody({
-    issue: "595",
+  const vague = renderPrBody(withStrategy({
+    issue: "703",
     intent: "Issue #595 の Dashboard Butler First guardrail を固定する。",
     satisfied: "Validator rejects vague path text.",
     unsatisfied: "Human review remains pending.",
@@ -260,7 +294,7 @@ test("validatePrBody accepts explicit Action Schema negation and rejects vague n
     authorityBoundary: "No high-risk operation.",
     butlerE2E: "Not required because this PR does not close a runtime Issue.",
     completionStatus: "incomplete",
-  });
+  }));
 
   const result = validatePrBody(vague);
   assert.equal(result.ok, false);
@@ -357,8 +391,8 @@ None.
 });
 
 test("validatePrBody rejects empty dry-run impact fields", () => {
-  const body = renderPrBody({
-    issue: "360",
+  const body = renderPrBody(withStrategy({
+    issue: "703",
     intent: "Issue #360 の dry-run impact gate を PR body に固定する。",
     satisfied: "Dry-run sections are present.",
     unsatisfied: "Issue #355 への適用 evidence は後続。",
@@ -371,16 +405,40 @@ test("validatePrBody rejects empty dry-run impact fields", () => {
     authorityBoundary: "No high-risk operation.",
     butlerE2E: "Not required for this docs/process guardrail.",
     completionStatus: "incomplete",
-  }).replace("- Expected touched files/routes/workflows: 想定ファイル、route、workflow、docs を明記してください。", "- Expected touched files/routes/workflows: None.");
+  })).replace("- Expected touched files/routes/workflows: 想定ファイル、route、workflow、docs を明記してください。", "- Expected touched files/routes/workflows: None.");
 
   const result = validatePrBody(body);
   assert.equal(result.ok, false);
   assert.match(result.errors.join("\n"), /Dry-run Impact Report field is not filled: Expected touched files\/routes\/workflows/);
 });
 
-test("validatePrBody rejects closing PRs without complete Butler evidence", () => {
+test("validatePrBody rejects a development strategy from a different Issue", () => {
   const body = renderPrBody({
+    ...withStrategy(),
     issue: "57",
+    strategyEvidence: "docs/development-strategy/issue-703-predev-strategy-guard.md",
+    intent: "Issue #57 に別 Issue の作戦図を使い回す逃げ道を拒否する。",
+    satisfied: "Validator catches mismatched strategy evidence.",
+    unsatisfied: "Human review remains pending.",
+    evidencePath: "docs/pr-template-model.md",
+    ownerGoal: "対象 Issue と作戦図 evidence を一致させる。",
+    butlerEntrypoint: "PR body review gate.",
+    actionSchemaExposure: "No schema change.",
+    runtimePath: "scripts/validate-pr-body.mjs.",
+    runtimeTruth: "Validator pass/fail output.",
+    authorityBoundary: "No high-risk operation.",
+    butlerE2E: "Not required for this guardrail path.",
+    completionStatus: "incomplete",
+  });
+
+  const result = validatePrBody(body);
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /作戦図 evidence Issue #703 must match Target Issue #57/);
+});
+
+test("validatePrBody rejects closing PRs without complete Butler evidence", () => {
+  const body = renderPrBody(withStrategy({
+    issue: "703",
     intent: "Closes #57",
     satisfied: "Everything.",
     e2e: "`node --test test/pr-body-guardrail.test.js`",
@@ -393,7 +451,7 @@ test("validatePrBody rejects closing PRs without complete Butler evidence", () =
     authorityBoundary: "scoped passkey approval where required.",
     butlerE2E: "None.",
     completionStatus: "incomplete",
-  });
+  }));
 
   const result = validatePrBody(body);
   assert.equal(result.ok, false);
@@ -406,8 +464,8 @@ test("validate-pr-body CLI passes on rendered file", () => {
   const file = path.join(tmpdir, "body.md");
   fs.writeFileSync(
     file,
-    renderPrBody({
-      issue: "57",
+      renderPrBody(withStrategy({
+      issue: "703",
       intent: "Prevent repeated PR body guard failures.",
       satisfied: "Helper generates all required sections.",
       unsatisfied: "Human review remains pending.",
@@ -420,7 +478,7 @@ test("validate-pr-body CLI passes on rendered file", () => {
       authorityBoundary: "No high-risk operation.",
       butlerE2E: "Not required because this PR does not close a runtime Issue.",
       completionStatus: "incomplete",
-    }),
+    })),
   );
 
   const output = execFileSync("node", ["scripts/validate-pr-body.mjs", file], {
@@ -446,6 +504,8 @@ test("guarded workflow grandfathers pre-queue open PRs while enforcing new queue
   const workflow = fs.readFileSync(".github/workflows/guarded-autonomy-required-checks.yml", "utf8");
 
   assert.match(workflow, /queue_delta_enforced_from_pr=596/);
+  assert.match(workflow, /pull_request:/);
+  assert.doesNotMatch(workflow, /pull_request_target:/);
   assert.match(workflow, /Skipping Execution Queue Delta enforcement for grandfathered PR/);
   assert.match(workflow, /Preemption decision must name one queue classification/);
   assert.match(workflow, /Queue delta must name the Issue\/PR or queue bucket being moved/);
@@ -478,8 +538,8 @@ test("guarded workflow rejects draft implementation PRs instead of using draft a
 });
 
 test("prepare-pr-body-file preserves a valid candidate body", async () => {
-  const candidate = renderPrBody({
-    issue: "57",
+  const candidate = renderPrBody(withStrategy({
+    issue: "703",
     intent: "Preserve valid candidate.",
     satisfied: "Body already matches the canonical contract.",
     unsatisfied: "Human review remains pending.",
@@ -492,7 +552,7 @@ test("prepare-pr-body-file preserves a valid candidate body", async () => {
     authorityBoundary: "No high-risk operation.",
     butlerE2E: "Not required for this guardrail path.",
     completionStatus: "incomplete",
-  });
+  }));
   const prepared = prepareGuardedPullRequestBody({
     candidateBody: candidate,
     renderBody: () => "should not be used"
@@ -510,8 +570,8 @@ test("prepare-pr-body-file normalizes malformed candidate into canonical body fi
     outputPath: file,
     candidateBody: "## Summary\n\nBroken.",
     renderBody: () =>
-      renderPrBody({
-        issue: "57",
+      renderPrBody(withStrategy({
+        issue: "703",
         intent: "Normalize malformed candidate.",
         satisfied: "Canonical helper rewrites the body.",
         unsatisfied: "Human review remains pending.",
@@ -524,7 +584,7 @@ test("prepare-pr-body-file normalizes malformed candidate into canonical body fi
         authorityBoundary: "No high-risk operation.",
         butlerE2E: "Not required for this guardrail path.",
         completionStatus: "incomplete",
-      })
+      }))
   });
 
   assert.equal(prepared.ok, true);
