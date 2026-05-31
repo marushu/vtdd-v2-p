@@ -57231,6 +57231,19 @@ var DashboardChatRoom = class {
       clientMessageId,
       messageId: ownerMessage.messageId
     });
+    const vpsMaintenanceMessages = await this.buildVpsMaintenanceIntentMessages({
+      payload,
+      threadId,
+      repository,
+      relatedIssue,
+      text,
+      now
+    });
+    if (vpsMaintenanceMessages) {
+      const butlerMessages = store ? await store.appendMany(threadId, vpsMaintenanceMessages) : vpsMaintenanceMessages;
+      await this.broadcastThread({ threadId, messages: [...messages, ...butlerMessages] });
+      return;
+    }
     await this.broadcastTransientStatus({
       threadId,
       status: "thinking",
@@ -57278,6 +57291,39 @@ var DashboardChatRoom = class {
       trafficControl
     };
     return this.sendSocket(bridgeSocket, turnRequest);
+  }
+  async buildVpsMaintenanceIntentMessages({ payload, threadId, repository, relatedIssue, text, now }) {
+    if (!detectDashboardVpsPrivilegedMaintenanceIntent({ text })) {
+      return null;
+    }
+    const flow = await buildDashboardVpsPrivilegedMaintenanceNaturalLanguageFlow({
+      payload: {
+        ...normalizeObject12(payload),
+        threadId,
+        repository,
+        relatedIssue,
+        issueNumber: relatedIssue,
+        text
+      },
+      repository,
+      relatedIssue,
+      origin: normalizeText31(this.env?.VTDD_RUNTIME_URL || this.env?.VTDD_PASSKEY_ORIGIN) || "https://dashboard-butler.local",
+      env: this.env
+    });
+    return [
+      normalizeDashboardChatMessage(
+        {
+          threadId,
+          role: "butler",
+          repository,
+          relatedIssue,
+          status: normalizeDashboardChatStatus(flow?.messageStatus || "blocked"),
+          text: flow?.reply || buildDashboardVpsPrivilegedMaintenanceReply({ repository, relatedIssue }),
+          createdAt: new Date(Date.parse(now) + 1).toISOString()
+        },
+        { threadId }
+      )
+    ].filter(Boolean);
   }
   async acceptAppServerBridgeMessage({ socket, attachment, payload }) {
     const normalized = normalizeDashboardAppServerBridgeEvent(payload, {
