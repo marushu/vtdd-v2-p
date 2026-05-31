@@ -422,6 +422,8 @@ export function normalizeScopeSnapshot(scope = {}) {
     pullNumber: normalizeText(scope.pullNumber),
     relatedIssue: normalizeText(scope.relatedIssue),
     phase: normalizeText(scope.phase),
+    secretName: normalizeText(scope.secretName),
+    variableName: normalizeText(scope.variableName),
     vpsProposalId: normalizeText(scope.vpsProposalId),
     vpsHost: normalizeText(scope.vpsHost),
     vpsOperation: normalizeText(scope.vpsOperation),

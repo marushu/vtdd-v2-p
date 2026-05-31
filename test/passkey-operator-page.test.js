@@ -460,7 +460,8 @@ test("passkey operator page focuses secret sync modes without hiding the require
   assert.equal(actionsVariableHtml.includes('<option value="VTDD_DASHBOARD_VPS_MAINTENANCE_HOST">'), true);
   assert.equal(actionsVariableHtml.includes('<option value="VTDD_DASHBOARD_VPS_MAINTENANCE_WORKDIR">'), true);
   assert.equal(actionsVariableHtml.includes("function readApprovalVariableName()"), true);
-  assert.equal(actionsVariableHtml.includes("variableName: readApprovalVariableName()"), true);
+  assert.equal(actionsVariableHtml.includes("const approvalVariableName = readApprovalVariableName()"), true);
+  assert.equal(actionsVariableHtml.includes("variableName: approvalVariableName"), true);
   assert.equal(actionsVariableHtml.includes("Dashboard VPS maintenance"), true);
   assert.equal(actionsVariableHtml.includes('<section data-operator-section="github-actions-secret-sync" hidden>'), true);
   assert.equal(actionsVariableHtml.includes('<section data-operator-section="gateway-bearer-vault" hidden>'), true);
@@ -468,6 +469,25 @@ test("passkey operator page focuses secret sync modes without hiding the require
   assert.equal(actionsVariableHtml.includes('<section data-operator-section="production-deploy" hidden>'), true);
   assert.equal(actionsVariableHtml.includes('<section data-operator-section="pr-merge" hidden>'), true);
   assert.equal(actionsVariableHtml.includes('<section data-operator-section="issue-close" hidden>'), true);
+});
+
+test("passkey operator page supports proposal-backed variable sync as passkey-only auto dispatch", () => {
+  const html = renderPasskeyOperatorPage({
+    repositoryInput: "marushu/vtdd-v2-p",
+    actionType: "destructive",
+    highRiskKind: "github_actions_variable_sync",
+    githubActionsVariableProposalId: "github-actions-variable-sync-test",
+    githubActionsVariableProposalName: "VTDD_DASHBOARD_VPS_MAINTENANCE_HOST"
+  });
+
+  assert.equal(html.includes("このページでは値を入力しません"), true);
+  assert.equal(html.includes("githubActionsVariableProposalMode = true"), true);
+  assert.equal(html.includes("variableProposalId: githubActionsVariableProposalId"), true);
+  assert.equal(html.includes('id="github-actions-variable-sync-button"'), false);
+  assert.equal(html.includes('placeholder="value..."'), false);
+  assert.equal(html.includes('await dispatchGithubActionsVariableSync({ source: "approval" });'), true);
+  assert.equal(html.includes('const githubActionsVariableSyncButton = document.getElementById("github-actions-variable-sync-button")'), true);
+  assert.equal(html.includes("if (githubActionsVariableSyncButton)"), true);
 });
 
 test("passkey operator page supports local helper mode without passkey controls", () => {

@@ -24,6 +24,10 @@ export function renderPasskeyOperatorPage(input = {}) {
   const dashboardReturnPath = escapeHtml(sanitizePasskeyDashboardReturnPath(input.dashboardReturnPath));
   const dashboardNotificationMode = dashboardMode && dashboardReturnPath === "/dashboard/notifications";
   const githubAppRoleDefault = escapeHtml(input.githubAppRole || "legacy");
+  const githubActionsVariableProposalId = escapeHtml(String(input.githubActionsVariableProposalId || "").trim());
+  const githubActionsVariableProposalName = escapeHtml(String(input.githubActionsVariableProposalName || "").trim());
+  const githubActionsVariableProposalMode =
+    operatorMode === "github_actions_variable_sync" && Boolean(githubActionsVariableProposalId);
   const vpsScope = {
     vpsProposalId: String(input.vpsProposalId || "").trim(),
     vpsHost: String(input.vpsHost || "").trim(),
@@ -384,17 +388,23 @@ export function renderPasskeyOperatorPage(input = {}) {
         <section data-operator-section="github-actions-variable-sync"${hiddenAttribute(!sectionVisibility.githubActionsVariableSync)}>
           <h2>8. GitHub Actions Variable Sync</h2>
           <p class="muted">Dashboard VPS maintenance の production deploy へ渡す GitHub Actions repository variable を同期します。値は Butler 会話、GitHub コメント、RAG、レスポンス本文に表示しません。</p>
-          <label for="github-actions-variable-name-input">Variable name</label>
+          ${githubActionsVariableProposalMode
+            ? `<p><strong>承認対象:</strong> ${githubActionsVariableProposalName || "GitHub Actions variable"}</p>
+          <p class="muted">このページでは値を入力しません。passkey approval が成功すると、Butler が作成した proposal の値を使って自動同期します。</p>
+          <input id="github-actions-variable-name-input" type="hidden" value="${githubActionsVariableProposalName}" />
+          <input id="github-actions-variable-value-input" type="password" autocomplete="off" hidden />`
+            : `<label for="github-actions-variable-name-input">Variable name</label>
           <select id="github-actions-variable-name-input">
             <option value="VTDD_DASHBOARD_VPS_MAINTENANCE_HOST">VTDD_DASHBOARD_VPS_MAINTENANCE_HOST</option>
             <option value="VTDD_DASHBOARD_VPS_MAINTENANCE_WORKDIR">VTDD_DASHBOARD_VPS_MAINTENANCE_WORKDIR</option>
           </select>
+          <p class="muted">Variable name は passkey approval scope に固定されます。承認後に variable を変更した場合は、もう一度 passkey approval が必要です。</p>
           <label for="github-actions-variable-value-input">Variable value</label>
           <input id="github-actions-variable-value-input" type="password" autocomplete="off" placeholder="value..." />
           <div class="row">
             <button id="github-actions-variable-sync-button">Sync GitHub Actions variable</button>
-          </div>
-          <p class="muted"><code>actionType=destructive</code> / <code>highRiskKind=github_actions_variable_sync</code> の approvalGrantId が必要です。</p>
+          </div>`}
+          <p class="muted"><code>actionType=destructive</code> / <code>highRiskKind=github_actions_variable_sync</code> の passkey approval が必要です。</p>
           <pre id="github-actions-variable-sync-output"></pre>
         </section>
 
@@ -438,6 +448,8 @@ export function renderPasskeyOperatorPage(input = {}) {
       const issueCloseLink = document.getElementById("issue-close-link");
       const operatorMode = "${escapeHtml(operatorMode)}";
       const vpsApprovalScope = ${safeScriptJson(vpsScope)};
+      const githubActionsVariableProposalId = "${githubActionsVariableProposalId}";
+      const githubActionsVariableProposalMode = ${githubActionsVariableProposalMode ? "true" : "false"};
       let latestApprovalGrantId = "";
       let latestApprovalGrant = null;
 
@@ -497,6 +509,32 @@ export function renderPasskeyOperatorPage(input = {}) {
           return null;
         }
         return document.getElementById("github-actions-variable-name-input").value;
+      }
+
+      function clearGithubActionsVariableApprovalGrant(reason) {
+        if (operatorMode !== "github_actions_variable_sync") {
+          return;
+        }
+        if (!latestApprovalGrantId && !latestApprovalGrant) {
+          return;
+        }
+        latestApprovalGrantId = "";
+        latestApprovalGrant = null;
+        if (githubActionsVariableSyncOutput) {
+          githubActionsVariableSyncOutput.textContent = reason || "Variable name changed. Please approve again before sync.";
+        }
+      }
+
+      function requireGithubActionsVariableApprovalGrantScope(variableName) {
+        const scopeVariableName = latestApprovalGrant?.scope?.variableName || "";
+        if (!latestApprovalGrantId || scopeVariableName !== variableName) {
+          latestApprovalGrantId = "";
+          latestApprovalGrant = null;
+          throw new Error(
+            "選択中の variable と passkey approval の scope が一致しません。"
+            + " Variable name を確認してから、もう一度 passkey approval を実行してください。"
+          );
+        }
       }
 
       function readApprovalRepositoryInput() {
@@ -835,6 +873,7 @@ export function renderPasskeyOperatorPage(input = {}) {
         try {
           applyOperatorModeDefaults();
           const repositoryInput = readApprovalRepositoryInput();
+          const approvalVariableName = readApprovalVariableName();
           setApproveOutput("approval challenge request...", { show: shouldShowApproveOutput("status") });
           const challengeResponse = await fetch("${apiBase}/approval/passkey/challenge", {
             method: "POST",
@@ -845,7 +884,8 @@ export function renderPasskeyOperatorPage(input = {}) {
               repositoryInput,
               issueNumber: Number(document.getElementById("issue-input").value || 0) || null,
               pullNumber: readApprovalPullNumber(),
-              variableName: readApprovalVariableName(),
+              variableName: approvalVariableName,
+              variableProposalId: githubActionsVariableProposalId,
               vpsProposalId: vpsApprovalScope.vpsProposalId,
               issueContext: {
                 issueNumber: Number(document.getElementById("issue-input").value || 0) || null
@@ -854,7 +894,8 @@ export function renderPasskeyOperatorPage(input = {}) {
                 actionType: document.getElementById("action-type-input").value,
                 repositoryInput,
                 highRiskKind: document.getElementById("risk-kind-input").value,
-                variableName: readApprovalVariableName(),
+                variableName: approvalVariableName,
+                variableProposalId: githubActionsVariableProposalId,
                 vpsProposalId: vpsApprovalScope.vpsProposalId
               }
             })
@@ -880,6 +921,15 @@ export function renderPasskeyOperatorPage(input = {}) {
           }
           latestApprovalGrant = verifyBody?.approvalGrant || null;
           latestApprovalGrantId = latestApprovalGrant?.approvalId || verifyBody?.approvalGrantId || "";
+          if (operatorMode === "github_actions_variable_sync") {
+            requireGithubActionsVariableApprovalGrantScope(approvalVariableName);
+            githubActionsVariableSyncOutput.textContent = githubActionsVariableProposalMode
+              ? approvalVariableName + " approval accepted. variable sync request..."
+              : approvalVariableName + " approval accepted. Enter the value and sync.";
+            if (githubActionsVariableProposalMode) {
+              await dispatchGithubActionsVariableSync({ source: "approval" });
+            }
+          }
           setApproveOutput(JSON.stringify(verifyBody, null, 2), { show: shouldShowApproveOutput("status") });
           if (operatorMode === "dashboard") {
             window.location.assign("${dashboardReturnPath}");
@@ -906,6 +956,56 @@ export function renderPasskeyOperatorPage(input = {}) {
       });
 
       applyOperatorModeDefaults();
+
+      const githubActionsVariableNameInput = document.getElementById("github-actions-variable-name-input");
+      if (githubActionsVariableNameInput) {
+        githubActionsVariableNameInput.addEventListener("change", () => {
+          clearGithubActionsVariableApprovalGrant("Variable name changed. Please approve again before sync.");
+        });
+      }
+
+      async function dispatchGithubActionsVariableSync({ source = "manual" } = {}) {
+        if (!latestApprovalGrantId) {
+          throw new Error("approvalGrantId is required before GitHub Actions variable sync");
+        }
+        const variableName = document.getElementById("github-actions-variable-name-input").value;
+        requireGithubActionsVariableApprovalGrantScope(variableName);
+        githubActionsVariableSyncOutput.textContent = source === "approval"
+          ? variableName + " approval accepted. variable sync request..."
+          : variableName + " variable sync request...";
+        const body = githubActionsVariableProposalMode
+          ? {
+              variableProposalId: githubActionsVariableProposalId,
+              policyInput: {
+                approvalGrantId: latestApprovalGrantId
+              }
+            }
+          : {
+              repository: document.getElementById("repo-input").value,
+              variableName,
+              variableValue: document.getElementById("github-actions-variable-value-input").value,
+              policyInput: {
+                approvalGrantId: latestApprovalGrantId
+              }
+            };
+        if (!githubActionsVariableProposalMode && !body.variableValue) {
+          throw new Error(variableName + " is required");
+        }
+        const syncResponse = await fetch("${apiBase}/action/github-actions-variable", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body)
+        });
+        const syncBody = await readResponseBody(syncResponse);
+        if (!syncResponse.ok) {
+          throw responseError(syncBody, variableName + " variable sync failed");
+        }
+        const valueInput = document.getElementById("github-actions-variable-value-input");
+        if (valueInput) {
+          valueInput.value = "";
+        }
+        githubActionsVariableSyncOutput.textContent = JSON.stringify(syncBody, null, 2);
+      }
 
       document.getElementById("sync-button").addEventListener("click", async () => {
         try {
@@ -1083,39 +1183,16 @@ export function renderPasskeyOperatorPage(input = {}) {
         }
       });
 
-      document.getElementById("github-actions-variable-sync-button").addEventListener("click", async () => {
-        try {
-          if (!latestApprovalGrantId) {
-            throw new Error("approvalGrantId is required before GitHub Actions variable sync");
+      const githubActionsVariableSyncButton = document.getElementById("github-actions-variable-sync-button");
+      if (githubActionsVariableSyncButton) {
+        githubActionsVariableSyncButton.addEventListener("click", async () => {
+          try {
+            await dispatchGithubActionsVariableSync();
+          } catch (error) {
+            githubActionsVariableSyncOutput.textContent = String(error);
           }
-          const variableName = document.getElementById("github-actions-variable-name-input").value;
-          const variableValue = document.getElementById("github-actions-variable-value-input").value;
-          if (!variableValue) {
-            throw new Error(variableName + " is required");
-          }
-          githubActionsVariableSyncOutput.textContent = variableName + " variable sync request...";
-          const syncResponse = await fetch("${apiBase}/action/github-actions-variable", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-              repository: document.getElementById("repo-input").value,
-              variableName,
-              variableValue,
-              policyInput: {
-                approvalGrantId: latestApprovalGrantId
-              }
-            })
-          });
-          const syncBody = await readResponseBody(syncResponse);
-          if (!syncResponse.ok) {
-            throw responseError(syncBody, variableName + " variable sync failed");
-          }
-          document.getElementById("github-actions-variable-value-input").value = "";
-          githubActionsVariableSyncOutput.textContent = JSON.stringify(syncBody, null, 2);
-        } catch (error) {
-          githubActionsVariableSyncOutput.textContent = String(error);
-        }
-      });
+        });
+      }
 
       document.getElementById("gateway-bearer-vault-button").addEventListener("click", async () => {
         try {
