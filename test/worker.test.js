@@ -4265,7 +4265,8 @@ test("worker serves dashboard notification center for recent events across repos
   assert.equal(body.includes("marushu/sunabaeye"), true);
   assert.equal(body.includes("dashboard-notification-center"), true);
   assert.equal(body.includes("2分前"), true);
-  assert.equal(body.includes("old notification"), false);
+  assert.equal(body.includes("直近30件"), true);
+  assert.equal(body.includes("old notification"), true);
 });
 
 test("worker serves dashboard PWA manifest and service worker notification handlers", async () => {
@@ -4964,6 +4965,9 @@ test("worker ingests GitHub Actions deploy completion event and shows it on dash
   assert.equal(eventBody.event.pullNumber, 552);
   assert.equal(eventBody.event.changeSummary, "dashboard: 通知カードにPR概要を出す (#534)");
   assert.equal(eventBody.webPush.delivered, 1);
+  assert.equal(eventBody.event.pwaNotificationStatus, "sent");
+  assert.equal(eventBody.event.pwaNotificationAttempted, 1);
+  assert.equal(eventBody.event.pwaNotificationDelivered, 1);
   assert.equal(pushCalls.length, 1);
   assert.equal(pushCalls[0].input, "https://push.example/send/deploy");
   assert.match(pushCalls[0].init.headers.authorization, /^vapid t=.+, k=.+/);
@@ -4984,6 +4988,14 @@ test("worker ingests GitHub Actions deploy completion event and shows it on dash
   assert.equal(decryptedPush.pullNumber, 552);
   assert.equal("approvalGrantId" in eventBody.event, false);
   assert.equal("token" in eventBody.event, false);
+  const storedDeployEvent = await store.latest({
+    kind: "github_actions_workflow_run",
+    repository: "marushu/vtdd-v2-p",
+    workflowName: "deploy-production"
+  });
+  assert.equal(storedDeployEvent.pwaNotificationStatus, "sent");
+  assert.equal(storedDeployEvent.pwaNotificationAttempted, 1);
+  assert.equal(storedDeployEvent.pwaNotificationDelivered, 1);
 
   const dashboardResponse = await worker.fetch(
     new Request("https://example.com/dashboard", {
@@ -5008,6 +5020,22 @@ test("worker ingests GitHub Actions deploy completion event and shows it on dash
   assert.equal(dashboardBody.includes("secret-must-not-persist"), false);
   assert.equal(dashboardBody.includes("setInterval("), false);
   assert.equal(dashboardBody.includes("fetch(threadEndpoint"), true);
+
+  const notificationsResponse = await worker.fetch(
+    new Request("https://example.com/dashboard/notifications", {
+      headers: dashboardAccessHeaders
+    }),
+    {
+      ...dashboardAccessEnv,
+      DASHBOARD_EVENT_STORE: store
+    }
+  );
+  assert.equal(notificationsResponse.status, 200);
+  const notificationsBody = await notificationsResponse.text();
+  assert.equal(notificationsBody.includes("直近30件"), true);
+  assert.equal(notificationsBody.includes("直近5分"), false);
+  assert.equal(notificationsBody.includes("Web Push: push service accepted 1/1"), true);
+  assert.equal(notificationsBody.includes("PWA受信確認: 未確認"), true);
 });
 
 test("worker records dashboard PWA push receive ack only for authenticated owner session", async () => {
@@ -5125,6 +5153,20 @@ test("worker records dashboard PWA push receive ack only for authenticated owner
   assert.equal(events[0].pullNumber, 552);
   assert.equal(JSON.stringify(events[0]).includes("secret"), false);
   assert.equal(pushCalls.length, 0);
+
+  const notificationsResponse = await worker.fetch(
+    new Request("https://example.com/dashboard/notifications", {
+      headers: dashboardAccessHeaders
+    }),
+    {
+      ...dashboardAccessEnv,
+      DASHBOARD_EVENT_STORE: store
+    }
+  );
+  assert.equal(notificationsResponse.status, 200);
+  const notificationsBody = await notificationsResponse.text();
+  assert.equal(notificationsBody.includes("PWA受信確認: あり"), true);
+  assert.equal(notificationsBody.includes("直近30件"), true);
 });
 
 test("worker rejects GitHub Actions deploy completion event without machine auth", async () => {

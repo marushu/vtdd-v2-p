@@ -61047,13 +61047,77 @@ async function handleGitHubActionsEventRequest(request, env) {
       reason: "dashboard event store is not configured"
     });
   }
-  await store.put(event.event);
-  const webPush = await dispatchDashboardWebPushForEvent(env, event.event);
+  const recorded = await recordDashboardNotificationEvent({
+    env,
+    eventStore: store,
+    event: event.event
+  });
   return json(202, {
     ok: true,
-    event: event.event,
-    webPush
+    event: recorded.event,
+    webPush: recorded.webPush
   });
+}
+async function recordDashboardNotificationEvent({ env, eventStore, event, overrides = {}, dispatch = true } = {}) {
+  const baseEvent = normalizeDashboardEventRecord({
+    ...event,
+    ...overrides
+  });
+  if (!eventStore || typeof eventStore.put !== "function") {
+    return {
+      ok: false,
+      event: baseEvent,
+      webPush: {
+        ok: false,
+        status: 503,
+        error: "dashboard_event_store_unavailable",
+        reason: "dashboard event store is not configured",
+        attempted: 0,
+        delivered: 0,
+        cleaned: 0
+      }
+    };
+  }
+  if (!dispatch) {
+    await eventStore.put(baseEvent);
+    return {
+      ok: true,
+      event: baseEvent,
+      webPush: {
+        ok: false,
+        status: 204,
+        reason: "dashboard notification dispatch skipped",
+        attempted: 0,
+        delivered: 0,
+        cleaned: 0
+      }
+    };
+  }
+  const webPush = await dispatchDashboardWebPushForEvent(env, baseEvent).catch((error2) => ({
+    ok: false,
+    status: 502,
+    error: "dashboard_web_push_dispatch_failed",
+    reason: error2 instanceof Error ? error2.message : "dashboard web push dispatch failed",
+    attempted: 0,
+    delivered: 0,
+    cleaned: 0
+  }));
+  const eventWithNotificationTruth = normalizeDashboardEventRecord({
+    ...baseEvent,
+    pwaNotificationStatus: webPush.ok ? "sent" : "pwa_notification_unavailable",
+    pwaNotificationError: webPush.ok ? null : webPush.error || "dashboard_web_push_unavailable",
+    pwaNotificationReason: webPush.ok ? null : webPush.reason || null,
+    pwaNotificationAttempted: webPush.attempted ?? 0,
+    pwaNotificationDelivered: webPush.delivered ?? 0,
+    pwaNotificationCleaned: webPush.cleaned ?? 0,
+    updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+  });
+  await eventStore.put(eventWithNotificationTruth);
+  return {
+    ok: webPush.ok,
+    event: eventWithNotificationTruth,
+    webPush
+  };
 }
 async function handleVpsRunnerEventRequest(request, env) {
   const payload = await readJson(request);
@@ -61081,17 +61145,12 @@ async function handleVpsRunnerEventRequest(request, env) {
       reason: "dashboard Butler chat store is not configured"
     });
   }
-  const webPush = await dispatchDashboardWebPushForEvent(env, event.event);
-  const eventWithNotificationTruth = normalizeDashboardEventRecord({
-    ...event.event,
-    pwaNotificationStatus: webPush.ok ? "sent" : "pwa_notification_unavailable",
-    pwaNotificationError: webPush.ok ? null : webPush.error || "dashboard_web_push_unavailable",
-    pwaNotificationReason: webPush.ok ? null : webPush.reason || null,
-    pwaNotificationAttempted: webPush.attempted ?? 0,
-    pwaNotificationDelivered: webPush.delivered ?? 0,
-    updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+  const recorded = await recordDashboardNotificationEvent({
+    env,
+    eventStore,
+    event: event.event
   });
-  await eventStore.put(eventWithNotificationTruth);
+  const eventWithNotificationTruth = recorded.event;
   let messages;
   try {
     messages = await chatStore.appendMany(event.threadId, [event.chatMessage]);
@@ -61114,7 +61173,7 @@ async function handleVpsRunnerEventRequest(request, env) {
     threadId: event.threadId,
     messages,
     webSocketBroadcast,
-    webPush
+    webPush: recorded.webPush
   });
 }
 async function handleOwnerActionRequiredEventRequest(request, env) {
@@ -61135,21 +61194,15 @@ async function handleOwnerActionRequiredEventRequest(request, env) {
       reason: "dashboard event store is not configured"
     });
   }
-  const webPush = await dispatchDashboardWebPushForEvent(env, event.event);
-  const eventWithNotificationTruth = normalizeDashboardEventRecord({
-    ...event.event,
-    pwaNotificationStatus: webPush.ok ? "sent" : "pwa_notification_unavailable",
-    pwaNotificationError: webPush.ok ? null : webPush.error || "dashboard_web_push_unavailable",
-    pwaNotificationReason: webPush.ok ? null : webPush.reason || null,
-    pwaNotificationAttempted: webPush.attempted ?? 0,
-    pwaNotificationDelivered: webPush.delivered ?? 0,
-    updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+  const recorded = await recordDashboardNotificationEvent({
+    env,
+    eventStore,
+    event: event.event
   });
-  await eventStore.put(eventWithNotificationTruth);
-  return json(webPush.ok ? 202 : webPush.status || 503, {
-    ok: webPush.ok,
-    event: eventWithNotificationTruth,
-    webPush
+  return json(recorded.webPush.ok ? 202 : recorded.webPush.status || 503, {
+    ok: recorded.webPush.ok,
+    event: recorded.event,
+    webPush: recorded.webPush
   });
 }
 async function handleVpsPrivilegedMaintenanceProposalRequest(request, env) {
@@ -63088,19 +63141,16 @@ async function recordGitHubActionsVariableSyncNotification({ ownerAction, env } 
       reason: "dashboard event store is not configured"
     };
   }
-  const webPush = await dispatchDashboardWebPushForEvent(env, event.event);
-  const eventWithNotificationTruth = normalizeDashboardEventRecord({
-    ...event.event,
-    status: "completed",
-    conclusion: "success",
-    pwaNotificationStatus: webPush.ok ? "sent" : "pwa_notification_unavailable",
-    pwaNotificationError: webPush.ok ? null : webPush.error || "dashboard_web_push_unavailable",
-    pwaNotificationReason: webPush.ok ? null : webPush.reason || null,
-    pwaNotificationAttempted: webPush.attempted ?? 0,
-    pwaNotificationDelivered: webPush.delivered ?? 0,
-    updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+  const recorded = await recordDashboardNotificationEvent({
+    env,
+    eventStore,
+    event: event.event,
+    overrides: {
+      status: "completed",
+      conclusion: "success"
+    }
   });
-  await eventStore.put(eventWithNotificationTruth);
+  const eventWithNotificationTruth = recorded.event;
   return {
     ok: true,
     event: eventWithNotificationTruth,
@@ -67027,6 +67077,9 @@ function normalizeDashboardEventRecord(event) {
     pwaNotificationReason: normalizeDashboardEventText(input.pwaNotificationReason) || null,
     pwaNotificationAttempted: normalizeNonNegativeInteger2(input.pwaNotificationAttempted),
     pwaNotificationDelivered: normalizeNonNegativeInteger2(input.pwaNotificationDelivered),
+    pwaNotificationCleaned: normalizeNonNegativeInteger2(input.pwaNotificationCleaned),
+    pwaReceiveStatus: normalizeDashboardEventText(input.pwaReceiveStatus) || null,
+    pwaReceivedAt: normalizeIsoTimestamp(input.pwaReceivedAt) || null,
     createdAt,
     updatedAt
   };
@@ -68310,6 +68363,59 @@ async function retrieveRecentDashboardEvents({ store, kind, repository, workflow
   }
   return [];
 }
+function attachDashboardPushReceiveTruth(events = []) {
+  const ackByKey = /* @__PURE__ */ new Map();
+  for (const event of Array.isArray(events) ? events : []) {
+    const record2 = normalizeDashboardEventRecord(event);
+    if (record2.kind !== "dashboard_push_received") {
+      continue;
+    }
+    const key = dashboardNotificationReceiveKey(record2);
+    if (!key) {
+      continue;
+    }
+    const existing = ackByKey.get(key);
+    if (!existing || compareDashboardEventRecency(record2, existing) > 0) {
+      ackByKey.set(key, record2);
+    }
+  }
+  const annotated = [];
+  for (const event of Array.isArray(events) ? events : []) {
+    const record2 = normalizeDashboardEventRecord(event);
+    if (record2.kind === "dashboard_push_received") {
+      const matchingWorkflowEvent = events.some((candidate) => {
+        const candidateRecord = normalizeDashboardEventRecord(candidate);
+        return candidateRecord.kind !== "dashboard_push_received" && dashboardNotificationReceiveKey(candidateRecord) === dashboardNotificationReceiveKey(record2);
+      });
+      if (matchingWorkflowEvent) {
+        continue;
+      }
+      annotated.push({
+        ...record2,
+        pwaReceiveStatus: "confirmed",
+        pwaReceivedAt: record2.updatedAt
+      });
+      continue;
+    }
+    const ack = ackByKey.get(dashboardNotificationReceiveKey(record2));
+    annotated.push({
+      ...record2,
+      pwaReceiveStatus: ack ? "confirmed" : record2.pwaNotificationDelivered > 0 ? "unconfirmed" : null,
+      pwaReceivedAt: ack?.updatedAt || null
+    });
+  }
+  return annotated;
+}
+function dashboardNotificationReceiveKey(event) {
+  const record2 = normalizeDashboardEventRecord(event);
+  const repository = normalizeCanonicalRepositoryInput(record2.repository);
+  const workflowName = normalizeDashboardEventText(record2.workflowName);
+  const runId = normalizeDashboardEventText(record2.runId);
+  if (!repository || !workflowName || !runId) {
+    return "";
+  }
+  return `${repository}:${workflowName}:${runId}`;
+}
 function renderDashboardDeployEvent(event) {
   if (!event) {
     return `<div class="deploy-event muted">\u76F4\u8FD1 deploy event: \u672A\u53D7\u4FE1</div>`;
@@ -68353,6 +68459,7 @@ function renderDashboardNotificationEvent(event) {
   const sha = normalizeDashboardEventText(event.headSha);
   const shortSha = sha ? sha.slice(0, 7) : "";
   const runLabel = buildDashboardEventLinkHtml(event);
+  const notificationTruth = renderDashboardNotificationTruth(event);
   const meta2 = [
     repository,
     event.pullNumber ? `PR #${event.pullNumber}` : "",
@@ -68364,8 +68471,39 @@ function renderDashboardNotificationEvent(event) {
   return `<div class="deploy-event">
             <div class="lane-title"><strong>${escapeDashboardHtml(title)}</strong><span class="pill ${badgeClass}">${escapeDashboardHtml(conclusion)}</span></div>
             <p>${escapeDashboardHtml(meta2)}</p>
+            ${notificationTruth}
             <p class="muted">${escapeDashboardHtml(relativeUpdatedAt || "\u6642\u523B\u672A\u53D7\u4FE1")} \u30FB ${escapeDashboardHtml(updatedAt || "updatedAt \u672A\u53D7\u4FE1")} \u30FB ${runLabel}</p>
           </div>`;
+}
+function renderDashboardNotificationTruth(event) {
+  const record2 = normalizeDashboardEventRecord(event);
+  const attempted = record2.pwaNotificationAttempted;
+  const delivered = record2.pwaNotificationDelivered;
+  const cleaned = normalizeNonNegativeInteger2(event?.pwaNotificationCleaned);
+  const receiveStatus = normalizeDashboardEventText(event?.pwaReceiveStatus);
+  const receivedAt = normalizeDashboardEventText(event?.pwaReceivedAt);
+  if (attempted === 0 && delivered === 0 && receiveStatus !== "confirmed") {
+    return "";
+  }
+  const details = [];
+  if (attempted > 0 || delivered > 0) {
+    details.push(`Web Push: push service accepted ${delivered}/${attempted}`);
+  }
+  if (cleaned > 0) {
+    details.push(`stale cleanup ${cleaned}`);
+  }
+  if (record2.pwaNotificationError || record2.pwaNotificationReason) {
+    details.push(record2.pwaNotificationError || record2.pwaNotificationReason);
+  }
+  if (receiveStatus === "confirmed") {
+    details.push(`PWA\u53D7\u4FE1\u78BA\u8A8D: \u3042\u308A${receivedAt ? ` ${formatDashboardRelativeTime(receivedAt)}` : ""}`);
+  } else if (delivered > 0) {
+    details.push("PWA\u53D7\u4FE1\u78BA\u8A8D: \u672A\u78BA\u8A8D");
+  }
+  if (details.length === 0) {
+    return "";
+  }
+  return `<p class="muted">${escapeDashboardHtml(details.join(" / "))}</p>`;
 }
 function collapseDashboardNotificationEvents(events = []) {
   const latestByKey = /* @__PURE__ */ new Map();
@@ -68636,13 +68774,11 @@ async function renderDashboardSelfParityPage({ url, env } = {}) {
 }
 async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventStore, env } = {}) {
   const origin = normalize7(runtimeOrigin);
-  const recentSince = new Date(Date.now() - 5 * 60 * 1e3).toISOString();
   const recentEvents = await retrieveRecentDashboardEvents({
     store: dashboardEventStore,
-    since: recentSince,
-    limit: 20
+    limit: 30
   });
-  const visibleRecentEvents = collapseDashboardNotificationEvents(recentEvents);
+  const visibleRecentEvents = collapseDashboardNotificationEvents(attachDashboardPushReceiveTruth(recentEvents));
   const publicKey = normalizeDashboardEventText(env?.[WEB_PUSH_PUBLIC_KEY_ENV]);
   return renderDashboardUtilityPage({
     title: "\u901A\u77E5\u30BB\u30F3\u30BF\u30FC",
@@ -68651,15 +68787,15 @@ async function renderDashboardNotificationsPage({ runtimeOrigin, dashboardEventS
     body: `
       <div class="grid single">
         <section class="lane">
-          <div class="lane-title"><h2>\u6700\u65B0\u901A\u77E5</h2><span class="pill">\u76F4\u8FD15\u5206</span></div>
-          ${visibleRecentEvents.length > 0 ? visibleRecentEvents.map((event) => renderDashboardNotificationEvent(event)).join("") : `<p class="muted">\u76F4\u8FD15\u5206\u306E\u901A\u77E5\u306F\u3042\u308A\u307E\u305B\u3093\u3002</p>`}
+          <div class="lane-title"><h2>\u6700\u65B0\u901A\u77E5</h2><span class="pill">\u76F4\u8FD130\u4EF6</span></div>
+          ${visibleRecentEvents.length > 0 ? visibleRecentEvents.map((event) => renderDashboardNotificationEvent(event)).join("") : `<p class="muted">\u901A\u77E5\u306F\u3042\u308A\u307E\u305B\u3093\u3002</p>`}
         </section>
       </div>
       <div class="grid single">
         <details class="lane" data-debug-section="notification-center-context">
           <summary>\u901A\u77E5\u30BB\u30F3\u30BF\u30FC\u306B\u3064\u3044\u3066</summary>
           <p>Dashboard Butler \u306E\u901A\u77E5\u5165\u53E3\u3067\u3059\u3002iOS PWA Web Push\u3001OS \u306E\u901A\u77E5\u97F3\u3001\u672A\u8AAD badge \u306F\u3053\u306E\u753B\u9762\u304B\u3089\u8A31\u53EF\u30FB\u78BA\u8A8D\u3057\u307E\u3059\u3002</p>
-          <p class="muted">VTDD \u3060\u3051\u3067\u306A\u304F\u3001\u4ED6 repo / \u4E26\u884C\u958B\u767A / queue / workflow \u304B\u3089\u5C4A\u3044\u305F\u30A4\u30D9\u30F3\u30C8\u3092\u76F4\u8FD15\u5206\u3060\u3051\u8868\u793A\u3057\u307E\u3059\u3002</p>
+          <p class="muted">VTDD \u3060\u3051\u3067\u306A\u304F\u3001\u4ED6 repo / \u4E26\u884C\u958B\u767A / queue / workflow \u304B\u3089\u5C4A\u3044\u305F\u30A4\u30D9\u30F3\u30C8\u3092\u76F4\u8FD130\u4EF6\u307E\u3067\u8868\u793A\u3057\u307E\u3059\u3002Web Push \u306F push service accepted \u3068 PWA\u53D7\u4FE1\u78BA\u8A8D\u3092\u5206\u3051\u3066\u8868\u793A\u3057\u307E\u3059\u3002</p>
         </details>
       </div>
       <div class="grid single">
