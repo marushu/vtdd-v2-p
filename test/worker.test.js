@@ -3269,6 +3269,52 @@ test("DashboardChatRoom routes VPS maintenance owner turns to Worker proposal be
   assert.equal(proposalRecord.content.proposal.capability.riskLevel, "low");
 });
 
+test("DashboardChatRoom uses WebSocket request origin for VPS approval URLs", async () => {
+  const provider = createInMemoryMemoryProvider();
+  const store = createInMemoryDashboardChatStore();
+  const dashboardSocket = createMockSocket("dashboard", "dashboard-e2e-637-origin");
+  const room = new DashboardChatRoom(
+    {
+      storage: createMockDurableObjectStorage(),
+      getWebSockets() {
+        return [dashboardSocket];
+      }
+    },
+    {
+      DASHBOARD_CHAT_STORE: store,
+      MEMORY_PROVIDER: provider,
+      VTDD_DASHBOARD_VPS_MAINTENANCE_HOST: "x85-131-245-163",
+      VTDD_DASHBOARD_VPS_MAINTENANCE_WORKDIR: "/home/vtdd-runner/vtdd-runner/repos/vtdd-v2-p"
+    }
+  );
+
+  await room.handleSocketMessage(
+    dashboardSocket,
+    JSON.stringify({
+      type: "owner_message",
+      repository: "marushu/vtdd-v2-p",
+      issueNumber: 637,
+      text: "Dashboard Butler から VPS runner status を確認して。root 実行は passkey 境界で止める。"
+    }),
+    {
+      role: "dashboard",
+      threadId: "dashboard-e2e-637-origin",
+      origin: "https://vtdd-v2-mvp.polished-tree-da7c.workers.dev"
+    }
+  );
+
+  const finalBroadcast = dashboardSocket.sent
+    .map((message) => JSON.parse(message))
+    .findLast((message) => message.type === "thread");
+  const butlerMessage = finalBroadcast.messages.find((message) => message.role === "butler");
+  assert.match(
+    butlerMessage.text,
+    /https:\/\/vtdd-v2-mvp\.polished-tree-da7c\.workers\.dev\/v2\/approval\/passkey\/operator/
+  );
+  assert.doesNotMatch(butlerMessage.text, /dashboard-butler\.local/);
+  assert.match(butlerMessage.text, /dashboardThreadId=dashboard-e2e-637-origin/);
+});
+
 test("DashboardChatRoom routes VPS maintenance owner turns without an app-server bridge socket", async () => {
   const provider = createInMemoryMemoryProvider();
   const store = createInMemoryDashboardChatStore();

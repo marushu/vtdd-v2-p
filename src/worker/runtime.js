@@ -155,7 +155,7 @@ export class DashboardChatRoom {
   async acceptSocket({ request, role, threadId }) {
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
-    const attachment = { role, threadId };
+    const attachment = { role, threadId, origin: url.origin };
     if (typeof this.ctx?.acceptWebSocket === "function") {
       server.serializeAttachment(attachment);
       this.ctx.acceptWebSocket(server);
@@ -218,7 +218,7 @@ export class DashboardChatRoom {
       payload = null;
     }
     if (payload?.type === "owner_message") {
-      await this.acceptOwnerMessage({ socket, threadId, payload });
+      await this.acceptOwnerMessage({ socket, threadId, payload, origin: socketAttachment.origin });
       return;
     }
     if (socketAttachment.role === "app_server_bridge") {
@@ -226,7 +226,7 @@ export class DashboardChatRoom {
     }
   }
 
-  async acceptOwnerMessage({ socket, threadId, payload }) {
+  async acceptOwnerMessage({ socket, threadId, payload, origin }) {
     const clientMessageId = sanitizeDashboardChatText(payload?.clientMessageId || payload?.client_message_id);
     const inputMediaReferences = payload?.mediaReferences || payload?.media_references || payload?.media;
     const mediaReferences = normalizeMediaReferences(inputMediaReferences);
@@ -301,7 +301,8 @@ export class DashboardChatRoom {
       repository,
       relatedIssue,
       text,
-      now
+      now,
+      origin
     });
     const bridgeSockets = this.connectedAppServerBridgeSockets(threadId);
     if (bridgeSockets.length === 0) {
@@ -402,7 +403,7 @@ export class DashboardChatRoom {
     return this.sendSocket(bridgeSocket, turnRequest);
   }
 
-  async buildVpsMaintenanceIntentMessages({ payload, threadId, repository, relatedIssue, text, now }) {
+  async buildVpsMaintenanceIntentMessages({ payload, threadId, repository, relatedIssue, text, now, origin }) {
     if (!detectDashboardVpsPrivilegedMaintenanceIntent({ text })) {
       return null;
     }
@@ -417,7 +418,7 @@ export class DashboardChatRoom {
       },
       repository,
       relatedIssue,
-      origin: normalizeText(this.env?.VTDD_RUNTIME_URL || this.env?.VTDD_PASSKEY_ORIGIN) || "https://dashboard-butler.local",
+      origin: normalizeText(origin) || normalizeText(this.env?.VTDD_RUNTIME_URL || this.env?.VTDD_PASSKEY_ORIGIN) || "https://dashboard-butler.local",
       env: this.env
     });
     return [
