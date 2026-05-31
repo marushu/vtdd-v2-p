@@ -101,6 +101,17 @@ validation is not configured. Browser access is accepted only when Cloudflare
 Access supplies a matching identity and a valid `Cf-Access-Jwt-Assertion`.
 Service-to-service dashboard event ingestion still uses machine auth.
 
+For Dashboard Butler VPS privileged maintenance proposals, configure these
+repository variables before claiming the VPS maintenance proposal path is
+production-ready:
+
+- `VTDD_DASHBOARD_VPS_MAINTENANCE_HOST`
+- `VTDD_DASHBOARD_VPS_MAINTENANCE_WORKDIR`
+
+These values are operator/runtime configuration. They must not be committed to
+the shared `wrangler.toml`; the deploy workflow writes them only into the
+generated production Wrangler config when the repository variables are set.
+
 ## Approval Boundary (scoped passkey approval)
 
 `deploy-production` workflow is manual (`workflow_dispatch`) and requires:
