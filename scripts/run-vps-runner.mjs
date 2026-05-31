@@ -13,7 +13,10 @@ import {
   parseCodexReviewFallbackComment,
   resolveGitHubAppInstallationToken
 } from "../src/core/index.js";
-import { loadGitHubAppRoleCredentialsFromVault } from "../src/core/desktop-bootstrap-vault.js";
+import {
+  loadGatewayBearerTokenFromVault,
+  loadGitHubAppRoleCredentialsFromVault
+} from "../src/core/desktop-bootstrap-vault.js";
 import { buildExecutionLeadTime } from "../src/core/execution-lead-time.js";
 import { prepareGuardedPullRequestBody, prepareGuardedPullRequestBodyFile } from "./prepare-pr-body-file.mjs";
 import { renderPrBody } from "./render-pr-body.mjs";
@@ -2017,8 +2020,9 @@ async function postVpsRunnerDashboardEvent({ eventPayload, env = process.env, fe
       reason: "dashboard threadId is missing"
     };
   }
-  const runtimeUrl = normalizeText(env?.VTDD_RUNTIME_URL);
-  const bearerToken = normalizeText(env?.VTDD_GATEWAY_BEARER_TOKEN);
+  const deliveryConfig = await resolveVpsRunnerDashboardDeliveryConfig({ env });
+  const runtimeUrl = deliveryConfig.runtimeUrl;
+  const bearerToken = deliveryConfig.bearerToken;
   if (!runtimeUrl || !bearerToken) {
     return {
       status: "skipped",
@@ -2066,6 +2070,49 @@ async function postVpsRunnerDashboardEvent({ eventPayload, env = process.env, fe
       status: "failed",
       reason: summarizeDiagnosticText(error?.message || String(error), 240)
     };
+  }
+}
+
+async function resolveVpsRunnerDashboardDeliveryConfig({ env = process.env } = {}) {
+  const runtimeUrl =
+    normalizeText(env?.VTDD_RUNTIME_URL) ||
+    (await loadVpsRunnerRuntimeUrlFromVaultManifest({
+      manifestPath: env?.VTDD_VPS_RUNNER_CREDENTIALS_MANIFEST || env?.VTDD_CREDENTIALS_MANIFEST
+    }));
+  const envBearerToken = normalizeText(env?.VTDD_GATEWAY_BEARER_TOKEN);
+  if (envBearerToken) {
+    return {
+      runtimeUrl,
+      bearerToken: envBearerToken,
+      tokenSource: "env"
+    };
+  }
+
+  const vaultResult = await loadGatewayBearerTokenFromVault({
+    manifestPath: env?.VTDD_VPS_RUNNER_CREDENTIALS_MANIFEST || env?.VTDD_CREDENTIALS_MANIFEST
+  });
+  return {
+    runtimeUrl,
+    bearerToken: vaultResult.ok ? normalizeText(vaultResult.gateway?.bearerToken) : "",
+    tokenSource: vaultResult.ok ? "vault" : "missing"
+  };
+}
+
+async function loadVpsRunnerRuntimeUrlFromVaultManifest({ manifestPath } = {}) {
+  const normalizedManifestPath = normalizeText(manifestPath);
+  if (!normalizedManifestPath) {
+    return "";
+  }
+  try {
+    const manifest = JSON.parse(await fs.readFile(normalizedManifestPath, "utf8"));
+    return normalizeText(
+      manifest?.gateway?.runtimeUrl ||
+        manifest?.runtime?.url ||
+        manifest?.runtime?.runtimeUrl ||
+        manifest?.dashboard?.runtimeUrl
+    );
+  } catch {
+    return "";
   }
 }
 

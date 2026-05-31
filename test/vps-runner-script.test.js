@@ -601,6 +601,68 @@ test("VPS runner event posts dashboard thread events to runtime", async () => {
   );
 });
 
+test("VPS runner event can read dashboard delivery token from vault manifest", async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "vtdd-vps-dashboard-vault-"));
+  const credentialsDir = path.join(tempDir, "credentials");
+  await fs.mkdir(path.join(credentialsDir, "gateway"), { recursive: true });
+  const manifestPath = path.join(credentialsDir, "manifest.json");
+  await fs.writeFile(path.join(credentialsDir, "gateway", "bearer-token.txt"), "vault-token-for-test\n");
+  await fs.writeFile(
+    manifestPath,
+    JSON.stringify(
+      {
+        version: 1,
+        gateway: {
+          bearerTokenPath: "gateway/bearer-token.txt",
+          runtimeUrl: "https://vtdd-v2-mvp.example.workers.dev"
+        }
+      },
+      null,
+      2
+    )
+  );
+
+  const githubCalls = [];
+  const runtimeCalls = [];
+  await postVpsRunnerEvent({
+    githubFetch: async (url, init = {}) => {
+      githubCalls.push({ url, init });
+      return { id: 45005 };
+    },
+    fetchImpl: async (url, init = {}) => {
+      runtimeCalls.push({ url: String(url), init });
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 202,
+        headers: { "content-type": "application/json" }
+      });
+    },
+    env: {
+      VTDD_VPS_RUNNER_CREDENTIALS_MANIFEST: manifestPath
+    },
+    payload: {
+      executionId: "exec-dashboard-vault-runtime",
+      repository: "marushu/vtdd-v2-p",
+      issueNumber: 637,
+      handoff: {
+        dashboardThreadId: "dashboard-main-marushu-vtdd-v2-p"
+      }
+    },
+    event: {
+      status: "completed",
+      lastEvent: "privileged_maintenance_completed",
+      currentStep: "vps_privileged_maintenance_helper",
+      message: "完了"
+    }
+  });
+
+  assert.equal(runtimeCalls.length, 1);
+  assert.equal(runtimeCalls[0].url, "https://vtdd-v2-mvp.example.workers.dev/v2/events/vps-runner");
+  assert.equal(runtimeCalls[0].init.headers.authorization, "Bearer vault-token-for-test");
+  const parsed = parseVpsRunnerEventComment(githubCalls[0].init.body.body);
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.event.dashboardDelivery.status, "delivered");
+});
+
 test("VPS runner event records missing runtime dashboard delivery configuration", async () => {
   const calls = [];
   await postVpsRunnerEvent({

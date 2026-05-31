@@ -108,7 +108,8 @@ Example:
     "apiTokenPath": "cloudflare/api-token.txt"
   },
   "gateway": {
-    "bearerTokenPath": "gateway/bearer-token.txt"
+    "bearerTokenPath": "gateway/bearer-token.txt",
+    "runtimeUrl": "https://your-worker.example.workers.dev"
   },
   "reviewer": {
     "geminiApiKeyPath": "reviewer/gemini-api-key.txt"
@@ -134,6 +135,8 @@ At minimum, the vault contract covers:
   - `accountId`
   - API token path
 - VTDD gateway bearer token path
+- VTDD runtime URL for VPS runner Dashboard event delivery, when the runner
+  cannot receive `VTDD_RUNTIME_URL` from its service environment
 - reviewer credential path(s), if configured
 
 ## Operational Model
