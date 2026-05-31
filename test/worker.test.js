@@ -3085,6 +3085,57 @@ test("DashboardChatRoom sends ordinary owner turns to connected app-server bridg
   assert.equal(status.text, "app-server bridge の返信を待っています");
 });
 
+test("DashboardChatRoom routes VPS maintenance owner turns to Worker proposal before app-server bridge", async () => {
+  const provider = createInMemoryMemoryProvider();
+  const store = createInMemoryDashboardChatStore();
+  const dashboardSocket = createMockSocket("dashboard", "dashboard-main-marushu-vtdd-v2-p");
+  const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-marushu-vtdd-v2-p");
+  const room = new DashboardChatRoom(
+    {
+      storage: createMockDurableObjectStorage(),
+      getWebSockets() {
+        return [dashboardSocket, bridgeSocket];
+      }
+    },
+    {
+      DASHBOARD_CHAT_STORE: store,
+      MEMORY_PROVIDER: provider,
+      VTDD_RUNTIME_URL: "https://example.com",
+      VTDD_DASHBOARD_VPS_MAINTENANCE_HOST: "x85-131-245-163",
+      VTDD_DASHBOARD_VPS_MAINTENANCE_WORKDIR: "/home/vtdd-runner/vtdd-runner/repos/vtdd-v2-p"
+    }
+  );
+
+  await room.webSocketMessage(
+    dashboardSocket,
+    JSON.stringify({
+      type: "owner_message",
+      threadId: "dashboard-main-marushu-vtdd-v2-p",
+      repository: "marushu/vtdd-v2-p",
+      issueNumber: 637,
+      text: "Dashboard Butler から VPS runner status を確認して。root 実行は passkey 境界で止める。"
+    })
+  );
+
+  assert.equal(bridgeSocket.sent.length, 0);
+  const ack = JSON.parse(dashboardSocket.sent[1]);
+  assert.equal(ack.type, "owner_message_accepted");
+  assert.equal(ack.ok, true);
+  const finalBroadcast = JSON.parse(dashboardSocket.sent.at(-1));
+  assert.equal(finalBroadcast.type, "thread");
+  assert.equal(finalBroadcast.messages.length, 2);
+  assert.equal(finalBroadcast.messages[0].role, "owner");
+  assert.equal(finalBroadcast.messages[1].role, "butler");
+  assert.equal(finalBroadcast.messages[1].status, "blocked");
+  assert.match(finalBroadcast.messages[1].text, /approval_required/);
+  assert.match(finalBroadcast.messages[1].text, /systemd\.user\.runner\.status|approval URL/);
+
+  const records = await provider.retrieve({ type: MemoryRecordType.APPROVAL_LOG, limit: 10 });
+  const proposalRecord = records.find((record) => record.content?.kind === "vps_privileged_maintenance_approval_proposal");
+  assert.equal(proposalRecord.content.proposal.capability.id, "systemd.user.runner.status");
+  assert.equal(proposalRecord.content.proposal.capability.riskLevel, "low");
+});
+
 test("DashboardChatRoom attaches execution queue preflight to repository app-server turns", async () => {
   const provider = createInMemoryMemoryProvider();
   const store = createInMemoryDashboardChatStore();
