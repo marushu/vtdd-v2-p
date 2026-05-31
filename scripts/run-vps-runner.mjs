@@ -1091,11 +1091,17 @@ function parseVpsPrivilegedMaintenanceQueueComment(body) {
     transport: normalizeText(payload.transport),
     repository: normalizeRepository(payload.repository),
     issueNumber: normalizePositiveInteger(payload.issueNumber),
+    dashboardThreadId: normalizeText(
+      payload?.handoff?.dashboardThreadId || payload.dashboardThreadId || payload.dashboard_thread_id
+    ),
     approvalScopeMatched: payload.approvalScopeMatched === true,
     approvalActor: normalizeGitHubLogin(payload.approvalActor),
     executionEnvelope: normalizeVpsPrivilegedMaintenanceExecutionEnvelope(payload.executionEnvelope),
     issueTraceability: payload.issueTraceability || null
   };
+  normalized.handoff = normalized.dashboardThreadId
+    ? { dashboardThreadId: normalized.dashboardThreadId }
+    : null;
 
   const issues = [];
   if (normalized.executionId !== marker[1]) {
