@@ -56,6 +56,7 @@ test("custom gpt instructions preserve current butler and approval boundaries", 
   assert.equal(doc.includes("vtddGitHubAuthority"), true);
   assert.equal(doc.includes("vtddDeployProduction"), true);
   assert.equal(doc.includes("vtddSyncGitHubActionsSecret"), true);
+  assert.equal(doc.includes("vtddSyncGitHubActionsVariable"), true);
   assert.equal(doc.includes("vtddExecutionProgress"), true);
   assert.equal(doc.includes("vtddRetrieveGitHub"), true);
   assert.equal(doc.includes("vtddUpsertRepositoryNickname"), true);
@@ -227,6 +228,7 @@ test("short custom gpt instructions stay under editor limits while preserving cr
   assert.equal(doc.includes("vtddRetrieveSelfParity"), true);
   assert.equal(doc.includes("vtddDeployProduction"), true);
   assert.equal(doc.includes("vtddSyncGitHubActionsSecret"), true);
+  assert.equal(doc.includes("vtddSyncGitHubActionsVariable"), true);
   assert.equal(doc.includes("vtddUpsertRepositoryNickname"), true);
   assert.equal(doc.includes("vtddDeleteRepositoryNickname"), true);
   assert.equal(doc.includes("vtddRetrieveRepositoryNicknames"), true);
@@ -382,6 +384,10 @@ test("custom gpt openapi doc exposes current gateway, execute, and progress rout
   assert.equal(doc.includes("/v2/action/deploy:"), true);
   assert.equal(doc.includes("/v2/action/github-actions-secret:"), true);
   assert.equal(doc.includes("- VTDD_GATEWAY_BEARER_TOKEN"), true);
+  assert.equal(doc.includes("/v2/action/github-actions-variable:"), true);
+  assert.equal(doc.includes("operationId: vtddSyncGitHubActionsVariable"), true);
+  assert.equal(doc.includes("- VTDD_DASHBOARD_VPS_MAINTENANCE_HOST"), true);
+  assert.equal(doc.includes("- VTDD_DASHBOARD_VPS_MAINTENANCE_WORKDIR"), true);
   assert.equal(doc.includes("/v2/action/repository-nickname:"), true);
   assert.equal(doc.includes("/v2/action/repository-nickname/delete:"), true);
   assert.equal(doc.includes("/v2/action/progress:"), true);
@@ -508,6 +514,25 @@ test("custom gpt openapi json parses and exposes paths as an object", () => {
       "application/json"
     ].schema.properties.secretName.enum.includes("VTDD_GATEWAY_BEARER_TOKEN"),
     true
+  );
+  assert.equal(typeof doc.paths["/v2/action/github-actions-variable"], "object");
+  assert.equal(
+    doc.paths["/v2/action/github-actions-variable"].post.requestBody.content[
+      "application/json"
+    ].schema.properties.variableName.enum.includes("VTDD_DASHBOARD_VPS_MAINTENANCE_HOST"),
+    true
+  );
+  assert.deepEqual(
+    doc.paths["/v2/action/github-actions-variable"].post.requestBody.content[
+      "application/json"
+    ].schema.required,
+    ["repository", "variableName", "variableValue", "policyInput"]
+  );
+  assert.deepEqual(
+    doc.paths["/v2/action/github-actions-variable"].post.requestBody.content[
+      "application/json"
+    ].schema.properties.policyInput.required,
+    ["approvalGrantId"]
   );
   assert.equal(typeof doc.paths["/v2/action/repository-nickname"], "object");
   assert.equal(typeof doc.paths["/v2/action/repository-nickname/delete"], "object");

@@ -22,10 +22,14 @@ test("passkey operator page can target explicit api base and sync endpoint", () 
   assert.equal(html.includes('fetch("/api/action/deploy"'), true);
   assert.equal(html.includes('fetch("/api/action/github-authority"'), true);
   assert.equal(html.includes('fetch("/api/action/github-actions-secret"'), true);
+  assert.equal(html.includes('fetch("/api/action/github-actions-variable"'), true);
   assert.equal(html.includes("readResponseBody"), true);
   assert.equal(html.includes("non_json_response"), true);
   assert.equal(html.includes("Sync GitHub App secrets"), true);
   assert.equal(html.includes("Sync GitHub Actions secret"), true);
+  assert.equal(html.includes("Sync GitHub Actions variable"), true);
+  assert.equal(html.includes("VTDD_DASHBOARD_VPS_MAINTENANCE_HOST"), true);
+  assert.equal(html.includes("VTDD_DASHBOARD_VPS_MAINTENANCE_WORKDIR"), true);
   assert.equal(html.includes("VTDD_GATEWAY_BEARER_TOKEN"), true);
   assert.equal(html.includes("Save gateway bearer to vault"), true);
   assert.equal(html.includes("Dispatch production deploy"), true);
@@ -439,11 +443,31 @@ test("passkey operator page focuses secret sync modes without hiding the require
   assert.equal(actionsSecretHtml.includes('<section data-operator-section="github-actions-secret-sync">'), true);
   assert.equal(actionsSecretHtml.includes('<option value="VTDD_GATEWAY_BEARER_TOKEN">'), true);
   assert.equal(actionsSecretHtml.includes("Worker secret / Custom GPT Action auth"), true);
+  assert.equal(actionsSecretHtml.includes('<section data-operator-section="github-actions-variable-sync" hidden>'), true);
   assert.equal(actionsSecretHtml.includes('<section data-operator-section="gateway-bearer-vault" hidden>'), true);
   assert.equal(actionsSecretHtml.includes('<section data-operator-section="github-app-secret-sync" hidden>'), true);
   assert.equal(actionsSecretHtml.includes('<section data-operator-section="production-deploy" hidden>'), true);
   assert.equal(actionsSecretHtml.includes('<section data-operator-section="pr-merge" hidden>'), true);
   assert.equal(actionsSecretHtml.includes('<section data-operator-section="issue-close" hidden>'), true);
+
+  const actionsVariableHtml = renderPasskeyOperatorPage({
+    repositoryInput: "marushu/vtdd-v2-p",
+    actionType: "destructive",
+    highRiskKind: "github_actions_variable_sync"
+  });
+  assert.equal(actionsVariableHtml.includes('<section data-operator-section="approval">'), true);
+  assert.equal(actionsVariableHtml.includes('<section data-operator-section="github-actions-variable-sync">'), true);
+  assert.equal(actionsVariableHtml.includes('<option value="VTDD_DASHBOARD_VPS_MAINTENANCE_HOST">'), true);
+  assert.equal(actionsVariableHtml.includes('<option value="VTDD_DASHBOARD_VPS_MAINTENANCE_WORKDIR">'), true);
+  assert.equal(actionsVariableHtml.includes("function readApprovalVariableName()"), true);
+  assert.equal(actionsVariableHtml.includes("variableName: readApprovalVariableName()"), true);
+  assert.equal(actionsVariableHtml.includes("Dashboard VPS maintenance"), true);
+  assert.equal(actionsVariableHtml.includes('<section data-operator-section="github-actions-secret-sync" hidden>'), true);
+  assert.equal(actionsVariableHtml.includes('<section data-operator-section="gateway-bearer-vault" hidden>'), true);
+  assert.equal(actionsVariableHtml.includes('<section data-operator-section="github-app-secret-sync" hidden>'), true);
+  assert.equal(actionsVariableHtml.includes('<section data-operator-section="production-deploy" hidden>'), true);
+  assert.equal(actionsVariableHtml.includes('<section data-operator-section="pr-merge" hidden>'), true);
+  assert.equal(actionsVariableHtml.includes('<section data-operator-section="issue-close" hidden>'), true);
 });
 
 test("passkey operator page supports local helper mode without passkey controls", () => {
@@ -524,6 +548,7 @@ test("passkey operator page keeps the full maintenance view when no mode is infe
   assert.equal(html.includes('<section data-operator-section="pr-merge">'), true);
   assert.equal(html.includes('<section data-operator-section="issue-close">'), true);
   assert.equal(html.includes('<section data-operator-section="github-actions-secret-sync">'), true);
+  assert.equal(html.includes('<section data-operator-section="github-actions-variable-sync">'), true);
   assert.equal(html.includes('<section data-operator-section="gateway-bearer-vault">'), true);
   assert.equal(html.includes('<section data-operator-section="vps-runner-admin">'), true);
 });

@@ -381,8 +381,25 @@ export function renderPasskeyOperatorPage(input = {}) {
           <pre id="openai-secret-sync-output"></pre>
         </section>
 
+        <section data-operator-section="github-actions-variable-sync"${hiddenAttribute(!sectionVisibility.githubActionsVariableSync)}>
+          <h2>8. GitHub Actions Variable Sync</h2>
+          <p class="muted">Dashboard VPS maintenance の production deploy へ渡す GitHub Actions repository variable を同期します。値は Butler 会話、GitHub コメント、RAG、レスポンス本文に表示しません。</p>
+          <label for="github-actions-variable-name-input">Variable name</label>
+          <select id="github-actions-variable-name-input">
+            <option value="VTDD_DASHBOARD_VPS_MAINTENANCE_HOST">VTDD_DASHBOARD_VPS_MAINTENANCE_HOST</option>
+            <option value="VTDD_DASHBOARD_VPS_MAINTENANCE_WORKDIR">VTDD_DASHBOARD_VPS_MAINTENANCE_WORKDIR</option>
+          </select>
+          <label for="github-actions-variable-value-input">Variable value</label>
+          <input id="github-actions-variable-value-input" type="password" autocomplete="off" placeholder="value..." />
+          <div class="row">
+            <button id="github-actions-variable-sync-button">Sync GitHub Actions variable</button>
+          </div>
+          <p class="muted"><code>actionType=destructive</code> / <code>highRiskKind=github_actions_variable_sync</code> の approvalGrantId が必要です。</p>
+          <pre id="github-actions-variable-sync-output"></pre>
+        </section>
+
         <section data-operator-section="gateway-bearer-vault"${hiddenAttribute(!sectionVisibility.gatewayBearerVault)}>
-          <h2>8. Gateway Bearer Vault</h2>
+          <h2>9. Gateway Bearer Vault</h2>
           <p class="muted">メモアプリ等に保管している <code>VTDD_GATEWAY_BEARER_TOKEN</code> を、この端末の local helper 経由で Mac/VPS vault に保存します。値は Butler 会話、GitHub コメント、RAG、レスポンス本文に表示しません。</p>
           <label for="gateway-bearer-token-input">VTDD_GATEWAY_BEARER_TOKEN</label>
           <input id="gateway-bearer-token-input" type="password" autocomplete="off" placeholder="token..." />
@@ -395,7 +412,7 @@ export function renderPasskeyOperatorPage(input = {}) {
         </section>
 
         <section data-operator-section="vps-runner-admin"${hiddenAttribute(!sectionVisibility.vpsRunnerAdmin)}>
-          <h2>9. VPS Runner Admin</h2>
+          <h2>10. VPS Runner Admin</h2>
           <p class="muted">VPS runner の repo allowlist 追加、runner restart、smoke などの管理操作用 approval です。ここでは real passkey で短命の <code>approvalGrantId</code> だけを発行します。VPS 操作そのものは GitHub queue と runner event に残る bounded command として別途実行されます。</p>
           ${vpsScopeSummary ? `<p class="muted">${vpsScopeSummary}</p>` : ""}
           <p class="muted"><code>actionType=destructive</code> / <code>highRiskKind=vps_runner_admin</code> の approvalGrantId が必要です。文字列としての passkey は承認ではありません。</p>
@@ -411,6 +428,7 @@ export function renderPasskeyOperatorPage(input = {}) {
       const mergeOutput = document.getElementById("merge-output");
       const issueCloseOutput = document.getElementById("issue-close-output");
       const openaiSecretSyncOutput = document.getElementById("openai-secret-sync-output");
+      const githubActionsVariableSyncOutput = document.getElementById("github-actions-variable-sync-output");
       const gatewayBearerVaultOutput = document.getElementById("gateway-bearer-vault-output");
       const copyApprovalGrantButton = document.getElementById("copy-approval-grant-button");
       const autoCopyApprovalGrantInput = document.getElementById("auto-copy-approval-grant-input");
@@ -472,6 +490,13 @@ export function renderPasskeyOperatorPage(input = {}) {
           throw new Error("repositoryInput is required before approval/deploy. Deploy does not require issueNumber or pullNumber, but it does require owner/repo.");
         }
         return repositoryInput;
+      }
+
+      function readApprovalVariableName() {
+        if (operatorMode !== "github_actions_variable_sync") {
+          return null;
+        }
+        return document.getElementById("github-actions-variable-name-input").value;
       }
 
       function readApprovalRepositoryInput() {
@@ -820,6 +845,7 @@ export function renderPasskeyOperatorPage(input = {}) {
               repositoryInput,
               issueNumber: Number(document.getElementById("issue-input").value || 0) || null,
               pullNumber: readApprovalPullNumber(),
+              variableName: readApprovalVariableName(),
               vpsProposalId: vpsApprovalScope.vpsProposalId,
               issueContext: {
                 issueNumber: Number(document.getElementById("issue-input").value || 0) || null
@@ -828,6 +854,7 @@ export function renderPasskeyOperatorPage(input = {}) {
                 actionType: document.getElementById("action-type-input").value,
                 repositoryInput,
                 highRiskKind: document.getElementById("risk-kind-input").value,
+                variableName: readApprovalVariableName(),
                 vpsProposalId: vpsApprovalScope.vpsProposalId
               }
             })
@@ -1056,6 +1083,40 @@ export function renderPasskeyOperatorPage(input = {}) {
         }
       });
 
+      document.getElementById("github-actions-variable-sync-button").addEventListener("click", async () => {
+        try {
+          if (!latestApprovalGrantId) {
+            throw new Error("approvalGrantId is required before GitHub Actions variable sync");
+          }
+          const variableName = document.getElementById("github-actions-variable-name-input").value;
+          const variableValue = document.getElementById("github-actions-variable-value-input").value;
+          if (!variableValue) {
+            throw new Error(variableName + " is required");
+          }
+          githubActionsVariableSyncOutput.textContent = variableName + " variable sync request...";
+          const syncResponse = await fetch("${apiBase}/action/github-actions-variable", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              repository: document.getElementById("repo-input").value,
+              variableName,
+              variableValue,
+              policyInput: {
+                approvalGrantId: latestApprovalGrantId
+              }
+            })
+          });
+          const syncBody = await readResponseBody(syncResponse);
+          if (!syncResponse.ok) {
+            throw responseError(syncBody, variableName + " variable sync failed");
+          }
+          document.getElementById("github-actions-variable-value-input").value = "";
+          githubActionsVariableSyncOutput.textContent = JSON.stringify(syncBody, null, 2);
+        } catch (error) {
+          githubActionsVariableSyncOutput.textContent = String(error);
+        }
+      });
+
       document.getElementById("gateway-bearer-vault-button").addEventListener("click", async () => {
         try {
           const pastedApprovalGrantId = document.getElementById("approval-grant-id-input").value.trim();
@@ -1206,6 +1267,9 @@ export function resolvePasskeyOperatorMode(input = {}) {
   if (highRiskKind === "github_actions_secret_sync") {
     return "github_actions_secret_sync";
   }
+  if (highRiskKind === "github_actions_variable_sync") {
+    return "github_actions_variable_sync";
+  }
   if (highRiskKind === "gateway_bearer_vault_bootstrap") {
     return "gateway_bearer_vault";
   }
@@ -1231,6 +1295,7 @@ function resolveSectionVisibility(operatorMode, options = {}) {
     prMerge: full || operatorMode === "merge",
     issueClose: full || operatorMode === "issue_close",
     githubActionsSecretSync: full || operatorMode === "github_actions_secret_sync",
+    githubActionsVariableSync: full || operatorMode === "github_actions_variable_sync",
     gatewayBearerVault: full || operatorMode === "gateway_bearer_vault",
     vpsRunnerAdmin: full || operatorMode === "vps"
   };
@@ -1273,7 +1338,7 @@ function safeScriptJson(value) {
 
 function normalizeOperatorMode(value) {
   const token = normalizeOperatorToken(value);
-  if (["full", "register", "deploy", "merge", "issue_close", "github_app_secret_sync", "github_actions_secret_sync", "gateway_bearer_vault", "vps", "dashboard"].includes(token)) {
+  if (["full", "register", "deploy", "merge", "issue_close", "github_app_secret_sync", "github_actions_secret_sync", "github_actions_variable_sync", "gateway_bearer_vault", "vps", "dashboard"].includes(token)) {
     return token;
   }
   if (token === "dashboard_access") {
@@ -1284,6 +1349,9 @@ function normalizeOperatorMode(value) {
   }
   if (token === "openai_secret_sync" || token === "codex_secret_sync") {
     return "github_actions_secret_sync";
+  }
+  if (token === "actions_variable_sync" || token === "variable_sync" || token === "dashboard_vps_variable_sync") {
+    return "github_actions_variable_sync";
   }
   if (token === "gateway_vault" || token === "gateway_bearer") {
     return "gateway_bearer_vault";
@@ -1322,6 +1390,9 @@ function defaultHighRiskKindForMode(operatorMode) {
   }
   if (operatorMode === "github_actions_secret_sync") {
     return "github_actions_secret_sync";
+  }
+  if (operatorMode === "github_actions_variable_sync") {
+    return "github_actions_variable_sync";
   }
   if (operatorMode === "gateway_bearer_vault") {
     return "gateway_bearer_vault_bootstrap";

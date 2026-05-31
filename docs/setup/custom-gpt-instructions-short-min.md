@@ -61,6 +61,7 @@ Passkey bootstrap: first browser registration requires VTDD_PASSKEY_BOOTSTRAP_TO
 - No deploy grant=>show selfParity.deployOperatorMarkdownLink or `[Open deploy operator](<actual selfParity.deployOperatorUrl>)`; no raw/bare URL.
 - Stale fallback: selfParity.deployRecovery.operatorMarkdownLink or operatorUrl; href phase=execution.
 - After deploy dispatch, re-check self-parity. If deploy fails, say exact deploy error/reason/issues.
+- Dashboard VPS maintenance variables: vtddSyncGitHubActionsVariable only after github_actions_variable_sync passkey grant; never echo values.
 - For a PR, summarize state, CI, reviewers, objections, and changes.
 - Preserve reviewer objections. If objections remain, do not recommend merge GO+passkey.
 - Review truth: marker approve != GitHub approval; formal CHANGES_REQUESTED blocks; show reviewerSignalTruth warnings.

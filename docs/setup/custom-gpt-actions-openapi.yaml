@@ -1087,6 +1087,10 @@ paths:
                     approvalGrantId:
                       type: string
                   additionalProperties: true
+              required:
+                - repository
+                - variableName
+                - variableValue
               additionalProperties: true
       responses:
         "202":
@@ -1157,6 +1161,63 @@ paths:
                 $ref: "#/components/schemas/VtddGenericResponse"
         "503":
           description: GitHub Actions secret sync failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+  /v2/action/github-actions-variable:
+    post:
+      operationId: vtddSyncGitHubActionsVariable
+      summary: Sync an approved GitHub Actions repository variable for Dashboard VPS maintenance after scoped passkey approval.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                repository:
+                  type: string
+                variableName:
+                  type: string
+                  enum:
+                    - VTDD_DASHBOARD_VPS_MAINTENANCE_HOST
+                    - VTDD_DASHBOARD_VPS_MAINTENANCE_WORKDIR
+                variableValue:
+                  type: string
+                policyInput:
+                  type: object
+                  properties:
+                    approvalGrantId:
+                      type: string
+                  required:
+                    - approvalGrantId
+                  additionalProperties: true
+              required:
+                - repository
+                - variableName
+                - variableValue
+                - policyInput
+              additionalProperties: true
+      responses:
+        "200":
+          description: GitHub Actions repository variable synced
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "401":
+          description: Missing machine auth
+        "403":
+          description: Invalid machine auth
+        "422":
+          description: GitHub Actions variable sync request blocked or invalid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VtddGenericResponse"
+        "503":
+          description: GitHub Actions variable sync failed
           content:
             application/json:
               schema:

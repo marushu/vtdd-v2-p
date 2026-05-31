@@ -57,6 +57,12 @@ export {
   validateGitHubActionsSecretSyncApprovalGrant,
   validateGitHubActionsSecretSyncRequest
 } from "./github-actions-secret-sync.js";
+export {
+  executeGitHubActionsVariableSync,
+  sanitizeGitHubActionsVariableSyncErrorMessage,
+  validateGitHubActionsVariableSyncApprovalGrant,
+  validateGitHubActionsVariableSyncRequest
+} from "./github-actions-variable-sync.js";
 export { requiredCredentialTier, evaluateCredentialBoundary } from "./credential-boundary.js";
 export { resolveRepositoryTarget } from "./repository-resolution.js";
 export {

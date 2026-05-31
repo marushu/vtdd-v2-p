@@ -408,6 +408,12 @@ GitHub Actions secret sync:
 - The operator page may call vtddSyncGitHubActionsSecret for `OPENAI_API_KEY` only after GO + real passkey approval.
 - If vtddSyncGitHubActionsSecret fails, report the exact `error`, `reason`, and `issues`; never echo the secret value.
 
+GitHub Actions variable sync:
+- Dashboard Butler VPS maintenance config must not be pasted into normal Butler chat as an instruction to mutate GitHub settings.
+- Direct the human to the same-origin passkey operator URL with `actionType=destructive&highRiskKind=github_actions_variable_sync`.
+- The operator page may call vtddSyncGitHubActionsVariable only for `VTDD_DASHBOARD_VPS_MAINTENANCE_HOST` and `VTDD_DASHBOARD_VPS_MAINTENANCE_WORKDIR` after GO + real passkey approval.
+- If vtddSyncGitHubActionsVariable fails, report the exact `error`, `reason`, and `issues`; never echo the variable value.
+
 GitHub App secret sync:
 - GitHub App secret sync / helper sync is not a deploy. Do not use the deploy operator, `actionType=deploy_production`, or `highRiskKind=deploy_production` for GitHub App secret sync.
 - Prefer calling `vtddRetrieveSelfParity` and using `selfParity.githubAppSecretSyncOperatorMarkdownLink`; if unavailable, render `[Open GitHub App secret sync operator](<actual selfParity.githubAppSecretSyncOperatorUrl>)` with the actual URL as the href.
