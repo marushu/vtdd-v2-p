@@ -9,6 +9,7 @@ import {
   buildVpsCapabilityProposal,
   buildVpsPrivilegedMaintenanceInstallInventory,
   buildVpsMaintenanceApprovalScope,
+  listVpsPrivilegedMaintenanceCommandRegistry,
   planVpsPrivilegedMaintenanceHelperExecution,
   createCloudflareMemoryProvider,
   createPasskeyApprovalOptions,
@@ -10068,6 +10069,36 @@ function buildDashboardVpsMaintenanceProposalPayload({ payload, repository, rela
   const workingDirectory = normalizeText(
     payload?.workingDirectory || payload?.working_directory || env?.VTDD_DASHBOARD_VPS_MAINTENANCE_WORKDIR
   );
+  const preset = resolveDashboardVpsMaintenanceNaturalLanguagePreset({ payload, workingDirectory });
+  if (preset) {
+    return {
+      host: normalizeText(payload?.vpsHost || payload?.host || env?.VTDD_DASHBOARD_VPS_MAINTENANCE_HOST),
+      repository,
+      relatedIssue,
+      operation: normalizeText(payload?.vpsOperation || payload?.operation) || preset.operation,
+      id: normalizeText(payload?.capabilityId || payload?.id) || preset.id,
+      title: normalizeText(payload?.capabilityTitle || payload?.title) || preset.title,
+      commandClass: normalizeText(payload?.commandClass || payload?.command_class) || preset.commandClass,
+      riskLevel: normalizeText(payload?.riskLevel || payload?.risk_level) || preset.riskLevel,
+      workingDirectories: Array.isArray(payload?.workingDirectories)
+        ? payload.workingDirectories
+        : workingDirectory
+          ? [workingDirectory]
+          : [],
+      allowedArgs: Array.isArray(payload?.allowedArgs) ? payload.allowedArgs : preset.allowedArgs,
+      affectedPaths: Array.isArray(payload?.affectedPaths) ? payload.affectedPaths : preset.affectedPaths,
+      redactionRules: Array.isArray(payload?.redactionRules)
+        ? payload.redactionRules
+        : ["no secrets", "summarize stdout/stderr", "redact tokens and credentials"],
+      rollbackPlan: normalizeText(payload?.rollbackPlan) || "disable capability in the root-owned manifest and keep audit history",
+      expectedRuntimeTruth: Array.isArray(payload?.expectedRuntimeTruth)
+        ? payload.expectedRuntimeTruth
+        : ["before state", "exit code", "redacted log summary", "after state", "next action"],
+      reason:
+        normalizeText(payload?.reason) ||
+        `Issue #637 Dashboard Butler natural-language flow: ${preset.id} queue handoff only`
+    };
+  }
   return {
     host: normalizeText(payload?.vpsHost || payload?.host || env?.VTDD_DASHBOARD_VPS_MAINTENANCE_HOST),
     repository,
@@ -10096,6 +10127,56 @@ function buildDashboardVpsMaintenanceProposalPayload({ payload, repository, rela
     reason:
       normalizeText(payload?.reason) ||
       "Issue #637 Dashboard Butler natural-language flow: queue handoff only, no root execution"
+  };
+}
+
+function resolveDashboardVpsMaintenanceNaturalLanguagePreset({ payload, workingDirectory } = {}) {
+  if (
+    normalizeText(payload?.capabilityId || payload?.id) ||
+    normalizeText(payload?.commandClass || payload?.command_class)
+  ) {
+    return null;
+  }
+  const text = normalizeText(payload?.text || payload?.message || payload?.ownerMessage || payload?.owner_message);
+  if (!text) return null;
+  const lower = text.toLowerCase();
+  const wantsLogs = lower.includes("logs") || lower.includes("log") || text.includes("ログ");
+  const wantsRestart = lower.includes("restart") || lower.includes("再起動") || text.includes("再起動");
+  const wantsStatus =
+    lower.includes("status") ||
+    lower.includes("health") ||
+    lower.includes("state") ||
+    text.includes("状態") ||
+    text.includes("確認") ||
+    text.includes("生存") ||
+    text.includes("稼働");
+  const mentionsBridge =
+    lower.includes("app-server") ||
+    lower.includes("app server") ||
+    lower.includes("bridge") ||
+    text.includes("ブリッジ");
+  const mentionsRunner = lower.includes("runner") || text.includes("ランナー") || text.includes("実行器");
+  if (!mentionsBridge && !mentionsRunner) return null;
+
+  let commandClass = "";
+  if (mentionsBridge && wantsLogs) commandClass = "systemd_user_app_server_bridge_logs";
+  else if (mentionsBridge && wantsRestart) commandClass = "systemd_user_app_server_bridge_restart";
+  else if (mentionsBridge && wantsStatus) commandClass = "systemd_user_app_server_bridge_status";
+  else if (mentionsRunner && wantsLogs) commandClass = "systemd_user_runner_logs";
+  else if (mentionsRunner && wantsRestart) commandClass = "systemd_user_runner_restart";
+  else if (mentionsRunner && wantsStatus) commandClass = "systemd_user_runner_status";
+  if (!commandClass) return null;
+
+  const registryEntry = listVpsPrivilegedMaintenanceCommandRegistry().find((entry) => entry.commandClass === commandClass);
+  if (!registryEntry) return null;
+  return {
+    id: commandClass.replaceAll("_", "."),
+    title: registryEntry.title,
+    commandClass: registryEntry.commandClass,
+    riskLevel: registryEntry.requiredRiskLevel,
+    allowedArgs: registryEntry.allowedArgs,
+    affectedPaths: [workingDirectory, "/home/vtdd-runner/.config/systemd/user", "/run/user"].filter(Boolean),
+    operation: wantsRestart ? "enable" : "review"
   };
 }
 

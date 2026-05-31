@@ -2627,6 +2627,47 @@ test("worker connects VPS privileged maintenance intent from Dashboard Butler ch
   assert.equal(queueCommentBody.includes('"handoff"'), true);
 });
 
+test("worker maps Dashboard Butler VPS runner status text to the low-risk preset", async () => {
+  const store = createInMemoryDashboardChatStore();
+  const provider = createInMemoryMemoryProvider();
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/chat/messages", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        threadId: "dashboard-main-marushu-vtdd-v2-p",
+        repository: "marushu/vtdd-v2-p",
+        issueNumber: 637,
+        text: "Dashboard Butler から VPS runner status を確認して。root 実行は passkey 境界で止める。"
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      DASHBOARD_CHAT_STORE: store,
+      MEMORY_PROVIDER: provider,
+      VTDD_DASHBOARD_VPS_MAINTENANCE_HOST: "x85-131-245-163",
+      VTDD_DASHBOARD_VPS_MAINTENANCE_WORKDIR: "/home/vtdd-runner/vtdd-runner/repos/vtdd-v2-p"
+    }
+  );
+
+  assert.equal(response.status, 202);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.execution.status, "approval_required");
+  assert.equal(body.execution.approvalScope.vpsCapabilityId, "systemd.user.runner.status");
+  assert.equal(body.execution.approvalScope.vpsOperation, "review");
+  assert.equal(body.execution.runtimeTruth.capabilityId, "systemd.user.runner.status");
+  assert.equal(body.execution.runtimeTruth.rootExecutionStarted, false);
+
+  const records = await provider.retrieve({ ids: [body.execution.vpsProposalId] });
+  const proposalRecord = records[0];
+  assert.equal(proposalRecord.content.proposal.capability.commandClass, "systemd_user_runner_status");
+  assert.equal(proposalRecord.content.proposal.capability.riskLevel, "low");
+  assert.deepEqual(proposalRecord.content.proposal.capability.allowedArgs, [
+    "systemctl --user is-active vtdd-vps-runner.timer vtdd-vps-runner.service"
+  ]);
+});
+
 test("worker allows dashboard passkey session chat without VPS runner handoff", async () => {
   const provider = createInMemoryMemoryProvider();
   await provider.store({

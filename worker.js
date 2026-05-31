@@ -37738,6 +37738,9 @@ function containsForbiddenPrivilegedPattern(capability) {
   ].join(" ");
   return /\bNOPASSWD\s*:\s*ALL\b/i.test(joined) || /\bsudo\s+su\b/i.test(joined) || /\b(root\s+shell|\/bin\/bash|\/bin\/sh)\b/i.test(joined);
 }
+function listVpsPrivilegedMaintenanceCommandRegistry() {
+  return Object.values(HELPER_COMMAND_REGISTRY).map(cloneHelperCommandRegistryEntry);
+}
 function bindHelperCommandRegistry(capability) {
   const entry = HELPER_COMMAND_REGISTRY[capability.commandClass];
   if (!entry) {
@@ -65821,6 +65824,26 @@ function buildDashboardVpsMaintenanceProposalPayload({ payload, repository, rela
   const workingDirectory = normalizeText31(
     payload?.workingDirectory || payload?.working_directory || env?.VTDD_DASHBOARD_VPS_MAINTENANCE_WORKDIR
   );
+  const preset = resolveDashboardVpsMaintenanceNaturalLanguagePreset({ payload, workingDirectory });
+  if (preset) {
+    return {
+      host: normalizeText31(payload?.vpsHost || payload?.host || env?.VTDD_DASHBOARD_VPS_MAINTENANCE_HOST),
+      repository,
+      relatedIssue,
+      operation: normalizeText31(payload?.vpsOperation || payload?.operation) || preset.operation,
+      id: normalizeText31(payload?.capabilityId || payload?.id) || preset.id,
+      title: normalizeText31(payload?.capabilityTitle || payload?.title) || preset.title,
+      commandClass: normalizeText31(payload?.commandClass || payload?.command_class) || preset.commandClass,
+      riskLevel: normalizeText31(payload?.riskLevel || payload?.risk_level) || preset.riskLevel,
+      workingDirectories: Array.isArray(payload?.workingDirectories) ? payload.workingDirectories : workingDirectory ? [workingDirectory] : [],
+      allowedArgs: Array.isArray(payload?.allowedArgs) ? payload.allowedArgs : preset.allowedArgs,
+      affectedPaths: Array.isArray(payload?.affectedPaths) ? payload.affectedPaths : preset.affectedPaths,
+      redactionRules: Array.isArray(payload?.redactionRules) ? payload.redactionRules : ["no secrets", "summarize stdout/stderr", "redact tokens and credentials"],
+      rollbackPlan: normalizeText31(payload?.rollbackPlan) || "disable capability in the root-owned manifest and keep audit history",
+      expectedRuntimeTruth: Array.isArray(payload?.expectedRuntimeTruth) ? payload.expectedRuntimeTruth : ["before state", "exit code", "redacted log summary", "after state", "next action"],
+      reason: normalizeText31(payload?.reason) || `Issue #637 Dashboard Butler natural-language flow: ${preset.id} queue handoff only`
+    };
+  }
   return {
     host: normalizeText31(payload?.vpsHost || payload?.host || env?.VTDD_DASHBOARD_VPS_MAINTENANCE_HOST),
     repository,
@@ -65837,6 +65860,39 @@ function buildDashboardVpsMaintenanceProposalPayload({ payload, repository, rela
     rollbackPlan: normalizeText31(payload?.rollbackPlan) || "disable capability and keep audit history",
     expectedRuntimeTruth: Array.isArray(payload?.expectedRuntimeTruth) ? payload.expectedRuntimeTruth : ["before package check", "exit code", "after Chromium launch check"],
     reason: normalizeText31(payload?.reason) || "Issue #637 Dashboard Butler natural-language flow: queue handoff only, no root execution"
+  };
+}
+function resolveDashboardVpsMaintenanceNaturalLanguagePreset({ payload, workingDirectory } = {}) {
+  if (normalizeText31(payload?.capabilityId || payload?.id) || normalizeText31(payload?.commandClass || payload?.command_class)) {
+    return null;
+  }
+  const text = normalizeText31(payload?.text || payload?.message || payload?.ownerMessage || payload?.owner_message);
+  if (!text) return null;
+  const lower = text.toLowerCase();
+  const wantsLogs = lower.includes("logs") || lower.includes("log") || text.includes("\u30ED\u30B0");
+  const wantsRestart = lower.includes("restart") || lower.includes("\u518D\u8D77\u52D5") || text.includes("\u518D\u8D77\u52D5");
+  const wantsStatus = lower.includes("status") || lower.includes("health") || lower.includes("state") || text.includes("\u72B6\u614B") || text.includes("\u78BA\u8A8D") || text.includes("\u751F\u5B58") || text.includes("\u7A3C\u50CD");
+  const mentionsBridge = lower.includes("app-server") || lower.includes("app server") || lower.includes("bridge") || text.includes("\u30D6\u30EA\u30C3\u30B8");
+  const mentionsRunner = lower.includes("runner") || text.includes("\u30E9\u30F3\u30CA\u30FC") || text.includes("\u5B9F\u884C\u5668");
+  if (!mentionsBridge && !mentionsRunner) return null;
+  let commandClass = "";
+  if (mentionsBridge && wantsLogs) commandClass = "systemd_user_app_server_bridge_logs";
+  else if (mentionsBridge && wantsRestart) commandClass = "systemd_user_app_server_bridge_restart";
+  else if (mentionsBridge && wantsStatus) commandClass = "systemd_user_app_server_bridge_status";
+  else if (mentionsRunner && wantsLogs) commandClass = "systemd_user_runner_logs";
+  else if (mentionsRunner && wantsRestart) commandClass = "systemd_user_runner_restart";
+  else if (mentionsRunner && wantsStatus) commandClass = "systemd_user_runner_status";
+  if (!commandClass) return null;
+  const registryEntry = listVpsPrivilegedMaintenanceCommandRegistry().find((entry) => entry.commandClass === commandClass);
+  if (!registryEntry) return null;
+  return {
+    id: commandClass.replaceAll("_", "."),
+    title: registryEntry.title,
+    commandClass: registryEntry.commandClass,
+    riskLevel: registryEntry.requiredRiskLevel,
+    allowedArgs: registryEntry.allowedArgs,
+    affectedPaths: [workingDirectory, "/home/vtdd-runner/.config/systemd/user", "/run/user"].filter(Boolean),
+    operation: wantsRestart ? "enable" : "review"
   };
 }
 function buildDashboardVpsMaintenanceManifest({ helperRequest, now } = {}) {
