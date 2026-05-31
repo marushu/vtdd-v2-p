@@ -9832,7 +9832,8 @@ async function buildDashboardChatTurn(payload, options = {}) {
   const threadId =
     normalizeDashboardThreadId(input.threadId || input.thread_id) ||
     (repository ? `dashboard-main-${repository.replace("/", "-")}` : "dashboard-main-unresolved");
-  const relatedIssue = normalizePositiveInteger(input.relatedIssue || input.issueNumber);
+  const relatedIssue =
+    normalizePositiveInteger(input.relatedIssue || input.issueNumber) || extractIssueNumberFromDashboardChatText(text);
   const mediaValidation = await resolveDashboardChatMediaReferences({
     env: options.env,
     mediaReferences: input.mediaReferences || input.media_references || input.media,
@@ -9860,7 +9861,7 @@ async function buildDashboardChatTurn(payload, options = {}) {
   const hasVpsPrivilegedMaintenanceIntent = detectDashboardVpsPrivilegedMaintenanceIntent({ text });
   const vpsMaintenanceFlow = hasVpsPrivilegedMaintenanceIntent
     ? await buildDashboardVpsPrivilegedMaintenanceNaturalLanguageFlow({
-        payload: input,
+        payload: { ...input, relatedIssue, issueNumber: relatedIssue },
         repository,
         relatedIssue,
         origin: options.origin,
@@ -9935,6 +9936,39 @@ async function buildDashboardVpsPrivilegedMaintenanceNaturalLanguageFlow({
       relatedIssue,
       env
     });
+    const preflight = buildDashboardVpsMaintenanceProposalPreflight({
+      proposalPayload,
+      repository,
+      relatedIssue
+    });
+    if (!preflight.ok) {
+      return {
+        messageStatus: "blocked",
+        reply: buildDashboardVpsPrivilegedMaintenanceBlockedReply({
+          repository,
+          relatedIssue,
+          error: preflight.error,
+          reason: preflight.reason,
+          issues: preflight.issues,
+          nextAction: preflight.nextAction
+        }),
+        execution: {
+          kind: "dashboard_vps_privileged_maintenance_natural_language",
+          status: "blocked",
+          runtimeTruth: {
+            kind: "vps_privileged_maintenance_dashboard_natural_language",
+            status: preflight.status,
+            dashboardNaturalLanguagePathReached: true,
+            proposalCreated: false,
+            helperQueueReached: false,
+            missingContext: preflight.missingContext,
+            missingConfiguration: preflight.missingConfiguration,
+            rootExecutionStarted: false,
+            helperExecutionStarted: false
+          }
+        }
+      };
+    }
     const proposal = await createVpsPrivilegedMaintenanceProposal({
       payload: proposalPayload,
       provider,
@@ -10094,6 +10128,59 @@ async function buildDashboardVpsPrivilegedMaintenanceNaturalLanguageFlow({
   };
 }
 
+function buildDashboardVpsMaintenanceProposalPreflight({ proposalPayload, repository, relatedIssue } = {}) {
+  const payload = normalizeObject(proposalPayload);
+  const issues = [];
+  const missingContext = [];
+  const missingConfiguration = [];
+  const capabilityId = normalizeText(payload.id || payload.capabilityId) || "unknown capability";
+  if (!normalizeCanonicalRepositoryInput(repository || payload.repository)) {
+    missingContext.push("repository");
+    issues.push("proposal repository is required");
+  }
+  if (!normalizePositiveInteger(relatedIssue || payload.relatedIssue || payload.issueNumber)) {
+    missingContext.push("relatedIssue");
+    issues.push("relatedIssue or issueNumber is required");
+  }
+  if (!normalizeText(payload.host)) {
+    missingConfiguration.push("host");
+    issues.push("proposal host is required");
+  }
+  if (!Array.isArray(payload.workingDirectories) || payload.workingDirectories.length === 0) {
+    missingConfiguration.push("workingDirectories");
+    issues.push(`capability ${capabilityId} requires at least one working directory`);
+  }
+  if (issues.length === 0) {
+    return { ok: true };
+  }
+  const status =
+    missingContext.length > 0
+      ? "vps_privileged_maintenance_context_required"
+      : "vps_privileged_maintenance_configuration_required";
+  const nextAction = [
+    missingContext.includes("repository") ? "対象 repository を owner/repo 形式で指定してください。" : "",
+    missingContext.includes("relatedIssue") ? "関連 Issue を #番号で指定してください。" : "",
+    missingConfiguration.includes("host")
+      ? "runtime config に VTDD_DASHBOARD_VPS_MAINTENANCE_HOST を設定してください。"
+      : "",
+    missingConfiguration.includes("workingDirectories")
+      ? "runtime config に VTDD_DASHBOARD_VPS_MAINTENANCE_WORKDIR を設定してください。"
+      : ""
+  ]
+    .filter(Boolean)
+    .join(" ");
+  return {
+    ok: false,
+    status,
+    error: status,
+    reason: issues.join("; "),
+    issues,
+    missingContext,
+    missingConfiguration,
+    nextAction
+  };
+}
+
 function detectDashboardVpsPrivilegedMaintenanceIntent({ text } = {}) {
   const normalized = normalizeText(text);
   if (!normalized) return false;
@@ -10113,77 +10200,51 @@ function detectDashboardVpsPrivilegedMaintenanceIntent({ text } = {}) {
 }
 
 function buildDashboardVpsMaintenanceProposalPayload({ payload, repository, relatedIssue, env } = {}) {
-  const workingDirectory = normalizeText(
-    payload?.workingDirectory || payload?.working_directory || env?.VTDD_DASHBOARD_VPS_MAINTENANCE_WORKDIR
-  );
+  const workingDirectory = normalizeText(env?.VTDD_DASHBOARD_VPS_MAINTENANCE_WORKDIR);
   const preset = resolveDashboardVpsMaintenanceNaturalLanguagePreset({ payload, workingDirectory });
   if (preset) {
     return {
-      host: normalizeText(payload?.vpsHost || payload?.host || env?.VTDD_DASHBOARD_VPS_MAINTENANCE_HOST),
+      host: normalizeDashboardVpsMaintenanceHost({ payload, env }),
       repository,
       relatedIssue,
-      operation: normalizeText(payload?.vpsOperation || payload?.operation) || preset.operation,
-      id: normalizeText(payload?.capabilityId || payload?.id) || preset.id,
-      title: normalizeText(payload?.capabilityTitle || payload?.title) || preset.title,
-      commandClass: normalizeText(payload?.commandClass || payload?.command_class) || preset.commandClass,
-      riskLevel: normalizeText(payload?.riskLevel || payload?.risk_level) || preset.riskLevel,
-      workingDirectories: Array.isArray(payload?.workingDirectories)
-        ? payload.workingDirectories
-        : workingDirectory
-          ? [workingDirectory]
-          : [],
-      allowedArgs: Array.isArray(payload?.allowedArgs) ? payload.allowedArgs : preset.allowedArgs,
-      affectedPaths: Array.isArray(payload?.affectedPaths) ? payload.affectedPaths : preset.affectedPaths,
-      redactionRules: Array.isArray(payload?.redactionRules)
-        ? payload.redactionRules
-        : ["no secrets", "summarize stdout/stderr", "redact tokens and credentials"],
-      rollbackPlan: normalizeText(payload?.rollbackPlan) || "disable capability in the root-owned manifest and keep audit history",
-      expectedRuntimeTruth: Array.isArray(payload?.expectedRuntimeTruth)
-        ? payload.expectedRuntimeTruth
-        : ["before state", "exit code", "redacted log summary", "after state", "next action"],
-      reason:
-        normalizeText(payload?.reason) ||
-        `Issue #637 Dashboard Butler natural-language flow: ${preset.id} queue handoff only`
+      operation: preset.operation,
+      id: preset.id,
+      title: preset.title,
+      commandClass: preset.commandClass,
+      riskLevel: preset.riskLevel,
+      workingDirectories: workingDirectory ? [workingDirectory] : [],
+      allowedArgs: preset.allowedArgs,
+      affectedPaths: preset.affectedPaths,
+      redactionRules: ["no secrets", "summarize stdout/stderr", "redact tokens and credentials"],
+      rollbackPlan: "disable capability in the root-owned manifest and keep audit history",
+      expectedRuntimeTruth: ["before state", "exit code", "redacted log summary", "after state", "next action"],
+      reason: `Issue #637 Dashboard Butler natural-language flow: ${preset.id} queue handoff only`
     };
   }
   return {
-    host: normalizeText(payload?.vpsHost || payload?.host || env?.VTDD_DASHBOARD_VPS_MAINTENANCE_HOST),
+    host: normalizeDashboardVpsMaintenanceHost({ payload, env }),
     repository,
     relatedIssue,
-    operation: normalizeText(payload?.vpsOperation || payload?.operation) || "add",
-    id: normalizeText(payload?.capabilityId || payload?.id) || "playwright.chromium.deps",
-    title: normalizeText(payload?.capabilityTitle || payload?.title) || "Playwright Chromium dependency install",
-    commandClass: normalizeText(payload?.commandClass || payload?.command_class) || "playwright_install_deps_chromium",
-    riskLevel: normalizeText(payload?.riskLevel || payload?.risk_level) || "high",
-    workingDirectories: Array.isArray(payload?.workingDirectories)
-      ? payload.workingDirectories
-      : workingDirectory
-        ? [workingDirectory]
-        : [],
-    allowedArgs: Array.isArray(payload?.allowedArgs)
-      ? payload.allowedArgs
-      : ["npx playwright install-deps chromium"],
-    affectedPaths: Array.isArray(payload?.affectedPaths) ? payload.affectedPaths : ["/usr/lib", "/usr/share/fonts"],
-    redactionRules: Array.isArray(payload?.redactionRules)
-      ? payload.redactionRules
-      : ["no secrets", "summarize package list"],
-    rollbackPlan: normalizeText(payload?.rollbackPlan) || "disable capability and keep audit history",
-    expectedRuntimeTruth: Array.isArray(payload?.expectedRuntimeTruth)
-      ? payload.expectedRuntimeTruth
-      : ["before package check", "exit code", "after Chromium launch check"],
-    reason:
-      normalizeText(payload?.reason) ||
-      "Issue #637 Dashboard Butler natural-language flow: queue handoff only, no root execution"
+    operation: "add",
+    id: "playwright.chromium.deps",
+    title: "Playwright Chromium dependency install",
+    commandClass: "playwright_install_deps_chromium",
+    riskLevel: "high",
+    workingDirectories: workingDirectory ? [workingDirectory] : [],
+    allowedArgs: ["npx playwright install-deps chromium"],
+    affectedPaths: ["/usr/lib", "/usr/share/fonts"],
+    redactionRules: ["no secrets", "summarize package list"],
+    rollbackPlan: "disable capability and keep audit history",
+    expectedRuntimeTruth: ["before package check", "exit code", "after Chromium launch check"],
+    reason: "Issue #637 Dashboard Butler natural-language flow: queue handoff only, no root execution"
   };
 }
 
+function normalizeDashboardVpsMaintenanceHost({ payload, env } = {}) {
+  return normalizeText(env?.VTDD_DASHBOARD_VPS_MAINTENANCE_HOST);
+}
+
 function resolveDashboardVpsMaintenanceNaturalLanguagePreset({ payload, workingDirectory } = {}) {
-  if (
-    normalizeText(payload?.capabilityId || payload?.id) ||
-    normalizeText(payload?.commandClass || payload?.command_class)
-  ) {
-    return null;
-  }
   const text = normalizeText(payload?.text || payload?.message || payload?.ownerMessage || payload?.owner_message);
   if (!text) return null;
   const lower = text.toLowerCase();
@@ -10276,9 +10337,9 @@ function buildDashboardVpsPrivilegedMaintenanceQueuedReply({ repository, related
   ].join("\n");
 }
 
-function buildDashboardVpsPrivilegedMaintenanceBlockedReply({ repository, relatedIssue, error, reason, issues } = {}) {
+function buildDashboardVpsPrivilegedMaintenanceBlockedReply({ repository, relatedIssue, error, reason, issues, nextAction } = {}) {
   const issueText = Array.isArray(issues) && issues.length > 0 ? issues.join("; ") : reason || "blocked";
-  return [
+  const lines = [
     "Dashboard Butler の自然文 intent から VPS helper queue へ進めようとしましたが、途中で止まりました。",
     "",
     `- 対象 repo: ${repository || "未指定"}`,
@@ -10286,7 +10347,11 @@ function buildDashboardVpsPrivilegedMaintenanceBlockedReply({ repository, relate
     `- error: ${error || "unknown"}`,
     `- reason: ${issueText}`,
     "- runtime truth: rootExecutionStarted=false, helperExecutionStarted=false"
-  ].join("\n");
+  ];
+  if (nextAction) {
+    lines.push(`- next action: ${nextAction}`);
+  }
+  return lines.join("\n");
 }
 
 function buildDashboardVpsPrivilegedMaintenanceReply({ repository, relatedIssue } = {}) {

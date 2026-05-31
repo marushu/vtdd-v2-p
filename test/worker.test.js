@@ -2638,6 +2638,12 @@ test("worker maps Dashboard Butler VPS runner status text to the low-risk preset
         threadId: "dashboard-main-marushu-vtdd-v2-p",
         repository: "marushu/vtdd-v2-p",
         issueNumber: 637,
+        vpsOperation: "add",
+        capabilityId: "playwright.chromium.deps",
+        commandClass: "playwright_install_deps_chromium",
+        riskLevel: "high",
+        workingDirectories: ["/tmp/owner-chat-workdir"],
+        allowedArgs: ["npx playwright install-deps chromium"],
         text: "Dashboard Butler から VPS runner status を確認して。root 実行は passkey 境界で止める。"
       })
     }),
@@ -2666,6 +2672,130 @@ test("worker maps Dashboard Butler VPS runner status text to the low-risk preset
   assert.deepEqual(proposalRecord.content.proposal.capability.allowedArgs, [
     "systemctl --user is-active vtdd-vps-runner.timer vtdd-vps-runner.service"
   ]);
+});
+
+test("worker reports Dashboard VPS maintenance config blockers before creating a proposal", async () => {
+  const store = createInMemoryDashboardChatStore();
+  const provider = createInMemoryMemoryProvider();
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/chat/messages", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        threadId: "dashboard-main-marushu-vtdd-v2-p",
+        repository: "marushu/vtdd-v2-p",
+        text: "Dashboard Butler から VPS runner status を確認して。root 実行は passkey 境界で止める。"
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      DASHBOARD_CHAT_STORE: store,
+      MEMORY_PROVIDER: provider
+    }
+  );
+
+  assert.equal(response.status, 202);
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.execution.status, "blocked");
+  assert.equal(body.execution.runtimeTruth.status, "vps_privileged_maintenance_context_required");
+  assert.equal(body.execution.runtimeTruth.dashboardNaturalLanguagePathReached, true);
+  assert.equal(body.execution.runtimeTruth.proposalCreated, false);
+  assert.deepEqual(body.execution.runtimeTruth.missingContext, ["relatedIssue"]);
+  assert.deepEqual(body.execution.runtimeTruth.missingConfiguration, ["host", "workingDirectories"]);
+  assert.match(body.messages[1].text, /関連 Issue: 未指定/);
+  assert.match(body.messages[1].text, /relatedIssue or issueNumber is required/);
+  assert.match(body.messages[1].text, /VTDD_DASHBOARD_VPS_MAINTENANCE_HOST/);
+  assert.match(body.messages[1].text, /rootExecutionStarted=false/);
+
+  const records = await provider.retrieve({ type: MemoryRecordType.APPROVAL_LOG, limit: 10 });
+  assert.equal(records.length, 0);
+});
+
+test("worker uses only Dashboard maintenance runtime config for privileged maintenance proposals", async () => {
+  const store = createInMemoryDashboardChatStore();
+  const provider = createInMemoryMemoryProvider();
+  const response = await worker.fetch(
+    new Request("https://example.com/v2/dashboard/chat/messages", {
+      method: "POST",
+      headers: gatewayAuthHeaders,
+      body: JSON.stringify({
+        threadId: "dashboard-main-marushu-vtdd-v2-p",
+        repository: "marushu/vtdd-v2-p",
+        issueNumber: 637,
+        vpsHost: "owner-chat-host",
+        workingDirectory: "/tmp/owner-chat-workdir",
+        text: "Dashboard Butler から VPS runner status を確認して。root 実行は passkey 境界で止める。"
+      })
+    }),
+    {
+      ...gatewayAuthEnv,
+      DASHBOARD_CHAT_STORE: store,
+      MEMORY_PROVIDER: provider,
+      VTDD_VPS_RUNNER_HOST: "generic-runner-host",
+      VTDD_VPS_RUNNER_WORKDIR: "/home/vtdd-runner/generic-runner-workdir",
+      VTDD_VPS_MAINTENANCE_HOST: "generic-maintenance-host",
+      VTDD_VPS_MAINTENANCE_WORKDIR: "/home/vtdd-runner/generic-maintenance-workdir"
+    }
+  );
+
+  assert.equal(response.status, 202);
+  const body = await response.json();
+  assert.equal(body.execution.status, "blocked");
+  assert.equal(body.execution.runtimeTruth.status, "vps_privileged_maintenance_configuration_required");
+  assert.deepEqual(body.execution.runtimeTruth.missingConfiguration, ["host", "workingDirectories"]);
+  assert.match(body.messages[1].text, /VTDD_DASHBOARD_VPS_MAINTENANCE_HOST/);
+  assert.doesNotMatch(
+    body.messages[1].text,
+    /VTDD_VPS_RUNNER_HOST|VTDD_VPS_RUNNER_WORKDIR|VTDD_VPS_MAINTENANCE_HOST|VTDD_VPS_MAINTENANCE_WORKDIR|owner-chat-host|owner-chat-workdir/
+  );
+
+  const records = await provider.retrieve({ type: MemoryRecordType.APPROVAL_LOG, limit: 10 });
+  assert.equal(records.length, 0);
+});
+
+test("DashboardChatRoom keeps VPS maintenance intent in Worker path when repo and config are missing", async () => {
+  const provider = createInMemoryMemoryProvider();
+  const store = createInMemoryDashboardChatStore();
+  const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
+  const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-unresolved");
+  const room = new DashboardChatRoom(
+    {
+      storage: createMockDurableObjectStorage(),
+      getWebSockets() {
+        return [dashboardSocket, bridgeSocket];
+      }
+    },
+    {
+      DASHBOARD_CHAT_STORE: store,
+      MEMORY_PROVIDER: provider,
+      VTDD_RUNTIME_URL: "https://example.com"
+    }
+  );
+
+  await room.webSocketMessage(
+    dashboardSocket,
+    JSON.stringify({
+      type: "owner_message",
+      threadId: "dashboard-main-unresolved",
+      text: "Dashboard Butler から VPS runner status を確認して。root 実行は passkey 境界で止める。"
+    })
+  );
+
+  assert.equal(bridgeSocket.sent.length, 0);
+  const finalBroadcast = JSON.parse(dashboardSocket.sent.at(-1));
+  assert.equal(finalBroadcast.type, "thread");
+  assert.equal(finalBroadcast.messages.length, 2);
+  assert.equal(finalBroadcast.messages[1].role, "butler");
+  assert.equal(finalBroadcast.messages[1].status, "blocked");
+  assert.match(finalBroadcast.messages[1].text, /対象 repo: 未指定/);
+  assert.match(finalBroadcast.messages[1].text, /関連 Issue: 未指定/);
+  assert.match(finalBroadcast.messages[1].text, /proposal repository is required/);
+  assert.match(finalBroadcast.messages[1].text, /relatedIssue or issueNumber is required/);
+  assert.match(finalBroadcast.messages[1].text, /VTDD_DASHBOARD_VPS_MAINTENANCE_WORKDIR/);
+
+  const records = await provider.retrieve({ type: MemoryRecordType.APPROVAL_LOG, limit: 10 });
+  assert.equal(records.length, 0);
 });
 
 test("worker allows dashboard passkey session chat without VPS runner handoff", async () => {
