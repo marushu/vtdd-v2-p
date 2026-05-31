@@ -34,8 +34,11 @@ export function renderPasskeyOperatorPage(input = {}) {
     vpsOperation: String(input.vpsOperation || "").trim(),
     vpsCapabilityId: String(input.vpsCapabilityId || "").trim(),
     vpsImpactScope: String(input.vpsImpactScope || "").trim(),
-    vpsExpiresAt: String(input.vpsExpiresAt || "").trim()
+    vpsExpiresAt: String(input.vpsExpiresAt || "").trim(),
+    dashboardThreadId: String(input.vpsDashboardThreadId || input.dashboardThreadId || "").trim(),
+    executionId: String(input.vpsExecutionId || input.executionId || "").trim()
   };
+  const vpsAutoContinueMode = operatorMode === "vps" && Boolean(vpsScope.dashboardThreadId);
   const vpsHost = escapeHtml(vpsScope.vpsHost);
   const vpsOperation = escapeHtml(vpsScope.vpsOperation);
   const vpsCapabilityId = escapeHtml(vpsScope.vpsCapabilityId);
@@ -288,17 +291,17 @@ export function renderPasskeyOperatorPage(input = {}) {
           }
           <div class="row">
             <button class="secondary" id="approve-button">${approveButtonLabel}</button>
-            ${deployOneTapMode || dashboardMode ? "" : '<button class="ghost" id="copy-approval-grant-button" type="button">Copy approvalGrantId</button>'}
+            ${deployOneTapMode || dashboardMode || vpsAutoContinueMode ? "" : '<button class="ghost" id="copy-approval-grant-button" type="button">Copy approvalGrantId</button>'}
           </div>
           ${
-            deployOneTapMode || dashboardMode
+            deployOneTapMode || dashboardMode || vpsAutoContinueMode
               ? '<input id="auto-copy-approval-grant-input" type="checkbox" hidden />'
               : `<label class="inline-check" for="auto-copy-approval-grant-input">
             <input id="auto-copy-approval-grant-input" type="checkbox" />
             Auto-copy approvalGrantId after approval
           </label>`
           }
-          ${deployOneTapMode || dashboardMode ? "" : '<p class="muted">GitHub App secret sync なら <code>actionType=destructive</code> / <code>highRiskKind=github_app_secret_sync</code>、production deploy なら <code>actionType=deploy_production</code> / <code>highRiskKind=deploy_production</code>、PR merge なら <code>actionType=merge</code> / <code>highRiskKind=pull_merge</code> を使います。</p>'}
+          ${deployOneTapMode || dashboardMode || vpsAutoContinueMode ? "" : '<p class="muted">GitHub App secret sync なら <code>actionType=destructive</code> / <code>highRiskKind=github_app_secret_sync</code>、production deploy なら <code>actionType=deploy_production</code> / <code>highRiskKind=deploy_production</code>、PR merge なら <code>actionType=merge</code> / <code>highRiskKind=pull_merge</code> を使います。</p>'}
           <pre id="approve-output"${deployOneTapMode || dashboardMode ? " hidden" : ""}></pre>
         </section>
 
@@ -423,7 +426,7 @@ export function renderPasskeyOperatorPage(input = {}) {
 
         <section data-operator-section="vps-runner-admin"${hiddenAttribute(!sectionVisibility.vpsRunnerAdmin)}>
           <h2>10. VPS Runner Admin</h2>
-          <p class="muted">VPS runner の repo allowlist 追加、runner restart、smoke などの管理操作用 approval です。ここでは real passkey で短命の <code>approvalGrantId</code> だけを発行します。VPS 操作そのものは GitHub queue と runner event に残る bounded command として別途実行されます。</p>
+          <p class="muted">VPS runner の repo allowlist 追加、runner restart、smoke などの管理操作用 approval です。Dashboard Butler から開いた場合、passkey 承認後は同じ chat thread に戻して helper queue へ自動継続します。</p>
           ${vpsScopeSummary ? `<p class="muted">${vpsScopeSummary}</p>` : ""}
           <p class="muted"><code>actionType=destructive</code> / <code>highRiskKind=vps_runner_admin</code> の approvalGrantId が必要です。文字列としての passkey は承認ではありません。</p>
         </section>
@@ -768,6 +771,13 @@ export function renderPasskeyOperatorPage(input = {}) {
           document.getElementById("risk-kind-input").value === "deploy_production";
       }
 
+      function shouldAutoContinueVpsMaintenance() {
+        return operatorMode === "vps" &&
+          document.getElementById("risk-kind-input").value === "vps_runner_admin" &&
+          Boolean(vpsApprovalScope.vpsProposalId) &&
+          Boolean(vpsApprovalScope.dashboardThreadId);
+      }
+
       function approvalGrantHasDeployScope(approvalGrant) {
         const scope = approvalGrant?.scope || {};
         return scope.actionType === "deploy_production" &&
@@ -816,6 +826,50 @@ export function renderPasskeyOperatorPage(input = {}) {
         if (deployDebugOutput) {
           deployDebugOutput.textContent = JSON.stringify(deployBody, null, 2);
         }
+      }
+
+      async function continueVpsMaintenanceFromApproval() {
+        if (!latestApprovalGrantId) {
+          throw new Error("approvalGrantId is required before VPS helper queue handoff");
+        }
+        if (!vpsApprovalScope.vpsProposalId) {
+          throw new Error("vpsProposalId is required before VPS helper queue handoff");
+        }
+        if (!vpsApprovalScope.dashboardThreadId) {
+          throw new Error("dashboardThreadId is required before returning VPS approval to Butler chat");
+        }
+        const repositoryInput = readRequiredRepositoryInput();
+        const issueNumber = Number(document.getElementById("issue-input").value || 0) || null;
+        setApproveOutput("パスキー承認済み。Dashboard Butler へ戻して VPS helper queue へ進めています...", {
+          show: shouldShowApproveOutput("status")
+        });
+        const continueResponse = await fetch("${apiBase}/dashboard/chat/messages", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            threadId: vpsApprovalScope.dashboardThreadId,
+            repository: repositoryInput,
+            issueNumber,
+            text: "passkey 承認済みです。Dashboard Butler から VPS helper queue へ進めて。",
+            vpsProposalId: vpsApprovalScope.vpsProposalId,
+            approvalGrantId: latestApprovalGrantId,
+            executionId: vpsApprovalScope.executionId || ""
+          })
+        });
+        const continueBody = await readResponseBody(continueResponse);
+        if (!continueResponse.ok) {
+          throw responseError(continueBody, "VPS helper queue handoff failed");
+        }
+        const runtimeTruth = continueBody?.execution?.runtimeTruth || {};
+        if (continueBody?.execution?.status !== "queued_for_vps_helper_execution") {
+          throw new Error(
+            "VPS helper queue handoff did not queue. "
+            + (runtimeTruth.status || continueBody?.execution?.status || "unknown")
+          );
+        }
+        setApproveOutput("VPS helper queue へ渡しました。Dashboard Butler と通知で進捗を確認してください。", {
+          show: shouldShowApproveOutput("status")
+        });
       }
 
       if (copyApprovalGrantButton) {
@@ -948,6 +1002,16 @@ export function renderPasskeyOperatorPage(input = {}) {
               await dispatchProductionDeploy({ source: "approval" });
             } catch (error) {
               deployOutput.textContent = String(error);
+            }
+          }
+          if (shouldAutoContinueVpsMaintenance()) {
+            try {
+              await continueVpsMaintenanceFromApproval();
+            } catch (error) {
+              setApproveOutput(
+                "パスキー承認後の VPS helper queue 継続に失敗しました。原因: " + String(error),
+                { show: shouldShowApproveOutput("error") }
+              );
             }
           }
         } catch (error) {

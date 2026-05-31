@@ -27286,8 +27286,11 @@ function renderPasskeyOperatorPage(input = {}) {
     vpsOperation: String(input.vpsOperation || "").trim(),
     vpsCapabilityId: String(input.vpsCapabilityId || "").trim(),
     vpsImpactScope: String(input.vpsImpactScope || "").trim(),
-    vpsExpiresAt: String(input.vpsExpiresAt || "").trim()
+    vpsExpiresAt: String(input.vpsExpiresAt || "").trim(),
+    dashboardThreadId: String(input.vpsDashboardThreadId || input.dashboardThreadId || "").trim(),
+    executionId: String(input.vpsExecutionId || input.executionId || "").trim()
   };
+  const vpsAutoContinueMode = operatorMode === "vps" && Boolean(vpsScope.dashboardThreadId);
   const vpsHost = escapeHtml(vpsScope.vpsHost);
   const vpsOperation = escapeHtml(vpsScope.vpsOperation);
   const vpsCapabilityId = escapeHtml(vpsScope.vpsCapabilityId);
@@ -27516,13 +27519,13 @@ function renderPasskeyOperatorPage(input = {}) {
           <input id="risk-kind-input" value="${highRiskKindDefault}" />`}
           <div class="row">
             <button class="secondary" id="approve-button">${approveButtonLabel}</button>
-            ${deployOneTapMode || dashboardMode ? "" : '<button class="ghost" id="copy-approval-grant-button" type="button">Copy approvalGrantId</button>'}
+            ${deployOneTapMode || dashboardMode || vpsAutoContinueMode ? "" : '<button class="ghost" id="copy-approval-grant-button" type="button">Copy approvalGrantId</button>'}
           </div>
-          ${deployOneTapMode || dashboardMode ? '<input id="auto-copy-approval-grant-input" type="checkbox" hidden />' : `<label class="inline-check" for="auto-copy-approval-grant-input">
+          ${deployOneTapMode || dashboardMode || vpsAutoContinueMode ? '<input id="auto-copy-approval-grant-input" type="checkbox" hidden />' : `<label class="inline-check" for="auto-copy-approval-grant-input">
             <input id="auto-copy-approval-grant-input" type="checkbox" />
             Auto-copy approvalGrantId after approval
           </label>`}
-          ${deployOneTapMode || dashboardMode ? "" : '<p class="muted">GitHub App secret sync \u306A\u3089 <code>actionType=destructive</code> / <code>highRiskKind=github_app_secret_sync</code>\u3001production deploy \u306A\u3089 <code>actionType=deploy_production</code> / <code>highRiskKind=deploy_production</code>\u3001PR merge \u306A\u3089 <code>actionType=merge</code> / <code>highRiskKind=pull_merge</code> \u3092\u4F7F\u3044\u307E\u3059\u3002</p>'}
+          ${deployOneTapMode || dashboardMode || vpsAutoContinueMode ? "" : '<p class="muted">GitHub App secret sync \u306A\u3089 <code>actionType=destructive</code> / <code>highRiskKind=github_app_secret_sync</code>\u3001production deploy \u306A\u3089 <code>actionType=deploy_production</code> / <code>highRiskKind=deploy_production</code>\u3001PR merge \u306A\u3089 <code>actionType=merge</code> / <code>highRiskKind=pull_merge</code> \u3092\u4F7F\u3044\u307E\u3059\u3002</p>'}
           <pre id="approve-output"${deployOneTapMode || dashboardMode ? " hidden" : ""}></pre>
         </section>
 
@@ -27645,7 +27648,7 @@ function renderPasskeyOperatorPage(input = {}) {
 
         <section data-operator-section="vps-runner-admin"${hiddenAttribute(!sectionVisibility.vpsRunnerAdmin)}>
           <h2>10. VPS Runner Admin</h2>
-          <p class="muted">VPS runner \u306E repo allowlist \u8FFD\u52A0\u3001runner restart\u3001smoke \u306A\u3069\u306E\u7BA1\u7406\u64CD\u4F5C\u7528 approval \u3067\u3059\u3002\u3053\u3053\u3067\u306F real passkey \u3067\u77ED\u547D\u306E <code>approvalGrantId</code> \u3060\u3051\u3092\u767A\u884C\u3057\u307E\u3059\u3002VPS \u64CD\u4F5C\u305D\u306E\u3082\u306E\u306F GitHub queue \u3068 runner event \u306B\u6B8B\u308B bounded command \u3068\u3057\u3066\u5225\u9014\u5B9F\u884C\u3055\u308C\u307E\u3059\u3002</p>
+          <p class="muted">VPS runner \u306E repo allowlist \u8FFD\u52A0\u3001runner restart\u3001smoke \u306A\u3069\u306E\u7BA1\u7406\u64CD\u4F5C\u7528 approval \u3067\u3059\u3002Dashboard Butler \u304B\u3089\u958B\u3044\u305F\u5834\u5408\u3001passkey \u627F\u8A8D\u5F8C\u306F\u540C\u3058 chat thread \u306B\u623B\u3057\u3066 helper queue \u3078\u81EA\u52D5\u7D99\u7D9A\u3057\u307E\u3059\u3002</p>
           ${vpsScopeSummary ? `<p class="muted">${vpsScopeSummary}</p>` : ""}
           <p class="muted"><code>actionType=destructive</code> / <code>highRiskKind=vps_runner_admin</code> \u306E approvalGrantId \u304C\u5FC5\u8981\u3067\u3059\u3002\u6587\u5B57\u5217\u3068\u3057\u3066\u306E passkey \u306F\u627F\u8A8D\u3067\u306F\u3042\u308A\u307E\u305B\u3093\u3002</p>
         </section>
@@ -27990,6 +27993,13 @@ function renderPasskeyOperatorPage(input = {}) {
           document.getElementById("risk-kind-input").value === "deploy_production";
       }
 
+      function shouldAutoContinueVpsMaintenance() {
+        return operatorMode === "vps" &&
+          document.getElementById("risk-kind-input").value === "vps_runner_admin" &&
+          Boolean(vpsApprovalScope.vpsProposalId) &&
+          Boolean(vpsApprovalScope.dashboardThreadId);
+      }
+
       function approvalGrantHasDeployScope(approvalGrant) {
         const scope = approvalGrant?.scope || {};
         return scope.actionType === "deploy_production" &&
@@ -28038,6 +28048,50 @@ function renderPasskeyOperatorPage(input = {}) {
         if (deployDebugOutput) {
           deployDebugOutput.textContent = JSON.stringify(deployBody, null, 2);
         }
+      }
+
+      async function continueVpsMaintenanceFromApproval() {
+        if (!latestApprovalGrantId) {
+          throw new Error("approvalGrantId is required before VPS helper queue handoff");
+        }
+        if (!vpsApprovalScope.vpsProposalId) {
+          throw new Error("vpsProposalId is required before VPS helper queue handoff");
+        }
+        if (!vpsApprovalScope.dashboardThreadId) {
+          throw new Error("dashboardThreadId is required before returning VPS approval to Butler chat");
+        }
+        const repositoryInput = readRequiredRepositoryInput();
+        const issueNumber = Number(document.getElementById("issue-input").value || 0) || null;
+        setApproveOutput("\u30D1\u30B9\u30AD\u30FC\u627F\u8A8D\u6E08\u307F\u3002Dashboard Butler \u3078\u623B\u3057\u3066 VPS helper queue \u3078\u9032\u3081\u3066\u3044\u307E\u3059...", {
+          show: shouldShowApproveOutput("status")
+        });
+        const continueResponse = await fetch("${apiBase}/dashboard/chat/messages", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            threadId: vpsApprovalScope.dashboardThreadId,
+            repository: repositoryInput,
+            issueNumber,
+            text: "passkey \u627F\u8A8D\u6E08\u307F\u3067\u3059\u3002Dashboard Butler \u304B\u3089 VPS helper queue \u3078\u9032\u3081\u3066\u3002",
+            vpsProposalId: vpsApprovalScope.vpsProposalId,
+            approvalGrantId: latestApprovalGrantId,
+            executionId: vpsApprovalScope.executionId || ""
+          })
+        });
+        const continueBody = await readResponseBody(continueResponse);
+        if (!continueResponse.ok) {
+          throw responseError(continueBody, "VPS helper queue handoff failed");
+        }
+        const runtimeTruth = continueBody?.execution?.runtimeTruth || {};
+        if (continueBody?.execution?.status !== "queued_for_vps_helper_execution") {
+          throw new Error(
+            "VPS helper queue handoff did not queue. "
+            + (runtimeTruth.status || continueBody?.execution?.status || "unknown")
+          );
+        }
+        setApproveOutput("VPS helper queue \u3078\u6E21\u3057\u307E\u3057\u305F\u3002Dashboard Butler \u3068\u901A\u77E5\u3067\u9032\u6357\u3092\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002", {
+          show: shouldShowApproveOutput("status")
+        });
       }
 
       if (copyApprovalGrantButton) {
@@ -28170,6 +28224,16 @@ function renderPasskeyOperatorPage(input = {}) {
               await dispatchProductionDeploy({ source: "approval" });
             } catch (error) {
               deployOutput.textContent = String(error);
+            }
+          }
+          if (shouldAutoContinueVpsMaintenance()) {
+            try {
+              await continueVpsMaintenanceFromApproval();
+            } catch (error) {
+              setApproveOutput(
+                "\u30D1\u30B9\u30AD\u30FC\u627F\u8A8D\u5F8C\u306E VPS helper queue \u7D99\u7D9A\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u539F\u56E0: " + String(error),
+                { show: shouldShowApproveOutput("error") }
+              );
             }
           }
         } catch (error) {
@@ -61382,7 +61446,9 @@ async function createVpsPrivilegedMaintenanceProposal({ payload, provider, origi
   const approvalOperatorUrl = buildVpsMaintenanceApprovalOperatorUrl({
     origin,
     approvalScope,
-    vpsProposalId
+    vpsProposalId,
+    dashboardThreadId: payload?.dashboardThreadId || payload?.dashboard_thread_id || payload?.threadId || payload?.thread_id,
+    executionId: payload?.executionId || payload?.execution_id
   });
   const ownerAction = {
     repository: proposal.repository,
@@ -61450,7 +61516,7 @@ function createVpsMaintenanceApprovalProposalRecord({ vpsProposalId, proposal, a
     createdAt: (/* @__PURE__ */ new Date()).toISOString()
   });
 }
-function buildVpsMaintenanceApprovalOperatorUrl({ origin, approvalScope, vpsProposalId }) {
+function buildVpsMaintenanceApprovalOperatorUrl({ origin, approvalScope, vpsProposalId, dashboardThreadId, executionId }) {
   const url = new URL("/v2/approval/passkey/operator", `${origin}/`);
   url.searchParams.set("mode", "vps");
   url.searchParams.set("vpsProposalId", vpsProposalId);
@@ -61459,6 +61525,14 @@ function buildVpsMaintenanceApprovalOperatorUrl({ origin, approvalScope, vpsProp
   url.searchParams.set("phase", approvalScope.phase || "execution");
   url.searchParams.set("actionType", approvalScope.actionType);
   url.searchParams.set("highRiskKind", approvalScope.highRiskKind);
+  const normalizedThreadId = normalizeDashboardThreadId(dashboardThreadId);
+  if (normalizedThreadId) {
+    url.searchParams.set("dashboardThreadId", normalizedThreadId);
+  }
+  const normalizedExecutionId = normalizeText32(executionId);
+  if (normalizedExecutionId) {
+    url.searchParams.set("executionId", normalizedExecutionId);
+  }
   return url.href;
 }
 function normalizeVpsMaintenanceProposalExpiresAt(value, now = /* @__PURE__ */ new Date()) {
@@ -63284,6 +63358,8 @@ async function handlePasskeyOperatorPageRequest(request, env) {
     vpsCapabilityId: vpsScope.vpsCapabilityId || vpsScope.display?.capabilityId || "",
     vpsImpactScope: vpsScope.vpsImpactScope || vpsScope.display?.impactScope || "",
     vpsExpiresAt: vpsScope.vpsExpiresAt || vpsScope.display?.expiresAt || "",
+    vpsDashboardThreadId: url.searchParams.get("dashboardThreadId") || url.searchParams.get("threadId"),
+    vpsExecutionId: url.searchParams.get("executionId"),
     githubActionsVariableProposalId: url.searchParams.get("variableProposalId"),
     githubActionsVariableProposalName: githubActionsVariableScope.variableName || githubActionsVariableProposal?.content?.variableName || "",
     returnUrl: normalizeOperatorReturnUrl(url.searchParams.get("returnUrl")),
@@ -66684,7 +66760,11 @@ async function buildDashboardVpsPrivilegedMaintenanceNaturalLanguageFlow({
       };
     }
     const proposal = await createVpsPrivilegedMaintenanceProposal({
-      payload: proposalPayload,
+      payload: {
+        ...proposalPayload,
+        dashboardThreadId: normalizeDashboardThreadId(payload?.threadId || payload?.thread_id),
+        executionId: normalizeText32(payload?.executionId || payload?.execution_id)
+      },
       provider,
       origin: origin || "https://example.com"
     });
