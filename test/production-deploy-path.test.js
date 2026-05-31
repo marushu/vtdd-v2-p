@@ -56,6 +56,8 @@ test("production deploy doc defines the governed GitHub Actions deploy path", ()
   assert.equal(doc.includes("`CF_ACCESS_TEAM_DOMAIN`"), true);
   assert.equal(doc.includes("`CF_ACCESS_AUD`"), true);
   assert.equal(doc.includes("`Cf-Access-Jwt-Assertion`"), true);
+  assert.equal(doc.includes("`VTDD_DASHBOARD_VPS_MAINTENANCE_HOST`"), true);
+  assert.equal(doc.includes("`VTDD_DASHBOARD_VPS_MAINTENANCE_WORKDIR`"), true);
   assert.equal(doc.includes("fails closed"), true);
   assert.equal(doc.includes("Cloudflare Access"), true);
 });
@@ -132,6 +134,14 @@ test("deploy-production workflow enforces the MVP production deploy boundary", (
     workflow.includes("VTDD_DASHBOARD_ALLOWED_GITHUB_LOGINS: ${{ vars.VTDD_DASHBOARD_ALLOWED_GITHUB_LOGINS }}"),
     true
   );
+  assert.equal(
+    workflow.includes("VTDD_DASHBOARD_VPS_MAINTENANCE_HOST: ${{ vars.VTDD_DASHBOARD_VPS_MAINTENANCE_HOST }}"),
+    true
+  );
+  assert.equal(
+    workflow.includes("VTDD_DASHBOARD_VPS_MAINTENANCE_WORKDIR: ${{ vars.VTDD_DASHBOARD_VPS_MAINTENANCE_WORKDIR }}"),
+    true
+  );
   assert.equal(workflow.includes("CF_ACCESS_TEAM_DOMAIN: ${{ vars.CF_ACCESS_TEAM_DOMAIN }}"), true);
   assert.equal(workflow.includes("CF_ACCESS_AUD: ${{ vars.CF_ACCESS_AUD }}"), true);
   assert.equal(workflow.includes("[env.production.vars]"), true);
@@ -148,6 +158,18 @@ test("deploy-production workflow enforces the MVP production deploy boundary", (
   assert.equal(
     workflow.includes(
       'append_toml_var "VTDD_DASHBOARD_ALLOWED_GITHUB_LOGINS" "$VTDD_DASHBOARD_ALLOWED_GITHUB_LOGINS"'
+    ),
+    true
+  );
+  assert.equal(
+    workflow.includes(
+      'append_toml_var "VTDD_DASHBOARD_VPS_MAINTENANCE_HOST" "$VTDD_DASHBOARD_VPS_MAINTENANCE_HOST"'
+    ),
+    true
+  );
+  assert.equal(
+    workflow.includes(
+      'append_toml_var "VTDD_DASHBOARD_VPS_MAINTENANCE_WORKDIR" "$VTDD_DASHBOARD_VPS_MAINTENANCE_WORKDIR"'
     ),
     true
   );
