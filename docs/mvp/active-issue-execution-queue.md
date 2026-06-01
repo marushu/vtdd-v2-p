@@ -101,18 +101,28 @@ Last rebuilt from GitHub runtime truth: 2026-05-31
   blocks Issue #637 and the broader Butler-first operating center. Issue #590
   moves to `Now` for the app-server activity watchdog slice; Issue #637 resumes
   after this recovery path no longer interrupts ordinary development.
+- 2026-06-01 owner live evidence classified Issue #723 as `ROOT` support for
+  Issue #590: after PR #721 merged and deploy-production succeeded, Dashboard
+  Butler still showed the old fixed 2-minute timeout until the owner manually
+  reloaded the PWA. This blocks Issue #590 validation because stale Dashboard
+  client / service worker / WebSocket session state can hide the actual runtime
+  behavior. Issue #723 temporarily becomes `Now` to add owner-facing freshness
+  check and force cache refresh; Issue #590 remains the parent root and resumes
+  immediately after stale-client recovery no longer masks the watchdog.
 
 ## Now
 
-- Issue #590: app-server turn timeout / silent wait recovery. This is the
-  current root because Dashboard Butler must not become unusable while Codex
-  app-server is still active. The immediate slice replaces fixed elapsed-time
-  timeout behavior with an app-server activity watchdog so progress / thinking /
-  command / diff / tool events keep the turn alive, quiet state remains
-  transient, and stalled recovery is reserved for true inactivity.
+- Issue #723: Dashboard Butler self-refresh and force cache reload for stale
+  PWA/client state. This is a temporary `ROOT` support slice for Issue #590
+  because PR #721 deploy truth cannot be trusted by the owner-facing PWA while
+  stale client/service-worker/session state can keep old timeout behavior alive.
 
 ## Next
 
+- Issue #590: app-server turn timeout / silent wait recovery resumes after
+  Issue #723 gives the owner a same-PWA freshness check and force refresh path,
+  so production E2E can distinguish stale client state from actual app-server
+  inactivity.
 - Issue #637: iPhone/PWA-complete VPS privileged maintenance capability
   lifecycle resumes after Issue #590 no longer blocks ordinary Dashboard Butler
   conversation continuity.

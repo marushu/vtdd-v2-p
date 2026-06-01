@@ -4369,6 +4369,16 @@ test("worker serves dashboard chat-first shell with debug and ops surfaces isola
   assert.equal(body.includes("<summary>開発/運用</summary>"), true);
   assert.equal(body.includes("<summary>Runtime surfaces</summary>"), false);
   assert.equal(body.includes("RAG を読む"), false);
+  assert.equal(body.includes("最新状態"), true);
+  assert.equal(body.includes("dashboard-refresh-check-button"), true);
+  assert.equal(body.includes("dashboard-force-refresh-button"), true);
+  assert.equal(body.includes("強制キャッシュ削除リロード"), true);
+  assert.equal(body.includes("20260601-issue-723-self-refresh"), true);
+  assert.equal(body.includes("VTDD_DASHBOARD_CLEAR_CACHES"), true);
+  assert.equal(body.includes("serviceWorker.getRegistration(\"/dashboard/\""), true);
+  assert.equal(body.includes("registration.update()"), true);
+  assert.equal(body.includes("window.location.reload()"), true);
+  assert.equal(body.includes("入力は保存します。添付は再選択が必要な場合があります。"), true);
 });
 
 test("worker uses explicit dashboard thread id for chat shell and passkey return", async () => {
@@ -4599,6 +4609,13 @@ test("worker serves dashboard PWA manifest and service worker notification handl
   assert.equal(serviceWorker.includes('pull\\/\\d+'), true);
   assert.equal(serviceWorker.includes("parsed.origin !== self.location.origin"), true);
   assert.equal(serviceWorker.includes('!parsed.pathname.startsWith("/dashboard/")'), true);
+  assert.equal(serviceWorker.includes("DASHBOARD_SERVICE_WORKER_VERSION"), true);
+  assert.equal(serviceWorker.includes("20260601-issue-723-self-refresh"), true);
+  assert.equal(serviceWorker.includes('self.addEventListener("message"'), true);
+  assert.equal(serviceWorker.includes("VTDD_DASHBOARD_CLEAR_CACHES"), true);
+  assert.equal(serviceWorker.includes("caches.keys()"), true);
+  assert.equal(serviceWorker.includes("isDashboardCacheName"), true);
+  assert.equal(serviceWorker.includes("Promise.allSettled"), true);
 
   const iconResponse = await worker.fetch(new Request("https://example.com/dashboard-icon.svg"));
   assert.equal(iconResponse.status, 200);

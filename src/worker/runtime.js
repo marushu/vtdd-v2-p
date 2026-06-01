@@ -88,6 +88,7 @@ const MCP_SERVER_INFO = Object.freeze({
 const MCP_INSTRUCTIONS =
   "VTDD MCP は Butler と同じ runtime truth / review truth / operational memory を読むための read-first surface です。現在の truth は runtime truth を優先し、memory は補助として扱ってください。";
 const DASHBOARD_ICON_VERSION = "20260529-butler-v2";
+const DASHBOARD_CLIENT_VERSION = "20260601-issue-723-self-refresh";
 const DASHBOARD_ICON_PNG_PATH = `/dashboard-icon-${DASHBOARD_ICON_VERSION}.png`;
 const DASHBOARD_ICON_LINKS = `<link rel="icon" type="image/png" sizes="512x512" href="${DASHBOARD_ICON_PNG_PATH}">
   <link rel="shortcut icon" href="${DASHBOARD_ICON_PNG_PATH}">
@@ -13546,12 +13547,36 @@ function buildDashboardWebManifest(url) {
 
 function renderDashboardServiceWorkerScript() {
   return `
+const DASHBOARD_SERVICE_WORKER_VERSION = ${JSON.stringify(DASHBOARD_CLIENT_VERSION)};
+
+function isDashboardCacheName(name) {
+  const text = String(name || "").toLowerCase();
+  return text.includes("dashboard") || text.includes("vtdd");
+}
+
 self.addEventListener("install", () => {
   self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(self.clients.claim());
+});
+
+self.addEventListener("message", (event) => {
+  const data = event.data || {};
+  if (data.type === "VTDD_DASHBOARD_CLEAR_CACHES") {
+    event.waitUntil((async () => {
+      if (typeof caches === "undefined") return;
+      const keys = await caches.keys();
+      await Promise.allSettled(keys.filter(isDashboardCacheName).map((key) => caches.delete(key)));
+    })());
+  }
+  if (data.type === "VTDD_DASHBOARD_VERSION") {
+    event.source?.postMessage?.({
+      type: "VTDD_DASHBOARD_VERSION",
+      serviceWorkerVersion: DASHBOARD_SERVICE_WORKER_VERSION
+    });
+  }
 });
 
 self.addEventListener("push", (event) => {
@@ -14388,6 +14413,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .pill.danger { border-color: #d69b9b; background: #fff0f0; color: #8a1f1f; }
     .deploy-event { border: 1px solid var(--border); border-radius: 12px; padding: 10px; margin: 10px 0; background: var(--soft); }
     .deploy-event p { margin-bottom: 6px; font-size: 13px; line-height: 1.45; }
+    .freshness-panel { border: 1px solid var(--border); border-radius: 12px; padding: 10px; margin: 10px 0; background: var(--soft); }
+    .freshness-panel p { margin-bottom: 6px; font-size: 13px; line-height: 1.45; }
+    .freshness-panel button { min-height: 36px; border: 1px solid var(--border); border-radius: 10px; padding: 7px 9px; color: var(--text); background: var(--button); font: inherit; font-size: 13px; font-weight: 750; }
+    .freshness-panel button:disabled { opacity: .55; }
     .quick-actions, .surface-list { display: grid; gap: 8px; }
     .quick-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .quick-actions a, .surface-list a, .disabled-action { display: inline-flex; align-items: center; justify-content: center; min-height: 36px; border: 1px solid var(--border); border-radius: 10px; padding: 7px 9px; color: var(--text); text-decoration: none; background: var(--soft); font-weight: 750; font-size: 13px; text-align: center; }
@@ -14476,6 +14505,15 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             <div class="lane-title"><h3>進行中</h3><span class="pill">状態</span></div>
             <p>直近の反映、失敗、進行中の作業があればここに出します。</p>
             ${renderDashboardDeployEvent(latestDeployEvent)}
+            <div class="freshness-panel" data-dashboard-freshness-panel data-client-version="${escapeDashboardHtml(DASHBOARD_CLIENT_VERSION)}">
+              <div class="lane-title"><h3>最新状態</h3><span class="pill" id="dashboard-freshness-pill">未確認</span></div>
+              <p id="dashboard-freshness-state">client build: ${escapeDashboardHtml(DASHBOARD_CLIENT_VERSION)}</p>
+              <p class="muted">2分 timeout など古い挙動が残る時は、PWA / service worker / WebSocket session が古い可能性をここで切り分けます。</p>
+              <div class="actions">
+                <button id="dashboard-refresh-check-button" type="button">最新状態を確認</button>
+                <button id="dashboard-force-refresh-button" type="button">強制キャッシュ削除リロード</button>
+              </div>
+            </div>
             <div class="quick-actions">
               ${renderDashboardActionList(cockpitActions)}
             </div>
@@ -14545,11 +14583,16 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       const mediaButton = document.getElementById("butler-media-button");
       const mediaInput = document.getElementById("butler-media-input");
       const pendingMedia = document.getElementById("butler-pending-media");
+      const freshnessPill = document.getElementById("dashboard-freshness-pill");
+      const freshnessState = document.getElementById("dashboard-freshness-state");
+      const refreshCheckButton = document.getElementById("dashboard-refresh-check-button");
+      const forceRefreshButton = document.getElementById("dashboard-force-refresh-button");
       if (!form || !log || !textarea || !status) return;
 
       const socketEndpoint = form.dataset.socketEndpoint;
       const threadEndpoint = form.dataset.threadEndpoint;
       const mediaUploadEndpoint = "/v2/media/upload";
+      const dashboardClientVersion = ${JSON.stringify(DASHBOARD_CLIENT_VERSION)};
       const dashboardSignInUrl = ${JSON.stringify(dashboardSignInUrl)};
       const threadId = form.dataset.threadId;
       const repositoryInput = form.dataset.repositoryInput;
@@ -14570,6 +14613,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       let authReturnResumePromise = null;
       const dashboardDraftKey = "vtdd.dashboard.draft:" + (threadId || "unknown");
       const dashboardDraftMetaKey = dashboardDraftKey + ":meta";
+      const dashboardForceRefreshKey = "vtdd.dashboard.forceRefresh:last";
 
       function getDashboardDraftStorage() {
         return window.sessionStorage;
@@ -14595,6 +14639,114 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           draftStorage.removeItem(dashboardDraftKey);
           draftStorage.removeItem(dashboardDraftMetaKey);
         } catch {}
+      }
+
+      function setFreshnessPill(text, ok) {
+        if (!freshnessPill) return;
+        freshnessPill.textContent = text;
+        freshnessPill.classList.toggle("success", ok === true);
+        freshnessPill.classList.toggle("danger", ok === false);
+      }
+
+      function setFreshnessState(text, options = {}) {
+        if (!freshnessState) return;
+        freshnessState.textContent = text;
+        setFreshnessPill(options.pill || "確認済み", options.ok);
+      }
+
+      async function getDashboardServiceWorkerRegistration() {
+        if (!("serviceWorker" in navigator)) return null;
+        try {
+          return await navigator.serviceWorker.getRegistration("/dashboard/");
+        } catch {
+          return null;
+        }
+      }
+
+      async function readDashboardFreshnessSnapshot() {
+        const registration = await getDashboardServiceWorkerRegistration();
+        const controllerState = navigator.serviceWorker?.controller ? "controllerあり" : "controllerなし";
+        const registrationState = registration
+          ? registration.waiting
+            ? "更新待ち"
+            : registration.installing
+              ? "installing"
+              : registration.active
+                ? "active"
+                : "registered"
+          : "未登録";
+        const socketState = describeChatSocketState();
+        return {
+          registration,
+          text: "client build: " + dashboardClientVersion + " / service worker: " + registrationState + " / " + controllerState + " / 接続状態: " + socketState
+        };
+      }
+
+      async function refreshDashboardFreshnessStatus(options = {}) {
+        try {
+          const snapshot = await readDashboardFreshnessSnapshot();
+          const lastForcedAt = getDashboardDraftStorage().getItem(dashboardForceRefreshKey) || "";
+          const suffix = lastForcedAt ? " / 前回の強制リロード: " + lastForcedAt : "";
+          setFreshnessState(snapshot.text + suffix, { ok: true, pill: options.pill || "確認済み" });
+          if (options.visibleStatus === true) {
+            setStatus("最新状態を確認しました。古い timeout 文言が続く場合は強制キャッシュ削除リロードを試せます。", { temporary: true });
+          }
+          return snapshot;
+        } catch {
+          setFreshnessState("最新状態を確認できませんでした。通常 reload か強制キャッシュ削除リロードを試してください。", { ok: false, pill: "要確認" });
+          return { registration: null, text: "" };
+        }
+      }
+
+      async function requestDashboardServiceWorkerCacheClear(registration) {
+        const target = registration?.active || registration?.waiting || registration?.installing || navigator.serviceWorker?.controller;
+        if (!target || typeof target.postMessage !== "function") return false;
+        try {
+          target.postMessage({
+            type: "VTDD_DASHBOARD_CLEAR_CACHES",
+            clientVersion: dashboardClientVersion,
+            threadId
+          });
+          return true;
+        } catch {
+          return false;
+        }
+      }
+
+      function isDashboardCacheName(name) {
+        const text = String(name || "").toLowerCase();
+        return text.includes("dashboard") || text.includes("vtdd");
+      }
+
+      async function clearDashboardCaches() {
+        if (!("caches" in window)) return 0;
+        const keys = await caches.keys();
+        const dashboardKeys = keys.filter(isDashboardCacheName);
+        await Promise.allSettled(dashboardKeys.map((key) => caches.delete(key)));
+        return dashboardKeys.length;
+      }
+
+      async function forceDashboardRefresh() {
+        persistDashboardDraft();
+        setFreshnessPill("更新中", null);
+        setStatus("強制キャッシュ削除リロードを準備しています。入力は保存します。添付は再選択が必要な場合があります。", { thinking: true });
+        if (forceRefreshButton) forceRefreshButton.disabled = true;
+        if (refreshCheckButton) refreshCheckButton.disabled = true;
+        try {
+          const snapshot = await readDashboardFreshnessSnapshot();
+          await requestDashboardServiceWorkerCacheClear(snapshot.registration);
+          await clearDashboardCaches();
+          if (snapshot.registration && typeof snapshot.registration.update === "function") {
+            await snapshot.registration.update().catch(() => null);
+          }
+          getDashboardDraftStorage().setItem(dashboardForceRefreshKey, new Date().toISOString());
+        } catch {
+          getDashboardDraftStorage().setItem(dashboardForceRefreshKey, new Date().toISOString() + " fallback");
+        } finally {
+          window.setTimeout(() => {
+            window.location.reload();
+          }, 120);
+        }
       }
 
       function restoreDashboardDraft() {
@@ -15790,6 +15942,12 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 
       resizeComposerInput();
       restoreDashboardDraft();
+      refreshCheckButton?.addEventListener("click", () => {
+        refreshDashboardFreshnessStatus({ visibleStatus: true, pill: "確認済み" });
+      });
+      forceRefreshButton?.addEventListener("click", () => {
+        forceDashboardRefresh();
+      });
       textarea.addEventListener("input", () => {
         normalizeComposerInput();
         persistDashboardDraft();
@@ -15828,6 +15986,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       window.addEventListener("pagehide", persistDashboardDraft);
       window.addEventListener("pageshow", async () => {
         if (await resumeDashboardSessionAfterAuthReturn("画面復帰後、再ログイン状態を確認しています。入力は保持しています。")) return;
+        refreshDashboardFreshnessStatus({ pill: "復帰確認" });
         dropStaleSocketIfNeeded();
         refreshThread();
         scheduleReconnect();
@@ -15838,6 +15997,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           return;
         }
         if (await resumeDashboardSessionAfterAuthReturn("画面復帰後、再ログイン状態を確認しています。入力は保持しています。")) return;
+        refreshDashboardFreshnessStatus({ pill: "表示中" });
         if (!chatSocket || chatSocket.readyState !== WebSocket.OPEN) {
           setConnectionRecoveryStatus("画面復帰を検知しました。接続を復帰しています。");
           dropStaleSocketIfNeeded();
@@ -15845,6 +16005,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           scheduleReconnect();
         }
       });
+      refreshDashboardFreshnessStatus({ pill: "初期確認" });
       connectThreadSocket();
     })();
   </script>
