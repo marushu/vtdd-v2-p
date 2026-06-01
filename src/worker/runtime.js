@@ -8945,9 +8945,6 @@ function shouldPersistDashboardAppServerProgress(input, { transientStatus = "" }
   if (normalizeDashboardChatStatus(transientStatus || input?.status) !== "thinking") {
     return false;
   }
-  if (normalizeDashboardBooleanFlag(input?.persistProgress ?? input?.persist_progress)) {
-    return true;
-  }
   const stage = normalizeDashboardEventText(
     input?.stage ||
       input?.phase ||
@@ -9005,31 +9002,8 @@ const DASHBOARD_APP_SERVER_STAGE_TEXT = {
 };
 
 const DASHBOARD_DURABLE_APP_SERVER_PROGRESS_STAGES = new Set([
-  "thinking",
-  "planning",
-  "hypothesis",
-  "target",
-  "verify",
-  "verification",
-  "command",
-  "file_change",
-  "tool_call",
-  "web_search",
   "waiting_approval",
-  "waiting_user_input",
-  "implementation",
-  "implement",
-  "test",
-  "tests",
-  "pr_body",
-  "pull_request_body",
-  "pr_create",
-  "pull_request_create",
-  "reviewer_wait",
-  "ci_wait",
-  "reviewer_revision",
-  "review_fix",
-  "debug_slow_turn"
+  "waiting_user_input"
 ]);
 
 function buildDashboardOwnerFacingTransientStatusText(input, { status = "", text = "", transientStatus = "" } = {}) {

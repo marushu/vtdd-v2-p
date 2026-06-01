@@ -65306,18 +65306,10 @@ function shouldPersistDashboardAppServerProgress(input, { transientStatus = "" }
   if (normalizeDashboardChatStatus(transientStatus || input?.status) !== "thinking") {
     return false;
   }
-  if (normalizeDashboardBooleanFlag(input?.persistProgress ?? input?.persist_progress)) {
-    return true;
-  }
   const stage = normalizeDashboardEventText(
     input?.stage || input?.phase || input?.step || input?.activity || input?.progressStage || input?.progress_stage
   ).toLowerCase().replaceAll("-", "_");
   return DASHBOARD_DURABLE_APP_SERVER_PROGRESS_STAGES.has(stage);
-}
-function normalizeDashboardBooleanFlag(value) {
-  if (value === true) return true;
-  if (value === false || value === null || value === void 0) return false;
-  return ["1", "true", "yes", "on"].includes(normalizeDashboardEventText(value).toLowerCase());
 }
 var DASHBOARD_APP_SERVER_STAGE_TEXT = {
   read_context: "\u65E2\u5B58 Issue / PR / docs \u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u3002",
@@ -65358,31 +65350,8 @@ var DASHBOARD_APP_SERVER_STAGE_TEXT = {
   review_fix: "reviewer \u6307\u6458\u3092\u53CD\u6620\u3057\u3066\u3044\u307E\u3059\u3002"
 };
 var DASHBOARD_DURABLE_APP_SERVER_PROGRESS_STAGES = /* @__PURE__ */ new Set([
-  "thinking",
-  "planning",
-  "hypothesis",
-  "target",
-  "verify",
-  "verification",
-  "command",
-  "file_change",
-  "tool_call",
-  "web_search",
   "waiting_approval",
-  "waiting_user_input",
-  "implementation",
-  "implement",
-  "test",
-  "tests",
-  "pr_body",
-  "pull_request_body",
-  "pr_create",
-  "pull_request_create",
-  "reviewer_wait",
-  "ci_wait",
-  "reviewer_revision",
-  "review_fix",
-  "debug_slow_turn"
+  "waiting_user_input"
 ]);
 function buildDashboardOwnerFacingTransientStatusText(input, { status = "", text = "", transientStatus = "" } = {}) {
   if (transientStatus === "replied" || status === "replied") {
