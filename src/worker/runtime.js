@@ -8862,6 +8862,22 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
       text,
       transientStatus
     });
+    if (shouldPersistDashboardAppServerProgress(input, { transientStatus })) {
+      messages.push(
+        normalizeDashboardChatMessage(
+          {
+            threadId,
+            role: "butler",
+            repository,
+            relatedIssue,
+            status: transientStatus,
+            text: transientText,
+            createdAt
+          },
+          { threadId }
+        )
+      );
+    }
   }
   return {
     ok: true,
@@ -8906,20 +8922,47 @@ async function filterDashboardAppServerBridgeMessagesForAppend({ store, threadId
     return normalizedMessages;
   }
   const latest = Array.isArray(recentMessages) ? recentMessages.at(-1) : null;
-  return normalizedMessages.filter((message) => !isDuplicateLatestStalledRecoveryMessage(message, latest));
+  return normalizedMessages.filter((message) => !isDuplicateLatestBridgeProgressMessage(message, latest));
 }
 
-function isDuplicateLatestStalledRecoveryMessage(message, latest) {
+function isDuplicateLatestBridgeProgressMessage(message, latest) {
   if (!message || !latest) {
     return false;
   }
+  const messageStatus = normalizeDashboardChatStatus(message.status);
+  const latestStatus = normalizeDashboardChatStatus(latest.status);
+  const duplicateCandidateStatus =
+    (messageStatus === "stalled" && latestStatus === "stalled") ||
+    (messageStatus === "thinking" && latestStatus === "thinking");
   return (
-    normalizeDashboardEventText(message.role).toLowerCase() === "system" &&
-    normalizeDashboardChatStatus(message.status) === "stalled" &&
-    normalizeDashboardEventText(latest.role).toLowerCase() === "system" &&
-    normalizeDashboardChatStatus(latest.status) === "stalled" &&
+    duplicateCandidateStatus &&
+    normalizeDashboardEventText(message.role).toLowerCase() === normalizeDashboardEventText(latest.role).toLowerCase() &&
     sanitizeDashboardChatText(message.text) === sanitizeDashboardChatText(latest.text)
   );
+}
+
+function shouldPersistDashboardAppServerProgress(input, { transientStatus = "" } = {}) {
+  if (normalizeDashboardChatStatus(transientStatus || input?.status) !== "thinking") {
+    return false;
+  }
+  if (normalizeDashboardBooleanFlag(input?.persistProgress ?? input?.persist_progress)) {
+    return true;
+  }
+  const stage = normalizeDashboardEventText(
+    input?.stage ||
+      input?.phase ||
+      input?.step ||
+      input?.activity ||
+      input?.progressStage ||
+      input?.progress_stage
+  ).toLowerCase().replaceAll("-", "_");
+  return DASHBOARD_DURABLE_APP_SERVER_PROGRESS_STAGES.has(stage);
+}
+
+function normalizeDashboardBooleanFlag(value) {
+  if (value === true) return true;
+  if (value === false || value === null || value === undefined) return false;
+  return ["1", "true", "yes", "on"].includes(normalizeDashboardEventText(value).toLowerCase());
 }
 
 const DASHBOARD_APP_SERVER_STAGE_TEXT = {
@@ -8934,6 +8977,10 @@ const DASHBOARD_APP_SERVER_STAGE_TEXT = {
   topic_branch: "topic branch を作成しています。",
   branch_create: "topic branch を作成しています。",
   planning: "方針を整理しています。",
+  hypothesis: "仮説を整理しています。",
+  target: "確認する箇所にあたりをつけています。",
+  verify: "検証方法を確認しています。",
+  verification: "検証方法を確認しています。",
   command: "コマンドを実行しています。",
   file_change: "ファイル変更を確認しています。",
   tool_call: "外部ツールの結果を待っています。",
@@ -8941,6 +8988,7 @@ const DASHBOARD_APP_SERVER_STAGE_TEXT = {
   waiting_approval: "承認待ちです。",
   waiting_user_input: "確認が必要です。",
   quiet: "接続と実行状態を確認中です。入力と文脈は保持しています。",
+  debug_slow_turn: "Issue #590 slow turn E2E を実行しています。",
   thinking: "考えています。",
   implementation: "実装に入っています。",
   implement: "実装に入っています。",
@@ -8955,6 +9003,34 @@ const DASHBOARD_APP_SERVER_STAGE_TEXT = {
   reviewer_revision: "reviewer 指摘を反映しています。",
   review_fix: "reviewer 指摘を反映しています。"
 };
+
+const DASHBOARD_DURABLE_APP_SERVER_PROGRESS_STAGES = new Set([
+  "thinking",
+  "planning",
+  "hypothesis",
+  "target",
+  "verify",
+  "verification",
+  "command",
+  "file_change",
+  "tool_call",
+  "web_search",
+  "waiting_approval",
+  "waiting_user_input",
+  "implementation",
+  "implement",
+  "test",
+  "tests",
+  "pr_body",
+  "pull_request_body",
+  "pr_create",
+  "pull_request_create",
+  "reviewer_wait",
+  "ci_wait",
+  "reviewer_revision",
+  "review_fix",
+  "debug_slow_turn"
+]);
 
 function buildDashboardOwnerFacingTransientStatusText(input, { status = "", text = "", transientStatus = "" } = {}) {
   if (transientStatus === "replied" || status === "replied") {

@@ -11,7 +11,8 @@ Goal:
 - confirm Dashboard Butler chat messages show subtle timestamps
 - confirm owner / Butler / system timestamps fit in an iPhone-width layout
 - confirm app-server progress stages are mapped to owner-facing Japanese transient status
-- confirm transient progress is not persisted as chat history
+- confirm transient progress still updates composer status while selected safe
+  stages may also persist as short Butler progress checkpoints
 - confirm final app-server replies return transient status to the normal connected state
 
 Non-goals:
@@ -31,7 +32,8 @@ node --test test/worker.test.js
 Observed result on 2026-05-26:
 - passed
 - confirms Dashboard inline chat renderer contains `message-meta` timestamp rendering
-- confirms `transient_status` is handled as composer status, not appended as a message
+- confirms `transient_status` is handled as composer status, and selected safe
+  stages can also create short Butler progress checkpoints
 - confirms `app_server_reply` is persisted as a Butler message and also returns transient status to `Dashboard thread 接続済み。`
 - confirms app-server stages map to owner-facing Japanese transient labels:
   - `既存 Issue / PR / docs を確認しています。`
@@ -62,7 +64,8 @@ Observed result on 2026-05-26:
 - previous-day message shows a date plus time label: `5/25 23:21`
 - timestamp text is visually secondary to message body text
 - owner copy button, Butler copy button, message body, and composer controls are not horizontally clipped in the 390 px viewport
-- transient status is not represented as a chat message in this visual fixture
+- transient status is not represented as a chat message in this visual fixture;
+  production progress checkpoints are covered by the app-server bridge tests
 
 ## Evidence Files
 
@@ -78,6 +81,7 @@ Screenshot hash:
 ## Current Reading
 
 Issue `#518` now has code-level evidence for timestamp rendering, transient
-non-persistence, owner-facing stage mapping, and final connected-state reset.
+status rendering, selected safe progress checkpoint persistence,
+owner-facing stage mapping, and final connected-state reset.
 It also has mobile-width visual evidence for timestamp layout. This is not a
 production deploy claim and does not close the Issue by itself.

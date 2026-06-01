@@ -579,12 +579,21 @@ test("dashboard app-server bridge maps Codex app-server notifications to dashboa
   assert.equal(completed.status, "replied");
   assert.equal(completed.text, "最終返答");
 
+  const started = mapAppServerNotificationToDashboardEvent(
+    { method: "turn/started", params: { threadId: "codex-thread-1", turnId: "turn-1" } },
+    { dashboardThreadId: "dashboard-main", codexThreadId: "codex-thread-1" }
+  );
+  assert.equal(started.type, "app_server_status");
+  assert.equal(started.persistProgress, true);
+  assert.equal(started.text, "codex app-server が応答を生成しています。");
+
   const plan = mapAppServerNotificationToDashboardEvent(
     { method: "turn/plan/updated", params: { threadId: "codex-thread-1", turnId: "turn-1" } },
     { dashboardThreadId: "dashboard-main", codexThreadId: "codex-thread-1" }
   );
   assert.equal(plan.type, "app_server_status");
   assert.equal(plan.stage, "planning");
+  assert.equal(plan.persistProgress, true);
 
   const command = mapAppServerNotificationToDashboardEvent(
     { method: "item/commandExecution/outputDelta", params: { threadId: "codex-thread-1", turnId: "turn-1", delta: "npm test" } },
@@ -592,6 +601,7 @@ test("dashboard app-server bridge maps Codex app-server notifications to dashboa
   );
   assert.equal(command.type, "app_server_status");
   assert.equal(command.stage, "command");
+  assert.equal(command.persistProgress, true);
 
   const diff = mapAppServerNotificationToDashboardEvent(
     { method: "turn/diff/updated", params: { threadId: "codex-thread-1", turnId: "turn-1" } },
@@ -599,6 +609,7 @@ test("dashboard app-server bridge maps Codex app-server notifications to dashboa
   );
   assert.equal(diff.type, "app_server_status");
   assert.equal(diff.stage, "file_change");
+  assert.equal(diff.persistProgress, true);
 
   const toolProgress = mapAppServerNotificationToDashboardEvent(
     { method: "item/mcpToolCall/progress", params: { threadId: "codex-thread-1", turnId: "turn-1", message: "raw provider progress" } },
@@ -606,6 +617,7 @@ test("dashboard app-server bridge maps Codex app-server notifications to dashboa
   );
   assert.equal(toolProgress.type, "app_server_status");
   assert.equal(toolProgress.stage, "tool_call");
+  assert.equal(toolProgress.persistProgress, true);
   assert.equal(toolProgress.text, "外部ツールの結果を待っています。");
   assert.doesNotMatch(toolProgress.text, /raw provider progress/);
 
@@ -1297,8 +1309,11 @@ test("dashboard app-server bridge runs Issue #590 debug slow turn without starti
   assert.equal(requestCount, 0);
   assert.equal(events[0].type, "app_server_status");
   assert.equal(events[0].stage, "debug_slow_turn");
+  assert.equal(events[0].persistProgress, true);
   assert.match(events[0].text, /slow turn E2E を開始/);
-  assert.ok(events.some((event) => event.type === "app_server_status" && /継続中/.test(event.text)));
+  assert.ok(
+    events.some((event) => event.type === "app_server_status" && event.persistProgress === true && /継続中/.test(event.text))
+  );
   const reply = events.find((event) => event.type === "app_server_reply");
   assert.ok(reply);
   assert.equal(reply.threadId, "dashboard-main");
@@ -1350,8 +1365,11 @@ test("dashboard app-server bridge can run debug slow turn with injected timing",
   });
 
   assert.equal(events[0].type, "app_server_status");
+  assert.equal(events[0].persistProgress, true);
   assert.equal(events[0].debugSlowTurn.lowRisk, true);
-  assert.ok(events.filter((event) => event.type === "app_server_status" && event.stage === "debug_slow_turn").length >= 2);
+  assert.ok(
+    events.filter((event) => event.type === "app_server_status" && event.stage === "debug_slow_turn" && event.persistProgress === true).length >= 2
+  );
   assert.equal(events.at(-1).type, "app_server_reply");
   assert.match(events.at(-1).text, /指定待機時間: 10秒/);
 });

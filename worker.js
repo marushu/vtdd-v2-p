@@ -65237,6 +65237,22 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
       text,
       transientStatus
     });
+    if (shouldPersistDashboardAppServerProgress(input, { transientStatus })) {
+      messages.push(
+        normalizeDashboardChatMessage(
+          {
+            threadId,
+            role: "butler",
+            repository,
+            relatedIssue,
+            status: transientStatus,
+            text: transientText,
+            createdAt
+          },
+          { threadId }
+        )
+      );
+    }
   }
   return {
     ok: true,
@@ -65275,13 +65291,33 @@ async function filterDashboardAppServerBridgeMessagesForAppend({ store, threadId
     return normalizedMessages;
   }
   const latest = Array.isArray(recentMessages) ? recentMessages.at(-1) : null;
-  return normalizedMessages.filter((message) => !isDuplicateLatestStalledRecoveryMessage(message, latest));
+  return normalizedMessages.filter((message) => !isDuplicateLatestBridgeProgressMessage(message, latest));
 }
-function isDuplicateLatestStalledRecoveryMessage(message, latest) {
+function isDuplicateLatestBridgeProgressMessage(message, latest) {
   if (!message || !latest) {
     return false;
   }
-  return normalizeDashboardEventText(message.role).toLowerCase() === "system" && normalizeDashboardChatStatus(message.status) === "stalled" && normalizeDashboardEventText(latest.role).toLowerCase() === "system" && normalizeDashboardChatStatus(latest.status) === "stalled" && sanitizeDashboardChatText(message.text) === sanitizeDashboardChatText(latest.text);
+  const messageStatus = normalizeDashboardChatStatus(message.status);
+  const latestStatus = normalizeDashboardChatStatus(latest.status);
+  const duplicateCandidateStatus = messageStatus === "stalled" && latestStatus === "stalled" || messageStatus === "thinking" && latestStatus === "thinking";
+  return duplicateCandidateStatus && normalizeDashboardEventText(message.role).toLowerCase() === normalizeDashboardEventText(latest.role).toLowerCase() && sanitizeDashboardChatText(message.text) === sanitizeDashboardChatText(latest.text);
+}
+function shouldPersistDashboardAppServerProgress(input, { transientStatus = "" } = {}) {
+  if (normalizeDashboardChatStatus(transientStatus || input?.status) !== "thinking") {
+    return false;
+  }
+  if (normalizeDashboardBooleanFlag(input?.persistProgress ?? input?.persist_progress)) {
+    return true;
+  }
+  const stage = normalizeDashboardEventText(
+    input?.stage || input?.phase || input?.step || input?.activity || input?.progressStage || input?.progress_stage
+  ).toLowerCase().replaceAll("-", "_");
+  return DASHBOARD_DURABLE_APP_SERVER_PROGRESS_STAGES.has(stage);
+}
+function normalizeDashboardBooleanFlag(value) {
+  if (value === true) return true;
+  if (value === false || value === null || value === void 0) return false;
+  return ["1", "true", "yes", "on"].includes(normalizeDashboardEventText(value).toLowerCase());
 }
 var DASHBOARD_APP_SERVER_STAGE_TEXT = {
   read_context: "\u65E2\u5B58 Issue / PR / docs \u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u3002",
@@ -65295,6 +65331,10 @@ var DASHBOARD_APP_SERVER_STAGE_TEXT = {
   topic_branch: "topic branch \u3092\u4F5C\u6210\u3057\u3066\u3044\u307E\u3059\u3002",
   branch_create: "topic branch \u3092\u4F5C\u6210\u3057\u3066\u3044\u307E\u3059\u3002",
   planning: "\u65B9\u91DD\u3092\u6574\u7406\u3057\u3066\u3044\u307E\u3059\u3002",
+  hypothesis: "\u4EEE\u8AAC\u3092\u6574\u7406\u3057\u3066\u3044\u307E\u3059\u3002",
+  target: "\u78BA\u8A8D\u3059\u308B\u7B87\u6240\u306B\u3042\u305F\u308A\u3092\u3064\u3051\u3066\u3044\u307E\u3059\u3002",
+  verify: "\u691C\u8A3C\u65B9\u6CD5\u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u3002",
+  verification: "\u691C\u8A3C\u65B9\u6CD5\u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u3002",
   command: "\u30B3\u30DE\u30F3\u30C9\u3092\u5B9F\u884C\u3057\u3066\u3044\u307E\u3059\u3002",
   file_change: "\u30D5\u30A1\u30A4\u30EB\u5909\u66F4\u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u3002",
   tool_call: "\u5916\u90E8\u30C4\u30FC\u30EB\u306E\u7D50\u679C\u3092\u5F85\u3063\u3066\u3044\u307E\u3059\u3002",
@@ -65302,6 +65342,7 @@ var DASHBOARD_APP_SERVER_STAGE_TEXT = {
   waiting_approval: "\u627F\u8A8D\u5F85\u3061\u3067\u3059\u3002",
   waiting_user_input: "\u78BA\u8A8D\u304C\u5FC5\u8981\u3067\u3059\u3002",
   quiet: "\u63A5\u7D9A\u3068\u5B9F\u884C\u72B6\u614B\u3092\u78BA\u8A8D\u4E2D\u3067\u3059\u3002\u5165\u529B\u3068\u6587\u8108\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002",
+  debug_slow_turn: "Issue #590 slow turn E2E \u3092\u5B9F\u884C\u3057\u3066\u3044\u307E\u3059\u3002",
   thinking: "\u8003\u3048\u3066\u3044\u307E\u3059\u3002",
   implementation: "\u5B9F\u88C5\u306B\u5165\u3063\u3066\u3044\u307E\u3059\u3002",
   implement: "\u5B9F\u88C5\u306B\u5165\u3063\u3066\u3044\u307E\u3059\u3002",
@@ -65316,6 +65357,33 @@ var DASHBOARD_APP_SERVER_STAGE_TEXT = {
   reviewer_revision: "reviewer \u6307\u6458\u3092\u53CD\u6620\u3057\u3066\u3044\u307E\u3059\u3002",
   review_fix: "reviewer \u6307\u6458\u3092\u53CD\u6620\u3057\u3066\u3044\u307E\u3059\u3002"
 };
+var DASHBOARD_DURABLE_APP_SERVER_PROGRESS_STAGES = /* @__PURE__ */ new Set([
+  "thinking",
+  "planning",
+  "hypothesis",
+  "target",
+  "verify",
+  "verification",
+  "command",
+  "file_change",
+  "tool_call",
+  "web_search",
+  "waiting_approval",
+  "waiting_user_input",
+  "implementation",
+  "implement",
+  "test",
+  "tests",
+  "pr_body",
+  "pull_request_body",
+  "pr_create",
+  "pull_request_create",
+  "reviewer_wait",
+  "ci_wait",
+  "reviewer_revision",
+  "review_fix",
+  "debug_slow_turn"
+]);
 function buildDashboardOwnerFacingTransientStatusText(input, { status = "", text = "", transientStatus = "" } = {}) {
   if (transientStatus === "replied" || status === "replied") {
     return "Dashboard thread \u63A5\u7D9A\u6E08\u307F\u3002";
