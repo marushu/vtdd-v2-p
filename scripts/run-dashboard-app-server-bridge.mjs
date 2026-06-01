@@ -11,7 +11,7 @@ const APP_SERVER_FAILURE_ALREADY_SENT = Symbol("appServerFailureAlreadySent");
 const DEFAULT_APP_SERVER_ERROR_TEXT =
   "codex app-server が応答生成中に失敗しました。画像を解析できなかった可能性があります。もう一度送るか、画像なしで内容を短く説明してください。";
 const APP_SERVER_TURN_TIMEOUT_TEXT =
-  "codex app-server の応答生成が時間切れになりました。入力は Dashboard thread に保存済みです。同じ thread で続けるか、内容を短くしてもう一度送れます。";
+  "codex app-server の応答が遅れています。この依頼は Dashboard thread に保存済みです。待つ、同じ内容でもう一度実行する、短くして再送する、キャンセルする、のいずれかで復旧できます。遅れて返信が届いた場合は、この thread に追加します。";
 const DASHBOARD_MEDIA_TMP_DIR = "vtdd-dashboard-media";
 const DEFAULT_TURN_TIMEOUT_MS = 120 * 1000;
 
@@ -611,7 +611,8 @@ function buildAppServerTurnTimeoutEvent({
   dashboardThreadId,
   codexThreadId,
   repository,
-  relatedIssue
+  relatedIssue,
+  ownerText
 } = {}) {
   return {
     type: "app_server_turn_failed",
@@ -621,7 +622,13 @@ function buildAppServerTurnTimeoutEvent({
     repository: repository || null,
     relatedIssue: relatedIssue || null,
     status: "timeout",
-    text: APP_SERVER_TURN_TIMEOUT_TEXT
+    text: APP_SERVER_TURN_TIMEOUT_TEXT,
+    recovery: {
+      status: "stalled",
+      retryable: true,
+      originalText: String(ownerText || ""),
+      actions: ["wait", "retry", "shorten_and_resend", "cancel"]
+    }
   };
 }
 
@@ -854,7 +861,8 @@ export async function handleDashboardTurnRequest({
         dashboardThreadId,
         codexThreadId,
         repository: request.repository,
-        relatedIssue: request.relatedIssue || request.issueNumber
+        relatedIssue: request.relatedIssue || request.issueNumber,
+        ownerText: text
       });
       void sendDashboardEvent(timeoutEvent);
       lateCompletionCleanupHandle = setTimeout(() => {
@@ -891,6 +899,10 @@ export async function handleDashboardTurnRequest({
     if (event.type === "app_server_status" && event.status === "replied") {
       event.type = "app_server_reply";
       event.text = accumulatedText || event.text;
+      if (timedOut) {
+        event.lateCompletion = true;
+        event.text = `遅れて返信が届きました。\n\n${event.text}`;
+      }
       void sendDashboardEvent(event);
       if (timedOut) {
         cleanupNotifications();

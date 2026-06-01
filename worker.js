@@ -65204,6 +65204,7 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
     transientText = "Dashboard thread \u63A5\u7D9A\u6E08\u307F\u3002";
   } else if (eventType === "app_server_turn_failed" || status === "failed") {
     const failureText = buildDashboardAppServerFailureThreadText({ text, status });
+    const messageStatus = normalizeDashboardEventText(input?.recovery?.status).toLowerCase() === "stalled" || status === "timeout" ? "stalled" : "failed";
     messages.push(
       normalizeDashboardChatMessage(
         {
@@ -65211,14 +65212,14 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
           role: "system",
           repository,
           relatedIssue,
-          status: "failed",
+          status: messageStatus,
           text: failureText,
           createdAt
         },
         { threadId }
       )
     );
-    transientStatus = "failed";
+    transientStatus = messageStatus;
     transientText = failureText;
   } else if (eventType === "app_server_status") {
     transientStatus = status === "replied" ? "replied" : "thinking";
@@ -65243,7 +65244,7 @@ function buildDashboardAppServerFailureThreadText({ text = "", status = "" } = {
   const normalizedText = sanitizeDashboardChatText(text);
   const normalizedStatus = normalizeDashboardEventText(status).toLowerCase();
   if (normalizedStatus === "timeout" || /timed out before completion/i.test(normalizedText)) {
-    return "codex app-server \u306E\u5FDC\u7B54\u751F\u6210\u304C\u6642\u9593\u5207\u308C\u306B\u306A\u308A\u307E\u3057\u305F\u3002\u5165\u529B\u306F Dashboard thread \u306B\u4FDD\u5B58\u6E08\u307F\u3067\u3059\u3002\u540C\u3058 thread \u3067\u7D9A\u3051\u308B\u304B\u3001\u5185\u5BB9\u3092\u77ED\u304F\u3057\u3066\u3082\u3046\u4E00\u5EA6\u9001\u308C\u307E\u3059\u3002";
+    return "codex app-server \u306E\u5FDC\u7B54\u304C\u9045\u308C\u3066\u3044\u307E\u3059\u3002\u3053\u306E\u4F9D\u983C\u306F Dashboard thread \u306B\u4FDD\u5B58\u6E08\u307F\u3067\u3059\u3002\u5F85\u3064\u3001\u540C\u3058\u5185\u5BB9\u3067\u3082\u3046\u4E00\u5EA6\u5B9F\u884C\u3059\u308B\u3001\u77ED\u304F\u3057\u3066\u518D\u9001\u3059\u308B\u3001\u30AD\u30E3\u30F3\u30BB\u30EB\u3059\u308B\u3001\u306E\u3044\u305A\u308C\u304B\u3067\u5FA9\u65E7\u3067\u304D\u307E\u3059\u3002\u9045\u308C\u3066\u8FD4\u4FE1\u304C\u5C4A\u3044\u305F\u5834\u5408\u306F\u3001\u3053\u306E thread \u306B\u8FFD\u52A0\u3057\u307E\u3059\u3002";
   }
   return normalizedText || "codex app-server \u304C\u8FD4\u4FE1\u524D\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u540C\u3058 thread \u3067\u7D9A\u3051\u308B\u304B\u3001\u5185\u5BB9\u3092\u77ED\u304F\u3057\u3066\u3082\u3046\u4E00\u5EA6\u9001\u308C\u307E\u3059\u3002";
 }
@@ -67328,7 +67329,7 @@ function normalizeDashboardChatRole(value) {
 }
 function normalizeDashboardChatStatus(value) {
   const status = normalizeDashboardEventText(value).toLowerCase();
-  return ["sent", "thinking", "replied", "blocked", "failed"].includes(status) ? status : "sent";
+  return ["sent", "thinking", "replied", "blocked", "failed", "stalled"].includes(status) ? status : "sent";
 }
 function normalizeDashboardThreadId(value) {
   const text = normalizeDashboardEventText(value).toLowerCase().replace(/[^a-z0-9_.:/-]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");

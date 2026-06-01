@@ -8825,6 +8825,11 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
     transientText = "Dashboard thread 接続済み。";
   } else if (eventType === "app_server_turn_failed" || status === "failed") {
     const failureText = buildDashboardAppServerFailureThreadText({ text, status });
+    const messageStatus =
+      normalizeDashboardEventText(input?.recovery?.status).toLowerCase() === "stalled" ||
+      status === "timeout"
+        ? "stalled"
+        : "failed";
     messages.push(
       normalizeDashboardChatMessage(
         {
@@ -8832,14 +8837,14 @@ function normalizeDashboardAppServerBridgeEvent(payload, { fallbackThreadId = ""
           role: "system",
           repository,
           relatedIssue,
-          status: "failed",
+          status: messageStatus,
           text: failureText,
           createdAt
         },
         { threadId }
       )
     );
-    transientStatus = "failed";
+    transientStatus = messageStatus;
     transientText = failureText;
   } else if (eventType === "app_server_status") {
     transientStatus = status === "replied" ? "replied" : "thinking";
@@ -8868,7 +8873,7 @@ function buildDashboardAppServerFailureThreadText({ text = "", status = "" } = {
     normalizedStatus === "timeout" ||
     /timed out before completion/i.test(normalizedText)
   ) {
-    return "codex app-server の応答生成が時間切れになりました。入力は Dashboard thread に保存済みです。同じ thread で続けるか、内容を短くしてもう一度送れます。";
+    return "codex app-server の応答が遅れています。この依頼は Dashboard thread に保存済みです。待つ、同じ内容でもう一度実行する、短くして再送する、キャンセルする、のいずれかで復旧できます。遅れて返信が届いた場合は、この thread に追加します。";
   }
   return normalizedText || "codex app-server が返信前に失敗しました。同じ thread で続けるか、内容を短くしてもう一度送れます。";
 }
@@ -11190,7 +11195,7 @@ function normalizeDashboardChatRole(value) {
 
 function normalizeDashboardChatStatus(value) {
   const status = normalizeDashboardEventText(value).toLowerCase();
-  return ["sent", "thinking", "replied", "blocked", "failed"].includes(status) ? status : "sent";
+  return ["sent", "thinking", "replied", "blocked", "failed", "stalled"].includes(status) ? status : "sent";
 }
 
 function normalizeDashboardThreadId(value) {

@@ -1168,7 +1168,11 @@ test("dashboard app-server bridge sends Japanese recoverable timeout failure", a
   assert.equal(timeoutEvent.threadId, "dashboard-main");
   assert.equal(timeoutEvent.repository, "marushu/vtdd-v2-p");
   assert.equal(timeoutEvent.relatedIssue, 590);
-  assert.match(timeoutEvent.text, /入力は Dashboard thread に保存済み/);
+  assert.match(timeoutEvent.text, /この依頼は Dashboard thread に保存済み/);
+  assert.deepEqual(timeoutEvent.recovery.actions, ["wait", "retry", "shorten_and_resend", "cancel"]);
+  assert.equal(timeoutEvent.recovery.status, "stalled");
+  assert.equal(timeoutEvent.recovery.retryable, true);
+  assert.equal(timeoutEvent.recovery.originalText, "timeout を再現して");
   assert.doesNotMatch(timeoutEvent.text, /timed out before completion/);
   await new Promise((resolve) => setTimeout(resolve, 10));
   assert.equal(handlers.size, 0);
@@ -1238,7 +1242,8 @@ test("dashboard app-server bridge persists late completion after timeout instead
   assert.ok(finalReply);
   assert.equal(finalReply.threadId, "dashboard-main");
   assert.equal(finalReply.codexThreadId, "codex-thread-late");
-  assert.equal(finalReply.text, "PR #632 を Draft で作成済みです。");
+  assert.equal(finalReply.lateCompletion, true);
+  assert.equal(finalReply.text, "遅れて返信が届きました。\n\nPR #632 を Draft で作成済みです。");
   assert.equal(handlers.size, 0);
 });
 
