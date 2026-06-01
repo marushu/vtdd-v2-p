@@ -94,19 +94,28 @@ Last rebuilt from GitHub runtime truth: 2026-05-31
 - 2026-05-31 Issue #689 was created from owner input about LINE-like reply
   target previews. It is classified as `QUEUE` and must not preempt the current
   Now item.
+- 2026-06-01 owner input classified Issue #590 as `ROOT`: Dashboard Butler
+  conversation timeout / silent wait recovery blocks continued iPhone/PWA
+  development itself. If Butler cannot keep responding while app-server activity
+  is still progressing, the owner must return to mac Codex to recover, which
+  blocks Issue #637 and the broader Butler-first operating center. Issue #590
+  moves to `Now` for the app-server activity watchdog slice; Issue #637 resumes
+  after this recovery path no longer interrupts ordinary development.
 
 ## Now
 
-- Issue #637: iPhone/PWA-complete VPS privileged maintenance capability
-  lifecycle. This is the current root because the owner must be able to approve,
-  expand, reduce, execute, and observe root/sudo maintenance from Dashboard
-  Butler with PWA notification when owner action is required, without returning
-  to mac Codex as the normal recovery path.
+- Issue #590: app-server turn timeout / silent wait recovery. This is the
+  current root because Dashboard Butler must not become unusable while Codex
+  app-server is still active. The immediate slice replaces fixed elapsed-time
+  timeout behavior with an app-server activity watchdog so progress / thinking /
+  command / diff / tool events keep the turn alive, quiet state remains
+  transient, and stalled recovery is reserved for true inactivity.
 
 ## Next
 
-- Issue #590: app-server turn timeout remains active after Issue #637 no longer
-  blocks iPhone/PWA-only privileged recovery.
+- Issue #637: iPhone/PWA-complete VPS privileged maintenance capability
+  lifecycle resumes after Issue #590 no longer blocks ordinary Dashboard Butler
+  conversation continuity.
 - Issue #450 / Issue #654 reconnect-resend correction: remove conversation
   claims from HTTP persistence, keep normal chat on WebSocket, and verify
   unacknowledged owner messages are resent after reconnect.

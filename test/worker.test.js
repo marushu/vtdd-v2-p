@@ -3949,7 +3949,7 @@ test("DashboardChatRoom persists app-server timeout as recoverable Japanese thre
   assert.equal(stored[0].status, "stalled");
   assert.equal(stored[0].repository, "marushu/vtdd-v2-p");
   assert.equal(stored[0].relatedIssue, 590);
-  assert.match(stored[0].text, /応答が遅れています/);
+  assert.match(stored[0].text, /進行イベントがしばらく届いていません/);
   assert.match(stored[0].text, /同じ内容でもう一度実行する/);
   assert.match(stored[0].text, /短くして再送/);
   assert.match(stored[0].text, /遅れて返信が届いた場合/);
@@ -4007,6 +4007,14 @@ test("DashboardChatRoom maps app-server progress stages to owner-facing transien
     ["github_issue_create", "GitHub に Issue を作成しています。"],
     ["bounded_change_contract", "bounded change contract を確認しています。"],
     ["topic_branch", "topic branch を作成しています。"],
+    ["planning", "方針を整理しています。"],
+    ["command", "コマンドを実行しています。"],
+    ["file_change", "ファイル変更を確認しています。"],
+    ["tool_call", "外部ツールの結果を待っています。"],
+    ["web_search", "必要な情報を確認しています。"],
+    ["waiting_approval", "承認待ちです。"],
+    ["waiting_user_input", "確認が必要です。"],
+    ["quiet", "しばらく進行イベントが届いていません。処理中の可能性があります。"],
     ["implementation", "実装に入っています。"],
     ["test", "テストを実行しています。"],
     ["pr_body", "PR本文を作成しています。"],

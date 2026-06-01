@@ -19,6 +19,7 @@ import {
   extractAppServerNotificationTurnId,
   formatDashboardMediaReferenceLines,
   handleDashboardTurnRequest,
+  isAppServerActivityNotification,
   JsonLineAppServerClient,
   mapAppServerNotificationToDashboardEvent,
   matchesAppServerTurnNotification,
@@ -575,6 +576,59 @@ test("dashboard app-server bridge maps Codex app-server notifications to dashboa
   assert.equal(completed.type, "app_server_status");
   assert.equal(completed.status, "replied");
   assert.equal(completed.text, "最終返答");
+
+  const plan = mapAppServerNotificationToDashboardEvent(
+    { method: "turn/plan/updated", params: { threadId: "codex-thread-1", turnId: "turn-1" } },
+    { dashboardThreadId: "dashboard-main", codexThreadId: "codex-thread-1" }
+  );
+  assert.equal(plan.type, "app_server_status");
+  assert.equal(plan.stage, "planning");
+
+  const command = mapAppServerNotificationToDashboardEvent(
+    { method: "item/commandExecution/outputDelta", params: { threadId: "codex-thread-1", turnId: "turn-1", delta: "npm test" } },
+    { dashboardThreadId: "dashboard-main", codexThreadId: "codex-thread-1" }
+  );
+  assert.equal(command.type, "app_server_status");
+  assert.equal(command.stage, "command");
+
+  const diff = mapAppServerNotificationToDashboardEvent(
+    { method: "turn/diff/updated", params: { threadId: "codex-thread-1", turnId: "turn-1" } },
+    { dashboardThreadId: "dashboard-main", codexThreadId: "codex-thread-1" }
+  );
+  assert.equal(diff.type, "app_server_status");
+  assert.equal(diff.stage, "file_change");
+
+  const toolProgress = mapAppServerNotificationToDashboardEvent(
+    { method: "item/mcpToolCall/progress", params: { threadId: "codex-thread-1", turnId: "turn-1", message: "raw provider progress" } },
+    { dashboardThreadId: "dashboard-main", codexThreadId: "codex-thread-1" }
+  );
+  assert.equal(toolProgress.type, "app_server_status");
+  assert.equal(toolProgress.stage, "tool_call");
+  assert.equal(toolProgress.text, "外部ツールの結果を待っています。");
+  assert.doesNotMatch(toolProgress.text, /raw provider progress/);
+
+  assert.equal(isAppServerActivityNotification({ method: "item/reasoning/summaryTextDelta", params: {} }), true);
+  assert.equal(isAppServerActivityNotification({ method: "thread/status/changed", params: {} }), false);
+  assert.equal(
+    isAppServerActivityNotification({
+      method: "thread/status/changed",
+      params: { status: { activeFlags: ["waitingOnApproval"] } }
+    }),
+    true
+  );
+  assert.equal(
+    isAppServerActivityNotification({
+      method: "thread/status/changed",
+      params: { status: { activeFlags: ["waitingOnUserInput"] } }
+    }),
+    true
+  );
+  assert.equal(isAppServerActivityNotification({ method: "warning", params: {} }), false);
+  assert.equal(isAppServerActivityNotification({ method: "model/rerouted", params: {} }), false);
+  assert.equal(isAppServerActivityNotification({ method: "item/reasoning/textDelta", params: {} }), true);
+  assert.equal(isAppServerActivityNotification({ method: "item/started", params: { item: { type: "reasoning" } } }), false);
+  assert.equal(isAppServerActivityNotification({ method: "item/started", params: { item: { type: "commandExecution" } } }), true);
+  assert.equal(isAppServerActivityNotification({ method: "thread/name/updated", params: {} }), false);
 });
 
 test("dashboard app-server bridge filters app-server notifications by Codex thread and turn", () => {
@@ -1178,6 +1232,273 @@ test("dashboard app-server bridge sends Japanese recoverable timeout failure", a
   assert.equal(handlers.size, 0);
 });
 
+test("dashboard app-server bridge sends quiet status before stalled timeout without ending the turn", async () => {
+  const events = [];
+  let nextId = 1;
+  const appServer = {
+    nextRequestId() {
+      const id = nextId;
+      nextId += 1;
+      return id;
+    },
+    onNotification() {
+      return () => {};
+    },
+    async request(message) {
+      if (message.method === "thread/start") {
+        return { thread: { id: "codex-thread-quiet" } };
+      }
+      if (message.method === "turn/start") {
+        return { turn: { id: "turn-quiet" } };
+      }
+      throw new Error(`unexpected method ${message.method}`);
+    }
+  };
+
+  await handleDashboardTurnRequest({
+    request: {
+      threadId: "dashboard-main",
+      repository: "marushu/vtdd-v2-p",
+      relatedIssue: 590,
+      text: "長めの開発を進めて"
+    },
+    appServer,
+    sendDashboardEvent: async (event) => events.push(event),
+    cwd: "/repo",
+    activityQuietMs: 1,
+    turnTimeoutMs: 20,
+    lateCompletionTimeoutMs: 1
+  });
+
+  const quietEvent = events.find((event) => event.type === "app_server_status" && event.status === "quiet");
+  assert.ok(quietEvent);
+  assert.equal(quietEvent.stage, "quiet");
+  assert.match(quietEvent.text, /進行イベントがしばらく届いていません/);
+  assert.equal(events.filter((event) => event.type === "app_server_turn_failed").length, 1);
+});
+
+test("dashboard app-server bridge resets stalled timeout when app-server activity continues", async () => {
+  const events = [];
+  const handlers = new Set();
+  let nextId = 1;
+  const appServer = {
+    nextRequestId() {
+      const id = nextId;
+      nextId += 1;
+      return id;
+    },
+    onNotification(handler) {
+      handlers.add(handler);
+      return () => handlers.delete(handler);
+    },
+    async request(message) {
+      if (message.method === "thread/start") {
+        return { thread: { id: "codex-thread-active" } };
+      }
+      if (message.method === "turn/start") {
+        return { turn: { id: "turn-active" } };
+      }
+      throw new Error(`unexpected method ${message.method}`);
+    }
+  };
+
+  const pending = handleDashboardTurnRequest({
+    request: {
+      threadId: "dashboard-main",
+      repository: "marushu/vtdd-v2-p",
+      relatedIssue: 590,
+      text: "テストまで進めて"
+    },
+    appServer,
+    sendDashboardEvent: async (event) => events.push(event),
+    cwd: "/repo",
+    activityQuietMs: 0,
+    turnTimeoutMs: 40
+  });
+
+  await waitFor(() => handlers.size === 1);
+  await new Promise((resolve) => setTimeout(resolve, 25));
+  for (const handler of handlers) {
+    handler({
+      method: "turn/plan/updated",
+      params: {
+        threadId: "codex-thread-active",
+        turnId: "turn-active"
+      }
+    });
+  }
+  await new Promise((resolve) => setTimeout(resolve, 25));
+  assert.equal(events.some((event) => event.type === "app_server_turn_failed"), false);
+  for (const handler of handlers) {
+    handler({
+      method: "item/agentMessage/delta",
+      params: {
+        threadId: "codex-thread-active",
+        turnId: "turn-active",
+        delta: "テストまで完了しました。"
+      }
+    });
+    handler({
+      method: "turn/completed",
+      params: {
+        threadId: "codex-thread-active",
+        turn: { id: "turn-active", status: "completed" }
+      }
+    });
+  }
+  await pending;
+
+  assert.equal(events.some((event) => event.type === "app_server_turn_failed"), false);
+  assert.equal(events.at(-1).type, "app_server_reply");
+  assert.equal(events.at(-1).text, "テストまで完了しました。");
+});
+
+test("dashboard app-server bridge does not reset stalled timeout for non-progress notifications", async () => {
+  const events = [];
+  const handlers = new Set();
+  let nextId = 1;
+  const appServer = {
+    nextRequestId() {
+      const id = nextId;
+      nextId += 1;
+      return id;
+    },
+    onNotification(handler) {
+      handlers.add(handler);
+      return () => handlers.delete(handler);
+    },
+    async request(message) {
+      if (message.method === "thread/start") {
+        return { thread: { id: "codex-thread-non-progress" } };
+      }
+      if (message.method === "turn/start") {
+        return { turn: { id: "turn-non-progress" } };
+      }
+      throw new Error(`unexpected method ${message.method}`);
+    }
+  };
+
+  const pending = handleDashboardTurnRequest({
+    request: {
+      threadId: "dashboard-main",
+      repository: "marushu/vtdd-v2-p",
+      relatedIssue: 590,
+      text: "止まったかどうか確認して"
+    },
+    appServer,
+    sendDashboardEvent: async (event) => events.push(event),
+    cwd: "/repo",
+    activityQuietMs: 0,
+    turnTimeoutMs: 30,
+    lateCompletionTimeoutMs: 1
+  });
+
+  await waitFor(() => handlers.size === 1);
+  await new Promise((resolve) => setTimeout(resolve, 15));
+  for (const handler of handlers) {
+    handler({
+      method: "thread/status/changed",
+      params: {
+        threadId: "codex-thread-non-progress",
+        turnId: "turn-non-progress",
+        status: { type: "active", activeFlags: [] }
+      }
+    });
+    handler({
+      method: "warning",
+      params: {
+        threadId: "codex-thread-non-progress",
+        turnId: "turn-non-progress",
+        message: "non-progress warning"
+      }
+    });
+  }
+  await new Promise((resolve) => setTimeout(resolve, 25));
+
+  const timeoutEvent = events.find((event) => event.type === "app_server_turn_failed");
+  assert.ok(timeoutEvent);
+  assert.equal(timeoutEvent.status, "timeout");
+  await pending;
+});
+
+test("dashboard app-server bridge keeps approval wait status from becoming stalled", async () => {
+  const events = [];
+  const handlers = new Set();
+  let nextId = 1;
+  const appServer = {
+    nextRequestId() {
+      const id = nextId;
+      nextId += 1;
+      return id;
+    },
+    onNotification(handler) {
+      handlers.add(handler);
+      return () => handlers.delete(handler);
+    },
+    async request(message) {
+      if (message.method === "thread/start") {
+        return { thread: { id: "codex-thread-approval-wait" } };
+      }
+      if (message.method === "turn/start") {
+        return { turn: { id: "turn-approval-wait" } };
+      }
+      throw new Error(`unexpected method ${message.method}`);
+    }
+  };
+
+  const pending = handleDashboardTurnRequest({
+    request: {
+      threadId: "dashboard-main",
+      repository: "marushu/vtdd-v2-p",
+      relatedIssue: 590,
+      text: "承認待ちを確認して"
+    },
+    appServer,
+    sendDashboardEvent: async (event) => events.push(event),
+    cwd: "/repo",
+    activityQuietMs: 0,
+    turnTimeoutMs: 40
+  });
+
+  await waitFor(() => handlers.size === 1);
+  await new Promise((resolve) => setTimeout(resolve, 25));
+  for (const handler of handlers) {
+    handler({
+      method: "thread/status/changed",
+      params: {
+        threadId: "codex-thread-approval-wait",
+        turnId: "turn-approval-wait",
+        status: { type: "active", activeFlags: ["waitingOnApproval"] }
+      }
+    });
+  }
+  await new Promise((resolve) => setTimeout(resolve, 25));
+  assert.equal(events.some((event) => event.type === "app_server_turn_failed"), false);
+
+  for (const handler of handlers) {
+    handler({
+      method: "item/agentMessage/delta",
+      params: {
+        threadId: "codex-thread-approval-wait",
+        turnId: "turn-approval-wait",
+        delta: "承認待ちを保持しました。"
+      }
+    });
+    handler({
+      method: "turn/completed",
+      params: {
+        threadId: "codex-thread-approval-wait",
+        turn: { id: "turn-approval-wait", status: "completed" }
+      }
+    });
+  }
+  await pending;
+
+  assert.equal(events.some((event) => event.type === "app_server_turn_failed"), false);
+  assert.equal(events.at(-1).type, "app_server_reply");
+  assert.equal(events.at(-1).text, "承認待ちを保持しました。");
+});
+
 test("dashboard app-server bridge persists late completion after timeout instead of losing the final reply", async () => {
   const events = [];
   const handlers = new Set();
@@ -1410,6 +1731,7 @@ test("dashboard app-server bridge args require a dashboard thread id for runtime
   assert.equal(parsed.threadId, "");
   assert.equal(parsed.sandboxMode, "danger-full-access");
   assert.equal(parsed.turnTimeoutMs, 120000);
+  assert.equal(parsed.activityQuietMs, 90000);
 });
 
 test("dashboard app-server bridge args preserve explicit disabled turn timeout", () => {
@@ -1417,10 +1739,12 @@ test("dashboard app-server bridge args preserve explicit disabled turn timeout",
     VTDD_RUNTIME_URL: "https://runtime.example",
     VTDD_GATEWAY_BEARER_TOKEN: "secret-token",
     VTDD_DASHBOARD_THREAD_ID: "dashboard-main",
-    VTDD_DASHBOARD_APP_SERVER_TURN_TIMEOUT_MS: "0"
+    VTDD_DASHBOARD_APP_SERVER_TURN_TIMEOUT_MS: "0",
+    VTDD_DASHBOARD_APP_SERVER_ACTIVITY_QUIET_MS: "0"
   });
   assert.equal(parsed.threadId, "dashboard-main");
   assert.equal(parsed.turnTimeoutMs, 0);
+  assert.equal(parsed.activityQuietMs, 0);
 });
 
 test("dashboard app-server bridge refuses to connect without a dashboard thread id", async () => {
@@ -1436,7 +1760,7 @@ test("dashboard app-server bridge refuses to connect without a dashboard thread 
 });
 
 test("dashboard app-server bridge args read runtime, token, and thread from environment", () => {
-  const parsed = parseBridgeArgs(["--thread-id", "dashboard-main", "--turn-timeout-ms", "1500"], {
+  const parsed = parseBridgeArgs(["--thread-id", "dashboard-main", "--turn-timeout-ms", "1500", "--activity-quiet-ms", "700"], {
     VTDD_RUNTIME_URL: "https://runtime.example",
     VTDD_GATEWAY_BEARER_TOKEN: "secret-token",
     VTDD_DASHBOARD_CODEX_CWD: "/repo",
@@ -1449,6 +1773,7 @@ test("dashboard app-server bridge args read runtime, token, and thread from envi
   assert.equal(parsed.cwd, "/repo");
   assert.equal(parsed.sandboxMode, "");
   assert.equal(parsed.turnTimeoutMs, 1500);
+  assert.equal(parsed.activityQuietMs, 700);
   assert.equal(parsed.reconnectDelayMs, 1000);
   assert.equal(parsed.heartbeatMs, 30000);
 });

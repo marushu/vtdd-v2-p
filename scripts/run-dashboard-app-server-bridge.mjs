@@ -11,9 +11,12 @@ const APP_SERVER_FAILURE_ALREADY_SENT = Symbol("appServerFailureAlreadySent");
 const DEFAULT_APP_SERVER_ERROR_TEXT =
   "codex app-server が応答生成中に失敗しました。画像を解析できなかった可能性があります。もう一度送るか、画像なしで内容を短く説明してください。";
 const APP_SERVER_TURN_TIMEOUT_TEXT =
-  "codex app-server の応答が遅れています。この依頼は Dashboard thread に保存済みです。待つ、同じ内容でもう一度実行する、短くして再送する、キャンセルする、のいずれかで復旧できます。遅れて返信が届いた場合は、この thread に追加します。";
+  "codex app-server から進行イベントがしばらく届いていません。この依頼は Dashboard thread に保存済みです。待つ、同じ内容でもう一度実行する、短くして再送する、キャンセルする、のいずれかで復旧できます。遅れて返信が届いた場合は、この thread に追加します。";
+const APP_SERVER_TURN_QUIET_TEXT =
+  "codex app-server から進行イベントがしばらく届いていません。処理中の可能性があります。接続と実行状態を確認しています。";
 const DASHBOARD_MEDIA_TMP_DIR = "vtdd-dashboard-media";
-const DEFAULT_TURN_TIMEOUT_MS = 120 * 1000;
+const DEFAULT_TURN_TIMEOUT_MS = 2 * 60 * 1000;
+const DEFAULT_ACTIVITY_QUIET_MS = 90 * 1000;
 
 export function buildAppServerInitializeRequest(id = 1) {
   return {
@@ -579,7 +582,110 @@ export function mapAppServerNotificationToDashboardEvent(message, context = {}) 
       text: "codex app-server が応答を生成しています。"
     };
   }
+  if (method === "thread/status/changed") {
+    const statusType = String(params.status?.type || params.status || "");
+    const activeFlags = Array.isArray(params.status?.activeFlags) ? params.status.activeFlags : [];
+    const stage = activeFlags.includes("waitingOnApproval")
+      ? "waiting_approval"
+      : activeFlags.includes("waitingOnUserInput")
+        ? "waiting_user_input"
+        : statusType === "active"
+          ? "thinking"
+          : "inspect_context";
+    return {
+      type: "app_server_status",
+      schema: DEFAULT_SCHEMA,
+      threadId: context.dashboardThreadId,
+      codexThreadId: params.threadId || context.codexThreadId || null,
+      status: "thinking",
+      stage,
+      text: "codex app-server の実行状態が更新されました。"
+    };
+  }
+  if (method === "turn/plan/updated" || method === "item/plan/delta") {
+    return {
+      type: "app_server_status",
+      schema: DEFAULT_SCHEMA,
+      threadId: context.dashboardThreadId,
+      codexThreadId: params.threadId || context.codexThreadId || null,
+      turnId: params.turnId || null,
+      status: "thinking",
+      stage: "planning",
+      text: "方針を整理しています。"
+    };
+  }
+  if (method === "turn/diff/updated" || method === "item/fileChange/patchUpdated" || method === "item/fileChange/outputDelta") {
+    return {
+      type: "app_server_status",
+      schema: DEFAULT_SCHEMA,
+      threadId: context.dashboardThreadId,
+      codexThreadId: params.threadId || context.codexThreadId || null,
+      turnId: params.turnId || null,
+      status: "thinking",
+      stage: "file_change",
+      text: "ファイル変更を確認しています。"
+    };
+  }
+  if (method === "command/exec/outputDelta" || method === "item/commandExecution/outputDelta") {
+    return {
+      type: "app_server_status",
+      schema: DEFAULT_SCHEMA,
+      threadId: context.dashboardThreadId,
+      codexThreadId: params.threadId || context.codexThreadId || null,
+      turnId: params.turnId || null,
+      status: "thinking",
+      stage: "command",
+      text: "コマンドを実行しています。"
+    };
+  }
+  if (method === "item/mcpToolCall/progress") {
+    return {
+      type: "app_server_status",
+      schema: DEFAULT_SCHEMA,
+      threadId: context.dashboardThreadId,
+      codexThreadId: params.threadId || context.codexThreadId || null,
+      turnId: params.turnId || null,
+      status: "thinking",
+      stage: "tool_call",
+      text: "外部ツールの結果を待っています。"
+    };
+  }
+  if (method === "item/started" || method === "item/completed") {
+    return {
+      type: "app_server_status",
+      schema: DEFAULT_SCHEMA,
+      threadId: context.dashboardThreadId,
+      codexThreadId: params.threadId || context.codexThreadId || null,
+      turnId: params.turnId || null,
+      status: "thinking",
+      stage: mapAppServerItemToProgressStage(params.item),
+      text: "codex app-server の処理が進行しています。"
+    };
+  }
+  if (method === "item/reasoning/summaryTextDelta" || method === "item/reasoning/summaryPartAdded" || method === "item/reasoning/textDelta") {
+    return {
+      type: "app_server_status",
+      schema: DEFAULT_SCHEMA,
+      threadId: context.dashboardThreadId,
+      codexThreadId: params.threadId || context.codexThreadId || null,
+      turnId: params.turnId || null,
+      status: "thinking",
+      stage: "thinking",
+      text: "考えています。"
+    };
+  }
   if (method === "turn/completed") {
+    const turnStatus = String(params.turn?.status || params.status || "completed");
+    if (turnStatus === "failed" || turnStatus === "interrupted") {
+      return {
+        type: "app_server_turn_failed",
+        schema: DEFAULT_SCHEMA,
+        threadId: context.dashboardThreadId,
+        codexThreadId: params.threadId || context.codexThreadId || null,
+        status: turnStatus,
+        text: turnStatus === "interrupted" ? "生成を停止しました。" : DEFAULT_APP_SERVER_ERROR_TEXT
+      };
+    }
     return {
       type: "app_server_status",
       schema: DEFAULT_SCHEMA,
@@ -599,6 +705,50 @@ export function mapAppServerNotificationToDashboardEvent(message, context = {}) 
     };
   }
   return null;
+}
+
+function mapAppServerItemToProgressStage(item = {}) {
+  const type = String(item?.type || item?.kind || "").toLowerCase();
+  if (type.includes("command")) return "command";
+  if (type.includes("filechange") || type.includes("file_change") || type.includes("patch")) return "file_change";
+  if (type.includes("mcptool") || type.includes("tool")) return "tool_call";
+  if (type.includes("websearch") || type.includes("web_search")) return "web_search";
+  if (type.includes("plan")) return "planning";
+  if (type.includes("reasoning")) return "thinking";
+  return "thinking";
+}
+
+export function isAppServerActivityNotification(message) {
+  const method = String(message?.method || "");
+  const progressMethods = [
+    "turn/started",
+    "item/agentMessage/delta",
+    "item/plan/delta",
+    "turn/plan/updated",
+    "turn/diff/updated",
+    "command/exec/outputDelta",
+    "item/commandExecution/outputDelta",
+    "item/commandExecution/terminalInteraction",
+    "item/fileChange/outputDelta",
+    "item/fileChange/patchUpdated",
+    "item/mcpToolCall/progress",
+    "item/reasoning/summaryTextDelta",
+    "item/reasoning/summaryPartAdded",
+    "item/reasoning/textDelta"
+  ];
+  if (progressMethods.includes(method)) {
+    return true;
+  }
+  const params = message?.params && typeof message.params === "object" ? message.params : {};
+  if (method === "thread/status/changed") {
+    const activeFlags = Array.isArray(params.status?.activeFlags) ? params.status.activeFlags : [];
+    return activeFlags.includes("waitingOnApproval") || activeFlags.includes("waitingOnUserInput");
+  }
+  if (method !== "item/started" && method !== "item/completed") {
+    return false;
+  }
+  const stage = mapAppServerItemToProgressStage(params.item);
+  return ["command", "file_change", "tool_call", "web_search", "planning"].includes(stage);
 }
 
 function createAppServerFailureAlreadySentError(message) {
@@ -799,6 +949,61 @@ export class JsonLineAppServerClient {
   }
 }
 
+function createAppServerTurnActivityWatchdog({
+  activityQuietMs = DEFAULT_ACTIVITY_QUIET_MS,
+  turnTimeoutMs = 0,
+  onQuiet = () => {},
+  onStalled = () => {}
+} = {}) {
+  let quietHandle = null;
+  let stalledHandle = null;
+  let stopped = false;
+
+  const clearQuiet = () => {
+    if (!quietHandle) return;
+    clearTimeout(quietHandle);
+    quietHandle = null;
+  };
+  const clearStalled = () => {
+    if (!stalledHandle) return;
+    clearTimeout(stalledHandle);
+    stalledHandle = null;
+  };
+  const stop = () => {
+    stopped = true;
+    clearQuiet();
+    clearStalled();
+  };
+  const markActivity = () => {
+    if (stopped) return;
+    clearQuiet();
+    clearStalled();
+    const quietMs = Number(activityQuietMs);
+    const stalledMs = Number(turnTimeoutMs);
+    if (Number.isFinite(quietMs) && quietMs > 0 && (!Number.isFinite(stalledMs) || stalledMs <= 0 || quietMs < stalledMs)) {
+      quietHandle = setTimeout(() => {
+        quietHandle = null;
+        if (stopped) return;
+        void onQuiet();
+      }, quietMs);
+    }
+    if (!Number.isFinite(stalledMs) || stalledMs <= 0) {
+      return;
+    }
+    stalledHandle = setTimeout(() => {
+      stalledHandle = null;
+      if (stopped) return;
+      stop();
+      void onStalled();
+    }, stalledMs);
+  };
+
+  return {
+    markActivity,
+    stop
+  };
+}
+
 export async function handleDashboardTurnRequest({
   request,
   appServer,
@@ -806,6 +1011,7 @@ export async function handleDashboardTurnRequest({
   cwd = process.cwd(),
   sandboxMode = "",
   turnTimeoutMs = 0,
+  activityQuietMs = DEFAULT_ACTIVITY_QUIET_MS,
   lateCompletionTimeoutMs = 30 * 60 * 1000,
   runtimeUrl = "",
   token = "",
@@ -844,18 +1050,24 @@ export async function handleDashboardTurnRequest({
   let activeTurnId = "";
   let turnSettled = false;
   let timedOut = false;
-  let timeoutHandle = null;
   let lateCompletionCleanupHandle = null;
   let cleanupNotifications = () => {};
   let resolveTurn = () => {};
   let rejectTurn = () => {};
-  const turnCompletion = new Promise((resolve, reject) => {
-    resolveTurn = resolve;
-    rejectTurn = reject;
-    if (!Number.isFinite(turnTimeoutMs) || turnTimeoutMs <= 0) {
-      return;
-    }
-    timeoutHandle = setTimeout(() => {
+  const activityWatchdog = createAppServerTurnActivityWatchdog({
+    activityQuietMs,
+    turnTimeoutMs,
+    onQuiet: () =>
+      sendDashboardEvent({
+        type: "app_server_status",
+        schema: DEFAULT_SCHEMA,
+        threadId: dashboardThreadId,
+        codexThreadId: codexThreadId || null,
+        status: "quiet",
+        stage: "quiet",
+        text: APP_SERVER_TURN_QUIET_TEXT
+      }),
+    onStalled: () => {
       timedOut = true;
       const timeoutEvent = buildAppServerTurnTimeoutEvent({
         dashboardThreadId,
@@ -869,14 +1081,26 @@ export async function handleDashboardTurnRequest({
         cleanupNotifications();
       }, lateCompletionTimeoutMs);
       finishTurn(resolveTurn);
-    }, turnTimeoutMs);
+    }
   });
+
   const finishTurn = (callback) => {
     if (turnSettled) return;
     turnSettled = true;
-    clearTimeout(timeoutHandle);
+    activityWatchdog.stop();
     callback();
   };
+
+  const markAppServerActivity = () => {
+    if (turnSettled || timedOut) return;
+    activityWatchdog.markActivity();
+  };
+
+  const turnCompletion = new Promise((resolve, reject) => {
+    resolveTurn = resolve;
+    rejectTurn = reject;
+  });
+  activityWatchdog.markActivity();
   const unsubscribe = appServer.onNotification((message) => {
     if (!matchesAppServerTurnNotification(message, { codexThreadId, turnId: activeTurnId })) {
       return;
@@ -884,6 +1108,9 @@ export async function handleDashboardTurnRequest({
     const notificationTurnId = extractAppServerNotificationTurnId(message);
     if (!activeTurnId && notificationTurnId) {
       activeTurnId = notificationTurnId;
+    }
+    if (isAppServerActivityNotification(message)) {
+      markAppServerActivity();
     }
     const event = mapAppServerNotificationToDashboardEvent(message, {
       dashboardThreadId,
@@ -992,9 +1219,10 @@ export async function handleDashboardTurnRequest({
     if (!activeTurnId && startedTurnId) {
       activeTurnId = startedTurnId;
     }
+    markAppServerActivity();
     await turnCompletion;
   } finally {
-    clearTimeout(timeoutHandle);
+    activityWatchdog.stop();
     if (!timedOut && typeof appServer.drainApprovalRequests === "function") {
       await appServer.drainApprovalRequests();
     }
@@ -1012,6 +1240,7 @@ export function parseBridgeArgs(argv = process.argv.slice(2), env = process.env)
     cwd: env.VTDD_DASHBOARD_CODEX_CWD || process.cwd(),
     sandboxMode: env.VTDD_DASHBOARD_APP_SERVER_SANDBOX || "",
     turnTimeoutMs: Number(env.VTDD_DASHBOARD_APP_SERVER_TURN_TIMEOUT_MS || DEFAULT_TURN_TIMEOUT_MS),
+    activityQuietMs: Number(env.VTDD_DASHBOARD_APP_SERVER_ACTIVITY_QUIET_MS || DEFAULT_ACTIVITY_QUIET_MS),
     reconnectDelayMs: Number(env.VTDD_DASHBOARD_BRIDGE_RECONNECT_DELAY_MS || 1000),
     heartbeatMs: Number(env.VTDD_DASHBOARD_BRIDGE_HEARTBEAT_MS || 25000)
   };
@@ -1023,6 +1252,7 @@ export function parseBridgeArgs(argv = process.argv.slice(2), env = process.env)
     if (arg === "--cwd") options.cwd = argv[++index] || "";
     if (arg === "--sandbox") options.sandboxMode = argv[++index] || "";
     if (arg === "--turn-timeout-ms") options.turnTimeoutMs = Number(argv[++index] || DEFAULT_TURN_TIMEOUT_MS);
+    if (arg === "--activity-quiet-ms") options.activityQuietMs = Number(argv[++index] || DEFAULT_ACTIVITY_QUIET_MS);
     if (arg === "--reconnect-delay-ms") options.reconnectDelayMs = Number(argv[++index] || 1000);
     if (arg === "--heartbeat-ms") options.heartbeatMs = Number(argv[++index] || 25000);
   }
@@ -1078,6 +1308,7 @@ export async function connectDashboardAppServerBridgeOnce({
   cwd = process.cwd(),
   sandboxMode = "",
   turnTimeoutMs = DEFAULT_TURN_TIMEOUT_MS,
+  activityQuietMs = DEFAULT_ACTIVITY_QUIET_MS,
   heartbeatMs = 25000,
   runtimeUrl = "",
   fetchImpl = globalThis.fetch,
@@ -1148,6 +1379,7 @@ export async function connectDashboardAppServerBridgeOnce({
             cwd,
             sandboxMode,
             turnTimeoutMs,
+            activityQuietMs,
             runtimeUrl,
             token,
             fetchImpl,
