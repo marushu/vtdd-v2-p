@@ -609,9 +609,23 @@ test("dashboard app-server bridge maps Codex app-server notifications to dashboa
 
   assert.equal(isAppServerActivityNotification({ method: "item/reasoning/summaryTextDelta", params: {} }), true);
   assert.equal(isAppServerActivityNotification({ method: "thread/status/changed", params: {} }), false);
+  assert.equal(
+    isAppServerActivityNotification({
+      method: "thread/status/changed",
+      params: { status: { activeFlags: ["waitingOnApproval"] } }
+    }),
+    true
+  );
+  assert.equal(
+    isAppServerActivityNotification({
+      method: "thread/status/changed",
+      params: { status: { activeFlags: ["waitingOnUserInput"] } }
+    }),
+    true
+  );
   assert.equal(isAppServerActivityNotification({ method: "warning", params: {} }), false);
   assert.equal(isAppServerActivityNotification({ method: "model/rerouted", params: {} }), false);
-  assert.equal(isAppServerActivityNotification({ method: "item/reasoning/textDelta", params: {} }), false);
+  assert.equal(isAppServerActivityNotification({ method: "item/reasoning/textDelta", params: {} }), true);
   assert.equal(isAppServerActivityNotification({ method: "item/started", params: { item: { type: "reasoning" } } }), false);
   assert.equal(isAppServerActivityNotification({ method: "item/started", params: { item: { type: "commandExecution" } } }), true);
   assert.equal(isAppServerActivityNotification({ method: "thread/name/updated", params: {} }), false);
@@ -1407,6 +1421,84 @@ test("dashboard app-server bridge does not reset stalled timeout for non-progres
   await pending;
 });
 
+test("dashboard app-server bridge keeps approval wait status from becoming stalled", async () => {
+  const events = [];
+  const handlers = new Set();
+  let nextId = 1;
+  const appServer = {
+    nextRequestId() {
+      const id = nextId;
+      nextId += 1;
+      return id;
+    },
+    onNotification(handler) {
+      handlers.add(handler);
+      return () => handlers.delete(handler);
+    },
+    async request(message) {
+      if (message.method === "thread/start") {
+        return { thread: { id: "codex-thread-approval-wait" } };
+      }
+      if (message.method === "turn/start") {
+        return { turn: { id: "turn-approval-wait" } };
+      }
+      throw new Error(`unexpected method ${message.method}`);
+    }
+  };
+
+  const pending = handleDashboardTurnRequest({
+    request: {
+      threadId: "dashboard-main",
+      repository: "marushu/vtdd-v2-p",
+      relatedIssue: 590,
+      text: "承認待ちを確認して"
+    },
+    appServer,
+    sendDashboardEvent: async (event) => events.push(event),
+    cwd: "/repo",
+    activityQuietMs: 0,
+    turnTimeoutMs: 40
+  });
+
+  await waitFor(() => handlers.size === 1);
+  await new Promise((resolve) => setTimeout(resolve, 25));
+  for (const handler of handlers) {
+    handler({
+      method: "thread/status/changed",
+      params: {
+        threadId: "codex-thread-approval-wait",
+        turnId: "turn-approval-wait",
+        status: { type: "active", activeFlags: ["waitingOnApproval"] }
+      }
+    });
+  }
+  await new Promise((resolve) => setTimeout(resolve, 25));
+  assert.equal(events.some((event) => event.type === "app_server_turn_failed"), false);
+
+  for (const handler of handlers) {
+    handler({
+      method: "item/agentMessage/delta",
+      params: {
+        threadId: "codex-thread-approval-wait",
+        turnId: "turn-approval-wait",
+        delta: "承認待ちを保持しました。"
+      }
+    });
+    handler({
+      method: "turn/completed",
+      params: {
+        threadId: "codex-thread-approval-wait",
+        turn: { id: "turn-approval-wait", status: "completed" }
+      }
+    });
+  }
+  await pending;
+
+  assert.equal(events.some((event) => event.type === "app_server_turn_failed"), false);
+  assert.equal(events.at(-1).type, "app_server_reply");
+  assert.equal(events.at(-1).text, "承認待ちを保持しました。");
+});
+
 test("dashboard app-server bridge persists late completion after timeout instead of losing the final reply", async () => {
   const events = [];
   const handlers = new Set();
@@ -1638,7 +1730,7 @@ test("dashboard app-server bridge args require a dashboard thread id for runtime
   });
   assert.equal(parsed.threadId, "");
   assert.equal(parsed.sandboxMode, "danger-full-access");
-  assert.equal(parsed.turnTimeoutMs, 300000);
+  assert.equal(parsed.turnTimeoutMs, 120000);
   assert.equal(parsed.activityQuietMs, 90000);
 });
 

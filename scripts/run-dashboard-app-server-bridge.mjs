@@ -15,7 +15,7 @@ const APP_SERVER_TURN_TIMEOUT_TEXT =
 const APP_SERVER_TURN_QUIET_TEXT =
   "codex app-server から進行イベントがしばらく届いていません。処理中の可能性があります。接続と実行状態を確認しています。";
 const DASHBOARD_MEDIA_TMP_DIR = "vtdd-dashboard-media";
-const DEFAULT_TURN_TIMEOUT_MS = 5 * 60 * 1000;
+const DEFAULT_TURN_TIMEOUT_MS = 2 * 60 * 1000;
 const DEFAULT_ACTIVITY_QUIET_MS = 90 * 1000;
 
 export function buildAppServerInitializeRequest(id = 1) {
@@ -733,15 +733,20 @@ export function isAppServerActivityNotification(message) {
     "item/fileChange/patchUpdated",
     "item/mcpToolCall/progress",
     "item/reasoning/summaryTextDelta",
-    "item/reasoning/summaryPartAdded"
+    "item/reasoning/summaryPartAdded",
+    "item/reasoning/textDelta"
   ];
   if (progressMethods.includes(method)) {
     return true;
   }
+  const params = message?.params && typeof message.params === "object" ? message.params : {};
+  if (method === "thread/status/changed") {
+    const activeFlags = Array.isArray(params.status?.activeFlags) ? params.status.activeFlags : [];
+    return activeFlags.includes("waitingOnApproval") || activeFlags.includes("waitingOnUserInput");
+  }
   if (method !== "item/started" && method !== "item/completed") {
     return false;
   }
-  const params = message?.params && typeof message.params === "object" ? message.params : {};
   const stage = mapAppServerItemToProgressStage(params.item);
   return ["command", "file_change", "tool_call", "web_search", "planning"].includes(stage);
 }
