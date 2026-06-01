@@ -78,7 +78,7 @@ test("active issue execution queue names current open PR hygiene", () => {
   assert.equal(doc.includes("PR #684 / Issue #590"), true);
   assert.equal(doc.includes("PR #685 / Issue #654"), true);
   assert.equal(doc.includes("PR #686 / Issue #579"), true);
-  assert.equal(doc.includes("PR #690 merged Issue #654 reconnect/resume continuation"), true);
+  assert.equal(doc.includes("PR #712 / Issue #528 was reclassified as a regression"), true);
   assert.equal(doc.includes("Issue #565, Issue #577, and Issue #580 were closed"), true);
   assert.equal(doc.includes("No open grandfathered PRs remain."), true);
 });
