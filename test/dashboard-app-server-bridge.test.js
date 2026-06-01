@@ -9,11 +9,13 @@ import {
   buildOwnerActionRequiredPayloadForAppServerApproval,
   buildAppServerRequestApprovalResponse,
   buildAppServerSandboxOverrides,
+  buildVpsRunnerWakeupCommand,
   buildAppServerThreadResumeRequest,
   buildAppServerThreadStartRequest,
   buildAppServerTurnStartRequest,
   buildDashboardTurnInputText,
   connectDashboardAppServerBridgeOnce,
+  executeVpsRunnerWakeup,
   extractAppServerNotificationTurnId,
   formatDashboardMediaReferenceLines,
   handleDashboardTurnRequest,
@@ -67,6 +69,57 @@ test("dashboard app-server bridge builds initialize and thread requests from Cod
   assert.equal(turn.params.threadId, "codex-thread-1");
   assert.deepEqual(turn.params.input, [{ type: "text", text: "今日は何日？", text_elements: [] }]);
   assert.equal(turn.params.sandboxPolicy, undefined);
+});
+
+test("dashboard app-server bridge runner wakeup uses only fixed user systemd start command", async () => {
+  assert.deepEqual(buildVpsRunnerWakeupCommand(), {
+    command: "systemctl",
+    args: ["--user", "start", "vtdd-vps-runner.service"],
+    shell: false
+  });
+
+  const spawnCalls = [];
+  const result = await executeVpsRunnerWakeup({
+    request: {
+      threadId: "dashboard-main",
+      requestId: "runner-wakeup:test",
+      executionId: "remote-codex-issue717",
+      repository: "marushu/vtdd-v2-p",
+      issueNumber: 717,
+      queueCommentUrl: "https://github.com/marushu/vtdd-v2-p/issues/717#issuecomment-1"
+    },
+    now: (() => {
+      const values = ["2026-06-01T00:00:00.000Z", "2026-06-01T00:00:01.000Z"];
+      return () => values.shift() || "2026-06-01T00:00:01.000Z";
+    })(),
+    spawnImpl(command, args, options) {
+      spawnCalls.push({ command, args, options });
+      const listeners = new Map();
+      return {
+        stdout: { on() {} },
+        stderr: { on() {} },
+        on(type, handler) {
+          listeners.set(type, handler);
+          if (type === "close") {
+            queueMicrotask(() => handler(0));
+          }
+        }
+      };
+    }
+  });
+
+  assert.equal(spawnCalls.length, 1);
+  assert.deepEqual(spawnCalls[0], {
+    command: "systemctl",
+    args: ["--user", "start", "vtdd-vps-runner.service"],
+    options: { shell: false, stdio: ["ignore", "pipe", "pipe"] }
+  });
+  assert.equal(result.type, "runner_wakeup_result");
+  assert.equal(result.status, "started");
+  assert.equal(result.attempted, true);
+  assert.equal(result.fallback, "vtdd-vps-runner.timer");
+  assert.equal(result.threadId, "dashboard-main");
+  assert.equal(result.executionId, "remote-codex-issue717");
 });
 
 test("dashboard app-server bridge wraps repository traffic-control context into turn input", () => {

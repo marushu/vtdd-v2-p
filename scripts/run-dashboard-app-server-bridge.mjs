@@ -196,6 +196,96 @@ export async function materializeDashboardMediaReferences({
   );
 }
 
+export function buildVpsRunnerWakeupCommand() {
+  return {
+    command: "systemctl",
+    args: ["--user", "start", "vtdd-vps-runner.service"],
+    shell: false
+  };
+}
+
+export async function executeVpsRunnerWakeup({
+  request = {},
+  spawnImpl = spawn,
+  now = () => new Date().toISOString()
+} = {}) {
+  const command = buildVpsRunnerWakeupCommand();
+  const startedAt = now();
+  return new Promise((resolve) => {
+    let stdout = "";
+    let stderr = "";
+    let child;
+    try {
+      child = spawnImpl(command.command, command.args, {
+        shell: false,
+        stdio: ["ignore", "pipe", "pipe"]
+      });
+    } catch (error) {
+      resolve({
+        type: "runner_wakeup_result",
+        schema: DEFAULT_SCHEMA,
+        threadId: normalizeBridgeText(request.threadId),
+        requestId: normalizeBridgeText(request.requestId),
+        executionId: normalizeBridgeText(request.executionId),
+        status: "failed",
+        attempted: true,
+        fallback: "vtdd-vps-runner.timer",
+        command,
+        startedAt,
+        completedAt: now(),
+        exitCode: null,
+        reason: normalizeBridgeText(error?.message || "failed to start vtdd-vps-runner.service").slice(0, 240)
+      });
+      return;
+    }
+    child.stdout?.on("data", (chunk) => {
+      stdout += String(chunk || "");
+    });
+    child.stderr?.on("data", (chunk) => {
+      stderr += String(chunk || "");
+    });
+    child.on("error", (error) => {
+      resolve({
+        type: "runner_wakeup_result",
+        schema: DEFAULT_SCHEMA,
+        threadId: normalizeBridgeText(request.threadId),
+        requestId: normalizeBridgeText(request.requestId),
+        executionId: normalizeBridgeText(request.executionId),
+        status: "failed",
+        attempted: true,
+        fallback: "vtdd-vps-runner.timer",
+        command,
+        startedAt,
+        completedAt: now(),
+        exitCode: null,
+        reason: normalizeBridgeText(error?.message || "failed to start vtdd-vps-runner.service").slice(0, 240)
+      });
+    });
+    child.on("close", (exitCode) => {
+      const normalizedExitCode = Number.isInteger(exitCode) ? exitCode : null;
+      const reason = normalizeBridgeText(stderr || stdout);
+      resolve({
+        type: "runner_wakeup_result",
+        schema: DEFAULT_SCHEMA,
+        threadId: normalizeBridgeText(request.threadId),
+        requestId: normalizeBridgeText(request.requestId),
+        executionId: normalizeBridgeText(request.executionId),
+        repository: normalizeBridgeText(request.repository),
+        issueNumber: Number(request.issueNumber || 0) || null,
+        queueCommentUrl: normalizeBridgeText(request.queueCommentUrl),
+        status: normalizedExitCode === 0 ? "started" : "failed",
+        attempted: true,
+        fallback: "vtdd-vps-runner.timer",
+        command,
+        startedAt,
+        completedAt: now(),
+        exitCode: normalizedExitCode,
+        reason: reason ? reason.slice(0, 240) : null
+      });
+    });
+  });
+}
+
 async function materializeDashboardMediaReference({ reference, runtimeUrl, token, fetchImpl, tmpRoot }) {
   const normalized = normalizeDashboardMediaReferenceForBridge(reference);
   if (!normalized.mediaId) {
@@ -1062,6 +1152,9 @@ export async function connectDashboardAppServerBridgeOnce({
             text: error?.message || DEFAULT_APP_SERVER_ERROR_TEXT
           });
         });
+    }
+    if (payload?.type === "runner_wakeup_requested") {
+      executeVpsRunnerWakeup({ request: payload }).then((result) => safeSend(result));
     }
   });
 
