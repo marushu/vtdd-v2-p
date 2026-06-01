@@ -1276,6 +1276,7 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("function scheduleReconnect()"), true);
   assert.equal(body.includes("function sendOwnerMessageByHttp("), true);
   assert.equal(body.includes("function isChatSocketOpen()"), true);
+  assert.equal(body.includes("function setHttpFallbackReadyStatus()"), true);
   assert.equal(body.includes("function describeChatSocketState()"), true);
   assert.equal(body.includes("function setConnectionRecoveryStatus("), true);
   assert.equal(body.includes("function buildReconnectStatus("), true);
@@ -1307,6 +1308,10 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes("WebSocket 未接続のため HTTP fallback で保存しました。再接続を続けています。"), false);
   assert.equal(body.includes("接続が不安定です。入力は保持したまま保存します。"), true);
   assert.equal(body.includes("接続が不安定なため保存しました。再接続を続けています。"), true);
+  assert.equal(body.includes("WebSocket は未接続ですが、送信できます。再接続を続けています。"), true);
+  assert.equal(body.includes('status.dataset.httpFallbackReady = "true"'), true);
+  assert.equal(body.includes('status.dataset.httpFallbackReady = "false"'), true);
+  assert.equal(body.includes("setHttpFallbackReadyStatus();"), true);
   assert.equal(body.includes("sendOwnerMessageByHttp(ownerPayload, clientMessageId)"), true);
   assert.equal(body.includes("refreshThread().then"), false);
   assert.equal(body.includes("履歴の再取得に失敗しました。入力は保持しています。"), true);
