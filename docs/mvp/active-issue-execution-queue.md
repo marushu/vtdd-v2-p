@@ -109,20 +109,23 @@ Last rebuilt from GitHub runtime truth: 2026-05-31
   behavior. Issue #723 temporarily becomes `Now` to add owner-facing freshness
   check and force cache refresh; Issue #590 remains the parent root and resumes
   immediately after stale-client recovery no longer masks the watchdog.
+- 2026-06-01 PR #724 merged and deploy-production succeeded for Issue #723.
+  Owner production PWA evidence confirmed the freshness controls exist in the
+  left navigation menu and `強制キャッシュ削除リロード` can be executed. The
+  owner also confirmed the menu placement is acceptable because keeping the
+  control resident in the main chat would be noisy. Issue #723 remains open
+  until evidence is posted and close-readiness is judged, but it no longer
+  needs to hold `Now`; Issue #590 resumes as the parent root.
 
 ## Now
 
-- Issue #723: Dashboard Butler self-refresh and force cache reload for stale
-  PWA/client state. This is a temporary `ROOT` support slice for Issue #590
-  because PR #721 deploy truth cannot be trusted by the owner-facing PWA while
-  stale client/service-worker/session state can keep old timeout behavior alive.
+- Issue #590: app-server turn timeout / silent wait recovery. Issue #723's
+  stale-client recovery support has production PWA evidence, so the queue
+  returns to the parent root: prove longer Dashboard Butler work can remain
+  observable and recoverable without fixed 2-minute conversation death.
 
 ## Next
 
-- Issue #590: app-server turn timeout / silent wait recovery resumes after
-  Issue #723 gives the owner a same-PWA freshness check and force refresh path,
-  so production E2E can distinguish stale client state from actual app-server
-  inactivity.
 - Issue #637: iPhone/PWA-complete VPS privileged maintenance capability
   lifecycle resumes after Issue #590 no longer blocks ordinary Dashboard Butler
   conversation continuity.
