@@ -57501,6 +57501,7 @@ var MCP_SERVER_INFO = Object.freeze({
 });
 var MCP_INSTRUCTIONS = "VTDD MCP \u306F Butler \u3068\u540C\u3058 runtime truth / review truth / operational memory \u3092\u8AAD\u3080\u305F\u3081\u306E read-first surface \u3067\u3059\u3002\u73FE\u5728\u306E truth \u306F runtime truth \u3092\u512A\u5148\u3057\u3001memory \u306F\u88DC\u52A9\u3068\u3057\u3066\u6271\u3063\u3066\u304F\u3060\u3055\u3044\u3002";
 var DASHBOARD_ICON_VERSION = "20260529-butler-v2";
+var DASHBOARD_CLIENT_VERSION = "20260601-issue-723-self-refresh";
 var DASHBOARD_ICON_PNG_PATH = `/dashboard-icon-${DASHBOARD_ICON_VERSION}.png`;
 var DASHBOARD_ICON_LINKS = `<link rel="icon" type="image/png" sizes="512x512" href="${DASHBOARD_ICON_PNG_PATH}">
   <link rel="shortcut icon" href="${DASHBOARD_ICON_PNG_PATH}">
@@ -69459,12 +69460,36 @@ function buildDashboardWebManifest(url) {
 }
 function renderDashboardServiceWorkerScript() {
   return `
+const DASHBOARD_SERVICE_WORKER_VERSION = ${JSON.stringify(DASHBOARD_CLIENT_VERSION)};
+
+function isDashboardCacheName(name) {
+  const text = String(name || "").toLowerCase();
+  return text.includes("dashboard") || text.includes("vtdd");
+}
+
 self.addEventListener("install", () => {
   self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(self.clients.claim());
+});
+
+self.addEventListener("message", (event) => {
+  const data = event.data || {};
+  if (data.type === "VTDD_DASHBOARD_CLEAR_CACHES") {
+    event.waitUntil((async () => {
+      if (typeof caches === "undefined") return;
+      const keys = await caches.keys();
+      await Promise.allSettled(keys.filter(isDashboardCacheName).map((key) => caches.delete(key)));
+    })());
+  }
+  if (data.type === "VTDD_DASHBOARD_VERSION") {
+    event.source?.postMessage?.({
+      type: "VTDD_DASHBOARD_VERSION",
+      serviceWorkerVersion: DASHBOARD_SERVICE_WORKER_VERSION
+    });
+  }
 });
 
 self.addEventListener("push", (event) => {
@@ -70218,6 +70243,10 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
     .pill.danger { border-color: #d69b9b; background: #fff0f0; color: #8a1f1f; }
     .deploy-event { border: 1px solid var(--border); border-radius: 12px; padding: 10px; margin: 10px 0; background: var(--soft); }
     .deploy-event p { margin-bottom: 6px; font-size: 13px; line-height: 1.45; }
+    .freshness-panel { border: 1px solid var(--border); border-radius: 12px; padding: 10px; margin: 10px 0; background: var(--soft); }
+    .freshness-panel p { margin-bottom: 6px; font-size: 13px; line-height: 1.45; }
+    .freshness-panel button { min-height: 36px; border: 1px solid var(--border); border-radius: 10px; padding: 7px 9px; color: var(--text); background: var(--button); font: inherit; font-size: 13px; font-weight: 750; }
+    .freshness-panel button:disabled { opacity: .55; }
     .quick-actions, .surface-list { display: grid; gap: 8px; }
     .quick-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .quick-actions a, .surface-list a, .disabled-action { display: inline-flex; align-items: center; justify-content: center; min-height: 36px; border: 1px solid var(--border); border-radius: 10px; padding: 7px 9px; color: var(--text); text-decoration: none; background: var(--soft); font-weight: 750; font-size: 13px; text-align: center; }
@@ -70306,6 +70335,15 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
             <div class="lane-title"><h3>\u9032\u884C\u4E2D</h3><span class="pill">\u72B6\u614B</span></div>
             <p>\u76F4\u8FD1\u306E\u53CD\u6620\u3001\u5931\u6557\u3001\u9032\u884C\u4E2D\u306E\u4F5C\u696D\u304C\u3042\u308C\u3070\u3053\u3053\u306B\u51FA\u3057\u307E\u3059\u3002</p>
             ${renderDashboardDeployEvent(latestDeployEvent)}
+            <div class="freshness-panel" data-dashboard-freshness-panel data-client-version="${escapeDashboardHtml(DASHBOARD_CLIENT_VERSION)}">
+              <div class="lane-title"><h3>\u6700\u65B0\u72B6\u614B</h3><span class="pill" id="dashboard-freshness-pill">\u672A\u78BA\u8A8D</span></div>
+              <p id="dashboard-freshness-state">client build: ${escapeDashboardHtml(DASHBOARD_CLIENT_VERSION)}</p>
+              <p class="muted">2\u5206 timeout \u306A\u3069\u53E4\u3044\u6319\u52D5\u304C\u6B8B\u308B\u6642\u306F\u3001PWA / service worker / WebSocket session \u304C\u53E4\u3044\u53EF\u80FD\u6027\u3092\u3053\u3053\u3067\u5207\u308A\u5206\u3051\u307E\u3059\u3002</p>
+              <div class="actions">
+                <button id="dashboard-refresh-check-button" type="button">\u6700\u65B0\u72B6\u614B\u3092\u78BA\u8A8D</button>
+                <button id="dashboard-force-refresh-button" type="button">\u5F37\u5236\u30AD\u30E3\u30C3\u30B7\u30E5\u524A\u9664\u30EA\u30ED\u30FC\u30C9</button>
+              </div>
+            </div>
             <div class="quick-actions">
               ${renderDashboardActionList(cockpitActions)}
             </div>
@@ -70375,11 +70413,16 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       const mediaButton = document.getElementById("butler-media-button");
       const mediaInput = document.getElementById("butler-media-input");
       const pendingMedia = document.getElementById("butler-pending-media");
+      const freshnessPill = document.getElementById("dashboard-freshness-pill");
+      const freshnessState = document.getElementById("dashboard-freshness-state");
+      const refreshCheckButton = document.getElementById("dashboard-refresh-check-button");
+      const forceRefreshButton = document.getElementById("dashboard-force-refresh-button");
       if (!form || !log || !textarea || !status) return;
 
       const socketEndpoint = form.dataset.socketEndpoint;
       const threadEndpoint = form.dataset.threadEndpoint;
       const mediaUploadEndpoint = "/v2/media/upload";
+      const dashboardClientVersion = ${JSON.stringify(DASHBOARD_CLIENT_VERSION)};
       const dashboardSignInUrl = ${JSON.stringify(dashboardSignInUrl)};
       const threadId = form.dataset.threadId;
       const repositoryInput = form.dataset.repositoryInput;
@@ -70400,6 +70443,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       let authReturnResumePromise = null;
       const dashboardDraftKey = "vtdd.dashboard.draft:" + (threadId || "unknown");
       const dashboardDraftMetaKey = dashboardDraftKey + ":meta";
+      const dashboardForceRefreshKey = "vtdd.dashboard.forceRefresh:last";
 
       function getDashboardDraftStorage() {
         return window.sessionStorage;
@@ -70425,6 +70469,114 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           draftStorage.removeItem(dashboardDraftKey);
           draftStorage.removeItem(dashboardDraftMetaKey);
         } catch {}
+      }
+
+      function setFreshnessPill(text, ok) {
+        if (!freshnessPill) return;
+        freshnessPill.textContent = text;
+        freshnessPill.classList.toggle("success", ok === true);
+        freshnessPill.classList.toggle("danger", ok === false);
+      }
+
+      function setFreshnessState(text, options = {}) {
+        if (!freshnessState) return;
+        freshnessState.textContent = text;
+        setFreshnessPill(options.pill || "\u78BA\u8A8D\u6E08\u307F", options.ok);
+      }
+
+      async function getDashboardServiceWorkerRegistration() {
+        if (!("serviceWorker" in navigator)) return null;
+        try {
+          return await navigator.serviceWorker.getRegistration("/dashboard/");
+        } catch {
+          return null;
+        }
+      }
+
+      async function readDashboardFreshnessSnapshot() {
+        const registration = await getDashboardServiceWorkerRegistration();
+        const controllerState = navigator.serviceWorker?.controller ? "controller\u3042\u308A" : "controller\u306A\u3057";
+        const registrationState = registration
+          ? registration.waiting
+            ? "\u66F4\u65B0\u5F85\u3061"
+            : registration.installing
+              ? "installing"
+              : registration.active
+                ? "active"
+                : "registered"
+          : "\u672A\u767B\u9332";
+        const socketState = describeChatSocketState();
+        return {
+          registration,
+          text: "client build: " + dashboardClientVersion + " / service worker: " + registrationState + " / " + controllerState + " / \u63A5\u7D9A\u72B6\u614B: " + socketState
+        };
+      }
+
+      async function refreshDashboardFreshnessStatus(options = {}) {
+        try {
+          const snapshot = await readDashboardFreshnessSnapshot();
+          const lastForcedAt = getDashboardDraftStorage().getItem(dashboardForceRefreshKey) || "";
+          const suffix = lastForcedAt ? " / \u524D\u56DE\u306E\u5F37\u5236\u30EA\u30ED\u30FC\u30C9: " + lastForcedAt : "";
+          setFreshnessState(snapshot.text + suffix, { ok: true, pill: options.pill || "\u78BA\u8A8D\u6E08\u307F" });
+          if (options.visibleStatus === true) {
+            setStatus("\u6700\u65B0\u72B6\u614B\u3092\u78BA\u8A8D\u3057\u307E\u3057\u305F\u3002\u53E4\u3044 timeout \u6587\u8A00\u304C\u7D9A\u304F\u5834\u5408\u306F\u5F37\u5236\u30AD\u30E3\u30C3\u30B7\u30E5\u524A\u9664\u30EA\u30ED\u30FC\u30C9\u3092\u8A66\u305B\u307E\u3059\u3002", { temporary: true });
+          }
+          return snapshot;
+        } catch {
+          setFreshnessState("\u6700\u65B0\u72B6\u614B\u3092\u78BA\u8A8D\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F\u3002\u901A\u5E38 reload \u304B\u5F37\u5236\u30AD\u30E3\u30C3\u30B7\u30E5\u524A\u9664\u30EA\u30ED\u30FC\u30C9\u3092\u8A66\u3057\u3066\u304F\u3060\u3055\u3044\u3002", { ok: false, pill: "\u8981\u78BA\u8A8D" });
+          return { registration: null, text: "" };
+        }
+      }
+
+      async function requestDashboardServiceWorkerCacheClear(registration) {
+        const target = registration?.active || registration?.waiting || registration?.installing || navigator.serviceWorker?.controller;
+        if (!target || typeof target.postMessage !== "function") return false;
+        try {
+          target.postMessage({
+            type: "VTDD_DASHBOARD_CLEAR_CACHES",
+            clientVersion: dashboardClientVersion,
+            threadId
+          });
+          return true;
+        } catch {
+          return false;
+        }
+      }
+
+      function isDashboardCacheName(name) {
+        const text = String(name || "").toLowerCase();
+        return text.includes("dashboard") || text.includes("vtdd");
+      }
+
+      async function clearDashboardCaches() {
+        if (!("caches" in window)) return 0;
+        const keys = await caches.keys();
+        const dashboardKeys = keys.filter(isDashboardCacheName);
+        await Promise.allSettled(dashboardKeys.map((key) => caches.delete(key)));
+        return dashboardKeys.length;
+      }
+
+      async function forceDashboardRefresh() {
+        persistDashboardDraft();
+        setFreshnessPill("\u66F4\u65B0\u4E2D", null);
+        setStatus("\u5F37\u5236\u30AD\u30E3\u30C3\u30B7\u30E5\u524A\u9664\u30EA\u30ED\u30FC\u30C9\u3092\u6E96\u5099\u3057\u3066\u3044\u307E\u3059\u3002\u5165\u529B\u306F\u4FDD\u5B58\u3057\u307E\u3059\u3002\u6DFB\u4ED8\u306F\u518D\u9078\u629E\u304C\u5FC5\u8981\u306A\u5834\u5408\u304C\u3042\u308A\u307E\u3059\u3002", { thinking: true });
+        if (forceRefreshButton) forceRefreshButton.disabled = true;
+        if (refreshCheckButton) refreshCheckButton.disabled = true;
+        try {
+          const snapshot = await readDashboardFreshnessSnapshot();
+          await requestDashboardServiceWorkerCacheClear(snapshot.registration);
+          await clearDashboardCaches();
+          if (snapshot.registration && typeof snapshot.registration.update === "function") {
+            await snapshot.registration.update().catch(() => null);
+          }
+          getDashboardDraftStorage().setItem(dashboardForceRefreshKey, new Date().toISOString());
+        } catch {
+          getDashboardDraftStorage().setItem(dashboardForceRefreshKey, new Date().toISOString() + " fallback");
+        } finally {
+          window.setTimeout(() => {
+            window.location.reload();
+          }, 120);
+        }
       }
 
       function restoreDashboardDraft() {
@@ -71620,6 +71772,12 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 
       resizeComposerInput();
       restoreDashboardDraft();
+      refreshCheckButton?.addEventListener("click", () => {
+        refreshDashboardFreshnessStatus({ visibleStatus: true, pill: "\u78BA\u8A8D\u6E08\u307F" });
+      });
+      forceRefreshButton?.addEventListener("click", () => {
+        forceDashboardRefresh();
+      });
       textarea.addEventListener("input", () => {
         normalizeComposerInput();
         persistDashboardDraft();
@@ -71658,6 +71816,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
       window.addEventListener("pagehide", persistDashboardDraft);
       window.addEventListener("pageshow", async () => {
         if (await resumeDashboardSessionAfterAuthReturn("\u753B\u9762\u5FA9\u5E30\u5F8C\u3001\u518D\u30ED\u30B0\u30A4\u30F3\u72B6\u614B\u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002")) return;
+        refreshDashboardFreshnessStatus({ pill: "\u5FA9\u5E30\u78BA\u8A8D" });
         dropStaleSocketIfNeeded();
         refreshThread();
         scheduleReconnect();
@@ -71668,6 +71827,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           return;
         }
         if (await resumeDashboardSessionAfterAuthReturn("\u753B\u9762\u5FA9\u5E30\u5F8C\u3001\u518D\u30ED\u30B0\u30A4\u30F3\u72B6\u614B\u3092\u78BA\u8A8D\u3057\u3066\u3044\u307E\u3059\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002")) return;
+        refreshDashboardFreshnessStatus({ pill: "\u8868\u793A\u4E2D" });
         if (!chatSocket || chatSocket.readyState !== WebSocket.OPEN) {
           setConnectionRecoveryStatus("\u753B\u9762\u5FA9\u5E30\u3092\u691C\u77E5\u3057\u307E\u3057\u305F\u3002\u63A5\u7D9A\u3092\u5FA9\u5E30\u3057\u3066\u3044\u307E\u3059\u3002");
           dropStaleSocketIfNeeded();
@@ -71675,6 +71835,7 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           scheduleReconnect();
         }
       });
+      refreshDashboardFreshnessStatus({ pill: "\u521D\u671F\u78BA\u8A8D" });
       connectThreadSocket();
     })();
   <\/script>
