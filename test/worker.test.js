@@ -4157,6 +4157,43 @@ test("DashboardChatRoom persists opt-in app-server progress checkpoints", async 
   assert.equal(sentPayloads[1].messages[0].text, "方針を整理しています。");
 });
 
+test("DashboardChatRoom persists known safe app-server progress stages without bridge opt-in flag", async () => {
+  const store = createInMemoryDashboardChatStore();
+  const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
+  const bridgeSocket = createMockSocket("app_server_bridge", "dashboard-main-unresolved");
+  const room = new DashboardChatRoom(
+    {
+      storage: createMockDurableObjectStorage(),
+      getWebSockets() {
+        return [dashboardSocket, bridgeSocket];
+      }
+    },
+    { DASHBOARD_CHAT_STORE: store }
+  );
+
+  await room.webSocketMessage(
+    bridgeSocket,
+    JSON.stringify({
+      type: "app_server_status",
+      status: "thinking",
+      stage: "file_change",
+      threadId: "dashboard-main-unresolved",
+      codexThreadId: "codex-thread-450",
+      text: "raw diff detail that must not be persisted"
+    })
+  );
+
+  const stored = await store.listThread("dashboard-main-unresolved");
+  assert.equal(stored.length, 1);
+  assert.equal(stored[0].role, "butler");
+  assert.equal(stored[0].status, "thinking");
+  assert.equal(stored[0].text, "ファイル変更を確認しています。");
+  assert.doesNotMatch(stored[0].text, /raw diff detail/);
+  const sentPayloads = dashboardSocket.sent.map((message) => JSON.parse(message));
+  assert.equal(sentPayloads[0].type, "transient_status");
+  assert.equal(sentPayloads[1].type, "thread");
+});
+
 test("DashboardChatRoom dedupes repeated app-server progress checkpoints", async () => {
   const store = createInMemoryDashboardChatStore();
   const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
@@ -4216,6 +4253,22 @@ test("DashboardChatRoom maps app-server progress stages to owner-facing transien
     ["reviewer_wait", "CI / reviewer を待っています。"],
     ["reviewer_revision", "reviewer 指摘を反映しています。"]
   ];
+  const durableStages = new Set([
+    "planning",
+    "hypothesis",
+    "target",
+    "verify",
+    "command",
+    "file_change",
+    "tool_call",
+    "web_search",
+    "implementation",
+    "test",
+    "pr_body",
+    "pr_create",
+    "reviewer_wait",
+    "reviewer_revision"
+  ]);
   for (const [stage, expectedText] of stageCases) {
     const store = createInMemoryDashboardChatStore();
     const dashboardSocket = createMockSocket("dashboard", "dashboard-main-unresolved");
@@ -4243,8 +4296,12 @@ test("DashboardChatRoom maps app-server progress stages to owner-facing transien
       })
     );
 
-    assert.equal((await store.listThread("dashboard-main-unresolved")).length, 0);
-    assert.equal(dashboardSocket.sent.length, 1);
+    const stored = await store.listThread("dashboard-main-unresolved");
+    assert.equal(stored.length, durableStages.has(stage) ? 1 : 0);
+    if (durableStages.has(stage)) {
+      assert.equal(stored[0].text, expectedText);
+    }
+    assert.equal(dashboardSocket.sent.filter((message) => JSON.parse(message).type === "transient_status").length, 1);
     const status = JSON.parse(dashboardSocket.sent[0]);
     assert.equal(status.type, "transient_status");
     assert.equal(status.status, "thinking");

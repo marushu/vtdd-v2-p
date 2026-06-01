@@ -12,7 +12,9 @@ Issue #590 の silent wait recovery と Issue #413 の owner-facing execution pr
 
 ## 設計
 
-app-server bridge が既に受けている Codex app-server lifecycle event を、`app_server_status` の transient だけで終わらせず、`persistProgress` が付いた checkpoint event として DashboardChatRoom に渡す。Worker 側は `persistProgress` のある `app_server_status` だけを durable thread message に保存する。
+app-server bridge が既に受けている Codex app-server lifecycle event を、`app_server_status` の transient だけで終わらせず、`persistProgress` が付いた checkpoint event として DashboardChatRoom に渡す。Worker 側は `persistProgress` のある `app_server_status` を durable thread message に保存する。
+
+レビュアー指摘を受け、Worker 側は `persistProgress` がない場合でも、`planning` / `command` / `file_change` / `tool_call` / `test` など既知の安全な stage だけは checkpoint として保存する。これにより、VPS app-server bridge process が一部古く、まだ `persistProgress` を付けない場合でも、既存 stage event が出ている限り owner-facing progress は thread に残る。
 
 通常の `app_server_status` は今まで通り transient-only にする。これにより既存の軽い status 表示は壊さない。durable checkpoint は role `butler` / status `thinking` として短い owner-facing text だけを保存する。直近に同じ role/status/text がある場合は保存しない。
 
@@ -23,15 +25,16 @@ app-server bridge が既に受けている Codex app-server lifecycle event を�
 ## 検証計画
 
 - Worker test: `persistProgress: true` の `app_server_status` が transient と durable thread message の両方になること。
+- Worker test: `persistProgress` がない既知の安全な stage も durable checkpoint になること。
 - Worker test: 同じ progress checkpoint が連続しても durable message は増殖しないこと。
-- Worker test: `persistProgress` なしの `app_server_status` は従来どおり transient-only のままであること。
+- Worker test: safety list 外の `app_server_status` は従来どおり transient-only のままであること。
 - Bridge test: Codex plan / command / file change / tool / reasoning summary events が `persistProgress: true` を持つこと。
 - `npm run build:worker`、`npm run check:generated-worker`、full `npm test` を通す。
 
 ## 改修見積もり
 
 - `scripts/run-dashboard-app-server-bridge.mjs`: Codex lifecycle event のうち owner-facing checkpoint にしたい status event に `persistProgress: true` を付与する。raw delta / raw provider message は保存しない。
-- `src/worker/runtime.js`: `app_server_status` の `persistProgress` を読み、owner-facing stage text を durable message として保存する。重複 checkpoint を append 前に除外する。
+- `src/worker/runtime.js`: `app_server_status` の `persistProgress` と既知の安全な stage を読み、owner-facing stage text を durable message として保存する。重複 checkpoint を append 前に除外する。
 - `test/dashboard-app-server-bridge.test.js`: bridge event mapping regression。
 - `test/worker.test.js`: persistent progress / duplicate suppression / transient-only regression。
 - `worker.js`: generated worker bundle。
@@ -57,7 +60,7 @@ Issue #590 / Issue #413、active execution queue、PR #728 / PR #729 truth、Ope
 
 ## 実装候補と捨てた案
 
-採用案は `persistProgress` flag による opt-in durable checkpoint。捨てた案は全 `app_server_status` durable 化、raw output 保存、VPS Codex CLI commentary の全文保存、final summary replacement まで同時実装する案。
+採用案は `persistProgress` flag による opt-in durable checkpoint と、Worker 側の既知安全 stage fallback。捨てた案は全 `app_server_status` durable 化、raw output 保存、VPS Codex CLI commentary の全文保存、final summary replacement まで同時実装する案。
 
 ## merge 後に通す E2E
 

@@ -8942,10 +8942,21 @@ function isDuplicateLatestBridgeProgressMessage(message, latest) {
 }
 
 function shouldPersistDashboardAppServerProgress(input, { transientStatus = "" } = {}) {
-  if (!normalizeDashboardBooleanFlag(input?.persistProgress ?? input?.persist_progress)) {
+  if (normalizeDashboardChatStatus(transientStatus || input?.status) !== "thinking") {
     return false;
   }
-  return normalizeDashboardChatStatus(transientStatus || input?.status) === "thinking";
+  if (normalizeDashboardBooleanFlag(input?.persistProgress ?? input?.persist_progress)) {
+    return true;
+  }
+  const stage = normalizeDashboardEventText(
+    input?.stage ||
+      input?.phase ||
+      input?.step ||
+      input?.activity ||
+      input?.progressStage ||
+      input?.progress_stage
+  ).toLowerCase().replaceAll("-", "_");
+  return DASHBOARD_DURABLE_APP_SERVER_PROGRESS_STAGES.has(stage);
 }
 
 function normalizeDashboardBooleanFlag(value) {
@@ -8992,6 +9003,32 @@ const DASHBOARD_APP_SERVER_STAGE_TEXT = {
   reviewer_revision: "reviewer 指摘を反映しています。",
   review_fix: "reviewer 指摘を反映しています。"
 };
+
+const DASHBOARD_DURABLE_APP_SERVER_PROGRESS_STAGES = new Set([
+  "thinking",
+  "planning",
+  "hypothesis",
+  "target",
+  "verify",
+  "verification",
+  "command",
+  "file_change",
+  "tool_call",
+  "web_search",
+  "implementation",
+  "implement",
+  "test",
+  "tests",
+  "pr_body",
+  "pull_request_body",
+  "pr_create",
+  "pull_request_create",
+  "reviewer_wait",
+  "ci_wait",
+  "reviewer_revision",
+  "review_fix",
+  "debug_slow_turn"
+]);
 
 function buildDashboardOwnerFacingTransientStatusText(input, { status = "", text = "", transientStatus = "" } = {}) {
   if (transientStatus === "replied" || status === "replied") {

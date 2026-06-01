@@ -65303,10 +65303,16 @@ function isDuplicateLatestBridgeProgressMessage(message, latest) {
   return duplicateCandidateStatus && normalizeDashboardEventText(message.role).toLowerCase() === normalizeDashboardEventText(latest.role).toLowerCase() && sanitizeDashboardChatText(message.text) === sanitizeDashboardChatText(latest.text);
 }
 function shouldPersistDashboardAppServerProgress(input, { transientStatus = "" } = {}) {
-  if (!normalizeDashboardBooleanFlag(input?.persistProgress ?? input?.persist_progress)) {
+  if (normalizeDashboardChatStatus(transientStatus || input?.status) !== "thinking") {
     return false;
   }
-  return normalizeDashboardChatStatus(transientStatus || input?.status) === "thinking";
+  if (normalizeDashboardBooleanFlag(input?.persistProgress ?? input?.persist_progress)) {
+    return true;
+  }
+  const stage = normalizeDashboardEventText(
+    input?.stage || input?.phase || input?.step || input?.activity || input?.progressStage || input?.progress_stage
+  ).toLowerCase().replaceAll("-", "_");
+  return DASHBOARD_DURABLE_APP_SERVER_PROGRESS_STAGES.has(stage);
 }
 function normalizeDashboardBooleanFlag(value) {
   if (value === true) return true;
@@ -65351,6 +65357,31 @@ var DASHBOARD_APP_SERVER_STAGE_TEXT = {
   reviewer_revision: "reviewer \u6307\u6458\u3092\u53CD\u6620\u3057\u3066\u3044\u307E\u3059\u3002",
   review_fix: "reviewer \u6307\u6458\u3092\u53CD\u6620\u3057\u3066\u3044\u307E\u3059\u3002"
 };
+var DASHBOARD_DURABLE_APP_SERVER_PROGRESS_STAGES = /* @__PURE__ */ new Set([
+  "thinking",
+  "planning",
+  "hypothesis",
+  "target",
+  "verify",
+  "verification",
+  "command",
+  "file_change",
+  "tool_call",
+  "web_search",
+  "implementation",
+  "implement",
+  "test",
+  "tests",
+  "pr_body",
+  "pull_request_body",
+  "pr_create",
+  "pull_request_create",
+  "reviewer_wait",
+  "ci_wait",
+  "reviewer_revision",
+  "review_fix",
+  "debug_slow_turn"
+]);
 function buildDashboardOwnerFacingTransientStatusText(input, { status = "", text = "", transientStatus = "" } = {}) {
   if (transientStatus === "replied" || status === "replied") {
     return "Dashboard thread \u63A5\u7D9A\u6E08\u307F\u3002";
