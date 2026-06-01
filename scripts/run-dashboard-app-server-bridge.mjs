@@ -17,6 +17,10 @@ const APP_SERVER_TURN_QUIET_TEXT =
 const DASHBOARD_MEDIA_TMP_DIR = "vtdd-dashboard-media";
 const DEFAULT_TURN_TIMEOUT_MS = 10 * 60 * 1000;
 const DEFAULT_ACTIVITY_QUIET_MS = 90 * 1000;
+const DEBUG_SLOW_TURN_DEFAULT_SECONDS = 150;
+const DEBUG_SLOW_TURN_MIN_SECONDS = 10;
+const DEBUG_SLOW_TURN_MAX_SECONDS = 10 * 60;
+const DEBUG_SLOW_TURN_PROGRESS_INTERVAL_MS = 30 * 1000;
 
 export function buildAppServerInitializeRequest(id = 1) {
   return {
@@ -787,6 +791,139 @@ function buildAppServerTurnTimeoutEvent({
   };
 }
 
+export function parseDashboardDebugSlowTurnRequest(request = {}) {
+  const text = normalizeBridgeText(request.text);
+  const relatedIssue = normalizePositiveInteger(request.relatedIssue || request.issueNumber);
+  const hasIssue590Context = relatedIssue === 590 || /(?:issue\s*)?#?590/i.test(text);
+  const hasSlowTurnIntent =
+    /debug[_ -]?slow[_ -]?turn/i.test(text) ||
+    /slow[_ -]?turn/i.test(text) ||
+    /timeout\s*e2e/i.test(text) ||
+    /slow\s*e2e/i.test(text) ||
+    /遅延.*(?:e2e|検証)/i.test(text) ||
+    /スローターン/i.test(text);
+
+  if (!hasIssue590Context || !hasSlowTurnIntent) {
+    return { enabled: false };
+  }
+
+  const durationSeconds = extractDebugSlowTurnDurationSeconds(text);
+  if (
+    !Number.isInteger(durationSeconds) ||
+    durationSeconds < DEBUG_SLOW_TURN_MIN_SECONDS ||
+    durationSeconds > DEBUG_SLOW_TURN_MAX_SECONDS
+  ) {
+    return {
+      enabled: true,
+      ok: false,
+      durationSeconds,
+      reason: `durationSeconds must be ${DEBUG_SLOW_TURN_MIN_SECONDS}-${DEBUG_SLOW_TURN_MAX_SECONDS}`
+    };
+  }
+
+  return {
+    enabled: true,
+    ok: true,
+    durationSeconds
+  };
+}
+
+function extractDebugSlowTurnDurationSeconds(text = "") {
+  const normalized = normalizeBridgeText(text);
+  const secondMatch = normalized.match(/(\d{1,4})\s*(?:秒|sec|secs|second|seconds|s)(?![a-z])/i);
+  if (secondMatch) {
+    return Number(secondMatch[1]);
+  }
+  const minuteMatch = normalized.match(/(\d{1,3})\s*(?:分|min|mins|minute|minutes|m)(?![a-z])/i);
+  if (minuteMatch) {
+    return Number(minuteMatch[1]) * 60;
+  }
+  return DEBUG_SLOW_TURN_DEFAULT_SECONDS;
+}
+
+export async function runDashboardDebugSlowTurn({
+  request = {},
+  sendDashboardEvent,
+  durationSeconds = DEBUG_SLOW_TURN_DEFAULT_SECONDS,
+  progressIntervalMs = DEBUG_SLOW_TURN_PROGRESS_INTERVAL_MS,
+  delayImpl = delay,
+  now = () => new Date().toISOString()
+} = {}) {
+  const dashboardThreadId = String(request.threadId || "");
+  const repository = request.repository || null;
+  const relatedIssue = request.relatedIssue || request.issueNumber || null;
+  const startedAt = now();
+  await sendDashboardEvent({
+    type: "app_server_status",
+    schema: DEFAULT_SCHEMA,
+    threadId: dashboardThreadId,
+    repository,
+    relatedIssue,
+    status: "thinking",
+    stage: "debug_slow_turn",
+    text: `Issue #590 slow turn E2E を開始しました。指定待機時間: ${durationSeconds}秒。`,
+    debugSlowTurn: {
+      startedAt,
+      durationSeconds,
+      lowRisk: true
+    }
+  });
+
+  let elapsedMs = 0;
+  const intervalMs = Math.max(1, Number(progressIntervalMs) || DEBUG_SLOW_TURN_PROGRESS_INTERVAL_MS);
+  const durationMs = durationSeconds * 1000;
+  while (elapsedMs < durationMs) {
+    const remainingMs = durationMs - elapsedMs;
+    const nextWaitMs = Math.min(intervalMs, remainingMs);
+    await delayImpl(nextWaitMs);
+    elapsedMs = Math.min(durationMs, elapsedMs + nextWaitMs);
+    if (elapsedMs >= durationMs) {
+      break;
+    }
+    await sendDashboardEvent({
+      type: "app_server_status",
+      schema: DEFAULT_SCHEMA,
+      threadId: dashboardThreadId,
+      repository,
+      relatedIssue,
+      status: "thinking",
+      stage: "debug_slow_turn",
+      text: `Issue #590 slow turn E2E 継続中です。経過: ${Math.floor(elapsedMs / 1000)}秒 / ${durationSeconds}秒。`,
+      debugSlowTurn: {
+        startedAt,
+        elapsedSeconds: Math.floor(elapsedMs / 1000),
+        durationSeconds,
+        lowRisk: true
+      }
+    });
+  }
+
+  const completedAt = now();
+  await sendDashboardEvent({
+    type: "app_server_reply",
+    schema: DEFAULT_SCHEMA,
+    threadId: dashboardThreadId,
+    repository,
+    relatedIssue,
+    status: "replied",
+    text: [
+      "Issue #590 slow turn E2E が完了しました。",
+      "",
+      `指定待機時間: ${durationSeconds}秒`,
+      `開始: ${startedAt}`,
+      `完了: ${completedAt}`,
+      "",
+      "この診断は sleep と progress event だけを使う低リスク検証です。root / sudo / deploy / credential / repository mutation は実行していません。"
+    ].join("\n"),
+    debugSlowTurn: {
+      startedAt,
+      completedAt,
+      durationSeconds,
+      lowRisk: true
+    }
+  });
+}
+
 function isAppServerFailureAlreadySent(error) {
   return Boolean(error && error[APP_SERVER_FAILURE_ALREADY_SENT]);
 }
@@ -1027,7 +1164,9 @@ export async function handleDashboardTurnRequest({
   runtimeUrl = "",
   token = "",
   fetchImpl = globalThis.fetch,
-  mediaTmpRoot = os.tmpdir()
+  mediaTmpRoot = os.tmpdir(),
+  debugSlowTurnDelayImpl = delay,
+  debugSlowTurnProgressIntervalMs = DEBUG_SLOW_TURN_PROGRESS_INTERVAL_MS
 }) {
   const dashboardThreadId = String(request.threadId || "");
   const text = String(request.text || "");
@@ -1037,6 +1176,30 @@ export async function handleDashboardTurnRequest({
       schema: DEFAULT_SCHEMA,
       threadId: dashboardThreadId,
       text: "dashboard threadId and text are required"
+    });
+    return;
+  }
+
+  const debugSlowTurn = parseDashboardDebugSlowTurnRequest(request);
+  if (debugSlowTurn.enabled) {
+    if (!debugSlowTurn.ok) {
+      await sendDashboardEvent({
+        type: "app_server_turn_failed",
+        schema: DEFAULT_SCHEMA,
+        threadId: dashboardThreadId,
+        repository: request.repository || null,
+        relatedIssue: request.relatedIssue || request.issueNumber || null,
+        status: "invalid_debug_slow_turn_duration",
+        text: `Issue #590 slow turn E2E の待機時間は ${DEBUG_SLOW_TURN_MIN_SECONDS}秒から ${DEBUG_SLOW_TURN_MAX_SECONDS}秒までにしてください。例: 「Issue #590 の slow turn を 3分で実行して」。`
+      });
+      return;
+    }
+    await runDashboardDebugSlowTurn({
+      request,
+      sendDashboardEvent,
+      durationSeconds: debugSlowTurn.durationSeconds,
+      progressIntervalMs: debugSlowTurnProgressIntervalMs,
+      delayImpl: debugSlowTurnDelayImpl
     });
     return;
   }
