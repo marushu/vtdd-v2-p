@@ -8873,7 +8873,7 @@ function buildDashboardAppServerFailureThreadText({ text = "", status = "" } = {
     normalizedStatus === "timeout" ||
     /timed out before completion/i.test(normalizedText)
   ) {
-    return "codex app-server の応答が遅れています。この依頼は Dashboard thread に保存済みです。待つ、同じ内容でもう一度実行する、短くして再送する、キャンセルする、のいずれかで復旧できます。遅れて返信が届いた場合は、この thread に追加します。";
+    return "codex app-server から進行イベントがしばらく届いていません。この依頼は Dashboard thread に保存済みです。待つ、同じ内容でもう一度実行する、短くして再送する、キャンセルする、のいずれかで復旧できます。遅れて返信が届いた場合は、この thread に追加します。";
   }
   return normalizedText || "codex app-server が返信前に失敗しました。同じ thread で続けるか、内容を短くしてもう一度送れます。";
 }
@@ -8889,6 +8889,15 @@ const DASHBOARD_APP_SERVER_STAGE_TEXT = {
   change_contract: "bounded change contract を確認しています。",
   topic_branch: "topic branch を作成しています。",
   branch_create: "topic branch を作成しています。",
+  planning: "方針を整理しています。",
+  command: "コマンドを実行しています。",
+  file_change: "ファイル変更を確認しています。",
+  tool_call: "外部ツールの結果を待っています。",
+  web_search: "必要な情報を確認しています。",
+  waiting_approval: "承認待ちです。",
+  waiting_user_input: "確認が必要です。",
+  quiet: "しばらく進行イベントが届いていません。処理中の可能性があります。",
+  thinking: "考えています。",
   implementation: "実装に入っています。",
   implement: "実装に入っています。",
   test: "テストを実行しています。",
