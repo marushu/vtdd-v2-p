@@ -13,6 +13,7 @@ const DEFAULT_APP_SERVER_ERROR_TEXT =
 const APP_SERVER_TURN_TIMEOUT_TEXT =
   "codex app-server の応答生成が時間切れになりました。入力は Dashboard thread に保存済みです。同じ thread で続けるか、内容を短くしてもう一度送れます。";
 const DASHBOARD_MEDIA_TMP_DIR = "vtdd-dashboard-media";
+const DEFAULT_TURN_TIMEOUT_MS = 120 * 1000;
 
 export function buildAppServerInitializeRequest(id = 1) {
   return {
@@ -998,7 +999,7 @@ export function parseBridgeArgs(argv = process.argv.slice(2), env = process.env)
     threadId: env.VTDD_DASHBOARD_THREAD_ID || "",
     cwd: env.VTDD_DASHBOARD_CODEX_CWD || process.cwd(),
     sandboxMode: env.VTDD_DASHBOARD_APP_SERVER_SANDBOX || "",
-    turnTimeoutMs: Number(env.VTDD_DASHBOARD_APP_SERVER_TURN_TIMEOUT_MS || 0),
+    turnTimeoutMs: Number(env.VTDD_DASHBOARD_APP_SERVER_TURN_TIMEOUT_MS || DEFAULT_TURN_TIMEOUT_MS),
     reconnectDelayMs: Number(env.VTDD_DASHBOARD_BRIDGE_RECONNECT_DELAY_MS || 1000),
     heartbeatMs: Number(env.VTDD_DASHBOARD_BRIDGE_HEARTBEAT_MS || 25000)
   };
@@ -1009,7 +1010,7 @@ export function parseBridgeArgs(argv = process.argv.slice(2), env = process.env)
     if (arg === "--thread-id") options.threadId = argv[++index] || "";
     if (arg === "--cwd") options.cwd = argv[++index] || "";
     if (arg === "--sandbox") options.sandboxMode = argv[++index] || "";
-    if (arg === "--turn-timeout-ms") options.turnTimeoutMs = Number(argv[++index] || 0);
+    if (arg === "--turn-timeout-ms") options.turnTimeoutMs = Number(argv[++index] || DEFAULT_TURN_TIMEOUT_MS);
     if (arg === "--reconnect-delay-ms") options.reconnectDelayMs = Number(argv[++index] || 1000);
     if (arg === "--heartbeat-ms") options.heartbeatMs = Number(argv[++index] || 25000);
   }
@@ -1064,7 +1065,7 @@ export async function connectDashboardAppServerBridgeOnce({
   appServer,
   cwd = process.cwd(),
   sandboxMode = "",
-  turnTimeoutMs = 0,
+  turnTimeoutMs = DEFAULT_TURN_TIMEOUT_MS,
   heartbeatMs = 25000,
   runtimeUrl = "",
   fetchImpl = globalThis.fetch,

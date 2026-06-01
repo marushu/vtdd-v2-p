@@ -1404,6 +1404,17 @@ test("dashboard app-server bridge args require a dashboard thread id for runtime
   });
   assert.equal(parsed.threadId, "");
   assert.equal(parsed.sandboxMode, "danger-full-access");
+  assert.equal(parsed.turnTimeoutMs, 120000);
+});
+
+test("dashboard app-server bridge args preserve explicit disabled turn timeout", () => {
+  const parsed = parseBridgeArgs([], {
+    VTDD_RUNTIME_URL: "https://runtime.example",
+    VTDD_GATEWAY_BEARER_TOKEN: "secret-token",
+    VTDD_DASHBOARD_THREAD_ID: "dashboard-main",
+    VTDD_DASHBOARD_APP_SERVER_TURN_TIMEOUT_MS: "0"
+  });
+  assert.equal(parsed.threadId, "dashboard-main");
   assert.equal(parsed.turnTimeoutMs, 0);
 });
 
