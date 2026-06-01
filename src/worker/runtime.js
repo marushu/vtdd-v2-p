@@ -139,7 +139,7 @@ export class DashboardChatRoom {
       ? normalizeDashboardThreadId(url.searchParams.get("threadId") || url.searchParams.get("thread_id"))
       : extractDashboardChatSocketThreadId(url.pathname);
     if (appServerBridgeSocket) {
-      return this.acceptSocket({ request, role: "app_server_bridge", threadId });
+      return this.acceptSocket({ request, role: "app_server_bridge", threadId, origin: url.origin });
     }
     if (!threadId) {
       return json(422, {
@@ -149,13 +149,13 @@ export class DashboardChatRoom {
       });
     }
 
-    return this.acceptSocket({ request, role: "dashboard", threadId });
+    return this.acceptSocket({ request, role: "dashboard", threadId, origin: url.origin });
   }
 
-  async acceptSocket({ request, role, threadId }) {
+  async acceptSocket({ request, role, threadId, origin }) {
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
-    const attachment = { role, threadId, origin: url.origin };
+    const attachment = { role, threadId, origin: normalizeText(origin) || new URL(request.url).origin };
     if (typeof this.ctx?.acceptWebSocket === "function") {
       server.serializeAttachment(attachment);
       this.ctx.acceptWebSocket(server);

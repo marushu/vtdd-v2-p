@@ -3107,6 +3107,76 @@ test("worker requires WebSocket upgrade for dashboard chat live updates", async 
   assert.equal(rooms.calls.length, 0);
 });
 
+test("DashboardChatRoom accepts dashboard WebSocket upgrade with request origin attachment", async () => {
+  const originalWebSocketPair = globalThis.WebSocketPair;
+  const OriginalResponse = globalThis.Response;
+  const acceptedSockets = [];
+  class MockAcceptedSocket {
+    constructor() {
+      this.readyState = 1;
+      this.sent = [];
+      this.attachment = null;
+    }
+    serializeAttachment(value) {
+      this.attachment = value;
+    }
+    send(message) {
+      this.sent.push(String(message));
+    }
+  }
+
+  globalThis.WebSocketPair = function MockWebSocketPair() {
+    return {
+      client: new MockAcceptedSocket(),
+      server: new MockAcceptedSocket()
+    };
+  };
+  globalThis.Response = class MockUpgradeResponse {
+    constructor(body = null, init = {}) {
+      this.body = body;
+      this.status = init.status ?? 200;
+      this.headers = new Headers(init.headers || {});
+      this.webSocket = init.webSocket || null;
+    }
+  };
+
+  try {
+    const store = createInMemoryDashboardChatStore();
+    const room = new DashboardChatRoom(
+      {
+        acceptWebSocket(socket) {
+          acceptedSockets.push(socket);
+        }
+      },
+      { DASHBOARD_CHAT_STORE: store }
+    );
+
+    const response = await room.fetch(
+      new Request("https://dashboard.example.test/v2/dashboard/chat/dashboard-main-unresolved/ws", {
+        headers: { upgrade: "websocket" }
+      })
+    );
+
+    assert.equal(response.status, 101);
+    assert.equal(acceptedSockets.length, 1);
+    assert.deepEqual(acceptedSockets[0].attachment, {
+      role: "dashboard",
+      threadId: "dashboard-main-unresolved",
+      origin: "https://dashboard.example.test"
+    });
+    const initialThread = JSON.parse(acceptedSockets[0].sent[0]);
+    assert.equal(initialThread.type, "thread");
+    assert.equal(initialThread.ok, true);
+  } finally {
+    if (originalWebSocketPair === undefined) {
+      delete globalThis.WebSocketPair;
+    } else {
+      globalThis.WebSocketPair = originalWebSocketPair;
+    }
+    globalThis.Response = OriginalResponse;
+  }
+});
+
 test("worker no longer exposes the dashboard VPS runner WebSocket push channel", async () => {
   const rooms = createMockDashboardChatRoomNamespace();
   const response = await worker.fetch(
