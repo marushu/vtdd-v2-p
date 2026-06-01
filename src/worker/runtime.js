@@ -14615,11 +14615,25 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
 
       function sendPendingOwnerMessage(reason) {
         if (!pendingOwnerSend || !isChatSocketOpen()) return false;
+        if (pendingOwnerSend.queuedWhileDisconnected) {
+          const latestText = textarea.value.trim();
+          if (latestText) {
+            pendingOwnerSend.text = latestText;
+          }
+        }
+        const submitButton = form.querySelector("button[type='submit']");
+        if (submitButton) {
+          submitButton.disabled = true;
+          pendingOwnerSend.submitButton = submitButton;
+        }
+        setComposerLocked(true);
         try {
           chatSocket.send(JSON.stringify(buildOwnerPayload(pendingOwnerSend)));
           setStatus(reason || "接続しました。未送信の入力を送信しています。", { thinking: true });
           return true;
         } catch (error) {
+          setComposerLocked(false);
+          if (submitButton) submitButton.disabled = false;
           setStatus((error && error.message) || "WebSocket 送信に失敗しました。入力は保持し、再接続後に再送します。");
           scheduleReconnect();
           return false;
@@ -15508,15 +15522,50 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
         }
         const submitButton = form.querySelector("button[type='submit']");
         persistDashboardDraft();
-        if (submitButton) submitButton.disabled = true;
-        setComposerLocked(true);
         const socketWasOpenAtSubmit = isChatSocketOpen();
         if (!socketWasOpenAtSubmit) {
-          setStatus("WebSocket 再接続中です。入力は保持し、接続後に送信します。", { thinking: true });
+          if (pendingMediaItems.length > 0) {
+            setStatus("WebSocket 再接続中です。入力と添付は保持しています。接続後にもう一度送信してください。");
+            scheduleReconnect();
+            textarea.focus({ preventScroll: true });
+            return;
+          }
+          if (pendingOwnerSend?.timeoutId) {
+            window.clearTimeout(pendingOwnerSend.timeoutId);
+          }
+          if (pendingOwnerSend?.clientMessageId) {
+            pendingSendRollbacks.delete(pendingOwnerSend.clientMessageId);
+          }
+          const clientMessageId = createClientMessageId();
+          pendingSendRollbacks.set(clientMessageId, []);
+          pendingOwnerSend = {
+            clientMessageId,
+            text,
+            mediaReferences: [],
+            submitButton: null,
+            queuedWhileDisconnected: true,
+            timeoutId: window.setTimeout(() => {
+              if (!pendingSendRollbacks.has(clientMessageId)) return;
+              if (isChatSocketOpen()) {
+                sendPendingOwnerMessage("送信確認が返らないため、同じ内容を再送しています。");
+              } else {
+                setStatus("WebSocket 再接続中です。入力は保持しています。接続後に自動送信します。");
+                scheduleReconnect();
+              }
+            }, 30000)
+          };
+          retryClientMessageId = clientMessageId;
+          setComposerLocked(false);
+          if (submitButton) submitButton.disabled = false;
+          setStatus("WebSocket 再接続中です。入力は保持しています。接続後に自動送信します。", { thinking: true });
           scheduleReconnect();
-        } else {
-          setStatus(pendingMediaItems.length > 0 ? "添付を保存してから送信しています" : "送信中です", { thinking: true });
+          textarea.focus({ preventScroll: true });
+          updateComposerReserve();
+          return;
         }
+        if (submitButton) submitButton.disabled = true;
+        setComposerLocked(true);
+        setStatus(pendingMediaItems.length > 0 ? "添付を保存してから送信しています" : "送信中です", { thinking: true });
         let mediaReferences = [];
         const clientMessageId = retryClientMessageId || createClientMessageId();
         try {
@@ -15545,7 +15594,9 @@ async function renderV2DashboardPage({ runtimeOrigin, url, dashboardEventStore }
           }, 30000)
         };
         if (!isChatSocketOpen()) {
-          setStatus("WebSocket 再接続中です。入力は保持し、接続後に送信します。", { thinking: true });
+          setComposerLocked(false);
+          if (submitButton) submitButton.disabled = false;
+          setStatus("WebSocket 再接続中です。入力は保持しています。接続後に自動送信します。", { thinking: true });
           scheduleReconnect();
           textarea.focus({ preventScroll: true });
           updateComposerReserve();

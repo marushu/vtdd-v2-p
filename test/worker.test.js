@@ -1314,7 +1314,10 @@ test("worker serves v2 dashboard for allowed owner identity without exposing sec
   assert.equal(body.includes('status.dataset.httpFallbackReady = "false"'), false);
   assert.equal(body.includes("setHttpFallbackReadyStatus();"), false);
   assert.equal(body.includes("sendOwnerMessageByHttp(ownerPayload, clientMessageId)"), false);
-  assert.equal(body.includes("WebSocket 再接続中です。入力は保持し、接続後に送信します。"), true);
+  assert.equal(body.includes("WebSocket 再接続中です。入力は保持し、接続後に送信します。"), false);
+  assert.equal(body.includes("WebSocket 再接続中です。入力は保持しています。接続後に自動送信します。"), true);
+  assert.equal(body.includes("queuedWhileDisconnected: true"), true);
+  assert.equal(body.includes("setComposerLocked(false);"), true);
   assert.equal(body.includes("接続しました。未送信の入力を送信しています。"), true);
   assert.equal(body.includes("sendPendingOwnerMessage(\"接続しました。未送信の入力を送信しています。\")"), true);
   assert.equal(body.includes("refreshThread().then"), true);

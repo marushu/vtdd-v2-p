@@ -70455,11 +70455,25 @@ async function renderV2DashboardPage({ runtimeOrigin, url: url2, dashboardEventS
 
       function sendPendingOwnerMessage(reason) {
         if (!pendingOwnerSend || !isChatSocketOpen()) return false;
+        if (pendingOwnerSend.queuedWhileDisconnected) {
+          const latestText = textarea.value.trim();
+          if (latestText) {
+            pendingOwnerSend.text = latestText;
+          }
+        }
+        const submitButton = form.querySelector("button[type='submit']");
+        if (submitButton) {
+          submitButton.disabled = true;
+          pendingOwnerSend.submitButton = submitButton;
+        }
+        setComposerLocked(true);
         try {
           chatSocket.send(JSON.stringify(buildOwnerPayload(pendingOwnerSend)));
           setStatus(reason || "\u63A5\u7D9A\u3057\u307E\u3057\u305F\u3002\u672A\u9001\u4FE1\u306E\u5165\u529B\u3092\u9001\u4FE1\u3057\u3066\u3044\u307E\u3059\u3002", { thinking: true });
           return true;
         } catch (error) {
+          setComposerLocked(false);
+          if (submitButton) submitButton.disabled = false;
           setStatus((error && error.message) || "WebSocket \u9001\u4FE1\u306B\u5931\u6557\u3057\u307E\u3057\u305F\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3001\u518D\u63A5\u7D9A\u5F8C\u306B\u518D\u9001\u3057\u307E\u3059\u3002");
           scheduleReconnect();
           return false;
@@ -71348,15 +71362,50 @@ async function renderV2DashboardPage({ runtimeOrigin, url: url2, dashboardEventS
         }
         const submitButton = form.querySelector("button[type='submit']");
         persistDashboardDraft();
-        if (submitButton) submitButton.disabled = true;
-        setComposerLocked(true);
         const socketWasOpenAtSubmit = isChatSocketOpen();
         if (!socketWasOpenAtSubmit) {
-          setStatus("WebSocket \u518D\u63A5\u7D9A\u4E2D\u3067\u3059\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3001\u63A5\u7D9A\u5F8C\u306B\u9001\u4FE1\u3057\u307E\u3059\u3002", { thinking: true });
+          if (pendingMediaItems.length > 0) {
+            setStatus("WebSocket \u518D\u63A5\u7D9A\u4E2D\u3067\u3059\u3002\u5165\u529B\u3068\u6DFB\u4ED8\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002\u63A5\u7D9A\u5F8C\u306B\u3082\u3046\u4E00\u5EA6\u9001\u4FE1\u3057\u3066\u304F\u3060\u3055\u3044\u3002");
+            scheduleReconnect();
+            textarea.focus({ preventScroll: true });
+            return;
+          }
+          if (pendingOwnerSend?.timeoutId) {
+            window.clearTimeout(pendingOwnerSend.timeoutId);
+          }
+          if (pendingOwnerSend?.clientMessageId) {
+            pendingSendRollbacks.delete(pendingOwnerSend.clientMessageId);
+          }
+          const clientMessageId = createClientMessageId();
+          pendingSendRollbacks.set(clientMessageId, []);
+          pendingOwnerSend = {
+            clientMessageId,
+            text,
+            mediaReferences: [],
+            submitButton: null,
+            queuedWhileDisconnected: true,
+            timeoutId: window.setTimeout(() => {
+              if (!pendingSendRollbacks.has(clientMessageId)) return;
+              if (isChatSocketOpen()) {
+                sendPendingOwnerMessage("\u9001\u4FE1\u78BA\u8A8D\u304C\u8FD4\u3089\u306A\u3044\u305F\u3081\u3001\u540C\u3058\u5185\u5BB9\u3092\u518D\u9001\u3057\u3066\u3044\u307E\u3059\u3002");
+              } else {
+                setStatus("WebSocket \u518D\u63A5\u7D9A\u4E2D\u3067\u3059\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002\u63A5\u7D9A\u5F8C\u306B\u81EA\u52D5\u9001\u4FE1\u3057\u307E\u3059\u3002");
+                scheduleReconnect();
+              }
+            }, 30000)
+          };
+          retryClientMessageId = clientMessageId;
+          setComposerLocked(false);
+          if (submitButton) submitButton.disabled = false;
+          setStatus("WebSocket \u518D\u63A5\u7D9A\u4E2D\u3067\u3059\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002\u63A5\u7D9A\u5F8C\u306B\u81EA\u52D5\u9001\u4FE1\u3057\u307E\u3059\u3002", { thinking: true });
           scheduleReconnect();
-        } else {
-          setStatus(pendingMediaItems.length > 0 ? "\u6DFB\u4ED8\u3092\u4FDD\u5B58\u3057\u3066\u304B\u3089\u9001\u4FE1\u3057\u3066\u3044\u307E\u3059" : "\u9001\u4FE1\u4E2D\u3067\u3059", { thinking: true });
+          textarea.focus({ preventScroll: true });
+          updateComposerReserve();
+          return;
         }
+        if (submitButton) submitButton.disabled = true;
+        setComposerLocked(true);
+        setStatus(pendingMediaItems.length > 0 ? "\u6DFB\u4ED8\u3092\u4FDD\u5B58\u3057\u3066\u304B\u3089\u9001\u4FE1\u3057\u3066\u3044\u307E\u3059" : "\u9001\u4FE1\u4E2D\u3067\u3059", { thinking: true });
         let mediaReferences = [];
         const clientMessageId = retryClientMessageId || createClientMessageId();
         try {
@@ -71385,7 +71434,9 @@ async function renderV2DashboardPage({ runtimeOrigin, url: url2, dashboardEventS
           }, 30000)
         };
         if (!isChatSocketOpen()) {
-          setStatus("WebSocket \u518D\u63A5\u7D9A\u4E2D\u3067\u3059\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3001\u63A5\u7D9A\u5F8C\u306B\u9001\u4FE1\u3057\u307E\u3059\u3002", { thinking: true });
+          setComposerLocked(false);
+          if (submitButton) submitButton.disabled = false;
+          setStatus("WebSocket \u518D\u63A5\u7D9A\u4E2D\u3067\u3059\u3002\u5165\u529B\u306F\u4FDD\u6301\u3057\u3066\u3044\u307E\u3059\u3002\u63A5\u7D9A\u5F8C\u306B\u81EA\u52D5\u9001\u4FE1\u3057\u307E\u3059\u3002", { thinking: true });
           scheduleReconnect();
           textarea.focus({ preventScroll: true });
           updateComposerReserve();
