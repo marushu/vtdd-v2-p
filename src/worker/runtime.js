@@ -11833,9 +11833,6 @@ async function createDashboardReadSessionCookieHeadersFromAuth({ request, env, d
   if (dashboardAuth?.authType !== "cloudflare_access") {
     return {};
   }
-  if (parseCookieHeader(request?.headers?.get("cookie"))[DASHBOARD_PASSKEY_SESSION_COOKIE]) {
-    return {};
-  }
   const provider = resolveMemoryProvider(env);
   const validation = validateMemoryProvider(provider);
   if (!validation.ok) {
